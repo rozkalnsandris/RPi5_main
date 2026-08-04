@@ -18,4 +18,6 @@ V02A is complete. It adds a least-privilege, read-only diagnostic that compares 
 
 V02B is complete. It records a verified, sanitized runtime baseline from the approved host-equivalent read-only context. The tracked baseline is bound to ignored, checksummed evidence and is not deployment configuration.
 
+V03 is complete. It compares two sanitized V02B JSON baselines offline and deterministically; it performs no host collection, monitoring, alerting, deployment, or remediation.
+
 See [the roadmap](docs/ROADMAP.md), [the security model](docs/SECURITY_MODEL.md), [the V01 inventory contract](docs/INVENTORY_CONTRACT.md), [the V02A findings](docs/V02A_FINDINGS.md), and [the current runtime baseline](docs/CURRENT_RUNTIME_BASELINE.md).

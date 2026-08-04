@@ -26,6 +26,10 @@ V02A added a bounded diagnostic and verified standard/approved-context compariso
 
 V02B adds a bounded host-equivalent read-only runtime collector, verifier, renderer, and a sanitized tracked baseline bound to verified evidence. It does not change Docker access, permissions, services, or production configuration. See the [runtime baseline contract](V02B_RUNTIME_BASELINE_CONTRACT.md) and [current baseline](CURRENT_RUNTIME_BASELINE.md).
 
+## V03 — complete: deterministic offline runtime diff
+
+V03 compares two verified V02B JSON baselines with strict input/report validation and deterministic JSON/Markdown output. It is offline-only and does not collect, monitor, alert, deploy, remediate, or alter the host. See the [diff contract](V03_RUNTIME_DIFF_CONTRACT.md) and [findings](V03_FINDINGS.md).
+
 ## Later phases
 
 Each subsystem is imported separately with redaction, tests, rollback instructions and a pull request.

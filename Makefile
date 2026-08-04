@@ -5,6 +5,7 @@ test:
 	./tests/test-safe-inventory.sh
 	./tests/test-access-model.sh
 	./tests/test-runtime-baseline.sh
+	./tests/test-runtime-diff.sh
 
 secret-scan:
 	./scripts/check-no-secrets.sh
