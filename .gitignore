@@ -45,6 +45,9 @@ volumes/
 **/volumes/
 runtime/
 **/runtime/
+!baselines/
+!baselines/runtime/
+!baselines/runtime/current.json
 *.sql
 *.sql.gz
 *.dump
