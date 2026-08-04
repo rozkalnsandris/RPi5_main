@@ -5,19 +5,28 @@
 **/.env
 **/.env.*
 **/secrets/
+**/secrets
 **/secrets.*
 **/credentials/
+**/credentials
 **/credentials.*
 **/private/
+**/private
 **/private.*
+**/token
+**/token.*
 **/*.token
 **/*.token.*
+**/password
+**/password.*
 **/*.password
 **/*.password.*
 *.pem
 *.key
 *.p12
 *.pfx
+*.crt
+*.cer
 id_rsa
 id_rsa.*
 id_ed25519
@@ -25,7 +34,7 @@ id_ed25519.*
 authorized_keys
 cert.json
 *.credentials.json
-cloudflared/*.json
+**/cloudflared/*.json
 
 # Runtime data, database exports, archives, and backups.
 backups/
