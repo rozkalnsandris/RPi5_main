@@ -16,4 +16,6 @@ V01 is inventory-only. Its collector is read-only, creates a bounded and sanitiz
 
 V02A is complete. It adds a least-privilege, read-only diagnostic that compares approved execution contexts without granting access or changing the host.
 
-See [the roadmap](docs/ROADMAP.md), [the security model](docs/SECURITY_MODEL.md), [the V01 inventory contract](docs/INVENTORY_CONTRACT.md), and [the V02A findings](docs/V02A_FINDINGS.md).
+V02B is complete. It records a verified, sanitized runtime baseline from the approved host-equivalent read-only context. The tracked baseline is bound to ignored, checksummed evidence and is not deployment configuration.
+
+See [the roadmap](docs/ROADMAP.md), [the security model](docs/SECURITY_MODEL.md), [the V01 inventory contract](docs/INVENTORY_CONTRACT.md), [the V02A findings](docs/V02A_FINDINGS.md), and [the current runtime baseline](docs/CURRENT_RUNTIME_BASELINE.md).

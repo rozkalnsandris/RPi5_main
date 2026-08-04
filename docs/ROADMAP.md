@@ -22,9 +22,9 @@ credentials, database contents, private keys, raw Cloudflare configuration or Do
 
 V02A added a bounded diagnostic and verified standard/approved-context comparison for Docker, systemd, socket, and interface metadata access. It made no host changes. See [V02A findings](V02A_FINDINGS.md).
 
-## V02B — future, not implemented
+## V02B — complete: verified runtime baseline
 
-Evaluate only a narrowly scoped read-only collection path if a future task demonstrates a need outside the verified host-equivalent context. Do not automate Docker-group membership or passwordless sudo.
+V02B adds a bounded host-equivalent read-only runtime collector, verifier, renderer, and a sanitized tracked baseline bound to verified evidence. It does not change Docker access, permissions, services, or production configuration. See the [runtime baseline contract](V02B_RUNTIME_BASELINE_CONTRACT.md) and [current baseline](CURRENT_RUNTIME_BASELINE.md).
 
 ## Later phases
 
