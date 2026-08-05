@@ -19,7 +19,7 @@ def verify(review_dir):
     files={p.name for p in d.iterdir()}
     if files not in (BASE_FILES,BASE_FILES|DECISION_FILES): raise ValueError
     for p in d.iterdir():
-        if not p.is_file() or p.is_symlink() or p.stat().st_nlink!=1 or p.stat().st_size>1_000_000: raise ValueError
+        if not p.is_file() or p.is_symlink() or p.stat().st_nlink!=1 or p.stat().st_size>2_000_000: raise ValueError
     expected={}
     for line in (d/'SHA256SUMS').read_text().splitlines():
         m=re.fullmatch(r'([0-9a-f]{64})  ([A-Za-z0-9._-]+)',line)
@@ -40,8 +40,9 @@ def verify(review_dir):
     if review['diff']['review_level'] not in {'none','informational','attention'}: raise ValueError
     if V.sha_file(d/'runtime-diff.json')!=review['diff']['json_sha256'] or V.sha_file(d/'runtime-diff.md')!=review['diff']['markdown_sha256']: raise ValueError
     diff=json.loads((d/'runtime-diff.json').read_text())
+    V.DIFF.validate_report(diff)
     if (d/'runtime-diff.md').read_text()!=V.DIFF.markdown(diff): raise ValueError
-    if diff.get('schema')!='rpi5.runtime-diff.v1' or diff.get('summary')!=review['diff']['summary'] or diff['summary']['review_level']!=review['diff']['review_level']: raise ValueError
+    if diff.get('schema') not in {V.DIFF.SCHEMA_V1,V.DIFF.SCHEMA_V2} or diff.get('summary')!=review['diff']['summary'] or diff['summary']['review_level']!=review['diff']['review_level']: raise ValueError
     if diff['inputs']['before']['sha256']!=review['current']['sha256'] or diff['inputs']['after']['sha256']!=review['candidate']['sha256']: raise ValueError
     raw=''.join(p.read_text(errors='ignore') for p in d.iterdir())
     if FORBIDDEN.search(raw): raise ValueError
