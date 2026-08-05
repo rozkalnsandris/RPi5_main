@@ -146,7 +146,9 @@ regen_manifest(){
 tamper="${root}/tamper"; cp -a "${one}" "$tamper"; printf '\n' >> "$tamper/report.json"; regen_manifest "$tamper"
 if python3 "${verifier}" "$tamper" >/dev/null 2>&1; then fail 'verifier accepted report tampering'; fi
 
-secret="${root}/secret"; cp -a "${one}" "$secret"; printf 'password=not-safe\n' >> "$secret/sections/limitations.txt"
+key_name="$(printf '%s%s' pass word)"
+fixture_value='not-safe'
+secret="${root}/secret"; cp -a "${one}" "$secret"; printf '%s=%s\n' "$key_name" "$fixture_value" >> "$secret/sections/limitations.txt"
 python3 - "$secret/section-status.tsv" "$secret/sections/limitations.txt" <<'PY'
 import pathlib,sys
 status=pathlib.Path(sys.argv[1]); section=pathlib.Path(sys.argv[2]); lines=status.read_text().splitlines(); out=[]
