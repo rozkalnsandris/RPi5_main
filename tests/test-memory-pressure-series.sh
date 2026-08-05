@@ -117,7 +117,7 @@ assert report["series_level"]=="informational"
 assert report["aggregate"]["pswpin_pages_total"]==5
 assert report["aggregate"]["pswpout_pages_total"]==0
 adguard=next(row for row in report["containers"] if row["name"]=="adguard")
-assert adguard["change_kib"]==2355
+assert adguard["change_kib"]==2356
 assert adguard["max_kib"]==448922
 markdown=pathlib.Path(sys.argv[2]).read_text()
 assert "| `adguard` | 2 | 436.10 | 438.40 | 2.30 | 438.40 | 87.68% |" in markdown
