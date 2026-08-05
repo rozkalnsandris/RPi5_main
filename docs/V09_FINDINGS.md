@@ -11,7 +11,7 @@ The four live V08 bundles from 2026-08-05 12:10–12:26 UTC each passed strict v
 - sampled totals were 8 swap-in pages, 0 swap-out pages, 73 major faults, 0 OOM kills and 0 PSI time;
 - the correct series interpretation is `intermittent_activity`, not sustained pressure.
 
-AdGuard moved from 436.1 MiB to 438.4 MiB. The normalized change is 2355 KiB, rendered as 2.30 MiB. The earlier terminal helper incorrectly treated bytes as KiB when rendering MiB and displayed approximately +2355 MiB.
+AdGuard moved from 436.1 MiB to 438.4 MiB. Normalizing each displayed value independently to whole KiB gives `446566 KiB` and `448922 KiB`; the resulting change is `2356 KiB`, rendered as `2.30 MiB`. The earlier terminal helper incorrectly treated bytes as KiB when rendering MiB and displayed approximately +2355 MiB.
 
 ## Root-cause status
 
