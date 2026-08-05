@@ -6,7 +6,7 @@ V04 is a strictly offline, manual, review-gated workflow for a second already-sa
 
 `prepare-runtime-baseline-review.py` canonical-validates the exact current and candidate JSON files, computes their SHA-256 bindings, produces a deterministic V03 diff, and writes a private immutable review bundle below ignored `evidence/` or `exports/`.
 
-`verify-runtime-baseline-review.py` validates the bundle tree, checksums, review schema, V03 report, cross-bindings, and optional decision without requiring the original baseline files.
+`verify-runtime-baseline-review.py` validates the bundle tree, checksums, review schema, V03 report, cross-bindings, and optional decision without requiring the original baseline files. It accepts immutable archived v1 reports and current v2 reports.
 
 ## Human decision
 
@@ -22,6 +22,6 @@ The decision binds the reviewer, explicit UTC decision time, reason code, review
 
 `apply-runtime-baseline-promotion.py` requires the exact expected current digest, exact reviewed candidate digest, a verified `accepted` decision, a strictly newer collection timestamp, and a valid archive index. It archives the previous JSON/Markdown plus review, diff, decision, transition, and checksums before replacing current through a rollback-safe transaction.
 
-`verify-runtime-baseline-archive.py` validates the deterministic index and every archive entry. Direct automatic restoration is not implemented. Repository rollback remains `git revert`; an intentional chronology exception requires a separately scoped and reviewed future version.
+`verify-runtime-baseline-archive.py` validates the deterministic index and every archive entry, including both supported diff schema versions. Direct automatic restoration is not implemented. Repository rollback remains `git revert`; an intentional chronology exception requires a separately scoped and reviewed future version.
 
 The V04 implementation itself leaves the real current baseline and Markdown unchanged.
