@@ -4,9 +4,9 @@ This is a verified, read-only runtime snapshot, not deployment configuration.
 
 ## Evidence binding
 
-- Collection UTC: `2026-08-05T09:44:02Z`
-- Source commit: `b1dd93d460ad71c1cf80502f7b2dc875fe384a1f`
-- Evidence manifest SHA-256: `872adb99cf9fa9b5c18380b2f0d737f23acd593b4b718311410359042377fb73`
+- Collection UTC: `2026-08-04T22:52:46Z`
+- Source commit: `c1c176868db1baddbb92ab3dc05e09c8dece7015`
+- Evidence manifest SHA-256: `2a4689aeeddf58bcbe7a4a380cb1dc10f237e5466a47b83bf90fd384c4c2bf54`
 - Collection context: `host-approved`
 
 ## Docker
@@ -47,7 +47,7 @@ This is a verified, read-only runtime snapshot, not deployment configuration.
 
 ## systemd
 
-- System state: `running`.
+- System state: `degraded`.
 - Enabled units: 46; failed units: 0; timers: 11.
 - Enabled `ModemManager.service`: `enabled`.
 - Enabled `NetworkManager-dispatcher.service`: `enabled`.
@@ -95,23 +95,25 @@ This is a verified, read-only runtime snapshot, not deployment configuration.
 - Enabled `watchdog.service`: `enabled`.
 - Enabled `wpa_supplicant.service`: `enabled`.
 - Enabled `zramswap.service`: `enabled`.
-- Timer `apt-daily-upgrade.timer`: load `loaded`, active `active`, sub `waiting`, activates `apt-daily-upgrade.service`, next `Thu 2026-08-06 06:23:10 CEST`, last `Wed 2026-08-05 06:58:32 CEST`.
-- Timer `apt-daily.timer`: load `loaded`, active `active`, sub `waiting`, activates `apt-daily.service`, next `Wed 2026-08-05 14:45:48 CEST`, last `Wed 2026-08-05 00:17:16 CEST`.
+- Timer `apt-daily-upgrade.timer`: load `loaded`, active `active`, sub `waiting`, activates `apt-daily-upgrade.service`, next `Wed 2026-08-05 06:19:39 CEST`, last `Tue 2026-08-04 06:26:39 CEST`.
+- Timer `apt-daily.timer`: load `loaded`, active `active`, sub `waiting`, activates `apt-daily.service`, next `Wed 2026-08-05 15:03:15 CEST`, last `Wed 2026-08-05 00:17:16 CEST`.
 - Timer `dpkg-db-backup.timer`: load `loaded`, active `active`, sub `waiting`, activates `dpkg-db-backup.service`, next `Thu 2026-08-06 00:00:00 CEST`, last `Wed 2026-08-05 00:00:00 CEST`.
-- Timer `e2scrub_all.timer`: load `loaded`, active `active`, sub `waiting`, activates `e2scrub_all.service`, next `Sun 2026-08-09 03:10:57 CEST`, last `Sun 2026-08-02 03:10:49 CEST`.
-- Timer `fstrim.timer`: load `loaded`, active `active`, sub `waiting`, activates `fstrim.service`, next `Mon 2026-08-10 01:03:37 CEST`, last `Mon 2026-08-03 01:31:59 CEST`.
-- Timer `hermes-deals-aldi-collector.timer`: load `loaded`, active `active`, sub `waiting`, activates `hermes-deals-aldi-collector.service`, next `Thu 2026-08-06 08:38:16 CEST`, last `Wed 2026-08-05 08:33:38 CEST`.
-- Timer `hermes-deals-edeka-collector.timer`: load `loaded`, active `active`, sub `waiting`, activates `hermes-deals-edeka-collector.service`, next `Thu 2026-08-06 08:50:28 CEST`, last `Wed 2026-08-05 08:51:42 CEST`.
-- Timer `hermes-deals-netto-collector.timer`: load `loaded`, active `active`, sub `waiting`, activates `hermes-deals-netto-collector.service`, next `Thu 2026-08-06 09:14:50 CEST`, last `Wed 2026-08-05 09:11:12 CEST`.
+- Timer `e2scrub_all.timer`: load `loaded`, active `active`, sub `waiting`, activates `e2scrub_all.service`, next `Sun 2026-08-09 03:10:11 CEST`, last `Sun 2026-08-02 03:10:49 CEST`.
+- Timer `fstrim.timer`: load `loaded`, active `active`, sub `waiting`, activates `fstrim.service`, next `Mon 2026-08-10 00:05:58 CEST`, last `Mon 2026-08-03 01:31:59 CEST`.
+- Timer `hermes-deals-aldi-collector.timer`: load `loaded`, active `active`, sub `waiting`, activates `hermes-deals-aldi-collector.service`, next `Wed 2026-08-05 08:30:01 CEST`, last `Tue 2026-08-04 08:39:00 CEST`.
+- Timer `hermes-deals-edeka-collector.timer`: load `loaded`, active `active`, sub `waiting`, activates `hermes-deals-edeka-collector.service`, next `Wed 2026-08-05 08:56:28 CEST`, last `Tue 2026-08-04 08:52:59 CEST`.
+- Timer `hermes-deals-netto-collector.timer`: load `loaded`, active `active`, sub `waiting`, activates `hermes-deals-netto-collector.service`, next `Wed 2026-08-05 09:16:00 CEST`, last `Tue 2026-08-04 09:17:19 CEST`.
 - Timer `logrotate.timer`: load `loaded`, active `active`, sub `waiting`, activates `logrotate.service`, next `Thu 2026-08-06 00:00:00 CEST`, last `Wed 2026-08-05 00:00:00 CEST`.
-- Timer `man-db.timer`: load `loaded`, active `active`, sub `waiting`, activates `man-db.service`, next `Thu 2026-08-06 08:01:43 CEST`, last `Wed 2026-08-05 05:11:08 CEST`.
-- Timer `systemd-tmpfiles-clean.timer`: load `loaded`, active `active`, sub `waiting`, activates `systemd-tmpfiles-clean.service`, next `unknown`, last `Wed 2026-08-05 01:39:19 CEST`.
+- Timer `man-db.timer`: load `loaded`, active `active`, sub `waiting`, activates `man-db.service`, next `Wed 2026-08-05 05:58:28 CEST`, last `Tue 2026-08-04 09:45:59 CEST`.
+- Timer `systemd-tmpfiles-clean.timer`: load `loaded`, active `active`, sub `waiting`, activates `systemd-tmpfiles-clean.service`, next `unknown`, last `Tue 2026-08-04 02:40:03 CEST`.
 
 ## Listening ports
 
 - `tcp` `loopback` port `8200`.
 - `tcp` `loopback` port `18554`.
-- `tcp` `loopback` port `36713`.
+- `tcp` `loopback` port `34811`.
+- `tcp` `loopback` port `41197`.
+- `tcp` `loopback` port `43413`.
 - `tcp` `private_or_local` port `1883`.
 - `tcp` `private_or_local` port `3030`.
 - `tcp` `private_or_local` port `8081`.
@@ -135,42 +137,41 @@ This is a verified, read-only runtime snapshot, not deployment configuration.
 - `udp` `loopback` port `5353`.
 - `udp` `private_or_local` port `546`.
 - `udp` `private_or_local` port `5353`.
-- `udp` `specific_other` port `5353`.
 - `udp` `wildcard` port `53`.
 - `udp` `wildcard` port `1900`.
 - `udp` `wildcard` port `5353`.
-- `udp` `wildcard` port `33165`.
-- `udp` `wildcard` port `34196`.
-- `udp` `wildcard` port `34379`.
-- `udp` `wildcard` port `36675`.
-- `udp` `wildcard` port `37092`.
-- `udp` `wildcard` port `37175`.
-- `udp` `wildcard` port `37695`.
-- `udp` `wildcard` port `39293`.
-- `udp` `wildcard` port `40297`.
-- `udp` `wildcard` port `43551`.
-- `udp` `wildcard` port `45889`.
-- `udp` `wildcard` port `46161`.
-- `udp` `wildcard` port `46321`.
-- `udp` `wildcard` port `46665`.
-- `udp` `wildcard` port `47059`.
-- `udp` `wildcard` port `47622`.
-- `udp` `wildcard` port `48300`.
-- `udp` `wildcard` port `48956`.
-- `udp` `wildcard` port `49150`.
-- `udp` `wildcard` port `49413`.
-- `udp` `wildcard` port `50186`.
-- `udp` `wildcard` port `51338`.
-- `udp` `wildcard` port `53837`.
-- `udp` `wildcard` port `55212`.
-- `udp` `wildcard` port `55842`.
-- `udp` `wildcard` port `56347`.
-- `udp` `wildcard` port `57079`.
-- `udp` `wildcard` port `58272`.
-- `udp` `wildcard` port `58705`.
-- `udp` `wildcard` port `59207`.
-- `udp` `wildcard` port `59377`.
-- `udp` `wildcard` port `59656`.
+- `udp` `wildcard` port `33297`.
+- `udp` `wildcard` port `33811`.
+- `udp` `wildcard` port `33957`.
+- `udp` `wildcard` port `33973`.
+- `udp` `wildcard` port `34398`.
+- `udp` `wildcard` port `34771`.
+- `udp` `wildcard` port `36210`.
+- `udp` `wildcard` port `36408`.
+- `udp` `wildcard` port `36991`.
+- `udp` `wildcard` port `37192`.
+- `udp` `wildcard` port `39817`.
+- `udp` `wildcard` port `40045`.
+- `udp` `wildcard` port `40207`.
+- `udp` `wildcard` port `40233`.
+- `udp` `wildcard` port `41968`.
+- `udp` `wildcard` port `42511`.
+- `udp` `wildcard` port `43716`.
+- `udp` `wildcard` port `44561`.
+- `udp` `wildcard` port `44811`.
+- `udp` `wildcard` port `45935`.
+- `udp` `wildcard` port `46198`.
+- `udp` `wildcard` port `46237`.
+- `udp` `wildcard` port `46888`.
+- `udp` `wildcard` port `47648`.
+- `udp` `wildcard` port `47750`.
+- `udp` `wildcard` port `49364`.
+- `udp` `wildcard` port `49674`.
+- `udp` `wildcard` port `51356`.
+- `udp` `wildcard` port `51881`.
+- `udp` `wildcard` port `52058`.
+- `udp` `wildcard` port `54584`.
+- `udp` `wildcard` port `56987`.
 
 ## Interfaces
 
@@ -180,25 +181,26 @@ This is a verified, read-only runtime snapshot, not deployment configuration.
 - `docker0`: operstate `up`, link type `ether`, loopback `false`, IPv4=1, IPv6=1; scopes global=1, host=0, link=1, other=0.
 - `eth0`: operstate `up`, link type `ether`, loopback `false`, IPv4=1, IPv6=3; scopes global=3, host=0, link=1, other=0.
 - `lo`: operstate `unknown`, link type `loopback`, loopback `true`, IPv4=1, IPv6=1; scopes global=0, host=2, link=0, other=0.
-- `veth0270bf4`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
-- `veth216534b`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
-- `veth2a20b5f`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
-- `veth2ee7403`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
-- `veth3a3670b`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
-- `veth691dc13`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
-- `veth774f804`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
-- `veth8f5c40d`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
-- `veth920dae4`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
-- `veth948762b`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
-- `vetha6caa90`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
-- `vethb053077`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
-- `vethb81aad0`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
-- `vethe6748eb`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
-- `vethedabf3b`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
-- `vethf499f5c`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
+- `veth023bd31`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
+- `veth41a8457`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
+- `veth44d1ef3`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
+- `veth4fc6cdd`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
+- `veth81b1b38`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
+- `veth89d22fa`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
+- `veth92da784`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
+- `vetha84c5b6`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
+- `vetha9ca034`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
+- `vethb521f98`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
+- `vethba19caa`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
+- `vethbe18f3d`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
+- `vethd325d84`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
+- `vethdd9a73a`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
+- `vethddffaf0`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
+- `vethe12877b`: operstate `up`, link type `ether`, loopback `false`, IPv4=0, IPv6=1; scopes global=0, host=0, link=1, other=0.
 - `wlan0`: operstate `down`, link type `ether`, loopback `false`, IPv4=0, IPv6=0; scopes global=0, host=0, link=0, other=0.
 
 ## Limitations and interpretation
 
 The entries above are direct, sanitized observations. They do not establish causation or serve as deployment configuration.
-- No command-capability limitations were recorded.
+Unavailable or informational sections:
+- `systemd_system_state: success_degraded`.

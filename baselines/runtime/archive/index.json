@@ -1,4 +1,16 @@
 {
-  "entries": [],
+  "entries": [
+    {
+      "decision": "accepted",
+      "entry_id": "2026-08-04T22-52-46Z--db222c2d6696",
+      "new_collection_utc": "2026-08-05T09:44:02Z",
+      "new_sha256": "2db82cc46d840aced4e57431195c821ead8f916bf9adfb707f2ac60c3bf371bc",
+      "old_collection_utc": "2026-08-04T22:52:46Z",
+      "old_sha256": "db222c2d66962400eb3eb836f4327a66479c96aa44d00f5f16b8071a45591204",
+      "review_id": "0e2a4688c55016fd93dbea814c8be39d",
+      "review_level": "attention",
+      "transition_sha256": "3a03d3c3935f590f9ef5a7d2adec5155f804d2823e51cda5da3d83e36634513f"
+    }
+  ],
   "schema": "rpi5.runtime-baseline-archive-index.v1"
 }
