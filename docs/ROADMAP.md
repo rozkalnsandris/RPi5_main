@@ -30,6 +30,10 @@ V02B adds a bounded host-equivalent read-only runtime collector, verifier, rende
 
 V03 compares two verified V02B JSON baselines with strict input/report validation and deterministic JSON/Markdown output. It is offline-only and does not collect, monitor, alert, deploy, remediate, or alter the host. See the [diff contract](V03_RUNTIME_DIFF_CONTRACT.md) and [findings](V03_FINDINGS.md).
 
+## V04 — complete: controlled baseline review tooling
+
+V04 validates a manually supplied canonical candidate, requires a deterministic V03 diff, records an explicit human decision, and permits promotion only for the exact reviewed, strictly newer candidate with an `accepted` decision. Previous current baselines are archived with checksummed transition records. V04 does not schedule collection, accept changes automatically, deploy, remediate, or alter the host. See the [review contract](V04_BASELINE_REVIEW_CONTRACT.md) and [findings](V04_FINDINGS.md).
+
 ## Later phases
 
 Each subsystem is imported separately with redaction, tests, rollback instructions and a pull request.

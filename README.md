@@ -20,4 +20,6 @@ V02B is complete. It records a verified, sanitized runtime baseline from the app
 
 V03 is complete. It compares two sanitized V02B JSON baselines offline and deterministically; it performs no host collection, monitoring, alerting, deployment, or remediation.
 
-See [the roadmap](docs/ROADMAP.md), [the security model](docs/SECURITY_MODEL.md), [the V01 inventory contract](docs/INVENTORY_CONTRACT.md), [the V02A findings](docs/V02A_FINDINGS.md), and [the current runtime baseline](docs/CURRENT_RUNTIME_BASELINE.md).
+V04 is complete as tooling. It adds an offline, human-gated review, decision, archive, and accepted-only promotion workflow. This implementation does not collect or promote a real second baseline.
+
+See [the roadmap](docs/ROADMAP.md), [the security model](docs/SECURITY_MODEL.md), [the V01 inventory contract](docs/INVENTORY_CONTRACT.md), [the V02A findings](docs/V02A_FINDINGS.md), [the current runtime baseline](docs/CURRENT_RUNTIME_BASELINE.md), and [the V04 review contract](docs/V04_BASELINE_REVIEW_CONTRACT.md).

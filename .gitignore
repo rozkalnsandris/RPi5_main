@@ -48,6 +48,8 @@ runtime/
 !baselines/
 !baselines/runtime/
 !baselines/runtime/current.json
+!baselines/runtime/archive/
+!baselines/runtime/archive/**
 *.sql
 *.sql.gz
 *.dump
