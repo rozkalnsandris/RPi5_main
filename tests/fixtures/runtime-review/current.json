@@ -1,14 +1,79 @@
 {
   "docker": {
-    "compose_projects": [{"name": "example-project", "status": "running"}],
+    "compose_projects": [
+      {
+        "name": "example-project",
+        "status": "running"
+      }
+    ],
     "compose_version": "v1.0.0",
-    "containers": [{"health": "healthy", "image": "example/service:1", "name": "example-service", "state": "running"}],
+    "containers": [
+      {
+        "health": "healthy",
+        "image": "example/service:1",
+        "name": "example-service",
+        "state": "running"
+      }
+    ],
     "engine_version": "1.0.0",
-    "networks": [{"driver": "bridge", "name": "example-net", "scope": "local"}]
+    "networks": [
+      {
+        "driver": "bridge",
+        "name": "example-net",
+        "scope": "local"
+      }
+    ]
   },
-  "interfaces": [{"ipv4_count": 1, "ipv6_count": 0, "link_type": "ether", "loopback": false, "name": "example0", "operstate": "up", "scope_counts": {"global": 1, "host": 0, "link": 0, "other": 0}}],
+  "interfaces": [
+    {
+      "ipv4_count": 1,
+      "ipv6_count": 0,
+      "link_type": "ether",
+      "loopback": false,
+      "name": "example0",
+      "operstate": "up",
+      "scope_counts": {
+        "global": 1,
+        "host": 0,
+        "link": 0,
+        "other": 0
+      }
+    }
+  ],
   "limitations": [],
-  "metadata": {"collection_utc": "2099-01-01T00:00:00Z", "context": "synthetic-review", "evidence_manifest_sha256": "2222222222222222222222222222222222222222222222222222222222222222", "schema_version": "v02b.0.0", "source_commit": "1111111111111111111111111111111111111111"},
-  "sockets": [{"address_scope": "loopback", "port": 8080, "protocol": "tcp"}],
-  "systemd": {"enabled_units": [{"name": "example.service", "state": "enabled"}], "failed_units": [], "system_state": "running", "timers": [{"activates": "example.service", "active": "active", "id": "example.timer", "last": "unknown", "load": "loaded", "next": "2099-01-01T00:00:00Z", "sub": "waiting"}]}
+  "metadata": {
+    "collection_utc": "2099-01-01T00:00:00Z",
+    "context": "synthetic-review",
+    "evidence_manifest_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+    "schema_version": "v02b.0.0",
+    "source_commit": "1111111111111111111111111111111111111111"
+  },
+  "sockets": [
+    {
+      "address_scope": "loopback",
+      "port": 8080,
+      "protocol": "tcp"
+    }
+  ],
+  "systemd": {
+    "enabled_units": [
+      {
+        "name": "example.service",
+        "state": "enabled"
+      }
+    ],
+    "failed_units": [],
+    "system_state": "running",
+    "timers": [
+      {
+        "activates": "example.service",
+        "active": "active",
+        "id": "example.timer",
+        "last": "unknown",
+        "load": "loaded",
+        "next": "2099-01-01T00:00:00Z",
+        "sub": "waiting"
+      }
+    ]
+  }
 }
