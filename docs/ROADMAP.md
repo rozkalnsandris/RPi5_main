@@ -42,6 +42,10 @@ V05 collected a second read-only host snapshot, verified and rendered it, produc
 
 V06 introduces a backward-compatible v2 diff schema. Exact high-numbered socket and dynamic `veth` observations remain auditable, while stable-profile rotation is grouped into one semantic change. Stable/low-port socket changes and non-`veth` interface changes remain material. Archived v1 reports remain valid. See the [V06 contract](V06_DYNAMIC_RUNTIME_SEMANTICS.md) and [findings](V06_FINDINGS.md).
 
+## V07 — complete: end-to-end baseline lineage verification
+
+V07 verifies the archive as one continuous and acyclic sequence of accepted transitions. Every archived old binding must match its stored baseline, every transition must begin at the previous transition head, and the final head must equal the exact canonical current JSON and deterministic Markdown projection. It emits optional deterministic JSON/Markdown integrity reports below ignored evidence paths and performs no host collection or mutation. See the [V07 contract](V07_RUNTIME_LINEAGE_CONTRACT.md) and [findings](V07_FINDINGS.md).
+
 ## Later phases
 
 Each subsystem is imported separately with redaction, tests, rollback instructions and a pull request.
