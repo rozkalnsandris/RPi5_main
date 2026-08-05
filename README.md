@@ -22,7 +22,7 @@ V03 is complete. It compares two sanitized V02B JSON baselines offline and deter
 
 V04 is complete as tooling. It adds an offline, human-gated review, decision, archive, and accepted-only promotion workflow.
 
-V05 is complete. It performed the first real temporal runtime refresh through V02B collection, V03 diff review, an explicit accepted V04 decision, archival of the previous baseline, and promotion of the exact reviewed candidate.
+V05 is complete. It performed the first real temporal runtime refresh through V02B collection, V03 diff review, an explicit accepted V04 decision, archival of the previous verified baseline, and promotion of the exact reviewed candidate.
 
 V06 is complete. It adds backward-compatible v2 runtime-diff semantics that retain exact dynamic socket and `veth` observations while grouping stable-profile churn for review.
 
@@ -30,4 +30,6 @@ V07 is complete. It verifies that every accepted archive transition forms one co
 
 V08 tooling is complete. It adds a bounded, non-root memory-pressure diagnostic for issue #5; a real RPi5 evidence collection remains a separate post-merge action.
 
-See [the roadmap](docs/ROADMAP.md), [the security model](docs/SECURITY_MODEL.md), [the V01 inventory contract](docs/INVENTORY_CONTRACT.md), [the V02A findings](docs/V02A_FINDINGS.md), [the current runtime baseline](docs/CURRENT_RUNTIME_BASELINE.md), [the V04 review contract](docs/V04_BASELINE_REVIEW_CONTRACT.md), [the V05 findings](docs/V05_FINDINGS.md), [the V06 semantics contract](docs/V06_DYNAMIC_RUNTIME_SEMANTICS.md), [the V07 lineage contract](docs/V07_RUNTIME_LINEAGE_CONTRACT.md), and [the V08 memory diagnostic contract](docs/V08_MEMORY_PRESSURE_DIAGNOSTIC_CONTRACT.md).
+V09 imports byte-identical source ownership for the existing host-wide encrypted backup implementation from Hermes Tech. It pins source blobs and SHA256, documents installed mappings and rollback, and performs no production verification or deployment.
+
+See [the roadmap](docs/ROADMAP.md), [the security model](docs/SECURITY_MODEL.md), [the V01 inventory contract](docs/INVENTORY_CONTRACT.md), [the V02A findings](docs/V02A_FINDINGS.md), [the current runtime baseline](docs/CURRENT_RUNTIME_BASELINE.md), [the V04 review contract](docs/V04_BASELINE_REVIEW_CONTRACT.md), [the V05 findings](docs/V05_FINDINGS.md), [the V06 semantics contract](docs/V06_DYNAMIC_RUNTIME_SEMANTICS.md), [the V07 lineage contract](docs/V07_RUNTIME_LINEAGE_CONTRACT.md), [the V08 memory diagnostic contract](docs/V08_MEMORY_PRESSURE_DIAGNOSTIC_CONTRACT.md), and [the V09 backup ownership contract](docs/V09_BACKUP_OWNERSHIP_CONTRACT.md).

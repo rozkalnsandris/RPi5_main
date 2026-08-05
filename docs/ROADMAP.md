@@ -50,6 +50,10 @@ V07 verifies the archive as one continuous and acyclic sequence of accepted tran
 
 V08 implements the non-root, read-only collector and verifier for issue #5. It measures MemAvailable, retained and active swap signals, memory PSI, major faults, safe process-name RSS totals, current container memory and bounded kernel memory events without reading arguments, environments, DNS queries or application configuration. A real RPi5 bundle and evidence-based root-cause conclusion remain post-merge work. See the [V08 contract](V08_MEMORY_PRESSURE_DIAGNOSTIC_CONTRACT.md) and [findings](V08_FINDINGS.md).
 
+## V09 — source ownership import: encrypted host backup
+
+V09 imports the existing host-wide encrypted backup script, configuration example, cron entry, and logrotate entry from the Hermes Tech repository without changing their bytes. Source Git blobs and SHA256 values are pinned in CI, and the source-to-installed mapping, no-op verification gate, future deployment controls, and rollback are documented. No host verification, backup execution, scheduling change, upload, retention deletion, restore, or deployment is performed by the repository import. See the [V09 contract](V09_BACKUP_OWNERSHIP_CONTRACT.md) and [findings](V09_FINDINGS.md).
+
 ## Later phases
 
 Each subsystem is imported separately with redaction, tests, rollback instructions and a pull request.

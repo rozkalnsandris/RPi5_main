@@ -17,6 +17,12 @@ expected_blobs=(
   8dde57f1a8bcc8561a9fb27df318a7d9d8367f70
   7d1490e4c6f525f80e14490e7946da95ea0bbd1f
 )
+expected_sha256=(
+  5ca85ae53bdf4fa3b99e21e1a30ddaa077d9e1791505b1e8389ee8587d011735
+  65e4d465fc13c05c4a19842a4c6a5f4c3410bd5ac0ede1bffe79c54d359b2a8c
+  d9ef8658cb78ea85a3c7bb8e3853b03eab4c896399e58c35ef5b960df2a51697
+  08e0b02be895592ffd1fd56ed6c5849cdc0e7b117c161e9382165ebcf05765e2
+)
 expected_modes=(100755 100644 100644 100644)
 
 for index in "${!paths[@]}"; do
@@ -30,14 +36,44 @@ for index in "${!paths[@]}"; do
     echo "V09: source blob drift for $path: ${actual_blob}" >&2
     exit 1
   }
+  actual_sha256=$(sha256sum -- "$path" | awk '{print $1}')
+  [[ "$actual_sha256" == "${expected_sha256[$index]}" ]] || {
+    echo "V09: SHA256 drift for $path: ${actual_sha256}" >&2
+    exit 1
+  }
   actual_mode=$(git ls-files -s -- "$path" | awk 'NR==1 {print $1}')
   [[ "$actual_mode" == "${expected_modes[$index]}" ]] || {
     echo "V09: mode drift for $path: ${actual_mode}" >&2
     exit 1
   }
-  actual_sha256=$(sha256sum -- "$path" | awk '{print $1}')
   printf 'V09_SHA256 %s %s\n' "$actual_sha256" "$path"
 done
+
+python3 - <<'PY'
+import json
+from pathlib import Path
+
+manifest_path = Path("ops/backup/source-provenance.json")
+data = json.loads(manifest_path.read_text(encoding="utf-8"))
+assert data["schema"] == "rpi5-backup-source-provenance-v1"
+assert data["source_repository"] == "rozkalnsandris/hermes-tech"
+assert data["source_commit"] == "194083f0d850c888d23f751aeb51e69a561a047a"
+assert data["original_introduction_commit"] == "36b8223710fd2dbe90b6d69898ffc17c34285da1"
+expected = [
+    ("ops/bin/rpi5-backup", "/usr/local/sbin/rpi5-backup", "100755", "059ac81b6af5aebb56ebd92a03407a5c28847954", "5ca85ae53bdf4fa3b99e21e1a30ddaa077d9e1791505b1e8389ee8587d011735"),
+    ("ops/backup/rpi5-backup.conf.example", "/etc/rpi5-backup.conf", "100644", "7981cdd33c1be2b548fde61d0d47a6fd5ece58b8", "65e4d465fc13c05c4a19842a4c6a5f4c3410bd5ac0ede1bffe79c54d359b2a8c"),
+    ("ops/cron.d/rpi5-backup", "/etc/cron.d/rpi5-backup", "100644", "8dde57f1a8bcc8561a9fb27df318a7d9d8367f70", "d9ef8658cb78ea85a3c7bb8e3853b03eab4c896399e58c35ef5b960df2a51697"),
+    ("ops/logrotate.d/rpi5-backup", "/etc/logrotate.d/rpi5-backup", "100644", "7d1490e4c6f525f80e14490e7946da95ea0bbd1f", "08e0b02be895592ffd1fd56ed6c5849cdc0e7b117c161e9382165ebcf05765e2"),
+]
+actual = [
+    (item["path"], item["installed_target"], item["repository_mode"], item["source_git_blob_sha1"], item["sha256"])
+    for item in data["files"]
+]
+assert actual == expected
+assert len({item[0] for item in actual}) == len(actual)
+assert len({item[1] for item in actual}) == len(actual)
+print("V09 provenance manifest: PASS")
+PY
 
 bash -n ops/bin/rpi5-backup
 
