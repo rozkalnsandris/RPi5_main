@@ -50,6 +50,10 @@ V07 verifies the archive as one continuous and acyclic sequence of accepted tran
 
 V08 implements the non-root, read-only collector and verifier for issue #5. It measures MemAvailable, retained and active swap signals, memory PSI, major faults, safe process-name RSS totals, current container memory and bounded kernel memory events without reading arguments, environments, DNS queries or application configuration. A real RPi5 bundle and evidence-based root-cause conclusion remain post-merge work. See the [V08 contract](V08_MEMORY_PRESSURE_DIAGNOSTIC_CONTRACT.md) and [findings](V08_FINDINGS.md).
 
+## V09 — complete: deterministic memory-pressure series analysis
+
+V09 verifies and analyzes two to sixty-four chronological V08 bundles offline. It normalizes Docker memory strings to KiB, fixes the observed 1024× MiB rendering error, reports host and per-container trends, and classifies isolated activity separately from sustained pressure. Source bundles remain unchanged and generated reports stay below ignored evidence paths. See the [V09 contract](V09_MEMORY_PRESSURE_SERIES_CONTRACT.md) and [findings](V09_FINDINGS.md).
+
 ## Later phases
 
 Each subsystem is imported separately with redaction, tests, rollback instructions and a pull request.
