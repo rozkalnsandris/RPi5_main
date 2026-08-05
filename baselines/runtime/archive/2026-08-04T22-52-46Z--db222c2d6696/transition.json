@@ -1,0 +1,31 @@
+{
+  "archive_checksums": {
+    "baseline.json": "db222c2d66962400eb3eb836f4327a66479c96aa44d00f5f16b8071a45591204",
+    "baseline.md": "da748766f90b7dcff11c79f79cd8f07a4969000e080ce04f59b504bb0ff0d7bc",
+    "decision.json": "b1f3574214a1840bad9d25c23f31c0483789a498956fb1083c14b4ead1e97c2d",
+    "review.json": "a689ba485df70ece68e9c1bec6fc72b6b31d23e5ac867546ed7065ba8889713b",
+    "runtime-diff.json": "7ff47dd1322485a0509e4e23c558f434ab9440cfac78f2e6aa49aed49ac7e847",
+    "runtime-diff.md": "1c534aa13b24903614be390359b178c3b596dba3a68d5ff85cfc020e1c1e7d93"
+  },
+  "decision": "accepted",
+  "diff_json_sha256": "7ff47dd1322485a0509e4e23c558f434ab9440cfac78f2e6aa49aed49ac7e847",
+  "diff_markdown_sha256": "1c534aa13b24903614be390359b178c3b596dba3a68d5ff85cfc020e1c1e7d93",
+  "entry_id": "2026-08-04T22-52-46Z--db222c2d6696",
+  "new": {
+    "collection_utc": "2026-08-05T09:44:02Z",
+    "context": "host-approved",
+    "evidence_manifest_sha256": "872adb99cf9fa9b5c18380b2f0d737f23acd593b4b718311410359042377fb73",
+    "sha256": "2db82cc46d840aced4e57431195c821ead8f916bf9adfb707f2ac60c3bf371bc",
+    "source_commit": "b1dd93d460ad71c1cf80502f7b2dc875fe384a1f"
+  },
+  "old": {
+    "collection_utc": "2026-08-04T22:52:46Z",
+    "context": "host-approved",
+    "evidence_manifest_sha256": "2a4689aeeddf58bcbe7a4a380cb1dc10f237e5466a47b83bf90fd384c4c2bf54",
+    "sha256": "db222c2d66962400eb3eb836f4327a66479c96aa44d00f5f16b8071a45591204",
+    "source_commit": "c1c176868db1baddbb92ab3dc05e09c8dece7015"
+  },
+  "review_id": "0e2a4688c55016fd93dbea814c8be39d",
+  "review_level": "attention",
+  "schema": "rpi5.runtime-baseline-transition.v1"
+}
