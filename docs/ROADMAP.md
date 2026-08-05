@@ -46,6 +46,10 @@ V06 introduces a backward-compatible v2 diff schema. Exact high-numbered socket 
 
 V07 verifies the archive as one continuous and acyclic sequence of accepted transitions. Every archived old binding must match its stored baseline, every transition must begin at the previous transition head, and the final head must equal the exact canonical current JSON and deterministic Markdown projection. It emits optional deterministic JSON/Markdown integrity reports below ignored evidence paths and performs no host collection or mutation. See the [V07 contract](V07_RUNTIME_LINEAGE_CONTRACT.md) and [findings](V07_FINDINGS.md).
 
+## V08 — tooling complete: bounded memory-pressure diagnosis
+
+V08 implements the non-root, read-only collector and verifier for issue #5. It measures MemAvailable, retained and active swap signals, memory PSI, major faults, safe process-name RSS totals, current container memory and bounded kernel memory events without reading arguments, environments, DNS queries or application configuration. A real RPi5 bundle and evidence-based root-cause conclusion remain post-merge work. See the [V08 contract](V08_MEMORY_PRESSURE_DIAGNOSTIC_CONTRACT.md) and [findings](V08_FINDINGS.md).
+
 ## Later phases
 
 Each subsystem is imported separately with redaction, tests, rollback instructions and a pull request.
