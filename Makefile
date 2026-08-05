@@ -6,6 +6,8 @@ test:
 	./tests/test-access-model.sh
 	./tests/test-runtime-baseline.sh
 	./tests/test-runtime-diff.sh
+	./tests/test-runtime-baseline-review.sh
+	python3 -m py_compile scripts/*.py
 
 secret-scan:
 	./scripts/check-no-secrets.sh
