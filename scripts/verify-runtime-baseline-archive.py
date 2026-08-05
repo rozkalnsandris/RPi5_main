@@ -41,7 +41,9 @@ def verify(root=None):
         baseline=V.load_canonical(d/'baseline.json')
         if V.sha_file(d/'baseline.json')!=entry['old_sha256'] or (d/'baseline.md').read_text()!=V.DOC.render(baseline): raise ValueError
         review=json.loads((d/'review.json').read_text()); decision=json.loads((d/'decision.json').read_text()); transition=json.loads((d/'transition.json').read_text())
-        if (d/'runtime-diff.md').read_text()!=V.DIFF.markdown(json.loads((d/'runtime-diff.json').read_text())): raise ValueError
+        diff=json.loads((d/'runtime-diff.json').read_text())
+        V.DIFF.validate_report(diff)
+        if (d/'runtime-diff.md').read_text()!=V.DIFF.markdown(diff): raise ValueError
         _keys(transition,{'schema','entry_id','old','new','review_id','decision','review_level','diff_json_sha256','diff_markdown_sha256','archive_checksums'})
         if transition['schema']!='rpi5.runtime-baseline-transition.v1' or transition['entry_id']!=entry['entry_id'] or transition['review_id']!=entry['review_id'] or transition['decision']!='accepted' or transition['review_level']!=entry['review_level']: raise ValueError
         if transition['old']['sha256']!=entry['old_sha256'] or transition['new']['sha256']!=entry['new_sha256'] or V.sha_file(d/'transition.json')!=entry['transition_sha256']: raise ValueError
