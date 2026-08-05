@@ -54,6 +54,10 @@ V08 implements the non-root, read-only collector and verifier for issue #5. It m
 
 V09 verifies and analyzes two to sixty-four chronological V08 bundles offline. It normalizes Docker memory strings to KiB, fixes the observed 1024× MiB rendering error, reports host and per-container trends, and classifies isolated activity separately from sustained pressure. Source bundles remain unchanged and generated reports stay below ignored evidence paths. See the [V09 contract](V09_MEMORY_PRESSURE_SERIES_CONTRACT.md) and [findings](V09_FINDINGS.md).
 
+## V10 — source ownership import: encrypted host backup
+
+V10 imports the existing host-wide encrypted backup script, configuration example, cron entry, and logrotate entry from the Hermes Tech repository without changing their bytes. Source Git blobs and SHA256 values are pinned in CI, and the source-to-installed mapping, no-op verification gate, future deployment controls, and rollback are documented. No host verification, backup execution, scheduling change, upload, retention deletion, restore, or deployment is performed by the repository import. See the [V10 contract](V10_BACKUP_OWNERSHIP_CONTRACT.md) and [findings](V10_FINDINGS.md).
+
 ## Later phases
 
 Each subsystem is imported separately with redaction, tests, rollback instructions and a pull request.
