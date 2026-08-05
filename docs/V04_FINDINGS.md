@@ -13,6 +13,6 @@ Direct verified results:
 - the tracked archive index is valid and empty;
 - generated review bundles remain ignored and untracked.
 
-The authoritative current JSON remains bound to SHA-256 `db222c2d66962400eb3eb836f4327a66479c96aa44d00f5f16b8071a45591204`. CI records and verifies the current Markdown SHA-256 and confirms both tracked files remain unchanged.
+The authoritative current JSON SHA-256 remains `db222c2d66962400eb3eb836f4327a66479c96aa44d00f5f16b8071a45591204`. The matching tracked Markdown SHA-256 remains `da748766f90b7dcff11c79f79cd8f07a4969000e080ce04f59b504bb0ff0d7bc`. GitHub Actions verified both bindings and byte-for-byte renderer compatibility.
 
 No second temporal V02B candidate was supplied, reviewed, accepted, or promoted. Therefore V04 makes no temporal-drift, runtime-health, or causal claim. No host collection, runtime command, privilege change, deployment, or production mutation occurred.
