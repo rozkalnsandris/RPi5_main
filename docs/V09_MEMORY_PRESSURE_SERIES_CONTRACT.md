@@ -12,7 +12,7 @@ The analyzer binds each source by bundle name, collection UTC and the SHA-256 of
 
 Docker memory strings are parsed with explicit binary and decimal units and normalized to whole KiB using decimal half-up rounding. JSON stores KiB and percentage basis points only. Markdown converts KiB to MiB exactly once.
 
-For the observed regression case, `436.1 MiB` becomes `446566 KiB`, `438.4 MiB` becomes `448922 KiB`, and the change is `2355 KiB` or `2.30 MiB`.
+For the observed regression case, `436.1 MiB` becomes `446566 KiB`, `438.4 MiB` becomes `448922 KiB`, and the whole-KiB change is `2356 KiB`, rendered as `2.30 MiB`.
 
 ## Classification
 
