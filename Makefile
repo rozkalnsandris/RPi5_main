@@ -8,6 +8,7 @@ test:
 	./tests/test-runtime-diff.sh
 	bash ./tests/test-runtime-baseline-review.sh
 	bash ./tests/test-runtime-baseline-lineage.sh
+	bash ./tests/test-memory-pressure-diagnostic.sh
 	python3 -m py_compile scripts/*.py
 
 secret-scan:
