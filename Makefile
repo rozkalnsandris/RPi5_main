@@ -9,6 +9,7 @@ test:
 	bash ./tests/test-runtime-baseline-review.sh
 	bash ./tests/test-runtime-baseline-lineage.sh
 	bash ./tests/test-memory-pressure-diagnostic.sh
+	bash ./tests/test-memory-pressure-series.sh
 	python3 -m py_compile scripts/*.py
 
 secret-scan:
