@@ -24,4 +24,6 @@ V04 is complete as tooling. It adds an offline, human-gated review, decision, ar
 
 V05 is complete. It performed the first real temporal runtime refresh through V02B collection, V03 diff review, an explicit accepted V04 decision, archival of the previous baseline, and promotion of the exact reviewed candidate.
 
-See [the roadmap](docs/ROADMAP.md), [the security model](docs/SECURITY_MODEL.md), [the V01 inventory contract](docs/INVENTORY_CONTRACT.md), [the V02A findings](docs/V02A_FINDINGS.md), [the current runtime baseline](docs/CURRENT_RUNTIME_BASELINE.md), [the V04 review contract](docs/V04_BASELINE_REVIEW_CONTRACT.md), and [the V05 findings](docs/V05_FINDINGS.md).
+V06 is complete. It adds backward-compatible v2 runtime-diff semantics that retain exact dynamic socket and `veth` observations while grouping stable-profile churn for review.
+
+See [the roadmap](docs/ROADMAP.md), [the security model](docs/SECURITY_MODEL.md), [the V01 inventory contract](docs/INVENTORY_CONTRACT.md), [the V02A findings](docs/V02A_FINDINGS.md), [the current runtime baseline](docs/CURRENT_RUNTIME_BASELINE.md), [the V04 review contract](docs/V04_BASELINE_REVIEW_CONTRACT.md), [the V05 findings](docs/V05_FINDINGS.md), and [the V06 semantics contract](docs/V06_DYNAMIC_RUNTIME_SEMANTICS.md).

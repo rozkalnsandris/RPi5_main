@@ -38,6 +38,10 @@ V04 validates a manually supplied canonical candidate, requires a deterministic 
 
 V05 collected a second read-only host snapshot, verified and rendered it, produced a V03 diff, recorded an explicit accepted V04 decision, archived the previous current baseline, and promoted the exact reviewed candidate. No host state was changed by the review or promotion workflow. See the [V05 findings](V05_FINDINGS.md).
 
+## V06 — complete: dynamic runtime semantics
+
+V06 introduces a backward-compatible v2 diff schema. Exact high-numbered socket and dynamic `veth` observations remain auditable, while stable-profile rotation is grouped into one semantic change. Stable/low-port socket changes and non-`veth` interface changes remain material. Archived v1 reports remain valid. See the [V06 contract](V06_DYNAMIC_RUNTIME_SEMANTICS.md) and [findings](V06_FINDINGS.md).
+
 ## Later phases
 
 Each subsystem is imported separately with redaction, tests, rollback instructions and a pull request.
