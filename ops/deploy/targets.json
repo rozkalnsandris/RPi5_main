@@ -1,0 +1,39 @@
+{
+  "schema": "rpi5.controlled-deploy-targets.v1",
+  "targets": [
+    {
+      "id": "backup-runner",
+      "source": "ops/bin/rpi5-backup",
+      "target": "/usr/local/sbin/rpi5-backup",
+      "owner": "root",
+      "group": "root",
+      "mode": "0700",
+      "validators": ["bash-n"]
+    },
+    {
+      "id": "backup-cron",
+      "source": "ops/cron.d/rpi5-backup",
+      "target": "/etc/cron.d/rpi5-backup",
+      "owner": "root",
+      "group": "root",
+      "mode": "0644",
+      "validators": ["cron-contract"]
+    },
+    {
+      "id": "backup-logrotate",
+      "source": "ops/logrotate.d/rpi5-backup",
+      "target": "/etc/logrotate.d/rpi5-backup",
+      "owner": "root",
+      "group": "root",
+      "mode": "0644",
+      "validators": ["logrotate-debug"]
+    }
+  ],
+  "reference_only": [
+    {
+      "source": "ops/backup/rpi5-backup.conf.example",
+      "production_target": "/etc/rpi5-backup.conf",
+      "reason": "The production file contains private host configuration and must never be replaced by the example."
+    }
+  ]
+}
