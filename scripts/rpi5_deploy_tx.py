@@ -303,6 +303,11 @@ def manual_rollback() -> None:
             except Exception as compensation_exc:
                 entry["rollback_compensation_phase"] = "restore_failed"
                 compensation_errors.append(f"{entry['id']}: {compensation_exc}")
+        if not compensation_errors:
+            try:
+                atomic_text(CTX.latest_success_path, transaction["id"] + "\n")
+            except Exception as pointer_exc:
+                compensation_errors.append(f"latest-success: {pointer_exc}")
         transaction.update({
             "status": "rollback_failed" if compensation_errors else "success",
             "rollback_attempted_at": now_iso(),
