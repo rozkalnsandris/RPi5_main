@@ -13,6 +13,7 @@ test:
 	bash ./tests/test-backup-ownership.sh
 	bash ./tests/test-adguard-memory-attribution.sh
 	bash ./tests/test-controlled-deploy.sh
+	python3 ./tests/test-controlled-deploy-rollback.py
 	python3 -m py_compile scripts/*.py
 
 secret-scan:
