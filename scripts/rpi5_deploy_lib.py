@@ -28,6 +28,10 @@ class DeployError(RuntimeError):
     pass
 
 
+def _inside(path: pathlib.Path, parent: pathlib.Path) -> bool:
+    return path == parent or parent in path.parents
+
+
 @dataclass(frozen=True)
 class Target:
     id: str
@@ -42,16 +46,58 @@ class Target:
 class Context:
     def __init__(self) -> None:
         self.repo = pathlib.Path(__file__).resolve().parents[1]
-        self.fake_root = pathlib.Path(os.environ.get("RPI5_DEPLOY_ROOT", "/")).resolve()
-        self.test_mode = os.environ.get("RPI5_DEPLOY_TEST_MODE") == "1"
-        self.state_dir = pathlib.Path(os.environ.get("RPI5_DEPLOY_STATE_DIR", "/var/lib/rpi5-deploy"))
-        self.log_file = pathlib.Path(os.environ.get("RPI5_DEPLOY_LOG", "/var/log/rpi5-deploy.log"))
-        self.max_plan_age = int(os.environ.get("RPI5_DEPLOY_MAX_PLAN_AGE", "1800"))
+        requested_test = os.environ.get("RPI5_DEPLOY_TEST_MODE") == "1"
+        if requested_test:
+            sandbox_raw = os.environ.get("RPI5_DEPLOY_TEST_SANDBOX")
+            root_raw = os.environ.get("RPI5_DEPLOY_ROOT")
+            if not sandbox_raw or not root_raw:
+                raise DeployError("test mode requires an explicit sandbox and fake root")
+            sandbox = pathlib.Path(sandbox_raw).resolve()
+            fake_root = pathlib.Path(root_raw).resolve()
+            if sandbox == pathlib.Path("/") or fake_root == pathlib.Path("/"):
+                raise DeployError("test mode may never target the real root filesystem")
+            if not sandbox.is_dir() or not fake_root.is_dir():
+                raise DeployError("test sandbox and fake root must already exist")
+            state_dir = pathlib.Path(
+                os.environ.get("RPI5_DEPLOY_STATE_DIR", str(sandbox / "state"))
+            ).resolve()
+            log_file = pathlib.Path(
+                os.environ.get("RPI5_DEPLOY_LOG", str(sandbox / "deploy.log"))
+            ).resolve()
+            for candidate in (self.repo, fake_root, state_dir, log_file.parent):
+                if not _inside(candidate, sandbox):
+                    raise DeployError(f"test path escapes sandbox: {candidate}")
+            self.test_mode = True
+            self.test_sandbox = sandbox
+            self.fake_root = fake_root
+            self.state_dir = state_dir
+            self.log_file = log_file
+            self.max_plan_age = int(os.environ.get("RPI5_DEPLOY_MAX_PLAN_AGE", "300"))
+        else:
+            self.test_mode = False
+            self.test_sandbox = None
+            self.fake_root = pathlib.Path("/")
+            self.state_dir = pathlib.Path("/var/lib/rpi5-deploy")
+            self.log_file = pathlib.Path("/var/log/rpi5-deploy.log")
+            self.max_plan_age = 1800
+        if not 60 <= self.max_plan_age <= 3600:
+            raise DeployError("plan lifetime must be between 60 and 3600 seconds")
         self.manifest_path = self.repo / "ops/deploy/targets.json"
         self.plan_path = self.state_dir / "plans/latest.json"
         self.lock_path = self.state_dir / "deploy.lock"
         self.latest_success_path = self.state_dir / "latest-success"
-        self.deploy_user = os.environ.get("RPI5_DEPLOY_USER") or os.environ.get("SUDO_USER") or pwd.getpwuid(self.repo.stat().st_uid).pw_name
+        repo_uid = self.repo.stat().st_uid
+        self.deploy_user = pwd.getpwuid(repo_uid).pw_name
+        if not self.test_mode and repo_uid == 0:
+            raise DeployError("production repository must be owned by a non-root operator")
+        sudo_user = os.environ.get("SUDO_USER")
+        if not self.test_mode and sudo_user:
+            try:
+                sudo_uid = pwd.getpwnam(sudo_user).pw_uid
+            except KeyError as exc:
+                raise DeployError(f"unknown SUDO_USER: {sudo_user}") from exc
+            if sudo_uid != repo_uid:
+                raise DeployError("SUDO_USER does not own the repository")
 
     def rooted(self, absolute: str) -> pathlib.Path:
         path = pathlib.PurePosixPath(absolute)
@@ -75,8 +121,27 @@ def sha256_file(path: pathlib.Path) -> str:
     return digest.hexdigest()
 
 
+def fsync_dir(path: pathlib.Path) -> None:
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_CLOEXEC", 0)
+    descriptor = os.open(path, flags)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def secure_dir(path: pathlib.Path, mode: int = 0o700) -> None:
+    path.mkdir(parents=True, exist_ok=True, mode=mode)
+    info = path.lstat()
+    if not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode):
+        raise DeployError(f"unsafe directory: {path}")
+    if not CTX.test_mode and info.st_uid != 0:
+        raise DeployError(f"deployment state directory is not root-owned: {path}")
+    os.chmod(path, mode)
+
+
 def atomic_json(path: pathlib.Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    secure_dir(path.parent)
     fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     tmp = pathlib.Path(name)
     try:
@@ -87,6 +152,7 @@ def atomic_json(path: pathlib.Path, payload: dict[str, Any]) -> None:
             os.fsync(handle.fileno())
         os.chmod(tmp, 0o600)
         os.replace(tmp, path)
+        fsync_dir(path.parent)
     finally:
         tmp.unlink(missing_ok=True)
 
@@ -94,10 +160,20 @@ def atomic_json(path: pathlib.Path, payload: dict[str, Any]) -> None:
 def append_log(message: str) -> None:
     line = f"[{dt.datetime.now().astimezone().strftime('%Y-%m-%d %H:%M:%S%z')}] {message}"
     print(line)
-    CTX.log_file.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
-    with CTX.log_file.open("a", encoding="utf-8") as handle:
-        handle.write(line + "\n")
-    os.chmod(CTX.log_file, 0o600)
+    secure_dir(CTX.log_file.parent, 0o755)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(CTX.log_file, flags, 0o600)
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "a", encoding="utf-8") as handle:
+            handle.write(line + "\n")
+            handle.flush()
+    except Exception:
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+        raise
     if shutil.which("logger") and not CTX.test_mode:
         subprocess.run(["logger", "-t", "rpi5-deploy", "--", message], check=False)
 
@@ -109,7 +185,7 @@ def run(args: list[str], *, cwd: pathlib.Path | None = None, check: bool = True,
         user = pwd.getpwnam(CTX.deploy_user)
         command = ["runuser", "-u", CTX.deploy_user, "--", "env", f"HOME={user.pw_dir}",
                    f"USER={CTX.deploy_user}", f"LOGNAME={CTX.deploy_user}",
-                   f"PATH={os.environ.get('PATH', '/usr/local/bin:/usr/bin:/bin')}", *command]
+                   "PATH=/usr/local/bin:/usr/bin:/bin", *command]
     result = subprocess.run(command, cwd=cwd, text=True,
                             stdout=subprocess.PIPE if capture else None,
                             stderr=subprocess.PIPE if capture else None,
@@ -135,9 +211,10 @@ def require_normal_user() -> None:
 
 
 def operation_lock() -> Any:
-    CTX.state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-    os.chmod(CTX.state_dir, 0o700)
-    handle = CTX.lock_path.open("a+")
+    secure_dir(CTX.state_dir)
+    flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(CTX.lock_path, flags, 0o600)
+    handle = os.fdopen(descriptor, "a+")
     try:
         fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError as exc:
@@ -147,6 +224,7 @@ def operation_lock() -> Any:
 
 
 def read_manifest() -> tuple[list[Target], str]:
+    safe_file(CTX.manifest_path)
     raw = CTX.manifest_path.read_bytes()
     data = json.loads(raw)
     if data.get("schema") != "rpi5.controlled-deploy-targets.v1":
@@ -234,12 +312,12 @@ def repository_preflight(*, validate: bool = True) -> dict[str, Any]:
 
 
 def github_checks(commit: str) -> dict[str, Any]:
-    if CTX.test_mode or os.environ.get("RPI5_DEPLOY_SKIP_GITHUB") == "1":
-        return {"skipped": True, "reason": "test/explicit skip"}
+    if CTX.test_mode:
+        return {"skipped": True, "reason": "sandbox test"}
     if not shutil.which("gh"):
         raise DeployError("GitHub CLI is required to verify exact-commit checks")
-    data = json.loads(run(["gh", "api", f"repos/{EXPECTED_REPOSITORY}/commits/{commit}/check-runs"],
-                          cwd=CTX.repo, timeout=120, as_user=True).stdout)
+    endpoint = f"repos/{EXPECTED_REPOSITORY}/commits/{commit}/check-runs?per_page=100"
+    data = json.loads(run(["gh", "api", endpoint], cwd=CTX.repo, timeout=120, as_user=True).stdout)
     checks = data.get("check_runs", [])
     if not checks:
         raise DeployError("no GitHub check runs found for exact commit")
@@ -268,22 +346,29 @@ def backup_age() -> int:
     pattern = re.compile(r"^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] Backup veiksmīgs:")
     stamp: dt.datetime | None = None
     path = CTX.rooted("/var/log/rpi5-backup.log")
-    safe_file(path)
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    info = safe_file(path)
+    with path.open("rb") as handle:
+        handle.seek(max(0, info.st_size - 4 * 1024 * 1024))
+        text = handle.read().decode("utf-8", "replace")
+    for line in text.splitlines():
         match = pattern.match(line)
         if match:
             stamp = dt.datetime.strptime(match.group(1), "%Y-%m-%d %H:%M:%S").astimezone()
     if stamp is None:
-        raise DeployError("no sanitized successful backup marker found")
+        raise DeployError("no recent sanitized successful backup marker found")
     return max(0, int((dt.datetime.now().astimezone() - stamp).total_seconds()))
 
 
 def docker_health() -> dict[str, int]:
-    data = json.loads((CTX.repo / "baselines/runtime/current.json").read_text(encoding="utf-8"))
+    baseline = CTX.repo / "baselines/runtime/current.json"
+    safe_file(baseline)
+    data = json.loads(baseline.read_text(encoding="utf-8"))
     expected = {c["name"]: c for c in data.get("docker", {}).get("containers", []) if c.get("state") == "running"}
     actual: dict[str, str] = {}
     for line in run(["docker", "ps", "--format", "{{.Names}}\t{{.Status}}"], timeout=60).stdout.splitlines():
-        name, _, status_text = line.partition("\t")
+        name, separator, status_text = line.partition("\t")
+        if not name or not separator:
+            raise DeployError("unexpected docker ps health projection")
         actual[name] = status_text
     missing = sorted(set(expected) - set(actual))
     unhealthy = sorted(name for name, item in expected.items()
@@ -294,8 +379,8 @@ def docker_health() -> dict[str, int]:
 
 
 def host_preflight() -> dict[str, Any]:
-    if CTX.test_mode or os.environ.get("RPI5_DEPLOY_SKIP_HOST_CHECKS") == "1":
-        return {"skipped": True, "reason": "test/explicit skip"}
+    if CTX.test_mode:
+        return {"skipped": True, "reason": "sandbox test"}
     require_root()
     if os.uname().nodename != "rpi5":
         raise DeployError(f"unexpected hostname: {os.uname().nodename}")
@@ -320,8 +405,10 @@ def host_preflight() -> dict[str, Any]:
         raise DeployError(f"load average is too high: {load1:.2f} > {limit:.2f}")
     temps = []
     for path in pathlib.Path("/sys/class/thermal").glob("thermal_zone*/temp"):
-        try: temps.append(int(path.read_text().strip()))
-        except (OSError, ValueError): pass
+        try:
+            temps.append(int(path.read_text().strip()))
+        except (OSError, ValueError):
+            pass
     if temps and max(temps) > 80_000:
         raise DeployError(f"temperature is too high: {max(temps) / 1000:.1f} C")
     throttled = None
@@ -332,7 +419,8 @@ def host_preflight() -> dict[str, Any]:
     ensure_no_conflicts()
     failed = run(["systemctl", "--failed", "--no-legend", "--plain"], check=False, timeout=30).stdout.strip()
     if failed:
-        raise DeployError(f"failed systemd units present: {[line.split()[0] for line in failed.splitlines()]}")
+        units = [line.split()[0].lstrip("●") for line in failed.splitlines() if line.split()]
+        raise DeployError(f"failed systemd units present: {units}")
     if run(["systemctl", "is-active", "cron.service"], check=False).returncode:
         raise DeployError("cron.service is not active")
     age = backup_age()
@@ -367,9 +455,10 @@ def target_plan(targets: Iterable[Target]) -> list[dict[str, Any]]:
 def build_plan(*, write: bool) -> dict[str, Any]:
     targets, manifest_sha = read_manifest()
     repo = repository_preflight(validate=True)
+    created_epoch = int(time.time())
     payload = {"schema": PLAN_SCHEMA, "repository": EXPECTED_REPOSITORY, "commit": repo["head"],
                "short_commit": repo["head"][:12], "created_at": now_iso(),
-               "created_epoch": int(time.time()), "expires_epoch": int(time.time()) + CTX.max_plan_age,
+               "created_epoch": created_epoch, "expires_epoch": created_epoch + CTX.max_plan_age,
                "manifest_sha256": manifest_sha, "repository_preflight": repo,
                "github_checks": github_checks(repo["head"]), "host_preflight": host_preflight(),
                "targets": target_plan(targets)}
@@ -394,9 +483,11 @@ def verify_plan_targets(plan: dict[str, Any]) -> None:
     if plan.get("manifest_sha256") != manifest_sha:
         raise DeployError("manifest changed after plan creation")
     planned = {row["id"]: row for row in plan["targets"]}
+    if set(planned) != {target.id for target in targets}:
+        raise DeployError("planned target set does not equal the manifest")
     for target in targets:
-        row = planned.get(target.id)
-        if not row or sha256_file(CTX.repo / target.source) != row["source_sha256"]:
+        row = planned[target.id]
+        if sha256_file(CTX.repo / target.source) != row["source_sha256"]:
             raise DeployError(f"source changed after plan: {target.id}")
         if fingerprint(CTX.rooted(target.target)) != row["before"]:
             raise DeployError(f"live target changed after plan: {target.id}")
