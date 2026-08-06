@@ -70,4 +70,5 @@ V12 adds:
 
 No engine installation, host deployment, service action, backup execution,
 upload, retention deletion, log rotation or production write was performed
-while implementing V12. Draft PR #31 remains the review boundary.
+while implementing V12. PR #31 is the implementation review boundary; merging
+it still does not install the engine or deploy any target.
