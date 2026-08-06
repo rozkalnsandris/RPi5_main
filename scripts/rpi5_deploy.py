@@ -270,7 +270,7 @@ def deploy(confirm: str) -> None:
 
 def status() -> None:
     require_root()
-    engine_source_preflight()
+    repository_preflight(validate=False)
     targets = require_target_contract()
     print(f"repository={EXPECTED_REPOSITORY}\nhead={git('rev-parse', 'HEAD')}")
     if CTX.plan_path.exists():
