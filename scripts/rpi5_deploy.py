@@ -14,12 +14,26 @@ import time
 
 from rpi5_deploy_lib import (CTX, ENGINE_INSTALLED_FILES, ENGINE_RELEASES,
     ENGINE_SCHEMA, ENGINE_SOURCE_FILES, EXPECTED_REPOSITORY, DeployError,
-    append_log, build_plan, engine_source_preflight, ensure_no_conflicts,
+    append_log, atomic_json, build_plan, engine_source_preflight, ensure_no_conflicts,
     expected_fingerprint, fingerprint, git, github_checks, host_identity,
     host_preflight, load_plan, operation_lock, read_manifest,
     repository_preflight, require_normal_user, require_root, run, safe_file,
     sha256_file, verify_engine_integrity, verify_plan_targets)
 from rpi5_deploy_tx import apply_plan, latest_transaction, manual_rollback
+
+
+REQUIRED_GITHUB_CHECKS = {"validate"}
+
+
+def require_repo_checks(checks: dict) -> None:
+    if CTX.test_mode:
+        return
+    names = {str(name) for name in checks.get("names", [])}
+    missing = sorted(REQUIRED_GITHUB_CHECKS - names)
+    if missing:
+        raise DeployError(
+            f"required exact-commit GitHub checks are missing: {missing}"
+        )
 
 
 def describe_fingerprint(value: dict) -> str:
@@ -119,7 +133,8 @@ def install_engine(confirm: str) -> None:
     if CTX.installed_engine:
         raise DeployError("install-engine must run from the repository controller")
     repository = repository_preflight(validate=True)
-    github_checks(repository["head"])
+    checks = github_checks(repository["head"])
+    require_repo_checks(checks)
     host_identity(root_required=False)
     short_commit = repository["head"][:12]
     if confirm != short_commit:
@@ -178,7 +193,14 @@ def engine_status(release_only: bool) -> None:
 def plan() -> None:
     require_root()
     with operation_lock():
-        payload = build_plan(write=True)
+        payload = build_plan(write=False)
+        require_repo_checks(payload["github_checks"])
+        atomic_json(CTX.plan_path, payload)
+        append_log(
+            f"PLAN PASS commit={payload['short_commit']} "
+            f"changed={sum(row['action'] == 'replace' for row in payload['targets'])} "
+            f"plan={CTX.plan_path}"
+        )
     show_plan(payload)
 
 
@@ -191,7 +213,8 @@ def deploy(confirm: str) -> None:
         current = repository_preflight(validate=True)
         if current["head"] != payload["commit"]:
             raise DeployError("repository commit changed after plan")
-        github_checks(payload["commit"])
+        checks = github_checks(payload["commit"])
+        require_repo_checks(checks)
         host_preflight()
         verify_plan_targets(payload)
         directory = apply_plan(payload)
