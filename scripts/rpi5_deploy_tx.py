@@ -9,6 +9,7 @@ import pathlib
 import re
 import shutil
 import stat
+import tempfile
 from typing import Any
 
 from rpi5_deploy_lib import (CTX, EXPECTED_REPOSITORY, TRANSACTION_SCHEMA, DeployError,
@@ -23,6 +24,54 @@ def sync_file(path: pathlib.Path) -> None:
         os.fsync(handle.fileno())
 
 
+def atomic_text(path: pathlib.Path, text: str) -> None:
+    secure_dir(path.parent)
+    descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temporary = pathlib.Path(name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temporary, 0o600)
+        os.replace(temporary, path)
+        fsync_dir(path.parent)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def verify_private_snapshot(path: pathlib.Path, expected_sha256: str, label: str) -> None:
+    info = safe_file(path)
+    if stat.S_IMODE(info.st_mode) != 0o600:
+        raise DeployError(f"private snapshot mode mismatch: {label}")
+    if not CTX.test_mode and (info.st_uid != 0 or info.st_gid != 0):
+        raise DeployError(f"private snapshot ownership mismatch: {label}")
+    if sha256_file(path) != expected_sha256:
+        raise DeployError(f"private snapshot checksum mismatch: {label}")
+
+
+def install_snapshot(
+    snapshot: pathlib.Path,
+    target: pathlib.Path,
+    desired: dict[str, Any],
+    label: str,
+) -> None:
+    verify_private_snapshot(snapshot, str(desired["sha256"]), label)
+    safe_target_parent(target)
+    temporary = target.parent / f".rpi5-restore.{label}.{os.getpid()}"
+    try:
+        shutil.copyfile(snapshot, temporary)
+        os.chown(temporary, int(desired["uid"]), int(desired["gid"]))
+        os.chmod(temporary, int(desired["mode"], 8))
+        sync_file(temporary)
+        os.replace(temporary, target)
+        fsync_dir(target.parent)
+    finally:
+        temporary.unlink(missing_ok=True)
+    if fingerprint(target) != desired:
+        raise DeployError(f"restored fingerprint mismatch: {label}")
+
+
 def restore(entry: dict[str, Any], directory: pathlib.Path) -> None:
     target = CTX.rooted(entry["target"])
     safe_target_parent(target)
@@ -30,19 +79,37 @@ def restore(entry: dict[str, Any], directory: pathlib.Path) -> None:
     if not before["exists"]:
         target.unlink(missing_ok=True)
         fsync_dir(target.parent)
+        if fingerprint(target) != before:
+            raise DeployError(f"restored absence mismatch: {entry['id']}")
         return
     backup = directory / entry["backup_relpath"]
-    safe_file(backup)
-    tmp = target.parent / f".rpi5-rollback.{entry['id']}.{os.getpid()}"
-    try:
-        shutil.copyfile(backup, tmp)
-        os.chown(tmp, int(before["uid"]), int(before["gid"]))
-        os.chmod(tmp, int(before["mode"], 8))
-        sync_file(tmp)
-        os.replace(tmp, target)
-        fsync_dir(target.parent)
-    finally:
-        tmp.unlink(missing_ok=True)
+    install_snapshot(backup, target, before, f"{entry['id']}.before")
+
+
+def verify_plan_row_state(row: dict[str, Any], by_id: dict[str, Any]) -> None:
+    target = by_id[row["id"]]
+    source = CTX.repo / target.source
+    safe_file(source)
+    if sha256_file(source) != row["source_sha256"]:
+        raise DeployError(f"source changed while applying plan: {target.id}")
+    installed = CTX.rooted(target.target)
+    safe_target_parent(installed)
+    if fingerprint(installed) != row["before"]:
+        raise DeployError(f"live target changed while applying plan: {target.id}")
+
+
+def verify_final_state(plan: dict[str, Any], by_id: dict[str, Any]) -> None:
+    for row in plan["targets"]:
+        target = by_id[row["id"]]
+        source = CTX.repo / target.source
+        safe_file(source)
+        if sha256_file(source) != row["source_sha256"]:
+            raise DeployError(f"source changed before transaction commit: {target.id}")
+        installed = CTX.rooted(target.target)
+        safe_target_parent(installed)
+        if fingerprint(installed) != row["desired"]:
+            raise DeployError(f"final target fingerprint mismatch: {target.id}")
+        validate_target(target, installed)
 
 
 def apply_plan(plan: dict[str, Any]) -> pathlib.Path:
@@ -59,10 +126,14 @@ def apply_plan(plan: dict[str, Any]) -> pathlib.Path:
     try:
         for row in plan["targets"]:
             target = by_id[row["id"]]
+            verify_plan_row_state(row, by_id)
             if row["action"] == "unchanged":
+                if row["before"] != row["desired"]:
+                    raise DeployError(f"unchanged action has different desired state: {target.id}")
+                validate_target(target, CTX.rooted(target.target))
                 transaction["targets"].append({**row, "post_sha256": row["source_sha256"],
-                                                "post": row["before"], "changed": False,
-                                                "phase": "unchanged"})
+                                                "post": fingerprint(CTX.rooted(target.target)),
+                                                "changed": False, "phase": "unchanged"})
                 atomic_json(directory / "transaction.json", transaction)
                 continue
             installed, source = CTX.rooted(target.target), CTX.repo / target.source
@@ -74,8 +145,9 @@ def apply_plan(plan: dict[str, Any]) -> pathlib.Path:
                 shutil.copyfile(installed, backup)
                 os.chmod(backup, 0o600)
                 sync_file(backup)
-                if sha256_file(backup) != row["before"]["sha256"]:
-                    raise DeployError(f"private backup verification failed: {target.id}")
+                verify_private_snapshot(
+                    backup, str(row["before"]["sha256"]), f"{target.id}.before"
+                )
             entry = {**row, "backup_relpath": backup_rel, "changed": True, "phase": "prepared"}
             changed.append(entry)
             transaction["targets"].append(entry)
@@ -100,13 +172,12 @@ def apply_plan(plan: dict[str, Any]) -> pathlib.Path:
             atomic_json(directory / "transaction.json", transaction)
             if CTX.test_mode and os.environ.get("RPI5_DEPLOY_TEST_FAIL_AFTER") == target.id:
                 raise DeployError(f"synthetic post-install failure after {target.id}")
+        verify_final_state(plan, by_id)
         host_preflight()
+        verify_final_state(plan, by_id)
         transaction.update({"status": "success", "completed_at": now_iso()})
         atomic_json(directory / "transaction.json", transaction)
-        CTX.latest_success_path.write_text(txid + "\n", encoding="utf-8")
-        os.chmod(CTX.latest_success_path, 0o600)
-        sync_file(CTX.latest_success_path)
-        fsync_dir(CTX.latest_success_path.parent)
+        atomic_text(CTX.latest_success_path, txid + "\n")
         append_log(f"DEPLOY PASS transaction={txid} commit={plan['short_commit']}")
         return directory
     except Exception as exc:
@@ -146,22 +217,107 @@ def latest_transaction() -> tuple[pathlib.Path, dict[str, Any]]:
     return directory, data
 
 
+def create_forward_snapshot(
+    entry: dict[str, Any],
+    directory: pathlib.Path,
+) -> pathlib.Path:
+    target = CTX.rooted(entry["target"])
+    current = fingerprint(target)
+    if current != entry.get("post"):
+        raise DeployError(f"refusing rollback over later target drift: {entry['id']}")
+    relative = pathlib.Path("rollback-forward") / f"{entry['id']}.post"
+    snapshot = directory / relative
+    secure_dir(snapshot.parent)
+    shutil.copyfile(target, snapshot)
+    os.chmod(snapshot, 0o600)
+    sync_file(snapshot)
+    verify_private_snapshot(snapshot, str(entry["post"]["sha256"]), f"{entry['id']}.post")
+    entry["rollback_forward_relpath"] = str(relative)
+    return snapshot
+
+
+def restore_deployed_state(entry: dict[str, Any], directory: pathlib.Path) -> None:
+    relative = entry.get("rollback_forward_relpath")
+    if not isinstance(relative, str):
+        raise DeployError(f"missing rollback compensation snapshot: {entry['id']}")
+    install_snapshot(
+        directory / relative,
+        CTX.rooted(entry["target"]),
+        entry["post"],
+        f"{entry['id']}.post",
+    )
+
+
+def verify_manual_rollback_inputs(
+    transaction: dict[str, Any],
+    directory: pathlib.Path,
+) -> list[dict[str, Any]]:
+    changed = [entry for entry in transaction["targets"] if entry.get("changed")]
+    for entry in changed:
+        if fingerprint(CTX.rooted(entry["target"])) != entry.get("post"):
+            raise DeployError(f"refusing rollback over later target drift: {entry['id']}")
+        before = entry["before"]
+        if before["exists"]:
+            verify_private_snapshot(
+                directory / entry["backup_relpath"],
+                str(before["sha256"]),
+                f"{entry['id']}.before",
+            )
+    for entry in changed:
+        create_forward_snapshot(entry, directory)
+    return changed
+
+
 def manual_rollback() -> None:
     directory, transaction = latest_transaction()
     if transaction.get("status") != "success":
         raise DeployError("latest transaction is not an active successful deploy")
-    for entry in transaction["targets"]:
-        if entry.get("changed") and fingerprint(CTX.rooted(entry["target"])) != entry.get("post"):
-            raise DeployError(f"refusing rollback over later target drift: {entry['id']}")
-    for entry in reversed(transaction["targets"]):
-        if entry.get("changed"):
+    changed = verify_manual_rollback_inputs(transaction, directory)
+    restored: list[dict[str, Any]] = []
+    try:
+        for entry in reversed(changed):
             restore(entry, directory)
+            restored.append(entry)
+            if CTX.test_mode and os.environ.get("RPI5_DEPLOY_TEST_FAIL_MANUAL_AFTER") == entry["id"]:
+                raise DeployError(f"synthetic manual rollback failure after {entry['id']}")
+        for entry in changed:
+            if fingerprint(CTX.rooted(entry["target"])) != entry["before"]:
+                raise DeployError(f"rollback verification failed: {entry['id']}")
+        for entry in changed:
             entry["phase"] = "manually_restored"
-    for entry in transaction["targets"]:
-        if entry.get("changed") and fingerprint(CTX.rooted(entry["target"])) != entry["before"]:
-            raise DeployError(f"rollback verification failed: {entry['id']}")
-    transaction.update({"status": "manually_rolled_back", "rolled_back_at": now_iso()})
-    atomic_json(directory / "transaction.json", transaction)
-    CTX.latest_success_path.unlink(missing_ok=True)
-    fsync_dir(CTX.latest_success_path.parent)
-    append_log(f"ROLLBACK PASS transaction={transaction['id']}")
+        transaction.update({
+            "status": "manually_rolled_back",
+            "rolled_back_at": now_iso(),
+            "rollback_attempt_status": "success",
+        })
+        atomic_json(directory / "transaction.json", transaction)
+        CTX.latest_success_path.unlink(missing_ok=True)
+        fsync_dir(CTX.latest_success_path.parent)
+        append_log(f"ROLLBACK PASS transaction={transaction['id']}")
+    except Exception as exc:
+        compensation_errors = []
+        for entry in reversed(restored):
+            try:
+                restore_deployed_state(entry, directory)
+                entry["rollback_compensation_phase"] = "deployed_state_restored"
+            except Exception as compensation_exc:
+                entry["rollback_compensation_phase"] = "restore_failed"
+                compensation_errors.append(f"{entry['id']}: {compensation_exc}")
+        transaction.update({
+            "status": "rollback_failed" if compensation_errors else "success",
+            "rollback_attempted_at": now_iso(),
+            "rollback_attempt_status": (
+                "compensation_failed" if compensation_errors else "compensated"
+            ),
+            "rollback_error": str(exc)[:1000],
+            "rollback_compensation_errors": compensation_errors,
+        })
+        atomic_json(directory / "transaction.json", transaction)
+        if compensation_errors:
+            raise DeployError(
+                f"manual rollback failed and deployed-state compensation was incomplete: "
+                f"{compensation_errors}"
+            ) from exc
+        raise DeployError(
+            f"manual rollback failed; deployed state was restored: {exc}"
+        ) from exc
