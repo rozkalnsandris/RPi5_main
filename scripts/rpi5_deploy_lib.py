@@ -26,6 +26,20 @@ REMOTE_RE = re.compile(
 )
 PLAN_SCHEMA = "rpi5.controlled-deploy-plan.v1"
 TRANSACTION_SCHEMA = "rpi5.controlled-deploy-transaction.v1"
+ENGINE_SCHEMA = "rpi5.controlled-deploy-engine.v1"
+ENGINE_RELEASES = pathlib.Path("/usr/local/libexec/rpi5-deploy/releases")
+ENGINE_SOURCE_FILES = (
+    "scripts/rpi5-deploy",
+    "scripts/rpi5_deploy.py",
+    "scripts/rpi5_deploy_lib.py",
+    "scripts/rpi5_deploy_tx.py",
+    "ops/deploy/targets.json",
+)
+ENGINE_INSTALLED_FILES = {
+    "rpi5_deploy.py": "0500",
+    "rpi5_deploy_lib.py": "0400",
+    "rpi5_deploy_tx.py": "0400",
+}
 
 
 class DeployError(RuntimeError):
@@ -34,6 +48,14 @@ class DeployError(RuntimeError):
 
 def _inside(path: pathlib.Path, parent: pathlib.Path) -> bool:
     return path == parent or parent in path.parents
+
+
+def _raw_sha256(path: pathlib.Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 @dataclass(frozen=True)
@@ -49,8 +71,36 @@ class Target:
 
 class Context:
     def __init__(self) -> None:
-        self.repo = pathlib.Path(__file__).resolve().parents[1]
+        code_path = pathlib.Path(__file__).resolve()
+        release_dir = code_path.parent
+        self.installed_engine = (
+            release_dir.parent == ENGINE_RELEASES
+            and re.fullmatch(r"[0-9a-f]{40}", release_dir.name) is not None
+        )
+        self.engine_release = release_dir if self.installed_engine else None
+        self.engine_config: dict[str, Any] | None = None
+        if self.installed_engine:
+            config_path = release_dir / "engine-source.json"
+            info = config_path.lstat()
+            if (not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode)
+                    or info.st_nlink != 1 or info.st_uid != 0
+                    or stat.S_IMODE(info.st_mode) != 0o400):
+                raise DeployError("installed deploy engine metadata is unsafe")
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            if (config.get("schema") != ENGINE_SCHEMA
+                    or config.get("installed_from_commit") != release_dir.name):
+                raise DeployError("installed deploy engine metadata is invalid")
+            repo = pathlib.Path(str(config.get("repo_path", "")))
+            if not repo.is_absolute() or ".." in repo.parts:
+                raise DeployError("installed deploy engine repository path is unsafe")
+            self.repo = repo.resolve()
+            self.engine_config = config
+        else:
+            self.repo = code_path.parents[1]
+
         requested_test = os.environ.get("RPI5_DEPLOY_TEST_MODE") == "1"
+        if requested_test and self.installed_engine:
+            raise DeployError("installed deploy engine never accepts test mode")
         if requested_test:
             sandbox_raw = os.environ.get("RPI5_DEPLOY_TEST_SANDBOX")
             root_raw = os.environ.get("RPI5_DEPLOY_ROOT")
@@ -90,10 +140,15 @@ class Context:
         self.plan_path = self.state_dir / "plans/latest.json"
         self.lock_path = self.state_dir / "deploy.lock"
         self.latest_success_path = self.state_dir / "latest-success"
-        repo_uid = self.repo.stat().st_uid
+        repo_info = self.repo.stat()
+        repo_uid = repo_info.st_uid
         self.deploy_user = pwd.getpwuid(repo_uid).pw_name
         if not self.test_mode and repo_uid == 0:
             raise DeployError("production repository must be owned by a non-root operator")
+        if self.installed_engine:
+            expected_uid = int(self.engine_config.get("repo_owner_uid", -1))
+            if repo_uid != expected_uid:
+                raise DeployError("repository owner changed after deploy engine installation")
         sudo_user = os.environ.get("SUDO_USER")
         if not self.test_mode and sudo_user:
             try:
@@ -118,11 +173,7 @@ def now_iso() -> str:
 
 
 def sha256_file(path: pathlib.Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for block in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
+    return _raw_sha256(path)
 
 
 def fsync_dir(path: pathlib.Path) -> None:
@@ -222,14 +273,63 @@ def git(*args: str) -> str:
     return run(["git", *args], cwd=CTX.repo, as_user=True).stdout.strip()
 
 
+def safe_file(path: pathlib.Path) -> os.stat_result:
+    info = path.lstat()
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+        raise DeployError(f"unsafe file: {path}")
+    return info
+
+
+def verify_engine_integrity() -> dict[str, Any]:
+    if CTX.test_mode:
+        return {"skipped": True, "reason": "sandbox test"}
+    if not CTX.installed_engine or CTX.engine_release is None or CTX.engine_config is None:
+        raise DeployError("root commands require the installed root-owned deploy engine")
+    installed = CTX.engine_config.get("installed_files")
+    if not isinstance(installed, dict) or set(installed) != set(ENGINE_INSTALLED_FILES):
+        raise DeployError("installed deploy engine file inventory is invalid")
+    for name, expected_mode in ENGINE_INSTALLED_FILES.items():
+        item = installed.get(name)
+        if not isinstance(item, dict) or item.get("mode") != expected_mode:
+            raise DeployError(f"installed deploy engine metadata mismatch: {name}")
+        path = CTX.engine_release / name
+        info = safe_file(path)
+        if info.st_uid != 0 or info.st_gid != 0 or stat.S_IMODE(info.st_mode) != int(expected_mode, 8):
+            raise DeployError(f"installed deploy engine ownership or mode mismatch: {name}")
+        if sha256_file(path) != item.get("sha256"):
+            raise DeployError(f"installed deploy engine checksum mismatch: {name}")
+    return {"release": CTX.engine_release.name,
+            "installed_from_commit": CTX.engine_config["installed_from_commit"]}
+
+
+def engine_source_preflight() -> dict[str, Any]:
+    if CTX.test_mode or not CTX.installed_engine:
+        return {"skipped": True}
+    source_files = CTX.engine_config.get("source_files")
+    if not isinstance(source_files, dict) or set(source_files) != set(ENGINE_SOURCE_FILES):
+        raise DeployError("deploy engine source inventory is invalid")
+    for relative, expected_sha in source_files.items():
+        path = CTX.repo / relative
+        safe_file(path)
+        if sha256_file(path) != expected_sha:
+            raise DeployError("deploy engine source changed; reinstall the engine from reviewed main")
+        git("ls-files", "--error-unmatch", "--", relative)
+    return {"source_count": len(source_files),
+            "installed_from_commit": CTX.engine_config["installed_from_commit"]}
+
+
 def require_root() -> None:
     if os.geteuid() != 0 and not CTX.test_mode:
-        raise DeployError("this command requires root; run it with sudo")
+        raise DeployError("this command requires root; use the repository controller without sudo")
+    if not CTX.test_mode:
+        verify_engine_integrity()
 
 
 def require_normal_user() -> None:
     if os.geteuid() == 0 and not CTX.test_mode:
-        raise DeployError("sync/test must run as the normal repository user")
+        raise DeployError("sync/test/install-engine must run as the normal repository user")
+    if CTX.installed_engine and not CTX.test_mode:
+        raise DeployError("normal-user commands must run from the repository controller")
 
 
 def operation_lock() -> Any:
@@ -273,13 +373,6 @@ def read_manifest() -> tuple[list[Target], str]:
     if {t.id for t in targets} != {"backup-runner", "backup-cron", "backup-logrotate"}:
         raise DeployError("V12 target set must remain exactly the approved V10 files")
     return targets, hashlib.sha256(raw).hexdigest()
-
-
-def safe_file(path: pathlib.Path) -> os.stat_result:
-    info = path.lstat()
-    if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
-        raise DeployError(f"unsafe file: {path}")
-    return info
 
 
 def fingerprint(path: pathlib.Path) -> dict[str, Any]:
@@ -340,10 +433,11 @@ def repository_preflight(*, validate: bool = True) -> dict[str, Any]:
     head, origin = git("rev-parse", "HEAD"), git("rev-parse", "origin/main")
     if head != origin:
         raise DeployError("local HEAD does not equal origin/main")
+    engine = engine_source_preflight()
     if validate:
         run(["make", "validate"], cwd=CTX.repo, capture=False, timeout=1200, as_user=True)
     return {"branch": branch, "head": head, "origin_main": origin,
-            "remote": "github.com/rozkalnsandris/RPi5_main"}
+            "remote": "github.com/rozkalnsandris/RPi5_main", "engine_source": engine}
 
 
 def github_checks(commit: str) -> dict[str, Any]:
@@ -413,10 +507,11 @@ def docker_health() -> dict[str, int]:
     return {"expected_running": len(expected), "observed_running": len(actual)}
 
 
-def host_identity() -> dict[str, Any]:
+def host_identity(*, root_required: bool = True) -> dict[str, Any]:
     if CTX.test_mode:
         return {"skipped": True, "reason": "sandbox test"}
-    require_root()
+    if root_required:
+        require_root()
     if os.uname().nodename != "rpi5":
         raise DeployError(f"unexpected hostname: {os.uname().nodename}")
     model = pathlib.Path("/proc/device-tree/model").read_bytes().rstrip(b"\0").decode("utf-8", "replace")
