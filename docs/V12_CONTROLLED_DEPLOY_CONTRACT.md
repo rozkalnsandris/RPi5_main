@@ -35,9 +35,9 @@ bash ./scripts/rpi5-deploy install-engine --confirm <12-character-main-commit>
 bash ./scripts/rpi5-deploy engine-status
 ```
 
-The installer requires clean, exact `main`, successful `make validate`,
-successful GitHub checks for the exact commit and the expected RPi5 host
-identity before invoking any privileged install command.
+The installer requires clean, exact `main`, successful `make validate`, the
+required successful GitHub `validate` check for the exact commit and the
+expected RPi5 host identity before invoking any privileged install command.
 
 It stages exact copies of the reviewed engine sources, verifies every staged
 SHA-256 against the Git source, writes deterministic source metadata and then
@@ -90,6 +90,12 @@ The target manifest is `ops/deploy/targets.json`. V12 manages exactly:
 | `ops/cron.d/rpi5-backup` | `/etc/cron.d/rpi5-backup` | `root:root` | `0644` | exact nightly cron contract |
 | `ops/logrotate.d/rpi5-backup` | `/etc/logrotate.d/rpi5-backup` | `root:root` | `0644` | debug-only `logrotate -d` |
 
+The engine independently hard-codes the complete approved tuple for every
+entry: ID, source, production target, owner, group, mode and validators. A
+manifest that preserves an approved ID but changes any other field is rejected
+before engine installation, plan creation, deploy or status. The manifest is a
+reviewed declaration, not authority to select arbitrary root paths.
+
 `ops/backup/rpi5-backup.conf.example` is deliberately **reference-only**.
 The real `/etc/rpi5-backup.conf` may contain private host configuration and
 must never be replaced by the example.
@@ -127,9 +133,15 @@ A production plan fails unless all of the following hold:
 - stable Git porcelain reports no tracked or untracked change;
 - a fresh fetch succeeds and local `HEAD` equals `origin/main`;
 - installed engine source hashes equal current tracked source hashes;
+- the complete manifest equals the hard-coded approved V12 target contract;
 - `make validate` succeeds as the non-root repository owner;
-- GitHub CLI returns at least one check run for the exact commit;
-- every returned exact-commit check run is completed with conclusion `success`.
+- GitHub CLI returns check runs for the exact commit;
+- every latest returned exact-commit check run is completed with conclusion `success`;
+- the required check name `validate` is present and successful.
+
+A different successful check cannot substitute for the repository validation
+job. The root-owned plan is written only after the required check-name gate has
+passed.
 
 A raw remote URL is never written into a plan or log. The stored projection is
 the fixed repository identity only, so credentials accidentally embedded in a
@@ -182,7 +194,8 @@ The plan includes:
 The default lifetime is 30 minutes. `deploy` refuses an expired plan, a changed
 manifest or source, a different commit, unsafe/symlinked target parents, or any
 target whose complete live fingerprint no longer equals the reviewed
-before-state.
+before-state. Every source is required to be a single regular non-symlink file;
+this applies to status reporting as well as planning and deployment.
 
 A file with matching content but wrong UID, GID or mode is `DRIFT`, not
 `MATCH`, and is planned for correction.
@@ -195,7 +208,9 @@ After all gates pass, deploy creates a root-only transaction below:
 /var/lib/rpi5-deploy/transactions/<UTC>-<short-commit>/
 ```
 
-For every changed target it:
+Immediately before processing each row, including `unchanged` rows, the engine
+rechecks that the source SHA and full live fingerprint still equal the reviewed
+plan. For every changed target it then:
 
 1. verifies all target parent components are real directories, not symlinks;
 2. copies the old regular file into a private `0600` transaction backup;
@@ -208,6 +223,11 @@ For every changed target it:
 9. verifies the complete desired fingerprint and validators again;
 10. records the installed phase before moving to the next target.
 
+After all rows are processed, every source and desired live fingerprint is
+verified before and again after the final host preflight. Successful transaction
+metadata and the `latest-success` pointer are written with fsync; the pointer is
+replaced atomically.
+
 V12 does not execute a backup, upload data, delete retention data, rotate logs,
 reload cron, restart services or restart containers. The three initial targets
 do not require a service restart.
@@ -215,20 +235,37 @@ do not require a service restart.
 ## Automatic rollback
 
 Any exception after a target enters the mutation set starts automatic rollback
-in reverse order. The old file is restored atomically, or a target that was
-previously absent is removed. Every restored SHA-256, UID, GID and mode must
+in reverse order. The rollback-start audit log is best-effort and cannot block
+the actual restoration. The old file is restored atomically, or a target that
+was previously absent is removed. Every restored SHA-256, UID, GID and mode must
 exactly equal the reviewed before-state. Transaction metadata records prepared,
 installed, restored or restore-failed phases.
 
-A fully restored failure is marked `rolled_back`. An incomplete restore is
-marked `rollback_failed` and reported clearly.
+If failure occurs after a `latest-success` pointer was created, automatic
+rollback removes that pointer when it still refers to the failing transaction.
+A fully restored failure is marked `rolled_back`. An incomplete restore or
+pointer cleanup is marked `rollback_failed` and reported clearly.
 
 ## Manual rollback
 
-Only the latest successful transaction can be rolled back in V12. Before
-restoring a target, the command requires its complete current fingerprint to
-equal the recorded post-deploy fingerprint. It therefore refuses to overwrite
-a later content, ownership, group or mode change.
+Only the latest successful transaction can be rolled back in V12. Before the
+first live write, the command:
+
+1. requires every changed target's complete current fingerprint to equal the
+   recorded post-deploy fingerprint;
+2. verifies every private before-state backup's type, mode, ownership and
+   SHA-256;
+3. creates and verifies a private `0600` post-state compensation snapshot for
+   every changed target.
+
+It therefore refuses to overwrite later content, ownership, group or mode
+changes, and it cannot begin restoration with a corrupt transaction backup.
+Targets are restored in reverse order. If a later restore or final verification
+fails, every already restored target is atomically returned to its recorded
+deployed state from the compensation snapshots and `latest-success` is
+re-established. A completely compensated attempt remains an active successful
+transaction with `rollback_attempt_status=compensated`; incomplete compensation
+is marked `rollback_failed` and reported as an incident.
 
 Rollback is deliberately not blocked by an unhealthy container or failed
 systemd unit, because that may be the reason rollback is needed. It still
@@ -266,13 +303,25 @@ It builds a temporary Git repository and fake root, then verifies:
 - refusal to roll back over metadata-only drift;
 - verified manual rollback to exact before fingerprints.
 
+`tests/test-controlled-deploy-rollback.py` adds focused transaction-hardening
+regressions for:
+
+- rejection of an ID-preserving manifest target-path change;
+- rejection of a repository source symlink during status;
+- failure after `latest-success` creation, full automatic restoration and stale
+  pointer cleanup;
+- refusal of a corrupt before-state backup before any manual-rollback write;
+- synthetic mid-rollback failure, deployed-state compensation and pointer
+  preservation;
+- a later successful exact rollback to the original bytes and modes.
+
 Run all repository checks with:
 
 ```bash
 make validate
 ```
 
-The test does not install `/usr/local/sbin/rpi5-deploy`, touch production state,
+The tests do not install `/usr/local/sbin/rpi5-deploy`, touch production state,
 run the real backup, reload cron or restart any service.
 
 ## Research decision: manifest transaction before Ansible
