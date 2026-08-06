@@ -47,6 +47,9 @@ grep -Fq 'runtime baseline mismatch' "$lib"
 grep -Fq 'cron.service is not active' "$lib"
 grep -Fq 'RPi throttling flag is not clear' "$lib"
 grep -Fq 'test mode may never target the real root filesystem' "$lib"
+grep -Fq 'root commands require the installed root-owned deploy engine' "$lib"
+grep -Fq 'exec sudo -- /usr/local/sbin/rpi5-deploy' "$script"
+grep -Fq 'exec /usr/bin/env -i' "$python"
 if grep -R -Fq 'RPI5_DEPLOY_SKIP_' "$python" "$lib" "$tx"; then
     echo "V12: a production preflight bypass variable is present" >&2
     exit 1
@@ -141,6 +144,46 @@ export RPI5_DEPLOY_STATE_DIR="$state"
 export RPI5_DEPLOY_LOG="$log"
 export RPI5_DEPLOY_MAX_PLAN_AGE=300
 
+python3 - "$fake_repo" "$work/engine-stage" <<'PY'
+import json
+import pathlib
+import subprocess
+import sys
+
+repo = pathlib.Path(sys.argv[1])
+stage = pathlib.Path(sys.argv[2])
+sys.path.insert(0, str(repo / "scripts"))
+import rpi5_deploy as deploy
+
+commit = subprocess.run(
+    ["git", "-C", str(repo), "rev-parse", "HEAD"],
+    check=True,
+    text=True,
+    stdout=subprocess.PIPE,
+).stdout.strip()
+release = deploy.ENGINE_RELEASES / commit
+source_hashes = deploy.engine_source_hashes()
+metadata_path, wrapper_path = deploy.stage_engine_release(
+    stage, release, commit, source_hashes
+)
+metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+assert metadata["schema"] == deploy.ENGINE_SCHEMA
+assert metadata["installed_from_commit"] == commit
+assert set(metadata["source_files"]) == set(deploy.ENGINE_SOURCE_FILES)
+assert set(metadata["installed_files"]) == set(deploy.ENGINE_INSTALLED_FILES)
+assert metadata["wrapper_sha256"] == deploy.sha256_file(wrapper_path)
+for name, relative in {
+    "rpi5_deploy.py": "scripts/rpi5_deploy.py",
+    "rpi5_deploy_lib.py": "scripts/rpi5_deploy_lib.py",
+    "rpi5_deploy_tx.py": "scripts/rpi5_deploy_tx.py",
+}.items():
+    assert metadata["installed_files"][name]["sha256"] == source_hashes[relative]
+wrapper = wrapper_path.read_text(encoding="utf-8")
+assert "exec /usr/bin/env -i" in wrapper
+assert str(release / "rpi5_deploy.py") in wrapper
+print("V12 engine release staging: PASS")
+PY
+
 bash "$fake_repo/scripts/rpi5-deploy" plan > "$work/plan.out"
 short_sha="$(git -C "$fake_repo" rev-parse --short=12 HEAD)"
 grep -Fq "CONFIRMATION FOR DEPLOY: $short_sha" "$work/plan.out"
@@ -153,6 +196,7 @@ plan = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 assert plan["schema"] == "rpi5.controlled-deploy-plan.v1"
 assert plan["short_commit"] == sys.argv[2]
 assert [item["action"] for item in plan["targets"]] == ["replace", "replace", "replace"]
+assert all(item["desired"]["exists"] for item in plan["targets"])
 assert plan["host_preflight"]["skipped"] is True
 print("V12 synthetic plan: PASS")
 PY
