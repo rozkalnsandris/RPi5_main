@@ -10,6 +10,7 @@ The design was derived from:
 - available Hermes, Qwen and RPi5 audit logs;
 - real Hermes operator deployment screenshots showing successful checked deployment, dispatcher rollback and a root-only release-tool boundary failure;
 - official Git documentation for stable porcelain and exact worktree semantics;
+- official GitHub check-run documentation for exact-commit status retrieval;
 - official Docker Compose documentation for configuration validation and dry-run behavior;
 - official Ansible documentation for check/diff limitations and secret exposure risk.
 
@@ -50,6 +51,43 @@ not claim that an unavailable raw Claude/Gemini archive was parsed.
    and diff output can reveal sensitive data. A small explicit manifest is the
    safer first deploy boundary for the three already imported files.
 
+## Review hardening findings
+
+The Draft PR security review found and corrected additional failure paths before
+V12 was allowed to leave review:
+
+1. The original manual rollback could partially restore several files and then
+   fail, leaving a mixed before/post state while the transaction still appeared
+   successful. Manual rollback now pre-verifies every backup, creates verified
+   post-state compensation snapshots, and returns already restored files to the
+   deployed state if a later restore fails.
+2. A corrupt transaction backup was previously detected only after it had been
+   copied toward a live target. Every before-state backup is now checksum,
+   ownership and mode verified before the first manual-rollback write.
+3. The first implementation verified the plan before entering the transaction,
+   but did not recheck each source and live before-state at the exact row
+   mutation boundary. It now rechecks every row, including `unchanged` rows,
+   and verifies the complete desired set before and after final host preflight.
+4. A failure after writing `latest-success` could leave a stale pointer to a
+   transaction that automatic rollback had already undone. The pointer is now
+   atomic and removed on a failed apply when it refers to that transaction.
+5. Merely requiring “some successful GitHub check” permits a false PASS if the
+   repository validation job is missing. V12 now requires the exact successful
+   check name `validate` in addition to requiring all latest returned checks to
+   be successful.
+6. Checking only manifest IDs permits an ID-preserving change to a different
+   root path. The engine now contains an independent exact allowlist for every
+   target's ID, source, destination, owner, group, mode and validators.
+7. Status reporting originally hashed a source path without first rejecting a
+   repository symlink. All target sources must now be regular, single-link,
+   non-symlink files in status as well as plan and deploy.
+8. An audit-log failure must never prevent rollback from starting. The
+   rollback-start log is best-effort; transaction state and live restoration
+   remain authoritative.
+
+Each of these findings has a fake-root regression scenario in the repository
+validation suite.
+
 ## Implemented result
 
 V12 adds:
@@ -59,16 +97,21 @@ V12 adds:
   root-owned deploy engine;
 - a root-owned `/usr/local/sbin/rpi5-deploy` wrapper that starts with `env -i`;
 - source/installed SHA-256, owner and mode verification for the engine;
-- `ops/deploy/targets.json` with exactly three non-secret V10 targets;
+- `ops/deploy/targets.json` with exactly three non-secret V10 targets plus an
+  engine-side exact target allowlist;
 - VS Code tasks for sync, test, engine installation/status, plan, deploy,
   status, rollback and logs;
-- a short-lived root-owned plan with full before/desired fingerprints;
-- private transaction backups, fsync and same-directory replacement;
-- automatic reverse-order rollback and guarded manual rollback;
-- non-root fake-root tests for sandboxing, engine staging, partial failure,
-  durable rollback phases, successful apply and metadata-only drift refusal.
+- a short-lived root-owned plan with full before/desired fingerprints and a
+  required exact-commit `validate` check;
+- private transaction backups, fsync, same-directory replacement and atomic
+  success-pointer handling;
+- automatic reverse-order rollback, guarded manual rollback and compensating
+  restoration of the deployed state after a failed manual rollback;
+- non-root fake-root tests for sandboxing, engine staging, manifest and symlink
+  tampering, partial failure, stale-pointer cleanup, backup corruption,
+  compensation, durable rollback phases, successful apply and metadata drift.
 
 No engine installation, host deployment, service action, backup execution,
 upload, retention deletion, log rotation or production write was performed
-while implementing V12. PR #31 is the implementation review boundary; merging
-it still does not install the engine or deploy any target.
+while implementing or reviewing V12. PR #31 is the implementation review
+boundary; merging it still does not install the engine or deploy any target.
