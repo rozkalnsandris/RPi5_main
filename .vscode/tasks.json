@@ -119,8 +119,7 @@
     {
       "id": "rollbackConfirmation",
       "type": "promptString",
-      "description": "Type ROLLBACK to restore the latest successful transaction",
-      "default": "ROLLBACK"
+      "description": "Type ROLLBACK to restore the latest successful transaction"
     }
   ]
 }
