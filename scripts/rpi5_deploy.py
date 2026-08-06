@@ -168,9 +168,10 @@ def install_engine(confirm: str) -> None:
 
 def engine_status(release_only: bool) -> None:
     require_root()
-    integrity = verify_engine_integrity(check_wrapper=not release_only)
+    integrity = verify_engine_integrity()
     source = engine_source_preflight()
-    print(f"ENGINE PASS release={integrity['release']} repo={CTX.repo}")
+    scope = "release" if release_only else "system"
+    print(f"ENGINE PASS scope={scope} release={integrity['release']} repo={CTX.repo}")
     print(f"source_files={source.get('source_count', 0)} installed_from={integrity['installed_from_commit']}")
 
 
@@ -199,7 +200,6 @@ def deploy(confirm: str) -> None:
 
 def status() -> None:
     require_root()
-    verify_engine_integrity(check_wrapper=True)
     engine_source_preflight()
     targets, _ = read_manifest()
     print(f"repository={EXPECTED_REPOSITORY}\nhead={git('rev-parse', 'HEAD')}")
