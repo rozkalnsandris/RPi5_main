@@ -3,23 +3,18 @@
 from __future__ import annotations
 
 import datetime as dt
-import grp
 import json
 import os
 import pathlib
-import pwd
 import re
 import shutil
 import stat
 from typing import Any
 
 from rpi5_deploy_lib import (CTX, EXPECTED_REPOSITORY, TRANSACTION_SCHEMA, DeployError,
-    Target, append_log, atomic_json, fingerprint, fsync_dir, host_preflight, now_iso,
-    read_manifest, safe_file, secure_dir, sha256_file, validate_target)
-
-
-def owner_ids(target: Target) -> tuple[int, int]:
-    return (os.getuid(), os.getgid()) if CTX.test_mode else (pwd.getpwnam(target.owner).pw_uid, grp.getgrnam(target.group).gr_gid)
+    append_log, atomic_json, fingerprint, fsync_dir, host_preflight, now_iso,
+    owner_ids, read_manifest, safe_file, safe_target_parent, secure_dir, sha256_file,
+    validate_target)
 
 
 def sync_file(path: pathlib.Path) -> None:
@@ -30,6 +25,7 @@ def sync_file(path: pathlib.Path) -> None:
 
 def restore(entry: dict[str, Any], directory: pathlib.Path) -> None:
     target = CTX.rooted(entry["target"])
+    safe_target_parent(target)
     before = entry["before"]
     if not before["exists"]:
         target.unlink(missing_ok=True)
@@ -37,7 +33,6 @@ def restore(entry: dict[str, Any], directory: pathlib.Path) -> None:
         return
     backup = directory / entry["backup_relpath"]
     safe_file(backup)
-    target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.parent / f".rpi5-rollback.{entry['id']}.{os.getpid()}"
     try:
         shutil.copyfile(backup, tmp)
@@ -71,7 +66,7 @@ def apply_plan(plan: dict[str, Any]) -> pathlib.Path:
                 atomic_json(directory / "transaction.json", transaction)
                 continue
             installed, source = CTX.rooted(target.target), CTX.repo / target.source
-            installed.parent.mkdir(parents=True, exist_ok=True)
+            safe_target_parent(installed)
             backup_rel = f"backups/{target.id}.before"
             if row["before"]["exists"]:
                 backup = directory / backup_rel
@@ -98,7 +93,7 @@ def apply_plan(plan: dict[str, Any]) -> pathlib.Path:
             finally:
                 tmp.unlink(missing_ok=True)
             after = fingerprint(installed)
-            if after["sha256"] != row["source_sha256"] or after["mode"] != f"{target.mode:04o}" or after["uid"] != uid or after["gid"] != gid:
+            if after != row["desired"]:
                 raise DeployError(f"post-install fingerprint mismatch: {target.id}")
             validate_target(target, installed)
             entry.update({"post_sha256": after["sha256"], "post": after, "phase": "installed"})
