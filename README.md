@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/branding/project-logo.svg" alt="RPi5 Main logo" width="160">
+</p>
+
 # RPi5_main
 
 This private repository is the source of truth for the Raspberry Pi 5 infrastructure.
