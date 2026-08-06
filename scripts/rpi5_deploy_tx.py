@@ -81,9 +81,13 @@ def restore(entry: dict[str, Any], directory: pathlib.Path) -> None:
         fsync_dir(target.parent)
         if fingerprint(target) != before:
             raise DeployError(f"restored absence mismatch: {entry['id']}")
+        if CTX.test_mode and os.environ.get("RPI5_DEPLOY_TEST_FAIL_RESTORE_AFTER_WRITE") == entry["id"]:
+            raise DeployError(f"synthetic restore failure after write: {entry['id']}")
         return
     backup = directory / entry["backup_relpath"]
     install_snapshot(backup, target, before, f"{entry['id']}.before")
+    if CTX.test_mode and os.environ.get("RPI5_DEPLOY_TEST_FAIL_RESTORE_AFTER_WRITE") == entry["id"]:
+        raise DeployError(f"synthetic restore failure after write: {entry['id']}")
 
 
 def verify_plan_row_state(row: dict[str, Any], by_id: dict[str, Any]) -> None:
@@ -289,8 +293,8 @@ def manual_rollback() -> None:
     restored: list[dict[str, Any]] = []
     try:
         for entry in reversed(changed):
-            restore(entry, directory)
             restored.append(entry)
+            restore(entry, directory)
             if CTX.test_mode and os.environ.get("RPI5_DEPLOY_TEST_FAIL_MANUAL_AFTER") == entry["id"]:
                 raise DeployError(f"synthetic manual rollback failure after {entry['id']}")
         for entry in changed:
