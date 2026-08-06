@@ -67,6 +67,53 @@ def engine_source_hashes() -> dict[str, str]:
     return result
 
 
+def stage_engine_release(
+    stage: pathlib.Path,
+    release: pathlib.Path,
+    commit: str,
+    source_hashes: dict[str, str],
+) -> tuple[pathlib.Path, pathlib.Path]:
+    stage.mkdir(parents=True, exist_ok=False)
+    installed_files: dict[str, dict[str, str]] = {}
+    source_by_name = {
+        "rpi5_deploy.py": "scripts/rpi5_deploy.py",
+        "rpi5_deploy_lib.py": "scripts/rpi5_deploy_lib.py",
+        "rpi5_deploy_tx.py": "scripts/rpi5_deploy_tx.py",
+    }
+    for name, relative in source_by_name.items():
+        source = CTX.repo / relative
+        destination = stage / name
+        shutil.copyfile(source, destination)
+        installed_sha = sha256_file(destination)
+        if installed_sha != source_hashes.get(relative):
+            raise DeployError(f"staged deploy engine checksum mismatch: {name}")
+        installed_files[name] = {
+            "sha256": installed_sha,
+            "mode": ENGINE_INSTALLED_FILES[name],
+        }
+    wrapper_path = stage / "rpi5-deploy-wrapper"
+    wrapper_path.write_text(
+        "#!/bin/sh\n"
+        "set -eu\n"
+        "exec /usr/bin/env -i "
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin "
+        f"/usr/bin/python3 {release}/rpi5_deploy.py \"$@\"\n",
+        encoding="utf-8",
+    )
+    metadata = {
+        "schema": ENGINE_SCHEMA,
+        "installed_from_commit": commit,
+        "repo_path": str(CTX.repo),
+        "repo_owner_uid": CTX.repo.stat().st_uid,
+        "source_files": source_hashes,
+        "installed_files": installed_files,
+        "wrapper_sha256": sha256_file(wrapper_path),
+    }
+    metadata_path = stage / "engine-source.json"
+    metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return metadata_path, wrapper_path
+
+
 def install_engine(confirm: str) -> None:
     require_normal_user()
     if CTX.installed_engine:
@@ -83,38 +130,9 @@ def install_engine(confirm: str) -> None:
     system_wrapper = pathlib.Path("/usr/local/sbin/rpi5-deploy")
     system_wrapper_tmp = pathlib.Path(f"/usr/local/sbin/.rpi5-deploy-{os.getpid()}")
     with tempfile.TemporaryDirectory(prefix="rpi5-deploy-engine-") as temporary:
-        stage = pathlib.Path(temporary)
-        installed_files: dict[str, dict[str, str]] = {}
-        source_by_name = {
-            "rpi5_deploy.py": CTX.repo / "scripts/rpi5_deploy.py",
-            "rpi5_deploy_lib.py": CTX.repo / "scripts/rpi5_deploy_lib.py",
-            "rpi5_deploy_tx.py": CTX.repo / "scripts/rpi5_deploy_tx.py",
-        }
-        for name, source in source_by_name.items():
-            destination = stage / name
-            shutil.copyfile(source, destination)
-            installed_files[name] = {
-                "sha256": sha256_file(destination),
-                "mode": ENGINE_INSTALLED_FILES[name],
-            }
-        metadata = {
-            "schema": ENGINE_SCHEMA,
-            "installed_from_commit": repository["head"],
-            "repo_path": str(CTX.repo),
-            "repo_owner_uid": CTX.repo.stat().st_uid,
-            "source_files": source_hashes,
-            "installed_files": installed_files,
-        }
-        metadata_path = stage / "engine-source.json"
-        metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        wrapper_path = stage / "rpi5-deploy-wrapper"
-        wrapper_path.write_text(
-            "#!/bin/sh\n"
-            "set -eu\n"
-            "exec /usr/bin/env -i "
-            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin "
-            f"/usr/bin/python3 {release}/rpi5_deploy.py \"$@\"\n",
-            encoding="utf-8",
+        stage = pathlib.Path(temporary) / "release"
+        metadata_path, wrapper_path = stage_engine_release(
+            stage, release, repository["head"], source_hashes
         )
         if engine_source_hashes() != source_hashes:
             raise DeployError("deploy engine source changed during installation staging")
@@ -138,7 +156,8 @@ def install_engine(confirm: str) -> None:
 
         direct_engine = ["sudo", "/usr/bin/env", "-i",
                          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-                         "/usr/bin/python3", str(release / "rpi5_deploy.py"), "engine-status"]
+                         "/usr/bin/python3", str(release / "rpi5_deploy.py"), "engine-status",
+                         "--release-only"]
         run(direct_engine, capture=False, timeout=300)
         run(["sudo", "install", "-o", "root", "-g", "root", "-m", "0700",
              str(wrapper_path), str(system_wrapper_tmp)], capture=False)
@@ -147,9 +166,9 @@ def install_engine(confirm: str) -> None:
     print(f"ENGINE INSTALL PASS commit={repository['head']} command={system_wrapper}")
 
 
-def engine_status() -> None:
+def engine_status(release_only: bool) -> None:
     require_root()
-    integrity = verify_engine_integrity()
+    integrity = verify_engine_integrity(check_wrapper=not release_only)
     source = engine_source_preflight()
     print(f"ENGINE PASS release={integrity['release']} repo={CTX.repo}")
     print(f"source_files={source.get('source_count', 0)} installed_from={integrity['installed_from_commit']}")
@@ -180,6 +199,7 @@ def deploy(confirm: str) -> None:
 
 def status() -> None:
     require_root()
+    verify_engine_integrity(check_wrapper=True)
     engine_source_preflight()
     targets, _ = read_manifest()
     print(f"repository={EXPECTED_REPOSITORY}\nhead={git('rev-parse', 'HEAD')}")
@@ -242,8 +262,10 @@ def logs(lines: int) -> None:
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(prog="rpi5-deploy")
     sub = result.add_subparsers(dest="command", required=True)
-    for name in ("sync", "test", "plan", "status", "engine-status"):
+    for name in ("sync", "test", "plan", "status"):
         sub.add_parser(name)
+    engine = sub.add_parser("engine-status")
+    engine.add_argument("--release-only", action="store_true")
     installer = sub.add_parser("install-engine")
     installer.add_argument("--confirm", required=True)
     apply = sub.add_parser("deploy")
@@ -266,7 +288,7 @@ def main() -> int:
         elif args.command == "install-engine":
             install_engine(args.confirm)
         elif args.command == "engine-status":
-            engine_status()
+            engine_status(args.release_only)
         elif args.command == "plan":
             plan()
         elif args.command == "deploy":
