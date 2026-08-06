@@ -62,9 +62,9 @@ V10 imports the existing host-wide encrypted backup script, configuration exampl
 
 V11 identifies exact `AdGuardHome` processes and attributes their memory using PSS, cgroup-v2 and RSS fallback data. It separates anonymous, file-backed, shared, kernel/socket, slab and swap classes, reports container-limit headroom, and preserves strict privacy by excluding process IDs, cgroup paths, DNS queries, client identities, arguments, environments and raw configuration. At least four verified live samples are required before the AdGuard root-cause conclusion is updated. See the [V11 contract](V11_ADGUARD_MEMORY_ATTRIBUTION_CONTRACT.md) and [findings](V11_FINDINGS.md).
 
-## V12 — Draft PR #31: controlled host deployment
+## V12 — controlled host deployment
 
-V12 adds a normal-user VS Code controller and a separately confirmed, versioned, root-owned deploy engine. The engine is installed below `/usr/local/libexec/rpi5-deploy/releases/<commit>/`; the active root wrapper starts with `env -i`, and every privileged command verifies installed engine SHA/UID/GID/mode plus current tracked engine-source hashes.
+V12 adds a normal-user VS Code controller and a separately confirmed, versioned, root-owned deploy engine. The engine is installed below `/usr/local/libexec/rpi5-deploy/releases/<commit>/`; the active root wrapper starts with `env -i`, and every privileged command verifies installed engine SHA/UID/GID/mode. Plan, deploy and status additionally require current tracked engine-source hashes; rollback and logs remain available through the verified installed engine during repository-source drift.
 
 The operator commands are `sync`, `test`, `install-engine`, `engine-status`, `plan`, `deploy`, `status`, `rollback` and `logs`. The initial target set remains exactly the three non-secret V10 backup implementation files. The private `/etc/rpi5-backup.conf` is reference-only.
 
