@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import fcntl
+import grp
 import hashlib
 import json
 import os
@@ -19,7 +20,10 @@ from dataclasses import dataclass
 from typing import Any, Iterable
 
 EXPECTED_REPOSITORY = "rozkalnsandris/RPi5_main"
-REMOTE_RE = re.compile(r"(?:github\.com[:/])rozkalnsandris/RPi5_main(?:\.git)?$")
+REMOTE_RE = re.compile(
+    r"^(?:git@github\.com:|ssh://git@github\.com/|https://github\.com/)"
+    r"rozkalnsandris/RPi5_main(?:\.git)?$"
+)
 PLAN_SCHEMA = "rpi5.controlled-deploy-plan.v1"
 TRANSACTION_SCHEMA = "rpi5.controlled-deploy-transaction.v1"
 
@@ -130,14 +134,32 @@ def fsync_dir(path: pathlib.Path) -> None:
         os.close(descriptor)
 
 
-def secure_dir(path: pathlib.Path, mode: int = 0o700) -> None:
-    path.mkdir(parents=True, exist_ok=True, mode=mode)
+def verify_dir(path: pathlib.Path, *, root_owned: bool) -> os.stat_result:
     info = path.lstat()
     if not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode):
         raise DeployError(f"unsafe directory: {path}")
-    if not CTX.test_mode and info.st_uid != 0:
-        raise DeployError(f"deployment state directory is not root-owned: {path}")
+    if root_owned and not CTX.test_mode and info.st_uid != 0:
+        raise DeployError(f"directory is not root-owned: {path}")
+    return info
+
+
+def secure_dir(path: pathlib.Path, mode: int = 0o700) -> None:
+    path.mkdir(parents=True, exist_ok=True, mode=mode)
+    verify_dir(path, root_owned=True)
     os.chmod(path, mode)
+
+
+def safe_target_parent(path: pathlib.Path) -> None:
+    root = CTX.fake_root
+    try:
+        relative = path.parent.relative_to(root)
+    except ValueError as exc:
+        raise DeployError(f"target parent escapes root: {path.parent}") from exc
+    current = root
+    verify_dir(current, root_owned=not CTX.test_mode)
+    for part in relative.parts:
+        current = current / part
+        verify_dir(current, root_owned=not CTX.test_mode)
 
 
 def atomic_json(path: pathlib.Path, payload: dict[str, Any]) -> None:
@@ -160,7 +182,8 @@ def atomic_json(path: pathlib.Path, payload: dict[str, Any]) -> None:
 def append_log(message: str) -> None:
     line = f"[{dt.datetime.now().astimezone().strftime('%Y-%m-%d %H:%M:%S%z')}] {message}"
     print(line)
-    secure_dir(CTX.log_file.parent, 0o755)
+    CTX.log_file.parent.mkdir(parents=True, exist_ok=True)
+    verify_dir(CTX.log_file.parent, root_owned=True)
     flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
     descriptor = os.open(CTX.log_file, flags, 0o600)
     try:
@@ -191,8 +214,7 @@ def run(args: list[str], *, cwd: pathlib.Path | None = None, check: bool = True,
                             stderr=subprocess.PIPE if capture else None,
                             timeout=timeout, check=False)
     if check and result.returncode:
-        detail = (result.stderr or result.stdout or "command failed").strip()
-        raise DeployError(f"command failed ({args[0]}): {detail[:1000]}")
+        raise DeployError(f"command failed ({args[0]}), exit={result.returncode}")
     return result
 
 
@@ -269,6 +291,18 @@ def fingerprint(path: pathlib.Path) -> dict[str, Any]:
             "gid": info.st_gid, "mode": f"{stat.S_IMODE(info.st_mode):04o}"}
 
 
+def owner_ids(target: Target) -> tuple[int, int]:
+    if CTX.test_mode:
+        return os.getuid(), os.getgid()
+    return pwd.getpwnam(target.owner).pw_uid, grp.getgrnam(target.group).gr_gid
+
+
+def expected_fingerprint(target: Target, source_sha: str) -> dict[str, Any]:
+    uid, gid = owner_ids(target)
+    return {"exists": True, "sha256": source_sha, "uid": uid, "gid": gid,
+            "mode": f"{target.mode:04o}"}
+
+
 def validate_cron(path: pathlib.Path) -> None:
     text = path.read_text(encoding="utf-8")
     if "\r" in text or not text.endswith("\n"):
@@ -293,10 +327,10 @@ def validate_target(target: Target, path: pathlib.Path) -> None:
 
 def repository_preflight(*, validate: bool = True) -> dict[str, Any]:
     if CTX.test_mode:
-        return {"branch": git("branch", "--show-current"), "head": git("rev-parse", "HEAD"), "remote": "test"}
+        return {"branch": git("branch", "--show-current"), "head": git("rev-parse", "HEAD"), "remote": "sandbox"}
     remote = git("remote", "get-url", "origin")
-    if not REMOTE_RE.search(remote):
-        raise DeployError(f"unexpected origin remote: {remote}")
+    if not REMOTE_RE.fullmatch(remote):
+        raise DeployError("origin is not the approved credential-free GitHub remote")
     branch = git("branch", "--show-current")
     if branch != "main":
         raise DeployError(f"production plan requires branch main, found {branch or 'detached'}")
@@ -308,7 +342,8 @@ def repository_preflight(*, validate: bool = True) -> dict[str, Any]:
         raise DeployError("local HEAD does not equal origin/main")
     if validate:
         run(["make", "validate"], cwd=CTX.repo, capture=False, timeout=1200, as_user=True)
-    return {"branch": branch, "head": head, "origin_main": origin, "remote": remote}
+    return {"branch": branch, "head": head, "origin_main": origin,
+            "remote": "github.com/rozkalnsandris/RPi5_main"}
 
 
 def github_checks(commit: str) -> dict[str, Any]:
@@ -378,7 +413,7 @@ def docker_health() -> dict[str, int]:
     return {"expected_running": len(expected), "observed_running": len(actual)}
 
 
-def host_preflight() -> dict[str, Any]:
+def host_identity() -> dict[str, Any]:
     if CTX.test_mode:
         return {"skipped": True, "reason": "sandbox test"}
     require_root()
@@ -394,6 +429,13 @@ def host_preflight() -> dict[str, Any]:
                        if len(line.split()) >= 4 and line.split()[1] == "/"), "")
     if "rw" not in root_mount.split(","):
         raise DeployError("root filesystem is not read-write")
+    return {"hostname": "rpi5", "model": model, "architecture": os.uname().machine}
+
+
+def host_preflight() -> dict[str, Any]:
+    identity = host_identity()
+    if CTX.test_mode:
+        return identity
     usage, vfs = shutil.disk_usage("/"), os.statvfs("/")
     inode_pct = vfs.f_favail / vfs.f_files * 100 if vfs.f_files else 0
     mem_kib = next((int(line.split()[1]) for line in pathlib.Path("/proc/meminfo").read_text().splitlines()
@@ -426,29 +468,32 @@ def host_preflight() -> dict[str, Any]:
     age = backup_age()
     if age > 36 * 3600:
         raise DeployError(f"last successful encrypted backup is too old ({age // 3600}h)")
-    return {"hostname": "rpi5", "model": model, "architecture": os.uname().machine,
-            "disk_free_bytes": usage.free, "free_inode_percent": round(inode_pct, 2),
-            "mem_available_kib": mem_kib, "load1": round(load1, 2),
-            "temperature_millic": max(temps) if temps else None, "throttled": throttled,
-            "backup_age_seconds": age, "runtime": docker_health()}
+    return {**identity, "disk_free_bytes": usage.free,
+            "free_inode_percent": round(inode_pct, 2), "mem_available_kib": mem_kib,
+            "load1": round(load1, 2), "temperature_millic": max(temps) if temps else None,
+            "throttled": throttled, "backup_age_seconds": age, "runtime": docker_health()}
 
 
 def target_plan(targets: Iterable[Target]) -> list[dict[str, Any]]:
     rows = []
     for target in targets:
-        source = (CTX.repo / target.source).resolve()
-        if CTX.repo not in source.parents:
-            raise DeployError(f"source escapes repository: {target.source}")
+        source = CTX.repo / target.source
         safe_file(source)
+        resolved = source.resolve()
+        if CTX.repo not in resolved.parents:
+            raise DeployError(f"source escapes repository: {target.source}")
         if not CTX.test_mode:
             git("ls-files", "--error-unmatch", "--", target.source)
         validate_target(target, source)
-        before, source_sha = fingerprint(CTX.rooted(target.target)), sha256_file(source)
+        installed = CTX.rooted(target.target)
+        safe_target_parent(installed)
+        before, source_sha = fingerprint(installed), sha256_file(source)
+        desired = expected_fingerprint(target, source_sha)
         rows.append({"id": target.id, "source": target.source, "target": target.target,
-                     "source_sha256": source_sha, "before": before, "owner": target.owner,
-                     "group": target.group, "mode": f"{target.mode:04o}",
+                     "source_sha256": source_sha, "before": before, "desired": desired,
+                     "owner": target.owner, "group": target.group, "mode": f"{target.mode:04o}",
                      "validators": list(target.validators),
-                     "action": "unchanged" if before["sha256"] == source_sha else "replace"})
+                     "action": "unchanged" if before == desired else "replace"})
     return rows
 
 
@@ -487,7 +532,13 @@ def verify_plan_targets(plan: dict[str, Any]) -> None:
         raise DeployError("planned target set does not equal the manifest")
     for target in targets:
         row = planned[target.id]
-        if sha256_file(CTX.repo / target.source) != row["source_sha256"]:
+        source = CTX.repo / target.source
+        safe_file(source)
+        if sha256_file(source) != row["source_sha256"]:
             raise DeployError(f"source changed after plan: {target.id}")
-        if fingerprint(CTX.rooted(target.target)) != row["before"]:
+        installed = CTX.rooted(target.target)
+        safe_target_parent(installed)
+        if fingerprint(installed) != row["before"]:
             raise DeployError(f"live target changed after plan: {target.id}")
+        if expected_fingerprint(target, row["source_sha256"]) != row.get("desired"):
+            raise DeployError(f"desired target fingerprint changed after plan: {target.id}")
