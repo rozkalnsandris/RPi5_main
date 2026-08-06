@@ -191,6 +191,21 @@ def main() -> None:
         transaction_dir = state / "transactions" / txid
         metadata_path = transaction_dir / "transaction.json"
 
+        restore_failure_env = env.copy()
+        restore_failure_env["RPI5_DEPLOY_TEST_FAIL_RESTORE_AFTER_WRITE"] = "backup-logrotate"
+        failed = run(
+            [*controller, "rollback", "--latest", "--confirm", "ROLLBACK"],
+            cwd=fake_repo,
+            env=restore_failure_env,
+            expect_success=False,
+        )
+        assert "manual rollback failed; deployed state was restored" in failed.stdout
+        assert_deployed(fake_repo, fake_root)
+        compensated = json.loads(metadata_path.read_text(encoding="utf-8"))
+        assert compensated["status"] == "success"
+        assert compensated["rollback_attempt_status"] == "compensated"
+        assert (state / "latest-success").read_text(encoding="utf-8").strip() == txid
+
         cron_backup = transaction_dir / "backups/backup-cron.before"
         saved_cron_backup = cron_backup.read_bytes()
         cron_backup.write_bytes(b"corrupted rollback backup\n")
