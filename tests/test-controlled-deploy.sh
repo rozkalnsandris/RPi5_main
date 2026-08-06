@@ -46,6 +46,11 @@ grep -Fq 'exact-commit GitHub checks are not all successful' "$lib"
 grep -Fq 'runtime baseline mismatch' "$lib"
 grep -Fq 'cron.service is not active' "$lib"
 grep -Fq 'RPi throttling flag is not clear' "$lib"
+grep -Fq 'test mode may never target the real root filesystem' "$lib"
+if grep -R -Fq 'RPI5_DEPLOY_SKIP_' "$python" "$lib" "$tx"; then
+    echo "V12: a production preflight bypass variable is present" >&2
+    exit 1
+fi
 
 work="$(mktemp -d)"
 trap 'rm -rf -- "$work"' EXIT
@@ -117,7 +122,20 @@ old_rotate_sha="$(sha256sum "$fake_root/etc/logrotate.d/rpi5-backup" | awk '{pri
     git commit -q -m test
 )
 
+if RPI5_DEPLOY_TEST_MODE=1 \
+   RPI5_DEPLOY_TEST_SANDBOX="$work" \
+   RPI5_DEPLOY_ROOT=/ \
+   RPI5_DEPLOY_STATE_DIR="$state" \
+   RPI5_DEPLOY_LOG="$log" \
+   bash "$fake_repo/scripts/rpi5-deploy" status >"$work/unsafe-test.out" 2>&1; then
+    echo "V12: test mode accepted the real root filesystem" >&2
+    exit 1
+fi
+grep -Fq 'test mode may never target the real root filesystem' "$work/unsafe-test.out"
+echo "V12 sandbox boundary: PASS"
+
 export RPI5_DEPLOY_TEST_MODE=1
+export RPI5_DEPLOY_TEST_SANDBOX="$work"
 export RPI5_DEPLOY_ROOT="$fake_root"
 export RPI5_DEPLOY_STATE_DIR="$state"
 export RPI5_DEPLOY_LOG="$log"
@@ -155,6 +173,19 @@ grep -Fq 'all changed targets were rolled back' "$work/fail.out"
 [[ "$(sha256sum "$fake_root/usr/local/sbin/rpi5-backup" | awk '{print $1}')" == "$old_runner_sha" ]]
 [[ "$(sha256sum "$fake_root/etc/cron.d/rpi5-backup" | awk '{print $1}')" == "$old_cron_sha" ]]
 [[ "$(sha256sum "$fake_root/etc/logrotate.d/rpi5-backup" | awk '{print $1}')" == "$old_rotate_sha" ]]
+failed_tx="$(find "$state/transactions" -mindepth 1 -maxdepth 1 -type d | sort | tail -1)"
+python3 - "$failed_tx/transaction.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+assert data["status"] == "rolled_back"
+changed = [item for item in data["targets"] if item.get("changed")]
+assert changed
+assert all(item["phase"] == "restored" for item in changed)
+print("V12 rollback audit metadata: PASS")
+PY
 echo "V12 automatic rollback simulation: PASS"
 
 bash "$fake_repo/scripts/rpi5-deploy" plan >/dev/null
@@ -168,13 +199,12 @@ grep -Fq 'MATCH  backup-runner' "$work/status.out"
 grep -Fq 'status=success' "$work/status.out"
 echo "V12 synthetic deploy: PASS"
 
-printf '%s\n' 'later unreviewed drift' > "$fake_root/etc/cron.d/rpi5-backup"
+chmod 0600 "$fake_root/etc/cron.d/rpi5-backup"
 if bash "$fake_repo/scripts/rpi5-deploy" rollback --latest --confirm ROLLBACK >"$work/drift.out" 2>&1; then
-    echo "V12: rollback overwrote later drift" >&2
+    echo "V12: rollback overwrote later metadata drift" >&2
     exit 1
 fi
 grep -Fq 'refusing rollback over later target drift' "$work/drift.out"
-cp "$fake_repo/ops/cron.d/rpi5-backup" "$fake_root/etc/cron.d/rpi5-backup"
 chmod 0644 "$fake_root/etc/cron.d/rpi5-backup"
 bash "$fake_repo/scripts/rpi5-deploy" rollback --latest --confirm ROLLBACK > "$work/rollback.out"
 grep -Fq 'ROLLBACK PASS' "$work/rollback.out"
