@@ -10,6 +10,7 @@ import pathlib
 import pwd
 import re
 import shutil
+import stat
 from typing import Any
 
 from rpi5_deploy_lib import (CTX, EXPECTED_REPOSITORY, TRANSACTION_SCHEMA, DeployError,
@@ -22,7 +23,8 @@ def owner_ids(target: Target) -> tuple[int, int]:
 
 
 def sync_file(path: pathlib.Path) -> None:
-    with path.open("rb") as handle:
+    with path.open("rb+") as handle:
+        handle.flush()
         os.fsync(handle.fileno())
 
 
@@ -139,7 +141,7 @@ def latest_transaction() -> tuple[pathlib.Path, dict[str, Any]]:
         raise DeployError("invalid latest-success pointer")
     directory = CTX.state_dir / "transactions" / txid
     info = directory.lstat()
-    if not info.is_dir() or info.is_symlink():
+    if not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode):
         raise DeployError("unsafe transaction directory")
     metadata = directory / "transaction.json"
     safe_file(metadata)
