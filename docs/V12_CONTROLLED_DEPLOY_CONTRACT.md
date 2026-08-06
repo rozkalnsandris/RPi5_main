@@ -2,22 +2,83 @@
 
 ## Purpose
 
-V12 adds a simple operator interface for reviewed production deployment from
-`RPi5_main`, while keeping the host-wide safety boundary stricter than an
-application deploy. It provides the same small set of actions used by the
-simplified Hermes workflow—sync, test, plan, deploy, status, rollback and
-logs—but does not turn a merge into an automatic production change.
+V12 adds a small operator interface for reviewed production deployment from
+`RPi5_main`, while keeping a stricter safety boundary than an application
+release. The visible workflow remains simple:
 
-The workflow remains:
+1. sync reviewed `main`;
+2. run all repository tests;
+3. generate and inspect a read-only deploy plan;
+4. apply that exact short-lived plan with the printed commit confirmation;
+5. verify status, or restore the exact recorded before-state.
 
-1. branch, tests, Draft PR, CI, review and squash merge;
-2. sync `main` on the RPi5;
-3. run and review a read-only deployment plan;
-4. apply that exact short-lived plan with the exact 12-character commit;
-5. verify the transaction, or automatically restore its before-state.
+A merge never deploys automatically. Merging V12 does not install the deploy
+engine and does not write any managed production target.
 
-V12 itself is repository tooling only. Merging V12 does not authorize or
-perform a production deployment.
+## Root execution boundary
+
+VS Code and the repository controller never execute user-writable repository
+Python directly as `root`.
+
+Normal-user commands run from the repository:
+
+```bash
+bash ./scripts/rpi5-deploy sync
+bash ./scripts/rpi5-deploy test
+```
+
+After V12 is merged, or whenever one of the engine source files changes, the
+operator performs one separately confirmed engine installation:
+
+```bash
+bash ./scripts/rpi5-deploy install-engine --confirm <12-character-main-commit>
+bash ./scripts/rpi5-deploy engine-status
+```
+
+The installer requires clean, exact `main`, successful `make validate`,
+successful GitHub checks for the exact commit and the expected RPi5 host
+identity before invoking any privileged install command.
+
+It stages exact copies of the reviewed engine sources, verifies every staged
+SHA-256 against the Git source, writes deterministic source metadata and then
+installs a versioned, root-owned release below:
+
+```text
+/usr/local/libexec/rpi5-deploy/releases/<40-character-commit>/
+```
+
+The release files are `root:root`; the entry point is mode `0500`, imported
+modules are mode `0400`, release metadata is mode `0400`, and the release
+directory is mode `0700`. A new release is verified directly before the
+root-owned `/usr/local/sbin/rpi5-deploy` wrapper is replaced. Previous releases
+remain available for incident analysis or a separately reviewed engine-pointer
+rollback.
+
+The system wrapper is installed `root:root` mode `0700` and starts Python with
+`env -i` plus a fixed minimal `PATH`. It therefore does not inherit test flags,
+GitHub tokens, shell aliases, Python paths, Docker overrides or other caller
+environment values. Git and GitHub checks run through `runuser` as the
+non-root repository owner with that user's `HOME`.
+
+Every root command verifies the installed release inventory, root ownership,
+modes and SHA-256 values. Repository preflight also requires the current
+tracked controller, engine modules and target manifest to match the source
+hashes recorded when the engine was installed. A reviewed engine-source change
+therefore fails closed until `install-engine` is run again from reviewed
+`main`.
+
+The normal repository controller routes only these commands to the installed
+engine through `sudo`:
+
+```bash
+bash ./scripts/rpi5-deploy plan
+bash ./scripts/rpi5-deploy deploy --confirm <12-character-planned-commit>
+bash ./scripts/rpi5-deploy status
+bash ./scripts/rpi5-deploy rollback --latest --confirm ROLLBACK
+bash ./scripts/rpi5-deploy logs --lines 150
+```
+
+Running the repository controller itself with `sudo` is rejected.
 
 ## Initial managed scope
 
@@ -38,44 +99,41 @@ scripts and application repositories are not deploy targets in V12. Each must
 first be imported and reviewed under its own source/installed mapping,
 validation and rollback contract.
 
-## Operator commands
+## VS Code tasks
 
-Run normal repository actions without root:
+The tracked `.vscode/tasks.json` exposes:
 
-```bash
-bash ./scripts/rpi5-deploy sync
-bash ./scripts/rpi5-deploy test
-```
+- `RPi5: Sync from GitHub`;
+- `RPi5: Test`;
+- `RPi5: Install deploy engine`;
+- `RPi5: Deploy engine status`;
+- `RPi5: Deploy plan`;
+- `RPi5: Deploy reviewed plan`;
+- `RPi5: Status`;
+- `RPi5: Rollback latest`;
+- `RPi5: Deploy logs`.
 
-Run host inspection and transactions through sudo:
-
-```bash
-sudo bash ./scripts/rpi5-deploy plan
-sudo bash ./scripts/rpi5-deploy deploy --confirm <12-character-commit>
-sudo bash ./scripts/rpi5-deploy status
-sudo bash ./scripts/rpi5-deploy rollback --latest --confirm ROLLBACK
-sudo bash ./scripts/rpi5-deploy logs --lines 150
-```
-
-The matching VS Code tasks are tracked in `.vscode/tasks.json`. `Deploy plan`
-and `Deploy reviewed plan` are separate tasks on purpose: the operator must see
-the planned before/source SHA values before entering the confirmation SHA.
+Engine installation is normally needed only once after V12 merge and again
+when one of the five engine-source files changes. Plan and deploy are separate
+tasks on purpose: the operator must inspect every before/desired fingerprint
+before entering the commit confirmation.
 
 ## Repository and CI preflight
 
 A production plan fails unless all of the following hold:
 
-- the remote is `rozkalnsandris/RPi5_main`;
+- the credential-free remote is exactly the approved GitHub repository;
 - the checked-out branch is `main`;
-- `git status --porcelain=v1 --untracked-files=all` is empty;
+- stable Git porcelain reports no tracked or untracked change;
 - a fresh fetch succeeds and local `HEAD` equals `origin/main`;
-- `make validate` succeeds as the normal repository owner;
+- installed engine source hashes equal current tracked source hashes;
+- `make validate` succeeds as the non-root repository owner;
 - GitHub CLI returns at least one check run for the exact commit;
-- every exact-commit check run is completed with conclusion `success`.
+- every returned exact-commit check run is completed with conclusion `success`.
 
-Git porcelain v1 is used because Git documents it as stable for scripts. The
-exact commit and live target fingerprints are written into a short-lived plan,
-not inferred again from a branch name at apply time.
+A raw remote URL is never written into a plan or log. The stored projection is
+the fixed repository identity only, so credentials accidentally embedded in a
+remote cannot leak into deployment evidence.
 
 ## Host preflight
 
@@ -93,12 +151,13 @@ The read-only plan and deploy preflight require:
 - every running container in the reviewed runtime baseline still present;
 - every baseline container expected healthy still reported healthy.
 
-The backup gate reads only the timestamp of the successful log marker. It does
-not print archive names, remote paths, keys, tokens or configuration contents.
+The backup gate reads only a timestamp from the most recent bounded portion of
+the backup log. It does not print archive names, remote paths, keys, tokens or
+configuration contents.
 
-The tracked runtime baseline is intentionally strict. When the runtime has
-legitimately changed, update and review the baseline first instead of teaching
-the deploy command to ignore drift.
+The tracked runtime baseline is intentionally strict. A legitimate runtime
+change must be collected, reviewed and promoted first instead of teaching the
+deploy command to ignore drift.
 
 ## Plan binding
 
@@ -111,16 +170,22 @@ the deploy command to ignore drift.
 The plan includes:
 
 - exact full and 12-character source commit;
+- installed engine/source binding;
 - manifest SHA-256;
 - repository, CI and sanitized host preflight results;
 - source SHA-256 for every target;
-- exact live before-state: presence, SHA-256, UID, GID and mode;
+- exact live before fingerprint: presence, SHA-256, UID, GID and mode;
+- exact desired fingerprint: SHA-256, UID, GID and mode;
 - `replace` or `unchanged` action;
 - creation and expiry times.
 
 The default lifetime is 30 minutes. `deploy` refuses an expired plan, a changed
-manifest or source, a different commit, or any target whose live fingerprint no
-longer equals the reviewed before-state.
+manifest or source, a different commit, unsafe/symlinked target parents, or any
+target whose complete live fingerprint no longer equals the reviewed
+before-state.
+
+A file with matching content but wrong UID, GID or mode is `DRIFT`, not
+`MATCH`, and is planned for correction.
 
 ## Apply transaction
 
@@ -132,13 +197,16 @@ After all gates pass, deploy creates a root-only transaction below:
 
 For every changed target it:
 
-1. copies the old regular file into a private `0600` transaction backup;
-2. verifies the private backup SHA-256 against the reviewed before-state;
-3. copies the source to a temporary file in the target directory;
-4. applies explicit owner, group and mode;
-5. validates the temporary file;
-6. replaces the target with same-directory `os.replace()`;
-7. verifies SHA-256, UID, GID, mode and validators again.
+1. verifies all target parent components are real directories, not symlinks;
+2. copies the old regular file into a private `0600` transaction backup;
+3. fsyncs and verifies that backup against the reviewed before SHA-256;
+4. records the prepared phase in transaction metadata;
+5. copies the source to a temporary file in the target directory;
+6. applies explicit owner, group and mode;
+7. fsyncs and validates the temporary file;
+8. replaces the target with same-directory `os.replace()` and fsyncs the directory;
+9. verifies the complete desired fingerprint and validators again;
+10. records the installed phase before moving to the next target.
 
 V12 does not execute a backup, upload data, delete retention data, rotate logs,
 reload cron, restart services or restart containers. The three initial targets
@@ -148,29 +216,36 @@ do not require a service restart.
 
 Any exception after a target enters the mutation set starts automatic rollback
 in reverse order. The old file is restored atomically, or a target that was
-previously absent is removed. Every restored fingerprint must exactly equal the
-reviewed before-state. The transaction is marked `rolled_back`; an incomplete
-restore is marked `rollback_failed` and reported clearly.
+previously absent is removed. Every restored SHA-256, UID, GID and mode must
+exactly equal the reviewed before-state. Transaction metadata records prepared,
+installed, restored or restore-failed phases.
+
+A fully restored failure is marked `rolled_back`. An incomplete restore is
+marked `rollback_failed` and reported clearly.
 
 ## Manual rollback
 
 Only the latest successful transaction can be rolled back in V12. Before
-restoring a target, the command requires its current SHA-256 to equal the
-transaction's post-deploy SHA-256. This prevents rollback from overwriting a
-later manual or reviewed change.
+restoring a target, the command requires its complete current fingerprint to
+equal the recorded post-deploy fingerprint. It therefore refuses to overwrite
+a later content, ownership, group or mode change.
 
-Rollback is deliberately not blocked by a failed container or failed systemd
-unit, because those may be the reason rollback is needed. It still requires the
-correct host, an exclusive deploy lock and no conflicting maintenance process.
-After restoration, the full host preflight runs. If runtime health still fails,
-the command reports that files were restored but the incident remains.
+Rollback is deliberately not blocked by an unhealthy container or failed
+systemd unit, because that may be the reason rollback is needed. It still
+requires the verified installed engine, exact RPi5/Debian/architecture identity,
+a read-write root filesystem, an exclusive deploy lock and no conflicting
+maintenance process. After restoration, the full host preflight runs. If
+runtime health still fails, the command reports that files were restored but
+the wider incident remains.
 
 ## Logs and secret boundary
 
 The deploy log is root-only at `/var/log/rpi5-deploy.log`; concise markers are
 also sent to journald with tag `rpi5-deploy`. Logs contain command phase,
-transaction ID, short commit and sanitized error text. They do not contain file
-contents, environment values, tokens, keys, backup names or raw configuration.
+transaction ID, short commit and bounded sanitized errors. Command failures do
+not copy arbitrary subprocess output into the root log. Logs do not contain
+file contents, environment values, raw remote URLs, tokens, keys, backup names
+or raw configuration.
 
 ## Testing
 
@@ -178,11 +253,17 @@ contents, environment values, tokens, keys, backup names or raw configuration.
 It builds a temporary Git repository and fake root, then verifies:
 
 - exact manifest scope and reference-only configuration guard;
+- test mode cannot target `/` or escape its temporary sandbox;
+- deterministic engine staging, source/installed SHA binding and `env -i` wrapper;
+- repository root commands route to the system engine;
+- no production preflight-bypass environment variable exists;
 - plan creation and exact-SHA confirmation;
+- complete before and desired fingerprints;
 - rejection of a wrong confirmation;
 - synthetic failure after a partial write and verified automatic rollback;
+- durable rollback phase metadata;
 - successful atomic deployment and status reporting;
-- refusal to roll back over later drift;
+- refusal to roll back over metadata-only drift;
 - verified manual rollback to exact before fingerprints.
 
 Run all repository checks with:
@@ -191,22 +272,28 @@ Run all repository checks with:
 make validate
 ```
 
+The test does not install `/usr/local/sbin/rpi5-deploy`, touch production state,
+run the real backup, reload cron or restart any service.
+
 ## Research decision: manifest transaction before Ansible
 
-Ansible check and diff modes are valuable for later, larger subsystem imports.
-However, Ansible documents that check mode is only a simulation, unsupported
-modules may report nothing, and diff output can reveal sensitive information.
-V12 therefore uses a small manifest-driven transaction with no new production
-dependency. When broader configuration is imported, Ansible can be added under
-this same outer commit/CI/plan/rollback contract, with `diff: false` on private
+Ansible check and diff modes are useful for later, larger subsystem imports.
+However, check mode is a simulation, unsupported modules may report nothing,
+and diff output can reveal sensitive information. V12 therefore starts with a
+small manifest-driven transaction and no new production automation dependency.
+When broader configuration is imported, Ansible can be placed inside this same
+outer engine/commit/CI/plan/rollback contract, with diff disabled for private
 configuration tasks.
 
-Docker Compose changes later must at minimum use `docker compose config --quiet`
-and an available Compose dry-run before any apply. They are intentionally not
+Future Docker Compose targets must at minimum use Compose configuration
+validation and an available dry-run before apply. They are intentionally not
 part of the initial three-file transaction.
 
-## Repository rollback
+## Rollback before production use
 
-Before any separately approved production use, revert the V12 repository
-commit. After production use, use the guarded transaction rollback and retain
-the transaction metadata for incident review.
+Before any separately approved engine installation or target apply, repository
+rollback is simply reverting the V12 commit. After engine installation, the
+versioned old engine release remains present; changing the system wrapper back
+to it requires a separate reviewed engine-pointer procedure. After a target
+apply, use the guarded transaction rollback and retain its metadata for
+incident review.
