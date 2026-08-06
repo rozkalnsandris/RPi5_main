@@ -23,6 +23,50 @@ from rpi5_deploy_tx import apply_plan, latest_transaction, manual_rollback
 
 
 REQUIRED_GITHUB_CHECKS = {"validate"}
+APPROVED_TARGET_CONTRACT = {
+    "backup-runner": (
+        "ops/bin/rpi5-backup",
+        "/usr/local/sbin/rpi5-backup",
+        "root",
+        "root",
+        0o700,
+        ("bash-n",),
+    ),
+    "backup-cron": (
+        "ops/cron.d/rpi5-backup",
+        "/etc/cron.d/rpi5-backup",
+        "root",
+        "root",
+        0o644,
+        ("cron-contract",),
+    ),
+    "backup-logrotate": (
+        "ops/logrotate.d/rpi5-backup",
+        "/etc/logrotate.d/rpi5-backup",
+        "root",
+        "root",
+        0o644,
+        ("logrotate-debug",),
+    ),
+}
+
+
+def require_target_contract() -> list:
+    targets, _ = read_manifest()
+    actual = {
+        target.id: (
+            target.source,
+            target.target,
+            target.owner,
+            target.group,
+            target.mode,
+            target.validators,
+        )
+        for target in targets
+    }
+    if actual != APPROVED_TARGET_CONTRACT:
+        raise DeployError("manifest does not match the hard-coded approved V12 target contract")
+    return targets
 
 
 def require_repo_checks(checks: dict) -> None:
@@ -133,6 +177,7 @@ def install_engine(confirm: str) -> None:
     if CTX.installed_engine:
         raise DeployError("install-engine must run from the repository controller")
     repository = repository_preflight(validate=True)
+    require_target_contract()
     checks = github_checks(repository["head"])
     require_repo_checks(checks)
     host_identity(root_required=False)
@@ -193,6 +238,7 @@ def engine_status(release_only: bool) -> None:
 def plan() -> None:
     require_root()
     with operation_lock():
+        require_target_contract()
         payload = build_plan(write=False)
         require_repo_checks(payload["github_checks"])
         atomic_json(CTX.plan_path, payload)
@@ -207,6 +253,7 @@ def plan() -> None:
 def deploy(confirm: str) -> None:
     require_root()
     with operation_lock():
+        require_target_contract()
         payload = load_plan()
         if confirm != payload["short_commit"]:
             raise DeployError("confirmation must equal the exact 12-character planned commit")
@@ -224,7 +271,7 @@ def deploy(confirm: str) -> None:
 def status() -> None:
     require_root()
     engine_source_preflight()
-    targets, _ = read_manifest()
+    targets = require_target_contract()
     print(f"repository={EXPECTED_REPOSITORY}\nhead={git('rev-parse', 'HEAD')}")
     if CTX.plan_path.exists():
         try:
@@ -244,7 +291,9 @@ def status() -> None:
         print("latest_transaction=none")
     for target in targets:
         current = fingerprint(CTX.rooted(target.target))
-        desired = expected_fingerprint(target, sha256_file(CTX.repo / target.source))
+        source = CTX.repo / target.source
+        safe_file(source)
+        desired = expected_fingerprint(target, sha256_file(source))
         state = "MATCH" if current == desired else ("ABSENT" if not current["exists"] else "DRIFT")
         print(f"{state:6} {target.id:18} {target.target}")
         if state != "MATCH":
