@@ -129,6 +129,22 @@ def main() -> None:
         controller = ["bash", str(fake_repo / "scripts/rpi5-deploy")]
 
         run([*controller, "plan"], cwd=fake_repo, env=env)
+        pointer_failure_env = env.copy()
+        pointer_failure_env["RPI5_DEPLOY_TEST_FAIL_AFTER_POINTER"] = "1"
+        failed = run(
+            [*controller, "deploy", "--confirm", short_commit],
+            cwd=fake_repo,
+            env=pointer_failure_env,
+            expect_success=False,
+        )
+        assert "all changed targets were rolled back" in failed.stdout
+        for key, path in live.items():
+            expected_bytes, expected_mode = before[key]
+            assert path.read_bytes() == expected_bytes
+            assert mode(path) == expected_mode
+        assert not (state / "latest-success").exists()
+
+        run([*controller, "plan"], cwd=fake_repo, env=env)
         run(
             [*controller, "deploy", "--confirm", short_commit],
             cwd=fake_repo,
