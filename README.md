@@ -8,7 +8,21 @@ Configuration is imported incrementally, with each small change reviewed before 
 
 Every change follows: **branch → tests → draft PR → CI → review → squash merge**.
 
-Any future production apply must bind to an exact Git commit and include preflight checks, a backup plan, verification, and a documented rollback. It is not enabled by this repository.
+Any production apply must bind to an exact Git commit and include preflight checks, a backup plan, verification, and a documented rollback. A merge never deploys automatically.
+
+## Controlled deploy
+
+V12 adds a VS Code-friendly operator workflow for the exact non-secret V10 backup implementation files already owned by this repository:
+
+- **RPi5: Sync from GitHub**
+- **RPi5: Test**
+- **RPi5: Deploy plan**
+- **RPi5: Deploy reviewed plan**
+- **RPi5: Status**
+- **RPi5: Rollback latest**
+- **RPi5: Deploy logs**
+
+Plan and deploy are deliberately separate. The root-owned plan is short-lived and binds the exact commit, successful GitHub checks, host health, backup freshness, reviewed runtime baseline, source hashes and every live target fingerprint. Apply uses private transaction backups, same-directory replacement, post-write validation and automatic rollback. V12 does not deploy the private `/etc/rpi5-backup.conf`, restart services, run a backup or change production merely by being merged.
 
 ## Versions
 
@@ -36,4 +50,6 @@ V10 imports byte-identical source ownership for the existing host-wide encrypted
 
 V11 tooling is complete. It attributes the exact AdGuard Home process and container memory to anonymous, file-backed, shared, kernel/socket, slab, and swap classes without reading DNS queries, client data, process arguments, environments, or raw configuration.
 
-See [the roadmap](docs/ROADMAP.md), [the security model](docs/SECURITY_MODEL.md), [the V01 inventory contract](docs/INVENTORY_CONTRACT.md), [the V02A findings](docs/V02A_FINDINGS.md), [the current runtime baseline](docs/CURRENT_RUNTIME_BASELINE.md), [the V04 review contract](docs/V04_BASELINE_REVIEW_CONTRACT.md), [the V05 findings](docs/V05_FINDINGS.md), [the V06 semantics contract](docs/V06_DYNAMIC_RUNTIME_SEMANTICS.md), [the V07 lineage contract](docs/V07_RUNTIME_LINEAGE_CONTRACT.md), [the V08 memory diagnostic contract](docs/V08_MEMORY_PRESSURE_DIAGNOSTIC_CONTRACT.md), [the V09 memory series contract](docs/V09_MEMORY_PRESSURE_SERIES_CONTRACT.md), [the V10 backup ownership contract](docs/V10_BACKUP_OWNERSHIP_CONTRACT.md), and [the V11 AdGuard memory attribution contract](docs/V11_ADGUARD_MEMORY_ATTRIBUTION_CONTRACT.md).
+V12 tooling is complete on its feature branch. It adds a human-reviewed, exact-commit deployment plan and atomic transaction workflow for only the three approved non-secret V10 installed files. Production use remains a separate explicit action after merge and live plan review.
+
+See [the roadmap](docs/ROADMAP.md), [the security model](docs/SECURITY_MODEL.md), [the V01 inventory contract](docs/INVENTORY_CONTRACT.md), [the V02A findings](docs/V02A_FINDINGS.md), [the current runtime baseline](docs/CURRENT_RUNTIME_BASELINE.md), [the V04 review contract](docs/V04_BASELINE_REVIEW_CONTRACT.md), [the V05 findings](docs/V05_FINDINGS.md), [the V06 semantics contract](docs/V06_DYNAMIC_RUNTIME_SEMANTICS.md), [the V07 lineage contract](docs/V07_RUNTIME_LINEAGE_CONTRACT.md), [the V08 memory diagnostic contract](docs/V08_MEMORY_PRESSURE_DIAGNOSTIC_CONTRACT.md), [the V09 memory series contract](docs/V09_MEMORY_PRESSURE_SERIES_CONTRACT.md), [the V10 backup ownership contract](docs/V10_BACKUP_OWNERSHIP_CONTRACT.md), [the V11 AdGuard memory attribution contract](docs/V11_ADGUARD_MEMORY_ATTRIBUTION_CONTRACT.md), and [the V12 controlled deploy contract](docs/V12_CONTROLLED_DEPLOY_CONTRACT.md).
