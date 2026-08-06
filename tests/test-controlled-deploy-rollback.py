@@ -128,6 +128,23 @@ def main() -> None:
         })
         controller = ["bash", str(fake_repo / "scripts/rpi5-deploy")]
 
+        manifest_path = fake_repo / "ops/deploy/targets.json"
+        manifest_text = manifest_path.read_text(encoding="utf-8")
+        manipulated = json.loads(manifest_text)
+        manipulated["targets"][0]["target"] = "/etc/unsafe-rpi5-target"
+        manifest_path.write_text(
+            json.dumps(manipulated, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        failed = run(
+            [*controller, "plan"],
+            cwd=fake_repo,
+            env=env,
+            expect_success=False,
+        )
+        assert "hard-coded approved V12 target contract" in failed.stdout
+        manifest_path.write_text(manifest_text, encoding="utf-8")
+
         run([*controller, "plan"], cwd=fake_repo, env=env)
         pointer_failure_env = env.copy()
         pointer_failure_env["RPI5_DEPLOY_TEST_FAIL_AFTER_POINTER"] = "1"
@@ -151,6 +168,24 @@ def main() -> None:
             env=env,
         )
         assert_deployed(fake_repo, fake_root)
+
+        source_path = fake_repo / "ops/bin/rpi5-backup"
+        source_bytes = source_path.read_bytes()
+        source_mode = mode(source_path)
+        probe = work / "source-symlink-probe"
+        probe.write_text("must not be read through repository symlink\n", encoding="utf-8")
+        source_path.unlink()
+        source_path.symlink_to(probe)
+        failed = run(
+            [*controller, "status"],
+            cwd=fake_repo,
+            env=env,
+            expect_success=False,
+        )
+        assert "unsafe file" in failed.stdout
+        source_path.unlink()
+        source_path.write_bytes(source_bytes)
+        os.chmod(source_path, source_mode)
 
         txid = (state / "latest-success").read_text(encoding="utf-8").strip()
         transaction_dir = state / "transactions" / txid
