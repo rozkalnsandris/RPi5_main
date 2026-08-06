@@ -62,11 +62,15 @@ V10 imports the existing host-wide encrypted backup script, configuration exampl
 
 V11 identifies exact `AdGuardHome` processes and attributes their memory using PSS, cgroup-v2 and RSS fallback data. It separates anonymous, file-backed, shared, kernel/socket, slab and swap classes, reports container-limit headroom, and preserves strict privacy by excluding process IDs, cgroup paths, DNS queries, client identities, arguments, environments and raw configuration. At least four verified live samples are required before the AdGuard root-cause conclusion is updated. See the [V11 contract](V11_ADGUARD_MEMORY_ATTRIBUTION_CONTRACT.md) and [findings](V11_FINDINGS.md).
 
-## V12 — tooling complete: controlled host deployment
+## V12 — Draft PR #31: controlled host deployment
 
-V12 adds a VS Code-friendly `sync`, `test`, `plan`, `deploy`, `status`, `rollback` and `logs` workflow for exactly the three non-secret V10 backup implementation targets. A root-owned, 30-minute plan binds exact `main`, `origin/main`, GitHub checks, host and runtime health, backup freshness, the manifest hash, source hashes and every live before fingerprint. Apply creates private transaction backups, performs same-directory replacement with exact owner/mode, validates before and after the write, and automatically rolls back any partial failure. Manual rollback refuses to overwrite later drift. The private `/etc/rpi5-backup.conf` remains reference-only. See the [V12 contract](V12_CONTROLLED_DEPLOY_CONTRACT.md) and [findings](V12_FINDINGS.md).
+V12 adds a normal-user VS Code controller and a separately confirmed, versioned, root-owned deploy engine. The engine is installed below `/usr/local/libexec/rpi5-deploy/releases/<commit>/`; the active root wrapper starts with `env -i`, and every privileged command verifies installed engine SHA/UID/GID/mode plus current tracked engine-source hashes.
 
-Merging V12 does not deploy to the host. The first production plan and apply require a separate explicit action after merge.
+The operator commands are `sync`, `test`, `install-engine`, `engine-status`, `plan`, `deploy`, `status`, `rollback` and `logs`. The initial target set remains exactly the three non-secret V10 backup implementation files. The private `/etc/rpi5-backup.conf` is reference-only.
+
+A 30-minute plan binds exact `main`, `origin/main`, exact-commit GitHub checks, RPi5 host and runtime health, backup freshness, the manifest hash, source hashes and complete before/desired SHA-256, UID, GID and mode fingerprints. Apply creates private transaction backups, records phases durably, uses same-directory replacement with fsync, validates after each write and automatically rolls back any partial failure. Manual rollback refuses later content or metadata drift.
+
+Merging V12 does not install the engine or deploy to the host. Engine installation, live plan review and any production apply are separate explicit post-merge actions. See the [V12 contract](V12_CONTROLLED_DEPLOY_CONTRACT.md) and [findings](V12_FINDINGS.md).
 
 ## Later phases
 
