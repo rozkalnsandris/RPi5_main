@@ -26,11 +26,32 @@
       }
     },
     {
+      "label": "RPi5: Install deploy engine",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "./scripts/rpi5-deploy",
+        "install-engine",
+        "--confirm",
+        "${input:engineCommit}"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "RPi5: Deploy engine status",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "./scripts/rpi5-deploy",
+        "engine-status"
+      ],
+      "problemMatcher": []
+    },
+    {
       "label": "RPi5: Deploy plan",
       "type": "process",
-      "command": "sudo",
+      "command": "bash",
       "args": [
-        "bash",
         "./scripts/rpi5-deploy",
         "plan"
       ],
@@ -39,9 +60,8 @@
     {
       "label": "RPi5: Deploy reviewed plan",
       "type": "process",
-      "command": "sudo",
+      "command": "bash",
       "args": [
-        "bash",
         "./scripts/rpi5-deploy",
         "deploy",
         "--confirm",
@@ -52,9 +72,8 @@
     {
       "label": "RPi5: Status",
       "type": "process",
-      "command": "sudo",
+      "command": "bash",
       "args": [
-        "bash",
         "./scripts/rpi5-deploy",
         "status"
       ],
@@ -63,9 +82,8 @@
     {
       "label": "RPi5: Rollback latest",
       "type": "process",
-      "command": "sudo",
+      "command": "bash",
       "args": [
-        "bash",
         "./scripts/rpi5-deploy",
         "rollback",
         "--latest",
@@ -77,9 +95,8 @@
     {
       "label": "RPi5: Deploy logs",
       "type": "process",
-      "command": "sudo",
+      "command": "bash",
       "args": [
-        "bash",
         "./scripts/rpi5-deploy",
         "logs",
         "--lines",
@@ -89,6 +106,11 @@
     }
   ],
   "inputs": [
+    {
+      "id": "engineCommit",
+      "type": "promptString",
+      "description": "Paste the exact 12-character main commit printed by Sync"
+    },
     {
       "id": "deployCommit",
       "type": "promptString",
