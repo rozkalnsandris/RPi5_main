@@ -92,15 +92,13 @@
     {
       "id": "deployCommit",
       "type": "promptString",
-      "description": "Paste the exact 12-character commit printed by Deploy plan",
-      "password": false
+      "description": "Paste the exact 12-character commit printed by Deploy plan"
     },
     {
       "id": "rollbackConfirmation",
       "type": "promptString",
       "description": "Type ROLLBACK to restore the latest successful transaction",
-      "default": "ROLLBACK",
-      "password": false
+      "default": "ROLLBACK"
     }
   ]
 }
