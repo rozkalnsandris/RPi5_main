@@ -178,10 +178,15 @@ def apply_plan(plan: dict[str, Any]) -> pathlib.Path:
         transaction.update({"status": "success", "completed_at": now_iso()})
         atomic_json(directory / "transaction.json", transaction)
         atomic_text(CTX.latest_success_path, txid + "\n")
+        if CTX.test_mode and os.environ.get("RPI5_DEPLOY_TEST_FAIL_AFTER_POINTER") == "1":
+            raise DeployError("synthetic failure after latest-success pointer")
         append_log(f"DEPLOY PASS transaction={txid} commit={plan['short_commit']}")
         return directory
     except Exception as exc:
-        append_log(f"DEPLOY FAIL transaction={txid}; automatic rollback starting")
+        try:
+            append_log(f"DEPLOY FAIL transaction={txid}; automatic rollback starting")
+        except Exception:
+            pass
         errors = []
         for entry in reversed(changed):
             try:
@@ -192,6 +197,14 @@ def apply_plan(plan: dict[str, Any]) -> pathlib.Path:
             except Exception as rollback_exc:
                 entry["phase"] = "restore_failed"
                 errors.append(f"{entry['id']}: {rollback_exc}")
+        try:
+            if CTX.latest_success_path.exists():
+                safe_file(CTX.latest_success_path)
+                if CTX.latest_success_path.read_text(encoding="utf-8").strip() == txid:
+                    CTX.latest_success_path.unlink()
+                    fsync_dir(CTX.latest_success_path.parent)
+        except Exception as pointer_exc:
+            errors.append(f"latest-success: {pointer_exc}")
         transaction.update({"status": "rolled_back" if not errors else "rollback_failed",
                             "failed_at": now_iso(), "error": str(exc)[:1000], "rollback_errors": errors})
         atomic_json(directory / "transaction.json", transaction)
