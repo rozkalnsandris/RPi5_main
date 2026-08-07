@@ -30,7 +30,7 @@ V12 adds a VS Code-friendly operator workflow for the exact non-secret V10 backu
 
 The repository controller runs as the normal operator. Privileged commands are routed to a separately confirmed, versioned and root-owned engine below `/usr/local/libexec/rpi5-deploy/releases/<commit>/`. The root wrapper starts with a clean environment and fixed `PATH`. Every root action verifies the installed engine files; plan, deploy and status also require the current tracked controller, modules and manifest to match the hashes recorded during engine installation. Rollback and logs remain available from the verified engine and transaction state during repository-source drift.
 
-Plan and deploy are deliberately separate. The root-owned plan is short-lived and binds the exact commit, successful GitHub checks, host health, backup freshness, reviewed runtime baseline, source hashes and complete live/desired SHA-256, UID, GID and mode fingerprints. Apply uses private transaction backups, fsync, same-directory replacement with fsync, post-write validation and automatic rollback.
+Plan and deploy are deliberately separate. The root-owned plan is short-lived and binds the exact commit, successful GitHub checks, host health, backup freshness, reviewed runtime baseline, source hashes and complete live/desired SHA-256, UID, GID and mode fingerprints. Apply uses private transaction backups, fsync, same-directory replacement, post-write validation and automatic rollback.
 
 V12 does not deploy the private `/etc/rpi5-backup.conf`, restart or reload services, run a backup, upload data, delete retention data, rotate logs or change production merely by being merged. Engine installation and any later target apply are separate explicit actions after merge.
 
@@ -60,7 +60,7 @@ V10 imports byte-identical source ownership for the existing host-wide encrypted
 
 V11 tooling is complete. It attributes the exact AdGuard Home process and container memory to anonymous, file-backed, shared, kernel/socket, slab, and swap classes without reading DNS queries, client data, process arguments, environments, or raw configuration.
 
-V12 adds the root-isolated, human-reviewed, exact-commit deployment engine and transaction workflow for only the three approved non-secret V10 installed files. Production engine installation and target deployment remain separate explicit post-merge actions.
+V12 adds the root-isolated, human-reviewed, exact-commit deployment engine and transaction workflow for only the three approved non-secret V10 installed files. Production engine installation and target deployment remain separate explicit actions after merge.
 
 V13 establishes host-wide ownership for the shared Cloudflare Tunnel connector. The tunnel remains remotely managed in Cloudflare; this repository reviews the exact host `cloudflared` systemd source, secret boundary, edge-readiness gates and no-downtime migration/rollback contract. Merging V13 does not install, start, stop or restart the connector and does not change Cloudflare routes, UFW or application origins.
 
