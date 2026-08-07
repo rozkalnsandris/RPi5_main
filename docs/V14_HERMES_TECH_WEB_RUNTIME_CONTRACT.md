@@ -2,16 +2,16 @@
 
 ## Status
 
-**Source reviewed in Git; production migration pending.**
+**Production migration complete — 2026-08-07.**
 
 This contract moves the legacy standalone `hermes-blog` Docker container into
 reviewed host infrastructure ownership and narrows the Hermes Tech origin from a
 wildcard Docker publish to loopback-only host access.
 
-Merging V14 performs no production mutation. It does not install or enable the
-unit, stop or replace the existing container, change the Cloudflare route, edit
-UFW, update the Nginx image, change Hermes Tech content generation, or restart
-the shared Cloudflare connector.
+The reviewed source was merged before any live cutover. Merging V14 performs no
+production mutation. Installation, route cutover, runtime cutover and UFW
+cleanup were separately confirmed production actions with independent health
+checks and rollback gates.
 
 ## Ownership boundary
 
@@ -26,78 +26,56 @@ the V13 contract. Neither the Hermes Tech application deploy nor this static-web
 runtime may start, stop, replace, reconcile, roll back or hold credentials for
 the shared Cloudflare Tunnel connector.
 
-## Verified pre-migration runtime
+## Final authoritative runtime
 
-The live read-only audit on 2026-08-07 established:
+The final host runtime is:
 
+- systemd unit: `hermes-tech-web.service`;
+- unit source: `ops/systemd/hermes-tech-web.service`;
+- installed unit: `/etc/systemd/system/hermes-tech-web.service`;
 - container name: `hermes-blog`;
-- image originally named `nginx:alpine`;
-- running immutable image ID:
-  `sha256:54f2a904c251d5a34adf545a72d32515a15e08418dae0266e23be2e18c66fefa`;
-- the running image has no repository tags and no repository digests available;
-- image architecture: `arm64`;
-- image creation timestamp: `2026-06-22T20:53:00.395943424Z`;
-- network mode: Docker default bridge;
-- container restart policy: `unless-stopped`;
-- host publish: wildcard host port `8089` to container port `80`;
+- systemd state: active and enabled;
+- Docker restart policy: `no`;
+- systemd restart policy: `Restart=on-failure`;
+- Docker publish: `127.0.0.1:8089:80` only;
 - static content bind:
   `/home/andris/hermes-tech/site/public:/usr/share/nginx/html:ro`;
-- JSON-file logging: `max-size=10m`, `max-file=3`;
-- loopback origin: HTTP 200;
-- direct LAN origin: HTTP 200;
-- public `https://tech.rozkalns.net/`: HTTP 200;
-- shared Cloudflare connector remained on the established host systemd PID during
-  the audit.
+- JSON-file logging: `max-size=10m`, `max-file=3`.
 
-The Hermes Tech pull-deploy systemd timer updates the application checkout and
-published static files. It does not create, replace or supervise `hermes-blog`.
+Systemd is the only restart supervisor. Docker and systemd restart supervision
+must not be combined.
 
 ## Image identity policy
 
-The mutable `nginx:alpine` tag currently resolves to an image different from the
-one used by the running production container. The running image has no
-`RepoDigest`, so this migration cannot pin a registry digest for the exact live
-bytes.
-
-To keep network/lifecycle hardening separate from an Nginx upgrade, V14 pins the
-exact local image ID:
+The migration deliberately preserved the exact production Nginx image bytes.
+The legacy running image had no repository tag or repository digest available,
+so V14 pins the exact retained local image ID:
 
 ```text
 sha256:54f2a904c251d5a34adf545a72d32515a15e08418dae0266e23be2e18c66fefa
 ```
 
-The reviewed service uses `--pull=never`. Production apply must prove that this
-exact image exists locally before the legacy container is stopped. The image
-must not be pruned until V14 migration and rollback observation are complete.
+The reviewed service uses `--pull=never`. This prevents the network/lifecycle
+hardening from silently becoming an Nginx upgrade.
 
-A later Nginx image refresh is a separate reviewed change with a registry digest,
-compatibility check, public-site verification and rollback image retained.
+A later Nginx refresh is a separate reviewed change. It should use a registry
+digest when possible, perform compatibility and public-site verification, and
+retain a rollback image.
 
-## Reviewed systemd source
-
-Authoritative source:
+The exact legacy container is currently retained in stopped state as:
 
 ```text
-ops/systemd/hermes-tech-web.service
+hermes-blog-legacy-v14
 ```
 
-Installed target after explicit production apply:
+Its verified legacy container ID is:
 
 ```text
-/etc/systemd/system/hermes-tech-web.service
+5738272eb00eeffd518a9cb3cb236292a37f44bb360e5a4d703956ce82c50397
 ```
 
-The unit requires Docker and the published-content directory, creates a container
-from the exact retained local image, starts it attached so systemd observes its
-lifetime, and removes the stopped container after service shutdown.
-
-Docker restart policy is explicitly `no`; systemd uses `Restart=on-failure`.
-Docker and systemd restart supervision must not be combined.
-
-The unit deliberately does not use force-removal in `ExecStartPre` or
-`ExecStopPost`. Accidentally starting the unit while a running legacy
-`hermes-blog` still exists must fail safely because of the name conflict rather
-than destroy the working container.
+The retained image and stopped rollback container must not be pruned until the
+post-migration observation/cleanup decision is made separately.
 
 ## Final origin contract
 
@@ -113,21 +91,104 @@ The final Cloudflare origin for `tech.rozkalns.net` is:
 http://127.0.0.1:8089
 ```
 
-After migration:
+The production result verified:
 
-- `curl http://127.0.0.1:8089/` must succeed;
-- direct `http://192.168.0.180:8089/` must fail;
-- `https://tech.rozkalns.net/` must remain HTTP 200;
-- Docker inspection must show only loopback host binding for container port 80;
-- wildcard IPv4, wildcard IPv6 and LAN-specific 8089 publishes are forbidden.
+- loopback origin HTTP 200;
+- direct `http://192.168.0.180:8089/` fails;
+- public `https://tech.rozkalns.net/` remains HTTP 200;
+- Docker inspection shows only `127.0.0.1:8089` for container port 80;
+- no wildcard IPv4 or IPv6 listener remains on 8089;
+- the obsolete LAN UFW `8089/tcp` allow rule is removed.
 
-The Cloudflare route is changed before the container migration because the
-existing wildcard listener already accepts loopback traffic. That lets the route
-change itself be proven independently while the legacy runtime remains intact.
+The route was changed before the container cutover because the legacy wildcard
+listener already accepted loopback traffic. This allowed the Cloudflare route
+change to be proven independently before the runtime replacement.
+
+## Verified production migration
+
+The migration completed in separately gated steps on 2026-08-07.
+
+### 1. Source and image preflight
+
+The RPi5 checkout was synchronized to the exact merged V14 source. The reviewed
+unit SHA256 was verified before installation, the exact retained image ID was
+present locally, and the legacy container was still healthy on both loopback and
+public paths.
+
+The shared Cloudflare connector remained on the existing host service with four
+active edge connections.
+
+### 2. Install-only gate
+
+The exact reviewed unit was installed as `root:root` mode `0644`, passed
+`systemd-analyze verify`, and `daemon-reload` completed.
+
+The unit was deliberately left inactive and disabled during this gate. The
+legacy wildcard container continued serving traffic unchanged.
+
+### 3. Cloudflare route cutover
+
+Only the `tech.rozkalns.net` origin was changed from the LAN address to:
+
+```text
+http://127.0.0.1:8089
+```
+
+While the legacy container still ran, five consecutive public checks returned
+HTTP 200. The shared Cloudflare connector PID remained unchanged and readiness
+remained four active edge connections.
+
+### 4. Runtime cutover and safe retry
+
+The legacy container was renamed to `hermes-blog-legacy-v14` and preserved as a
+rollback asset before the reviewed systemd runtime was started.
+
+The first cutover attempt reached the correct new runtime state — exact image,
+Docker restart policy `no`, loopback-only bind — but the operator verification
+script had an `ERR`-trap bug: the intentionally failing direct-LAN curl was
+mistaken for a transaction failure. Automatic rollback restored the legacy
+container, and both loopback and public health returned HTTP 200.
+
+No runtime defect was identified. The verification script was corrected so the
+expected non-zero LAN curl result was handled inside an `if` condition rather
+than triggering the rollback trap.
+
+The second cutover then passed:
+
+- `hermes-tech-web.service`: active and enabled;
+- new `hermes-blog` uses the exact pinned image;
+- Docker restart policy: `no`;
+- binding: exactly `127.0.0.1:8089`;
+- direct LAN connection: blocked (`curl` rc 7);
+- five consecutive public checks: HTTP 200;
+- Cloudflare connector PID unchanged;
+- four active Cloudflare edge connections;
+- legacy rollback container preserved and exited.
+
+### 5. UFW cleanup
+
+After the runtime gates passed, the single matching LAN Hermes Tech rule was
+identified by specification and removed without assuming a historical rule
+number.
+
+Final verification passed:
+
+- no `8089/tcp` LAN allow rule remains;
+- Docker still publishes only `127.0.0.1:8089`;
+- direct LAN remains blocked;
+- five consecutive public Tech checks return HTTP 200;
+- Cloudflare connector remains four-of-four ready;
+- stopped legacy rollback asset remains preserved.
+
+Final marker:
+
+```text
+HERMES_TECH_V14_UFW_FINAL=PASS
+```
 
 ## Static content and logging contract
 
-V14 preserves the verified application-data boundary:
+V14 preserves the application-data boundary:
 
 ```text
 /home/andris/hermes-tech/site/public
@@ -135,76 +196,39 @@ V14 preserves the verified application-data boundary:
     read-only
 ```
 
-The migration does not change Hugo output, cron schedules, pull-deploy behavior,
-Nginx configuration, application content, container root filesystem mode,
-container capabilities, memory limits or CPU limits.
+The migration did not change Hugo output, collector/digest cron schedules,
+pull-deploy behavior, Nginx configuration, application content, container root
+filesystem mode, container capabilities, memory limits or CPU limits.
 
-The existing bounded Docker JSON logging policy is preserved:
+The existing bounded Docker JSON logging policy remains:
 
 ```text
 max-size=10m
 max-file=3
 ```
 
-## Production migration gates
-
-Production apply is a separate, explicitly confirmed transaction after merge.
-The order is:
-
-1. require exact merged `main` and successful GitHub checks;
-2. prove `cloudflared.service` active/enabled with the expected unchanged PID and
-   four active edge connections;
-3. prove current loopback, LAN and public Hermes Tech HTTP health;
-4. prove the exact retained image ID exists locally;
-5. prove the tracked unit is byte-identical to the intended installed source;
-6. install the reviewed unit without enabling or starting it;
-7. run `systemd-analyze verify` on the installed unit;
-8. change only the Cloudflare `tech.rozkalns.net` origin from
-   `http://192.168.0.180:8089` to `http://127.0.0.1:8089`;
-9. while the legacy wildcard container still runs, require public Tech HTTP 200,
-   loopback HTTP 200 and unchanged Cloudflare connector readiness;
-10. stop and remove only the legacy `hermes-blog` container;
-11. start and enable `hermes-tech-web.service` immediately;
-12. require service active/enabled and container running from the exact image ID;
-13. require Docker port binding exactly `127.0.0.1:8089 -> 80/tcp`;
-14. require loopback HTTP 200 and public Tech HTTP 200;
-15. require direct LAN 8089 to fail;
-16. require the shared Cloudflare connector PID and four-edge readiness to remain
-    unchanged;
-17. only after those gates pass, remove the obsolete UFW LAN `8089/tcp` allow
-    rule by matching its current specification/number rather than assuming an
-    old rule number;
-18. repeat loopback, public, direct-LAN-failure and Cloudflare readiness checks;
-19. quarantine or remove legacy host-local setup scripts that could recreate the
-    wildcard container only in a separate cleanup step after observation.
-
-The container cutover itself cannot run two listeners on the same host port at
-the same time. The route is therefore pre-proven on loopback and the old
-container stop/new service start are performed as one tightly bounded operation.
-
 ## Rollback
 
-Before removing the UFW LAN rule, rollback is:
+The immediate rollback asset remains the stopped legacy container plus the exact
+retained image.
 
-1. stop `hermes-tech-web.service`;
-2. remove any stopped reviewed `hermes-blog` container if necessary;
-3. recreate the legacy runtime from the retained exact image ID with the verified
-   original read-only content bind, JSON logging and wildcard 8089 publish;
+If rollback is required while that asset is retained:
+
+1. stop and disable `hermes-tech-web.service`;
+2. remove the reviewed `hermes-blog` container if necessary;
+3. rename/start `hermes-blog-legacy-v14` as `hermes-blog`;
 4. require loopback and public Tech HTTP 200;
-5. if required, restore the Cloudflare origin to
-   `http://192.168.0.180:8089` only after the legacy listener is healthy;
-6. verify the shared Cloudflare connector remains healthy.
+5. restore the LAN UFW rule only if direct LAN access is intentionally required;
+6. restore the Cloudflare route to a LAN origin only after the legacy listener
+   and any required firewall path are healthy;
+7. verify the shared Cloudflare connector remains healthy.
 
-The retained image ID is a required rollback asset until the migration is closed.
-Image pruning is forbidden during that period.
+The current accepted production architecture does **not** require the LAN UFW
+rule or LAN Cloudflare origin. Normal operation is loopback-only.
 
-After the loopback runtime is accepted and the LAN UFW rule is removed, rollback
-must restore both the legacy listener and any required LAN firewall rule before a
-LAN-origin route is restored.
+## Exclusions and later cleanup
 
-## Exclusions
-
-V14 does not:
+V14 did not:
 
 - update Nginx;
 - introduce Docker Compose for Hermes Tech;
@@ -213,5 +237,9 @@ V14 does not:
 - change the pull-deploy timer;
 - change Cloudflare credentials or Access policy;
 - restart or replace `cloudflared.service`;
-- change any other application origin or UFW rule;
-- delete legacy scripts during the initial runtime cutover.
+- change any other application origin or UFW rule.
+
+Legacy host-local setup scripts that could recreate the old wildcard container
+should be quarantined or removed only in a separate reviewed cleanup after the
+rollback observation window. The stopped legacy container and exact image should
+also be removed only after that separate decision.
