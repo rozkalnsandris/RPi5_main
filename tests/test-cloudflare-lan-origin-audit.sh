@@ -63,8 +63,11 @@ if grep -Eq '^[[:space:]]*(sudo[[:space:]]+)?(reboot|shutdown|poweroff|halt)([[:
 fi
 
 # Avoid secret-bearing or application-content reads.
-if grep -Eq 'docker[[:space:]]+inspect|docker[[:space:]]+logs|journalctl|printenv|/proc/.*/environ|(^|[[:space:]])env([[:space:]]|$)|\.env([[:space:]"'"']|$)' "$script"; then
+if grep -Eq 'docker[[:space:]]+inspect|docker[[:space:]]+logs|journalctl|printenv|/proc/.*/environ|(^|[[:space:]])env([[:space:]]|$)' "$script"; then
   fail "secret-bearing/runtime-content read is forbidden"
+fi
+if grep -Fq '.env' "$script"; then
+  fail "environment-file access is forbidden"
 fi
 
 # Contract must preserve the read-only and human-policy boundaries.
