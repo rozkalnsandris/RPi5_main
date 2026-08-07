@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/branding/project-logo.svg" alt="RPi5 Main logo" width="160">
+  <img src="assets/branding/readme-banner.svg" alt="RPi5 Main project banner" width="960">
 </p>
 
 # RPi5_main
