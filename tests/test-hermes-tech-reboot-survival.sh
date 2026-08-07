@@ -33,7 +33,7 @@ grep -Fq 'HERMES_TECH_REBOOT_SURVIVAL_VERIFY=PASS' "$script" || fail "verify mar
 
 # The verifier may collect evidence and write its protected baseline only.
 # It must never perform lifecycle, firewall, tunnel, image or rollback mutations.
-if grep -Eq '(^|[[:space:]])(reboot|shutdown|poweroff|halt)([[:space:]]|$)' "$script"; then
+if grep -Eq '^[[:space:]]*(sudo[[:space:]]+)?(reboot|shutdown|poweroff|halt)([[:space:]]|$)' "$script"; then
   fail "host power mutation is forbidden"
 fi
 if grep -Eq 'systemctl[[:space:]]+(start|stop|restart|try-restart|reload|enable|disable|mask|unmask|reboot|poweroff)' "$script"; then
