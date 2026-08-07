@@ -40,6 +40,18 @@ ENGINE_INSTALLED_FILES = {
     "rpi5_deploy_lib.py": "0400",
     "rpi5_deploy_tx.py": "0400",
 }
+MAINTENANCE_PROCESS_PATTERNS = (
+    r"(^|/)(rpi5-backup|backup\.sh)( |$)",
+    r"(^|/)(update\.sh|rpi5-update)( |$)",
+    r"(^|/)(apt-get|apt|dpkg)( |$)",
+    r"(^|/)(unattended-upgrade|unattended-upgrades)( |$)",
+)
+PACKAGE_MANAGER_LOCKS = (
+    "/var/lib/dpkg/lock-frontend",
+    "/var/lib/dpkg/lock",
+    "/var/cache/apt/archives/lock",
+    "/var/lib/apt/lists/lock",
+)
 
 
 class DeployError(RuntimeError):
@@ -458,14 +470,13 @@ def github_checks(commit: str) -> dict[str, Any]:
 
 
 def ensure_no_conflicts() -> None:
-    for pattern in (r"(^|/)(rpi5-backup|backup\.sh)( |$)", r"(^|/)(update\.sh|rpi5-update)( |$)",
-                    r"apt-get|apt |dpkg|unattended-upgrade"):
+    for pattern in MAINTENANCE_PROCESS_PATTERNS:
         result = run(["pgrep", "-af", pattern], check=False)
         lines = [line for line in result.stdout.splitlines() if not line.startswith(f"{os.getpid()} ")]
         if lines:
             raise DeployError(f"conflicting maintenance process is active ({pattern})")
     if shutil.which("fuser"):
-        for name in ("/var/lib/dpkg/lock-frontend", "/var/lib/dpkg/lock", "/var/cache/apt/archives/lock"):
+        for name in PACKAGE_MANAGER_LOCKS:
             path = CTX.rooted(name)
             if path.exists() and run(["fuser", str(path)], check=False).returncode == 0:
                 raise DeployError(f"package-manager lock is active: {name}")
