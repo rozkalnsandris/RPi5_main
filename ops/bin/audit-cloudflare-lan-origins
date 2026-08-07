@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+[[ "$EUID" -eq 0 ]] || {
+  echo "V18 LAN-origin audit: FAIL: run as root" >&2
+  exit 1
+}
+
+HOST_IP="192.168.0.180"
+LAN_CIDR="192.168.0.0/24"
+
+# Reviewed V13 route inventory. V18 does not query or mutate Cloudflare control-plane state.
+ORIGINS=(
+  "deals.rozkalns.net|9128|private-application"
+  "hermes.rozkalns.net|9119|admin-private"
+  "portainer.rozkalns.net|9000|admin"
+  "grafana.rozkalns.net|3030|admin"
+  "ha.rozkalns.net|8123|admin"
+  "adguard.rozkalns.net|3080|admin"
+  "kuma.rozkalns.net|3001|admin"
+  "prometheus.rozkalns.net|9090|admin"
+)
+
+fail() {
+  echo "V18 LAN-origin audit: FAIL: $*" >&2
+  exit 1
+}
+
+for cmd in ss docker ufw systemctl timeout bash awk grep sed curl; do
+  command -v "$cmd" >/dev/null 2>&1 || fail "missing command: $cmd"
+done
+
+[[ "$(systemctl is-active cloudflared.service)" == "active" ]] || fail "cloudflared is not active"
+[[ "$(systemctl is-enabled cloudflared.service)" == "enabled" ]] || fail "cloudflared is not enabled"
+
+CF_PID="$(systemctl show cloudflared.service -p MainPID --value)"
+[[ -n "$CF_PID" && "$CF_PID" != "0" ]] || fail "cloudflared PID unavailable"
+
+CF_HA="$({
+  curl -fsS --max-time 5 http://127.0.0.1:20241/metrics |
+    awk '$1 == "cloudflared_tunnel_ha_connections" {total += $2; found=1} END {if (!found) exit 1; printf "%.0f\n", total}'
+} 2>/dev/null)" || fail "cloudflared HA metric unavailable"
+[[ "$CF_HA" == "4" ]] || fail "cloudflared HA is not 4"
+
+SS_ALL="$(ss -H -lntp)"
+UFW_ALL="$(ufw status numbered)"
+printf '%s\n' "$UFW_ALL" | grep -Fq 'Status: active' || fail "UFW is not active"
+
+mapfile -t DOCKER_NAMES < <(docker ps --format '{{.Names}}' | sort -u)
+
+probe_tcp() {
+  local host="$1" port="$2"
+  if timeout 2 bash -c "exec 3<>/dev/tcp/${host}/${port}" >/dev/null 2>&1; then
+    printf 'open'
+  else
+    printf 'closed'
+  fi
+}
+
+listener_lines() {
+  local port="$1"
+  printf '%s\n' "$SS_ALL" | awk -v p="$port" '$4 ~ (":" p "$") {print}'
+}
+
+classify_bind() {
+  local lines="$1"
+  [[ -n "$lines" ]] || {
+    printf 'none'
+    return
+  }
+
+  local has_loopback=false has_lan=false has_wildcard=false has_other=false addr
+  while IFS= read -r addr; do
+    [[ -n "$addr" ]] || continue
+    case "$addr" in
+      127.0.0.1:*|\[::1\]:*) has_loopback=true ;;
+      0.0.0.0:*|\[::\]:*|\*:*) has_wildcard=true ;;
+      "$HOST_IP":*) has_lan=true ;;
+      *) has_other=true ;;
+    esac
+  done < <(printf '%s\n' "$lines" | awk '{print $4}')
+
+  local count=0 label=""
+  for pair in \
+    "$has_loopback:loopback" \
+    "$has_lan:lan-specific" \
+    "$has_wildcard:wildcard" \
+    "$has_other:other"; do
+    if [[ "${pair%%:*}" == "true" ]]; then
+      count=$((count + 1))
+      label="${pair#*:}"
+    fi
+  done
+
+  if (( count == 1 )); then
+    printf '%s' "$label"
+  else
+    printf 'mixed'
+  fi
+}
+
+docker_owners_for_port() {
+  local port="$1" name ports owners=()
+  for name in "${DOCKER_NAMES[@]}"; do
+    ports="$(docker port "$name" 2>/dev/null || true)"
+    if printf '%s\n' "$ports" | grep -Eq "(^|[^0-9])${port}($|[^0-9])"; then
+      owners+=("$name")
+    fi
+  done
+
+  if (( ${#owners[@]} == 0 )); then
+    printf '-'
+  else
+    local IFS=,
+    printf '%s' "${owners[*]}"
+  fi
+}
+
+listener_processes() {
+  local lines="$1"
+  [[ -n "$lines" ]] || {
+    printf '-'
+    return
+  }
+
+  local value
+  value="$(printf '%s\n' "$lines" |
+    sed -n 's/.*users:(\(.*\))$/\1/p' |
+    tr '\n' ';' |
+    sed 's/;$//')"
+  [[ -n "$value" ]] && printf '%s' "$value" || printf '-'
+}
+
+ufw_rule_for_port() {
+  local port="$1" value
+  value="$(printf '%s\n' "$UFW_ALL" |
+    awk -v p="$port" -v cidr="$LAN_CIDR" '$0 ~ p && $0 ~ cidr {print}' |
+    tr '\n' ';' |
+    sed 's/;$//')"
+  [[ -n "$value" ]] && printf '%s' "$value" || printf '-'
+}
+
+printf 'cloudflared_pid=%s\n' "$CF_PID"
+printf 'cloudflared_ha=%s\n' "$CF_HA"
+printf 'audit_scope=%s\n' "${#ORIGINS[@]}"
+printf '\n'
+printf 'hostname\tport\tclass\tbind_class\tdocker_owner\tlistener_process\tufw_lan_rule\tloopback_tcp\tlan_tcp\n'
+
+for origin in "${ORIGINS[@]}"; do
+  IFS='|' read -r hostname port class <<<"$origin"
+  lines="$(listener_lines "$port")"
+  bind_class="$(classify_bind "$lines")"
+  docker_owner="$(docker_owners_for_port "$port")"
+  process_owner="$(listener_processes "$lines")"
+  ufw_rule="$(ufw_rule_for_port "$port")"
+  loopback_tcp="$(probe_tcp 127.0.0.1 "$port")"
+  lan_tcp="$(probe_tcp "$HOST_IP" "$port")"
+
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$hostname" "$port" "$class" "$bind_class" "$docker_owner" \
+    "$process_owner" "$ufw_rule" "$loopback_tcp" "$lan_tcp"
+done
+
+printf '\nV18_CLOUDFLARE_LAN_ORIGIN_AUDIT=PASS\n'
