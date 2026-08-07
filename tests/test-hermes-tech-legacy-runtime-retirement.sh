@@ -59,9 +59,12 @@ grep -Fq 'cloudflared HA is not 4' "$script" || fail "Cloudflare HA preflight mi
 grep -Fq 'cloudflared PID changed' "$script" || fail "Cloudflare PID stability gate missing"
 grep -Fq 'rollback container identity drift' "$script" || fail "rollback asset identity gate missing"
 
-# Contract preserves the explicit source-vs-production boundary.
-grep -Fq '**Source reviewed in Git; host quarantine pending.**' "$contract" || fail "V15 status boundary missing"
-grep -Fq 'Merging V15 performs no production mutation.' "$contract" || fail "merge/no-mutation boundary missing"
+# Contract records the completed host cleanup while preserving source-vs-production boundaries.
+grep -Fq '**Production host quarantine complete — 2026-08-07.**' "$contract" || fail "V15 completed status missing"
+grep -Fq 'Merging V15 performed no production mutation.' "$contract" || fail "merge/no-mutation history missing"
+grep -Fq 'The later explicit `apply` invocation was the separately confirmed host cleanup change and is now complete.' "$contract" || fail "explicit apply completion boundary missing"
 grep -Fq 'V15 does **not** remove `hermes-blog-legacy-v14`' "$contract" || fail "rollback retention boundary missing"
+grep -Fq 'direct LAN `192.168.0.180:8089` remained blocked (`curl` rc 7)' "$contract" || fail "direct LAN verification evidence missing"
+grep -Fq 'Cloudflare connector PID remained unchanged at `423466` and HA readiness remained 4/4' "$contract" || fail "Cloudflare verification evidence missing"
 
 echo "Hermes Tech legacy runtime retirement test: PASS"
