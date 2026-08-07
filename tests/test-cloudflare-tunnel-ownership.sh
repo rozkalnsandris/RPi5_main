@@ -67,12 +67,27 @@ if grep -Fqx 'PrivateNetwork=yes' "$unit"; then
 fi
 grep -Fq -- '--no-autoupdate' "$unit" || fail "automatic updates must be disabled"
 
-# The contract must preserve the migration safety boundary and temporary apex marker.
-grep -Fq 'Application repositories deploy only their application.' "$contract" || fail "missing ownership invariant"
-grep -Fq '`http://172.19.0.10:80`' "$contract" || fail "missing temporary apex origin record"
-grep -Fq 'must be removed after the host connector is established' "$contract" || fail "temporary origin is not marked for removal"
-grep -Fq 'old Docker connector remains online' "$contract" || fail "missing no-downtime migration gate"
-grep -Fq 'Merging V13 performs no production change.' "$contract" || fail "missing merge/no-deploy boundary"
+# The contract must describe the completed host-owned architecture, not the
+# retired CV-owned migration path.
+grep -Fq '**Migration complete — 2026-08-07.**' "$contract" || fail "migration is not marked complete"
+grep -Fq 'Application repositories may verify their own local and public endpoints' "$contract" || fail "missing ownership invariant"
+grep -Fq '`rozkalns.net` | `http://127.0.0.1:8088` | public' "$contract" || fail "missing stable loopback apex origin"
+grep -Fq '`RPi5_main` is the only repository that owns the shared RPi5 Cloudflare' "$contract" || fail "missing authoritative host owner"
+grep -Fq 'Cloudflare Tunnel itself is outbound-only.' "$contract" || fail "missing outbound-only firewall boundary"
+grep -Fq 'Docker-published ports must not rely on UFW as their primary exposure control.' "$contract" || fail "missing Docker/UFW boundary"
+grep -Fq 'Do **not** protect all `*.rozkalns.net` with one broad wildcard Access policy.' "$contract" || fail "missing Access wildcard safety rule"
+
+# Retired migration-era CV connector references must not reappear in the final
+# ownership contract. Build strings in pieces so this test does not itself
+# preserve the retired exact paths as searchable documentation.
+legacy_apex='http://172.19.0.'"10:80"
+legacy_container='cv-'"cloudflared"
+legacy_env='/home/andris/docker/cv/cloudflared.'"env"
+for legacy in "$legacy_apex" "$legacy_container" "$legacy_env"; do
+  if grep -Fq "$legacy" "$contract"; then
+    fail "retired CV-owned tunnel reference reintroduced"
+  fi
+done
 
 # No local ingress config.yml is part of the remotely-managed design.
 if find ops -type f \( -name 'config.yml' -o -name 'config.yaml' \) -print | grep -q .; then
