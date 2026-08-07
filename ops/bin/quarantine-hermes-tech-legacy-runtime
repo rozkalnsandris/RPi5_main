@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+MODE="${1:-check}"
+[[ "$MODE" == "check" || "$MODE" == "apply" ]] || {
+  echo "usage: $0 [check|apply]" >&2
+  exit 64
+}
+
+LIVE="hermes-blog"
+ROLLBACK="hermes-blog-legacy-v14"
+EXPECTED_IMAGE="sha256:54f2a904c251d5a34adf545a72d32515a15e08418dae0266e23be2e18c66fefa"
+EXPECTED_ROLLBACK_ID="5738272eb00eeffd518a9cb3cb236292a37f44bb360e5a4d703956ce82c50397"
+
+SETUP_SRC="/home/andris/hermes-tech-phase3/setup3.sh"
+SETUP_SHA="7a1455e938354871b46a91dc00bccb6679ad5c2799f1368e7d5b829190604226"
+FIX_SRC="/home/andris/_home_cleanup_20260804-221307/fix-port.sh"
+FIX_SHA="115566b8f432863370bd4945f960a8f587f8041df7512bb81174388d42210c98"
+
+QUARANTINE_DIR="/home/andris/.quarantine/hermes-tech-v14-legacy-runtime-20260807"
+SETUP_DST="$QUARANTINE_DIR/setup3.sh"
+FIX_DST="$QUARANTINE_DIR/fix-port.sh"
+MANIFEST="$QUARANTINE_DIR/MANIFEST.tsv"
+
+fail() {
+  echo "Hermes Tech legacy runtime quarantine: FAIL: $*" >&2
+  exit 1
+}
+
+sha_of() {
+  sha256sum "$1" | awk '{print $1}'
+}
+
+require_exact_file_or_quarantine() {
+  local src="$1" dst="$2" expected="$3"
+  if [[ -f "$src" ]]; then
+    [[ "$(sha_of "$src")" == "$expected" ]] || fail "checksum drift: $src"
+    [[ ! -e "$dst" ]] || fail "both source and quarantine target exist: $src"
+    return 0
+  fi
+  [[ -f "$dst" ]] || fail "neither source nor quarantine target exists: $src"
+  [[ "$(sha_of "$dst")" == "$expected" ]] || fail "quarantine checksum drift: $dst"
+}
+
+assert_not_scheduled() {
+  local path="$1"
+  if grep -RIlF -- "$path" \
+      /etc/systemd/system \
+      /etc/cron.d \
+      /etc/cron.daily \
+      /etc/cron.hourly \
+      /etc/cron.weekly \
+      /etc/cron.monthly \
+      2>/dev/null | grep -q .; then
+    fail "legacy script is still scheduled/referenced: $path"
+  fi
+}
+
+runtime_gate() {
+  [[ "$(systemctl is-active hermes-tech-web.service)" == "active" ]] || fail "web service not active"
+  [[ "$(systemctl is-enabled hermes-tech-web.service)" == "enabled" ]] || fail "web service not enabled"
+  [[ "$(docker inspect "$LIVE" --format '{{.Image}}')" == "$EXPECTED_IMAGE" ]] || fail "live image drift"
+  [[ "$(docker inspect "$LIVE" --format '{{.HostConfig.RestartPolicy.Name}}')" == "no" ]] || fail "live restart-policy drift"
+  [[ "$(docker port "$LIVE" 80/tcp)" == "127.0.0.1:8089" ]] || fail "live publish drift"
+  [[ "$(docker inspect "$ROLLBACK" --format '{{.State.Status}}')" == "exited" ]] || fail "rollback container is not exited"
+  [[ "$(docker inspect "$ROLLBACK" --format '{{.Id}}')" == "$EXPECTED_ROLLBACK_ID" ]] || fail "rollback container identity drift"
+  curl -fsS -o /dev/null --max-time 10 http://127.0.0.1:8089/ || fail "loopback origin unhealthy"
+  curl -fsS -o /dev/null --max-time 15 https://tech.rozkalns.net/ || fail "public Tech unhealthy"
+}
+
+runtime_gate
+CF_PID_BEFORE="$(systemctl show cloudflared.service -p MainPID --value)"
+[[ -n "$CF_PID_BEFORE" && "$CF_PID_BEFORE" != "0" ]] || fail "cloudflared PID unavailable"
+HA_BEFORE="$(curl -fsS --max-time 5 http://127.0.0.1:20241/metrics | awk '$1 == "cloudflared_tunnel_ha_connections" {t += $2; f=1} END {if (!f) exit 1; printf "%.0f\n", t}')"
+[[ "$HA_BEFORE" == "4" ]] || fail "cloudflared HA is not 4"
+
+require_exact_file_or_quarantine "$SETUP_SRC" "$SETUP_DST" "$SETUP_SHA"
+require_exact_file_or_quarantine "$FIX_SRC" "$FIX_DST" "$FIX_SHA"
+assert_not_scheduled "$SETUP_SRC"
+assert_not_scheduled "$FIX_SRC"
+
+echo "mode=$MODE"
+echo "setup_sha256=$SETUP_SHA"
+echo "fix_sha256=$FIX_SHA"
+echo "cloudflared_pid_before=$CF_PID_BEFORE"
+echo "cloudflared_ha_before=$HA_BEFORE"
+
+if [[ "$MODE" == "apply" ]]; then
+  install -d -m 0700 "$QUARANTINE_DIR"
+
+  if [[ -f "$SETUP_SRC" ]]; then
+    mv -- "$SETUP_SRC" "$SETUP_DST"
+  fi
+  if [[ -f "$FIX_SRC" ]]; then
+    mv -- "$FIX_SRC" "$FIX_DST"
+  fi
+
+  chmod 0400 "$SETUP_DST" "$FIX_DST"
+
+  {
+    printf 'source\tquarantine\tsha256\n'
+    printf '%s\t%s\t%s\n' "$SETUP_SRC" "$SETUP_DST" "$SETUP_SHA"
+    printf '%s\t%s\t%s\n' "$FIX_SRC" "$FIX_DST" "$FIX_SHA"
+  } > "$MANIFEST"
+  chmod 0400 "$MANIFEST"
+fi
+
+[[ ! -e "$SETUP_SRC" || "$MODE" == "check" ]] || fail "setup source still present after apply"
+[[ ! -e "$FIX_SRC" || "$MODE" == "check" ]] || fail "fix source still present after apply"
+
+if [[ "$MODE" == "apply" ]]; then
+  [[ "$(sha_of "$SETUP_DST")" == "$SETUP_SHA" ]] || fail "setup quarantine verification failed"
+  [[ "$(sha_of "$FIX_DST")" == "$FIX_SHA" ]] || fail "fix quarantine verification failed"
+  [[ "$(stat -c '%a' "$SETUP_DST")" == "400" ]] || fail "setup quarantine mode drift"
+  [[ "$(stat -c '%a' "$FIX_DST")" == "400" ]] || fail "fix quarantine mode drift"
+fi
+
+runtime_gate
+CF_PID_AFTER="$(systemctl show cloudflared.service -p MainPID --value)"
+HA_AFTER="$(curl -fsS --max-time 5 http://127.0.0.1:20241/metrics | awk '$1 == "cloudflared_tunnel_ha_connections" {t += $2; f=1} END {if (!f) exit 1; printf "%.0f\n", t}')"
+[[ "$CF_PID_AFTER" == "$CF_PID_BEFORE" ]] || fail "cloudflared PID changed"
+[[ "$HA_AFTER" == "4" ]] || fail "cloudflared HA changed"
+
+echo "cloudflared_pid_after=$CF_PID_AFTER"
+echo "cloudflared_ha_after=$HA_AFTER"
+echo "HERMES_TECH_LEGACY_RUNTIME_QUARANTINE=PASS"
