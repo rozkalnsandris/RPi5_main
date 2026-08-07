@@ -49,11 +49,15 @@ if grep -Eq 'cloudflared[^\n]*(tunnel|route|access)[^\n]*(create|delete|update|r
   fail "Cloudflare control-plane mutation is forbidden"
 fi
 
-# Contract must preserve the two-stage authorization boundary.
-grep -Fq '**Source reviewed in Git; real reboot verification pending.**' "$contract" || fail "V16 status missing"
-grep -Fq 'Merging V16 performs no production mutation.' "$contract" || fail "merge boundary missing"
+# Contract records the completed real reboot while preserving the explicit cleanup boundary.
+grep -Fq '**Production reboot-survival verification complete — 2026-08-07.**' "$contract" || fail "V16 completed status missing"
+grep -Fq 'Merging V16 performed no production mutation.' "$contract" || fail "merge/no-mutation history missing"
 grep -Fq 'The verifier itself never initiates a reboot.' "$contract" || fail "reboot boundary missing"
 grep -Fq 'A real RPi5 reboot is a separate production maintenance action.' "$contract" || fail "explicit maintenance boundary missing"
+grep -Fq 'post-reboot boot ID: `7d742ff6-cd06-4010-a91e-797cbbd2fe5d`' "$contract" || fail "post-reboot identity evidence missing"
+grep -Fq 'ActiveEnterTimestampMonotonic=18060729' "$contract" || fail "early boot production evidence missing"
+grep -Fq 'Cloudflare returned to HA readiness 4/4' "$contract" || fail "Cloudflare reboot evidence missing"
+grep -Fq 'HERMES_TECH_V16_REAL_REBOOT_SURVIVAL=PASS' "$contract" || fail "real reboot PASS marker missing"
 grep -Fq 'A successful reboot-survival verification does not itself remove anything.' "$contract" || fail "rollback retirement boundary missing"
 
 echo "Hermes Tech reboot survival test: PASS"
