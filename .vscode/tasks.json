@@ -1,0 +1,125 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "RPi5: Sync from GitHub",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "./scripts/rpi5-deploy",
+        "sync"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "RPi5: Test",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "./scripts/rpi5-deploy",
+        "test"
+      ],
+      "problemMatcher": [],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "RPi5: Install deploy engine",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "./scripts/rpi5-deploy",
+        "install-engine",
+        "--confirm",
+        "${input:engineCommit}"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "RPi5: Deploy engine status",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "./scripts/rpi5-deploy",
+        "engine-status"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "RPi5: Deploy plan",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "./scripts/rpi5-deploy",
+        "plan"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "RPi5: Deploy reviewed plan",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "./scripts/rpi5-deploy",
+        "deploy",
+        "--confirm",
+        "${input:deployCommit}"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "RPi5: Status",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "./scripts/rpi5-deploy",
+        "status"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "RPi5: Rollback latest",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "./scripts/rpi5-deploy",
+        "rollback",
+        "--latest",
+        "--confirm",
+        "${input:rollbackConfirmation}"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "RPi5: Deploy logs",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "./scripts/rpi5-deploy",
+        "logs",
+        "--lines",
+        "150"
+      ],
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "engineCommit",
+      "type": "promptString",
+      "description": "Paste the exact 12-character main commit printed by Sync"
+    },
+    {
+      "id": "deployCommit",
+      "type": "promptString",
+      "description": "Paste the exact 12-character commit printed by Deploy plan"
+    },
+    {
+      "id": "rollbackConfirmation",
+      "type": "promptString",
+      "description": "Type ROLLBACK to restore the latest successful transaction"
+    }
+  ]
+}
