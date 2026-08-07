@@ -14,10 +14,23 @@ fail() {
 [[ -f "$contract" ]] || fail "missing $contract"
 
 # Exact reviewed runtime identity and remotely-managed token-file contract.
-grep -Fqx 'ConditionPathIsExecutable=/usr/local/libexec/cloudflared/2026.7.3/cloudflared' "$unit" || fail "missing exact binary condition"
-grep -Fqx 'ConditionPathExists=/etc/cloudflared/rpi5-tunnel.token' "$unit" || fail "missing token source condition"
+grep -Fqx 'AssertFileIsExecutable=/usr/local/libexec/cloudflared/2026.7.3/cloudflared' "$unit" || fail "missing exact binary assertion"
+grep -Fqx 'AssertFileNotEmpty=/etc/cloudflared/rpi5-tunnel.token' "$unit" || fail "missing non-empty token assertion"
 grep -Fqx 'LoadCredential=tunnel-token:/etc/cloudflared/rpi5-tunnel.token' "$unit" || fail "missing LoadCredential"
 grep -Fq 'ExecStart=/usr/local/libexec/cloudflared/2026.7.3/cloudflared tunnel --no-autoupdate --metrics 127.0.0.1:20241 run --token-file ${CREDENTIALS_DIRECTORY}/tunnel-token' "$unit" || fail "ExecStart contract drift"
+
+# Validate actual systemd syntax, but substitute CI-safe existing files so verify
+# checks syntax/directives without requiring production binaries or credentials.
+command -v systemd-analyze >/dev/null 2>&1 || fail "systemd-analyze is required"
+tmp_unit="$(mktemp --suffix=.service)"
+trap 'rm -f "$tmp_unit"' EXIT
+sed \
+  -e 's#AssertFileIsExecutable=/usr/local/libexec/cloudflared/2026.7.3/cloudflared#AssertFileIsExecutable=/usr/bin/true#' \
+  -e 's#AssertFileNotEmpty=/etc/cloudflared/rpi5-tunnel.token#AssertFileNotEmpty=/etc/hosts#' \
+  -e 's#/usr/local/libexec/cloudflared/2026.7.3/cloudflared#/usr/bin/true#g' \
+  -e 's#LoadCredential=tunnel-token:/etc/cloudflared/rpi5-tunnel.token#LoadCredential=tunnel-token:/etc/hosts#' \
+  "$unit" > "$tmp_unit"
+systemd-analyze verify "$tmp_unit" >/dev/null || fail "systemd-analyze verify rejected unit"
 
 # The token must never be embedded in the unit or passed with --token.
 if grep -Eq 'eyJ[A-Za-z0-9._-]{20,}' "$unit"; then
