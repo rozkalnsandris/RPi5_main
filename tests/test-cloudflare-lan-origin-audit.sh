@@ -70,14 +70,18 @@ if grep -Fq '.env' "$script"; then
   fail "environment-file access is forbidden"
 fi
 
-# Contract must preserve the read-only and human-policy boundaries.
-grep -Fq '**Source review in progress; production audit not yet executed.**' "$contract" || fail "V18 status missing"
-grep -Fq 'Merging V18 performs no production mutation.' "$contract" || fail "source-only boundary missing"
-grep -Fq 'The operator prints its result to stdout only.' "$contract" || fail "stdout-only boundary missing"
+# Contract must preserve the completed read-only audit and policy boundaries.
+grep -Fq '**Production read-only audit complete — 2026-08-07.**' "$contract" || fail "V18 completed status missing"
+grep -Fq 'Merging V18 performed no production mutation.' "$contract" || fail "source-only boundary missing"
+grep -Fq 'V18_NO_MUTATION_PROOF=PASS' "$contract" || fail "no-mutation production evidence missing"
+grep -Fq 'V18_PRODUCTION_LAN_ORIGIN_AUDIT=PASS' "$contract" || fail "production audit evidence missing"
+grep -Fq 'Cloudflare PID before/after: `878` / `878`' "$contract" || fail "Cloudflare stability evidence missing"
 grep -Fq 'It cannot infer a human policy requirement merely from host state.' "$contract" || fail "policy inference boundary missing"
-grep -Fq '**keep LAN break-glass**' "$contract" || fail "keep classification missing"
-grep -Fq '**loopback migration candidate**' "$contract" || fail "candidate classification missing"
-grep -Fq '**application-specific investigation required**' "$contract" || fail "investigation classification missing"
+grep -Fq '| `deals.rozkalns.net` | **loopback migration candidate** |' "$contract" || fail "Deals classification missing"
+for host in hermes.rozkalns.net portainer.rozkalns.net grafana.rozkalns.net ha.rozkalns.net adguard.rozkalns.net kuma.rozkalns.net prometheus.rozkalns.net; do
+  grep -Fq "| \`$host\` | **keep LAN break-glass** |" "$contract" || fail "LAN break-glass classification missing for $host"
+done
+grep -Fq 'only Deals `9128` advances as a loopback-migration candidate.' "$contract" || fail "next-candidate boundary missing"
 grep -Fq 'Any actual origin change is outside V18.' "$contract" || fail "migration boundary missing"
 
 echo "Cloudflare LAN-origin audit test: PASS"
