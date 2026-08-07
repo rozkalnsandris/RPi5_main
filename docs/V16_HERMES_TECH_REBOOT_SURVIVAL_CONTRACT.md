@@ -2,15 +2,15 @@
 
 ## Status
 
-**Source reviewed in Git; real reboot verification pending.**
+**Production reboot-survival verification complete — 2026-08-07.**
 
 V16 proves that the authoritative Hermes Tech web origin survives a real RPi5 reboot under systemd ownership before any V14 rollback asset is retired.
 
-Merging V16 performs no production mutation. It does not reboot the host, start/stop/restart services, change Docker runtime, edit Cloudflare, edit UFW, alter Hermes Tech schedules/content, remove the stopped rollback container, or prune the retained Nginx image.
+Merging V16 performed no production mutation. It did not reboot the host, start/stop/restart services, change Docker runtime, edit Cloudflare, edit UFW, alter Hermes Tech schedules/content, remove the stopped rollback container, or prune the retained Nginx image.
 
 ## Authoritative pre-reboot state
 
-The accepted V14/V15 production state remains:
+The accepted V14/V15 production state was:
 
 - systemd unit `hermes-tech-web.service` active and enabled;
 - Docker container name `hermes-blog`;
@@ -84,6 +84,29 @@ The reboot must occur only after a successful capture. No rollback asset may be 
 - V15 quarantine remains intact and the original mutation-capable legacy paths remain absent.
 
 A Cloudflare PID value is evidence only. A process PID is expected to change across a reboot and must not be used as a cross-boot identity guarantee; the kernel boot ID is the authoritative reboot discriminator.
+
+## Verified production reboot
+
+The separately authorized real RPi5 reboot and post-reboot V16 verification completed successfully on 2026-08-07.
+
+Authoritative evidence:
+
+- pre-reboot boot ID: `8aaee2b2-e486-47ee-9d5e-56be15c03b00`;
+- post-reboot boot ID: `7d742ff6-cd06-4010-a91e-797cbbd2fe5d`;
+- pre-reboot live container ID: `e0a8e09a03dea401895fcec0bea32a03a5c890d404e27ab8c113644a85349466`;
+- post-reboot live container ID: `9dcf4dbb652aebded7c8454d4c17407573b5d6fa9569823308011551279a8073`;
+- `hermes-tech-web.service` was active and enabled after reboot;
+- `ActiveEnterTimestampMonotonic=18060729` usec, approximately 18.1 seconds after boot, proving early normal boot ownership;
+- recreated `hermes-blog` retained image `sha256:54f2a904c251d5a34adf545a72d32515a15e08418dae0266e23be2e18c66fefa`;
+- Docker restart policy remained `no`;
+- publish remained exactly `127.0.0.1:8089`;
+- direct LAN `192.168.0.180:8089` remained blocked with `curl` rc 7;
+- Cloudflare returned to HA readiness 4/4; PID changed across reboot from `423466` to `878`, as expected;
+- public Tech returned HTTP 200 for three consecutive verification checks;
+- `hermes-blog-legacy-v14` remained exited with exact ID `5738272eb00eeffd518a9cb3cb236292a37f44bb360e5a4d703956ce82c50397`;
+- authoritative markers were `HERMES_TECH_REBOOT_SURVIVAL_VERIFY=PASS` and `HERMES_TECH_V16_REAL_REBOOT_SURVIVAL=PASS`.
+
+This establishes that the authoritative Hermes Tech web runtime survives a real host reboot without the legacy rollback container participating in recovery.
 
 ## Forbidden actions
 
