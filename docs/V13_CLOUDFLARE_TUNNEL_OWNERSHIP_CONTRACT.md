@@ -33,12 +33,13 @@ DNS associations and Cloudflare Access policy remain control-plane state. No
 local tunnel ingress `config.yml` is authoritative on the RPi5.
 
 Only one connector remains continuously active on this physical RPi5. A second
-same-host connector is allowed only as a temporary update/migration canary.
-True host-level high availability requires another physical host/failure domain.
+same-host connector is allowed only as a temporary update or migration canary.
+True host-level high availability requires another physical host or failure
+domain.
 
-## Retired application-owned model
+## Application ownership boundary
 
-The former CV-owned Docker connector model is permanently retired. No
+The former application-owned connector model is permanently retired. No
 application Compose file, deploy helper, rollback helper or environment file may
 own the shared connector or its tunnel credential.
 
@@ -49,12 +50,12 @@ regression and must fail review.
 
 ## Current published-hostname classes
 
-The route list is remotely managed. The current policy classes are:
+The route list is remotely managed. The current reviewed policy classes are:
 
 | Hostname | Origin | Class | External access policy |
 |---|---|---|---|
 | `rozkalns.net` | `http://127.0.0.1:8088` | public | no Access login |
-| `tech.rozkalns.net` | `http://192.168.0.180:8089` | public | no Access login |
+| `tech.rozkalns.net` | `http://127.0.0.1:8089` | public | no Access login |
 | `deals.rozkalns.net` | `http://192.168.0.180:9128` | private application | Cloudflare Access |
 | `hermes.rozkalns.net` | `http://192.168.0.180:9119` | admin/private | Cloudflare Access |
 | `portainer.rozkalns.net` | `http://192.168.0.180:9000` | admin | Cloudflare Access |
@@ -64,21 +65,29 @@ The route list is remotely managed. The current policy classes are:
 | `kuma.rozkalns.net` | `http://192.168.0.180:3001` | admin | Cloudflare Access |
 | `prometheus.rozkalns.net` | `http://192.168.0.180:9090` | admin | Cloudflare Access |
 
+The two public sites that do not require direct LAN access now use loopback-only
+origins on the RPi5:
+
+- CV/public apex: `127.0.0.1:8088`;
+- Hermes Tech: `127.0.0.1:8089`.
+
+Both corresponding LAN UFW allow rules were removed only after loopback bind,
+public HTTP and connector-readiness verification passed.
+
 `hermes.rozkalns.net` is private by default. It must not be made public unless
 there is an explicit product requirement and a separate review of what the
 service exposes.
 
-### Access grouping rule
+## Access grouping rule
 
 Do **not** protect all `*.rozkalns.net` with one broad wildcard Access policy.
-Public and private hostnames share the zone, and a broad wildcard previously
-risked trapping public sites behind Access.
+Public and private hostnames share the zone, and a broad wildcard can trap
+intentionally public sites behind Access.
 
-Use exact hostnames (or a deliberately reviewed narrow grouping) for private
-applications. If Cloudflare's account-level **Require Access protection**
-feature is enabled, first create explicit Access applications or public
-exemptions for every intentionally public hostname so the public sites are not
-blocked.
+Use exact hostnames, or a deliberately reviewed narrow grouping, for private
+applications. If Cloudflare account-level Access enforcement is enabled, first
+create explicit applications or public exemptions for every intentionally public
+hostname.
 
 Public set:
 
@@ -103,30 +112,29 @@ host firewall.
 
 Cloudflare Tunnel itself is outbound-only. A normal connector needs no inbound
 firewall opening for Internet traffic. The host must be able to make outbound
-connections to Cloudflare on TCP/UDP port `7844` (and normal DNS/HTTPS needed by
-the host). With UFW's normal allow-outgoing policy, no inbound Tunnel-specific
-rule is required.
+connections to Cloudflare on TCP/UDP port `7844`, plus normal DNS/HTTPS required
+by the host.
 
-UFW is still useful for host-native and LAN-facing services such as SSH, DNS,
-MQTT and intentionally retained LAN administration paths.
+UFW remains useful for host-native and intentionally LAN-facing services such as
+SSH, DNS, MQTT and reviewed local administration paths.
 
 ### Docker warning
 
 Docker-published ports must not rely on UFW as their primary exposure control.
-Docker creates its own NAT/filter rules and published container traffic can be
-diverted before UFW's normal host `INPUT` rules are evaluated.
+Docker creates NAT/filter rules and published container traffic can be diverted
+before UFW's normal host `INPUT` rules are evaluated.
 
-Therefore exposure is controlled in this order:
+Exposure is therefore controlled in this order:
 
 1. bind the service to the narrowest host address that satisfies the use case;
 2. use Cloudflare Access for externally reachable private/admin hostnames;
-3. keep UFW as defense-in-depth for host/LAN traffic;
-4. use Docker/firewall-specific forwarding policy only when a real routed-port
-   requirement exists.
+3. keep UFW as defense in depth for host/LAN traffic;
+4. use Docker/firewall-specific forwarding policy only for a real routed-port
+   requirement.
 
 ### Binding policy
 
-- Public applications that need no direct LAN access should prefer a loopback
+- Public applications that need no direct LAN access should use a loopback
   publish such as `127.0.0.1:PORT:CONTAINER_PORT` and a loopback Tunnel origin.
 - Private/admin services may retain a `192.168.0.180` LAN binding when local
   break-glass access is intentionally desired; external access remains behind
@@ -134,27 +142,21 @@ Therefore exposure is controlled in this order:
 - Wildcard Docker publishes (`0.0.0.0` / `[::]`) are not accepted for
   Tunnel-only origins unless explicitly justified.
 
-The CV origin is the first target for this hardening: its public route already
-uses `127.0.0.1:8088`, so the Docker publish should also become loopback-only.
+The CV `8088` and Hermes Tech `8089` public origins are the first completed
+examples of this loopback-only policy.
 
-## UFW cleanup after connector migration
+## UFW cleanup status
 
-The old rules that allowed host service ports specifically from Docker subnet
-`172.19.0.0/16` for the former connector are obsolete. The host-level connector
-does not originate from that Docker network. Those Tunnel-specific rules should
-be removed after a numbered-rule preflight and followed immediately by local
-origin, connector 4/4 and public endpoint verification.
+Obsolete Tunnel-specific Docker-subnet rules have been removed. LAN rules are
+not removed as a batch; each rule is retained or removed according to whether
+direct LAN access is an intentional requirement.
 
-LAN rules are **not** removed as a batch. Each LAN rule is retained or removed
-based on whether direct LAN access is intentionally required for that service.
-
-In particular:
+Current policy:
 
 - keep LAN SSH/DNS/MQTT rules while those LAN services are intentionally used;
-- keep LAN admin rules where local break-glass access is desired;
-- remove the CV `8088/tcp` LAN rule after CV is bound to loopback only;
-- review the public Hermes Tech `8089` wildcard publish separately before
-  changing its Cloudflare origin or LAN rule.
+- keep reviewed LAN admin rules where local break-glass access is desired;
+- CV `8088/tcp`: no direct LAN allow rule; loopback-only origin;
+- Hermes Tech `8089/tcp`: no direct LAN allow rule; loopback-only origin.
 
 ## Connector readiness and updates
 
@@ -183,5 +185,5 @@ Every RPi5 application repository should document this boundary:
 - no shared Tunnel credential may be committed, copied into app runtime, passed
   through app Compose, or written into app deployment evidence.
 
-This ownership statement supersedes all historical incident instructions that
-assumed the connector lived inside the CV Compose project.
+This ownership statement supersedes historical instructions that assumed the
+shared connector belonged to an individual application.
