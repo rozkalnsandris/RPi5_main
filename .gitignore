@@ -67,8 +67,9 @@ evidence/*
 exports/*
 !exports/.gitkeep
 
-# Editor and language caches.
-.vscode/
+# Editor and language caches. Only the reviewed VS Code task file is tracked.
+.vscode/*
+!.vscode/tasks.json
 .idea/
 __pycache__/
 *.pyc
