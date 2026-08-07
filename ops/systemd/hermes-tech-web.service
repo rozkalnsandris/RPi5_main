@@ -1,0 +1,40 @@
+[Unit]
+Description=Hermes Tech static web origin
+Documentation=https://github.com/rozkalnsandris/RPi5_main
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+ConditionPathExists=/home/andris/hermes-tech/site/public
+
+[Service]
+Type=simple
+ExecStartPre=-/usr/bin/docker rm hermes-blog
+ExecStartPre=/usr/bin/docker create --name hermes-blog --pull=never --restart=no --publish 127.0.0.1:8089:80 --mount type=bind,src=/home/andris/hermes-tech/site/public,dst=/usr/share/nginx/html,readonly --log-driver=json-file --log-opt max-size=10m --log-opt max-file=3 sha256:54f2a904c251d5a34adf545a72d32515a15e08418dae0266e23be2e18c66fefa
+ExecStart=/usr/bin/docker start --attach hermes-blog
+ExecStop=-/usr/bin/docker stop --time=10 hermes-blog
+ExecStopPost=-/usr/bin/docker rm hermes-blog
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=30s
+TimeoutStopSec=30s
+UMask=0027
+
+# systemd is the only restart supervisor. The Docker container intentionally
+# uses restart policy "no" so host and container supervisors cannot conflict.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=read-only
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectKernelLogs=yes
+ProtectClock=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target
