@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+command_name="${1:-}"
+
+case "$command_name" in
+    sync|test|install-engine)
+        if [[ ${EUID} -eq 0 && "${RPI5_DEPLOY_TEST_MODE:-0}" != "1" ]]; then
+            echo "ERROR: $command_name must run as the normal repository user." >&2
+            exit 1
+        fi
+        exec python3 "$repo/scripts/rpi5_deploy.py" "$@"
+        ;;
+    plan|deploy|status|rollback|logs|engine-status)
+        if [[ "${RPI5_DEPLOY_TEST_MODE:-0}" == "1" ]]; then
+            exec python3 "$repo/scripts/rpi5_deploy.py" "$@"
+        fi
+        if [[ ${EUID} -eq 0 ]]; then
+            echo "ERROR: run this repository command without sudo; it will invoke the installed root-owned engine." >&2
+            exit 1
+        fi
+        if [[ ! -f /usr/local/sbin/rpi5-deploy ]]; then
+            echo "ERROR: deploy engine is not installed; run 'bash ./scripts/rpi5-deploy install-engine --confirm <commit>'." >&2
+            exit 1
+        fi
+        exec sudo -- /usr/local/sbin/rpi5-deploy "$@"
+        ;;
+    ""|-h|--help)
+        exec python3 "$repo/scripts/rpi5_deploy.py" "$@"
+        ;;
+    *)
+        exec python3 "$repo/scripts/rpi5_deploy.py" "$@"
+        ;;
+esac
