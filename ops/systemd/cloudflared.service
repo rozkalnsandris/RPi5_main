@@ -5,8 +5,8 @@ Wants=network-online.target
 After=network-online.target
 StartLimitIntervalSec=60s
 StartLimitBurst=5
-ConditionPathIsExecutable=/usr/local/libexec/cloudflared/2026.7.3/cloudflared
-ConditionPathExists=/etc/cloudflared/rpi5-tunnel.token
+AssertFileIsExecutable=/usr/local/libexec/cloudflared/2026.7.3/cloudflared
+AssertFileNotEmpty=/etc/cloudflared/rpi5-tunnel.token
 
 [Service]
 Type=notify
