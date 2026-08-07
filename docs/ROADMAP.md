@@ -82,6 +82,16 @@ The migration is explicitly no-downtime: the existing Docker connector remains o
 
 Merging V13 performs no production mutation. Installing the exact reviewed unit, starting the replica, retiring the old Docker connector and every later cleanup step remain separately confirmed live actions. See the [V13 contract](V13_CLOUDFLARE_TUNNEL_OWNERSHIP_CONTRACT.md).
 
+## V14 — Hermes Tech static web runtime ownership
+
+V14 imports reviewed host ownership for the standalone `hermes-blog` Docker runtime and narrows its published origin to `127.0.0.1:8089`. The Hermes Tech application continues to own Hugo/content publication files only; `RPi5_main` owns the container lifecycle, while V13 continues to own the shared Cloudflare connector.
+
+The migration deliberately preserves the exact currently running Nginx image bytes. Because the live image has no repository digest and the mutable `nginx:alpine` tag has already moved, the source pins the exact retained local image ID and uses `--pull=never`. Docker restart policy is disabled and systemd becomes the only restart supervisor.
+
+CI enforces the exact loopback publish, immutable local image identity, read-only content bind, bounded JSON logging, no force-removal of a still-running legacy container, ownership boundaries and `systemd-analyze verify` on a CI-neutralized copy of the unit.
+
+Merging V14 performs no production mutation. The Cloudflare route change, installed-unit activation, legacy-container cutover and later removal of the obsolete LAN 8089 UFW rule are separate explicit production steps with pre/post health and rollback gates. See the [V14 contract](V14_HERMES_TECH_WEB_RUNTIME_CONTRACT.md).
+
 ## Later phases
 
-Each remaining subsystem is imported separately with redaction, tests, rollback instructions and a pull request. Docker Compose, Home Assistant, monitoring, update scripts and application repositories remain outside the V12 target set until their own contracts are reviewed. Cloudflare runtime ownership is defined by V13, but its live cutover and future control-plane-as-code work remain explicitly gated operations.
+Each remaining subsystem is imported separately with redaction, tests, rollback instructions and a pull request. Docker Compose, Home Assistant, monitoring, update scripts and application repositories remain outside the V12 target set until their own contracts are reviewed. Cloudflare runtime ownership is defined by V13, while application-origin/runtime hardening is imported one reviewed subsystem at a time beginning with V14.
