@@ -13,6 +13,7 @@ test:
 	bash ./tests/test-backup-ownership.sh
 	bash ./tests/test-adguard-memory-attribution.sh
 	bash ./tests/test-controlled-deploy.sh
+	bash ./tests/test-cloudflare-tunnel-ownership.sh
 	python3 ./tests/test-controlled-deploy-rollback.py
 	python3 ./tests/test-vscode-deploy-tasks.py
 	python3 ./tests/test-v12-maintenance-conflicts.py

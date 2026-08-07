@@ -72,6 +72,16 @@ A 30-minute plan binds exact `main`, `origin/main`, exact-commit GitHub checks, 
 
 Merging V12 does not install the engine or deploy to the host. Engine installation, live plan review and any production apply are separate explicit post-merge actions. See the [V12 contract](V12_CONTROLLED_DEPLOY_CONTRACT.md) and [findings](V12_FINDINGS.md).
 
+## V13 — Cloudflare Tunnel host ownership
+
+V13 imports the non-secret systemd source and operating contract for the shared `rpi5-tunnel` connector. Cloudflare remains remotely managed; `RPi5_main` becomes authoritative for the RPi5 connector runtime while application repositories are forbidden from controlling the shared tunnel lifecycle.
+
+The reviewed service pins `cloudflared 2026.7.3`, consumes the root-only token through systemd `LoadCredential=` and `--token-file`, exposes diagnostics/Prometheus metrics only on loopback, uses bounded resource controls and retains the networking required to reach Cloudflare edge and local origins. CI includes the ownership contract plus `systemd-analyze verify` against a production-path-neutralized copy of the unit.
+
+The migration is explicitly no-downtime: the existing Docker connector remains online until the new host connector independently proves four active edge connections and all published applications pass end-to-end checks. The temporary Docker container IP used by the apex route is not a final origin. Token rotation, UFW cleanup, CV ownership removal, monitoring integration and later Terraform control-plane import are separate post-cutover gates.
+
+Merging V13 performs no production mutation. Installing the exact reviewed unit, starting the replica, retiring the old Docker connector and every later cleanup step remain separately confirmed live actions. See the [V13 contract](V13_CLOUDFLARE_TUNNEL_OWNERSHIP_CONTRACT.md).
+
 ## Later phases
 
-Each subsystem is imported separately with redaction, tests, rollback instructions and a pull request. Docker Compose, systemd, Cloudflare, Home Assistant, monitoring, update scripts and application repositories remain outside the V12 target set until their own contracts are reviewed.
+Each remaining subsystem is imported separately with redaction, tests, rollback instructions and a pull request. Docker Compose, Home Assistant, monitoring, update scripts and application repositories remain outside the V12 target set until their own contracts are reviewed. Cloudflare runtime ownership is defined by V13, but its live cutover and future control-plane-as-code work remain explicitly gated operations.

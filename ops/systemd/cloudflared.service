@@ -1,0 +1,54 @@
+[Unit]
+Description=Cloudflare Tunnel connector for rpi5-tunnel
+Documentation=https://developers.cloudflare.com/tunnel/
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=60s
+StartLimitBurst=5
+AssertFileIsExecutable=/usr/local/libexec/cloudflared/2026.7.3/cloudflared
+AssertFileNotEmpty=/etc/cloudflared/rpi5-tunnel.token
+
+[Service]
+Type=notify
+NotifyAccess=main
+DynamicUser=yes
+LoadCredential=tunnel-token:/etc/cloudflared/rpi5-tunnel.token
+RuntimeDirectory=cloudflared
+RuntimeDirectoryMode=0700
+WorkingDirectory=/run/cloudflared
+Environment=HOME=/run/cloudflared
+ExecStartPre=/usr/bin/test -s ${CREDENTIALS_DIRECTORY}/tunnel-token
+ExecStart=/usr/local/libexec/cloudflared/2026.7.3/cloudflared tunnel --no-autoupdate --metrics 127.0.0.1:20241 run --token-file ${CREDENTIALS_DIRECTORY}/tunnel-token
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=0
+TimeoutStopSec=45s
+UMask=0077
+
+# Least privilege / containment. The connector needs outbound network access and
+# read-only access to the systemd-provided credential, but no persistent write
+# access outside its private runtime directory.
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectKernelLogs=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+TasksMax=64
+MemoryHigh=96M
+MemoryMax=128M
+OOMScoreAdjust=-500
+
+[Install]
+WantedBy=multi-user.target
