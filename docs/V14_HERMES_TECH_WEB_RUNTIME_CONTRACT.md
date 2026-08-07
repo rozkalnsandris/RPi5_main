@@ -8,10 +8,12 @@ This contract moves the legacy standalone `hermes-blog` Docker container into
 reviewed host infrastructure ownership and narrows the Hermes Tech origin from a
 wildcard Docker publish to loopback-only host access.
 
-The reviewed source was merged before any live cutover. Merging V14 performs no
-production mutation. Installation, route cutover, runtime cutover and UFW
-cleanup were separately confirmed production actions with independent health
-checks and rollback gates.
+The reviewed source was merged before any live cutover.
+
+Merging V14 performs no production mutation.
+
+Installation, route cutover, runtime cutover and UFW cleanup were separately
+confirmed production actions with independent health checks and rollback gates.
 
 ## Ownership boundary
 
