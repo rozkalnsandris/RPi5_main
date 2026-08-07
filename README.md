@@ -12,7 +12,27 @@ Configuration is imported incrementally, with each small change reviewed before 
 
 Every change follows: **branch → tests → draft PR → CI → review → squash merge**.
 
-Any future production apply must bind to an exact Git commit and include preflight checks, a backup plan, verification, and a documented rollback. It is not enabled by this repository.
+Any production apply must bind to an exact Git commit and include preflight checks, a backup plan, verification, and a documented rollback. A merge never deploys automatically.
+
+## Controlled deploy
+
+V12 adds a VS Code-friendly operator workflow for the exact non-secret V10 backup implementation files already owned by this repository:
+
+- **RPi5: Sync from GitHub**
+- **RPi5: Test**
+- **RPi5: Install deploy engine**
+- **RPi5: Deploy engine status**
+- **RPi5: Deploy plan**
+- **RPi5: Deploy reviewed plan**
+- **RPi5: Status**
+- **RPi5: Rollback latest**
+- **RPi5: Deploy logs**
+
+The repository controller runs as the normal operator. Privileged commands are routed to a separately confirmed, versioned and root-owned engine below `/usr/local/libexec/rpi5-deploy/releases/<commit>/`. The root wrapper starts with a clean environment and fixed `PATH`. Every root action verifies the installed engine files; plan, deploy and status also require the current tracked controller, modules and manifest to match the hashes recorded during engine installation. Rollback and logs remain available from the verified engine and transaction state during repository-source drift.
+
+Plan and deploy are deliberately separate. The root-owned plan is short-lived and binds the exact commit, successful GitHub checks, host health, backup freshness, reviewed runtime baseline, source hashes and complete live/desired SHA-256, UID, GID and mode fingerprints. Apply uses private transaction backups, fsync, same-directory replacement, post-write validation and automatic rollback.
+
+V12 does not deploy the private `/etc/rpi5-backup.conf`, restart or reload services, run a backup, upload data, delete retention data, rotate logs or change production merely by being merged. Engine installation and any later target apply are separate explicit actions after merge.
 
 ## Versions
 
@@ -40,4 +60,6 @@ V10 imports byte-identical source ownership for the existing host-wide encrypted
 
 V11 tooling is complete. It attributes the exact AdGuard Home process and container memory to anonymous, file-backed, shared, kernel/socket, slab, and swap classes without reading DNS queries, client data, process arguments, environments, or raw configuration.
 
-See [the roadmap](docs/ROADMAP.md), [the security model](docs/SECURITY_MODEL.md), [the V01 inventory contract](docs/INVENTORY_CONTRACT.md), [the V02A findings](docs/V02A_FINDINGS.md), [the current runtime baseline](docs/CURRENT_RUNTIME_BASELINE.md), [the V04 review contract](docs/V04_BASELINE_REVIEW_CONTRACT.md), [the V05 findings](docs/V05_FINDINGS.md), [the V06 semantics contract](docs/V06_DYNAMIC_RUNTIME_SEMANTICS.md), [the V07 lineage contract](docs/V07_RUNTIME_LINEAGE_CONTRACT.md), [the V08 memory diagnostic contract](docs/V08_MEMORY_PRESSURE_DIAGNOSTIC_CONTRACT.md), [the V09 memory series contract](docs/V09_MEMORY_PRESSURE_SERIES_CONTRACT.md), [the V10 backup ownership contract](docs/V10_BACKUP_OWNERSHIP_CONTRACT.md), and [the V11 AdGuard memory attribution contract](docs/V11_ADGUARD_MEMORY_ATTRIBUTION_CONTRACT.md).
+V12 adds the root-isolated, human-reviewed, exact-commit deployment engine and transaction workflow for only the three approved non-secret V10 installed files. Production engine installation and target deployment remain separate explicit post-merge actions.
+
+See [the roadmap](docs/ROADMAP.md), [the security model](docs/SECURITY_MODEL.md), [the V01 inventory contract](docs/INVENTORY_CONTRACT.md), [the V02A findings](docs/V02A_FINDINGS.md), [the current runtime baseline](docs/CURRENT_RUNTIME_BASELINE.md), [the V04 review contract](docs/V04_BASELINE_REVIEW_CONTRACT.md), [the V05 findings](docs/V05_FINDINGS.md), [the V06 semantics contract](docs/V06_DYNAMIC_RUNTIME_SEMANTICS.md), [the V07 lineage contract](docs/V07_RUNTIME_LINEAGE_CONTRACT.md), [the V08 memory diagnostic contract](docs/V08_MEMORY_PRESSURE_DIAGNOSTIC_CONTRACT.md), [the V09 memory series contract](docs/V09_MEMORY_PRESSURE_SERIES_CONTRACT.md), [the V10 backup ownership contract](docs/V10_BACKUP_OWNERSHIP_CONTRACT.md), [the V11 AdGuard memory attribution contract](docs/V11_ADGUARD_MEMORY_ATTRIBUTION_CONTRACT.md), and [the V12 controlled deploy contract](docs/V12_CONTROLLED_DEPLOY_CONTRACT.md).
