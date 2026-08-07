@@ -2,11 +2,11 @@
 
 ## Status
 
-**Source review in progress; production audit not yet executed.**
+**Production read-only audit complete — 2026-08-07.**
 
 V18 inventories the remaining Cloudflare origins that still target the RPi5 LAN address before any further loopback hardening decision.
 
-Merging V18 performs no production mutation.
+Merging V18 performed no production mutation. The later production audit was separately executed as a read-only action and completed with no-mutation evidence.
 
 ## Reviewed route scope
 
@@ -47,9 +47,36 @@ For every reviewed port it collects only allowlisted exposure metadata:
 
 The operator prints its result to stdout only. It does not create evidence files or read application payloads.
 
+## Production audit evidence
+
+The production audit completed PASS on 2026-08-07 against exact repository main `7832285e0ecf64def73ccc0a30138a18163afafb`.
+
+No-mutation evidence:
+
+- V18 regression: PASS;
+- Cloudflare PID before/after: `878` / `878`;
+- Cloudflare HA: 4/4;
+- UFW SHA256 before/after: `5daffa3993d7857554bc9db84c3c617c1d6ed6a56816df4266d1a9bd524e08cf`;
+- container identity SHA256 before/after: `3b360f4d6ef5a7ee36f59ce20b63fad85973ceae1853885b45523aa6aec2db16`;
+- operator marker: `V18_CLOUDFLARE_LAN_ORIGIN_AUDIT=PASS`;
+- wrapper markers: `V18_NO_MUTATION_PROOF=PASS` and `V18_PRODUCTION_LAN_ORIGIN_AUDIT=PASS`.
+
+Observed inventory:
+
+| Hostname | Port | Bind | Docker published-port owner | UFW LAN allow | Loopback TCP | LAN TCP |
+|---|---:|---|---|---|---|---|
+| `deals.rozkalns.net` | 9128 | LAN-specific | `hermes-deals-web-1` | none | closed | open |
+| `hermes.rozkalns.net` | 9119 | LAN-specific | none identified | present | closed | open |
+| `portainer.rozkalns.net` | 9000 | LAN-specific | `portainer` | present | closed | open |
+| `grafana.rozkalns.net` | 3030 | LAN-specific | `grafana` | present | closed | open |
+| `ha.rozkalns.net` | 8123 | wildcard | none identified | present | open | open |
+| `adguard.rozkalns.net` | 3080 | wildcard | none identified | present | open | open |
+| `kuma.rozkalns.net` | 3001 | wildcard | none identified | present | open | open |
+| `prometheus.rozkalns.net` | 9090 | LAN-specific | `prometheus` | present | closed | open |
+
 ## Privacy and secret boundary
 
-V18 must not read or print:
+V18 did not read or print:
 
 - Docker container environments;
 - `.env` files;
@@ -78,15 +105,22 @@ V18 must not:
 
 ## Interpretation boundary
 
-The audit can establish technical facts such as wildcard/LAN/loopback binding, runtime ownership evidence and existing firewall exposure. It cannot infer a human policy requirement merely from host state.
+The audit establishes technical facts such as wildcard/LAN/loopback binding, runtime ownership evidence and existing firewall exposure. It cannot infer a human policy requirement merely from host state.
 
-After the production audit, each origin must be classified with an explicit decision into one of:
+The reviewed infrastructure policy decision after the audit is:
 
-1. **keep LAN break-glass** — direct LAN access is intentionally required;
-2. **loopback migration candidate** — direct LAN access is not required and the service can be reviewed for a CV/Tech-style loopback cutover;
-3. **application-specific investigation required** — ownership, protocol or operational constraints require a separate investigation first.
+| Hostname | Classification | Rationale |
+|---|---|---|
+| `deals.rozkalns.net` | **loopback migration candidate** | private app; LAN-specific Docker publish; no matching UFW LAN allow rule; no reviewed break-glass requirement established |
+| `hermes.rozkalns.net` | **keep LAN break-glass** | admin/private service with an existing reviewed LAN administration rule |
+| `portainer.rozkalns.net` | **keep LAN break-glass** | core host administration path; local access remains useful when shared ingress is unavailable |
+| `grafana.rozkalns.net` | **keep LAN break-glass** | local observability/admin access remains useful during tunnel or external-access incidents |
+| `ha.rozkalns.net` | **keep LAN break-glass** | LAN-local Home Assistant administration must remain available independently of Cloudflare |
+| `adguard.rozkalns.net` | **keep LAN break-glass** | LAN-local DNS administration must remain available independently of Cloudflare |
+| `kuma.rozkalns.net` | **keep LAN break-glass** | local monitoring access remains useful when external ingress is impaired |
+| `prometheus.rozkalns.net` | **keep LAN break-glass** | local metrics administration/diagnostics remains useful during ingress incidents |
 
-No origin may be migrated merely because it is technically reachable on loopback.
+This classification does not make any production exposure change. It records the operational policy for the next step.
 
 ## Migration boundary
 
@@ -101,6 +135,8 @@ Any actual origin change is outside V18. A future migration must use a separate 
 7. remove the matching UFW rule only after the loopback-only runtime is proven;
 8. retain an explicit rollback path until post-change stability is established.
 
+For the current inventory, only Deals `9128` advances as a loopback-migration candidate. Its actual migration requires a separate issue in the application/runtime ownership context.
+
 ## Completion criterion
 
-V18 is complete only when all eight origins have a verified production inventory and an explicit keep/candidate/investigate classification. The audit itself performs no deployment or exposure change.
+V18 is complete: all eight origins have a verified production inventory and an explicit keep/candidate classification. The audit itself performed no deployment or exposure change.
