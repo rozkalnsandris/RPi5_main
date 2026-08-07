@@ -65,12 +65,17 @@ grep -Fq 'authoritative image disappeared' "$script" || fail "authoritative imag
 grep -Fq 'live container changed during rollback retirement' "$script" || fail "live container identity stability gate missing"
 grep -Fq 'cloudflared PID changed during rollback retirement' "$script" || fail "Cloudflare PID stability gate missing"
 
-# Contract must explicitly preserve the image and source-vs-production boundary.
-grep -Fq '**Source reviewed in Git; production rollback-container retirement pending.**' "$contract" || fail "V17 status missing"
-grep -Fq 'Merging V17 performs no production mutation.' "$contract" || fail "merge/no-mutation boundary missing"
+# Contract must record completed production state while preserving the image and source-vs-production boundary.
+grep -Fq '**Production rollback-container retirement complete — 2026-08-07.**' "$contract" || fail "V17 completed status missing"
+grep -Fq 'Merging V17 performed no production mutation.' "$contract" || fail "merge/no-mutation boundary missing"
 grep -Fq 'is not a disposable rollback artifact.' "$contract" || fail "authoritative image distinction missing"
 grep -Fq 'Removing or pruning the image would break a future service restart or host reboot.' "$contract" || fail "image retention rationale missing"
 grep -Fq 'The only allowed Docker lifecycle mutation is:' "$contract" || fail "single-mutation boundary missing"
-grep -Fq 'The later explicit `apply` invocation is a separately confirmed production host cleanup action.' "$contract" || fail "explicit apply boundary missing"
+grep -Fq 'HERMES_TECH_V14_ROLLBACK_CONTAINER_RETIREMENT_APPLY=PASS' "$contract" || fail "production apply evidence missing"
+grep -Fq 'HERMES_TECH_V17_ROLLBACK_CONTAINER_RETIREMENT=PASS' "$contract" || fail "production wrapper evidence missing"
+grep -Fq 'live `hermes-blog` container ID remained unchanged: `9dcf4dbb652aebded7c8454d4c17407573b5d6fa9569823308011551279a8073`' "$contract" || fail "live container production evidence missing"
+grep -Fq 'Cloudflare PID remained `878` and HA remained 4/4 during the operation' "$contract" || fail "Cloudflare production evidence missing"
+grep -Fq 'The explicit `apply` invocation was the separately confirmed production host cleanup action and is now complete.' "$contract" || fail "completed apply boundary missing"
+grep -Fq 'must continue to be retained while `hermes-tech-web.service` references it with `--pull=never`.' "$contract" || fail "ongoing image retention boundary missing"
 
 echo "Hermes Tech rollback container retirement test: PASS"

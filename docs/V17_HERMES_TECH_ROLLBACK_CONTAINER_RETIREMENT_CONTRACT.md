@@ -2,11 +2,11 @@
 
 ## Status
 
-**Source reviewed in Git; production rollback-container retirement pending.**
+**Production rollback-container retirement complete — 2026-08-07.**
 
-V17 retires only the stopped legacy rollback container `hermes-blog-legacy-v14` after V16 proved that the authoritative Hermes Tech runtime survives a real RPi5 reboot under `hermes-tech-web.service` ownership.
+V17 retired only the stopped legacy rollback container `hermes-blog-legacy-v14` after V16 proved that the authoritative Hermes Tech runtime survives a real RPi5 reboot under `hermes-tech-web.service` ownership.
 
-Merging V17 performs no production mutation.
+Merging V17 performed no production mutation. The later explicit reviewed `apply` was the separately authorized production host cleanup action.
 
 ## Proven prerequisite
 
@@ -33,7 +33,7 @@ is not a disposable rollback artifact.
 
 The authoritative installed `hermes-tech-web.service` still uses that exact local image with `--pull=never` when creating `hermes-blog`. Removing or pruning the image would break a future service restart or host reboot.
 
-V17 therefore must preserve the exact image before, during and after rollback-container retirement.
+V17 therefore preserved the exact image before, during and after rollback-container retirement.
 
 ## Reviewed operator
 
@@ -56,7 +56,7 @@ docker rm "$ROLLBACK"
 
 where `$ROLLBACK` is exactly `hermes-blog-legacy-v14`.
 
-`docker rm -f` is forbidden. The operator must fail closed if the rollback container is running, missing in `check`, or has an unexpected container ID.
+`docker rm -f` is forbidden. The operator fails closed if the rollback container is running, missing in `check`, or has an unexpected container ID.
 
 ## Required pre-apply gates
 
@@ -94,6 +94,26 @@ After the exact stopped container is removed, the operator must prove:
 - Cloudflare HA remains 4/4;
 - public Tech returns HTTP 200 for three consecutive checks.
 
+## Production completion evidence
+
+The reviewed V17 `apply` completed successfully on production on 2026-08-07:
+
+- exact repository main before apply: `8eaad466765f7caebdbfc06c382d3739949b5b84`;
+- V17 regression and read-only preflight: PASS;
+- rollback container before removal: `exited` with exact ID `5738272eb00eeffd518a9cb3cb236292a37f44bb360e5a4d703956ce82c50397`;
+- operator marker: `HERMES_TECH_V14_ROLLBACK_CONTAINER_RETIREMENT_APPLY=PASS`;
+- rollback container absent after apply: PASS;
+- live `hermes-blog` container ID remained unchanged: `9dcf4dbb652aebded7c8454d4c17407573b5d6fa9569823308011551279a8073`;
+- live and retained image remained exact: `sha256:54f2a904c251d5a34adf545a72d32515a15e08418dae0266e23be2e18c66fefa`;
+- Docker publish remained exactly `127.0.0.1:8089`;
+- Docker restart policy remained `no`;
+- direct LAN `192.168.0.180:8089` remained blocked (`curl` rc 7);
+- Cloudflare PID remained `878` and HA remained 4/4 during the operation;
+- public Tech returned HTTP 200 for all three final checks;
+- final wrapper marker: `HERMES_TECH_V17_ROLLBACK_CONTAINER_RETIREMENT=PASS`.
+
+No image prune/removal, live-container lifecycle change, service restart, UFW/Cloudflare mutation, or V15/V16 evidence deletion occurred.
+
 ## Forbidden actions
 
 V17 must not:
@@ -111,6 +131,6 @@ V17 must not:
 
 ## Production boundary
 
-Repository merge is source-only. The later explicit `apply` invocation is a separately confirmed production host cleanup action.
+Repository merge was source-only. The explicit `apply` invocation was the separately confirmed production host cleanup action and is now complete.
 
-No service/app deploy is required by V17. The authoritative Hermes Tech runtime and shared ingress remain running throughout the cleanup.
+No service/app deploy was required by V17. The authoritative Hermes Tech runtime and shared ingress remained running throughout the cleanup. The exact Nginx image remains an active boot-time dependency and must continue to be retained while `hermes-tech-web.service` references it with `--pull=never`.
