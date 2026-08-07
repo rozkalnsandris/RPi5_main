@@ -1,0 +1,203 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+MODE="${1:-check}"
+[[ "$MODE" == "check" || "$MODE" == "capture" || "$MODE" == "verify" ]] || {
+  echo "usage: $0 [check|capture|verify]" >&2
+  exit 64
+}
+
+LIVE="hermes-blog"
+ROLLBACK="hermes-blog-legacy-v14"
+EXPECTED_IMAGE="sha256:54f2a904c251d5a34adf545a72d32515a15e08418dae0266e23be2e18c66fefa"
+EXPECTED_ROLLBACK_ID="5738272eb00eeffd518a9cb3cb236292a37f44bb360e5a4d703956ce82c50397"
+EXPECTED_UNIT_SHA="a3cda6ca497de0b4594a974114ca99109946ff1097341d3c1606f800cb3c85c6"
+UNIT="/etc/systemd/system/hermes-tech-web.service"
+
+SETUP_SRC="/home/andris/hermes-tech-phase3/setup3.sh"
+FIX_SRC="/home/andris/_home_cleanup_20260804-221307/fix-port.sh"
+QDIR="/home/andris/.quarantine/hermes-tech-v14-legacy-runtime-20260807"
+SETUP_DST="$QDIR/setup3.sh"
+FIX_DST="$QDIR/fix-port.sh"
+SETUP_SHA="7a1455e938354871b46a91dc00bccb6679ad5c2799f1368e7d5b829190604226"
+FIX_SHA="115566b8f432863370bd4945f960a8f587f8041df7512bb81174388d42210c98"
+
+STATE_DIR="/var/lib/rpi5-main"
+STATE_FILE="$STATE_DIR/hermes-tech-reboot-survival.env"
+EARLY_BOOT_MAX_USEC=600000000
+
+fail() {
+  echo "Hermes Tech reboot survival: FAIL: $*" >&2
+  exit 1
+}
+
+[[ "$EUID" -eq 0 ]] || fail "run as root"
+
+sha_of() {
+  sha256sum "$1" | awk '{print $1}'
+}
+
+ha_value() {
+  curl -fsS --max-time 5 http://127.0.0.1:20241/metrics |
+    awk '$1 == "cloudflared_tunnel_ha_connections" {t += $2; f=1} END {if (!f) exit 1; printf "%.0f\n", t}'
+}
+
+state_value() {
+  local key="$1"
+  awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' "$STATE_FILE"
+}
+
+assert_quarantine() {
+  [[ ! -e "$SETUP_SRC" ]] || fail "legacy setup source restored"
+  [[ ! -e "$FIX_SRC" ]] || fail "legacy fix source restored"
+  [[ -f "$SETUP_DST" ]] || fail "quarantined setup missing"
+  [[ -f "$FIX_DST" ]] || fail "quarantined fix missing"
+  [[ "$(sha_of "$SETUP_DST")" == "$SETUP_SHA" ]] || fail "quarantined setup checksum drift"
+  [[ "$(sha_of "$FIX_DST")" == "$FIX_SHA" ]] || fail "quarantined fix checksum drift"
+  [[ "$(stat -c '%a' "$SETUP_DST")" == "400" ]] || fail "quarantined setup mode drift"
+  [[ "$(stat -c '%a' "$FIX_DST")" == "400" ]] || fail "quarantined fix mode drift"
+}
+
+assert_lan_blocked() {
+  local rc
+  if curl --noproxy '*' -fsS -o /dev/null --connect-timeout 2 --max-time 4 http://192.168.0.180:8089/; then
+    fail "direct LAN origin unexpectedly reachable"
+  else
+    rc=$?
+    echo "lan_direct_rc=$rc"
+  fi
+}
+
+assert_ufw() {
+  local status
+  status="$(ufw status numbered)"
+  printf '%s\n' "$status" | grep -Fq 'Status: active' || fail "UFW is not active"
+  if printf '%s\n' "$status" | grep -Eq '8089(/tcp)?'; then
+    fail "unexpected UFW 8089 rule present"
+  fi
+}
+
+runtime_gate() {
+  [[ -f "$UNIT" ]] || fail "installed web unit missing"
+  [[ "$(sha_of "$UNIT")" == "$EXPECTED_UNIT_SHA" ]] || fail "installed web unit checksum drift"
+  [[ "$(systemctl is-active hermes-tech-web.service)" == "active" ]] || fail "web service not active"
+  [[ "$(systemctl is-enabled hermes-tech-web.service)" == "enabled" ]] || fail "web service not enabled"
+
+  CURRENT_LIVE_ID="$(docker inspect "$LIVE" --format '{{.Id}}')"
+  [[ "$(docker inspect "$LIVE" --format '{{.Image}}')" == "$EXPECTED_IMAGE" ]] || fail "live image drift"
+  [[ "$(docker inspect "$LIVE" --format '{{.HostConfig.RestartPolicy.Name}}')" == "no" ]] || fail "live restart-policy drift"
+  [[ "$(docker port "$LIVE" 80/tcp)" == "127.0.0.1:8089" ]] || fail "live publish drift"
+
+  local mount logging
+  mount="$(docker inspect "$LIVE" --format '{{range .Mounts}}{{if eq .Destination "/usr/share/nginx/html"}}{{.Source}}|{{.Destination}}|{{.RW}}{{end}}{{end}}')"
+  logging="$(docker inspect "$LIVE" --format '{{.HostConfig.LogConfig.Type}}|{{index .HostConfig.LogConfig.Config "max-size"}}|{{index .HostConfig.LogConfig.Config "max-file"}}')"
+  [[ "$mount" == "/home/andris/hermes-tech/site/public|/usr/share/nginx/html|false" ]] || fail "content mount drift"
+  [[ "$logging" == "json-file|10m|3" ]] || fail "logging contract drift"
+
+  [[ "$(docker inspect "$ROLLBACK" --format '{{.State.Status}}')" == "exited" ]] || fail "rollback container is not exited"
+  [[ "$(docker inspect "$ROLLBACK" --format '{{.Id}}')" == "$EXPECTED_ROLLBACK_ID" ]] || fail "rollback container identity drift"
+  [[ "$(docker image inspect "$EXPECTED_IMAGE" --format '{{.Id}}')" == "$EXPECTED_IMAGE" ]] || fail "retained image missing"
+
+  assert_quarantine
+
+  curl --noproxy '*' -fsS -o /dev/null --max-time 10 http://127.0.0.1:8089/ || fail "loopback origin unhealthy"
+  assert_lan_blocked
+  assert_ufw
+  curl -fsS -o /dev/null --max-time 15 https://tech.rozkalns.net/ || fail "public Tech unhealthy"
+
+  [[ "$(systemctl is-active cloudflared.service)" == "active" ]] || fail "cloudflared not active"
+  [[ "$(systemctl is-enabled cloudflared.service)" == "enabled" ]] || fail "cloudflared not enabled"
+  CURRENT_CF_PID="$(systemctl show cloudflared.service -p MainPID --value)"
+  [[ -n "$CURRENT_CF_PID" && "$CURRENT_CF_PID" != "0" ]] || fail "cloudflared PID unavailable"
+  CURRENT_HA="$(ha_value)"
+  [[ "$CURRENT_HA" == "4" ]] || fail "cloudflared HA is not 4"
+
+  CURRENT_BOOT_ID="$(cat /proc/sys/kernel/random/boot_id)"
+  CURRENT_ACTIVE_MONO="$(systemctl show hermes-tech-web.service -p ActiveEnterTimestampMonotonic --value)"
+  [[ "$CURRENT_ACTIVE_MONO" =~ ^[0-9]+$ && "$CURRENT_ACTIVE_MONO" -gt 0 ]] || fail "web active-enter monotonic timestamp unavailable"
+
+  echo "boot_id=$CURRENT_BOOT_ID"
+  echo "live_container_id=$CURRENT_LIVE_ID"
+  echo "web_active_enter_monotonic_usec=$CURRENT_ACTIVE_MONO"
+  echo "cloudflared_pid=$CURRENT_CF_PID"
+  echo "cloudflared_ha=$CURRENT_HA"
+}
+
+wait_for_post_boot_readiness() {
+  local attempt
+  for attempt in $(seq 1 60); do
+    if [[ "$(systemctl is-active hermes-tech-web.service 2>/dev/null || true)" == "active" ]] &&
+       [[ "$(systemctl is-active cloudflared.service 2>/dev/null || true)" == "active" ]] &&
+       curl --noproxy '*' -fsS -o /dev/null --max-time 3 http://127.0.0.1:8089/ 2>/dev/null &&
+       [[ "$(ha_value 2>/dev/null || true)" == "4" ]]; then
+      echo "post_boot_ready_attempt=$attempt"
+      return 0
+    fi
+    sleep 2
+  done
+  fail "post-boot services did not become ready"
+}
+
+case "$MODE" in
+  check)
+    runtime_gate
+    echo "HERMES_TECH_REBOOT_SURVIVAL_CHECK=PASS"
+    ;;
+
+  capture)
+    runtime_gate
+    install -d -o root -g root -m 0700 "$STATE_DIR"
+    tmp="$(mktemp "$STATE_DIR/.hermes-tech-reboot-survival.XXXXXX")"
+    trap 'rm -f "$tmp"' EXIT
+    {
+      echo "PRE_BOOT_ID=$CURRENT_BOOT_ID"
+      echo "PRE_LIVE_ID=$CURRENT_LIVE_ID"
+      echo "PRE_CF_PID=$CURRENT_CF_PID"
+      echo "PRE_ACTIVE_MONO=$CURRENT_ACTIVE_MONO"
+      echo "PRE_CAPTURED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    } > "$tmp"
+    chmod 0600 "$tmp"
+    chown root:root "$tmp"
+    mv -f "$tmp" "$STATE_FILE"
+    trap - EXIT
+    echo "state_file=$STATE_FILE"
+    echo "HERMES_TECH_REBOOT_SURVIVAL_CAPTURE=PASS"
+    ;;
+
+  verify)
+    [[ -f "$STATE_FILE" ]] || fail "pre-reboot state file missing"
+    [[ "$(stat -c '%U:%G:%a' "$STATE_FILE")" == "root:root:600" ]] || fail "pre-reboot state file metadata drift"
+
+    PRE_BOOT_ID="$(state_value PRE_BOOT_ID)"
+    PRE_LIVE_ID="$(state_value PRE_LIVE_ID)"
+    PRE_CF_PID="$(state_value PRE_CF_PID)"
+    PRE_CAPTURED_AT="$(state_value PRE_CAPTURED_AT)"
+    [[ -n "$PRE_BOOT_ID" && -n "$PRE_LIVE_ID" && -n "$PRE_CF_PID" && -n "$PRE_CAPTURED_AT" ]] || fail "pre-reboot state incomplete"
+
+    CURRENT_BOOT_ID="$(cat /proc/sys/kernel/random/boot_id)"
+    [[ "$CURRENT_BOOT_ID" != "$PRE_BOOT_ID" ]] || fail "kernel boot ID did not change"
+
+    wait_for_post_boot_readiness
+    runtime_gate
+
+    [[ "$CURRENT_LIVE_ID" != "$PRE_LIVE_ID" ]] || fail "live container ID was not recreated across reboot"
+    [[ "$CURRENT_ACTIVE_MONO" -le "$EARLY_BOOT_MAX_USEC" ]] || fail "web service did not enter active state within early boot window"
+
+    echo "pre_boot_id=$PRE_BOOT_ID"
+    echo "post_boot_id=$CURRENT_BOOT_ID"
+    echo "pre_live_container_id=$PRE_LIVE_ID"
+    echo "post_live_container_id=$CURRENT_LIVE_ID"
+    echo "pre_cloudflared_pid=$PRE_CF_PID"
+    echo "post_cloudflared_pid=$CURRENT_CF_PID"
+    echo "pre_captured_at=$PRE_CAPTURED_AT"
+
+    for i in 1 2 3; do
+      code="$(curl -fsS -o /dev/null --max-time 15 -w '%{http_code}' https://tech.rozkalns.net/)"
+      echo "public_check_${i}=$code"
+      [[ "$code" == "200" ]] || fail "public Tech check $i failed"
+      sleep 2
+    done
+
+    echo "HERMES_TECH_REBOOT_SURVIVAL_VERIFY=PASS"
+    ;;
+esac
