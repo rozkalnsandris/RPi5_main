@@ -25,11 +25,16 @@ from adguard_memory_core import (
     canonical_json,
     render_markdown,
 )
+from adguard_memory_safety import (
+    CollectionEnvironment,
+    SafetyError,
+    collection_environment,
+    effective_uid,
+    test_override,
+)
 
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parent
-PROC_ROOT = pathlib.Path(os.environ.get("ADGUARD_ATTR_PROC_ROOT", "/proc"))
-CGROUP_ROOT = pathlib.Path(os.environ.get("ADGUARD_ATTR_CGROUP_ROOT", "/sys/fs/cgroup"))
 MAX_PROCESSES = 8
 
 
@@ -37,9 +42,11 @@ def fail(message: str) -> None:
     raise SystemExit(f"collect-adguard-memory-attribution: {message}")
 
 
-def effective_uid() -> int:
-    override = os.environ.get("ADGUARD_ATTR_TEST_UID")
-    return int(override) if override is not None else os.geteuid()
+def runtime_environment() -> CollectionEnvironment:
+    try:
+        return collection_environment(REPO)
+    except SafetyError as exc:
+        fail(str(exc))
 
 
 def no_symlink_components(path: pathlib.Path) -> None:
@@ -61,7 +68,7 @@ def allowed_output(path: pathlib.Path) -> pathlib.Path:
     allowed = False
     for name in ("evidence", "exports"):
         try:
-            target.relative_to(REPO / name)
+            target.relative_to((REPO / name).resolve())
             allowed = True
         except ValueError:
             pass
@@ -70,8 +77,11 @@ def allowed_output(path: pathlib.Path) -> pathlib.Path:
     return target
 
 
-def git_commit() -> str:
-    override = os.environ.get("ADGUARD_ATTR_TEST_COMMIT")
+def git_commit(environment: CollectionEnvironment) -> str:
+    try:
+        override = test_override("ADGUARD_ATTR_TEST_COMMIT", environment)
+    except SafetyError as exc:
+        fail(str(exc))
     if override:
         return override
     completed = subprocess.run(
@@ -85,8 +95,11 @@ def git_commit() -> str:
     return value if completed.returncode == 0 else "unavailable"
 
 
-def collected_utc() -> str:
-    override = os.environ.get("ADGUARD_ATTR_FIXED_UTC")
+def collected_utc(environment: CollectionEnvironment) -> str:
+    try:
+        override = test_override("ADGUARD_ATTR_FIXED_UTC", environment)
+    except SafetyError as exc:
+        fail(str(exc))
     if override:
         return override
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -96,10 +109,10 @@ def read_text(path: pathlib.Path) -> str:
     return path.read_text(encoding="utf-8", errors="strict")
 
 
-def find_processes() -> list[pathlib.Path]:
+def find_processes(proc_root: pathlib.Path) -> list[pathlib.Path]:
     result: list[pathlib.Path] = []
-    for child in sorted(PROC_ROOT.iterdir(), key=lambda path: path.name):
-        if not child.name.isdigit() or not child.is_dir():
+    for child in sorted(proc_root.iterdir(), key=lambda path: path.name):
+        if not child.name.isdigit() or not child.is_dir() or child.is_symlink():
             continue
         try:
             name = read_text(child / "comm").strip()
@@ -192,8 +205,12 @@ def read_keyed_ints(path: pathlib.Path, allowed: tuple[str, ...]) -> dict[str, i
     return result
 
 
-def docker_stats() -> tuple[bool, str, str, str, int]:
-    if os.environ.get("ADGUARD_ATTR_DISABLE_DOCKER") == "1":
+def docker_stats(environment: CollectionEnvironment) -> tuple[bool, str, str, str, int]:
+    try:
+        disable = test_override("ADGUARD_ATTR_DISABLE_DOCKER", environment)
+    except SafetyError as exc:
+        fail(str(exc))
+    if disable == "1":
         return False, "0", "0", "0%", 0
     completed = subprocess.run(
         [
@@ -235,8 +252,8 @@ def write_map(
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def build_bundle(target: pathlib.Path) -> pathlib.Path:
-    processes = find_processes()
+def build_bundle(target: pathlib.Path, environment: CollectionEnvironment) -> pathlib.Path:
+    processes = find_processes(environment.proc_root)
     limitations: set[str] = set()
 
     status_totals = {key: 0 for key in STATUS_MEMORY_KEYS}
@@ -272,7 +289,7 @@ def build_bundle(target: pathlib.Path) -> pathlib.Path:
     if len(cgroup_paths) == 1:
         relative = next(iter(cgroup_paths))
         relative_parts = [part for part in relative.parts if part not in {"/", ""}]
-        cgroup_dir = CGROUP_ROOT.joinpath(*relative_parts)
+        cgroup_dir = environment.cgroup_root.joinpath(*relative_parts)
         scalar_files = {
             "memory_current_bytes": "memory.current",
             "memory_peak_bytes": "memory.peak",
@@ -292,7 +309,7 @@ def build_bundle(target: pathlib.Path) -> pathlib.Path:
     else:
         limitations.add("Exact AdGuardHome processes appeared in multiple cgroups; cgroup attribution was omitted.")
 
-    available, usage, limit, percent, pids = docker_stats()
+    available, usage, limit, percent, pids = docker_stats(environment)
     if not available:
         limitations.add("Docker stats for the exact adguard container was unavailable.")
 
@@ -302,8 +319,8 @@ def build_bundle(target: pathlib.Path) -> pathlib.Path:
     metadata = {
         "schema": SCHEMA,
         "collector_version": COLLECTOR_VERSION,
-        "git_commit": git_commit(),
-        "collected_at_utc": collected_utc(),
+        "git_commit": git_commit(environment),
+        "collected_at_utc": collected_utc(environment),
     }
 
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -394,10 +411,15 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
-    if effective_uid() == 0:
+    environment = runtime_environment()
+    try:
+        uid = effective_uid(environment)
+    except SafetyError as exc:
+        fail(str(exc))
+    if uid == 0:
         fail("root execution rejected")
     target = allowed_output(pathlib.Path(args.output))
-    result = build_bundle(target)
+    result = build_bundle(target, environment)
     report = json.loads((result / "report.json").read_text(encoding="utf-8"))
     print(f"AdGuard memory result: {result}")
     print(f"Observation level: {report['observation_level']}")

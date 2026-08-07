@@ -12,6 +12,7 @@ test:
 	bash ./tests/test-memory-pressure-series.sh
 	bash ./tests/test-backup-ownership.sh
 	bash ./tests/test-adguard-memory-attribution.sh
+	python3 ./tests/test-adguard-memory-series.py
 	python3 -m py_compile scripts/*.py
 
 secret-scan:

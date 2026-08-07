@@ -58,9 +58,11 @@ V09 verifies and analyzes two to sixty-four chronological V08 bundles offline. I
 
 V10 imports the existing host-wide encrypted backup script, configuration example, cron entry, and logrotate entry from the Hermes Tech repository without changing their bytes. Source Git blobs and SHA256 values are pinned in CI, and the source-to-installed mapping, no-op verification gate, future deployment controls, and rollback are documented. No host verification, backup execution, scheduling change, upload, retention deletion, restore, or deployment is performed by the repository import. See the [V10 contract](V10_BACKUP_OWNERSHIP_CONTRACT.md) and [findings](V10_FINDINGS.md).
 
-## V11 — tooling complete: AdGuard memory attribution
+## V11 — tooling complete, live evidence pending: AdGuard memory attribution
 
-V11 identifies exact `AdGuardHome` processes and attributes their memory using PSS, cgroup-v2 and RSS fallback data. It separates anonymous, file-backed, shared, kernel/socket, slab and swap classes, reports container-limit headroom, and preserves strict privacy by excluding process IDs, cgroup paths, DNS queries, client identities, arguments, environments and raw configuration. At least four verified live samples are required before the AdGuard root-cause conclusion is updated. See the [V11 contract](V11_ADGUARD_MEMORY_ATTRIBUTION_CONTRACT.md) and [findings](V11_FINDINGS.md).
+V11 identifies exact `AdGuardHome` processes and attributes their memory using PSS, cgroup-v2 and RSS fallback data. It separates anonymous, file-backed, shared, kernel/socket, slab and swap classes, reports container-limit headroom, and preserves strict privacy by excluding process IDs, cgroup paths, DNS queries, client identities, arguments, environments and raw configuration.
+
+The live-evidence workflow now collects exactly four samples in one non-root command, verifies every bundle immediately, requires one exact Git commit and strictly increasing timestamps, and independently verifies the deterministic series summary. Synthetic environment overrides are fixture-only and cannot target real host proc/cgroup roots. Issue #27 remains open until a real four-sample RPi5 series is collected and interpreted. See the [V11 contract](V11_ADGUARD_MEMORY_ATTRIBUTION_CONTRACT.md) and [findings](V11_FINDINGS.md).
 
 ## Later phases
 
