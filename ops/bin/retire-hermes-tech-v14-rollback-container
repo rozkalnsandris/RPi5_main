@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+MODE="${1:-check}"
+[[ "$MODE" == "check" || "$MODE" == "apply" ]] || {
+  echo "usage: $0 [check|apply]" >&2
+  exit 64
+}
+
+LIVE="hermes-blog"
+ROLLBACK="hermes-blog-legacy-v14"
+EXPECTED_ROLLBACK_ID="5738272eb00eeffd518a9cb3cb236292a37f44bb360e5a4d703956ce82c50397"
+EXPECTED_IMAGE="sha256:54f2a904c251d5a34adf545a72d32515a15e08418dae0266e23be2e18c66fefa"
+EXPECTED_UNIT_SHA="a3cda6ca497de0b4594a974114ca99109946ff1097341d3c1606f800cb3c85c6"
+UNIT="/etc/systemd/system/hermes-tech-web.service"
+STATE_FILE="/var/lib/rpi5-main/hermes-tech-reboot-survival.env"
+QDIR="/home/andris/.quarantine/hermes-tech-v14-legacy-runtime-20260807"
+SETUP_Q="$QDIR/setup3.sh"
+FIX_Q="$QDIR/fix-port.sh"
+MANIFEST="$QDIR/MANIFEST.tsv"
+SETUP_SHA="7a1455e938354871b46a91dc00bccb6679ad5c2799f1368e7d5b829190604226"
+FIX_SHA="115566b8f432863370bd4945f960a8f587f8041df7512bb81174388d42210c98"
+
+fail() {
+  echo "Hermes Tech rollback retirement: FAIL: $*" >&2
+  exit 1
+}
+
+[[ "$EUID" -eq 0 ]] || fail "run as root"
+
+sha_of() {
+  sha256sum "$1" | awk '{print $1}'
+}
+
+ha_value() {
+  curl -fsS --max-time 5 http://127.0.0.1:20241/metrics |
+    awk '$1 == "cloudflared_tunnel_ha_connections" {t += $2; f=1} END {if (!f) exit 1; printf "%.0f\n", t}'
+}
+
+assert_lan_blocked() {
+  local rc
+  if curl --noproxy '*' -fsS -o /dev/null --connect-timeout 2 --max-time 4 http://192.168.0.180:8089/; then
+    fail "direct LAN origin unexpectedly reachable"
+  else
+    rc=$?
+    echo "lan_direct_rc=$rc"
+  fi
+}
+
+assert_ufw() {
+  local status
+  status="$(ufw status numbered)"
+  printf '%s\n' "$status" | grep -Fq 'Status: active' || fail "UFW is not active"
+  if printf '%s\n' "$status" | grep -Eq '8089(/tcp)?'; then
+    fail "unexpected UFW 8089 rule present"
+  fi
+}
+
+assert_evidence() {
+  [[ -f "$STATE_FILE" ]] || fail "V16 reboot baseline missing"
+  [[ "$(stat -c '%U:%G:%a' "$STATE_FILE")" == "root:root:600" ]] || fail "V16 reboot baseline metadata drift"
+
+  [[ -f "$SETUP_Q" ]] || fail "quarantined setup missing"
+  [[ -f "$FIX_Q" ]] || fail "quarantined fix missing"
+  [[ -f "$MANIFEST" ]] || fail "quarantine manifest missing"
+  [[ "$(sha_of "$SETUP_Q")" == "$SETUP_SHA" ]] || fail "quarantined setup checksum drift"
+  [[ "$(sha_of "$FIX_Q")" == "$FIX_SHA" ]] || fail "quarantined fix checksum drift"
+  [[ "$(stat -c '%a' "$SETUP_Q")" == "400" ]] || fail "quarantined setup mode drift"
+  [[ "$(stat -c '%a' "$FIX_Q")" == "400" ]] || fail "quarantined fix mode drift"
+  [[ "$(stat -c '%a' "$MANIFEST")" == "400" ]] || fail "quarantine manifest mode drift"
+}
+
+runtime_gate() {
+  [[ -f "$UNIT" ]] || fail "installed web unit missing"
+  [[ "$(sha_of "$UNIT")" == "$EXPECTED_UNIT_SHA" ]] || fail "installed web unit checksum drift"
+  grep -Fq -- '--pull=never' "$UNIT" || fail "installed unit lost pull=never"
+  grep -Fq -- "$EXPECTED_IMAGE" "$UNIT" || fail "installed unit lost exact image"
+
+  [[ "$(systemctl is-active hermes-tech-web.service)" == "active" ]] || fail "web service not active"
+  [[ "$(systemctl is-enabled hermes-tech-web.service)" == "enabled" ]] || fail "web service not enabled"
+
+  CURRENT_LIVE_ID="$(docker inspect "$LIVE" --format '{{.Id}}')"
+  [[ "$(docker inspect "$LIVE" --format '{{.Image}}')" == "$EXPECTED_IMAGE" ]] || fail "live image drift"
+  [[ "$(docker inspect "$LIVE" --format '{{.HostConfig.RestartPolicy.Name}}')" == "no" ]] || fail "live restart policy drift"
+  [[ "$(docker port "$LIVE" 80/tcp)" == "127.0.0.1:8089" ]] || fail "live publish drift"
+  [[ "$(docker image inspect "$EXPECTED_IMAGE" --format '{{.Id}}')" == "$EXPECTED_IMAGE" ]] || fail "authoritative image missing"
+
+  local mount logging
+  mount="$(docker inspect "$LIVE" --format '{{range .Mounts}}{{if eq .Destination "/usr/share/nginx/html"}}{{.Source}}|{{.Destination}}|{{.RW}}{{end}}{{end}}')"
+  logging="$(docker inspect "$LIVE" --format '{{.HostConfig.LogConfig.Type}}|{{index .HostConfig.LogConfig.Config "max-size"}}|{{index .HostConfig.LogConfig.Config "max-file"}}')"
+  [[ "$mount" == "/home/andris/hermes-tech/site/public|/usr/share/nginx/html|false" ]] || fail "content mount drift"
+  [[ "$logging" == "json-file|10m|3" ]] || fail "logging contract drift"
+
+  assert_evidence
+
+  curl --noproxy '*' -fsS -o /dev/null --max-time 10 http://127.0.0.1:8089/ || fail "loopback origin unhealthy"
+  assert_lan_blocked
+  assert_ufw
+  curl -fsS -o /dev/null --max-time 15 https://tech.rozkalns.net/ || fail "public Tech unhealthy"
+
+  [[ "$(systemctl is-active cloudflared.service)" == "active" ]] || fail "cloudflared not active"
+  [[ "$(systemctl is-enabled cloudflared.service)" == "enabled" ]] || fail "cloudflared not enabled"
+  CURRENT_CF_PID="$(systemctl show cloudflared.service -p MainPID --value)"
+  [[ -n "$CURRENT_CF_PID" && "$CURRENT_CF_PID" != "0" ]] || fail "cloudflared PID unavailable"
+  CURRENT_HA="$(ha_value)"
+  [[ "$CURRENT_HA" == "4" ]] || fail "cloudflared HA is not 4"
+
+  echo "live_container_id=$CURRENT_LIVE_ID"
+  echo "cloudflared_pid=$CURRENT_CF_PID"
+  echo "cloudflared_ha=$CURRENT_HA"
+}
+
+assert_rollback_present() {
+  [[ "$(docker inspect "$ROLLBACK" --format '{{.State.Status}}')" == "exited" ]] || fail "rollback container is not exited"
+  [[ "$(docker inspect "$ROLLBACK" --format '{{.Id}}')" == "$EXPECTED_ROLLBACK_ID" ]] || fail "rollback container identity drift"
+  echo "rollback_id=$EXPECTED_ROLLBACK_ID"
+  echo "rollback_status=exited"
+}
+
+case "$MODE" in
+  check)
+    echo "mode=check"
+    runtime_gate
+    assert_rollback_present
+    echo "HERMES_TECH_V14_ROLLBACK_CONTAINER_RETIREMENT_CHECK=PASS"
+    ;;
+
+  apply)
+    echo "mode=apply"
+    runtime_gate
+    PRE_LIVE_ID="$CURRENT_LIVE_ID"
+    PRE_CF_PID="$CURRENT_CF_PID"
+    assert_rollback_present
+
+    docker rm "$ROLLBACK"
+
+    if docker inspect "$ROLLBACK" >/dev/null 2>&1; then
+      fail "rollback container still exists after removal"
+    fi
+
+    runtime_gate
+    [[ "$CURRENT_LIVE_ID" == "$PRE_LIVE_ID" ]] || fail "live container changed during rollback retirement"
+    [[ "$CURRENT_CF_PID" == "$PRE_CF_PID" ]] || fail "cloudflared PID changed during rollback retirement"
+    [[ "$(docker image inspect "$EXPECTED_IMAGE" --format '{{.Id}}')" == "$EXPECTED_IMAGE" ]] || fail "authoritative image disappeared"
+
+    for i in 1 2 3; do
+      code="$(curl -fsS -o /dev/null --max-time 15 -w '%{http_code}' https://tech.rozkalns.net/)"
+      echo "public_check_${i}=$code"
+      [[ "$code" == "200" ]] || fail "public Tech check $i failed"
+      sleep 2
+    done
+
+    echo "rollback_container_absent=PASS"
+    echo "authoritative_image_retained=PASS"
+    echo "HERMES_TECH_V14_ROLLBACK_CONTAINER_RETIREMENT_APPLY=PASS"
+    ;;
+esac
