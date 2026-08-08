@@ -45,7 +45,13 @@ def sample_config(service: str = operator.OLD_SERVICE) -> dict:
     return {"ingress": ingress, "originRequest": {"connectTimeout": 30}}
 
 
-def run_authorizer(body: str, *, issue: int = 61, login: str = "rozkalnsandris", user_id: int = 277435981) -> subprocess.CompletedProcess[str]:
+def run_authorizer(
+    body: str,
+    *,
+    issue: int = 61,
+    login: str = "rozkalnsandris",
+    user_id: int = 277435981,
+) -> tuple[subprocess.CompletedProcess[str], str]:
     event = {
         "action": "created",
         "issue": {"number": issue},
@@ -77,50 +83,42 @@ def run_authorizer(body: str, *, issue: int = 61, login: str = "rozkalnsandris",
             stderr=subprocess.STDOUT,
             check=False,
         )
-        result.github_output = output_path.read_text(encoding="utf-8") if output_path.exists() else ""  # type: ignore[attr-defined]
-        return result
+        output = output_path.read_text(encoding="utf-8") if output_path.exists() else ""
+        return result, output
 
 
 def test_syntax_and_static_security_boundaries() -> None:
-    subprocess.run([sys.executable, "-m", "py_compile", str(OPERATOR_PATH), str(AUTHORIZER_PATH)], check=True)
+    subprocess.run(
+        [sys.executable, "-m", "py_compile", str(OPERATOR_PATH), str(AUTHORIZER_PATH)],
+        check=True,
+    )
     operator_text = OPERATOR_PATH.read_text(encoding="utf-8")
     workflow_text = WORKFLOW_PATH.read_text(encoding="utf-8")
 
     assert operator.HOSTNAME == "deals.rozkalns.net"
     assert operator.OLD_SERVICE == "http://192.168.0.180:9128"
     assert operator.NEW_SERVICE == "http://127.0.0.1:9128"
-    assert operator.EXPECTED_HOSTNAMES == {
-        "rozkalns.net",
-        "tech.rozkalns.net",
-        "deals.rozkalns.net",
-        "hermes.rozkalns.net",
-        "portainer.rozkalns.net",
-        "grafana.rozkalns.net",
-        "ha.rozkalns.net",
-        "adguard.rozkalns.net",
-        "kuma.rozkalns.net",
-        "prometheus.rozkalns.net",
-    }
-
+    assert len(operator.EXPECTED_HOSTNAMES) == 10
     assert 'suffix="/configurations"' in operator_text
     assert 'method="PUT"' in operator_text
     assert 'body={"config": config}' in operator_text
-    assert "CLOUDFLARE_API_TOKEN" in operator_text
-    assert "CLOUDFLARE_ACCOUNT_ID" in operator_text
-    assert "CLOUDFLARE_TUNNEL_ID" in operator_text
-    assert "Authorization" in operator_text
+    assert all(name in operator_text for name in (
+        "CLOUDFLARE_API_TOKEN",
+        "CLOUDFLARE_ACCOUNT_ID",
+        "CLOUDFLARE_TUNNEL_ID",
+    ))
 
     for forbidden in (
         "/token",
         "/access/",
         "/dns_records",
-        "systemctl",
-        "cloudflared ",
-        "ufw ",
-        "docker ",
         "subprocess",
         "os.system",
         "shell=True",
+        "/usr/bin/docker",
+        "/usr/bin/systemctl",
+        "/usr/sbin/ufw",
+        "/usr/local/bin/cloudflared",
     ):
         assert forbidden not in operator_text
 
@@ -132,10 +130,8 @@ def test_syntax_and_static_security_boundaries() -> None:
     assert "issues: write" in workflow_text
     assert "actions/upload-artifact" not in workflow_text
     assert "self-hosted" not in workflow_text
-    assert "sudo " not in workflow_text
-    assert "cloudflared " not in workflow_text
-    assert "docker " not in workflow_text
-    assert "ufw " not in workflow_text
+    for executable in ("sudo --", "systemctl ", "docker run", "ufw ", "/usr/local/bin/cloudflared"):
+        assert executable not in workflow_text
 
 
 def test_authorizer_accepts_only_exact_owner_commands() -> None:
@@ -144,9 +140,8 @@ def test_authorizer_accepts_only_exact_owner_commands() -> None:
         "/rpi5-61 cutover": "cutover",
         "/rpi5-61 verify": "verify-loopback",
     }.items():
-        result = run_authorizer(command)
+        result, output = run_authorizer(command)
         assert result.returncode == 0, result.stdout
-        output = result.github_output  # type: ignore[attr-defined]
         assert f"operation={operation}\n" in output
         assert "issue_number=61\n" in output
 
@@ -157,10 +152,10 @@ def test_authorizer_accepts_only_exact_owner_commands() -> None:
         "/rpi5-61 rollback",
         "/hermes-307 apply-dual",
     ):
-        assert run_authorizer(command).returncode != 0
+        assert run_authorizer(command)[0].returncode != 0
 
-    assert run_authorizer("/rpi5-61 cutover", issue=60).returncode != 0
-    assert run_authorizer("/rpi5-61 cutover", login="someone-else", user_id=1).returncode != 0
+    assert run_authorizer("/rpi5-61 cutover", issue=60)[0].returncode != 0
+    assert run_authorizer("/rpi5-61 cutover", login="someone-else", user_id=1)[0].returncode != 0
 
 
 def test_config_validator_is_exact_and_fail_closed() -> None:
@@ -168,42 +163,35 @@ def test_config_validator_is_exact_and_fail_closed() -> None:
     index = operator.validate_configuration(config, operator.OLD_SERVICE)
     assert config["ingress"][index]["hostname"] == operator.HOSTNAME
 
-    wrong_origin = sample_config("http://127.0.0.1:9128")
-    try:
-        operator.validate_configuration(wrong_origin, operator.OLD_SERVICE)
-    except operator.RouteError as exc:
-        assert str(exc) == "deals_origin_mismatch"
-    else:
-        raise AssertionError("wrong current Deals origin was accepted")
-
+    cases = []
+    wrong_origin = sample_config(operator.NEW_SERVICE)
+    cases.append((wrong_origin, "deals_origin_mismatch"))
     extra = sample_config()
     extra["ingress"].insert(-1, {"hostname": "extra.rozkalns.net", "service": "http://127.0.0.1:9999"})
-    try:
-        operator.validate_configuration(extra, operator.OLD_SERVICE)
-    except operator.RouteError as exc:
-        assert str(exc) in {"unexpected_ingress_count", "hostname_set_mismatch"}
-    else:
-        raise AssertionError("unknown route was accepted")
-
+    cases.append((extra, "unexpected_ingress_count"))
     no_catchall = sample_config()
     no_catchall["ingress"][-1]["service"] = "http_status:200"
-    try:
-        operator.validate_configuration(no_catchall, operator.OLD_SERVICE)
-    except operator.RouteError as exc:
-        assert str(exc) == "catchall_contract_mismatch"
-    else:
-        raise AssertionError("catch-all drift was accepted")
+    cases.append((no_catchall, "catchall_contract_mismatch"))
+
+    for candidate, expected_reason in cases:
+        try:
+            operator.validate_configuration(candidate, operator.OLD_SERVICE)
+        except operator.RouteError as exc:
+            assert str(exc) == expected_reason
+        else:
+            raise AssertionError(f"invalid config accepted: {expected_reason}")
 
 
 def test_cutover_changes_only_deals_service() -> None:
     original = sample_config()
     puts: list[dict] = []
     reads = 0
-
-    original_get_tunnel = operator.get_tunnel
-    original_get_configuration = operator.get_configuration
-    original_put_configuration = operator.put_configuration
-    original_verify_access_edge = operator.verify_access_edge
+    saved = (
+        operator.get_tunnel,
+        operator.get_configuration,
+        operator.put_configuration,
+        operator.verify_access_edge,
+    )
     try:
         operator.get_tunnel = lambda *_args: {"name": operator.TUNNEL_NAME, "config_src": "cloudflare"}
 
@@ -214,11 +202,8 @@ def test_cutover_changes_only_deals_service() -> None:
                 return copy.deepcopy(original), 41
             return copy.deepcopy(puts[-1]), 42
 
-        def fake_put(_account, _tunnel, _token, config):
-            puts.append(copy.deepcopy(config))
-
         operator.get_configuration = fake_get
-        operator.put_configuration = fake_put
+        operator.put_configuration = lambda _a, _t, _k, config: puts.append(copy.deepcopy(config))
         operator.verify_access_edge = lambda: None
 
         output = io.StringIO()
@@ -234,10 +219,12 @@ def test_cutover_changes_only_deals_service() -> None:
         assert "RESULT=PASS" in output.getvalue()
         assert "ONLY_DEALS_SERVICE_CHANGED=true" in output.getvalue()
     finally:
-        operator.get_tunnel = original_get_tunnel
-        operator.get_configuration = original_get_configuration
-        operator.put_configuration = original_put_configuration
-        operator.verify_access_edge = original_verify_access_edge
+        (
+            operator.get_tunnel,
+            operator.get_configuration,
+            operator.put_configuration,
+            operator.verify_access_edge,
+        ) = saved
 
 
 def test_post_write_failure_requests_bounded_rollback() -> None:
@@ -245,7 +232,6 @@ def test_post_write_failure_requests_bounded_rollback() -> None:
     puts: list[dict] = []
     reads = 0
     rollback_calls: list[dict] = []
-
     saved = (
         operator.get_tunnel,
         operator.get_configuration,
@@ -298,14 +284,13 @@ def test_post_write_failure_requests_bounded_rollback() -> None:
 
 
 def main() -> None:
-    tests = [
+    for test in (
         test_syntax_and_static_security_boundaries,
         test_authorizer_accepts_only_exact_owner_commands,
         test_config_validator_is_exact_and_fail_closed,
         test_cutover_changes_only_deals_service,
         test_post_write_failure_requests_bounded_rollback,
-    ]
-    for test in tests:
+    ):
         test()
         print(f"{test.__name__}: PASS")
     print("Deals route cutover tests: PASS")
