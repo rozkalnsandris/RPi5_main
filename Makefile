@@ -16,6 +16,7 @@ test:
 	bash ./tests/test-cloudflare-tunnel-ownership.sh
 	bash ./tests/test-hermes-tech-web-runtime.sh
 	bash ./tests/test-hermes-tech-http-policy.sh
+	bash ./tests/test-hermes-tech-http-policy-activation.sh
 	bash ./tests/test-hermes-tech-legacy-runtime-retirement.sh
 	bash ./tests/test-hermes-tech-reboot-survival.sh
 	bash ./tests/test-hermes-tech-rollback-container-retirement.sh
