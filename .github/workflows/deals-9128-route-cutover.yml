@@ -1,0 +1,203 @@
+name: RPi5 #61 Deals route cutover
+
+on:
+  issue_comment:
+    types:
+      - created
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rpi5-61-deals-route-cutover
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    name: Authorize exact owner command
+    if: github.event.issue.pull_request == null && startsWith(github.event.comment.body, '/rpi5-61 ')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      operation: ${{ steps.authorize.outputs.operation }}
+      issue_number: ${{ steps.authorize.outputs.issue_number }}
+      comment_id: ${{ steps.authorize.outputs.comment_id }}
+      trigger_actor: ${{ steps.authorize.outputs.trigger_actor }}
+
+    steps:
+      - name: Checkout default-branch authorizer
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate exact issue, owner and command
+        id: authorize
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/github_rpi5_61_bridge.py
+
+  route:
+    name: Run guarded Cloudflare route operation
+    needs: authorize
+    if: needs.authorize.result == 'success' && contains(fromJSON('["check","cutover","verify-loopback"]'), needs.authorize.outputs.operation)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      result: ${{ steps.operator.outputs.result }}
+      reason: ${{ steps.operator.outputs.reason }}
+      route_state: ${{ steps.operator.outputs.route_state }}
+      access_edge: ${{ steps.operator.outputs.access_edge }}
+      config_mutated: ${{ steps.operator.outputs.config_mutated }}
+      only_deals_service_changed: ${{ steps.operator.outputs.only_deals_service_changed }}
+      auto_rollback: ${{ steps.operator.outputs.auto_rollback }}
+      operator_rc: ${{ steps.operator.outputs.operator_rc }}
+
+    steps:
+      - name: Checkout reviewed default-branch operator
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Run exact guarded operation
+        id: operator
+        continue-on-error: true
+        env:
+          OPERATION: ${{ needs.authorize.outputs.operation }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_TUNNEL_ID: ${{ secrets.CLOUDFLARE_TUNNEL_ID }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          LOG="$RUNNER_TEMP/rpi5-61-route-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.log"
+          trap 'rm -f -- "$LOG"' EXIT
+
+          set +e
+          python3 scripts/cloudflare_deals_route.py "$OPERATION" >"$LOG" 2>&1
+          rc=$?
+          set -e
+
+          # The operator is intentionally constrained to uppercase key=value evidence.
+          if grep -Ev '^[A-Z0-9_]+=[A-Za-z0-9_.:-]+$' "$LOG" | grep -q .; then
+            echo 'operator emitted non-allowlisted evidence' >&2
+            exit 1
+          fi
+
+          value() {
+            local key="$1" fallback="$2" found
+            found="$(awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' "$LOG")"
+            printf '%s' "${found:-$fallback}"
+          }
+
+          result="$(value RESULT unavailable)"
+          reason="$(value REASON none)"
+          route_state="$(value ROUTE_STATE unavailable)"
+          access_edge="$(value ACCESS_EDGE unavailable)"
+          config_mutated="$(value CONFIG_MUTATED unavailable)"
+          only_changed="$(value ONLY_DEALS_SERVICE_CHANGED unavailable)"
+          auto_rollback="$(value AUTO_ROLLBACK unavailable)"
+
+          printf 'result=%s\n' "$result" >> "$GITHUB_OUTPUT"
+          printf 'reason=%s\n' "$reason" >> "$GITHUB_OUTPUT"
+          printf 'route_state=%s\n' "$route_state" >> "$GITHUB_OUTPUT"
+          printf 'access_edge=%s\n' "$access_edge" >> "$GITHUB_OUTPUT"
+          printf 'config_mutated=%s\n' "$config_mutated" >> "$GITHUB_OUTPUT"
+          printf 'only_deals_service_changed=%s\n' "$only_changed" >> "$GITHUB_OUTPUT"
+          printf 'auto_rollback=%s\n' "$auto_rollback" >> "$GITHUB_OUTPUT"
+          printf 'operator_rc=%s\n' "$rc" >> "$GITHUB_OUTPUT"
+
+          cat "$LOG"
+          exit "$rc"
+
+      - name: Preserve operator failure as job failure
+        if: steps.operator.outcome == 'failure'
+        shell: bash
+        run: exit 1
+
+  report:
+    name: Report sanitized route result
+    if: always() && needs.authorize.result == 'success'
+    needs:
+      - authorize
+      - route
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - name: Comment sanitized result on issue 61
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ needs.authorize.outputs.issue_number }}
+          COMMENT_ID: ${{ needs.authorize.outputs.comment_id }}
+          OPERATION: ${{ needs.authorize.outputs.operation }}
+          ROUTE_JOB_RESULT: ${{ needs.route.result }}
+          RESULT: ${{ needs.route.outputs.result }}
+          REASON: ${{ needs.route.outputs.reason }}
+          ROUTE_STATE: ${{ needs.route.outputs.route_state }}
+          ACCESS_EDGE: ${{ needs.route.outputs.access_edge }}
+          CONFIG_MUTATED: ${{ needs.route.outputs.config_mutated }}
+          ONLY_CHANGED: ${{ needs.route.outputs.only_deals_service_changed }}
+          AUTO_ROLLBACK: ${{ needs.route.outputs.auto_rollback }}
+          OPERATOR_RC: ${{ needs.route.outputs.operator_rc }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          def clean(name: str, fallback: str = "unavailable") -> str:
+              value = os.environ.get(name) or fallback
+              return value.replace("`", "").replace("\n", " ").replace("\r", " ")[:160]
+
+          body = (
+              "## #61 Deals route bridge result\n\n"
+              f"- command comment: `{clean('COMMENT_ID')}`\n"
+              f"- operation: `{clean('OPERATION')}`\n"
+              f"- workflow job: `{clean('ROUTE_JOB_RESULT')}`\n"
+              f"- result: `{clean('RESULT')}`\n"
+              f"- reason: `{clean('REASON')}`\n"
+              f"- route state: `{clean('ROUTE_STATE')}`\n"
+              f"- Cloudflare Access edge: `{clean('ACCESS_EDGE')}`\n"
+              f"- config mutated: `{clean('CONFIG_MUTATED')}`\n"
+              f"- only Deals service changed: `{clean('ONLY_CHANGED')}`\n"
+              f"- automatic rollback: `{clean('AUTO_ROLLBACK')}`\n"
+              f"- operator rc: `{clean('OPERATOR_RC')}`\n"
+              f"- workflow: {clean('RUN_URL')}\n\n"
+              "Safety boundary: the workflow may change only the remotely-managed `deals.rozkalns.net` service from the exact LAN origin to the exact loopback origin after full configuration preflight. "
+              "Cloudflare credentials are read only from encrypted Actions secrets and are never included in this evidence. "
+              "No Access/DNS/UFW/Docker/application/database/shared-cloudflared lifecycle action is exposed."
+          )
+          payload = json.dumps({"body": body}).encode("utf-8")
+          request = urllib.request.Request(
+              f"https://api.github.com/repos/{os.environ['REPOSITORY']}/issues/{os.environ['ISSUE_NUMBER']}/comments",
+              data=payload,
+              method="POST",
+              headers={
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+                  "Content-Type": "application/json",
+                  "User-Agent": "rpi5-main-61-route-reporter",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              },
+          )
+          with urllib.request.urlopen(request, timeout=20) as response:
+              if response.status != 201:
+                  raise SystemExit(f"unexpected comment status: {response.status}")
+          PY
