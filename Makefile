@@ -19,6 +19,7 @@ test:
 	bash ./tests/test-hermes-tech-http-policy-activation.sh
 	bash ./tests/test-hermes-tech-http-policy-v20-retry.sh
 	bash ./tests/test-hermes-tech-v20-git-index-owner.sh
+	bash ./tests/test-rpi5-main-git-index-owner-bootstrap.sh
 	bash ./tests/test-hermes-tech-legacy-runtime-retirement.sh
 	bash ./tests/test-hermes-tech-reboot-survival.sh
 	bash ./tests/test-hermes-tech-rollback-container-retirement.sh
