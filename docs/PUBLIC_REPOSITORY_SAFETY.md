@@ -32,13 +32,13 @@ The migration rule is:
 
 GitHub Actions additionally runs `scripts/run-gitleaks-ci.sh` on a GitHub-hosted runner. The scanner:
 
-- downloads exactly Gitleaks `8.30.0` and verifies the release archive against the release checksum manifest;
+- downloads exactly Gitleaks `8.18.4` and verifies the release archive against the release checksum manifest;
 - runs a synthetic rule-matching canary before trusting a clean scan;
-- requires full redaction of the canary value;
-- scans the complete reachable Git history through a controlled `git log -p --all` stream;
+- requires redaction of the canary value;
+- independently verifies the complete reachable history stream and then scans all reachable Git history;
 - stores no findings artifact and posts no automated PR comment.
 
-The scanner intentionally does not use Gitleaks `8.30.1`, which has a documented detection regression. Version changes require a separate review and the canary must continue to prove detection.
+The version is intentionally a conservative known-good control rather than `latest`: the upstream report for the Gitleaks `8.30.1` detection regression explicitly shows the same canonical GitHub PAT shape being detected by `8.18.4`. The first attempted `8.30.0` pin in PR validation did not pass this repository's runtime canary, so it was rejected rather than trusted. Any future scanner upgrade must pass the same canary before the history result is accepted.
 
 ## GitHub Actions policy
 
