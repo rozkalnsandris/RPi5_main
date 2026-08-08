@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+IFS=$'\n\t'
+umask 077
+
+MODE="${1:-check}"
+shift || true
+REPO=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --repo)
+      [[ $# -ge 2 ]] || { echo "missing value for --repo" >&2; exit 64; }
+      REPO="$2"
+      shift 2
+      ;;
+    *)
+      echo "usage: $0 [check|apply] --repo <absolute-checkout-path>" >&2
+      exit 64
+      ;;
+  esac
+done
+
+case "$MODE" in
+  check|apply) ;;
+  *) echo "usage: $0 [check|apply] --repo <absolute-checkout-path>" >&2; exit 64 ;;
+esac
+
+fail() { echo "RPi5_main Git index bootstrap: FAIL: $*" >&2; exit 1; }
+say() { printf '%s\n' "$*"; }
+sha_of() { sha256sum -- "$1" | awk '{print $1}'; }
+
+[[ "$EUID" -eq 0 ]] || fail "run through sudo/root"
+[[ -n "$REPO" && "$REPO" == /* ]] || fail "--repo must be an absolute path"
+[[ -n "${SUDO_UID:-}" && -n "${SUDO_GID:-}" ]] || fail "invoke with sudo from the checkout owner"
+[[ "$SUDO_UID" =~ ^[0-9]+$ && "$SUDO_GID" =~ ^[0-9]+$ ]] || fail "invalid sudo caller identity"
+[[ "$SUDO_UID" -ne 0 ]] || fail "sudo caller must be non-root"
+
+canonical="$(readlink -f -- "$REPO")" || fail "cannot canonicalize repository path"
+[[ "$canonical" == "$REPO" ]] || fail "repository path must already be canonical"
+[[ -d "$REPO" && ! -L "$REPO" ]] || fail "repository must be a real directory"
+GIT_DIR="$REPO/.git"
+INDEX="$GIT_DIR/index"
+LOCK="$GIT_DIR/index.lock"
+HEAD_FILE="$GIT_DIR/HEAD"
+
+[[ -d "$GIT_DIR" && ! -L "$GIT_DIR" ]] || fail ".git must be a real directory"
+[[ -f "$INDEX" && ! -L "$INDEX" ]] || fail "index must be a regular non-symlink file"
+[[ ! -e "$LOCK" ]] || fail "index.lock exists; refuse repair"
+[[ -f "$HEAD_FILE" && ! -L "$HEAD_FILE" ]] || fail "HEAD must be a regular non-symlink file"
+[[ "$(cat -- "$HEAD_FILE")" == "ref: refs/heads/main" ]] || fail "checkout is not on main"
+
+repo_uid="$(stat -c '%u' -- "$REPO")"
+repo_gid="$(stat -c '%g' -- "$REPO")"
+git_uid="$(stat -c '%u' -- "$GIT_DIR")"
+git_gid="$(stat -c '%g' -- "$GIT_DIR")"
+index_uid="$(stat -c '%u' -- "$INDEX")"
+index_gid="$(stat -c '%g' -- "$INDEX")"
+index_mode="$(stat -c '%a' -- "$INDEX")"
+index_size="$(stat -c '%s' -- "$INDEX")"
+index_sha="$(sha_of "$INDEX")"
+
+[[ "$repo_uid" == "$SUDO_UID" && "$repo_gid" == "$SUDO_GID" ]] || fail "repository owner does not match sudo caller"
+[[ "$git_uid" == "$repo_uid" && "$git_gid" == "$repo_gid" ]] || fail ".git ownership differs from repository owner"
+
+say "mode=$MODE"
+say "repo_uid=$repo_uid"
+say "repo_gid=$repo_gid"
+say "index_uid=$index_uid"
+say "index_gid=$index_gid"
+say "index_mode=$index_mode"
+say "index_size=$index_size"
+say "index_sha256=$index_sha"
+
+if [[ "$index_uid" == "$repo_uid" && "$index_gid" == "$repo_gid" ]]; then
+  say "ownership_change=false"
+  say "RPI5_MAIN_GIT_INDEX_BOOTSTRAP=PASS"
+  exit 0
+fi
+
+[[ "$index_uid" -eq 0 ]] || fail "index owner is neither checkout owner nor root"
+
+if [[ "$MODE" == "check" ]]; then
+  say "ownership_change=required"
+  say "RPI5_MAIN_GIT_INDEX_BOOTSTRAP_CHECK=PASS"
+  exit 0
+fi
+
+# Single-file, conditional ownership repair only. Never recurse and never run Git.
+chown --no-dereference --from="$index_uid:$index_gid" "$repo_uid:$repo_gid" -- "$INDEX"
+
+[[ "$(stat -c '%u' -- "$INDEX")" == "$repo_uid" ]] || fail "index owner repair failed"
+[[ "$(stat -c '%g' -- "$INDEX")" == "$repo_gid" ]] || fail "index group repair failed"
+[[ "$(stat -c '%a' -- "$INDEX")" == "$index_mode" ]] || fail "index mode changed"
+[[ "$(stat -c '%s' -- "$INDEX")" == "$index_size" ]] || fail "index size changed"
+[[ "$(sha_of "$INDEX")" == "$index_sha" ]] || fail "index content changed"
+
+say "ownership_change=applied"
+say "RPI5_MAIN_GIT_INDEX_BOOTSTRAP=PASS"
