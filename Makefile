@@ -32,6 +32,6 @@ secret-scan:
 	./scripts/check-no-secrets.sh
 
 public-safety:
-	./scripts/check-public-safety.sh
+	bash ./scripts/check-public-safety.sh
 
 validate: test secret-scan public-safety
