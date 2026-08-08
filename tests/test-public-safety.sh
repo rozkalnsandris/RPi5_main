@@ -35,10 +35,14 @@ reset_case() {
   rm -f "$tmp/leak.txt"
 }
 
+run_guard() {
+  (cd "$tmp" && PUBLIC_SAFETY_BASE="$base" bash "$guard")
+}
+
 lan_value="192.168.""0.180"
 commit_value "$lan_value"
 set +e
-output="$(cd "$tmp" && PUBLIC_SAFETY_BASE="$base" "$guard" 2>&1)"
+output="$(run_guard 2>&1)"
 rc=$?
 set -e
 [[ "$rc" -ne 0 ]] || fail "private LAN host was accepted"
@@ -49,7 +53,7 @@ reset_case
 home_value="/home/""andris""/private/file"
 commit_value "$home_value"
 set +e
-output="$(cd "$tmp" && PUBLIC_SAFETY_BASE="$base" "$guard" 2>&1)"
+output="$(run_guard 2>&1)"
 rc=$?
 set -e
 [[ "$rc" -ne 0 ]] || fail "user home path was accepted"
@@ -60,7 +64,7 @@ reset_case
 email_value="person@""private.invalid"
 commit_value "$email_value"
 set +e
-output="$(cd "$tmp" && PUBLIC_SAFETY_BASE="$base" "$guard" 2>&1)"
+output="$(run_guard 2>&1)"
 rc=$?
 set -e
 [[ "$rc" -ne 0 ]] || fail "email address was accepted"
@@ -71,6 +75,6 @@ reset_case
 printf '%s\n' '$LAN_IP $LAN_CIDR $TECH_PUBLIC_DIR $ORIGIN_PORT' >"$tmp/note.txt"
 git -C "$tmp" add note.txt
 git -C "$tmp" commit -qm placeholders
-(cd "$tmp" && PUBLIC_SAFETY_BASE="$base" "$guard") >/dev/null || fail "neutral placeholders were rejected"
+run_guard >/dev/null || fail "neutral placeholders were rejected"
 
 echo "Public safety guard test: PASS"
