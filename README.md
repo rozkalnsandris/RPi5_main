@@ -1,12 +1,42 @@
 <p align="center">
-  <img src="assets/branding/readme-banner.jpg" alt="RPi5 Main project banner" width="960">
+  <img src="assets/branding/project-logo.svg" alt="RPi5 Main project logo" width="128" height="128">
 </p>
 
-# RPi5_main
+<h1 align="center">RPi5 Main</h1>
 
-This private repository is the source of truth for the Raspberry Pi 5 infrastructure.
+<p align="center">
+  <strong>Source-controlled infrastructure for a production Raspberry Pi 5 homelab, with exact-commit deploys and strict secret boundaries.</strong>
+</p>
 
-Configuration is imported incrementally, with each small change reviewed before it can become authoritative. Secrets, private keys, credentials, runtime data, database data, Docker volumes, and backups are never stored in Git.
+<p align="center">
+  <a href="docs/ROADMAP.md">Roadmap</a>
+  ·
+  <a href="docs/SECURITY_MODEL.md">Security model</a>
+  ·
+  <a href="docs/CURRENT_RUNTIME_BASELINE.md">Runtime baseline</a>
+  ·
+  <a href="docs/V12_CONTROLLED_DEPLOY_CONTRACT.md">Controlled deploy</a>
+  ·
+  <a href="https://github.com/rozkalnsandris/RPi5_main/actions">Actions</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/rozkalnsandris/RPi5_main/actions/workflows/validate.yml">
+    <img src="https://github.com/rozkalnsandris/RPi5_main/actions/workflows/validate.yml/badge.svg?branch=main" alt="RPi5 Main validation status">
+  </a>
+</p>
+
+RPi5 Main is the infrastructure source of truth for the Raspberry Pi 5 host.
+Configuration is imported incrementally and becomes authoritative only after a
+reviewed change path. Secrets, private keys, credentials, runtime data, database
+data, Docker volumes, and backups are never stored in Git.
+
+| | |
+|---|---|
+| **Role** | host infrastructure · runtime ownership · controlled operations |
+| **Host** | Raspberry Pi 5 · Debian · Docker/systemd services |
+| **Workflow** | branch · tests · Draft PR · CI · review · squash merge |
+| **Safety** | exact commit binding · least privilege · preflight · rollback · no secrets in Git |
 
 ## Change workflow
 
