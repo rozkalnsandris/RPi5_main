@@ -1,4 +1,4 @@
-.PHONY: test secret-scan validate
+.PHONY: test secret-scan public-safety validate
 
 test:
 	./tests/test-shell-syntax.sh
@@ -21,6 +21,7 @@ test:
 	bash ./tests/test-hermes-tech-reboot-survival.sh
 	bash ./tests/test-hermes-tech-rollback-container-retirement.sh
 	bash ./tests/test-cloudflare-lan-origin-audit.sh
+	bash ./tests/test-public-safety.sh
 	python3 ./tests/test-controlled-deploy-rollback.py
 	python3 ./tests/test-vscode-deploy-tasks.py
 	python3 ./tests/test-v12-maintenance-conflicts.py
@@ -30,4 +31,7 @@ test:
 secret-scan:
 	./scripts/check-no-secrets.sh
 
-validate: test secret-scan
+public-safety:
+	./scripts/check-public-safety.sh
+
+validate: test secret-scan public-safety
