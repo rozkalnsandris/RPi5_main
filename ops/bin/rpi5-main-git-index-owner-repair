@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+IFS=$'\n\t'
+umask 077
+
+MODE="${1:-check}"
+case "$MODE" in
+  check|apply) ;;
+  *)
+    echo "usage: $0 [check|apply]" >&2
+    exit 64
+    ;;
+esac
+
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+REPO="$(cd "$(dirname "$SCRIPT_PATH")/../.." && pwd -P)"
+GIT_DIR="$REPO/.git"
+INDEX="$GIT_DIR/index"
+LOCK="$GIT_DIR/index.lock"
+
+say() { printf '%s\n' "$*"; }
+fail() { say "RPi5_main Git index ownership repair: FAIL: $*" >&2; exit 1; }
+sha_of() { sha256sum "$1" | awk '{print $1}'; }
+
+[[ "$EUID" -eq 0 ]] || fail "run as root"
+[[ -d "$REPO" && -d "$GIT_DIR" ]] || fail "expected primary checkout missing"
+[[ ! -L "$REPO" && ! -L "$GIT_DIR" ]] || fail "repository path must not be a symlink"
+[[ -f "$INDEX" && ! -L "$INDEX" ]] || fail "Git index must be a regular non-symlink file"
+[[ ! -e "$LOCK" ]] || fail "Git index lock exists; refuse repair"
+
+repo_uid="$(stat -c '%u' "$REPO")"
+repo_gid="$(stat -c '%g' "$REPO")"
+repo_owner="$(stat -c '%U' "$REPO")"
+repo_group="$(stat -c '%G' "$REPO")"
+git_uid="$(stat -c '%u' "$GIT_DIR")"
+git_gid="$(stat -c '%g' "$GIT_DIR")"
+
+[[ "$repo_uid" -ne 0 ]] || fail "repository owner unexpectedly root"
+[[ "$git_uid" == "$repo_uid" && "$git_gid" == "$repo_gid" ]] || fail ".git directory ownership differs from repository owner/group"
+
+index_uid="$(stat -c '%u' "$INDEX")"
+index_gid="$(stat -c '%g' "$INDEX")"
+index_mode="$(stat -c '%a' "$INDEX")"
+index_sha="$(sha_of "$INDEX")"
+
+say "mode=$MODE"
+say "repo_owner=$repo_owner"
+say "repo_group=$repo_group"
+say "index_mode=$index_mode"
+say "index_sha256=$index_sha"
+say "index_uid=$index_uid"
+say "index_gid=$index_gid"
+say "target_uid=$repo_uid"
+say "target_gid=$repo_gid"
+
+if [[ "$index_uid" == "$repo_uid" && "$index_gid" == "$repo_gid" ]]; then
+  say "ownership_change=false"
+  say "RPI5_MAIN_GIT_INDEX_OWNER_REPAIR=PASS"
+  exit 0
+fi
+
+[[ "$index_uid" -eq 0 ]] || fail "index owner is neither repository owner nor root; refuse repair"
+
+if [[ "$MODE" == "check" ]]; then
+  say "ownership_change=required"
+  say "RPI5_MAIN_GIT_INDEX_OWNER_REPAIR_CHECK=PASS"
+  exit 0
+fi
+
+# Deliberately repair only the single primary-checkout index file. Never recurse.
+chown --no-dereference "$repo_uid:$repo_gid" "$INDEX"
+
+[[ "$(stat -c '%u' "$INDEX")" == "$repo_uid" ]] || fail "index owner repair did not stick"
+[[ "$(stat -c '%g' "$INDEX")" == "$repo_gid" ]] || fail "index group repair did not stick"
+[[ "$(stat -c '%a' "$INDEX")" == "$index_mode" ]] || fail "index mode changed during repair"
+[[ "$(sha_of "$INDEX")" == "$index_sha" ]] || fail "index content changed during repair"
+
+say "ownership_change=applied"
+say "RPI5_MAIN_GIT_INDEX_OWNER_REPAIR=PASS"

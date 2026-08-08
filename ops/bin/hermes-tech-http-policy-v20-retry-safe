@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+IFS=$'\n\t'
+umask 077
+
+MODE="${1:-check}"
+shift || true
+
+EXPECTED_SHA=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --expected-sha)
+      [[ $# -ge 2 ]] || { echo "missing value for --expected-sha" >&2; exit 64; }
+      EXPECTED_SHA="$2"
+      shift 2
+      ;;
+    *)
+      echo "usage: $0 [check|apply|verify] --expected-sha <40-hex-sha>" >&2
+      exit 64
+      ;;
+  esac
+done
+
+case "$MODE" in
+  check|apply|verify) ;;
+  *)
+    echo "usage: $0 [check|apply|verify] --expected-sha <40-hex-sha>" >&2
+    exit 64
+    ;;
+esac
+
+[[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+  echo "Hermes Tech V20 safe retry: FAIL: exact --expected-sha is required" >&2
+  exit 64
+}
+
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+REPO="$(cd "$(dirname "$SCRIPT_PATH")/../.." && pwd -P)"
+RETRY="$REPO/ops/bin/hermes-tech-http-policy-v20-retry"
+GIT_DIR="$REPO/.git"
+INDEX="$GIT_DIR/index"
+
+say() { printf '%s\n' "$*"; }
+fail() { say "Hermes Tech V20 safe retry: FAIL: $*" >&2; exit 1; }
+
+[[ "$EUID" -eq 0 ]] || fail "run as root"
+[[ -f "$RETRY" ]] || fail "reviewed retry operator missing"
+[[ -d "$GIT_DIR" && ! -L "$GIT_DIR" ]] || fail "expected primary Git directory missing or symlinked"
+[[ -f "$INDEX" && ! -L "$INDEX" ]] || fail "Git index missing or symlinked"
+
+repo_uid="$(stat -c '%u' "$REPO")"
+repo_gid="$(stat -c '%g' "$REPO")"
+repo_owner="$(stat -c '%U' "$REPO")"
+repo_group="$(stat -c '%G' "$REPO")"
+index_uid="$(stat -c '%u' "$INDEX")"
+index_gid="$(stat -c '%g' "$INDEX")"
+
+[[ "$repo_uid" -ne 0 ]] || fail "repository owner unexpectedly root"
+[[ "$(stat -c '%u' "$GIT_DIR")" == "$repo_uid" ]] || fail ".git owner differs from repository owner"
+[[ "$(stat -c '%g' "$GIT_DIR")" == "$repo_gid" ]] || fail ".git group differs from repository group"
+[[ "$index_uid" == "$repo_uid" && "$index_gid" == "$repo_gid" ]] ||
+  fail "Git index ownership is not repaired; run the bounded index owner repair first"
+
+command -v runuser >/dev/null 2>&1 || fail "runuser is required"
+[[ -x /usr/bin/git ]] || fail "/usr/bin/git missing"
+
+shim_dir="$(mktemp -d)"
+cleanup() { rm -rf -- "$shim_dir"; }
+trap cleanup EXIT HUP INT TERM
+
+cat >"$shim_dir/git" <<EOF
+#!/usr/bin/env bash
+exec runuser -u "$repo_owner" -- /usr/bin/git "\$@"
+EOF
+chmod 0700 "$shim_dir/git"
+
+say "mode=$MODE"
+say "repo_owner=$repo_owner"
+say "repo_group=$repo_group"
+say "git_execution_identity=$repo_owner"
+say "git_optional_locks=0"
+
+# Privileged runtime checks remain root-owned, while every Git command issued by
+# the reviewed retry operator resolves through the shim as the checkout owner.
+# The optional-lock guard also prevents read-only status from refreshing index.
+export GIT_OPTIONAL_LOCKS=0
+export PATH="$shim_dir:$PATH"
+
+bash "$RETRY" "$MODE" --expected-sha "$EXPECTED_SHA"
