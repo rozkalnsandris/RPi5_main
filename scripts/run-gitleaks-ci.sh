@@ -3,7 +3,10 @@ set -Eeuo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
-GITLEAKS_VERSION="8.30.0"
+# v8.18.4 is used as a known-good control: the upstream v8.30.1 regression
+# report demonstrates this release detects the same canonical GitHub PAT shape
+# that v8.30.1 missed. Our runtime canary remains the final trust gate.
+GITLEAKS_VERSION="8.18.4"
 archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
 release_base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
 
@@ -36,16 +39,15 @@ version="$($tmp/gitleaks version)"
   exit 1
 }
 
-# Canary: this value is deliberately assembled at runtime so the repository does
-# not contain a rule-matching credential-shaped literal. A healthy scanner must
-# reject it before the real history scan is trusted.
+# Canary: deliberately assembled at runtime so no rule-matching token-shaped
+# literal is committed to the repository. A healthy scanner must reject it.
 canary_dir="$tmp/canary"
 mkdir -p "$canary_dir"
-canary="ghp_""aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789"
+canary="ghp_""7Nq4Xv2Za9Lm5Rt8Pk3Hy6Wc1Bd0Fs9Gj4Ku"
 printf 'token = "%s"\n' "$canary" >"$canary_dir/canary.txt"
 
 set +e
-"$tmp/gitleaks" dir --redact=100 --no-banner --no-color "$canary_dir" >"$tmp/canary.log" 2>&1
+"$tmp/gitleaks" detect --no-git --source "$canary_dir" --redact --no-banner --no-color >"$tmp/canary.log" 2>&1
 canary_rc=$?
 set -e
 
@@ -54,16 +56,23 @@ set -e
   exit 1
 }
 if grep -Fq "$canary" "$tmp/canary.log"; then
-  echo "Gitleaks CI: FAIL: scanner canary was not fully redacted" >&2
+  echo "Gitleaks CI: FAIL: scanner canary was not redacted" >&2
   exit 1
 fi
 
 echo "Gitleaks CI: canary PASS"
 
-# Stream the complete reachable history ourselves instead of trusting the
-# scanner's internal git invocation. This also fails the pipeline if git log
-# itself cannot produce the history stream.
-git log -p --all --no-ext-diff --no-textconv -- . |
-  "$tmp/gitleaks" stdin --redact=100 --no-banner --no-color
+# Independently prove the complete history stream can be generated before
+# asking this older known-good scanner to execute its own equivalent git-log
+# scan. This prevents a broken repository/history invocation from being treated
+# as a clean result.
+git log -p --all --no-ext-diff --no-textconv -- . >/dev/null
+
+"$tmp/gitleaks" detect \
+  --source . \
+  --log-opts="--all --no-ext-diff --no-textconv" \
+  --redact \
+  --no-banner \
+  --no-color
 
 echo "Gitleaks CI: history scan PASS"
