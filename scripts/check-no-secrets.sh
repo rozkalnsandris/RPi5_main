@@ -15,13 +15,18 @@ if [[ -n "${bad_names}" ]]; then
   exit 1
 fi
 
-patterns='(BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY|gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|CLOUDFLARE_API_TOKEN[[:space:]]*=|POSTGRES_PASSWORD[[:space:]]*=|GRAFANA_ADMIN_PASSWORD[[:space:]]*=|password[[:space:]]*[:=][[:space:]]*[^<][^[:space:]]+)'
+patterns='(BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY|gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|CLOUDFLARE_API_TOKEN[[:space:]]*=|POSTGRES_PASSWORD[[:space:]]*=|GRAFANA_ADMIN_PASSWORD[[:space:]]*=|Authorization:[[:space:]]*(Bearer|Basic)[[:space:]]+[^[:space:]]+|password[[:space:]]*[:=][[:space:]]*[^<][^[:space:]]+)'
 
-if git grep -nEI "${patterns}" -- . \
-  ':(exclude)scripts/check-no-secrets.sh' \
-  ':(exclude).github/workflows/validate.yml'
-then
-  echo "Potential secret content found. Review before commit." >&2
+matching_files="$(
+  git grep -IlE "${patterns}" -- . \
+    ':(exclude)scripts/check-no-secrets.sh' \
+    ':(exclude).github/workflows/validate.yml' ||
+  true
+)"
+
+if [[ -n "${matching_files}" ]]; then
+  echo "Potential secret content found in tracked file(s); matched values are redacted:" >&2
+  printf '%s\n' "${matching_files}" >&2
   exit 1
 fi
 
