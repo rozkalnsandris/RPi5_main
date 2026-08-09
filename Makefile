@@ -26,6 +26,9 @@ test:
 	bash ./tests/test-maintenance-health.sh
 	bash ./tests/test-maintenance-health-entrypoints.sh
 	python3 ./tests/test-maintenance-telegram-credentials.py
+	bash ./tests/test-maintenance-systemd-units.sh
+	python3 ./tests/test-maintenance-systemd-cutover.py
+	bash ./tests/test-maintenance-systemd-notify.sh
 	bash ./tests/test-adguard-memory-attribution.sh
 	bash ./tests/test-controlled-deploy.sh
 	bash ./tests/test-cloudflare-tunnel-ownership.sh
