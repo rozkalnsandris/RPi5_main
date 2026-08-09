@@ -17,7 +17,7 @@ umask 077
 CONFIG=/etc/rpi-update.conf
 LOCK=/run/lock/rpi5-update.lock
 BACKUP_LOCK=/run/lock/rpi5-backup.lock
-LIBEXEC=/usr/local/libexec/rpi5-maintenance
+LIBEXEC=/usr/local/lib/rpi5-maintenance
 BACKUP_WAIT_TIMEOUT=1800
 HOST_IPV4="${HOST_IPV4:-}"
 UPDATE_HOME="$(getent passwd "$UPDATE_USER" | awk -F: 'NR==1 {print $6}')"
@@ -51,6 +51,7 @@ docker image prune -f --filter until=336h
 assert module.validate(GOOD) == [], module.validate(GOOD)
 
 cases = {
+    "forbidden-local-libexec": GOOD + "\nOLD=/usr/local/libexec/rpi5-maintenance\n",
     "concrete-user-home": GOOD + "\nLEGACY=/home/example-user/runtime/\n",
     "private-ipv4-10": GOOD + "\nLEGACY_HOST=10.20.30.40\n",
     "private-ipv4-172": GOOD + "\nLEGACY_HOST=172.20.30.40\n",
