@@ -62,7 +62,7 @@ class GitHubAppReadTokenTests(unittest.TestCase):
         with self.assertRaises(module.TokenBrokerError):
             module.validate_token_payload(payload, repository=repo)
 
-    def test_mint_requests_only_named_repo_and_read_permissions(self) -> None:
+    def test_mint_requests_only_repository_name_and_read_permissions(self) -> None:
         repo = "rozkalnsandris/rozkalns-cv"
         captured: dict = {}
 
@@ -82,12 +82,19 @@ class GitHubAppReadTokenTests(unittest.TestCase):
 
         self.assertTrue(token.startswith("ghs_"))
         self.assertEqual(captured["method"], "POST")
-        self.assertEqual(captured["body"]["repositories"], [repo])
+        self.assertEqual(captured["body"]["repositories"], ["rozkalns-cv"])
         self.assertEqual(
             captured["body"]["permissions"],
             {"actions": "read", "contents": "read"},
         )
         self.assertNotIn("token", str(captured["body"]).lower())
+
+    def test_response_scope_still_requires_full_repository_name(self) -> None:
+        repo = "rozkalnsandris/rozkalns-cv"
+        payload = self.valid_payload(repo)
+        payload["repositories"] = [{"full_name": "someone-else/rozkalns-cv"}]
+        with self.assertRaises(module.TokenBrokerError):
+            module.validate_token_payload(payload, repository=repo)
 
     def test_unapproved_repository_fails_before_network_or_signing(self) -> None:
         with patch.object(module, "build_app_jwt") as jwt, patch.object(
