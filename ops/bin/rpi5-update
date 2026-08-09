@@ -54,7 +54,7 @@ readonly CONFIG_FILE="/etc/rpi-update.conf"
 readonly LOG="/var/log/rpi5-update.log"
 readonly LOCK_FILE="/run/lock/rpi5-update.lock"
 readonly BACKUP_LOCK_FILE="/run/lock/rpi5-backup.lock"
-readonly LIBEXEC_DIR="/usr/local/libexec/rpi5-maintenance"
+readonly LIBEXEC_DIR="/usr/local/lib/rpi5-maintenance"
 readonly TELEGRAM_HELPER="${LIBEXEC_DIR}/rpi5-update-telegram.py"
 
 validate_runtime_code_file() {
