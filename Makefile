@@ -32,6 +32,7 @@ test:
 	python3 ./tests/test-deals-route-cutover.py
 	python3 ./tests/test-github-app-readonly.py
 	python3 ./tests/test-github-app-read-token.py
+	python3 ./tests/test-cv-github-app-auth-boundary.py
 	python3 -m py_compile scripts/*.py
 
 secret-scan:

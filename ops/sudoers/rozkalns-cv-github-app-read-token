@@ -1,0 +1,3 @@
+# Managed by RPi5_main. Phase 3 CV pull-deploy authentication boundary.
+# This grants only a short-lived read token for the CV repository.
+andris ALL=(root) NOPASSWD: /usr/local/sbin/rozkalns-github-app-read-token --repository rozkalnsandris/rozkalns-cv
