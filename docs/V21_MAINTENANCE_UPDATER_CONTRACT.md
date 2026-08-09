@@ -15,8 +15,8 @@ The retained File Library contains the complete historical v16 updater source an
 The exact live file from the 2026-08-09 host incident is now available as review evidence and is SHA256-bound in `ops/maintenance/updater-source-provenance.json`:
 
 - live v17 incident-fixed baseline: `bd0afe74dea18742a002c852d59fc67ec848a032116d2adc314c24848895e24c`, 47,190 bytes;
-- reviewed public-safe V21 successor: `860b2dd0be0d7f32f2648742a356bccabb20f0c9f8e7073ba2b1c998aa212851`, 50,076 bytes;
-- reviewed V21 Git blob: `67cd5b443dfdb8a48fd08aaa4015dc0f6b26e9ec`.
+- reviewed public-safe V21 successor: the exact current candidate identity is enforced by `ops/maintenance/updater-source-provenance.json` and repository tests;
+- reviewed V21 Git blob: the exact current candidate blob is likewise provenance-bound and CI-enforced.
 
 V21 is intentionally a **reviewed successor derived from the exact live baseline**, not a byte-identical import: the purpose of #95 is to preserve the known-good updater behavior while correcting the audited safety and ownership defects. Before any production installation, the then-live updater must still match the expected live baseline or an explicitly reviewed later baseline; unexpected runtime drift stops migration rather than being overwritten.
 
@@ -30,7 +30,7 @@ The same dry-run exposed a reporting defect: Hermes could report that its Git ch
 
 The full source audit exposed further stale/destructive assumptions. The imported V21 source corrects these #95-owned defects:
 
-- backup-overlap detection no longer recognizes legacy process names; mutation modes use the authoritative V10 backup lock with a bounded wait;
+- backup-overlap detection no longer recognizes legacy process names; mutation modes use the authoritative V10 ownership-snapshot backup lock with a bounded wait;
 - reboot package detection no longer treats `--check` APT simulation candidates as packages that were actually installed;
 - unattended `docker network prune` is removed;
 - Compose `--remove-orphans` is removed from normal recreation and rollback;
@@ -41,7 +41,7 @@ The full source audit exposed further stale/destructive assumptions. The importe
 - Telegram credentials are not copied into a child process environment;
 - concrete user-home paths and private-LAN addresses are removed from the tracked executable and remain runtime configuration/derivation only.
 
-Broad home-directory cleanup ownership is intentionally not expanded inside #95; that remains #98. Full backup-vs-update mutual exclusion is intentionally not hidden inside #95; that remains #100 because it requires a coordinated change to the already-owned V10 backup implementation.
+Broad home-directory cleanup ownership is intentionally not expanded inside #95; that remains #98. Full backup-vs-update mutual exclusion is intentionally not hidden inside #95; that remains #100 because it requires a coordinated change to the already-owned backup implementation.
 
 ## Audited behavior to preserve
 
@@ -50,7 +50,7 @@ The updater is deliberately conservative:
 - run only as root and hold a non-blocking duplicate-update process lock;
 - require a root-only maintenance configuration;
 - keep host-specific private values outside the public repository;
-- load helper/notifier code only from the root-controlled `/usr/local/libexec/rpi5-maintenance` installation boundary and reject unsafe ownership/writability;
+- load helper/notifier code only from the root-controlled `/usr/local/lib/rpi5-maintenance` installation boundary and reject unsafe ownership/writability;
 - validate free disk/inodes, Docker and both Compose projects before normal update/check mutation decisions;
 - keep `--cleanup-only` usable under low-space pressure by separating cleanup eligibility from the normal update free-space threshold;
 - prove every service defined by each targeted Compose project has a corresponding current container before mutation, then verify running/health state;
@@ -71,6 +71,12 @@ The updater is deliberately conservative:
 
 ## Documentation-backed decisions
 
+### FHS local helper placement
+
+The public administrator entrypoint belongs below `/usr/local/sbin`. Internal site-local maintenance helpers are installed below `/usr/local/lib/rpi5-maintenance`, which stays inside the FHS-defined `/usr/local/lib` hierarchy while allowing a package/application-specific child directory. The reviewed source therefore forbids the earlier `/usr/local/libexec/rpi5-maintenance` target instead of creating an extra top-level directory under `/usr/local`.
+
+The legacy shell variable name `LIBEXEC_DIR` is retained inside V21 to keep the source diff focused; its value is the authoritative path and now points to `/usr/local/lib/rpi5-maintenance`. A later cosmetic rename is not required for production correctness.
+
 ### APT
 
 Debian's APT semantics distinguish conservative `upgrade` from `full-upgrade`: the latter may remove packages to complete dependency changes. V21 therefore keeps the weekly automatic path removal-free and keeps `full-upgrade` as a visibility/manual-review signal rather than silently broadening unattended mutation scope.
@@ -87,7 +93,7 @@ The existing historical home wildcard cleanup rules remain visible in the succes
 
 ### Backup overlap
 
-The encrypted V10 backup is the authoritative backup implementation and owns `/run/lock/rpi5-backup.lock`. V21 waits for that lock with a configurable bounded timeout before mutating APT/Hermes/Docker state. Matching process names is not an acceptable ownership boundary because executable names and paths can change while the lock contract remains stable. A timeout or lock setup error fails closed.
+The encrypted backup ownership snapshot owns `/run/lock/rpi5-backup.lock`; the immutable tracked artifact currently contains runtime `backup_version=12`. V21 waits for that lock with a configurable bounded timeout before mutating APT/Hermes/Docker state. Matching process names is not an acceptable ownership boundary because executable names and paths can change while the lock contract remains stable. A timeout or lock setup error fails closed.
 
 Waiting for the backup-specific lock does not by itself create full mutual exclusion after the wait is released: a manually started backup could otherwise begin during an updater mutation window. Issue #100 owns the coordinated shared-maintenance-lock change across both backup and update, including canonical acquisition order and deadlock tests. That coordinated behavior is intentionally not smuggled into #95.
 
@@ -140,15 +146,15 @@ The classifier deliberately recognizes both a nonzero-behind convention and the 
 | Repository source | Installed target | Expected owner/mode |
 |---|---|---|
 | `ops/bin/rpi5-update` | `/usr/local/sbin/rpi5-update` | `root:root`, `0750` |
-| `ops/lib/rpi5-update-hermes-status.sh` | `/usr/local/libexec/rpi5-maintenance/rpi5-update-hermes-status.sh` | `root:root`, not group/world writable |
-| `ops/lib/rpi5-update-locks.sh` | `/usr/local/libexec/rpi5-maintenance/rpi5-update-locks.sh` | `root:root`, not group/world writable |
-| `ops/lib/rpi5-update-reboot.sh` | `/usr/local/libexec/rpi5-maintenance/rpi5-update-reboot.sh` | `root:root`, not group/world writable |
-| `ops/lib/rpi5-update-compose-health.sh` | `/usr/local/libexec/rpi5-maintenance/rpi5-update-compose-health.sh` | `root:root`, not group/world writable |
-| `ops/lib/rpi5-update-compose-policy.sh` | `/usr/local/libexec/rpi5-maintenance/rpi5-update-compose-policy.sh` | `root:root`, not group/world writable |
-| `ops/lib/rpi5-update-space-policy.sh` | `/usr/local/libexec/rpi5-maintenance/rpi5-update-space-policy.sh` | `root:root`, not group/world writable |
-| `ops/lib/rpi5-update-origin-policy.sh` | `/usr/local/libexec/rpi5-maintenance/rpi5-update-origin-policy.sh` | `root:root`, not group/world writable |
-| `ops/lib/rpi5-update-http-health.sh` | `/usr/local/libexec/rpi5-maintenance/rpi5-update-http-health.sh` | `root:root`, not group/world writable |
-| `ops/lib/rpi5-update-telegram.py` | `/usr/local/libexec/rpi5-maintenance/rpi5-update-telegram.py` | `root:root`, not group/world writable |
+| `ops/lib/rpi5-update-hermes-status.sh` | `/usr/local/lib/rpi5-maintenance/rpi5-update-hermes-status.sh` | `root:root`, not group/world writable |
+| `ops/lib/rpi5-update-locks.sh` | `/usr/local/lib/rpi5-maintenance/rpi5-update-locks.sh` | `root:root`, not group/world writable |
+| `ops/lib/rpi5-update-reboot.sh` | `/usr/local/lib/rpi5-maintenance/rpi5-update-reboot.sh` | `root:root`, not group/world writable |
+| `ops/lib/rpi5-update-compose-health.sh` | `/usr/local/lib/rpi5-maintenance/rpi5-update-compose-health.sh` | `root:root`, not group/world writable |
+| `ops/lib/rpi5-update-compose-policy.sh` | `/usr/local/lib/rpi5-maintenance/rpi5-update-compose-policy.sh` | `root:root`, not group/world writable |
+| `ops/lib/rpi5-update-space-policy.sh` | `/usr/local/lib/rpi5-maintenance/rpi5-update-space-policy.sh` | `root:root`, not group/world writable |
+| `ops/lib/rpi5-update-origin-policy.sh` | `/usr/local/lib/rpi5-maintenance/rpi5-update-origin-policy.sh` | `root:root`, not group/world writable |
+| `ops/lib/rpi5-update-http-health.sh` | `/usr/local/lib/rpi5-maintenance/rpi5-update-http-health.sh` | `root:root`, not group/world writable |
+| `ops/lib/rpi5-update-telegram.py` | `/usr/local/lib/rpi5-maintenance/rpi5-update-telegram.py` | `root:root`, not group/world writable |
 
 The current home-directory updater location is transitional only and must not remain the authoritative scheduler target after the systemd migration in #97.
 
@@ -165,6 +171,7 @@ The current home-directory updater location is transitional only and must not re
 - deterministic run/check-vs-cleanup free-space policy tests;
 - deterministic HTTP retry/capture/transport-failure normalization tests;
 - deterministic Telegram chunking/error-redaction tests;
+- FHS helper root must be `/usr/local/lib/rpi5-maintenance`; `/usr/local/libexec/rpi5-maintenance` is forbidden by the source validator;
 - no concrete user-home path or RFC1918 IPv4 address in tracked updater source;
 - no `docker image prune -a/--all` in the imported updater;
 - no unattended `docker network prune` or obsolete network-prune capability gate;
