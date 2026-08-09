@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export LC_ALL=C
+export LANG=C
+
+readonly MAINTENANCE_LIB_DIR="/usr/local/lib/rpi5-maintenance"
+readonly LOCK_LIB="${MAINTENANCE_LIB_DIR}/rpi5-maintenance-locks.sh"
+# This path contains the byte-identical V10 ownership snapshot whose runtime
+# script identifies itself as backup runner V12. SHA256 is the identity.
+readonly BACKUP_CORE="${MAINTENANCE_LIB_DIR}/rpi5-backup-v10-core"
+readonly MAINTENANCE_LOCK_FILE="/run/lock/rpi5-maintenance-exclusive.lock"
+readonly MAINTENANCE_LOCK_TIMEOUT=1800
+
+log() {
+    printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
+}
+
+require_root_controlled_file() {
+    local path="$1" uid mode
+    [[ -f "$path" && ! -L "$path" ]] || return 1
+    uid="$(stat -c '%u' "$path")"
+    mode="$(stat -c '%a' "$path")"
+    [[ "$uid" -eq 0 ]] || return 1
+    (( (8#$mode & 022) == 0 ))
+}
+
+[[ ${EUID:-$(id -u)} -eq 0 ]] || {
+    echo "rpi5-backup must run as root." >&2
+    exit 1
+}
+
+require_root_controlled_file "$LOCK_LIB" || {
+    echo "unsafe or missing maintenance lock library: $LOCK_LIB" >&2
+    exit 1
+}
+require_root_controlled_file "$BACKUP_CORE" || {
+    echo "unsafe or missing reviewed backup core: $BACKUP_CORE" >&2
+    exit 1
+}
+# shellcheck source=/dev/null
+source "$LOCK_LIB"
+
+shared_fd=""
+lock_rc=0
+rpi5_acquire_exclusive_lock \
+    "$MAINTENANCE_LOCK_FILE" \
+    "$MAINTENANCE_LOCK_TIMEOUT" \
+    shared_fd || lock_rc=$?
+case "$lock_rc" in
+    0)
+        log "Shared maintenance lock acquired; starting reviewed backup core."
+        ;;
+    "$RPI5_LOCK_CONFLICT_RC")
+        log "FAIL shared maintenance lock timeout after ${MAINTENANCE_LOCK_TIMEOUT}s."
+        exit 75
+        ;;
+    *)
+        log "FAIL shared maintenance lock acquisition error rc=${lock_rc}."
+        exit 1
+        ;;
+esac
+
+# Do not exec: keeping this wrapper process alive guarantees its open flock file
+# descriptor remains held for the full lifetime of the unchanged backup core.
+# The core then acquires its own duplicate-backup lock while shared is held.
+set +e
+"$BACKUP_CORE" "$@"
+backup_rc=$?
+set -e
+
+rpi5_release_exclusive_lock "$shared_fd" || true
+exit "$backup_rc"
