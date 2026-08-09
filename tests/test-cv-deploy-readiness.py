@@ -120,12 +120,41 @@ class CvDeployReadinessTests(unittest.TestCase):
             self.assertFalse(payload["control_plane_changed"])
             self.assertFalse(payload["production_mutation_authorized"])
 
+    def test_deploy_failure_state_is_sanitized_and_requires_exact_shas(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = module.record(
+                state_root=Path(tmp),
+                reason="DEPLOY_FAILED",
+                target_sha=SHA_B,
+                production_sha=SHA_A,
+                deploy_impact="AUTO_DEPLOY_SAFE",
+                control_plane_changed=False,
+                ci_run_id=98765,
+            )
+            self.assertEqual(payload["reason"], "DEPLOY_FAILED")
+            self.assertEqual(payload["target_sha"], SHA_B)
+            self.assertEqual(payload["production_sha"], SHA_A)
+            self.assertFalse(payload["production_mutation_authorized"])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ValueError):
+                module.record(
+                    state_root=Path(tmp),
+                    reason="DEPLOY_FAILED",
+                    target_sha="",
+                    production_sha="",
+                    deploy_impact="AUTO_DEPLOY_SAFE",
+                    control_plane_changed=False,
+                    ci_run_id=98765,
+                )
+
     def test_reason_and_impact_sets_match_phase3_contract(self) -> None:
         self.assertIn("AUTO_DEPLOY_READY", module.REASONS)
         self.assertIn("WAIT_HELPER_ACTIVATION", module.REASONS)
         self.assertIn("WAIT_PULL_TRANSPORT_ACTIVATION", module.REASONS)
         self.assertIn("MANUAL_ROLLOUT_REQUIRED", module.REASONS)
         self.assertIn("DB_HOST_APPLY_REQUIRED", module.REASONS)
+        self.assertIn("DEPLOY_FAILED", module.REASONS)
         self.assertNotIn("APPROVED", module.REASONS)
         self.assertEqual(
             module.DEPLOY_IMPACTS,
