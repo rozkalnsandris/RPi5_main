@@ -13,6 +13,9 @@ REQUIRED_MARKERS = (
     "umask 077",
     "/etc/rpi-update.conf",
     "/run/lock/rpi5-update.lock",
+    "/run/lock/rpi5-backup.lock",
+    "/usr/local/libexec/rpi5-maintenance",
+    "BACKUP_WAIT_TIMEOUT",
     "rpi5_classify_hermes_update_check",
     "rpi5_wait_for_lock_available",
     "rpi5_applied_packages_require_reboot",
@@ -22,13 +25,12 @@ REQUIRED_MARKERS = (
     "rpi5_application_local_health_targets",
     "rpi5_request_code_with_retry",
     "rpi5-update-telegram.py",
-    "http://127.0.0.1:8088/",
-    "http://127.0.0.1:8089/",
-    "--no-build",
     "--check",
     "--no-reboot",
     "--cleanup-only",
 )
+
+SAFE_COMPOSE_UP = 'docker compose up "${RPI5_COMPOSE_UP_ARGS[@]}"'
 
 
 def validate(text: str) -> list[str]:
@@ -39,6 +41,9 @@ def validate(text: str) -> list[str]:
             errors.append(f"missing required marker: {marker}")
 
     normalized = re.sub(r"\\\n[ \t]*", " ", text)
+
+    if text.count(SAFE_COMPOSE_UP) < 2:
+        errors.append("Compose recreate/rollback are not both routed through the reviewed argument helper")
 
     image_prune_commands = re.findall(
         r"docker\s+image\s+prune\b[^\n;]*", normalized, flags=re.IGNORECASE
@@ -59,6 +64,8 @@ def validate(text: str) -> list[str]:
 
     if "--remove-orphans" in normalized:
         errors.append("unattended Compose --remove-orphans is forbidden")
+    if re.search(r"\bdocker\s+compose\s+up\b[^\n;]*--build\b", normalized):
+        errors.append("generic host maintenance may not build application images")
 
     if re.search(r"\bpgrep\b[^\n]*(backup\\?\.sh|rpi5[^\n]*backup)", normalized):
         errors.append("backup overlap still depends on process-name matching")
