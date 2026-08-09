@@ -176,13 +176,16 @@ def validate_token_payload(
 def mint_repository_token(repository: str) -> str:
     if repository not in ALLOWED_REPOSITORIES:
         raise TokenBrokerError("repository is not approved for automation token access")
+    owner, separator, repository_name = repository.partition("/")
+    if not separator or not owner or not repository_name or "/" in repository_name:
+        raise TokenBrokerError("approved repository identifier is malformed")
     jwt = build_app_jwt()
     payload = request_json(
         f"{API_ROOT}/app/installations/{INSTALLATION_ID}/access_tokens",
         authorization=jwt,
         method="POST",
         body={
-            "repositories": [repository],
+            "repositories": [repository_name],
             "permissions": REQUIRED_PERMISSIONS,
         },
     )
