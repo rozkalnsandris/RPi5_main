@@ -1,0 +1,15 @@
+[Unit]
+Description=RPi5 daily maintenance health monitor
+Documentation=https://github.com/rozkalnsandris/RPi5_main
+Wants=network-online.target
+After=network-online.target docker.service cloudflared.service ssh.service
+OnFailure=rpi5-maintenance-notify@%N.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/rpi5-monitor
+TimeoutStartSec=5min
+Restart=no
+UMask=0077
+StandardOutput=journal
+StandardError=journal
