@@ -58,6 +58,7 @@ test:
 	python3 ./tests/test-cv-github-app-auth-boundary.py
 	python3 ./tests/test-cv-deploy-readiness.py
 	python3 ./tests/test-cv-pull-deploy-controller.py
+	python3 ./tests/test-cv-pull-deploy-canary.py
 	python3 -m py_compile scripts/*.py ops/lib/rpi5-update-telegram.py ops/lib/rpi5-maintenance-telegram.py
 
 secret-scan:
