@@ -104,9 +104,20 @@ From RPi5, using an installation token produced from the app identity, verify al
 3. the token can read `main` for each installed repository;
 4. the token can list workflow runs for an exact SHA;
 5. the token can list jobs for the selected successful run;
-6. the token cannot access a repository outside its selected installation scope;
+6. the installation repository list is exactly the four approved repositories;
 7. no GitHub write operation is required for the read-only canary;
 8. logs/evidence contain no private key, JWT, or installation access token.
+
+The reviewed canary is `scripts/verify-github-app-readonly.py`. After the PEM has been placed at a private absolute path with mode `0600`, run only:
+
+```bash
+python3 scripts/verify-github-app-readonly.py \
+  --app-id <APP_ID> \
+  --installation-id <INSTALLATION_ID> \
+  --key-file /absolute/private/path/rozkalns-automation.pem
+```
+
+The command fails closed if the PEM is a symlink, is group/world accessible, the token lifetime or permission set is unexpected, the installation contains an extra/missing repository, or any selected repository lacks the expected exact-main successful CI evidence. Successful output contains only PASS state, token lifetime, permission names, repository names, main SHAs and CI run IDs. It never prints the PEM, App JWT or installation access token.
 
 Record only sanitized PASS/FAIL evidence and non-secret identifiers needed for troubleshooting.
 
