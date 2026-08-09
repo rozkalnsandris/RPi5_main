@@ -1,0 +1,83 @@
+# V21 weekly maintenance updater ownership contract
+
+## Status
+
+**Source import in progress. Production unchanged.**
+
+This phase moves the existing RPi5 weekly maintenance updater out of the interactive user's home directory and into reviewed host-infrastructure ownership. The intended installed target is `/usr/local/sbin/rpi5-update`; private runtime configuration remains outside Git.
+
+Issue #95 owns the updater import. Issues #96-#98 separately own monitor/post-reboot privilege repair, systemd scheduling, and cleanup-path regression protection. This split prevents a source-ownership change from silently changing production scheduling or credentials.
+
+## 2026-08-09 incident boundary
+
+A scheduled cron trigger reached a path that had been removed by an earlier home-directory cleanup. Recovery of the retained updater then exposed two source/runtime drift defects: two application origins had intentionally become loopback-only while the updater still probed their previous LAN addresses, and the runtime banner still reported the previous script version. A bounded host-only repair corrected those two items and `--check` returned success. Those host edits are not yet an authoritative repository deployment.
+
+The same dry-run exposed a reporting defect: Hermes could report that its Git checkout was behind `origin/main` while the final summary still rendered an unchanged semantic version as fully current.
+
+## Audited behavior to preserve
+
+The updater is deliberately conservative:
+
+- run only as root and hold a non-blocking process lock;
+- require a root-only maintenance configuration;
+- validate free disk/inodes, Docker and both Compose projects before mutation;
+- refuse to overlap the host backup workflow;
+- perform APT metadata refresh and dpkg integrity checks before other updates;
+- use a no-removal APT upgrade path for unattended weekly maintenance;
+- simulate `full-upgrade` only to surface packages/removals that need manual review;
+- never run autoremove automatically;
+- keep APT-managed rclone under APT instead of mixing package managers;
+- run Hermes in the configured unprivileged user context, with backup and post-update health gates;
+- preserve tagged Docker rollback/release images during retention cleanup;
+- snapshot Compose image identity before pulls and attempt bounded image rollback on failed recreation;
+- treat intentionally loopback-only origins as loopback health checks;
+- block automatic reboot after any failed update/health phase.
+
+## Documentation-backed decisions
+
+### APT
+
+Debian's APT semantics distinguish conservative `upgrade` from `full-upgrade`: the latter may remove packages to complete dependency changes. V21 therefore keeps the weekly automatic path removal-free and keeps `full-upgrade` as a visibility/manual-review signal rather than silently broadening unattended mutation scope.
+
+### Docker cleanup
+
+Docker image pruning without `-a/--all` is required. The all-images mode may remove any image not referenced by a container, including retained rollback/release images. Build-cache pruning is a separate cache operation and may use its own all-unused-cache semantics. Volumes are never pruned by this updater.
+
+### Docker Compose
+
+Pulling and recreating are separate gates. The updater snapshots existing image identity, pulls first, then runs Compose with `--pull never` and `--wait`; failed runtime health enters the explicit image-tag rollback path rather than silently accepting a partially healthy stack.
+
+`--remove-orphans` is an intentional destructive boundary: Compose removes containers for services no longer present in the project definition. It is acceptable only while the two targeted Compose projects remain authoritative for those project containers. This flag must not be generalized to unrelated stacks.
+
+### Hermes
+
+`hermes update --check` is a preview/freshness check, not the installation itself. The updater must represent three semantic states:
+
+- `current` — check succeeded and no update-available signal was reported;
+- `available` — the CLI reports a checkout behind/update available; this is informational/warning state, not a maintenance failure by itself;
+- `error` — the check itself failed without an update-available signal.
+
+The classifier deliberately recognizes both a nonzero-behind convention and the observed zero-exit-behind output. Checkout freshness must not be inferred only from the semantic version string or only from one CLI exit-code convention.
+
+## Source-to-installed target
+
+| Repository source | Installed target | Expected owner/mode |
+|---|---|---|
+| `ops/bin/rpi5-update` (pending exact import) | `/usr/local/sbin/rpi5-update` | `root:root`, `0750` |
+| `ops/lib/rpi5-update-hermes-status.sh` | bundled/installed with updater implementation | root-controlled, not independently scheduled |
+
+The current home-directory updater location is transitional only and must not remain the authoritative scheduler target after the systemd migration in #97.
+
+## V21 repository gates
+
+- Bash syntax for imported shell source and helper library;
+- deterministic Hermes current/available/error classifier tests;
+- no `docker image prune -a/--all` in the imported updater;
+- loopback-only application-origin health policy regression;
+- no credentials/private configuration in tracked source;
+- source-to-installed mapping and rollback contract;
+- normal repository `make validate` before PR readiness.
+
+## Production boundary
+
+Merge does not authorize host installation, package upgrades, Docker pulls/recreates, Hermes update, reboot, timer enablement or cron removal. Production apply is a later explicit transaction after #95-#98 have the required migration gates.
