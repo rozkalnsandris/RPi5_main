@@ -15,6 +15,8 @@ text = OPERATOR.read_text(encoding="utf-8")
 wrapper = WRAPPER.read_text(encoding="utf-8")
 lock_lib = LOCK_LIB.read_text(encoding="utf-8")
 
+assert OPERATOR.stat().st_mode & 0o100, "lock cutover operator must be owner-executable after checkout"
+
 backup_sha = hashlib.sha256(BACKUP.read_bytes()).hexdigest()
 assert backup_sha == "5ca85ae53bdf4fa3b99e21e1a30ddaa077d9e1791505b1e8389ee8587d011735"
 assert "# RPi5 šifrētais backup runneris V12." in BACKUP.read_text(encoding="utf-8")
