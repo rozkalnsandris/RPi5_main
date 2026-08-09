@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export LC_ALL=C
+export LANG=C
+
+readonly TELEGRAM_HELPER="/usr/local/lib/rpi5-maintenance/rpi5-maintenance-telegram.py"
+readonly FALLBACK_UNIT="${1:-unknown.service}"
+
+unit="${MONITOR_UNIT:-$FALLBACK_UNIT}"
+result="${MONITOR_SERVICE_RESULT:-unknown}"
+exit_code="${MONITOR_EXIT_CODE:-unknown}"
+exit_status="${MONITOR_EXIT_STATUS:-unknown}"
+invocation_id="${MONITOR_INVOCATION_ID:-unknown}"
+
+case "$result" in
+    success)
+        icon="✅"
+        heading="RPi5 MAINTENANCE SERVICE OK"
+        ;;
+    *)
+        icon="❌"
+        heading="RPi5 MAINTENANCE SERVICE FAILURE"
+        ;;
+esac
+
+message="${icon} ${heading}
+
+Unit: ${unit}
+Result: ${result}
+Exit: ${exit_code}/${exit_status}
+Invocation: ${invocation_id}
+Time: $(date '+%Y-%m-%d %H:%M:%S %Z')
+
+Logs: journalctl -u ${unit}"
+
+printf '%s\n' "$message" | python3 "$TELEGRAM_HELPER"
