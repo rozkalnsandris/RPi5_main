@@ -27,7 +27,7 @@ test:
 	bash ./tests/test-hermes-tech-web-runtime.sh
 	bash ./tests/test-hermes-tech-http-policy.sh
 	bash ./tests/test-hermes-tech-http-policy-activation.sh
-	bash ./tests/test-hermes-tech-v20-retry.sh
+	bash ./tests/test-hermes-tech-http-policy-v20-retry.sh
 	bash ./tests/test-hermes-tech-v20-git-index-owner.sh
 	bash ./tests/test-rpi5-main-git-index-owner-bootstrap.sh
 	bash ./tests/test-v20-operator-executable-mode.sh
