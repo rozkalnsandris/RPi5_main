@@ -20,6 +20,7 @@ test:
 	bash ./tests/test-maintenance-updater-origin-policy.sh
 	bash ./tests/test-maintenance-updater-http-health.sh
 	bash ./tests/test-maintenance-updater-provenance.sh
+	bash ./tests/test-maintenance-updater-source.sh
 	python3 ./tests/test-maintenance-updater-source-validator.py
 	python3 ./tests/test-maintenance-updater-telegram.py
 	bash ./tests/test-adguard-memory-attribution.sh
