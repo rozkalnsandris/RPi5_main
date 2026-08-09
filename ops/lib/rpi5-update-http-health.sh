@@ -5,10 +5,17 @@
 
 rpi5_request_code() {
     local url="${1:?missing URL}"
-    curl -sS -o /dev/null -w '%{http_code}' \
-        --connect-timeout 3 \
-        --max-time 8 \
-        "$url" 2>/dev/null || printf '000'
+    local code
+
+    code="$(
+        curl -sS -o /dev/null -w '%{http_code}' \
+            --connect-timeout 3 \
+            --max-time 8 \
+            "$url" 2>/dev/null || true
+    )"
+
+    [[ "$code" =~ ^[0-9]{3}$ ]] || code="000"
+    printf '%s' "$code"
 }
 
 rpi5_code_is_reachable() {
