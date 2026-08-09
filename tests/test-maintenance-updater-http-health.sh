@@ -12,12 +12,16 @@ tmp="$(mktemp -d)"
 cleanup() { rm -rf -- "$tmp"; }
 trap cleanup EXIT
 
-# First request fails, second succeeds. Captured stdout must contain only the
-# final HTTP code; retry diagnostics must stay on stderr.
-_test_n=0
+# First request fails, second succeeds. The mock counter is file-backed because
+# rpi5_request_code is intentionally invoked inside command substitution.
+counter="$tmp/request-count"
+printf '0\n' >"$counter"
 rpi5_request_code() {
-    _test_n=$((_test_n + 1))
-    if [[ "$_test_n" -eq 1 ]]; then
+    local n
+    n="$(<"$counter")"
+    n=$((n + 1))
+    printf '%s\n' "$n" >"$counter"
+    if [[ "$n" -eq 1 ]]; then
         printf '530'
     else
         printf '200'
@@ -26,7 +30,7 @@ rpi5_request_code() {
 
 captured="$(rpi5_request_code_with_retry 'https://example.invalid/' 2 0 2>"$tmp/retry.err")"
 [[ "$captured" == "200" ]]
-[[ "$_test_n" -eq 0 ]] || true  # command substitution executes in a subshell
+[[ "$(<"$counter")" -eq 2 ]]
 [[ -s "$tmp/retry.err" ]]
 grep -Fq 'HTTP 530' "$tmp/retry.err"
 printf '%s\n' 'PASS retry-success-clean-stdout'
