@@ -1,0 +1,112 @@
+name: V21 Sanitize Public Source
+
+on:
+  push:
+    branches:
+      - fix/95-maintenance-updater-ownership
+    paths:
+      - '.github/workflows/v21-sanitize-public-source.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  sanitize:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Apply deterministic public-source sanitization
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+
+          p = Path('ops/bin/rpi5-update')
+          raw = p.read_bytes()
+          old_sha = hashlib.sha256(raw).hexdigest()
+          expected_old = 'a29bbb79c9698f534e880e51ab62b4c5f7baf6bd0c4c2620f94e8f7921e4cf6c'
+          if old_sha != expected_old:
+              raise SystemExit(f'unexpected updater baseline sha256: {old_sha}')
+
+          s = raw.decode('utf-8')
+          home = '/home/' + 'andris' + '/'
+          lan = '192.168.' + '0.180'
+
+          replacements = {
+              f'#   MAIN_COMPOSE_DIR={home}docker': '#   MAIN_COMPOSE_DIR=<user-home>/docker',
+              f'#   CV_COMPOSE_DIR={home}docker/cv': '#   CV_COMPOSE_DIR=<user-home>/docker/cv',
+              f'#   HOST_IPV4={lan}': '#   HOST_IPV4=<private-ipv4>',
+              f'    MAIN_COMPOSE_DIR="${{MAIN_COMPOSE_DIR:-{home}docker}}"': '    MAIN_COMPOSE_DIR="${MAIN_COMPOSE_DIR:-}"',
+              f'    CV_COMPOSE_DIR="${{CV_COMPOSE_DIR:-{home}docker/cv}}"': '    CV_COMPOSE_DIR="${CV_COMPOSE_DIR:-}"',
+              f'    HOST_IPV4="${{HOST_IPV4:-{lan}}}"': '    HOST_IPV4="${HOST_IPV4:-}"',
+              '    HERMES_BIN="${HERMES_BIN:-/home/${UPDATE_USER}/.local/bin/hermes}"': '    HERMES_BIN="${HERMES_BIN:-}"',
+              'readonly UPDATE_USER MAIN_COMPOSE_DIR CV_COMPOSE_DIR\nreadonly REBOOT_POLICY RCLONE_UPDATE_MODE HERMES_UPDATE HERMES_BACKUP\nreadonly CLEANUP_RETENTION_DAYS DOCKER_CLEANUP JOURNAL_RETENTION\nreadonly MIN_FREE_KB COMPOSE_WAIT_TIMEOUT\nreadonly RCLONE_TIMEOUT HERMES_TIMEOUT DOCKER_PULL_TIMEOUT BACKUP_WAIT_TIMEOUT HOST_IPV4 HERMES_BIN': 'readonly UPDATE_USER\nreadonly REBOOT_POLICY RCLONE_UPDATE_MODE HERMES_UPDATE HERMES_BACKUP\nreadonly CLEANUP_RETENTION_DAYS DOCKER_CLEANUP JOURNAL_RETENTION\nreadonly MIN_FREE_KB COMPOSE_WAIT_TIMEOUT\nreadonly RCLONE_TIMEOUT HERMES_TIMEOUT DOCKER_PULL_TIMEOUT BACKUP_WAIT_TIMEOUT HOST_IPV4',
+              'readonly UPDATE_HOME\n\nrun_as_update_user() {': 'MAIN_COMPOSE_DIR="${MAIN_COMPOSE_DIR:-${UPDATE_HOME}/docker}"\nCV_COMPOSE_DIR="${CV_COMPOSE_DIR:-${MAIN_COMPOSE_DIR}/cv}"\nHERMES_BIN="${HERMES_BIN:-${UPDATE_HOME}/.local/bin/hermes}"\nreadonly UPDATE_HOME MAIN_COMPOSE_DIR CV_COMPOSE_DIR HERMES_BIN\n\nrun_as_update_user() {',
+              f'                log "Gaida dashboard readiness uz {lan}:9119/api/status..."': '                log "Gaida dashboard readiness uz ${HOST_IPV4}:9119/api/status..."',
+              f'                        http://{lan}:9119/api/status 2>/dev/null || true)"': '                        "http://${HOST_IPV4}:9119/api/status" 2>/dev/null || true)"',
+              f'if hermes_local_code="$(rpi5_request_code_with_retry "http://{lan}:9119/api/status" 3 3)"; then': 'if hermes_local_code="$(rpi5_request_code_with_retry "http://${HOST_IPV4}:9119/api/status" 3 3)"; then',
+              f'printf \'%-20s %-48s HTTP %s\\n\' "Hermes (local)" "http://{lan}:9119/api/status" "$hermes_local_code"': 'printf \'%-20s %-48s HTTP %s\\n\' "Hermes (local)" "http://${HOST_IPV4}:9119/api/status" "$hermes_local_code"',
+          }
+
+          for old, new in replacements.items():
+              if s.count(old) != 1:
+                  raise SystemExit(f'expected exactly one replacement target: {old[:80]!r}')
+              s = s.replace(old, new)
+
+          needle = '''    for duration_name in RCLONE_TIMEOUT HERMES_TIMEOUT DOCKER_PULL_TIMEOUT; do
+              duration_value="${!duration_name}"
+              [[ "$duration_value" =~ ^[1-9][0-9]*([smhd])?$ ]] || {
+                  echo "KĻŪDA: ${duration_name} ir nederīgs ilgums: ${duration_value}" >&2
+                  exit 1
+              }
+          done
+
+          python3 - "$HOST_IPV4" <<'PYCFG'
+          '''
+          replacement = '''    for duration_name in RCLONE_TIMEOUT HERMES_TIMEOUT DOCKER_PULL_TIMEOUT; do
+              duration_value="${!duration_name}"
+              [[ "$duration_value" =~ ^[1-9][0-9]*([smhd])?$ ]] || {
+                  echo "KĻŪDA: ${duration_name} ir nederīgs ilgums: ${duration_value}" >&2
+                  exit 1
+              }
+          done
+
+          [[ -n "$HOST_IPV4" ]] || {
+              echo "KĻŪDA: HOST_IPV4 jādefinē root-only /etc/rpi-update.conf." >&2
+              exit 1
+          }
+
+          python3 - "$HOST_IPV4" <<'PYCFG'
+          '''
+          if s.count(needle) != 1:
+              raise SystemExit('HOST_IPV4 validation insertion target not found exactly once')
+          s = s.replace(needle, replacement)
+
+          if home in s or lan in s:
+              raise SystemExit('private public-repo literal remained after sanitization')
+
+          out = s.encode('utf-8')
+          new_sha = hashlib.sha256(out).hexdigest()
+          expected_new = '860b2dd0be0d7f32f2648742a356bccabb20f0c9f8e7073ba2b1c998aa212851'
+          if new_sha != expected_new:
+              raise SystemExit(f'unexpected sanitized sha256: {new_sha}')
+          p.write_bytes(out)
+          PY
+          bash -n ops/bin/rpi5-update
+
+      - name: Commit sanitized source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- ops/bin/rpi5-update
+          git commit -m 'fix: sanitize V21 updater public runtime defaults'
+          git push origin HEAD:fix/95-maintenance-updater-ownership
