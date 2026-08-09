@@ -25,6 +25,7 @@ source /usr/local/libexec/rpi5-maintenance/rpi5-update-compose-policy.sh
 source /usr/local/libexec/rpi5-maintenance/rpi5-update-space-policy.sh
 source /usr/local/libexec/rpi5-maintenance/rpi5-update-origin-policy.sh
 source /usr/local/libexec/rpi5-maintenance/rpi5-update-http-health.sh
+TELEGRAM_HELPER=/usr/local/libexec/rpi5-maintenance/rpi5-update-telegram.py
 rpi5_classify_hermes_update_check 0 "Up to date"
 rpi5_wait_for_lock_available /run/lock/rpi5-backup.lock 1800
 rpi5_applied_packages_require_reboot run "linux-image"
@@ -34,6 +35,7 @@ rpi5_enforce_normal_space_gate run
 rpi5_application_local_health_targets
 rpi5_request_code_with_retry http://127.0.0.1:8088/ 3 5
 curl http://127.0.0.1:8089/
+printf '%s\0%s\0%s' "$TELEGRAM_TOKEN" "$CHAT_ID" "$text" | python3 "$TELEGRAM_HELPER"
 docker compose up -d --pull never --no-build --wait --wait-timeout 240
 docker image prune -f --filter until=336h
 '''
@@ -49,6 +51,8 @@ cases = {
     "tech-lan": GOOD.replace("http://127.0.0.1:8089/", "http://${HOST_IPV4}:8089/", 1),
     "missing-no-build": GOOD.replace(" --no-build", "", 1),
     "missing-lock-helper": GOOD.replace("rpi5_wait_for_lock_available", "legacy_wait_for_backup", 1),
+    "missing-telegram-helper": GOOD.replace("rpi5-update-telegram.py", "legacy-notifier.py", 1),
+    "telegram-child-env": GOOD + '\nTELEGRAM_TOKEN="$TELEGRAM_TOKEN" TELEGRAM_CHAT_ID="$CHAT_ID" python3 notifier.py\n',
 }
 
 for name, text in cases.items():
