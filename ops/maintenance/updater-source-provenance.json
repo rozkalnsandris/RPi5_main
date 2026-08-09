@@ -1,0 +1,61 @@
+{
+  "schema": "rpi5-maintenance-updater-provenance-v1",
+  "issue": 95,
+  "status": "reviewed-successor-source-imported",
+  "installed_target": "/usr/local/sbin/rpi5-update",
+  "historical_lineage": [
+    {
+      "stage": "v16b-pre-healthcheck-fix",
+      "date": "2026-07-27",
+      "sha256": "3371fd692e41907721af70c11cb91217c3ade4bef11b9925565a2a5789b06a29",
+      "evidence": "File Library rpi5-update-v16b-healthcheck-fix.log"
+    },
+    {
+      "stage": "v16b-post-healthcheck-fix",
+      "date": "2026-07-27",
+      "sha256": "01e6952b25f2e63e8d838a004b98cdf3571452b08ae093b04046fff2e3179b18",
+      "size_bytes": 45550,
+      "evidence": "File Library rpi5-update-v16b-healthcheck-fix.log"
+    },
+    {
+      "stage": "v17-hardening",
+      "date": "2026-08-02",
+      "sha256": null,
+      "evidence": "File Library rpi5-fix-actionable-errors-v1..v6 and final verification v7",
+      "properties": [
+        "version marker advanced to v17",
+        "docker image prune -a/--all removed",
+        "Hermes partial npm/web update detection added",
+        "Hermes dashboard stop/restore hardening added"
+      ]
+    },
+    {
+      "stage": "2026-08-09-live-incident-fix",
+      "date": "2026-08-09",
+      "sha256": "bd0afe74dea18742a002c852d59fc67ec848a032116d2adc314c24848895e24c",
+      "size_bytes": 47190,
+      "evidence": "User-uploaded rpi5-update-live-20260809.sh; exact bytes SHA256-bound during issue #95 review",
+      "properties": [
+        "CV local health origin changed to loopback port 8088",
+        "Hermes Tech local health origin changed to loopback port 8089",
+        "runtime banner corrected to v17"
+      ]
+    }
+  ],
+  "candidate": {
+    "stage": "v21-reviewed-successor-public-safe",
+    "path": "ops/bin/rpi5-update",
+    "sha256": "b1678732e8e33b1d5b479167bae23f7efb8a2f5390fe635a91cb19792d706860",
+    "git_blob_sha1": "105b00e81d5629f35cf6050137db31d5f400f957",
+    "size_bytes": 50072,
+    "helper_root": "/usr/local/lib/rpi5-maintenance",
+    "derived_from_sha256": "bd0afe74dea18742a002c852d59fc67ec848a032116d2adc314c24848895e24c",
+    "public_runtime_literals_removed": true
+  },
+  "candidate_policy": {
+    "claim_byte_identical_import": false,
+    "unexpected_live_diff_blocks_install": true,
+    "production_install_requires_explicit_approval": true,
+    "private_runtime_values_live_outside_git": true
+  }
+}
