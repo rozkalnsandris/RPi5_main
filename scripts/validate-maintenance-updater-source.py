@@ -52,6 +52,11 @@ def validate(text: str) -> list[str]:
     if re.search(r"\bdocker\s+network\s+prune\b", normalized):
         errors.append("unattended docker network prune is forbidden")
 
+    if 'require_help_flag "docker image prune" "--all"' in text:
+        errors.append("obsolete docker image prune --all capability gate remains")
+    if 'require_help_flag "docker network prune"' in text:
+        errors.append("obsolete docker network prune capability gate remains")
+
     if "--remove-orphans" in normalized:
         errors.append("unattended Compose --remove-orphans is forbidden")
 
