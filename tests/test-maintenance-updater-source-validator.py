@@ -19,6 +19,10 @@ LOCK=/run/lock/rpi5-update.lock
 BACKUP_LOCK=/run/lock/rpi5-backup.lock
 LIBEXEC=/usr/local/libexec/rpi5-maintenance
 BACKUP_WAIT_TIMEOUT=1800
+HOST_IPV4="${HOST_IPV4:-}"
+UPDATE_HOME="$(getent passwd "$UPDATE_USER" | awk -F: 'NR==1 {print $6}')"
+MAIN_COMPOSE_DIR="${MAIN_COMPOSE_DIR:-${UPDATE_HOME}/docker}"
+HERMES_BIN="${HERMES_BIN:-${UPDATE_HOME}/.local/bin/hermes}"
 # Supported: --check --no-reboot --cleanup-only
 source "$LIBEXEC/rpi5-update-hermes-status.sh"
 source "$LIBEXEC/rpi5-update-locks.sh"
@@ -47,6 +51,10 @@ docker image prune -f --filter until=336h
 assert module.validate(GOOD) == [], module.validate(GOOD)
 
 cases = {
+    "concrete-user-home": GOOD + "\nLEGACY=/home/example-user/runtime/\n",
+    "private-ipv4-10": GOOD + "\nLEGACY_HOST=10.20.30.40\n",
+    "private-ipv4-172": GOOD + "\nLEGACY_HOST=172.20.30.40\n",
+    "private-ipv4-192": GOOD + "\nLEGACY_HOST=192.168.50.25\n",
     "image-prune-all": GOOD.replace("docker image prune -f", "docker image prune -a -f"),
     "network-prune": GOOD + "\ndocker network prune -f\n",
     "image-prune-all-capability": GOOD + '\nrequire_help_flag "docker image prune" "--all" docker image prune\n',
