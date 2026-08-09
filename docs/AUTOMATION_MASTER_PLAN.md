@@ -122,7 +122,7 @@ Profile repository. No production deploy automation. Consume minimal shared poli
 
 ## GitHub App target
 
-Desired name: `Rozkalns Automation`.
+App name: `Rozkalns Automation`.
 
 Purpose:
 
@@ -152,6 +152,11 @@ Do not install initially on:
 Webhook remains disabled for the initial authentication-only design.
 
 Use short-lived installation access tokens; keep the App private key only on RPi5 outside repositories/chat/evidence.
+
+Current non-secret identity:
+
+- App ID: `4537106`
+- Installation ID: `152422751`
 
 Detailed contract: `docs/AUTOMATION_GITHUB_APP.md`.
 
@@ -183,19 +188,32 @@ Historical bootstrap evidence: `RPi5_main` baseline commit `aa9d920d7f5fbc10a8e2
 
 Canonical reusable baseline SHA: `e2fa7ecb1b1cdfab0711d8e3e147b5ae03a9a3f2`.
 
-### Phase 2 — GitHub App preparation — CURRENT
+### Phase 2 — GitHub App preparation — COMPLETE
 
 - [x] Exact required repository permission/API contract defined.
 - [x] RPi5 read-only App verifier implemented and CI-proven (`936722453592788e6e824e0baf4dd0e158978cdc`).
-- [ ] Create `Rozkalns Automation` with only Actions read + Contents read.
-- [ ] Install on exactly the four initial controller repositories.
-- [ ] Generate/store private PEM securely on RPi5.
-- [ ] Verify short-lived installation-token flow on RPi5.
-- [ ] Verify exact-SHA/Actions reads for all four repositories without PAT/user-token fallback.
+- [x] `Rozkalns Automation` created with only Actions read + Contents read.
+- [x] Installed on exactly the four initial controller repositories.
+- [x] Private PEM stored root-only on RPi5 at `/root/.config/rozkalns-automation/github-app.pem` with mode `0600`.
+- [x] Short-lived installation-token flow verified from RPi5.
+- [x] Exact-SHA/Actions reads verified for all four repositories without PAT/user-token fallback.
 
-Exit gate: RPi5 performs required exact-SHA reads with the App and sanitized evidence; no persistent PAT is required.
+Phase 2 canary evidence (2026-08-09):
 
-### Phase 3 — CV pull-deploy migration
+- verifier blob: `30a2031a954c29b4f10c35d1d8279381df5b1814`;
+- `GITHUB_APP_READONLY_CANARY=PASS`;
+- token lifetime observed: `3599` seconds;
+- effective permissions: `actions:read,contents:read`;
+- repository scope matched exactly the four approved repositories;
+- `RPi5_main`: main `b642c88319901a12347e9daf4b152bcc31889c96`, CI run `31316536528`;
+- `hermes-tech`: main `84e818e017543bbd9cab881269785bfbd8185bbd`, CI run `31316585322`;
+- `rozkalns-cv`: main `c0fec6ec45bbabb253e75127386bbc07b5338c0d`, CI run `31280034416`;
+- `hermes-deals`: main `398903a94a73b1c57c615012f2c720a54304689a`, CI run `31316810092`;
+- no PEM, JWT or installation token was emitted in evidence.
+
+Exit gate: PASS. RPi5 performs required exact-SHA reads with the App and sanitized evidence; no persistent PAT is required for this read-only controller path.
+
+### Phase 3 — CV pull-deploy migration — CURRENT
 
 - [ ] Port Hermes Tech-style classifier/controller to CV semantics.
 - [ ] Reuse existing `rozkalns-cv-deploy-main` helper.
@@ -255,4 +273,4 @@ If question 3 is `no` or question 5 is `yes`, do not make the change.
 
 ## Current next action
 
-**Phase 2 only:** create and install `Rozkalns Automation` with the exact read-only permission/repository scope above, store the private key securely on RPi5, then run the existing read-only GitHub App verifier. Do not start CV/Deals runner migration until the Phase 2 exit gate is green.
+**Phase 3 only:** port the Hermes Tech-style local pull/poll deploy controller to `rozkalns-cv` while preserving the existing `rozkalns-cv-deploy-main` transaction, rollback and public verification. Add exact-SHA CI gating, locking/readiness state and one exact-SHA canary before enabling recurring local execution or retiring the current public-repo self-hosted release runner path.
