@@ -1,0 +1,410 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export LC_ALL=C
+export LANG=C
+
+readonly CONFIG_FILE="/etc/rpi-update.conf"
+readonly REQUIRED_CONTAINERS_FILE="/etc/rpi5-maintenance/required-containers"
+readonly MAINTENANCE_LIB_DIR="/usr/local/lib/rpi5-maintenance"
+readonly CREDSTORE_DIR="/etc/credstore"
+readonly TOKEN_CREDENTIAL="${CREDSTORE_DIR}/rpi5-maintenance-telegram-token"
+readonly CHAT_CREDENTIAL="${CREDSTORE_DIR}/rpi5-maintenance-telegram-chat-id"
+readonly STATE_DIR="/var/lib/rpi5-maintenance-scheduler"
+readonly LEGACY_DIR="${STATE_DIR}/legacy-cron"
+readonly ACTIVE_MARKER="${STATE_DIR}/systemd-active"
+readonly EXPECTED_LIVE_V17_SHA256="bd0afe74dea18742a002c852d59fc67ec848a032116d2adc314c24848895e24c"
+
+MODE="check"
+ALLOW_PERSISTENT_CATCHUP=0
+
+usage() {
+    cat <<'EOF'
+Usage: rpi5-maintenance-systemd-cutover MODE [--allow-persistent-catchup]
+
+Modes:
+  --check                Read-only migration preflight.
+  --inventory-candidate  Print current running container names for review.
+  --install              Install reviewed executables/helpers/units; do not enable/start.
+  --activate             Atomically retire legacy cron and activate systemd scheduling.
+  --verify               Verify active systemd scheduler and retired legacy cron.
+  --rollback             Disable new scheduling and restore backed-up legacy cron.
+
+--activate requires --allow-persistent-catchup because first activation of the
+weekly Persistent=true timer may immediately run a missed Sunday update.
+EOF
+}
+
+for arg in "$@"; do
+    case "$arg" in
+        --check|--inventory-candidate|--install|--activate|--verify|--rollback)
+            MODE="${arg#--}"
+            ;;
+        --allow-persistent-catchup)
+            ALLOW_PERSISTENT_CATCHUP=1
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Unknown argument: $arg" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
+[[ ${EUID:-$(id -u)} -eq 0 ]] || {
+    echo "This operator must run as root." >&2
+    exit 1
+}
+
+repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+
+log() {
+    printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
+}
+
+require_command() {
+    command -v "$1" >/dev/null 2>&1 || {
+        log "FAIL missing command: $1"
+        return 1
+    }
+}
+
+require_root_file() {
+    local path="$1" uid mode
+    [[ -f "$path" && ! -L "$path" ]] || return 1
+    uid="$(stat -c '%u' "$path")"
+    mode="$(stat -c '%a' "$path")"
+    [[ "$uid" -eq 0 ]] || return 1
+    (( (8#$mode & 022) == 0 ))
+}
+
+for command_name in \
+    systemctl systemd-analyze install sha256sum stat getent awk grep sort \
+    cp mv rm mkdir cat python3 bash date docker; do
+    require_command "$command_name"
+done
+
+[[ -f "$CONFIG_FILE" ]] || {
+    log "FAIL missing $CONFIG_FILE"
+    exit 1
+}
+config_uid="$(stat -c '%u' "$CONFIG_FILE")"
+config_mode="$(stat -c '%a' "$CONFIG_FILE")"
+[[ "$config_uid" -eq 0 && $((8#$config_mode & 077)) -eq 0 ]] || {
+    log "FAIL $CONFIG_FILE must remain root-only"
+    exit 1
+}
+# shellcheck source=/dev/null
+source "$CONFIG_FILE"
+: "${TELEGRAM_TOKEN:?TELEGRAM_TOKEN missing from root-only config}"
+: "${CHAT_ID:?CHAT_ID missing from root-only config}"
+UPDATE_USER="${UPDATE_USER:-andris}"
+UPDATE_HOME="$(getent passwd "$UPDATE_USER" | awk -F: 'NR==1 {print $6}')"
+[[ -n "$UPDATE_HOME" && -d "$UPDATE_HOME" ]] || {
+    log "FAIL invalid maintenance user home"
+    exit 1
+}
+
+readonly UPDATE_USER UPDATE_HOME
+readonly LEGACY_UPDATE_CRON="20 2 * * 0 root ${UPDATE_HOME}/update.sh"
+readonly LEGACY_MONITOR_CRON="0 9 * * * ${UPDATE_USER} ${UPDATE_HOME}/monitor.sh"
+readonly LEGACY_POST_REBOOT_CRON="@reboot ${UPDATE_USER} ${UPDATE_HOME}/post-reboot.sh"
+
+repo_files=(
+    ops/bin/rpi5-update
+    ops/bin/rpi5-monitor
+    ops/bin/rpi5-post-reboot
+    ops/bin/rpi5-maintenance-notify
+    ops/lib/rpi5-update-hermes-status.sh
+    ops/lib/rpi5-update-locks.sh
+    ops/lib/rpi5-update-reboot.sh
+    ops/lib/rpi5-update-compose-health.sh
+    ops/lib/rpi5-update-compose-policy.sh
+    ops/lib/rpi5-update-space-policy.sh
+    ops/lib/rpi5-update-origin-policy.sh
+    ops/lib/rpi5-update-http-health.sh
+    ops/lib/rpi5-update-telegram.py
+    ops/lib/rpi5-maintenance-health.sh
+    ops/lib/rpi5-maintenance-telegram.py
+    ops/systemd/rpi5-update.service
+    ops/systemd/rpi5-update.timer
+    ops/systemd/rpi5-monitor.service
+    ops/systemd/rpi5-monitor.timer
+    ops/systemd/rpi5-post-reboot.service
+    ops/systemd/rpi5-maintenance-notify@.service
+)
+for rel in "${repo_files[@]}"; do
+    [[ -f "$repo/$rel" && ! -L "$repo/$rel" ]] || {
+        log "FAIL missing reviewed repository source: $rel"
+        exit 1
+    }
+done
+
+validate_legacy_cron_file() {
+    local path="$1"
+    local expected="$2"
+    local active
+
+    [[ -f "$path" && ! -L "$path" ]] || {
+        log "FAIL missing legacy cron file: $path"
+        return 1
+    }
+    active="$(awk 'NF && $1 !~ /^#/ {print}' "$path")"
+    [[ "$active" == "$expected" ]] || {
+        log "FAIL unexpected active content in $path"
+        return 1
+    }
+}
+
+legacy_cron_preflight() {
+    validate_legacy_cron_file /etc/cron.d/rpi5-update "$LEGACY_UPDATE_CRON"
+    validate_legacy_cron_file /etc/cron.d/rpi5-monitor "$LEGACY_MONITOR_CRON"
+    validate_legacy_cron_file /etc/cron.d/rpi5-post-reboot "$LEGACY_POST_REBOOT_CRON"
+
+    [[ -f "${UPDATE_HOME}/update.sh" && ! -L "${UPDATE_HOME}/update.sh" ]] || {
+        log "FAIL legacy live updater is missing"
+        return 1
+    }
+    legacy_sha="$(sha256sum "${UPDATE_HOME}/update.sh" | awk '{print $1}')"
+    [[ "$legacy_sha" == "$EXPECTED_LIVE_V17_SHA256" ]] || {
+        log "FAIL live updater drifted from reviewed v17 baseline: $legacy_sha"
+        return 1
+    }
+}
+
+validate_required_inventory() {
+    require_root_file "$REQUIRED_CONTAINERS_FILE" || {
+        log "FAIL unsafe or missing $REQUIRED_CONTAINERS_FILE"
+        return 1
+    }
+    awk 'NF && $1 !~ /^#/ {count++} END {exit !(count > 0)}' "$REQUIRED_CONTAINERS_FILE" || {
+        log "FAIL required-container inventory is empty"
+        return 1
+    }
+}
+
+validate_installed_targets() {
+    local path
+    for path in \
+        /usr/local/sbin/rpi5-update \
+        /usr/local/sbin/rpi5-monitor \
+        /usr/local/sbin/rpi5-post-reboot \
+        /usr/local/sbin/rpi5-maintenance-notify \
+        "${MAINTENANCE_LIB_DIR}/rpi5-update-hermes-status.sh" \
+        "${MAINTENANCE_LIB_DIR}/rpi5-update-locks.sh" \
+        "${MAINTENANCE_LIB_DIR}/rpi5-update-reboot.sh" \
+        "${MAINTENANCE_LIB_DIR}/rpi5-update-compose-health.sh" \
+        "${MAINTENANCE_LIB_DIR}/rpi5-update-compose-policy.sh" \
+        "${MAINTENANCE_LIB_DIR}/rpi5-update-space-policy.sh" \
+        "${MAINTENANCE_LIB_DIR}/rpi5-update-origin-policy.sh" \
+        "${MAINTENANCE_LIB_DIR}/rpi5-update-http-health.sh" \
+        "${MAINTENANCE_LIB_DIR}/rpi5-update-telegram.py" \
+        "${MAINTENANCE_LIB_DIR}/rpi5-maintenance-health.sh" \
+        "${MAINTENANCE_LIB_DIR}/rpi5-maintenance-telegram.py"; do
+        require_root_file "$path" || {
+            log "FAIL unsafe or missing installed target: $path"
+            return 1
+        }
+    done
+
+    for path in \
+        /etc/systemd/system/rpi5-update.service \
+        /etc/systemd/system/rpi5-update.timer \
+        /etc/systemd/system/rpi5-monitor.service \
+        /etc/systemd/system/rpi5-monitor.timer \
+        /etc/systemd/system/rpi5-post-reboot.service \
+        /etc/systemd/system/rpi5-maintenance-notify@.service; do
+        require_root_file "$path" || {
+            log "FAIL unsafe or missing installed unit: $path"
+            return 1
+        }
+    done
+}
+
+install_reviewed_files() {
+    install -d -o root -g root -m 0755 "$MAINTENANCE_LIB_DIR" /etc/systemd/system "$CREDSTORE_DIR"
+    install -o root -g root -m 0750 "$repo/ops/bin/rpi5-update" /usr/local/sbin/rpi5-update
+    install -o root -g root -m 0750 "$repo/ops/bin/rpi5-monitor" /usr/local/sbin/rpi5-monitor
+    install -o root -g root -m 0750 "$repo/ops/bin/rpi5-post-reboot" /usr/local/sbin/rpi5-post-reboot
+    install -o root -g root -m 0750 "$repo/ops/bin/rpi5-maintenance-notify" /usr/local/sbin/rpi5-maintenance-notify
+
+    for name in \
+        rpi5-update-hermes-status.sh rpi5-update-locks.sh rpi5-update-reboot.sh \
+        rpi5-update-compose-health.sh rpi5-update-compose-policy.sh \
+        rpi5-update-space-policy.sh rpi5-update-origin-policy.sh \
+        rpi5-update-http-health.sh rpi5-update-telegram.py \
+        rpi5-maintenance-health.sh rpi5-maintenance-telegram.py; do
+        install -o root -g root -m 0644 "$repo/ops/lib/$name" "${MAINTENANCE_LIB_DIR}/$name"
+    done
+
+    for unit in \
+        rpi5-update.service rpi5-update.timer rpi5-monitor.service rpi5-monitor.timer \
+        rpi5-post-reboot.service rpi5-maintenance-notify@.service; do
+        install -o root -g root -m 0644 "$repo/ops/systemd/$unit" "/etc/systemd/system/$unit"
+    done
+
+    credential_tmp="$(mktemp -d)"
+    trap 'rm -rf "$credential_tmp"' RETURN
+    printf '%s\n' "$TELEGRAM_TOKEN" >"$credential_tmp/token"
+    printf '%s\n' "$CHAT_ID" >"$credential_tmp/chat"
+    install -o root -g root -m 0600 "$credential_tmp/token" "$TOKEN_CREDENTIAL"
+    install -o root -g root -m 0600 "$credential_tmp/chat" "$CHAT_CREDENTIAL"
+    rm -rf "$credential_tmp"
+    trap - RETURN
+
+    systemctl daemon-reload
+    systemd-analyze verify --man=no --recursive-errors=no \
+        /etc/systemd/system/rpi5-update.service \
+        /etc/systemd/system/rpi5-update.timer \
+        /etc/systemd/system/rpi5-monitor.service \
+        /etc/systemd/system/rpi5-monitor.timer \
+        /etc/systemd/system/rpi5-post-reboot.service \
+        /etc/systemd/system/rpi5-maintenance-notify@.service
+    systemd-analyze calendar 'Sun *-*-* 02:20:00' >/dev/null
+    systemd-analyze calendar '*-*-* 09:00:00' >/dev/null
+}
+
+backup_and_remove_legacy_cron() {
+    install -d -o root -g root -m 0700 "$LEGACY_DIR"
+    for name in rpi5-update rpi5-monitor rpi5-post-reboot; do
+        src="/etc/cron.d/$name"
+        dst="$LEGACY_DIR/$name"
+        [[ ! -e "$dst" ]] || {
+            log "FAIL legacy backup already exists: $dst"
+            return 1
+        }
+        cp -a -- "$src" "$dst"
+        cmp -s -- "$src" "$dst" || {
+            log "FAIL cron backup verification failed: $name"
+            return 1
+        }
+    done
+    rm -f -- /etc/cron.d/rpi5-update /etc/cron.d/rpi5-monitor /etc/cron.d/rpi5-post-reboot
+}
+
+restore_legacy_cron() {
+    local name
+    for name in rpi5-update rpi5-monitor rpi5-post-reboot; do
+        [[ -f "$LEGACY_DIR/$name" ]] || continue
+        cp -a -- "$LEGACY_DIR/$name" "/etc/cron.d/$name"
+    done
+}
+
+activate_systemd_scheduler() {
+    [[ "$ALLOW_PERSISTENT_CATCHUP" -eq 1 ]] || {
+        log "REFUSED: --activate requires --allow-persistent-catchup before cron is changed."
+        return 2
+    }
+    legacy_cron_preflight
+    validate_installed_targets
+    validate_required_inventory
+    require_root_file "$TOKEN_CREDENTIAL"
+    require_root_file "$CHAT_CREDENTIAL"
+    [[ ! -e "$ACTIVE_MARKER" ]] || {
+        log "FAIL scheduler already marked active"
+        return 1
+    }
+
+    systemctl is-enabled --quiet rpi5-update.timer && {
+        log "FAIL rpi5-update.timer is already enabled before cutover"
+        return 1
+    } || true
+    systemctl is-enabled --quiet rpi5-monitor.timer && {
+        log "FAIL rpi5-monitor.timer is already enabled before cutover"
+        return 1
+    } || true
+
+    install -d -o root -g root -m 0700 "$STATE_DIR"
+    rollback_needed=1
+    rollback_on_error() {
+        rc=$?
+        trap - ERR
+        if [[ "$rollback_needed" -eq 1 ]]; then
+            systemctl disable --now rpi5-update.timer rpi5-monitor.timer 2>/dev/null || true
+            systemctl disable rpi5-post-reboot.service 2>/dev/null || true
+            restore_legacy_cron
+            systemctl daemon-reload || true
+        fi
+        exit "$rc"
+    }
+    trap rollback_on_error ERR
+
+    backup_and_remove_legacy_cron
+    systemctl enable rpi5-post-reboot.service
+    systemctl enable --now rpi5-update.timer rpi5-monitor.timer
+
+    systemctl is-enabled --quiet rpi5-post-reboot.service
+    systemctl is-enabled --quiet rpi5-update.timer
+    systemctl is-enabled --quiet rpi5-monitor.timer
+    systemctl is-active --quiet rpi5-update.timer
+    systemctl is-active --quiet rpi5-monitor.timer
+
+    : >"$ACTIVE_MARKER"
+    chmod 0600 "$ACTIVE_MARKER"
+    rollback_needed=0
+    trap - ERR
+}
+
+verify_scheduler() {
+    validate_installed_targets
+    validate_required_inventory
+    [[ ! -e /etc/cron.d/rpi5-update ]]
+    [[ ! -e /etc/cron.d/rpi5-monitor ]]
+    [[ ! -e /etc/cron.d/rpi5-post-reboot ]]
+    [[ -f "$ACTIVE_MARKER" ]]
+    systemctl is-enabled --quiet rpi5-post-reboot.service
+    systemctl is-enabled --quiet rpi5-update.timer
+    systemctl is-enabled --quiet rpi5-monitor.timer
+    systemctl is-active --quiet rpi5-update.timer
+    systemctl is-active --quiet rpi5-monitor.timer
+    systemctl list-timers --all --no-pager rpi5-update.timer rpi5-monitor.timer
+}
+
+rollback_scheduler() {
+    systemctl disable --now rpi5-update.timer rpi5-monitor.timer 2>/dev/null || true
+    systemctl disable rpi5-post-reboot.service 2>/dev/null || true
+    restore_legacy_cron
+    rm -f -- "$ACTIVE_MARKER"
+    systemctl daemon-reload
+    legacy_cron_preflight
+}
+
+case "$MODE" in
+    check)
+        legacy_cron_preflight
+        systemd-analyze calendar 'Sun *-*-* 02:20:00'
+        systemd-analyze calendar '*-*-* 09:00:00'
+        log "CHECK PASS: repository sources and exact legacy scheduler baseline are reviewable."
+        ;;
+    inventory-candidate)
+        docker ps --filter status=running --format '{{.Names}}' | sort -u
+        ;;
+    install)
+        legacy_cron_preflight
+        install_reviewed_files
+        validate_installed_targets
+        log "INSTALL PASS: systemd files installed but no new timer/service was enabled or started."
+        ;;
+    activate)
+        activate_systemd_scheduler
+        log "ACTIVATE PASS: legacy cron retired and systemd scheduling enabled."
+        ;;
+    verify)
+        verify_scheduler
+        log "VERIFY PASS: systemd scheduler active; legacy cron absent."
+        ;;
+    rollback)
+        rollback_scheduler
+        log "ROLLBACK PASS: systemd scheduling disabled and legacy cron restored."
+        ;;
+    *)
+        echo "Unsupported mode: $MODE" >&2
+        exit 2
+        ;;
+esac
