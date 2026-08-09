@@ -215,12 +215,39 @@ Exit gate: PASS. RPi5 performs required exact-SHA reads with the App and sanitiz
 
 ### Phase 3 — CV pull-deploy migration — CURRENT
 
-- [ ] Port Hermes Tech-style classifier/controller to CV semantics.
-- [ ] Reuse existing `rozkalns-cv-deploy-main` helper.
-- [ ] Add exact-SHA CI gate and local locking/readiness state.
-- [ ] Run exact-SHA canary and public verification.
-- [ ] Enable recurring local controller.
-- [ ] Disable/remove public-repo self-hosted release runner only after canary success.
+- [x] Add a repository-scoped GitHub App read-token broker and narrow CV-only auth/sudo boundary; prove the CV-scoped token path on RPi5.
+- [x] Add App-authenticated exact-SHA CI preflight and deterministic deploy-impact classification before any activation/deploy boundary.
+- [x] Decouple the local pull transport from the legacy self-hosted runner path while keeping the legacy path intact during migration.
+- [x] Gate `AUTO_DEPLOY_SAFE` on exact target identities for the dedicated pull deploy library and wrapper; mismatches become the sanitized `WAIT_PULL_TRANSPORT_ACTIVATION` state.
+- [x] Add the RPi5-owned readiness controller, local locking/readiness state, and systemd definitions without enabling recurring execution.
+- [x] Run the first one-shot readiness-controller host canary with exact-SHA CI, timer disabled/inactive, production unchanged, legacy helper unchanged, and public-site verification PASS.
+- [x] Reconcile controller/readiness compatibility for both legacy `WAIT_HELPER_ACTIVATION` and current `WAIT_PULL_TRANSPORT_ACTIVATION` states in RPi5_main PR #128.
+- [x] Keep public JS MIME/cache/nosniff/CSP verification inside the pull transaction before state commit so those failures remain rollback-capable (CV PR #141).
+- [x] Require the dedicated pull wrapper to accept only the exact current fetched `origin/main`, not merely an ancestor SHA (CV PR #143).
+- [x] Add and CI-prove the manual-only production-canary executor and disabled installer in RPi5_main PR #135; the source boundary itself does not authorize a production canary run.
+- [x] Refresh/install the exact current controller/readiness/preflight/classifier artifacts and run a current-main one-shot readiness canary with the recurring timer disabled/inactive and `production_mutation_authorized=false`; install the parallel pull transport and manual canary executor without invoking production deployment.
+- [ ] Separately approve and run one exact-current-main production deploy-execution canary through the merged manual canary boundary; retain `MANUAL_ROLLOUT_REQUIRED` and require transactional rollback/public verification evidence.
+- [ ] Enable the recurring local controller only after the replacement production canary is green.
+- [ ] Disable/remove the public-repo self-hosted release runner only after the replacement production canary and public verification are green.
+
+Phase 3 evidence through 2026-08-09:
+
+- GitHub App broker payload fix: RPi5_main PR #124, merge `16e59bd1f5d9623c97ee5f10e76cebbf6fef7b16`;
+- deploy-impact classifier/preflight ordering: CV PR #135, merge `f9db2c4a50589df0e4db27fa60f15629c8bdee8c`;
+- pull transport decoupling: CV PR #138, merge `01bf1860ef5a32f345347eae121821f60a9c4606`;
+- exact pull artifact identity gate: CV commit `d47b5fd1eab1103faf6ec91093965295b4414cbc`;
+- readiness controller/source: RPi5_main PR #125, merge `78c0706be0a00bb87fe1ec98317e120c70309144`;
+- first readiness-controller host canary: PASS with timer disabled/inactive, production unchanged and public site PASS (tracker #103 evidence);
+- pull-transport wait-state compatibility: RPi5_main PR #128, merge `7589aa9b0acabd4d88a39af03b2d3571f70e9890`;
+- transactional public-contract rollback boundary: CV PR #141, merge `378984487a068989d7f505b405c3409f2d4dd857`;
+- exact-current-main pull wrapper hardening: CV PR #143, merge `6f13986c27d2c32c2fbcdbdbb1912bf163b8af88`;
+- manual-only production-canary source boundary: RPi5_main PR #135, merge `e755ab2c3fbe99967645c62b6c83aeda3f8a0117`;
+- current host-prep/readiness evidence: RPi5_main source `e755ab2c3fbe99967645c62b6c83aeda3f8a0117`, exact-main CI run `31336091705`; CV target `6f13986c27d2c32c2fbcdbdbb1912bf163b8af88`, exact-main CI run `31336104950`; source/artifact identity PASS; `PULL_DEPLOY_CONTROLLER_RESULT=MANUAL_ROLLOUT_REQUIRED`; `CONTROL_PLANE_CHANGED=true`; `PRODUCTION_MUTATION_AUTHORIZED=false`;
+- host-prep safety evidence: production SHA remained `0149bed2b84803f6fd8c191920191730c7a887cb` before/after; legacy helper unchanged; legacy runner sudo rule unchanged; recurring timer `disabled/inactive`; public site PASS; `PHASE3_PRODUCTION_CANARY_PREP=PASS`; `PREP_BLOCK_RC=0`.
+
+The current production-to-main range contains `runner/`/control-plane changes and therefore correctly remains `MANUAL_ROLLOUT_REQUIRED`. It must never be reclassified to `AUTO_DEPLOY_SAFE` merely to make a canary proceed. The explicit manual canary path exists for this exact case.
+
+Sequencing note: the latest host-prep was completed before this canonical-plan reconciliation merged. That was control-plane sequencing drift relative to issue #130, but the preparation remained non-deploying: production state, legacy helper/rule and public service stayed unchanged and the recurring timer remained disabled/inactive. This reconciliation must merge before any production-canary execution.
 
 ### Phase 4 — Hermes Deals production migration
 
@@ -273,4 +300,8 @@ If question 3 is `no` or question 5 is `yes`, do not make the change.
 
 ## Current next action
 
-**Phase 3 only:** port the Hermes Tech-style local pull/poll deploy controller to `rozkalns-cv` while preserving the existing `rozkalns-cv-deploy-main` transaction, rollback and public verification. Add exact-SHA CI gating, locking/readiness state and one exact-SHA canary before enabling recurring local execution or retiring the current public-repo self-hosted release runner path.
+**Phase 3 only:** merge this reconciliation before any production mutation. Then re-read current `RPi5_main/main` and verify the current `rozkalns-cv/main`. If the CV target is still the exact prepared target and its exact-main CI/preflight/artifact identity remain valid, separately approve and run one manual exact-current-main production deploy-execution canary through `/usr/local/sbin/rozkalns-cv-pull-deploy-canary`. The approved SHA must be supplied explicitly and must retain `MANUAL_ROLLOUT_REQUIRED`.
+
+If `rozkalns-cv/main` advances before execution, the old approval/prep is stale: do not deploy it. Refresh the current target, exact-SHA CI and installed artifact identities, rerun the non-mutating readiness gate, and require a new exact-SHA manual approval.
+
+During the production canary the recurring timer must remain disabled/inactive and the legacy self-hosted release path must remain present. Only after the replacement canary commits successfully with rollback-capable public MIME/cache/nosniff/CSP verification and post-deploy readiness `CURRENT` may Phase 3 proceed to recurring-controller activation. Legacy runner retirement remains a later, separate step after replacement canary/public verification PASS.
