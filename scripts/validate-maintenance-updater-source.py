@@ -16,6 +16,9 @@ REQUIRED_MARKERS = (
     "/run/lock/rpi5-backup.lock",
     "/usr/local/libexec/rpi5-maintenance",
     "BACKUP_WAIT_TIMEOUT",
+    'HOST_IPV4="${HOST_IPV4:-}"',
+    'MAIN_COMPOSE_DIR="${MAIN_COMPOSE_DIR:-${UPDATE_HOME}/docker}"',
+    'HERMES_BIN="${HERMES_BIN:-${UPDATE_HOME}/.local/bin/hermes}"',
     "rpi5_classify_hermes_update_check",
     "rpi5_wait_for_lock_available",
     "rpi5_applied_packages_require_reboot",
@@ -31,6 +34,11 @@ REQUIRED_MARKERS = (
 )
 
 SAFE_COMPOSE_UP = 'docker compose up "${RPI5_COMPOSE_UP_ARGS[@]}"'
+PRIVATE_IPV4_PATTERNS = (
+    r"(?<![0-9])10(?:\.[0-9]{1,3}){3}(?![0-9])",
+    r"(?<![0-9])192\.168(?:\.[0-9]{1,3}){2}(?![0-9])",
+    r"(?<![0-9])172\.(?:1[6-9]|2[0-9]|3[01])(?:\.[0-9]{1,3}){2}(?![0-9])",
+)
 
 
 def validate(text: str) -> list[str]:
@@ -41,6 +49,11 @@ def validate(text: str) -> list[str]:
             errors.append(f"missing required marker: {marker}")
 
     normalized = re.sub(r"\\\n[ \t]*", " ", text)
+
+    if re.search(r"/home/[A-Za-z0-9._-]+/", text):
+        errors.append("tracked updater contains a concrete user-home path")
+    if any(re.search(pattern, text) for pattern in PRIVATE_IPV4_PATTERNS):
+        errors.append("tracked updater contains a concrete RFC1918 IPv4 address")
 
     if text.count(SAFE_COMPOSE_UP) < 2:
         errors.append("Compose recreate/rollback are not both routed through the reviewed argument helper")
