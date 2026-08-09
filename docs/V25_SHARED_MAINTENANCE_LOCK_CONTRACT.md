@@ -147,18 +147,27 @@ The regression binds to the actual repository entrypoints:
 - immutable `ops/bin/rpi5-backup` must acquire backup-private inside the core;
 - runtime concurrency scenarios reproduce those exact two entrypoint orders and prove that either job can start first without overlap or deadlock.
 
-## Systemd installer coupling
+## Installation ordering with V23/V24 systemd cutover
 
-The V23/V24 systemd cutover installer is extended to ship and verify `rpi5-maintenance-locks.sh` with the updater. V25 production migration must not install the shared-lock updater without the helper it sources.
+The reviewed V23/V24 systemd installer remains intentionally unchanged in V25. Its `--install` phase may install the V25 updater binary, but it does not activate timers or retire legacy cron.
+
+The V25 lock-cutover transaction owns installation and verification of `rpi5-maintenance-locks.sh` together with the serialized backup path. Therefore #123 must preserve this order inside one guarded maintenance window:
+
+1. run the existing systemd `--install` phase while legacy cron is still authoritative and new timers remain inactive;
+2. immediately run V25 lock-cutover `--install` and `--verify`, which installs the shared helper and serializes the canonical backup path;
+3. verify the V25 updater, wrapper, immutable core and shared helper as one set;
+4. only then allow scheduler `--activate --allow-persistent-catchup`.
+
+The temporary interval after systemd `--install` does not change the active scheduler: legacy cron still points to the reviewed home-directory v17 updater, while `/usr/local/sbin/rpi5-update` is not yet scheduled. The transaction must not be paused or declared complete until V25 lock-cutover verification passes.
 
 ## Production ordering
 
 Shared serialization becomes effective only when both sides use the shared lock. The production transaction therefore treats these as one guarded window:
 
-1. install reviewed V25 updater + shared-lock helper;
-2. migrate canonical backup path to serialized wrapper while all relevant locks are quiescent;
+1. install reviewed V25 updater without activating it;
+2. install/verify the shared-lock helper and migrate canonical backup to the serialized wrapper under the fail-fast quiescent window;
 3. verify exact updater/wrapper/core/helper identities;
-4. only then proceed with the already-reviewed scheduler cutover/verification steps in #123.
+4. only then retire legacy cron and activate the reviewed systemd scheduler.
 
 Leaving the host indefinitely half-migrated is not an accepted state.
 
@@ -174,7 +183,7 @@ Leaving the host indefinitely half-migrated is not an accepted state.
 - wrapper holds shared lock around immutable core;
 - migration quiescent lock acquisition is non-blocking and distinguishes conflict from error;
 - atomic canonical-path replacement and exact-SHA rollback are tested;
-- systemd installer ships the shared-lock helper;
+- lock-cutover installs/verifies the shared-lock helper before scheduler activation is permitted;
 - FHS `/usr/local/lib/rpi5-maintenance` boundary remains mandatory;
 - V24 cleanup ownership regressions remain green;
 - exact updater provenance, public-safety and full-history secret scans remain mandatory.
