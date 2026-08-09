@@ -63,9 +63,9 @@
   "candidate": {
     "stage": "v25-shared-maintenance-lock-public-safe",
     "path": "ops/bin/rpi5-update",
-    "sha256": "2f44d0b256e28450dd94ab7a6d1f5b5d2cb4a198adc44a11ae6932a3877a6b3c",
+    "sha256": "8701b3f8b21ccafb0d02fdd2d162aeb9400a57beb58572800dfe901bfc4bd02a",
     "git_blob_sha1": "049d9a040efb4be4c2ff861d46a7e0e302b1c5e8",
-    "size_bytes": 50297,
+    "size_bytes": 49860,
     "helper_root": "/usr/local/lib/rpi5-maintenance",
     "derived_from_sha256": "2f44d0b256e28450dd94ab7a6d1f5b5d2cb4a198adc44a11ae6932a3877a6b3c",
     "public_runtime_literals_removed": true,
