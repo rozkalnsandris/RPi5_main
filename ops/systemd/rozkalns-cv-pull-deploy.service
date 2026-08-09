@@ -2,15 +2,12 @@
 Description=Rozkalns CV pull-deploy readiness controller
 Wants=network-online.target
 After=network-online.target
-ConditionPathExists=/home/andris/rozkalns-cv
-ConditionPathExists=/home/andris/rozkalns-cv-worktrees/release-control
 ConditionPathExists=/var/lib/rozkalns-cv-deploy/current-sha
 
 [Service]
 Type=oneshot
 User=andris
 Group=andris
-Environment=HOME=/home/andris
 UMask=0077
 ExecStart=/usr/local/sbin/rozkalns-cv-pull-deploy
 
