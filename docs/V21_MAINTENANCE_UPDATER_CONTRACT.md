@@ -2,7 +2,7 @@
 
 ## Status
 
-**Reviewed successor source imported and provenance-bound. Production unchanged.**
+**Reviewed successor source imported, public-safe, and provenance-bound. Production unchanged.**
 
 This phase moves the existing RPi5 weekly maintenance updater out of the interactive user's home directory and into reviewed host-infrastructure ownership. The repository source is now `ops/bin/rpi5-update`; the intended installed target is `/usr/local/sbin/rpi5-update`. Private runtime configuration remains outside Git.
 
@@ -15,10 +15,12 @@ The retained File Library contains the complete historical v16 updater source an
 The exact live file from the 2026-08-09 host incident is now available as review evidence and is SHA256-bound in `ops/maintenance/updater-source-provenance.json`:
 
 - live v17 incident-fixed baseline: `bd0afe74dea18742a002c852d59fc67ec848a032116d2adc314c24848895e24c`, 47,190 bytes;
-- reviewed V21 successor: `a29bbb79c9698f534e880e51ab62b4c5f7baf6bd0c4c2620f94e8f7921e4cf6c`, 49,855 bytes;
-- reviewed V21 Git blob: `fb75ceb988472456d9c21a3cbfd157078f2fdc66`.
+- reviewed public-safe V21 successor: `860b2dd0be0d7f32f2648742a356bccabb20f0c9f8e7073ba2b1c998aa212851`, 50,076 bytes;
+- reviewed V21 Git blob: `67cd5b443dfdb8a48fd08aaa4015dc0f6b26e9ec`.
 
 V21 is intentionally a **reviewed successor derived from the exact live baseline**, not a byte-identical import: the purpose of #95 is to preserve the known-good updater behavior while correcting the audited safety and ownership defects. Before any production installation, the then-live updater must still match the expected live baseline or an explicitly reviewed later baseline; unexpected runtime drift stops migration rather than being overwritten.
+
+Because `RPi5_main` is public, concrete user-home paths and RFC1918 addresses are not tracked in the executable source. Compose/Hermes paths are derived from the configured maintenance user's runtime home, while `HOST_IPV4` is supplied by root-only `/etc/rpi-update.conf`. This keeps host-specific values outside Git without weakening the runtime validation boundary.
 
 ## 2026-08-09 incident boundary
 
@@ -36,7 +38,8 @@ The full source audit exposed further stale/destructive assumptions. The importe
 - Compose recreation is explicitly `--no-build`, preserving the boundary between host maintenance and application builds/deploys;
 - `--cleanup-only` is not rejected merely because the host is already below the normal free-space/inode update threshold;
 - HTTP retry capture preserves a single normalized three-digit status code even when `curl` itself fails;
-- Telegram credentials are not copied into a child process environment.
+- Telegram credentials are not copied into a child process environment;
+- concrete user-home paths and private-LAN addresses are removed from the tracked executable and remain runtime configuration/derivation only.
 
 Broad home-directory cleanup ownership is intentionally not expanded inside #95; that remains #98. Full backup-vs-update mutual exclusion is intentionally not hidden inside #95; that remains #100 because it requires a coordinated change to the already-owned V10 backup implementation.
 
@@ -46,6 +49,7 @@ The updater is deliberately conservative:
 
 - run only as root and hold a non-blocking duplicate-update process lock;
 - require a root-only maintenance configuration;
+- keep host-specific private values outside the public repository;
 - load helper/notifier code only from the root-controlled `/usr/local/libexec/rpi5-maintenance` installation boundary and reject unsafe ownership/writability;
 - validate free disk/inodes, Docker and both Compose projects before normal update/check mutation decisions;
 - keep `--cleanup-only` usable under low-space pressure by separating cleanup eligibility from the normal update free-space threshold;
@@ -109,6 +113,10 @@ The live v16b repair established two important semantics that V21 preserves in a
 
 Runtime Telegram credentials remain in root-only configuration outside Git. V21 no longer copies the token/chat ID into a child Python environment; the notifier receives the three values through a short-lived NUL-delimited stdin channel. Notification failure remains warning-only and cannot erase the original maintenance result.
 
+### Public repository boundary
+
+The executable source contains no concrete user-home path and no RFC1918 IPv4 address. The source validator independently rejects those classes in addition to the repository-wide public-safety guard. Runtime Compose and Hermes paths are derived from `UPDATE_HOME` unless explicitly supplied by root-only configuration; `HOST_IPV4` is required from that private configuration before health checks proceed.
+
 ### Journald cleanup
 
 `journalctl --rotate --vacuum-time=...` is compatible with the retention goal: rotation archives the current journal files and vacuuming removes archived files older than the configured window. This remains a bounded log-retention action rather than arbitrary log deletion.
@@ -147,7 +155,7 @@ The current home-directory updater location is transitional only and must not re
 ## V21 repository gates
 
 - exact live v17 baseline SHA256/size recorded in provenance;
-- exact imported V21 source SHA256, Git blob identity, size and executable Git mode recorded/tested;
+- exact imported public-safe V21 source SHA256, Git blob identity, size and executable Git mode recorded/tested;
 - Bash syntax for imported shell source and helper libraries;
 - deterministic Hermes current/available/error classifier tests;
 - deterministic backup-lock held/available/released/bounded-wait tests;
@@ -157,6 +165,7 @@ The current home-directory updater location is transitional only and must not re
 - deterministic run/check-vs-cleanup free-space policy tests;
 - deterministic HTTP retry/capture/transport-failure normalization tests;
 - deterministic Telegram chunking/error-redaction tests;
+- no concrete user-home path or RFC1918 IPv4 address in tracked updater source;
 - no `docker image prune -a/--all` in the imported updater;
 - no unattended `docker network prune` or obsolete network-prune capability gate;
 - no unattended Compose `--remove-orphans`;
