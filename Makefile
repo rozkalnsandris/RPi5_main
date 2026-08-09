@@ -42,6 +42,7 @@ test:
 	python3 ./tests/test-vscode-deploy-tasks.py
 	python3 ./tests/test-v12-maintenance-conflicts.py
 	python3 ./tests/test-deals-route-cutover.py
+	python3 ./tests/test-github-app-readonly.py
 	python3 -m py_compile scripts/*.py ops/lib/rpi5-update-telegram.py
 
 secret-scan:
