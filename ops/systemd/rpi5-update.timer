@@ -1,0 +1,13 @@
+[Unit]
+Description=Schedule RPi5 weekly maintenance update
+Documentation=https://github.com/rozkalnsandris/RPi5_main
+
+[Timer]
+OnCalendar=Sun *-*-* 02:20:00
+Persistent=true
+AccuracySec=1s
+RandomizedDelaySec=0
+Unit=rpi5-update.service
+
+[Install]
+WantedBy=timers.target
