@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export LC_ALL=C
+export LANG=C
+
+readonly MAINTENANCE_LIB_DIR="/usr/local/lib/rpi5-maintenance"
+readonly HEALTH_LIB="${MAINTENANCE_LIB_DIR}/rpi5-maintenance-health.sh"
+readonly REQUIRED_CONTAINERS_FILE="/etc/rpi5-maintenance/required-containers"
+
+fail=0
+
+log() {
+    printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
+}
+
+require_root_controlled_file() {
+    local path="$1" uid mode
+    [[ -f "$path" && ! -L "$path" ]] || return 1
+    uid="$(stat -c '%u' "$path")"
+    mode="$(stat -c '%a' "$path")"
+    [[ "$uid" -eq 0 ]] || return 1
+    (( (8#$mode & 022) == 0 ))
+}
+
+[[ ${EUID:-$(id -u)} -eq 0 ]] || {
+    echo "rpi5-monitor must run as root." >&2
+    exit 1
+}
+
+require_root_controlled_file "$HEALTH_LIB" || {
+    echo "unsafe or missing health library: $HEALTH_LIB" >&2
+    exit 1
+}
+# shellcheck source=/dev/null
+source "$HEALTH_LIB"
+
+require_root_controlled_file "$REQUIRED_CONTAINERS_FILE" || {
+    echo "unsafe or missing required-container inventory: $REQUIRED_CONTAINERS_FILE" >&2
+    exit 1
+}
+required_containers="$(cat "$REQUIRED_CONTAINERS_FILE")"
+
+for command_name in docker systemctl curl stat date cat; do
+    command -v "$command_name" >/dev/null 2>&1 || {
+        log "FAIL missing command: $command_name"
+        exit 1
+    }
+done
+
+log "RPi5 monitor started"
+
+for unit in docker.service ssh.service cloudflared.service; do
+    if systemctl is-active --quiet "$unit"; then
+        log "OK systemd $unit active"
+    else
+        log "FAIL systemd $unit not active"
+        fail=1
+    fi
+done
+
+container_rows="$(docker ps -a --format '{{.Names}}\t{{.State}}\t{{.HealthStatus}}')" || {
+    log "FAIL docker container inventory unavailable"
+    exit 1
+}
+container_rc=0
+rpi5_validate_required_container_inventory "$required_containers" "$container_rows" || container_rc=$?
+case "$container_rc" in
+    0) log "OK required Docker containers running/healthy" ;;
+    1)
+        fail=1
+        log "FAIL required Docker container state/health"
+        while IFS=$'\t' read -r name state health; do
+            [[ -n "$name" ]] || continue
+            log "FAIL container ${name}: state=${state} health=${health}"
+        done <<<"$RPI5_BAD_CONTAINERS"
+        ;;
+    2)
+        fail=1
+        log "FAIL required-container inventory is empty"
+        ;;
+    *)
+        fail=1
+        log "FAIL Docker health classification error rc=${container_rc}"
+        ;;
+esac
+
+LOCAL_TARGETS=(
+    "CV|http://127.0.0.1:8088/"
+    "Hermes Tech|http://127.0.0.1:8089/"
+)
+PUBLIC_TARGETS=(
+    "CV|https://rozkalns.net/"
+    "Hermes Tech|https://tech.rozkalns.net/"
+    "Portainer|https://portainer.rozkalns.net/"
+    "Grafana|https://grafana.rozkalns.net/"
+    "Home Assistant|https://ha.rozkalns.net/"
+    "AdGuard|https://adguard.rozkalns.net/"
+    "Uptime Kuma|https://kuma.rozkalns.net/"
+    "Prometheus|https://prometheus.rozkalns.net/"
+    "Hermes|https://hermes.rozkalns.net/"
+)
+
+for entry in "${LOCAL_TARGETS[@]}"; do
+    name="${entry%%|*}"
+    url="${entry#*|}"
+    code="000"
+    if code="$(rpi5_http_wait_reachable "$url" 3 2)"; then
+        log "OK local ${name}: HTTP ${code}"
+    else
+        fail=1
+        log "FAIL local ${name}: HTTP ${code}"
+    fi
+done
+
+for entry in "${PUBLIC_TARGETS[@]}"; do
+    name="${entry%%|*}"
+    url="${entry#*|}"
+    code="000"
+    if code="$(rpi5_http_wait_reachable "$url" 3 5)"; then
+        log "OK public ${name}: HTTP ${code}"
+    else
+        fail=1
+        log "FAIL public ${name}: HTTP ${code}"
+    fi
+done
+
+if (( fail == 0 )); then
+    log "RPi5 monitor PASS"
+    exit 0
+fi
+
+log "RPi5 monitor FAIL"
+exit 1
