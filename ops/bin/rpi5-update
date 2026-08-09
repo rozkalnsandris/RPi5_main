@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # RPi5 drošs nedēļas atjaunināšanas skripts
-# Versija: 21
+# Versija: 24
 #
 # Noklusējuma palaišana (reāls update):
 #   sudo /usr/local/sbin/rpi5-update
@@ -115,7 +115,8 @@ for helper in \
     rpi5-update-compose-policy.sh \
     rpi5-update-space-policy.sh \
     rpi5-update-origin-policy.sh \
-    rpi5-update-http-health.sh; do
+    rpi5-update-http-health.sh \
+    rpi5-update-cleanup-policy.sh; do
     validate_runtime_code_file "${LIBEXEC_DIR}/${helper}"
     # shellcheck source=/dev/null
     source "${LIBEXEC_DIR}/${helper}"
@@ -432,15 +433,28 @@ require_command() {
 }
 
 CURRENT_PHASE="priekšpārbaude"
-log "===== RPi5 UPDATE v21 SĀKTS (mode=${MODE}, run_id=${RUN_ID}) ====="
+log "===== RPi5 UPDATE v24 SĀKTS (mode=${MODE}, run_id=${RUN_ID}) ====="
 
 for command_name in \
-    apt-get dpkg dpkg-query apt-mark docker python3 curl flock runuser \
+    apt-get dpkg dpkg-query apt-mark python3 curl flock runuser \
     systemctl journalctl systemd-tmpfiles numfmt df awk grep sort paste \
     readlink shutdown comm stat install chown chmod ionice renice sync \
     timeout getent env find rm sed head tail tr tee mv mkdir mktemp sleep cat id; do
     require_command "$command_name"
 done
+
+DOCKER_COMMAND_AVAILABLE=1
+if command -v docker >/dev/null 2>&1; then
+    :
+elif [[ "$MODE" == "cleanup" ]]; then
+    DOCKER_COMMAND_AVAILABLE=0
+    CLEANUP_STATUS=1
+    WARNINGS+=("Docker komanda nav pieejama; Docker cleanup izlaists, non-Docker cleanup turpināts.")
+    log "BRĪDINĀJUMS: docker komanda nav pieejama cleanup-only režīmā."
+else
+    log "KĻŪDA: trūkst komandas: docker"
+    exit 1
+fi
 
 id "$UPDATE_USER" >/dev/null 2>&1 || {
     log "KĻŪDA: lietotājs $UPDATE_USER neeksistē."
@@ -499,29 +513,39 @@ require_help_flag() {
     fi
 }
 
-require_help_flag "docker compose up" "--wait" docker compose up
-require_help_flag "docker compose up" "--pull" docker compose up
-require_help_flag "docker compose up" "--no-build" docker compose up
-require_help_flag "docker compose up" "--wait-timeout" docker compose up
-require_help_flag "docker compose pull" "--ignore-buildable" docker compose pull
-require_help_flag "docker compose config" "--images" docker compose config
-require_help_flag "docker compose config" "--services" docker compose config
-require_help_flag "docker compose ps" "--all" docker compose ps
-require_help_flag "docker compose ps" "--services" docker compose ps
-require_help_flag "docker image prune" "--filter" docker image prune
-require_help_flag "docker builder prune" "--filter" docker builder prune
-require_help_flag "docker builder prune" "--all" docker builder prune
+if [[ "$DOCKER_COMMAND_AVAILABLE" -eq 1 ]]; then
+    if [[ "$MODE" != "cleanup" ]]; then
+        require_help_flag "docker compose up" "--wait" docker compose up
+        require_help_flag "docker compose up" "--pull" docker compose up
+        require_help_flag "docker compose up" "--no-build" docker compose up
+        require_help_flag "docker compose up" "--wait-timeout" docker compose up
+        require_help_flag "docker compose pull" "--ignore-buildable" docker compose pull
+        require_help_flag "docker compose config" "--images" docker compose config
+        require_help_flag "docker compose config" "--services" docker compose config
+        require_help_flag "docker compose ps" "--all" docker compose ps
+        require_help_flag "docker compose ps" "--services" docker compose ps
+    fi
+    require_help_flag "docker image prune" "--filter" docker image prune
+    require_help_flag "docker builder prune" "--filter" docker builder prune
+    require_help_flag "docker builder prune" "--all" docker builder prune
+fi
 require_help_flag "journalctl" "--vacuum-time" journalctl
 require_help_flag "journalctl" "--rotate" journalctl
 require_help_flag "rm" "--one-file-system" rm
 require_help_flag "timeout" "--kill-after" timeout
 
-cleanup_remove_file() {
+cleanup_remove_owned_log_rotation() {
     local path="$1"
+    local kind
 
     [[ -e "$path" || -L "$path" ]] || return 0
-    log "Dzēš vecu failu: $path"
+    if ! kind="$(rpi5_cleanup_owned_path_kind "$path")" || [[ "$kind" != "log_rotation" ]]; then
+        log "KĻŪDA: atteikta neparedzēta log faila dzēšana: $path"
+        CLEANUP_STATUS=1
+        return 1
+    fi
 
+    log "Dzēš vecu updater log rotation: $path"
     if rm -f -- "$path"; then
         CLEANUP_DELETED_ITEMS=$((CLEANUP_DELETED_ITEMS + 1))
     else
@@ -529,24 +553,18 @@ cleanup_remove_file() {
     fi
 }
 
-cleanup_remove_directory() {
+cleanup_remove_owned_tmp_directory() {
     local path="$1"
+    local kind
 
     [[ -d "$path" && ! -L "$path" ]] || return 0
+    if ! kind="$(rpi5_cleanup_owned_path_kind "$path")" || [[ "$kind" != "tmp_directory" ]]; then
+        log "KĻŪDA: atteikta neparedzēta pagaidu direktorijas dzēšana: $path"
+        CLEANUP_STATUS=1
+        return 1
+    fi
 
-    case "$path" in
-        "$UPDATE_HOME"/rpi5-*-backup-20*|\
-        "$UPDATE_HOME"/cloudflare-ufw-backup-20*)
-            ;;
-        *)
-            log "KĻŪDA: atteikta neparedzētas direktorijas dzēšana: $path"
-            CLEANUP_STATUS=1
-            return 1
-            ;;
-    esac
-
-    log "Dzēš vecu backup direktoriju: $path"
-
+    log "Dzēš vecu updater pagaidu direktoriju: $path"
     if rm -rf --one-file-system -- "$path"; then
         CLEANUP_DELETED_ITEMS=$((CLEANUP_DELETED_ITEMS + 1))
     else
@@ -554,75 +572,15 @@ cleanup_remove_directory() {
     fi
 }
 
-cleanup_old_maintenance_artifacts() {
+cleanup_owned_maintenance_artifacts() {
     local retention_minutes=$((CLEANUP_RETENTION_DAYS * 24 * 60))
     local item
 
-    if [[ -d "$UPDATE_HOME/update-script-backups" ]]; then
-        while IFS= read -r -d '' item; do
-            cleanup_remove_file "$item"
-        done < <(
-            find "$UPDATE_HOME/update-script-backups" \
-                -xdev -mindepth 1 -maxdepth 1 \
-                -type f \
-                -cmin "+${retention_minutes}" \
-                -print0
-        )
-    fi
-
+    # V24 never infers disposable state from names inside a user's
+    # home. Only directories created by this updater under /tmp and
+    # this updater's own rotated log files are custom-cleaned.
     while IFS= read -r -d '' item; do
-        cleanup_remove_file "$item"
-    done < <(
-        find "$UPDATE_HOME" \
-            -xdev -mindepth 1 -maxdepth 1 \
-            -type f \
-            \( -name 'rpi5_*.log' -o -name 'rpi5-*.log' \) \
-            -mmin "+${retention_minutes}" \
-            -print0
-    )
-
-    while IFS= read -r -d '' item; do
-        cleanup_remove_directory "$item"
-    done < <(
-        find "$UPDATE_HOME" \
-            -xdev -mindepth 1 -maxdepth 1 \
-            -type d \
-            \( -name 'rpi5-*-backup-20*' -o -name 'cloudflare-ufw-backup-20*' \) \
-            -cmin "+${retention_minutes}" \
-            -print0
-    )
-
-    while IFS= read -r -d '' item; do
-        if [[ ! -e "$item" ]]; then
-            cleanup_remove_file "$item"
-        fi
-    done < <(
-        find "$UPDATE_HOME" \
-            -xdev -mindepth 1 -maxdepth 1 \
-            -type l \
-            -name 'rpi5-*-latest-backup' \
-            -print0
-    )
-
-    while IFS= read -r -d '' item; do
-        cleanup_remove_file "$item"
-    done < <(
-        find /tmp \
-            -xdev -mindepth 1 -maxdepth 1 \
-            -type f \
-            \( -name 'rpi5_*.sh' -o -name 'rpi5-*.sh' -o -name 'deploy_rpi5_*.sh' \) \
-            -mmin "+${retention_minutes}" \
-            -print0
-    )
-
-    while IFS= read -r -d '' item; do
-        log "Dzēš vecu RPi5 pagaidu direktoriju: $item"
-
-        if rm -rf --one-file-system -- "$item"; then
-            CLEANUP_DELETED_ITEMS=$((CLEANUP_DELETED_ITEMS + 1))
-        else
-            CLEANUP_STATUS=1
-        fi
+        cleanup_remove_owned_tmp_directory "$item"
     done < <(
         find /tmp \
             -xdev -mindepth 1 -maxdepth 1 \
@@ -633,7 +591,7 @@ cleanup_old_maintenance_artifacts() {
     )
 
     while IFS= read -r -d '' item; do
-        cleanup_remove_file "$item"
+        cleanup_remove_owned_log_rotation "$item"
     done < <(
         find /var/log \
             -xdev -mindepth 1 -maxdepth 1 \
@@ -661,9 +619,9 @@ run_retention_cleanup() {
 
     systemd-tmpfiles --clean || CLEANUP_STATUS=1
 
-    cleanup_old_maintenance_artifacts
+    cleanup_owned_maintenance_artifacts
 
-    if [[ "$DOCKER_CLEANUP" == "yes" ]]; then
+    if [[ "$DOCKER_CLEANUP" == "yes" && "$DOCKER_AVAILABLE_FOR_CLEANUP" -eq 1 ]]; then
         log "Docker: dzēš dangling image un neizmantotu build cache, kas vecāki par retention."
         log "Docker networks, volumes, konteineri un tagotie rollback/release image netiek dzēsti."
 
@@ -675,7 +633,9 @@ run_retention_cleanup() {
             -a \
             -f \
             --filter "until=${retention_hours}h" || CLEANUP_STATUS=1
-
+    elif [[ "$DOCKER_CLEANUP" == "yes" ]]; then
+        CLEANUP_STATUS=1
+        log "BRĪDINĀJUMS: Docker nav pieejams; Docker cleanup izlaists, pārējā tīrīšana turpinās."
     else
         log "Docker cleanup izlaists pēc konfigurācijas."
     fi
@@ -693,16 +653,18 @@ run_retention_cleanup() {
         )"
     fi
 
-    log "Tīrīšana: dzēsti ${CLEANUP_DELETED_ITEMS} maintenance objekti."
+    log "Tīrīšana: dzēsti ${CLEANUP_DELETED_ITEMS} updater-owned retention objekti."
     log "Tīrīšanas diska vietas izmaiņa: ${CLEANUP_SPACE_DELTA}"
-    docker system df || true
+    if [[ "$DOCKER_AVAILABLE_FOR_CLEANUP" -eq 1 ]]; then
+        docker system df || true
+    fi
 
     SUMMARY_LINES+=(
         "🧹 Tīrīšana (${CLEANUP_RETENTION_DAYS}d): $(status_icon "$CLEANUP_STATUS") (${CLEANUP_SPACE_DELTA})"
     )
 }
 
-if [[ "$HERMES_UPDATE" == "yes" && -x "$HERMES_BIN" ]]; then
+if [[ "$MODE" != "cleanup" && "$HERMES_UPDATE" == "yes" && -x "$HERMES_BIN" ]]; then
     require_help_flag "hermes update" "--check" run_as_update_user "$HERMES_BIN" update
     require_help_flag "hermes update" "--yes" run_as_update_user "$HERMES_BIN" update
     if [[ "$HERMES_BACKUP" == "yes" ]]; then
@@ -740,7 +702,19 @@ else
     log "Cleanup-only režīmā minimālās brīvās vietas/inode slieksnis netiek piemērots pirms tīrīšanas."
 fi
 
-docker info >/dev/null
+DOCKER_AVAILABLE_FOR_CLEANUP="$DOCKER_COMMAND_AVAILABLE"
+if [[ "$MODE" == "cleanup" ]]; then
+    if [[ "$DOCKER_COMMAND_AVAILABLE" -eq 1 ]] && docker info >/dev/null 2>&1; then
+        log "Docker daemon pieejams; Docker cleanup drīkst tikt mēģināts."
+    elif [[ "$DOCKER_COMMAND_AVAILABLE" -eq 1 ]]; then
+        DOCKER_AVAILABLE_FOR_CLEANUP=0
+        CLEANUP_STATUS=1
+        WARNINGS+=("Docker daemon nav pieejams; Docker cleanup izlaists, non-Docker cleanup turpināts.")
+        log "BRĪDINĀJUMS: Docker daemon nav pieejams cleanup-only režīmā."
+    fi
+else
+    docker info >/dev/null
+fi
 
 validate_compose_project() {
     local project_name="$1"
@@ -759,8 +733,10 @@ validate_compose_project() {
     log "Compose konfigurācija '${project_name}': OK."
 }
 
-validate_compose_project "main" "$MAIN_COMPOSE_DIR"
-validate_compose_project "cv" "$CV_COMPOSE_DIR"
+if [[ "$MODE" != "cleanup" ]]; then
+    validate_compose_project "main" "$MAIN_COMPOSE_DIR"
+    validate_compose_project "cv" "$CV_COMPOSE_DIR"
+fi
 
 check_project_runtime() {
     local project_name="$1"
@@ -811,8 +787,10 @@ check_project_runtime() {
     return "$bad"
 }
 
-check_project_runtime "main" "$MAIN_COMPOSE_DIR"
-check_project_runtime "cv" "$CV_COMPOSE_DIR"
+if [[ "$MODE" != "cleanup" ]]; then
+    check_project_runtime "main" "$MAIN_COMPOSE_DIR"
+    check_project_runtime "cv" "$CV_COMPOSE_DIR"
+fi
 
 if [[ "$MODE" == "run" || "$MODE" == "cleanup" ]]; then
     log "Pārbauda backup lock; gaidīšanas limits ${BACKUP_WAIT_TIMEOUT}s."
@@ -1416,8 +1394,7 @@ CURRENT_PHASE="veselības pārbaudes"
 log "----- Veselības pārbaudes -----"
 
 # HTTP retry/reachability behavior is provided by the reviewed
-# rpi5-update-http-health.sh helper loaded from the root-controlled libexec path.
-
+# rpi5-update-http-health.sh helper loaded from the root-controlled maintenance library path.
 
 LOCAL_URLS=(
     "Home Assistant|http://${HOST_IPV4}:8123/"
@@ -1596,7 +1573,7 @@ if [[ "$MODE" == "run" ]]; then
 fi
 FINAL_SENT=1
 
-log "===== RPi5 UPDATE v21 PABEIGTS: status=${OVERALL_STATUS}, ilgums=${DURATION} ====="
+log "===== RPi5 UPDATE v24 PABEIGTS: status=${OVERALL_STATUS}, ilgums=${DURATION} ====="
 
 if [[ "$REBOOT_REQUIRED" -eq 1 && "$MODE" == "run" ]]; then
     log "Drošs reboot ieplānots pēc 1 minūtes: ${REBOOT_REASON}"
