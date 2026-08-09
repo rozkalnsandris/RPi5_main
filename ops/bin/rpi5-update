@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # RPi5 drošs nedēļas atjaunināšanas skripts
-# Versija: 24
+# Versija: 25
 #
 # Noklusējuma palaišana (reāls update):
 #   sudo /usr/local/sbin/rpi5-update
@@ -30,7 +30,7 @@
 #   RCLONE_TIMEOUT=10m
 #   HERMES_TIMEOUT=30m
 #   DOCKER_PULL_TIMEOUT=45m
-#   BACKUP_WAIT_TIMEOUT=1800      # sekundes; max 7200
+#   MAINTENANCE_LOCK_TIMEOUT=1800 # sekundes; max 7200
 #   HOST_IPV4=<private-ipv4>
 #
 # Obligātās esošās vērtības:
@@ -53,7 +53,7 @@ export COMPOSE_PROGRESS=plain
 readonly CONFIG_FILE="/etc/rpi-update.conf"
 readonly LOG="/var/log/rpi5-update.log"
 readonly LOCK_FILE="/run/lock/rpi5-update.lock"
-readonly BACKUP_LOCK_FILE="/run/lock/rpi5-backup.lock"
+readonly MAINTENANCE_LOCK_FILE="/run/lock/rpi5-maintenance-exclusive.lock"
 readonly LIBEXEC_DIR="/usr/local/lib/rpi5-maintenance"
 readonly TELEGRAM_HELPER="${LIBEXEC_DIR}/rpi5-update-telegram.py"
 
@@ -110,6 +110,7 @@ fi
 for helper in \
     rpi5-update-hermes-status.sh \
     rpi5-update-locks.sh \
+    rpi5-maintenance-locks.sh \
     rpi5-update-reboot.sh \
     rpi5-update-compose-health.sh \
     rpi5-update-compose-policy.sh \
@@ -125,10 +126,24 @@ validate_runtime_code_file "$TELEGRAM_HELPER"
 
 mkdir -p "$(dirname "$LOCK_FILE")"
 exec 9>"$LOCK_FILE"
-if ! flock -n 9; then
-    echo "KĻŪDA: cits RPi5 update process jau darbojas." >&2
-    exit 75
-fi
+private_lock_rc=0
+flock \
+    --exclusive \
+    --nonblock \
+    --conflict-exit-code "$RPI5_LOCK_CONFLICT_RC" \
+    9 || private_lock_rc=$?
+case "$private_lock_rc" in
+    0)
+        ;;
+    "$RPI5_LOCK_CONFLICT_RC")
+        echo "KĻŪDA: cits RPi5 update process jau darbojas." >&2
+        exit 75
+        ;;
+    *)
+        echo "KĻŪDA: updater private lock operācija neizdevās (rc=${private_lock_rc})." >&2
+        exit 1
+        ;;
+esac
 
 rotate_log() {
     local max_bytes=$((10 * 1024 * 1024))
@@ -260,7 +275,6 @@ send_msg() {
     fi
 }
 
-
 on_error() {
     local exit_code=$?
     local line_no="${1:-?}"
@@ -327,7 +341,7 @@ validate_secure_config() {
     RCLONE_TIMEOUT="${RCLONE_TIMEOUT:-10m}"
     HERMES_TIMEOUT="${HERMES_TIMEOUT:-30m}"
     DOCKER_PULL_TIMEOUT="${DOCKER_PULL_TIMEOUT:-45m}"
-    BACKUP_WAIT_TIMEOUT="${BACKUP_WAIT_TIMEOUT:-1800}"
+    MAINTENANCE_LOCK_TIMEOUT="${MAINTENANCE_LOCK_TIMEOUT:-${BACKUP_WAIT_TIMEOUT:-1800}}"
     HOST_IPV4="${HOST_IPV4:-}"
     HERMES_BIN="${HERMES_BIN:-}"
 
@@ -381,12 +395,12 @@ validate_secure_config() {
         exit 1
     }
 
-    [[ "$BACKUP_WAIT_TIMEOUT" =~ ^[1-9][0-9]*$ ]] || {
-        echo "KĻŪDA: BACKUP_WAIT_TIMEOUT jābūt pozitīvam sekunžu skaitlim." >&2
+    [[ "$MAINTENANCE_LOCK_TIMEOUT" =~ ^[1-9][0-9]*$ ]] || {
+        echo "KĻŪDA: MAINTENANCE_LOCK_TIMEOUT jābūt pozitīvam sekunžu skaitlim." >&2
         exit 1
     }
-    if (( BACKUP_WAIT_TIMEOUT > 7200 )); then
-        echo "KĻŪDA: BACKUP_WAIT_TIMEOUT nedrīkst pārsniegt 7200 sekundes." >&2
+    if (( MAINTENANCE_LOCK_TIMEOUT > 7200 )); then
+        echo "KĻŪDA: MAINTENANCE_LOCK_TIMEOUT nedrīkst pārsniegt 7200 sekundes." >&2
         exit 1
     fi
 
@@ -423,7 +437,7 @@ readonly UPDATE_USER
 readonly REBOOT_POLICY RCLONE_UPDATE_MODE HERMES_UPDATE HERMES_BACKUP
 readonly CLEANUP_RETENTION_DAYS DOCKER_CLEANUP JOURNAL_RETENTION
 readonly MIN_FREE_KB COMPOSE_WAIT_TIMEOUT
-readonly RCLONE_TIMEOUT HERMES_TIMEOUT DOCKER_PULL_TIMEOUT BACKUP_WAIT_TIMEOUT HOST_IPV4
+readonly RCLONE_TIMEOUT HERMES_TIMEOUT DOCKER_PULL_TIMEOUT MAINTENANCE_LOCK_TIMEOUT HOST_IPV4
 
 require_command() {
     command -v "$1" >/dev/null 2>&1 || {
@@ -433,7 +447,7 @@ require_command() {
 }
 
 CURRENT_PHASE="priekšpārbaude"
-log "===== RPi5 UPDATE v24 SĀKTS (mode=${MODE}, run_id=${RUN_ID}) ====="
+log "===== RPi5 UPDATE v25 SĀKTS (mode=${MODE}, run_id=${RUN_ID}) ====="
 
 for command_name in \
     apt-get dpkg dpkg-query apt-mark python3 curl flock runuser \
@@ -792,20 +806,29 @@ if [[ "$MODE" != "cleanup" ]]; then
     check_project_runtime "cv" "$CV_COMPOSE_DIR"
 fi
 
+MAINTENANCE_LOCK_FD=""
 if [[ "$MODE" == "run" || "$MODE" == "cleanup" ]]; then
-    log "Pārbauda backup lock; gaidīšanas limits ${BACKUP_WAIT_TIMEOUT}s."
-    backup_wait_rc=0
-    rpi5_wait_for_lock_available "$BACKUP_LOCK_FILE" "$BACKUP_WAIT_TIMEOUT" || backup_wait_rc=$?
-    if [[ "$backup_wait_rc" -eq 75 ]]; then
-        log "KĻŪDA: backup lock neatbrīvojās ${BACKUP_WAIT_TIMEOUT}s laikā; maintenance netiek sākta."
-        exit 75
-    elif [[ "$backup_wait_rc" -ne 0 ]]; then
-        log "KĻŪDA: backup lock pārbaude neizdevās (rc=${backup_wait_rc})."
-        exit 1
-    fi
-    log "Backup lock ir brīvs; maintenance var turpināties."
+    log "Gaida shared maintenance lock; limits ${MAINTENANCE_LOCK_TIMEOUT}s."
+    maintenance_lock_rc=0
+    rpi5_acquire_exclusive_lock \
+        "$MAINTENANCE_LOCK_FILE" \
+        "$MAINTENANCE_LOCK_TIMEOUT" \
+        MAINTENANCE_LOCK_FD || maintenance_lock_rc=$?
+    case "$maintenance_lock_rc" in
+        0)
+            log "Shared maintenance lock iegūts; mutējošā maintenance var turpināties."
+            ;;
+        "$RPI5_LOCK_CONFLICT_RC")
+            log "KĻŪDA: shared maintenance lock neatbrīvojās ${MAINTENANCE_LOCK_TIMEOUT}s laikā."
+            exit 75
+            ;;
+        *)
+            log "KĻŪDA: shared maintenance lock iegūšana neizdevās (rc=${maintenance_lock_rc})."
+            exit 1
+            ;;
+    esac
 else
-    log "--check režīmā backup lock gaidīšana netiek veikta; pakotnes/Hermes/Docker netiek instalēti."
+    log "--check režīmā shared maintenance lock netiek ņemts; hosta mutācijas netiek veiktas."
 fi
 
 if [[ "$MODE" == "run" ]]; then
@@ -1106,9 +1129,6 @@ else
         [[ "$HERMES_BACKUP" == "yes" ]] && hermes_update_args+=(--backup)
         hermes_update_output="$TMP_DIR/hermes-update-output.log"
 
-        # Stop the system dashboard as root before invoking the user-scoped
-        # Hermes updater. This prevents Hermes from opening a non-interactive
-        # polkit password prompt while it replaces the frontend assets.
         if [[ "$hermes_dashboard_was_active" -eq 1 ]]; then
             log "Aptur hermes-dashboard.service pirms Hermes update..."
             if ! systemctl stop hermes-dashboard.service; then
@@ -1162,8 +1182,6 @@ else
             fi
         fi
 
-        # Restore the dashboard even when Hermes update itself failed, so a
-        # failed update does not leave the administration UI offline.
         if [[ "$hermes_dashboard_was_active" -eq 1 ]]; then
             log "Restartē hermes-dashboard.service..."
             if systemctl restart hermes-dashboard.service; then
@@ -1215,9 +1233,6 @@ else
     fi
 fi
 
-# ============================================================
-# DOCKER COMPOSE
-# ============================================================
 snapshot_images() {
     local project_dir="$1"
     local output_file="$2"
@@ -1329,7 +1344,6 @@ update_compose_project() {
     }
 
     rpi5_build_compose_up_args "$COMPOSE_WAIT_TIMEOUT" false || return 2
-    # Reviewed unattended policy includes --pull never --no-build --wait.
     if (
         cd "$project_dir"
         docker compose up "${RPI5_COMPOSE_UP_ARGS[@]}"
@@ -1387,9 +1401,6 @@ else
 fi
 SUMMARY_LINES+=("🐳 Docker CV: $(status_icon "$CV_DOCKER_STATUS")")
 
-# ============================================================
-# VESELĪBAS PĀRBAUDES
-# ============================================================
 CURRENT_PHASE="veselības pārbaudes"
 log "----- Veselības pārbaudes -----"
 
@@ -1445,8 +1456,6 @@ for entry in "${PUBLIC_URLS[@]}"; do
     printf '%-20s %-48s HTTP %s\n' "$name" "$url" "$code"
 done
 
-# ----- Hermes specifiska veselības pārbaude (ārpus masīviem) -----
-# Lokālā: dashboard uz localhost:9119/api/status
 HERMES_LOCAL_OK=0
 if hermes_local_code="$(rpi5_request_code_with_retry "http://${HOST_IPV4}:9119/api/status" 3 3)"; then
     HERMES_LOCAL_OK=1
@@ -1455,7 +1464,6 @@ else
 fi
 printf '%-20s %-48s HTTP %s\n' "Hermes (local)" "http://${HOST_IPV4}:9119/api/status" "$hermes_local_code"
 
-# Publiskā: tikai ja lokālais ir OK (dependency)
 if [[ "$HERMES_LOCAL_OK" -eq 1 ]]; then
     if hermes_public_code="$(rpi5_request_code_with_retry "https://hermes.rozkalns.net/" 8 10)"; then
         :
@@ -1472,9 +1480,6 @@ SUMMARY_LINES+=("🩺 Lokālie servisi: $(status_icon "$LOCAL_HEALTH_STATUS")")
 SUMMARY_LINES+=("🌐 Publiskie servisi: $(status_icon "$PUBLIC_HEALTH_STATUS")")
 SUMMARY_LINES+=("📊 Hermes dashboard: $(status_icon "$(( ! HERMES_LOCAL_OK ))")")
 
-# ============================================================
-# REBOOT NOTEIKŠANA UN GALA ATSKAITE
-# ============================================================
 CURRENT_PHASE="gala atskaite"
 
 OVERALL_STATUS=0
@@ -1573,7 +1578,7 @@ if [[ "$MODE" == "run" ]]; then
 fi
 FINAL_SENT=1
 
-log "===== RPi5 UPDATE v24 PABEIGTS: status=${OVERALL_STATUS}, ilgums=${DURATION} ====="
+log "===== RPi5 UPDATE v25 PABEIGTS: status=${OVERALL_STATUS}, ilgums=${DURATION} ====="
 
 if [[ "$REBOOT_REQUIRED" -eq 1 && "$MODE" == "run" ]]; then
     log "Drošs reboot ieplānots pēc 1 minūtes: ${REBOOT_REASON}"
