@@ -54,8 +54,17 @@ index_blob="$(awk '{print $2}' <<<"$index_line")"
 bash -n "$source_file"
 python3 "$validator" "$source_file"
 
-[[ ! -e "$repo/ops/maintenance/.v21-staging" ]]
-[[ ! -e "$repo/.github/workflows/v21-assemble-updater.yml" ]]
+for temporary_path in \
+    "$repo/ops/maintenance/.v21-staging" \
+    "$repo/ops/maintenance/.v21-public-staging" \
+    "$repo/.github/workflows/v21-assemble-updater.yml" \
+    "$repo/.github/workflows/v21-sanitize-public-source.yml" \
+    "$repo/.github/workflows/v21-assemble-public-source.yml"; do
+    [[ ! -e "$temporary_path" ]] || {
+        echo "temporary V21 source transport artifact remains: $temporary_path" >&2
+        exit 1
+    }
+done
 
 printf 'V21 updater source ownership: PASS sha256=%s size=%s mode=%s\n' \
     "$actual_sha256" "$actual_size" "$index_mode"
