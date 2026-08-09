@@ -6,23 +6,46 @@ repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 # shellcheck source=../ops/lib/rpi5-update-compose-policy.sh
 source "$repo/ops/lib/rpi5-update-compose-policy.sh"
 
+contains_arg() {
+    local wanted="$1"
+    shift
+    local arg
+    for arg in "$@"; do
+        [[ "$arg" == "$wanted" ]] && return 0
+    done
+    return 1
+}
+
+assert_pair() {
+    local key="$1" value="$2"
+    shift 2
+    local -a args=("$@")
+    local i
+    for ((i = 0; i + 1 < ${#args[@]}; i++)); do
+        if [[ "${args[$i]}" == "$key" && "${args[$((i + 1))]}" == "$value" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 assert_safe() {
     local rollback="$1"
     local token
     rpi5_build_compose_up_args 240 "$rollback"
 
-    local joined=" ${RPI5_COMPOSE_UP_ARGS[*]} "
-    [[ "$joined" == *" --pull never "* ]]
-    [[ "$joined" == *" --no-build "* ]]
-    [[ "$joined" == *" --wait "* ]]
-    [[ "$joined" == *" --wait-timeout 240 "* ]]
-    [[ "$joined" != *" --remove-orphans "* ]]
-    [[ "$joined" != *" --build "* ]]
+    contains_arg -d "${RPI5_COMPOSE_UP_ARGS[@]}"
+    assert_pair --pull never "${RPI5_COMPOSE_UP_ARGS[@]}"
+    contains_arg --no-build "${RPI5_COMPOSE_UP_ARGS[@]}"
+    contains_arg --wait "${RPI5_COMPOSE_UP_ARGS[@]}"
+    assert_pair --wait-timeout 240 "${RPI5_COMPOSE_UP_ARGS[@]}"
+    ! contains_arg --remove-orphans "${RPI5_COMPOSE_UP_ARGS[@]}"
+    ! contains_arg --build "${RPI5_COMPOSE_UP_ARGS[@]}"
 
     if [[ "$rollback" == "true" ]]; then
-        [[ "$joined" == *" --force-recreate "* ]]
+        contains_arg --force-recreate "${RPI5_COMPOSE_UP_ARGS[@]}"
     else
-        [[ "$joined" != *" --force-recreate "* ]]
+        ! contains_arg --force-recreate "${RPI5_COMPOSE_UP_ARGS[@]}"
     fi
 
     for token in "${RPI5_COMPOSE_UP_ARGS[@]}"; do
