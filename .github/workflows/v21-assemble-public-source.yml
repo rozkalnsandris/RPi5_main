@@ -1,0 +1,48 @@
+name: V21 Assemble Public Source
+
+on:
+  push:
+    branches:
+      - fix/95-maintenance-updater-ownership
+    paths:
+      - '.github/workflows/v21-assemble-public-source.yml'
+      - 'ops/maintenance/.v21-public-staging/**'
+
+permissions:
+  contents: write
+
+jobs:
+  assemble:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Assemble and verify exact source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cat \
+            ops/maintenance/.v21-public-staging/rpi5-update.part01 \
+            ops/maintenance/.v21-public-staging/rpi5-update.part02 \
+            ops/maintenance/.v21-public-staging/rpi5-update.part03 \
+            ops/maintenance/.v21-public-staging/rpi5-update.part04 \
+            > ops/bin/rpi5-update
+          printf '%s  %s\n' \
+            '860b2dd0be0d7f32f2648742a356bccabb20f0c9f8e7073ba2b1c998aa212851' \
+            'ops/bin/rpi5-update' | sha256sum -c -
+          bash -n ops/bin/rpi5-update
+          chmod 0755 ops/bin/rpi5-update
+
+      - name: Commit assembled source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- ops/bin/rpi5-update
+          git commit -m 'fix: sanitize V21 updater public runtime defaults'
+          git push origin HEAD:fix/95-maintenance-updater-ownership
