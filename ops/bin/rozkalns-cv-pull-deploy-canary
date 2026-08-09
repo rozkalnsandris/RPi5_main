@@ -1,0 +1,280 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+IFS=$'\n\t'
+umask 077
+PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+export PATH
+
+fail() {
+    printf 'ERROR: %s\n' "$*" >&2
+    exit 1
+}
+
+usage() {
+    cat >&2 <<'EOF'
+Usage: rozkalns-cv-pull-deploy-canary \
+  --target-sha <40-hex-sha> \
+  --approve-manual-rollout <same-40-hex-sha>
+EOF
+    exit 2
+}
+
+TARGET_SHA=''
+APPROVED_SHA=''
+while (( $# > 0 )); do
+    case "$1" in
+        --target-sha)
+            (( $# >= 2 )) || usage
+            TARGET_SHA="$2"
+            shift 2
+            ;;
+        --approve-manual-rollout)
+            (( $# >= 2 )) || usage
+            APPROVED_SHA="$2"
+            shift 2
+            ;;
+        *)
+            usage
+            ;;
+    esac
+done
+
+[[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'target SHA is invalid'
+[[ "$APPROVED_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'manual rollout approval SHA is invalid'
+[[ "$APPROVED_SHA" == "$TARGET_SHA" ]] \
+    || fail 'manual rollout approval does not match target SHA'
+[[ ${EUID:-$(id -u)} -ne 0 ]] || fail 'production canary must run as an unprivileged user'
+[[ "$(id -un)" == 'andris' ]] || fail 'production canary must run as andris'
+
+OWNER='andris'
+PREFLIGHT='/usr/local/sbin/rozkalns-cv-pull-deploy-preflight'
+CLASSIFIER='/usr/local/libexec/rozkalns-cv/classify-deploy-impact'
+PULL_LIBRARY='/usr/local/libexec/rozkalns-cv/rozkalns-cv-deploy-library'
+PULL_HELPER='/usr/local/sbin/rozkalns-cv-pull-deploy-main'
+CONTROLLER='/usr/local/sbin/rozkalns-cv-pull-deploy'
+READINESS='/usr/local/libexec/rozkalns-cv/deploy-readiness'
+LEGACY_HELPER='/usr/local/sbin/rozkalns-cv-deploy-main'
+PRODUCTION_STATE='/var/lib/rozkalns-cv-deploy/current-sha'
+TIMER_UNIT='rozkalns-cv-pull-deploy.timer'
+
+for command_name in \
+    awk basename flock getent git grep id install mktemp realpath stat sudo systemctl tr
+do
+    command -v "$command_name" >/dev/null 2>&1 \
+        || fail "required command is missing: $command_name"
+done
+
+OWNER_HOME="$(getent passwd "$OWNER" | awk -F: 'NR == 1 {print $6}')"
+[[ "$OWNER_HOME" == /* && -d "$OWNER_HOME" && ! -L "$OWNER_HOME" ]] \
+    || fail 'owner home directory is missing or unsafe'
+SOURCE="$OWNER_HOME/rozkalns-cv-worktrees/release-control"
+STATE_ROOT="$OWNER_HOME/.local/state/rozkalns-cv-main-deploy"
+CANARY_LOCK="$STATE_ROOT/production-canary.lock"
+EVIDENCE_ROOT="$OWNER_HOME/.local/state/rozkalns-cv-pull-deploy/evidence"
+
+SELF="$(realpath -e -- "${BASH_SOURCE[0]}")"
+[[ "$SELF" == '/usr/local/sbin/rozkalns-cv-pull-deploy-canary' ]] \
+    || fail 'production canary must run from the root-owned installed path'
+[[ "$(stat -c '%U:%G:%a' "$SELF")" == 'root:root:755' ]] \
+    || fail 'production canary ownership/mode is unexpected'
+
+[[ -d "$SOURCE" && ! -L "$SOURCE" ]] || fail 'release-control worktree is missing or unsafe'
+[[ -f "$PRODUCTION_STATE" && ! -L "$PRODUCTION_STATE" ]] \
+    || fail 'production state file is missing or unsafe'
+[[ -d "$EVIDENCE_ROOT" && ! -L "$EVIDENCE_ROOT" ]] \
+    || fail 'pull-deploy evidence root is missing or unsafe'
+[[ "$(stat -c '%U:%G:%a' "$EVIDENCE_ROOT")" == "$OWNER:$OWNER:700" ]] \
+    || fail 'pull-deploy evidence root ownership/mode is unexpected'
+
+for installed in "$PREFLIGHT" "$CLASSIFIER" "$PULL_LIBRARY" "$PULL_HELPER"; do
+    [[ -f "$installed" && -x "$installed" && ! -L "$installed" ]] \
+        || fail "installed CV artifact is missing or unsafe: $installed"
+    [[ "$(stat -c '%U:%G:%a' "$installed")" == 'root:root:755' ]] \
+        || fail "installed CV artifact ownership/mode is unexpected: $installed"
+done
+for installed in "$CONTROLLER" "$READINESS" "$LEGACY_HELPER"; do
+    [[ -f "$installed" && -x "$installed" && ! -L "$installed" ]] \
+        || fail "installed host control artifact is missing or unsafe: $installed"
+    [[ "$(stat -c '%U:%G:%a' "$installed")" == 'root:root:755' ]] \
+        || fail "installed host control artifact ownership/mode is unexpected: $installed"
+done
+
+install -d -m 0700 "$STATE_ROOT"
+exec 9>"$CANARY_LOCK"
+flock -n 9 || fail 'another production canary is already running'
+
+TIMER_ENABLED="$(systemctl is-enabled "$TIMER_UNIT" 2>/dev/null || true)"
+TIMER_ACTIVE="$(systemctl is-active "$TIMER_UNIT" 2>/dev/null || true)"
+[[ "$TIMER_ENABLED" != enabled ]] || fail 'recurring CV pull-deploy timer is enabled'
+[[ "$TIMER_ACTIVE" != active ]] || fail 'recurring CV pull-deploy timer is active'
+
+git -C "$SOURCE" fetch --prune origin main
+[[ -z "$(git -C "$SOURCE" branch --show-current)" ]] \
+    || fail 'release-control worktree must remain detached'
+[[ -z "$(git -C "$SOURCE" status --porcelain=v1 --untracked-files=all)" ]] \
+    || fail 'release-control worktree is not clean'
+REMOTE_MAIN="$(git -C "$SOURCE" rev-parse refs/remotes/origin/main)"
+[[ "$REMOTE_MAIN" == "$TARGET_SHA" ]] \
+    || fail 'approved target is no longer exact current origin/main'
+
+git -C "$SOURCE" cat-file -e "${TARGET_SHA}^{commit}" \
+    || fail 'approved target commit is unavailable'
+
+PRODUCTION_BEFORE="$(tr -d '[:space:]' < "$PRODUCTION_STATE")"
+[[ "$PRODUCTION_BEFORE" =~ ^[0-9a-f]{40}$ ]] || fail 'production SHA is invalid'
+[[ "$PRODUCTION_BEFORE" != "$TARGET_SHA" ]] \
+    || fail 'approved target is already current production'
+git -C "$SOURCE" merge-base --is-ancestor "$PRODUCTION_BEFORE" "$TARGET_SHA" \
+    || fail 'production SHA is not an ancestor of approved target'
+
+extract_field() {
+    local key=$1
+    local payload=$2
+    printf '%s\n' "$payload" \
+        | awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); print; exit}'
+}
+
+PREFLIGHT_OUTPUT=''
+if ! PREFLIGHT_OUTPUT="$($PREFLIGHT)"; then
+    fail 'App-authenticated preflight failed'
+fi
+PREFLIGHT_RESULT="$(extract_field 'PULL_DEPLOY_PREFLIGHT_RESULT' "$PREFLIGHT_OUTPUT")"
+PREFLIGHT_TARGET="$(extract_field 'TARGET_SHA' "$PREFLIGHT_OUTPUT")"
+PREFLIGHT_PRODUCTION="$(extract_field 'PRODUCTION_SHA' "$PREFLIGHT_OUTPUT")"
+DEPLOY_IMPACT="$(extract_field 'DEPLOY_IMPACT' "$PREFLIGHT_OUTPUT")"
+CONTROL_PLANE_CHANGED="$(extract_field 'CONTROL_PLANE_CHANGED' "$PREFLIGHT_OUTPUT")"
+CI_RUN_ID="$(extract_field 'CI_RUN_ID' "$PREFLIGHT_OUTPUT")"
+PREFLIGHT_MUTATION="$(extract_field 'PRODUCTION_MUTATION_AUTHORIZED' "$PREFLIGHT_OUTPUT")"
+
+[[ "$PREFLIGHT_RESULT" == 'MANUAL_ROLLOUT_REQUIRED' ]] \
+    || fail "preflight did not require manual rollout: $PREFLIGHT_RESULT"
+[[ "$PREFLIGHT_TARGET" == "$TARGET_SHA" ]] || fail 'preflight target SHA changed'
+[[ "$PREFLIGHT_PRODUCTION" == "$PRODUCTION_BEFORE" ]] \
+    || fail 'preflight production SHA changed'
+[[ "$DEPLOY_IMPACT" == 'MANUAL_ROLLOUT_REQUIRED' ]] \
+    || fail 'preflight deploy impact is not manual rollout'
+[[ "$CONTROL_PLANE_CHANGED" == true || "$CONTROL_PLANE_CHANGED" == false ]] \
+    || fail 'preflight control-plane flag is invalid'
+[[ "$CI_RUN_ID" =~ ^[1-9][0-9]*$ ]] || fail 'preflight exact-SHA CI run id is invalid'
+[[ "$PREFLIGHT_MUTATION" == false ]] \
+    || fail 'preflight unexpectedly authorized production mutation'
+
+# The manual approval is valid only for the exact control/transport artifacts in
+# the approved CV commit. A stale host install fails closed before sudo.
+declare -a installed_paths=(
+    "$PREFLIGHT"
+    "$CLASSIFIER"
+    "$PULL_LIBRARY"
+    "$PULL_HELPER"
+)
+declare -a source_paths=(
+    'runner/pull-deploy/rozkalns-cv-pull-deploy-preflight'
+    'runner/pull-deploy/classify_deploy_impact.py'
+    'runner/release/rozkalns-cv-deploy-main'
+    'runner/release/rozkalns-cv-pull-deploy-main'
+)
+for index in "${!installed_paths[@]}"; do
+    expected_blob="$(git -C "$SOURCE" rev-parse "$TARGET_SHA:${source_paths[$index]}")"
+    actual_blob="$(git hash-object "${installed_paths[$index]}")"
+    [[ "$expected_blob" =~ ^[0-9a-f]{40}$ ]] || fail 'expected CV artifact blob is invalid'
+    [[ "$actual_blob" == "$expected_blob" ]] \
+        || fail "installed CV artifact does not match approved target: ${source_paths[$index]}"
+done
+
+# Recheck origin/main after all read-only gates. If another merge landed, require
+# a new explicit approval rather than silently deploying the earlier target.
+git -C "$SOURCE" fetch --prune origin main
+REMOTE_MAIN="$(git -C "$SOURCE" rev-parse refs/remotes/origin/main)"
+[[ "$REMOTE_MAIN" == "$TARGET_SHA" ]] \
+    || fail 'origin/main advanced after approval checks; rerun with a new approval'
+
+LEGACY_HELPER_BEFORE="$(git hash-object "$LEGACY_HELPER")"
+EVIDENCE_DIR="$(mktemp -d \
+    "$EVIDENCE_ROOT/rozkalns-cv-main-deploy-canary-${TARGET_SHA:0:12}.XXXXXXXX")"
+[[ -d "$EVIDENCE_DIR" && ! -L "$EVIDENCE_DIR" ]] \
+    || fail 'canary evidence directory was not created safely'
+[[ "$(stat -c '%U:%G:%a' "$EVIDENCE_DIR")" == "$OWNER:$OWNER:700" ]] \
+    || fail 'canary evidence directory ownership/mode is unexpected'
+
+printf 'CV_PRODUCTION_CANARY_APPROVAL=PASS\n'
+printf 'TARGET_SHA=%s\n' "$TARGET_SHA"
+printf 'PRODUCTION_BEFORE=%s\n' "$PRODUCTION_BEFORE"
+printf 'CI_RUN_ID=%s\n' "$CI_RUN_ID"
+printf 'DEPLOY_IMPACT=%s\n' "$DEPLOY_IMPACT"
+printf 'CONTROL_PLANE_CHANGED=%s\n' "$CONTROL_PLANE_CHANGED"
+printf 'TIMER_ENABLED=%s\n' "$TIMER_ENABLED"
+printf 'TIMER_ACTIVE=%s\n' "$TIMER_ACTIVE"
+
+# This is the only production-mutation boundary in the canary executor.
+sudo -n "$PULL_HELPER" "$TARGET_SHA" "$EVIDENCE_DIR"
+
+SUMMARY="$EVIDENCE_DIR/summary.env"
+DEPLOY_LOG="$EVIDENCE_DIR/deploy.log"
+[[ -f "$SUMMARY" && ! -L "$SUMMARY" ]] || fail 'deploy summary is missing or unsafe'
+[[ -f "$DEPLOY_LOG" && ! -L "$DEPLOY_LOG" ]] || fail 'deploy log is missing or unsafe'
+
+summary_field() {
+    local key=$1
+    awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' "$SUMMARY"
+}
+
+[[ "$(summary_field DEPLOY_RESULT)" == PASS ]] || fail 'deploy result is not PASS'
+[[ "$(summary_field TARGET_SHA)" == "$TARGET_SHA" ]] || fail 'deploy summary target mismatch'
+[[ "$(summary_field FINAL_STATE_SHA)" == "$TARGET_SHA" ]] \
+    || fail 'deploy summary final state mismatch'
+[[ "$(summary_field PRODUCTION_CHANGED)" == true ]] \
+    || fail 'production did not change during canary'
+[[ "$(summary_field MUTATION_STARTED)" == true ]] \
+    || fail 'deploy mutation did not start'
+[[ "$(summary_field TRANSACTION_COMMITTED)" == true ]] \
+    || fail 'deploy transaction did not commit'
+[[ "$(summary_field ROLLBACK_PERFORMED)" == false ]] \
+    || fail 'successful canary unexpectedly rolled back'
+[[ "$(summary_field SHARED_INGRESS_CONTROLLED)" == false ]] \
+    || fail 'canary crossed shared ingress ownership boundary'
+[[ "$(summary_field DATABASE_MIGRATIONS_EXECUTED)" == false ]] \
+    || fail 'canary unexpectedly executed database migrations'
+
+for marker in \
+    'PUBLIC_SITE=PASS' \
+    'PUBLIC_MODULE_MIME=PASS' \
+    'PUBLIC_CACHE_IMMUTABLE=PASS' \
+    'PUBLIC_NOSNIFF=PASS' \
+    'PUBLIC_CSP_NONCE=PASS'
+do
+    grep -Fq "$marker" "$DEPLOY_LOG" \
+        || fail "transactional public contract evidence is missing: $marker"
+done
+
+PRODUCTION_AFTER="$(tr -d '[:space:]' < "$PRODUCTION_STATE")"
+[[ "$PRODUCTION_AFTER" == "$TARGET_SHA" ]] || fail 'production state did not reach approved target'
+LEGACY_HELPER_AFTER="$(git hash-object "$LEGACY_HELPER")"
+[[ "$LEGACY_HELPER_AFTER" == "$LEGACY_HELPER_BEFORE" ]] \
+    || fail 'legacy deploy helper changed during pull canary'
+
+CONTROLLER_OUTPUT="$($CONTROLLER)" || fail 'post-deploy readiness reconciliation failed'
+[[ "$(extract_field 'PULL_DEPLOY_CONTROLLER_RESULT' "$CONTROLLER_OUTPUT")" == 'NO_OP_ALREADY_CURRENT' ]] \
+    || fail 'post-deploy controller did not observe current production'
+[[ "$(extract_field 'READINESS_REASON' "$CONTROLLER_OUTPUT")" == CURRENT ]] \
+    || fail 'post-deploy readiness reason is not CURRENT'
+[[ "$(extract_field 'TARGET_SHA' "$CONTROLLER_OUTPUT")" == "$TARGET_SHA" ]] \
+    || fail 'post-deploy readiness target mismatch'
+[[ "$(extract_field 'PRODUCTION_SHA' "$CONTROLLER_OUTPUT")" == "$TARGET_SHA" ]] \
+    || fail 'post-deploy readiness production mismatch'
+[[ "$(extract_field 'PRODUCTION_MUTATION_AUTHORIZED' "$CONTROLLER_OUTPUT")" == false ]] \
+    || fail 'readiness controller unexpectedly authorizes mutation'
+
+TIMER_ENABLED_AFTER="$(systemctl is-enabled "$TIMER_UNIT" 2>/dev/null || true)"
+TIMER_ACTIVE_AFTER="$(systemctl is-active "$TIMER_UNIT" 2>/dev/null || true)"
+[[ "$TIMER_ENABLED_AFTER" != enabled ]] || fail 'recurring timer became enabled during canary'
+[[ "$TIMER_ACTIVE_AFTER" != active ]] || fail 'recurring timer became active during canary'
+
+printf 'CV_PRODUCTION_CANARY=PASS\n'
+printf 'FINAL_STATE_SHA=%s\n' "$PRODUCTION_AFTER"
+printf 'LEGACY_HELPER_MODIFIED=false\n'
+printf 'TRANSACTIONAL_PUBLIC_CONTRACTS=PASS\n'
+printf 'READINESS_RECONCILIATION=CURRENT\n'
+printf 'TIMER_ENABLED=%s\n' "$TIMER_ENABLED_AFTER"
+printf 'TIMER_ACTIVE=%s\n' "$TIMER_ACTIVE_AFTER"
+printf 'EVIDENCE_ID=%s\n' "$(basename -- "$EVIDENCE_DIR")"
+printf 'LEGACY_RUNNER_RETIREMENT_AUTHORIZED=false\n'
