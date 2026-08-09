@@ -21,6 +21,7 @@ REQUIRED_MARKERS = (
     "rpi5_enforce_normal_space_gate",
     "rpi5_application_local_health_targets",
     "rpi5_request_code_with_retry",
+    "rpi5-update-telegram.py",
     "http://127.0.0.1:8088/",
     "http://127.0.0.1:8089/",
     "--no-build",
@@ -61,6 +62,12 @@ def validate(text: str) -> list[str]:
         errors.append("CV local health regressed from loopback to HOST_IPV4")
     if re.search(r"HOST_IPV4[^\n]*:8089", normalized):
         errors.append("Hermes Tech local health regressed from loopback to HOST_IPV4")
+
+    if re.search(
+        r"(?m)^\s*TELEGRAM_(?:TOKEN|CHAT_ID)=[^\n]*\$TELEGRAM_(?:TOKEN|CHAT_ID)",
+        text,
+    ):
+        errors.append("Telegram credential is exported through a child process environment")
 
     return errors
 
