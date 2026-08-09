@@ -41,3 +41,8 @@ jobs:
 
       - name: Run pinned Gitleaks history scan
         run: bash ./scripts/run-gitleaks-ci.sh
+
+  public-automation-baseline:
+    uses: rozkalnsandris/ops-workflows/.github/workflows/public-repo-baseline.yml@e2fa7ecb1b1cdfab0711d8e3e147b5ae03a9a3f2
+    with:
+      forbid_self_hosted: true
