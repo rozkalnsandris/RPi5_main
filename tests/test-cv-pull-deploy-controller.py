@@ -36,6 +36,7 @@ class CvPullDeployControllerTests(unittest.TestCase):
         self.assertIn("/usr/local/libexec/rozkalns-cv/deploy-readiness", self.controller)
         self.assertIn("PRODUCTION_MUTATION_AUTHORIZED=false", self.controller)
         self.assertNotIn("rozkalns-cv-deploy-main", self.controller)
+        self.assertNotIn("/usr/local/sbin/rozkalns-cv-pull-deploy-main", self.controller)
         self.assertNotIn("systemctl ", self.controller)
         self.assertNotIn("docker ", self.controller)
         self.assertNotIn("sudo ", self.controller)
@@ -47,12 +48,26 @@ class CvPullDeployControllerTests(unittest.TestCase):
             "DB_HOST_APPLY_REQUIRED",
             "NO_DEPLOY",
             "WAIT_HELPER_ACTIVATION",
+            "WAIT_PULL_TRANSPORT_ACTIVATION",
             "AUTO_DEPLOY_READY",
             "PREFLIGHT_FAILED",
         ):
             self.assertIn(marker, self.controller)
         self.assertIn("flock -n 9", self.controller)
         self.assertIn("NO_OP_BUSY", self.controller)
+
+    def test_controller_keeps_legacy_and_pull_transport_waits_readiness_only(self) -> None:
+        self.assertIn(
+            "WAIT_HELPER_ACTIVATION|WAIT_PULL_TRANSPORT_ACTIVATION)",
+            self.controller,
+        )
+        self.assertIn(
+            "record_readiness \"$RESULT\" \"$TARGET_SHA\" \"$PRODUCTION_SHA\" 'AUTO_DEPLOY_SAFE' false \"$CI_RUN_ID\"",
+            self.controller,
+        )
+        self.assertIn("DEPLOY_IMPACT='AUTO_DEPLOY_SAFE'", self.controller)
+        self.assertIn("CONTROL_PLANE_CHANGED='false'", self.controller)
+        self.assertNotIn("rozkalns-cv-pull-deploy-main \"$TARGET_SHA\"", self.controller)
 
     def test_service_runs_unprivileged_with_app_token_sudo_compatibility(self) -> None:
         self.assertIn("User=andris", self.service)
