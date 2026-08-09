@@ -31,6 +31,9 @@ test:
 	bash ./tests/test-maintenance-systemd-notify.sh
 	bash ./tests/test-maintenance-cleanup-policy.sh
 	python3 ./tests/test-maintenance-cleanup-source.py
+	bash ./tests/test-maintenance-shared-lock.sh
+	python3 ./tests/test-maintenance-shared-lock-source.py
+	python3 ./tests/test-maintenance-lock-cutover.py
 	bash ./tests/test-adguard-memory-attribution.sh
 	bash ./tests/test-controlled-deploy.sh
 	bash ./tests/test-cloudflare-tunnel-ownership.sh
