@@ -35,12 +35,13 @@ assert lineage[3]["size_bytes"] == 47190
 
 candidate = data["candidate"]
 assert candidate == {
-    "stage": "v21-reviewed-successor",
+    "stage": "v21-reviewed-successor-public-safe",
     "path": "ops/bin/rpi5-update",
-    "sha256": "a29bbb79c9698f534e880e51ab62b4c5f7baf6bd0c4c2620f94e8f7921e4cf6c",
-    "git_blob_sha1": "fb75ceb988472456d9c21a3cbfd157078f2fdc66",
-    "size_bytes": 49855,
+    "sha256": "860b2dd0be0d7f32f2648742a356bccabb20f0c9f8e7073ba2b1c998aa212851",
+    "git_blob_sha1": "67cd5b443dfdb8a48fd08aaa4015dc0f6b26e9ec",
+    "size_bytes": 50076,
     "derived_from_sha256": "bd0afe74dea18742a002c852d59fc67ec848a032116d2adc314c24848895e24c",
+    "public_runtime_literals_removed": True,
 }
 
 policy = data["candidate_policy"]
@@ -48,6 +49,7 @@ assert policy == {
     "claim_byte_identical_import": False,
     "unexpected_live_diff_blocks_install": True,
     "production_install_requires_explicit_approval": True,
+    "private_runtime_values_live_outside_git": True,
 }
 print("Maintenance updater provenance manifest: PASS")
 PY
