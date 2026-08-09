@@ -129,6 +129,11 @@ Reusable workflows must:
 
 Callers must pin reusable workflows to an exact commit SHA once the baseline is stable.
 
+Phase 1 evidence:
+- reusable baseline merged in `RPi5_main` at `aa9d920d7f5fbc10a8e2b52bb346659f92c13172`;
+- the baseline found and forced correction of two pre-existing unpinned `actions/checkout@v4` references in `RPi5_main`;
+- low-risk caller `rozkalnsandris/rozkalnsandris` adopted the baseline pinned to that exact commit and passed its first workflow run.
+
 ## GitHub App target
 
 Desired app name: `Rozkalns Automation` (or an equivalent unambiguous name if unavailable).
@@ -137,10 +142,7 @@ Purpose:
 - RPi5 read-only access to repository/main/Actions state for exact-SHA verification.
 - Optional narrowly scoped status/deployment reporting back to GitHub.
 
-Initial permissions should be the minimum required, expected to begin around:
-- Contents: read
-- Actions: read
-- Pull requests: read only where required
+Initial permissions are defined by `docs/AUTOMATION_GITHUB_APP.md` and must remain minimal.
 
 Add write permissions only for a proven function such as deployment/check reporting or sanitized audit comments. Do not grant Secrets, Workflows write, or broad Administration access merely for convenience.
 
@@ -152,24 +154,24 @@ Use short-lived installation tokens rather than a long-lived PAT.
 
 - [x] Choose `RPi5_main` as canonical automation control repository.
 - [x] Define this master plan and strict anti-drift operating rule.
-- [ ] Merge this plan to `main` after CI.
-- [ ] Create/maintain one umbrella GitHub issue that tracks phase status and points here.
+- [x] Merge this plan to `main` after CI.
+- [x] Create/maintain one umbrella GitHub issue that tracks phase status and points here.
 
 Exit gate: master plan exists on `main`, CI passes, umbrella tracker exists.
 
 ### Phase 1 — Reusable public-repo baseline
 
-- [ ] Add a reusable `workflow_call` baseline in `RPi5_main`.
-- [ ] Check action SHA pinning and public-runner safety without replacing project-specific tests.
-- [ ] Validate the baseline in `RPi5_main` itself.
-- [ ] Adopt it in one low-risk caller first.
-- [ ] Pin caller reference to exact `RPi5_main` commit SHA.
+- [x] Add a reusable `workflow_call` baseline in `RPi5_main`.
+- [x] Check action SHA pinning and public-runner safety without replacing project-specific tests.
+- [x] Validate the baseline in `RPi5_main` itself.
+- [x] Adopt it in one low-risk caller first.
+- [x] Pin caller reference to exact `RPi5_main` commit SHA.
 
 Exit gate: reusable baseline is CI-proven and exact-SHA consumed by at least one repository.
 
 ### Phase 2 — GitHub App preparation
 
-- [ ] Define exact required repository permissions from real controller calls.
+- [x] Define exact required repository permissions from real controller calls.
 - [ ] Create/install `Rozkalns Automation` only on in-scope repositories.
 - [ ] Verify short-lived installation-token flow on RPi5.
 - [ ] Verify read-only exact-SHA/Actions lookup before granting any write permission.
@@ -249,4 +251,4 @@ If question 3 is `no` or question 5 is `yes`, do not make the change.
 
 ## Current next action
 
-**Phase 0 only:** merge this master plan after CI, create the umbrella tracker, then begin Phase 1 reusable baseline. Do not start CV/Deals runner migration before Phase 1 has a proven reusable baseline unless a production incident requires an explicitly documented exception.
+**Phase 2 only:** create and install `Rozkalns Automation` with the exact read-only permission/repository scope defined in `docs/AUTOMATION_GITHUB_APP.md`; then verify one-hour installation-token authentication and exact-SHA/Actions reads on RPi5. Do not start CV/Deals runner migration before the Phase 2 exit gate is proven.
