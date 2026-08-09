@@ -19,7 +19,8 @@ The source audit exposed further stale/destructive assumptions that must be corr
 - backup-overlap detection still recognized legacy `backup.sh` process names, while the authoritative V10 backup uses `/usr/local/sbin/rpi5-backup` and `/run/lock/rpi5-backup.lock`;
 - reboot package detection consumed the APT simulation package list even in `--check` mode, so an available kernel/firmware package could be described as already updated even though check mode performed no package installation;
 - automatic `docker network prune` can delete old custom networks merely because no container references them at that moment;
-- Compose `--remove-orphans` deletes project containers absent from the current definition, but the updater's image-tag rollback cannot recreate a removed orphan.
+- Compose `--remove-orphans` deletes project containers absent from the current definition, but the updater's image-tag rollback cannot recreate a removed orphan;
+- the legacy Compose runtime gate inspects only containers that already exist and can therefore miss one completely absent service while other project containers remain healthy.
 
 ## Audited behavior to preserve
 
@@ -28,6 +29,7 @@ The updater is deliberately conservative:
 - run only as root and hold a non-blocking process lock;
 - require a root-only maintenance configuration;
 - validate free disk/inodes, Docker and both Compose projects before mutation;
+- prove every service defined by each targeted Compose project has a corresponding current container before mutation, then verify running/health state;
 - refuse to overlap the host backup workflow using its authoritative lock rather than process-name guessing;
 - perform APT metadata refresh and dpkg integrity checks before other updates;
 - use a no-removal APT upgrade path for unattended weekly maintenance;
@@ -63,6 +65,8 @@ Network pruning is removed from the unattended weekly path. Docker defines an un
 
 Pulling and recreating are separate gates. The updater snapshots existing image identity, pulls first, then runs Compose with `--pull never` and `--wait`; failed runtime health enters the explicit image-tag rollback path rather than silently accepting a partially healthy stack.
 
+Before mutation, project completeness must be checked separately from per-container health: `docker compose config --services` is the expected service set and `docker compose ps --all --services` is the service set with current project containers. Any expected service missing from the latter is a preflight failure even if every remaining container is running/healthy. This prevents a partially missing project from being mistaken for a healthy baseline.
+
 The unattended updater must not pass `--remove-orphans`. Docker documents that flag as removing containers for services absent from the current Compose definition. The existing rollback restores image tags for defined services; it does not reconstruct deleted orphan containers, so automatic orphan deletion violates the rollback boundary. Orphans may be reported and handled through a separate reviewed cleanup.
 
 ### Journald cleanup
@@ -91,6 +95,7 @@ The classifier deliberately recognizes both a nonzero-behind convention and the 
 | `ops/lib/rpi5-update-hermes-status.sh` | bundled/installed with updater implementation | root-controlled, not independently scheduled |
 | `ops/lib/rpi5-update-locks.sh` | bundled/installed with updater implementation | root-controlled, not independently scheduled |
 | `ops/lib/rpi5-update-reboot.sh` | bundled/installed with updater implementation | root-controlled, not independently scheduled |
+| `ops/lib/rpi5-update-compose-health.sh` | bundled/installed with updater implementation | root-controlled, not independently scheduled |
 
 The current home-directory updater location is transitional only and must not remain the authoritative scheduler target after the systemd migration in #97.
 
@@ -100,6 +105,7 @@ The current home-directory updater location is transitional only and must not re
 - deterministic Hermes current/available/error classifier tests;
 - deterministic backup-lock held/available/released tests;
 - deterministic check-vs-run reboot-package semantics tests;
+- deterministic Compose expected-vs-actual service completeness tests;
 - no `docker image prune -a/--all` in the imported updater;
 - no unattended `docker network prune`;
 - no unattended Compose `--remove-orphans`;
