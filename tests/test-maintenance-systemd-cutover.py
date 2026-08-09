@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import stat
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -9,6 +10,7 @@ SCRIPT = ROOT / "ops/bin/rpi5-maintenance-systemd-cutover"
 text = SCRIPT.read_text(encoding="utf-8")
 
 assert text.startswith("#!/usr/bin/env bash\n")
+assert SCRIPT.stat().st_mode & stat.S_IXUSR, "systemd cutover operator must be executable"
 assert "set -Eeuo pipefail" in text
 assert "EXPECTED_LIVE_V17_SHA256=\"bd0afe74dea18742a002c852d59fc67ec848a032116d2adc314c24848895e24c\"" in text
 assert "--allow-persistent-catchup" in text
