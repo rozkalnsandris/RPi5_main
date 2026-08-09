@@ -45,6 +45,8 @@ assert module.validate(GOOD) == [], module.validate(GOOD)
 cases = {
     "image-prune-all": GOOD.replace("docker image prune -f", "docker image prune -a -f"),
     "network-prune": GOOD + "\ndocker network prune -f\n",
+    "image-prune-all-capability": GOOD + '\nrequire_help_flag "docker image prune" "--all" docker image prune\n',
+    "network-prune-capability": GOOD + '\nrequire_help_flag "docker network prune" "--filter" docker network prune\n',
     "remove-orphans": GOOD.replace("--no-build", "--no-build --remove-orphans", 1),
     "legacy-backup-pgrep": GOOD + "\npgrep -af 'backup.sh'\n",
     "cv-lan": GOOD.replace("http://127.0.0.1:8088/", "http://${HOST_IPV4}:8088/", 1),
