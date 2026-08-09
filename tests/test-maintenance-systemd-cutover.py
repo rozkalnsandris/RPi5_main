@@ -15,6 +15,7 @@ assert "--allow-persistent-catchup" in text
 assert "REFUSED: --activate requires --allow-persistent-catchup" in text
 assert "/etc/rpi5-maintenance/required-containers" in text
 assert 'MAINTENANCE_LIB_DIR="/usr/local/lib/rpi5-maintenance"' in text
+assert text.count("/usr/local/lib/rpi5-maintenance") == 1
 assert "/usr/local/libexec/rpi5-maintenance" not in text
 assert 'CREDSTORE_DIR="/etc/credstore"' in text
 assert 'TOKEN_CREDENTIAL="${CREDSTORE_DIR}/rpi5-maintenance-telegram-token"' in text
