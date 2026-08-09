@@ -12,6 +12,17 @@ tmp="$(mktemp -d)"
 cleanup() { rm -rf -- "$tmp"; }
 trap cleanup EXIT
 
+# curl commonly prints HTTP 000 and also returns a transport error. The helper
+# must normalize that to exactly one three-digit code, never `000000`.
+curl() {
+    printf '000'
+    return 7
+}
+normalized="$(rpi5_request_code 'https://example.invalid/')"
+[[ "$normalized" == "000" ]]
+unset -f curl
+printf '%s\n' 'PASS curl-failure-normalized-to-000'
+
 # First request fails, second succeeds. The mock counter is file-backed because
 # rpi5_request_code is intentionally invoked inside command substitution.
 counter="$tmp/request-count"
@@ -60,4 +71,4 @@ rpi5_request_code_with_retry 'https://example.invalid/' 0 0 >/dev/null 2>&1 || r
 [[ "$rc" -eq 2 ]]
 printf '%s\n' 'PASS invalid-attempt-count'
 
-printf '%s\n' 'Maintenance updater HTTP health tests: PASS (4 cases)'
+printf '%s\n' 'Maintenance updater HTTP health tests: PASS (5 cases)'
