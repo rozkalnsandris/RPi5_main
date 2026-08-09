@@ -1,0 +1,399 @@
+                    log "KĻŪDA: Hermes dashboard nav sasniedzams pēc restart."
+                fi
+            else
+                HERMES_STATUS=1
+                log "KĻŪDA: hermes-dashboard.service restart neizdevās."
+            fi
+        fi
+    fi
+
+    HERMES_AFTER="$(hermes_version)"
+    if [[ "$MODE" == "check" ]]; then
+        case "${HERMES_CHECK_STATE:-error}" in
+            current)
+                SUMMARY_LINES+=("🤖 Hermes: ${HERMES_AFTER:-?} (Git current) ✅")
+                ;;
+            available)
+                if [[ -n "${HERMES_CHECK_BEHIND:-}" ]]; then
+                    SUMMARY_LINES+=("🤖 Hermes: ${HERMES_AFTER:-?} (update pieejams: ${HERMES_CHECK_BEHIND} commits) ⚠️")
+                else
+                    SUMMARY_LINES+=("🤖 Hermes: ${HERMES_AFTER:-?} (update pieejams) ⚠️")
+                fi
+                ;;
+            *)
+                SUMMARY_LINES+=("🤖 Hermes: ${HERMES_AFTER:-?} (check kļūda) ❌")
+                ;;
+        esac
+    else
+        SUMMARY_LINES+=("🤖 Hermes: ${HERMES_BEFORE:-?} → ${HERMES_AFTER:-?} $(status_icon "$HERMES_STATUS")")
+    fi
+fi
+
+# ============================================================
+# DOCKER COMPOSE
+# ============================================================
+snapshot_images() {
+    local project_dir="$1"
+    local output_file="$2"
+    local image_ref image_id version
+
+    (
+        cd "$project_dir"
+
+        while IFS= read -r image_ref; do
+            [[ -n "$image_ref" ]] || continue
+
+            image_id="$(
+                docker image inspect --format '{{.Id}}' "$image_ref" 2>/dev/null ||
+                    true
+            )"
+
+            version="$(
+                docker image inspect \
+                    --format '{{index .Config.Labels "org.opencontainers.image.version"}}' \
+                    "$image_ref" 2>/dev/null || true
+            )"
+
+            [[ "$version" == "<no value>" ]] && version=""
+
+            printf '%s\t%s\t%s\n' \
+                "$image_ref" \
+                "${image_id:-MISSING}" \
+                "${version:-}"
+        done < <(docker compose config --images | sort -u)
+    ) >"$output_file"
+}
+
+restore_image_tags() {
+    local snapshot_file="$1"
+    local image_ref image_id version
+
+    while IFS=$'\t' read -r image_ref image_id version; do
+        [[ -n "$image_ref" ]] || continue
+        [[ "$image_id" != "MISSING" && -n "$image_id" ]] || continue
+
+        if [[ "$image_ref" == *@sha256:* ]]; then
+            log "Rollback tag nav vajadzīgs digest-pinned image: ${image_ref}"
+            continue
+        fi
+
+        log "Rollback image tag: ${image_ref} -> ${image_id:0:19}"
+        docker image tag "$image_id" "$image_ref"
+    done <"$snapshot_file"
+}
+
+collect_image_changes() {
+    local project_name="$1"
+    local before_file="$2"
+    local after_file="$3"
+    local image_ref old_id old_version new_line new_id new_version
+    local old_label new_label _
+
+    while IFS=$'\t' read -r image_ref old_id old_version; do
+        [[ -n "$image_ref" ]] || continue
+
+        new_line="$(
+            awk -F '\t' -v ref="$image_ref" '$1 == ref {print; exit}' "$after_file"
+        )"
+
+        [[ -n "$new_line" ]] || continue
+        IFS=$'\t' read -r _ new_id new_version <<<"$new_line"
+
+        if [[ "$old_id" != "$new_id" ]]; then
+            old_label="${old_version:-${old_id:7:12}}"
+            new_label="${new_version:-${new_id:7:12}}"
+            UPDATED_IMAGES+=("${project_name}: ${image_ref} ${old_label} → ${new_label}")
+        fi
+    done <"$before_file"
+}
+
+update_compose_project() {
+    local project_name="$1"
+    local project_dir="$2"
+    local before_file="${TMP_DIR}/${project_name}-before.tsv"
+    local pulled_file="${TMP_DIR}/${project_name}-pulled.tsv"
+    local rollback_ok=0
+
+    log "----- Docker Compose: ${project_name} -----"
+    validate_compose_project "$project_name" "$project_dir" || return 2
+    snapshot_images "$project_dir" "$before_file" || return 2
+
+    if [[ "$MODE" == "check" ]]; then
+        log "${project_name}: --check režīmā image netiek vilkti un konteineri netiek recreatēti."
+        return 0
+    fi
+
+    (
+        cd "$project_dir"
+        timeout \
+            --foreground \
+            --kill-after=60s \
+            "$DOCKER_PULL_TIMEOUT" \
+            docker compose pull --ignore-buildable
+    ) || {
+        log "KĻŪDA: ${project_name} docker compose pull neizdevās."
+        restore_image_tags "$before_file" || true
+        return 1
+    }
+
+    snapshot_images "$project_dir" "$pulled_file" || {
+        log "KĻŪDA: ${project_name} image snapshot pēc pull neizdevās."
+        restore_image_tags "$before_file" || true
+        return 2
+    }
+
+    rpi5_build_compose_up_args "$COMPOSE_WAIT_TIMEOUT" false || return 2
+    # Reviewed unattended policy includes --pull never --no-build --wait.
+    if (
+        cd "$project_dir"
+        docker compose up "${RPI5_COMPOSE_UP_ARGS[@]}"
+    ); then
+        if check_project_runtime "$project_name" "$project_dir"; then
+            collect_image_changes "$project_name" "$before_file" "$pulled_file"
+            return 0
+        fi
+
+        log "KĻŪDA: ${project_name} runtime pārbaude pēc compose up neizdevās."
+    fi
+
+    log "KĻŪDA: ${project_name} jaunais stack nekļuva running/healthy."
+    log "Mēģina automātisku image rollback."
+
+    restore_image_tags "$before_file"
+
+    rpi5_build_compose_up_args "$COMPOSE_WAIT_TIMEOUT" true || return 2
+    if (
+        cd "$project_dir"
+        docker compose up "${RPI5_COMPOSE_UP_ARGS[@]}"
+    ); then
+        if check_project_runtime "$project_name" "$project_dir"; then
+            rollback_ok=1
+            log "${project_name}: rollback izdevās; iepriekšējie image atjaunoti."
+        else
+            log "KRITISKI: ${project_name} rollback runtime pārbaude neizdevās."
+        fi
+    else
+        log "KRITISKI: ${project_name} rollback neizdevās."
+    fi
+
+    [[ "$rollback_ok" -eq 1 ]] || return 2
+    return 1
+}
+
+CURRENT_PHASE="Docker main"
+if update_compose_project "main" "$MAIN_COMPOSE_DIR"; then
+    MAIN_DOCKER_STATUS=0
+else
+    MAIN_DOCKER_STATUS=$?
+fi
+SUMMARY_LINES+=("🐳 Docker main: $(status_icon "$MAIN_DOCKER_STATUS")")
+
+CURRENT_PHASE="Docker CV"
+if [[ "$MAIN_DOCKER_STATUS" -eq 0 ]]; then
+    if update_compose_project "cv" "$CV_COMPOSE_DIR"; then
+        CV_DOCKER_STATUS=0
+    else
+        CV_DOCKER_STATUS=$?
+    fi
+else
+    CV_DOCKER_STATUS=1
+    log "CV stack update izlaists, jo main stack update neizdevās."
+fi
+SUMMARY_LINES+=("🐳 Docker CV: $(status_icon "$CV_DOCKER_STATUS")")
+
+# ============================================================
+# VESELĪBAS PĀRBAUDES
+# ============================================================
+CURRENT_PHASE="veselības pārbaudes"
+log "----- Veselības pārbaudes -----"
+
+# HTTP retry/reachability behavior is provided by the reviewed
+# rpi5-update-http-health.sh helper loaded from the root-controlled libexec path.
+
+
+LOCAL_URLS=(
+    "Home Assistant|http://${HOST_IPV4}:8123/"
+    "Uptime Kuma|http://${HOST_IPV4}:3001/"
+    "AdGuard|http://${HOST_IPV4}:3080/"
+    "Grafana|http://${HOST_IPV4}:3030/"
+    "Prometheus|http://${HOST_IPV4}:9090/-/healthy"
+    "Portainer|http://${HOST_IPV4}:9000/"
+    "Node Exporter|http://${HOST_IPV4}:9100/metrics"
+)
+while IFS=$'\t' read -r app_name app_url; do
+    LOCAL_URLS+=("${app_name}|${app_url}")
+done < <(rpi5_application_local_health_targets)
+
+PUBLIC_URLS=(
+    "CV|https://rozkalns.net/"
+    "Hermes Tech|https://tech.rozkalns.net/"
+    "Portainer|https://portainer.rozkalns.net/"
+    "Grafana|https://grafana.rozkalns.net/"
+    "Home Assistant|https://ha.rozkalns.net/"
+    "AdGuard|https://adguard.rozkalns.net/"
+    "Uptime Kuma|https://kuma.rozkalns.net/"
+    "Prometheus|https://prometheus.rozkalns.net/"
+)
+
+for entry in "${LOCAL_URLS[@]}"; do
+    name="${entry%%|*}"
+    url="${entry#*|}"
+    if code="$(rpi5_request_code_with_retry "$url" 3 5)"; then
+        :
+    else
+        LOCAL_HEALTH_STATUS=1
+    fi
+
+    printf '%-20s %-48s HTTP %s\n' "$name" "$url" "$code"
+done
+
+for entry in "${PUBLIC_URLS[@]}"; do
+    name="${entry%%|*}"
+    url="${entry#*|}"
+
+    if code="$(rpi5_request_code_with_retry "$url" 8 10)"; then
+        :
+    else
+        PUBLIC_HEALTH_STATUS=1
+    fi
+
+    printf '%-20s %-48s HTTP %s\n' "$name" "$url" "$code"
+done
+
+# ----- Hermes specifiska veselības pārbaude (ārpus masīviem) -----
+# Lokālā: dashboard uz localhost:9119/api/status
+HERMES_LOCAL_OK=0
+if hermes_local_code="$(rpi5_request_code_with_retry "http://192.168.0.180:9119/api/status" 3 3)"; then
+    HERMES_LOCAL_OK=1
+else
+    LOCAL_HEALTH_STATUS=1
+fi
+printf '%-20s %-48s HTTP %s\n' "Hermes (local)" "http://192.168.0.180:9119/api/status" "$hermes_local_code"
+
+# Publiskā: tikai ja lokālais ir OK (dependency)
+if [[ "$HERMES_LOCAL_OK" -eq 1 ]]; then
+    if hermes_public_code="$(rpi5_request_code_with_retry "https://hermes.rozkalns.net/" 8 10)"; then
+        :
+    else
+        PUBLIC_HEALTH_STATUS=1
+    fi
+    printf '%-20s %-48s HTTP %s\n' "Hermes (public)" "https://hermes.rozkalns.net/" "$hermes_public_code"
+else
+    PUBLIC_HEALTH_STATUS=1
+    printf '%-20s %-48s %s\n' "Hermes (public)" "https://hermes.rozkalns.net/" "SKIPPED (dependency: local Hermes failed)"
+fi
+
+SUMMARY_LINES+=("🩺 Lokālie servisi: $(status_icon "$LOCAL_HEALTH_STATUS")")
+SUMMARY_LINES+=("🌐 Publiskie servisi: $(status_icon "$PUBLIC_HEALTH_STATUS")")
+SUMMARY_LINES+=("📊 Hermes dashboard: $(status_icon "$(( ! HERMES_LOCAL_OK ))")")
+
+# ============================================================
+# REBOOT NOTEIKŠANA UN GALA ATSKAITE
+# ============================================================
+CURRENT_PHASE="gala atskaite"
+
+OVERALL_STATUS=0
+for status in \
+    "$APT_STATUS" \
+    "$RCLONE_STATUS" \
+    "$HERMES_STATUS" \
+    "$MAIN_DOCKER_STATUS" \
+    "$CV_DOCKER_STATUS" \
+    "$LOCAL_HEALTH_STATUS" \
+    "$PUBLIC_HEALTH_STATUS" \
+    "$CLEANUP_STATUS"; do
+    if [[ "$status" -ne 0 ]]; then
+        OVERALL_STATUS=1
+    fi
+done
+
+REBOOT_REQUIRED=0
+REBOOT_REASON="nav nepieciešams"
+
+if [[ -f /var/run/reboot-required ]]; then
+    REBOOT_REQUIRED=1
+    REBOOT_REASON="/var/run/reboot-required"
+fi
+
+if rpi5_applied_packages_require_reboot "$MODE" "$APT_PACKAGE_LIST"; then
+    REBOOT_REQUIRED=1
+    REBOOT_REASON="kernel/firmware pakotne atjaunināta"
+fi
+
+case "$REBOOT_POLICY" in
+    always)
+        REBOOT_REQUIRED=1
+        REBOOT_REASON="REBOOT_POLICY=always"
+        ;;
+    never)
+        REBOOT_REQUIRED=0
+        REBOOT_REASON="REBOOT_POLICY=never"
+        ;;
+esac
+
+if [[ "$NO_REBOOT" -eq 1 ]]; then
+    REBOOT_REQUIRED=0
+    REBOOT_REASON="--no-reboot"
+fi
+
+if [[ "$OVERALL_STATUS" -ne 0 ]]; then
+    REBOOT_REQUIRED=0
+    REBOOT_REASON="kļūdas dēļ reboot bloķēts"
+fi
+
+END_EPOCH="$(date +%s)"
+DURATION="$(elapsed_human $((END_EPOCH - START_EPOCH)))"
+
+if [[ "$MODE" == "check" ]]; then
+    HEADER="🔎 RPi5 UPDATE PĀRBAUDE PABEIGTA"
+elif [[ "$OVERALL_STATUS" -eq 0 ]]; then
+    HEADER="✅ RPi5 SVĒTDIENAS UPDATE VEIKSMĪGS"
+else
+    HEADER="⚠️ RPi5 UPDATE PABEIGTS AR KĻŪDĀM"
+fi
+
+REPORT="${HEADER}
+
+$(printf '%s\n' "${SUMMARY_LINES[@]}")
+
+⏱ Ilgums: ${DURATION}
+🔁 Reboot: $([[ "$REBOOT_REQUIRED" -eq 1 ]] && echo "JĀ" || echo "NĒ") (${REBOOT_REASON})"
+
+if (( ${#UPDATED_IMAGES[@]} > 0 )); then
+    REPORT+="
+
+Atjauninātie Docker image:
+$(printf '• %s\n' "${UPDATED_IMAGES[@]}")"
+else
+    REPORT+="
+
+Docker image izmaiņas: nav"
+fi
+
+if (( ${#WARNINGS[@]} > 0 )); then
+    REPORT+="
+
+Brīdinājumi:
+$(printf '• %s\n' "${WARNINGS[@]}")"
+fi
+
+REPORT+="
+
+Logs: ${LOG}"
+
+printf '\n%s\n' "$REPORT"
+
+if [[ "$MODE" == "run" ]]; then
+    send_msg "$REPORT" || true
+fi
+FINAL_SENT=1
+
+log "===== RPi5 UPDATE v21 PABEIGTS: status=${OVERALL_STATUS}, ilgums=${DURATION} ====="
+
+if [[ "$REBOOT_REQUIRED" -eq 1 && "$MODE" == "run" ]]; then
+    log "Drošs reboot ieplānots pēc 1 minūtes: ${REBOOT_REASON}"
+    sync
+    shutdown -r +1 "RPi5 update pabeigts; ${REBOOT_REASON}"
+fi
+
+exit "$OVERALL_STATUS"
