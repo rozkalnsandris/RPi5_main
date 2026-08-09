@@ -49,21 +49,40 @@
       "size_bytes": 50072,
       "helper_root": "/usr/local/lib/rpi5-maintenance",
       "evidence": "RPi5_main PR #99 merged FHS-correct V21 source"
+    },
+    {
+      "stage": "v24-cleanup-ownership-public-safe-final",
+      "date": "2026-08-09",
+      "sha256": "2f44d0b256e28450dd94ab7a6d1f5b5d2cb4a198adc44a11ae6932a3877a6b3c",
+      "git_blob_sha1": "5cbccfc5468cbb089e7cf7b9c4c78603eb542367",
+      "size_bytes": 50297,
+      "helper_root": "/usr/local/lib/rpi5-maintenance",
+      "evidence": "RPi5_main PR #109 merged V24 cleanup-ownership source"
     }
   ],
   "candidate": {
-    "stage": "v24-cleanup-ownership-public-safe-final",
+    "stage": "v25-shared-maintenance-lock-public-safe",
     "path": "ops/bin/rpi5-update",
     "sha256": "2f44d0b256e28450dd94ab7a6d1f5b5d2cb4a198adc44a11ae6932a3877a6b3c",
-    "git_blob_sha1": "5cbccfc5468cbb089e7cf7b9c4c78603eb542367",
+    "git_blob_sha1": "049d9a040efb4be4c2ff861d46a7e0e302b1c5e8",
     "size_bytes": 50297,
     "helper_root": "/usr/local/lib/rpi5-maintenance",
-    "derived_from_sha256": "b1678732e8e33b1d5b479167bae23f7efb8a2f5390fe635a91cb19792d706860",
+    "derived_from_sha256": "2f44d0b256e28450dd94ab7a6d1f5b5d2cb4a198adc44a11ae6932a3877a6b3c",
     "public_runtime_literals_removed": true,
     "cleanup_home_scan_removed": true,
     "cleanup_only_compose_preflight_removed": true,
     "cleanup_custom_paths_allowlisted": true,
-    "cleanup_only_docker_command_optional": true
+    "cleanup_only_docker_command_optional": true,
+    "shared_maintenance_lock": true,
+    "backup_private_probe_removed": true,
+    "explicit_lock_conflict_code": 200
+  },
+  "backup_ownership_snapshot": {
+    "label": "V10 ownership snapshot",
+    "runtime_version": 12,
+    "path": "ops/bin/rpi5-backup",
+    "sha256": "5ca85ae53bdf4fa3b99e21e1a30ddaa077d9e1791505b1e8389ee8587d011735",
+    "identity_authority": "sha256"
   },
   "candidate_policy": {
     "claim_byte_identical_import": false,
