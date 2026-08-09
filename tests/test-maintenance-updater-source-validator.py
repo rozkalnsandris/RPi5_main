@@ -16,9 +16,9 @@ set -Eeuo pipefail
 umask 077
 CONFIG=/etc/rpi-update.conf
 LOCK=/run/lock/rpi5-update.lock
-BACKUP_LOCK=/run/lock/rpi5-backup.lock
+MAINTENANCE_LOCK=/run/lock/rpi5-maintenance-exclusive.lock
 LIBEXEC=/usr/local/lib/rpi5-maintenance
-BACKUP_WAIT_TIMEOUT=1800
+MAINTENANCE_LOCK_TIMEOUT=1800
 HOST_IPV4="${HOST_IPV4:-}"
 UPDATE_HOME="$(getent passwd "$UPDATE_USER" | awk -F: 'NR==1 {print $6}')"
 MAIN_COMPOSE_DIR="${MAIN_COMPOSE_DIR:-${UPDATE_HOME}/docker}"
@@ -26,6 +26,7 @@ HERMES_BIN="${HERMES_BIN:-${UPDATE_HOME}/.local/bin/hermes}"
 # Supported: --check --no-reboot --cleanup-only
 source "$LIBEXEC/rpi5-update-hermes-status.sh"
 source "$LIBEXEC/rpi5-update-locks.sh"
+source "$LIBEXEC/rpi5-maintenance-locks.sh"
 source "$LIBEXEC/rpi5-update-reboot.sh"
 source "$LIBEXEC/rpi5-update-compose-health.sh"
 source "$LIBEXEC/rpi5-update-compose-policy.sh"
@@ -34,7 +35,8 @@ source "$LIBEXEC/rpi5-update-origin-policy.sh"
 source "$LIBEXEC/rpi5-update-http-health.sh"
 TELEGRAM_HELPER="$LIBEXEC/rpi5-update-telegram.py"
 rpi5_classify_hermes_update_check 0 "Up to date"
-rpi5_wait_for_lock_available "$BACKUP_LOCK" "$BACKUP_WAIT_TIMEOUT"
+RPI5_LOCK_CONFLICT_RC=200
+rpi5_acquire_exclusive_lock "$MAINTENANCE_LOCK" "$MAINTENANCE_LOCK_TIMEOUT" MAINTENANCE_LOCK_FD
 rpi5_applied_packages_require_reboot run "linux-image"
 rpi5_find_missing_compose_services "api" "api"
 rpi5_build_compose_up_args 240 false
@@ -52,6 +54,8 @@ assert module.validate(GOOD) == [], module.validate(GOOD)
 
 cases = {
     "forbidden-local-libexec": GOOD + "\nOLD=/usr/local/libexec/rpi5-maintenance\n",
+    "forbidden-backup-private-lock": GOOD + "\nOLD=/run/lock/rpi5-backup.lock\n",
+    "legacy-backup-lock-helper": GOOD + "\nrpi5_wait_for_lock_available /run/lock/legacy.lock 10\n",
     "concrete-user-home": GOOD + "\nLEGACY=/home/example-user/runtime/\n",
     "private-ipv4-10": GOOD + "\nLEGACY_HOST=10.20.30.40\n",
     "private-ipv4-172": GOOD + "\nLEGACY_HOST=172.20.30.40\n",
@@ -71,7 +75,9 @@ cases = {
         1,
     ),
     "missing-origin-helper": GOOD.replace("rpi5_application_local_health_targets", "legacy_origin_list", 1),
-    "missing-lock-helper": GOOD.replace("rpi5_wait_for_lock_available", "legacy_wait_for_backup", 1),
+    "missing-shared-lock-helper": GOOD.replace("rpi5_acquire_exclusive_lock", "legacy_wait_for_backup", 1),
+    "missing-lock-library": GOOD.replace("rpi5-maintenance-locks.sh", "legacy-locks.sh", 1),
+    "missing-conflict-code": GOOD.replace("RPI5_LOCK_CONFLICT_RC", "LEGACY_LOCK_RC", 1),
     "missing-telegram-helper": GOOD.replace("rpi5-update-telegram.py", "legacy-notifier.py", 1),
     "telegram-child-env": GOOD + '\nTELEGRAM_TOKEN="$TELEGRAM_TOKEN" TELEGRAM_CHAT_ID="$CHAT_ID" python3 notifier.py\n',
 }

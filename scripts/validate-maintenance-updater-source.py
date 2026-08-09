@@ -13,14 +13,16 @@ REQUIRED_MARKERS = (
     "umask 077",
     "/etc/rpi-update.conf",
     "/run/lock/rpi5-update.lock",
-    "/run/lock/rpi5-backup.lock",
+    "/run/lock/rpi5-maintenance-exclusive.lock",
     "/usr/local/lib/rpi5-maintenance",
-    "BACKUP_WAIT_TIMEOUT",
+    "MAINTENANCE_LOCK_TIMEOUT",
+    "rpi5-maintenance-locks.sh",
+    "rpi5_acquire_exclusive_lock",
+    "RPI5_LOCK_CONFLICT_RC",
     'HOST_IPV4="${HOST_IPV4:-}"',
     'MAIN_COMPOSE_DIR="${MAIN_COMPOSE_DIR:-${UPDATE_HOME}/docker}"',
     'HERMES_BIN="${HERMES_BIN:-${UPDATE_HOME}/.local/bin/hermes}"',
     "rpi5_classify_hermes_update_check",
-    "rpi5_wait_for_lock_available",
     "rpi5_applied_packages_require_reboot",
     "rpi5_find_missing_compose_services",
     "rpi5_build_compose_up_args",
@@ -57,6 +59,11 @@ def validate(text: str) -> list[str]:
         errors.append("tracked updater contains a concrete user-home path")
     if any(re.search(pattern, text) for pattern in PRIVATE_IPV4_PATTERNS):
         errors.append("tracked updater contains a concrete RFC1918 IPv4 address")
+
+    if "/run/lock/rpi5-backup.lock" in text:
+        errors.append("updater still depends on backup-private lock instead of shared maintenance lock")
+    if "rpi5_wait_for_lock_available" in text:
+        errors.append("updater still uses legacy backup-lock probe semantics")
 
     if text.count(SAFE_COMPOSE_UP) < 2:
         errors.append("Compose recreate/rollback are not both routed through the reviewed argument helper")

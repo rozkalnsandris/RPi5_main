@@ -1,0 +1,271 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export LC_ALL=C
+export LANG=C
+
+readonly LIVE_BACKUP="/usr/local/sbin/rpi5-backup"
+readonly LIVE_UPDATER="/usr/local/sbin/rpi5-update"
+readonly MAINTENANCE_LIB_DIR="/usr/local/lib/rpi5-maintenance"
+# Historical ownership label is V10; the byte-identical script itself is the
+# runtime V12 backup runner. SHA256 is the authoritative artifact identity.
+readonly BACKUP_OWNERSHIP_SNAPSHOT="V10"
+readonly BACKUP_RUNTIME_VERSION=12
+readonly BACKUP_CORE="${MAINTENANCE_LIB_DIR}/rpi5-backup-v10-core"
+readonly LOCK_LIB="${MAINTENANCE_LIB_DIR}/rpi5-maintenance-locks.sh"
+readonly STATE_DIR="/var/lib/rpi5-maintenance-lock-migration"
+readonly SAVED_BACKUP="${STATE_DIR}/rpi5-backup.pre-shared-lock"
+readonly ACTIVE_MARKER="${STATE_DIR}/shared-lock-active"
+readonly UPDATE_LOCK="/run/lock/rpi5-update.lock"
+readonly BACKUP_LOCK="/run/lock/rpi5-backup.lock"
+readonly SHARED_LOCK="/run/lock/rpi5-maintenance-exclusive.lock"
+readonly V10_BACKUP_SHA256="5ca85ae53bdf4fa3b99e21e1a30ddaa077d9e1791505b1e8389ee8587d011735"
+
+MODE="check"
+case "${1:---check}" in
+    --check) MODE="check" ;;
+    --install) MODE="install" ;;
+    --verify) MODE="verify" ;;
+    --rollback) MODE="rollback" ;;
+    -h|--help)
+        cat <<'EOF'
+Usage: rpi5-maintenance-lock-cutover [--check|--install|--verify|--rollback]
+
+--check     Read-only shared-lock migration preflight.
+--install   Atomically make the canonical backup path a shared-lock wrapper.
+--verify    Verify V25 updater + wrapper + exact reviewed backup core.
+--rollback  Restore the exact pre-migration backup ownership snapshot.
+EOF
+        exit 0
+        ;;
+    *) echo "Unknown mode: ${1:-}" >&2; exit 2 ;;
+esac
+
+[[ ${EUID:-$(id -u)} -eq 0 ]] || {
+    echo "This operator must run as root." >&2
+    exit 1
+}
+
+repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+readonly REPO_BACKUP="$repo/ops/bin/rpi5-backup"
+readonly REPO_WRAPPER="$repo/ops/bin/rpi5-backup-serialized"
+readonly REPO_LOCK_LIB="$repo/ops/lib/rpi5-maintenance-locks.sh"
+readonly REPO_PROVENANCE="$repo/ops/maintenance/updater-source-provenance.json"
+
+log() {
+    printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
+}
+
+sha256_file() {
+    sha256sum "$1" | awk '{print $1}'
+}
+
+require_root_file() {
+    local path="$1" uid mode
+    [[ -f "$path" && ! -L "$path" ]] || return 1
+    uid="$(stat -c '%u' "$path")"
+    mode="$(stat -c '%a' "$path")"
+    [[ "$uid" -eq 0 ]] || return 1
+    (( (8#$mode & 022) == 0 ))
+}
+
+for command_name in sha256sum awk stat install mv mkdir rm flock python3 bash grep; do
+    command -v "$command_name" >/dev/null 2>&1 || {
+        log "FAIL missing command: $command_name"
+        exit 1
+    }
+done
+
+for path in "$REPO_BACKUP" "$REPO_WRAPPER" "$REPO_LOCK_LIB" "$REPO_PROVENANCE"; do
+    [[ -f "$path" && ! -L "$path" ]] || {
+        log "FAIL missing repository source: $path"
+        exit 1
+    }
+done
+[[ "$(sha256_file "$REPO_BACKUP")" == "$V10_BACKUP_SHA256" ]] || {
+    log "FAIL repository backup ownership snapshot drifted"
+    exit 1
+}
+grep -Fq '# RPi5 šifrētais backup runneris V12.' "$REPO_BACKUP" || {
+    log "FAIL reviewed backup runtime-version marker drifted"
+    exit 1
+}
+# shellcheck source=/dev/null
+source "$REPO_LOCK_LIB"
+
+EXPECTED_UPDATER_SHA256="$(python3 - "$REPO_PROVENANCE" <<'PY'
+import json, sys
+from pathlib import Path
+data=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+candidate=data['candidate']
+if candidate.get('stage') != 'v25-shared-maintenance-lock-public-safe':
+    raise SystemExit('unexpected updater candidate stage')
+print(candidate['sha256'])
+PY
+)"
+readonly EXPECTED_UPDATER_SHA256
+
+validate_installed_updater() {
+    require_root_file "$LIVE_UPDATER" || {
+        log "FAIL reviewed updater is not installed at $LIVE_UPDATER"
+        return 1
+    }
+    local actual
+    actual="$(sha256_file "$LIVE_UPDATER")"
+    [[ "$actual" == "$EXPECTED_UPDATER_SHA256" ]] || {
+        log "FAIL installed updater is not the reviewed V25 shared-lock source: $actual"
+        return 1
+    }
+}
+
+validate_v10_ownership_snapshot() {
+    local path="$1"
+    require_root_file "$path" || return 1
+    [[ "$(sha256_file "$path")" == "$V10_BACKUP_SHA256" ]]
+}
+
+validate_v10_live_backup() {
+    validate_v10_ownership_snapshot "$LIVE_BACKUP"
+}
+
+validate_serialized_backup() {
+    require_root_file "$LIVE_BACKUP" || return 1
+    validate_v10_ownership_snapshot "$BACKUP_CORE" || return 1
+    require_root_file "$LOCK_LIB" || return 1
+    [[ "$(sha256_file "$LIVE_BACKUP")" == "$(sha256_file "$REPO_WRAPPER")" ]]
+}
+
+QUIESCENT_UPDATE_FD=""
+QUIESCENT_BACKUP_FD=""
+QUIESCENT_SHARED_FD=""
+
+acquire_quiescent_one() {
+    local label="$1" path="$2" result_var="$3"
+    local rc=0
+
+    rpi5_try_exclusive_lock "$path" "$result_var" || rc=$?
+    case "$rc" in
+        0)
+            return 0
+            ;;
+        "$RPI5_LOCK_CONFLICT_RC")
+            log "REFUSED ${label} lock is busy; migration contention rc=${RPI5_LOCK_CONFLICT_RC}"
+            return "$RPI5_LOCK_CONFLICT_RC"
+            ;;
+        *)
+            log "FAIL ${label} lock acquisition error rc=${rc}; not classified as contention"
+            return "$rc"
+            ;;
+    esac
+}
+
+# Hold a fail-fast quiescent migration window. Every probe uses the explicit
+# conflict code; real flock errors retain their own status and are not logged
+# as lock contention. Any failure exits and closes already-open descriptors.
+acquire_quiescent_window() {
+    acquire_quiescent_one updater "$UPDATE_LOCK" QUIESCENT_UPDATE_FD
+    acquire_quiescent_one backup "$BACKUP_LOCK" QUIESCENT_BACKUP_FD
+    acquire_quiescent_one shared "$SHARED_LOCK" QUIESCENT_SHARED_FD
+}
+
+install_wrapper() {
+    validate_installed_updater
+    validate_v10_live_backup || {
+        log "FAIL canonical backup is not the reviewed V10 ownership snapshot / runtime V12 artifact"
+        return 1
+    }
+    [[ ! -e "$ACTIVE_MARKER" ]] || {
+        log "FAIL shared-lock migration already active"
+        return 1
+    }
+    acquire_quiescent_window
+
+    install -d -o root -g root -m 0700 "$STATE_DIR"
+    [[ ! -e "$SAVED_BACKUP" ]] || {
+        log "FAIL saved pre-migration backup already exists"
+        return 1
+    }
+    install -o root -g root -m 0750 "$LIVE_BACKUP" "$SAVED_BACKUP"
+    validate_v10_ownership_snapshot "$SAVED_BACKUP" || {
+        log "FAIL saved V10 ownership snapshot verification failed"
+        return 1
+    }
+
+    install -d -o root -g root -m 0755 "$MAINTENANCE_LIB_DIR"
+    install -o root -g root -m 0750 "$REPO_BACKUP" "$BACKUP_CORE"
+    install -o root -g root -m 0644 "$REPO_LOCK_LIB" "$LOCK_LIB"
+
+    wrapper_tmp="${LIVE_BACKUP}.shared-lock.new"
+    install -o root -g root -m 0750 "$REPO_WRAPPER" "$wrapper_tmp"
+    [[ "$(sha256_file "$wrapper_tmp")" == "$(sha256_file "$REPO_WRAPPER")" ]] || {
+        rm -f -- "$wrapper_tmp"
+        log "FAIL staged wrapper verification failed"
+        return 1
+    }
+    mv -f -- "$wrapper_tmp" "$LIVE_BACKUP"
+
+    validate_serialized_backup || {
+        log "FAIL installed serialized backup verification failed; restoring ownership snapshot"
+        install -o root -g root -m 0750 "$SAVED_BACKUP" "$LIVE_BACKUP"
+        return 1
+    }
+
+    : >"$ACTIVE_MARKER"
+    chmod 0600 "$ACTIVE_MARKER"
+    log "INSTALL PASS: canonical backup now holds the shared maintenance lock around exact V10 ownership snapshot / runtime V12 core."
+}
+
+verify_wrapper() {
+    validate_installed_updater
+    [[ -f "$ACTIVE_MARKER" ]] || {
+        log "FAIL shared-lock active marker missing"
+        return 1
+    }
+    validate_serialized_backup
+    validate_v10_ownership_snapshot "$SAVED_BACKUP"
+    log "VERIFY PASS: V25 updater and serialized backup share the maintenance lock; rollback SHA is exact."
+}
+
+rollback_wrapper() {
+    [[ -f "$ACTIVE_MARKER" ]] || {
+        log "FAIL shared-lock migration is not active"
+        return 1
+    }
+    validate_v10_ownership_snapshot "$SAVED_BACKUP" || {
+        log "FAIL exact saved V10 ownership snapshot is unavailable"
+        return 1
+    }
+    acquire_quiescent_window
+
+    rollback_tmp="${LIVE_BACKUP}.rollback.new"
+    install -o root -g root -m 0750 "$SAVED_BACKUP" "$rollback_tmp"
+    mv -f -- "$rollback_tmp" "$LIVE_BACKUP"
+    validate_v10_live_backup || {
+        log "FAIL rollback verification failed"
+        return 1
+    }
+    rm -f -- "$ACTIVE_MARKER"
+    log "ROLLBACK PASS: exact V10 ownership snapshot / runtime V12 backup restored at canonical path."
+}
+
+case "$MODE" in
+    check)
+        validate_installed_updater
+        if [[ -f "$ACTIVE_MARKER" ]]; then
+            validate_serialized_backup
+            log "CHECK PASS: shared-lock migration is already active and consistent."
+        else
+            validate_v10_live_backup || {
+                log "FAIL canonical backup is not the reviewed V10 ownership snapshot / runtime V12 pre-migration artifact"
+                exit 1
+            }
+            log "CHECK PASS: reviewed V25 updater installed and exact backup ownership snapshot ready for shared-lock cutover."
+        fi
+        ;;
+    install) install_wrapper ;;
+    verify) verify_wrapper ;;
+    rollback) rollback_wrapper ;;
+    *) exit 2 ;;
+esac

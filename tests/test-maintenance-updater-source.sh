@@ -37,7 +37,7 @@ index_blob="$(awk '{print $2}' <<<"$index_line")"
 if [[ "$actual_sha256" != "$expected_sha256" ||
       "$actual_size" != "$expected_size" ||
       "$index_blob" != "$expected_blob" ]]; then
-    printf 'V24 updater provenance mismatch: expected_sha=%s actual_sha=%s expected_size=%s actual_size=%s expected_blob=%s actual_blob=%s\n' \
+    printf 'V25 updater provenance mismatch: expected_sha=%s actual_sha=%s expected_size=%s actual_size=%s expected_blob=%s actual_blob=%s\n' \
         "$expected_sha256" "$actual_sha256" \
         "$expected_size" "$actual_size" \
         "$expected_blob" "$index_blob" >&2
@@ -45,7 +45,7 @@ if [[ "$actual_sha256" != "$expected_sha256" ||
 fi
 
 [[ "$index_mode" == "100755" ]] || {
-    echo "V24 updater Git mode must be 100755, got $index_mode" >&2
+    echo "V25 updater Git mode must be 100755, got $index_mode" >&2
     exit 1
 }
 
@@ -60,12 +60,13 @@ for temporary_path in \
     "$repo/.github/workflows/v21-assemble-public-source.yml" \
     "$repo/.github/workflows/v24-cleanup-ownership-transform.yml" \
     "$repo/.github/workflows/v24-finalize-cleanup.yml" \
-    "$repo/.github/workflows/v24-finalize-tests.yml"; do
+    "$repo/.github/workflows/v24-finalize-tests.yml" \
+    "$repo/.github/workflows/v25-shared-lock-transform.yml"; do
     [[ ! -e "$temporary_path" ]] || {
-        echo "temporary V21/V24 source transport artifact remains: $temporary_path" >&2
+        echo "temporary V21/V24/V25 source transport artifact remains: $temporary_path" >&2
         exit 1
     }
 done
 
-printf 'V24 updater source ownership: PASS sha256=%s size=%s mode=%s blob=%s\n' \
+printf 'V25 updater source ownership: PASS sha256=%s size=%s mode=%s blob=%s\n' \
     "$actual_sha256" "$actual_size" "$index_mode" "$index_blob"
