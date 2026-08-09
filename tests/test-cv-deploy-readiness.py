@@ -104,9 +104,26 @@ class CvDeployReadinessTests(unittest.TestCase):
                     ci_run_id=None,
                 )
 
+    def test_pull_transport_wait_state_is_sanitized_and_non_mutating(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = module.record(
+                state_root=Path(tmp),
+                reason="WAIT_PULL_TRANSPORT_ACTIVATION",
+                target_sha=SHA_B,
+                production_sha=SHA_A,
+                deploy_impact="AUTO_DEPLOY_SAFE",
+                control_plane_changed=False,
+                ci_run_id=67890,
+            )
+            self.assertEqual(payload["reason"], "WAIT_PULL_TRANSPORT_ACTIVATION")
+            self.assertEqual(payload["deploy_impact"], "AUTO_DEPLOY_SAFE")
+            self.assertFalse(payload["control_plane_changed"])
+            self.assertFalse(payload["production_mutation_authorized"])
+
     def test_reason_and_impact_sets_match_phase3_contract(self) -> None:
         self.assertIn("AUTO_DEPLOY_READY", module.REASONS)
         self.assertIn("WAIT_HELPER_ACTIVATION", module.REASONS)
+        self.assertIn("WAIT_PULL_TRANSPORT_ACTIVATION", module.REASONS)
         self.assertIn("MANUAL_ROLLOUT_REQUIRED", module.REASONS)
         self.assertIn("DB_HOST_APPLY_REQUIRED", module.REASONS)
         self.assertNotIn("APPROVED", module.REASONS)

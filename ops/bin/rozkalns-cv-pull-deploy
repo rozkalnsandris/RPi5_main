@@ -117,11 +117,13 @@ case "$RESULT" in
         record_readiness "$RESULT" "$TARGET_SHA" "$PRODUCTION_SHA" "$DEPLOY_IMPACT" "$CONTROL_PLANE_CHANGED" "$CI_RUN_ID"
         READINESS_REASON="$RESULT"
         ;;
-    WAIT_HELPER_ACTIVATION)
-        [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'helper target SHA is invalid'
-        [[ "$PRODUCTION_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'helper production SHA is invalid'
-        record_readiness 'WAIT_HELPER_ACTIVATION' "$TARGET_SHA" "$PRODUCTION_SHA" 'AUTO_DEPLOY_SAFE' false "$CI_RUN_ID"
-        READINESS_REASON='WAIT_HELPER_ACTIVATION'
+    WAIT_HELPER_ACTIVATION|WAIT_PULL_TRANSPORT_ACTIVATION)
+        [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'activation-wait target SHA is invalid'
+        [[ "$PRODUCTION_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'activation-wait production SHA is invalid'
+        [[ -z "$DEPLOY_IMPACT" || "$DEPLOY_IMPACT" == 'AUTO_DEPLOY_SAFE' ]] \
+            || fail 'activation-wait result is not AUTO_DEPLOY_SAFE'
+        record_readiness "$RESULT" "$TARGET_SHA" "$PRODUCTION_SHA" 'AUTO_DEPLOY_SAFE' false "$CI_RUN_ID"
+        READINESS_REASON="$RESULT"
         DEPLOY_IMPACT='AUTO_DEPLOY_SAFE'
         CONTROL_PLANE_CHANGED='false'
         ;;
