@@ -1,0 +1,20 @@
+[Unit]
+Description=Rozkalns CV pull-deploy readiness controller
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/var/lib/rozkalns-cv-deploy/current-sha
+
+[Service]
+Type=oneshot
+User=andris
+Group=andris
+UMask=0077
+ExecStart=/usr/local/sbin/rozkalns-cv-pull-deploy
+
+# The unprivileged controller must be able to cross only the existing
+# sudoers-allowlisted GitHub App read-token broker boundary inside the CV
+# preflight. NoNewPrivileges must therefore remain false for this service.
+NoNewPrivileges=false
+PrivateTmp=true
+ProtectSystem=full
+ProtectControlGroups=true
