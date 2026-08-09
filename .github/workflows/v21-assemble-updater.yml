@@ -1,0 +1,53 @@
+name: V21 Assemble Updater
+
+on:
+  push:
+    branches:
+      - fix/95-maintenance-updater-ownership
+    paths:
+      - '.github/workflows/v21-assemble-updater.yml'
+      - 'ops/maintenance/.v21-staging/**'
+
+permissions:
+  contents: write
+
+jobs:
+  assemble:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Assemble and verify exact source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p ops/bin
+          cat \
+            ops/maintenance/.v21-staging/rpi5-update.part01 \
+            ops/maintenance/.v21-staging/rpi5-update.part02 \
+            ops/maintenance/.v21-staging/rpi5-update.part03 \
+            ops/maintenance/.v21-staging/rpi5-update.part04 \
+            > ops/bin/rpi5-update
+          printf '%s  %s\n' \
+            'a29bbb79c9698f534e880e51ab62b4c5f7baf6bd0c4c2620f94e8f7921e4cf6c' \
+            'ops/bin/rpi5-update' | sha256sum -c -
+          bash -n ops/bin/rpi5-update
+          chmod 0755 ops/bin/rpi5-update
+
+      - name: Commit assembled source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if git diff --quiet -- ops/bin/rpi5-update && git ls-files --error-unmatch ops/bin/rpi5-update >/dev/null 2>&1; then
+            echo 'V21 updater source already assembled at expected content.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- ops/bin/rpi5-update
+          git commit -m 'feat: import reviewed V21 maintenance updater source'
+          git push origin HEAD:fix/95-maintenance-updater-ownership
