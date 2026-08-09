@@ -115,7 +115,9 @@ class CvPullDeployControllerTests(unittest.TestCase):
             "EVIDENCE_ID",
         ):
             self.assertIn(marker, self.ready_case)
-        self.assertIn("record_readiness 'DEPLOY_FAILED'", self.controller)
+        self.assertIn("record_deploy_failure()", self.controller)
+        self.assertIn("'DEPLOY_FAILED'", self.controller)
+        self.assertIn("record_deploy_failure", self.ready_case)
         self.assertIn("PULL_DEPLOY_CONTROLLER_RESULT=DEPLOY_FAILED", self.ready_case)
 
     def test_service_runs_unprivileged_with_app_token_and_pull_helper_sudo_compatibility(self) -> None:
