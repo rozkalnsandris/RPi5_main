@@ -21,6 +21,7 @@ test:
 	bash ./tests/test-maintenance-updater-http-health.sh
 	bash ./tests/test-maintenance-updater-provenance.sh
 	python3 ./tests/test-maintenance-updater-source-validator.py
+	python3 ./tests/test-maintenance-updater-telegram.py
 	bash ./tests/test-adguard-memory-attribution.sh
 	bash ./tests/test-controlled-deploy.sh
 	bash ./tests/test-cloudflare-tunnel-ownership.sh
@@ -40,7 +41,7 @@ test:
 	python3 ./tests/test-vscode-deploy-tasks.py
 	python3 ./tests/test-v12-maintenance-conflicts.py
 	python3 ./tests/test-deals-route-cutover.py
-	python3 -m py_compile scripts/*.py
+	python3 -m py_compile scripts/*.py ops/lib/rpi5-update-telegram.py
 
 secret-scan:
 	./scripts/check-no-secrets.sh
