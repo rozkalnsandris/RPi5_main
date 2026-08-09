@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+IFS=$'\n\t'
+umask 077
+PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+export PATH
+
+fail() {
+    printf 'ERROR: %s\n' "$*" >&2
+    exit 1
+}
+
+[[ ${EUID:-$(id -u)} -ne 0 ]] || fail 'CV pull controller must run as an unprivileged user'
+[[ "$(id -un)" == 'andris' ]] || fail 'CV pull controller must run as andris'
+
+OWNER='andris'
+PREFLIGHT='/usr/local/sbin/rozkalns-cv-pull-deploy-preflight'
+READINESS='/usr/local/libexec/rozkalns-cv/deploy-readiness'
+
+for command_name in awk flock getent id install stat; do
+    command -v "$command_name" >/dev/null 2>&1 \
+        || fail "required command is missing: $command_name"
+done
+OWNER_HOME="$(getent passwd "$OWNER" | awk -F: 'NR == 1 {print $6}')"
+[[ "$OWNER_HOME" == /* && -d "$OWNER_HOME" && ! -L "$OWNER_HOME" ]] \
+    || fail 'owner home directory is missing or unsafe'
+STATE_ROOT="$OWNER_HOME/.local/state/rozkalns-cv-main-deploy"
+LOCK_FILE="$STATE_ROOT/controller.lock"
+
+for installed in "$PREFLIGHT" "$READINESS"; do
+    [[ -x "$installed" && ! -L "$installed" ]] \
+        || fail "installed controller dependency is missing or unsafe: $installed"
+    [[ "$(stat -c '%U:%G:%a' "$installed")" == 'root:root:755' ]] \
+        || fail "installed controller dependency ownership/mode is unexpected: $installed"
+done
+
+install -d -m 0700 "$STATE_ROOT"
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+    printf 'PULL_DEPLOY_CONTROLLER_RESULT=NO_OP_BUSY\n'
+    exit 0
+fi
+
+record_readiness() {
+    local reason=$1
+    local target_sha=$2
+    local production_sha=$3
+    local deploy_impact=$4
+    local control_plane_changed=$5
+    local ci_run_id=${6:-}
+    local -a args=(
+        record
+        --state-root "$STATE_ROOT"
+        --reason "$reason"
+        --target-sha "$target_sha"
+        --production-sha "$production_sha"
+        --deploy-impact "$deploy_impact"
+        --control-plane-changed "$control_plane_changed"
+    )
+    if [[ -n "$ci_run_id" ]]; then
+        args+=(--ci-run-id "$ci_run_id")
+    fi
+    "$READINESS" "${args[@]}" >/dev/null
+}
+
+extract_field() {
+    local key=$1
+    local payload=$2
+    printf '%s\n' "$payload" | awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); print; exit}'
+}
+
+PREFLIGHT_OUTPUT=''
+if ! PREFLIGHT_OUTPUT="$($PREFLIGHT 2>/dev/null)"; then
+    record_readiness 'PREFLIGHT_FAILED' '' '' 'UNCLASSIFIED' false
+    printf 'PULL_DEPLOY_CONTROLLER_RESULT=PREFLIGHT_FAILED\n'
+    printf 'PRODUCTION_MUTATION_AUTHORIZED=false\n'
+    exit 1
+fi
+
+RESULT=$(extract_field 'PULL_DEPLOY_PREFLIGHT_RESULT' "$PREFLIGHT_OUTPUT")
+TARGET_SHA=$(extract_field 'TARGET_SHA' "$PREFLIGHT_OUTPUT")
+PRODUCTION_SHA=$(extract_field 'PRODUCTION_SHA' "$PREFLIGHT_OUTPUT")
+DEPLOY_IMPACT=$(extract_field 'DEPLOY_IMPACT' "$PREFLIGHT_OUTPUT")
+CONTROL_PLANE_CHANGED=$(extract_field 'CONTROL_PLANE_CHANGED' "$PREFLIGHT_OUTPUT")
+CI_RUN_ID=$(extract_field 'CI_RUN_ID' "$PREFLIGHT_OUTPUT")
+
+[[ -n "$RESULT" ]] || fail 'preflight did not emit a result'
+
+case "$RESULT" in
+    NO_OP_BUSY)
+        printf 'PULL_DEPLOY_CONTROLLER_RESULT=NO_OP_BUSY\n'
+        exit 0
+        ;;
+    NO_OP_ALREADY_CURRENT)
+        [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'current target SHA is invalid'
+        [[ "$PRODUCTION_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'current production SHA is invalid'
+        [[ "$TARGET_SHA" == "$PRODUCTION_SHA" ]] || fail 'current result has mismatched SHAs'
+        record_readiness 'CURRENT' "$TARGET_SHA" "$PRODUCTION_SHA" 'NO_DEPLOY' false "$CI_RUN_ID"
+        READINESS_REASON='CURRENT'
+        DEPLOY_IMPACT='NO_DEPLOY'
+        CONTROL_PLANE_CHANGED='false'
+        ;;
+    WAIT_CI)
+        [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'WAIT_CI target SHA is invalid'
+        [[ "$PRODUCTION_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'WAIT_CI production SHA is invalid'
+        record_readiness 'WAIT_CI' "$TARGET_SHA" "$PRODUCTION_SHA" 'UNCLASSIFIED' false
+        READINESS_REASON='WAIT_CI'
+        DEPLOY_IMPACT='UNCLASSIFIED'
+        CONTROL_PLANE_CHANGED='false'
+        ;;
+    MANUAL_ROLLOUT_REQUIRED|DB_HOST_APPLY_REQUIRED|NO_DEPLOY)
+        [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'classified target SHA is invalid'
+        [[ "$PRODUCTION_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'classified production SHA is invalid'
+        [[ "$DEPLOY_IMPACT" == "$RESULT" ]] || fail 'preflight result and deploy impact disagree'
+        [[ "$CONTROL_PLANE_CHANGED" == true || "$CONTROL_PLANE_CHANGED" == false ]] \
+            || fail 'control-plane flag is invalid'
+        record_readiness "$RESULT" "$TARGET_SHA" "$PRODUCTION_SHA" "$DEPLOY_IMPACT" "$CONTROL_PLANE_CHANGED" "$CI_RUN_ID"
+        READINESS_REASON="$RESULT"
+        ;;
+    WAIT_HELPER_ACTIVATION)
+        [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'helper target SHA is invalid'
+        [[ "$PRODUCTION_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'helper production SHA is invalid'
+        record_readiness 'WAIT_HELPER_ACTIVATION' "$TARGET_SHA" "$PRODUCTION_SHA" 'AUTO_DEPLOY_SAFE' false "$CI_RUN_ID"
+        READINESS_REASON='WAIT_HELPER_ACTIVATION'
+        DEPLOY_IMPACT='AUTO_DEPLOY_SAFE'
+        CONTROL_PLANE_CHANGED='false'
+        ;;
+    READY)
+        [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'ready target SHA is invalid'
+        [[ "$PRODUCTION_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'ready production SHA is invalid'
+        [[ "$DEPLOY_IMPACT" == 'AUTO_DEPLOY_SAFE' ]] || fail 'READY result is not AUTO_DEPLOY_SAFE'
+        [[ "$CONTROL_PLANE_CHANGED" == false ]] || fail 'READY result unexpectedly changes control plane'
+        record_readiness 'AUTO_DEPLOY_READY' "$TARGET_SHA" "$PRODUCTION_SHA" "$DEPLOY_IMPACT" false "$CI_RUN_ID"
+        READINESS_REASON='AUTO_DEPLOY_READY'
+        ;;
+    *)
+        fail "unsupported preflight result: $RESULT"
+        ;;
+esac
+
+printf 'PULL_DEPLOY_CONTROLLER_RESULT=%s\n' "$RESULT"
+printf 'READINESS_REASON=%s\n' "$READINESS_REASON"
+printf 'TARGET_SHA=%s\n' "$TARGET_SHA"
+printf 'PRODUCTION_SHA=%s\n' "$PRODUCTION_SHA"
+printf 'DEPLOY_IMPACT=%s\n' "$DEPLOY_IMPACT"
+printf 'CONTROL_PLANE_CHANGED=%s\n' "$CONTROL_PLANE_CHANGED"
+if [[ -n "$CI_RUN_ID" ]]; then
+    printf 'CI_RUN_ID=%s\n' "$CI_RUN_ID"
+fi
+printf 'PRODUCTION_MUTATION_AUTHORIZED=false\n'
