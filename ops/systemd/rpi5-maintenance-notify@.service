@@ -1,0 +1,33 @@
+[Unit]
+Description=RPi5 maintenance notification for %i
+Documentation=https://github.com/rozkalnsandris/RPi5_main
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+DynamicUser=yes
+ExecStart=/usr/local/sbin/rpi5-maintenance-notify %i
+LoadCredential=telegram-token:/etc/credstore/rpi5-maintenance-telegram-token
+LoadCredential=telegram-chat-id:/etc/credstore/rpi5-maintenance-telegram-chat-id
+TimeoutStartSec=30s
+Restart=no
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+StandardOutput=journal
+StandardError=journal
