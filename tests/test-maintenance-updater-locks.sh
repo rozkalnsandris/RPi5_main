@@ -60,4 +60,50 @@ rpi5_lock_is_held "$lock" || rc=$?
 }
 printf '%s\n' 'PASS backup-lock-released'
 
-printf '%s\n' 'Maintenance updater backup lock tests: PASS (3 cases)'
+rm -f -- "$ready"
+(
+    exec 8>"$lock"
+    flock 8
+    : >"$ready"
+    sleep 0.2
+) &
+holder_pid=$!
+for _ in $(seq 1 100); do
+    [[ -e "$ready" ]] && break
+    sleep 0.02
+done
+rpi5_wait_for_lock_available "$lock" 2
+wait "$holder_pid"
+holder_pid=""
+printf '%s\n' 'PASS backup-lock-bounded-wait-success'
+
+rm -f -- "$ready"
+(
+    exec 8>"$lock"
+    flock 8
+    : >"$ready"
+    sleep 5
+) &
+holder_pid=$!
+for _ in $(seq 1 100); do
+    [[ -e "$ready" ]] && break
+    sleep 0.02
+done
+rc=0
+rpi5_wait_for_lock_available "$lock" 1 || rc=$?
+[[ "$rc" -eq 75 ]] || {
+    echo "expected lock wait timeout to return 75, got $rc" >&2
+    exit 1
+}
+printf '%s\n' 'PASS backup-lock-bounded-wait-timeout'
+
+kill "$holder_pid" 2>/dev/null || true
+wait "$holder_pid" 2>/dev/null || true
+holder_pid=""
+
+rc=0
+rpi5_wait_for_lock_available "$lock" invalid || rc=$?
+[[ "$rc" -eq 2 ]]
+printf '%s\n' 'PASS backup-lock-invalid-timeout'
+
+printf '%s\n' 'Maintenance updater backup lock tests: PASS (6 cases)'
