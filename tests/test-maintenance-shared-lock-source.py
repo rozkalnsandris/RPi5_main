@@ -38,7 +38,8 @@ assert "RPI5_LOCK_CONFLICT_RC" in updater
 assert canonical_root in updater
 
 # Actual backup order: wrapper acquires shared, invokes exact core, then the
-# immutable core itself acquires its private duplicate-backup lock.
+# immutable core itself acquires its private duplicate-backup lock. The core's
+# historical assignment is intentionally unquoted and remains byte-identical.
 assert 'MAINTENANCE_LOCK_FILE="/run/lock/rpi5-maintenance-exclusive.lock"' in wrapper
 wrapper_shared = wrapper.index("rpi5_acquire_exclusive_lock")
 wrapper_core = wrapper.index('"$BACKUP_CORE" "$@"')
@@ -46,7 +47,7 @@ assert wrapper_shared < wrapper_core
 assert 'BACKUP_CORE="${MAINTENANCE_LIB_DIR}/rpi5-backup-v10-core"' in wrapper
 assert canonical_root in wrapper
 
-assert 'LOCK_FILE="/run/lock/rpi5-backup.lock"' in core
+assert "LOCK_FILE=/run/lock/rpi5-backup.lock" in core
 core_private = core.index('exec 9>"$LOCK_FILE"')
 assert core_private > 0
 assert "rpi5-maintenance-exclusive.lock" not in core
