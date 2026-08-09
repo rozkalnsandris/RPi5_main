@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 umask 077
-PATH='/home/andris/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
 export PATH
 
 fail() {
@@ -13,15 +13,20 @@ fail() {
 [[ ${EUID:-$(id -u)} -ne 0 ]] || fail 'CV pull controller must run as an unprivileged user'
 [[ "$(id -un)" == 'andris' ]] || fail 'CV pull controller must run as andris'
 
+OWNER='andris'
 PREFLIGHT='/usr/local/sbin/rozkalns-cv-pull-deploy-preflight'
 READINESS='/usr/local/libexec/rozkalns-cv/deploy-readiness'
-STATE_ROOT='/home/andris/.local/state/rozkalns-cv-main-deploy'
-LOCK_FILE="$STATE_ROOT/controller.lock"
 
-for command_name in flock id install python3 stat; do
+for command_name in awk flock getent id install stat; do
     command -v "$command_name" >/dev/null 2>&1 \
         || fail "required command is missing: $command_name"
 done
+OWNER_HOME="$(getent passwd "$OWNER" | awk -F: 'NR == 1 {print $6}')"
+[[ "$OWNER_HOME" == /* && -d "$OWNER_HOME" && ! -L "$OWNER_HOME" ]] \
+    || fail 'owner home directory is missing or unsafe'
+STATE_ROOT="$OWNER_HOME/.local/state/rozkalns-cv-main-deploy"
+LOCK_FILE="$STATE_ROOT/controller.lock"
+
 for installed in "$PREFLIGHT" "$READINESS"; do
     [[ -x "$installed" && ! -L "$installed" ]] \
         || fail "installed controller dependency is missing or unsafe: $installed"
