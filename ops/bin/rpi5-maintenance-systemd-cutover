@@ -129,6 +129,7 @@ repo_files=(
     ops/lib/rpi5-update-space-policy.sh
     ops/lib/rpi5-update-origin-policy.sh
     ops/lib/rpi5-update-http-health.sh
+    ops/lib/rpi5-update-cleanup-policy.sh
     ops/lib/rpi5-update-telegram.py
     ops/lib/rpi5-maintenance-health.sh
     ops/lib/rpi5-maintenance-telegram.py
@@ -204,6 +205,7 @@ validate_installed_targets() {
         "${MAINTENANCE_LIB_DIR}/rpi5-update-space-policy.sh" \
         "${MAINTENANCE_LIB_DIR}/rpi5-update-origin-policy.sh" \
         "${MAINTENANCE_LIB_DIR}/rpi5-update-http-health.sh" \
+        "${MAINTENANCE_LIB_DIR}/rpi5-update-cleanup-policy.sh" \
         "${MAINTENANCE_LIB_DIR}/rpi5-update-telegram.py" \
         "${MAINTENANCE_LIB_DIR}/rpi5-maintenance-health.sh" \
         "${MAINTENANCE_LIB_DIR}/rpi5-maintenance-telegram.py"; do
@@ -238,7 +240,7 @@ install_reviewed_files() {
         rpi5-update-hermes-status.sh rpi5-update-locks.sh rpi5-update-reboot.sh \
         rpi5-update-compose-health.sh rpi5-update-compose-policy.sh \
         rpi5-update-space-policy.sh rpi5-update-origin-policy.sh \
-        rpi5-update-http-health.sh rpi5-update-telegram.py \
+        rpi5-update-http-health.sh rpi5-update-cleanup-policy.sh rpi5-update-telegram.py \
         rpi5-maintenance-health.sh rpi5-maintenance-telegram.py; do
         install -o root -g root -m 0644 "$repo/ops/lib/$name" "${MAINTENANCE_LIB_DIR}/$name"
     done
