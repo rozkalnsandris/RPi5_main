@@ -226,9 +226,10 @@ Exit gate: PASS. RPi5 performs required exact-SHA reads with the App and sanitiz
 - [x] Require the dedicated pull wrapper to accept only the exact current fetched `origin/main`, not merely an ancestor SHA (CV PR #143).
 - [x] Add and CI-prove the manual-only production-canary executor and disabled installer in RPi5_main PR #135; the source boundary itself does not authorize a production canary run.
 - [x] Refresh/install the exact current controller/readiness/preflight/classifier artifacts and run a current-main one-shot readiness canary with the recurring timer disabled/inactive and `production_mutation_authorized=false`; install the parallel pull transport and manual canary executor without invoking production deployment.
-- [ ] Separately approve and run one exact-current-main production deploy-execution canary through the merged manual canary boundary; retain `MANUAL_ROLLOUT_REQUIRED` and require transactional rollback/public verification evidence.
-- [ ] Enable the recurring local controller only after the replacement production canary is green.
-- [ ] Disable/remove the public-repo self-hosted release runner only after the replacement production canary and public verification are green.
+- [x] Separately approve and run one exact-current-main production deploy-execution canary through the merged manual canary boundary; target `6f13986c27d2c32c2fbcdbdbb1912bf163b8af88` committed successfully on the second explicit manual invocation with transactional public verification PASS.
+- [ ] Fix and regression-prove CV pull rollback/pre-mutation prerequisite handling from `rozkalns-cv` issue #144 before enabling recurring execution.
+- [ ] Enable the recurring local controller only after the replacement production canary is green and the rollback regression gate is green.
+- [ ] Disable/remove the public-repo self-hosted release runner only after the replacement production canary, rollback regression gate and public verification are green.
 
 Phase 3 evidence through 2026-08-09:
 
@@ -243,11 +244,14 @@ Phase 3 evidence through 2026-08-09:
 - exact-current-main pull wrapper hardening: CV PR #143, merge `6f13986c27d2c32c2fbcdbdbb1912bf163b8af88`;
 - manual-only production-canary source boundary: RPi5_main PR #135, merge `e755ab2c3fbe99967645c62b6c83aeda3f8a0117`;
 - current host-prep/readiness evidence: RPi5_main source `e755ab2c3fbe99967645c62b6c83aeda3f8a0117`, exact-main CI run `31336091705`; CV target `6f13986c27d2c32c2fbcdbdbb1912bf163b8af88`, exact-main CI run `31336104950`; source/artifact identity PASS; `PULL_DEPLOY_CONTROLLER_RESULT=MANUAL_ROLLOUT_REQUIRED`; `CONTROL_PLANE_CHANGED=true`; `PRODUCTION_MUTATION_AUTHORIZED=false`;
-- host-prep safety evidence: production SHA remained `0149bed2b84803f6fd8c191920191730c7a887cb` before/after; legacy helper unchanged; legacy runner sudo rule unchanged; recurring timer `disabled/inactive`; public site PASS; `PHASE3_PRODUCTION_CANARY_PREP=PASS`; `PREP_BLOCK_RC=0`.
+- host-prep safety evidence: production SHA remained `0149bed2b84803f6fd8c191920191730c7a887cb` before/after; legacy helper unchanged; legacy runner sudo rule unchanged; recurring timer `disabled/inactive`; public site PASS; `PHASE3_PRODUCTION_CANARY_PREP=PASS`; `PREP_BLOCK_RC=0`;
+- first explicit production-canary invocation at 23:28 local failed before transaction commit on the new CVBot pseudonymization-secret prerequisite and then exposed a rollback regression: `DEPLOY_RESULT=FAIL_ROLLBACK_FAIL`, `FINAL_STATE_SHA=0149bed2b84803f6fd8c191920191730c7a887cb`, `TRANSACTION_COMMITTED=false`, `ROLLBACK_PERFORMED=true`;
+- protected production `bot/.env` was subsequently corrected without exposing either secret; file metadata changed at 23:32:38 local and later sanitized validation returned `CLIENT_KEY_SECRET_STATUS=PASS`;
+- second explicit manual canary invocation at 23:33:41 local, from `andris` on `TTY=pts/0`, succeeded at 23:34:03 local: `DEPLOY_RESULT=PASS`, `FINAL_STATE_SHA=6f13986c27d2c32c2fbcdbdbb1912bf163b8af88`, `TRANSACTION_COMMITTED=true`, `ROLLBACK_PERFORMED=false`, CVBot healthy, and `PUBLIC_SITE`, module MIME, immutable cache, `nosniff` and CSP nonce checks all PASS;
+- provenance audit found no `rozkalns-cv-pull-deploy.service/.timer` activity for either invocation; recurring timer remained `disabled/inactive`, so the successful production canary was manual rather than recurring automation;
+- the failed first attempt demonstrates that the pull transport currently discovers the target-only `CLIENT_KEY_SECRET` prerequisite after `MUTATION_STARTED=true`, and rollback reuses target helper semantics against the restored older baseline. CV issue #144 is the blocking Phase 3 safety regression before recurring activation.
 
-The current production-to-main range contains `runner/`/control-plane changes and therefore correctly remains `MANUAL_ROLLOUT_REQUIRED`. It must never be reclassified to `AUTO_DEPLOY_SAFE` merely to make a canary proceed. The explicit manual canary path exists for this exact case.
-
-Sequencing note: the latest host-prep was completed before this canonical-plan reconciliation merged. That was control-plane sequencing drift relative to issue #130, but the preparation remained non-deploying: production state, legacy helper/rule and public service stayed unchanged and the recurring timer remained disabled/inactive. This reconciliation must merge before any production-canary execution.
+The production-to-target range contained `runner/`/control-plane changes and therefore correctly remained `MANUAL_ROLLOUT_REQUIRED`; the successful canary used the explicit manual approval path rather than reclassification. Production now matches `6f13986c27d2c32c2fbcdbdbb1912bf163b8af88` with public health PASS, but recurring execution remains unauthorized until issue #144 is fixed and regression-proven.
 
 ### Phase 4 — Hermes Deals production migration
 
@@ -300,8 +304,6 @@ If question 3 is `no` or question 5 is `yes`, do not make the change.
 
 ## Current next action
 
-**Phase 3 only:** merge this reconciliation before any production mutation. Then re-read current `RPi5_main/main` and verify the current `rozkalns-cv/main`. If the CV target is still the exact prepared target and its exact-main CI/preflight/artifact identity remain valid, separately approve and run one manual exact-current-main production deploy-execution canary through `/usr/local/sbin/rozkalns-cv-pull-deploy-canary`. The approved SHA must be supplied explicitly and must retain `MANUAL_ROLLOUT_REQUIRED`.
+**Phase 3 only:** fix `rozkalns-cv` issue #144 before recurring activation. The pull path must validate target-only runtime prerequisites before `MUTATION_STARTED=true` and must not fail a restored older baseline merely because the newer target helper introduced a prerequisite that the baseline did not require. Add focused regression tests, run full CV CI, merge only from current `main`, then install the exact pull artifacts and run a non-destructive rollback/pre-mutation regression canary with the recurring timer still disabled/inactive.
 
-If `rozkalns-cv/main` advances before execution, the old approval/prep is stale: do not deploy it. Refresh the current target, exact-SHA CI and installed artifact identities, rerun the non-mutating readiness gate, and require a new exact-SHA manual approval.
-
-During the production canary the recurring timer must remain disabled/inactive and the legacy self-hosted release path must remain present. Only after the replacement canary commits successfully with rollback-capable public MIME/cache/nosniff/CSP verification and post-deploy readiness `CURRENT` may Phase 3 proceed to recurring-controller activation. Legacy runner retirement remains a later, separate step after replacement canary/public verification PASS.
+Only after issue #144 is merged and the host regression gate is green may Phase 3 proceed to enable the recurring local controller. Legacy self-hosted runner retirement remains a later separate step after recurring-controller activation is proven healthy.
