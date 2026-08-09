@@ -60,8 +60,11 @@ assert "lock acquisition error" in cutover
 assert "--timeout" not in cutover
 assert canonical_root in cutover
 
-# The scheduler installer must ship/verify the shared helper with the updater.
-assert systemd_cutover.count("rpi5-maintenance-locks.sh") == 3
+# V25 helper installation is owned by the lock-cutover transaction itself.
+# The earlier systemd installer remains stable; it installs but does not activate
+# the new updater. #123 must run/verify lock cutover before enabling timers.
+assert cutover.count("rpi5-maintenance-locks.sh") >= 2
+assert 'install -o root -g root -m 0644 "$REPO_LOCK_LIB" "$LOCK_LIB"' in cutover
 assert 'MAINTENANCE_LIB_DIR="/usr/local/lib/rpi5-maintenance"' in systemd_cutover
 
 print("Maintenance shared-lock source/order contract: PASS")
