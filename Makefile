@@ -11,6 +11,7 @@ test:
 	bash ./tests/test-memory-pressure-diagnostic.sh
 	bash ./tests/test-memory-pressure-series.sh
 	bash ./tests/test-backup-ownership.sh
+	bash ./tests/test-maintenance-updater-status.sh
 	bash ./tests/test-adguard-memory-attribution.sh
 	bash ./tests/test-controlled-deploy.sh
 	bash ./tests/test-cloudflare-tunnel-ownership.sh
