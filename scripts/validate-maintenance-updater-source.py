@@ -14,7 +14,7 @@ REQUIRED_MARKERS = (
     "/etc/rpi-update.conf",
     "/run/lock/rpi5-update.lock",
     "/run/lock/rpi5-backup.lock",
-    "/usr/local/libexec/rpi5-maintenance",
+    "/usr/local/lib/rpi5-maintenance",
     "BACKUP_WAIT_TIMEOUT",
     'HOST_IPV4="${HOST_IPV4:-}"',
     'MAIN_COMPOSE_DIR="${MAIN_COMPOSE_DIR:-${UPDATE_HOME}/docker}"',
@@ -34,6 +34,7 @@ REQUIRED_MARKERS = (
 )
 
 SAFE_COMPOSE_UP = 'docker compose up "${RPI5_COMPOSE_UP_ARGS[@]}"'
+FORBIDDEN_LOCAL_LIBEXEC = "/usr/local/libexec/rpi5-maintenance"
 PRIVATE_IPV4_PATTERNS = (
     r"(?<![0-9])10(?:\.[0-9]{1,3}){3}(?![0-9])",
     r"(?<![0-9])192\.168(?:\.[0-9]{1,3}){2}(?![0-9])",
@@ -50,6 +51,8 @@ def validate(text: str) -> list[str]:
 
     normalized = re.sub(r"\\\n[ \t]*", " ", text)
 
+    if FORBIDDEN_LOCAL_LIBEXEC in text:
+        errors.append("tracked updater uses non-FHS /usr/local/libexec maintenance path")
     if re.search(r"/home/[A-Za-z0-9._-]+/", text):
         errors.append("tracked updater contains a concrete user-home path")
     if any(re.search(pattern, text) for pattern in PRIVATE_IPV4_PATTERNS):
