@@ -12,9 +12,7 @@ fail() {
 
 [[ ${EUID:-$(id -u)} -eq 0 ]] || fail 'run installer with sudo'
 
-SOURCE_ROOT="${1:-/home/andris/RPi5_main}"
 OWNER='andris'
-OWNER_HOME='/home/andris'
 CONTROLLER_REL='ops/bin/rozkalns-cv-pull-deploy'
 READINESS_REL='scripts/cv-deploy-readiness.py'
 SERVICE_REL='ops/systemd/rozkalns-cv-pull-deploy.service'
@@ -24,22 +22,26 @@ DEST_LIBEXEC='/usr/local/libexec/rozkalns-cv'
 DEST_READINESS="$DEST_LIBEXEC/deploy-readiness"
 DEST_SERVICE='/etc/systemd/system/rozkalns-cv-pull-deploy.service'
 DEST_TIMER='/etc/systemd/system/rozkalns-cv-pull-deploy.timer'
-STATE_ROOT='/home/andris/.local/state/rozkalns-cv-main-deploy'
 PREFLIGHT='/usr/local/sbin/rozkalns-cv-pull-deploy-preflight'
 CLASSIFIER='/usr/local/libexec/rozkalns-cv/classify-deploy-impact'
 BROKER='/usr/local/sbin/rozkalns-github-app-read-token'
 
-for command_name in bash git id install python3 runuser sha256sum stat systemctl; do
+for command_name in awk bash getent git id install python3 runuser sha256sum stat systemctl; do
     command -v "$command_name" >/dev/null 2>&1 \
         || fail "required command is missing: $command_name"
 done
 id "$OWNER" >/dev/null 2>&1 || fail 'owner user is missing'
+OWNER_HOME="$(getent passwd "$OWNER" | awk -F: 'NR == 1 {print $6}')"
+[[ "$OWNER_HOME" == /* && -d "$OWNER_HOME" && ! -L "$OWNER_HOME" ]] \
+    || fail 'owner home directory is missing or unsafe'
+SOURCE_ROOT="${1:-$OWNER_HOME/RPi5_main}"
+STATE_ROOT="$OWNER_HOME/.local/state/rozkalns-cv-main-deploy"
 [[ -d "$SOURCE_ROOT" && ! -L "$SOURCE_ROOT" ]] || fail 'RPi5_main source root is missing or unsafe'
 
 owner_git() {
     runuser -u "$OWNER" -- env \
         HOME="$OWNER_HOME" \
-        PATH='/home/andris/.local/bin:/usr/local/bin:/usr/bin:/bin' \
+        PATH='/usr/local/bin:/usr/bin:/bin' \
         git -C "$SOURCE_ROOT" "$@"
 }
 
