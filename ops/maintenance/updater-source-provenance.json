@@ -1,0 +1,49 @@
+{
+  "schema": "rpi5-maintenance-updater-provenance-v1",
+  "issue": 95,
+  "status": "reviewed-successor-in-progress",
+  "installed_target": "/usr/local/sbin/rpi5-update",
+  "historical_lineage": [
+    {
+      "stage": "v16b-pre-healthcheck-fix",
+      "date": "2026-07-27",
+      "sha256": "3371fd692e41907721af70c11cb91217c3ade4bef11b9925565a2a5789b06a29",
+      "evidence": "File Library rpi5-update-v16b-healthcheck-fix.log"
+    },
+    {
+      "stage": "v16b-post-healthcheck-fix",
+      "date": "2026-07-27",
+      "sha256": "01e6952b25f2e63e8d838a004b98cdf3571452b08ae093b04046fff2e3179b18",
+      "size_bytes": 45550,
+      "evidence": "File Library rpi5-update-v16b-healthcheck-fix.log"
+    },
+    {
+      "stage": "v17-hardening",
+      "date": "2026-08-02",
+      "sha256": null,
+      "evidence": "File Library rpi5-fix-actionable-errors-v1..v6 and final verification v7",
+      "properties": [
+        "version marker advanced to v17",
+        "docker image prune -a/--all removed",
+        "Hermes partial npm/web update detection added",
+        "Hermes dashboard stop/restore hardening added"
+      ]
+    },
+    {
+      "stage": "2026-08-09-live-incident-fix",
+      "date": "2026-08-09",
+      "sha256": null,
+      "evidence": "operator-verified live check output; live file is not available to Git as a byte-identical artifact",
+      "properties": [
+        "CV local health origin changed to loopback port 8088",
+        "Hermes Tech local health origin changed to loopback port 8089",
+        "runtime banner corrected to v17"
+      ]
+    }
+  ],
+  "candidate_policy": {
+    "claim_byte_identical_import": false,
+    "unexpected_live_diff_blocks_install": true,
+    "production_install_requires_explicit_approval": true
+  }
+}
