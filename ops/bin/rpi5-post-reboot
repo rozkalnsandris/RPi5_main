@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export LC_ALL=C
+export LANG=C
+
+readonly MAINTENANCE_LIB_DIR="/usr/local/lib/rpi5-maintenance"
+readonly HEALTH_LIB="${MAINTENANCE_LIB_DIR}/rpi5-maintenance-health.sh"
+readonly REQUIRED_CONTAINERS_FILE="/etc/rpi5-maintenance/required-containers"
+readonly MAX_ATTEMPTS=30
+readonly RETRY_DELAY=10
+
+log() {
+    printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
+}
+
+require_root_controlled_file() {
+    local path="$1" uid mode
+    [[ -f "$path" && ! -L "$path" ]] || return 1
+    uid="$(stat -c '%u' "$path")"
+    mode="$(stat -c '%a' "$path")"
+    [[ "$uid" -eq 0 ]] || return 1
+    (( (8#$mode & 022) == 0 ))
+}
+
+[[ ${EUID:-$(id -u)} -eq 0 ]] || {
+    echo "rpi5-post-reboot must run as root." >&2
+    exit 1
+}
+
+require_root_controlled_file "$HEALTH_LIB" || {
+    echo "unsafe or missing health library: $HEALTH_LIB" >&2
+    exit 1
+}
+# shellcheck source=/dev/null
+source "$HEALTH_LIB"
+
+require_root_controlled_file "$REQUIRED_CONTAINERS_FILE" || {
+    echo "unsafe or missing required-container inventory: $REQUIRED_CONTAINERS_FILE" >&2
+    exit 1
+}
+required_containers="$(cat "$REQUIRED_CONTAINERS_FILE")"
+
+for command_name in docker systemctl curl stat date sleep cat; do
+    command -v "$command_name" >/dev/null 2>&1 || {
+        log "FAIL missing command: $command_name"
+        exit 1
+    }
+done
+
+check_ready_once() {
+    local unit rows rc code
+
+    for unit in docker.service ssh.service cloudflared.service; do
+        systemctl is-active --quiet "$unit" || return 1
+    done
+
+    rows="$(docker ps -a --format '{{.Names}}\t{{.State}}\t{{.HealthStatus}}')" || return 1
+    rc=0
+    rpi5_validate_required_container_inventory "$required_containers" "$rows" || rc=$?
+    [[ "$rc" -eq 0 ]] || return 1
+
+    for url in \
+        http://127.0.0.1:8088/ \
+        http://127.0.0.1:8089/ \
+        https://rozkalns.net/ \
+        https://tech.rozkalns.net/ \
+        https://hermes.rozkalns.net/; do
+        code="$(rpi5_http_code "$url")"
+        rpi5_http_code_is_reachable "$code" || return 1
+    done
+
+    return 0
+}
+
+log "RPi5 post-reboot verification started"
+for ((attempt = 1; attempt <= MAX_ATTEMPTS; attempt++)); do
+    if check_ready_once; then
+        log "RPi5 post-reboot PASS on attempt ${attempt}/${MAX_ATTEMPTS}"
+        exit 0
+    fi
+
+    if (( attempt < MAX_ATTEMPTS )); then
+        log "RPi5 post-reboot not ready (${attempt}/${MAX_ATTEMPTS}); retry in ${RETRY_DELAY}s"
+        sleep "$RETRY_DELAY"
+    fi
+done
+
+log "RPi5 post-reboot FAIL after ${MAX_ATTEMPTS} attempts"
+for unit in docker.service ssh.service cloudflared.service; do
+    systemctl is-active "$unit" 2>/dev/null || true
+done
+docker ps -a --format 'container={{.Names}} state={{.State}} health={{.HealthStatus}}' 2>/dev/null || true
+exit 1

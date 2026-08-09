@@ -23,6 +23,9 @@ test:
 	bash ./tests/test-maintenance-updater-source.sh
 	python3 ./tests/test-maintenance-updater-source-validator.py
 	python3 ./tests/test-maintenance-updater-telegram.py
+	bash ./tests/test-maintenance-health.sh
+	bash ./tests/test-maintenance-health-entrypoints.sh
+	python3 ./tests/test-maintenance-telegram-credentials.py
 	bash ./tests/test-adguard-memory-attribution.sh
 	bash ./tests/test-controlled-deploy.sh
 	bash ./tests/test-cloudflare-tunnel-ownership.sh
@@ -47,7 +50,7 @@ test:
 	python3 ./tests/test-cv-github-app-auth-boundary.py
 	python3 ./tests/test-cv-deploy-readiness.py
 	python3 ./tests/test-cv-pull-deploy-controller.py
-	python3 -m py_compile scripts/*.py ops/lib/rpi5-update-telegram.py
+	python3 -m py_compile scripts/*.py ops/lib/rpi5-update-telegram.py ops/lib/rpi5-maintenance-telegram.py
 
 secret-scan:
 	./scripts/check-no-secrets.sh
