@@ -14,6 +14,7 @@ test:
 	bash ./tests/test-maintenance-updater-status.sh
 	bash ./tests/test-maintenance-updater-locks.sh
 	bash ./tests/test-maintenance-updater-reboot.sh
+	bash ./tests/test-maintenance-updater-compose-health.sh
 	bash ./tests/test-adguard-memory-attribution.sh
 	bash ./tests/test-controlled-deploy.sh
 	bash ./tests/test-cloudflare-tunnel-ownership.sh
