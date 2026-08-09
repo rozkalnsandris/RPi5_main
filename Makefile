@@ -20,13 +20,14 @@ test:
 	bash ./tests/test-maintenance-updater-origin-policy.sh
 	bash ./tests/test-maintenance-updater-http-health.sh
 	bash ./tests/test-maintenance-updater-provenance.sh
+	python3 ./tests/test-maintenance-updater-source-validator.py
 	bash ./tests/test-adguard-memory-attribution.sh
 	bash ./tests/test-controlled-deploy.sh
 	bash ./tests/test-cloudflare-tunnel-ownership.sh
 	bash ./tests/test-hermes-tech-web-runtime.sh
 	bash ./tests/test-hermes-tech-http-policy.sh
 	bash ./tests/test-hermes-tech-http-policy-activation.sh
-	bash ./tests/test-hermes-tech-http-policy-v20-retry.sh
+	bash ./tests/test-hermes-tech-v20-retry.sh
 	bash ./tests/test-hermes-tech-v20-git-index-owner.sh
 	bash ./tests/test-rpi5-main-git-index-owner-bootstrap.sh
 	bash ./tests/test-v20-operator-executable-mode.sh
