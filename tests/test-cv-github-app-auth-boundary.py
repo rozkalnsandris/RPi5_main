@@ -48,7 +48,10 @@ class CvGitHubAppAuthBoundaryTests(unittest.TestCase):
         self.assertIn("INSTALLATION_ID = 152422751", self.broker_text)
         self.assertIn('"actions": "read"', self.broker_text)
         self.assertIn('"contents": "read"', self.broker_text)
-        self.assertIn("repository not approved", self.broker_text)
+        self.assertIn(
+            "repository is not approved for automation token access",
+            self.broker_text,
+        )
 
     def test_sudoers_syntax_when_visudo_is_available(self) -> None:
         visudo = shutil.which("visudo")
