@@ -54,9 +54,9 @@
   "candidate": {
     "stage": "v24-cleanup-ownership-public-safe-final",
     "path": "ops/bin/rpi5-update",
-    "sha256": "b1678732e8e33b1d5b479167bae23f7efb8a2f5390fe635a91cb19792d706860",
+    "sha256": "2f44d0b256e28450dd94ab7a6d1f5b5d2cb4a198adc44a11ae6932a3877a6b3c",
     "git_blob_sha1": "5cbccfc5468cbb089e7cf7b9c4c78603eb542367",
-    "size_bytes": 50072,
+    "size_bytes": 50297,
     "helper_root": "/usr/local/lib/rpi5-maintenance",
     "derived_from_sha256": "b1678732e8e33b1d5b479167bae23f7efb8a2f5390fe635a91cb19792d706860",
     "public_runtime_literals_removed": true,
