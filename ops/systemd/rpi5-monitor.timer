@@ -1,0 +1,13 @@
+[Unit]
+Description=Schedule RPi5 daily maintenance health monitor
+Documentation=https://github.com/rozkalnsandris/RPi5_main
+
+[Timer]
+OnCalendar=*-*-* 09:00:00
+Persistent=false
+AccuracySec=1s
+RandomizedDelaySec=0
+Unit=rpi5-monitor.service
+
+[Install]
+WantedBy=timers.target
