@@ -45,9 +45,10 @@
   "candidate": {
     "stage": "v21-reviewed-successor-public-safe",
     "path": "ops/bin/rpi5-update",
-    "sha256": "860b2dd0be0d7f32f2648742a356bccabb20f0c9f8e7073ba2b1c998aa212851",
-    "git_blob_sha1": "67cd5b443dfdb8a48fd08aaa4015dc0f6b26e9ec",
-    "size_bytes": 50076,
+    "sha256": "b1678732e8e33b1d5b479167bae23f7efb8a2f5390fe635a91cb19792d706860",
+    "git_blob_sha1": "105b00e81d5629f35cf6050137db31d5f400f957",
+    "size_bytes": 50072,
+    "helper_root": "/usr/local/lib/rpi5-maintenance",
     "derived_from_sha256": "bd0afe74dea18742a002c852d59fc67ec848a032116d2adc314c24848895e24c",
     "public_runtime_literals_removed": true
   },
