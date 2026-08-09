@@ -16,8 +16,8 @@
 #
 # Atbalstītās papildu vērtības /etc/rpi-update.conf:
 #   UPDATE_USER=andris
-#   MAIN_COMPOSE_DIR=/home/andris/docker
-#   CV_COMPOSE_DIR=/home/andris/docker/cv
+#   MAIN_COMPOSE_DIR=<user-home>/docker
+#   CV_COMPOSE_DIR=<user-home>/docker/cv
 #   REBOOT_POLICY=if-needed       # if-needed | always | never
 #   RCLONE_UPDATE_MODE=auto       # auto | selfupdate | skip
 #   HERMES_UPDATE=yes             # yes | no
@@ -31,7 +31,7 @@
 #   HERMES_TIMEOUT=30m
 #   DOCKER_PULL_TIMEOUT=45m
 #   BACKUP_WAIT_TIMEOUT=1800      # sekundes; max 7200
-#   HOST_IPV4=192.168.0.180
+#   HOST_IPV4=<private-ipv4>
 #
 # Obligātās esošās vērtības:
 #   TELEGRAM_TOKEN=...
@@ -312,8 +312,8 @@ validate_secure_config() {
     : "${CHAT_ID:?Kļūda: CHAT_ID nav definēts}"
 
     UPDATE_USER="${UPDATE_USER:-andris}"
-    MAIN_COMPOSE_DIR="${MAIN_COMPOSE_DIR:-/home/andris/docker}"
-    CV_COMPOSE_DIR="${CV_COMPOSE_DIR:-/home/andris/docker/cv}"
+    MAIN_COMPOSE_DIR="${MAIN_COMPOSE_DIR:-}"
+    CV_COMPOSE_DIR="${CV_COMPOSE_DIR:-}"
     REBOOT_POLICY="${REBOOT_POLICY:-if-needed}"
     RCLONE_UPDATE_MODE="${RCLONE_UPDATE_MODE:-auto}"
     HERMES_UPDATE="${HERMES_UPDATE:-yes}"
@@ -327,8 +327,8 @@ validate_secure_config() {
     HERMES_TIMEOUT="${HERMES_TIMEOUT:-30m}"
     DOCKER_PULL_TIMEOUT="${DOCKER_PULL_TIMEOUT:-45m}"
     BACKUP_WAIT_TIMEOUT="${BACKUP_WAIT_TIMEOUT:-1800}"
-    HOST_IPV4="${HOST_IPV4:-192.168.0.180}"
-    HERMES_BIN="${HERMES_BIN:-/home/${UPDATE_USER}/.local/bin/hermes}"
+    HOST_IPV4="${HOST_IPV4:-}"
+    HERMES_BIN="${HERMES_BIN:-}"
 
     case "$REBOOT_POLICY" in
         if-needed|always|never) ;;
@@ -397,6 +397,11 @@ validate_secure_config() {
         }
     done
 
+    [[ -n "$HOST_IPV4" ]] || {
+        echo "KĻŪDA: HOST_IPV4 jādefinē root-only /etc/rpi-update.conf." >&2
+        exit 1
+    }
+
     python3 - "$HOST_IPV4" <<'PY'
 import ipaddress
 import sys
@@ -413,11 +418,11 @@ PY
 
 validate_secure_config
 
-readonly UPDATE_USER MAIN_COMPOSE_DIR CV_COMPOSE_DIR
+readonly UPDATE_USER
 readonly REBOOT_POLICY RCLONE_UPDATE_MODE HERMES_UPDATE HERMES_BACKUP
 readonly CLEANUP_RETENTION_DAYS DOCKER_CLEANUP JOURNAL_RETENTION
 readonly MIN_FREE_KB COMPOSE_WAIT_TIMEOUT
-readonly RCLONE_TIMEOUT HERMES_TIMEOUT DOCKER_PULL_TIMEOUT BACKUP_WAIT_TIMEOUT HOST_IPV4 HERMES_BIN
+readonly RCLONE_TIMEOUT HERMES_TIMEOUT DOCKER_PULL_TIMEOUT BACKUP_WAIT_TIMEOUT HOST_IPV4
 
 require_command() {
     command -v "$1" >/dev/null 2>&1 || {
@@ -447,7 +452,10 @@ UPDATE_HOME="$(getent passwd "$UPDATE_USER" | awk -F: 'NR==1 {print $6}')"
     log "KĻŪDA: lietotājam $UPDATE_USER nav derīgas HOME direktorijas."
     exit 1
 }
-readonly UPDATE_HOME
+MAIN_COMPOSE_DIR="${MAIN_COMPOSE_DIR:-${UPDATE_HOME}/docker}"
+CV_COMPOSE_DIR="${CV_COMPOSE_DIR:-${MAIN_COMPOSE_DIR}/cv}"
+HERMES_BIN="${HERMES_BIN:-${UPDATE_HOME}/.local/bin/hermes}"
+readonly UPDATE_HOME MAIN_COMPOSE_DIR CV_COMPOSE_DIR HERMES_BIN
 
 run_as_update_user() {
     runuser -u "$UPDATE_USER" -- \
@@ -1181,12 +1189,12 @@ else
         if [[ "$hermes_dashboard_was_active" -eq 1 ]]; then
             log "Restartē hermes-dashboard.service..."
             if systemctl restart hermes-dashboard.service; then
-                log "Gaida dashboard readiness uz 192.168.0.180:9119/api/status..."
+                log "Gaida dashboard readiness uz ${HOST_IPV4}:9119/api/status..."
                 dashboard_ready=0
                 for ((attempt = 1; attempt <= 15; attempt++)); do
                     code="$(curl -sS -o /dev/null -w '%{http_code}' \
                         --connect-timeout 3 --max-time 5 \
-                        http://192.168.0.180:9119/api/status 2>/dev/null || true)"
+                        "http://${HOST_IPV4}:9119/api/status" 2>/dev/null || true)"
                     if [[ "$code" == "200" ]]; then
                         dashboard_ready=1
                         log "Hermes dashboard gatavs (mēģinājums ${attempt})"
@@ -1463,12 +1471,12 @@ done
 # ----- Hermes specifiska veselības pārbaude (ārpus masīviem) -----
 # Lokālā: dashboard uz localhost:9119/api/status
 HERMES_LOCAL_OK=0
-if hermes_local_code="$(rpi5_request_code_with_retry "http://192.168.0.180:9119/api/status" 3 3)"; then
+if hermes_local_code="$(rpi5_request_code_with_retry "http://${HOST_IPV4}:9119/api/status" 3 3)"; then
     HERMES_LOCAL_OK=1
 else
     LOCAL_HEALTH_STATUS=1
 fi
-printf '%-20s %-48s HTTP %s\n' "Hermes (local)" "http://192.168.0.180:9119/api/status" "$hermes_local_code"
+printf '%-20s %-48s HTTP %s\n' "Hermes (local)" "http://${HOST_IPV4}:9119/api/status" "$hermes_local_code"
 
 # Publiskā: tikai ja lokālais ir OK (dependency)
 if [[ "$HERMES_LOCAL_OK" -eq 1 ]]; then
