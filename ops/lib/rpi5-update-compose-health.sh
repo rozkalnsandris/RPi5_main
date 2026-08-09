@@ -4,23 +4,27 @@
 # Compare newline-separated expected service names from
 # `docker compose config --services` with the newline-separated service names
 # that currently have containers according to `docker compose ps --all --services`.
-# Sets RPI5_MISSING_COMPOSE_SERVICES to a newline-separated sorted list.
+# Sets RPI5_MISSING_COMPOSE_SERVICES to a newline-separated list in expected
+# configuration order. Service names produced by Compose cannot contain spaces.
 rpi5_find_missing_compose_services() {
     local expected="${1-}"
     local actual="${2-}"
-    local expected_file actual_file
+    local service
+    local -A actual_services=()
+    local -a missing=()
 
-    expected_file="$(mktemp)" || return 2
-    actual_file="$(mktemp)" || {
-        rm -f -- "$expected_file"
-        return 2
-    }
+    while IFS= read -r service; do
+        [[ -n "$service" ]] || continue
+        actual_services["$service"]=1
+    done <<<"$actual"
 
-    printf '%s\n' "$expected" | sed '/^[[:space:]]*$/d' | sort -u >"$expected_file"
-    printf '%s\n' "$actual" | sed '/^[[:space:]]*$/d' | sort -u >"$actual_file"
+    while IFS= read -r service; do
+        [[ -n "$service" ]] || continue
+        [[ -n "${actual_services[$service]:-}" ]] || missing+=("$service")
+    done <<<"$expected"
 
-    RPI5_MISSING_COMPOSE_SERVICES="$(comm -23 "$expected_file" "$actual_file")"
-    rm -f -- "$expected_file" "$actual_file"
+    RPI5_MISSING_COMPOSE_SERVICES="$(printf '%s\n' "${missing[@]:-}")"
+    RPI5_MISSING_COMPOSE_SERVICES="${RPI5_MISSING_COMPOSE_SERVICES%$'\n'}"
 
-    [[ -z "$RPI5_MISSING_COMPOSE_SERVICES" ]]
+    (( ${#missing[@]} == 0 ))
 }
