@@ -227,10 +227,12 @@ Exit gate: PASS. RPi5 performs required exact-SHA reads with the App and sanitiz
 - [x] Add and CI-prove the manual-only production-canary executor and disabled installer in RPi5_main PR #135; the source boundary itself does not authorize a production canary run.
 - [x] Refresh/install the exact current controller/readiness/preflight/classifier artifacts and run a current-main one-shot readiness canary with the recurring timer disabled/inactive and `production_mutation_authorized=false`; install the parallel pull transport and manual canary executor without invoking production deployment.
 - [x] Separately approve and run one exact-current-main production deploy-execution canary through the merged manual canary boundary; retain `MANUAL_ROLLOUT_REQUIRED` and require transactional rollback/public verification evidence.
-- [ ] Enable the recurring local controller only after the replacement production canary is green.
-- [ ] Disable/remove the public-repo self-hosted release runner only after the replacement production canary and public verification are green.
+- [x] Add and CI-prove the narrow issue #140 `AUTO_DEPLOY_SAFE` execution boundary in the local CV controller: only exact `READY` + successful exact-SHA CI + `CONTROL_PLANE_CHANGED=false` may cross the root-owned pull-helper boundary; manual/DB/no-deploy/wait/failure states remain non-mutating.
+- [ ] Install the reviewed #140 controller/readiness artifacts with the recurring timer still disabled/inactive and run one separately authorized one-shot `AUTO_DEPLOY_SAFE` execution canary; require fresh exact-current-main/CI/pull-artifact revalidation, transactional public-contract evidence, post-deploy `CURRENT`, and the legacy runner unchanged.
+- [ ] Enable the recurring local controller only after the one-shot `AUTO_DEPLOY_SAFE` execution canary is green.
+- [ ] Disable/remove the public-repo self-hosted release runner only after the replacement execution path and public verification are green.
 
-Phase 3 evidence through 2026-08-09:
+Phase 3 evidence through 2026-08-10:
 
 - GitHub App broker payload fix: RPi5_main PR #124, merge `16e59bd1f5d9623c97ee5f10e76cebbf6fef7b16`;
 - deploy-impact classifier/preflight ordering: CV PR #135, merge `f9db2c4a50589df0e4db27fa60f15629c8bdee8c`;
@@ -245,9 +247,12 @@ Phase 3 evidence through 2026-08-09:
 - current host-prep/readiness evidence: RPi5_main source `e755ab2c3fbe99967645c62b6c83aeda3f8a0117`, exact-main CI run `31336091705`; CV target `6f13986c27d2c32c2fbcdbdbb1912bf163b8af88`, exact-main CI run `31336104950`; source/artifact identity PASS; `PULL_DEPLOY_CONTROLLER_RESULT=MANUAL_ROLLOUT_REQUIRED`; `CONTROL_PLANE_CHANGED=true`; `PRODUCTION_MUTATION_AUTHORIZED=false`;
 - host-prep safety evidence: production SHA remained `0149bed2b84803f6fd8c191920191730c7a887cb` before/after; legacy helper unchanged; legacy runner sudo rule unchanged; recurring timer `disabled/inactive`; public site PASS; `PHASE3_PRODUCTION_CANARY_PREP=PASS`; `PREP_BLOCK_RC=0`;
 - replacement production canary PASS at `2026-08-09T21:34:03Z`: approved/target SHA `6f13986c27d2c32c2fbcdbdbb1912bf163b8af88`, previous production `0149bed2b84803f6fd8c191920191730c7a887cb`, exact-main CI `31336104950`, `DEPLOY_IMPACT=MANUAL_ROLLOUT_REQUIRED`, `CONTROL_PLANE_CHANGED=true`, `DEPLOY_RESULT=PASS`, `PRODUCTION_CHANGED=true`, `MUTATION_STARTED=true`, `TRANSACTION_COMMITTED=true`, `ROLLBACK_PERFORMED=false`, `SHARED_INGRESS_CONTROLLED=false`, `DATABASE_MIGRATIONS_EXECUTED=false`;
-- production-canary postconditions PASS: final production state `6f13986c27d2c32c2fbcdbdbb1912bf163b8af88`, `TRANSACTIONAL_PUBLIC_CONTRACTS=PASS`, `READINESS_RECONCILIATION=CURRENT`, legacy helper unchanged, recurring timer remained `disabled/inactive`, evidence ID `rozkalns-cv-main-deploy-canary-6f13986c27d2.HIm0dR8B`, and `LEGACY_RUNNER_RETIREMENT_AUTHORIZED=false`.
+- production-canary postconditions PASS: final production state `6f13986c27d2c32c2fbcdbdbb1912bf163b8af88`, `TRANSACTIONAL_PUBLIC_CONTRACTS=PASS`, `READINESS_RECONCILIATION=CURRENT`, legacy helper unchanged, recurring timer remained `disabled/inactive`, evidence ID `rozkalns-cv-main-deploy-canary-6f13986c27d2.HIm0dR8B`, and `LEGACY_RUNNER_RETIREMENT_AUTHORIZED=false`;
+- pre-activation audit blocker #140: readiness-only controller blob `bc0b338f0ec776f1ea607758c7d95de676fa69fe` mapped `READY` to `AUTO_DEPLOY_READY` but never invoked `/usr/local/sbin/rozkalns-cv-pull-deploy-main`; timer blob `75ad7b3c0565b2c8a3e6a73600ce38265520199b` therefore remained disabled/inactive while the execution boundary was added and reviewed.
 
 The replacement production canary intentionally retained `MANUAL_ROLLOUT_REQUIRED` because the pre-deploy production-to-target range contained `runner/`/control-plane changes. The canary completed through the explicit manual boundary and production now equals the approved target. No reclassification to `AUTO_DEPLOY_SAFE` was used.
+
+The #140 execution boundary does not weaken that rule. It may invoke the dedicated root-owned pull wrapper only after the App-authenticated preflight returns exact `READY` for `AUTO_DEPLOY_SAFE`, reports `CONTROL_PLANE_CHANGED=false`, exposes valid exact-SHA CI and pull-artifact identities, and passes a second identical preflight immediately before mutation. The CV wrapper itself still fresh-fetches and rejects any target that is no longer exact current `origin/main`. All manual, DB/host, no-deploy, wait and preflight-failure states remain non-mutating.
 
 Sequencing note: the non-deploying host preparation happened before PR #133 reconciled the canonical plan, but PR #133 merged before the production canary was approved and executed. The production canary therefore ran after canonical sequencing had been restored.
 
@@ -302,8 +307,8 @@ If question 3 is `no` or question 5 is `yes`, do not make the change.
 
 ## Current next action
 
-**Phase 3 only:** the replacement production canary is green. The first incomplete gate is now recurring local controller activation. Before enabling recurring execution, re-read current `RPi5_main/main`, verify the installed controller/readiness/systemd artifacts still match reviewed source, confirm CV production/readiness is `CURRENT`, and confirm the timer is still disabled/inactive. Recurring activation is a separate host mutation and requires explicit authorization.
+**Phase 3 only:** issue #140 replaces immediate recurring-timer activation with a required `AUTO_DEPLOY_SAFE` execution proof. After the reviewed #140 source boundary merges, re-read current `RPi5_main/main`, keep `rozkalns-cv-pull-deploy.timer` disabled/inactive, and install only the exact reviewed controller/readiness artifacts. Reverify the installed preflight/classifier/pull-library/pull-wrapper identities and confirm the current CV production/readiness state before any production mutation.
 
-When authorized, enable/start only the reviewed local `rozkalns-cv-pull-deploy.timer` path, verify the controller remains fail-closed and observes the current production without unexpected mutation, and capture timer/service/readiness evidence. Do not retire or modify the legacy self-hosted release runner in the same step.
+Then select or create a separately reviewed CV target that classifies exactly `AUTO_DEPLOY_SAFE`, has successful exact-main CI and does not change control-plane/runtime-sensitive/DB-host boundaries. With separate explicit authorization, run one one-shot controller/service execution while the recurring timer remains disabled. Require a second fresh preflight immediately before the sudo boundary, the pull wrapper's own exact-current-main check, transactional rollback-capable MIME/cache/nosniff/CSP evidence, final production at the exact target, post-deploy readiness `CURRENT`, and the legacy self-hosted release path unchanged.
 
-Legacy self-hosted runner retirement remains the final Phase 3 gate and requires its own review/authorization only after recurring-controller activation evidence is green.
+Only after that one-shot `AUTO_DEPLOY_SAFE` execution canary is green may recurring timer activation be reviewed and separately authorized. Legacy self-hosted runner retirement remains the final Phase 3 gate and requires its own review/authorization after recurring replacement execution evidence is green.
