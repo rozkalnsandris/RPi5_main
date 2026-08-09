@@ -16,8 +16,10 @@ fail() {
 OWNER='andris'
 PREFLIGHT='/usr/local/sbin/rozkalns-cv-pull-deploy-preflight'
 READINESS='/usr/local/libexec/rozkalns-cv/deploy-readiness'
+PULL_HELPER='/usr/local/sbin/rozkalns-cv-pull-deploy-main'
+PRODUCTION_STATE='/var/lib/rozkalns-cv-deploy/current-sha'
 
-for command_name in awk flock getent id install stat; do
+for command_name in awk basename flock getent grep id install mktemp stat sudo tr; do
     command -v "$command_name" >/dev/null 2>&1 \
         || fail "required command is missing: $command_name"
 done
@@ -26,6 +28,7 @@ OWNER_HOME="$(getent passwd "$OWNER" | awk -F: 'NR == 1 {print $6}')"
     || fail 'owner home directory is missing or unsafe'
 STATE_ROOT="$OWNER_HOME/.local/state/rozkalns-cv-main-deploy"
 LOCK_FILE="$STATE_ROOT/controller.lock"
+EVIDENCE_ROOT="$OWNER_HOME/.local/state/rozkalns-cv-pull-deploy/evidence"
 
 for installed in "$PREFLIGHT" "$READINESS"; do
     [[ -x "$installed" && ! -L "$installed" ]] \
@@ -69,11 +72,46 @@ extract_field() {
     printf '%s\n' "$payload" | awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); print; exit}'
 }
 
+summary_field() {
+    local key=$1
+    local summary=$2
+    awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' "$summary"
+}
+
+record_deploy_failure() {
+    local observed_production=${PRODUCTION_SHA:-}
+    local candidate=''
+    if [[ -f "$PRODUCTION_STATE" && ! -L "$PRODUCTION_STATE" ]]; then
+        candidate="$(tr -d '[:space:]' < "$PRODUCTION_STATE" 2>/dev/null || true)"
+        if [[ "$candidate" =~ ^[0-9a-f]{40}$ ]]; then
+            observed_production="$candidate"
+        fi
+    fi
+    if [[ "${TARGET_SHA:-}" =~ ^[0-9a-f]{40}$ \
+       && "$observed_production" =~ ^[0-9a-f]{40}$ ]]; then
+        record_readiness \
+            'DEPLOY_FAILED' \
+            "$TARGET_SHA" \
+            "$observed_production" \
+            'AUTO_DEPLOY_SAFE' \
+            false \
+            "${CI_RUN_ID:-}" || true
+    fi
+}
+
+post_deploy_fail() {
+    record_deploy_failure
+    printf 'PRODUCTION_MUTATION_AUTHORIZED=true\n' >&2
+    printf 'PRODUCTION_MUTATION_ATTEMPTED=true\n' >&2
+    fail "$*"
+}
+
 PREFLIGHT_OUTPUT=''
 if ! PREFLIGHT_OUTPUT="$($PREFLIGHT 2>/dev/null)"; then
     record_readiness 'PREFLIGHT_FAILED' '' '' 'UNCLASSIFIED' false
     printf 'PULL_DEPLOY_CONTROLLER_RESULT=PREFLIGHT_FAILED\n'
     printf 'PRODUCTION_MUTATION_AUTHORIZED=false\n'
+    printf 'PRODUCTION_MUTATION_ATTEMPTED=false\n'
     exit 1
 fi
 
@@ -83,12 +121,16 @@ PRODUCTION_SHA=$(extract_field 'PRODUCTION_SHA' "$PREFLIGHT_OUTPUT")
 DEPLOY_IMPACT=$(extract_field 'DEPLOY_IMPACT' "$PREFLIGHT_OUTPUT")
 CONTROL_PLANE_CHANGED=$(extract_field 'CONTROL_PLANE_CHANGED' "$PREFLIGHT_OUTPUT")
 CI_RUN_ID=$(extract_field 'CI_RUN_ID' "$PREFLIGHT_OUTPUT")
+PULL_LIBRARY_BLOB_SHA=$(extract_field 'PULL_LIBRARY_BLOB_SHA' "$PREFLIGHT_OUTPUT")
+PULL_WRAPPER_BLOB_SHA=$(extract_field 'PULL_WRAPPER_BLOB_SHA' "$PREFLIGHT_OUTPUT")
 
 [[ -n "$RESULT" ]] || fail 'preflight did not emit a result'
 
 case "$RESULT" in
     NO_OP_BUSY)
         printf 'PULL_DEPLOY_CONTROLLER_RESULT=NO_OP_BUSY\n'
+        printf 'PRODUCTION_MUTATION_AUTHORIZED=false\n'
+        printf 'PRODUCTION_MUTATION_ATTEMPTED=false\n'
         exit 0
         ;;
     NO_OP_ALREADY_CURRENT)
@@ -130,10 +172,146 @@ case "$RESULT" in
     READY)
         [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'ready target SHA is invalid'
         [[ "$PRODUCTION_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'ready production SHA is invalid'
+        [[ "$TARGET_SHA" != "$PRODUCTION_SHA" ]] || fail 'READY unexpectedly points at current production'
         [[ "$DEPLOY_IMPACT" == 'AUTO_DEPLOY_SAFE' ]] || fail 'READY result is not AUTO_DEPLOY_SAFE'
         [[ "$CONTROL_PLANE_CHANGED" == false ]] || fail 'READY result unexpectedly changes control plane'
+        [[ "$CI_RUN_ID" =~ ^[1-9][0-9]*$ ]] || fail 'READY exact-SHA CI run id is invalid'
+        [[ "$PULL_LIBRARY_BLOB_SHA" =~ ^[0-9a-f]{40}$ ]] \
+            || fail 'READY pull library blob SHA is invalid'
+        [[ "$PULL_WRAPPER_BLOB_SHA" =~ ^[0-9a-f]{40}$ ]] \
+            || fail 'READY pull wrapper blob SHA is invalid'
+
         record_readiness 'AUTO_DEPLOY_READY' "$TARGET_SHA" "$PRODUCTION_SHA" "$DEPLOY_IMPACT" false "$CI_RUN_ID"
-        READINESS_REASON='AUTO_DEPLOY_READY'
+
+        [[ -f "$PULL_HELPER" && -x "$PULL_HELPER" && ! -L "$PULL_HELPER" ]] \
+            || fail 'READY pull helper is missing or unsafe'
+        [[ "$(stat -c '%U:%G:%a' "$PULL_HELPER")" == 'root:root:755' ]] \
+            || fail 'READY pull helper ownership/mode is unexpected'
+        [[ -f "$PRODUCTION_STATE" && ! -L "$PRODUCTION_STATE" ]] \
+            || fail 'production state file is missing or unsafe'
+        [[ -d "$EVIDENCE_ROOT" && ! -L "$EVIDENCE_ROOT" ]] \
+            || fail 'pull-deploy evidence root is missing or unsafe'
+        [[ "$(stat -c '%U:%G:%a' "$EVIDENCE_ROOT")" == "$OWNER:$OWNER:700" ]] \
+            || fail 'pull-deploy evidence root ownership/mode is unexpected'
+
+        RECHECK_OUTPUT=''
+        if ! RECHECK_OUTPUT="$($PREFLIGHT)"; then
+            record_readiness 'PREFLIGHT_FAILED' '' '' 'UNCLASSIFIED' false
+            fail 'pre-mutation App-authenticated preflight recheck failed'
+        fi
+        RECHECK_RESULT=$(extract_field 'PULL_DEPLOY_PREFLIGHT_RESULT' "$RECHECK_OUTPUT")
+        RECHECK_TARGET=$(extract_field 'TARGET_SHA' "$RECHECK_OUTPUT")
+        RECHECK_PRODUCTION=$(extract_field 'PRODUCTION_SHA' "$RECHECK_OUTPUT")
+        RECHECK_IMPACT=$(extract_field 'DEPLOY_IMPACT' "$RECHECK_OUTPUT")
+        RECHECK_CONTROL=$(extract_field 'CONTROL_PLANE_CHANGED' "$RECHECK_OUTPUT")
+        RECHECK_CI_RUN_ID=$(extract_field 'CI_RUN_ID' "$RECHECK_OUTPUT")
+        RECHECK_PULL_LIBRARY_BLOB_SHA=$(extract_field 'PULL_LIBRARY_BLOB_SHA' "$RECHECK_OUTPUT")
+        RECHECK_PULL_WRAPPER_BLOB_SHA=$(extract_field 'PULL_WRAPPER_BLOB_SHA' "$RECHECK_OUTPUT")
+
+        [[ "$RECHECK_RESULT" == READY ]] \
+            || fail "pre-mutation preflight is no longer READY: $RECHECK_RESULT"
+        [[ "$RECHECK_TARGET" == "$TARGET_SHA" ]] \
+            || fail 'origin/main advanced before mutation'
+        [[ "$RECHECK_PRODUCTION" == "$PRODUCTION_SHA" ]] \
+            || fail 'production state changed before mutation'
+        [[ "$RECHECK_IMPACT" == 'AUTO_DEPLOY_SAFE' ]] \
+            || fail 'pre-mutation deploy impact changed'
+        [[ "$RECHECK_CONTROL" == false ]] \
+            || fail 'pre-mutation control-plane flag changed'
+        [[ "$RECHECK_CI_RUN_ID" == "$CI_RUN_ID" ]] \
+            || fail 'pre-mutation exact-SHA CI run changed'
+        [[ "$RECHECK_PULL_LIBRARY_BLOB_SHA" == "$PULL_LIBRARY_BLOB_SHA" ]] \
+            || fail 'pre-mutation pull library identity changed'
+        [[ "$RECHECK_PULL_WRAPPER_BLOB_SHA" == "$PULL_WRAPPER_BLOB_SHA" ]] \
+            || fail 'pre-mutation pull wrapper identity changed'
+
+        EVIDENCE_DIR="$(mktemp -d \
+            "$EVIDENCE_ROOT/rozkalns-cv-auto-deploy-${TARGET_SHA:0:12}.XXXXXXXX")"
+        [[ -d "$EVIDENCE_DIR" && ! -L "$EVIDENCE_DIR" ]] \
+            || fail 'AUTO_DEPLOY_SAFE evidence directory was not created safely'
+        [[ "$(stat -c '%U:%G:%a' "$EVIDENCE_DIR")" == "$OWNER:$OWNER:700" ]] \
+            || fail 'AUTO_DEPLOY_SAFE evidence directory ownership/mode is unexpected'
+
+        printf 'AUTO_DEPLOY_EXECUTION_GATE=PASS\n'
+        printf 'TARGET_SHA=%s\n' "$TARGET_SHA"
+        printf 'PRODUCTION_BEFORE=%s\n' "$PRODUCTION_SHA"
+        printf 'CI_RUN_ID=%s\n' "$CI_RUN_ID"
+
+        if ! sudo -n "$PULL_HELPER" "$TARGET_SHA" "$EVIDENCE_DIR"; then
+            record_deploy_failure
+            printf 'PULL_DEPLOY_CONTROLLER_RESULT=DEPLOY_FAILED\n'
+            printf 'TARGET_SHA=%s\n' "$TARGET_SHA"
+            printf 'PRODUCTION_SHA=%s\n' "$PRODUCTION_SHA"
+            printf 'DEPLOY_IMPACT=AUTO_DEPLOY_SAFE\n'
+            printf 'CONTROL_PLANE_CHANGED=false\n'
+            printf 'CI_RUN_ID=%s\n' "$CI_RUN_ID"
+            printf 'PRODUCTION_MUTATION_AUTHORIZED=true\n'
+            printf 'PRODUCTION_MUTATION_ATTEMPTED=true\n'
+            exit 1
+        fi
+
+        SUMMARY="$EVIDENCE_DIR/summary.env"
+        DEPLOY_LOG="$EVIDENCE_DIR/deploy.log"
+        [[ -f "$SUMMARY" && ! -L "$SUMMARY" ]] || post_deploy_fail 'deploy summary is missing or unsafe'
+        [[ -f "$DEPLOY_LOG" && ! -L "$DEPLOY_LOG" ]] || post_deploy_fail 'deploy log is missing or unsafe'
+        [[ "$(summary_field DEPLOY_RESULT "$SUMMARY")" == PASS ]] \
+            || post_deploy_fail 'deploy result is not PASS'
+        [[ "$(summary_field TARGET_SHA "$SUMMARY")" == "$TARGET_SHA" ]] \
+            || post_deploy_fail 'deploy summary target mismatch'
+        [[ "$(summary_field FINAL_STATE_SHA "$SUMMARY")" == "$TARGET_SHA" ]] \
+            || post_deploy_fail 'deploy summary final state mismatch'
+        [[ "$(summary_field PRODUCTION_CHANGED "$SUMMARY")" == true ]] \
+            || post_deploy_fail 'AUTO_DEPLOY_SAFE deployment did not change production'
+        [[ "$(summary_field MUTATION_STARTED "$SUMMARY")" == true ]] \
+            || post_deploy_fail 'AUTO_DEPLOY_SAFE mutation did not start'
+        [[ "$(summary_field TRANSACTION_COMMITTED "$SUMMARY")" == true ]] \
+            || post_deploy_fail 'AUTO_DEPLOY_SAFE transaction did not commit'
+        [[ "$(summary_field ROLLBACK_PERFORMED "$SUMMARY")" == false ]] \
+            || post_deploy_fail 'successful AUTO_DEPLOY_SAFE deployment unexpectedly rolled back'
+        [[ "$(summary_field SHARED_INGRESS_CONTROLLED "$SUMMARY")" == false ]] \
+            || post_deploy_fail 'AUTO_DEPLOY_SAFE deployment crossed shared ingress boundary'
+        [[ "$(summary_field DATABASE_MIGRATIONS_EXECUTED "$SUMMARY")" == false ]] \
+            || post_deploy_fail 'AUTO_DEPLOY_SAFE deployment executed database migrations'
+
+        for marker in \
+            'PUBLIC_SITE=PASS' \
+            'PUBLIC_MODULE_MIME=PASS' \
+            'PUBLIC_CACHE_IMMUTABLE=PASS' \
+            'PUBLIC_NOSNIFF=PASS' \
+            'PUBLIC_CSP_NONCE=PASS'
+        do
+            grep -Fq "$marker" "$DEPLOY_LOG" \
+                || post_deploy_fail "transactional public contract evidence is missing: $marker"
+        done
+
+        PRODUCTION_AFTER="$(tr -d '[:space:]' < "$PRODUCTION_STATE")"
+        [[ "$PRODUCTION_AFTER" == "$TARGET_SHA" ]] \
+            || post_deploy_fail 'production state did not reach AUTO_DEPLOY_SAFE target'
+
+        POSTFLIGHT_OUTPUT=''
+        if ! POSTFLIGHT_OUTPUT="$($PREFLIGHT)"; then
+            post_deploy_fail 'post-deploy App-authenticated preflight failed'
+        fi
+        [[ "$(extract_field 'PULL_DEPLOY_PREFLIGHT_RESULT' "$POSTFLIGHT_OUTPUT")" == 'NO_OP_ALREADY_CURRENT' ]] \
+            || post_deploy_fail 'post-deploy preflight did not observe current production'
+        [[ "$(extract_field 'TARGET_SHA' "$POSTFLIGHT_OUTPUT")" == "$TARGET_SHA" ]] \
+            || post_deploy_fail 'post-deploy target SHA mismatch'
+        [[ "$(extract_field 'PRODUCTION_SHA' "$POSTFLIGHT_OUTPUT")" == "$TARGET_SHA" ]] \
+            || post_deploy_fail 'post-deploy production SHA mismatch'
+
+        record_readiness 'CURRENT' "$TARGET_SHA" "$TARGET_SHA" 'NO_DEPLOY' false "$CI_RUN_ID"
+        printf 'PULL_DEPLOY_CONTROLLER_RESULT=PASS\n'
+        printf 'READINESS_REASON=CURRENT\n'
+        printf 'TARGET_SHA=%s\n' "$TARGET_SHA"
+        printf 'PRODUCTION_SHA=%s\n' "$TARGET_SHA"
+        printf 'DEPLOY_IMPACT=AUTO_DEPLOY_SAFE\n'
+        printf 'CONTROL_PLANE_CHANGED=false\n'
+        printf 'CI_RUN_ID=%s\n' "$CI_RUN_ID"
+        printf 'PRODUCTION_MUTATION_AUTHORIZED=true\n'
+        printf 'PRODUCTION_MUTATION_ATTEMPTED=true\n'
+        printf 'TRANSACTIONAL_PUBLIC_CONTRACTS=PASS\n'
+        printf 'EVIDENCE_ID=%s\n' "$(basename -- "$EVIDENCE_DIR")"
+        exit 0
         ;;
     *)
         fail "unsupported preflight result: $RESULT"
@@ -150,3 +328,4 @@ if [[ -n "$CI_RUN_ID" ]]; then
     printf 'CI_RUN_ID=%s\n' "$CI_RUN_ID"
 fi
 printf 'PRODUCTION_MUTATION_AUTHORIZED=false\n'
+printf 'PRODUCTION_MUTATION_ATTEMPTED=false\n'
