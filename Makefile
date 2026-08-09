@@ -17,6 +17,7 @@ test:
 	bash ./tests/test-maintenance-updater-compose-health.sh
 	bash ./tests/test-maintenance-updater-compose-policy.sh
 	bash ./tests/test-maintenance-updater-space-policy.sh
+	bash ./tests/test-maintenance-updater-origin-policy.sh
 	bash ./tests/test-adguard-memory-attribution.sh
 	bash ./tests/test-controlled-deploy.sh
 	bash ./tests/test-cloudflare-tunnel-ownership.sh
