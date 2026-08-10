@@ -12,10 +12,10 @@ rpi5_compose_service_inventory() {
     local project_dir="${1:?missing compose project directory}"
     local rendered
 
-    rendered="$((
+    rendered="$(
         cd "$project_dir"
         docker compose config --format json
-    ))" || return 2
+    )" || return 2
 
     printf '%s' "$rendered" | python3 -c '
 import json
@@ -78,7 +78,7 @@ rpi5_local_image_id() {
 
 rpi5_select_compose_update_targets() {
     local project_dir="${1:?missing compose project directory}"
-    local inventory row service kind image_ref container_id
+    local inventory service kind image_ref container_id
     local running_image desired_image running_hash desired_hash
 
     RPI5_COMPOSE_ALL_SERVICES=()
