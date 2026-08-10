@@ -43,7 +43,7 @@ fail() {
 [[ ${EUID:-$(id -u)} -eq 0 ]] || fail 'run this operator as root'
 
 for command_name in \
-    awk bash cmp cp curl dirname docker flock getent gh git grep id install mktemp \
+    awk bash cat cmp cp curl dirname docker env flock getent gh git grep id install mktemp \
     python3 rm runuser sha256sum stat systemctl tr; do
     command -v "$command_name" >/dev/null 2>&1 \
         || fail "required command is missing: $command_name"
@@ -114,6 +114,7 @@ require_exact_main_ci() {
     local repository="$1"
     local sha="$2"
     local mode="$3"
+    local workflow="$4"
     local token runs_json run_id jobs_json
 
     unset GH_TOKEN GITHUB_TOKEN
@@ -124,7 +125,7 @@ require_exact_main_ci() {
 
     runs_json="$(
         GH_TOKEN="$token" gh api \
-            "repos/$repository/actions/runs?branch=main&head_sha=$sha&status=completed&per_page=100"
+            "repos/$repository/actions/workflows/$workflow/runs?branch=main&head_sha=$sha&status=completed&per_page=100"
     )"
     run_id="$(
         printf '%s' "$runs_json" | python3 -c '
@@ -206,7 +207,6 @@ assert_cv_control_artifacts() {
     done
 }
 
-# Serialize host-control activation itself.
 exec 9>/run/lock/rozkalns-cv-controller-activation.lock
 flock -n 9 || fail 'another CV controller activation is already running'
 
@@ -232,7 +232,7 @@ bash -n "$repo/$CONTROLLER_REL"
 python3 "$repo/$READINESS_REL" --help >/dev/null
 bash -n "$repo/$POLICY_REL"
 
-rpi_ci_run_id="$(require_exact_main_ci "$RPI_REPOSITORY" "$rpi_head" rpi)"
+rpi_ci_run_id="$(require_exact_main_ci "$RPI_REPOSITORY" "$rpi_head" rpi validate.yml)"
 printf 'RPI5_MAIN_EXACT_SHA=%s\n' "$rpi_head"
 printf 'RPI5_MAIN_EXACT_SHA_CI=PASS run=%s\n' "$rpi_ci_run_id"
 
@@ -249,7 +249,7 @@ production_before="$(tr -d '[:space:]' < "$CV_STATE")"
 [[ "$production_before" == "$EXPECTED_CV_SHA" ]] \
     || fail "CV production is not reconciled to the approved activation baseline: $production_before"
 
-cv_ci_run_id="$(require_exact_main_ci "$CV_REPOSITORY" "$EXPECTED_CV_SHA" cv)"
+cv_ci_run_id="$(require_exact_main_ci "$CV_REPOSITORY" "$EXPECTED_CV_SHA" cv ci.yml)"
 printf 'CV_EXACT_MAIN_CI=PASS run=%s\n' "$cv_ci_run_id"
 printf 'CV_MAIN_PRODUCTION_RECONCILIATION=PASS sha=%s\n' "$EXPECTED_CV_SHA"
 
@@ -377,9 +377,6 @@ cv_service_active_after="$(unit_active "$SERVICE_UNIT")"
 [[ "$cv_service_active_after" != active && "$cv_service_active_after" != activating ]] \
     || fail 'CV pull controller service became active during #140 activation'
 
-# The activation gate must stay non-deploying. Use only the App-authenticated
-# preflight; because CV main and production are pinned equal above, any race or
-# new commit changes the result away from NO_OP_ALREADY_CURRENT and fails closed.
 preflight_output="$(
     runuser -u "$OWNER" -- env \
         HOME="$owner_home" \
