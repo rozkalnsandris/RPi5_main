@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import fnmatch
 from pathlib import Path
 import subprocess
 import unittest
@@ -10,6 +11,12 @@ INSTALLER = ROOT / "scripts" / "install-cv-pull-deploy-readiness.sh"
 SERVICE = ROOT / "ops" / "systemd" / "rozkalns-cv-pull-deploy.service"
 TIMER = ROOT / "ops" / "systemd" / "rozkalns-cv-pull-deploy.timer"
 READINESS = ROOT / "scripts" / "cv-deploy-readiness.py"
+
+# Cross-repository contract pinned to current rozkalns-cv pull-wrapper blob
+# ddaa8c7f8c0776e77be18b2cd5ea8a9489900e70. The wrapper deliberately accepts
+# only evidence basenames inside the rozkalns-cv-main-deploy-* namespace.
+CV_PULL_WRAPPER_BLOB = "ddaa8c7f8c0776e77be18b2cd5ea8a9489900e70"
+CV_PULL_WRAPPER_EVIDENCE_GLOB = "rozkalns-cv-main-deploy-*"
 
 
 class CvPullDeployControllerTests(unittest.TestCase):
@@ -74,6 +81,25 @@ class CvPullDeployControllerTests(unittest.TestCase):
         )
         self.assertIn("DEPLOY_IMPACT='AUTO_DEPLOY_SAFE'", self.non_ready_case)
         self.assertIn("CONTROL_PLANE_CHANGED='false'", self.non_ready_case)
+
+    def test_auto_deploy_evidence_name_matches_current_cv_wrapper_contract(self) -> None:
+        producer_template = (
+            "rozkalns-cv-main-deploy-auto-${TARGET_SHA:0:12}.XXXXXXXX"
+        )
+        self.assertIn(
+            f'"$EVIDENCE_ROOT/{producer_template}"',
+            self.ready_case,
+        )
+        self.assertNotIn("rozkalns-cv-auto-deploy-", self.controller)
+
+        # mktemp replaces the X suffix but preserves the namespace prefix. A
+        # representative basename must therefore remain inside the wrapper's
+        # pinned accepted glob without broadening that root-owned restriction.
+        representative = "rozkalns-cv-main-deploy-auto-0123456789ab.A1b2C3d4"
+        self.assertTrue(
+            fnmatch.fnmatchcase(representative, CV_PULL_WRAPPER_EVIDENCE_GLOB),
+            msg=f"controller evidence escaped CV wrapper contract {CV_PULL_WRAPPER_BLOB}",
+        )
 
     def test_ready_path_revalidates_exact_main_ci_and_pull_artifacts_before_mutation(self) -> None:
         for marker in (

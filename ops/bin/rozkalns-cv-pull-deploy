@@ -226,7 +226,7 @@ case "$RESULT" in
             || fail 'pre-mutation pull wrapper identity changed'
 
         EVIDENCE_DIR="$(mktemp -d \
-            "$EVIDENCE_ROOT/rozkalns-cv-auto-deploy-${TARGET_SHA:0:12}.XXXXXXXX")"
+            "$EVIDENCE_ROOT/rozkalns-cv-main-deploy-auto-${TARGET_SHA:0:12}.XXXXXXXX")"
         [[ -d "$EVIDENCE_DIR" && ! -L "$EVIDENCE_DIR" ]] \
             || fail 'AUTO_DEPLOY_SAFE evidence directory was not created safely'
         [[ "$(stat -c '%U:%G:%a' "$EVIDENCE_DIR")" == "$OWNER:$OWNER:700" ]] \

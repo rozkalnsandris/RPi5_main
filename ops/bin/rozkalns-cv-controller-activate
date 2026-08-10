@@ -207,6 +207,26 @@ assert_cv_control_artifacts() {
     done
 }
 
+assert_controller_wrapper_evidence_contract() {
+    local controller_source="$repo/$CONTROLLER_REL"
+    local wrapper_source="$cv_source/runner/release/rozkalns-cv-pull-deploy-main"
+
+    [[ -f "$controller_source" && ! -L "$controller_source" ]] \
+        || fail '#140 controller source is missing or unsafe for evidence-contract proof'
+    [[ -f "$wrapper_source" && ! -L "$wrapper_source" ]] \
+        || fail 'CV pull-wrapper source is missing or unsafe for evidence-contract proof'
+
+    grep -Fq 'rozkalns-cv-main-deploy-auto-${TARGET_SHA:0:12}.XXXXXXXX' \
+        "$controller_source" \
+        || fail '#140 controller evidence basename is outside the CV wrapper namespace'
+    if grep -Fq 'rozkalns-cv-auto-deploy-' "$controller_source"; then
+        fail '#140 controller retains the rejected legacy evidence namespace'
+    fi
+    grep -Fq '"$PULL_EVIDENCE_ROOT"/rozkalns-cv-main-deploy-*)' \
+        "$wrapper_source" \
+        || fail 'CV pull-wrapper evidence allow-pattern changed incompatibly'
+}
+
 exec 9>/run/lock/rozkalns-cv-controller-activation.lock
 flock -n 9 || fail 'another CV controller activation is already running'
 
@@ -255,6 +275,8 @@ printf 'CV_MAIN_PRODUCTION_RECONCILIATION=PASS sha=%s\n' "$EXPECTED_CV_SHA"
 
 assert_cv_control_artifacts
 printf 'CV_CONTROL_ARTIFACT_IDENTITY=PASS\n'
+assert_controller_wrapper_evidence_contract
+printf 'CV_CONTROLLER_WRAPPER_EVIDENCE_CONTRACT=PASS\n'
 
 [[ -f "$POLICY_DEST" && ! -L "$POLICY_DEST" ]] || fail '#141 installed Compose policy is missing or unsafe'
 [[ "$(stat -c '%U:%G:%a' "$POLICY_DEST")" == 'root:root:644' ]] \
@@ -398,6 +420,7 @@ owner_git_cv fetch --prune origin main
 [[ "$(tr -d '[:space:]' < "$CV_STATE")" == "$production_before" ]] \
     || fail 'CV production state changed during #140 activation'
 assert_cv_control_artifacts
+assert_controller_wrapper_evidence_contract
 [[ "$(sha256_file "$POLICY_DEST")" == "$policy_sha_before" ]] \
     || fail '#141 policy changed during #140 activation'
 [[ "$(sha256_file "$LEGACY_HELPER")" == "$legacy_helper_before" ]] \
