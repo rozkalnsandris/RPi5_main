@@ -1,0 +1,434 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+IFS=$'\n\t'
+umask 077
+PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+export PATH
+
+readonly OWNER='andris'
+readonly RPI_REPOSITORY='rozkalnsandris/RPi5_main'
+readonly CV_REPOSITORY='rozkalnsandris/rozkalns-cv'
+readonly EXPECTED_CV_SHA='f5431265232f356fa27f6204f0cba56e1e730928'
+readonly BROKER='/usr/local/sbin/rozkalns-github-app-read-token'
+readonly CV_SOURCE_REL='rozkalns-cv-worktrees/release-control'
+readonly CV_STATE='/var/lib/rozkalns-cv-deploy/current-sha'
+readonly PREFLIGHT='/usr/local/sbin/rozkalns-cv-pull-deploy-preflight'
+readonly CLASSIFIER='/usr/local/libexec/rozkalns-cv/classify-deploy-impact'
+readonly PULL_LIBRARY='/usr/local/libexec/rozkalns-cv/rozkalns-cv-deploy-library'
+readonly PULL_WRAPPER='/usr/local/sbin/rozkalns-cv-pull-deploy-main'
+readonly LEGACY_HELPER='/usr/local/sbin/rozkalns-cv-deploy-main'
+readonly LEGACY_RULE='/etc/sudoers.d/rozkalns-cv-github-deploy'
+readonly PULL_RULE='/etc/sudoers.d/rozkalns-cv-pull-deploy'
+readonly POLICY_REL='ops/lib/rpi5-update-compose-policy.sh'
+readonly POLICY_DEST='/usr/local/lib/rpi5-maintenance/rpi5-update-compose-policy.sh'
+readonly INSTALLER_REL='scripts/install-cv-pull-deploy-readiness.sh'
+readonly CONTROLLER_REL='ops/bin/rozkalns-cv-pull-deploy'
+readonly READINESS_REL='scripts/cv-deploy-readiness.py'
+readonly SERVICE_REL='ops/systemd/rozkalns-cv-pull-deploy.service'
+readonly TIMER_REL='ops/systemd/rozkalns-cv-pull-deploy.timer'
+readonly DEST_CONTROLLER='/usr/local/sbin/rozkalns-cv-pull-deploy'
+readonly DEST_READINESS='/usr/local/libexec/rozkalns-cv/deploy-readiness'
+readonly DEST_SERVICE='/etc/systemd/system/rozkalns-cv-pull-deploy.service'
+readonly DEST_TIMER='/etc/systemd/system/rozkalns-cv-pull-deploy.timer'
+readonly TIMER_UNIT='rozkalns-cv-pull-deploy.timer'
+readonly SERVICE_UNIT='rozkalns-cv-pull-deploy.service'
+readonly LOCAL_URL='http://127.0.0.1:8088/'
+readonly PUBLIC_URL='https://rozkalns.net/'
+
+fail() {
+    printf 'ERROR: %s\n' "$*" >&2
+    exit 1
+}
+
+[[ ${EUID:-$(id -u)} -eq 0 ]] || fail 'run this operator as root'
+
+for command_name in \
+    awk bash cmp cp curl dirname docker flock getent gh git grep id install mktemp \
+    python3 rm runuser sha256sum stat systemctl tr; do
+    command -v "$command_name" >/dev/null 2>&1 \
+        || fail "required command is missing: $command_name"
+done
+
+repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+owner_home="$(getent passwd "$OWNER" | awk -F: 'NR == 1 {print $6}')"
+[[ -n "$owner_home" && -d "$owner_home" && ! -L "$owner_home" ]] \
+    || fail 'maintenance owner home is unavailable or unsafe'
+readonly repo owner_home
+readonly cv_source="$owner_home/$CV_SOURCE_REL"
+readonly cv_project_dir="$owner_home/docker/cv"
+
+owner_git_rpi() {
+    runuser -u "$OWNER" -- env \
+        HOME="$owner_home" \
+        PATH='/usr/local/bin:/usr/bin:/bin' \
+        git -C "$repo" "$@"
+}
+
+owner_git_cv() {
+    runuser -u "$OWNER" -- env \
+        HOME="$owner_home" \
+        PATH='/usr/local/bin:/usr/bin:/bin' \
+        git -C "$cv_source" "$@"
+}
+
+unit_enabled() {
+    systemctl is-enabled "$1" 2>/dev/null || true
+}
+
+unit_active() {
+    systemctl is-active "$1" 2>/dev/null || true
+}
+
+sha256_file() {
+    sha256sum "$1" | awk '{print $1}'
+}
+
+optional_sha256() {
+    local path="$1"
+    if [[ -e "$path" ]]; then
+        [[ -f "$path" && ! -L "$path" ]] || fail "unsafe invariant path: $path"
+        sha256_file "$path"
+    else
+        printf 'ABSENT\n'
+    fi
+}
+
+contains_value() {
+    local wanted="$1"
+    shift
+    local value
+    for value in "$@"; do
+        [[ "$value" == "$wanted" ]] && return 0
+    done
+    return 1
+}
+
+extract_field() {
+    local key="$1"
+    local payload="$2"
+    printf '%s\n' "$payload" \
+        | awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); print; exit}'
+}
+
+require_exact_main_ci() {
+    local repository="$1"
+    local sha="$2"
+    local mode="$3"
+    local token runs_json run_id jobs_json
+
+    unset GH_TOKEN GITHUB_TOKEN
+    token="$("$BROKER" --repository "$repository")" \
+        || fail "GitHub App token unavailable for $repository"
+    [[ ${#token} -ge 20 && "$token" != *[[:space:]]* ]] \
+        || fail "GitHub App token malformed for $repository"
+
+    runs_json="$(
+        GH_TOKEN="$token" gh api \
+            "repos/$repository/actions/runs?branch=main&head_sha=$sha&status=completed&per_page=100"
+    )"
+    run_id="$(
+        printf '%s' "$runs_json" | python3 -c '
+import json
+import sys
+sha = sys.argv[1]
+runs = json.load(sys.stdin).get("workflow_runs", [])
+ok = [
+    row for row in runs
+    if row.get("event") == "push"
+    and row.get("head_branch") == "main"
+    and row.get("head_sha") == sha
+    and row.get("status") == "completed"
+    and row.get("conclusion") == "success"
+]
+print(max((int(row["id"]) for row in ok), default=""))
+' "$sha"
+    )"
+    [[ "$run_id" =~ ^[1-9][0-9]*$ ]] \
+        || fail "no successful exact-main CI run for $repository@$sha"
+
+    jobs_json="$(
+        GH_TOKEN="$token" gh api \
+            "repos/$repository/actions/runs/$run_id/jobs?filter=latest&per_page=100"
+    )"
+    printf '%s' "$jobs_json" | python3 -c '
+import json
+import sys
+mode = sys.argv[1]
+jobs = json.load(sys.stdin).get("jobs", [])
+passed = {
+    row.get("name")
+    for row in jobs
+    if row.get("status") == "completed"
+    and row.get("conclusion") == "success"
+}
+if mode == "rpi":
+    required = {
+        "validate",
+        "gitleaks",
+        "public-automation-baseline / public automation policy",
+    }
+else:
+    required = {"validate"}
+missing = required - passed
+if missing:
+    raise SystemExit("missing exact-main jobs: " + ",".join(sorted(missing)))
+' "$mode"
+
+    unset token runs_json jobs_json GH_TOKEN GITHUB_TOKEN
+    printf '%s\n' "$run_id"
+}
+
+assert_cv_control_artifacts() {
+    local -a sources=(
+        'runner/pull-deploy/rozkalns-cv-pull-deploy-preflight'
+        'runner/pull-deploy/classify_deploy_impact.py'
+        'runner/release/rozkalns-cv-deploy-main'
+        'runner/release/rozkalns-cv-pull-deploy-main'
+    )
+    local -a installed=(
+        "$PREFLIGHT"
+        "$CLASSIFIER"
+        "$PULL_LIBRARY"
+        "$PULL_WRAPPER"
+    )
+    local index expected actual
+
+    for index in "${!sources[@]}"; do
+        [[ -f "${installed[$index]}" && -x "${installed[$index]}" \
+           && ! -L "${installed[$index]}" ]] \
+            || fail "installed CV control artifact is missing or unsafe: ${installed[$index]}"
+        [[ "$(stat -c '%U:%G:%a' "${installed[$index]}")" == 'root:root:755' ]] \
+            || fail "installed CV control artifact ownership/mode is unexpected: ${installed[$index]}"
+        expected="$(owner_git_cv rev-parse "$EXPECTED_CV_SHA:${sources[$index]}")"
+        actual="$(git hash-object "${installed[$index]}")"
+        [[ "$actual" == "$expected" ]] \
+            || fail "installed CV control artifact drifted: ${sources[$index]}"
+    done
+}
+
+# Serialize host-control activation itself.
+exec 9>/run/lock/rozkalns-cv-controller-activation.lock
+flock -n 9 || fail 'another CV controller activation is already running'
+
+[[ -d "$repo/.git" ]] || fail 'operator must run from the RPi5_main checkout'
+[[ "$(owner_git_rpi branch --show-current)" == main ]] || fail 'RPi5_main checkout is not on main'
+[[ -z "$(owner_git_rpi status --porcelain=v1 --untracked-files=all)" ]] \
+    || fail 'RPi5_main checkout is not clean'
+owner_git_rpi fetch --prune origin main
+rpi_head="$(owner_git_rpi rev-parse HEAD)"
+rpi_remote="$(owner_git_rpi rev-parse refs/remotes/origin/main)"
+[[ "$rpi_head" == "$rpi_remote" ]] || fail 'RPi5_main checkout is not exact current origin/main'
+[[ "$rpi_head" =~ ^[0-9a-f]{40}$ ]] || fail 'RPi5_main main SHA is invalid'
+
+for relative in \
+    "$INSTALLER_REL" "$CONTROLLER_REL" "$READINESS_REL" "$SERVICE_REL" "$TIMER_REL" "$POLICY_REL"; do
+    owner_git_rpi ls-files --error-unmatch "$relative" >/dev/null \
+        || fail "RPi5_main source is not tracked: $relative"
+    [[ -f "$repo/$relative" && ! -L "$repo/$relative" ]] \
+        || fail "RPi5_main source is missing or unsafe: $relative"
+done
+bash -n "$repo/$INSTALLER_REL"
+bash -n "$repo/$CONTROLLER_REL"
+python3 "$repo/$READINESS_REL" --help >/dev/null
+bash -n "$repo/$POLICY_REL"
+
+rpi_ci_run_id="$(require_exact_main_ci "$RPI_REPOSITORY" "$rpi_head" rpi)"
+printf 'RPI5_MAIN_EXACT_SHA=%s\n' "$rpi_head"
+printf 'RPI5_MAIN_EXACT_SHA_CI=PASS run=%s\n' "$rpi_ci_run_id"
+
+[[ -d "$cv_source" && ! -L "$cv_source" ]] || fail 'CV release-control worktree is missing or unsafe'
+[[ -z "$(owner_git_cv branch --show-current)" ]] || fail 'CV release-control worktree must remain detached'
+[[ -z "$(owner_git_cv status --porcelain=v1 --untracked-files=all)" ]] \
+    || fail 'CV release-control worktree is not clean'
+owner_git_cv fetch --prune origin main
+cv_main="$(owner_git_cv rev-parse refs/remotes/origin/main)"
+[[ "$cv_main" == "$EXPECTED_CV_SHA" ]] \
+    || fail "CV origin/main advanced from the approved activation baseline: $cv_main"
+[[ -f "$CV_STATE" && ! -L "$CV_STATE" ]] || fail 'CV production state is missing or unsafe'
+production_before="$(tr -d '[:space:]' < "$CV_STATE")"
+[[ "$production_before" == "$EXPECTED_CV_SHA" ]] \
+    || fail "CV production is not reconciled to the approved activation baseline: $production_before"
+
+cv_ci_run_id="$(require_exact_main_ci "$CV_REPOSITORY" "$EXPECTED_CV_SHA" cv)"
+printf 'CV_EXACT_MAIN_CI=PASS run=%s\n' "$cv_ci_run_id"
+printf 'CV_MAIN_PRODUCTION_RECONCILIATION=PASS sha=%s\n' "$EXPECTED_CV_SHA"
+
+assert_cv_control_artifacts
+printf 'CV_CONTROL_ARTIFACT_IDENTITY=PASS\n'
+
+[[ -f "$POLICY_DEST" && ! -L "$POLICY_DEST" ]] || fail '#141 installed Compose policy is missing or unsafe'
+[[ "$(stat -c '%U:%G:%a' "$POLICY_DEST")" == 'root:root:644' ]] \
+    || fail '#141 installed Compose policy ownership/mode is unexpected'
+cmp -s "$repo/$POLICY_REL" "$POLICY_DEST" \
+    || fail '#141 installed Compose policy drifted from current reviewed source'
+policy_sha_before="$(sha256_file "$POLICY_DEST")"
+
+[[ -d "$cv_project_dir" && ! -L "$cv_project_dir" ]] || fail 'CV Compose project directory is missing or unsafe'
+# shellcheck source=/dev/null
+source "$POLICY_DEST"
+rpi5_select_compose_update_targets "$cv_project_dir" \
+    || fail "#141 policy could not classify CV project (config_drift_service=${RPI5_COMPOSE_CONFIG_DRIFT_SERVICE:-none})"
+contains_value cvbot "${RPI5_COMPOSE_BUILDABLE_SERVICES[@]}" \
+    || fail '#141 policy no longer classifies cvbot as buildable/local-only'
+contains_value cvbot "${RPI5_COMPOSE_CHANGED_REGISTRY_SERVICES[@]}" \
+    && fail '#141 policy selected buildable cvbot as a registry recreation target'
+rpi5_build_compose_up_args 240 false "$cv_project_dir" \
+    || fail "#141 policy could not build safe CV maintenance args (config_drift_service=${RPI5_COMPOSE_CONFIG_DRIFT_SERVICE:-none})"
+contains_value --no-build "${RPI5_COMPOSE_UP_ARGS[@]}" || fail '#141 policy lost --no-build'
+contains_value --no-deps "${RPI5_COMPOSE_UP_ARGS[@]}" || fail '#141 policy lost --no-deps'
+contains_value cvbot "${RPI5_COMPOSE_UP_ARGS[@]}" \
+    && fail '#141 policy selected cvbot for generic maintenance'
+contains_value --remove-orphans "${RPI5_COMPOSE_UP_ARGS[@]}" \
+    && fail '#141 policy unexpectedly allows --remove-orphans'
+contains_value --force-recreate "${RPI5_COMPOSE_UP_ARGS[@]}" \
+    && fail '#141 policy unexpectedly allows normal force recreation'
+printf 'PHASE3_MAINTENANCE_POLICY_RECHECK=PASS mode=%s\n' "$RPI5_COMPOSE_UPDATE_MODE"
+
+[[ -f "$LEGACY_HELPER" && ! -L "$LEGACY_HELPER" ]] || fail 'legacy CV helper is missing or unsafe'
+legacy_helper_before="$(sha256_file "$LEGACY_HELPER")"
+legacy_rule_before="$(optional_sha256 "$LEGACY_RULE")"
+pull_rule_before="$(optional_sha256 "$PULL_RULE")"
+
+cv_timer_enabled_before="$(unit_enabled "$TIMER_UNIT")"
+cv_timer_active_before="$(unit_active "$TIMER_UNIT")"
+cv_service_active_before="$(unit_active "$SERVICE_UNIT")"
+[[ "$cv_timer_enabled_before" != enabled && "$cv_timer_active_before" != active ]] \
+    || fail 'CV pull timer must be disabled/inactive before #140 activation'
+[[ "$cv_service_active_before" != active && "$cv_service_active_before" != activating ]] \
+    || fail 'CV pull controller service must be inactive before #140 activation'
+
+cvbot_health_before="$(docker inspect cvbot --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>/dev/null || true)"
+[[ "$cvbot_health_before" == healthy ]] || fail 'cvbot is not healthy before #140 activation'
+curl --fail --silent --show-error --max-time 20 "$LOCAL_URL" >/dev/null \
+    || fail 'local CV site is not healthy before #140 activation'
+curl --fail --silent --show-error --max-time 20 "$PUBLIC_URL" >/dev/null \
+    || fail 'public CV site is not healthy before #140 activation'
+printf 'PRE_ACTIVATION_RUNTIME_HEALTH=PASS\n'
+
+work="$(mktemp -d)"
+installation_started=false
+backup_artifact() {
+    local path="$1"
+    local name="$2"
+    if [[ -e "$path" ]]; then
+        [[ -f "$path" && ! -L "$path" ]] || fail "installed host artifact is unsafe: $path"
+        cp --preserve=mode,ownership,timestamps "$path" "$work/$name"
+        printf 'present\n' >"$work/$name.state"
+    else
+        printf 'absent\n' >"$work/$name.state"
+    fi
+}
+restore_artifact() {
+    local path="$1"
+    local name="$2"
+    local state
+    state="$(cat "$work/$name.state")"
+    if [[ "$state" == present ]]; then
+        cp --preserve=mode,ownership,timestamps "$work/$name" "$path" || true
+    else
+        rm -f -- "$path" || true
+    fi
+}
+cleanup() {
+    local rc="$?"
+    if (( rc != 0 )) && [[ "$installation_started" == true ]]; then
+        restore_artifact "$DEST_CONTROLLER" controller
+        restore_artifact "$DEST_READINESS" readiness
+        restore_artifact "$DEST_SERVICE" service
+        restore_artifact "$DEST_TIMER" timer
+        systemctl daemon-reload || true
+        systemctl disable --now "$TIMER_UNIT" >/dev/null 2>&1 || true
+        printf 'CV_CONTROLLER_ACTIVATION_ROLLBACK=ATTEMPTED\n' >&2
+    fi
+    rm -rf -- "$work"
+    exit "$rc"
+}
+trap cleanup EXIT
+
+backup_artifact "$DEST_CONTROLLER" controller
+backup_artifact "$DEST_READINESS" readiness
+backup_artifact "$DEST_SERVICE" service
+backup_artifact "$DEST_TIMER" timer
+installation_started=true
+bash "$repo/$INSTALLER_REL" "$repo"
+
+for pair in \
+    "$CONTROLLER_REL|$DEST_CONTROLLER|root:root:755" \
+    "$READINESS_REL|$DEST_READINESS|root:root:755" \
+    "$SERVICE_REL|$DEST_SERVICE|root:root:644" \
+    "$TIMER_REL|$DEST_TIMER|root:root:644"; do
+    IFS='|' read -r relative destination expected_stat <<<"$pair"
+    [[ -f "$destination" && ! -L "$destination" ]] \
+        || fail "installed #140 artifact is missing or unsafe: $destination"
+    [[ "$(stat -c '%U:%G:%a' "$destination")" == "$expected_stat" ]] \
+        || fail "installed #140 artifact ownership/mode is unexpected: $destination"
+    expected_blob="$(owner_git_rpi rev-parse "$rpi_head:$relative")"
+    actual_blob="$(git hash-object "$destination")"
+    [[ "$actual_blob" == "$expected_blob" ]] \
+        || fail "installed #140 artifact bytes differ from reviewed source: $relative"
+done
+printf 'CV_CONTROLLER_ARTIFACT_INSTALL=PASS\n'
+
+cv_timer_enabled_after="$(unit_enabled "$TIMER_UNIT")"
+cv_timer_active_after="$(unit_active "$TIMER_UNIT")"
+cv_service_active_after="$(unit_active "$SERVICE_UNIT")"
+[[ "$cv_timer_enabled_after" != enabled && "$cv_timer_active_after" != active ]] \
+    || fail 'CV pull timer became enabled/active during #140 activation'
+[[ "$cv_service_active_after" != active && "$cv_service_active_after" != activating ]] \
+    || fail 'CV pull controller service became active during #140 activation'
+
+# The activation gate must stay non-deploying. Use only the App-authenticated
+# preflight; because CV main and production are pinned equal above, any race or
+# new commit changes the result away from NO_OP_ALREADY_CURRENT and fails closed.
+preflight_output="$(
+    runuser -u "$OWNER" -- env \
+        HOME="$owner_home" \
+        PATH='/home/andris/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' \
+        "$PREFLIGHT"
+)" || fail 'post-install CV preflight failed'
+preflight_result="$(extract_field PULL_DEPLOY_PREFLIGHT_RESULT "$preflight_output")"
+preflight_target="$(extract_field TARGET_SHA "$preflight_output")"
+preflight_production="$(extract_field PRODUCTION_SHA "$preflight_output")"
+[[ "$preflight_result" == NO_OP_ALREADY_CURRENT ]] \
+    || fail "post-install CV preflight is not non-mutating current state: $preflight_result"
+[[ "$preflight_target" == "$EXPECTED_CV_SHA" && "$preflight_production" == "$EXPECTED_CV_SHA" ]] \
+    || fail 'post-install CV preflight SHA reconciliation changed'
+printf 'POST_INSTALL_PREFLIGHT=NO_OP_ALREADY_CURRENT\n'
+
+owner_git_cv fetch --prune origin main
+[[ "$(owner_git_cv rev-parse refs/remotes/origin/main)" == "$EXPECTED_CV_SHA" ]] \
+    || fail 'CV origin/main advanced during #140 activation'
+[[ "$(tr -d '[:space:]' < "$CV_STATE")" == "$production_before" ]] \
+    || fail 'CV production state changed during #140 activation'
+assert_cv_control_artifacts
+[[ "$(sha256_file "$POLICY_DEST")" == "$policy_sha_before" ]] \
+    || fail '#141 policy changed during #140 activation'
+[[ "$(sha256_file "$LEGACY_HELPER")" == "$legacy_helper_before" ]] \
+    || fail 'legacy CV helper changed during #140 activation'
+[[ "$(optional_sha256 "$LEGACY_RULE")" == "$legacy_rule_before" ]] \
+    || fail 'legacy CV runner rule changed during #140 activation'
+[[ "$(optional_sha256 "$PULL_RULE")" == "$pull_rule_before" ]] \
+    || fail 'CV pull sudo rule changed during #140 activation'
+
+cvbot_health_after="$(docker inspect cvbot --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>/dev/null || true)"
+[[ "$cvbot_health_after" == healthy ]] || fail 'cvbot health changed during #140 activation'
+curl --fail --silent --show-error --max-time 20 "$LOCAL_URL" >/dev/null \
+    || fail 'local CV site health changed during #140 activation'
+curl --fail --silent --show-error --max-time 20 "$PUBLIC_URL" >/dev/null \
+    || fail 'public CV site health changed during #140 activation'
+
+installation_started=false
+printf 'CV_PRODUCTION_SHA=%s\n' "$production_before"
+printf 'CV_PRODUCTION_CHANGED=false\n'
+printf 'CVBOT_HEALTH=healthy\n'
+printf 'LOCAL_SITE=PASS\n'
+printf 'PUBLIC_SITE=PASS\n'
+printf 'LEGACY_CV_HELPER_MODIFIED=false\n'
+printf 'LEGACY_CV_RUNNER_RULE_MODIFIED=false\n'
+printf 'PULL_SUDO_RULE_MODIFIED=false\n'
+printf 'CV_PULL_TIMER_ENABLED=%s\n' "$cv_timer_enabled_after"
+printf 'CV_PULL_TIMER_ACTIVE=%s\n' "$cv_timer_active_after"
+printf 'CV_PULL_SERVICE_ACTIVE=%s\n' "$cv_service_active_after"
+printf 'PRODUCTION_MUTATION_AUTHORIZED=false\n'
+printf 'PRODUCTION_MUTATION_ATTEMPTED=false\n'
+printf 'PHASE3_140_CONTROLLER_HOST_ACTIVATION=PASS\n'
