@@ -68,14 +68,13 @@ class CvControllerActivationContractTests(unittest.TestCase):
             self.assertIn(marker, self.text)
 
         # Data-only references in arrays are allowed. Reject actual direct
-        # command positions instead. The pull wrapper requires arguments, so a
-        # command-position match must contain a following token; the controller
-        # takes no arguments and must never appear as a standalone command.
+        # command positions instead. Restrict whitespace to spaces/tabs so a
+        # data-only array row cannot consume the following newline/`)` token.
         direct_controller = re.compile(
-            r'(?m)^\s*"\$DEST_CONTROLLER"\s*(?:$|[<>|;&])'
+            r'(?m)^[ \t]*"\$DEST_CONTROLLER"[ \t]*(?:$|[<>|;&])'
         )
         direct_pull_wrapper = re.compile(
-            r'(?m)^\s*"\$PULL_WRAPPER"\s+\S'
+            r'(?m)^[ \t]*"\$PULL_WRAPPER"[ \t]+\S'
         )
         self.assertIsNone(
             direct_controller.search(self.text),
