@@ -20,6 +20,7 @@ test:
 	bash ./tests/test-maintenance-updater-space-policy.sh
 	bash ./tests/test-maintenance-updater-origin-policy.sh
 	bash ./tests/test-maintenance-updater-http-health.sh
+	bash ./tests/test-maintenance-updater-apt-policy.sh
 	bash ./tests/test-maintenance-updater-provenance.sh
 	bash ./tests/test-maintenance-updater-source.sh
 	python3 ./tests/test-maintenance-updater-source-validator.py
