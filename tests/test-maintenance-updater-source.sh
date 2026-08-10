@@ -19,15 +19,17 @@ from pathlib import Path
 
 data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 candidate = data["candidate"]
+print(candidate["stage"])
 print(candidate["sha256"])
 print(candidate["size_bytes"])
 print(candidate["git_blob_sha1"])
 PY
 )
 
-expected_sha256="${expected[0]}"
-expected_size="${expected[1]}"
-expected_blob="${expected[2]}"
+expected_stage="${expected[0]}"
+expected_sha256="${expected[1]}"
+expected_size="${expected[2]}"
+expected_blob="${expected[3]}"
 actual_sha256="$(sha256sum "$source_file" | awk '{print $1}')"
 actual_size="$(stat -c '%s' "$source_file")"
 index_line="$(git -C "$repo" ls-files -s -- ops/bin/rpi5-update)"
@@ -37,7 +39,8 @@ index_blob="$(awk '{print $2}' <<<"$index_line")"
 if [[ "$actual_sha256" != "$expected_sha256" ||
       "$actual_size" != "$expected_size" ||
       "$index_blob" != "$expected_blob" ]]; then
-    printf 'V25 updater provenance mismatch: expected_sha=%s actual_sha=%s expected_size=%s actual_size=%s expected_blob=%s actual_blob=%s\n' \
+    printf 'Updater provenance mismatch (%s): expected_sha=%s actual_sha=%s expected_size=%s actual_size=%s expected_blob=%s actual_blob=%s\n' \
+        "$expected_stage" \
         "$expected_sha256" "$actual_sha256" \
         "$expected_size" "$actual_size" \
         "$expected_blob" "$index_blob" >&2
@@ -45,7 +48,7 @@ if [[ "$actual_sha256" != "$expected_sha256" ||
 fi
 
 [[ "$index_mode" == "100755" ]] || {
-    echo "V25 updater Git mode must be 100755, got $index_mode" >&2
+    echo "Updater Git mode must be 100755, got $index_mode" >&2
     exit 1
 }
 
@@ -68,5 +71,5 @@ for temporary_path in \
     }
 done
 
-printf 'V25 updater source ownership: PASS sha256=%s size=%s mode=%s blob=%s\n' \
-    "$actual_sha256" "$actual_size" "$index_mode" "$index_blob"
+printf 'Updater source ownership: PASS stage=%s sha256=%s size=%s mode=%s blob=%s\n' \
+    "$expected_stage" "$actual_sha256" "$actual_size" "$index_mode" "$index_blob"

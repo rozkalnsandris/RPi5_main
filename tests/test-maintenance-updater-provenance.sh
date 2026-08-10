@@ -40,14 +40,20 @@ assert v24["git_blob_sha1"] == "5cbccfc5468cbb089e7cf7b9c4c78603eb542367"
 assert v24["size_bytes"] == 50297
 assert v24["helper_root"] == "/usr/local/lib/rpi5-maintenance"
 
+v25 = by_stage["v25-shared-maintenance-lock-public-safe"]
+assert v25["sha256"] == "8701b3f8b21ccafb0d02fdd2d162aeb9400a57beb58572800dfe901bfc4bd02a"
+assert v25["git_blob_sha1"] == "049d9a040efb4be4c2ff861d46a7e0e302b1c5e8"
+assert v25["size_bytes"] == 49860
+assert v25["helper_root"] == "/usr/local/lib/rpi5-maintenance"
+
 candidate = data["candidate"]
-assert candidate["stage"] == "v25-shared-maintenance-lock-public-safe"
+assert candidate["stage"] == "v26-cached-apt-check-public-safe"
 assert candidate["path"] == "ops/bin/rpi5-update"
 assert re.fullmatch(r"[0-9a-f]{64}", candidate["sha256"])
 assert re.fullmatch(r"[0-9a-f]{40}", candidate["git_blob_sha1"])
 assert isinstance(candidate["size_bytes"], int) and candidate["size_bytes"] > 40000
 assert candidate["helper_root"] == "/usr/local/lib/rpi5-maintenance"
-assert candidate["derived_from_sha256"] == v24["sha256"]
+assert candidate["derived_from_sha256"] == v25["sha256"]
 assert candidate["public_runtime_literals_removed"] is True
 assert candidate["cleanup_home_scan_removed"] is True
 assert candidate["cleanup_only_compose_preflight_removed"] is True
@@ -56,6 +62,10 @@ assert candidate["cleanup_only_docker_command_optional"] is True
 assert candidate["shared_maintenance_lock"] is True
 assert candidate["backup_private_probe_removed"] is True
 assert candidate["explicit_lock_conflict_code"] == 200
+assert candidate["apt_check_cached_metadata"] is True
+assert candidate["apt_check_metadata_refresh"] is False
+assert candidate["apt_check_cache_freshness_reported"] is True
+assert candidate["run_apt_metadata_refresh"] is True
 
 backup = data["backup_ownership_snapshot"]
 assert backup["label"] == "V10 ownership snapshot"

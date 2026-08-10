@@ -17,8 +17,10 @@ REQUIRED_MARKERS = (
     "/usr/local/lib/rpi5-maintenance",
     "MAINTENANCE_LOCK_TIMEOUT",
     "rpi5-maintenance-locks.sh",
+    "rpi5-update-apt-policy.sh",
     "rpi5_acquire_exclusive_lock",
     "RPI5_LOCK_CONFLICT_RC",
+    "rpi5_prepare_apt_metadata",
     'HOST_IPV4="${HOST_IPV4:-}"',
     'MAIN_COMPOSE_DIR="${MAIN_COMPOSE_DIR:-${UPDATE_HOME}/docker}"',
     'HERMES_BIN="${HERMES_BIN:-${UPDATE_HOME}/.local/bin/hermes}"',
@@ -103,6 +105,9 @@ def validate(text: str) -> list[str]:
         text,
     ):
         errors.append("Telegram credential is exported through a child process environment")
+
+    if "--error-on=any update" in text:
+        errors.append("APT metadata refresh bypasses the reviewed APT policy helper")
 
     return errors
 
