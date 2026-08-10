@@ -328,4 +328,4 @@ if [[ -n "$CI_RUN_ID" ]]; then
     printf 'CI_RUN_ID=%s\n' "$CI_RUN_ID"
 fi
 printf 'PRODUCTION_MUTATION_AUTHORIZED=false\n'
-printf 'PRODUCTION_MUTATION_ATTEMPTED=false\n
+printf 'PRODUCTION_MUTATION_ATTEMPTED=false\n'
