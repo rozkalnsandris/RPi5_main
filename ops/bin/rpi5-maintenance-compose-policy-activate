@@ -1,0 +1,261 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+IFS=$'\n\t'
+umask 077
+PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+export PATH
+
+readonly OWNER='andris'
+readonly POLICY_REL='ops/lib/rpi5-update-compose-policy.sh'
+readonly UPDATER_REL='ops/bin/rpi5-update'
+readonly POLICY_DEST='/usr/local/lib/rpi5-maintenance/rpi5-update-compose-policy.sh'
+readonly UPDATER_DEST='/usr/local/sbin/rpi5-update'
+readonly BROKER='/usr/local/sbin/rozkalns-github-app-read-token'
+readonly CV_STATE='/var/lib/rozkalns-cv-deploy/current-sha'
+readonly LEGACY_CV_HELPER='/usr/local/sbin/rozkalns-cv-deploy-main'
+readonly CV_PULL_TIMER='rozkalns-cv-pull-deploy.timer'
+readonly MAINTENANCE_TIMER='rpi5-update.timer'
+readonly REPOSITORY='rozkalnsandris/RPi5_main'
+
+fail() {
+    printf 'ERROR: %s\n' "$*" >&2
+    exit 1
+}
+
+[[ ${EUID:-$(id -u)} -eq 0 ]] || fail 'run this operator as root'
+
+for command_name in \
+    awk bash cmp cp dirname docker getent gh git install mktemp python3 rm runuser \
+    sha256sum stat systemctl tr; do
+    command -v "$command_name" >/dev/null 2>&1 \
+        || fail "required command is missing: $command_name"
+done
+
+repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+owner_home="$(getent passwd "$OWNER" | awk -F: 'NR == 1 {print $6}')"
+[[ -n "$owner_home" && -d "$owner_home" ]] || fail 'maintenance owner home is unavailable'
+readonly repo owner_home
+readonly cv_project_dir="$owner_home/docker/cv"
+
+owner_git() {
+    runuser -u "$OWNER" -- git -C "$repo" "$@"
+}
+
+unit_enabled() {
+    systemctl is-enabled "$1" 2>/dev/null || true
+}
+
+unit_active() {
+    systemctl is-active "$1" 2>/dev/null || true
+}
+
+sha256_file() {
+    sha256sum "$1" | awk '{print $1}'
+}
+
+contains_value() {
+    local wanted="$1"
+    shift
+    local value
+    for value in "$@"; do
+        [[ "$value" == "$wanted" ]] && return 0
+    done
+    return 1
+}
+
+policy_installed=false
+had_previous_policy=false
+work="$(mktemp -d)"
+backup="$work/previous-policy"
+
+restore_policy() {
+    local rc="$1"
+    if (( rc != 0 )) && [[ "$policy_installed" == true ]]; then
+        if [[ "$had_previous_policy" == true ]]; then
+            install -o root -g root -m 0644 "$backup" "$POLICY_DEST" || true
+        else
+            rm -f -- "$POLICY_DEST" || true
+        fi
+    fi
+    rm -rf -- "$work"
+}
+trap 'rc=$?; restore_policy "$rc"; exit "$rc"' EXIT
+
+[[ -d "$repo/.git" ]] || fail 'operator must run from the RPi5_main checkout'
+[[ "$(owner_git branch --show-current)" == main ]] || fail 'RPi5_main checkout is not on main'
+[[ -z "$(owner_git status --porcelain=v1 --untracked-files=all)" ]] \
+    || fail 'RPi5_main checkout is not clean'
+
+owner_git fetch --prune origin main
+head_sha="$(owner_git rev-parse HEAD)"
+remote_sha="$(owner_git rev-parse refs/remotes/origin/main)"
+[[ "$head_sha" == "$remote_sha" ]] || fail 'RPi5_main checkout is not exact current origin/main'
+[[ "$head_sha" =~ ^[0-9a-f]{40}$ ]] || fail 'RPi5_main main SHA is invalid'
+
+policy_source="$repo/$POLICY_REL"
+updater_source="$repo/$UPDATER_REL"
+[[ -f "$policy_source" && ! -L "$policy_source" ]] || fail 'reviewed Compose policy source is missing or unsafe'
+[[ -f "$updater_source" && ! -L "$updater_source" ]] || fail 'reviewed updater source is missing or unsafe'
+owner_git ls-files --error-unmatch "$POLICY_REL" >/dev/null
+owner_git ls-files --error-unmatch "$UPDATER_REL" >/dev/null
+bash -n "$policy_source"
+
+[[ -f "$UPDATER_DEST" && ! -L "$UPDATER_DEST" ]] || fail 'installed weekly updater is missing or unsafe'
+[[ "$(stat -c '%U:%G:%a' "$UPDATER_DEST")" == 'root:root:750' ]] \
+    || fail 'installed weekly updater ownership/mode is unexpected'
+source_updater_sha256="$(sha256_file "$updater_source")"
+installed_updater_before="$(sha256_file "$UPDATER_DEST")"
+[[ "$source_updater_sha256" == "$installed_updater_before" ]] \
+    || fail 'installed weekly updater drifted from reviewed source'
+
+[[ -x "$BROKER" && ! -L "$BROKER" ]] || fail 'GitHub App token broker is missing or unsafe'
+unset GH_TOKEN GITHUB_TOKEN
+app_token="$("$BROKER" --repository "$REPOSITORY")"
+[[ ${#app_token} -ge 20 && "$app_token" != *[[:space:]]* ]] \
+    || fail 'GitHub App token broker returned an invalid token'
+
+runs_json="$(
+    GH_TOKEN="$app_token" gh api \
+        "repos/$REPOSITORY/actions/runs?branch=main&head_sha=$head_sha&status=completed&per_page=100"
+)"
+ci_run_id="$(
+    printf '%s' "$runs_json" | python3 -c '
+import json
+import sys
+
+sha = sys.argv[1]
+runs = json.load(sys.stdin).get("workflow_runs", [])
+ok = [
+    row for row in runs
+    if row.get("event") == "push"
+    and row.get("head_branch") == "main"
+    and row.get("head_sha") == sha
+    and row.get("status") == "completed"
+    and row.get("conclusion") == "success"
+]
+print(max((int(row["id"]) for row in ok), default=""))
+' "$head_sha"
+)"
+[[ -n "$ci_run_id" ]] || fail 'no successful exact-main RPi5_main CI run is available'
+
+jobs_json="$(
+    GH_TOKEN="$app_token" gh api \
+        "repos/$REPOSITORY/actions/runs/$ci_run_id/jobs?filter=latest&per_page=100"
+)"
+printf '%s' "$jobs_json" | python3 -c '
+import json
+import sys
+
+jobs = json.load(sys.stdin).get("jobs", [])
+required = {
+    "validate",
+    "gitleaks",
+    "public-automation-baseline / public automation policy",
+}
+passed = {
+    row.get("name")
+    for row in jobs
+    if row.get("status") == "completed"
+    and row.get("conclusion") == "success"
+}
+missing = required - passed
+if missing:
+    raise SystemExit("missing exact-main jobs: " + ",".join(sorted(missing)))
+'
+unset app_token runs_json jobs_json GH_TOKEN GITHUB_TOKEN
+
+echo "RPI5_MAIN_EXACT_SHA=$head_sha"
+echo "RPI5_MAIN_EXACT_SHA_CI=PASS run=$ci_run_id"
+
+[[ -s "$CV_STATE" ]] || fail 'CV production state is missing'
+production_before="$(tr -d '[:space:]' < "$CV_STATE")"
+[[ "$production_before" =~ ^[0-9a-f]{40}$ ]] || fail 'CV production state SHA is invalid'
+[[ -f "$LEGACY_CV_HELPER" && ! -L "$LEGACY_CV_HELPER" ]] || fail 'legacy CV helper is missing or unsafe'
+legacy_helper_before="$(sha256_file "$LEGACY_CV_HELPER")"
+cv_timer_enabled_before="$(unit_enabled "$CV_PULL_TIMER")"
+cv_timer_active_before="$(unit_active "$CV_PULL_TIMER")"
+maintenance_timer_enabled_before="$(unit_enabled "$MAINTENANCE_TIMER")"
+maintenance_timer_active_before="$(unit_active "$MAINTENANCE_TIMER")"
+[[ "$cv_timer_enabled_before" != enabled && "$cv_timer_active_before" != active ]] \
+    || fail 'CV pull timer must remain disabled/inactive during #141 activation'
+
+if [[ -e "$POLICY_DEST" ]]; then
+    [[ -f "$POLICY_DEST" && ! -L "$POLICY_DEST" ]] || fail 'installed Compose policy path is unsafe'
+    cp --preserve=mode,ownership,timestamps "$POLICY_DEST" "$backup"
+    had_previous_policy=true
+fi
+
+install -d -o root -g root -m 0755 "$(dirname -- "$POLICY_DEST")"
+install -o root -g root -m 0644 "$policy_source" "$POLICY_DEST"
+policy_installed=true
+[[ "$(stat -c '%U:%G:%a' "$POLICY_DEST")" == 'root:root:644' ]] \
+    || fail 'installed Compose policy ownership/mode is unexpected'
+cmp -s "$policy_source" "$POLICY_DEST" || fail 'installed Compose policy bytes differ from reviewed source'
+bash -n "$POLICY_DEST"
+policy_sha256="$(sha256_file "$POLICY_DEST")"
+
+echo "COMPOSE_POLICY_SHA256=$policy_sha256"
+echo 'COMPOSE_POLICY_EXACT_INSTALL=PASS'
+
+[[ -d "$cv_project_dir" && ! -L "$cv_project_dir" ]] || fail 'CV Compose project directory is missing or unsafe'
+# shellcheck source=/dev/null
+source "$POLICY_DEST"
+rpi5_select_compose_update_targets "$cv_project_dir" \
+    || fail "installed Compose policy could not safely classify CV project (config_drift_service=${RPI5_COMPOSE_CONFIG_DRIFT_SERVICE:-none})"
+contains_value cvbot "${RPI5_COMPOSE_BUILDABLE_SERVICES[@]}" \
+    || fail 'CV policy proof did not classify cvbot as buildable/local-only'
+contains_value cvbot "${RPI5_COMPOSE_CHANGED_REGISTRY_SERVICES[@]}" \
+    && fail 'CV policy proof selected buildable cvbot as a changed registry service'
+
+rpi5_build_compose_up_args 240 false "$cv_project_dir" \
+    || fail "installed Compose policy could not build safe CV maintenance arguments (config_drift_service=${RPI5_COMPOSE_CONFIG_DRIFT_SERVICE:-none})"
+contains_value --no-build "${RPI5_COMPOSE_UP_ARGS[@]}" || fail 'safe Compose args lost --no-build'
+contains_value --no-deps "${RPI5_COMPOSE_UP_ARGS[@]}" || fail 'safe Compose args lost --no-deps'
+contains_value --remove-orphans "${RPI5_COMPOSE_UP_ARGS[@]}" \
+    && fail 'unsafe --remove-orphans appeared in Compose args'
+contains_value --force-recreate "${RPI5_COMPOSE_UP_ARGS[@]}" \
+    && fail 'normal maintenance unexpectedly requested force recreation'
+
+if [[ "$RPI5_COMPOSE_UPDATE_MODE" == 'changed-registry-images' ]]; then
+    contains_value cvbot "${RPI5_COMPOSE_UP_ARGS[@]}" \
+        && fail 'buildable cvbot was selected for generic maintenance recreation'
+elif [[ "$RPI5_COMPOSE_UPDATE_MODE" == 'no-image-change-no-recreate' ]]; then
+    contains_value --no-recreate "${RPI5_COMPOSE_UP_ARGS[@]}" \
+        || fail 'no-image-change path lost --no-recreate'
+else
+    fail "unexpected Compose maintenance mode: $RPI5_COMPOSE_UPDATE_MODE"
+fi
+
+echo 'CVBOT_CLASSIFICATION=buildable-local'
+echo 'CVBOT_GENERIC_RECREATE_AUTHORIZED=false'
+echo "COMPOSE_POLICY_MODE=$RPI5_COMPOSE_UPDATE_MODE"
+echo 'COMPOSE_POLICY_LIVE_READONLY_PROOF=PASS'
+
+installed_updater_after="$(sha256_file "$UPDATER_DEST")"
+legacy_helper_after="$(sha256_file "$LEGACY_CV_HELPER")"
+production_after="$(tr -d '[:space:]' < "$CV_STATE")"
+cv_timer_enabled_after="$(unit_enabled "$CV_PULL_TIMER")"
+cv_timer_active_after="$(unit_active "$CV_PULL_TIMER")"
+maintenance_timer_enabled_after="$(unit_enabled "$MAINTENANCE_TIMER")"
+maintenance_timer_active_after="$(unit_active "$MAINTENANCE_TIMER")"
+
+[[ "$installed_updater_after" == "$installed_updater_before" ]] || fail 'weekly updater bytes changed during helper-only activation'
+[[ "$legacy_helper_after" == "$legacy_helper_before" ]] || fail 'legacy CV helper changed during #141 activation'
+[[ "$production_after" == "$production_before" ]] || fail 'CV production state changed during #141 activation'
+[[ "$cv_timer_enabled_after" == "$cv_timer_enabled_before" ]] || fail 'CV pull timer enablement changed during #141 activation'
+[[ "$cv_timer_active_after" == "$cv_timer_active_before" ]] || fail 'CV pull timer activity changed during #141 activation'
+[[ "$maintenance_timer_enabled_after" == "$maintenance_timer_enabled_before" ]] || fail 'weekly maintenance timer enablement changed during helper-only activation'
+[[ "$maintenance_timer_active_after" == "$maintenance_timer_active_before" ]] || fail 'weekly maintenance timer activity changed during helper-only activation'
+
+policy_installed=false
+
+echo "CV_PRODUCTION_SHA=$production_after"
+echo 'CV_PRODUCTION_CHANGED=false'
+echo 'LEGACY_CV_HELPER_MODIFIED=false'
+echo 'WEEKLY_UPDATER_MODIFIED=false'
+echo 'WEEKLY_UPDATER_EXECUTED=false'
+echo "CV_PULL_TIMER_ENABLED=$cv_timer_enabled_after"
+echo "CV_PULL_TIMER_ACTIVE=$cv_timer_active_after"
+echo "MAINTENANCE_TIMER_ENABLED=$maintenance_timer_enabled_after"
+echo "MAINTENANCE_TIMER_ACTIVE=$maintenance_timer_active_after"
+echo 'PHASE3_MAINTENANCE_POLICY_HOST_GATE=PASS'
