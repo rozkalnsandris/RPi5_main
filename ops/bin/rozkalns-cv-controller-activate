@@ -451,4 +451,4 @@ printf 'CV_PULL_TIMER_ACTIVE=%s\n' "$cv_timer_active_after"
 printf 'CV_PULL_SERVICE_ACTIVE=%s\n' "$cv_service_active_after"
 printf 'PRODUCTION_MUTATION_AUTHORIZED=false\n'
 printf 'PRODUCTION_MUTATION_ATTEMPTED=false\n'
-printf 'PHASE3_140_CONTROLLER_HOST_ACTIVATION=PASS\n
+printf 'PHASE3_140_CONTROLLER_HOST_ACTIVATION=PASS\n'
