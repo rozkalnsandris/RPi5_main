@@ -33,6 +33,25 @@ class CvControllerActivationContractTests(unittest.TestCase):
         for marker in required:
             self.assertIn(marker, self.text)
 
+    def test_activation_proves_controller_wrapper_evidence_contract_before_install(self) -> None:
+        for marker in (
+            "assert_controller_wrapper_evidence_contract()",
+            "runner/release/rozkalns-cv-pull-deploy-main",
+            "rozkalns-cv-main-deploy-auto-${TARGET_SHA:0:12}.XXXXXXXX",
+            '"$PULL_EVIDENCE_ROOT"/rozkalns-cv-main-deploy-*)',
+            "#140 controller retains the rejected legacy evidence namespace",
+            "CV_CONTROLLER_WRAPPER_EVIDENCE_CONTRACT=PASS",
+        ):
+            self.assertIn(marker, self.text)
+
+        proof = self.text.index("assert_controller_wrapper_evidence_contract\n")
+        install = self.text.index('bash "$repo/$INSTALLER_REL" "$repo"')
+        self.assertLess(proof, install)
+        self.assertIn(
+            "assert_controller_wrapper_evidence_contract\n[[ \"$(sha256_file \"$POLICY_DEST\")\" == \"$policy_sha_before\" ]]",
+            self.text,
+        )
+
     def test_exact_workflow_ci_is_required(self) -> None:
         self.assertIn(
             'actions/workflows/$workflow/runs?branch=main&head_sha=$sha&status=completed',
