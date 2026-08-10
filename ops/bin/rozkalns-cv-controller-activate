@@ -9,6 +9,7 @@ readonly OWNER='andris'
 readonly RPI_REPOSITORY='rozkalnsandris/RPi5_main'
 readonly CV_REPOSITORY='rozkalnsandris/rozkalns-cv'
 readonly EXPECTED_CV_SHA='f5431265232f356fa27f6204f0cba56e1e730928'
+readonly EXPECTED_CV_PULL_WRAPPER_BLOB='ddaa8c7f8c0776e77be18b2cd5ea8a9489900e70'
 readonly BROKER='/usr/local/sbin/rozkalns-github-app-read-token'
 readonly CV_SOURCE_REL='rozkalns-cv-worktrees/release-control'
 readonly CV_STATE='/var/lib/rozkalns-cv-deploy/current-sha'
@@ -209,21 +210,23 @@ assert_cv_control_artifacts() {
 
 assert_controller_wrapper_evidence_contract() {
     local controller_source="$repo/$CONTROLLER_REL"
-    local wrapper_source="$cv_source/runner/release/rozkalns-cv-pull-deploy-main"
+    local wrapper_rel='runner/release/rozkalns-cv-pull-deploy-main'
+    local wrapper_blob wrapper_text
 
     [[ -f "$controller_source" && ! -L "$controller_source" ]] \
         || fail '#140 controller source is missing or unsafe for evidence-contract proof'
-    [[ -f "$wrapper_source" && ! -L "$wrapper_source" ]] \
-        || fail 'CV pull-wrapper source is missing or unsafe for evidence-contract proof'
-
     grep -Fq 'rozkalns-cv-main-deploy-auto-${TARGET_SHA:0:12}.XXXXXXXX' \
         "$controller_source" \
         || fail '#140 controller evidence basename is outside the CV wrapper namespace'
     if grep -Fq 'rozkalns-cv-auto-deploy-' "$controller_source"; then
         fail '#140 controller retains the rejected legacy evidence namespace'
     fi
-    grep -Fq '"$PULL_EVIDENCE_ROOT"/rozkalns-cv-main-deploy-*)' \
-        "$wrapper_source" \
+
+    wrapper_blob="$(owner_git_cv rev-parse "$EXPECTED_CV_SHA:$wrapper_rel")"
+    [[ "$wrapper_blob" == "$EXPECTED_CV_PULL_WRAPPER_BLOB" ]] \
+        || fail 'exact CV pull-wrapper blob changed from the reviewed evidence contract'
+    wrapper_text="$(owner_git_cv show "$EXPECTED_CV_SHA:$wrapper_rel")"
+    grep -Fq '"$PULL_EVIDENCE_ROOT"/rozkalns-cv-main-deploy-*)' <<<"$wrapper_text" \
         || fail 'CV pull-wrapper evidence allow-pattern changed incompatibly'
 }
 
