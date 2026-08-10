@@ -380,7 +380,7 @@ cv_service_active_after="$(unit_active "$SERVICE_UNIT")"
 preflight_output="$(
     runuser -u "$OWNER" -- env \
         HOME="$owner_home" \
-        PATH='/home/andris/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' \
+        PATH="$owner_home/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
         "$PREFLIGHT"
 )" || fail 'post-install CV preflight failed'
 preflight_result="$(extract_field PULL_DEPLOY_PREFLIGHT_RESULT "$preflight_output")"
