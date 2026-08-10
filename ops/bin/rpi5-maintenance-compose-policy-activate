@@ -25,7 +25,7 @@ fail() {
 [[ ${EUID:-$(id -u)} -eq 0 ]] || fail 'run this operator as root'
 
 for command_name in \
-    awk bash cmp docker getent gh git install mktemp python3 rm runuser \
+    awk bash cmp cp dirname docker getent gh git install mktemp python3 rm runuser \
     sha256sum stat systemctl tr; do
     command -v "$command_name" >/dev/null 2>&1 \
         || fail "required command is missing: $command_name"
