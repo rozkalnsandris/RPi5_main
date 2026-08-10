@@ -67,16 +67,24 @@ class CvControllerActivationContractTests(unittest.TestCase):
         ):
             self.assertIn(marker, self.text)
 
-        for line in self.text.splitlines():
-            stripped = line.strip()
-            self.assertFalse(
-                stripped.startswith('"$DEST_CONTROLLER"'),
-                msg=f"controller must not execute during activation: {line}",
-            )
-            self.assertFalse(
-                stripped.startswith('"$PULL_WRAPPER"'),
-                msg=f"pull wrapper must not execute during activation: {line}",
-            )
+        # Data-only references in arrays are allowed. Reject actual direct
+        # command positions instead. The pull wrapper requires arguments, so a
+        # command-position match must contain a following token; the controller
+        # takes no arguments and must never appear as a standalone command.
+        direct_controller = re.compile(
+            r'(?m)^\s*"\$DEST_CONTROLLER"\s*(?:$|[<>|;&])'
+        )
+        direct_pull_wrapper = re.compile(
+            r'(?m)^\s*"\$PULL_WRAPPER"\s+\S'
+        )
+        self.assertIsNone(
+            direct_controller.search(self.text),
+            msg="controller must not execute during activation",
+        )
+        self.assertIsNone(
+            direct_pull_wrapper.search(self.text),
+            msg="pull wrapper must not execute during activation",
+        )
 
     def test_activation_does_not_enable_or_start_recurring_execution(self) -> None:
         forbidden = (
