@@ -27,6 +27,7 @@ HERMES_BIN="${HERMES_BIN:-${UPDATE_HOME}/.local/bin/hermes}"
 source "$LIBEXEC/rpi5-update-hermes-status.sh"
 source "$LIBEXEC/rpi5-update-locks.sh"
 source "$LIBEXEC/rpi5-maintenance-locks.sh"
+source "$LIBEXEC/rpi5-update-apt-policy.sh"
 source "$LIBEXEC/rpi5-update-reboot.sh"
 source "$LIBEXEC/rpi5-update-compose-health.sh"
 source "$LIBEXEC/rpi5-update-compose-policy.sh"
@@ -37,6 +38,7 @@ TELEGRAM_HELPER="$LIBEXEC/rpi5-update-telegram.py"
 rpi5_classify_hermes_update_check 0 "Up to date"
 RPI5_LOCK_CONFLICT_RC=200
 rpi5_acquire_exclusive_lock "$MAINTENANCE_LOCK" "$MAINTENANCE_LOCK_TIMEOUT" MAINTENANCE_LOCK_FD
+rpi5_prepare_apt_metadata check -o Acquire::Retries=3
 rpi5_applied_packages_require_reboot run "linux-image"
 rpi5_find_missing_compose_services "api" "api"
 rpi5_build_compose_up_args 240 false
@@ -77,6 +79,9 @@ cases = {
     "missing-origin-helper": GOOD.replace("rpi5_application_local_health_targets", "legacy_origin_list", 1),
     "missing-shared-lock-helper": GOOD.replace("rpi5_acquire_exclusive_lock", "legacy_wait_for_backup", 1),
     "missing-lock-library": GOOD.replace("rpi5-maintenance-locks.sh", "legacy-locks.sh", 1),
+    "missing-apt-policy-library": GOOD.replace("rpi5-update-apt-policy.sh", "legacy-apt-policy.sh", 1),
+    "missing-apt-policy-routing": GOOD.replace("rpi5_prepare_apt_metadata", "legacy_apt_refresh", 1),
+    "direct-apt-metadata-refresh": GOOD + "\napt-get --error-on=any update\n",
     "missing-conflict-code": GOOD.replace("RPI5_LOCK_CONFLICT_RC", "LEGACY_LOCK_RC", 1),
     "missing-telegram-helper": GOOD.replace("rpi5-update-telegram.py", "legacy-notifier.py", 1),
     "telegram-child-env": GOOD + '\nTELEGRAM_TOKEN="$TELEGRAM_TOKEN" TELEGRAM_CHAT_ID="$CHAT_ID" python3 notifier.py\n',
