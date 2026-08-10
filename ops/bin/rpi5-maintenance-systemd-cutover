@@ -215,6 +215,11 @@ validate_installed_targets() {
         }
     done
 
+    [[ "$(stat -c '%a' /usr/local/sbin/rpi5-maintenance-notify)" == 755 ]] || {
+        log "FAIL notifier entrypoint must be mode 755 for DynamicUser execution"
+        return 1
+    }
+
     for path in \
         /etc/systemd/system/rpi5-update.service \
         /etc/systemd/system/rpi5-update.timer \
@@ -234,7 +239,7 @@ install_reviewed_files() {
     install -o root -g root -m 0750 "$repo/ops/bin/rpi5-update" /usr/local/sbin/rpi5-update
     install -o root -g root -m 0750 "$repo/ops/bin/rpi5-monitor" /usr/local/sbin/rpi5-monitor
     install -o root -g root -m 0750 "$repo/ops/bin/rpi5-post-reboot" /usr/local/sbin/rpi5-post-reboot
-    install -o root -g root -m 0750 "$repo/ops/bin/rpi5-maintenance-notify" /usr/local/sbin/rpi5-maintenance-notify
+    install -o root -g root -m 0755 "$repo/ops/bin/rpi5-maintenance-notify" /usr/local/sbin/rpi5-maintenance-notify
 
     for name in \
         rpi5-update-hermes-status.sh rpi5-update-locks.sh rpi5-update-reboot.sh \
