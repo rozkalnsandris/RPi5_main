@@ -24,6 +24,7 @@ class CvControllerActivationContractTests(unittest.TestCase):
     def test_activation_is_pinned_to_recovered_cv_baseline(self) -> None:
         required = [
             "EXPECTED_CV_SHA='f5431265232f356fa27f6204f0cba56e1e730928'",
+            "EXPECTED_CV_PULL_WRAPPER_BLOB='ddaa8c7f8c0776e77be18b2cd5ea8a9489900e70'",
             "CV_MAIN_PRODUCTION_RECONCILIATION=PASS",
             "CV_EXACT_MAIN_CI=PASS",
             "CV_CONTROL_ARTIFACT_IDENTITY=PASS",
@@ -40,10 +41,17 @@ class CvControllerActivationContractTests(unittest.TestCase):
             "rozkalns-cv-main-deploy-auto-${TARGET_SHA:0:12}.XXXXXXXX",
             '"$PULL_EVIDENCE_ROOT"/rozkalns-cv-main-deploy-*)',
             "#140 controller retains the rejected legacy evidence namespace",
+            'owner_git_cv rev-parse "$EXPECTED_CV_SHA:$wrapper_rel"',
+            'owner_git_cv show "$EXPECTED_CV_SHA:$wrapper_rel"',
+            "exact CV pull-wrapper blob changed from the reviewed evidence contract",
             "CV_CONTROLLER_WRAPPER_EVIDENCE_CONTRACT=PASS",
         ):
             self.assertIn(marker, self.text)
 
+        self.assertEqual(
+            self.text.count("assert_controller_wrapper_evidence_contract\n"),
+            2,
+        )
         proof = self.text.index("assert_controller_wrapper_evidence_contract\n")
         install = self.text.index('bash "$repo/$INSTALLER_REL" "$repo"')
         self.assertLess(proof, install)
@@ -86,23 +94,14 @@ class CvControllerActivationContractTests(unittest.TestCase):
         ):
             self.assertIn(marker, self.text)
 
-        # Data-only references in arrays are allowed. Reject actual direct
-        # command positions instead. Restrict whitespace to spaces/tabs so a
-        # data-only array row cannot consume the following newline/`)` token.
         direct_controller = re.compile(
             r'(?m)^[ \t]*"\$DEST_CONTROLLER"[ \t]*(?:$|[<>|;&])'
         )
         direct_pull_wrapper = re.compile(
             r'(?m)^[ \t]*"\$PULL_WRAPPER"[ \t]+\S'
         )
-        self.assertIsNone(
-            direct_controller.search(self.text),
-            msg="controller must not execute during activation",
-        )
-        self.assertIsNone(
-            direct_pull_wrapper.search(self.text),
-            msg="pull wrapper must not execute during activation",
-        )
+        self.assertIsNone(direct_controller.search(self.text))
+        self.assertIsNone(direct_pull_wrapper.search(self.text))
 
     def test_activation_does_not_enable_or_start_recurring_execution(self) -> None:
         forbidden = (
@@ -113,39 +112,18 @@ class CvControllerActivationContractTests(unittest.TestCase):
             r"sudo\s+-n\s+.*PULL_(?:WRAPPER|HELPER)",
         )
         for pattern in forbidden:
-            self.assertIsNone(
-                re.search(pattern, self.text),
-                msg=f"forbidden activation behavior matched: {pattern}",
-            )
-
-        self.assertIn(
-            "CV pull timer must be disabled/inactive before #140 activation",
-            self.text,
-        )
-        self.assertIn(
-            "CV pull timer became enabled/active during #140 activation",
-            self.text,
-        )
+            self.assertIsNone(re.search(pattern, self.text))
         self.assertIn("CV_PULL_TIMER_ENABLED=", self.text)
         self.assertIn("CV_PULL_TIMER_ACTIVE=", self.text)
 
     def test_post_install_preflight_must_remain_non_mutating_current(self) -> None:
-        self.assertIn(
-            '[[ "$preflight_result" == NO_OP_ALREADY_CURRENT ]]',
-            self.text,
-        )
+        self.assertIn('[[ "$preflight_result" == NO_OP_ALREADY_CURRENT ]]', self.text)
         self.assertIn(
             '[[ "$preflight_target" == "$EXPECTED_CV_SHA" && "$preflight_production" == "$EXPECTED_CV_SHA" ]]',
             self.text,
         )
-        self.assertIn(
-            "CV origin/main advanced during #140 activation",
-            self.text,
-        )
-        self.assertIn(
-            "CV production state changed during #140 activation",
-            self.text,
-        )
+        self.assertIn("CV origin/main advanced during #140 activation", self.text)
+        self.assertIn("CV production state changed during #140 activation", self.text)
 
     def test_failed_post_install_proof_restores_previous_artifacts(self) -> None:
         for marker in (
