@@ -24,6 +24,7 @@ class CvControllerActivationContractTests(unittest.TestCase):
     def test_activation_is_pinned_to_recovered_cv_baseline(self) -> None:
         required = [
             "EXPECTED_CV_SHA='f5431265232f356fa27f6204f0cba56e1e730928'",
+            "EXPECTED_CV_PULL_WRAPPER_BLOB='ddaa8c7f8c0776e77be18b2cd5ea8a9489900e70'",
             "CV_MAIN_PRODUCTION_RECONCILIATION=PASS",
             "CV_EXACT_MAIN_CI=PASS",
             "CV_CONTROL_ARTIFACT_IDENTITY=PASS",
@@ -40,10 +41,17 @@ class CvControllerActivationContractTests(unittest.TestCase):
             "rozkalns-cv-main-deploy-auto-${TARGET_SHA:0:12}.XXXXXXXX",
             '"$PULL_EVIDENCE_ROOT"/rozkalns-cv-main-deploy-*)',
             "#140 controller retains the rejected legacy evidence namespace",
+            'owner_git_cv rev-parse "$EXPECTED_CV_SHA:$wrapper_rel"',
+            'owner_git_cv show "$EXPECTED_CV_SHA:$wrapper_rel"',
+            "exact CV pull-wrapper blob changed from the reviewed evidence contract",
             "CV_CONTROLLER_WRAPPER_EVIDENCE_CONTRACT=PASS",
         ):
             self.assertIn(marker, self.text)
 
+        self.assertEqual(
+            self.text.count("assert_controller_wrapper_evidence_contract\n"),
+            2,
+        )
         proof = self.text.index("assert_controller_wrapper_evidence_contract\n")
         install = self.text.index('bash "$repo/$INSTALLER_REL" "$repo"')
         self.assertLess(proof, install)
