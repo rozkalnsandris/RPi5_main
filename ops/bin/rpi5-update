@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # RPi5 drošs nedēļas atjaunināšanas skripts
-# Versija: 25
+# Versija: 26
 #
 # Noklusējuma palaišana (reāls update):
 #   sudo /usr/local/sbin/rpi5-update
@@ -111,6 +111,7 @@ for helper in \
     rpi5-update-hermes-status.sh \
     rpi5-update-locks.sh \
     rpi5-maintenance-locks.sh \
+    rpi5-update-apt-policy.sh \
     rpi5-update-reboot.sh \
     rpi5-update-compose-health.sh \
     rpi5-update-compose-policy.sh \
@@ -447,7 +448,7 @@ require_command() {
 }
 
 CURRENT_PHASE="priekšpārbaude"
-log "===== RPi5 UPDATE v25 SĀKTS (mode=${MODE}, run_id=${RUN_ID}) ====="
+log "===== RPi5 UPDATE v26 SĀKTS (mode=${MODE}, run_id=${RUN_ID}) ====="
 
 for command_name in \
     apt-get dpkg dpkg-query apt-mark python3 curl flock runuser \
@@ -882,11 +883,37 @@ APT_COMMON=(
     -o DPkg::Lock::Timeout=300
 )
 
-log "APT repozitoriju metadatu atjaunināšana..."
-if ! apt-get "${APT_COMMON[@]}" --error-on=any update; then
-    APT_STATUS=1
-    log "KĻŪDA: apt-get update neizdevās."
+APT_METADATA_READY=1
+apt_metadata_rc=0
+if [[ "$MODE" == "run" ]]; then
+    log "APT repozitoriju metadatu atjaunināšana..."
 else
+    log "--check: APT repozitoriju metadata netiks refreshēta; tiks izmantots esošais cache."
+fi
+rpi5_prepare_apt_metadata "$MODE" "${APT_COMMON[@]}" || apt_metadata_rc=$?
+
+case "$apt_metadata_rc" in
+    0)
+        log "APT repozitoriju metadata atjaunināta."
+        ;;
+    "$RPI5_APT_METADATA_SKIPPED_RC")
+        if apt_cache_age_seconds="$(rpi5_cached_apt_list_age_seconds)"; then
+            apt_cache_age_human="$(elapsed_human "$apt_cache_age_seconds")"
+            log "--check: cached APT lists jaunākā faila mtime vecums ir ${apt_cache_age_human}; tas ir tikai lokāls freshness indikators."
+            WARNINGS+=("APT --check izmanto cached metadata; jaunākā lists faila mtime vecums ${apt_cache_age_human} nav garantēts pēdējā veiksmīgā refresh laiks.")
+        else
+            log "BRĪDINĀJUMS: --check režīmā APT cache freshness nevar droši noteikt; metadata netika refreshēta."
+            WARNINGS+=("APT --check izmanto cached metadata; cache freshness nevarēja droši noteikt.")
+        fi
+        ;;
+    *)
+        APT_STATUS=1
+        APT_METADATA_READY=0
+        log "KĻŪDA: APT metadata sagatavošana neizdevās (rc=${apt_metadata_rc})."
+        ;;
+esac
+
+if [[ "$APT_METADATA_READY" -eq 1 ]]; then
     dpkg_audit_before="$(dpkg --audit 2>&1 || true)"
 
     if [[ -n "$dpkg_audit_before" ]]; then
@@ -1578,7 +1605,7 @@ if [[ "$MODE" == "run" ]]; then
 fi
 FINAL_SENT=1
 
-log "===== RPi5 UPDATE v25 PABEIGTS: status=${OVERALL_STATUS}, ilgums=${DURATION} ====="
+log "===== RPi5 UPDATE v26 PABEIGTS: status=${OVERALL_STATUS}, ilgums=${DURATION} ====="
 
 if [[ "$REBOOT_REQUIRED" -eq 1 && "$MODE" == "run" ]]; then
     log "Drošs reboot ieplānots pēc 1 minūtes: ${REBOOT_REASON}"
