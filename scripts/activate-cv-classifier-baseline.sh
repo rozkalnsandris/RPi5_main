@@ -264,7 +264,7 @@ printf 'CV_CLASSIFIER_ARTIFACT_INSTALL=PASS blob=%s\n' "$TARGET_CLASSIFIER_BLOB"
 
 preflight_output="$(runuser -u "$OWNER" -- env \
     HOME="$owner_home" \
-    PATH='/home/andris/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' \
+    PATH="$owner_home/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
     "$PREFLIGHT")" || fail 'post-install App-authenticated preflight failed'
 preflight_result="$(extract_field PULL_DEPLOY_PREFLIGHT_RESULT "$preflight_output")"
 preflight_target="$(extract_field TARGET_SHA "$preflight_output")"
