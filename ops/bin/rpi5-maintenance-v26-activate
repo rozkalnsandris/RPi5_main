@@ -94,16 +94,16 @@ PY
 
 atomic_stage_copy() {
     local source="$1" destination="$2" mode="$3" result_var="$4"
-    local owner="${5:-}" group="${6:-}" stage
+    local owner="${5:-}" group="${6:-}" staged_path
     [[ -d "$(dirname -- "$destination")" && ! -L "$(dirname -- "$destination")" ]] || return 1
-    stage="$(mktemp "${destination}.v26-stage.XXXXXX")" || return 1
+    staged_path="$(mktemp "${destination}.v26-stage.XXXXXX")" || return 1
     if [[ -n "$owner" || -n "$group" ]]; then
-        [[ -n "$owner" && -n "$group" ]] || { rm -f -- "$stage"; return 2; }
-        install -o "$owner" -g "$group" -m "$mode" "$source" "$stage" || { rm -f -- "$stage"; return 1; }
+        [[ -n "$owner" && -n "$group" ]] || { rm -f -- "$staged_path"; return 2; }
+        install -o "$owner" -g "$group" -m "$mode" "$source" "$staged_path" || { rm -f -- "$staged_path"; return 1; }
     else
-        install -m "$mode" "$source" "$stage" || { rm -f -- "$stage"; return 1; }
+        install -m "$mode" "$source" "$staged_path" || { rm -f -- "$staged_path"; return 1; }
     fi
-    printf -v "$result_var" '%s' "$stage"
+    printf -v "$result_var" '%s' "$staged_path"
 }
 
 atomic_replace_stage() {
