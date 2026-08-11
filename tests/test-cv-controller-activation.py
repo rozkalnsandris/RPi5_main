@@ -80,6 +80,24 @@ class CvControllerActivationContractTests(unittest.TestCase):
         ):
             self.assertIn(job, self.text)
 
+    def test_maintenance_policy_recheck_respects_no_recreate_semantics(self) -> None:
+        for marker in (
+            'case "$RPI5_COMPOSE_UPDATE_MODE" in',
+            "changed-registry-images)",
+            "no-image-change-no-recreate)",
+            "#141 changed-registry mode unexpectedly uses --no-recreate",
+            "#141 policy selected buildable cvbot as a changed-registry maintenance target",
+            "#141 no-image-change mode lost --no-recreate",
+            "#141 no-image-change mode no longer includes cvbot under --no-recreate",
+            "#141 policy returned unexpected update mode",
+            "CVBOT_GENERIC_RECREATE_AUTHORIZED=false",
+        ):
+            self.assertIn(marker, self.text)
+        self.assertNotIn(
+            "#141 policy selected cvbot for generic maintenance",
+            self.text,
+        )
+
     def test_only_reviewed_installer_crosses_host_artifact_boundary(self) -> None:
         self.assertEqual(
             self.text.count('bash "$repo/$INSTALLER_REL" "$repo"'),
