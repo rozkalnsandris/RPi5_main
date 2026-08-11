@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
+import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,6 +20,26 @@ class CvControllerActivationContractTests(unittest.TestCase):
         self.assertIn(
             "python3 ./tests/test-cv-controller-activation.py",
             makefile,
+        )
+
+    def test_operator_is_executable_in_git_index(self) -> None:
+        index = subprocess.check_output(
+            [
+                "git",
+                "-C",
+                str(ROOT),
+                "ls-files",
+                "-s",
+                "--",
+                "ops/bin/rozkalns-cv-controller-activate",
+            ],
+            text=True,
+        ).strip()
+        self.assertTrue(index, "#140 activation operator is not tracked")
+        self.assertEqual(
+            index.split()[0],
+            "100755",
+            f"#140 activation operator mode is not executable: {index}",
         )
 
     def test_activation_is_pinned_to_recovered_cv_baseline(self) -> None:
