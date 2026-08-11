@@ -1,5 +1,6 @@
 .PHONY: test secret-scan public-safety validate
 
+# Full validation includes source-contract and dynamic V26 activation transaction gates.
 test:
 	./tests/test-shell-syntax.sh
 	./tests/test-safe-inventory.sh
