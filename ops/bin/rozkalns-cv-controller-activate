@@ -301,12 +301,29 @@ rpi5_build_compose_up_args 240 false "$cv_project_dir" \
     || fail "#141 policy could not build safe CV maintenance args (config_drift_service=${RPI5_COMPOSE_CONFIG_DRIFT_SERVICE:-none})"
 contains_value --no-build "${RPI5_COMPOSE_UP_ARGS[@]}" || fail '#141 policy lost --no-build'
 contains_value --no-deps "${RPI5_COMPOSE_UP_ARGS[@]}" || fail '#141 policy lost --no-deps'
-contains_value cvbot "${RPI5_COMPOSE_UP_ARGS[@]}" \
-    && fail '#141 policy selected cvbot for generic maintenance'
 contains_value --remove-orphans "${RPI5_COMPOSE_UP_ARGS[@]}" \
     && fail '#141 policy unexpectedly allows --remove-orphans'
 contains_value --force-recreate "${RPI5_COMPOSE_UP_ARGS[@]}" \
     && fail '#141 policy unexpectedly allows normal force recreation'
+
+case "$RPI5_COMPOSE_UPDATE_MODE" in
+    changed-registry-images)
+        contains_value --no-recreate "${RPI5_COMPOSE_UP_ARGS[@]}" \
+            && fail '#141 changed-registry mode unexpectedly uses --no-recreate'
+        contains_value cvbot "${RPI5_COMPOSE_UP_ARGS[@]}" \
+            && fail '#141 policy selected buildable cvbot as a changed-registry maintenance target'
+        ;;
+    no-image-change-no-recreate)
+        contains_value --no-recreate "${RPI5_COMPOSE_UP_ARGS[@]}" \
+            || fail '#141 no-image-change mode lost --no-recreate'
+        contains_value cvbot "${RPI5_COMPOSE_UP_ARGS[@]}" \
+            || fail '#141 no-image-change mode no longer includes cvbot under --no-recreate'
+        ;;
+    *)
+        fail "#141 policy returned unexpected update mode: $RPI5_COMPOSE_UPDATE_MODE"
+        ;;
+esac
+printf 'CVBOT_GENERIC_RECREATE_AUTHORIZED=false\n'
 printf 'PHASE3_MAINTENANCE_POLICY_RECHECK=PASS mode=%s\n' "$RPI5_COMPOSE_UPDATE_MODE"
 
 [[ -f "$LEGACY_HELPER" && ! -L "$LEGACY_HELPER" ]] || fail 'legacy CV helper is missing or unsafe'
