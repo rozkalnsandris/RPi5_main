@@ -43,7 +43,7 @@ class CVClassifierHostAlignmentTests(unittest.TestCase):
             'row.get("head_branch") == "main"',
             'row.get("head_sha") == sha',
             '"validate", "gitleaks", "public-automation-baseline / public automation policy"',
-            'required = {"validate"}',
+            'else {"validate"}',
             'require_exact_main_ci "$RPI_REPOSITORY" "$rpi_head" rpi validate.yml',
             'require_exact_main_ci "$CV_REPOSITORY" "$TARGET_CV_SHA" cv ci.yml',
         ):
