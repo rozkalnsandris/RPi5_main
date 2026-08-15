@@ -1,0 +1,186 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+IFS=$'\n\t'
+umask 077
+PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+export PATH
+
+fail() {
+    printf 'ERROR: %s\n' "$*" >&2
+    exit 1
+}
+
+usage() {
+    cat >&2 <<'EOF'
+Usage: sudo /usr/local/sbin/rozkalns-cv-manual-rollout-operator \
+  --target-sha <40-hex-sha> \
+  --approve-manual-rollout <same-40-hex-sha>
+EOF
+    exit 2
+}
+
+TARGET_SHA=''
+APPROVED_SHA=''
+while (( $# > 0 )); do
+    case "$1" in
+        --target-sha)
+            (( $# >= 2 )) || usage
+            TARGET_SHA="$2"
+            shift 2
+            ;;
+        --approve-manual-rollout)
+            (( $# >= 2 )) || usage
+            APPROVED_SHA="$2"
+            shift 2
+            ;;
+        *)
+            usage
+            ;;
+    esac
+done
+
+[[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'target SHA is invalid'
+[[ "$APPROVED_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'manual rollout approval SHA is invalid'
+[[ "$APPROVED_SHA" == "$TARGET_SHA" ]] \
+    || fail 'manual rollout approval does not match target SHA'
+[[ ${EUID:-$(id -u)} -eq 0 ]] || fail 'manual rollout operator must run as root via sudo'
+
+OWNER='andris'
+CANARY='/usr/local/sbin/rozkalns-cv-pull-deploy-canary'
+CONTROLLER='/usr/local/sbin/rozkalns-cv-pull-deploy'
+TIMER_FILE='/etc/systemd/system/rozkalns-cv-pull-deploy.timer'
+SERVICE_FILE='/etc/systemd/system/rozkalns-cv-pull-deploy.service'
+TIMER_UNIT='rozkalns-cv-pull-deploy.timer'
+SERVICE_UNIT='rozkalns-cv-pull-deploy.service'
+
+EXPECTED_CANARY_BLOB='adaf84049b6c97648249e606dd00d2effa2b4d8a'
+EXPECTED_CONTROLLER_BLOB='2bd0878da77b787fe22496c586ca6e68bb8fad1e'
+EXPECTED_TIMER_BLOB='75ad7b3c0565b2c8a3e6a73600ce38265520199b'
+EXPECTED_SERVICE_BLOB='e379e483187f5f7345729ca09c35dcd56aff69ec'
+
+for command_name in getent git id realpath runuser sleep stat systemctl; do
+    command -v "$command_name" >/dev/null 2>&1 \
+        || fail "required command is missing: $command_name"
+done
+id "$OWNER" >/dev/null 2>&1 || fail 'owner user is missing'
+OWNER_HOME="$(getent passwd "$OWNER" | awk -F: 'NR == 1 {print $6}')"
+[[ "$OWNER_HOME" == /* && -d "$OWNER_HOME" && ! -L "$OWNER_HOME" ]] \
+    || fail 'owner home directory is missing or unsafe'
+
+SELF="$(realpath -e -- "${BASH_SOURCE[0]}")"
+[[ "$SELF" == '/usr/local/sbin/rozkalns-cv-manual-rollout-operator' ]] \
+    || fail 'manual rollout operator must run from the root-owned installed path'
+[[ "$(stat -c '%U:%G:%a' "$SELF")" == 'root:root:755' ]] \
+    || fail 'manual rollout operator ownership/mode is unexpected'
+
+check_blob() {
+    local path=$1
+    local expected_mode=$2
+    local expected_blob=$3
+    local label=$4
+    local actual_blob
+
+    [[ -f "$path" && ! -L "$path" ]] || fail "$label is missing or unsafe"
+    [[ "$(stat -c '%U:%G:%a' "$path")" == "root:root:$expected_mode" ]] \
+        || fail "$label ownership/mode is unexpected"
+    actual_blob="$(git hash-object "$path")"
+    [[ "$actual_blob" == "$expected_blob" ]] || fail "$label identity changed"
+}
+
+check_blob "$CANARY" 755 "$EXPECTED_CANARY_BLOB" 'production canary'
+check_blob "$CONTROLLER" 755 "$EXPECTED_CONTROLLER_BLOB" 'pull-deploy controller'
+check_blob "$TIMER_FILE" 644 "$EXPECTED_TIMER_BLOB" 'pull-deploy timer unit'
+check_blob "$SERVICE_FILE" 644 "$EXPECTED_SERVICE_BLOB" 'pull-deploy service unit'
+
+INITIAL_TIMER_ENABLED="$(systemctl is-enabled "$TIMER_UNIT" 2>/dev/null || true)"
+INITIAL_TIMER_ACTIVE="$(systemctl is-active "$TIMER_UNIT" 2>/dev/null || true)"
+case "$INITIAL_TIMER_ENABLED/$INITIAL_TIMER_ACTIVE" in
+    enabled/active)
+        RESTORE_RECURRING_TIMER=true
+        ;;
+    disabled/inactive)
+        RESTORE_RECURRING_TIMER=false
+        ;;
+    *)
+        fail "unexpected initial recurring timer state: enabled=$INITIAL_TIMER_ENABLED active=$INITIAL_TIMER_ACTIVE"
+        ;;
+esac
+
+FINAL_RESULT='FAIL'
+RESTORE_ATTEMPTED=false
+
+finalize() {
+    local rc=$?
+    local final_enabled final_active
+    trap - EXIT
+
+    if [[ "$RESTORE_RECURRING_TIMER" == true ]]; then
+        RESTORE_ATTEMPTED=true
+        if ! systemctl enable --now "$TIMER_UNIT"; then
+            printf 'ERROR: failed to restore recurring CV pull-deploy timer\n' >&2
+            rc=1
+        fi
+        final_enabled="$(systemctl is-enabled "$TIMER_UNIT" 2>/dev/null || true)"
+        final_active="$(systemctl is-active "$TIMER_UNIT" 2>/dev/null || true)"
+        if [[ "$final_enabled" != enabled || "$final_active" != active ]]; then
+            printf 'ERROR: recurring CV pull-deploy timer restoration did not reach enabled/active\n' >&2
+            rc=1
+        fi
+    else
+        final_enabled="$(systemctl is-enabled "$TIMER_UNIT" 2>/dev/null || true)"
+        final_active="$(systemctl is-active "$TIMER_UNIT" 2>/dev/null || true)"
+        if [[ "$final_enabled" == enabled || "$final_active" == active ]]; then
+            printf 'ERROR: manual rollout changed an initially disabled/inactive timer state\n' >&2
+            rc=1
+        fi
+    fi
+
+    printf 'INITIAL_TIMER_ENABLED=%s\n' "$INITIAL_TIMER_ENABLED"
+    printf 'INITIAL_TIMER_ACTIVE=%s\n' "$INITIAL_TIMER_ACTIVE"
+    printf 'FINAL_TIMER_ENABLED=%s\n' "$final_enabled"
+    printf 'FINAL_TIMER_ACTIVE=%s\n' "$final_active"
+    printf 'TIMER_RESTORE_ATTEMPTED=%s\n' "$RESTORE_ATTEMPTED"
+
+    if (( rc == 0 )) && [[ "$FINAL_RESULT" == PASS ]]; then
+        printf 'CV_MANUAL_ROLLOUT_OPERATOR=PASS\n'
+    else
+        printf 'CV_MANUAL_ROLLOUT_OPERATOR=FAIL\n' >&2
+    fi
+    exit "$rc"
+}
+
+trap finalize EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+printf 'INITIAL_TIMER_ENABLED=%s\n' "$INITIAL_TIMER_ENABLED"
+printf 'INITIAL_TIMER_ACTIVE=%s\n' "$INITIAL_TIMER_ACTIVE"
+
+if [[ "$RESTORE_RECURRING_TIMER" == true ]]; then
+    systemctl disable --now "$TIMER_UNIT"
+    [[ "$(systemctl is-enabled "$TIMER_UNIT" 2>/dev/null || true)" != enabled ]] \
+        || fail 'recurring timer remained enabled after pause'
+    [[ "$(systemctl is-active "$TIMER_UNIT" 2>/dev/null || true)" != active ]] \
+        || fail 'recurring timer remained active after pause'
+fi
+
+for (( attempt = 0; attempt < 60; attempt++ )); do
+    systemctl is-active --quiet "$SERVICE_UNIT" || break
+    sleep 1
+done
+systemctl is-active --quiet "$SERVICE_UNIT" \
+    && fail 'in-flight CV pull-deploy service did not stop within 60 seconds'
+
+printf 'MANUAL_ROLLOUT_TIMER_PAUSE=PASS\n'
+
+runuser -u "$OWNER" -- env \
+    HOME="$OWNER_HOME" \
+    PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' \
+    "$CANARY" \
+    --target-sha "$TARGET_SHA" \
+    --approve-manual-rollout "$APPROVED_SHA"
+
+FINAL_RESULT='PASS'
+printf 'MANUAL_ROLLOUT_CANARY=PASS\n'
+printf 'AUTHORIZED_TARGET_SHA=%s\n' "$TARGET_SHA"
