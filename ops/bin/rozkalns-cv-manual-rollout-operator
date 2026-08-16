@@ -58,7 +58,7 @@ EXPECTED_CONTROLLER_BLOB='2bd0878da77b787fe22496c586ca6e68bb8fad1e'
 EXPECTED_TIMER_BLOB='75ad7b3c0565b2c8a3e6a73600ce38265520199b'
 EXPECTED_SERVICE_BLOB='e379e483187f5f7345729ca09c35dcd56aff69ec'
 
-for command_name in getent git id realpath runuser sleep stat systemctl; do
+for command_name in awk getent git id realpath runuser sleep stat systemctl; do
     command -v "$command_name" >/dev/null 2>&1 \
         || fail "required command is missing: $command_name"
 done
@@ -120,19 +120,14 @@ finalize() {
             printf 'ERROR: failed to restore recurring CV pull-deploy timer\n' >&2
             rc=1
         fi
-        final_enabled="$(systemctl is-enabled "$TIMER_UNIT" 2>/dev/null || true)"
-        final_active="$(systemctl is-active "$TIMER_UNIT" 2>/dev/null || true)"
-        if [[ "$final_enabled" != enabled || "$final_active" != active ]]; then
-            printf 'ERROR: recurring CV pull-deploy timer restoration did not reach enabled/active\n' >&2
-            rc=1
-        fi
-    else
-        final_enabled="$(systemctl is-enabled "$TIMER_UNIT" 2>/dev/null || true)"
-        final_active="$(systemctl is-active "$TIMER_UNIT" 2>/dev/null || true)"
-        if [[ "$final_enabled" == enabled || "$final_active" == active ]]; then
-            printf 'ERROR: manual rollout changed an initially disabled/inactive timer state\n' >&2
-            rc=1
-        fi
+    fi
+
+    final_enabled="$(systemctl is-enabled "$TIMER_UNIT" 2>/dev/null || true)"
+    final_active="$(systemctl is-active "$TIMER_UNIT" 2>/dev/null || true)"
+    if [[ "$final_enabled" != "$INITIAL_TIMER_ENABLED" \
+        || "$final_active" != "$INITIAL_TIMER_ACTIVE" ]]; then
+        printf 'ERROR: recurring CV pull-deploy timer final state differs from captured initial state\n' >&2
+        rc=1
     fi
 
     printf 'INITIAL_TIMER_ENABLED=%s\n' "$INITIAL_TIMER_ENABLED"
