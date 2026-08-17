@@ -1,0 +1,21 @@
+[Unit]
+Description=Balcony MQTT log subscriber
+Documentation=https://github.com/rozkalnsandris/RPi5_main
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/default/balkons-log
+LoadCredential=mqtt-client-config:/etc/credstore/balkons-log-mqtt-client-config
+ExecStart=/usr/local/sbin/balkons-log-subscribe
+Restart=always
+RestartSec=5s
+UMask=0077
+NoNewPrivileges=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+IFS=$'\n\t'
+
+: "${CREDENTIALS_DIRECTORY:?CREDENTIALS_DIRECTORY must be provided by systemd}"
+: "${BALKONS_LOG_MQTT_HOST:?BALKONS_LOG_MQTT_HOST must be provided at runtime}"
+: "${BALKONS_LOG_MQTT_TOPIC:?BALKONS_LOG_MQTT_TOPIC must be provided at runtime}"
+: "${BALKONS_LOG_MQTT_FORMAT:?BALKONS_LOG_MQTT_FORMAT must be provided at runtime}"
+
+DOCKER_BIN="${BALKONS_LOG_DOCKER_BIN:-/usr/bin/docker}"
+CONTAINER="${BALKONS_LOG_MQTT_CONTAINER:-mosquitto}"
+CLIENT_CONFIG="${CREDENTIALS_DIRECTORY}/mqtt-client-config"
+
+[[ -x "$DOCKER_BIN" ]] || {
+    echo "balkons-log: docker executable is unavailable" >&2
+    exit 1
+}
+
+[[ -f "$CLIENT_CONFIG" && ! -L "$CLIENT_CONFIG" && -r "$CLIENT_CONFIG" && -s "$CLIENT_CONFIG" ]] || {
+    echo "balkons-log: MQTT client config credential is unavailable" >&2
+    exit 1
+}
+
+# Authentication is read by mosquitto_sub from stdin as a Mosquitto 2.1+
+# client config. No username or password is placed in docker/mosquitto argv
+# or in the non-secret runtime environment file.
+exec "$DOCKER_BIN" exec -i "$CONTAINER" mosquitto_sub \
+    -o /dev/stdin \
+    -h "$BALKONS_LOG_MQTT_HOST" \
+    -t "$BALKONS_LOG_MQTT_TOPIC" \
+    -F "$BALKONS_LOG_MQTT_FORMAT" \
+    <"$CLIENT_CONFIG"
