@@ -6,6 +6,8 @@ last_reviewed: 2026-08-17
 # Public-safe desired-state registry.
 # Never place account IDs, tunnel IDs, Access AUD tags, owner emails,
 # source public IPs, tokens, credentials, or recovery secrets in this file.
+# audit_route_presence is the expected current route state for read-only
+# reconciliation; it never authorizes creating/removing a route.
 
 invariants:
   shared_tunnel_owner: RPi5_main
@@ -41,8 +43,8 @@ hostnames:
     desired_origin_scope: loopback
     access_application_scope: none
     protect_with_access: false
-    app_jwt_validation: false
     lan_break_glass: false
+    audit_route_presence: present
     evidence: implementation-loopback-doc-drift
 
   - hostname: tech.rozkalns.net
@@ -52,8 +54,8 @@ hostnames:
     desired_origin_scope: loopback
     access_application_scope: none
     protect_with_access: false
-    app_jwt_validation: false
     lan_break_glass: false
+    audit_route_presence: present
     evidence: central-loopback-contract-reconcile-parent-wildcard
 
   - hostname: deals.rozkalns.net
@@ -65,6 +67,7 @@ hostnames:
     protect_with_access: true
     app_jwt_validation: app-dependent
     lan_break_glass: false
+    audit_route_presence: present
     evidence: loopback-cutover-and-access-edge-verified
 
   - hostname: hermes.rozkalns.net
@@ -76,6 +79,7 @@ hostnames:
     protect_with_access: true
     app_jwt_validation: app-dependent
     lan_break_glass: true
+    audit_route_presence: present
     evidence: central-contract-policy-reconciliation-required
 
   - hostname: portainer.rozkalns.net
@@ -87,6 +91,7 @@ hostnames:
     protect_with_access: true
     app_jwt_validation: app-dependent
     lan_break_glass: true
+    audit_route_presence: present
     evidence: central-contract-policy-reconciliation-required
 
   - hostname: grafana.rozkalns.net
@@ -98,6 +103,7 @@ hostnames:
     protect_with_access: true
     app_jwt_validation: app-dependent
     lan_break_glass: true
+    audit_route_presence: present
     evidence: central-contract-policy-reconciliation-required
 
   - hostname: ha.rozkalns.net
@@ -109,6 +115,7 @@ hostnames:
     protect_with_access: true
     app_jwt_validation: trusted-proxy-boundary
     lan_break_glass: true
+    audit_route_presence: present
     evidence: trusted-proxy-production-gate-passed
 
   - hostname: adguard.rozkalns.net
@@ -120,6 +127,7 @@ hostnames:
     protect_with_access: true
     app_jwt_validation: app-dependent
     lan_break_glass: true
+    audit_route_presence: present
     evidence: central-contract-policy-reconciliation-required
 
   - hostname: kuma.rozkalns.net
@@ -131,6 +139,7 @@ hostnames:
     protect_with_access: true
     app_jwt_validation: app-dependent
     lan_break_glass: true
+    audit_route_presence: present
     evidence: central-contract-policy-reconciliation-required
 
   - hostname: prometheus.rozkalns.net
@@ -142,6 +151,7 @@ hostnames:
     protect_with_access: true
     app_jwt_validation: app-dependent
     lan_break_glass: true
+    audit_route_presence: present
     evidence: central-contract-policy-reconciliation-required
 
   - hostname: dash.rozkalns.net
@@ -153,6 +163,7 @@ hostnames:
     protect_with_access: true
     app_jwt_validation: privileged-terminal
     lan_break_glass: false
+    audit_route_presence: absent
     evidence: target-contract-route-and-exact-app-not-live-at-audit
 
   - hostname: control.rozkalns.net
@@ -164,4 +175,5 @@ hostnames:
     protect_with_access: not-applicable
     app_jwt_validation: required
     lan_break_glass: false
+    audit_route_presence: not-applicable
     evidence: worker-jwt-validation-present-parent-wildcard-policy-reconcile
