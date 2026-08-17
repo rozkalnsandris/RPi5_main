@@ -43,6 +43,7 @@ hostnames:
     desired_origin_scope: loopback
     access_application_scope: none
     protect_with_access: false
+    app_jwt_validation: false
     lan_break_glass: false
     audit_route_presence: present
     evidence: implementation-loopback-doc-drift
@@ -54,6 +55,7 @@ hostnames:
     desired_origin_scope: loopback
     access_application_scope: none
     protect_with_access: false
+    app_jwt_validation: false
     lan_break_glass: false
     audit_route_presence: present
     evidence: central-loopback-contract-reconcile-parent-wildcard
