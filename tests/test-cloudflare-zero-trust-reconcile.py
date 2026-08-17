@@ -362,14 +362,27 @@ class CloudflareP0Tests(unittest.TestCase):
         )
         self.assertGreaterEqual(len(registry), 12)
         self.assertEqual(
-            registry["dash.rozkalns.net"].audit_route_presence, "absent"
+            registry["dash.rozkalns.net"].audit_route_presence, "present"
         )
         self.assertEqual(
             registry["control.rozkalns.net"].audit_route_presence, "not-applicable"
         )
-        for hostname, item in registry.items():
-            if item.delivery == "shared_rpi5_tunnel" and hostname != "dash.rozkalns.net":
+        for item in registry.values():
+            if item.delivery == "shared_rpi5_tunnel":
                 self.assertEqual(item.audit_route_presence, "present")
+
+    def test_repository_registry_tracks_dashboard_live_route_contract(self) -> None:
+        registry = cf.load_registry(
+            ROOT / "ops" / "contracts" / "cloudflare-hostname-policy.yaml"
+        )
+        dash = registry["dash.rozkalns.net"]
+        self.assertEqual(dash.delivery, "shared_rpi5_tunnel")
+        self.assertEqual(dash.trust_class, "ADMIN")
+        self.assertEqual(dash.desired_origin_scope, "loopback")
+        self.assertEqual(dash.access_application_scope, "exact-owner")
+        self.assertTrue(dash.protect_with_access)
+        self.assertFalse(dash.lan_break_glass)
+        self.assertEqual(dash.audit_route_presence, "present")
 
     def test_wrapper_preserves_hidden_token_boundary(self) -> None:
         wrapper = (
