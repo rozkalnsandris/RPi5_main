@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+IFS=$'\n\t'
+
+: "${HASS_URL:?HASS_URL must be provided at runtime}"
+: "${HASS_TOKEN:?HASS_TOKEN must be provided at runtime}"
+
+TEMP_ENTITY="${BALCONY_WATERING_TEMP_ENTITY:-weather.forecast_home}"
+THRESHOLD="${BALCONY_WATERING_TEMP_THRESHOLD_C:-27.0}"
+LOGFILE="${BALCONY_WATERING_LOGFILE:-${HOME}/.local/state/balcony-watering/watering.log}"
+AUTH_HEADER_NAME="Authorization"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+PRIMARY_SCRIPT="${BALCONY_WATERING_PRIMARY:-${script_dir}/balcony-watering-2x}"
+
+mkdir -p -- "$(dirname -- "$LOGFILE")"
+
+log() {
+    printf '%s %s\n' "$(TZ="Europe/Berlin" date '+%Y-%m-%d %H:%M:%S')" "$*" | tee -a "$LOGFILE"
+}
+
+log_file_only() {
+    printf '%s %s\n' "$(TZ="Europe/Berlin" date '+%Y-%m-%d %H:%M:%S')" "$*" >>"$LOGFILE"
+}
+
+resp=$(curl -s --max-time 10 \
+    -H "${AUTH_HEADER_NAME}: Bearer ${HASS_TOKEN}" \
+    "${HASS_URL}/api/states/${TEMP_ENTITY}") || resp=""
+
+if [[ -z "$resp" ]]; then
+    log "TEMP-CHECK FAIL: Home Assistant did not answer — skipping watering (fail closed)"
+    exit 1
+fi
+
+temp=$(printf '%s' "$resp" | python3 -c '
+import json
+import sys
+try:
+    data = json.load(sys.stdin)
+    print(data["attributes"]["temperature"])
+except Exception:
+    print("")
+' 2>/dev/null) || temp=""
+
+if [[ -z "$temp" ]]; then
+    log "TEMP-CHECK FAIL: temperature could not be parsed — skipping watering (fail closed)"
+    exit 1
+fi
+
+log_file_only "TEMP-CHECK: outside ${temp} C (threshold ${THRESHOLD} C)"
+
+if awk -v t="$temp" -v th="$THRESHOLD" 'BEGIN { exit !(t >= th) }'; then
+    log "TEMP-CHECK: ${temp} C >= ${THRESHOLD} C — delegating to primary watering controller"
+    exec bash "$PRIMARY_SCRIPT"
+fi
+
+log_file_only "TEMP-CHECK: ${temp} C < ${THRESHOLD} C — SKIP"
+exit 0

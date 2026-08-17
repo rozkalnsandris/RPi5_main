@@ -2,6 +2,7 @@
 
 test:
 	./tests/test-shell-syntax.sh
+	bash ./tests/test-balcony-watering.sh
 	./tests/test-safe-inventory.sh
 	./tests/test-access-model.sh
 	./tests/test-runtime-baseline.sh
