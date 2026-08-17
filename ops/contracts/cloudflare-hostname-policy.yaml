@@ -165,8 +165,8 @@ hostnames:
     protect_with_access: true
     app_jwt_validation: privileged-terminal
     lan_break_glass: false
-    audit_route_presence: absent
-    evidence: target-contract-route-and-exact-app-not-live-at-audit
+    audit_route_presence: present
+    evidence: dashboard-phase11-live-route-and-protect-with-access-verified
 
   - hostname: control.rozkalns.net
     owner_repo: rozkalnsandris/rozkalns-control-center
