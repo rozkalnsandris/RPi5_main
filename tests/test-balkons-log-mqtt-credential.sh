@@ -13,11 +13,14 @@ fail() {
     exit 1
 }
 
-bash -n "$wrapper"
+write_test_credential() {
+    mkdir -p "$tmp/creds"
+    printf '%s\n' '-u <test-user>' '-P TEST_ONLY_SENTINEL_173' >"$tmp/creds/mqtt-client-config"
+    chmod 600 "$tmp/creds/mqtt-client-config"
+}
 
-mkdir -p "$tmp/creds"
-printf '%s\n' '-u <test-user>' '-P TEST_ONLY_SENTINEL_173' >"$tmp/creds/mqtt-client-config"
-chmod 600 "$tmp/creds/mqtt-client-config"
+bash -n "$wrapper"
+write_test_credential
 
 cat >"$tmp/docker" <<'MOCK'
 #!/usr/bin/env bash
@@ -82,6 +85,7 @@ if CAPTURE_ARGS="$tmp/missing-argv" \
     fail "wrapper did not fail closed when credential was missing"
 fi
 
+write_test_credential
 if CAPTURE_ARGS="$tmp/nohost-argv" \
    CAPTURE_STDIN="$tmp/nohost-stdin" \
    CREDENTIALS_DIRECTORY="$tmp/creds" \
@@ -90,6 +94,20 @@ if CAPTURE_ARGS="$tmp/nohost-argv" \
    BALKONS_LOG_MQTT_FORMAT="%I %t %p" \
    "$wrapper" >/dev/null 2>&1; then
     fail "wrapper did not fail closed when non-secret host config was missing"
+fi
+
+rm -f "$tmp/creds/mqtt-client-config"
+printf '%s\n' '-u <test-user>' '-P TEST_ONLY_SENTINEL_173' >"$tmp/real-config"
+ln -s "$tmp/real-config" "$tmp/creds/mqtt-client-config"
+if CAPTURE_ARGS="$tmp/symlink-argv" \
+   CAPTURE_STDIN="$tmp/symlink-stdin" \
+   CREDENTIALS_DIRECTORY="$tmp/creds" \
+   BALKONS_LOG_DOCKER_BIN="$tmp/docker" \
+   BALKONS_LOG_MQTT_HOST="broker.invalid" \
+   BALKONS_LOG_MQTT_TOPIC="balkons/log" \
+   BALKONS_LOG_MQTT_FORMAT="%I %t %p" \
+   "$wrapper" >/dev/null 2>&1; then
+    fail "wrapper accepted a symlink credential"
 fi
 
 echo "balkons-log credential regression: PASS"

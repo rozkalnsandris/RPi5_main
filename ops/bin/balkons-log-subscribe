@@ -16,7 +16,7 @@ CLIENT_CONFIG="${CREDENTIALS_DIRECTORY}/mqtt-client-config"
     exit 1
 }
 
-[[ -r "$CLIENT_CONFIG" && -s "$CLIENT_CONFIG" ]] || {
+[[ -f "$CLIENT_CONFIG" && ! -L "$CLIENT_CONFIG" && -r "$CLIENT_CONFIG" && -s "$CLIENT_CONFIG" ]] || {
     echo "balkons-log: MQTT client config credential is unavailable" >&2
     exit 1
 }
