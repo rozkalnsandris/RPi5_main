@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CORE="$ROOT/scripts/cloudflare_zero_trust_reconcile.py"
 RUNNER="$ROOT/scripts/cloudflare_zero_trust_reconcile_stdin.py"
 REGISTRY="$ROOT/ops/contracts/cloudflare-hostname-policy.yaml"
 
@@ -10,6 +11,7 @@ fail() {
   exit 2
 }
 
+[[ -f "$CORE" ]] || fail "GET-only core missing"
 [[ -f "$RUNNER" ]] || fail "stdin runner missing"
 [[ -f "$REGISTRY" ]] || fail "canonical registry missing"
 command -v python3 >/dev/null 2>&1 || fail "python3 missing"
