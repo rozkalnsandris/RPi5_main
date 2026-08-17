@@ -1,0 +1,167 @@
+schema_version: 1
+status: desired-state
+canonical_issue: 177
+last_reviewed: 2026-08-17
+
+# Public-safe desired-state registry.
+# Never place account IDs, tunnel IDs, Access AUD tags, owner emails,
+# source public IPs, tokens, credentials, or recovery secrets in this file.
+
+invariants:
+  shared_tunnel_owner: RPi5_main
+  inbound_router_port_forward: false
+  admin_persistent_bypass_allowed: false
+  human_service_token_access_allowed: false
+  owner_phone_identity_model: cloudflare_one_client
+  owner_phone_initial_posture: require_warp
+  owner_phone_mac_binding: false
+  production_mutation_requires_explicit_owner_authorization: true
+
+trust_classes:
+  PUBLIC:
+    access_required: false
+    persistent_bypass_allowed: false
+    preferred_origin_scope: loopback
+  FAMILY_PRIVATE:
+    access_required: true
+    persistent_bypass_allowed: false
+    preferred_origin_scope: loopback
+  ADMIN:
+    access_required: true
+    persistent_bypass_allowed: false
+    preferred_owner_scope: exact-owner
+    owner_phone_posture_required: true
+    preferred_origin_scope: loopback-or-explicit-break-glass
+
+hostnames:
+  - hostname: rozkalns.net
+    owner_repo: rozkalnsandris/rozkalns-cv
+    delivery: shared_rpi5_tunnel
+    trust_class: PUBLIC
+    desired_origin_scope: loopback
+    access_application_scope: none
+    protect_with_access: false
+    app_jwt_validation: false
+    lan_break_glass: false
+    evidence: implementation-loopback-doc-drift
+
+  - hostname: tech.rozkalns.net
+    owner_repo: rozkalnsandris/hermes-tech
+    delivery: shared_rpi5_tunnel
+    trust_class: PUBLIC
+    desired_origin_scope: loopback
+    access_application_scope: none
+    protect_with_access: false
+    app_jwt_validation: false
+    lan_break_glass: false
+    evidence: central-loopback-contract-reconcile-parent-wildcard
+
+  - hostname: deals.rozkalns.net
+    owner_repo: rozkalnsandris/hermes-deals
+    delivery: shared_rpi5_tunnel
+    trust_class: FAMILY_PRIVATE
+    desired_origin_scope: loopback
+    access_application_scope: exact-or-narrow-family
+    protect_with_access: true
+    app_jwt_validation: app-dependent
+    lan_break_glass: false
+    evidence: loopback-cutover-and-access-edge-verified
+
+  - hostname: hermes.rozkalns.net
+    owner_repo: rozkalnsandris/RPi5_main
+    delivery: shared_rpi5_tunnel
+    trust_class: ADMIN
+    desired_origin_scope: explicit-lan-break-glass
+    access_application_scope: exact-or-narrow-admin
+    protect_with_access: true
+    app_jwt_validation: app-dependent
+    lan_break_glass: true
+    evidence: central-contract-policy-reconciliation-required
+
+  - hostname: portainer.rozkalns.net
+    owner_repo: rozkalnsandris/RPi5_main
+    delivery: shared_rpi5_tunnel
+    trust_class: ADMIN
+    desired_origin_scope: explicit-lan-break-glass
+    access_application_scope: exact-or-narrow-admin
+    protect_with_access: true
+    app_jwt_validation: app-dependent
+    lan_break_glass: true
+    evidence: central-contract-policy-reconciliation-required
+
+  - hostname: grafana.rozkalns.net
+    owner_repo: rozkalnsandris/RPi5_main
+    delivery: shared_rpi5_tunnel
+    trust_class: ADMIN
+    desired_origin_scope: explicit-lan-break-glass
+    access_application_scope: exact-or-narrow-admin
+    protect_with_access: true
+    app_jwt_validation: app-dependent
+    lan_break_glass: true
+    evidence: central-contract-policy-reconciliation-required
+
+  - hostname: ha.rozkalns.net
+    owner_repo: rozkalnsandris/home-assistant-config
+    delivery: shared_rpi5_tunnel
+    trust_class: ADMIN
+    desired_origin_scope: explicit-lan-break-glass
+    access_application_scope: exact-or-narrow-admin
+    protect_with_access: true
+    app_jwt_validation: trusted-proxy-boundary
+    lan_break_glass: true
+    evidence: trusted-proxy-production-gate-passed
+
+  - hostname: adguard.rozkalns.net
+    owner_repo: rozkalnsandris/RPi5_main
+    delivery: shared_rpi5_tunnel
+    trust_class: ADMIN
+    desired_origin_scope: explicit-lan-break-glass
+    access_application_scope: exact-or-narrow-admin
+    protect_with_access: true
+    app_jwt_validation: app-dependent
+    lan_break_glass: true
+    evidence: central-contract-policy-reconciliation-required
+
+  - hostname: kuma.rozkalns.net
+    owner_repo: rozkalnsandris/RPi5_main
+    delivery: shared_rpi5_tunnel
+    trust_class: ADMIN
+    desired_origin_scope: explicit-lan-break-glass
+    access_application_scope: exact-or-narrow-admin
+    protect_with_access: true
+    app_jwt_validation: app-dependent
+    lan_break_glass: true
+    evidence: central-contract-policy-reconciliation-required
+
+  - hostname: prometheus.rozkalns.net
+    owner_repo: rozkalnsandris/RPi5_main
+    delivery: shared_rpi5_tunnel
+    trust_class: ADMIN
+    desired_origin_scope: explicit-lan-break-glass
+    access_application_scope: exact-or-narrow-admin
+    protect_with_access: true
+    app_jwt_validation: app-dependent
+    lan_break_glass: true
+    evidence: central-contract-policy-reconciliation-required
+
+  - hostname: dash.rozkalns.net
+    owner_repo: rozkalnsandris/dashboard_RPi5
+    delivery: shared_rpi5_tunnel
+    trust_class: ADMIN
+    desired_origin_scope: loopback
+    access_application_scope: exact-owner
+    protect_with_access: true
+    app_jwt_validation: privileged-terminal
+    lan_break_glass: false
+    evidence: target-contract-route-and-exact-app-not-live-at-audit
+
+  - hostname: control.rozkalns.net
+    owner_repo: rozkalnsandris/rozkalns-control-center
+    delivery: cloudflare_worker
+    trust_class: ADMIN
+    desired_origin_scope: cloudflare-worker
+    access_application_scope: exact-owner
+    protect_with_access: not-applicable
+    app_jwt_validation: required
+    lan_break_glass: false
+    evidence: worker-jwt-validation-present-parent-wildcard-policy-reconcile
