@@ -1,6 +1,7 @@
 # Cloudflare P0 read-only reconciliation operator — issue #179
 
-Status: **source contract / GET-only / no production mutation**
+Status: **source contract / GET-only / no production mutation**  
+Current synchronized source baseline: `RPi5_main/main` `61ff1b775470841c53806531d4c73749b1854dfe`
 
 Canonical design:
 - `docs/CLOUDFLARE_ZERO_TRUST_MOBILE_AUDIT_2026-08-17.md`
@@ -47,7 +48,10 @@ The operator requires these bindings outside Git:
 - `CLOUDFLARE_API_TOKEN`
 
 The wrapper prompts for the API token on `/dev/tty` with terminal echo disabled if the
-token is not already present in the environment.
+token is not already present in the parent shell environment. Before starting Python it
+removes `CLOUDFLARE_API_TOKEN` from the environment and passes the token only through a
+one-line stdin pipe to the dedicated runner. The token is never an argv value and is not
+exported to the child process environment.
 
 The public-safe JSON output intentionally never includes:
 
