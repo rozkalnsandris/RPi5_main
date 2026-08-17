@@ -26,7 +26,7 @@ A MAC address is local link-layer state and does not identify the device to Clou
 ## Preferred Android model
 
 1. Install Cloudflare One Agent on the Android phone.
-2. Enroll it into the correct Zero Trust organization using an owner-only device-enrollment policy.
+2. Enroll it into the Zero Trust organization using an owner-only device-enrollment policy.
 3. Keep Cloudflare One Client connected/auto-connected.
 4. Require exact owner identity for ADMIN Access applications.
 5. Add the Cloudflare One Client `Require WARP` posture check to the ADMIN owner policy after a canary passes.
@@ -35,6 +35,20 @@ A MAC address is local link-layer state and does not identify the device to Clou
    - home Wi-Fi;
    - cellular data;
    - a non-enrolled browser/device, which must be denied.
+
+## Identity-provider hardening
+
+The fresh 2026-08-17 inventory shows both Cloudflare and One-Time PIN login methods are available in the Zero Trust organization.
+
+For **ADMIN** applications, prefer the Cloudflare identity provider restricted to the Cloudflare account/member identity when the owner account is protected with strong MFA. Cloudflare's 2026 Access documentation describes its own IdP as backed by Cloudflare account security, including MFA, and identifies it as a stronger default than email One-Time PIN for most use cases.
+
+Target separation:
+
+- ADMIN: Cloudflare IdP / exact owner identity; do not rely on email OTP as the normal owner login path;
+- FAMILY_PRIVATE: keep a deliberately separate family authentication policy/login method if family sharing requires it;
+- PUBLIC: no Access authentication.
+
+For the highest-impact ADMIN applications, independently evaluate Cloudflare Access independent MFA as an additional layer. Do not enable it blindly: first verify its session behavior on the owner phone so MFA hardening does not create unnecessary prompts on every normal visit.
 
 ## Session model
 
@@ -108,6 +122,8 @@ Before any Access write:
 - Client sessions / Authenticate with Cloudflare One Client: https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/cloudflare-one-client/configure/client-sessions/
 - Session management: https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/
 - Authorization cookie / global SSO token: https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/
+- Cloudflare as identity provider: https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/cloudflare/
+- Independent MFA: https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/independent-mfa/
 - Manual Android enrollment: https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/cloudflare-one-client/deployment/manual-deployment/
 - Device enrollment permissions: https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/cloudflare-one-client/deployment/device-enrollment/
 - Client posture checks: https://developers.cloudflare.com/cloudflare-one/reusable-components/posture-checks/client-checks/
