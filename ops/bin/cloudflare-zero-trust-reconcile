@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CORE="$ROOT/scripts/cloudflare_zero_trust_reconcile.py"
+RUNNER="$ROOT/scripts/cloudflare_zero_trust_reconcile_stdin.py"
+REGISTRY="$ROOT/ops/contracts/cloudflare-hostname-policy.yaml"
+
+fail() {
+  printf 'Cloudflare P0 #179: BLOCKED: %s\n' "$*" >&2
+  exit 2
+}
+
+[[ -f "$CORE" ]] || fail "GET-only core missing"
+[[ -f "$RUNNER" ]] || fail "stdin runner missing"
+[[ -f "$REGISTRY" ]] || fail "canonical registry missing"
+command -v python3 >/dev/null 2>&1 || fail "python3 missing"
+
+[[ "${CLOUDFLARE_ACCOUNT_ID:-}" =~ ^[0-9a-fA-F]{32}$ ]] ||
+  fail "CLOUDFLARE_ACCOUNT_ID missing or invalid"
+[[ "${CLOUDFLARE_TUNNEL_ID:-}" =~ ^[0-9a-fA-F-]{36}$ ]] ||
+  fail "CLOUDFLARE_TUNNEL_ID missing or invalid"
+
+api_token="${CLOUDFLARE_API_TOKEN:-}"
+unset CLOUDFLARE_API_TOKEN
+if [[ -z "$api_token" ]]; then
+  [[ -r /dev/tty ]] || fail "no TTY available for hidden API token prompt"
+  IFS= read -r -s -p 'Cloudflare API token (hidden): ' api_token </dev/tty
+  printf '\n' >/dev/tty
+fi
+
+cleanup() {
+  api_token=''
+  unset CLOUDFLARE_API_TOKEN
+}
+trap cleanup EXIT HUP INT TERM
+
+[[ ${#api_token} -ge 20 ]] || fail "API token missing or invalid"
+
+if printf '%s\n' "$api_token" | python3 "$RUNNER" "$REGISTRY" "$@"; then
+  rc=0
+else
+  rc=$?
+fi
+api_token=''
+exit "$rc"
