@@ -103,7 +103,7 @@ def sample_registry() -> dict[str, Any]:
 
 
 def sample_state() -> dict[str, Any]:
-    raw_email = "redacted-owner@example.invalid"
+    raw_email = "redacted-owner@example.com"
     raw_ip = "198.51.100.44/32"
     apps = [
         {
@@ -257,12 +257,12 @@ class CloudflareP0Tests(unittest.TestCase):
         policy = {
             "decision": "allow",
             "include": [
-                {"email": {"email": "redacted-owner@example.invalid"}},
+                {"email": {"email": "redacted-owner@example.com"}},
                 {"ip": {"ip": "198.51.100.44/32"}},
             ],
         }
         rendered = json.dumps(cf.sanitize_policy(policy), sort_keys=True)
-        self.assertNotIn("redacted-owner@example.invalid", rendered)
+        self.assertNotIn("redacted-owner@example.com", rendered)
         self.assertNotIn("198.51.100.44", rendered)
         self.assertIn('"email"', rendered)
         self.assertIn('"ip"', rendered)
@@ -286,7 +286,7 @@ class CloudflareP0Tests(unittest.TestCase):
 
         serialized = json.dumps(report, sort_keys=True)
         for forbidden in (
-            "redacted-owner@example.invalid",
+            "redacted-owner@example.com",
             "198.51.100.44",
             "raw-audience-must-not-leak",
             "second-raw-audience",
