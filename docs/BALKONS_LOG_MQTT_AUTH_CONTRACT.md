@@ -4,11 +4,13 @@ Issue: #173
 
 ## Purpose
 
-This document defines the reviewed source-side remediation for the balcony MQTT logger credential exposure found on 2026-08-17. It is a **source contract only**. It does not authorize installation, service reload/restart, broker mutation, MQTT credential rotation, ESP32 changes, MQTT publication, or pump activation.
+This document defines the reviewed source-side remediation and production cutover contract for the balcony MQTT logger credential exposure found on 2026-08-17.
+
+The source implementation removes MQTT authentication from process argv. Production mutation remains separately owner-gated.
 
 ## Read-only live evidence
 
-The pre-remediation audit established the following sanitized facts:
+The pre-remediation audits established the following sanitized facts:
 
 - the live unit is the root-owned system unit `/etc/systemd/system/balkons-log.service` with no drop-ins;
 - the unit is enabled and active;
@@ -16,9 +18,29 @@ The pre-remediation audit established the following sanitized facts:
 - the running process also exposes the same authentication secret in argv;
 - the target container is `mosquitto`;
 - the local broker image is `eclipse-mosquitto:2`, Linux arm64, with exact local Mosquitto version `2.1.2`;
-- host systemd is version 252 and `systemd-creds` is available.
+- host systemd is version 252 and `systemd-creds` is available;
+- broker authentication uses one `password_file`, no auth plugin, and `allow_anonymous false`;
+- the password file contains exactly one entry and exactly one unique username;
+- the logger uses that single username;
+- available broker logs are rotated and do not cover broker start, so historical connection logs cannot prove that the single username was logger-only.
 
-The real username, password, broker host, output format, private network coordinates, and other private runtime values are intentionally absent from this public repository.
+The real username, password, password hash, broker host, output format, private network coordinates, and other private runtime values are intentionally absent from this public repository.
+
+## Security consequence of the privileged preflight
+
+The original source contract assumed that the old credential could be revoked after the logger was moved to a new path. The privileged read-only preflight disproved that assumption.
+
+Because there is only one broker-side authenticated username and the logger uses it, the existing credential must be treated as **shared** for cutover planning. Revoking or changing it as part of the logger cutover could disconnect the ESP32 or another authenticated client.
+
+Therefore #173 uses a logger-only migration:
+
+1. keep the existing shared credential unchanged;
+2. add a distinct logger-only broker user;
+3. move only `balkons-log.service` to the logger-only credential;
+4. verify the logger no longer exposes authentication in argv;
+5. leave rotation/revocation of the old shared credential to a separate owner-gated ESP32/client credential-isolation task.
+
+The logger cutover must never delete, replace, rotate, or revoke the pre-existing broker user.
 
 ## Reviewed source design
 
@@ -39,13 +61,13 @@ root-only host credential source
         -> mosquitto_sub -o /dev/stdin
 ```
 
-Mosquitto 2.1+ supports `-o <config-file>`. The deployed 2.1.2 client therefore can read its authentication options from `/dev/stdin` instead of receiving them in command-line arguments.
+Mosquitto 2.1+ supports `-o <config-file>`. The deployed 2.1.2 client can therefore read authentication options from `/dev/stdin` instead of receiving them in command-line arguments.
 
 The host credential source is a Mosquitto client config with runtime-only values, for example:
 
 ```text
--u <runtime-user>
--P <new-runtime-secret>
+-u <logger-only-runtime-user>
+-P <logger-only-runtime-secret>
 ```
 
 That file is never tracked. The source unit maps it to the systemd credential ID `mqtt-client-config`.
@@ -66,7 +88,7 @@ Authentication values must not be placed in that environment file. The productio
 The wrapper exits before invoking Docker when:
 
 - `$CREDENTIALS_DIRECTORY` is absent;
-- the `mqtt-client-config` credential is missing, unreadable, or empty;
+- the `mqtt-client-config` credential is missing, unreadable, empty, or a symlink;
 - a required non-secret host/topic/format value is absent;
 - the Docker client executable is unavailable.
 
@@ -82,41 +104,147 @@ The regression test replaces Docker with a local mock and performs no network, b
 4. username/password CLI flags are absent from argv;
 5. the tracked systemd unit uses `LoadCredential=` and the reviewed wrapper;
 6. authentication is not placed in the unit environment;
-7. missing credentials fail closed.
+7. missing and symlink credentials fail closed.
 
 `make validate` includes this regression together with the repository secret scan and public-safety guard.
 
-## Owner-gated production cutover contract
+## Prepared logger-only production cutover
 
-A later production change requires a separate explicit owner authorization. Before any mutation it must take a fresh backup and record a rollback path. The bounded cutover order is:
+A production cutover requires a separate explicit owner authorization. It is one bounded transaction with a rollback point before every externally visible mutation.
 
-1. re-check the live unit, container identity, Mosquitto version, broker health, ESP32 MQTT health, and subscriber state;
-2. back up the existing live unit and any related host-only runtime configuration;
-3. generate a **new** MQTT logger credential without printing or committing it;
-4. create the protected root-only Mosquitto client config for `LoadCredential=`;
-5. create the non-secret `/etc/default/balkons-log` values from the existing live host/topic/format behavior;
-6. install the reviewed wrapper and unit;
-7. daemon-reload and restart only `balkons-log.service`;
-8. verify sanitized `systemctl` and `/proc/<pid>/cmdline` evidence contains no authentication secret or password CLI flag;
-9. verify the subscriber still receives `balkons/log` and that the ESP32 remains MQTT-connected and healthy;
-10. only after the new path is proven healthy, revoke the old exposed credential;
-11. if any verification fails before old-credential revocation, restore the backup and restart the previous unit while keeping the pump untouched.
+### Gate 0 — exact source and live-state preflight
 
-The old credential is considered exposed because it has existed in argv. Source merge does not rotate or revoke it.
+Immediately before mutation:
+
+1. confirm the expected `RPi5_main` source revision and exact wrapper/unit SHA256 values;
+2. confirm the live unit is still enabled, active, and using the known argv-exposed form;
+3. confirm the `mosquitto` container is running, its restart count is unchanged, and the image remains Mosquitto 2.1.2 arm64;
+4. confirm broker auth still has `allow_anonymous false`, one password-file directive, and exactly one existing unique username;
+5. confirm the logger still uses that existing username;
+6. abort if the broker auth topology changed since the privileged preflight.
+
+### Gate 1 — backup and rollback capture
+
+Before changing the password file or systemd:
+
+1. create a root-only rollback directory with mode `0700`;
+2. copy the live `balkons-log.service` preserving metadata;
+3. copy the resolved broker password file preserving metadata;
+4. back up any pre-existing `/etc/default/balkons-log`, credential source, or installed wrapper if present;
+5. record sanitized SHA256, owner, group, and mode evidence without printing usernames, hashes, or secrets;
+6. verify all backups exist before continuing.
+
+If backup verification fails, stop with no mutation.
+
+### Gate 2 — create a logger-only broker identity
+
+The new logger username must be distinct from the existing shared username.
+
+The new password must be entered/generated without putting it in argv, environment variables, shell history, logs, Git, or terminal output. Do not use `mosquitto_passwd -b` because batch mode places the password on the command line.
+
+Use the installed Mosquitto password-file tooling in its interactive password-entry mode. After it succeeds:
+
+1. verify the broker password file still contains the original entry;
+2. verify total entry count increased from one to two;
+3. verify there are two unique usernames;
+4. verify no username or password hash is printed as evidence;
+5. preserve the password-file owner/group/mode expected by the running broker.
+
+If any structural check fails, restore the password-file backup before any broker reload.
+
+### Gate 3 — reload broker authentication only
+
+Reload Mosquitto configuration/password data with the broker's reload signal; do not restart/recreate the container.
+
+After reload:
+
+1. confirm the container remains running;
+2. confirm its restart count did not increase;
+3. confirm the broker did not terminate or enter a restart loop;
+4. confirm the password file is still readable by the broker;
+5. do not disconnect or restart ESP32.
+
+A password-file reload changes future authentication checks but must not be used to revoke the original shared username during #173.
+
+If broker health fails, restore the password-file backup, reload the broker again, verify health, and stop before logger installation.
+
+### Gate 4 — install logger-only systemd path
+
+With broker health proven:
+
+1. create the protected root-only Mosquitto client config for the new logger-only username/password;
+2. create `/etc/default/balkons-log` from the existing live non-secret host/topic/format semantics only;
+3. install the reviewed `balkons-log-subscribe` wrapper;
+4. install the reviewed `balkons-log.service` unit;
+5. run systemd unit verification before restart;
+6. run `systemctl daemon-reload`;
+7. restart **only** `balkons-log.service`.
+
+The Mosquitto broker container, ESP32, Home Assistant, watering automation, and pump must not be restarted or changed during this gate.
+
+### Gate 5 — post-cutover verification
+
+The cutover is accepted only if all of these pass:
+
+1. `balkons-log.service` is active/running and does not enter a restart loop;
+2. the effective systemd `ExecStart` contains no username/password argument;
+3. `/proc/<MainPID>/cmdline` contains neither a password flag nor the old/new secret;
+4. the subscriber uses `docker exec -i ... mosquitto_sub -o /dev/stdin`;
+5. the logger continues receiving the intended `balkons/log` stream without printing payload evidence into the audit;
+6. the Mosquitto container remains running with unchanged restart count;
+7. ESP32 remains MQTT-connected and healthy;
+8. no pump command is issued and watering state is not changed by the verification.
+
+Only sanitized structural evidence is retained.
+
+### Gate 6 — completion boundary
+
+After a successful logger cutover:
+
+- keep the original shared broker username and password active;
+- do **not** change ESP32 credentials in #173;
+- do **not** revoke the original shared credential in #173;
+- record that the logger argv exposure has been removed but the historically exposed shared credential still requires a separate credential-isolation/rotation task;
+- keep #173 open until that follow-up relationship is recorded and the owner decides whether closure of #173 is appropriate or whether the credential-compromise portion remains tracked here.
+
+## Rollback contract
+
+Rollback is allowed without improvising new configuration.
+
+### Before broker reload
+
+Restore the password-file backup and stop. No service change is required.
+
+### After broker reload but before logger restart
+
+Restore the password-file backup, reload Mosquitto authentication, verify broker health, and stop.
+
+### After logger restart
+
+1. restore the previous live unit and previous installed wrapper/runtime files from backup;
+2. restore the password-file backup;
+3. reload Mosquitto authentication;
+4. run `systemctl daemon-reload`;
+5. restart only `balkons-log.service` on its previous configuration;
+6. verify the previous logger is active and Mosquitto/ESP32 remain healthy;
+7. leave the pump untouched.
+
+The pre-existing shared credential is never revoked during this transaction, so rollback does not require an ESP32 credential change.
 
 ## Production boundary
 
-This source change deliberately does **not**:
+Preparation/source review does **not** authorize any of the following:
 
-- edit `/etc/systemd/system/balkons-log.service`;
-- create `/etc/default/balkons-log`;
-- create or alter a live credential source;
-- run `systemctl daemon-reload`, restart, or enable a service;
-- execute `docker exec`;
-- alter the Mosquitto broker or password database;
-- rotate or revoke any MQTT credential;
-- publish MQTT;
-- change ESP32 firmware or connectivity;
-- issue any pump command.
+- editing `/etc/systemd/system/balkons-log.service`;
+- creating `/etc/default/balkons-log`;
+- creating or altering a live credential source;
+- modifying the broker password file;
+- signaling or reloading Mosquitto;
+- running `systemctl daemon-reload` or restarting a service;
+- executing an MQTT client against the live broker;
+- rotating or revoking any MQTT credential;
+- publishing MQTT;
+- changing ESP32 firmware or connectivity;
+- issuing any pump command.
 
-Production deploy: **NO — explicit owner authorization is required later.**
+Production deploy: **NO — an explicit owner authorization is required for the bounded logger-only cutover.**
