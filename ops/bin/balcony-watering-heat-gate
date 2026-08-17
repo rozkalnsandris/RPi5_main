@@ -8,6 +8,7 @@ IFS=$'\n\t'
 TEMP_ENTITY="${BALCONY_WATERING_TEMP_ENTITY:-weather.forecast_home}"
 THRESHOLD="${BALCONY_WATERING_TEMP_THRESHOLD_C:-27.0}"
 LOGFILE="${BALCONY_WATERING_LOGFILE:-${HOME}/.local/state/balcony-watering/watering.log}"
+AUTH_HEADER_NAME="Authorization"
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 PRIMARY_SCRIPT="${BALCONY_WATERING_PRIMARY:-${script_dir}/balcony-watering-2x}"
 
@@ -22,7 +23,7 @@ log_file_only() {
 }
 
 resp=$(curl -s --max-time 10 \
-    -H "Authorization: Bearer ${HASS_TOKEN}" \
+    -H "${AUTH_HEADER_NAME}: Bearer ${HASS_TOKEN}" \
     "${HASS_URL}/api/states/${TEMP_ENTITY}") || resp=""
 
 if [[ -z "$resp" ]]; then

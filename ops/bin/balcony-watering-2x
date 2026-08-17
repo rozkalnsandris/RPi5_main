@@ -10,6 +10,7 @@ DURATION="${BALCONY_WATERING_DURATION_SECONDS:-60}"
 PAUSE="${BALCONY_WATERING_PAUSE_SECONDS:-300}"
 LOCKFILE="${BALCONY_WATERING_LOCKFILE:-/tmp/balcony-watering-2x.lock}"
 LOGFILE="${BALCONY_WATERING_LOGFILE:-${HOME}/.local/state/balcony-watering/watering.log}"
+AUTH_HEADER_NAME="Authorization"
 
 [[ "$DURATION" =~ ^[0-9]+$ ]] || { echo "Invalid BALCONY_WATERING_DURATION_SECONDS" >&2; exit 2; }
 [[ "$PAUSE" =~ ^[0-9]+$ ]] || { echo "Invalid BALCONY_WATERING_PAUSE_SECONDS" >&2; exit 2; }
@@ -45,7 +46,7 @@ check_required_sensors() {
     local resp bad_sensors
 
     resp=$(curl -s --max-time 10 \
-        -H "Authorization: Bearer ${HASS_TOKEN}" \
+        -H "${AUTH_HEADER_NAME}: Bearer ${HASS_TOKEN}" \
         "${HASS_URL}/api/states") || resp=""
 
     if [[ -z "$resp" ]]; then
@@ -95,7 +96,7 @@ call_ha() {
 
     http=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
         -X POST "${HASS_URL}/api/services/switch/turn_${action}" \
-        -H "Authorization: Bearer ${HASS_TOKEN}" \
+        -H "${AUTH_HEADER_NAME}: Bearer ${HASS_TOKEN}" \
         -H "Content-Type: application/json" \
         -d "$JSON_DATA") || http="000"
 
