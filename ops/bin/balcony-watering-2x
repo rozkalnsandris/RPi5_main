@@ -1,0 +1,179 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+IFS=$'\n\t'
+
+: "${HASS_URL:?HASS_URL must be provided at runtime}"
+: "${HASS_TOKEN:?HASS_TOKEN must be provided at runtime}"
+
+ENTITY="${BALCONY_WATERING_ENTITY:-switch.balkona_laistisana_suknis}"
+DURATION="${BALCONY_WATERING_DURATION_SECONDS:-60}"
+PAUSE="${BALCONY_WATERING_PAUSE_SECONDS:-300}"
+LOCKFILE="${BALCONY_WATERING_LOCKFILE:-/tmp/balcony-watering-2x.lock}"
+LOGFILE="${BALCONY_WATERING_LOGFILE:-${HOME}/.local/state/balcony-watering/watering.log}"
+
+[[ "$DURATION" =~ ^[0-9]+$ ]] || { echo "Invalid BALCONY_WATERING_DURATION_SECONDS" >&2; exit 2; }
+[[ "$PAUSE" =~ ^[0-9]+$ ]] || { echo "Invalid BALCONY_WATERING_PAUSE_SECONDS" >&2; exit 2; }
+
+mkdir -p -- "$(dirname -- "$LOGFILE")"
+
+log() {
+    printf '%s %s\n' "$(TZ="Europe/Berlin" date '+%Y-%m-%d %H:%M:%S')" "$*" | tee -a "$LOGFILE"
+}
+
+send_tg() {
+    if [[ -z "${TELEGRAM_TOKEN:-}" || -z "${CHAT_ID:-}" ]]; then
+        return 0
+    fi
+
+    curl -s --max-time 15 -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+        -d "chat_id=${CHAT_ID}" \
+        --data-urlencode "text=$1" >/dev/null 2>&1 || true
+}
+
+# Prevent overlapping watering runs.
+exec 200>"$LOCKFILE"
+if ! flock -n 200; then
+    log "SKIP: watering controller already holds the lock"
+    exit 1
+fi
+
+# Flower 5 is intentionally disconnected and excluded from the required set.
+# Required: flowers 1-4 and 6-15. Missing/unavailable/unknown => SKIP.
+# Home Assistant transport or JSON uncertainty also => SKIP. No timestamp-age
+# freshness gate is used because unchanged categorical MQTT states can remain valid.
+check_required_sensors() {
+    local resp bad_sensors
+
+    resp=$(curl -s --max-time 10 \
+        -H "Authorization: Bearer ${HASS_TOKEN}" \
+        "${HASS_URL}/api/states") || resp=""
+
+    if [[ -z "$resp" ]]; then
+        log "SENSOR-CHECK FAIL: Home Assistant did not answer — SKIP (fail closed)"
+        send_tg "🚨 Balcony watering skipped: Home Assistant did not answer the sensor check"
+        exit 0
+    fi
+
+    bad_sensors=$(printf '%s' "$resp" | python3 -c '
+import json
+import sys
+
+required = [
+    "sensor.balkona_laistisana_puke_%d" % i
+    for i in list(range(1, 5)) + list(range(6, 16))
+]
+try:
+    states = {s["entity_id"]: s["state"] for s in json.load(sys.stdin)}
+except Exception:
+    print("PARSE_FAIL")
+    raise SystemExit(0)
+
+bad = [eid for eid in required if states.get(eid) in (None, "unavailable", "unknown")]
+print(",".join(bad) if bad else "OK")
+') || bad_sensors="PARSE_FAIL"
+
+    if [[ "$bad_sensors" == "PARSE_FAIL" ]]; then
+        log "SENSOR-CHECK FAIL: Home Assistant state JSON could not be parsed — SKIP (fail closed)"
+        send_tg "🚨 Balcony watering skipped: sensor-state JSON parse failure"
+        exit 0
+    fi
+
+    if [[ "$bad_sensors" != "OK" ]]; then
+        log "SENSOR-CHECK SKIP: required sensors unavailable: ${bad_sensors}"
+        send_tg "🚨 Balcony watering skipped: required sensors unavailable (${bad_sensors})"
+        exit 0
+    fi
+
+    log "SENSOR-CHECK OK: all 14 required sensors (1-4, 6-15) are available"
+}
+
+JSON_DATA='{"entity_id": "'"$ENTITY"'"}'
+
+call_ha() {
+    local action="$1"
+    local http=""
+
+    http=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+        -X POST "${HASS_URL}/api/services/switch/turn_${action}" \
+        -H "Authorization: Bearer ${HASS_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "$JSON_DATA") || http="000"
+
+    printf '%s\n' "${http:-000}"
+}
+
+retry_ha() {
+    local action="$1"
+    local label="${2:-$action}"
+    local http=""
+    local i
+
+    for i in 1 2 3; do
+        http=$(call_ha "$action")
+        if [[ "$http" == "200" ]]; then
+            log "${label} succeeded (attempt ${i})"
+            printf '200\n'
+            return 0
+        fi
+        log "${label} attempt ${i} failed (${http}); waiting 3s"
+        sleep 3
+    done
+
+    log "${label} failed after 3 attempts (${http})"
+    printf '%s\n' "$http"
+    return 1
+}
+
+PUMP_IS_ON=0
+cleanup() {
+    if [[ "$PUMP_IS_ON" == "1" ]]; then
+        log "CLEANUP: requesting pump OFF (trap)"
+        if retry_ha "off" "CLEANUP pump OFF" >/dev/null 2>&1; then
+            PUMP_IS_ON=0
+            log "CLEANUP OK: pump OFF acknowledged"
+        else
+            log "CLEANUP FAIL: pump may still be ON"
+        fi
+    fi
+}
+trap cleanup EXIT INT TERM
+
+check_required_sensors
+
+log "===== starting 2x balcony watering cycle ====="
+
+log "--- cycle 1: requesting pump ON ---"
+if ! retry_ha "on" "cycle 1 pump ON" >/dev/null; then
+    log "FAIL: cycle 1 pump ON was not acknowledged"
+    exit 1
+fi
+PUMP_IS_ON=1
+log "cycle 1: watering for ${DURATION}s"
+sleep "$DURATION"
+
+if ! retry_ha "off" "cycle 1 pump OFF" >/dev/null; then
+    log "FAIL: cycle 1 pump OFF was not acknowledged"
+    exit 1
+fi
+PUMP_IS_ON=0
+log "cycle 1 complete"
+
+log "--- pause ${PAUSE}s between cycles ---"
+sleep "$PAUSE"
+
+log "--- cycle 2: requesting pump ON ---"
+if ! retry_ha "on" "cycle 2 pump ON" >/dev/null; then
+    log "FAIL: cycle 2 pump ON was not acknowledged"
+    exit 1
+fi
+PUMP_IS_ON=1
+log "cycle 2: watering for ${DURATION}s"
+sleep "$DURATION"
+
+if ! retry_ha "off" "cycle 2 pump OFF" >/dev/null; then
+    log "FAIL: cycle 2 pump OFF was not acknowledged"
+    exit 1
+fi
+PUMP_IS_ON=0
+
+log "===== 2x balcony watering cycle complete ====="
