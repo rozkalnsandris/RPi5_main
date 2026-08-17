@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CORE="$ROOT/scripts/cloudflare_zero_trust_reconcile.py"
+RUNNER="$ROOT/scripts/cloudflare_zero_trust_reconcile_stdin.py"
 REGISTRY="$ROOT/ops/contracts/cloudflare-hostname-policy.yaml"
 
 fail() {
@@ -10,7 +10,7 @@ fail() {
   exit 2
 }
 
-[[ -f "$CORE" ]] || fail "core operator missing"
+[[ -f "$RUNNER" ]] || fail "stdin runner missing"
 [[ -f "$REGISTRY" ]] || fail "canonical registry missing"
 command -v python3 >/dev/null 2>&1 || fail "python3 missing"
 
@@ -19,22 +19,26 @@ command -v python3 >/dev/null 2>&1 || fail "python3 missing"
 [[ "${CLOUDFLARE_TUNNEL_ID:-}" =~ ^[0-9a-fA-F-]{36}$ ]] ||
   fail "CLOUDFLARE_TUNNEL_ID missing or invalid"
 
-token_was_prompted=false
-if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+api_token="${CLOUDFLARE_API_TOKEN:-}"
+unset CLOUDFLARE_API_TOKEN
+if [[ -z "$api_token" ]]; then
   [[ -r /dev/tty ]] || fail "no TTY available for hidden API token prompt"
-  IFS= read -r -s -p 'Cloudflare API token (hidden): ' CLOUDFLARE_API_TOKEN </dev/tty
+  IFS= read -r -s -p 'Cloudflare API token (hidden): ' api_token </dev/tty
   printf '\n' >/dev/tty
-  export CLOUDFLARE_API_TOKEN
-  token_was_prompted=true
 fi
 
 cleanup() {
-  if [[ "$token_was_prompted" == "true" ]]; then
-    unset CLOUDFLARE_API_TOKEN
-  fi
+  api_token=''
+  unset CLOUDFLARE_API_TOKEN
 }
 trap cleanup EXIT HUP INT TERM
 
-[[ ${#CLOUDFLARE_API_TOKEN} -ge 20 ]] || fail "API token missing or invalid"
+[[ ${#api_token} -ge 20 ]] || fail "API token missing or invalid"
 
-python3 "$CORE" --registry "$REGISTRY" "$@"
+if printf '%s\n' "$api_token" | python3 "$RUNNER" "$REGISTRY" "$@"; then
+  rc=0
+else
+  rc=$?
+fi
+api_token=''
+exit "$rc"
