@@ -170,14 +170,14 @@ Rollback is deletion of only the newly created exact application, followed by pr
 For `p1a-08-control-root-exact-app`:
 
 - the existing `control.rozkalns.net/api/github/webhook` application must exist before the write;
-- it must remain byte-for-semantics unchanged after the write;
+- it must remain semantically unchanged after the write;
 - the root must resolve to the new exact owner-only app;
 - the webhook path must still resolve to the more-specific path application;
 - Control Center Worker Access JWT verification must remain healthy.
 
-Do not remove the webhook path BYPASS as part of root hardening. Cloudflare explicitly documents path-specific Bypass as a valid pattern for intentionally public webhook/callback endpoints.
+Do not remove the webhook path BYPASS as part of root hardening. Cloudflare documents path-specific Bypass as a supported pattern for endpoints that must remain publicly reachable, including webhook receivers.
 
-Reference: https://developers.cloudflare.com/cloudflare-one/traffic-policies/http-policies/common-policies/ (conceptual public-endpoint pattern) and Access application path precedence reference above.
+Reference: https://developers.cloudflare.com/cloudflare-one/access-controls/policies/common-policies/ and the Access application path precedence reference above.
 
 ## 7. P1B — Protect with Access, one Tunnel ingress at a time
 
