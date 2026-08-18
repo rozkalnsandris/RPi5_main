@@ -165,7 +165,7 @@ class CloudflareP1WritePlanTests(unittest.TestCase):
         self.assertIsNone(re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", combined))
         self.assertNotIn("Authorization: Bearer", combined)
         self.assertNotIn("CLOUDFLARE_API_TOKEN=", combined)
-        self.assertNotIn("home public IP:", combined.lower())
+        self.assertNotIn("home public ip:", combined.lower())
 
 
 if __name__ == "__main__":
