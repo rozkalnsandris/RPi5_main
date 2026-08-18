@@ -53,6 +53,7 @@ test:
 	bash ./tests/test-hermes-tech-rollback-container-retirement.sh
 	bash ./tests/test-cloudflare-lan-origin-audit.sh
 	python3 ./tests/test-cloudflare-zero-trust-reconcile.py
+	python3 ./tests/test-cloudflare-p1-write-plan.py
 	bash ./tests/test-cloudflare-zero-trust-wrapper.sh
 	bash ./tests/test-public-safety.sh
 	python3 ./tests/test-controlled-deploy-rollback.py
