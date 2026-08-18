@@ -68,7 +68,7 @@ for pid in $pids; do
 done
 
 attempt=0
-while [ "$attempt" -lt 50 ]; do
+while [ "$attempt" -lt 5 ]; do
     remaining=0
     for pid in $pids; do
         if pid_matches "$pid"; then
@@ -78,7 +78,7 @@ while [ "$attempt" -lt 50 ]; do
     done
     [ "$remaining" -eq 0 ] && exit 0
     attempt=$((attempt + 1))
-    sleep 0.1
+    sleep 1
 done
 
 exit 1
