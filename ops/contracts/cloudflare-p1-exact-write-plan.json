@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "status": "plan-only",
+  "canonical_issue": 179,
+  "evidence_baseline": "36f57e1e5f8b59f05b4e0e93a236ca1c92dce927",
+  "live_evidence_generated_at": "2026-08-18T13:44:28+02:00",
+  "mutation_authorized": false,
+  "authorization_contract": {
+    "explicit_owner_authorization_required": true,
+    "max_forward_mutations_per_authorization": 1,
+    "predeclared_inverse_rollback_included": true,
+    "fresh_get_before_each_mutation": true,
+    "fresh_get_after_each_mutation": true,
+    "stop_on_any_unexpected_diff": true,
+    "production_deploy_is_separate_authorization": true
+  },
+  "credential_separation": {
+    "access_phase_token_permission": "Access: Apps and Policies Write",
+    "tunnel_phase_token_permission": "Cloudflare Tunnel Write",
+    "dns_write_allowed": false,
+    "global_api_key_allowed": false,
+    "secret_values_in_git_allowed": false
+  },
+  "current_evidence": {
+    "result": "BLOCKED",
+    "blocker_count": 20,
+    "drift_count": 2,
+    "tunnel_status": "healthy",
+    "tunnel_connection_count": 4,
+    "dash_route_reconciliation": "PASS",
+    "mutation_performed": false
+  },
+  "global_invariants": [
+    "preserve-public-rozkalns-net",
+    "preserve-public-tech-until-wildcard-retired",
+    "preserve-control-webhook-specific-bypass",
+    "no-admin-persistent-bypass",
+    "no-human-service-token",
+    "one-forward-mutation-per-authorization",
+    "no-dns-write",
+    "no-rpi5-host-mutation",
+    "no-deploy-or-restart",
+    "all-unrelated-access-objects-unchanged",
+    "all-unrelated-tunnel-ingress-entries-unchanged"
+  ],
+  "write_surfaces": {
+    "access_application_create": "POST /accounts/{account_id}/access/apps",
+    "access_application_delete": "DELETE /accounts/{account_id}/access/apps/{app_id}",
+    "access_application_policy_delete": "DELETE /accounts/{account_id}/access/apps/{app_id}/policies/{policy_id}",
+    "tunnel_configuration_put": "PUT /accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations"
+  },
+  "exact_app_template": {
+    "type": "self_hosted",
+    "session_duration": "24h",
+    "domain": "exact-target-hostname",
+    "policies": [
+      {
+        "decision": "allow",
+        "precedence": 1,
+        "include": [
+          "exact-owner-email-private-input"
+        ],
+        "require": [],
+        "exclude": []
+      }
+    ],
+    "forbidden_policy_actions": [
+      "bypass",
+      "non_identity"
+    ],
+    "forbidden_selectors": [
+      "everyone",
+      "email_domain",
+      "ip",
+      "service_token"
+    ]
+  },
+  "phases": [
+    {
+      "id": "P1A",
+      "name": "exact-admin-access-apps",
+      "mutations": [
+        {
+          "id": "p1a-01-kuma-exact-app",
+          "target": "kuma.rozkalns.net",
+          "operation": "create_exact_access_application",
+          "application_name": "RPi5 Kuma Admin",
+          "forward_method": "POST",
+          "preconditions": ["fresh-get-only-reconciliation-matches-expected-preimage","target-currently-resolves-wildcard-or-control-path-special-case","exact-target-application-absent","owner-email-provided-privately-and-not-logged","public-hosts-still-public"],
+          "postconditions": ["target-resolves-exact","one-email-allow-selector","no-bypass","no-everyone","session-duration-24h","owner-access-pass","unauthenticated-access-denied","public-hosts-regression-pass"],
+          "rollback": "delete-created-exact-application-and-prove-preimage-resolution-restored"
+        },
+        {
+          "id": "p1a-02-grafana-exact-app",
+          "target": "grafana.rozkalns.net",
+          "operation": "create_exact_access_application",
+          "application_name": "RPi5 Grafana Admin",
+          "forward_method": "POST",
+          "preconditions": ["fresh-get-only-reconciliation-matches-expected-preimage","target-currently-resolves-wildcard-or-control-path-special-case","exact-target-application-absent","owner-email-provided-privately-and-not-logged","public-hosts-still-public"],
+          "postconditions": ["target-resolves-exact","one-email-allow-selector","no-bypass","no-everyone","session-duration-24h","owner-access-pass","unauthenticated-access-denied","public-hosts-regression-pass"],
+          "rollback": "delete-created-exact-application-and-prove-preimage-resolution-restored"
+        },
+        {
+          "id": "p1a-03-prometheus-exact-app",
+          "target": "prometheus.rozkalns.net",
+          "operation": "create_exact_access_application",
+          "application_name": "RPi5 Prometheus Admin",
+          "forward_method": "POST",
+          "preconditions": ["fresh-get-only-reconciliation-matches-expected-preimage","target-currently-resolves-wildcard-or-control-path-special-case","exact-target-application-absent","owner-email-provided-privately-and-not-logged","public-hosts-still-public"],
+          "postconditions": ["target-resolves-exact","one-email-allow-selector","no-bypass","no-everyone","session-duration-24h","owner-access-pass","unauthenticated-access-denied","public-hosts-regression-pass"],
+          "rollback": "delete-created-exact-application-and-prove-preimage-resolution-restored"
+        },
+        {
+          "id": "p1a-04-adguard-exact-app",
+          "target": "adguard.rozkalns.net",
+          "operation": "create_exact_access_application",
+          "application_name": "RPi5 AdGuard Admin",
+          "forward_method": "POST",
+          "preconditions": ["fresh-get-only-reconciliation-matches-expected-preimage","target-currently-resolves-wildcard-or-control-path-special-case","exact-target-application-absent","owner-email-provided-privately-and-not-logged","public-hosts-still-public"],
+          "postconditions": ["target-resolves-exact","one-email-allow-selector","no-bypass","no-everyone","session-duration-24h","owner-access-pass","unauthenticated-access-denied","public-hosts-regression-pass"],
+          "rollback": "delete-created-exact-application-and-prove-preimage-resolution-restored"
+        },
+        {
+          "id": "p1a-05-hermes-exact-app",
+          "target": "hermes.rozkalns.net",
+          "operation": "create_exact_access_application",
+          "application_name": "RPi5 Hermes Admin",
+          "forward_method": "POST",
+          "preconditions": ["fresh-get-only-reconciliation-matches-expected-preimage","target-currently-resolves-wildcard-or-control-path-special-case","exact-target-application-absent","owner-email-provided-privately-and-not-logged","public-hosts-still-public"],
+          "postconditions": ["target-resolves-exact","one-email-allow-selector","no-bypass","no-everyone","session-duration-24h","owner-access-pass","unauthenticated-access-denied","public-hosts-regression-pass"],
+          "rollback": "delete-created-exact-application-and-prove-preimage-resolution-restored"
+        },
+        {
+          "id": "p1a-06-portainer-exact-app",
+          "target": "portainer.rozkalns.net",
+          "operation": "create_exact_access_application",
+          "application_name": "RPi5 Portainer Admin",
+          "forward_method": "POST",
+          "preconditions": ["fresh-get-only-reconciliation-matches-expected-preimage","target-currently-resolves-wildcard-or-control-path-special-case","exact-target-application-absent","owner-email-provided-privately-and-not-logged","public-hosts-still-public"],
+          "postconditions": ["target-resolves-exact","one-email-allow-selector","no-bypass","no-everyone","session-duration-24h","owner-access-pass","unauthenticated-access-denied","public-hosts-regression-pass"],
+          "rollback": "delete-created-exact-application-and-prove-preimage-resolution-restored"
+        },
+        {
+          "id": "p1a-07-ha-exact-app",
+          "target": "ha.rozkalns.net",
+          "operation": "create_exact_access_application",
+          "application_name": "RPi5 Home Assistant Admin",
+          "forward_method": "POST",
+          "preconditions": ["fresh-get-only-reconciliation-matches-expected-preimage","target-currently-resolves-wildcard-or-control-path-special-case","exact-target-application-absent","owner-email-provided-privately-and-not-logged","public-hosts-still-public"],
+          "postconditions": ["target-resolves-exact","one-email-allow-selector","no-bypass","no-everyone","session-duration-24h","owner-access-pass","unauthenticated-access-denied","public-hosts-regression-pass"],
+          "rollback": "delete-created-exact-application-and-prove-preimage-resolution-restored"
+        },
+        {
+          "id": "p1a-08-control-root-exact-app",
+          "target": "control.rozkalns.net",
+          "operation": "create_exact_access_application",
+          "application_name": "RPi5 Control Owner",
+          "forward_method": "POST",
+          "preconditions": ["fresh-get-only-reconciliation-matches-expected-preimage","control-root-exact-application-absent","control-webhook-path-application-present-and-unchanged","owner-email-provided-privately-and-not-logged","public-hosts-still-public"],
+          "postconditions": ["target-resolves-exact","one-email-allow-selector","no-bypass","no-everyone","session-duration-24h","owner-access-pass","unauthenticated-access-denied","public-hosts-regression-pass","control-webhook-path-remains-more-specific-and-unchanged","control-worker-jwt-validation-remains-healthy"],
+          "rollback": "delete-created-exact-application-and-prove-preimage-resolution-restored"
+        }
+      ]
+    },
+    {
+      "id": "P1B",
+      "name": "tunnel-origin-access-one-host-at-a-time",
+      "mutations": [
+        {"id":"p1b-01-kuma-protect","target":"kuma.rozkalns.net","operation":"enable_tunnel_protect_with_access","forward_method":"PUT","preconditions":["target-exact-access-application-proven-no-bypass","fresh-full-tunnel-config-preimage-captured-locally-0600","preimage-canonical-hash-recorded-locally","target-aud-and-team-resolved-privately","all-ingress-routes-match-canonical-registry"],"allowed_diff":["target.originRequest.access.required=true","target.originRequest.access.teamName=private-current-team-name","target.originRequest.access.audTag=[private-exact-app-aud]"],"postconditions":["fresh-config-diff-is-exactly-allowed-diff","protect-with-access-present-required","aud-count-one","team-name-matches-organization","owner-access-pass","unauthenticated-access-denied","origin-health-pass","unrelated-ingress-hash-unchanged"],"rollback":"put-exact-full-tunnel-config-preimage-and-reverify-unrelated-ingress-hash"},
+        {"id":"p1b-02-grafana-protect","target":"grafana.rozkalns.net","operation":"enable_tunnel_protect_with_access","forward_method":"PUT","preconditions":["target-exact-access-application-proven-no-bypass","fresh-full-tunnel-config-preimage-captured-locally-0600","preimage-canonical-hash-recorded-locally","target-aud-and-team-resolved-privately","all-ingress-routes-match-canonical-registry"],"allowed_diff":["target.originRequest.access.required=true","target.originRequest.access.teamName=private-current-team-name","target.originRequest.access.audTag=[private-exact-app-aud]"],"postconditions":["fresh-config-diff-is-exactly-allowed-diff","protect-with-access-present-required","aud-count-one","team-name-matches-organization","owner-access-pass","unauthenticated-access-denied","origin-health-pass","unrelated-ingress-hash-unchanged"],"rollback":"put-exact-full-tunnel-config-preimage-and-reverify-unrelated-ingress-hash"},
+        {"id":"p1b-03-prometheus-protect","target":"prometheus.rozkalns.net","operation":"enable_tunnel_protect_with_access","forward_method":"PUT","preconditions":["target-exact-access-application-proven-no-bypass","fresh-full-tunnel-config-preimage-captured-locally-0600","preimage-canonical-hash-recorded-locally","target-aud-and-team-resolved-privately","all-ingress-routes-match-canonical-registry"],"allowed_diff":["target.originRequest.access.required=true","target.originRequest.access.teamName=private-current-team-name","target.originRequest.access.audTag=[private-exact-app-aud]"],"postconditions":["fresh-config-diff-is-exactly-allowed-diff","protect-with-access-present-required","aud-count-one","team-name-matches-organization","owner-access-pass","unauthenticated-access-denied","origin-health-pass","unrelated-ingress-hash-unchanged"],"rollback":"put-exact-full-tunnel-config-preimage-and-reverify-unrelated-ingress-hash"},
+        {"id":"p1b-04-adguard-protect","target":"adguard.rozkalns.net","operation":"enable_tunnel_protect_with_access","forward_method":"PUT","preconditions":["target-exact-access-application-proven-no-bypass","fresh-full-tunnel-config-preimage-captured-locally-0600","preimage-canonical-hash-recorded-locally","target-aud-and-team-resolved-privately","all-ingress-routes-match-canonical-registry"],"allowed_diff":["target.originRequest.access.required=true","target.originRequest.access.teamName=private-current-team-name","target.originRequest.access.audTag=[private-exact-app-aud]"],"postconditions":["fresh-config-diff-is-exactly-allowed-diff","protect-with-access-present-required","aud-count-one","team-name-matches-organization","owner-access-pass","unauthenticated-access-denied","origin-health-pass","unrelated-ingress-hash-unchanged"],"rollback":"put-exact-full-tunnel-config-preimage-and-reverify-unrelated-ingress-hash"},
+        {"id":"p1b-05-hermes-protect","target":"hermes.rozkalns.net","operation":"enable_tunnel_protect_with_access","forward_method":"PUT","preconditions":["target-exact-access-application-proven-no-bypass","fresh-full-tunnel-config-preimage-captured-locally-0600","preimage-canonical-hash-recorded-locally","target-aud-and-team-resolved-privately","all-ingress-routes-match-canonical-registry"],"allowed_diff":["target.originRequest.access.required=true","target.originRequest.access.teamName=private-current-team-name","target.originRequest.access.audTag=[private-exact-app-aud]"],"postconditions":["fresh-config-diff-is-exactly-allowed-diff","protect-with-access-present-required","aud-count-one","team-name-matches-organization","owner-access-pass","unauthenticated-access-denied","origin-health-pass","unrelated-ingress-hash-unchanged"],"rollback":"put-exact-full-tunnel-config-preimage-and-reverify-unrelated-ingress-hash"},
+        {"id":"p1b-06-portainer-protect","target":"portainer.rozkalns.net","operation":"enable_tunnel_protect_with_access","forward_method":"PUT","preconditions":["target-exact-access-application-proven-no-bypass","fresh-full-tunnel-config-preimage-captured-locally-0600","preimage-canonical-hash-recorded-locally","target-aud-and-team-resolved-privately","all-ingress-routes-match-canonical-registry"],"allowed_diff":["target.originRequest.access.required=true","target.originRequest.access.teamName=private-current-team-name","target.originRequest.access.audTag=[private-exact-app-aud]"],"postconditions":["fresh-config-diff-is-exactly-allowed-diff","protect-with-access-present-required","aud-count-one","team-name-matches-organization","owner-access-pass","unauthenticated-access-denied","origin-health-pass","unrelated-ingress-hash-unchanged"],"rollback":"put-exact-full-tunnel-config-preimage-and-reverify-unrelated-ingress-hash"},
+        {"id":"p1b-07-ha-protect","target":"ha.rozkalns.net","operation":"enable_tunnel_protect_with_access","forward_method":"PUT","preconditions":["target-exact-access-application-proven-no-bypass","fresh-full-tunnel-config-preimage-captured-locally-0600","preimage-canonical-hash-recorded-locally","target-aud-and-team-resolved-privately","all-ingress-routes-match-canonical-registry"],"allowed_diff":["target.originRequest.access.required=true","target.originRequest.access.teamName=private-current-team-name","target.originRequest.access.audTag=[private-exact-app-aud]"],"postconditions":["fresh-config-diff-is-exactly-allowed-diff","protect-with-access-present-required","aud-count-one","team-name-matches-organization","owner-access-pass","unauthenticated-access-denied","origin-health-pass","unrelated-ingress-hash-unchanged"],"rollback":"put-exact-full-tunnel-config-preimage-and-reverify-unrelated-ingress-hash"}
+      ]
+    },
+    {
+      "id": "P1C",
+      "name": "family-cleanup-and-wildcard-retirement",
+      "mutations": [
+        {"id":"p1c-01-deals-remove-ip-bypass","target":"deals.rozkalns.net","operation":"delete_exact_deals_ip_bypass_policy","forward_method":"DELETE","preconditions":["deals-exact-application-present","exactly-one-ip-bypass-policy-present","two-email-family-allow-present","one-service-token-non-identity-policy-present","private-policy-preimage-captured-locally-0600","family-browser-canary-ready","service-token-canary-ready"],"postconditions":["deals-exact-application-still-selected","no-deals-bypass","two-email-family-allow-unchanged","service-token-non-identity-unchanged","family-browser-access-pass","service-token-access-pass","unauthenticated-access-denied"],"rollback":"recreate-only-deleted-bypass-policy-from-local-private-preimage"},
+        {"id":"p1c-02-deals-protect","target":"deals.rozkalns.net","operation":"enable_tunnel_protect_with_access","forward_method":"PUT","preconditions":["deals-no-bypass-proven","family-and-service-token-paths-proven","fresh-full-tunnel-config-preimage-captured-locally-0600","preimage-canonical-hash-recorded-locally","deals-app-aud-and-team-resolved-privately"],"allowed_diff":["deals.originRequest.access.required=true","deals.originRequest.access.teamName=private-current-team-name","deals.originRequest.access.audTag=[private-exact-app-aud]"],"postconditions":["protect-with-access-present-required","family-browser-access-pass","service-token-access-pass","unauthenticated-access-denied","origin-health-pass","unrelated-ingress-hash-unchanged"],"rollback":"put-exact-full-tunnel-config-preimage-and-reverify"},
+        {"id":"p1c-03-retire-parent-wildcard","target":"*.rozkalns.net","operation":"delete_broad_wildcard_access_application","forward_method":"DELETE","preconditions":["all-admin-roots-resolve-exact-no-bypass","all-required-tunnel-protect-canaries-pass","deals-no-bypass-and-protect-pass","dash-exact-and-protect-still-pass","control-root-exact-and-webhook-path-pass","tech-public-exact-bypass-carveout-still-present","rozkalns-net-public-pass","full-private-wildcard-app-and-policies-preimage-captured-locally-0600","no-unclassified-hostname-or-route"],"postconditions":["no-private-root-depends-on-wildcard","all-admin-owner-access-pass","all-admin-unauthenticated-denial-pass","deals-family-and-service-token-pass","tech-public-pass","rozkalns-net-public-pass"],"rollback":"recreate-wildcard-application-and-policies-from-local-private-preimage"},
+        {"id":"p1c-04-remove-tech-public-carveout","target":"tech.rozkalns.net","operation":"delete_temporary_public_access_application","forward_method":"DELETE","preconditions":["parent-wildcard-absent","tech-current-exact-application-is-everyone-bypass-only","tech-app-preimage-captured-locally-0600","tech-origin-loopback-route-healthy","rozkalns-net-public-pass"],"postconditions":["tech-has-no-access-application","tech-public-unauthenticated-pass","rozkalns-net-public-pass","all-private-roots-remain-protected"],"rollback":"recreate-tech-public-carveout-from-local-private-preimage"}
+      ]
+    }
+  ],
+  "owner_phone_phase": {
+    "id": "P1D",
+    "status": "blocked-source-decision",
+    "mutation_authorized": false,
+    "reason": "Current Cloudflare docs state Require WARP accepts consumer WARP as well as organization-enrolled clients; reconcile Require WARP versus Require Gateway before treating posture as an enrolled-device identity signal.",
+    "required_next_source_decision": ["compare-require-warp-vs-require-gateway-against-owner-phone-threat-model","keep-exact-owner-identity","keep-android-wifi-and-cellular-canaries","keep-non-enrolled-device-denial","treat-authenticate-with-cloudflare-one-client-as-beta-and-separate-canary"]
+  },
+  "completion_gate": ["fresh-get-only-reconciliation-blocker-count-zero-except-explicitly-deferred-owner-phone-drift","public-hosts-remain-public","no-admin-bypass","all-required-protect-with-access-proven","no-unclassified-hostnames-or-routes","all-private-preimages-destroyed-after-accepted-rollback-window"]
+}
