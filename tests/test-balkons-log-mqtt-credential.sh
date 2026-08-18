@@ -5,6 +5,7 @@ IFS=$'\n\t'
 repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 wrapper="$repo/ops/bin/balkons-log-subscribe"
 unit="$repo/ops/systemd/balkons-log.service"
+contract="$repo/docs/BALKONS_LOG_MQTT_AUTH_CONTRACT.md"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
@@ -72,6 +73,22 @@ fi
 grep -Fq 'EnvironmentFile=/etc/default/balkons-log' "$unit" || fail "non-secret runtime config boundary missing"
 grep -Fq 'LoadCredential=mqtt-client-config:' "$unit" || fail "systemd credential boundary missing"
 grep -Fq 'ExecStart=/usr/local/sbin/balkons-log-subscribe' "$unit" || fail "unit does not use the reviewed wrapper"
+
+# The tracked journal directives are a safe source fallback, not permission to
+# overwrite a pre-existing private production append sink. The public contract
+# must require a runtime-only local drop-in that preserves the captured target.
+grep -Fq 'Safe source fallback only.' "$unit" || fail "tracked unit does not label journal output as fallback-only"
+grep -Fxq 'StandardOutput=journal' "$unit" || fail "tracked unit stdout fallback changed"
+grep -Fxq 'StandardError=journal' "$unit" || fail "tracked unit stderr fallback changed"
+grep -Fq 'runtime-only local systemd drop-in' "$contract" || fail "runtime output-preservation drop-in contract missing"
+grep -Fq 'StandardOutput=append:<captured-private-runtime-path>' "$contract" || fail "stdout append-preservation placeholder missing"
+grep -Fq 'StandardError=append:<captured-private-runtime-path>' "$contract" || fail "stderr append-preservation placeholder missing"
+grep -Fq 'FD 1 and FD 2' "$contract" || fail "running output-FD verification contract missing"
+grep -Fq 'must never be copied to Git' "$contract" || fail "private output-path publication boundary missing"
+
+if grep -Eq 'Standard(Output|Error)=append:/[^<[:space:]]+' "$unit" "$contract"; then
+    fail "public source contains a literal private append destination"
+fi
 
 rm -f "$tmp/creds/mqtt-client-config"
 if CAPTURE_ARGS="$tmp/missing-argv" \
