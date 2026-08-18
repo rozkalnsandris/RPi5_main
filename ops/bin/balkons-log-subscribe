@@ -2,30 +2,127 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-: "${CREDENTIALS_DIRECTORY:?CREDENTIALS_DIRECTORY must be provided by systemd}"
 : "${BALKONS_LOG_MQTT_HOST:?BALKONS_LOG_MQTT_HOST must be provided at runtime}"
 : "${BALKONS_LOG_MQTT_TOPIC:?BALKONS_LOG_MQTT_TOPIC must be provided at runtime}"
 : "${BALKONS_LOG_MQTT_FORMAT:?BALKONS_LOG_MQTT_FORMAT must be provided at runtime}"
 
 DOCKER_BIN="${BALKONS_LOG_DOCKER_BIN:-/usr/bin/docker}"
 CONTAINER="${BALKONS_LOG_MQTT_CONTAINER:-mosquitto}"
-CLIENT_CONFIG="${CREDENTIALS_DIRECTORY}/mqtt-client-config"
+CLIENT_ID="${BALKONS_LOG_MQTT_CLIENT_ID:-balkons-log-service}"
 
 [[ -x "$DOCKER_BIN" ]] || {
     echo "balkons-log: docker executable is unavailable" >&2
     exit 1
 }
 
+[[ "$CLIENT_ID" =~ ^[A-Za-z0-9._:-]{1,64}$ ]] || {
+    echo "balkons-log: MQTT client id is invalid" >&2
+    exit 1
+}
+
+cleanup_container_subscriber() {
+    "$DOCKER_BIN" exec "$CONTAINER" sh -s -- "$CLIENT_ID" "$BALKONS_LOG_MQTT_TOPIC" <<'SH'
+set -eu
+client_id="$1"
+topic="$2"
+
+pid_matches() {
+    pid="$1"
+    file="/proc/$pid/cmdline"
+    [ -r "$file" ] || return 1
+    args="$(tr '\000' '\n' <"$file" 2>/dev/null || true)"
+    [ -n "$args" ] || return 1
+
+    has_sub=0
+    has_id=0
+    has_topic=0
+    prev=""
+    while IFS= read -r arg; do
+        [ "$arg" = "mosquitto_sub" ] && has_sub=1
+        case "$prev" in
+            -i|--id) [ "$arg" = "$client_id" ] && has_id=1 ;;
+            -t|--topic) [ "$arg" = "$topic" ] && has_topic=1 ;;
+        esac
+        prev="$arg"
+    done <<EOF_ARGS
+$args
+EOF_ARGS
+
+    [ "$has_sub" -eq 1 ] && [ "$has_id" -eq 1 ] && [ "$has_topic" -eq 1 ]
+}
+
+pids=""
+for file in /proc/[0-9]*/cmdline; do
+    pid="${file#/proc/}"
+    pid="${pid%/cmdline}"
+    if pid_matches "$pid"; then
+        pids="$pids $pid"
+    fi
+done
+
+[ -n "$pids" ] || exit 0
+
+for pid in $pids; do
+    pid_matches "$pid" || continue
+    kill -TERM "$pid" 2>/dev/null || exit 1
+done
+
+attempt=0
+while [ "$attempt" -lt 50 ]; do
+    remaining=0
+    for pid in $pids; do
+        if pid_matches "$pid"; then
+            remaining=1
+            break
+        fi
+    done
+    [ "$remaining" -eq 0 ] && exit 0
+    attempt=$((attempt + 1))
+    sleep 0.1
+done
+
+exit 1
+SH
+}
+
+case "${1:-}" in
+    "") ;;
+    --stop)
+        cleanup_container_subscriber || {
+            echo "balkons-log: managed container subscriber did not stop cleanly" >&2
+            exit 1
+        }
+        exit 0
+        ;;
+    *)
+        echo "balkons-log: unsupported argument" >&2
+        exit 2
+        ;;
+esac
+
+: "${CREDENTIALS_DIRECTORY:?CREDENTIALS_DIRECTORY must be provided by systemd}"
+CLIENT_CONFIG="${CREDENTIALS_DIRECTORY}/mqtt-client-config"
+
 [[ -f "$CLIENT_CONFIG" && ! -L "$CLIENT_CONFIG" && -r "$CLIENT_CONFIG" && -s "$CLIENT_CONFIG" ]] || {
     echo "balkons-log: MQTT client config credential is unavailable" >&2
     exit 1
 }
 
+# Remove only a stale subscriber carrying this service's explicit non-secret
+# client id before starting a replacement. This never targets unrelated
+# mosquitto_sub processes.
+cleanup_container_subscriber || {
+    echo "balkons-log: stale managed container subscriber could not be retired" >&2
+    exit 1
+}
+
 # Authentication is read by mosquitto_sub from stdin as a Mosquitto 2.1+
 # client config. No username or password is placed in docker/mosquitto argv
-# or in the non-secret runtime environment file.
+# or in the non-secret runtime environment file. The explicit client id gives
+# systemd a safe, non-secret identity for ExecStop lifecycle cleanup.
 exec "$DOCKER_BIN" exec -i "$CONTAINER" mosquitto_sub \
     -o /dev/stdin \
+    -i "$CLIENT_ID" \
     -h "$BALKONS_LOG_MQTT_HOST" \
     -t "$BALKONS_LOG_MQTT_TOPIC" \
     -F "$BALKONS_LOG_MQTT_FORMAT" \
