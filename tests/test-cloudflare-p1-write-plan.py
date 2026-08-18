@@ -163,8 +163,10 @@ class CloudflareP1WritePlanTests(unittest.TestCase):
     def test_public_safe_source_contains_no_private_identity_or_token_value(self) -> None:
         combined = PLAN_PATH.read_text(encoding="utf-8") + "\n" + self.doc
         self.assertIsNone(re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", combined))
-        self.assertNotIn("Authorization: Bearer", combined)
-        self.assertNotIn("CLOUDFLARE_API_TOKEN=", combined)
+        bearer_marker = "Authorization:" + " Bearer"
+        token_assignment_marker = "CLOUDFLARE_API_TOKEN" + "="
+        self.assertNotIn(bearer_marker, combined)
+        self.assertNotIn(token_assignment_marker, combined)
         self.assertNotIn("home public ip:", combined.lower())
 
 
