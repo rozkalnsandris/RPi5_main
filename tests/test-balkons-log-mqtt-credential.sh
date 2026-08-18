@@ -26,6 +26,15 @@ write_test_credential
 cat >"$tmp/docker" <<'MOCK'
 #!/usr/bin/env bash
 set -Eeuo pipefail
+
+# Lifecycle cleanup runs a small shell helper inside the target container. The
+# mock records that the cleanup path was invoked without executing the helper.
+if [[ "${1:-}" == "exec" && "${2:-}" == "mosquitto" && "${3:-}" == "sh" ]]; then
+    cat >/dev/null
+    printf 'cleanup\n' >>"${CAPTURE_CLEANUP:?}"
+    exit 0
+fi
+
 printf '%s\n' "$@" >"${CAPTURE_ARGS:?}"
 cat >"${CAPTURE_STDIN:?}"
 MOCK
@@ -33,6 +42,7 @@ chmod +x "$tmp/docker"
 
 CAPTURE_ARGS="$tmp/argv" \
 CAPTURE_STDIN="$tmp/stdin" \
+CAPTURE_CLEANUP="$tmp/cleanup" \
 CREDENTIALS_DIRECTORY="$tmp/creds" \
 BALKONS_LOG_DOCKER_BIN="$tmp/docker" \
 BALKONS_LOG_MQTT_CONTAINER="mosquitto" \
@@ -52,6 +62,8 @@ grep -Fxq -- '/dev/stdin' "$tmp/argv" || fail "Mosquitto config is not sourced f
 grep -Fxq -- 'broker.invalid' "$tmp/argv" || fail "non-secret host option missing"
 grep -Fxq -- 'balkons/log' "$tmp/argv" || fail "topic option missing"
 grep -Fxq -- '%I %t %p' "$tmp/argv" || fail "format option missing"
+grep -Fxq -- 'balkons-log-service' "$tmp/argv" || fail "managed non-secret client id missing"
+[[ "$(grep -c '^cleanup$' "$tmp/cleanup")" -eq 1 ]] || fail "pre-start lifecycle cleanup was not invoked exactly once"
 
 if grep -Fq -- 'TEST_ONLY_SENTINEL_173' "$tmp/argv"; then
     fail "credential value leaked into docker argv"
@@ -63,6 +75,19 @@ if grep -Fxq -- '-u' "$tmp/argv" || grep -Fxq -- '--username' "$tmp/argv"; then
     fail "username flag leaked into docker argv"
 fi
 
+CAPTURE_ARGS="$tmp/stop-argv" \
+CAPTURE_STDIN="$tmp/stop-stdin" \
+CAPTURE_CLEANUP="$tmp/cleanup" \
+BALKONS_LOG_DOCKER_BIN="$tmp/docker" \
+BALKONS_LOG_MQTT_CONTAINER="mosquitto" \
+BALKONS_LOG_MQTT_HOST="broker.invalid" \
+BALKONS_LOG_MQTT_TOPIC="balkons/log" \
+BALKONS_LOG_MQTT_FORMAT="%I %t %p" \
+"$wrapper" --stop
+
+[[ "$(grep -c '^cleanup$' "$tmp/cleanup")" -eq 2 ]] || fail "explicit lifecycle stop cleanup was not invoked"
+[[ ! -e "$tmp/stop-argv" ]] || fail "stop mode launched a subscriber command"
+
 if grep -Eq '(^|[[:space:]])(-P|--pw|--password)([[:space:]]|$)' "$unit"; then
     fail "tracked unit contains a password argv option"
 fi
@@ -73,6 +98,8 @@ fi
 grep -Fq 'EnvironmentFile=/etc/default/balkons-log' "$unit" || fail "non-secret runtime config boundary missing"
 grep -Fq 'LoadCredential=mqtt-client-config:' "$unit" || fail "systemd credential boundary missing"
 grep -Fq 'ExecStart=/usr/local/sbin/balkons-log-subscribe' "$unit" || fail "unit does not use the reviewed wrapper"
+grep -Fq 'ExecStop=/usr/local/sbin/balkons-log-subscribe --stop' "$unit" || fail "unit does not retire its managed container subscriber"
+grep -Fxq 'TimeoutStopSec=15s' "$unit" || fail "bounded lifecycle stop timeout missing"
 
 # The tracked journal directives are a safe source fallback, not permission to
 # overwrite a pre-existing private production append sink. The public contract
@@ -85,6 +112,8 @@ grep -Fq 'StandardOutput=append:<captured-private-runtime-path>' "$contract" || 
 grep -Fq 'StandardError=append:<captured-private-runtime-path>' "$contract" || fail "stderr append-preservation placeholder missing"
 grep -Fq 'FD 1 and FD 2' "$contract" || fail "running output-FD verification contract missing"
 grep -Fq 'must never be copied to Git' "$contract" || fail "private output-path publication boundary missing"
+grep -Fq 'container-side subscriber lifecycle' "$contract" || fail "container subscriber lifecycle contract missing"
+grep -Fq 'captured legacy subscriber PID' "$contract" || fail "one-time legacy subscriber retirement contract missing"
 
 if grep -Eq 'Standard(Output|Error)=append:/[^<[:space:]]+' "$unit" "$contract"; then
     fail "public source contains a literal private append destination"
@@ -93,6 +122,7 @@ fi
 rm -f "$tmp/creds/mqtt-client-config"
 if CAPTURE_ARGS="$tmp/missing-argv" \
    CAPTURE_STDIN="$tmp/missing-stdin" \
+   CAPTURE_CLEANUP="$tmp/missing-cleanup" \
    CREDENTIALS_DIRECTORY="$tmp/creds" \
    BALKONS_LOG_DOCKER_BIN="$tmp/docker" \
    BALKONS_LOG_MQTT_HOST="broker.invalid" \
@@ -105,6 +135,7 @@ fi
 write_test_credential
 if CAPTURE_ARGS="$tmp/nohost-argv" \
    CAPTURE_STDIN="$tmp/nohost-stdin" \
+   CAPTURE_CLEANUP="$tmp/nohost-cleanup" \
    CREDENTIALS_DIRECTORY="$tmp/creds" \
    BALKONS_LOG_DOCKER_BIN="$tmp/docker" \
    BALKONS_LOG_MQTT_TOPIC="balkons/log" \
@@ -118,6 +149,7 @@ printf '%s\n' '-u <test-user>' '-P TEST_ONLY_SENTINEL_173' >"$tmp/real-config"
 ln -s "$tmp/real-config" "$tmp/creds/mqtt-client-config"
 if CAPTURE_ARGS="$tmp/symlink-argv" \
    CAPTURE_STDIN="$tmp/symlink-stdin" \
+   CAPTURE_CLEANUP="$tmp/symlink-cleanup" \
    CREDENTIALS_DIRECTORY="$tmp/creds" \
    BALKONS_LOG_DOCKER_BIN="$tmp/docker" \
    BALKONS_LOG_MQTT_HOST="broker.invalid" \
