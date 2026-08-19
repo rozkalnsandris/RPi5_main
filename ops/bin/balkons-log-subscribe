@@ -21,7 +21,9 @@ CLIENT_ID="${BALKONS_LOG_MQTT_CLIENT_ID:-balkons-log-service}"
 }
 
 cleanup_container_subscriber() {
-    "$DOCKER_BIN" exec "$CONTAINER" sh -s -- "$CLIENT_ID" "$BALKONS_LOG_MQTT_TOPIC" <<'SH'
+    # The helper body is delivered to the container shell over stdin. Docker
+    # requires -i here so the heredoc remains attached to docker exec stdin.
+    "$DOCKER_BIN" exec -i "$CONTAINER" sh -s -- "$CLIENT_ID" "$BALKONS_LOG_MQTT_TOPIC" <<'SH'
 set -eu
 client_id="$1"
 topic="$2"
