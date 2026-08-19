@@ -5,6 +5,8 @@ test:
 	bash ./tests/test-balcony-watering.sh
 	bash ./tests/test-balkons-log-mqtt-credential.sh
 	bash ./tests/test-balkons-log-legacy-set-contract.sh
+	python3 ./tests/test-balkons-bot-source.py
+	bash ./tests/test-balkons-bot-systemd.sh
 	./tests/test-safe-inventory.sh
 	./tests/test-access-model.sh
 	./tests/test-runtime-baseline.sh
@@ -69,7 +71,7 @@ test:
 	python3 ./tests/test-cv-controller-activation.py
 	python3 ./tests/test-cv-classifier-host-alignment.py
 	python3 ./tests/test-cv-pull-deploy-canary.py
-	python3 -m py_compile scripts/*.py ops/lib/rpi5-update-telegram.py ops/lib/rpi5-maintenance-telegram.py
+	python3 -m py_compile scripts/*.py ops/lib/rpi5-update-telegram.py ops/lib/rpi5-maintenance-telegram.py ops/lib/balkons-bot.py
 
 secret-scan:
 	./scripts/check-no-secrets.sh

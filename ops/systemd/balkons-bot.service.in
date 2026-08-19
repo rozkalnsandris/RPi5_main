@@ -1,0 +1,44 @@
+# SOURCE TEMPLATE ONLY — DO NOT INSTALL WITHOUT RENDERING THE @...@ TOKENS.
+# Production rendering is separately owner-gated under RPi5_main#192.
+[Unit]
+Description=Balcony irrigation Telegram/MQTT bot
+Documentation=https://github.com/rozkalnsandris/RPi5_main
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=@SERVICE_USER@
+ExecStart=@PYTHON_EXECUTABLE@ @BOT_SOURCE_PATH@
+LoadCredential=telegram-token:/etc/credstore/balkons-bot-telegram-token
+LoadCredential=telegram-chat-id:/etc/credstore/balkons-bot-telegram-chat-id
+LoadCredential=mqtt-host:/etc/credstore/balkons-bot-mqtt-host
+LoadCredential=mqtt-username:/etc/credstore/balkons-bot-mqtt-username
+LoadCredential=mqtt-secret:/etc/credstore/balkons-bot-mqtt-secret
+Environment=PYTHONDONTWRITEBYTECODE=1
+Restart=@RESTART_POLICY@
+RestartSec=@RESTART_SEC@
+TimeoutStopSec=@TIMEOUT_STOP_SEC@
+SendSIGKILL=no
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
