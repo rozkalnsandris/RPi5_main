@@ -27,9 +27,10 @@ cat >"$tmp/docker" <<'MOCK'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Lifecycle cleanup runs a small shell helper inside the target container. The
-# mock records that the cleanup path was invoked without executing the helper.
-if [[ "${1:-}" == "exec" && "${2:-}" == "mosquitto" && "${3:-}" == "sh" ]]; then
+# Lifecycle cleanup delivers a shell helper to docker exec over stdin. Model
+# the real Docker contract: the cleanup branch is accepted only with -i.
+if [[ "${1:-}" == "exec" && "${2:-}" == "-i" && "${3:-}" == "mosquitto" && "${4:-}" == "sh" ]]; then
+    printf '%s\n' "$@" >"${CAPTURE_CLEANUP_ARGS:?}"
     cat >/dev/null
     printf 'cleanup\n' >>"${CAPTURE_CLEANUP:?}"
     exit 0
@@ -43,6 +44,7 @@ chmod +x "$tmp/docker"
 CAPTURE_ARGS="$tmp/argv" \
 CAPTURE_STDIN="$tmp/stdin" \
 CAPTURE_CLEANUP="$tmp/cleanup" \
+CAPTURE_CLEANUP_ARGS="$tmp/cleanup-argv" \
 CREDENTIALS_DIRECTORY="$tmp/creds" \
 BALKONS_LOG_DOCKER_BIN="$tmp/docker" \
 BALKONS_LOG_MQTT_CONTAINER="mosquitto" \
@@ -64,6 +66,11 @@ grep -Fxq -- 'balkons/log' "$tmp/argv" || fail "topic option missing"
 grep -Fxq -- '%I %t %p' "$tmp/argv" || fail "format option missing"
 grep -Fxq -- 'balkons-log-service' "$tmp/argv" || fail "managed non-secret client id missing"
 [[ "$(grep -c '^cleanup$' "$tmp/cleanup")" -eq 1 ]] || fail "pre-start lifecycle cleanup was not invoked exactly once"
+grep -Fxq -- 'exec' "$tmp/cleanup-argv" || fail "cleanup docker exec verb missing"
+grep -Fxq -- '-i' "$tmp/cleanup-argv" || fail "cleanup helper stdin is not attached"
+grep -Fxq -- 'mosquitto' "$tmp/cleanup-argv" || fail "cleanup container target missing"
+grep -Fxq -- 'sh' "$tmp/cleanup-argv" || fail "cleanup shell missing"
+grep -Fxq -- '-s' "$tmp/cleanup-argv" || fail "cleanup shell stdin mode missing"
 
 if grep -Fq -- 'TEST_ONLY_SENTINEL_173' "$tmp/argv"; then
     fail "credential value leaked into docker argv"
@@ -78,6 +85,7 @@ fi
 CAPTURE_ARGS="$tmp/stop-argv" \
 CAPTURE_STDIN="$tmp/stop-stdin" \
 CAPTURE_CLEANUP="$tmp/cleanup" \
+CAPTURE_CLEANUP_ARGS="$tmp/stop-cleanup-argv" \
 BALKONS_LOG_DOCKER_BIN="$tmp/docker" \
 BALKONS_LOG_MQTT_CONTAINER="mosquitto" \
 BALKONS_LOG_MQTT_HOST="broker.invalid" \
@@ -87,6 +95,7 @@ BALKONS_LOG_MQTT_FORMAT="%I %t %p" \
 
 [[ "$(grep -c '^cleanup$' "$tmp/cleanup")" -eq 2 ]] || fail "explicit lifecycle stop cleanup was not invoked"
 [[ ! -e "$tmp/stop-argv" ]] || fail "stop mode launched a subscriber command"
+grep -Fxq -- '-i' "$tmp/stop-cleanup-argv" || fail "stop cleanup helper stdin is not attached"
 
 if grep -Eq '(^|[[:space:]])(-P|--pw|--password)([[:space:]]|$)' "$unit"; then
     fail "tracked unit contains a password argv option"
@@ -123,6 +132,7 @@ rm -f "$tmp/creds/mqtt-client-config"
 if CAPTURE_ARGS="$tmp/missing-argv" \
    CAPTURE_STDIN="$tmp/missing-stdin" \
    CAPTURE_CLEANUP="$tmp/missing-cleanup" \
+   CAPTURE_CLEANUP_ARGS="$tmp/missing-cleanup-argv" \
    CREDENTIALS_DIRECTORY="$tmp/creds" \
    BALKONS_LOG_DOCKER_BIN="$tmp/docker" \
    BALKONS_LOG_MQTT_HOST="broker.invalid" \
@@ -136,6 +146,7 @@ write_test_credential
 if CAPTURE_ARGS="$tmp/nohost-argv" \
    CAPTURE_STDIN="$tmp/nohost-stdin" \
    CAPTURE_CLEANUP="$tmp/nohost-cleanup" \
+   CAPTURE_CLEANUP_ARGS="$tmp/nohost-cleanup-argv" \
    CREDENTIALS_DIRECTORY="$tmp/creds" \
    BALKONS_LOG_DOCKER_BIN="$tmp/docker" \
    BALKONS_LOG_MQTT_TOPIC="balkons/log" \
@@ -150,6 +161,7 @@ ln -s "$tmp/real-config" "$tmp/creds/mqtt-client-config"
 if CAPTURE_ARGS="$tmp/symlink-argv" \
    CAPTURE_STDIN="$tmp/symlink-stdin" \
    CAPTURE_CLEANUP="$tmp/symlink-cleanup" \
+   CAPTURE_CLEANUP_ARGS="$tmp/symlink-cleanup-argv" \
    CREDENTIALS_DIRECTORY="$tmp/creds" \
    BALKONS_LOG_DOCKER_BIN="$tmp/docker" \
    BALKONS_LOG_MQTT_HOST="broker.invalid" \
