@@ -1,7 +1,7 @@
 schema_version: 1
 status: desired-state
 canonical_issue: 177
-last_reviewed: 2026-08-17
+last_reviewed: 2026-08-19
 
 # Public-safe desired-state registry.
 # Never place account IDs, tunnel IDs, Access AUD tags, owner emails,
@@ -15,7 +15,7 @@ invariants:
   admin_persistent_bypass_allowed: false
   human_service_token_access_allowed: false
   owner_phone_identity_model: cloudflare_one_client
-  owner_phone_initial_posture: require_warp
+  owner_phone_initial_posture: require_gateway
   owner_phone_mac_binding: false
   production_mutation_requires_explicit_owner_authorization: true
 
