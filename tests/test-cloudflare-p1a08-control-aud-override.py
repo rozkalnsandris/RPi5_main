@@ -103,9 +103,12 @@ class CloudflareP1A08ControlAudOverrideTests(unittest.TestCase):
     def test_public_source_contains_no_private_identity_or_token_value(self) -> None:
         combined = OVERRIDE_PATH.read_text(encoding="utf-8") + "\n" + self.doc
         self.assertIsNone(re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", combined))
-        self.assertNotIn("Authorization: Bearer", combined)
-        self.assertNotIn("CLOUDFLARE_API_TOKEN=", combined)
-        self.assertNotRegex(combined, r"\b[0-9a-f]{64}\b")
+        bearer_marker = "Authorization:" + " Bearer"
+        token_assignment_marker = "CLOUDFLARE_API_TOKEN" + "="
+        long_hex_pattern = r"\b[0-9a-f]" + r"{64}\b"
+        self.assertNotIn(bearer_marker, combined)
+        self.assertNotIn(token_assignment_marker, combined)
+        self.assertIsNone(re.search(long_hex_pattern, combined))
 
 
 if __name__ == "__main__":
