@@ -51,6 +51,15 @@ after boot and every 15 minutes thereafter. A failed check makes
 service a private temporary namespace and could cause it to inspect a different
 `/tmp` from the host mount it is intended to protect.
 
+The service must use `ProtectSystem=full`, not `ProtectSystem=strict`. On
+Bookworm/systemd 252, `strict` remounts the entire filesystem hierarchy
+read-only inside the service mount namespace, which changes the checker's view
+of `/tmp` from the host's `rw` mount to `ro` and causes a false `TMP_NOT_RW`
+failure. `full` keeps `/usr`, `/boot`, `/efi`, and `/etc` read-only while
+preserving the host `/tmp` access mode. Do not compensate with
+`ReadWritePaths=/tmp`: the monitor should observe the host mount semantics
+rather than manufacture a unit-specific writable exception.
+
 ## Large-cache policy
 
 The larger tmpfs ceiling is not permission for build caches to consume `/tmp`
