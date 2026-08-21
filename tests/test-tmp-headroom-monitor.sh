@@ -43,19 +43,20 @@ expect_reason TMP_RELATIME_SET 2123235328 1916403712 10 1777 tmpfs 'rw,nosuid,no
 expect_reason TMP_HEADROOM_BELOW_256M 2123235328 268435455 84 1777 tmpfs 'rw,nosuid,nodev'
 expect_reason TMP_USAGE_AT_OR_ABOVE_85_PERCENT 2123235328 318485299 85 1777 tmpfs 'rw,nosuid,nodev'
 
-# Source safety: this monitor must remain read-only and scoped to /tmp metadata.
 ! grep -Eq '(^|[;&|])[[:space:]]*(sudo|mount|umount|rm|systemctl|docker)([[:space:]]|$)' "$checker"
 grep -Fq 'MIN_TMP_AVAILABLE_BYTES=$((256 * 1024 * 1024))' "$checker"
 grep -Fq 'MAX_TMP_USED_PERCENT=85' "$checker"
 grep -Fq 'findmnt -n -o FSTYPE --target /tmp' "$checker"
 grep -Fq "df -B1 --output=size,avail,pcent /tmp" "$checker"
 
-# Unit semantics: frequent lightweight check, existing notifier, and no PrivateTmp
-# because a private namespace would hide the host /tmp that this service monitors.
+# Unit semantics: the checker must observe host /tmp. PrivateTmp stays disabled,
+# and ProtectSystem=full protects OS/config paths without remounting /tmp read-only.
 grep -Fxq 'OnFailure=rpi5-maintenance-notify@%N.service' "$service"
 grep -Fxq 'ExecStart=/usr/local/sbin/rpi5-tmp-headroom' "$service"
 grep -Fxq 'PrivateTmp=no' "$service"
-grep -Fxq 'ProtectSystem=strict' "$service"
+grep -Fxq 'ProtectSystem=full' "$service"
+! grep -Fxq 'ProtectSystem=strict' "$service"
+! grep -Fq 'ReadWritePaths=/tmp' "$service"
 grep -Fxq 'CapabilityBoundingSet=' "$service"
 grep -Fxq 'OnBootSec=5min' "$timer"
 grep -Fxq 'OnUnitActiveSec=15min' "$timer"
