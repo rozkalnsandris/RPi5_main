@@ -74,9 +74,20 @@ create phase-specific npm caches in `/tmp` should be redirected once their exact
 producer is proven.
 
 No `NODE_COMPILE_CACHE`, `node-compile-cache`, `TMPDIR`, or phase-specific npm
-cache producer is currently tracked in `RPi5_main`. Producer provenance must be
-established from safe evidence before changing another repository, user setup,
-or live service configuration.
+cache producer is currently tracked in `RPi5_main`. Safe cross-repository
+evidence recorded in #201 has, however, proven one concrete Node compile-cache
+producer class: Raspberry Pi-side `dashboard_RPi5` candidate/build workflows
+execute the audited web `vite build` path, which enables Node's module compile
+cache. This proves a producer path, not that `dashboard_RPi5` is the sole
+producer of every historical `/tmp/node-compile-cache` entry.
+
+The durable remediation for that proven producer class belongs in future
+`dashboard_RPi5` Raspberry Pi-side build/candidate operators: set
+`NODE_COMPILE_CACHE` explicitly to an NVMe-backed operator/user cache directory
+before invoking npm/Vite, and add regression coverage that rejects fallback to
+`/tmp/node-compile-cache`. The exact creator of the historical phase-specific
+npm cache remains unproven and must be established from safe evidence before
+redirecting that workflow or changing user/live configuration.
 
 ## Deployment boundary
 
@@ -89,6 +100,9 @@ The #201 capacity fix itself is already accepted. Remaining acceptance work is:
 
 1. activate the reviewed monitoring source under a separately authorized host
    transaction;
-2. prove and redirect the recurring Node/npm cache producer(s);
-3. run representative build/admin workloads and confirm `/tmp` remains below the
+2. redirect the proven dashboard Node compile-cache producer class to an
+   NVMe-backed cache and require regression coverage against `/tmp` fallback;
+3. prove and redirect the remaining phase-specific npm or other recurring large
+   cache producer(s);
+4. run representative build/admin workloads and confirm `/tmp` remains below the
    alert thresholds.
