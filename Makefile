@@ -31,6 +31,7 @@ test:
 	bash ./tests/test-maintenance-health.sh
 	bash ./tests/test-maintenance-health-entrypoints.sh
 	bash ./tests/test-tmp-headroom-monitor.sh
+	bash ./tests/test-tmp-headroom-activation.sh
 	python3 ./tests/test-maintenance-telegram-credentials.py
 	bash ./tests/test-maintenance-systemd-units.sh
 	python3 ./tests/test-maintenance-systemd-cutover.py
