@@ -207,7 +207,7 @@ class RestoreDrillTests(unittest.TestCase):
         self.assertEqual(list(self.root.glob("hermes-tech-restore-drill-*")), [])
 
     def test_archive_validation_failure_removes_plaintext_workspace(self) -> None:
-        bad_archive = self.root / "rpi5_backup_2026-08-22_03-00-00.tar.gz.ae"
+        bad_archive = self.root / "rpi5_backup_2026-08-22_03-00-00.tar.gz.age"
         with tarfile.open(bad_archive, "w:gz") as tar:
             for parts in sorted(restore_drill.HERMES_REQUIRED):
                 add_file(tar, "./" + "/".join(parts))
