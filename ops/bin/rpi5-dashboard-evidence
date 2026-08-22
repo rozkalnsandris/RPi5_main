@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 022
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export LC_ALL=C
+export LANG=C
+
+readonly EVIDENCE_HELPER="/usr/local/lib/rpi5-maintenance/dashboard-evidence.py"
+readonly UPDATE_UNIT="rpi5-update.service"
+
+log() { printf '[%s] %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*"; }
+
+require_root_controlled_file() {
+    local path="$1" uid mode
+    [[ -f "$path" && ! -L "$path" ]] || return 1
+    uid="$(stat -c '%u' "$path")"
+    mode="$(stat -c '%a' "$path")"
+    [[ "$uid" -eq 0 ]] || return 1
+    (( (8#$mode & 022) == 0 ))
+}
+
+[[ ${EUID:-$(id -u)} -eq 0 ]] || { echo "rpi5-dashboard-evidence must run as root." >&2; exit 1; }
+require_root_controlled_file "$EVIDENCE_HELPER" || {
+    echo "unsafe or missing dashboard evidence helper: $EVIDENCE_HELPER" >&2
+    exit 1
+}
+
+for command_name in curl date python3 stat systemctl awk; do
+    command -v "$command_name" >/dev/null 2>&1 || {
+        echo "missing required command: $command_name" >&2
+        exit 1
+    }
+done
+
+observe_endpoint() {
+    local endpoint_id="$1" label="$2" url="$3"
+    local result code seconds latency_ms state observed_at
+    result="$(curl --silent --show-error --output /dev/null \
+        --write-out '%{http_code}\t%{time_total}' \
+        --connect-timeout 3 --max-time 8 "$url" 2>/dev/null || true)"
+    IFS=$'\t' read -r code seconds <<<"$result"
+    [[ "$code" =~ ^[0-9]{3}$ ]] || code="000"
+    if [[ "$seconds" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+        latency_ms="$(awk -v seconds="$seconds" 'BEGIN { printf "%.0f", seconds * 1000 }')"
+        [[ "$latency_ms" =~ ^[0-9]+$ ]] || latency_ms=""
+        (( ${latency_ms:-300001} <= 300000 )) || latency_ms="300000"
+    else
+        latency_ms=""
+    fi
+
+    if [[ "$code" =~ ^2[0-9][0-9]$ || "$code" =~ ^3[0-9][0-9]$ || "$code" == "401" || "$code" == "403" ]]; then
+        state="UP"
+    elif [[ "$code" == "000" ]]; then
+        state="DOWN"
+    else
+        state="DEGRADED"
+    fi
+    observed_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+
+    args=(endpoint-observe --endpoint-id "$endpoint_id" --label "$label" --state "$state" --occurred-at "$observed_at")
+    [[ "$code" == "000" ]] || args+=(--status-code "$((10#$code))")
+    [[ -z "$latency_ms" ]] || args+=(--latency-ms "$latency_ms")
+    python3 "$EVIDENCE_HELPER" "${args[@]}"
+}
+
+observe_maintenance() {
+    local output key value active_state="" invocation_id="" service_result="" observed_at
+    output="$(systemctl show "$UPDATE_UNIT" --no-pager \
+        --property=ActiveState --property=InvocationID --property=Result 2>/dev/null || true)"
+    while IFS='=' read -r key value; do
+        case "$key" in
+            ActiveState) active_state="$value" ;;
+            InvocationID) invocation_id="$value" ;;
+            Result) service_result="$value" ;;
+        esac
+    done <<<"$output"
+
+    case "$active_state" in
+        active|activating|reloading|deactivating) return 0 ;;
+    esac
+    [[ "$invocation_id" =~ ^[0-9a-f]{32}$ ]] || return 0
+    [[ "$service_result" =~ ^[A-Za-z0-9._:-]{1,64}$ ]] || return 0
+    observed_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    python3 "$EVIDENCE_HELPER" maintenance-record \
+        --invocation-id "$invocation_id" \
+        --service-result "$service_result" \
+        --occurred-at "$observed_at"
+}
+
+observe_throttle() {
+    local output raw_hex observed_at
+    [[ -x /usr/bin/vcgencmd ]] || return 0
+    output="$(/usr/bin/vcgencmd get_throttled 2>/dev/null || true)"
+    [[ "$output" =~ ^throttled=(0x[0-9a-fA-F]+)$ ]] || return 0
+    raw_hex="${BASH_REMATCH[1],,}"
+    observed_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    python3 "$EVIDENCE_HELPER" throttle-record --raw-hex "$raw_hex" --observed-at "$observed_at"
+}
+
+# Curated to the dashboard Phase 6B maximum of eight distinct endpoints.
+# Prometheus is deliberately omitted because dashboard_RPi5 has a dedicated
+# Prometheus history/readiness path and must not fail endpoint evidence >8 IDs.
+ENDPOINTS=(
+    'cv|CV|https://rozkalns.net/'
+    'hermes-tech|Hermes Tech|https://tech.rozkalns.net/'
+    'portainer|Portainer|https://portainer.rozkalns.net/'
+    'grafana|Grafana|https://grafana.rozkalns.net/'
+    'home-assistant|Home Assistant|https://ha.rozkalns.net/'
+    'adguard|AdGuard|https://adguard.rozkalns.net/'
+    'uptime-kuma|Uptime Kuma|https://kuma.rozkalns.net/'
+    'hermes|Hermes|https://hermes.rozkalns.net/'
+)
+
+for entry in "${ENDPOINTS[@]}"; do
+    IFS='|' read -r endpoint_id label url <<<"$entry"
+    observe_endpoint "$endpoint_id" "$label" "$url"
+done
+observe_maintenance
+observe_throttle
+log "dashboard evidence collection complete"

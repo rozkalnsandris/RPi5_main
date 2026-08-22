@@ -14,6 +14,7 @@ test:
 	bash ./tests/test-memory-pressure-diagnostic.sh
 	bash ./tests/test-memory-pressure-series.sh
 	bash ./tests/test-backup-ownership.sh
+	python3 ./tests/test-dashboard-evidence.py
 	python3 ./tests/test-hermes-tech-restore-drill.py
 	bash ./tests/test-maintenance-updater-status.sh
 	bash ./tests/test-maintenance-updater-locks.sh
@@ -73,7 +74,7 @@ test:
 	python3 ./tests/test-cv-controller-activation.py
 	python3 ./tests/test-cv-classifier-host-alignment.py
 	python3 ./tests/test-cv-pull-deploy-canary.py
-	python3 -m py_compile scripts/*.py ops/lib/rpi5-update-telegram.py ops/lib/rpi5-maintenance-telegram.py ops/bin/hermes-tech-restore-drill
+	python3 -m py_compile scripts/*.py ops/lib/rpi5-update-telegram.py ops/lib/rpi5-maintenance-telegram.py ops/lib/dashboard-evidence.py ops/bin/hermes-tech-restore-drill
 
 secret-scan:
 	./scripts/check-no-secrets.sh
