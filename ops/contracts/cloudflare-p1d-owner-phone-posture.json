@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "status": "source-decision-complete-plan-only",
+  "canonical_issue": 179,
+  "decision_date": "2026-08-19",
+  "mutation_authorized": false,
+  "supersedes_for_p1d_only": "docs/CLOUDFLARE_P1_EXACT_WRITE_PLAN.md#9-p1d-owner-phone-posture--intentionally-blocked-pending-source-decision",
+  "decision": {
+    "identity_requirement": "exact-owner-identity",
+    "selected_posture": "require_gateway",
+    "require_warp_sufficient_for_enrolled_device_proof": false,
+    "reason": "Require Gateway matches organization-enrolled-and-gateway-filtered device semantics; Require WARP also accepts consumer WARP.",
+    "android_supported": true,
+    "device_uuid_initial_control": false,
+    "device_uuid_reason": "requires-managed-deployment-mdm-and-cannot-be-assigned-manually",
+    "hardware_backed_registration_required": false,
+    "hardware_backed_registration_android_available": false,
+    "posture_only_mode_initial_canary": false
+  },
+  "policy_shape": {
+    "action": "allow",
+    "include": [
+      "exact-owner-identity-private-input"
+    ],
+    "require": [
+      "gateway"
+    ],
+    "exclude": [],
+    "forbidden_actions": [
+      "bypass",
+      "non_identity"
+    ],
+    "forbidden_selectors": [
+      "everyone",
+      "ip",
+      "email_domain",
+      "service_token"
+    ],
+    "session_change_allowed_in_initial_posture_canary": false
+  },
+  "enrollment": {
+    "policy_basis": "exact-owner-identity",
+    "posture_selector_allowed_in_enrollment_policy": false,
+    "fresh_get_only_preflight_required": true,
+    "write_only_if_current_enrollment_policy_is_not_already_owner_only": true
+  },
+  "future_canaries": [
+    {
+      "id": "p1d-00-fresh-owner-phone-preflight",
+      "kind": "read-only",
+      "authorized": false
+    },
+    {
+      "id": "p1d-01-owner-only-enrollment-policy",
+      "kind": "conditional-access-policy-write",
+      "authorized": false,
+      "condition": "fresh-preflight-proves-current-enrollment-policy-not-owner-only"
+    },
+    {
+      "id": "p1d-02-owner-phone-enrollment",
+      "kind": "interactive-device-state-change",
+      "authorized": false,
+      "preconditions": [
+        "owner-only-enrollment-gate-proven"
+      ]
+    },
+    {
+      "id": "p1d-03-dash-require-gateway",
+      "kind": "access-policy-write",
+      "authorized": false,
+      "target": "dash.rozkalns.net",
+      "allowed_diff": [
+        "preserve-exact-owner-include",
+        "add-require-gateway-only"
+      ],
+      "forbidden_diff": [
+        "session-change",
+        "bypass",
+        "everyone",
+        "ip",
+        "email-domain",
+        "service-token"
+      ],
+      "required_canaries": [
+        "owner-wifi-pass",
+        "owner-cellular-pass",
+        "non-enrolled-denied",
+        "non-gateway-owner-context-denied",
+        "public-regressions-pass"
+      ]
+    },
+    {
+      "id": "p1d-04-control-require-gateway",
+      "kind": "access-policy-write",
+      "authorized": false,
+      "target": "control.rozkalns.net",
+      "preconditions": [
+        "p1c-03-control-root-retarget-accepted",
+        "control-parent-app-id-aud-preserved",
+        "p1d-03-dash-require-gateway-accepted",
+        "control-webhook-app-unchanged"
+      ],
+      "allowed_diff": [
+        "preserve-exact-owner-include",
+        "add-require-gateway-only"
+      ],
+      "forbidden_diff": [
+        "session-change",
+        "webhook-app-change",
+        "bypass",
+        "everyone",
+        "ip",
+        "email-domain",
+        "service-token"
+      ],
+      "required_canaries": [
+        "owner-wifi-pass",
+        "owner-cellular-pass",
+        "non-enrolled-denied",
+        "non-gateway-owner-context-denied",
+        "control-webhook-pass",
+        "public-regressions-pass"
+      ]
+    }
+  ],
+  "client_session_beta": {
+    "authenticate_with_cloudflare_one_client": "separate-canary",
+    "included_in_initial_posture_canary": false,
+    "session_duration_change_allowed": false,
+    "bulk_apply_to_all_allowed_in_first_canary": false,
+    "goal": "bounded-near-passwordless-owner-phone-access-while-valid-client-session-is-running"
+  },
+  "authorization_contract": {
+    "explicit_owner_authorization_required_for_each_state_change": true,
+    "one_forward_state_change_per_authorization": true,
+    "predeclared_rollback_or_revocation_only": true,
+    "fresh_get_before_access_policy_write": true,
+    "fresh_get_after_access_policy_write": true,
+    "stop_on_unexpected_diff": true
+  },
+  "source_references": [
+    "https://developers.cloudflare.com/cloudflare-one/reusable-components/posture-checks/client-checks/require-gateway/",
+    "https://developers.cloudflare.com/cloudflare-one/reusable-components/posture-checks/client-checks/require-warp/",
+    "https://developers.cloudflare.com/cloudflare-one/reusable-components/posture-checks/client-checks/",
+    "https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/cloudflare-one-client/deployment/device-enrollment/",
+    "https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/cloudflare-one-client/deployment/manual-deployment/",
+    "https://developers.cloudflare.com/cloudflare-one/reusable-components/posture-checks/client-checks/device-uuid/",
+    "https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/cloudflare-one-client/deployment/mdm-deployment/hardware-backed-registration/",
+    "https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/cloudflare-one-client/configure/client-sessions/",
+    "https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/"
+  ]
+}
