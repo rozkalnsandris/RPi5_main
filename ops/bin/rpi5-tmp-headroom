@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export LC_ALL=C
+export LANG=C
+
+readonly MIN_TMP_SIZE_BYTES=$((1024 * 1024 * 1024))
+readonly MIN_TMP_AVAILABLE_BYTES=$((256 * 1024 * 1024))
+readonly MAX_TMP_USED_PERCENT=85
+
+RPI5_TMP_HEADROOM_REASON=''
+
+log() {
+    printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
+}
+
+rpi5_has_mount_option() {
+    local options="${1:?missing mount options}"
+    local option="${2:?missing mount option}"
+    [[ ",${options}," == *",${option},"* ]]
+}
+
+rpi5_tmp_headroom_classify() {
+    local size_bytes="${1:?missing size bytes}"
+    local available_bytes="${2:?missing available bytes}"
+    local used_percent="${3:?missing used percent}"
+    local mode="${4:?missing mode}"
+    local fstype="${5:?missing fstype}"
+    local vfs_options="${6:?missing vfs options}"
+
+    RPI5_TMP_HEADROOM_REASON=''
+
+    if [[ ! "$size_bytes" =~ ^[0-9]+$ || ! "$available_bytes" =~ ^[0-9]+$ || ! "$used_percent" =~ ^[0-9]+$ ]]; then
+        RPI5_TMP_HEADROOM_REASON='TMP_METRICS_INVALID'
+        return 2
+    fi
+    if [[ "$fstype" != 'tmpfs' ]]; then
+        RPI5_TMP_HEADROOM_REASON='TMP_NOT_TMPFS'
+        return 1
+    fi
+    if (( size_bytes < MIN_TMP_SIZE_BYTES )); then
+        RPI5_TMP_HEADROOM_REASON='TMP_SIZE_BELOW_1G'
+        return 1
+    fi
+    if [[ "$mode" != '1777' ]]; then
+        RPI5_TMP_HEADROOM_REASON='TMP_MODE_NOT_1777'
+        return 1
+    fi
+    if ! rpi5_has_mount_option "$vfs_options" 'rw'; then
+        RPI5_TMP_HEADROOM_REASON='TMP_NOT_RW'
+        return 1
+    fi
+    if ! rpi5_has_mount_option "$vfs_options" 'nosuid'; then
+        RPI5_TMP_HEADROOM_REASON='TMP_NOSUID_MISSING'
+        return 1
+    fi
+    if ! rpi5_has_mount_option "$vfs_options" 'nodev'; then
+        RPI5_TMP_HEADROOM_REASON='TMP_NODEV_MISSING'
+        return 1
+    fi
+    if rpi5_has_mount_option "$vfs_options" 'noexec'; then
+        RPI5_TMP_HEADROOM_REASON='TMP_NOEXEC_SET'
+        return 1
+    fi
+    if rpi5_has_mount_option "$vfs_options" 'noatime'; then
+        RPI5_TMP_HEADROOM_REASON='TMP_NOATIME_SET'
+        return 1
+    fi
+    if rpi5_has_mount_option "$vfs_options" 'relatime'; then
+        RPI5_TMP_HEADROOM_REASON='TMP_RELATIME_SET'
+        return 1
+    fi
+    if (( available_bytes < MIN_TMP_AVAILABLE_BYTES )); then
+        RPI5_TMP_HEADROOM_REASON='TMP_HEADROOM_BELOW_256M'
+        return 1
+    fi
+    if (( used_percent >= MAX_TMP_USED_PERCENT )); then
+        RPI5_TMP_HEADROOM_REASON='TMP_USAGE_AT_OR_ABOVE_85_PERCENT'
+        return 1
+    fi
+
+    RPI5_TMP_HEADROOM_REASON='PASS'
+    return 0
+}
+
+main() {
+    local command_name fstype vfs_options mode df_row size_bytes available_bytes used_percent rc
+
+    for command_name in findmnt df stat awk date; do
+        command -v "$command_name" >/dev/null 2>&1 || {
+            log "FAIL /tmp reason=MISSING_COMMAND command=${command_name}"
+            return 1
+        }
+    done
+
+    fstype="$(findmnt -n -o FSTYPE --target /tmp)" || {
+        log 'FAIL /tmp reason=FINDMNT_FSTYPE_FAILED'
+        return 1
+    }
+    vfs_options="$(findmnt -n -o VFS-OPTIONS --target /tmp)" || {
+        log 'FAIL /tmp reason=FINDMNT_VFS_OPTIONS_FAILED'
+        return 1
+    }
+    mode="$(stat -c '%a' /tmp)" || {
+        log 'FAIL /tmp reason=STAT_MODE_FAILED'
+        return 1
+    }
+    df_row="$(df -B1 --output=size,avail,pcent /tmp | awk 'NR == 2 {gsub(/%/, "", $3); print $1, $2, $3}')" || {
+        log 'FAIL /tmp reason=DF_FAILED'
+        return 1
+    }
+    read -r size_bytes available_bytes used_percent <<<"$df_row"
+
+    rc=0
+    rpi5_tmp_headroom_classify \
+        "$size_bytes" \
+        "$available_bytes" \
+        "$used_percent" \
+        "$mode" \
+        "$fstype" \
+        "$vfs_options" || rc=$?
+
+    if (( rc != 0 )); then
+        log "FAIL /tmp reason=${RPI5_TMP_HEADROOM_REASON} size_bytes=${size_bytes:-unknown} available_bytes=${available_bytes:-unknown} used_percent=${used_percent:-unknown} mode=${mode:-unknown} fstype=${fstype:-unknown}"
+        return 1
+    fi
+
+    log "OK /tmp size_bytes=${size_bytes} available_bytes=${available_bytes} used_percent=${used_percent} mode=${mode} fstype=${fstype}"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi

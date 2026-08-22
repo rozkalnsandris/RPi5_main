@@ -30,6 +30,7 @@ test:
 	python3 ./tests/test-maintenance-updater-telegram.py
 	bash ./tests/test-maintenance-health.sh
 	bash ./tests/test-maintenance-health-entrypoints.sh
+	bash ./tests/test-tmp-headroom-monitor.sh
 	python3 ./tests/test-maintenance-telegram-credentials.py
 	bash ./tests/test-maintenance-systemd-units.sh
 	python3 ./tests/test-maintenance-systemd-cutover.py
@@ -55,6 +56,7 @@ test:
 	bash ./tests/test-cloudflare-lan-origin-audit.sh
 	python3 ./tests/test-cloudflare-zero-trust-reconcile.py
 	python3 ./tests/test-cloudflare-p1-write-plan.py
+	python3 ./tests/test-cloudflare-p1a08-control-aud-override.py
 	bash ./tests/test-cloudflare-zero-trust-wrapper.sh
 	bash ./tests/test-public-safety.sh
 	python3 ./tests/test-controlled-deploy-rollback.py
