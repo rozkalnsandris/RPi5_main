@@ -142,6 +142,42 @@ owner_git() {
         git -C "$repo" "$@"
 }
 
+assert_source_blobs() {
+    local spec rel expected
+
+    for spec in \
+        "$CHECKER_REL:$CHECKER_BLOB" \
+        "$SERVICE_REL:$SERVICE_BLOB" \
+        "$TIMER_REL:$TIMER_BLOB"
+    do
+        rel="${spec%%:*}"
+        expected="${spec#*:}"
+        [[ "$(owner_git rev-parse "HEAD:$rel")" == "$expected" ]] \
+            || fail "reviewed source blob changed: $rel"
+        [[ "$(hash_blob "$repo/$rel")" == "$expected" ]] \
+            || fail "working-tree source bytes changed: $rel"
+    done
+}
+
+assert_absent_monitor_baseline() {
+    local path state
+
+    for path in "$CHECKER_DEST" "$SERVICE_DEST" "$TIMER_DEST"; do
+        [[ ! -e "$path" && ! -L "$path" ]] || fail "activation baseline is not absent: $path"
+    done
+    [[ -z "$(unit_fragment "$SERVICE_UNIT")" ]] || fail 'monitor service already has a loaded fragment'
+    [[ -z "$(unit_fragment "$TIMER_UNIT")" ]] || fail 'monitor timer already has a loaded fragment'
+
+    for state in "$(unit_active "$SERVICE_UNIT")" "$(unit_active "$TIMER_UNIT")"; do
+        [[ "$state" != active && "$state" != failed ]] || fail 'monitor unit is already active or failed'
+    done
+    case "$(unit_enabled "$TIMER_UNIT")" in
+        enabled|enabled-runtime|linked|linked-runtime|alias)
+            fail 'monitor timer is already enabled or linked'
+            ;;
+    esac
+}
+
 [[ -e "$repo/.git" && ! -L "$repo/.git" ]] || fail 'operator must run from an RPi5_main checkout'
 [[ "$(owner_git branch --show-current)" == main ]] || fail 'RPi5_main checkout is not on main'
 [[ -z "$(owner_git status --porcelain=v1 --untracked-files=all)" ]] \
@@ -154,16 +190,7 @@ local_head="$(owner_git rev-parse HEAD)"
 operator_blob="$(owner_git rev-parse "HEAD:$OPERATOR_REL")"
 [[ "$(hash_blob "$0")" == "$operator_blob" ]] || fail 'executed operator bytes do not match current main'
 
-for spec in \
-    "$CHECKER_REL:$CHECKER_BLOB" \
-    "$SERVICE_REL:$SERVICE_BLOB" \
-    "$TIMER_REL:$TIMER_BLOB"
-do
-    rel="${spec%%:*}"
-    expected="${spec#*:}"
-    [[ "$(owner_git rev-parse "HEAD:$rel")" == "$expected" ]] \
-        || fail "reviewed source blob changed: $rel"
-done
+assert_source_blobs
 
 printf 'RPI5_MAIN_EXACT_SHA=%s\n' "$local_head"
 printf 'RPI5_MAIN_EXACT_SHA_CI=PASS run=%s\n' "$ci_run_id"
@@ -175,18 +202,7 @@ tmp_mount_fragment="$(unit_fragment tmp.mount)"
 [[ "$tmp_mount_fragment" == "$EXPECTED_TMP_MOUNT_FRAGMENT" ]] \
     || fail "unexpected tmp.mount fragment: ${tmp_mount_fragment:-none}"
 
-for path in "$CHECKER_DEST" "$SERVICE_DEST" "$TIMER_DEST"; do
-    [[ ! -e "$path" && ! -L "$path" ]] || fail "activation baseline is not absent: $path"
-done
-[[ -z "$(unit_fragment "$SERVICE_UNIT")" ]] || fail 'monitor service already has a loaded fragment'
-[[ -z "$(unit_fragment "$TIMER_UNIT")" ]] || fail 'monitor timer already has a loaded fragment'
-[[ "$(unit_active "$SERVICE_UNIT")" != active ]] || fail 'monitor service is already active'
-[[ "$(unit_active "$TIMER_UNIT")" != active ]] || fail 'monitor timer is already active'
-case "$(unit_enabled "$TIMER_UNIT")" in
-    enabled|enabled-runtime|linked|linked-runtime|alias)
-        fail 'monitor timer is already enabled or linked'
-        ;;
-esac
+assert_absent_monitor_baseline
 
 runuser -u "$OWNER" -- env \
     HOME="$owner_home" \
@@ -205,8 +221,8 @@ rollback() {
 
     systemctl disable --now "$TIMER_UNIT" >/dev/null 2>&1 || true
     systemctl stop "$SERVICE_UNIT" >/dev/null 2>&1 || true
-    rm -f -- "$TIMER_DEST" "$SERVICE_DEST" "$CHECKER_DEST"
-    systemctl daemon-reload
+    rm -f -- "$TIMER_DEST" "$SERVICE_DEST" "$CHECKER_DEST" || ok=false
+    systemctl daemon-reload || ok=false
     systemctl reset-failed "$SERVICE_UNIT" "$TIMER_UNIT" >/dev/null 2>&1 || true
 
     for path in "$CHECKER_DEST" "$SERVICE_DEST" "$TIMER_DEST"; do
@@ -214,9 +230,14 @@ rollback() {
             ok=false
         fi
     done
-    if [[ "$(unit_active "$SERVICE_UNIT")" == active || "$(unit_active "$TIMER_UNIT")" == active ]]; then
+    if [[ -n "$(unit_fragment "$SERVICE_UNIT")" || -n "$(unit_fragment "$TIMER_UNIT")" ]]; then
         ok=false
     fi
+    for state in "$(unit_active "$SERVICE_UNIT")" "$(unit_active "$TIMER_UNIT")"; do
+        if [[ "$state" == active || "$state" == failed ]]; then
+            ok=false
+        fi
+    done
     case "$(unit_enabled "$TIMER_UNIT")" in
         enabled|enabled-runtime|linked|linked-runtime|alias)
             ok=false
@@ -246,6 +267,26 @@ on_exit() {
     exit "$rc"
 }
 trap on_exit EXIT
+
+read -r remote_main_recheck ci_run_id_recheck < <(require_remote_main_and_ci)
+[[ "$remote_main_recheck" == "$local_head" ]] || fail 'GitHub main moved during activation preflight'
+[[ "$(owner_git rev-parse HEAD)" == "$local_head" ]] || fail 'local HEAD moved during activation preflight'
+[[ "$(owner_git branch --show-current)" == main ]] || fail 'local branch moved during activation preflight'
+[[ -z "$(owner_git status --porcelain=v1 --untracked-files=all)" ]] \
+    || fail 'working tree changed during activation preflight'
+[[ "$(hash_blob "$0")" == "$operator_blob" ]] || fail 'operator path changed during activation preflight'
+assert_source_blobs
+[[ "$(systemctl --version | awk 'NR == 1 {print $2}')" == '252' ]] \
+    || fail 'systemd version moved during activation preflight'
+[[ "$(unit_fragment tmp.mount)" == "$EXPECTED_TMP_MOUNT_FRAGMENT" ]] \
+    || fail 'tmp.mount fragment moved during activation preflight'
+assert_absent_monitor_baseline
+runuser -u "$OWNER" -- env \
+    HOME="$owner_home" \
+    PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin' \
+    "$repo/$CHECKER_REL"
+ci_run_id="$ci_run_id_recheck"
+printf 'PRE_MUTATION_REVALIDATION=PASS\n'
 
 mutation_started=true
 
