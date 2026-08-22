@@ -8,9 +8,11 @@ export LANG=C
 
 readonly MAINTENANCE_LIB_DIR="/usr/local/lib/rpi5-maintenance"
 readonly LOCK_LIB="${MAINTENANCE_LIB_DIR}/rpi5-maintenance-locks.sh"
+readonly EVIDENCE_HELPER="${MAINTENANCE_LIB_DIR}/dashboard-evidence.py"
 # This path contains the byte-identical V10 ownership snapshot whose runtime
 # script identifies itself as backup runner V12. SHA256 is the identity.
 readonly BACKUP_CORE="${MAINTENANCE_LIB_DIR}/rpi5-backup-v10-core"
+readonly BACKUP_METADATA_DIR="/opt/backups"
 readonly MAINTENANCE_LOCK_FILE="/run/lock/rpi5-maintenance-exclusive.lock"
 readonly MAINTENANCE_LOCK_TIMEOUT=1800
 
@@ -25,6 +27,47 @@ require_root_controlled_file() {
     mode="$(stat -c '%a' "$path")"
     [[ "$uid" -eq 0 ]] || return 1
     (( (8#$mode & 022) == 0 ))
+}
+
+latest_backup_size_since() {
+    local start_epoch="$1" candidate mtime size best_mtime=-1 best_size=""
+    shopt -s nullglob
+    for candidate in "$BACKUP_METADATA_DIR"/rpi5_backup_*.tar.gz.age; do
+        [[ -f "$candidate" && ! -L "$candidate" ]] || continue
+        mtime="$(stat -c '%Y' "$candidate" 2>/dev/null || true)"
+        size="$(stat -c '%s' "$candidate" 2>/dev/null || true)"
+        [[ "$mtime" =~ ^[0-9]+$ && "$size" =~ ^[1-9][0-9]*$ ]] || continue
+        if (( mtime >= start_epoch && mtime > best_mtime )); then
+            best_mtime="$mtime"
+            best_size="$size"
+        fi
+    done
+    shopt -u nullglob
+    [[ -n "$best_size" ]] || return 1
+    printf '%s' "$best_size"
+}
+
+record_backup_evidence_best_effort() {
+    local run_id="$1" started_at="$2" completed_at="$3" start_epoch="$4" backup_rc="$5"
+    local size_bytes="" rc=0
+    if ! require_root_controlled_file "$EVIDENCE_HELPER"; then
+        log "WARN dashboard backup evidence helper unavailable; backup result unchanged."
+        return 0
+    fi
+    if [[ "$backup_rc" -eq 0 ]]; then
+        size_bytes="$(latest_backup_size_since "$start_epoch" || true)"
+        if [[ -z "$size_bytes" ]]; then
+            log "WARN dashboard backup evidence size unavailable; successful backup result unchanged."
+            return 0
+        fi
+    fi
+    args=(backup-record --run-id "$run_id" --started-at "$started_at" --completed-at "$completed_at" --exit-code "$backup_rc")
+    [[ -z "$size_bytes" ]] || args+=(--size-bytes "$size_bytes")
+    python3 "$EVIDENCE_HELPER" "${args[@]}" >/dev/null 2>&1 || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        log "WARN dashboard backup evidence write failed rc=${rc}; backup result unchanged."
+    fi
+    return 0
 }
 
 [[ ${EUID:-$(id -u)} -eq 0 ]] || {
@@ -63,6 +106,10 @@ case "$lock_rc" in
         ;;
 esac
 
+run_id="backup-$(date -u '+%Y%m%dT%H%M%SZ')-$$"
+started_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+start_epoch="$(date -u '+%s')"
+
 # Do not exec: keeping this wrapper process alive guarantees its open flock file
 # descriptor remains held for the full lifetime of the unchanged backup core.
 # The core then acquires its own duplicate-backup lock while shared is held.
@@ -71,5 +118,8 @@ set +e
 backup_rc=$?
 set -e
 
+completed_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+record_backup_evidence_best_effort \
+    "$run_id" "$started_at" "$completed_at" "$start_epoch" "$backup_rc"
 rpi5_release_exclusive_lock "$shared_fd" || true
 exit "$backup_rc"
