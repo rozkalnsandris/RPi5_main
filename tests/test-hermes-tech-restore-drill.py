@@ -14,7 +14,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-SCRIPT = Path(__file__).with_name("hermes-tech-restore-drill")
+SCRIPT = Path(__file__).resolve().parents[1] / "ops" / "bin" / "hermes-tech-restore-drill"
 LOADER = SourceFileLoader("restore_drill", str(SCRIPT))
 SPEC = spec_from_loader("restore_drill", LOADER)
 assert SPEC is not None
@@ -66,7 +66,7 @@ class RestoreDrillTests(unittest.TestCase):
         self.evidence = self.root / "evidence.json"
         self.rpi = self.root / "rpi-source"
         self.hermes = self.root / "hermes-source"
-        self.rpi.mkdig()
+        self.rpi.mkdir()
         self.hermes.mkdir()
 
     def args(self) -> argparse.Namespace:
@@ -207,7 +207,7 @@ class RestoreDrillTests(unittest.TestCase):
         self.assertEqual(list(self.root.glob("hermes-tech-restore-drill-*")), [])
 
     def test_archive_validation_failure_removes_plaintext_workspace(self) -> None:
-        bad_archive = self.root / "rpi5_backup_2026-08-22_03-00-00.tar.gz.age"
+        bad_archive = self.root / "rpi5_backup_2026-08-22_03-00-00.tar.gz.ae"
         with tarfile.open(bad_archive, "w:gz") as tar:
             for parts in sorted(restore_drill.HERMES_REQUIRED):
                 add_file(tar, "./" + "/".join(parts))
