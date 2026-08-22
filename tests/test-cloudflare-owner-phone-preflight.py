@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import cloudflare_owner_phone_preflight as preflight  # noqa: E402
 
-OWNER = "owner@example.invalid"
+OWNER = "owner@example.com"
 ENROLL_APP = "11111111-1111-4111-8111-111111111111"
 DASH_APP = "22222222-2222-4222-8222-222222222222"
 WILDCARD_APP = "33333333-3333-4333-8333-333333333333"
