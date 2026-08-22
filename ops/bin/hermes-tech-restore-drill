@@ -18,21 +18,19 @@ import tempfile
 import time
 from typing import Any, Iterable
 
-PRODUCTION_APP = Path("/home/andris/hermes-tech")
-HERMES_PREFIX = ("home", "andris", "hermes-tech")
 MANIFEST_PARTS = ("backup-metadata", "manifest.txt")
-HERMES_REQUIRED = {
-    HERMES_PREFIX + (".git", "HEAD"),
-    HERMES_PREFIX + (".env",),
-    HERMES_PREFIX + (".python-version",),
-    HERMES_PREFIX + ("requirements.txt",),
-    HERMES_PREFIX + ("collector.py",),
-    HERMES_PREFIX + ("digest.py",),
-    HERMES_PREFIX + ("publish.sh",),
-    HERMES_PREFIX + ("run_digests.sh",),
-    HERMES_PREFIX + ("tools", "ci.sh"),
-    HERMES_PREFIX + ("site", "hugo.toml"),
-    HERMES_PREFIX + ("data", "hermes.db"),
+HERMES_REQUIRED_SUFFIXES = {
+    (".git", "HEAD"),
+    (".env",),
+    (".python-version",),
+    ("requirements.txt",),
+    ("collector.py",),
+    ("digest.py",),
+    ("publish.sh",),
+    ("run_digests.sh",),
+    ("tools", "ci.sh"),
+    ("site", "hugo.toml"),
+    ("data", "hermes.db"),
 }
 BACKUP_NAME_RE = re.compile(
     r"^rpi5_backup_(?P<stamp>\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})\.tar\.gz\.age$"
@@ -69,6 +67,26 @@ def _require_regular_file(path: Path, category: str) -> Path:
     if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
         raise DrillError(category)
     return candidate.resolve(strict=True)
+
+
+def _production_contract(path: Path) -> tuple[Path, tuple[str, ...], set[tuple[str, ...]]]:
+    candidate = path.expanduser()
+    if not candidate.is_absolute():
+        raise DrillError("production_root_invalid")
+    lexical = PurePosixPath(candidate.as_posix())
+    if ".." in lexical.parts:
+        raise DrillError("production_root_invalid")
+    try:
+        production = candidate.resolve(strict=True)
+    except OSError as exc:
+        raise DrillError("production_root_invalid") from exc
+    if not production.is_dir() or production == Path("/"):
+        raise DrillError("production_root_invalid")
+    prefix = tuple(part for part in lexical.parts if part not in ("", "/", "."))
+    if not prefix:
+        raise DrillError("production_root_invalid")
+    required = {prefix + suffix for suffix in HERMES_REQUIRED_SUFFIXES}
+    return production, prefix, required
 
 
 def _validate_backup_name(name: str) -> str:
@@ -147,14 +165,14 @@ def _verify_source_checkout(root: Path, sha: str, relative: str) -> Path:
     )
     if completed.returncode != 0:
         raise DrillError("source_verification_failed")
-    path = (root / relative).resolve(strict=True)
+    resolved = (root / relative).resolve(strict=True)
     try:
-        path.relative_to(root)
+        resolved.relative_to(root)
     except ValueError as exc:
         raise DrillError("source_verification_failed") from exc
-    if not path.is_file():
+    if not resolved.is_file():
         raise DrillError("source_verification_failed")
-    return path
+    return resolved
 
 
 def _identity_preflight(identity: Path) -> Path:
@@ -165,12 +183,11 @@ def _identity_preflight(identity: Path) -> Path:
     return identity
 
 
-def _work_base_preflight(work_base: Path, archive_size: int, min_free_bytes: int) -> Path:
+def _work_base_preflight(
+    work_base: Path, production: Path, archive_size: int, min_free_bytes: int
+) -> Path:
     base = work_base.expanduser().resolve(strict=True)
-    if not base.is_dir():
-        raise DrillError("work_dir_invalid")
-    production = PRODUCTION_APP.resolve(strict=False)
-    if base == Path("/"):
+    if not base.is_dir() or base == Path("/"):
         raise DrillError("work_dir_invalid")
     try:
         base.relative_to(production)
@@ -224,7 +241,9 @@ def _is_under(parts: tuple[str, ...], prefix: tuple[str, ...]) -> bool:
     return len(parts) >= len(prefix) and parts[: len(prefix)] == prefix
 
 
-def _validate_archive(plain_tar: Path) -> list[tarfile.TarInfo]:
+def _validate_archive(
+    plain_tar: Path, prefix: tuple[str, ...], required: set[tuple[str, ...]]
+) -> list[tarfile.TarInfo]:
     try:
         with tarfile.open(plain_tar, mode="r:gz") as archive:
             members = archive.getmembers()
@@ -247,10 +266,10 @@ def _validate_archive(plain_tar: Path) -> list[tarfile.TarInfo]:
         if member.issym() or member.islnk():
             base = parts[:-1] if member.issym() else ()
             target = _resolved_link_parts(base, member.linkname)
-            if _is_under(parts, HERMES_PREFIX) and not _is_under(target, HERMES_PREFIX):
+            if _is_under(parts, prefix) and not _is_under(target, prefix):
                 raise DrillError("archive_validation_failed")
 
-    if not HERMES_REQUIRED.issubset(available) or MANIFEST_PARTS not in available:
+    if not required.issubset(available) or MANIFEST_PARTS not in available:
         raise DrillError("restore_shape_invalid")
     return members
 
@@ -294,12 +313,15 @@ def _read_manifest_timestamp(plain_tar: Path) -> str:
 
 
 def _extraction_space_preflight(
-    workspace: Path, plain_tar: Path, members: Iterable[tarfile.TarInfo]
+    workspace: Path,
+    plain_tar: Path,
+    members: Iterable[tarfile.TarInfo],
+    prefix: tuple[str, ...],
 ) -> None:
     materialized = 0
     for member in members:
         parts = _normalized_member_parts(member.name)
-        if member.isreg() and _is_under(parts, HERMES_PREFIX):
+        if member.isreg() and _is_under(parts, prefix):
             materialized += max(0, int(member.size))
     required = materialized + plain_tar.stat().st_size + 256 * 1024 * 1024
     if shutil.disk_usage(workspace).free < required:
@@ -327,12 +349,19 @@ def _mkdir_parents(root: Path, path: Path) -> None:
             current.mkdir(mode=0o700)
 
 
-def _extract_hermes(plain_tar: Path, restore_root: Path, members: Iterable[tarfile.TarInfo]) -> None:
+def _extract_hermes(
+    plain_tar: Path,
+    restore_root: Path,
+    members: Iterable[tarfile.TarInfo],
+    prefix: tuple[str, ...],
+    required: set[tuple[str, ...]],
+    production: Path,
+) -> None:
     restore_root.mkdir(mode=0o700)
     selected: list[tuple[tarfile.TarInfo, tuple[str, ...]]] = []
     for member in members:
         parts = _normalized_member_parts(member.name)
-        if _is_under(parts, HERMES_PREFIX):
+        if _is_under(parts, prefix):
             selected.append((member, parts))
 
     try:
@@ -374,7 +403,7 @@ def _extract_hermes(plain_tar: Path, restore_root: Path, members: Iterable[tarfi
                 remaining: list[tuple[tarfile.TarInfo, tuple[str, ...]]] = []
                 for member, parts in pending:
                     target_parts = _resolved_link_parts((), member.linkname)
-                    if not _is_under(target_parts, HERMES_PREFIX):
+                    if not _is_under(target_parts, prefix):
                         raise DrillError("archive_validation_failed")
                     target = _destination(restore_root, target_parts)
                     dest = _destination(restore_root, parts)
@@ -392,7 +421,7 @@ def _extract_hermes(plain_tar: Path, restore_root: Path, members: Iterable[tarfi
 
             for member, parts in symlinks:
                 target_parts = _resolved_link_parts(parts[:-1], member.linkname)
-                if not _is_under(target_parts, HERMES_PREFIX):
+                if not _is_under(target_parts, prefix):
                     raise DrillError("archive_validation_failed")
                 dest = _destination(restore_root, parts)
                 _mkdir_parents(restore_root, dest)
@@ -409,11 +438,11 @@ def _extract_hermes(plain_tar: Path, restore_root: Path, members: Iterable[tarfi
             raise
         raise DrillError("archive_extraction_failed") from exc
 
-    app = restore_root.joinpath(*HERMES_PREFIX)
-    if not app.is_dir() or app.resolve(strict=True) == PRODUCTION_APP.resolve(strict=False):
+    app = restore_root.joinpath(*prefix)
+    if not app.is_dir() or app.resolve(strict=True) == production:
         raise DrillError("restore_shape_invalid")
-    for required in HERMES_REQUIRED:
-        if not restore_root.joinpath(*required).exists():
+    for required_path in required:
+        if not restore_root.joinpath(*required_path).exists():
             raise DrillError("restore_shape_invalid")
 
 
@@ -484,13 +513,12 @@ def _run_hermes_verifier(verifier: Path, restore_root: Path, evidence: Path) -> 
     }
 
 
-def _evidence_preflight(path: Path) -> Path:
+def _evidence_preflight(path: Path, production: Path) -> Path:
     candidate = path.expanduser()
     parent = candidate.parent.resolve(strict=True)
     if not parent.is_dir():
         raise DrillError("evidence_path_unsafe")
     resolved = parent / candidate.name
-    production = PRODUCTION_APP.resolve(strict=False)
     try:
         resolved.relative_to(production)
     except ValueError:
@@ -502,10 +530,8 @@ def _evidence_preflight(path: Path) -> Path:
     return resolved
 
 
-def _write_evidence(path: Path, report: dict[str, Any]) -> None:
-    path = _evidence_preflight(path)
-    if path.exists():
-        raise DrillError("evidence_exists")
+def _write_evidence(path: Path, report: dict[str, Any], production: Path) -> None:
+    path = _evidence_preflight(path, production)
     encoded = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
@@ -519,6 +545,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--archive", required=True, type=Path)
     parser.add_argument("--sidecar", type=Path, help="defaults to <archive>.sha256")
     parser.add_argument("--age-identity", required=True, type=Path)
+    parser.add_argument("--production-app-root", required=True, type=Path)
     parser.add_argument("--rpi-source-root", required=True, type=Path)
     parser.add_argument("--rpi-source-sha", required=True)
     parser.add_argument("--hermes-source-root", required=True, type=Path)
@@ -555,9 +582,11 @@ def execute(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
         "failure_category": None,
     }
     workspace: Path | None = None
+    production: Path | None = None
     try:
         if args.min_free_bytes < 1:
             raise DrillError("free_space_invalid")
+        production, prefix, required = _production_contract(args.production_app_root)
         report["backup_name_timestamp"] = _validate_backup_name(archive.name)
         report["backup_name"] = archive.name
         encrypted_sha, encrypted_size = _verify_sidecar(archive, sidecar)
@@ -574,8 +603,10 @@ def execute(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
             args.hermes_source_sha,
             "tools/verify_restore_root.py",
         )
-        work_base = _work_base_preflight(args.work_dir, encrypted_size, args.min_free_bytes)
-        evidence_path = _evidence_preflight(evidence_path)
+        work_base = _work_base_preflight(
+            args.work_dir, production, encrypted_size, args.min_free_bytes
+        )
+        evidence_path = _evidence_preflight(evidence_path, production)
         workspace = Path(tempfile.mkdtemp(prefix="hermes-tech-restore-drill-", dir=work_base))
         os.chmod(workspace, 0o700)
         try:
@@ -589,10 +620,10 @@ def execute(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
         restore_root = workspace / "restore"
         verifier_evidence = workspace / "verifier-evidence.json"
         _run_age_decrypt(identity, archive, plain_tar)
-        members = _validate_archive(plain_tar)
+        members = _validate_archive(plain_tar, prefix, required)
         report["backup_timestamp"] = _read_manifest_timestamp(plain_tar)
-        _extraction_space_preflight(workspace, plain_tar, members)
-        _extract_hermes(plain_tar, restore_root, members)
+        _extraction_space_preflight(workspace, plain_tar, members, prefix)
+        _extract_hermes(plain_tar, restore_root, members, prefix, required, production)
         report["verifier"] = _run_hermes_verifier(verifier, restore_root, verifier_evidence)
         report["status"] = "pass"
     except (OSError, ValueError, DrillError) as exc:
@@ -609,8 +640,10 @@ def execute(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
         report["finished_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
         report["elapsed_seconds"] = round(max(0.0, time.monotonic() - started_mono), 3)
 
+    if production is None:
+        return 1, report
     try:
-        _write_evidence(evidence_path, report)
+        _write_evidence(evidence_path, report, production)
     except (OSError, DrillError):
         return 1, report
     return (0 if report["status"] == "pass" else 1), report

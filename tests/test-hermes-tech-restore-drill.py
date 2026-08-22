@@ -29,9 +29,9 @@ def add_file(tar: tarfile.TarFile, name: str, data: bytes = b"fixture\n", mode: 
     tar.addfile(info, io.BytesIO(data))
 
 
-def make_valid_archive(path: Path) -> None:
+def make_valid_archive(path: Path, required: set[tuple[str, ...]]) -> None:
     with tarfile.open(path, "w:gz") as tar:
-        for parts in sorted(restore_drill.HERMES_REQUIRED):
+        for parts in sorted(required):
             name = "./" + "/".join(parts)
             data = b"fixture\n"
             mode = 0o600
@@ -57,8 +57,11 @@ class RestoreDrillTests(unittest.TestCase):
         self.tmp_obj = tempfile.TemporaryDirectory(prefix="rpi5-restore-drill-test-")
         self.addCleanup(self.tmp_obj.cleanup)
         self.root = Path(self.tmp_obj.name)
+        self.production = self.root / "fixture-production" / "hermes-tech"
+        self.production.mkdir(parents=True)
+        _, self.prefix, self.required = restore_drill._production_contract(self.production)
         self.archive = self.root / "rpi5_backup_2026-08-22_02-00-00.tar.gz.age"
-        make_valid_archive(self.archive)
+        make_valid_archive(self.archive, self.required)
         self.sidecar = write_sidecar(self.archive)
         self.identity = self.root / "age.key"
         self.identity.write_text("FIXTURE_PRIVATE_VALUE_DO_NOT_EMIT\n", encoding="utf-8")
@@ -74,6 +77,7 @@ class RestoreDrillTests(unittest.TestCase):
             archive=self.archive,
             sidecar=self.sidecar,
             age_identity=self.identity,
+            production_app_root=self.production,
             rpi_source_root=self.rpi,
             rpi_source_sha="1" * 40,
             hermes_source_root=self.hermes,
@@ -123,7 +127,7 @@ class RestoreDrillTests(unittest.TestCase):
         encoded = self.evidence.read_text(encoding="utf-8")
         self.assertNotIn("FIXTURE_PRIVATE_VALUE_DO_NOT_EMIT", encoded)
         self.assertNotIn(str(self.identity), encoded)
-        self.assertNotIn(str(self.root / "restore"), encoded)
+        self.assertNotIn(str(self.production), encoded)
 
     def test_wrong_sidecar_fails_before_decrypt(self) -> None:
         write_sidecar(self.archive, digest="0" * 64)
@@ -155,37 +159,34 @@ class RestoreDrillTests(unittest.TestCase):
                 add_file(tar, bad_name)
             with self.subTest(name=bad_name):
                 with self.assertRaisesRegex(restore_drill.DrillError, "archive_validation_failed"):
-                    restore_drill._validate_archive(path)
+                    restore_drill._validate_archive(path, self.prefix, self.required)
 
     def test_unsafe_symlink_and_hardlink_are_rejected(self) -> None:
         for kind in (tarfile.SYMTYPE, tarfile.LNKTYPE):
             path = self.root / f"bad-link-{kind!r}.tar.gz"
-            make_valid_archive(path)
-            # Rebuild with the valid entries plus one escaping link.
+            make_valid_archive(path, self.required)
             rebuilt = self.root / f"rebuilt-{kind!r}.tar.gz"
             with tarfile.open(rebuilt, "w:gz") as tar:
-                for parts in sorted(restore_drill.HERMES_REQUIRED):
+                for parts in sorted(self.required):
                     add_file(tar, "./" + "/".join(parts))
                 add_file(
                     tar,
                     "./backup-metadata/manifest.txt",
                     b"created_at=2026-08-22T02:00:00+02:00\nbackup_version=12\n",
                 )
-                info = tarfile.TarInfo("./home/andris/hermes-tech/escape-link")
+                info = tarfile.TarInfo("./" + "/".join(self.prefix + ("escape-link",)))
                 info.type = kind
-                info.linkname = "../../../../etc/passwd"
+                info.linkname = "../../../../../../../../etc/passwd"
                 tar.addfile(info)
             with self.subTest(kind=kind):
                 with self.assertRaisesRegex(restore_drill.DrillError, "archive_validation_failed"):
-                    restore_drill._validate_archive(rebuilt)
+                    restore_drill._validate_archive(rebuilt, self.prefix, self.required)
 
     def test_production_work_dir_is_impossible(self) -> None:
-        production = self.root / "production-hermes"
-        child = production / "child"
-        child.mkdir(parents=True)
-        with patch.object(restore_drill, "PRODUCTION_APP", production):
-            with self.assertRaisesRegex(restore_drill.DrillError, "production_root_forbidden"):
-                restore_drill._work_base_preflight(child, 1, 1)
+        child = self.production / "child"
+        child.mkdir()
+        with self.assertRaisesRegex(restore_drill.DrillError, "production_root_forbidden"):
+            restore_drill._work_base_preflight(child, self.production.resolve(), 1, 1)
 
     def test_verifier_failure_propagates_and_plaintext_is_removed(self) -> None:
         def fake_decrypt(_identity: Path, archive: Path, output: Path) -> None:
@@ -209,7 +210,7 @@ class RestoreDrillTests(unittest.TestCase):
     def test_archive_validation_failure_removes_plaintext_workspace(self) -> None:
         bad_archive = self.root / "rpi5_backup_2026-08-22_03-00-00.tar.gz.age"
         with tarfile.open(bad_archive, "w:gz") as tar:
-            for parts in sorted(restore_drill.HERMES_REQUIRED):
+            for parts in sorted(self.required):
                 add_file(tar, "./" + "/".join(parts))
             add_file(
                 tar,
@@ -251,11 +252,10 @@ class RestoreDrillTests(unittest.TestCase):
         self.assertFalse(report["cleanup_plaintext_removed"])
 
     def test_evidence_path_cannot_write_into_production_tree(self) -> None:
-        production = self.root / "production-hermes"
-        production.mkdir()
-        with patch.object(restore_drill, "PRODUCTION_APP", production):
-            with self.assertRaisesRegex(restore_drill.DrillError, "production_root_forbidden"):
-                restore_drill._evidence_preflight(production / "evidence.json")
+        with self.assertRaisesRegex(restore_drill.DrillError, "production_root_forbidden"):
+            restore_drill._evidence_preflight(
+                self.production / "evidence.json", self.production.resolve()
+            )
 
     def test_exact_source_checkout_accepts_reviewed_file_and_rejects_dirty_copy(self) -> None:
         source = self.root / "source-checkout"
@@ -268,7 +268,7 @@ class RestoreDrillTests(unittest.TestCase):
         subprocess.run(
             [
                 "git", "-c", "user.name=Restore Test",
-                "-c", "user.email=restore@example.invalid",
+                "-c", "user.email=restore@example.com",
                 "commit", "-q", "-m", "fixture",
             ],
             cwd=source, check=True,
@@ -292,7 +292,7 @@ class RestoreDrillTests(unittest.TestCase):
         encoded = json.dumps(evidence, sort_keys=True)
         self.assertNotIn(secret, encoded)
         self.assertNotIn(str(self.identity), encoded)
-        self.assertNotIn("/home/andris/hermes-tech", encoded)
+        self.assertNotIn(str(self.production), encoded)
 
 
 if __name__ == "__main__":
