@@ -30,17 +30,22 @@ Metadata is collectable only when a task provides a strict allowlist and sanitiz
 - Do not commit generated evidence unless a future task explicitly approves a sanitized fixture.
 - Never expose a secret in output, diffs, commits, PRs, or issues.
 
-<!-- BEGIN FAST-LANE-V2.1-MANAGED -->
-## FAST-LANE v2.1 Hybrid
+<!-- BEGIN FAST-LANE-V2.2-MANAGED -->
+## FAST-LANE v2.2 Composite
 
-Read `docs/FAST_LANE_V2_1.md` for the RPi5-specific adoption.
+Read `docs/FAST_LANE_V2_2.md` as the active RPi5-specific startup contract.
 
-- **FAST** is limited to Git/source/documentation/test work that does not inspect protected runtime data and does not mutate host/runtime state. It may proceed through Ready when explicitly authorized as FAST.
-- A FAST PR may batch **2-5 closely related same-risk work items** only when all of them remain inside the same source-only boundary.
-- After initial publication, at most **two scope-preserving corrective commits** may address CI/review findings. A third correction or any authority/scope expansion requires STOP.
-- Use one Ready receipt and refresh mutable merge evidence immediately before merge.
+**Primary rule:** the human approves the **RISK / DECISION**; automation executes the **TECHNICAL STEPS**.
+
+- `START`, `turpini`, or equivalent continuation may carry Git/source/documentation/test work through Ready when it does not inspect protected runtime data and does not mutate host/runtime state.
+- FAST may batch **2-5 closely related same-risk work items** and use up to **two scope-preserving corrective commits** for CI/review findings.
+- Normal delivery has at most two owner gates: explicit **MERGE**, then one bounded **COMPOSITE LIVE** only when host/runtime mutation is required.
+- CI polling, exact-SHA evidence, read-only preflight, checkout discovery, clean/ancestor validation, build preparation and reconciliation are technical automation steps, not owner gates.
+- Composite Live must bind exact Git SHA, exact host/target, allowed mutation categories, hard limits where practical, explicit exclusions and expected baseline. It may include only explicitly named trusted `git fetch` + `git merge --ff-only`; it never implies reset/rebase/clean/force.
+- Authorization is consumed at the first authorized mutation. Any later error, ambiguity or drift requires evidence preservation and STOP; no automatic retry, rollback, cleanup, reset, rebase or alternate mutation path unless explicitly pre-authorized.
 - **STRICT is the default for host/runtime work**: sudo/root, packages, services/timers, Docker, networking/firewall/DNS/Cloudflare Tunnel, SSH/users/mounts/kernel, backups, databases/application data, secrets/credentials and protected runtime inspection.
+- Put any remaining owner decision visibly at the end under `ACTION REQUIRED` and provide exact copyable input when needed.
 - Merge remains explicit owner authority and never authorizes any host/runtime mutation.
 
 This FAST-LANE block does not weaken any earlier forbidden-path or production-safety rule. If classification is uncertain, classify STRICT and STOP.
-<!-- END FAST-LANE-V2.1-MANAGED -->
+<!-- END FAST-LANE-V2.2-MANAGED -->
