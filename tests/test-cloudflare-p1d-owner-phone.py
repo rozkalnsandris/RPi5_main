@@ -143,7 +143,7 @@ class CloudflareP1DOwnerPhoneTests(unittest.TestCase):
         self.assertFalse(beta["session_duration_change_allowed"])
         self.assertFalse(beta["bulk_apply_to_all_allowed_in_first_canary"])
         self.assertIn("near-passwordless-owner-phone", beta["goal"])
-        self.assertIn("Access Beta", self.decision)
+        self.assertIn("client-session Beta", self.decision)
         self.assertIn("separate Beta canary", self.owner)
 
     def test_device_uuid_and_hardware_backed_registration_are_not_assumed(self) -> None:
