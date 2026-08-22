@@ -20,6 +20,8 @@ grep -Fq 'row.get("head_sha") == sha' "$operator"
 grep -Fq '"public-automation-baseline / public automation policy"' "$operator"
 grep -Fq 'local checkout is not exact current GitHub main' "$operator"
 grep -Fq 'executed operator bytes do not match current main' "$operator"
+grep -Fq "for command_name in awk gh git getent id install python3 rm runuser stat systemctl systemd-analyze; do" "$operator"
+grep -Fq "printf '%s\\t%s\\n' \"\$remote_sha\" \"\$run_id\"" "$operator"
 
 grep -Fq "readonly EXPECTED_TMP_MOUNT_FRAGMENT='/run/systemd/generator/tmp.mount'" "$operator"
 grep -Fq "unexpected systemd major version" "$operator"

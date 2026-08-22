@@ -118,12 +118,12 @@ if missing:
 '
 
     unset token remote_json runs_json jobs_json GH_TOKEN GITHUB_TOKEN
-    printf '%s %s\n' "$remote_sha" "$run_id"
+    printf '%s\t%s\n' "$remote_sha" "$run_id"
 }
 
 [[ ${EUID:-$(id -u)} -eq 0 ]] || fail 'run the /tmp monitor activation operator as root'
 
-for command_name in gh git getent id install python3 rm runuser stat systemctl systemd-analyze; do
+for command_name in awk gh git getent id install python3 rm runuser stat systemctl systemd-analyze; do
     command -v "$command_name" >/dev/null 2>&1 \
         || fail "required command is missing: $command_name"
 done
