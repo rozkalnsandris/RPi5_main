@@ -1,19 +1,33 @@
-# FAST-LANE v2.1 Hybrid — RPi5_main
+# FAST-LANE v2.2 Composite — RPi5_main
 
-This repository adopts the shared FAST/STRICT vocabulary with a fail-closed host policy.
+> Compatibility path: `AGENTS.md` already points to this v2.1 filename; these are the authoritative v2.2 rules.
+
+## Core rule
+
+**The human approves the RISK / DECISION. Automation executes the TECHNICAL STEPS.** Read-only checks never create owner gates. STRICT describes host/runtime mutation risk, not approval-per-command.
 
 ## FAST
 
-FAST is Git-only: documentation, source, tests and reviewed policy code that neither reads protected runtime data nor mutates the host. A FAST batch may include 2-5 closely related same-risk work items and up to two scope-preserving corrective commits.
+Git-only documentation, source, tests and policy/orchestration code may proceed from fresh canonical GitHub state through Ready in one coherent batch when they do not read protected runtime data or mutate the host. This includes branch, PR, CI/review and up to two scope-preserving corrections. Batch 2-5 closely related same-risk items when coherent. Merge remains explicit.
 
-## STRICT
+## Human gate budget
 
-STRICT is the default for any host/runtime interaction: sudo/root, package install/remove/upgrade, services/timers, Docker, networking/firewall/DNS/Cloudflare Tunnel, SSH/users/mounts/kernel, backups, databases/application data, secrets/credentials, protected configuration or runtime inspection. Uncertain classification is STRICT.
+Normal delivery has at most two owner gates: **MERGE**, then **COMPOSITE LIVE** only when host/runtime mutation is required. CI polling, exact-SHA evidence, read-only preflight, checkout discovery, clean/ancestor validation, build preparation and reconciliation are automation steps.
 
-FAST source work may prepare a future strict operation, but execution/installation/activation always needs a separate exact owner authorization.
+## Composite STRICT
 
-## CI and evidence
+One live authorization may cover tightly coupled operations required for one bounded host/runtime action when it binds exact Git SHA, exact host/target, allowed mutation categories, hard limits, explicit exclusions and expected baseline. A trusted local checkout may perform only explicitly allowed `git fetch` + `git merge --ff-only` inside the same envelope when needed; this never implies `reset`, `rebase`, `clean` or force operations.
 
-Existing host/security validation remains authoritative. Phase 1 does not weaken or selectively skip host-protective checks. Produce one Ready receipt; immediately before merge refresh mutable GitHub evidence only.
+Preflight is the beginning of the same fail-closed one-shot. Revalidate SHA/host/baseline immediately before first mutation and stop on drift. Use pinned tooling and exact artifacts where applicable.
 
-Merge remains explicit owner authority and never authorizes host/runtime mutation.
+## Local STRICT boundaries
+
+Sudo/root, packages, services/timers, Docker, networking/firewall/DNS/Cloudflare Tunnel, SSH/users/mounts/kernel, backups, databases/application data, secrets/credentials, protected configuration/runtime inspection or another host/runtime mutation require Composite Live authorization. Uncertain live classification is STRICT.
+
+## Failure and evidence
+
+Authorization is consumed at the first authorized mutation. Any later error/ambiguity requires evidence preservation and STOP; no automatic retry, rollback, cleanup, reset, rebase or alternate mutation path unless explicitly pre-authorized.
+
+Use one Ready receipt and one final live receipt. Put any remaining owner decision at the **end** under `ACTION REQUIRED`; when the owner must enter/run something, provide the exact copyable instruction in a fenced `bash` block.
+
+Merge never authorizes host/runtime mutation.
