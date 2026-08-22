@@ -1,7 +1,8 @@
 # Cloudflare P1D owner-phone posture decision — issue #179
 
-Status: **SOURCE DECISION COMPLETE / PLAN ONLY / NO PRODUCTION WRITE AUTHORIZED**  
+Status: **GET-ONLY PREFLIGHT SOURCE PREPARED / PLAN ONLY / NO PRODUCTION WRITE AUTHORIZED**  
 Decision date: 2026-08-19  
+Source revalidation: 2026-08-22  
 Tracking issue: #179  
 Supersedes for P1D only: the pending source-decision text in `docs/CLOUDFLARE_P1_EXACT_WRITE_PLAN.md` section 9.
 
@@ -20,7 +21,7 @@ Gateway posture is an additional device signal. It does **not** replace the owne
 
 ## 2. Current Cloudflare source basis
 
-Reviewed current official Cloudflare documentation on 2026-08-19 and revalidated on 2026-08-22.
+Reviewed official Cloudflare documentation on 2026-08-19 and revalidated against current docs/API on 2026-08-22.
 
 ### Require Gateway versus Require WARP
 
@@ -30,7 +31,7 @@ Cloudflare documents:
 - `Require Gateway` requires the Cloudflare One Client to be enrolled in the Zero Trust organization and connected through that organization's Gateway configuration;
 - both checks are supported on Android/ChromeOS.
 
-Therefore `Require Gateway` better matches the owner-phone threat model: exact human identity plus an organization-enrolled client path.
+Therefore `Require Gateway` better matches the owner-phone threat model: exact human identity plus an organization-enrolled Gateway path.
 
 References:
 
@@ -38,60 +39,144 @@ References:
 - https://developers.cloudflare.com/cloudflare-one/reusable-components/posture-checks/client-checks/require-warp/
 - https://developers.cloudflare.com/cloudflare-one/reusable-components/posture-checks/client-checks/
 
+### Require Gateway is a reusable posture resource
+
+Current Cloudflare setup instructions require two distinct steps:
+
+1. create/enable a reusable Cloudflare One Client **Gateway** posture check;
+2. reference that enabled check from an Access policy.
+
+The API exposes posture rules through:
+
+`GET /accounts/{account_id}/devices/posture`
+
+and identifies the Gateway check with posture type `gateway`.
+
+Therefore P1D may not assume the reusable Gateway posture resource already exists. `p1d-00` must inventory it. If there is no single enabled Android-compatible Gateway check, the Access-policy canary is not ready.
+
+References:
+
+- https://developers.cloudflare.com/cloudflare-one/reusable-components/posture-checks/client-checks/require-gateway/
+- https://developers.cloudflare.com/api/resources/zero_trust/subresources/devices/subresources/posture/
+
 ### Enrollment cannot depend on posture
 
 Cloudflare documents that device posture checks are not supported in device-enrollment policies because posture can only be evaluated after a device is enrolled.
 
 The enrollment gate must therefore be identity-based and owner-only. A future live preflight must prove the current enrollment policy before deciding whether any enrollment-policy write is needed.
 
-Reference:
+Cloudflare models device enrollment permissions as an Access application of type `warp` with Access policies and configured login methods.
+
+References:
 
 - https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/cloudflare-one-client/deployment/device-enrollment/
+- https://developers.cloudflare.com/api/resources/zero_trust/subresources/access/subresources/applications/
 
-### Android enrollment
+### Android registration and device state
 
-Cloudflare documents manual Android enrollment through the Cloudflare One Agent: enter the organization team name, authenticate, install the VPN profile, and connect.
+Current Cloudflare API separates WARP **registrations** from **physical devices**. Multiple registrations can exist for one physical device. Registration responses can include the assigned device settings profile and user binding, while the physical-device API carries device type and client-version metadata.
 
-Reference:
+P1D therefore treats owner email, registration/device IDs, device names, keys, hardware identifiers and virtual IPs as private execution data. The source preflight correlates them only in memory and emits only counts/booleans/classifications.
 
-- https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/cloudflare-one-client/deployment/manual-deployment/
+References:
 
-### Device UUID is not the initial personal-phone control
+- https://developers.cloudflare.com/api/resources/zero_trust/subresources/devices/subresources/registrations/
+- https://developers.cloudflare.com/api/resources/zero_trust/subresources/devices/subresources/devices/
 
-Cloudflare's Device UUID posture requires UUID assignment through managed deployment/MDM and states that UUIDs cannot be assigned manually. The personal Android phone is not assumed to be MDM-managed, so Device UUID remains deferred.
+### Client mode must route through Gateway
 
-Reference:
+For the initial owner-phone path, the applied device settings profile must use the normal Gateway-routing client mode. Current Cloudflare source examples represent Traffic and DNS mode with `service_mode_v2.mode = warp`.
 
-- https://developers.cloudflare.com/cloudflare-one/reusable-components/posture-checks/client-checks/device-uuid/
+Posture-only mode is not the selected initial path because it does not route device traffic through Gateway.
 
-### Hardware-backed registration is not available on Android
+References:
 
-Current Cloudflare documentation lists hardware-backed registration as unavailable for Android. It therefore cannot be a P1D Android invariant.
-
-Reference:
-
-- https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/cloudflare-one-client/deployment/mdm-deployment/hardware-backed-registration/
+- https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/cloudflare-one-client/configure/modes/
+- https://developers.cloudflare.com/api/resources/zero_trust/subresources/devices/subresources/policies/
 
 ### Authenticate with Cloudflare One Client remains separate Beta work
 
-Cloudflare continues to document **Authenticate with Cloudflare One Client** under "Configure client sessions in Access Beta". It is not required to enforce Gateway posture and is not part of the initial P1D posture canary.
+Cloudflare continues to document **Authenticate with Cloudflare One Client** under its Access client-session Beta feature. It is not required to enforce Gateway posture and is not part of the initial P1D posture canary.
+
+Current Access application and organization API responses expose the client-session authentication setting (`allow_authenticate_via_warp`) and organization client session duration. The GET-only preflight records only the boolean/duration, never private application or organization identifiers.
 
 When enabled for an Access application, Cloudflare documents that the Cloudflare One Client session duration takes precedence over application, policy, and global Access session durations. A valid client session therefore provides the intended near-passwordless owner-phone UX until that bounded session expires or is revoked.
 
 No P1D posture mutation may change client-session authentication or session duration. The Beta convenience path requires its own reviewed canary and authorization.
 
-Reference:
+References:
 
 - https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/cloudflare-one-client/configure/client-sessions/
 - https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/
+- https://developers.cloudflare.com/api/resources/zero_trust/subresources/access/subresources/applications/
+- https://developers.cloudflare.com/api/resources/zero_trust/subresources/access/subresources/organizations/
 
-## 3. Desired owner-phone policy shape
+## 3. Canonical GET-only preflight operator
+
+The source operator for `p1d-00-fresh-owner-phone-preflight` is:
+
+`ops/bin/cloudflare-owner-phone-preflight`
+
+It is deliberately read-only. It uses the existing repository `CloudflareGetClient`, whose only API primitive is HTTP GET.
+
+### Private execution inputs
+
+The operator consumes, but must never emit or commit:
+
+- `CLOUDFLARE_ACCOUNT_ID` from the private execution environment;
+- the Cloudflare API token from a protected environment source or hidden TTY prompt, then via stdin to the runner;
+- the exact owner email from a separate hidden TTY prompt, then via stdin to the runner.
+
+The owner email is not accepted through argv or a dedicated environment variable.
+
+### GET surfaces
+
+The preflight is limited to:
+
+- `GET /user/tokens/verify`;
+- `GET /accounts/{account_id}/access/organizations`;
+- `GET /accounts/{account_id}/access/apps`;
+- `GET /accounts/{account_id}/access/apps/{app_id}/policies`;
+- `GET /accounts/{account_id}/devices/posture`;
+- `GET /accounts/{account_id}/devices/registrations?include=policy&status=active`;
+- `GET /accounts/{account_id}/devices/physical-devices`;
+- `GET /accounts/{account_id}/devices/policy`;
+- `GET /accounts/{account_id}/devices/policies`.
+
+No POST, PUT, PATCH or DELETE implementation exists in the operator.
+
+### Public-safe report
+
+The report may contain:
+
+- organization binding present/not-present;
+- enrollment application count, policy actions and selector **types**;
+- whether the private owner identity exactly matches the one allowed enrollment email selector;
+- active owner/Android registration counts;
+- applied device-profile mode classification;
+- client-version/tunnel-type presence booleans;
+- enabled Android-compatible Gateway posture-check count;
+- sanitized Dashboard/Control Access shape;
+- organization/application client-session booleans/durations;
+- next P1D gate IDs and public-safe blocker reason codes.
+
+The report must never contain:
+
+- owner email;
+- account ID, auth domain or team name;
+- device/registration IDs or device name;
+- hardware ID, public key, virtual/public IP;
+- Access application/policy/AUD IDs;
+- posture rule ID;
+- device profile ID.
+
+## 4. Desired owner-phone policy shape
 
 For an ADMIN Access application after a separately authorized P1D canary:
 
 - action: `allow`;
 - Include: exactly one owner identity supplied privately at execution;
-- Require: `Gateway`;
+- Require: the selected reusable `Gateway` posture check;
 - Exclude: none unless separately justified and reviewed;
 - Bypass: none;
 - Everyone: none;
@@ -103,29 +188,34 @@ The identity and Gateway requirements are conjunctive: the request must match th
 
 Optional Android OS-version posture remains a later additive hardening canary. It must not be bundled into the first Gateway posture mutation.
 
-## 4. Client-mode decision
+## 5. Client-mode decision
 
-The initial owner-phone path should use an organization-enrolled Cloudflare One Client mode that actually sends the phone's traffic through the organization's Gateway path. The production preflight must prove the effective client mode and Gateway connectivity before any Access policy write.
+The initial owner-phone path should use an organization-enrolled Cloudflare One Client mode that routes the phone's traffic through the organization's Gateway path.
 
-Do not introduce Posture only mode as part of the first P1D canary. It adds certificate/mTLS/WAF behavior and a separate operational surface that is not required for the selected Gateway posture decision.
+The GET-only API preflight can prove the assigned profile configuration (`service_mode_v2.mode = warp`) for an already-enrolled device. It cannot by itself prove an end-to-end live network path. The later interactive Wi-Fi/cellular canary must prove actual Gateway connectivity before any Access-policy posture write.
 
-## 5. Future canary sequence — not authorized
+Do not introduce Posture only mode as part of the first P1D canary.
 
-Every step below remains separately owner-authorized. This source decision authorizes none of them.
+## 6. Future canary sequence — not authorized
+
+Every state-changing step below remains separately owner-authorized. This source decision authorizes none of them.
 
 ### `p1d-00-fresh-owner-phone-preflight` — GET-only
 
 Prove, without mutation:
 
-- exact current Zero Trust organization/team binding;
-- current device-enrollment policy/login methods;
-- current owner phone enrollment state, if any;
-- effective client mode and Gateway connectivity;
-- current posture-check inventory;
-- exact Dashboard Access policy preimage;
-- exact Control root Access policy preimage only after its P1C AUD-preserving retarget exists;
-- current client-session authentication setting;
+- exact current Zero Trust account/organization binding from private execution context;
+- current device-enrollment `warp` application and policy shape;
+- current login-method metadata without emitting IdP IDs;
+- current owner Android registration state, if any;
+- selected owner Android device-profile mode, if an unambiguous registration exists;
+- current reusable Gateway posture-check inventory;
+- exact Dashboard Access policy preimage in sanitized form;
+- Control root resolution/preimage summary without exposing private IDs/AUD;
+- current organization/application client-session authentication setting;
 - no private identifier or selector value is written to Git.
+
+The operator is diagnostic. A `PASS` means the read completed deterministically and produced a safe next-gate sequence; it does **not** mean later state-changing gates are authorized or already accepted.
 
 ### `p1d-01-owner-only-enrollment-policy` — conditional
 
@@ -146,23 +236,48 @@ Only after the enrollment gate is proven.
 
 Canary requirements:
 
-- enroll the Android phone into the intended Zero Trust organization;
-- prove Cloudflare One Client connected to the organization;
-- prove Gateway posture becomes observable;
+- enroll the Android phone into the intended Zero Trust organization if not already correctly enrolled;
+- prove the Cloudflare One Client is connected to the organization;
+- prove the applied device profile routes traffic through Gateway;
 - verify both home Wi-Fi and cellular data;
 - keep identifiers private;
 - do not change Access application policy in the same authorization.
 
-If the device is lost or enrollment is wrong, revoke/remove the device registration before proceeding.
+If an existing owner Android registration is already present, this gate still requires the Wi-Fi/cellular/Gateway canary to be positively accepted before Access policy mutation.
+
+If the device is lost or enrollment is wrong, revoke/remove the device registration only under its own exact authorization or a predeclared revocation path.
+
+### `p1d-02a-enable-gateway-posture-check` — conditional reusable-posture write
+
+Cloudflare requires the reusable Gateway check to exist before it can be referenced from an Access policy.
+
+Run this gate only if fresh `p1d-00` evidence proves there is no single enabled Android-compatible Gateway posture rule.
+
+Allowed forward diff:
+
+- create exactly one reusable device posture rule of type `gateway`;
+- no Access application/policy change;
+- no device-enrollment policy change;
+- no device-profile change;
+- no Gateway firewall-policy change;
+- no session change.
+
+If fresh preflight already proves exactly one suitable Gateway posture check exists, this gate is skipped with **no write**.
+
+If multiple suitable Gateway checks exist, STOP for source/operator selection review instead of guessing which rule to bind.
 
 ### `p1d-03-dash-require-gateway`
 
-Dashboard is the first Access-policy posture canary because current #179 evidence already proves its exact owner Access application and `Protect with Access` boundary.
+Only after:
+
+- owner-phone enrollment/Gateway canary is accepted;
+- exactly one enabled Android-compatible Gateway posture check is established;
+- fresh Dashboard policy preimage is captured privately.
 
 Allowed semantic policy diff:
 
 - preserve the existing exact owner Include selector;
-- add exactly one `Require Gateway` condition;
+- add exactly one `Require Gateway` device-posture condition;
 - change no session duration;
 - add no Bypass/Everyone/IP/email-domain/service-token selector.
 
@@ -174,7 +289,7 @@ Postconditions:
 - exact owner on a context that does not pass Gateway is denied;
 - Dashboard origin/Protect-with-Access evidence remains unchanged;
 - PUBLIC regressions pass;
-- all unrelated Access objects are unchanged.
+- all unrelated Access/device objects are unchanged.
 
 Rollback: restore the exact private policy preimage and verify the previous policy semantics are restored.
 
@@ -192,31 +307,21 @@ The allowed policy diff and Wi-Fi/cellular/non-enrolled tests are the same as Da
 
 Rollback: restore the exact private Control root policy preimage and prove the same application identity/AUD and the webhook application are unchanged.
 
-### Later ADMIN expansion
+### Later ADMIN expansion and convenience
 
 Other ADMIN exact-owner applications may adopt the same Gateway requirement only after Dashboard and Control canaries are accepted. Each application remains its own explicit mutation gate; this P1D decision does not authorize bulk rollout.
 
-## 6. Session and convenience boundary
-
-P1D selects device posture, not session behavior.
-
-The initial Gateway canary must not:
-
-- enable `Authenticate with Cloudflare One Client`;
-- change global Access session duration;
-- change application session duration;
-- change policy session duration.
-
-Standard Access SSO remains the stable fallback. A later separately reviewed Beta canary may enable `Authenticate with Cloudflare One Client` for a single ADMIN application first, with a bounded client session and no `Apply to all Access applications` bulk change. That later canary is the intended path to avoiding repeated password/IdP prompts on the enrolled owner phone.
+A later separately reviewed Beta canary may enable `Authenticate with Cloudflare One Client` for a single ADMIN application first, with a bounded client session and no `Apply to all Access applications` bulk change. That later canary is the intended path to avoiding repeated password/IdP prompts on the enrolled owner phone.
 
 ## 7. Failure and rollback invariants
 
-STOP and rollback the current canary if any of these occurs:
+STOP and use only the applicable predeclared rollback/revocation if any state-changing canary produces:
 
 - exact owner cannot access on Wi-Fi;
 - exact owner cannot access on cellular;
 - a non-enrolled device passes;
 - a consumer-WARP-only/non-organization path passes as if it were the enrolled owner device;
+- reusable Gateway posture state becomes ambiguous;
 - any Bypass/Everyone/broad selector appears;
 - session settings change unexpectedly;
 - Control webhook behavior changes;
@@ -226,19 +331,22 @@ STOP and rollback the current canary if any of these occurs:
 
 One owner authorization permits one forward production mutation or one interactive enrollment-state change, plus only its predeclared rollback/revocation if required.
 
-## 8. Source-only completion criteria
+## 8. Source/live completion criteria
 
-This source decision is complete when repository CI proves:
+Source readiness requires repository CI to prove:
 
 - canonical registry selects `require_gateway`;
 - owner-phone contract selects exact owner + Require Gateway;
 - machine-readable P1D contract is non-authorizing;
-- `Require WARP` is explicitly rejected as sufficient enrolled-device proof;
+- GET-only preflight has no write primitive and no owner-email environment/argv path;
+- public report does not expose private identity/device/account/application values;
 - enrollment posture is not used before enrollment;
+- reusable Gateway posture resource existence is inventoried before Access-policy use;
+- `Require WARP` is explicitly rejected as sufficient enrolled-device proof;
 - Dashboard precedes Control for Access-policy canaries;
 - Control depends on accepted `p1c-03-control-root-retarget` and preserved application ID/AUD;
-- client-session Beta remains separate and is not applied in bulk;
-- no production writer is added;
-- no private identity, device, account, policy, AUD, token, or recovery value is committed.
+- client-session Beta remains separate and is not applied in bulk.
 
-Merge of this source decision still does not authorize Cloudflare, phone, RPi5, DNS, Tunnel, Access, session, deploy, or restart mutation.
+Live `p1d-00` execution additionally requires positively green exact-current-`main` **push** CI. If the connected GitHub surface cannot positively prove that push run, the live preflight remains blocked even when PR CI was green.
+
+Merge of this source decision/operator still does not authorize Cloudflare, phone, RPi5, DNS, Tunnel, Access, posture, session, deploy, or restart mutation.

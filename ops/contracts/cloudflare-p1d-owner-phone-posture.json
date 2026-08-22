@@ -3,6 +3,7 @@
   "status": "source-decision-complete-plan-only",
   "canonical_issue": 179,
   "decision_date": "2026-08-19",
+  "last_revalidated": "2026-08-22",
   "mutation_authorized": false,
   "supersedes_for_p1d_only": "docs/CLOUDFLARE_P1_EXACT_WRITE_PLAN.md#9-p1d-owner-phone-posture--intentionally-blocked-pending-source-decision",
   "decision": {
@@ -15,7 +16,8 @@
     "device_uuid_reason": "requires-managed-deployment-mdm-and-cannot-be-assigned-manually",
     "hardware_backed_registration_required": false,
     "hardware_backed_registration_android_available": false,
-    "posture_only_mode_initial_canary": false
+    "posture_only_mode_initial_canary": false,
+    "gateway_posture_rule_must_exist_before_access_policy_reference": true
   },
   "policy_shape": {
     "action": "allow",
@@ -39,10 +41,57 @@
     "session_change_allowed_in_initial_posture_canary": false
   },
   "enrollment": {
+    "application_type": "warp",
     "policy_basis": "exact-owner-identity",
     "posture_selector_allowed_in_enrollment_policy": false,
     "fresh_get_only_preflight_required": true,
     "write_only_if_current_enrollment_policy_is_not_already_owner_only": true
+  },
+  "readonly_preflight": {
+    "operator": "ops/bin/cloudflare-owner-phone-preflight",
+    "mutation_performed": false,
+    "private_inputs": [
+      "cloudflare-account-id-env",
+      "cloudflare-api-token-hidden-stdin",
+      "exact-owner-email-hidden-stdin"
+    ],
+    "get_surfaces": [
+      "/user/tokens/verify",
+      "/accounts/{account_id}/access/organizations",
+      "/accounts/{account_id}/access/apps",
+      "/accounts/{account_id}/access/apps/{app_id}/policies",
+      "/accounts/{account_id}/devices/posture",
+      "/accounts/{account_id}/devices/registrations",
+      "/accounts/{account_id}/devices/physical-devices",
+      "/accounts/{account_id}/devices/policy",
+      "/accounts/{account_id}/devices/policies"
+    ],
+    "proves": [
+      "organization-binding-present",
+      "device-enrollment-application-and-policy-shape",
+      "owner-android-registration-state-without-emitting-identity-or-device-id",
+      "selected-owner-android-device-profile-mode",
+      "android-compatible-require-gateway-check-inventory",
+      "dashboard-and-control-access-preimage-summary",
+      "organization-and-application-client-session-authentication-settings"
+    ],
+    "forbidden_output": [
+      "owner-email",
+      "account-id",
+      "auth-domain",
+      "team-name",
+      "device-id",
+      "registration-id",
+      "device-name",
+      "hardware-id",
+      "public-key",
+      "virtual-ip",
+      "access-app-id",
+      "access-policy-id",
+      "device-posture-rule-id",
+      "device-profile-id"
+    ],
+    "exact_main_push_ci_must_be_positively_green_before_live_execution": true
   },
   "future_canaries": [
     {
@@ -65,10 +114,32 @@
       ]
     },
     {
+      "id": "p1d-02a-enable-gateway-posture-check",
+      "kind": "conditional-device-posture-write",
+      "authorized": false,
+      "condition": "fresh-preflight-proves-no-enabled-android-compatible-gateway-posture-check",
+      "forward_method": "POST",
+      "allowed_diff": [
+        "create-exactly-one-device-posture-rule-type-gateway"
+      ],
+      "forbidden_diff": [
+        "access-application-change",
+        "access-policy-change",
+        "device-enrollment-policy-change",
+        "device-profile-change",
+        "gateway-firewall-policy-change",
+        "session-change"
+      ]
+    },
+    {
       "id": "p1d-03-dash-require-gateway",
       "kind": "access-policy-write",
       "authorized": false,
       "target": "dash.rozkalns.net",
+      "preconditions": [
+        "p1d-02-owner-phone-enrollment-canary-accepted",
+        "exactly-one-enabled-android-compatible-gateway-posture-check"
+      ],
       "allowed_diff": [
         "preserve-exact-owner-include",
         "add-require-gateway-only"
@@ -144,9 +215,17 @@
     "https://developers.cloudflare.com/cloudflare-one/reusable-components/posture-checks/client-checks/",
     "https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/cloudflare-one-client/deployment/device-enrollment/",
     "https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/cloudflare-one-client/deployment/manual-deployment/",
+    "https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/device-registration/",
+    "https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/cloudflare-one-client/configure/modes/",
     "https://developers.cloudflare.com/cloudflare-one/reusable-components/posture-checks/client-checks/device-uuid/",
     "https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/cloudflare-one-client/deployment/mdm-deployment/hardware-backed-registration/",
     "https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/cloudflare-one-client/configure/client-sessions/",
-    "https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/"
+    "https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/",
+    "https://developers.cloudflare.com/api/resources/zero_trust/subresources/devices/subresources/posture/",
+    "https://developers.cloudflare.com/api/resources/zero_trust/subresources/devices/subresources/registrations/",
+    "https://developers.cloudflare.com/api/resources/zero_trust/subresources/devices/subresources/devices/",
+    "https://developers.cloudflare.com/api/resources/zero_trust/subresources/devices/subresources/policies/",
+    "https://developers.cloudflare.com/api/resources/zero_trust/subresources/access/subresources/applications/",
+    "https://developers.cloudflare.com/api/resources/zero_trust/subresources/access/subresources/organizations/"
   ]
 }
