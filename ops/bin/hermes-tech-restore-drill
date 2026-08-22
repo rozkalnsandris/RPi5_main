@@ -19,6 +19,7 @@ import time
 from typing import Any, Iterable
 
 MANIFEST_PARTS = ("backup-metadata", "manifest.txt")
+EXPECTED_BACKUP_VERSION = "12"
 HERMES_REQUIRED_SUFFIXES = {
     (".git", "HEAD"),
     (".env",),
@@ -296,12 +297,18 @@ def _read_manifest_timestamp(plain_tar: Path) -> str:
         text = payload.decode("utf-8")
     except UnicodeError as exc:
         raise DrillError("restore_shape_invalid") from exc
-    created_at = None
+
+    manifest: dict[str, str] = {}
     for line in text.splitlines():
-        if line.startswith("created_at="):
-            created_at = line.removeprefix("created_at=").strip()
-            break
-    if not created_at:
+        key, separator, value = line.partition("=")
+        if not separator or key not in {"created_at", "backup_version"}:
+            continue
+        if key in manifest:
+            raise DrillError("restore_shape_invalid")
+        manifest[key] = value.strip()
+
+    created_at = manifest.get("created_at")
+    if not created_at or manifest.get("backup_version") != EXPECTED_BACKUP_VERSION:
         raise DrillError("restore_shape_invalid")
     try:
         parsed = datetime.fromisoformat(created_at)

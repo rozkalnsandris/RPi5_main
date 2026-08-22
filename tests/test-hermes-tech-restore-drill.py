@@ -106,6 +106,36 @@ class RestoreDrillTests(unittest.TestCase):
             "hugo_robots_bytes": 100,
         }
 
+    def test_manifest_requires_exact_v12_version(self) -> None:
+        cases = {
+            "correct": (
+                b"created_at=2026-08-22T02:00:00+02:00\nbackup_version=12\n",
+                "2026-08-22T02:00:00+02:00",
+            ),
+            "missing": (
+                b"created_at=2026-08-22T02:00:00+02:00\n",
+                None,
+            ),
+            "wrong": (
+                b"created_at=2026-08-22T02:00:00+02:00\nbackup_version=11\n",
+                None,
+            ),
+            "duplicate": (
+                b"created_at=2026-08-22T02:00:00+02:00\nbackup_version=12\nbackup_version=12\n",
+                None,
+            ),
+        }
+        for label, (payload, expected) in cases.items():
+            path = self.root / f"manifest-{label}.tar.gz"
+            with tarfile.open(path, "w:gz") as tar:
+                add_file(tar, "./backup-metadata/manifest.txt", payload)
+            with self.subTest(label=label):
+                if expected is not None:
+                    self.assertEqual(restore_drill._read_manifest_timestamp(path), expected)
+                else:
+                    with self.assertRaisesRegex(restore_drill.DrillError, "restore_shape_invalid"):
+                        restore_drill._read_manifest_timestamp(path)
+
     def test_valid_synthetic_archive_passes_and_cleans_plaintext(self) -> None:
         def fake_decrypt(_identity: Path, archive: Path, output: Path) -> None:
             shutil.copyfile(archive, output)
