@@ -67,17 +67,26 @@
       "size_bytes": 49860,
       "helper_root": "/usr/local/lib/rpi5-maintenance",
       "evidence": "RPi5_main PR #112 merged V25 shared-maintenance-lock source"
+    },
+    {
+      "stage": "v26-cached-apt-check-public-safe",
+      "date": "2026-08-10",
+      "sha256": "df1b41f128cee6b014ad0ff43a5365699a055ff99ff26e2ad5dba6f5f60fc19e",
+      "git_blob_sha1": "595b4752e1f40a961230daab188187bf79e63be8",
+      "size_bytes": 51089,
+      "helper_root": "/usr/local/lib/rpi5-maintenance",
+      "evidence": "RPi5_main issue #138 / Draft PR #152 exact GitHub-stored source identity"
     }
   ],
   "candidate": {
-    "stage": "v26-cached-apt-check-public-safe",
+    "stage": "v27-hermes-manual-update-check-only-public-safe",
     "path": "ops/bin/rpi5-update",
-    "sha256": "df1b41f128cee6b014ad0ff43a5365699a055ff99ff26e2ad5dba6f5f60fc19e",
-    "git_blob_sha1": "595b4752e1f40a961230daab188187bf79e63be8",
-    "size_bytes": 51089,
+    "sha256": "f9c83acdd72131d6b696900972aa11d24978645b931846ff4ea8e6a8ed80bdc2",
+    "git_blob_sha1": "744192e2acb7105d90a93e1cf3426433c09cb26d",
+    "size_bytes": 46805,
     "helper_root": "/usr/local/lib/rpi5-maintenance",
-    "derived_from_sha256": "8701b3f8b21ccafb0d02fdd2d162aeb9400a57beb58572800dfe901bfc4bd02a",
-    "evidence": "RPi5_main issue #138 / Draft PR #152 exact GitHub-stored source identity",
+    "derived_from_sha256": "df1b41f128cee6b014ad0ff43a5365699a055ff99ff26e2ad5dba6f5f60fc19e",
+    "evidence": "RPi5_main issue #217 / maintenance/hermes-manual-notify-only-20260823 exact GitHub-stored source identity",
     "public_runtime_literals_removed": true,
     "cleanup_home_scan_removed": true,
     "cleanup_only_compose_preflight_removed": true,
@@ -89,7 +98,12 @@
     "apt_check_cached_metadata": true,
     "apt_check_metadata_refresh": false,
     "apt_check_cache_freshness_reported": true,
-    "run_apt_metadata_refresh": true
+    "run_apt_metadata_refresh": true,
+    "hermes_unattended_update": false,
+    "hermes_update_check_only": true,
+    "hermes_update_check_after_health": true,
+    "hermes_update_check_advisory": true,
+    "hermes_update_check_blocks_reboot": false
   },
   "backup_ownership_snapshot": {
     "label": "V10 ownership snapshot",
