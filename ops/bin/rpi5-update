@@ -664,10 +664,6 @@ run_retention_cleanup() {
     )
 }
 
-if [[ "$MODE" != "cleanup" && -x "$HERMES_BIN" ]]; then
-    require_help_flag "hermes update" "--check" run_as_update_user "$HERMES_BIN" update
-fi
-
 renice 10 $$ >/dev/null 2>&1 || true
 ionice -c2 -n7 -p $$ >/dev/null 2>&1 || true
 
