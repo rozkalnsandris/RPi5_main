@@ -2,8 +2,8 @@
 """Write bounded sanitized evidence consumed by dashboard_RPi5.
 
 Production CLI is root-only and writes only fixed files beneath
-/var/lib/dashboard-rpi5/evidence. The module functions accept an alternate
-root for repository tests; they never read raw logs, secrets, or configuration.
+/var/lib/dashboard-rpi5/evidence. The module functions accept alternate roots
+for repository tests; they never read raw logs, secrets, or configuration.
 """
 from __future__ import annotations
 
@@ -18,12 +18,15 @@ from pathlib import Path
 from typing import Any
 
 EVIDENCE_ROOT = Path("/var/lib/dashboard-rpi5/evidence")
+DEPLOY_STATE_ROOT = Path("/var/lib/rpi5-deploy")
 MAX_BYTES = 64 * 1024
 BACKUP_MAX_RUNS = 32
 EVENT_MAX_ITEMS = 64
 BACKUP_SCHEMA = "dashboard-rpi5.backup-evidence.v1"
 ENDPOINT_SCHEMA = "dashboard-rpi5.endpoint-evidence.v1"
 THROTTLE_SCHEMA = "dashboard-rpi5.throttle-evidence.v1"
+DEPLOY_TRANSACTION_SCHEMA = "rpi5.controlled-deploy-transaction.v1"
+DEPLOY_REPOSITORY = "rozkalnsandris/RPi5_main"
 FILES = {
     "backup": "backups.json",
     "endpoint": "endpoints.json",
@@ -37,6 +40,7 @@ SAFE_UNIT_RESULT = re.compile(r"^[A-Za-z0-9._:-]{1,64}$")
 INVOCATION_ID = re.compile(r"^[0-9a-f]{32}$")
 TRANSACTION_ID = re.compile(r"^(\d{8}T\d{12}Z)-([0-9a-f]{12})$")
 COMMIT = re.compile(r"^[0-9a-f]{12}$")
+FULL_COMMIT = re.compile(r"^[0-9a-f]{40}$")
 RAW_HEX = re.compile(r"^0x[0-9a-f]+$")
 STATES = {"UP", "DOWN", "DEGRADED", "UNKNOWN"}
 
@@ -56,6 +60,23 @@ def parse_iso(value: str) -> datetime:
 
 def canonical_iso(value: str) -> str:
     return parse_iso(value).astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def canonical_controlled_deploy_iso(value: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError("invalid controlled-deploy timestamp")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("invalid controlled-deploy timestamp") from exc
+    offset = parsed.utcoffset()
+    if parsed.tzinfo is None or offset is None or offset.total_seconds() != 0:
+        raise ValueError("controlled-deploy timestamp must be UTC")
+    return parsed.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def _assert_safe_directory(path: Path, *, production: bool) -> None:
@@ -99,6 +120,29 @@ def _read_existing(path: Path, default: dict[str, Any], *, production: bool) -> 
         if not isinstance(value, dict):
             raise ValueError("evidence file must be object")
         return value
+    finally:
+        os.close(fd)
+
+
+def _read_fixed_text(path: Path, *, production: bool, max_bytes: int = MAX_BYTES) -> str:
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or stat.S_ISLNK(st.st_mode) or st.st_nlink != 1:
+            raise RuntimeError("unsafe source file")
+        if st.st_size > max_bytes:
+            raise RuntimeError("oversized source file")
+        if production and (st.st_uid != 0 or (st.st_mode & 0o022) != 0):
+            raise RuntimeError("unsafe source file metadata")
+        raw = b""
+        while True:
+            chunk = os.read(fd, min(8192, max_bytes + 1 - len(raw)))
+            if not chunk:
+                break
+            raw += chunk
+            if len(raw) > max_bytes:
+                raise RuntimeError("oversized source file")
+        return raw.decode("utf-8")
     finally:
         os.close(fd)
 
@@ -213,6 +257,17 @@ def _validate_deploy_event(item: Any) -> None:
     if match is None or not COMMIT.fullmatch(item["commit"]) or match.group(2) != item["commit"]:
         raise ValueError("invalid existing deploy identity")
     parse_iso(item["occurredAt"])
+
+
+def _sort_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(
+        events,
+        key=lambda item: (
+            parse_iso(str(item["occurredAt"])).timestamp(),
+            str(item.get("invocationId") or item.get("transactionId") or ""),
+        ),
+        reverse=True,
+    )
 
 
 def record_backup(*, run_id: str, started_at: str, completed_at: str, exit_code: int,
@@ -330,10 +385,25 @@ def record_maintenance(*, invocation_id: str, service_result: str, occurred_at: 
         raise ValueError("existing maintenance history exceeds bound")
     for item in events:
         _validate_maintenance_event(item)
-    if any(item.get("invocationId") == invocation_id for item in events):
-        return False
-    event = {"invocationId": invocation_id, "occurredAt": occurred_at, "result": result, "unitResult": unit_result}
-    _atomic_write(path, {"observedAt": occurred_at, "events": [event, *events][:EVENT_MAX_ITEMS]}, production=production)
+
+    event = {
+        "invocationId": invocation_id,
+        "occurredAt": occurred_at,
+        "result": result,
+        "unitResult": unit_result,
+    }
+    same = [item for item in events if item.get("invocationId") == invocation_id]
+    if len(same) > 1:
+        raise ValueError("duplicate maintenance invocation")
+    if same:
+        existing = same[0]
+        if existing.get("result") != result or existing.get("unitResult") != unit_result:
+            raise ValueError("maintenance invocation result conflict")
+        if existing.get("occurredAt") == occurred_at:
+            return False
+        events = [item for item in events if item.get("invocationId") != invocation_id]
+    events = _sort_events([event, *events])[:EVENT_MAX_ITEMS]
+    _atomic_write(path, {"observedAt": occurred_at, "events": events}, production=production)
     return True
 
 
@@ -357,7 +427,82 @@ def record_deploy(*, transaction_id: str, commit: str, occurred_at: str,
     if any(item.get("transactionId") == transaction_id for item in events):
         return False
     event = {"transactionId": transaction_id, "commit": commit, "occurredAt": occurred_at}
-    _atomic_write(path, {"observedAt": occurred_at, "events": [event, *events][:EVENT_MAX_ITEMS]}, production=production)
+    events = _sort_events([event, *events])[:EVENT_MAX_ITEMS]
+    _atomic_write(path, {"observedAt": occurred_at, "events": events}, production=production)
+    return True
+
+
+def sync_deploy_state(*, state_root: Path = DEPLOY_STATE_ROOT, root: Path = EVIDENCE_ROOT,
+                      observed_at: str | None = None) -> bool:
+    """Rebuild evidence from the authoritative controlled-deploy latest-success transaction."""
+    ensure_root(root)
+    production_state = state_root == DEPLOY_STATE_ROOT
+    if production_state and os.geteuid() != 0:
+        raise PermissionError("production deploy evidence sync must run as root")
+
+    _assert_safe_directory(state_root, production=production_state)
+    latest = state_root / "latest-success"
+    try:
+        pointer = _read_fixed_text(latest, production=production_state, max_bytes=128).strip()
+    except FileNotFoundError:
+        pointer = ""
+
+    observed = canonical_iso(observed_at) if observed_at is not None else utc_now_iso()
+    evidence_path = _path("deploy", root)
+    evidence_production = root == EVIDENCE_ROOT
+
+    if pointer == "":
+        _atomic_write(
+            evidence_path,
+            {"observedAt": observed, "events": []},
+            production=evidence_production,
+        )
+        return True
+
+    match = TRANSACTION_ID.fullmatch(pointer)
+    if match is None:
+        raise ValueError("invalid latest controlled-deploy pointer")
+    short_commit = match.group(2)
+
+    transactions_root = state_root / "transactions"
+    _assert_safe_directory(transactions_root, production=production_state)
+    transaction_root = transactions_root / pointer
+    _assert_safe_directory(transaction_root, production=production_state)
+    raw = _read_fixed_text(
+        transaction_root / "transaction.json",
+        production=production_state,
+        max_bytes=MAX_BYTES,
+    )
+    try:
+        transaction = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError("invalid controlled-deploy transaction json") from exc
+    if not isinstance(transaction, dict):
+        raise ValueError("invalid controlled-deploy transaction")
+    full_commit = transaction.get("commit")
+    completed_at = transaction.get("completed_at")
+    if (
+        transaction.get("schema") != DEPLOY_TRANSACTION_SCHEMA
+        or transaction.get("id") != pointer
+        or transaction.get("repository") != DEPLOY_REPOSITORY
+        or transaction.get("status") != "success"
+        or not isinstance(full_commit, str)
+        or FULL_COMMIT.fullmatch(full_commit) is None
+        or not full_commit.startswith(short_commit)
+        or not isinstance(completed_at, str)
+    ):
+        raise ValueError("invalid controlled-deploy transaction")
+    completed_at = canonical_controlled_deploy_iso(completed_at)
+    event = {
+        "transactionId": pointer,
+        "commit": short_commit,
+        "occurredAt": completed_at,
+    }
+    _atomic_write(
+        evidence_path,
+        {"observedAt": observed, "events": [event]},
+        production=evidence_production,
+    )
     return True
 
 
@@ -369,7 +514,11 @@ def record_throttle(*, raw_hex: str, observed_at: str, root: Path = EVIDENCE_ROO
         raise ValueError("invalid throttle value")
     if int(raw_hex[2:], 16) > 0xFFFFFFFF:
         raise ValueError("throttle value out of range")
-    value = {"schema": THROTTLE_SCHEMA, "observedAt": canonical_iso(observed_at), "rawHex": raw_hex}
+    value = {
+        "schema": THROTTLE_SCHEMA,
+        "observedAt": canonical_iso(observed_at),
+        "rawHex": raw_hex,
+    }
     _atomic_write(_path("throttle", root), value, production=production)
     return True
 
@@ -398,6 +547,7 @@ def build_parser() -> argparse.ArgumentParser:
     deploy.add_argument("--transaction-id", required=True)
     deploy.add_argument("--commit", required=True)
     deploy.add_argument("--occurred-at", required=True)
+    sub.add_parser("deploy-sync")
     throttle = sub.add_parser("throttle-record")
     throttle.add_argument("--raw-hex", required=True)
     throttle.add_argument("--observed-at", required=True)
@@ -409,16 +559,36 @@ def main() -> int:
     if os.geteuid() != 0:
         raise PermissionError("dashboard evidence writer must run as root")
     if args.command == "backup-record":
-        record_backup(run_id=args.run_id, started_at=args.started_at, completed_at=args.completed_at,
-                      exit_code=args.exit_code, size_bytes=args.size_bytes)
+        record_backup(
+            run_id=args.run_id,
+            started_at=args.started_at,
+            completed_at=args.completed_at,
+            exit_code=args.exit_code,
+            size_bytes=args.size_bytes,
+        )
     elif args.command == "endpoint-observe":
-        record_endpoint(endpoint_id=args.endpoint_id, label=args.label, state=args.state,
-                        status_code=args.status_code, latency_ms=args.latency_ms, occurred_at=args.occurred_at)
+        record_endpoint(
+            endpoint_id=args.endpoint_id,
+            label=args.label,
+            state=args.state,
+            status_code=args.status_code,
+            latency_ms=args.latency_ms,
+            occurred_at=args.occurred_at,
+        )
     elif args.command == "maintenance-record":
-        record_maintenance(invocation_id=args.invocation_id, service_result=args.service_result,
-                           occurred_at=args.occurred_at)
+        record_maintenance(
+            invocation_id=args.invocation_id,
+            service_result=args.service_result,
+            occurred_at=args.occurred_at,
+        )
     elif args.command == "deploy-record":
-        record_deploy(transaction_id=args.transaction_id, commit=args.commit, occurred_at=args.occurred_at)
+        record_deploy(
+            transaction_id=args.transaction_id,
+            commit=args.commit,
+            occurred_at=args.occurred_at,
+        )
+    elif args.command == "deploy-sync":
+        sync_deploy_state()
     elif args.command == "throttle-record":
         record_throttle(raw_hex=args.raw_hex, observed_at=args.observed_at)
     else:
