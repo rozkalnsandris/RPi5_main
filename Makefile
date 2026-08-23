@@ -61,6 +61,7 @@ test:
 	python3 ./tests/test-cloudflare-p1-write-plan.py
 	python3 ./tests/test-cloudflare-p1a08-control-aud-override.py
 	python3 ./tests/test-cloudflare-p1d-owner-phone.py
+	python3 ./tests/test-cloudflare-owner-phone-preflight.py
 	bash ./tests/test-cloudflare-zero-trust-wrapper.sh
 	bash ./tests/test-public-safety.sh
 	python3 ./tests/test-controlled-deploy-rollback.py
