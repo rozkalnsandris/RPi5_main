@@ -8,12 +8,17 @@ release. The visible workflow remains simple:
 
 1. sync reviewed `main`;
 2. run all repository tests;
-3. generate and inspect a read-only deploy plan;
+3. generate and inspect a deploy plan;
 4. apply that exact short-lived plan with the printed commit confirmation;
 5. verify status, or restore the exact recorded before-state.
 
 A merge never deploys automatically. Merging V12 does not install the deploy
 engine and does not write any managed production target.
+
+The controller lineage remains V12, but its reviewed target contract follows
+the current production maintenance topology. Production was migrated to the V25
+shared-lock backup architecture, so the generic controller must never replace
+the canonical V25 wrapper with the older immutable backup core.
 
 ## Root execution boundary
 
@@ -80,15 +85,34 @@ bash ./scripts/rpi5-deploy logs --lines 150
 
 Running the repository controller itself with `sudo` is rejected.
 
-## Initial managed scope
+## Current managed and attested scope
 
-The target manifest is `ops/deploy/targets.json`. V12 manages exactly:
+The target manifest is `ops/deploy/targets.json`. The current contract contains
+exactly five production files:
 
-| Repository source | Production target | Owner | Mode | Validation |
-|---|---|---:|---:|---|
-| `ops/bin/rpi5-backup` | `/usr/local/sbin/rpi5-backup` | `root:root` | `0700` | `bash -n` |
-| `ops/cron.d/rpi5-backup` | `/etc/cron.d/rpi5-backup` | `root:root` | `0644` | exact nightly cron contract |
-| `ops/logrotate.d/rpi5-backup` | `/etc/logrotate.d/rpi5-backup` | `root:root` | `0644` | debug-only `logrotate -d` |
+| ID | Repository source | Production target | Owner | Mode | Validation | Policy |
+|---|---|---|---:|---:|---|---|
+| `backup-runner` | `ops/bin/rpi5-backup-serialized` | `/usr/local/sbin/rpi5-backup` | `root:root` | `0750` | `bash -n` | **attestation-only** |
+| `backup-core` | `ops/bin/rpi5-backup` | `/usr/local/lib/rpi5-maintenance/rpi5-backup-v10-core` | `root:root` | `0750` | `bash -n` | **attestation-only** |
+| `maintenance-lock-lib` | `ops/lib/rpi5-maintenance-locks.sh` | `/usr/local/lib/rpi5-maintenance/rpi5-maintenance-locks.sh` | `root:root` | `0644` | `bash -n` | **attestation-only** |
+| `backup-cron` | `ops/cron.d/rpi5-backup` | `/etc/cron.d/rpi5-backup` | `root:root` | `0644` | exact nightly cron contract | managed replace |
+| `backup-logrotate` | `ops/logrotate.d/rpi5-backup` | `/etc/logrotate.d/rpi5-backup` | `root:root` | `0644` | debug-only `logrotate -d` | managed replace |
+
+The first three files are the V25 shared-maintenance trust bundle: the canonical
+serialized wrapper, immutable V10-ownership/runtime-V12 core and shared-lock
+helper. Their topology was established by the dedicated V25 maintenance
+cutover. Generic controlled deploy therefore **attests** those files but never
+repairs them.
+
+For an attestation-only target, `plan` requires the complete live fingerprint
+(SHA-256, UID, GID and mode) to equal the reviewed source fingerprint. Any
+difference fails closed with `attestation-only target drift`; no plan is
+persisted. Repair must use the dedicated V25 maintenance path under separate
+production authorization, followed by a fresh controlled-deploy preflight.
+
+Cron and logrotate remain ordinary managed targets. Reviewed drift in those two
+files may be planned as `replace` and receives the existing transaction and
+rollback protections.
 
 The engine independently hard-codes the complete approved tuple for every
 entry: ID, source, production target, owner, group, mode and validators. A
@@ -101,9 +125,22 @@ The real `/etc/rpi5-backup.conf` may contain private host configuration and
 must never be replaced by the example.
 
 Docker Compose, systemd units, Cloudflare, Home Assistant, monitoring, update
-scripts and application repositories are not deploy targets in V12. Each must
-first be imported and reviewed under its own source/installed mapping,
+scripts and application repositories are not deploy targets in this contract.
+Each must first be imported and reviewed under its own source/installed mapping,
 validation and rollback contract.
+
+## Baseline attestation and dashboard evidence
+
+A successful transaction may contain `unchanged` V25 attestation rows. If the
+production wrapper/core/helper already match reviewed source exactly, the
+controller can attest that state without rewriting the V25 trust bundle.
+
+After the full transaction and host verification succeed, the engine records
+the exact `RPi5_main` commit and atomically writes `/var/lib/rpi5-deploy/latest-success`.
+That pointer is the authoritative private source projected by the sanitized
+dashboard deployment-evidence producer. It must never be fabricated manually.
+If it is absent, no controlled-deploy production commit has been proven and the
+dashboard correctly reports deployment state as `UNKNOWN`.
 
 ## VS Code tasks
 
@@ -133,7 +170,7 @@ A production plan fails unless all of the following hold:
 - stable Git porcelain reports no tracked or untracked change;
 - a fresh fetch succeeds and local `HEAD` equals `origin/main`;
 - installed engine source hashes equal current tracked source hashes;
-- the complete manifest equals the hard-coded approved V12 target contract;
+- the complete manifest equals the hard-coded approved current target contract;
 - `make validate` succeeds as the non-root repository owner;
 - GitHub CLI returns check runs for the exact commit;
 - every latest returned exact-commit check run is completed with conclusion `success`;
@@ -149,7 +186,7 @@ remote cannot leak into deployment evidence.
 
 ## Host preflight
 
-The read-only plan and deploy preflight require:
+The plan and deploy preflight require:
 
 - hostname `rpi5`, Raspberry Pi 5 model, Debian 12 and arm64/aarch64;
 - a read-write root filesystem;
@@ -197,8 +234,11 @@ target whose complete live fingerprint no longer equals the reviewed
 before-state. Every source is required to be a single regular non-symlink file;
 this applies to status reporting as well as planning and deployment.
 
-A file with matching content but wrong UID, GID or mode is `DRIFT`, not
-`MATCH`, and is planned for correction.
+For ordinary managed targets, a file with matching content but wrong UID, GID
+or mode is `DRIFT` and may be planned for correction. For V25 attestation-only
+targets, any content or metadata mismatch fails planning instead. Immediately
+before apply, `verify_plan_targets` also requires every attestation-only row to
+remain `unchanged` with `before == desired`.
 
 ## Apply transaction
 
@@ -210,7 +250,8 @@ After all gates pass, deploy creates a root-only transaction below:
 
 Immediately before processing each row, including `unchanged` rows, the engine
 rechecks that the source SHA and full live fingerprint still equal the reviewed
-plan. For every changed target it then:
+plan. Attestation-only rows are validated and recorded as unchanged, with no
+write. For every ordinary changed target it then:
 
 1. verifies all target parent components are real directories, not symlinks;
 2. copies the old regular file into a private `0600` transaction backup;
@@ -228,18 +269,20 @@ verified before and again after the final host preflight. Successful transaction
 metadata and the `latest-success` pointer are written with fsync; the pointer is
 replaced atomically.
 
-V12 does not execute a backup, upload data, delete retention data, rotate logs,
-reload cron, restart services or restart containers. The three initial targets
-do not require a service restart.
+The controller does not execute a backup, upload data, delete retention data,
+rotate logs, reload cron, restart services or restart containers. Attestation of
+the V25 bundle itself performs no target-file writes.
 
 ## Automatic rollback
 
-Any exception after a target enters the mutation set starts automatic rollback
-in reverse order. The rollback-start audit log is best-effort and cannot block
-the actual restoration. The old file is restored atomically, or a target that
-was previously absent is removed. Every restored SHA-256, UID, GID and mode must
-exactly equal the reviewed before-state. Transaction metadata records prepared,
-installed, restored or restore-failed phases.
+Any exception after an ordinary target enters the mutation set starts automatic
+rollback of changed targets in reverse order. V25 attestation-only rows cannot
+enter that mutation set because their drift is rejected during planning. The
+rollback-start audit log is best-effort and cannot block the actual restoration.
+The old file is restored atomically, or a target that was previously absent is
+removed. Every restored SHA-256, UID, GID and mode must exactly equal the
+reviewed before-state. Transaction metadata records prepared, installed,
+restored or restore-failed phases.
 
 If failure occurs after a `latest-success` pointer was created, automatic
 rollback removes that pointer when it still refers to the failing transaction.
@@ -267,6 +310,9 @@ re-established. A completely compensated attempt remains an active successful
 transaction with `rollback_attempt_status=compensated`; incomplete compensation
 is marked `rollback_failed` and reported as an incident.
 
+Attestation-only V25 rows are never manual-rollback targets because generic
+controlled deploy did not write them.
+
 Rollback is deliberately not blocked by an unhealthy container or failed
 systemd unit, because that may be the reason rollback is needed. It still
 requires the verified installed engine, exact RPi5/Debian/architecture identity,
@@ -289,17 +335,18 @@ or raw configuration.
 `tests/test-controlled-deploy.sh` runs without root, Docker or systemd changes.
 It builds a temporary Git repository and fake root, then verifies:
 
-- exact manifest scope and reference-only configuration guard;
+- exact five-target V25-aware manifest scope and reference-only configuration guard;
 - test mode cannot target `/` or escape its temporary sandbox;
 - deterministic engine staging, source/installed SHA binding and `env -i` wrapper;
 - repository root commands route to the system engine;
 - no production preflight-bypass environment variable exists;
-- plan creation and exact-SHA confirmation;
-- complete before and desired fingerprints;
-- rejection of a wrong confirmation;
-- synthetic failure after a partial write and verified automatic rollback;
+- V25 wrapper drift is rejected before a plan is persisted;
+- valid V25 wrapper/core/lock-helper rows remain `unchanged`;
+- cron/logrotate drift remains ordinary managed `replace` work;
+- exact-SHA confirmation;
+- synthetic failure after a partial writable-target change and verified automatic rollback;
 - durable rollback phase metadata;
-- successful atomic deployment and status reporting;
+- successful transaction and status reporting without rewriting the V25 bundle;
 - refusal to roll back over metadata-only drift;
 - verified manual rollback to exact before fingerprints.
 
@@ -310,6 +357,8 @@ regressions for:
 - rejection of a repository source symlink during status;
 - failure after `latest-success` creation, full automatic restoration and stale
   pointer cleanup;
+- proof that only cron/logrotate enter the mutation/rollback set while V25
+  attestation rows remain unchanged;
 - refusal of a corrupt before-state backup before any manual-rollback write;
 - synthetic mid-rollback failure, deployed-state compensation and pointer
   preservation;
@@ -336,13 +385,19 @@ configuration tasks.
 
 Future Docker Compose targets must at minimum use Compose configuration
 validation and an available dry-run before apply. They are intentionally not
-part of the initial three-file transaction.
+part of the current constrained backup transaction.
 
 ## Rollback before production use
 
 Before any separately approved engine installation or target apply, repository
-rollback is simply reverting the V12 commit. After engine installation, the
-versioned old engine release remains present; changing the system wrapper back
-to it requires a separate reviewed engine-pointer procedure. After a target
-apply, use the guarded transaction rollback and retain its metadata for
-incident review.
+rollback is simply reverting the reviewed source commit. After engine
+installation, the versioned old engine release remains present; changing the
+system wrapper back to it requires a separate reviewed engine-pointer
+procedure. After a target apply, use the guarded transaction rollback and retain
+its metadata for incident review.
+
+The first production controlled-deploy baseline is a separate live action. It
+requires a fresh exact-main preflight and explicit owner authorization for any
+checkout sync, deploy-engine installation, plan/state creation or transaction
+write. Missing `latest-success` must remain `UNKNOWN` until that authorized
+transaction succeeds.

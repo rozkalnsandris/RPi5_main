@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression tests for compensated V12 manual rollback."""
+"""Regression tests for compensated manual rollback with V25 attestation targets."""
 from __future__ import annotations
 
 import hashlib
@@ -54,7 +54,9 @@ def copy(relative: str, fake_repo: pathlib.Path) -> None:
 
 def assert_deployed(fake_repo: pathlib.Path, fake_root: pathlib.Path) -> None:
     pairs = {
-        "ops/bin/rpi5-backup": "usr/local/sbin/rpi5-backup",
+        "ops/bin/rpi5-backup-serialized": "usr/local/sbin/rpi5-backup",
+        "ops/bin/rpi5-backup": "usr/local/lib/rpi5-maintenance/rpi5-backup-v10-core",
+        "ops/lib/rpi5-maintenance-locks.sh": "usr/local/lib/rpi5-maintenance/rpi5-maintenance-locks.sh",
         "ops/cron.d/rpi5-backup": "etc/cron.d/rpi5-backup",
         "ops/logrotate.d/rpi5-backup": "etc/logrotate.d/rpi5-backup",
     }
@@ -77,6 +79,8 @@ def main() -> None:
             "scripts/rpi5_deploy_tx.py",
             "ops/deploy/targets.json",
             "ops/bin/rpi5-backup",
+            "ops/bin/rpi5-backup-serialized",
+            "ops/lib/rpi5-maintenance-locks.sh",
             "ops/cron.d/rpi5-backup",
             "ops/logrotate.d/rpi5-backup",
             "ops/backup/rpi5-backup.conf.example",
@@ -86,15 +90,22 @@ def main() -> None:
 
         live = {
             "backup-runner": fake_root / "usr/local/sbin/rpi5-backup",
+            "backup-core": fake_root / "usr/local/lib/rpi5-maintenance/rpi5-backup-v10-core",
+            "maintenance-lock-lib": fake_root / "usr/local/lib/rpi5-maintenance/rpi5-maintenance-locks.sh",
             "backup-cron": fake_root / "etc/cron.d/rpi5-backup",
             "backup-logrotate": fake_root / "etc/logrotate.d/rpi5-backup",
         }
         for path in live.values():
             path.parent.mkdir(parents=True, exist_ok=True)
-        live["backup-runner"].write_text("old runner\n", encoding="utf-8")
+
+        shutil.copyfile(fake_repo / "ops/bin/rpi5-backup-serialized", live["backup-runner"])
+        shutil.copyfile(fake_repo / "ops/bin/rpi5-backup", live["backup-core"])
+        shutil.copyfile(fake_repo / "ops/lib/rpi5-maintenance-locks.sh", live["maintenance-lock-lib"])
         live["backup-cron"].write_text("old cron\n", encoding="utf-8")
         live["backup-logrotate"].write_text("old rotate\n", encoding="utf-8")
-        os.chmod(live["backup-runner"], 0o700)
+        os.chmod(live["backup-runner"], 0o750)
+        os.chmod(live["backup-core"], 0o750)
+        os.chmod(live["maintenance-lock-lib"], 0o644)
         os.chmod(live["backup-cron"], 0o644)
         os.chmod(live["backup-logrotate"], 0o644)
         before = {
@@ -142,9 +153,11 @@ def main() -> None:
             env=env,
             expect_success=False,
         )
-        assert "hard-coded approved V12 target contract" in failed.stdout
+        assert "hard-coded approved current target contract" in failed.stdout
         manifest_path.write_text(manifest_text, encoding="utf-8")
 
+        # A failure after latest-success is written must remove the pointer and
+        # restore only writable targets. The V25 attested bundle stays untouched.
         run([*controller, "plan"], cwd=fake_repo, env=env)
         pointer_failure_env = env.copy()
         pointer_failure_env["RPI5_DEPLOY_TEST_FAIL_AFTER_POINTER"] = "1"
@@ -169,6 +182,7 @@ def main() -> None:
         )
         assert_deployed(fake_repo, fake_root)
 
+        # Repository source symlinks remain rejected even for an attested target.
         source_path = fake_repo / "ops/bin/rpi5-backup"
         source_bytes = source_path.read_bytes()
         source_mode = mode(source_path)
@@ -190,6 +204,12 @@ def main() -> None:
         txid = (state / "latest-success").read_text(encoding="utf-8").strip()
         transaction_dir = state / "transactions" / txid
         metadata_path = transaction_dir / "transaction.json"
+        transaction = json.loads(metadata_path.read_text(encoding="utf-8"))
+        changed_ids = [item["id"] for item in transaction["targets"] if item.get("changed")]
+        assert changed_ids == ["backup-cron", "backup-logrotate"]
+        for item in transaction["targets"][:3]:
+            assert item["changed"] is False
+            assert item["phase"] == "unchanged"
 
         restore_failure_env = env.copy()
         restore_failure_env["RPI5_DEPLOY_TEST_FAIL_RESTORE_AFTER_WRITE"] = "backup-logrotate"
@@ -251,7 +271,7 @@ def main() -> None:
         assert completed["rollback_attempt_status"] == "success"
         assert not (state / "latest-success").exists()
 
-    print("V12 compensated manual rollback regression: PASS")
+    print("controlled deploy compensated rollback regression: PASS")
 
 
 if __name__ == "__main__":
