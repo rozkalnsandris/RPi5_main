@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DECISION_PATH = ROOT / "docs" / "CLOUDFLARE_P1D_OWNER_PHONE_POSTURE_DECISION.md"
+ZERO_APP_PATH = ROOT / "docs" / "CLOUDFLARE_P1D_ZERO_ENROLLMENT_APPLICATION.md"
 OWNER_PATH = ROOT / "docs" / "CLOUDFLARE_OWNER_PHONE_ACCESS_CONTRACT.md"
 CONTRACT_PATH = ROOT / "ops" / "contracts" / "cloudflare-p1d-owner-phone-posture.json"
 REGISTRY_PATH = ROOT / "ops" / "contracts" / "cloudflare-hostname-policy.yaml"
@@ -21,6 +22,7 @@ class CloudflareP1DOwnerPhoneTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
         cls.decision = DECISION_PATH.read_text(encoding="utf-8")
+        cls.zero_app = ZERO_APP_PATH.read_text(encoding="utf-8")
         cls.owner = OWNER_PATH.read_text(encoding="utf-8")
         cls.registry = REGISTRY_PATH.read_text(encoding="utf-8")
 
@@ -75,6 +77,10 @@ class CloudflareP1DOwnerPhoneTests(unittest.TestCase):
         self.assertIn("exact-owner-email-hidden-stdin", preflight["private_inputs"])
         self.assertIn("/accounts/{account_id}/devices/registrations", preflight["get_surfaces"])
         self.assertIn("/accounts/{account_id}/devices/physical-devices", preflight["get_surfaces"])
+        self.assertIn(
+            "device-enrollment-application-count-classification-and-policy-shape",
+            preflight["proves"],
+        )
         for forbidden in (
             "owner-email",
             "device-id",
@@ -88,7 +94,7 @@ class CloudflareP1DOwnerPhoneTests(unittest.TestCase):
         self.assertTrue(PREFLIGHT_RUNNER_PATH.exists())
         self.assertTrue(PREFLIGHT_WRAPPER_PATH.exists())
 
-    def test_enrollment_does_not_depend_on_posture(self) -> None:
+    def test_enrollment_classifies_zero_one_and_multiple_applications(self) -> None:
         enrollment = self.contract["enrollment"]
         self.assertEqual(enrollment["application_type"], "warp")
         self.assertEqual(enrollment["policy_basis"], "exact-owner-identity")
@@ -97,14 +103,29 @@ class CloudflareP1DOwnerPhoneTests(unittest.TestCase):
         self.assertTrue(
             enrollment["write_only_if_current_enrollment_policy_is_not_already_owner_only"]
         )
+        self.assertEqual(
+            enrollment["application_count_classification"],
+            {
+                "0": "missing-create-owner-only-enrollment-application",
+                "1": "inspect-existing-owner-only-policy",
+                ">1": "ambiguous-stop",
+            },
+        )
+        self.assertEqual(
+            enrollment["missing_application_canary"],
+            "p1d-01a-create-owner-only-enrollment-application",
+        )
+        self.assertIn("zero", self.zero_app.lower())
+        self.assertIn("ambiguous", self.zero_app.lower())
 
-    def test_canary_order_includes_conditional_gateway_rule_creation(self) -> None:
+    def test_canary_order_and_missing_app_create_contract(self) -> None:
         canaries = self.contract["future_canaries"]
         ids = [item["id"] for item in canaries]
         self.assertEqual(
             ids,
             [
                 "p1d-00-fresh-owner-phone-preflight",
+                "p1d-01a-create-owner-only-enrollment-application",
                 "p1d-01-owner-only-enrollment-policy",
                 "p1d-02-owner-phone-enrollment",
                 "p1d-02a-enable-gateway-posture-check",
@@ -112,25 +133,64 @@ class CloudflareP1DOwnerPhoneTests(unittest.TestCase):
                 "p1d-04-control-require-gateway",
             ],
         )
-        posture_write = canaries[3]
+
+        create_app = canaries[1]
+        self.assertFalse(create_app["authorized"])
+        self.assertEqual(create_app["kind"], "conditional-access-application-create")
+        self.assertEqual(create_app["forward_method"], "POST")
+        self.assertEqual(create_app["forward_endpoint"], "/accounts/{account_id}/access/apps")
+        self.assertEqual(create_app["required_permission"], "Access: Apps and Policies Write")
+        payload = create_app["payload_template"]
+        self.assertEqual(payload["type"], "warp")
+        self.assertEqual(len(payload["policies"]), 1)
+        policy = payload["policies"][0]
+        self.assertEqual(policy["decision"], "allow")
+        self.assertEqual(policy["precedence"], 1)
+        self.assertEqual(
+            policy["include"],
+            [{"email": {"email": "exact-owner-identity-private-input"}}],
+        )
+        self.assertEqual(policy["require"], [])
+        self.assertEqual(policy["exclude"], [])
+        for omitted in ("allowed_idps", "auto_redirect_to_identity", "session_duration"):
+            self.assertIn(omitted, create_app["deliberately_omitted_fields"])
+            self.assertNotIn(omitted, payload)
+
+        rollback = create_app["rollback"]
+        self.assertEqual(rollback["method"], "DELETE")
+        self.assertEqual(
+            rollback["endpoint"],
+            "/accounts/{account_id}/access/apps/{created_app_id}",
+        )
+        self.assertTrue(rollback["only_if_created_app_is_safely_attributable"])
+        self.assertIn("no-retry", create_app["failure_contract"])
+        self.assertIn("no-delete-on-ambiguous-attribution", create_app["failure_contract"])
+
+        existing_policy = canaries[2]
+        self.assertEqual(
+            existing_policy["condition"],
+            "fresh-preflight-proves-exactly-one-device-enrollment-application-and-current-policy-not-owner-only",
+        )
+
+        posture_write = canaries[4]
         self.assertFalse(posture_write["authorized"])
         self.assertEqual(posture_write["forward_method"], "POST")
         self.assertEqual(
             posture_write["allowed_diff"],
             ["create-exactly-one-device-posture-rule-type-gateway"],
         )
-        self.assertEqual(canaries[4]["target"], "dash.rozkalns.net")
+        self.assertEqual(canaries[5]["target"], "dash.rozkalns.net")
         self.assertIn(
             "exactly-one-enabled-android-compatible-gateway-posture-check",
-            canaries[4]["preconditions"],
-        )
-        self.assertEqual(canaries[5]["target"], "control.rozkalns.net")
-        self.assertIn(
-            "p1c-03-control-root-retarget-accepted",
             canaries[5]["preconditions"],
         )
-        self.assertIn("control-parent-app-id-aud-preserved", canaries[5]["preconditions"])
-        self.assertIn("control-webhook-app-unchanged", canaries[5]["preconditions"])
+        self.assertEqual(canaries[6]["target"], "control.rozkalns.net")
+        self.assertIn(
+            "p1c-03-control-root-retarget-accepted",
+            canaries[6]["preconditions"],
+        )
+        self.assertIn("control-parent-app-id-aud-preserved", canaries[6]["preconditions"])
+        self.assertIn("control-webhook-app-unchanged", canaries[6]["preconditions"])
         self.assertTrue(all(not item["authorized"] for item in canaries))
 
     def test_initial_posture_canary_does_not_mix_session_beta(self) -> None:
@@ -162,6 +222,7 @@ class CloudflareP1DOwnerPhoneTests(unittest.TestCase):
         combined = "\n".join(
             [
                 DECISION_PATH.read_text(encoding="utf-8"),
+                ZERO_APP_PATH.read_text(encoding="utf-8"),
                 OWNER_PATH.read_text(encoding="utf-8"),
                 CONTRACT_PATH.read_text(encoding="utf-8"),
                 REGISTRY_PATH.read_text(encoding="utf-8"),

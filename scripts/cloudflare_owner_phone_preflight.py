@@ -183,8 +183,17 @@ def _enrollment_shape(
 ) -> tuple[dict[str, Any], list[str]]:
     blockers: list[str] = []
     warp_apps = [app for app in apps if app.get("type") == "warp"]
+    application_count = len(warp_apps)
+    application_state = (
+        "missing"
+        if application_count == 0
+        else "single"
+        if application_count == 1
+        else "ambiguous"
+    )
     report: dict[str, Any] = {
-        "application_count": len(warp_apps),
+        "application_count": application_count,
+        "application_state": application_state,
         "policy_count": 0,
         "policy_actions": [],
         "include_selector_types": [],
@@ -195,8 +204,10 @@ def _enrollment_shape(
         "allowed_idp_count": None,
         "auto_redirect_to_identity": None,
     }
-    if len(warp_apps) != 1:
-        blockers.append("device_enrollment_application_count_mismatch")
+    if application_count == 0:
+        return report, blockers
+    if application_count > 1:
+        blockers.append("device_enrollment_application_ambiguous")
         return report, blockers
 
     app = warp_apps[0]
@@ -430,7 +441,9 @@ def build_report(owner_email: str, state: dict[str, Any]) -> dict[str, Any]:
         blockers.append("dashboard_exact_access_application_missing")
 
     remaining_gates: list[str] = []
-    if not enrollment["owner_only"]:
+    if enrollment["application_state"] == "missing":
+        remaining_gates.append("p1d-01a-create-owner-only-enrollment-application")
+    elif enrollment["application_state"] == "single" and not enrollment["owner_only"]:
         remaining_gates.append("p1d-01-owner-only-enrollment-policy")
     if device["owner_android_active_registration_count"] == 0:
         remaining_gates.append("p1d-02-owner-phone-enrollment")

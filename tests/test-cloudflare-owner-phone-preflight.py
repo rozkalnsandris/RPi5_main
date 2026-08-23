@@ -134,10 +134,15 @@ class CloudflareOwnerPhonePreflightTests(unittest.TestCase):
     def test_happy_fixture_is_public_safe_and_gets_to_dashboard_sequence(self) -> None:
         report = preflight.build_report(OWNER, base_state())
         self.assertEqual(report["result"], "PASS")
+        self.assertEqual(report["enrollment"]["application_state"], "single")
         self.assertTrue(report["enrollment"]["owner_only"])
         self.assertEqual(report["owner_device"]["owner_android_active_registration_count"], 1)
         self.assertTrue(report["owner_device"]["selected_android_gateway_routing_mode"])
         self.assertTrue(report["gateway_posture"]["ready"])
+        self.assertNotIn(
+            "p1d-01a-create-owner-only-enrollment-application",
+            report["remaining_gates"],
+        )
         self.assertNotIn("p1d-01-owner-only-enrollment-policy", report["remaining_gates"])
         self.assertNotIn("p1d-02a-enable-gateway-posture-check", report["remaining_gates"])
         self.assertIn("p1d-02-owner-phone-enrollment-canary", report["remaining_gates"])
@@ -156,6 +161,59 @@ class CloudflareOwnerPhonePreflightTests(unittest.TestCase):
         ):
             self.assertNotIn(private_value, rendered)
 
+    def test_missing_enrollment_application_routes_to_create_canary(self) -> None:
+        state = base_state()
+        state["apps"] = [app for app in state["apps"] if app["id"] != ENROLL_APP]
+        state["policies"].pop(ENROLL_APP)
+        state["registrations"] = []
+        state["devices"] = []
+
+        report = preflight.build_report(OWNER, state)
+
+        self.assertEqual(report["result"], "PASS")
+        self.assertEqual(report["enrollment"]["application_count"], 0)
+        self.assertEqual(report["enrollment"]["application_state"], "missing")
+        self.assertFalse(report["enrollment"]["owner_only"])
+        self.assertNotIn("device_enrollment_application_ambiguous", report["blockers"])
+        self.assertIn(
+            "p1d-01a-create-owner-only-enrollment-application",
+            report["remaining_gates"],
+        )
+        self.assertNotIn("p1d-01-owner-only-enrollment-policy", report["remaining_gates"])
+        self.assertIn("p1d-02-owner-phone-enrollment", report["remaining_gates"])
+
+    def test_multiple_enrollment_applications_fail_closed(self) -> None:
+        state = base_state()
+        second_id = "aaaaaaaa-1111-4111-8111-111111111111"
+        state["apps"].append(
+            {
+                "id": second_id,
+                "type": "warp",
+                "name": "Unexpected second enrollment app",
+            }
+        )
+        state["policies"][second_id] = [
+            {
+                "decision": "allow",
+                "precedence": 1,
+                "include": [{"email": {"email": OWNER}}],
+                "require": [],
+                "exclude": [],
+            }
+        ]
+
+        report = preflight.build_report(OWNER, state)
+
+        self.assertEqual(report["result"], "BLOCKED")
+        self.assertEqual(report["enrollment"]["application_count"], 2)
+        self.assertEqual(report["enrollment"]["application_state"], "ambiguous")
+        self.assertIn("device_enrollment_application_ambiguous", report["blockers"])
+        self.assertNotIn(
+            "p1d-01a-create-owner-only-enrollment-application",
+            report["remaining_gates"],
+        )
+        self.assertNotIn("p1d-01-owner-only-enrollment-policy", report["remaining_gates"])
+
     def test_non_owner_only_enrollment_routes_to_p1d01(self) -> None:
         state = base_state()
         state["policies"][ENROLL_APP][0]["include"] = [
@@ -163,8 +221,13 @@ class CloudflareOwnerPhonePreflightTests(unittest.TestCase):
         ]
         report = preflight.build_report(OWNER, state)
         self.assertEqual(report["result"], "PASS")
+        self.assertEqual(report["enrollment"]["application_state"], "single")
         self.assertFalse(report["enrollment"]["owner_only"])
         self.assertIn("p1d-01-owner-only-enrollment-policy", report["remaining_gates"])
+        self.assertNotIn(
+            "p1d-01a-create-owner-only-enrollment-application",
+            report["remaining_gates"],
+        )
 
     def test_missing_owner_android_registration_routes_to_p1d02(self) -> None:
         state = base_state()
@@ -298,7 +361,7 @@ class CloudflareOwnerPhonePreflightTests(unittest.TestCase):
             self.assertNotIn(forbidden, combined)
         self.assertIn("CloudflareGetClient", source)
         self.assertIn("Owner email (hidden)", wrapper)
-        self.assertNotIn("owner_email=\"${", wrapper)
+        self.assertNotIn('owner_email="${', wrapper)
 
 
 if __name__ == "__main__":
