@@ -3,9 +3,13 @@
   "status": "source-decision-complete-plan-only",
   "canonical_issue": 179,
   "decision_date": "2026-08-19",
-  "last_revalidated": "2026-08-22",
+  "last_revalidated": "2026-08-23",
   "mutation_authorized": false,
   "supersedes_for_p1d_only": "docs/CLOUDFLARE_P1_EXACT_WRITE_PLAN.md#9-p1d-owner-phone-posture--intentionally-blocked-pending-source-decision",
+  "design_documents": [
+    "docs/CLOUDFLARE_P1D_OWNER_PHONE_POSTURE_DECISION.md",
+    "docs/CLOUDFLARE_P1D_ZERO_ENROLLMENT_APPLICATION.md"
+  ],
   "decision": {
     "identity_requirement": "exact-owner-identity",
     "selected_posture": "require_gateway",
@@ -45,7 +49,13 @@
     "policy_basis": "exact-owner-identity",
     "posture_selector_allowed_in_enrollment_policy": false,
     "fresh_get_only_preflight_required": true,
-    "write_only_if_current_enrollment_policy_is_not_already_owner_only": true
+    "write_only_if_current_enrollment_policy_is_not_already_owner_only": true,
+    "application_count_classification": {
+      "0": "missing-create-owner-only-enrollment-application",
+      "1": "inspect-existing-owner-only-policy",
+      ">1": "ambiguous-stop"
+    },
+    "missing_application_canary": "p1d-01a-create-owner-only-enrollment-application"
   },
   "readonly_preflight": {
     "operator": "ops/bin/cloudflare-owner-phone-preflight",
@@ -68,7 +78,7 @@
     ],
     "proves": [
       "organization-binding-present",
-      "device-enrollment-application-and-policy-shape",
+      "device-enrollment-application-count-classification-and-policy-shape",
       "owner-android-registration-state-without-emitting-identity-or-device-id",
       "selected-owner-android-device-profile-mode",
       "android-compatible-require-gateway-check-inventory",
@@ -100,10 +110,76 @@
       "authorized": false
     },
     {
+      "id": "p1d-01a-create-owner-only-enrollment-application",
+      "kind": "conditional-access-application-create",
+      "authorized": false,
+      "condition": "fresh-preflight-proves-device-enrollment-application-count-zero",
+      "forward_method": "POST",
+      "forward_endpoint": "/accounts/{account_id}/access/apps",
+      "required_permission": "Access: Apps and Policies Write",
+      "one_forward_call_only": true,
+      "payload_template": {
+        "type": "warp",
+        "name": "RPi5 Owner Device Enrollment",
+        "policies": [
+          {
+            "name": "RPi5 Owner Device Enrollment",
+            "decision": "allow",
+            "precedence": 1,
+            "include": [
+              {
+                "email": {
+                  "email": "exact-owner-identity-private-input"
+                }
+              }
+            ],
+            "require": [],
+            "exclude": []
+          }
+        ]
+      },
+      "deliberately_omitted_fields": [
+        "allowed_idps",
+        "auto_redirect_to_identity",
+        "session_duration"
+      ],
+      "allowed_diff": [
+        "create-exactly-one-access-application-type-warp",
+        "create-exactly-one-inline-exclusive-owner-email-allow-policy-precedence-1"
+      ],
+      "forbidden_diff": [
+        "unrelated-access-application-change",
+        "unrelated-access-policy-change",
+        "device-posture-change",
+        "device-profile-change",
+        "gateway-firewall-policy-change",
+        "session-change"
+      ],
+      "post_write_proof": [
+        "fresh-get-device-enrollment-application-count-equals-1",
+        "fresh-get-single-owner-only-allow-policy",
+        "fresh-get-empty-require-and-exclude",
+        "fresh-get-no-unrelated-diff"
+      ],
+      "rollback": {
+        "method": "DELETE",
+        "endpoint": "/accounts/{account_id}/access/apps/{created_app_id}",
+        "only_if_created_app_is_safely_attributable": true,
+        "post_rollback_proof": "fresh-get-device-enrollment-application-count-equals-0"
+      },
+      "failure_contract": [
+        "stop-on-http-error",
+        "stop-on-ambiguous-created-app-attribution",
+        "stop-on-unexpected-diff",
+        "no-retry",
+        "no-delete-on-ambiguous-attribution"
+      ]
+    },
+    {
       "id": "p1d-01-owner-only-enrollment-policy",
       "kind": "conditional-access-policy-write",
       "authorized": false,
-      "condition": "fresh-preflight-proves-current-enrollment-policy-not-owner-only"
+      "condition": "fresh-preflight-proves-exactly-one-device-enrollment-application-and-current-policy-not-owner-only"
     },
     {
       "id": "p1d-02-owner-phone-enrollment",
