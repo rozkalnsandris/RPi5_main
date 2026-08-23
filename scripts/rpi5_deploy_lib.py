@@ -52,6 +52,11 @@ PACKAGE_MANAGER_LOCKS = (
     "/var/cache/apt/archives/lock",
     "/var/lib/apt/lists/lock",
 )
+ATTEST_ONLY_TARGET_IDS = frozenset({
+    "backup-runner",
+    "backup-core",
+    "maintenance-lock-lib",
+})
 
 
 class DeployError(RuntimeError):
@@ -382,8 +387,15 @@ def read_manifest() -> tuple[list[Target], str]:
         targets.append(target)
     if len({t.id for t in targets}) != len(targets) or len({t.target for t in targets}) != len(targets):
         raise DeployError("duplicate target id or path")
-    if {t.id for t in targets} != {"backup-runner", "backup-cron", "backup-logrotate"}:
-        raise DeployError("V12 target set must remain exactly the approved V10 files")
+    expected_ids = {
+        "backup-runner",
+        "backup-core",
+        "maintenance-lock-lib",
+        "backup-cron",
+        "backup-logrotate",
+    }
+    if {t.id for t in targets} != expected_ids:
+        raise DeployError("target set must remain exactly the approved V25 backup topology")
     return targets, hashlib.sha256(raw).hexdigest()
 
 
@@ -595,6 +607,10 @@ def target_plan(targets: Iterable[Target]) -> list[dict[str, Any]]:
         safe_target_parent(installed)
         before, source_sha = fingerprint(installed), sha256_file(source)
         desired = expected_fingerprint(target, source_sha)
+        if target.id in ATTEST_ONLY_TARGET_IDS and before != desired:
+            raise DeployError(
+                f"attestation-only target drift: {target.id}; use its dedicated V25 maintenance path"
+            )
         rows.append({"id": target.id, "source": target.source, "target": target.target,
                      "source_sha256": source_sha, "before": before, "desired": desired,
                      "owner": target.owner, "group": target.group, "mode": f"{target.mode:04o}",
@@ -648,3 +664,6 @@ def verify_plan_targets(plan: dict[str, Any]) -> None:
             raise DeployError(f"live target changed after plan: {target.id}")
         if expected_fingerprint(target, row["source_sha256"]) != row.get("desired"):
             raise DeployError(f"desired target fingerprint changed after plan: {target.id}")
+        if target.id in ATTEST_ONLY_TARGET_IDS:
+            if row.get("action") != "unchanged" or row.get("before") != row.get("desired"):
+                raise DeployError(f"attestation-only target is not unchanged in plan: {target.id}")
