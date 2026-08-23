@@ -29,8 +29,8 @@ the same directory.
 |---|---|---|
 | `backups.json` | `rpi5-backup-serialized` best-effort receipt | run id, UTC start/end, result, duration, encrypted archive size, exit code |
 | `endpoints.json` | `rpi5-dashboard-evidence` | transition id, curated endpoint id/label, state, HTTP code, latency |
-| `maintenance.json` | `rpi5-dashboard-evidence` | systemd invocation id, observed completion result, bounded unit result |
-| `deployments.json` | explicit `dashboard-evidence.py deploy-record` call | verified deployment transaction id, 12-char commit, acceptance time |
+| `maintenance.json` | `rpi5-dashboard-evidence` | systemd invocation id, actual execution exit time, bounded unit result |
+| `deployments.json` | `rpi5-dashboard-evidence` via controlled-deploy state | latest successful `RPi5_main` transaction id, 12-char commit, completion time |
 | `throttle.json` | `rpi5-dashboard-evidence` | observation time and Raspberry Pi `get_throttled` hex value |
 
 Raw logs, response bodies, private paths, backup names, rclone remotes,
@@ -59,14 +59,21 @@ the weekly updater completed. The collector uses fixed
 
 - `ActiveState`;
 - `InvocationID`;
-- `Result`.
+- `Result`;
+- `ExecMainExitTimestamp`.
 
 Active/transitional executions are not recorded. A completed valid invocation
-is deduplicated by its 32-hex `InvocationID`; `Result=success` becomes dashboard
+is keyed by its 32-hex `InvocationID`; `Result=success` becomes dashboard
 `SUCCESS`, while another bounded systemd result becomes `FAILED` with the
-bounded unit result token. The event time is the collector observation time,
-so the maximum timing error is the timer interval rather than fabricated
-journal precision.
+bounded unit result token. `occurredAt` is derived from the unit's actual
+`ExecMainExitTimestamp`, not from the later evidence-collector run.
+
+The writer permits one narrow repair case for already-retained evidence: if the
+same invocation has the same result/unit-result but the timestamp differs, the
+record is replaced with the authoritative exit timestamp and the bounded event
+list is re-sorted. A conflicting result for the same invocation fails closed.
+This allows the pre-fix collector-time timestamp to self-heal without erasing a
+real historical failure.
 
 ## Backup evidence
 
@@ -92,11 +99,34 @@ evidence becomes stale.
 
 ## Deployment evidence
 
-A deployment event is never inferred from the `current` symlink or from source
-merge state. `deploy-record` is a bounded explicit producer operation intended
-to be called only by a separately authorized dashboard production rollout
-after exact-release activation and final acceptance have passed. The
-transaction id and commit must cross-check by format.
+Phase 6C compares the proven production commit for
+`rozkalnsandris/RPi5_main` with that repository's GitHub `main`. Therefore a
+dashboard application release SHA is not valid deployment evidence for this
+surface.
+
+The collector derives `deployments.json` only from the fixed root-owned
+controlled-deploy state below `/var/lib/rpi5-deploy`:
+
+- `latest-success` selects one transaction;
+- the transaction id must embed the same 12-char commit prefix;
+- `transactions/<id>/transaction.json` must use schema
+  `rpi5.controlled-deploy-transaction.v1`;
+- repository must be exactly `rozkalnsandris/RPi5_main`;
+- status must be exactly `success`;
+- the full 40-char commit must match the id prefix;
+- the controlled-deploy completion timestamp must be UTC and is normalized to
+  canonical browser evidence format.
+
+Only the latest authoritative successful transaction is projected. No target
+paths, before/after fingerprints, private state paths, logs or rollback material
+are copied to browser evidence. If the controlled-deploy state is absent or
+invalid, the sync fails closed rather than retaining or inventing a dashboard
+release as an `RPi5_main` deployment.
+
+The legacy bounded `deploy-record` helper remains for compatibility with already
+reviewed callers, but normal periodic production collection uses `deploy-sync`.
+A dashboard rollout must never call `deploy-record` with a dashboard release
+SHA to satisfy Phase 6C.
 
 ## Source-to-installed mapping
 
@@ -111,9 +141,10 @@ transaction id and commit must cross-check by format.
 ## Validation
 
 `make validate` covers the pure producer functions, file bounds, deduplication,
-malformed retained evidence, exact eight-endpoint curation, shell syntax,
-backup-result preservation assertions and the source-only systemd least-
-privilege shape.
+maintenance timestamp repair/conflict refusal, authoritative controlled-deploy
+projection, malformed retained evidence, exact eight-endpoint curation, shell
+syntax, backup-result preservation assertions and the source-only systemd
+least-privilege shape.
 
 ## Production boundary
 
@@ -121,15 +152,15 @@ This document and its source PR perform no installation or activation.
 Repository merge alone does not authorize:
 
 - replacing the live backup wrapper;
-- installing the evidence helper/collector;
+- installing or replacing the evidence helper/collector;
 - creating or changing `/var/lib/dashboard-rpi5/evidence`;
 - installing/enabling/starting/restarting the evidence service or timer;
 - `/dev/vcio` device-policy activation;
 - any identity/group change;
 - any Docker, Cloudflare, network or dashboard deployment mutation;
 - executing a backup/update/deploy;
-- recording a production deploy event.
+- changing `/var/lib/rpi5-deploy` controlled-deploy state.
 
-Those actions require a separately owner-authorized, exact-SHA Composite Live
-transaction after both producer and consumer source PRs are merged and freshly
-revalidated.
+Any live correction remains a separately owner-authorized exact-SHA operation.
+It must preserve the existing trust boundaries and stop on the first post-write
+error or ambiguity without automatic retry, rollback or cleanup.
