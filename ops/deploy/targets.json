@@ -3,11 +3,29 @@
   "targets": [
     {
       "id": "backup-runner",
-      "source": "ops/bin/rpi5-backup",
+      "source": "ops/bin/rpi5-backup-serialized",
       "target": "/usr/local/sbin/rpi5-backup",
       "owner": "root",
       "group": "root",
-      "mode": "0700",
+      "mode": "0750",
+      "validators": ["bash-n"]
+    },
+    {
+      "id": "backup-core",
+      "source": "ops/bin/rpi5-backup",
+      "target": "/usr/local/lib/rpi5-maintenance/rpi5-backup-v10-core",
+      "owner": "root",
+      "group": "root",
+      "mode": "0750",
+      "validators": ["bash-n"]
+    },
+    {
+      "id": "maintenance-lock-lib",
+      "source": "ops/lib/rpi5-maintenance-locks.sh",
+      "target": "/usr/local/lib/rpi5-maintenance/rpi5-maintenance-locks.sh",
+      "owner": "root",
+      "group": "root",
+      "mode": "0644",
       "validators": ["bash-n"]
     },
     {
