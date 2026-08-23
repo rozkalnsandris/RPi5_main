@@ -67,14 +67,20 @@ assert endpoint["events"][0]["fromState"] == "UP"
 assert endpoint["events"][0]["toState"] == "DOWN"
 assert endpoint["events"][1]["fromState"] == "UNKNOWN"
 
+# Pre-fix collector-time timestamps must self-heal to the authoritative systemd
+# execution exit timestamp for the same invocation/result.
 invocation = "0123456789abcdef0123456789abcdef"
+assert helper.record_maintenance(
+    invocation_id=invocation, service_result="success",
+    occurred_at="2026-08-22T20:06:00Z", root=root,
+)
 assert helper.record_maintenance(
     invocation_id=invocation, service_result="success",
     occurred_at="2026-08-22T20:05:00Z", root=root,
 )
 assert not helper.record_maintenance(
     invocation_id=invocation, service_result="success",
-    occurred_at="2026-08-22T20:06:00Z", root=root,
+    occurred_at="2026-08-22T20:05:00Z", root=root,
 )
 maintenance = json.loads((root / "maintenance.json").read_text())
 assert maintenance["events"] == [{
@@ -83,17 +89,85 @@ assert maintenance["events"] == [{
     "result": "SUCCESS",
     "unitResult": None,
 }]
+try:
+    helper.record_maintenance(
+        invocation_id=invocation, service_result="exit-code",
+        occurred_at="2026-08-22T20:05:00Z", root=root,
+    )
+except ValueError:
+    pass
+else:
+    raise AssertionError("same maintenance invocation with conflicting result must fail closed")
 
-commit = "abcdef123456"
-transaction = f"20260822T200500123456Z-{commit}"
+# Seed the exact class of invalid evidence produced by the first #196 live
+# operator, then prove deploy-sync replaces it only from RPi5_main controlled
+# deploy state.
+fake_commit = "abcdef123456"
+fake_transaction = f"20260822T200500123456Z-{fake_commit}"
 assert helper.record_deploy(
-    transaction_id=transaction, commit=commit,
+    transaction_id=fake_transaction, commit=fake_commit,
     occurred_at="2026-08-22T20:07:00Z", root=root,
 )
-assert not helper.record_deploy(
-    transaction_id=transaction, commit=commit,
-    occurred_at="2026-08-22T20:08:00Z", root=root,
+state_root = Path(tempfile.mkdtemp(prefix="dashboard-deploy-state-test-")) / "state"
+state_root.mkdir()
+(state_root / "transactions").mkdir()
+rpi_commit = "123456abcdef123456abcdef123456abcdef1234"
+rpi_short = rpi_commit[:12]
+rpi_transaction = f"20260822T195930123456Z-{rpi_short}"
+tx_root = state_root / "transactions" / rpi_transaction
+tx_root.mkdir()
+(state_root / "latest-success").write_text(rpi_transaction + "\n", encoding="utf-8")
+(tx_root / "transaction.json").write_text(json.dumps({
+    "schema": "rpi5.controlled-deploy-transaction.v1",
+    "id": rpi_transaction,
+    "repository": "rozkalnsandris/RPi5_main",
+    "commit": rpi_commit,
+    "started_at": "2026-08-22T19:58:00+00:00",
+    "completed_at": "2026-08-22T19:59:30+00:00",
+    "status": "success",
+    "targets": [],
+}) + "\n", encoding="utf-8")
+assert helper.sync_deploy_state(
+    state_root=state_root,
+    root=root,
+    observed_at="2026-08-22T20:10:00Z",
 )
+deploy = json.loads((root / "deployments.json").read_text())
+assert deploy == {
+    "observedAt": "2026-08-22T20:10:00.000Z",
+    "events": [{
+        "transactionId": rpi_transaction,
+        "commit": rpi_short,
+        "occurredAt": "2026-08-22T19:59:30.000Z",
+    }],
+}
+assert fake_commit not in (root / "deployments.json").read_text()
+
+bad_state = Path(tempfile.mkdtemp(prefix="dashboard-deploy-state-bad-")) / "state"
+bad_state.mkdir()
+(bad_state / "transactions").mkdir()
+bad_tx_root = bad_state / "transactions" / rpi_transaction
+bad_tx_root.mkdir()
+(bad_state / "latest-success").write_text(rpi_transaction + "\n", encoding="utf-8")
+(bad_tx_root / "transaction.json").write_text(json.dumps({
+    "schema": "rpi5.controlled-deploy-transaction.v1",
+    "id": rpi_transaction,
+    "repository": "rozkalnsandris/dashboard_RPi5",
+    "commit": rpi_commit,
+    "completed_at": "2026-08-22T19:59:30+00:00",
+    "status": "success",
+}) + "\n", encoding="utf-8")
+try:
+    helper.sync_deploy_state(
+        state_root=bad_state,
+        root=root,
+        observed_at="2026-08-22T20:11:00Z",
+    )
+except ValueError:
+    pass
+else:
+    raise AssertionError("non-RPi5_main controlled-deploy transaction must fail closed")
+
 assert helper.record_throttle(raw_hex="0x50005", observed_at="2026-08-22T20:09:00Z", root=root)
 throttle = json.loads((root / "throttle.json").read_text())
 assert throttle == {
@@ -122,6 +196,7 @@ else:
 subprocess.run(["bash", "-n", str(collector_path)], check=True)
 subprocess.run(["bash", "-n", str(backup_wrapper_path)], check=True)
 collector = collector_path.read_text()
+helper_source = helper_path.read_text()
 backup_wrapper = backup_wrapper_path.read_text()
 service = service_path.read_text()
 timer = timer_path.read_text()
@@ -132,6 +207,12 @@ assert len({entry[0] for entry in entries}) == 8
 assert not any("prometheus" in entry[0].lower() or "prometheus" in entry[2].lower() for entry in entries)
 assert "401" in collector and "403" in collector
 assert "systemctl show \"$UPDATE_UNIT\"" in collector
+assert "ExecMainExitTimestamp" in collector
+assert 'date -u --date="$exit_timestamp"' in collector
+assert "deploy-sync" in collector
+assert "/var/lib/rpi5-deploy" in helper_source
+assert "rpi5.controlled-deploy-transaction.v1" in helper_source
+assert 'DEPLOY_REPOSITORY = "rozkalnsandris/RPi5_main"' in helper_source
 assert "docker " not in collector
 assert "journalctl" not in collector
 assert "/var/log/" not in collector
