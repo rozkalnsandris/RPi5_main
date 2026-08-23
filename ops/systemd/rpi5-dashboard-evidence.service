@@ -1,0 +1,38 @@
+# SOURCE-ONLY BLUEPRINT. Do not install/start without separate owner authorization.
+[Unit]
+Description=Produce sanitized dashboard_RPi5 evidence snapshots
+Documentation=https://github.com/rozkalnsandris/RPi5_main
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/local/sbin/rpi5-dashboard-evidence
+
+UMask=0022
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+LockPersonality=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+DevicePolicy=closed
+DeviceAllow=/dev/vcio rw
+StateDirectory=dashboard-rpi5
+StateDirectoryMode=0755
+TasksMax=32
+MemoryMax=128M
