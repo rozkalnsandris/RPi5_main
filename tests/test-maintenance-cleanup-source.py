@@ -53,7 +53,15 @@ assert "Docker komanda nav pieejama; Docker cleanup izlaists" in text
 assert "Docker daemon nav pieejams; Docker cleanup izlaists" in text
 assert 'if [[ "$MODE" != "cleanup" ]]; then\n    validate_compose_project' in text
 assert 'if [[ "$MODE" != "cleanup" ]]; then\n    check_project_runtime' in text
-assert 'if [[ "$MODE" != "cleanup" && "$HERMES_UPDATE" == "yes"' in text
+
+# V27 keeps Hermes update checking read-only and outside cleanup-only. Cleanup
+# exits before the advisory check, and the legacy auto-update toggle is gone.
+cleanup_final = text.index('if [[ "$MODE" == "cleanup" ]]; then\n    END_EPOCH=')
+cleanup_exit = text.index('    exit "$CLEANUP_STATUS"', cleanup_final)
+hermes_phase = text.index('CURRENT_PHASE="Hermes update check"')
+hermes_check = text.index('"$HERMES_BIN" update --check', hermes_phase)
+assert cleanup_final < cleanup_exit < hermes_phase < hermes_check
+assert "HERMES_UPDATE" not in text
 
 # Production installer must ship and verify the cleanup policy helper together
 # with the updater under the canonical maintenance library root.
