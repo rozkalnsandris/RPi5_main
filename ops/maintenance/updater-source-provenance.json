@@ -81,9 +81,9 @@
   "candidate": {
     "stage": "v27-hermes-manual-update-check-only-public-safe",
     "path": "ops/bin/rpi5-update",
-    "sha256": "aeae65af1f70dab7534cafcf5184b9bf3709b1f8a70afe9a562cb6db97af1acb",
-    "git_blob_sha1": "bf6321b9ac0812fc49ce9d066d9bccc1b77b02f5",
-    "size_bytes": 46953,
+    "sha256": "f9c83acdd72131d6b696900972aa11d24978645b931846ff4ea8e6a8ed80bdc2",
+    "git_blob_sha1": "744192e2acb7105d90a93e1cf3426433c09cb26d",
+    "size_bytes": 46805,
     "helper_root": "/usr/local/lib/rpi5-maintenance",
     "derived_from_sha256": "df1b41f128cee6b014ad0ff43a5365699a055ff99ff26e2ad5dba6f5f60fc19e",
     "evidence": "RPi5_main issue #217 / maintenance/hermes-manual-notify-only-20260823 exact GitHub-stored source identity",

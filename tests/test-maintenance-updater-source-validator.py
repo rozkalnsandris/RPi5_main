@@ -96,6 +96,8 @@ cases = {
     "hermes-dashboard-stop": GOOD + "\nsystemctl stop hermes-dashboard.service\n",
     "hermes-dashboard-restart": GOOD + "\nsystemctl restart hermes-dashboard.service\n",
     "hermes-doctor-in-updater": GOOD + '\n"$HERMES_BIN" doctor\n',
+    "hermes-check-fatal-preflight": GOOD
+    + '\nrequire_help_flag "hermes update" "--check" run_as_update_user "$HERMES_BIN" update\n',
     "hermes-check-before-health": GOOD.replace(
         'CURRENT_PHASE="veselības pārbaudes"\nCURRENT_PHASE="Hermes update check"\n"$HERMES_BIN" update --check',
         'CURRENT_PHASE="Hermes update check"\n"$HERMES_BIN" update --check\nCURRENT_PHASE="veselības pārbaudes"',

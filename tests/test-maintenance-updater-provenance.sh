@@ -4,16 +4,21 @@ IFS=$'\n\t'
 
 repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 manifest="$repo/ops/maintenance/updater-source-provenance.json"
+source_file="$repo/ops/bin/rpi5-update"
 
 [[ -f "$manifest" && ! -L "$manifest" ]]
+[[ -f "$source_file" && ! -L "$source_file" ]]
 
-python3 - "$manifest" <<'PY'
+python3 - "$manifest" "$source_file" <<'PY'
+import hashlib
 import json
 import re
 import sys
 from pathlib import Path
 
 data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+source_bytes = Path(sys.argv[2]).read_bytes()
+
 assert data["schema"] == "rpi5-maintenance-updater-provenance-v1"
 assert data["issue"] == 95
 assert data["status"] == "reviewed-successor-source-imported"
@@ -46,14 +51,30 @@ assert v25["git_blob_sha1"] == "049d9a040efb4be4c2ff861d46a7e0e302b1c5e8"
 assert v25["size_bytes"] == 49860
 assert v25["helper_root"] == "/usr/local/lib/rpi5-maintenance"
 
+v26 = by_stage["v26-cached-apt-check-public-safe"]
+assert v26["sha256"] == "df1b41f128cee6b014ad0ff43a5365699a055ff99ff26e2ad5dba6f5f60fc19e"
+assert v26["git_blob_sha1"] == "595b4752e1f40a961230daab188187bf79e63be8"
+assert v26["size_bytes"] == 51089
+assert v26["helper_root"] == "/usr/local/lib/rpi5-maintenance"
+
 candidate = data["candidate"]
-assert candidate["stage"] == "v26-cached-apt-check-public-safe"
+assert candidate["stage"] == "v27-hermes-manual-update-check-only-public-safe"
 assert candidate["path"] == "ops/bin/rpi5-update"
+assert candidate["sha256"] == "f9c83acdd72131d6b696900972aa11d24978645b931846ff4ea8e6a8ed80bdc2"
+assert candidate["git_blob_sha1"] == "744192e2acb7105d90a93e1cf3426433c09cb26d"
+assert candidate["size_bytes"] == 46805
 assert re.fullmatch(r"[0-9a-f]{64}", candidate["sha256"])
 assert re.fullmatch(r"[0-9a-f]{40}", candidate["git_blob_sha1"])
-assert isinstance(candidate["size_bytes"], int) and candidate["size_bytes"] > 40000
 assert candidate["helper_root"] == "/usr/local/lib/rpi5-maintenance"
-assert candidate["derived_from_sha256"] == v25["sha256"]
+assert candidate["derived_from_sha256"] == v26["sha256"]
+
+actual_sha256 = hashlib.sha256(source_bytes).hexdigest()
+blob_header = f"blob {len(source_bytes)}\0".encode("ascii")
+actual_blob_sha1 = hashlib.sha1(blob_header + source_bytes).hexdigest()
+assert actual_sha256 == candidate["sha256"]
+assert actual_blob_sha1 == candidate["git_blob_sha1"]
+assert len(source_bytes) == candidate["size_bytes"]
+
 assert candidate["public_runtime_literals_removed"] is True
 assert candidate["cleanup_home_scan_removed"] is True
 assert candidate["cleanup_only_compose_preflight_removed"] is True
@@ -66,6 +87,11 @@ assert candidate["apt_check_cached_metadata"] is True
 assert candidate["apt_check_metadata_refresh"] is False
 assert candidate["apt_check_cache_freshness_reported"] is True
 assert candidate["run_apt_metadata_refresh"] is True
+assert candidate["hermes_unattended_update"] is False
+assert candidate["hermes_update_check_only"] is True
+assert candidate["hermes_update_check_after_health"] is True
+assert candidate["hermes_update_check_advisory"] is True
+assert candidate["hermes_update_check_blocks_reboot"] is False
 
 backup = data["backup_ownership_snapshot"]
 assert backup["label"] == "V10 ownership snapshot"

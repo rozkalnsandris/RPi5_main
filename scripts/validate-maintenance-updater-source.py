@@ -41,6 +41,7 @@ REQUIRED_MARKERS = (
 
 SAFE_COMPOSE_UP = 'docker compose up "${RPI5_COMPOSE_UP_ARGS[@]}"'
 FORBIDDEN_LOCAL_LIBEXEC = "/usr/local/libexec/rpi5-maintenance"
+FORBIDDEN_HERMES_FATAL_PREFLIGHT = 'require_help_flag "hermes update" "--check"'
 FORBIDDEN_HERMES_AUTOMATION_MARKERS = (
     "HERMES_UPDATE",
     "HERMES_BACKUP",
@@ -76,6 +77,11 @@ def validate(text: str) -> list[str]:
     for marker in FORBIDDEN_HERMES_AUTOMATION_MARKERS:
         if marker in text:
             errors.append(f"weekly updater contains forbidden Hermes mutation marker: {marker}")
+
+    if FORBIDDEN_HERMES_FATAL_PREFLIGHT in text:
+        errors.append(
+            "Hermes advisory update check must not have a fatal capability preflight gate"
+        )
 
     health_phase = text.find('CURRENT_PHASE="veselības pārbaudes"')
     hermes_phase = text.find('CURRENT_PHASE="Hermes update check"')
