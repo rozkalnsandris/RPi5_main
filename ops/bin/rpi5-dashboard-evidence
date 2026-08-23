@@ -65,14 +65,16 @@ observe_endpoint() {
 }
 
 observe_maintenance() {
-    local output key value active_state="" invocation_id="" service_result="" observed_at
+    local output key value active_state="" invocation_id="" service_result="" exit_timestamp="" occurred_at
     output="$(systemctl show "$UPDATE_UNIT" --no-pager \
-        --property=ActiveState --property=InvocationID --property=Result 2>/dev/null || true)"
+        --property=ActiveState --property=InvocationID --property=Result \
+        --property=ExecMainExitTimestamp 2>/dev/null || true)"
     while IFS='=' read -r key value; do
         case "$key" in
             ActiveState) active_state="$value" ;;
             InvocationID) invocation_id="$value" ;;
             Result) service_result="$value" ;;
+            ExecMainExitTimestamp) exit_timestamp="$value" ;;
         esac
     done <<<"$output"
 
@@ -81,11 +83,21 @@ observe_maintenance() {
     esac
     [[ "$invocation_id" =~ ^[0-9a-f]{32}$ ]] || return 0
     [[ "$service_result" =~ ^[A-Za-z0-9._:-]{1,64}$ ]] || return 0
-    observed_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    [[ -n "$exit_timestamp" ]] || return 0
+    occurred_at="$(date -u --date="$exit_timestamp" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || true)"
+    [[ "$occurred_at" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] || return 0
     python3 "$EVIDENCE_HELPER" maintenance-record \
         --invocation-id "$invocation_id" \
         --service-result "$service_result" \
-        --occurred-at "$observed_at"
+        --occurred-at "$occurred_at"
+}
+
+sync_deployment() {
+    local rc=0
+    python3 "$EVIDENCE_HELPER" deploy-sync >/dev/null 2>&1 || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        log "WARN dashboard deploy evidence sync unavailable rc=${rc}; existing evidence left fail-closed."
+    fi
 }
 
 observe_throttle() {
@@ -117,5 +129,6 @@ for entry in "${ENDPOINTS[@]}"; do
     observe_endpoint "$endpoint_id" "$label" "$url"
 done
 observe_maintenance
+sync_deployment
 observe_throttle
 log "dashboard evidence collection complete"
