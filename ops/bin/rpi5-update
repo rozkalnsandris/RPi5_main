@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # RPi5 drošs nedēļas atjaunināšanas skripts
-# Versija: 26
+# Versija: 27
 #
 # Noklusējuma palaišana (reāls update):
 #   sudo /usr/local/sbin/rpi5-update
@@ -20,8 +20,8 @@
 #   CV_COMPOSE_DIR=<user-home>/docker/cv
 #   REBOOT_POLICY=if-needed       # if-needed | always | never
 #   RCLONE_UPDATE_MODE=auto       # auto | selfupdate | skip
-#   HERMES_UPDATE=yes             # yes | no
-#   HERMES_BACKUP=yes             # yes | no
+#   # Hermes update ir manuāls; nedēļas job beigās palaiž tikai update --check.
+#   # HERMES_TIMEOUT zemāk ierobežo šo read-only pārbaudi.
 #   CLEANUP_RETENTION_DAYS=14
 #   DOCKER_CLEANUP=yes            # yes | no
 #   JOURNAL_RETENTION=14d
@@ -192,7 +192,6 @@ declare -a UPDATED_IMAGES=()
 
 APT_STATUS=0
 RCLONE_STATUS=0
-HERMES_STATUS=0
 MAIN_DOCKER_STATUS=0
 CV_DOCKER_STATUS=0
 LOCAL_HEALTH_STATUS=0
@@ -209,8 +208,6 @@ APT_FULL_ONLY_COUNT=0
 APT_FULL_REMOVE_COUNT=0
 RCLONE_BEFORE=""
 RCLONE_AFTER=""
-HERMES_BEFORE=""
-HERMES_AFTER=""
 
 log() {
     printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
@@ -332,8 +329,6 @@ validate_secure_config() {
     CV_COMPOSE_DIR="${CV_COMPOSE_DIR:-}"
     REBOOT_POLICY="${REBOOT_POLICY:-if-needed}"
     RCLONE_UPDATE_MODE="${RCLONE_UPDATE_MODE:-auto}"
-    HERMES_UPDATE="${HERMES_UPDATE:-yes}"
-    HERMES_BACKUP="${HERMES_BACKUP:-yes}"
     CLEANUP_RETENTION_DAYS="${CLEANUP_RETENTION_DAYS:-14}"
     DOCKER_CLEANUP="${DOCKER_CLEANUP:-yes}"
     JOURNAL_RETENTION="${JOURNAL_RETENTION:-${CLEANUP_RETENTION_DAYS}d}"
@@ -354,16 +349,6 @@ validate_secure_config() {
     case "$RCLONE_UPDATE_MODE" in
         auto|selfupdate|skip) ;;
         *) echo "KĻŪDA: nederīgs RCLONE_UPDATE_MODE=$RCLONE_UPDATE_MODE" >&2; exit 1 ;;
-    esac
-
-    case "$HERMES_UPDATE" in
-        yes|no) ;;
-        *) echo "KĻŪDA: HERMES_UPDATE jābūt yes vai no." >&2; exit 1 ;;
-    esac
-
-    case "$HERMES_BACKUP" in
-        yes|no) ;;
-        *) echo "KĻŪDA: HERMES_BACKUP jābūt yes vai no." >&2; exit 1 ;;
     esac
 
     case "$DOCKER_CLEANUP" in
@@ -435,7 +420,7 @@ PY
 validate_secure_config
 
 readonly UPDATE_USER
-readonly REBOOT_POLICY RCLONE_UPDATE_MODE HERMES_UPDATE HERMES_BACKUP
+readonly REBOOT_POLICY RCLONE_UPDATE_MODE
 readonly CLEANUP_RETENTION_DAYS DOCKER_CLEANUP JOURNAL_RETENTION
 readonly MIN_FREE_KB COMPOSE_WAIT_TIMEOUT
 readonly RCLONE_TIMEOUT HERMES_TIMEOUT DOCKER_PULL_TIMEOUT MAINTENANCE_LOCK_TIMEOUT HOST_IPV4
@@ -448,7 +433,7 @@ require_command() {
 }
 
 CURRENT_PHASE="priekšpārbaude"
-log "===== RPi5 UPDATE v26 SĀKTS (mode=${MODE}, run_id=${RUN_ID}) ====="
+log "===== RPi5 UPDATE v27 SĀKTS (mode=${MODE}, run_id=${RUN_ID}) ====="
 
 for command_name in \
     apt-get dpkg dpkg-query apt-mark python3 curl flock runuser \
@@ -679,12 +664,8 @@ run_retention_cleanup() {
     )
 }
 
-if [[ "$MODE" != "cleanup" && "$HERMES_UPDATE" == "yes" && -x "$HERMES_BIN" ]]; then
+if [[ "$MODE" != "cleanup" && -x "$HERMES_BIN" ]]; then
     require_help_flag "hermes update" "--check" run_as_update_user "$HERMES_BIN" update
-    require_help_flag "hermes update" "--yes" run_as_update_user "$HERMES_BIN" update
-    if [[ "$HERMES_BACKUP" == "yes" ]]; then
-        require_help_flag "hermes update" "--backup" run_as_update_user "$HERMES_BIN" update
-    fi
 fi
 
 renice 10 $$ >/dev/null 2>&1 || true
@@ -1029,7 +1010,7 @@ if [[ "$MODE" == "run" && "$APT_STATUS" -ne 0 ]]; then
     send_msg "❌ RPi5 UPDATE APSTĀDINĀTS APT FĀZĒ
 
 APT vai dpkg pārbaude neizdevās.
-Hermes, rclone un Docker update netika turpināti.
+rclone un Docker update netika turpināti; Hermes advisory update check netika sasniegts.
 Reboot NETIKS veikts.
 
 Logs: ${LOG}" || true
@@ -1093,170 +1074,6 @@ else
 
         RCLONE_AFTER="$(rclone_version)"
         SUMMARY_LINES+=("☁️ rclone: ${RCLONE_BEFORE:-?} → ${RCLONE_AFTER:-?} $(status_icon "$RCLONE_STATUS")")
-    fi
-fi
-
-# ============================================================
-# HERMES
-# ============================================================
-CURRENT_PHASE="Hermes"
-log "----- Hermes -----"
-
-hermes_version() {
-    run_as_update_user "$HERMES_BIN" version 2>/dev/null |
-        grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' |
-        head -1 || true
-}
-
-if [[ "$HERMES_UPDATE" == "no" ]]; then
-    log "Hermes update izlaists pēc konfigurācijas."
-    SUMMARY_LINES+=("🤖 Hermes: izlaists")
-elif [[ ! -x "$HERMES_BIN" ]]; then
-    HERMES_STATUS=1
-    log "KĻŪDA: Hermes binārais fails nav izpildāms: $HERMES_BIN"
-    SUMMARY_LINES+=("🤖 Hermes: nav atrasts ❌")
-else
-    HERMES_BEFORE="$(hermes_version)"
-    hermes_was_active=0
-    hermes_dashboard_was_active=0
-    systemctl is-active --quiet hermes-gateway.service && hermes_was_active=1 || true
-    systemctl is-active --quiet hermes-dashboard.service && hermes_dashboard_was_active=1 || true
-
-    if [[ "$MODE" == "check" ]]; then
-        hermes_check_output="${TMP_DIR}/hermes-check-output.log"
-        set +e
-        run_timed_as_update_user \
-            "$HERMES_TIMEOUT" \
-            60s \
-            "$HERMES_BIN" update --check \
-            2>&1 | tee "$hermes_check_output"
-        hermes_check_rc=${PIPESTATUS[0]}
-        set -e
-
-        hermes_check_text="$(cat "$hermes_check_output")"
-        if rpi5_classify_hermes_update_check "$hermes_check_rc" "$hermes_check_text"; then
-            case "$HERMES_CHECK_STATE" in
-                current)
-                    log "Hermes checkout ir current."
-                    ;;
-                available)
-                    if [[ -n "$HERMES_CHECK_BEHIND" ]]; then
-                        WARNINGS+=("Hermes update pieejams: ${HERMES_CHECK_BEHIND} commit(s) behind origin/main.")
-                    else
-                        WARNINGS+=("Hermes update pieejams pēc hermes update --check.")
-                    fi
-                    ;;
-            esac
-        else
-            HERMES_STATUS=1
-            log "KĻŪDA: hermes update --check neizdevās (rc=${hermes_check_rc})."
-        fi
-    else
-        hermes_update_args=(update --yes)
-        [[ "$HERMES_BACKUP" == "yes" ]] && hermes_update_args+=(--backup)
-        hermes_update_output="$TMP_DIR/hermes-update-output.log"
-
-        if [[ "$hermes_dashboard_was_active" -eq 1 ]]; then
-            log "Aptur hermes-dashboard.service pirms Hermes update..."
-            if ! systemctl stop hermes-dashboard.service; then
-                HERMES_STATUS=1
-                log "KĻŪDA: hermes-dashboard.service neizdevās apturēt."
-            fi
-        fi
-
-        if [[ "$HERMES_STATUS" -eq 0 ]]; then
-            set +e
-            run_timed_as_update_user \
-                "$HERMES_TIMEOUT" \
-                60s \
-                "$HERMES_BIN" "${hermes_update_args[@]}" \
-                2>&1 | tee "$hermes_update_output"
-            hermes_update_rc=${PIPESTATUS[0]}
-            set -e
-
-            if [[ "$hermes_update_rc" -ne 0 ]]; then
-                HERMES_STATUS=1
-                log "KĻŪDA: hermes update atgrieza kodu ${hermes_update_rc}."
-            fi
-
-            if grep -Eiq \
-                'Update partially complete|npm install failed|Web UI npm install failed|stale Node deps|EBADENGINE|Unsupported engine|npm error' \
-                "$hermes_update_output"; then
-                HERMES_STATUS=1
-                log "KĻŪDA: Hermes update pabeidzās tikai daļēji."
-                WARNINGS+=("Hermes update bija daļējs; pārbaudi npm/Node atkarības.")
-            fi
-        fi
-
-        if [[ "$HERMES_STATUS" -eq 0 ]]; then
-            if ! run_timed_as_update_user \
-                10m \
-                30s \
-                "$HERMES_BIN" doctor; then
-                HERMES_STATUS=1
-                log "KĻŪDA: Hermes doctor ziņoja par problēmu."
-            fi
-
-            run_timed_as_update_user \
-                2m \
-                15s \
-                "$HERMES_BIN" gateway status || true
-
-            if [[ "$hermes_was_active" -eq 1 ]] &&
-               ! systemctl is-active --quiet hermes-gateway.service; then
-                HERMES_STATUS=1
-                log "KĻŪDA: hermes-gateway.service pēc update nav active."
-            fi
-        fi
-
-        if [[ "$hermes_dashboard_was_active" -eq 1 ]]; then
-            log "Restartē hermes-dashboard.service..."
-            if systemctl restart hermes-dashboard.service; then
-                log "Gaida dashboard readiness uz ${HOST_IPV4}:9119/api/status..."
-                dashboard_ready=0
-                for ((attempt = 1; attempt <= 15; attempt++)); do
-                    code="$(curl -sS -o /dev/null -w '%{http_code}' \
-                        --connect-timeout 3 --max-time 5 \
-                        "http://${HOST_IPV4}:9119/api/status" 2>/dev/null || true)"
-                    if [[ "$code" == "200" ]]; then
-                        dashboard_ready=1
-                        log "Hermes dashboard gatavs (mēģinājums ${attempt})"
-                        break
-                    fi
-                    if (( attempt < 15 )); then
-                        sleep 3
-                    fi
-                done
-                if [[ "$dashboard_ready" -eq 0 ]]; then
-                    HERMES_STATUS=1
-                    log "KĻŪDA: Hermes dashboard nav sasniedzams pēc restart."
-                fi
-            else
-                HERMES_STATUS=1
-                log "KĻŪDA: hermes-dashboard.service restart neizdevās."
-            fi
-        fi
-    fi
-
-    HERMES_AFTER="$(hermes_version)"
-    if [[ "$MODE" == "check" ]]; then
-        case "${HERMES_CHECK_STATE:-error}" in
-            current)
-                SUMMARY_LINES+=("🤖 Hermes: ${HERMES_AFTER:-?} (Git current) ✅")
-                ;;
-            available)
-                if [[ -n "${HERMES_CHECK_BEHIND:-}" ]]; then
-                    SUMMARY_LINES+=("🤖 Hermes: ${HERMES_AFTER:-?} (update pieejams: ${HERMES_CHECK_BEHIND} commits) ⚠️")
-                else
-                    SUMMARY_LINES+=("🤖 Hermes: ${HERMES_AFTER:-?} (update pieejams) ⚠️")
-                fi
-                ;;
-            *)
-                SUMMARY_LINES+=("🤖 Hermes: ${HERMES_AFTER:-?} (check kļūda) ❌")
-                ;;
-        esac
-    else
-        SUMMARY_LINES+=("🤖 Hermes: ${HERMES_BEFORE:-?} → ${HERMES_AFTER:-?} $(status_icon "$HERMES_STATUS")")
     fi
 fi
 
@@ -1507,13 +1324,66 @@ SUMMARY_LINES+=("🩺 Lokālie servisi: $(status_icon "$LOCAL_HEALTH_STATUS")")
 SUMMARY_LINES+=("🌐 Publiskie servisi: $(status_icon "$PUBLIC_HEALTH_STATUS")")
 SUMMARY_LINES+=("📊 Hermes dashboard: $(status_icon "$(( ! HERMES_LOCAL_OK ))")")
 
+# ============================================================
+# HERMES UPDATE CHECK — ADVISORY ONLY, AFTER ALL WEEKLY MUTATIONS/HEALTH
+# ============================================================
+CURRENT_PHASE="Hermes update check"
+log "----- Hermes update check (read-only, manual update only) -----"
+
+hermes_version() {
+    run_as_update_user "$HERMES_BIN" version 2>/dev/null |
+        grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' |
+        head -1 || true
+}
+
+if [[ ! -x "$HERMES_BIN" ]]; then
+    log "BRĪDINĀJUMS: Hermes binārais fails nav izpildāms; update check izlaists: $HERMES_BIN"
+    WARNINGS+=("Hermes update check izlaists, jo Hermes binārais fails nav atrasts. Automātisks Hermes update netiek veikts.")
+    SUMMARY_LINES+=("🤖 Hermes: nav atrasts (manual update only) ⚠️")
+else
+    HERMES_VERSION_NOW="$(hermes_version)"
+    hermes_check_output="${TMP_DIR}/hermes-check-output.log"
+    set +e
+    run_timed_as_update_user \
+        "$HERMES_TIMEOUT" \
+        60s \
+        "$HERMES_BIN" update --check \
+        2>&1 | tee "$hermes_check_output"
+    hermes_check_rc=${PIPESTATUS[0]}
+    set -e
+
+    hermes_check_text="$(cat "$hermes_check_output")"
+    if rpi5_classify_hermes_update_check "$hermes_check_rc" "$hermes_check_text"; then
+        case "$HERMES_CHECK_STATE" in
+            current)
+                log "Hermes checkout ir current; nedēļas job neko neinstalē."
+                SUMMARY_LINES+=("🤖 Hermes: ${HERMES_VERSION_NOW:-?} (Git current; manual update only) ✅")
+                ;;
+            available)
+                if [[ -n "$HERMES_CHECK_BEHIND" ]]; then
+                    log "Hermes update pieejams: ${HERMES_CHECK_BEHIND} commit(s) behind origin/main; automātisks update netiek veikts."
+                    WARNINGS+=("Hermes update pieejams: ${HERMES_CHECK_BEHIND} commit(s) behind origin/main. Nedēļas maintenance to NEINSTALĒ; atjaunini manuāli, kad esi gatavs.")
+                    SUMMARY_LINES+=("🤖 Hermes: ${HERMES_VERSION_NOW:-?} (MANUAL update: ${HERMES_CHECK_BEHIND} commits) ⚠️")
+                else
+                    log "Hermes update pieejams; automātisks update netiek veikts."
+                    WARNINGS+=("Hermes update pieejams pēc hermes update --check. Nedēļas maintenance to NEINSTALĒ; atjaunini manuāli, kad esi gatavs.")
+                    SUMMARY_LINES+=("🤖 Hermes: ${HERMES_VERSION_NOW:-?} (MANUAL update available) ⚠️")
+                fi
+                ;;
+        esac
+    else
+        log "BRĪDINĀJUMS: hermes update --check neizdevās (rc=${hermes_check_rc}); hosta weekly maintenance statuss netiek pazemināts."
+        WARNINGS+=("Hermes read-only update check neizdevās (rc=${hermes_check_rc}). Automātisks Hermes update netika mēģināts; pārbaudi manuāli.")
+        SUMMARY_LINES+=("🤖 Hermes: ${HERMES_VERSION_NOW:-?} (update check kļūda; manual only) ⚠️")
+    fi
+fi
+
 CURRENT_PHASE="gala atskaite"
 
 OVERALL_STATUS=0
 for status in \
     "$APT_STATUS" \
     "$RCLONE_STATUS" \
-    "$HERMES_STATUS" \
     "$MAIN_DOCKER_STATUS" \
     "$CV_DOCKER_STATUS" \
     "$LOCAL_HEALTH_STATUS" \
@@ -1605,7 +1475,7 @@ if [[ "$MODE" == "run" ]]; then
 fi
 FINAL_SENT=1
 
-log "===== RPi5 UPDATE v26 PABEIGTS: status=${OVERALL_STATUS}, ilgums=${DURATION} ====="
+log "===== RPi5 UPDATE v27 PABEIGTS: status=${OVERALL_STATUS}, ilgums=${DURATION} ====="
 
 if [[ "$REBOOT_REQUIRED" -eq 1 && "$MODE" == "run" ]]; then
     log "Drošs reboot ieplānots pēc 1 minūtes: ${REBOOT_REASON}"
