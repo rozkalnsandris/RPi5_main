@@ -25,6 +25,8 @@ REQUIRED_MARKERS = (
     'MAIN_COMPOSE_DIR="${MAIN_COMPOSE_DIR:-${UPDATE_HOME}/docker}"',
     'HERMES_BIN="${HERMES_BIN:-${UPDATE_HOME}/.local/bin/hermes}"',
     "rpi5_classify_hermes_update_check",
+    'CURRENT_PHASE="Hermes update check"',
+    '"$HERMES_BIN" update --check',
     "rpi5_applied_packages_require_reboot",
     "rpi5_find_missing_compose_services",
     "rpi5_build_compose_up_args",
@@ -39,6 +41,15 @@ REQUIRED_MARKERS = (
 
 SAFE_COMPOSE_UP = 'docker compose up "${RPI5_COMPOSE_UP_ARGS[@]}"'
 FORBIDDEN_LOCAL_LIBEXEC = "/usr/local/libexec/rpi5-maintenance"
+FORBIDDEN_HERMES_AUTOMATION_MARKERS = (
+    "HERMES_UPDATE",
+    "HERMES_BACKUP",
+    "HERMES_STATUS",
+    "update --yes",
+    "systemctl stop hermes-dashboard.service",
+    "systemctl restart hermes-dashboard.service",
+    '"$HERMES_BIN" doctor',
+)
 PRIVATE_IPV4_PATTERNS = (
     r"(?<![0-9])10(?:\.[0-9]{1,3}){3}(?![0-9])",
     r"(?<![0-9])192\.168(?:\.[0-9]{1,3}){2}(?![0-9])",
@@ -61,6 +72,24 @@ def validate(text: str) -> list[str]:
         errors.append("tracked updater contains a concrete user-home path")
     if any(re.search(pattern, text) for pattern in PRIVATE_IPV4_PATTERNS):
         errors.append("tracked updater contains a concrete RFC1918 IPv4 address")
+
+    for marker in FORBIDDEN_HERMES_AUTOMATION_MARKERS:
+        if marker in text:
+            errors.append(f"weekly updater contains forbidden Hermes mutation marker: {marker}")
+
+    health_phase = text.find('CURRENT_PHASE="veselības pārbaudes"')
+    hermes_phase = text.find('CURRENT_PHASE="Hermes update check"')
+    hermes_check = text.find('"$HERMES_BIN" update --check')
+    final_phase = text.find('CURRENT_PHASE="gala atskaite"')
+    if not (
+        health_phase >= 0
+        and hermes_phase > health_phase
+        and hermes_check > hermes_phase
+        and final_phase > hermes_check
+    ):
+        errors.append(
+            "Hermes update check must be read-only and ordered after health checks and before final report"
+        )
 
     if "/run/lock/rpi5-backup.lock" in text:
         errors.append("updater still depends on backup-private lock instead of shared maintenance lock")
