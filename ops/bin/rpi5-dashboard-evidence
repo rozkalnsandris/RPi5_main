@@ -20,6 +20,21 @@ require_root_controlled_file() {
     (( (8#$mode & 022) == 0 ))
 }
 
+normalize_maintenance_result() {
+    local service_result="$1" exec_main_code="$2" exec_main_status="$3"
+    # systemctl reset-failed clears the unit Result while preserving the last
+    # main-process exit metadata. Recover only the exact non-zero normal-exit
+    # case so an already-recorded FAILED invocation remains stable.
+    if [[ "$service_result" == "success" \
+        && "$exec_main_code" == "1" \
+        && "$exec_main_status" =~ ^[0-9]+$ \
+        && "$exec_main_status" != "0" ]]; then
+        printf '%s\n' 'exit-code'
+        return
+    fi
+    printf '%s\n' "$service_result"
+}
+
 [[ ${EUID:-$(id -u)} -eq 0 ]] || { echo "rpi5-dashboard-evidence must run as root." >&2; exit 1; }
 require_root_controlled_file "$EVIDENCE_HELPER" || {
     echo "unsafe or missing dashboard evidence helper: $EVIDENCE_HELPER" >&2
@@ -65,15 +80,19 @@ observe_endpoint() {
 }
 
 observe_maintenance() {
-    local output key value active_state="" invocation_id="" service_result="" exit_timestamp="" occurred_at
+    local output key value active_state="" invocation_id="" service_result="" exit_timestamp="" \
+        exec_main_code="" exec_main_status="" occurred_at
     output="$(systemctl show "$UPDATE_UNIT" --no-pager \
         --property=ActiveState --property=InvocationID --property=Result \
+        --property=ExecMainCode --property=ExecMainStatus \
         --property=ExecMainExitTimestamp 2>/dev/null || true)"
     while IFS='=' read -r key value; do
         case "$key" in
             ActiveState) active_state="$value" ;;
             InvocationID) invocation_id="$value" ;;
             Result) service_result="$value" ;;
+            ExecMainCode) exec_main_code="$value" ;;
+            ExecMainStatus) exec_main_status="$value" ;;
             ExecMainExitTimestamp) exit_timestamp="$value" ;;
         esac
     done <<<"$output"
@@ -82,6 +101,9 @@ observe_maintenance() {
         active|activating|reloading|deactivating) return 0 ;;
     esac
     [[ "$invocation_id" =~ ^[0-9a-f]{32}$ ]] || return 0
+    [[ "$service_result" =~ ^[A-Za-z0-9._:-]{1,64}$ ]] || return 0
+    service_result="$(normalize_maintenance_result \
+        "$service_result" "$exec_main_code" "$exec_main_status")"
     [[ "$service_result" =~ ^[A-Za-z0-9._:-]{1,64}$ ]] || return 0
     [[ -n "$exit_timestamp" ]] || return 0
     occurred_at="$(date -u --date="$exit_timestamp" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || true)"

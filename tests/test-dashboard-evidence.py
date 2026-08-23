@@ -208,6 +208,8 @@ assert not any("prometheus" in entry[0].lower() or "prometheus" in entry[2].lowe
 assert "401" in collector and "403" in collector
 assert "systemctl show \"$UPDATE_UNIT\"" in collector
 assert "ExecMainExitTimestamp" in collector
+assert "ExecMainCode" in collector
+assert "ExecMainStatus" in collector
 assert 'date -u --date="$exit_timestamp"' in collector
 assert "deploy-sync" in collector
 assert "/var/lib/rpi5-deploy" in helper_source
@@ -217,6 +219,41 @@ assert "docker " not in collector
 assert "journalctl" not in collector
 assert "/var/log/" not in collector
 assert "usermod" not in collector and "SupplementaryGroups" not in collector
+
+# The collector must preserve the previous failed result for the exact systemd
+# reset-failed shape observed on #196: Result=success while the same invocation
+# still carries a normal non-zero main-process exit status. Exercise the pure
+# shell normalizer directly without running the root collector.
+normalizer = re.search(
+    r"^normalize_maintenance_result\(\) \{.*?^\}",
+    collector,
+    re.MULTILINE | re.DOTALL,
+)
+assert normalizer is not None
+normalizer_source = normalizer.group(0)
+
+def normalize(service_result: str, exec_main_code: str, exec_main_status: str) -> str:
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            normalizer_source + '\nnormalize_maintenance_result "$1" "$2" "$3"',
+            "dashboard-evidence-test",
+            service_result,
+            exec_main_code,
+            exec_main_status,
+        ],
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+    )
+    return result.stdout.strip()
+
+assert normalize("success", "1", "1") == "exit-code"
+assert normalize("success", "1", "42") == "exit-code"
+assert normalize("success", "1", "0") == "success"
+assert normalize("exit-code", "1", "1") == "exit-code"
+assert normalize("success", "", "") == "success"
 
 assert 'readonly BACKUP_METADATA_DIR="/opt/backups"' in backup_wrapper
 assert "rpi5_backup_*.tar.gz.age" in backup_wrapper
