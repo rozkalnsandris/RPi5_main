@@ -1,0 +1,310 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+IFS=$'\n\t'
+umask 077
+PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+export PATH
+
+readonly OWNER='andris'
+readonly REPOSITORY='rozkalnsandris/RPi5_main'
+readonly BROKER='/usr/local/sbin/rozkalns-github-app-read-token'
+readonly UPDATER_REL='ops/bin/rpi5-update'
+readonly APT_POLICY_REL='ops/lib/rpi5-update-apt-policy.sh'
+readonly LOCK_LIB_REL='ops/lib/rpi5-maintenance-locks.sh'
+readonly PROVENANCE_REL='ops/maintenance/updater-source-provenance.json'
+readonly UPDATER_DEST='/usr/local/sbin/rpi5-update'
+readonly APT_POLICY_DEST='/usr/local/lib/rpi5-maintenance/rpi5-update-apt-policy.sh'
+readonly MAINTENANCE_LIB='/usr/local/lib/rpi5-maintenance'
+readonly BACKUP_DEST='/usr/local/sbin/rpi5-backup'
+readonly UPDATE_LOCK='/run/lock/rpi5-update.lock'
+readonly BACKUP_LOCK='/run/lock/rpi5-backup.lock'
+readonly SHARED_LOCK='/run/lock/rpi5-maintenance-exclusive.lock'
+readonly UPDATE_TIMER='rpi5-update.timer'
+readonly MONITOR_TIMER='rpi5-monitor.timer'
+readonly UPDATE_SERVICE='rpi5-update.service'
+readonly EXPECTED_V25_SHA256='8701b3f8b21ccafb0d02fdd2d162aeb9400a57beb58572800dfe901bfc4bd02a'
+readonly EXPECTED_V26_SHA256='df1b41f128cee6b014ad0ff43a5365699a055ff99ff26e2ad5dba6f5f60fc19e'
+readonly EXPECTED_V27_SHA256='f9c83acdd72131d6b696900972aa11d24978645b931846ff4ea8e6a8ed80bdc2'
+readonly EXPECTED_V27_BLOB='744192e2acb7105d90a93e1cf3426433c09cb26d'
+readonly EXPECTED_APT_POLICY_BLOB='9350483fd6e40af13f62f7a51fba575e53eeaf70'
+readonly EXPECTED_CHECK_MARKER='--check: APT repozitoriju metadata netiks refreshēta'
+readonly FORBIDDEN_REFRESH_MARKER='APT repozitoriju metadatu atjaunināšana...'
+
+QUIESCENT_UPDATE_FD=''
+QUIESCENT_BACKUP_FD=''
+QUIESCENT_SHARED_FD=''
+mutation_started=false
+state_dir=''
+updater_stage=''
+policy_stage=''
+V27_APT_BEFORE=''
+V27_APT_AFTER=''
+
+fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+log() { printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"; }
+sha256_file() { sha256sum "$1" | awk '{print $1}'; }
+unit_enabled() { systemctl is-enabled "$1" 2>/dev/null || true; }
+unit_active() { systemctl is-active "$1" 2>/dev/null || true; }
+
+require_root_file() {
+    local path="$1" uid mode
+    [[ -f "$path" && ! -L "$path" ]] || return 1
+    uid="$(stat -c '%u' "$path")"; mode="$(stat -c '%a' "$path")"
+    [[ "$uid" -eq 0 ]] && (( (8#$mode & 022) == 0 ))
+}
+
+require_root_dir() {
+    local path="$1" uid mode
+    [[ -d "$path" && ! -L "$path" ]] || return 1
+    uid="$(stat -c '%u' "$path")"; mode="$(stat -c '%a' "$path")"
+    [[ "$uid" -eq 0 ]] && (( (8#$mode & 022) == 0 ))
+}
+
+apt_lists_fingerprint() {
+    local root="${1:-/var/lib/apt/lists}"
+    python3 - "$root" <<'PY'
+import hashlib, sys
+from pathlib import Path
+root=Path(sys.argv[1])
+if not root.is_dir(): raise SystemExit('APT lists directory missing')
+h=hashlib.sha256()
+for p in sorted(root.rglob('*'), key=lambda x:x.as_posix()):
+    st=p.lstat(); h.update(p.relative_to(root).as_posix().encode()+b'\0')
+    h.update(str(st.st_mode).encode()+b'\0'+str(st.st_size).encode()+b'\0'+str(st.st_mtime_ns).encode()+b'\0')
+    if p.is_file() and not p.is_symlink():
+        with p.open('rb') as f:
+            for chunk in iter(lambda:f.read(1024*1024), b''): h.update(chunk)
+print(h.hexdigest())
+PY
+}
+
+helper_fingerprint_without_apt_policy() {
+    python3 - "$MAINTENANCE_LIB" "$(basename -- "$APT_POLICY_DEST")" <<'PY'
+import hashlib, sys
+from pathlib import Path
+root=Path(sys.argv[1]); excluded=sys.argv[2]
+if not root.is_dir(): raise SystemExit('maintenance helper directory missing')
+h=hashlib.sha256()
+for p in sorted(root.iterdir(), key=lambda x:x.name):
+    if p.name==excluded or p.is_symlink() or not p.is_file(): continue
+    h.update(p.name.encode()+b'\0'); h.update(p.read_bytes())
+print(h.hexdigest())
+PY
+}
+
+atomic_stage_copy() {
+    local source="$1" destination="$2" mode="$3" result_var="$4"
+    local owner="${5:-}" group="${6:-}" staged_path
+    [[ -d "$(dirname -- "$destination")" && ! -L "$(dirname -- "$destination")" ]] || return 1
+    staged_path="$(mktemp "${destination}.v27-stage.XXXXXX")" || return 1
+    # Publish the exact created path before any later operation can fail. Once
+    # mktemp succeeds, fail-closed evidence must never lose this artifact.
+    printf -v "$result_var" '%s' "$staged_path"
+    if [[ -n "$owner" || -n "$group" ]]; then
+        [[ -n "$owner" && -n "$group" ]] || return 2
+        install -o "$owner" -g "$group" -m "$mode" "$source" "$staged_path" || return 1
+    else
+        install -m "$mode" "$source" "$staged_path" || return 1
+    fi
+}
+
+atomic_replace_stage() {
+    local stage="$1" destination="$2"
+    [[ -f "$stage" && ! -L "$stage" ]] || return 1
+    [[ "$(dirname -- "$stage")" == "$(dirname -- "$destination")" ]] || return 2
+    mv -Tf -- "$stage" "$destination"
+}
+
+verify_v27_check() {
+    local staged_updater="$1" check_log="$2" apt_root="${3:-/var/lib/apt/lists}" before after
+    before="$(apt_lists_fingerprint "$apt_root")" || return 1
+    "$staged_updater" --check >"$check_log" 2>&1 || return 1
+    after="$(apt_lists_fingerprint "$apt_root")" || return 1
+    [[ "$before" == "$after" ]] || return 1
+    grep -Fq -- "$EXPECTED_CHECK_MARKER" "$check_log" || return 1
+    ! grep -Fq -- "$FORBIDDEN_REFRESH_MARKER" "$check_log" || return 1
+    V27_APT_BEFORE="$before"; V27_APT_AFTER="$after"
+}
+
+acquire_quiescent_one() {
+    local label="$1" path="$2" result_var="$3" rc=0
+    rpi5_try_exclusive_lock "$path" "$result_var" || rc=$?
+    case "$rc" in
+        0) return 0 ;;
+        "$RPI5_LOCK_CONFLICT_RC") log "REFUSED ${label} lock is busy; activation contention rc=${RPI5_LOCK_CONFLICT_RC}"; return "$rc" ;;
+        *) log "FAIL ${label} lock acquisition error rc=${rc}; not classified as contention"; return "$rc" ;;
+    esac
+}
+
+release_fd_var() {
+    local var_name="$1"; local fd="${!var_name:-}"
+    [[ -n "$fd" ]] || return 0
+    rpi5_release_exclusive_lock "$fd" || true
+    printf -v "$var_name" '%s' ''
+}
+
+release_quiescent_window() {
+    release_fd_var QUIESCENT_SHARED_FD
+    release_fd_var QUIESCENT_BACKUP_FD
+    release_fd_var QUIESCENT_UPDATE_FD
+}
+
+acquire_quiescent_window() {
+    local update_path="${1:-$UPDATE_LOCK}" backup_path="${2:-$BACKUP_LOCK}" shared_path="${3:-$SHARED_LOCK}" rc=0
+    release_quiescent_window
+    acquire_quiescent_one updater "$update_path" QUIESCENT_UPDATE_FD || rc=$?
+    (( rc == 0 )) || { release_quiescent_window; return "$rc"; }
+    acquire_quiescent_one backup "$backup_path" QUIESCENT_BACKUP_FD || rc=$?
+    (( rc == 0 )) || { release_quiescent_window; return "$rc"; }
+    acquire_quiescent_one shared "$shared_path" QUIESCENT_SHARED_FD || rc=$?
+    (( rc == 0 )) || { release_quiescent_window; return "$rc"; }
+}
+
+on_exit() {
+    local rc=$?
+    trap - EXIT
+    if (( rc != 0 )) && [[ "$mutation_started" == true ]]; then
+        printf 'STOP: V27 activation failed after the first host write; no automatic retry, rollback, cleanup, or alternate mutation was attempted.\n' >&2
+        printf 'PRESERVED_STATE_DIR=%s\n' "${state_dir:-not-created}" >&2
+        printf 'PRESERVED_UPDATER_STAGE=%s\n' "${updater_stage:-none}" >&2
+        printf 'PRESERVED_POLICY_STAGE=%s\n' "${policy_stage:-none}" >&2
+        [[ -f "$UPDATER_DEST" ]] && printf 'CURRENT_UPDATER_SHA256=%s\n' "$(sha256_file "$UPDATER_DEST")" >&2 || true
+        [[ -f "$APT_POLICY_DEST" ]] && printf 'CURRENT_APT_POLICY_SHA256=%s\n' "$(sha256_file "$APT_POLICY_DEST")" >&2 || true
+        exit "$rc"
+    fi
+    release_quiescent_window
+    exit "$rc"
+}
+
+main() {
+    [[ ${EUID:-$(id -u)} -eq 0 ]] || fail 'run this operator as root'
+    for c in awk bash basename cmp cp date dirname find flock gh git grep install mktemp mv python3 runuser sha256sum sort stat systemctl tail; do
+        command -v "$c" >/dev/null 2>&1 || fail "required command is missing: $c"
+    done
+
+    local repo; repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"; readonly repo
+    owner_git() { runuser -u "$OWNER" -- git -C "$repo" "$@"; }
+    [[ -d "$repo/.git" ]] || fail 'operator must run from the RPi5_main checkout'
+    [[ "$(owner_git branch --show-current)" == main ]] || fail 'RPi5_main checkout is not on main'
+    [[ -z "$(owner_git status --porcelain=v1 --untracked-files=all)" ]] || fail 'RPi5_main checkout is not clean'
+    owner_git fetch --prune origin main
+    local head_sha remote_sha; head_sha="$(owner_git rev-parse HEAD)"; remote_sha="$(owner_git rev-parse refs/remotes/origin/main)"
+    [[ "$head_sha" == "$remote_sha" && "$head_sha" =~ ^[0-9a-f]{40}$ ]] || fail 'RPi5_main checkout is not exact current origin/main'
+
+    local updater_source="$repo/$UPDATER_REL" apt_policy_source="$repo/$APT_POLICY_REL" lock_lib="$repo/$LOCK_LIB_REL" provenance="$repo/$PROVENANCE_REL"
+    for p in "$updater_source" "$apt_policy_source" "$lock_lib" "$provenance"; do [[ -f "$p" && ! -L "$p" ]] || fail "reviewed source is missing or unsafe: $p"; done
+    for p in "$UPDATER_REL" "$APT_POLICY_REL" "$LOCK_LIB_REL" "$PROVENANCE_REL"; do owner_git ls-files --error-unmatch "$p" >/dev/null; done
+    bash -n "$updater_source"; bash -n "$apt_policy_source"; bash -n "$lock_lib"
+    # shellcheck source=/dev/null
+    source "$lock_lib"
+
+    local source_updater_sha source_updater_blob source_policy_blob
+    source_updater_sha="$(sha256_file "$updater_source")"; source_updater_blob="$(owner_git ls-files -s -- "$UPDATER_REL" | awk '{print $2}')"; source_policy_blob="$(owner_git ls-files -s -- "$APT_POLICY_REL" | awk '{print $2}')"
+    [[ "$source_updater_sha" == "$EXPECTED_V27_SHA256" ]] || fail 'reviewed V27 updater SHA drifted'
+    [[ "$source_updater_blob" == "$EXPECTED_V27_BLOB" ]] || fail 'reviewed V27 updater blob drifted'
+    [[ "$source_policy_blob" == "$EXPECTED_APT_POLICY_BLOB" ]] || fail 'reviewed APT policy blob drifted'
+    python3 - "$provenance" "$EXPECTED_V27_SHA256" "$EXPECTED_V27_BLOB" <<'PY'
+import json,sys
+from pathlib import Path
+c=json.loads(Path(sys.argv[1]).read_text())['candidate']
+assert c['stage']=='v27-hermes-manual-update-check-only-public-safe'
+assert c['sha256']==sys.argv[2] and c['git_blob_sha1']==sys.argv[3]
+assert c['apt_check_cached_metadata'] is True and c['apt_check_metadata_refresh'] is False and c['run_apt_metadata_refresh'] is True
+assert c['hermes_unattended_update'] is False and c['hermes_update_check_only'] is True
+assert c['hermes_update_check_after_health'] is True and c['hermes_update_check_advisory'] is True
+assert c['hermes_update_check_blocks_reboot'] is False
+PY
+
+    [[ -x "$BROKER" && ! -L "$BROKER" ]] || fail 'GitHub App token broker is missing or unsafe'
+    unset GH_TOKEN GITHUB_TOKEN
+    local app_token runs_json ci_run_id jobs_json
+    app_token="$("$BROKER" --repository "$REPOSITORY")"; [[ ${#app_token} -ge 20 && "$app_token" != *[[:space:]]* ]] || fail 'GitHub App token broker returned an invalid token'
+    runs_json="$(GH_TOKEN="$app_token" gh api "repos/$REPOSITORY/actions/runs?branch=main&head_sha=$head_sha&status=completed&per_page=100")"
+    ci_run_id="$(printf '%s' "$runs_json" | python3 -c 'import json,sys; s=sys.argv[1]; r=json.load(sys.stdin).get("workflow_runs",[]); ok=[x for x in r if x.get("event")=="push" and x.get("head_branch")=="main" and x.get("head_sha")==s and x.get("conclusion")=="success"]; print(max((int(x["id"]) for x in ok),default=""))' "$head_sha")"
+    [[ -n "$ci_run_id" ]] || fail 'no successful exact-main RPi5_main push CI run is available'
+    jobs_json="$(GH_TOKEN="$app_token" gh api "repos/$REPOSITORY/actions/runs/$ci_run_id/jobs?filter=latest&per_page=100")"
+    printf '%s' "$jobs_json" | python3 -c 'import json,sys; j=json.load(sys.stdin).get("jobs",[]); req={"validate","gitleaks","public-automation-baseline / public automation policy"}; passed={x.get("name") for x in j if x.get("conclusion")=="success"}; missing=req-passed; missing and (_ for _ in ()).throw(SystemExit("missing exact-main jobs: "+",".join(sorted(missing))))'
+    unset app_token runs_json jobs_json GH_TOKEN GITHUB_TOKEN
+    echo "RPI5_MAIN_EXACT_SHA=$head_sha"; echo "RPI5_MAIN_EXACT_SHA_CI=PASS run=$ci_run_id"
+
+    require_root_dir "$MAINTENANCE_LIB" || fail 'maintenance helper directory is missing, unsafe, or writable by non-root'
+    require_root_dir "$(dirname -- "$UPDATER_DEST")" || fail 'updater destination directory is missing, unsafe, or writable by non-root'
+    require_root_file "$UPDATER_DEST" || fail 'installed weekly updater is missing or unsafe'
+    [[ "$(stat -c '%U:%G:%a' "$UPDATER_DEST")" == 'root:root:750' ]] || fail 'installed updater ownership/mode is unexpected'
+    local live_updater_before; live_updater_before="$(sha256_file "$UPDATER_DEST")"
+    case "$live_updater_before" in
+        "$EXPECTED_V25_SHA256"|"$EXPECTED_V26_SHA256") ;;
+        "$EXPECTED_V27_SHA256")
+            require_root_file "$APT_POLICY_DEST" && cmp -s "$apt_policy_source" "$APT_POLICY_DEST" || fail 'V27 is installed but APT policy helper differs from reviewed source'
+            echo 'V27_ALREADY_CURRENT=PASS'; echo "V27_UPDATER_SHA256=$live_updater_before"; exit 0 ;;
+        *) fail 'installed updater is not a reviewed V25/V26 predecessor or exact V27' ;;
+    esac
+    if [[ "$live_updater_before" == "$EXPECTED_V26_SHA256" ]]; then require_root_file "$APT_POLICY_DEST" && cmp -s "$apt_policy_source" "$APT_POLICY_DEST" || fail 'V26 is installed but APT policy helper differs from reviewed source'; fi
+    [[ "$(unit_active "$UPDATE_SERVICE")" != active ]] || fail 'weekly updater service is currently active'
+
+    local update_timer_enabled_before update_timer_active_before monitor_timer_enabled_before monitor_timer_active_before backup_sha_before='missing' helpers_before
+    update_timer_enabled_before="$(unit_enabled "$UPDATE_TIMER")"; update_timer_active_before="$(unit_active "$UPDATE_TIMER")"
+    monitor_timer_enabled_before="$(unit_enabled "$MONITOR_TIMER")"; monitor_timer_active_before="$(unit_active "$MONITOR_TIMER")"
+    [[ -f "$BACKUP_DEST" && ! -L "$BACKUP_DEST" ]] && backup_sha_before="$(sha256_file "$BACKUP_DEST")"; helpers_before="$(helper_fingerprint_without_apt_policy)"
+
+    local lock_rc=0; acquire_quiescent_window "$UPDATE_LOCK" "$BACKUP_LOCK" "$SHARED_LOCK" || lock_rc=$?
+    case "$lock_rc" in 0) ;; "$RPI5_LOCK_CONFLICT_RC") fail 'maintenance quiescent window is busy; STOP before mutation' ;; *) fail "maintenance quiescent lock acquisition failed rc=$lock_rc" ;; esac
+
+    trap on_exit EXIT
+    mutation_started=true
+    state_dir="$(mktemp -d "/root/rpi5-v27-activation-$(date +%Y%m%d-%H%M%S).XXXXXX")"
+    chmod 0700 "$state_dir"
+    cp --preserve=mode,ownership,timestamps "$UPDATER_DEST" "$state_dir/rpi5-update.before"
+    printf '%s\n' "$live_updater_before" >"$state_dir/rpi5-update.before.sha256"
+    if [[ -e "$APT_POLICY_DEST" ]]; then require_root_file "$APT_POLICY_DEST" || fail 'existing APT policy path is unsafe'; cp --preserve=mode,ownership,timestamps "$APT_POLICY_DEST" "$state_dir/rpi5-update-apt-policy.before"; fi
+
+    atomic_stage_copy "$updater_source" "$UPDATER_DEST" 0750 updater_stage root root || fail 'failed to stage V27 updater beside live target'
+    atomic_stage_copy "$apt_policy_source" "$APT_POLICY_DEST" 0644 policy_stage root root || fail 'failed to stage reviewed APT policy beside live target'
+    [[ "$(stat -c '%U:%G:%a' "$updater_stage")" == 'root:root:750' && "$(sha256_file "$updater_stage")" == "$EXPECTED_V27_SHA256" ]] || fail 'staged updater identity/mode drifted'
+    [[ "$(stat -c '%U:%G:%a' "$policy_stage")" == 'root:root:644' ]] || fail 'staged APT policy ownership/mode drifted'
+    cmp -s "$updater_source" "$updater_stage" && cmp -s "$apt_policy_source" "$policy_stage" || fail 'staged bytes differ from reviewed source'
+    bash -n "$updater_stage"; bash -n "$policy_stage"
+
+    atomic_replace_stage "$policy_stage" "$APT_POLICY_DEST" || fail 'atomic APT policy replacement failed'; policy_stage=''
+    require_root_file "$APT_POLICY_DEST" && cmp -s "$apt_policy_source" "$APT_POLICY_DEST" || fail 'installed APT policy differs from reviewed source'
+
+    # V27 --check owns updater-private itself. Backup-private + shared remain held,
+    # so no mutating backup/updater can cross the staged verification window.
+    release_fd_var QUIESCENT_UPDATE_FD
+    local check_log="$state_dir/v27-check.log"
+    if ! verify_v27_check "$updater_stage" "$check_log" /var/lib/apt/lists; then tail -n 120 "$check_log" >&2 || true; fail 'staged V27 updater --check failed or mutated APT lists'; fi
+
+    lock_rc=0; acquire_quiescent_one updater "$UPDATE_LOCK" QUIESCENT_UPDATE_FD || lock_rc=$?
+    case "$lock_rc" in 0) ;; "$RPI5_LOCK_CONFLICT_RC") fail 'another updater acquired updater-private after staged check; STOP with evidence, no rollback/retry' ;; *) fail "updater-private reacquisition failed rc=$lock_rc" ;; esac
+    [[ "$(sha256_file "$UPDATER_DEST")" == "$live_updater_before" ]] || fail 'live updater changed during staged V27 check'
+    cmp -s "$apt_policy_source" "$APT_POLICY_DEST" || fail 'APT policy changed during staged V27 check'
+
+    atomic_replace_stage "$updater_stage" "$UPDATER_DEST" || fail 'atomic V27 updater replacement failed'; updater_stage=''
+    require_root_file "$UPDATER_DEST" || fail 'installed V27 updater is unsafe'
+    [[ "$(stat -c '%U:%G:%a' "$UPDATER_DEST")" == 'root:root:750' && "$(sha256_file "$UPDATER_DEST")" == "$EXPECTED_V27_SHA256" ]] || fail 'installed V27 updater identity/mode drifted'
+    cmp -s "$updater_source" "$UPDATER_DEST" && cmp -s "$apt_policy_source" "$APT_POLICY_DEST" || fail 'installed V27 bytes drifted'
+    bash -n "$UPDATER_DEST"; bash -n "$APT_POLICY_DEST"
+
+    echo "V27_PREDECESSOR_SHA256=$live_updater_before"
+    echo "V27_EVIDENCE_STATE=$state_dir"
+    echo "V27_UPDATER_SHA256=$(sha256_file "$UPDATER_DEST")"
+    echo "V27_APT_POLICY_SHA256=$(sha256_file "$APT_POLICY_DEST")"
+    echo 'V27_EXACT_INSTALL=PASS'
+    echo "APT_LISTS_FINGERPRINT_BEFORE=$V27_APT_BEFORE"
+    echo "APT_LISTS_FINGERPRINT_AFTER=$V27_APT_AFTER"
+    echo 'V27_NON_MUTATING_APT_CHECK=PASS'
+    [[ "$(unit_enabled "$UPDATE_TIMER")" == "$update_timer_enabled_before" && "$(unit_active "$UPDATE_TIMER")" == "$update_timer_active_before" ]] || fail 'update timer state changed'
+    [[ "$(unit_enabled "$MONITOR_TIMER")" == "$monitor_timer_enabled_before" && "$(unit_active "$MONITOR_TIMER")" == "$monitor_timer_active_before" ]] || fail 'monitor timer state changed'
+    [[ "$(helper_fingerprint_without_apt_policy)" == "$helpers_before" ]] || fail 'unrelated maintenance helper bytes changed'
+    local backup_sha_after='missing'; [[ -f "$BACKUP_DEST" && ! -L "$BACKUP_DEST" ]] && backup_sha_after="$(sha256_file "$BACKUP_DEST")"; [[ "$backup_sha_after" == "$backup_sha_before" ]] || fail 'canonical backup bytes changed'
+
+    mutation_started=false
+    release_quiescent_window
+    trap - EXIT
+    echo "UPDATE_TIMER_STATE=${update_timer_enabled_before}/${update_timer_active_before}"
+    echo "MONITOR_TIMER_STATE=${monitor_timer_enabled_before}/${monitor_timer_active_before}"
+    echo 'MAINTENANCE_BOUNDARIES_UNCHANGED=PASS'
+    echo 'V27_HOST_ACTIVATION=PASS'
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then main "$@"; fi
