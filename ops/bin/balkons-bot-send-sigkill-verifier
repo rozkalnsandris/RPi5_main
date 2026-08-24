@@ -203,7 +203,7 @@ run_preflight() {
 
   [[ "$PF_RC" -eq 0 || "$PF_RC" -eq 2 ]] || block "preflight_execution_error" "$PF_RC"
 
-  parsed="$(printf '%s' "$PF_JSON" | python3 -c '
+  parsed="$(printf '%s' "$PF_JSON" | python3 -I -c '
 import json, sys
 try:
     d = json.load(sys.stdin)
