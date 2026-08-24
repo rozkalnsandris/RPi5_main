@@ -1,0 +1,13 @@
+{
+  "candidate_sha256": "253fd9222dcec884d4df9591d2bed30baa0a5c8906bd7688fb2af4abd75f39c6",
+  "current_sha256": "2db82cc46d840aced4e57431195c821ead8f916bf9adfb707f2ac60c3bf371bc",
+  "decided_at": "2026-08-24T08:30:41Z",
+  "decision": "accepted",
+  "diff_json_sha256": "034375c07b1b8b144dc586812b33d2bdad0411e930b7c214c9c15e6afd0908b6",
+  "diff_markdown_sha256": "baca42f412e6c363d9eb5a433d9f276b5c80dfeb49d69502638b2fd390a205c4",
+  "reason": "expected_change",
+  "review_id": "92588e653d7f2ccc76958a636678c570",
+  "review_level": "attention",
+  "reviewer": "rozkalnsandris",
+  "schema": "rpi5.runtime-baseline-decision.v1"
+}

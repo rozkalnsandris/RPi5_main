@@ -10,6 +10,17 @@
       "review_id": "0e2a4688c55016fd93dbea814c8be39d",
       "review_level": "attention",
       "transition_sha256": "3a03d3c3935f590f9ef5a7d2adec5155f804d2823e51cda5da3d83e36634513f"
+    },
+    {
+      "decision": "accepted",
+      "entry_id": "2026-08-05T09-44-02Z--2db82cc46d84",
+      "new_collection_utc": "2026-08-24T08:18:20Z",
+      "new_sha256": "253fd9222dcec884d4df9591d2bed30baa0a5c8906bd7688fb2af4abd75f39c6",
+      "old_collection_utc": "2026-08-05T09:44:02Z",
+      "old_sha256": "2db82cc46d840aced4e57431195c821ead8f916bf9adfb707f2ac60c3bf371bc",
+      "review_id": "92588e653d7f2ccc76958a636678c570",
+      "review_level": "attention",
+      "transition_sha256": "2a7a842db8575b2b2a93dd934be7b64e3ee5162f45572247be28fb84fcf147ee"
     }
   ],
   "schema": "rpi5.runtime-baseline-archive-index.v1"
