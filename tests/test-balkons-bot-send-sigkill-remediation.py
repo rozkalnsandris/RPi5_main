@@ -42,6 +42,13 @@ assert "dropin_dir_writable_by_nonroot" in text
 assert 'print("|".join(fields))' in text
 assert "IFS='|' read -r" in text
 
+# Root mutation mode must not make root the Git/preflight reader for a user-owned checkout.
+assert "checkout_owner_must_be_nonroot" in text
+assert 'runuser -u "$repo_user" -- env GIT_OPTIONAL_LOCKS=0' in text
+assert "GIT_OPTIONAL_LOCKS=0" in text
+assert "safe.directory" not in text
+assert "git config" not in text
+
 # The forward path is intentionally narrower than a service deployment.
 apply_start = text.index("  apply)")
 verify_start = text.index("  verify)")

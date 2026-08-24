@@ -96,6 +96,20 @@ Every operator invocation must bind all of the following:
 The operator additionally proves its own/drop-in/preflight files are Git-tracked
 and clean before any mutation.
 
+## Privilege separation
+
+The trusted checkout is expected to remain owned by its normal non-root operator.
+The remediation refuses a root-owned checkout.
+
+In `--apply`/`--rollback` mode, root privilege is used only for the fixed systemd
+filesystem change and `systemctl daemon-reload`. Git reads and the existing
+`balkons-bot-preflight` are executed as the checkout owner through `runuser`, with
+`GIT_OPTIONAL_LOCKS=0` so read-only Git checks do not opportunistically refresh the
+index. The operator does not add or persist a Git `safe.directory` exception.
+
+This keeps the same Git/read-only identity that successfully ran Phase K7 while
+preserving root only for the explicitly owner-gated systemd mutation.
+
 ## Modes
 
 ### `--check`

@@ -152,8 +152,31 @@ readonly PREFLIGHT_PATH="$repo/$PREFLIGHT_REL"
 readonly DROPIN_SOURCE="$repo/$DROPIN_REL"
 
 [[ "$(sha256_text "$repo")" == "$EXPECTED_CHECKOUT_FINGERPRINT" ]] || block "checkout_fingerprint_mismatch"
-[[ "$(git -C "$repo" rev-parse HEAD 2>/dev/null || true)" == "$EXPECTED_REPO_SHA" ]] || block "repo_head_mismatch"
-[[ "$(git -C "$repo" branch --show-current 2>/dev/null || true)" == "main" ]] || block "repo_branch_not_main"
+
+repo_uid="$(stat -c '%u' "$repo" 2>/dev/null || true)"
+[[ "$repo_uid" =~ ^[0-9]+$ ]] || block "checkout_owner_uid_unreadable"
+[[ "$repo_uid" != "0" ]] || block "checkout_owner_must_be_nonroot"
+repo_user="$(getent passwd "$repo_uid" | awk -F: 'NR==1 {print $1}')"
+[[ -n "$repo_user" ]] || block "checkout_owner_unresolvable"
+readonly repo_uid repo_user
+
+as_repo_owner() {
+  local current_uid
+  current_uid="$(id -u)"
+  if [[ "$current_uid" == "$repo_uid" ]]; then
+    env GIT_OPTIONAL_LOCKS=0 "$@"
+  elif [[ "$current_uid" == "0" ]]; then
+    runuser -u "$repo_user" -- env GIT_OPTIONAL_LOCKS=0 "$@"
+  else
+    return 126
+  fi
+}
+
+observed_head="$(as_repo_owner git -C "$repo" rev-parse HEAD 2>/dev/null)" || block "repo_head_unreadable"
+[[ "$observed_head" == "$EXPECTED_REPO_SHA" ]] || block "repo_head_mismatch"
+observed_branch="$(as_repo_owner git -C "$repo" branch --show-current 2>/dev/null)" || block "repo_branch_unreadable"
+[[ "$observed_branch" == "main" ]] || block "repo_branch_not_main"
+
 [[ -f "$SELF_PATH" && ! -L "$SELF_PATH" ]] || block "artifact_missing_or_symlink"
 [[ -f "$PREFLIGHT_PATH" && ! -L "$PREFLIGHT_PATH" ]] || block "preflight_missing_or_symlink"
 [[ -f "$DROPIN_SOURCE" && ! -L "$DROPIN_SOURCE" ]] || block "dropin_source_missing_or_symlink"
@@ -161,9 +184,10 @@ readonly DROPIN_SOURCE="$repo/$DROPIN_REL"
 [[ "$(sha256_file "$PREFLIGHT_PATH")" == "$EXPECTED_PREFLIGHT_SHA256" ]] || block "preflight_hash_mismatch"
 [[ "$(sha256_file "$DROPIN_SOURCE")" == "$EXPECTED_DROPIN_SHA256" ]] || block "dropin_hash_mismatch"
 
-tracked_count="$(git -C "$repo" ls-files --stage -- "$SELF_REL" "$PREFLIGHT_REL" "$DROPIN_REL" 2>/dev/null | wc -l)"
+tracked_count="$(as_repo_owner git -C "$repo" ls-files --stage -- "$SELF_REL" "$PREFLIGHT_REL" "$DROPIN_REL" 2>/dev/null | wc -l)" || block "required_paths_tracking_unreadable"
 [[ "$tracked_count" -eq 3 ]] || block "required_paths_not_tracked"
-[[ -z "$(git -C "$repo" status --porcelain -- "$SELF_REL" "$PREFLIGHT_REL" "$DROPIN_REL" 2>/dev/null)" ]] || block "required_paths_dirty"
+required_status="$(as_repo_owner git -C "$repo" status --porcelain -- "$SELF_REL" "$PREFLIGHT_REL" "$DROPIN_REL" 2>/dev/null)" || block "required_paths_status_unreadable"
+[[ -z "$required_status" ]] || block "required_paths_dirty"
 
 PF_JSON=""
 PF_RC=0
@@ -177,7 +201,8 @@ PF_WRITES_PERFORMED=""
 run_preflight() {
   set +e
   PF_JSON="$(
-    "$PREFLIGHT_PATH" \
+    as_repo_owner \
+      "$PREFLIGHT_PATH" \
       --expected-repo-sha "$EXPECTED_REPO_SHA" \
       --expected-live-source-sha256 "$EXPECTED_LIVE_SOURCE_SHA256" \
       2>/dev/null
