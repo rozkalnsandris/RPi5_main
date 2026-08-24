@@ -1,0 +1,314 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export LC_ALL=C
+export LANG=C
+
+readonly SERVICE="balkons-bot.service"
+readonly SELF_REL="ops/bin/balkons-bot-send-sigkill-remediation"
+readonly PREFLIGHT_REL="ops/bin/balkons-bot-preflight"
+readonly DROPIN_REL="ops/systemd/balkons-bot-no-sigkill.conf"
+readonly DROPIN_DIR="/etc/systemd/system/${SERVICE}.d"
+readonly DROPIN_TARGET="${DROPIN_DIR}/90-rpi5-no-sigkill.conf"
+readonly CANONICAL_H3_LIVE_SOURCE_SHA256="54e7c58bae49a4a78fc033bd86eaa752cf21583bb86a0ba10d7ba9a617b1afd9"
+
+MODE="check"
+MODE_COUNT=0
+EXPECTED_REPO_SHA=""
+EXPECTED_CHECKOUT_FINGERPRINT=""
+EXPECTED_ARTIFACT_SHA256=""
+EXPECTED_PREFLIGHT_SHA256=""
+EXPECTED_DROPIN_SHA256=""
+EXPECTED_LIVE_SOURCE_SHA256="$CANONICAL_H3_LIVE_SOURCE_SHA256"
+MUTATION_STARTED="NO"
+
+usage() {
+  cat <<'EOF'
+Usage: balkons-bot-send-sigkill-remediation MODE BINDINGS
+
+Modes (choose exactly one):
+  --check      Read-only readiness check; expects the sole live blocker to be SendSIGKILL=yes.
+  --apply      Install only the reviewed SendSIGKILL=no drop-in, daemon-reload, then rerun preflight.
+  --verify     Read-only verification of an already applied reviewed drop-in.
+  --rollback   Remove only the exact reviewed drop-in and daemon-reload. Separate owner authorization required.
+
+Required bindings:
+  --expected-repo-sha SHA1
+  --expected-checkout-fingerprint SHA256
+  --expected-artifact-sha256 SHA256
+  --expected-preflight-sha256 SHA256
+  --expected-dropin-sha256 SHA256
+
+Optional binding:
+  --expected-live-source-sha256 SHA256
+
+This source artifact never restarts/reloads/stops/starts/enables/disables/kills the service,
+never performs automatic rollback, and never mutates credentials, MQTT, Docker, packages,
+networking, storage, backups, Home Assistant, ESP32, or pump state.
+EOF
+}
+
+while (($#)); do
+  case "$1" in
+    --check|--apply|--verify|--rollback)
+      MODE="${1#--}"
+      MODE_COUNT=$((MODE_COUNT + 1))
+      shift
+      ;;
+    --expected-repo-sha)
+      [[ $# -ge 2 ]] || { usage >&2; exit 2; }
+      EXPECTED_REPO_SHA="$2"
+      shift 2
+      ;;
+    --expected-checkout-fingerprint)
+      [[ $# -ge 2 ]] || { usage >&2; exit 2; }
+      EXPECTED_CHECKOUT_FINGERPRINT="$2"
+      shift 2
+      ;;
+    --expected-artifact-sha256)
+      [[ $# -ge 2 ]] || { usage >&2; exit 2; }
+      EXPECTED_ARTIFACT_SHA256="$2"
+      shift 2
+      ;;
+    --expected-preflight-sha256)
+      [[ $# -ge 2 ]] || { usage >&2; exit 2; }
+      EXPECTED_PREFLIGHT_SHA256="$2"
+      shift 2
+      ;;
+    --expected-dropin-sha256)
+      [[ $# -ge 2 ]] || { usage >&2; exit 2; }
+      EXPECTED_DROPIN_SHA256="$2"
+      shift 2
+      ;;
+    --expected-live-source-sha256)
+      [[ $# -ge 2 ]] || { usage >&2; exit 2; }
+      EXPECTED_LIVE_SOURCE_SHA256="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+[[ "$MODE_COUNT" -eq 1 ]] || {
+  printf 'RESULT=BLOCKED\nBLOCK_REASON=mode_must_be_explicit_and_unique\nMUTATION_STARTED=NO\n'
+  exit 2
+}
+
+sha256_file() {
+  sha256sum "$1" | awk '{print $1}'
+}
+
+sha256_text() {
+  printf '%s' "$1" | sha256sum | awk '{print $1}'
+}
+
+is_sha1() {
+  [[ "$1" =~ ^[0-9a-f]{40}$ ]]
+}
+
+is_sha256() {
+  [[ "$1" =~ ^[0-9a-f]{64}$ ]]
+}
+
+block() {
+  printf 'RESULT=BLOCKED\n'
+  printf 'BLOCK_REASON=%s\n' "$1"
+  printf 'MUTATION_STARTED=%s\n' "$MUTATION_STARTED"
+  exit "${2:-2}"
+}
+
+for required in \
+  "$EXPECTED_REPO_SHA" \
+  "$EXPECTED_CHECKOUT_FINGERPRINT" \
+  "$EXPECTED_ARTIFACT_SHA256" \
+  "$EXPECTED_PREFLIGHT_SHA256" \
+  "$EXPECTED_DROPIN_SHA256" \
+  "$EXPECTED_LIVE_SOURCE_SHA256"; do
+  [[ -n "$required" ]] || block "missing_binding"
+done
+is_sha1 "$EXPECTED_REPO_SHA" || block "expected_repo_sha_invalid"
+for digest in \
+  "$EXPECTED_CHECKOUT_FINGERPRINT" \
+  "$EXPECTED_ARTIFACT_SHA256" \
+  "$EXPECTED_PREFLIGHT_SHA256" \
+  "$EXPECTED_DROPIN_SHA256" \
+  "$EXPECTED_LIVE_SOURCE_SHA256"; do
+  is_sha256 "$digest" || block "expected_sha256_invalid"
+done
+
+repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+readonly repo
+readonly SELF_PATH="$repo/$SELF_REL"
+readonly PREFLIGHT_PATH="$repo/$PREFLIGHT_REL"
+readonly DROPIN_SOURCE="$repo/$DROPIN_REL"
+
+[[ "$(sha256_text "$repo")" == "$EXPECTED_CHECKOUT_FINGERPRINT" ]] || block "checkout_fingerprint_mismatch"
+[[ "$(git -C "$repo" rev-parse HEAD 2>/dev/null || true)" == "$EXPECTED_REPO_SHA" ]] || block "repo_head_mismatch"
+[[ "$(git -C "$repo" branch --show-current 2>/dev/null || true)" == "main" ]] || block "repo_branch_not_main"
+[[ -f "$SELF_PATH" && ! -L "$SELF_PATH" ]] || block "artifact_missing_or_symlink"
+[[ -f "$PREFLIGHT_PATH" && ! -L "$PREFLIGHT_PATH" ]] || block "preflight_missing_or_symlink"
+[[ -f "$DROPIN_SOURCE" && ! -L "$DROPIN_SOURCE" ]] || block "dropin_source_missing_or_symlink"
+[[ "$(sha256_file "$SELF_PATH")" == "$EXPECTED_ARTIFACT_SHA256" ]] || block "artifact_hash_mismatch"
+[[ "$(sha256_file "$PREFLIGHT_PATH")" == "$EXPECTED_PREFLIGHT_SHA256" ]] || block "preflight_hash_mismatch"
+[[ "$(sha256_file "$DROPIN_SOURCE")" == "$EXPECTED_DROPIN_SHA256" ]] || block "dropin_hash_mismatch"
+
+tracked_count="$(git -C "$repo" ls-files --stage -- "$SELF_REL" "$PREFLIGHT_REL" "$DROPIN_REL" 2>/dev/null | wc -l)"
+[[ "$tracked_count" -eq 3 ]] || block "required_paths_not_tracked"
+[[ -z "$(git -C "$repo" status --porcelain -- "$SELF_REL" "$PREFLIGHT_REL" "$DROPIN_REL" 2>/dev/null)" ]] || block "required_paths_dirty"
+
+PF_JSON=""
+PF_RC=0
+PF_STATE=""
+PF_BLOCKERS=""
+PF_SEND_SIGKILL=""
+PF_LIVE_MATCH=""
+PF_MUTATION_STARTED=""
+PF_WRITES_PERFORMED=""
+
+run_preflight() {
+  set +e
+  PF_JSON="$(
+    "$PREFLIGHT_PATH" \
+      --expected-repo-sha "$EXPECTED_REPO_SHA" \
+      --expected-live-source-sha256 "$EXPECTED_LIVE_SOURCE_SHA256" \
+      2>/dev/null
+  )"
+  PF_RC=$?
+  set -e
+
+  [[ "$PF_RC" -eq 0 || "$PF_RC" -eq 2 ]] || block "preflight_execution_error" "$PF_RC"
+
+  parsed="$(printf '%s' "$PF_JSON" | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    md = d.get("service_metadata") or {}
+    blockers = d.get("blockers")
+    if not isinstance(blockers, list) or not all(isinstance(x, str) for x in blockers):
+        raise ValueError
+    fields = [
+        d.get("preflight"),
+        ",".join(blockers),
+        md.get("send_sigkill", ""),
+        str(d.get("live_source_provenance_match", "")).lower(),
+        str(d.get("mutation_started", "")).lower(),
+        str(d.get("writes_performed", "")).lower(),
+    ]
+    if not all(isinstance(x, str) for x in fields):
+        raise ValueError
+    print("\t".join(fields))
+except Exception:
+    raise SystemExit(2)
+' 2>/dev/null)" || block "preflight_json_invalid"
+
+  IFS=$'\t' read -r \
+    PF_STATE PF_BLOCKERS PF_SEND_SIGKILL PF_LIVE_MATCH PF_MUTATION_STARTED PF_WRITES_PERFORMED \
+    <<<"$parsed"
+
+  [[ "$PF_LIVE_MATCH" == "true" ]] || block "live_source_provenance_not_confirmed"
+  [[ "$PF_MUTATION_STARTED" == "false" ]] || block "preflight_reported_mutation"
+  [[ "$PF_WRITES_PERFORMED" == "false" ]] || block "preflight_reported_write"
+}
+
+require_expected_drift() {
+  run_preflight
+  [[ "$PF_RC" -eq 2 ]] || block "expected_blocked_preflight_exit_missing"
+  [[ "$PF_STATE" == "BLOCKED" ]] || block "expected_blocked_preflight_state_missing"
+  [[ "$PF_BLOCKERS" == "send_sigkill_not_disabled" ]] || block "unexpected_preflight_blockers"
+  [[ "$PF_SEND_SIGKILL" == "yes" ]] || block "unexpected_send_sigkill_baseline"
+}
+
+require_preflight_pass() {
+  run_preflight
+  [[ "$PF_RC" -eq 0 ]] || block "post_change_preflight_not_pass"
+  [[ "$PF_STATE" == "PASS" ]] || block "post_change_preflight_not_pass"
+  [[ -z "$PF_BLOCKERS" ]] || block "post_change_preflight_has_blockers"
+  [[ "$PF_SEND_SIGKILL" == "no" ]] || block "send_sigkill_not_effective"
+}
+
+validate_dropin_dir_if_present() {
+  if [[ -e "$DROPIN_DIR" || -L "$DROPIN_DIR" ]]; then
+    [[ -d "$DROPIN_DIR" && ! -L "$DROPIN_DIR" ]] || block "dropin_dir_unsafe"
+    dir_uid="$(stat -c '%u' "$DROPIN_DIR" 2>/dev/null || true)"
+    dir_mode="$(stat -c '%a' "$DROPIN_DIR" 2>/dev/null || true)"
+    [[ "$dir_uid" == "0" && "$dir_mode" =~ ^[0-7]{3,4}$ ]] || block "dropin_dir_metadata_unsafe"
+    (( (8#$dir_mode & 022) == 0 )) || block "dropin_dir_writable_by_nonroot"
+  fi
+}
+
+emit_preflight() {
+  printf 'PREFLIGHT_JSON=%s\n' "$PF_JSON"
+}
+
+case "$MODE" in
+  check)
+    require_expected_drift
+    [[ ! -e "$DROPIN_TARGET" && ! -L "$DROPIN_TARGET" ]] || block "dropin_target_already_exists"
+    validate_dropin_dir_if_present
+    emit_preflight
+    printf 'RESULT=READY\nMUTATION_STARTED=NO\n'
+    ;;
+
+  apply)
+    [[ ${EUID:-$(id -u)} -eq 0 ]] || block "apply_requires_root"
+    require_expected_drift
+    [[ ! -e "$DROPIN_TARGET" && ! -L "$DROPIN_TARGET" ]] || block "dropin_target_already_exists"
+    validate_dropin_dir_if_present
+    emit_preflight
+
+    MUTATION_STARTED="YES"
+    printf 'MUTATION_STARTED=YES\n'
+    if [[ ! -d "$DROPIN_DIR" ]]; then
+      install -d -o root -g root -m 0755 "$DROPIN_DIR" 2>/dev/null || block "dropin_dir_create_failed"
+    fi
+    install -o root -g root -m 0644 "$DROPIN_SOURCE" "$DROPIN_TARGET" 2>/dev/null || block "dropin_install_failed"
+    [[ "$(sha256_file "$DROPIN_TARGET" 2>/dev/null || true)" == "$EXPECTED_DROPIN_SHA256" ]] || block "installed_dropin_hash_mismatch"
+    systemctl daemon-reload >/dev/null 2>&1 || block "daemon_reload_failed"
+
+    require_preflight_pass
+    emit_preflight
+    printf 'RESULT=PASS\nMUTATION_STARTED=YES\nSERVICE_RESTARTED=NO\nDEPLOY_AUTHORIZED=NO\n'
+    ;;
+
+  verify)
+    [[ -f "$DROPIN_TARGET" && ! -L "$DROPIN_TARGET" ]] || block "dropin_target_missing_or_symlink"
+    [[ "$(sha256_file "$DROPIN_TARGET" 2>/dev/null || true)" == "$EXPECTED_DROPIN_SHA256" ]] || block "installed_dropin_hash_mismatch"
+    require_preflight_pass
+    emit_preflight
+    printf 'RESULT=PASS\nMUTATION_STARTED=NO\n'
+    ;;
+
+  rollback)
+    [[ ${EUID:-$(id -u)} -eq 0 ]] || block "rollback_requires_root"
+    [[ -f "$DROPIN_TARGET" && ! -L "$DROPIN_TARGET" ]] || block "dropin_target_missing_or_symlink"
+    [[ "$(sha256_file "$DROPIN_TARGET" 2>/dev/null || true)" == "$EXPECTED_DROPIN_SHA256" ]] || block "installed_dropin_hash_mismatch"
+
+    run_preflight
+    if [[ "$PF_STATE" == "PASS" && "$PF_RC" -eq 0 && "$PF_SEND_SIGKILL" == "no" && -z "$PF_BLOCKERS" ]]; then
+      :
+    elif [[ "$PF_STATE" == "BLOCKED" && "$PF_RC" -eq 2 && "$PF_SEND_SIGKILL" == "yes" && "$PF_BLOCKERS" == "send_sigkill_not_disabled" ]]; then
+      :
+    else
+      block "rollback_preflight_unexpected"
+    fi
+    emit_preflight
+
+    MUTATION_STARTED="YES"
+    printf 'MUTATION_STARTED=YES\n'
+    rm -- "$DROPIN_TARGET" 2>/dev/null || block "dropin_remove_failed"
+    systemctl daemon-reload >/dev/null 2>&1 || block "rollback_daemon_reload_failed"
+
+    require_expected_drift
+    emit_preflight
+    printf 'RESULT=ROLLBACK_PASS\nMUTATION_STARTED=YES\nSERVICE_RESTARTED=NO\n'
+    ;;
+esac

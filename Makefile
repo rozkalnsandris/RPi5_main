@@ -8,6 +8,7 @@ test:
 	python3 ./tests/test-balkons-bot-source.py
 	bash ./tests/test-balkons-bot-systemd.sh
 	python3 ./tests/test-balkons-bot-preflight.py
+	python3 ./tests/test-balkons-bot-send-sigkill-remediation.py
 	./tests/test-safe-inventory.sh
 	./tests/test-access-model.sh
 	./tests/test-runtime-baseline.sh
