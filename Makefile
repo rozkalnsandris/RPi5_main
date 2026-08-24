@@ -7,6 +7,7 @@ test:
 	bash ./tests/test-balkons-log-legacy-set-contract.sh
 	python3 ./tests/test-balkons-bot-source.py
 	bash ./tests/test-balkons-bot-systemd.sh
+	python3 ./tests/test-balkons-bot-preflight.py
 	./tests/test-safe-inventory.sh
 	./tests/test-access-model.sh
 	./tests/test-runtime-baseline.sh
@@ -80,7 +81,7 @@ test:
 	python3 ./tests/test-cv-controller-activation.py
 	python3 ./tests/test-cv-classifier-host-alignment.py
 	python3 ./tests/test-cv-pull-deploy-canary.py
-	python3 -m py_compile scripts/*.py ops/lib/rpi5-update-telegram.py ops/lib/rpi5-maintenance-telegram.py ops/lib/dashboard-evidence.py ops/bin/hermes-tech-restore-drill ops/lib/balkons-bot.py
+	python3 -m py_compile scripts/*.py ops/lib/rpi5-update-telegram.py ops/lib/rpi5-maintenance-telegram.py ops/lib/dashboard-evidence.py ops/bin/hermes-tech-restore-drill ops/lib/balkons-bot.py ops/bin/balkons-bot-preflight
 
 secret-scan:
 	./scripts/check-no-secrets.sh
