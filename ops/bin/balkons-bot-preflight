@@ -1,0 +1,328 @@
+#!/usr/bin/env python3
+"""Sanitized read-only production preflight for RPi5_main#192.
+
+No writes and no service lifecycle actions are performed. The artifact reads only
+a strict systemd metadata allowlist, hashes the current live Python source without
+printing it, and probes Paho compatibility through the service interpreter.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+import shlex
+import subprocess
+from pathlib import Path
+from typing import Callable, Sequence
+
+SERVICE = "balkons-bot.service"
+CANONICAL_H3_LIVE_SOURCE_SHA256 = (
+    "54e7c58bae49a4a78fc033bd86eaa752cf21583bb86a0ba10d7ba9a617b1afd9"
+)
+SOURCE_REL = Path("ops/lib/balkons-bot.py")
+TEMPLATE_REL = Path("ops/systemd/balkons-bot.service.in")
+PREFLIGHT_REL = Path("ops/bin/balkons-bot-preflight")
+CRITICAL_RELS = (SOURCE_REL, TEMPLATE_REL, PREFLIGHT_REL)
+
+SHA1_RE = re.compile(r"^[0-9a-f]{40}$")
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+SYSTEMD_PROPERTIES = (
+    "LoadState",
+    "ActiveState",
+    "SubState",
+    "User",
+    "ExecStart",
+    "Restart",
+    "RestartUSec",
+    "TimeoutStopUSec",
+    "SendSIGKILL",
+    "FragmentPath",
+)
+
+PAHO_PROBE = (
+    "import importlib.metadata,json,paho.mqtt.client as mqtt;"
+    "print(json.dumps({"
+    "'version':importlib.metadata.version('paho-mqtt'),"
+    "'callback_api_versioned':hasattr(mqtt,'CallbackAPIVersion')"
+    "},separators=(',',':')))"
+)
+
+
+class PreflightError(RuntimeError):
+    def __init__(self, code: str) -> None:
+        self.code = code
+        super().__init__(code)
+
+
+class CommandResult:
+    def __init__(self, returncode: int, stdout: str) -> None:
+        self.returncode = returncode
+        self.stdout = stdout
+
+
+Runner = Callable[[Sequence[str]], CommandResult]
+
+
+def sha256_text(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def run_command(command: Sequence[str]) -> CommandResult:
+    try:
+        completed = subprocess.run(
+            list(command),
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        raise PreflightError("command_execution_failed") from None
+    return CommandResult(completed.returncode, completed.stdout)
+
+
+def build_git_head_command(repo_root: Path) -> tuple[str, ...]:
+    return ("git", "-C", str(repo_root), "rev-parse", "HEAD")
+
+
+def build_git_status_command(repo_root: Path) -> tuple[str, ...]:
+    return (
+        "git",
+        "-C",
+        str(repo_root),
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=no",
+        "--",
+        *(str(path) for path in CRITICAL_RELS),
+    )
+
+
+def build_systemctl_command() -> tuple[str, ...]:
+    command = ["systemctl", "show", SERVICE, "--no-pager"]
+    command.extend(f"--property={name}" for name in SYSTEMD_PROPERTIES)
+    return tuple(command)
+
+
+def build_paho_command(python_executable: Path) -> tuple[str, ...]:
+    return (str(python_executable), "-c", PAHO_PROBE)
+
+
+def parse_properties(raw: str) -> dict[str, str]:
+    properties: dict[str, str] = {}
+    for line in raw.splitlines():
+        if not line:
+            continue
+        if "=" not in line:
+            raise PreflightError("systemd_property_shape_invalid")
+        key, value = line.split("=", 1)
+        if key in properties:
+            raise PreflightError("systemd_property_duplicate")
+        properties[key] = value
+    if any(name not in properties for name in SYSTEMD_PROPERTIES):
+        raise PreflightError("systemd_property_missing")
+    return properties
+
+
+def parse_exec_start(raw: str) -> tuple[Path, Path]:
+    path_match = re.search(r"(?:^|[ {;])path=(/[^ ;}]+)", raw)
+    argv_match = re.search(
+        r"(?:^|[ {;])argv\[\]=(.+?)(?:\s+;\s+"
+        r"(?:ignore_errors|start_time|stop_time|pid|code|status)=|$)",
+        raw,
+    )
+    if not path_match or not argv_match:
+        raise PreflightError("execstart_shape_invalid")
+
+    python_executable = Path(path_match.group(1))
+    try:
+        argv = shlex.split(argv_match.group(1), posix=True)
+    except ValueError:
+        raise PreflightError("execstart_argv_invalid") from None
+    if not argv or not Path(argv[0]).is_absolute():
+        raise PreflightError("execstart_argv_invalid")
+
+    source_candidates = [
+        Path(value)
+        for value in argv[1:]
+        if value.startswith("/") and value.endswith(".py")
+    ]
+    if len(source_candidates) != 1:
+        raise PreflightError("execstart_source_ambiguous")
+    return python_executable, source_candidates[0]
+
+
+def probe_paho(python_executable: Path, runner: Runner) -> dict[str, str]:
+    result = runner(build_paho_command(python_executable))
+    if result.returncode != 0:
+        raise PreflightError("paho_probe_failed")
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        raise PreflightError("paho_probe_shape_invalid") from None
+    version = payload.get("version") if isinstance(payload, dict) else None
+    versioned = payload.get("callback_api_versioned") if isinstance(payload, dict) else None
+    if (
+        not isinstance(version, str)
+        or not version
+        or len(version) > 64
+        or not isinstance(versioned, bool)
+    ):
+        raise PreflightError("paho_probe_shape_invalid")
+    return {
+        "version": version,
+        "callback_api_class": "versioned" if versioned else "legacy",
+    }
+
+
+def collect_preflight(
+    expected_repo_sha: str,
+    expected_live_source_sha256: str,
+    *,
+    repo_root: Path | None = None,
+    runner: Runner = run_command,
+) -> dict[str, object]:
+    if not SHA1_RE.fullmatch(expected_repo_sha):
+        raise PreflightError("expected_repo_sha_invalid")
+    if not SHA256_RE.fullmatch(expected_live_source_sha256):
+        raise PreflightError("expected_live_source_sha256_invalid")
+
+    root = (repo_root or Path(__file__).resolve().parents[2]).resolve()
+    artifact_path = root / PREFLIGHT_REL
+    tracked_source = root / SOURCE_REL
+    tracked_template = root / TEMPLATE_REL
+    for path, code in (
+        (artifact_path, "preflight_artifact_missing"),
+        (tracked_source, "tracked_source_missing"),
+        (tracked_template, "tracked_template_missing"),
+    ):
+        if not path.is_file():
+            raise PreflightError(code)
+
+    head = runner(build_git_head_command(root))
+    if head.returncode != 0:
+        raise PreflightError("repo_head_unreadable")
+    observed_repo_sha = head.stdout.strip()
+    if not SHA1_RE.fullmatch(observed_repo_sha):
+        raise PreflightError("repo_head_invalid")
+
+    status = runner(build_git_status_command(root))
+    if status.returncode != 0:
+        raise PreflightError("repo_status_unreadable")
+    critical_worktree_clean = status.stdout.strip() == ""
+
+    systemd = runner(build_systemctl_command())
+    if systemd.returncode != 0:
+        raise PreflightError("systemd_show_failed")
+    properties = parse_properties(systemd.stdout)
+    python_executable, live_source = parse_exec_start(properties["ExecStart"])
+    if not live_source.is_file():
+        raise PreflightError("live_source_missing")
+
+    live_source_sha256 = sha256_file(live_source)
+    paho = probe_paho(python_executable, runner)
+    user = properties["User"]
+    fragment_path = properties["FragmentPath"]
+    blockers: list[str] = []
+    if observed_repo_sha != expected_repo_sha:
+        blockers.append("repo_head_mismatch")
+    if not critical_worktree_clean:
+        blockers.append("critical_worktree_dirty")
+    if properties["LoadState"] != "loaded":
+        blockers.append("service_not_loaded")
+    if properties["ActiveState"] != "active" or properties["SubState"] != "running":
+        blockers.append("service_not_running")
+    if not user:
+        blockers.append("service_user_missing")
+    if not fragment_path.startswith("/"):
+        blockers.append("fragment_path_invalid")
+    if properties["SendSIGKILL"].casefold() != "no":
+        blockers.append("send_sigkill_not_disabled")
+    if live_source_sha256 != expected_live_source_sha256:
+        blockers.append("live_source_provenance_mismatch")
+
+    return {
+        "schema": "rpi5.balkons_bot_preflight.v1",
+        "scope": "READ_ONLY",
+        "service": SERVICE,
+        "expected_repo_sha": expected_repo_sha,
+        "observed_repo_sha": observed_repo_sha,
+        "preflight_artifact_sha256": sha256_file(artifact_path),
+        "tracked_source_sha256": sha256_file(tracked_source),
+        "tracked_template_sha256": sha256_file(tracked_template),
+        "live_source_sha256": live_source_sha256,
+        "live_source_provenance_match": live_source_sha256 == expected_live_source_sha256,
+        "critical_worktree_clean": critical_worktree_clean,
+        "service_metadata": {
+            "load_state": properties["LoadState"],
+            "active_state": properties["ActiveState"],
+            "sub_state": properties["SubState"],
+            "user_sha256": sha256_text(user) if user else None,
+            "user_is_root": user == "root",
+            "python_executable_path_sha256": sha256_text(str(python_executable)),
+            "live_source_path_sha256": sha256_text(str(live_source)),
+            "fragment_path_sha256": sha256_text(fragment_path) if fragment_path.startswith("/") else None,
+            "restart": properties["Restart"],
+            "restart_usec": properties["RestartUSec"],
+            "timeout_stop_usec": properties["TimeoutStopUSec"],
+            "send_sigkill": properties["SendSIGKILL"],
+        },
+        "paho": paho,
+        "blockers": sorted(blockers),
+        "preflight": "PASS" if not blockers else "BLOCKED",
+        "mutation_started": False,
+        "writes_performed": False,
+    }
+
+
+def blocked_report(code: str) -> dict[str, object]:
+    return {
+        "schema": "rpi5.balkons_bot_preflight.v1",
+        "scope": "READ_ONLY",
+        "service": SERVICE,
+        "blockers": [code],
+        "preflight": "BLOCKED",
+        "mutation_started": False,
+        "writes_performed": False,
+    }
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Sanitized read-only balkons-bot production preflight"
+    )
+    parser.add_argument("--expected-repo-sha", required=True)
+    parser.add_argument(
+        "--expected-live-source-sha256",
+        default=CANONICAL_H3_LIVE_SOURCE_SHA256,
+    )
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    try:
+        report = collect_preflight(
+            args.expected_repo_sha,
+            args.expected_live_source_sha256,
+        )
+    except PreflightError as exc:
+        report = blocked_report(exc.code)
+    except Exception:
+        report = blocked_report("internal_error")
+    print(json.dumps(report, sort_keys=True, separators=(",", ":")))
+    return 0 if report["preflight"] == "PASS" else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
