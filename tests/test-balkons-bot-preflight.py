@@ -50,13 +50,17 @@ class FakeRunner:
     def __call__(self, command):
         command = tuple(command)
         self.commands.append(command)
+        if command[:4] == ("git", "-C", str(ROOT), "rev-parse"):
+            raise AssertionError("tests must use temp repo root")
         if command[0] == "git" and command[3:5] == ("rev-parse", "HEAD"):
             return preflight.CommandResult(0, self.repo_sha + "\n")
         if command[0] == "git" and command[3] == "status":
-            return preflight.CommandResult(
-                0,
-                " M ops/lib/balkons-bot.py\n" if self.dirty else "",
+            return preflight.CommandResult(0, " M ops/lib/balkons-bot.py\n" if self.dirty else "")
+        if command[0] == "git" and command[3:5] == ("ls-files", "--stage"):
+            payload = "".join(
+                f"100644 {'d' * 40} 0\t{path}\n" for path in preflight.CRITICAL_RELS
             )
+            return preflight.CommandResult(0, payload)
         if command[:3] == ("systemctl", "show", preflight.SERVICE):
             payload = "\n".join(
                 [
@@ -73,7 +77,7 @@ class FakeRunner:
                 ]
             )
             return preflight.CommandResult(0, payload + "\n")
-        if command[0] == "/usr/bin/python3" and command[1] == "-c":
+        if command[0] == "/usr/bin/python3" and command[1:3] == ("-I", "-c"):
             return preflight.CommandResult(
                 0,
                 json.dumps(
@@ -116,6 +120,7 @@ class BalkonsBotPreflightTests(unittest.TestCase):
         self.assertEqual(report["preflight"], "PASS")
         self.assertFalse(report["mutation_started"])
         self.assertFalse(report["writes_performed"])
+        self.assertTrue(report["critical_paths_tracked"])
         self.assertEqual(report["paho"]["callback_api_class"], "versioned")
         encoded = json.dumps(report, sort_keys=True)
         self.assertNotIn(str(live), encoded)
@@ -146,6 +151,7 @@ class BalkonsBotPreflightTests(unittest.TestCase):
         temporary, repo, live, live_hash = self.make_repo()
         self.addCleanup(temporary.cleanup)
         runner = FakeRunner(live_source=live, dirty=True)
+
         report = preflight.collect_preflight(
             REPO_SHA,
             live_hash,
@@ -158,6 +164,7 @@ class BalkonsBotPreflightTests(unittest.TestCase):
         temporary, repo, live, live_hash = self.make_repo()
         self.addCleanup(temporary.cleanup)
         runner = FakeRunner(live_source=live, send_sigkill="yes")
+
         report = preflight.collect_preflight(
             REPO_SHA,
             live_hash,
@@ -170,6 +177,7 @@ class BalkonsBotPreflightTests(unittest.TestCase):
         temporary, repo, live, live_hash = self.make_repo()
         self.addCleanup(temporary.cleanup)
         runner = FakeRunner(live_source=live, repo_sha="c" * 40)
+
         report = preflight.collect_preflight(
             REPO_SHA,
             live_hash,
@@ -207,8 +215,34 @@ class BalkonsBotPreflightTests(unittest.TestCase):
 
             git_head = preflight.build_git_head_command(repo)
             git_status = preflight.build_git_status_command(repo)
+            git_tracked = preflight.build_git_tracked_command(repo)
             self.assertEqual(git_head[3:], ("rev-parse", "HEAD"))
             self.assertEqual(git_status[3], "status")
+            self.assertEqual(git_tracked[3:5], ("ls-files", "--stage"))
+            self.assertEqual(preflight.build_paho_command(Path("/usr/bin/python3"))[1:3], ("-I", "-c"))
+
+    def test_non_system_python_exec_fails_closed(self):
+        with self.assertRaises(preflight.PreflightError) as caught:
+            preflight.parse_exec_start(
+                "{ path=/tmp/python3 ; argv[]=/tmp/python3 /tmp/bot.py ; ignore_errors=no }"
+            )
+        self.assertEqual(caught.exception.code, "python_executable_not_system_python")
+
+    def test_versioned_system_python_is_accepted(self):
+        python_executable, source = preflight.parse_exec_start(
+            "{ path=/usr/bin/python3.11 ; "
+            "argv[]=/usr/bin/python3.11 /opt/private/bot.py ; ignore_errors=no }"
+        )
+        self.assertEqual(python_executable, Path("/usr/bin/python3.11"))
+        self.assertEqual(source, Path("/opt/private/bot.py"))
+
+    def test_execstart_python_mismatch_fails_closed(self):
+        with self.assertRaises(preflight.PreflightError) as caught:
+            preflight.parse_exec_start(
+                "{ path=/usr/bin/python3 ; "
+                "argv[]=/usr/local/bin/python3 /opt/private/bot.py ; ignore_errors=no }"
+            )
+        self.assertEqual(caught.exception.code, "execstart_python_mismatch")
 
     def test_source_has_no_broad_runtime_or_secret_reads(self):
         source = MODULE_PATH.read_text(encoding="utf-8")

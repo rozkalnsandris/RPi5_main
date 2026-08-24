@@ -32,13 +32,16 @@ not match that expected SHA.
 1. `git rev-parse HEAD` for exact repository identity;
 2. `git status --porcelain` limited to the tracked bot source, systemd template and
    preflight artifact;
-3. one `systemctl show balkons-bot.service` call restricted to these properties:
+3. `git ls-files --stage` for those same three critical paths so an untracked file
+   cannot shadow a missing artifact from the reviewed commit;
+4. one `systemctl show balkons-bot.service` call restricted to these properties:
    `LoadState`, `ActiveState`, `SubState`, `User`, `ExecStart`, `Restart`,
    `RestartUSec`, `TimeoutStopUSec`, `SendSIGKILL`, and `FragmentPath`;
-4. hash the single absolute Python source path derived from `ExecStart`;
-5. invoke the same Python interpreter with a fixed `-c` probe that returns only
+5. hash the single absolute Python source path derived from `ExecStart`;
+6. require the service executable to be a system-path `python3`/`python3.x`, then
+   invoke it with isolated mode (`-I`) and a fixed `-c` probe that returns only
    the installed `paho-mqtt` version and whether `CallbackAPIVersion` exists;
-6. hash the tracked source, tracked unit template, and preflight artifact itself.
+7. hash the tracked source, tracked unit template, and preflight artifact itself.
 
 The artifact must not:
 
@@ -83,11 +86,13 @@ The preflight is `PASS` only when all of the following hold:
 
 - expected repository SHA and live-source SHA inputs are structurally valid;
 - repository HEAD equals the expected SHA;
-- the critical tracked paths are clean;
+- the critical tracked paths are clean and are actually tracked by the reviewed commit;
 - the service is loaded and `active/running`;
 - a single absolute Python source can be derived from `ExecStart`;
+- the `ExecStart` executable path matches argv[0] exactly;
 - the live source exists and its SHA256 matches the reviewed expected provenance;
 - the service user and fragment path are present;
+- the service executable is a system-path Python 3 interpreter before any probe is executed;
 - `SendSIGKILL=no`;
 - the Paho compatibility probe succeeds and returns a bounded version string plus
   versioned/legacy callback classification.

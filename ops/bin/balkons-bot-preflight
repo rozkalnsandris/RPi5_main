@@ -27,6 +27,8 @@ CRITICAL_RELS = (SOURCE_REL, TEMPLATE_REL, PREFLIGHT_REL)
 
 SHA1_RE = re.compile(r"^[0-9a-f]{40}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+PYTHON_NAME_RE = re.compile(r"^python3(?:\.\d+)?$")
+PAHO_VERSION_RE = re.compile(r"^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$")
 SYSTEMD_PROPERTIES = (
     "LoadState",
     "ActiveState",
@@ -50,6 +52,8 @@ PAHO_PROBE = (
 
 
 class PreflightError(RuntimeError):
+    """Fail-closed error that carries only a public blocker code."""
+
     def __init__(self, code: str) -> None:
         self.code = code
         super().__init__(code)
@@ -108,6 +112,28 @@ def build_git_status_command(repo_root: Path) -> tuple[str, ...]:
     )
 
 
+def build_git_tracked_command(repo_root: Path) -> tuple[str, ...]:
+    return (
+        "git",
+        "-C",
+        str(repo_root),
+        "ls-files",
+        "--stage",
+        "--",
+        *(str(path) for path in CRITICAL_RELS),
+    )
+
+
+def parse_tracked_paths(raw: str) -> set[str]:
+    paths: set[str] = set()
+    for line in raw.splitlines():
+        if "\t" not in line:
+            raise PreflightError("repo_tracked_shape_invalid")
+        _metadata, path = line.split("\t", 1)
+        paths.add(path)
+    return paths
+
+
 def build_systemctl_command() -> tuple[str, ...]:
     command = ["systemctl", "show", SERVICE, "--no-pager"]
     command.extend(f"--property={name}" for name in SYSTEMD_PROPERTIES)
@@ -115,7 +141,7 @@ def build_systemctl_command() -> tuple[str, ...]:
 
 
 def build_paho_command(python_executable: Path) -> tuple[str, ...]:
-    return (str(python_executable), "-c", PAHO_PROBE)
+    return (str(python_executable), "-I", "-c", PAHO_PROBE)
 
 
 def parse_properties(raw: str) -> dict[str, str]:
@@ -145,12 +171,20 @@ def parse_exec_start(raw: str) -> tuple[Path, Path]:
         raise PreflightError("execstart_shape_invalid")
 
     python_executable = Path(path_match.group(1))
+    if (
+        python_executable.parent not in (Path("/usr/bin"), Path("/usr/local/bin"))
+        or not PYTHON_NAME_RE.fullmatch(python_executable.name)
+    ):
+        raise PreflightError("python_executable_not_system_python")
     try:
         argv = shlex.split(argv_match.group(1), posix=True)
     except ValueError:
         raise PreflightError("execstart_argv_invalid") from None
+
     if not argv or not Path(argv[0]).is_absolute():
         raise PreflightError("execstart_argv_invalid")
+    if Path(argv[0]) != python_executable:
+        raise PreflightError("execstart_python_mismatch")
 
     source_candidates = [
         Path(value)
@@ -159,7 +193,11 @@ def parse_exec_start(raw: str) -> tuple[Path, Path]:
     ]
     if len(source_candidates) != 1:
         raise PreflightError("execstart_source_ambiguous")
-    return python_executable, source_candidates[0]
+
+    live_source = source_candidates[0]
+    if not live_source.is_absolute():
+        raise PreflightError("execstart_source_invalid")
+    return python_executable, live_source
 
 
 def probe_paho(python_executable: Path, runner: Runner) -> dict[str, str]:
@@ -170,12 +208,12 @@ def probe_paho(python_executable: Path, runner: Runner) -> dict[str, str]:
         payload = json.loads(result.stdout)
     except json.JSONDecodeError:
         raise PreflightError("paho_probe_shape_invalid") from None
+
     version = payload.get("version") if isinstance(payload, dict) else None
     versioned = payload.get("callback_api_versioned") if isinstance(payload, dict) else None
     if (
         not isinstance(version, str)
-        or not version
-        or len(version) > 64
+        or not PAHO_VERSION_RE.fullmatch(version)
         or not isinstance(versioned, bool)
     ):
         raise PreflightError("paho_probe_shape_invalid")
@@ -201,6 +239,7 @@ def collect_preflight(
     artifact_path = root / PREFLIGHT_REL
     tracked_source = root / SOURCE_REL
     tracked_template = root / TEMPLATE_REL
+
     for path, code in (
         (artifact_path, "preflight_artifact_missing"),
         (tracked_source, "tracked_source_missing"),
@@ -221,23 +260,35 @@ def collect_preflight(
         raise PreflightError("repo_status_unreadable")
     critical_worktree_clean = status.stdout.strip() == ""
 
+    tracked = runner(build_git_tracked_command(root))
+    if tracked.returncode != 0:
+        raise PreflightError("repo_tracked_unreadable")
+    critical_paths_tracked = parse_tracked_paths(tracked.stdout) == {
+        str(path) for path in CRITICAL_RELS
+    }
+
     systemd = runner(build_systemctl_command())
     if systemd.returncode != 0:
         raise PreflightError("systemd_show_failed")
     properties = parse_properties(systemd.stdout)
+
     python_executable, live_source = parse_exec_start(properties["ExecStart"])
     if not live_source.is_file():
         raise PreflightError("live_source_missing")
 
     live_source_sha256 = sha256_file(live_source)
     paho = probe_paho(python_executable, runner)
+
     user = properties["User"]
     fragment_path = properties["FragmentPath"]
     blockers: list[str] = []
+
     if observed_repo_sha != expected_repo_sha:
         blockers.append("repo_head_mismatch")
     if not critical_worktree_clean:
         blockers.append("critical_worktree_dirty")
+    if not critical_paths_tracked:
+        blockers.append("critical_paths_not_tracked")
     if properties["LoadState"] != "loaded":
         blockers.append("service_not_loaded")
     if properties["ActiveState"] != "active" or properties["SubState"] != "running":
@@ -251,7 +302,7 @@ def collect_preflight(
     if live_source_sha256 != expected_live_source_sha256:
         blockers.append("live_source_provenance_mismatch")
 
-    return {
+    report: dict[str, object] = {
         "schema": "rpi5.balkons_bot_preflight.v1",
         "scope": "READ_ONLY",
         "service": SERVICE,
@@ -261,8 +312,11 @@ def collect_preflight(
         "tracked_source_sha256": sha256_file(tracked_source),
         "tracked_template_sha256": sha256_file(tracked_template),
         "live_source_sha256": live_source_sha256,
-        "live_source_provenance_match": live_source_sha256 == expected_live_source_sha256,
+        "live_source_provenance_match": (
+            live_source_sha256 == expected_live_source_sha256
+        ),
         "critical_worktree_clean": critical_worktree_clean,
+        "critical_paths_tracked": critical_paths_tracked,
         "service_metadata": {
             "load_state": properties["LoadState"],
             "active_state": properties["ActiveState"],
@@ -271,7 +325,9 @@ def collect_preflight(
             "user_is_root": user == "root",
             "python_executable_path_sha256": sha256_text(str(python_executable)),
             "live_source_path_sha256": sha256_text(str(live_source)),
-            "fragment_path_sha256": sha256_text(fragment_path) if fragment_path.startswith("/") else None,
+            "fragment_path_sha256": (
+                sha256_text(fragment_path) if fragment_path.startswith("/") else None
+            ),
             "restart": properties["Restart"],
             "restart_usec": properties["RestartUSec"],
             "timeout_stop_usec": properties["TimeoutStopUSec"],
@@ -283,6 +339,7 @@ def collect_preflight(
         "mutation_started": False,
         "writes_performed": False,
     }
+    return report
 
 
 def blocked_report(code: str) -> dict[str, object]:
@@ -320,6 +377,7 @@ def main() -> int:
         report = blocked_report(exc.code)
     except Exception:
         report = blocked_report("internal_error")
+
     print(json.dumps(report, sort_keys=True, separators=(",", ":")))
     return 0 if report["preflight"] == "PASS" else 2
 
