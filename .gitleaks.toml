@@ -1,0 +1,11 @@
+title = "RPi5_main Gitleaks policy"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known non-secret Hermes Docker image tags in sanitized runtime-baseline evidence"
+regexTarget = "secret"
+regexes = [
+  '''^main-[0-9a-f]{12}$''',
+]

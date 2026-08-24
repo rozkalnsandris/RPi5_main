@@ -1,0 +1,31 @@
+{
+  "archive_checksums": {
+    "baseline.json": "2db82cc46d840aced4e57431195c821ead8f916bf9adfb707f2ac60c3bf371bc",
+    "baseline.md": "145c86d5e524837447d401a939043cbc1cd41ac623574193bf4401bebaa751a2",
+    "decision.json": "04d87e8f7d462ca5416b90aa934421e9ebcd52a98b0f303fdce7eb841a47968f",
+    "review.json": "fb301cf3b083eaafdefa681ca6c11ed00d9a30f2d1e6efb4e653332e8ad530ca",
+    "runtime-diff.json": "034375c07b1b8b144dc586812b33d2bdad0411e930b7c214c9c15e6afd0908b6",
+    "runtime-diff.md": "baca42f412e6c363d9eb5a433d9f276b5c80dfeb49d69502638b2fd390a205c4"
+  },
+  "decision": "accepted",
+  "diff_json_sha256": "034375c07b1b8b144dc586812b33d2bdad0411e930b7c214c9c15e6afd0908b6",
+  "diff_markdown_sha256": "baca42f412e6c363d9eb5a433d9f276b5c80dfeb49d69502638b2fd390a205c4",
+  "entry_id": "2026-08-05T09-44-02Z--2db82cc46d84",
+  "new": {
+    "collection_utc": "2026-08-24T08:18:20Z",
+    "context": "issue196-post-evidence-fix",
+    "evidence_manifest_sha256": "b879e0adcdd1986cc7eeaf3a29802884a9c5d49d90a07b3eac5486a86aef9d46",
+    "sha256": "253fd9222dcec884d4df9591d2bed30baa0a5c8906bd7688fb2af4abd75f39c6",
+    "source_commit": "ec9027382367ea71bf9027d615a0a3eecd012b77"
+  },
+  "old": {
+    "collection_utc": "2026-08-05T09:44:02Z",
+    "context": "host-approved",
+    "evidence_manifest_sha256": "872adb99cf9fa9b5c18380b2f0d737f23acd593b4b718311410359042377fb73",
+    "sha256": "2db82cc46d840aced4e57431195c821ead8f916bf9adfb707f2ac60c3bf371bc",
+    "source_commit": "b1dd93d460ad71c1cf80502f7b2dc875fe384a1f"
+  },
+  "review_id": "92588e653d7f2ccc76958a636678c570",
+  "review_level": "attention",
+  "schema": "rpi5.runtime-baseline-transition.v1"
+}
