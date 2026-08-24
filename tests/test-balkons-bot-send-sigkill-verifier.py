@@ -19,6 +19,8 @@ assert "mode_must_be_explicit_and_unique" in text
 assert "--check|--verify" in text
 assert "--apply" not in text
 assert "--rollback" not in text
+assert "python3 -I -c" in text
+assert "python3 -c" not in text
 
 for binding in (
     "--expected-repo-sha",
