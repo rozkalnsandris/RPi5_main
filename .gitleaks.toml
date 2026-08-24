@@ -1,0 +1,12 @@
+title = "RPi5_main Gitleaks policy"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known non-secret Hermes Docker image tags in sanitized runtime-baseline evidence"
+regexes = [
+  '''^release-0\.3\.27-netto-quality-2ded85a-20260804$''',
+  '''^preview-netto-daily-nopdf-v7-3-684b148$''',
+  '''^main-308d4b1c2639$''',
+]
