@@ -205,12 +205,14 @@ try:
     ]
     if not all(isinstance(x, str) for x in fields):
         raise ValueError
-    print("\t".join(fields))
+    if any("|" in x for x in fields):
+        raise ValueError
+    print("|".join(fields))
 except Exception:
     raise SystemExit(2)
 ' 2>/dev/null)" || block "preflight_json_invalid"
 
-  IFS=$'\t' read -r \
+  IFS='|' read -r \
     PF_STATE PF_BLOCKERS PF_SEND_SIGKILL PF_LIVE_MATCH PF_MUTATION_STARTED PF_WRITES_PERFORMED \
     <<<"$parsed"
 

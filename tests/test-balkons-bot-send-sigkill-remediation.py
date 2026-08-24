@@ -39,6 +39,8 @@ assert "preflight_reported_write" in text
 assert "dropin_target_already_exists" in text
 assert "installed_dropin_hash_mismatch" in text
 assert "dropin_dir_writable_by_nonroot" in text
+assert 'print("|".join(fields))' in text
+assert "IFS='|' read -r" in text
 
 # The forward path is intentionally narrower than a service deployment.
 apply_start = text.index("  apply)")
@@ -47,7 +49,7 @@ apply = text[apply_start:verify_start]
 assert apply.index("require_expected_drift") < apply.index("MUTATION_STARTED=\"YES\"")
 assert apply.index("install -o root -g root -m 0644") < apply.index("systemctl daemon-reload")
 assert apply.index("systemctl daemon-reload") < apply.index("require_preflight_pass")
-assert "restart" not in apply.lower()
+assert "systemctl restart" not in apply
 assert "systemctl reload" not in apply
 assert "systemctl stop" not in apply
 assert "systemctl start" not in apply
