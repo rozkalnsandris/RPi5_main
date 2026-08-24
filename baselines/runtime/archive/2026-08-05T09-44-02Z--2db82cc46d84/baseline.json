@@ -1,0 +1,1113 @@
+{
+  "docker": {
+    "compose_projects": [
+      {
+        "name": "cv",
+        "status": "running"
+      },
+      {
+        "name": "docker",
+        "status": "running"
+      },
+      {
+        "name": "hermes-deals",
+        "status": "running"
+      },
+      {
+        "name": "hermes-deals-ui-dev-9190",
+        "status": "running"
+      }
+    ],
+    "compose_version": "v5.3.1",
+    "containers": [
+      {
+        "health": "healthy",
+        "image": "adguard/adguardhome:latest",
+        "name": "adguard",
+        "state": "running"
+      },
+      {
+        "health": "healthy",
+        "image": "willfarrell/autoheal:latest",
+        "name": "autoheal",
+        "state": "running"
+      },
+      {
+        "health": "none",
+        "image": "chromadb/chroma:latest",
+        "name": "chromadb",
+        "state": "running"
+      },
+      {
+        "health": "none",
+        "image": "nginx:alpine",
+        "name": "cv",
+        "state": "running"
+      },
+      {
+        "health": "none",
+        "image": "cloudflare/cloudflared:latest",
+        "name": "cv-cloudflared",
+        "state": "running"
+      },
+      {
+        "health": "healthy",
+        "image": "cv-cvbot",
+        "name": "cvbot",
+        "state": "running"
+      },
+      {
+        "health": "none",
+        "image": "grafana/grafana:latest",
+        "name": "grafana",
+        "state": "running"
+      },
+      {
+        "health": "healthy",
+        "image": "grafana/grafana-image-renderer:latest",
+        "name": "grafana-renderer",
+        "state": "running"
+      },
+      {
+        "health": "healthy",
+        "image": "hermes-deals-api:release-0.3.27-netto-quality-2ded85a-20260804",
+        "name": "hermes-deals-api-1",
+        "state": "running"
+      },
+      {
+        "health": "healthy",
+        "image": "postgres:18.4-bookworm",
+        "name": "hermes-deals-db-1",
+        "state": "running"
+      },
+      {
+        "health": "healthy",
+        "image": "hermes-deals-api:preview-netto-daily-nopdf-v7-3-684b148",
+        "name": "hermes-deals-ui-dev-9190-ui_dev_api-1",
+        "state": "running"
+      },
+      {
+        "health": "healthy",
+        "image": "nginx:1.30.4-alpine",
+        "name": "hermes-deals-ui-dev-9190-ui_dev_web-1",
+        "state": "running"
+      },
+      {
+        "health": "none",
+        "image": "nginx:1.30.4-alpine",
+        "name": "hermes-deals-web-1",
+        "state": "running"
+      },
+      {
+        "health": "none",
+        "image": "ghcr.io/home-assistant/home-assistant:stable",
+        "name": "homeassistant",
+        "state": "running"
+      },
+      {
+        "health": "none",
+        "image": "ghcr.io/home-assistant-libs/python-matter-server:stable",
+        "name": "matter-server",
+        "state": "running"
+      },
+      {
+        "health": "none",
+        "image": "eclipse-mosquitto:2",
+        "name": "mosquitto",
+        "state": "running"
+      },
+      {
+        "health": "none",
+        "image": "prom/node-exporter:latest",
+        "name": "node-exporter",
+        "state": "running"
+      },
+      {
+        "health": "none",
+        "image": "portainer/portainer-ce:latest",
+        "name": "portainer",
+        "state": "running"
+      },
+      {
+        "health": "none",
+        "image": "prom/prometheus:latest",
+        "name": "prometheus",
+        "state": "running"
+      },
+      {
+        "health": "healthy",
+        "image": "louislam/uptime-kuma:2",
+        "name": "uptime-kuma",
+        "state": "running"
+      }
+    ],
+    "engine_version": "29.7.1",
+    "networks": [
+      {
+        "driver": "bridge",
+        "name": "bridge",
+        "scope": "local"
+      },
+      {
+        "driver": "bridge",
+        "name": "cv_default",
+        "scope": "local"
+      },
+      {
+        "driver": "bridge",
+        "name": "docker_default",
+        "scope": "local"
+      },
+      {
+        "driver": "bridge",
+        "name": "hermes-deals_internal",
+        "scope": "local"
+      },
+      {
+        "driver": "host",
+        "name": "host",
+        "scope": "local"
+      },
+      {
+        "driver": "null",
+        "name": "none",
+        "scope": "local"
+      }
+    ]
+  },
+  "interfaces": [
+    {
+      "ipv4_count": 1,
+      "ipv6_count": 1,
+      "link_type": "ether",
+      "loopback": false,
+      "name": "br-545decce23b3",
+      "operstate": "up",
+      "scope_counts": {
+        "global": 1,
+        "host": 0,
+        "link": 1,
+        "other": 0
+      }
+    },
+    {
+      "ipv4_count": 1,
+      "ipv6_count": 1,
+      "link_type": "ether",
+      "loopback": false,
+      "name": "br-5b43dced60dc",
+      "operstate": "up",
+      "scope_counts": {
+        "global": 1,
+        "host": 0,
+        "link": 1,
+        "other": 0
+      }
+    },
+    {
+      "ipv4_count": 1,
+      "ipv6_count": 1,
+      "link_type": "ether",
+      "loopback": false,
+      "name": "br-5b8b1c7e3a43",
+      "operstate": "up",
+      "scope_counts": {
+        "global": 1,
+        "host": 0,
+        "link": 1,
+        "other": 0
+      }
+    },
+    {
+      "ipv4_count": 1,
+      "ipv6_count": 1,
+      "link_type": "ether",
+      "loopback": false,
+      "name": "docker0",
+      "operstate": "up",
+      "scope_counts": {
+        "global": 1,
+        "host": 0,
+        "link": 1,
+        "other": 0
+      }
+    },
+    {
+      "ipv4_count": 1,
+      "ipv6_count": 3,
+      "link_type": "ether",
+      "loopback": false,
+      "name": "eth0",
+      "operstate": "up",
+      "scope_counts": {
+        "global": 3,
+        "host": 0,
+        "link": 1,
+        "other": 0
+      }
+    },
+    {
+      "ipv4_count": 1,
+      "ipv6_count": 1,
+      "link_type": "loopback",
+      "loopback": true,
+      "name": "lo",
+      "operstate": "unknown",
+      "scope_counts": {
+        "global": 0,
+        "host": 2,
+        "link": 0,
+        "other": 0
+      }
+    },
+    {
+      "ipv4_count": 0,
+      "ipv6_count": 1,
+      "link_type": "ether",
+      "loopback": false,
+      "name": "veth0270bf4",
+      "operstate": "up",
+      "scope_counts": {
+        "global": 0,
+        "host": 0,
+        "link": 1,
+        "other": 0
+      }
+    },
+    {
+      "ipv4_count": 0,
+      "ipv6_count": 1,
+      "link_type": "ether",
+      "loopback": false,
+      "name": "veth216534b",
+      "operstate": "up",
+      "scope_counts": {
+        "global": 0,
+        "host": 0,
+        "link": 1,
+        "other": 0
+      }
+    },
+    {
+      "ipv4_count": 0,
+      "ipv6_count": 1,
+      "link_type": "ether",
+      "loopback": false,
+      "name": "veth2a20b5f",
+      "operstate": "up",
+      "scope_counts": {
+        "global": 0,
+        "host": 0,
+        "link": 1,
+        "other": 0
+      }
+    },
+    {
+      "ipv4_count": 0,
+      "ipv6_count": 1,
+      "link_type": "ether",
+      "loopback": false,
+      "name": "veth2ee7403",
+      "operstate": "up",
+      "scope_counts": {
+        "global": 0,
+        "host": 0,
+        "link": 1,
+        "other": 0
+      }
+    },
+    {
+      "ipv4_count": 0,
+      "ipv6_count": 1,
+      "link_type": "ether",
+      "loopback": false,
+      "name": "veth3a3670b",
+      "operstate": "up",
+      "scope_counts": {
+        "global": 0,
+        "host": 0,
+        "link": 1,
+        "other": 0
+      }
+    },
+    {
+      "ipv4_count": 0,
+      "ipv6_count": 1,
+      "link_type": "ether",
+      "loopback": false,
+      "name": "veth691dc13",
+      "operstate": "up",
+      "scope_counts": {
+        "global": 0,
+        "host": 0,
+        "link": 1,
+        "other": 0
+      }
+    },
+    {
+      "ipv4_count": 0,
+      "ipv6_count": 1,
+      "link_type": "ether",
+      "loopback": false,
+      "name": "veth774f804",
+      "operstate": "up",
+      "scope_counts": {
+        "global": 0,
+        "host": 0,
+        "link": 1,
+        "other": 0
+      }
+    },
+    {
+      "ipv4_count": 0,
+      "ipv6_count": 1,
+      "link_type": "ether",
+      "loopback": false,
+      "name": "veth8f5c40d",
+      "operstate": "up",
+      "scope_counts": {
+        "global": 0,
+        "host": 0,
+        "link": 1,
+        "other": 0
+      }
+    },
+    {
+      "ipv4_count": 0,
+      "ipv6_count": 1,
+      "link_type": "ether",
+      "loopback": false,
+      "name": "veth920dae4",
+      "operstate": "up",
+      "scope_counts": {
+        "global": 0,
+        "host": 0,
+        "link": 1,
+        "other": 0
+      }
+    },
+    {
+      "ipv4_count": 0,
+      "ipv6_count": 1,
+      "link_type": "ether",
+      "loopback": false,
+      "name": "veth948762b",
+      "operstate": "up",
+      "scope_counts": {
+        "global": 0,
+        "host": 0,
+        "link": 1,
+        "other": 0
+      }
+    },
+    {
+      "ipv4_count": 0,
+      "ipv6_count": 1,
+      "link_type": "ether",
+      "loopback": false,
+      "name": "vetha6caa90",
+      "operstate": "up",
+      "scope_counts": {
+        "global": 0,
+        "host": 0,
+        "link": 1,
+        "other": 0
+      }
+    },
+    {
+      "ipv4_count": 0,
+      "ipv6_count": 1,
+      "link_type": "ether",
+      "loopback": false,
+      "name": "vethb053077",
+      "operstate": "up",
+      "scope_counts": {
+        "global": 0,
+        "host": 0,
+        "link": 1,
+        "other": 0
+      }
+    },
+    {
+      "ipv4_count": 0,
+      "ipv6_count": 1,
+      "link_type": "ether",
+      "loopback": false,
+      "name": "vethb81aad0",
+      "operstate": "up",
+      "scope_counts": {
+        "global": 0,
+        "host": 0,
+        "link": 1,
+        "other": 0
+      }
+    },
+    {
+      "ipv4_count": 0,
+      "ipv6_count": 1,
+      "link_type": "ether",
+      "loopback": false,
+      "name": "vethe6748eb",
+      "operstate": "up",
+      "scope_counts": {
+        "global": 0,
+        "host": 0,
+        "link": 1,
+        "other": 0
+      }
+    },
+    {
+      "ipv4_count": 0,
+      "ipv6_count": 1,
+      "link_type": "ether",
+      "loopback": false,
+      "name": "vethedabf3b",
+      "operstate": "up",
+      "scope_counts": {
+        "global": 0,
+        "host": 0,
+        "link": 1,
+        "other": 0
+      }
+    },
+    {
+      "ipv4_count": 0,
+      "ipv6_count": 1,
+      "link_type": "ether",
+      "loopback": false,
+      "name": "vethf499f5c",
+      "operstate": "up",
+      "scope_counts": {
+        "global": 0,
+        "host": 0,
+        "link": 1,
+        "other": 0
+      }
+    },
+    {
+      "ipv4_count": 0,
+      "ipv6_count": 0,
+      "link_type": "ether",
+      "loopback": false,
+      "name": "wlan0",
+      "operstate": "down",
+      "scope_counts": {
+        "global": 0,
+        "host": 0,
+        "link": 0,
+        "other": 0
+      }
+    }
+  ],
+  "limitations": [],
+  "metadata": {
+    "collection_utc": "2026-08-05T09:44:02Z",
+    "context": "host-approved",
+    "evidence_manifest_sha256": "872adb99cf9fa9b5c18380b2f0d737f23acd593b4b718311410359042377fb73",
+    "schema_version": "v02b.0.0",
+    "source_commit": "b1dd93d460ad71c1cf80502f7b2dc875fe384a1f"
+  },
+  "sockets": [
+    {
+      "address_scope": "loopback",
+      "port": 8200,
+      "protocol": "tcp"
+    },
+    {
+      "address_scope": "loopback",
+      "port": 18554,
+      "protocol": "tcp"
+    },
+    {
+      "address_scope": "loopback",
+      "port": 36713,
+      "protocol": "tcp"
+    },
+    {
+      "address_scope": "private_or_local",
+      "port": 1883,
+      "protocol": "tcp"
+    },
+    {
+      "address_scope": "private_or_local",
+      "port": 3030,
+      "protocol": "tcp"
+    },
+    {
+      "address_scope": "private_or_local",
+      "port": 8081,
+      "protocol": "tcp"
+    },
+    {
+      "address_scope": "private_or_local",
+      "port": 9000,
+      "protocol": "tcp"
+    },
+    {
+      "address_scope": "private_or_local",
+      "port": 9090,
+      "protocol": "tcp"
+    },
+    {
+      "address_scope": "private_or_local",
+      "port": 9100,
+      "protocol": "tcp"
+    },
+    {
+      "address_scope": "private_or_local",
+      "port": 9119,
+      "protocol": "tcp"
+    },
+    {
+      "address_scope": "private_or_local",
+      "port": 9128,
+      "protocol": "tcp"
+    },
+    {
+      "address_scope": "private_or_local",
+      "port": 9190,
+      "protocol": "tcp"
+    },
+    {
+      "address_scope": "private_or_local",
+      "port": 9443,
+      "protocol": "tcp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 22,
+      "protocol": "tcp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 53,
+      "protocol": "tcp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 3001,
+      "protocol": "tcp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 3080,
+      "protocol": "tcp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 5580,
+      "protocol": "tcp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 8080,
+      "protocol": "tcp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 8088,
+      "protocol": "tcp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 8089,
+      "protocol": "tcp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 8123,
+      "protocol": "tcp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 18555,
+      "protocol": "tcp"
+    },
+    {
+      "address_scope": "loopback",
+      "port": 5353,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "private_or_local",
+      "port": 546,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "private_or_local",
+      "port": 5353,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "specific_other",
+      "port": 5353,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 53,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 1900,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 5353,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 33165,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 34196,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 34379,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 36675,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 37092,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 37175,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 37695,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 39293,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 40297,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 43551,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 45889,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 46161,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 46321,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 46665,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 47059,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 47622,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 48300,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 48956,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 49150,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 49413,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 50186,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 51338,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 53837,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 55212,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 55842,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 56347,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 57079,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 58272,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 58705,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 59207,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 59377,
+      "protocol": "udp"
+    },
+    {
+      "address_scope": "wildcard",
+      "port": 59656,
+      "protocol": "udp"
+    }
+  ],
+  "systemd": {
+    "enabled_units": [
+      {
+        "name": "ModemManager.service",
+        "state": "enabled"
+      },
+      {
+        "name": "NetworkManager-dispatcher.service",
+        "state": "enabled"
+      },
+      {
+        "name": "NetworkManager-wait-online.service",
+        "state": "enabled"
+      },
+      {
+        "name": "NetworkManager.service",
+        "state": "enabled"
+      },
+      {
+        "name": "actions.runner.rozkalnsandris-hermes-deals.rpi5-hermes-deals-audit.service",
+        "state": "enabled"
+      },
+      {
+        "name": "apparmor.service",
+        "state": "enabled"
+      },
+      {
+        "name": "apt-daily-upgrade.timer",
+        "state": "enabled"
+      },
+      {
+        "name": "apt-daily.timer",
+        "state": "enabled"
+      },
+      {
+        "name": "avahi-daemon.service",
+        "state": "enabled"
+      },
+      {
+        "name": "balkons-bot.service",
+        "state": "enabled"
+      },
+      {
+        "name": "balkons-log.service",
+        "state": "enabled"
+      },
+      {
+        "name": "console-setup.service",
+        "state": "enabled"
+      },
+      {
+        "name": "containerd.service",
+        "state": "enabled"
+      },
+      {
+        "name": "cron.service",
+        "state": "enabled"
+      },
+      {
+        "name": "docker.service",
+        "state": "enabled"
+      },
+      {
+        "name": "dpkg-db-backup.timer",
+        "state": "enabled"
+      },
+      {
+        "name": "e2scrub_all.timer",
+        "state": "enabled"
+      },
+      {
+        "name": "e2scrub_reap.service",
+        "state": "enabled"
+      },
+      {
+        "name": "fail2ban.service",
+        "state": "enabled"
+      },
+      {
+        "name": "fake-hwclock.service",
+        "state": "enabled"
+      },
+      {
+        "name": "fstrim.timer",
+        "state": "enabled"
+      },
+      {
+        "name": "getty@.service",
+        "state": "enabled"
+      },
+      {
+        "name": "hciuart.service",
+        "state": "enabled"
+      },
+      {
+        "name": "hermes-dashboard.service",
+        "state": "enabled"
+      },
+      {
+        "name": "hermes-deals-aldi-collector.timer",
+        "state": "enabled"
+      },
+      {
+        "name": "hermes-deals-edeka-collector.timer",
+        "state": "enabled"
+      },
+      {
+        "name": "hermes-deals-netto-collector.timer",
+        "state": "enabled"
+      },
+      {
+        "name": "hermes-gateway.service",
+        "state": "enabled"
+      },
+      {
+        "name": "keyboard-setup.service",
+        "state": "enabled"
+      },
+      {
+        "name": "logrotate.timer",
+        "state": "enabled"
+      },
+      {
+        "name": "man-db.timer",
+        "state": "enabled"
+      },
+      {
+        "name": "nvmefc-boot-connections.service",
+        "state": "enabled"
+      },
+      {
+        "name": "rpi-display-backlight.service",
+        "state": "enabled"
+      },
+      {
+        "name": "rpi-eeprom-update.service",
+        "state": "enabled"
+      },
+      {
+        "name": "rpi5-docker-firewall.service",
+        "state": "enabled"
+      },
+      {
+        "name": "ssh.service",
+        "state": "enabled"
+      },
+      {
+        "name": "sshswitch.service",
+        "state": "enabled"
+      },
+      {
+        "name": "systemd-pstore.service",
+        "state": "enabled"
+      },
+      {
+        "name": "systemd-timesyncd.service",
+        "state": "enabled"
+      },
+      {
+        "name": "triggerhappy.service",
+        "state": "enabled"
+      },
+      {
+        "name": "udisks2.service",
+        "state": "enabled"
+      },
+      {
+        "name": "ufw.service",
+        "state": "enabled"
+      },
+      {
+        "name": "unattended-upgrades.service",
+        "state": "enabled"
+      },
+      {
+        "name": "watchdog.service",
+        "state": "enabled"
+      },
+      {
+        "name": "wpa_supplicant.service",
+        "state": "enabled"
+      },
+      {
+        "name": "zramswap.service",
+        "state": "enabled"
+      }
+    ],
+    "failed_units": [],
+    "system_state": "running",
+    "timers": [
+      {
+        "activates": "apt-daily-upgrade.service",
+        "active": "active",
+        "id": "apt-daily-upgrade.timer",
+        "last": "Wed 2026-08-05 06:58:32 CEST",
+        "load": "loaded",
+        "next": "Thu 2026-08-06 06:23:10 CEST",
+        "sub": "waiting"
+      },
+      {
+        "activates": "apt-daily.service",
+        "active": "active",
+        "id": "apt-daily.timer",
+        "last": "Wed 2026-08-05 00:17:16 CEST",
+        "load": "loaded",
+        "next": "Wed 2026-08-05 14:45:48 CEST",
+        "sub": "waiting"
+      },
+      {
+        "activates": "dpkg-db-backup.service",
+        "active": "active",
+        "id": "dpkg-db-backup.timer",
+        "last": "Wed 2026-08-05 00:00:00 CEST",
+        "load": "loaded",
+        "next": "Thu 2026-08-06 00:00:00 CEST",
+        "sub": "waiting"
+      },
+      {
+        "activates": "e2scrub_all.service",
+        "active": "active",
+        "id": "e2scrub_all.timer",
+        "last": "Sun 2026-08-02 03:10:49 CEST",
+        "load": "loaded",
+        "next": "Sun 2026-08-09 03:10:57 CEST",
+        "sub": "waiting"
+      },
+      {
+        "activates": "fstrim.service",
+        "active": "active",
+        "id": "fstrim.timer",
+        "last": "Mon 2026-08-03 01:31:59 CEST",
+        "load": "loaded",
+        "next": "Mon 2026-08-10 01:03:37 CEST",
+        "sub": "waiting"
+      },
+      {
+        "activates": "hermes-deals-aldi-collector.service",
+        "active": "active",
+        "id": "hermes-deals-aldi-collector.timer",
+        "last": "Wed 2026-08-05 08:33:38 CEST",
+        "load": "loaded",
+        "next": "Thu 2026-08-06 08:38:16 CEST",
+        "sub": "waiting"
+      },
+      {
+        "activates": "hermes-deals-edeka-collector.service",
+        "active": "active",
+        "id": "hermes-deals-edeka-collector.timer",
+        "last": "Wed 2026-08-05 08:51:42 CEST",
+        "load": "loaded",
+        "next": "Thu 2026-08-06 08:50:28 CEST",
+        "sub": "waiting"
+      },
+      {
+        "activates": "hermes-deals-netto-collector.service",
+        "active": "active",
+        "id": "hermes-deals-netto-collector.timer",
+        "last": "Wed 2026-08-05 09:11:12 CEST",
+        "load": "loaded",
+        "next": "Thu 2026-08-06 09:14:50 CEST",
+        "sub": "waiting"
+      },
+      {
+        "activates": "logrotate.service",
+        "active": "active",
+        "id": "logrotate.timer",
+        "last": "Wed 2026-08-05 00:00:00 CEST",
+        "load": "loaded",
+        "next": "Thu 2026-08-06 00:00:00 CEST",
+        "sub": "waiting"
+      },
+      {
+        "activates": "man-db.service",
+        "active": "active",
+        "id": "man-db.timer",
+        "last": "Wed 2026-08-05 05:11:08 CEST",
+        "load": "loaded",
+        "next": "Thu 2026-08-06 08:01:43 CEST",
+        "sub": "waiting"
+      },
+      {
+        "activates": "systemd-tmpfiles-clean.service",
+        "active": "active",
+        "id": "systemd-tmpfiles-clean.timer",
+        "last": "Wed 2026-08-05 01:39:19 CEST",
+        "load": "loaded",
+        "next": "unknown",
+        "sub": "waiting"
+      }
+    ]
+  }
+}

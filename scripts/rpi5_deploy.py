@@ -25,11 +25,27 @@ from rpi5_deploy_tx import apply_plan, latest_transaction, manual_rollback
 REQUIRED_GITHUB_CHECKS = {"validate"}
 APPROVED_TARGET_CONTRACT = {
     "backup-runner": (
-        "ops/bin/rpi5-backup",
+        "ops/bin/rpi5-backup-serialized",
         "/usr/local/sbin/rpi5-backup",
         "root",
         "root",
-        0o700,
+        0o750,
+        ("bash-n",),
+    ),
+    "backup-core": (
+        "ops/bin/rpi5-backup",
+        "/usr/local/lib/rpi5-maintenance/rpi5-backup-v10-core",
+        "root",
+        "root",
+        0o750,
+        ("bash-n",),
+    ),
+    "maintenance-lock-lib": (
+        "ops/lib/rpi5-maintenance-locks.sh",
+        "/usr/local/lib/rpi5-maintenance/rpi5-maintenance-locks.sh",
+        "root",
+        "root",
+        0o644,
         ("bash-n",),
     ),
     "backup-cron": (
@@ -65,7 +81,7 @@ def require_target_contract() -> list:
         for target in targets
     }
     if actual != APPROVED_TARGET_CONTRACT:
-        raise DeployError("manifest does not match the hard-coded approved V12 target contract")
+        raise DeployError("manifest does not match the hard-coded approved current target contract")
     return targets
 
 

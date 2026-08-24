@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "status": "plan-only",
+  "canonical_issue": 199,
+  "mutation_authorized": false,
+  "base_contract": "ops/contracts/cloudflare-p1-exact-write-plan.json",
+  "precedence": {
+    "scope": [
+      "p1a-08-control-root-exact-app",
+      "p1c-03-retire-parent-wildcard",
+      "p1c-04-remove-tech-public-carveout"
+    ],
+    "rule": "this-file-supersedes-base-contract-only-for-listed-units-after-merge"
+  },
+  "authorization_state": {
+    "old_p1a08_authorization": "retired-before-execution-because-contract-materially-changed",
+    "forward_attempt_started": false,
+    "cloudflare_write_executed": false,
+    "rollback_executed": false,
+    "new_live_authorization_required": true
+  },
+  "platform_contract": {
+    "access_application_update": "PUT /accounts/{account_id}/access/apps/{app_id}",
+    "required_permission": "Access: Apps and Policies Write",
+    "aud_stability": "application-aud-must-remain-unchanged-when-updating-existing-app-in-place",
+    "aud_source_rule": "aud-is-private-live-evidence-and-must-not-be-committed",
+    "webhook_specificity_rule": "control-webhook-path-application-remains-more-specific-and-unchanged"
+  },
+  "decision": {
+    "strategy": "defer-control-root-until-p1c-and-retarget-existing-parent-wildcard-in-place",
+    "rejected": [
+      "create-new-control-root-app-now-because-new-app-has-distinct-aud-and-worker-is-bound-to-current-parent-aud",
+      "retarget-parent-wildcard-before-p1b-and-deals-gates-because-that-would-retire-catch-all-too-early",
+      "stage-new-app-plus-worker-dual-aud-deploy-because-in-place-parent-retarget-at-the-existing-retirement-gate-is-smaller-and-preserves-aud"
+    ]
+  },
+  "replacement_units": [
+    {
+      "id": "p1a-08-control-root-exact-app",
+      "status": "deferred-no-write",
+      "target": "control.rozkalns.net",
+      "operation": "no-forward-mutation-at-p1a",
+      "forward_method": "NONE",
+      "replacement": "p1c-03-control-root-retarget",
+      "postconditions": [
+        "current-wildcard-control-coverage-remains-unchanged-until-p1c-03",
+        "control-webhook-path-application-remains-more-specific-and-unchanged",
+        "control-worker-jwt-validation-remains-healthy"
+      ]
+    },
+    {
+      "id": "p1c-03-control-root-retarget",
+      "replaces": "p1c-03-retire-parent-wildcard",
+      "target_before": "*.rozkalns.net",
+      "target_after": "control.rozkalns.net",
+      "operation": "update_existing_parent_wildcard_application_in_place",
+      "forward_method": "PUT",
+      "preconditions": [
+        "fresh-get-only-reconciliation-matches-expected-preimage",
+        "all-admin-roots-except-control-resolve-exact-no-bypass",
+        "all-required-tunnel-protect-canaries-pass",
+        "deals-no-bypass-and-protect-pass",
+        "dash-exact-and-protect-still-pass",
+        "control-root-still-resolves-current-parent-wildcard",
+        "control-worker-expected-aud-matches-current-parent-wildcard-aud-privately",
+        "control-webhook-path-application-present-and-unchanged",
+        "tech-public-exact-bypass-carveout-still-present",
+        "rozkalns-net-public-pass",
+        "no-unclassified-hostname-or-route",
+        "full-private-parent-application-and-policies-preimage-captured-locally-0600",
+        "owner-email-provided-privately-and-not-logged"
+      ],
+      "allowed_diff": [
+        "same-application-domain:*.rozkalns.net->control.rozkalns.net",
+        "same-application-name->RPi5 Control Owner",
+        "same-application-session-duration->24h",
+        "same-application-policies->exactly-one-owner-email-allow-precedence-1-with-empty-require-and-exclude"
+      ],
+      "postconditions": [
+        "same-application-id-preserved-privately",
+        "same-application-aud-preserved-privately",
+        "parent-wildcard-domain-absent",
+        "control-root-resolves-exact",
+        "control-root-selected-application-is-retargeted-parent-application",
+        "one-email-allow-selector",
+        "no-bypass",
+        "no-everyone",
+        "no-service-token-human-path",
+        "session-duration-24h",
+        "owner-access-pass",
+        "unauthenticated-access-denied",
+        "control-worker-jwt-validation-remains-healthy",
+        "control-webhook-path-remains-more-specific-and-unchanged",
+        "control-webhook-runtime-pass",
+        "all-other-private-roots-remain-exact-and-protected",
+        "deals-family-and-service-token-pass",
+        "tech-public-pass",
+        "rozkalns-net-public-pass",
+        "no-unclassified-hostname-or-route"
+      ],
+      "rollback": "put-exact-full-parent-application-and-policy-preimage-back-to-the-same-application-id-and-prove-wildcard-resolution-plus-original-aud-restored"
+    },
+    {
+      "id": "p1c-04-remove-tech-public-carveout",
+      "status": "unchanged-operation-with-updated-precondition",
+      "target": "tech.rozkalns.net",
+      "forward_method": "DELETE",
+      "required_precondition": "p1c-03-control-root-retarget-pass-and-parent-wildcard-domain-absent"
+    }
+  ],
+  "execution_rules": [
+    "one-owner-authorization-equals-one-forward-mutation-plus-only-its-predeclared-inverse-rollback",
+    "fresh-current-main-and-exact-main-ci-before-each-live-write",
+    "fresh-get-only-live-preimage-before-each-live-write",
+    "authorization-consumed-at-first-forward-write-attempt-regardless-of-http-result",
+    "no-blind-retry-after-failure-timeout-or-ambiguity",
+    "do-not-delete-and-recreate-the-parent-application-during-retarget",
+    "do-not-expose-private-aud-app-policy-id-owner-email-or-preimage"
+  ]
+}

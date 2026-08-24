@@ -50,6 +50,10 @@ docker compose up "${RPI5_COMPOSE_UP_ARGS[@]}"
 rpi5_build_compose_up_args 240 true
 docker compose up "${RPI5_COMPOSE_UP_ARGS[@]}"
 docker image prune -f --filter until=336h
+CURRENT_PHASE="veselības pārbaudes"
+CURRENT_PHASE="Hermes update check"
+"$HERMES_BIN" update --check
+CURRENT_PHASE="gala atskaite"
 '''
 
 assert module.validate(GOOD) == [], module.validate(GOOD)
@@ -85,6 +89,25 @@ cases = {
     "missing-conflict-code": GOOD.replace("RPI5_LOCK_CONFLICT_RC", "LEGACY_LOCK_RC", 1),
     "missing-telegram-helper": GOOD.replace("rpi5-update-telegram.py", "legacy-notifier.py", 1),
     "telegram-child-env": GOOD + '\nTELEGRAM_TOKEN="$TELEGRAM_TOKEN" TELEGRAM_CHAT_ID="$CHAT_ID" python3 notifier.py\n',
+    "hermes-auto-toggle": GOOD + "\nHERMES_UPDATE=yes\n",
+    "hermes-backup-toggle": GOOD + "\nHERMES_BACKUP=yes\n",
+    "hermes-status-gate": GOOD + "\nHERMES_STATUS=1\n",
+    "hermes-unattended-update": GOOD + '\n"$HERMES_BIN" update --yes\n',
+    "hermes-dashboard-stop": GOOD + "\nsystemctl stop hermes-dashboard.service\n",
+    "hermes-dashboard-restart": GOOD + "\nsystemctl restart hermes-dashboard.service\n",
+    "hermes-doctor-in-updater": GOOD + '\n"$HERMES_BIN" doctor\n',
+    "hermes-check-fatal-preflight": GOOD
+    + '\nrequire_help_flag "hermes update" "--check" run_as_update_user "$HERMES_BIN" update\n',
+    "hermes-check-before-health": GOOD.replace(
+        'CURRENT_PHASE="veselības pārbaudes"\nCURRENT_PHASE="Hermes update check"\n"$HERMES_BIN" update --check',
+        'CURRENT_PHASE="Hermes update check"\n"$HERMES_BIN" update --check\nCURRENT_PHASE="veselības pārbaudes"',
+        1,
+    ),
+    "hermes-check-after-report": GOOD.replace(
+        'CURRENT_PHASE="Hermes update check"\n"$HERMES_BIN" update --check\nCURRENT_PHASE="gala atskaite"',
+        'CURRENT_PHASE="gala atskaite"\nCURRENT_PHASE="Hermes update check"\n"$HERMES_BIN" update --check',
+        1,
+    ),
 }
 
 for name, text in cases.items():

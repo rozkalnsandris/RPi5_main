@@ -1,0 +1,15 @@
+# SOURCE-ONLY BLUEPRINT. Do not enable/start without separate owner authorization.
+[Unit]
+Description=Schedule sanitized dashboard_RPi5 evidence collection
+Documentation=https://github.com/rozkalnsandris/RPi5_main
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+AccuracySec=15s
+RandomizedDelaySec=0
+Persistent=false
+Unit=rpi5-dashboard-evidence.service
+
+[Install]
+WantedBy=timers.target

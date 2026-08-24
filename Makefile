@@ -16,6 +16,8 @@ test:
 	bash ./tests/test-memory-pressure-diagnostic.sh
 	bash ./tests/test-memory-pressure-series.sh
 	bash ./tests/test-backup-ownership.sh
+	python3 ./tests/test-dashboard-evidence.py
+	python3 ./tests/test-hermes-tech-restore-drill.py
 	bash ./tests/test-maintenance-updater-status.sh
 	bash ./tests/test-maintenance-updater-locks.sh
 	bash ./tests/test-maintenance-updater-reboot.sh
@@ -26,12 +28,16 @@ test:
 	bash ./tests/test-maintenance-updater-origin-policy.sh
 	bash ./tests/test-maintenance-updater-http-health.sh
 	bash ./tests/test-maintenance-updater-apt-policy.sh
+	python3 ./tests/test-maintenance-v27-activation.py
+	python3 ./tests/test-maintenance-v27-activation-transaction.py
 	bash ./tests/test-maintenance-updater-provenance.sh
 	bash ./tests/test-maintenance-updater-source.sh
 	python3 ./tests/test-maintenance-updater-source-validator.py
 	python3 ./tests/test-maintenance-updater-telegram.py
 	bash ./tests/test-maintenance-health.sh
 	bash ./tests/test-maintenance-health-entrypoints.sh
+	bash ./tests/test-tmp-headroom-monitor.sh
+	bash ./tests/test-tmp-headroom-activation.sh
 	python3 ./tests/test-maintenance-telegram-credentials.py
 	bash ./tests/test-maintenance-systemd-units.sh
 	python3 ./tests/test-maintenance-systemd-cutover.py
@@ -57,6 +63,9 @@ test:
 	bash ./tests/test-cloudflare-lan-origin-audit.sh
 	python3 ./tests/test-cloudflare-zero-trust-reconcile.py
 	python3 ./tests/test-cloudflare-p1-write-plan.py
+	python3 ./tests/test-cloudflare-p1a08-control-aud-override.py
+	python3 ./tests/test-cloudflare-p1d-owner-phone.py
+	python3 ./tests/test-cloudflare-owner-phone-preflight.py
 	bash ./tests/test-cloudflare-zero-trust-wrapper.sh
 	bash ./tests/test-public-safety.sh
 	python3 ./tests/test-controlled-deploy-rollback.py
@@ -71,7 +80,7 @@ test:
 	python3 ./tests/test-cv-controller-activation.py
 	python3 ./tests/test-cv-classifier-host-alignment.py
 	python3 ./tests/test-cv-pull-deploy-canary.py
-	python3 -m py_compile scripts/*.py ops/lib/rpi5-update-telegram.py ops/lib/rpi5-maintenance-telegram.py ops/lib/balkons-bot.py
+	python3 -m py_compile scripts/*.py ops/lib/rpi5-update-telegram.py ops/lib/rpi5-maintenance-telegram.py ops/lib/dashboard-evidence.py ops/bin/hermes-tech-restore-drill ops/lib/balkons-bot.py
 
 secret-scan:
 	./scripts/check-no-secrets.sh

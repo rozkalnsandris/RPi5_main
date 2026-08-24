@@ -1,0 +1,671 @@
+#!/usr/bin/env python3
+"""Restore one retained Hermes Tech backup into an isolated root and verify it."""
+from __future__ import annotations
+
+import argparse
+from datetime import datetime, timezone
+from hashlib import sha256
+import json
+import os
+from pathlib import Path, PurePosixPath
+import re
+import shutil
+import stat
+import subprocess
+import sys
+import tarfile
+import tempfile
+import time
+from typing import Any, Iterable
+
+MANIFEST_PARTS = ("backup-metadata", "manifest.txt")
+EXPECTED_BACKUP_VERSION = "12"
+HERMES_REQUIRED_SUFFIXES = {
+    (".git", "HEAD"),
+    (".env",),
+    (".python-version",),
+    ("requirements.txt",),
+    ("collector.py",),
+    ("digest.py",),
+    ("publish.sh",),
+    ("run_digests.sh",),
+    ("tools", "ci.sh"),
+    ("site", "hugo.toml"),
+    ("data", "hermes.db"),
+}
+BACKUP_NAME_RE = re.compile(
+    r"^rpi5_backup_(?P<stamp>\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})\.tar\.gz\.age$"
+)
+SHA_RE = re.compile(r"^[0-9a-f]{64}$")
+COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
+DEFAULT_MIN_FREE_BYTES = 1024 * 1024 * 1024
+AGE_BINARY = "/usr/bin/age"
+SAFE_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+
+class DrillError(RuntimeError):
+    """Fail-closed restore-drill error with a sanitized category."""
+
+    def __init__(self, category: str) -> None:
+        super().__init__(category)
+        self.category = category
+
+
+def _sha256_file(path: Path) -> str:
+    digest = sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _require_regular_file(path: Path, category: str) -> Path:
+    candidate = path.expanduser()
+    try:
+        info = candidate.lstat()
+    except OSError as exc:
+        raise DrillError(category) from exc
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+        raise DrillError(category)
+    return candidate.resolve(strict=True)
+
+
+def _production_contract(path: Path) -> tuple[Path, tuple[str, ...], set[tuple[str, ...]]]:
+    candidate = path.expanduser()
+    if not candidate.is_absolute():
+        raise DrillError("production_root_invalid")
+    lexical = PurePosixPath(candidate.as_posix())
+    if ".." in lexical.parts:
+        raise DrillError("production_root_invalid")
+    try:
+        production = candidate.resolve(strict=True)
+    except OSError as exc:
+        raise DrillError("production_root_invalid") from exc
+    if not production.is_dir() or production == Path("/"):
+        raise DrillError("production_root_invalid")
+    prefix = tuple(part for part in lexical.parts if part not in ("", "/", "."))
+    if not prefix:
+        raise DrillError("production_root_invalid")
+    required = {prefix + suffix for suffix in HERMES_REQUIRED_SUFFIXES}
+    return production, prefix, required
+
+
+def _validate_backup_name(name: str) -> str:
+    match = BACKUP_NAME_RE.fullmatch(name)
+    if match is None:
+        raise DrillError("backup_name_invalid")
+    return match.group("stamp")
+
+
+def _verify_sidecar(archive: Path, sidecar: Path) -> tuple[str, int]:
+    archive = _require_regular_file(archive, "archive_invalid")
+    sidecar = _require_regular_file(sidecar, "sidecar_invalid")
+    try:
+        lines = sidecar.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError) as exc:
+        raise DrillError("sidecar_invalid") from exc
+    if len(lines) != 1:
+        raise DrillError("sidecar_invalid")
+    parts = lines[0].split()
+    if len(parts) != 2 or not SHA_RE.fullmatch(parts[0].lower()):
+        raise DrillError("sidecar_invalid")
+    if parts[1].lstrip("*") != archive.name:
+        raise DrillError("sidecar_invalid")
+    actual = _sha256_file(archive)
+    if actual != parts[0].lower():
+        raise DrillError("sidecar_mismatch")
+    size = archive.stat().st_size
+    if size <= 0:
+        raise DrillError("archive_invalid")
+    return actual, int(size)
+
+
+def _git_environment() -> dict[str, str]:
+    return {
+        "PATH": SAFE_PATH,
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "HOME": "/nonexistent",
+        "GIT_OPTIONAL_LOCKS": "0",
+    }
+
+
+def _run_git(root: Path, args: list[str]) -> str:
+    completed = subprocess.run(
+        ["git", "-c", f"safe.directory={root}", "-C", str(root), *args],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=False,
+        env=_git_environment(),
+    )
+    if completed.returncode != 0:
+        raise DrillError("source_verification_failed")
+    return completed.stdout.strip()
+
+
+def _verify_source_checkout(root: Path, sha: str, relative: str) -> Path:
+    if not COMMIT_RE.fullmatch(sha.lower()):
+        raise DrillError("source_verification_failed")
+    root = root.expanduser().resolve(strict=True)
+    if not root.is_dir():
+        raise DrillError("source_verification_failed")
+    head = _run_git(root, ["rev-parse", "HEAD"])
+    if head.lower() != sha.lower():
+        raise DrillError("source_verification_failed")
+    _run_git(root, ["cat-file", "-e", f"{sha}:{relative}"])
+    completed = subprocess.run(
+        [
+            "git", "-c", f"safe.directory={root}", "-C", str(root),
+            "diff", "--quiet", sha, "--", relative,
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+        env=_git_environment(),
+    )
+    if completed.returncode != 0:
+        raise DrillError("source_verification_failed")
+    resolved = (root / relative).resolve(strict=True)
+    try:
+        resolved.relative_to(root)
+    except ValueError as exc:
+        raise DrillError("source_verification_failed") from exc
+    if not resolved.is_file():
+        raise DrillError("source_verification_failed")
+    return resolved
+
+
+def _identity_preflight(identity: Path) -> Path:
+    identity = _require_regular_file(identity, "age_identity_invalid")
+    mode = stat.S_IMODE(identity.stat().st_mode)
+    if mode & 0o077:
+        raise DrillError("age_identity_permissions")
+    return identity
+
+
+def _work_base_preflight(
+    work_base: Path, production: Path, archive_size: int, min_free_bytes: int
+) -> Path:
+    base = work_base.expanduser().resolve(strict=True)
+    if not base.is_dir() or base == Path("/"):
+        raise DrillError("work_dir_invalid")
+    try:
+        base.relative_to(production)
+    except ValueError:
+        pass
+    else:
+        raise DrillError("production_root_forbidden")
+    required = max(int(min_free_bytes), int(archive_size) * 4 + 256 * 1024 * 1024)
+    free = shutil.disk_usage(base).free
+    if free < required:
+        raise DrillError("free_space_insufficient")
+    return base
+
+
+def _normalized_member_parts(name: str) -> tuple[str, ...]:
+    if "\\" in name or name.startswith("/"):
+        raise DrillError("archive_validation_failed")
+    path = PurePosixPath(name)
+    if path.is_absolute():
+        raise DrillError("archive_validation_failed")
+    parts: list[str] = []
+    for part in path.parts:
+        if part in ("", "."):
+            continue
+        if part == "..":
+            raise DrillError("archive_validation_failed")
+        parts.append(part)
+    return tuple(parts)
+
+
+def _resolved_link_parts(base: tuple[str, ...], target: str) -> tuple[str, ...]:
+    if "\\" in target or target.startswith("/"):
+        raise DrillError("archive_validation_failed")
+    target_path = PurePosixPath(target)
+    if target_path.is_absolute():
+        raise DrillError("archive_validation_failed")
+    stack = list(base)
+    for part in target_path.parts:
+        if part in ("", "."):
+            continue
+        if part == "..":
+            if not stack:
+                raise DrillError("archive_validation_failed")
+            stack.pop()
+        else:
+            stack.append(part)
+    return tuple(stack)
+
+
+def _is_under(parts: tuple[str, ...], prefix: tuple[str, ...]) -> bool:
+    return len(parts) >= len(prefix) and parts[: len(prefix)] == prefix
+
+
+def _validate_archive(
+    plain_tar: Path, prefix: tuple[str, ...], required: set[tuple[str, ...]]
+) -> list[tarfile.TarInfo]:
+    try:
+        with tarfile.open(plain_tar, mode="r:gz") as archive:
+            members = archive.getmembers()
+    except (OSError, tarfile.TarError) as exc:
+        raise DrillError("archive_validation_failed") from exc
+
+    seen: set[tuple[str, ...]] = set()
+    available: set[tuple[str, ...]] = set()
+    for member in members:
+        parts = _normalized_member_parts(member.name)
+        if parts:
+            if parts in seen:
+                raise DrillError("archive_validation_failed")
+            seen.add(parts)
+            available.add(parts)
+        if member.isdev() or member.isfifo():
+            raise DrillError("archive_validation_failed")
+        if not (member.isdir() or member.isreg() or member.issym() or member.islnk()):
+            raise DrillError("archive_validation_failed")
+        if member.issym() or member.islnk():
+            base = parts[:-1] if member.issym() else ()
+            target = _resolved_link_parts(base, member.linkname)
+            if _is_under(parts, prefix) and not _is_under(target, prefix):
+                raise DrillError("archive_validation_failed")
+
+    if not required.issubset(available) or MANIFEST_PARTS not in available:
+        raise DrillError("restore_shape_invalid")
+    return members
+
+
+def _read_manifest_timestamp(plain_tar: Path) -> str:
+    try:
+        with tarfile.open(plain_tar, mode="r:gz") as archive:
+            candidate = None
+            for member in archive.getmembers():
+                if _normalized_member_parts(member.name) == MANIFEST_PARTS:
+                    candidate = member
+                    break
+            if candidate is None or not candidate.isreg() or candidate.size > 64 * 1024:
+                raise DrillError("restore_shape_invalid")
+            source = archive.extractfile(candidate)
+            if source is None:
+                raise DrillError("restore_shape_invalid")
+            payload = source.read(64 * 1024 + 1)
+    except (OSError, tarfile.TarError) as exc:
+        raise DrillError("archive_validation_failed") from exc
+    if len(payload) > 64 * 1024:
+        raise DrillError("restore_shape_invalid")
+    try:
+        text = payload.decode("utf-8")
+    except UnicodeError as exc:
+        raise DrillError("restore_shape_invalid") from exc
+
+    manifest: dict[str, str] = {}
+    for line in text.splitlines():
+        key, separator, value = line.partition("=")
+        if not separator or key not in {"created_at", "backup_version"}:
+            continue
+        if key in manifest:
+            raise DrillError("restore_shape_invalid")
+        manifest[key] = value.strip()
+
+    created_at = manifest.get("created_at")
+    if not created_at or manifest.get("backup_version") != EXPECTED_BACKUP_VERSION:
+        raise DrillError("restore_shape_invalid")
+    try:
+        parsed = datetime.fromisoformat(created_at)
+    except ValueError as exc:
+        raise DrillError("restore_shape_invalid") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise DrillError("restore_shape_invalid")
+    return parsed.isoformat(timespec="seconds")
+
+
+def _extraction_space_preflight(
+    workspace: Path,
+    plain_tar: Path,
+    members: Iterable[tarfile.TarInfo],
+    prefix: tuple[str, ...],
+) -> None:
+    materialized = 0
+    for member in members:
+        parts = _normalized_member_parts(member.name)
+        if member.isreg() and _is_under(parts, prefix):
+            materialized += max(0, int(member.size))
+    required = materialized + plain_tar.stat().st_size + 256 * 1024 * 1024
+    if shutil.disk_usage(workspace).free < required:
+        raise DrillError("free_space_insufficient")
+
+
+def _destination(root: Path, parts: tuple[str, ...]) -> Path:
+    destination = root.joinpath(*parts)
+    try:
+        destination.resolve(strict=False).relative_to(root.resolve(strict=True))
+    except ValueError as exc:
+        raise DrillError("archive_validation_failed") from exc
+    return destination
+
+
+def _mkdir_parents(root: Path, path: Path) -> None:
+    relative = path.parent.relative_to(root)
+    current = root
+    for part in relative.parts:
+        current = current / part
+        if current.exists():
+            if current.is_symlink() or not current.is_dir():
+                raise DrillError("archive_validation_failed")
+        else:
+            current.mkdir(mode=0o700)
+
+
+def _extract_hermes(
+    plain_tar: Path,
+    restore_root: Path,
+    members: Iterable[tarfile.TarInfo],
+    prefix: tuple[str, ...],
+    required: set[tuple[str, ...]],
+    production: Path,
+) -> None:
+    restore_root.mkdir(mode=0o700)
+    selected: list[tuple[tarfile.TarInfo, tuple[str, ...]]] = []
+    for member in members:
+        parts = _normalized_member_parts(member.name)
+        if _is_under(parts, prefix):
+            selected.append((member, parts))
+
+    try:
+        with tarfile.open(plain_tar, mode="r:gz") as archive:
+            by_name = {member.name: member for member in archive.getmembers()}
+
+            directories = [(m, p) for m, p in selected if m.isdir()]
+            regulars = [(m, p) for m, p in selected if m.isreg()]
+            hardlinks = [(m, p) for m, p in selected if m.islnk()]
+            symlinks = [(m, p) for m, p in selected if m.issym()]
+
+            for member, parts in directories:
+                dest = _destination(restore_root, parts)
+                _mkdir_parents(restore_root, dest)
+                if dest.exists():
+                    if dest.is_symlink() or not dest.is_dir():
+                        raise DrillError("archive_validation_failed")
+                else:
+                    dest.mkdir(mode=0o700)
+
+            for member, parts in regulars:
+                dest = _destination(restore_root, parts)
+                _mkdir_parents(restore_root, dest)
+                if dest.exists() or dest.is_symlink():
+                    raise DrillError("archive_validation_failed")
+                source = archive.extractfile(by_name[member.name])
+                if source is None:
+                    raise DrillError("archive_validation_failed")
+                fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(fd, "wb") as handle, source:
+                    shutil.copyfileobj(source, handle, length=1024 * 1024)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.chmod(dest, member.mode & 0o777)
+
+            pending = list(hardlinks)
+            while pending:
+                progressed = False
+                remaining: list[tuple[tarfile.TarInfo, tuple[str, ...]]] = []
+                for member, parts in pending:
+                    target_parts = _resolved_link_parts((), member.linkname)
+                    if not _is_under(target_parts, prefix):
+                        raise DrillError("archive_validation_failed")
+                    target = _destination(restore_root, target_parts)
+                    dest = _destination(restore_root, parts)
+                    _mkdir_parents(restore_root, dest)
+                    if dest.exists() or dest.is_symlink():
+                        raise DrillError("archive_validation_failed")
+                    if target.exists() and target.is_file() and not target.is_symlink():
+                        os.link(target, dest)
+                        progressed = True
+                    else:
+                        remaining.append((member, parts))
+                if not progressed:
+                    raise DrillError("archive_validation_failed")
+                pending = remaining
+
+            for member, parts in symlinks:
+                target_parts = _resolved_link_parts(parts[:-1], member.linkname)
+                if not _is_under(target_parts, prefix):
+                    raise DrillError("archive_validation_failed")
+                dest = _destination(restore_root, parts)
+                _mkdir_parents(restore_root, dest)
+                if dest.exists() or dest.is_symlink():
+                    raise DrillError("archive_validation_failed")
+                os.symlink(member.linkname, dest)
+
+            for member, parts in sorted(directories, key=lambda item: len(item[1]), reverse=True):
+                dest = _destination(restore_root, parts)
+                if not dest.is_symlink():
+                    os.chmod(dest, member.mode & 0o777)
+    except (OSError, tarfile.TarError) as exc:
+        if isinstance(exc, DrillError):
+            raise
+        raise DrillError("archive_extraction_failed") from exc
+
+    app = restore_root.joinpath(*prefix)
+    if not app.is_dir() or app.resolve(strict=True) == production:
+        raise DrillError("restore_shape_invalid")
+    for required_path in required:
+        if not restore_root.joinpath(*required_path).exists():
+            raise DrillError("restore_shape_invalid")
+
+
+def _run_age_decrypt(identity: Path, archive: Path, output: Path) -> None:
+    completed = subprocess.run(
+        [AGE_BINARY, "--decrypt", "-i", str(identity), "-o", str(output), str(archive)],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if completed.returncode != 0 or not output.is_file() or output.stat().st_size == 0:
+        raise DrillError("age_decrypt_failed")
+    os.chmod(output, 0o600)
+
+
+def _run_hermes_verifier(verifier: Path, restore_root: Path, evidence: Path) -> dict[str, Any]:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(verifier),
+            "--restore-root",
+            str(restore_root),
+            "--evidence",
+            str(evidence),
+        ],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+        env={
+            "PATH": SAFE_PATH,
+            "LANG": "C.UTF-8",
+            "LC_ALL": "C.UTF-8",
+            "HOME": "/nonexistent",
+            "GIT_OPTIONAL_LOCKS": "0",
+        },
+    )
+    if completed.returncode != 0 or not evidence.is_file():
+        raise DrillError("verifier_failed")
+    try:
+        report = json.loads(evidence.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise DrillError("verifier_failed") from exc
+    if report.get("status") != "pass" or report.get("production_root_touched") is not False:
+        raise DrillError("verifier_failed")
+    git_report = report.get("git")
+    sqlite_report = report.get("sqlite")
+    env_report = report.get("env")
+    hugo_report = report.get("hugo")
+    if not all(isinstance(item, dict) for item in (git_report, sqlite_report, env_report, hugo_report)):
+        raise DrillError("verifier_failed")
+    return {
+        "status": "pass",
+        "mode": report.get("mode"),
+        "git_head": git_report.get("head"),
+        "git_fsck": git_report.get("fsck"),
+        "sqlite_sha256": sqlite_report.get("sha256"),
+        "sqlite_size_bytes": sqlite_report.get("size_bytes"),
+        "sqlite_quick_check": sqlite_report.get("quick_check"),
+        "sqlite_user_version": sqlite_report.get("user_version"),
+        "sqlite_unchanged_during_check": sqlite_report.get("unchanged_during_check"),
+        "env_mode": env_report.get("mode"),
+        "env_contents_read": env_report.get("contents_read"),
+        "hugo_index_bytes": hugo_report.get("index_bytes"),
+        "hugo_sitemap_bytes": hugo_report.get("sitemap_bytes"),
+        "hugo_robots_bytes": hugo_report.get("robots_bytes"),
+    }
+
+
+def _evidence_preflight(path: Path, production: Path) -> Path:
+    candidate = path.expanduser()
+    parent = candidate.parent.resolve(strict=True)
+    if not parent.is_dir():
+        raise DrillError("evidence_path_unsafe")
+    resolved = parent / candidate.name
+    try:
+        resolved.relative_to(production)
+    except ValueError:
+        pass
+    else:
+        raise DrillError("production_root_forbidden")
+    if resolved.exists():
+        raise DrillError("evidence_exists")
+    return resolved
+
+
+def _write_evidence(path: Path, report: dict[str, Any], production: Path) -> None:
+    path = _evidence_preflight(path, production)
+    encoded = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(encoded)
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--archive", required=True, type=Path)
+    parser.add_argument("--sidecar", type=Path, help="defaults to <archive>.sha256")
+    parser.add_argument("--age-identity", required=True, type=Path)
+    parser.add_argument("--production-app-root", required=True, type=Path)
+    parser.add_argument("--rpi-source-root", required=True, type=Path)
+    parser.add_argument("--rpi-source-sha", required=True)
+    parser.add_argument("--hermes-source-root", required=True, type=Path)
+    parser.add_argument("--hermes-source-sha", required=True)
+    parser.add_argument("--evidence", required=True, type=Path)
+    parser.add_argument("--work-dir", type=Path, default=Path("/var/tmp"))
+    parser.add_argument("--min-free-bytes", type=int, default=DEFAULT_MIN_FREE_BYTES)
+    return parser
+
+
+def execute(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
+    started_wall = datetime.now(timezone.utc)
+    started_mono = time.monotonic()
+    archive = args.archive.expanduser().resolve(strict=False)
+    sidecar = (
+        args.sidecar.expanduser().resolve(strict=False)
+        if args.sidecar is not None
+        else Path(str(archive) + ".sha256")
+    )
+    evidence_path = args.evidence.expanduser()
+    report: dict[str, Any] = {
+        "status": "fail",
+        "mode": "hermes-tech-retained-backup-restore-drill",
+        "started_at": started_wall.isoformat(timespec="seconds"),
+        "backup_name": None,
+        "backup_timestamp": None,
+        "backup_name_timestamp": None,
+        "encrypted_sha256": None,
+        "encrypted_size_bytes": None,
+        "rpi_source_sha": args.rpi_source_sha.lower() if COMMIT_RE.fullmatch(args.rpi_source_sha.lower()) else None,
+        "hermes_source_sha": args.hermes_source_sha.lower() if COMMIT_RE.fullmatch(args.hermes_source_sha.lower()) else None,
+        "verifier": None,
+        "cleanup_plaintext_removed": True,
+        "failure_category": None,
+    }
+    workspace: Path | None = None
+    production: Path | None = None
+    try:
+        if args.min_free_bytes < 1:
+            raise DrillError("free_space_invalid")
+        production, prefix, required = _production_contract(args.production_app_root)
+        report["backup_name_timestamp"] = _validate_backup_name(archive.name)
+        report["backup_name"] = archive.name
+        encrypted_sha, encrypted_size = _verify_sidecar(archive, sidecar)
+        report["encrypted_sha256"] = encrypted_sha
+        report["encrypted_size_bytes"] = encrypted_size
+        identity = _identity_preflight(args.age_identity)
+        _verify_source_checkout(
+            args.rpi_source_root,
+            args.rpi_source_sha,
+            "ops/bin/hermes-tech-restore-drill",
+        )
+        verifier = _verify_source_checkout(
+            args.hermes_source_root,
+            args.hermes_source_sha,
+            "tools/verify_restore_root.py",
+        )
+        work_base = _work_base_preflight(
+            args.work_dir, production, encrypted_size, args.min_free_bytes
+        )
+        evidence_path = _evidence_preflight(evidence_path, production)
+        workspace = Path(tempfile.mkdtemp(prefix="hermes-tech-restore-drill-", dir=work_base))
+        os.chmod(workspace, 0o700)
+        try:
+            evidence_path.relative_to(workspace.resolve(strict=True))
+        except ValueError:
+            pass
+        else:
+            raise DrillError("evidence_path_unsafe")
+
+        plain_tar = workspace / "backup.tar.gz"
+        restore_root = workspace / "restore"
+        verifier_evidence = workspace / "verifier-evidence.json"
+        _run_age_decrypt(identity, archive, plain_tar)
+        members = _validate_archive(plain_tar, prefix, required)
+        report["backup_timestamp"] = _read_manifest_timestamp(plain_tar)
+        _extraction_space_preflight(workspace, plain_tar, members, prefix)
+        _extract_hermes(plain_tar, restore_root, members, prefix, required, production)
+        report["verifier"] = _run_hermes_verifier(verifier, restore_root, verifier_evidence)
+        report["status"] = "pass"
+    except (OSError, ValueError, DrillError) as exc:
+        report["status"] = "fail"
+        report["failure_category"] = exc.category if isinstance(exc, DrillError) else "operator_failed"
+    finally:
+        if workspace is not None and workspace.exists():
+            try:
+                shutil.rmtree(workspace)
+            except OSError:
+                report["cleanup_plaintext_removed"] = False
+                report["status"] = "fail"
+                report["failure_category"] = "cleanup_failed"
+        report["finished_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        report["elapsed_seconds"] = round(max(0.0, time.monotonic() - started_mono), 3)
+
+    if production is None:
+        return 1, report
+    try:
+        _write_evidence(evidence_path, report, production)
+    except (OSError, DrillError):
+        return 1, report
+    return (0 if report["status"] == "pass" else 1), report
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parser().parse_args(argv)
+    code, report = execute(args)
+    if code == 0:
+        print("HERMES_TECH_RESTORE_DRILL=PASS")
+    else:
+        category = report.get("failure_category") or "evidence_write_failed"
+        print(f"HERMES_TECH_RESTORE_DRILL=FAIL category={category}", file=sys.stderr)
+    return code
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

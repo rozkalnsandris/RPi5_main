@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CORE="$ROOT/scripts/cloudflare_owner_phone_preflight.py"
+RUNNER="$ROOT/scripts/cloudflare_owner_phone_preflight_stdin.py"
+
+fail() {
+  printf 'Cloudflare P1D #179: BLOCKED: %s\n' "$*" >&2
+  exit 2
+}
+
+[[ -f "$CORE" ]] || fail "GET-only owner-phone core missing"
+[[ -f "$RUNNER" ]] || fail "stdin runner missing"
+command -v python3 >/dev/null 2>&1 || fail "python3 missing"
+
+[[ "${CLOUDFLARE_ACCOUNT_ID:-}" =~ ^[0-9a-fA-F]{32}$ ]] ||
+  fail "CLOUDFLARE_ACCOUNT_ID missing or invalid"
+
+api_token="${CLOUDFLARE_API_TOKEN:-}"
+unset CLOUDFLARE_API_TOKEN
+if [[ -z "$api_token" ]]; then
+  [[ -r /dev/tty ]] || fail "no TTY available for hidden API token prompt"
+  IFS= read -r -s -p 'Cloudflare API token (hidden): ' api_token </dev/tty
+  printf '\n' >/dev/tty
+fi
+
+[[ -r /dev/tty ]] || fail "no TTY available for hidden owner identity prompt"
+IFS= read -r -s -p 'Owner email (hidden): ' owner_email </dev/tty
+printf '\n' >/dev/tty
+
+cleanup() {
+  api_token=''
+  owner_email=''
+  unset CLOUDFLARE_API_TOKEN
+}
+trap cleanup EXIT HUP INT TERM
+
+[[ ${#api_token} -ge 20 ]] || fail "API token missing or invalid"
+[[ "$owner_email" == *@*.* ]] || fail "owner email missing or invalid"
+
+if printf '%s\n%s\n' "$api_token" "$owner_email" | python3 "$RUNNER"; then
+  rc=0
+else
+  rc=$?
+fi
+api_token=''
+owner_email=''
+exit "$rc"
