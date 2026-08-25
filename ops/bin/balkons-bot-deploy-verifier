@@ -1,0 +1,576 @@
+#!/usr/bin/env python3
+"""Read-only verifier for the RPi5_main#192 balcony-bot deployment.
+
+This artifact never mutates the host. It validates the exact K10 baseline before
+deployment and the exact additive source/drop-in deployment after a separately
+owner-authorized Composite STRICT transaction.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import stat
+import subprocess
+from pathlib import Path
+from typing import Callable, Sequence
+
+SERVICE = "balkons-bot.service"
+SELF_REL = Path("ops/bin/balkons-bot-deploy-verifier")
+SOURCE_REL = Path("ops/lib/balkons-bot.py")
+DROPIN_REL = Path("ops/systemd/balkons-bot-runtime-override.conf")
+PREFLIGHT_REL = Path("ops/bin/balkons-bot-preflight")
+
+SOURCE_TARGET = Path("/usr/local/lib/rpi5-balkons-bot.py")
+DROPIN_TARGET = Path(
+    "/etc/systemd/system/balkons-bot.service.d/95-rpi5-source-credentials.conf"
+)
+K10_DROPIN_TARGET = Path(
+    "/etc/systemd/system/balkons-bot.service.d/90-rpi5-no-sigkill.conf"
+)
+
+CANONICAL_H3_LIVE_SOURCE_SHA256 = (
+    "54e7c58bae49a4a78fc033bd86eaa752cf21583bb86a0ba10d7ba9a617b1afd9"
+)
+CANONICAL_PYTHON_PATH_SHA256 = (
+    "31f2aee4e71d21fbe5cf8b01ff0e069b9275f58929596ceb00d14d90e3e16cd6"
+)
+BASELINE_RESTART = "always"
+BASELINE_RESTART_USEC = "10s"
+BASELINE_TIMEOUT_STOP_USEC = "1min 30s"
+
+SHA1_RE = re.compile(r"^[0-9a-f]{40}$")
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+class DeployVerifyError(RuntimeError):
+    """Fail-closed verifier error carrying only a public blocker code."""
+
+    def __init__(self, code: str) -> None:
+        self.code = code
+        super().__init__(code)
+
+
+class CommandResult:
+    def __init__(self, returncode: int, stdout: str) -> None:
+        self.returncode = returncode
+        self.stdout = stdout
+
+
+Runner = Callable[[Sequence[str]], CommandResult]
+ArgvReader = Callable[[int], bytes]
+
+
+def sha256_text(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def run_command(command: Sequence[str]) -> CommandResult:
+    try:
+        completed = subprocess.run(
+            list(command),
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=15,
+            env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
+        )
+    except (OSError, subprocess.SubprocessError):
+        raise DeployVerifyError("command_execution_failed") from None
+    return CommandResult(completed.returncode, completed.stdout)
+
+
+def read_process_argv(pid: int) -> bytes:
+    try:
+        return Path(f"/proc/{pid}/cmdline").read_bytes()
+    except OSError:
+        raise DeployVerifyError("process_argv_unreadable") from None
+
+
+def map_absolute(path: Path, root_prefix: Path | None) -> Path:
+    if root_prefix is None:
+        return path
+    return root_prefix / path.relative_to("/")
+
+
+def require_sha1(value: str, code: str) -> None:
+    if not SHA1_RE.fullmatch(value):
+        raise DeployVerifyError(code)
+
+
+def require_sha256(value: str, code: str) -> None:
+    if not SHA256_RE.fullmatch(value):
+        raise DeployVerifyError(code)
+
+
+def build_git_head_command(repo_root: Path) -> tuple[str, ...]:
+    return ("git", "-C", str(repo_root), "rev-parse", "HEAD")
+
+
+def build_git_branch_command(repo_root: Path) -> tuple[str, ...]:
+    return ("git", "-C", str(repo_root), "branch", "--show-current")
+
+
+def build_git_status_command(repo_root: Path) -> tuple[str, ...]:
+    return (
+        "git",
+        "-C",
+        str(repo_root),
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=no",
+        "--",
+        str(SELF_REL),
+        str(SOURCE_REL),
+        str(DROPIN_REL),
+        str(PREFLIGHT_REL),
+    )
+
+
+def build_git_tracked_command(repo_root: Path) -> tuple[str, ...]:
+    return (
+        "git",
+        "-C",
+        str(repo_root),
+        "ls-files",
+        "--stage",
+        "--",
+        str(SELF_REL),
+        str(SOURCE_REL),
+        str(DROPIN_REL),
+        str(PREFLIGHT_REL),
+    )
+
+
+def build_preflight_command(
+    preflight_path: Path,
+    expected_repo_sha: str,
+    expected_live_source_sha256: str,
+) -> tuple[str, ...]:
+    return (
+        str(preflight_path),
+        "--expected-repo-sha",
+        expected_repo_sha,
+        "--expected-live-source-sha256",
+        expected_live_source_sha256,
+    )
+
+
+def build_mainpid_command() -> tuple[str, ...]:
+    return (
+        "systemctl",
+        "show",
+        SERVICE,
+        "--no-pager",
+        "--property=MainPID",
+    )
+
+
+def parse_tracked_paths(raw: str) -> set[str]:
+    paths: set[str] = set()
+    for line in raw.splitlines():
+        if "\t" not in line:
+            raise DeployVerifyError("repo_tracked_shape_invalid")
+        _meta, path = line.split("\t", 1)
+        paths.add(path)
+    return paths
+
+
+def parse_preflight(raw: str) -> dict[str, object]:
+    try:
+        report = json.loads(raw)
+    except json.JSONDecodeError:
+        raise DeployVerifyError("preflight_json_invalid") from None
+    if not isinstance(report, dict):
+        raise DeployVerifyError("preflight_json_invalid")
+    return report
+
+
+def validate_preflight_report(
+    report: dict[str, object],
+    *,
+    expected_repo_sha: str,
+    expected_live_source_sha256: str,
+    expected_live_path_sha256: str,
+    expected_fragment_path_sha256: str,
+    expected_user_sha256: str,
+) -> None:
+    blockers = report.get("blockers")
+    metadata = report.get("service_metadata")
+    if (
+        report.get("preflight") != "PASS"
+        or blockers != []
+        or report.get("scope") != "READ_ONLY"
+        or report.get("expected_repo_sha") != expected_repo_sha
+        or report.get("observed_repo_sha") != expected_repo_sha
+        or report.get("live_source_sha256") != expected_live_source_sha256
+        or report.get("live_source_provenance_match") is not True
+        or report.get("critical_worktree_clean") is not True
+        or report.get("critical_paths_tracked") is not True
+        or report.get("mutation_started") is not False
+        or report.get("writes_performed") is not False
+        or not isinstance(metadata, dict)
+    ):
+        raise DeployVerifyError("preflight_acceptance_failed")
+
+    expected_metadata = {
+        "load_state": "loaded",
+        "active_state": "active",
+        "sub_state": "running",
+        "user_sha256": expected_user_sha256,
+        "user_is_root": False,
+        "python_executable_path_sha256": CANONICAL_PYTHON_PATH_SHA256,
+        "live_source_path_sha256": expected_live_path_sha256,
+        "fragment_path_sha256": expected_fragment_path_sha256,
+        "restart": BASELINE_RESTART,
+        "restart_usec": BASELINE_RESTART_USEC,
+        "timeout_stop_usec": BASELINE_TIMEOUT_STOP_USEC,
+        "send_sigkill": "no",
+    }
+    for key, expected in expected_metadata.items():
+        if metadata.get(key) != expected:
+            raise DeployVerifyError(f"preflight_metadata_{key}_mismatch")
+
+
+def run_preflight(
+    *,
+    repo_root: Path,
+    expected_repo_sha: str,
+    expected_live_source_sha256: str,
+    runner: Runner,
+) -> dict[str, object]:
+    preflight_path = repo_root / PREFLIGHT_REL
+    result = runner(
+        build_preflight_command(
+            preflight_path,
+            expected_repo_sha,
+            expected_live_source_sha256,
+        )
+    )
+    if result.returncode != 0:
+        raise DeployVerifyError("preflight_not_pass")
+    return parse_preflight(result.stdout)
+
+
+def validate_root_owned_public_file(
+    path: Path,
+    expected_sha256: str,
+    *,
+    expected_owner_uid: int = 0,
+) -> None:
+    try:
+        st = path.lstat()
+    except OSError:
+        raise DeployVerifyError("required_public_file_missing") from None
+    if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode):
+        raise DeployVerifyError("required_public_file_unsafe")
+    if st.st_uid != expected_owner_uid:
+        raise DeployVerifyError("required_public_file_owner_mismatch")
+    if stat.S_IMODE(st.st_mode) != 0o644:
+        raise DeployVerifyError("required_public_file_mode_mismatch")
+    if sha256_file(path) != expected_sha256:
+        raise DeployVerifyError("required_public_file_hash_mismatch")
+
+
+def parse_main_pid(raw: str) -> int:
+    lines = [line for line in raw.splitlines() if line]
+    if len(lines) != 1 or not lines[0].startswith("MainPID="):
+        raise DeployVerifyError("mainpid_shape_invalid")
+    value = lines[0].split("=", 1)[1]
+    if not value.isdigit():
+        raise DeployVerifyError("mainpid_shape_invalid")
+    pid = int(value)
+    if pid <= 1:
+        raise DeployVerifyError("mainpid_invalid")
+    return pid
+
+
+def validate_process_argv(raw: bytes) -> None:
+    if not raw.endswith(b"\0"):
+        raise DeployVerifyError("process_argv_shape_invalid")
+    fields = raw[:-1].split(b"\0")
+    if len(fields) != 2:
+        raise DeployVerifyError("process_argv_shape_invalid")
+    try:
+        argv = [field.decode("utf-8", errors="strict") for field in fields]
+    except UnicodeDecodeError:
+        raise DeployVerifyError("process_argv_shape_invalid") from None
+    if argv != ["/usr/bin/python3", str(SOURCE_TARGET)]:
+        raise DeployVerifyError("process_argv_not_exact_deployed_shape")
+
+
+def validate_repo_bindings(
+    *,
+    repo_root: Path,
+    expected_repo_sha: str,
+    expected_checkout_fingerprint: str,
+    expected_verifier_sha256: str,
+    expected_source_sha256: str,
+    expected_dropin_sha256: str,
+    expected_preflight_sha256: str,
+    runner: Runner,
+    effective_uid: int,
+) -> None:
+    repo_root = repo_root.resolve()
+    if effective_uid == 0:
+        raise DeployVerifyError("verifier_must_run_nonroot")
+    try:
+        repo_uid = repo_root.stat().st_uid
+    except OSError:
+        raise DeployVerifyError("checkout_owner_unreadable") from None
+    if repo_uid == 0 or repo_uid != effective_uid:
+        raise DeployVerifyError("must_run_as_checkout_owner")
+    if sha256_text(str(repo_root)) != expected_checkout_fingerprint:
+        raise DeployVerifyError("checkout_fingerprint_mismatch")
+
+    head = runner(build_git_head_command(repo_root))
+    branch = runner(build_git_branch_command(repo_root))
+    status_result = runner(build_git_status_command(repo_root))
+    tracked_result = runner(build_git_tracked_command(repo_root))
+    if (
+        head.returncode != 0
+        or branch.returncode != 0
+        or status_result.returncode != 0
+        or tracked_result.returncode != 0
+    ):
+        raise DeployVerifyError("repo_git_check_failed")
+    if head.stdout.strip() != expected_repo_sha:
+        raise DeployVerifyError("repo_head_mismatch")
+    if branch.stdout.strip() != "main":
+        raise DeployVerifyError("repo_branch_not_main")
+    if status_result.stdout.strip():
+        raise DeployVerifyError("required_paths_dirty")
+    if parse_tracked_paths(tracked_result.stdout) != {
+        str(SELF_REL),
+        str(SOURCE_REL),
+        str(DROPIN_REL),
+        str(PREFLIGHT_REL),
+    }:
+        raise DeployVerifyError("required_paths_not_tracked")
+
+    expected_files = (
+        (repo_root / SELF_REL, expected_verifier_sha256),
+        (repo_root / SOURCE_REL, expected_source_sha256),
+        (repo_root / DROPIN_REL, expected_dropin_sha256),
+        (repo_root / PREFLIGHT_REL, expected_preflight_sha256),
+    )
+    for path, expected_sha256 in expected_files:
+        if not path.is_file() or path.is_symlink():
+            raise DeployVerifyError("required_source_file_unsafe")
+        if sha256_file(path) != expected_sha256:
+            raise DeployVerifyError("required_source_hash_mismatch")
+
+
+def collect(
+    *,
+    mode: str,
+    expected_repo_sha: str,
+    expected_checkout_fingerprint: str,
+    expected_verifier_sha256: str,
+    expected_source_sha256: str,
+    expected_dropin_sha256: str,
+    expected_preflight_sha256: str,
+    expected_k10_dropin_sha256: str,
+    expected_baseline_live_path_sha256: str,
+    expected_fragment_path_sha256: str,
+    expected_user_sha256: str,
+    repo_root: Path | None = None,
+    runner: Runner = run_command,
+    argv_reader: ArgvReader = read_process_argv,
+    root_prefix: Path | None = None,
+    effective_uid: int | None = None,
+    expected_root_owner_uid: int = 0,
+) -> dict[str, object]:
+    require_sha1(expected_repo_sha, "expected_repo_sha_invalid")
+    for value, code in (
+        (expected_checkout_fingerprint, "expected_checkout_fingerprint_invalid"),
+        (expected_verifier_sha256, "expected_verifier_sha256_invalid"),
+        (expected_source_sha256, "expected_source_sha256_invalid"),
+        (expected_dropin_sha256, "expected_dropin_sha256_invalid"),
+        (expected_preflight_sha256, "expected_preflight_sha256_invalid"),
+        (expected_k10_dropin_sha256, "expected_k10_dropin_sha256_invalid"),
+        (
+            expected_baseline_live_path_sha256,
+            "expected_baseline_live_path_sha256_invalid",
+        ),
+        (expected_fragment_path_sha256, "expected_fragment_path_sha256_invalid"),
+        (expected_user_sha256, "expected_user_sha256_invalid"),
+    ):
+        require_sha256(value, code)
+
+    root = (repo_root or Path(__file__).resolve().parents[2]).resolve()
+    uid = os.geteuid() if effective_uid is None else effective_uid
+    validate_repo_bindings(
+        repo_root=root,
+        expected_repo_sha=expected_repo_sha,
+        expected_checkout_fingerprint=expected_checkout_fingerprint,
+        expected_verifier_sha256=expected_verifier_sha256,
+        expected_source_sha256=expected_source_sha256,
+        expected_dropin_sha256=expected_dropin_sha256,
+        expected_preflight_sha256=expected_preflight_sha256,
+        runner=runner,
+        effective_uid=uid,
+    )
+
+    k10_dropin = map_absolute(K10_DROPIN_TARGET, root_prefix)
+    validate_root_owned_public_file(
+        k10_dropin,
+        expected_k10_dropin_sha256,
+        expected_owner_uid=expected_root_owner_uid,
+    )
+
+    source_target = map_absolute(SOURCE_TARGET, root_prefix)
+    dropin_target = map_absolute(DROPIN_TARGET, root_prefix)
+
+    if mode == "check":
+        if source_target.exists() or source_target.is_symlink():
+            raise DeployVerifyError("deploy_source_target_already_exists")
+        if dropin_target.exists() or dropin_target.is_symlink():
+            raise DeployVerifyError("deploy_dropin_target_already_exists")
+
+        report = run_preflight(
+            repo_root=root,
+            expected_repo_sha=expected_repo_sha,
+            expected_live_source_sha256=CANONICAL_H3_LIVE_SOURCE_SHA256,
+            runner=runner,
+        )
+        validate_preflight_report(
+            report,
+            expected_repo_sha=expected_repo_sha,
+            expected_live_source_sha256=CANONICAL_H3_LIVE_SOURCE_SHA256,
+            expected_live_path_sha256=expected_baseline_live_path_sha256,
+            expected_fragment_path_sha256=expected_fragment_path_sha256,
+            expected_user_sha256=expected_user_sha256,
+        )
+        return {
+            "schema": "rpi5.balkons_bot_deploy_verifier.v1",
+            "mode": "check",
+            "result": "READY",
+            "preflight": report,
+            "credential_content_read": False,
+            "mutation_started": False,
+            "writes_performed": False,
+        }
+
+    if mode == "verify":
+        validate_root_owned_public_file(
+            source_target,
+            expected_source_sha256,
+            expected_owner_uid=expected_root_owner_uid,
+        )
+        validate_root_owned_public_file(
+            dropin_target,
+            expected_dropin_sha256,
+            expected_owner_uid=expected_root_owner_uid,
+        )
+
+        report = run_preflight(
+            repo_root=root,
+            expected_repo_sha=expected_repo_sha,
+            expected_live_source_sha256=expected_source_sha256,
+            runner=runner,
+        )
+        validate_preflight_report(
+            report,
+            expected_repo_sha=expected_repo_sha,
+            expected_live_source_sha256=expected_source_sha256,
+            expected_live_path_sha256=sha256_text(str(SOURCE_TARGET)),
+            expected_fragment_path_sha256=expected_fragment_path_sha256,
+            expected_user_sha256=expected_user_sha256,
+        )
+
+        before = runner(build_mainpid_command())
+        if before.returncode != 0:
+            raise DeployVerifyError("mainpid_unreadable")
+        pid = parse_main_pid(before.stdout)
+        argv_raw = argv_reader(pid)
+        after = runner(build_mainpid_command())
+        if after.returncode != 0 or parse_main_pid(after.stdout) != pid:
+            raise DeployVerifyError("mainpid_changed_during_argv_check")
+        validate_process_argv(argv_raw)
+
+        return {
+            "schema": "rpi5.balkons_bot_deploy_verifier.v1",
+            "mode": "verify",
+            "result": "PASS",
+            "preflight": report,
+            "process_argv_shape": "exact_python_and_deployed_source_only",
+            "credential_content_read": False,
+            "mutation_started": False,
+            "writes_performed": False,
+        }
+
+    raise DeployVerifyError("mode_invalid")
+
+
+def blocked_report(code: str, mode: str | None) -> dict[str, object]:
+    return {
+        "schema": "rpi5.balkons_bot_deploy_verifier.v1",
+        "mode": mode,
+        "result": "BLOCKED",
+        "blockers": [code],
+        "credential_content_read": False,
+        "mutation_started": False,
+        "writes_performed": False,
+    }
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Read-only #192 balcony-bot deployment verifier"
+    )
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--check", action="store_true")
+    group.add_argument("--verify", action="store_true")
+    parser.add_argument("--expected-repo-sha", required=True)
+    parser.add_argument("--expected-checkout-fingerprint", required=True)
+    parser.add_argument("--expected-verifier-sha256", required=True)
+    parser.add_argument("--expected-source-sha256", required=True)
+    parser.add_argument("--expected-dropin-sha256", required=True)
+    parser.add_argument("--expected-preflight-sha256", required=True)
+    parser.add_argument("--expected-k10-dropin-sha256", required=True)
+    parser.add_argument("--expected-baseline-live-path-sha256", required=True)
+    parser.add_argument("--expected-fragment-path-sha256", required=True)
+    parser.add_argument("--expected-user-sha256", required=True)
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    mode = "check" if args.check else "verify"
+    try:
+        report = collect(
+            mode=mode,
+            expected_repo_sha=args.expected_repo_sha,
+            expected_checkout_fingerprint=args.expected_checkout_fingerprint,
+            expected_verifier_sha256=args.expected_verifier_sha256,
+            expected_source_sha256=args.expected_source_sha256,
+            expected_dropin_sha256=args.expected_dropin_sha256,
+            expected_preflight_sha256=args.expected_preflight_sha256,
+            expected_k10_dropin_sha256=args.expected_k10_dropin_sha256,
+            expected_baseline_live_path_sha256=args.expected_baseline_live_path_sha256,
+            expected_fragment_path_sha256=args.expected_fragment_path_sha256,
+            expected_user_sha256=args.expected_user_sha256,
+        )
+    except DeployVerifyError as exc:
+        report = blocked_report(exc.code, mode)
+    except Exception:
+        report = blocked_report("internal_error", mode)
+
+    print(json.dumps(report, sort_keys=True, separators=(",", ":")))
+    return 0 if report["result"] in {"READY", "PASS"} else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
