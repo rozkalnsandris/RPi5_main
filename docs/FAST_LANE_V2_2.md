@@ -6,9 +6,17 @@ This is the active local FAST-LANE startup contract. The older versioned filenam
 
 **The human approves the RISK / DECISION. Automation executes the TECHNICAL STEPS.** Read-only checks never create owner gates. STRICT describes host/runtime mutation risk, not approval-per-command.
 
+## Command routing invariant
+
+Bare `START`, `START RPi5_main`, `turpini`, or equivalent continuation selects normal **FAST-LANE v2.2** operation. It does **not** select `GITHUB-ONLY`.
+
+`GITHUB-ONLY` is active only when the owner explicitly includes the `GITHUB-ONLY` mode in the current command (including the documented `git hub only` spelling). `LIVE-ALL` likewise requires an explicit current-command `LIVE-ALL` token.
+
+Never infer either explicit mode from `.github/start-github-only.json`, a deploy queue, a handoff/issue, executor availability, historical chat state, or a prior authorization receipt. Those are state/evidence inputs after command mode has been selected; they are not mode selectors. The machine-readable local dispatcher contract is `.github/start-mode-routing.json`.
+
 ## FAST
 
-`START`, `turpini`, or equivalent continuation may carry safe Git-only documentation, source, tests and policy/orchestration code from fresh canonical GitHub state through Ready in one coherent batch when they do not read protected runtime data or mutate the host. This includes branch, PR, CI/review and up to two scope-preserving corrections. Batch 2-5 closely related same-risk items when coherent. Merge remains explicit.
+`START`, `turpini`, or equivalent continuation may carry safe source, documentation, test and policy/orchestration work from fresh canonical GitHub state through Ready in one coherent batch when it does not read protected runtime data or mutate the host. This includes branch, PR, CI/review and up to two scope-preserving corrections. Batch 2-5 closely related same-risk items when coherent. Merge remains explicit.
 
 ## Human gate budget
 
