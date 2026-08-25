@@ -38,18 +38,29 @@ the two new exact files instead of requiring a raw systemd/source backup.
 
 ## Runtime overlay
 
-The reviewed overlay uses systemd list-reset semantics to replace only the runtime
-command and credential list while preserving private service identity and the
-already-proven lifecycle values from the base unit:
+The reviewed overlay uses systemd list-reset semantics to establish a deterministic
+tracked execution environment while preserving private service identity and the
+already-proven K10 lifecycle values from the base unit:
 
-- reset `ExecStart=` and set exactly
-  `/usr/bin/python3 /usr/local/lib/rpi5-balkons-bot.py`;
+- clear legacy `ExecStartPre=`, `ExecStart=`, `ExecStartPost=`, `ExecReload=`,
+  `ExecStop=` and `ExecStopPost=` lists, then set exactly
+  `/usr/bin/python3 /usr/local/lib/rpi5-balkons-bot.py` as `ExecStart`;
 - reset `LoadCredential=` and add exactly the five reviewed credential names;
+- clear legacy unit-level `Environment=`, `EnvironmentFile=` and `PassEnvironment=`
+  sources, then add only `PYTHONDONTWRITEBYTECODE=1`;
+- apply `UnsetEnvironment=` for the known historical/canonical credential-variable
+  names as a final defense against manager/PAM-supplied values without reading any
+  environment contents;
 - keep `SendSIGKILL=no`;
 - apply the non-secret service hardening already defined by the tracked source
   template;
 - do not set `User=`, `Restart=`, `RestartSec=`, `TimeoutStopSec=`, enablement,
   dependencies, broker settings, or any private identity value.
+
+The empty resets are intentional: unlike installing a fresh full unit, a drop-in
+otherwise inherits list-valued execution/environment settings from the existing
+base unit. The tracked bot requires only systemd's generated
+`CREDENTIALS_DIRECTORY` plus the explicit non-secret Python setting above.
 
 The five fixed credential source paths are:
 
@@ -84,7 +95,9 @@ by merge or by a generic `turpini`.
 The same pre-mutation gate must query effective `LoadCredential` metadata in memory
 and accept only an empty current list. It may emit only `EMPTY`/`NONEMPTY`, not raw
 entries. This ensures the overlay's explicit `LoadCredential=` reset cannot erase
-an unexpected pre-existing credential contract.
+an unexpected pre-existing credential contract. No equivalent environment-content
+inspection is needed or permitted: the overlay clears unit environment sources and
+uses `UnsetEnvironment=` for known secret-variable names without reading values.
 
 ## Read-only deployment verifier
 
@@ -158,11 +171,23 @@ At minimum it binds:
 
 The manifest is evidence and a rollback authorization input, not automatic rollback.
 
+## Post-merge build preparation
+
+Merge still does not authorize production. After merge, safe source-level build
+preparation must re-read the exact merged `main`, compute the exact SHA256 bindings
+for the merged verifier/source/overlay/preflight artifacts, and produce the exact
+operator transaction artifact plus its SHA256. Only that exact reviewed artifact
+may be named in a later Composite STRICT owner authorization.
+
+This post-merge build step performs no protected runtime inspection and no host
+mutation. Live preflight begins only after the later owner authorization.
+
 ## Future Composite STRICT forward sequence
 
-After source review and merge, a fresh owner authorization may cover one fail-closed
-transaction only if it binds the exact merged SHA, host/checkout fingerprint,
-artifact SHA256 values, K10 baseline, fixed targets and explicit exclusions.
+After source review, merge, post-merge build preparation and a fresh owner
+authorization, one fail-closed transaction may proceed only if it binds the exact
+merged SHA, host/checkout fingerprint, transaction-artifact SHA256, component
+SHA256 values, K10 baseline, fixed targets and explicit exclusions.
 
 The intended sequence is:
 

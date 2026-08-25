@@ -261,9 +261,20 @@ class BalkonsBotDeployVerifierTests(unittest.TestCase):
     def test_runtime_overlay_is_exact_scoped_contract(self):
         text = OVERLAY_PATH.read_text(encoding="utf-8")
         lines = text.splitlines()
-        self.assertEqual(lines.count("ExecStart="), 1)
+        for reset in (
+            "ExecStartPre=",
+            "ExecStart=",
+            "ExecStartPost=",
+            "ExecReload=",
+            "ExecStop=",
+            "ExecStopPost=",
+            "LoadCredential=",
+            "Environment=",
+            "EnvironmentFile=",
+            "PassEnvironment=",
+        ):
+            self.assertEqual(lines.count(reset), 1)
         self.assertIn("ExecStart=/usr/bin/python3 /usr/local/lib/rpi5-balkons-bot.py", lines)
-        self.assertEqual(lines.count("LoadCredential="), 1)
         expected_credentials = {
             "LoadCredential=telegram-token:/etc/credstore/balkons-bot-telegram-token",
             "LoadCredential=telegram-chat-id:/etc/credstore/balkons-bot-telegram-chat-id",
@@ -272,6 +283,24 @@ class BalkonsBotDeployVerifierTests(unittest.TestCase):
             "LoadCredential=mqtt-secret:/etc/credstore/balkons-bot-mqtt-secret",
         }
         self.assertEqual({line for line in lines if line.startswith("LoadCredential=") and line != "LoadCredential="}, expected_credentials)
+        self.assertIn("Environment=PYTHONDONTWRITEBYTECODE=1", lines)
+        unset_lines = [line for line in lines if line.startswith("UnsetEnvironment=")]
+        self.assertEqual(len(unset_lines), 1)
+        for name in (
+            "BOT_TOKEN",
+            "CHAT_ID",
+            "MQTT_USER",
+            "MQTT_USERNAME",
+            "MQTT_PASS",
+            "MQTT_PASSWORD",
+            "MQTT_SECRET",
+            "TELEGRAM_TOKEN",
+            "TELEGRAM_BOT_TOKEN",
+            "TELEGRAM_CHAT_ID",
+            "TG_TOKEN",
+            "TG_CHAT_ID",
+        ):
+            self.assertIn(name, unset_lines[0].split("=", 1)[1].split())
         for required in (
             "SendSIGKILL=no",
             "UMask=0077",
