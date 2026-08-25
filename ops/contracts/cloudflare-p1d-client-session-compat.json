@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "status": "source-decision-complete-plan-only",
+  "canonical_issue": 179,
+  "source_revalidated": "2026-08-25",
+  "mutation_authorized": false,
+  "extends": "ops/contracts/cloudflare-p1d-owner-phone-posture.json#client_session_beta",
+  "goal": "bounded-near-passwordless-owner-phone-access-after-accepted-enrollment-and-gateway-posture-canaries",
+  "compatibility": {
+    "supported_access_policy_actions": [
+      "allow",
+      "block"
+    ],
+    "binding_cookie_must_be_disabled": true,
+    "binding_cookie_change_allowed_in_first_beta_canary": false,
+    "when_binding_cookie_enabled": "stop-and-require-separate-source-security-decision-and-owner-authorization",
+    "one_user_per_device": true,
+    "identity_source": "idp-used-to-enroll-cloudflare-one-client",
+    "team_domain_and_idp_reachability_required": true,
+    "fresh_get_only_target_application_preflight_required": true,
+    "fresh_get_fields": [
+      "allow_authenticate_via_warp",
+      "enable_binding_cookie",
+      "policy_actions"
+    ]
+  },
+  "first_beta_canary": {
+    "authorized": false,
+    "target_scope": "one-exact-admin-access-application",
+    "forward_method": "PUT",
+    "required_permission": "Access: Apps and Policies Write",
+    "semantic_allowed_diff": [
+      "target-application-allow_authenticate_via_warp-false-to-true"
+    ],
+    "preconditions": [
+      "owner-phone-enrollment-and-wifi-cellular-gateway-canary-accepted",
+      "target-access-application-resolves-exactly-and-unambiguously",
+      "target-policy-actions-are-only-allow-or-block",
+      "target-enable_binding_cookie-is-false",
+      "fresh-private-full-application-preimage-captured",
+      "team-domain-and-idp-path-reachable-through-cloudflare-one-client"
+    ],
+    "forbidden_diff": [
+      "binding-cookie-change",
+      "access-policy-change",
+      "gateway-posture-change",
+      "session-duration-change",
+      "organization-apply-to-all-change",
+      "idp-or-login-method-change",
+      "device-enrollment-change",
+      "tunnel-dns-worker-or-rpi5-host-change"
+    ],
+    "bulk_apply_to_all_allowed": false,
+    "session_duration_change_allowed": false,
+    "rollback": "restore-exact-private-target-application-preimage-only-if-predeclared-and-required",
+    "failure_contract": [
+      "stop-on-http-error",
+      "stop-on-ambiguous-target",
+      "stop-on-unexpected-diff",
+      "stop-on-required-canary-failure",
+      "no-blind-retry"
+    ]
+  },
+  "privacy": {
+    "forbidden_public_evidence": [
+      "owner-email",
+      "account-id",
+      "team-name-or-auth-domain",
+      "access-application-id",
+      "access-application-aud",
+      "access-policy-id",
+      "device-or-registration-id",
+      "session-token-or-cookie"
+    ]
+  },
+  "source_references": [
+    "https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/cloudflare-one-client/configure/client-sessions/",
+    "https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/",
+    "https://developers.cloudflare.com/api/resources/zero_trust/subresources/access/subresources/applications/methods/get/",
+    "https://developers.cloudflare.com/api/resources/zero_trust/subresources/access/subresources/applications/methods/update/"
+  ]
+}
