@@ -2,6 +2,7 @@
 
 test:
 	./tests/test-shell-syntax.sh
+	python3 ./tests/test-start-mode-routing.py
 	bash ./tests/test-balcony-watering.sh
 	bash ./tests/test-balkons-log-mqtt-credential.sh
 	bash ./tests/test-balkons-log-legacy-set-contract.sh
