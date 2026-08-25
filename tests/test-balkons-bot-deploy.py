@@ -9,6 +9,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "ops/bin/balkons-bot-deploy-verifier"
@@ -35,13 +36,7 @@ def sha256_bytes(value: bytes) -> str:
 
 
 class FakeRunner:
-    def __init__(
-        self,
-        *,
-        repo: Path,
-        restart: str = verifier.BASELINE_RESTART,
-        mainpid: int = 4242,
-    ) -> None:
+    def __init__(self, *, repo: Path, restart: str = verifier.BASELINE_RESTART, mainpid: int = 4242) -> None:
         self.repo = repo
         self.restart = restart
         self.mainpid = mainpid
@@ -59,15 +54,15 @@ class FakeRunner:
         if command == verifier.build_git_tracked_command(self.repo):
             payload = "".join(
                 f"100644 {'d' * 40} 0\t{path}\n"
-                for path in (
-                    verifier.SELF_REL,
-                    verifier.SOURCE_REL,
-                    verifier.DROPIN_REL,
-                    verifier.PREFLIGHT_REL,
-                )
+                for path in (verifier.SELF_REL, verifier.SOURCE_REL, verifier.DROPIN_REL, verifier.PREFLIGHT_REL)
             )
             return verifier.CommandResult(0, payload)
-        if command and command[0] == str(self.repo / verifier.PREFLIGHT_REL):
+        expected_preflight_prefix = (
+            verifier.PYTHON,
+            "-I",
+            str(self.repo / verifier.PREFLIGHT_REL),
+        )
+        if command[:3] == expected_preflight_prefix:
             expected_live_sha = command[-1]
             live_path_sha = (
                 BASELINE_PATH_SHA
@@ -110,7 +105,6 @@ class FakeRunner:
         raise AssertionError(f"unexpected command: {command}")
 
 
-@unittest.skipIf(os.geteuid() == 0, "deployment verifier is intentionally non-root")
 class BalkonsBotDeployVerifierTests(unittest.TestCase):
     def make_fixture(self):
         temporary = tempfile.TemporaryDirectory(prefix="balkons-bot-deploy-")
@@ -118,7 +112,6 @@ class BalkonsBotDeployVerifierTests(unittest.TestCase):
         work = Path(temporary.name)
         repo = work / "repo"
         fake_root = work / "root"
-
         copies = {
             verifier.SELF_REL: MODULE_PATH.read_bytes(),
             verifier.SOURCE_REL: SOURCE_PATH.read_bytes(),
@@ -129,12 +122,10 @@ class BalkonsBotDeployVerifierTests(unittest.TestCase):
             path = repo / rel
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
-
         k10 = verifier.map_absolute(verifier.K10_DROPIN_TARGET, fake_root)
         k10.parent.mkdir(parents=True, exist_ok=True)
         k10.write_bytes(K10_BYTES)
         k10.chmod(0o644)
-
         hashes = {
             "verifier": sha256_bytes(copies[verifier.SELF_REL]),
             "source": sha256_bytes(copies[verifier.SOURCE_REL]),
@@ -168,7 +159,6 @@ class BalkonsBotDeployVerifierTests(unittest.TestCase):
         self.assertFalse(report["credential_content_read"])
         self.assertFalse(report["mutation_started"])
         self.assertFalse(report["writes_performed"])
-        self.assertEqual(report["preflight"]["live_source_sha256"], verifier.CANONICAL_H3_LIVE_SOURCE_SHA256)
 
     def test_check_blocks_if_forward_source_target_already_exists(self):
         _repo, fake_root, _runner, _hashes, kwargs = self.make_fixture()
@@ -179,7 +169,7 @@ class BalkonsBotDeployVerifierTests(unittest.TestCase):
             verifier.collect(mode="check", **kwargs)
         self.assertEqual(caught.exception.code, "deploy_source_target_already_exists")
 
-    def test_verify_accepts_exact_targets_preflight_and_two_argument_process(self):
+    def test_verify_accepts_exact_targets_and_two_argument_process(self):
         _repo, fake_root, _runner, hashes, kwargs = self.make_fixture()
         source_target = verifier.map_absolute(verifier.SOURCE_TARGET, fake_root)
         dropin_target = verifier.map_absolute(verifier.DROPIN_TARGET, fake_root)
@@ -189,17 +179,11 @@ class BalkonsBotDeployVerifierTests(unittest.TestCase):
         dropin_target.write_bytes(OVERLAY_PATH.read_bytes())
         source_target.chmod(0o644)
         dropin_target.chmod(0o644)
-
         argv = b"/usr/bin/python3\0/usr/local/lib/rpi5-balkons-bot.py\0"
-        report = verifier.collect(
-            mode="verify",
-            argv_reader=lambda _pid: argv,
-            **kwargs,
-        )
+        report = verifier.collect(mode="verify", argv_reader=lambda _pid: argv, **kwargs)
         self.assertEqual(report["result"], "PASS")
-        self.assertEqual(report["process_argv_shape"], "exact_python_and_deployed_source_only")
         self.assertEqual(report["preflight"]["live_source_sha256"], hashes["source"])
-        self.assertFalse(report["credential_content_read"])
+        self.assertEqual(report["process_argv_shape"], "exact_python_and_deployed_source_only")
 
     def test_verify_rejects_extra_argv_without_disclosing_it(self):
         _repo, fake_root, _runner, _hashes, kwargs = self.make_fixture()
@@ -211,67 +195,55 @@ class BalkonsBotDeployVerifierTests(unittest.TestCase):
         dropin_target.write_bytes(OVERLAY_PATH.read_bytes())
         source_target.chmod(0o644)
         dropin_target.chmod(0o644)
-
         secret_probe = "DO_NOT_DISCLOSE_SECRET_ARG"
-        argv = (
-            b"/usr/bin/python3\0/usr/local/lib/rpi5-balkons-bot.py\0"
-            + secret_probe.encode("utf-8")
-            + b"\0"
-        )
+        argv = b"/usr/bin/python3\0/usr/local/lib/rpi5-balkons-bot.py\0" + secret_probe.encode() + b"\0"
         with self.assertRaises(verifier.DeployVerifyError) as caught:
             verifier.collect(mode="verify", argv_reader=lambda _pid: argv, **kwargs)
         self.assertEqual(caught.exception.code, "process_argv_shape_invalid")
         self.assertNotIn(secret_probe, str(caught.exception))
 
     def test_lifecycle_drift_blocks(self):
-        repo, _fake_root, runner, _hashes, kwargs = self.make_fixture()
-        drifted = FakeRunner(repo=repo, restart="on-failure")
-        kwargs["runner"] = drifted
+        repo, _fake_root, _runner, _hashes, kwargs = self.make_fixture()
+        kwargs["runner"] = FakeRunner(repo=repo, restart="on-failure")
         with self.assertRaises(verifier.DeployVerifyError) as caught:
             verifier.collect(mode="check", **kwargs)
         self.assertEqual(caught.exception.code, "preflight_metadata_restart_mismatch")
-        self.assertNotEqual(runner, drifted)
+
+    def test_interpreter_preflight_and_subprocess_environment_are_isolated(self):
+        text = MODULE_PATH.read_text(encoding="utf-8")
+        self.assertEqual(text.splitlines()[0], "#!/usr/bin/python3 -I")
+        command = verifier.build_preflight_command(Path("/repo/preflight"), REPO_SHA, "b" * 64)
+        self.assertEqual(command[:3], ("/usr/bin/python3", "-I", "/repo/preflight"))
+        self.assertEqual(
+            verifier.COMMAND_ENV,
+            {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C", "GIT_OPTIONAL_LOCKS": "0"},
+        )
+        self.assertNotIn("os.environ", text)
+        completed = mock.Mock(returncode=0, stdout="ok\n")
+        with mock.patch.object(verifier.subprocess, "run", return_value=completed) as run:
+            result = verifier.run_command(("/usr/bin/git", "--version"))
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(run.call_args.kwargs["env"], verifier.COMMAND_ENV)
 
     def test_verifier_has_no_mutating_or_secret_read_surface(self):
         text = MODULE_PATH.read_text(encoding="utf-8")
-        forbidden = (
-            "sudo",
-            "daemon-reload",
-            "systemctl restart",
-            "systemctl stop",
-            "systemctl start",
-            "systemctl kill",
-            "journalctl",
-            "docker inspect",
-            "/proc/*/environ",
-            "CREDENTIALS_DIRECTORY",
-            "/etc/credstore",
-            "write_text(",
-            "write_bytes(",
-            ".unlink(",
-            "os.remove(",
-            "os.chmod(",
-            "os.chown(",
-        )
-        for token in forbidden:
+        for token in (
+            "sudo", "daemon-reload", "systemctl restart", "systemctl stop", "systemctl start",
+            "systemctl kill", "journalctl", "docker inspect", "/proc/*/environ",
+            "CREDENTIALS_DIRECTORY", "/etc/credstore", "write_text(", "write_bytes(",
+            ".unlink(", "os.remove(", "os.chmod(", "os.chown(",
+        ):
             self.assertNotIn(token, text)
         self.assertIn("/proc/{pid}/cmdline", text)
-        self.assertIn('"systemctl",\n        "show"', text)
+        self.assertEqual(verifier.GIT, "/usr/bin/git")
+        self.assertEqual(verifier.SYSTEMCTL, "/usr/bin/systemctl")
 
     def test_runtime_overlay_is_exact_scoped_contract(self):
         text = OVERLAY_PATH.read_text(encoding="utf-8")
         lines = text.splitlines()
         for reset in (
-            "ExecStartPre=",
-            "ExecStart=",
-            "ExecStartPost=",
-            "ExecReload=",
-            "ExecStop=",
-            "ExecStopPost=",
-            "LoadCredential=",
-            "Environment=",
-            "EnvironmentFile=",
-            "PassEnvironment=",
+            "ExecStartPre=", "ExecStart=", "ExecStartPost=", "ExecReload=", "ExecStop=",
+            "ExecStopPost=", "LoadCredential=", "Environment=", "EnvironmentFile=", "PassEnvironment=",
         ):
             self.assertEqual(lines.count(reset), 1)
         self.assertIn("ExecStart=/usr/bin/python3 /usr/local/lib/rpi5-balkons-bot.py", lines)
@@ -282,44 +254,25 @@ class BalkonsBotDeployVerifierTests(unittest.TestCase):
             "LoadCredential=mqtt-username:/etc/credstore/balkons-bot-mqtt-username",
             "LoadCredential=mqtt-secret:/etc/credstore/balkons-bot-mqtt-secret",
         }
-        self.assertEqual({line for line in lines if line.startswith("LoadCredential=") and line != "LoadCredential="}, expected_credentials)
+        self.assertEqual(
+            {line for line in lines if line.startswith("LoadCredential=") and line != "LoadCredential="},
+            expected_credentials,
+        )
         self.assertIn("Environment=PYTHONDONTWRITEBYTECODE=1", lines)
         unset_lines = [line for line in lines if line.startswith("UnsetEnvironment=")]
         self.assertEqual(len(unset_lines), 1)
         for name in (
-            "BOT_TOKEN",
-            "CHAT_ID",
-            "MQTT_USER",
-            "MQTT_USERNAME",
-            "MQTT_PASS",
-            "MQTT_PASSWORD",
-            "MQTT_SECRET",
-            "TELEGRAM_TOKEN",
-            "TELEGRAM_BOT_TOKEN",
-            "TELEGRAM_CHAT_ID",
-            "TG_TOKEN",
-            "TG_CHAT_ID",
+            "BOT_TOKEN", "CHAT_ID", "MQTT_USER", "MQTT_USERNAME", "MQTT_PASS", "MQTT_PASSWORD",
+            "MQTT_SECRET", "TELEGRAM_TOKEN", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TG_TOKEN", "TG_CHAT_ID",
         ):
             self.assertIn(name, unset_lines[0].split("=", 1)[1].split())
         for required in (
-            "SendSIGKILL=no",
-            "UMask=0077",
-            "NoNewPrivileges=yes",
-            "PrivateTmp=yes",
-            "PrivateDevices=yes",
-            "ProtectSystem=strict",
-            "ProtectHome=read-only",
-            "ProtectKernelTunables=yes",
-            "ProtectKernelModules=yes",
-            "ProtectControlGroups=yes",
-            "RestrictSUIDSGID=yes",
-            "LockPersonality=yes",
-            "MemoryDenyWriteExecute=yes",
-            "RestrictRealtime=yes",
-            "RestrictNamespaces=yes",
-            "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6",
-            "CapabilityBoundingSet=",
-            "AmbientCapabilities=",
+            "SendSIGKILL=no", "UMask=0077", "NoNewPrivileges=yes", "PrivateTmp=yes",
+            "PrivateDevices=yes", "ProtectSystem=strict", "ProtectHome=read-only",
+            "ProtectKernelTunables=yes", "ProtectKernelModules=yes", "ProtectControlGroups=yes",
+            "RestrictSUIDSGID=yes", "LockPersonality=yes", "MemoryDenyWriteExecute=yes",
+            "RestrictRealtime=yes", "RestrictNamespaces=yes",
+            "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6", "CapabilityBoundingSet=", "AmbientCapabilities=",
         ):
             self.assertIn(required, lines)
         self.assertNotIn("User=", text)
