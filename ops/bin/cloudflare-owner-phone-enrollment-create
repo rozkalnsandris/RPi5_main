@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RUNNER="$ROOT/scripts/cloudflare_owner_phone_enrollment_create_stdin.py"
+CANARY='p1d-01a-create-owner-only-enrollment-application'
+
+fail() {
+  printf 'Cloudflare P1D #179 %s: BLOCKED: %s\n' "$CANARY" "$*" >&2
+  exit 2
+}
+
+[[ -f "$RUNNER" ]] || fail "stdin runner missing"
+command -v python3 >/dev/null 2>&1 || fail "python3 missing"
+[[ "${CLOUDFLARE_ACCOUNT_ID:-}" =~ ^[0-9a-fA-F]{32}$ ]] ||
+  fail "CLOUDFLARE_ACCOUNT_ID missing or invalid"
+[[ -z "${CLOUDFLARE_API_TOKEN:-}" ]] || fail "exported CLOUDFLARE_API_TOKEN forbidden"
+[[ -z "${CLOUDFLARE_WRITE_API_TOKEN:-}" ]] || fail "exported write API token forbidden"
+[[ -z "${CLOUDFLARE_OWNER_EMAIL:-}" ]] || fail "owner identity environment variable forbidden"
+[[ -z "${CLOUDFLARE_API_BASE:-}" ]] || fail "custom CLOUDFLARE_API_BASE forbidden in live wrapper"
+[[ "$-" != *x* ]] || fail "shell tracing forbidden"
+[[ -r /dev/tty ]] || fail "TTY required"
+
+printf 'This operator is the single-forward-write canary: %s\n' "$CANARY" >/dev/tty
+printf 'It may perform exactly one Cloudflare Access application POST and never retries or auto-rolls back.\n' >/dev/tty
+IFS= read -r -p "Type exact canary id to arm: " armed </dev/tty
+[[ "$armed" == "$CANARY" ]] || fail "arming phrase mismatch"
+armed=''
+
+IFS= read -r -s -p 'Cloudflare READ API token (hidden): ' read_token </dev/tty
+printf '\n' >/dev/tty
+IFS= read -r -s -p 'Cloudflare WRITE API token (hidden): ' write_token </dev/tty
+printf '\n' >/dev/tty
+IFS= read -r -s -p 'Owner email (hidden): ' owner_email </dev/tty
+printf '\n' >/dev/tty
+
+cleanup() {
+  read_token=''
+  write_token=''
+  owner_email=''
+  unset CLOUDFLARE_API_TOKEN CLOUDFLARE_WRITE_API_TOKEN CLOUDFLARE_OWNER_EMAIL
+}
+trap cleanup EXIT HUP INT TERM
+
+[[ ${#read_token} -ge 20 ]] || fail "READ API token missing or invalid"
+[[ ${#write_token} -ge 20 ]] || fail "WRITE API token missing or invalid"
+[[ "$owner_email" == *@*.* ]] || fail "owner email missing or invalid"
+
+if printf '%s\n%s\n%s\n' "$read_token" "$write_token" "$owner_email" | python3 "$RUNNER"; then
+  rc=0
+else
+  rc=$?
+fi
+read_token=''
+write_token=''
+owner_email=''
+exit "$rc"
