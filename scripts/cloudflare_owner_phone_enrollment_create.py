@@ -34,7 +34,7 @@ _VOLATILE_KEYS = {
 
 
 class CloudflareCreateAttemptError(AuditError):
-    """A public-safe failure after the single forward POST was attempted."""
+    """Public-safe failure after the one allowed forward POST was attempted."""
 
     def __init__(self, reason: str, mutation_performed: bool | None) -> None:
         super().__init__(reason)
@@ -42,7 +42,7 @@ class CloudflareCreateAttemptError(AuditError):
 
 
 class CloudflareAccessAppCreateClient:
-    """Narrow Cloudflare client with one fixed Access-application POST primitive."""
+    """Narrow client exposing only one fixed Access-application create primitive."""
 
     def __init__(self, api_token: str, api_base: str = DEFAULT_API_BASE, timeout: int = 20) -> None:
         if len(api_token) < 20 or any(ch.isspace() for ch in api_token):
@@ -64,11 +64,9 @@ class CloudflareAccessAppCreateClient:
     ) -> dict[str, Any]:
         if not ACCOUNT_ID_RE.fullmatch(account_id):
             raise AuditError("missing_or_invalid_account_id")
-        owner_email = validate_owner_email(owner_email)
         payload = build_create_payload(owner_email)
-        url = f"{self._api_base}/accounts/{account_id}/access/apps"
         request = urllib.request.Request(
-            url,
+            f"{self._api_base}/accounts/{account_id}/access/apps",
             data=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
             method="POST",
             headers={
@@ -82,28 +80,19 @@ class CloudflareAccessAppCreateClient:
             with self._opener.open(request, timeout=self._timeout) as response:
                 body = response.read().decode("utf-8")
         except urllib.error.HTTPError as exc:
-            raise CloudflareCreateAttemptError(
-                f"cloudflare_create_http_{exc.code}", None
-            ) from exc
+            raise CloudflareCreateAttemptError(f"cloudflare_create_http_{exc.code}", None) from exc
         except (urllib.error.URLError, TimeoutError, UnicodeDecodeError) as exc:
-            raise CloudflareCreateAttemptError(
-                "cloudflare_create_request_failed", None
-            ) from exc
+            raise CloudflareCreateAttemptError("cloudflare_create_request_failed", None) from exc
+
         try:
             decoded = json.loads(body)
         except json.JSONDecodeError as exc:
-            raise CloudflareCreateAttemptError(
-                "cloudflare_create_response_invalid", None
-            ) from exc
+            raise CloudflareCreateAttemptError("cloudflare_create_response_invalid", None) from exc
         if not isinstance(decoded, dict) or decoded.get("success") is not True:
-            raise CloudflareCreateAttemptError(
-                "cloudflare_create_unsuccessful", None
-            )
+            raise CloudflareCreateAttemptError("cloudflare_create_unsuccessful", None)
         result = decoded.get("result")
         if not isinstance(result, dict):
-            raise CloudflareCreateAttemptError(
-                "cloudflare_create_result_missing", True
-            )
+            raise CloudflareCreateAttemptError("cloudflare_create_result_missing", True)
         return result
 
 
@@ -133,15 +122,15 @@ def _stable(value: Any) -> Any:
             if key not in _VOLATILE_KEYS
         }
     if isinstance(value, list):
-        stable_items = [_stable(item) for item in value]
-        return sorted(
-            stable_items,
-            key=lambda item: json.dumps(item, sort_keys=True, separators=(",", ":")),
-        )
+        items = [_stable(item) for item in value]
+        return sorted(items, key=lambda item: json.dumps(item, sort_keys=True, separators=(",", ":")))
     return value
 
 
-def _access_snapshot(state: dict[str, Any], excluded_app_id: str | None = None) -> Any:
+def _unrelated_state_snapshot(
+    state: dict[str, Any],
+    excluded_app_id: str | None = None,
+) -> Any:
     apps: list[dict[str, Any]] = []
     for app in state.get("apps", []):
         if not isinstance(app, dict):
@@ -158,17 +147,16 @@ def _access_snapshot(state: dict[str, Any], excluded_app_id: str | None = None) 
                 continue
             policies[str(app_id)] = deepcopy(app_policies)
 
-    return _stable({"apps": apps, "policies": policies})
-
-
-def _public_relevant_snapshot(report: dict[str, Any]) -> Any:
     return _stable(
         {
-            "organization_binding_present": report.get("organization_binding_present"),
-            "gateway_posture": report.get("gateway_posture"),
-            "owner_device": report.get("owner_device"),
-            "client_session_beta": report.get("client_session_beta"),
-            "access": report.get("access"),
+            "organization": deepcopy(state.get("organization")),
+            "apps": apps,
+            "policies": policies,
+            "posture": deepcopy(state.get("posture")),
+            "registrations": deepcopy(state.get("registrations")),
+            "devices": deepcopy(state.get("devices")),
+            "default_profile": deepcopy(state.get("default_profile")),
+            "custom_profiles": deepcopy(state.get("custom_profiles")),
         }
     )
 
@@ -252,11 +240,10 @@ def execute_canary(
         report["reason"] = str(exc)
         return report
 
-    before_access = _access_snapshot(before_state)
-    before_public = _public_relevant_snapshot(before_report)
-
+    before_unrelated = _unrelated_state_snapshot(before_state)
     report["forward_request_attempted"] = True
     report["forward_request_count"] = 1
+
     try:
         created = write_client.create_owner_enrollment_application(account_id, owner_email)
     except CloudflareCreateAttemptError as exc:
@@ -276,7 +263,6 @@ def execute_canary(
         report["result"] = "STOP_ERROR"
         report["reason"] = "created_application_attribution_missing"
         return report
-
     report["created_application_attributable"] = True
 
     try:
@@ -288,20 +274,18 @@ def execute_canary(
         return report
 
     warp_apps = [
-        app
-        for app in after_state.get("apps", [])
+        app for app in after_state.get("apps", [])
         if isinstance(app, dict) and app.get("type") == "warp"
     ]
-    created_matches_response = (
-        len(warp_apps) == 1 and warp_apps[0].get("id") == created_app_id
-    )
+    created_matches_response = len(warp_apps) == 1 and warp_apps[0].get("id") == created_app_id
     enrollment = after_report.get("enrollment") if isinstance(after_report.get("enrollment"), dict) else {}
     require_types = enrollment.get("require_selector_types")
     exclude_types = enrollment.get("exclude_selector_types")
+    unrelated_state_unchanged = before_unrelated == _unrelated_state_snapshot(
+        after_state, created_app_id
+    )
 
-    unrelated_access_unchanged = before_access == _access_snapshot(after_state, created_app_id)
-    relevant_public_state_unchanged = before_public == _public_relevant_snapshot(after_report)
-    post_proof = {
+    report["post_write_proof"] = {
         "enrollment_application_count": enrollment.get("application_count"),
         "enrollment_application_state": enrollment.get("application_state"),
         "owner_only": enrollment.get("owner_only"),
@@ -311,10 +295,8 @@ def execute_canary(
         "require_selector_types": require_types,
         "exclude_selector_types": exclude_types,
         "created_application_matches_response": created_matches_response,
-        "unrelated_access_unchanged": unrelated_access_unchanged,
-        "relevant_public_state_unchanged": relevant_public_state_unchanged,
+        "unrelated_state_unchanged": unrelated_state_unchanged,
     }
-    report["post_write_proof"] = post_proof
 
     accepted = (
         after_report.get("result") == "PASS"
@@ -327,8 +309,7 @@ def execute_canary(
         and require_types == []
         and exclude_types == []
         and created_matches_response
-        and unrelated_access_unchanged
-        and relevant_public_state_unchanged
+        and unrelated_state_unchanged
     )
     if not accepted:
         report["result"] = "STOP_ERROR"
