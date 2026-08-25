@@ -49,3 +49,19 @@ Read `docs/FAST_LANE_V2_2.md` as the active RPi5-specific startup contract.
 
 This FAST-LANE block does not weaken any earlier forbidden-path or production-safety rule. If classification is uncertain, classify STRICT and STOP.
 <!-- END FAST-LANE-V2.2-MANAGED -->
+
+<!-- BEGIN GITHUB-ONLY-LIVE-ALL-V1-MANAGED -->
+## GITHUB-ONLY / LIVE-ALL v1
+
+Canonical shared contract: `rozkalnsandris/ops-workflows/docs/GITHUB_ONLY_LIVE_ALL.md` with machine invariants in `policy/github-only-live-all-v1.json`.
+
+- `GITHUB-ONLY` (including `git hub only`) means fresh GitHub state, Git/source/documentation/test work, and preparation of a required rollout up to but not including the first host/runtime/live mutation.
+- Persist deferred rollout state as public-safe `[DEPLOY-QUEUE]` issues in `rozkalnsandris/ops-workflows`; chat or memory is never the queue.
+- Merge remains separately explicit. Neither `GITHUB-ONLY` nor `LIVE-ALL` authorizes merge.
+- A GitHub write whose deterministic side effect changes production/runtime counts as live work and must not run under `GITHUB-ONLY`.
+- Queue `READY` requires the final exact deployable SHA plus exact target alias, reviewed repository entrypoint, preflight, verification, allowed mutation categories/limits and no outstanding separate prerequisite owner gate.
+- `LIVE-ALL` snapshots only open `READY` queue items present at command start, freshly revalidates each exact SHA/target/baseline and may execute only ordinary predeclared rollout mutations that this repository already permits inside the exact authorization envelope.
+- sudo/root, packages, services/timers, Docker authority, networking/firewall/DNS/Tunnel, SSH/users/mounts/kernel, backups, databases/application data, secrets/credentials and protected runtime inspection remain STRICT/separately gated unless the exact repository-local contract explicitly includes that category.
+- After any selected live mutation starts, error/ambiguity requires public-safe evidence preservation and STOP of the remaining batch; no automatic retry/rollback/cleanup/reset/rebase/alternate mutation path unless explicitly pre-authorized.
+- All earlier production-safety and forbidden-data rules remain authoritative and stricter where applicable.
+<!-- END GITHUB-ONLY-LIVE-ALL-V1-MANAGED -->
