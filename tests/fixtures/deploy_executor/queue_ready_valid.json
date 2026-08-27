@@ -1,0 +1,25 @@
+{
+  "repository": "rozkalnsandris/ops-workflows",
+  "issue_number": 321,
+  "state": "READY",
+  "source_repository": "rozkalnsandris/hermes-tech",
+  "source_sha": "0123456789abcdef0123456789abcdef01234567",
+  "target_alias": "hermes-tech-production",
+  "operation_id": "hermes-tech.application-deploy.v1",
+  "expected_baseline": {
+    "kind": "exact",
+    "value": "release-baseline-v1"
+  },
+  "mutation_budget": [
+    {
+      "category": "application-release",
+      "max_operations": 1
+    }
+  ],
+  "rollback_policy": "NONE",
+  "exclusions": [
+    "no database writes",
+    "no control-plane activation"
+  ],
+  "dependencies": []
+}
