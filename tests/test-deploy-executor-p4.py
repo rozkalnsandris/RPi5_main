@@ -214,7 +214,7 @@ class P4AdapterInterfaceTests(unittest.TestCase):
         normalized = normalize_ready_queue(
             load_issue(), repository_full_name=QUEUE_REPOSITORY, registry=registry
         )
-        prepared = prepare_operation(normalized, execution_enabled=registry.execution_enabled)
+        prepared = prepare_operation(normalized)
         self.assertFalse(prepared.execution_enabled)
         self.assertEqual(prepared.adapter_id, "fixture.inert.v1")
         self.assertIn("exact-source-ci.v1", prepared.preflight_checks)
