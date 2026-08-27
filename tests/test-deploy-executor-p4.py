@@ -105,6 +105,12 @@ class P4RegistryAndNormalizationTests(unittest.TestCase):
         with self.assertRaisesRegex(QueueNormalizationError, "QUEUE_SHA"):
             parse_ready_queue(issue, repository_full_name=QUEUE_REPOSITORY)
 
+    def test_duplicate_queue_contract_section_fails_closed(self):
+        issue = load_issue()
+        issue["body"] += "\n\n## Queue contract\n\n- **source_repository:** `rozkalnsandris/example`"
+        with self.assertRaisesRegex(QueueNormalizationError, "exactly one"):
+            parse_ready_queue(issue, repository_full_name=QUEUE_REPOSITORY)
+
     def test_missing_or_extra_queue_field_fails_closed(self):
         issue = load_issue()
         issue["body"] = issue["body"].replace(
