@@ -16,5 +16,10 @@
       "max_operations": 1
     }
   ],
-  "rollback_policy": "NONE"
+  "rollback_policy": "NONE",
+  "exclusions": [
+    "no database writes",
+    "no control-plane activation"
+  ],
+  "dependencies": []
 }

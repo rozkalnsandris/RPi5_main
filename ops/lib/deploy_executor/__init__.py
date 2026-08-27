@@ -7,4 +7,4 @@ from .protocol import (  # noqa: F401
     validate_queue_binding,
     verify_authorization_unchanged,
 )
-from .state import InvalidTransition, ReplayError, StateStore  # noqa: F401
+from .state import InvalidTransition, ReplayError, StateIntegrityError, StateStore  # noqa: F401

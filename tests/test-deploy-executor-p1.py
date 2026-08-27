@@ -20,7 +20,12 @@ from deploy_executor.protocol import (  # noqa: E402
     validate_queue_binding,
     verify_authorization_unchanged,
 )
-from deploy_executor.state import InvalidTransition, ReplayError, StateStore  # noqa: E402
+from deploy_executor.state import (  # noqa: E402
+    InvalidTransition,
+    ReplayError,
+    StateIntegrityError,
+    StateStore,
+)
 
 FIXTURES = ROOT / "tests" / "fixtures" / "deploy_executor"
 REPOSITORY_ID = AUTHORIZATION_REPOSITORY_ID
@@ -130,6 +135,13 @@ class ProtocolTests(unittest.TestCase):
         issue["created_at"] = "2026-08-27T20:06:00Z"
         self.assert_code("SERVER_TIME_SKEW", lambda: self.accept(issue))
 
+    def test_accepted_payload_is_defensive_copy(self):
+        accepted = self.accept()
+        mutable_copy = accepted.payload
+        mutable_copy["target_alias"] = "attacker-controlled"
+        self.assertEqual(accepted.payload["target_alias"], "hermes-tech-production")
+        validate_queue_binding(accepted, self.queue)
+
     def test_edited_raw_body_rejected_even_when_payload_semantics_unchanged(self):
         accepted = self.accept()
         edited = copy.deepcopy(self.issue)
@@ -158,6 +170,27 @@ class ProtocolTests(unittest.TestCase):
         not_ready = copy.deepcopy(self.queue)
         not_ready["state"] = "WAITING"
         self.assert_code("QUEUE_NOT_READY", lambda: validate_queue_binding(accepted, not_ready))
+
+    def test_queue_types_exclusions_and_dependencies_are_strictly_bound(self):
+        accepted = self.accept()
+
+        bool_issue = copy.deepcopy(self.queue)
+        bool_issue["issue_number"] = True
+        self.assert_code("MALFORMED_SCHEMA", lambda: validate_queue_binding(accepted, bool_issue))
+
+        wrong_exclusions = copy.deepcopy(self.queue)
+        wrong_exclusions["exclusions"] = ["different exclusion"]
+        self.assert_code(
+            "QUEUE_BINDING_MISMATCH",
+            lambda: validate_queue_binding(accepted, wrong_exclusions),
+        )
+
+        wrong_dependencies = copy.deepcopy(self.queue)
+        wrong_dependencies["dependencies"] = ["queue:999"]
+        self.assert_code(
+            "QUEUE_BINDING_MISMATCH",
+            lambda: validate_queue_binding(accepted, wrong_dependencies),
+        )
 
     def test_queue_sha_target_and_operation_mismatch_rejected(self):
         accepted = self.accept()
@@ -213,7 +246,7 @@ class StateMachineTests(unittest.TestCase):
         )
 
     def test_duplicate_request_or_issue_identity_is_replay(self):
-        with StateStore(self.db_path) as store:
+        with StateStore(self.db_path, bootstrap=True) as store:
             self.discover(store)
             with self.assertRaises(ReplayError):
                 self.discover(store, issue_id=self.accepted.issue_id + 1)
@@ -223,8 +256,27 @@ class StateMachineTests(unittest.TestCase):
                     request_id="c9a75889-3c34-4d1c-9f37-b750fef9c4be",
                 )
 
+    def test_missing_or_corrupt_state_database_fails_closed(self):
+        with self.assertRaises(StateIntegrityError):
+            StateStore(self.db_path)
+
+        self.db_path.write_bytes(b"not a sqlite database")
+        with self.assertRaises(StateIntegrityError):
+            StateStore(self.db_path)
+
+    def test_state_loss_after_consumption_does_not_create_fresh_replay_window(self):
+        with StateStore(self.db_path, bootstrap=True) as store:
+            self.discover(store)
+            store.transition(self.accepted.request_id, "VALIDATING")
+            store.transition(self.accepted.request_id, "ACCEPTED")
+            store.consume(self.accepted.request_id)
+
+        self.db_path.unlink()
+        with self.assertRaises(StateIntegrityError):
+            StateStore(self.db_path)
+
     def test_state_transitions_restart_and_consumption_are_fail_closed(self):
-        with StateStore(self.db_path) as store:
+        with StateStore(self.db_path, bootstrap=True) as store:
             self.discover(store)
             with self.assertRaises(InvalidTransition):
                 store.transition(self.accepted.request_id, "SUCCEEDED")

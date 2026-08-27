@@ -67,11 +67,16 @@ class AcceptedAuthorization:
     request_id: str
     created_at: datetime
     target_alias: str
-    payload: Mapping[str, Any]
+    canonical_payload_json: str
     canonical_payload_sha256: str
     raw_body_sha256: str
     performed_via_github_app_id: int | None
     performed_via_github_app_slug: str | None
+
+    @property
+    def payload(self) -> Mapping[str, Any]:
+        # Return a fresh object so caller mutation cannot alter accepted authority.
+        return _parse_json_strict(self.canonical_payload_json)
 
 
 def _fail(code: str, message: str) -> None:
@@ -164,6 +169,34 @@ def _validate_public_string_list(value: Any, where: str) -> list[str]:
     return result
 
 
+def _validate_baseline(value: Any, where: str) -> Mapping[str, Any]:
+    if type(value) is not dict:
+        _fail("MALFORMED_SCHEMA", f"{where} must be an object")
+    _require_exact_keys(value, BASELINE_FIELDS, where)
+    _require_string(value["kind"], f"{where}.kind", 64, pattern=IDENTIFIER_RE)
+    _require_string(value["value"], f"{where}.value", 512)
+    return value
+
+
+def _validate_mutation_budget(value: Any, where: str) -> list[Mapping[str, Any]]:
+    if type(value) is not list or not value or len(value) > 16:
+        _fail("MALFORMED_SCHEMA", f"{where} must contain 1..16 entries")
+    seen_categories: set[str] = set()
+    for index, budget in enumerate(value):
+        item_where = f"{where}[{index}]"
+        if type(budget) is not dict:
+            _fail("MALFORMED_SCHEMA", f"{item_where} must be an object")
+        _require_exact_keys(budget, BUDGET_FIELDS, item_where)
+        category = _require_string(
+            budget["category"], f"{item_where}.category", 128, pattern=IDENTIFIER_RE
+        )
+        if category in seen_categories:
+            _fail("MALFORMED_SCHEMA", f"duplicate mutation category {category!r}")
+        seen_categories.add(category)
+        _parse_positive_int(budget["max_operations"], f"{item_where}.max_operations", maximum=100)
+    return value
+
+
 def _validate_payload(payload: Mapping[str, Any]) -> Mapping[str, Any]:
     _require_exact_keys(payload, PAYLOAD_FIELDS, "payload")
 
@@ -182,30 +215,8 @@ def _validate_payload(payload: Mapping[str, Any]) -> Mapping[str, Any]:
     _require_string(payload["target_alias"], "target_alias", 64, pattern=IDENTIFIER_RE)
     _require_string(payload["operation_id"], "operation_id", 128, pattern=IDENTIFIER_RE)
 
-    baseline = payload["expected_baseline"]
-    if type(baseline) is not dict:
-        _fail("MALFORMED_SCHEMA", "expected_baseline must be an object")
-    _require_exact_keys(baseline, BASELINE_FIELDS, "expected_baseline")
-    _require_string(baseline["kind"], "expected_baseline.kind", 64, pattern=IDENTIFIER_RE)
-    _require_string(baseline["value"], "expected_baseline.value", 512)
-
-    budgets = payload["mutation_budget"]
-    if type(budgets) is not list or not budgets or len(budgets) > 16:
-        _fail("MALFORMED_SCHEMA", "mutation_budget must contain 1..16 entries")
-    seen_categories: set[str] = set()
-    for index, budget in enumerate(budgets):
-        if type(budget) is not dict:
-            _fail("MALFORMED_SCHEMA", f"mutation_budget[{index}] must be an object")
-        _require_exact_keys(budget, BUDGET_FIELDS, f"mutation_budget[{index}]")
-        category = _require_string(
-            budget["category"], f"mutation_budget[{index}].category", 128, pattern=IDENTIFIER_RE
-        )
-        if category in seen_categories:
-            _fail("MALFORMED_SCHEMA", f"duplicate mutation category {category!r}")
-        seen_categories.add(category)
-        _parse_positive_int(
-            budget["max_operations"], f"mutation_budget[{index}].max_operations", maximum=100
-        )
+    _validate_baseline(payload["expected_baseline"], "expected_baseline")
+    _validate_mutation_budget(payload["mutation_budget"], "mutation_budget")
 
     rollback_policy = _require_string(payload["rollback_policy"], "rollback_policy", 64)
     if rollback_policy not in ROLLBACK_POLICIES:
@@ -338,7 +349,7 @@ def accept_issue(
         request_id=payload["request_id"],
         created_at=created_at,
         target_alias=payload["target_alias"],
-        payload=payload,
+        canonical_payload_json=canonical.decode("utf-8"),
         canonical_payload_sha256=hashlib.sha256(canonical).hexdigest(),
         raw_body_sha256=hashlib.sha256(raw_body.encode("utf-8", "strict")).hexdigest(),
         performed_via_github_app_id=app_id,
@@ -361,29 +372,51 @@ def validate_queue_binding(auth: AcceptedAuthorization, queue: Mapping[str, Any]
             "expected_baseline",
             "mutation_budget",
             "rollback_policy",
+            "exclusions",
+            "dependencies",
         }
     )
     _require_exact_keys(queue, expected_fields, "queue")
 
-    payload = auth.payload
-    if queue["repository"] != payload["queue_repository"]:
-        _fail("QUEUE_BINDING_MISMATCH", "queue repository mismatch")
-    if queue["issue_number"] != payload["queue_issue"]:
-        _fail("QUEUE_BINDING_MISMATCH", "queue issue mismatch")
-    if queue["state"] != "READY":
+    repository = _require_string(queue["repository"], "queue.repository", 201, pattern=REPOSITORY_RE)
+    issue_number = _parse_positive_int(queue["issue_number"], "queue.issue_number", maximum=2_147_483_647)
+    state = _require_string(queue["state"], "queue.state", 32)
+    if state != "READY":
         _fail("QUEUE_NOT_READY", "referenced deploy queue is not READY")
+    source_repository = _require_string(
+        queue["source_repository"], "queue.source_repository", 201, pattern=REPOSITORY_RE
+    )
+    source_sha = _require_string(queue["source_sha"], "queue.source_sha", 40, pattern=SHA_RE)
+    target_alias = _require_string(
+        queue["target_alias"], "queue.target_alias", 64, pattern=IDENTIFIER_RE
+    )
+    operation_id = _require_string(
+        queue["operation_id"], "queue.operation_id", 128, pattern=IDENTIFIER_RE
+    )
+    baseline = _validate_baseline(queue["expected_baseline"], "queue.expected_baseline")
+    mutation_budget = _validate_mutation_budget(queue["mutation_budget"], "queue.mutation_budget")
+    rollback_policy = _require_string(queue["rollback_policy"], "queue.rollback_policy", 64)
+    if rollback_policy not in ROLLBACK_POLICIES:
+        _fail("UNSUPPORTED_ROLLBACK_POLICY", rollback_policy)
+    exclusions = _validate_public_string_list(queue["exclusions"], "queue.exclusions")
+    dependencies = _validate_public_string_list(queue["dependencies"], "queue.dependencies")
 
+    payload = auth.payload
     comparisons = {
-        "source_repository": payload["source_repository"],
-        "source_sha": payload["source_sha"],
-        "target_alias": payload["target_alias"],
-        "operation_id": payload["operation_id"],
-        "expected_baseline": payload["expected_baseline"],
-        "mutation_budget": payload["mutation_budget"],
-        "rollback_policy": payload["rollback_policy"],
+        "repository": (repository, payload["queue_repository"]),
+        "issue_number": (issue_number, payload["queue_issue"]),
+        "source_repository": (source_repository, payload["source_repository"]),
+        "source_sha": (source_sha, payload["source_sha"]),
+        "target_alias": (target_alias, payload["target_alias"]),
+        "operation_id": (operation_id, payload["operation_id"]),
+        "expected_baseline": (baseline, payload["expected_baseline"]),
+        "mutation_budget": (mutation_budget, payload["mutation_budget"]),
+        "rollback_policy": (rollback_policy, payload["rollback_policy"]),
+        "exclusions": (exclusions, payload["exclusions"]),
+        "dependencies": (dependencies, payload["dependencies"]),
     }
-    for key, expected in comparisons.items():
-        if queue[key] != expected:
+    for key, (actual, expected) in comparisons.items():
+        if actual != expected:
             _fail("QUEUE_BINDING_MISMATCH", f"{key} mismatch")
 
 
