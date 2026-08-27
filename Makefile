@@ -5,6 +5,7 @@ test:
 	python3 ./tests/test-start-mode-routing.py
 	python3 ./tests/test-deploy-executor-p1.py
 	python3 ./tests/test-deploy-executor-p2.py
+	python3 ./tests/test-deploy-executor-p4.py
 	bash ./tests/test-balcony-watering.sh
 	bash ./tests/test-balkons-log-mqtt-credential.sh
 	bash ./tests/test-balkons-log-legacy-set-contract.sh
