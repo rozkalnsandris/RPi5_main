@@ -306,6 +306,45 @@ Phase 4 target sequence after inventory:
 - [ ] Full rollback/health/readiness audit PASS.
 - [ ] Final architecture documented and issue #103 closed.
 
+### Cross-cutting Track X — owner-authorized pull deploy executor v1 — P0 SOURCE ONLY
+
+Roadmap: `RPi5_main#236`.
+Threat model / protocol: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_V1.md`.
+
+This track standardizes a future owner-authorized GitHub -> outbound-polling RPi5 execution transport. It does **not** replace the ordered repository migration phases above and it does not make a READY queue item executable by itself.
+
+Current ordering rules:
+
+- the canonical production/live migration lane remains Phase 4 until the plan explicitly advances it;
+- the owner's explicit 2026-08-27 decision opens only P0 source/documentation reconciliation for #236;
+- P0 must define the trust model, authorization payload, TTL, replay boundary, operation-registry boundary and abuse cases before implementation;
+- P1-P5 remain source-only but are not automatically authorized by completion of P0; start them only after re-reading this plan and a fresh explicit continuation that still fits the current program ordering;
+- P6 merge remains separately explicit owner authority;
+- P7 GitHub App creation/permission changes, P8 host installation, P9/P10 canaries and all later live execution remain blocked until this master plan separately names that exact step as eligible and the owner separately authorizes its live envelope.
+
+Critical authorization invariant established by P0:
+
+**An autonomous RPi5 credential must not have write authority over the GitHub surface from which owner authorization is accepted.**
+
+Therefore the first executor-side authorization App, if later approved, defaults to `ops-workflows` only with Issues **read-only**, not Issues write. The existing `Rozkalns Automation` App also remains unchanged at Actions read + Contents read on its existing repository scope. Automatic GitHub result reporting must use a separately reviewed non-authority channel; it must never require giving the validator write access to LIVE-AUTH authority.
+
+The future transport remains data-only:
+
+`owner-authored LIVE-AUTH -> exact queue/SHA/target/operation/baseline revalidation -> static source-controlled operation registry -> fixed project adapter -> existing narrow controller/helper`.
+
+Forbidden permanently for this track:
+
+- SSH command transport;
+- persistent self-hosted GitHub Actions production runner;
+- inbound public RPi5 webhook/API;
+- GitHub-provided shell command, executable path or arbitrary argv authority;
+- generic `bash -c`, `sh -c`, `eval`, Docker/systemctl/sudo passthrough;
+- merge-as-deploy authorization;
+- automatic retry/cleanup/alternate path after mutation starts;
+- automatic rollback unless the exact reviewed rollback policy is named in the queue, owner authorization and operation registry.
+
+P0 exit gate is a reviewed focused PR containing this reconciliation plus the threat-model/protocol document, with zero GitHub App permission, credential, host/runtime, production, DB or Cloudflare mutation. After P0 reaches Ready, STOP for explicit merge.
+
 ## Scope-control checklist before every step
 
 1. Which phase am I executing?
@@ -318,10 +357,12 @@ If question 3 is `no` or question 5 is `yes`, do not make the change.
 
 ## Current next action
 
-**Phase 4 only — read-only/source governance gate.** Phase 3 is complete and must not be reopened merely to continue the program.
+**Bounded explicit exception: #236 P0 source-only reconciliation is the immediate selected task; the canonical production/live lane remains Phase 4.** Phase 3 is complete and must not be reopened merely to continue the program.
 
-The first incomplete automation-program gate is the Hermes Deals #384 current-state inventory/reconciliation described above. Re-resolve exact current `hermes-deals/main`, #35/#39/#386/#384, open PRs/issues and relevant current continuity before any Phase 4 implementation. Inventory the live self-hosted workflows, runner labels, installed dispatchers/helpers/runtime dependencies and producer/consumer contracts, then classify the smallest safe replacement candidate.
+For #236 P0, change only tracked documentation/source contracts needed to reconcile the owner-authorized pull deploy executor into this master plan and define its threat model. Do not create/modify a GitHub App, grant permissions, generate/place credentials, install host files, change root/sudoers/systemd/timers, activate an executor or deploy production. P0 ends at a reviewed/green source PR and then requires explicit merge.
 
-Do **not** start a generic Deals controller, install/refresh host artifacts, change root/sudoers/systemd/timers, deregister a runner, deploy production, write DB/Review/publication state, consume a retailer-specific execution authorization, or change GitHub/Cloudflare settings as part of this first gate.
+After P0 is completed or parked, return to the first incomplete Phase 4 Hermes Deals #384 current-state inventory/reconciliation unless a later fresh owner instruction and this master plan explicitly select another safe source-only prerequisite. Re-resolve exact current `hermes-deals/main`, #35/#39/#386/#384, open PRs/issues and relevant current continuity before any Phase 4 implementation. Inventory the live self-hosted workflows, runner labels, installed dispatchers/helpers/runtime dependencies and producer/consumer contracts, then classify the smallest safe replacement candidate.
+
+Do **not** start a generic Deals controller, install/refresh host artifacts, change root/sudoers/systemd/timers, deregister a runner, deploy production, write DB/Review/publication state, consume a retailer-specific execution authorization, or change GitHub/Cloudflare settings as part of the first Phase 4 gate.
 
 After the read-only inventory is documented and reviewed, update this plan if the actual Phase 4 sequencing differs from the target sequence above. Only then open a narrowly scoped implementation issue/PR for the selected lowest-risk read-only canary.
