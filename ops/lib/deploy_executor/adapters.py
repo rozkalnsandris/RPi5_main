@@ -54,12 +54,12 @@ class AdapterCatalog:
             raise AdapterError(f"unknown adapter_id: {adapter_id}") from exc
 
 
-def prepare_operation(normalized: NormalizedQueue, *, execution_enabled: bool) -> PreparedOperation:
+def prepare_operation(normalized: NormalizedQueue) -> PreparedOperation:
     spec: OperationSpec = normalized.operation
     return PreparedOperation(
         operation_id=spec.operation_id,
         adapter_id=spec.adapter_id,
-        execution_enabled=execution_enabled,
+        execution_enabled=normalized.execution_enabled,
         normalized_queue_json=normalized.canonical_json,
         preflight_checks=spec.preflight,
         postcondition_checks=spec.postconditions,
