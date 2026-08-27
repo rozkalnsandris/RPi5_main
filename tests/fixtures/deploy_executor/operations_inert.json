@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "execution_enabled": false,
+  "operations": [
+    {
+      "operation_id": "fixture.application-deploy.v1",
+      "source_repository": "rozkalnsandris/example",
+      "queue_match": {
+        "target_alias": "example-production / web",
+        "execution_location_class": "trusted-home-host",
+        "repository_entrypoint": "ops/bin/example-deploy",
+        "deploy_class": "AUTO_DEPLOY_SAFE"
+      },
+      "target_alias": "example-production",
+      "adapter_id": "fixture.inert.v1",
+      "authorization_class": "ORDINARY",
+      "ordinary_live_all_eligible": true,
+      "baseline": {
+        "kind": "resolver",
+        "resolver_id": "fixture.baseline.v1"
+      },
+      "mutation_budget": [
+        {
+          "category": "application-deploy",
+          "max_operations": 1
+        }
+      ],
+      "rollback_policy": "NONE",
+      "exclusions": [
+        "database writes",
+        "credential changes",
+        "permission changes"
+      ],
+      "dependencies": [],
+      "preflight": [
+        "exact-source-ci.v1",
+        "target-baseline.v1"
+      ],
+      "postconditions": [
+        "exact-deployed-sha.v1"
+      ],
+      "required_github_evidence": [
+        "exact-sha-ci-success.v1"
+      ]
+    }
+  ]
+}
