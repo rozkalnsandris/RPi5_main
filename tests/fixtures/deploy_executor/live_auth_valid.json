@@ -1,0 +1,17 @@
+{
+  "id": 9876543210,
+  "number": 444,
+  "state": "open",
+  "title": "[LIVE-AUTH][PENDING] hermes-tech-production",
+  "created_at": "2026-08-27T20:00:00Z",
+  "body": "Owner-authorized deployment request.\n\n<!-- rozkalns-live-auth:v1 -->\n```json\n{\n  \"schema\": \"rozkalns.live-auth.v1\",\n  \"request_id\": \"4a5da3f4-ccf1-4c63-ae8f-3eb8506f2b61\",\n  \"queue_repository\": \"rozkalnsandris/ops-workflows\",\n  \"queue_issue\": 321,\n  \"source_repository\": \"rozkalnsandris/hermes-tech\",\n  \"source_sha\": \"0123456789abcdef0123456789abcdef01234567\",\n  \"target_alias\": \"hermes-tech-production\",\n  \"operation_id\": \"hermes-tech.application-deploy.v1\",\n  \"expected_baseline\": {\n    \"kind\": \"exact\",\n    \"value\": \"release-baseline-v1\"\n  },\n  \"mutation_budget\": [\n    {\n      \"category\": \"application-release\",\n      \"max_operations\": 1\n    }\n  ],\n  \"rollback_policy\": \"NONE\",\n  \"exclusions\": [\n    \"no database writes\",\n    \"no control-plane activation\"\n  ],\n  \"dependencies\": []\n}\n```\n<!-- /rozkalns-live-auth:v1 -->",
+  "user": {
+    "id": 277435981,
+    "type": "User",
+    "login": "rozkalnsandris"
+  },
+  "performed_via_github_app": {
+    "slug": "chatgpt-codex-connector",
+    "id": 1144995
+  }
+}
