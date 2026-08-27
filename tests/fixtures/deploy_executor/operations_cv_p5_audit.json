@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "execution_enabled": false,
+  "operations": [
+    {
+      "operation_id": "rozkalns-cv.exact-sha-release.v1",
+      "source_repository": "rozkalnsandris/rozkalns-cv",
+      "queue_match": {
+        "target_alias": "rozkalns-cv-production",
+        "execution_location_class": "trusted-home-host",
+        "repository_entrypoint": "runner/release/rozkalns-cv-pull-deploy-main",
+        "deploy_class": "ORDINARY_LIVE_ALL_ELIGIBLE"
+      },
+      "target_alias": "rozkalns-cv-production",
+      "adapter_id": "rozkalns-cv.exact-sha.v1",
+      "authorization_class": "ORDINARY",
+      "ordinary_live_all_eligible": true,
+      "baseline": {
+        "kind": "resolver",
+        "resolver_id": "rozkalns-cv.production-sha.v1"
+      },
+      "mutation_budget": [
+        {
+          "category": "rozkalns-cv.transactional-release",
+          "max_operations": 1
+        }
+      ],
+      "rollback_policy": "BUILTIN_TRANSACTIONAL_V1",
+      "exclusions": [
+        "database migrations",
+        "shared ingress control",
+        "control-plane activation",
+        "secret/permission changes"
+      ],
+      "dependencies": [
+        "interface-audit:rozkalns-cv.v1",
+        "helper-blob:c787789e77c31576310bed28da0fbc893cfabb5f",
+        "deploy-library-blob:ade60abbfea3cf56b1a56bbc1b2e0669b1a1b983"
+      ],
+      "preflight": [
+        "LIVE-AUTH and queue envelope independently revalidated",
+        "source SHA is current main and exact-SHA CI is successful",
+        "production SHA resolver matches current state file",
+        "installed helper/library root ownership, mode and Git blob identities match audit",
+        "evidence root ownership and mode match audit"
+      ],
+      "postconditions": [
+        "summary target and final state equal authorized source SHA",
+        "transaction committed exactly once on success",
+        "shared ingress control is false",
+        "database migrations executed is false",
+        "public site MIME/cache/nosniff/CSP checks pass"
+      ],
+      "required_github_evidence": [
+        "source repository stable identity",
+        "authorized SHA exists and is current main",
+        "exact-SHA main CI completed successfully",
+        "helper/library source blobs match audited identities"
+      ]
+    }
+  ]
+}

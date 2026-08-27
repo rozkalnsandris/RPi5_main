@@ -115,7 +115,7 @@ Replace production and audit self-hosted runner transport with trusted local RPi
 
 ### `RPi5_main`
 
-Remain infrastructure/control-plane truth. Keep infrastructure production apply manual. Automation may prepare deterministic readiness/plan states but must not auto-apply host changes merely because CI passed.
+Remain infrastructure/control-plane truth. Keep infrastructure production apply manual. Automation may prepare deterministic readiness/plan states but must not auto-apply host files/services merely because CI passed.
 
 ### `rozkalnsandris`
 
@@ -306,27 +306,28 @@ Phase 4 target sequence after inventory:
 - [ ] Full rollback/health/readiness audit PASS.
 - [ ] Final architecture documented and issue #103 closed.
 
-### Cross-cutting Track X — owner-authorized pull deploy executor v1 — P4 SOURCE ONLY (P0/P1/P2/P3 COMPLETE)
+### Cross-cutting Track X — owner-authorized pull deploy executor v1 — P5 SOURCE ONLY (P0/P1/P2/P3/P4 COMPLETE)
 
 Roadmap: `RPi5_main#236`.
 Threat model / protocol: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_V1.md`.
+P5 audit: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_P5_AUDIT.md`.
 
 This track standardizes a future owner-authorized GitHub -> outbound-polling RPi5 execution transport. It does **not** replace the ordered repository migration phases above and it does not make a READY queue item executable by itself.
 
 Current ordering rules:
 
 - the canonical production/live migration lane remains Phase 4 until the plan explicitly advances it;
-- P0 merged through #237, P1 through #238, P2 through #241 and P3 through `RPi5_main#242` plus `ops-workflows#23`; the P4 selection baselines are `RPi5_main/main=55f3f7b94b329f9698cfacdc1f8e4830cbd913c0` and `ops-workflows/main=c9d6b3898a9eda98ce83c5ce77e2bfd49f3703d8`;
-- the owner's fresh 2026-08-28 `turpini` continuation selects only P4 source-only queue-normalization/static-operation-registry/adapter-framework work after re-reading this plan, #236 and the merged P3 LIVE-AUTH contract;
-- P4 is limited to deterministic queue normalization, a source-controlled operation registry, adapter interface, mutation-budget/baseline/preflight/postcondition/rollback contracts, and fail-closed inert fixtures/fakes;
-- the production P4 registry must remain `execution_enabled=false` with zero production operations and zero concrete production adapters; no real target may become executable in P4;
-- raw DEPLOY-QUEUE prose is not command or mutation authority. Machine authority comes only from exact static registry selectors/contracts; the complete queue contract is cryptographically bound so any edit causes drift instead of being semantically guessed;
-- unknown, ambiguous, malformed or non-READY queue state remains unselected and must not create LIVE-AUTH;
-- P5 remains the separate cross-repository interface/security audit and is not authorized merely because P4 completes;
+- P0 merged through #237, P1 through #238, P2 through #241, P3 through `RPi5_main#242` plus `ops-workflows#23`, and P4 through `RPi5_main#243`; the P5 selection baselines are `RPi5_main/main=660099cb401a8692b66cdf11510a7c1eb368215a` and `ops-workflows/main=c9d6b3898a9eda98ce83c5ce77e2bfd49f3703d8`;
+- the owner's fresh 2026-08-28 `turpini` continuation selects only P5 cross-repository interface/security audit source work after re-reading this plan, #236, the merged P3 LIVE-AUTH contract and the P4 executor framework;
+- P5 may bind exact reviewed source identities, add identity-only dispatcher IPC contracts, propose hardened non-installed systemd source, and prove a dormant first-target adapter contract with fixtures/tests;
+- `ops/deploy/executor-operations.json` must remain `execution_enabled=false` with zero production operations; P5 may use only audit/test registry fixtures for target matching;
+- the existing autonomous CV pull controller is not the owner-authorized executor adapter because it resolves current `origin/main` itself; the audited lower-level exact-SHA helper may be referenced only through a separate fixed adapter contract;
+- the CV helper's built-in rollback makes `BUILTIN_TRANSACTIONAL_V1` mandatory for that adapter; `NONE` must fail before mutation;
+- the P5 adapter must remain mutation-disabled and contain no generic execution bridge; P7+ live work remains separate;
 - every source PR merge remains separately explicit owner authority;
 - P7 GitHub App creation/permission changes, P8 host installation, P9/P10 canaries and all later live execution remain blocked until this master plan separately names that exact step as eligible and the owner separately authorizes its live envelope.
 
-Critical authorization invariant established by P0 and enforced by P1-P4:
+Critical authorization invariant established by P0 and enforced by P1-P5:
 
 **An autonomous RPi5 credential must not have write authority over the GitHub surface from which owner authorization is accepted.**
 
@@ -347,7 +348,7 @@ Forbidden permanently for this track:
 - automatic retry/cleanup/alternate path after mutation starts;
 - automatic rollback unless the exact reviewed rollback policy is named in the queue, owner authorization and operation registry.
 
-P4 exit gate is one reviewed/green `RPi5_main` source PR proving the empty production registry, deterministic queue normalization, adapter interface and inert fixtures/fakes, with zero GitHub App permission, credential, host/runtime, production, DB or Cloudflare mutation. After P4 reaches Ready, STOP for explicit owner merge. P5 is not implicitly authorized by Ready or merge.
+P5 exit gate is one reviewed/green `RPi5_main` source PR proving the authorization/queue/dispatcher/first-target interfaces, empty production registry, dormant exact-SHA CV adapter contract, hardened proposed poller unit, secret scan and final diff review with zero GitHub App permission, credential, host/runtime, production, DB or Cloudflare mutation. After P5 reaches Ready, STOP for explicit owner merge. P7 is not implicitly authorized by Ready or merge.
 
 ## Scope-control checklist before every step
 
@@ -361,11 +362,11 @@ If question 3 is `no` or question 5 is `yes`, do not make the change.
 
 ## Current next action
 
-**Bounded explicit exception: #236 P4 adapter/normalization framework source is the immediate selected task; the canonical production/live lane remains Phase 4.** Phase 3 of the main migration program is complete and must not be reopened merely to continue this cross-cutting track.
+**Bounded explicit exception: #236 P5 cross-repository interface/security audit source is the immediate selected task; the canonical production/live lane remains Hermes Deals Phase 4.** Phase 3 of the main migration program is complete and must not be reopened merely to continue this cross-cutting track.
 
-For #236 P4, change only tracked RPi5_main source/tests plus this sequencing reconciliation. Add a deterministic parser for the existing public DEPLOY-QUEUE contract, exact static operation matching, machine mutation/baseline/preflight/postcondition/rollback contracts and an adapter interface. Keep `ops/deploy/executor-operations.json` non-executable with `execution_enabled=false` and zero production operations; prove behavior only with inert fixtures/fakes. Do not create/modify a GitHub App, grant permissions, generate/place credentials, add a live result writer, install host files, change root/sudoers/systemd/timers, register a production adapter, activate an executor, create LIVE-AUTH or deploy production. P4 ends at a reviewed/green source PR and then requires explicit merge.
+For #236 P5, change only tracked RPi5_main source/tests/docs required to bind the merged `ops-workflows` LIVE-AUTH contract, P1-P4 executor interfaces and one reviewed first-target helper contract. Keep the real production registry empty/disabled; use only dormant audit fixtures and an adapter whose `apply()` cannot mutate. The poller proposal must remain unprivileged with `NoNewPrivileges=true` and no sudo/Docker socket, while privileged IPC accepts identity only and independently revalidates authority. Do not create/modify a GitHub App, grant permissions, generate/place credentials, install host files, change root/sudoers/systemd/timers, activate an executor, create LIVE-AUTH or deploy production. P5 ends at a reviewed/green source PR and then requires explicit merge.
 
-After P4 is completed or parked, return to the first incomplete Phase 4 Hermes Deals #384 current-state inventory/reconciliation unless a later fresh owner instruction and this master plan explicitly select P5 or another safe source-only prerequisite. Re-resolve exact current `hermes-deals/main`, #35/#39/#386/#384, open PRs/issues and relevant current continuity before any Phase 4 implementation.
+After P5 is completed or parked, return to the first incomplete Phase 4 Hermes Deals #384 current-state inventory/reconciliation unless a later fresh owner instruction and this master plan explicitly select the next executor prerequisite. Re-resolve exact current `hermes-deals/main`, #35/#39/#386/#384, open PRs/issues and relevant current continuity before any Phase 4 implementation.
 
 Do **not** start a generic Deals controller, install/refresh host artifacts, change root/sudoers/systemd/timers, deregister a runner, deploy production, write DB/Review/publication state, consume a retailer-specific execution authorization, or change GitHub/Cloudflare settings as part of the first Phase 4 gate.
 
