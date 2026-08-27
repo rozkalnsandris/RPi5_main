@@ -35,7 +35,7 @@ from deploy_executor.transport import (  # noqa: E402
 
 DATE = "Thu, 27 Aug 2026 21:30:00 GMT"
 NOW = datetime(2026, 8, 27, 21, 30, 0, tzinfo=timezone.utc)
-TOKEN = "ghs_4537106_stateless_example_token_with_variable_length_abcdefghijklmnopqrstuvwxyz"
+TOKEN = "opaque-installation-value-variable-length-abcdefghijklmnopqrstuvwxyz0123456789"
 
 
 def response(status=200, payload=None, headers=None):
@@ -263,7 +263,7 @@ class P2TransportTests(unittest.TestCase):
         with self.assertRaises(TokenError):
             gh.get_json("/meta")
         self.assertEqual(sender.calls, [])
-        bad = FakeTokenProvider(InstallationToken("ghs_bad\nheader", NOW + timedelta(minutes=5)))
+        bad = FakeTokenProvider(InstallationToken("synthetic-control\nheader", NOW + timedelta(minutes=5)))
         gh, sender, _, _ = client([], token_provider=bad)
         with self.assertRaises(TokenError):
             gh.get_json("/meta")
