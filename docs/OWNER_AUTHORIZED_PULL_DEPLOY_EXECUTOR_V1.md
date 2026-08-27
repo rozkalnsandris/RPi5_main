@@ -35,17 +35,38 @@ No GitHub-controlled value may become a shell command, executable path, arbitrar
 
 The configured owner authority is GitHub numeric user ID `277435981`; login text is display-only. A valid owner actor must also be returned by GitHub as `type=User`.
 
-Compromise of the owner's GitHub account is equivalent to compromise of the owner authorization boundary and cannot be distinguished by this protocol.
+Compromise of the owner's GitHub account, or of an explicitly trusted operator integration acting with the owner's delegated GitHub authority, is equivalent to compromise of the owner authorization boundary and cannot be distinguished by this protocol.
 
 ### ChatGPT/GitHub operator path
 
 ChatGPT may create LIVE-AUTH only after a separately explicit owner deployment/live instruction that satisfies the repository-local authorization contract. `START`, `turpini`, merge approval, GITHUB-ONLY, queue READY, historical chat state or a prior authorization must never imply LIVE-AUTH.
 
-P9 must prove that the actual connected GitHub write path creates the authorization object with GitHub server metadata identifying the configured owner numeric ID. If the write appears as an App/Bot actor, execution fails closed until the transport is redesigned.
+P9 must prove that the actual connected GitHub write path creates the authorization object with GitHub server metadata identifying the configured owner numeric ID. If the write appears as an unapproved App/Bot actor, execution fails closed until the transport is redesigned.
+
+The connected operator integration is part of the owner-authorization trust root only for explicit owner-invoked LIVE-AUTH creation. This trust does not extend to unattended automation or unrelated repository writers.
 
 ### Authorization store
 
 `ops-workflows` stores only public-safe queue/authorization data. A READY queue item means eligible for consideration; it is never authority to execute.
+
+#### Authorization-surface governance invariant
+
+Issue creator metadata alone is not sufficient if another write-capable actor can rewrite the issue body while preserving the original creator. Therefore v1 may use `ops-workflows` as the LIVE-AUTH store only while its authorization surface is a reviewed trust root.
+
+Before P7 live enablement, a governance preflight must prove, with the strongest current GitHub evidence available:
+
+- the repository owner remains the expected numeric owner identity;
+- no unapproved human collaborator/team has issue-write authority;
+- no unapproved GitHub App/integration has issue-write authority;
+- repository/workflow `GITHUB_TOKEN` policy does not grant unattended issue-write authority;
+- every workflow capable of running on the authorization repository is reviewed for explicit `issues: write`, `write-all`, reusable-workflow inheritance and secret/token-based issue mutation paths;
+- any approved operator integration that can create LIVE-AUTH is explicitly part of the owner trust root and is not an unattended executor credential.
+
+The current P0 source audit found no `issues: write` or `write-all` match in `ops-workflows`, and the visible issue-triggered queue-lint workflow explicitly declares `contents: read` and `issues: read`; this is point-in-time evidence only, not a permanent guarantee.
+
+If P7 cannot completely establish the approved writer set, **do not enable production authorization from `ops-workflows`**. The fallback is a separately owner-approved isolated authorization repository with Issues enabled, GitHub Actions disabled, no unapproved collaborators/integrations, and the executor still read-only. Creating such a repository or changing repository settings is itself a later trust-boundary mutation and is not authorized by P0.
+
+Any later collaborator, integration, Actions-token, workflow-permission or repository-governance expansion that can affect LIVE-AUTH is a trust-boundary change. The executor must remain/switch mutation-disabled until that governance is separately reviewed and the authorization trust root is re-established.
 
 ### Critical credential invariant
 
@@ -89,7 +110,7 @@ One normal GitHub Issue in `rozkalnsandris/ops-workflows`:
 [LIVE-AUTH][PENDING] <public-safe target alias>
 ```
 
-It must be an Issue, not a pull request.
+It must be an Issue, not a pull request, and the authorization-surface governance invariant above must be currently satisfied.
 
 ### Fixed TTL
 
@@ -147,23 +168,26 @@ Also store SHA-256 of the exact raw issue body. Immediately before privileged di
 All checks are mandatory and ordered:
 
 1. repository is exactly `rozkalnsandris/ops-workflows`;
-2. resource is an open Issue, not a PR;
-3. title matches LIVE-AUTH v1;
-4. GitHub `user.id == 277435981` and `user.type == User`;
-5. GitHub server time proves request age is within 600 seconds;
-6. strict payload parsing succeeds;
-7. GitHub issue ID and `request_id` are unseen in durable local state;
-8. referenced queue issue is still open and exactly READY;
-9. queue repo/SHA/target/operation/mutation envelope matches LIVE-AUTH;
-10. exact source SHA exists and repository-local reachability/current-main rules pass;
-11. required exact-SHA CI/review evidence is fresh and successful;
-12. expected target baseline still matches or the reviewed resolver proves it;
-13. static registry permits the operation/deploy class/mutation budget/rollback policy;
-14. exact adapter/helper identities and cross-repository interface contracts are proven;
-15. no new secret, permission, DB, infrastructure or undeclared mutation is required;
-16. immediately before privileged dispatch, repeat authorization, queue, source/CI and baseline reads and require both accepted digests unchanged.
+2. authorization-surface governance is in the currently accepted reviewed state with no known write-scope drift;
+3. resource is an open Issue, not a PR;
+4. title matches LIVE-AUTH v1;
+5. GitHub `user.id == 277435981` and `user.type == User`;
+6. GitHub server time proves request age is within 600 seconds;
+7. strict payload parsing succeeds;
+8. GitHub issue ID and `request_id` are unseen in durable local state;
+9. referenced queue issue is still open and exactly READY;
+10. queue repo/SHA/target/operation/mutation envelope matches LIVE-AUTH;
+11. exact source SHA exists and repository-local reachability/current-main rules pass;
+12. required exact-SHA CI/review evidence is fresh and successful;
+13. expected target baseline still matches or the reviewed resolver proves it;
+14. static registry permits the operation/deploy class/mutation budget/rollback policy;
+15. exact adapter/helper identities and cross-repository interface contracts are proven;
+16. no new secret, permission, DB, infrastructure or undeclared mutation is required;
+17. immediately before privileged dispatch, repeat authorization, queue, source/CI and baseline reads and require both accepted digests unchanged.
 
 Unknown, incomplete, stale or ambiguous evidence is rejection, not permission.
+
+If the implementation cannot reliably detect governance drift with its least-privilege reads, it must fail toward mutation-disabled operation and require a fresh owner-reviewed governance attestation; it must not broaden App permissions merely to make the check convenient.
 
 ## 6. Replay and crash safety
 
@@ -244,7 +268,9 @@ and the helper identity, rollback scope and operation counts are revalidated. `r
 | Threat | Mandatory defense |
 | --- | --- |
 | Executor forges owner approval | Executor credential read-only on authorization surface; exact numeric owner actor |
-| App edits owner issue/comment | No executor Issues write on authorization repo |
+| Executor App edits owner issue/comment | No executor Issues write on authorization repo |
+| Another collaborator/App/workflow rewrites owner issue | Reviewed authorization-surface governance; mutation disabled on unknown/write-scope drift; isolated auth repo fallback |
+| Trusted operator integration compromised | Treat as owner-boundary compromise; revoke/review integration and disable executor until trust is re-established |
 | Stale authorization | Fixed 600-second server-time TTL |
 | Edited authorization | Raw-body + canonical-payload digests re-fetched before dispatch |
 | Replay after success/failure/crash | Durable unique IDs; atomic `CONSUMED` before privileged boundary |
@@ -282,8 +308,10 @@ A later automatic GitHub receipt channel is allowed only after proving it cannot
 Reviewed 2026-08-27 against current official GitHub documentation:
 
 - REST best practices: authenticated/serialized polling, conditional requests, `Retry-After`, bounded rate-limit handling;
-- GitHub App installation authentication: short-lived installation tokens and repository/permission scoping;
-- Issues/Issue Comments permissions: `Issues: write` authorizes update operations, motivating the read-only authorization-reader boundary.
+- GitHub App installation authentication: short-lived installation tokens and selected-repository/permission scoping;
+- Issues/Issue Comments permissions: `Issues: write` authorizes update operations, motivating the read-only authorization-reader boundary;
+- GitHub Free personal accounts can own unlimited private repositories, so an isolated authorization-repository fallback does not require a paid GitHub plan;
+- GitHub permits Actions to be disabled for a repository, so a fallback authorization repository can remove workflow execution from its trust surface.
 
 Re-check these semantics immediately before P2/P7 because API versions and product behavior can change.
 
@@ -292,7 +320,7 @@ Re-check these semantics immediately before P2/P7 because API versions and produ
 P0 is complete only when:
 
 - this threat model and `AUTOMATION_MASTER_PLAN.md` reconciliation are reviewed in a focused PR;
-- issue #236 is reconciled with the read-only authorization-reader invariant;
-- no GitHub App permission, credential, host/runtime, production, DB or Cloudflare mutation occurred.
+- issue #236 is reconciled with the read-only authorization-reader and authorization-surface-governance invariants;
+- no GitHub App permission, credential, repository-settings, host/runtime, production, DB or Cloudflare mutation occurred.
 
 After P0 reaches Ready, STOP for explicit merge. P1 is not implicitly authorized by P0.
