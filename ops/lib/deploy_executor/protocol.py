@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from typing import Any, Mapping, Sequence
 
 AUTHORIZATION_REPOSITORY = "rozkalnsandris/ops-workflows"
+AUTHORIZATION_REPOSITORY_ID = 1328835922
 OWNER_USER_ID = 277435981
 LIVE_AUTH_SCHEMA = "rozkalns.live-auth.v1"
 TTL_SECONDS = 600
@@ -295,6 +296,11 @@ def accept_issue(
 ) -> AcceptedAuthorization:
     if type(repository_id) is not int or repository_id < 1:
         _fail("MALFORMED_REPOSITORY_ID", "repository_id must be a positive integer")
+    if repository_id != AUTHORIZATION_REPOSITORY_ID:
+        _fail(
+            "WRONG_AUTHORIZATION_REPOSITORY_ID",
+            f"repository_id must be {AUTHORIZATION_REPOSITORY_ID}",
+        )
     if governance_ok is not True:
         _fail("GOVERNANCE_UNTRUSTED", "authorization surface is not in a reviewed trusted state")
 

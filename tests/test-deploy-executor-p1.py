@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT / "ops" / "lib"))
 
 from deploy_executor.protocol import (  # noqa: E402
     AUTHORIZATION_REPOSITORY,
+    AUTHORIZATION_REPOSITORY_ID,
     ProtocolError,
     accept_issue,
     validate_queue_binding,
@@ -22,7 +23,7 @@ from deploy_executor.protocol import (  # noqa: E402
 from deploy_executor.state import InvalidTransition, ReplayError, StateStore  # noqa: E402
 
 FIXTURES = ROOT / "tests" / "fixtures" / "deploy_executor"
-REPOSITORY_ID = 1328835922
+REPOSITORY_ID = AUTHORIZATION_REPOSITORY_ID
 OPERATOR_APP_ID = 1144995
 SERVER_TIME = datetime(2026, 8, 27, 20, 5, 0, tzinfo=timezone.utc)
 
@@ -68,6 +69,7 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(accepted.performed_via_github_app_slug, "chatgpt-codex-connector")
         validate_queue_binding(accepted, self.queue)
 
+
     def test_unapproved_operator_integration_rejected(self):
         issue = copy.deepcopy(self.issue)
         issue["performed_via_github_app"]["id"] = 999999
@@ -83,6 +85,19 @@ class ProtocolTests(unittest.TestCase):
         issue["user"]["id"] = 42
         self.assert_code("WRONG_OWNER", lambda: self.accept(issue))
 
+    def test_wrong_authorization_repository_id_rejected(self):
+        self.assert_code(
+            "WRONG_AUTHORIZATION_REPOSITORY_ID",
+            lambda: accept_issue(
+                self.issue,
+                repository_id=REPOSITORY_ID + 1,
+                repository_full_name=AUTHORIZATION_REPOSITORY,
+                server_time=SERVER_TIME,
+                governance_ok=True,
+                approved_operator_app_ids=frozenset({OPERATOR_APP_ID}),
+            ),
+        )
+
     def test_governance_unknown_fails_closed(self):
         self.assert_code("GOVERNANCE_UNTRUSTED", lambda: self.accept(governance_ok=False))
 
@@ -90,6 +105,10 @@ class ProtocolTests(unittest.TestCase):
         issue = copy.deepcopy(self.issue)
         replace_payload(issue, lambda p: p.__setitem__("unexpected", True))
         self.assert_code("MALFORMED_SCHEMA", lambda: self.accept(issue))
+
+        unsupported = copy.deepcopy(self.issue)
+        replace_payload(unsupported, lambda p: p.__setitem__("schema", "rozkalns.live-auth.v2"))
+        self.assert_code("UNSUPPORTED_SCHEMA", lambda: self.accept(unsupported))
 
     def test_duplicate_json_key_rejected(self):
         issue = copy.deepcopy(self.issue)
