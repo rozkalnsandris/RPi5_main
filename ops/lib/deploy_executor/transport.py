@@ -256,7 +256,7 @@ class GitHubHttpsSender:
         except ResponseError:
             raise
         except (OSError, TimeoutError, http.client.HTTPException) as exc:
-            raise NetworkFailure(type(exc).__name__) from exc
+            raise NetworkFailure(type(exc).__name__) from None
         finally:
             connection.close()
 
@@ -440,7 +440,7 @@ class GitHubRestClient:
             token = self.token_provider.get_installation_token()
         except Exception as exc:
             self._log("token_error", error_class=type(exc).__name__)
-            raise TokenError("installation token provider failed") from exc
+            raise TokenError("installation token provider failed") from None
         if not isinstance(token, InstallationToken):
             raise TokenError("installation token provider returned wrong type")
         if type(token.value) is not str or not token.value or len(token.value) > 16_384:
@@ -476,7 +476,7 @@ class GitHubRestClient:
                         attempt=attempt,
                         error_class=type(exc).__name__,
                     )
-                    raise
+                    raise NetworkFailure("GitHub API network request failed") from None
                 delay = self.backoff_seconds[attempt - 1]
                 self._log(
                     "github_transport_retry",

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import sys
 import tempfile
+import traceback
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -220,7 +221,7 @@ class P2TransportTests(unittest.TestCase):
         self.assertEqual(len(sender.calls), 3)
         self.assertEqual(sleeps, [1.0, 2.0])
 
-    def test_network_and_token_errors_do_not_log_secret_text(self):
+    def test_network_and_token_errors_do_not_log_or_trace_secret_text(self):
         logger = ListLogger()
         gh, _, _, sleeps = client(
             [NetworkFailure(f"secret={TOKEN}"), response(payload={"ok": True})], logger=logger
@@ -228,13 +229,32 @@ class P2TransportTests(unittest.TestCase):
         self.assertEqual(gh.get_json("/meta").value, {"ok": True})
         self.assertEqual(sleeps, [1.0])
         self.assertTrue(all(TOKEN not in repr(item) for item in logger.events))
+
         logger = ListLogger()
         provider = FakeTokenProvider(error=RuntimeError(f"token was {TOKEN}"))
         gh, sender, _, _ = client([], logger=logger, token_provider=provider)
-        with self.assertRaises(TokenError) as caught:
+        try:
             gh.get_json("/meta")
-        self.assertNotIn(TOKEN, str(caught.exception))
+        except TokenError as exc:
+            rendered = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+            self.assertNotIn(TOKEN, rendered)
+        else:
+            self.fail("expected TokenError")
         self.assertEqual(sender.calls, [])
+        self.assertTrue(all(TOKEN not in repr(item) for item in logger.events))
+
+        logger = ListLogger()
+        gh, sender, _, _ = client(
+            [NetworkFailure(f"secret={TOKEN}")], logger=logger, attempts=1
+        )
+        try:
+            gh.get_json("/meta")
+        except NetworkFailure as exc:
+            rendered = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+            self.assertNotIn(TOKEN, rendered)
+        else:
+            self.fail("expected NetworkFailure")
+        self.assertEqual(len(sender.calls), 1)
         self.assertTrue(all(TOKEN not in repr(item) for item in logger.events))
 
     def test_token_is_opaque_but_expiry_and_controls_are_checked(self):
