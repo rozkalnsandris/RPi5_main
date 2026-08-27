@@ -103,6 +103,7 @@ class ParsedQueue:
 class NormalizedQueue:
     parsed: ParsedQueue
     operation: OperationSpec
+    execution_enabled: bool
     canonical_json: str
 
     def as_protocol_queue(self) -> dict[str, Any]:
@@ -189,4 +190,9 @@ def normalize_ready_queue(
         "dependencies": dependencies,
     }
     canonical = json.dumps(protocol_queue, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-    return NormalizedQueue(parsed=parsed, operation=operation, canonical_json=canonical)
+    return NormalizedQueue(
+        parsed=parsed,
+        operation=operation,
+        execution_enabled=registry.execution_enabled,
+        canonical_json=canonical,
+    )
