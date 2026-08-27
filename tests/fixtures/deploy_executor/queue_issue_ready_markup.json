@@ -1,0 +1,6 @@
+{
+  "number": 123,
+  "state": "open",
+  "title": "[DEPLOY-QUEUE][READY] fixture application deploy",
+  "body": "## Queue contract\n\n- **source_repository:** `rozkalnsandris/example`\n- **exact_git_sha_or_waiting_merge:** `0123456789abcdef0123456789abcdef01234567`\n- **source_pr_or_issue_if_applicable:** merged `example#1`\n- **target_alias:** `example-production / web`\n- **execution_location_class:** `trusted-home-host`\n- **repository_entrypoint:** `ops/bin/example-deploy` reviewed fixed adapter selector\n- **expected_baseline_when_observable:** resolve through the reviewed fixture baseline contract immediately before mutation\n- **read_only_preflight:** exact source SHA and CI plus fixture baseline resolver\n- **verification_and_reconciliation:** exact deployed SHA must equal approved source SHA\n- **allowed_mutation_categories_and_limits:** `application-deploy` maximum one operation\n- **explicit_exclusions:** no database writes; no credential or permission changes\n- **dependencies_if_any:** none\n- **deploy_class_and_extra_owner_gate_requirement:** `AUTO_DEPLOY_SAFE`; ordinary eligibility fixture only\n\n## Evidence\n\nInert test fixture only."
+}

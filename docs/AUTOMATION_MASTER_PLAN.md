@@ -306,7 +306,7 @@ Phase 4 target sequence after inventory:
 - [ ] Full rollback/health/readiness audit PASS.
 - [ ] Final architecture documented and issue #103 closed.
 
-### Cross-cutting Track X — owner-authorized pull deploy executor v1 — P3 SOURCE ONLY (P0/P1/P2 COMPLETE)
+### Cross-cutting Track X — owner-authorized pull deploy executor v1 — P4 SOURCE ONLY (P0/P1/P2/P3 COMPLETE)
 
 Roadmap: `RPi5_main#236`.
 Threat model / protocol: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_V1.md`.
@@ -316,16 +316,17 @@ This track standardizes a future owner-authorized GitHub -> outbound-polling RPi
 Current ordering rules:
 
 - the canonical production/live migration lane remains Phase 4 until the plan explicitly advances it;
-- P0 merged through #237, P1 merged through #238 and P2 merged through #241; the P3 selection baseline is `RPi5_main/main=647bc57bd23a9f5ef4a26a16737804b6afde8c7f`;
-- the owner's fresh 2026-08-28 `turpini` continuation selects only P3 source-only shared LIVE-AUTH/receipt contract work after re-reading this plan, #236 and current `ops-workflows` policy;
-- P3 is limited to public-safe `ops-workflows` policy/docs/schema/template/lint surfaces that represent owner LIVE-AUTH separately from DEPLOY-QUEUE readiness and define non-authority receipts;
-- P3 may add only read-only GitHub issue linting; it must not create a live executor App, grant permissions, mint/read credentials, add a GitHub result writer, install host files, add an RPi5 production dispatcher, or create a workflow whose deterministic side effect is production execution;
-- direct same-session `LIVE-ALL` semantics remain valid for an available direct executor; deferred RPi5 pull execution additionally requires one exact short-lived owner-authored LIVE-AUTH per selected queue item;
-- P4 operation-registry/adapter source work and P5 cross-repository security review remain separate later source-only phases and are not authorized merely because P3 completes;
+- P0 merged through #237, P1 through #238, P2 through #241 and P3 through `RPi5_main#242` plus `ops-workflows#23`; the P4 selection baselines are `RPi5_main/main=55f3f7b94b329f9698cfacdc1f8e4830cbd913c0` and `ops-workflows/main=c9d6b3898a9eda98ce83c5ce77e2bfd49f3703d8`;
+- the owner's fresh 2026-08-28 `turpini` continuation selects only P4 source-only queue-normalization/static-operation-registry/adapter-framework work after re-reading this plan, #236 and the merged P3 LIVE-AUTH contract;
+- P4 is limited to deterministic queue normalization, a source-controlled operation registry, adapter interface, mutation-budget/baseline/preflight/postcondition/rollback contracts, and fail-closed inert fixtures/fakes;
+- the production P4 registry must remain `execution_enabled=false` with zero production operations and zero concrete production adapters; no real target may become executable in P4;
+- raw DEPLOY-QUEUE prose is not command or mutation authority. Machine authority comes only from exact static registry selectors/contracts; the complete queue contract is cryptographically bound so any edit causes drift instead of being semantically guessed;
+- unknown, ambiguous, malformed or non-READY queue state remains unselected and must not create LIVE-AUTH;
+- P5 remains the separate cross-repository interface/security audit and is not authorized merely because P4 completes;
 - every source PR merge remains separately explicit owner authority;
 - P7 GitHub App creation/permission changes, P8 host installation, P9/P10 canaries and all later live execution remain blocked until this master plan separately names that exact step as eligible and the owner separately authorizes its live envelope.
 
-Critical authorization invariant established by P0 and enforced by P1-P3:
+Critical authorization invariant established by P0 and enforced by P1-P4:
 
 **An autonomous RPi5 credential must not have write authority over the GitHub surface from which owner authorization is accepted.**
 
@@ -346,7 +347,7 @@ Forbidden permanently for this track:
 - automatic retry/cleanup/alternate path after mutation starts;
 - automatic rollback unless the exact reviewed rollback policy is named in the queue, owner authorization and operation registry.
 
-P3 exit gate is a reviewed/green `ops-workflows` source PR for LIVE-AUTH/receipt policy plus this focused RPi5 sequencing reconciliation, with zero GitHub App permission, credential, host/runtime, production, DB or Cloudflare mutation. After both source PRs reach Ready, STOP for explicit owner merge decisions. P4 is not implicitly authorized by Ready or merge.
+P4 exit gate is one reviewed/green `RPi5_main` source PR proving the empty production registry, deterministic queue normalization, adapter interface and inert fixtures/fakes, with zero GitHub App permission, credential, host/runtime, production, DB or Cloudflare mutation. After P4 reaches Ready, STOP for explicit owner merge. P5 is not implicitly authorized by Ready or merge.
 
 ## Scope-control checklist before every step
 
@@ -360,11 +361,11 @@ If question 3 is `no` or question 5 is `yes`, do not make the change.
 
 ## Current next action
 
-**Bounded explicit exception: #236 P3 LIVE-AUTH shared source contract is the immediate selected task; the canonical production/live lane remains Phase 4.** Phase 3 of the main migration program is complete and must not be reopened merely to continue this cross-cutting track.
+**Bounded explicit exception: #236 P4 adapter/normalization framework source is the immediate selected task; the canonical production/live lane remains Phase 4.** Phase 3 of the main migration program is complete and must not be reopened merely to continue this cross-cutting track.
 
-For #236 P3, change only the tracked `ops-workflows` documentation/policy/schema/template/read-only lint surfaces required to represent a separate owner-authored LIVE-AUTH and public-safe non-authority receipt, plus this RPi5 sequencing reconciliation. Keep `ops-workflows` GitHub-side and non-executing. Do not create/modify a GitHub App, grant permissions, generate/place credentials, add a write-capable LIVE-AUTH reporter, install host files, change root/sudoers/systemd/timers, activate an executor or deploy production. P3 ends at reviewed/green source PRs and then requires explicit merge.
+For #236 P4, change only tracked RPi5_main source/tests plus this sequencing reconciliation. Add a deterministic parser for the existing public DEPLOY-QUEUE contract, exact static operation matching, machine mutation/baseline/preflight/postcondition/rollback contracts and an adapter interface. Keep `ops/deploy/executor-operations.json` non-executable with `execution_enabled=false` and zero production operations; prove behavior only with inert fixtures/fakes. Do not create/modify a GitHub App, grant permissions, generate/place credentials, add a live result writer, install host files, change root/sudoers/systemd/timers, register a production adapter, activate an executor, create LIVE-AUTH or deploy production. P4 ends at a reviewed/green source PR and then requires explicit merge.
 
-After P3 is completed or parked, return to the first incomplete Phase 4 Hermes Deals #384 current-state inventory/reconciliation unless a later fresh owner instruction and this master plan explicitly select another safe source-only prerequisite. Re-resolve exact current `hermes-deals/main`, #35/#39/#386/#384, open PRs/issues and relevant current continuity before any Phase 4 implementation. Inventory the live self-hosted workflows, runner labels, installed dispatchers/helpers/runtime dependencies and producer/consumer contracts, then classify the smallest safe replacement candidate.
+After P4 is completed or parked, return to the first incomplete Phase 4 Hermes Deals #384 current-state inventory/reconciliation unless a later fresh owner instruction and this master plan explicitly select P5 or another safe source-only prerequisite. Re-resolve exact current `hermes-deals/main`, #35/#39/#386/#384, open PRs/issues and relevant current continuity before any Phase 4 implementation.
 
 Do **not** start a generic Deals controller, install/refresh host artifacts, change root/sudoers/systemd/timers, deregister a runner, deploy production, write DB/Review/publication state, consume a retailer-specific execution authorization, or change GitHub/Cloudflare settings as part of the first Phase 4 gate.
 
