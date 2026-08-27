@@ -53,10 +53,9 @@ def _contract_fields(body: Any) -> dict[str, str]:
     if type(body) is not str:
         _fail("QUEUE_SCHEMA", "issue body must be a string")
     lines = body.splitlines()
-    try:
-        start = lines.index("## Queue contract") + 1
-    except ValueError:
-        _fail("QUEUE_SCHEMA", "missing exact '## Queue contract' section")
+    if lines.count("## Queue contract") != 1:
+        _fail("QUEUE_SCHEMA", "exactly one '## Queue contract' section is required")
+    start = lines.index("## Queue contract") + 1
     section: list[str] = []
     for line in lines[start:]:
         if line.startswith("## "):
