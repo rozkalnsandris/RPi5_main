@@ -5,156 +5,104 @@ Roadmap: `RPi5_main#236`
 Canonical program: `docs/AUTOMATION_MASTER_PLAN.md`
 Shared queue policy: `rozkalnsandris/ops-workflows/docs/GITHUB_ONLY_LIVE_ALL.md`
 
-## 1. Purpose
+## 1. Purpose and authority
 
-Define the security and authorization contract for a pull-based RPi5 deployment executor that can consume an explicit owner decision from GitHub without exposing SSH, adding a self-hosted GitHub Actions production runner, accepting inbound webhooks on the RPi5, or accepting arbitrary remote shell commands.
+Define the security contract for a pull-based RPi5 deployment executor that can consume a separately explicit owner decision from GitHub without SSH, a self-hosted GitHub Actions production runner, an inbound RPi5 webhook/API, or arbitrary remote shell execution.
 
-This document is source-only. It does not authorize GitHub App creation or permission changes, credential placement, host installation, systemd/sudo/root changes, production deployment, database writes, Cloudflare changes, or any other live mutation.
+This document is source-only. It authorizes no GitHub App creation/permission change, credential placement, host installation, root/sudo/systemd change, production deploy, DB write, Cloudflare change, or other live mutation. Repository-local deployment contracts remain stricter where applicable. Merge never authorizes deployment.
 
-Repository-local deployment contracts remain stricter where applicable. Merge never authorizes deployment.
+This is a cross-cutting transport/security track; it does not replace the ordered phases in `AUTOMATION_MASTER_PLAN.md`. P7+ live work remains blocked until the master plan separately names the exact live step as eligible.
 
-## 2. Architecture decision
-
-The intended control flow is:
+## 2. Intended flow
 
 ```text
 owner decision
-  -> public-safe DEPLOY-QUEUE state in ops-workflows
-  -> separate owner-authored LIVE-AUTH object in ops-workflows
-  -> RPi5 outbound-only authenticated polling
-  -> authorization/queue/source/CI/baseline revalidation
-  -> static operation registry
+  -> DEPLOY-QUEUE READY state in ops-workflows
+  -> separate owner-authored LIVE-AUTH issue in ops-workflows
+  -> outbound-only authenticated RPi5 polling
+  -> auth/queue/source/CI/baseline revalidation
+  -> source-controlled static operation registry
   -> fixed project adapter
   -> existing narrow project controller/root helper
-  -> health/evidence
+  -> health + durable evidence
 ```
 
-No GitHub-controlled field may become a shell command, executable path, arbitrary argv list, Docker command, sudo command, or dynamic import target.
+No GitHub-controlled value may become a shell command, executable path, arbitrary argv list, environment injection, Docker/systemctl/sudo passthrough, or dynamic import target.
 
-## 3. Program ordering
+## 3. Trust boundaries
 
-This is a cross-cutting transport/security track, not a replacement for the ordered migration phases in `AUTOMATION_MASTER_PLAN.md`.
+### Owner
 
-- P0-P5 may prepare and prove source-only contracts when explicitly selected by the owner and when they do not perform host/runtime/permission mutation.
-- Source work in this track must not silently consume or supersede a repository-specific authorization or the current Hermes Deals Phase 4 execution lane.
-- P6 merge remains explicit owner authority.
-- P7 and later live steps are blocked until the master plan separately names the exact live step as eligible and the owner gives the required explicit authorization.
+The configured owner authority is GitHub numeric user ID `277435981`; login text is display-only. A valid owner actor must also be returned by GitHub as `type=User`.
 
-## 4. Trust domains
+Compromise of the owner's GitHub account is equivalent to compromise of the owner authorization boundary and cannot be distinguished by this protocol.
 
-### 4.1 Owner identity
+### ChatGPT/GitHub operator path
 
-The configured owner authority is the GitHub user with numeric ID `277435981`.
+ChatGPT may create LIVE-AUTH only after a separately explicit owner deployment/live instruction that satisfies the repository-local authorization contract. `START`, `turpini`, merge approval, GITHUB-ONLY, queue READY, historical chat state or a prior authorization must never imply LIVE-AUTH.
 
-The numeric ID is authoritative. Login text is display-only because logins can be renamed. A valid owner actor must also be returned by GitHub as `type=User`.
+P9 must prove that the actual connected GitHub write path creates the authorization object with GitHub server metadata identifying the configured owner numeric ID. If the write appears as an App/Bot actor, execution fails closed until the transport is redesigned.
 
-Compromise of the owner's GitHub account is equivalent to compromise of the owner authorization boundary and is outside what this protocol can cryptographically distinguish. Account security therefore remains a prerequisite.
+### Authorization store
 
-### 4.2 ChatGPT/GitHub operator path
+`ops-workflows` stores only public-safe queue/authorization data. A READY queue item means eligible for consideration; it is never authority to execute.
 
-ChatGPT may prepare a LIVE-AUTH request only after the owner gives an explicit live/deploy instruction that satisfies the repository's governing authorization contract.
+### Critical credential invariant
 
-The GitHub mutation that creates LIVE-AUTH is itself part of the live authorization transport. Generic `START`, `turpini`, merge approval, GITHUB-ONLY, a READY queue item, or prior authorization must never create LIVE-AUTH.
+**No autonomous RPi5 credential may have write authority over the GitHub surface from which owner authorization is accepted.**
 
-P9 must prove that the actual connected GitHub write path creates the LIVE-AUTH object with GitHub server metadata identifying the configured owner numeric user ID. If GitHub reports a bot/app actor instead, the protocol fails closed and the authorization transport must be redesigned before production enablement.
+The first executor authorization App, if later approved, therefore defaults to:
 
-### 4.3 `ops-workflows` authorization store
-
-`ops-workflows` stores public-safe queue and authorization metadata. It must never contain credentials, protected host paths, private runtime configuration, secret material, raw private evidence, or arbitrary executable commands.
-
-A READY deploy queue item means eligible for consideration only. It is not live authorization.
-
-### 4.4 Deploy authorization reader credential
-
-Critical invariant:
-
-**No credential held by the autonomous RPi5 executor may have permission to modify the GitHub surface from which owner authorization is accepted.**
-
-The first live GitHub App for this protocol therefore defaults to:
-
-- installation scope: `rozkalnsandris/ops-workflows` only;
-- Issues: read-only;
+- repository scope: `rozkalnsandris/ops-workflows` only;
+- Issues: **read-only**;
 - Metadata: minimum/implicit read;
-- all write permissions: no access;
+- all GitHub write permissions: no access;
 - webhook: disabled.
 
-The previously proposed single App with `Issues: read/write` is rejected by this threat model because GitHub documents that `Issues: write` can update issue comments and issue state/content surfaces. A credential that can rewrite authorization material cannot also be trusted to validate that material as owner-authored.
+The earlier proposal to give the same executor App `Issues: read/write` is rejected. Current GitHub documentation confirms that `Issues: write` permits issue/comment update operations; a validator credential that can rewrite accepted authorization material is not an independent authority validator.
 
-If automated GitHub result reporting is added later, its write capability must be separated from the accepted authorization surface. Acceptable future designs include a distinct repository/surface or a separately reviewed narrow reporting mechanism. The reporter must not be able to create, edit, delete, relabel, close, reopen, or otherwise forge accepted LIVE-AUTH authority.
+Automatic GitHub result reporting, if added later, must use a separately reviewed reporting surface/capability that cannot create, edit, delete, relabel, close, reopen or otherwise forge accepted LIVE-AUTH authority. Until that is proven, local durable evidence plus an already-approved notification channel is safer than granting the executor GitHub write authority.
 
-Until that separation is proven, local durable evidence plus the existing approved notification path is preferred over granting the executor GitHub write authority.
+### Existing `Rozkalns Automation`
 
-### 4.5 Existing `Rozkalns Automation` App
-
-The existing App remains unchanged and read-only:
+Remain unchanged:
 
 - Actions: read;
 - Contents: read;
-- existing approved repository installation scope only.
+- existing approved repository scope only.
 
-It remains the source/CI truth reader for repositories already in its contract. This executor work must not opportunistically add Issues write, workflow write, deployments write, repository administration, or additional repository scope to that App.
+It remains the source/CI truth reader for repositories in its contract. This track must not opportunistically add Issues/workflow/deployment/admin write permissions or repository scope.
 
-### 4.6 Unprivileged poller
+### Unprivileged poller
 
-The always-on poller:
+The always-on poller runs without root, has no generic sudo path, should retain `NoNewPrivileges=true`, performs outbound HTTPS plus narrow local IPC/state operations, and never translates `operation_id` into a shell string.
 
-- runs without root;
-- has no generic sudo path;
-- should retain `NoNewPrivileges=true`;
-- performs only outbound HTTPS to GitHub and local trusted-controller IPC/state operations;
-- accepts only structured GitHub data;
-- never resolves `operation_id` into a shell string.
+### Privileged dispatcher
 
-A compromised poller may at most submit a bounded request identity to the privileged dispatcher. That alone must never be sufficient to mutate production.
+The privileged boundary accepts only a narrow request identity, then independently re-fetches/revalidates authorization and the source-controlled operation registry before entering a mutation-capable adapter. It does not trust SHA, command, path, argv, rollback command or mutation budget supplied by the unprivileged process.
 
-### 4.7 Privileged dispatcher
+## 4. LIVE-AUTH v1 transport
 
-The privileged dispatcher independently re-resolves the accepted request and static operation registry immediately before entering a mutation-capable adapter.
-
-It accepts only a narrow identifier, such as repository identity plus LIVE-AUTH issue ID/request ID. It does not accept target SHA, shell argv, executable paths, rollback commands, or mutation budgets as trusted parameters from the unprivileged poller.
-
-### 4.8 Project adapter/root helper
-
-Each operation is implemented by a reviewed fixed adapter that delegates to an existing project-specific controller/helper where possible. The adapter must preserve that project's stricter exact-SHA, deploy-classification, locking, transaction, health, rollback and evidence rules.
-
-There is no generic deploy adapter.
-
-## 5. Authorization object v1
-
-### 5.1 Transport
-
-A live authorization is one normal GitHub Issue in `rozkalnsandris/ops-workflows` with title:
+One normal GitHub Issue in `rozkalnsandris/ops-workflows`:
 
 ```text
 [LIVE-AUTH][PENDING] <public-safe target alias>
 ```
 
-The issue must not be a pull request.
+It must be an Issue, not a pull request.
 
-### 5.2 Fixed TTL
+### Fixed TTL
 
-Protocol v1 TTL is exactly **600 seconds (10 minutes)** from GitHub server `created_at`.
+Protocol v1 TTL is exactly **600 seconds (10 minutes)** from GitHub server `created_at`. It is not caller-selectable and is not extended by edits, comments, labels, reactions, retries, polling delays or restarts.
 
-TTL is not caller-selectable and is not extended by edits, comments, labels, reactions, retries, polling delays or local restarts.
+Age should be evaluated against the authenticated GitHub response `Date` header. Missing/malformed server time, material clock inconsistency or age above 600 seconds fails closed.
 
-The executor should compare `created_at` with the GitHub HTTP response `Date` header from the authenticated fetch. If the server time is unavailable, malformed, earlier than `created_at` beyond a small documented tolerance, or more than 600 seconds after creation, mutation-capable execution fails closed.
+### Payload block
 
-### 5.3 Machine payload
+The body contains exactly one marked JSON authority block. Four backticks below are documentation delimiters only:
 
-The issue body contains exactly one marked JSON payload:
-
-```text
+````text
 <!-- rozkalns-live-auth:v1 -->
-```json
-{ ... }
-```
-<!-- /rozkalns-live-auth:v1 -->
-```
-
-The parser must reject missing markers, multiple payload blocks, duplicate JSON keys, non-object roots, unknown top-level fields, type mismatches, oversized values, invalid Unicode, or trailing second authority blocks.
-
-Required fields:
-
 ```json
 {
   "schema": "rozkalns.live-auth.v1",
@@ -170,70 +118,58 @@ Required fields:
     "value": "public-safe bounded value"
   },
   "mutation_budget": [
-    {
-      "category": "reviewed-category-id",
-      "max_operations": 1
-    }
+    {"category": "reviewed-category-id", "max_operations": 1}
   ],
   "rollback_policy": "NONE",
   "exclusions": ["explicit exclusion"],
   "dependencies": []
 }
 ```
+<!-- /rozkalns-live-auth:v1 -->
+````
 
-`operation_id`, mutation categories, rollback policies and baseline resolver IDs are enums owned by source-controlled RPi5 policy. GitHub may select only already-existing values; it cannot define new executable behavior.
+Reject missing/multiple authority blocks, duplicate JSON keys, non-object roots, unknown top-level fields, type mismatches, oversized values, invalid Unicode or additional authority blocks.
 
-### 5.4 Canonical payload digest
+`operation_id`, mutation categories, baseline resolver IDs and rollback policies are enums owned by source-controlled RPi5 policy. GitHub can select only already-reviewed values; it cannot define executable behavior.
 
-After strict JSON parsing, calculate a semantic digest over UTF-8 JSON serialized with:
+### Canonical digest
 
-- object keys sorted lexicographically;
-- separators exactly `,` and `:` with no insignificant whitespace;
-- JSON strings encoded normally without ASCII-only coercion;
-- duplicate keys already rejected before serialization.
-
-Conceptually this is equivalent to Python:
+After strict parsing, calculate a semantic SHA-256 over UTF-8 JSON serialized with lexicographically sorted keys, `,`/`:` separators without insignificant whitespace, normal JSON string encoding, and duplicate keys already rejected. This is conceptually equivalent to:
 
 ```python
 json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 ```
 
-Store `SHA-256(canonical_payload)` plus a separate SHA-256 of the exact raw issue body observed at acceptance.
+Also store SHA-256 of the exact raw issue body. Immediately before privileged dispatch, re-fetch and require both digests unchanged.
 
-Immediately before privileged dispatch, re-fetch the issue and require both digests to remain identical.
+## 5. Acceptance algorithm
 
-## 6. Acceptance algorithm
+All checks are mandatory and ordered:
 
-A request is eligible only when all checks pass in order:
+1. repository is exactly `rozkalnsandris/ops-workflows`;
+2. resource is an open Issue, not a PR;
+3. title matches LIVE-AUTH v1;
+4. GitHub `user.id == 277435981` and `user.type == User`;
+5. GitHub server time proves request age is within 600 seconds;
+6. strict payload parsing succeeds;
+7. GitHub issue ID and `request_id` are unseen in durable local state;
+8. referenced queue issue is still open and exactly READY;
+9. queue repo/SHA/target/operation/mutation envelope matches LIVE-AUTH;
+10. exact source SHA exists and repository-local reachability/current-main rules pass;
+11. required exact-SHA CI/review evidence is fresh and successful;
+12. expected target baseline still matches or the reviewed resolver proves it;
+13. static registry permits the operation/deploy class/mutation budget/rollback policy;
+14. exact adapter/helper identities and cross-repository interface contracts are proven;
+15. no new secret, permission, DB, infrastructure or undeclared mutation is required;
+16. immediately before privileged dispatch, repeat authorization, queue, source/CI and baseline reads and require both accepted digests unchanged.
 
-1. repository identity is exactly `rozkalnsandris/ops-workflows`;
-2. resource is an Issue, not a PR;
-3. issue is open;
-4. title matches the supported LIVE-AUTH v1 form;
-5. GitHub `user.id == 277435981` and `user.type == User`;
-6. GitHub server time proves `0 <= age <= 600 seconds` within the documented clock tolerance;
-7. strict payload parser passes;
-8. `request_id` and GitHub issue ID are unseen in local durable state;
-9. referenced queue issue is open and exactly READY;
-10. queue source repo/SHA/target/operation/mutation envelope matches LIVE-AUTH;
-11. exact source SHA exists and is still allowed by repository-local policy;
-12. required exact-SHA CI/review evidence is fresh and successful;
-13. expected target baseline still matches or its reviewed resolver returns the expected state;
-14. static operation registry contains the exact operation and permits the declared deploy class/mutation budget/rollback policy;
-15. required adapter/helper identities and cross-repository interfaces are proven;
-16. no new secret, permission, DB, infrastructure or undeclared mutation is required;
-17. immediately before privileged dispatch, repeat the GitHub authorization, queue, source/CI and baseline reads and require the accepted body/payload digests unchanged.
+Unknown, incomplete, stale or ambiguous evidence is rejection, not permission.
 
-Unknown or incomplete evidence is rejection, not permission.
+## 6. Replay and crash safety
 
-## 7. Replay and local state
+Use a durable trusted local state store; SQLite is the preferred first implementation unless P1 proves an equivalent simpler design.
 
-Use a durable trusted local store; SQLite is the preferred first implementation unless P1 review proves a simpler equivalent has the same crash/replay properties.
-
-Minimum unique identities:
-
-- GitHub repository ID + issue ID;
-- `request_id`.
+Uniqueness must cover GitHub repository+issue identity and `request_id`.
 
 Minimum states:
 
@@ -249,134 +185,114 @@ EXPIRED
 STOP_ERROR
 ```
 
-`CONSUMED` must be persisted atomically **before** crossing into a mutation-capable adapter/IPC request. Entry into that boundary consumes authorization even if the adapter later discovers that its first intended external write cannot start. False-positive consumption is preferred over replay.
+Persist `CONSUMED` atomically **before** crossing into the mutation-capable adapter/IPC boundary. Entry into that boundary consumes authorization even if the adapter later finds that its first intended write cannot start. False-positive consumption is safer than accidental replay.
 
-A process crash after `CONSUMED` must never replay automatically. Recovery requires evidence and a new owner authorization unless a repository-local contract explicitly proves a non-mutating pre-write state and separately defines a safe recovery path.
+A crash after `CONSUMED` never auto-replays. Recovery requires preserved evidence and a new owner authorization unless a stricter repository-local contract explicitly defines another safe path.
 
-## 8. Polling and GitHub API contract
+## 7. Polling/API contract
 
-Webhooks remain disabled because no inbound RPi5 listener is required.
+No inbound RPi5 webhook is required. Polling must use:
 
-When polling is used:
-
-- authenticated requests only;
-- fixed interval, initially approximately 2 minutes;
-- requests serialized rather than concurrent;
+- authenticated REST requests;
+- fixed interval, initially about 2 minutes;
+- serialized, not concurrent, requests;
 - stable/specific query URLs;
-- retain `ETag` and use `If-None-Match` where supported;
-- honor `Retry-After` and `X-RateLimit-*`;
-- no busy retry on primary or secondary rate limiting;
+- `ETag` + `If-None-Match` where supported;
+- `Retry-After` and `X-RateLimit-*` handling;
+- no busy retry on rate limiting;
 - bounded pre-mutation transport retry only;
-- no GitHub write retry after mutation-capable execution begins.
+- no write/execution retry after mutation-capable execution starts.
 
-GitHub documents that correctly authorized conditional GETs returning `304 Not Modified` do not consume the primary REST rate limit.
+GitHub documents that correctly authorized conditional GET requests returning `304 Not Modified` do not consume the primary REST rate limit.
 
-Pin one supported REST API version in source. At implementation time, re-check the current GitHub documentation rather than hard-coding a historical API version from this document.
+Pin one currently supported REST API version in implementation and re-check official docs immediately before P2/P7 rather than relying on a historical header value.
 
-## 9. Operation registry contract
+GitHub App installation tokens must be minted on demand and never logged/persisted. Current GitHub documentation states they expire after one hour and can be further scoped down to selected repositories/permissions within the App installation grant.
 
-The registry is source-controlled under `RPi5_main` and is the only mapping from GitHub data to executable behavior.
+## 8. Static operation registry
 
-Every operation record must define:
+The source-controlled RPi5 registry is the only mapping from GitHub data to executable behavior. Each operation record must define:
 
-- schema/version;
-- operation ID;
+- operation/schema version;
 - source repository;
 - target alias/class;
 - allowed deploy classification;
 - fixed adapter identity;
 - required source/CI evidence;
-- allowed mutation categories and maximum counts;
+- mutation categories and maximum counts;
 - rollback policy enum;
 - postconditions;
 - LIVE-ALL eligibility class;
 - cross-repository contract/version IDs.
 
-Forbidden registry features:
+Forbidden: shell snippets, GitHub-provided argv, user-controlled executable paths, environment injection, dynamic imports, generic sudo/Docker/systemctl passthrough. Unknown operations reject.
 
-- shell snippets;
-- arbitrary argv arrays from GitHub;
-- user-controlled executable paths;
-- environment injection from GitHub;
-- dynamic Python/module imports from GitHub values;
-- generic `sudo`, Docker or systemctl passthrough.
+## 9. Rollback semantics
 
-Unknown operation IDs fail closed.
+After mutation begins, error/ambiguity means evidence + STOP; no retry, cleanup, alternate path or rollback unless that exact behavior was pre-authorized.
 
-## 10. Rollback semantics
+A helper with built-in rollback is eligible only when the same reviewed rollback policy ID is present in:
 
-The global rule remains: after authorized mutation begins, error or ambiguity means evidence plus STOP; do not retry, clean up, select an alternate path or roll back unless that exact behavior was pre-authorized.
+1. the static registry;
+2. the deploy queue envelope;
+3. LIVE-AUTH;
 
-Therefore an adapter may invoke a project helper with built-in rollback only when all of these are true:
+and the helper identity, rollback scope and operation counts are revalidated. `rollback_policy=NONE` forbids automatic rollback. A helper that cannot enforce this distinction is not executor-eligible.
 
-1. the registry names a reviewed rollback policy ID;
-2. LIVE-AUTH names the identical rollback policy;
-3. the queue envelope names the same rollback behavior;
-4. the helper's exact source/installed identity is revalidated;
-5. rollback scope and operation counts are bounded;
-6. tests prove no alternate/unbounded rollback path.
+## 10. Threat matrix
 
-`rollback_policy=NONE` forbids automatic rollback, even if a generic helper would otherwise attempt one. Such a helper is not eligible until an adapter can enforce the declared policy.
-
-## 11. Threat model
-
-| Threat | Required defense |
+| Threat | Mandatory defense |
 | --- | --- |
-| Executor bot forges owner approval | Executor credential is read-only on authorization surface; exact numeric owner actor required |
-| App edits owner issue/comment then executes it | No executor Issues write permission on authorization repository |
-| Stale authorization executes later | Fixed 600-second GitHub-server-time TTL |
-| Edited authorization | Raw body + canonical payload digests re-fetched immediately before dispatch |
-| Replay after success/failure/crash | Durable unique issue/request IDs; atomic `CONSUMED` before privileged boundary |
-| Queue changed after approval | Fresh queue revalidation immediately before dispatch |
-| Source/main changed | Exact immutable SHA binding; repository-local reachability/current-main rules revalidated |
-| CI evidence changed/missing | Exact-SHA Actions read and required job/check semantics revalidated |
-| Target baseline drift | Exact baseline/resolver re-run immediately before mutation |
-| Malicious `operation_id` | Static allowlisted registry; unknown values reject |
-| Arbitrary shell/path injection | GitHub has no command/path/argv authority; adapters are fixed source code |
-| Poller compromise | No generic sudo; privileged dispatcher independently revalidates request |
-| Dispatcher confused-deputy attack | Dispatcher accepts only narrow request identity and re-reads authority itself |
-| GitHub partial outage/ambiguous response | Fail closed before mutation; no cached permission decision substitutes for fresh evidence |
-| Rate limiting | Conditional GET, serialized requests, obey retry headers, hard retry ceiling |
-| Local state loss/corruption | Mutation path disabled until durable state integrity is restored; never assume unseen/replay-safe |
-| Helper identity drift | Exact source/installed identity and cross-repo contract revalidation |
-| Helper failure after mutation | Evidence + STOP; only explicitly authorized built-in rollback may run |
-| Result-report write fails after successful deploy | Production result remains authoritative from local health/evidence; no retry that could repeat deployment; reporting reconciled separately |
-| Public issue leaks sensitive data | Public-safe schema only; secrets/private paths/protected config rejected from evidence |
-| Owner GitHub account compromise | Out of protocol scope; treat as owner-boundary compromise and rely on GitHub account security/revocation |
+| Executor forges owner approval | Executor credential read-only on authorization surface; exact numeric owner actor |
+| App edits owner issue/comment | No executor Issues write on authorization repo |
+| Stale authorization | Fixed 600-second server-time TTL |
+| Edited authorization | Raw-body + canonical-payload digests re-fetched before dispatch |
+| Replay after success/failure/crash | Durable unique IDs; atomic `CONSUMED` before privileged boundary |
+| Queue drift | Fresh READY/envelope revalidation |
+| Source drift | Exact immutable SHA + repository-local reachability/current-main rules |
+| CI drift | Fresh exact-SHA Actions/check semantics |
+| Baseline drift | Immediate pre-mutation baseline revalidation |
+| Malicious operation ID | Static allowlisted registry |
+| Shell/path injection | No command/path/argv authority from GitHub |
+| Poller compromise | No generic sudo; privileged dispatcher independently revalidates |
+| Confused deputy | Dispatcher accepts only request identity and re-reads authority itself |
+| GitHub outage/partial response | Fail closed before mutation |
+| Rate limiting | Conditional GET, serialized calls, retry headers, hard ceiling |
+| Local state loss/corruption | Disable mutation path until integrity is restored |
+| Helper/interface drift | Exact identity + cross-repo contract verification |
+| Helper failure after mutation | Evidence + STOP; only explicitly authorized built-in rollback |
+| Receipt/reporting failure | Never repeat deployment merely to repair reporting |
+| Public evidence leakage | Public-safe bounded schema; reject protected data |
 
-## 12. Result reporting separation
+## 11. Result reporting separation
 
-P0 intentionally does not grant an autonomous GitHub write credential.
+P0 deliberately grants no autonomous GitHub write credential. Local evidence must retain request ID, source SHA, target, operation, consumption state, mutation counts, health/postconditions and a sanitized failure class.
 
-Local evidence must record the final request ID, source SHA, target, operation ID, consumed state, mutation counts, health/postcondition result and sanitized failure class.
+A later automatic GitHub receipt channel is allowed only after proving it cannot mutate the authorization surface. Reporting failure must never cause deployment replay.
 
-A later phase may add automatic GitHub receipts only after proving that the reporter cannot mutate the accepted authorization store. Result-write failure must never cause the deployment operation to run again.
+## 12. Canary rules
 
-## 13. First canary rules
+- No dummy commit, placeholder deployment or invented production delta just to test automation.
+- P9 uses a genuine prepared owner decision in mutation-disabled/dry-run mode.
+- P10 uses the lowest-risk genuine READY ordinary deployment available then.
+- High-risk control-plane operations such as Hermes Tech pull-deploy activation remain later STRICT work.
 
-- No dummy commit, placeholder deployment or invented production delta solely to exercise automation.
-- P9 uses the first genuine prepared owner decision to prove the complete path in dry-run/mutation-disabled mode.
-- P10 uses the lowest-risk genuine READY ordinary deployment available at that time.
-- High-risk control-plane operations such as Hermes Tech pull-deploy activation are deferred until the ordinary canary is proven.
+## 13. External documentation reviewed for P0
 
-## 14. External documentation reviewed for P0
+Reviewed 2026-08-27 against current official GitHub documentation:
 
-Reviewed 2026-08-27 against current official documentation:
+- REST best practices: authenticated/serialized polling, conditional requests, `Retry-After`, bounded rate-limit handling;
+- GitHub App installation authentication: short-lived installation tokens and repository/permission scoping;
+- Issues/Issue Comments permissions: `Issues: write` authorizes update operations, motivating the read-only authorization-reader boundary.
 
-- GitHub REST API best practices: authenticated requests, serialized polling, conditional requests, `Retry-After`, bounded rate-limit handling;
-- GitHub App installation authentication: installation tokens expire after one hour and can be scoped down to selected repositories/permissions within the App installation grant;
-- GitHub Issues/Issue Comments permissions: `Issues: write` is sufficient for update operations, which is why the executor credential must not have write permission on the accepted authorization surface;
-- GitHub reaction APIs identify the reacting user, but reactions are not used as the primary v1 authorization binding because an issue payload remains mutable to any credential with Issues write.
+Re-check these semantics immediately before P2/P7 because API versions and product behavior can change.
 
-Re-check these contracts immediately before P2/P7 because GitHub API versions and product semantics can change.
-
-## 15. P0 exit gate
+## 14. P0 exit gate
 
 P0 is complete only when:
 
-- this threat model is reviewed in a focused PR;
-- `AUTOMATION_MASTER_PLAN.md` explicitly records this as a cross-cutting source-only track without changing the current Phase 4 live ordering;
+- this threat model and `AUTOMATION_MASTER_PLAN.md` reconciliation are reviewed in a focused PR;
 - issue #236 is reconciled with the read-only authorization-reader invariant;
-- no GitHub App permission, host, credential, systemd, sudo/root, production or Cloudflare mutation occurred.
+- no GitHub App permission, credential, host/runtime, production, DB or Cloudflare mutation occurred.
 
-After P0 reaches Ready, STOP for explicit merge decision. Do not start P1 under the P0 authorization.
+After P0 reaches Ready, STOP for explicit merge. P1 is not implicitly authorized by P0.
