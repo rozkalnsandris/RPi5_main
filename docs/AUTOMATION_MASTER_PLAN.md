@@ -246,16 +246,16 @@ Phase 3 exit decision:
 `CV_REPOSITORY_SELF_HOSTED_RUNNER_COUNT=0`
 `CV_LEGACY_RUNNER_RETIREMENT=PASS`
 
-### Phase 4 — Hermes Deals public-repository execution migration — CURRENT: P8 COMPLETE / P9 SOURCE PREP
+### Phase 4 — Hermes Deals public-repository execution migration — CURRENT: P9 CORE MERGED / P9 EVIDENCE SOURCE
 
 Hermes Deals Phase 4 remains the canonical production/live migration lane. Historical checklists are evidence only; current execution must re-resolve live repository state before every consequential step.
 
-Current source anchors after the 2026-08-28 P8 closeout/P9 reconciliation:
+Current source anchors after the 2026-08-28 P9 core merge reconciliation:
 
 - `hermes-deals/main=140a50a17b398862a220e9302da1e6fa0680f2a2`; the reviewed canary source merge `2fbde52cc5b6661343dca3fd967d8112cb2bffbe` remains an ancestor beneath a later docs-progress commit;
-- `RPi5_main/main=6a43ef875c785321a1b6bf09d8e558c5151c8546` (`RPi5_main#249` squash merge);
+- `RPi5_main/main=d425f98db85fc2ffdffb2d66f6b34727e5e75b07` (`RPi5_main#250` squash merge);
 - `ops-workflows/main=c9d6b3898a9eda98ce83c5ce77e2bfd49f3703d8`;
-- exact-main RPi5 source/policy checks for `6a43ef875c785321a1b6bf09d8e558c5151c8546` are green; issue-comment/live-route jobs are skipped where expected.
+- exact-main RPi5 checks for `d425f98db85fc2ffdffb2d66f6b34727e5e75b07` are green: Validate #612, Gitleaks, public automation baseline, FAST-LANE policy drift #67 and GITHUB-ONLY policy drift #56.
 
 Completed Phase 4 source/live gates:
 
@@ -271,13 +271,15 @@ Completed Phase 4 source/live gates:
 - [x] `RPi5_main#249` merged the exact-source-bound P8 dry-run installer/poller/timer/credential contract at `6a43ef875c785321a1b6bf09d8e558c5151c8546`.
 - [x] Separately owner-authorized P8 host installation/activation completed on RPi5: exact source installed, sandbox verification passed, read-only authenticated polling succeeded as the dedicated unprivileged identity, timer is enabled/active, production dispatcher/result writer remain disabled and `PRODUCTION_MUTATION_STARTED=false`.
 - [x] Temporary P8 staging credential was removed under a separate exact cleanup authorization without changing the installed root-owned credential.
+- [x] `RPi5_main#250` merged the mutation-disabled P9 decision core and exact-main CI passed at `d425f98db85fc2ffdffb2d66f6b34727e5e75b07`.
 
 Phase 4 next gates:
 
-- [ ] `RPi5_main#250` prepares the mutation-disabled P9 read-only authorization canary core and must be reviewed/CI-green before merge.
+- [ ] `RPi5_main#251` freezes fail-closed source contracts for short-lived JIT writer-set governance evidence and sanitized `hermes-deals.origin-path-registration.v1` baseline evidence; no protected host reads or live entrypoint are part of this gate.
+- [ ] The governance and Hermes baseline evidence **producers/provenance** must be separately reviewed; the unprivileged executor must not be able to forge either evidence object, and protected host inspection remains STRICT.
 - [ ] P9 live wiring must preserve two independent read-only App trust domains: Deploy Executor reads only `ops-workflows` Issues; Rozkalns Automation reads only approved source Contents/Actions. Do not widen either merely for convenience.
-- [ ] P9 requires a fresh short-lived writer-set governance attestation; no permanent `governance_ok=true` is acceptable.
-- [ ] The selected genuine P9 operation requires an exact read-only target baseline resolver. The dormant Hermes Deals canary names `hermes-deals.origin-path-registration.v1`; that resolver is not yet live-wired and protected paths must not be guessed/inspected outside a separately reviewed boundary.
+- [ ] Source + separately authorized host wiring is still required for the Automation App read-only credential/client and a one-shot P9 entrypoint.
+- [ ] The production registry and current P8 poller remain empty/disabled until a later reviewed source gate makes the exact canary operation consumable without weakening P8 safety.
 - [ ] A genuine P9 canary may run only when a real READY deploy-queue item and explicit owner decision exist. Do not create a dummy/placeholder LIVE-AUTH merely to test the executor.
 - [ ] P9 must end with local `DRY_RUN_READY` and `PRODUCTION_MUTATION_STARTED=false`; P10 remains a separate live mutation gate.
 - [ ] Only after the replacement path is proven may any current Hermes Deals self-hosted canary runner/path be retired, and runner retirement itself remains separately owner-authorized.
@@ -313,7 +315,7 @@ Do not use this phase to consume retailer-specific execution authorizations, cha
 - [ ] Full rollback/health/readiness audit PASS.
 - [ ] Final architecture documented and issue #103 closed.
 
-### Cross-cutting Track X — owner-authorized pull deploy executor v1 — P8 COMPLETE / P9 SOURCE PREP
+### Cross-cutting Track X — owner-authorized pull deploy executor v1 — P8 COMPLETE / P9 EVIDENCE SOURCE
 
 Roadmap: `RPi5_main#236`.
 Threat model / protocol: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_V1.md`.
@@ -321,9 +323,10 @@ P5 audit: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_P5_AUDIT.md`.
 P6 attestation: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_P6_ATTESTATION.md`.
 P8 prep: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_P8_PREP.md`.
 P9 prep: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_P9_PREP.md`.
+P9 evidence contracts: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_P9_EVIDENCE_CONTRACTS.md`.
 Hermes Deals dormant canary contract: `docs/HERMES_DEALS_ORIGIN_PULL_CANARY_SOURCE.md`.
 
-P0 through P8 are complete at their respective source/live gates. P8 is installed and accepted on RPi5 at exact reviewed source `6a43ef875c785321a1b6bf09d8e558c5151c8546`; the recurring poller is unprivileged/read-only, production dispatch remains disabled, and the temporary staging credential was removed separately after acceptance.
+P0 through P8 are complete at their respective source/live gates. The P9 decision core is source-complete and merged by `RPi5_main#250` at `d425f98db85fc2ffdffb2d66f6b34727e5e75b07`; evidence provenance/runtime wiring are still incomplete. P8 remains installed and accepted on RPi5 at exact reviewed source `6a43ef875c785321a1b6bf09d8e558c5151c8546`; the recurring poller is unprivileged/read-only, production dispatch remains disabled, and the temporary staging credential was removed separately after acceptance.
 
 Critical P0 authorization invariant remains binding:
 
@@ -336,9 +339,9 @@ P9 preserves two independent read-only identities:
 - `Rozkalns Deploy Executor` reads only the authorization surface in `ops-workflows`;
 - `Rozkalns Automation` remains the existing source/CI reader with Actions read + Contents read on only the reviewed source repository allowlist.
 
-`RPi5_main#250` adds source-only P9 core primitives for stable source repository identity, merged/reachable exact-SHA + CI proof, short-lived writer-set-governance freshness, genuine READY queue/source/baseline/adapter-preflight composition and final unchanged-authority verification. It does not change the production registry, P8 poller, systemd units, credentials or GitHub permissions, and it exposes no mutation/apply/result-writer path.
+`RPi5_main#250` provides stable source repository identity, merged/reachable exact-SHA + CI proof, JIT writer-set-governance freshness, genuine READY queue/source/baseline/adapter-preflight composition and final unchanged-authority verification. `RPi5_main#251` is the next source gate and freezes strict schemas/parsers for JIT governance evidence and sanitized Hermes baseline evidence. Neither gate changes the production registry, P8 poller, systemd units, credentials or GitHub permissions, and neither exposes a mutation/apply/result-writer path.
 
-P9 live readiness still requires later reviewed wiring for a fresh writer-set governance attestation, the separate Automation App read-only source client/credential boundary, and an exact operation-specific read-only baseline resolver. Any host credential/service/systemd/protected-evidence change remains separately owner-gated. A genuine P9 canary also requires a real READY queue item and explicit owner decision; no placeholder authorization is allowed.
+P9 live readiness still requires reviewed evidence producers/provenance, the separate Automation App read-only runtime credential/client boundary, a one-shot P9 entrypoint, an exact operation-specific registry/runtime composition, a genuine READY queue and explicit owner decision. Any host credential/service/systemd/protected-evidence change remains separately owner-gated.
 
 The future transport remains data-only:
 
@@ -368,8 +371,8 @@ If question 3 is `no` or question 5 is `yes`, do not make the change.
 
 ## Current next action
 
-**SOURCE ONLY:** complete review/CI for `RPi5_main#250` P9 read-only canary source preparation. The PR itself performs no host mutation, creates no LIVE-AUTH and does not authorize a P9 canary.
+**SOURCE ONLY:** complete `RPi5_main#251` review/CI for the P9 governance + sanitized baseline evidence contracts. This gate performs no protected host inspection, changes no credentials/systemd/registry/poller state, creates no LIVE-AUTH/READY queue and authorizes no P9 canary.
 
-After #250 is explicitly merged and exact-main CI is green, freshly re-resolve the first genuine READY rollout candidate. If a genuine P9 canary is to proceed, first close the remaining source/host prerequisites for JIT writer-set governance, the separate Automation App source/CI credential path, and the operation-specific read-only baseline resolver, each under the appropriate later gate.
+After #251 is explicitly merged and exact-main CI is green, re-resolve the next source prerequisite. Expected remaining work is a narrowly reviewed producer/provenance design for the two evidence objects plus separate Automation App client/one-shot P9 runtime composition. Any step that reads protected host state or places credentials/files/services remains a later Composite STRICT owner gate.
 
-Do **not** create a dummy LIVE-AUTH, place/change credentials, modify systemd, widen GitHub App permissions, activate any mutation-capable adapter, deregister Hermes Deals runners, deploy production, write DB/Review/publication state, consume retailer-specific execution authorization, or mutate Cloudflare/repository settings merely because #250 is Ready or merged.
+Do **not** create a dummy LIVE-AUTH, place/change credentials, modify systemd, widen GitHub App permissions, activate any mutation-capable adapter, deregister Hermes Deals runners, deploy production, write DB/Review/publication state, consume retailer-specific execution authorization, or mutate Cloudflare/repository settings merely because #251 is Ready or merged.
