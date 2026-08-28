@@ -12,13 +12,15 @@ STATE_ROOT=/var/lib/rozkalns-deploy-executor
 SYSTEMD_ROOT=/etc/systemd/system
 
 PRIVATE_KEY_SOURCE=
+EXPECTED_SOURCE_SHA=
 ACTIVATE=false
 
 usage() {
   cat <<'EOF'
-Usage:
-  sudo scripts/install-deploy-executor-p8-dry-run.sh \
+Usage (run as root):
+  scripts/install-deploy-executor-p8-dry-run.sh \
     --private-key /absolute/path/to/rozkalns-deploy-executor.private-key.pem \
+    --expected-source-sha <reviewed-40-char-git-sha> \
     [--activate]
 
 This installer is P8 read-only/dry-run only. It refuses a non-empty or
@@ -32,6 +34,11 @@ while (($#)); do
     --private-key)
       [[ $# -ge 2 ]] || { echo "P8_INSTALL=FAIL missing_private_key_value" >&2; exit 64; }
       PRIVATE_KEY_SOURCE=$2
+      shift 2
+      ;;
+    --expected-source-sha)
+      [[ $# -ge 2 ]] || { echo "P8_INSTALL=FAIL missing_source_sha_value" >&2; exit 64; }
+      EXPECTED_SOURCE_SHA=$2
       shift 2
       ;;
     --activate)
@@ -52,6 +59,10 @@ done
 [[ ${EUID} -eq 0 ]] || { echo "P8_INSTALL=FAIL root_required" >&2; exit 1; }
 [[ -n ${PRIVATE_KEY_SOURCE} && ${PRIVATE_KEY_SOURCE} == /* ]] || {
   echo "P8_INSTALL=FAIL private_key_absolute_path_required" >&2
+  exit 64
+}
+[[ ${EXPECTED_SOURCE_SHA} =~ ^[0-9a-f]{40}$ ]] || {
+  echo "P8_INSTALL=FAIL expected_source_sha_invalid" >&2
   exit 64
 }
 
@@ -81,6 +92,19 @@ PACKAGE_FILES=(
   transport.py
 )
 
+SOURCE_PATHS=(
+  scripts/install-deploy-executor-p8-dry-run.sh
+  ops/deploy/executor-p8-dry-run-config.json
+  ops/deploy/executor-operations.json
+  ops/systemd/rozkalns-deploy-executor.service
+  ops/systemd/rozkalns-deploy-executor.timer
+  ops/bin/rozkalns-deploy-poll
+  ops/bin/rozkalns-deploy-dispatch
+)
+for name in "${PACKAGE_FILES[@]}"; do
+  SOURCE_PATHS+=("ops/lib/deploy_executor/${name}")
+done
+
 # ---- Complete preflight: no host mutation above this line. ----
 
 for path in \
@@ -99,11 +123,25 @@ for name in "${PACKAGE_FILES[@]}"; do
   }
 done
 
+/usr/bin/git -C "$REPO_ROOT" cat-file -e "${EXPECTED_SOURCE_SHA}^{commit}" 2>/dev/null || {
+  echo "P8_INSTALL=FAIL expected_source_sha_missing" >&2
+  exit 1
+}
+source_head=$(/usr/bin/git -C "$REPO_ROOT" rev-parse --verify HEAD)
+[[ "$source_head" == "$EXPECTED_SOURCE_SHA" ]] || {
+  echo "P8_INSTALL=FAIL source_head_mismatch" >&2
+  exit 1
+}
+/usr/bin/git -C "$REPO_ROOT" diff --quiet "$EXPECTED_SOURCE_SHA" -- "${SOURCE_PATHS[@]}" || {
+  echo "P8_INSTALL=FAIL reviewed_source_dirty" >&2
+  exit 1
+}
+
 [[ -f "$PRIVATE_KEY_SOURCE" && ! -L "$PRIVATE_KEY_SOURCE" ]] || {
   echo "P8_INSTALL=FAIL private_key_not_regular" >&2
   exit 1
 }
-key_mode=$(stat -c '%a' -- "$PRIVATE_KEY_SOURCE")
+key_mode=$(/usr/bin/stat -c '%a' -- "$PRIVATE_KEY_SOURCE")
 case "$key_mode" in
   400|600) ;;
   *)
@@ -116,7 +154,7 @@ esac
   exit 1
 }
 
-python3 - "$CONFIG_SOURCE" "$REGISTRY_SOURCE" <<'PY'
+/usr/bin/python3 - "$CONFIG_SOURCE" "$REGISTRY_SOURCE" <<'PY'
 import json
 import sys
 
@@ -143,27 +181,17 @@ if registry != {"schema_version": 1, "execution_enabled": False, "operations": [
     raise SystemExit("P8_INSTALL=FAIL production_registry_not_inert")
 PY
 
-if getent passwd "$SERVICE_USER" >/dev/null; then
-  user_shell=$(getent passwd "$SERVICE_USER" | cut -d: -f7)
-  user_group=$(id -gn "$SERVICE_USER")
-  [[ "$user_shell" == "/usr/sbin/nologin" || "$user_shell" == "/bin/false" ]] || {
-    echo "P8_INSTALL=FAIL existing_service_user_shell_mismatch" >&2
-    exit 1
-  }
-  [[ "$user_group" == "$SERVICE_GROUP" ]] || {
-    echo "P8_INSTALL=FAIL existing_service_user_group_mismatch" >&2
-    exit 1
-  }
+if /usr/bin/getent passwd "$SERVICE_USER" >/dev/null || /usr/bin/getent group "$SERVICE_GROUP" >/dev/null; then
+  echo "P8_INSTALL=FAIL existing_service_identity_requires_fresh_review" >&2
+  exit 1
 fi
 
 for target in \
+  "$INSTALL_ROOT" \
+  "$CONFIG_ROOT" \
+  "$STATE_ROOT" \
   "${SYSTEMD_ROOT}/rozkalns-deploy-executor.service" \
-  "${SYSTEMD_ROOT}/rozkalns-deploy-executor.timer" \
-  "${CONFIG_ROOT}/config.json" \
-  "${CONFIG_ROOT}/executor-operations.json" \
-  "${CONFIG_ROOT}/github-app.pem" \
-  "${INSTALL_ROOT}/poller" \
-  "${INSTALL_ROOT}/dispatcher"; do
+  "${SYSTEMD_ROOT}/rozkalns-deploy-executor.timer"; do
   [[ ! -e "$target" ]] || {
     echo "P8_INSTALL=FAIL existing_target_requires_fresh_review" >&2
     exit 1
@@ -171,6 +199,7 @@ for target in \
 done
 
 echo "P8_INSTALL_PREFLIGHT=PASS"
+echo "SOURCE_SHA=${EXPECTED_SOURCE_SHA}"
 echo "APP_ID=${EXPECTED_APP_ID}"
 echo "INSTALLATION_ID=${EXPECTED_INSTALLATION_ID}"
 echo "AUTHORIZATION_REPOSITORY_ID=${EXPECTED_REPOSITORY_ID}"
@@ -179,44 +208,40 @@ echo "RESULT_WRITER_ENABLED=false"
 
 # ---- Authorized P8 host mutation begins here. Errors stop; no auto rollback. ----
 
-if ! getent group "$SERVICE_GROUP" >/dev/null; then
-  groupadd --system "$SERVICE_GROUP"
-fi
-if ! getent passwd "$SERVICE_USER" >/dev/null; then
-  useradd \
-    --system \
-    --gid "$SERVICE_GROUP" \
-    --home-dir /nonexistent \
-    --no-create-home \
-    --shell /usr/sbin/nologin \
-    "$SERVICE_USER"
-fi
+/usr/sbin/groupadd --system "$SERVICE_GROUP"
+/usr/sbin/useradd \
+  --system \
+  --gid "$SERVICE_GROUP" \
+  --home-dir /nonexistent \
+  --no-create-home \
+  --shell /usr/sbin/nologin \
+  "$SERVICE_USER"
 
-install -d -o root -g root -m 0755 "$INSTALL_ROOT"
-install -d -o root -g root -m 0755 "${INSTALL_ROOT}/deploy_executor"
-install -d -o root -g root -m 0755 "$CONFIG_ROOT"
+/usr/bin/install -d -o root -g root -m 0755 "$INSTALL_ROOT"
+/usr/bin/install -d -o root -g root -m 0755 "${INSTALL_ROOT}/deploy_executor"
+/usr/bin/install -d -o root -g root -m 0755 "$CONFIG_ROOT"
 
 for name in "${PACKAGE_FILES[@]}"; do
-  install -o root -g root -m 0644 "${LIB_SOURCE}/${name}" "${INSTALL_ROOT}/deploy_executor/${name}"
+  /usr/bin/install -o root -g root -m 0644 "${LIB_SOURCE}/${name}" "${INSTALL_ROOT}/deploy_executor/${name}"
 done
-install -o root -g root -m 0755 "$POLLER_SOURCE" "${INSTALL_ROOT}/poller"
-install -o root -g root -m 0755 "$DISPATCH_SOURCE" "${INSTALL_ROOT}/dispatcher"
-install -o root -g root -m 0644 "$CONFIG_SOURCE" "${CONFIG_ROOT}/config.json"
-install -o root -g root -m 0444 "$REGISTRY_SOURCE" "${CONFIG_ROOT}/executor-operations.json"
-install -o root -g root -m 0400 "$PRIVATE_KEY_SOURCE" "${CONFIG_ROOT}/github-app.pem"
-install -o root -g root -m 0644 "$SERVICE_SOURCE" "${SYSTEMD_ROOT}/rozkalns-deploy-executor.service"
-install -o root -g root -m 0644 "$TIMER_SOURCE" "${SYSTEMD_ROOT}/rozkalns-deploy-executor.timer"
+/usr/bin/install -o root -g root -m 0755 "$POLLER_SOURCE" "${INSTALL_ROOT}/poller"
+/usr/bin/install -o root -g root -m 0755 "$DISPATCH_SOURCE" "${INSTALL_ROOT}/dispatcher"
+/usr/bin/install -o root -g root -m 0644 "$CONFIG_SOURCE" "${CONFIG_ROOT}/config.json"
+/usr/bin/install -o root -g root -m 0444 "$REGISTRY_SOURCE" "${CONFIG_ROOT}/executor-operations.json"
+/usr/bin/install -o root -g root -m 0400 "$PRIVATE_KEY_SOURCE" "${CONFIG_ROOT}/github-app.pem"
+/usr/bin/install -o root -g root -m 0644 "$SERVICE_SOURCE" "${SYSTEMD_ROOT}/rozkalns-deploy-executor.service"
+/usr/bin/install -o root -g root -m 0644 "$TIMER_SOURCE" "${SYSTEMD_ROOT}/rozkalns-deploy-executor.timer"
 
-systemctl daemon-reload
-systemd-analyze verify \
+/usr/bin/systemctl daemon-reload
+/usr/bin/systemd-analyze verify \
   "${SYSTEMD_ROOT}/rozkalns-deploy-executor.service" \
   "${SYSTEMD_ROOT}/rozkalns-deploy-executor.timer" >/dev/null
-systemd-analyze security --offline=yes \
+/usr/bin/systemd-analyze security --offline=yes --threshold=2.0 --no-pager \
   "${SYSTEMD_ROOT}/rozkalns-deploy-executor.service" >/dev/null
 
 if [[ "$ACTIVATE" == true ]]; then
-  systemctl start rozkalns-deploy-executor.service
-  systemctl enable --now rozkalns-deploy-executor.timer
+  /usr/bin/systemctl start rozkalns-deploy-executor.service
+  /usr/bin/systemctl enable --now rozkalns-deploy-executor.timer
 fi
 
 echo "P8_INSTALL=PASS"
