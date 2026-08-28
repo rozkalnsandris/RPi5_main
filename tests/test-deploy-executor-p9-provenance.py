@@ -56,12 +56,7 @@ def test_valid_governance() -> None:
         assert result.filename == provenance.GOVERNANCE_FILENAME
         assert result.payload["schema"] == provenance.GOVERNANCE_SCHEMA
         assert len(result.sha256) == 64
-        try:
-            result.payload["value"] = "tampered"
-        except TypeError:
-            pass
-        else:
-            raise AssertionError("trusted payload must be immutable")
+        assert type(result.payload) is dict
 
 
 def test_valid_baseline() -> None:
@@ -157,6 +152,64 @@ def test_reject_oversize() -> None:
         make_root(root)
         make_file(root, provenance.GOVERNANCE_FILENAME, b"x" * (provenance.MAX_EVIDENCE_BYTES + 1))
         expect_error(root, provenance.load_governance_evidence, "size")
+
+
+def test_reject_missing_no_follow_guard() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td) / "evidence"
+        make_root(root)
+        make_file(root, provenance.GOVERNANCE_FILENAME, payload(provenance.GOVERNANCE_SCHEMA))
+        with mock.patch.object(provenance, "EVIDENCE_ROOT", root), \
+             mock.patch.object(provenance.os, "O_NOFOLLOW", None):
+            try:
+                provenance.load_governance_evidence()
+            except provenance.ProvenanceError as exc:
+                assert "guards" in str(exc)
+            else:
+                raise AssertionError("expected missing O_NOFOLLOW guard rejection")
+
+
+def test_reject_missing_dir_fd_guard() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td) / "evidence"
+        make_root(root)
+        make_file(root, provenance.GOVERNANCE_FILENAME, payload(provenance.GOVERNANCE_SCHEMA))
+        with mock.patch.object(provenance, "EVIDENCE_ROOT", root), \
+             mock.patch.object(provenance.os, "supports_dir_fd", set()):
+            try:
+                provenance.load_governance_evidence()
+            except provenance.ProvenanceError as exc:
+                assert "dir_fd" in str(exc)
+            else:
+                raise AssertionError("expected missing dir_fd guard rejection")
+
+
+def test_payload_remains_compatible_with_strict_semantic_parser() -> None:
+    from datetime import datetime, timezone
+    from deploy_executor.p9_evidence import parse_governance_evidence
+
+    evidence = {
+        "schema": provenance.GOVERNANCE_SCHEMA,
+        "repository": "rozkalnsandris/ops-workflows",
+        "repository_id": 1328835922,
+        "observed_at": "2026-08-28T19:14:30Z",
+        "writer_set_sha256": "b" * 64,
+        "trusted": True,
+    }
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td) / "evidence"
+        make_root(root)
+        make_file(
+            root,
+            provenance.GOVERNANCE_FILENAME,
+            json.dumps(evidence, separators=(",", ":")).encode(),
+        )
+        loaded = load_with_test_identity(root, provenance.load_governance_evidence)
+        parsed = parse_governance_evidence(
+            loaded.payload,
+            server_time=datetime(2026, 8, 28, 19, 15, tzinfo=timezone.utc),
+        )
+        assert parsed.writer_set_sha256 == "b" * 64
 
 
 def test_no_path_argument_surface() -> None:

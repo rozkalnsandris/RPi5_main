@@ -33,11 +33,14 @@ Required future host ownership/mode:
 - each object is bounded to 64 KiB;
 - the executor has no API for caller-selected paths or filenames.
 
-The loader opens the directory and then the fixed filename with `dir_fd` and
-`O_NOFOLLOW` where available, validates ownership/mode/type/link/size using the
+The loader requires `O_NOFOLLOW`, `O_DIRECTORY`, `O_CLOEXEC`, and `dir_fd`
+support before reading anything; if those platform guards are unavailable it
+fails closed. It opens the directory and then the fixed filename with
+`O_NOFOLLOW` and `dir_fd`, validates ownership/mode/type/link/size using the
 opened descriptors, reads a bounded payload, re-checks file identity/size/time
 metadata after the read, requires strict UTF-8 JSON with the expected schema,
-and returns an immutable mapping plus SHA-256 of the exact bytes consumed.
+and returns a parser-compatible plain JSON object plus SHA-256 of the exact
+bytes consumed.
 
 The downstream P9 evidence parsers remain responsible for exact keys, freshness,
 repository/source/operation/target bindings and all operation-specific boolean
@@ -87,9 +90,10 @@ The source suite must prove:
 - directory mode/ownership drift rejects;
 - file mode/group drift rejects;
 - symlinks and hard links reject;
+- missing no-follow or `dir_fd` platform guards reject;
 - wrong evidence schema rejects;
 - oversized evidence rejects;
-- returned payload is immutable;
+- the returned payload remains a plain `dict` accepted by the strict P9 semantic parser;
 - public loader entrypoints accept no path argument.
 
 ## Explicit non-goals
