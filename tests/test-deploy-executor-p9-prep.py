@@ -292,6 +292,39 @@ class P9PrepTests(unittest.TestCase):
             )
         self.assertFalse(adapter.apply_called)
 
+    def test_p9_rejects_adapter_preflight_missing_required_safety_evidence(self):
+        cases = (
+            ({"execution_enabled": False, "privileged_dispatch_ready": False}, "read_only"),
+            ({"read_only": True, "privileged_dispatch_ready": False}, "execution_enabled"),
+            ({"read_only": True, "execution_enabled": False}, "privileged_dispatch_ready"),
+        )
+        for preflight_result, expected_error in cases:
+            with self.subTest(expected_error=expected_error):
+                class IncompleteAdapter(Adapter):
+                    def preflight(self, prepared):
+                        return preflight_result
+
+                adapter = IncompleteAdapter()
+                with self.assertRaisesRegex(P9CanaryError, expected_error):
+                    run_p9_dry_run_canary(
+                        issue_number=77,
+                        authority_client=AuthorityClient(),
+                        source_client=SourceClient(),
+                        governance=GovernanceEvidence("rozkalnsandris/ops-workflows", 1328835922, NOW, "e"*64, True),
+                        state_store=StateStore(), registry=object(), adapter_catalog=Catalog(adapter),
+                        normalize_ready_queue=lambda issue, **kwargs: Normalized(),
+                        validate_queue_binding=lambda accepted, queue: None,
+                        verify_source_evidence=verify_source_evidence,
+                        resolve_baseline=lambda operation, expected: BaselineEvidence(
+                            "hermes-deals.origin-path-registration.v1",
+                            "hermes-deals-origin-path-audit",
+                            True,
+                            "registration:observed",
+                        ),
+                        prepare_operation=lambda normalized: SimpleNamespace(adapter_id="x", execution_enabled=False),
+                    )
+                self.assertFalse(adapter.apply_called)
+
     def test_p9_rechecks_governance_before_final_authority_refetch(self):
         class DriftingAuthority(AuthorityClient):
             def __init__(self):
