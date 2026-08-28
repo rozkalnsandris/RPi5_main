@@ -1,0 +1,70 @@
+{
+  "schema": "rozkalns.deploy-executor-p6-attestation.v1",
+  "status": "SOURCE_ATTESTATION",
+  "execution_enabled": false,
+  "attested_runtime_source": {
+    "repository": "rozkalnsandris/RPi5_main",
+    "repository_id": 1323383044,
+    "sha": "cef684e8cde2da00de2f1591c58647a868e6acf3",
+    "pull_request": 244,
+    "github_verified": true,
+    "exact_main_ci": [
+      {"workflow": "Validate", "run_id": 33147154701, "run_number": 589, "conclusion": "success"},
+      {"workflow": "FAST-LANE policy drift", "run_id": 33147154712, "run_number": 44, "conclusion": "success"},
+      {"workflow": "GITHUB-ONLY policy drift", "run_id": 33147154776, "run_number": 33, "conclusion": "success"}
+    ],
+    "validate_jobs": {
+      "gitleaks": "success",
+      "validate": "success",
+      "public_automation_baseline": "success"
+    }
+  },
+  "authorization_surface": {
+    "repository": "rozkalnsandris/ops-workflows",
+    "repository_id": 1328835922,
+    "sha": "c9d6b3898a9eda98ce83c5ce77e2bfd49f3703d8",
+    "exact_main_ci": [
+      {"workflow": "Policy Merge Gate", "run_id": 33122863889, "conclusion": "success"},
+      {"workflow": "LIVE-AUTH contract", "run_id": 33122863915, "conclusion": "success"},
+      {"workflow": "Validate shared automation", "run_id": 33122864076, "conclusion": "success"}
+    ],
+    "source_identities": {
+      "queue_template_blob_sha": "5db2f30c9906e56918ce32af96cb6454ca201807",
+      "policy_blob_sha": "ddfee69cf04d4b7fbd2a46fce6ae30eace6496e6",
+      "schema_blob_sha": "b1b3ab2be8b578a64fb92be01a8fd8be7ae71240"
+    },
+    "authorization_reader_permission": "issues:read",
+    "authorization_reader_write": false
+  },
+  "first_target": {
+    "repository": "rozkalnsandris/rozkalns-cv",
+    "repository_id": 1325237749,
+    "sha": "d25730b20c41edff29a83927bff386751f053cd0",
+    "exact_main_ci": [
+      {"workflow": "CI", "run_id": 32900880228, "conclusion": "success"},
+      {"workflow": "GITHUB-ONLY policy drift", "run_id": 32900880639, "conclusion": "success"}
+    ],
+    "source_identities": {
+      "preflight_blob_sha": "2592e4e38e933f01409d5816c05defd22e661f6c",
+      "pull_helper_blob_sha": "c787789e77c31576310bed28da0fbc893cfabb5f",
+      "deploy_library_blob_sha": "ade60abbfea3cf56b1a56bbc1b2e0669b1a1b983",
+      "installer_blob_sha": "0f61e8d0eddb413c86beeb0eee6ded4b1f3161d5"
+    },
+    "existing_autonomous_controller_is_executor_adapter": false,
+    "required_rollback_policy": "BUILTIN_TRANSACTIONAL_V1"
+  },
+  "compatibility": {
+    "result": "PASS",
+    "production_registry_execution_enabled": false,
+    "production_operation_count": 0,
+    "p5_cv_adapter_mutation_enabled": false,
+    "poller_unit_installed": false,
+    "github_result_writer_enabled": false
+  },
+  "live_gates": {
+    "p7_github_app_or_permission_change_authorized": false,
+    "p8_host_install_authorized": false,
+    "p9_live_auth_creation_authorized": false,
+    "p10_production_mutation_authorized": false
+  }
+}
