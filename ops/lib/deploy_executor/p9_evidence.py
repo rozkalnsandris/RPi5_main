@@ -19,6 +19,9 @@ HERMES_BASELINE_RESOLVER = "hermes-deals.origin-path-registration.v1"
 MAX_EVIDENCE_AGE_SECONDS = 300
 SHA40_RE = re.compile(r"^[0-9a-f]{40}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+RFC3339_UTC_RE = re.compile(
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$"
+)
 
 GOVERNANCE_KEYS = frozenset(
     {
@@ -64,14 +67,14 @@ def _object(value: Any, *, keys: frozenset[str], where: str) -> Mapping[str, Any
 
 
 def _timestamp(value: Any, *, where: str) -> datetime:
-    if type(value) is not str or not value.endswith("Z"):
-        raise P9EvidenceError(f"{where} must be an RFC3339 UTC timestamp ending in Z")
+    if type(value) is not str or RFC3339_UTC_RE.fullmatch(value) is None:
+        raise P9EvidenceError(
+            f"{where} must be canonical RFC3339 UTC YYYY-MM-DDTHH:MM:SS[.fraction]Z"
+        )
     try:
         parsed = datetime.fromisoformat(value[:-1] + "+00:00")
     except ValueError as exc:
         raise P9EvidenceError(f"{where} is malformed") from exc
-    if parsed.tzinfo is None:
-        raise P9EvidenceError(f"{where} must be timezone-aware")
     return parsed.astimezone(timezone.utc)
 
 
