@@ -85,6 +85,7 @@ class HermesOriginObservation:
     target_alias: str
     source_repository: str
     registered_commit_sha: str
+    observed_source_commit_sha: str
     registration_source_repository: str
     installer_source_blob: str
     probe_source_blob: str
@@ -169,6 +170,8 @@ def build_hermes_origin_baseline_evidence(
     )
     if SHA40_RE.fullmatch(observation.registered_commit_sha) is None:
         raise P9ProducerError("registered Hermes source SHA is malformed")
+    if SHA40_RE.fullmatch(observation.observed_source_commit_sha) is None:
+        raise P9ProducerError("observed Hermes source SHA is malformed")
 
     registration_identity_ok = (
         observation.resolver_id == HERMES_BASELINE_RESOLVER
@@ -179,6 +182,7 @@ def build_hermes_origin_baseline_evidence(
     registered_source_match = (
         observation.registration_source_repository == HERMES_SOURCE_REPOSITORY
         and observation.source_repository == HERMES_SOURCE_REPOSITORY
+        and observation.registered_commit_sha == observation.observed_source_commit_sha
     )
     probe_identity_ok = observation.probe_source_blob == PROBE_SOURCE_BLOB
     dispatcher_identity_ok = observation.dispatcher_source_blob == DISPATCHER_SOURCE_BLOB
