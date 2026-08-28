@@ -330,7 +330,7 @@ class P8PrepTests(unittest.TestCase):
                 binary,
                 "security",
                 "--offline=yes",
-                "--threshold=2.0",
+                "--threshold=20",
                 "--no-pager",
                 str(SERVICE),
             ],
@@ -354,7 +354,7 @@ class P8PrepTests(unittest.TestCase):
             '"$INSTALL_ROOT"',
             '"$CONFIG_ROOT"',
             '"$STATE_ROOT"',
-            "--threshold=2.0",
+            "--threshold=20",
         )
         for marker in required:
             self.assertIn(marker, installer)
