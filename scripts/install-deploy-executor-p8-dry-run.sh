@@ -236,7 +236,7 @@ done
 /usr/bin/systemd-analyze verify \
   "${SYSTEMD_ROOT}/rozkalns-deploy-executor.service" \
   "${SYSTEMD_ROOT}/rozkalns-deploy-executor.timer" >/dev/null
-/usr/bin/systemd-analyze security --offline=yes --threshold=2.0 --no-pager \
+/usr/bin/systemd-analyze security --offline=yes --threshold=20 --no-pager \
   "${SYSTEMD_ROOT}/rozkalns-deploy-executor.service" >/dev/null
 
 if [[ "$ACTIVATE" == true ]]; then
