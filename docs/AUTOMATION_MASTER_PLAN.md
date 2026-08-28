@@ -306,28 +306,29 @@ Phase 4 target sequence after inventory:
 - [ ] Full rollback/health/readiness audit PASS.
 - [ ] Final architecture documented and issue #103 closed.
 
-### Cross-cutting Track X — owner-authorized pull deploy executor v1 — P5 SOURCE ONLY (P0/P1/P2/P3/P4 COMPLETE)
+### Cross-cutting Track X — owner-authorized pull deploy executor v1 — P6 SOURCE ONLY (P0/P1/P2/P3/P4/P5 COMPLETE)
 
 Roadmap: `RPi5_main#236`.
 Threat model / protocol: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_V1.md`.
 P5 audit: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_P5_AUDIT.md`.
+P6 attestation: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_P6_ATTESTATION.md`.
 
 This track standardizes a future owner-authorized GitHub -> outbound-polling RPi5 execution transport. It does **not** replace the ordered repository migration phases above and it does not make a READY queue item executable by itself.
 
 Current ordering rules:
 
 - the canonical production/live migration lane remains Phase 4 until the plan explicitly advances it;
-- P0 merged through #237, P1 through #238, P2 through #241, P3 through `RPi5_main#242` plus `ops-workflows#23`, and P4 through `RPi5_main#243`; the P5 selection baselines are `RPi5_main/main=660099cb401a8692b66cdf11510a7c1eb368215a` and `ops-workflows/main=c9d6b3898a9eda98ce83c5ce77e2bfd49f3703d8`;
-- the owner's fresh 2026-08-28 `turpini` continuation selects only P5 cross-repository interface/security audit source work after re-reading this plan, #236, the merged P3 LIVE-AUTH contract and the P4 executor framework;
-- P5 may bind exact reviewed source identities, add identity-only dispatcher IPC contracts, propose hardened non-installed systemd source, and prove a dormant first-target adapter contract with fixtures/tests;
-- `ops/deploy/executor-operations.json` must remain `execution_enabled=false` with zero production operations; P5 may use only audit/test registry fixtures for target matching;
-- the existing autonomous CV pull controller is not the owner-authorized executor adapter because it resolves current `origin/main` itself; the audited lower-level exact-SHA helper may be referenced only through a separate fixed adapter contract;
-- the CV helper's built-in rollback makes `BUILTIN_TRANSACTIONAL_V1` mandatory for that adapter; `NONE` must fail before mutation;
-- the P5 adapter must remain mutation-disabled and contain no generic execution bridge; P7+ live work remains separate;
+- P0 merged through #237, P1 through #238, P2 through #241, P3 through `RPi5_main#242` plus `ops-workflows#23`, P4 through `RPi5_main#243`, and P5 through `RPi5_main#244`;
+- merged P5 runtime/source candidate identity is `RPi5_main/main=cef684e8cde2da00de2f1591c58647a868e6acf3`; its exact-main Validate #589, Gitleaks/public baseline, FAST-LANE drift #44 and GITHUB-ONLY drift #33 are green;
+- P5-bound cross-repository identities remain `ops-workflows/main=c9d6b3898a9eda98ce83c5ce77e2bfd49f3703d8` and `rozkalns-cv/main=d25730b20c41edff29a83927bff386751f053cd0`, with their exact-main CI green and audited policy/helper blob identities unchanged;
+- the owner's fresh 2026-08-28 `turpini` continuation selects only P6 post-merge exact-main/cross-repository attestation source work;
+- P6 may update governance/evidence only; it must not change executor runtime code, the production registry, adapters or the proposed systemd unit;
+- `ops/deploy/executor-operations.json` remains `execution_enabled=false` with zero production operations, and the P5 CV adapter remains mutation-disabled;
+- the P6 governance commit is not a replacement runtime-source authorization: the attested P5 runtime/source candidate remains exact SHA `cef684e8cde2da00de2f1591c58647a868e6acf3` until a later reviewed source change explicitly supersedes it;
 - every source PR merge remains separately explicit owner authority;
-- P7 GitHub App creation/permission changes, P8 host installation, P9/P10 canaries and all later live execution remain blocked until this master plan separately names that exact step as eligible and the owner separately authorizes its live envelope.
+- P7 GitHub App creation/permission changes, P8 host installation, P9/P10 canaries and all later live execution remain blocked and require their own explicit live authorization.
 
-Critical authorization invariant established by P0 and enforced by P1-P5:
+Critical authorization invariant established by P0 and enforced by P1-P6:
 
 **An autonomous RPi5 credential must not have write authority over the GitHub surface from which owner authorization is accepted.**
 
@@ -348,7 +349,7 @@ Forbidden permanently for this track:
 - automatic retry/cleanup/alternate path after mutation starts;
 - automatic rollback unless the exact reviewed rollback policy is named in the queue, owner authorization and operation registry.
 
-P5 exit gate is one reviewed/green `RPi5_main` source PR proving the authorization/queue/dispatcher/first-target interfaces, empty production registry, dormant exact-SHA CV adapter contract, hardened proposed poller unit, secret scan and final diff review with zero GitHub App permission, credential, host/runtime, production, DB or Cloudflare mutation. After P5 reaches Ready, STOP for explicit owner merge. P7 is not implicitly authorized by Ready or merge.
+P6 exit gate is one reviewed/green `RPi5_main` source attestation PR proving P5 exact-main CI, unchanged cross-repository source identities/CI and the exact installation-candidate runtime source SHA, with zero runtime/registry/adapter/systemd/App/permission/credential/host/production mutation. After that PR is separately merged, re-read the resulting exact `main` and require exact-main CI green. Only then is P6 complete. P7 remains a separate explicit LIVE STOP.
 
 ## Scope-control checklist before every step
 
@@ -357,16 +358,15 @@ P5 exit gate is one reviewed/green `RPi5_main` source PR proving the authorizati
 3. Is this change required for that gate?
 4. Does it preserve existing production safety boundaries?
 5. Am I touching a repository or subsystem outside the phase scope?
-
 If question 3 is `no` or question 5 is `yes`, do not make the change.
 
 ## Current next action
 
-**Bounded explicit exception: #236 P5 cross-repository interface/security audit source is the immediate selected task; the canonical production/live lane remains Hermes Deals Phase 4.** Phase 3 of the main migration program is complete and must not be reopened merely to continue this cross-cutting track.
+**Bounded explicit exception: #236 P6 exact-main/cross-repository source attestation is the immediate selected task; the canonical production/live lane remains Hermes Deals Phase 4.** Phase 3 of the main migration program is complete and must not be reopened merely to continue this cross-cutting track.
 
-For #236 P5, change only tracked RPi5_main source/tests/docs required to bind the merged `ops-workflows` LIVE-AUTH contract, P1-P4 executor interfaces and one reviewed first-target helper contract. Keep the real production registry empty/disabled; use only dormant audit fixtures and an adapter whose `apply()` cannot mutate. The poller proposal must remain unprivileged with `NoNewPrivileges=true` and no sudo/Docker socket, while privileged IPC accepts identity only and independently revalidates authority. Do not create/modify a GitHub App, grant permissions, generate/place credentials, install host files, change root/sudoers/systemd/timers, activate an executor, create LIVE-AUTH or deploy production. P5 ends at a reviewed/green source PR and then requires explicit merge.
+For #236 P6, change only tracked RPi5_main governance/evidence needed to attest merged P5 exact-main and the unchanged `ops-workflows` / `rozkalns-cv` compatibility identities. Do not modify executor runtime code, `ops/deploy/executor-operations.json`, adapters or the proposed executor systemd unit. Record `cef684e8cde2da00de2f1591c58647a868e6acf3` as the installation-candidate runtime source identity, while making explicit that this is not host-install authority. Do not create/modify a GitHub App, grant permissions, generate/place credentials, install host files, change root/sudoers/systemd/timers, activate an executor, create LIVE-AUTH or deploy production. P6 ends only after the attestation PR is explicitly merged and exact-main CI is green.
 
-After P5 is completed or parked, return to the first incomplete Phase 4 Hermes Deals #384 current-state inventory/reconciliation unless a later fresh owner instruction and this master plan explicitly select the next executor prerequisite. Re-resolve exact current `hermes-deals/main`, #35/#39/#386/#384, open PRs/issues and relevant current continuity before any Phase 4 implementation.
+After P6 completion, return to the first incomplete Phase 4 Hermes Deals #384 current-state inventory/reconciliation unless a later fresh owner instruction and this master plan select another safe source prerequisite. **Do not begin P7 under a generic continuation:** P7 is a GitHub App/permission trust-boundary mutation and requires a separate explicit LIVE authorization.
 
 Do **not** start a generic Deals controller, install/refresh host artifacts, change root/sudoers/systemd/timers, deregister a runner, deploy production, write DB/Review/publication state, consume a retailer-specific execution authorization, or change GitHub/Cloudflare settings as part of the first Phase 4 gate.
 
