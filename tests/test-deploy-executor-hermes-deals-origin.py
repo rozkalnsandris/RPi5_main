@@ -25,8 +25,12 @@ from deploy_executor.hermes_deals_origin_adapter import (
     SOURCE_REPOSITORY_ID,
     HermesDealsOriginAuditAdapter,
 )
-from deploy_executor.queue_normalizer import QUEUE_REPOSITORY, normalize_ready_queue
-from deploy_executor.registry import RegistryError, load_registry
+from deploy_executor.queue_normalizer import (
+    QUEUE_REPOSITORY,
+    QueueNormalizationError,
+    normalize_ready_queue,
+)
+from deploy_executor.registry import load_registry
 
 FIXTURES = ROOT / "tests" / "fixtures" / "deploy_executor"
 PRODUCTION_REGISTRY = ROOT / "ops" / "deploy" / "executor-operations.json"
@@ -140,7 +144,7 @@ class HermesDealsOriginCanaryTests(unittest.TestCase):
             "`tools/runner/origin-path-rpi5-audit-dispatcher.sh` fixed reviewed selector",
             "`bin/arbitrary-command` attacker-selected path",
         )
-        with self.assertRaisesRegex(RegistryError, "UNKNOWN_OPERATION"):
+        with self.assertRaisesRegex(QueueNormalizationError, "UNKNOWN_OPERATION"):
             normalize_ready_queue(
                 issue, repository_full_name=QUEUE_REPOSITORY, registry=registry
             )
