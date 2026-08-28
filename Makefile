@@ -11,6 +11,7 @@ test:
 	python3 ./tests/test-deploy-executor-p8-prep.py
 	python3 ./tests/test-deploy-executor-p9-prep.py
 	python3 ./tests/test-deploy-executor-p9-evidence.py
+	python3 ./tests/test-deploy-executor-p9-provenance.py
 	bash ./tests/test-balcony-watering.sh
 	bash ./tests/test-balkons-log-mqtt-credential.sh
 	bash ./tests/test-balkons-log-legacy-set-contract.sh
