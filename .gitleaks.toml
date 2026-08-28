@@ -4,8 +4,10 @@ title = "RPi5_main Gitleaks policy"
 useDefault = true
 
 [allowlist]
-description = "Known non-secret Hermes Docker image tags in sanitized runtime-baseline evidence"
+description = "Known public non-secret source identity values and sanitized runtime-baseline image tags"
 regexTarget = "secret"
 regexes = [
   '''^main-[0-9a-f]{12}$''',
+  '''^c9d6b3898a9eda98ce83c5ce77e2bfd49f3703d8$''',
+  '''^9649c6c38b4bce83ee535557dc7e8e335f8c08ad$''',
 ]
