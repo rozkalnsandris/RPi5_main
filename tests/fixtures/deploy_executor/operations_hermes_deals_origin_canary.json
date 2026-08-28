@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "execution_enabled": false,
+  "operations": [
+    {
+      "operation_id": "hermes-deals.origin-path-audit.v1",
+      "source_repository": "rozkalnsandris/hermes-deals",
+      "queue_match": {
+        "target_alias": "hermes-deals-origin-path-audit",
+        "execution_location_class": "trusted-home-host",
+        "repository_entrypoint": "tools/runner/origin-path-rpi5-audit-dispatcher.sh",
+        "deploy_class": "STRICT_LIVE_AUTH_REQUIRED"
+      },
+      "target_alias": "hermes-deals-origin-path-audit",
+      "adapter_id": "hermes-deals.origin-path-audit.v1",
+      "authorization_class": "STRICT",
+      "ordinary_live_all_eligible": false,
+      "baseline": {
+        "kind": "resolver",
+        "resolver_id": "hermes-deals.origin-path-registration.v1"
+      },
+      "mutation_budget": [
+        {
+          "category": "hermes-deals.read-only-audit-invocation",
+          "max_operations": 1
+        }
+      ],
+      "rollback_policy": "NONE",
+      "exclusions": [
+        "production database writes",
+        "production deployment/cutover",
+        "restart/configuration mutation",
+        "parser/collector behavior changes",
+        "runner registration/deregistration",
+        "GitHub App/credential/permission changes"
+      ],
+      "dependencies": [
+        "source-repository-id:1317143994",
+        "migration-contract:hermes-deals#787",
+        "dispatcher-source-blob:f9bfd02c6d36bb54d5380e1f0c99a0195e2ff4bc",
+        "installer-source-blob:41f004420a0f5aed314aaefd796a54e14dbd17ea",
+        "probe-source-blob:2362e8eb578a7279c38fe4ed2a7d1edd05df891a",
+        "privileged-boundary:identity-only-dispatch-request-v1"
+      ],
+      "preflight": [
+        "LIVE-AUTH and queue envelope independently revalidated before any privileged request",
+        "source repository stable ID is 1317143994 and authorized SHA is merged/reachable from current main",
+        "exact authorized source SHA CI is successful",
+        "registered dispatcher/probe identities and root-owned registration are independently revalidated",
+        "poller remains unprivileged and sends identity only across the privileged boundary",
+        "operation remains read-only with rollback policy NONE and one invocation maximum"
+      ],
+      "postconditions": [
+        "sanitized dispatcher manifest is bound to authorized commit SHA and requested as-of date",
+        "production_apply_authorized is false",
+        "production_database_write is false",
+        "production_deployment is false",
+        "restart_or_configuration_mutation is false",
+        "reporting failure cannot authorize or replay a second execution"
+      ],
+      "required_github_evidence": [
+        "source repository stable identity",
+        "authorized SHA is merged/reachable from current main",
+        "exact-SHA CI completed successfully",
+        "dispatcher installer and probe source blobs match the audited Hermes Deals identities",
+        "LIVE-AUTH and READY queue remain separate authority and eligibility records"
+      ]
+    }
+  ]
+}
