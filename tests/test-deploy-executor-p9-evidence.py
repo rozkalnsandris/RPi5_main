@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 import sys
@@ -94,6 +94,20 @@ class P9EvidenceTests(unittest.TestCase):
                 governance(observed_at="2026-08-28T19:15:01Z"), server_time=NOW
             )
 
+    def test_governance_evidence_rejects_noncanonical_rfc3339_utc_shapes(self):
+        for observed_at in (
+            "2026-08-28Z",
+            "2026-08-28 19:14:30Z",
+            "2026-08-28T19:14Z",
+            "2026-08-28T19:14:30+00:00",
+        ):
+            with self.subTest(observed_at=observed_at), self.assertRaisesRegex(
+                P9EvidenceError, "canonical RFC3339 UTC"
+            ):
+                parse_governance_evidence(
+                    governance(observed_at=observed_at), server_time=NOW
+                )
+
     def test_hermes_baseline_accepts_only_exact_authorized_source_and_safety_attestation(self):
         result = resolve_hermes_origin_baseline(
             operation(),
@@ -163,13 +177,18 @@ class P9EvidenceTests(unittest.TestCase):
                 server_time=NOW,
             )
 
-    def test_hermes_baseline_rejects_stale_future_and_non_utc_evidence(self):
-        for observed_at in (
-            "2026-08-28T19:00:00Z",
-            "2026-08-28T19:15:01Z",
-            "2026-08-28T19:14:30+00:00",
-        ):
-            with self.subTest(observed_at=observed_at), self.assertRaises(P9EvidenceError):
+    def test_hermes_baseline_rejects_stale_future_and_noncanonical_evidence_time(self):
+        cases = (
+            ("2026-08-28T19:00:00Z", "stale"),
+            ("2026-08-28T19:15:01Z", "future"),
+            ("2026-08-28T19:14:30+00:00", "canonical RFC3339 UTC"),
+            ("2026-08-28 19:14:30Z", "canonical RFC3339 UTC"),
+            ("2026-08-28T19:14Z", "canonical RFC3339 UTC"),
+        )
+        for observed_at, error in cases:
+            with self.subTest(observed_at=observed_at), self.assertRaisesRegex(
+                P9EvidenceError, error
+            ):
                 resolve_hermes_origin_baseline(
                     operation(),
                     {"kind": "resolver", "value": HERMES_BASELINE_RESOLVER},
