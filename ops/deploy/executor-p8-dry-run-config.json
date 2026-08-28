@@ -1,0 +1,14 @@
+{
+  "schema": "rozkalns.deploy-executor-p8-dry-run-config.v1",
+  "mode": "READ_ONLY_DRY_RUN",
+  "app_id": 4748870,
+  "installation_id": 157217641,
+  "authorization_repository": "rozkalnsandris/ops-workflows",
+  "authorization_repository_id": 1328835922,
+  "owner_login": "rozkalnsandris",
+  "owner_id": 277435981,
+  "poll_interval_seconds": 120,
+  "issue_title_prefix": "[LIVE-AUTH][PENDING] ",
+  "mutation_dispatch_enabled": false,
+  "result_writer_enabled": false
+}
