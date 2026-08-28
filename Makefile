@@ -7,6 +7,7 @@ test:
 	python3 ./tests/test-deploy-executor-p2.py
 	python3 ./tests/test-deploy-executor-p4.py
 	python3 ./tests/test-deploy-executor-p5.py
+	python3 ./tests/test-deploy-executor-hermes-deals-origin.py
 	bash ./tests/test-balcony-watering.sh
 	bash ./tests/test-balkons-log-mqtt-credential.sh
 	bash ./tests/test-balkons-log-legacy-set-contract.sh
