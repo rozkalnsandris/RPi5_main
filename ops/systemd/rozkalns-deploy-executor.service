@@ -1,0 +1,45 @@
+[Unit]
+Description=Rozkalns owner-authorized deploy executor poller
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=rozkalns-deploy-executor
+Group=rozkalns-deploy-executor
+UMask=0077
+ExecStart=/usr/local/libexec/rozkalns-deploy-executor/poller
+Restart=on-failure
+RestartSec=120s
+
+# P5 source contract only. The future poller is unprivileged and may not cross
+# a sudo/root boundary. Privileged mutation dispatch is a separate interface.
+NoNewPrivileges=true
+PrivateTmp=true
+RemoveIPC=true
+RestrictNamespaces=true
+ProtectProc=invisible
+ProcSubset=pid
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectHostname=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/rozkalns-deploy-executor
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+[Install]
+WantedBy=multi-user.target

@@ -16,6 +16,13 @@ class PreparedOperation:
     operation_id: str
     adapter_id: str
     execution_enabled: bool
+    source_repository: str
+    source_sha: str
+    target_alias: str
+    rollback_policy: str
+    mutation_budget: tuple[tuple[str, int], ...]
+    exclusions: tuple[str, ...]
+    dependencies: tuple[str, ...]
     normalized_queue_json: str
     preflight_checks: tuple[str, ...]
     postcondition_checks: tuple[str, ...]
@@ -24,7 +31,12 @@ class PreparedOperation:
 
 @runtime_checkable
 class OperationAdapter(Protocol):
-    """P4 interface only. No production adapter is registered or invoked in P4."""
+    """Fixed project adapter interface.
+
+    P5 may register source-only/dormant adapters for interface proof, but the
+    production registry remains mutation-disabled. A concrete adapter must
+    independently reject an unsupported rollback or mutation envelope.
+    """
 
     adapter_id: str
 
@@ -56,10 +68,20 @@ class AdapterCatalog:
 
 def prepare_operation(normalized: NormalizedQueue) -> PreparedOperation:
     spec: OperationSpec = normalized.operation
+    queue = normalized.as_protocol_queue()
     return PreparedOperation(
         operation_id=spec.operation_id,
         adapter_id=spec.adapter_id,
         execution_enabled=normalized.execution_enabled,
+        source_repository=queue["source_repository"],
+        source_sha=queue["source_sha"],
+        target_alias=queue["target_alias"],
+        rollback_policy=spec.rollback_policy,
+        mutation_budget=tuple(
+            (budget.category, budget.max_operations) for budget in spec.mutation_budget
+        ),
+        exclusions=spec.exclusions,
+        dependencies=tuple(queue["dependencies"]),
         normalized_queue_json=normalized.canonical_json,
         preflight_checks=spec.preflight,
         postcondition_checks=spec.postconditions,
