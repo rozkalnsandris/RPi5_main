@@ -1,0 +1,12 @@
+[Unit]
+Description=Poll owner-authorized deploy queue every two minutes
+
+[Timer]
+OnBootSec=30s
+OnUnitInactiveSec=2min
+AccuracySec=5s
+Persistent=true
+Unit=rozkalns-deploy-executor.service
+
+[Install]
+WantedBy=timers.target

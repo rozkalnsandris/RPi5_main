@@ -1,0 +1,16 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import sys
+
+
+def main() -> int:
+    if len(sys.argv) != 1:
+        print("DEPLOY_EXECUTOR_DISPATCH=DISABLED unexpected_arguments=true", file=sys.stderr)
+        return 64
+    print("DEPLOY_EXECUTOR_DISPATCH=DISABLED mutation_dispatch=false", file=sys.stderr)
+    return 78
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

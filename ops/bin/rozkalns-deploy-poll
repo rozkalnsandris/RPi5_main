@@ -1,0 +1,47 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+import sys
+
+HERE = Path(__file__).resolve().parent
+SOURCE_LIB = HERE.parent / "lib"
+if SOURCE_LIB.is_dir():
+    sys.path.insert(0, str(SOURCE_LIB))
+
+from deploy_executor.p8_poller import run
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Run one read-only Rozkalns Deploy Executor P8 poll iteration"
+    )
+    parser.add_argument(
+        "--config",
+        default="/etc/rozkalns-deploy-executor/config.json",
+    )
+    parser.add_argument(
+        "--registry",
+        default="/etc/rozkalns-deploy-executor/executor-operations.json",
+    )
+    parser.add_argument(
+        "--state-dir",
+        default="/var/lib/rozkalns-deploy-executor",
+    )
+    parser.add_argument("--credential", required=True)
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    return run(
+        config_path=args.config,
+        registry_path=args.registry,
+        state_dir=args.state_dir,
+        credential_path=args.credential,
+    )
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
