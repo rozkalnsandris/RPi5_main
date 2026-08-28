@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 from datetime import datetime, timedelta, timezone
 import json
-import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -49,7 +48,10 @@ class FakeRequester:
         if method == "GET" and path == "/":
             return RawResponse(200, {"date": date}, {})
         if method == "GET" and path == "/app/installations/157217641":
-            permissions = {"issues": "write" if self.write_permission else "read", "metadata": "read"}
+            permissions = {
+                "issues": "write" if self.write_permission else "read",
+                "metadata": "read",
+            }
             return RawResponse(
                 200,
                 {"date": date},
@@ -188,7 +190,10 @@ class P8PrepTests(unittest.TestCase):
             ],
         )
         body = json.loads(requester.calls[-1][3].decode())
-        self.assertEqual(body, {"repository_ids": [1328835922], "permissions": {"issues": "read"}})
+        self.assertEqual(
+            body,
+            {"repository_ids": [1328835922], "permissions": {"issues": "read"}},
+        )
         for _method, _path, headers, _body in requester.calls:
             authorization = headers.get("Authorization", "")
             self.assertNotIn(token.value, authorization)
@@ -272,11 +277,7 @@ class P8PrepTests(unittest.TestCase):
                     {
                         "schema_version": 1,
                         "execution_enabled": False,
-                        "operations": [
-                            {
-                                "operation_id": "x",
-                            }
-                        ],
+                        "operations": [{"operation_id": "x"}],
                     }
                 ),
                 encoding="utf-8",
@@ -320,12 +321,19 @@ class P8PrepTests(unittest.TestCase):
         for forbidden in ("sudo", "/var/run/docker.sock", "bash -c", "sh -c"):
             self.assertNotIn(forbidden, non_comments)
 
-    def test_systemd_offline_security_analysis_passes_when_available(self):
+    def test_systemd_offline_security_analysis_passes_threshold_when_available(self):
         binary = shutil.which("systemd-analyze")
         if binary is None:
             self.skipTest("systemd-analyze is unavailable")
         proc = subprocess.run(
-            [binary, "security", "--offline=yes", str(SERVICE)],
+            [
+                binary,
+                "security",
+                "--offline=yes",
+                "--threshold=2.0",
+                "--no-pager",
+                str(SERVICE),
+            ],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -333,6 +341,23 @@ class P8PrepTests(unittest.TestCase):
         )
         self.assertEqual(proc.returncode, 0, proc.stdout)
         self.assertIn("Overall exposure level", proc.stdout)
+
+    def test_installer_binds_exact_source_and_requires_clean_first_install(self):
+        installer = INSTALLER.read_text(encoding="utf-8")
+        required = (
+            "--expected-source-sha",
+            "EXPECTED_SOURCE_SHA",
+            '/usr/bin/git -C "$REPO_ROOT" cat-file -e',
+            '/usr/bin/git -C "$REPO_ROOT" rev-parse --verify HEAD',
+            '/usr/bin/git -C "$REPO_ROOT" diff --quiet "$EXPECTED_SOURCE_SHA"',
+            "existing_service_identity_requires_fresh_review",
+            '"$INSTALL_ROOT"',
+            '"$CONFIG_ROOT"',
+            '"$STATE_ROOT"',
+            "--threshold=2.0",
+        )
+        for marker in required:
+            self.assertIn(marker, installer)
 
     def test_runtime_entrypoints_and_installer_expose_no_mutation_bridge(self):
         poller = POLLER.read_text(encoding="utf-8").lower()
