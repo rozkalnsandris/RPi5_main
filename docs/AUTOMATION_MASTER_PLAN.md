@@ -246,18 +246,18 @@ Phase 3 exit decision:
 `CV_REPOSITORY_SELF_HOSTED_RUNNER_COUNT=0`
 `CV_LEGACY_RUNNER_RETIREMENT=PASS`
 
-### Phase 4 — Hermes Deals public-repository execution migration — CURRENT: SOURCE CANARY MERGED / LIVE ACTIVATION STOP
+### Phase 4 — Hermes Deals public-repository execution migration — CURRENT: SOURCE CANARY MERGED / P8 PREP SOURCE
 
 Hermes Deals Phase 4 remains the canonical production/live migration lane. Historical checklists are evidence only; current execution must re-resolve live repository state before every consequential step.
 
 Current source anchors after the 2026-08-28 reconciliation:
 
 - `hermes-deals/main=2fbde52cc5b6661343dca3fd967d8112cb2bffbe` (`hermes-deals#787` squash merge);
-- `RPi5_main/main=e97cc69f29a66e208d66cda6d7003bb5d828494a` (`RPi5_main#247` squash merge);
+- `RPi5_main/main=e1649f87d908c311727ac5ab6958a48a4280f359` (`RPi5_main#248` squash merge);
 - `ops-workflows/main=c9d6b3898a9eda98ce83c5ce77e2bfd49f3703d8`;
-- exact-main checks for `RPi5_main@e97cc69f29a66e208d66cda6d7003bb5d828494a` are green: validate, Gitleaks, public automation baseline, FAST-LANE policy drift and GITHUB-ONLY policy drift.
+- exact-main checks for `RPi5_main@e1649f87d908c311727ac5ab6958a48a4280f359` are green: validate, Gitleaks, public automation baseline, FAST-LANE policy drift and GITHUB-ONLY policy drift.
 
-Completed Phase 4 source gates:
+Completed Phase 4 source/live gates:
 
 - [x] Current Hermes Deals governance/open-work inventory was re-read before implementation.
 - [x] `hermes-deals#787` froze the current public RPi5 execution inventory and capability grouping: 79 workflows total, 52 self-hosted workflows, with separate audit and release trust domains.
@@ -266,13 +266,13 @@ Completed Phase 4 source gates:
 - [x] `RPi5_main#247` added and merged a dormant STRICT source contract for `hermes-deals.origin-path-audit.v1` with exact Hermes Deals repository/helper source identity bindings and adversarial tests.
 - [x] The production executor registry remains unchanged and disabled: `execution_enabled=false`, `operations=[]`.
 - [x] The Hermes Deals canary adapter remains validation-only; `apply()` fails closed and the current self-hosted origin-audit path remains unchanged.
+- [x] The P0 authorization-surface trust-root audit completed fail-closed before P7; unapproved Issues writers were removed from the accepted `ops-workflows` authority surface.
+- [x] P7 created `Rozkalns Deploy Executor` as a private GitHub App, installed only on `ops-workflows`, with Issues read-only plus Metadata read, webhook disabled, and no write permission. The read-only App/scope canary passed for App ID `4748870` and installation ID `157217641` with `REPOSITORY_COUNT=1` and `GITHUB_REPOSITORY_WRITE_PERFORMED=false`.
 
 Phase 4 next gates:
 
-- [ ] Immediately before any host or permission activation, fresh-read and re-prove every producer/consumer identity used by the selected canary, including current `hermes-deals/main`, current `RPi5_main/main`, current `ops-workflows/main`, exact-main CI, dispatcher/installer/probe source identities, authorization repository identity and the exact privileged-boundary contract.
-- [ ] Complete the authorization-surface governance audit required by P0 before accepting LIVE-AUTH: prove the accepted `ops-workflows` issue surface has no unapproved human/App/workflow/token writer. Unknown or incomplete writer scope fails closed.
-- [ ] P7 GitHub App creation/permission/install is a separate explicit LIVE STOP. Generic `START`/`turpini`, source merge, queue READY or historical authorization does not authorize it.
-- [ ] P8 host installation/credential/systemd/privilege-boundary work is a separate explicit LIVE STOP after P7 is proven.
+- [ ] `RPi5_main#249` must first make the P8 read-only poller/timer/credential/install contract reviewable and installable while keeping production mutation dispatch disabled.
+- [ ] P8 host installation/credential/systemd work may begin only after #249 is merged, the exact merged main CI is green, and a fresh cross-repository/JIT preflight binds the exact merged source. A historical or pre-source P8 authorization is not a substitute for that exact-source gate.
 - [ ] P9 genuine read-only authorization canary must prove end-to-end control-plane behavior with `PRODUCTION_MUTATION_STARTED=false` before any live mutation canary.
 - [ ] Only after the replacement path is proven may the current Hermes Deals self-hosted canary runner/path be retired, and runner retirement itself remains separately owner-authorized.
 
@@ -307,23 +307,24 @@ Do not use this phase to consume retailer-specific execution authorizations, cha
 - [ ] Full rollback/health/readiness audit PASS.
 - [ ] Final architecture documented and issue #103 closed.
 
-### Cross-cutting Track X — owner-authorized pull deploy executor v1 — P6 COMPLETE / P7 LIVE STOP
+### Cross-cutting Track X — owner-authorized pull deploy executor v1 — P7 COMPLETE / P8 PREP SOURCE
 
 Roadmap: `RPi5_main#236`.
 Threat model / protocol: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_V1.md`.
 P5 audit: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_P5_AUDIT.md`.
 P6 attestation: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_P6_ATTESTATION.md`.
+P8 prep: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_P8_PREP.md`.
 Hermes Deals dormant canary contract: `docs/HERMES_DEALS_ORIGIN_PULL_CANARY_SOURCE.md`.
 
-P0 through P6 are source-complete and merged. The latest reviewed RPi5 source containing the dormant Hermes Deals canary is `e97cc69f29a66e208d66cda6d7003bb5d828494a`, and its exact-main checks are green. This SHA is source evidence only; it is not host-install or live-execution authority.
+P0 through P6 are source-complete and merged. P7 is live-complete: the dedicated authorization reader App is `Rozkalns Deploy Executor`, App ID `4748870`, installation ID `157217641`, installed on exactly `rozkalnsandris/ops-workflows` with Issues read-only plus Metadata read and no GitHub write permission. Its read-only permission/scope canary passed without any P8 host mutation.
 
 Critical P0 authorization invariant remains binding:
 
 **An autonomous RPi5 credential must not have write authority over the GitHub surface from which owner authorization is accepted.**
 
-The roadmap body's historical Issues read/write Deploy Executor App text remains superseded by P0 review/checkpoints. The authorization reader defaults to `ops-workflows` only with Issues read-only plus minimum metadata. Result reporting, if later implemented, must use a separately reviewed non-authority channel and must not gain the ability to mutate accepted LIVE-AUTH authority.
+The roadmap body's historical Issues read/write Deploy Executor App text remains superseded by P0 review/checkpoints. The authorization reader is `ops-workflows` only with Issues read-only plus minimum metadata. Result reporting, if later implemented, must use a separately reviewed non-authority channel and must not gain the ability to mutate accepted LIVE-AUTH authority.
 
-Before P7 can be authorized, the accepted authorization surface must be audited as a trust root: collaborators/teams, installed Apps/integrations, repository/workflow `GITHUB_TOKEN` permissions, explicit issue-write permissions and token/secret-based issue mutation paths must be understood. Any unapproved or unknown writer keeps the executor mutation-disabled; if the writer set cannot be completely established, move authorization to a separately owner-approved isolated repository rather than broadening executor permissions.
+The P7 trust-root review established the accepted `ops-workflows` authority surface before App creation. The dedicated reader then proved exact single-repository scope and no write capability. Any later collaborator/App/workflow/token writer drift or unknown writer scope must fail closed before P9/P10 authority can be accepted.
 
 The future transport remains data-only:
 
@@ -340,7 +341,9 @@ Forbidden permanently for this track:
 - automatic retry/cleanup/alternate path after mutation starts;
 - automatic rollback unless the exact reviewed rollback policy is named in the queue, owner authorization and operation registry.
 
-P7 is the next executor phase and is a LIVE STOP. It must not begin from a generic continuation. App creation/install, permission changes, private-key generation/placement, repository-settings changes and any other trust-boundary mutation require a separate explicit owner authorization after the read-only authorization-surface audit is complete and reviewed.
+The first P8 JIT preflight stopped before mutation because the merged source contained only a proposed systemd unit and no installable poller/timer entrypoint. No RPi5 identity, file, credential, directory, service or timer was changed, and the private key remained off-host. `RPi5_main#249` is the source-only prerequisite that adds a read-only oneshot poller, timer, `LoadCredential` contract, exact-source-bound installer, hardened sandbox checks and an explicit mutation-disabled dispatcher while leaving the production registry empty/disabled.
+
+P8 host activation must not run from this source PR or from a generic continuation. After #249 is explicitly merged and exact-main CI is green, freshly bind the exact merged SHA, P7 App/installation scope, `ops-workflows` trust root, production registry and host baseline. Obtain an exact P8 live authorization for that merged source before the first credential/user/file/systemd mutation. P9 and P10 remain separate gates.
 
 ## Scope-control checklist before every step
 
@@ -353,8 +356,8 @@ If question 3 is `no` or question 5 is `yes`, do not make the change.
 
 ## Current next action
 
-**SOURCE/READ-ONLY ONLY:** reconcile and review this Phase 4 post-canary plan update. After it is merged and exact-main CI is green, the next technical work permitted by a generic continuation is read-only evidence collection/revalidation only.
+**SOURCE ONLY:** complete review/CI for `RPi5_main#249` P8 dry-run host preparation. The PR itself performs no host mutation and does not authorize P8 installation.
 
-Do **not** begin P7 App creation/install, change permissions, generate/place credentials, install executor/broker host components, change root/sudoers/systemd/timers, create LIVE-AUTH, deregister Hermes Deals runners, deploy production, write DB/Review/publication state, consume retailer-specific execution authorization, or mutate Cloudflare/repository settings under generic `START`/`turpini`.
+After #249 is explicitly merged and exact-main CI is green, perform a fresh read-only JIT preflight against the exact merged SHA and current P7/`ops-workflows` trust-root state, then STOP for an exact P8 live authorization bound to that source and host baseline.
 
-When the read-only authorization-surface and cross-repository evidence are complete, STOP and request the exact separately owner-authorized LIVE gate for P7 if the prerequisites pass.
+Do **not** place the Deploy Executor private key on RPi5, create the executor user/group/state directories, install/reload/start/enable systemd, create LIVE-AUTH, deregister Hermes Deals runners, deploy production, write DB/Review/publication state, consume retailer-specific execution authorization, or mutate Cloudflare/repository settings merely because #249 is Ready or merged.
