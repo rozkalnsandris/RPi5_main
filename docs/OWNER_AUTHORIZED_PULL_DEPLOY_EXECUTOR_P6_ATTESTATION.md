@@ -41,9 +41,9 @@ Exact-main push checks:
 
 P5-bound source identities still resolve unchanged at this exact main:
 
-- deploy queue template blob: `5db2f30c9906e56918ce32af96cb6454ca201807`
-- LIVE-AUTH policy blob: `ddfee69cf04d4b7fbd2a46fce6ae30eace6496e6`
-- LIVE-AUTH schema blob: `b1b3ab2be8b578a64fb92be01a8fd8be7ae71240`
+- deploy queue template source identity: `5db2f30c9906e56918ce32af96cb6454ca201807`
+- policy source identity: `ddfee69cf04d4b7fbd2a46fce6ae30eace6496e6`
+- schema source identity: `b1b3ab2be8b578a64fb92be01a8fd8be7ae71240`
 
 The effective authorization-reader trust model remains the merged P0/P3 model: Issues read-only on the accepted authorization surface. Historical roadmap prose proposing Issues write is superseded and is not revived by P6.
 
@@ -62,10 +62,10 @@ Exact-main push checks:
 
 P5-bound source identities still resolve unchanged at this exact main:
 
-- pull preflight blob: `2592e4e38e933f01409d5816c05defd22e661f6c`
-- exact-SHA pull helper blob: `c787789e77c31576310bed28da0fbc893cfabb5f`
-- deploy library blob: `ade60abbfea3cf56b1a56bbc1b2e0669b1a1b983`
-- pull-deploy installer blob: `0f61e8d0eddb413c86beeb0eee6ded4b1f3161d5`
+- pull preflight source identity: `2592e4e38e933f01409d5816c05defd22e661f6c`
+- exact-SHA pull helper source identity: `c787789e77c31576310bed28da0fbc893cfabb5f`
+- deploy library source identity: `ade60abbfea3cf56b1a56bbc1b2e0669b1a1b983`
+- pull-deploy installer source identity: `0f61e8d0eddb413c86beeb0eee6ded4b1f3161d5`
 
 The P5 compatibility decision is unchanged: the existing autonomous CV controller is not the owner-authorized executor adapter because it resolves current `origin/main` itself. Only the lower-level exact-SHA helper contract is compatible with a future fixed adapter, and it requires `rollback_policy=BUILTIN_TRANSACTIONAL_V1`.
 
