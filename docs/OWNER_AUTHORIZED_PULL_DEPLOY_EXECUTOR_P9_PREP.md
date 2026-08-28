@@ -1,6 +1,6 @@
 # Owner-authorized deploy executor v1 — P9 read-only canary source preparation
 
-Status: **P9 SOURCE PREP ONLY — NO LIVE AUTHORIZATION / NO HOST MUTATION**
+Status: **P9 CORE MERGED — EVIDENCE/RUNTIME PREREQUISITES STILL SOURCE-ONLY**
 Roadmap: `RPi5_main#236`
 
 P8 is complete and accepted on RPi5 at reviewed source
@@ -9,17 +9,24 @@ poller is active on its timer, authenticated read-only polling succeeds, the
 production operation registry remains empty/disabled, the dispatcher remains
 mutation-disabled, and `PRODUCTION_MUTATION_STARTED=false`.
 
-P9 is a different gate. It must use a genuine owner decision bound to a genuine
-READY deployment queue item; this source change must not create a dummy
+The P9 decision core from `RPi5_main#250` is merged on `RPi5_main/main` at
+`d425f98db85fc2ffdffb2d66f6b34727e5e75b07`; exact-main Validate #612 and
+policy checks passed. This does **not** make P9 live-ready. The next source gate
+is `RPi5_main#251`, which freezes fail-closed JIT governance and sanitized
+operation-baseline evidence contracts without adding a live entrypoint or host
+read/mutation path.
+
+P9 is a different gate from P8. It must use a genuine owner decision bound to a
+genuine READY deployment queue item; source preparation must not create a dummy
 `[LIVE-AUTH]`, turn a WAITING/BLOCKED queue READY, install a credential, change
 systemd, widen GitHub App permissions, or execute a production adapter.
 
 ## P9 source goal
 
-Prepare the pure read-only decision core that can eventually produce
-`DRY_RUN_READY` only after all authority/evidence gates pass. This gate adds no
-live entrypoint and does not modify the P8 poller, systemd units, installed
-credentials, or the production registry.
+The merged pure read-only decision core can eventually produce `DRY_RUN_READY`
+only after all authority/evidence gates pass. It adds no live entrypoint and
+does not modify the P8 poller, systemd units, installed credentials, or the
+production registry.
 
 The future P9 invocation must compose the already-reviewed components rather
 than replace them:
@@ -89,9 +96,10 @@ The same attestation is checked against a second fresh GitHub server clock
 immediately before the final LIVE-AUTH unchanged-body re-fetch. Any stale,
 unknown or untrusted writer surface fails closed.
 
-How the JIT writer-set attestation is produced and placed on RPi5 remains a
-separate reviewed source/host boundary. This source prep does not hardcode a
-PASS or grant admin/write permissions to the authorization App.
+`RPi5_main#251` adds only the strict source parser/schema for this evidence. The
+producer and placement/provenance mechanism remain a separate reviewed
+source/host boundary: the unprivileged executor must not be able to mint its
+own `trusted=true` attestation.
 
 ## Baseline resolver boundary
 
@@ -99,13 +107,21 @@ P9 cannot emit `DRY_RUN_READY` from queue/source/CI evidence alone. The selected
 operation must also supply a read-only resolver for its exact expected target
 baseline.
 
-The dormant Hermes Deals canary currently names
-`hermes-deals.origin-path-registration.v1`. That resolver is not yet wired into
-the P8 runtime, so a genuine Hermes Deals P9 canary remains blocked until its
-read-only resolver contract and any required host evidence path are separately
-reviewed. Do not invent or inspect protected runtime paths to bypass this gate.
+The dormant Hermes Deals canary names
+`hermes-deals.origin-path-registration.v1`. `RPi5_main#251` freezes a sanitized
+baseline evidence schema bound to the exact operation/target/source SHA and
+explicit registration/probe/dispatcher/workflow/read-only assertions. It does
+not authorize direct reads of the root-owned registration or other protected
+runtime paths.
 
-## Source files in this prep gate
+The future producer for that sanitized evidence must itself be narrowly
+reviewed, source-identified and separately authorized for any protected host
+inspection or file placement. Do not broaden poller permissions or create a
+generic root-read/helper capability to bypass this gate.
+
+## Source files in the merged core and evidence follow-up
+
+Merged by `RPi5_main#250`:
 
 - `ops/lib/deploy_executor/source_evidence.py` — stable source-repository
   identity, ancestor/reachability and exact-SHA CI proof over an injected
@@ -115,22 +131,33 @@ reviewed. Do not invent or inspect protected runtime paths to bypass this gate.
   preflight gates; output is local `DRY_RUN_READY` only.
 - `tests/test-deploy-executor-p9-prep.py` — adversarial offline tests.
 
+Prepared by `RPi5_main#251`:
+
+- `ops/lib/deploy_executor/p9_evidence.py` — strict JIT governance and sanitized
+  Hermes baseline evidence contracts;
+- `tests/test-deploy-executor-p9-evidence.py` — adversarial schema/identity/
+  freshness/source-binding tests;
+- `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_P9_EVIDENCE_CONTRACTS.md` —
+  provenance and protected-host boundary.
+
 No production operation is added to `ops/deploy/executor-operations.json`.
-No systemd/service/poller/dispatcher source is changed by this prep gate.
+No systemd/service/poller/dispatcher source is changed by these source gates.
 
 ## Exit / later gates
 
-This source prep is mergeable only when focused tests and normal repository CI
-are green and review finds no new write/privilege path.
+The #251 evidence source gate is mergeable only when focused tests and normal
+repository CI are green and review finds no new write/privilege path.
 
-After merge, P9 is **not automatically live-ready**. Before a genuine canary the
-remaining prerequisites must be freshly resolved:
+After #251 merge, P9 is **still not automatically live-ready**. Before a genuine
+canary the remaining prerequisites must be freshly resolved:
 
 - a real READY queue item and explicit owner decision, never a placeholder;
-- source wiring for the short-lived writer-set governance attestation;
+- a reviewed producer/provenance path for the short-lived writer-set governance
+  attestation;
+- a reviewed producer/provenance path for sanitized Hermes baseline evidence;
 - source + separately authorized host wiring for the Automation App read-only
   credential/client if the current runtime lacks it;
-- the selected operation's exact read-only baseline resolver;
+- a one-shot P9 entrypoint that composes only the reviewed read-only pieces;
 - fresh exact-main CI and cross-repository compatibility evidence.
 
 Any credential placement, service/unit change, systemd reload/restart/enable,
