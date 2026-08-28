@@ -204,12 +204,14 @@ def run_p9_dry_run_canary(
     preflight = adapter.preflight(prepared)
     if type(preflight) is not dict or not preflight:
         raise P9CanaryError("adapter read-only preflight returned no evidence")
-    if preflight.get("read_only") is False:
-        raise P9CanaryError("adapter preflight does not preserve read-only mode")
+    if preflight.get("read_only") is not True:
+        raise P9CanaryError("adapter preflight must explicitly assert read_only=true")
+    if preflight.get("privileged_dispatch_ready") is not False:
+        raise P9CanaryError("adapter preflight must explicitly assert privileged_dispatch_ready=false")
+    if preflight.get("execution_enabled") is not False:
+        raise P9CanaryError("adapter preflight must explicitly assert execution_enabled=false")
     for flag in (
         "mutation_enabled",
-        "execution_enabled",
-        "privileged_dispatch_ready",
         "production_apply_authorized",
     ):
         if preflight.get(flag) is True:
