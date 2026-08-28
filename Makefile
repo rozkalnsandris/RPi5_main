@@ -13,6 +13,7 @@ test:
 	python3 ./tests/test-deploy-executor-p9-evidence.py
 	python3 ./tests/test-deploy-executor-p9-provenance.py
 	python3 ./tests/test-deploy-executor-p9-producer.py
+	python3 ./tests/test-deploy-executor-p9-governance-collector.py
 	bash ./tests/test-balcony-watering.sh
 	bash ./tests/test-balkons-log-mqtt-credential.sh
 	bash ./tests/test-balkons-log-legacy-set-contract.sh
