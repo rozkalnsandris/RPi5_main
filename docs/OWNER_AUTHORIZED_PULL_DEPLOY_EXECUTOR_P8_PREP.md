@@ -91,13 +91,22 @@ only.
 structure. Before its first host write it requires:
 
 - execution as root under the separately authorized P8 live gate;
+- an explicit `--expected-source-sha` containing the reviewed lowercase
+  40-character Git commit identity;
+- the local checkout `HEAD` to equal that exact SHA and every installed runtime
+  source path to match the reviewed commit without working-tree drift;
 - an absolute regular private-key source with mode `0400` or `0600`;
 - OpenSSL private-key validation;
 - the exact P7 non-secret config identities above;
 - the production registry to be exactly empty/disabled;
 - all reviewed runtime/package/unit source files to exist and not be symlinks;
-- any pre-existing service identity to have the expected non-login shell/group;
-- all target paths to be absent, otherwise a fresh review is required.
+- the dedicated service user and group to be absent on the first installation;
+- the executor install/config/state roots and systemd unit targets to be absent,
+  otherwise a fresh review is required.
+
+This exact-SHA check is an additional host-side guard, not a substitute for the
+external JIT operator checking that the script itself came from the reviewed
+merged source before execution.
 
 After the first mutation, any command failure stops. The installer does not
 perform automatic rollback, cleanup, reset or alternate-path recovery.
@@ -125,10 +134,11 @@ handling:
 - root-only source credential injected with `LoadCredential`;
 - no sudo or Docker socket.
 
-The source test runs `systemd-analyze security --offline=yes` when the command
-is available. P8 host activation must run the same analysis against the actual
-installed unit on the actual RPi5 systemd version; source CI is not a substitute
-for that host evidence.
+The source test runs `systemd-analyze security --offline=yes --threshold=2.0`
+when the command is available. The current reviewed source remains below that
+maximum exposure threshold. P8 host activation must run the same bounded
+analysis against the actual installed unit on the actual RPi5 systemd version;
+source CI is not a substitute for that host evidence.
 
 ## P8/P9 boundary
 
