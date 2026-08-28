@@ -134,11 +134,12 @@ handling:
 - root-only source credential injected with `LoadCredential`;
 - no sudo or Docker socket.
 
-The source test runs `systemd-analyze security --offline=yes --threshold=2.0`
-when the command is available. The current reviewed source remains below that
-maximum exposure threshold. P8 host activation must run the same bounded
-analysis against the actual installed unit on the actual RPi5 systemd version;
-source CI is not a substitute for that host evidence.
+The source test runs `systemd-analyze security --offline=yes --threshold=20`
+when the command is available. systemd represents the CLI threshold as an
+integer from 0 to 100, so `20` corresponds to a displayed maximum exposure of
+`2.0`. P8 host activation must run the same bounded analysis against the actual
+installed unit on the actual RPi5 systemd version; source CI is not a substitute
+for that host evidence.
 
 ## P8/P9 boundary
 
