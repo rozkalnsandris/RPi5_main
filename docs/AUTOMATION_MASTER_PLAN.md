@@ -250,12 +250,12 @@ Phase 3 exit decision:
 
 Hermes Deals Phase 4 remains the canonical production/live migration lane. Historical checklists are evidence only; current execution must re-resolve live repository state before every consequential step.
 
-Current source anchors after the 2026-08-29 P9 governance collector merge reconciliation:
+Current source anchors after the 2026-08-29 P9 governance collector reconciliation and independent dashboard merge:
 
 - `hermes-deals/main=140a50a17b398862a220e9302da1e6fa0680f2a2`; the reviewed canary source merge `2fbde52cc5b6661343dca3fd967d8112cb2bffbe` remains an ancestor beneath a later docs-progress commit;
-- `RPi5_main/main=cc2d9cd6bd9f76c9d6f96a6389acf765cf3555e8` (`RPi5_main#260` squash merge);
+- `RPi5_main/main=b0964ce64209e17921d7f1d9afbce126be0b286a` (`RPi5_main#262` independent dashboard bridge merge); P9 governance collector merge `cc2d9cd6bd9f76c9d6f96a6389acf765cf3555e8` (`RPi5_main#260`) is its direct parent;
 - `ops-workflows/main=c9d6b3898a9eda98ce83c5ce77e2bfd49f3703d8`;
-- exact-main RPi5 checks for `cc2d9cd6bd9f76c9d6f96a6389acf765cf3555e8` are green: Validate #626 (including Gitleaks/public automation baseline), FAST-LANE policy drift #81 and GITHUB-ONLY policy drift #70.
+- P9 baseline exact-main checks for `cc2d9cd6bd9f76c9d6f96a6389acf765cf3555e8` are green: Validate #626 (including Gitleaks/public automation baseline), FAST-LANE policy drift #81 and GITHUB-ONLY policy drift #70. The independent current main `b0964ce64209e17921d7f1d9afbce126be0b286a` was merged into PR #263 branch before final Ready validation.
 
 Completed Phase 4 source/live gates:
 
