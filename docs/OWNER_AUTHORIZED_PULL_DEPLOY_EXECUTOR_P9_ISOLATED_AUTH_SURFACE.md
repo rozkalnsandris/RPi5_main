@@ -1,6 +1,6 @@
 # P9 isolated LIVE-AUTH authorization surface
 
-Status: SOURCE ONLY / DORMANT / PARTIAL LIVE SETUP STOP
+Status: SOURCE ONLY / DORMANT / POST-SAVE TRUST EVIDENCE STOP
 Roadmap: `RPi5_main#236`
 Canonical program: `docs/AUTOMATION_MASTER_PLAN.md`
 
@@ -31,7 +31,7 @@ The corrected least-privilege decision is therefore **owner-only LIVE-AUTH writi
 - App-authored authorization issues are rejected;
 - no operator/writer GitHub App is approved on the authorization repository;
 - `chatgpt-codex-connector` is explicitly excluded and must remain unselected for this repository;
-- only the separately reviewed read-only Deploy Executor reader may be selected later.
+- only the separately reviewed read-only Deploy Executor reader may be selected.
 
 GitHub documents that a GitHub App can make user-attributed requests on behalf of a user. User attribution does not narrow the App installation's repository permission set, so attribution alone is not accepted as containment for this authorization trust root.
 
@@ -41,6 +41,28 @@ Official GitHub product references reviewed for this correction:
 - installed-App repository selection: <https://docs.github.com/en/apps/using-github-apps/reviewing-and-modifying-installed-github-apps>;
 - repository Actions disablement: <https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository>;
 - user-attributed GitHub App requests: <https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/authenticating-with-a-github-app-on-behalf-of-a-user>.
+
+## 2026-08-29 read-only executor repository-selection transaction
+
+After `RPi5_main#268` merged the corrected owner-only connector-scope contract at `de68073fa2269a128b130d67e4f868d914c61a47` and exact-main Validate #646, FAST-LANE #101 and GITHUB-ONLY #90 were green, the owner separately authorized the remaining read-only repository-selection transaction.
+
+Immediately before the Save, the owner revalidated in an owner-authenticated GitHub UI session that the isolated repository had the intended private/Issues-on/Actions-off/zero-direct-collaborator/no-writer posture. The `Rozkalns Deploy Executor` configuration page showed:
+
+- App ID `4748870`;
+- repository permissions limited to Issues read and Metadata read/minimum;
+- repository access mode `Only select repositories`;
+- selected repositories `rozkalnsandris/ops-workflows` and `rozkalnsandris/deploy-authorizations`;
+- no permission widening.
+
+The owner then performed exactly one Save. That mutation consumed the remaining-reader setup authorization. No `chatgpt-codex-connector` selection, writer integration, permission widening, repository-settings change, host/runtime or production mutation was authorized or reported as part of that Save.
+
+The Save receipt is **not** accepted as final trust-surface evidence by itself. Post-save read-only verification established only a partial result:
+
+- the current ChatGPT Codex Connector installation repository set still does not include `deploy-authorizations`, consistent with the required exclusion;
+- the available connector cannot enumerate the separate Deploy Executor installation ID `157217641` and returns `403 Resource not accessible by integration` for that installation;
+- the available connector also cannot independently establish the complete post-save collaborator/App administration surface of the private authorization repository.
+
+Therefore the final writer/reader trust surface remains **NOT PROVEN**. No retry, rollback, cleanup or alternate mutation path followed the post-save evidence limitation. The machine contract deliberately remains `status=partial-stop`, `authorization_repository_id=null`, `activation_enabled=false`, `runtime_binding_ready=false`, `host_wiring_enabled=false`, and `production_mutation_enabled=false` until accepted read-only evidence closes this gate.
 
 ## Frozen repository roles
 
@@ -58,15 +80,15 @@ The intended repository identity is:
 
 `rozkalnsandris/deploy-authorizations`
 
-The repository now exists and the partial setup evidence records GitHub ID `1350486101`. Its authoritative runtime binding remains intentionally **unbound** because the writer/reader surface has not completed the revised owner-only acceptance gate. Schema v2 rejects any non-null `authorization_repository_id` while evidence status is `partial-stop`; the machine contract keeps that field null and `activation_enabled=false`, `runtime_binding_ready=false`, `host_wiring_enabled=false`, and `production_mutation_enabled=false`.
+The repository exists and the partial setup evidence records GitHub ID `1350486101`. The owner-performed repository-selection Save reports that the reviewed read-only Deploy Executor was added to the selected-repository set, but the complete post-save writer/reader surface has not been independently verified. Its authoritative runtime binding therefore remains intentionally **unbound**. Schema v2 rejects any non-null `authorization_repository_id` while evidence status is `partial-stop`; the machine contract keeps that field null and `activation_enabled=false`, `runtime_binding_ready=false`, `host_wiring_enabled=false`, and `production_mutation_enabled=false`.
 
-A later source binding must use exactly the observed GitHub-assigned ID `1350486101`, but only after a separately authorized remaining setup transaction proves the revised writer/reader surface. No synthetic ID, placeholder repository, temporary repository, name-only trust, or partial-setup evidence is sufficient for runtime binding.
+A later source binding must use exactly the observed GitHub-assigned ID `1350486101`, but only after accepted read-only post-save evidence proves the final writer/reader surface. No synthetic ID, placeholder repository, temporary repository, name-only trust, owner Save receipt alone, or partial-setup evidence is sufficient for runtime binding.
 
 ## Required isolated-repository invariants
 
-Before any P9 runtime binding can become Ready, the authorization repository must be freshly proven to satisfy all of these conditions in one owner-authorized trust-boundary transaction:
+Before any P9 runtime binding can become Ready, fresh accepted evidence must prove all of these conditions:
 
-- repository identity is exactly `rozkalnsandris/deploy-authorizations` plus its fresh stable numeric GitHub ID;
+- repository identity is exactly `rozkalnsandris/deploy-authorizations` plus stable numeric GitHub ID `1350486101`;
 - visibility is private;
 - Issues are enabled;
 - GitHub Actions are disabled for the repository so no workflow can acquire `GITHUB_TOKEN` authority there;
@@ -74,6 +96,7 @@ Before any P9 runtime binding can become Ready, the authorization repository mus
 - no team writer surface exists for this user-owned repository;
 - no GitHub App/OAuth/operator integration can edit Issues in the repository;
 - `chatgpt-codex-connector` App ID `1144995` is not selected for the repository;
+- the final installed-App surface contains only the reviewed read-only `Rozkalns Deploy Executor` reader;
 - every accepted LIVE-AUTH issue has GitHub server-side actor `type=User`, ID `277435981`;
 - the configured owner numeric identity remains `277435981`;
 - any later change to collaborators, integrations, Actions enablement, repository visibility, or issue-write authority is a trust-boundary change that invalidates the accepted setup until separately reviewed.
@@ -107,13 +130,14 @@ Autonomous executor reader:
 - Issues read-only;
 - Metadata read-only/minimum;
 - no GitHub write permission on the authorization surface;
-- webhook disabled remains the target posture.
+- webhook disabled remains the target posture;
+- owner-performed selected-repository Save reports access to both `ops-workflows` and `deploy-authorizations`, but final post-save App-surface evidence remains pending.
 
 No issue-writer integration is approved by this source decision. The only accepted writer identity is the owner User actor.
 
 ## Installation-token isolation
 
-The queue repository and authorization repository are separate trust roles even if the same read-only Deploy Executor installation is later selected for both repositories.
+The queue repository and authorization repository are separate trust roles even if the same read-only Deploy Executor installation is selected for both repositories.
 
 Future runtime source must mint repository-scoped installation tokens per role rather than turning the current one-repository P8 token into an unnecessarily broad generic token:
 
@@ -121,20 +145,20 @@ Future runtime source must mint repository-scoped installation tokens per role r
 - authorization-read token: only `rozkalnsandris/deploy-authorizations`, Issues read;
 - no token may carry Issues write or repository Administration permission.
 
-The current P8 source and installed runtime remain bound to `ops-workflows` only. This PR does not alter that installed configuration.
+The current P8 source and installed runtime remain bound to `ops-workflows` only. The owner-performed selected-repository Save does not alter that installed runtime configuration, and this source reconciliation does not alter it either.
 
 ## Protocol migration contract
 
-The current LIVE-AUTH v1 implementation intentionally conflates authorization repository and queue repository through the existing `AUTHORIZATION_REPOSITORY` constant. That behavior remains unchanged in this source-decision gate so current P8/P9 code cannot silently begin consuming the isolated repository before its trust surface is completed and source-bound.
+The current LIVE-AUTH v1 implementation intentionally conflates authorization repository and queue repository through the existing `AUTHORIZATION_REPOSITORY` constant. That behavior remains unchanged so current P8/P9 code cannot silently begin consuming the isolated repository before its trust surface is accepted and source-bound.
 
-After the remaining trust-boundary setup has been completed and stable ID `1350486101` has been freshly revalidated, a separate source PR and schema migration must split the roles explicitly:
+After accepted post-save trust evidence proves the final isolated writer/reader surface, a separate source PR and schema migration must split the roles explicitly:
 
 1. `QUEUE_REPOSITORY` remains `rozkalnsandris/ops-workflows` with stable ID `1328835922`;
-2. the LIVE-AUTH repository becomes `rozkalnsandris/deploy-authorizations` plus its real stable repository ID;
+2. the LIVE-AUTH repository becomes `rozkalnsandris/deploy-authorizations` plus stable repository ID `1350486101`;
 3. payload `queue_repository` validation continues to require `ops-workflows`;
 4. issue acceptance validates the isolated repository name **and** stable numeric ID;
 5. governance acceptance no longer depends on the broad `ops-workflows` writer-set digest as the LIVE-AUTH authority surface;
-6. the isolated repository setup evidence becomes the trust-root prerequisite for LIVE-AUTH acceptance;
+6. the accepted isolated repository setup evidence becomes the trust-root prerequisite for LIVE-AUTH acceptance;
 7. P8/poller/runtime client composition is updated only after that source migration is separately reviewed and merged.
 
 Until those steps are complete, P9 remains mutation-disabled and no genuine LIVE-AUTH canary is eligible.
@@ -143,25 +167,24 @@ Until those steps are complete, P9 remains mutation-disabled and no genuine LIVE
 
 `APPROVED_GOVERNANCE_WRITER_SET_SHA256` remains unset. The merged collector is valid evidence that `ops-workflows` cannot presently be established as the complete authorization writer surface using only the reviewed executor capability. Selecting isolation does not turn partial evidence into trusted evidence and does not source-pin a synthetic digest.
 
-The isolated repository has a different writer surface and requires its own later exact setup evidence after the remaining trust-boundary setup is completed. No digest is derived from the dormant contract itself.
+The isolated repository has a different writer surface and requires accepted exact post-save evidence. No digest is derived from the dormant contract, the pre-save UI, or the owner Save receipt alone.
 
-## Future owner-gated live setup — not authorized here
+## Post-save evidence gate — read-only / no mutation authorized here
 
-A later exact owner authorization must separately name only the remaining GitHub trust-boundary mutations and revalidation required to complete setup:
+The remaining gate is evidence collection and verification, not another automatic setup attempt. It must prove with sanitized read-only evidence:
 
-- freshly revalidate exact repository identity `1350486101`, private visibility, Issues enabled, Actions disabled and zero direct collaborators;
-- prove `chatgpt-codex-connector` and every other writer integration remain absent;
-- extend `Rozkalns Deploy Executor` selected-repository access to the isolated repository without increasing its Issues/Metadata read-only permissions;
-- prove the final installed-App surface contains only that reviewed read-only executor;
-- capture sanitized repository identity/settings/writer/reader evidence and STOP.
+- exact repository identity `1350486101`, private visibility, Issues enabled, Actions disabled and zero direct collaborators;
+- `chatgpt-codex-connector` and every other writer integration absent;
+- final installed-App surface containing exactly `Rozkalns Deploy Executor` App ID `4748870` with Issues read + Metadata read only and no write permission;
+- no other human/team/integration writer surface capable of editing accepted LIVE-AUTH authority.
 
-Those are repository-settings/App-installation trust-boundary mutations. This source decision does not authorize any of them.
+If that evidence is unavailable, ambiguous, inconsistent or shows drift, preserve the evidence and STOP. Do not retry the Save, reselect repositories, widen permissions, change repository settings, roll back, clean up or choose an alternate mutation path under this source/evidence gate. Any corrective GitHub mutation requires a new exact owner authorization naming that mutation.
 
-If the remaining live setup cannot prove owner-only writing plus the single reviewed read-only executor without introducing a new admin credential or any writer integration, preserve evidence and STOP rather than choosing another path automatically.
+Only after this evidence gate passes may a separate reviewed source migration bind repository ID `1350486101` and split queue versus authorization repository roles.
 
 ## Safety boundary
 
-This source gate performs no:
+This source reconciliation performs no:
 
 - repository creation or deletion;
 - repository-settings change;
@@ -171,7 +194,7 @@ This source gate performs no:
 - P8 poller/config/systemd/service/timer change;
 - production registry or adapter activation;
 - READY/LIVE-AUTH creation;
-- authorization consumption;
+- authorization consumption beyond recording the historical owner Save receipt;
 - Hermes Deals runner, DB, Cloudflare, Docker, storage, network, backup, or production mutation.
 
-Merge of this source contract, if later explicitly authorized, still authorizes none of those live actions.
+Merge of this source reconciliation, if later explicitly authorized, still authorizes none of those live actions.
