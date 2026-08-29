@@ -41,10 +41,14 @@ def write_registry(value: dict) -> Path:
 
 
 class P4RegistryAndNormalizationTests(unittest.TestCase):
-    def test_production_registry_is_empty_and_execution_disabled(self):
+    def test_production_registry_contains_only_reviewed_disabled_canary(self):
         registry = load_registry(PRODUCTION_REGISTRY)
         self.assertFalse(registry.execution_enabled)
-        self.assertEqual(registry.operations, ())
+        self.assertEqual(len(registry.operations), 1)
+        operation = registry.operations[0]
+        self.assertEqual(operation.operation_id, "hermes-deals.origin-path-audit.v1")
+        self.assertEqual(operation.adapter_id, "hermes-deals.origin-path-audit.v1")
+        self.assertFalse(operation.ordinary_live_all_eligible)
 
     def test_inert_fixture_registry_loads(self):
         registry = load_registry(FIXTURES / "operations_inert.json")

@@ -41,7 +41,7 @@ ADAPTER_SOURCE = ROOT / "ops" / "lib" / "deploy_executor" / "hermes_deals_origin
 
 
 def _prepared():
-    registry = load_registry(CANARY_REGISTRY)
+    registry = load_registry(PRODUCTION_REGISTRY)
     issue = json.loads(CANARY_QUEUE.read_text(encoding="utf-8"))
     normalized = normalize_ready_queue(
         issue, repository_full_name=QUEUE_REPOSITORY, registry=registry
@@ -50,15 +50,15 @@ def _prepared():
 
 
 class HermesDealsOriginCanaryTests(unittest.TestCase):
-    def test_production_registry_remains_exactly_empty_and_disabled(self):
+    def test_production_registry_matches_reviewed_canary_and_is_dormant(self):
         raw = json.loads(PRODUCTION_REGISTRY.read_text(encoding="utf-8"))
-        self.assertEqual(
-            raw,
-            {"schema_version": 1, "execution_enabled": False, "operations": []},
-        )
+        reviewed = json.loads(CANARY_REGISTRY.read_text(encoding="utf-8"))
+        self.assertEqual(raw, reviewed)
         registry = load_registry(PRODUCTION_REGISTRY)
         self.assertFalse(registry.execution_enabled)
-        self.assertEqual(registry.operations, ())
+        self.assertEqual(len(registry.operations), 1)
+        self.assertEqual(registry.operations[0].operation_id, OPERATION_ID)
+        self.assertEqual(registry.operations[0].adapter_id, ADAPTER_ID)
 
     def test_canary_registry_is_strict_and_dormant(self):
         registry = load_registry(CANARY_REGISTRY)
@@ -75,7 +75,7 @@ class HermesDealsOriginCanaryTests(unittest.TestCase):
             INVOCATION_BUDGET,
         )
 
-    def test_exact_ready_queue_normalizes_but_cannot_enable_execution(self):
+    def test_exact_ready_queue_normalizes_from_production_registry_but_cannot_enable_execution(self):
         prepared = _prepared()
         self.assertFalse(prepared.execution_enabled)
         self.assertEqual(prepared.operation_id, OPERATION_ID)
@@ -122,7 +122,7 @@ class HermesDealsOriginCanaryTests(unittest.TestCase):
                     HermesDealsOriginAuditAdapter().preflight(bad)
 
     def test_queue_prose_cannot_expand_static_operation_authority(self):
-        registry = load_registry(CANARY_REGISTRY)
+        registry = load_registry(PRODUCTION_REGISTRY)
         issue = json.loads(CANARY_QUEUE.read_text(encoding="utf-8"))
         issue["body"] = issue["body"].replace(
             "one read-only audit invocation; zero production mutations",
@@ -138,7 +138,7 @@ class HermesDealsOriginCanaryTests(unittest.TestCase):
         self.assertFalse(prepared.execution_enabled)
 
     def test_queue_cannot_select_an_unreviewed_entrypoint(self):
-        registry = load_registry(CANARY_REGISTRY)
+        registry = load_registry(PRODUCTION_REGISTRY)
         issue = json.loads(CANARY_QUEUE.read_text(encoding="utf-8"))
         issue["body"] = issue["body"].replace(
             "`tools/runner/origin-path-rpi5-audit-dispatcher.sh` fixed reviewed selector",

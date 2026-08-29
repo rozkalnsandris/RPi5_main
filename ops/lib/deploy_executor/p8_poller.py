@@ -14,7 +14,6 @@ from .github_app_auth import (
     GitHubAppInstallationTokenProvider,
     load_dry_run_config,
 )
-from .registry import RegistryError, load_registry
 from .transport import (
     GitHubHttpsSender,
     GitHubRestClient,
@@ -24,6 +23,7 @@ from .transport import (
 
 STATUS_SCHEMA = "rozkalns.deploy-executor-p8-status.v1"
 MAX_OPEN_ISSUES = 100
+REGISTRY_ROOT_FIELDS = frozenset({"schema_version", "execution_enabled", "operations"})
 
 
 class P8PollerError(RuntimeError):
@@ -87,6 +87,23 @@ def _validate_repository(payload: Any, config: DryRunAppConfig) -> None:
         raise P8PollerError("authorization repository name drifted")
 
 
+def _validate_registry_gate(path: str | Path) -> None:
+    try:
+        raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise P8PollerError("production registry could not be read") from exc
+    if type(raw) is not dict:
+        raise P8PollerError("production registry root must be an object")
+    if set(raw) != REGISTRY_ROOT_FIELDS:
+        raise P8PollerError("production registry root schema drifted")
+    if type(raw["schema_version"]) is not int or raw["schema_version"] != 1:
+        raise P8PollerError("production registry schema version is unsupported")
+    if raw["execution_enabled"] is not False:
+        raise P8PollerError("P8 requires an execution-disabled production registry")
+    # Deliberately do not inspect raw["operations"]. P8 must not normalize,
+    # select, dispatch, preflight or apply any registry operation entry.
+
+
 def _candidate_count(value: Any, prefix: str) -> int:
     if type(value) is not list:
         raise P8PollerError("open issue poll returned a non-array payload")
@@ -115,12 +132,7 @@ def poll_once(
     if config.mutation_dispatch_enabled or config.result_writer_enabled:
         raise P8PollerError("P8 configuration unexpectedly enables a write path")
 
-    try:
-        registry = load_registry(registry_path)
-    except RegistryError as exc:
-        raise P8PollerError(f"production registry rejected: {exc.code}") from exc
-    if registry.execution_enabled or registry.operations:
-        raise P8PollerError("P8 requires an empty execution-disabled production registry")
+    _validate_registry_gate(registry_path)
 
     state = _validate_state_dir(state_dir)
     provider = token_provider or GitHubAppInstallationTokenProvider(
