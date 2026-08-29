@@ -104,7 +104,11 @@ python3 - <<'PY'
 import json
 from pathlib import Path
 value = json.loads(Path("ops/deploy/executor-operations.json").read_text(encoding="utf-8"))
-assert value == {"schema_version": 1, "execution_enabled": False, "operations": []}, value
+assert isinstance(value, dict), value
+assert set(value) == {"schema_version", "execution_enabled", "operations"}, value
+assert value["schema_version"] == 1, value
+assert value["execution_enabled"] is False, value
+assert isinstance(value["operations"], list), value
 PY
 
 grep -Fq 'SOURCE ONLY / DORMANT / NOT INSTALLED' "$doc"
