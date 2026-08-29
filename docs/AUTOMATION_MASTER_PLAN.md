@@ -246,16 +246,16 @@ Phase 3 exit decision:
 `CV_REPOSITORY_SELF_HOSTED_RUNNER_COUNT=0`
 `CV_LEGACY_RUNNER_RETIREMENT=PASS`
 
-### Phase 4 — Hermes Deals public-repository execution migration — CURRENT: P9 ISOLATED AUTH SURFACE SOURCE
+### Phase 4 — Hermes Deals public-repository execution migration — CURRENT: P9 ISOLATED AUTH TRUST-BOUNDARY STOP
 
 Hermes Deals Phase 4 remains the canonical production/live migration lane. Historical checklists are evidence only; current execution must re-resolve live repository state before every consequential step.
 
-Current source anchors after the 2026-08-29 P9 governance collector reconciliation and independent dashboard merge:
+Current source anchors after the 2026-08-29 P9 isolated-auth source merge:
 
 - `hermes-deals/main=140a50a17b398862a220e9302da1e6fa0680f2a2`; the reviewed canary source merge `2fbde52cc5b6661343dca3fd967d8112cb2bffbe` remains an ancestor beneath a later docs-progress commit;
-- `RPi5_main/main=b0964ce64209e17921d7f1d9afbce126be0b286a` (`RPi5_main#262` independent dashboard bridge merge); P9 governance collector merge `cc2d9cd6bd9f76c9d6f96a6389acf765cf3555e8` (`RPi5_main#260`) is its direct parent;
+- `RPi5_main/main=6efb1efa3e8e4792de487ec16c95f6e0dc21f622` (`RPi5_main#263` squash merge); its direct parent is the independent dashboard bridge main `b0964ce64209e17921d7f1d9afbce126be0b286a`, with P9 governance collector `cc2d9cd6bd9f76c9d6f96a6389acf765cf3555e8` as the preceding P9 baseline;
 - `ops-workflows/main=c9d6b3898a9eda98ce83c5ce77e2bfd49f3703d8`;
-- P9 baseline exact-main checks for `cc2d9cd6bd9f76c9d6f96a6389acf765cf3555e8` are green: Validate #626 (including Gitleaks/public automation baseline), FAST-LANE policy drift #81 and GITHUB-ONLY policy drift #70. The independent current main `b0964ce64209e17921d7f1d9afbce126be0b286a` was merged into PR #263 branch before final Ready validation.
+- exact-main checks for `6efb1efa3e8e4792de487ec16c95f6e0dc21f622` are green: Validate #637 (including Gitleaks/public automation baseline), FAST-LANE policy drift #92 and GITHUB-ONLY policy drift #81.
 
 Completed Phase 4 source/live gates:
 
@@ -277,11 +277,12 @@ Completed Phase 4 source/live gates:
 - [x] `RPi5_main#258` merged the narrowly typed governance/Hermes evidence producer and fixed-file atomic publisher contract at `5f0f1ed62e4d52422139364898f735578be2cbdb`; exact-main CI passed and work item #257 is completed. The approved governance writer-set digest remains deliberately unset.
 - [x] `RPi5_main#260` merged the complete-source fail-closed governance collector boundary at `cc2d9cd6bd9f76c9d6f96a6389acf765cf3555e8`; exact-main CI passed and work item #259 is completed. The current read-only executor capability still cannot independently prove the complete installed-App/integration administration surface of `ops-workflows`.
 - [x] Owner architecture decision selected the P0 fallback `P9 TRUST DECISION: ISOLATED-AUTH-SURFACE` rather than broadening autonomous executor permissions.
+- [x] `RPi5_main#263` merged the dormant isolated LIVE-AUTH authorization-surface contract at `6efb1efa3e8e4792de487ec16c95f6e0dc21f622`; exact-main Validate #637, FAST-LANE #92 and GITHUB-ONLY #81 are green. Work item #264 is completed. The merged source still keeps `authorization_repository_id=null`, `activation_enabled=false`, `runtime_binding_ready=false`, `host_wiring_enabled=false` and `production_mutation_enabled=false`.
 
 Phase 4 next gates:
 
-- [ ] `RPi5_main#264` is the current source-only gate for the dormant isolated LIVE-AUTH authorization-surface contract. It must keep `authorization_repository_id` unbound, all activation/runtime/host/production flags false, and current P8/P9 runtime unchanged.
-- [ ] The intended isolated authorization repository is `rozkalnsandris/deploy-authorizations`; it does not exist at this source gate. A later separately owner-authorized trust-boundary transaction must create it private, enable Issues, disable Actions, prove the approved writer surface, and extend only read-only Deploy Executor selected-repository access without increasing permission levels.
+- [ ] **TRUST-BOUNDARY STOP:** do not create or configure `rozkalnsandris/deploy-authorizations`, mutate repository visibility/Issues/Actions/settings, or extend GitHub App selected-repository access until a separately explicit owner authorization names that exact transaction. The merged source does not prove that repository exists and its stable numeric repository ID remains intentionally unbound.
+- [ ] A later separately owner-authorized trust-boundary transaction must create the isolated repository private, enable Issues, disable Actions, establish the approved issue-writer surface, and extend only read-only Deploy Executor selected-repository access without increasing permission levels. It must capture the real stable repository ID and sanitized writer/settings evidence.
 - [ ] After that live setup yields the real stable repository ID, a separate reviewed source migration must split queue and LIVE-AUTH repository identities. `ops-workflows` remains the queue repository; LIVE-AUTH acceptance must bind the isolated repository name plus stable numeric ID.
 - [ ] `APPROVED_GOVERNANCE_WRITER_SET_SHA256` remains unset. Selecting isolation does not convert the partial `ops-workflows` governance surface into trusted evidence or justify a synthetic digest.
 - [ ] The separate Automation App client/one-shot P9 runtime composition remains source work after the isolated trust surface is established and source-bound.
@@ -321,7 +322,7 @@ Do not use this phase to create the isolated repository without its exact owner 
 - [ ] Full rollback/health/readiness audit PASS.
 - [ ] Final architecture documented and issue #103 closed.
 
-### Cross-cutting Track X — owner-authorized pull deploy executor v1 — P8 COMPLETE / P9 ISOLATED AUTH SURFACE SOURCE
+### Cross-cutting Track X — owner-authorized pull deploy executor v1 — P8 COMPLETE / P9 ISOLATED AUTH TRUST-BOUNDARY STOP
 
 Roadmap: `RPi5_main#236`.
 Threat model / protocol: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_V1.md`.
@@ -336,7 +337,7 @@ P9 governance collector: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_P9_GOVERNAN
 P9 isolated authorization surface: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_P9_ISOLATED_AUTH_SURFACE.md`.
 Hermes Deals dormant canary contract: `docs/HERMES_DEALS_ORIGIN_PULL_CANARY_SOURCE.md`.
 
-P0 through P8 are complete at their respective source/live gates. The P9 decision core is merged by `RPi5_main#250`; the P9 evidence schemas/parsers are merged by `RPi5_main#254` at `26f1f8810eaafbdf34e020f77253b57f7fe56da6`; the fixed-path provenance boundary is merged by `RPi5_main#256` at `68632ac3c5216f569d235fe1af04d4c4df1e1d6c`; the typed producer/publisher boundary is merged by `RPi5_main#258` at `5f0f1ed62e4d52422139364898f735578be2cbdb`; the governance collector is merged by `RPi5_main#260` at `cc2d9cd6bd9f76c9d6f96a6389acf765cf3555e8` and #259 is completed. `RPi5_main#264` is the current isolated authorization-surface source gate. P8 remains installed and accepted on RPi5 at exact reviewed source `6a43ef875c785321a1b6bf09d8e558c5151c8546`; the recurring poller is unprivileged/read-only, production dispatch remains disabled, and the temporary staging credential was removed separately after acceptance.
+P0 through P8 are complete at their respective source/live gates. The P9 decision core is merged by `RPi5_main#250`; the P9 evidence schemas/parsers are merged by `RPi5_main#254` at `26f1f8810eaafbdf34e020f77253b57f7fe56da6`; the fixed-path provenance boundary is merged by `RPi5_main#256` at `68632ac3c5216f569d235fe1af04d4c4df1e1d6c`; the typed producer/publisher boundary is merged by `RPi5_main#258` at `5f0f1ed62e4d52422139364898f735578be2cbdb`; the governance collector is merged by `RPi5_main#260` at `cc2d9cd6bd9f76c9d6f96a6389acf765cf3555e8` and #259 is completed. The isolated authorization-surface source gate is merged by `RPi5_main#263` at `6efb1efa3e8e4792de487ec16c95f6e0dc21f622`; exact-main Validate #637, FAST-LANE #92 and GITHUB-ONLY #81 are green, and #264 is completed. P8 remains installed and accepted on RPi5 at exact reviewed source `6a43ef875c785321a1b6bf09d8e558c5151c8546`; the recurring poller is unprivileged/read-only, production dispatch remains disabled, and the temporary staging credential was removed separately after acceptance.
 
 Critical P0 authorization invariant remains binding:
 
@@ -351,9 +352,9 @@ P9 preserves independent least-privilege roles:
 - `Rozkalns Deploy Executor` remains read-only; future runtime must mint separately repository-scoped queue-read and authorization-read tokens rather than a generic broad token;
 - `Rozkalns Automation` remains the existing source/CI reader with Actions read + Contents read on only the reviewed source repository allowlist.
 
-`RPi5_main#250` provides stable source repository identity, merged/reachable exact-SHA + CI proof, JIT governance freshness, genuine READY queue/source/baseline/adapter-preflight composition and final unchanged-authority verification. `RPi5_main#254` provides strict schemas/parsers for the JIT governance and sanitized Hermes baseline evidence. `RPi5_main#256` provides the fixed-path root-owned consumer provenance/placement boundary. `RPi5_main#258` provides the separately reviewed typed producer/publisher source boundary while deliberately keeping governance evidence fail-closed. `RPi5_main#260` freezes the source/tree and completeness/provenance boundary for the complete `ops-workflows` writer-surface collector and proves the remaining admin/integration inventory capability gap. `RPi5_main#264` is the current source gate that freezes the dormant isolated-surface decision without creating that repository, inventing its stable ID, changing the production registry/P8 poller/systemd/credentials/GitHub permissions, or exposing a mutation/apply/result-writer path.
+`RPi5_main#250` provides stable source repository identity, merged/reachable exact-SHA + CI proof, JIT governance freshness, genuine READY queue/source/baseline/adapter-preflight composition and final unchanged-authority verification. `RPi5_main#254` provides strict schemas/parsers for the JIT governance and sanitized Hermes baseline evidence. `RPi5_main#256` provides the fixed-path root-owned consumer provenance/placement boundary. `RPi5_main#258` provides the separately reviewed typed producer/publisher source boundary while deliberately keeping governance evidence fail-closed. `RPi5_main#260` freezes the source/tree and completeness/provenance boundary for the complete `ops-workflows` writer-surface collector and proves the remaining admin/integration inventory capability gap. `RPi5_main#263` completes the dormant isolated-surface source gate without creating that repository, inventing its stable ID, changing the production registry/P8 poller/systemd/credentials/GitHub permissions, or exposing a mutation/apply/result-writer path.
 
-P9 live readiness still requires: explicit merge of PR #263 under work item #264 plus exact-main CI; a separately owner-authorized isolated-repository creation/settings/App-selection transaction with sanitized writer evidence; a later reviewed source binding to the actual stable repository ID and explicit queue/auth protocol split; the separate Automation App read-only runtime credential/client boundary; a one-shot P9 entrypoint; exact operation-specific registry/runtime composition; a genuine READY queue and explicit owner decision. Any host credential/service/systemd/protected-evidence or GitHub permission/repository-setting change remains separately owner-gated.
+P9 live readiness still requires: a separately owner-authorized isolated-repository creation/settings/App-selection transaction with sanitized writer evidence; a later reviewed source binding to the actual stable repository ID and explicit queue/auth protocol split; the separate Automation App read-only runtime credential/client boundary; a one-shot P9 entrypoint; exact operation-specific registry/runtime composition; a genuine READY queue and explicit owner decision. The #263 merge and exact-main CI requirement is complete. Any host credential/service/systemd/protected-evidence or GitHub permission/repository-setting change remains separately owner-gated.
 
 The future transport remains data-only:
 
@@ -383,8 +384,10 @@ If question 3 is `no` or question 5 is `yes`, do not make the change.
 
 ## Current next action
 
-**SOURCE ONLY:** complete `RPi5_main#264` / PR #263 review and exact-head CI for the dormant isolated LIVE-AUTH authorization-surface decision. Keep `authorization_repository_id=null`, `activation_enabled=false`, `runtime_binding_ready=false`, `host_wiring_enabled=false`, `production_mutation_enabled=false`; do not change current P8/P9 runtime bindings. Merge remains separately owner-authorized.
+**STOP / OWNER TRUST-BOUNDARY GATE:** `RPi5_main#263` is merged at exact current main `6efb1efa3e8e4792de487ec16c95f6e0dc21f622`, and exact-main Validate #637, FAST-LANE policy drift #92 and GITHUB-ONLY policy drift #81 are green. The dormant isolated LIVE-AUTH source contract is complete; `authorization_repository_id` remains null and all activation/runtime/host/production flags remain false.
 
-After #263 is explicitly merged and exact-main CI is green, STOP for a separately explicit owner authorization before creating/configuring `rozkalnsandris/deploy-authorizations`, changing repository settings, or extending GitHub App selected-repository access. That future trust-boundary transaction must capture the real stable repository ID and sanitized writer/settings evidence. A later source PR must then bind that ID and split queue vs LIVE-AUTH repository roles before any host/runtime wiring or genuine P9 canary.
+Do not create/configure `rozkalnsandris/deploy-authorizations`, change its visibility/Issues/Actions/settings, extend GitHub App selected-repository access, or establish the real writer surface without a separately explicit owner authorization for that exact trust-boundary transaction. That future transaction must capture the real stable repository ID and sanitized writer/settings evidence while preserving read-only Deploy Executor permission levels.
 
-Do **not** create a dummy LIVE-AUTH, invent the future repository ID, pin an approved governance digest from synthetic/partial evidence, place/change credentials, modify systemd, widen GitHub App permission levels, activate any mutation-capable adapter, deregister Hermes Deals runners, deploy production, write DB/Review/publication state, consume retailer-specific execution authorization, or mutate Cloudflare/repository settings merely because #264 is Ready or merged.
+Only after that separately authorized trust-boundary setup is proven may a new reviewed source PR bind the actual authorization repository ID and split queue vs LIVE-AUTH repository roles. Host/runtime wiring, credentials, genuine P9 LIVE-AUTH, P9 canary execution and P10 remain later separate gates.
+
+Do **not** create a dummy LIVE-AUTH, invent the future repository ID, pin an approved governance digest from synthetic/partial evidence, place/change credentials, modify systemd, widen GitHub App permission levels, activate any mutation-capable adapter, deregister Hermes Deals runners, deploy production, write DB/Review/publication state, consume retailer-specific execution authorization, or mutate Cloudflare/repository settings merely because #263 is merged.
