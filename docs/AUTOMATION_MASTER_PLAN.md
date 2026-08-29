@@ -246,16 +246,16 @@ Phase 3 exit decision:
 `CV_REPOSITORY_SELF_HOSTED_RUNNER_COUNT=0`
 `CV_LEGACY_RUNNER_RETIREMENT=PASS`
 
-### Phase 4 — Hermes Deals public-repository execution migration — CURRENT: P9 PROVENANCE MERGED / P9 PRODUCER SOURCE
+### Phase 4 — Hermes Deals public-repository execution migration — CURRENT: P9 PRODUCERS MERGED / P9 GOVERNANCE COLLECTOR SOURCE
 
 Hermes Deals Phase 4 remains the canonical production/live migration lane. Historical checklists are evidence only; current execution must re-resolve live repository state before every consequential step.
 
-Current source anchors after the 2026-08-28 P9 provenance merge reconciliation:
+Current source anchors after the 2026-08-28 P9 producer merge reconciliation:
 
 - `hermes-deals/main=140a50a17b398862a220e9302da1e6fa0680f2a2`; the reviewed canary source merge `2fbde52cc5b6661343dca3fd967d8112cb2bffbe` remains an ancestor beneath a later docs-progress commit;
-- `RPi5_main/main=68632ac3c5216f569d235fe1af04d4c4df1e1d6c` (`RPi5_main#256` squash merge);
+- `RPi5_main/main=5f0f1ed62e4d52422139364898f735578be2cbdb` (`RPi5_main#258` squash merge);
 - `ops-workflows/main=c9d6b3898a9eda98ce83c5ce77e2bfd49f3703d8`;
-- exact-main RPi5 checks for `68632ac3c5216f569d235fe1af04d4c4df1e1d6c` are green: Validate #618 (including Gitleaks/public automation baseline), FAST-LANE policy drift #73 and GITHUB-ONLY policy drift #62.
+- exact-main RPi5 checks for `5f0f1ed62e4d52422139364898f735578be2cbdb` are green: Validate #621 (including Gitleaks/public automation baseline), FAST-LANE policy drift #76 and GITHUB-ONLY policy drift #65.
 
 Completed Phase 4 source/live gates:
 
@@ -274,11 +274,13 @@ Completed Phase 4 source/live gates:
 - [x] `RPi5_main#250` merged the mutation-disabled P9 decision core and exact-main CI passed at `d425f98db85fc2ffdffb2d66f6b34727e5e75b07`.
 - [x] `RPi5_main#254` merged the fail-closed P9 governance/Hermes baseline evidence schemas and parsers at `26f1f8810eaafbdf34e020f77253b57f7fe56da6`; exact-main CI passed and work item #251 is completed.
 - [x] `RPi5_main#256` merged the fixed-path root-owned provenance loader/placement contract at `68632ac3c5216f569d235fe1af04d4c4df1e1d6c`; exact-main CI passed and work item #255 is completed.
+- [x] `RPi5_main#258` merged the narrowly typed governance/Hermes evidence producer and fixed-file atomic publisher contract at `5f0f1ed62e4d52422139364898f735578be2cbdb`; exact-main CI passed and work item #257 is completed. The approved governance writer-set digest remains deliberately unset.
 
 Phase 4 next gates:
 
-- [ ] `RPi5_main#257` is the current source-only gate for narrowly typed governance/Hermes evidence producers and fixed-file atomic publication under the merged provenance contract.
-- [ ] Governance evidence must remain fail-closed until a separately reviewed complete authorization-writer-surface collector can establish the required human/team/App/workflow/token mutation surfaces and a reviewed source change pins the approved writer-set digest. Do not invent a new admin credential or treat a partial audit as trusted.
+- [ ] `RPi5_main#259` is the current source-only gate for the complete governance writer-surface collector boundary, exact `ops-workflows` source/tree pinning and fail-closed completeness/provenance contracts.
+- [ ] Governance evidence must remain fail-closed until every required human/team/App/workflow/token mutation surface is established by a reviewed complete collector and a separate reviewed source change pins the approved writer-set digest. Do not invent a new admin credential or treat a partial audit as trusted.
+- [ ] The installed App/integration administration surface is still an unresolved runtime capability boundary. If the already reviewed read-only credentials cannot establish it completely, STOP for a separate owner architecture/credential/permission decision before any live collection or source pin.
 - [ ] P9 live wiring must preserve two independent read-only App trust domains: Deploy Executor reads only `ops-workflows` Issues; Rozkalns Automation reads only approved source Contents/Actions. Do not widen either merely for convenience.
 - [ ] Source + separately authorized host wiring is still required for the Automation App read-only credential/client and a one-shot P9 entrypoint.
 - [ ] The production registry and current P8 poller remain empty/disabled until a later reviewed source gate makes the exact canary operation consumable without weakening P8 safety.
@@ -317,7 +319,7 @@ Do not use this phase to consume retailer-specific execution authorizations, cha
 - [ ] Full rollback/health/readiness audit PASS.
 - [ ] Final architecture documented and issue #103 closed.
 
-### Cross-cutting Track X — owner-authorized pull deploy executor v1 — P8 COMPLETE / P9 PRODUCER SOURCE
+### Cross-cutting Track X — owner-authorized pull deploy executor v1 — P8 COMPLETE / P9 GOVERNANCE COLLECTOR SOURCE
 
 Roadmap: `RPi5_main#236`.
 Threat model / protocol: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_V1.md`.
@@ -328,9 +330,10 @@ P9 prep: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_P9_PREP.md`.
 P9 evidence contracts: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_P9_EVIDENCE_CONTRACTS.md`.
 P9 evidence provenance: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_P9_PROVENANCE.md`.
 P9 evidence producers: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_P9_PRODUCERS.md`.
+P9 governance collector: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_P9_GOVERNANCE_COLLECTOR.md`.
 Hermes Deals dormant canary contract: `docs/HERMES_DEALS_ORIGIN_PULL_CANARY_SOURCE.md`.
 
-P0 through P8 are complete at their respective source/live gates. The P9 decision core is merged by `RPi5_main#250`; the P9 evidence schemas/parsers are merged by `RPi5_main#254` at `26f1f8810eaafbdf34e020f77253b57f7fe56da6`; the fixed-path provenance boundary is merged by `RPi5_main#256` at `68632ac3c5216f569d235fe1af04d4c4df1e1d6c`; `RPi5_main#257` is the current evidence-producer source gate. P8 remains installed and accepted on RPi5 at exact reviewed source `6a43ef875c785321a1b6bf09d8e558c5151c8546`; the recurring poller is unprivileged/read-only, production dispatch remains disabled, and the temporary staging credential was removed separately after acceptance.
+P0 through P8 are complete at their respective source/live gates. The P9 decision core is merged by `RPi5_main#250`; the P9 evidence schemas/parsers are merged by `RPi5_main#254` at `26f1f8810eaafbdf34e020f77253b57f7fe56da6`; the fixed-path provenance boundary is merged by `RPi5_main#256` at `68632ac3c5216f569d235fe1af04d4c4df1e1d6c`; the typed producer/publisher boundary is merged by `RPi5_main#258` at `5f0f1ed62e4d52422139364898f735578be2cbdb`; `RPi5_main#259` is the current governance writer-surface collector source gate. P8 remains installed and accepted on RPi5 at exact reviewed source `6a43ef875c785321a1b6bf09d8e558c5151c8546`; the recurring poller is unprivileged/read-only, production dispatch remains disabled, and the temporary staging credential was removed separately after acceptance.
 
 Critical P0 authorization invariant remains binding:
 
@@ -343,9 +346,9 @@ P9 preserves two independent read-only identities:
 - `Rozkalns Deploy Executor` reads only the authorization surface in `ops-workflows`;
 - `Rozkalns Automation` remains the existing source/CI reader with Actions read + Contents read on only the reviewed source repository allowlist.
 
-`RPi5_main#250` provides stable source repository identity, merged/reachable exact-SHA + CI proof, JIT writer-set-governance freshness, genuine READY queue/source/baseline/adapter-preflight composition and final unchanged-authority verification. `RPi5_main#254` provides strict schemas/parsers for the JIT governance and sanitized Hermes baseline evidence. `RPi5_main#256` provides the fixed-path root-owned consumer provenance/placement boundary. `RPi5_main#257` adds the separately reviewed typed producer/publisher source boundary while deliberately keeping governance evidence fail-closed until a complete writer-surface collector and reviewed approved digest exist. None of these gates changes the production registry, P8 poller, systemd units, credentials or GitHub permissions, and none exposes a mutation/apply/result-writer path.
+`RPi5_main#250` provides stable source repository identity, merged/reachable exact-SHA + CI proof, JIT writer-set-governance freshness, genuine READY queue/source/baseline/adapter-preflight composition and final unchanged-authority verification. `RPi5_main#254` provides strict schemas/parsers for the JIT governance and sanitized Hermes baseline evidence. `RPi5_main#256` provides the fixed-path root-owned consumer provenance/placement boundary. `RPi5_main#258` provides the separately reviewed typed producer/publisher source boundary while deliberately keeping governance evidence fail-closed. `RPi5_main#259` now freezes the source/tree and completeness/provenance boundary for the complete writer-surface collector without claiming that the unresolved installed-App/integration administration surface is already collectable. None of these gates changes the production registry, P8 poller, systemd units, credentials or GitHub permissions, and none exposes a mutation/apply/result-writer path.
 
-P9 live readiness still requires the complete reviewed governance collector/source pin, the separate Automation App read-only runtime credential/client boundary, a one-shot P9 entrypoint, an exact operation-specific registry/runtime composition, a genuine READY queue and explicit owner decision. Any host credential/service/systemd/protected-evidence change remains separately owner-gated.
+P9 live readiness still requires the complete reviewed runtime governance collection capability, a real complete writer-set audit plus separate approved digest source pin, the separate Automation App read-only runtime credential/client boundary, a one-shot P9 entrypoint, an exact operation-specific registry/runtime composition, a genuine READY queue and explicit owner decision. Any host credential/service/systemd/protected-evidence or GitHub permission/repository-setting change remains separately owner-gated.
 
 The future transport remains data-only:
 
@@ -375,8 +378,8 @@ If question 3 is `no` or question 5 is `yes`, do not make the change.
 
 ## Current next action
 
-**SOURCE ONLY:** complete `RPi5_main#257` review/CI for the typed P9 evidence producer/publisher contract. Governance evidence must remain fail-closed while the approved writer-set digest is unset; this gate performs no protected host inspection, installs/runs no producer, changes no credentials/systemd/registry/poller state, creates no LIVE-AUTH/READY queue and authorizes no P9 canary.
+**SOURCE ONLY:** complete `RPi5_main#259` review/CI for the fail-closed P9 governance writer-surface collector boundary. The collector must stay pinned to exact reviewed `ops-workflows` source/tree identity and must reject any incomplete collaborator/team/App/workflow/token surface. `APPROVED_GOVERNANCE_WRITER_SET_SHA256` remains unset; this gate performs no protected host/admin collection, places no credential, changes no permissions/repository settings/systemd/registry/poller state, creates no LIVE-AUTH/READY queue and authorizes no P9 canary.
 
-After #257 is explicitly merged and exact-main CI is green, re-resolve the next source prerequisite. Expected remaining work is the complete reviewed governance writer-surface collector/source-pin capability plus the separate Automation App client/one-shot P9 runtime composition. Any step that reads protected host state, changes permissions/repository settings, or places credentials/files/services remains a later Composite STRICT owner gate.
+After #259 is explicitly merged and exact-main CI is green, re-resolve whether the complete installed-App/integration administration surface can be collected with an already reviewed read-only capability. If not, STOP for the separate owner architecture/credential/permission decision before any runtime audit or digest source pin. The separate Automation App client/one-shot P9 runtime composition also remains source work after that trust prerequisite is resolved. Any step that reads protected host state, changes permissions/repository settings, or places credentials/files/services remains a later Composite STRICT owner gate.
 
-Do **not** create a dummy LIVE-AUTH, place/change credentials, modify systemd, widen GitHub App permissions, activate any mutation-capable adapter, deregister Hermes Deals runners, deploy production, write DB/Review/publication state, consume retailer-specific execution authorization, or mutate Cloudflare/repository settings merely because #257 is Ready or merged.
+Do **not** create a dummy LIVE-AUTH, pin an approved governance digest from synthetic/partial evidence, place/change credentials, modify systemd, widen GitHub App permissions, activate any mutation-capable adapter, deregister Hermes Deals runners, deploy production, write DB/Review/publication state, consume retailer-specific execution authorization, or mutate Cloudflare/repository settings merely because #259 is Ready or merged.
