@@ -144,8 +144,8 @@ terminal mutation.
 The `.path` unit watches only the fixed `READY` file. It does not accept a
 request payload. The operator stages all inputs first and changes `READY` last.
 A staging-root creation/ownership decision, path/service install or enable is a
-later host/systemd or permission mutation and requires a separate exact owner
-authorization. Merge of this source gate does not perform any of those steps.
+later host/systemd or permission mutation and requires a separate exact owner authorization.
+Merge of this source gate does not perform any of those steps.
 
 No automatic retry, rollback or production cleanup exists. A blocked bridge
 receipt must be reviewed before any new trigger is written.
