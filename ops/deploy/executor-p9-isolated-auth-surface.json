@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "activation_enabled": false,
+  "authorization_repository": "rozkalnsandris/deploy-authorizations",
+  "authorization_repository_id": null,
+  "authorization_repository_visibility": "private",
+  "issues_enabled": true,
+  "actions_enabled": false,
+  "queue_repository": "rozkalnsandris/ops-workflows",
+  "queue_repository_id": 1328835922,
+  "owner_user_id": 277435981,
+  "approved_operator_integrations": [
+    {
+      "app_id": 1144995,
+      "slug": "chatgpt-codex-connector",
+      "issues_permission": "write",
+      "authority_mode": "explicit-owner-invocation-only"
+    }
+  ],
+  "executor_app": {
+    "app_id": 4748870,
+    "issues_permission": "read",
+    "metadata_permission": "read",
+    "write_permissions_allowed": false
+  },
+  "required_repository_invariants": {
+    "no_unapproved_human_collaborators": true,
+    "no_unapproved_teams": true,
+    "no_unapproved_integrations": true,
+    "actions_disabled": true,
+    "issues_enabled": true,
+    "no_workflow_authority": true
+  },
+  "runtime_binding_ready": false,
+  "host_wiring_enabled": false,
+  "production_mutation_enabled": false
+}
