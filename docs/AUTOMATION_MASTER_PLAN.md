@@ -103,7 +103,7 @@ Shared public automation library. GitHub-hosted only, least privilege, full-SHA 
 
 ### `hermes-tech`
 
-Reference production execution architecture. Keep GitHub-hosted CI and local RPi5 pull/poll deploy classification, exact-SHA CI, locking, canary activation, rollback, health checks, and separate sensitive approvals. Later replace persistent user `gh auth` with the GitHub App.
+Reference production execution architecture. Keep GitHub-hosted CI and local RPi5 pull/poll deploy classification, exact-SHA CI, locking, canary activation, rollback, health checks, and separate sensitive approvals. Phase 6 now prioritizes replacing persistent user authentication with GitHub App installation authentication while independently isolating the generated-content write credential behind a narrow publisher capability.
 
 ### `rozkalns-cv`
 
@@ -246,9 +246,9 @@ Phase 3 exit decision:
 `CV_REPOSITORY_SELF_HOSTED_RUNNER_COUNT=0`
 `CV_LEGACY_RUNNER_RETIREMENT=PASS`
 
-### Phase 4 — Hermes Deals public-repository execution migration — CURRENT: P9 ISOLATED AUTH TRUST-BOUNDARY STOP
+### Phase 4 — Hermes Deals public-repository execution migration — PAUSED BY OWNER PRIORITY OVERRIDE: P9 POST-SAVE TRUST EVIDENCE STOP
 
-Hermes Deals Phase 4 remains the canonical production/live migration lane. Historical checklists are evidence only; current execution must re-resolve live repository state before every consequential step.
+Hermes Deals Phase 4 remains incomplete and its recorded P9 safety state remains authoritative, but active continuation is paused by the explicit 2026-08-29 owner priority decision to execute Phase 6 Hermes Tech authentication migration first. This pause does not mark any Phase 4/5 gate complete, authorize cleanup/retry of a consumed P9 transaction, or weaken any isolated-auth invariant. Resume Phase 4 only after Phase 6 exit or a later explicit reviewed priority reconciliation.
 
 Historical source evidence from the 2026-08-29 P9 isolated-auth and continuity chain; these pins are evidence only and must never be inferred to be current branch state:
 
@@ -285,12 +285,15 @@ Completed Phase 4 source/live gates:
 - [x] `RPi5_main#266` merged the continuity refresh at `454d82216ad8ba9f50aeff38f212c0967fbe273c`; exact-main Validate #641, FAST-LANE #96 and GITHUB-ONLY #85 were green. This is historical completion evidence, not a durable current-main pin.
 - [x] The first separately owner-authorized isolated-auth trust-boundary transaction created private `rozkalnsandris/deploy-authorizations` at observed GitHub ID `1350486101`, enabled Issues, disabled Actions, proved zero direct collaborators and zero installed GitHub Apps, then stopped fail-closed before App selection. Sanitized evidence is `RPi5_main#191` comment `5461784620`.
 - [x] Connector-scope reconciliation rejects the earlier Issues-only assumption for `chatgpt-codex-connector` App ID `1144995`: its selected-repository permission set includes broader write authority for Actions, Contents/code, Issues, Pull requests and Workflows. The corrected source contract selects owner-only LIVE-AUTH writing and explicitly excludes that App from the authorization repository.
+- [x] `RPi5_main#268` merged that corrected owner-only connector-scope contract at `de68073fa2269a128b130d67e4f868d914c61a47`; exact-main Validate #646, FAST-LANE #101 and GITHUB-ONLY #90 completed successfully.
+- [x] Under a later exact owner authorization, the owner revalidated the intended private/Issues-on/Actions-off/zero-collaborator/no-writer posture in GitHub UI and performed one `Rozkalns Deploy Executor` selected-repository Save after the UI showed `Only select repositories`, `ops-workflows` plus `deploy-authorizations`, and only Issues read + Metadata read. This is an owner-reported mutation receipt, not accepted final trust-surface evidence. The authorization was consumed at Save.
+- [x] Post-save read-only verification proved the ChatGPT Codex Connector installation still does not include `deploy-authorizations`, but the available connector cannot enumerate the separate Deploy Executor installation `157217641` and returned `403 Resource not accessible by integration`; the final installed-App/collaborator administration surface therefore remains independently unproven. No retry, rollback, cleanup or host/runtime/production mutation followed.
 
-Phase 4 next gates:
+Phase 4 next gates (paused, not waived):
 
-- [ ] **CONNECTOR-SCOPE SOURCE GATE:** merge and exact-main validate the owner-only writer contract before any remaining App selected-repository mutation. Until then `authorization_repository_id` remains null and all activation/runtime/host/production flags remain false.
-- [ ] A later separately owner-authorized remaining trust-boundary transaction must freshly revalidate repository ID `1350486101`, private/Issues/Actions/collaborator state, prove `chatgpt-codex-connector` and every other writer integration absent, and extend only read-only `Rozkalns Deploy Executor` selected-repository access without increasing permission levels. Final installed-App evidence must contain exactly that read-only reader, then STOP.
-- [ ] After that revised live setup proves owner-only writing plus the single read-only executor reader, a separate reviewed source migration must bind authorization repository ID `1350486101` and split queue and LIVE-AUTH repository identities. `ops-workflows` remains the queue repository.
+- [x] **CONNECTOR-SCOPE SOURCE GATE:** owner-only LIVE-AUTH writing and explicit connector exclusion are merged in #268 and exact-main CI is green.
+- [ ] **POST-SAVE TRUST EVIDENCE STOP:** obtain read-only, sanitized evidence proving repository ID `1350486101`, private visibility, Issues enabled, Actions disabled, zero direct collaborators, no writer integration including `chatgpt-codex-connector`, and a final installed-App surface containing only `Rozkalns Deploy Executor` App ID `4748870` with Issues read + Metadata read and no write permission. Evidence unavailable, ambiguous or drifting means STOP; this gate authorizes no corrective mutation. Until it passes, `authorization_repository_id` remains null and all activation/runtime/host/production flags remain false.
+- [ ] Only after accepted post-save trust evidence, a separate reviewed source migration may bind authorization repository ID `1350486101` and split queue and LIVE-AUTH repository identities. `ops-workflows` remains the queue repository.
 - [ ] `APPROVED_GOVERNANCE_WRITER_SET_SHA256` remains unset. Selecting isolation does not convert the partial `ops-workflows` governance surface into trusted evidence or justify a synthetic digest.
 - [ ] The separate Automation App client/one-shot P9 runtime composition remains source work after the isolated trust surface is established and source-bound.
 - [ ] The production registry and current P8 poller remain empty/disabled until a later reviewed source gate makes the exact canary operation consumable without weakening P8 safety.
@@ -298,20 +301,45 @@ Phase 4 next gates:
 - [ ] P9 must end with local `DRY_RUN_READY` and `PRODUCTION_MUTATION_STARTED=false`; P10 remains a separate live mutation gate.
 - [ ] Only after the replacement path is proven may any current Hermes Deals self-hosted canary runner/path be retired, and runner retirement itself remains separately owner-authorized.
 
-Do not use this phase to select `chatgpt-codex-connector` for the authorization repository, retry or clean up the consumed partial setup transaction, consume retailer-specific execution authorizations, change parser/corpus state, write DB/Review/publication state, deploy production, mutate Cloudflare, modify repository settings or widen credentials/permissions without the exact separate gate for that action.
+Do not use this phase to select `chatgpt-codex-connector` for the authorization repository, retry or clean up consumed P9 transactions, treat the owner Save as final accepted trust evidence, bind the authorization repository ID prematurely, consume retailer-specific execution authorizations, change parser/corpus state, write DB/Review/publication state, deploy production, mutate Cloudflare, modify repository settings or widen credentials/permissions without the exact separate gate for that action.
 
-### Phase 5 — Hermes Deals migration completion / residual audit paths
+### Phase 5 — Hermes Deals migration completion / residual audit paths — PAUSED WITH PHASE 4
 
 - [ ] Reconcile Phase 4 canary evidence against every remaining audit/diagnostic/release path.
 - [ ] Migrate remaining capabilities incrementally, one trust domain at a time, preserving exact SHA, owner authorization, sanitized evidence and no-write boundaries where applicable.
 - [ ] Remove each residual self-hosted runner only after its replacement is proven and separate owner authorization is granted.
 - [ ] Record final runner/control-plane inventory and regression evidence in Hermes Deals governance and `RPi5_main#103`.
 
-### Phase 6 — Hermes Tech authentication migration
+### Phase 6 — Hermes Tech authentication migration — CURRENT: OWNER PRIORITY OVERRIDE 2026-08-29
 
-- [ ] Replace persistent user `gh auth` dependency with GitHub App installation authentication.
-- [ ] Preserve classifier, canary, timer, locking, deploy helper, readiness alerts and exact-SHA gates.
-- [ ] Canary before recurring production behavior changes.
+Owner priority explicitly advances Phase 6 before completion of paused Phase 4/5. This is a sequencing change only: it does not authorize GitHub App permission changes, credential movement/rotation/revocation, ruleset/repository-setting changes, host/service/systemd changes, publication, deployment, scheduler mutation or any other live mutation.
+
+Canonical Phase 6 owners and evidence:
+
+- `rozkalnsandris/hermes-tech#95` / `#116` own the residual publisher/authentication risk and roadmap;
+- `rozkalnsandris/RPi5_main#93` / `#110` own the host-side isolated publisher implementation;
+- Hermes Tech `docs/publisher-credential-boundary.md` defines the replacement boundary and staged production migration;
+- Phase 2 already proved `Rozkalns Automation` read-only Actions/Contents installation authentication. That existing App remains read-only unless a later reviewed Phase 6 design proves an exact additional endpoint/permission is required.
+
+Phase 6 execution order:
+
+1. **SOURCE INVENTORY / DESIGN GATE:** fresh-read current `hermes-tech/main`, `RPi5_main/main`, #95/#116/#110, current CI/reviews/comments and the exact source paths that still depend on persistent user auth, raw publisher SSH/deploy-key access or related GitHub credentials. Record only sanitized identities/capabilities; never read or emit secret bytes/tokens.
+2. **SOURCE IMPLEMENTATION GATE:** implement the narrow #110 publisher boundary and authentication changes with synthetic/no-network tests first. Preserve exact repository/branch/base/parent/subject/path/refspec/fast-forward/post-push validation and existing classifier/readiness/timer/locking contracts. Do not expose arbitrary Git/SSH/sudo/shell execution.
+3. **READ-ONLY AUTH MIGRATION:** replace any remaining persistent user `gh auth` dependency with repository-scoped short-lived GitHub App installation authentication where the operation is read-only. Do not broaden `Rozkalns Automation` beyond its proven Actions-read/Contents-read contract for this step.
+4. **WRITE-CREDENTIAL DECISION:** keep publication write authority as a separate capability from read-only controller authentication. Before choosing a deploy-key copy, dedicated publisher App, or another token-minting boundary, document the exact required GitHub write endpoint, minimal permission, host secret owner, sudo/service boundary, rollback and abuse boundary. No permission/key/ruleset mutation occurs in source implementation.
+5. **PRE-LIVE READY GATE:** source-reviewed implementation must be CI-green with adversarial synthetic coverage, exact rollback/recovery procedure and cross-repository producer/consumer audit. Merge remains explicit and does not authorize live activation.
+6. **COMPOSITE LIVE GATE:** only after a separate exact owner authorization may host installation/credential placement and one controlled publication canary occur. Old shared-UID write access remains available for recovery until the new path is proven.
+7. **RETIREMENT GATE:** only after the new path and recovery proof pass may the obsolete shared-UID credential/user-auth path be removed, rotated or revoked under another exact authorization if not already included in a bounded approved transaction.
+
+Phase 6 exit requires:
+
+- [ ] persistent user `gh auth` is not required for normal Hermes Tech controller reads;
+- [ ] generated-content write credential/token-minting secret is isolated from the shared `andris` UID;
+- [ ] Hermes runtime can invoke only the narrow generated-content publication capability and cannot read/export raw write authority;
+- [ ] classifier, canary, timer, locking, deploy helper, readiness alerts, publication serialization and exact-SHA/fast-forward gates remain intact;
+- [ ] one separately approved real publication canary and recovery proof pass;
+- [ ] obsolete shared-UID credential/auth path is removed/rotated only after replacement proof;
+- [ ] final residual risk and rotation/recovery procedure are recorded in #95/#116/#110 and this master plan before Phase 4/5 resume.
 
 ### Phase 7 — RPi5_main auto-plan/readiness
 
@@ -329,7 +357,7 @@ Do not use this phase to select `chatgpt-codex-connector` for the authorization 
 - [ ] Full rollback/health/readiness audit PASS.
 - [ ] Final architecture documented and issue #103 closed.
 
-### Cross-cutting Track X — owner-authorized pull deploy executor v1 — P8 COMPLETE / P9 ISOLATED AUTH TRUST-BOUNDARY STOP
+### Cross-cutting Track X — owner-authorized pull deploy executor v1 — P8 COMPLETE / P9 POST-SAVE TRUST EVIDENCE STOP
 
 Roadmap: `RPi5_main#236`.
 Threat model / protocol: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_V1.md`.
@@ -344,26 +372,26 @@ P9 governance collector: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_P9_GOVERNAN
 P9 isolated authorization surface: `docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_P9_ISOLATED_AUTH_SURFACE.md`.
 Hermes Deals dormant canary contract: `docs/HERMES_DEALS_ORIGIN_PULL_CANARY_SOURCE.md`.
 
-P0 through P8 are complete at their respective source/live gates. The P9 decision core is merged by `RPi5_main#250`; the P9 evidence schemas/parsers are merged by `RPi5_main#254` at `26f1f8810eaafbdf34e020f77253b57f7fe56da6`; the fixed-path provenance boundary is merged by `RPi5_main#256` at `68632ac3c5216f569d235fe1af04d4c4df1e1d6c`; the typed producer/publisher boundary is merged by `RPi5_main#258` at `5f0f1ed62e4d52422139364898f735578be2cbdb`; the governance collector is merged by `RPi5_main#260` at `cc2d9cd6bd9f76c9d6f96a6389acf765cf3555e8` and #259 is completed. The isolated authorization-surface source gate is merged by `RPi5_main#263` at `6efb1efa3e8e4792de487ec16c95f6e0dc21f622`; #264 is completed. Historical continuity merges are `RPi5_main#265` at `252f1034eb1a79c2620f8ef3844a34f092c7e41f` and `RPi5_main#266` at `454d82216ad8ba9f50aeff38f212c0967fbe273c`; their recorded exact-main checks were green at those merge checkpoints. These SHAs are evidence only and are not a durable assertion of current `main`. P8 remains installed and accepted on RPi5 at exact reviewed source `6a43ef875c785321a1b6bf09d8e558c5151c8546`; the recurring poller is unprivileged/read-only, production dispatch remains disabled, and the temporary staging credential was removed separately after acceptance.
+P0 through P8 are complete at their respective source/live gates. The P9 decision core is merged by `RPi5_main#250`; the P9 evidence schemas/parsers are merged by `RPi5_main#254` at `26f1f8810eaafbdf34e020f77253b57f7fe56da6`; the fixed-path provenance boundary is merged by `RPi5_main#256` at `68632ac3c5216f569d235fe1af04d4c4df1e1d6c`; the typed producer/publisher boundary is merged by `RPi5_main#258` at `5f0f1ed62e4d52422139364898f735578be2cbdb`; the governance collector is merged by `RPi5_main#260` at `cc2d9cd6bd9f76c9d6f96a6389acf765cf3555e8` and #259 is completed. The isolated authorization-surface source gate is merged by `RPi5_main#263` at `6efb1efa3e8e4792de487ec16c95f6e0dc21f622`; #264 is completed. Historical continuity merges are `RPi5_main#265` at `252f1034eb1a79c2620f8ef3844a34f092c7e41f` and `RPi5_main#266` at `454d82216ad8ba9f50aeff38f212c0967fbe273c`; their recorded exact-main checks were green at those merge checkpoints. These SHAs are evidence only and are not a durable assertion of current `main`. `RPi5_main#268` then merged the corrected owner-only connector-scope contract at `de68073fa2269a128b130d67e4f868d914c61a47` with exact-main Validate #646, FAST-LANE #101 and GITHUB-ONLY #90 green. P8 remains installed and accepted on RPi5 at exact reviewed source `6a43ef875c785321a1b6bf09d8e558c5151c8546`; the recurring poller is unprivileged/read-only, production dispatch remains disabled, and the temporary staging credential was removed separately after acceptance.
 
 Critical P0 authorization invariant remains binding:
 
 **An autonomous RPi5 credential must not have write authority over the GitHub surface from which owner authorization is accepted.**
 
-The roadmap body's historical Issues read/write Deploy Executor App text remains superseded by P0 review/checkpoints. The current installed P8 reader remains `ops-workflows` only with Issues read-only plus minimum metadata. The selected P9 target architecture moves future LIVE-AUTH authority to a separately isolated repository instead of broadening that autonomous credential. Result reporting, if later implemented, must use a separately reviewed non-authority channel and must not gain the ability to mutate accepted LIVE-AUTH authority.
+The roadmap body's historical Issues read/write Deploy Executor App text remains superseded by P0 review/checkpoints. The installed P8 runtime remains bound to `ops-workflows` only with Issues read-only plus minimum metadata. The selected P9 target architecture moves LIVE-AUTH authority to the separately isolated repository instead of broadening that autonomous credential. An owner-performed GitHub UI Save reports that the same read-only Deploy Executor installation now selects both `ops-workflows` and `deploy-authorizations`, but the current connector cannot independently enumerate installation `157217641`; this Save is not accepted as final trust-surface evidence and does not change the installed P8 runtime binding. Result reporting, if later implemented, must use a separately reviewed non-authority channel and must not gain the ability to mutate accepted LIVE-AUTH authority.
 
 P9 preserves independent least-privilege roles:
 
 - `rozkalnsandris/ops-workflows` remains the READY/deploy-queue eligibility surface;
-- future `rozkalnsandris/deploy-authorizations` is the isolated LIVE-AUTH authority surface only after a separately authorized setup and exact stable-ID source binding;
+- `rozkalnsandris/deploy-authorizations` is the intended isolated LIVE-AUTH authority surface, but runtime acceptance remains blocked until post-save trust evidence is complete and a later source migration binds its stable ID;
 - only exact owner actor `type=User`, ID `277435981`, may write accepted LIVE-AUTH issues; no writer/operator integration is approved;
 - `chatgpt-codex-connector` App ID `1144995` remains unselected because its fixed selected-repository permissions are broader than Issues write;
-- `Rozkalns Deploy Executor` remains read-only; future runtime must mint separately repository-scoped queue-read and authorization-read tokens rather than a generic broad token;
+- `Rozkalns Deploy Executor` remains read-only; the owner-performed Save reports selected-repository access to both queue and authorization repositories, while final installed-App evidence remains unproven; future runtime must mint separately repository-scoped queue-read and authorization-read tokens rather than a generic broad token;
 - `Rozkalns Automation` remains the existing source/CI reader with Actions read + Contents read on only the reviewed source repository allowlist.
 
-`RPi5_main#250` provides stable source repository identity, merged/reachable exact-SHA + CI proof, JIT governance freshness, genuine READY queue/source/baseline/adapter-preflight composition and final unchanged-authority verification. `RPi5_main#254` provides strict schemas/parsers for the JIT governance and sanitized Hermes baseline evidence. `RPi5_main#256` provides the fixed-path root-owned consumer provenance/placement boundary. `RPi5_main#258` provides the separately reviewed typed producer/publisher source boundary while deliberately keeping governance evidence fail-closed. `RPi5_main#260` freezes the source/tree and completeness/provenance boundary for the complete `ops-workflows` writer-surface collector and proves the remaining admin/integration inventory capability gap. `RPi5_main#263` completes the dormant isolated-surface source gate without creating that repository, inventing its stable ID, changing the production registry/P8 poller/systemd/credentials/GitHub permissions, or exposing a mutation/apply/result-writer path. `RPi5_main#265` and `RPi5_main#266` are continuity/history reconciliations only and do not change that safety boundary.
+`RPi5_main#250` provides stable source repository identity, merged/reachable exact-SHA + CI proof, JIT governance freshness, genuine READY queue/source/baseline/adapter-preflight composition and final unchanged-authority verification. `RPi5_main#254` provides strict schemas/parsers for the JIT governance and sanitized Hermes baseline evidence. `RPi5_main#256` provides the fixed-path root-owned consumer provenance/placement boundary. `RPi5_main#258` provides the separately reviewed typed producer/publisher source boundary while deliberately keeping governance evidence fail-closed. `RPi5_main#260` freezes the source/tree and completeness/provenance boundary for the complete `ops-workflows` writer-surface collector and proves the remaining admin/integration inventory capability gap. `RPi5_main#263` completes the dormant isolated-surface source gate without creating that repository, inventing its stable ID, changing the production registry/P8 poller/systemd/credentials/GitHub permissions, or exposing a mutation/apply/result-writer path. `RPi5_main#265` and `RPi5_main#266` are continuity/history reconciliations only and do not change that safety boundary. `RPi5_main#268` supersedes the earlier connector writer assumption with owner-only writing and explicit connector exclusion.
 
-P9 live readiness still requires: merge/exact-main validation of the connector-scope source correction; a separately owner-authorized remaining setup transaction that keeps every writer integration absent and selects only the read-only executor; a later reviewed source binding to observed repository ID `1350486101` with explicit queue/auth protocol split; the separate Automation App read-only runtime credential/client boundary; a one-shot P9 entrypoint; exact operation-specific registry/runtime composition; a genuine READY queue and explicit owner decision. The #263 source gate plus #265/#266 continuity checkpoints are historical completion evidence. Fresh current `RPi5_main/main`, exact-main CI and relevant cross-repository state must be resolved immediately before any consequential next step. Any host credential/service/systemd/protected-evidence or GitHub permission/repository-setting change remains separately owner-gated.
+P9 live readiness now requires: accepted read-only post-save evidence proving the isolated repository's final owner-only writer plus single read-only executor surface; a later reviewed source binding to observed repository ID `1350486101` with explicit queue/auth protocol split; the separate Automation App read-only runtime credential/client boundary; a one-shot P9 entrypoint; exact operation-specific registry/runtime composition; a genuine READY queue and explicit owner decision. The connector-scope source correction is already merged and exact-main green, and the owner-performed selected-repository Save has occurred, but neither fact permits source binding while the final trust surface remains unproven. Fresh current `RPi5_main/main`, exact-main CI and relevant cross-repository state must be resolved immediately before any consequential next step. Any corrective GitHub permission/repository-setting change, host credential/service/systemd/protected-evidence change or production mutation remains separately owner-gated.
 
 The future transport remains data-only:
 
@@ -393,12 +421,10 @@ If question 3 is `no` or question 5 is `yes`, do not make the change.
 
 ## Current next action
 
-**CONNECTOR-SCOPE SOURCE GATE / LIVE STOP:** the first trust-boundary transaction created and partially configured repository ID `1350486101`, then consumed its authorization and stopped before App selection when the real `chatgpt-codex-connector` permission set contradicted the Issues-only source assumption. Sanitized evidence is `RPi5_main#191` comment `5461784620`. The corrected contract requires owner-only LIVE-AUTH writing, no writer integrations, the connector unselected, and only the read-only executor as a future reader. `authorization_repository_id` remains null and all activation/runtime/host/production flags remain false.
+**PHASE 6 SOURCE INVENTORY / DESIGN GATE:** the owner has explicitly prioritized Hermes Tech authentication migration ahead of paused Phase 4/5. After this reconciliation is merged and exact-main CI is green, fresh-read `hermes-tech/main`, `RPi5_main/main`, Hermes Tech #95/#116, RPi5_main #93/#110, current CI/reviews/comments and the exact auth/publisher source paths. Separate read-only controller authentication from generated-content write authority before changing code.
 
-Immediately before any consequential continuation, fresh-read current `RPi5_main/main`, exact-main CI and relevant cross-repository/issue/PR/review/comment state. A later docs/continuity merge changing `main` does not itself create a new architecture gate and must not trigger another self-referential current-main pin.
+The first implementation must remain source-only: define and test the narrow #110 publisher/authentication boundary with synthetic/no-network coverage while preserving all existing exact-SHA, publication-path, fast-forward, locking, classifier/readiness and rollback invariants. The existing `Rozkalns Automation` App remains Actions-read/Contents-read; do not broaden its permissions merely because Phase 6 is current.
 
-Merge and exact-main validation of this connector-scope correction remain separate owner/source gates. Do not change repository settings or selected-repository access under the consumed authorization. After the corrected source is merged and exact-main green, a new exact owner authorization may cover only fresh state revalidation plus adding `Rozkalns Deploy Executor` as an Issues/Metadata read-only reader; `chatgpt-codex-connector` and every other writer integration must remain absent.
+Merge of the reconciliation or later source implementation does not authorize host credential placement, App permission/repository-setting changes, ruleset changes, publication, service/systemd mutation, key movement/rotation/revocation or removal of the current shared-UID recovery path. Those are later exact owner gates after source/CI/review readiness.
 
-Only after that separately authorized revised trust-boundary setup is proven may a new reviewed source PR bind observed authorization repository ID `1350486101` and split queue vs LIVE-AUTH repository roles. Host/runtime wiring, credentials, genuine P9 LIVE-AUTH, P9 canary execution and P10 remain later separate gates.
-
-Do **not** select the broad connector, create a dummy LIVE-AUTH, bind the observed repository ID from partial evidence, pin an approved governance digest from synthetic/partial evidence, place/change credentials, modify systemd, widen GitHub App permission levels, activate any mutation-capable adapter, deregister Hermes Deals runners, deploy production, write DB/Review/publication state, consume retailer-specific execution authorization, or mutate Cloudflare/repository settings merely because the connector-scope source correction exists.
+Paused Phase 4/5 state remains preserved exactly. When Phase 4 resumes, its first gate is **POST-SAVE TRUST EVIDENCE STOP**, not connector-scope correction or another Deploy Executor selection attempt. Do not select the broad connector, retry/clean up consumed P9 transactions, treat the owner Save as final accepted trust evidence, bind partial evidence, place/change credentials, modify systemd, activate mutation-capable adapters, deregister Hermes Deals runners, deploy production, write DB/Review/publication state, or mutate Cloudflare/repository settings while Phase 6 is current.
