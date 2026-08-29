@@ -15,6 +15,8 @@ sys.path.insert(0, str(ROOT / "ops" / "lib"))
 from deploy_executor.protocol import (  # noqa: E402
     AUTHORIZATION_REPOSITORY,
     AUTHORIZATION_REPOSITORY_ID,
+    QUEUE_REPOSITORY,
+    QUEUE_REPOSITORY_ID,
     ProtocolError,
     accept_issue,
     validate_queue_binding,
@@ -29,7 +31,6 @@ from deploy_executor.state import (  # noqa: E402
 
 FIXTURES = ROOT / "tests" / "fixtures" / "deploy_executor"
 REPOSITORY_ID = AUTHORIZATION_REPOSITORY_ID
-OPERATOR_APP_ID = 1144995
 SERVER_TIME = datetime(2026, 8, 27, 20, 5, 0, tzinfo=timezone.utc)
 
 
@@ -59,7 +60,7 @@ class ProtocolTests(unittest.TestCase):
             repository_full_name=AUTHORIZATION_REPOSITORY,
             server_time=server_time,
             governance_ok=governance_ok,
-            approved_operator_app_ids=frozenset({OPERATOR_APP_ID}),
+            approved_operator_app_ids=frozenset(),
         )
 
     def assert_code(self, code: str, fn):
@@ -67,18 +68,38 @@ class ProtocolTests(unittest.TestCase):
             fn()
         self.assertEqual(caught.exception.code, code)
 
-    def test_valid_owner_authored_request_via_operator_integration(self):
+    def test_valid_owner_authored_request_has_no_operator_integration(self):
         accepted = self.accept()
         self.assertEqual(accepted.request_id, "4a5da3f4-ccf1-4c63-ae8f-3eb8506f2b61")
-        self.assertEqual(accepted.performed_via_github_app_id, OPERATOR_APP_ID)
-        self.assertEqual(accepted.performed_via_github_app_slug, "chatgpt-codex-connector")
+        self.assertIsNone(accepted.performed_via_github_app_id)
+        self.assertIsNone(accepted.performed_via_github_app_slug)
+        self.assertEqual(accepted.repository_full_name, "rozkalnsandris/deploy-authorizations")
+        self.assertEqual(accepted.repository_id, 1350486101)
         validate_queue_binding(accepted, self.queue)
 
+    def test_queue_and_authorization_repository_roles_are_split(self):
+        self.assertEqual(QUEUE_REPOSITORY, "rozkalnsandris/ops-workflows")
+        self.assertEqual(QUEUE_REPOSITORY_ID, 1328835922)
+        self.assertEqual(AUTHORIZATION_REPOSITORY, "rozkalnsandris/deploy-authorizations")
+        self.assertEqual(AUTHORIZATION_REPOSITORY_ID, 1350486101)
 
-    def test_unapproved_operator_integration_rejected(self):
+    def test_app_authored_live_auth_rejected_even_if_caller_supplies_app_id(self):
         issue = copy.deepcopy(self.issue)
-        issue["performed_via_github_app"]["id"] = 999999
-        self.assert_code("UNAPPROVED_OPERATOR_INTEGRATION", lambda: self.accept(issue))
+        issue["performed_via_github_app"] = {
+            "slug": "chatgpt-codex-connector",
+            "id": 1144995,
+        }
+        self.assert_code(
+            "UNAPPROVED_OPERATOR_INTEGRATION",
+            lambda: accept_issue(
+                issue,
+                repository_id=REPOSITORY_ID,
+                repository_full_name=AUTHORIZATION_REPOSITORY,
+                server_time=SERVER_TIME,
+                governance_ok=True,
+                approved_operator_app_ids=frozenset({1144995}),
+            ),
+        )
 
     def test_bot_authored_rejected_even_if_numeric_id_matches(self):
         issue = copy.deepcopy(self.issue)
@@ -90,6 +111,18 @@ class ProtocolTests(unittest.TestCase):
         issue["user"]["id"] = 42
         self.assert_code("WRONG_OWNER", lambda: self.accept(issue))
 
+    def test_wrong_authorization_repository_rejected(self):
+        self.assert_code(
+            "WRONG_AUTHORIZATION_REPOSITORY",
+            lambda: accept_issue(
+                self.issue,
+                repository_id=REPOSITORY_ID,
+                repository_full_name=QUEUE_REPOSITORY,
+                server_time=SERVER_TIME,
+                governance_ok=True,
+            ),
+        )
+
     def test_wrong_authorization_repository_id_rejected(self):
         self.assert_code(
             "WRONG_AUTHORIZATION_REPOSITORY_ID",
@@ -99,9 +132,16 @@ class ProtocolTests(unittest.TestCase):
                 repository_full_name=AUTHORIZATION_REPOSITORY,
                 server_time=SERVER_TIME,
                 governance_ok=True,
-                approved_operator_app_ids=frozenset({OPERATOR_APP_ID}),
             ),
         )
+
+    def test_wrong_queue_repository_rejected(self):
+        issue = copy.deepcopy(self.issue)
+        replace_payload(
+            issue,
+            lambda p: p.__setitem__("queue_repository", AUTHORIZATION_REPOSITORY),
+        )
+        self.assert_code("WRONG_QUEUE_REPOSITORY", lambda: self.accept(issue))
 
     def test_governance_unknown_fails_closed(self):
         self.assert_code("GOVERNANCE_UNTRUSTED", lambda: self.accept(governance_ok=False))
@@ -153,7 +193,7 @@ class ProtocolTests(unittest.TestCase):
                 edited,
                 server_time=SERVER_TIME,
                 governance_ok=True,
-                approved_operator_app_ids=frozenset({OPERATOR_APP_ID}),
+                approved_operator_app_ids=frozenset(),
             ),
         )
 
@@ -228,7 +268,7 @@ class StateMachineTests(unittest.TestCase):
             repository_full_name=AUTHORIZATION_REPOSITORY,
             server_time=SERVER_TIME,
             governance_ok=True,
-            approved_operator_app_ids=frozenset({OPERATOR_APP_ID}),
+            approved_operator_app_ids=frozenset(),
         )
         self.tmp = tempfile.TemporaryDirectory()
         self.db_path = Path(self.tmp.name) / "state.sqlite3"

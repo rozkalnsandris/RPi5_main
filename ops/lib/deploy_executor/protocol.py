@@ -8,8 +8,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Mapping, Sequence
 
-AUTHORIZATION_REPOSITORY = "rozkalnsandris/ops-workflows"
-AUTHORIZATION_REPOSITORY_ID = 1328835922
+QUEUE_REPOSITORY = "rozkalnsandris/ops-workflows"
+QUEUE_REPOSITORY_ID = 1328835922
+AUTHORIZATION_REPOSITORY = "rozkalnsandris/deploy-authorizations"
+AUTHORIZATION_REPOSITORY_ID = 1350486101
 OWNER_USER_ID = 277435981
 LIVE_AUTH_SCHEMA = "rozkalns.live-auth.v1"
 TTL_SECONDS = 600
@@ -206,8 +208,8 @@ def _validate_payload(payload: Mapping[str, Any]) -> Mapping[str, Any]:
     _parse_uuid4(payload["request_id"])
 
     queue_repository = _require_string(payload["queue_repository"], "queue_repository", 201, pattern=REPOSITORY_RE)
-    if queue_repository != AUTHORIZATION_REPOSITORY:
-        _fail("WRONG_QUEUE_REPOSITORY", f"queue_repository must be {AUTHORIZATION_REPOSITORY!r}")
+    if queue_repository != QUEUE_REPOSITORY:
+        _fail("WRONG_QUEUE_REPOSITORY", f"queue_repository must be {QUEUE_REPOSITORY!r}")
 
     _parse_positive_int(payload["queue_issue"], "queue_issue", maximum=2_147_483_647)
     _require_string(payload["source_repository"], "source_repository", 201, pattern=REPOSITORY_RE)
@@ -329,17 +331,13 @@ def accept_issue(
     if app is not None:
         if type(app) is not dict:
             _fail("MALFORMED_ISSUE", "performed_via_github_app must be an object or null")
-        app_id = _parse_positive_int(
+        observed_app_id = _parse_positive_int(
             app.get("id"), "performed_via_github_app.id", maximum=2**63 - 1
         )
-        if app_id not in approved_operator_app_ids:
-            _fail(
-                "UNAPPROVED_OPERATOR_INTEGRATION",
-                f"performed_via_github_app.id {app_id} is not in the reviewed owner-operator trust set",
-            )
-        slug = app.get("slug")
-        if slug is not None:
-            app_slug = _require_string(slug, "performed_via_github_app.slug", 128)
+        _fail(
+            "UNAPPROVED_OPERATOR_INTEGRATION",
+            f"app-authored LIVE-AUTH is forbidden; observed app id {observed_app_id}",
+        )
 
     return AcceptedAuthorization(
         repository_id=repository_id,
