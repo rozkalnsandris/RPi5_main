@@ -34,10 +34,14 @@ POLLER_UNIT = ROOT / "ops" / "systemd" / "rozkalns-deploy-executor.service"
 
 
 class P5InterfaceSecurityTests(unittest.TestCase):
-    def test_production_registry_remains_empty_and_execution_disabled(self):
+    def test_production_registry_remains_disabled_with_reviewed_strict_canary(self):
         registry = load_registry(PRODUCTION_REGISTRY)
         self.assertFalse(registry.execution_enabled)
-        self.assertEqual(registry.operations, ())
+        self.assertEqual(len(registry.operations), 1)
+        operation = registry.operations[0]
+        self.assertEqual(operation.operation_id, "hermes-deals.origin-path-audit.v1")
+        self.assertEqual(operation.authorization_class, "STRICT")
+        self.assertFalse(operation.ordinary_live_all_eligible)
 
     def test_audit_registry_has_one_dormant_cv_operation(self):
         registry = load_registry(AUDIT_REGISTRY)
