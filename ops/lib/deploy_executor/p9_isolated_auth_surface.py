@@ -199,6 +199,9 @@ def validate_contract(payload: Mapping[str, Any]) -> IsolatedAuthSurfaceContract
             raise IsolatedAuthSurfaceError(
                 "authorization_repository_id must match observed repository id"
             )
+        raise IsolatedAuthSurfaceError(
+            "partial-stop evidence may not bind authorization_repository_id"
+        )
 
     writer = payload["authorization_writer"]
     if type(writer) is not dict:
@@ -279,8 +282,10 @@ def validate_contract(payload: Mapping[str, Any]) -> IsolatedAuthSurfaceContract
     for key in sorted(_INVARIANT_KEYS):
         _require_bool(invariants[key], f"required_repository_invariants.{key}", True)
 
+    if production_mutation_enabled:
+        raise IsolatedAuthSurfaceError("P9 isolated auth source contract may not enable production mutation")
     if repository_id is None:
-        if activation_enabled or runtime_binding_ready or host_wiring_enabled or production_mutation_enabled:
+        if activation_enabled or runtime_binding_ready or host_wiring_enabled:
             raise IsolatedAuthSurfaceError(
                 "unbound authorization repository id requires dormant fail-closed state"
             )
@@ -288,9 +293,6 @@ def validate_contract(payload: Mapping[str, Any]) -> IsolatedAuthSurfaceContract
         raise IsolatedAuthSurfaceError("activation requires runtime_binding_ready")
     if host_wiring_enabled and not activation_enabled:
         raise IsolatedAuthSurfaceError("host wiring requires activation")
-    if production_mutation_enabled:
-        raise IsolatedAuthSurfaceError("P9 isolated auth source contract may not enable production mutation")
-
     return IsolatedAuthSurfaceContract(
         authorization_repository=payload["authorization_repository"],
         authorization_repository_id=repository_id,

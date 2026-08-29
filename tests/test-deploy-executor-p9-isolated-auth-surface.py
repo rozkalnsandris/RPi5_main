@@ -124,43 +124,23 @@ def test_unbound_repository_id_forbids_activation() -> None:
         "activation_enabled",
         "runtime_binding_ready",
         "host_wiring_enabled",
-        "production_mutation_enabled",
     ):
         payload = load_raw()
         payload[key] = True
         expect_error(payload, "unbound authorization repository id requires dormant fail-closed state")
 
 
-def test_bound_id_alone_does_not_enable_runtime() -> None:
+def test_partial_stop_evidence_forbids_repository_binding() -> None:
     payload = load_raw()
     payload["authorization_repository_id"] = 1350486101
-    contract = isolated.validate_contract(payload)
-    assert contract.authorization_repository_id == 1350486101
-    assert contract.activation_enabled is False
-    assert contract.runtime_binding_ready is False
-
-
-def test_activation_requires_runtime_binding() -> None:
+    expect_error(payload, "partial-stop evidence may not bind authorization_repository_id")
     payload = load_raw()
-    payload["authorization_repository_id"] = 1350486101
-    payload["activation_enabled"] = True
-    expect_error(payload, "activation requires runtime_binding_ready")
-
-
-def test_host_wiring_requires_activation() -> None:
-    payload = load_raw()
-    payload["authorization_repository_id"] = 1350486101
-    payload["runtime_binding_ready"] = True
-    payload["host_wiring_enabled"] = True
-    expect_error(payload, "host wiring requires activation")
+    payload["authorization_repository_id"] = 1
+    expect_error(payload, "must match observed repository id")
 
 
 def test_p9_contract_can_never_enable_production_mutation() -> None:
     payload = load_raw()
-    payload["authorization_repository_id"] = 1350486101
-    payload["runtime_binding_ready"] = True
-    payload["activation_enabled"] = True
-    payload["host_wiring_enabled"] = True
     payload["production_mutation_enabled"] = True
     expect_error(payload, "may not enable production mutation")
 

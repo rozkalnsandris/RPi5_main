@@ -58,7 +58,7 @@ The intended repository identity is:
 
 `rozkalnsandris/deploy-authorizations`
 
-The repository now exists and the partial setup evidence records GitHub ID `1350486101`. Its authoritative runtime binding remains intentionally **unbound** because the writer/reader surface has not completed the revised owner-only acceptance gate. The machine contract therefore keeps `authorization_repository_id=null`, `activation_enabled=false`, `runtime_binding_ready=false`, `host_wiring_enabled=false`, and `production_mutation_enabled=false`.
+The repository now exists and the partial setup evidence records GitHub ID `1350486101`. Its authoritative runtime binding remains intentionally **unbound** because the writer/reader surface has not completed the revised owner-only acceptance gate. Schema v2 rejects any non-null `authorization_repository_id` while evidence status is `partial-stop`; the machine contract keeps that field null and `activation_enabled=false`, `runtime_binding_ready=false`, `host_wiring_enabled=false`, and `production_mutation_enabled=false`.
 
 A later source binding must use exactly the observed GitHub-assigned ID `1350486101`, but only after a separately authorized remaining setup transaction proves the revised writer/reader surface. No synthetic ID, placeholder repository, temporary repository, name-only trust, or partial-setup evidence is sufficient for runtime binding.
 
@@ -127,7 +127,7 @@ The current P8 source and installed runtime remain bound to `ops-workflows` only
 
 The current LIVE-AUTH v1 implementation intentionally conflates authorization repository and queue repository through the existing `AUTHORIZATION_REPOSITORY` constant. That behavior remains unchanged in this source-decision gate so current P8/P9 code cannot silently begin consuming the isolated repository before its trust surface is completed and source-bound.
 
-After the remaining trust-boundary setup has been completed and stable ID `1350486101` has been freshly revalidated, a separate source PR must split the roles explicitly:
+After the remaining trust-boundary setup has been completed and stable ID `1350486101` has been freshly revalidated, a separate source PR and schema migration must split the roles explicitly:
 
 1. `QUEUE_REPOSITORY` remains `rozkalnsandris/ops-workflows` with stable ID `1328835922`;
 2. the LIVE-AUTH repository becomes `rozkalnsandris/deploy-authorizations` plus its real stable repository ID;
