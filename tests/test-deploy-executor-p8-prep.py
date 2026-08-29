@@ -23,13 +23,16 @@ from deploy_executor.github_app_auth import (
 from deploy_executor.p8_poller import P8PollerError, poll_once
 from deploy_executor.transport import HTTPResponse, InstallationToken
 
+FIXTURES = ROOT / "tests" / "fixtures" / "deploy_executor"
 CONFIG = ROOT / "ops" / "deploy" / "executor-p8-dry-run-config.json"
 REGISTRY = ROOT / "ops" / "deploy" / "executor-operations.json"
+CANARY_REGISTRY = FIXTURES / "operations_hermes_deals_origin_canary.json"
 SERVICE = ROOT / "ops" / "systemd" / "rozkalns-deploy-executor.service"
 TIMER = ROOT / "ops" / "systemd" / "rozkalns-deploy-executor.timer"
 POLLER = ROOT / "ops" / "bin" / "rozkalns-deploy-poll"
 DISPATCHER = ROOT / "ops" / "bin" / "rozkalns-deploy-dispatch"
 INSTALLER = ROOT / "scripts" / "install-deploy-executor-p8-dry-run.sh"
+POLLER_SOURCE = ROOT / "ops" / "lib" / "deploy_executor" / "p8_poller.py"
 
 
 def _decode_segment(segment: str) -> dict:
@@ -266,7 +269,7 @@ class P8PrepTests(unittest.TestCase):
         issue_call = next(row for row in second.calls if "/issues?state=open" in row[1])
         self.assertEqual(issue_call[2].get("If-None-Match"), '"p8"')
 
-    def test_nonempty_registry_is_rejected_before_any_network_read(self):
+    def test_poller_does_not_parse_or_consume_disabled_registry_operations(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             state = root / "state"
@@ -277,13 +280,49 @@ class P8PrepTests(unittest.TestCase):
                     {
                         "schema_version": 1,
                         "execution_enabled": False,
-                        "operations": [{"operation_id": "x"}],
+                        "operations": [
+                            {
+                                "operation_id": "intentionally.invalid.for-p8",
+                                "command": "must-never-be-interpreted",
+                            }
+                        ],
                     }
                 ),
                 encoding="utf-8",
             )
             sender = PollSender()
-            with self.assertRaises(P8PollerError):
+            result = poll_once(
+                config_path=CONFIG,
+                registry_path=registry,
+                state_dir=state,
+                credential_path="/unused",
+                token_provider=StaticTokenProvider(),
+                sender=sender,
+            )
+        self.assertEqual(result.result, "POLL_OK")
+        self.assertEqual(result.candidate_count, 1)
+        self.assertEqual(len(sender.calls), 2)
+        self.assertFalse(result.mutation_dispatch_enabled)
+        self.assertFalse(result.production_mutation_started)
+
+    def test_execution_enabled_registry_is_rejected_before_any_network_read(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = root / "state"
+            state.mkdir(mode=0o700)
+            registry = root / "registry.json"
+            registry.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "execution_enabled": True,
+                        "operations": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            sender = PollSender()
+            with self.assertRaisesRegex(P8PollerError, "execution-disabled"):
                 poll_once(
                     config_path=CONFIG,
                     registry_path=registry,
@@ -293,6 +332,19 @@ class P8PrepTests(unittest.TestCase):
                     sender=sender,
                 )
         self.assertEqual(sender.calls, [])
+
+    def test_poller_source_has_no_operation_normalization_or_adapter_bridge(self):
+        source = POLLER_SOURCE.read_text(encoding="utf-8")
+        for forbidden in (
+            "load_registry(",
+            "queue_normalizer",
+            "normalize_ready_queue",
+            "prepare_operation",
+            "AdapterCatalog",
+            ".exact_match(",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, source)
 
     def test_systemd_contract_uses_credential_sandbox_state_directory_and_timer(self):
         service = SERVICE.read_text(encoding="utf-8")
@@ -373,10 +425,15 @@ class P8PrepTests(unittest.TestCase):
         self.assertIn("mutation_dispatch_enabled=false", installer)
         self.assertIn("production_mutation_started=false", installer)
 
-    def test_production_registry_remains_exactly_empty_and_disabled(self):
+    def test_production_registry_matches_reviewed_canary_and_stays_disabled(self):
+        production = json.loads(REGISTRY.read_text(encoding="utf-8"))
+        reviewed = json.loads(CANARY_REGISTRY.read_text(encoding="utf-8"))
+        self.assertEqual(production, reviewed)
+        self.assertFalse(production["execution_enabled"])
+        self.assertEqual(len(production["operations"]), 1)
         self.assertEqual(
-            json.loads(REGISTRY.read_text(encoding="utf-8")),
-            {"schema_version": 1, "execution_enabled": False, "operations": []},
+            production["operations"][0]["operation_id"],
+            "hermes-deals.origin-path-audit.v1",
         )
 
 
