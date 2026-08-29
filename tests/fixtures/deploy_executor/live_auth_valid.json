@@ -9,9 +9,5 @@
     "id": 277435981,
     "type": "User",
     "login": "rozkalnsandris"
-  },
-  "performed_via_github_app": {
-    "slug": "chatgpt-codex-connector",
-    "id": 1144995
   }
 }
