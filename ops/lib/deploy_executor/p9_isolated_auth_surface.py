@@ -5,12 +5,13 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 EXPECTED_AUTHORIZATION_REPOSITORY = "rozkalnsandris/deploy-authorizations"
-EXPECTED_OBSERVED_AUTHORIZATION_REPOSITORY_ID = 1350486101
+EXPECTED_AUTHORIZATION_REPOSITORY_ID = 1350486101
 EXPECTED_QUEUE_REPOSITORY = "rozkalnsandris/ops-workflows"
 EXPECTED_QUEUE_REPOSITORY_ID = 1328835922
 EXPECTED_OWNER_USER_ID = 277435981
+EXPECTED_EVIDENCE_COMMENT_ID = 5462591875
 EXCLUDED_OPERATOR_APP_ID = 1144995
 EXCLUDED_OPERATOR_APP_SLUG = "chatgpt-codex-connector"
 EXPECTED_EXECUTOR_APP_ID = 4748870
@@ -23,8 +24,8 @@ class IsolatedAuthSurfaceError(ValueError):
 @dataclass(frozen=True)
 class IsolatedAuthSurfaceContract:
     authorization_repository: str
-    authorization_repository_id: int | None
-    observed_repository_id: int
+    authorization_repository_id: int
+    accepted_repository_id: int
     queue_repository: str
     queue_repository_id: int
     owner_user_id: int
@@ -40,7 +41,7 @@ _TOP_LEVEL_KEYS = frozenset(
         "activation_enabled",
         "authorization_repository",
         "authorization_repository_id",
-        "observed_repository_setup",
+        "accepted_repository_setup",
         "authorization_repository_visibility",
         "issues_enabled",
         "actions_enabled",
@@ -57,7 +58,7 @@ _TOP_LEVEL_KEYS = frozenset(
         "production_mutation_enabled",
     }
 )
-_OBSERVED_SETUP_KEYS = frozenset(
+_ACCEPTED_SETUP_KEYS = frozenset(
     {
         "repository_id",
         "evidence_repository",
@@ -68,6 +69,7 @@ _OBSERVED_SETUP_KEYS = frozenset(
         "actions_enabled",
         "direct_collaborator_count",
         "installed_github_app_count",
+        "installed_github_app_ids",
         "status",
     }
 )
@@ -145,6 +147,11 @@ def validate_contract(payload: Mapping[str, Any]) -> IsolatedAuthSurfaceContract
         raise IsolatedAuthSurfaceError("unsupported schema_version")
     if payload["authorization_repository"] != EXPECTED_AUTHORIZATION_REPOSITORY:
         raise IsolatedAuthSurfaceError("authorization repository drifted")
+    repository_id = _require_positive_int(
+        payload["authorization_repository_id"], "authorization_repository_id"
+    )
+    if repository_id != EXPECTED_AUTHORIZATION_REPOSITORY_ID:
+        raise IsolatedAuthSurfaceError("authorization repository id drifted")
     if payload["authorization_repository_visibility"] != "private":
         raise IsolatedAuthSurfaceError("authorization repository must be private")
     if payload["queue_repository"] != EXPECTED_QUEUE_REPOSITORY:
@@ -154,54 +161,63 @@ def validate_contract(payload: Mapping[str, Any]) -> IsolatedAuthSurfaceContract
     if payload["owner_user_id"] != EXPECTED_OWNER_USER_ID:
         raise IsolatedAuthSurfaceError("owner identity drifted")
 
-    observed_setup = payload["observed_repository_setup"]
-    if type(observed_setup) is not dict:
-        raise IsolatedAuthSurfaceError("observed_repository_setup must be an object")
-    _require_exact_keys(observed_setup, _OBSERVED_SETUP_KEYS, "observed_repository_setup")
-    if observed_setup["repository_id"] != EXPECTED_OBSERVED_AUTHORIZATION_REPOSITORY_ID:
-        raise IsolatedAuthSurfaceError("observed authorization repository id drifted")
-    if observed_setup["evidence_repository"] != "rozkalnsandris/RPi5_main":
-        raise IsolatedAuthSurfaceError("observed setup evidence repository drifted")
-    if observed_setup["evidence_issue"] != 191:
-        raise IsolatedAuthSurfaceError("observed setup evidence issue drifted")
-    if observed_setup["evidence_comment_id"] != 5461784620:
-        raise IsolatedAuthSurfaceError("observed setup evidence comment drifted")
-    if observed_setup["visibility"] != "private":
-        raise IsolatedAuthSurfaceError("observed authorization repository must be private")
-    _require_bool(observed_setup["issues_enabled"], "observed_repository_setup.issues_enabled", True)
-    _require_bool(observed_setup["actions_enabled"], "observed_repository_setup.actions_enabled", False)
+    accepted_setup = payload["accepted_repository_setup"]
+    if type(accepted_setup) is not dict:
+        raise IsolatedAuthSurfaceError("accepted_repository_setup must be an object")
+    _require_exact_keys(accepted_setup, _ACCEPTED_SETUP_KEYS, "accepted_repository_setup")
+    if accepted_setup["repository_id"] != EXPECTED_AUTHORIZATION_REPOSITORY_ID:
+        raise IsolatedAuthSurfaceError("accepted authorization repository id drifted")
+    if repository_id != accepted_setup["repository_id"]:
+        raise IsolatedAuthSurfaceError(
+            "authorization_repository_id must match accepted repository id"
+        )
+    if accepted_setup["evidence_repository"] != "rozkalnsandris/RPi5_main":
+        raise IsolatedAuthSurfaceError("accepted setup evidence repository drifted")
+    if accepted_setup["evidence_issue"] != 191:
+        raise IsolatedAuthSurfaceError("accepted setup evidence issue drifted")
+    if accepted_setup["evidence_comment_id"] != EXPECTED_EVIDENCE_COMMENT_ID:
+        raise IsolatedAuthSurfaceError("accepted setup evidence comment drifted")
+    if accepted_setup["visibility"] != "private":
+        raise IsolatedAuthSurfaceError("accepted authorization repository must be private")
+    _require_bool(
+        accepted_setup["issues_enabled"],
+        "accepted_repository_setup.issues_enabled",
+        True,
+    )
+    _require_bool(
+        accepted_setup["actions_enabled"],
+        "accepted_repository_setup.actions_enabled",
+        False,
+    )
     if _require_nonnegative_int(
-        observed_setup["direct_collaborator_count"],
-        "observed_repository_setup.direct_collaborator_count",
+        accepted_setup["direct_collaborator_count"],
+        "accepted_repository_setup.direct_collaborator_count",
     ) != 0:
-        raise IsolatedAuthSurfaceError("observed setup must have zero direct collaborators")
+        raise IsolatedAuthSurfaceError("accepted setup must have zero direct collaborators")
     if _require_nonnegative_int(
-        observed_setup["installed_github_app_count"],
-        "observed_repository_setup.installed_github_app_count",
-    ) != 0:
-        raise IsolatedAuthSurfaceError("observed setup must have zero installed GitHub Apps")
-    if observed_setup["status"] != "partial-stop":
-        raise IsolatedAuthSurfaceError("observed setup status drifted")
+        accepted_setup["installed_github_app_count"],
+        "accepted_repository_setup.installed_github_app_count",
+    ) != 1:
+        raise IsolatedAuthSurfaceError("accepted setup must have exactly one installed GitHub App")
+    if accepted_setup["installed_github_app_ids"] != [EXPECTED_EXECUTOR_APP_ID]:
+        raise IsolatedAuthSurfaceError(
+            "accepted setup installed App surface must contain only the executor App"
+        )
+    if accepted_setup["status"] != "accepted":
+        raise IsolatedAuthSurfaceError("accepted setup status must be accepted")
 
     _require_bool(payload["issues_enabled"], "issues_enabled", True)
     _require_bool(payload["actions_enabled"], "actions_enabled", False)
-    activation_enabled = _require_bool(payload["activation_enabled"], "activation_enabled")
-    runtime_binding_ready = _require_bool(payload["runtime_binding_ready"], "runtime_binding_ready")
-    host_wiring_enabled = _require_bool(payload["host_wiring_enabled"], "host_wiring_enabled")
-    production_mutation_enabled = _require_bool(
-        payload["production_mutation_enabled"], "production_mutation_enabled"
+    activation_enabled = _require_bool(payload["activation_enabled"], "activation_enabled", False)
+    runtime_binding_ready = _require_bool(
+        payload["runtime_binding_ready"], "runtime_binding_ready", False
     )
-
-    repository_id = payload["authorization_repository_id"]
-    if repository_id is not None:
-        repository_id = _require_positive_int(repository_id, "authorization_repository_id")
-        if repository_id != observed_setup["repository_id"]:
-            raise IsolatedAuthSurfaceError(
-                "authorization_repository_id must match observed repository id"
-            )
-        raise IsolatedAuthSurfaceError(
-            "partial-stop evidence may not bind authorization_repository_id"
-        )
+    host_wiring_enabled = _require_bool(
+        payload["host_wiring_enabled"], "host_wiring_enabled", False
+    )
+    production_mutation_enabled = _require_bool(
+        payload["production_mutation_enabled"], "production_mutation_enabled", False
+    )
 
     writer = payload["authorization_writer"]
     if type(writer) is not dict:
@@ -273,7 +289,11 @@ def validate_contract(payload: Mapping[str, Any]) -> IsolatedAuthSurfaceContract
         raise IsolatedAuthSurfaceError("executor app id drifted")
     if executor["issues_permission"] != "read" or executor["metadata_permission"] != "read":
         raise IsolatedAuthSurfaceError("executor App must remain Issues read + Metadata read")
-    _require_bool(executor["write_permissions_allowed"], "executor_app.write_permissions_allowed", False)
+    _require_bool(
+        executor["write_permissions_allowed"],
+        "executor_app.write_permissions_allowed",
+        False,
+    )
 
     invariants = payload["required_repository_invariants"]
     if type(invariants) is not dict:
@@ -282,21 +302,10 @@ def validate_contract(payload: Mapping[str, Any]) -> IsolatedAuthSurfaceContract
     for key in sorted(_INVARIANT_KEYS):
         _require_bool(invariants[key], f"required_repository_invariants.{key}", True)
 
-    if production_mutation_enabled:
-        raise IsolatedAuthSurfaceError("P9 isolated auth source contract may not enable production mutation")
-    if repository_id is None:
-        if activation_enabled or runtime_binding_ready or host_wiring_enabled:
-            raise IsolatedAuthSurfaceError(
-                "unbound authorization repository id requires dormant fail-closed state"
-            )
-    if activation_enabled and not runtime_binding_ready:
-        raise IsolatedAuthSurfaceError("activation requires runtime_binding_ready")
-    if host_wiring_enabled and not activation_enabled:
-        raise IsolatedAuthSurfaceError("host wiring requires activation")
     return IsolatedAuthSurfaceContract(
         authorization_repository=payload["authorization_repository"],
         authorization_repository_id=repository_id,
-        observed_repository_id=observed_setup["repository_id"],
+        accepted_repository_id=accepted_setup["repository_id"],
         queue_repository=payload["queue_repository"],
         queue_repository_id=payload["queue_repository_id"],
         owner_user_id=payload["owner_user_id"],
