@@ -1,0 +1,213 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+export PATH="/usr/sbin:/usr/bin:/sbin:/bin"
+export LC_ALL=C
+export LANG=C
+export GIT_CONFIG_NOSYSTEM=1
+export HOME=/nonexistent
+unset NODE_OPTIONS NODE_PATH BASH_ENV ENV CDPATH
+
+readonly TARGET_SHA="3fcdd12db07bf2ef5504a3fa8fafe873d5b56c6d"
+readonly INPUT_ROOT="/home/andris/.cache/dashboard-rpi5-operator/issue226-3fcdd12db07bf2ef5504a3fa8fafe873d5b56c6d"
+readonly STAGED_SOURCE_ROOT="${INPUT_ROOT}/source"
+readonly CANDIDATE_ROOT="${INPUT_ROOT}/candidate"
+readonly MANIFEST="${INPUT_ROOT}/candidate-manifest.json"
+readonly READY_FILE="${INPUT_ROOT}/READY"
+readonly RUNTIME_ROOT="/run/dashboard-rpi5-issue226"
+readonly RUNTIME_SOURCE_ROOT="${RUNTIME_ROOT}/source"
+readonly EVIDENCE_ROOT="/var/lib/dashboard-rpi5/evidence"
+readonly EVIDENCE_FILE="/var/lib/dashboard-rpi5/evidence/issue226-recovery-preflight.txt"
+readonly EVIDENCE_SCHEMA="dashboard-rpi5.issue226-readonly-bridge.v1"
+readonly READY_SCHEMA="dashboard-rpi5.issue226-trusted-read-input.v1"
+
+# Exact Git blob identities from rozkalnsandris/dashboard_RPi5@${TARGET_SHA}.
+declare -Ar PINNED_SOURCE_BLOBS=(
+  ["tools/operator/issue226-readonly-recovery-preflight.sh"]="dcfee173c5f62b914428d5bcff1eba410358e626"
+  ["tools/production-candidate-manifest.mjs"]="bea0f30602d119ae53b81e70ce2d4c283d369ce8"
+  ["tools/package-terminal-native-runtime.mjs"]="f37c315dfda4ac00ed7dcf793fa8e2f44bfeff57"
+  ["tools/production-release-controller.mjs"]="c501bea57c0d5c35e7961ae1f1e5593a02268661"
+  ["ops/production/release-activation-contract.json"]="4b923e2282c6ddd7781495ac7e7ff02bcd09919f"
+)
+
+readonly -a ALLOWED_KEYS=(
+  STAGE TARGET_SHA CANDIDATE_ROOT MANIFEST CURRENT_SYMLINK CURRENT_RELEASE TARGET_RELEASE
+  RELEASE_CONTROLLER_LOCK LOG_CLIENT_GROUP AGENT_GROUPS AGENT_BROAD_PRIVILEGED_GROUPS
+  DOCKER_BROKER_STATE DOCKER_BROKER_PID DOCKER_BROKER_CWD DOCKER_BROKER_NRESTARTS DOCKER_BROKER_RESULT
+  AGENT_STATE AGENT_PID AGENT_CWD AGENT_NRESTARTS AGENT_RESULT
+  WEB_STATE WEB_PID WEB_CWD WEB_NRESTARTS WEB_RESULT
+  LOG_BROKER_STATE LOG_BROKER_PID LOG_BROKER_CWD LOG_BROKER_NRESTARTS LOG_BROKER_RESULT
+  TERMINAL_SOCKET_STATE LOG_BROKER_SOCKET LOG_BROKER_HEALTH_HTTP LOG_BROKER_SYSTEMD_SSH_HTTP
+  LOG_BROKER_SYSTEMD_SSH_BODY QUICK_COMMANDS_EFFECTIVE QUICK_COMMANDS_DROPIN_METADATA
+  QUICK_COMMANDS_DROPIN_SHA256 BACKUP_LOG_METADATA INSTALLED_LOG_BROKER_UNIT_SHA256
+  INSTALLED_AGENT_UNIT_SHA256 CANDIDATE_LOG_BROKER_UNIT_SHA256 CANDIDATE_AGENT_UNIT_SHA256
+  CANDIDATE_LOG_BROKER_ENTRY_SIZE PRODUCT_HEALTH_HTTP PRODUCT_HOST_HTTP PRODUCT_DOCKER_HTTP
+  PRODUCT_LOGS_SOURCES_HTTP PRODUCT_QUICK_COMMANDS_HTTP CANDIDATE_MANIFEST_VERIFY RELEASE_CONTROLLER_PLAN
+  PLAN_OBSERVED_CURRENT PLAN_TARGET_RELEASE PLAN_CANDIDATE_SHA256 PLAN_OPERATIONS PRODUCTION_MUTATION
+  SYSTEMD_MUTATION IDENTITY_PERMISSION_MUTATION DOCKER_AUTHORITY_MUTATION CLOUDFLARE_MUTATION
+  TERMINAL_ACTIVATION RESULT BLOCKED_REASON
+)
+
+die() {
+  printf 'BRIDGE_RESULT=BLOCKED\n' >&2
+  printf 'BRIDGE_REASON=%s\n' "$1" >&2
+  exit 1
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || die "required_command_missing_${1//-/_}"
+}
+
+require_exact_real_dir() {
+  local path="$1" resolved
+  [[ -d "$path" && ! -L "$path" ]] || return 1
+  resolved="$(realpath -e -- "$path" 2>/dev/null || true)"
+  [[ "$resolved" == "$path" ]]
+}
+
+require_exact_regular_file() {
+  local path="$1" resolved
+  [[ -f "$path" && ! -L "$path" ]] || return 1
+  resolved="$(realpath -e -- "$path" 2>/dev/null || true)"
+  [[ "$resolved" == "$path" ]]
+}
+
+require_root_owned_safe_dir() {
+  local path="$1" uid mode
+  require_exact_real_dir "$path" || return 1
+  uid="$(stat -Lc '%u' -- "$path" 2>/dev/null || true)"
+  mode="$(stat -Lc '%a' -- "$path" 2>/dev/null || true)"
+  [[ "$uid" == "0" && "$mode" =~ ^[0-7]{3,4}$ ]] || return 1
+  (( (8#$mode & 022) == 0 ))
+}
+
+key_allowed() {
+  local candidate="$1" key
+  for key in "${ALLOWED_KEYS[@]}"; do
+    [[ "$candidate" == "$key" ]] && return 0
+  done
+  return 1
+}
+
+publish_evidence() {
+  local source="$1" tmp
+  [[ -f "$EVIDENCE_FILE" && ! -L "$EVIDENCE_FILE" ]] || [[ ! -e "$EVIDENCE_FILE" && ! -L "$EVIDENCE_FILE" ]] \
+    || die 'evidence_target_invalid'
+  tmp="$(mktemp "${EVIDENCE_ROOT}/.issue226-recovery-preflight.XXXXXX")" || die 'evidence_temp_create_failed'
+  cat -- "$source" >"$tmp" || { rm -f -- "$tmp"; die 'evidence_temp_write_failed'; }
+  chmod 0644 "$tmp" || { rm -f -- "$tmp"; die 'evidence_temp_mode_failed'; }
+  [[ "$(stat -Lc '%s' -- "$tmp")" -le 65536 ]] || { rm -f -- "$tmp"; die 'evidence_too_large'; }
+  mv -fT -- "$tmp" "$EVIDENCE_FILE" || { rm -f -- "$tmp"; die 'evidence_publish_failed'; }
+}
+
+[[ ${EUID:-$(id -u)} -eq 0 ]] || die 'root_context_required'
+for command_name in bash cat chmod git install mktemp mv node readlink realpath rm stat; do
+  require_command "$command_name"
+done
+
+require_root_owned_safe_dir "$RUNTIME_ROOT" || die 'runtime_root_invalid'
+require_root_owned_safe_dir "$EVIDENCE_ROOT" || die 'evidence_root_invalid'
+require_exact_real_dir "$INPUT_ROOT" || die 'input_root_invalid'
+require_exact_real_dir "$STAGED_SOURCE_ROOT" || die 'staged_source_root_invalid'
+require_exact_real_dir "$CANDIDATE_ROOT" || die 'candidate_root_invalid'
+require_exact_regular_file "$MANIFEST" || die 'manifest_invalid'
+require_exact_regular_file "$READY_FILE" || die 'ready_file_invalid'
+
+ready_value="$(cat -- "$READY_FILE")" || die 'ready_file_read_failed'
+expected_ready="$(printf 'SCHEMA=%s\nTARGET_SHA=%s' "$READY_SCHEMA" "$TARGET_SHA")"
+[[ "$ready_value" == "$expected_ready" ]] || die 'ready_file_contract_mismatch'
+
+[[ ! -e "$RUNTIME_SOURCE_ROOT" && ! -L "$RUNTIME_SOURCE_ROOT" ]] || die 'runtime_source_already_present'
+
+for relative in "${!PINNED_SOURCE_BLOBS[@]}"; do
+  staged="${STAGED_SOURCE_ROOT}/${relative}"
+  runtime="${RUNTIME_SOURCE_ROOT}/${relative}"
+  require_exact_regular_file "$staged" || die 'staged_source_file_invalid'
+  install -D -m 0600 -- "$staged" "$runtime" || die 'runtime_source_copy_failed'
+  actual_blob="$(git hash-object --no-filters -- "$runtime" 2>/dev/null || true)"
+  [[ "$actual_blob" == "${PINNED_SOURCE_BLOBS[$relative]}" ]] || die 'runtime_source_blob_mismatch'
+done
+
+helper="${RUNTIME_SOURCE_ROOT}/tools/operator/issue226-readonly-recovery-preflight.sh"
+raw_output="${RUNTIME_ROOT}/helper-output.txt"
+safe_output="${RUNTIME_ROOT}/helper-public-safe.txt"
+publish_source="${RUNTIME_ROOT}/bridge-evidence.txt"
+: >"$raw_output"
+: >"$safe_output"
+
+set +e
+/usr/bin/bash "$helper" \
+  --sha "$TARGET_SHA" \
+  --candidate-root "$CANDIDATE_ROOT" \
+  --manifest "$MANIFEST" >"$raw_output" 2>&1
+helper_rc=$?
+set -e
+
+declare -A seen=()
+declare -A value_by_key=()
+discarded_lines=0
+duplicate_keys=0
+while IFS= read -r line || [[ -n "$line" ]]; do
+  if ((${#line} > 2048)) || [[ "$line" != *=* ]]; then
+    discarded_lines=$((discarded_lines + 1))
+    continue
+  fi
+  key="${line%%=*}"
+  value="${line#*=}"
+  if ! [[ "$key" =~ ^[A-Z0-9_]+$ ]] || ! key_allowed "$key" || [[ "$value" =~ [^[:print:]] ]]; then
+    discarded_lines=$((discarded_lines + 1))
+    continue
+  fi
+  if [[ -n "${seen[$key]:-}" ]]; then
+    duplicate_keys=$((duplicate_keys + 1))
+    continue
+  fi
+  seen[$key]=1
+  value_by_key[$key]="$value"
+  printf '%s=%s\n' "$key" "$value" >>"$safe_output"
+done <"$raw_output"
+
+bridge_result='BLOCKED'
+bridge_reason='helper_blocked'
+if ((duplicate_keys > 0)); then
+  bridge_reason='duplicate_helper_key'
+elif ((discarded_lines > 0)); then
+  bridge_reason='nonallowlisted_helper_output'
+elif ((helper_rc == 0)) \
+  && [[ "${value_by_key[RESULT]:-}" == 'READ_ONLY_RECOVERY_PREFLIGHT_PASS' ]] \
+  && [[ "${value_by_key[TARGET_SHA]:-}" == "$TARGET_SHA" ]] \
+  && [[ "${value_by_key[CANDIDATE_ROOT]:-}" == "$CANDIDATE_ROOT" ]] \
+  && [[ "${value_by_key[MANIFEST]:-}" == "$MANIFEST" ]] \
+  && [[ "${value_by_key[CANDIDATE_MANIFEST_VERIFY]:-}" == 'PASS' ]] \
+  && [[ "${value_by_key[RELEASE_CONTROLLER_PLAN]:-}" == 'PASS' ]] \
+  && [[ "${value_by_key[PLAN_TARGET_RELEASE]:-}" == 'absent' ]] \
+  && [[ "${value_by_key[PLAN_OPERATIONS]:-}" == 'copy_manifest_allowlisted_release,write_verified_manifest_marker,atomic_current_symlink_swap' ]] \
+  && [[ "${value_by_key[PRODUCTION_MUTATION]:-}" == 'NO' ]] \
+  && [[ "${value_by_key[SYSTEMD_MUTATION]:-}" == 'NO' ]] \
+  && [[ "${value_by_key[IDENTITY_PERMISSION_MUTATION]:-}" == 'NO' ]] \
+  && [[ "${value_by_key[DOCKER_AUTHORITY_MUTATION]:-}" == 'NO' ]] \
+  && [[ "${value_by_key[CLOUDFLARE_MUTATION]:-}" == 'NO' ]] \
+  && [[ "${value_by_key[TERMINAL_ACTIVATION]:-}" == 'NO' ]]; then
+  bridge_result='PASS'
+  bridge_reason='none'
+elif ((helper_rc == 0)); then
+  bridge_reason='helper_success_contract_mismatch'
+fi
+
+{
+  printf 'SCHEMA=%s\n' "$EVIDENCE_SCHEMA"
+  printf 'BRIDGE_RESULT=%s\n' "$bridge_result"
+  printf 'BRIDGE_REASON=%s\n' "$bridge_reason"
+  printf 'BRIDGE_HELPER_EXIT_CODE=%s\n' "$helper_rc"
+  printf 'BRIDGE_DISCARDED_LINES=%s\n' "$discarded_lines"
+  printf 'BRIDGE_DUPLICATE_KEYS=%s\n' "$duplicate_keys"
+  printf 'SOURCE_BUNDLE_PIN=PASS\n'
+  cat -- "$safe_output"
+} >"$publish_source"
+
+publish_evidence "$publish_source"
+printf 'BRIDGE_RESULT=%s\n' "$bridge_result"
+printf 'BRIDGE_REASON=%s\n' "$bridge_reason"
+printf 'EVIDENCE_FILE=%s\n' "$EVIDENCE_FILE"
+[[ "$bridge_result" == 'PASS' ]]
