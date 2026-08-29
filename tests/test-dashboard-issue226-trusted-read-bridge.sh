@@ -57,9 +57,17 @@ done
 # The staged source is copied to root-private runtime storage before any pinned
 # dashboard code is executed, closing the operator-writable source TOCTOU boundary.
 grep -Fq 'install -D -m 0600 -- "$staged" "$runtime"' "$bridge"
+grep -Fq 'require_exact_real_dir "$RUNTIME_SOURCE_ROOT"' "$bridge"
+grep -Fq 'cd -- "$RUNTIME_SOURCE_ROOT"' "$bridge"
 grep -Fq '/usr/bin/bash "$helper"' "$bridge"
 grep -Fq 'unset NODE_OPTIONS NODE_PATH BASH_ENV ENV CDPATH' "$bridge"
 grep -Fq "[[ ! -e \"\$RUNTIME_SOURCE_ROOT\" && ! -L \"\$RUNTIME_SOURCE_ROOT\" ]]" "$bridge"
+
+verify_line="$(grep -nF 'actual_blob="$(git hash-object --no-filters -- "$runtime"' "$bridge" | cut -d: -f1)"
+cwd_line="$(grep -nF 'cd -- "$RUNTIME_SOURCE_ROOT"' "$bridge" | cut -d: -f1)"
+helper_line="$(grep -nF '/usr/bin/bash "$helper"' "$bridge" | cut -d: -f1)"
+[[ "$verify_line" =~ ^[0-9]+$ && "$cwd_line" =~ ^[0-9]+$ && "$helper_line" =~ ^[0-9]+$ ]]
+(( verify_line < cwd_line && cwd_line < helper_line ))
 
 for expected in \
   'User=root' \

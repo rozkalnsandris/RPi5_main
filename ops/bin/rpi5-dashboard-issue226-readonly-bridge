@@ -129,6 +129,9 @@ for relative in "${!PINNED_SOURCE_BLOBS[@]}"; do
   [[ "$actual_blob" == "${PINNED_SOURCE_BLOBS[$relative]}" ]] || die 'runtime_source_blob_mismatch'
 done
 
+require_exact_real_dir "$RUNTIME_SOURCE_ROOT" || die 'runtime_source_root_invalid'
+cd -- "$RUNTIME_SOURCE_ROOT" || die 'runtime_source_cwd_failed'
+
 helper="${RUNTIME_SOURCE_ROOT}/tools/operator/issue226-readonly-recovery-preflight.sh"
 raw_output="${RUNTIME_ROOT}/helper-output.txt"
 safe_output="${RUNTIME_ROOT}/helper-public-safe.txt"
