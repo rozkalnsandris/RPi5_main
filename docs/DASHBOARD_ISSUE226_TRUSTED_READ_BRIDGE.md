@@ -44,10 +44,11 @@ and requires a new source review. The bridge never follows a moving branch.
 ## Fixed operator input layout
 
 The bridge accepts no argv, browser path, GitHub path, environment override or
-executor-supplied filesystem path. Its only input layout is:
+executor-supplied filesystem path. Its only input layout is the neutral fixed
+staging root below:
 
 ```text
-/home/andris/.cache/dashboard-rpi5-operator/
+/var/cache/dashboard-rpi5-operator/
   issue226-3fcdd12db07bf2ef5504a3fa8fafe873d5b56c6d/
     source/
       tools/operator/issue226-readonly-recovery-preflight.sh
@@ -60,6 +61,11 @@ executor-supplied filesystem path. Its only input layout is:
     candidate-manifest.json
     READY
 ```
+
+This source PR does not create that staging root and does not choose or mutate
+its host owner/group/mode. Those staging details must be frozen and reviewed in
+the later exact host-installation envelope. The bridge service sees the staging
+root read-only in its own systemd namespace.
 
 `READY` is only a local trigger and carries no authority. Its exact contents are:
 
@@ -96,7 +102,8 @@ Hardening keeps the operation read-bounded:
 - `NoNewPrivileges=yes`;
 - only `CAP_SYS_PTRACE` remains in the capability bounding set for cross-identity
   process CWD evidence;
-- home is read-only and non-executable;
+- home and the fixed staging root are read-only to the service, and home is
+  non-executable;
 - system files are read-only;
 - devices are closed;
 - network is denied except localhost plus AF_UNIX for the existing broker;
@@ -136,9 +143,9 @@ terminal mutation.
 
 The `.path` unit watches only the fixed `READY` file. It does not accept a
 request payload. The operator stages all inputs first and changes `READY` last.
-A path/service install or enable is itself a later host/systemd mutation and
-requires a separate exact owner authorization. Merge of this source gate does
-not install or enable either unit.
+A staging-root creation/ownership decision, path/service install or enable is a
+later host/systemd or permission mutation and requires a separate exact owner
+authorization. Merge of this source gate does not perform any of those steps.
 
 No automatic retry, rollback or production cleanup exists. A blocked bridge
 receipt must be reviewed before any new trigger is written.
@@ -166,6 +173,7 @@ fixed input/evidence paths, systemd hardening and unchanged disabled executor
 registry.
 
 After a separately authorized merge, exact-main CI must pass. A later owner gate
-would still be required to install/enable this bridge on the RPi5. Only after a
-fresh bridge PASS may dashboard #226 freeze a new exact Composite Live recovery
-envelope and request separate production authorization.
+would still be required to create/freeze the neutral staging boundary and to
+install/enable this bridge on the RPi5. Only after a fresh bridge PASS may
+dashboard #226 freeze a new exact Composite Live recovery envelope and request
+separate production authorization.

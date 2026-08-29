@@ -4,7 +4,7 @@ Description=Trigger exact dashboard_RPi5 #226 trusted-read preflight on frozen i
 Documentation=https://github.com/rozkalnsandris/RPi5_main/issues/261
 
 [Path]
-PathChanged=/home/andris/.cache/dashboard-rpi5-operator/issue226-3fcdd12db07bf2ef5504a3fa8fafe873d5b56c6d/READY
+PathChanged=/var/cache/dashboard-rpi5-operator/issue226-3fcdd12db07bf2ef5504a3fa8fafe873d5b56c6d/READY
 Unit=rpi5-dashboard-issue226-readonly-bridge.service
 
 [Install]

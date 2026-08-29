@@ -10,7 +10,7 @@ export HOME=/nonexistent
 unset NODE_OPTIONS NODE_PATH BASH_ENV ENV CDPATH
 
 readonly TARGET_SHA="3fcdd12db07bf2ef5504a3fa8fafe873d5b56c6d"
-readonly INPUT_ROOT="/home/andris/.cache/dashboard-rpi5-operator/issue226-3fcdd12db07bf2ef5504a3fa8fafe873d5b56c6d"
+readonly INPUT_ROOT="/var/cache/dashboard-rpi5-operator/issue226-3fcdd12db07bf2ef5504a3fa8fafe873d5b56c6d"
 readonly STAGED_SOURCE_ROOT="${INPUT_ROOT}/source"
 readonly CANDIDATE_ROOT="${INPUT_ROOT}/candidate"
 readonly MANIFEST="${INPUT_ROOT}/candidate-manifest.json"

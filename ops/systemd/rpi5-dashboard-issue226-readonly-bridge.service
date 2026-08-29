@@ -41,6 +41,7 @@ StateDirectory=dashboard-rpi5
 StateDirectoryMode=0755
 RuntimeDirectory=dashboard-rpi5-issue226
 RuntimeDirectoryMode=0700
+ReadOnlyPaths=/var/cache/dashboard-rpi5-operator
 ReadWritePaths=/var/lib/dashboard-rpi5/evidence
 TasksMax=64
 MemoryMax=256M

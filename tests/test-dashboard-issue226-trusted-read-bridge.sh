@@ -8,7 +8,7 @@ path_unit="ops/systemd/rpi5-dashboard-issue226-readonly-bridge.path"
 doc="docs/DASHBOARD_ISSUE226_TRUSTED_READ_BRIDGE.md"
 registry="ops/deploy/executor-operations.json"
 target="3fcdd12db07bf2ef5504a3fa8fafe873d5b56c6d"
-input_root="/home/andris/.cache/dashboard-rpi5-operator/issue226-${target}"
+input_root="/var/cache/dashboard-rpi5-operator/issue226-${target}"
 
 for file in "$bridge" "$service" "$path_unit" "$doc" "$registry"; do
   [[ -f "$file" && ! -L "$file" ]]
@@ -55,7 +55,7 @@ for forbidden in \
 done
 
 # The staged source is copied to root-private runtime storage before any pinned
-# dashboard code is executed, closing the user-writable source TOCTOU boundary.
+# dashboard code is executed, closing the operator-writable source TOCTOU boundary.
 grep -Fq 'install -D -m 0600 -- "$staged" "$runtime"' "$bridge"
 grep -Fq '/usr/bin/bash "$helper"' "$bridge"
 grep -Fq 'unset NODE_OPTIONS NODE_PATH BASH_ENV ENV CDPATH' "$bridge"
@@ -76,6 +76,7 @@ for expected in \
   'IPAddressAllow=localhost' \
   'StateDirectory=dashboard-rpi5' \
   'RuntimeDirectory=dashboard-rpi5-issue226' \
+  'ReadOnlyPaths=/var/cache/dashboard-rpi5-operator' \
   'ReadWritePaths=/var/lib/dashboard-rpi5/evidence'; do
   grep -Fq -- "$expected" "$service"
 done
@@ -100,6 +101,7 @@ PY
 
 grep -Fq 'SOURCE ONLY / DORMANT / NOT INSTALLED' "$doc"
 grep -Fq "$target" "$doc"
+grep -Fq '/var/cache/dashboard-rpi5-operator/' "$doc"
 grep -Fq 'does not change' "$doc"
 grep -Fq 'executor-operations.json' "$doc"
 grep -Fq 'separate exact owner authorization' "$doc"
