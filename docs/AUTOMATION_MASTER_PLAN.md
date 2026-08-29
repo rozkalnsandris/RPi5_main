@@ -103,7 +103,7 @@ Shared public automation library. GitHub-hosted only, least privilege, full-SHA 
 
 ### `hermes-tech`
 
-Reference production execution architecture. Keep GitHub-hosted CI and local RPi5 pull/poll deploy classification, exact-SHA CI, locking, canary activation, rollback, health checks, and separate sensitive approvals. Phase 6 now prioritizes replacing persistent user authentication with GitHub App installation authentication while independently isolating the generated-content write credential behind a narrow publisher capability.
+Reference production execution architecture. Keep GitHub-hosted CI and local RPi5 pull/poll deploy classification, exact-SHA CI, locking, canary activation, rollback, health checks, and separate sensitive approvals. Phase 6 remains a later, separately gated migration for replacing persistent user authentication with GitHub App installation authentication while independently isolating generated-content write authority behind a narrow publisher capability.
 
 ### `rozkalns-cv`
 
@@ -246,9 +246,9 @@ Phase 3 exit decision:
 `CV_REPOSITORY_SELF_HOSTED_RUNNER_COUNT=0`
 `CV_LEGACY_RUNNER_RETIREMENT=PASS`
 
-### Phase 4 — Hermes Deals public-repository execution migration — PAUSED BY OWNER PRIORITY OVERRIDE: P9 POST-SAVE TRUST EVIDENCE STOP
+### Phase 4 — Hermes Deals public-repository execution migration — CURRENT: #236 / P9 POST-SAVE TRUST EVIDENCE STOP
 
-Hermes Deals Phase 4 remains incomplete and its recorded P9 safety state remains authoritative, but active continuation is paused by the explicit 2026-08-29 owner priority decision to execute Phase 6 Hermes Tech authentication migration first. This pause does not mark any Phase 4/5 gate complete, authorize cleanup/retry of a consumed P9 transaction, or weaken any isolated-auth invariant. Resume Phase 4 only after Phase 6 exit or a later explicit reviewed priority reconciliation.
+Phase 4 remains incomplete. The owner's later 2026-08-29 continuation correction supersedes the temporary Phase 6 priority override from #269 for current program routing: resume the cross-cutting `RPi5_main#236` pull-executor lane at its existing P9 post-save trust-evidence gate. This is an RPi5 executor/trust-boundary continuation, not authorization to change Hermes Deals application behavior. It does not mark any Phase 4/5 gate complete, authorize cleanup/retry of a consumed P9 transaction, or weaken any isolated-auth invariant.
 
 Historical source evidence from the 2026-08-29 P9 isolated-auth and continuity chain; these pins are evidence only and must never be inferred to be current branch state:
 
@@ -289,7 +289,7 @@ Completed Phase 4 source/live gates:
 - [x] Under a later exact owner authorization, the owner revalidated the intended private/Issues-on/Actions-off/zero-collaborator/no-writer posture in GitHub UI and performed one `Rozkalns Deploy Executor` selected-repository Save after the UI showed `Only select repositories`, `ops-workflows` plus `deploy-authorizations`, and only Issues read + Metadata read. This is an owner-reported mutation receipt, not accepted final trust-surface evidence. The authorization was consumed at Save.
 - [x] Post-save read-only verification proved the ChatGPT Codex Connector installation still does not include `deploy-authorizations`, but the available connector cannot enumerate the separate Deploy Executor installation `157217641` and returned `403 Resource not accessible by integration`; the final installed-App/collaborator administration surface therefore remains independently unproven. No retry, rollback, cleanup or host/runtime/production mutation followed.
 
-Phase 4 next gates (paused, not waived):
+Phase 4 next gates (current, not waived):
 
 - [x] **CONNECTOR-SCOPE SOURCE GATE:** owner-only LIVE-AUTH writing and explicit connector exclusion are merged in #268 and exact-main CI is green.
 - [ ] **POST-SAVE TRUST EVIDENCE STOP:** obtain read-only, sanitized evidence proving repository ID `1350486101`, private visibility, Issues enabled, Actions disabled, zero direct collaborators, no writer integration including `chatgpt-codex-connector`, and a final installed-App surface containing only `Rozkalns Deploy Executor` App ID `4748870` with Issues read + Metadata read and no write permission. Evidence unavailable, ambiguous or drifting means STOP; this gate authorizes no corrective mutation. Until it passes, `authorization_repository_id` remains null and all activation/runtime/host/production flags remain false.
@@ -303,16 +303,16 @@ Phase 4 next gates (paused, not waived):
 
 Do not use this phase to select `chatgpt-codex-connector` for the authorization repository, retry or clean up consumed P9 transactions, treat the owner Save as final accepted trust evidence, bind the authorization repository ID prematurely, consume retailer-specific execution authorizations, change parser/corpus state, write DB/Review/publication state, deploy production, mutate Cloudflare, modify repository settings or widen credentials/permissions without the exact separate gate for that action.
 
-### Phase 5 — Hermes Deals migration completion / residual audit paths — PAUSED WITH PHASE 4
+### Phase 5 — Hermes Deals migration completion / residual audit paths — PENDING AFTER PHASE 4
 
 - [ ] Reconcile Phase 4 canary evidence against every remaining audit/diagnostic/release path.
 - [ ] Migrate remaining capabilities incrementally, one trust domain at a time, preserving exact SHA, owner authorization, sanitized evidence and no-write boundaries where applicable.
 - [ ] Remove each residual self-hosted runner only after its replacement is proven and separate owner authorization is granted.
 - [ ] Record final runner/control-plane inventory and regression evidence in Hermes Deals governance and `RPi5_main#103`.
 
-### Phase 6 — Hermes Tech authentication migration — CURRENT: OWNER PRIORITY OVERRIDE 2026-08-29
+### Phase 6 — Hermes Tech authentication migration — DEFERRED: TEMPORARY PRIORITY OVERRIDE SUPERSEDED 2026-08-29
 
-Owner priority explicitly advances Phase 6 before completion of paused Phase 4/5. This is a sequencing change only: it does not authorize GitHub App permission changes, credential movement/rotation/revocation, ruleset/repository-setting changes, host/service/systemd changes, publication, deployment, scheduler mutation or any other live mutation.
+Phase 6 remains planned but is no longer the current program lane. The owner's later 2026-08-29 continuation correction returned current work to the `RPi5_main#236` RPi5 pull-executor/P9 trust-boundary lane. This sequencing correction does not authorize GitHub App permission changes, credential movement/rotation/revocation, ruleset/repository-setting changes, host/service/systemd changes, publication, deployment, scheduler mutation or any other live mutation.
 
 Canonical Phase 6 owners and evidence:
 
@@ -339,7 +339,7 @@ Phase 6 exit requires:
 - [ ] classifier, canary, timer, locking, deploy helper, readiness alerts, publication serialization and exact-SHA/fast-forward gates remain intact;
 - [ ] one separately approved real publication canary and recovery proof pass;
 - [ ] obsolete shared-UID credential/auth path is removed/rotated only after replacement proof;
-- [ ] final residual risk and rotation/recovery procedure are recorded in #95/#116/#110 and this master plan before Phase 4/5 resume.
+- [ ] final residual risk and rotation/recovery procedure are recorded in #95/#116/#110 and this master plan before Phase 6 is marked complete.
 
 ### Phase 7 — RPi5_main auto-plan/readiness
 
@@ -421,10 +421,10 @@ If question 3 is `no` or question 5 is `yes`, do not make the change.
 
 ## Current next action
 
-**PHASE 6 SOURCE INVENTORY / DESIGN GATE:** the owner has explicitly prioritized Hermes Tech authentication migration ahead of paused Phase 4/5. After this reconciliation is merged and exact-main CI is green, fresh-read `hermes-tech/main`, `RPi5_main/main`, Hermes Tech #95/#116, RPi5_main #93/#110, current CI/reviews/comments and the exact auth/publisher source paths. Separate read-only controller authentication from generated-content write authority before changing code.
+**#236 / P9 POST-SAVE TRUST EVIDENCE STOP:** current program continuation is the RPi5 pull-executor trust gate. Obtain read-only, sanitized evidence proving `rozkalnsandris/deploy-authorizations` repository ID `1350486101`, private visibility, Issues enabled, Actions disabled, zero direct collaborators, `chatgpt-codex-connector` absent/unselected, no other writer integration, and a final installed-App surface containing only `Rozkalns Deploy Executor` App ID `4748870` with Issues read + Metadata read and no write permission.
 
-The first implementation must remain source-only: define and test the narrow #110 publisher/authentication boundary with synthetic/no-network coverage while preserving all existing exact-SHA, publication-path, fast-forward, locking, classifier/readiness and rollback invariants. The existing `Rozkalns Automation` App remains Actions-read/Contents-read; do not broaden its permissions merely because Phase 6 is current.
+The current connector cannot independently enumerate the separate Deploy Executor installation `157217641`; therefore accepted evidence may require owner-authenticated GitHub UI/API screenshots or equivalent sanitized receipts. This gate authorizes no Save, repository selection change, permission/scope change, repository setting change, retry, cleanup or other mutation. If required evidence is unavailable, ambiguous, inconsistent or drifting, preserve evidence and STOP.
 
-Merge of the reconciliation or later source implementation does not authorize host credential placement, App permission/repository-setting changes, ruleset changes, publication, service/systemd mutation, key movement/rotation/revocation or removal of the current shared-UID recovery path. Those are later exact owner gates after source/CI/review readiness.
+Until that evidence passes, keep `authorization_repository_id=null`, `activation_enabled=false`, `runtime_binding_ready=false`, `host_wiring_enabled=false` and `production_mutation_enabled=false`; keep the current P8 poller/runtime unchanged and keep `chatgpt-codex-connector` unselected. Do not create a dummy LIVE-AUTH or READY item merely to exercise the path.
 
-Paused Phase 4/5 state remains preserved exactly. When Phase 4 resumes, its first gate is **POST-SAVE TRUST EVIDENCE STOP**, not connector-scope correction or another Deploy Executor selection attempt. Do not select the broad connector, retry/clean up consumed P9 transactions, treat the owner Save as final accepted trust evidence, bind partial evidence, place/change credentials, modify systemd, activate mutation-capable adapters, deregister Hermes Deals runners, deploy production, write DB/Review/publication state, or mutate Cloudflare/repository settings while Phase 6 is current.
+Only after accepted post-save trust evidence may a separate reviewed source migration bind authorization repository ID `1350486101` and split queue versus LIVE-AUTH repository identities. Merge remains explicit and still does not authorize App/permission changes, host credential/service/systemd mutation, runner retirement or production execution. Phase 6 Hermes Tech work remains deferred while this #236/P9 gate is current.
