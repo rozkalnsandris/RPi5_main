@@ -1,19 +1,22 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "activation_enabled": false,
   "authorization_repository": "rozkalnsandris/deploy-authorizations",
-  "authorization_repository_id": null,
-  "observed_repository_setup": {
+  "authorization_repository_id": 1350486101,
+  "accepted_repository_setup": {
     "repository_id": 1350486101,
     "evidence_repository": "rozkalnsandris/RPi5_main",
     "evidence_issue": 191,
-    "evidence_comment_id": 5461784620,
+    "evidence_comment_id": 5462591875,
     "visibility": "private",
     "issues_enabled": true,
     "actions_enabled": false,
     "direct_collaborator_count": 0,
-    "installed_github_app_count": 0,
-    "status": "partial-stop"
+    "installed_github_app_count": 1,
+    "installed_github_app_ids": [
+      4748870
+    ],
+    "status": "accepted"
   },
   "authorization_repository_visibility": "private",
   "issues_enabled": true,
