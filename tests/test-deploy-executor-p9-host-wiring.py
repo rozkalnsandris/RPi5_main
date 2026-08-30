@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import stat
 import sys
 import tempfile
 import unittest
@@ -11,6 +12,15 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "ops" / "lib"))
 
 from deploy_executor.github_app_auth import RawResponse
+from deploy_executor.p9_control_postcanary_collector import (
+    AUDIT_SQL,
+    TARGET_SQL,
+    ControlPostCanaryCollectionRequest,
+    ControlPostCanaryCollectorError,
+    FixedD1ReadClient,
+    PINNED_CANARY_SOURCE_SHA,
+    validate_collection_request,
+)
 from deploy_executor.p9_host_runtime import (
     DEFAULT_ISOLATED_AUTH,
     DEFAULT_REGISTRY,
@@ -24,6 +34,27 @@ from deploy_executor.p9_source_auth import (
     SOURCE_APP_ID,
     SOURCE_INSTALLATION_ID,
 )
+
+CURRENT_READY_SOURCE_SHA = "f9b900a884bffda993197fc7fa9223c886e11a90"
+
+
+def _d1_payload(*, changed_db=False, rows_written=0, changes=0) -> bytes:
+    return json.dumps(
+        {
+            "success": True,
+            "result": [
+                {
+                    "success": True,
+                    "meta": {
+                        "changed_db": changed_db,
+                        "rows_written": rows_written,
+                        "changes": changes,
+                    },
+                    "results": [],
+                }
+            ],
+        }
+    ).encode("utf-8")
 
 
 class Requester:
@@ -150,6 +181,49 @@ class P9HostWiringTests(unittest.TestCase):
                 state.discover(request_id="again")
             state.close()
 
+    def test_control_baseline_keeps_current_source_separate_from_historical_canary(self):
+        request = validate_collection_request(
+            ControlPostCanaryCollectionRequest(source_sha=CURRENT_READY_SOURCE_SHA)
+        )
+        self.assertEqual(request.source_sha, CURRENT_READY_SOURCE_SHA)
+        self.assertNotEqual(request.source_sha, PINNED_CANARY_SOURCE_SHA)
+
+        collector_source = (
+            ROOT / "ops/lib/deploy_executor/p9_control_postcanary_collector.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("source_sha=request.source_sha", collector_source)
+        self.assertIn("canary_source_sha=PINNED_CANARY_SOURCE_SHA", collector_source)
+
+    def test_control_baseline_d1_reader_is_select_only_and_zero_write(self):
+        calls = []
+
+        def requester(url, headers, body):
+            payload = json.loads(body.decode("utf-8"))
+            calls.append((url, dict(headers), payload))
+            self.assertIn(payload["sql"], {AUDIT_SQL, TARGET_SQL})
+            self.assertTrue(payload["sql"].startswith("SELECT "))
+            return 200, _d1_payload()
+
+        client = FixedD1ReadClient(api_token="x" * 32, requester=requester)
+        audit = client.select_pinned_request()
+        target = client.select_pinned_target()
+
+        for result in (audit, target):
+            self.assertFalse(result.changed_db)
+            self.assertEqual(result.rows_written, 0)
+            self.assertEqual(result.changes, 0)
+        self.assertEqual(len(calls), 2)
+        with self.assertRaises(ControlPostCanaryCollectorError):
+            client._query("DELETE FROM merge_decisions", ())
+
+    def test_control_baseline_d1_reader_rejects_write_semantics(self):
+        def requester(_url, _headers, _body):
+            return 200, _d1_payload(changed_db=True, rows_written=1, changes=1)
+
+        client = FixedD1ReadClient(api_token="x" * 32, requester=requester)
+        with self.assertRaises(ControlPostCanaryCollectorError):
+            client.select_pinned_request()
+
     def test_installer_preserves_p8_and_binds_exact_reviewed_bytes(self):
         installer = (ROOT / "scripts" / "install-deploy-executor-p9-runtime.sh").read_text(encoding="utf-8")
         self.assertNotIn("systemctl", installer)
@@ -164,13 +238,32 @@ class P9HostWiringTests(unittest.TestCase):
             installer,
         )
         self.assertIn("reviewed source differs from exact expected SHA", installer)
-        self.assertIn('"$INSTALL_ROOT" "$BIN" "$P9_CONFIG_ROOT" "$STATE_ROOT" "$EVIDENCE_ROOT"', installer)
+        self.assertIn(
+            '"$INSTALL_ROOT" "$BIN" "$BASELINE_BIN" "$P9_CONFIG_ROOT" "$STATE_ROOT" "$EVIDENCE_ROOT"',
+            installer,
+        )
+        self.assertIn("p9_control_postcanary_collector.py", installer)
+        self.assertIn("p9_control_postcanary_producer.py", installer)
+        self.assertIn("ops/bin/rozkalns-deploy-p9-control-baseline", installer)
+        self.assertIn(
+            'BASELINE_BIN="/usr/local/sbin/rozkalns-deploy-p9-control-baseline"',
+            installer,
+        )
+        self.assertIn(
+            '"$ROOT/ops/bin/rozkalns-deploy-p9-control-baseline" "$BASELINE_BIN"',
+            installer,
+        )
+        self.assertNotIn("control-d1-read-token", installer)
         self.assertIn("P9_RUNTIME_ACTIVE=NO", installer)
         self.assertIn("P9_EVIDENCE_PRESENT=NO", installer)
         self.assertLess(
             installer.index("diff --quiet"),
             installer.index("Authorized P9 host installation mutation begins here"),
         )
+
+    def test_control_baseline_operator_is_executable_source(self):
+        operator = ROOT / "ops/bin/rozkalns-deploy-p9-control-baseline"
+        self.assertEqual(stat.S_IMODE(operator.stat().st_mode), 0o755)
 
 
 if __name__ == "__main__":

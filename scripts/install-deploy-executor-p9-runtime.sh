@@ -18,6 +18,7 @@ SERVICE_USER="rozkalns-deploy-executor"
 SERVICE_GROUP="rozkalns-deploy-executor"
 INSTALL_ROOT="/usr/local/lib/rozkalns-deploy-executor"
 BIN="/usr/local/sbin/rozkalns-deploy-p9"
+BASELINE_BIN="/usr/local/sbin/rozkalns-deploy-p9-control-baseline"
 P8_CONFIG_ROOT="/etc/rozkalns-deploy-executor"
 P9_CONFIG_ROOT="/etc/rozkalns-deploy-executor-p9"
 STATE_ROOT="/var/lib/rozkalns-deploy-executor-p9"
@@ -32,6 +33,8 @@ PACKAGE_FILES=(
   control_center_postcanary_adapter.py
   github_app_auth.py
   p9_canary.py
+  p9_control_postcanary_collector.py
+  p9_control_postcanary_producer.py
   p9_evidence.py
   p9_host_runtime.py
   p9_isolated_auth_surface.py
@@ -48,6 +51,7 @@ PACKAGE_FILES=(
 SOURCE_PATHS=(
   scripts/install-deploy-executor-p9-runtime.sh
   ops/bin/rozkalns-deploy-p9
+  ops/bin/rozkalns-deploy-p9-control-baseline
   ops/deploy/executor-operations.json
   ops/deploy/executor-p9-isolated-auth-surface.json
 )
@@ -90,7 +94,7 @@ for credential in "$EXECUTOR_KEY" "$SOURCE_KEY"; do
   esac
 done
 
-for target in "$INSTALL_ROOT" "$BIN" "$P9_CONFIG_ROOT" "$STATE_ROOT" "$EVIDENCE_ROOT"; do
+for target in "$INSTALL_ROOT" "$BIN" "$BASELINE_BIN" "$P9_CONFIG_ROOT" "$STATE_ROOT" "$EVIDENCE_ROOT"; do
   [[ ! -e "$target" ]] || {
     echo "P9 target already exists; refusing ambiguous or non-transactional reinstall: $target" >&2
     exit 1
@@ -104,6 +108,8 @@ for name in "${PACKAGE_FILES[@]}"; do
     "$ROOT/ops/lib/deploy_executor/$name" "$INSTALL_ROOT/deploy_executor/$name"
 done
 /usr/bin/install -o root -g root -m 0755 "$ROOT/ops/bin/rozkalns-deploy-p9" "$BIN"
+/usr/bin/install -o root -g root -m 0755 \
+  "$ROOT/ops/bin/rozkalns-deploy-p9-control-baseline" "$BASELINE_BIN"
 /usr/bin/install -d -o root -g root -m 0755 "$P9_CONFIG_ROOT"
 /usr/bin/install -o root -g root -m 0644 \
   "$ROOT/ops/deploy/executor-operations.json" "$P9_CONFIG_ROOT/executor-operations.json"
