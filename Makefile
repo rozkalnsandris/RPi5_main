@@ -11,6 +11,7 @@ test:
 	python3 ./tests/test-deploy-executor-control-center-postcanary.py
 	python3 ./tests/test-deploy-executor-p8-prep.py
 	python3 ./tests/test-deploy-executor-p9-prep.py
+	python3 ./tests/test-deploy-executor-p9-host-wiring.py
 	python3 ./tests/test-deploy-executor-p9-evidence.py
 	python3 ./tests/test-deploy-executor-p9-provenance.py
 	python3 ./tests/test-deploy-executor-p9-producer.py
@@ -99,7 +100,7 @@ test:
 	python3 ./tests/test-cv-controller-activation.py
 	python3 ./tests/test-cv-classifier-host-alignment.py
 	python3 ./tests/test-cv-pull-deploy-canary.py
-	python3 -m py_compile scripts/*.py ops/lib/rpi5-update-telegram.py ops/lib/rpi5-maintenance-telegram.py ops/lib/dashboard-evidence.py ops/bin/hermes-tech-restore-drill ops/lib/balkons-bot.py ops/bin/balkons-bot-preflight ops/bin/balkons-bot-deploy-verifier ops/lib/deploy_executor/*.py
+	python3 -m py_compile scripts/*.py ops/lib/rpi5-update-telegram.py ops/lib/rpi5-maintenance-telegram.py ops/lib/dashboard-evidence.py ops/bin/hermes-tech-restore-drill ops/bin/balkons-bot-preflight ops/bin/balkons-bot-deploy-verifier ops/lib/deploy_executor/*.py
 
 secret-scan:
 	./scripts/check-no-secrets.sh
