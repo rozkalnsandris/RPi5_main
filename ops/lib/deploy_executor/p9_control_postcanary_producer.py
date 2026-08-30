@@ -39,6 +39,45 @@ _ROOT_UID = 0
 _DIRECTORY_MODE = 0o750
 _FILE_MODE = 0o440
 
+_TARGET_ISSUE_FAILURE_CODES = frozenset(
+    {
+        "TARGET_ISSUE_OBJECT_INVALID",
+        "TARGET_ISSUE_NUMBER_MISMATCH",
+        "TARGET_ISSUE_NOT_OPEN",
+        "TARGET_ISSUE_IS_PULL_REQUEST",
+    }
+)
+_TARGET_PR_FAILURE_CODES = frozenset(
+    {
+        "TARGET_PR_OBJECT_INVALID",
+        "TARGET_PR_NUMBER_MISMATCH",
+        "TARGET_PR_NOT_CLOSED",
+        "TARGET_PR_MERGED_AT_INVALID",
+        "TARGET_PR_DRAFT_INVALID",
+        "TARGET_PR_HEAD_MISMATCH",
+        "TARGET_PR_HEAD_REPO_MISMATCH",
+        "TARGET_PR_BASE_MISMATCH",
+        "TARGET_PR_MERGE_SHA_MISMATCH",
+    }
+)
+_TARGET_MERGE_FAILURE_CODES = frozenset(
+    {
+        "TARGET_MERGE_COMMIT_OBJECT_INVALID",
+        "TARGET_MERGE_SHA_MISMATCH",
+        "TARGET_MERGE_PARENTS_INVALID",
+        "TARGET_MERGE_PARENT_COUNT_MISMATCH",
+        "TARGET_MERGE_PARENT_OBJECT_INVALID",
+        "TARGET_MERGE_PARENT_SHA_MISMATCH",
+    }
+)
+_TARGET_COMPARE_FAILURE_CODES = frozenset(
+    {
+        "TARGET_COMPARE_OBJECT_INVALID",
+        "TARGET_MAIN_RELATION_MISMATCH",
+        "TARGET_MERGE_BASE_MISMATCH",
+    }
+)
+
 
 class ControlPostCanaryProducerError(RuntimeError):
     pass
@@ -257,6 +296,20 @@ def target_github_evidence_failure_code(
     return None
 
 
+def _target_failure_check_name(failure_code: str) -> str:
+    if failure_code in _TARGET_ISSUE_FAILURE_CODES:
+        return "target_issue_exact"
+    if failure_code in _TARGET_PR_FAILURE_CODES:
+        return "target_pr_merge_evidence_exact"
+    if failure_code in _TARGET_MERGE_FAILURE_CODES:
+        return "target_merge_parent_exact"
+    if failure_code in _TARGET_COMPARE_FAILURE_CODES:
+        return "target_main_descends_from_merge"
+    raise ControlPostCanaryProducerError(
+        "Control target GitHub evidence produced an unknown sanitized failure code"
+    )
+
+
 def _target_issue_exact(observation: ControlPostCanaryObservation) -> bool:
     return _target_issue_failure_code(_target_evidence(observation)) is None
 
@@ -359,9 +412,10 @@ def build_control_postcanary_baseline_evidence(
 
     target_failure = target_github_evidence_failure_code(_target_evidence(observation))
     if target_failure is not None:
+        target_check = _target_failure_check_name(target_failure)
         raise ControlPostCanaryProducerError(
             "Control target GitHub evidence failed reviewed predicate: "
-            f"{target_failure}"
+            f"{target_failure} check={target_check}"
         )
 
     checks = {
