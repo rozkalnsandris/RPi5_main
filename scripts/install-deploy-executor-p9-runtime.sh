@@ -25,6 +25,7 @@ getent passwd "$SERVICE_USER" >/dev/null || { echo "existing P8 service user is 
 getent group "$SERVICE_GROUP" >/dev/null || { echo "existing P8 service group is required" >&2; exit 1; }
 [[ -d /var/lib/rozkalns-deploy-executor ]] || { echo "existing P8 state directory is required" >&2; exit 1; }
 [[ -f "$CONFIG_ROOT/github-app.pem" ]] || { echo "existing Deploy Executor credential is required" >&2; exit 1; }
+[[ -f /root/.config/rozkalns-automation/github-app.pem ]] || { echo "existing Rozkalns Automation credential is required" >&2; exit 1; }
 [[ ! -e "$STATE_ROOT" ]] || { echo "P9 state root already exists; refusing non-transactional reinstall" >&2; exit 1; }
 [[ ! -e "$EVIDENCE_ROOT" ]] || { echo "P9 evidence root already exists; refusing ambiguous ownership" >&2; exit 1; }
 

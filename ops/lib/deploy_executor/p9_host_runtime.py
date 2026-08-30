@@ -13,7 +13,13 @@ from .p9_isolated_auth_surface import load_contract
 from .p9_provenance import load_control_postcanary_baseline_evidence
 from .p9_runtime import build_p9_read_clients
 from .p9_source_auth import CONTROL_SOURCE_REPOSITORY, P9SourceInstallationTokenProvider
-from .protocol import QUEUE_REPOSITORY, validate_queue_binding
+from .protocol import (
+    AUTHORIZATION_REPOSITORY,
+    AUTHORIZATION_REPOSITORY_ID,
+    QUEUE_REPOSITORY,
+    QUEUE_REPOSITORY_ID,
+    validate_queue_binding,
+)
 from .queue_normalizer import normalize_ready_queue
 from .registry import load_registry
 from .source_evidence import verify_source_evidence
@@ -96,6 +102,22 @@ def _preflight(
     adapter_catalog: AdapterCatalog,
     trusted_baseline: dict[str, Any],
 ) -> P9HostPreflight:
+    authorization_repository = authorization_client.get_json(
+        f"/repos/{AUTHORIZATION_REPOSITORY}"
+    ).value
+    if (
+        type(authorization_repository) is not dict
+        or authorization_repository.get("id") != AUTHORIZATION_REPOSITORY_ID
+        or authorization_repository.get("full_name") != AUTHORIZATION_REPOSITORY
+    ):
+        raise P9HostRuntimeError("authorization repository identity drifted")
+    queue_repository = queue_client.get_json(f"/repos/{QUEUE_REPOSITORY}").value
+    if (
+        type(queue_repository) is not dict
+        or queue_repository.get("id") != QUEUE_REPOSITORY_ID
+        or queue_repository.get("full_name") != QUEUE_REPOSITORY
+    ):
+        raise P9HostRuntimeError("queue repository identity drifted")
     accepted = authorization_client.read_live_auth(
         issue_number,
         governance_ok=True,

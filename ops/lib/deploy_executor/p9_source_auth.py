@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 import json
+import os
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
@@ -142,6 +143,8 @@ class P9SourceInstallationTokenProvider:
         self.repository = repository
         self.repository_id = repository_id
         self.private_key = require_private_key(private_key)
+        if self.private_key.stat().st_uid != os.geteuid():
+            raise P9SourceAuthError("source private key owner must match the P9 process identity")
         self.requester = requester
         self.signer = signer
 
