@@ -69,6 +69,7 @@ class ControlPostCanaryObservation:
     target_audit_rows: tuple[Mapping[str, Any], ...]
     d1_selects: tuple[Mapping[str, Any], ...]
     observed_mutation_classes: tuple[str, ...] = ()
+    canary_source_sha: str | None = None
 
 
 def _canonical_time(value: datetime) -> str:
@@ -106,12 +107,17 @@ def _canary_exact(observation: ControlPostCanaryObservation) -> bool:
     run = observation.canary_run
     if type(run) is not dict:
         return False
+    expected_canary_source_sha = (
+        observation.source_sha
+        if observation.canary_source_sha is None
+        else observation.canary_source_sha
+    )
     run_ok = (
         run.get("id") == observation.canary_run_id
         and run.get("name") == CANARY_WORKFLOW_NAME
         and run.get("path") == CANARY_WORKFLOW_PATH
         and run.get("head_branch") == "main"
-        and run.get("head_sha") == observation.source_sha
+        and run.get("head_sha") == expected_canary_source_sha
         and run.get("event") == "workflow_dispatch"
         and run.get("status") == "completed"
         and run.get("conclusion") == "failure"
@@ -244,6 +250,8 @@ def build_control_postcanary_baseline_evidence(
     _positive_int(observation.target_issue_number, "target_issue_number")
     _positive_int(observation.target_pr_number, "target_pr_number")
     _require_sha(observation.source_sha, "source_sha")
+    if observation.canary_source_sha is not None:
+        _require_sha(observation.canary_source_sha, "canary_source_sha")
     _require_sha(observation.expected_pr_head, "expected_pr_head")
     _require_sha(observation.expected_old_main, "expected_old_main")
     _require_sha(observation.expected_merge_sha, "expected_merge_sha")
