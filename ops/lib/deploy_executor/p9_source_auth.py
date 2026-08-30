@@ -35,7 +35,9 @@ SOURCE_TOKEN_SAFE_STAGES = frozenset(
         "clock_response",
         "jwt_sign",
         "installation_request",
-        "installation_response",
+        "installation_not_found",
+        "installation_status",
+        "installation_payload",
         "installation_scope",
         "token_request",
         "token_response",
@@ -219,14 +221,13 @@ class P9SourceInstallationTokenProvider:
             )
         except Exception:
             raise P9SourceTokenStageError("installation_request") from None
-        try:
-            installation = _object(
-                installation_response,
-                200,
-                "source repository installation probe",
-            )
-        except Exception:
-            raise P9SourceTokenStageError("installation_response") from None
+        if installation_response.status == 404:
+            raise P9SourceTokenStageError("installation_not_found") from None
+        if installation_response.status != 200:
+            raise P9SourceTokenStageError("installation_status") from None
+        if type(installation_response.value) is not dict:
+            raise P9SourceTokenStageError("installation_payload") from None
+        installation = installation_response.value
         try:
             validate_source_installation(installation)
         except Exception:
