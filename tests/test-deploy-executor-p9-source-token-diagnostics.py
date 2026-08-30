@@ -20,6 +20,9 @@ from deploy_executor.p9_source_auth import (
 )
 
 BASELINE_CLI = ROOT / "ops" / "bin" / "rozkalns-deploy-p9-control-baseline"
+BASELINE_COLLECTOR = (
+    ROOT / "ops" / "lib" / "deploy_executor" / "p9_control_postcanary_collector.py"
+)
 REPOSITORY_INSTALLATION_PATH = (
     "/repos/rozkalnsandris/rozkalns-control-center/installation"
 )
@@ -244,13 +247,28 @@ class P9SourceTokenDiagnosticsTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             P9SourceTokenStageError("secret-derived-stage")
 
-    def test_baseline_cli_primes_source_auth_before_d1_credential_read(self):
-        source = BASELINE_CLI.read_text(encoding="utf-8")
-        build_at = source.index("source_client = build_source_client()")
-        prime_at = source.index("source_client.token_provider.get_installation_token()")
-        d1_at = source.index("read_fixed_d1_token()")
+    def test_baseline_cli_primes_source_auth_before_failfast_collector_d1_boundary(self):
+        cli_source = BASELINE_CLI.read_text(encoding="utf-8")
+        build_at = cli_source.index("source_client = build_source_client()")
+        prime_at = cli_source.index(
+            "source_client.token_provider.get_installation_token()"
+        )
+        collect_at = cli_source.index("observation = collect_control_postcanary_observation(")
         self.assertLess(build_at, prime_at)
-        self.assertLess(prime_at, d1_at)
+        self.assertLess(prime_at, collect_at)
+
+        collector_source = BASELINE_COLLECTOR.read_text(encoding="utf-8")
+        collect_fn = collector_source[
+            collector_source.index("def collect_control_postcanary_observation(") :
+            collector_source.index("def build_source_client(")
+        ]
+        target_gate_at = collect_fn.index(
+            "target_failure = target_github_evidence_failure_code(target_evidence)"
+        )
+        d1_at = collect_fn.index(
+            "FixedD1ReadClient(api_token=read_fixed_d1_token())"
+        )
+        self.assertLess(target_gate_at, d1_at)
 
 
 if __name__ == "__main__":

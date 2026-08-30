@@ -21,8 +21,10 @@ from .control_center_postcanary_adapter import (
 )
 from .p9_control_postcanary_producer import (
     ControlPostCanaryObservation,
+    ControlPostCanaryTargetEvidence,
     TARGET_PROJECT_ID,
     TARGET_REPOSITORY,
+    target_github_evidence_failure_code,
 )
 from .p9_evidence import CONTROL_BASELINE_RESOLVER
 from .p9_source_auth import P9SourceInstallationTokenProvider
@@ -109,6 +111,15 @@ class D1SelectResult:
             "rows_written": self.rows_written,
             "changes": self.changes,
         }
+
+
+class D1Reader(Protocol):
+    def select_pinned_request(self) -> D1SelectResult: ...
+
+    def select_pinned_target(self) -> D1SelectResult: ...
+
+
+D1ClientFactory = Callable[[], D1Reader]
 
 
 @dataclass(frozen=True)
@@ -309,7 +320,7 @@ def collect_control_postcanary_observation(
     *,
     source_client: JSONReader,
     target_client: JSONReader,
-    d1_client: FixedD1ReadClient,
+    d1_client_factory: D1ClientFactory | None = None,
 ) -> ControlPostCanaryObservation:
     request = validate_collection_request(request)
     _positive_int(PINNED_CANARY_RUN_ID, "PINNED_CANARY_RUN_ID")
@@ -382,6 +393,29 @@ def collect_control_postcanary_observation(
         "target compare",
     )
 
+    target_evidence = ControlPostCanaryTargetEvidence(
+        target_issue_number=PINNED_TARGET_ISSUE_NUMBER,
+        target_issue=target_issue,
+        target_pr_number=PINNED_TARGET_PR_NUMBER,
+        target_pr=target_pr,
+        expected_pr_head=PINNED_EXPECTED_PR_HEAD,
+        expected_old_main=PINNED_EXPECTED_OLD_MAIN,
+        expected_merge_sha=PINNED_EXPECTED_MERGE_SHA,
+        target_merge_commit=target_merge_commit,
+        target_compare=target_compare,
+    )
+    target_failure = target_github_evidence_failure_code(target_evidence)
+    if target_failure is not None:
+        raise ControlPostCanaryCollectorError(
+            "target GitHub semantic validation failed before D1: "
+            f"{target_failure}"
+        )
+
+    d1_client = (
+        d1_client_factory()
+        if d1_client_factory is not None
+        else FixedD1ReadClient(api_token=read_fixed_d1_token())
+    )
     audit = d1_client.select_pinned_request()
     target = d1_client.select_pinned_target()
 
