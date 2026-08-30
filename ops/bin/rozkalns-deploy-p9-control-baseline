@@ -51,6 +51,9 @@ def main() -> int:
     args = parse_args()
     request = ControlPostCanaryCollectionRequest(source_sha=args.source_sha)
     source_client = build_source_client()
+    # Prime exactly one source-App token before the D1 credential is opened.
+    # The capability-specific provider caches a successful mint for this process.
+    source_client.token_provider.get_installation_token()
     target_client = PublicTargetGitHubReader()
     d1_client = FixedD1ReadClient(api_token=read_fixed_d1_token())
     observation = collect_control_postcanary_observation(

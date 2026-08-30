@@ -28,10 +28,33 @@ SOURCE_REPOSITORIES = {
 }
 REQUIRED_PERMISSIONS = {"actions": "read", "contents": "read"}
 ALLOWED_PERMISSION_KEYS = frozenset({"actions", "contents", "metadata"})
+SOURCE_TOKEN_SAFE_STAGES = frozenset(
+    {
+        "clock_request",
+        "clock_response",
+        "jwt_sign",
+        "installation_request",
+        "installation_response",
+        "installation_scope",
+        "token_request",
+        "token_response",
+        "token_scope",
+    }
+)
 
 
 class P9SourceAuthError(AppAuthError):
     pass
+
+
+class P9SourceTokenStageError(P9SourceAuthError):
+    """Public-safe source-App token failure with an allowlisted stage only."""
+
+    def __init__(self, stage: str):
+        if stage not in SOURCE_TOKEN_SAFE_STAGES:
+            raise ValueError("source token failure stage is not allowlisted")
+        self.stage = stage
+        super().__init__(f"source installation token provider failed stage={stage}")
 
 
 def _headers(token: str | None = None) -> dict[str, str]:
@@ -126,7 +149,7 @@ def validate_source_token(
 
 
 class P9SourceInstallationTokenProvider:
-    """Mint one Actions/Contents read token for one reviewed P9 source repository."""
+    """Mint and cache one Actions/Contents read token for one reviewed P9 source repository."""
 
     def __init__(
         self,
@@ -147,29 +170,55 @@ class P9SourceInstallationTokenProvider:
             raise P9SourceAuthError("source private key owner must match the P9 process identity")
         self.requester = requester
         self.signer = signer
+        self._cached_token: InstallationToken | None = None
 
     def get_installation_token(self) -> InstallationToken:
-        clock = self.requester("GET", "/", _headers(), None)
+        if self._cached_token is not None:
+            return self._cached_token
+
+        try:
+            clock = self.requester("GET", "/", _headers(), None)
+        except Exception:
+            raise P9SourceTokenStageError("clock_request") from None
         if clock.status != 200:
-            raise P9SourceAuthError(f"GitHub clock probe returned HTTP {clock.status}")
-        now = _server_time(clock.headers)
-        jwt = build_app_jwt(
-            app_id=SOURCE_APP_ID,
-            server_time=now,
-            private_key=self.private_key,
-            signer=self.signer,
-        )
-        installation = _object(
-            self.requester(
+            raise P9SourceTokenStageError("clock_response") from None
+        try:
+            now = _server_time(clock.headers)
+        except Exception:
+            raise P9SourceTokenStageError("clock_response") from None
+
+        try:
+            jwt = build_app_jwt(
+                app_id=SOURCE_APP_ID,
+                server_time=now,
+                private_key=self.private_key,
+                signer=self.signer,
+            )
+        except Exception:
+            raise P9SourceTokenStageError("jwt_sign") from None
+
+        try:
+            installation_response = self.requester(
                 "GET",
                 f"/app/installations/{SOURCE_INSTALLATION_ID}",
                 _headers(jwt),
                 None,
-            ),
-            200,
-            "source installation probe",
-        )
-        validate_source_installation(installation)
+            )
+        except Exception:
+            raise P9SourceTokenStageError("installation_request") from None
+        try:
+            installation = _object(
+                installation_response,
+                200,
+                "source installation probe",
+            )
+        except Exception:
+            raise P9SourceTokenStageError("installation_response") from None
+        try:
+            validate_source_installation(installation)
+        except Exception:
+            raise P9SourceTokenStageError("installation_scope") from None
+
         body = json.dumps(
             {
                 "repository_ids": [self.repository_id],
@@ -177,19 +226,31 @@ class P9SourceInstallationTokenProvider:
             },
             separators=(",", ":"),
         ).encode("utf-8")
-        token_payload = _object(
-            self.requester(
+        try:
+            token_response = self.requester(
                 "POST",
                 f"/app/installations/{SOURCE_INSTALLATION_ID}/access_tokens",
                 {**_headers(jwt), "Content-Type": "application/json"},
                 body,
-            ),
-            201,
-            "source installation token mint",
-        )
-        return validate_source_token(
-            token_payload,
-            repository=self.repository,
-            repository_id=self.repository_id,
-            now=now,
-        )
+            )
+        except Exception:
+            raise P9SourceTokenStageError("token_request") from None
+        try:
+            token_payload = _object(
+                token_response,
+                201,
+                "source installation token mint",
+            )
+        except Exception:
+            raise P9SourceTokenStageError("token_response") from None
+        try:
+            token = validate_source_token(
+                token_payload,
+                repository=self.repository,
+                repository_id=self.repository_id,
+                now=now,
+            )
+        except Exception:
+            raise P9SourceTokenStageError("token_scope") from None
+        self._cached_token = token
+        return token

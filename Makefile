@@ -12,6 +12,7 @@ test:
 	python3 ./tests/test-deploy-executor-p8-prep.py
 	python3 ./tests/test-deploy-executor-p9-prep.py
 	python3 ./tests/test-deploy-executor-p9-host-wiring.py
+	python3 ./tests/test-deploy-executor-p9-source-token-diagnostics.py
 	python3 ./tests/test-deploy-executor-p9-baseline-upgrade.py
 	python3 ./tests/test-deploy-executor-p9-evidence.py
 	python3 ./tests/test-deploy-executor-p9-provenance.py
