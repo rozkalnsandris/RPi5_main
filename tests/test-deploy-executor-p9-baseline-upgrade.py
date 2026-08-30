@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
+PROVISION_SCRIPT = (
+    ROOT / "scripts/provision-deploy-executor-p9-control-d1-read-token.py"
+)
 
 EXPECTED_281_PACKAGE_FILES = (
     "__init__.py",
@@ -107,6 +111,81 @@ class P9BaselineWiringUpgradeTests(unittest.TestCase):
         self.assertIn("P9_RUNTIME_ACTIVE=NO", source)
         self.assertIn("P9_EVIDENCE_PRODUCED=NO", source)
         self.assertIn("P9_CREDENTIAL_MUTATION=NO", source)
+
+
+class P9D1CredentialProvisioningTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        spec = importlib.util.spec_from_file_location(
+            "p9_d1_credential_provision", PROVISION_SCRIPT
+        )
+        assert spec is not None and spec.loader is not None
+        cls.module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.module)
+        cls.source = PROVISION_SCRIPT.read_text(encoding="utf-8")
+
+    def test_fixed_target_and_hidden_tty_ingress(self):
+        self.assertEqual(
+            str(self.module.CREDENTIAL_PATH),
+            "/root/.config/rozkalns-deploy-executor-p9/control-d1-read-token",
+        )
+        self.assertIn("getpass.getpass", self.source)
+        self.assertIn("interactive TTY", self.source)
+        self.assertNotIn("os.environ", self.source)
+
+    def test_token_validation_matches_collector_bounds(self):
+        self.assertEqual(
+            self.module.validate_token("x" * 20), ("x" * 20 + "\n").encode()
+        )
+        self.assertEqual(len(self.module.validate_token("x" * 4096)), 4097)
+        for value in (
+            "x" * 19,
+            "x" * 4097,
+            "abc def" + "x" * 20,
+            "abc\t" + "x" * 20,
+        ):
+            with self.assertRaises(self.module.ProvisioningError):
+                self.module.validate_token(value)
+
+    def test_operator_is_create_only_and_has_no_network_path(self):
+        self.assertIn("os.O_EXCL", self.source)
+        self.assertIn("O_NOFOLLOW", self.source)
+        self.assertIn(
+            "credential target already exists; overwrite/rotation is not authorized",
+            self.source,
+        )
+        for forbidden in (
+            "unlink(",
+            "replace(",
+            "rename(",
+            "rmtree",
+            "urllib",
+            "http.client",
+            "requests",
+            "curl",
+            "Authorization:",
+        ):
+            self.assertNotIn(forbidden, self.source)
+
+    def test_exact_sha_is_revalidated_before_mutation(self):
+        self.assertGreaterEqual(
+            self.source.count("_require_exact_source(args.expected_sha)"), 2
+        )
+        marker = "Authorized credential-placement mutation begins here"
+        preflight = self.source[: self.source.index(marker)]
+        self.assertIn("_require_target_absent()", preflight)
+        self.assertIn("_require_root_config_metadata()", preflight)
+
+    def test_success_markers_preserve_prerequisite_scope(self):
+        for marker in (
+            "CREDENTIAL_INPUT=HIDDEN_TTY",
+            "CREDENTIAL_OVERWRITE=NO",
+            "D1_REQUEST=NO",
+            "BASELINE_COLLECTION=NO",
+            "P9_EXECUTION=NO",
+            "STATE_STORE_TOUCHED=NO",
+        ):
+            self.assertIn(marker, self.source)
 
 
 if __name__ == "__main__":
