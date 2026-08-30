@@ -3,66 +3,70 @@
   "execution_enabled": false,
   "operations": [
     {
-      "operation_id": "hermes-deals.origin-path-audit.v1",
-      "source_repository": "rozkalnsandris/hermes-deals",
+      "operation_id": "rozkalns-control-center.merge-postcanary-reconcile.v1",
+      "source_repository": "rozkalnsandris/rozkalns-control-center",
       "queue_match": {
-        "target_alias": "hermes-deals-origin-path-audit",
-        "execution_location_class": "trusted-home-host",
-        "repository_entrypoint": "tools/runner/origin-path-rpi5-audit-dispatcher.sh",
+        "target_alias": "control-center-merge-postcanary-reconcile",
+        "execution_location_class": "github-actions-readonly",
+        "repository_entrypoint": ".github/workflows/phase3-merge-postcanary-readonly-reconcile.yml",
         "deploy_class": "STRICT_LIVE_AUTH_REQUIRED"
       },
-      "target_alias": "hermes-deals-origin-path-audit",
-      "adapter_id": "hermes-deals.origin-path-audit.v1",
+      "target_alias": "control-center-merge-postcanary-reconcile",
+      "adapter_id": "rozkalns-control-center.merge-postcanary-reconcile.v1",
       "authorization_class": "STRICT",
       "ordinary_live_all_eligible": false,
       "baseline": {
         "kind": "resolver",
-        "resolver_id": "hermes-deals.origin-path-registration.v1"
+        "resolver_id": "control-center.merge-postcanary-audit-row.v1"
       },
       "mutation_budget": [
         {
-          "category": "hermes-deals.read-only-audit-invocation",
+          "category": "control-center.read-only-reconciliation-run",
           "max_operations": 1
         }
       ],
       "rollback_policy": "NONE",
       "exclusions": [
-        "production database writes",
-        "production deployment/cutover",
-        "restart/configuration mutation",
-        "parser/collector behavior changes",
-        "runner registration/deregistration",
-        "GitHub App/credential/permission changes"
+        "GitHub merge/decision mutation",
+        "D1 write/migration/apply",
+        "Worker deploy",
+        "Cloudflare configuration mutation",
+        "GitHub App/credential/permission changes",
+        "host/runtime mutation"
       ],
       "dependencies": [
-        "source-repository-id:1317143994",
-        "migration-contract:hermes-deals#787",
-        "dispatcher-source-blob:f9bfd02c6d36bb54d5380e1f0c99a0195e2ff4bc",
-        "installer-source-blob:41f004420a0f5aed314aaefd796a54e14dbd17ea",
-        "probe-source-blob:2362e8eb578a7279c38fe4ed2a7d1edd05df891a",
-        "privileged-boundary:identity-only-dispatch-request-v1"
+        "source-repository-id:1329279953",
+        "workflow-source-blob:907447666e510340b241348cd1c6ed3260f8b0ab",
+        "target-repository-id:1328835922",
+        "workflow-trigger:owner-issue-comment-278-v1",
+        "d1-access:select-only-zero-write-v1",
+        "p9-trigger-dispatch:prohibited"
       ],
       "preflight": [
-        "LIVE-AUTH and queue envelope independently revalidated before any privileged request",
-        "source repository stable ID is 1317143994 and authorized SHA is merged/reachable from current main",
+        "LIVE-AUTH and READY queue envelope are independently revalidated",
+        "source repository stable ID is 1329279953 and authorized SHA is merged/reachable from current main",
         "exact authorized source SHA CI is successful",
-        "registered dispatcher/probe identities and root-owned registration are independently revalidated",
-        "poller remains unprivileged and sends identity only across the privileged boundary",
-        "operation remains read-only with rollback policy NONE and one invocation maximum"
+        "reviewed post-canary workflow source blob remains 907447666e510340b241348cd1c6ed3260f8b0ab",
+        "workflow remains owner-comment triggered with contents/actions read and D1 SELECT-only zero-write assertions",
+        "P9 does not post the owner trigger comment or dispatch/rerun the workflow",
+        "operation remains execution-disabled with rollback policy NONE and one future read-only reconciliation maximum"
       ],
       "postconditions": [
-        "sanitized dispatcher manifest is bound to authorized commit SHA and requested as-of date",
-        "production_apply_authorized is false",
-        "production_database_write is false",
-        "production_deployment is false",
-        "restart_or_configuration_mutation is false",
-        "reporting failure cannot authorize or replay a second execution"
+        "P9 result is DRY_RUN_READY only",
+        "MERGE_POST_SENT is false",
+        "REMOTE_D1_MUTATION is false",
+        "WORKER_MUTATION is false",
+        "CLOUDFLARE_CONFIG_MUTATION is false",
+        "GITHUB_DECISION_MUTATION is false",
+        "GITHUB_APP_PERMISSION_MUTATION is false",
+        "production mutation started is false"
       ],
       "required_github_evidence": [
         "source repository stable identity",
         "authorized SHA is merged/reachable from current main",
         "exact-SHA CI completed successfully",
-        "dispatcher installer and probe source blobs match the audited Hermes Deals identities",
+        "post-canary workflow blob matches the reviewed Control Center identity",
+        "consumed Merge canary target evidence remains bounded to ops-workflows",
         "LIVE-AUTH and READY queue remain separate authority and eligibility records"
       ]
     }
