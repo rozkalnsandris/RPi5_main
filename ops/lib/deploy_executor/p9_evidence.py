@@ -10,12 +10,17 @@ from .p9_canary import BaselineEvidence, GovernanceEvidence
 
 GOVERNANCE_SCHEMA = "rozkalns.deploy-executor-p9-governance-evidence.v1"
 HERMES_BASELINE_SCHEMA = "rozkalns.deploy-executor-p9-hermes-origin-baseline.v1"
+CONTROL_BASELINE_SCHEMA = "rozkalns.deploy-executor-p9-control-postcanary-baseline.v1"
 AUTHORIZATION_REPOSITORY = "rozkalnsandris/ops-workflows"
 AUTHORIZATION_REPOSITORY_ID = 1328835922
 HERMES_OPERATION_ID = "hermes-deals.origin-path-audit.v1"
 HERMES_SOURCE_REPOSITORY = "rozkalnsandris/hermes-deals"
 HERMES_TARGET_ALIAS = "hermes-deals-origin-path-audit"
 HERMES_BASELINE_RESOLVER = "hermes-deals.origin-path-registration.v1"
+CONTROL_OPERATION_ID = "rozkalns-control-center.merge-postcanary-reconcile.v1"
+CONTROL_SOURCE_REPOSITORY = "rozkalnsandris/rozkalns-control-center"
+CONTROL_TARGET_ALIAS = "control-center-merge-postcanary-reconcile"
+CONTROL_BASELINE_RESOLVER = "control-center.merge-postcanary-audit-row.v1"
 MAX_EVIDENCE_AGE_SECONDS = 300
 SHA40_RE = re.compile(r"^[0-9a-f]{40}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -46,6 +51,25 @@ HERMES_BASELINE_KEYS = frozenset(
         "probe_identity_ok",
         "dispatcher_identity_ok",
         "workflow_identity_ok",
+        "mutation_surface_read_only",
+    }
+)
+CONTROL_BASELINE_KEYS = frozenset(
+    {
+        "schema",
+        "resolver_id",
+        "target_alias",
+        "source_repository",
+        "source_sha",
+        "observed_at",
+        "canary_run_terminal_failure_exact",
+        "target_issue_exact",
+        "target_pr_merge_evidence_exact",
+        "target_merge_parent_exact",
+        "target_main_descends_from_merge",
+        "audit_row_exact",
+        "target_audit_row_count_one",
+        "d1_select_only_zero_write",
         "mutation_surface_read_only",
     }
 )
@@ -113,7 +137,9 @@ def parse_governance_evidence(value: Any, *, server_time: datetime) -> Governanc
 
 
 def _canonical_sha256(value: Mapping[str, Any]) -> str:
-    raw = json.dumps(dict(value), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    raw = json.dumps(
+        dict(value), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
 
 
@@ -141,11 +167,15 @@ def resolve_hermes_origin_baseline(
         "kind": "resolver",
         "value": HERMES_BASELINE_RESOLVER,
     }:
-        raise P9EvidenceError("LIVE-AUTH expected_baseline does not bind the reviewed Hermes resolver")
+        raise P9EvidenceError(
+            "LIVE-AUTH expected_baseline does not bind the reviewed Hermes resolver"
+        )
     if type(source_sha) is not str or SHA40_RE.fullmatch(source_sha) is None:
         raise P9EvidenceError("authorized Hermes source SHA is malformed")
 
-    payload = _object(evidence, keys=HERMES_BASELINE_KEYS, where="Hermes baseline evidence")
+    payload = _object(
+        evidence, keys=HERMES_BASELINE_KEYS, where="Hermes baseline evidence"
+    )
     if payload["schema"] != HERMES_BASELINE_SCHEMA:
         raise P9EvidenceError("Hermes baseline evidence schema mismatch")
     if payload["resolver_id"] != HERMES_BASELINE_RESOLVER:
@@ -155,7 +185,9 @@ def resolve_hermes_origin_baseline(
     if payload["source_repository"] != HERMES_SOURCE_REPOSITORY:
         raise P9EvidenceError("Hermes baseline evidence source repository mismatch")
     if payload["registered_commit_sha"] != source_sha:
-        raise P9EvidenceError("Hermes baseline evidence is not bound to the authorized source SHA")
+        raise P9EvidenceError(
+            "Hermes baseline evidence is not bound to the authorized source SHA"
+        )
     for flag in (
         "registration_identity_ok",
         "registered_source_match",
@@ -165,8 +197,12 @@ def resolve_hermes_origin_baseline(
         "mutation_surface_read_only",
     ):
         if payload[flag] is not True:
-            raise P9EvidenceError(f"Hermes baseline evidence must explicitly assert {flag}=true")
-    observed_at = _timestamp(payload["observed_at"], where="Hermes baseline observed_at")
+            raise P9EvidenceError(
+                f"Hermes baseline evidence must explicitly assert {flag}=true"
+            )
+    observed_at = _timestamp(
+        payload["observed_at"], where="Hermes baseline observed_at"
+    )
     _fresh(observed_at, server_time=server_time, where="Hermes baseline evidence")
 
     return BaselineEvidence(
@@ -175,3 +211,107 @@ def resolve_hermes_origin_baseline(
         matched=True,
         evidence_id=f"sha256:{_canonical_sha256(payload)}",
     )
+
+
+def resolve_control_postcanary_baseline(
+    operation: Any,
+    expected_baseline: Mapping[str, Any],
+    *,
+    evidence: Any,
+    source_sha: str,
+    server_time: datetime,
+) -> BaselineEvidence:
+    if getattr(operation, "operation_id", None) != CONTROL_OPERATION_ID:
+        raise P9EvidenceError("Control baseline resolver received the wrong operation")
+    if getattr(operation, "source_repository", None) != CONTROL_SOURCE_REPOSITORY:
+        raise P9EvidenceError("Control baseline resolver source repository mismatch")
+    if getattr(operation, "target_alias", None) != CONTROL_TARGET_ALIAS:
+        raise P9EvidenceError("Control baseline resolver target alias mismatch")
+    baseline_contract = getattr(operation, "baseline", None)
+    if (
+        getattr(baseline_contract, "kind", None) != "resolver"
+        or getattr(baseline_contract, "resolver_id", None) != CONTROL_BASELINE_RESOLVER
+    ):
+        raise P9EvidenceError("Control operation baseline contract mismatch")
+    if type(expected_baseline) is not dict or expected_baseline != {
+        "kind": "resolver",
+        "value": CONTROL_BASELINE_RESOLVER,
+    }:
+        raise P9EvidenceError(
+            "LIVE-AUTH expected_baseline does not bind the reviewed Control resolver"
+        )
+    if type(source_sha) is not str or SHA40_RE.fullmatch(source_sha) is None:
+        raise P9EvidenceError("authorized Control source SHA is malformed")
+
+    payload = _object(
+        evidence, keys=CONTROL_BASELINE_KEYS, where="Control baseline evidence"
+    )
+    if payload["schema"] != CONTROL_BASELINE_SCHEMA:
+        raise P9EvidenceError("Control baseline evidence schema mismatch")
+    if payload["resolver_id"] != CONTROL_BASELINE_RESOLVER:
+        raise P9EvidenceError("Control baseline evidence resolver mismatch")
+    if payload["target_alias"] != CONTROL_TARGET_ALIAS:
+        raise P9EvidenceError("Control baseline evidence target alias mismatch")
+    if payload["source_repository"] != CONTROL_SOURCE_REPOSITORY:
+        raise P9EvidenceError("Control baseline evidence source repository mismatch")
+    if payload["source_sha"] != source_sha:
+        raise P9EvidenceError(
+            "Control baseline evidence is not bound to the authorized source SHA"
+        )
+    for flag in (
+        "canary_run_terminal_failure_exact",
+        "target_issue_exact",
+        "target_pr_merge_evidence_exact",
+        "target_merge_parent_exact",
+        "target_main_descends_from_merge",
+        "audit_row_exact",
+        "target_audit_row_count_one",
+        "d1_select_only_zero_write",
+        "mutation_surface_read_only",
+    ):
+        if payload[flag] is not True:
+            raise P9EvidenceError(
+                f"Control baseline evidence must explicitly assert {flag}=true"
+            )
+    observed_at = _timestamp(
+        payload["observed_at"], where="Control baseline observed_at"
+    )
+    _fresh(observed_at, server_time=server_time, where="Control baseline evidence")
+
+    return BaselineEvidence(
+        resolver_id=CONTROL_BASELINE_RESOLVER,
+        target_alias=CONTROL_TARGET_ALIAS,
+        matched=True,
+        evidence_id=f"sha256:{_canonical_sha256(payload)}",
+    )
+
+
+def resolve_p9_baseline(
+    operation: Any,
+    expected_baseline: Mapping[str, Any],
+    *,
+    evidence: Any,
+    source_sha: str,
+    server_time: datetime,
+) -> BaselineEvidence:
+    baseline_contract = getattr(operation, "baseline", None)
+    if getattr(baseline_contract, "kind", None) != "resolver":
+        raise P9EvidenceError("P9 operation does not declare a resolver baseline")
+    resolver_id = getattr(baseline_contract, "resolver_id", None)
+    if resolver_id == HERMES_BASELINE_RESOLVER:
+        return resolve_hermes_origin_baseline(
+            operation,
+            expected_baseline,
+            evidence=evidence,
+            source_sha=source_sha,
+            server_time=server_time,
+        )
+    if resolver_id == CONTROL_BASELINE_RESOLVER:
+        return resolve_control_postcanary_baseline(
+            operation,
+            expected_baseline,
+            evidence=evidence,
+            source_sha=source_sha,
+            server_time=server_time,
+        )
+    raise P9EvidenceError("P9 operation baseline resolver is not allowlisted")
