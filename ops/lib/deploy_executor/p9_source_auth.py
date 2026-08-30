@@ -21,6 +21,7 @@ SOURCE_APP_ID = 4537106
 SOURCE_INSTALLATION_ID = 152422751
 OWNER_LOGIN = "rozkalnsandris"
 OWNER_ID = 277435981
+OWNER_TYPE = "User"
 CONTROL_SOURCE_REPOSITORY = "rozkalnsandris/rozkalns-control-center"
 CONTROL_SOURCE_REPOSITORY_ID = 1329279953
 SOURCE_REPOSITORIES = {
@@ -105,10 +106,19 @@ def _validate_permissions(value: Any, where: str) -> None:
 def validate_source_installation(payload: Mapping[str, Any]) -> None:
     if payload.get("id") != SOURCE_INSTALLATION_ID:
         raise P9SourceAuthError("source installation id mismatch")
+    if payload.get("app_id") != SOURCE_APP_ID:
+        raise P9SourceAuthError("source installation app id mismatch")
+    if payload.get("target_id") != OWNER_ID or payload.get("target_type") != OWNER_TYPE:
+        raise P9SourceAuthError("source installation target mismatch")
     if payload.get("repository_selection") != "selected":
         raise P9SourceAuthError("source installation must use selected repositories")
     account = payload.get("account")
-    if type(account) is not dict or account.get("id") != OWNER_ID or account.get("login") != OWNER_LOGIN:
+    if (
+        type(account) is not dict
+        or account.get("id") != OWNER_ID
+        or account.get("login") != OWNER_LOGIN
+        or account.get("type") != OWNER_TYPE
+    ):
         raise P9SourceAuthError("source installation owner mismatch")
     _validate_permissions(payload.get("permissions"), "source installation")
 
@@ -136,6 +146,8 @@ def validate_source_token(
     remaining = int((expiry - now.astimezone(timezone.utc)).total_seconds())
     if not 3000 <= remaining <= 3700:
         raise P9SourceAuthError("source installation token lifetime is outside expected bounds")
+    if payload.get("repository_selection") != "selected":
+        raise P9SourceAuthError("source installation token selection posture mismatch")
     _validate_permissions(payload.get("permissions"), "source installation token")
     repositories = payload.get("repositories")
     observed = [
@@ -197,10 +209,11 @@ class P9SourceInstallationTokenProvider:
         except Exception:
             raise P9SourceTokenStageError("jwt_sign") from None
 
+        owner, repository_name = self.repository.split("/", 1)
         try:
             installation_response = self.requester(
                 "GET",
-                f"/app/installations/{SOURCE_INSTALLATION_ID}",
+                f"/repos/{owner}/{repository_name}/installation",
                 _headers(jwt),
                 None,
             )
@@ -210,7 +223,7 @@ class P9SourceInstallationTokenProvider:
             installation = _object(
                 installation_response,
                 200,
-                "source installation probe",
+                "source repository installation probe",
             )
         except Exception:
             raise P9SourceTokenStageError("installation_response") from None

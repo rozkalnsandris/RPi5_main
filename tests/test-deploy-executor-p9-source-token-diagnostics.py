@@ -15,61 +15,84 @@ from deploy_executor.p9_source_auth import (
     P9SourceAuthError,
     P9SourceInstallationTokenProvider,
     P9SourceTokenStageError,
+    SOURCE_APP_ID,
     SOURCE_INSTALLATION_ID,
 )
 
 BASELINE_CLI = ROOT / "ops" / "bin" / "rozkalns-deploy-p9-control-baseline"
+REPOSITORY_INSTALLATION_PATH = (
+    "/repos/rozkalnsandris/rozkalns-control-center/installation"
+)
 
 
 class Requester:
-    def __init__(self, *, permission: str = "read", fail_install_request: bool = False):
-        self.permission = permission
+    def __init__(
+        self,
+        *,
+        installation_status: int = 200,
+        installation_overrides: dict | None = None,
+        token_status: int = 201,
+        token_overrides: dict | None = None,
+        fail_install_request: bool = False,
+    ):
+        self.installation_status = installation_status
+        self.installation_overrides = installation_overrides or {}
+        self.token_status = token_status
+        self.token_overrides = token_overrides or {}
         self.fail_install_request = fail_install_request
         self.calls: list[tuple[str, str]] = []
         self.token_requests = 0
+        self.request = None
 
     def __call__(self, method, path, headers, body):
         self.calls.append((method, path))
         date = "Sun, 30 Aug 2026 11:00:00 GMT"
         if method == "GET" and path == "/":
             return RawResponse(200, {"date": date}, {})
-        if method == "GET" and path == f"/app/installations/{SOURCE_INSTALLATION_ID}":
+        if method == "GET" and path == REPOSITORY_INSTALLATION_PATH:
             if self.fail_install_request:
                 raise RuntimeError("private-inner-error-must-not-escape")
-            return RawResponse(
-                200,
-                {"date": date},
-                {
-                    "id": SOURCE_INSTALLATION_ID,
-                    "repository_selection": "selected",
-                    "account": {"id": 277435981, "login": "rozkalnsandris"},
-                    "permissions": {
-                        "actions": self.permission,
-                        "contents": "read",
-                        "metadata": "read",
-                    },
+            payload = {
+                "id": SOURCE_INSTALLATION_ID,
+                "app_id": SOURCE_APP_ID,
+                "target_id": 277435981,
+                "target_type": "User",
+                "repository_selection": "selected",
+                "account": {
+                    "id": 277435981,
+                    "login": "rozkalnsandris",
+                    "type": "User",
                 },
-            )
+                "permissions": {
+                    "actions": "read",
+                    "contents": "read",
+                    "metadata": "read",
+                },
+            }
+            payload.update(self.installation_overrides)
+            if self.installation_status != 200:
+                payload = {"message": "private-installation-response-must-not-escape"}
+            return RawResponse(self.installation_status, {"date": date}, payload)
         if method == "POST" and path == f"/app/installations/{SOURCE_INSTALLATION_ID}/access_tokens":
             self.token_requests += 1
-            request = json.loads(body.decode("utf-8"))
-            self.request = request
-            return RawResponse(
-                201,
-                {"date": date},
-                {
-                    "token": "ghs_" + "x" * 80,
-                    "expires_at": "2026-08-30T12:00:00Z",
-                    "permissions": {
-                        "actions": "read",
-                        "contents": "read",
-                        "metadata": "read",
-                    },
-                    "repositories": [
-                        {"id": 1329279953, "full_name": CONTROL_SOURCE_REPOSITORY}
-                    ],
+            self.request = json.loads(body.decode("utf-8"))
+            payload = {
+                "token": "ghs_" + "x" * 80,
+                "expires_at": "2026-08-30T12:00:00Z",
+                "repository_selection": "selected",
+                "permissions": {
+                    "actions": "read",
+                    "contents": "read",
+                    "metadata": "read",
                 },
-            )
+                "repositories": [
+                    {"id": 1329279953, "full_name": CONTROL_SOURCE_REPOSITORY}
+                ],
+            }
+            payload.update(self.token_overrides)
+            if self.token_status != 201:
+                payload = {"message": "private-token-response-must-not-escape"}
+            return RawResponse(self.token_status, {"date": date}, payload)
         raise AssertionError((method, path))
 
 
@@ -86,7 +109,24 @@ def _provider(tmp: str, requester: Requester) -> P9SourceInstallationTokenProvid
 
 
 class P9SourceTokenDiagnosticsTests(unittest.TestCase):
-    def test_provider_mints_exactly_once_and_reuses_cached_token(self):
+    def _assert_stage_before_mint(
+        self, requester: Requester, expected_stage: str
+    ) -> P9SourceTokenStageError:
+        with tempfile.TemporaryDirectory() as tmp:
+            provider = _provider(tmp, requester)
+            with self.assertRaises(P9SourceTokenStageError) as raised:
+                provider.get_installation_token()
+            self.assertIsInstance(raised.exception, P9SourceAuthError)
+            self.assertEqual(raised.exception.stage, expected_stage)
+            self.assertEqual(
+                str(raised.exception),
+                f"source installation token provider failed stage={expected_stage}",
+            )
+            if expected_stage.startswith("installation"):
+                self.assertEqual(requester.token_requests, 0)
+            return raised.exception
+
+    def test_provider_proves_repository_installation_then_mints_once_and_reuses(self):
         with tempfile.TemporaryDirectory() as tmp:
             requester = Requester()
             provider = _provider(tmp, requester)
@@ -94,6 +134,17 @@ class P9SourceTokenDiagnosticsTests(unittest.TestCase):
             second = provider.get_installation_token()
             self.assertIs(first, second)
             self.assertEqual(requester.token_requests, 1)
+            self.assertIn(("GET", REPOSITORY_INSTALLATION_PATH), requester.calls)
+            self.assertNotIn(
+                ("GET", f"/app/installations/{SOURCE_INSTALLATION_ID}"),
+                requester.calls,
+            )
+            self.assertLess(
+                requester.calls.index(("GET", REPOSITORY_INSTALLATION_PATH)),
+                requester.calls.index(
+                    ("POST", f"/app/installations/{SOURCE_INSTALLATION_ID}/access_tokens")
+                ),
+            )
             self.assertEqual(
                 requester.request,
                 {
@@ -102,34 +153,72 @@ class P9SourceTokenDiagnosticsTests(unittest.TestCase):
                 },
             )
 
-    def test_installation_scope_failure_is_sanitized_and_stops_before_mint(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            requester = Requester(permission="write")
-            provider = _provider(tmp, requester)
-            with self.assertRaises(P9SourceTokenStageError) as raised:
-                provider.get_installation_token()
-            self.assertIsInstance(raised.exception, P9SourceAuthError)
-            self.assertEqual(raised.exception.stage, "installation_scope")
-            self.assertEqual(
-                str(raised.exception),
-                "source installation token provider failed stage=installation_scope",
-            )
-            self.assertEqual(requester.token_requests, 0)
+    def test_repository_installation_404_is_sanitized_and_stops_before_mint(self):
+        requester = Requester(installation_status=404)
+        error = self._assert_stage_before_mint(requester, "installation_response")
+        self.assertNotIn("private-installation-response", str(error))
+
+    def test_repository_installation_identity_and_scope_fail_closed_before_mint(self):
+        invalid_installations = (
+            {"id": SOURCE_INSTALLATION_ID + 1},
+            {"app_id": SOURCE_APP_ID + 1},
+            {"target_id": 1},
+            {"target_type": "Organization"},
+            {"repository_selection": "all"},
+            {"account": {"id": 1, "login": "rozkalnsandris", "type": "User"}},
+            {"account": {"id": 277435981, "login": "other", "type": "User"}},
+            {"account": {"id": 277435981, "login": "rozkalnsandris", "type": "Bot"}},
+            {"permissions": {"contents": "read", "metadata": "read"}},
+            {"permissions": {"actions": "write", "contents": "read", "metadata": "read"}},
+            {
+                "permissions": {
+                    "actions": "read",
+                    "contents": "read",
+                    "metadata": "read",
+                    "issues": "read",
+                }
+            },
+        )
+        for overrides in invalid_installations:
+            with self.subTest(overrides=overrides):
+                requester = Requester(installation_overrides=overrides)
+                self._assert_stage_before_mint(requester, "installation_scope")
 
     def test_request_failure_does_not_expose_inner_exception_text(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            requester = Requester(fail_install_request=True)
-            provider = _provider(tmp, requester)
-            with self.assertRaises(P9SourceTokenStageError) as raised:
-                provider.get_installation_token()
-            message = str(raised.exception)
-            self.assertEqual(raised.exception.stage, "installation_request")
-            self.assertEqual(
-                message,
-                "source installation token provider failed stage=installation_request",
-            )
-            self.assertNotIn("private-inner-error", message)
-            self.assertEqual(requester.token_requests, 0)
+        requester = Requester(fail_install_request=True)
+        error = self._assert_stage_before_mint(requester, "installation_request")
+        self.assertNotIn("private-inner-error", str(error))
+
+    def test_token_mint_response_failure_is_sanitized(self):
+        requester = Requester(token_status=422)
+        error = self._assert_stage_before_mint(requester, "token_response")
+        self.assertEqual(requester.token_requests, 1)
+        self.assertNotIn("private-token-response", str(error))
+
+    def test_token_scope_failures_are_sanitized(self):
+        invalid_tokens = (
+            {"repository_selection": "all"},
+            {"permissions": {"actions": "read", "contents": "write", "metadata": "read"}},
+            {
+                "permissions": {
+                    "actions": "read",
+                    "contents": "read",
+                    "metadata": "read",
+                    "issues": "read",
+                }
+            },
+            {"repositories": []},
+            {
+                "repositories": [
+                    {"id": 1329279953, "full_name": "rozkalnsandris/not-control-center"}
+                ]
+            },
+        )
+        for overrides in invalid_tokens:
+            with self.subTest(overrides=overrides):
+                requester = Requester(token_overrides=overrides)
+                self._assert_stage_before_mint(requester, "token_scope")
+                self.assertEqual(requester.token_requests, 1)
 
     def test_arbitrary_failure_stage_is_rejected(self):
         with self.assertRaises(ValueError):
