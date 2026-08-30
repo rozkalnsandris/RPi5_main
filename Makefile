@@ -8,6 +8,7 @@ test:
 	python3 ./tests/test-deploy-executor-p4.py
 	python3 ./tests/test-deploy-executor-p5.py
 	python3 ./tests/test-deploy-executor-hermes-deals-origin.py
+	python3 ./tests/test-deploy-executor-control-center-postcanary.py
 	python3 ./tests/test-deploy-executor-p8-prep.py
 	python3 ./tests/test-deploy-executor-p9-prep.py
 	python3 ./tests/test-deploy-executor-p9-evidence.py

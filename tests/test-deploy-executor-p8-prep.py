@@ -26,7 +26,7 @@ from deploy_executor.transport import HTTPResponse, InstallationToken
 FIXTURES = ROOT / "tests" / "fixtures" / "deploy_executor"
 CONFIG = ROOT / "ops" / "deploy" / "executor-p8-dry-run-config.json"
 REGISTRY = ROOT / "ops" / "deploy" / "executor-operations.json"
-CANARY_REGISTRY = FIXTURES / "operations_hermes_deals_origin_canary.json"
+CANARY_REGISTRY = FIXTURES / "operations_control_center_postcanary_canary.json"
 SERVICE = ROOT / "ops" / "systemd" / "rozkalns-deploy-executor.service"
 TIMER = ROOT / "ops" / "systemd" / "rozkalns-deploy-executor.timer"
 POLLER = ROOT / "ops" / "bin" / "rozkalns-deploy-poll"
@@ -433,7 +433,7 @@ class P8PrepTests(unittest.TestCase):
         self.assertEqual(len(production["operations"]), 1)
         self.assertEqual(
             production["operations"][0]["operation_id"],
-            "hermes-deals.origin-path-audit.v1",
+            "rozkalns-control-center.merge-postcanary-reconcile.v1",
         )
 
 
