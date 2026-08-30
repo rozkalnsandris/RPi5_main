@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import sys
+from typing import Callable
 
 LIB = Path("/usr/local/lib/rozkalns-deploy-executor")
 if str(LIB) not in sys.path:
@@ -21,6 +22,7 @@ from deploy_executor.p9_control_postcanary_collector import (
     PINNED_TARGET_PR_NUMBER,
     build_source_client,
     collect_control_postcanary_observation,
+    collect_public_target_snapshot,
 )
 from deploy_executor.p9_control_postcanary_producer import (
     publish_control_postcanary_baseline_evidence,
@@ -41,6 +43,48 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def collect_once(
+    request: ControlPostCanaryCollectionRequest,
+    *,
+    target_client_factory: Callable[[], object] | None = None,
+    source_client_factory: Callable[[], object] | None = None,
+    collector_fn: Callable[..., object] | None = None,
+):
+    target_factory = (
+        PublicTargetGitHubReader
+        if target_client_factory is None
+        else target_client_factory
+    )
+    target_client = target_factory()
+    # All pinned public target GETs and semantic predicates run before protected
+    # source-App private-key/token work. No retry path exists here.
+    target_snapshot = collect_public_target_snapshot(target_client)
+
+    if source_client_factory is None:
+        source_client = build_source_client()
+    else:
+        source_client = source_client_factory()
+    # Prime exactly one source-App token only after the public target preflight.
+    # The capability-specific provider caches a successful mint for this process.
+    source_client.token_provider.get_installation_token()
+
+    # The collector revalidates the immutable-in-process target snapshot before
+    # source evidence and before it can open the fixed D1 credential.
+    if collector_fn is None:
+        observation = collect_control_postcanary_observation(
+            request,
+            source_client=source_client,
+            target_snapshot=target_snapshot,
+        )
+    else:
+        observation = collector_fn(
+            request,
+            source_client=source_client,
+            target_snapshot=target_snapshot,
+        )
+    return observation
+
+
 def main() -> int:
     if os.geteuid() != _ROOT_UID:
         raise ControlPostCanaryCollectorError(
@@ -48,18 +92,7 @@ def main() -> int:
         )
     args = parse_args()
     request = ControlPostCanaryCollectionRequest(source_sha=args.source_sha)
-    source_client = build_source_client()
-    # Prime exactly one source-App token before any D1 credential access.
-    # The capability-specific provider caches a successful mint for this process.
-    source_client.token_provider.get_installation_token()
-    target_client = PublicTargetGitHubReader()
-    # The collector validates all reviewed target GitHub semantics before it opens
-    # the fixed D1 credential or constructs the capability-specific D1 reader.
-    observation = collect_control_postcanary_observation(
-        request,
-        source_client=source_client,
-        target_client=target_client,
-    )
+    observation = collect_once(request)
     digest = publish_control_postcanary_baseline_evidence(observation)
     print(
         json.dumps(
@@ -71,6 +104,7 @@ def main() -> int:
                 "target_issue": PINNED_TARGET_ISSUE_NUMBER,
                 "target_pr": PINNED_TARGET_PR_NUMBER,
                 "request_id": PINNED_REQUEST_ID,
+                "public_target_preauth_verified": True,
                 "source_app_scope_verified": True,
                 "d1_select_only_zero_write": True,
                 "p9_executed": False,

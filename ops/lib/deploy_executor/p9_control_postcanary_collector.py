@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 import http.client
 import json
@@ -64,6 +64,7 @@ _ALLOWED_SQL = frozenset({AUDIT_SQL, TARGET_SQL})
 SHA40_RE = re.compile(r"^[0-9a-f]{40}$")
 _REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 MAX_D1_RESPONSE_BYTES = 256 * 1024
+MAX_PUBLIC_ETAG_BYTES = 512
 
 # Historical Control Merge canary tuple. These values are source-pinned so the
 # evidence collector cannot be redirected to a different run, request, PR or
@@ -77,6 +78,14 @@ PINNED_EXPECTED_PR_HEAD = "7cd685c55b8ccba33400b2062ac703cbed668fc5"
 PINNED_EXPECTED_OLD_MAIN = "c9d6b3898a9eda98ce83c5ce77e2bfd49f3703d8"
 PINNED_EXPECTED_MERGE_SHA = "db3b0ff76ee471d3b430e440a14d5cabbb1d99bc"
 PINNED_REQUEST_ID = "rcmerge_04b1e930_033d_41eb_8a9a_2d65d91db7b0"
+
+_COMPARE_FAILURE_CODES = frozenset(
+    {
+        "TARGET_COMPARE_OBJECT_INVALID",
+        "TARGET_MAIN_RELATION_MISMATCH",
+        "TARGET_MERGE_BASE_MISMATCH",
+    }
+)
 
 
 class ControlPostCanaryCollectorError(RuntimeError):
@@ -123,9 +132,19 @@ D1ClientFactory = Callable[[], D1Reader]
 
 
 @dataclass(frozen=True)
-class _PublicJSONResponse:
+class PublicTargetJSONResponse:
     value: Any
     server_time: datetime
+    etag: str | None
+
+
+@dataclass(frozen=True)
+class ControlPostCanaryTargetSnapshot:
+    repository: PublicTargetJSONResponse
+    issue: PublicTargetJSONResponse
+    pr: PublicTargetJSONResponse
+    merge: PublicTargetJSONResponse
+    compare: PublicTargetJSONResponse
 
 
 class PublicTargetGitHubReader:
@@ -139,11 +158,13 @@ class PublicTargetGitHubReader:
         root = f"/repos/{TARGET_REPOSITORY}"
         prefix = root + "/"
         if type(path) is not str or (path != root and not path.startswith(prefix)):
-            raise ControlPostCanaryCollectorError("target GitHub path is outside the reviewed repository")
+            raise ControlPostCanaryCollectorError(
+                "target GitHub path is outside the reviewed repository"
+            )
         if "://" in path or any(ch in path for ch in ("\r", "\n", "\x00")):
             raise ControlPostCanaryCollectorError("target GitHub path is invalid")
 
-    def get_json(self, path_or_url: str) -> _PublicJSONResponse:
+    def get_json(self, path_or_url: str) -> PublicTargetJSONResponse:
         self._validate_path(path_or_url)
         response = self._sender.send(
             method="GET",
@@ -160,15 +181,26 @@ class PublicTargetGitHubReader:
             )
         date = response.headers.get("date")
         if type(date) is not str:
-            raise ControlPostCanaryCollectorError("target GitHub response has no server date")
+            raise ControlPostCanaryCollectorError(
+                "target GitHub response has no server date"
+            )
+        etag = _validated_public_etag(response.headers.get("etag"))
         try:
             server_time = parsedate_to_datetime(date)
             value = json.loads(response.body.decode("utf-8"))
         except (TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise ControlPostCanaryCollectorError("target GitHub response is malformed") from exc
+            raise ControlPostCanaryCollectorError(
+                "target GitHub response is malformed"
+            ) from exc
         if server_time.tzinfo is None:
-            raise ControlPostCanaryCollectorError("target GitHub server date is timezone-naive")
-        return _PublicJSONResponse(value=value, server_time=server_time)
+            raise ControlPostCanaryCollectorError(
+                "target GitHub server date is timezone-naive"
+            )
+        return PublicTargetJSONResponse(
+            value=value,
+            server_time=server_time,
+            etag=etag,
+        )
 
 
 D1Requester = Callable[[str, Mapping[str, str], bytes], tuple[int, bytes]]
@@ -210,14 +242,22 @@ class FixedD1ReadClient:
         api_token: str,
         requester: D1Requester | None = None,
     ):
-        if type(api_token) is not str or len(api_token) < 20 or any(ch.isspace() for ch in api_token):
-            raise ControlPostCanaryCollectorError("D1 read token is missing or malformed")
+        if (
+            type(api_token) is not str
+            or len(api_token) < 20
+            or any(ch.isspace() for ch in api_token)
+        ):
+            raise ControlPostCanaryCollectorError(
+                "D1 read token is missing or malformed"
+            )
         self._token = api_token
         self._requester = requester or _default_d1_requester
 
     def _query(self, sql: str, params: tuple[Any, ...]) -> D1SelectResult:
         if sql not in _ALLOWED_SQL or not sql.startswith("SELECT "):
-            raise ControlPostCanaryCollectorError("D1 SQL is outside the reviewed SELECT allowlist")
+            raise ControlPostCanaryCollectorError(
+                "D1 SQL is outside the reviewed SELECT allowlist"
+            )
         body = json.dumps(
             {"sql": sql, "params": list(params)},
             sort_keys=True,
@@ -247,8 +287,14 @@ class FixedD1ReadClient:
         item = result[0]
         meta = item.get("meta")
         rows = item.get("results")
-        if type(meta) is not dict or type(rows) is not list or any(type(row) is not dict for row in rows):
-            raise ControlPostCanaryCollectorError("D1 result metadata/rows are malformed")
+        if (
+            type(meta) is not dict
+            or type(rows) is not list
+            or any(type(row) is not dict for row in rows)
+        ):
+            raise ControlPostCanaryCollectorError(
+                "D1 result metadata/rows are malformed"
+            )
         values = D1SelectResult(
             sql=sql,
             rows=tuple(rows),
@@ -266,7 +312,9 @@ class FixedD1ReadClient:
             or type(values.changes) is not int
             or values.changes != 0
         ):
-            raise ControlPostCanaryCollectorError("D1 SELECT did not prove zero-write semantics")
+            raise ControlPostCanaryCollectorError(
+                "D1 SELECT did not prove zero-write semantics"
+            )
         return values
 
     def select_pinned_request(self) -> D1SelectResult:
@@ -284,13 +332,17 @@ def _positive_int(value: Any, where: str) -> int:
 
 def _sha(value: Any, where: str) -> str:
     if type(value) is not str or SHA40_RE.fullmatch(value) is None:
-        raise ControlPostCanaryCollectorError(f"{where} must be a lowercase 40-character SHA")
+        raise ControlPostCanaryCollectorError(
+            f"{where} must be a lowercase 40-character SHA"
+        )
     return value
 
 
 def _validate_request_id(value: Any) -> str:
     if type(value) is not str or _REQUEST_ID_RE.fullmatch(value) is None:
-        raise ControlPostCanaryCollectorError("request_id is outside the reviewed identifier grammar")
+        raise ControlPostCanaryCollectorError(
+            "request_id is outside the reviewed identifier grammar"
+        )
     return value
 
 
@@ -315,11 +367,284 @@ def _list_of_dicts(value: Any, where: str) -> tuple[dict[str, Any], ...]:
     return tuple(value)
 
 
+def _validated_public_etag(value: Any) -> str | None:
+    if value is None:
+        return None
+    if type(value) is not str:
+        raise ControlPostCanaryCollectorError("target GitHub ETag is malformed")
+    if len(value.encode("utf-8")) > MAX_PUBLIC_ETAG_BYTES:
+        raise ControlPostCanaryCollectorError("target GitHub ETag is malformed")
+    if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in value):
+        raise ControlPostCanaryCollectorError("target GitHub ETag is malformed")
+    return value
+
+
+def _normalize_public_response(value: Any, where: str) -> PublicTargetJSONResponse:
+    payload = getattr(value, "value", None)
+    server_time = getattr(value, "server_time", None)
+    etag = _validated_public_etag(getattr(value, "etag", None))
+    if not isinstance(server_time, datetime) or server_time.tzinfo is None:
+        raise ControlPostCanaryCollectorError(
+            f"{where} lacks trusted GitHub server time"
+        )
+    return PublicTargetJSONResponse(
+        value=payload,
+        server_time=server_time,
+        etag=etag,
+    )
+
+
+def _target_evidence_from_snapshot(
+    snapshot: ControlPostCanaryTargetSnapshot,
+) -> ControlPostCanaryTargetEvidence:
+    return ControlPostCanaryTargetEvidence(
+        target_issue_number=PINNED_TARGET_ISSUE_NUMBER,
+        target_issue=snapshot.issue.value,
+        target_pr_number=PINNED_TARGET_PR_NUMBER,
+        target_pr=snapshot.pr.value,
+        expected_pr_head=PINNED_EXPECTED_PR_HEAD,
+        expected_old_main=PINNED_EXPECTED_OLD_MAIN,
+        expected_merge_sha=PINNED_EXPECTED_MERGE_SHA,
+        target_merge_commit=snapshot.merge.value,
+        target_compare=snapshot.compare.value,
+    )
+
+
+def _nested(value: Any, *keys: str) -> Any:
+    current = value
+    for key in keys:
+        if type(current) is not dict:
+            return None
+        current = current.get(key)
+    return current
+
+
+def _public_sha(value: Any) -> str:
+    if value is None:
+        return "NONE"
+    if type(value) is str and SHA40_RE.fullmatch(value) is not None:
+        return value
+    return "INVALID"
+
+
+def _diagnostic_sha_pair(
+    failure_code: str,
+    snapshot: ControlPostCanaryTargetSnapshot,
+) -> tuple[str, str]:
+    if failure_code == "TARGET_PR_HEAD_MISMATCH":
+        return PINNED_EXPECTED_PR_HEAD, _public_sha(
+            _nested(snapshot.pr.value, "head", "sha")
+        )
+    if failure_code == "TARGET_PR_MERGE_SHA_MISMATCH":
+        return PINNED_EXPECTED_MERGE_SHA, _public_sha(
+            _nested(snapshot.pr.value, "merge_commit_sha")
+        )
+    if failure_code == "TARGET_MERGE_SHA_MISMATCH":
+        return PINNED_EXPECTED_MERGE_SHA, _public_sha(
+            _nested(snapshot.merge.value, "sha")
+        )
+    if failure_code == "TARGET_MERGE_PARENT_SHA_MISMATCH":
+        parents = _nested(snapshot.merge.value, "parents")
+        observed = None
+        if type(parents) is list and len(parents) == 1 and type(parents[0]) is dict:
+            observed = parents[0].get("sha")
+        return PINNED_EXPECTED_OLD_MAIN, _public_sha(observed)
+    if failure_code == "TARGET_MERGE_BASE_MISMATCH":
+        return PINNED_EXPECTED_MERGE_SHA, _public_sha(
+            _nested(snapshot.compare.value, "merge_base_commit", "sha")
+        )
+    return "NONE", "NONE"
+
+
+def _diagnostic_response(
+    failure_code: str,
+    snapshot: ControlPostCanaryTargetSnapshot,
+) -> tuple[str, PublicTargetJSONResponse]:
+    if failure_code.startswith("TARGET_ISSUE_"):
+        return "issue", snapshot.issue
+    if failure_code.startswith("TARGET_PR_"):
+        return "pr", snapshot.pr
+    if failure_code in _COMPARE_FAILURE_CODES:
+        return "compare", snapshot.compare
+    return "merge", snapshot.merge
+
+
+def _canonical_public_time(value: datetime) -> str:
+    return value.astimezone(timezone.utc).isoformat(timespec="seconds").replace(
+        "+00:00", "Z"
+    )
+
+
+def _target_failure_diagnostic(
+    failure_code: str,
+    snapshot: ControlPostCanaryTargetSnapshot,
+) -> str:
+    endpoint, response = _diagnostic_response(failure_code, snapshot)
+    expected_sha, observed_sha = _diagnostic_sha_pair(failure_code, snapshot)
+    etag = response.etag if response.etag is not None else "NONE"
+    return (
+        "target GitHub semantic validation failed before source-App: "
+        f"{failure_code} endpoint={endpoint} "
+        f"expected_sha={expected_sha} observed_sha={observed_sha} "
+        f"server_time={_canonical_public_time(response.server_time)} etag={etag}"
+    )
+
+
+def _validate_target_snapshot(
+    snapshot: ControlPostCanaryTargetSnapshot,
+    *,
+    diagnostic: bool,
+) -> tuple[
+    dict[str, Any],
+    dict[str, Any],
+    dict[str, Any],
+    dict[str, Any],
+    dict[str, Any],
+]:
+    if not isinstance(snapshot, ControlPostCanaryTargetSnapshot):
+        raise ControlPostCanaryCollectorError("target snapshot has the wrong type")
+
+    target_repository = snapshot.repository.value
+    if type(target_repository) is not dict or (
+        target_repository.get("id") != TARGET_REPOSITORY_ID
+        or target_repository.get("full_name") != TARGET_REPOSITORY
+        or target_repository.get("default_branch") != "main"
+    ):
+        if diagnostic:
+            response = snapshot.repository
+            etag = response.etag if response.etag is not None else "NONE"
+            raise ControlPostCanaryCollectorError(
+                "target GitHub semantic validation failed before source-App: "
+                "TARGET_REPOSITORY_IDENTITY_MISMATCH endpoint=repository "
+                "expected_sha=NONE observed_sha=NONE "
+                f"server_time={_canonical_public_time(response.server_time)} "
+                f"etag={etag}"
+            )
+        raise ControlPostCanaryCollectorError("target repository identity drifted")
+
+    target_evidence = _target_evidence_from_snapshot(snapshot)
+    target_failure = target_github_evidence_failure_code(target_evidence)
+    if target_failure is not None:
+        if diagnostic:
+            raise ControlPostCanaryCollectorError(
+                _target_failure_diagnostic(target_failure, snapshot)
+            )
+        raise ControlPostCanaryCollectorError(
+            "target GitHub snapshot failed reviewed predicate before source-App/D1: "
+            f"{target_failure}"
+        )
+
+    return (
+        _dict(snapshot.repository.value, "target repository"),
+        _dict(snapshot.issue.value, "target issue"),
+        _dict(snapshot.pr.value, "target pull request"),
+        _dict(snapshot.merge.value, "target merge commit"),
+        _dict(snapshot.compare.value, "target compare"),
+    )
+
+
+def _collect_target_snapshot_for_semantic_revalidation(
+    target_client: JSONReader,
+) -> ControlPostCanaryTargetSnapshot:
+    """Compatibility path for already-authenticated/injected collector callers.
+
+    The production baseline CLI never uses this path: it passes a strict snapshot
+    produced by ``collect_public_target_snapshot()``, which requires trusted GitHub
+    server-time metadata and preserves ETag for public-safe diagnostics before any
+    source-App capability is constructed.  This helper exists only to preserve the
+    collector's pre-#public-preauth injected ``target_client`` interface while still
+    revalidating every semantic predicate before source evidence and D1.
+    """
+
+    compatibility_time = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+    def semantic_response(value: Any) -> PublicTargetJSONResponse:
+        return PublicTargetJSONResponse(
+            value=getattr(value, "value", None),
+            server_time=compatibility_time,
+            etag=None,
+        )
+
+    snapshot = ControlPostCanaryTargetSnapshot(
+        repository=semantic_response(
+            target_client.get_json(f"/repos/{TARGET_REPOSITORY}")
+        ),
+        issue=semantic_response(
+            target_client.get_json(
+                f"/repos/{TARGET_REPOSITORY}/issues/{PINNED_TARGET_ISSUE_NUMBER}"
+            )
+        ),
+        pr=semantic_response(
+            target_client.get_json(
+                f"/repos/{TARGET_REPOSITORY}/pulls/{PINNED_TARGET_PR_NUMBER}"
+            )
+        ),
+        merge=semantic_response(
+            target_client.get_json(
+                f"/repos/{TARGET_REPOSITORY}/commits/{PINNED_EXPECTED_MERGE_SHA}"
+            )
+        ),
+        compare=semantic_response(
+            target_client.get_json(
+                f"/repos/{TARGET_REPOSITORY}/compare/{PINNED_EXPECTED_MERGE_SHA}...main"
+            )
+        ),
+    )
+    _validate_target_snapshot(snapshot, diagnostic=False)
+    return snapshot
+
+
+def collect_public_target_snapshot(
+    target_client: JSONReader,
+) -> ControlPostCanaryTargetSnapshot:
+    """Read and validate all pinned public target evidence before protected auth."""
+
+    _positive_int(PINNED_TARGET_ISSUE_NUMBER, "PINNED_TARGET_ISSUE_NUMBER")
+    _positive_int(PINNED_TARGET_PR_NUMBER, "PINNED_TARGET_PR_NUMBER")
+    _sha(PINNED_EXPECTED_PR_HEAD, "PINNED_EXPECTED_PR_HEAD")
+    _sha(PINNED_EXPECTED_OLD_MAIN, "PINNED_EXPECTED_OLD_MAIN")
+    _sha(PINNED_EXPECTED_MERGE_SHA, "PINNED_EXPECTED_MERGE_SHA")
+
+    snapshot = ControlPostCanaryTargetSnapshot(
+        repository=_normalize_public_response(
+            target_client.get_json(f"/repos/{TARGET_REPOSITORY}"),
+            "target repository response",
+        ),
+        issue=_normalize_public_response(
+            target_client.get_json(
+                f"/repos/{TARGET_REPOSITORY}/issues/{PINNED_TARGET_ISSUE_NUMBER}"
+            ),
+            "target issue response",
+        ),
+        pr=_normalize_public_response(
+            target_client.get_json(
+                f"/repos/{TARGET_REPOSITORY}/pulls/{PINNED_TARGET_PR_NUMBER}"
+            ),
+            "target pull request response",
+        ),
+        merge=_normalize_public_response(
+            target_client.get_json(
+                f"/repos/{TARGET_REPOSITORY}/commits/{PINNED_EXPECTED_MERGE_SHA}"
+            ),
+            "target merge commit response",
+        ),
+        compare=_normalize_public_response(
+            target_client.get_json(
+                f"/repos/{TARGET_REPOSITORY}/compare/{PINNED_EXPECTED_MERGE_SHA}...main"
+            ),
+            "target compare response",
+        ),
+    )
+    _validate_target_snapshot(snapshot, diagnostic=True)
+    return snapshot
+
+
 def collect_control_postcanary_observation(
     request: ControlPostCanaryCollectionRequest,
     *,
     source_client: JSONReader,
-    target_client: JSONReader,
+    target_snapshot: ControlPostCanaryTargetSnapshot | None = None,
+    target_client: JSONReader | None = None,
     d1_client_factory: D1ClientFactory | None = None,
 ) -> ControlPostCanaryObservation:
     request = validate_collection_request(request)
@@ -332,13 +657,40 @@ def collect_control_postcanary_observation(
     _sha(PINNED_EXPECTED_MERGE_SHA, "PINNED_EXPECTED_MERGE_SHA")
     _validate_request_id(PINNED_REQUEST_ID)
 
+    if (target_snapshot is None) == (target_client is None):
+        raise ControlPostCanaryCollectorError(
+            "exactly one target snapshot or target client is required"
+        )
+    if target_snapshot is None:
+        assert target_client is not None
+        target_snapshot = _collect_target_snapshot_for_semantic_revalidation(
+            target_client
+        )
+
+    target_evidence = _target_evidence_from_snapshot(target_snapshot)
+    target_failure = target_github_evidence_failure_code(target_evidence)
+    if target_failure is not None:
+        raise ControlPostCanaryCollectorError(
+            "target GitHub snapshot failed reviewed predicate before source-App/D1: "
+            f"{target_failure}"
+        )
+    (
+        _target_repository,
+        target_issue,
+        target_pr,
+        target_merge_commit,
+        target_compare,
+    ) = _validate_target_snapshot(target_snapshot, diagnostic=False)
+
     source = verify_source_evidence(
         source_client,
         source_repository=SOURCE_REPOSITORY,
         source_sha=request.source_sha,
     )
     if source.repository != SOURCE_REPOSITORY or source.source_sha != request.source_sha:
-        raise ControlPostCanaryCollectorError("Control source verification returned unexpected identity")
+        raise ControlPostCanaryCollectorError(
+            "Control source verification returned unexpected identity"
+        )
 
     canary_response = source_client.get_json(
         f"/repos/{SOURCE_REPOSITORY}/actions/runs/{PINNED_CANARY_RUN_ID}"
@@ -346,7 +698,9 @@ def collect_control_postcanary_observation(
     canary = _dict(canary_response.value, "canary run")
     observed_at = getattr(canary_response, "server_time", None)
     if not isinstance(observed_at, datetime) or observed_at.tzinfo is None:
-        raise ControlPostCanaryCollectorError("canary observation lacks trusted GitHub server time")
+        raise ControlPostCanaryCollectorError(
+            "canary observation lacks trusted GitHub server time"
+        )
 
     jobs_payload = _dict(
         source_client.get_json(
@@ -356,60 +710,6 @@ def collect_control_postcanary_observation(
         "canary jobs response",
     )
     canary_jobs = _list_of_dicts(jobs_payload.get("jobs"), "canary jobs")
-
-    target_repository = _dict(
-        target_client.get_json(f"/repos/{TARGET_REPOSITORY}").value,
-        "target repository",
-    )
-    if (
-        target_repository.get("id") != TARGET_REPOSITORY_ID
-        or target_repository.get("full_name") != TARGET_REPOSITORY
-        or target_repository.get("default_branch") != "main"
-    ):
-        raise ControlPostCanaryCollectorError("target repository identity drifted")
-
-    target_issue = _dict(
-        target_client.get_json(
-            f"/repos/{TARGET_REPOSITORY}/issues/{PINNED_TARGET_ISSUE_NUMBER}"
-        ).value,
-        "target issue",
-    )
-    target_pr = _dict(
-        target_client.get_json(
-            f"/repos/{TARGET_REPOSITORY}/pulls/{PINNED_TARGET_PR_NUMBER}"
-        ).value,
-        "target pull request",
-    )
-    target_merge_commit = _dict(
-        target_client.get_json(
-            f"/repos/{TARGET_REPOSITORY}/commits/{PINNED_EXPECTED_MERGE_SHA}"
-        ).value,
-        "target merge commit",
-    )
-    target_compare = _dict(
-        target_client.get_json(
-            f"/repos/{TARGET_REPOSITORY}/compare/{PINNED_EXPECTED_MERGE_SHA}...main"
-        ).value,
-        "target compare",
-    )
-
-    target_evidence = ControlPostCanaryTargetEvidence(
-        target_issue_number=PINNED_TARGET_ISSUE_NUMBER,
-        target_issue=target_issue,
-        target_pr_number=PINNED_TARGET_PR_NUMBER,
-        target_pr=target_pr,
-        expected_pr_head=PINNED_EXPECTED_PR_HEAD,
-        expected_old_main=PINNED_EXPECTED_OLD_MAIN,
-        expected_merge_sha=PINNED_EXPECTED_MERGE_SHA,
-        target_merge_commit=target_merge_commit,
-        target_compare=target_compare,
-    )
-    target_failure = target_github_evidence_failure_code(target_evidence)
-    if target_failure is not None:
-        raise ControlPostCanaryCollectorError(
-            "target GitHub semantic validation failed before D1: "
-            f"{target_failure}"
-        )
 
     d1_client = (
         d1_client_factory()
@@ -463,10 +763,14 @@ def build_source_client(
 def read_fixed_d1_token(path: str | Path | None = None) -> str:
     token_path = DEFAULT_D1_TOKEN if path is None else Path(path)
     if token_path != DEFAULT_D1_TOKEN:
-        raise ControlPostCanaryCollectorError("D1 token path is not the reviewed fixed path")
+        raise ControlPostCanaryCollectorError(
+            "D1 token path is not the reviewed fixed path"
+        )
     for name in ("O_NOFOLLOW", "O_CLOEXEC"):
         if type(getattr(os, name, None)) is not int:
-            raise ControlPostCanaryCollectorError("required credential open guard is unavailable")
+            raise ControlPostCanaryCollectorError(
+                "required credential open guard is unavailable"
+            )
     flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
     try:
         fd = os.open(token_path, flags)
@@ -475,9 +779,13 @@ def read_fixed_d1_token(path: str | Path | None = None) -> str:
     try:
         before = os.fstat(fd)
         if not stat.S_ISREG(before.st_mode):
-            raise ControlPostCanaryCollectorError("D1 read token must be a regular file")
+            raise ControlPostCanaryCollectorError(
+                "D1 read token must be a regular file"
+            )
         if before.st_uid != 0 or stat.S_IMODE(before.st_mode) not in {0o400, 0o600}:
-            raise ControlPostCanaryCollectorError("D1 read token ownership/mode mismatch")
+            raise ControlPostCanaryCollectorError(
+                "D1 read token ownership/mode mismatch"
+            )
         chunks: list[bytes] = []
         total = 0
         while True:
@@ -487,7 +795,9 @@ def read_fixed_d1_token(path: str | Path | None = None) -> str:
             chunks.append(chunk)
             total += len(chunk)
             if total > 4096:
-                raise ControlPostCanaryCollectorError("D1 read token exceeds size limit")
+                raise ControlPostCanaryCollectorError(
+                    "D1 read token exceeds size limit"
+                )
         raw = b"".join(chunks)
         after = os.fstat(fd)
         if (
@@ -497,7 +807,9 @@ def read_fixed_d1_token(path: str | Path | None = None) -> str:
             or before.st_mtime_ns != after.st_mtime_ns
             or before.st_size != len(raw)
         ):
-            raise ControlPostCanaryCollectorError("D1 read token changed during read")
+            raise ControlPostCanaryCollectorError(
+                "D1 read token changed during read"
+            )
     finally:
         os.close(fd)
     try:
