@@ -6,8 +6,8 @@ Tracking:
 
 - shared executor roadmap: `RPi5_main#236`
 - isolated-auth trust boundary: `RPi5_main#191`
-- source registry/auth gates: `RPi5_main#271`, `#273`, `#275`, `#276`, `#277`
-- Control Center source correction: `rozkalnsandris/rozkalns-control-center#489`
+- source registry/auth gates: `RPi5_main#271`, `#273`, `#275`, `#276`, `#277`, `#278`
+- Control Center source corrections: `rozkalnsandris/rozkalns-control-center#489`, `#491`
 - historical first-operation contract: `docs/HERMES_DEALS_ORIGIN_PULL_CANARY_SOURCE.md`
 
 ## Owner routing decision
@@ -26,11 +26,13 @@ Reviewed source evidence for this source contract:
 
 - repository: `rozkalnsandris/rozkalns-control-center`
 - stable repository ID: `1329279953`
-- reviewed main after squash merge of `#489`: `eebe1175ce80bfb739b85eda0e3286d6e6fc75e4`
+- reviewed main after squash merge of `#491`: `f9b900a884bffda993197fc7fa9223c886e11a90`
 - reviewed workflow path: `.github/workflows/phase3-merge-postcanary-readonly-reconcile.yml`
-- reviewed workflow blob: `907447666e510340b241348cd1c6ed3260f8b0ab`
-- exact reviewed-main CI: successful before registry reconciliation
+- reviewed workflow blob: `84b060b364fb5e9d824cf0d43e4f81c8ec6ea449`
+- exact reviewed-main CI: `CI` #676 / run `33302808439` — successful
 - target evidence repository: `rozkalnsandris/ops-workflows`, stable repository ID `1328835922`
+
+Control Center #491 changed only the target-PR failure diagnostics: the former aggregate merge-evidence failure was split into predicate-specific fail-closed STOP codes. The reviewed diff preserves the same target PR number/state/merged-at/draft/head/base/repository/merge-SHA predicates, and does not widen workflow permissions, trigger authority, D1 access or mutation behavior.
 
 The reviewed SHA and workflow blob are source-review evidence, not permanent execution authority. Any genuine P9 attempt must freshly resolve the current Control repository identity, the exact authorized SHA, merged/reachable status and exact-SHA CI. Any drift in the selected workflow identity or safety contract is a STOP condition and requires a new source review.
 
@@ -90,7 +92,7 @@ P9 itself continues to omit adapter `apply()`, `StateStore.consume()`, a dispatc
 
 ## Source evidence support
 
-The P9 source verifier now recognizes Control Center by stable repository ID `1329279953` and canonical exact-main workflow `ci.yml`.
+The P9 source verifier recognizes Control Center by stable repository ID `1329279953` and canonical exact-main workflow `ci.yml`.
 
 A genuine P9 attempt must freshly prove:
 
@@ -99,7 +101,7 @@ A genuine P9 attempt must freshly prove:
 3. successful completed exact-main `ci.yml` run for that SHA;
 4. at least one successful job in that exact run.
 
-This allowlist extension grants only source/CI evidence verification. It does not grant write permission, workflow-trigger authority or Cloudflare access.
+This allowlist grants only source/CI evidence verification. It does not grant write permission, workflow-trigger authority or Cloudflare access.
 
 ## Historical Hermes preservation
 

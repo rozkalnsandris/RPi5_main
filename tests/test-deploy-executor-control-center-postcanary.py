@@ -35,7 +35,7 @@ PRODUCTION_REGISTRY = ROOT / "ops" / "deploy" / "executor-operations.json"
 CANARY_REGISTRY = FIXTURES / "operations_control_center_postcanary_canary.json"
 CANARY_QUEUE = FIXTURES / "queue_issue_control_center_postcanary_ready_markup.json"
 ADAPTER_SOURCE = ROOT / "ops" / "lib" / "deploy_executor" / "control_center_postcanary_adapter.py"
-SOURCE_SHA = "eebe1175ce80bfb739b85eda0e3286d6e6fc75e4"
+SOURCE_SHA = "f9b900a884bffda993197fc7fa9223c886e11a90"
 
 
 def _prepared():
@@ -78,7 +78,7 @@ class ControlSourceClient:
                 {
                     "workflow_runs": [
                         {
-                            "id": 33300966632,
+                            "id": 33302808439,
                             "head_sha": SOURCE_SHA,
                             "head_branch": "main",
                             "status": "completed",
@@ -87,7 +87,7 @@ class ControlSourceClient:
                     ]
                 }
             )
-        if path == f"/repos/{SOURCE_REPOSITORY}/actions/runs/33300966632/jobs?filter=latest&per_page=100":
+        if path == f"/repos/{SOURCE_REPOSITORY}/actions/runs/33302808439/jobs?filter=latest&per_page=100":
             return Response({"jobs": [{"status": "completed", "conclusion": "success"}]})
         raise AssertionError(path)
 
@@ -180,7 +180,7 @@ class ControlCenterPostCanaryTests(unittest.TestCase):
         self.assertEqual(evidence.source_sha, SOURCE_SHA)
         self.assertEqual(evidence.current_main_sha, SOURCE_SHA)
         self.assertEqual(evidence.workflow, "ci.yml")
-        self.assertEqual(evidence.run_id, 33300966632)
+        self.assertEqual(evidence.run_id, 33302808439)
 
     def test_control_adapter_exposes_no_command_or_trigger_execution_bridge(self):
         source = ADAPTER_SOURCE.read_text(encoding="utf-8").lower()

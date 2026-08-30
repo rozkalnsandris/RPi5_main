@@ -13,7 +13,7 @@ TARGET_ALIAS = "control-center-merge-postcanary-reconcile"
 ROLLBACK_POLICY = "NONE"
 INVOCATION_BUDGET = (("control-center.read-only-reconciliation-run", 1),)
 WORKFLOW_PATH = ".github/workflows/phase3-merge-postcanary-readonly-reconcile.yml"
-WORKFLOW_SOURCE_BLOB = "907447666e510340b241348cd1c6ed3260f8b0ab"
+WORKFLOW_SOURCE_BLOB = "84b060b364fb5e9d824cf0d43e4f81c8ec6ea449"
 TARGET_REPOSITORY_ID = 1328835922
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
