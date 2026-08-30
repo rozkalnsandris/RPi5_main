@@ -46,8 +46,14 @@ class P4RegistryAndNormalizationTests(unittest.TestCase):
         self.assertFalse(registry.execution_enabled)
         self.assertEqual(len(registry.operations), 1)
         operation = registry.operations[0]
-        self.assertEqual(operation.operation_id, "hermes-deals.origin-path-audit.v1")
-        self.assertEqual(operation.adapter_id, "hermes-deals.origin-path-audit.v1")
+        self.assertEqual(
+            operation.operation_id,
+            "rozkalns-control-center.merge-postcanary-reconcile.v1",
+        )
+        self.assertEqual(
+            operation.adapter_id,
+            "rozkalns-control-center.merge-postcanary-reconcile.v1",
+        )
         self.assertFalse(operation.ordinary_live_all_eligible)
 
     def test_inert_fixture_registry_loads(self):
