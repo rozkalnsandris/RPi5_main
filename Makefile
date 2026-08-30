@@ -11,6 +11,7 @@ test:
 	python3 ./tests/test-deploy-executor-control-center-postcanary.py
 	python3 ./tests/test-deploy-executor-p8-prep.py
 	python3 ./tests/test-deploy-executor-p9-prep.py
+	python3 ./tests/test-deploy-executor-p9-host-wiring.py
 	python3 ./tests/test-deploy-executor-p9-evidence.py
 	python3 ./tests/test-deploy-executor-p9-provenance.py
 	python3 ./tests/test-deploy-executor-p9-producer.py
