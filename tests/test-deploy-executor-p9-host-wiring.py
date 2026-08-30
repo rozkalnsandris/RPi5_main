@@ -5,11 +5,18 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "ops" / "lib"))
 
 from deploy_executor.github_app_auth import RawResponse
+from deploy_executor.p9_host_runtime import (
+    DEFAULT_ISOLATED_AUTH,
+    DEFAULT_REGISTRY,
+    LazyP9StateStore,
+    P9HostRuntimeError,
+)
 from deploy_executor.p9_source_auth import (
     CONTROL_SOURCE_REPOSITORY,
     P9SourceAuthError,
@@ -103,16 +110,67 @@ class P9HostWiringTests(unittest.TestCase):
         self.assertNotIn("Dispatcher", source)
         self.assertNotIn("ResultWriter", source)
         self.assertIn("load_control_postcanary_baseline_evidence", source)
-        self.assertIn("StateStore(state_db)", source)
+        self.assertIn("LazyP9StateStore(state_db)", source)
+        self.assertNotIn("state_store = StateStore(state_db)", source)
 
-    def test_installer_preserves_p8_service_and_requires_fresh_roots(self):
+    def test_p9_config_is_isolated_from_active_p8_config(self):
+        self.assertEqual(
+            DEFAULT_ISOLATED_AUTH,
+            Path("/etc/rozkalns-deploy-executor-p9/executor-p9-isolated-auth-surface.json"),
+        )
+        self.assertEqual(
+            DEFAULT_REGISTRY,
+            Path("/etc/rozkalns-deploy-executor-p9/executor-operations.json"),
+        )
+
+    def test_lazy_state_store_opens_only_inside_discover_boundary(self):
+        created = []
+
+        class FakeStateStore:
+            def __init__(self, path):
+                created.append(path)
+
+            def discover(self, **kwargs):
+                return ("DISCOVERED", kwargs)
+
+            def transition(self, request_id, new_state):
+                return (request_id, new_state)
+
+            def close(self):
+                return None
+
+        with patch("deploy_executor.p9_host_runtime.StateStore", FakeStateStore):
+            state = LazyP9StateStore("/tmp/p9-state.sqlite3")
+            self.assertEqual(created, [])
+            discovered = state.discover(request_id="request")
+            self.assertEqual(created, ["/tmp/p9-state.sqlite3"])
+            self.assertEqual(discovered[0], "DISCOVERED")
+            self.assertEqual(state.transition("request", "VALIDATING"), ("request", "VALIDATING"))
+            with self.assertRaises(P9HostRuntimeError):
+                state.discover(request_id="again")
+            state.close()
+
+    def test_installer_preserves_p8_and_binds_exact_reviewed_bytes(self):
         installer = (ROOT / "scripts" / "install-deploy-executor-p9-runtime.sh").read_text(encoding="utf-8")
         self.assertNotIn("systemctl", installer)
         self.assertNotIn("useradd", installer)
         self.assertNotIn("groupadd", installer)
-        self.assertIn("refusing non-transactional reinstall", installer)
+        self.assertIn('P8_CONFIG_ROOT="/etc/rozkalns-deploy-executor"', installer)
+        self.assertIn('P9_CONFIG_ROOT="/etc/rozkalns-deploy-executor-p9"', installer)
+        self.assertIn('"$P9_CONFIG_ROOT/executor-operations.json"', installer)
+        self.assertNotIn('"$P8_CONFIG_ROOT/executor-operations.json"', installer)
+        self.assertIn(
+            '/usr/bin/git -C "$ROOT" diff --quiet "$EXPECTED_SHA" -- "${SOURCE_PATHS[@]}"',
+            installer,
+        )
+        self.assertIn("reviewed source differs from exact expected SHA", installer)
+        self.assertIn('"$INSTALL_ROOT" "$BIN" "$P9_CONFIG_ROOT" "$STATE_ROOT" "$EVIDENCE_ROOT"', installer)
         self.assertIn("P9_RUNTIME_ACTIVE=NO", installer)
         self.assertIn("P9_EVIDENCE_PRESENT=NO", installer)
+        self.assertLess(
+            installer.index("diff --quiet"),
+            installer.index("Authorized P9 host installation mutation begins here"),
+        )
 
 
 if __name__ == "__main__":

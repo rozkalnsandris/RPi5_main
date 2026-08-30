@@ -8,15 +8,16 @@ The gate deliberately does **not** install or activate anything on RPi5. Merge i
 
 ## Canonical runtime shape
 
-P8 remains unchanged: its timer, service, unprivileged poller and existing state directory are not reused as a P9 execution surface.
+P8 remains unchanged: its timer, service, unprivileged poller, active config and existing state directory are not reused or overwritten as a P9 execution surface.
 
 P9 is a separate manual, owner-gated one-shot:
 
 - executable: `/usr/local/sbin/rozkalns-deploy-p9`;
-- fixed isolated-auth contract: `/etc/rozkalns-deploy-executor/executor-p9-isolated-auth-surface.json`;
-- fixed execution-disabled registry: `/etc/rozkalns-deploy-executor/executor-operations.json`;
-- Deploy Executor App credential: existing `/etc/rozkalns-deploy-executor/github-app.pem`;
-- Rozkalns Automation source-read credential: existing root-controlled `/root/.config/rozkalns-automation/github-app.pem`;
+- fixed P9 config root: `/etc/rozkalns-deploy-executor-p9`;
+- fixed isolated-auth contract: `/etc/rozkalns-deploy-executor-p9/executor-p9-isolated-auth-surface.json`;
+- fixed execution-disabled registry: `/etc/rozkalns-deploy-executor-p9/executor-operations.json`;
+- Deploy Executor App credential: existing `/etc/rozkalns-deploy-executor/github-app.pem`, referenced read-only and never copied;
+- Rozkalns Automation source-read credential: existing root-controlled `/root/.config/rozkalns-automation/github-app.pem`, referenced read-only and never copied;
 - dedicated P9 replay DB: `/var/lib/rozkalns-deploy-executor-p9/state.sqlite3`, root-owned and not shared with the P8 poller;
 - trusted evidence spool: `/run/rozkalns-deploy-executor-evidence`, `root:rozkalns-deploy-executor`, mode `0750`.
 
@@ -30,7 +31,7 @@ This source addition does not prove that the live Automation App installation cu
 
 ## Pre-StateStore gate
 
-The canonical entrypoint performs a complete read-only duplicate preflight before constructing the StateStore mutation path:
+The canonical entrypoint performs a complete read-only duplicate preflight before entering the StateStore attempt boundary:
 
 1. isolated-auth contract remains dormant/fail-closed;
 2. registry contains exactly the reviewed Control operation and is globally execution-disabled;
@@ -41,13 +42,15 @@ The canonical entrypoint performs a complete read-only duplicate preflight befor
 7. Control adapter preflight remains read-only and privileged dispatch disabled;
 8. LIVE-AUTH is re-fetched unchanged.
 
-Only then is the existing durable StateStore opened and `run_p9_dry_run_canary()` allowed to reach its first `discover()` write. Any failure before that point leaves the P9 attempt unconsumed.
+The host composition uses a capability-specific lazy P9 StateStore wrapper. Constructing that wrapper does not open SQLite. The first call to `state_store.discover()` opens the already-bootstrapped durable database and is therefore the local execution-attempt boundary; any SQLite open/journal side effect is inside that already-consumed boundary. The canary then writes `DISCOVERED` and transitions to `VALIDATING`.
 
-After the first StateStore mutation, normal fail-closed transaction rules apply: an error or drift is STOP with no automatic retry, rollback, cleanup or alternate mutation.
+Any failure before `discover()` leaves the P9 attempt unconsumed. Any failure or ambiguity from entry into `discover()` onward is STOP with no automatic retry, rollback, cleanup or alternate mutation.
 
 ## Installer source contract
 
-`scripts/install-deploy-executor-p9-runtime.sh` is a future LIVE-only upgrade action. It is exact-SHA pinned, requires the existing P8 identity, installs a fixed list of reviewed P9 modules, creates a fresh dedicated root-owned P9 StateStore and the fixed evidence spool, and refuses ambiguous pre-existing P9 roots.
+`scripts/install-deploy-executor-p9-runtime.sh` is a future LIVE-only upgrade action. It is exact-SHA pinned and also requires every installed source path to be byte/worktree-clean against that exact reviewed SHA before the first host mutation. It requires the existing P8 identity and existing root-owned private-key files, but does not copy or modify either credential.
+
+The installer writes only fresh P9-specific targets: a separate library tree, manual CLI, isolated P9 config root, dedicated root-owned P9 StateStore and the fixed evidence spool. It refuses ambiguous pre-existing P9 library/config/state/evidence/CLI targets. This preserves the active P8 `/usr/local/libexec/rozkalns-deploy-executor` runtime and `/etc/rozkalns-deploy-executor` config instead of replacing its registry.
 
 It deliberately does not:
 
@@ -63,4 +66,4 @@ A future live installation therefore still requires an explicit owner authorizat
 
 ## Acceptance
 
-Source acceptance requires tests proving the separate source-read App scope, rejection of write/unknown-repository capability, absence of dispatch/apply paths from host composition, exact fixed state/evidence paths, and installer non-activation properties. Normal repository CI remains authoritative after the PR is pushed.
+Source acceptance requires tests proving the separate source-read App scope, rejection of write/unknown-repository capability, absence of dispatch/apply paths from host composition, P8/P9 config isolation, lazy StateStore opening at the `discover()` boundary, exact reviewed-source dirty-tree rejection, exact fixed state/evidence paths, and installer non-activation properties. Normal repository CI remains authoritative after the PR is pushed.

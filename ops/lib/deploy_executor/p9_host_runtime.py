@@ -26,8 +26,10 @@ from .source_evidence import verify_source_evidence
 from .state import StateStore
 from .transport import GitHubHttpsSender, GitHubRestClient, HTTPSender, JSONResponse
 
-DEFAULT_ISOLATED_AUTH = Path("/etc/rozkalns-deploy-executor/executor-p9-isolated-auth-surface.json")
-DEFAULT_REGISTRY = Path("/etc/rozkalns-deploy-executor/executor-operations.json")
+DEFAULT_ISOLATED_AUTH = Path(
+    "/etc/rozkalns-deploy-executor-p9/executor-p9-isolated-auth-surface.json"
+)
+DEFAULT_REGISTRY = Path("/etc/rozkalns-deploy-executor-p9/executor-operations.json")
 DEFAULT_EXECUTOR_KEY = Path("/etc/rozkalns-deploy-executor/github-app.pem")
 DEFAULT_SOURCE_KEY = Path("/root/.config/rozkalns-automation/github-app.pem")
 DEFAULT_STATE_DB = Path("/var/lib/rozkalns-deploy-executor-p9/state.sqlite3")
@@ -36,6 +38,35 @@ CONTROL_OPERATION_ID = "rozkalns-control-center.merge-postcanary-reconcile.v1"
 
 class P9HostRuntimeError(RuntimeError):
     pass
+
+
+class LazyP9StateStore:
+    """Open durable SQLite only when the canary enters discover().
+
+    Construction is mutation-free. The first call to discover() is therefore
+    the P9 local-state attempt boundary; any SQLite open/journal side effect
+    happens inside that already-consumed boundary.
+    """
+
+    def __init__(self, path: str | Path):
+        self.path = path
+        self._store: StateStore | None = None
+
+    def discover(self, **kwargs: Any) -> Any:
+        if self._store is not None:
+            raise P9HostRuntimeError("P9 StateStore discover may be entered only once")
+        self._store = StateStore(self.path)
+        return self._store.discover(**kwargs)
+
+    def transition(self, request_id: str, new_state: str) -> Any:
+        if self._store is None:
+            raise P9HostRuntimeError("P9 StateStore transition ran before discover")
+        return self._store.transition(request_id, new_state)
+
+    def close(self) -> None:
+        if self._store is not None:
+            self._store.close()
+            self._store = None
 
 
 class CapturingGitHubClient:
@@ -213,7 +244,7 @@ def run_p9_host_one_shot(
         trusted_baseline=trusted.payload,
     )
 
-    state_store = StateStore(state_db)
+    state_store = LazyP9StateStore(state_db)
     context: dict[str, Any] = {}
 
     def source_verifier(client: Any, *, source_repository: str, source_sha: str):
