@@ -7,7 +7,7 @@ import json
 import os
 from pathlib import Path
 import stat
-from typing import Any, Mapping
+from typing import Any
 
 
 class ProvenanceError(RuntimeError):
@@ -18,12 +18,24 @@ EVIDENCE_ROOT = Path("/run/rozkalns-deploy-executor-evidence")
 SERVICE_GROUP = "rozkalns-deploy-executor"
 GOVERNANCE_FILENAME = "governance.json"
 HERMES_ORIGIN_BASELINE_FILENAME = "hermes-origin-baseline.json"
+CONTROL_POSTCANARY_BASELINE_FILENAME = "control-postcanary-baseline.json"
 GOVERNANCE_SCHEMA = "rozkalns.deploy-executor-p9-governance-evidence.v1"
 HERMES_ORIGIN_BASELINE_SCHEMA = "rozkalns.deploy-executor-p9-hermes-origin-baseline.v1"
+CONTROL_POSTCANARY_BASELINE_SCHEMA = (
+    "rozkalns.deploy-executor-p9-control-postcanary-baseline.v1"
+)
 MAX_EVIDENCE_BYTES = 64 * 1024
 _ROOT_UID = 0
 _DIRECTORY_MODE = 0o750
 _FILE_MODE = 0o440
+
+_ALLOWED_EVIDENCE_FILES = frozenset(
+    {
+        GOVERNANCE_FILENAME,
+        HERMES_ORIGIN_BASELINE_FILENAME,
+        CONTROL_POSTCANARY_BASELINE_FILENAME,
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -96,7 +108,7 @@ def _require_platform_guards() -> None:
 
 
 def _load_fixed(filename: str, expected_schema: str) -> TrustedEvidence:
-    if filename not in {GOVERNANCE_FILENAME, HERMES_ORIGIN_BASELINE_FILENAME}:
+    if filename not in _ALLOWED_EVIDENCE_FILES:
         raise ProvenanceError("evidence filename is not allowlisted")
     _require_platform_guards()
     gid = _service_gid()
@@ -155,3 +167,10 @@ def load_governance_evidence() -> TrustedEvidence:
 
 def load_hermes_origin_baseline_evidence() -> TrustedEvidence:
     return _load_fixed(HERMES_ORIGIN_BASELINE_FILENAME, HERMES_ORIGIN_BASELINE_SCHEMA)
+
+
+def load_control_postcanary_baseline_evidence() -> TrustedEvidence:
+    return _load_fixed(
+        CONTROL_POSTCANARY_BASELINE_FILENAME,
+        CONTROL_POSTCANARY_BASELINE_SCHEMA,
+    )
