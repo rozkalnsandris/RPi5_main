@@ -15,6 +15,7 @@ test:
 	python3 ./tests/test-deploy-executor-p9-source-token-diagnostics.py
 	python3 ./tests/test-deploy-executor-p9-source-repair-upgrade.py
 	python3 ./tests/test-deploy-executor-p9-baseline-upgrade.py
+	python3 ./tests/test-deploy-executor-p9-d1-credential-replacement.py
 	python3 ./tests/test-deploy-executor-p9-evidence.py
 	python3 ./tests/test-deploy-executor-p9-provenance.py
 	python3 ./tests/test-deploy-executor-p9-producer.py
