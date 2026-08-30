@@ -14,7 +14,6 @@ if str(LIB) not in sys.path:
 from deploy_executor.p9_control_postcanary_collector import (
     ControlPostCanaryCollectionRequest,
     ControlPostCanaryCollectorError,
-    FixedD1ReadClient,
     PublicTargetGitHubReader,
     PINNED_CANARY_RUN_ID,
     PINNED_REQUEST_ID,
@@ -22,7 +21,6 @@ from deploy_executor.p9_control_postcanary_collector import (
     PINNED_TARGET_PR_NUMBER,
     build_source_client,
     collect_control_postcanary_observation,
-    read_fixed_d1_token,
 )
 from deploy_executor.p9_control_postcanary_producer import (
     publish_control_postcanary_baseline_evidence,
@@ -51,16 +49,16 @@ def main() -> int:
     args = parse_args()
     request = ControlPostCanaryCollectionRequest(source_sha=args.source_sha)
     source_client = build_source_client()
-    # Prime exactly one source-App token before the D1 credential is opened.
+    # Prime exactly one source-App token before any D1 credential access.
     # The capability-specific provider caches a successful mint for this process.
     source_client.token_provider.get_installation_token()
     target_client = PublicTargetGitHubReader()
-    d1_client = FixedD1ReadClient(api_token=read_fixed_d1_token())
+    # The collector validates all reviewed target GitHub semantics before it opens
+    # the fixed D1 credential or constructs the capability-specific D1 reader.
     observation = collect_control_postcanary_observation(
         request,
         source_client=source_client,
         target_client=target_client,
-        d1_client=d1_client,
     )
     digest = publish_control_postcanary_baseline_evidence(observation)
     print(

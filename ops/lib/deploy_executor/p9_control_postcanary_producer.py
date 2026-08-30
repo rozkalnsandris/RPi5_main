@@ -45,6 +45,19 @@ class ControlPostCanaryProducerError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class ControlPostCanaryTargetEvidence:
+    target_issue_number: int
+    target_issue: Mapping[str, Any]
+    target_pr_number: int
+    target_pr: Mapping[str, Any]
+    expected_pr_head: str
+    expected_old_main: str
+    expected_merge_sha: str
+    target_merge_commit: Mapping[str, Any]
+    target_compare: Mapping[str, Any]
+
+
+@dataclass(frozen=True)
 class ControlPostCanaryObservation:
     observed_at: datetime
     resolver_id: str
@@ -137,52 +150,127 @@ def _canary_exact(observation: ControlPostCanaryObservation) -> bool:
     return run_ok and len(matching_jobs) == 1
 
 
-def _target_issue_exact(observation: ControlPostCanaryObservation) -> bool:
-    issue = observation.target_issue
-    return (
-        type(issue) is dict
-        and issue.get("number") == observation.target_issue_number
-        and issue.get("state") == "open"
-        and "pull_request" not in issue
+def _target_evidence(
+    observation: ControlPostCanaryObservation,
+) -> ControlPostCanaryTargetEvidence:
+    return ControlPostCanaryTargetEvidence(
+        target_issue_number=observation.target_issue_number,
+        target_issue=observation.target_issue,
+        target_pr_number=observation.target_pr_number,
+        target_pr=observation.target_pr,
+        expected_pr_head=observation.expected_pr_head,
+        expected_old_main=observation.expected_old_main,
+        expected_merge_sha=observation.expected_merge_sha,
+        target_merge_commit=observation.target_merge_commit,
+        target_compare=observation.target_compare,
     )
+
+
+def _target_issue_failure_code(
+    evidence: ControlPostCanaryTargetEvidence,
+) -> str | None:
+    issue = evidence.target_issue
+    if type(issue) is not dict:
+        return "TARGET_ISSUE_OBJECT_INVALID"
+    if issue.get("number") != evidence.target_issue_number:
+        return "TARGET_ISSUE_NUMBER_MISMATCH"
+    if issue.get("state") != "open":
+        return "TARGET_ISSUE_NOT_OPEN"
+    if "pull_request" in issue:
+        return "TARGET_ISSUE_IS_PULL_REQUEST"
+    return None
+
+
+def _target_pr_failure_code(
+    evidence: ControlPostCanaryTargetEvidence,
+) -> str | None:
+    pr = evidence.target_pr
+    if type(pr) is not dict:
+        return "TARGET_PR_OBJECT_INVALID"
+    if pr.get("number") != evidence.target_pr_number:
+        return "TARGET_PR_NUMBER_MISMATCH"
+    if pr.get("state") != "closed":
+        return "TARGET_PR_NOT_CLOSED"
+    if not _nonempty_string(pr.get("merged_at")):
+        return "TARGET_PR_MERGED_AT_INVALID"
+    if pr.get("draft") is not False:
+        return "TARGET_PR_DRAFT_INVALID"
+    if _nested(pr, "head", "sha") != evidence.expected_pr_head:
+        return "TARGET_PR_HEAD_MISMATCH"
+    if _nested(pr, "head", "repo", "full_name") != TARGET_REPOSITORY:
+        return "TARGET_PR_HEAD_REPO_MISMATCH"
+    if (
+        _nested(pr, "base", "ref") != "main"
+        or _nested(pr, "base", "repo", "full_name") != TARGET_REPOSITORY
+    ):
+        return "TARGET_PR_BASE_MISMATCH"
+    if pr.get("merge_commit_sha") != evidence.expected_merge_sha:
+        return "TARGET_PR_MERGE_SHA_MISMATCH"
+    return None
+
+
+def _merge_parent_failure_code(
+    evidence: ControlPostCanaryTargetEvidence,
+) -> str | None:
+    commit = evidence.target_merge_commit
+    if type(commit) is not dict:
+        return "TARGET_MERGE_COMMIT_OBJECT_INVALID"
+    if commit.get("sha") != evidence.expected_merge_sha:
+        return "TARGET_MERGE_SHA_MISMATCH"
+    parents = commit.get("parents")
+    if type(parents) is not list:
+        return "TARGET_MERGE_PARENTS_INVALID"
+    if len(parents) != 1:
+        return "TARGET_MERGE_PARENT_COUNT_MISMATCH"
+    if type(parents[0]) is not dict:
+        return "TARGET_MERGE_PARENT_OBJECT_INVALID"
+    if parents[0].get("sha") != evidence.expected_old_main:
+        return "TARGET_MERGE_PARENT_SHA_MISMATCH"
+    return None
+
+
+def _main_descends_failure_code(
+    evidence: ControlPostCanaryTargetEvidence,
+) -> str | None:
+    compare = evidence.target_compare
+    if type(compare) is not dict:
+        return "TARGET_COMPARE_OBJECT_INVALID"
+    if compare.get("status") not in {"identical", "ahead"}:
+        return "TARGET_MAIN_RELATION_MISMATCH"
+    if _nested(compare, "merge_base_commit", "sha") != evidence.expected_merge_sha:
+        return "TARGET_MERGE_BASE_MISMATCH"
+    return None
+
+
+def target_github_evidence_failure_code(
+    evidence: ControlPostCanaryTargetEvidence,
+) -> str | None:
+    for validator in (
+        _target_issue_failure_code,
+        _target_pr_failure_code,
+        _merge_parent_failure_code,
+        _main_descends_failure_code,
+    ):
+        failure = validator(evidence)
+        if failure is not None:
+            return failure
+    return None
+
+
+def _target_issue_exact(observation: ControlPostCanaryObservation) -> bool:
+    return _target_issue_failure_code(_target_evidence(observation)) is None
 
 
 def _target_pr_exact(observation: ControlPostCanaryObservation) -> bool:
-    pr = observation.target_pr
-    return (
-        type(pr) is dict
-        and pr.get("number") == observation.target_pr_number
-        and pr.get("state") == "closed"
-        and _nonempty_string(pr.get("merged_at"))
-        and pr.get("draft") is False
-        and _nested(pr, "head", "sha") == observation.expected_pr_head
-        and _nested(pr, "head", "repo", "full_name") == TARGET_REPOSITORY
-        and _nested(pr, "base", "ref") == "main"
-        and _nested(pr, "base", "repo", "full_name") == TARGET_REPOSITORY
-        and pr.get("merge_commit_sha") == observation.expected_merge_sha
-    )
+    return _target_pr_failure_code(_target_evidence(observation)) is None
 
 
 def _merge_parent_exact(observation: ControlPostCanaryObservation) -> bool:
-    commit = observation.target_merge_commit
-    parents = commit.get("parents") if type(commit) is dict else None
-    return (
-        type(commit) is dict
-        and commit.get("sha") == observation.expected_merge_sha
-        and type(parents) is list
-        and len(parents) == 1
-        and type(parents[0]) is dict
-        and parents[0].get("sha") == observation.expected_old_main
-    )
+    return _merge_parent_failure_code(_target_evidence(observation)) is None
 
 
 def _main_descends_from_merge(observation: ControlPostCanaryObservation) -> bool:
-    compare = observation.target_compare
-    return (
-        type(compare) is dict
-        and compare.get("status") in {"identical", "ahead"}
-        and _nested(compare, "merge_base_commit", "sha") == observation.expected_merge_sha
-    )
+    return _main_descends_failure_code(_target_evidence(observation)) is None
 
 
 def _audit_row_exact(observation: ControlPostCanaryObservation) -> bool:
@@ -267,6 +355,13 @@ def build_control_postcanary_baseline_evidence(
     if not identity_ok:
         raise ControlPostCanaryProducerError(
             "Control post-canary observation does not match the reviewed source identity"
+        )
+
+    target_failure = target_github_evidence_failure_code(_target_evidence(observation))
+    if target_failure is not None:
+        raise ControlPostCanaryProducerError(
+            "Control target GitHub evidence failed reviewed predicate: "
+            f"{target_failure}"
         )
 
     checks = {
