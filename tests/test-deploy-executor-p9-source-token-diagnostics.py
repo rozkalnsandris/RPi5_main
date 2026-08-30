@@ -31,12 +31,14 @@ class Requester:
         *,
         installation_status: int = 200,
         installation_overrides: dict | None = None,
+        installation_non_object: bool = False,
         token_status: int = 201,
         token_overrides: dict | None = None,
         fail_install_request: bool = False,
     ):
         self.installation_status = installation_status
         self.installation_overrides = installation_overrides or {}
+        self.installation_non_object = installation_non_object
         self.token_status = token_status
         self.token_overrides = token_overrides or {}
         self.fail_install_request = fail_install_request
@@ -52,6 +54,12 @@ class Requester:
         if method == "GET" and path == REPOSITORY_INSTALLATION_PATH:
             if self.fail_install_request:
                 raise RuntimeError("private-inner-error-must-not-escape")
+            if self.installation_non_object:
+                return RawResponse(
+                    self.installation_status,
+                    {"date": date},
+                    ["private-installation-payload-must-not-escape"],
+                )
             payload = {
                 "id": SOURCE_INSTALLATION_ID,
                 "app_id": SOURCE_APP_ID,
@@ -153,10 +161,22 @@ class P9SourceTokenDiagnosticsTests(unittest.TestCase):
                 },
             )
 
-    def test_repository_installation_404_is_sanitized_and_stops_before_mint(self):
+    def test_repository_installation_404_is_public_safe_and_stops_before_mint(self):
         requester = Requester(installation_status=404)
-        error = self._assert_stage_before_mint(requester, "installation_response")
+        error = self._assert_stage_before_mint(requester, "installation_not_found")
         self.assertNotIn("private-installation-response", str(error))
+        self.assertNotIn("404", str(error))
+
+    def test_repository_installation_other_non_200_is_public_safe(self):
+        requester = Requester(installation_status=403)
+        error = self._assert_stage_before_mint(requester, "installation_status")
+        self.assertNotIn("private-installation-response", str(error))
+        self.assertNotIn("403", str(error))
+
+    def test_repository_installation_non_object_is_public_safe(self):
+        requester = Requester(installation_non_object=True)
+        error = self._assert_stage_before_mint(requester, "installation_payload")
+        self.assertNotIn("private-installation-payload", str(error))
 
     def test_repository_installation_identity_and_scope_fail_closed_before_mint(self):
         invalid_installations = (
