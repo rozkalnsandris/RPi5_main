@@ -11,6 +11,7 @@ SOURCE_REPOSITORIES: Mapping[str, tuple[int, str]] = {
     "rozkalnsandris/hermes-tech": (1323427708, "ci.yml"),
     "rozkalnsandris/rozkalns-cv": (1325237749, "ci.yml"),
     "rozkalnsandris/hermes-deals": (1317143994, "ci.yml"),
+    "rozkalnsandris/rozkalns-control-center": (1329279953, "ci.yml"),
 }
 
 
