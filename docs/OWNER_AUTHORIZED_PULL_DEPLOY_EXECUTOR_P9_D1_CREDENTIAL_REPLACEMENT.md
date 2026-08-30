@@ -63,7 +63,7 @@ Before changing the credential file, the operator makes exactly one candidate-to
 Properties:
 
 - fixed HTTPS host and exact account path;
-- `Authorization: Bearer <hidden candidate>` exists only in process memory;
+- the bearer authorization header is constructed from the hidden candidate only in process memory;
 - no redirect-following layer;
 - no retry loop;
 - bounded response size;
