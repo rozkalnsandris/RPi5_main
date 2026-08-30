@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import sys
+
+LIB = Path("/usr/local/lib/rozkalns-deploy-executor")
+if str(LIB) not in sys.path:
+    sys.path.insert(0, str(LIB))
+
+from deploy_executor.p9_control_postcanary_collector import (
+    ControlPostCanaryCollectionRequest,
+    ControlPostCanaryCollectorError,
+    FixedD1ReadClient,
+    PublicTargetGitHubReader,
+    PINNED_CANARY_RUN_ID,
+    PINNED_REQUEST_ID,
+    PINNED_TARGET_ISSUE_NUMBER,
+    PINNED_TARGET_PR_NUMBER,
+    build_source_client,
+    collect_control_postcanary_observation,
+    read_fixed_d1_token,
+)
+from deploy_executor.p9_control_postcanary_producer import (
+    publish_control_postcanary_baseline_evidence,
+)
+
+_ROOT_UID = 0
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Collect and publish the one reviewed Control post-canary P9 baseline"
+    )
+    parser.add_argument(
+        "--source-sha",
+        required=True,
+        help="exact current/authorized Control source SHA bound by READY/LIVE-AUTH",
+    )
+    return parser.parse_args()
+
+
+def main() -> int:
+    if os.geteuid() != _ROOT_UID:
+        raise ControlPostCanaryCollectorError(
+            "Control baseline collection/publication requires root"
+        )
+    args = parse_args()
+    request = ControlPostCanaryCollectionRequest(source_sha=args.source_sha)
+    source_client = build_source_client()
+    target_client = PublicTargetGitHubReader()
+    d1_client = FixedD1ReadClient(api_token=read_fixed_d1_token())
+    observation = collect_control_postcanary_observation(
+        request,
+        source_client=source_client,
+        target_client=target_client,
+        d1_client=d1_client,
+    )
+    digest = publish_control_postcanary_baseline_evidence(observation)
+    print(
+        json.dumps(
+            {
+                "P9_CONTROL_BASELINE": "PASS",
+                "evidence_sha256": digest,
+                "source_sha": request.source_sha,
+                "canary_run_id": PINNED_CANARY_RUN_ID,
+                "target_issue": PINNED_TARGET_ISSUE_NUMBER,
+                "target_pr": PINNED_TARGET_PR_NUMBER,
+                "request_id": PINNED_REQUEST_ID,
+                "source_app_scope_verified": True,
+                "d1_select_only_zero_write": True,
+                "p9_executed": False,
+                "state_store_touched": False,
+                "production_mutation_started": False,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except Exception as exc:
+        print(
+            f"P9_CONTROL_BASELINE=STOP reason={type(exc).__name__}:{exc}",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
