@@ -68,11 +68,14 @@ class Requester:
         date = "Sun, 30 Aug 2026 11:00:00 GMT"
         if method == "GET" and path == "/":
             return RawResponse(200, {"date": date}, {})
-        if method == "GET" and path == f"/app/installations/{SOURCE_INSTALLATION_ID}":
+        if method == "GET" and path == "/repos/rozkalnsandris/rozkalns-control-center/installation":
             return RawResponse(200, {"date": date}, {
                 "id": SOURCE_INSTALLATION_ID,
+                "app_id": SOURCE_APP_ID,
+                "target_id": 277435981,
+                "target_type": "User",
                 "repository_selection": "selected",
-                "account": {"id": 277435981, "login": "rozkalnsandris"},
+                "account": {"id": 277435981, "login": "rozkalnsandris", "type": "User"},
                 "permissions": {"actions": self.permission, "contents": "read", "metadata": "read"},
             })
         if method == "POST" and path == f"/app/installations/{SOURCE_INSTALLATION_ID}/access_tokens":
@@ -81,6 +84,7 @@ class Requester:
             return RawResponse(201, {"date": date}, {
                 "token": "ghs_" + "x" * 80,
                 "expires_at": "2026-08-30T12:00:00Z",
+                "repository_selection": "selected",
                 "permissions": {"actions": "read", "contents": "read", "metadata": "read"},
                 "repositories": [{"id": self.repository_id, "full_name": CONTROL_SOURCE_REPOSITORY}],
             })
