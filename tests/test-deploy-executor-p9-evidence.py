@@ -10,14 +10,18 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "ops" / "lib"))
 
 from deploy_executor.p9_evidence import (
+    CONTROL_BASELINE_RESOLVER,
     HERMES_BASELINE_RESOLVER,
     P9EvidenceError,
     parse_governance_evidence,
+    resolve_control_postcanary_baseline,
     resolve_hermes_origin_baseline,
+    resolve_p9_baseline,
 )
 
 NOW = datetime(2026, 8, 28, 19, 15, tzinfo=timezone.utc)
 SHA = "a" * 40
+CONTROL_SHA = "f9b900a884bffda993197fc7fa9223c886e11a90"
 
 
 def governance(**overrides):
@@ -55,6 +59,37 @@ def baseline(**overrides):
         "probe_identity_ok": True,
         "dispatcher_identity_ok": True,
         "workflow_identity_ok": True,
+        "mutation_surface_read_only": True,
+    }
+    value.update(overrides)
+    return value
+
+
+def control_operation():
+    return SimpleNamespace(
+        operation_id="rozkalns-control-center.merge-postcanary-reconcile.v1",
+        source_repository="rozkalnsandris/rozkalns-control-center",
+        target_alias="control-center-merge-postcanary-reconcile",
+        baseline=SimpleNamespace(kind="resolver", resolver_id=CONTROL_BASELINE_RESOLVER),
+    )
+
+
+def control_baseline(**overrides):
+    value = {
+        "schema": "rozkalns.deploy-executor-p9-control-postcanary-baseline.v1",
+        "resolver_id": CONTROL_BASELINE_RESOLVER,
+        "target_alias": "control-center-merge-postcanary-reconcile",
+        "source_repository": "rozkalnsandris/rozkalns-control-center",
+        "source_sha": CONTROL_SHA,
+        "observed_at": "2026-08-28T19:14:30Z",
+        "canary_run_terminal_failure_exact": True,
+        "target_issue_exact": True,
+        "target_pr_merge_evidence_exact": True,
+        "target_merge_parent_exact": True,
+        "target_main_descends_from_merge": True,
+        "audit_row_exact": True,
+        "target_audit_row_count_one": True,
+        "d1_select_only_zero_write": True,
         "mutation_surface_read_only": True,
     }
     value.update(overrides)
@@ -196,6 +231,104 @@ class P9EvidenceTests(unittest.TestCase):
                     source_sha=SHA,
                     server_time=NOW,
                 )
+
+    def test_control_baseline_accepts_exact_fresh_operation_specific_evidence(self):
+        result = resolve_control_postcanary_baseline(
+            control_operation(),
+            {"kind": "resolver", "value": CONTROL_BASELINE_RESOLVER},
+            evidence=control_baseline(),
+            source_sha=CONTROL_SHA,
+            server_time=NOW,
+        )
+        self.assertTrue(result.matched)
+        self.assertEqual(result.resolver_id, CONTROL_BASELINE_RESOLVER)
+        self.assertEqual(result.target_alias, "control-center-merge-postcanary-reconcile")
+        self.assertRegex(result.evidence_id, r"^sha256:[0-9a-f]{64}$")
+
+    def test_control_baseline_rejects_live_auth_source_and_safety_drift(self):
+        with self.assertRaisesRegex(P9EvidenceError, "expected_baseline"):
+            resolve_control_postcanary_baseline(
+                control_operation(),
+                {"kind": "resolver", "value": "other"},
+                evidence=control_baseline(),
+                source_sha=CONTROL_SHA,
+                server_time=NOW,
+            )
+        with self.assertRaisesRegex(P9EvidenceError, "authorized source SHA"):
+            resolve_control_postcanary_baseline(
+                control_operation(),
+                {"kind": "resolver", "value": CONTROL_BASELINE_RESOLVER},
+                evidence=control_baseline(source_sha="c" * 40),
+                source_sha=CONTROL_SHA,
+                server_time=NOW,
+            )
+        for flag in (
+            "canary_run_terminal_failure_exact",
+            "target_issue_exact",
+            "target_pr_merge_evidence_exact",
+            "target_merge_parent_exact",
+            "target_main_descends_from_merge",
+            "audit_row_exact",
+            "target_audit_row_count_one",
+            "d1_select_only_zero_write",
+            "mutation_surface_read_only",
+        ):
+            with self.subTest(flag=flag), self.assertRaisesRegex(P9EvidenceError, flag):
+                resolve_control_postcanary_baseline(
+                    control_operation(),
+                    {"kind": "resolver", "value": CONTROL_BASELINE_RESOLVER},
+                    evidence=control_baseline(**{flag: False}),
+                    source_sha=CONTROL_SHA,
+                    server_time=NOW,
+                )
+
+    def test_control_baseline_rejects_missing_stale_and_noncanonical_evidence(self):
+        missing = control_baseline()
+        missing.pop("audit_row_exact")
+        with self.assertRaisesRegex(P9EvidenceError, "keys mismatch"):
+            resolve_control_postcanary_baseline(
+                control_operation(),
+                {"kind": "resolver", "value": CONTROL_BASELINE_RESOLVER},
+                evidence=missing,
+                source_sha=CONTROL_SHA,
+                server_time=NOW,
+            )
+        for observed_at, error in (
+            ("2026-08-28T19:00:00Z", "stale"),
+            ("2026-08-28T19:15:01Z", "future"),
+            ("2026-08-28T19:14:30+00:00", "canonical RFC3339 UTC"),
+        ):
+            with self.subTest(observed_at=observed_at), self.assertRaisesRegex(
+                P9EvidenceError, error
+            ):
+                resolve_control_postcanary_baseline(
+                    control_operation(),
+                    {"kind": "resolver", "value": CONTROL_BASELINE_RESOLVER},
+                    evidence=control_baseline(observed_at=observed_at),
+                    source_sha=CONTROL_SHA,
+                    server_time=NOW,
+                )
+
+    def test_canonical_resolver_dispatches_control_and_fails_closed_unknown(self):
+        result = resolve_p9_baseline(
+            control_operation(),
+            {"kind": "resolver", "value": CONTROL_BASELINE_RESOLVER},
+            evidence=control_baseline(),
+            source_sha=CONTROL_SHA,
+            server_time=NOW,
+        )
+        self.assertEqual(result.resolver_id, CONTROL_BASELINE_RESOLVER)
+
+        unknown = control_operation()
+        unknown.baseline = SimpleNamespace(kind="resolver", resolver_id="unknown")
+        with self.assertRaisesRegex(P9EvidenceError, "not allowlisted"):
+            resolve_p9_baseline(
+                unknown,
+                {"kind": "resolver", "value": "unknown"},
+                evidence=control_baseline(),
+                source_sha=CONTROL_SHA,
+                server_time=NOW,
+            )
 
 
 if __name__ == "__main__":
