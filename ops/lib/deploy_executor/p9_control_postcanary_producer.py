@@ -205,6 +205,17 @@ def _target_evidence(
     )
 
 
+def _target_issue_lifecycle_exact(issue: Mapping[str, Any]) -> bool:
+    state = issue.get("state")
+    if state == "open":
+        return True
+    return (
+        state == "closed"
+        and issue.get("state_reason") == "completed"
+        and _nonempty_string(issue.get("closed_at"))
+    )
+
+
 def _target_issue_failure_code(
     evidence: ControlPostCanaryTargetEvidence,
 ) -> str | None:
@@ -213,7 +224,7 @@ def _target_issue_failure_code(
         return "TARGET_ISSUE_OBJECT_INVALID"
     if issue.get("number") != evidence.target_issue_number:
         return "TARGET_ISSUE_NUMBER_MISMATCH"
-    if issue.get("state") != "open":
+    if not _target_issue_lifecycle_exact(issue):
         return "TARGET_ISSUE_NOT_OPEN"
     if "pull_request" in issue:
         return "TARGET_ISSUE_IS_PULL_REQUEST"
