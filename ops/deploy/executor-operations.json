@@ -36,7 +36,7 @@
       ],
       "dependencies": [
         "source-repository-id:1329279953",
-        "workflow-source-blob:84b060b364fb5e9d824cf0d43e4f81c8ec6ea449",
+        "workflow-source-blob:48a55c05eae0daee72d87abf66e04ea5b872dd58",
         "target-repository-id:1328835922",
         "workflow-trigger:owner-issue-comment-278-v1",
         "d1-access:select-only-zero-write-v1",
@@ -46,7 +46,7 @@
         "LIVE-AUTH and READY queue envelope are independently revalidated",
         "source repository stable ID is 1329279953 and authorized SHA is merged/reachable from current main",
         "exact authorized source SHA CI is successful",
-        "reviewed post-canary workflow source blob remains 84b060b364fb5e9d824cf0d43e4f81c8ec6ea449",
+        "reviewed post-canary workflow source blob remains 48a55c05eae0daee72d87abf66e04ea5b872dd58",
         "workflow remains owner-comment triggered with contents/actions read and D1 SELECT-only zero-write assertions",
         "P9 does not post the owner trigger comment or dispatch/rerun the workflow",
         "operation remains execution-disabled with rollback policy NONE and one future read-only reconciliation maximum"
