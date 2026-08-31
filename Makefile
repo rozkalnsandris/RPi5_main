@@ -3,6 +3,7 @@
 test:
 	./tests/test-shell-syntax.sh
 	python3 ./tests/test-start-mode-routing.py
+	python3 ./tests/test-auto-run-full.py
 	python3 ./tests/test-deploy-executor-p1.py
 	python3 ./tests/test-deploy-executor-p2.py
 	python3 ./tests/test-deploy-executor-p4.py

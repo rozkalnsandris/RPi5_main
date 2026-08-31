@@ -34,10 +34,11 @@ Metadata is collectable only when a task provides a strict allowlist and sanitiz
 
 Read `.github/start-mode-routing.json` before selecting a startup/continuation mode.
 
-- Bare `START`, `START RPi5_main`, `turpini`, or equivalent continuation means normal **FAST-LANE v2.2**. It is not `GITHUB-ONLY`.
+- Bare `START`, `START RPi5_main`, `turpini`, or equivalent continuation means normal **FAST-LANE v2.2**. It is not `GITHUB-ONLY` and does not activate `AUTO-RUN FULL`.
 - Activate `GITHUB-ONLY` only when the owner explicitly includes `GITHUB-ONLY` (or the documented `git hub only` spelling) in the current command.
 - Activate `LIVE-ALL` only when the owner explicitly includes `LIVE-ALL` in the current command.
-- Never infer either explicit mode from `.github/start-github-only.json`, deploy-queue state, handoff/issue continuity, executor availability, historical chat mode, or a prior authorization receipt.
+- Activate `AUTO-RUN FULL` only from the exact explicit form `AUTO-RUN FULL RPi5_main #<issue>` and then read `.github/auto-run-full-v1.json` plus `docs/AUTO_RUN_FULL_V1.md` before any activation write.
+- Never infer an explicit mode from `.github/start-github-only.json`, deploy-queue state, handoff/issue continuity, executor availability, historical chat mode, controller state, or a prior authorization receipt.
 - A deploy queue, handoff, executor limitation or authorization receipt may affect the selected lane after routing, but it must never rewrite the command mode itself.
 
 <!-- BEGIN FAST-LANE-V2.2-MANAGED -->
@@ -55,10 +56,29 @@ Read `docs/FAST_LANE_V2_2.md` as the active RPi5-specific startup contract.
 - Authorization is consumed at the first authorized mutation. Any later error, ambiguity or drift requires evidence preservation and STOP; no automatic retry, rollback, cleanup, reset, rebase or alternate mutation path unless explicitly pre-authorized.
 - **STRICT is the default for host/runtime work**: sudo/root, packages, services/timers, Docker, networking/firewall/DNS/Cloudflare Tunnel, SSH/users/mounts/kernel, backups, databases/application data, secrets/credentials and protected runtime inspection.
 - Put any remaining owner decision visibly at the end under `ACTION REQUIRED` and provide exact copyable input when needed.
-- Merge remains explicit owner authority and never authorizes any host/runtime mutation.
+- Merge remains explicit owner authority and never by itself authorizes host/runtime mutation. A valid `AUTO-RUN FULL RPi5_main #<issue>` activation is a separate explicit owner decision whose frozen issue envelope may include merge and predeclared runtime authority under the AUTO-RUN contract; it is never inferred from FAST continuation.
 
 This FAST-LANE block does not weaken any earlier forbidden-path or production-safety rule. If classification is uncertain, classify STRICT and STOP.
 <!-- END FAST-LANE-V2.2-MANAGED -->
+
+<!-- BEGIN AUTO-RUN-FULL-V1-MANAGED -->
+## AUTO-RUN FULL v1
+
+Canonical local contract: `.github/auto-run-full-v1.json` and `docs/AUTO_RUN_FULL_V1.md`. Durable controller state: issue `#295`. Roadmap: issue `#294`.
+
+- `AUTO-RUN FULL RPi5_main #<issue>` is one explicit, issue-specific owner decision. It is not blanket repository authority and is never inferred from `START`, `turpini`, prior chat context, issue continuity or controller state.
+- Before activation, freshly read repository rules, the exact target issue, current `main`, active PR/CI/review state, relevant dependencies and controller issue `#295`.
+- Materialize the frozen issue-specific authorization as an owner-identity GitHub activation receipt before using FULL authority. Later issue edits never silently expand that frozen authority.
+- Inside the frozen envelope, routine analysis/source/docs/tests, branch/commit/PR work, CI/review/fix convergence and ordinary merge-conflict corrections require no additional owner nudge.
+- The explicit AUTO-RUN FULL command is merge authority only for the canonical PR implementing that exact frozen issue. Merge requires a fresh exact head, required green CI, zero unresolved actionable review findings and no force/history rewrite.
+- Runtime/live authority exists only for mutation classes and targets frozen at activation. Use existing reviewed operation registries, queue/baseline checks and the `#236` LIVE-AUTH protocol where applicable; do not create arbitrary SSH/sudo/shell authority.
+- The agent itself still must not run `sudo`, obtain autonomous root, read protected secrets/configuration or bypass the earlier production safety boundary. AUTO-RUN may drive an already-reviewed narrow executor only through its declared GitHub authorization protocol.
+- A ChatGPT turn/session ending is resumable state, not a STOP. Persist continuation in GitHub and allow the hourly Scheduled Task or a manual `turpini` resume trigger to continue from canonical state.
+- If ChatGPT/app permissions require a product-level confirmation, persist `PAUSED_PLATFORM_APPROVAL`; repository policy cannot suppress a platform-mandated approval.
+- Provider LLM API keys, token-billed fallback and automatic paid-credit purchase are forbidden by default.
+- Three materially identical failed attempts without a new safe hypothesis produce `STOP_ERROR`; do not loop blindly.
+- Normal terminal state is `DONE`. `STOP_SCOPE_OR_RISK` is only for genuinely new scope/mutation authority that was not frozen by the explicit AUTO-RUN activation.
+<!-- END AUTO-RUN-FULL-V1-MANAGED -->
 
 <!-- BEGIN GITHUB-ONLY-LIVE-ALL-V1-MANAGED -->
 ## GITHUB-ONLY / LIVE-ALL v1
