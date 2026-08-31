@@ -12,6 +12,16 @@ Current P9 classification remains unchanged:
 - `CLEAN_P9_REPEAT_REQUIRED=true`
 - `P10_BLOCKED=true`
 
+## Canonical operator
+
+The only supported source entrypoint for this convergence is:
+
+`scripts/install-deploy-executor-p9-freshness-baseline-cli-upgrade.py`
+
+The earlier #310 path `scripts/install-deploy-executor-p9-freshness-host-upgrade.py` was an overlapping, weaker implementation of the same one-target mutation and is retired. It must not be invoked, restored as an alternate path, or treated as equivalent authorization evidence. The #311 baseline-CLI operator is canonical because it requires `O_NOFOLLOW`, rechecks target type and metadata immediately before the write boundary, verifies metadata/bytes/blob after the write, and explicitly exposes no retry, rollback, cleanup or alternate mutation path.
+
+Retiring the duplicate changes no P9 timing semantics and no repaired baseline CLI bytes: baseline freshness remains exactly 300 seconds, LIVE-AUTH TTL remains exactly 600 seconds, and the minimum operator handoff floor remains 180 seconds.
+
 ## Immutable target and provenance
 
 This operator has exactly one host mutation target:

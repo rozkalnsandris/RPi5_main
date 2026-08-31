@@ -11,6 +11,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 OPERATOR = ROOT / "scripts" / "install-deploy-executor-p9-freshness-baseline-cli-upgrade.py"
+LEGACY_OPERATOR = ROOT / "scripts" / "install-deploy-executor-p9-freshness-host-upgrade.py"
+BASELINE_CLI = ROOT / "ops" / "bin" / "rozkalns-deploy-p9-control-baseline"
 
 
 def git_blob_sha(data: bytes) -> str:
@@ -34,6 +36,11 @@ class P9FreshnessBaselineCliUpgradeTests(unittest.TestCase):
         self.assertEqual(target.new_blob_sha, "8dc38e4d224373925483a45b782f04e0aa27a8bd")
         self.assertEqual(target.mode, 0o755)
         self.assertNotIn("TARGETS", self.ns)
+        self.assertEqual(git_blob_sha(BASELINE_CLI.read_bytes()), target.new_blob_sha)
+
+    def test_weaker_duplicate_operator_is_retired(self) -> None:
+        self.assertTrue(OPERATOR.is_file())
+        self.assertFalse(LEGACY_OPERATOR.exists())
 
     def test_fail_closed_write_boundary_and_verification(self) -> None:
         source = self.source
