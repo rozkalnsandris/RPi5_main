@@ -31,13 +31,12 @@ REQUIRED_PERMISSIONS = {"actions": "read", "contents": "read"}
 ALLOWED_PERMISSION_KEYS = frozenset({"actions", "contents", "metadata"})
 SOURCE_TOKEN_SAFE_STAGES = frozenset(
     {
-        "clock_request",
-        "clock_response",
         "jwt_sign",
         "installation_request",
         "installation_not_found",
         "installation_status",
         "installation_payload",
+        "installation_clock",
         "installation_scope",
         "token_request",
         "token_response",
@@ -190,21 +189,11 @@ class P9SourceInstallationTokenProvider:
         if self._cached_token is not None:
             return self._cached_token
 
-        try:
-            clock = self.requester("GET", "/", _headers(), None)
-        except Exception:
-            raise P9SourceTokenStageError("clock_request") from None
-        if clock.status != 200:
-            raise P9SourceTokenStageError("clock_response") from None
-        try:
-            now = _server_time(clock.headers)
-        except Exception:
-            raise P9SourceTokenStageError("clock_response") from None
-
+        local_now = datetime.now(timezone.utc)
         try:
             jwt = build_app_jwt(
                 app_id=SOURCE_APP_ID,
-                server_time=now,
+                server_time=local_now,
                 private_key=self.private_key,
                 signer=self.signer,
             )
@@ -227,6 +216,10 @@ class P9SourceInstallationTokenProvider:
             raise P9SourceTokenStageError("installation_status") from None
         if type(installation_response.value) is not dict:
             raise P9SourceTokenStageError("installation_payload") from None
+        try:
+            server_now = _server_time(installation_response.headers)
+        except Exception:
+            raise P9SourceTokenStageError("installation_clock") from None
         installation = installation_response.value
         try:
             validate_source_installation(installation)
@@ -262,7 +255,7 @@ class P9SourceInstallationTokenProvider:
                 token_payload,
                 repository=self.repository,
                 repository_id=self.repository_id,
-                now=now,
+                now=server_now,
             )
         except Exception:
             raise P9SourceTokenStageError("token_scope") from None
