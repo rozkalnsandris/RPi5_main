@@ -259,16 +259,29 @@ class TokenRequester:
     def __call__(self, method, path, headers, body):
         self.calls.append((method, path, dict(headers), body))
         date = "Fri, 28 Aug 2026 18:00:00 GMT"
-        if method == "GET" and path == "/":
-            return RawResponse(200, {"date": date}, {})
-        if method == "GET" and path == "/app/installations/157217641":
+        repositories = {
+            1328835922: "rozkalnsandris/ops-workflows",
+            1350486101: "rozkalnsandris/deploy-authorizations",
+        }
+        repository_by_path = {
+            "/repos/rozkalnsandris/ops-workflows/installation": 1328835922,
+            "/repos/rozkalnsandris/deploy-authorizations/installation": 1350486101,
+        }
+        if method == "GET" and path in repository_by_path:
             return RawResponse(
                 200,
                 {"date": date},
                 {
                     "id": 157217641,
+                    "app_id": 4748870,
+                    "target_id": 277435981,
+                    "target_type": "User",
                     "repository_selection": "selected",
-                    "account": {"id": 277435981, "login": "rozkalnsandris"},
+                    "account": {
+                        "id": 277435981,
+                        "login": "rozkalnsandris",
+                        "type": "User",
+                    },
                     "permissions": {
                         "issues": "write" if self.write_permission else "read",
                         "metadata": "read",
@@ -278,10 +291,6 @@ class TokenRequester:
         if method == "POST" and path == "/app/installations/157217641/access_tokens":
             payload = json.loads(body.decode("utf-8"))
             repository_id = payload["repository_ids"][0]
-            repositories = {
-                1328835922: "rozkalnsandris/ops-workflows",
-                1350486101: "rozkalnsandris/deploy-authorizations",
-            }
             return RawResponse(
                 201,
                 {"date": date},
@@ -453,6 +462,18 @@ class P9PrepTests(unittest.TestCase):
             auth_token = clients.authorization.token_provider.get_installation_token()
 
         self.assertNotEqual(queue_token.value, auth_token.value)
+        self.assertFalse(any(path == "/" for _, path, _, _ in requester.calls))
+        self.assertEqual(
+            [
+                path
+                for method, path, _headers, _body in requester.calls
+                if method == "GET"
+            ],
+            [
+                "/repos/rozkalnsandris/ops-workflows/installation",
+                "/repos/rozkalnsandris/deploy-authorizations/installation",
+            ],
+        )
         bodies = [
             json.loads(body.decode("utf-8"))
             for method, path, _headers, body in requester.calls
