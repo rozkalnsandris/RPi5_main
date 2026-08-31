@@ -18,6 +18,7 @@ test:
 	python3 ./tests/test-deploy-executor-p9-source-token-diagnostics.py
 	python3 ./tests/test-deploy-executor-p9-source-repair-upgrade.py
 	python3 ./tests/test-deploy-executor-p9-registry-provenance-upgrade.py
+	python3 ./tests/test-deploy-executor-p9-final-lifecycle-baseline-repair.py
 	python3 ./tests/test-deploy-executor-p9-baseline-upgrade.py
 	python3 ./tests/test-deploy-executor-p9-d1-credential-replacement.py
 	python3 ./tests/test-deploy-executor-p9-evidence.py
