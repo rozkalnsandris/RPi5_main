@@ -16,6 +16,7 @@ test:
 	python3 ./tests/test-deploy-executor-p9-prep.py
 	python3 ./tests/test-deploy-executor-p9-host-wiring.py
 	python3 ./tests/test-deploy-executor-p9-source-token-diagnostics.py
+	python3 ./tests/test-deploy-executor-p9-source-clock-repair.py
 	python3 ./tests/test-deploy-executor-p9-source-repair-upgrade.py
 	python3 ./tests/test-deploy-executor-p9-registry-provenance-upgrade.py
 	python3 ./tests/test-deploy-executor-p9-final-lifecycle-baseline-repair.py
