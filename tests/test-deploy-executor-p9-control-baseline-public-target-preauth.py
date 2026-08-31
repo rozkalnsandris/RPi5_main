@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "ops" / "lib"))
 
 from deploy_executor import p9_control_postcanary_collector as collector
 from deploy_executor import p9_control_postcanary_producer as producer
+from deploy_executor import transport
 from deploy_executor.control_center_postcanary_adapter import TARGET_REPOSITORY_ID
 
 SOURCE_SHA = "f9b900a884bffda993197fc7fa9223c886e11a90"
@@ -22,6 +23,9 @@ NOW = datetime(2026, 8, 30, 21, 20, tzinfo=timezone.utc)
 BASELINE_BIN = ROOT / "ops" / "bin" / "rozkalns-deploy-p9-control-baseline"
 UPGRADE_OPERATOR = (
     ROOT / "scripts" / "install-deploy-executor-p9-gate-d-public-target-preauth-upgrade.py"
+)
+API_2026_UPGRADE_OPERATOR = (
+    ROOT / "scripts" / "install-deploy-executor-p9-gate-d-api-2026-compat-upgrade.py"
 )
 
 
@@ -33,6 +37,20 @@ class Response:
 
 
 def target_payloads():
+    pr = {
+        "number": collector.PINNED_TARGET_PR_NUMBER,
+        "state": "closed",
+        "merged_at": "2026-08-29T18:48:04Z",
+        "draft": False,
+        "head": {
+            "sha": collector.PINNED_EXPECTED_PR_HEAD,
+            "repo": {"full_name": producer.TARGET_REPOSITORY},
+        },
+        "base": {
+            "ref": "main",
+            "repo": {"full_name": producer.TARGET_REPOSITORY},
+        },
+    }
     return {
         "repository": {
             "id": TARGET_REPOSITORY_ID,
@@ -43,25 +61,13 @@ def target_payloads():
             "number": collector.PINNED_TARGET_ISSUE_NUMBER,
             "state": "open",
         },
-        "pr": {
-            "number": collector.PINNED_TARGET_PR_NUMBER,
-            "state": "closed",
-            "merged_at": "2026-08-29T18:48:04Z",
-            "draft": False,
-            "head": {
-                "sha": collector.PINNED_EXPECTED_PR_HEAD,
-                "repo": {"full_name": producer.TARGET_REPOSITORY},
-            },
-            "base": {
-                "ref": "main",
-                "repo": {"full_name": producer.TARGET_REPOSITORY},
-            },
-            "merge_commit_sha": collector.PINNED_EXPECTED_MERGE_SHA,
-        },
+        # GitHub REST 2026-03-10 deliberately omits merge_commit_sha here.
+        "pr": pr,
         "merge": {
             "sha": collector.PINNED_EXPECTED_MERGE_SHA,
             "parents": [{"sha": collector.PINNED_EXPECTED_OLD_MAIN}],
         },
+        "merge_pulls": [copy.deepcopy(pr)],
         "compare": {
             "status": "ahead",
             "merge_base_commit": {"sha": collector.PINNED_EXPECTED_MERGE_SHA},
@@ -100,6 +106,11 @@ class TargetClient:
             f"{collector.PINNED_EXPECTED_MERGE_SHA}"
         ):
             return self._response("merge")
+        if path == (
+            f"/repos/{producer.TARGET_REPOSITORY}/commits/"
+            f"{collector.PINNED_EXPECTED_MERGE_SHA}/pulls"
+        ):
+            return self._response("merge_pulls")
         if path == (
             f"/repos/{producer.TARGET_REPOSITORY}/compare/"
             f"{collector.PINNED_EXPECTED_MERGE_SHA}...main"
@@ -160,10 +171,6 @@ def mutate_pr_base_repo(payloads):
     payloads["pr"]["base"]["repo"]["full_name"] = "other/repo"
 
 
-def mutate_pr_merge_sha(payloads):
-    payloads["pr"]["merge_commit_sha"] = "0" * 40
-
-
 def mutate_merge_object(payloads):
     payloads["merge"] = []
 
@@ -200,6 +207,14 @@ def mutate_compare_base(payloads):
     payloads["compare"]["merge_base_commit"]["sha"] = "0" * 40
 
 
+def mutate_association_missing(payloads):
+    payloads["merge_pulls"] = []
+
+
+def mutate_association_wrong_pr(payloads):
+    payloads["merge_pulls"][0]["number"] = collector.PINNED_TARGET_PR_NUMBER + 1
+
+
 FAILURE_CASES = (
     ("TARGET_ISSUE_OBJECT_INVALID", mutate_issue_object),
     ("TARGET_ISSUE_NUMBER_MISMATCH", mutate_issue_number),
@@ -214,7 +229,6 @@ FAILURE_CASES = (
     ("TARGET_PR_HEAD_REPO_MISMATCH", mutate_pr_head_repo),
     ("TARGET_PR_BASE_MISMATCH", mutate_pr_base_ref),
     ("TARGET_PR_BASE_MISMATCH", mutate_pr_base_repo),
-    ("TARGET_PR_MERGE_SHA_MISMATCH", mutate_pr_merge_sha),
     ("TARGET_MERGE_COMMIT_OBJECT_INVALID", mutate_merge_object),
     ("TARGET_MERGE_SHA_MISMATCH", mutate_merge_sha),
     ("TARGET_MERGE_PARENTS_INVALID", mutate_merge_parents_type),
@@ -224,6 +238,11 @@ FAILURE_CASES = (
     ("TARGET_COMPARE_OBJECT_INVALID", mutate_compare_object),
     ("TARGET_MAIN_RELATION_MISMATCH", mutate_compare_status),
     ("TARGET_MERGE_BASE_MISMATCH", mutate_compare_base),
+)
+
+ASSOCIATION_FAILURE_CASES = (
+    mutate_association_missing,
+    mutate_association_wrong_pr,
 )
 
 
@@ -238,62 +257,91 @@ def load_baseline_cli():
 
 
 class PublicTargetPreauthTests(unittest.TestCase):
-    def test_every_target_mismatch_stops_before_source_app_and_d1(self):
+    def _assert_stops_before_protected_paths(self, payloads, code):
         cli = load_baseline_cli()
+        source_factory = mock.Mock(
+            side_effect=AssertionError("source-App reached before target preflight")
+        )
+        observation_collector = mock.Mock(
+            side_effect=AssertionError("collector reached after failed target preflight")
+        )
+        with mock.patch.object(
+            collector,
+            "read_fixed_d1_token",
+            side_effect=AssertionError("D1 credential read reached"),
+        ) as token_read, mock.patch.object(
+            collector,
+            "FixedD1ReadClient",
+            side_effect=AssertionError("D1 client constructed"),
+        ) as d1_client:
+            with self.assertRaisesRegex(collector.ControlPostCanaryCollectorError, code):
+                cli.collect_once(
+                    collector.ControlPostCanaryCollectionRequest(source_sha=SOURCE_SHA),
+                    target_client_factory=lambda p=payloads: TargetClient(p),
+                    source_client_factory=source_factory,
+                    collector_fn=observation_collector,
+                )
+        source_factory.assert_not_called()
+        observation_collector.assert_not_called()
+        token_read.assert_not_called()
+        d1_client.assert_not_called()
+
+    def test_every_remaining_target_mismatch_stops_before_source_app_and_d1(self):
         for code, mutate in FAILURE_CASES:
             with self.subTest(code=code, mutate=mutate.__name__):
                 payloads = target_payloads()
                 mutate(payloads)
-                source_factory = mock.Mock(
-                    side_effect=AssertionError("source-App reached before target preflight")
-                )
-                observation_collector = mock.Mock(
-                    side_effect=AssertionError("collector reached after failed target preflight")
-                )
-                with mock.patch.object(
-                    collector,
-                    "read_fixed_d1_token",
-                    side_effect=AssertionError("D1 credential read reached"),
-                ) as token_read, mock.patch.object(
-                    collector,
-                    "FixedD1ReadClient",
-                    side_effect=AssertionError("D1 client constructed"),
-                ) as d1_client:
-                    with self.assertRaisesRegex(
-                        collector.ControlPostCanaryCollectorError, code
-                    ):
-                        cli.collect_once(
-                            collector.ControlPostCanaryCollectionRequest(
-                                source_sha=SOURCE_SHA
-                            ),
-                            target_client_factory=lambda p=payloads: TargetClient(p),
-                            source_client_factory=source_factory,
-                            collector_fn=observation_collector,
-                        )
-                source_factory.assert_not_called()
-                observation_collector.assert_not_called()
-                token_read.assert_not_called()
-                d1_client.assert_not_called()
+                self._assert_stops_before_protected_paths(payloads, code)
 
-    def test_pr_merge_sha_mismatch_has_public_sha_time_and_etag_only(self):
+    def test_missing_or_wrong_merge_pr_association_stops_before_source_app_and_d1(self):
+        for mutate in ASSOCIATION_FAILURE_CASES:
+            with self.subTest(mutate=mutate.__name__):
+                payloads = target_payloads()
+                mutate(payloads)
+                self._assert_stops_before_protected_paths(
+                    payloads, "TARGET_MERGE_PR_ASSOCIATION_MISMATCH"
+                )
+
+    def test_merge_pr_association_mismatch_has_public_identity_time_and_etag_only(self):
+        cli = load_baseline_cli()
         payloads = target_payloads()
-        mutate_pr_merge_sha(payloads)
+        mutate_association_wrong_pr(payloads)
         with self.assertRaises(collector.ControlPostCanaryCollectorError) as raised:
-            collector.collect_public_target_snapshot(TargetClient(payloads))
+            cli.collect_public_target_snapshot_api_2026(TargetClient(payloads))
         text = str(raised.exception)
-        self.assertIn("TARGET_PR_MERGE_SHA_MISMATCH", text)
-        self.assertIn("endpoint=pr", text)
-        self.assertIn(f"expected_sha={collector.PINNED_EXPECTED_MERGE_SHA}", text)
-        self.assertIn(f"observed_sha={'0' * 40}", text)
+        self.assertIn("TARGET_MERGE_PR_ASSOCIATION_MISMATCH", text)
+        self.assertIn("endpoint=merge_pulls", text)
+        self.assertIn(f"expected_pr={collector.PINNED_TARGET_PR_NUMBER}", text)
+        self.assertIn(
+            f"observed_prs={collector.PINNED_TARGET_PR_NUMBER + 1}", text
+        )
         self.assertIn("server_time=2026-08-30T21:20:00Z", text)
-        self.assertIn('etag=W/"pr-etag"', text)
+        self.assertIn('etag=W/"merge_pulls-etag"', text)
         self.assertNotIn("Authorization", text)
         self.assertNotIn("private-key", text.lower())
         self.assertNotIn("d1", text.lower())
 
+    def test_api_2026_fixture_omits_removed_merge_commit_sha(self):
+        payloads = target_payloads()
+        self.assertEqual(transport.API_VERSION, "2026-03-10")
+        self.assertNotIn("merge_commit_sha", payloads["pr"])
+        self.assertNotIn("merge_commit_sha", payloads["merge_pulls"][0])
+
+    def test_successful_association_derives_legacy_merge_field_without_mutating_raw_pr(self):
+        cli = load_baseline_cli()
+        payloads = target_payloads()
+        raw_pr = copy.deepcopy(payloads["pr"])
+        snapshot = cli.collect_public_target_snapshot_api_2026(TargetClient(payloads))
+        self.assertEqual(payloads["pr"], raw_pr)
+        self.assertNotIn("merge_commit_sha", payloads["pr"])
+        self.assertEqual(
+            snapshot.pr.value["merge_commit_sha"], collector.PINNED_EXPECTED_MERGE_SHA
+        )
+
     def test_public_preflight_reads_each_pinned_endpoint_once(self):
+        cli = load_baseline_cli()
         client = TargetClient(target_payloads())
-        snapshot = collector.collect_public_target_snapshot(client)
+        snapshot = cli.collect_public_target_snapshot_api_2026(client)
         self.assertIsInstance(snapshot, collector.ControlPostCanaryTargetSnapshot)
         self.assertEqual(
             client.calls,
@@ -302,6 +350,7 @@ class PublicTargetPreauthTests(unittest.TestCase):
                 f"/repos/{producer.TARGET_REPOSITORY}/issues/{collector.PINNED_TARGET_ISSUE_NUMBER}",
                 f"/repos/{producer.TARGET_REPOSITORY}/pulls/{collector.PINNED_TARGET_PR_NUMBER}",
                 f"/repos/{producer.TARGET_REPOSITORY}/commits/{collector.PINNED_EXPECTED_MERGE_SHA}",
+                f"/repos/{producer.TARGET_REPOSITORY}/commits/{collector.PINNED_EXPECTED_MERGE_SHA}/pulls",
                 f"/repos/{producer.TARGET_REPOSITORY}/compare/{collector.PINNED_EXPECTED_MERGE_SHA}...main",
             ],
         )
@@ -310,7 +359,7 @@ class PublicTargetPreauthTests(unittest.TestCase):
         source = BASELINE_BIN.read_text(encoding="utf-8")
         body = source[source.index("def collect_once(") : source.index("\ndef main()")]
         preflight_at = body.index(
-            "target_snapshot = collect_public_target_snapshot(target_client)"
+            "target_snapshot = collect_public_target_snapshot_api_2026(target_client)"
         )
         source_build_at = body.index("source_client = build_source_client()")
         source_mint_at = body.index(
@@ -323,7 +372,7 @@ class PublicTargetPreauthTests(unittest.TestCase):
         self.assertLess(source_build_at, source_mint_at)
         self.assertLess(source_mint_at, collect_at)
 
-    def test_complete_pr_predicate_set_is_preserved(self):
+    def test_all_non_removed_pr_predicates_are_preserved(self):
         expected = {
             "TARGET_PR_OBJECT_INVALID",
             "TARGET_PR_NUMBER_MISMATCH",
@@ -333,10 +382,14 @@ class PublicTargetPreauthTests(unittest.TestCase):
             "TARGET_PR_HEAD_MISMATCH",
             "TARGET_PR_HEAD_REPO_MISMATCH",
             "TARGET_PR_BASE_MISMATCH",
-            "TARGET_PR_MERGE_SHA_MISMATCH",
         }
         actual = {code for code, _ in FAILURE_CASES if code.startswith("TARGET_PR_")}
         self.assertEqual(actual, expected)
+        # The frozen downstream compatibility check remains present, but its
+        # value is derived only after the API-2026 commit->PR proof succeeds.
+        self.assertIn(
+            "TARGET_PR_MERGE_SHA_MISMATCH", producer._TARGET_PR_FAILURE_CODES
+        )
 
 
 class PublicTargetPreauthUpgradeSourceTests(unittest.TestCase):
@@ -375,6 +428,62 @@ class PublicTargetPreauthUpgradeSourceTests(unittest.TestCase):
 
     def test_upgrade_has_no_network_credential_d1_baseline_p9_or_retry_path(self):
         self.assertIn("TARGETS_REPLACED=2", self.source)
+        for marker in (
+            "NETWORK_REQUEST=NO",
+            "CREDENTIAL_READ=NO",
+            "D1_REQUEST=NO",
+            "BASELINE_COLLECTION=NO",
+            "P9_EXECUTION=NO",
+            "STATE_STORE_TOUCHED=NO",
+            "ROLLBACK_PATH=NO",
+            "RETRY_PATH=NO",
+        ):
+            self.assertIn(marker, self.source)
+        for forbidden in (
+            "urllib",
+            "http.client",
+            "requests",
+            "curl",
+            "wget",
+            "control-d1-read-token",
+            "github-app.pem",
+            "systemctl",
+            "StateStore",
+            "cloudflare",
+        ):
+            self.assertNotIn(forbidden, self.source)
+
+
+class Api2026CompatUpgradeSourceTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location(
+            "p9_gate_d_api_2026_compat_upgrade", API_2026_UPGRADE_OPERATOR
+        )
+        assert spec is not None and spec.loader is not None
+        cls.module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = cls.module
+        spec.loader.exec_module(cls.module)
+        cls.source = API_2026_UPGRADE_OPERATOR.read_text(encoding="utf-8")
+
+    def test_upgrade_is_bound_to_exact_current_baseline_cli_prestate(self):
+        self.assertEqual(
+            [
+                (spec.source_path, str(spec.target_path), spec.old_blob_sha, spec.mode)
+                for spec in self.module.TARGETS
+            ],
+            [
+                (
+                    "ops/bin/rozkalns-deploy-p9-control-baseline",
+                    "/usr/local/sbin/rozkalns-deploy-p9-control-baseline",
+                    "af13d0d227bfe48b20430d76cfac8c9f5ac971bc",
+                    0o755,
+                )
+            ],
+        )
+
+    def test_upgrade_has_no_network_credential_d1_baseline_p9_or_retry_path(self):
+        self.assertIn("TARGETS_REPLACED=1", self.source)
         for marker in (
             "NETWORK_REQUEST=NO",
             "CREDENTIAL_READ=NO",
