@@ -79,11 +79,11 @@ class P9FreshnessBaselineCliUpgradeTests(unittest.TestCase):
             self.assertIn(marker, source)
 
     def test_replace_helper_changes_only_fixed_target_not_neighbor(self) -> None:
-        ns = self.ns
-        TargetSpec = ns["TargetSpec"]
-        replace = ns["_replace_exact_target"]
-        original_target = ns["TARGET"]
-        original_metadata = ns["_target_metadata"]
+        replace = self.ns["_replace_exact_target"]
+        runtime_globals = replace.__globals__
+        TargetSpec = runtime_globals["TargetSpec"]
+        original_target = runtime_globals["TARGET"]
+        original_metadata = runtime_globals["_target_metadata"]
 
         old_bytes = b"reviewed-old-baseline-cli\n"
         new_bytes = b"reviewed-repaired-baseline-cli\n"
@@ -96,19 +96,23 @@ class P9FreshnessBaselineCliUpgradeTests(unittest.TestCase):
             neighbor_path.write_bytes(neighbor_bytes)
             target_path.chmod(0o755)
 
-            ns["TARGET"] = TargetSpec(
+            runtime_globals["TARGET"] = TargetSpec(
                 source_path="ops/bin/rozkalns-deploy-p9-control-baseline",
                 target_path=target_path,
                 old_blob_sha=git_blob_sha(old_bytes),
                 new_blob_sha=git_blob_sha(new_bytes),
                 mode=0o755,
             )
-            ns["_target_metadata"] = lambda st: (0, 0, stat.S_IMODE(st.st_mode))
+            runtime_globals["_target_metadata"] = lambda st: (
+                0,
+                0,
+                stat.S_IMODE(st.st_mode),
+            )
             try:
                 replace(new_bytes)
             finally:
-                ns["TARGET"] = original_target
-                ns["_target_metadata"] = original_metadata
+                runtime_globals["TARGET"] = original_target
+                runtime_globals["_target_metadata"] = original_metadata
 
             self.assertEqual(target_path.read_bytes(), new_bytes)
             self.assertEqual(stat.S_IMODE(target_path.stat().st_mode), 0o755)
