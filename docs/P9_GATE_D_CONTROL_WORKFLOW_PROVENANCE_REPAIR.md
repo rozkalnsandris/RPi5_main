@@ -61,9 +61,9 @@ Unchanged invariants:
   through the adapter.
 
 The production registry, reviewed fixture and adapter now bind only workflow
-blob `48a55c05eae0daee72d87abf66e04ea5b872dd58`. Focused tests deliberately substitute the stale blob
-`84b060b364fb5e9d824cf0d43e4f81c8ec6ea449` and an arbitrary SHA and require the adapter to reject both as
-`source/interface dependency mismatch`.
+blob `48a55c05eae0daee72d87abf66e04ea5b872dd58`. Focused tests deliberately
+substitute the stale blob `84b060b364fb5e9d824cf0d43e4f81c8ec6ea449` and an arbitrary SHA and require
+the adapter to reject both as `source/interface dependency mismatch`.
 
 The synthetic READY queue fixture is updated only to exercise the reviewed
 source contract in tests. It is not the real deploy queue and grants no
@@ -72,30 +72,38 @@ authorization.
 ## Real queue remains WAITING
 
 `ops-workflows#27` is intentionally different from the synthetic test fixture.
-During this source repair its machine-parsed `## Queue contract` remains
-byte-for-byte on the old Control SHA/blob. Only its `## Evidence` records the
-pre-mutation drift.
+Its machine-parsed `## Queue contract` remains on the older reviewed Control
+SHA/workflow blob while the required host provenance gates are incomplete.
+Evidence comments may record completed prerequisites without changing READY
+eligibility.
 
-Do not update the real Queue contract to the new Control SHA/blob until:
+Do not update the real Queue contract or title to READY until all of the
+following are true:
 
-1. this source repair is merged with exact-main CI green; and
-2. the required trusted-host workflow-provenance adapter convergence is
-   separately authorized and proven.
+1. the Control workflow-provenance source repair is merged with exact-main CI
+   green;
+2. the trusted-host installed adapter provenance convergence is separately
+   authorized and proven;
+3. a trusted Gate D baseline has passed with public-target pre-auth, exact
+   source-App read scope and D1 SELECT-only zero-write evidence; and
+4. the installed P9 operation registry has been separately converged to the
+   reviewed current registry bytes described below.
 
-`WAITING` is not LIVE-AUTH and is not execution authority.
+`WAITING` is not LIVE-AUTH and is not execution authority. A baseline PASS is
+not sufficient to make genuine P9 READY while the full runtime registry remains
+on an incompatible dependency contract.
 
-## Trusted-host source audit
+## Trusted-host adapter audit
 
-The installed Gate D baseline CLI imports
-`p9_control_postcanary_collector`, and the collector imports
-`WORKFLOW_SOURCE_BLOB` from `control_center_postcanary_adapter`.
-The earlier API-2026 host upgrade replaced only the baseline CLI. It did not
-replace the installed adapter.
+The installed Gate D baseline CLI imports `p9_control_postcanary_collector`, and
+the collector imports `WORKFLOW_SOURCE_BLOB` from
+`control_center_postcanary_adapter`. The earlier API-2026 host upgrade replaced
+only the baseline CLI. It did not replace the installed adapter.
 
-Consequently, a fresh baseline bound to the new Control workflow provenance
-requires a later installed-adapter convergence gate.
+Consequently, a baseline bound to the new Control workflow provenance required
+the later installed-adapter convergence gate.
 
-This repository therefore contains the source-only reviewed operator:
+The reviewed source-only adapter operator is:
 
 `scripts/install-deploy-executor-p9-gate-d-control-workflow-provenance-upgrade.py`
 
@@ -103,51 +111,81 @@ Its exact target set contains one file only:
 
 `/usr/local/lib/rozkalns-deploy-executor/deploy_executor/control_center_postcanary_adapter.py`
 
-The operator's expected old blob is
-`2a92f7fc0994b37f9625cb1c1178be98215e83e5`, mode `0644`, owner/group
-`root:root`. That value is an **expected prestate for future live preflight, not
-a claim about current host bytes**.
+Its expected old blob is `2a92f7fc0994b37f9625cb1c1178be98215e83e5`,
+mode `0644`, owner/group `root:root`. That value is an expected prestate for live
+preflight, not a general claim about host bytes.
 
-Before any future write the operator must prove:
+## Why the config registry was not a Gate D baseline target
+
+The Gate D baseline collection path does not load
+`/etc/rozkalns-deploy-executor-p9/executor-operations.json`; it consumes the
+installed collector/adapter provenance directly. Expanding the baseline repair
+operator to the installed config registry would therefore have added an
+unnecessary live mutation category to Gate D.
+
+Genuine P9 is different. `p9_host_runtime.py` loads the installed registry and
+passes its normalized operation dependencies into the selected adapter. The
+current adapter requires workflow blob
+`48a55c05eae0daee72d87abf66e04ea5b872dd58`. An installed registry that still
+pins `84b060b364fb5e9d824cf0d43e4f81c8ec6ea449` is therefore intentionally
+incompatible and must fail closed before genuine P9 can become eligible.
+
+## Genuine-P9 registry provenance convergence
+
+The reviewed initial P9 runtime installer installed exactly:
+
+`/etc/rozkalns-deploy-executor-p9/executor-operations.json`
+
+with owner/group `root:root`, mode `0644`, from source blob
+`5e9e4c7e96b6f24453077d896812a402bb303a92`. Subsequent accepted host repair
+receipts explicitly excluded config-registry mutation. This historical chain is
+the reviewed expected prestate for a future live preflight; it is not a fresh
+read of protected host contents.
+
+The current reviewed source registry is `ops/deploy/executor-operations.json`.
+It binds the repaired Control workflow provenance. This repository therefore
+contains the source-only reviewed one-target operator:
+
+`scripts/install-deploy-executor-p9-gate-d-registry-provenance-upgrade.py`
+
+The operator may replace only the installed registry above. Before any write it
+must prove:
 
 - exact reviewed RPi5 source SHA;
 - the operator itself matches that exact source;
 - root execution;
 - root-owned, non-group/world-writable parent chain;
 - regular non-symlink target;
-- exact owner/mode;
-- exact old blob;
+- exact `root:root 0644` metadata;
+- exact old blob `5e9e4c7e96b6f24453077d896812a402bb303a92`;
 - unchanged inode/path immediately before the first truncate.
 
-Without `--apply`, it is preflight-only and reports mutation `NO`.
-Source merge does not authorize `--apply`.
+The replacement bytes are read from
+`<exact-reviewed-sha>:ops/deploy/executor-operations.json`; they are never copied
+from an unpinned worktree file. Without `--apply`, the operator is preflight-only
+and reports `P9_GATE_D_REGISTRY_PROVENANCE_MUTATION=NO`.
 
-A separately scoped later LIVE authorization is required for the one-target
-replacement. The operator has no network, credential, D1, baseline collection,
-P9, StateStore, systemd, config-registry, rollback, cleanup or retry path.
+A successful separately authorized apply reports exactly one registry target
+replacement and `CONFIG_REGISTRY_MUTATION=YES`. It has no network, credential,
+D1, baseline collection, P9 execution, StateStore, systemd, adapter, baseline
+CLI, collector, rollback, cleanup or retry path. Source merge alone never
+authorizes `--apply`.
 
-## Why the config registry is not a Gate D target
+## Required sequence from the current WAITING state
 
-The Gate D baseline collection path does not load
-`/etc/rozkalns-deploy-executor-p9/executor-operations.json`; it consumes the
-installed collector/adapter provenance directly. Expanding this repair operator
-to the installed config registry would add an unnecessary live mutation
-category.
+The remaining gates are deliberately separate:
 
-The installed registry must be freshly reconciled before any later genuine P9
-attempt that uses the full runtime/queue operation path. That later work is not
-authorized by this source repair or by a future Gate D baseline authorization.
+1. merge this source-only registry-provenance operator after exact-head CI and
+   review are green;
+2. separately authorize a trusted checkout clean/ancestor-gated fast-forward to
+   that exact merged RPi5 SHA plus exactly one installed-registry replacement;
+3. record public-safe host provenance evidence and only then reconcile
+   `ops-workflows#27` machine Queue contract to the current reviewed Control
+   SHA/workflow dependency contract;
+4. only after fresh queue/registry/baseline/trust reconciliation may genuine P9
+   be considered READY; genuine P9 still requires its own fresh authority and
+   any required isolated LIVE-AUTH.
 
-## Required sequence after merge
-
-After this source PR is merged, the next gates remain separate:
-
-1. separately authorized trusted-host one-target adapter provenance convergence;
-2. source/GitHub continuity reconciliation, including only then updating the
-   real `ops-workflows#27` Queue contract if the host gate passed;
-3. a new separately owner-authorized Gate D trusted baseline;
-4. only after a baseline PASS may genuine P9 eligibility be reconsidered.
-
-A host adapter PASS does not authorize baseline collection. A baseline PASS does
-not authorize genuine P9. Genuine P9 still requires its own fresh authority and
-all current queue/LIVE-AUTH/trust predicates.
+The already completed adapter convergence and Gate D baseline do not authorize
+this registry mutation. A registry PASS does not authorize genuine P9, and a
+READY queue never substitutes for LIVE authorization.
