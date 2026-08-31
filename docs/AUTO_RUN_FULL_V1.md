@@ -1,10 +1,20 @@
 # AUTO-RUN FULL v1 — ChatGPT Plus issue-to-DONE orchestration
 
-Status: PROPOSED SOURCE CONTRACT — activates only after merge
+Status: ACTIVE — merged repository contract; runtime authority remains issue-specific and frozen at activation
 Canonical machine contract: `.github/auto-run-full-v1.json`
 Roadmap: `RPi5_main#294`
 Durable controller state: `RPi5_main#295`
 Runtime/deferred execution dependency: `RPi5_main#236`
+
+## Active v1 receipt
+
+The source/policy contract was merged by PR #297 and is active through `AGENTS.md`, `.github/start-mode-routing.json`, and `.github/auto-run-full-v1.json`.
+
+The durable ChatGPT Plus controller is issue #295. One hourly Scheduled Task named `RPi5 AUTO-RUN` reconstructs any active job from GitHub, stays silent while the controller is IDLE, and forbids provider API keys, token-billed fallback, automatic paid credits, force/history rewrite, and authority outside the frozen issue envelope.
+
+Genuine completed AUTO-RUN FULL targets include #212, #299, and #239. Their GitHub state provides auditable issue-specific activation/completion evidence and demonstrates controller return to IDLE after DONE. These canaries do not widen runtime authority: #236 remains the separate deterministic GitHub-to-RPi5 execution trust boundary.
+
+Roadmap #294 is the historical design/rollout record for v1. Its original local long-running controller/Codex CLI candidate architecture was superseded by the owner-approved ChatGPT Plus + GitHub durable-controller implementation captured by PR #297 and the merged machine contract.
 
 ## Goal
 
