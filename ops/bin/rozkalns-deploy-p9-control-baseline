@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import argparse
-from datetime import timezone
+from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
@@ -13,6 +13,7 @@ LIB = Path("/usr/local/lib/rozkalns-deploy-executor")
 if str(LIB) not in sys.path:
     sys.path.insert(0, str(LIB))
 
+from deploy_executor.control_center_postcanary_adapter import SOURCE_REPOSITORY
 from deploy_executor.p9_control_postcanary_collector import (
     ControlPostCanaryCollectionRequest,
     ControlPostCanaryCollectorError,
@@ -34,11 +35,13 @@ from deploy_executor.p9_control_postcanary_producer import (
     TARGET_REPOSITORY,
     publish_control_postcanary_baseline_evidence,
 )
+from deploy_executor.p9_evidence import MAX_EVIDENCE_AGE_SECONDS
 from deploy_executor.transport import API_VERSION
 
 _ROOT_UID = 0
 _REVIEWED_GITHUB_API_VERSION = "2026-03-10"
 _MAX_ASSOCIATION_DIAGNOSTIC_PRS = 16
+_MIN_OPERATOR_HANDOFF_FRESHNESS_SECONDS = 180
 
 
 def _nested(value: Any, *keys: str) -> Any:
@@ -232,6 +235,43 @@ def collect_once(
     return observation
 
 
+def _canonical_utc(value: datetime, *, where: str) -> datetime:
+    if not isinstance(value, datetime) or value.tzinfo is None:
+        raise ControlPostCanaryCollectorError(f"{where} is unavailable")
+    return value.astimezone(timezone.utc)
+
+
+def _format_utc(value: datetime) -> str:
+    return value.astimezone(timezone.utc).isoformat(timespec="seconds").replace(
+        "+00:00", "Z"
+    )
+
+
+def _freshness_handoff(observed_at: datetime, *, server_time: datetime) -> dict[str, object]:
+    """Return operator-visible freshness metadata using only trusted GitHub time."""
+
+    observed = _canonical_utc(observed_at, where="Control baseline observed_at")
+    current = _canonical_utc(server_time, where="Control baseline GitHub server time")
+    age = (current - observed).total_seconds()
+    if age < 0 or age > MAX_EVIDENCE_AGE_SECONDS:
+        raise ControlPostCanaryCollectorError(
+            "Control baseline evidence is stale or from the future before publication"
+        )
+
+    expires = observed + timedelta(seconds=MAX_EVIDENCE_AGE_SECONDS)
+    remaining = int((expires - current).total_seconds())
+    if remaining < _MIN_OPERATOR_HANDOFF_FRESHNESS_SECONDS:
+        raise ControlPostCanaryCollectorError(
+            "Control baseline remaining freshness is below the operator handoff minimum"
+        )
+    return {
+        "observed_at": _format_utc(observed),
+        "expires_at": _format_utc(expires),
+        "remaining_freshness_seconds": remaining,
+        "minimum_handoff_freshness_seconds": _MIN_OPERATOR_HANDOFF_FRESHNESS_SECONDS,
+    }
+
+
 def main() -> int:
     if os.geteuid() != _ROOT_UID:
         raise ControlPostCanaryCollectorError(
@@ -239,7 +279,24 @@ def main() -> int:
         )
     args = parse_args()
     request = ControlPostCanaryCollectionRequest(source_sha=args.source_sha)
-    observation = collect_once(request)
+
+    # All expensive/non-local collection work must complete before the operator
+    # receives PASS. Reuse the one cached source token, then obtain one final
+    # authoritative GitHub Date header after collection so handoff freshness is
+    # measured after D1/select and source evidence work rather than at CLI exit.
+    source_client = build_source_client()
+    observation = collect_once(
+        request,
+        source_client_factory=lambda: source_client,
+    )
+    freshness_response = source_client.get_json(f"/repos/{SOURCE_REPOSITORY}")
+    freshness = _freshness_handoff(
+        observation.observed_at,
+        server_time=freshness_response.server_time,
+    )
+
+    # Do not replace the trusted baseline or emit PASS unless at least the
+    # reviewed operator handoff budget remains.
     digest = publish_control_postcanary_baseline_evidence(observation)
     print(
         json.dumps(
@@ -257,6 +314,7 @@ def main() -> int:
                 "p9_executed": False,
                 "state_store_touched": False,
                 "production_mutation_started": False,
+                **freshness,
             },
             sort_keys=True,
             separators=(",", ":"),
