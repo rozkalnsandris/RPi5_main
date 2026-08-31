@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import importlib.util
 import json
 import sys
 import unittest
@@ -35,7 +36,10 @@ PRODUCTION_REGISTRY = ROOT / "ops" / "deploy" / "executor-operations.json"
 CANARY_REGISTRY = FIXTURES / "operations_control_center_postcanary_canary.json"
 CANARY_QUEUE = FIXTURES / "queue_issue_control_center_postcanary_ready_markup.json"
 ADAPTER_SOURCE = ROOT / "ops" / "lib" / "deploy_executor" / "control_center_postcanary_adapter.py"
-SOURCE_SHA = "f9b900a884bffda993197fc7fa9223c886e11a90"
+SOURCE_SHA = "f04601dfd47e5691c875c0935b36ff101680f4dd"
+EXPECTED_WORKFLOW_SOURCE_BLOB = "48a55c05eae0daee72d87abf66e04ea5b872dd58"
+STALE_WORKFLOW_SOURCE_BLOB = "84b060b364fb5e9d824cf0d43e4f81c8ec6ea449"
+CI_RUN_ID = 33380350418
 
 
 def _prepared():
@@ -78,7 +82,7 @@ class ControlSourceClient:
                 {
                     "workflow_runs": [
                         {
-                            "id": 33302808439,
+                            "id": CI_RUN_ID,
                             "head_sha": SOURCE_SHA,
                             "head_branch": "main",
                             "status": "completed",
@@ -87,7 +91,7 @@ class ControlSourceClient:
                     ]
                 }
             )
-        if path == f"/repos/{SOURCE_REPOSITORY}/actions/runs/33302808439/jobs?filter=latest&per_page=100":
+        if path == f"/repos/{SOURCE_REPOSITORY}/actions/runs/{CI_RUN_ID}/jobs?filter=latest&per_page=100":
             return Response({"jobs": [{"status": "completed", "conclusion": "success"}]})
         raise AssertionError(path)
 
@@ -123,7 +127,34 @@ class ControlCenterPostCanaryTests(unittest.TestCase):
         self.assertEqual(prepared.mutation_budget, INVOCATION_BUDGET)
         self.assertIn(f"source-repository-id:{SOURCE_REPOSITORY_ID}", prepared.dependencies)
         self.assertIn(f"workflow-source-blob:{WORKFLOW_SOURCE_BLOB}", prepared.dependencies)
+        self.assertNotIn(
+            f"workflow-source-blob:{STALE_WORKFLOW_SOURCE_BLOB}", prepared.dependencies
+        )
         self.assertIn("p9-trigger-dispatch:prohibited", prepared.dependencies)
+
+    def test_workflow_provenance_accepts_only_reviewed_control_496_blob(self):
+        self.assertEqual(WORKFLOW_SOURCE_BLOB, EXPECTED_WORKFLOW_SOURCE_BLOB)
+        self.assertNotEqual(WORKFLOW_SOURCE_BLOB, STALE_WORKFLOW_SOURCE_BLOB)
+        prepared = _prepared()
+        for unreviewed in (STALE_WORKFLOW_SOURCE_BLOB, "0" * 40):
+            with self.subTest(unreviewed=unreviewed):
+                drifted = copy.copy(prepared)
+                object.__setattr__(
+                    drifted,
+                    "dependencies",
+                    tuple(
+                        (
+                            f"workflow-source-blob:{unreviewed}"
+                            if item == f"workflow-source-blob:{WORKFLOW_SOURCE_BLOB}"
+                            else item
+                        )
+                        for item in prepared.dependencies
+                    ),
+                )
+                with self.assertRaisesRegex(
+                    AdapterError, "source/interface dependency mismatch"
+                ):
+                    ControlCenterPostCanaryAdapter().preflight(drifted)
 
     def test_adapter_preflight_is_local_read_only_and_apply_is_inert(self):
         prepared = _prepared()
@@ -132,7 +163,7 @@ class ControlCenterPostCanaryTests(unittest.TestCase):
         preflight = adapter.preflight(prepared)
         self.assertEqual(preflight["result"], "SOURCE_CANARY_CONTRACT_PASS")
         self.assertEqual(preflight["workflow_path"], WORKFLOW_PATH)
-        self.assertEqual(preflight["workflow_source_blob"], WORKFLOW_SOURCE_BLOB)
+        self.assertEqual(preflight["workflow_source_blob"], EXPECTED_WORKFLOW_SOURCE_BLOB)
         self.assertTrue(preflight["read_only"])
         self.assertFalse(preflight["execution_enabled"])
         self.assertFalse(preflight["privileged_dispatch_ready"])
@@ -180,7 +211,7 @@ class ControlCenterPostCanaryTests(unittest.TestCase):
         self.assertEqual(evidence.source_sha, SOURCE_SHA)
         self.assertEqual(evidence.current_main_sha, SOURCE_SHA)
         self.assertEqual(evidence.workflow, "ci.yml")
-        self.assertEqual(evidence.run_id, 33302808439)
+        self.assertEqual(evidence.run_id, CI_RUN_ID)
 
     def test_control_adapter_exposes_no_command_or_trigger_execution_bridge(self):
         source = ADAPTER_SOURCE.read_text(encoding="utf-8").lower()
@@ -213,6 +244,144 @@ class ControlCenterPostCanaryTests(unittest.TestCase):
                 "GITHUB_DECISION_MUTATION",
                 "GITHUB_APP_PERMISSION_MUTATION",
             },
+        )
+
+OPERATOR = (
+    ROOT
+    / "scripts"
+    / "install-deploy-executor-p9-gate-d-control-workflow-provenance-upgrade.py"
+)
+
+
+def _load_operator():
+    spec = importlib.util.spec_from_file_location(
+        "p9_gate_d_control_workflow_provenance_upgrade", OPERATOR
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+class P9GateDControlWorkflowProvenanceUpgradeTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.module = _load_operator()
+        cls.source = OPERATOR.read_text(encoding="utf-8")
+
+    def test_exact_one_target_contract_uses_current_adapter_as_expected_prestate(self):
+        target = self.module.TARGET
+        self.assertEqual(
+            (
+                target.source_path,
+                str(target.target_path),
+                target.old_blob_sha,
+                target.mode,
+            ),
+            (
+                "ops/lib/deploy_executor/control_center_postcanary_adapter.py",
+                "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/control_center_postcanary_adapter.py",
+                "2a92f7fc0994b37f9625cb1c1178be98215e83e5",
+                0o644,
+            ),
+        )
+        self.assertNotIn("rozkalns-deploy-p9-control-baseline", self.source)
+        self.assertNotIn("p9_control_postcanary_collector.py", self.source)
+
+    def test_operator_preflight_proves_exact_source_and_old_adapter_before_apply(self):
+        source = self.source
+        marker = "Final duplicate gate before the first live mutation"
+        preflight = source[: source.index(marker)]
+        self.assertIn("_require_exact_source(expected_sha)", preflight)
+        self.assertIn("_require_target_prestate()", preflight)
+        self.assertIn("_require_parent_chain_safe(TARGET.target_path)", preflight)
+        self.assertIn(
+            '_run_git("show", f"{expected_sha}:{TARGET.source_path}", capture=True)',
+            preflight,
+        )
+        self.assertIn("if not args.apply:", preflight)
+        self.assertIn(
+            "P9_GATE_D_CONTROL_WORKFLOW_PROVENANCE_MUTATION=NO", preflight
+        )
+        self.assertGreaterEqual(source.count("_preflight(args.expected_sha)"), 2)
+
+    def test_operator_mutation_is_one_target_in_place_and_non_retrying(self):
+        source = self.source
+        marker = "A separately owner-authorized one-target live mutation begins here"
+        mutation = source[source.index(marker):]
+        for operation in (
+            "os.ftruncate(fd, 0)",
+            "_write_fd_all(fd, reviewed_bytes)",
+            "os.fchmod(fd, TARGET.mode)",
+            "os.fchown(fd, 0, 0)",
+            "os.fsync(fd)",
+        ):
+            self.assertIn(operation, mutation)
+        for forbidden in (
+            "os.replace",
+            "os.rename",
+            "os.unlink",
+            "shutil",
+            "tempfile",
+            "mkstemp",
+            "for attempt",
+            "while attempt",
+        ):
+            self.assertNotIn(forbidden, source)
+        self.assertIn("TARGETS_REPLACED=1", source)
+        self.assertIn("ROLLBACK_PATH=NO", source)
+        self.assertIn("RETRY_PATH=NO", source)
+
+    def test_operator_has_no_network_credential_baseline_or_config_path(self):
+        source = self.source
+        for forbidden in (
+            "urllib",
+            "http.client",
+            "requests",
+            "curl",
+            "wget",
+            "gh ",
+            "Authorization:",
+            "control-d1-read-token",
+            "github-app.pem",
+            "systemctl",
+            "StateStore",
+            "executor-operations.json",
+            "cloudflare",
+        ):
+            self.assertNotIn(forbidden, source)
+        for marker in (
+            "NETWORK_REQUEST=NO",
+            "CREDENTIAL_READ=NO",
+            "D1_REQUEST=NO",
+            "BASELINE_COLLECTION=NO",
+            "P9_EXECUTION=NO",
+            "STATE_STORE_TOUCHED=NO",
+            "SYSTEMD_MUTATION=NO",
+            "CONFIG_REGISTRY_MUTATION=NO",
+            "BASELINE_CLI_TOUCHED=NO",
+            "COLLECTOR_TOUCHED=NO",
+        ):
+            self.assertIn(marker, source)
+
+    def test_operator_revalidates_open_inode_before_first_truncate(self):
+        source = self.source
+        fn = source[
+            source.index("def _replace_exact_target") :
+            source.index("def _parse_args")
+        ]
+        truncate_at = fn.index("os.ftruncate(fd, 0)")
+        self.assertLess(fn.index("os.fstat(fd)"), truncate_at)
+        self.assertLess(fn.index("_git_blob_sha(current)"), truncate_at)
+        self.assertLess(
+            fn.index("os.stat(TARGET.target_path, follow_symlinks=False)"),
+            truncate_at,
+        )
+        self.assertIn("os.O_NOFOLLOW", fn)
+        self.assertGreater(
+            fn.index("if _read_fd_all(fd) != reviewed_bytes"),
+            truncate_at,
         )
 
 
