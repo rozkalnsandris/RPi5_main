@@ -8,4 +8,6 @@ while IFS= read -r -d '' file; do
   count=$((count + 1))
 done < <(find scripts tests -type f -name '*.sh' -print0 | sort -z)
 
+bash ./tests/test-dashboard-issue226-trusted-read-bridge.sh
+
 echo "Shell syntax: PASS (${count} files)"

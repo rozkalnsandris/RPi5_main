@@ -1,0 +1,95 @@
+{
+  "schema": "rozkalns.deploy-executor-interface-audit.v1",
+  "status": "SOURCE_AUDIT",
+  "execution_enabled": false,
+  "baselines": {
+    "rpi5_main": {
+      "repository": "rozkalnsandris/RPi5_main",
+      "repository_id": 1323383044,
+      "sha": "660099cb401a8692b66cdf11510a7c1eb368215a"
+    },
+    "authorization_surface": {
+      "repository": "rozkalnsandris/ops-workflows",
+      "repository_id": 1328835922,
+      "sha": "c9d6b3898a9eda98ce83c5ce77e2bfd49f3703d8",
+      "policy_blob_sha": "ddfee69cf04d4b7fbd2a46fce6ae30eace6496e6",
+      "schema_blob_sha": "b1b3ab2be8b578a64fb92be01a8fd8be7ae71240",
+      "deploy_queue_template_blob": "5db2f30c9906e56918ce32af96cb6454ca201807"
+    },
+    "first_target": {
+      "repository": "rozkalnsandris/rozkalns-cv",
+      "repository_id": 1325237749,
+      "sha": "d25730b20c41edff29a83927bff386751f053cd0",
+      "preflight_blob": "2592e4e38e933f01409d5816c05defd22e661f6c",
+      "pull_helper_blob": "c787789e77c31576310bed28da0fbc893cfabb5f",
+      "deploy_library_blob": "ade60abbfea3cf56b1a56bbc1b2e0669b1a1b983",
+      "installer_blob": "0f61e8d0eddb413c86beeb0eee6ded4b1f3161d5"
+    }
+  },
+  "authority_interface": {
+    "owner_user_id": 277435981,
+    "ttl_seconds": 600,
+    "authorization_reader_permission": "issues:read",
+    "authorization_reader_write": false,
+    "queue_normalizer_owner": "RPi5_main",
+    "status": "COMPATIBLE"
+  },
+  "dispatcher_interface": {
+    "request_schema": "rozkalns.deploy-dispatch-request.v1",
+    "accepted_identity_only": true,
+    "forbidden_request_authority": [
+      "source_sha",
+      "target_alias",
+      "operation_id",
+      "command",
+      "path",
+      "argv",
+      "rollback_command",
+      "mutation_budget"
+    ],
+    "independent_refetch_required": true,
+    "status": "COMPATIBLE_SOURCE_CONTRACT"
+  },
+  "poller_privilege": {
+    "user": "rozkalns-deploy-executor",
+    "no_new_privileges": true,
+    "generic_sudo": false,
+    "proposed_unit": "ops/systemd/rozkalns-deploy-executor.service",
+    "systemd_analyze_security_offline_exposure": 1.5,
+    "status": "COMPATIBLE_SOURCE_CONTRACT"
+  },
+  "first_target_interface": {
+    "operation_id": "rozkalns-cv.exact-sha-release.v1",
+    "adapter_id": "rozkalns-cv.exact-sha.v1",
+    "direct_existing_controller_as_adapter": false,
+    "reason_direct_controller_forbidden": "existing controller selects current origin/main itself rather than accepting the independently revalidated LIVE-AUTH exact SHA",
+    "fixed_root_helper": "/usr/local/sbin/rozkalns-cv-pull-deploy-main",
+    "fixed_deploy_library": "/usr/local/libexec/rozkalns-cv/rozkalns-cv-deploy-library",
+    "helper_expected_owner_mode": "root:root:755",
+    "library_expected_owner_mode": "root:root:755",
+    "helper_required_caller": "andris",
+    "evidence_root_resolver": "sudo-user-home-relative:.local/state/rozkalns-cv-pull-deploy/evidence",
+    "evidence_root_expected_owner_mode": "sudo-user:sudo-user:700",
+    "helper_revalidates_target_is_current_origin_main": true,
+    "automatic_rollback_behavior": true,
+    "required_rollback_policy": "BUILTIN_TRANSACTIONAL_V1",
+    "database_migrations_allowed": false,
+    "shared_ingress_control_allowed": false,
+    "control_plane_activation_allowed": false,
+    "p5_adapter_mutation_enabled": false,
+    "status": "COMPATIBLE_ONLY_THROUGH_DORMANT_EXACT_SHA_ADAPTER"
+  },
+  "result_handoff": {
+    "github_receipt_is_authority": false,
+    "github_writer_enabled": false,
+    "local_evidence_required": true,
+    "reporting_failure_may_replay": false,
+    "status": "COMPATIBLE"
+  },
+  "live_gates": {
+    "p7_github_app_or_permission_change_authorized": false,
+    "p8_host_install_authorized": false,
+    "p9_live_auth_creation_authorized": false,
+    "p10_production_mutation_authorized": false
+  }
+}

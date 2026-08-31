@@ -1,0 +1,276 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+from datetime import timezone
+import json
+import os
+from pathlib import Path
+import sys
+from typing import Any, Callable
+
+LIB = Path("/usr/local/lib/rozkalns-deploy-executor")
+if str(LIB) not in sys.path:
+    sys.path.insert(0, str(LIB))
+
+from deploy_executor.p9_control_postcanary_collector import (
+    ControlPostCanaryCollectionRequest,
+    ControlPostCanaryCollectorError,
+    ControlPostCanaryTargetSnapshot,
+    PublicTargetGitHubReader,
+    PublicTargetJSONResponse,
+    PINNED_CANARY_RUN_ID,
+    PINNED_EXPECTED_MERGE_SHA,
+    PINNED_EXPECTED_PR_HEAD,
+    PINNED_REQUEST_ID,
+    PINNED_TARGET_ISSUE_NUMBER,
+    PINNED_TARGET_PR_NUMBER,
+    _normalize_public_response,
+    _validate_target_snapshot,
+    build_source_client,
+    collect_control_postcanary_observation,
+)
+from deploy_executor.p9_control_postcanary_producer import (
+    TARGET_REPOSITORY,
+    publish_control_postcanary_baseline_evidence,
+)
+from deploy_executor.transport import API_VERSION
+
+_ROOT_UID = 0
+_REVIEWED_GITHUB_API_VERSION = "2026-03-10"
+_MAX_ASSOCIATION_DIAGNOSTIC_PRS = 16
+
+
+def _nested(value: Any, *keys: str) -> Any:
+    current = value
+    for key in keys:
+        if type(current) is not dict:
+            return None
+        current = current.get(key)
+    return current
+
+
+def _association_identity(row: object) -> bool:
+    return (
+        type(row) is dict
+        and row.get("number") == PINNED_TARGET_PR_NUMBER
+        and row.get("state") == "closed"
+        and type(row.get("merged_at")) is str
+        and bool(row.get("merged_at"))
+        and row.get("draft") is False
+        and _nested(row, "head", "sha") == PINNED_EXPECTED_PR_HEAD
+        and _nested(row, "head", "repo", "full_name") == TARGET_REPOSITORY
+        and _nested(row, "base", "ref") == "main"
+        and _nested(row, "base", "repo", "full_name") == TARGET_REPOSITORY
+    )
+
+
+def _observed_association_prs(payload: object) -> str:
+    if type(payload) is not list:
+        return "INVALID"
+    numbers: list[int] = []
+    for row in payload:
+        if type(row) is not dict:
+            return "INVALID"
+        number = row.get("number")
+        if type(number) is not int or number < 1:
+            return "INVALID"
+        numbers.append(number)
+    values = sorted(set(numbers))
+    if len(values) > _MAX_ASSOCIATION_DIAGNOSTIC_PRS:
+        return "MANY"
+    return ",".join(str(value) for value in values) if values else "NONE"
+
+
+def _association_failure(response: PublicTargetJSONResponse) -> ControlPostCanaryCollectorError:
+    observed = _observed_association_prs(response.value)
+    server_time = response.server_time.astimezone(timezone.utc).isoformat(
+        timespec="seconds"
+    ).replace("+00:00", "Z")
+    etag = response.etag if response.etag is not None else "NONE"
+    return ControlPostCanaryCollectorError(
+        "target GitHub semantic validation failed before source-App: "
+        "TARGET_MERGE_PR_ASSOCIATION_MISMATCH endpoint=merge_pulls "
+        f"expected_pr={PINNED_TARGET_PR_NUMBER} observed_prs={observed} "
+        f"server_time={server_time} etag={etag}"
+    )
+
+
+def collect_public_target_snapshot_api_2026(target_client: object) -> ControlPostCanaryTargetSnapshot:
+    """Validate the 2026-03-10 public target contract before protected auth.
+
+    GitHub REST 2026-03-10 removed ``merge_commit_sha`` from pull-request
+    payloads. The commit-specific pull-association endpoint is therefore the
+    reviewed source of the PR<->merge-commit relationship. Only after that
+    association is proven do we derive the legacy field consumed by the frozen
+    downstream target predicate set.
+    """
+
+    if API_VERSION != _REVIEWED_GITHUB_API_VERSION:
+        raise ControlPostCanaryCollectorError(
+            "public target GitHub API version differs from reviewed contract"
+        )
+
+    repository = _normalize_public_response(
+        target_client.get_json(f"/repos/{TARGET_REPOSITORY}"),
+        "target repository response",
+    )
+    issue = _normalize_public_response(
+        target_client.get_json(
+            f"/repos/{TARGET_REPOSITORY}/issues/{PINNED_TARGET_ISSUE_NUMBER}"
+        ),
+        "target issue response",
+    )
+    pr = _normalize_public_response(
+        target_client.get_json(
+            f"/repos/{TARGET_REPOSITORY}/pulls/{PINNED_TARGET_PR_NUMBER}"
+        ),
+        "target pull request response",
+    )
+    merge = _normalize_public_response(
+        target_client.get_json(
+            f"/repos/{TARGET_REPOSITORY}/commits/{PINNED_EXPECTED_MERGE_SHA}"
+        ),
+        "target merge commit response",
+    )
+    merge_pulls = _normalize_public_response(
+        target_client.get_json(
+            f"/repos/{TARGET_REPOSITORY}/commits/{PINNED_EXPECTED_MERGE_SHA}/pulls"
+        ),
+        "target merge pull association response",
+    )
+    compare = _normalize_public_response(
+        target_client.get_json(
+            f"/repos/{TARGET_REPOSITORY}/compare/{PINNED_EXPECTED_MERGE_SHA}...main"
+        ),
+        "target compare response",
+    )
+
+    payload = merge_pulls.value
+    if type(payload) is not list or any(type(row) is not dict for row in payload):
+        raise _association_failure(merge_pulls)
+    matches = [row for row in payload if _association_identity(row)]
+    if len(matches) != 1:
+        raise _association_failure(merge_pulls)
+
+    # Compatibility-only derived field: REST 2026-03-10 no longer supplies it
+    # in the PR response. It is populated only after the commit-specific
+    # association endpoint has proven that the pinned merge commit introduced
+    # the exact pinned PR identity.
+    pr_value = pr.value
+    if type(pr_value) is dict:
+        pr_value = dict(pr_value)
+        pr_value["merge_commit_sha"] = PINNED_EXPECTED_MERGE_SHA
+    derived_pr = PublicTargetJSONResponse(
+        value=pr_value,
+        server_time=pr.server_time,
+        etag=pr.etag,
+    )
+
+    snapshot = ControlPostCanaryTargetSnapshot(
+        repository=repository,
+        issue=issue,
+        pr=derived_pr,
+        merge=merge,
+        compare=compare,
+    )
+    _validate_target_snapshot(snapshot, diagnostic=True)
+    return snapshot
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Collect and publish the one reviewed Control post-canary P9 baseline"
+    )
+    parser.add_argument(
+        "--source-sha",
+        required=True,
+        help="exact current/authorized Control source SHA bound by READY/LIVE-AUTH",
+    )
+    return parser.parse_args()
+
+
+def collect_once(
+    request: ControlPostCanaryCollectionRequest,
+    *,
+    target_client_factory: Callable[[], object] | None = None,
+    source_client_factory: Callable[[], object] | None = None,
+    collector_fn: Callable[..., object] | None = None,
+):
+    target_factory = (
+        PublicTargetGitHubReader
+        if target_client_factory is None
+        else target_client_factory
+    )
+    target_client = target_factory()
+    # All pinned public target GETs and semantic predicates run before protected
+    # source-App private-key/token work. No retry path exists here.
+    target_snapshot = collect_public_target_snapshot_api_2026(target_client)
+
+    if source_client_factory is None:
+        source_client = build_source_client()
+    else:
+        source_client = source_client_factory()
+    # Prime exactly one source-App token only after the public target preflight.
+    # The capability-specific provider caches a successful mint for this process.
+    source_client.token_provider.get_installation_token()
+
+    # The collector revalidates the immutable-in-process target snapshot before
+    # source evidence and before it can open the fixed D1 credential.
+    if collector_fn is None:
+        observation = collect_control_postcanary_observation(
+            request,
+            source_client=source_client,
+            target_snapshot=target_snapshot,
+        )
+    else:
+        observation = collector_fn(
+            request,
+            source_client=source_client,
+            target_snapshot=target_snapshot,
+        )
+    return observation
+
+
+def main() -> int:
+    if os.geteuid() != _ROOT_UID:
+        raise ControlPostCanaryCollectorError(
+            "Control baseline collection/publication requires root"
+        )
+    args = parse_args()
+    request = ControlPostCanaryCollectionRequest(source_sha=args.source_sha)
+    observation = collect_once(request)
+    digest = publish_control_postcanary_baseline_evidence(observation)
+    print(
+        json.dumps(
+            {
+                "P9_CONTROL_BASELINE": "PASS",
+                "evidence_sha256": digest,
+                "source_sha": request.source_sha,
+                "canary_run_id": PINNED_CANARY_RUN_ID,
+                "target_issue": PINNED_TARGET_ISSUE_NUMBER,
+                "target_pr": PINNED_TARGET_PR_NUMBER,
+                "request_id": PINNED_REQUEST_ID,
+                "public_target_preauth_verified": True,
+                "source_app_scope_verified": True,
+                "d1_select_only_zero_write": True,
+                "p9_executed": False,
+                "state_store_touched": False,
+                "production_mutation_started": False,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except Exception as exc:
+        print(
+            f"P9_CONTROL_BASELINE=STOP reason={type(exc).__name__}:{exc}",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)

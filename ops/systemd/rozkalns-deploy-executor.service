@@ -1,0 +1,45 @@
+[Unit]
+Description=Rozkalns owner-authorized deploy executor read-only poll
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=rozkalns-deploy-executor
+Group=rozkalns-deploy-executor
+UMask=0077
+
+LoadCredential=github-app.pem:/etc/rozkalns-deploy-executor/github-app.pem
+StateDirectory=rozkalns-deploy-executor
+StateDirectoryMode=0700
+ExecStart=/usr/local/libexec/rozkalns-deploy-executor/poller --config /etc/rozkalns-deploy-executor/config.json --registry /etc/rozkalns-deploy-executor/executor-operations.json --state-dir /var/lib/rozkalns-deploy-executor --credential %d/github-app.pem
+
+# P8 dry-run contract: this unit has no sudo/root mutation crossing. It may
+# authenticate to the read-only authorization App, read ops-workflows Issues,
+# and write only sanitized local polling state.
+NoNewPrivileges=true
+PrivateTmp=true
+RemoveIPC=true
+RestrictNamespaces=true
+ProtectProc=invisible
+ProcSubset=pid
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectHostname=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/rozkalns-deploy-executor
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
