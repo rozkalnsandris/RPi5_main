@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
+import hashlib
 import importlib.machinery
 import importlib.util
 import io
 import json
 from pathlib import Path
+import runpy
 from types import SimpleNamespace
 import sys
 import unittest
@@ -15,6 +17,14 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "ops" / "lib"))
 BASELINE_BIN = ROOT / "ops" / "bin" / "rozkalns-deploy-p9-control-baseline"
+UPGRADE_OPERATOR = (
+    ROOT / "scripts" / "install-deploy-executor-p9-freshness-host-upgrade.py"
+)
+
+
+def _git_blob_sha(data: bytes) -> str:
+    header = f"blob {len(data)}\0".encode("ascii")
+    return hashlib.sha1(header + data).hexdigest()
 
 
 def load_baseline_module():
@@ -156,6 +166,72 @@ class P9ControlBaselineFreshnessHandoffTests(unittest.TestCase):
         self.assertFalse(payload["state_store_touched"])
         self.assertFalse(payload["production_mutation_started"])
         publisher.assert_called_once_with(observation)
+
+
+class P9FreshnessHostUpgradeTests(unittest.TestCase):
+    def test_one_target_contract_binds_proven_old_and_repaired_new_blob(self):
+        namespace = runpy.run_path(str(UPGRADE_OPERATOR))
+        target = namespace["TARGET"]
+
+        self.assertEqual(
+            target.source_path,
+            "ops/bin/rozkalns-deploy-p9-control-baseline",
+        )
+        self.assertEqual(
+            str(target.target_path),
+            "/usr/local/sbin/rozkalns-deploy-p9-control-baseline",
+        )
+        self.assertEqual(
+            target.old_blob_sha,
+            "0afad9d93dd74570aeed31ccfdb8c5c7419ddcd8",
+        )
+        self.assertEqual(
+            target.new_blob_sha,
+            "8dc38e4d224373925483a45b782f04e0aa27a8bd",
+        )
+        self.assertEqual(target.mode, 0o755)
+        self.assertEqual(_git_blob_sha(BASELINE_BIN.read_bytes()), target.new_blob_sha)
+
+    def test_operator_is_fail_closed_before_and_after_write(self):
+        source = UPGRADE_OPERATOR.read_text(encoding="utf-8")
+
+        self.assertEqual(source.count("reviewed = _preflight(args.expected_sha)"), 2)
+        self.assertIn("reviewed freshness baseline source blob mismatch", source)
+        self.assertIn("os.O_NOFOLLOW", source)
+        self.assertIn("path_now.st_dev, path_now.st_ino", source)
+        self.assertLess(
+            source.index("path_now.st_dev"),
+            source.index("os.ftruncate(fd, 0)"),
+        )
+        self.assertIn("installed target post-write blob mismatch", source)
+        self.assertIn('print("TARGETS_REPLACED=1")', source)
+
+    def test_operator_scope_is_one_baseline_cli_only(self):
+        source = UPGRADE_OPERATOR.read_text(encoding="utf-8")
+
+        for marker in (
+            'print("NETWORK_REQUEST=NO")',
+            'print("CREDENTIAL_READ=NO")',
+            'print("D1_REQUEST=NO")',
+            'print("BASELINE_COLLECTION=NO")',
+            'print("P9_EXECUTION=NO")',
+            'print("STATE_STORE_TOUCHED=NO")',
+            'print("SYSTEMD_MUTATION=NO")',
+            'print("CONFIG_REGISTRY_MUTATION=NO")',
+            'print("SOURCE_AUTH_TOUCHED=NO")',
+            'print("ADAPTER_TOUCHED=NO")',
+            'print("PRODUCER_TOUCHED=NO")',
+            'print("COLLECTOR_TOUCHED=NO")',
+            'print("BASELINE_CLI_TOUCHED=YES")',
+            'print("ROLLBACK_PATH=NO")',
+            'print("RETRY_PATH=NO")',
+        ):
+            self.assertIn(marker, source)
+
+        self.assertNotIn("/usr/bin/systemctl", source)
+        self.assertNotIn("StateStore", source)
+        self.assertNotIn("requests.", source)
+        self.assertNotIn("urllib", source)
 
 
 if __name__ == "__main__":
