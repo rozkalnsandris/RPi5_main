@@ -1,11 +1,12 @@
 # Owner-authorized pull deploy executor v1 — P10 hardened controller bootstrap
 
-Status: SOURCE IMPLEMENTED / EXECUTION DISABLED
+Status: BOOTSTRAP SOURCE MERGED / INSTALLER-STAGER SOURCE MERGED / EXECUTION DISABLED
 Roadmap: `RPi5_main#236`
 Queue: `ops-workflows#28`
 Dashboard candidate: `5f7739348f56398d0ba301c9320e1de0062838fc`
 Machine contract: `ops/deploy/p10-dashboard-bootstrap.json`
 Source operation: `dashboard-rpi5.hardened-controller-bootstrap.v1`
+Installer/stager source merge: `RPi5_main#320`
 
 ## Why this gate exists
 
@@ -64,8 +65,9 @@ Reviewed source surfaces:
 - descriptor-safe filesystem implementation: `ops/lib/deploy_executor/dashboard_bootstrap_fs.py`;
 - one-shot bootstrap orchestrator: `ops/lib/deploy_executor/dashboard_bootstrap.py`;
 - narrow source wrapper: `ops/bin/rozkalns-dashboard-controller-bootstrap`;
+- dedicated installer/stager: `scripts/install-deploy-executor-p10-bootstrap-installer-stager.py`;
 - machine contract: `ops/deploy/p10-dashboard-bootstrap.json`;
-- regression: `tests/test-deploy-executor-p10-bootstrap-adapter.py` and `tests/test-deploy-executor-p10-bootstrap.py`.
+- regression: `tests/test-deploy-executor-p10-bootstrap-adapter.py`, `tests/test-deploy-executor-p10-bootstrap-installer-stager.py` and `tests/test-deploy-executor-p10-bootstrap.py`.
 
 The future installed identities are fixed to:
 
@@ -73,7 +75,7 @@ The future installed identities are fixed to:
 - library root: `/usr/local/lib/rozkalns-deploy-executor`;
 - live bootstrap package root: `/usr/local/lib/rozkalns-deploy-executor/deploy_executor`.
 
-This source PR does **not** install any of these paths.
+Source merge does **not** install any of these paths.
 
 ### Privileged trust anchor before import
 
@@ -134,7 +136,7 @@ Before the apply lock is created, and again while holding it, the helper require
 
 If the hardened candidate is already current, bootstrap fails before mutation and the normal P10 controller path must be used. Existing target-release evidence also fails closed; the helper does not turn into a retry or cleanup path.
 
-## Exact mutation budget
+## Exact bootstrap mutation budget
 
 One separately LIVE/root-authorized bootstrap may perform at most:
 
@@ -156,7 +158,7 @@ Internal bounds are also fixed:
 
 The helper performs no package, systemd, service, Docker, network, Cloudflare, credential, DB or identity mutation and starts no child process.
 
-## Fail-closed mutation evidence
+## Fail-closed bootstrap mutation evidence
 
 The apply lock is transient only while no release mutation has started.
 
@@ -180,9 +182,27 @@ SUCCESS
 
 After success, the historical release is retained and the helper no longer qualifies as a useful deploy channel: a subsequent call against candidate-as-current fails before mutation. Ordinary P10 must return to `/opt/dashboard_RPi5/current/tools/production-release-controller.mjs`.
 
+## Installer/stager source gate
+
+`RPi5_main#320` merged the dedicated installer/stager source. It exists solely to establish the already-reviewed immutable bootstrap trust anchor and fixed staging tree before the bootstrap can ever be invoked.
+
+The installer/stager is bound to the exact preserved candidate identity and SHA-256, consumes the preserved `candidate` and `candidate.json` children through a descriptor-safe fixed interface, and accepts no caller-supplied privileged path authority. Its separately authorized mutation budget is exactly:
+
+- fixed staging-root materializations: 1;
+- trusted entrypoint installations: 1;
+- trusted module installations: 3;
+- production release materializations: 0;
+- `current` pointer swaps: 0;
+- P10 PLAN executions: 0;
+- P10 APPLY executions: 0;
+- rollback attempts: 0;
+- retry attempts: 0.
+
+A failure before the first installer/stager mutation stops without mutation. Any error or ambiguity after mutation begins preserves materialized evidence and STOPs with no automatic retry, cleanup, rollback or alternate mutation path.
+
 ## Source/live separation
 
-This implementation remains **execution-disabled** source. Source merge does not authorize:
+Both the bootstrap source and installer/stager source remain **execution-disabled**. Source merge and exact-main CI do not authorize:
 
 - installing the helper/library;
 - creating the fixed staging tree;
@@ -196,10 +216,12 @@ This implementation remains **execution-disabled** source. Source merge does not
 - permissions/identity/credential changes;
 - cleanup of preserved evidence.
 
-After source merge and exact-main CI, the next step is read-only revalidation of source/helper identities, Dashboard exact candidate/CI, #28 and the current host baseline. Only then may the owner issue a **separate exact LIVE bootstrap authorization**. Bootstrap success must STOP for fresh ordinary P10 PLAN reconciliation; it must not continue directly into P10 APPLY.
+After `RPi5_main#320` merge, exact-main CI and source/provenance revalidation, the next possible mutation is a **separate exact LIVE/root installer/stager authorization**. That transaction may install only the fixed reviewed bootstrap entrypoint/modules and materialize only the fixed bootstrap staging tree. It may not materialize a production release, change `current`, execute P10 PLAN/APPLY, or mutate package/service/systemd/Docker/network/credential state.
+
+Installer/stager completion must STOP. A fresh read-only proof must then establish the installed helper/module Git blobs, fixed staging identity and current production baseline. Only after that proof passes may the owner issue a **different separate exact LIVE/root bootstrap authorization**. Bootstrap success must STOP again for fresh post-bootstrap reconciliation and a new ordinary P10 PLAN gate; it must not continue directly into P10 APPLY.
 
 ## Queue state
 
-`ops-workflows#28` remains WAITING. While this implementation is unmerged, its reason is `WAITING_HARDENED_CONTROLLER_BOOTSTRAP_SOURCE_MERGE`.
+`ops-workflows#28` remains WAITING. The source blocker represented by PR #320 is merged, but WAITING is intentionally retained because source merge is not live readiness.
 
-After merge, exact-main CI and source identity revalidation, #28 still remains WAITING behind the separate LIVE/root bootstrap gate. It must not become READY until the bootstrap succeeds, post-bootstrap state is revalidated, and a fresh ordinary P10 PLAN produces the reviewed application baseline.
+The current next gate is the separately owner-authorized LIVE/root installer/stager transaction after fresh exact-main/source/provenance and trusted-host preflight. #28 must remain WAITING through installer/stager installation, read-only trust-anchor/staging/baseline proof, the separate hardened-controller bootstrap, post-bootstrap verification and a fresh ordinary P10 PLAN. Only that later reviewed application baseline may make #28 eligible for READY. READY itself never authorizes P10 APPLY.
