@@ -152,7 +152,7 @@ def main() -> None:
     assert bootstrap["roadmap_issue"] == 236
     assert bootstrap["queue"]["issue"] == 28
     assert bootstrap["queue"]["required_status"] == "WAITING"
-    assert bootstrap["queue"]["reason"] == "WAITING_HARDENED_CONTROLLER_BOOTSTRAP_INSTALLER_STAGER_SOURCE"
+    assert bootstrap["queue"]["reason"] == "WAITING_HARDENED_CONTROLLER_BOOTSTRAP_INSTALLER_STAGER_LIVE_GATE"
     assert bootstrap["dashboard"]["candidate_sha"] == CANDIDATE_SHA
     assert bootstrap["dashboard"]["candidate_sha256"] == "c5a2adef8f7242833094a1c0cb8a8074392312567deeddd1228dc46c16cff5c0"
     assert bootstrap["dashboard"]["historical_manifest_schema_source"] == HISTORICAL_COMMIT
@@ -216,6 +216,7 @@ def main() -> None:
     installer = bootstrap["installer_stager"]
     assert installer["status"] == "SOURCE_MERGED_EXECUTION_DISABLED"
     assert installer["source_merge_pr"] == 320
+    assert installer["post_merge_reconciliation_pr"] == 321
     assert installer["source_operator"] == "scripts/install-deploy-executor-p10-bootstrap-installer-stager.py"
     assert installer["source_test"] == "tests/test-deploy-executor-p10-bootstrap-installer-stager.py"
     assert installer["preserved_evidence_parent_basename"] == "p10-preflight-5f773934-20260901T074158Z-294325"
@@ -264,7 +265,7 @@ def main() -> None:
     assert transition["preflight_retry_allowed"] is False
     assert transition["bootstrap_execution_source"] == "MERGED_EXECUTION_DISABLED"
     assert transition["installer_stager_source"] == "MERGED_EXECUTION_DISABLED"
-    assert transition["next_gate"] == "SEPARATE_LIVE_ROOT_INSTALLER_STAGER_AFTER_EXACT_MAIN_REVALIDATION"
+    assert transition["next_gate"] == "SEPARATE_LIVE_ROOT_INSTALLER_STAGER_AFTER_EXACT_MAIN_AND_TRUSTED_HOST_REVALIDATION"
 
     assert "known historical, bootstrap required" in doc
     assert "do not execute operator-writable candidate JavaScript as root" in doc
