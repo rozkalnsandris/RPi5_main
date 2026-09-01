@@ -1,11 +1,19 @@
 #!/usr/bin/env python3
+import hashlib
+import importlib.machinery
+import importlib.util
 import json
+import os
 from pathlib import Path
+import sys
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 PREFLIGHT = ROOT / "ops" / "deploy" / "p10-dashboard-preflight.json"
 BOOTSTRAP = ROOT / "ops" / "deploy" / "p10-dashboard-bootstrap.json"
 DOC = ROOT / "docs" / "OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_P10_BOOTSTRAP.md"
+WRAPPER = ROOT / "ops" / "bin" / "rozkalns-dashboard-controller-bootstrap"
+LIB = ROOT / "ops" / "lib" / "deploy_executor"
 
 CANDIDATE_SHA = "5f7739348f56398d0ba301c9320e1de0062838fc"
 HISTORICAL_BLOB = "c501bea57c0d5c35e7961ae1f1e5593a02268661"
@@ -14,6 +22,95 @@ HARDENED = {
     "7fcc58cbea2f1247d6e4d93bc3805923697fbfab",
     "c0566adb76e044632a4556dbefeb0f46839b4996",
 }
+
+
+def git_blob(data: bytes) -> str:
+    digest = hashlib.sha1()
+    digest.update(f"blob {len(data)}\0".encode("ascii"))
+    digest.update(data)
+    return digest.hexdigest()
+
+
+def load_wrapper():
+    module_name = "p10_bootstrap_entrypoint_source_test"
+    loader = importlib.machinery.SourceFileLoader(module_name, str(WRAPPER))
+    spec = importlib.util.spec_from_file_location(
+        module_name,
+        WRAPPER,
+        loader=loader,
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    previous = sys.modules.get(module_name)
+    sys.modules[module_name] = module
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        if previous is None:
+            sys.modules.pop(module_name, None)
+        else:
+            sys.modules[module_name] = previous
+    return module
+
+
+def assert_trust_anchor_regression(implementation: dict) -> None:
+    wrapper = load_wrapper()
+    source = WRAPPER.read_text(encoding="utf-8")
+    assert "sys.path.insert" not in source
+    assert "from deploy_executor" not in source
+    assert source.index("_verify_trust_anchor()") < source.index("_load_trusted_modules()")
+    assert "sys.dont_write_bytecode = True" in source
+    assert implementation["trust_anchor_verified_before_module_import"] is True
+    assert implementation["normal_deploy_executor_package_init_executed"] is False
+    assert implementation["source_wrapper_git_blob"] == git_blob(WRAPPER.read_bytes())
+    assert implementation["source_wrapper_identity_verification"] == "separate-live-preflight-before-root-invocation"
+    assert implementation["source_wrapper_runtime_mode"] == "0755"
+    assert implementation["trusted_directory_mode"] == "0755"
+    assert implementation["trusted_module_mode"] == "0644"
+    assert implementation["future_installed_library_root_mode"] == "0755"
+    assert 'Path("/usr/local/sbin")' in source
+    assert 'INSTALLED_LIBRARY_ROOT, "installed bootstrap library root"' in source
+
+    expected = implementation["trusted_module_git_blobs"]
+    assert expected == wrapper.TRUSTED_MODULE_GIT_BLOBS
+    for name, blob in expected.items():
+        assert git_blob((LIB / name).read_bytes()) == blob
+
+    with tempfile.TemporaryDirectory() as tmp:
+        package = Path(tmp) / "deploy_executor"
+        package.mkdir(mode=0o755)
+        (package / "__init__.py").write_text(
+            "raise RuntimeError('normal package init must not execute')\n",
+            encoding="utf-8",
+        )
+        for name in expected:
+            target = package / name
+            target.write_bytes((LIB / name).read_bytes())
+            os.chmod(target, 0o644)
+        os.chmod(package, 0o755)
+
+        wrapper._verify_trust_anchor(
+            package_root=package,
+            expected_uid=os.geteuid(),
+            expected_gid=os.getegid(),
+        )
+        loaded = wrapper._load_trusted_modules(package_root=package)
+        assert loaded.BOOTSTRAP_ACK == "I_AUTHORIZED_DASHBOARD_RPI5_HARDENED_CONTROLLER_BOOTSTRAP"
+        assert not (package / "__pycache__").exists()
+
+        tampered = package / "dashboard_bootstrap.py"
+        tampered.write_bytes(tampered.read_bytes() + b"\n# tamper\n")
+        os.chmod(tampered, 0o644)
+        try:
+            wrapper._verify_trust_anchor(
+                package_root=package,
+                expected_uid=os.geteuid(),
+                expected_gid=os.getegid(),
+            )
+        except wrapper.BootstrapEntrypointError as exc:
+            assert "Git blob mismatch" in str(exc)
+        else:
+            raise AssertionError("tampered trusted module was accepted")
 
 
 def main() -> None:
@@ -50,13 +147,15 @@ def main() -> None:
     assert dependency["separate_source_implementation_required"] is True
     assert dependency["separate_live_root_authorization_required_after_source_merge"] is True
 
-    assert bootstrap["schema_version"] == 1
-    assert bootstrap["status"] == "SOURCE_ONLY_BOOTSTRAP_RECONCILIATION"
+    assert bootstrap["schema_version"] == 2
+    assert bootstrap["status"] == "SOURCE_IMPLEMENTED_EXECUTION_DISABLED"
     assert bootstrap["roadmap_issue"] == 236
     assert bootstrap["queue"]["issue"] == 28
     assert bootstrap["queue"]["required_status"] == "WAITING"
-    assert bootstrap["queue"]["reason"] == "WAITING_HARDENED_CONTROLLER_BOOTSTRAP_IMPLEMENTATION"
+    assert bootstrap["queue"]["reason"] == "WAITING_HARDENED_CONTROLLER_BOOTSTRAP_SOURCE_MERGE"
     assert bootstrap["dashboard"]["candidate_sha"] == CANDIDATE_SHA
+    assert bootstrap["dashboard"]["historical_manifest_schema_source"] == HISTORICAL_COMMIT
+    assert bootstrap["dashboard"]["historical_manifest_schema"] == "dashboard-rpi5.production-candidate.v1"
 
     observed = bootstrap["observed_historical_controller"]
     assert observed["git_blob"] == HISTORICAL_BLOB
@@ -76,19 +175,52 @@ def main() -> None:
     assert invariants["bootstrap_requires_fail_closed_no_retry_after_mutation"] is True
     assert invariants["bootstrap_source_merge_authorizes_live_installation"] is False
     assert invariants["bootstrap_preflight_authorization_authorizes_live_installation"] is False
+    assert invariants["normal_executor_registry_remains_globally_execution_disabled"] is True
+    assert invariants["bootstrap_is_not_a_persistent_alternate_deploy_channel"] is True
 
-    implementation = bootstrap["required_source_implementation"]
-    assert implementation["owner"] == "RPi5_main-control-plane"
-    assert implementation["kind"] == "dedicated-one-time-bootstrap-adapter"
-    assert implementation["generic_shell_authority_forbidden"] is True
-    assert implementation["arbitrary_path_or_argv_authority_forbidden"] is True
-    assert implementation["must_bind_exact_dashboard_candidate_sha"] is True
-    assert implementation["must_bind_exact_historical_controller_blob"] is True
-    assert implementation["must_use_descriptor_safe_or_equivalent_immutable_candidate_consumption"] is True
-    assert implementation["must_verify_root_owned_trust_anchor_before_first_privileged_execution"] is True
-    assert implementation["must_define_exact_mutation_budget_and_exclusions"] is True
-    assert implementation["must_define_post_mutation_evidence_preservation"] is True
-    assert implementation["must_be_execution_disabled_until_separate_live_authorization"] is True
+    required_implementation = bootstrap["required_source_implementation"]
+    assert required_implementation["owner"] == "RPi5_main-control-plane"
+    assert required_implementation["kind"] == "dedicated-one-time-bootstrap-adapter"
+    assert required_implementation["generic_shell_authority_forbidden"] is True
+    assert required_implementation["arbitrary_path_or_argv_authority_forbidden"] is True
+    assert required_implementation["must_bind_exact_dashboard_candidate_sha"] is True
+    assert required_implementation["must_bind_exact_historical_controller_blob"] is True
+    assert required_implementation["must_use_descriptor_safe_or_equivalent_immutable_candidate_consumption"] is True
+    assert required_implementation["must_verify_root_owned_trust_anchor_before_first_privileged_execution"] is True
+    assert required_implementation["must_define_exact_mutation_budget_and_exclusions"] is True
+    assert required_implementation["must_define_post_mutation_evidence_preservation"] is True
+    assert required_implementation["must_be_execution_disabled_until_separate_live_authorization"] is True
+
+    implementation = bootstrap["implementation"]
+    assert implementation["operation_id"] == "dashboard-rpi5.hardened-controller-bootstrap.v1"
+    assert implementation["adapter_contract"] == "ops/lib/deploy_executor/dashboard_bootstrap_contract.py"
+    assert implementation["adapter_implementation"] == "ops/lib/deploy_executor/dashboard_bootstrap_adapter.py"
+    assert implementation["descriptor_safe_filesystem"] == "ops/lib/deploy_executor/dashboard_bootstrap_fs.py"
+    assert implementation["bootstrap_orchestrator"] == "ops/lib/deploy_executor/dashboard_bootstrap.py"
+    assert implementation["source_wrapper"] == "ops/bin/rozkalns-dashboard-controller-bootstrap"
+    assert implementation["normal_executor_registry_registered"] is False
+    assert implementation["execution_enabled"] is False
+    assert implementation["network_allowed"] is False
+    assert implementation["process_execution_allowed"] is False
+    assert implementation["fixed_production_root"] == "/opt/dashboard_RPi5"
+    assert implementation["fixed_candidate_root"].endswith(f"/{CANDIDATE_SHA}/source")
+    assert implementation["fixed_manifest_path"].endswith(f"/{CANDIDATE_SHA}/candidate-manifest.json")
+    assert_trust_anchor_regression(implementation)
+
+    budget = bootstrap["mutation_budget"]
+    assert budget["apply_lock"] == 1
+    assert budget["release_materialization"] == 1
+    assert budget["current_pointer_swap"] == 1
+    assert budget["release_deletions"] == 0
+    assert budget["rollback_attempts"] == 0
+    assert budget["p10_application_apply"] == 0
+
+    failure = bootstrap["failure_semantics"]
+    assert failure["pre_release_mutation_failure"] == "remove_transient_lock_only"
+    assert failure["post_release_mutation_failure"] == "preserve_lock_and_partial_evidence_then_stop"
+    assert failure["automatic_retry"] is False
+    assert failure["automatic_cleanup_after_release_mutation"] is False
+    assert failure["automatic_rollback"] is False
 
     transition = bootstrap["p10_transition"]
     assert transition["candidate_build_arm64"] == "PASS"
@@ -99,12 +231,16 @@ def main() -> None:
     assert transition["production_mutation_started"] is False
     assert transition["apply_executed"] is False
     assert transition["preflight_retry_allowed"] is False
+    assert transition["bootstrap_source_implementation"] == "IN_REVIEW_EXECUTION_DISABLED"
 
     assert "known historical, bootstrap required" in doc
     assert "do not execute operator-writable candidate JavaScript as root" in doc
     assert "do not patch the current immutable release in place" in doc
     assert "do not copy/replace only the installed controller as a preflight workaround" in doc
     assert "separate exact LIVE bootstrap authorization" in doc
+    assert "dashboard-rpi5.hardened-controller-bootstrap.v1" in doc
+    assert "execution-disabled" in doc
+    assert "before any installed bootstrap Python module is imported" in doc
 
 
 if __name__ == "__main__":

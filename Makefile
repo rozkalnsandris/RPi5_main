@@ -32,6 +32,7 @@ test:
 	python3 ./tests/test-deploy-executor-p9-isolated-auth-surface.py
 	python3 ./tests/test-deploy-executor-p10-preflight-recipe.py
 	python3 ./tests/test-deploy-executor-p10-bootstrap.py
+	python3 ./tests/test-deploy-executor-p10-bootstrap-adapter.py
 	bash ./tests/test-balcony-watering.sh
 	bash ./tests/test-balkons-log-mqtt-credential.sh
 	bash ./tests/test-balkons-log-legacy-set-contract.sh
