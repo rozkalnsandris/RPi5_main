@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "capability": "dashboard-rpi5.preverified-handoff-materializer.v1",
+  "execution_enabled": false,
+  "source_repository": "rozkalnsandris/dashboard_RPi5",
+  "reviewed_source_sha": "066b9a24008dd57439f9e66eae198416c4dfc590",
+  "reviewed_source_tree_sha": "62756ba22fc8d47e44988c086c08dcf37779cfb3",
+  "reviewed_parent_sha": "5f7739348f56398d0ba301c9320e1de0062838fc",
+  "reviewed_producer": {
+    "path": "tools/production-candidate-manifest.mjs",
+    "blob_sha": "bea0f30602d119ae53b81e70ce2d4c283d369ce8"
+  },
+  "preverification_binding": {
+    "candidate_sha256": "d12a49de01891e3a4cc188fa16c173c5eb44c786f013d3a6ebfefe95dcaa47b9",
+    "file_count": 72,
+    "total_bytes": 6773246,
+    "manifest_schema": "dashboard-rpi5.production-candidate.v1",
+    "hash_algorithm": "sha256"
+  },
+  "unprivileged_ingress": {
+    "root": "/home/andris/.cache/rozkalns-dashboard-preverified-ingress/066b9a24008dd57439f9e66eae198416c4dfc590",
+    "source": "/home/andris/.cache/rozkalns-dashboard-preverified-ingress/066b9a24008dd57439f9e66eae198416c4dfc590/source",
+    "manifest": "/home/andris/.cache/rozkalns-dashboard-preverified-ingress/066b9a24008dd57439f9e66eae198416c4dfc590/candidate-manifest.json",
+    "owner": "andris",
+    "group": "andris",
+    "directory_mode": "0555",
+    "file_mode": "0444",
+    "caller_selectable": false,
+    "timestamp_pid_prep_root_allowed_as_privileged_input": false,
+    "git_checkout_allowed_as_privileged_input": false
+  },
+  "validation": {
+    "descriptor_safe": true,
+    "nofollow": true,
+    "rehash_while_materializing": true,
+    "exact_manifest_tree_equality": true,
+    "symlinks_allowed": false,
+    "special_files_allowed": false,
+    "exact_file_count": 72,
+    "exact_total_bytes": 6773246,
+    "exact_candidate_sha256": "d12a49de01891e3a4cc188fa16c173c5eb44c786f013d3a6ebfefe95dcaa47b9"
+  },
+  "service_owned_handoff": {
+    "base": "/var/lib/rozkalns-deploy-executor/dashboard-candidate-input",
+    "root": "/var/lib/rozkalns-deploy-executor/dashboard-candidate-input/066b9a24008dd57439f9e66eae198416c4dfc590",
+    "source": "/var/lib/rozkalns-deploy-executor/dashboard-candidate-input/066b9a24008dd57439f9e66eae198416c4dfc590/source",
+    "manifest": "/var/lib/rozkalns-deploy-executor/dashboard-candidate-input/066b9a24008dd57439f9e66eae198416c4dfc590/candidate-manifest.json",
+    "owner": "rozkalns-deploy-executor",
+    "group": "rozkalns-deploy-executor",
+    "base_mode_precondition": "0755",
+    "directory_mode": "0555",
+    "file_mode": "0444",
+    "partial": "/var/lib/rozkalns-deploy-executor/dashboard-candidate-input/.066b9a24008dd57439f9e66eae198416c4dfc590.handoff-materializer-partial",
+    "publish": "renameat2-RENAME_NOREPLACE",
+    "target_must_be_absent": true,
+    "partial_must_be_absent": true,
+    "base_owner": "root",
+    "base_group": "root"
+  },
+  "mutation_budget": [
+    {
+      "category": "handoff-candidate-partial-root-create",
+      "max_operations": 1
+    },
+    {
+      "category": "handoff-source-root-create",
+      "max_operations": 1
+    },
+    {
+      "category": "handoff-file-materialization",
+      "max_operations": 72
+    },
+    {
+      "category": "handoff-manifest-materialization",
+      "max_operations": 1
+    },
+    {
+      "category": "handoff-final-no-replace-rename",
+      "max_operations": 1
+    }
+  ],
+  "failure_policy": {
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "deletion_budget": 0,
+    "preserve_partial_after_post_mutation_failure": true
+  },
+  "downstream": {
+    "normal_candidate_stager": "scripts/dashboard-rpi5-production-candidate-stager.py",
+    "normal_candidate_stager_invoked_by_this_capability": false,
+    "production_candidate_root_created_by_this_capability": false,
+    "production_root_written_by_this_capability": false
+  },
+  "post_merge_gate_sequence": [
+    "unprivileged-preverification-pass",
+    "separate-handoff-materialization-live-root-gate",
+    "read-only-handoff-proof",
+    "separate-candidate-stager-live-root-gate",
+    "read-only-candidate-staging-proof",
+    "trusted-controller-plan-only-gate",
+    "ready-reconciliation",
+    "later-apply-live-auth"
+  ],
+  "explicit_exclusions": [
+    "caller-supplied path/source/digest/command/script/argv/environment authority",
+    "timestamp/PID preparation root as privileged input authority",
+    "direct root consumption of a Git checkout",
+    "normal candidate stager installation/enablement/invocation",
+    "/var/lib/rozkalns-dashboard-release-candidates mutation",
+    "/opt/dashboard_RPi5 mutation",
+    "candidate JavaScript or Node/package-manager execution as root",
+    "git/shell/network/credential execution as root",
+    "package/systemd/service/Docker/network/Cloudflare/permission/database mutation",
+    "automatic retry/cleanup/rollback"
+  ],
+  "source_state": {
+    "registry_execution_enabled_must_remain": false,
+    "live_authority": false,
+    "merge_authorizes_handoff_materialization": false,
+    "merge_authorizes_candidate_staging": false,
+    "merge_authorizes_apply": false
+  }
+}
