@@ -8,12 +8,13 @@ CONTRACT = ROOT / "ops" / "deploy" / "p10-dashboard-preflight.json"
 EXPECTED_SHA = "5f7739348f56398d0ba301c9320e1de0062838fc"
 NEW_CONTROLLER_BLOB = "c0566adb76e044632a4556dbefeb0f46839b4996"
 LEGACY_CONTROLLER_BLOB = "7fcc58cbea2f1247d6e4d93bc3805923697fbfab"
+HISTORICAL_BOOTSTRAP_BLOB = "c501bea57c0d5c35e7961ae1f1e5593a02268661"
 
 
 def main() -> None:
     contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
 
-    assert contract["schema_version"] == 1
+    assert contract["schema_version"] == 2
     assert contract["status"] == "SOURCE_ONLY_PREFLIGHT_CONTRACT"
     assert contract["roadmap_issue"] == 236
 
@@ -93,14 +94,29 @@ def main() -> None:
     )
     assert "sha1sum" not in controller["identity_command"]
 
-    identities = {entry["git_blob"]: entry for entry in controller["accepted_identities"]}
+    identities = {
+        entry["git_blob"]: entry for entry in controller["accepted_plan_identities"]
+    }
     assert set(identities) == {NEW_CONTROLLER_BLOB, LEGACY_CONTROLLER_BLOB}
+    assert HISTORICAL_BOOTSTRAP_BLOB not in identities
     assert identities[NEW_CONTROLLER_BLOB]["classification"] == "new-symlink-safe"
     assert identities[NEW_CONTROLLER_BLOB]["node_extra_args"] == []
-    assert identities[LEGACY_CONTROLLER_BLOB]["classification"] == "reviewed-legacy"
+    assert identities[LEGACY_CONTROLLER_BLOB]["classification"] == (
+        "reviewed-legacy-hardened"
+    )
     assert identities[LEGACY_CONTROLLER_BLOB]["node_extra_args"] == [
         "--preserve-symlinks-main"
     ]
+
+    bootstrap_required = controller["bootstrap_required_identities"]
+    assert len(bootstrap_required) == 1
+    assert bootstrap_required[0]["git_blob"] == HISTORICAL_BOOTSTRAP_BLOB
+    assert bootstrap_required[0]["classification"] == (
+        "known-historical-pre-descriptor-safe"
+    )
+    assert bootstrap_required[0]["privileged_plan_allowed"] is False
+    assert bootstrap_required[0]["candidate_checkout_root_execution_allowed"] is False
+    assert bootstrap_required[0]["retry_under_consumed_preflight_allowed"] is False
 
     assert controller["identity_selection_before_privileged_plan"] is True
     assert controller["trial_invocation_forbidden"] is True
