@@ -1,17 +1,19 @@
 {
-  "schema_version": 1,
-  "status": "SOURCE_ONLY_BOOTSTRAP_RECONCILIATION",
+  "schema_version": 2,
+  "status": "SOURCE_IMPLEMENTED_EXECUTION_DISABLED",
   "roadmap_issue": 236,
   "queue": {
     "repository": "rozkalnsandris/ops-workflows",
     "issue": 28,
     "required_status": "WAITING",
-    "reason": "WAITING_HARDENED_CONTROLLER_BOOTSTRAP_IMPLEMENTATION"
+    "reason": "WAITING_HARDENED_CONTROLLER_BOOTSTRAP_SOURCE_MERGE"
   },
   "dashboard": {
     "repository": "rozkalnsandris/dashboard_RPi5",
     "candidate_sha": "5f7739348f56398d0ba301c9320e1de0062838fc",
-    "canonical_bootstrap_contract": "docs/PHASE11D_RELEASE_ACTIVATION.md#first-descriptor-safe-controller-bootstrap"
+    "canonical_bootstrap_contract": "docs/PHASE11D_RELEASE_ACTIVATION.md#first-descriptor-safe-controller-bootstrap",
+    "historical_manifest_schema_source": "400296591ec14c062e4c3c9fdbc95c38109ba0fd",
+    "historical_manifest_schema": "dashboard-rpi5.production-candidate.v1"
   },
   "observed_historical_controller": {
     "git_blob": "c501bea57c0d5c35e7961ae1f1e5593a02268661",
@@ -34,7 +36,9 @@
     "bootstrap_requires_exact_reviewed_provenance": true,
     "bootstrap_requires_fail_closed_no_retry_after_mutation": true,
     "bootstrap_source_merge_authorizes_live_installation": false,
-    "bootstrap_preflight_authorization_authorizes_live_installation": false
+    "bootstrap_preflight_authorization_authorizes_live_installation": false,
+    "normal_executor_registry_remains_globally_execution_disabled": true,
+    "bootstrap_is_not_a_persistent_alternate_deploy_channel": true
   },
   "required_source_implementation": {
     "owner": "RPi5_main-control-plane",
@@ -49,6 +53,54 @@
     "must_define_post_mutation_evidence_preservation": true,
     "must_be_execution_disabled_until_separate_live_authorization": true
   },
+  "implementation": {
+    "operation_id": "dashboard-rpi5.hardened-controller-bootstrap.v1",
+    "adapter_contract": "ops/lib/deploy_executor/dashboard_bootstrap_contract.py",
+    "descriptor_safe_filesystem": "ops/lib/deploy_executor/dashboard_bootstrap_fs.py",
+    "bootstrap_orchestrator": "ops/lib/deploy_executor/dashboard_bootstrap.py",
+    "source_wrapper": "ops/bin/rozkalns-dashboard-controller-bootstrap",
+    "future_installed_entrypoint": "/usr/local/sbin/rozkalns-dashboard-controller-bootstrap",
+    "future_installed_library_root": "/usr/local/lib/rozkalns-deploy-executor",
+    "normal_executor_registry_registered": false,
+    "execution_enabled": false,
+    "network_allowed": false,
+    "process_execution_allowed": false,
+    "fixed_production_root": "/opt/dashboard_RPi5",
+    "fixed_staging_root": "/var/lib/rozkalns-deploy-executor/bootstrap/dashboard-rpi5/5f7739348f56398d0ba301c9320e1de0062838fc",
+    "fixed_candidate_root": "/var/lib/rozkalns-deploy-executor/bootstrap/dashboard-rpi5/5f7739348f56398d0ba301c9320e1de0062838fc/source",
+    "fixed_manifest_path": "/var/lib/rozkalns-deploy-executor/bootstrap/dashboard-rpi5/5f7739348f56398d0ba301c9320e1de0062838fc/candidate-manifest.json",
+    "required_cli_values": [
+      "--expected-current <40-lower-hex>",
+      "--expected-candidate <64-lower-hex>",
+      "--apply",
+      "--ack I_AUTHORIZED_DASHBOARD_RPI5_HARDENED_CONTROLLER_BOOTSTRAP"
+    ],
+    "forbidden_cli_authority": [
+      "candidate-root",
+      "manifest-path",
+      "production-root",
+      "command",
+      "script",
+      "arbitrary argv"
+    ]
+  },
+  "mutation_budget": {
+    "apply_lock": 1,
+    "release_materialization": 1,
+    "current_pointer_swap": 1,
+    "release_deletions": 0,
+    "rollback_attempts": 0,
+    "p10_application_apply": 0,
+    "maximum_manifest_files": 512,
+    "maximum_manifest_total_bytes": 536870912
+  },
+  "failure_semantics": {
+    "pre_release_mutation_failure": "remove_transient_lock_only",
+    "post_release_mutation_failure": "preserve_lock_and_partial_evidence_then_stop",
+    "automatic_retry": false,
+    "automatic_cleanup_after_release_mutation": false,
+    "automatic_rollback": false
+  },
   "p10_transition": {
     "candidate_build_arm64": "PASS",
     "candidate_manifest_verify": "PASS",
@@ -58,6 +110,7 @@
     "production_mutation_started": false,
     "apply_executed": false,
     "preflight_retry_allowed": false,
-    "next_gate": "SOURCE_ONLY_HARDENED_CONTROLLER_BOOTSTRAP_IMPLEMENTATION"
+    "bootstrap_source_implementation": "IN_REVIEW_EXECUTION_DISABLED",
+    "next_gate": "MERGE_HARDENED_CONTROLLER_BOOTSTRAP_SOURCE_THEN_REVALIDATE"
   }
 }
