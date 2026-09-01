@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+from dataclasses import asdict
+import json
+import os
+from pathlib import Path
+import sys
+
+LIB = Path("/usr/local/lib/rozkalns-deploy-executor")
+if str(LIB) not in sys.path:
+    sys.path.insert(0, str(LIB))
+
+from deploy_executor.dashboard_bootstrap import BOOTSTRAP_ACK, DashboardBootstrapError, apply_bootstrap
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run the exact one-time Dashboard hardened-controller bootstrap")
+    parser.add_argument("--expected-current", required=True)
+    parser.add_argument("--expected-candidate", required=True)
+    parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--ack", required=True)
+    return parser.parse_args()
+
+
+def main() -> int:
+    if os.geteuid() != 0:
+        raise DashboardBootstrapError("Dashboard bootstrap helper must run as root")
+    args = parse_args()
+    if not args.apply:
+        raise DashboardBootstrapError("Dashboard bootstrap requires explicit --apply")
+    if args.ack != BOOTSTRAP_ACK:
+        raise DashboardBootstrapError("Dashboard bootstrap acknowledgement mismatch")
+    receipt = apply_bootstrap(
+        expected_current=args.expected_current,
+        expected_candidate_sha256=args.expected_candidate,
+        acknowledgement=args.ack,
+    )
+    print(json.dumps(asdict(receipt), sort_keys=True, separators=(",", ":")))
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except Exception as exc:
+        print(f"P10_BOOTSTRAP=STOP reason={type(exc).__name__}:{exc}", file=sys.stderr)
+        raise SystemExit(1)
