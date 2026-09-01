@@ -77,7 +77,7 @@ This source PR does **not** install any of these paths.
 
 ### Privileged trust anchor before import
 
-The helper itself is a separately reviewed trust anchor. Before a future LIVE invocation, the host preflight must verify the installed helper at the fixed path against the exact source-wrapper Git blob recorded in `ops/deploy/p10-dashboard-bootstrap.json`. Runtime then requires that fixed helper path to be a real `root:root 0755` file and checks the fixed `/usr` → `/usr/local` → `/usr/local/lib` parent chain is root-owned and not group/world writable.
+The helper itself is a separately reviewed trust anchor. Before a future LIVE invocation, the host preflight must verify the installed helper at the fixed path against the exact source-wrapper Git blob recorded in `ops/deploy/p10-dashboard-bootstrap.json`. Runtime then requires that fixed helper path to be a real `root:root 0755` file, checks `/usr`, `/usr/local`, `/usr/local/lib` and `/usr/local/sbin` are root-owned and not group/world writable, and requires `/usr/local/lib/rozkalns-deploy-executor` itself to be a real `root:root 0755` directory.
 
 Critically, **before any installed bootstrap Python module is imported**, the wrapper descriptor-safely opens the fixed package root and requires it to be `root:root 0755`. It then opens exactly these live modules with `O_NOFOLLOW`, requires `root:root 0644`, applies a bounded size check and verifies their exact reviewed Git blobs from the machine contract:
 

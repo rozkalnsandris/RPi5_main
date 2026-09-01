@@ -4,7 +4,6 @@ import importlib.util
 import json
 import os
 from pathlib import Path
-import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,6 +51,9 @@ def assert_trust_anchor_regression(implementation: dict) -> None:
     assert implementation["source_wrapper_runtime_mode"] == "0755"
     assert implementation["trusted_directory_mode"] == "0755"
     assert implementation["trusted_module_mode"] == "0644"
+    assert implementation["future_installed_library_root_mode"] == "0755"
+    assert 'Path("/usr/local/sbin")' in source
+    assert 'INSTALLED_LIBRARY_ROOT, "installed bootstrap library root"' in source
 
     expected = implementation["trusted_module_git_blobs"]
     assert expected == wrapper.TRUSTED_MODULE_GIT_BLOBS

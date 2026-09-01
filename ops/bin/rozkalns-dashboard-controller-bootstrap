@@ -85,7 +85,7 @@ def _git_blob(data: bytes) -> str:
 
 
 def _verify_fixed_parent_chain(*, expected_uid: int = 0, expected_gid: int = 0) -> None:
-    for path in (Path("/usr"), Path("/usr/local"), Path("/usr/local/lib")):
+    for path in (Path("/usr"), Path("/usr/local"), Path("/usr/local/lib"), Path("/usr/local/sbin")):
         fd = _open_abs_dir(path, str(path))
         try:
             st = os.fstat(fd)
@@ -93,6 +93,17 @@ def _verify_fixed_parent_chain(*, expected_uid: int = 0, expected_gid: int = 0) 
                 raise BootstrapEntrypointError(f"{path} parent trust metadata mismatch")
         finally:
             os.close(fd)
+    library = _open_abs_dir(INSTALLED_LIBRARY_ROOT, "installed bootstrap library root")
+    try:
+        _assert_metadata(
+            os.fstat(library),
+            uid=expected_uid,
+            gid=expected_gid,
+            expected_mode=TRUSTED_DIRECTORY_MODE,
+            label="installed bootstrap library root",
+        )
+    finally:
+        os.close(library)
 
 
 def _verify_self_metadata(*, expected_uid: int = 0, expected_gid: int = 0) -> None:
