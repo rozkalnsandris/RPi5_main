@@ -6,7 +6,7 @@
     "repository": "rozkalnsandris/ops-workflows",
     "issue": 28,
     "required_status": "WAITING",
-    "reason": "WAITING_HARDENED_CONTROLLER_BOOTSTRAP_INSTALLER_STAGER_SOURCE"
+    "reason": "WAITING_HARDENED_CONTROLLER_BOOTSTRAP_INSTALLER_STAGER_LIVE_GATE"
   },
   "dashboard": {
     "repository": "rozkalnsandris/dashboard_RPi5",
@@ -108,6 +108,7 @@
   "installer_stager": {
     "status": "SOURCE_MERGED_EXECUTION_DISABLED",
     "source_merge_pr": 320,
+    "post_merge_reconciliation_pr": 321,
     "source_operator": "scripts/install-deploy-executor-p10-bootstrap-installer-stager.py",
     "source_test": "tests/test-deploy-executor-p10-bootstrap-installer-stager.py",
     "expected_control_source": "exact merged RPi5_main commit supplied as the sole positional identity and revalidated before mutation",
@@ -176,6 +177,6 @@
     "production_mutation_started": false,
     "apply_executed": false,
     "preflight_retry_allowed": false,
-    "next_gate": "SEPARATE_LIVE_ROOT_INSTALLER_STAGER_AFTER_EXACT_MAIN_REVALIDATION"
+    "next_gate": "SEPARATE_LIVE_ROOT_INSTALLER_STAGER_AFTER_EXACT_MAIN_AND_TRUSTED_HOST_REVALIDATION"
   }
 }
