@@ -1,12 +1,13 @@
 # Owner-authorized pull deploy executor v1 — P10 hardened controller bootstrap
 
-Status: BOOTSTRAP SOURCE MERGED / INSTALLER-STAGER SOURCE MERGED / EXECUTION DISABLED
+Status: BOOTSTRAP SOURCE MERGED / INSTALLER-STAGER TRUST-NAMESPACE REPAIR SOURCE / EXECUTION DISABLED
 Roadmap: `RPi5_main#236`
 Queue: `ops-workflows#28`
 Dashboard candidate: `5f7739348f56398d0ba301c9320e1de0062838fc`
 Machine contract: `ops/deploy/p10-dashboard-bootstrap.json`
 Source operation: `dashboard-rpi5.hardened-controller-bootstrap.v1`
 Installer/stager source merge: `RPi5_main#320`
+Trust-namespace repair: `RPi5_main#323`
 
 ## Why this gate exists
 
@@ -105,11 +106,31 @@ The helper has no candidate-root, manifest-path, production-root, command, scrip
 Candidate and manifest locations are source constants bound to exact Dashboard `5f7739348f56398d0ba301c9320e1de0062838fc`:
 
 ```text
-/var/lib/rozkalns-deploy-executor/bootstrap/dashboard-rpi5/5f7739348f56398d0ba301c9320e1de0062838fc/source
-/var/lib/rozkalns-deploy-executor/bootstrap/dashboard-rpi5/5f7739348f56398d0ba301c9320e1de0062838fc/candidate-manifest.json
+/var/lib/rozkalns-dashboard-controller-bootstrap/5f7739348f56398d0ba301c9320e1de0062838fc/source
+/var/lib/rozkalns-dashboard-controller-bootstrap/5f7739348f56398d0ba301c9320e1de0062838fc/candidate-manifest.json
 ```
 
 The production root is fixed to `/opt/dashboard_RPi5`.
+
+### State vs trust namespace invariant
+
+`/var/lib/rozkalns-deploy-executor` is the private writable state namespace of the unprivileged executor service. Its source unit remains deliberately bound to:
+
+```text
+User=rozkalns-deploy-executor
+Group=rozkalns-deploy-executor
+StateDirectory=rozkalns-deploy-executor
+StateDirectoryMode=0700
+ReadWritePaths=/var/lib/rozkalns-deploy-executor
+```
+
+That service-owned StateDirectory is not a root trust anchor and **must never be an ancestor** of privileged bootstrap staging or other bootstrap trust material. The one-shot bootstrap staging namespace is therefore separately capability-specific and root-owned:
+
+```text
+/var/lib/rozkalns-dashboard-controller-bootstrap/<exact-dashboard-sha>
+```
+
+Do not repair a staging preflight failure by changing ownership or permissions of `/var/lib/rozkalns-deploy-executor`, widening `StateDirectoryMode`, adding the bootstrap namespace to the unprivileged service's writable paths, weakening root-owner checks, or introducing a generic path selector. Creation of the new root-owned namespace is itself a later LIVE/root mutation and is not authorized by source merge.
 
 ### Descriptor-safe candidate consumption
 
@@ -186,6 +207,8 @@ After success, the historical release is retained and the helper no longer quali
 
 `RPi5_main#320` merged the dedicated installer/stager source. It exists solely to establish the already-reviewed immutable bootstrap trust anchor and fixed staging tree before the bootstrap can ever be invoked.
 
+`RPi5_main#323` then identified a fail-closed trust-boundary defect before any installer/stager root mutation: the original staging target was nested beneath the unprivileged executor StateDirectory. The repaired source moves only privileged bootstrap staging to `/var/lib/rozkalns-dashboard-controller-bootstrap/<exact-dashboard-sha>` while leaving the executor StateDirectory contract unchanged.
+
 The installer/stager is bound to the exact preserved candidate identity and SHA-256, consumes the preserved `candidate` and `candidate.json` children through a descriptor-safe fixed interface, and accepts no caller-supplied privileged path authority. Its separately authorized mutation budget is exactly:
 
 - fixed staging-root materializations: 1;
@@ -199,6 +222,8 @@ The installer/stager is bound to the exact preserved candidate identity and SHA-
 - retry attempts: 0.
 
 A failure before the first installer/stager mutation stops without mutation. Any error or ambiguity after mutation begins preserves materialized evidence and STOPs with no automatic retry, cleanup, rollback or alternate mutation path.
+
+The pre-repair held installer/stager LIVE authorization is bound to the superseded exact source/provenance/staging target and is **not reusable**, even though its root apply never began. A future installer/stager transaction requires a new exact authorization after this repair is merged, exact-main CI/provenance is re-established and the trusted host is freshly revalidated.
 
 ## Source/live separation
 
@@ -216,12 +241,14 @@ Both the bootstrap source and installer/stager source remain **execution-disable
 - permissions/identity/credential changes;
 - cleanup of preserved evidence.
 
-After `RPi5_main#320` merge, exact-main CI and source/provenance revalidation, the next possible mutation is a **separate exact LIVE/root installer/stager authorization**. That transaction may install only the fixed reviewed bootstrap entrypoint/modules and materialize only the fixed bootstrap staging tree. It may not materialize a production release, change `current`, execute P10 PLAN/APPLY, or mutate package/service/systemd/Docker/network/credential state.
+The current source gate is `RPi5_main#323`: complete focused source review, exact-head CI and Ready, then STOP for the separate explicit MERGE gate tracked by `#332`. Merge does not authorize live execution.
+
+Only after an explicitly authorized #323 merge and fresh exact-main CI/provenance may `#324` perform the required read-only trusted-host revalidation. If that passes, the owner may issue a **new separate exact LIVE/root installer/stager authorization** bound to the repaired exact source, new operator/wrapper/module blobs, exact Dashboard candidate/digest and the fixed `/var/lib/rozkalns-dashboard-controller-bootstrap/<candidate-sha>` destination.
 
 Installer/stager completion must STOP. A fresh read-only proof must then establish the installed helper/module Git blobs, fixed staging identity and current production baseline. Only after that proof passes may the owner issue a **different separate exact LIVE/root bootstrap authorization**. Bootstrap success must STOP again for fresh post-bootstrap reconciliation and a new ordinary P10 PLAN gate; it must not continue directly into P10 APPLY.
 
 ## Queue state
 
-`ops-workflows#28` remains WAITING. The source blocker represented by PR #320 is merged, but WAITING is intentionally retained because source merge is not live readiness.
+`ops-workflows#28` remains WAITING. `ops-workflows#29` records that #28 is blocked by the #323 trust-namespace repair and that the pre-repair held installer/stager authorization must not be reused.
 
-The current next gate is the separately owner-authorized LIVE/root installer/stager transaction after fresh exact-main/source/provenance and trusted-host preflight. #28 must remain WAITING through installer/stager installation, read-only trust-anchor/staging/baseline proof, the separate hardened-controller bootstrap, post-bootstrap verification and a fresh ordinary P10 PLAN. Only that later reviewed application baseline may make #28 eligible for READY. READY itself never authorizes P10 APPLY.
+The current next gate is **source-only #323 repair -> exact-head CI/review -> Ready -> explicit MERGE**. After merge, exact-main/provenance and #324 trusted-host read-only revalidation precede any new LIVE/root installer/stager decision. #28 must remain WAITING through installer/stager installation, read-only trust-anchor/staging/baseline proof, the separate hardened-controller bootstrap, post-bootstrap verification and a fresh ordinary P10 PLAN. Only that later reviewed application baseline may make #28 eligible for READY. READY itself never authorizes P10 APPLY.
