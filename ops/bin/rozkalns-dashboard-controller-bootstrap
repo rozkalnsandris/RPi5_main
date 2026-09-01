@@ -20,7 +20,7 @@ TRUSTED_MODULE_MODE = 0o644
 TRUSTED_ENTRYPOINT_MODE = 0o755
 MAX_TRUSTED_MODULE_BYTES = 256 * 1024
 TRUSTED_MODULE_GIT_BLOBS = {
-    "dashboard_bootstrap_contract.py": "e55591e715fb1408f5d8027f3c00ab4f9ecbccb7",
+    "dashboard_bootstrap_contract.py": "f446dfa5152531507312edcfcf66e8de5a73306d",
     "dashboard_bootstrap_fs.py": "d258026312f9b9109c98b934e287d04a97fb8328",
     "dashboard_bootstrap.py": "b3e8d3995afb39820e64889a8f1b770fbcf70615",
 }
