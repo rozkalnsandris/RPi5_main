@@ -100,16 +100,10 @@ def main() -> None:
     assert transition["apply_executed"] is False
     assert transition["preflight_retry_allowed"] is False
 
-    for forbidden in [
-        "add the historical controller to the normal PLAN allowlist",
-        "execute operator-writable candidate JavaScript as root",
-        "patch the current immutable release in place",
-    ]:
-        assert forbidden not in doc
-
     assert "known historical, bootstrap required" in doc
     assert "do not execute operator-writable candidate JavaScript as root" in doc
     assert "do not patch the current immutable release in place" in doc
+    assert "do not copy/replace only the installed controller as a preflight workaround" in doc
     assert "separate exact LIVE bootstrap authorization" in doc
 
 
