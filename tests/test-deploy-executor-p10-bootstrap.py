@@ -148,7 +148,7 @@ def main() -> None:
     assert dependency["separate_live_root_authorization_required_after_source_merge"] is True
 
     assert bootstrap["schema_version"] == 3
-    assert bootstrap["status"] == "INSTALLER_STAGER_SOURCE_IN_REVIEW_EXECUTION_DISABLED"
+    assert bootstrap["status"] == "INSTALLER_STAGER_SOURCE_MERGED_EXECUTION_DISABLED"
     assert bootstrap["roadmap_issue"] == 236
     assert bootstrap["queue"]["issue"] == 28
     assert bootstrap["queue"]["required_status"] == "WAITING"
@@ -214,7 +214,8 @@ def main() -> None:
     assert_trust_anchor_regression(implementation)
 
     installer = bootstrap["installer_stager"]
-    assert installer["status"] == "SOURCE_IN_REVIEW_EXECUTION_DISABLED"
+    assert installer["status"] == "SOURCE_MERGED_EXECUTION_DISABLED"
+    assert installer["source_merge_pr"] == 320
     assert installer["source_operator"] == "scripts/install-deploy-executor-p10-bootstrap-installer-stager.py"
     assert installer["source_test"] == "tests/test-deploy-executor-p10-bootstrap-installer-stager.py"
     assert installer["preserved_evidence_parent_basename"] == "p10-preflight-5f773934-20260901T074158Z-294325"
@@ -262,8 +263,8 @@ def main() -> None:
     assert transition["apply_executed"] is False
     assert transition["preflight_retry_allowed"] is False
     assert transition["bootstrap_execution_source"] == "MERGED_EXECUTION_DISABLED"
-    assert transition["installer_stager_source"] == "IN_REVIEW_EXECUTION_DISABLED"
-    assert transition["next_gate"] == "MERGE_INSTALLER_STAGER_SOURCE_THEN_EXACT_MAIN_REVALIDATE"
+    assert transition["installer_stager_source"] == "MERGED_EXECUTION_DISABLED"
+    assert transition["next_gate"] == "SEPARATE_LIVE_ROOT_INSTALLER_STAGER_AFTER_EXACT_MAIN_REVALIDATION"
 
     assert "known historical, bootstrap required" in doc
     assert "do not execute operator-writable candidate JavaScript as root" in doc
