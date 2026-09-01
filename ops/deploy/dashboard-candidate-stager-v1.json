@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "capability": "dashboard-rpi5.production-candidate-stager.v1",
+  "operation_id": "dashboard-rpi5.production-release.v1",
+  "execution_enabled": false,
+  "source_repository": "rozkalnsandris/dashboard_RPi5",
+  "reviewed_source_sha": "066b9a24008dd57439f9e66eae198416c4dfc590",
+  "reviewed_parent_sha": "5f7739348f56398d0ba301c9320e1de0062838fc",
+  "manifest": {
+    "schema": "dashboard-rpi5.production-candidate.v1",
+    "hash_algorithm": "sha256",
+    "expected_digest_binding": "exact-lowercase-64-hex-from-separate-LIVE-envelope",
+    "max_manifest_bytes": 4194304,
+    "max_files": 512,
+    "max_total_bytes": 536870912
+  },
+  "preverified_input": {
+    "owner": "rozkalns-deploy-executor",
+    "group": "rozkalns-deploy-executor",
+    "root": "/var/lib/rozkalns-deploy-executor/dashboard-candidate-input/066b9a24008dd57439f9e66eae198416c4dfc590",
+    "source": "/var/lib/rozkalns-deploy-executor/dashboard-candidate-input/066b9a24008dd57439f9e66eae198416c4dfc590/source",
+    "manifest": "/var/lib/rozkalns-deploy-executor/dashboard-candidate-input/066b9a24008dd57439f9e66eae198416c4dfc590/candidate-manifest.json",
+    "directory_mode": "0555",
+    "file_mode": "0444",
+    "requirements": [
+      "exact tree equals manifest paths",
+      "all entries are regular files or real directories",
+      "symlinks and special files are forbidden",
+      "file sizes and sha256 digests match the exact manifest",
+      "candidate digest equals the separately authorized LIVE digest"
+    ]
+  },
+  "staging_output": {
+    "root": "/var/lib/rozkalns-dashboard-release-candidates/066b9a24008dd57439f9e66eae198416c4dfc590",
+    "source": "/var/lib/rozkalns-dashboard-release-candidates/066b9a24008dd57439f9e66eae198416c4dfc590/source",
+    "manifest": "/var/lib/rozkalns-dashboard-release-candidates/066b9a24008dd57439f9e66eae198416c4dfc590/candidate-manifest.json",
+    "owner_uid": 0,
+    "group_gid": 0,
+    "directory_mode": "0755",
+    "file_mode": "0644",
+    "publish": "single source-derived partial-directory rename"
+  },
+  "mutation_budget": [
+    {"category": "staging-namespace-root-create", "max_operations": 1},
+    {"category": "staging-candidate-partial-root-create", "max_operations": 1},
+    {"category": "staging-file-materialization", "max_operations": 512},
+    {"category": "staging-manifest-materialization", "max_operations": 1},
+    {"category": "staging-final-rename", "max_operations": 1}
+  ],
+  "explicit_exclusions": [
+    "production /opt/dashboard_RPi5 mutation",
+    "production releases materialization",
+    "current pointer mutation",
+    "apply-lock mutation",
+    "P10 PLAN",
+    "P10 APPLY",
+    "candidate JavaScript execution as root",
+    "generic shell/command/path/argv/environment authority",
+    "package/systemd/service/Docker/network/Cloudflare/credential/permission/database mutation",
+    "automatic retry",
+    "automatic cleanup",
+    "automatic rollback"
+  ],
+  "source_state": {
+    "registry_execution_enabled_must_remain": false,
+    "live_authority": false,
+    "merge_authorizes_staging": false
+  }
+}
