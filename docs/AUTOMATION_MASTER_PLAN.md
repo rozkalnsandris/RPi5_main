@@ -272,7 +272,7 @@ Historical source evidence from the 2026-08-29 P9 isolated-auth and continuity c
 - `ops-workflows/main=c9d6b3898a9eda98ce83c5ce77e2bfd49f3703d8` was the reviewed queue/policy anchor for this P9 chain;
 - `RPi5_main#271` merged the accepted isolated-auth repository source binding at `86b9c44ecb8c999fc559b30af0b024a47295e6d7`; exact-main Validate #654, FAST-LANE #109 and GITHUB-ONLY #98 were green at that checkpoint;
 - `RPi5_main#273` merged the source-only queue/LIVE-AUTH runtime composition at `c0e43799c51c32e653515ba7695c364d61fb0a35`; exact-main Validate #658, FAST-LANE #113 and GITHUB-ONLY #102 were green at that checkpoint;
-- `RPi5_main#275` merged the dormant-canary operation-consumption source gate at `887ae2a5cbe8e0c94a8de6fd5e11110fda443b75`; exact-main Validate #664, FAST-LANE #119 and GITHUB-ONLY #108 were green at that checkpoint.
+- `RPi5_main#275` merged the dormant-canary operation-consumption gate at `887ae2a5cbe8e0c94a8de6fd5e11110fda443b75`; exact-main Validate #664, FAST-LANE #119 and GITHUB-ONLY #108 were green at that checkpoint.
 
 Immediately before any consequential source, trust-boundary or live step, fresh-read current `RPi5_main/main`, all relevant cross-repository branch heads, exact-main CI, active PR/issues/reviews/comments and any required live evidence. No continuity merge SHA in this document is a durable `current main` assertion.
 
@@ -459,3 +459,30 @@ Finish PR #320 only through focused source review, exact-head CI and Ready. Then
 The next live step, only after that post-merge evidence passes, is a **separate exact LIVE/root installer/stager authorization** bound to the merged RPi5 control SHA, exact Dashboard candidate/digest, exact preserved evidence identity, exact helper/module Git blobs, fixed staging/install destinations and the no-retry/no-cleanup/no-rollback mutation envelope. It may install only the fixed bootstrap trust anchor and fixed staging tree; it must report zero production-release materializations, zero `current` swaps, zero P10 PLAN/APPLY and no package/service/systemd/Docker/network/credential mutation. After that transaction, STOP and perform only read-only proof of installed identities/staging plus a fresh production baseline.
 
 Only if that proof passes may a **different separate LIVE/root bootstrap authorization** be considered. Bootstrap success itself is another STOP. Only fresh post-bootstrap verification may make a new ordinary P10 PLAN authorization eligible. #28 remains WAITING until those gates are satisfied; no P10 APPLY, production deployment, cleanup, runner retirement or unrelated live mutation is authorized by PR #320, its eventual merge, or either source-only gate. Phase 6 Hermes Tech work remains deferred while this #191/#236 executor lane is current.
+
+## Current supersession — P10 post-#321 source state (2026-09-01)
+
+This section is the canonical current-state override for all earlier wording in this file that still describes `RPi5_main#319` or `#320` as an unmerged/current source gate. Those passages are retained only as historical sequencing context and MUST NOT be used as the next-action authority.
+
+Source state at this checkpoint:
+
+- `RPi5_main#320` merged the narrow P10 bootstrap installer/stager source capability;
+- `RPi5_main#321` merged the post-merge source/machine-contract reconciliation;
+- the post-#321 source checkpoint is `6bfcb577e937f171ae0c69fdddb6b6142b619997`;
+- exact-main Validate #772, FAST-LANE #228 and GITHUB-ONLY #216 completed successfully for that checkpoint;
+- installer/stager source remains execution-disabled and source merge is not LIVE/root authorization;
+- `ops-workflows#28` remains `WAITING`; its current blocker is the separate installer/stager LIVE gate, not missing installer/stager source.
+
+The current queue reason is `WAITING_HARDENED_CONTROLLER_BOOTSTRAP_INSTALLER_STAGER_LIVE_GATE`.
+
+Current gate sequence:
+
+1. before any host mutation, freshly revalidate current `RPi5_main/main`, exact-main CI/provenance, #191/#236/#28 and the trusted-host read-only baseline required by the installer/stager contract;
+2. only after those reads pass may the owner issue a **separate exact LIVE/root installer/stager authorization** bound to the exact merged control source, Dashboard candidate/digest, preserved evidence identity, helper/module Git blobs, fixed destinations and fixed mutation budget;
+3. that installer/stager transaction may install only the fixed bootstrap trust anchor and materialize only the fixed staging tree; production-release materialization, `current` swap, P10 PLAN/APPLY, package/service/systemd/Docker/network/credential mutation, retry, cleanup and rollback remain excluded;
+4. installer/stager completion MUST STOP; fresh read-only proof must establish installed helper/module identities, fixed staging identity and the current production baseline;
+5. only after that proof passes may a **different separate exact LIVE/root hardened-controller bootstrap authorization** be considered;
+6. bootstrap completion MUST STOP again for fresh post-bootstrap verification and a new ordinary P10 PLAN reconciliation;
+7. `ops-workflows#28` remains WAITING through these gates and may become READY only after a valid fresh reviewed P10 PLAN baseline exists. READY never authorizes P10 APPLY.
+
+No merge in the #320/#321 source chain authorizes host/runtime mutation, deployment, bootstrap execution or P10 application APPLY.
