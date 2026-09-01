@@ -21,6 +21,25 @@ module = importlib.util.module_from_spec(spec)
 sys.modules[loader.name] = module
 loader.exec_module(module)
 
+EXPECTED_PROVENANCE = {
+    "verification_phase": "unprivileged-preverification-before-LIVE",
+    "repository": "rozkalnsandris/dashboard_RPi5",
+    "source_sha": "066b9a24008dd57439f9e66eae198416c4dfc590",
+    "source_tree_sha": "62756ba22fc8d47e44988c086c08dcf37779cfb3",
+    "parent_sha": "5f7739348f56398d0ba301c9320e1de0062838fc",
+    "producer_path": "tools/production-candidate-manifest.mjs",
+    "producer_blob_sha": "bea0f30602d119ae53b81e70ce2d4c283d369ce8",
+    "handoff_owner": "rozkalns-deploy-executor",
+    "candidate_javascript_runs_as_root": False,
+    "root_stager_consumes_git_repository": False,
+}
+
+
+def assert_reviewed_provenance(value: object) -> None:
+    if type(value) is not dict or value != EXPECTED_PROVENANCE:
+        raise AssertionError("reviewed Dashboard provenance drift")
+
+
 
 def manifest_for(files: list[tuple[str, bytes]], *, source_sha: str | None = None) -> tuple[bytes, str]:
     source = source_sha or module.REVIEWED_SOURCE_SHA
@@ -69,6 +88,34 @@ class CandidateStagerContractTests(unittest.TestCase):
         self.assertFalse(contract["source_state"]["registry_execution_enabled_must_remain"])
         self.assertFalse(contract["source_state"]["live_authority"])
         self.assertFalse(contract["source_state"]["merge_authorizes_staging"])
+
+
+    def test_exact_reviewed_provenance_binding(self) -> None:
+        contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
+        assert_reviewed_provenance(contract["provenance"])
+        self.assertEqual(contract["provenance"]["source_sha"], module.REVIEWED_SOURCE_SHA)
+        self.assertFalse(contract["provenance"]["candidate_javascript_runs_as_root"])
+        self.assertFalse(contract["provenance"]["root_stager_consumes_git_repository"])
+
+    def test_provenance_drift_is_rejected(self) -> None:
+        drifts = {
+            "verification_phase": "root",
+            "repository": "other/repository",
+            "source_sha": "1" * 40,
+            "source_tree_sha": "2" * 40,
+            "parent_sha": "3" * 40,
+            "producer_path": "tools/other.mjs",
+            "producer_blob_sha": "4" * 40,
+            "handoff_owner": "root",
+            "candidate_javascript_runs_as_root": True,
+            "root_stager_consumes_git_repository": True,
+        }
+        for field, drift_value in drifts.items():
+            with self.subTest(field=field):
+                drifted = dict(EXPECTED_PROVENANCE)
+                drifted[field] = drift_value
+                with self.assertRaisesRegex(AssertionError, "provenance drift"):
+                    assert_reviewed_provenance(drifted)
 
     def test_fixed_identity_paths_and_budget(self) -> None:
         self.assertEqual(module.OPERATION_ID, "dashboard-rpi5.production-release.v1")

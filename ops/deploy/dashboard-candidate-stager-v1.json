@@ -6,6 +6,18 @@
   "source_repository": "rozkalnsandris/dashboard_RPi5",
   "reviewed_source_sha": "066b9a24008dd57439f9e66eae198416c4dfc590",
   "reviewed_parent_sha": "5f7739348f56398d0ba301c9320e1de0062838fc",
+  "provenance": {
+    "verification_phase": "unprivileged-preverification-before-LIVE",
+    "repository": "rozkalnsandris/dashboard_RPi5",
+    "source_sha": "066b9a24008dd57439f9e66eae198416c4dfc590",
+    "source_tree_sha": "62756ba22fc8d47e44988c086c08dcf37779cfb3",
+    "parent_sha": "5f7739348f56398d0ba301c9320e1de0062838fc",
+    "producer_path": "tools/production-candidate-manifest.mjs",
+    "producer_blob_sha": "bea0f30602d119ae53b81e70ce2d4c283d369ce8",
+    "handoff_owner": "rozkalns-deploy-executor",
+    "candidate_javascript_runs_as_root": false,
+    "root_stager_consumes_git_repository": false
+  },
   "manifest": {
     "schema": "dashboard-rpi5.production-candidate.v1",
     "hash_algorithm": "sha256",
@@ -41,11 +53,26 @@
     "publish": "single source-derived partial-directory rename"
   },
   "mutation_budget": [
-    {"category": "staging-namespace-root-create", "max_operations": 1},
-    {"category": "staging-candidate-partial-root-create", "max_operations": 1},
-    {"category": "staging-file-materialization", "max_operations": 512},
-    {"category": "staging-manifest-materialization", "max_operations": 1},
-    {"category": "staging-final-rename", "max_operations": 1}
+    {
+      "category": "staging-namespace-root-create",
+      "max_operations": 1
+    },
+    {
+      "category": "staging-candidate-partial-root-create",
+      "max_operations": 1
+    },
+    {
+      "category": "staging-file-materialization",
+      "max_operations": 512
+    },
+    {
+      "category": "staging-manifest-materialization",
+      "max_operations": 1
+    },
+    {
+      "category": "staging-final-rename",
+      "max_operations": 1
+    }
   ],
   "explicit_exclusions": [
     "production /opt/dashboard_RPi5 mutation",
