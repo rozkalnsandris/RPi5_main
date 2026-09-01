@@ -147,13 +147,14 @@ def main() -> None:
     assert dependency["separate_source_implementation_required"] is True
     assert dependency["separate_live_root_authorization_required_after_source_merge"] is True
 
-    assert bootstrap["schema_version"] == 2
-    assert bootstrap["status"] == "SOURCE_IMPLEMENTED_EXECUTION_DISABLED"
+    assert bootstrap["schema_version"] == 3
+    assert bootstrap["status"] == "INSTALLER_STAGER_SOURCE_IN_REVIEW_EXECUTION_DISABLED"
     assert bootstrap["roadmap_issue"] == 236
     assert bootstrap["queue"]["issue"] == 28
     assert bootstrap["queue"]["required_status"] == "WAITING"
-    assert bootstrap["queue"]["reason"] == "WAITING_HARDENED_CONTROLLER_BOOTSTRAP_SOURCE_MERGE"
+    assert bootstrap["queue"]["reason"] == "WAITING_HARDENED_CONTROLLER_BOOTSTRAP_INSTALLER_STAGER_SOURCE"
     assert bootstrap["dashboard"]["candidate_sha"] == CANDIDATE_SHA
+    assert bootstrap["dashboard"]["candidate_sha256"] == "c5a2adef8f7242833094a1c0cb8a8074392312567deeddd1228dc46c16cff5c0"
     assert bootstrap["dashboard"]["historical_manifest_schema_source"] == HISTORICAL_COMMIT
     assert bootstrap["dashboard"]["historical_manifest_schema"] == "dashboard-rpi5.production-candidate.v1"
 
@@ -175,6 +176,11 @@ def main() -> None:
     assert invariants["bootstrap_requires_fail_closed_no_retry_after_mutation"] is True
     assert invariants["bootstrap_source_merge_authorizes_live_installation"] is False
     assert invariants["bootstrap_preflight_authorization_authorizes_live_installation"] is False
+    assert invariants["installer_stager_source_merge_authorizes_live_installation"] is False
+    assert invariants["installer_stager_may_materialize_production_release"] is False
+    assert invariants["installer_stager_may_swap_current_pointer"] is False
+    assert invariants["installer_stager_may_execute_p10_plan"] is False
+    assert invariants["installer_stager_may_execute_p10_apply"] is False
     assert invariants["normal_executor_registry_remains_globally_execution_disabled"] is True
     assert invariants["bootstrap_is_not_a_persistent_alternate_deploy_channel"] is True
 
@@ -207,6 +213,30 @@ def main() -> None:
     assert implementation["fixed_manifest_path"].endswith(f"/{CANDIDATE_SHA}/candidate-manifest.json")
     assert_trust_anchor_regression(implementation)
 
+    installer = bootstrap["installer_stager"]
+    assert installer["status"] == "SOURCE_IN_REVIEW_EXECUTION_DISABLED"
+    assert installer["source_operator"] == "scripts/install-deploy-executor-p10-bootstrap-installer-stager.py"
+    assert installer["source_test"] == "tests/test-deploy-executor-p10-bootstrap-installer-stager.py"
+    assert installer["preserved_evidence_parent_basename"] == "p10-preflight-5f773934-20260901T074158Z-294325"
+    assert installer["caller_supplied_path_arguments"] is False
+    assert installer["descriptor_safe_preserved_evidence_consumption"] is True
+    assert installer["fixed_staging_root"].endswith(CANDIDATE_SHA)
+    assert installer["mutation_budget"] == {
+        "fixed_staging_root_materializations": 1,
+        "trusted_entrypoint_installations": 1,
+        "trusted_module_installations": 3,
+        "production_release_materializations": 0,
+        "current_pointer_swaps": 0,
+        "p10_plan_executions": 0,
+        "p10_apply_executions": 0,
+        "rollback_attempts": 0,
+        "retry_attempts": 0,
+    }
+    assert installer["failure_semantics"]["automatic_retry"] is False
+    assert installer["failure_semantics"]["automatic_cleanup"] is False
+    assert installer["failure_semantics"]["automatic_rollback"] is False
+    assert installer["separate_live_root_authorization_required_after_source_merge"] is True
+
     budget = bootstrap["mutation_budget"]
     assert budget["apply_lock"] == 1
     assert budget["release_materialization"] == 1
@@ -231,7 +261,9 @@ def main() -> None:
     assert transition["production_mutation_started"] is False
     assert transition["apply_executed"] is False
     assert transition["preflight_retry_allowed"] is False
-    assert transition["bootstrap_source_implementation"] == "IN_REVIEW_EXECUTION_DISABLED"
+    assert transition["bootstrap_execution_source"] == "MERGED_EXECUTION_DISABLED"
+    assert transition["installer_stager_source"] == "IN_REVIEW_EXECUTION_DISABLED"
+    assert transition["next_gate"] == "MERGE_INSTALLER_STAGER_SOURCE_THEN_EXACT_MAIN_REVALIDATE"
 
     assert "known historical, bootstrap required" in doc
     assert "do not execute operator-writable candidate JavaScript as root" in doc
