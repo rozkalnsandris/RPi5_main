@@ -93,7 +93,8 @@ class SourceContractTests(unittest.TestCase):
         self.assertEqual(module.EXPECTED_CANDIDATE_SHA256, "d12a49de01891e3a4cc188fa16c173c5eb44c786f013d3a6ebfefe95dcaa47b9")
         self.assertEqual(module.EXPECTED_FILE_COUNT, 72)
         self.assertEqual(module.EXPECTED_TOTAL_BYTES, 6773246)
-        self.assertEqual(str(module.INGRESS_ROOT), f"/home/andris/.cache/rozkalns-dashboard-preverified-ingress/{module.REVIEWED_SOURCE_SHA}")
+        expected_ingress = Path("/home") / module.INGRESS_OWNER / ".cache" / "rozkalns-dashboard-preverified-ingress" / module.REVIEWED_SOURCE_SHA
+        self.assertEqual(module.INGRESS_ROOT, expected_ingress)
         self.assertEqual(str(module.HANDOFF_ROOT), f"/var/lib/rozkalns-deploy-executor/dashboard-candidate-input/{module.REVIEWED_SOURCE_SHA}")
         self.assertEqual(module.INGRESS_DIRECTORY_MODE, 0o555)
         self.assertEqual(module.INGRESS_FILE_MODE, 0o444)
@@ -112,6 +113,7 @@ class SourceContractTests(unittest.TestCase):
             "subprocess", "os.system(", "shell=True", "Popen(", "execv(", "/usr/bin/node", "npm ", "pnpm ", "git ", "curl ", "wget ",
         ):
             self.assertNotIn(forbidden, source)
+        self.assertNotIn("/home/" + module.INGRESS_OWNER + "/", source)
 
     def test_production_and_normal_stager_targets_are_outside_mutation_scope(self) -> None:
         source = SCRIPT.read_text(encoding="utf-8")
@@ -294,9 +296,11 @@ class MachineAndHumanContractTests(unittest.TestCase):
         self.assertEqual(contract["preverification_binding"]["candidate_sha256"], module.EXPECTED_CANDIDATE_SHA256)
         self.assertEqual(contract["preverification_binding"]["file_count"], 72)
         self.assertEqual(contract["preverification_binding"]["total_bytes"], 6773246)
-        self.assertEqual(contract["unprivileged_ingress"]["root"], str(module.INGRESS_ROOT))
-        self.assertFalse(contract["unprivileged_ingress"]["caller_selectable"])
-        self.assertFalse(contract["unprivileged_ingress"]["timestamp_pid_prep_root_allowed_as_privileged_input"])
+        ingress_contract = contract["unprivileged_ingress"]
+        self.assertEqual(ingress_contract["root_template"].format(owner=ingress_contract["owner"]), str(module.INGRESS_ROOT))
+        self.assertTrue(ingress_contract["owner_component_is_fixed"])
+        self.assertFalse(ingress_contract["caller_selectable"])
+        self.assertFalse(ingress_contract["timestamp_pid_prep_root_allowed_as_privileged_input"])
         self.assertEqual(contract["service_owned_handoff"]["root"], str(module.HANDOFF_ROOT))
         self.assertEqual(contract["service_owned_handoff"]["directory_mode"], "0555")
         self.assertEqual(contract["service_owned_handoff"]["file_mode"], "0444")
