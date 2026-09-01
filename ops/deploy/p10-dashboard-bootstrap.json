@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "status": "SOURCE_ONLY_BOOTSTRAP_RECONCILIATION",
+  "roadmap_issue": 236,
+  "queue": {
+    "repository": "rozkalnsandris/ops-workflows",
+    "issue": 28,
+    "required_status": "WAITING",
+    "reason": "WAITING_HARDENED_CONTROLLER_BOOTSTRAP_IMPLEMENTATION"
+  },
+  "dashboard": {
+    "repository": "rozkalnsandris/dashboard_RPi5",
+    "candidate_sha": "5f7739348f56398d0ba301c9320e1de0062838fc",
+    "canonical_bootstrap_contract": "docs/PHASE11D_RELEASE_ACTIVATION.md#first-descriptor-safe-controller-bootstrap"
+  },
+  "observed_historical_controller": {
+    "git_blob": "c501bea57c0d5c35e7961ae1f1e5593a02268661",
+    "source_commit": "400296591ec14c062e4c3c9fdbc95c38109ba0fd",
+    "classification": "known-historical-pre-descriptor-safe",
+    "normal_privileged_plan_allowed": false,
+    "normal_privileged_apply_allowed": false
+  },
+  "hardened_controller_identities": [
+    "7fcc58cbea2f1247d6e4d93bc3805923697fbfab",
+    "c0566adb76e044632a4556dbefeb0f46839b4996"
+  ],
+  "invariants": {
+    "candidate_checkout_is_data_only": true,
+    "candidate_checkout_javascript_may_execute_as_root": false,
+    "historical_controller_may_be_added_to_normal_plan_allowlist": false,
+    "current_release_may_be_patched_in_place": false,
+    "installed_controller_may_be_replaced_as_preflight_workaround": false,
+    "bootstrap_requires_root_owned_immutable_trust_anchor": true,
+    "bootstrap_requires_exact_reviewed_provenance": true,
+    "bootstrap_requires_fail_closed_no_retry_after_mutation": true,
+    "bootstrap_source_merge_authorizes_live_installation": false,
+    "bootstrap_preflight_authorization_authorizes_live_installation": false
+  },
+  "required_source_implementation": {
+    "owner": "RPi5_main-control-plane",
+    "kind": "dedicated-one-time-bootstrap-adapter",
+    "generic_shell_authority_forbidden": true,
+    "arbitrary_path_or_argv_authority_forbidden": true,
+    "must_bind_exact_dashboard_candidate_sha": true,
+    "must_bind_exact_historical_controller_blob": true,
+    "must_use_descriptor_safe_or_equivalent_immutable_candidate_consumption": true,
+    "must_verify_root_owned_trust_anchor_before_first_privileged_execution": true,
+    "must_define_exact_mutation_budget_and_exclusions": true,
+    "must_define_post_mutation_evidence_preservation": true,
+    "must_be_execution_disabled_until_separate_live_authorization": true
+  },
+  "p10_transition": {
+    "candidate_build_arm64": "PASS",
+    "candidate_manifest_verify": "PASS",
+    "runtime_smoke": "PASS",
+    "controller_classification": "BOOTSTRAP_REQUIRED",
+    "privileged_plan_attempted": false,
+    "production_mutation_started": false,
+    "apply_executed": false,
+    "preflight_retry_allowed": false,
+    "next_gate": "SOURCE_ONLY_HARDENED_CONTROLLER_BOOTSTRAP_IMPLEMENTATION"
+  }
+}
