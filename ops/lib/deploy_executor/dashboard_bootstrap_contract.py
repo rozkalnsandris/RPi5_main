@@ -15,7 +15,7 @@ HARDENED_CONTROLLER_BLOB = "c0566adb76e044632a4556dbefeb0f46839b4996"
 BOOTSTRAP_ACK = "I_AUTHORIZED_DASHBOARD_RPI5_HARDENED_CONTROLLER_BOOTSTRAP"
 
 PRODUCTION_ROOT = Path("/opt/dashboard_RPi5")
-STAGING_ROOT = Path(f"/var/lib/rozkalns-deploy-executor/bootstrap/dashboard-rpi5/{SOURCE_SHA}")
+STAGING_ROOT = Path(f"/var/lib/rozkalns-dashboard-controller-bootstrap/{SOURCE_SHA}")
 CANDIDATE_ROOT = STAGING_ROOT / "source"
 MANIFEST_PATH = STAGING_ROOT / "candidate-manifest.json"
 INSTALLED_ENTRYPOINT = Path("/usr/local/sbin/rozkalns-dashboard-controller-bootstrap")
