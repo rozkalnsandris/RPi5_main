@@ -34,17 +34,25 @@ POLLER_UNIT = ROOT / "ops" / "systemd" / "rozkalns-deploy-executor.service"
 
 
 class P5InterfaceSecurityTests(unittest.TestCase):
-    def test_production_registry_remains_disabled_with_reviewed_strict_canary(self):
+    def test_production_registry_remains_disabled_with_reviewed_operations(self):
         registry = load_registry(PRODUCTION_REGISTRY)
         self.assertFalse(registry.execution_enabled)
-        self.assertEqual(len(registry.operations), 1)
-        operation = registry.operations[0]
+        operations = {item.operation_id: item for item in registry.operations}
         self.assertEqual(
-            operation.operation_id,
-            "rozkalns-control-center.merge-postcanary-reconcile.v1",
+            set(operations),
+            {
+                "rozkalns-control-center.merge-postcanary-reconcile.v1",
+                "dashboard-rpi5.production-release.v1",
+            },
         )
-        self.assertEqual(operation.authorization_class, "STRICT")
-        self.assertFalse(operation.ordinary_live_all_eligible)
+        strict = operations["rozkalns-control-center.merge-postcanary-reconcile.v1"]
+        self.assertEqual(strict.authorization_class, "STRICT")
+        self.assertFalse(strict.ordinary_live_all_eligible)
+        dashboard = operations["dashboard-rpi5.production-release.v1"]
+        self.assertEqual(dashboard.authorization_class, "ORDINARY")
+        self.assertTrue(dashboard.ordinary_live_all_eligible)
+        self.assertEqual(dashboard.baseline.kind, "queue_exact")
+        self.assertFalse(registry.execution_enabled)
 
     def test_audit_registry_has_one_dormant_cv_operation(self):
         registry = load_registry(AUDIT_REGISTRY)
