@@ -44,7 +44,10 @@
     "installer_stager_may_execute_p10_plan": false,
     "installer_stager_may_execute_p10_apply": false,
     "normal_executor_registry_remains_globally_execution_disabled": true,
-    "bootstrap_is_not_a_persistent_alternate_deploy_channel": true
+    "bootstrap_is_not_a_persistent_alternate_deploy_channel": true,
+    "deploy_executor_state_directory_is_privileged_bootstrap_staging_ancestor": false,
+    "deploy_executor_state_directory_contract_must_remain_unchanged": true,
+    "bootstrap_staging_namespace_must_be_root_owned_and_capability_specific": true
   },
   "required_source_implementation": {
     "owner": "RPi5_main-control-plane",
@@ -66,7 +69,7 @@
     "descriptor_safe_filesystem": "ops/lib/deploy_executor/dashboard_bootstrap_fs.py",
     "bootstrap_orchestrator": "ops/lib/deploy_executor/dashboard_bootstrap.py",
     "source_wrapper": "ops/bin/rozkalns-dashboard-controller-bootstrap",
-    "source_wrapper_git_blob": "c873247ec82f22a9193c4bbf1ceb93c494b5a530",
+    "source_wrapper_git_blob": "be46238c6bb7ed2aafef115db93830dc86a2ec44",
     "source_wrapper_identity_verification": "separate-live-preflight-before-root-invocation",
     "source_wrapper_runtime_mode": "0755",
     "future_installed_entrypoint": "/usr/local/sbin/rozkalns-dashboard-controller-bootstrap",
@@ -75,7 +78,7 @@
     "trusted_directory_mode": "0755",
     "trusted_module_mode": "0644",
     "trusted_module_git_blobs": {
-      "dashboard_bootstrap_contract.py": "e55591e715fb1408f5d8027f3c00ab4f9ecbccb7",
+      "dashboard_bootstrap_contract.py": "f446dfa5152531507312edcfcf66e8de5a73306d",
       "dashboard_bootstrap_fs.py": "d258026312f9b9109c98b934e287d04a97fb8328",
       "dashboard_bootstrap.py": "b3e8d3995afb39820e64889a8f1b770fbcf70615"
     },
@@ -86,9 +89,9 @@
     "network_allowed": false,
     "process_execution_allowed": false,
     "fixed_production_root": "/opt/dashboard_RPi5",
-    "fixed_staging_root": "/var/lib/rozkalns-deploy-executor/bootstrap/dashboard-rpi5/5f7739348f56398d0ba301c9320e1de0062838fc",
-    "fixed_candidate_root": "/var/lib/rozkalns-deploy-executor/bootstrap/dashboard-rpi5/5f7739348f56398d0ba301c9320e1de0062838fc/source",
-    "fixed_manifest_path": "/var/lib/rozkalns-deploy-executor/bootstrap/dashboard-rpi5/5f7739348f56398d0ba301c9320e1de0062838fc/candidate-manifest.json",
+    "fixed_staging_root": "/var/lib/rozkalns-dashboard-controller-bootstrap/5f7739348f56398d0ba301c9320e1de0062838fc",
+    "fixed_candidate_root": "/var/lib/rozkalns-dashboard-controller-bootstrap/5f7739348f56398d0ba301c9320e1de0062838fc/source",
+    "fixed_manifest_path": "/var/lib/rozkalns-dashboard-controller-bootstrap/5f7739348f56398d0ba301c9320e1de0062838fc/candidate-manifest.json",
     "required_cli_values": [
       "--expected-current <40-lower-hex>",
       "--expected-candidate <64-lower-hex>",
@@ -109,7 +112,9 @@
     "status": "SOURCE_MERGED_EXECUTION_DISABLED",
     "source_merge_pr": 320,
     "post_merge_reconciliation_pr": 321,
+    "trust_namespace_repair_issue": 323,
     "source_operator": "scripts/install-deploy-executor-p10-bootstrap-installer-stager.py",
+    "source_operator_git_blob": "3f807561530b21bcf695167a28c87e6b366933ea",
     "source_test": "tests/test-deploy-executor-p10-bootstrap-installer-stager.py",
     "expected_control_source": "exact merged RPi5_main commit supplied as the sole positional identity and revalidated before mutation",
     "preserved_evidence_parent_basename": "p10-preflight-5f773934-20260901T074158Z-294325",
@@ -120,12 +125,15 @@
     "preserved_parent_is_caller_cwd_only": true,
     "caller_supplied_path_arguments": false,
     "descriptor_safe_preserved_evidence_consumption": true,
-    "fixed_staging_root": "/var/lib/rozkalns-deploy-executor/bootstrap/dashboard-rpi5/5f7739348f56398d0ba301c9320e1de0062838fc",
+    "fixed_staging_parent": "/var/lib/rozkalns-dashboard-controller-bootstrap",
+    "fixed_staging_root": "/var/lib/rozkalns-dashboard-controller-bootstrap/5f7739348f56398d0ba301c9320e1de0062838fc",
+    "deploy_executor_state_directory": "/var/lib/rozkalns-deploy-executor",
+    "deploy_executor_state_directory_may_be_staging_ancestor": false,
     "fixed_installed_entrypoint": "/usr/local/sbin/rozkalns-dashboard-controller-bootstrap",
     "fixed_installed_package_root": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor",
-    "trusted_entrypoint_git_blob": "c873247ec82f22a9193c4bbf1ceb93c494b5a530",
+    "trusted_entrypoint_git_blob": "be46238c6bb7ed2aafef115db93830dc86a2ec44",
     "trusted_module_git_blobs": {
-      "dashboard_bootstrap_contract.py": "e55591e715fb1408f5d8027f3c00ab4f9ecbccb7",
+      "dashboard_bootstrap_contract.py": "f446dfa5152531507312edcfcf66e8de5a73306d",
       "dashboard_bootstrap_fs.py": "d258026312f9b9109c98b934e287d04a97fb8328",
       "dashboard_bootstrap.py": "b3e8d3995afb39820e64889a8f1b770fbcf70615"
     },
@@ -147,7 +155,8 @@
       "automatic_cleanup": false,
       "automatic_rollback": false
     },
-    "separate_live_root_authorization_required_after_source_merge": true
+    "separate_live_root_authorization_required_after_source_merge": true,
+    "prior_pre_repair_live_authorization_reusable": false
   },
   "mutation_budget": {
     "apply_lock": 1,
@@ -172,11 +181,11 @@
     "runtime_smoke": "PASS",
     "controller_classification": "BOOTSTRAP_REQUIRED",
     "bootstrap_execution_source": "MERGED_EXECUTION_DISABLED",
-    "installer_stager_source": "MERGED_EXECUTION_DISABLED",
+    "installer_stager_source": "MERGED_EXECUTION_DISABLED_TRUST_NAMESPACE_REPAIR_REQUIRED",
     "privileged_plan_attempted": false,
     "production_mutation_started": false,
     "apply_executed": false,
     "preflight_retry_allowed": false,
-    "next_gate": "SEPARATE_LIVE_ROOT_INSTALLER_STAGER_AFTER_EXACT_MAIN_AND_TRUSTED_HOST_REVALIDATION"
+    "next_gate": "MERGE_TRUST_NAMESPACE_REPAIR_THEN_EXACT_MAIN_AND_TRUSTED_HOST_REVALIDATION_BEFORE_NEW_LIVE_ROOT_INSTALLER_STAGER"
   }
 }
