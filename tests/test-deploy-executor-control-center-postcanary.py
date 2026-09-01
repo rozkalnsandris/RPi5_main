@@ -100,12 +100,18 @@ class ControlCenterPostCanaryTests(unittest.TestCase):
     def test_production_registry_matches_reviewed_control_fixture_and_is_dormant(self):
         raw = json.loads(PRODUCTION_REGISTRY.read_text(encoding="utf-8"))
         reviewed = json.loads(CANARY_REGISTRY.read_text(encoding="utf-8"))
-        self.assertEqual(raw, reviewed)
+        self.assertEqual(raw["schema_version"], reviewed["schema_version"])
+        self.assertEqual(raw["execution_enabled"], reviewed["execution_enabled"])
+        control_raw = next(
+            item for item in raw["operations"] if item["operation_id"] == OPERATION_ID
+        )
+        self.assertEqual(control_raw, reviewed["operations"][0])
+
         registry = load_registry(PRODUCTION_REGISTRY)
         self.assertFalse(registry.execution_enabled)
-        self.assertEqual(len(registry.operations), 1)
-        operation = registry.operations[0]
-        self.assertEqual(operation.operation_id, OPERATION_ID)
+        operations = {item.operation_id: item for item in registry.operations}
+        self.assertIn(OPERATION_ID, operations)
+        operation = operations[OPERATION_ID]
         self.assertEqual(operation.adapter_id, ADAPTER_ID)
         self.assertEqual(operation.authorization_class, "STRICT")
         self.assertFalse(operation.ordinary_live_all_eligible)

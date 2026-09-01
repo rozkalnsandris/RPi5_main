@@ -10,6 +10,7 @@ IDENTIFIER_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$")
 ROLLBACK_POLICIES = frozenset({"NONE", "BUILTIN_TRANSACTIONAL_V1"})
 AUTHORIZATION_CLASSES = frozenset({"ORDINARY", "STRICT"})
+BASELINE_KINDS = frozenset({"resolver", "queue_exact"})
 
 ROOT_KEYS = frozenset({"schema_version", "execution_enabled", "operations"})
 OPERATION_KEYS = frozenset({
@@ -169,10 +170,11 @@ def _parse_operation(value: Any, index: int) -> OperationSpec:
     if type(baseline) is not dict:
         _fail("REGISTRY_SCHEMA", f"{where}.baseline must be an object")
     _exact_keys(baseline, BASELINE_KEYS, f"{where}.baseline")
-    if baseline["kind"] != "resolver":
-        _fail("REGISTRY_POLICY", "P4 baseline contracts must use a declared read-only resolver")
+    baseline_kind = _string(baseline["kind"], f"{where}.baseline.kind", max_len=32, pattern=IDENTIFIER_RE)
+    if baseline_kind not in BASELINE_KINDS:
+        _fail("REGISTRY_POLICY", f"unsupported baseline kind {baseline_kind!r}")
     baseline_contract = BaselineContract(
-        kind="resolver",
+        kind=baseline_kind,
         resolver_id=_string(baseline["resolver_id"], f"{where}.baseline.resolver_id", pattern=IDENTIFIER_RE),
     )
 
@@ -231,7 +233,7 @@ def load_registry(path: str | Path) -> OperationRegistry:
     if raw["schema_version"] != 1:
         _fail("REGISTRY_SCHEMA", "schema_version must be 1")
     if raw["execution_enabled"] is not False:
-        _fail("P4_EXECUTION_FORBIDDEN", "P4 registry must keep execution_enabled=false")
+        _fail("P4_EXECUTION_FORBIDDEN", "registry must keep execution_enabled=false until a separate live enablement gate")
     if type(raw["operations"]) is not list:
         _fail("REGISTRY_SCHEMA", "operations must be a list")
     operations = tuple(_parse_operation(item, index) for index, item in enumerate(raw["operations"]))

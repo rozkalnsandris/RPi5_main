@@ -69,6 +69,77 @@
         "consumed Merge canary target evidence remains bounded to ops-workflows",
         "LIVE-AUTH and READY queue remain separate authority and eligibility records"
       ]
+    },
+    {
+      "operation_id": "dashboard-rpi5.production-release.v1",
+      "source_repository": "rozkalnsandris/dashboard_RPi5",
+      "queue_match": {
+        "target_alias": "dashboard-rpi5-production-release",
+        "execution_location_class": "trusted-home-host",
+        "repository_entrypoint": "tools/production-release-controller.mjs",
+        "deploy_class": "AUTO_DEPLOY_SAFE"
+      },
+      "target_alias": "dashboard-rpi5-production-release",
+      "adapter_id": "dashboard-rpi5.production-release.v1",
+      "authorization_class": "ORDINARY",
+      "ordinary_live_all_eligible": true,
+      "baseline": {
+        "kind": "queue_exact",
+        "resolver_id": "dashboard-release-plan.v1"
+      },
+      "mutation_budget": [
+        {
+          "category": "filesystem.apply-lock-lifecycle",
+          "max_operations": 1
+        },
+        {
+          "category": "filesystem.release-materialization",
+          "max_operations": 1
+        },
+        {
+          "category": "filesystem.current-pointer-swap",
+          "max_operations": 1
+        }
+      ],
+      "rollback_policy": "NONE",
+      "exclusions": [
+        "database writes",
+        "credential or permission changes",
+        "package/systemd/service/Docker/network/Cloudflare mutation",
+        "release deletion",
+        "automatic retry/cleanup/rollback",
+        "candidate-checkout JavaScript executed as root",
+        "arbitrary command/path/argv/environment authority"
+      ],
+      "dependencies": [
+        "trusted-controller-current-release.v1",
+        "descriptor-safe-candidate-staging.v1",
+        "separate-plan-pass.v1",
+        "genuine-source-delta-required.v1"
+      ],
+      "preflight": [
+        "READY and LIVE-AUTH bind the same exact Dashboard source SHA and target alias",
+        "exact source SHA is merged/reviewed and exact-SHA CI is successful",
+        "queue exact baseline matches a separately accepted trusted-controller PLAN",
+        "expected current differs from source SHA so the first-live mutation canary is not already-current/no-op",
+        "trusted current controller and candidate staging identities are independently revalidated before mutation",
+        "operation remains source-registered but globally execution-disabled until separate host/live enablement"
+      ],
+      "postconditions": [
+        "current release equals the exact authorized Dashboard source SHA",
+        "installed candidate digest equals the exact PLAN candidate SHA-256",
+        "previous release is retained",
+        "apply lock is absent on success and preserved on post-mutation failure",
+        "release deletions are zero",
+        "automatic retry cleanup and rollback are absent"
+      ],
+      "required_github_evidence": [
+        "exact Dashboard source repository and SHA",
+        "exact-SHA CI completed successfully",
+        "accepted trusted-controller PLAN with observed current and candidate SHA-256",
+        "READY queue contract hash",
+        "separate owner LIVE-AUTH for the exact normalized envelope"
+      ]
     }
   ]
 }
