@@ -270,7 +270,7 @@ def main() -> None:
     assert "do not execute operator-writable candidate JavaScript as root" in doc
     assert "do not patch the current immutable release in place" in doc
     assert "do not copy/replace only the installed controller as a preflight workaround" in doc
-    assert "separate exact LIVE bootstrap authorization" in doc
+    assert "separate exact LIVE/root bootstrap authorization" in doc
     assert "dashboard-rpi5.hardened-controller-bootstrap.v1" in doc
     assert "execution-disabled" in doc
     assert "before any installed bootstrap Python module is imported" in doc
