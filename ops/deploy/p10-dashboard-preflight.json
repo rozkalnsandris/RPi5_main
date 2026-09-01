@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "status": "SOURCE_ONLY_PREFLIGHT_CONTRACT",
   "roadmap_issue": 236,
   "queue": {
@@ -55,7 +55,7 @@
     "installed_controller_replacement_forbidden": true,
     "identity_algorithm": "git-blob-sha1",
     "identity_command": "git hash-object --no-filters /opt/dashboard_RPi5/current/tools/production-release-controller.mjs",
-    "accepted_identities": [
+    "accepted_plan_identities": [
       {
         "git_blob": "c0566adb76e044632a4556dbefeb0f46839b4996",
         "classification": "new-symlink-safe",
@@ -63,10 +63,21 @@
       },
       {
         "git_blob": "7fcc58cbea2f1247d6e4d93bc3805923697fbfab",
-        "classification": "reviewed-legacy",
+        "classification": "reviewed-legacy-hardened",
         "node_extra_args": [
           "--preserve-symlinks-main"
         ]
+      }
+    ],
+    "bootstrap_required_identities": [
+      {
+        "git_blob": "c501bea57c0d5c35e7961ae1f1e5593a02268661",
+        "source_commit": "400296591ec14c062e4c3c9fdbc95c38109ba0fd",
+        "classification": "known-historical-pre-descriptor-safe",
+        "privileged_plan_allowed": false,
+        "candidate_checkout_root_execution_allowed": false,
+        "retry_under_consumed_preflight_allowed": false,
+        "next_gate": "SOURCE_ONLY_HARDENED_CONTROLLER_BOOTSTRAP_IMPLEMENTATION"
       }
     ],
     "identity_selection_before_privileged_plan": true,
@@ -84,6 +95,16 @@
       "targetRelease",
       "operations"
     ]
+  },
+  "bootstrap_dependency": {
+    "required_when_controller_classification": "known-historical-pre-descriptor-safe",
+    "dashboard_contract": "docs/PHASE11D_RELEASE_ACTIVATION.md#first-descriptor-safe-controller-bootstrap",
+    "historical_controller_is_normal_plan_allowlist_member": false,
+    "bootstrap_may_patch_current_release_in_place": false,
+    "bootstrap_may_execute_operator_writable_candidate_javascript_as_root": false,
+    "bootstrap_may_be_inferred_from_merge_or_preflight_authorization": false,
+    "separate_source_implementation_required": true,
+    "separate_live_root_authorization_required_after_source_merge": true
   },
   "failure_contract": {
     "any_preflight_error_is_stop": true,
