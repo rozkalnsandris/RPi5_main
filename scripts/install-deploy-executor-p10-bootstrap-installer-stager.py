@@ -32,7 +32,7 @@ MAX_MANIFEST_FILES = 512
 MAX_TOTAL_BYTES = 512 * 1024 * 1024
 COPY_BUFFER_BYTES = 64 * 1024
 
-STAGING_PARENT = Path('/var/lib/rozkalns-deploy-executor/bootstrap/dashboard-rpi5')
+STAGING_PARENT = Path('/var/lib/rozkalns-dashboard-controller-bootstrap')
 STAGING_ROOT = STAGING_PARENT / DASHBOARD_SOURCE_SHA
 STAGING_TMP_NAME = f'.{DASHBOARD_SOURCE_SHA}.installer-stager-partial'
 STAGING_SOURCE_NAME = 'source'
@@ -92,13 +92,13 @@ TRUSTED_TARGETS = (
     TrustedTarget(
         'ops/bin/rozkalns-dashboard-controller-bootstrap',
         INSTALLED_ENTRYPOINT,
-        'c873247ec82f22a9193c4bbf1ceb93c494b5a530',
+        'be46238c6bb7ed2aafef115db93830dc86a2ec44',
         TRUSTED_ENTRYPOINT_MODE,
     ),
     TrustedTarget(
         'ops/lib/deploy_executor/dashboard_bootstrap_contract.py',
         INSTALLED_PACKAGE_ROOT / 'dashboard_bootstrap_contract.py',
-        'e55591e715fb1408f5d8027f3c00ab4f9ecbccb7',
+        'f446dfa5152531507312edcfcf66e8de5a73306d',
         TRUSTED_MODULE_MODE,
     ),
     TrustedTarget(
@@ -389,7 +389,7 @@ def _require_staging_prestate() -> None:
         if ancestor == Path('/'):
             break
         _require_safe_root_dir(ancestor)
-    if missing and cursor not in (Path('/var/lib'), Path('/var/lib/rozkalns-deploy-executor'), Path('/var/lib/rozkalns-deploy-executor/bootstrap')):
+    if missing and cursor != Path('/var/lib'):
         raise InstallerStagerError('fixed staging parent is missing below an unexpected anchor')
 
 
