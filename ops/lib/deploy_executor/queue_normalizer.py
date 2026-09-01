@@ -13,6 +13,10 @@ TITLE_RE = re.compile(r"^\[DEPLOY-QUEUE\]\[(?P<state>[A-Z_]+)\]\s+.+$")
 BULLET_RE = re.compile(r"^- \*\*(?P<key>[a-z0-9_]+):\*\*\s+(?P<value>.+)$")
 LEADING_CODE_RE = re.compile(r"^`(?P<value>[^`]+)`")
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+DASHBOARD_RELEASE_BASELINE_ID = "dashboard-release-plan.v1"
+DASHBOARD_RELEASE_BASELINE_RE = re.compile(
+    r"^current=(?P<current>none|[0-9a-f]{40});candidate=(?P<candidate>[0-9a-f]{64})$"
+)
 
 QUEUE_FIELDS = frozenset({
     "source_repository",
@@ -154,6 +158,30 @@ def parse_ready_queue(issue: Mapping[str, Any], *, repository_full_name: str) ->
     )
 
 
+def _normalized_expected_baseline(parsed: ParsedQueue, operation: OperationSpec) -> dict[str, str]:
+    if operation.baseline.kind == "resolver":
+        return {"kind": "resolver", "value": operation.baseline.resolver_id}
+    if operation.baseline.kind != "queue_exact":
+        _fail("BASELINE_CONTRACT", f"unsupported baseline kind {operation.baseline.kind!r}")
+    if operation.baseline.resolver_id != DASHBOARD_RELEASE_BASELINE_ID:
+        _fail("BASELINE_CONTRACT", f"unsupported queue-exact baseline contract {operation.baseline.resolver_id!r}")
+
+    fields = dict(parsed.fields)
+    token = _leading_code(fields, "expected_baseline_when_observable")
+    match = DASHBOARD_RELEASE_BASELINE_RE.fullmatch(token)
+    if match is None:
+        _fail(
+            "QUEUE_BASELINE",
+            "dashboard release baseline must be current=<40-hex|none>;candidate=<64-hex>",
+        )
+    if match.group("current") == parsed.source_sha:
+        _fail(
+            "QUEUE_NOOP_ALREADY_CURRENT",
+            "already-current operations=[] candidate cannot satisfy the P10 first-live mutation canary",
+        )
+    return {"kind": DASHBOARD_RELEASE_BASELINE_ID, "value": token}
+
+
 def normalize_ready_queue(
     issue: Mapping[str, Any], *, repository_full_name: str, registry: OperationRegistry
 ) -> NormalizedQueue:
@@ -179,7 +207,7 @@ def normalize_ready_queue(
         "source_sha": parsed.source_sha,
         "target_alias": operation.target_alias,
         "operation_id": operation.operation_id,
-        "expected_baseline": {"kind": operation.baseline.kind, "value": operation.baseline.resolver_id},
+        "expected_baseline": _normalized_expected_baseline(parsed, operation),
         "mutation_budget": [
             {"category": item.category, "max_operations": item.max_operations}
             for item in operation.mutation_budget

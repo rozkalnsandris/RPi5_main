@@ -425,16 +425,20 @@ class P8PrepTests(unittest.TestCase):
         self.assertIn("mutation_dispatch_enabled=false", installer)
         self.assertIn("production_mutation_started=false", installer)
 
-    def test_production_registry_matches_reviewed_canary_and_stays_disabled(self):
+    def test_production_registry_preserves_reviewed_canary_and_stays_disabled(self):
         production = json.loads(REGISTRY.read_text(encoding="utf-8"))
         reviewed = json.loads(CANARY_REGISTRY.read_text(encoding="utf-8"))
-        self.assertEqual(production, reviewed)
         self.assertFalse(production["execution_enabled"])
-        self.assertEqual(len(production["operations"]), 1)
-        self.assertEqual(
-            production["operations"][0]["operation_id"],
-            "rozkalns-control-center.merge-postcanary-reconcile.v1",
-        )
+        self.assertFalse(reviewed["execution_enabled"])
+        self.assertEqual(production["schema_version"], reviewed["schema_version"])
+        self.assertEqual(len(reviewed["operations"]), 1)
+        reviewed_canary = reviewed["operations"][0]
+        matches = [
+            operation
+            for operation in production["operations"]
+            if operation["operation_id"] == reviewed_canary["operation_id"]
+        ]
+        self.assertEqual(matches, [reviewed_canary])
 
 
 if __name__ == "__main__":
