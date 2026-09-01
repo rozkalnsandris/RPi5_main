@@ -41,20 +41,19 @@ def write_registry(value: dict) -> Path:
 
 
 class P4RegistryAndNormalizationTests(unittest.TestCase):
-    def test_production_registry_contains_only_reviewed_disabled_canary(self):
+    def test_production_registry_contains_reviewed_disabled_operations(self):
         registry = load_registry(PRODUCTION_REGISTRY)
         self.assertFalse(registry.execution_enabled)
-        self.assertEqual(len(registry.operations), 1)
-        operation = registry.operations[0]
-        self.assertEqual(
-            operation.operation_id,
-            "rozkalns-control-center.merge-postcanary-reconcile.v1",
-        )
-        self.assertEqual(
-            operation.adapter_id,
-            "rozkalns-control-center.merge-postcanary-reconcile.v1",
-        )
-        self.assertFalse(operation.ordinary_live_all_eligible)
+        self.assertEqual(len(registry.operations), 2)
+        operations = {item.operation_id: item for item in registry.operations}
+        p9 = operations["rozkalns-control-center.merge-postcanary-reconcile.v1"]
+        self.assertEqual(p9.adapter_id, "rozkalns-control-center.merge-postcanary-reconcile.v1")
+        self.assertFalse(p9.ordinary_live_all_eligible)
+        dashboard = operations["dashboard-rpi5.production-release.v1"]
+        self.assertEqual(dashboard.adapter_id, "dashboard-rpi5.production-release.v1")
+        self.assertTrue(dashboard.ordinary_live_all_eligible)
+        self.assertEqual(dashboard.baseline.kind, "queue_exact")
+        self.assertEqual(dashboard.baseline.resolver_id, "dashboard-release-plan.v1")
 
     def test_inert_fixture_registry_loads(self):
         registry = load_registry(FIXTURES / "operations_inert.json")
@@ -233,6 +232,8 @@ class P4AdapterInterfaceTests(unittest.TestCase):
         prepared = prepare_operation(normalized)
         self.assertFalse(prepared.execution_enabled)
         self.assertEqual(prepared.adapter_id, "fixture.inert.v1")
+        self.assertEqual(prepared.expected_baseline_kind, "resolver")
+        self.assertEqual(prepared.expected_baseline_value, "fixture.baseline.v1")
         self.assertIn("exact-source-ci.v1", prepared.preflight_checks)
         self.assertIn("exact-deployed-sha.v1", prepared.postcondition_checks)
 

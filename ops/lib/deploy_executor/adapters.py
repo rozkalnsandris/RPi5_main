@@ -27,15 +27,18 @@ class PreparedOperation:
     preflight_checks: tuple[str, ...]
     postcondition_checks: tuple[str, ...]
     required_github_evidence: tuple[str, ...]
+    expected_baseline_kind: str = "resolver"
+    expected_baseline_value: str = ""
 
 
 @runtime_checkable
 class OperationAdapter(Protocol):
     """Fixed project adapter interface.
 
-    P5 may register source-only/dormant adapters for interface proof, but the
-    production registry remains mutation-disabled. A concrete adapter must
-    independently reject an unsupported rollback or mutation envelope.
+    Source preparation may register dormant capability-specific adapters for
+    interface proof while the production registry remains mutation-disabled.
+    A concrete adapter must independently reject unsupported baseline,
+    rollback, mutation, path and authority envelopes.
     """
 
     adapter_id: str
@@ -69,6 +72,7 @@ class AdapterCatalog:
 def prepare_operation(normalized: NormalizedQueue) -> PreparedOperation:
     spec: OperationSpec = normalized.operation
     queue = normalized.as_protocol_queue()
+    expected_baseline = queue["expected_baseline"]
     return PreparedOperation(
         operation_id=spec.operation_id,
         adapter_id=spec.adapter_id,
@@ -86,4 +90,6 @@ def prepare_operation(normalized: NormalizedQueue) -> PreparedOperation:
         preflight_checks=spec.preflight,
         postcondition_checks=spec.postconditions,
         required_github_evidence=spec.required_github_evidence,
+        expected_baseline_kind=expected_baseline["kind"],
+        expected_baseline_value=expected_baseline["value"],
     )
