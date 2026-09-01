@@ -23,13 +23,15 @@ The previously observed timestamp/PID preparation root remains evidence only. It
 
 ## Deterministic unprivileged ingress
 
-Before any future root gate, the exact preverified bytes must exist under the only reviewed ingress namespace:
+Before any future root gate, the exact preverified bytes must exist under the only reviewed ingress namespace. The public repository records this as a deterministic template rather than embedding a private user-home literal:
 
 ```text
-/home/andris/.cache/rozkalns-dashboard-preverified-ingress/066b9a24008dd57439f9e66eae198416c4dfc590/
+/home/{fixed-owner}/.cache/rozkalns-dashboard-preverified-ingress/066b9a24008dd57439f9e66eae198416c4dfc590/
   source/
   candidate-manifest.json
 ```
+
+`{fixed-owner}` is not caller input: it is the compile-time `INGRESS_OWNER`, fixed to `andris`, and the source constructs the path from separate immutable components. The resulting runtime namespace is therefore exactly the activation-frozen ingress while the repository remains public-safe.
 
 That ingress is owned by `andris:andris`; directories are `0555`, files and manifest are `0444`. Preparing those exact bytes is an **unprivileged** pre-LIVE activity. The privileged materializer has no CLI field for an alternate source, path, manifest, candidate digest, command, script, argv or environment. It cannot select the historical timestamp/PID preparation root or a Git checkout.
 
