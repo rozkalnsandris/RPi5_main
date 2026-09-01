@@ -11,16 +11,18 @@ fail() {
 }
 
 usage() {
-    cat >&2 <<'EOF'
+    cat >&2 <<'USAGE'
 Usage: sudo /usr/local/sbin/rozkalns-cv-manual-rollout-operator \
   --target-sha <40-hex-sha> \
-  --approve-manual-rollout <same-40-hex-sha>
-EOF
+  --approve-manual-rollout <same-40-hex-sha> \
+  --expected-current-pull-wrapper-blob <40-hex-blob>
+USAGE
     exit 2
 }
 
 TARGET_SHA=''
 APPROVED_SHA=''
+EXPECTED_CURRENT_PULL_WRAPPER_BLOB=''
 while (( $# > 0 )); do
     case "$1" in
         --target-sha)
@@ -33,6 +35,11 @@ while (( $# > 0 )); do
             APPROVED_SHA="$2"
             shift 2
             ;;
+        --expected-current-pull-wrapper-blob)
+            (( $# >= 2 )) || usage
+            EXPECTED_CURRENT_PULL_WRAPPER_BLOB="$2"
+            shift 2
+            ;;
         *)
             usage
             ;;
@@ -43,11 +50,17 @@ done
 [[ "$APPROVED_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'manual rollout approval SHA is invalid'
 [[ "$APPROVED_SHA" == "$TARGET_SHA" ]] \
     || fail 'manual rollout approval does not match target SHA'
+[[ "$EXPECTED_CURRENT_PULL_WRAPPER_BLOB" =~ ^[0-9a-f]{40}$ ]] \
+    || fail 'expected current pull-wrapper blob is invalid'
 [[ ${EUID:-$(id -u)} -eq 0 ]] || fail 'manual rollout operator must run as root via sudo'
 
 OWNER='andris'
 CANARY='/usr/local/sbin/rozkalns-cv-pull-deploy-canary'
 CONTROLLER='/usr/local/sbin/rozkalns-cv-pull-deploy'
+PREFLIGHT='/usr/local/sbin/rozkalns-cv-pull-deploy-preflight'
+CLASSIFIER='/usr/local/libexec/rozkalns-cv/classify-deploy-impact'
+PULL_LIBRARY='/usr/local/libexec/rozkalns-cv/rozkalns-cv-deploy-library'
+PULL_HELPER='/usr/local/sbin/rozkalns-cv-pull-deploy-main'
 TIMER_FILE='/etc/systemd/system/rozkalns-cv-pull-deploy.timer'
 SERVICE_FILE='/etc/systemd/system/rozkalns-cv-pull-deploy.service'
 TIMER_UNIT='rozkalns-cv-pull-deploy.timer'
@@ -58,7 +71,7 @@ EXPECTED_CONTROLLER_BLOB='2bd0878da77b787fe22496c586ca6e68bb8fad1e'
 EXPECTED_TIMER_BLOB='75ad7b3c0565b2c8a3e6a73600ce38265520199b'
 EXPECTED_SERVICE_BLOB='e379e483187f5f7345729ca09c35dcd56aff69ec'
 
-for command_name in awk getent git id realpath runuser sleep stat systemctl; do
+for command_name in awk getent git id install mktemp realpath rm runuser sleep stat systemctl; do
     command -v "$command_name" >/dev/null 2>&1 \
         || fail "required command is missing: $command_name"
 done
@@ -66,6 +79,8 @@ id "$OWNER" >/dev/null 2>&1 || fail 'owner user is missing'
 OWNER_HOME="$(getent passwd "$OWNER" | awk -F: 'NR == 1 {print $6}')"
 [[ "$OWNER_HOME" == /* && -d "$OWNER_HOME" && ! -L "$OWNER_HOME" ]] \
     || fail 'owner home directory is missing or unsafe'
+SOURCE="$OWNER_HOME/rozkalns-cv-worktrees/release-control"
+[[ -d "$SOURCE" && ! -L "$SOURCE" ]] || fail 'release-control worktree is missing or unsafe'
 
 SELF="$(realpath -e -- "${BASH_SOURCE[0]}")"
 [[ "$SELF" == '/usr/local/sbin/rozkalns-cv-manual-rollout-operator' ]] \
@@ -85,6 +100,13 @@ check_blob() {
         || fail "$label ownership/mode is unexpected"
     actual_blob="$(git hash-object "$path")"
     [[ "$actual_blob" == "$expected_blob" ]] || fail "$label identity changed"
+}
+
+extract_field() {
+    local key=$1
+    local payload=$2
+    printf '%s\n' "$payload" \
+        | awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); print; exit}'
 }
 
 check_blob "$CANARY" 755 "$EXPECTED_CANARY_BLOB" 'production canary'
@@ -168,6 +190,87 @@ systemctl is-active --quiet "$SERVICE_UNIT" \
     && fail 'in-flight CV pull-deploy service did not stop within 60 seconds'
 
 printf 'MANUAL_ROLLOUT_TIMER_PAUSE=PASS\n'
+
+# Alignment is deliberately narrow: exact current CV main, successful read-only
+# manual-rollout preflight, three already-matching control artifacts, and one
+# explicitly approved current pull-wrapper blob. No rollback/cleanup of the
+# installed wrapper is attempted after the first alignment mutation.
+runuser -u "$OWNER" -- env \
+    HOME="$OWNER_HOME" \
+    PATH='/usr/local/bin:/usr/bin:/bin' \
+    git -C "$SOURCE" fetch --prune origin main
+[[ -z "$(runuser -u "$OWNER" -- env HOME="$OWNER_HOME" PATH='/usr/local/bin:/usr/bin:/bin' \
+    git -C "$SOURCE" branch --show-current)" ]] \
+    || fail 'release-control worktree must remain detached'
+[[ -z "$(runuser -u "$OWNER" -- env HOME="$OWNER_HOME" PATH='/usr/local/bin:/usr/bin:/bin' \
+    git -C "$SOURCE" status --porcelain=v1 --untracked-files=all)" ]] \
+    || fail 'release-control worktree is not clean'
+REMOTE_MAIN="$(runuser -u "$OWNER" -- env HOME="$OWNER_HOME" PATH='/usr/local/bin:/usr/bin:/bin' \
+    git -C "$SOURCE" rev-parse refs/remotes/origin/main)"
+[[ "$REMOTE_MAIN" == "$TARGET_SHA" ]] \
+    || fail 'approved target is no longer exact current origin/main before wrapper alignment'
+
+PREFLIGHT_OUTPUT="$(runuser -u "$OWNER" -- env \
+    HOME="$OWNER_HOME" \
+    PATH="$OWNER_HOME/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+    "$PREFLIGHT")" || fail 'App-authenticated preflight failed before wrapper alignment'
+[[ "$(extract_field 'PULL_DEPLOY_PREFLIGHT_RESULT' "$PREFLIGHT_OUTPUT")" == 'MANUAL_ROLLOUT_REQUIRED' ]] \
+    || fail 'preflight did not require manual rollout before wrapper alignment'
+[[ "$(extract_field 'TARGET_SHA' "$PREFLIGHT_OUTPUT")" == "$TARGET_SHA" ]] \
+    || fail 'preflight target SHA changed before wrapper alignment'
+[[ "$(extract_field 'DEPLOY_IMPACT' "$PREFLIGHT_OUTPUT")" == 'MANUAL_ROLLOUT_REQUIRED' ]] \
+    || fail 'preflight deploy impact is not manual rollout before wrapper alignment'
+[[ "$(extract_field 'CONTROL_PLANE_CHANGED' "$PREFLIGHT_OUTPUT")" == true ]] \
+    || fail 'preflight did not report control-plane change before wrapper alignment'
+[[ "$(extract_field 'CI_RUN_ID' "$PREFLIGHT_OUTPUT")" =~ ^[1-9][0-9]*$ ]] \
+    || fail 'preflight exact-SHA CI run id is invalid before wrapper alignment'
+[[ "$(extract_field 'PRODUCTION_MUTATION_AUTHORIZED' "$PREFLIGHT_OUTPUT")" == false ]] \
+    || fail 'preflight unexpectedly authorized production mutation before wrapper alignment'
+
+SOURCE_PREFLIGHT='runner/pull-deploy/rozkalns-cv-pull-deploy-preflight'
+SOURCE_CLASSIFIER='runner/pull-deploy/classify_deploy_impact.py'
+SOURCE_PULL_LIBRARY='runner/release/rozkalns-cv-deploy-main'
+SOURCE_PULL_HELPER='runner/release/rozkalns-cv-pull-deploy-main'
+
+for spec in \
+    "$PREFLIGHT:$SOURCE_PREFLIGHT" \
+    "$CLASSIFIER:$SOURCE_CLASSIFIER" \
+    "$PULL_LIBRARY:$SOURCE_PULL_LIBRARY"
+do
+    installed="${spec%%:*}"
+    source_rel="${spec#*:}"
+    expected_blob="$(runuser -u "$OWNER" -- env HOME="$OWNER_HOME" PATH='/usr/local/bin:/usr/bin:/bin' \
+        git -C "$SOURCE" rev-parse "$TARGET_SHA:$source_rel")"
+    actual_blob="$(git hash-object "$installed")"
+    [[ "$actual_blob" == "$expected_blob" ]] \
+        || fail "non-wrapper CV control artifact does not match approved target: $source_rel"
+done
+
+TARGET_PULL_WRAPPER_BLOB="$(runuser -u "$OWNER" -- env HOME="$OWNER_HOME" PATH='/usr/local/bin:/usr/bin:/bin' \
+    git -C "$SOURCE" rev-parse "$TARGET_SHA:$SOURCE_PULL_HELPER")"
+CURRENT_PULL_WRAPPER_BLOB="$(git hash-object "$PULL_HELPER")"
+[[ "$CURRENT_PULL_WRAPPER_BLOB" == "$EXPECTED_CURRENT_PULL_WRAPPER_BLOB" ]] \
+    || fail 'installed pull-wrapper blob differs from explicitly approved current baseline'
+
+if [[ "$CURRENT_PULL_WRAPPER_BLOB" == "$TARGET_PULL_WRAPPER_BLOB" ]]; then
+    printf 'PULL_WRAPPER_ALIGNMENT=NO_OP_ALREADY_TARGET\n'
+else
+    STAGED_PULL_WRAPPER="$(mktemp /run/rozkalns-cv-pull-wrapper-target.XXXXXXXX)"
+    runuser -u "$OWNER" -- env HOME="$OWNER_HOME" PATH='/usr/local/bin:/usr/bin:/bin' \
+        git -C "$SOURCE" show "$TARGET_SHA:$SOURCE_PULL_HELPER" >"$STAGED_PULL_WRAPPER"
+    [[ "$(git hash-object "$STAGED_PULL_WRAPPER")" == "$TARGET_PULL_WRAPPER_BLOB" ]] \
+        || fail 'staged target pull-wrapper blob mismatch'
+    install -o root -g root -m 0755 "$STAGED_PULL_WRAPPER" "$PULL_HELPER"
+    [[ "$(stat -c '%U:%G:%a' "$PULL_HELPER")" == 'root:root:755' ]] \
+        || fail 'aligned pull-wrapper ownership/mode is unexpected'
+    [[ "$(git hash-object "$PULL_HELPER")" == "$TARGET_PULL_WRAPPER_BLOB" ]] \
+        || fail 'aligned pull-wrapper identity mismatch'
+    rm -f -- "$STAGED_PULL_WRAPPER"
+    printf 'PULL_WRAPPER_ALIGNMENT=UPDATED\n'
+fi
+printf 'PULL_WRAPPER_BEFORE=%s\n' "$CURRENT_PULL_WRAPPER_BLOB"
+printf 'PULL_WRAPPER_AFTER=%s\n' "$(git hash-object "$PULL_HELPER")"
+printf 'PULL_WRAPPER_TARGET=%s\n' "$TARGET_PULL_WRAPPER_BLOB"
 
 runuser -u "$OWNER" -- env \
     HOME="$OWNER_HOME" \

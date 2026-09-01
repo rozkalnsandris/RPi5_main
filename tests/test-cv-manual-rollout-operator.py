@@ -40,6 +40,15 @@ class CvManualRolloutOperatorTests(unittest.TestCase):
         ):
             self.assertIn(marker, self.operator)
 
+    def test_operator_requires_explicit_current_pull_wrapper_baseline(self) -> None:
+        for marker in (
+            "--expected-current-pull-wrapper-blob",
+            '[[ "$EXPECTED_CURRENT_PULL_WRAPPER_BLOB" =~ ^[0-9a-f]{40}$ ]]',
+            '[[ "$CURRENT_PULL_WRAPPER_BLOB" == "$EXPECTED_CURRENT_PULL_WRAPPER_BLOB" ]]',
+            "installed pull-wrapper blob differs from explicitly approved current baseline",
+        ):
+            self.assertIn(marker, self.operator)
+
     def test_operator_is_root_owned_interactive_boundary_without_new_sudoers(self) -> None:
         for marker in (
             "manual rollout operator must run as root via sudo",
@@ -93,18 +102,36 @@ class CvManualRolloutOperatorTests(unittest.TestCase):
         self.assertIn("FINAL_TIMER_ENABLED", self.operator)
         self.assertIn("FINAL_TIMER_ACTIVE", self.operator)
 
-    def test_operator_waits_for_in_flight_service_before_canary(self) -> None:
+    def test_operator_waits_for_in_flight_service_before_alignment_and_canary(self) -> None:
         wait_index = self.operator.index('systemctl is-active --quiet "$SERVICE_UNIT"')
+        alignment_index = self.operator.index("# Alignment is deliberately narrow")
         canary_index = self.operator.index('    "$CANARY" \\\n')
-        self.assertLess(wait_index, canary_index)
+        self.assertLess(wait_index, alignment_index)
+        self.assertLess(alignment_index, canary_index)
         self.assertIn("did not stop within 60 seconds", self.operator)
 
-    def test_operator_delegates_production_mutation_only_to_existing_canary(self) -> None:
+    def test_wrapper_alignment_is_preflight_bound_and_narrow(self) -> None:
+        for marker in (
+            "PULL_DEPLOY_PREFLIGHT_RESULT",
+            "MANUAL_ROLLOUT_REQUIRED",
+            "CONTROL_PLANE_CHANGED",
+            "PRODUCTION_MUTATION_AUTHORIZED",
+            "non-wrapper CV control artifact does not match approved target",
+            "runner/release/rozkalns-cv-pull-deploy-main",
+            'install -o root -g root -m 0755 "$STAGED_PULL_WRAPPER" "$PULL_HELPER"',
+            "PULL_WRAPPER_ALIGNMENT=UPDATED",
+            "PULL_WRAPPER_ALIGNMENT=NO_OP_ALREADY_TARGET",
+        ):
+            self.assertIn(marker, self.operator)
+        self.assertNotIn('cp -- "$PULL_HELPER"', self.operator)
+        self.assertNotIn("PULL_WRAPPER_BACKUP", self.operator)
+        self.assertNotIn("PULL_WRAPPER_ROLLBACK", self.operator)
+
+    def test_operator_delegates_application_rollout_to_existing_canary(self) -> None:
         self.assertIn('runuser -u "$OWNER" -- env', self.operator)
         self.assertIn('    "$CANARY" \\\n', self.operator)
         self.assertIn('--target-sha "$TARGET_SHA"', self.operator)
         self.assertIn('--approve-manual-rollout "$APPROVED_SHA"', self.operator)
-        self.assertNotIn("rozkalns-cv-pull-deploy-main", self.operator)
         self.assertNotIn("current-sha", self.operator)
         self.assertNotIn("docker ", self.operator)
 
