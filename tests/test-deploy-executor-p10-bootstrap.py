@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 import hashlib
+import importlib.machinery
 import importlib.util
 import json
 import os
 from pathlib import Path
+import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,10 +32,24 @@ def git_blob(data: bytes) -> str:
 
 
 def load_wrapper():
-    spec = importlib.util.spec_from_file_location("p10_bootstrap_entrypoint_source_test", WRAPPER)
+    module_name = "p10_bootstrap_entrypoint_source_test"
+    loader = importlib.machinery.SourceFileLoader(module_name, str(WRAPPER))
+    spec = importlib.util.spec_from_file_location(
+        module_name,
+        WRAPPER,
+        loader=loader,
+    )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    previous = sys.modules.get(module_name)
+    sys.modules[module_name] = module
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        if previous is None:
+            sys.modules.pop(module_name, None)
+        else:
+            sys.modules[module_name] = previous
     return module
 
 
