@@ -13,6 +13,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / 'scripts/install-deploy-executor-p10-bootstrap-installer-stager.py'
+SERVICE_UNIT = ROOT / 'ops/systemd/rozkalns-deploy-executor.service'
 loader = importlib.machinery.SourceFileLoader('p10_installer_stager', str(SCRIPT))
 spec = importlib.util.spec_from_loader(loader.name, loader)
 assert spec is not None
@@ -46,7 +47,9 @@ class InstallerStagerContractTests(unittest.TestCase):
         self.assertEqual(module.DASHBOARD_SOURCE_SHA, '5f7739348f56398d0ba301c9320e1de0062838fc')
         self.assertEqual(module.EXPECTED_CANDIDATE_SHA256, 'c5a2adef8f7242833094a1c0cb8a8074392312567deeddd1228dc46c16cff5c0')
         self.assertEqual(module.PRESERVED_PARENT_NAME, 'p10-preflight-5f773934-20260901T074158Z-294325')
-        self.assertEqual(str(module.STAGING_ROOT), f'/var/lib/rozkalns-deploy-executor/bootstrap/dashboard-rpi5/{module.DASHBOARD_SOURCE_SHA}')
+        self.assertEqual(str(module.STAGING_PARENT), '/var/lib/rozkalns-dashboard-controller-bootstrap')
+        self.assertEqual(str(module.STAGING_ROOT), f'/var/lib/rozkalns-dashboard-controller-bootstrap/{module.DASHBOARD_SOURCE_SHA}')
+        self.assertNotIn('/var/lib/rozkalns-deploy-executor/bootstrap', str(module.STAGING_ROOT))
         args = module._parse_args(['0' * 40])
         self.assertFalse(args.apply)
         with self.assertRaises(SystemExit):
@@ -58,12 +61,25 @@ class InstallerStagerContractTests(unittest.TestCase):
         self.assertEqual(
             {target.expected_blob for target in module.TRUSTED_TARGETS},
             {
-                'c873247ec82f22a9193c4bbf1ceb93c494b5a530',
-                'e55591e715fb1408f5d8027f3c00ab4f9ecbccb7',
+                'be46238c6bb7ed2aafef115db93830dc86a2ec44',
+                'f446dfa5152531507312edcfcf66e8de5a73306d',
                 'd258026312f9b9109c98b934e287d04a97fb8328',
                 'b3e8d3995afb39820e64889a8f1b770fbcf70615',
             },
         )
+
+    def test_state_directory_remains_separate_from_privileged_staging(self) -> None:
+        unit = SERVICE_UNIT.read_text(encoding='utf-8')
+        for required in (
+            'User=rozkalns-deploy-executor',
+            'Group=rozkalns-deploy-executor',
+            'StateDirectory=rozkalns-deploy-executor',
+            'StateDirectoryMode=0700',
+            'ReadWritePaths=/var/lib/rozkalns-deploy-executor',
+        ):
+            self.assertIn(required, unit)
+        self.assertNotIn('/var/lib/rozkalns-dashboard-controller-bootstrap', unit)
+        self.assertNotIn('/var/lib/rozkalns-deploy-executor/bootstrap', SCRIPT.read_text(encoding='utf-8'))
 
     def test_manifest_requires_exact_digest(self) -> None:
         controller = b'test-controller'

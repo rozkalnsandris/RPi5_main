@@ -13,6 +13,7 @@ PREFLIGHT = ROOT / "ops" / "deploy" / "p10-dashboard-preflight.json"
 BOOTSTRAP = ROOT / "ops" / "deploy" / "p10-dashboard-bootstrap.json"
 DOC = ROOT / "docs" / "OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_P10_BOOTSTRAP.md"
 WRAPPER = ROOT / "ops" / "bin" / "rozkalns-dashboard-controller-bootstrap"
+INSTALLER = ROOT / "scripts" / "install-deploy-executor-p10-bootstrap-installer-stager.py"
 LIB = ROOT / "ops" / "lib" / "deploy_executor"
 
 CANDIDATE_SHA = "5f7739348f56398d0ba301c9320e1de0062838fc"
@@ -183,6 +184,9 @@ def main() -> None:
     assert invariants["installer_stager_may_execute_p10_apply"] is False
     assert invariants["normal_executor_registry_remains_globally_execution_disabled"] is True
     assert invariants["bootstrap_is_not_a_persistent_alternate_deploy_channel"] is True
+    assert invariants["deploy_executor_state_directory_is_privileged_bootstrap_staging_ancestor"] is False
+    assert invariants["deploy_executor_state_directory_contract_must_remain_unchanged"] is True
+    assert invariants["bootstrap_staging_namespace_must_be_root_owned_and_capability_specific"] is True
 
     required_implementation = bootstrap["required_source_implementation"]
     assert required_implementation["owner"] == "RPi5_main-control-plane"
@@ -209,20 +213,29 @@ def main() -> None:
     assert implementation["network_allowed"] is False
     assert implementation["process_execution_allowed"] is False
     assert implementation["fixed_production_root"] == "/opt/dashboard_RPi5"
-    assert implementation["fixed_candidate_root"].endswith(f"/{CANDIDATE_SHA}/source")
-    assert implementation["fixed_manifest_path"].endswith(f"/{CANDIDATE_SHA}/candidate-manifest.json")
+    expected_staging = f"/var/lib/rozkalns-dashboard-controller-bootstrap/{CANDIDATE_SHA}"
+    assert implementation["fixed_staging_root"] == expected_staging
+    assert implementation["fixed_candidate_root"] == f"{expected_staging}/source"
+    assert implementation["fixed_manifest_path"] == f"{expected_staging}/candidate-manifest.json"
+    assert "/var/lib/rozkalns-deploy-executor/bootstrap" not in implementation["fixed_staging_root"]
     assert_trust_anchor_regression(implementation)
 
     installer = bootstrap["installer_stager"]
     assert installer["status"] == "SOURCE_MERGED_EXECUTION_DISABLED"
     assert installer["source_merge_pr"] == 320
     assert installer["post_merge_reconciliation_pr"] == 321
+    assert installer["trust_namespace_repair_issue"] == 323
     assert installer["source_operator"] == "scripts/install-deploy-executor-p10-bootstrap-installer-stager.py"
+    assert installer["source_operator_git_blob"] == git_blob(INSTALLER.read_bytes())
     assert installer["source_test"] == "tests/test-deploy-executor-p10-bootstrap-installer-stager.py"
     assert installer["preserved_evidence_parent_basename"] == "p10-preflight-5f773934-20260901T074158Z-294325"
     assert installer["caller_supplied_path_arguments"] is False
     assert installer["descriptor_safe_preserved_evidence_consumption"] is True
-    assert installer["fixed_staging_root"].endswith(CANDIDATE_SHA)
+    assert installer["fixed_staging_parent"] == "/var/lib/rozkalns-dashboard-controller-bootstrap"
+    assert installer["fixed_staging_root"] == expected_staging
+    assert installer["deploy_executor_state_directory"] == "/var/lib/rozkalns-deploy-executor"
+    assert installer["deploy_executor_state_directory_may_be_staging_ancestor"] is False
+    assert installer["prior_pre_repair_live_authorization_reusable"] is False
     assert installer["mutation_budget"] == {
         "fixed_staging_root_materializations": 1,
         "trusted_entrypoint_installations": 1,
@@ -264,8 +277,8 @@ def main() -> None:
     assert transition["apply_executed"] is False
     assert transition["preflight_retry_allowed"] is False
     assert transition["bootstrap_execution_source"] == "MERGED_EXECUTION_DISABLED"
-    assert transition["installer_stager_source"] == "MERGED_EXECUTION_DISABLED"
-    assert transition["next_gate"] == "SEPARATE_LIVE_ROOT_INSTALLER_STAGER_AFTER_EXACT_MAIN_AND_TRUSTED_HOST_REVALIDATION"
+    assert transition["installer_stager_source"] == "MERGED_EXECUTION_DISABLED_TRUST_NAMESPACE_REPAIR_REQUIRED"
+    assert transition["next_gate"] == "MERGE_TRUST_NAMESPACE_REPAIR_THEN_EXACT_MAIN_AND_TRUSTED_HOST_REVALIDATION_BEFORE_NEW_LIVE_ROOT_INSTALLER_STAGER"
 
     assert "known historical, bootstrap required" in doc
     assert "do not execute operator-writable candidate JavaScript as root" in doc
@@ -275,6 +288,9 @@ def main() -> None:
     assert "dashboard-rpi5.hardened-controller-bootstrap.v1" in doc
     assert "execution-disabled" in doc
     assert "before any installed bootstrap Python module is imported" in doc
+    assert "/var/lib/rozkalns-dashboard-controller-bootstrap" in doc
+    assert "StateDirectory=rozkalns-deploy-executor" in doc
+    assert "must never be an ancestor" in doc
 
 
 if __name__ == "__main__":
