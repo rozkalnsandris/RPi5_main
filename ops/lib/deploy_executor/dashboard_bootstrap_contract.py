@@ -4,8 +4,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-from .adapters import AdapterError, PreparedOperation
-
 OPERATION_ID = "dashboard-rpi5.hardened-controller-bootstrap.v1"
 ADAPTER_ID = OPERATION_ID
 SOURCE_REPOSITORY = "rozkalnsandris/dashboard_RPi5"
@@ -22,6 +20,7 @@ CANDIDATE_ROOT = STAGING_ROOT / "source"
 MANIFEST_PATH = STAGING_ROOT / "candidate-manifest.json"
 INSTALLED_ENTRYPOINT = Path("/usr/local/sbin/rozkalns-dashboard-controller-bootstrap")
 INSTALLED_LIBRARY_ROOT = Path("/usr/local/lib/rozkalns-deploy-executor")
+INSTALLED_PACKAGE_ROOT = INSTALLED_LIBRARY_ROOT / "deploy_executor"
 
 APPLY_LOCK_NAME = ".dashboard-release-controller.lock"
 MANIFEST_MARKER = ".dashboard-production-candidate.json"
@@ -31,12 +30,16 @@ MAX_MANIFEST_BYTES = 4 * 1024 * 1024
 MAX_MANIFEST_FILES = 512
 MAX_TOTAL_BYTES = 512 * 1024 * 1024
 COPY_BUFFER_BYTES = 64 * 1024
+MAX_TRUSTED_MODULE_BYTES = 256 * 1024
 ROOT_UID = 0
 ROOT_GID = 0
 RELEASE_DIRECTORY_MODE = 0o755
 RELEASE_FILE_MODE = 0o644
 MARKER_MODE = 0o600
 PREVERIFY_FILE_MODE = 0o600
+TRUSTED_DIRECTORY_MODE = 0o755
+TRUSTED_MODULE_MODE = 0o644
+TRUSTED_ENTRYPOINT_MODE = 0o755
 
 MUTATION_BUDGET = (
     ("dashboard.bootstrap.apply-lock", 1),
@@ -107,56 +110,10 @@ class BootstrapReceipt:
     p10_apply_executed: bool
 
 
-class DashboardHardenedControllerBootstrapAdapter:
-    """Dormant source contract; it never dispatches the root bootstrap helper."""
+def __getattr__(name: str):
+    """Keep the dormant source adapter API lazy and outside the root import closure."""
+    if name == "DashboardHardenedControllerBootstrapAdapter":
+        from .dashboard_bootstrap_adapter import DashboardHardenedControllerBootstrapAdapter
 
-    adapter_id = ADAPTER_ID
-
-    def _validate(self, prepared: PreparedOperation) -> None:
-        if prepared.operation_id != OPERATION_ID or prepared.adapter_id != ADAPTER_ID:
-            raise AdapterError("Dashboard bootstrap operation identity mismatch")
-        if prepared.execution_enabled:
-            raise AdapterError("Dashboard bootstrap source adapter must remain execution-disabled")
-        if prepared.source_repository != SOURCE_REPOSITORY or prepared.source_sha != SOURCE_SHA:
-            raise AdapterError("Dashboard bootstrap source identity mismatch")
-        if prepared.target_alias != TARGET_ALIAS or prepared.rollback_policy != ROLLBACK_POLICY:
-            raise AdapterError("Dashboard bootstrap target/rollback mismatch")
-        if prepared.mutation_budget != MUTATION_BUDGET:
-            raise AdapterError("Dashboard bootstrap mutation budget mismatch")
-        if not REQUIRED_EXCLUSIONS.issubset(set(prepared.exclusions)):
-            raise AdapterError("Dashboard bootstrap required exclusions are missing")
-        if not REQUIRED_DEPENDENCIES.issubset(set(prepared.dependencies)):
-            raise AdapterError("Dashboard bootstrap dependency binding mismatch")
-
-    def preflight(self, prepared: PreparedOperation) -> Mapping[str, Any]:
-        self._validate(prepared)
-        return {
-            "adapter_id": ADAPTER_ID,
-            "source_sha": SOURCE_SHA,
-            "target_alias": TARGET_ALIAS,
-            "historical_controller_blob": HISTORICAL_CONTROLLER_BLOB,
-            "hardened_controller_blob": HARDENED_CONTROLLER_BLOB,
-            "candidate_root": str(CANDIDATE_ROOT),
-            "manifest_path": str(MANIFEST_PATH),
-            "installed_entrypoint": str(INSTALLED_ENTRYPOINT),
-            "execution_enabled": False,
-            "privileged_dispatch_ready": False,
-            "live_authorized": False,
-            "result": "SOURCE_BOOTSTRAP_CONTRACT_PASS",
-        }
-
-    def apply(self, prepared: PreparedOperation) -> Mapping[str, Any]:
-        self._validate(prepared)
-        raise AdapterError(
-            "Dashboard bootstrap adapter is source-only and execution-disabled; a separate LIVE/root gate is required"
-        )
-
-    def postconditions(self, prepared: PreparedOperation) -> Mapping[str, Any]:
-        self._validate(prepared)
-        return {
-            "execution_enabled": False,
-            "required_current_controller_blob": HARDENED_CONTROLLER_BLOB,
-            "required_current_source_sha": SOURCE_SHA,
-            "releases_deleted": 0,
-            "p10_apply_executed": False,
-        }
+        return DashboardHardenedControllerBootstrapAdapter
+    raise AttributeError(name)

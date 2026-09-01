@@ -59,19 +59,35 @@ The dedicated source implementation is intentionally outside the normal executor
 
 Reviewed source surfaces:
 
-- adapter contract: `ops/lib/deploy_executor/dashboard_bootstrap_contract.py`;
+- source/dormant adapter API: `ops/lib/deploy_executor/dashboard_bootstrap_contract.py`;
+- dormant adapter implementation: `ops/lib/deploy_executor/dashboard_bootstrap_adapter.py`;
 - descriptor-safe filesystem implementation: `ops/lib/deploy_executor/dashboard_bootstrap_fs.py`;
 - one-shot bootstrap orchestrator: `ops/lib/deploy_executor/dashboard_bootstrap.py`;
 - narrow source wrapper: `ops/bin/rozkalns-dashboard-controller-bootstrap`;
 - machine contract: `ops/deploy/p10-dashboard-bootstrap.json`;
-- regression: `tests/test-deploy-executor-p10-bootstrap-adapter.py`.
+- regression: `tests/test-deploy-executor-p10-bootstrap-adapter.py` and `tests/test-deploy-executor-p10-bootstrap.py`.
 
 The future installed identities are fixed to:
 
 - helper: `/usr/local/sbin/rozkalns-dashboard-controller-bootstrap`;
-- library root: `/usr/local/lib/rozkalns-deploy-executor`.
+- library root: `/usr/local/lib/rozkalns-deploy-executor`;
+- live bootstrap package root: `/usr/local/lib/rozkalns-deploy-executor/deploy_executor`.
 
-This source PR does **not** install either path.
+This source PR does **not** install any of these paths.
+
+### Privileged trust anchor before import
+
+The helper itself is a separately reviewed trust anchor. Before a future LIVE invocation, the host preflight must verify the installed helper at the fixed path against the exact source-wrapper Git blob recorded in `ops/deploy/p10-dashboard-bootstrap.json`. Runtime then requires that fixed helper path to be a real `root:root 0755` file and checks the fixed `/usr` → `/usr/local` → `/usr/local/lib` parent chain is root-owned and not group/world writable.
+
+Critically, **before any installed bootstrap Python module is imported**, the wrapper descriptor-safely opens the fixed package root and requires it to be `root:root 0755`. It then opens exactly these live modules with `O_NOFOLLOW`, requires `root:root 0644`, applies a bounded size check and verifies their exact reviewed Git blobs from the machine contract:
+
+- `dashboard_bootstrap_contract.py`;
+- `dashboard_bootstrap_fs.py`;
+- `dashboard_bootstrap.py`.
+
+The dormant adapter is deliberately outside that privileged import closure. The wrapper creates a private synthetic package rooted only at the already verified directory, disables bytecode writes and imports only those three exact modules. Normal `deploy_executor/__init__.py` is not executed, so its broader protocol/state/transport imports do not become bootstrap root authority.
+
+This closes the previously possible gap where a root helper could have imported mutable installed library code before proving its provenance. The wrapper does not self-hash recursively; its exact blob is instead a required external pre-invocation LIVE/preflight identity, while runtime independently verifies its fixed path and metadata.
 
 ### Fixed inputs only
 

@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
+import hashlib
+import importlib.util
 import json
+import os
 from pathlib import Path
+import sys
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 PREFLIGHT = ROOT / "ops" / "deploy" / "p10-dashboard-preflight.json"
 BOOTSTRAP = ROOT / "ops" / "deploy" / "p10-dashboard-bootstrap.json"
 DOC = ROOT / "docs" / "OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_P10_BOOTSTRAP.md"
+WRAPPER = ROOT / "ops" / "bin" / "rozkalns-dashboard-controller-bootstrap"
+LIB = ROOT / "ops" / "lib" / "deploy_executor"
 
 CANDIDATE_SHA = "5f7739348f56398d0ba301c9320e1de0062838fc"
 HISTORICAL_BLOB = "c501bea57c0d5c35e7961ae1f1e5593a02268661"
@@ -14,6 +21,78 @@ HARDENED = {
     "7fcc58cbea2f1247d6e4d93bc3805923697fbfab",
     "c0566adb76e044632a4556dbefeb0f46839b4996",
 }
+
+
+def git_blob(data: bytes) -> str:
+    digest = hashlib.sha1()
+    digest.update(f"blob {len(data)}\0".encode("ascii"))
+    digest.update(data)
+    return digest.hexdigest()
+
+
+def load_wrapper():
+    spec = importlib.util.spec_from_file_location("p10_bootstrap_entrypoint_source_test", WRAPPER)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def assert_trust_anchor_regression(implementation: dict) -> None:
+    wrapper = load_wrapper()
+    source = WRAPPER.read_text(encoding="utf-8")
+    assert "sys.path.insert" not in source
+    assert "from deploy_executor" not in source
+    assert source.index("_verify_trust_anchor()") < source.index("_load_trusted_modules()")
+    assert "sys.dont_write_bytecode = True" in source
+    assert implementation["trust_anchor_verified_before_module_import"] is True
+    assert implementation["normal_deploy_executor_package_init_executed"] is False
+    assert implementation["source_wrapper_git_blob"] == git_blob(WRAPPER.read_bytes())
+    assert implementation["source_wrapper_identity_verification"] == "separate-live-preflight-before-root-invocation"
+    assert implementation["source_wrapper_runtime_mode"] == "0755"
+    assert implementation["trusted_directory_mode"] == "0755"
+    assert implementation["trusted_module_mode"] == "0644"
+
+    expected = implementation["trusted_module_git_blobs"]
+    assert expected == wrapper.TRUSTED_MODULE_GIT_BLOBS
+    for name, blob in expected.items():
+        assert git_blob((LIB / name).read_bytes()) == blob
+
+    with tempfile.TemporaryDirectory() as tmp:
+        package = Path(tmp) / "deploy_executor"
+        package.mkdir(mode=0o755)
+        (package / "__init__.py").write_text(
+            "raise RuntimeError('normal package init must not execute')\n",
+            encoding="utf-8",
+        )
+        for name in expected:
+            target = package / name
+            target.write_bytes((LIB / name).read_bytes())
+            os.chmod(target, 0o644)
+        os.chmod(package, 0o755)
+
+        wrapper._verify_trust_anchor(
+            package_root=package,
+            expected_uid=os.geteuid(),
+            expected_gid=os.getegid(),
+        )
+        loaded = wrapper._load_trusted_modules(package_root=package)
+        assert loaded.BOOTSTRAP_ACK == "I_AUTHORIZED_DASHBOARD_RPI5_HARDENED_CONTROLLER_BOOTSTRAP"
+        assert not (package / "__pycache__").exists()
+
+        tampered = package / "dashboard_bootstrap.py"
+        tampered.write_bytes(tampered.read_bytes() + b"\n# tamper\n")
+        os.chmod(tampered, 0o644)
+        try:
+            wrapper._verify_trust_anchor(
+                package_root=package,
+                expected_uid=os.geteuid(),
+                expected_gid=os.getegid(),
+            )
+        except wrapper.BootstrapEntrypointError as exc:
+            assert "Git blob mismatch" in str(exc)
+        else:
+            raise AssertionError("tampered trusted module was accepted")
 
 
 def main() -> None:
@@ -97,6 +176,7 @@ def main() -> None:
     implementation = bootstrap["implementation"]
     assert implementation["operation_id"] == "dashboard-rpi5.hardened-controller-bootstrap.v1"
     assert implementation["adapter_contract"] == "ops/lib/deploy_executor/dashboard_bootstrap_contract.py"
+    assert implementation["adapter_implementation"] == "ops/lib/deploy_executor/dashboard_bootstrap_adapter.py"
     assert implementation["descriptor_safe_filesystem"] == "ops/lib/deploy_executor/dashboard_bootstrap_fs.py"
     assert implementation["bootstrap_orchestrator"] == "ops/lib/deploy_executor/dashboard_bootstrap.py"
     assert implementation["source_wrapper"] == "ops/bin/rozkalns-dashboard-controller-bootstrap"
@@ -107,6 +187,7 @@ def main() -> None:
     assert implementation["fixed_production_root"] == "/opt/dashboard_RPi5"
     assert implementation["fixed_candidate_root"].endswith(f"/{CANDIDATE_SHA}/source")
     assert implementation["fixed_manifest_path"].endswith(f"/{CANDIDATE_SHA}/candidate-manifest.json")
+    assert_trust_anchor_regression(implementation)
 
     budget = bootstrap["mutation_budget"]
     assert budget["apply_lock"] == 1
@@ -141,6 +222,7 @@ def main() -> None:
     assert "separate exact LIVE bootstrap authorization" in doc
     assert "dashboard-rpi5.hardened-controller-bootstrap.v1" in doc
     assert "execution-disabled" in doc
+    assert "before any installed bootstrap Python module is imported" in doc
 
 
 if __name__ == "__main__":

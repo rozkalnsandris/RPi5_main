@@ -9,7 +9,6 @@ BOOTSTRAP_ACK = c.BOOTSTRAP_ACK
 DashboardBootstrapError = c.DashboardBootstrapError
 BootstrapPaths = c.BootstrapPaths
 BootstrapReceipt = c.BootstrapReceipt
-DashboardHardenedControllerBootstrapAdapter = c.DashboardHardenedControllerBootstrapAdapter
 
 
 def _validate_inputs(expected_current: str, expected_candidate_sha256: str, acknowledgement: str) -> None:

@@ -2,17 +2,174 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict
+import hashlib
+import importlib
 import json
 import os
 from pathlib import Path
+import stat
 import sys
+import types
 
-LIB = Path("/usr/local/lib/rozkalns-deploy-executor")
-if str(LIB) not in sys.path:
-    sys.path.insert(0, str(LIB))
+INSTALLED_ENTRYPOINT = Path("/usr/local/sbin/rozkalns-dashboard-controller-bootstrap")
+INSTALLED_LIBRARY_ROOT = Path("/usr/local/lib/rozkalns-deploy-executor")
+INSTALLED_PACKAGE_ROOT = INSTALLED_LIBRARY_ROOT / "deploy_executor"
+TRUSTED_PACKAGE_NAME = "_p10_dashboard_bootstrap_trusted"
+TRUSTED_DIRECTORY_MODE = 0o755
+TRUSTED_MODULE_MODE = 0o644
+TRUSTED_ENTRYPOINT_MODE = 0o755
+MAX_TRUSTED_MODULE_BYTES = 256 * 1024
+TRUSTED_MODULE_GIT_BLOBS = {
+    "dashboard_bootstrap_contract.py": "e55591e715fb1408f5d8027f3c00ab4f9ecbccb7",
+    "dashboard_bootstrap_fs.py": "d258026312f9b9109c98b934e287d04a97fb8328",
+    "dashboard_bootstrap.py": "b3e8d3995afb39820e64889a8f1b770fbcf70615",
+}
 
-from deploy_executor.dashboard_bootstrap import BOOTSTRAP_ACK, DashboardBootstrapError, apply_bootstrap
+
+class BootstrapEntrypointError(RuntimeError):
+    pass
+
+
+def _mode(st: os.stat_result) -> int:
+    return stat.S_IMODE(st.st_mode)
+
+
+def _assert_metadata(st: os.stat_result, *, uid: int, gid: int, expected_mode: int, label: str) -> None:
+    if st.st_uid != uid or st.st_gid != gid or _mode(st) != expected_mode:
+        raise BootstrapEntrypointError(f"{label} metadata mismatch")
+
+
+def _open_abs_dir(path: Path, label: str) -> int:
+    if not path.is_absolute():
+        raise BootstrapEntrypointError(f"{label} must be absolute")
+    fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        for part in path.parts[1:]:
+            nxt = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            if not stat.S_ISDIR(os.fstat(nxt).st_mode):
+                os.close(nxt)
+                raise BootstrapEntrypointError(f"{label} must be a real directory")
+            os.close(fd)
+            fd = nxt
+        return fd
+    except Exception:
+        os.close(fd)
+        raise
+
+
+def _read_module_bytes(fd: int, label: str) -> bytes:
+    st = os.fstat(fd)
+    if not stat.S_ISREG(st.st_mode) or st.st_size > MAX_TRUSTED_MODULE_BYTES:
+        raise BootstrapEntrypointError(f"{label} must be a bounded regular file")
+    os.lseek(fd, 0, os.SEEK_SET)
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = os.read(fd, min(65536, MAX_TRUSTED_MODULE_BYTES + 1 - total))
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > MAX_TRUSTED_MODULE_BYTES:
+            raise BootstrapEntrypointError(f"{label} exceeds reviewed size bound")
+        chunks.append(chunk)
+    if os.fstat(fd).st_size != total:
+        raise BootstrapEntrypointError(f"{label} changed while being read")
+    return b"".join(chunks)
+
+
+def _git_blob(data: bytes) -> str:
+    digest = hashlib.sha1()
+    digest.update(f"blob {len(data)}\0".encode("ascii"))
+    digest.update(data)
+    return digest.hexdigest()
+
+
+def _verify_fixed_parent_chain(*, expected_uid: int = 0, expected_gid: int = 0) -> None:
+    for path in (Path("/usr"), Path("/usr/local"), Path("/usr/local/lib")):
+        fd = _open_abs_dir(path, str(path))
+        try:
+            st = os.fstat(fd)
+            if st.st_uid != expected_uid or st.st_gid != expected_gid or (_mode(st) & 0o022):
+                raise BootstrapEntrypointError(f"{path} parent trust metadata mismatch")
+        finally:
+            os.close(fd)
+
+
+def _verify_self_metadata(*, expected_uid: int = 0, expected_gid: int = 0) -> None:
+    if Path(os.path.abspath(__file__)) != INSTALLED_ENTRYPOINT:
+        raise BootstrapEntrypointError("bootstrap must execute from the fixed installed entrypoint")
+    parent = _open_abs_dir(INSTALLED_ENTRYPOINT.parent, "installed entrypoint parent")
+    try:
+        fd = os.open(
+            INSTALLED_ENTRYPOINT.name,
+            os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+            dir_fd=parent,
+        )
+        try:
+            st = os.fstat(fd)
+            if not stat.S_ISREG(st.st_mode):
+                raise BootstrapEntrypointError("installed bootstrap entrypoint must be a regular file")
+            _assert_metadata(
+                st,
+                uid=expected_uid,
+                gid=expected_gid,
+                expected_mode=TRUSTED_ENTRYPOINT_MODE,
+                label="installed bootstrap entrypoint",
+            )
+        finally:
+            os.close(fd)
+    finally:
+        os.close(parent)
+
+
+def _verify_trust_anchor(
+    *,
+    package_root: Path = INSTALLED_PACKAGE_ROOT,
+    expected_uid: int = 0,
+    expected_gid: int = 0,
+    expected_blobs: dict[str, str] = TRUSTED_MODULE_GIT_BLOBS,
+) -> None:
+    package = _open_abs_dir(package_root, "bootstrap package root")
+    try:
+        _assert_metadata(
+            os.fstat(package),
+            uid=expected_uid,
+            gid=expected_gid,
+            expected_mode=TRUSTED_DIRECTORY_MODE,
+            label="bootstrap package root",
+        )
+        for name, expected_blob in expected_blobs.items():
+            if "/" in name or name.startswith("."):
+                raise BootstrapEntrypointError("trusted module name is invalid")
+            fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=package)
+            try:
+                st = os.fstat(fd)
+                if not stat.S_ISREG(st.st_mode):
+                    raise BootstrapEntrypointError(f"trusted module {name} must be regular")
+                _assert_metadata(
+                    st,
+                    uid=expected_uid,
+                    gid=expected_gid,
+                    expected_mode=TRUSTED_MODULE_MODE,
+                    label=f"trusted module {name}",
+                )
+                if _git_blob(_read_module_bytes(fd, f"trusted module {name}")) != expected_blob:
+                    raise BootstrapEntrypointError(f"trusted module Git blob mismatch: {name}")
+            finally:
+                os.close(fd)
+    finally:
+        os.close(package)
+
+
+def _load_trusted_modules(*, package_root: Path = INSTALLED_PACKAGE_ROOT):
+    sys.dont_write_bytecode = True
+    package = types.ModuleType(TRUSTED_PACKAGE_NAME)
+    package.__package__ = TRUSTED_PACKAGE_NAME
+    package.__path__ = [str(package_root)]
+    sys.modules[TRUSTED_PACKAGE_NAME] = package
+    for stem in ("dashboard_bootstrap_contract", "dashboard_bootstrap_fs", "dashboard_bootstrap"):
+        importlib.import_module(f"{TRUSTED_PACKAGE_NAME}.{stem}")
+    return sys.modules[f"{TRUSTED_PACKAGE_NAME}.dashboard_bootstrap"]
 
 
 def parse_args() -> argparse.Namespace:
@@ -26,18 +183,23 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     if os.geteuid() != 0:
-        raise DashboardBootstrapError("Dashboard bootstrap helper must run as root")
+        raise BootstrapEntrypointError("Dashboard bootstrap helper must run as root")
+    _verify_fixed_parent_chain()
+    _verify_self_metadata()
+    _verify_trust_anchor()
+    bootstrap = _load_trusted_modules()
+
     args = parse_args()
     if not args.apply:
-        raise DashboardBootstrapError("Dashboard bootstrap requires explicit --apply")
-    if args.ack != BOOTSTRAP_ACK:
-        raise DashboardBootstrapError("Dashboard bootstrap acknowledgement mismatch")
-    receipt = apply_bootstrap(
+        raise BootstrapEntrypointError("Dashboard bootstrap requires explicit --apply")
+    if args.ack != bootstrap.BOOTSTRAP_ACK:
+        raise BootstrapEntrypointError("Dashboard bootstrap acknowledgement mismatch")
+    receipt = bootstrap.apply_bootstrap(
         expected_current=args.expected_current,
         expected_candidate_sha256=args.expected_candidate,
         acknowledgement=args.ack,
     )
-    print(json.dumps(asdict(receipt), sort_keys=True, separators=(",", ":")))
+    print(json.dumps(receipt.__dict__, sort_keys=True, separators=(",", ":")))
     return 0
 
 
