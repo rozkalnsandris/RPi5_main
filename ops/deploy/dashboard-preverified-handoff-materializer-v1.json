@@ -18,14 +18,15 @@
     "hash_algorithm": "sha256"
   },
   "unprivileged_ingress": {
-    "root": "/home/andris/.cache/rozkalns-dashboard-preverified-ingress/066b9a24008dd57439f9e66eae198416c4dfc590",
-    "source": "/home/andris/.cache/rozkalns-dashboard-preverified-ingress/066b9a24008dd57439f9e66eae198416c4dfc590/source",
-    "manifest": "/home/andris/.cache/rozkalns-dashboard-preverified-ingress/066b9a24008dd57439f9e66eae198416c4dfc590/candidate-manifest.json",
+    "root_template": "/home/{owner}/.cache/rozkalns-dashboard-preverified-ingress/066b9a24008dd57439f9e66eae198416c4dfc590",
+    "source_relative": "source",
+    "manifest_relative": "candidate-manifest.json",
     "owner": "andris",
     "group": "andris",
     "directory_mode": "0555",
     "file_mode": "0444",
     "caller_selectable": false,
+    "owner_component_is_fixed": true,
     "timestamp_pid_prep_root_allowed_as_privileged_input": false,
     "git_checkout_allowed_as_privileged_input": false
   },
