@@ -12,6 +12,7 @@ SOURCE_REPOSITORY_ID = 1317143994
 TARGET_ALIAS = "hermes-deals-origin-path-audit"
 ROLLBACK_POLICY = "NONE"
 INVOCATION_BUDGET = (("hermes-deals.read-only-audit-invocation", 1),)
+WORKFLOW_SOURCE_BLOB = "99a18c5f669e7880a8a8288c3f964285df87ae22"
 DISPATCHER_SOURCE_BLOB = "f9bfd02c6d36bb54d5380e1f0c99a0195e2ff4bc"
 INSTALLER_SOURCE_BLOB = "41f004420a0f5aed314aaefd796a54e14dbd17ea"
 PROBE_SOURCE_BLOB = "2362e8eb578a7279c38fe4ed2a7d1edd05df891a"
@@ -32,6 +33,7 @@ REQUIRED_DEPENDENCIES = frozenset(
     {
         f"source-repository-id:{SOURCE_REPOSITORY_ID}",
         "migration-contract:hermes-deals#787",
+        f"workflow-source-blob:{WORKFLOW_SOURCE_BLOB}",
         f"dispatcher-source-blob:{DISPATCHER_SOURCE_BLOB}",
         f"installer-source-blob:{INSTALLER_SOURCE_BLOB}",
         f"probe-source-blob:{PROBE_SOURCE_BLOB}",
@@ -77,6 +79,10 @@ class HermesDealsOriginAuditAdapter:
             "adapter_id": ADAPTER_ID,
             "source_sha": prepared.source_sha,
             "source_repository_id": SOURCE_REPOSITORY_ID,
+            "workflow_source_blob": WORKFLOW_SOURCE_BLOB,
+            "dispatcher_source_blob": DISPATCHER_SOURCE_BLOB,
+            "installer_source_blob": INSTALLER_SOURCE_BLOB,
+            "probe_source_blob": PROBE_SOURCE_BLOB,
             "read_only": True,
             "execution_enabled": False,
             "privileged_dispatch_ready": False,
