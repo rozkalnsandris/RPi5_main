@@ -35,6 +35,7 @@ test:
 	python3 ./tests/test-deploy-executor-p10-bootstrap-adapter.py
 	python3 ./tests/test-deploy-executor-p10-dashboard-adapter.py
 	python3 ./tests/test-deploy-executor-p10-bootstrap-installer-stager.py
+	python3 ./tests/test-dashboard-rpi5-handoff-execution-provenance.py
 	bash ./tests/test-balcony-watering.sh
 	bash ./tests/test-balkons-log-mqtt-credential.sh
 	bash ./tests/test-balkons-log-legacy-set-contract.sh

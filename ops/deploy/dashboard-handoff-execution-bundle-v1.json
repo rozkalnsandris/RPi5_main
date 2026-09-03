@@ -1,0 +1,96 @@
+{
+  "schema_version": 2,
+  "capability": "dashboard-rpi5.handoff-execution-bundle.v1",
+  "execution_enabled": false,
+  "source_repository": "rozkalnsandris/RPi5_main",
+  "source_binding": {
+    "merged_main_sha": "fresh-post-merge-main-required",
+    "merged_tree_sha": "fresh-post-merge-tree-required",
+    "entrypoint": {"repo_path": "scripts/dashboard-rpi5-preverified-handoff-materializer.py", "git_blob_sha": "9c462cec02d89ab2cd77278c4cf1421b6beda998"},
+    "core": {"repo_path": "scripts/dashboard-rpi5-preverified-handoff-materializer-core.py", "git_blob_sha": "e697b00121e2baa83df77782b1a2a504811d6316"},
+    "ingress_preparer": {"repo_path": "scripts/dashboard-rpi5-handoff-execution-ingress-preparer.py", "git_blob_sha": "f5fb6395797fb1b2c5007ba45ae5486433f6097f", "privileged_execution": false},
+    "bootstrap_emitter": {"repo_path": "scripts/dashboard-rpi5-handoff-execution-bootstrap-emitter.py", "git_blob_sha": "8fd6f7a09d2d3cf37c67d661e2a05cf5732414af", "privileged_execution": false},
+    "payload_emitter": {"repo_path": "scripts/dashboard-rpi5-handoff-execution-payload-emitter.py", "git_blob_sha": "47acb02e651fc26ece38f43fdfc749cf4113e0ea", "privileged_execution": false},
+    "bundle_materializer": {"repo_path": "scripts/dashboard-rpi5-handoff-execution-bundle-materializer.py", "git_blob_sha": "f1f5240afd98071f034196a2e61c716b85a560ab", "privileged_execution": true},
+    "proof": {"repo_path": "scripts/dashboard-rpi5-handoff-execution-bundle-proof.py", "git_blob_sha": "50c79610c4d26422c68b2aee3622874680519996", "privileged_execution": false},
+    "caller_selectable_source": false
+  },
+  "unprivileged_execution_ingress": {
+    "root": "/home/andris/.cache/rozkalns-dashboard-handoff-exec-ingress/v1",
+    "owner": "andris",
+    "group": "andris",
+    "directory_mode": "0555",
+    "file_mode": "0444",
+    "exact_files": ["dashboard-rpi5-preverified-handoff-materializer.py", "dashboard-rpi5-preverified-handoff-materializer-core.py", "execution-manifest.json"],
+    "git_checkout_allowed_as_privileged_input": false,
+    "root_may_open_ingress_paths": false
+  },
+  "bootstrap": {
+    "transport": "unprivileged-verified-materializer-bytes-to-root-stdin",
+    "root_destination": "/var/lib/rozkalns-dashboard-handoff-exec/.bundle-materializer-v1.py",
+    "root_destination_owner": "root:root",
+    "root_destination_mode": "0444",
+    "hash_proof_against_fresh_merged_source_required_before_execution": true,
+    "root_opens_user_source_path": false
+  },
+  "root_owned_execution_bundle": {
+    "parent": "/var/lib",
+    "base": "/var/lib/rozkalns-dashboard-handoff-exec",
+    "root": "/var/lib/rozkalns-dashboard-handoff-exec/v1",
+    "partial": "/var/lib/rozkalns-dashboard-handoff-exec/.v1.execution-bundle-partial",
+    "entrypoint": "/var/lib/rozkalns-dashboard-handoff-exec/v1/dashboard-rpi5-preverified-handoff-materializer.py",
+    "owner_uid": 0,
+    "group_gid": 0,
+    "parent_mode_precondition": "0755",
+    "base_mode": "0755",
+    "directory_mode": "0555",
+    "file_mode": "0444",
+    "under_executor_state_directory": false,
+    "under_user_home": false,
+    "target_must_be_absent": true,
+    "partial_must_be_absent": true,
+    "post_publish_absolute_reopen": true
+  },
+  "materialization": {
+    "payload_transport": "unprivileged-verified-wrapper-core-manifest-json-to-root-stdin",
+    "root_reads_user_controlled_path": false,
+    "root_materializer_hardcodes_entrypoint_git_blob": "9c462cec02d89ab2cd77278c4cf1421b6beda998",
+    "root_materializer_hardcodes_core_git_blob": "e697b00121e2baa83df77782b1a2a504811d6316",
+    "runtime_manifest_is_not_sufficient_code_authority": true,
+    "root_destination_rehash_required": true,
+    "root_destination_git_blob_recheck_required": true,
+    "exact_tree_equality_required": true,
+    "symlinks_allowed": false,
+    "special_files_allowed": false,
+    "publish": "renameat2-RENAME_NOREPLACE",
+    "handoff_materializer_invoked": false,
+    "generic_privileged_execution_surface": false
+  },
+  "runtime_execution": {
+    "only_entrypoint": "/var/lib/rozkalns-dashboard-handoff-exec/v1/dashboard-rpi5-preverified-handoff-materializer.py",
+    "bundle_verified_before_core_import": true,
+    "direct_user_checkout_execution": "fail-closed"
+  },
+  "failure_policy": {"automatic_retry": false, "automatic_cleanup": false, "automatic_rollback": false, "deletion_budget": 0, "preserve_partial_after_post_mutation_failure": true},
+  "gate_sequence": [
+    "exact-merged-source-validation",
+    "read-only-fixed-candidate-ingress-reproof",
+    "unprivileged-execution-ingress-preparation",
+    "read-only-execution-ingress-proof",
+    "separate-execution-bundle-materialization-live-root-gate",
+    "read-only-execution-bundle-proof",
+    "fresh-handoff-materialization-live-root-gate",
+    "read-only-handoff-proof"
+  ],
+  "explicit_exclusions": [
+    "root opening or executing a Git checkout or user-home ingress path",
+    "root execution from /tmp or another mutable user-owned path",
+    "caller-supplied privileged path/command/script/environment authority",
+    "shell/subprocess/Git/network/credential execution inside the root materializer",
+    "handoff materialization by execution-bundle materialization",
+    "candidate staging or /opt/dashboard_RPi5 mutation",
+    "PLAN/APPLY/deploy or package/systemd/Docker/network/database mutation",
+    "automatic retry/cleanup/rollback/deletion"
+  ],
+  "source_state": {"registry_execution_enabled_must_remain": false, "live_authority": false, "merge_authorizes_execution_bundle_materialization": false, "merge_authorizes_handoff_materialization": false, "previous_repaired_handoff_live_authority_reusable": false}
+}
