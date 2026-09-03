@@ -3,12 +3,10 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
-import grp
 import hashlib
 import json
 import os
 from pathlib import Path
-import pwd
 import re
 import stat
 import sys
@@ -19,9 +17,7 @@ REVIEWED_SOURCE_SHA = "066b9a24008dd57439f9e66eae198416c4dfc590"
 MANIFEST_SCHEMA = "dashboard-rpi5.production-candidate.v1"
 MANIFEST_NAME = "candidate-manifest.json"
 SOURCE_NAME = "source"
-INPUT_OWNER = "rozkalns-deploy-executor"
-INPUT_GROUP = "rozkalns-deploy-executor"
-INPUT_BASE = Path("/var/lib/rozkalns-deploy-executor/dashboard-candidate-input")
+INPUT_BASE = Path("/var/lib/rozkalns-dashboard-candidate-input")
 INPUT_ROOT = INPUT_BASE / REVIEWED_SOURCE_SHA
 INPUT_SOURCE = INPUT_ROOT / SOURCE_NAME
 INPUT_MANIFEST = INPUT_ROOT / MANIFEST_NAME
@@ -38,6 +34,7 @@ MAX_TOTAL_BYTES = 512 * 1024 * 1024
 COPY_BUFFER_BYTES = 64 * 1024
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
+INPUT_BASE_MODE = 0o755
 INPUT_DIRECTORY_MODE = 0o555
 INPUT_FILE_MODE = 0o444
 OUTPUT_DIRECTORY_MODE = 0o755
@@ -298,10 +295,24 @@ def _hash_fd(fd: int, expected_size: int, label: str) -> str:
     return digest.hexdigest()
 
 
-def _load_and_verify_input(*, expected_digest: str, uid: int, gid: int) -> CandidateManifest:
-    root = _open_abs_dir(INPUT_ROOT, "candidate input root")
+def _open_verified_input_root(*, uid: int, gid: int) -> int:
+    base = _open_abs_dir(INPUT_BASE, "candidate input base")
+    try:
+        _assert_metadata(os.fstat(base), uid=uid, gid=gid, mode=INPUT_BASE_MODE, label="candidate input base", directory=True)
+        root = os.open(REVIEWED_SOURCE_SHA, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=base)
+    finally:
+        os.close(base)
     try:
         _assert_metadata(os.fstat(root), uid=uid, gid=gid, mode=INPUT_DIRECTORY_MODE, label="candidate input root", directory=True)
+    except Exception:
+        os.close(root)
+        raise
+    return root
+
+
+def _load_and_verify_input(*, expected_digest: str, uid: int, gid: int) -> CandidateManifest:
+    root = _open_verified_input_root(uid=uid, gid=gid)
+    try:
         manifest_fd = os.open(MANIFEST_NAME, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=root)
         try:
             _assert_metadata(os.fstat(manifest_fd), uid=uid, gid=gid, mode=INPUT_FILE_MODE, label="candidate input manifest", directory=False)
@@ -430,9 +441,8 @@ def _write_manifest(output_root_fd: int, manifest: CandidateManifest) -> None:
 
 
 def _stage_verified_input(manifest: CandidateManifest, *, uid: int, gid: int) -> dict[str, Any]:
-    input_root = _open_abs_dir(INPUT_ROOT, "candidate input root")
+    input_root = _open_verified_input_root(uid=uid, gid=gid)
     try:
-        _assert_metadata(os.fstat(input_root), uid=uid, gid=gid, mode=INPUT_DIRECTORY_MODE, label="candidate input root", directory=True)
         input_source = os.open(SOURCE_NAME, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=input_root)
         try:
             _assert_metadata(os.fstat(input_source), uid=uid, gid=gid, mode=INPUT_DIRECTORY_MODE, label="candidate input source", directory=True)
@@ -493,12 +503,7 @@ def _stage_verified_input(manifest: CandidateManifest, *, uid: int, gid: int) ->
 
 
 def _handoff_ids() -> tuple[int, int]:
-    try:
-        uid = pwd.getpwnam(INPUT_OWNER).pw_uid
-        gid = grp.getgrnam(INPUT_GROUP).gr_gid
-    except KeyError as exc:
-        raise CandidateStagerError("fixed candidate-input owner/group is unavailable") from exc
-    return uid, gid
+    return ROOT_UID, ROOT_GID
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
