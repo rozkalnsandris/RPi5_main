@@ -43,6 +43,7 @@ class P5InterfaceSecurityTests(unittest.TestCase):
             {
                 "rozkalns-control-center.merge-postcanary-reconcile.v1",
                 "dashboard-rpi5.production-release.v1",
+                "hermes-deals.origin-path-audit.v1",
             },
         )
         strict = operations["rozkalns-control-center.merge-postcanary-reconcile.v1"]
@@ -52,6 +53,10 @@ class P5InterfaceSecurityTests(unittest.TestCase):
         self.assertEqual(dashboard.authorization_class, "ORDINARY")
         self.assertTrue(dashboard.ordinary_live_all_eligible)
         self.assertEqual(dashboard.baseline.kind, "queue_exact")
+        hermes = operations["hermes-deals.origin-path-audit.v1"]
+        self.assertEqual(hermes.authorization_class, "STRICT")
+        self.assertFalse(hermes.ordinary_live_all_eligible)
+        self.assertEqual(hermes.rollback_policy, "NONE")
         self.assertFalse(registry.execution_enabled)
 
     def test_audit_registry_has_one_dormant_cv_operation(self):
