@@ -1,114 +1,133 @@
-# Hermes Deals origin-path pull canary — historical source contract
+# Hermes Deals origin-path pull canary — source contract
 
-Status: **HISTORICAL DORMANT OPERATION / NO LONGER PRODUCTION-REGISTRY SELECTED / NOT HOST-EXECUTABLE**
+Status: **SOURCE-REGISTERED / GLOBALLY EXECUTION-DISABLED / STRICT / NOT HOST-EXECUTABLE**
 
 Tracking:
 
+- current reconciliation: `RPi5_main#352`
 - Hermes Deals migration: `rozkalnsandris/hermes-deals#384`
 - merged inventory/architecture gate: `hermes-deals#787`
 - shared executor roadmap: `RPi5_main#236`
-- historical production-registry consumption gate: `RPi5_main#275`
-- historical genuine-canary waiting gate: `RPi5_main#276`
+- historical dormant source gate: `RPi5_main#247`
+- historical production-registry gate: `RPi5_main#275`
+- historical P9 reroute: `RPi5_main#278`
 
-## Current routing notice
+## Current routing
 
-On 2026-08-30 the owner redirected the first P9 genuine read-only canary target from Hermes Deals to the Rozkalns Control post-canary read-only reconciliation path. The production executor registry therefore no longer selects `hermes-deals.origin-path-audit.v1` as the active P9 operation. The reviewed Hermes adapter and fixtures remain source-controlled as historical regression evidence only.
+After the ordinary Dashboard P10 canary completed, Phase 4 returned to the residual Hermes Deals execution-path migration. `RPi5_main#352` re-admits the already-reviewed `hermes-deals.origin-path-audit.v1` operation to the source-controlled production operation registry alongside the existing Control Center and Dashboard operations.
 
-This change does not activate either operation. Global `execution_enabled=false` remains authoritative, no real READY or LIVE-AUTH is created by source reconciliation, and P9 remains incapable of calling adapter `apply()`, a dispatcher, a workflow trigger or a production mutation surface.
+This is source reconciliation only. Top-level `execution_enabled=false` remains authoritative. Re-admission does not create READY or LIVE-AUTH state, invoke an audit, install or activate a broker, change a runner, mutate host/runtime state, deploy production, or authorize any later live action.
 
-The current selected P9 source contract is documented in `docs/CONTROL_CENTER_POSTCANARY_P9_SOURCE.md`.
+The operation remains:
 
-## Historical purpose
+- authorization class: `STRICT`;
+- ordinary LIVE-ALL eligibility: `false`;
+- rollback policy: `NONE`;
+- invocation budget: exactly one `hermes-deals.read-only-audit-invocation`;
+- adapter behavior: validation-only with fail-closed `apply()`.
 
-This source contract originally defined the first read-only Hermes Deals migration canary for the existing owner-authorized pull executor architecture. It did not create a second request protocol and did not replace the current Hermes Deals self-hosted audit path.
+## Current cross-repository provenance
 
-The canary operation is `hermes-deals.origin-path-audit.v1`. It was introduced as a dormant reviewed fixture by `RPi5_main#247` and was consumed into the production registry by `RPi5_main#275` while the global gate remained `execution_enabled=false`. After the 2026-08-30 owner routing decision, the production registry moved to the Control Center operation while this Hermes contract remained dormant historical evidence.
+Fresh `RPi5_main#352` reconciliation on 2026-09-03 verified the current Hermes Deals source baseline:
 
-## Frozen cross-repository source identities
+- repository: `rozkalnsandris/hermes-deals`;
+- stable repository ID: `1317143994`;
+- current reviewed `main`: `fbe3cfa143788607446d0095ae1f887354d10eb3`;
+- origin audit workflow: `.github/workflows/origin-path-rpi5-audit.yml`;
+- workflow source blob: `99a18c5f669e7880a8a8288c3f964285df87ae22`;
+- dispatcher: `tools/runner/origin-path-rpi5-audit-dispatcher.sh`;
+- dispatcher source blob: `f9bfd02c6d36bb54d5380e1f0c99a0195e2ff4bc`;
+- installer: `tools/runner/install-origin-path-rpi5-audit.sh`;
+- installer source blob: `41f004420a0f5aed314aaefd796a54e14dbd17ea`;
+- probe: `tools/hermes_deals_origin_probe.py`;
+- probe source blob: `2362e8eb578a7279c38fe4ed2a7d1edd05df891a`.
 
-Hermes Deals reviewed baseline for this historical source contract:
+The static registry and adapter bind all four reviewed workflow/helper blob identities. Missing or mismatched provenance fails closed. These source identities prove reviewed source compatibility only; they do not prove current host installation, root-owned file identity, runner state, credentials, permissions, deployed SHA, runtime configuration, or production health.
 
-- repository: `rozkalnsandris/hermes-deals`
-- stable repository ID: `1317143994`
-- reviewed main after `#787`: `2fbde52cc5b6661343dca3fd967d8112cb2bffbe`
-- dispatcher source blob: `f9bfd02c6d36bb54d5380e1f0c99a0195e2ff4bc`
-- installer source blob: `41f004420a0f5aed314aaefd796a54e14dbd17ea`
-- probe source blob: `2362e8eb578a7279c38fe4ed2a7d1edd05df891a`
+Any future executable canary must freshly resolve the authorized Hermes Deals source SHA, merged/reachable state, exact-SHA CI and the then-current reviewed provenance. Historical or current prose must never silently expand authority.
 
-These identities remain evidence for the historical review, not permanent execution authority. Any future proposal to restore Hermes as a live candidate must independently resolve current source identity, exact authorized SHA, merged/reachable status, exact-SHA CI and a new owner routing decision.
+## Static selector and authority boundary
 
-## Historical static operation contract
+The only reviewed operation identity is `hermes-deals.origin-path-audit.v1` with:
 
-The reviewed historical fixture remains deliberately fail-closed:
+- source repository: `rozkalnsandris/hermes-deals`;
+- target alias: `hermes-deals-origin-path-audit`;
+- execution location class: `trusted-home-host`;
+- repository entrypoint selector: `tools/runner/origin-path-rpi5-audit-dispatcher.sh`;
+- baseline resolver: `hermes-deals.origin-path-registration.v1`.
 
-- authorization class: `STRICT`
-- ordinary LIVE-ALL eligibility: `false`
-- target alias: `hermes-deals-origin-path-audit`
-- location class: `trusted-home-host`
-- reviewed source selector: `tools/runner/origin-path-rpi5-audit-dispatcher.sh`
-- rollback policy: `NONE`
-- invocation budget: one `hermes-deals.read-only-audit-invocation`
-- production DB, deploy/cutover, restart/configuration, parser/collector, runner and credential/permission changes are excluded.
+GitHub queue prose is not command, executable path, argv, environment, operation-count or exclusion authority. Normalization must match the exact static selectors in the source registry. An unknown operation or unreviewed entrypoint fails closed.
 
-Queue prose is not operation, command, path, argument or budget authority. The historical fixture can be normalized only against its historical reviewed registry fixture; it is no longer accepted by the current production executor registry.
+The fixed exclusions are:
+
+- production database writes;
+- production deployment/cutover;
+- restart/configuration mutation;
+- parser/collector behavior changes;
+- runner registration/deregistration;
+- GitHub App/credential/permission changes.
+
+The registry may only describe one bounded read-only audit invocation. It does not grant generic shell, sudo, root, process-launch or arbitrary privileged execution authority.
 
 ## Privilege boundary
 
-The proposed executor poller remains the P5/P6 dedicated unprivileged service identity with `NoNewPrivileges=true`, no capabilities and no privileged command bridge.
+The pull-executor poller remains an unprivileged service identity with `NoNewPrivileges=true` and no generic privileged command bridge.
 
-The only payload allowed across the future unprivileged-to-privileged interface remains `rozkalns.deploy-dispatch-request.v1`: authorization repository identity, authorization issue identity and request UUID. It does not carry source SHA, operation ID, target, executable path, arguments or mutation budget.
+The reviewed unprivileged-to-privileged request shape remains identity-only: authorization repository identity, authorization issue identity and request UUID. It does not carry source SHA, operation ID, target, command, executable path, argv or mutation budget.
 
-This historical contract therefore grants no access to the Hermes Deals privileged dispatcher. A future privileged broker would still require independent re-fetch and revalidation of LIVE-AUTH, queue/source/CI/baseline state and a currently selected static operation.
+`HermesDealsOriginAuditAdapter` does not cross that boundary. Before any future privileged request could become eligible, a separately reviewed broker/runtime path would have to independently re-fetch and validate LIVE-AUTH, READY queue state, exact source/CI/baseline state, operation registry identity and current host-side registration. This source contract does not assert that such a live boundary is ready.
 
-## Legacy canary path compatibility
+## Legacy Hermes path
 
-The Hermes Deals `origin-path-rpi5-audit` workflow remains outside this source-only routing change. Its self-hosted audit job and root-owned dispatcher are not modified by switching the P9 source contract to Control Center.
+The existing Hermes Deals `origin-path-rpi5-audit` workflow remains unchanged by #352. Its self-hosted `hermes-deals-audit` runner and root-owned dispatcher continue to be residual Phase 4 surfaces until a separately proven replacement and separately authorized retirement exist.
 
-The dispatcher remains bound to its existing runner-owned evidence directory contract. This document does not weaken that allowlist, add a caller, alter its installer or add a privilege rule.
+The workflow currently calls the fixed root-owned dispatcher and requires the reviewed workflow/dispatcher/installer/probe source family. Re-admitting the operation to the disabled RPi5 registry does not invoke that workflow and does not modify its runner, dispatcher, installer, probe, sudoers rule, systemd state or source checkout.
+
+The separate `hermes-deals-release` production runner surface is not part of this operation and is not changed or authorized by #352.
 
 ## Adapter behavior
 
-`HermesDealsOriginAuditAdapter` remains validation-only historical evidence:
+`HermesDealsOriginAuditAdapter` is deliberately non-executable:
 
-- preflight verifies exact operation/source/target/rollback/budget/exclusion/dependency contracts;
+- preflight verifies exact operation, adapter, repository, SHA shape, target, rollback, invocation budget, exclusions and all reviewed provenance dependencies;
+- preflight exposes the four reviewed provenance blob identities as source evidence;
 - `execution_enabled` must remain false;
-- `apply()` always fails closed;
-- postconditions only describe the sanitized evidence contract and required false production-mutation flags;
-- the adapter contains no command launcher or generic execution surface.
+- `apply()` always raises `AdapterError` and performs no launch or mutation;
+- postconditions describe only the sanitized evidence fields and required false production-mutation flags;
+- the adapter contains no `subprocess`, shell, `sudo`, generic command or process-launch bridge.
 
-## Historical regression evidence
+## Regression contract
 
-The retained regression contract now proves that:
+Focused regression coverage proves that:
 
-1. the historical Hermes registry fixture remains globally execution-disabled and `STRICT`;
-2. the current production registry does **not** select the Hermes operation;
-3. the exact historical READY fixture still normalizes only against the historical reviewed fixture without enabling execution;
-4. free-form queue prose cannot expand the static invocation budget;
-5. an unreviewed entrypoint fails with `UNKNOWN_OPERATION`;
-6. adapter preflight remains read-only/disabled and `apply()` remains fail-closed;
-7. the privileged dispatch request rejects SHA/operation/command/path/argv fields;
-8. the expected Hermes Deals dispatcher/installer/probe source identities remain bound as historical dependencies;
-9. source evidence does not claim host readiness.
-
-## Current P9 gate
-
-This Hermes document no longer selects the next P9 attempt. The current P9 operation and exact waiting conditions are defined by `docs/CONTROL_CENTER_POSTCANARY_P9_SOURCE.md` plus the current production registry and canonical roadmap.
-
-Do not create or promote a dummy/placeholder READY item or LIVE-AUTH merely to exercise either operation. P9 success remains local `DRY_RUN_READY` with `PRODUCTION_MUTATION_STARTED=false`; P10 remains a separate mutation gate.
+1. the production registry remains globally `execution_enabled=false`;
+2. Control Center and Dashboard operations remain present with their reviewed semantics unchanged;
+3. Hermes is re-admitted as `STRICT`, not ordinary LIVE-ALL eligible, with rollback `NONE`;
+4. the exact current Hermes source fixture normalizes against the production registry without enabling execution;
+5. workflow, dispatcher, installer and probe provenance are bound and missing/drifted provenance fails closed;
+6. free-form queue prose cannot expand the static invocation budget or exclusions;
+7. an unreviewed entrypoint fails with `UNKNOWN_OPERATION`;
+8. adapter preflight remains read-only/disabled and `apply()` remains fail-closed;
+9. the privileged dispatch request rejects SHA/operation/command/path/argv authority;
+10. source evidence does not claim host/runtime readiness.
 
 ## Explicitly not authorized
 
-This historical source contract itself does not authorize or perform:
+This source contract does not authorize or perform:
 
+- merge of the #352 source PR without a separate owner decision;
 - READY or LIVE-AUTH creation/promotion;
-- any GitHub App, authorization-surface, credential or permission change;
-- executor or privileged-broker installation/activation change;
-- systemd, privilege-rule, package or host mutation;
-- Hermes Deals runner registration/deregistration;
+- invoking the Hermes origin-path audit;
+- workflow migration or workflow dispatch/rerun;
+- executor/broker installation or activation;
+- systemd, sudoers, privilege-rule, package, host or runtime mutation;
+- source-checkout synchronization on the RPi5;
+- runner registration/deregistration or retirement;
+- GitHub App, credential, secret or permission changes;
 - production deploy/cutover;
 - DB/Review/publication writes;
 - parser/collector changes;
-- Cloudflare mutation;
-- modification of the existing Hermes Deals origin audit dispatcher/installer/workflow.
+- Cloudflare/network mutation;
+- P11 high-risk/control-plane work.
 
-Nothing in this document carries historical authorization forward.
+Source readiness is not live readiness. Any later replacement canary, runner retirement or other host/runtime action requires fresh merged-source validation and its own explicit owner LIVE authorization.
