@@ -4,7 +4,7 @@ Status: **source only / execution disabled / no LIVE authority**. Issue: `RPi5_m
 
 ## Problem
 
-The handoff materializer must eventually run as root, but `/home/andris/RPi5_main` is an unprivileged writable Git checkout. Root must never execute/import Python from that checkout, `/tmp`, or the user-owned execution ingress.
+The handoff materializer must eventually run as root, but `<fixed-owner-home>/RPi5_main` is an unprivileged writable Git checkout. Root must never execute/import Python from that checkout, `/tmp`, or the user-owned execution ingress.
 
 ## Reviewed source chain
 
@@ -24,9 +24,9 @@ The machine contract records each reviewed Git blob. The future merged main SHA/
 
 The reviewed ingress remains:
 
-`/home/andris/.cache/rozkalns-dashboard-handoff-exec-ingress/v1`
+`<fixed-owner-home>/.cache/rozkalns-dashboard-handoff-exec-ingress/v1`
 
-It is `andris:andris`, directory `0555`, files `0444`, and contains exactly the wrapper, core and `execution-manifest.json`. The manifest binds the fresh exact merged main SHA/tree plus both code Git blobs and SHA-256 digests.
+The `<fixed-owner-home>` prefix is resolved from the passwd database for fixed owner `andris`, not from caller input or `$HOME`. It is `andris:andris`, directory `0555`, files `0444`, and contains exactly the wrapper, core and `execution-manifest.json`. The manifest binds the fresh exact merged main SHA/tree plus both code Git blobs and SHA-256 digests.
 
 The privileged side never opens this path.
 

@@ -1,5 +1,5 @@
 from __future__ import annotations
-import hashlib,json
+import hashlib,json,re
 from pathlib import Path
 import unittest
 
@@ -25,12 +25,14 @@ class T(unittest.TestCase):
  def test_no_root_user_path(self):
   c=json.loads(CON.read_text());self.assertFalse(c['unprivileged_execution_ingress']['root_may_open_ingress_paths']);self.assertFalse(c['bootstrap']['root_opens_user_source_path']);self.assertFalse(c['materialization']['root_reads_user_controlled_path'])
   s=MAT.read_text();self.assertIn('sys.stdin.buffer',s);self.assertIn('renameat2',s);self.assertIn('O_NOFOLLOW',s);self.assertIn("Path('/var/lib/rozkalns-dashboard-handoff-exec')",s)
-  for x in ['/home/andris','subprocess','os.system(','shell=True','Popen(','execv(','--source','--path','--command']: self.assertNotIn(x,s)
+  self.assertIsNone(re.search(r'/home/[A-Za-z0-9._-]+',s))
+  for x in ['subprocess','os.system(','shell=True','Popen(','execv(','--source','--path','--command']: self.assertNotIn(x,s)
  def test_root_receiver_binds_reviewed_code(self):
   s=MAT.read_text();self.assertIn("ENTRY_BLOB='9c462cec02d89ab2cd77278c4cf1421b6beda998'",s);self.assertIn("CORE_BLOB='e697b00121e2baa83df77782b1a2a504811d6316'",s);self.assertIn('handoffMaterializations=0',s)
   c=json.loads(CON.read_text())['materialization'];self.assertTrue(c['runtime_manifest_is_not_sufficient_code_authority'])
  def test_fixed_emitters(self):
-  b=BOOT.read_text();e=EMIT.read_text();self.assertIn('materializer bytes differ from committed Git blob',b);self.assertIn("ING=Path('/home/andris/.cache/rozkalns-dashboard-handoff-exec-ingress/v1')",e)
+  c=json.loads(CON.read_text())['unprivileged_execution_ingress'];self.assertEqual(c['owner_home_source'],'passwd-db');self.assertEqual(c['root_relative'],'.cache/rozkalns-dashboard-handoff-exec-ingress/v1')
+  p=PREP.read_text();b=BOOT.read_text();e=EMIT.read_text();self.assertIn('materializer bytes differ from committed Git blob',b);self.assertIn('Path(pwd.getpwnam(OWNER).pw_dir)',p);self.assertIn("ING=Path(pwd.getpwnam('andris').pw_dir)/'.cache/rozkalns-dashboard-handoff-exec-ingress/v1'",e)
   for s in (b,e):
    for x in ['--source','--path','--command','--script','--env','sudo']:self.assertNotIn(x,s)
  def test_gate_and_failure(self):

@@ -486,32 +486,3 @@ Current gate sequence:
 7. `ops-workflows#28` remains WAITING through these gates and may become READY only after a valid fresh reviewed P10 PLAN baseline exists. READY never authorizes P10 APPLY.
 
 No merge in the #320/#321 source chain authorizes host/runtime mutation, deployment, bootstrap execution or P10 application APPLY.
-
-## Current supersession — P10 Dashboard #349 immutable root execution provenance (2026-09-03)
-
-This section supersedes all earlier Phase 4, Track X and current-next-action wording that still treats the post-#321 installer/stager LIVE gate as the present executable next step. Canonical short-form continuity remains `RPi5_main#191`; mutable state must still be fresh-read before every consequential action.
-
-At this reconciliation checkpoint:
-
-- `RPi5_main#347/#348` merged the fixed root-owned Dashboard handoff trust-namespace repair; the reconciliation-time source checkpoint is `b8bb4119d5b16f770373984f9553682a02317e8b`, which becomes historical evidence as soon as `main` moves;
-- accepted fixed candidate-ingress proof is recorded for Dashboard source `066b9a24008dd57439f9e66eae198416c4dfc590`, candidate SHA-256 `d12a49de01891e3a4cc188fa16c173c5eb44c786f013d3a6ebfefe95dcaa47b9`, exactly 72 files and 6,773,246 bytes;
-- canonical controller #295 is stopped at `STOP_SOURCE_EXECUTION_TRUST_GAP`: root must not execute/import the handoff materializer directly from `/home/andris/RPi5_main`, another user-writable checkout, `/tmp`, or a user-owned ingress path;
-- the repaired handoff base/target/partial were recorded absent and handoff runtime mutation had not started at the accepted #295 evidence point; those host facts are historical receipts only and must be freshly revalidated before any later host gate;
-- current source work item is `RPi5_main#349`, which binds the handoff wrapper/core to exact Git blobs plus SHA-256, adds a fixed unprivileged execution ingress, stdin-only bootstrap/payload transport, a fixed root-owned receiver under `/var/lib/rozkalns-dashboard-handoff-exec`, exact-tree no-replace publication and a read-only root-bundle proof;
-- the only eventual privileged handoff entrypoint is the canonical root-owned bundle path `/var/lib/rozkalns-dashboard-handoff-exec/v1/dashboard-rpi5-preverified-handoff-materializer.py`; the wrapper must verify the root-owned bundle and exact source binding before importing the core;
-- `ops/deploy/executor-operations.json` remains globally `execution_enabled=false`; source merge grants no execution-bundle, handoff, candidate-stager, PLAN, APPLY or other LIVE authority.
-
-The binding gate order is now:
-
-1. finish `RPi5_main#349` through focused source/contract/tests plus this plan reconciliation, Draft PR, exact-head CI/review and Ready; then STOP for an explicit merge authorization;
-2. only after owner-authorized merge, freshly validate exact merged `main`/tree, exact-main CI and the #349 source/blob contract;
-3. separately authorize any required unprivileged execution-ingress host preparation and prove that fixed ingress against the fresh merged source; source authorization does not authorize that host mutation;
-4. only then may a **separate execution-bundle LIVE/root gate** install/prove the fixed root-owned bootstrap receiver and materialize the fixed root-owned execution bundle from stdin-only verified bytes; this gate must not invoke the handoff materializer and must STOP after its bounded mutation;
-5. perform read-only execution-bundle proof against the fresh merged main/tree and exact wrapper/core Git blobs and SHA-256 values;
-6. only after that proof passes may the owner issue a **fresh separate handoff-materialization LIVE/root gate**; no pre-#349 handoff authorization is reusable;
-7. handoff materialization MUST STOP for read-only handoff proof before any separate candidate-stager LIVE/root gate;
-8. candidate staging, trusted-controller PLAN, READY reconciliation and later APPLY remain later distinct gates and retain their existing no-retry/no-cleanup/no-implicit-rollback rules.
-
-`docs/ROADMAP.md` remains the older general host-subsystem roadmap and is not the P10 control-plane continuity document; #349 does not require a ROADMAP edit.
-
-Current next action is therefore **#349 SOURCE-RECOVERY-AND-PLAN-RECONCILIATION -> DRAFT PR -> EXACT-HEAD CI/REVIEW -> READY -> STOP FOR `MERGE RPi5_main #<PR>`**. No current source authorization, this plan reconciliation, a future PR, or its eventual merge may be interpreted as LIVE/root/runtime authority.

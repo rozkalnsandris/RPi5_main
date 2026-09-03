@@ -28,7 +28,7 @@ CORE_REPO_PATH = "scripts/dashboard-rpi5-preverified-handoff-materializer-core.p
 ENTRYPOINT = REPO_ROOT / ENTRYPOINT_REPO_PATH
 CORE = REPO_ROOT / CORE_REPO_PATH
 
-INGRESS_BASE = Path("/home/andris/.cache/rozkalns-dashboard-handoff-exec-ingress")
+INGRESS_BASE = Path(pwd.getpwnam(OWNER).pw_dir) / ".cache/rozkalns-dashboard-handoff-exec-ingress"
 INGRESS_ROOT = INGRESS_BASE / "v1"
 INGRESS_PARTIAL = INGRESS_BASE / ".v1.execution-ingress-partial"
 MANIFEST_NAME = "execution-manifest.json"

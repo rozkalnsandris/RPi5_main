@@ -4,7 +4,7 @@ import base64,hashlib,json,os,pwd,grp,stat,subprocess,sys
 from pathlib import Path
 
 REPO=Path(__file__).resolve().parent.parent
-ING=Path('/home/andris/.cache/rozkalns-dashboard-handoff-exec-ingress/v1')
+ING=Path(pwd.getpwnam('andris').pw_dir)/'.cache/rozkalns-dashboard-handoff-exec-ingress/v1'
 ENTRY='dashboard-rpi5-preverified-handoff-materializer.py'; CORE='dashboard-rpi5-preverified-handoff-materializer-core.py'; MAN='execution-manifest.json'
 EPATH='scripts/dashboard-rpi5-preverified-handoff-materializer.py'; CPATH='scripts/dashboard-rpi5-preverified-handoff-materializer-core.py'
 ACK='RPi5_main#349:EMIT-DASHBOARD-HANDOFF-EXECUTION-BUNDLE-PAYLOAD-V1'

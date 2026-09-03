@@ -17,13 +17,13 @@ Issues: original `RPi5_main#345`; trust-namespace repair `RPi5_main#347`; privil
 
 The fixed unprivileged candidate ingress remains:
 
-`/home/andris/.cache/rozkalns-dashboard-preverified-ingress/066b9a24008dd57439f9e66eae198416c4dfc590`
+`<fixed-owner-home>/.cache/rozkalns-dashboard-preverified-ingress/066b9a24008dd57439f9e66eae198416c4dfc590`
 
-It is `andris:andris`, directories `0555`, files `0444`, and is never privileged authority by arbitrary pathname.
+The `<fixed-owner-home>` prefix denotes the fixed owner home resolved from the passwd database. It is `andris:andris`, directories `0555`, files `0444`, and is never privileged authority by arbitrary pathname.
 
 ## Privileged execution provenance
 
-Root must **not execute or import** the materializer from `/home/andris/RPi5_main`, another Git checkout, `/tmp`, or another mutable user-owned path.
+Root must **not execute or import** the materializer from `<fixed-owner-home>/RPi5_main`, another Git checkout, `/tmp`, or another mutable user-owned path.
 
 Before a handoff LIVE gate can exist, #349 requires the separate execution-bundle contract:
 
