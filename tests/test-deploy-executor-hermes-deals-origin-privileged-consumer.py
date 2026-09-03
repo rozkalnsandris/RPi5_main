@@ -55,10 +55,13 @@ def canonical_evidence() -> CanonicalHermesOriginEvidence:
         mutation_budget=INVOCATION_BUDGET,
         exclusions=tuple(sorted(REQUIRED_EXCLUSIONS)),
         dependencies=tuple(sorted(REQUIRED_DEPENDENCIES)),
+        isolated_authorization_surface_valid=True,
         authorization_owner_verified=True,
         authorization_ttl_valid=True,
         authorization_body_unchanged=True,
+        authorization_replay_available=True,
         queue_ready=True,
+        queue_binding_valid=True,
         registry_execution_enabled=False,
         source_reachable_from_main=True,
         source_ci_success=True,
@@ -82,26 +85,24 @@ def host_evidence() -> dict[str, object]:
         "probe_identity_match": True,
         "workflow_identity_match": True,
         "evidence_read_only": True,
+        "evidence_fresh": True,
         "protected_values_included": False,
     }
 
 
 class FakeCanonicalRevalidator:
-    def __init__(self, evidence: CanonicalHermesOriginEvidence | None = None):
-        self.evidence = evidence or canonical_evidence()
-        self.calls: list[tuple[str, object]] = []
-        self.fail_final = False
+    def __init__(
+        self,
+        first: CanonicalHermesOriginEvidence | None = None,
+        second: CanonicalHermesOriginEvidence | None = None,
+    ):
+        self.first = first or canonical_evidence()
+        self.second = second if second is not None else self.first
+        self.calls: list[int] = []
 
     def revalidate(self, authorization_issue_number: int) -> CanonicalHermesOriginEvidence:
-        self.calls.append(("revalidate", authorization_issue_number))
-        return self.evidence
-
-    def verify_unchanged(self, evidence: CanonicalHermesOriginEvidence) -> None:
-        self.calls.append(("verify_unchanged", evidence.request_id))
-        if self.fail_final:
-            raise HermesDealsOriginPrivilegedConsumerError(
-                "final authorization revalidation failed"
-            )
+        self.calls.append(authorization_issue_number)
+        return self.first if len(self.calls) == 1 else self.second
 
 
 class FakeHostEvidenceResolver:
@@ -121,7 +122,7 @@ class HermesDealsOriginPrivilegedConsumerTests(unittest.TestCase):
             "authorization_issue_number": 17,
         }
 
-    def test_exact_identity_is_revalidated_and_remains_non_executable(self):
+    def test_exact_identity_is_fully_revalidated_twice_and_remains_non_executable(self):
         canonical = FakeCanonicalRevalidator()
         host = FakeHostEvidenceResolver()
 
@@ -142,13 +143,7 @@ class HermesDealsOriginPrivilegedConsumerTests(unittest.TestCase):
         self.assertFalse(ready.genuine_hermes_audit_authorized)
         self.assertFalse(ready.runner_retirement_eligible)
         self.assertFalse(ready.production_mutation_started)
-        self.assertEqual(
-            canonical.calls,
-            [
-                ("revalidate", 17),
-                ("verify_unchanged", REQUEST_ID),
-            ],
-        )
+        self.assertEqual(canonical.calls, [17, 17])
         self.assertEqual(host.calls, [SOURCE_SHA])
 
     def test_expanded_request_never_reaches_canonical_revalidator(self):
@@ -226,12 +221,15 @@ class HermesDealsOriginPrivilegedConsumerTests(unittest.TestCase):
                     host_evidence_resolver=FakeHostEvidenceResolver(),
                 )
 
-    def test_authorization_queue_source_ci_and_baseline_must_be_freshly_valid(self):
+    def test_full_canonical_trust_state_must_be_valid(self):
         fields = (
+            "isolated_authorization_surface_valid",
             "authorization_owner_verified",
             "authorization_ttl_valid",
             "authorization_body_unchanged",
+            "authorization_replay_available",
             "queue_ready",
+            "queue_binding_valid",
             "source_reachable_from_main",
             "source_ci_success",
             "baseline_matched",
@@ -247,7 +245,7 @@ class HermesDealsOriginPrivilegedConsumerTests(unittest.TestCase):
                         host_evidence_resolver=FakeHostEvidenceResolver(),
                     )
 
-    def test_host_evidence_is_exact_sanitized_and_source_bound(self):
+    def test_host_evidence_is_exact_fresh_sanitized_and_source_bound(self):
         cases: list[dict[str, object]] = []
 
         expanded = host_evidence()
@@ -257,6 +255,10 @@ class HermesDealsOriginPrivilegedConsumerTests(unittest.TestCase):
         protected = host_evidence()
         protected["protected_values_included"] = True
         cases.append(protected)
+
+        stale = host_evidence()
+        stale["evidence_fresh"] = False
+        cases.append(stale)
 
         wrong_source = host_evidence()
         wrong_source["registered_source_sha"] = "3" * 40
@@ -275,18 +277,32 @@ class HermesDealsOriginPrivilegedConsumerTests(unittest.TestCase):
                         canonical_revalidator=canonical,
                         host_evidence_resolver=FakeHostEvidenceResolver(evidence),
                     )
-                self.assertEqual(canonical.calls, [("revalidate", 17)])
+                self.assertEqual(canonical.calls, [17])
 
-    def test_final_authorization_revalidation_failure_does_not_emit_ready(self):
-        canonical = FakeCanonicalRevalidator()
-        canonical.fail_final = True
+    def test_final_full_revalidation_failure_does_not_emit_ready(self):
+        stale = replace(canonical_evidence(), authorization_ttl_valid=False)
+        with self.assertRaises(HermesDealsOriginPrivilegedConsumerError):
+            evaluate_hermes_deals_origin_privileged_consumer(
+                self.request(),
+                canonical_revalidator=FakeCanonicalRevalidator(
+                    canonical_evidence(),
+                    stale,
+                ),
+                host_evidence_resolver=FakeHostEvidenceResolver(),
+            )
+
+    def test_final_evidence_drift_does_not_emit_ready(self):
+        drifted = replace(canonical_evidence(), source_ci_run_id=9002)
         with self.assertRaisesRegex(
             HermesDealsOriginPrivilegedConsumerError,
-            "final authorization revalidation failed",
+            "canonical evidence drifted",
         ):
             evaluate_hermes_deals_origin_privileged_consumer(
                 self.request(),
-                canonical_revalidator=canonical,
+                canonical_revalidator=FakeCanonicalRevalidator(
+                    canonical_evidence(),
+                    drifted,
+                ),
                 host_evidence_resolver=FakeHostEvidenceResolver(),
             )
 
@@ -315,6 +331,7 @@ class HermesDealsOriginPrivilegedConsumerTests(unittest.TestCase):
     def test_source_readiness_keeps_live_gates_false(self):
         readiness = source_readiness()
         self.assertTrue(readiness["privileged_consumer_implemented"])
+        self.assertTrue(readiness["full_canonical_revalidation_after_host_evidence"])
         self.assertFalse(readiness["privileged_dispatch_enabled"])
         self.assertFalse(readiness["host_wiring_enabled"])
         self.assertFalse(readiness["genuine_hermes_audit_authorized"])

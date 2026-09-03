@@ -14,11 +14,11 @@ Tracking:
 
 PR #353 re-admitted `hermes-deals.origin-path-audit.v1` to the source-controlled operation registry while global `execution_enabled=false` remains authoritative. The operation is `STRICT`, not ordinary LIVE-ALL eligible, has rollback policy `NONE`, and permits at most one future `hermes-deals.read-only-audit-invocation`.
 
-PR #355 then froze an identity-only request carrying only `schema` and `authorization_issue_number`. It did not add a dispatcher, host wiring, result writer or production apply surface.
+PR #355 froze an identity-only request carrying only `schema` and `authorization_issue_number`. It did not add a dispatcher, host wiring, result writer or production apply surface.
 
-Issue #356 implements the next source-only layer: a Hermes-specific privileged-consumer validation/orchestration module. The module can derive `PRIVILEGED_CONSUMER_READY` only after independent canonical revalidation and a separately supplied sanitized host-evidence check. It still cannot invoke the root-owned audit helper, call `HermesDealsOriginAuditAdapter.apply()`, consume a live request, write a result, mutate host state or retire a runner.
+Issue #356 implements the next source-only layer: a Hermes-specific privileged-consumer validation/orchestration module. The module can derive `PRIVILEGED_CONSUMER_READY` only after two complete canonical revalidations with fresh sanitized host evidence between them. It still cannot invoke the root-owned audit helper, call `HermesDealsOriginAuditAdapter.apply()`, consume a live request, write a result, mutate host state or retire a runner.
 
-The persistent `hermes-deals-audit` self-hosted workflow remains the current historical execution path until a later replacement canary proves otherwise.
+The persistent `hermes-deals-audit` self-hosted workflow remains the existing execution path until a later replacement canary proves otherwise.
 
 ## Current reviewed Hermes source provenance
 
@@ -45,28 +45,30 @@ The privileged consumer accepts only:
 
 The request parser rejects every extra field, including command/shell text, executable paths, argv, environment, sudo authority, source SHA, `as_of`, artifact paths and repository entrypoints.
 
-The consumer receives no source, queue, operation, dispatcher or host path authority from the caller. Those values must be re-derived from reviewed canonical interfaces.
+The consumer receives no source, queue, operation, dispatcher or host-path authority from the caller. Those values must be re-derived through capability-specific reviewed interfaces.
 
-## Independent canonical revalidation
+## Complete canonical revalidation
 
-`hermes_deals_origin_privileged_consumer.py` requires a capability-specific read-only canonical revalidator. Before source readiness can be emitted, the returned evidence must prove all of the following:
+`hermes_deals_origin_privileged_consumer.py` requires a capability-specific read-only canonical revalidator. Each complete revalidation must prove:
 
-1. the revalidated LIVE-AUTH issue number exactly equals the identity-only request;
-2. request identity, queue issue and source-CI run identity are valid;
-3. owner identity, authorization TTL and authorization body stability are freshly valid;
-4. the queue is READY;
-5. source repository is exactly `rozkalnsandris/hermes-deals`;
-6. exact source SHA is merged/reachable and exact-SHA CI succeeded;
-7. operation and adapter are exactly `hermes-deals.origin-path-audit.v1`;
-8. target alias is exactly `hermes-deals-origin-path-audit`;
-9. authorization class is `STRICT` and ordinary LIVE-ALL eligibility is false;
-10. global registry and prepared-operation execution remain disabled;
-11. rollback remains `NONE` and mutation budget remains exactly one read-only audit invocation;
-12. required exclusions and all reviewed source/provenance dependencies remain present;
-13. baseline validation passed;
-14. adapter preflight is read-only and still reports privileged dispatch not ready.
+1. the isolated authorization surface is the reviewed one;
+2. the revalidated LIVE-AUTH issue number exactly equals the identity-only request;
+3. request identity, queue issue and source-CI run identity are valid;
+4. owner identity, authorization TTL and authorization body stability are valid;
+5. replay state is available and the request is eligible for this read-only source gate;
+6. the queue is READY and its binding to the authorization is valid;
+7. source repository is exactly `rozkalnsandris/hermes-deals`;
+8. exact source SHA is merged/reachable and exact-SHA CI succeeded;
+9. operation and adapter are exactly `hermes-deals.origin-path-audit.v1`;
+10. target alias is exactly `hermes-deals-origin-path-audit`;
+11. authorization class is `STRICT` and ordinary LIVE-ALL eligibility is false;
+12. global registry and prepared-operation execution remain disabled;
+13. rollback remains `NONE` and mutation budget remains exactly one read-only audit invocation;
+14. required exclusions and all reviewed source/provenance dependencies remain present;
+15. baseline validation passed;
+16. adapter preflight is read-only and still reports privileged dispatch not ready.
 
-After sanitized host evidence is resolved, the consumer requires a final `verify_unchanged()` authorization check immediately before emitting its source-only readiness result.
+The consumer performs this full revalidation before host evidence resolution and repeats the full revalidation after host evidence resolution. Both immutable evidence snapshots must be exactly equal. TTL, replay, queue/source/CI/policy drift therefore fails closed before `PRIVILEGED_CONSUMER_READY`.
 
 ## Sanitized host-evidence contract
 
@@ -76,7 +78,9 @@ The host-evidence resolver is a separately supplied read-only interface. Its out
 - exact operation ID;
 - registered source SHA;
 - fixed registration name;
-- booleans proving root ownership, `0600` registration mode, dispatcher/probe/workflow identity match and read-only capture;
+- booleans proving root ownership, `0600` registration mode, dispatcher/probe/workflow identity match;
+- `evidence_read_only=true`;
+- `evidence_fresh=true`;
 - `protected_values_included=false`.
 
 Extra fields fail closed. In particular, raw protected configuration, credential values, arbitrary paths, argv, environment or command authority cannot enter this contract.
@@ -87,7 +91,7 @@ This source contract does not itself inspect the host and does not prove any cur
 
 The #356 consumer source has no subprocess/shell execution, no generic sudo bridge, no systemd control, no socket/spool service, no `adapter.apply()` call, no StateStore `consume()`, no result writer and no host mutation API.
 
-`PRIVILEGED_CONSUMER_READY` therefore means only that a future privileged host component could be eligible for a separate installation/activation review. It is not an audit authorization and cannot cause the root-owned Hermes dispatcher to run.
+`PRIVILEGED_CONSUMER_READY` means only that source-level canonical and sanitized-evidence contracts converged. It is not an audit authorization and cannot cause the root-owned Hermes dispatcher to run.
 
 ## Gate separation
 
