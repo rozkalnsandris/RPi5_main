@@ -23,6 +23,7 @@ from deploy_executor.hermes_deals_origin_adapter import (
     OPERATION_ID,
     PROBE_SOURCE_BLOB,
     SOURCE_REPOSITORY_ID,
+    WORKFLOW_SOURCE_BLOB,
     HermesDealsOriginAuditAdapter,
 )
 from deploy_executor.queue_normalizer import (
@@ -40,8 +41,8 @@ POLLER_UNIT = ROOT / "ops" / "systemd" / "rozkalns-deploy-executor.service"
 ADAPTER_SOURCE = ROOT / "ops" / "lib" / "deploy_executor" / "hermes_deals_origin_adapter.py"
 
 
-def _prepared():
-    registry = load_registry(CANARY_REGISTRY)
+def _prepared(registry_path: Path = CANARY_REGISTRY):
+    registry = load_registry(registry_path)
     issue = json.loads(CANARY_QUEUE.read_text(encoding="utf-8"))
     normalized = normalize_ready_queue(
         issue, repository_full_name=QUEUE_REPOSITORY, registry=registry
@@ -50,15 +51,20 @@ def _prepared():
 
 
 class HermesDealsOriginCanaryTests(unittest.TestCase):
-    def test_historical_canary_remains_dormant_but_is_not_production_selected(self):
+    def test_canary_is_re_admitted_to_disabled_production_registry(self):
         production = load_registry(PRODUCTION_REGISTRY)
         reviewed = load_registry(CANARY_REGISTRY)
         self.assertFalse(production.execution_enabled)
         self.assertFalse(reviewed.execution_enabled)
-        self.assertNotIn(OPERATION_ID, {row.operation_id for row in production.operations})
+        production_operations = {row.operation_id: row for row in production.operations}
+        self.assertIn(OPERATION_ID, production_operations)
+        operation = production_operations[OPERATION_ID]
+        self.assertEqual(operation.adapter_id, ADAPTER_ID)
+        self.assertEqual(operation.authorization_class, "STRICT")
+        self.assertFalse(operation.ordinary_live_all_eligible)
+        self.assertEqual(operation.rollback_policy, "NONE")
         self.assertEqual(len(reviewed.operations), 1)
         self.assertEqual(reviewed.operations[0].operation_id, OPERATION_ID)
-        self.assertEqual(reviewed.operations[0].adapter_id, ADAPTER_ID)
 
     def test_canary_registry_is_strict_and_dormant(self):
         registry = load_registry(CANARY_REGISTRY)
@@ -75,15 +81,16 @@ class HermesDealsOriginCanaryTests(unittest.TestCase):
             INVOCATION_BUDGET,
         )
 
-    def test_exact_ready_queue_normalizes_from_historical_registry_but_cannot_enable_execution(self):
-        prepared = _prepared()
+    def test_exact_ready_queue_normalizes_from_production_registry_without_enabling_execution(self):
+        prepared = _prepared(PRODUCTION_REGISTRY)
         self.assertFalse(prepared.execution_enabled)
         self.assertEqual(prepared.operation_id, OPERATION_ID)
         self.assertEqual(prepared.adapter_id, ADAPTER_ID)
-        self.assertEqual(prepared.source_sha, "2fbde52cc5b6661343dca3fd967d8112cb2bffbe")
+        self.assertEqual(prepared.source_sha, "fbe3cfa143788607446d0095ae1f887354d10eb3")
         self.assertEqual(prepared.rollback_policy, "NONE")
         self.assertEqual(prepared.mutation_budget, INVOCATION_BUDGET)
         self.assertIn(f"source-repository-id:{SOURCE_REPOSITORY_ID}", prepared.dependencies)
+        self.assertIn(f"workflow-source-blob:{WORKFLOW_SOURCE_BLOB}", prepared.dependencies)
         self.assertIn(
             f"dispatcher-source-blob:{DISPATCHER_SOURCE_BLOB}", prepared.dependencies
         )
@@ -93,7 +100,7 @@ class HermesDealsOriginCanaryTests(unittest.TestCase):
         self.assertIn(f"probe-source-blob:{PROBE_SOURCE_BLOB}", prepared.dependencies)
 
     def test_adapter_preflight_is_read_only_and_apply_is_inert(self):
-        prepared = _prepared()
+        prepared = _prepared(PRODUCTION_REGISTRY)
         adapter = HermesDealsOriginAuditAdapter()
         self.assertIs(AdapterCatalog((adapter,)).require(ADAPTER_ID), adapter)
         preflight = adapter.preflight(prepared)
@@ -101,6 +108,10 @@ class HermesDealsOriginCanaryTests(unittest.TestCase):
         self.assertTrue(preflight["read_only"])
         self.assertFalse(preflight["execution_enabled"])
         self.assertFalse(preflight["privileged_dispatch_ready"])
+        self.assertEqual(preflight["workflow_source_blob"], WORKFLOW_SOURCE_BLOB)
+        self.assertEqual(preflight["dispatcher_source_blob"], DISPATCHER_SOURCE_BLOB)
+        self.assertEqual(preflight["installer_source_blob"], INSTALLER_SOURCE_BLOB)
+        self.assertEqual(preflight["probe_source_blob"], PROBE_SOURCE_BLOB)
         with self.assertRaisesRegex(AdapterError, "execution-disabled"):
             adapter.apply(prepared)
 
@@ -121,8 +132,30 @@ class HermesDealsOriginCanaryTests(unittest.TestCase):
                 with self.assertRaisesRegex(AdapterError, pattern):
                     HermesDealsOriginAuditAdapter().preflight(bad)
 
+    def test_adapter_rejects_missing_or_drifted_source_provenance(self):
+        prepared = _prepared(PRODUCTION_REGISTRY)
+        dependencies = list(prepared.dependencies)
+        workflow = f"workflow-source-blob:{WORKFLOW_SOURCE_BLOB}"
+        dependencies.remove(workflow)
+        missing = copy.copy(prepared)
+        object.__setattr__(missing, "dependencies", tuple(dependencies))
+        with self.assertRaisesRegex(AdapterError, "dependency mismatch"):
+            HermesDealsOriginAuditAdapter().preflight(missing)
+
+        drifted = copy.copy(prepared)
+        object.__setattr__(
+            drifted,
+            "dependencies",
+            tuple(
+                "workflow-source-blob:" + "0" * 40 if item == workflow else item
+                for item in prepared.dependencies
+            ),
+        )
+        with self.assertRaisesRegex(AdapterError, "dependency mismatch"):
+            HermesDealsOriginAuditAdapter().preflight(drifted)
+
     def test_queue_prose_cannot_expand_static_operation_authority(self):
-        registry = load_registry(CANARY_REGISTRY)
+        registry = load_registry(PRODUCTION_REGISTRY)
         issue = json.loads(CANARY_QUEUE.read_text(encoding="utf-8"))
         issue["body"] = issue["body"].replace(
             "one read-only audit invocation; zero production mutations",
@@ -138,7 +171,7 @@ class HermesDealsOriginCanaryTests(unittest.TestCase):
         self.assertFalse(prepared.execution_enabled)
 
     def test_queue_cannot_select_an_unreviewed_entrypoint(self):
-        registry = load_registry(CANARY_REGISTRY)
+        registry = load_registry(PRODUCTION_REGISTRY)
         issue = json.loads(CANARY_QUEUE.read_text(encoding="utf-8"))
         issue["body"] = issue["body"].replace(
             "`tools/runner/origin-path-rpi5-audit-dispatcher.sh` fixed reviewed selector",
@@ -194,7 +227,9 @@ class HermesDealsOriginCanaryTests(unittest.TestCase):
                 self.assertNotIn(forbidden, adapter)
 
     def test_source_contract_does_not_claim_host_readiness(self):
-        postconditions = HermesDealsOriginAuditAdapter().postconditions(_prepared())
+        postconditions = HermesDealsOriginAuditAdapter().postconditions(
+            _prepared(PRODUCTION_REGISTRY)
+        )
         self.assertTrue(postconditions["read_only"])
         self.assertFalse(postconditions["execution_enabled"])
         self.assertEqual(
