@@ -37,6 +37,7 @@ _HOST_EVIDENCE_FIELDS = frozenset(
         "probe_identity_match",
         "workflow_identity_match",
         "evidence_read_only",
+        "evidence_fresh",
         "protected_values_included",
     }
 )
@@ -64,10 +65,13 @@ class CanonicalHermesOriginEvidence:
     mutation_budget: tuple[tuple[str, int], ...]
     exclusions: tuple[str, ...]
     dependencies: tuple[str, ...]
+    isolated_authorization_surface_valid: bool
     authorization_owner_verified: bool
     authorization_ttl_valid: bool
     authorization_body_unchanged: bool
+    authorization_replay_available: bool
     queue_ready: bool
+    queue_binding_valid: bool
     registry_execution_enabled: bool
     source_reachable_from_main: bool
     source_ci_success: bool
@@ -109,11 +113,6 @@ class CanonicalHermesOriginRevalidator(Protocol):
         self,
         authorization_issue_number: int,
     ) -> CanonicalHermesOriginEvidence: ...
-
-    def verify_unchanged(
-        self,
-        evidence: CanonicalHermesOriginEvidence,
-    ) -> None: ...
 
 
 class SanitizedHermesOriginHostEvidenceResolver(Protocol):
@@ -193,10 +192,13 @@ def _validate_canonical_evidence(
         _fail("canonical Hermes provenance/dependencies are incomplete")
 
     required_true = {
+        "isolated_authorization_surface_valid": evidence.isolated_authorization_surface_valid,
         "authorization_owner_verified": evidence.authorization_owner_verified,
         "authorization_ttl_valid": evidence.authorization_ttl_valid,
         "authorization_body_unchanged": evidence.authorization_body_unchanged,
+        "authorization_replay_available": evidence.authorization_replay_available,
         "queue_ready": evidence.queue_ready,
+        "queue_binding_valid": evidence.queue_binding_valid,
         "source_reachable_from_main": evidence.source_reachable_from_main,
         "source_ci_success": evidence.source_ci_success,
         "baseline_matched": evidence.baseline_matched,
@@ -252,6 +254,7 @@ def parse_sanitized_hermes_origin_host_evidence(
         "probe_identity_match",
         "workflow_identity_match",
         "evidence_read_only",
+        "evidence_fresh",
     ):
         _require_bool(value[field], True, f"sanitized host {field}")
     _require_bool(
@@ -290,21 +293,26 @@ def evaluate_hermes_deals_origin_privileged_consumer(
         expected_source_sha=evidence.source_sha,
     )
 
-    # Final authority revalidation occurs after host evidence resolution and before
-    # the source-only readiness result is emitted.
-    canonical_revalidator.verify_unchanged(evidence)
+    # Repeat the complete canonical revalidation after host evidence resolution.
+    # Any TTL/replay/queue/source/CI/policy drift prevents readiness.
+    final_evidence = canonical_revalidator.revalidate(
+        request.authorization_issue_number,
+    )
+    _validate_canonical_evidence(request, final_evidence)
+    if final_evidence != evidence:
+        _fail("canonical evidence drifted during privileged consumer revalidation")
 
     return HermesDealsOriginPrivilegedConsumerReady(
         result="PRIVILEGED_CONSUMER_READY",
         authorization_issue_number=request.authorization_issue_number,
-        request_id=evidence.request_id,
-        queue_issue=evidence.queue_issue,
-        source_repository=evidence.source_repository,
-        source_sha=evidence.source_sha,
-        current_main_sha=evidence.current_main_sha,
-        source_ci_run_id=evidence.source_ci_run_id,
-        operation_id=evidence.operation_id,
-        target_alias=evidence.target_alias,
+        request_id=final_evidence.request_id,
+        queue_issue=final_evidence.queue_issue,
+        source_repository=final_evidence.source_repository,
+        source_sha=final_evidence.source_sha,
+        current_main_sha=final_evidence.current_main_sha,
+        source_ci_run_id=final_evidence.source_ci_run_id,
+        operation_id=final_evidence.operation_id,
+        target_alias=final_evidence.target_alias,
         host_evidence_id=host_evidence.evidence_id,
     )
 
@@ -319,4 +327,5 @@ def source_readiness() -> Mapping[str, Any]:
         "production_mutation_started": False,
         "request_authority": ("authorization_issue_number",),
         "host_evidence_schema": HOST_EVIDENCE_SCHEMA,
+        "full_canonical_revalidation_after_host_evidence": True,
     }
