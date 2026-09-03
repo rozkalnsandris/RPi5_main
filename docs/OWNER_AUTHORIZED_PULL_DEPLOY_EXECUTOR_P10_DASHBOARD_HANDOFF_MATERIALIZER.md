@@ -2,7 +2,7 @@
 
 Status: **source only / execution disabled / no LIVE authority**.
 
-Issues: original `RPi5_main#345`; security repair `RPi5_main#347`.
+Issues: original `RPi5_main#345`; trust-namespace repair `RPi5_main#347`; privileged execution-provenance repair `RPi5_main#349`.
 
 ## Frozen candidate
 
@@ -13,11 +13,33 @@ Issues: original `RPi5_main#345`; security repair `RPi5_main#347`.
 - candidate SHA-256 `d12a49de01891e3a4cc188fa16c173c5eb44c786f013d3a6ebfefe95dcaa47b9`;
 - exactly 72 files / 6,773,246 bytes.
 
-## Fixed ingress and repaired root-owned handoff
+## Fixed candidate ingress
 
-The fixed unprivileged ingress remains `/home/{fixed-owner}/.cache/rozkalns-dashboard-preverified-ingress/<source-sha>` with compile-time owner `andris`, `andris:andris`, directories `0555`, files `0444`. Preparing it is a separate explicitly authorized unprivileged host mutation.
+The fixed unprivileged candidate ingress remains:
 
-The repaired privileged handoff namespace is:
+`<fixed-owner-home>/.cache/rozkalns-dashboard-preverified-ingress/066b9a24008dd57439f9e66eae198416c4dfc590`
+
+The `<fixed-owner-home>` prefix denotes the fixed owner home resolved from the passwd database. It is `andris:andris`, directories `0555`, files `0444`, and is never privileged authority by arbitrary pathname.
+
+## Privileged execution provenance
+
+Root must **not execute or import** the materializer from `<fixed-owner-home>/RPi5_main`, another Git checkout, `/tmp`, or another mutable user-owned path.
+
+Before a handoff LIVE gate can exist, #349 requires the separate execution-bundle contract:
+
+`ops/deploy/dashboard-handoff-execution-bundle-v1.json`
+
+The only accepted privileged entrypoint is:
+
+`/var/lib/rozkalns-dashboard-handoff-exec/v1/dashboard-rpi5-preverified-handoff-materializer.py`
+
+Its sibling core and `execution-manifest.json` must be in the same root-owned immutable bundle. The bundle is materialized in a separate root gate from a fixed unprivileged execution ingress, with root receiving verified bytes by stdin rather than opening user-controlled source paths. A read-only proof must establish exact merged main SHA/tree, exact wrapper/core Git blobs and SHA-256 values, root ownership/modes and exact three-file tree before handoff execution is authorized.
+
+The wrapper checks the canonical root-owned execution path and exact execution manifest **before importing the core**. It then rehashes its own root-owned file and the root-owned core against the execution manifest. This makes the Git checkout source evidence only, never root code authority.
+
+## Repaired root-owned handoff
+
+The accepted handoff namespace remains:
 
 ```text
 /var/lib/rozkalns-dashboard-candidate-input/
@@ -26,25 +48,36 @@ The repaired privileged handoff namespace is:
     candidate-manifest.json
 ```
 
-It is outside the executor service StateDirectory. `/var/lib` must be `root:root 0755`; the materializer may create only the fixed base as `root:root 0755`. Partial/final candidate directories and accepted source directories remain root-owned; final directories are `0555` and final files/manifest are `0444`. No accepted handoff object is transferred to the executor service.
+It is outside executor StateDirectory. `/var/lib` must be `root:root 0755`; the handoff base is `root:root 0755`; final handoff directories are `root:root 0555`; files/manifest are `root:root 0444`.
 
-Publication remains one source-derived `renameat2(..., RENAME_NOREPLACE)` with final and partial required absent. After publish, the hardened entrypoint closes the publication namespace, re-opens the **absolute canonical final path**, and re-verifies root ownership, modes, manifest bytes, exact tree, sizes, and SHA-256 before success.
+Publication remains one source-derived `renameat2(..., RENAME_NOREPLACE)` with final and partial required absent. After publish, the wrapper closes the publication namespace, re-opens the absolute canonical final path and re-verifies root ownership, modes, manifest bytes, exact tree, sizes and SHA-256 before success.
 
-There is no deletion budget, automatic retry, cleanup, rollback, alternate path, normal candidate-stager invocation, `/opt/dashboard_RPi5` mutation, PLAN/APPLY, candidate JavaScript execution, shell/subprocess, Git/network/credential authority, or generic caller-selected path/command/argv/environment.
-
-`ops/deploy/executor-operations.json` remains `execution_enabled=false`. Source merge grants **no** host/root/LIVE authority.
+No accepted handoff object is transferred to the unprivileged executor service.
 
 ## Required post-merge gates
 
 1. exact merged-source validation;
-2. unprivileged preverification PASS;
-3. separately authorized fixed-ingress preparation;
-4. **separate handoff-materialization LIVE/root gate** bound to the repaired exact main SHA;
-5. STOP + **read-only handoff proof**;
-6. **separate candidate-stager LIVE/root gate**;
-7. STOP + read-only candidate-staging proof;
-8. **trusted-controller PLAN-only gate**;
-9. **READY reconciliation**;
-10. later **APPLY LIVE-AUTH**.
+2. read-only fixed candidate-ingress reproof;
+3. unprivileged execution-ingress preparation;
+4. read-only execution-ingress proof;
+5. **separate execution-bundle materialization LIVE/root gate**;
+6. STOP + read-only execution-bundle proof;
+7. **fresh handoff-materialization LIVE/root gate**;
+8. STOP + read-only handoff proof;
+9. **separate candidate-stager LIVE/root gate**;
+10. STOP + read-only candidate-staging proof;
+11. **trusted-controller PLAN-only gate**;
+12. **READY reconciliation**;
+13. later **APPLY LIVE-AUTH**.
 
-The old `LIVE RPi5_main #345 HANDOFF-MATERIALIZATION` authorization targeted the rejected trust boundary and is invalidated before consumption. It cannot authorize repaired-source execution.
+The execution-bundle materialization gate does not invoke the handoff materializer. The handoff materializer does not invoke the candidate stager.
+
+## Failure and exclusion policy
+
+There is no deletion budget, automatic retry, cleanup, rollback or alternate path after the first mutation. Preserve partial evidence after a post-mutation failure.
+
+There is no generic caller-selected path/command/argv/environment authority, direct root Git-checkout consumption, `/tmp` execution, candidate JavaScript/Node/package-manager execution as root, root Git/network/credential authority, normal candidate-stager invocation, `/opt/dashboard_RPi5`, PLAN/APPLY/deploy, package/systemd/service/Docker/network/Cloudflare/permission/database mutation.
+
+`ops/deploy/executor-operations.json` remains globally `execution_enabled=false`. Source merge grants **no** execution-bundle, handoff, candidate-stager or APPLY LIVE authority.
+
+The old `LIVE RPi5_main #345 HANDOFF-MATERIALIZATION` authorization and the pre-#349 repaired handoff authorization are unusable after this repair. Fresh post-merge proof and fresh owner authorization are required.
