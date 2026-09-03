@@ -44,7 +44,7 @@ class P4RegistryAndNormalizationTests(unittest.TestCase):
     def test_production_registry_contains_reviewed_disabled_operations(self):
         registry = load_registry(PRODUCTION_REGISTRY)
         self.assertFalse(registry.execution_enabled)
-        self.assertEqual(len(registry.operations), 2)
+        self.assertEqual(len(registry.operations), 3)
         operations = {item.operation_id: item for item in registry.operations}
         p9 = operations["rozkalns-control-center.merge-postcanary-reconcile.v1"]
         self.assertEqual(p9.adapter_id, "rozkalns-control-center.merge-postcanary-reconcile.v1")
@@ -54,6 +54,11 @@ class P4RegistryAndNormalizationTests(unittest.TestCase):
         self.assertTrue(dashboard.ordinary_live_all_eligible)
         self.assertEqual(dashboard.baseline.kind, "queue_exact")
         self.assertEqual(dashboard.baseline.resolver_id, "dashboard-release-plan.v1")
+        hermes = operations["hermes-deals.origin-path-audit.v1"]
+        self.assertEqual(hermes.adapter_id, "hermes-deals.origin-path-audit.v1")
+        self.assertEqual(hermes.authorization_class, "STRICT")
+        self.assertFalse(hermes.ordinary_live_all_eligible)
+        self.assertEqual(hermes.rollback_policy, "NONE")
 
     def test_inert_fixture_registry_loads(self):
         registry = load_registry(FIXTURES / "operations_inert.json")
