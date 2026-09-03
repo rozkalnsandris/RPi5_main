@@ -197,7 +197,6 @@ Canonical reusable baseline SHA: `e2fa7ecb1b1cdfab0711d8e3e147b5ae03a9a3f2`.
 - [x] Private PEM stored root-only on RPi5 at `/root/.config/rozkalns-automation/github-app.pem` with mode `0600`.
 - [x] Short-lived installation-token flow verified from RPi5.
 - [x] Exact-SHA/Actions reads verified for all four repositories without PAT/user-token fallback.
-
 Phase 2 canary evidence (2026-08-09):
 
 - verifier blob: `30a2031a954c29b4f10c35d1d8279381df5b1814`;
@@ -486,3 +485,45 @@ Current gate sequence:
 7. `ops-workflows#28` remains WAITING through these gates and may become READY only after a valid fresh reviewed P10 PLAN baseline exists. READY never authorizes P10 APPLY.
 
 No merge in the #320/#321 source chain authorizes host/runtime mutation, deployment, bootstrap execution or P10 application APPLY.
+
+## Current supersession — P10 ordinary deployment canary COMPLETE (2026-09-03)
+
+This section supersedes every earlier mutable-state statement in this file that says `P10_EXECUTED=false`, describes `ops-workflows#28` as WAITING/READY for this canary, or treats the Dashboard P10 application APPLY as a future gate. Those passages remain historical sequencing evidence only. GitHub remains canonical for source/queue state, and host/runtime identity must always be freshly revalidated before any later consequential action.
+
+Accepted completion evidence is recorded in canonical `RPi5_main#191`, roadmap `RPi5_main#236`, and the completed queue `ops-workflows#28`:
+
+- source-security work item `RPi5_main#349` is closed/completed and PR #350 merged the root execution-provenance boundary;
+- the reviewed RPi5 control source checkpoint for the completed gate chain was `a4ad23274b5e5574b5ad6e1d3fb409f521ae6073`; this SHA is completion evidence, not a durable assertion of future `main`;
+- Dashboard PR #258 merged exact candidate source `066b9a24008dd57439f9e66eae198416c4dfc590`, tree `62756ba22fc8d47e44988c086c08dcf37779cfb3`, direct parent `5f7739348f56398d0ba301c9320e1de0062838fc`;
+- frozen candidate SHA-256 was `d12a49de01891e3a4cc188fa16c173c5eb44c786f013d3a6ebfefe95dcaa47b9`, with 72 files and 6,773,246 bytes;
+- source checkout convergence, candidate-ingress reproof, execution-ingress preparation, root-owned execution-bundle materialization/proof, root-owned handoff materialization/proof, and candidate staging/proof all passed under separately bounded one-shot gates;
+- trusted-controller PLAN-only then passed with observed current `5f7739348f56398d0ba301c9320e1de0062838fc`, target `066b9a24008dd57439f9e66eae198416c4dfc590` absent, and exact planned operations `copy_manifest_allowlisted_release`, `write_verified_manifest_marker`, `atomic_current_symlink_swap`; its postcheck proved no production mutation;
+- after separate exact owner authorization, P10 application APPLY returned `status=APPLIED`, previous release `5f7739348f56398d0ba301c9320e1de0062838fc`, current release `066b9a24008dd57439f9e66eae198416c4dfc590`, exact candidate SHA-256 `d12a49de01891e3a4cc188fa16c173c5eb44c786f013d3a6ebfefe95dcaa47b9`, and `releasesDeleted=0`;
+- read-only post-APPLY proof showed target `verified-existing`, observed current `066b9a24008dd57439f9e66eae198416c4dfc590`, `operations=[]`, and successful apply-lock cleanup;
+- no retry, rollback, destructive cleanup, alternate path, credential/permission mutation, package/service/systemd/Docker/network/Cloudflare/DB mutation, or undeclared release deletion occurred;
+- `ops-workflows#28` is closed/completed with the sanitized completion receipt;
+- every one-time LIVE authorization consumed during this chain is non-reusable.
+
+Binding classification after this canary:
+
+`P9_EXIT_GATE=MET`
+`P10_EXIT_GATE=MET`
+`P10_EXECUTED=true`
+`P10_CANARY_QUEUE_28=COMPLETED`
+`P10_CANARY_REUSABLE_LIVE_AUTH=false`
+
+P10 completion proves this reviewed ordinary Dashboard release path can cross its bounded production mutation boundary under explicit owner authorization. It does not grant generic executor authority, does not make high-risk/control-plane P11 operations ordinary, does not authorize another deployment, and does not authorize retirement of any runner/path.
+
+### Current Phase 4 next action after P10
+
+Phase 4 remains the current program phase until its residual Hermes Deals execution paths are reconciled. Do **not** jump directly to P11 merely because the P10 ordinary canary passed.
+
+After this source-only plan reconciliation is merged and exact-main CI is freshly green:
+
+1. re-read current `RPi5_main/main`, this master plan, canonical #191, roadmap #236, and the closed `ops-workflows#28` completion record;
+2. fresh-read current Hermes Deals governance and only the exact residual self-hosted canary/runner/audit/release paths that Phase 4 still needs to retire or migrate; do not infer current runner/runtime state from this document or old receipts;
+3. perform a **read-only/source-only residual-path retirement-readiness audit** and identify one exact next Phase 4 work item;
+4. if source changes are required, use the normal focused branch -> PR -> CI/review -> Ready flow;
+5. if a runner/path retirement or any other host/runtime mutation becomes eligible, STOP for a new exact owner LIVE authorization. `turpini`, P10 success, this document, and the closed queue do not authorize retirement or any other live mutation.
+
+P11 high-risk/control-plane operation work remains pending behind completion of the current Phase 4 residual-path decision. Any future P11 adapter/root operation requires its own reviewed source contract and separate STRICT owner authorization; it cannot inherit the ordinary P10 canary envelope.
