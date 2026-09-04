@@ -190,5 +190,5 @@ def source_readiness() -> Mapping[str, Any]:
         "runner_retirement_eligible": RUNNER_RETIREMENT_ELIGIBLE,
         "production_mutation_started": PRODUCTION_MUTATION_STARTED,
         "live_install_eligible": LIVE_INSTALL_ELIGIBLE,
-        "blocking_prerequisite": "prove exact authenticated Hermes GitHub source-read/revalidation authority",
+        "blocking_prerequisite": "implement concrete canonical Hermes revalidator and sanitized host-evidence resolver composition, then bind them to the broker entrypoint",
     }
