@@ -219,3 +219,20 @@ Repository source does not prove actual runtime state. The entrypoint remains in
 `PRODUCTION_MUTATION_STARTED=false`
 
 Next sequence: finish this source integration and Draft PR → separate MERGE → fresh exact merged-source/CI/helper validation → read-only runtime preflight → separate LIVE installation authorization → later separate STRICT one-canary authorization → later separate runner-retirement authorization.
+
+## Post-#368 merged-source supersession (2026-09-04)
+
+PR #368 is merged at exact `RPi5_main/main = 2550e77f6cb811ca6f10b49ef0b2fef554d64869` with exact-main Validate #833, FAST-LANE #289 and GITHUB-ONLY #277 successful. Hermes remains `511c1566111983f809bc958bc4b68510771d3efb` and the reviewed helper blob remains `51bb23cc6c2083ab7c8b4e81ba82dd880e46d673`.
+
+`CURRENT_WORK_ITEM=HERMES_RUNTIME_PREFLIGHT_PREPARATION`
+`ELIGIBLE_SOURCE_SHA=2550e77f6cb811ca6f10b49ef0b2fef554d64869`
+`SOURCE_INTEGRATION_MERGED=true`
+`SOURCE_READ_AUTHORITY_PROVEN=false`
+`BROKER_ENTRYPOINT_WIRED=false`
+`HELPER_PROCESS_LAUNCH_WIRED=false`
+`LIVE_INSTALL_ELIGIBLE=false`
+`GENUINE_HERMES_AUDIT_AUTHORIZED=false`
+`RUNNER_RETIREMENT_ELIGIBLE=false`
+`PRODUCTION_MUTATION_STARTED=false`
+
+The one-canary gate is still not authorized. Before any LIVE installation or genuine audit execution, the next separate step is a bounded read-only runtime preflight proving the expected adapters and public-safe identity/metadata contract without reading credential contents.
