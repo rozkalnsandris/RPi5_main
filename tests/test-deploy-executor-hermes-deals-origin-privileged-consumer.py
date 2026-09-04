@@ -25,9 +25,11 @@ from deploy_executor.hermes_deals_origin_dispatch_request import (
 )
 from deploy_executor.hermes_deals_origin_privileged_consumer import (
     AUTHORIZATION_CLASS,
+    CANONICAL_AS_OF_SOURCE,
     HOST_EVIDENCE_SCHEMA,
     CanonicalHermesOriginEvidence,
     HermesDealsOriginPrivilegedConsumerError,
+    consume_privileged_request,
     evaluate_hermes_deals_origin_privileged_consumer,
     source_readiness,
 )
@@ -36,11 +38,13 @@ from deploy_executor.hermes_deals_origin_privileged_consumer import (
 SOURCE_SHA = "1" * 40
 CURRENT_MAIN_SHA = "2" * 40
 REQUEST_ID = "123e4567-e89b-42d3-a456-426614174000"
+AUTHORIZATION_CREATED_AT = "2026-09-04T07:26:48Z"
 
 
 def canonical_evidence() -> CanonicalHermesOriginEvidence:
     return CanonicalHermesOriginEvidence(
         authorization_issue_number=17,
+        authorization_created_at=AUTHORIZATION_CREATED_AT,
         request_id=REQUEST_ID,
         queue_issue=41,
         source_repository=SOURCE_REPOSITORY,
@@ -129,7 +133,7 @@ class HermesDealsOriginPrivilegedConsumerTests(unittest.TestCase):
         canonical = FakeCanonicalRevalidator()
         host = FakeHostEvidenceResolver()
 
-        ready = evaluate_hermes_deals_origin_privileged_consumer(
+        ready = consume_privileged_request(
             self.request(),
             canonical_revalidator=canonical,
             host_evidence_resolver=host,
@@ -137,6 +141,8 @@ class HermesDealsOriginPrivilegedConsumerTests(unittest.TestCase):
 
         self.assertEqual(ready.result, "PRIVILEGED_CONSUMER_READY")
         self.assertEqual(ready.authorization_issue_number, 17)
+        self.assertEqual(ready.authorization_created_at, AUTHORIZATION_CREATED_AT)
+        self.assertEqual(ready.canonical_as_of, "2026-09-04")
         self.assertEqual(ready.operation_id, OPERATION_ID)
         self.assertEqual(ready.source_sha, SOURCE_SHA)
         self.assertEqual(ready.host_evidence_id, "host-origin-audit-readonly-1")
@@ -146,6 +152,18 @@ class HermesDealsOriginPrivilegedConsumerTests(unittest.TestCase):
         self.assertFalse(ready.genuine_hermes_audit_authorized)
         self.assertFalse(ready.runner_retirement_eligible)
         self.assertFalse(ready.production_mutation_started)
+        self.assertEqual(canonical.calls, [17, 17])
+        self.assertEqual(host.calls, [SOURCE_SHA])
+
+    def test_compatibility_wrapper_uses_same_fail_closed_consumer(self):
+        canonical = FakeCanonicalRevalidator()
+        host = FakeHostEvidenceResolver()
+        ready = evaluate_hermes_deals_origin_privileged_consumer(
+            self.request(),
+            canonical_revalidator=canonical,
+            host_evidence_resolver=host,
+        )
+        self.assertEqual(ready.canonical_as_of, "2026-09-04")
         self.assertEqual(canonical.calls, [17, 17])
         self.assertEqual(host.calls, [SOURCE_SHA])
 
@@ -161,6 +179,7 @@ class HermesDealsOriginPrivilegedConsumerTests(unittest.TestCase):
             "as_of",
             "artifact_dir",
             "repository_entrypoint",
+            "capability",
         )
         for field in prohibited:
             with self.subTest(field=field):
@@ -169,13 +188,32 @@ class HermesDealsOriginPrivilegedConsumerTests(unittest.TestCase):
                 request = self.request()
                 request[field] = "untrusted"
                 with self.assertRaises(HermesDealsOriginDispatchRequestError):
-                    evaluate_hermes_deals_origin_privileged_consumer(
+                    consume_privileged_request(
                         request,
                         canonical_revalidator=canonical,
                         host_evidence_resolver=host,
                     )
                 self.assertEqual(canonical.calls, [])
                 self.assertEqual(host.calls, [])
+
+    def test_authorization_created_at_must_be_canonical_github_utc(self):
+        for value in (
+            "2026-09-04T09:26:48+02:00",
+            "2026-09-04T07:26:48.000Z",
+            "2026-09-04",
+            "not-a-time",
+        ):
+            with self.subTest(value=value):
+                evidence = replace(canonical_evidence(), authorization_created_at=value)
+                with self.assertRaisesRegex(
+                    HermesDealsOriginPrivilegedConsumerError,
+                    "authorization_created_at",
+                ):
+                    consume_privileged_request(
+                        self.request(),
+                        canonical_revalidator=FakeCanonicalRevalidator(evidence),
+                        host_evidence_resolver=FakeHostEvidenceResolver(),
+                    )
 
     def test_wrong_operation_source_or_strict_policy_fails_closed(self):
         cases = (
@@ -198,7 +236,7 @@ class HermesDealsOriginPrivilegedConsumerTests(unittest.TestCase):
         for evidence in cases:
             with self.subTest(evidence=evidence):
                 with self.assertRaises(HermesDealsOriginPrivilegedConsumerError):
-                    evaluate_hermes_deals_origin_privileged_consumer(
+                    consume_privileged_request(
                         self.request(),
                         canonical_revalidator=FakeCanonicalRevalidator(evidence),
                         host_evidence_resolver=FakeHostEvidenceResolver(),
@@ -218,7 +256,7 @@ class HermesDealsOriginPrivilegedConsumerTests(unittest.TestCase):
             replace(canonical_evidence(), exclusions=exclusions),
         ):
             with self.assertRaises(HermesDealsOriginPrivilegedConsumerError):
-                evaluate_hermes_deals_origin_privileged_consumer(
+                consume_privileged_request(
                     self.request(),
                     canonical_revalidator=FakeCanonicalRevalidator(evidence),
                     host_evidence_resolver=FakeHostEvidenceResolver(),
@@ -242,7 +280,7 @@ class HermesDealsOriginPrivilegedConsumerTests(unittest.TestCase):
             with self.subTest(field=field):
                 evidence = replace(canonical_evidence(), **{field: False})
                 with self.assertRaises(HermesDealsOriginPrivilegedConsumerError):
-                    evaluate_hermes_deals_origin_privileged_consumer(
+                    consume_privileged_request(
                         self.request(),
                         canonical_revalidator=FakeCanonicalRevalidator(evidence),
                         host_evidence_resolver=FakeHostEvidenceResolver(),
@@ -287,7 +325,7 @@ class HermesDealsOriginPrivilegedConsumerTests(unittest.TestCase):
             with self.subTest(evidence=evidence):
                 canonical = FakeCanonicalRevalidator()
                 with self.assertRaises(HermesDealsOriginPrivilegedConsumerError):
-                    evaluate_hermes_deals_origin_privileged_consumer(
+                    consume_privileged_request(
                         self.request(),
                         canonical_revalidator=canonical,
                         host_evidence_resolver=FakeHostEvidenceResolver(evidence),
@@ -297,7 +335,7 @@ class HermesDealsOriginPrivilegedConsumerTests(unittest.TestCase):
     def test_final_full_revalidation_failure_does_not_emit_ready(self):
         stale = replace(canonical_evidence(), authorization_ttl_valid=False)
         with self.assertRaises(HermesDealsOriginPrivilegedConsumerError):
-            evaluate_hermes_deals_origin_privileged_consumer(
+            consume_privileged_request(
                 self.request(),
                 canonical_revalidator=FakeCanonicalRevalidator(
                     canonical_evidence(),
@@ -307,19 +345,27 @@ class HermesDealsOriginPrivilegedConsumerTests(unittest.TestCase):
             )
 
     def test_final_evidence_drift_does_not_emit_ready(self):
-        drifted = replace(canonical_evidence(), source_ci_run_id=9002)
-        with self.assertRaisesRegex(
-            HermesDealsOriginPrivilegedConsumerError,
-            "canonical evidence drifted",
-        ):
-            evaluate_hermes_deals_origin_privileged_consumer(
-                self.request(),
-                canonical_revalidator=FakeCanonicalRevalidator(
-                    canonical_evidence(),
-                    drifted,
-                ),
-                host_evidence_resolver=FakeHostEvidenceResolver(),
-            )
+        drifted_values = (
+            replace(canonical_evidence(), source_ci_run_id=9002),
+            replace(
+                canonical_evidence(),
+                authorization_created_at="2026-09-04T07:26:49Z",
+            ),
+        )
+        for drifted in drifted_values:
+            with self.subTest(drifted=drifted):
+                with self.assertRaisesRegex(
+                    HermesDealsOriginPrivilegedConsumerError,
+                    "canonical evidence drifted",
+                ):
+                    consume_privileged_request(
+                        self.request(),
+                        canonical_revalidator=FakeCanonicalRevalidator(
+                            canonical_evidence(),
+                            drifted,
+                        ),
+                        host_evidence_resolver=FakeHostEvidenceResolver(),
+                    )
 
     def test_consumer_source_exposes_no_execution_primitive(self):
         source = (
@@ -348,6 +394,7 @@ class HermesDealsOriginPrivilegedConsumerTests(unittest.TestCase):
         self.assertTrue(readiness["privileged_consumer_implemented"])
         self.assertTrue(readiness["runner_independent_pull_helper_bound"])
         self.assertEqual(readiness["pull_helper_arguments"], PULL_HELPER_ARGUMENTS)
+        self.assertEqual(readiness["canonical_as_of_source"], CANONICAL_AS_OF_SOURCE)
         self.assertTrue(readiness["full_canonical_revalidation_after_host_evidence"])
         self.assertFalse(readiness["privileged_dispatch_enabled"])
         self.assertFalse(readiness["host_wiring_enabled"])
