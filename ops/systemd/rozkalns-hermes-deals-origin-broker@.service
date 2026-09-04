@@ -1,0 +1,39 @@
+[Unit]
+Description=Rozkalns Hermes Deals origin privileged broker connection (source contract only)
+After=network-online.target
+
+[Service]
+Type=exec
+User=root
+Group=root
+ExecStart=/usr/local/libexec/rozkalns-hermes-deals-origin-broker
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal
+Environment=PYTHONPATH=/usr/local/lib/rozkalns-deploy-executor
+LoadCredential=source-github-app.pem:/etc/rozkalns-hermes-deals-origin-broker/source-github-app.pem
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=CAP_SETUID CAP_SETGID
+AmbientCapabilities=
+UMask=0077
+TimeoutStartSec=60
+RuntimeMaxSec=60
