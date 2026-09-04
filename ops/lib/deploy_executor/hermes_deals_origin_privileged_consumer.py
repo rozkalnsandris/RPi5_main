@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import re
 import uuid
 from typing import Any, Mapping, Protocol
@@ -23,6 +24,7 @@ from .hermes_deals_origin_dispatch_request import (
 
 HOST_EVIDENCE_SCHEMA = "rozkalns.hermes-deals.origin-host-evidence.v1"
 AUTHORIZATION_CLASS = "STRICT"
+CANONICAL_AS_OF_SOURCE = "github-live-auth-created-at-utc-date"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 EVIDENCE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._:-]{0,127}$")
 _HOST_EVIDENCE_FIELDS = frozenset(
@@ -53,6 +55,7 @@ class HermesDealsOriginPrivilegedConsumerError(RuntimeError):
 @dataclass(frozen=True)
 class CanonicalHermesOriginEvidence:
     authorization_issue_number: int
+    authorization_created_at: str
     request_id: str
     queue_issue: int
     source_repository: str
@@ -94,6 +97,8 @@ class SanitizedHermesOriginHostEvidence:
 class HermesDealsOriginPrivilegedConsumerReady:
     result: str
     authorization_issue_number: int
+    authorization_created_at: str
+    canonical_as_of: str
     request_id: str
     queue_issue: int
     source_repository: str
@@ -150,6 +155,23 @@ def _canonical_uuid4(value: Any, where: str) -> str:
     return value
 
 
+def _canonical_authorization_created_at(value: Any) -> tuple[str, str]:
+    if type(value) is not str:
+        _fail("canonical authorization_created_at must be GitHub UTC RFC3339")
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=timezone.utc
+        )
+    except ValueError as exc:
+        raise HermesDealsOriginPrivilegedConsumerError(
+            "canonical authorization_created_at must be GitHub UTC RFC3339"
+        ) from exc
+    canonical = parsed.strftime("%Y-%m-%dT%H:%M:%SZ")
+    if canonical != value:
+        _fail("canonical authorization_created_at must be GitHub UTC RFC3339")
+    return canonical, parsed.date().isoformat()
+
+
 def _require_bool(value: Any, expected: bool, where: str) -> None:
     if type(value) is not bool or value is not expected:
         _fail(f"{where} must be {str(expected).lower()}")
@@ -169,6 +191,7 @@ def _validate_canonical_evidence(
         _fail("canonical revalidator returned unsupported evidence")
     if evidence.authorization_issue_number != request.authorization_issue_number:
         _fail("canonical authorization issue identity drifted")
+    _canonical_authorization_created_at(evidence.authorization_created_at)
     _canonical_uuid4(evidence.request_id, "canonical request_id")
     _positive_int(evidence.queue_issue, "canonical queue_issue")
     _positive_int(evidence.source_ci_run_id, "canonical source_ci_run_id")
@@ -274,7 +297,7 @@ def parse_sanitized_hermes_origin_host_evidence(
     )
 
 
-def evaluate_hermes_deals_origin_privileged_consumer(
+def consume_privileged_request(
     request_payload: Mapping[str, Any],
     *,
     canonical_revalidator: CanonicalHermesOriginRevalidator,
@@ -307,9 +330,14 @@ def evaluate_hermes_deals_origin_privileged_consumer(
     if final_evidence != evidence:
         _fail("canonical evidence drifted during privileged consumer revalidation")
 
+    authorization_created_at, canonical_as_of = _canonical_authorization_created_at(
+        final_evidence.authorization_created_at
+    )
     return HermesDealsOriginPrivilegedConsumerReady(
         result="PRIVILEGED_CONSUMER_READY",
         authorization_issue_number=request.authorization_issue_number,
+        authorization_created_at=authorization_created_at,
+        canonical_as_of=canonical_as_of,
         request_id=final_evidence.request_id,
         queue_issue=final_evidence.queue_issue,
         source_repository=final_evidence.source_repository,
@@ -322,11 +350,27 @@ def evaluate_hermes_deals_origin_privileged_consumer(
     )
 
 
+def evaluate_hermes_deals_origin_privileged_consumer(
+    request_payload: Mapping[str, Any],
+    *,
+    canonical_revalidator: CanonicalHermesOriginRevalidator,
+    host_evidence_resolver: SanitizedHermesOriginHostEvidenceResolver,
+) -> HermesDealsOriginPrivilegedConsumerReady:
+    """Compatibility wrapper for the pre-dispatch consumer API."""
+
+    return consume_privileged_request(
+        request_payload,
+        canonical_revalidator=canonical_revalidator,
+        host_evidence_resolver=host_evidence_resolver,
+    )
+
+
 def source_readiness() -> Mapping[str, Any]:
     return {
         "privileged_consumer_implemented": True,
         "runner_independent_pull_helper_bound": True,
         "pull_helper_arguments": PULL_HELPER_ARGUMENTS,
+        "canonical_as_of_source": CANONICAL_AS_OF_SOURCE,
         "privileged_dispatch_enabled": False,
         "host_wiring_enabled": False,
         "genuine_hermes_audit_authorized": False,
