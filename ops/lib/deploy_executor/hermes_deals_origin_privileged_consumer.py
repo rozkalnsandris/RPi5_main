@@ -9,8 +9,19 @@ from .hermes_deals_origin_adapter import (
     ADAPTER_ID,
     INVOCATION_BUDGET,
     OPERATION_ID,
+    PULL_HELPER_ARGUMENTS,
+    PULL_HELPER_CAPABILITY,
+    PULL_HELPER_CONTRACT_BLOB,
+    PULL_HELPER_CONTRACT_PATH,
+    PULL_HELPER_EVIDENCE_ROOT,
+    PULL_HELPER_INSTALLED_PATH,
+    PULL_HELPER_REGISTRATION_PATH,
+    PULL_HELPER_REGISTRATION_SCHEMA,
+    PULL_HELPER_SOURCE_BLOB,
+    PULL_HELPER_SOURCE_PATH,
     REQUIRED_DEPENDENCIES,
     REQUIRED_EXCLUSIONS,
+    REVIEWED_SOURCE_SHA,
     ROLLBACK_POLICY,
     SOURCE_REPOSITORY,
     TARGET_ALIAS,
@@ -169,8 +180,10 @@ def _validate_canonical_evidence(
     _canonical_uuid4(evidence.request_id, "canonical request_id")
     _positive_int(evidence.queue_issue, "canonical queue_issue")
     _positive_int(evidence.source_ci_run_id, "canonical source_ci_run_id")
-    _require_source_sha(evidence.source_sha, "canonical source_sha")
+    source_sha = _require_source_sha(evidence.source_sha, "canonical source_sha")
     _require_source_sha(evidence.current_main_sha, "canonical current_main_sha")
+    if source_sha != REVIEWED_SOURCE_SHA:
+        _fail("canonical source_sha is not the reviewed runner-independent helper source")
 
     expected_strings = {
         "source_repository": (evidence.source_repository, SOURCE_REPOSITORY),
@@ -328,4 +341,17 @@ def source_readiness() -> Mapping[str, Any]:
         "request_authority": ("authorization_issue_number",),
         "host_evidence_schema": HOST_EVIDENCE_SCHEMA,
         "full_canonical_revalidation_after_host_evidence": True,
+        "reviewed_source_sha": REVIEWED_SOURCE_SHA,
+        "pull_helper_source_bound": True,
+        "pull_helper_execution_enabled": False,
+        "pull_helper_source_path": PULL_HELPER_SOURCE_PATH,
+        "pull_helper_source_blob": PULL_HELPER_SOURCE_BLOB,
+        "pull_helper_contract_path": PULL_HELPER_CONTRACT_PATH,
+        "pull_helper_contract_blob": PULL_HELPER_CONTRACT_BLOB,
+        "pull_helper_capability": PULL_HELPER_CAPABILITY,
+        "pull_helper_arguments": PULL_HELPER_ARGUMENTS,
+        "pull_helper_installed_path": PULL_HELPER_INSTALLED_PATH,
+        "pull_helper_registration_schema": PULL_HELPER_REGISTRATION_SCHEMA,
+        "pull_helper_registration_path": PULL_HELPER_REGISTRATION_PATH,
+        "pull_helper_evidence_root": PULL_HELPER_EVIDENCE_ROOT,
     }
