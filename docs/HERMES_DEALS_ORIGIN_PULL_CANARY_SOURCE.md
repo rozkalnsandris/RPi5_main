@@ -1,75 +1,50 @@
 # Hermes Deals origin-path pull canary — source contract
 
-Status: **SOURCE-REGISTERED / PULL-HELPER BOUND / PRIVILEGED DISPATCH SOURCE PRESENT / GLOBALLY EXECUTION-DISABLED / STRICT / NOT HOST-EXECUTABLE**
+Status: **SOURCE-REGISTERED / PULL-HELPER BOUND / DISPATCH PLAN MERGED / BROKER SECURITY GATE / GLOBALLY EXECUTION-DISABLED / STRICT / NOT HOST-EXECUTABLE**
 
 Tracking:
 
-- current dispatcher source gate: `RPi5_main#361`
+- current broker installation/wiring source gate: `RPi5_main#363` / Draft PR #364
+- completed dispatcher source gate: `RPi5_main#361` / PR #362
 - completed helper-binding gate: `RPi5_main#359` / PR #360
 - completed privileged-consumer gate: `RPi5_main#356` / PR #357
+- completed identity-only request gate: `RPi5_main#354` / PR #355
 - completed registry reconciliation: `RPi5_main#352` / PR #353
-- completed runner-independent helper source: `hermes-deals#834` / PR #840
+- runner-independent helper source: `hermes-deals#834` / PR #840
 - Hermes Deals migration: `rozkalnsandris/hermes-deals#384`
-- merged inventory/architecture gate: `hermes-deals#787`
 - shared executor roadmap: `RPi5_main#236`
 
 ## Current routing
 
-Phase 4 is the residual Hermes Deals origin-audit execution-path migration.
+Phase 4 remains the residual Hermes Deals origin-audit migration. The production operation registry contains `hermes-deals.origin-path-audit.v1` but remains globally `execution_enabled=false`.
 
-The production operation registry contains `hermes-deals.origin-path-audit.v1` but remains globally `execution_enabled=false`. The operation is:
+The operation remains:
 
-- authorization class: `STRICT`;
-- ordinary LIVE-ALL eligibility: `false`;
-- rollback policy: `NONE`;
-- invocation budget: exactly one future `hermes-deals.read-only-audit-invocation`;
-- adapter behavior: validation-only with fail-closed `apply()`.
+- authorization class `STRICT`;
+- ordinary LIVE-ALL eligibility `false`;
+- rollback policy `NONE`;
+- invocation budget exactly one future `hermes-deals.read-only-audit-invocation`;
+- adapter `apply()` fail-closed.
 
-Hermes Deals #834 / PR #840 merged the runner-independent capability-specific pull helper. RPi5_main #359 / PR #360 bound the exact reviewed helper provenance/interface and required sanitized host-evidence checks.
+PR #362 merged the capability-specific source dispatch plan, but no helper process launch exists and no production selector/cutover occurred.
 
-RPi5_main #361 adds a **source-only privileged dispatch plan**. It does not switch the production selector, install a broker/helper, invoke an audit, create READY/LIVE-AUTH, mutate a runner, mutate the host, deploy production, write application data, or authorize any later live action.
+## Reviewed cross-repository source anchors
 
-## Reviewed cross-repository provenance
+At #363 creation:
 
-The #361 source baseline is:
+- `RPi5_main/main = 8c157f0f6caf6258ebab7765a9b9ec2934070964`;
+- exact-main Validate #814, FAST-LANE #270 and GITHUB-ONLY #258 are SUCCESS;
+- `hermes-deals/main = 2f47f64ab15e767f4e53ad182326e64e313d5094`;
+- Hermes Deals CI #1775 and GITHUB-ONLY #101 are SUCCESS;
+- runner-independent pull-helper blob `51bb23cc6c2083ab7c8b4e81ba82dd880e46d673`.
 
-- `rozkalnsandris/hermes-deals/main`: `2f47f64ab15e767f4e53ad182326e64e313d5094`;
-- repository ID: `1317143994`;
-- origin audit workflow blob: `99a18c5f669e7880a8a8288c3f964285df87ae22`;
-- legacy dispatcher blob: `f9bfd02c6d36bb54d5380e1f0c99a0195e2ff4bc`;
-- legacy installer blob: `41f004420a0f5aed314aaefd796a54e14dbd17ea`;
-- probe blob: `2362e8eb578a7279c38fe4ed2a7d1edd05df891a`;
-- runner-independent pull helper blob: `51bb23cc6c2083ab7c8b4e81ba82dd880e46d673`.
+The helper fixes capability `origin-path-audit`, root-owned registration schema/path, machine identity `rpi5`, installed path `/usr/local/sbin/hermes-deals-origin-path-rpi5-pull-dispatch`, fixed probe identity and evidence root. Its caller-visible arguments remain exactly `registered_source_sha` and `as_of`.
 
-The pull helper fixes:
+These are source anchors only; they prove no live RPi5 installation or runtime state.
 
-- capability `origin-path-audit`;
-- registration schema `rozkalns.hermes-deals.origin-path-rpi5-pull-registration.v1`;
-- evidence schema `rozkalns.hermes-deals.origin-path-rpi5-pull-evidence.v1`;
-- machine identity `rpi5`;
-- installed helper path `/usr/local/sbin/hermes-deals-origin-path-rpi5-pull-dispatch`;
-- caller-visible argument names exactly `registered_source_sha` and `as_of`.
+## Identity-only request and canonical derivation
 
-The helper source itself fixes its registration path, probe path, evidence root, execution environment and probe targets. GitHub prose does not select them.
-
-These source identities prove source compatibility only. They do not prove current RPi5 installation, root ownership, permissions, service state, credentials, deployed source, runner state or production health.
-
-## Static selector stays legacy
-
-The source-controlled operation still matches:
-
-- operation: `hermes-deals.origin-path-audit.v1`;
-- source repository: `rozkalnsandris/hermes-deals`;
-- target alias: `hermes-deals-origin-path-audit`;
-- execution location: `trusted-home-host`;
-- repository entrypoint: `tools/runner/origin-path-rpi5-audit-dispatcher.sh`;
-- baseline resolver: `hermes-deals.origin-path-registration.v1`.
-
-#361 does **not** replace that legacy repository entrypoint. The runner-independent helper is source-bound behind the future privileged boundary, but selector/cutover remains a later separately reviewed gate.
-
-## Identity-only privileged request
-
-The privileged request carries only:
+The privileged request remains exactly:
 
 ```json
 {
@@ -78,98 +53,106 @@ The privileged request carries only:
 }
 ```
 
-Any source SHA, `as_of`, capability, operation, target, command, path, argv, environment, sudo target, URL or artifact/evidence path supplied by the caller is rejected as an extra field.
+Caller-supplied source SHA, `as_of`, command, shell, capability, executable/path, argv, environment, UID/GID, systemd unit, URL, output or evidence path is forbidden.
 
-## Mandatory consumer revalidation
+The mandatory consumer revalidates the complete canonical state twice, with sanitized host evidence between those reads. `registered_source_sha` comes only from the fully revalidated source evidence; `as_of` is the UTC calendar date derived from the validated GitHub owner authorization `created_at`. Both values are non-caller authority.
 
-`consume_privileged_request()` must independently prove the complete canonical state twice, with sanitized host evidence between the two reads:
+## Completed dispatch-plan boundary
 
-1. isolated owner-only authorization surface;
-2. exact authorization issue identity;
-3. GitHub server-side `authorization_created_at`;
-4. owner identity, TTL, body stability and replay eligibility;
-5. exact READY queue binding;
-6. exact source repository/SHA and merged reachability;
-7. exact-SHA CI success;
-8. exact operation/adapter/target;
-9. `STRICT`, not ordinary LIVE-ALL;
-10. globally disabled registry and prepared execution;
-11. rollback `NONE` and one-invocation budget;
-12. all fixed exclusions and reviewed provenance;
-13. baseline match;
-14. read-only adapter preflight with live dispatch still not ready.
+`hermes_deals_origin_privileged_dispatcher.py` calls the double-revalidation consumer and source-binds:
 
-The two immutable canonical snapshots must compare equal. Drift in the authorization timestamp, TTL, body, replay state, queue, source, CI, operation, policy or provenance prevents readiness.
-
-## Canonical helper parameters
-
-The source SHA is not request authority. `registered_source_sha` is the exact SHA from the fully revalidated canonical evidence and must also match sanitized host registration evidence.
-
-`as_of` is not request authority. It is the UTC calendar date derived from the already validated GitHub server-side owner authorization creation timestamp:
-
-`authorization_created_at -> YYYY-MM-DD`
-
-This derivation is source-fixed. A caller cannot override it.
-
-## Privileged dispatch source boundary
-
-`hermes_deals_origin_privileged_dispatcher.py` accepts only:
-
-- the identity-only request;
-- the typed canonical revalidator;
-- the typed sanitized host-evidence resolver.
-
-It calls `consume_privileged_request()` and emits one immutable plan that source-binds:
-
-- schema `rozkalns.hermes-deals.origin-privileged-dispatch-plan.v1`;
 - operation `hermes-deals.origin-path-audit.v1`;
 - capability `origin-path-audit`;
 - helper blob `51bb23cc6c2083ab7c8b4e81ba82dd880e46d673`;
-- helper installed path `/usr/local/sbin/hermes-deals-origin-path-rpi5-pull-dispatch`;
-- argument names exactly `registered_source_sha`, `as_of`;
-- argument values only from revalidated canonical evidence.
+- installed helper path `/usr/local/sbin/hermes-deals-origin-path-rpi5-pull-dispatch`;
+- argument names `registered_source_sha`, `as_of`;
+- argument values only from canonical evidence.
 
-It does not expose a generic subprocess/shell/sudo interface and does not launch the helper. `PRIVILEGED_DISPATCH_SOURCE_READY` is source readiness only.
+It emits source data only and contains no subprocess/shell/sudo launch surface.
 
-## Live flags remain false
+## #363 broker and socket source contract
 
-The new boundary does not change any live gate:
+The new source-only broker adds a second fail-closed boundary before any future process launch can exist:
 
-- `execution_enabled=false`;
+1. one UNIX socket frame only;
+2. maximum 256 bytes;
+3. UTF-8 JSON with exactly the existing request schema/issue identity;
+4. duplicate keys, extra fields, CR/NUL framing, multiple frames and oversized payloads rejected;
+5. broker calls the reviewed dispatcher preparation path itself;
+6. caller cannot submit a prebuilt plan;
+7. exact operation/repository/capability/helper/blob/path/argument shape is rechecked;
+8. any live flag present in the plan fails closed.
+
+The proposed source transport is:
+
+- `rozkalns-hermes-deals-origin-broker.socket`;
+- `/run/rozkalns-hermes-deals-origin-broker/request.sock`;
+- root-owned socket, group `rozkalns-deploy-executor`, mode `0660`;
+- `Accept=yes`, `MaxConnections=1`;
+- per-connection `rozkalns-hermes-deals-origin-broker@.service`;
+- fixed broker install path `/usr/local/libexec/rozkalns-hermes-deals-origin-broker`.
+
+The existing poller unit is unchanged and retains `NoNewPrivileges=true`. It is not granted sudo, root, Docker-socket, arbitrary unit or capability authority.
+
+The generic `rozkalns-deploy-dispatch` remains disabled.
+
+## Installation manifest is evidence, not an installer
+
+`ops/deploy/hermes-deals-origin-broker-installation.json` records the exact intended path/owner/group/mode contract for the broker module, entrypoint, socket/service units, credential path, reviewed helper, registration, probe and evidence root.
+
+It deliberately records:
+
+- `eligible_source_sha = null`;
+- `eligible_source_sha_status = POST_MERGE_EXACT_MAIN_BIND_REQUIRED`;
+- `live_install_eligible = false`;
+- source credential/permission mutation authorized = false.
+
+No host path is created or changed by this source gate.
+
+## Source-read authority is the current blocker
+
+The existing `p9_source_auth.py` source App allowlist is control-center-only. #363 does not widen it and does not assume the host credential already has Hermes authority.
+
+The future broker credential path is source-fixed as `/etc/rozkalns-hermes-deals-origin-broker/source-github-app.pem`, `root:root 0600`, but no key is created or copied and no App installation/permission change is authorized.
+
+The inert broker entrypoint parses the identity frame and then returns `SOURCE_AUTHORITY_UNPROVEN`. Therefore the source deliberately remains:
+
+- `source_read_authority_proven=false`;
+- `helper_process_launch_implemented=false`;
 - `privileged_dispatch_enabled=false`;
 - `host_wiring_enabled=false`;
+- `live_install_eligible=false`;
 - `genuine_hermes_audit_authorized=false`;
 - `runner_retirement_eligible=false`;
 - `production_mutation_started=false`.
 
-`HermesDealsOriginAuditAdapter.apply()` remains fail-closed.
+## Static selector and legacy runner stay unchanged
 
-## Legacy runner path
+The production registry still points to the legacy `tools/runner/origin-path-rpi5-audit-dispatcher.sh` while global execution remains disabled. #363 does not replace that selector.
 
-The existing `origin-path-rpi5-audit` workflow and `hermes-deals-audit` self-hosted runner remain unchanged and continue to be the residual execution path until a replacement is separately installed, activated and proven.
-
-The separate `hermes-deals-release` production runner is outside this origin-audit lane.
+The existing `origin-path-rpi5-audit` workflow and `hermes-deals-audit` self-hosted runner therefore remain the residual path until a replacement is separately source-complete, installed, activated and proven. The separate `hermes-deals-release` runner remains outside this lane.
 
 ## Regression contract
 
 Focused tests must prove:
 
-1. the production registry remains globally disabled;
-2. the legacy repository entrypoint remains unchanged;
-3. the exact helper provenance/capability/schemas/machine/two-argument interface remains bound;
-4. the request stays identity-only;
-5. caller-supplied SHA/`as_of`/path/argv/env/capability is rejected before revalidation;
-6. sanitized host evidence cannot carry path/argv/command authority;
-7. canonical authorization timestamp must be exact GitHub UTC RFC3339;
-8. canonical timestamp/source/CI/queue/policy drift fails closed across the second revalidation;
-9. helper SHA and `as_of` values come only from the canonical consumer result;
-10. the dispatcher source contains no process-launch or generic privilege primitive;
-11. all dispatch/wiring/live/retirement/production flags remain false.
+1. request/socket framing is exact, bounded and identity-only;
+2. extra authority and duplicate/multi-frame input is rejected before canonical revalidation;
+3. broker invokes the existing dispatcher preparation path rather than accepting a caller plan;
+4. exact helper provenance/path/two-argument contract remains bound;
+5. broker and inert entrypoint contain no process-launch/shell/sudo/systemctl surface;
+6. installation manifest has no eligible merged SHA and no LIVE eligibility;
+7. socket is root-owned, narrow-group `0660` and serialized;
+8. service is source-fixed and hardened with no writable privileged path in this gate;
+9. existing poller `NoNewPrivileges=true` posture is unchanged;
+10. generic deploy dispatcher remains disabled;
+11. source App scope is not widened;
+12. every dispatch/wiring/live/canary/retirement/production flag remains false.
 
 ## Next gates
 
-After #361 reaches Ready, STOP for separate owner MERGE authorization.
+#363 must first reach source Ready and STOP for separate MERGE authorization.
 
-After a separately authorized merge, fresh exact-main validation still proves only **source readiness**. Before any live installation there must be another source/security gate that freezes the exact broker/installer/service/permission wiring and cross-repository interface.
+Even after a separately authorized #363 merge and fresh exact-main CI, **LIVE is still not next**. A new source prerequisite must prove exact authenticated Hermes GitHub source/Actions read authority and then implement/review the exact bounded helper launch surface while all live flags remain false.
 
-Only after that may a separate explicit LIVE authorization install/activate the reviewed host components. A separate later STRICT authorization is required for one genuine read-only audit canary. Runner retirement remains later and separately authorized.
+Only after that source prerequisite is merged and exact-main-bound may a separate explicit LIVE authorization install/activate the reviewed host components. A still-separate STRICT authorization is required for exactly one genuine read-only audit canary. Runner retirement remains later and separately LIVE-authorized.
