@@ -225,16 +225,16 @@ class HermesDealsOriginPrivilegedBrokerTests(unittest.TestCase):
         self.assertIn("prepare_hermes_deals_origin_privileged_dispatch(", broker_source)
         self.assertIn("SOURCE_AUTHORITY_UNPROVEN", entrypoint)
 
-    def test_installation_manifest_is_exact_and_not_live_eligible(self):
+    def test_installation_manifest_tracks_365_prerequisite_and_stays_non_live(self):
         manifest = json.loads(
             (ROOT / "ops/deploy/hermes-deals-origin-broker-installation.json").read_text(
                 encoding="utf-8"
             )
         )
-        self.assertEqual(manifest["issue"], 363)
+        self.assertEqual(manifest["issue"], 365)
         self.assertEqual(
             manifest["source_baseline"],
-            "8c157f0f6caf6258ebab7765a9b9ec2934070964",
+            "9c60248547043ee5ae7b1d0e2897fd9b8aac381a",
         )
         self.assertIsNone(manifest["eligible_source_sha"])
         self.assertEqual(
@@ -242,10 +242,20 @@ class HermesDealsOriginPrivilegedBrokerTests(unittest.TestCase):
             "POST_MERGE_EXACT_MAIN_BIND_REQUIRED",
         )
         self.assertFalse(manifest["live_install_eligible"])
-        self.assertEqual(manifest["source_read_authority"]["status"], "UNPROVEN")
-        self.assertFalse(
-            manifest["source_read_authority"]["permission_or_credential_mutation_authorized"]
+        source_auth = manifest["source_read_authority"]
+        self.assertEqual(
+            source_auth["status"],
+            "SOURCE_COMPOSITION_IMPLEMENTED_RUNTIME_UNPROVEN",
         )
+        self.assertEqual(source_auth["required_repository"], SOURCE_REPOSITORY)
+        self.assertEqual(source_auth["required_repository_id"], 1317143994)
+        self.assertEqual(
+            source_auth["required_permissions"],
+            {"actions": "read", "contents": "read"},
+        )
+        self.assertFalse(source_auth["permission_or_credential_mutation_authorized"])
+        self.assertFalse(source_auth["runtime_credential_proven"])
+        self.assertFalse(source_auth["runtime_installation_scope_proven"])
         self.assertEqual(manifest["transport"]["socket_path"], BROKER_SOCKET_PATH)
         self.assertEqual(manifest["transport"]["request_max_bytes"], BROKER_REQUEST_MAX_BYTES)
         self.assertEqual(
@@ -261,8 +271,17 @@ class HermesDealsOriginPrivilegedBrokerTests(unittest.TestCase):
             list(PULL_HELPER_ARGUMENTS),
         )
         self.assertEqual(manifest["service_security"]["writable_privileged_paths"], [])
-        for value in manifest["source_gate_flags"].values():
-            self.assertFalse(value)
+        flags = manifest["source_gate_flags"]
+        self.assertTrue(flags["source_auth_composition_implemented"])
+        self.assertFalse(flags["source_read_authority_proven"])
+        self.assertFalse(flags["concrete_canonical_revalidator_implemented"])
+        self.assertTrue(flags["helper_process_launch_implemented"])
+        self.assertFalse(flags["helper_process_launch_wired"])
+        self.assertFalse(flags["privileged_dispatch_enabled"])
+        self.assertFalse(flags["host_wiring_enabled"])
+        self.assertFalse(flags["genuine_hermes_audit_authorized"])
+        self.assertFalse(flags["runner_retirement_eligible"])
+        self.assertFalse(flags["production_mutation_started"])
 
     def test_socket_and_service_are_capability_specific_and_hardened(self):
         socket_unit = (
@@ -311,7 +330,7 @@ class HermesDealsOriginPrivilegedBrokerTests(unittest.TestCase):
         self.assertIn("DEPLOY_EXECUTOR_DISPATCH=DISABLED", generic_dispatch)
         self.assertNotIn("subprocess", generic_dispatch)
 
-    def test_source_readiness_requires_another_source_gate_before_live_install(self):
+    def test_broker_source_readiness_still_requires_concrete_integration_gate(self):
         readiness = source_readiness()
         self.assertTrue(readiness["broker_boundary_implemented"])
         self.assertEqual(readiness["socket_path"], BROKER_SOCKET_PATH)
