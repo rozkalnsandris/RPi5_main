@@ -22,6 +22,12 @@ from deploy_executor.hermes_deals_origin_adapter import (
     INVOCATION_BUDGET,
     OPERATION_ID,
     PROBE_SOURCE_BLOB,
+    PULL_HELPER_ARGUMENTS,
+    PULL_HELPER_CAPABILITY,
+    PULL_HELPER_EVIDENCE_SCHEMA,
+    PULL_HELPER_MACHINE_ID,
+    PULL_HELPER_REGISTRATION_SCHEMA,
+    PULL_HELPER_SOURCE_BLOB,
     SOURCE_REPOSITORY_ID,
     WORKFLOW_SOURCE_BLOB,
     HermesDealsOriginAuditAdapter,
@@ -98,6 +104,26 @@ class HermesDealsOriginCanaryTests(unittest.TestCase):
             f"installer-source-blob:{INSTALLER_SOURCE_BLOB}", prepared.dependencies
         )
         self.assertIn(f"probe-source-blob:{PROBE_SOURCE_BLOB}", prepared.dependencies)
+        self.assertIn(
+            f"pull-helper-source-blob:{PULL_HELPER_SOURCE_BLOB}", prepared.dependencies
+        )
+        self.assertIn(
+            f"pull-helper-capability:{PULL_HELPER_CAPABILITY}", prepared.dependencies
+        )
+        self.assertIn(
+            f"pull-helper-registration-schema:{PULL_HELPER_REGISTRATION_SCHEMA}",
+            prepared.dependencies,
+        )
+        self.assertIn(
+            f"pull-helper-evidence-schema:{PULL_HELPER_EVIDENCE_SCHEMA}",
+            prepared.dependencies,
+        )
+        self.assertIn(
+            f"pull-helper-machine-id:{PULL_HELPER_MACHINE_ID}", prepared.dependencies
+        )
+        self.assertIn(
+            "pull-helper-arguments:registered_source_sha,as_of", prepared.dependencies
+        )
 
     def test_adapter_preflight_is_read_only_and_apply_is_inert(self):
         prepared = _prepared(PRODUCTION_REGISTRY)
@@ -112,8 +138,44 @@ class HermesDealsOriginCanaryTests(unittest.TestCase):
         self.assertEqual(preflight["dispatcher_source_blob"], DISPATCHER_SOURCE_BLOB)
         self.assertEqual(preflight["installer_source_blob"], INSTALLER_SOURCE_BLOB)
         self.assertEqual(preflight["probe_source_blob"], PROBE_SOURCE_BLOB)
+        self.assertEqual(preflight["pull_helper_source_blob"], PULL_HELPER_SOURCE_BLOB)
+        self.assertEqual(preflight["pull_helper_capability"], PULL_HELPER_CAPABILITY)
+        self.assertEqual(
+            preflight["pull_helper_registration_schema"], PULL_HELPER_REGISTRATION_SCHEMA
+        )
+        self.assertEqual(
+            preflight["pull_helper_evidence_schema"], PULL_HELPER_EVIDENCE_SCHEMA
+        )
+        self.assertEqual(preflight["pull_helper_machine_id"], PULL_HELPER_MACHINE_ID)
+        self.assertEqual(preflight["pull_helper_arguments"], PULL_HELPER_ARGUMENTS)
+        self.assertTrue(preflight["pull_helper_interface_bound"])
         with self.assertRaisesRegex(AdapterError, "execution-disabled"):
             adapter.apply(prepared)
+
+    def test_pull_helper_contract_is_capability_specific_without_generic_authority(self):
+        self.assertEqual(PULL_HELPER_CAPABILITY, "origin-path-audit")
+        self.assertEqual(PULL_HELPER_ARGUMENTS, ("registered_source_sha", "as_of"))
+        preflight = HermesDealsOriginAuditAdapter().preflight(
+            _prepared(PRODUCTION_REGISTRY)
+        )
+        for forbidden in (
+            "command",
+            "shell",
+            "executable_path",
+            "environment",
+            "output_path",
+            "evidence_root",
+            "probe_path",
+            "sudo_target",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, preflight)
+
+        registry_text = PRODUCTION_REGISTRY.read_text(encoding="utf-8")
+        self.assertIn(
+            '"repository_entrypoint": "tools/runner/origin-path-rpi5-audit-dispatcher.sh"',
+            registry_text,
+        )
 
     def test_adapter_rejects_any_attempt_to_mark_fixture_executable(self):
         bad = copy.copy(_prepared())
@@ -134,20 +196,26 @@ class HermesDealsOriginCanaryTests(unittest.TestCase):
 
     def test_adapter_rejects_missing_or_drifted_source_provenance(self):
         prepared = _prepared(PRODUCTION_REGISTRY)
-        dependencies = list(prepared.dependencies)
-        workflow = f"workflow-source-blob:{WORKFLOW_SOURCE_BLOB}"
-        dependencies.remove(workflow)
-        missing = copy.copy(prepared)
-        object.__setattr__(missing, "dependencies", tuple(dependencies))
-        with self.assertRaisesRegex(AdapterError, "dependency mismatch"):
-            HermesDealsOriginAuditAdapter().preflight(missing)
+        for dependency in (
+            f"workflow-source-blob:{WORKFLOW_SOURCE_BLOB}",
+            f"pull-helper-source-blob:{PULL_HELPER_SOURCE_BLOB}",
+            "pull-helper-arguments:registered_source_sha,as_of",
+        ):
+            with self.subTest(dependency=dependency):
+                dependencies = list(prepared.dependencies)
+                dependencies.remove(dependency)
+                missing = copy.copy(prepared)
+                object.__setattr__(missing, "dependencies", tuple(dependencies))
+                with self.assertRaisesRegex(AdapterError, "dependency mismatch"):
+                    HermesDealsOriginAuditAdapter().preflight(missing)
 
+        helper = f"pull-helper-source-blob:{PULL_HELPER_SOURCE_BLOB}"
         drifted = copy.copy(prepared)
         object.__setattr__(
             drifted,
             "dependencies",
             tuple(
-                "workflow-source-blob:" + "0" * 40 if item == workflow else item
+                "pull-helper-source-blob:" + "0" * 40 if item == helper else item
                 for item in prepared.dependencies
             ),
         )
