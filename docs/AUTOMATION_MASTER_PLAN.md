@@ -628,3 +628,66 @@ Current gate sequence:
 7. runner/path retirement is eligible only after the replacement path is proven end-to-end and remains a separate owner-authorized LIVE mutation.
 
 Neither #363 source readiness, PR #364, any later source merge, historical Phase 2 App proof, `START`, `SYNC`, `turpini`, nor AUTO-RUN continuation authorizes helper execution, credential/App permission change, host file placement, chmod/chown, systemd socket/service install/enable/start, sudoers/user/group mutation, READY/LIVE-AUTH creation, runner retirement, deployment, DB/application-data writes, Cloudflare/network/container/runtime mutation, retry, cleanup or rollback.
+
+
+## Current supersession — Hermes source auth + bounded helper launch gate (2026-09-04)
+
+This section supersedes the #363 current-gate wording above. The #361/#363 sections remain historical source evidence only; **this final section is the current Phase 4 next-action authority**.
+
+Fresh source state at `RPi5_main#365` creation:
+
+- `RPi5_main/main = 9c60248547043ee5ae7b1d0e2897fd9b8aac381a`;
+- #363 is closed/completed and PR #364 merged to that exact main SHA;
+- exact-main Validate #820, FAST-LANE #276 and GITHUB-ONLY #264 are SUCCESS;
+- current `hermes-deals/main = 511c1566111983f809bc958bc4b68510771d3efb`;
+- the current Hermes head is a verified docs-only bot commit whose parent is `2f47f64ab15e767f4e53ad182326e64e313d5094`;
+- the reviewed runner-independent helper blob remains exact `51bb23cc6c2083ab7c8b4e81ba82dd880e46d673` on current Hermes main;
+- current source work item is `RPi5_main#365` / Draft PR #366.
+
+#365 reuses the existing read-only Source App provider rather than creating a broader authentication mechanism. It source-binds `rozkalnsandris/hermes-deals` / repository ID `1317143994` to App ID `4537106`, installation ID `152422751`, selected-repository posture, a one-repository installation token and exactly `Actions:read + Contents:read`. No GitHub App installation, selected repository, permission, private key or credential is changed by this source gate.
+
+#365 also adds a separately source-reviewed one-shot helper launch abstraction. It first calls the existing `prepare_hermes_deals_origin_privileged_dispatch()` path, preserving the identity-only request and mandatory double canonical revalidation, and then fixes the process boundary to:
+
+- executable `/usr/local/sbin/hermes-deals-origin-path-rpi5-pull-dispatch`;
+- helper blob `51bb23cc6c2083ab7c8b4e81ba82dd880e46d673`;
+- exactly two canonical arguments `registered_source_sha`, `as_of`;
+- `shell=False`;
+- a fixed minimal environment;
+- 50-second timeout;
+- 4096-byte stdout and stderr limits;
+- one invocation budget;
+- accepted exit codes only `0`, `1`, `2`;
+- exact validated helper stdout with explicit false production DB/deployment/restart flags.
+
+CI uses a fake runner seam. No real helper/audit process is executed by this source gate.
+
+Demand-driven inspection during #365 found an additional prerequisite: `CanonicalHermesOriginRevalidator` and `SanitizedHermesOriginHostEvidenceResolver` are still Protocol/test seams, not concrete production Hermes compositions. Consequently the broker entrypoint remains inert and #365 does not wire the fixed launcher into a live-capable path.
+
+Binding classification for the current gate:
+
+`PHASE4_CURRENT_WORK_ITEM=RPi5_main#365`
+`P9_EXIT_GATE=MET`
+`P10_EXIT_GATE=MET`
+`GLOBAL_EXECUTION_ENABLED=false`
+`SOURCE_AUTH_COMPOSITION_IMPLEMENTED=true`
+`SOURCE_READ_AUTHORITY_PROVEN=false`
+`CONCRETE_CANONICAL_REVALIDATOR_IMPLEMENTED=false`
+`HELPER_PROCESS_LAUNCH_IMPLEMENTED=true`
+`HELPER_PROCESS_LAUNCH_WIRED=false`
+`PRIVILEGED_DISPATCH_ENABLED=false`
+`HOST_WIRING_ENABLED=false`
+`LIVE_INSTALL_ELIGIBLE=false`
+`GENUINE_HERMES_AUDIT_AUTHORIZED=false`
+`RUNNER_RETIREMENT_ELIGIBLE=false`
+`PRODUCTION_MUTATION_STARTED=false`
+
+Current gate sequence:
+1. finish #365 / PR #366 through focused source review, exact-head CI and Ready, then STOP for a separate explicit owner `MERGE RPi5_main #366` decision;
+2. after any separately authorized merge, freshly require exact-main CI and cross-repository helper provenance;
+3. open a **separate source integration gate** that implements/reviews the concrete canonical Hermes revalidator and sanitized host-evidence resolver, then binds those components to the broker entrypoint without expanding caller authority;
+4. merge that integration gate only under a separate owner MERGE decision and again require fresh exact-main/cross-repository evidence plus a read-only runtime preflight for the expected App installation/credential/helper/unit identities;
+5. only if every source and runtime prerequisite passes may a separate explicit LIVE authorization install/activate the exact reviewed host components;
+6. a later separate STRICT authorization is required for exactly one genuine read-only Hermes origin audit canary;
+7. runner/path retirement is eligible only after the replacement path is proven end-to-end and remains a separate owner-authorized LIVE mutation.
+
+Neither #365 source readiness, PR #366, either source merge, historical Phase 2 App proof, `START`, `SYNC`, `turpini`, nor AUTO-RUN continuation authorizes App/credential mutation, broker/helper execution, host file placement, chmod/chown, systemd installation/enable/start, user/group/sudoers changes, READY/LIVE-AUTH creation, runner retirement, deployment, DB/application-data writes, Cloudflare/network/container/runtime mutation, retry, cleanup or rollback.
