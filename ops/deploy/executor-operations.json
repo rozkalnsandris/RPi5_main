@@ -147,7 +147,7 @@
       "queue_match": {
         "target_alias": "hermes-deals-origin-path-audit",
         "execution_location_class": "trusted-home-host",
-        "repository_entrypoint": "tools/runner/origin-path-rpi5-audit-dispatcher.sh",
+        "repository_entrypoint": "tools/runner/origin_path_rpi5_pull_helper.py",
         "deploy_class": "STRICT_LIVE_AUTH_REQUIRED"
       },
       "target_alias": "hermes-deals-origin-path-audit",
@@ -156,7 +156,7 @@
       "ordinary_live_all_eligible": false,
       "baseline": {
         "kind": "resolver",
-        "resolver_id": "hermes-deals.origin-path-registration.v1"
+        "resolver_id": "hermes-deals.origin-path-rpi5-pull-registration.v1"
       },
       "mutation_budget": [
         {
@@ -175,24 +175,31 @@
       ],
       "dependencies": [
         "source-repository-id:1317143994",
+        "reviewed-source-sha:2f47f64ab15e767f4e53ad182326e64e313d5094",
         "migration-contract:hermes-deals#787",
+        "runner-independent-helper-contract:hermes-deals#834",
         "workflow-source-blob:99a18c5f669e7880a8a8288c3f964285df87ae22",
         "dispatcher-source-blob:f9bfd02c6d36bb54d5380e1f0c99a0195e2ff4bc",
         "installer-source-blob:41f004420a0f5aed314aaefd796a54e14dbd17ea",
         "probe-source-blob:2362e8eb578a7279c38fe4ed2a7d1edd05df891a",
+        "pull-helper-source-blob:51bb23cc6c2083ab7c8b4e81ba82dd880e46d673",
+        "pull-helper-contract-blob:7407737a6ded00ba53687de79983ef8395881adb",
+        "pull-helper-interface:registered-sha-as-of-v1",
+        "pull-helper-evidence-authority:source-fixed-rpi5-v1",
         "privileged-boundary:identity-only-dispatch-request-v1"
       ],
       "preflight": [
         "LIVE-AUTH and READY queue envelope are independently revalidated before any privileged request",
-        "source repository stable ID is 1317143994 and authorized SHA is merged/reachable from current main",
-        "exact authorized source SHA CI is successful",
-        "origin-path workflow dispatcher installer and probe source blobs match the reviewed Hermes Deals identities",
-        "root-owned registration is independently revalidated without taking command/path/argv authority from GitHub prose",
+        "source is exact reviewed Hermes Deals 2f47f64ab15e767f4e53ad182326e64e313d5094 and is merged/reachable from current main with successful exact-SHA CI",
+        "runner-independent helper blob 51bb23cc6c2083ab7c8b4e81ba82dd880e46d673 and contract blob 7407737a6ded00ba53687de79983ef8395881adb remain reviewed",
+        "future broker interface is exactly registered-sha plus canonical as-of; GitHub prose supplies no command path argv environment URL machine or evidence-path authority",
+        "future helper registration and evidence namespace are source-fixed and must be independently proven before any execution",
+        "legacy workflow dispatcher installer and probe source identities remain compatibility evidence and are not activated modified or retired by this source gate",
         "poller remains unprivileged and sends identity only across the privileged boundary",
         "operation remains execution-disabled with rollback policy NONE and one read-only audit invocation maximum"
       ],
       "postconditions": [
-        "sanitized dispatcher manifest is bound to authorized commit SHA and requested as-of date",
+        "future sanitized helper evidence is bound to the reviewed source SHA and requested as-of date under the fixed rpi5 evidence namespace",
         "production_apply_authorized is false",
         "production_database_write is false",
         "production_deployment is false",
@@ -201,9 +208,10 @@
       ],
       "required_github_evidence": [
         "source repository stable identity",
-        "authorized SHA is merged/reachable from current main",
+        "authorized SHA equals reviewed Hermes Deals 2f47f64ab15e767f4e53ad182326e64e313d5094 and remains merged/reachable from current main",
         "exact-SHA CI completed successfully",
-        "workflow dispatcher installer and probe source blobs match the audited Hermes Deals identities",
+        "runner-independent helper and contract blobs match the reviewed Hermes Deals identities",
+        "legacy workflow dispatcher installer and probe source blobs remain unchanged compatibility evidence",
         "LIVE-AUTH and READY queue remain separate authority and eligibility records"
       ]
     }
