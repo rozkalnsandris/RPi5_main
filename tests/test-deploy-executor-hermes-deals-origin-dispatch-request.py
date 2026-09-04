@@ -40,6 +40,7 @@ class HermesDealsOriginDispatchRequestTests(unittest.TestCase):
             "as_of",
             "artifact_dir",
             "repository_entrypoint",
+            "capability",
         )
         for field in prohibited:
             with self.subTest(field=field):
@@ -83,10 +84,10 @@ class HermesDealsOriginDispatchRequestTests(unittest.TestCase):
                 }
             )
 
-    def test_source_readiness_does_not_claim_dispatch_or_retirement(self):
+    def test_source_readiness_claims_source_boundary_only(self):
         readiness = source_readiness()
         self.assertEqual(readiness["identity_fields"], ("authorization_issue_number",))
-        self.assertFalse(readiness["privileged_dispatch_implemented"])
+        self.assertTrue(readiness["privileged_dispatch_implemented"])
         self.assertFalse(readiness["privileged_dispatch_enabled"])
         self.assertFalse(readiness["host_wiring_enabled"])
         self.assertFalse(readiness["runner_retirement_eligible"])
