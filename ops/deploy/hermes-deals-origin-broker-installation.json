@@ -1,0 +1,161 @@
+{
+  "schema": "rozkalns.hermes-deals.origin-broker-installation.v1",
+  "repository": "rozkalnsandris/RPi5_main",
+  "phase": "P4",
+  "issue": 363,
+  "source_baseline": "8c157f0f6caf6258ebab7765a9b9ec2934070964",
+  "eligible_source_sha": null,
+  "eligible_source_sha_status": "POST_MERGE_EXACT_MAIN_BIND_REQUIRED",
+  "live_install_eligible": false,
+  "source_read_authority": {
+    "status": "UNPROVEN",
+    "required_repository": "rozkalnsandris/hermes-deals",
+    "required_permissions": {
+      "actions": "read",
+      "contents": "read"
+    },
+    "credential_source_path": "/etc/rozkalns-hermes-deals-origin-broker/source-github-app.pem",
+    "credential_runtime_name": "source-github-app.pem",
+    "credential_owner": "root",
+    "credential_group": "root",
+    "credential_mode": "0600",
+    "permission_or_credential_mutation_authorized": false,
+    "blocking_reason": "current p9 source App allowlist is control-center-only; exact Hermes read authority must be separately proven before launch or host activation"
+  },
+  "transport": {
+    "kind": "systemd-unix-stream-socket",
+    "socket_path": "/run/rozkalns-hermes-deals-origin-broker/request.sock",
+    "socket_unit": "rozkalns-hermes-deals-origin-broker.socket",
+    "service_unit": "rozkalns-hermes-deals-origin-broker@.service",
+    "request_max_bytes": 256,
+    "request_fields": [
+      "schema",
+      "authorization_issue_number"
+    ],
+    "caller_authority": [
+      "authorization_issue_number"
+    ],
+    "socket_owner": "root",
+    "socket_group": "rozkalns-deploy-executor",
+    "socket_mode": "0660",
+    "socket_directory_mode": "0755",
+    "accept_per_connection": true,
+    "max_connections": 1
+  },
+  "install_targets": [
+    {
+      "source": "ops/lib/deploy_executor/hermes_deals_origin_privileged_broker.py",
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_privileged_broker.py",
+      "owner": "root",
+      "group": "root",
+      "mode": "0644",
+      "identity": "BIND_TO_POST_MERGE_EXACT_RPI5_MAIN"
+    },
+    {
+      "source": "ops/bin/rozkalns-hermes-deals-origin-broker",
+      "target": "/usr/local/libexec/rozkalns-hermes-deals-origin-broker",
+      "owner": "root",
+      "group": "root",
+      "mode": "0755",
+      "identity": "BIND_TO_POST_MERGE_EXACT_RPI5_MAIN"
+    },
+    {
+      "source": "ops/systemd/rozkalns-hermes-deals-origin-broker.socket",
+      "target": "/etc/systemd/system/rozkalns-hermes-deals-origin-broker.socket",
+      "owner": "root",
+      "group": "root",
+      "mode": "0644",
+      "identity": "BIND_TO_POST_MERGE_EXACT_RPI5_MAIN"
+    },
+    {
+      "source": "ops/systemd/rozkalns-hermes-deals-origin-broker@.service",
+      "target": "/etc/systemd/system/rozkalns-hermes-deals-origin-broker@.service",
+      "owner": "root",
+      "group": "root",
+      "mode": "0644",
+      "identity": "BIND_TO_POST_MERGE_EXACT_RPI5_MAIN"
+    }
+  ],
+  "reviewed_helper_dependency": {
+    "repository": "rozkalnsandris/hermes-deals",
+    "repository_sha": "2f47f64ab15e767f4e53ad182326e64e313d5094",
+    "source": "tools/runner/origin_path_rpi5_pull_helper.py",
+    "source_blob": "51bb23cc6c2083ab7c8b4e81ba82dd880e46d673",
+    "capability": "origin-path-audit",
+    "installed_helper_path": "/usr/local/sbin/hermes-deals-origin-path-rpi5-pull-dispatch",
+    "installed_helper_owner": "root",
+    "installed_helper_group": "root",
+    "installed_helper_mode": "0755",
+    "registration_path": "/etc/hermes-deals-audits.d/origin-path-rpi5-pull.json",
+    "registration_owner": "root",
+    "registration_group": "root",
+    "registration_mode": "0600",
+    "probe_path": "/usr/local/libexec/hermes-deals-audits/origin-path-probe.py",
+    "probe_identity_source": "root-owned registration probe_sha256",
+    "evidence_root": "/var/lib/hermes-deals-audits/origin-path-audit/evidence",
+    "evidence_root_owner": "root",
+    "evidence_root_group": "root",
+    "evidence_root_mode": "0700",
+    "argument_names": [
+      "registered_source_sha",
+      "as_of"
+    ]
+  },
+  "service_security": {
+    "user": "root",
+    "group": "root",
+    "standard_input": "socket",
+    "standard_output": "socket",
+    "no_new_privileges": true,
+    "protect_system": "strict",
+    "protect_home": true,
+    "private_tmp": true,
+    "private_devices": true,
+    "restrict_suid_sgid": true,
+    "memory_deny_write_execute": true,
+    "restrict_namespaces": true,
+    "allowed_address_families": [
+      "AF_UNIX",
+      "AF_INET",
+      "AF_INET6"
+    ],
+    "capability_bounding_set": [
+      "CAP_SETUID",
+      "CAP_SETGID"
+    ],
+    "ambient_capabilities": [],
+    "timeout_seconds": 60,
+    "writable_privileged_paths": []
+  },
+  "existing_poller_invariants": {
+    "unit": "rozkalns-deploy-executor.service",
+    "user": "rozkalns-deploy-executor",
+    "group": "rozkalns-deploy-executor",
+    "no_new_privileges": true,
+    "generic_sudo_allowed": false,
+    "root_execution_allowed": false,
+    "docker_socket_allowed": false
+  },
+  "source_gate_flags": {
+    "source_read_authority_proven": false,
+    "helper_process_launch_implemented": false,
+    "privileged_dispatch_enabled": false,
+    "host_wiring_enabled": false,
+    "genuine_hermes_audit_authorized": false,
+    "runner_retirement_eligible": false,
+    "production_mutation_started": false
+  },
+  "state_contract": {
+    "broker_local_mutable_state": null,
+    "status": "NO_NEW_BROKER_STATE_AUTHORITY",
+    "requirement": "replay/consumption and canonical queue/source state must remain independently revalidated by the reviewed deploy-executor authority before any later launch surface can be enabled"
+  },
+  "next_gates": [
+    "prove exact authenticated Hermes GitHub source-read/revalidation authority without implicit App permission widening",
+    "implement and review the exact bounded helper launch surface while all live flags remain false",
+    "merge and bind exact-main source identities with fresh exact-main CI",
+    "separate owner LIVE authorization for host installation/activation",
+    "separate STRICT authorization for one genuine read-only origin audit canary",
+    "separate owner LIVE authorization for any runner retirement"
+  ]
+}

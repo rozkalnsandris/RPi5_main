@@ -570,3 +570,61 @@ Current gate sequence:
 6. runner/path retirement is eligible only after the replacement path is proven end-to-end and remains a separate owner-authorized LIVE mutation.
 
 Neither P10 completion, #361 source readiness, source merge, `START`, `turpini`, nor ordinary AUTO-RUN continuation authorizes helper execution, host wiring, systemd/sudoers/user/group/permission mutation, READY/LIVE-AUTH creation, runner retirement, deployment, DB/application-data writes, credential/App permission changes, Cloudflare/network/container/runtime mutation, retry, cleanup or rollback.
+
+## Current supersession — Hermes privileged broker installation/wiring security gate (2026-09-04)
+
+This section supersedes the #361 current-gate wording immediately above. The #361 section remains historical source evidence only; **this final section is the current Phase 4 next-action authority**.
+
+Fresh source state at `RPi5_main#363` creation:
+
+- `RPi5_main/main = 8c157f0f6caf6258ebab7765a9b9ec2934070964`;
+- #361 is closed/completed and PR #362 merged to that exact main SHA;
+- exact-main Validate #814, FAST-LANE #270 and GITHUB-ONLY #258 are SUCCESS;
+- `hermes-deals/main = 2f47f64ab15e767f4e53ad182326e64e313d5094`;
+- Hermes Deals CI #1775 and GITHUB-ONLY #101 are SUCCESS;
+- reviewed runner-independent helper blob remains `51bb23cc6c2083ab7c8b4e81ba82dd880e46d673`;
+- current source work item is `RPi5_main#363` / Draft PR #364.
+
+#363 proves the **source contract** for a capability-specific broker installation/wiring boundary while deliberately keeping the actual mutation path absent. The new broker transport accepts exactly one bounded identity-only UNIX-socket frame carrying only `authorization_issue_number`; it calls the already-reviewed dispatcher preparation path itself and cannot accept caller-selected source SHA, `as_of`, capability, executable/path, argv, environment, UID/GID, unit, command, output path or a prebuilt dispatch plan.
+
+The source-only host transport is fixed to:
+
+- socket unit `rozkalns-hermes-deals-origin-broker.socket`;
+- socket path `/run/rozkalns-hermes-deals-origin-broker/request.sock`;
+- socket `root:rozkalns-deploy-executor` mode `0660`, `Accept=yes`, `MaxConnections=1`;
+- per-connection root service `rozkalns-hermes-deals-origin-broker@.service`;
+- fixed broker path `/usr/local/libexec/rozkalns-hermes-deals-origin-broker`;
+- existing poller `rozkalns-deploy-executor.service` unchanged with `NoNewPrivileges=true` and no generic sudo/root/Docker-socket authority;
+- generic `ops/bin/rozkalns-deploy-dispatch` still `DISABLED`.
+
+`ops/deploy/hermes-deals-origin-broker-installation.json` freezes the intended broker/module/unit/helper/registration/probe/evidence/credential paths and owner/group/mode posture. It deliberately records `eligible_source_sha=null`, `POST_MERGE_EXACT_MAIN_BIND_REQUIRED` and `live_install_eligible=false`; it is evidence, not an installer or LIVE authorization.
+
+The source-read boundary remains deliberately fail-closed. Phase 2 historically proved the read-only `Rozkalns Automation` App contract included `hermes-deals`, but that historical evidence is **not current host credential/runtime proof**. The currently concrete privileged `p9_source_auth.py` provider is source-allowlisted only for `rozkalns-control-center`; #363 neither broadens that provider nor mutates any App installation, permission or credential. The broker entrypoint therefore returns `SOURCE_AUTHORITY_UNPROVEN`, and no helper process-launch implementation is present.
+
+Binding classification for the current gate:
+
+`PHASE4_CURRENT_WORK_ITEM=RPi5_main#363`
+`P9_EXIT_GATE=MET`
+`P10_EXIT_GATE=MET`
+`GLOBAL_EXECUTION_ENABLED=false`
+`BROKER_BOUNDARY_IMPLEMENTED=true`
+`SOURCE_READ_AUTHORITY_PROVEN=false`
+`HELPER_PROCESS_LAUNCH_IMPLEMENTED=false`
+`PRIVILEGED_DISPATCH_ENABLED=false`
+`HOST_WIRING_ENABLED=false`
+`LIVE_INSTALL_ELIGIBLE=false`
+`GENUINE_HERMES_AUDIT_AUTHORIZED=false`
+`RUNNER_RETIREMENT_ELIGIBLE=false`
+`PRODUCTION_MUTATION_STARTED=false`
+
+Current gate sequence:
+
+1. finish #363 / PR #364 through focused source review, exact-head CI and Ready, then STOP for a separate explicit owner `MERGE RPi5_main #364` decision;
+2. after any separately authorized merge, freshly require exact-main CI and bind the exact merged RPi5 source identity; merge still proves source readiness only;
+3. open a **new source prerequisite gate** that composes exact authenticated Hermes GitHub source/Actions read authority from the reviewed read-only App contract without implicit permission widening, and implements/reviews the exact bounded fixed-helper launch surface while every live flag remains false;
+4. merge that prerequisite only under a separate owner MERGE decision and again require fresh exact-main/cross-repository compatibility evidence;
+5. only then may a separate explicit LIVE authorization install/activate the exact reviewed broker/helper/socket/service/credential boundary on the host;
+6. a later separate STRICT authorization is required for exactly one genuine read-only Hermes origin audit canary;
+7. runner/path retirement is eligible only after the replacement path is proven end-to-end and remains a separate owner-authorized LIVE mutation.
+
+Neither #363 source readiness, PR #364, any later source merge, historical Phase 2 App proof, `START`, `SYNC`, `turpini`, nor AUTO-RUN continuation authorizes helper execution, credential/App permission change, host file placement, chmod/chown, systemd socket/service install/enable/start, sudoers/user/group mutation, READY/LIVE-AUTH creation, runner retirement, deployment, DB/application-data writes, Cloudflare/network/container/runtime mutation, retry, cleanup or rollback.

@@ -1,0 +1,16 @@
+[Unit]
+Description=Rozkalns Hermes Deals origin privileged broker socket (source contract only)
+
+[Socket]
+ListenStream=/run/rozkalns-hermes-deals-origin-broker/request.sock
+Accept=yes
+SocketUser=root
+SocketGroup=rozkalns-deploy-executor
+SocketMode=0660
+DirectoryMode=0755
+RemoveOnStop=yes
+Backlog=4
+MaxConnections=1
+
+[Install]
+WantedBy=sockets.target
