@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,7 @@ import requests
 
 MQTT_PORT = 1883
 MQTT_KEEPALIVE = 60
+MQTT_LOOP_TIMEOUT_S = 0.05
 T_CMD = "balkons/cmd"
 T_OUT = "balkons/telegram_out"
 
@@ -200,6 +202,16 @@ def _load_runtime_credentials() -> None:
     _mqtt_secret = read_credential(directory, "mqtt-secret")
 
 
+def _mqtt_network_loop(client: mqtt.Client) -> None:
+    # Paho 1.6.x publish() does not wake loop_start()'s select wait. Keep the
+    # same loop_forever network-thread model, but bound Telegram -> MQTT
+    # command dispatch scheduling latency explicitly.
+    client.loop_forever(
+        timeout=MQTT_LOOP_TIMEOUT_S,
+        retry_first_connection=True,
+    )
+
+
 def _start_mqtt() -> None:
     global _mqttc
 
@@ -214,7 +226,13 @@ def _start_mqtt() -> None:
     client.username_pw_set(_mqtt_username, _mqtt_secret)
     client.on_message = on_message
     client.connect(_mqtt_host, MQTT_PORT, MQTT_KEEPALIVE)
-    client.loop_start()
+    thread = threading.Thread(
+        target=_mqtt_network_loop,
+        args=(client,),
+        name="balkons-mqtt",
+        daemon=True,
+    )
+    thread.start()
     _mqttc = client
 
 
