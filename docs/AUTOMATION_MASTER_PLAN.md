@@ -691,3 +691,57 @@ Current gate sequence:
 7. runner/path retirement is eligible only after the replacement path is proven end-to-end and remains a separate owner-authorized LIVE mutation.
 
 Neither #365 source readiness, PR #366, either source merge, historical Phase 2 App proof, `START`, `SYNC`, `turpini`, nor AUTO-RUN continuation authorizes App/credential mutation, broker/helper execution, host file placement, chmod/chown, systemd installation/enable/start, user/group/sudoers changes, READY/LIVE-AUTH creation, runner retirement, deployment, DB/application-data writes, Cloudflare/network/container/runtime mutation, retry, cleanup or rollback.
+
+
+## Current supersession — Hermes canonical source-integration gate (2026-09-04)
+
+This section supersedes the #365 next-action wording above. All earlier Phase 4 sections remain historical evidence only; **this final section is the current Phase 4 source authority**.
+
+Fresh source evidence for this gate:
+
+- `RPi5_main/main = 13c0c46e9966b0682b53553a92bed510cf491c86` at branch creation;
+- GitHub reports #365 completed and PR #366 merged at that exact main SHA on 2026-09-04;
+- `hermes-deals/main = 511c1566111983f809bc958bc4b68510771d3efb`;
+- `tools/runner/origin_path_rpi5_pull_helper.py` remains blob `51bb23cc6c2083ab7c8b4e81ba82dd880e46d673` on that Hermes main;
+- this source-integration patch is not merged, so no post-integration eligible `RPi5_main` SHA or runtime claim exists yet.
+
+The source integration introduces three capability-specific components without widening caller authority:
+
+1. `ConcreteCanonicalHermesOriginRevalidator` accepts only `authorization_issue_number` at its request boundary and reconstructs the owner-authored LIVE-AUTH, READY queue, disabled static registry, exact Hermes repository ancestry/CI and adapter provenance from the existing reviewed read-only clients. The Hermes source client must be the existing single-repository Source App provider fixed to repository ID `1317143994`, App ID `4537106`, installation ID `152422751` and exactly `Actions:read + Contents:read`. GitHub response timestamps must be canonical, monotonic and mutually consistent.
+2. `ConcreteSanitizedHermesOriginHostEvidenceResolver` accepts no path, command, environment, unit, identity or capability selector. A later privileged adapter may provide one bounded raw observation with fixed source-known registration, broker, socket, service, credential-location, helper, probe, dispatcher and workflow identities. The resolver rejects duplicate/extra fields, stale/future timestamps, secret-like material, identity drift and every positive mutation/authority flag, then emits only the minimal existing consumer evidence.
+3. `HermesDealsOriginBrokerComposition` binds those exact concrete types to the existing fixed one-shot launcher. The installed broker entrypoint does not construct it, and the composition has no default real runner. CI supplies a fake runner only. The fixed helper executable, two arguments, `shell=False`, minimal environment, timeout, output bounds and one-invocation limit remain unchanged.
+
+The canonical evidence now distinguishes a validated source-side baseline **contract** from actual host state. Repository source does not claim that any registration, credential, helper, unit or App installation exists on the RPi5. Durable replay availability and the future sanitized host observation provider remain runtime adapters that must be proven during a separate read-only preflight before any entrypoint wiring or LIVE decision.
+
+Binding classification for the current source patch:
+
+`PHASE4_CURRENT_WORK_ITEM=HERMES_CANONICAL_SOURCE_INTEGRATION_DRAFT`
+`P9_EXIT_GATE=MET`
+`P10_EXIT_GATE=MET`
+`GLOBAL_EXECUTION_ENABLED=false`
+`SOURCE_AUTH_COMPOSITION_IMPLEMENTED=true`
+`SOURCE_READ_AUTHORITY_PROVEN=false`
+`CONCRETE_CANONICAL_REVALIDATOR_IMPLEMENTED=true`
+`SANITIZED_HOST_EVIDENCE_RESOLVER_IMPLEMENTED=true`
+`BROKER_COMPOSITION_IMPLEMENTED=true`
+`BROKER_ENTRYPOINT_WIRED=false`
+`HELPER_PROCESS_LAUNCH_IMPLEMENTED=true`
+`HELPER_PROCESS_LAUNCH_WIRED=false`
+`PRIVILEGED_DISPATCH_ENABLED=false`
+`HOST_WIRING_ENABLED=false`
+`LIVE_INSTALL_ELIGIBLE=false`
+`GENUINE_HERMES_AUDIT_AUTHORIZED=false`
+`RUNNER_RETIREMENT_ELIGIBLE=false`
+`PRODUCTION_MUTATION_STARTED=false`
+
+Current gate sequence:
+
+1. complete focused source review, exact-head CI and Draft PR readiness for this integration patch;
+2. STOP for a separate explicit owner MERGE decision;
+3. after merge, freshly bind the exact merged `RPi5_main/main`, exact-main CI and current Hermes helper provenance;
+4. perform a separate read-only runtime preflight for the expected App installation, credential metadata, replay store, registration, broker, helper, socket and service identities without reading credential content;
+5. only if every source and runtime prerequisite passes may a separate explicit LIVE authorization install/activate the exact reviewed host components;
+6. a later separate STRICT authorization is required for exactly one genuine read-only Hermes origin audit canary;
+7. runner/path retirement is eligible only after the replacement path is proven end-to-end and remains a separate owner-authorized LIVE mutation.
+
+Neither this source patch, its Draft PR, a later source merge, #365/#366, historical App proof, nor any continuation command authorizes credential/App mutation, host inspection, broker/helper execution, host file placement, systemd action, READY/LIVE-AUTH creation, deployment, application/database mutation, runner retirement, retry, cleanup or rollback.

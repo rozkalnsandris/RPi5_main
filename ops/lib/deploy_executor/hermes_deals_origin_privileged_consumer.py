@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from datetime import datetime, timezone
 import re
 import uuid
@@ -25,6 +25,7 @@ from .hermes_deals_origin_dispatch_request import (
 HOST_EVIDENCE_SCHEMA = "rozkalns.hermes-deals.origin-host-evidence.v1"
 AUTHORIZATION_CLASS = "STRICT"
 CANONICAL_AS_OF_SOURCE = "github-live-auth-created-at-utc-date"
+MAX_CANONICAL_TIME_DRIFT_SECONDS = 30
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 EVIDENCE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._:-]{0,127}$")
 _HOST_EVIDENCE_FIELDS = frozenset(
@@ -56,6 +57,7 @@ class HermesDealsOriginPrivilegedConsumerError(RuntimeError):
 class CanonicalHermesOriginEvidence:
     authorization_issue_number: int
     authorization_created_at: str
+    github_server_time: str
     request_id: str
     queue_issue: int
     source_repository: str
@@ -81,7 +83,7 @@ class CanonicalHermesOriginEvidence:
     registry_execution_enabled: bool
     source_reachable_from_main: bool
     source_ci_success: bool
-    baseline_matched: bool
+    baseline_contract_valid: bool
     prepared_execution_enabled: bool
     adapter_preflight_read_only: bool
     adapter_preflight_privileged_dispatch_ready: bool
@@ -128,6 +130,7 @@ class SanitizedHermesOriginHostEvidenceResolver(Protocol):
         self,
         *,
         source_sha: str,
+        github_server_time: str,
     ) -> Mapping[str, Any]: ...
 
 
@@ -172,6 +175,23 @@ def _canonical_authorization_created_at(value: Any) -> tuple[str, str]:
     return canonical, parsed.date().isoformat()
 
 
+def _canonical_github_server_time(value: Any) -> tuple[str, datetime]:
+    if type(value) is not str:
+        _fail("canonical github_server_time must be GitHub UTC RFC3339")
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=timezone.utc
+        )
+    except ValueError as exc:
+        raise HermesDealsOriginPrivilegedConsumerError(
+            "canonical github_server_time must be GitHub UTC RFC3339"
+        ) from exc
+    canonical = parsed.strftime("%Y-%m-%dT%H:%M:%SZ")
+    if canonical != value:
+        _fail("canonical github_server_time must be GitHub UTC RFC3339")
+    return canonical, parsed
+
+
 def _require_bool(value: Any, expected: bool, where: str) -> None:
     if type(value) is not bool or value is not expected:
         _fail(f"{where} must be {str(expected).lower()}")
@@ -192,6 +212,15 @@ def _validate_canonical_evidence(
     if evidence.authorization_issue_number != request.authorization_issue_number:
         _fail("canonical authorization issue identity drifted")
     _canonical_authorization_created_at(evidence.authorization_created_at)
+    _, github_server_time = _canonical_github_server_time(evidence.github_server_time)
+    # The protocol parser already enforces TTL against the authoritative GitHub
+    # Date header. Preserve that invariant at this interface boundary too.
+    authorization_time = datetime.strptime(
+        evidence.authorization_created_at, "%Y-%m-%dT%H:%M:%SZ"
+    ).replace(tzinfo=timezone.utc)
+    age = (github_server_time - authorization_time).total_seconds()
+    if age < -30 or age > 600:
+        _fail("canonical authorization and GitHub response times are inconsistent")
     _canonical_uuid4(evidence.request_id, "canonical request_id")
     _positive_int(evidence.queue_issue, "canonical queue_issue")
     _positive_int(evidence.source_ci_run_id, "canonical source_ci_run_id")
@@ -227,7 +256,7 @@ def _validate_canonical_evidence(
         "queue_binding_valid": evidence.queue_binding_valid,
         "source_reachable_from_main": evidence.source_reachable_from_main,
         "source_ci_success": evidence.source_ci_success,
-        "baseline_matched": evidence.baseline_matched,
+        "baseline_contract_valid": evidence.baseline_contract_valid,
         "adapter_preflight_read_only": evidence.adapter_preflight_read_only,
     }
     for name, value in required_true.items():
@@ -317,7 +346,10 @@ def consume_privileged_request(
     _validate_canonical_evidence(request, evidence)
 
     host_evidence = parse_sanitized_hermes_origin_host_evidence(
-        host_evidence_resolver.resolve(source_sha=evidence.source_sha),
+        host_evidence_resolver.resolve(
+            source_sha=evidence.source_sha,
+            github_server_time=evidence.github_server_time,
+        ),
         expected_source_sha=evidence.source_sha,
     )
 
@@ -327,8 +359,22 @@ def consume_privileged_request(
         request.authorization_issue_number,
     )
     _validate_canonical_evidence(request, final_evidence)
-    if final_evidence != evidence:
+    stable_fields = tuple(
+        field.name for field in fields(CanonicalHermesOriginEvidence)
+        if field.name != "github_server_time"
+    )
+    if any(
+        getattr(final_evidence, name) != getattr(evidence, name)
+        for name in stable_fields
+    ):
         _fail("canonical evidence drifted during privileged consumer revalidation")
+    _, first_server_time = _canonical_github_server_time(evidence.github_server_time)
+    _, final_server_time = _canonical_github_server_time(
+        final_evidence.github_server_time
+    )
+    canonical_time_drift = (final_server_time - first_server_time).total_seconds()
+    if not 0 <= canonical_time_drift <= MAX_CANONICAL_TIME_DRIFT_SECONDS:
+        _fail("canonical GitHub response time drifted during privileged revalidation")
 
     authorization_created_at, canonical_as_of = _canonical_authorization_created_at(
         final_evidence.authorization_created_at

@@ -1,10 +1,11 @@
 # Hermes Deals origin audit — privileged dispatcher and broker source boundary
 
-Status: **#364 MERGED / #365 SOURCE-AUTH + FIXED-LAUNCH PREREQUISITE / BROKER ENTRYPOINT INERT / NOT LIVE-INSTALL ELIGIBLE**
+Status: **#366 MERGED / CANONICAL SOURCE-INTEGRATION DRAFT / BROKER ENTRYPOINT INERT / NOT LIVE-INSTALL ELIGIBLE**
 
 Tracking:
 
-- current work item: `RPi5_main#365` / Draft PR #366
+- completed prerequisite: `RPi5_main#365` / merged PR #366 at `13c0c46e9966b0682b53553a92bed510cf491c86`
+- current work item: unmerged Hermes canonical source-integration draft
 - completed broker installation/wiring source gate: `RPi5_main#363` / PR #364
 - completed privileged-dispatch plan: `RPi5_main#361` / PR #362
 - completed pull-helper binding: `RPi5_main#359` / PR #360
@@ -204,3 +205,68 @@ It remains evidence, not an installer or LIVE authorization.
 `HERMES_RELEASE_RUNNER_IN_SCOPE=false`
 
 `PRODUCTION_MUTATION_STARTED=false`
+
+## Source-integration supersession after merged #365/#366 (2026-09-04)
+
+This section supersedes the earlier “current” and “next gate” wording. GitHub freshly reports PR #366 merged as `13c0c46e9966b0682b53553a92bed510cf491c86`; the refreshed local `main` matches. Hermes `main` remains `511c1566111983f809bc958bc4b68510771d3efb`, with the reviewed pull-helper blob still `51bb23cc6c2083ab7c8b4e81ba82dd880e46d673`.
+
+The current unmerged source integration implements:
+
+- a concrete canonical Hermes revalidator using only the reviewed isolated authorization/queue clients and the fixed single-repository Hermes Source App client;
+- a sanitized host-evidence resolver whose provider has zero arguments and whose only output is the minimal evidence already consumed by the double-revalidation boundary;
+- an inert broker composition binding those exact components to the fixed one-shot helper launcher with a required fake runner seam in CI.
+
+Caller authority remains exactly `authorization_issue_number`. The concrete revalidator accepts no repository, SHA, `as_of`, URL, App, installation, permission, path, command, argv, environment, unit, UID/GID or capability selector.
+
+### Sanitized host observation fields
+
+| Fields | Why necessary |
+|---|---|
+| `schema`, `evidence_id`, `observed_at` | Version, correlate and freshness-check exactly one bounded observation against GitHub server time. |
+| `operation_id`, `registered_source_sha` | Bind host evidence to the canonical Hermes authorization rather than caller prose. |
+| Registration path/name/owner/group/mode | Prove the fixed root-owned `0600` registration identity. |
+| Broker path/owner/group/mode and socket/service identities | Prove only the reviewed capability-specific privileged boundary. |
+| Credential path/owner/group/mode | Prove public location metadata without reading or returning credential content. |
+| Pull-helper path/owner/group/mode/blob and argument names | Prove the exact helper and its two canonical arguments. |
+| Probe path/blob plus dispatcher/workflow blobs | Bind the complete reviewed origin-audit source chain. |
+| Read-only and negative credential/secret/filesystem/systemd/authority/production flags | Fail closed if observation collection expands authority or performs a mutation. |
+
+The raw observation has an exact schema, an 8192-byte ceiling, duplicate-key rejection and a five-minute maximum age. It returns no credential value and exposes no generic path, command or host-inspection API.
+
+Repository source still does **not** prove the actual App installation, credential, replay store, registration, helper, broker, socket or service state. The installed entrypoint remains inert and prints `SOURCE_AUTHORITY_UNPROVEN`; it does not construct the composition or launch a helper.
+
+`CURRENT_WORK_ITEM=HERMES_CANONICAL_SOURCE_INTEGRATION_DRAFT`
+
+`CURRENT_PHASE=4`
+
+`GLOBAL_EXECUTION_ENABLED=false`
+
+`SOURCE_AUTH_COMPOSITION_IMPLEMENTED=true`
+
+`SOURCE_READ_AUTHORITY_PROVEN=false`
+
+`CONCRETE_CANONICAL_REVALIDATOR_IMPLEMENTED=true`
+
+`SANITIZED_HOST_EVIDENCE_RESOLVER_IMPLEMENTED=true`
+
+`BROKER_COMPOSITION_IMPLEMENTED=true`
+
+`BROKER_ENTRYPOINT_WIRED=false`
+
+`HELPER_PROCESS_LAUNCH_IMPLEMENTED=true`
+
+`HELPER_PROCESS_LAUNCH_WIRED=false`
+
+`PRIVILEGED_DISPATCH_ENABLED=false`
+
+`HOST_WIRING_ENABLED=false`
+
+`LIVE_INSTALL_ELIGIBLE=false`
+
+`GENUINE_HERMES_AUDIT_AUTHORIZED=false`
+
+`RUNNER_RETIREMENT_ELIGIBLE=false`
+
+`PRODUCTION_MUTATION_STARTED=false`
+
+Next sequence: source-integration review/Draft PR → separate MERGE → fresh merged-source and cross-repository validation → read-only runtime preflight → separate LIVE installation authorization → later separate STRICT one-canary authorization → later separate runner-retirement authorization.

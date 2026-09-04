@@ -44,12 +44,14 @@ SOURCE_SHA = "1" * 40
 CURRENT_MAIN_SHA = "2" * 40
 REQUEST_ID = "123e4567-e89b-42d3-a456-426614174000"
 AUTHORIZATION_CREATED_AT = "2026-09-04T07:26:48Z"
+GITHUB_SERVER_TIME = "2026-09-04T07:27:00Z"
 
 
 def canonical_evidence() -> CanonicalHermesOriginEvidence:
     return CanonicalHermesOriginEvidence(
         authorization_issue_number=17,
         authorization_created_at=AUTHORIZATION_CREATED_AT,
+        github_server_time=GITHUB_SERVER_TIME,
         request_id=REQUEST_ID,
         queue_issue=41,
         source_repository=SOURCE_REPOSITORY,
@@ -75,7 +77,7 @@ def canonical_evidence() -> CanonicalHermesOriginEvidence:
         registry_execution_enabled=False,
         source_reachable_from_main=True,
         source_ci_success=True,
-        baseline_matched=True,
+        baseline_contract_valid=True,
         prepared_execution_enabled=False,
         adapter_preflight_read_only=True,
         adapter_preflight_privileged_dispatch_ready=False,
@@ -115,7 +117,9 @@ class FakeHostEvidenceResolver:
     def __init__(self):
         self.calls: list[str] = []
 
-    def resolve(self, *, source_sha: str) -> dict[str, object]:
+    def resolve(
+        self, *, source_sha: str, github_server_time: str
+    ) -> dict[str, object]:
         self.calls.append(source_sha)
         return host_evidence()
 
@@ -149,7 +153,7 @@ class HermesDealsOriginPrivilegedBrokerTests(unittest.TestCase):
         self.assertEqual(envelope.installed_helper_path, INSTALLED_HELPER_PATH)
         self.assertEqual(envelope.helper_argument_names, PULL_HELPER_ARGUMENTS)
         self.assertEqual(envelope.helper_arguments, (SOURCE_SHA, "2026-09-04"))
-        self.assertFalse(envelope.process_launch_implemented)
+        self.assertTrue(envelope.process_launch_implemented)
         self.assertFalse(envelope.privileged_dispatch_enabled)
         self.assertFalse(envelope.host_wiring_enabled)
         self.assertFalse(envelope.genuine_hermes_audit_authorized)
@@ -164,6 +168,8 @@ class HermesDealsOriginPrivilegedBrokerTests(unittest.TestCase):
             request_bytes()[:-1],
             request_bytes() + b"\n",
             request_bytes().replace(b"\n", b"\r\n"),
+            b"\xff\n",
+            b"{\"schema\":\"x\",\"authorization_issue_number\":17}\x00\n",
             b"{\"schema\":\"x\",\"authorization_issue_number\":17}\n",
             b"{\"schema\":\"rozkalns.hermes-deals.origin-dispatch-request.v1\",\"authorization_issue_number\":17,\"authorization_issue_number\":18}\n",
             b"x" * (BROKER_REQUEST_MAX_BYTES + 1),
@@ -231,15 +237,20 @@ class HermesDealsOriginPrivilegedBrokerTests(unittest.TestCase):
                 encoding="utf-8"
             )
         )
-        self.assertEqual(manifest["issue"], 365)
+        self.assertIsNone(manifest["issue"])
         self.assertEqual(
             manifest["source_baseline"],
-            "9c60248547043ee5ae7b1d0e2897fd9b8aac381a",
+            "13c0c46e9966b0682b53553a92bed510cf491c86",
         )
+        prerequisite = manifest["completed_source_prerequisite"]
+        self.assertEqual(prerequisite["issue"], 365)
+        self.assertEqual(prerequisite["pull_request"], 366)
+        self.assertTrue(prerequisite["merged"])
+        self.assertEqual(prerequisite["merge_commit_sha"], manifest["source_baseline"])
         self.assertIsNone(manifest["eligible_source_sha"])
         self.assertEqual(
             manifest["eligible_source_sha_status"],
-            "POST_MERGE_EXACT_MAIN_BIND_REQUIRED",
+            "INTEGRATION_SOURCE_MERGE_REQUIRED",
         )
         self.assertFalse(manifest["live_install_eligible"])
         source_auth = manifest["source_read_authority"]
@@ -274,7 +285,10 @@ class HermesDealsOriginPrivilegedBrokerTests(unittest.TestCase):
         flags = manifest["source_gate_flags"]
         self.assertTrue(flags["source_auth_composition_implemented"])
         self.assertFalse(flags["source_read_authority_proven"])
-        self.assertFalse(flags["concrete_canonical_revalidator_implemented"])
+        self.assertTrue(flags["concrete_canonical_revalidator_implemented"])
+        self.assertTrue(flags["sanitized_host_evidence_resolver_implemented"])
+        self.assertTrue(flags["broker_composition_implemented"])
+        self.assertFalse(flags["broker_entrypoint_wired"])
         self.assertTrue(flags["helper_process_launch_implemented"])
         self.assertFalse(flags["helper_process_launch_wired"])
         self.assertFalse(flags["privileged_dispatch_enabled"])
@@ -326,7 +340,7 @@ class HermesDealsOriginPrivilegedBrokerTests(unittest.TestCase):
         self.assertIn("Group=rozkalns-deploy-executor", poller)
         self.assertIn("NoNewPrivileges=true", poller)
         self.assertIn("CapabilityBoundingSet=", poller)
-        self.assertNotIn("sudo", poller.lower())
+        self.assertNotIn("ExecStart=/usr/bin/sudo", poller)
         self.assertIn("DEPLOY_EXECUTOR_DISPATCH=DISABLED", generic_dispatch)
         self.assertNotIn("subprocess", generic_dispatch)
 
@@ -339,6 +353,11 @@ class HermesDealsOriginPrivilegedBrokerTests(unittest.TestCase):
         self.assertEqual(readiness["broker_install_path"], BROKER_INSTALL_PATH)
         self.assertEqual(readiness["caller_authority"], ("authorization_issue_number",))
         self.assertFalse(readiness["source_read_authority_proven"])
+        self.assertTrue(readiness["helper_process_launch_implemented"])
+        self.assertFalse(readiness["helper_process_launch_wired"])
+        self.assertTrue(readiness["concrete_canonical_revalidator_implemented"])
+        self.assertTrue(readiness["sanitized_host_evidence_resolver_implemented"])
+        self.assertTrue(readiness["broker_composition_implemented"])
         self.assertFalse(readiness["process_launch_surface"])
         self.assertFalse(readiness["privileged_dispatch_enabled"])
         self.assertFalse(readiness["host_wiring_enabled"])

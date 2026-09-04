@@ -43,12 +43,14 @@ SOURCE_SHA = "1" * 40
 CURRENT_MAIN_SHA = "2" * 40
 REQUEST_ID = "123e4567-e89b-42d3-a456-426614174000"
 AUTHORIZATION_CREATED_AT = "2026-09-04T07:26:48Z"
+GITHUB_SERVER_TIME = "2026-09-04T07:27:00Z"
 
 
 def canonical_evidence() -> CanonicalHermesOriginEvidence:
     return CanonicalHermesOriginEvidence(
         authorization_issue_number=17,
         authorization_created_at=AUTHORIZATION_CREATED_AT,
+        github_server_time=GITHUB_SERVER_TIME,
         request_id=REQUEST_ID,
         queue_issue=41,
         source_repository=SOURCE_REPOSITORY,
@@ -74,7 +76,7 @@ def canonical_evidence() -> CanonicalHermesOriginEvidence:
         registry_execution_enabled=False,
         source_reachable_from_main=True,
         source_ci_success=True,
-        baseline_matched=True,
+        baseline_contract_valid=True,
         prepared_execution_enabled=False,
         adapter_preflight_read_only=True,
         adapter_preflight_privileged_dispatch_ready=False,
@@ -121,7 +123,9 @@ class FakeHostEvidenceResolver:
         self.evidence = evidence or host_evidence()
         self.calls: list[str] = []
 
-    def resolve(self, *, source_sha: str) -> dict[str, object]:
+    def resolve(
+        self, *, source_sha: str, github_server_time: str
+    ) -> dict[str, object]:
         self.calls.append(source_sha)
         return dict(self.evidence)
 

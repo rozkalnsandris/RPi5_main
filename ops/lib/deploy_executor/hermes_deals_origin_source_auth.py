@@ -17,6 +17,13 @@ SOURCE_AUTH_COMPOSITION_IMPLEMENTED = True
 SOURCE_RUNTIME_CREDENTIAL_PROVEN = False
 SOURCE_RUNTIME_INSTALLATION_PROVEN = False
 SOURCE_WRITE_PERMISSION_REQUIRED = False
+SOURCE_CREDENTIAL_PATH = (
+    "/etc/rozkalns-hermes-deals-origin-broker/source-github-app.pem"
+)
+SOURCE_CREDENTIAL_RUNTIME_NAME = "source-github-app.pem"
+SOURCE_CREDENTIAL_OWNER = "root"
+SOURCE_CREDENTIAL_GROUP = "root"
+SOURCE_CREDENTIAL_MODE = "0600"
 
 
 def build_hermes_deals_source_token_provider(
@@ -48,6 +55,11 @@ def source_readiness() -> Mapping[str, object]:
         "app_id": SOURCE_APP_ID,
         "installation_id": SOURCE_INSTALLATION_ID,
         "requested_permissions": dict(REQUIRED_PERMISSIONS),
+        "credential_source_path": SOURCE_CREDENTIAL_PATH,
+        "credential_runtime_name": SOURCE_CREDENTIAL_RUNTIME_NAME,
+        "credential_owner": SOURCE_CREDENTIAL_OWNER,
+        "credential_group": SOURCE_CREDENTIAL_GROUP,
+        "credential_mode": SOURCE_CREDENTIAL_MODE,
         "repository_selection_required": "selected",
         "token_repository_count": 1,
         "source_runtime_credential_proven": SOURCE_RUNTIME_CREDENTIAL_PROVEN,

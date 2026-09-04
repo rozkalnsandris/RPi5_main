@@ -1,10 +1,11 @@
 # Hermes Deals origin-path pull canary — source contract
 
-Status: **SOURCE-REGISTERED / PULL-HELPER BOUND / BROKER SOURCE MERGED / #365 SOURCE-AUTH + FIXED-LAUNCH PREREQUISITE / GLOBALLY EXECUTION-DISABLED / NOT HOST-EXECUTABLE**
+Status: **SOURCE-REGISTERED / #366 MERGED / CANONICAL SOURCE-INTEGRATION DRAFT / GLOBALLY EXECUTION-DISABLED / NOT HOST-EXECUTABLE**
 
 Tracking:
 
-- current source prerequisite: `RPi5_main#365` / Draft PR #366
+- completed source prerequisite: `RPi5_main#365` / merged PR #366 at `13c0c46e9966b0682b53553a92bed510cf491c86`
+- current work item: unmerged Hermes canonical source-integration draft
 - completed broker installation/wiring gate: `RPi5_main#363` / PR #364
 - completed dispatcher gate: `RPi5_main#361` / PR #362
 - completed helper binding: `RPi5_main#359` / PR #360
@@ -178,3 +179,43 @@ Focused tests must prove:
 `RUNNER_RETIREMENT_ELIGIBLE=false`
 
 `PRODUCTION_MUTATION_STARTED=false`
+
+## Source-integration supersession after merged #365/#366 (2026-09-04)
+
+This section supersedes the earlier current/next-gate wording while retaining it as historical evidence. GitHub freshly reports PR #366 merged as `13c0c46e9966b0682b53553a92bed510cf491c86`; refreshed local `main` matches. Hermes `main` remains `511c1566111983f809bc958bc4b68510771d3efb`, and the reviewed helper blob remains `51bb23cc6c2083ab7c8b4e81ba82dd880e46d673`.
+
+The current unmerged source patch implements the concrete canonical revalidator, strict sanitized host-evidence resolver and inert broker composition. It preserves the identity-only request, mandatory double canonical revalidation, fixed Hermes repository, exact Source App scope, fixed helper path/two-argument interface, fake-runner-only CI seam and all bounded launcher limits.
+
+Host observation fields are limited to: version/correlation/freshness; canonical operation and source SHA; fixed registration identity; fixed broker/socket/service identities; public credential location metadata; fixed pull-helper identity/interface; fixed probe/dispatcher/workflow source identities; and explicit negative secret/mutation/authority flags. The resolver emits none of the paths, unit names or credential metadata to the caller-facing result.
+
+Repository source does not prove actual runtime state. The entrypoint remains inert, no helper/audit can execute from it, and no credential/App permission, file, service, runner, database or application state is inspected or changed.
+
+`CURRENT_WORK_ITEM=HERMES_CANONICAL_SOURCE_INTEGRATION_DRAFT`
+
+`CONCRETE_CANONICAL_REVALIDATOR_IMPLEMENTED=true`
+
+`SANITIZED_HOST_EVIDENCE_RESOLVER_IMPLEMENTED=true`
+
+`BROKER_COMPOSITION_IMPLEMENTED=true`
+
+`BROKER_ENTRYPOINT_WIRED=false`
+
+`SOURCE_READ_AUTHORITY_PROVEN=false`
+
+`HELPER_PROCESS_LAUNCH_IMPLEMENTED=true`
+
+`HELPER_PROCESS_LAUNCH_WIRED=false`
+
+`PRIVILEGED_DISPATCH_ENABLED=false`
+
+`HOST_WIRING_ENABLED=false`
+
+`LIVE_INSTALL_ELIGIBLE=false`
+
+`GENUINE_HERMES_AUDIT_AUTHORIZED=false`
+
+`RUNNER_RETIREMENT_ELIGIBLE=false`
+
+`PRODUCTION_MUTATION_STARTED=false`
+
+Next sequence: finish this source integration and Draft PR → separate MERGE → fresh exact merged-source/CI/helper validation → read-only runtime preflight → separate LIVE installation authorization → later separate STRICT one-canary authorization → later separate runner-retirement authorization.
