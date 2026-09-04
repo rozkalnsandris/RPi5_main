@@ -18,7 +18,7 @@ from .hermes_deals_origin_dispatch_request import (
 )
 from .hermes_deals_origin_privileged_consumer import (
     CanonicalHermesOriginRevalidator,
-    HermesOriginHostEvidenceResolver,
+    SanitizedHermesOriginHostEvidenceResolver,
 )
 from .hermes_deals_origin_privileged_dispatcher import (
     INSTALLED_HELPER_PATH,
@@ -136,7 +136,7 @@ def prepare_hermes_deals_origin_broker_envelope(
     raw_request: bytes,
     *,
     canonical_revalidator: CanonicalHermesOriginRevalidator,
-    host_evidence_resolver: HermesOriginHostEvidenceResolver,
+    host_evidence_resolver: SanitizedHermesOriginHostEvidenceResolver,
 ) -> HermesDealsOriginBrokerEnvelope:
     """Prepare the exact capability envelope; never launch a process.
 
