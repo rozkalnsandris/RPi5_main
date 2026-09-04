@@ -15,12 +15,12 @@ class HermesDealsOriginDispatchRequestError(ValueError):
 
 @dataclass(frozen=True)
 class HermesDealsOriginDispatchRequest:
-    """Identity-only request for a future privileged Hermes origin-audit boundary.
+    """Identity-only request for the Hermes origin privileged boundary.
 
     This value carries no command, path, argv, environment, repository entrypoint,
-    sudo target, source SHA, probe date, artifact path, or other execution authority.
-    A future privileged consumer must use the authorization issue identity to
-    independently re-resolve all canonical authority and source/runtime evidence.
+    sudo target, source SHA, probe date, artifact path, capability selector, or
+    other execution authority. The privileged consumer re-resolves all canonical
+    authority and source/runtime evidence from the authorization issue identity.
     """
 
     authorization_issue_number: int
@@ -61,27 +61,27 @@ def parse_hermes_deals_origin_dispatch_request(
 
 
 def privileged_revalidation_requirements() -> tuple[str, ...]:
-    """Static requirements a future privileged consumer must satisfy itself."""
+    """Static requirements the privileged consumer must satisfy itself."""
 
     return (
         "re-fetch owner-authored LIVE-AUTH from isolated authorization repository",
-        "revalidate LIVE-AUTH TTL body hash replay state and canonical queue binding",
+        "revalidate GitHub server created_at TTL body hash replay state and canonical queue binding",
         "re-fetch READY queue and require exact Hermes operation/source envelope",
         "revalidate exact Hermes source SHA merged reachability and exact-SHA CI",
         "revalidate disabled static registry operation and invocation budget/exclusions",
-        "revalidate reviewed workflow dispatcher installer and probe provenance",
+        "revalidate reviewed workflow dispatcher installer probe and pull-helper provenance",
         "revalidate root-owned origin registration and installed helper identities",
-        "derive all execution parameters from reviewed source/canonical state, never request prose",
+        "derive source SHA and as_of from canonical evidence, never request prose",
     )
 
 
 def source_readiness() -> Mapping[str, Any]:
-    """Describe this source gate without creating an executable dispatch surface."""
+    """Describe the request side of the source-only dispatcher gate."""
 
     return {
         "schema": SCHEMA,
         "identity_fields": ("authorization_issue_number",),
-        "privileged_dispatch_implemented": False,
+        "privileged_dispatch_implemented": True,
         "privileged_dispatch_enabled": False,
         "host_wiring_enabled": False,
         "runner_retirement_eligible": False,
