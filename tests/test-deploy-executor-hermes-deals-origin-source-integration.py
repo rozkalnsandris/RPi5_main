@@ -671,7 +671,13 @@ class HermesOriginBrokerCompositionTests(unittest.TestCase):
         )
         self.assertTrue(manifest["completed_source_prerequisite"]["merged"])
         self.assertEqual(manifest["completed_source_prerequisite"]["pull_request"], 366)
-        self.assertIsNone(manifest["eligible_source_sha"])
+        self.assertEqual(manifest["eligible_source_sha"], "2550e77f6cb811ca6f10b49ef0b2fef554d64869")
+        self.assertEqual(
+            manifest["eligible_source_sha_status"],
+            "MERGED_SOURCE_RUNTIME_PREFLIGHT_REQUIRED",
+        )
+        self.assertEqual(manifest["source_integration"]["status"], "MERGED_SOURCE_RUNTIME_UNPROVEN")
+        self.assertFalse(manifest["post_merge_source_evidence"]["runtime_state_proven"])
         self.assertFalse(manifest["live_install_eligible"])
         self.assertFalse(
             manifest["source_integration"][

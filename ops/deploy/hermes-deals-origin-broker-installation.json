@@ -10,8 +10,8 @@
     "merged": true,
     "merge_commit_sha": "13c0c46e9966b0682b53553a92bed510cf491c86"
   },
-  "eligible_source_sha": null,
-  "eligible_source_sha_status": "INTEGRATION_SOURCE_MERGE_REQUIRED",
+  "eligible_source_sha": "2550e77f6cb811ca6f10b49ef0b2fef554d64869",
+  "eligible_source_sha_status": "MERGED_SOURCE_RUNTIME_PREFLIGHT_REQUIRED",
   "live_install_eligible": false,
   "source_read_authority": {
     "status": "SOURCE_COMPOSITION_IMPLEMENTED_RUNTIME_UNPROVEN",
@@ -36,7 +36,7 @@
     "blocking_reason": "source token composition is reviewed but current host credential/install state remains unproven"
   },
   "source_integration": {
-    "status": "UNMERGED_SOURCE_IMPLEMENTED_RUNTIME_UNPROVEN",
+    "status": "MERGED_SOURCE_RUNTIME_UNPROVEN",
     "canonical_revalidator": "ConcreteCanonicalHermesOriginRevalidator",
     "sanitized_host_evidence_resolver": "ConcreteSanitizedHermesOriginHostEvidenceResolver",
     "broker_composition": "HermesDealsOriginBrokerComposition",
@@ -53,7 +53,8 @@
     "host_observation_provider_arguments": [],
     "durable_replay_adapter_runtime_proven": false,
     "host_observation_adapter_runtime_proven": false,
-    "broker_entrypoint_wired": false
+    "broker_entrypoint_wired": false,
+    "merged_source_sha": "2550e77f6cb811ca6f10b49ef0b2fef554d64869"
   },
   "transport": {
     "kind": "systemd-unix-stream-socket",
@@ -82,7 +83,7 @@
       "owner": "root",
       "group": "root",
       "mode": "0644",
-      "identity": "BIND_TO_POST_MERGE_EXACT_RPI5_MAIN"
+      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA"
     },
     {
       "source": "ops/lib/deploy_executor/hermes_deals_origin_source_auth.py",
@@ -90,7 +91,7 @@
       "owner": "root",
       "group": "root",
       "mode": "0644",
-      "identity": "BIND_TO_POST_MERGE_EXACT_RPI5_MAIN"
+      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA"
     },
     {
       "source": "ops/lib/deploy_executor/hermes_deals_origin_helper_launch.py",
@@ -98,7 +99,7 @@
       "owner": "root",
       "group": "root",
       "mode": "0644",
-      "identity": "BIND_TO_POST_MERGE_EXACT_RPI5_MAIN"
+      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA"
     },
     {
       "source": "ops/lib/deploy_executor/hermes_deals_origin_canonical_revalidator.py",
@@ -106,7 +107,7 @@
       "owner": "root",
       "group": "root",
       "mode": "0644",
-      "identity": "BIND_TO_POST_MERGE_EXACT_RPI5_MAIN"
+      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA"
     },
     {
       "source": "ops/lib/deploy_executor/hermes_deals_origin_host_evidence.py",
@@ -114,7 +115,7 @@
       "owner": "root",
       "group": "root",
       "mode": "0644",
-      "identity": "BIND_TO_POST_MERGE_EXACT_RPI5_MAIN"
+      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA"
     },
     {
       "source": "ops/lib/deploy_executor/hermes_deals_origin_broker_composition.py",
@@ -122,7 +123,7 @@
       "owner": "root",
       "group": "root",
       "mode": "0644",
-      "identity": "BIND_TO_POST_MERGE_EXACT_RPI5_MAIN"
+      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA"
     },
     {
       "source": "ops/lib/deploy_executor/p9_source_auth.py",
@@ -130,7 +131,7 @@
       "owner": "root",
       "group": "root",
       "mode": "0644",
-      "identity": "BIND_TO_POST_MERGE_EXACT_RPI5_MAIN"
+      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA"
     },
     {
       "source": "ops/bin/rozkalns-hermes-deals-origin-broker",
@@ -138,7 +139,7 @@
       "owner": "root",
       "group": "root",
       "mode": "0755",
-      "identity": "BIND_TO_POST_MERGE_EXACT_RPI5_MAIN"
+      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA"
     },
     {
       "source": "ops/systemd/rozkalns-hermes-deals-origin-broker.socket",
@@ -146,7 +147,7 @@
       "owner": "root",
       "group": "root",
       "mode": "0644",
-      "identity": "BIND_TO_POST_MERGE_EXACT_RPI5_MAIN"
+      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA"
     },
     {
       "source": "ops/systemd/rozkalns-hermes-deals-origin-broker@.service",
@@ -154,7 +155,7 @@
       "owner": "root",
       "group": "root",
       "mode": "0644",
-      "identity": "BIND_TO_POST_MERGE_EXACT_RPI5_MAIN"
+      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA"
     }
   ],
   "reviewed_helper_dependency": {
@@ -272,12 +273,40 @@
     "durable_replay_availability_adapter_runtime_proven": false
   },
   "next_gates": [
-    "finish the source integration Draft PR through exact-head CI and review",
-    "merge the source integration only after separate owner MERGE authorization",
-    "bind the post-merge exact RPi5 main with fresh exact-main CI and Hermes helper provenance",
-    "perform a separate read-only runtime App credential replay-store registration helper broker socket and service preflight",
+    "perform the separate read-only runtime App credential-metadata replay-store registration helper broker socket and service preflight against eligible_source_sha",
     "separate owner LIVE authorization for exact host installation/activation only if all source/runtime prerequisites pass",
     "separate STRICT authorization for one genuine read-only origin audit canary",
     "separate owner LIVE authorization for any runner retirement"
-  ]
+  ],
+  "completed_source_integration": {
+    "pull_request": 368,
+    "merged": true,
+    "merge_commit_sha": "2550e77f6cb811ca6f10b49ef0b2fef554d64869"
+  },
+  "post_merge_source_evidence": {
+    "rpi5_main_sha": "2550e77f6cb811ca6f10b49ef0b2fef554d64869",
+    "exact_main_ci": [
+      {
+        "workflow": "Validate",
+        "run_number": 833,
+        "run_id": 33879258349,
+        "conclusion": "success"
+      },
+      {
+        "workflow": "FAST-LANE policy drift",
+        "run_number": 289,
+        "run_id": 33879258257,
+        "conclusion": "success"
+      },
+      {
+        "workflow": "GITHUB-ONLY policy drift",
+        "run_number": 277,
+        "run_id": 33879258258,
+        "conclusion": "success"
+      }
+    ],
+    "hermes_repository_sha": "511c1566111983f809bc958bc4b68510771d3efb",
+    "hermes_helper_blob": "51bb23cc6c2083ab7c8b4e81ba82dd880e46d673",
+    "runtime_state_proven": false
+  }
 }

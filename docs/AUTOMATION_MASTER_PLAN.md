@@ -745,3 +745,44 @@ Current gate sequence:
 7. runner/path retirement is eligible only after the replacement path is proven end-to-end and remains a separate owner-authorized LIVE mutation.
 
 Neither this source patch, its Draft PR, a later source merge, #365/#366, historical App proof, nor any continuation command authorizes credential/App mutation, host inspection, broker/helper execution, host file placement, systemd action, READY/LIVE-AUTH creation, deployment, application/database mutation, runner retirement, retry, cleanup or rollback.
+
+## Current supersession — Hermes post-#368 merged-source binding (2026-09-04)
+
+This section supersedes the pre-merge #368 wording above while retaining it as historical evidence. This is a source-only reconciliation; it does not prove or inspect RPi5 runtime state.
+
+Fresh source evidence:
+
+- `RPi5_main/main = 2550e77f6cb811ca6f10b49ef0b2fef554d64869` and PR #368 is merged at that exact SHA;
+- exact-main Validate #833 / `33879258349`, FAST-LANE #289 / `33879258257`, and GITHUB-ONLY #277 / `33879258258` completed successfully;
+- `hermes-deals/main = 511c1566111983f809bc958bc4b68510771d3efb`;
+- `tools/runner/origin_path_rpi5_pull_helper.py` remains blob `51bb23cc6c2083ab7c8b4e81ba82dd880e46d673`.
+
+The concrete canonical revalidator, sanitized host-evidence resolver and inert broker composition are therefore merged source. The merged SHA is eligible only as the source baseline for the next read-only runtime preflight. Repository source still does not prove the durable replay adapter, host-observation adapter, App installation, credential metadata, registration, helper, broker, socket or service identities on the RPi5.
+
+`PHASE4_CURRENT_WORK_ITEM=HERMES_RUNTIME_PREFLIGHT_PREPARATION`
+`ELIGIBLE_SOURCE_SHA=2550e77f6cb811ca6f10b49ef0b2fef554d64869`
+`SOURCE_INTEGRATION_MERGED=true`
+`SOURCE_AUTH_COMPOSITION_IMPLEMENTED=true`
+`SOURCE_READ_AUTHORITY_PROVEN=false`
+`CONCRETE_CANONICAL_REVALIDATOR_IMPLEMENTED=true`
+`SANITIZED_HOST_EVIDENCE_RESOLVER_IMPLEMENTED=true`
+`BROKER_COMPOSITION_IMPLEMENTED=true`
+`BROKER_ENTRYPOINT_WIRED=false`
+`HELPER_PROCESS_LAUNCH_IMPLEMENTED=true`
+`HELPER_PROCESS_LAUNCH_WIRED=false`
+`PRIVILEGED_DISPATCH_ENABLED=false`
+`HOST_WIRING_ENABLED=false`
+`LIVE_INSTALL_ELIGIBLE=false`
+`GENUINE_HERMES_AUDIT_AUTHORIZED=false`
+`RUNNER_RETIREMENT_ELIGIBLE=false`
+`PRODUCTION_MUTATION_STARTED=false`
+
+Current gate sequence:
+
+1. merge this source-truth reconciliation only under a separate explicit owner MERGE decision;
+2. from the then-current exact merged source, perform the separate read-only runtime preflight using only the bounded metadata/sanitization contract;
+3. only if every source and runtime prerequisite passes may a separate explicit LIVE authorization install/activate the reviewed host components;
+4. a later separate STRICT authorization is required for exactly one genuine read-only Hermes origin audit canary;
+5. runner/path retirement remains a later separate owner-authorized LIVE mutation.
+
+No source merge or continuation command authorizes credential contents access, App/permission mutation, helper/audit execution, systemd action, host file placement, deployment, database/application mutation, runner retirement, cleanup, retry or rollback.

@@ -247,11 +247,13 @@ class HermesDealsOriginPrivilegedBrokerTests(unittest.TestCase):
         self.assertEqual(prerequisite["pull_request"], 366)
         self.assertTrue(prerequisite["merged"])
         self.assertEqual(prerequisite["merge_commit_sha"], manifest["source_baseline"])
-        self.assertIsNone(manifest["eligible_source_sha"])
+        self.assertEqual(manifest["eligible_source_sha"], "2550e77f6cb811ca6f10b49ef0b2fef554d64869")
         self.assertEqual(
             manifest["eligible_source_sha_status"],
-            "INTEGRATION_SOURCE_MERGE_REQUIRED",
+            "MERGED_SOURCE_RUNTIME_PREFLIGHT_REQUIRED",
         )
+        self.assertEqual(manifest["completed_source_integration"]["pull_request"], 368)
+        self.assertEqual(manifest["completed_source_integration"]["merge_commit_sha"], manifest["eligible_source_sha"])
         self.assertFalse(manifest["live_install_eligible"])
         source_auth = manifest["source_read_authority"]
         self.assertEqual(
