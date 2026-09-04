@@ -180,6 +180,12 @@
         "dispatcher-source-blob:f9bfd02c6d36bb54d5380e1f0c99a0195e2ff4bc",
         "installer-source-blob:41f004420a0f5aed314aaefd796a54e14dbd17ea",
         "probe-source-blob:2362e8eb578a7279c38fe4ed2a7d1edd05df891a",
+        "pull-helper-source-blob:51bb23cc6c2083ab7c8b4e81ba82dd880e46d673",
+        "pull-helper-capability:origin-path-audit",
+        "pull-helper-registration-schema:rozkalns.hermes-deals.origin-path-rpi5-pull-registration.v1",
+        "pull-helper-evidence-schema:rozkalns.hermes-deals.origin-path-rpi5-pull-evidence.v1",
+        "pull-helper-machine-id:rpi5",
+        "pull-helper-arguments:registered_source_sha,as_of",
         "privileged-boundary:identity-only-dispatch-request-v1"
       ],
       "preflight": [
@@ -187,6 +193,7 @@
         "source repository stable ID is 1317143994 and authorized SHA is merged/reachable from current main",
         "exact authorized source SHA CI is successful",
         "origin-path workflow dispatcher installer and probe source blobs match the reviewed Hermes Deals identities",
+        "runner-independent pull helper blob capability schemas machine identity and two-argument interface match the reviewed Hermes Deals contract",
         "root-owned registration is independently revalidated without taking command/path/argv authority from GitHub prose",
         "poller remains unprivileged and sends identity only across the privileged boundary",
         "operation remains execution-disabled with rollback policy NONE and one read-only audit invocation maximum"
@@ -204,6 +211,7 @@
         "authorized SHA is merged/reachable from current main",
         "exact-SHA CI completed successfully",
         "workflow dispatcher installer and probe source blobs match the audited Hermes Deals identities",
+        "runner-independent pull helper source and interface match the audited Hermes Deals identities",
         "LIVE-AUTH and READY queue remain separate authority and eligibility records"
       ]
     }

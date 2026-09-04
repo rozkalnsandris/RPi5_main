@@ -9,6 +9,7 @@ from .hermes_deals_origin_adapter import (
     ADAPTER_ID,
     INVOCATION_BUDGET,
     OPERATION_ID,
+    PULL_HELPER_ARGUMENTS,
     REQUIRED_DEPENDENCIES,
     REQUIRED_EXCLUSIONS,
     ROLLBACK_POLICY,
@@ -36,6 +37,8 @@ _HOST_EVIDENCE_FIELDS = frozenset(
         "dispatcher_identity_match",
         "probe_identity_match",
         "workflow_identity_match",
+        "pull_helper_identity_match",
+        "pull_helper_interface_match",
         "evidence_read_only",
         "evidence_fresh",
         "protected_values_included",
@@ -253,6 +256,8 @@ def parse_sanitized_hermes_origin_host_evidence(
         "dispatcher_identity_match",
         "probe_identity_match",
         "workflow_identity_match",
+        "pull_helper_identity_match",
+        "pull_helper_interface_match",
         "evidence_read_only",
         "evidence_fresh",
     ):
@@ -320,6 +325,8 @@ def evaluate_hermes_deals_origin_privileged_consumer(
 def source_readiness() -> Mapping[str, Any]:
     return {
         "privileged_consumer_implemented": True,
+        "runner_independent_pull_helper_bound": True,
+        "pull_helper_arguments": PULL_HELPER_ARGUMENTS,
         "privileged_dispatch_enabled": False,
         "host_wiring_enabled": False,
         "genuine_hermes_audit_authorized": False,

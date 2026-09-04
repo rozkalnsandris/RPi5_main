@@ -12,6 +12,7 @@ from deploy_executor.hermes_deals_origin_adapter import (
     ADAPTER_ID,
     INVOCATION_BUDGET,
     OPERATION_ID,
+    PULL_HELPER_ARGUMENTS,
     REQUIRED_DEPENDENCIES,
     REQUIRED_EXCLUSIONS,
     ROLLBACK_POLICY,
@@ -84,6 +85,8 @@ def host_evidence() -> dict[str, object]:
         "dispatcher_identity_match": True,
         "probe_identity_match": True,
         "workflow_identity_match": True,
+        "pull_helper_identity_match": True,
+        "pull_helper_interface_match": True,
         "evidence_read_only": True,
         "evidence_fresh": True,
         "protected_values_included": False,
@@ -245,7 +248,7 @@ class HermesDealsOriginPrivilegedConsumerTests(unittest.TestCase):
                         host_evidence_resolver=FakeHostEvidenceResolver(),
                     )
 
-    def test_host_evidence_is_exact_fresh_sanitized_and_source_bound(self):
+    def test_host_evidence_is_exact_fresh_sanitized_source_and_pull_helper_bound(self):
         cases: list[dict[str, object]] = []
 
         expanded = host_evidence()
@@ -264,9 +267,21 @@ class HermesDealsOriginPrivilegedConsumerTests(unittest.TestCase):
         wrong_source["registered_source_sha"] = "3" * 40
         cases.append(wrong_source)
 
-        wrong_identity = host_evidence()
-        wrong_identity["dispatcher_identity_match"] = False
-        cases.append(wrong_identity)
+        wrong_legacy_identity = host_evidence()
+        wrong_legacy_identity["dispatcher_identity_match"] = False
+        cases.append(wrong_legacy_identity)
+
+        wrong_pull_helper_identity = host_evidence()
+        wrong_pull_helper_identity["pull_helper_identity_match"] = False
+        cases.append(wrong_pull_helper_identity)
+
+        wrong_pull_helper_interface = host_evidence()
+        wrong_pull_helper_interface["pull_helper_interface_match"] = False
+        cases.append(wrong_pull_helper_interface)
+
+        missing_pull_helper_identity = host_evidence()
+        del missing_pull_helper_identity["pull_helper_identity_match"]
+        cases.append(missing_pull_helper_identity)
 
         for evidence in cases:
             with self.subTest(evidence=evidence):
@@ -331,6 +346,8 @@ class HermesDealsOriginPrivilegedConsumerTests(unittest.TestCase):
     def test_source_readiness_keeps_live_gates_false(self):
         readiness = source_readiness()
         self.assertTrue(readiness["privileged_consumer_implemented"])
+        self.assertTrue(readiness["runner_independent_pull_helper_bound"])
+        self.assertEqual(readiness["pull_helper_arguments"], PULL_HELPER_ARGUMENTS)
         self.assertTrue(readiness["full_canonical_revalidation_after_host_evidence"])
         self.assertFalse(readiness["privileged_dispatch_enabled"])
         self.assertFalse(readiness["host_wiring_enabled"])
