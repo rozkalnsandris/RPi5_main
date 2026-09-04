@@ -32,7 +32,11 @@ BROKER_SOCKET_UNIT = "rozkalns-hermes-deals-origin-broker.socket"
 BROKER_SERVICE_UNIT = "rozkalns-hermes-deals-origin-broker@.service"
 BROKER_INSTALL_PATH = "/usr/local/libexec/rozkalns-hermes-deals-origin-broker"
 SOURCE_READ_AUTHORITY_PROVEN = False
-HELPER_PROCESS_LAUNCH_IMPLEMENTED = False
+HELPER_PROCESS_LAUNCH_IMPLEMENTED = True
+HELPER_PROCESS_LAUNCH_WIRED = False
+CONCRETE_CANONICAL_REVALIDATOR_IMPLEMENTED = True
+SANITIZED_HOST_EVIDENCE_RESOLVER_IMPLEMENTED = True
+BROKER_COMPOSITION_IMPLEMENTED = True
 PRIVILEGED_DISPATCH_ENABLED = False
 HOST_WIRING_ENABLED = False
 GENUINE_HERMES_AUDIT_AUTHORIZED = False
@@ -183,12 +187,17 @@ def source_readiness() -> Mapping[str, Any]:
         "broker_install_path": BROKER_INSTALL_PATH,
         "caller_authority": ("authorization_issue_number",),
         "source_read_authority_proven": SOURCE_READ_AUTHORITY_PROVEN,
-        "process_launch_surface": HELPER_PROCESS_LAUNCH_IMPLEMENTED,
+        "helper_process_launch_implemented": HELPER_PROCESS_LAUNCH_IMPLEMENTED,
+        "helper_process_launch_wired": HELPER_PROCESS_LAUNCH_WIRED,
+        "process_launch_surface": False,
+        "concrete_canonical_revalidator_implemented": CONCRETE_CANONICAL_REVALIDATOR_IMPLEMENTED,
+        "sanitized_host_evidence_resolver_implemented": SANITIZED_HOST_EVIDENCE_RESOLVER_IMPLEMENTED,
+        "broker_composition_implemented": BROKER_COMPOSITION_IMPLEMENTED,
         "privileged_dispatch_enabled": PRIVILEGED_DISPATCH_ENABLED,
         "host_wiring_enabled": HOST_WIRING_ENABLED,
         "genuine_hermes_audit_authorized": GENUINE_HERMES_AUDIT_AUTHORIZED,
         "runner_retirement_eligible": RUNNER_RETIREMENT_ELIGIBLE,
         "production_mutation_started": PRODUCTION_MUTATION_STARTED,
         "live_install_eligible": LIVE_INSTALL_ELIGIBLE,
-        "blocking_prerequisite": "implement concrete canonical Hermes revalidator and sanitized host-evidence resolver composition, then bind them to the broker entrypoint",
+        "blocking_prerequisite": "merge and freshly validate the source integration, then complete a separate read-only runtime preflight before any LIVE installation decision",
     }

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 from pathlib import Path
 import sys
@@ -39,7 +40,10 @@ from deploy_executor.hermes_deals_origin_privileged_consumer import (
     HOST_EVIDENCE_SCHEMA,
     CanonicalHermesOriginEvidence,
 )
-from deploy_executor.hermes_deals_origin_privileged_dispatcher import INSTALLED_HELPER_PATH
+from deploy_executor.hermes_deals_origin_privileged_dispatcher import (
+    INSTALLED_HELPER_PATH,
+    prepare_hermes_deals_origin_privileged_dispatch,
+)
 from deploy_executor.hermes_deals_origin_source_auth import (
     build_hermes_deals_source_token_provider,
     source_readiness as auth_readiness,
@@ -55,6 +59,7 @@ SOURCE_SHA = "1" * 40
 CURRENT_MAIN_SHA = "2" * 40
 REQUEST_ID = "123e4567-e89b-42d3-a456-426614174000"
 AUTHORIZATION_CREATED_AT = "2026-09-04T07:26:48Z"
+GITHUB_SERVER_TIME = "2026-09-04T07:27:00Z"
 SERVER_DATE = "Fri, 04 Sep 2026 09:00:00 GMT"
 
 
@@ -62,6 +67,7 @@ def canonical_evidence() -> CanonicalHermesOriginEvidence:
     return CanonicalHermesOriginEvidence(
         authorization_issue_number=17,
         authorization_created_at=AUTHORIZATION_CREATED_AT,
+        github_server_time=GITHUB_SERVER_TIME,
         request_id=REQUEST_ID,
         queue_issue=41,
         source_repository=SOURCE_REPOSITORY,
@@ -87,7 +93,7 @@ def canonical_evidence() -> CanonicalHermesOriginEvidence:
         registry_execution_enabled=False,
         source_reachable_from_main=True,
         source_ci_success=True,
-        baseline_matched=True,
+        baseline_contract_valid=True,
         prepared_execution_enabled=False,
         adapter_preflight_read_only=True,
         adapter_preflight_privileged_dispatch_ready=False,
@@ -127,7 +133,9 @@ class FakeHostEvidenceResolver:
     def __init__(self):
         self.calls: list[str] = []
 
-    def resolve(self, *, source_sha: str) -> dict[str, object]:
+    def resolve(
+        self, *, source_sha: str, github_server_time: str
+    ) -> dict[str, object]:
         self.calls.append(source_sha)
         return host_evidence()
 
@@ -160,7 +168,19 @@ class FakeRunner:
 
 
 class SourceAuthRequester:
-    def __init__(self, *, installation_permissions=None, token_permissions=None, token_repositories=None):
+    def __init__(
+        self,
+        *,
+        installation_id=SOURCE_INSTALLATION_ID,
+        app_id=SOURCE_APP_ID,
+        repository_selection="selected",
+        installation_permissions=None,
+        token_permissions=None,
+        token_repositories=None,
+    ):
+        self.installation_id = installation_id
+        self.app_id = app_id
+        self.repository_selection = repository_selection
         self.installation_permissions = installation_permissions or {
             "actions": "read",
             "contents": "read",
@@ -187,11 +207,11 @@ class SourceAuthRequester:
                 200,
                 {"date": SERVER_DATE},
                 {
-                    "id": SOURCE_INSTALLATION_ID,
-                    "app_id": SOURCE_APP_ID,
+                    "id": self.installation_id,
+                    "app_id": self.app_id,
                     "target_id": 277435981,
                     "target_type": "User",
-                    "repository_selection": "selected",
+                    "repository_selection": self.repository_selection,
                     "account": {
                         "id": 277435981,
                         "login": "rozkalnsandris",
@@ -260,12 +280,22 @@ class HermesDealsOriginSourceAuthHelperLaunchTests(unittest.TestCase):
 
     def test_source_provider_rejects_permission_or_repository_widening(self):
         cases = (
+            {"installation_id": 1},
+            {"app_id": 1},
+            {"repository_selection": "all"},
             {"installation_permissions": {"actions": "read", "contents": "read", "issues": "read"}},
             {"installation_permissions": {"actions": "write", "contents": "read", "metadata": "read"}},
             {"token_permissions": {"actions": "read", "contents": "write", "metadata": "read"}},
             {"token_permissions": {"actions": "read", "contents": "read", "issues": "read"}},
             {"token_repositories": [{"id": 1, "full_name": HERMES_DEALS_SOURCE_REPOSITORY}]},
             {"token_repositories": [{"id": HERMES_DEALS_SOURCE_REPOSITORY_ID, "full_name": "rozkalnsandris/other"}]},
+            {"token_repositories": [
+                {
+                    "id": HERMES_DEALS_SOURCE_REPOSITORY_ID,
+                    "full_name": HERMES_DEALS_SOURCE_REPOSITORY,
+                },
+                {"id": 1, "full_name": "rozkalnsandris/other"},
+            ]},
         )
         for kwargs in cases:
             with self.subTest(kwargs=kwargs), tempfile.TemporaryDirectory() as tmp:
@@ -374,6 +404,33 @@ class HermesDealsOriginSourceAuthHelperLaunchTests(unittest.TestCase):
                         canonical_revalidator=FakeCanonicalRevalidator(),
                         host_evidence_resolver=FakeHostEvidenceResolver(),
                     )
+
+    def test_launcher_rejects_plan_identity_or_live_flag_tampering(self):
+        plan = prepare_hermes_deals_origin_privileged_dispatch(
+            request_payload(),
+            canonical_revalidator=FakeCanonicalRevalidator(),
+            host_evidence_resolver=FakeHostEvidenceResolver(),
+        )
+        drifted = (
+            replace(plan, capability="other-capability"),
+            replace(plan, helper_source_blob="0" * 40),
+            replace(plan, installed_helper_path="/tmp/untrusted"),
+            replace(plan, helper_argument_names=("path", "argv")),
+            replace(plan, helper_arguments=("0" * 40, "2026-09-04")),
+            replace(plan, privileged_dispatch_enabled=True),
+            replace(plan, host_wiring_enabled=True),
+            replace(plan, genuine_hermes_audit_authorized=True),
+            replace(plan, runner_retirement_eligible=True),
+            replace(plan, production_mutation_started=True),
+        )
+        for candidate in drifted:
+            runner = FakeRunner()
+            launcher = HermesDealsOriginOneShotHelperLauncher(runner=runner)
+            with self.subTest(candidate=candidate), self.assertRaises(
+                HermesDealsOriginHelperLaunchError
+            ):
+                launcher._launch_validated_plan(candidate)
+            self.assertEqual(runner.calls, [])
 
     def test_source_contract_has_no_generic_command_or_shell_authority(self):
         source = (

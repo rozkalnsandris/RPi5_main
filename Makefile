@@ -9,6 +9,12 @@ test:
 	python3 ./tests/test-deploy-executor-p4.py
 	python3 ./tests/test-deploy-executor-p5.py
 	python3 ./tests/test-deploy-executor-hermes-deals-origin.py
+	python3 ./tests/test-deploy-executor-hermes-deals-origin-dispatch-request.py
+	python3 ./tests/test-deploy-executor-hermes-deals-origin-privileged-consumer.py
+	python3 ./tests/test-deploy-executor-hermes-deals-origin-privileged-dispatcher.py
+	python3 ./tests/test-deploy-executor-hermes-deals-origin-privileged-broker.py
+	python3 ./tests/test-deploy-executor-hermes-deals-origin-source-auth-helper-launch.py
+	python3 ./tests/test-deploy-executor-hermes-deals-origin-source-integration.py
 	python3 ./tests/test-deploy-executor-control-center-postcanary.py
 	python3 ./tests/test-deploy-executor-p9-control-baseline-failfast.py
 	python3 ./tests/test-deploy-executor-p9-freshness-handoff.py
