@@ -527,3 +527,46 @@ After this source-only plan reconciliation is merged and exact-main CI is freshl
 5. if a runner/path retirement or any other host/runtime mutation becomes eligible, STOP for a new exact owner LIVE authorization. `turpini`, P10 success, this document, and the closed queue do not authorize retirement or any other live mutation.
 
 P11 high-risk/control-plane operation work remains pending behind completion of the current Phase 4 residual-path decision. Any future P11 adapter/root operation requires its own reviewed source contract and separate STRICT owner authorization; it cannot inherit the ordinary P10 canary envelope.
+
+## Current supersession — Hermes origin privileged dispatcher source gate (2026-09-04)
+
+This section supersedes the prior generic Phase 4 residual-path next-action wording above. Historical P9/P10 sequencing remains evidence only; it is not current execution authority.
+
+Fresh source state at `RPi5_main#361` activation:
+
+- `RPi5_main/main = 68a6246171af014dac79711ebc510ddbc6c3d31a`;
+- `hermes-deals/main = 2f47f64ab15e767f4e53ad182326e64e313d5094`;
+- `RPi5_main#352` / PR #353 completed dormant Hermes production-registry registration while global `execution_enabled=false` remained authoritative;
+- `RPi5_main#354` / PR #355 completed the identity-only request carrying only `schema` + `authorization_issue_number`;
+- `RPi5_main#356` / PR #357 completed the double-canonical-revalidation privileged consumer, still without an execution surface;
+- `hermes-deals#834` / PR #840 completed the runner-independent capability-specific pull helper;
+- `RPi5_main#359` / PR #360 completed exact pull-helper provenance/interface and sanitized host-evidence binding;
+- `RPi5_main#361` / Draft PR #362 is the current source-only gate for the capability-specific privileged dispatcher plan.
+
+The #361 source gate must derive `registered_source_sha` only from the fully revalidated canonical Hermes source evidence and derive helper `as_of` only from the UTC calendar date of the already validated GitHub server-side owner authorization `created_at`. Neither value is caller authority. The caller still supplies only `authorization_issue_number`.
+
+The reviewed helper remains fixed to capability `origin-path-audit`, source blob `51bb23cc6c2083ab7c8b4e81ba82dd880e46d673`, installed identity `/usr/local/sbin/hermes-deals-origin-path-rpi5-pull-dispatch`, and exactly two argument names `registered_source_sha`, `as_of`. The dispatcher source may emit an immutable capability plan only; it must not expose a generic shell/subprocess/sudo/path/argv/environment execution primitive and must not launch the helper in this gate.
+
+Binding classification for the current gate:
+
+`PHASE4_CURRENT_WORK_ITEM=RPi5_main#361`
+`P9_EXIT_GATE=MET`
+`P10_EXIT_GATE=MET`
+`GLOBAL_EXECUTION_ENABLED=false`
+`PRIVILEGED_DISPATCH_SOURCE_GATE=IN_PROGRESS`
+`PRIVILEGED_DISPATCH_ENABLED=false`
+`HOST_WIRING_ENABLED=false`
+`GENUINE_HERMES_AUDIT_AUTHORIZED=false`
+`RUNNER_RETIREMENT_ELIGIBLE=false`
+`PRODUCTION_MUTATION_STARTED=false`
+
+Current gate sequence:
+
+1. finish #361 / PR #362 through focused source review, exact-head CI and Ready, then STOP for a separate explicit owner `MERGE RPi5_main #362` decision;
+2. after any separately authorized merge, freshly require exact-main CI and provenance/interface revalidation; merge still proves source readiness only;
+3. define and review a separate source/host installation-wiring security gate for the exact broker/helper/service/permission boundary and cross-repository producer/consumer contract;
+4. only after that gate may a separate explicit LIVE authorization install or activate the exact reviewed capability-specific host components;
+5. a later separate STRICT authorization is required for exactly one genuine read-only Hermes origin audit canary with sanitized postconditions;
+6. runner/path retirement is eligible only after the replacement path is proven end-to-end and remains a separate owner-authorized LIVE mutation.
+
+Neither P10 completion, #361 source readiness, source merge, `START`, `turpini`, nor ordinary AUTO-RUN continuation authorizes helper execution, host wiring, systemd/sudoers/user/group/permission mutation, READY/LIVE-AUTH creation, runner retirement, deployment, DB/application-data writes, credential/App permission changes, Cloudflare/network/container/runtime mutation, retry, cleanup or rollback.
