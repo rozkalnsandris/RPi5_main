@@ -2,14 +2,19 @@
   "schema": "rozkalns.hermes-deals.origin-broker-installation.v1",
   "repository": "rozkalnsandris/RPi5_main",
   "phase": "P4",
-  "issue": 363,
-  "source_baseline": "8c157f0f6caf6258ebab7765a9b9ec2934070964",
+  "issue": 365,
+  "source_baseline": "9c60248547043ee5ae7b1d0e2897fd9b8aac381a",
   "eligible_source_sha": null,
   "eligible_source_sha_status": "POST_MERGE_EXACT_MAIN_BIND_REQUIRED",
   "live_install_eligible": false,
   "source_read_authority": {
-    "status": "UNPROVEN",
+    "status": "SOURCE_COMPOSITION_IMPLEMENTED_RUNTIME_UNPROVEN",
+    "app_id": 4537106,
+    "installation_id": 152422751,
     "required_repository": "rozkalnsandris/hermes-deals",
+    "required_repository_id": 1317143994,
+    "required_repository_selection": "selected",
+    "required_token_repository_count": 1,
     "required_permissions": {
       "actions": "read",
       "contents": "read"
@@ -20,7 +25,9 @@
     "credential_group": "root",
     "credential_mode": "0600",
     "permission_or_credential_mutation_authorized": false,
-    "blocking_reason": "current p9 source App allowlist is control-center-only; exact Hermes read authority must be separately proven before launch or host activation"
+    "runtime_credential_proven": false,
+    "runtime_installation_scope_proven": false,
+    "blocking_reason": "source token composition is reviewed but current host credential/install state and concrete canonical Hermes revalidator composition remain unproven"
   },
   "transport": {
     "kind": "systemd-unix-stream-socket",
@@ -46,6 +53,30 @@
     {
       "source": "ops/lib/deploy_executor/hermes_deals_origin_privileged_broker.py",
       "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_privileged_broker.py",
+      "owner": "root",
+      "group": "root",
+      "mode": "0644",
+      "identity": "BIND_TO_POST_MERGE_EXACT_RPI5_MAIN"
+    },
+    {
+      "source": "ops/lib/deploy_executor/hermes_deals_origin_source_auth.py",
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_source_auth.py",
+      "owner": "root",
+      "group": "root",
+      "mode": "0644",
+      "identity": "BIND_TO_POST_MERGE_EXACT_RPI5_MAIN"
+    },
+    {
+      "source": "ops/lib/deploy_executor/hermes_deals_origin_helper_launch.py",
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_helper_launch.py",
+      "owner": "root",
+      "group": "root",
+      "mode": "0644",
+      "identity": "BIND_TO_POST_MERGE_EXACT_RPI5_MAIN"
+    },
+    {
+      "source": "ops/lib/deploy_executor/p9_source_auth.py",
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/p9_source_auth.py",
       "owner": "root",
       "group": "root",
       "mode": "0644",
@@ -78,7 +109,9 @@
   ],
   "reviewed_helper_dependency": {
     "repository": "rozkalnsandris/hermes-deals",
-    "repository_sha": "2f47f64ab15e767f4e53ad182326e64e313d5094",
+    "repository_sha_observed_at_gate": "511c1566111983f809bc958bc4b68510771d3efb",
+    "repository_sha_parent_reviewed_source": "2f47f64ab15e767f4e53ad182326e64e313d5094",
+    "current_head_change_class": "docs-only-bot-commit",
     "source": "tools/runner/origin_path_rpi5_pull_helper.py",
     "source_blob": "51bb23cc6c2083ab7c8b4e81ba82dd880e46d673",
     "capability": "origin-path-audit",
@@ -100,6 +133,34 @@
       "registered_source_sha",
       "as_of"
     ]
+  },
+  "helper_launch_contract": {
+    "implemented": true,
+    "wired_to_broker_entrypoint": false,
+    "executable": "/usr/local/sbin/hermes-deals-origin-path-rpi5-pull-dispatch",
+    "argument_names": [
+      "registered_source_sha",
+      "as_of"
+    ],
+    "caller_plan_authority": false,
+    "shell": false,
+    "environment": {
+      "PATH": "/usr/bin:/bin",
+      "LANG": "C.UTF-8",
+      "LC_ALL": "C.UTF-8",
+      "PYTHONUNBUFFERED": "1"
+    },
+    "timeout_seconds": 50,
+    "stdout_limit_bytes": 4096,
+    "stderr_limit_bytes": 4096,
+    "invocation_budget": 1,
+    "accepted_exit_codes": [
+      0,
+      1,
+      2
+    ],
+    "canonical_double_revalidation_required": true,
+    "real_helper_execution_in_ci": false
   },
   "service_security": {
     "user": "root",
@@ -137,8 +198,11 @@
     "docker_socket_allowed": false
   },
   "source_gate_flags": {
+    "source_auth_composition_implemented": true,
     "source_read_authority_proven": false,
-    "helper_process_launch_implemented": false,
+    "concrete_canonical_revalidator_implemented": false,
+    "helper_process_launch_implemented": true,
+    "helper_process_launch_wired": false,
     "privileged_dispatch_enabled": false,
     "host_wiring_enabled": false,
     "genuine_hermes_audit_authorized": false,
@@ -148,13 +212,14 @@
   "state_contract": {
     "broker_local_mutable_state": null,
     "status": "NO_NEW_BROKER_STATE_AUTHORITY",
-    "requirement": "replay/consumption and canonical queue/source state must remain independently revalidated by the reviewed deploy-executor authority before any later launch surface can be enabled"
+    "requirement": "replay/consumption and canonical queue/source state must remain independently revalidated by a concrete reviewed Hermes canonical revalidator immediately before any fixed helper launch"
   },
   "next_gates": [
-    "prove exact authenticated Hermes GitHub source-read/revalidation authority without implicit App permission widening",
-    "implement and review the exact bounded helper launch surface while all live flags remain false",
-    "merge and bind exact-main source identities with fresh exact-main CI",
-    "separate owner LIVE authorization for host installation/activation",
+    "merge #365 only after exact-head CI and separate owner MERGE authorization",
+    "bind post-merge exact RPi5 main source identities with fresh exact-main CI",
+    "separate source integration gate for concrete canonical Hermes revalidator plus host-evidence resolver and broker-entrypoint composition",
+    "fresh cross-repository and read-only runtime credential/install preflight after that integration source merge",
+    "separate owner LIVE authorization for exact host installation/activation only if all source/runtime prerequisites pass",
     "separate STRICT authorization for one genuine read-only origin audit canary",
     "separate owner LIVE authorization for any runner retirement"
   ]

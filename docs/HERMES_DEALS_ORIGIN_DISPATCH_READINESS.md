@@ -1,10 +1,11 @@
 # Hermes Deals origin audit — privileged dispatcher and broker source boundary
 
-Status: **#361 MERGED / #363 BROKER INSTALLATION-WIRING SOURCE GATE / DISPATCH DISABLED / HOST WIRING DISABLED / NOT LIVE-INSTALL ELIGIBLE**
+Status: **#364 MERGED / #365 SOURCE-AUTH + FIXED-LAUNCH PREREQUISITE / BROKER ENTRYPOINT INERT / NOT LIVE-INSTALL ELIGIBLE**
 
 Tracking:
 
-- current work item: `RPi5_main#363` / Draft PR #364
+- current work item: `RPi5_main#365` / Draft PR #366
+- completed broker installation/wiring source gate: `RPi5_main#363` / PR #364
 - completed privileged-dispatch plan: `RPi5_main#361` / PR #362
 - completed pull-helper binding: `RPi5_main#359` / PR #360
 - completed privileged-consumer gate: `RPi5_main#356` / PR #357
@@ -16,19 +17,22 @@ Tracking:
 
 ## Current source baseline
 
-At #363 creation:
+At #365 creation:
 
-- `RPi5_main/main = 8c157f0f6caf6258ebab7765a9b9ec2934070964`;
-- exact-main Validate #814, FAST-LANE #270 and GITHUB-ONLY #258 are SUCCESS;
-- `hermes-deals/main = 2f47f64ab15e767f4e53ad182326e64e313d5094`;
-- Hermes Deals CI #1775 and GITHUB-ONLY #101 are SUCCESS;
-- runner-independent helper blob is `51bb23cc6c2083ab7c8b4e81ba82dd880e46d673`.
+- `RPi5_main/main = 9c60248547043ee5ae7b1d0e2897fd9b8aac381a`;
+- exact-main Validate #820, FAST-LANE #276 and GITHUB-ONLY #264 are SUCCESS;
+- `hermes-deals/main = 511c1566111983f809bc958bc4b68510771d3efb`;
+- that Hermes head is a verified docs-only bot commit whose parent is the prior reviewed source checkpoint `2f47f64ab15e767f4e53ad182326e64e313d5094`;
+- runner-independent helper blob remains exactly `51bb23cc6c2083ab7c8b4e81ba82dd880e46d673` on current Hermes main;
+- Hermes Deals repository ID is `1317143994`.
 
-These are source-review anchors only. They prove no current RPi5 files, ownership, permissions, credentials, units, sockets, runner state or runtime health.
+The current Hermes head had no commit-associated workflow runs returned by the GitHub connector. This document therefore does **not** claim current-head Hermes CI from historical runs; the unchanged helper blob is the reviewed cross-repository helper identity for this gate.
 
-## Completed dispatcher boundary
+These values are source-review anchors only. They prove no current RPi5 files, ownership, permissions, credentials, App installation selection, units, sockets, runner state or runtime health.
 
-PR #362 merged the source-only `hermes_deals_origin_privileged_dispatcher.py` contract. The caller still supplies only:
+## Completed #363/#364 broker boundary
+
+PR #364 merged the source contract for the dedicated identity-only UNIX socket broker. The caller still supplies only:
 
 ```json
 {
@@ -37,116 +41,139 @@ PR #362 merged the source-only `hermes_deals_origin_privileged_dispatcher.py` co
 }
 ```
 
-`prepare_hermes_deals_origin_privileged_dispatch()` calls the mandatory double canonical revalidation consumer and derives both helper arguments internally:
+The broker calls `prepare_hermes_deals_origin_privileged_dispatch()` itself, preserving the mandatory double canonical revalidation and sanitized host-evidence check before an immutable helper plan exists. Caller-supplied source SHA, `as_of`, helper path, arbitrary argv/env, UID/GID, unit, capability, URL, command or output path remains forbidden.
 
-- `registered_source_sha` = the fully revalidated canonical Hermes source SHA;
-- `as_of` = the UTC calendar date of the already validated GitHub owner authorization `created_at`.
+The source-only transport remains fixed to:
 
-The dispatcher source fixes:
+- socket `rozkalns-hermes-deals-origin-broker.socket`;
+- `/run/rozkalns-hermes-deals-origin-broker/request.sock`;
+- `root:rozkalns-deploy-executor` mode `0660`;
+- `Accept=yes`, `MaxConnections=1`;
+- per-connection root service `rozkalns-hermes-deals-origin-broker@.service`;
+- broker path `/usr/local/libexec/rozkalns-hermes-deals-origin-broker`.
 
-- operation `hermes-deals.origin-path-audit.v1`;
-- capability `origin-path-audit`;
-- helper source blob `51bb23cc6c2083ab7c8b4e81ba82dd880e46d673`;
-- helper path `/usr/local/sbin/hermes-deals-origin-path-rpi5-pull-dispatch`;
-- argument names exactly `registered_source_sha`, `as_of`.
+The existing unprivileged poller retains `NoNewPrivileges=true` and no generic sudo/root/Docker-socket authority. The generic `ops/bin/rozkalns-deploy-dispatch` remains `DISABLED`.
 
-It has no process-launch surface.
+## #365 exact read-only source-App composition
 
-## #363 capability-specific broker source
+The existing `p9_source_auth.py` provider already enforces source App ID `4537106`, installation ID `152422751`, owner identity, selected-repository installation posture, one-repository installation tokens, short token lifetime and exactly `Actions:read + Contents:read` with metadata read tolerated only as GitHub installation metadata.
 
-#363 adds `hermes_deals_origin_privileged_broker.py`. Its UNIX-socket transport accepts exactly one bounded UTF-8 newline-framed JSON object, maximum 256 bytes, with only the existing identity-only request schema. Duplicate keys, extra fields, multiple frames, CR/NUL framing, oversized input and invalid UTF-8/JSON fail closed before canonical revalidation.
+#365 adds the exact Hermes repository binding:
 
-The broker does not accept a prebuilt dispatch plan. It calls `prepare_hermes_deals_origin_privileged_dispatch()` itself, then rechecks the exact operation, source repository, capability, helper source blob, installed helper path, two argument names and the canonical argument tuple. Any live flag entering the plan fails closed.
+- repository `rozkalnsandris/hermes-deals`;
+- repository ID `1317143994`;
+- requested token permissions exactly `actions:read`, `contents:read`;
+- token repository count exactly one.
 
-The broker envelope deliberately contains no callable, shell, executable selector, arbitrary path, argv extender, environment selector, UID/GID selector, unit selector or output path.
+`hermes_deals_origin_source_auth.py` exposes a Hermes-specific factory with no caller repository/permission selector. This is **source composition**, not runtime proof. No App installation, repository selection, permission or private-key/credential is changed in #365.
 
-## Poller-to-broker trust boundary
+Current source classification:
 
-The proposed source-only host transport is a dedicated systemd UNIX stream socket:
-
-- socket unit: `rozkalns-hermes-deals-origin-broker.socket`;
-- path: `/run/rozkalns-hermes-deals-origin-broker/request.sock`;
-- owner: `root`;
-- group: `rozkalns-deploy-executor`;
-- mode: `0660`;
-- `Accept=yes`;
-- `MaxConnections=1`.
-
-The per-connection service is `rozkalns-hermes-deals-origin-broker@.service` and is source-fixed to `/usr/local/libexec/rozkalns-hermes-deals-origin-broker`. It is root-owned by design because this is the future narrow privilege boundary, but the caller cannot select a service, executable, arguments, environment or capability.
-
-The service contract includes `NoNewPrivileges=yes`, `ProtectSystem=strict`, `ProtectHome=yes`, private devices/tmp, namespace/SUID/SGID/realtime hardening, bounded runtime and a capability bounding set limited to `CAP_SETUID CAP_SETGID` for the reviewed helper's fixed root-to-audit-user transition. It exposes no writable privileged path in this source gate.
-
-The existing `rozkalns-deploy-executor.service` poller is not modified. It remains the unprivileged `rozkalns-deploy-executor` user/group with `NoNewPrivileges=true`, empty ambient capability set and no generic sudo/root/Docker-socket authority.
-
-The generic `ops/bin/rozkalns-deploy-dispatch` remains `DISABLED` and is not repurposed as a root broker.
-
-## Installation manifest
-
-`ops/deploy/hermes-deals-origin-broker-installation.json` freezes the reviewed source contract for:
-
-- broker module and broker entrypoint target paths, owner/group/modes;
-- socket/service unit target paths and modes;
-- socket path/group/mode;
-- source credential path `/etc/rozkalns-hermes-deals-origin-broker/source-github-app.pem` with `root:root 0600` posture;
-- reviewed Hermes helper source/blob/path/interface;
-- root-owned registration path `/etc/hermes-deals-audits.d/origin-path-rpi5-pull.json` mode `0600`;
-- fixed probe path and registration-bound probe digest;
-- root-owned evidence root `/var/lib/hermes-deals-audits/origin-path-audit/evidence` mode `0700`.
-
-The manifest intentionally has `eligible_source_sha=null` with `POST_MERGE_EXACT_MAIN_BIND_REQUIRED`. It is not a host installer and is not LIVE authority.
-
-## Blocking authenticated source-read prerequisite
-
-The current source cannot safely compose a live broker yet. `p9_source_auth.py` is explicitly allowlisted only for `rozkalnsandris/rozkalns-control-center`; #363 does not silently widen that App/repository scope and does not create/change any credential, App installation or permission.
-
-The broker service source names a future root-only credential path, but its entrypoint remains fail-closed and returns `SOURCE_AUTHORITY_UNPROVEN`. Therefore:
+`SOURCE_AUTH_COMPOSITION_IMPLEMENTED=true`
 
 `SOURCE_READ_AUTHORITY_PROVEN=false`
 
-`HELPER_PROCESS_LAUNCH_IMPLEMENTED=false`
+`SOURCE_RUNTIME_CREDENTIAL_PROVEN=false`
 
-`LIVE_INSTALL_ELIGIBLE=false`
+`SOURCE_RUNTIME_INSTALLATION_PROVEN=false`
 
-A later source gate must prove the exact authenticated Hermes GitHub source/Actions read authority and implement/review the bounded fixed helper launch surface. That source work still must keep all live flags false.
+## #365 fixed one-shot helper launch surface
+
+`hermes_deals_origin_helper_launch.py` implements the reviewed fixed process boundary without wiring it to the broker entrypoint.
+
+It can only prepare a launch by calling the existing `prepare_hermes_deals_origin_privileged_dispatch()` path, so the identity-only request must pass the canonical double revalidation immediately before invocation. The socket caller cannot submit a dispatch plan.
+
+The process boundary is source-fixed to:
+
+- executable `/usr/local/sbin/hermes-deals-origin-path-rpi5-pull-dispatch`;
+- argv exactly `(registered_source_sha, canonical_as_of)` after the executable;
+- helper blob `51bb23cc6c2083ab7c8b4e81ba82dd880e46d673`;
+- `shell=False`;
+- fixed environment only;
+- 50-second timeout;
+- stdout/stderr source limits of 4096 bytes each;
+- one invocation per launcher instance;
+- accepted helper exit codes only `0`, `1`, `2`;
+- exact validated stdout identity and false production-mutation flags.
+
+The real helper is never executed by CI; tests inject a fake runner and verify the exact argv/env/timeout/output contract and failure modes.
+
+Current source classification:
+
+`HELPER_PROCESS_LAUNCH_IMPLEMENTED=true`
+
+`HELPER_PROCESS_LAUNCH_WIRED=false`
+
+`PRIVILEGED_DISPATCH_ENABLED=false`
+
+`HOST_WIRING_ENABLED=false`
+
+## Demand-driven prerequisite discovered during #365
+
+`CanonicalHermesOriginRevalidator` and `SanitizedHermesOriginHostEvidenceResolver` are currently Protocol/test seams. There is no concrete production Hermes composition in `ops/lib/deploy_executor` that reconstructs the complete queue/LIVE-AUTH/source/CI canonical evidence and resolves the sanitized host evidence for the broker.
+
+That means #365 must **not** wire the broker entrypoint to real helper execution and must not claim that LIVE is next merely because token composition and a fixed launcher exist.
+
+After #365 is separately merged and exact-main CI is fresh, a new source integration gate must:
+
+1. implement/review the concrete canonical Hermes revalidator using the already reviewed isolated authorization, queue, registry, source and CI trust contracts;
+2. implement/review the concrete sanitized host-evidence resolver without creating caller authority;
+3. bind those exact components to the broker entrypoint;
+4. preserve the identity-only socket request and fixed helper launcher;
+5. keep host/runtime state unchanged until a later separate LIVE authorization.
+
+Only after that integration source gate is merged, exact-main/cross-repository evidence is fresh, and a read-only runtime preflight proves the expected App installation/credential/helper/unit identities may a separate LIVE host-install/activation authorization be considered.
+
+## Installation manifest
+
+`ops/deploy/hermes-deals-origin-broker-installation.json` now records #365 as the source gate. It includes the fixed source-auth repository/App/permission contract and fixed helper-launch contract, but deliberately retains:
+
+- `eligible_source_sha = null`;
+- `eligible_source_sha_status = POST_MERGE_EXACT_MAIN_BIND_REQUIRED`;
+- `live_install_eligible = false`;
+- runtime credential/install proof = false;
+- concrete canonical revalidator implemented = false;
+- helper launch wired = false.
+
+It remains evidence, not an installer or LIVE authorization.
 
 ## Required false flags
 
 - production registry `execution_enabled=false`;
+- adapter `apply()` remains fail-closed;
 - generic dispatcher remains disabled;
 - `privileged_dispatch_enabled=false`;
 - `host_wiring_enabled=false`;
+- `live_install_eligible=false`;
 - `genuine_hermes_audit_authorized=false`;
 - `runner_retirement_eligible=false`;
 - `production_mutation_started=false`.
 
-`HermesDealsOriginAuditAdapter.apply()` remains fail-closed.
-
 ## Gate sequence
 
-1. **#352 complete** — dormant operation registration.
-2. **#354/#355 complete** — identity-only request.
-3. **#356/#357 complete** — double canonical revalidation consumer.
-4. **Hermes #834/#840 complete** — runner-independent capability helper.
-5. **#359/#360 complete** — helper provenance/interface and host-evidence binding.
-6. **#361/#362 complete** — immutable capability-specific dispatcher plan, no launch.
-7. **#363 current** — broker/socket/service/install-security source contract; source-read authority and process launch intentionally unresolved/fail-closed.
-8. **Next source prerequisite** — prove exact Hermes authenticated source/Actions read authority and exact bounded helper launch source; keep live flags false.
-9. **Source merge/exact-main bind** — bind eligible source SHA and fresh CI/security evidence.
-10. **LIVE host installation/activation** — separate explicit owner authorization only after all source prerequisites are complete.
-11. **STRICT genuine canary** — separate authorization for exactly one read-only origin audit.
-12. **Runner retirement** — only after accepted replacement canary and separately authorized LIVE retirement.
-
-A merge of #363 does not authorize any later gate.
+1. #352 complete — dormant operation registration.
+2. #354/#355 complete — identity-only request.
+3. #356/#357 complete — double canonical revalidation consumer contract.
+4. Hermes #834/#840 complete — runner-independent capability helper.
+5. #359/#360 complete — helper provenance/interface + host-evidence binding.
+6. #361/#362 complete — immutable capability-specific dispatcher plan.
+7. #363/#364 complete — broker/socket/service/install-security source contract.
+8. **#365 / PR #366 current** — exact Hermes source-App token composition + fixed one-shot helper launch source, still unwired.
+9. **Next source integration gate** — concrete canonical revalidator + host-evidence resolver + broker-entrypoint composition.
+10. Fresh exact-main/cross-repository and read-only runtime preflight.
+11. Separate explicit LIVE host installation/activation only if all source/runtime prerequisites pass.
+12. Separate STRICT authorization for exactly one genuine read-only origin audit canary.
+13. Separate LIVE runner retirement only after accepted replacement proof.
 
 ## Current classification
 
-`CURRENT_WORK_ITEM=RPi5_main#363`
+`CURRENT_WORK_ITEM=RPi5_main#365`
 
 `CURRENT_PHASE=4`
 
 `GLOBAL_EXECUTION_ENABLED=false`
 
-`PRIVILEGED_CONSUMER_IMPLEMENTED=true`
+`PRIVILEGED_CONSUMER_CONTRACT_IMPLEMENTED=true`
 
 `RUNNER_INDEPENDENT_PULL_HELPER_SOURCE_BOUND=true`
 
@@ -154,9 +181,15 @@ A merge of #363 does not authorize any later gate.
 
 `BROKER_BOUNDARY_IMPLEMENTED=true`
 
+`SOURCE_AUTH_COMPOSITION_IMPLEMENTED=true`
+
 `SOURCE_READ_AUTHORITY_PROVEN=false`
 
-`HELPER_PROCESS_LAUNCH_IMPLEMENTED=false`
+`CONCRETE_CANONICAL_REVALIDATOR_IMPLEMENTED=false`
+
+`HELPER_PROCESS_LAUNCH_IMPLEMENTED=true`
+
+`HELPER_PROCESS_LAUNCH_WIRED=false`
 
 `PRIVILEGED_DISPATCH_ENABLED=false`
 
