@@ -1,0 +1,35 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import sys
+
+from deploy_executor.hermes_deals_origin_privileged_broker import (
+    BROKER_REQUEST_MAX_BYTES,
+    HermesDealsOriginPrivilegedBrokerError,
+    parse_broker_transport_request,
+)
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv if argv is None else argv)
+    if len(argv) != 1:
+        print("HERMES_ORIGIN_BROKER=REJECTED reason=arguments_forbidden", file=sys.stderr)
+        return 64
+
+    raw = sys.stdin.buffer.read(BROKER_REQUEST_MAX_BYTES + 1)
+    try:
+        request = parse_broker_transport_request(raw)
+    except HermesDealsOriginPrivilegedBrokerError:
+        print("HERMES_ORIGIN_BROKER=REJECTED reason=invalid_identity_frame", file=sys.stderr)
+        return 65
+
+    print(
+        "HERMES_ORIGIN_BROKER=SOURCE_AUTHORITY_UNPROVEN "
+        f"authorization_issue_number={request.authorization_issue_number} "
+        "dispatch=false host_wiring=false production_mutation_started=false"
+    )
+    return 78
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
