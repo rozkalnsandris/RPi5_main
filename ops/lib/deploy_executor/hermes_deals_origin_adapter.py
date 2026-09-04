@@ -16,6 +16,14 @@ WORKFLOW_SOURCE_BLOB = "99a18c5f669e7880a8a8288c3f964285df87ae22"
 DISPATCHER_SOURCE_BLOB = "f9bfd02c6d36bb54d5380e1f0c99a0195e2ff4bc"
 INSTALLER_SOURCE_BLOB = "41f004420a0f5aed314aaefd796a54e14dbd17ea"
 PROBE_SOURCE_BLOB = "2362e8eb578a7279c38fe4ed2a7d1edd05df891a"
+PULL_HELPER_SOURCE_BLOB = "51bb23cc6c2083ab7c8b4e81ba82dd880e46d673"
+PULL_HELPER_CAPABILITY = "origin-path-audit"
+PULL_HELPER_REGISTRATION_SCHEMA = (
+    "rozkalns.hermes-deals.origin-path-rpi5-pull-registration.v1"
+)
+PULL_HELPER_EVIDENCE_SCHEMA = "rozkalns.hermes-deals.origin-path-rpi5-pull-evidence.v1"
+PULL_HELPER_MACHINE_ID = "rpi5"
+PULL_HELPER_ARGUMENTS = ("registered_source_sha", "as_of")
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 REQUIRED_EXCLUSIONS = frozenset(
@@ -37,6 +45,12 @@ REQUIRED_DEPENDENCIES = frozenset(
         f"dispatcher-source-blob:{DISPATCHER_SOURCE_BLOB}",
         f"installer-source-blob:{INSTALLER_SOURCE_BLOB}",
         f"probe-source-blob:{PROBE_SOURCE_BLOB}",
+        f"pull-helper-source-blob:{PULL_HELPER_SOURCE_BLOB}",
+        f"pull-helper-capability:{PULL_HELPER_CAPABILITY}",
+        f"pull-helper-registration-schema:{PULL_HELPER_REGISTRATION_SCHEMA}",
+        f"pull-helper-evidence-schema:{PULL_HELPER_EVIDENCE_SCHEMA}",
+        f"pull-helper-machine-id:{PULL_HELPER_MACHINE_ID}",
+        "pull-helper-arguments:registered_source_sha,as_of",
         "privileged-boundary:identity-only-dispatch-request-v1",
     }
 )
@@ -83,6 +97,13 @@ class HermesDealsOriginAuditAdapter:
             "dispatcher_source_blob": DISPATCHER_SOURCE_BLOB,
             "installer_source_blob": INSTALLER_SOURCE_BLOB,
             "probe_source_blob": PROBE_SOURCE_BLOB,
+            "pull_helper_source_blob": PULL_HELPER_SOURCE_BLOB,
+            "pull_helper_capability": PULL_HELPER_CAPABILITY,
+            "pull_helper_registration_schema": PULL_HELPER_REGISTRATION_SCHEMA,
+            "pull_helper_evidence_schema": PULL_HELPER_EVIDENCE_SCHEMA,
+            "pull_helper_machine_id": PULL_HELPER_MACHINE_ID,
+            "pull_helper_arguments": PULL_HELPER_ARGUMENTS,
+            "pull_helper_interface_bound": True,
             "read_only": True,
             "execution_enabled": False,
             "privileged_dispatch_ready": False,
