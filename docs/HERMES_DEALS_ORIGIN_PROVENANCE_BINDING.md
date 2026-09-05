@@ -118,25 +118,32 @@ Source review identified the same root-side Git ownership class already correcte
 
 This failure is pre-mutation evidence only. It does not authorize a preflight retry, broker installation, systemd activation, helper execution or genuine audit.
 
+### Accepted credential placement and merged installer repair
+
+Canonical `RPi5_main#191` records that the later separately owner-authorized credential first-install at exact `750736eb681f15184358f3c8c7e18f46f47dc99c` completed with public-safe result `HERMES_SOURCE_CREDENTIAL_PROVISIONED`, `mutation_started=true`, and no credential content emitted. That one-shot authorization is consumed/non-reusable. This source document does not independently re-read or prove the credential's current protected runtime state.
+
+PR #384 subsequently merged the narrow installer Git-trust repair. At the audited checkpoint, current `RPi5_main/main=05fb1254307ec3eb91fb7d16ff1c242d585c53a8`, exact-main checks are 5/5 SUCCESS, installer source blob is `6762f6dffa7908cc8e8dd8fb7c144c1433edbe54`, and provisioner blob remains `76692cadd7a2dd959a5777f0978bb16371e7e0be`. The trusted checkout audit remained clean/detached at old source `750736eb...`; no fetch, merge, reset, rebase, stash or clean was performed by that audit.
+
 ## Required continuation sequence
 
 The current fail-closed sequence is:
 
-1. merge the reviewed #383 broker-installer root Git trust repair only after exact-head CI/review convergence and explicit owner MERGE authorization;
-2. refresh exact `RPi5_main/main`, exact-main CI and the installer source blob;
-3. run a **fresh default-mode read-only broker installer preflight** under owner-controlled root execution on that exact current main, without `--apply`;
-4. only if that preflight passes may a later separate owner LIVE authorization consider broker installer `--apply`;
-5. broker installation/systemd socket activation, genuine audit dispatch and runner retirement remain separately gated;
-6. any new preflight failure remains fail-closed and must be analyzed before any retry.
+1. merge this source-only continuity reconciliation only after exact-head CI/review convergence and explicit owner MERGE authorization;
+2. refresh exact `RPi5_main/main`, exact-main CI, installer blob and current Hermes helper provenance;
+3. under a **new separate exact owner LIVE authorization**, converge only the reviewed trusted checkout to that new exact main using the explicitly allowed `git fetch` + `git merge --ff-only` path; reset/rebase/stash/clean/force remain forbidden;
+4. after successful checkout convergence, run one **fresh default-mode read-only broker installer preflight** under owner-controlled root execution on that exact current main, without `--apply`;
+5. only if that preflight passes may a later separate owner LIVE authorization consider broker first-install `--apply` for the reviewed ten file materializations plus `systemctl daemon-reload` and socket `enable --now` surface;
+6. genuine audit dispatch, privileged dispatch enablement, runner retirement and later Phase/P11 work remain separately gated; any new failure after a live mutation starts requires evidence + STOP with no retry/rollback/cleanup/alternate path unless separately authorized.
 
-A previous preflight failure must not be rerun as a substitute for this sequence, and no historical authorization may be reused.
+Historical credential-placement, checkout, installer and P10 authorizations are consumed, superseded or otherwise non-reusable and must not be reused as authority for this sequence.
 
 ## Safety state
 
 `INSTALLER_SOURCE_IMPLEMENTED=true`  
 `SOURCE_CREDENTIAL_PROVISIONER_IMPLEMENTED=true`
+`SOURCE_CREDENTIAL_FIRST_INSTALL_RECEIPT=true`
 `SOURCE_READ_AUTHORITY_PROVEN=false`  
-`SOURCE_RUNTIME_CREDENTIAL_PROVEN=false`
+`SOURCE_RUNTIME_CREDENTIAL_CURRENT_STATE_PROVEN=false`
 `BROKER_ENTRYPOINT_WIRED=false`  
 `HELPER_PROCESS_LAUNCH_WIRED=false`  
 `PRIVILEGED_DISPATCH_ENABLED=false`  
