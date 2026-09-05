@@ -21,7 +21,7 @@ spec.loader.exec_module(installer)
 
 class HermesOriginBrokerInstallerTests(unittest.TestCase):
     def test_frozen_target_surface_is_exact_and_bounded(self) -> None:
-        self.assertEqual(len(installer.TARGETS), 10)
+        self.assertEqual(len(installer.TARGETS), 9)
         self.assertEqual(
             {item.source_path for item in installer.TARGETS},
             {
@@ -31,7 +31,6 @@ class HermesOriginBrokerInstallerTests(unittest.TestCase):
                 "ops/lib/deploy_executor/hermes_deals_origin_canonical_revalidator.py",
                 "ops/lib/deploy_executor/hermes_deals_origin_host_evidence.py",
                 "ops/lib/deploy_executor/hermes_deals_origin_broker_composition.py",
-                "ops/lib/deploy_executor/p9_source_auth.py",
                 "ops/bin/rozkalns-hermes-deals-origin-broker",
                 "ops/systemd/rozkalns-hermes-deals-origin-broker.socket",
                 "ops/systemd/rozkalns-hermes-deals-origin-broker@.service",
@@ -44,6 +43,16 @@ class HermesOriginBrokerInstallerTests(unittest.TestCase):
                 ("enable", "--now", installer.SOCKET_UNIT),
             ),
         )
+        self.assertEqual(installer.INSTALL_MUTATION_BUDGET[0], ("trusted-file-materialization", 9))
+        self.assertEqual(len(installer.SHARED_PREREQUISITES), 1)
+        shared = installer.SHARED_PREREQUISITES[0]
+        self.assertEqual(shared.source_path, "ops/lib/deploy_executor/p9_source_auth.py")
+        self.assertEqual(
+            str(shared.target_path),
+            "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/p9_source_auth.py",
+        )
+        self.assertEqual(shared.expected_blob, "130fc36a22bb4ace500b022c3defcccbf0893012")
+        self.assertEqual(shared.mode, 0o644)
 
     def test_git_blob_matches_git_object_rule(self) -> None:
         self.assertEqual(
@@ -97,6 +106,27 @@ class HermesOriginBrokerInstallerTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
+            [
+                (row["source"], row["target"], row["source_blob"], row["mode"])
+                for row in value["shared_prerequisites"]
+            ],
+            [
+                (
+                    target.source_path,
+                    str(target.target_path),
+                    target.expected_blob,
+                    f"{target.mode:04o}",
+                )
+                for target in installer.SHARED_PREREQUISITES
+            ],
+        )
+        self.assertEqual(value["installer"]["install_target_count"], 9)
+        self.assertEqual(value["installer"]["shared_prerequisite_count"], 1)
+        self.assertEqual(
+            value["installer"]["shared_prerequisite_policy"],
+            "EXACT_EXISTING_READ_ONLY_REQUIRED_NO_MUTATION",
+        )
+        self.assertEqual(
             value["installer"]["git_trust_scope"],
             "COMMAND_ONLY_EXACT_REPO_ROOT",
         )
@@ -118,6 +148,46 @@ class HermesOriginBrokerInstallerTests(unittest.TestCase):
             path.write_bytes(b"already here")
             with self.assertRaises(installer.HermesOriginBrokerInstallerError):
                 installer._existing_target_state(target, b"x")
+
+    def test_shared_prerequisite_requires_exact_reviewed_existing_file(self) -> None:
+        old_uid = installer.ROOT_UID
+        old_gid = installer.ROOT_GID
+        try:
+            with tempfile.TemporaryDirectory() as temp:
+                path = Path(temp) / "shared.py"
+                desired = b"reviewed shared source\n"
+                target = installer.Target(
+                    "source", path, installer._git_blob(desired), 0o644
+                )
+                installer.ROOT_UID = os.getuid()
+                installer.ROOT_GID = os.getgid()
+                with self.assertRaises(installer.HermesOriginBrokerInstallerError):
+                    installer._require_shared_prerequisite(target, desired)
+                path.write_bytes(desired)
+                os.chmod(path, 0o644)
+                installer._require_shared_prerequisite(target, desired)
+                path.write_bytes(b"drifted shared source\n")
+                with self.assertRaises(installer.HermesOriginBrokerInstallerError):
+                    installer._require_shared_prerequisite(target, desired)
+                path.write_bytes(desired)
+                os.chmod(path, 0o600)
+                with self.assertRaises(installer.HermesOriginBrokerInstallerError):
+                    installer._require_shared_prerequisite(target, desired)
+        finally:
+            installer.ROOT_UID = old_uid
+            installer.ROOT_GID = old_gid
+
+    def test_shared_prerequisite_read_is_descriptor_safe_and_non_mutating(self) -> None:
+        source = SCRIPT.read_text(encoding="utf-8")
+        fn = source[source.index("def _require_shared_prerequisite"):source.index("def _require_shared_prerequisites")]
+        self.assertIn('for required in ("O_NOFOLLOW", "O_CLOEXEC")', fn)
+        self.assertIn("os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC", fn)
+        self.assertIn("opened.st_dev, opened.st_ino", fn)
+        self.assertNotIn("O_RDWR", fn)
+        self.assertNotIn("O_WRONLY", fn)
+        self.assertNotIn("fchmod", fn)
+        self.assertNotIn("fchown", fn)
+        self.assertNotIn("ftruncate", fn)
 
     def test_credential_preflight_checks_metadata_only(self) -> None:
         old_path = installer.SOURCE_CREDENTIAL

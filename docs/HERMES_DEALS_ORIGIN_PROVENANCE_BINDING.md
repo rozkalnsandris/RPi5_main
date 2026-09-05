@@ -43,17 +43,18 @@ Any target blob mismatch means the implementation provenance is stale. A new rev
 
 The reviewed first-install entrypoint is `scripts/install-hermes-deals-origin-broker.py`, with its machine-readable source contract in `ops/deploy/hermes-deals-origin-broker-installer.json`.
 
-`installer_source_blob=6762f6dffa7908cc8e8dd8fb7c144c1433edbe54`
+`installer_source_blob=3edabde4660b04539c808a806e1bf1bcc8fefef8`
 
 The installer is deliberately narrower than generic privileged shell access:
 
 - default invocation is read-only preflight; `--apply` requires root and a separate explicit LIVE owner authorization;
-- it requires an exact checkout SHA supplied by the operator, proves that SHA is descendant-or-equal to the immutable implementation baseline, verifies its own tracked source at that SHA, and verifies all ten frozen install-target Git blobs;
+- it requires an exact checkout SHA supplied by the operator, proves that SHA is descendant-or-equal to the immutable implementation baseline, verifies its own tracked source at that SHA, verifies nine frozen broker-owned install-target Git blobs, and separately verifies the frozen `p9_source_auth.py` shared-prerequisite source blob;
 - root-side Git provenance uses only command-scoped `safe.directory=<exact resolved REPO_ROOT>` while preserving the fixed minimal subprocess environment; wildcard trust and root global/system Git config mutation are forbidden;
 - it checks only allowlisted runtime metadata: trusted root-owned parent directories, the fixed `rozkalns-deploy-executor` group, and source GitHub App credential **path/owner/group/mode only**;
 - it never reads credential contents and never creates, replaces, chmods or otherwise mutates credentials;
-- it is first-install-only: any pre-existing install target fails closed before mutation and requires a separate reconciliation source gate;
-- its apply surface is exactly ten reviewed file materializations followed by `systemctl daemon-reload` and `systemctl enable --now rozkalns-hermes-deals-origin-broker.socket`;
+- it is first-install-only for broker-owned targets: any pre-existing broker install target still fails closed before mutation; the already-owned P9 `p9_source_auth.py` dependency is not adopted or overwritten and is instead an exact existing shared prerequisite;
+- shared-prerequisite validation is read-only and descriptor-safe: regular non-symlink `root:root 0644`, `O_RDONLY|O_NOFOLLOW|O_CLOEXEC`, exact reviewed bytes/blob, and stable device/inode identity are mandatory; the broker installer never chmods/chowns/replaces that dependency;
+- its apply surface is exactly nine reviewed broker file materializations followed by `systemctl daemon-reload` and `systemctl enable --now rozkalns-hermes-deals-origin-broker.socket`; the shared prerequisite is revalidated immediately before systemd activation;
 - it does not directly start a broker service instance, run the Hermes helper, authorize a genuine audit, mutate App permissions, retire the runner, or enable the privileged dispatch path.
 
 The installed broker entrypoint remains the reviewed fail-closed source stub. Socket activation therefore establishes only the broker transport boundary; it does **not** authorize or execute the later genuine origin audit canary.
@@ -124,18 +125,26 @@ Canonical `RPi5_main#191` records that the later separately owner-authorized cre
 
 PR #384 subsequently merged the narrow installer Git-trust repair. At the audited checkpoint, current `RPi5_main/main=05fb1254307ec3eb91fb7d16ff1c242d585c53a8`, exact-main checks are 5/5 SUCCESS, installer source blob is `6762f6dffa7908cc8e8dd8fb7c144c1433edbe54`, and provisioner blob remains `76692cadd7a2dd959a5777f0978bb16371e7e0be`. The trusted checkout audit remained clean/detached at old source `750736eb...`; no fetch, merge, reset, rebase, stash or clean was performed by that audit.
 
+### Post-convergence broker preflight — existing P9 shared target
+
+After PR #385 merged and the separately owner-authorized trusted checkout convergence completed, one fresh default-mode broker installer preflight was run at exact `RPi5_main/main=6264113026bf5842edb5b45bb13fd2b3b513dc73`. It failed closed before broker mutation because `/usr/local/lib/rozkalns-deploy-executor/deploy_executor/p9_source_auth.py` already existed. The public-safe receipt recorded `credential_content_read=false`, `credential_mutated=false`, `helper_executed=false` and no `--apply` or systemd action. Minimal follow-up metadata established exactly one pre-existing reviewed target, `root:root 0644`; that failed run did not read its contents.
+
+This source reconciliation does **not** authorize overwrite or adoption. `p9_source_auth.py` is reclassified as an external shared runtime prerequisite already owned by the P9 installation path. Broker preflight must prove its exact reviewed source identity (`130fc36a22bb4ace500b022c3defcccbf0893012`) through a bounded descriptor-safe read plus exact owner/group/mode and inode/path stability. The broker installer mutation set is reduced to the remaining nine capability-specific files, all still `O_EXCL` first-install targets. Any missing, metadata-drifted, byte-drifted or replaced shared prerequisite fails closed; any pre-existing broker-owned target also still fails closed.
+
+This is source readiness only. The observed runtime metadata is historical evidence for the failed preflight and is not a claim that the shared prerequisite will still match after this source change merges.
+
 ## Required continuation sequence
 
 The current fail-closed sequence is:
 
-1. merge this source-only continuity reconciliation only after exact-head CI/review convergence and explicit owner MERGE authorization;
-2. refresh exact `RPi5_main/main`, exact-main CI, installer blob and current Hermes helper provenance;
+1. complete this source-only shared-prerequisite reconciliation through focused branch -> Draft PR -> exact-head CI/review -> Ready, then require a separate explicit owner MERGE authorization;
+2. after merge, freshly resolve exact `RPi5_main/main`, exact-main CI, installer blob and current Hermes helper provenance;
 3. under a **new separate exact owner LIVE authorization**, converge only the reviewed trusted checkout to that new exact main using the explicitly allowed `git fetch` + `git merge --ff-only` path; reset/rebase/stash/clean/force remain forbidden;
-4. after successful checkout convergence, run one **fresh default-mode read-only broker installer preflight** under owner-controlled root execution on that exact current main, without `--apply`;
-5. only if that preflight passes may a later separate owner LIVE authorization consider broker first-install `--apply` for the reviewed ten file materializations plus `systemctl daemon-reload` and socket `enable --now` surface;
+4. after successful checkout convergence, run one fresh **default-mode read-only broker installer preflight** without `--apply`; it must prove the exact existing `p9_source_auth.py` shared prerequisite, credential metadata, socket group and nine absent broker-owned targets;
+5. only if that preflight passes may a later separate owner LIVE authorization consider broker first-install `--apply` for exactly nine broker file materializations plus `systemctl daemon-reload` and socket `enable --now`; the shared P9 prerequisite remains outside the mutation surface;
 6. genuine audit dispatch, privileged dispatch enablement, runner retirement and later Phase/P11 work remain separately gated; any new failure after a live mutation starts requires evidence + STOP with no retry/rollback/cleanup/alternate path unless separately authorized.
 
-Historical credential-placement, checkout, installer and P10 authorizations are consumed, superseded or otherwise non-reusable and must not be reused as authority for this sequence.
+Historical credential-placement, checkout, installer, failed-preflight and P10 authorizations are consumed, superseded or otherwise non-reusable and must not be reused as authority for this sequence.
 
 ## Safety state
 

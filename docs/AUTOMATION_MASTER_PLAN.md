@@ -791,3 +791,47 @@ Current gate sequence:
 5. runner/path retirement remains a later separate owner-authorized LIVE mutation.
 
 No source merge or continuation command authorizes credential contents access, App/permission mutation, helper/audit execution, systemd action, host file placement, deployment, database/application mutation, runner retirement, cleanup, retry or rollback.
+
+## Current supersession — Hermes broker shared-prerequisite reconciliation (2026-09-05)
+
+This section supersedes the earlier Phase 4 runtime-preflight wording above while retaining it as historical evidence. **This final section is the current Phase 4 next-action authority.** Repository source still does not by itself prove current RPi5 runtime state.
+
+Fresh evidence for this gate:
+
+- `RPi5_main/main = 6264113026bf5842edb5b45bb13fd2b3b513dc73`, with PR #385 merged and exact-main Validate #858, FAST-LANE #314 and GITHUB-ONLY #302 SUCCESS;
+- the separately owner-authorized trusted checkout convergence to that exact main completed PASS and its authorization is consumed/non-reusable;
+- one subsequent default-mode broker installer preflight failed closed before broker mutation because the reviewed P9 runtime target `/usr/local/lib/rozkalns-deploy-executor/deploy_executor/p9_source_auth.py` already existed;
+- the failed preflight reported `credential_content_read=false`, `credential_mutated=false`, `helper_executed=false`; no `--apply`, broker file materialization or systemd action occurred;
+- minimal read-only follow-up metadata found exactly one pre-existing reviewed target, `root:root 0644`; its contents were not read in that failed run;
+- current relevant `hermes-deals` helper provenance remains separately revalidated at the next post-merge gate rather than assumed from this source patch.
+
+The source correction preserves ownership boundaries instead of granting overwrite authority. `p9_source_auth.py` is removed from the broker-owned installation set and becomes one exact existing shared prerequisite. Broker preflight may read only that fixed non-secret code target through `O_RDONLY|O_NOFOLLOW|O_CLOEXEC` and must prove a regular non-symlink `root:root 0644` file, exact reviewed bytes/blob `130fc36a22bb4ace500b022c3defcccbf0893012`, and stable device/inode identity. The broker installer never creates, replaces, chmods or chowns that shared dependency.
+
+The broker-owned mutation surface is therefore reduced from ten to **nine** first-install files. Those nine remain absent-only `O_EXCL` targets; any pre-existing broker-owned target still fails closed. The shared prerequisite is revalidated again immediately before systemd activation if a later separately authorized `--apply` ever reaches that point.
+
+Binding classification:
+
+`PHASE4_CURRENT_WORK_ITEM=HERMES_EXISTING_TARGET_RECONCILIATION_SOURCE`
+`TRUSTED_CHECKOUT_CONVERGENCE=PASS_CONSUMED`
+`BROKER_PREFLIGHT=FAIL_CLOSED_EXISTING_SHARED_P9_TARGET`
+`BROKER_INSTALL_TARGET_COUNT=9`
+`SHARED_P9_SOURCE_AUTH_PREREQUISITE_COUNT=1`
+`SHARED_P9_SOURCE_AUTH_RUNTIME_PROVEN=false`
+`LIVE_INSTALL_ELIGIBLE=false`
+`BROKER_ENTRYPOINT_WIRED=false`
+`PRIVILEGED_DISPATCH_ENABLED=false`
+`HOST_WIRING_ENABLED=false`
+`GENUINE_HERMES_AUDIT_AUTHORIZED=false`
+`PRODUCTION_MUTATION_STARTED=false`
+
+Current gate sequence:
+
+1. finish this source-only reconciliation through focused source/tests/docs review, Draft PR, exact-head CI/review and Ready;
+2. STOP for a separate explicit owner MERGE decision;
+3. after merge, freshly bind exact `RPi5_main/main`, exact-main CI, installer blob and current Hermes helper provenance;
+4. because the installer source changed, require a new separately authorized trusted-checkout `git fetch` + `git merge --ff-only` convergence to that new exact main before rerunning host preflight;
+5. run one fresh default-mode read-only broker installer preflight without `--apply`; it must prove the shared P9 prerequisite plus all other bounded runtime predicates and nine absent broker targets;
+6. only a successful preflight may lead to a later separate owner LIVE broker first-install authorization for the nine broker files plus the reviewed systemd actions;
+7. genuine Hermes audit, privileged dispatch enablement, runner retirement and later Phase/P11 work remain separate gates.
+
+Neither this source authorization, branch/PR, future merge, the consumed checkout convergence, nor the failed preflight authorizes broker installation, systemd mutation, credential mutation/content access, helper/audit execution, runtime-file reconciliation, overwrite/adoption, retry, rollback, cleanup, deployment, database/application mutation or runner retirement.
