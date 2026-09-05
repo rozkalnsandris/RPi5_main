@@ -835,3 +835,49 @@ Current gate sequence:
 7. genuine Hermes audit, privileged dispatch enablement, runner retirement and later Phase/P11 work remain separate gates.
 
 Neither this source authorization, branch/PR, future merge, the consumed checkout convergence, nor the failed preflight authorizes broker installation, systemd mutation, credential mutation/content access, helper/audit execution, runtime-file reconciliation, overwrite/adoption, retry, rollback, cleanup, deployment, database/application mutation or runner retirement.
+
+## Current supersession — P9 Hermes source-auth runtime-upgrade source gate (2026-09-05)
+
+This section supersedes the shared-prerequisite next-action sequence immediately above. Earlier Phase 4 sections remain historical evidence only. Repository source still does not by itself prove current host state.
+
+Fresh gate evidence:
+
+- current `RPi5_main/main = 475aa1c935868d0ac7a5cb5569e051767faab643`;
+- the separately authorized trusted checkout convergence to that exact SHA completed PASS and its LIVE authorization is consumed/non-reusable;
+- the owner then ran one exact default-mode broker installer preflight under root without `--apply`; it returned `FAIL_CLOSED` because the installed shared `p9_source_auth.py` content differs from the reviewed current source;
+- the preflight itself reported `credential_content_read=false`, `credential_mutated=false`, `helper_executed=false`; no broker files, systemd state or credential content were changed;
+- minimal read-only follow-up proved the observed installed file was `root:root 0644`, Git blob `4cb441873df8245387f06ee55d637a9f7b11cdc8`;
+- that blob is the reviewed P9 source-auth state from the Gate-D source-clock line at commit `3649dbd05f6e701369e9e32ccecdd11d51b8516e`;
+- current reviewed source requires blob `130fc36a22bb4ace500b022c3defcccbf0893012`, introduced later by the #365/#366 Hermes source-auth gate to add exact `rozkalnsandris/hermes-deals` repository ID `1317143994` alongside the existing Control repository allowlist.
+
+The failed broker preflight therefore must not be relaxed to accept the old blob. The old runtime file is reviewed but capability-stale for the Hermes broker path. The correction is a separate one-target P9-owned runtime upgrade, not broker adoption/overwrite authority.
+
+Source gate `P9-SOURCE-AUTH-HERMES-RUNTIME-UPGRADE-SOURCE` adds a dedicated operator and machine contract for exactly `4cb44187... -> 130fc36a...` at the fixed target `/usr/local/lib/rozkalns-deploy-executor/deploy_executor/p9_source_auth.py`. Default invocation is read-only preflight. `--apply` remains root-only and requires a separate explicit owner LIVE authorization after source merge and exact-source convergence.
+
+The reviewed replacement algorithm is deliberately stricter than the older in-place P9 upgrade scripts: exact command-scoped `safe.directory=<resolved repo root>` Git trust; root-owned non-group/other-writable real parent chain; descriptor-relative `O_NOFOLLOW|O_CLOEXEC` validation of a single-link regular old target; a fixed same-directory `O_CREAT|O_EXCL|O_NOFOLLOW` temporary file; complete write plus metadata and file `fsync`; duplicate old-target blob/inode validation immediately before replacement; atomic `os.replace` using the same parent directory descriptor; parent-directory `fsync`; and exact post-replace blob/metadata verification. There is no in-place truncate/write path and no automatic retry, rollback or cleanup after mutation starts.
+
+Binding classification:
+
+`PHASE4_CURRENT_WORK_ITEM=P9_SOURCE_AUTH_HERMES_RUNTIME_UPGRADE_SOURCE`
+`BROKER_PREFLIGHT=FAIL_CLOSED_SHARED_P9_SOURCE_AUTH_DRIFT`
+`OBSERVED_SHARED_P9_SOURCE_AUTH_BLOB=4cb441873df8245387f06ee55d637a9f7b11cdc8`
+`REQUIRED_SHARED_P9_SOURCE_AUTH_BLOB=130fc36a22bb4ace500b022c3defcccbf0893012`
+`RUNTIME_UPGRADE_OPERATOR_IMPLEMENTED=true`
+`RUNTIME_UPGRADE_PERFORMED=false`
+`BROKER_PREFLIGHT_RETRY_AUTHORIZED=false`
+`BROKER_INSTALL_AUTHORIZED=false`
+`LIVE_INSTALL_ELIGIBLE=false`
+`GENUINE_HERMES_AUDIT_AUTHORIZED=false`
+`PRODUCTION_MUTATION_STARTED=false`
+
+Current gate sequence:
+
+1. complete this source-only operator/manifest/tests/docs patch through focused review, Draft PR, exact-head CI/reviews and Ready, then STOP for a separate explicit MERGE decision;
+2. after merge, freshly resolve exact `RPi5_main/main`, exact-main CI and relevant Hermes helper/source provenance;
+3. if the trusted checkout is behind the merged source, require a separate exact LIVE trusted-checkout convergence using only reviewed `git fetch origin main` + `git merge --ff-only origin/main`;
+4. on the exact merged checkout, run the new runtime-upgrade operator once in default read-only preflight mode without `--apply`; it must prove the exact old blob, root ownership/mode, single-link regular-file identity, safe parent chain and absent fixed temporary path;
+5. only a successful upgrade preflight may lead to a separate explicit owner LIVE authorization for exactly one atomic `p9_source_auth.py` replacement `4cb44187... -> 130fc36a...`; no other host target is in that mutation envelope;
+6. after that LIVE step succeeds, freshly prove the installed new blob/metadata and only then may a new broker default-mode read-only preflight be considered; the previous failed broker preflight is not retry authority;
+7. only a successful fresh broker preflight may lead to the still-separate broker first-install LIVE gate; genuine audit dispatch, privileged-dispatch enablement and runner retirement remain later independent gates.
+
+Neither this source authorization, this document, a future PR/merge, nor the observed old runtime blob authorizes `--apply`, broker installation, systemd mutation, credential content access/mutation, helper/audit execution, retry of the failed broker preflight, rollback, cleanup, deployment, DB/application mutation or runner retirement.

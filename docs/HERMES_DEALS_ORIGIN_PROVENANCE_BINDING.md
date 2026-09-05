@@ -133,16 +133,28 @@ This source reconciliation does **not** authorize overwrite or adoption. `p9_sou
 
 This is source readiness only. The observed runtime metadata is historical evidence for the failed preflight and is not a claim that the shared prerequisite will still match after this source change merges.
 
+### Broker preflight after shared-prerequisite source reconciliation — reviewed runtime blob is capability-stale
+
+After PR #386 merged and the trusted checkout converged to exact `475aa1c935868d0ac7a5cb5569e051767faab643`, the owner ran one fresh default-mode broker installer preflight under root without `--apply`. It failed closed because the installed shared prerequisite content did not equal the required reviewed blob. The receipt explicitly preserved `credential_content_read=false`, `credential_mutated=false` and `helper_executed=false`; no broker/systemd/credential mutation occurred.
+
+Minimal read-only follow-up identified the installed shared file as `root:root 0644`, Git blob `4cb441873df8245387f06ee55d637a9f7b11cdc8`. Repository history binds that blob to the earlier reviewed Gate-D P9 source-auth implementation. Current source blob `130fc36a22bb4ace500b022c3defcccbf0893012` is the later #365/#366 capability extension that adds the exact `rozkalnsandris/hermes-deals` repository binding. Therefore the old runtime blob must not be accepted as an equivalent prerequisite: it is reviewed but does not implement the Hermes source-read capability required by this broker path.
+
+The source-only correction adds `scripts/install-deploy-executor-p9-hermes-source-auth-upgrade.py` with machine contract `ops/deploy/p9-hermes-source-auth-runtime-upgrade.json`. It is a P9-owned one-target transition, not broker overwrite authority. Default mode is read-only preflight; `--apply` is separately LIVE-gated. The exact transition is only `4cb441873df8245387f06ee55d637a9f7b11cdc8 -> 130fc36a22bb4ace500b022c3defcccbf0893012` at the fixed existing `p9_source_auth.py` target.
+
+The replacement is descriptor-safe and atomic: exact command-scoped Git `safe.directory`, safe root-owned parent chain, `O_NOFOLLOW` old-target validation, single-link regular-file requirement, fixed same-directory `O_EXCL` temporary creation, full write/metadata verification plus file `fsync`, duplicate old-target inode/blob check, same-directory `os.replace`, directory `fsync`, and exact post-replace verification. It deliberately has no in-place `ftruncate` rewrite and no automatic retry/rollback/cleanup after mutation starts. Source merge alone authorizes none of these runtime writes.
+
 ## Required continuation sequence
 
 The current fail-closed sequence is:
 
-1. complete this source-only shared-prerequisite reconciliation through focused branch -> Draft PR -> exact-head CI/review -> Ready, then require a separate explicit owner MERGE authorization;
-2. after merge, freshly resolve exact `RPi5_main/main`, exact-main CI, installer blob and current Hermes helper provenance;
-3. under a **new separate exact owner LIVE authorization**, converge only the reviewed trusted checkout to that new exact main using the explicitly allowed `git fetch` + `git merge --ff-only` path; reset/rebase/stash/clean/force remain forbidden;
-4. after successful checkout convergence, run one fresh **default-mode read-only broker installer preflight** without `--apply`; it must prove the exact existing `p9_source_auth.py` shared prerequisite, credential metadata, socket group and nine absent broker-owned targets;
-5. only if that preflight passes may a later separate owner LIVE authorization consider broker first-install `--apply` for exactly nine broker file materializations plus `systemctl daemon-reload` and socket `enable --now`; the shared P9 prerequisite remains outside the mutation surface;
-6. genuine audit dispatch, privileged dispatch enablement, runner retirement and later Phase/P11 work remain separately gated; any new failure after a live mutation starts requires evidence + STOP with no retry/rollback/cleanup/alternate path unless separately authorized.
+1. complete the dedicated P9 Hermes source-auth runtime-upgrade source gate through focused branch -> Draft PR -> exact-head CI/review -> Ready, then require a separate explicit owner MERGE authorization;
+2. after merge, freshly resolve exact `RPi5_main/main`, exact-main CI, upgrade-operator blob, installer blob and current Hermes helper provenance;
+3. if needed, under a **new separate exact owner LIVE authorization**, converge only the reviewed trusted checkout to that merged main using the explicitly allowed `git fetch` + `git merge --ff-only` path; reset/rebase/stash/clean/force remain forbidden;
+4. run the new P9 runtime-upgrade operator once in default read-only preflight mode without `--apply`; it must prove exact old blob `4cb441873df8245387f06ee55d637a9f7b11cdc8`, exact root ownership/mode, single-link regular-file identity, safe parent chain and absent fixed temp path;
+5. only if that upgrade preflight passes may a separate explicit owner LIVE authorization replace exactly that one P9-owned target with reviewed blob `130fc36a22bb4ace500b022c3defcccbf0893012`;
+6. after successful one-target convergence and fresh post-state proof, run a new fresh **default-mode read-only broker installer preflight** without `--apply`; the previous failed broker preflight is not retry authority;
+7. only if that fresh broker preflight passes may a later separate owner LIVE authorization consider broker first-install `--apply` for exactly nine broker file materializations plus `systemctl daemon-reload` and socket `enable --now`; the shared P9 prerequisite remains outside broker mutation authority;
+8. genuine audit dispatch, privileged dispatch enablement, runner retirement and later Phase/P11 work remain separately gated; any new failure after a live mutation starts requires evidence + STOP with no retry/rollback/cleanup/alternate path unless separately authorized.
 
 Historical credential-placement, checkout, installer, failed-preflight and P10 authorizations are consumed, superseded or otherwise non-reusable and must not be reused as authority for this sequence.
 
