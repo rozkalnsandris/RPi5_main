@@ -288,3 +288,11 @@ PR #368 is merged and current `RPi5_main/main` is `2550e77f6cb811ca6f10b49ef0b2f
 `PRODUCTION_MUTATION_STARTED=false`
 
 The next gate is a separate read-only runtime preflight for only the bounded expected App-installation/credential metadata, durable replay adapter, sanitized host-observation adapter, registration, helper, broker, socket and service identities. This merged-source binding itself makes no runtime claim and authorizes no LIVE action.
+
+## Post-first-install local runtime prerequisite preflight supersession (2026-09-05)
+
+The broker transport is now historical PASS evidence from the separately authorized first-install, but installation does not enable dispatch. Source review confirms that the installed entrypoint remains inert, the replay availability and host-observation production providers remain unimplemented Protocol seams, and current Source App installation scope cannot be cryptographically proven without using the protected private key.
+
+`preflight-hermes-deals-origin-runtime-prerequisites.py` therefore implements only the non-mutating local half of runtime readiness. It validates credential metadata without reading credential content, the existing P9 replay database through immutable read-only SQLite access, registration/helper/probe identities, exact broker/shared-prerequisite blobs, the evidence root, and socket enabled/active/listening state. It never mints a token, sends a GitHub request, sends a broker socket request, launches the helper or mutates systemd/filesystem state.
+
+Success is intentionally `HERMES_ORIGIN_RUNTIME_PREFLIGHT_PARTIAL_READY`. The Source App scope, concrete replay adapter, concrete host-observation adapter, broker-entrypoint wiring, privileged dispatch and genuine audit authorization remain false. After merge and exact-source convergence, this local preflight may be executed once read-only; only a partial-ready result may advance to a separately reviewed source/trust-boundary decision for protected credential use and production adapter/wiring work.

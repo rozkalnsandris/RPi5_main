@@ -175,3 +175,9 @@ Historical credential-placement, checkout, installer, failed-preflight and P10 a
 `PRODUCTION_MUTATION_STARTED=false`
 
 This document and its manifests prove source provenance only. They do not prove actual RPi5 services, files, permissions, credentials, App installation scope, replay storage, broker socket/service state, helper installation, deployed SHA, or production data.
+
+## Post-first-install local runtime-preflight source binding
+
+The separately authorized P9 source-auth convergence and broker first-install are now accepted historical #191 evidence, but they do not alter this document's source-vs-runtime boundary. The installed broker is intentionally inert and no source file may infer current credential/App scope or end-to-end dispatch readiness from installation receipts alone.
+
+The new local runtime prerequisite preflight is source-bound by `ops/deploy/hermes-deals-origin-runtime-prerequisite-preflight.json`. It may read only reviewed non-secret runtime code/registration/replay structures and credential metadata; it does not open the Source App private key and makes no GitHub API request. Consequently its maximum successful classification is `HERMES_ORIGIN_RUNTIME_PREFLIGHT_PARTIAL_READY`, with Source App installation scope and production replay/host-observation adapters explicitly unproven. Broker-entrypoint wiring, privileged dispatch, helper execution and genuine audit authorization remain false and separately gated.

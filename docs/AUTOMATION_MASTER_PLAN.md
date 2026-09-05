@@ -881,3 +881,35 @@ Current gate sequence:
 7. only a successful fresh broker preflight may lead to the still-separate broker first-install LIVE gate; genuine audit dispatch, privileged-dispatch enablement and runner retirement remain later independent gates.
 
 Neither this source authorization, this document, a future PR/merge, nor the observed old runtime blob authorizes `--apply`, broker installation, systemd mutation, credential content access/mutation, helper/audit execution, retry of the failed broker preflight, rollback, cleanup, deployment, DB/application mutation or runner retirement.
+
+## Current supersession — Hermes post-first-install local runtime prerequisite preflight source gate (2026-09-05)
+
+This section supersedes the runtime-upgrade sequencing immediately above while preserving it as historical evidence. Repository source still does not by itself prove current RPi5 runtime state.
+
+Accepted #191 continuity records that the separately owner-authorized P9 shared prerequisite upgrade completed PASS, a fresh broker default-mode preflight returned `HERMES_ORIGIN_BROKER_INSTALL_PREFLIGHT_READY`, and the separately owner-authorized broker first-install then returned `HERMES_ORIGIN_BROKER_INSTALLED_FAIL_CLOSED` with nine reviewed files materialized and the broker socket activated. Those one-shot LIVE authorizations are consumed/non-reusable. Fresh read-only poststate at that checkpoint found the nine reviewed target blobs exact, the shared P9 prerequisite exact, and the socket enabled/active/listening. This is historical runtime evidence only; it must be revalidated before later trust decisions.
+
+Focused source review after first-install found an important remaining boundary. The production `AuthorizationReplayAvailability` and `HermesOriginHostObservationProvider` are still Protocol seams only, and the installed broker entrypoint remains inert with `BROKER_ENTRYPOINT_WIRED=false`. Existing `P9SourceInstallationTokenProvider` can prove the Source App installation/repository scope only by using the protected private key to sign a JWT and mint a repository-scoped token. Therefore a preflight that promises both `credential_content_read=false` and current key-to-App installation-scope proof would be dishonest.
+
+This source gate adds `scripts/preflight-hermes-deals-origin-runtime-prerequisites.py` plus `ops/deploy/hermes-deals-origin-runtime-prerequisite-preflight.json`. The operator is root-read-context only but mutation-free. It validates only the locally provable prerequisites: credential path metadata without opening the credential, immutable read-only P9 replay-store structure, fixed registration/helper/probe/evidence-root identities, exact installed broker/shared-prerequisite source blobs, and read-only broker socket status/path metadata. It performs no GitHub API request, socket request, helper launch, filesystem mutation or systemd mutation.
+
+A successful run deliberately returns `HERMES_ORIGIN_RUNTIME_PREFLIGHT_PARTIAL_READY`, not full runtime readiness. Its receipt must keep `source_app_installation_scope_proven=false`, `durable_replay_adapter_runtime_proven=false`, `host_observation_adapter_runtime_proven=false`, `broker_entrypoint_wired=false`, `privileged_dispatch_enabled=false` and `genuine_audit_authorized=false`. This prevents local metadata success from being misrepresented as end-to-end dispatch readiness.
+
+Current gate sequence:
+
+1. complete this source-only local-runtime-preflight operator/contract/tests/docs through focused review, Draft PR, exact-head CI/review and Ready;
+2. STOP for a separate explicit owner MERGE decision;
+3. after merge, freshly bind exact `RPi5_main/main` and exact-main CI, then separately converge the trusted checkout if it is behind the merged source;
+4. run the merged operator once in read-only root context; any failure is fail-closed and is not retry authority;
+5. only `HERMES_ORIGIN_RUNTIME_PREFLIGHT_PARTIAL_READY` may advance to a separate trust-boundary source decision that defines how the protected Source App credential may be used for current installation/repository-scope proof and implements the concrete replay/host-observation adapters before any broker-entrypoint wiring;
+6. genuine Hermes audit, privileged dispatch enablement, runner retirement and later Phase/P11 work remain separate owner gates.
+
+`PHASE4_CURRENT_WORK_ITEM=HERMES_LOCAL_RUNTIME_PREREQUISITE_PREFLIGHT_SOURCE`
+`BROKER_FIRST_INSTALL=PASS_CONSUMED`
+`LOCAL_RUNTIME_PREFLIGHT_IMPLEMENTED=true`
+`SOURCE_APP_INSTALLATION_SCOPE_PROVEN=false`
+`DURABLE_REPLAY_ADAPTER_RUNTIME_PROVEN=false`
+`HOST_OBSERVATION_ADAPTER_RUNTIME_PROVEN=false`
+`BROKER_ENTRYPOINT_WIRED=false`
+`PRIVILEGED_DISPATCH_ENABLED=false`
+`GENUINE_HERMES_AUDIT_AUTHORIZED=false`
+`PRODUCTION_MUTATION_STARTED=false`
