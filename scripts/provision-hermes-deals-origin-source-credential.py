@@ -44,7 +44,14 @@ class ProvisioningError(RuntimeError):
 
 def _git(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["/usr/bin/git", "-C", str(REPO_ROOT), *args],
+        [
+            "/usr/bin/git",
+            "-c",
+            f"safe.directory={REPO_ROOT}",
+            "-C",
+            str(REPO_ROOT),
+            *args,
+        ],
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

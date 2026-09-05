@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import stat
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -150,12 +151,33 @@ class HermesSourceCredentialProvisionerTests(unittest.TestCase):
         self.assertFalse(value["automatic_rollback"])
         self.assertFalse(value["automatic_cleanup"])
 
+    def test_git_trust_is_exact_command_scoped_without_env_widening(self) -> None:
+        completed = subprocess.CompletedProcess([], 0, stdout="ok\n", stderr="")
+        with mock.patch.object(provisioner.subprocess, "run", return_value=completed) as run:
+            provisioner._git("rev-parse", "--verify", "HEAD")
+        argv = run.call_args.args[0]
+        self.assertEqual(argv[0:3], [
+            "/usr/bin/git",
+            "-c",
+            f"safe.directory={provisioner.REPO_ROOT}",
+        ])
+        self.assertEqual(argv[3:5], ["-C", str(provisioner.REPO_ROOT)])
+        self.assertNotIn("safe.directory=*", argv)
+        self.assertNotIn("--global", argv)
+        self.assertNotIn("--system", argv)
+        self.assertEqual(
+            run.call_args.kwargs["env"],
+            {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"},
+        )
+
     def test_source_uses_hidden_tty_and_required_exclusive_guards(self) -> None:
         source = SCRIPT.read_text(encoding="utf-8")
         self.assertIn('open("/dev/tty", "r+"', source)
         self.assertIn("hidden[3] &= ~termios.ECHO", source)
         self.assertIn("os.O_EXCL", source)
         self.assertIn('("O_NOFOLLOW", "O_CLOEXEC")', source)
+        self.assertIn('f"safe.directory={REPO_ROOT}"', source)
+        self.assertNotIn("safe.directory=*", source)
         self.assertNotIn("os.environ", source)
         self.assertNotIn("sys.stdin.read", source)
 
