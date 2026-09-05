@@ -1,0 +1,98 @@
+{
+  "deliberately_unproven": {
+    "broker_entrypoint_wired": false,
+    "durable_replay_adapter_runtime_proven": false,
+    "genuine_hermes_audit_authorized": false,
+    "host_observation_adapter_runtime_proven": false,
+    "privileged_dispatch_enabled": false,
+    "source_app_installation_scope": true,
+    "source_app_reason": "proving runtime key-to-App installation scope requires credential use; this gate forbids credential content reads and GitHub API requests"
+  },
+  "fail_result": "FAIL_CLOSED",
+  "immutable_implementation_baseline": "2550e77f6cb811ca6f10b49ef0b2fef554d64869",
+  "issue": 191,
+  "local_runtime_checks": {
+    "broker_runtime": "exact nine broker-owned targets plus exact shared P9 prerequisite from ops/deploy/hermes-deals-origin-broker-installer.json",
+    "credential_metadata_only": {
+      "content_read": false,
+      "group": "root",
+      "mode": "0600",
+      "owner": "root",
+      "path": "/etc/rozkalns-hermes-deals-origin-broker/source-github-app.pem"
+    },
+    "durable_replay_store": {
+      "group": "root",
+      "mode": "0600",
+      "nonempty_wal_allowed": false,
+      "owner": "root",
+      "path": "/var/lib/rozkalns-deploy-executor-p9/state.sqlite3",
+      "sqlite_open": "mode=ro&immutable=1"
+    },
+    "evidence_root": {
+      "group": "root",
+      "mode": "0700",
+      "owner": "root",
+      "path": "/var/lib/hermes-deals-audits/origin-path-audit/evidence"
+    },
+    "helper": {
+      "git_blob": "51bb23cc6c2083ab7c8b4e81ba82dd880e46d673",
+      "group": "root",
+      "mode": "0755",
+      "owner": "root",
+      "path": "/usr/local/sbin/hermes-deals-origin-path-rpi5-pull-dispatch"
+    },
+    "probe": {
+      "git_blob": "2362e8eb578a7279c38fe4ed2a7d1edd05df891a",
+      "group": "root",
+      "mode": "0755",
+      "owner": "root",
+      "path": "/usr/local/libexec/hermes-deals-audits/origin-path-probe.py"
+    },
+    "registration": {
+      "group": "root",
+      "mode": "0600",
+      "owner": "root",
+      "path": "/etc/hermes-deals-audits.d/origin-path-rpi5-pull.json",
+      "schema": "rozkalns.hermes-deals.origin-path-rpi5-pull-registration.v1"
+    },
+    "socket": {
+      "active": true,
+      "enabled": true,
+      "group": "rozkalns-deploy-executor",
+      "mode": "0660",
+      "path": "/run/rozkalns-hermes-deals-origin-broker/request.sock",
+      "substate": "listening",
+      "unit": "rozkalns-hermes-deals-origin-broker.socket"
+    }
+  },
+  "next_gate_after_partial_ready": "separate source/trust-boundary reconciliation for credential-using Source App scope proof and concrete replay/host-observation adapters before broker-entrypoint wiring",
+  "operator": {
+    "credential_content_read_implemented": false,
+    "helper_execution_implemented": false,
+    "mutation_implemented": false,
+    "network_request_implemented": false,
+    "path": "scripts/preflight-hermes-deals-origin-runtime-prerequisites.py",
+    "root_read_context_required": true,
+    "socket_request_implemented": false,
+    "source_blob": "af33b5cdc4982fc1ee5660927eb51f57d97dc27c"
+  },
+  "phase": 4,
+  "repository": "rozkalnsandris/RPi5_main",
+  "safety": {
+    "automatic_cleanup": false,
+    "automatic_retry": false,
+    "automatic_rollback": false,
+    "credential_content_read": false,
+    "credential_mutation": false,
+    "filesystem_mutation": false,
+    "github_api_request": false,
+    "helper_execution": false,
+    "production_mutation_started": false,
+    "socket_request": false,
+    "systemd_mutation": false
+  },
+  "schema": "rozkalns.hermes-deals.origin-runtime-prerequisite-preflight-contract.v1",
+  "source_gate": "HERMES_RUNTIME_PREREQUISITE_PREFLIGHT_SOURCE",
+  "success_result": "HERMES_ORIGIN_RUNTIME_PREFLIGHT_PARTIAL_READY",
+  "success_semantics": "local runtime identities and replay-store structure are proven read-only; Source App scope and production adapters remain separately unproven"
+}
