@@ -37,7 +37,7 @@ SYSTEMCTL_MUTATIONS = (
 )
 
 INSTALL_MUTATION_BUDGET = (
-    ("trusted-file-materialization", 10),
+    ("trusted-file-materialization", 9),
     ("systemd-daemon-reload", 1),
     ("systemd-socket-enable-start", 1),
 )
@@ -93,12 +93,6 @@ TARGETS = (
         FILE_MODE,
     ),
     Target(
-        "ops/lib/deploy_executor/p9_source_auth.py",
-        Path("/usr/local/lib/rozkalns-deploy-executor/deploy_executor/p9_source_auth.py"),
-        "130fc36a22bb4ace500b022c3defcccbf0893012",
-        FILE_MODE,
-    ),
-    Target(
         "ops/bin/rozkalns-hermes-deals-origin-broker",
         Path("/usr/local/libexec/rozkalns-hermes-deals-origin-broker"),
         "211b968b0c8ef6a0a7d73ce50a53d6bac7d2cc2f",
@@ -114,6 +108,16 @@ TARGETS = (
         "ops/systemd/rozkalns-hermes-deals-origin-broker@.service",
         Path("/etc/systemd/system/rozkalns-hermes-deals-origin-broker@.service"),
         "2a304e70550f17092b9cafd365bbf6d05d23893b",
+        FILE_MODE,
+    ),
+)
+
+
+SHARED_PREREQUISITES = (
+    Target(
+        "ops/lib/deploy_executor/p9_source_auth.py",
+        Path("/usr/local/lib/rozkalns-deploy-executor/deploy_executor/p9_source_auth.py"),
+        "130fc36a22bb4ace500b022c3defcccbf0893012",
         FILE_MODE,
     ),
 )
@@ -245,15 +249,78 @@ def _group_preflight() -> None:
         _fail("required broker socket group identity drifted")
 
 
+def _read_fd_bounded(fd: int, maximum_bytes: int) -> bytes:
+    chunks: list[bytes] = []
+    remaining = maximum_bytes + 1
+    while remaining > 0:
+        chunk = os.read(fd, min(64 * 1024, remaining))
+        if not chunk:
+            break
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    value = b"".join(chunks)
+    if len(value) > maximum_bytes:
+        _fail("shared prerequisite exceeds the reviewed source size")
+    return value
+
+
+def _require_shared_prerequisite(target: Target, desired: bytes) -> None:
+    try:
+        before = os.lstat(target.target_path)
+    except FileNotFoundError:
+        _fail(f"required shared prerequisite is absent: {target.target_path}")
+    if stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode):
+        _fail(f"shared prerequisite is not a regular non-symlink file: {target.target_path}")
+    if before.st_uid != ROOT_UID or before.st_gid != ROOT_GID:
+        _fail(f"shared prerequisite owner/group drifted: {target.target_path}")
+    if stat.S_IMODE(before.st_mode) != target.mode:
+        _fail(f"shared prerequisite mode drifted: {target.target_path}")
+    for required in ("O_NOFOLLOW", "O_CLOEXEC"):
+        if not hasattr(os, required):
+            _fail(f"required shared prerequisite read guard is unavailable: {required}")
+
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
+    try:
+        fd = os.open(target.target_path, flags)
+    except OSError as exc:
+        _fail(f"unable to open shared prerequisite safely: {target.target_path}: {exc.strerror}")
+    try:
+        opened = os.fstat(fd)
+        if not stat.S_ISREG(opened.st_mode):
+            _fail(f"opened shared prerequisite is not regular: {target.target_path}")
+        if opened.st_uid != ROOT_UID or opened.st_gid != ROOT_GID:
+            _fail(f"opened shared prerequisite owner/group drifted: {target.target_path}")
+        if stat.S_IMODE(opened.st_mode) != target.mode:
+            _fail(f"opened shared prerequisite mode drifted: {target.target_path}")
+        current = _read_fd_bounded(fd, len(desired))
+        if current != desired or _git_blob(current) != target.expected_blob:
+            _fail(f"shared prerequisite content differs from reviewed source: {target.target_path}")
+        try:
+            path_now = os.stat(target.target_path, follow_symlinks=False)
+        except OSError as exc:
+            _fail(f"shared prerequisite path changed during validation: {target.target_path}: {exc.strerror}")
+        if (path_now.st_dev, path_now.st_ino) != (opened.st_dev, opened.st_ino):
+            _fail(f"shared prerequisite changed during validation: {target.target_path}")
+    finally:
+        os.close(fd)
+
+
+def _require_shared_prerequisites(expected_sha: str) -> None:
+    for target in SHARED_PREREQUISITES:
+        _require_secure_parent_chain(target.target_path)
+        desired = _source_bytes(expected_sha, target)
+        _require_shared_prerequisite(target, desired)
+
+
 def _existing_target_state(target: Target, desired: bytes) -> str:
     del desired
     try:
         os.lstat(target.target_path)
     except FileNotFoundError:
         return "absent"
-    # This first-install capability intentionally does not read existing runtime
-    # files, including systemd units. Any pre-existing target is ambiguous and
-    # therefore requires a separate reconciliation source gate.
+    # Broker-owned first-install targets remain O_EXCL-only. Existing shared
+    # dependencies are modeled separately in SHARED_PREREQUISITES and are never
+    # adopted, overwritten, chmodded or chowned by this installer.
     _fail(f"install target already exists and requires separate reconciliation: {target.target_path}")
 
 
@@ -262,6 +329,7 @@ def _preflight(expected_sha: str) -> tuple[tuple[Target, bytes, str], ...]:
     _require_exact_checkout(expected_sha)
     _group_preflight()
     _credential_metadata_preflight()
+    _require_shared_prerequisites(expected_sha)
 
     prepared: list[tuple[Target, bytes, str]] = []
     for target in TARGETS:
@@ -331,6 +399,7 @@ def _receipt(
         "source_sha": expected_sha,
         "immutable_implementation_baseline": IMMUTABLE_IMPLEMENTATION_BASELINE,
         "install_target_count": len(TARGETS),
+        "shared_prerequisite_count": len(SHARED_PREREQUISITES),
         "files_materialized": files_materialized,
         "credential_content_read": False,
         "credential_mutated": False,
@@ -361,6 +430,10 @@ def apply(expected_sha: str) -> str:
         mutation_started = True
         _write_new_target(target, desired)
         materialized += 1
+
+    # Re-prove the external shared dependency immediately before systemd
+    # activation. It remains outside the broker mutation surface.
+    _require_shared_prerequisites(expected_sha)
 
     mutation_started = True
     _systemctl("daemon-reload")
