@@ -81,12 +81,14 @@ Issue #372 adds a separately reviewable first-install-only source provisioner:
 
 `scripts/provision-hermes-deals-origin-source-credential.py`
 
-`credential_provisioner_source_blob=f087fd5a52e2a65b79cfc4c7d68c27e8ddaf95b2`
+`credential_provisioner_source_blob=21df577532a2f7491158319c30fff652bd64728e`
 
 The provisioner contract is intentionally narrower than generic file or secret placement:
 
 - exact reviewed `RPi5_main` checkout SHA is required and revalidated immediately before mutation;
+- root-side Git provenance uses only command-scoped `safe.directory=<exact resolved REPO_ROOT>`; wildcard trust and root global/system Git config mutation are forbidden;
 - the credential value is accepted only through hidden multiline `/dev/tty` input with terminal echo disabled; it is never accepted through argv, environment variables, GitHub, chat, stdout or stderr;
+- the downloaded PEM is not staged as an intermediate plaintext file on RPi5; keep the workstation copy protected and enter it only into the reviewed hidden TTY prompt for first-install placement;
 - only the two reviewed ASCII-armored private-key PEM envelopes are accepted, with bounded input size and canonical base64-text body checks;
 - target is fixed to `/etc/rozkalns-hermes-deals-origin-broker/source-github-app.pem`, `root:root 0600`;
 - its parent credential directory is fixed to `/etc/rozkalns-hermes-deals-origin-broker`, `root:root 0700`;
@@ -97,6 +99,11 @@ The provisioner contract is intentionally narrower than generic file or secret p
 - it performs no GitHub API request, token mint, App permission/repository-selection mutation, broker install, helper/audit execution or systemd action.
 
 This source provisioner does not itself authorize placement. Credential placement remains STRICT and requires a separate exact-source owner LIVE authorization. No credential value may appear in GitHub, chat or public evidence.
+
+
+### First LIVE placement attempt — pre-mutation source-trust failure
+
+The first owner-authorized credential-placement invocation after #376 failed closed with `reason=source SHA mismatch` and `mutation_started=false` before credential input or filesystem creation. The unprivileged wrapper had already matched exact main and the provisioner blob. Source review identified the root-side cause: the provisioner's intentionally minimal Git subprocess environment removed Git's documented `SUDO_UID` ownership exception, so root Git could reject the user-owned checkout before provenance commands completed. Issue #377 corrects this without widening environment trust: Git receives only command-scoped `safe.directory=<exact resolved REPO_ROOT>`. No retry is authorized by this source correction.
 
 ## Required continuation sequence
 
