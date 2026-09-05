@@ -244,9 +244,9 @@ Phase 3 exit decision:
 `CV_REPOSITORY_SELF_HOSTED_RUNNER_COUNT=0`
 `CV_LEGACY_RUNNER_RETIREMENT=PASS`
 
-### Phase 4 — Hermes Deals public-repository execution migration — CURRENT: #191 / P9 EXIT GATE MET / P10 SEPARATELY GATED
+### Phase 4 — Hermes Deals public-repository execution migration — CURRENT: #191 / P10 COMPLETE / RESIDUAL HERMES MIGRATION
 
-Phase 4 remains incomplete. Canonical current continuation is `RPi5_main#191`. Gate B source-App capability proof, Gate C least-privilege D1 credential correction, Gate D source/host convergence and READY eligibility are **PASS / COMPLETE**. The clean genuine P9 read-only authorization canary is now also **PASS**, while `ops-workflows#27` remains an eligibility/read-only canary record rather than P10 execution authority. Current mutable state must still be fresh-read before every consequential continuation.
+Phase 4 remains incomplete after the completed P10 ordinary deployment canary because residual Hermes Deals execution migration work remains. Canonical current continuation is `RPi5_main#191`. Gate B source-App capability proof, Gate C least-privilege D1 credential correction, Gate D source/host convergence, the clean genuine P9 read-only authorization canary, and the P10 ordinary Dashboard canary are **PASS / COMPLETE**. All one-time P10 LIVE authorizations are consumed/non-reusable. Current mutable state must still be fresh-read before every consequential continuation.
 
 Historical P9 failures remain non-reusable evidence. The first incident chain used malformed shell syntax and then a prohibited retry inside an already consumed STRICT envelope. The later clean-repeat #6 invocation was correctly formed but failed closed in `_preflight()` because its trusted baseline was stale, before `LazyP9StateStore` construction. A timing-recovery attempt then produced baseline evidence `1e2adbccd7d92533b2021f1fb7648f87a496001b6cb3703ae258941e44662bec`, but owner-authored `deploy-authorizations#7` was created at `2026-08-31T21:33:00Z`, twenty seconds after that baseline expired at `21:32:40Z`; exactly one P9 #7 invocation correctly stopped with the same stale-baseline error and was not retried. #5/#6/#7 and their baselines are consumed or expired historical evidence only.
 
@@ -259,8 +259,10 @@ Current classification is binding:
 `P9_EXIT_GATE=MET`
 `CLEAN_P9_REPEAT_REQUIRED=false`
 `P10_BLOCKED_BY_P9=false`
-`P10_EXECUTED=false`
-`P10_SEPARATE_LIVE_GATE_REQUIRED=true`
+`P10_EXECUTED=true`
+`P10_ORDINARY_CANARY_COMPLETE=true`
+`P10_REUSABLE_LIVE_AUTHORIZATION=false`
+`PHASE4_COMPLETE=false`
 
 Historical source evidence from the 2026-08-29 P9 isolated-auth and continuity chain; these pins are evidence only and must never be inferred to be current branch state:
 
@@ -456,13 +458,11 @@ If question 3 is `no` or question 5 is `yes`, do not make the change.
 
 ## Current next action
 
-**#191 / #236 / P10 CANDIDATE #28 — INSTALLER/STAGER SOURCE (#320) -> MERGE GATE -> EXACT-MAIN CI/PROVENANCE -> SEPARATE LIVE/ROOT INSTALLER/STAGER STOP:** P9 is complete, #319 is merged, and the exact Dashboard candidate remains `5f7739348f56398d0ba301c9320e1de0062838fc` with preserved candidate SHA-256 `c5a2adef8f7242833094a1c0cb8a8074392312567deeddd1228dc46c16cff5c0`. Post-#319 read-only evidence proves the bootstrap trust-anchor files and fixed staging tree are not yet installed. #28 therefore remains WAITING for the dedicated installer/stager source capability.
+**P10 COMPLETE — do not replay historical P10 gates.** The ordinary Dashboard P10 canary completed on 2026-09-03 and `ops-workflows#28` is closed/completed. Historical #320/#321 installer/stager, bootstrap, candidate-staging, PLAN and APPLY gates are completion evidence only; every one-time LIVE authorization from that chain is consumed/non-reusable.
 
-Finish PR #320 only through focused source review, exact-head CI and Ready. Then STOP for explicit `MERGE RPi5_main #320`. After an owner-authorized merge, freshly require exact-main CI and source/provenance revalidation. Source merge does not authorize the installer/stager live transaction, bootstrap execution, production release materialization or `current` transition.
+Phase 4 itself remains incomplete because residual Hermes Deals execution migration is still active. Before any new consequential action, re-read the latest `RPi5_main#191` continuation and current GitHub/source state and select only its first incomplete residual Hermes work item. Do not infer runtime state from this source document.
 
-The next live step, only after that post-merge evidence passes, is a **separate exact LIVE/root installer/stager authorization** bound to the merged RPi5 control SHA, exact Dashboard candidate/digest, exact preserved evidence identity, exact helper/module Git blobs, fixed staging/install destinations and the no-retry/no-cleanup/no-rollback mutation envelope. It may install only the fixed bootstrap trust anchor and fixed staging tree; it must report zero production-release materializations, zero `current` swaps, zero P10 PLAN/APPLY and no package/service/systemd/Docker/network/credential mutation. After that transaction, STOP and perform only read-only proof of installed identities/staging plus a fresh production baseline.
-
-Only if that proof passes may a **different separate LIVE/root bootstrap authorization** be considered. Bootstrap success itself is another STOP. Only fresh post-bootstrap verification may make a new ordinary P10 PLAN authorization eligible. #28 remains WAITING until those gates are satisfied; no P10 APPLY, production deployment, cleanup, runner retirement or unrelated live mutation is authorized by PR #320, its eventual merge, or either source-only gate. Phase 6 Hermes Tech work remains deferred while this #191/#236 executor lane is current.
+P11/high-risk control-plane work remains later and must not inherit P10 authority. Any future MERGE or LIVE/runtime mutation still requires its own explicit owner gate.
 
 ## Current supersession — P10 post-#321 source state (2026-09-01)
 
