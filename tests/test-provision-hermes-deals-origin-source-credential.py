@@ -98,7 +98,7 @@ class HermesSourceCredentialProvisionerTests(unittest.TestCase):
             provisioner.ROOT_UID = old_uid
             provisioner.ROOT_GID = old_gid
 
-    def test_create_credential_is_exclusive_and_mode_bounded(self) -> None:
+    def test_create_credential_is_exclusive_mode_bounded_and_race_safe(self) -> None:
         old_path = provisioner.CREDENTIAL_PATH
         old_uid = provisioner.ROOT_UID
         old_gid = provisioner.ROOT_GID
@@ -115,9 +115,15 @@ class HermesSourceCredentialProvisionerTests(unittest.TestCase):
                 self.assertEqual(stat.S_IMODE(info.st_mode), 0o600)
                 self.assertEqual(path.read_bytes(), payload)
                 self.assertTrue(provisioner.MUTATION_STARTED)
-                with self.assertRaises(FileExistsError):
+
+                provisioner.MUTATION_STARTED = False
+                with self.assertRaisesRegex(
+                    provisioner.ProvisioningError,
+                    "credential file creation failed after mutation entry; STOP",
+                ):
                     with mock.patch.object(provisioner.os, "fchown", return_value=None):
                         provisioner._create_credential(payload)
+                self.assertTrue(provisioner.MUTATION_STARTED)
         finally:
             provisioner.CREDENTIAL_PATH = old_path
             provisioner.ROOT_UID = old_uid
