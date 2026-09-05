@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/install-hermes-deals-origin-broker.py"
@@ -50,6 +51,30 @@ class HermesOriginBrokerInstallerTests(unittest.TestCase):
             "ce013625030ba8dba906f756967f9e9ca394464a",
         )
 
+    def test_git_trust_is_exact_command_scoped_without_env_widening(self) -> None:
+        completed = mock.Mock(returncode=0, stdout=b"ok\n", stderr=b"")
+        with mock.patch.object(installer.subprocess, "run", return_value=completed) as run:
+            installer._git("rev-parse", "HEAD")
+        argv = run.call_args.args[0]
+        self.assertEqual(
+            argv[:5],
+            (
+                str(installer.GIT),
+                "-c",
+                f"safe.directory={installer.ROOT}",
+                "-C",
+                str(installer.ROOT),
+            ),
+        )
+        self.assertNotIn("safe.directory=*", argv)
+        self.assertNotIn("--global", argv)
+        self.assertNotIn("--system", argv)
+        self.assertEqual(
+            run.call_args.kwargs["env"],
+            {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"},
+        )
+        self.assertEqual(SCRIPT.read_text(encoding="utf-8").count("str(GIT)"), 1)
+
     def test_installer_manifest_is_bound_to_script_and_exact_targets(self) -> None:
         value = json.loads(MANIFEST.read_text(encoding="utf-8"))
         self.assertEqual(
@@ -71,6 +96,12 @@ class HermesOriginBrokerInstallerTests(unittest.TestCase):
                 for target in installer.TARGETS
             ],
         )
+        self.assertEqual(
+            value["installer"]["git_trust_scope"],
+            "COMMAND_ONLY_EXACT_REPO_ROOT",
+        )
+        self.assertFalse(value["installer"]["git_safe_directory_wildcard"])
+        self.assertFalse(value["installer"]["git_global_or_system_config_mutation"])
         safety = value["source_safety_state"]
         self.assertFalse(safety["live_install_eligible"])
         self.assertFalse(safety["runtime_preflight_proven"])
