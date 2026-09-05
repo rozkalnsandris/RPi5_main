@@ -913,3 +913,32 @@ Current gate sequence:
 `PRIVILEGED_DISPATCH_ENABLED=false`
 `GENUINE_HERMES_AUDIT_AUTHORIZED=false`
 `PRODUCTION_MUTATION_STARTED=false`
+
+## Current supersession — Hermes pull-helper first-install prerequisite source gate (2026-09-05)
+
+This section supersedes the local-runtime-preflight next-action wording immediately above. Earlier Phase 4 sections remain historical evidence only; repository source never proves current host state by itself.
+
+The owner executed the merged local runtime prerequisite preflight once on exact `RPi5_main=e23234f7a9308211a0d964a791e2b0f70b587818`. It failed closed before mutation because `/etc/hermes-deals-audits.d/origin-path-rpi5-pull.json` was absent. The receipt explicitly kept filesystem/systemd mutation, credential-content access, GitHub API request, socket request, helper execution, privileged dispatch and genuine audit false. Focused read-only follow-up found the complete #834 runner-independent bundle absent: helper, probe, registration, evidence root and fixed `rpi5` evidence directory. Shared parents `/usr/local/sbin`, `/usr/local/libexec/hermes-deals-audits`, `/etc/hermes-deals-audits.d` and `/var/lib` remain external read-only prerequisites.
+
+Hermes Deals #834 / PR #840 already defined this state as intentionally deferred: PR #840 merged the runner-independent helper at exact reviewed source `2f47f64ab15e767f4e53ad182326e64e313d5094`, helper blob `51bb23cc6c2083ab7c8b4e81ba82dd880e46d673`, and probe blob `2362e8eb578a7279c38fe4ed2a7d1edd05df891a`, while explicitly requiring a later separate installation source/live slice. The old self-hosted-runner installer is not eligible because it mutates a different dispatcher/config/sudoers surface and does not create the runner-independent registration.
+
+This source gate adds a capability-specific first-install operator and machine contract. The Hermes source checkout path and source SHA are fixed, not caller-selected. Default mode is read-only preflight; `--apply` is root-only and separately LIVE-gated. The owned mutation surface is exactly four new `0700` root directories under `/var/lib/hermes-deals-audits/.../evidence/rpi5` plus three exact files: helper `0755`, probe `0755`, and canonical registration `0600`. Every owned target is absent-only; pre-existing state fails closed with no adoption or overwrite. No systemd, credential, GitHub API, socket, helper/audit, deploy, runner or data mutation exists in this installer.
+
+The installer intentionally does not create its Hermes source checkout. A separate future LIVE scope must prepare the fixed detached clean checkout `<RPi5-checkout-parent>/hermes-deals-origin-pull-trusted` at exact `2f47f64...` using only reviewed Git fetch/worktree operations before installer preflight. That checkout mutation is outside the root installer budget.
+
+The local runtime preflight is also corrected to validate the fixed `/var/lib/hermes-deals-audits/origin-path-audit/evidence/rpi5` directory required by #834, in addition to the evidence root.
+
+`PHASE4_CURRENT_WORK_ITEM=HERMES_ORIGIN_PULL_HELPER_FIRST_INSTALL_SOURCE`
+`LOCAL_RUNTIME_PREFLIGHT=FAIL_CLOSED_MISSING_PULL_HELPER_BUNDLE`
+`HELPER_INSTALLER_IMPLEMENTED=true`
+`HELPER_INSTALL_TARGET_DIRECTORIES=4`
+`HELPER_INSTALL_TARGET_FILES=3`
+`HELPER_INSTALL_PERFORMED=false`
+`HERMES_TRUSTED_SOURCE_CHECKOUT_PREPARED=false`
+`SOURCE_APP_INSTALLATION_SCOPE_PROVEN=false`
+`BROKER_ENTRYPOINT_WIRED=false`
+`PRIVILEGED_DISPATCH_ENABLED=false`
+`GENUINE_HERMES_AUDIT_AUTHORIZED=false`
+`PRODUCTION_MUTATION_STARTED=false`
+
+Current sequence: source review/Draft PR/CI/Ready → explicit MERGE → fresh merged-source validation → separately LIVE-converge RPi5 trusted checkout if needed → separately LIVE-prepare the exact Hermes detached source checkout → one default-mode helper-installer preflight → only then a separate exact root LIVE helper first-install → read-only poststate → one fresh local runtime prerequisite preflight. Source App credential use, concrete production adapters, broker-entrypoint wiring, genuine audit and runner retirement remain later independent gates.

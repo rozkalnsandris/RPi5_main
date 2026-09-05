@@ -1,0 +1,168 @@
+{
+  "directory_targets": [
+    {
+      "group": "root",
+      "mode": "0700",
+      "owner": "root",
+      "path": "/var/lib/hermes-deals-audits"
+    },
+    {
+      "group": "root",
+      "mode": "0700",
+      "owner": "root",
+      "path": "/var/lib/hermes-deals-audits/origin-path-audit"
+    },
+    {
+      "group": "root",
+      "mode": "0700",
+      "owner": "root",
+      "path": "/var/lib/hermes-deals-audits/origin-path-audit/evidence"
+    },
+    {
+      "group": "root",
+      "mode": "0700",
+      "owner": "root",
+      "path": "/var/lib/hermes-deals-audits/origin-path-audit/evidence/rpi5"
+    }
+  ],
+  "file_targets": [
+    {
+      "group": "root",
+      "mode": "0755",
+      "owner": "root",
+      "path": "/usr/local/sbin/hermes-deals-origin-path-rpi5-pull-dispatch",
+      "source": "helper"
+    },
+    {
+      "group": "root",
+      "mode": "0755",
+      "owner": "root",
+      "path": "/usr/local/libexec/hermes-deals-audits/origin-path-probe.py",
+      "source": "probe"
+    },
+    {
+      "group": "root",
+      "mode": "0600",
+      "owner": "root",
+      "path": "/etc/hermes-deals-audits.d/origin-path-rpi5-pull.json",
+      "source": "generated-exact-registration"
+    }
+  ],
+  "future_live_precondition": {
+    "checkout_allowed_git_mutations": [
+      "git fetch origin main",
+      "git worktree add --detach <fixed-target> <exact-sha>"
+    ],
+    "checkout_creation_is_outside_installer_mutation_budget": true,
+    "checkout_creation_requires_separate_explicit_live_scope": true,
+    "checkout_exact_sha": "2f47f64ab15e767f4e53ad182326e64e313d5094",
+    "checkout_manager_repository_derivation": "RPi5_CHECKOUT_PARENT/hermes-deals",
+    "checkout_manager_repository_name": "hermes-deals",
+    "checkout_target_derivation": "RPi5_CHECKOUT_PARENT/hermes-deals-origin-pull-trusted",
+    "checkout_target_name": "hermes-deals-origin-pull-trusted",
+    "reset_rebase_clean_force_allowed": false,
+    "trusted_hermes_checkout_must_exist_before_installer_preflight": true
+  },
+  "hermes_source": {
+    "caller_selectable_path": false,
+    "caller_selectable_sha": false,
+    "checkout_required_state": "EXACT_SHA_DETACHED_CLEAN_CORRECT_ORIGIN_ANCESTOR_OF_LOCAL_ORIGIN_MAIN",
+    "origin": "https://github.com/rozkalnsandris/hermes-deals.git",
+    "repository": "rozkalnsandris/hermes-deals",
+    "sha": "2f47f64ab15e767f4e53ad182326e64e313d5094",
+    "trusted_checkout_derivation": "RPi5_CHECKOUT_PARENT/hermes-deals-origin-pull-trusted",
+    "trusted_checkout_name": "hermes-deals-origin-pull-trusted"
+  },
+  "installer": {
+    "apply_requires_root": true,
+    "default_mode": "READ_ONLY_PREFLIGHT",
+    "existing_owned_target_policy": "FAIL_CLOSED_NO_ADOPTION_NO_RECONCILIATION",
+    "first_install_only": true,
+    "immutable_rpi_baseline": "e23234f7a9308211a0d964a791e2b0f70b587818",
+    "path": "scripts/install-hermes-deals-origin-pull-helper.py",
+    "source_blob": "bd17987c06fdecf628b25356a1012038b8eea27e"
+  },
+  "issue": 191,
+  "mutation_budget": [
+    [
+      "trusted-directory-materialization",
+      4
+    ],
+    [
+      "trusted-file-materialization",
+      3
+    ]
+  ],
+  "phase": 4,
+  "registration": {
+    "capability": "origin-path-audit",
+    "git_blob": "eac8778b2c09e191ca2d3abac3a4f5e243cd41c3",
+    "group": "root",
+    "helper_sha256": "f2f6e4ca823eb6c0872de0a5e92531ebacb076c48934c80654d84f3ef6f7e625",
+    "mode": "0600",
+    "owner": "root",
+    "path": "/etc/hermes-deals-audits.d/origin-path-rpi5-pull.json",
+    "probe_sha256": "96a8b5819ec85f27095c535f1a3be6cba7bac0e2a40a1132869fb39dc669ad43",
+    "registered_source_sha": "2f47f64ab15e767f4e53ad182326e64e313d5094",
+    "schema": "rozkalns.hermes-deals.origin-path-rpi5-pull-registration.v1",
+    "sha256": "b92564a93d67098c9ec264e88d48096ae1323430547ed14b6d22b590ac8591bc",
+    "size": 338
+  },
+  "repository": "rozkalnsandris/RPi5_main",
+  "reviewed_sources": {
+    "helper": {
+      "git_blob": "51bb23cc6c2083ab7c8b4e81ba82dd880e46d673",
+      "path": "tools/runner/origin_path_rpi5_pull_helper.py",
+      "sha256": "f2f6e4ca823eb6c0872de0a5e92531ebacb076c48934c80654d84f3ef6f7e625"
+    },
+    "probe": {
+      "git_blob": "2362e8eb578a7279c38fe4ed2a7d1edd05df891a",
+      "path": "tools/hermes_deals_origin_probe.py",
+      "sha256": "96a8b5819ec85f27095c535f1a3be6cba7bac0e2a40a1132869fb39dc669ad43"
+    }
+  },
+  "safety": {
+    "automatic_cleanup": false,
+    "automatic_retry": false,
+    "automatic_rollback": false,
+    "broker_dispatch_enabled": false,
+    "credential_content_read": false,
+    "credential_mutation": false,
+    "genuine_audit_authorized": false,
+    "github_api_request": false,
+    "helper_execution": false,
+    "socket_request": false,
+    "systemd_mutation": false
+  },
+  "schema": "rozkalns.hermes-deals.origin-pull-helper-installer-contract.v1",
+  "shared_parents": [
+    {
+      "group": "root",
+      "mode": "0755",
+      "mutation": false,
+      "owner": "root",
+      "path": "/usr/local/sbin"
+    },
+    {
+      "group": "root",
+      "mode": "0755",
+      "mutation": false,
+      "owner": "root",
+      "path": "/usr/local/libexec/hermes-deals-audits"
+    },
+    {
+      "group": "root",
+      "mode": "0755",
+      "mutation": false,
+      "owner": "root",
+      "path": "/etc/hermes-deals-audits.d"
+    },
+    {
+      "group": "root",
+      "mode": "0755",
+      "mutation": false,
+      "owner": "root",
+      "path": "/var/lib"
+    }
+  ]
+}

@@ -31,6 +31,7 @@ REGISTRATION = Path("/etc/hermes-deals-audits.d/origin-path-rpi5-pull.json")
 HELPER = Path("/usr/local/sbin/hermes-deals-origin-path-rpi5-pull-dispatch")
 PROBE = Path("/usr/local/libexec/hermes-deals-audits/origin-path-probe.py")
 EVIDENCE_ROOT = Path("/var/lib/hermes-deals-audits/origin-path-audit/evidence")
+MACHINE_ROOT = EVIDENCE_ROOT / "rpi5"
 SOCKET_UNIT = "rozkalns-hermes-deals-origin-broker.socket"
 SOCKET_PATH = Path("/run/rozkalns-hermes-deals-origin-broker/request.sock")
 REGISTRATION_SCHEMA = "rozkalns.hermes-deals.origin-path-rpi5-pull-registration.v1"
@@ -235,6 +236,7 @@ def _registration_and_helper() -> str:
         if hashlib.sha256(raw).hexdigest() != expected_sha256 or _git_blob(raw) != expected_blob:
             _fail(f"Hermes helper/probe identity drifted: {path}")
     _require_directory_metadata(EVIDENCE_ROOT, mode=0o700)
+    _require_directory_metadata(MACHINE_ROOT, mode=0o700)
     return source_sha
 
 

@@ -28,6 +28,12 @@
       "path": "/var/lib/rozkalns-deploy-executor-p9/state.sqlite3",
       "sqlite_open": "mode=ro&immutable=1"
     },
+    "evidence_machine_root": {
+      "group": "root",
+      "mode": "0700",
+      "owner": "root",
+      "path": "/var/lib/hermes-deals-audits/origin-path-audit/evidence/rpi5"
+    },
     "evidence_root": {
       "group": "root",
       "mode": "0700",
@@ -74,7 +80,7 @@
     "path": "scripts/preflight-hermes-deals-origin-runtime-prerequisites.py",
     "root_read_context_required": true,
     "socket_request_implemented": false,
-    "source_blob": "af33b5cdc4982fc1ee5660927eb51f57d97dc27c"
+    "source_blob": "a817df1830b05355bbf1edd62b260e29d1f0f11a"
   },
   "phase": 4,
   "repository": "rozkalnsandris/RPi5_main",

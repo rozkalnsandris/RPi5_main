@@ -16,6 +16,7 @@ test:
 	python3 ./tests/test-deploy-executor-hermes-deals-origin-source-auth-helper-launch.py
 	python3 ./tests/test-deploy-executor-hermes-deals-origin-source-integration.py
 	python3 ./tests/test-hermes-deals-origin-runtime-prerequisite-preflight.py
+	python3 ./tests/test-install-hermes-deals-origin-pull-helper.py
 	python3 ./tests/test-deploy-executor-control-center-postcanary.py
 	python3 ./tests/test-deploy-executor-p9-control-baseline-failfast.py
 	python3 ./tests/test-deploy-executor-p9-freshness-handoff.py
