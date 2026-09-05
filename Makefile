@@ -27,6 +27,7 @@ test:
 	python3 ./tests/test-deploy-executor-p9-source-clock-repair.py
 	python3 ./tests/test-deploy-executor-p9-executor-auth-repair.py
 	python3 ./tests/test-deploy-executor-p9-source-repair-upgrade.py
+	python3 ./tests/test-deploy-executor-p9-hermes-source-auth-upgrade.py
 	python3 ./tests/test-deploy-executor-p9-registry-provenance-upgrade.py
 	python3 ./tests/test-deploy-executor-p9-final-lifecycle-baseline-repair.py
 	python3 ./tests/test-deploy-executor-p9-baseline-upgrade.py

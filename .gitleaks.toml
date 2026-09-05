@@ -11,4 +11,6 @@ regexes = [
   '''^c9d6b3898a9eda98ce83c5ce77e2bfd49f3703d8$''',
   '''^9649c6c38b4bce83ee535557dc7e8e335f8c08ad$''',
   '''^64736e040291e4b4d9b13ffceaac56fa5c7907ec$''',
+  '''^4cb441873df8245387f06ee55d637a9f7b11cdc8$''',
+  '''^130fc36a22bb4ace500b022c3defcccbf0893012$''',
 ]

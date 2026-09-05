@@ -1,0 +1,61 @@
+{
+  "next_gate": "SOURCE_PR_CI_READY_THEN_SEPARATE_MERGE_DECISION",
+  "operator": {
+    "apply_flag": "--apply",
+    "apply_requires_root": true,
+    "apply_requires_separate_explicit_live_authorization": true,
+    "automatic_cleanup": false,
+    "automatic_retry": false,
+    "automatic_rollback": false,
+    "credential_content_read": false,
+    "default_mode": "READ_ONLY_PREFLIGHT",
+    "exact_checkout_sha_required": true,
+    "fail_closed_after_first_mutation": true,
+    "git_global_or_system_config_mutation": false,
+    "git_safe_directory_wildcard": false,
+    "git_trust_scope": "COMMAND_ONLY_EXACT_REPO_ROOT",
+    "github_api_request": false,
+    "helper_execution": false,
+    "mutation_target_count": 1,
+    "source": "scripts/install-deploy-executor-p9-hermes-source-auth-upgrade.py",
+    "source_blob": "62fc0684efd8234fea274520ce3c5504c8378dc9",
+    "systemd_mutation": false
+  },
+  "replacement": {
+    "atomic_namespace_replace": true,
+    "fixed_temp_name": ".p9_source_auth.py.hermes-source-auth-upgrade.tmp",
+    "in_place_truncate_write": false,
+    "old_target_revalidated_immediately_before_replace": true,
+    "parent_chain": "ROOT_OWNED_NON_GROUP_OR_OTHER_WRITABLE_REAL_DIRECTORIES",
+    "parent_directory_fsync_after_replace": true,
+    "post_replace_exact_blob_metadata_verify": true,
+    "replace": "os.replace with same parent src_dir_fd/dst_dir_fd",
+    "target_open": "O_RDONLY|O_NOFOLLOW|O_CLOEXEC via parent dir_fd",
+    "temp_create": "O_RDWR|O_CREAT|O_EXCL|O_NOFOLLOW|O_CLOEXEC",
+    "temp_fsync_before_replace": true,
+    "temp_same_directory": true
+  },
+  "repository": "rozkalnsandris/RPi5_main",
+  "schema": "rozkalns.p9-hermes-source-auth-runtime-upgrade.v1",
+  "source_safety_state": {
+    "broker_install_authorized": false,
+    "broker_preflight_retry_authorized": false,
+    "genuine_hermes_audit_authorized": false,
+    "privileged_dispatch_enabled": false,
+    "production_mutation_started": false,
+    "runtime_upgrade_performed": false
+  },
+  "status": "SOURCE_ONLY_RUNTIME_UPGRADE_OPERATOR_REVIEWED_RUNTIME_UNPROVEN",
+  "target": {
+    "group": "root",
+    "hardlink_count_required": 1,
+    "mode": "0644",
+    "new_blob": "130fc36a22bb4ace500b022c3defcccbf0893012",
+    "new_blob_classification": "REVIEWED_CONTROL_AND_HERMES_EXACT_REPOSITORY_ALLOWLIST",
+    "old_blob": "4cb441873df8245387f06ee55d637a9f7b11cdc8",
+    "old_blob_classification": "REVIEWED_PRE_HERMES_SOURCE_ALLOWLIST",
+    "owner": "root",
+    "source": "ops/lib/deploy_executor/p9_source_auth.py",
+    "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/p9_source_auth.py"
+  }
+}
