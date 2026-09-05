@@ -38,7 +38,7 @@
   },
   "credential_provisioner": {
     "source": "scripts/provision-hermes-deals-origin-source-credential.py",
-    "source_blob": "f087fd5a52e2a65b79cfc4c7d68c27e8ddaf95b2",
+    "source_blob": "21df577532a2f7491158319c30fff652bd64728e",
     "exact_checkout_sha_required": true,
     "requires_root": true,
     "requires_separate_explicit_live_authorization": true,
@@ -74,7 +74,11 @@
     "fail_closed_after_first_mutation": true,
     "automatic_retry": false,
     "automatic_rollback": false,
-    "automatic_cleanup": false
+    "automatic_cleanup": false,
+    "git_trust_scope": "COMMAND_ONLY_EXACT_REPO_ROOT",
+    "git_safe_directory_wildcard": false,
+    "git_global_or_system_config_mutation": false,
+    "intermediate_plaintext_rpi5_file": false
   },
   "credential_metadata_precondition": {
     "path": "/etc/rozkalns-hermes-deals-origin-broker/source-github-app.pem",
@@ -103,7 +107,7 @@
     },
     {
       "source": "ops/lib/deploy_executor/hermes_deals_origin_helper_launch.py",
-      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_helper_launch.py",
+      "target": "/usr/local/libexec/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_helper_launch.py",
       "source_blob": "5f190ebdcfdbc2a12242843733cb9740202cc9bd",
       "owner": "root",
       "group": "root",
