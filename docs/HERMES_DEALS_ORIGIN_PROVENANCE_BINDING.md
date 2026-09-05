@@ -39,8 +39,29 @@ A runtime preflight must freshly resolve exact `rozkalnsandris/RPi5_main/main`; 
 
 Any target blob mismatch means the implementation provenance is stale. A new reviewed source gate must establish a new immutable implementation baseline before runtime preflight or LIVE installation can proceed.
 
+## Capability-specific installer source slice
+
+The reviewed first-install entrypoint is `scripts/install-hermes-deals-origin-broker.py`, with its machine-readable source contract in `ops/deploy/hermes-deals-origin-broker-installer.json`.
+
+`installer_source_blob=e020e547b7985e170758a39ff7b906c806c5052e`
+
+The installer is deliberately narrower than generic privileged shell access:
+
+- default invocation is read-only preflight; `--apply` requires root and a separate explicit LIVE owner authorization;
+- it requires an exact checkout SHA supplied by the operator, proves that SHA is descendant-or-equal to the immutable implementation baseline, verifies its own tracked source at that SHA, and verifies all ten frozen install-target Git blobs;
+- it checks only allowlisted runtime metadata: trusted root-owned parent directories, the fixed `rozkalns-deploy-executor` group, and source GitHub App credential **path/owner/group/mode only**;
+- it never reads credential contents and never creates, replaces, chmods or otherwise mutates credentials;
+- it is first-install-only: any pre-existing install target fails closed before mutation and requires a separate reconciliation source gate;
+- its apply surface is exactly ten reviewed file materializations followed by `systemctl daemon-reload` and `systemctl enable --now rozkalns-hermes-deals-origin-broker.socket`;
+- it does not directly start a broker service instance, run the Hermes helper, authorize a genuine audit, mutate App permissions, retire the runner, or enable the privileged dispatch path.
+
+The installed broker entrypoint remains the reviewed fail-closed source stub. Socket activation therefore establishes only the broker transport boundary; it does **not** authorize or execute the later genuine origin audit canary.
+
+The installer source does not convert source readiness into runtime readiness. `LIVE_INSTALL_ELIGIBLE` remains false until the installer slice is merged, exact-main provenance/CI is freshly rebound, and its bounded host preflight passes. A new exact-source LIVE authorization is required before `--apply`.
+
 ## Safety state
 
+`INSTALLER_SOURCE_IMPLEMENTED=true`  
 `SOURCE_READ_AUTHORITY_PROVEN=false`  
 `BROKER_ENTRYPOINT_WIRED=false`  
 `HELPER_PROCESS_LAUNCH_WIRED=false`  
@@ -51,6 +72,6 @@ Any target blob mismatch means the implementation provenance is stale. A new rev
 `RUNNER_RETIREMENT_ELIGIBLE=false`  
 `PRODUCTION_MUTATION_STARTED=false`
 
-This document and its manifest binding prove source provenance only. They do not prove actual RPi5 services, files, permissions, credentials, App installation scope, replay storage, broker socket/service state, helper installation, deployed SHA, or production data.
+This document and its manifests prove source provenance only. They do not prove actual RPi5 services, files, permissions, credentials, App installation scope, replay storage, broker socket/service state, helper installation, deployed SHA, or production data.
 
-After this source fix is separately merged, the next step is fresh merged-source CI/helper validation followed by a separate bounded **read-only runtime preflight**. Any host installation/activation remains a separate explicit LIVE owner gate; one genuine audit canary and runner retirement remain later separate gates.
+After this source fix is separately merged, the next step is fresh merged-source CI/helper validation followed by the bounded **read-only installer preflight**. Any host installation/activation remains a separate explicit LIVE owner gate; one genuine audit canary and runner retirement remain later separate gates.

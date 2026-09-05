@@ -1,0 +1,141 @@
+{
+  "schema": "rozkalns.hermes-deals.origin-broker-installer.v1",
+  "repository": "rozkalnsandris/RPi5_main",
+  "status": "SOURCE_INSTALLER_IMPLEMENTED_RUNTIME_UNPROVEN",
+  "installer": {
+    "source": "scripts/install-hermes-deals-origin-broker.py",
+    "source_blob": "e020e547b7985e170758a39ff7b906c806c5052e",
+    "immutable_implementation_baseline": "2550e77f6cb811ca6f10b49ef0b2fef554d64869",
+    "exact_checkout_sha_required": true,
+    "default_mode": "READ_ONLY_PREFLIGHT",
+    "apply_flag": "--apply",
+    "apply_requires_root": true,
+    "apply_requires_separate_explicit_live_authorization": true,
+    "first_install_only": true,
+    "preexisting_install_target_policy": "FAIL_CLOSED_RECONCILIATION_REQUIRED",
+    "credential_content_read": false,
+    "credential_mutation": false,
+    "helper_execution": false,
+    "genuine_audit_authorized": false,
+    "broker_dispatch_enabled": false,
+    "host_wiring_enabled": false,
+    "service_direct_start": false,
+    "socket_activation_only": true,
+    "systemd_mutations": [
+      [
+        "daemon-reload"
+      ],
+      [
+        "enable",
+        "--now",
+        "rozkalns-hermes-deals-origin-broker.socket"
+      ]
+    ],
+    "fail_closed_after_first_mutation": true,
+    "automatic_retry": false,
+    "automatic_rollback": false,
+    "automatic_cleanup": false
+  },
+  "credential_metadata_precondition": {
+    "path": "/etc/rozkalns-hermes-deals-origin-broker/source-github-app.pem",
+    "owner": "root",
+    "group": "root",
+    "mode": "0600",
+    "content_read": false
+  },
+  "socket_group_precondition": "rozkalns-deploy-executor",
+  "install_targets": [
+    {
+      "source": "ops/lib/deploy_executor/hermes_deals_origin_privileged_broker.py",
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_privileged_broker.py",
+      "source_blob": "2543278ee48f184a79ac67c70e7f77c06cfbd7c8",
+      "owner": "root",
+      "group": "root",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/hermes_deals_origin_source_auth.py",
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_source_auth.py",
+      "source_blob": "43640e9089cc39e96d472beb50e8653a5df5fa78",
+      "owner": "root",
+      "group": "root",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/hermes_deals_origin_helper_launch.py",
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_helper_launch.py",
+      "source_blob": "5f190ebdcfdbc2a12242843733cb9740202cc9bd",
+      "owner": "root",
+      "group": "root",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/hermes_deals_origin_canonical_revalidator.py",
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_canonical_revalidator.py",
+      "source_blob": "8c5d9d7746248b485b212cf601786924ba6e4d42",
+      "owner": "root",
+      "group": "root",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/hermes_deals_origin_host_evidence.py",
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_host_evidence.py",
+      "source_blob": "4358beb65a48ed72c82d0e99e1fc8fd49db88524",
+      "owner": "root",
+      "group": "root",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/hermes_deals_origin_broker_composition.py",
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_broker_composition.py",
+      "source_blob": "a7a9421527fb5b2ed0f250446dc257f0a9ac8a29",
+      "owner": "root",
+      "group": "root",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/p9_source_auth.py",
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/p9_source_auth.py",
+      "source_blob": "130fc36a22bb4ace500b022c3defcccbf0893012",
+      "owner": "root",
+      "group": "root",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/bin/rozkalns-hermes-deals-origin-broker",
+      "target": "/usr/local/libexec/rozkalns-hermes-deals-origin-broker",
+      "source_blob": "211b968b0c8ef6a0a7d73ce50a53d6bac7d2cc2f",
+      "owner": "root",
+      "group": "root",
+      "mode": "0755"
+    },
+    {
+      "source": "ops/systemd/rozkalns-hermes-deals-origin-broker.socket",
+      "target": "/etc/systemd/system/rozkalns-hermes-deals-origin-broker.socket",
+      "source_blob": "8eb05b83840b13b27e03e2bbb37d6d0bfc3697cb",
+      "owner": "root",
+      "group": "root",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/systemd/rozkalns-hermes-deals-origin-broker@.service",
+      "target": "/etc/systemd/system/rozkalns-hermes-deals-origin-broker@.service",
+      "source_blob": "2a304e70550f17092b9cafd365bbf6d05d23893b",
+      "owner": "root",
+      "group": "root",
+      "mode": "0644"
+    }
+  ],
+  "source_safety_state": {
+    "live_install_eligible": false,
+    "runtime_preflight_proven": false,
+    "broker_entrypoint_wired": false,
+    "helper_process_launch_wired": false,
+    "privileged_dispatch_enabled": false,
+    "host_wiring_enabled": false,
+    "genuine_hermes_audit_authorized": false,
+    "runner_retirement_eligible": false,
+    "production_mutation_started": false
+  },
+  "next_gate": "MERGE_THEN_FRESH_EXACT_MAIN_AND_BOUNDED_READ_ONLY_INSTALLER_PREFLIGHT"
+}
