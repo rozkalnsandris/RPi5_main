@@ -12,6 +12,16 @@
   },
   "eligible_source_sha": "2550e77f6cb811ca6f10b49ef0b2fef554d64869",
   "eligible_source_sha_status": "MERGED_SOURCE_RUNTIME_PREFLIGHT_REQUIRED",
+  "eligible_source_sha_semantics": "IMMUTABLE_PR_368_IMPLEMENTATION_BASELINE_NOT_CURRENT_CONTROL_PLANE",
+  "runtime_preflight_binding": {
+    "status": "RESOLVE_CURRENT_MAIN_AT_PREFLIGHT",
+    "repository": "rozkalnsandris/RPi5_main",
+    "main_ref": "main",
+    "required_relationship_to_eligible_source_sha": "DESCENDANT_OR_EQUAL",
+    "require_install_target_blob_identity_match": true,
+    "hardcoded_control_plane_sha": false
+  },
+  "provenance_contract_doc": "docs/HERMES_DEALS_ORIGIN_PROVENANCE_BINDING.md",
   "live_install_eligible": false,
   "source_read_authority": {
     "status": "SOURCE_COMPOSITION_IMPLEMENTED_RUNTIME_UNPROVEN",
@@ -54,7 +64,8 @@
     "durable_replay_adapter_runtime_proven": false,
     "host_observation_adapter_runtime_proven": false,
     "broker_entrypoint_wired": false,
-    "merged_source_sha": "2550e77f6cb811ca6f10b49ef0b2fef554d64869"
+    "merged_source_sha": "2550e77f6cb811ca6f10b49ef0b2fef554d64869",
+    "merged_source_sha_semantics": "PR_368_IMPLEMENTATION_MERGE_SHA_NOT_CURRENT_CONTROL_PLANE"
   },
   "transport": {
     "kind": "systemd-unix-stream-socket",
@@ -83,7 +94,9 @@
       "owner": "root",
       "group": "root",
       "mode": "0644",
-      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA"
+      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA",
+      "source_blob": "2543278ee48f184a79ac67c70e7f77c06cfbd7c8",
+      "identity_semantics": "IMMUTABLE_PR_368_IMPLEMENTATION_BLOB"
     },
     {
       "source": "ops/lib/deploy_executor/hermes_deals_origin_source_auth.py",
@@ -91,7 +104,9 @@
       "owner": "root",
       "group": "root",
       "mode": "0644",
-      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA"
+      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA",
+      "source_blob": "43640e9089cc39e96d472beb50e8653a5df5fa78",
+      "identity_semantics": "IMMUTABLE_PR_368_IMPLEMENTATION_BLOB"
     },
     {
       "source": "ops/lib/deploy_executor/hermes_deals_origin_helper_launch.py",
@@ -99,7 +114,9 @@
       "owner": "root",
       "group": "root",
       "mode": "0644",
-      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA"
+      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA",
+      "source_blob": "5f190ebdcfdbc2a12242843733cb9740202cc9bd",
+      "identity_semantics": "IMMUTABLE_PR_368_IMPLEMENTATION_BLOB"
     },
     {
       "source": "ops/lib/deploy_executor/hermes_deals_origin_canonical_revalidator.py",
@@ -107,7 +124,9 @@
       "owner": "root",
       "group": "root",
       "mode": "0644",
-      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA"
+      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA",
+      "source_blob": "8c5d9d7746248b485b212cf601786924ba6e4d42",
+      "identity_semantics": "IMMUTABLE_PR_368_IMPLEMENTATION_BLOB"
     },
     {
       "source": "ops/lib/deploy_executor/hermes_deals_origin_host_evidence.py",
@@ -115,7 +134,9 @@
       "owner": "root",
       "group": "root",
       "mode": "0644",
-      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA"
+      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA",
+      "source_blob": "4358beb65a48ed72c82d0e99e1fc8fd49db88524",
+      "identity_semantics": "IMMUTABLE_PR_368_IMPLEMENTATION_BLOB"
     },
     {
       "source": "ops/lib/deploy_executor/hermes_deals_origin_broker_composition.py",
@@ -123,7 +144,9 @@
       "owner": "root",
       "group": "root",
       "mode": "0644",
-      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA"
+      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA",
+      "source_blob": "a7a9421527fb5b2ed0f250446dc257f0a9ac8a29",
+      "identity_semantics": "IMMUTABLE_PR_368_IMPLEMENTATION_BLOB"
     },
     {
       "source": "ops/lib/deploy_executor/p9_source_auth.py",
@@ -131,7 +154,9 @@
       "owner": "root",
       "group": "root",
       "mode": "0644",
-      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA"
+      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA",
+      "source_blob": "130fc36a22bb4ace500b022c3defcccbf0893012",
+      "identity_semantics": "IMMUTABLE_PR_368_IMPLEMENTATION_BLOB"
     },
     {
       "source": "ops/bin/rozkalns-hermes-deals-origin-broker",
@@ -139,7 +164,9 @@
       "owner": "root",
       "group": "root",
       "mode": "0755",
-      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA"
+      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA",
+      "source_blob": "211b968b0c8ef6a0a7d73ce50a53d6bac7d2cc2f",
+      "identity_semantics": "IMMUTABLE_PR_368_IMPLEMENTATION_BLOB"
     },
     {
       "source": "ops/systemd/rozkalns-hermes-deals-origin-broker.socket",
@@ -147,7 +174,9 @@
       "owner": "root",
       "group": "root",
       "mode": "0644",
-      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA"
+      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA",
+      "source_blob": "8eb05b83840b13b27e03e2bbb37d6d0bfc3697cb",
+      "identity_semantics": "IMMUTABLE_PR_368_IMPLEMENTATION_BLOB"
     },
     {
       "source": "ops/systemd/rozkalns-hermes-deals-origin-broker@.service",
@@ -155,7 +184,9 @@
       "owner": "root",
       "group": "root",
       "mode": "0644",
-      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA"
+      "identity": "SOURCE_AT_ELIGIBLE_SOURCE_SHA",
+      "source_blob": "2a304e70550f17092b9cafd365bbf6d05d23893b",
+      "identity_semantics": "IMMUTABLE_PR_368_IMPLEMENTATION_BLOB"
     }
   ],
   "reviewed_helper_dependency": {
@@ -273,7 +304,7 @@
     "durable_replay_availability_adapter_runtime_proven": false
   },
   "next_gates": [
-    "perform the separate read-only runtime App credential-metadata replay-store registration helper broker socket and service preflight against eligible_source_sha",
+    "resolve current RPi5_main/main at preflight; require descendant-or-equal to eligible_source_sha and exact immutable install-target blob matches before the separate read-only runtime App credential-metadata replay-store registration helper broker socket and service preflight",
     "separate owner LIVE authorization for exact host installation/activation only if all source/runtime prerequisites pass",
     "separate STRICT authorization for one genuine read-only origin audit canary",
     "separate owner LIVE authorization for any runner retirement"
@@ -284,7 +315,7 @@
     "merge_commit_sha": "2550e77f6cb811ca6f10b49ef0b2fef554d64869"
   },
   "post_merge_source_evidence": {
-    "rpi5_main_sha": "2550e77f6cb811ca6f10b49ef0b2fef554d64869",
+    "evidence_scope": "PR_368_IMPLEMENTATION_BASELINE",
     "exact_main_ci": [
       {
         "workflow": "Validate",
@@ -307,6 +338,8 @@
     ],
     "hermes_repository_sha": "511c1566111983f809bc958bc4b68510771d3efb",
     "hermes_helper_blob": "51bb23cc6c2083ab7c8b4e81ba82dd880e46d673",
-    "runtime_state_proven": false
+    "runtime_state_proven": false,
+    "rpi5_main_sha": "2550e77f6cb811ca6f10b49ef0b2fef554d64869",
+    "rpi5_main_sha_semantics": "PR_368_IMPLEMENTATION_MERGE_SHA_NOT_CURRENT_CONTROL_PLANE"
   }
 }
