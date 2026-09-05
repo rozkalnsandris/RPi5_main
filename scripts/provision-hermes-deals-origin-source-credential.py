@@ -175,13 +175,19 @@ def _create_credential(payload: bytes) -> None:
             raise ProvisioningError("required credential file guard is unavailable")
         flags |= value
     MUTATION_STARTED = True
-    fd = os.open(CREDENTIAL_PATH, flags, CREDENTIAL_MODE)
     try:
-        os.fchown(fd, ROOT_UID, ROOT_GID)
-        os.fchmod(fd, CREDENTIAL_MODE)
-        _write_all(fd, payload)
-        os.fsync(fd)
-        info = os.fstat(fd)
+        fd = os.open(CREDENTIAL_PATH, flags, CREDENTIAL_MODE)
+    except OSError as exc:
+        raise ProvisioningError("credential file creation failed after mutation entry; STOP") from exc
+    try:
+        try:
+            os.fchown(fd, ROOT_UID, ROOT_GID)
+            os.fchmod(fd, CREDENTIAL_MODE)
+            _write_all(fd, payload)
+            os.fsync(fd)
+            info = os.fstat(fd)
+        except OSError as exc:
+            raise ProvisioningError("credential file materialization failed after mutation entry; STOP") from exc
         if (
             not stat.S_ISREG(info.st_mode)
             or info.st_uid != ROOT_UID
@@ -189,7 +195,7 @@ def _create_credential(payload: bytes) -> None:
             or stat.S_IMODE(info.st_mode) != CREDENTIAL_MODE
             or info.st_size != len(payload)
         ):
-            raise ProvisioningError("credential post-write metadata mismatch")
+            raise ProvisioningError("credential post-write metadata mismatch after mutation entry; STOP")
     finally:
         os.close(fd)
 
@@ -197,9 +203,12 @@ def _create_credential(payload: bytes) -> None:
 def _create_credential_directory() -> None:
     global MUTATION_STARTED
     MUTATION_STARTED = True
-    os.mkdir(CREDENTIAL_DIR, CREDENTIAL_DIR_MODE)
-    os.chown(CREDENTIAL_DIR, ROOT_UID, ROOT_GID)
-    os.chmod(CREDENTIAL_DIR, CREDENTIAL_DIR_MODE)
+    try:
+        os.mkdir(CREDENTIAL_DIR, CREDENTIAL_DIR_MODE)
+        os.chown(CREDENTIAL_DIR, ROOT_UID, ROOT_GID)
+        os.chmod(CREDENTIAL_DIR, CREDENTIAL_DIR_MODE)
+    except OSError as exc:
+        raise ProvisioningError("credential directory creation failed after mutation entry; STOP") from exc
 
 
 def _receipt(*, result: str, source_sha: str, mutation_started: bool, reason: str | None = None) -> str:
