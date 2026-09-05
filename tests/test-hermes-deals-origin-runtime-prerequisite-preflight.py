@@ -83,6 +83,9 @@ class HermesRuntimePrerequisitePreflightTests(unittest.TestCase):
                 os.chmod(probe, 0o755)
                 evidence.mkdir()
                 os.chmod(evidence, 0o700)
+                machine_root = evidence / "rpi5"
+                machine_root.mkdir()
+                os.chmod(machine_root, 0o700)
                 source_sha = "c" * 40
                 registration.write_text(
                     json.dumps(
@@ -103,7 +106,7 @@ class HermesRuntimePrerequisitePreflightTests(unittest.TestCase):
                     preflight, "HELPER", helper
                 ), mock.patch.object(preflight, "PROBE", probe), mock.patch.object(
                     preflight, "EVIDENCE_ROOT", evidence
-                ), mock.patch.object(preflight, "HELPER_GIT_BLOB", git_blob(helper_raw)), mock.patch.object(
+                ), mock.patch.object(preflight, "MACHINE_ROOT", machine_root), mock.patch.object(preflight, "HELPER_GIT_BLOB", git_blob(helper_raw)), mock.patch.object(
                     preflight, "PROBE_GIT_BLOB", git_blob(probe_raw)
                 ):
                     self.assertEqual(preflight._registration_and_helper(), source_sha)
