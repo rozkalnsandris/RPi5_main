@@ -59,10 +59,64 @@ The installed broker entrypoint remains the reviewed fail-closed source stub. So
 
 The installer source does not convert source readiness into runtime readiness. `LIVE_INSTALL_ELIGIBLE` remains false until the installer slice is merged, exact-main provenance/CI is freshly rebound, and its bounded host preflight passes. A new exact-source LIVE authorization is required before `--apply`.
 
+## Credential prerequisite discovered by the first bounded preflight
+
+After PR #371 merged, fresh exact-main checks and Hermes helper provenance were revalidated and one default-mode installer preflight was executed on trusted `rpi5` at exact clean checkout `32655619fca01105f872a4a2c44c41edc373b4dd`.
+
+It failed closed before mutation because the fixed source GitHub App credential target was absent. The public-safe receipt recorded:
+
+- `result=FAIL_CLOSED`;
+- `credential_content_read=false`;
+- `credential_mutated=false`;
+- `helper_executed=false`;
+- no installer `--apply`, systemd action, broker install or other host mutation occurred.
+
+Canonical public-safe continuity receipt: `RPi5_main#191` comment `5551180411`.
+
+This proves only that credential placement is the current prerequisite. It does **not** authorize credential creation and it does not prove any secret value or credential validity.
+
+## Capability-specific source credential provisioner
+
+Issue #372 adds a separately reviewable first-install-only source provisioner:
+
+`scripts/provision-hermes-deals-origin-source-credential.py`
+
+`credential_provisioner_source_blob=767702773e83ed6d34ca200d8ae68d3a20c23e83`
+
+The provisioner contract is intentionally narrower than generic file or secret placement:
+
+- exact reviewed `RPi5_main` checkout SHA is required and revalidated immediately before mutation;
+- the credential value is accepted only through hidden multiline `/dev/tty` input with terminal echo disabled; it is never accepted through argv, environment variables, GitHub, chat, stdout or stderr;
+- only the two reviewed ASCII-armored private-key PEM envelopes are accepted, with bounded input size and canonical base64-text body checks;
+- target is fixed to `/etc/rozkalns-hermes-deals-origin-broker/source-github-app.pem`, `root:root 0600`;
+- its parent credential directory is fixed to `/etc/rozkalns-hermes-deals-origin-broker`, `root:root 0700`;
+- existing credential target fails closed; overwrite and rotation are not authorized;
+- file creation requires `O_CREAT|O_EXCL|O_NOFOLLOW|O_CLOEXEC`;
+- maximum mutation surface is one credential-directory creation if absent plus one credential-file creation;
+- mutation entry is recorded before the first filesystem create attempt; any later error is terminal STOP with no retry, rollback or cleanup;
+- it performs no GitHub API request, token mint, App permission/repository-selection mutation, broker install, helper/audit execution or systemd action.
+
+This source provisioner does not itself authorize placement. Credential placement remains STRICT and requires a separate exact-source owner LIVE authorization. No credential value may appear in GitHub, chat or public evidence.
+
+## Required continuation sequence
+
+The current fail-closed sequence is:
+
+1. merge the reviewed #372 credential-provisioner source only after exact-head CI/review convergence and explicit owner MERGE authorization;
+2. refresh exact `RPi5_main/main`, exact-main CI and the provisioner source blob;
+3. obtain a separate one-shot owner LIVE authorization limited to at most one credential-directory create-if-absent and one credential-file create at the fixed path, with no overwrite/rotation/retry/rollback/cleanup and no App/permission mutation;
+4. after a successful public-safe credential placement receipt, run a **fresh default-mode read-only broker installer preflight** on that exact current main;
+5. only if that preflight passes may a later separate owner LIVE authorization consider broker installer `--apply`;
+6. genuine audit dispatch and runner retirement remain later separate gates.
+
+A previous preflight failure must not be rerun as a substitute for this sequence, and no historical authorization may be reused.
+
 ## Safety state
 
 `INSTALLER_SOURCE_IMPLEMENTED=true`  
+`SOURCE_CREDENTIAL_PROVISIONER_IMPLEMENTED=true`  
 `SOURCE_READ_AUTHORITY_PROVEN=false`  
+`SOURCE_RUNTIME_CREDENTIAL_PROVEN=false`  
 `BROKER_ENTRYPOINT_WIRED=false`  
 `HELPER_PROCESS_LAUNCH_WIRED=false`  
 `PRIVILEGED_DISPATCH_ENABLED=false`  
@@ -73,5 +127,3 @@ The installer source does not convert source readiness into runtime readiness. `
 `PRODUCTION_MUTATION_STARTED=false`
 
 This document and its manifests prove source provenance only. They do not prove actual RPi5 services, files, permissions, credentials, App installation scope, replay storage, broker socket/service state, helper installation, deployed SHA, or production data.
-
-After this source fix is separately merged, the next step is fresh merged-source CI/helper validation followed by the bounded **read-only installer preflight**. Any host installation/activation remains a separate explicit LIVE owner gate; one genuine audit canary and runner retirement remain later separate gates.
