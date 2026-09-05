@@ -170,9 +170,65 @@ class HermesSourceCredentialProvisionerTests(unittest.TestCase):
             {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"},
         )
 
+    def test_hidden_tty_uses_separate_nonseekable_streams(self) -> None:
+        class FakeTTY:
+            def __init__(self, lines: list[str] | None = None) -> None:
+                self.lines = iter(lines or [])
+                self.writes: list[str] = []
+                self.closed = False
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb) -> None:
+                self.close()
+
+            def close(self) -> None:
+                self.closed = True
+
+            def isatty(self) -> bool:
+                return True
+
+            def fileno(self) -> int:
+                return 42
+
+            def readline(self) -> str:
+                return next(self.lines, "")
+
+            def write(self, value: str) -> int:
+                self.writes.append(value)
+                return len(value)
+
+            def flush(self) -> None:
+                pass
+
+            def seekable(self) -> bool:
+                return False
+
+            def seek(self, *args, **kwargs):
+                raise OSError("non-seekable TTY")
+
+        secret = fake_pem()
+        tty_in = FakeTTY(secret.splitlines(keepends=True) + [".\n"])
+        tty_out = FakeTTY()
+        previous = [0, 0, 0, provisioner.termios.ECHO]
+        with (
+            mock.patch("builtins.open", side_effect=[tty_in, tty_out]) as opened,
+            mock.patch.object(provisioner.termios, "tcgetattr", return_value=previous),
+            mock.patch.object(provisioner.termios, "tcsetattr") as tcsetattr,
+        ):
+            self.assertEqual(provisioner._read_hidden_multiline_pem(), secret)
+        self.assertEqual(opened.call_args_list[0].args, ("/dev/tty", "r"))
+        self.assertEqual(opened.call_args_list[1].args, ("/dev/tty", "w"))
+        self.assertEqual(tcsetattr.call_count, 2)
+        self.assertTrue(tty_in.closed)
+        self.assertTrue(tty_out.closed)
+
     def test_source_uses_hidden_tty_and_required_exclusive_guards(self) -> None:
         source = SCRIPT.read_text(encoding="utf-8")
-        self.assertIn('open("/dev/tty", "r+"', source)
+        self.assertIn('open("/dev/tty", "r"', source)
+        self.assertIn('open("/dev/tty", "w"', source)
+        self.assertNotIn('open("/dev/tty", "r+"', source)
         self.assertIn("hidden[3] &= ~termios.ECHO", source)
         self.assertIn("os.O_EXCL", source)
         self.assertIn('("O_NOFOLLOW", "O_CLOEXEC")', source)

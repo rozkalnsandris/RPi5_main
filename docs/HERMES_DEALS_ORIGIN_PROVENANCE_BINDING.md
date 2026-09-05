@@ -81,7 +81,7 @@ Issue #372 adds a separately reviewable first-install-only source provisioner:
 
 `scripts/provision-hermes-deals-origin-source-credential.py`
 
-`credential_provisioner_source_blob=21df577532a2f7491158319c30fff652bd64728e`
+`credential_provisioner_source_blob=76692cadd7a2dd959a5777f0978bb16371e7e0be`
 
 The provisioner contract is intentionally narrower than generic file or secret placement:
 
@@ -105,13 +105,17 @@ This source provisioner does not itself authorize placement. Credential placemen
 
 The first owner-authorized credential-placement invocation after #376 failed closed with `reason=source SHA mismatch` and `mutation_started=false` before credential input or filesystem creation. The unprivileged wrapper had already matched exact main and the provisioner blob. Source review identified the root-side cause: the provisioner's intentionally minimal Git subprocess environment removed Git's documented `SUDO_UID` ownership exception, so root Git could reject the user-owned checkout before provenance commands completed. Issue #377 corrects this without widening environment trust: Git receives only command-scoped `safe.directory=<exact resolved REPO_ROOT>`. No retry is authorized by this source correction.
 
+### Second LIVE placement attempt — pre-mutation TTY I/O failure
+
+After #379 merged and a clean exact-source worktree was prepared, the next owner-authorized credential-placement invocation failed closed before credential input or filesystem creation with `io.UnsupportedOperation: File or stream is not seekable` and `mutation_started=false`. The terminal itself was a valid PTY (`/dev/pts/2`). Source review identified `open("/dev/tty", "r+")` as the cause: Python update-mode buffered I/O requires a seekable raw stream, while a TTY is non-seekable. Issue #381 replaces that stream with separate read-only and write-only `/dev/tty` text streams while preserving echo suppression/restoration and every existing credential safety boundary. This remains pre-mutation evidence only and does not authorize a placement retry.
+
 ## Required continuation sequence
 
 The current fail-closed sequence is:
 
-1. merge the reviewed #372 credential-provisioner source only after exact-head CI/review convergence and explicit owner MERGE authorization;
+1. merge the reviewed #381 TTY I/O source repair only after exact-head CI/review convergence and explicit owner MERGE authorization;
 2. refresh exact `RPi5_main/main`, exact-main CI and the provisioner source blob;
-3. obtain a separate one-shot owner LIVE authorization limited to at most one credential-directory create-if-absent and one credential-file create at the fixed path, with no overwrite/rotation/retry/rollback/cleanup and no App/permission mutation;
+3. obtain a new separate one-shot owner LIVE authorization limited to at most one credential-directory create-if-absent and one credential-file create at the fixed path, with no overwrite/rotation/retry/rollback/cleanup and no App/permission mutation;
 4. after a successful public-safe credential placement receipt, run a **fresh default-mode read-only broker installer preflight** on that exact current main;
 5. only if that preflight passes may a later separate owner LIVE authorization consider broker installer `--apply`;
 6. genuine audit dispatch and runner retirement remain later separate gates.
