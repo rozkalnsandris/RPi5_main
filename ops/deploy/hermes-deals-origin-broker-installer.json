@@ -38,7 +38,7 @@
   },
   "credential_provisioner": {
     "source": "scripts/provision-hermes-deals-origin-source-credential.py",
-    "source_blob": "21df577532a2f7491158319c30fff652bd64728e",
+    "source_blob": "76692cadd7a2dd959a5777f0978bb16371e7e0be",
     "exact_checkout_sha_required": true,
     "requires_root": true,
     "requires_separate_explicit_live_authorization": true,

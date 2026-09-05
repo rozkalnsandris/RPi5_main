@@ -137,26 +137,31 @@ def validate_pem(value: str) -> bytes:
 
 def _read_hidden_multiline_pem() -> str:
     try:
-        tty = open("/dev/tty", "r+", encoding="utf-8", newline="")
+        tty_in = open("/dev/tty", "r", encoding="utf-8", newline="")
     except OSError as exc:
         raise ProvisioningError("credential provisioning requires an interactive TTY") from exc
-    with tty:
-        if not tty.isatty():
+    try:
+        tty_out = open("/dev/tty", "w", encoding="utf-8", newline="", buffering=1)
+    except OSError as exc:
+        tty_in.close()
+        raise ProvisioningError("credential provisioning requires an interactive TTY") from exc
+    with tty_in, tty_out:
+        if not tty_in.isatty() or not tty_out.isatty():
             raise ProvisioningError("credential provisioning requires an interactive TTY")
-        fd = tty.fileno()
+        fd = tty_in.fileno()
         previous = termios.tcgetattr(fd)
         hidden = list(previous)
         hidden[3] &= ~termios.ECHO
-        tty.write(
+        tty_out.write(
             "Paste the owner-supplied GitHub App private key (input hidden).\n"
             "Enter a single dot (.) on its own line to finish.\n"
         )
-        tty.flush()
+        tty_out.flush()
         lines: list[str] = []
         try:
             termios.tcsetattr(fd, termios.TCSADRAIN, hidden)
             while True:
-                line = tty.readline()
+                line = tty_in.readline()
                 if line == "":
                     raise ProvisioningError("credential input ended before the terminator")
                 line = line.rstrip("\r\n")
@@ -167,8 +172,8 @@ def _read_hidden_multiline_pem() -> str:
                     raise ProvisioningError("credential input exceeds reviewed PEM bounds")
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, previous)
-            tty.write("\n")
-            tty.flush()
+            tty_out.write("\n")
+            tty_out.flush()
     return "\n".join(lines) + "\n"
 
 
