@@ -4,7 +4,7 @@
   "status": "SOURCE_INSTALLER_AND_CREDENTIAL_PROVISIONER_IMPLEMENTED_RUNTIME_UNPROVEN",
   "installer": {
     "source": "scripts/install-hermes-deals-origin-broker.py",
-    "source_blob": "e020e547b7985e170758a39ff7b906c806c5052e",
+    "source_blob": "6762f6dffa7908cc8e8dd8fb7c144c1433edbe54",
     "immutable_implementation_baseline": "2550e77f6cb811ca6f10b49ef0b2fef554d64869",
     "exact_checkout_sha_required": true,
     "default_mode": "READ_ONLY_PREFLIGHT",
@@ -34,7 +34,10 @@
     "fail_closed_after_first_mutation": true,
     "automatic_retry": false,
     "automatic_rollback": false,
-    "automatic_cleanup": false
+    "automatic_cleanup": false,
+    "git_trust_scope": "COMMAND_ONLY_EXACT_REPO_ROOT",
+    "git_safe_directory_wildcard": false,
+    "git_global_or_system_config_mutation": false
   },
   "credential_provisioner": {
     "source": "scripts/provision-hermes-deals-origin-source-credential.py",
@@ -183,5 +186,5 @@
     "runner_retirement_eligible": false,
     "production_mutation_started": false
   },
-  "next_gate": "MERGE_THEN_EXACT_MAIN_AND_SEPARATE_CREDENTIAL_PLACEMENT_LIVE_AUTH"
+  "next_gate": "MERGE_THEN_EXACT_MAIN_AND_FRESH_READ_ONLY_BROKER_INSTALLER_PREFLIGHT"
 }

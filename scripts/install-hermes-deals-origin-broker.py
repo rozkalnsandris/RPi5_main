@@ -146,8 +146,21 @@ def _run(
     )
 
 
+def _git(*args: str) -> subprocess.CompletedProcess[bytes]:
+    return _run(
+        (
+            str(GIT),
+            "-c",
+            f"safe.directory={ROOT}",
+            "-C",
+            str(ROOT),
+            *args,
+        )
+    )
+
+
 def _git_stdout(*args: str) -> bytes:
-    result = _run((str(GIT), *args))
+    result = _git(*args)
     if result.returncode != 0:
         _fail("reviewed Git source validation failed")
     return result.stdout
@@ -164,14 +177,11 @@ def _require_exact_checkout(expected_sha: str) -> None:
     if head != expected_sha:
         _fail("checkout HEAD does not match the authorized source SHA")
 
-    result = _run(
-        (
-            str(GIT),
-            "merge-base",
-            "--is-ancestor",
-            IMMUTABLE_IMPLEMENTATION_BASELINE,
-            expected_sha,
-        )
+    result = _git(
+        "merge-base",
+        "--is-ancestor",
+        IMMUTABLE_IMPLEMENTATION_BASELINE,
+        expected_sha,
     )
     if result.returncode != 0:
         _fail("authorized source SHA is not descended from the immutable implementation baseline")

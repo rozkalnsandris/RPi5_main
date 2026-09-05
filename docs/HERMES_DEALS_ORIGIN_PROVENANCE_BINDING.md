@@ -43,12 +43,13 @@ Any target blob mismatch means the implementation provenance is stale. A new rev
 
 The reviewed first-install entrypoint is `scripts/install-hermes-deals-origin-broker.py`, with its machine-readable source contract in `ops/deploy/hermes-deals-origin-broker-installer.json`.
 
-`installer_source_blob=e020e547b7985e170758a39ff7b906c806c5052e`
+`installer_source_blob=6762f6dffa7908cc8e8dd8fb7c144c1433edbe54`
 
 The installer is deliberately narrower than generic privileged shell access:
 
 - default invocation is read-only preflight; `--apply` requires root and a separate explicit LIVE owner authorization;
 - it requires an exact checkout SHA supplied by the operator, proves that SHA is descendant-or-equal to the immutable implementation baseline, verifies its own tracked source at that SHA, and verifies all ten frozen install-target Git blobs;
+- root-side Git provenance uses only command-scoped `safe.directory=<exact resolved REPO_ROOT>` while preserving the fixed minimal subprocess environment; wildcard trust and root global/system Git config mutation are forbidden;
 - it checks only allowlisted runtime metadata: trusted root-owned parent directories, the fixed `rozkalns-deploy-executor` group, and source GitHub App credential **path/owner/group/mode only**;
 - it never reads credential contents and never creates, replaces, chmods or otherwise mutates credentials;
 - it is first-install-only: any pre-existing install target fails closed before mutation and requires a separate reconciliation source gate;
@@ -109,16 +110,24 @@ The first owner-authorized credential-placement invocation after #376 failed clo
 
 After #379 merged and a clean exact-source worktree was prepared, the next owner-authorized credential-placement invocation failed closed before credential input or filesystem creation with `io.UnsupportedOperation: File or stream is not seekable` and `mutation_started=false`. The terminal itself was a valid PTY (`/dev/pts/2`). Source review identified `open("/dev/tty", "r+")` as the cause: Python update-mode buffered I/O requires a seekable raw stream, while a TTY is non-seekable. Issue #381 replaces that stream with separate read-only and write-only `/dev/tty` text streams while preserving echo suppression/restoration and every existing credential safety boundary. This remains pre-mutation evidence only and does not authorize a placement retry.
 
+### Broker installer preflight after credential placement — pre-mutation source-trust failure
+
+After the source credential first-install step, the owner ran the default-mode broker installer preflight at exact `RPi5_main` SHA `750736eb681f15184358f3c8c7e18f46f47dc99c`. It failed closed before installer mutation with `reason=reviewed Git source validation failed`. Credential contents were not read or mutated and the Hermes helper was not executed.
+
+Source review identified the same root-side Git ownership class already corrected for the credential provisioner: the installer's intentionally minimal subprocess environment omits Git's documented `SUDO_UID` sudo ownership exception, while installer Git commands did not provide an exact `safe.directory`. Issue #383 corrects only that provenance invocation by adding command-scoped `safe.directory=<exact resolved REPO_ROOT>` to every installer Git command. Wildcard trust, root global/system Git config mutation, environment widening and installer mutation-surface changes remain forbidden.
+
+This failure is pre-mutation evidence only. It does not authorize a preflight retry, broker installation, systemd activation, helper execution or genuine audit.
+
 ## Required continuation sequence
 
 The current fail-closed sequence is:
 
-1. merge the reviewed #381 TTY I/O source repair only after exact-head CI/review convergence and explicit owner MERGE authorization;
-2. refresh exact `RPi5_main/main`, exact-main CI and the provisioner source blob;
-3. obtain a new separate one-shot owner LIVE authorization limited to at most one credential-directory create-if-absent and one credential-file create at the fixed path, with no overwrite/rotation/retry/rollback/cleanup and no App/permission mutation;
-4. after a successful public-safe credential placement receipt, run a **fresh default-mode read-only broker installer preflight** on that exact current main;
-5. only if that preflight passes may a later separate owner LIVE authorization consider broker installer `--apply`;
-6. genuine audit dispatch and runner retirement remain later separate gates.
+1. merge the reviewed #383 broker-installer root Git trust repair only after exact-head CI/review convergence and explicit owner MERGE authorization;
+2. refresh exact `RPi5_main/main`, exact-main CI and the installer source blob;
+3. run a **fresh default-mode read-only broker installer preflight** under owner-controlled root execution on that exact current main, without `--apply`;
+4. only if that preflight passes may a later separate owner LIVE authorization consider broker installer `--apply`;
+5. broker installation/systemd socket activation, genuine audit dispatch and runner retirement remain separately gated;
+6. any new preflight failure remains fail-closed and must be analyzed before any retry.
 
 A previous preflight failure must not be rerun as a substitute for this sequence, and no historical authorization may be reused.
 
