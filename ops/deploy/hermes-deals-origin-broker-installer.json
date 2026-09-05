@@ -1,7 +1,7 @@
 {
   "schema": "rozkalns.hermes-deals.origin-broker-installer.v1",
   "repository": "rozkalnsandris/RPi5_main",
-  "status": "SOURCE_INSTALLER_IMPLEMENTED_RUNTIME_UNPROVEN",
+  "status": "SOURCE_INSTALLER_AND_CREDENTIAL_PROVISIONER_IMPLEMENTED_RUNTIME_UNPROVEN",
   "installer": {
     "source": "scripts/install-hermes-deals-origin-broker.py",
     "source_blob": "e020e547b7985e170758a39ff7b906c806c5052e",
@@ -31,6 +31,46 @@
         "rozkalns-hermes-deals-origin-broker.socket"
       ]
     ],
+    "fail_closed_after_first_mutation": true,
+    "automatic_retry": false,
+    "automatic_rollback": false,
+    "automatic_cleanup": false
+  },
+  "credential_provisioner": {
+    "source": "scripts/provision-hermes-deals-origin-source-credential.py",
+    "source_blob": "f087fd5a52e2a65b79cfc4c7d68c27e8ddaf95b2",
+    "exact_checkout_sha_required": true,
+    "requires_root": true,
+    "requires_separate_explicit_live_authorization": true,
+    "input": "HIDDEN_TTY_MULTILINE",
+    "credential_content_emitted": false,
+    "credential_directory": "/etc/rozkalns-hermes-deals-origin-broker",
+    "credential_directory_owner": "root",
+    "credential_directory_group": "root",
+    "credential_directory_mode": "0700",
+    "credential_target": "/etc/rozkalns-hermes-deals-origin-broker/source-github-app.pem",
+    "credential_owner": "root",
+    "credential_group": "root",
+    "credential_mode": "0600",
+    "first_install_only": true,
+    "existing_target_policy": "FAIL_CLOSED_NO_OVERWRITE_OR_ROTATION",
+    "mutation_budget": [
+      [
+        "credential-directory-create-if-absent",
+        1
+      ],
+      [
+        "credential-file-create",
+        1
+      ]
+    ],
+    "github_api_request": false,
+    "permission_mutation": false,
+    "repository_selection_mutation": false,
+    "token_mint": false,
+    "broker_install": false,
+    "helper_execution": false,
+    "systemd_mutation": false,
     "fail_closed_after_first_mutation": true,
     "automatic_retry": false,
     "automatic_rollback": false,
@@ -127,6 +167,8 @@
     }
   ],
   "source_safety_state": {
+    "credential_provisioner_implemented": true,
+    "source_runtime_credential_proven": false,
     "live_install_eligible": false,
     "runtime_preflight_proven": false,
     "broker_entrypoint_wired": false,
@@ -137,5 +179,5 @@
     "runner_retirement_eligible": false,
     "production_mutation_started": false
   },
-  "next_gate": "MERGE_THEN_FRESH_EXACT_MAIN_AND_BOUNDED_READ_ONLY_INSTALLER_PREFLIGHT"
+  "next_gate": "MERGE_THEN_EXACT_MAIN_AND_SEPARATE_CREDENTIAL_PLACEMENT_LIVE_AUTH"
 }
