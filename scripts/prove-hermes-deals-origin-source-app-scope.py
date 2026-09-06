@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import sys
 from typing import Any, Mapping
 
@@ -28,12 +29,16 @@ def _fail(message: str) -> None:
     raise SourceAppScopeProofError(message)
 
 
-def _source_sha(expected_sha: str) -> None:
-    if SHA_RE.fullmatch(expected_sha) is None:
-        _fail('expected RPi5 source SHA is malformed')
-    import subprocess
-    result = subprocess.run(
-        ('/usr/bin/git', 'rev-parse', 'HEAD'),
+def _git(*args: str) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(
+        (
+            '/usr/bin/git',
+            '-c',
+            f'safe.directory={ROOT}',
+            '-C',
+            str(ROOT),
+            *args,
+        ),
         cwd=ROOT,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -41,8 +46,20 @@ def _source_sha(expected_sha: str) -> None:
         shell=False,
         env={'PATH': '/usr/bin:/bin', 'LANG': 'C.UTF-8', 'LC_ALL': 'C.UTF-8'},
     )
+
+
+def _source_sha(expected_sha: str) -> None:
+    if SHA_RE.fullmatch(expected_sha) is None:
+        _fail('expected RPi5 source SHA is malformed')
+    result = _git('rev-parse', 'HEAD')
     if result.returncode != 0 or result.stdout.decode('ascii', 'strict').strip() != expected_sha:
         _fail('RPi5 checkout does not match expected source SHA')
+    source = _git('show', f'{expected_sha}:scripts/prove-hermes-deals-origin-source-app-scope.py')
+    if source.returncode != 0 or source.stdout != Path(__file__).read_bytes():
+        _fail('Source App scope prover differs from expected source SHA')
+    status = _git('status', '--porcelain')
+    if status.returncode != 0 or status.stdout:
+        _fail('trusted checkout is not clean')
 
 
 def _receipt(result: str, expected_sha: str, **extra: object) -> str:
