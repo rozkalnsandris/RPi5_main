@@ -1,0 +1,111 @@
+{
+  "schema": "rozkalns.hermes-deals.origin-runtime-adapters-contract.v1",
+  "repository": "rozkalnsandris/RPi5_main",
+  "phase": 4,
+  "issue": 191,
+  "source_gate": "HERMES_ORIGIN_RUNTIME_ADAPTER_TRUST_BOUNDARY_SOURCE",
+  "source_baseline": "e949f7835898fc207aa137cb26ffb6dfc701a497",
+  "required_previous_result": "HERMES_ORIGIN_RUNTIME_PREFLIGHT_PARTIAL_READY",
+  "runtime_module": {
+    "path": "ops/lib/deploy_executor/hermes_deals_origin_runtime_adapters.py",
+    "source_blob": "f6a7ba54ae021316d35677cd0ec730b90d63ba25"
+  },
+  "durable_replay_adapter": {
+    "class": "ConcreteDurableHermesOriginReplayAuthority",
+    "state_db": "/var/lib/rozkalns-deploy-executor-p9/state.sqlite3",
+    "availability_mode": "SQLITE_IMMUTABLE_READ_ONLY",
+    "availability_mutation": false,
+    "double_identical_canonical_availability_required_before_consume": true,
+    "consume_implemented": true,
+    "consume_wired_to_broker_entrypoint": false,
+    "consume_mutates_replay_state": true,
+    "automatic_retry": false,
+    "automatic_rollback": false,
+    "automatic_cleanup": false
+  },
+  "host_observation_adapter": {
+    "class": "ConcreteLocalHermesOriginHostObservationProvider",
+    "provider_arguments": [],
+    "caller_path_command_argv_environment_allowed": false,
+    "credential_content_read": false,
+    "systemd_interaction": false,
+    "socket_request": false,
+    "helper_execution": false,
+    "filesystem_mutation": false,
+    "output_schema": "rozkalns.hermes-deals.origin-host-observation.v1"
+  },
+  "runtime_adapter_preflight": {
+    "path": "scripts/preflight-hermes-deals-origin-runtime-adapters.py",
+    "source_blob": "e0843ba76f70ce4c08c7d877c107aeafdb396475",
+    "root_read_context_required": true,
+    "mutation_implemented": false,
+    "credential_content_read": false,
+    "github_api_request": false,
+    "systemd_interaction": false,
+    "socket_request": false,
+    "helper_execution": false,
+    "replay_consume_invoked": false,
+    "success_result": "HERMES_ORIGIN_RUNTIME_ADAPTERS_READY"
+  },
+  "source_app_scope_proof": {
+    "class": "ConcreteHermesDealsSourceAppScopeProver",
+    "operator": "scripts/prove-hermes-deals-origin-source-app-scope.py",
+    "operator_source_blob": "5f131f5e31bb796966f1097b6e613f4d4b1a4681",
+    "default_result": "HERMES_SOURCE_APP_SCOPE_PROOF_PROTECTED_READY",
+    "protected_result": "HERMES_SOURCE_APP_SCOPE_PROVEN",
+    "protected_flag": "--prove",
+    "root_read_context_required": true,
+    "repository": "rozkalnsandris/hermes-deals",
+    "repository_id": 1317143994,
+    "app_id": 4537106,
+    "installation_id": 152422751,
+    "repository_selection": "selected",
+    "token_repository_count": 1,
+    "permissions": {
+      "actions": "read",
+      "contents": "read"
+    },
+    "credential_path": "/etc/rozkalns-hermes-deals-origin-broker/source-github-app.pem",
+    "credential_content_read": true,
+    "github_api_request": true,
+    "short_lived_installation_token_minted": true,
+    "installation_token_exposed": false,
+    "credential_mutation": false,
+    "filesystem_mutation": false,
+    "production_mutation_started": false,
+    "requires_separate_live_owner_authorization": true
+  },
+  "reviewed_hermes_source": {
+    "sha": "2f47f64ab15e767f4e53ad182326e64e313d5094",
+    "helper_blob": "51bb23cc6c2083ab7c8b4e81ba82dd880e46d673",
+    "probe_blob": "2362e8eb578a7279c38fe4ed2a7d1edd05df891a"
+  },
+  "source_gate_flags": {
+    "runtime_adapters_implemented": true,
+    "runtime_adapters_runtime_proven": false,
+    "source_app_scope_prover_implemented": true,
+    "source_app_installation_scope_proven": false,
+    "broker_entrypoint_wired": false,
+    "privileged_dispatch_enabled": false,
+    "genuine_hermes_audit_authorized": false,
+    "runner_retirement_eligible": false,
+    "production_mutation_started": false
+  },
+  "next_sequence": [
+    "merge source only after exact-head review and CI",
+    "converge trusted RPi5 checkout separately if merged source is newer",
+    "run the root read-only runtime-adapter preflight without protected credential use",
+    "only HERMES_ORIGIN_RUNTIME_ADAPTERS_READY may reach the separate LIVE protected Source App scope-proof gate",
+    "only separately accepted runtime-adapter and Source App scope proof may advance to broker-entrypoint wiring source work"
+  ],
+  "not_authorized": [
+    "broker entrypoint wiring",
+    "privileged dispatch",
+    "helper execution",
+    "genuine Hermes audit",
+    "broker socket request",
+    "runner retirement",
+    "deployment or cutover",
+    "production application-data mutation"
+  ]
+}
