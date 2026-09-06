@@ -942,3 +942,29 @@ The local runtime preflight is also corrected to validate the fixed `/var/lib/he
 `PRODUCTION_MUTATION_STARTED=false`
 
 Current sequence: source review/Draft PR/CI/Ready → explicit MERGE → fresh merged-source validation → separately LIVE-converge RPi5 trusted checkout if needed → separately LIVE-prepare the exact Hermes detached source checkout → one default-mode helper-installer preflight → only then a separate exact root LIVE helper first-install → read-only poststate → one fresh local runtime prerequisite preflight. Source App credential use, concrete production adapters, broker-entrypoint wiring, genuine audit and runner retirement remain later independent gates.
+
+## Current supersession — Hermes PARTIAL_READY runtime-adapter trust-boundary source gate (2026-09-06)
+
+This section supersedes the pull-helper first-install next-action wording immediately above. Earlier Phase 4 sections remain historical evidence only; repository source never substitutes for fresh host/runtime proof.
+
+Accepted #191 continuity now records the exact owner-controlled sequence through `RPi5_main=e949f7835898fc207aa137cb26ffb6dfc701a497`: the runner-independent helper bundle first-install materialized exactly four root-owned `0700` directories plus three reviewed/generated root-owned files, and the subsequent root read-only local runtime prerequisite preflight returned `HERMES_ORIGIN_RUNTIME_PREFLIGHT_PARTIAL_READY`. That receipt proved credential metadata, the durable replay-store structure, local broker/helper/registration identities and read-only systemd query state while keeping credential content access, GitHub API requests, helper/socket execution and filesystem/systemd mutation false. The first-install LIVE authorization is consumed/non-reusable; PARTIAL_READY itself grants no LIVE authority.
+
+PARTIAL_READY deliberately leaves three prerequisites for a separate trust-boundary decision: current Source App installation/repository scope, a concrete durable replay authority, and a concrete sanitized host-observation provider. The Source App proof cannot honestly remain metadata-only: the already-reviewed `P9SourceInstallationTokenProvider` must sign with the protected private key, query the fixed App installation, mint one short-lived exact-repository token, and validate that token's selected-repository/read-only scope. Therefore protected Source App proof is isolated from the ordinary read-only runtime-adapter preflight and requires its own later explicit LIVE owner authorization. The token value is never part of a receipt or downstream interface.
+
+This source gate adds `ConcreteDurableHermesOriginReplayAuthority`, `ConcreteLocalHermesOriginHostObservationProvider` and `ConcreteHermesDealsSourceAppScopeProver`. Replay availability uses immutable read-only SQLite and may be called repeatedly during canonical revalidation without mutation. A later consume boundary requires at least two identical canonical availability checks, is one-shot/fail-closed, and is not wired to the installed broker entrypoint in this gate. The host provider accepts no caller arguments or selectors, reads only fixed reviewed non-secret runtime identities plus credential metadata, performs no systemd interaction/socket request/helper execution, and emits only the existing sanitized observation schema.
+
+Two operators keep runtime proof separated by authority class. `preflight-hermes-deals-origin-runtime-adapters.py` is root-read-context but mutation-free and never invokes the Source App prover; success is `HERMES_ORIGIN_RUNTIME_ADAPTERS_READY`. `prove-hermes-deals-origin-source-app-scope.py` defaults to a non-protected `HERMES_SOURCE_APP_SCOPE_PROOF_PROTECTED_READY` receipt. Its `--prove` mode is root-only, uses the fixed credential/App/installation/repository/permissions, performs the protected credential read and GitHub token exchange, returns only public-safe scope facts, and requires a separate LIVE owner authorization.
+
+`PHASE4_CURRENT_WORK_ITEM=HERMES_ORIGIN_RUNTIME_ADAPTER_TRUST_BOUNDARY_SOURCE`
+`LOCAL_RUNTIME_PREREQUISITE_PREFLIGHT=HERMES_ORIGIN_RUNTIME_PREFLIGHT_PARTIAL_READY`
+`RUNTIME_ADAPTERS_IMPLEMENTED=true`
+`RUNTIME_ADAPTERS_RUNTIME_PROVEN=false`
+`SOURCE_APP_SCOPE_PROVER_IMPLEMENTED=true`
+`SOURCE_APP_INSTALLATION_SCOPE_PROVEN=false`
+`BROKER_ENTRYPOINT_WIRED=false`
+`PRIVILEGED_DISPATCH_ENABLED=false`
+`GENUINE_HERMES_AUDIT_AUTHORIZED=false`
+`RUNNER_RETIREMENT_ELIGIBLE=false`
+`PRODUCTION_MUTATION_STARTED=false`
+
+Current sequence: focused source/tests/docs review → Draft PR → exact-head CI/review → explicit MERGE → fresh merged-source/trusted-checkout convergence if needed → one root read-only runtime-adapter preflight → only on `HERMES_ORIGIN_RUNTIME_ADAPTERS_READY`, a separate explicit LIVE protected Source App scope proof → only after both proofs are accepted may a later source gate consider broker-entrypoint construction/wiring. This gate does not authorize replay consumption, broker/socket activation changes, helper execution, genuine audit, privileged dispatch, deployment, production-data mutation or runner retirement.
