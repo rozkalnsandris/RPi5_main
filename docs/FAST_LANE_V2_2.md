@@ -100,6 +100,8 @@ Authorization is consumed at the first authorized live mutation. Any later error
 
 For normal FAST delivery, use one Ready receipt and one final live receipt. Put any remaining owner decision at the **end** under `ACTION REQUIRED`; when the owner must enter/run something, provide the exact copyable instruction in a fenced `bash` block.
 
-For AUTO-RUN FULL, routine technical continuation does not generate `ACTION REQUIRED`. Notify the owner only on `DONE`, `STOP_SCOPE_OR_RISK`, `STOP_ERROR`, or a platform-level approval that ChatGPT itself requires.
+Independently of whether an owner gate exists, every user-visible work-cycle response must end with exactly one copy-pasteable `NEXT COMMAND`. If a real owner gate exists, `ACTION REQUIRED` contains that exact command and also satisfies the Next Command Contract. Otherwise use the state-appropriate non-gate command: `SYNC RPi5_main` while waiting for mutable CI/review/external state, `turpini` for immediate same-scope technical continuation, or `START RPi5_main` after DONE to select the next canonical lane. Never invent an owner gate to satisfy this presentation rule.
+
+For AUTO-RUN FULL, routine technical continuation does not generate `ACTION REQUIRED`, but it still obeys the Next Command Contract. Notify the owner only on `DONE`, `STOP_SCOPE_OR_RISK`, `STOP_ERROR`, or a platform-level approval that ChatGPT itself requires; any user-visible terminal/status response still ends with one exact resume/refresh command.
 
 Merge never by itself authorizes host/runtime mutation. AUTO-RUN FULL authority comes from the separately frozen issue-specific owner activation, not from merge.
