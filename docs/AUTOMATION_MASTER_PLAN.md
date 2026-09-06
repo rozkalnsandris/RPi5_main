@@ -1010,3 +1010,30 @@ Current sequence: source review/Draft PR/CI/Ready → explicit MERGE → fresh e
 - `LIVE_INSTALL_ELIGIBLE=false`.
 - `PRODUCTION_MUTATION_STARTED=false`.
 - After merge: converge the trusted checkout, run the root read-only upgrade preflight, then STOP for a separate exact LIVE runtime-upgrade authorization.
+
+## Current supersession — failed Hermes one-canary evidence-write recovery source gate (2026-09-06)
+
+The first genuine broker canary used READY queue `ops-workflows#30` and owner-authored `deploy-authorizations#9` for reviewed Hermes source `2f47f64ab15e767f4e53ad182326e64e313d5094`. The broker completed canonical preparation and durable replay consume, then returned sanitized `FAIL_CLOSED` at `safe_stage=helper_launch` with `authorization_reuse_forbidden=true`. That queue/authorization pair is permanently non-reusable; this source gate authorizes no retry, replay reset, cleanup or second canary.
+
+Source review plus the documented systemd sandbox semantics identify the missing capability: the broker service preserves `ProtectSystem=strict`, but the applied runtime unit allowlists only `/var/lib/rozkalns-deploy-executor-p9` while the reviewed helper persists sanitized audit evidence below the fixed machine root `/var/lib/hermes-deals-audits/origin-path-audit/evidence/rpi5`. The fix keeps the filesystem read-only by default and adds only that machine-specific evidence root to `ReadWritePaths=`. No broader `/var/lib`, `/var/lib/hermes-deals-audits`, home, credential or arbitrary path write authority is added.
+
+The service-unit Git blob change must be paired with `hermes_deals_origin_runtime_adapters.py`, because the host-observation adapter validates the installed service unit by exact reviewed blob. The recovery mutation surface is therefore exactly two replacements: current runtime adapter `456fea3d6969975d0fd432d20089772f28b63ec7` → `21918e96495592b6a3478e8e74ae06fdf640121d`, and current service unit `21319746d1e32f2b67f701f0a22174bfb0542987` → `2f4874323a92610d4d91df719a97688bc880fc48`. Twenty-five other installed broker/executor files are immutable exact-blob prerequisites.
+
+The reviewed recovery operator is `scripts/install-hermes-deals-origin-broker-evidence-write-recovery.py`. Default mode is root read-only preflight; it additionally requires the fixed evidence parent and `rpi5` directory to be real `root:root 0700` directories before any future write permission upgrade. `--apply` remains a separate explicit LIVE gate. Apply ordering is double preflight → stop socket → replace exactly two files → revalidate prerequisites → daemon-reload → start socket → verify active/enabled. There is no automatic retry, rollback or cleanup.
+
+`PHASE4_CURRENT_WORK_ITEM=HERMES_ORIGIN_BROKER_EVIDENCE_WRITE_PATH_RECOVERY`
+`FAILED_CANARY_QUEUE=30`
+`FAILED_CANARY_LIVE_AUTH=9`
+`FAILED_CANARY_DURABLE_REPLAY_CONSUMED=true`
+`FAILED_CANARY_AUTHORIZATION_REUSE_FORBIDDEN=true`
+`FAILED_CANARY_RETRY_AUTHORIZED=false`
+`PROTECT_SYSTEM_STRICT_PRESERVED=true`
+`SOURCE_SERVICE_WRITE_PATHS=REPLAY_STATE_PLUS_FIXED_RPI5_EVIDENCE_ROOT`
+`RECOVERY_PREFLIGHT_PROVEN=false`
+`RECOVERY_APPLIED=false`
+`LIVE_RECOVERY_ELIGIBLE=false`
+`GENUINE_HERMES_AUDIT_ACCEPTED=false`
+`RUNNER_RETIREMENT_ELIGIBLE=false`
+`PRODUCTION_MUTATION_STARTED=false`
+
+After this source gate: review/Draft PR/CI/Ready → explicit MERGE → trusted-checkout convergence → root read-only recovery preflight → separate exact LIVE recovery apply → read-only poststate verification. Only after accepted recovery may a **new** READY queue item and a **new** owner-authored LIVE-AUTH/request ID authorize one new genuine canary. Queue #30 and LIVE-AUTH #9 must never be reused.
