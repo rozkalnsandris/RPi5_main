@@ -50,7 +50,7 @@
   "source_app_scope_proof": {
     "class": "ConcreteHermesDealsSourceAppScopeProver",
     "operator": "scripts/prove-hermes-deals-origin-source-app-scope.py",
-    "operator_source_blob": "5f131f5e31bb796966f1097b6e613f4d4b1a4681",
+    "operator_source_blob": "ef62436417b5c82cdccf0cb8c3f29292db252e88",
     "default_result": "HERMES_SOURCE_APP_SCOPE_PROOF_PROTECTED_READY",
     "protected_result": "HERMES_SOURCE_APP_SCOPE_PROVEN",
     "protected_flag": "--prove",

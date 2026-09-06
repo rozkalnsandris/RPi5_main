@@ -264,6 +264,18 @@ class SourceAppScopeProverTests(unittest.TestCase):
         self.assertFalse(value["installation_token_minted"])
         self.assertFalse(value["installation_token_exposed"])
 
+    def test_source_app_scope_cli_uses_root_safe_exact_source_validation(self):
+        source = (
+            ROOT / "scripts/prove-hermes-deals-origin-source-app-scope.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("f'safe.directory={ROOT}'", source)
+        self.assertIn("_git('rev-parse', 'HEAD')", source)
+        self.assertIn(
+            "_git('show', f'{expected_sha}:scripts/prove-hermes-deals-origin-source-app-scope.py')",
+            source,
+        )
+        self.assertIn("_git('status', '--porcelain')", source)
+
     def test_source_readiness_remains_nonlive(self):
         readiness = runtime.source_readiness()
         self.assertTrue(readiness["source_app_scope_prover_implemented"])
