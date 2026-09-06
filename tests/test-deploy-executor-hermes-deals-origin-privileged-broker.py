@@ -274,8 +274,14 @@ class HermesDealsOriginPrivilegedBrokerTests(unittest.TestCase):
         self.assertEqual(manifest["transport"]["request_max_bytes"], BROKER_REQUEST_MAX_BYTES)
         self.assertEqual(
             manifest["reviewed_helper_dependency"]["source_blob"],
-            PULL_HELPER_SOURCE_BLOB,
+            "51bb23cc6c2083ab7c8b4e81ba82dd880e46d673",
         )
+        loopback = json.loads(
+            (ROOT / "ops/deploy/hermes-deals-origin-loopback-provenance-runtime-upgrade.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(loopback["hermes_source"]["helper_new_blob"], PULL_HELPER_SOURCE_BLOB)
         self.assertEqual(
             manifest["reviewed_helper_dependency"]["installed_helper_path"],
             INSTALLED_HELPER_PATH,

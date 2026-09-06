@@ -36,7 +36,8 @@ SOCKET_UNIT = "rozkalns-hermes-deals-origin-broker.socket"
 SOCKET_PATH = Path("/run/rozkalns-hermes-deals-origin-broker/request.sock")
 REGISTRATION_SCHEMA = "rozkalns.hermes-deals.origin-path-rpi5-pull-registration.v1"
 CAPABILITY = "origin-path-audit"
-HELPER_GIT_BLOB = "51bb23cc6c2083ab7c8b4e81ba82dd880e46d673"
+REVIEWED_HERMES_SOURCE_SHA = "f6c48cc85c187d927575da6efef4b05b4d4c0e40"
+HELPER_GIT_BLOB = "4ef95c3f02b810b6b25721aa1b1b53d43b8ca572"
 PROBE_GIT_BLOB = "2362e8eb578a7279c38fe4ed2a7d1edd05df891a"
 MAX_REGISTRATION_BYTES = 4096
 MAX_CODE_BYTES = 2 * 1024 * 1024
@@ -221,6 +222,8 @@ def _registration_and_helper() -> str:
     source_sha = registration.get("registered_source_sha")
     if type(source_sha) is not str or FULL_SHA.fullmatch(source_sha) is None:
         _fail("registered Hermes source SHA is invalid")
+    if source_sha != REVIEWED_HERMES_SOURCE_SHA:
+        _fail("registered Hermes source SHA differs from corrected reviewed source")
     helper_sha256 = registration.get("helper_sha256")
     probe_sha256 = registration.get("probe_sha256")
     if type(helper_sha256) is not str or SHA256.fullmatch(helper_sha256) is None:

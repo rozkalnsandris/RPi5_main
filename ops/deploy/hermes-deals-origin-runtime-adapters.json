@@ -8,7 +8,7 @@
   "required_previous_result": "HERMES_ORIGIN_RUNTIME_PREFLIGHT_PARTIAL_READY",
   "runtime_module": {
     "path": "ops/lib/deploy_executor/hermes_deals_origin_runtime_adapters.py",
-    "source_blob": "21918e96495592b6a3478e8e74ae06fdf640121d"
+    "source_blob": "862946e500749036a641c0ed3dcc66445dcdf23a"
   },
   "durable_replay_adapter": {
     "class": "ConcreteDurableHermesOriginReplayAuthority",
@@ -76,8 +76,8 @@
     "requires_separate_live_owner_authorization": true
   },
   "reviewed_hermes_source": {
-    "sha": "2f47f64ab15e767f4e53ad182326e64e313d5094",
-    "helper_blob": "51bb23cc6c2083ab7c8b4e81ba82dd880e46d673",
+    "sha": "f6c48cc85c187d927575da6efef4b05b4d4c0e40",
+    "helper_blob": "4ef95c3f02b810b6b25721aa1b1b53d43b8ca572",
     "probe_blob": "2362e8eb578a7279c38fe4ed2a7d1edd05df891a"
   },
   "source_gate_flags": {

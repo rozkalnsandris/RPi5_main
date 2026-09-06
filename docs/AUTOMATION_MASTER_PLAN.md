@@ -1037,3 +1037,30 @@ The reviewed recovery operator is `scripts/install-hermes-deals-origin-broker-ev
 `PRODUCTION_MUTATION_STARTED=false`
 
 After this source gate: review/Draft PR/CI/Ready → explicit MERGE → trusted-checkout convergence → root read-only recovery preflight → separate exact LIVE recovery apply → read-only poststate verification. Only after accepted recovery may a **new** READY queue item and a **new** owner-authored LIVE-AUTH/request ID authorize one new genuine canary. Queue #30 and LIVE-AUTH #9 must never be reused.
+
+## Current supersession — Hermes loopback helper provenance reconciliation source gate (2026-09-06)
+
+This section supersedes the failed-canary recovery next-action wording immediately above while preserving every earlier receipt as historical evidence. Repository source still does not prove current RPi5 runtime state.
+
+Accepted #191 continuity records that replacement canary `ops-workflows#35` plus human `deploy-authorizations#12` reached helper execution after durable replay consume and then failed closed with helper exit `1`. That authorization/request is consumed and permanently non-reusable. The public edge probes were healthy while the old helper's fixed origin `http://192.168.0.180:9128` failed; bounded host evidence separately showed the intended loopback origin `http://127.0.0.1:9128` healthy. Hermes Deals #847/#848 then merged the loopback correction as exact `hermes-deals/main=f6c48cc85c187d927575da6efef4b05b4d4c0e40`, helper Git blob `4ef95c3f02b810b6b25721aa1b1b53d43b8ca572`, helper SHA-256 `23b29ff5f800cc5ade9cc8e38607a4e37beae9f45c6c82111ea4b49f063e06cf`; the probe remains blob `2362e8eb578a7279c38fe4ed2a7d1edd05df891a` / SHA-256 `96a8b5819ec85f27095c535f1a3be6cba7bac0e2a40a1132869fb39dc669ad43`.
+
+The static RPi5 Hermes operation, adapter and runtime contracts now bind that corrected helper identity and exact Hermes source. The canonical corrected registration is exactly 338 bytes, Git blob `a0444a84cb1a54abfeaefb47baf7f0c41b9677d8`, SHA-256 `36c511a36e462bf196a6695c4bac39497c56ab9ef7749aa0b2eb4621e172cad7`, and registers source `f6c48cc85c187d927575da6efef4b05b4d4c0e40` with the corrected helper digest and unchanged probe digest.
+
+The source-only runtime reconciliation operator is `scripts/install-hermes-deals-origin-pull-helper-runtime-upgrade.py`, governed by `ops/deploy/hermes-deals-origin-loopback-provenance-runtime-upgrade.json`. Default mode is root read-only preflight; `--apply` is separately LIVE-gated. To keep the installed broker internally coherent, its fixed mutation set is exactly five reviewed replacements: three installed RPi5 consumer-binding modules (`hermes_deals_origin_adapter.py`, `hermes_deals_origin_runtime_adapters.py`, `hermes_deals_origin_broker_runtime.py`), then the helper, then the registration. The unchanged probe is a read-only immutable prerequisite. There is no caller-selected path/command/argv/environment authority, no systemd/Docker/network/credential mutation, no GitHub API or socket request, no replay consume, no helper execution and no genuine audit in this operator.
+
+Every target requires a root-owned safe parent chain, exact old blob/metadata, single-link regular-file identity and an absent fixed same-directory temp. Replacements use `O_EXCL|O_NOFOLLOW`, complete write + metadata + file `fsync`, exact prepared-content validation, duplicate old-target validation, atomic same-directory `os.replace`, parent-directory `fsync`, and exact post-replace verification. Any error after the first mutation is fail-closed with no retry, rollback or cleanup. A partial application therefore cannot silently authorize dispatch; identity disagreement causes later runtime validation to reject.
+
+`PHASE4_CURRENT_WORK_ITEM=HERMES_LOOPBACK_HELPER_PROVENANCE_RECONCILIATION_SOURCE`
+`HERMES_CORRECTED_SOURCE_SHA=f6c48cc85c187d927575da6efef4b05b4d4c0e40`
+`HERMES_CORRECTED_HELPER_BLOB=4ef95c3f02b810b6b25721aa1b1b53d43b8ca572`
+`CANARY_35_AUTH_12_CONSUMED=true`
+`FAILED_CANARY_RETRY_AUTHORIZED=false`
+`RUNTIME_RECONCILIATION_OPERATOR_IMPLEMENTED=true`
+`RUNTIME_RECONCILIATION_APPLIED=false`
+`NEW_READY_QUEUE_PREPARED=false`
+`NEW_LIVE_AUTHORIZATION_PRESENT=false`
+`GENUINE_REPLACEMENT_CANARY_AUTHORIZED=false`
+`RUNNER_RETIREMENT_ELIGIBLE=false`
+`PRODUCTION_MUTATION_STARTED=false`
+
+Current sequence: focused source/tests/docs review -> Draft PR -> exact-head CI/review -> explicit MERGE -> fresh exact merged-source and Hermes provenance validation -> separately authorized trusted-checkout convergence as required -> one root read-only reconciliation preflight -> separate exact LIVE authorization for the five fixed replacements -> read-only post-upgrade identity verification -> only then a new genuine READY queue plus new human LIVE-AUTH/request ID may authorize one replacement canary. The consumed #35/#12 pair is never reusable, and runner/path retirement remains a later independent gate.

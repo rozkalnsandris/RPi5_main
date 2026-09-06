@@ -385,3 +385,9 @@ The reviewed recovery operator is `scripts/install-hermes-deals-origin-broker-ev
 `PRODUCTION_MUTATION_STARTED=false`
 
 After this source gate: review/Draft PR/CI/Ready → explicit MERGE → trusted-checkout convergence → root read-only recovery preflight → separate exact LIVE recovery apply → read-only poststate verification. Only after accepted recovery may a **new** READY queue item and a **new** owner-authored LIVE-AUTH/request ID authorize one new genuine canary. Queue #30 and LIVE-AUTH #9 must never be reused.
+
+## Current supersession — loopback provenance reconciliation before replacement dispatch (2026-09-06)
+
+The current dispatch prerequisite is no longer the #30/#9 evidence-write recovery. Accepted #191 evidence records that canary #35/#12 reached helper execution after replay consume and then failed closed on the old helper's LAN origin binding; that pair is consumed and non-reusable. Hermes #847/#848 merged corrected source `f6c48cc85c187d927575da6efef4b05b4d4c0e40` with helper blob `4ef95c3f02b810b6b25721aa1b1b53d43b8ca572` targeting loopback `127.0.0.1:9128` while preserving the reviewed public/Host/six-probe interface.
+
+RPi5 source now has a fail-closed reconciliation contract for the exact installed consumer bindings, helper and registration. This is source readiness only: no runtime replacement, systemd/Docker/network action, helper execution, replay consume or genuine audit is authorized. A replacement dispatch can be considered only after explicit MERGE, fresh exact provenance, separately LIVE-gated runtime convergence and read-only poststate, followed by a new READY queue and new human LIVE-AUTH/request ID.
