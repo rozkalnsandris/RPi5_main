@@ -36,7 +36,7 @@
   },
   "runtime_adapter_preflight": {
     "path": "scripts/preflight-hermes-deals-origin-runtime-adapters.py",
-    "source_blob": "e0843ba76f70ce4c08c7d877c107aeafdb396475",
+    "source_blob": "ed7b94fb3977aa26e69bb0ff1f3ec594e294f10b",
     "root_read_context_required": true,
     "mutation_implemented": false,
     "credential_content_read": false,

@@ -31,11 +31,16 @@ def _fail(message: str) -> None:
     raise RuntimeAdapterPreflightError(message)
 
 
-def _require_source(expected_sha: str) -> None:
-    if SHA_RE.fullmatch(expected_sha) is None:
-        _fail("expected RPi5 source SHA is malformed")
-    result = subprocess.run(
-        ("/usr/bin/git", "rev-parse", "HEAD"),
+def _git(*args: str) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(
+        (
+            "/usr/bin/git",
+            "-c",
+            f"safe.directory={ROOT}",
+            "-C",
+            str(ROOT),
+            *args,
+        ),
         cwd=ROOT,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -43,8 +48,20 @@ def _require_source(expected_sha: str) -> None:
         shell=False,
         env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"},
     )
+
+
+def _require_source(expected_sha: str) -> None:
+    if SHA_RE.fullmatch(expected_sha) is None:
+        _fail("expected RPi5 source SHA is malformed")
+    result = _git("rev-parse", "HEAD")
     if result.returncode != 0 or result.stdout.decode("ascii", "strict").strip() != expected_sha:
         _fail("RPi5 checkout does not match expected source SHA")
+    source = _git("show", f"{expected_sha}:scripts/preflight-hermes-deals-origin-runtime-adapters.py")
+    if source.returncode != 0 or source.stdout != Path(__file__).read_bytes():
+        _fail("runtime-adapter preflight source differs from expected source SHA")
+    status = _git("status", "--porcelain")
+    if status.returncode != 0 or status.stdout:
+        _fail("trusted checkout is not clean")
 
 
 def _receipt(result: str, expected_sha: str, **extra: object) -> str:

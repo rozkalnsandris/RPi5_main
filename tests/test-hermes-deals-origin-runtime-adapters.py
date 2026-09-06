@@ -325,6 +325,10 @@ class ContractAndSourceBoundaryTests(unittest.TestCase):
         source = (
             ROOT / "scripts/preflight-hermes-deals-origin-runtime-adapters.py"
         ).read_text(encoding="utf-8")
+        self.assertIn('f"safe.directory={ROOT}"', source)
+        self.assertIn('_git("rev-parse", "HEAD")', source)
+        self.assertIn('_git("show", f"{expected_sha}:scripts/preflight-hermes-deals-origin-runtime-adapters.py")', source)
+        self.assertIn('_git("status", "--porcelain")', source)
         for token in (
             "--apply",
             "ConcreteHermesDealsSourceAppScopeProver",
