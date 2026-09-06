@@ -184,7 +184,7 @@ The new local runtime prerequisite preflight is source-bound by `ops/deploy/herm
 
 ## Current provenance binding — loopback-corrected helper (2026-09-06)
 
-Canonical #191 continuity now supersedes the old helper as the current static identity without rewriting its historical first-install provenance. The accepted canary using `ops-workflows#35` / `deploy-authorizations#12` consumed replay and reached helper execution, then failed closed because the old helper targeted `http://192.168.0.180:9128`; bounded evidence showed `http://127.0.0.1:9128` healthy. That authorization is consumed and is not retry authority.
+Canonical #191 continuity now supersedes the old helper as the current static identity without rewriting its historical first-install provenance. The accepted canary using `ops-workflows#35` / `deploy-authorizations#12` consumed replay and reached helper execution, then failed closed because the old helper targeted its historical fixed private-LAN origin; bounded evidence showed `http://127.0.0.1:9128` healthy. That authorization is consumed and is not retry authority.
 
 Current reviewed Hermes source is exact `f6c48cc85c187d927575da6efef4b05b4d4c0e40` from #847/#848. Its helper identity is Git blob `4ef95c3f02b810b6b25721aa1b1b53d43b8ca572`, SHA-256 `23b29ff5f800cc5ade9cc8e38607a4e37beae9f45c6c82111ea4b49f063e06cf`; the probe remains blob `2362e8eb578a7279c38fe4ed2a7d1edd05df891a`, SHA-256 `96a8b5819ec85f27095c535f1a3be6cba7bac0e2a40a1132869fb39dc669ad43`. The corresponding canonical registration is blob `a0444a84cb1a54abfeaefb47baf7f0c41b9677d8`, SHA-256 `36c511a36e462bf196a6695c4bac39497c56ab9ef7749aa0b2eb4621e172cad7`, size 338.
 
