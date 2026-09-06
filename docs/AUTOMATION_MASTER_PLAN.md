@@ -968,3 +968,28 @@ Two operators keep runtime proof separated by authority class. `preflight-hermes
 `PRODUCTION_MUTATION_STARTED=false`
 
 Current sequence: focused source/tests/docs review → Draft PR → exact-head CI/review → explicit MERGE → fresh merged-source/trusted-checkout convergence if needed → one root read-only runtime-adapter preflight → only on `HERMES_ORIGIN_RUNTIME_ADAPTERS_READY`, a separate explicit LIVE protected Source App scope proof → only after both proofs are accepted may a later source gate consider broker-entrypoint construction/wiring. This gate does not authorize replay consumption, broker/socket activation changes, helper execution, genuine audit, privileged dispatch, deployment, production-data mutation or runner retirement.
+
+## Current supersession — Hermes broker-entrypoint wiring source gate (2026-09-06)
+
+This section supersedes earlier broker-entrypoint next-action wording. Accepted #191 evidence records both prerequisite runtime proofs on exact reviewed source: the root read-only runtime-adapter preflight returned `HERMES_ORIGIN_RUNTIME_ADAPTERS_READY`, and the separately owner-authorized protected Source App proof returned `HERMES_SOURCE_APP_SCOPE_PROVEN` for exactly `rozkalnsandris/hermes-deals`, one selected repository, and only `actions:read` + `contents:read`. Those are runtime evidence records; repository source does not recreate or broaden either authorization.
+
+This source gate wires the broker entrypoint to a zero-argument fixed runtime factory. The socket caller still controls only `authorization_issue_number`. The factory fixes the isolated authorization surface, execution-disabled operation registry, executor read-client credential, Hermes source credential, source repository, replay store, sanitized host-observation provider and capability-specific helper runner. No repository, SHA, path, command, argv, environment, unit, UID/GID, App, installation or permission selector is accepted from the caller.
+
+The replay boundary is now explicit: the same `ConcreteDurableHermesOriginReplayAuthority` instance is shared with the canonical revalidator; exactly two successful canonical availability checks must precede one durable `consume()`; the consume attempt occurs before helper launch; and once the consume boundary is entered the authorization is non-reusable even if helper execution later fails. Only after a valid `CONSUMED` receipt may the fixed one-shot helper runner start. Public broker receipts expose only allowlisted failure stages and bounded identity/result fields, never token or private-key content.
+
+This is still source readiness, not live activation. The currently installed broker entrypoint is expected to remain the older inert blob until a later separately reviewed upgrade. The current service sandbox uses `ProtectSystem=strict` with no replay-store writable path, while durable consume requires a write to `/var/lib/rozkalns-deploy-executor-p9`. Therefore this source gate deliberately keeps `LIVE_INSTALL_ELIGIBLE=false`; it does not alter the service unit, installed files, socket state, credentials or runtime permissions.
+
+`PHASE4_CURRENT_WORK_ITEM=HERMES_ORIGIN_BROKER_ENTRYPOINT_WIRING_SOURCE`
+`BROKER_ENTRYPOINT_WIRED=true`
+`HELPER_PROCESS_LAUNCH_WIRED=true`
+`DURABLE_REPLAY_CONSUME_BEFORE_HELPER=true`
+`CALLER_AUTHORITY=authorization_issue_number`
+`CURRENT_INSTALLED_ENTRYPOINT_UPGRADED=false`
+`CURRENT_SERVICE_REPLAY_WRITE_AUTHORITY_PROVEN=false`
+`LIVE_INSTALL_ELIGIBLE=false`
+`PRIVILEGED_DISPATCH_ENABLED=false`
+`GENUINE_HERMES_AUDIT_AUTHORIZED=false`
+`RUNNER_RETIREMENT_ELIGIBLE=false`
+`PRODUCTION_MUTATION_STARTED=false`
+
+Current sequence: source review/Draft PR/CI/Ready → explicit MERGE → fresh exact merged-source validation → a separate source gate for exact broker/runtime upgrade provenance plus the minimum replay-store write permission required by durable consume → separate MERGE → trusted-checkout convergence and root read-only upgrade preflight → separate explicit LIVE runtime upgrade → read-only post-upgrade verification → only then a separate STRICT authorization for one genuine read-only audit canary. Runner retirement remains a later independent LIVE gate.

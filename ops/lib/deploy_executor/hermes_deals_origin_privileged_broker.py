@@ -33,7 +33,7 @@ BROKER_SERVICE_UNIT = "rozkalns-hermes-deals-origin-broker@.service"
 BROKER_INSTALL_PATH = "/usr/local/libexec/rozkalns-hermes-deals-origin-broker"
 SOURCE_READ_AUTHORITY_PROVEN = False
 HELPER_PROCESS_LAUNCH_IMPLEMENTED = True
-HELPER_PROCESS_LAUNCH_WIRED = False
+HELPER_PROCESS_LAUNCH_WIRED = True
 CONCRETE_CANONICAL_REVALIDATOR_IMPLEMENTED = True
 SANITIZED_HOST_EVIDENCE_RESOLVER_IMPLEMENTED = True
 BROKER_COMPOSITION_IMPLEMENTED = True
@@ -199,5 +199,5 @@ def source_readiness() -> Mapping[str, Any]:
         "runner_retirement_eligible": RUNNER_RETIREMENT_ELIGIBLE,
         "production_mutation_started": PRODUCTION_MUTATION_STARTED,
         "live_install_eligible": LIVE_INSTALL_ELIGIBLE,
-        "blocking_prerequisite": "merge and freshly validate the source integration, then complete a separate read-only runtime preflight before any LIVE installation decision",
+        "blocking_prerequisite": "source entrypoint wiring is not live-install eligible until a separate reviewed upgrade gate binds the new broker/runtime blobs and grants only the replay-store write path required for durable consume",
     }

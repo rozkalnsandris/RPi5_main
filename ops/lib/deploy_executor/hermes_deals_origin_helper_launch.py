@@ -25,7 +25,7 @@ from .hermes_deals_origin_privileged_dispatcher import (
 )
 
 HELPER_PROCESS_LAUNCH_IMPLEMENTED = True
-HELPER_PROCESS_LAUNCH_WIRED = False
+HELPER_PROCESS_LAUNCH_WIRED = True
 HELPER_TIMEOUT_SECONDS = 50
 MAX_STDOUT_BYTES = 4096
 MAX_STDERR_BYTES = 4096
@@ -87,7 +87,7 @@ def _kill_and_wait(process: subprocess.Popen[bytes]) -> None:
         pass
 
 
-def _run_fixed_helper_process(
+def run_fixed_helper_process(
     argv: tuple[str, str, str],
     *,
     env: Mapping[str, str],
@@ -228,7 +228,7 @@ def _validate_result(
 class HermesDealsOriginOneShotHelperLauncher:
     """One-shot fixed helper launcher; the socket caller never receives this seam."""
 
-    def __init__(self, *, runner: FixedHelperRunner = _run_fixed_helper_process):
+    def __init__(self, *, runner: FixedHelperRunner = run_fixed_helper_process):
         self._runner = runner
         self._invoked = False
 
@@ -271,6 +271,14 @@ class HermesDealsOriginOneShotHelperLauncher:
             helper_exit_code=result.returncode,
             stdout_validated=True,
         )
+
+    def launch_prepared_plan(
+        self,
+        plan: HermesDealsOriginPrivilegedDispatchPlan,
+    ) -> HermesDealsOriginHelperLaunchReceipt:
+        """Launch only a plan already produced by the canonical dispatcher boundary."""
+
+        return self._launch_validated_plan(plan)
 
     def prepare_and_launch(
         self,

@@ -229,7 +229,8 @@ class HermesDealsOriginPrivilegedBrokerTests(unittest.TestCase):
             with self.subTest(token=token):
                 self.assertNotIn(token, combined)
         self.assertIn("prepare_hermes_deals_origin_privileged_dispatch(", broker_source)
-        self.assertIn("SOURCE_AUTHORITY_UNPROVEN", entrypoint)
+        self.assertIn("build_runtime_broker_composition", entrypoint)
+        self.assertNotIn("SOURCE_AUTHORITY_UNPROVEN", entrypoint)
 
     def test_installation_manifest_tracks_365_prerequisite_and_stays_non_live(self):
         manifest = json.loads(
@@ -290,9 +291,9 @@ class HermesDealsOriginPrivilegedBrokerTests(unittest.TestCase):
         self.assertTrue(flags["concrete_canonical_revalidator_implemented"])
         self.assertTrue(flags["sanitized_host_evidence_resolver_implemented"])
         self.assertTrue(flags["broker_composition_implemented"])
-        self.assertFalse(flags["broker_entrypoint_wired"])
+        self.assertTrue(flags["broker_entrypoint_wired"])
         self.assertTrue(flags["helper_process_launch_implemented"])
-        self.assertFalse(flags["helper_process_launch_wired"])
+        self.assertTrue(flags["helper_process_launch_wired"])
         self.assertFalse(flags["privileged_dispatch_enabled"])
         self.assertFalse(flags["host_wiring_enabled"])
         self.assertFalse(flags["genuine_hermes_audit_authorized"])
@@ -356,7 +357,7 @@ class HermesDealsOriginPrivilegedBrokerTests(unittest.TestCase):
         self.assertEqual(readiness["caller_authority"], ("authorization_issue_number",))
         self.assertFalse(readiness["source_read_authority_proven"])
         self.assertTrue(readiness["helper_process_launch_implemented"])
-        self.assertFalse(readiness["helper_process_launch_wired"])
+        self.assertTrue(readiness["helper_process_launch_wired"])
         self.assertTrue(readiness["concrete_canonical_revalidator_implemented"])
         self.assertTrue(readiness["sanitized_host_evidence_resolver_implemented"])
         self.assertTrue(readiness["broker_composition_implemented"])

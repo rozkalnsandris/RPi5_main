@@ -5,6 +5,7 @@ import inspect
 import json
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 import unittest
 from urllib.parse import urlsplit
 
@@ -19,7 +20,12 @@ from deploy_executor.hermes_deals_origin_adapter import (  # noqa: E402
 )
 from deploy_executor.hermes_deals_origin_broker_composition import (  # noqa: E402
     HermesDealsOriginBrokerComposition,
+    HermesDealsOriginBrokerCompositionError,
     source_readiness as composition_readiness,
+)
+from deploy_executor.hermes_deals_origin_broker_runtime import (  # noqa: E402
+    build_runtime_broker_composition,
+    source_readiness as runtime_readiness,
 )
 from deploy_executor.hermes_deals_origin_canonical_revalidator import (  # noqa: E402
     ConcreteCanonicalHermesOriginRevalidator,
@@ -258,13 +264,30 @@ def _client(provider: object, sender: GitHubFixtureSender) -> GitHubRestClient:
 
 
 class ReplayAvailability:
-    def __init__(self, available: bool = True):
+    def __init__(self, available: bool = True, *, invalid_receipt: bool = False):
         self.available = available
+        self.invalid_receipt = invalid_receipt
         self.calls: list[str] = []
+        self.consume_calls: list[str] = []
+        self.consumed = False
 
     def is_available(self, accepted: object) -> bool:
         self.calls.append(accepted.request_id)
-        return self.available
+        return self.available and not self.consumed
+
+    def consume(self, request_id: str) -> object:
+        self.consume_calls.append(request_id)
+        if self.consumed or self.calls != [request_id, request_id]:
+            raise RuntimeError("consume requires exactly two prior availability checks")
+        self.consumed = True
+        return SimpleNamespace(
+            request_id=request_id,
+            state="BROKEN" if self.invalid_receipt else "CONSUMED",
+            availability_checks=2,
+            durable_replay_consumed=True,
+            replay_mutation_started=True,
+            production_mutation_started=False,
+        )
 
 
 def _revalidator(
@@ -350,8 +373,9 @@ class ObservationProvider:
 
 
 class FakeRunner:
-    def __init__(self):
+    def __init__(self, replay: ReplayAvailability | None = None):
         self.calls: list[tuple[object, ...]] = []
+        self.replay = replay
 
     def __call__(
         self,
@@ -362,6 +386,8 @@ class FakeRunner:
         stdout_limit: int,
         stderr_limit: int,
     ) -> HelperProcessResult:
+        if self.replay is not None and self.replay.consume_calls != [REQUEST_ID]:
+            raise AssertionError("helper runner entered before durable replay consume")
         self.calls.append((argv, env, timeout_seconds, stdout_limit, stderr_limit))
         return HelperProcessResult(
             returncode=0,
@@ -437,14 +463,15 @@ class CanonicalHermesOriginRevalidatorTests(unittest.TestCase):
 
     def test_second_canonical_pass_detects_authorization_drift(self):
         sender = GitHubFixtureSender(replay_authorization_drift=True)
-        revalidator, _, _ = _revalidator(sender)
+        revalidator, _, replay = _revalidator(sender)
         host = ConcreteSanitizedHermesOriginHostEvidenceResolver(
             observation_provider=ObservationProvider()
         )
-        runner = FakeRunner()
+        runner = FakeRunner(replay)
         composition = HermesDealsOriginBrokerComposition(
             canonical_revalidator=revalidator,
             host_evidence_resolver=host,
+            replay_authority=replay,
             runner=runner,
         )
         with self.assertRaises(Exception):
@@ -565,10 +592,11 @@ class HermesOriginBrokerCompositionTests(unittest.TestCase):
         resolver = ConcreteSanitizedHermesOriginHostEvidenceResolver(
             observation_provider=provider
         )
-        runner = FakeRunner()
+        runner = FakeRunner(replay)
         composition = HermesDealsOriginBrokerComposition(
             canonical_revalidator=revalidator,
             host_evidence_resolver=resolver,
+            replay_authority=replay,
             runner=runner,
         )
         return composition, runner, provider, sender, replay
@@ -581,8 +609,12 @@ class HermesOriginBrokerCompositionTests(unittest.TestCase):
         self.assertEqual(receipt.canonical_as_of, "2026-09-04")
         self.assertEqual(receipt.helper_arguments, (SOURCE_SHA, "2026-09-04"))
         self.assertFalse(receipt.production_mutation_started)
+        self.assertTrue(receipt.durable_replay_consumed)
+        self.assertTrue(receipt.replay_mutation_started)
+        self.assertTrue(receipt.authorization_reuse_forbidden)
         self.assertEqual(provider.calls, 1)
         self.assertEqual(replay.calls, [REQUEST_ID, REQUEST_ID])
+        self.assertEqual(replay.consume_calls, [REQUEST_ID])
         self.assertEqual(len(runner.calls), 1)
         argv, env, timeout, stdout_limit, stderr_limit = runner.calls[0]
         self.assertEqual(argv, (INSTALLED_HELPER_PATH, SOURCE_SHA, "2026-09-04"))
@@ -597,8 +629,10 @@ class HermesOriginBrokerCompositionTests(unittest.TestCase):
             _host_observation(pull_helper_source_blob="0" * 40)
         )
         composition, runner, _, _, _ = self.composition(provider=bad_provider)
-        with self.assertRaises(SanitizedHermesOriginHostEvidenceError):
+        with self.assertRaises(HermesDealsOriginBrokerCompositionError) as caught:
             composition.prepare_and_launch(_request_bytes())
+        self.assertEqual(caught.exception.stage, "canonical_prepare")
+        self.assertFalse(caught.exception.replay_consume_attempted)
         self.assertEqual(runner.calls, [])
 
         for field in (
@@ -619,10 +653,58 @@ class HermesOriginBrokerCompositionTests(unittest.TestCase):
                 composition.prepare_and_launch(_request_bytes(**{field: "untrusted"}))
             self.assertEqual(runner.calls, [])
 
+    def test_invalid_replay_consume_receipt_blocks_helper_and_forbids_retry(self):
+        replay = ReplayAvailability(invalid_receipt=True)
+        revalidator, sender, replay = _revalidator(replay=replay)
+        provider = ObservationProvider()
+        resolver = ConcreteSanitizedHermesOriginHostEvidenceResolver(
+            observation_provider=provider
+        )
+        runner = FakeRunner()
+        composition = HermesDealsOriginBrokerComposition(
+            canonical_revalidator=revalidator,
+            host_evidence_resolver=resolver,
+            replay_authority=replay,
+            runner=runner,
+        )
+        with self.assertRaises(HermesDealsOriginBrokerCompositionError) as caught:
+            composition.prepare_and_launch(_request_bytes())
+        self.assertEqual(caught.exception.stage, "replay_consume")
+        self.assertTrue(caught.exception.replay_consume_attempted)
+        self.assertEqual(replay.calls, [REQUEST_ID, REQUEST_ID])
+        self.assertEqual(replay.consume_calls, [REQUEST_ID])
+        self.assertEqual(runner.calls, [])
+
+    def test_runtime_factory_is_zero_argument_fixed_authority_only(self):
+        self.assertEqual(tuple(inspect.signature(build_runtime_broker_composition).parameters), ())
+        source = (
+            ROOT / "ops/lib/deploy_executor/hermes_deals_origin_broker_runtime.py"
+        ).read_text(encoding="utf-8")
+        for required in (
+            "/etc/rozkalns-deploy-executor-p9/executor-p9-isolated-auth-surface.json",
+            "/etc/rozkalns-deploy-executor-p9/executor-operations.json",
+            "/etc/rozkalns-deploy-executor/github-app.pem",
+            "build_hermes_deals_source_token_provider",
+            "ConcreteDurableHermesOriginReplayAuthority",
+            "ConcreteLocalHermesOriginHostObservationProvider",
+            "run_fixed_helper_process",
+        ):
+            self.assertIn(required, source)
+        for forbidden in (
+            "argparse",
+            "sys.argv",
+            "shell=True",
+            "sudo ",
+            "systemctl ",
+            "repository=argv",
+            "private_key=argv",
+        ):
+            self.assertNotIn(forbidden, source)
+
     def test_second_invocation_is_rejected_and_real_helper_is_never_selected(self):
         composition, runner, _, _, _ = self.composition()
         composition.prepare_and_launch(_request_bytes())
-        with self.assertRaises(HermesDealsOriginHelperLaunchError):
+        with self.assertRaises(HermesDealsOriginBrokerCompositionError):
             composition.prepare_and_launch(_request_bytes())
         self.assertEqual(len(runner.calls), 1)
 
@@ -630,7 +712,7 @@ class HermesOriginBrokerCompositionTests(unittest.TestCase):
             ROOT
             / "ops/lib/deploy_executor/hermes_deals_origin_broker_composition.py"
         ).read_text(encoding="utf-8")
-        self.assertNotIn("_run_fixed_helper_process", source)
+        self.assertNotIn("run_fixed_helper_process", source)
         self.assertNotIn("import subprocess", source)
         self.assertNotIn("shell=True", source)
         self.assertNotIn("sudo ", source)
@@ -647,8 +729,14 @@ class HermesOriginBrokerCompositionTests(unittest.TestCase):
         self.assertFalse(host["host_wiring_enabled"])
         self.assertFalse(host["production_mutation_started"])
         self.assertTrue(composition["broker_composition_implemented"])
+        self.assertTrue(composition["broker_entrypoint_wired"])
+        self.assertTrue(composition["durable_replay_consume_before_helper"])
+        runtime = runtime_readiness()
+        self.assertTrue(runtime["broker_runtime_factory_implemented"])
+        self.assertEqual(runtime["factory_arguments"], ())
+        self.assertTrue(runtime["broker_entrypoint_wired"])
+        self.assertTrue(runtime["durable_replay_consume_before_helper"])
         for flag in (
-            "broker_entrypoint_wired",
             "privileged_dispatch_enabled",
             "host_wiring_enabled",
             "live_install_eligible",
@@ -657,6 +745,8 @@ class HermesOriginBrokerCompositionTests(unittest.TestCase):
             "production_mutation_started",
         ):
             self.assertFalse(composition[flag], flag)
+        self.assertFalse(runtime["live_install_eligible"])
+        self.assertFalse(runtime["production_mutation_started"])
 
     def test_manifest_and_docs_record_source_truth_without_runtime_claims(self):
         manifest = json.loads(
@@ -676,7 +766,10 @@ class HermesOriginBrokerCompositionTests(unittest.TestCase):
             manifest["eligible_source_sha_status"],
             "MERGED_SOURCE_RUNTIME_PREFLIGHT_REQUIRED",
         )
-        self.assertEqual(manifest["source_integration"]["status"], "MERGED_SOURCE_RUNTIME_UNPROVEN")
+        self.assertEqual(
+            manifest["source_integration"]["status"],
+            "SOURCE_ENTRYPOINT_WIRED_RUNTIME_UPGRADE_REQUIRED",
+        )
         self.assertFalse(manifest["post_merge_source_evidence"]["runtime_state_proven"])
         self.assertFalse(manifest["live_install_eligible"])
         self.assertFalse(
@@ -689,9 +782,18 @@ class HermesOriginBrokerCompositionTests(unittest.TestCase):
                 "host_observation_adapter_runtime_proven"
             ]
         )
+        self.assertTrue(manifest["source_gate_flags"]["broker_entrypoint_wired"])
+        self.assertTrue(manifest["source_gate_flags"]["helper_process_launch_wired"])
+        wiring = manifest["broker_entrypoint_wiring_source"]
+        self.assertEqual(wiring["status"], "SOURCE_WIRED_NOT_LIVE_INSTALL_ELIGIBLE")
+        self.assertEqual(wiring["caller_authority"], ["authorization_issue_number"])
+        self.assertEqual(wiring["replay_availability_checks_before_consume"], 2)
+        self.assertTrue(wiring["durable_replay_consume_before_helper"])
+        self.assertTrue(wiring["authorization_reuse_forbidden_after_consume_attempt"])
+        self.assertTrue(wiring["current_installed_entrypoint_expected_inert"])
+        self.assertFalse(wiring["current_service_replay_write_authority_proven"])
+        self.assertFalse(wiring["live_install_eligible"])
         for flag in (
-            "broker_entrypoint_wired",
-            "helper_process_launch_wired",
             "privileged_dispatch_enabled",
             "host_wiring_enabled",
             "genuine_hermes_audit_authorized",
@@ -706,14 +808,19 @@ class HermesOriginBrokerCompositionTests(unittest.TestCase):
         historical = master.index(
             "## Current supersession — Hermes source auth + bounded helper launch gate"
         )
-        current = master.index(
+        integration = master.index(
             "## Current supersession — Hermes canonical source-integration gate"
         )
-        self.assertLess(historical, current)
+        current = master.index(
+            "## Current supersession — Hermes broker-entrypoint wiring source gate (2026-09-06)"
+        )
+        self.assertLess(historical, integration)
+        self.assertLess(integration, current)
         current_text = master[current:]
-        self.assertIn("CONCRETE_CANONICAL_REVALIDATOR_IMPLEMENTED=true", current_text)
-        self.assertIn("SANITIZED_HOST_EVIDENCE_RESOLVER_IMPLEMENTED=true", current_text)
-        self.assertIn("BROKER_ENTRYPOINT_WIRED=false", current_text)
+        self.assertIn("BROKER_ENTRYPOINT_WIRED=true", current_text)
+        self.assertIn("HELPER_PROCESS_LAUNCH_WIRED=true", current_text)
+        self.assertIn("DURABLE_REPLAY_CONSUME_BEFORE_HELPER=true", current_text)
+        self.assertIn("CURRENT_SERVICE_REPLAY_WRITE_AUTHORITY_PROVEN=false", current_text)
         self.assertIn("LIVE_INSTALL_ELIGIBLE=false", current_text)
         self.assertIn("PRODUCTION_MUTATION_STARTED=false", current_text)
 
@@ -722,10 +829,14 @@ class HermesOriginBrokerCompositionTests(unittest.TestCase):
             "docs/HERMES_DEALS_ORIGIN_PULL_CANARY_SOURCE.md",
         ):
             text = (ROOT / path).read_text(encoding="utf-8")
-            supersession = text.index("Source-integration supersession after merged #365/#366")
+            supersession = text.index(
+                "## Current supersession — Hermes broker-entrypoint wiring source gate (2026-09-06)"
+            )
             current_text = text[supersession:]
-            self.assertIn("CONCRETE_CANONICAL_REVALIDATOR_IMPLEMENTED=true", current_text)
-            self.assertIn("SOURCE_READ_AUTHORITY_PROVEN=false", current_text)
+            self.assertIn("BROKER_ENTRYPOINT_WIRED=true", current_text)
+            self.assertIn("HELPER_PROCESS_LAUNCH_WIRED=true", current_text)
+            self.assertIn("DURABLE_REPLAY_CONSUME_BEFORE_HELPER=true", current_text)
+            self.assertIn("CURRENT_SERVICE_REPLAY_WRITE_AUTHORITY_PROVEN=false", current_text)
             self.assertIn("LIVE_INSTALL_ELIGIBLE=false", current_text)
             self.assertIn("PRODUCTION_MUTATION_STARTED=false", current_text)
 
