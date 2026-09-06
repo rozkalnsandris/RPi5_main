@@ -212,6 +212,11 @@ assert next_command["canonical_non_gate_commands"] == {
     "select_next_canonical_lane": "START RPi5_main",
 }
 assert next_command["never_implies_merge_or_live_authority"] is True
+canonical_non_gate = set(next_command["canonical_non_gate_commands"].values())
+routable_fast = set(routing["bare_continuation_commands"])
+assert canonical_non_gate <= routable_fast
+for command_text in canonical_non_gate:
+    assert routing["examples"][command_text] == "FAST-LANE v2.2"
 
 assert "AUTO-RUN FULL RPi5_main #<issue>" in doc
 assert "normal implementation lane" in doc
