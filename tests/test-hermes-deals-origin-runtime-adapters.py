@@ -28,7 +28,9 @@ from deploy_executor.protocol import (  # noqa: E402
 from deploy_executor.state import StateStore  # noqa: E402
 from deploy_executor.transport import InstallationToken  # noqa: E402
 
-SOURCE_SHA = "e949f7835898fc207aa137cb26ffb6dfc701a497"
+SOURCE_SHA = subprocess.check_output(
+    ("git", "rev-parse", "HEAD"), cwd=ROOT, text=True
+).strip()
 REQUEST_ID = "123e4567-e89b-42d3-a456-426614174000"
 
 
