@@ -463,7 +463,7 @@ class HermesDealsOriginSourceAuthHelperLaunchTests(unittest.TestCase):
 
         launch = launch_readiness()
         self.assertTrue(launch["helper_process_launch_implemented"])
-        self.assertFalse(launch["helper_process_launch_wired"])
+        self.assertTrue(launch["helper_process_launch_wired"])
         self.assertEqual(launch["executable"], INSTALLED_HELPER_PATH)
         self.assertEqual(launch["argument_names"], PULL_HELPER_ARGUMENTS)
         self.assertFalse(launch["shell"])

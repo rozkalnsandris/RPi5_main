@@ -1,8 +1,18 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from dataclasses import asdict
+import json
 import sys
 
+from deploy_executor.hermes_deals_origin_broker_composition import (
+    BROKER_DISPATCH_RECEIPT_SCHEMA,
+    HermesDealsOriginBrokerCompositionError,
+)
+from deploy_executor.hermes_deals_origin_broker_runtime import (
+    HermesDealsOriginBrokerRuntimeError,
+    build_runtime_broker_composition,
+)
 from deploy_executor.hermes_deals_origin_privileged_broker import (
     BROKER_REQUEST_MAX_BYTES,
     HermesDealsOriginPrivilegedBrokerError,
@@ -10,26 +20,65 @@ from deploy_executor.hermes_deals_origin_privileged_broker import (
 )
 
 
+def _json(value: dict[str, object]) -> str:
+    return json.dumps(value, sort_keys=True, separators=(',', ':'))
+
+
+def _failure(
+    issue_number: int,
+    *,
+    safe_stage: str,
+    replay_consume_attempted: bool = False,
+    durable_replay_consumed: bool = False,
+    helper_execution_attempted: bool = False,
+) -> str:
+    return _json({
+        'schema': BROKER_DISPATCH_RECEIPT_SCHEMA,
+        'result': 'FAIL_CLOSED',
+        'authorization_issue_number': issue_number,
+        'safe_stage': safe_stage,
+        'replay_consume_attempted': replay_consume_attempted,
+        'durable_replay_consumed': durable_replay_consumed,
+        'authorization_reuse_forbidden': replay_consume_attempted,
+        'helper_execution_attempted': helper_execution_attempted,
+        'production_mutation_started': False,
+    })
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
     if len(argv) != 1:
-        print("HERMES_ORIGIN_BROKER=REJECTED reason=arguments_forbidden", file=sys.stderr)
+        print('HERMES_ORIGIN_BROKER=REJECTED reason=arguments_forbidden', file=sys.stderr)
         return 64
 
     raw = sys.stdin.buffer.read(BROKER_REQUEST_MAX_BYTES + 1)
     try:
         request = parse_broker_transport_request(raw)
     except HermesDealsOriginPrivilegedBrokerError:
-        print("HERMES_ORIGIN_BROKER=REJECTED reason=invalid_identity_frame", file=sys.stderr)
+        print('HERMES_ORIGIN_BROKER=REJECTED reason=invalid_identity_frame', file=sys.stderr)
         return 65
 
-    print(
-        "HERMES_ORIGIN_BROKER=SOURCE_AUTHORITY_UNPROVEN "
-        f"authorization_issue_number={request.authorization_issue_number} "
-        "dispatch=false host_wiring=false production_mutation_started=false"
-    )
-    return 78
+    try:
+        composition = build_runtime_broker_composition()
+    except HermesDealsOriginBrokerRuntimeError:
+        print(_failure(request.authorization_issue_number, safe_stage='runtime_composition'))
+        return 70
+
+    try:
+        receipt = composition.prepare_and_launch(raw)
+    except HermesDealsOriginBrokerCompositionError as exc:
+        print(_failure(
+            request.authorization_issue_number,
+            safe_stage=exc.stage,
+            replay_consume_attempted=exc.replay_consume_attempted,
+            durable_replay_consumed=exc.durable_replay_consumed,
+            helper_execution_attempted=exc.helper_execution_attempted,
+        ))
+        return 71
+
+    print(_json(asdict(receipt)))
+    return 0
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     raise SystemExit(main())

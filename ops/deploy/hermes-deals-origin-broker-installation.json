@@ -47,7 +47,7 @@
     "blocking_reason": "source token composition is reviewed but current host credential/install state remains unproven"
   },
   "source_integration": {
-    "status": "MERGED_SOURCE_RUNTIME_UNPROVEN",
+    "status": "SOURCE_ENTRYPOINT_WIRED_RUNTIME_UPGRADE_REQUIRED",
     "canonical_revalidator": "ConcreteCanonicalHermesOriginRevalidator",
     "sanitized_host_evidence_resolver": "ConcreteSanitizedHermesOriginHostEvidenceResolver",
     "broker_composition": "HermesDealsOriginBrokerComposition",
@@ -64,9 +64,13 @@
     "host_observation_provider_arguments": [],
     "durable_replay_adapter_runtime_proven": false,
     "host_observation_adapter_runtime_proven": false,
-    "broker_entrypoint_wired": false,
+    "broker_entrypoint_wired": true,
     "merged_source_sha": "2550e77f6cb811ca6f10b49ef0b2fef554d64869",
-    "merged_source_sha_semantics": "PR_368_IMPLEMENTATION_MERGE_SHA_NOT_CURRENT_CONTROL_PLANE"
+    "merged_source_sha_semantics": "PR_368_IMPLEMENTATION_MERGE_SHA_NOT_CURRENT_CONTROL_PLANE",
+    "helper_process_launch_wired": true,
+    "durable_replay_consume_before_helper": true,
+    "shared_replay_authority_required": true,
+    "runtime_upgrade_applied": false
   },
   "transport": {
     "kind": "systemd-unix-stream-socket",
@@ -295,9 +299,9 @@
     "concrete_canonical_revalidator_implemented": true,
     "sanitized_host_evidence_resolver_implemented": true,
     "broker_composition_implemented": true,
-    "broker_entrypoint_wired": false,
+    "broker_entrypoint_wired": true,
     "helper_process_launch_implemented": true,
-    "helper_process_launch_wired": false,
+    "helper_process_launch_wired": true,
     "privileged_dispatch_enabled": false,
     "host_wiring_enabled": false,
     "genuine_hermes_audit_authorized": false,
@@ -307,14 +311,17 @@
   },
   "state_contract": {
     "broker_local_mutable_state": null,
-    "status": "NO_NEW_BROKER_STATE_AUTHORITY",
-    "requirement": "replay/consumption and canonical queue/source state must remain independently revalidated by the concrete Hermes canonical revalidator immediately before any fixed helper launch",
-    "durable_replay_availability_adapter_runtime_proven": false
+    "status": "SOURCE_CONSUME_BOUNDARY_IMPLEMENTED_RUNTIME_WRITE_AUTHORITY_UNPROVEN",
+    "requirement": "the same durable replay authority must pass exactly two canonical availability checks, then consume exactly once before any fixed helper launch; a consume attempt makes authorization reuse forbidden",
+    "durable_replay_availability_adapter_runtime_proven": false,
+    "durable_replay_consume_before_helper": true,
+    "current_service_replay_write_authority_proven": false
   },
   "next_gates": [
-    "resolve current RPi5_main/main at preflight; require descendant-or-equal to eligible_source_sha, exact immutable nine broker install-target blob matches, and exact existing p9_source_auth shared-prerequisite identity before the separate read-only runtime App credential-metadata replay-store registration helper broker socket and service preflight",
-    "separate owner LIVE authorization for exact host installation/activation only if all source/runtime prerequisites pass",
-    "separate STRICT authorization for one genuine read-only origin audit canary",
+    "merge and freshly validate this source-only broker-entrypoint wiring gate",
+    "separate source gate for exact installed broker/runtime upgrade provenance plus only the replay-store write permission required by durable consume",
+    "after that source gate is merged: trusted-checkout convergence, root read-only upgrade preflight, then separate owner LIVE runtime upgrade authorization",
+    "separate STRICT authorization for one genuine read-only origin audit canary only after accepted post-upgrade verification",
     "separate owner LIVE authorization for any runner retirement"
   ],
   "completed_source_integration": {
@@ -349,5 +356,24 @@
     "runtime_state_proven": false,
     "rpi5_main_sha": "2550e77f6cb811ca6f10b49ef0b2fef554d64869",
     "rpi5_main_sha_semantics": "PR_368_IMPLEMENTATION_MERGE_SHA_NOT_CURRENT_CONTROL_PLANE"
+  },
+  "broker_entrypoint_wiring_source": {
+    "status": "SOURCE_WIRED_NOT_LIVE_INSTALL_ELIGIBLE",
+    "runtime_factory": "ops/lib/deploy_executor/hermes_deals_origin_broker_runtime.py",
+    "caller_authority": [
+      "authorization_issue_number"
+    ],
+    "canonical_double_revalidation_required": true,
+    "shared_replay_authority_required": true,
+    "replay_availability_checks_before_consume": 2,
+    "durable_replay_consume_before_helper": true,
+    "authorization_reuse_forbidden_after_consume_attempt": true,
+    "fixed_helper_runner_only": true,
+    "current_installed_entrypoint_expected_inert": true,
+    "current_service_replay_write_authority_proven": false,
+    "replay_state_directory": "/var/lib/rozkalns-deploy-executor-p9",
+    "new_runtime_module_installed": false,
+    "live_install_eligible": false,
+    "next_source_gate": "EXACT_BROKER_RUNTIME_UPGRADE_PROVENANCE_AND_MINIMAL_REPLAY_WRITE_PERMISSION"
   }
 }
