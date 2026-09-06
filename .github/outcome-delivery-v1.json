@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "policy": "OUTCOME DELIVERY v1",
+  "repository": "rozkalnsandris/RPi5_main",
+  "status": "ACTIVE",
+  "principle": "ONE_VISIBLE_OUTCOME_PER_DELIVERY_UNIT",
+  "delivery_unit": {
+    "default": "SINGLE_OUTCOME_PR",
+    "issue_first_for_implementation": true,
+    "one_outcome_issue": true,
+    "one_outcome_branch": true,
+    "one_outcome_pr": true,
+    "closely_related_same_risk_work_items_min": 2,
+    "closely_related_same_risk_work_items_max": 5,
+    "keep_small_logical_commits_inside_pr": true,
+    "vertical_slice_components_as_applicable": [
+      "IMPLEMENTATION",
+      "WIRING_OR_INTEGRATION",
+      "TESTS",
+      "OPERATOR_OR_PREFLIGHT",
+      "DOCS_AND_PROVENANCE"
+    ],
+    "split_only_when": [
+      "INDEPENDENTLY_VALUABLE_OUTCOME",
+      "DIFFERENT_RISK_OR_TRUST_BOUNDARY",
+      "DIFFERENT_RUNTIME_TARGET_OR_OWNER_DECISION",
+      "REVIEWABILITY_REQUIRES_A_SEPARATE_COHERENT_OUTCOME"
+    ],
+    "do_not_split_only_because": [
+      "INTERNAL_LAYER_BOUNDARY",
+      "PROOF_OBJECT_BOUNDARY",
+      "DOCUMENTATION_FOLLOWS_IMPLEMENTATION",
+      "TESTS_FOLLOW_IMPLEMENTATION"
+    ]
+  },
+  "stacked_pull_requests": {
+    "github_feature_status": "PUBLIC_PREVIEW",
+    "default_enabled": false,
+    "allowed_under_current_rpi5_main_policy": false,
+    "reason": "CURRENT_NO_FORCE_PUSH_AND_NO_HISTORY_REWRITE_POLICY",
+    "github_requires_linear_stack_history": true,
+    "github_stack_maintenance_uses_rebase": true,
+    "github_cli_stack_push_uses_force_with_lease": true,
+    "github_auto_merge_supported_for_stacked_prs": false,
+    "may_enable_only_after_explicit_repository_policy_change": true,
+    "do_not_simulate_with_serial_dependent_prs": true
+  },
+  "ci": {
+    "preserve_existing_main_ruleset": true,
+    "preserve_strict_required_status_checks": true,
+    "preserve_required_review_thread_resolution": true,
+    "preserve_squash_only_merge": true,
+    "preserve_no_bypass": true,
+    "superseded_pr_runs_may_be_cancelled": true,
+    "do_not_reduce_required_checks_for_speed": true
+  },
+  "fast_merge": {
+    "explicit_owner_authorization_required": true,
+    "canonical_authorization_syntax": "MERGE RPi5_main #<pr> HEAD=<sha>",
+    "authorization_may_be_issued_while_required_checks_are_pending": true,
+    "final_diff_must_be_frozen_before_authorization": true,
+    "authorization_binds": [
+      "REPOSITORY",
+      "PULL_REQUEST_NUMBER",
+      "EXACT_HEAD_SHA"
+    ],
+    "head_change_invalidates_authorization": true,
+    "base_drift_requiring_a_new_head_invalidates_authorization": true,
+    "pending_state": "MERGE_AUTHORIZED_PENDING_CHECKS",
+    "execution_requires": [
+      "FRESH_PR_AND_MAIN_READ",
+      "EXACT_HEAD_SHA_UNCHANGED",
+      "FINAL_SCOPE_DIFF_STILL_MATCHES",
+      "ALL_REQUIRED_STATUS_CHECKS_PASS",
+      "ZERO_UNRESOLVED_REVIEW_THREADS",
+      "FRESH_MERGEABILITY_ACCEPTABLE",
+      "RULESET_REQUIREMENTS_SATISFIED"
+    ],
+    "merge_method": "SQUASH",
+    "expected_head_guard_required": true,
+    "early_github_auto_merge_for_sha_bound_fast_authorization": false,
+    "failure_or_head_drift": "STOP_WITHOUT_MERGE"
+  },
+  "auto_run_full": {
+    "default_delivery_unit": "SINGLE_OUTCOME_PR",
+    "activation_is_issue_scoped_merge_authority": true,
+    "separate_fast_merge_gate_required": false,
+    "github_auto_merge_only_after_final_exact_head_readiness": true,
+    "head_change_requires_fresh_readiness": true,
+    "native_stacked_prs_default": false
+  },
+  "live": {
+    "merge_never_authorizes_live": true,
+    "normal_owner_gate": "ONE_BOUNDED_COMPOSITE_LIVE_IF_RUNTIME_MUTATION_IS_REQUIRED",
+    "bind_exact_sha_target_mutation_classes_and_limits": true,
+    "authorization_consumed_at_first_live_mutation": true,
+    "post_mutation_error_without_predeclared_recovery": "STOP_NO_RETRY_ROLLBACK_CLEANUP_OR_ALTERNATE_PATH"
+  },
+  "continuity": {
+    "preferred_current_section_fields": [
+      "GOAL",
+      "DONE",
+      "REMAINING",
+      "EXACT_NEXT_GATE"
+    ],
+    "historical_detail_should_not_replace_current_state": true
+  },
+  "evidence_reviewed_utc_date": "2026-09-06"
+}

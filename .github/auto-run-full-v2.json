@@ -31,11 +31,24 @@
     "session_end_is_resumable": true,
     "manual_turpini_is_resume_only": true
   },
+  "delivery_unit": {
+    "contract": ".github/outcome-delivery-v1.json",
+    "default": "SINGLE_OUTCOME_PR",
+    "one_frozen_issue_one_outcome_pr": true,
+    "closely_related_same_risk_work_items_min": 2,
+    "closely_related_same_risk_work_items_max": 5,
+    "keep_small_logical_commits_inside_pr": true,
+    "include_vertical_slice_components_as_applicable": true,
+    "do_not_split_only_for_internal_proof_objects": true,
+    "native_stacked_prs_default": false,
+    "native_stacked_prs_allowed_under_current_no_history_rewrite_policy": false
+  },
   "activation": {
     "fresh_reads_required": [
       "AGENTS.md",
       ".github/start-mode-routing.json",
       ".github/auto-run-full-v2.json",
+      ".github/outcome-delivery-v1.json",
       "target_issue",
       "current_main",
       "active_pr_ci_review_state",
@@ -61,6 +74,7 @@
   "allowed_without_further_owner_nudge": [
     "FRESH_GITHUB_READS",
     "SOURCE_ANALYSIS",
+    "OUTCOME_SCOPE_AND_DELIVERY_SLICE_RECONCILIATION",
     "SOURCE_DOC_TEST_POLICY_CHANGES",
     "BRANCH_CREATE",
     "EXACT_PATH_COMMITS",
@@ -86,6 +100,7 @@
     "NEW_CLOUDFLARE_OR_INFRASTRUCTURE_MUTATION_CLASS",
     "ARBITRARY_SSH_OR_SHELL_AUTHORITY",
     "RESET_REBASE_FORCE_OR_HISTORY_REWRITE",
+    "NATIVE_STACK_REBASE_OR_FORCE_WITH_LEASE_UNDER_CURRENT_POLICY",
     "UNDECLARED_CLEANUP",
     "UNDECLARED_RETRY_OR_ROLLBACK",
     "PROVIDER_API_KEY",
@@ -97,6 +112,9 @@
     "preferred_merge_mechanism": "GITHUB_AUTO_MERGE",
     "repository_auto_merge_capability_required_for_preferred_mechanism": true,
     "canonical_pr_only": true,
+    "single_outcome_pr_default": true,
+    "native_stacked_prs_default": false,
+    "github_auto_merge_supported_for_native_stacks": false,
     "auto_merge_enable_only_after_final_exact_head_ready": true,
     "fresh_exact_head_revalidation_required": true,
     "final_diff_scope_review_required": true,
@@ -107,13 +125,16 @@
     "changed_head_requires_fresh_review_and_checks_before_auto_merge_reenable": true,
     "repository_ruleset_bypass": false,
     "force_merge": false,
-    "direct_merge_fallback_allowed_only_after_same_final_readiness_gate": true
+    "direct_merge_fallback_allowed_only_after_same_final_readiness_gate": true,
+    "direct_merge_should_bind_expected_head_sha_when_supported": true
   },
   "live": {
     "auto_run_full_command_may_be_up_front_live_authority_only_for_frozen_predeclared_mutation_classes": true,
     "exact_target_and_operation_identity_required_before_first_live_mutation": true,
     "use_existing_236_live_auth_protocol_when_applicable": true,
     "live_auth_must_be_owner_identity_on_github": true,
+    "prefer_one_bounded_composite_live_for_tightly_coupled_same_outcome_steps": true,
+    "merge_authorizes_live": false,
     "new_mutation_class_after_activation": "STOP_SCOPE_OR_RISK",
     "post_mutation_error": "STOP_ERROR_NO_UNDECLARED_RETRY_CLEANUP_ROLLBACK_OR_ALTERNATE_PATH"
   },
@@ -145,7 +166,13 @@
     "platform_required_app_approval": "PAUSED_PLATFORM_APPROVAL",
     "external_wait": "PAUSED_EXTERNAL",
     "identical_failure_retry_ceiling": 3,
-    "retry_requires_materially_new_hypothesis_after_repeat": true
+    "retry_requires_materially_new_hypothesis_after_repeat": true,
+    "current_state_fields": [
+      "GOAL",
+      "DONE",
+      "REMAINING",
+      "EXACT_NEXT_GATE"
+    ]
   },
   "completion": {
     "normal_terminal_state": "DONE",
@@ -168,6 +195,8 @@
     "github_event_triggered_work_supported_for_pull_request_activity": true,
     "connected_app_approval_may_pause_task": true,
     "repository_provider_permissions_still_apply": true,
-    "repository_allow_auto_merge_setting_must_be_enabled_out_of_band_when_not_exposed_by_the_connected_app": true
+    "repository_allow_auto_merge_setting_must_be_enabled_out_of_band_when_not_exposed_by_the_connected_app": true,
+    "github_native_stacked_prs_public_preview": true,
+    "github_native_stack_auto_merge_supported": false
   }
 }
