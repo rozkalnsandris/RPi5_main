@@ -14,9 +14,16 @@ assert routing["repository"] == "rozkalnsandris/RPi5_main"
 assert routing["schema_version"] == 3
 assert routing["default_continuation_mode"] == "FAST-LANE v2.2"
 assert routing["bare_continuation_result"] == "FAST-LANE v2.2"
+assert routing["bare_continuation_commands"] == [
+    "START",
+    "START RPi5_main",
+    "SYNC RPi5_main",
+    "turpini",
+]
 assert routing["lane_roles"]["FAST-LANE v2.2"] == "SAFE_DISCOVERY_AUDIT_AND_NON_FULL_CONTINUATION"
 assert routing["lane_roles"]["AUTO-RUN-FULL"] == "NORMAL_ISSUE_SCOPED_IMPLEMENTATION"
 assert routing["examples"]["START RPi5_main"] == "FAST-LANE v2.2"
+assert routing["examples"]["SYNC RPi5_main"] == "FAST-LANE v2.2"
 assert routing["examples"]["turpini"] == "FAST-LANE v2.2"
 assert routing["examples"]["START RPi5_main GITHUB-ONLY"] == "GITHUB-ONLY"
 assert routing["examples"]["AUTO-RUN FULL RPi5_main #301"] == "AUTO-RUN-FULL"
@@ -59,7 +66,7 @@ assert "preferred operator lane" in agents
 assert "Activate `AUTO-RUN FULL` only from the exact explicit form" in agents
 assert "AUTO-RUN FULL v2" in agents
 assert "GitHub native auto-merge" in agents
-assert "Bare `START`, `START RPi5_main`, `turpini`" in fast
+assert "Bare `START`, `START RPi5_main`, `SYNC RPi5_main`, `turpini`" in fast
 assert "It does **not** select `GITHUB-ONLY` or `AUTO-RUN FULL`" in fast
 assert "Never infer an explicit mode" in fast
 assert "AUTO-RUN FULL v2 relationship" in fast

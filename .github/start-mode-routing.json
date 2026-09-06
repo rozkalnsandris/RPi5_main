@@ -32,7 +32,7 @@
       "may_be_inferred_from_context": false
     }
   },
-  "bare_continuation_commands": ["START", "START RPi5_main", "turpini"],
+  "bare_continuation_commands": ["START", "START RPi5_main", "SYNC RPi5_main", "turpini"],
   "bare_continuation_result": "FAST-LANE v2.2",
   "forbidden_mode_inference_sources": [
     ".github/start-github-only.json existence",
@@ -46,6 +46,7 @@
   ],
   "examples": {
     "START RPi5_main": "FAST-LANE v2.2",
+    "SYNC RPi5_main": "FAST-LANE v2.2",
     "turpini": "FAST-LANE v2.2",
     "START RPi5_main GITHUB-ONLY": "GITHUB-ONLY",
     "GITHUB-ONLY": "GITHUB-ONLY",

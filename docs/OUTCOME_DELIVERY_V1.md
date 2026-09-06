@@ -135,7 +135,7 @@ EXACT NEXT COMMAND
 
 ### Next Command Contract
 
-Every user-visible work-cycle response must end with exactly one recommended, copy-pasteable command. Status-only endings are not sufficient.
+Every user-visible work-cycle terminal response that ends or pauses repository work must end with exactly one recommended, copy-pasteable command. Status-only terminal endings are not sufficient.
 
 Use the command that matches the current state:
 

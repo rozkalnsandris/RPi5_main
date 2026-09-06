@@ -16,7 +16,7 @@ FAST never infers AUTO-RUN FULL authority.
 
 ## Command routing invariant
 
-Bare `START`, `START RPi5_main`, `turpini`, or equivalent continuation selects normal **FAST-LANE v2.2** operation. It does **not** select `GITHUB-ONLY` or `AUTO-RUN FULL`.
+Bare `START`, `START RPi5_main`, `SYNC RPi5_main`, `turpini`, or equivalent continuation selects normal **FAST-LANE v2.2** operation. It does **not** select `GITHUB-ONLY` or `AUTO-RUN FULL`.
 
 `GITHUB-ONLY` is active only when the owner explicitly includes the `GITHUB-ONLY` mode in the current command (including the documented `git hub only` spelling). `LIVE-ALL` likewise requires an explicit current-command `LIVE-ALL` token.
 
@@ -100,7 +100,7 @@ Authorization is consumed at the first authorized live mutation. Any later error
 
 For normal FAST delivery, use one Ready receipt and one final live receipt. Put any remaining owner decision at the **end** under `ACTION REQUIRED`; when the owner must enter/run something, provide the exact copyable instruction in a fenced `bash` block.
 
-Independently of whether an owner gate exists, every user-visible work-cycle response must end with exactly one copy-pasteable `NEXT COMMAND`. If a real owner gate exists, `ACTION REQUIRED` contains that exact command and also satisfies the Next Command Contract. Otherwise use the state-appropriate non-gate command: `SYNC RPi5_main` while waiting for mutable CI/review/external state, `turpini` for immediate same-scope technical continuation, or `START RPi5_main` after DONE to select the next canonical lane. Never invent an owner gate to satisfy this presentation rule.
+Independently of whether an owner gate exists, every user-visible work-cycle terminal response that ends or pauses repository work must end with exactly one copy-pasteable `NEXT COMMAND`. If a real owner gate exists, `ACTION REQUIRED` contains that exact command and also satisfies the Next Command Contract. Otherwise use the state-appropriate non-gate command: `SYNC RPi5_main` while waiting for mutable CI/review/external state, `turpini` for immediate same-scope technical continuation, or `START RPi5_main` after DONE to select the next canonical lane. Never invent an owner gate to satisfy this presentation rule.
 
 For AUTO-RUN FULL, routine technical continuation does not generate `ACTION REQUIRED`, but it still obeys the Next Command Contract. Notify the owner only on `DONE`, `STOP_SCOPE_OR_RISK`, `STOP_ERROR`, or a platform-level approval that ChatGPT itself requires; any user-visible terminal/status response still ends with one exact resume/refresh command.
 
