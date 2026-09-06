@@ -326,7 +326,10 @@ class HermesDealsOriginPrivilegedBrokerTests(unittest.TestCase):
         self.assertIn("CapabilityBoundingSet=CAP_SETUID CAP_SETGID", service_unit)
         self.assertIn("AmbientCapabilities=", service_unit)
         self.assertIn("RuntimeMaxSec=60", service_unit)
-        self.assertNotIn("ReadWritePaths=", service_unit)
+        self.assertEqual(
+            [line for line in service_unit.splitlines() if line.startswith("ReadWritePaths=")],
+            ["ReadWritePaths=/var/lib/rozkalns-deploy-executor-p9"],
+        )
         self.assertNotIn("sudo", service_unit.lower())
         self.assertNotIn("systemd-run", service_unit)
         self.assertNotIn("/bin/sh", service_unit)

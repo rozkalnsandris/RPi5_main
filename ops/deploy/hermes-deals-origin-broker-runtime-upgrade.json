@@ -1,0 +1,277 @@
+{
+  "schema": "rozkalns.hermes-deals.origin-broker-runtime-upgrade.v1",
+  "repository": "rozkalnsandris/RPi5_main",
+  "phase": "P4",
+  "issue": 191,
+  "source_gate": "EXACT_BROKER_RUNTIME_UPGRADE_PROVENANCE_AND_MINIMAL_REPLAY_WRITE_PERMISSION",
+  "source_baseline": "d83dd50e24844d4e4db8b43510e903e96330a140",
+  "operator": {
+    "path": "scripts/install-hermes-deals-origin-broker-runtime-upgrade.py",
+    "source_blob": "6e4cbbb59797227b685dd1deb15e72b038e6c21a",
+    "default_mode": "ROOT_READ_ONLY_PREFLIGHT",
+    "apply_flag": "--apply",
+    "apply_requires_root": true,
+    "apply_requires_separate_explicit_live_authorization": true,
+    "git_trust_scope": "COMMAND_ONLY_EXACT_REPO_ROOT",
+    "clean_exact_checkout_required": true,
+    "automatic_retry": false,
+    "automatic_rollback": false,
+    "automatic_cleanup": false
+  },
+  "runtime_design": {
+    "broker_entrypoint_wired": true,
+    "fixed_runtime_registry_implemented": true,
+    "global_p9_registry_used": false,
+    "global_p9_registry_mutation": false,
+    "fixed_runtime_registry_operation_count": 1,
+    "replay_state_directory": "/var/lib/rozkalns-deploy-executor-p9",
+    "service_write_permission": "ReadWritePaths=/var/lib/rozkalns-deploy-executor-p9",
+    "service_write_permission_scope": "REPLAY_STATE_DIRECTORY_ONLY",
+    "durable_replay_consume_before_helper": true
+  },
+  "replace_targets": [
+    {
+      "source": "ops/lib/deploy_executor/hermes_deals_origin_privileged_broker.py",
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_privileged_broker.py",
+      "old_blob": "2543278ee48f184a79ac67c70e7f77c06cfbd7c8",
+      "new_blob": "7656fe3c0ba7cfe1865ec000ab77503569beb7bd",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/hermes_deals_origin_helper_launch.py",
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_helper_launch.py",
+      "old_blob": "5f190ebdcfdbc2a12242843733cb9740202cc9bd",
+      "new_blob": "4e29a13202cfb49003d9922e5ceeb905bb00a774",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/hermes_deals_origin_broker_composition.py",
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_broker_composition.py",
+      "old_blob": "a7a9421527fb5b2ed0f250446dc257f0a9ac8a29",
+      "new_blob": "571f7f51cf10013c66343c1c8c27ddfaf8cd92c0",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/bin/rozkalns-hermes-deals-origin-broker",
+      "target": "/usr/local/libexec/rozkalns-hermes-deals-origin-broker",
+      "old_blob": "211b968b0c8ef6a0a7d73ce50a53d6bac7d2cc2f",
+      "new_blob": "49aced1a1e6dd0c986947f53f06b23eba590aec4",
+      "mode": "0755"
+    },
+    {
+      "source": "ops/systemd/rozkalns-hermes-deals-origin-broker@.service",
+      "target": "/etc/systemd/system/rozkalns-hermes-deals-origin-broker@.service",
+      "old_blob": "2a304e70550f17092b9cafd365bbf6d05d23893b",
+      "new_blob": "21319746d1e32f2b67f701f0a22174bfb0542987",
+      "mode": "0644"
+    }
+  ],
+  "create_targets": [
+    {
+      "source": "ops/lib/deploy_executor/hermes_deals_origin_adapter.py",
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_adapter.py",
+      "required_prestate": "ABSENT",
+      "new_blob": "0b20cefa0c9193ecb8e7811c855767d56baf59ce",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/hermes_deals_origin_dispatch_request.py",
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_dispatch_request.py",
+      "required_prestate": "ABSENT",
+      "new_blob": "bd58fa89a6eade662cf1e942d48ef5381c4e679b",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/hermes_deals_origin_privileged_consumer.py",
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_privileged_consumer.py",
+      "required_prestate": "ABSENT",
+      "new_blob": "af0987064710afedd02cd56f40b9e3a3cacfaf00",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/hermes_deals_origin_privileged_dispatcher.py",
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_privileged_dispatcher.py",
+      "required_prestate": "ABSENT",
+      "new_blob": "ae51af60bf2094be944d13c303bf6a94c0117d69",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/hermes_deals_origin_broker_runtime.py",
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_broker_runtime.py",
+      "required_prestate": "ABSENT",
+      "new_blob": "53112450cbccbabd9a5ec62966b9fd96d3513bea",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/hermes_deals_origin_runtime_adapters.py",
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_runtime_adapters.py",
+      "required_prestate": "ABSENT",
+      "new_blob": "456fea3d6969975d0fd432d20089772f28b63ec7",
+      "mode": "0644"
+    }
+  ],
+  "shared_prerequisites": [
+    {
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_source_auth.py",
+      "expected_blob": "43640e9089cc39e96d472beb50e8653a5df5fa78",
+      "mode": "0644",
+      "mutation_authorized": false
+    },
+    {
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_canonical_revalidator.py",
+      "expected_blob": "8c5d9d7746248b485b212cf601786924ba6e4d42",
+      "mode": "0644",
+      "mutation_authorized": false
+    },
+    {
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_host_evidence.py",
+      "expected_blob": "4358beb65a48ed72c82d0e99e1fc8fd49db88524",
+      "mode": "0644",
+      "mutation_authorized": false
+    },
+    {
+      "target": "/etc/systemd/system/rozkalns-hermes-deals-origin-broker.socket",
+      "expected_blob": "8eb05b83840b13b27e03e2bbb37d6d0bfc3697cb",
+      "mode": "0644",
+      "mutation_authorized": false
+    },
+    {
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/adapters.py",
+      "expected_blob": "9d62967607fc9677a3c8cc2720462ee7135ed2a6",
+      "mode": "0644",
+      "mutation_authorized": false
+    },
+    {
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/queue_normalizer.py",
+      "expected_blob": "1878d4765fab112a1066aec75cbcd9c422040dd2",
+      "mode": "0644",
+      "mutation_authorized": false
+    },
+    {
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/registry.py",
+      "expected_blob": "7de127a58534879385bc58299827d9081775dbe9",
+      "mode": "0644",
+      "mutation_authorized": false
+    },
+    {
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/protocol.py",
+      "expected_blob": "c968390ea0886894f278da39a92aa714d4ca601d",
+      "mode": "0644",
+      "mutation_authorized": false
+    },
+    {
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/state.py",
+      "expected_blob": "ac91f1b8d4f78742443e7b90c16c046f1b7ea22f",
+      "mode": "0644",
+      "mutation_authorized": false
+    },
+    {
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/transport.py",
+      "expected_blob": "7e0bbca7f8106e1bb3595ab551d99047db0ccb58",
+      "mode": "0644",
+      "mutation_authorized": false
+    },
+    {
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/source_evidence.py",
+      "expected_blob": "3a3ed0999c6a1c240ac3349866b0d559e46d90e6",
+      "mode": "0644",
+      "mutation_authorized": false
+    },
+    {
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/github_app_auth.py",
+      "expected_blob": "510fab79f5e5e2cb387673eba33e8b7af1e001c2",
+      "mode": "0644",
+      "mutation_authorized": false
+    },
+    {
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/p9_canary.py",
+      "expected_blob": "e288110ea421edc165284c25923d9b8ed189ac83",
+      "mode": "0644",
+      "mutation_authorized": false
+    },
+    {
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/p9_isolated_auth_surface.py",
+      "expected_blob": "cb4dc3c68f001032ce6692fdced9bcbbbd23a41d",
+      "mode": "0644",
+      "mutation_authorized": false
+    },
+    {
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/p9_runtime.py",
+      "expected_blob": "ff3fd3196b7335305dced89244c65f68c65d27b4",
+      "mode": "0644",
+      "mutation_authorized": false
+    },
+    {
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/p9_source_auth.py",
+      "expected_blob": "130fc36a22bb4ace500b022c3defcccbf0893012",
+      "mode": "0644",
+      "mutation_authorized": false
+    }
+  ],
+  "credential_preconditions": [
+    {
+      "path": "/etc/rozkalns-hermes-deals-origin-broker/source-github-app.pem",
+      "owner": "root",
+      "group": "root",
+      "mode": "0600",
+      "content_read": false,
+      "mutation_authorized": false
+    },
+    {
+      "path": "/etc/rozkalns-deploy-executor/github-app.pem",
+      "owner": "root",
+      "group": "root",
+      "mode": "0400",
+      "content_read": false,
+      "mutation_authorized": false
+    }
+  ],
+  "systemd_precondition": {
+    "socket_unit": "rozkalns-hermes-deals-origin-broker.socket",
+    "required_enabled": true,
+    "required_active": true,
+    "active_broker_service_instances_required": 0
+  },
+  "apply_sequence": [
+    "repeat-complete-read-only-preflight",
+    "stop-broker-socket",
+    "verify-socket-exact-inactive-and-no-active-service-instance",
+    "replace-five-exact-old-blob-targets",
+    "create-six-absent-only-runtime-targets",
+    "revalidate-sixteen-shared-prerequisites",
+    "systemd-daemon-reload",
+    "start-broker-socket",
+    "verify-socket-active-and-enabled"
+  ],
+  "source_gate_state": {
+    "runtime_upgrade_preflight_proven": false,
+    "runtime_upgrade_applied": false,
+    "current_service_replay_write_authority_proven": false,
+    "privileged_dispatch_enabled": false,
+    "replay_consume_invoked": false,
+    "helper_executed": false,
+    "genuine_hermes_audit_authorized": false,
+    "runner_retirement_eligible": false,
+    "production_mutation_started": false,
+    "live_upgrade_eligible": false
+  },
+  "next_sequence": [
+    "merge source only after exact-head review and CI",
+    "converge trusted RPi5 checkout to exact merged source",
+    "run root read-only broker runtime upgrade preflight",
+    "only a separate exact owner LIVE authorization may run --apply",
+    "after accepted upgrade, run read-only post-upgrade runtime verification",
+    "only then may a separate STRICT one-canary authorization be considered"
+  ],
+  "not_authorized": [
+    "runtime upgrade by source merge",
+    "systemd mutation without separate LIVE authorization",
+    "global P9 registry mutation",
+    "credential content exposure or credential mutation",
+    "replay consume during upgrade",
+    "helper execution during upgrade",
+    "genuine Hermes audit",
+    "runner retirement",
+    "deployment or production application-data mutation"
+  ]
+}
