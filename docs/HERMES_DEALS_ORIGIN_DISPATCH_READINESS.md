@@ -341,3 +341,20 @@ This is still source readiness, not live activation. The currently installed bro
 `PRODUCTION_MUTATION_STARTED=false`
 
 Current sequence: source review/Draft PR/CI/Ready → explicit MERGE → fresh exact merged-source validation → a separate source gate for exact broker/runtime upgrade provenance plus the minimum replay-store write permission required by durable consume → separate MERGE → trusted-checkout convergence and root read-only upgrade preflight → separate explicit LIVE runtime upgrade → read-only post-upgrade verification → only then a separate STRICT authorization for one genuine read-only audit canary. Runner retirement remains a later independent LIVE gate.
+
+## Current supersession — Hermes broker runtime upgrade/provenance source gate (2026-09-06)
+
+- `PHASE4_CURRENT_WORK_ITEM=EXACT_BROKER_RUNTIME_UPGRADE_PROVENANCE_AND_MINIMAL_REPLAY_WRITE_PERMISSION`.
+- Source runtime uses a fixed one-operation Hermes registry; the global P9 operation registry is neither read nor mutated by the broker runtime.
+- The broker service grants only `ReadWritePaths=/var/lib/rozkalns-deploy-executor-p9`, required for durable replay SQLite/WAL consume.
+- The reviewed upgrade operator is `scripts/install-hermes-deals-origin-broker-runtime-upgrade.py`; default mode is root read-only preflight and `--apply` requires a separate exact owner LIVE authorization.
+- Exact upgrade surface: 5 reviewed old-blob replacements + 6 absent-only Hermes runtime creates; 16 shared executor files are read-only exact-blob prerequisites.
+- Apply ordering is fixed: repeat preflight → stop broker socket → verify exact inactive/no active instance → file upgrade → revalidate prerequisites → daemon-reload → start socket → verify active/enabled.
+- No automatic retry, rollback, cleanup, global registry mutation, credential mutation, replay consume, helper execution, genuine audit, runner retirement, deploy, or production-data mutation is authorized by this source gate.
+- `BROKER_ENTRYPOINT_WIRED=true`.
+- `CURRENT_SERVICE_REPLAY_WRITE_AUTHORITY_PROVEN=false`.
+- `RUNTIME_UPGRADE_PREFLIGHT_PROVEN=false`.
+- `RUNTIME_UPGRADE_APPLIED=false`.
+- `LIVE_INSTALL_ELIGIBLE=false`.
+- `PRODUCTION_MUTATION_STARTED=false`.
+- After merge: converge the trusted checkout, run the root read-only upgrade preflight, then STOP for a separate exact LIVE runtime-upgrade authorization.

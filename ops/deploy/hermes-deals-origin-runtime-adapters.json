@@ -8,7 +8,7 @@
   "required_previous_result": "HERMES_ORIGIN_RUNTIME_PREFLIGHT_PARTIAL_READY",
   "runtime_module": {
     "path": "ops/lib/deploy_executor/hermes_deals_origin_runtime_adapters.py",
-    "source_blob": "f6a7ba54ae021316d35677cd0ec730b90d63ba25"
+    "source_blob": "456fea3d6969975d0fd432d20089772f28b63ec7"
   },
   "durable_replay_adapter": {
     "class": "ConcreteDurableHermesOriginReplayAuthority",
@@ -17,7 +17,7 @@
     "availability_mutation": false,
     "double_identical_canonical_availability_required_before_consume": true,
     "consume_implemented": true,
-    "consume_wired_to_broker_entrypoint": false,
+    "consume_wired_to_broker_entrypoint": true,
     "consume_mutates_replay_state": true,
     "automatic_retry": false,
     "automatic_rollback": false,
@@ -85,25 +85,25 @@
     "runtime_adapters_runtime_proven": false,
     "source_app_scope_prover_implemented": true,
     "source_app_installation_scope_proven": false,
-    "broker_entrypoint_wired": false,
+    "broker_entrypoint_wired": true,
     "privileged_dispatch_enabled": false,
     "genuine_hermes_audit_authorized": false,
     "runner_retirement_eligible": false,
     "production_mutation_started": false
   },
   "next_sequence": [
-    "merge source only after exact-head review and CI",
+    "merge exact broker runtime upgrade/provenance source only after exact-head review and CI",
     "converge trusted RPi5 checkout separately if merged source is newer",
-    "run the root read-only runtime-adapter preflight without protected credential use",
-    "only HERMES_ORIGIN_RUNTIME_ADAPTERS_READY may reach the separate LIVE protected Source App scope-proof gate",
-    "only separately accepted runtime-adapter and Source App scope proof may advance to broker-entrypoint wiring source work"
+    "run the root read-only broker runtime upgrade preflight against the exact merged source",
+    "only a separate owner LIVE authorization may stop the broker socket and perform the exact runtime upgrade",
+    "only accepted post-upgrade read-only verification may reach a separate STRICT one-canary gate"
   ],
   "not_authorized": [
-    "broker entrypoint wiring",
-    "privileged dispatch",
+    "live broker runtime upgrade",
+    "broker socket stop/start or systemd daemon-reload",
+    "replay consumption",
     "helper execution",
     "genuine Hermes audit",
-    "broker socket request",
     "runner retirement",
     "deployment or cutover",
     "production application-data mutation"

@@ -311,16 +311,18 @@
   },
   "state_contract": {
     "broker_local_mutable_state": null,
-    "status": "SOURCE_CONSUME_BOUNDARY_IMPLEMENTED_RUNTIME_WRITE_AUTHORITY_UNPROVEN",
+    "status": "SOURCE_REPLAY_WRITE_PERMISSION_REVIEWED_RUNTIME_UNPROVEN",
     "requirement": "the same durable replay authority must pass exactly two canonical availability checks, then consume exactly once before any fixed helper launch; a consume attempt makes authorization reuse forbidden",
     "durable_replay_availability_adapter_runtime_proven": false,
     "durable_replay_consume_before_helper": true,
     "current_service_replay_write_authority_proven": false
   },
   "next_gates": [
-    "merge and freshly validate this source-only broker-entrypoint wiring gate",
-    "separate source gate for exact installed broker/runtime upgrade provenance plus only the replay-store write permission required by durable consume",
-    "after that source gate is merged: trusted-checkout convergence, root read-only upgrade preflight, then separate owner LIVE runtime upgrade authorization",
+    "merge and freshly validate the exact broker runtime upgrade/provenance source gate",
+    "converge trusted checkout to the exact merged source",
+    "run the root read-only broker runtime upgrade preflight",
+    "only a separate owner LIVE authorization may perform the exact runtime upgrade",
+    "after accepted upgrade, run post-upgrade read-only runtime verification",
     "separate STRICT authorization for one genuine read-only origin audit canary only after accepted post-upgrade verification",
     "separate owner LIVE authorization for any runner retirement"
   ],
@@ -358,7 +360,7 @@
     "rpi5_main_sha_semantics": "PR_368_IMPLEMENTATION_MERGE_SHA_NOT_CURRENT_CONTROL_PLANE"
   },
   "broker_entrypoint_wiring_source": {
-    "status": "SOURCE_WIRED_NOT_LIVE_INSTALL_ELIGIBLE",
+    "status": "SOURCE_WIRED_RUNTIME_UPGRADE_OPERATOR_PREPARED_NOT_LIVE",
     "runtime_factory": "ops/lib/deploy_executor/hermes_deals_origin_broker_runtime.py",
     "caller_authority": [
       "authorization_issue_number"
@@ -374,6 +376,29 @@
     "replay_state_directory": "/var/lib/rozkalns-deploy-executor-p9",
     "new_runtime_module_installed": false,
     "live_install_eligible": false,
-    "next_source_gate": "EXACT_BROKER_RUNTIME_UPGRADE_PROVENANCE_AND_MINIMAL_REPLAY_WRITE_PERMISSION"
+    "next_source_gate": "MERGE_EXACT_BROKER_RUNTIME_UPGRADE_PROVENANCE_AND_MINIMAL_REPLAY_WRITE_PERMISSION"
+  },
+  "broker_runtime_upgrade_source": {
+    "status": "SOURCE_OPERATOR_REVIEWED_RUNTIME_PREFLIGHT_REQUIRED",
+    "contract": "ops/deploy/hermes-deals-origin-broker-runtime-upgrade.json",
+    "operator": "scripts/install-hermes-deals-origin-broker-runtime-upgrade.py",
+    "operator_source_blob": "6e4cbbb59797227b685dd1deb15e72b038e6c21a",
+    "source_baseline": "d83dd50e24844d4e4db8b43510e903e96330a140",
+    "replace_target_count": 5,
+    "create_target_count": 6,
+    "shared_prerequisite_count": 16,
+    "fixed_runtime_registry_implemented": true,
+    "global_p9_registry_mutation": false,
+    "replay_state_directory": "/var/lib/rozkalns-deploy-executor-p9",
+    "service_write_permission": "ReadWritePaths=/var/lib/rozkalns-deploy-executor-p9",
+    "service_write_permission_reviewed": true,
+    "current_service_replay_write_authority_proven": false,
+    "runtime_upgrade_preflight_proven": false,
+    "runtime_upgrade_applied": false,
+    "live_upgrade_eligible": false,
+    "source_merge_authorizes_live_upgrade": false,
+    "automatic_retry": false,
+    "automatic_rollback": false,
+    "automatic_cleanup": false
   }
 }

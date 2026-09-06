@@ -24,6 +24,7 @@ from deploy_executor.hermes_deals_origin_broker_composition import (  # noqa: E4
     source_readiness as composition_readiness,
 )
 from deploy_executor.hermes_deals_origin_broker_runtime import (  # noqa: E402
+    _fixed_registry,
     build_runtime_broker_composition,
     source_readiness as runtime_readiness,
 )
@@ -682,14 +683,17 @@ class HermesOriginBrokerCompositionTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         for required in (
             "/etc/rozkalns-deploy-executor-p9/executor-p9-isolated-auth-surface.json",
-            "/etc/rozkalns-deploy-executor-p9/executor-operations.json",
             "/etc/rozkalns-deploy-executor/github-app.pem",
+            "OperationRegistry(",
+            "operations=(operation,)",
             "build_hermes_deals_source_token_provider",
             "ConcreteDurableHermesOriginReplayAuthority",
             "ConcreteLocalHermesOriginHostObservationProvider",
             "run_fixed_helper_process",
         ):
             self.assertIn(required, source)
+        self.assertNotIn("/etc/rozkalns-deploy-executor-p9/executor-operations.json", source)
+        self.assertNotIn("load_registry", source)
         for forbidden in (
             "argparse",
             "sys.argv",
@@ -717,6 +721,22 @@ class HermesOriginBrokerCompositionTests(unittest.TestCase):
         self.assertNotIn("shell=True", source)
         self.assertNotIn("sudo ", source)
         self.assertNotIn("systemctl ", source)
+
+    def test_fixed_runtime_registry_matches_reviewed_hermes_operation_only(self):
+        production = load_registry(ROOT / "ops/deploy/executor-operations.json")
+        expected = tuple(
+            operation
+            for operation in production.operations
+            if operation.operation_id == OPERATION_ID
+        )
+        self.assertEqual(len(expected), 1)
+        fixed = _fixed_registry()
+        self.assertFalse(fixed.execution_enabled)
+        self.assertEqual(fixed.operations, expected)
+        readiness = runtime_readiness()
+        self.assertTrue(readiness["fixed_runtime_registry_implemented"])
+        self.assertFalse(readiness["global_registry_path_used"])
+        self.assertEqual(readiness["fixed_runtime_registry_operation_count"], 1)
 
     def test_all_source_readiness_flags_remain_non_live(self):
         canonical = canonical_readiness()
@@ -785,7 +805,7 @@ class HermesOriginBrokerCompositionTests(unittest.TestCase):
         self.assertTrue(manifest["source_gate_flags"]["broker_entrypoint_wired"])
         self.assertTrue(manifest["source_gate_flags"]["helper_process_launch_wired"])
         wiring = manifest["broker_entrypoint_wiring_source"]
-        self.assertEqual(wiring["status"], "SOURCE_WIRED_NOT_LIVE_INSTALL_ELIGIBLE")
+        self.assertEqual(wiring["status"], "SOURCE_WIRED_RUNTIME_UPGRADE_OPERATOR_PREPARED_NOT_LIVE")
         self.assertEqual(wiring["caller_authority"], ["authorization_issue_number"])
         self.assertEqual(wiring["replay_availability_checks_before_consume"], 2)
         self.assertTrue(wiring["durable_replay_consume_before_helper"])
@@ -793,6 +813,21 @@ class HermesOriginBrokerCompositionTests(unittest.TestCase):
         self.assertTrue(wiring["current_installed_entrypoint_expected_inert"])
         self.assertFalse(wiring["current_service_replay_write_authority_proven"])
         self.assertFalse(wiring["live_install_eligible"])
+        upgrade = manifest["broker_runtime_upgrade_source"]
+        self.assertEqual(upgrade["status"], "SOURCE_OPERATOR_REVIEWED_RUNTIME_PREFLIGHT_REQUIRED")
+        self.assertEqual(upgrade["replace_target_count"], 5)
+        self.assertEqual(upgrade["create_target_count"], 6)
+        self.assertEqual(upgrade["shared_prerequisite_count"], 16)
+        self.assertTrue(upgrade["fixed_runtime_registry_implemented"])
+        self.assertFalse(upgrade["global_p9_registry_mutation"])
+        self.assertEqual(
+            upgrade["service_write_permission"],
+            "ReadWritePaths=/var/lib/rozkalns-deploy-executor-p9",
+        )
+        self.assertFalse(upgrade["runtime_upgrade_preflight_proven"])
+        self.assertFalse(upgrade["runtime_upgrade_applied"])
+        self.assertFalse(upgrade["live_upgrade_eligible"])
+        self.assertFalse(upgrade["source_merge_authorizes_live_upgrade"])
         for flag in (
             "privileged_dispatch_enabled",
             "host_wiring_enabled",
@@ -811,16 +846,21 @@ class HermesOriginBrokerCompositionTests(unittest.TestCase):
         integration = master.index(
             "## Current supersession — Hermes canonical source-integration gate"
         )
-        current = master.index(
+        wiring_section = master.index(
             "## Current supersession — Hermes broker-entrypoint wiring source gate (2026-09-06)"
         )
+        current = master.rindex(
+            "## Current supersession — Hermes broker runtime upgrade/provenance source gate (2026-09-06)"
+        )
         self.assertLess(historical, integration)
-        self.assertLess(integration, current)
+        self.assertLess(integration, wiring_section)
+        self.assertLess(wiring_section, current)
         current_text = master[current:]
+        self.assertIn("PHASE4_CURRENT_WORK_ITEM=EXACT_BROKER_RUNTIME_UPGRADE_PROVENANCE_AND_MINIMAL_REPLAY_WRITE_PERMISSION", current_text)
         self.assertIn("BROKER_ENTRYPOINT_WIRED=true", current_text)
-        self.assertIn("HELPER_PROCESS_LAUNCH_WIRED=true", current_text)
-        self.assertIn("DURABLE_REPLAY_CONSUME_BEFORE_HELPER=true", current_text)
         self.assertIn("CURRENT_SERVICE_REPLAY_WRITE_AUTHORITY_PROVEN=false", current_text)
+        self.assertIn("RUNTIME_UPGRADE_PREFLIGHT_PROVEN=false", current_text)
+        self.assertIn("RUNTIME_UPGRADE_APPLIED=false", current_text)
         self.assertIn("LIVE_INSTALL_ELIGIBLE=false", current_text)
         self.assertIn("PRODUCTION_MUTATION_STARTED=false", current_text)
 
@@ -829,14 +869,14 @@ class HermesOriginBrokerCompositionTests(unittest.TestCase):
             "docs/HERMES_DEALS_ORIGIN_PULL_CANARY_SOURCE.md",
         ):
             text = (ROOT / path).read_text(encoding="utf-8")
-            supersession = text.index(
-                "## Current supersession — Hermes broker-entrypoint wiring source gate (2026-09-06)"
+            supersession = text.rindex(
+                "## Current supersession — Hermes broker runtime upgrade/provenance source gate (2026-09-06)"
             )
             current_text = text[supersession:]
             self.assertIn("BROKER_ENTRYPOINT_WIRED=true", current_text)
-            self.assertIn("HELPER_PROCESS_LAUNCH_WIRED=true", current_text)
-            self.assertIn("DURABLE_REPLAY_CONSUME_BEFORE_HELPER=true", current_text)
             self.assertIn("CURRENT_SERVICE_REPLAY_WRITE_AUTHORITY_PROVEN=false", current_text)
+            self.assertIn("RUNTIME_UPGRADE_PREFLIGHT_PROVEN=false", current_text)
+            self.assertIn("RUNTIME_UPGRADE_APPLIED=false", current_text)
             self.assertIn("LIVE_INSTALL_ELIGIBLE=false", current_text)
             self.assertIn("PRODUCTION_MUTATION_STARTED=false", current_text)
 

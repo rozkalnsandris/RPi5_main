@@ -322,10 +322,11 @@ class ContractAndSourceBoundaryTests(unittest.TestCase):
         )
         self.assertTrue(contract["source_app_scope_proof"]["requires_separate_live_owner_authorization"])
         self.assertFalse(contract["source_app_scope_proof"]["installation_token_exposed"])
+        self.assertTrue(contract["durable_replay_adapter"]["consume_wired_to_broker_entrypoint"])
+        self.assertTrue(contract["source_gate_flags"]["broker_entrypoint_wired"])
         for key in (
             "runtime_adapters_runtime_proven",
             "source_app_installation_scope_proven",
-            "broker_entrypoint_wired",
             "privileged_dispatch_enabled",
             "genuine_hermes_audit_authorized",
             "runner_retirement_eligible",

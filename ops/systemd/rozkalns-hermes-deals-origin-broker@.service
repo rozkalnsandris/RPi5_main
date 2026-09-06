@@ -16,6 +16,7 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 PrivateDevices=yes
 ProtectSystem=strict
+ReadWritePaths=/var/lib/rozkalns-deploy-executor-p9
 ProtectHome=yes
 ProtectClock=yes
 ProtectHostname=yes
