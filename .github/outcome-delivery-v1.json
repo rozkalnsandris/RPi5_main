@@ -101,9 +101,30 @@
       "GOAL",
       "DONE",
       "REMAINING",
-      "EXACT_NEXT_GATE"
+      "EXACT_NEXT_GATE",
+      "EXACT_NEXT_COMMAND"
     ],
     "historical_detail_should_not_replace_current_state": true
   },
-  "evidence_reviewed_utc_date": "2026-09-06"
+  "evidence_reviewed_utc_date": "2026-09-06",
+  "next_command_contract": {
+    "required_on_every_user_visible_work_cycle_terminal_response": true,
+    "exactly_one_recommended_command": true,
+    "command_must_be_copy_pasteable": true,
+    "command_must_be_last_actionable_content": true,
+    "action_required_reserved_for_real_owner_gate": true,
+    "do_not_invent_owner_gate": true,
+    "selection_order": [
+      "EXACT_OWNER_AUTHORIZATION_IF_REAL_GATE_EXISTS",
+      "SYNC_RPI5_MAIN_WHEN_WAITING_ON_MUTABLE_GITHUB_OR_EXTERNAL_STATE",
+      "TURPINI_WHEN_SAME_SCOPE_TECHNICAL_CONTINUATION_IS_READY",
+      "START_RPI5_MAIN_WHEN_CURRENT_OUTCOME_IS_DONE"
+    ],
+    "canonical_non_gate_commands": {
+      "refresh_waiting_state": "SYNC RPi5_main",
+      "continue_same_scope": "turpini",
+      "select_next_canonical_lane": "START RPi5_main"
+    },
+    "never_implies_merge_or_live_authority": true
+  }
 }

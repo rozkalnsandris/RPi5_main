@@ -130,7 +130,23 @@ GOAL
 DONE
 REMAINING
 EXACT NEXT GATE
+EXACT NEXT COMMAND
 ```
+
+### Next Command Contract
+
+Every user-visible work-cycle response must end with exactly one recommended, copy-pasteable command. Status-only endings are not sufficient.
+
+Use the command that matches the current state:
+
+1. A real owner authorization/decision gate exists -> end under `ACTION REQUIRED` with the exact current authorization command, including exact PR/head/target bindings where the gate requires them.
+2. No owner gate exists, but CI/review/external mutable state must be refreshed -> `SYNC RPi5_main`.
+3. No owner gate exists and same-scope technical continuation is immediately safe -> `turpini`.
+4. The current outcome is DONE and no same-scope continuation remains -> `START RPi5_main` to select the next canonical lane or return IDLE.
+
+`ACTION REQUIRED` remains reserved for actual owner decisions. Do not manufacture MERGE/LIVE/cleanup/retry authority to produce a command. The final command is presentation/continuity only and grants no authority by itself.
+
+The command must be the **last actionable content** in the response and there must be **one recommended command**, not several alternatives.
 
 Historical evidence may remain append-only, but it must not obscure the current lane or force every continuation to reconstruct the project from a long supersession chain.
 
@@ -144,5 +160,7 @@ Reviewed 2026-09-06:
 - GitHub Docs — Rulesets / strict required status checks
 - GitHub REST API — Merge a pull request with exact head `sha`
 - DORA — Working in small batches
+- OpenAI Help Center — Prompt engineering best practices for ChatGPT (clear, specific instructions)
+- OpenAI — A practical guide to building agents (each routine step maps to a concrete action/output)
 
 These sources inform the packaging/merge mechanics only. Repository-local safety rules remain authoritative where stricter.

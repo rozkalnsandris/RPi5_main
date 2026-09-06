@@ -30,6 +30,18 @@ Metadata is collectable only when a task provides a strict allowlist and sanitiz
 - Do not commit generated evidence unless a future task explicitly approves a sanitized fixture.
 - Never expose a secret in output, diffs, commits, PRs, or issues.
 
+## Terminal response — Next Command Contract
+
+Every user-visible work-cycle response that ends or pauses repository work must finish with exactly one explicit, copy-pasteable command for the owner under `NEXT COMMAND` or, when a real owner decision is required, under `ACTION REQUIRED`.
+
+- `ACTION REQUIRED` is reserved for a genuine owner authorization/decision gate. Never invent an authorization gate merely to satisfy this presentation rule.
+- If a real owner gate exists, the final command is the exact authorization command with current identifiers and exact SHA/target bindings where applicable.
+- If no owner gate exists and mutable GitHub/external state must be refreshed, use `SYNC RPi5_main`.
+- If no owner gate exists and same-scope technical work can continue immediately, use `turpini`.
+- If the current outcome is DONE and no same-scope continuation remains, use `START RPi5_main` to select the next canonical lane (or report IDLE).
+- The command must be the last actionable content in the response. Give one recommended command, not a menu of alternatives.
+- This is a response/continuity contract only. It never grants MERGE, LIVE, cleanup, retry, rollback, credential, permission, or runtime authority.
+
 ## Startup command routing
 
 Read `.github/start-mode-routing.json` before selecting a startup/continuation mode.

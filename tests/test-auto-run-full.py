@@ -196,7 +196,22 @@ assert outcome["continuity"]["preferred_current_section_fields"] == [
     "DONE",
     "REMAINING",
     "EXACT_NEXT_GATE",
+    "EXACT_NEXT_COMMAND",
 ]
+
+next_command = outcome["next_command_contract"]
+assert next_command["required_on_every_user_visible_work_cycle_terminal_response"] is True
+assert next_command["exactly_one_recommended_command"] is True
+assert next_command["command_must_be_copy_pasteable"] is True
+assert next_command["command_must_be_last_actionable_content"] is True
+assert next_command["action_required_reserved_for_real_owner_gate"] is True
+assert next_command["do_not_invent_owner_gate"] is True
+assert next_command["canonical_non_gate_commands"] == {
+    "refresh_waiting_state": "SYNC RPi5_main",
+    "continue_same_scope": "turpini",
+    "select_next_canonical_lane": "START RPi5_main",
+}
+assert next_command["never_implies_merge_or_live_authority"] is True
 
 assert "AUTO-RUN FULL RPi5_main #<issue>" in doc
 assert "normal implementation lane" in doc
@@ -218,6 +233,11 @@ assert "one outcome issue" in outcome_doc
 assert "MERGE RPi5_main #<pr> HEAD=<exact-head-sha>" in outcome_doc
 assert "do not create native stacked PRs under the current policy" in outcome_doc
 assert "strict required status checks" in outcome_doc
+assert "### Next Command Contract" in outcome_doc
+assert "SYNC RPi5_main" in outcome_doc
+assert "turpini" in outcome_doc
+assert "START RPi5_main" in outcome_doc
+assert "Next Command Contract" in fast
 
 assert "## Outcome Delivery v1" in pr_template
 assert "Coherent work items" in pr_template
