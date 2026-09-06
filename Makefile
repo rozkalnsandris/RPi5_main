@@ -13,6 +13,7 @@ test:
 	python3 ./tests/test-deploy-executor-hermes-deals-origin-privileged-consumer.py
 	python3 ./tests/test-deploy-executor-hermes-deals-origin-privileged-dispatcher.py
 	python3 ./tests/test-deploy-executor-hermes-deals-origin-privileged-broker.py
+	python3 ./tests/test-hermes-deals-origin-broker-request-operator.py
 	python3 ./tests/test-deploy-executor-hermes-deals-origin-source-auth-helper-launch.py
 	python3 ./tests/test-deploy-executor-hermes-deals-origin-source-integration.py
 	python3 ./tests/test-hermes-deals-origin-runtime-adapters.py
