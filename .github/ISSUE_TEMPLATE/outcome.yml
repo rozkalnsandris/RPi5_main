@@ -1,0 +1,65 @@
+name: Outcome delivery
+description: Define one visible implementation outcome and its coherent delivery slice.
+title: "[Outcome] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use one issue for one visible outcome. Prefer one Outcome PR containing 2-5 closely related same-risk work items.
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: What will be observably true when this work is complete?
+      placeholder: Describe the end state, not an internal proof object.
+    validations:
+      required: true
+  - type: textarea
+    id: definition-of-done
+    attributes:
+      label: Definition of Done
+      description: List the verifiable conditions that prove the outcome.
+      placeholder: |
+        - ...
+        - ...
+    validations:
+      required: true
+  - type: textarea
+    id: work-items
+    attributes:
+      label: Coherent work items
+      description: List 2-5 closely related same-risk items that belong in the same Outcome PR.
+      placeholder: |
+        1. Implementation
+        2. Wiring/integration
+        3. Tests
+        4. Operator/preflight
+        5. Docs/provenance
+    validations:
+      required: true
+  - type: dropdown
+    id: runtime-class
+    attributes:
+      label: Host/runtime classification
+      description: Choose the highest-risk effect required by the outcome.
+      options:
+        - SOURCE_ONLY
+        - READ_ONLY_RUNTIME
+        - LIVE_STRICT_MUTATION
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Trust boundary and exclusions
+      description: State exact targets/mutation classes if relevant and explicitly list what is out of scope.
+      placeholder: No host/runtime mutation; no credentials; no ruleset weakening; ...
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Integrated validation
+      description: Which tests, CI checks, preflight and post-verification prove the whole outcome?
+    validations:
+      required: true
