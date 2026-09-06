@@ -42,7 +42,7 @@ class HermesOriginBrokerRuntimeUpgradeTests(unittest.TestCase):
     def test_service_write_authority_is_only_replay_state_directory(self) -> None:
         unit = (ROOT / "ops/systemd/rozkalns-hermes-deals-origin-broker@.service").read_text()
         write_lines = [line for line in unit.splitlines() if line.startswith("ReadWritePaths=")]
-        self.assertEqual(write_lines, ["ReadWritePaths=/var/lib/rozkalns-deploy-executor-p9"])
+        self.assertEqual(write_lines, ["ReadWritePaths=/var/lib/rozkalns-deploy-executor-p9 /var/lib/hermes-deals-audits/origin-path-audit/evidence/rpi5"])
         self.assertNotIn("ReadWritePaths=/var/lib/rozkalns-deploy-executor\n", unit)
 
     def test_git_source_guard_is_exact_command_scoped_and_clean(self) -> None:

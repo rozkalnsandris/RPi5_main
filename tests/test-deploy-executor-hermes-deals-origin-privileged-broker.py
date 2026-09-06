@@ -328,7 +328,7 @@ class HermesDealsOriginPrivilegedBrokerTests(unittest.TestCase):
         self.assertIn("RuntimeMaxSec=60", service_unit)
         self.assertEqual(
             [line for line in service_unit.splitlines() if line.startswith("ReadWritePaths=")],
-            ["ReadWritePaths=/var/lib/rozkalns-deploy-executor-p9"],
+            ["ReadWritePaths=/var/lib/rozkalns-deploy-executor-p9 /var/lib/hermes-deals-audits/origin-path-audit/evidence/rpi5"],
         )
         self.assertNotIn("sudo", service_unit.lower())
         self.assertNotIn("systemd-run", service_unit)
