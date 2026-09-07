@@ -9,6 +9,7 @@ test:
 	python3 ./tests/test-deploy-executor-p4.py
 	python3 ./tests/test-deploy-executor-p5.py
 	python3 ./tests/test-deploy-executor-hermes-deals-origin.py
+	python3 ./tests/test-deploy-executor-weather-public-runtime.py
 	python3 ./tests/test-deploy-executor-hermes-deals-origin-dispatch-request.py
 	python3 ./tests/test-deploy-executor-hermes-deals-origin-privileged-consumer.py
 	python3 ./tests/test-deploy-executor-hermes-deals-origin-privileged-dispatcher.py
