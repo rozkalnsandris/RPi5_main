@@ -1,10 +1,11 @@
 # Hermes Deals Netto non-root preflight v2 — RPi5 source binding
 
-Status: **SOURCE BINDING IMPLEMENTED / NOT MERGED / EXECUTION DISABLED / LIVE NOT AUTHORIZED**
+Status: **SOURCE BINDING MERGED / EXECUTION DISABLED / LIVE NOT AUTHORIZED**
 
 Tracking:
 
-- current RPi5 work item: `RPi5_main#407`;
+- current post-merge continuity work item: `RPi5_main#412`;
+- merged RPi5 source binding: `RPi5_main#407` / PR #411 at `cb5a7b4098a3f85eff42d9e93202c1fda2bab716`;
 - upstream helper source: `hermes-deals#858` / PR #859;
 - Phase 4 umbrella continuity: `RPi5_main#191`;
 - residual runner migration: `hermes-deals#384`.
@@ -59,8 +60,8 @@ This source binding explicitly excludes:
 
 ## Gate separation
 
-This PR can prove only source compatibility. It does **not** prove current RPi5 installation, registration, ownership, permissions, corpus accessibility, runner state or runtime health.
+The merged source binding proves source compatibility only. It does **not** prove current RPi5 installation, registration, ownership, permissions, corpus accessibility, runner state or runtime health.
 
-After merge, any helper installation or host wiring requires fresh trusted-host read-only evidence followed by its own explicit LIVE authorization. A genuine read-only Netto canary requires a later independent READY/LIVE-AUTH envelope. Runner retirement remains ineligible until all required Hermes capability classes have accepted runner-independent replacements.
+The exact next gate is fresh trusted-host read-only evidence. After that evidence is reviewed, any helper installation or host wiring still requires its own explicit LIVE authorization. A genuine read-only Netto canary requires a later independent READY/LIVE-AUTH envelope. Runner retirement remains ineligible until all required Hermes capability classes have accepted runner-independent replacements.
 
 Merge never authorizes LIVE work.
