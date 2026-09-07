@@ -77,7 +77,7 @@ def _fixed_registry() -> OperationRegistry:
             'dispatcher-source-blob:f9bfd02c6d36bb54d5380e1f0c99a0195e2ff4bc',
             'installer-source-blob:41f004420a0f5aed314aaefd796a54e14dbd17ea',
             'probe-source-blob:2362e8eb578a7279c38fe4ed2a7d1edd05df891a',
-            'pull-helper-source-blob:51bb23cc6c2083ab7c8b4e81ba82dd880e46d673',
+            'pull-helper-source-blob:4ef95c3f02b810b6b25721aa1b1b53d43b8ca572',
             'pull-helper-capability:origin-path-audit',
             'pull-helper-registration-schema:rozkalns.hermes-deals.origin-path-rpi5-pull-registration.v1',
             'pull-helper-evidence-schema:rozkalns.hermes-deals.origin-path-rpi5-pull-evidence.v1',

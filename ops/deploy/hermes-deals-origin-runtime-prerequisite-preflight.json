@@ -41,7 +41,7 @@
       "path": "/var/lib/hermes-deals-audits/origin-path-audit/evidence"
     },
     "helper": {
-      "git_blob": "51bb23cc6c2083ab7c8b4e81ba82dd880e46d673",
+      "git_blob": "4ef95c3f02b810b6b25721aa1b1b53d43b8ca572",
       "group": "root",
       "mode": "0755",
       "owner": "root",
@@ -59,7 +59,8 @@
       "mode": "0600",
       "owner": "root",
       "path": "/etc/hermes-deals-audits.d/origin-path-rpi5-pull.json",
-      "schema": "rozkalns.hermes-deals.origin-path-rpi5-pull-registration.v1"
+      "schema": "rozkalns.hermes-deals.origin-path-rpi5-pull-registration.v1",
+      "registered_source_sha": "f6c48cc85c187d927575da6efef4b05b4d4c0e40"
     },
     "socket": {
       "active": true,
@@ -80,7 +81,7 @@
     "path": "scripts/preflight-hermes-deals-origin-runtime-prerequisites.py",
     "root_read_context_required": true,
     "socket_request_implemented": false,
-    "source_blob": "a817df1830b05355bbf1edd62b260e29d1f0f11a"
+    "source_blob": "6ea747206ddd54d1f78deaa8893af574cafce7ec"
   },
   "phase": 4,
   "repository": "rozkalnsandris/RPi5_main",

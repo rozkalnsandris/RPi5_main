@@ -305,3 +305,9 @@ The reviewed recovery operator is `scripts/install-hermes-deals-origin-broker-ev
 `PRODUCTION_MUTATION_STARTED=false`
 
 After this source gate: review/Draft PR/CI/Ready → explicit MERGE → trusted-checkout convergence → root read-only recovery preflight → separate exact LIVE recovery apply → read-only poststate verification. Only after accepted recovery may a **new** READY queue item and a **new** owner-authored LIVE-AUTH/request ID authorize one new genuine canary. Queue #30 and LIVE-AUTH #9 must never be reused.
+
+## Current supersession — loopback-corrected replacement-canary prerequisite (2026-09-06)
+
+The later accepted canary `ops-workflows#35` / human `deploy-authorizations#12` supersedes the older #30/#9 evidence-recovery checkpoint as the current canary evidence. It consumed durable replay, reached helper execution and failed closed with helper exit `1`; the pair is permanently non-reusable. Public probes were healthy while the historical helper's fixed private-LAN origin failed, and bounded host evidence showed `http://127.0.0.1:9128` healthy.
+
+Hermes Deals #847/#848 corrected only that helper origin binding and merged exact source `f6c48cc85c187d927575da6efef4b05b4d4c0e40`, helper blob `4ef95c3f02b810b6b25721aa1b1b53d43b8ca572`. RPi5 source now binds that identity and provides a default-read-only, separately LIVE-gated five-target reconciliation contract covering the three installed RPi5 consumer-binding modules, helper and registration; the probe remains unchanged/read-only. No canary retry is authorized by this source patch. Only after merge, fresh provenance, separately authorized runtime convergence and read-only poststate may a new READY queue plus a new human LIVE-AUTH/request ID authorize one replacement canary.

@@ -1,0 +1,149 @@
+{
+  "schema": "rozkalns.hermes-deals.origin-loopback-provenance-runtime-upgrade.v1",
+  "repository": "rozkalnsandris/RPi5_main",
+  "issue": 191,
+  "phase": 4,
+  "source_gate": "HERMES_LOOPBACK_HELPER_PROVENANCE_RECONCILIATION_SOURCE",
+  "source_baseline": "1e3ab5f5ee5884958087d01bb98bb57a03328874",
+  "hermes_source": {
+    "repository": "rozkalnsandris/hermes-deals",
+    "origin": "https://github.com/rozkalnsandris/hermes-deals.git",
+    "sha": "f6c48cc85c187d927575da6efef4b05b4d4c0e40",
+    "trusted_checkout_name": "hermes-deals-origin-pull-trusted",
+    "helper_source": "tools/runner/origin_path_rpi5_pull_helper.py",
+    "helper_old_blob": "51bb23cc6c2083ab7c8b4e81ba82dd880e46d673",
+    "helper_new_blob": "4ef95c3f02b810b6b25721aa1b1b53d43b8ca572",
+    "helper_old_sha256": "f2f6e4ca823eb6c0872de0a5e92531ebacb076c48934c80654d84f3ef6f7e625",
+    "helper_new_sha256": "23b29ff5f800cc5ade9cc8e38607a4e37beae9f45c6c82111ea4b49f063e06cf",
+    "probe_blob": "2362e8eb578a7279c38fe4ed2a7d1edd05df891a",
+    "probe_sha256": "96a8b5819ec85f27095c535f1a3be6cba7bac0e2a40a1132869fb39dc669ad43"
+  },
+  "registration": {
+    "schema": "rozkalns.hermes-deals.origin-path-rpi5-pull-registration.v1",
+    "capability": "origin-path-audit",
+    "registered_source_sha": "f6c48cc85c187d927575da6efef4b05b4d4c0e40",
+    "helper_sha256": "23b29ff5f800cc5ade9cc8e38607a4e37beae9f45c6c82111ea4b49f063e06cf",
+    "probe_sha256": "96a8b5819ec85f27095c535f1a3be6cba7bac0e2a40a1132869fb39dc669ad43",
+    "old_blob": "eac8778b2c09e191ca2d3abac3a4f5e243cd41c3",
+    "new_blob": "a0444a84cb1a54abfeaefb47baf7f0c41b9677d8",
+    "old_sha256": "b92564a93d67098c9ec264e88d48096ae1323430547ed14b6d22b590ac8591bc",
+    "new_sha256": "36c511a36e462bf196a6695c4bac39497c56ab9ef7749aa0b2eb4621e172cad7",
+    "canonical_size": 338
+  },
+  "operator": {
+    "path": "scripts/install-hermes-deals-origin-pull-helper-runtime-upgrade.py",
+    "source_blob": "d9b743439dbfe57f4230bef8384d7b7ca3fcf9f0",
+    "default_mode": "ROOT_READ_ONLY_PREFLIGHT",
+    "apply_flag": "--apply",
+    "apply_requires_root": true,
+    "apply_requires_separate_explicit_live_authorization": true,
+    "exact_rpi5_checkout_required": true,
+    "exact_detached_clean_hermes_checkout_required": true,
+    "git_trust_scope": "COMMAND_ONLY_EXACT_REPOSITORY",
+    "caller_selectable_target_path": false,
+    "caller_selectable_command_argv_environment": false,
+    "automatic_retry": false,
+    "automatic_rollback": false,
+    "automatic_cleanup": false
+  },
+  "runtime_targets": [
+    {
+      "name": "consumer_adapter",
+      "source": "ops/lib/deploy_executor/hermes_deals_origin_adapter.py",
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_adapter.py",
+      "mode": "0644",
+      "old_blob": "0b20cefa0c9193ecb8e7811c855767d56baf59ce",
+      "new_blob": "03d2d250d7da9a235f0d6150e799dc85a5796ff1"
+    },
+    {
+      "name": "runtime_adapters",
+      "source": "ops/lib/deploy_executor/hermes_deals_origin_runtime_adapters.py",
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_runtime_adapters.py",
+      "mode": "0644",
+      "old_blob": "21918e96495592b6a3478e8e74ae06fdf640121d",
+      "new_blob": "862946e500749036a641c0ed3dcc66445dcdf23a"
+    },
+    {
+      "name": "broker_runtime",
+      "source": "ops/lib/deploy_executor/hermes_deals_origin_broker_runtime.py",
+      "target": "/usr/local/lib/rozkalns-deploy-executor/deploy_executor/hermes_deals_origin_broker_runtime.py",
+      "mode": "0644",
+      "old_blob": "53112450cbccbabd9a5ec62966b9fd96d3513bea",
+      "new_blob": "e1d4c1d8af780eca5d33ba5806cd66adecb33c81"
+    },
+    {
+      "name": "helper",
+      "target": "/usr/local/sbin/hermes-deals-origin-path-rpi5-pull-dispatch",
+      "mode": "0755",
+      "old_blob": "51bb23cc6c2083ab7c8b4e81ba82dd880e46d673",
+      "new_blob": "4ef95c3f02b810b6b25721aa1b1b53d43b8ca572"
+    },
+    {
+      "name": "registration",
+      "target": "/etc/hermes-deals-audits.d/origin-path-rpi5-pull.json",
+      "mode": "0600",
+      "old_blob": "eac8778b2c09e191ca2d3abac3a4f5e243cd41c3",
+      "new_blob": "a0444a84cb1a54abfeaefb47baf7f0c41b9677d8"
+    }
+  ],
+  "runtime_target_order": [
+    "consumer_adapter",
+    "runtime_adapters",
+    "broker_runtime",
+    "helper",
+    "registration"
+  ],
+  "immutable_prerequisite": {
+    "name": "probe",
+    "target": "/usr/local/libexec/hermes-deals-audits/origin-path-probe.py",
+    "mode": "0755",
+    "git_blob": "2362e8eb578a7279c38fe4ed2a7d1edd05df891a",
+    "sha256": "96a8b5819ec85f27095c535f1a3be6cba7bac0e2a40a1132869fb39dc669ad43",
+    "mutation_authorized": false
+  },
+  "replacement_policy": {
+    "fixed_same_directory_temp_names": true,
+    "old_target_single_link_regular_file_required": true,
+    "old_target_revalidated_before_each_replace": true,
+    "temp_create": "O_RDWR|O_CREAT|O_EXCL|O_NOFOLLOW|O_CLOEXEC",
+    "temp_file_fsync_before_replace": true,
+    "atomic_namespace_replace": true,
+    "parent_directory_fsync_after_replace": true,
+    "post_replace_exact_identity_verify": true,
+    "partial_apply_semantics": "FAIL_CLOSED_NO_RETRY_ROLLBACK_CLEANUP"
+  },
+  "source_gate_state": {
+    "corrected_static_bindings_implemented": true,
+    "runtime_upgrade_operator_implemented": true,
+    "runtime_upgrade_preflight_proven": false,
+    "runtime_upgrade_applied": false,
+    "new_ready_queue_prepared": false,
+    "new_live_authorization_present": false,
+    "genuine_replacement_canary_authorized": false,
+    "runner_retirement_eligible": false,
+    "production_mutation_started": false
+  },
+  "not_authorized": [
+    "runtime target replacement by source merge",
+    "systemd mutation",
+    "Docker or container mutation",
+    "network or firewall mutation",
+    "credential content read or credential mutation",
+    "GitHub API request from the runtime-upgrade operator",
+    "socket request",
+    "helper execution or genuine audit",
+    "replay consume",
+    "READY or LIVE-AUTH synthesis",
+    "runner retirement",
+    "deployment or production application-data mutation"
+  ],
+  "next_sequence": [
+    "merge source only after exact-head CI/review and explicit owner MERGE authorization",
+    "freshly validate exact merged RPi5 source and corrected Hermes source provenance",
+    "separately converge required trusted checkouts under exact owner LIVE authorization",
+    "run one root read-only runtime-upgrade preflight without --apply",
+    "only a separate exact owner LIVE authorization may run the fixed five-target --apply",
+    "perform read-only post-upgrade identity verification",
+    "only then may a new genuine READY queue plus new human LIVE-AUTH/request ID authorize one replacement canary"
+  ]
+}

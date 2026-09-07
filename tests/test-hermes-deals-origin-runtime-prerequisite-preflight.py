@@ -86,7 +86,7 @@ class HermesRuntimePrerequisitePreflightTests(unittest.TestCase):
                 machine_root = evidence / "rpi5"
                 machine_root.mkdir()
                 os.chmod(machine_root, 0o700)
-                source_sha = "c" * 40
+                source_sha = preflight.REVIEWED_HERMES_SOURCE_SHA
                 registration.write_text(
                     json.dumps(
                         {
