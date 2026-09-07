@@ -311,3 +311,25 @@ After this source gate: review/Draft PR/CI/Ready → explicit MERGE → trusted-
 The later accepted canary `ops-workflows#35` / human `deploy-authorizations#12` supersedes the older #30/#9 evidence-recovery checkpoint as the current canary evidence. It consumed durable replay, reached helper execution and failed closed with helper exit `1`; the pair is permanently non-reusable. Public probes were healthy while the historical helper's fixed private-LAN origin failed, and bounded host evidence showed `http://127.0.0.1:9128` healthy.
 
 Hermes Deals #847/#848 corrected only that helper origin binding and merged exact source `f6c48cc85c187d927575da6efef4b05b4d4c0e40`, helper blob `4ef95c3f02b810b6b25721aa1b1b53d43b8ca572`. RPi5 source now binds that identity and provides a default-read-only, separately LIVE-gated five-target reconciliation contract covering the three installed RPi5 consumer-binding modules, helper and registration; the probe remains unchanged/read-only. No canary retry is authorized by this source patch. Only after merge, fresh provenance, separately authorized runtime convergence and read-only poststate may a new READY queue plus a new human LIVE-AUTH/request ID authorize one replacement canary.
+
+## Current supersession — successful loopback-corrected replacement canary (2026-09-07)
+
+Issue #405 records the accepted public-safe post-canary reconciliation. The first replacement authorization attempt, `deploy-authorizations#13`, was rejected during `canonical_prepare` because GitHub reported it as app-authored; no replay consume or helper execution occurred, and that authorization/request is non-reusable. The fresh human-authored `deploy-authorizations#14`, bound to READY `ops-workflows#36` and request ID `f1ce782b-baae-40b7-9f3f-bf8eaa7ddcad`, then completed the corrected one-shot path for exact Hermes source `f6c48cc85c187d927575da6efef4b05b4d4c0e40`.
+
+The accepted terminal receipt is `HERMES_ORIGIN_BROKER_DISPATCH_COMPLETE`: canonical preparation passed, replay availability was checked twice, durable replay was consumed exactly once, the fixed `origin-path-audit` helper executed with exit code `0`, helper stdout validation passed, and `production_mutation_started=false`. The #14 authorization/request is consumed and permanently non-reusable. Immediate read-only postverification retained exact RPi5 source `0e7c766b20b0577e2ba25fd2061a9be916362da9`, exact Hermes source, corrected helper blob `4ef95c3f02b810b6b25721aa1b1b53d43b8ca572`, clean trusted checkouts and an active/enabled broker socket with no active broker instance after completion. Repository source still must not be treated as proof of future runtime state.
+
+`PHASE4_CURRENT_WORK_ITEM=HERMES_POSTCANARY_INCREMENTAL_CAPABILITY_MIGRATION_SOURCE`
+`REPLACEMENT_CANARY_QUEUE=36`
+`REPLACEMENT_CANARY_LIVE_AUTH=14`
+`REPLACEMENT_CANARY_REQUEST_ID=f1ce782b-baae-40b7-9f3f-bf8eaa7ddcad`
+`REPLACEMENT_CANARY_RESULT=HERMES_ORIGIN_BROKER_DISPATCH_COMPLETE`
+`DURABLE_REPLAY_CONSUMED=true`
+`HELPER_EXECUTED=true`
+`HELPER_EXIT_CODE=0`
+`HELPER_STDOUT_VALIDATED=true`
+`GENUINE_HERMES_AUDIT_ACCEPTED=true`
+`ORIGIN_PATH_REPLACEMENT_PROVEN=true`
+`RUNNER_RETIREMENT_ELIGIBLE=false`
+`PRODUCTION_MUTATION_STARTED=false`
+
+The corrected origin-path replacement is now proven end-to-end, satisfying that prerequisite in `hermes-deals#384`. It does **not** by itself authorize or justify deregistering the persistent `hermes-deals-audit` runner because additional capabilities still depend on that runner surface. The next source-only lane is a deterministic inventory of the remaining audit-runner consumers followed by selection and design of exactly one next capability-specific migration. Runner deregistration/retirement, systemd/host mutation, credentials/permissions and any further genuine audit remain separate owner/LIVE gates.
