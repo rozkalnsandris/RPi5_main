@@ -96,7 +96,9 @@ Merging V14 performs no production mutation. The Cloudflare route change, instal
 
 Issue #408 registers the reviewed `rozkalns_weather` public-only handoff as a `STRICT`, non-LIVE-ALL deploy-executor operation with a dedicated execution-disabled adapter and deterministic sanitized baseline resolver contract. The registry remains globally disabled, and the source lane does not install or execute Docker/systemd operations, initialize SQLite, write corpus data, configure credentials/private coordinates, or mutate Cloudflare/network state. See [the weather executor source contract](WEATHER_PUBLIC_RUNTIME_EXECUTOR_SOURCE.md).
 
-Any future weather deployment remains a separate LIVE gate. Production schema initialization, bounded corpus backfill, backup/recovery, private WeatherNext access and executor capability enablement remain distinct reviewed mutation classes rather than being folded into the application-release adapter.
+Issue #410 extends this into one source-only first-bootstrap composition: application release, persistent volume ensure, explicit schema initialization, privacy-safe readiness, optional public smoke, bounded DWD 10416 truth backfill, bounded exact Single Runs for ICON-D2/IFS/AIFS, corpus integrity and the reviewed 30-minute recurring public-ingest schedule. These remain distinct mutation/read-only capability classes; all privileged dispatch and host wiring remain disabled. The plan requires exact weather SHA/CI, sanitized baseline, explicit historical bounds and an explicit recovery decision before a later composite LIVE can become eligible.
+
+Any actual weather deployment remains a separate LIVE gate. Production schema initialization, bounded corpus backfill, backup/recovery, private WeatherNext access and executor capability enablement remain distinct reviewed mutation classes rather than being folded into the application-release adapter.
 
 ## Later phases
 
