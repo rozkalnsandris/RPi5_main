@@ -92,6 +92,12 @@ CI enforces the exact loopback publish, immutable local image identity, read-onl
 
 Merging V14 performs no production mutation. The Cloudflare route change, installed-unit activation, legacy-container cutover and later removal of the obsolete LAN 8089 UFW rule are separate explicit production steps with pre/post health and rollback gates. See the [V14 contract](V14_HERMES_TECH_WEB_RUNTIME_CONTRACT.md).
 
+## Weather public runtime — static adapter source integration
+
+Issue #408 registers the reviewed `rozkalns_weather` public-only handoff as a `STRICT`, non-LIVE-ALL deploy-executor operation with a dedicated execution-disabled adapter and deterministic sanitized baseline resolver contract. The registry remains globally disabled, and the source lane does not install or execute Docker/systemd operations, initialize SQLite, write corpus data, configure credentials/private coordinates, or mutate Cloudflare/network state. See [the weather executor source contract](WEATHER_PUBLIC_RUNTIME_EXECUTOR_SOURCE.md).
+
+Any future weather deployment remains a separate LIVE gate. Production schema initialization, bounded corpus backfill, backup/recovery, private WeatherNext access and executor capability enablement remain distinct reviewed mutation classes rather than being folded into the application-release adapter.
+
 ## Later phases
 
 Each remaining subsystem is imported separately with redaction, tests, rollback instructions and a pull request. Docker Compose, Home Assistant, monitoring, update scripts and application repositories remain outside the V12 target set until their own contracts are reviewed. Cloudflare runtime ownership is defined by V13, while application-origin/runtime hardening is imported one reviewed subsystem at a time beginning with V14.
