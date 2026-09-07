@@ -44,6 +44,7 @@ class P5InterfaceSecurityTests(unittest.TestCase):
                 "rozkalns-control-center.merge-postcanary-reconcile.v1",
                 "dashboard-rpi5.production-release.v1",
                 "hermes-deals.origin-path-audit.v1",
+                "rozkalns-weather.public-runtime-release.v1",
             },
         )
         strict = operations["rozkalns-control-center.merge-postcanary-reconcile.v1"]
@@ -57,6 +58,15 @@ class P5InterfaceSecurityTests(unittest.TestCase):
         self.assertEqual(hermes.authorization_class, "STRICT")
         self.assertFalse(hermes.ordinary_live_all_eligible)
         self.assertEqual(hermes.rollback_policy, "NONE")
+        weather = operations["rozkalns-weather.public-runtime-release.v1"]
+        self.assertEqual(weather.authorization_class, "STRICT")
+        self.assertFalse(weather.ordinary_live_all_eligible)
+        self.assertEqual(weather.baseline.kind, "resolver")
+        self.assertEqual(
+            weather.baseline.resolver_id,
+            "rozkalns-weather.public-runtime-baseline.v1",
+        )
+        self.assertEqual(weather.rollback_policy, "NONE")
         self.assertFalse(registry.execution_enabled)
 
     def test_audit_registry_has_one_dormant_cv_operation(self):
