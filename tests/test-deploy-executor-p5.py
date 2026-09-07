@@ -44,6 +44,7 @@ class P5InterfaceSecurityTests(unittest.TestCase):
                 "rozkalns-control-center.merge-postcanary-reconcile.v1",
                 "dashboard-rpi5.production-release.v1",
                 "hermes-deals.origin-path-audit.v1",
+                "hermes-deals.netto-missing-normal-price-nonroot-preflight-v2.v1",
                 "rozkalns-weather.public-runtime-release.v1",
             },
         )
@@ -58,6 +59,15 @@ class P5InterfaceSecurityTests(unittest.TestCase):
         self.assertEqual(hermes.authorization_class, "STRICT")
         self.assertFalse(hermes.ordinary_live_all_eligible)
         self.assertEqual(hermes.rollback_policy, "NONE")
+        netto = operations["hermes-deals.netto-missing-normal-price-nonroot-preflight-v2.v1"]
+        self.assertEqual(netto.authorization_class, "STRICT")
+        self.assertFalse(netto.ordinary_live_all_eligible)
+        self.assertEqual(netto.baseline.kind, "resolver")
+        self.assertEqual(
+            netto.baseline.resolver_id,
+            "hermes-deals.netto-nonroot-preflight-v2-registration.v1",
+        )
+        self.assertEqual(netto.rollback_policy, "NONE")
         weather = operations["rozkalns-weather.public-runtime-release.v1"]
         self.assertEqual(weather.authorization_class, "STRICT")
         self.assertFalse(weather.ordinary_live_all_eligible)
