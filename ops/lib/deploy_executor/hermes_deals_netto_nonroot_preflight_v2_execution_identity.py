@@ -9,7 +9,7 @@ import pwd
 import stat
 import subprocess
 from types import MappingProxyType
-from typing import Any, Mapping, Protocol
+from typing import Any, Mapping
 
 from .hermes_deals_netto_nonroot_preflight_v2_adapter import SOURCE_SHA
 
@@ -95,14 +95,6 @@ FALSE_POSTCONDITIONS = (
     "database_write_performed",
     "review_write_performed",
     "deployment_performed",
-)
-ALLOWED_BLOCKED_AT = frozenset(
-    {
-        "n9_manifest_unreadable",
-        "n9_manifest_identity_mismatch",
-        "corpus_root_unreadable",
-        "campaign_identity_probe_required",
-    }
 )
 
 N9_ROOT = (
@@ -210,10 +202,6 @@ class NettoLaunchReceipt:
     blocked_at: str
     output_validated: bool
     production_mutation_started: bool = False
-
-
-class FixedNettoRunner(Protocol):
-    def __call__(self, plan: NettoLaunchPlan) -> FixedProcessResult: ...
 
 
 def resolve_execution_identity() -> ExecutionIdentitySnapshot:
@@ -422,9 +410,14 @@ def _validate_launch_plan(plan: NettoLaunchPlan) -> None:
         raise HermesDealsNettoExecutionIdentityError("fixed launch plan drift")
 
 
-def run_fixed_process(plan: NettoLaunchPlan) -> FixedProcessResult:
-    """Future fixed privilege-drop seam; exact helper provenance bounds its output."""
+def _run_fixed_process(plan: NettoLaunchPlan) -> FixedProcessResult:
+    """Future fixed privilege-drop seam; the runner re-resolves the fixed account."""
     _validate_launch_plan(plan)
+    resolved_identity = resolve_execution_identity()
+    if plan != fixed_launch_plan(resolved_identity):
+        raise HermesDealsNettoExecutionIdentityError(
+            "fixed Netto runner identity does not match the dedicated account"
+        )
     try:
         completed = subprocess.run(
             plan.argv,
@@ -511,7 +504,14 @@ def validate_helper_result(
             raise HermesDealsNettoExecutionIdentityError(
                 f"fixed helper evidence boolean drift: {field}"
             )
-    if payload["blocked_at"] not in ALLOWED_BLOCKED_AT or payload["non_root_ready"] is not False:
+    if (
+        payload["n9_manifest_readable"] is not True
+        or payload["n9_manifest_sha256_match"] is not True
+        or payload["corpus_root_readable"] is not True
+        or payload["corpus_root_executable"] is not True
+        or payload["blocked_at"] != "campaign_identity_probe_required"
+        or payload["non_root_ready"] is not False
+    ):
         raise HermesDealsNettoExecutionIdentityError("fixed helper readiness drift")
     metadata = payload["safe_permission_metadata"]
     if type(metadata) is not dict or set(metadata) != PERMISSION_FIELDS:
@@ -527,10 +527,7 @@ def validate_helper_result(
 class HermesDealsNettoV2OneShotLauncher:
     """Capability-specific future launcher; source remains disabled and unwired."""
 
-    def __init__(self, *, runner: FixedNettoRunner = run_fixed_process):
-        if not callable(runner):
-            raise TypeError("fixed Netto runner must be callable")
-        self._runner = runner
+    def __init__(self):
         self._invoked = False
 
     def launch_prevalidated(
@@ -565,7 +562,7 @@ class HermesDealsNettoV2OneShotLauncher:
 
         self._invoked = True
         try:
-            result = self._runner(plan)
+            result = _run_fixed_process(plan)
         except HermesDealsNettoExecutionIdentityError:
             raise
         except Exception:

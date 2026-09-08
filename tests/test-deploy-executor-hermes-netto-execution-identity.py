@@ -336,6 +336,19 @@ class NettoExecutionIdentityContractTests(unittest.TestCase):
                 ),
             )
 
+        incomplete_access = json.loads(_valid_result().stdout)
+        incomplete_access["n9_manifest_readable"] = False
+        incomplete_access["blocked_at"] = "n9_manifest_unreadable"
+        with self.assertRaises(HermesDealsNettoExecutionIdentityError):
+            validate_helper_result(
+                plan,
+                FixedProcessResult(
+                    0,
+                    (json.dumps(incomplete_access, sort_keys=True) + "\n").encode(),
+                    b"",
+                ),
+            )
+
     def test_one_shot_consumes_before_runner_and_has_no_retry(self):
         calls = []
 
@@ -343,8 +356,9 @@ class NettoExecutionIdentityContractTests(unittest.TestCase):
             calls.append(plan)
             return _valid_result(plan.uid)
 
-        launcher = HermesDealsNettoV2OneShotLauncher(runner=runner)
+        launcher = HermesDealsNettoV2OneShotLauncher()
         with (
+            patch.object(execution, "_run_fixed_process", side_effect=runner),
             patch.object(execution, "EXECUTION_ENABLED", True),
             patch.object(execution, "HOST_WIRING_ENABLED", True),
             patch.object(execution, "ACCESS_EVIDENCE_RESOLVER_WIRED", True),
@@ -389,6 +403,8 @@ class NettoExecutionIdentityContractTests(unittest.TestCase):
         self.assertIn("extra_groups=()", source)
         self.assertIn("user=plan.uid", source)
         self.assertIn("group=plan.gid", source)
+        self.assertIn("resolved_identity = resolve_execution_identity()", source)
+        self.assertNotIn("runner:", source)
 
 
 if __name__ == "__main__":
