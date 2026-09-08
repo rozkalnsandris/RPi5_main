@@ -4,6 +4,7 @@ import json
 import sys
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,9 +30,8 @@ from deploy_executor.hermes_deals_netto_nonroot_preflight_v2_execution_identity 
     FIXED_INPUT_RELATIVE_PATHS,
     HELPER_SHA256,
     HOST_WIRING_ENABLED,
-    INPUT_HOME_ROOT,
     INPUT_OWNER_ACCOUNT,
-    INPUT_OWNER_HOME,
+    INPUT_OWNER_HOME_TOKEN,
     INSTALLED_HELPER_PATH,
     N9_GENERATED,
     N9_MANIFEST,
@@ -181,17 +181,22 @@ class NettoExecutionIdentityContractTests(unittest.TestCase):
         self.assertEqual(contract["execution_identity"]["home"], EXECUTION_HOME)
         self.assertEqual(contract["execution_identity"]["shell"], EXECUTION_SHELL)
         self.assertEqual(contract["execution_identity"]["supplementary_groups"], [])
+        self.assertTrue(contract["execution_identity"]["forbidden_numeric_identity_aliases"])
         self.assertEqual(contract["architecture"]["reuse_pattern"], BROKER_COMPOSITION_PATTERN)
         self.assertFalse(contract["architecture"]["parallel_privileged_broker_allowed"])
         self.assertFalse(contract["input_access"]["generic_home_read_allowed"])
+        self.assertFalse(contract["process"]["direct_low_level_execution_when_disabled"])
         self.assertEqual(contract["process"]["argv"], list(FIXED_ARGV))
         self.assertEqual(contract["process"]["cwd"], FIXED_CWD)
         self.assertEqual(contract["process"]["environment"], dict(FIXED_ENV))
         self.assertEqual(
             contract["input_access"]["path_binding"],
             {
-                "home_root": INPUT_HOME_ROOT,
+                "base_token": INPUT_OWNER_HOME_TOKEN,
                 "owner_account": INPUT_OWNER_ACCOUNT,
+                "absolute_path_authority": (
+                    "frozen_helper_provenance_plus_future_trusted_host_resolver"
+                ),
                 "relative_paths_are_source_fixed": True,
                 "caller_override_allowed": False,
             },
@@ -211,8 +216,8 @@ class NettoExecutionIdentityContractTests(unittest.TestCase):
                 )
             ],
         )
-        self.assertEqual(readiness["input_home_root"], INPUT_HOME_ROOT)
         self.assertEqual(readiness["input_owner_account"], INPUT_OWNER_ACCOUNT)
+        self.assertEqual(readiness["input_owner_home_token"], INPUT_OWNER_HOME_TOKEN)
         self.assertEqual(readiness["fixed_input_relative_paths"], FIXED_INPUT_RELATIVE_PATHS)
 
         for field in (
@@ -240,7 +245,7 @@ class NettoExecutionIdentityContractTests(unittest.TestCase):
             _identity(username="root", uid=0, gid=0),
             _identity(uid=0),
             _identity(primary_group="docker"),
-            _identity(home=INPUT_OWNER_HOME),
+            _identity(home="/tmp"),
             _identity(shell="/bin/bash"),
             _identity(supplementary_groups=("docker",)),
             _identity(supplementary_groups=("adm",)),
@@ -250,14 +255,80 @@ class NettoExecutionIdentityContractTests(unittest.TestCase):
                 with self.assertRaises(HermesDealsNettoExecutionIdentityError):
                     validate_execution_identity(snapshot)
 
+    def test_resolver_rejects_forbidden_numeric_uid_or_gid_aliases(self):
+        primary = SimpleNamespace(gr_name=EXECUTION_GROUP, gr_gid=991, gr_mem=[])
+        docker = SimpleNamespace(gr_name="docker", gr_gid=998, gr_mem=[])
+        root = SimpleNamespace(pw_uid=0)
+        owner = SimpleNamespace(pw_uid=1000)
+
+        uid_alias_account = SimpleNamespace(
+            pw_name=EXECUTION_USER,
+            pw_uid=1000,
+            pw_gid=991,
+            pw_dir=EXECUTION_HOME,
+            pw_shell=EXECUTION_SHELL,
+        )
+
+        def uid_alias_pwd(name):
+            if name == EXECUTION_USER:
+                return uid_alias_account
+            if name == "andris":
+                return owner
+            if name == "root":
+                return root
+            raise KeyError(name)
+
+        with (
+            patch.object(execution.pwd, "getpwnam", side_effect=uid_alias_pwd),
+            patch.object(execution.grp, "getgrgid", return_value=primary),
+            patch.object(execution.grp, "getgrall", return_value=[primary, docker]),
+            patch.object(
+                execution.grp,
+                "getgrnam",
+                side_effect=lambda name: docker if name == "docker" else (_ for _ in ()).throw(KeyError(name)),
+            ),
+        ):
+            with self.assertRaisesRegex(HermesDealsNettoExecutionIdentityError, "forbidden numeric UID"):
+                execution.resolve_execution_identity()
+
+        gid_alias_account = SimpleNamespace(
+            pw_name=EXECUTION_USER,
+            pw_uid=991,
+            pw_gid=998,
+            pw_dir=EXECUTION_HOME,
+            pw_shell=EXECUTION_SHELL,
+        )
+        gid_alias_primary = SimpleNamespace(gr_name=EXECUTION_GROUP, gr_gid=998, gr_mem=[])
+
+        def gid_alias_pwd(name):
+            if name == EXECUTION_USER:
+                return gid_alias_account
+            if name == "andris":
+                return owner
+            if name == "root":
+                return root
+            raise KeyError(name)
+
+        with (
+            patch.object(execution.pwd, "getpwnam", side_effect=gid_alias_pwd),
+            patch.object(execution.grp, "getgrgid", return_value=gid_alias_primary),
+            patch.object(execution.grp, "getgrall", return_value=[gid_alias_primary, docker]),
+            patch.object(
+                execution.grp,
+                "getgrnam",
+                side_effect=lambda name: docker if name == "docker" else (_ for _ in ()).throw(KeyError(name)),
+            ),
+        ):
+            with self.assertRaisesRegex(HermesDealsNettoExecutionIdentityError, "forbidden numeric GID"):
+                execution.resolve_execution_identity()
+
     def test_fixed_input_access_is_minimal_and_rejects_broad_home_access(self):
-        self.assertEqual(INPUT_OWNER_HOME, f"{INPUT_HOME_ROOT}/{INPUT_OWNER_ACCOUNT}")
         paths = [item.path for item in FIXED_INPUT_ACCESS]
         self.assertEqual(
             paths,
             [
-                INPUT_OWNER_HOME,
-                f"{INPUT_OWNER_HOME}/hermes-deals-audits",
+                INPUT_OWNER_HOME_TOKEN,
+                f"{INPUT_OWNER_HOME_TOKEN}/hermes-deals-audits",
                 N9_ROOT,
                 N9_GENERATED,
                 N9_MANIFEST,
@@ -274,7 +345,7 @@ class NettoExecutionIdentityContractTests(unittest.TestCase):
         validate_fixed_input_access(_access())
 
         broad = list(_access())
-        broad[0] = FixedAccessSnapshot(INPUT_OWNER_HOME, "directory", True, True, False)
+        broad[0] = FixedAccessSnapshot(INPUT_OWNER_HOME_TOKEN, "directory", True, True, False)
         with self.assertRaisesRegex(HermesDealsNettoExecutionIdentityError, "input-access"):
             validate_fixed_input_access(tuple(broad))
 
@@ -315,6 +386,13 @@ class NettoExecutionIdentityContractTests(unittest.TestCase):
         self.assertEqual(plan.extra_groups, ())
         self.assertFalse(plan.shell)
         self.assertTrue(plan.close_fds)
+
+    def test_low_level_process_seam_remains_disabled_without_all_gates(self):
+        plan = fixed_launch_plan(_identity())
+        with patch.object(execution, "resolve_execution_identity") as resolver:
+            with self.assertRaisesRegex(HermesDealsNettoExecutionIdentityError, "source-disabled"):
+                execution._run_fixed_process(plan)
+            resolver.assert_not_called()
 
     def test_helper_output_is_bounded_sanitized_and_identity_bound(self):
         plan = fixed_launch_plan(_identity())
