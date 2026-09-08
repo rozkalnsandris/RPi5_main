@@ -7,6 +7,7 @@ test:
 	python3 ./tests/test-auto-live-v1.py
 	python3 ./tests/test-auto-run-lane-eligibility.py
 	python3 ./tests/test-control-phase5-production-visibility.py
+	python3 ./tests/test-control-phase5-observation-transport.py
 	python3 ./tests/test-deploy-executor-p1.py
 	python3 ./tests/test-deploy-executor-p2.py
 	python3 ./tests/test-deploy-executor-p4.py
