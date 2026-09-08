@@ -11,6 +11,18 @@ or registration absent after the source binding is merged. That observation is n
 a durable baseline: every future installer preflight revalidates the exact source, checkout,
 shared-parent metadata, and target absence.
 
+## RPi5 source checkout bootstrap prerequisite
+
+The installer must itself run from an exact detached `RPi5_main` checkout. The reviewed bootstrap
+contract is `ops/deploy/rpi5-main-netto-v2-trusted-checkout-bootstrap.json`, with operator context
+documented in `docs/RPI5_MAIN_NETTO_V2_TRUSTED_CHECKOUT_BOOTSTRAP.md`.
+
+The fixed target is
+`<RPi5-checkout-parent>/RPi5_main-netto-nonroot-preflight-v2-installer-trusted`. Creation of that
+checkout is a separate LIVE mutation and is not performed by the installer. The ordinary
+`RPi5_main` manager checkout may be stale or dirty, but the bootstrap grants no repair authority:
+its working-tree bytes, index and HEAD must remain untouched.
+
 ## Frozen provenance
 
 The installer binds one immutable Hermes source:
@@ -97,15 +109,17 @@ decision after a successful installation is freshly verified.
 
 1. Merge and freshly verify this source contract and exact-main CI.
 2. Freshly revalidate the current host before any mutation.
-3. If absent, prepare the fixed Hermes trusted detached checkout only under its own exact LIVE
-   scope; allowed Git changes are limited to `git fetch origin main` plus one fixed detached
+3. If absent, prepare the fixed exact `RPi5_main` detached installer checkout under the reviewed
+   `rpi5-main-netto-v2-trusted-checkout-bootstrap` contract and its own exact LIVE scope.
+4. If absent, prepare the fixed Hermes trusted detached checkout only under its own exact LIVE
+   scope; allowed Git changes remain limited to `git fetch origin main` plus one fixed detached
    worktree creation. Reset/rebase/clean/force are forbidden.
-4. Run the installer in default read-only preflight mode.
-5. Only a successful preflight may lead to a separate exact root LIVE `--apply` authorization
+5. Run the installer from the exact RPi5 trusted checkout in default read-only preflight mode.
+6. Only a successful preflight may lead to a separate exact root LIVE `--apply` authorization
    for the 1+2 mutation budget.
-6. After apply, verify all three targets read-only.
-7. Re-evaluate the non-root/no-Docker execution identity as a separate source gate.
-8. A genuine Netto preflight invocation/canary remains a later independent READY/LIVE-AUTH gate.
+7. After apply, verify all three targets read-only.
+8. Re-evaluate the non-root/no-Docker execution identity as a separate source gate.
+9. A genuine Netto preflight invocation/canary remains a later independent READY/LIVE-AUTH gate.
 
 Merge never authorizes LIVE work. Installation never authorizes helper invocation or runner
 retirement.
