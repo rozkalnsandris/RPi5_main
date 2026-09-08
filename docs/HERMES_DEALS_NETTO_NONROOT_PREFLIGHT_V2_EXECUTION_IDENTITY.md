@@ -91,20 +91,25 @@ prose or caller-supplied provenance.
 ## Minimum fixed input-access contract
 
 A future dedicated identity may receive only the access needed to reach the two reviewed input
-surfaces. The desired access evidence is exact and fail-closed:
+surfaces. The path identity is public-safe but still exact: source fixes `home_root=/home`,
+`owner_account=andris`, and every relative suffix. Runtime absolute paths are derived only from
+those constants; there is no caller-supplied base path, username or suffix.
 
-| Path | Type | Read/list | Traverse/execute | Write |
+The desired access evidence is exact and fail-closed:
+
+| Relative path under the fixed owner home | Type | Read/list | Traverse/execute | Write |
 | --- | --- | --- | --- | --- |
-| `/home/andris` | directory | no | yes | no |
-| `/home/andris/hermes-deals-audits` | directory | no | yes | no |
-| `/home/andris/hermes-deals-audits/netto-n9-visual-cell-validation-pack-v1-20260802T202304Z` | directory | no | yes | no |
+| owner-home root | directory | no | yes | no |
+| `hermes-deals-audits` | directory | no | yes | no |
+| `hermes-deals-audits/netto-n9-visual-cell-validation-pack-v1-20260802T202304Z` | directory | no | yes | no |
 | `.../generated` | directory | no | yes | no |
 | `.../generated/fixture-manifest.json` | file | yes | no | no |
-| `/home/andris/hermes-deals-netto-corpus` | directory | no | yes | no |
-| `/home/andris/hermes-deals-netto-corpus/flyers` | directory | yes | yes | no |
+| `hermes-deals-netto-corpus` | directory | no | yes | no |
+| `hermes-deals-netto-corpus/flyers` | directory | yes | yes | no |
 
-The ellipsis in this explanatory table is not an implementation path; the machine contract stores
-the full exact path. Generic `/home/andris` read/list authority is explicitly forbidden.
+The ellipses in this explanatory table are not implementation paths. The machine contract stores
+the exact source-fixed relative suffixes plus the fixed home root/account binding. Generic owner-home
+read/list authority is explicitly forbidden.
 
 This source gate does not decide how that minimum access will be realized. Account creation,
 group membership, ACLs, ownership, `chmod`/`chown`, or another host permission mechanism are
