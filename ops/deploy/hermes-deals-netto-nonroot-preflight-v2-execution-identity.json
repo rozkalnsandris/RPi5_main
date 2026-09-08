@@ -53,52 +53,58 @@
   },
   "input_access": {
     "contract_id": "hermes-deals.netto-v2-minimum-fixed-input-access.v1",
+    "path_binding": {
+      "home_root": "/home",
+      "owner_account": "andris",
+      "relative_paths_are_source_fixed": true,
+      "caller_override_allowed": false
+    },
     "generic_home_read_allowed": false,
     "requirements": [
       {
-        "path": "/home/andris",
+        "relative_path": "",
         "kind": "directory",
         "readable": false,
         "executable": true,
         "writable": false
       },
       {
-        "path": "/home/andris/hermes-deals-audits",
+        "relative_path": "hermes-deals-audits",
         "kind": "directory",
         "readable": false,
         "executable": true,
         "writable": false
       },
       {
-        "path": "/home/andris/hermes-deals-audits/netto-n9-visual-cell-validation-pack-v1-20260802T202304Z",
+        "relative_path": "hermes-deals-audits/netto-n9-visual-cell-validation-pack-v1-20260802T202304Z",
         "kind": "directory",
         "readable": false,
         "executable": true,
         "writable": false
       },
       {
-        "path": "/home/andris/hermes-deals-audits/netto-n9-visual-cell-validation-pack-v1-20260802T202304Z/generated",
+        "relative_path": "hermes-deals-audits/netto-n9-visual-cell-validation-pack-v1-20260802T202304Z/generated",
         "kind": "directory",
         "readable": false,
         "executable": true,
         "writable": false
       },
       {
-        "path": "/home/andris/hermes-deals-audits/netto-n9-visual-cell-validation-pack-v1-20260802T202304Z/generated/fixture-manifest.json",
+        "relative_path": "hermes-deals-audits/netto-n9-visual-cell-validation-pack-v1-20260802T202304Z/generated/fixture-manifest.json",
         "kind": "file",
         "readable": true,
         "executable": false,
         "writable": false
       },
       {
-        "path": "/home/andris/hermes-deals-netto-corpus",
+        "relative_path": "hermes-deals-netto-corpus",
         "kind": "directory",
         "readable": false,
         "executable": true,
         "writable": false
       },
       {
-        "path": "/home/andris/hermes-deals-netto-corpus/flyers",
+        "relative_path": "hermes-deals-netto-corpus/flyers",
         "kind": "directory",
         "readable": true,
         "executable": true,
