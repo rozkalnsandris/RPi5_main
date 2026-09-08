@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import copy
+from dataclasses import replace
 import json
+from pathlib import Path
 import sys
 import unittest
-from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "ops" / "lib"))
@@ -29,6 +31,27 @@ from deploy_executor.hermes_deals_netto_nonroot_preflight_v2_adapter import (
     TARGET_ALIAS,
     HermesDealsNettoNonrootPreflightV2Adapter,
 )
+from deploy_executor.hermes_deals_netto_nonroot_preflight_v2_helper_launch import (
+    CANARY_AUTHORIZED,
+    EXTRA_GROUPS,
+    FIXED_ARGV,
+    FIXED_CWD,
+    FIXED_ENV,
+    HELPER_SHA256,
+    HOST_WIRING_ENABLED,
+    INSTALLED_HELPER_PATH,
+    INTERPRETER,
+    LAUNCH_ENABLED,
+    PRODUCTION_MUTATION_STARTED,
+    RUN_GID,
+    RUN_UID,
+    HermesDealsNettoNonrootPreflightV2LaunchError,
+    InstalledHelperSnapshot,
+    _validate_helper_snapshot,
+    fixed_launch_spec,
+    launch_fixed_helper,
+    source_readiness as launcher_source_readiness,
+)
 from deploy_executor.queue_normalizer import (
     QUEUE_REPOSITORY,
     QueueNormalizationError,
@@ -50,6 +73,13 @@ ADAPTER_SOURCE = (
     / "lib"
     / "deploy_executor"
     / "hermes_deals_netto_nonroot_preflight_v2_adapter.py"
+)
+LAUNCHER_SOURCE = (
+    ROOT
+    / "ops"
+    / "lib"
+    / "deploy_executor"
+    / "hermes_deals_netto_nonroot_preflight_v2_helper_launch.py"
 )
 
 
@@ -217,6 +247,111 @@ class HermesNettoNonrootPreflightV2AdapterTests(unittest.TestCase):
             "requests",
             "urllib",
             "socket.",
+        ):
+            self.assertNotIn(forbidden, source)
+
+
+class HermesNettoNonrootPreflightV2FixedLauncherTests(unittest.TestCase):
+    def _valid_snapshot(self) -> InstalledHelperSnapshot:
+        return InstalledHelperSnapshot(
+            regular=True,
+            symlink=False,
+            link_count=1,
+            uid=0,
+            gid=0,
+            mode=0o555,
+            sha256=HELPER_SHA256,
+            descriptor_matches_path=True,
+        )
+
+    def test_launcher_readiness_is_fixed_and_source_disabled(self):
+        readiness = launcher_source_readiness()
+        spec = fixed_launch_spec()
+        self.assertTrue(readiness["launch_implemented"])
+        self.assertFalse(LAUNCH_ENABLED)
+        self.assertFalse(HOST_WIRING_ENABLED)
+        self.assertFalse(CANARY_AUTHORIZED)
+        self.assertFalse(PRODUCTION_MUTATION_STARTED)
+        self.assertFalse(readiness["launch_enabled"])
+        self.assertFalse(readiness["host_wiring_enabled"])
+        self.assertFalse(readiness["canary_authorized"])
+        self.assertFalse(readiness["production_mutation_started"])
+        self.assertEqual(INTERPRETER, "/usr/bin/python3")
+        self.assertEqual(spec.argv, FIXED_ARGV)
+        self.assertEqual(
+            spec.argv,
+            (INTERPRETER, INSTALLED_HELPER_PATH, SOURCE_SHA),
+        )
+        self.assertEqual(spec.cwd, FIXED_CWD)
+        self.assertEqual(dict(spec.environment), dict(FIXED_ENV))
+        self.assertEqual(spec.user, RUN_UID)
+        self.assertEqual(spec.group, RUN_GID)
+        self.assertEqual((RUN_UID, RUN_GID), (1000, 1000))
+        self.assertEqual(spec.extra_groups, EXTRA_GROUPS)
+        self.assertEqual(spec.extra_groups, ())
+        self.assertFalse(spec.shell)
+        self.assertFalse(readiness["caller_process_authority"])
+
+    def test_helper_provenance_contract_rejects_any_metadata_or_hash_drift(self):
+        valid = self._valid_snapshot()
+        _validate_helper_snapshot(valid)
+        cases = (
+            replace(valid, regular=False),
+            replace(valid, symlink=True),
+            replace(valid, link_count=2),
+            replace(valid, uid=1000),
+            replace(valid, gid=1000),
+            replace(valid, mode=0o755),
+            replace(valid, sha256="0" * 64),
+            replace(valid, descriptor_matches_path=False),
+        )
+        for candidate in cases:
+            with self.subTest(candidate=candidate):
+                with self.assertRaises(HermesDealsNettoNonrootPreflightV2LaunchError):
+                    _validate_helper_snapshot(candidate)
+
+    def test_launch_cannot_reach_subprocess_while_source_disabled(self):
+        with (
+            mock.patch(
+                "deploy_executor.hermes_deals_netto_nonroot_preflight_v2_helper_launch.validate_installed_helper"
+            ) as validate,
+            mock.patch(
+                "deploy_executor.hermes_deals_netto_nonroot_preflight_v2_helper_launch.subprocess.run"
+            ) as run,
+        ):
+            with self.assertRaisesRegex(
+                HermesDealsNettoNonrootPreflightV2LaunchError,
+                "source-disabled",
+            ):
+                launch_fixed_helper()
+        validate.assert_not_called()
+        run.assert_not_called()
+
+    def test_launcher_source_uses_fixed_posix_identity_drop_without_generic_bridge(self):
+        source = LAUNCHER_SOURCE.read_text(encoding="utf-8").lower()
+        for required in (
+            "user=run_uid",
+            "group=run_gid",
+            "extra_groups=extra_groups",
+            "shell=false",
+            "close_fds=true",
+            "os.lstat(installed_helper_path)",
+            "os.o_nofollow",
+        ):
+            self.assertIn(required, source)
+        for forbidden in (
+            "sudo",
+            "systemctl",
+            "docker.sock",
+            "docker ",
+            "requests",
+            "urllib",
+            "socket.",
+            "os.system",
+            "shell=true",
+            "bash -c",
+            "sh -c",
+            "eval(",
         ):
             self.assertNotIn(forbidden, source)
 
