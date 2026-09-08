@@ -36,11 +36,13 @@ The future child identity is source-fixed by account metadata, not by a caller-s
 - effective UID and GID: resolved from those exact fixed names and required to be non-zero;
 - supplementary groups: exactly empty;
 - forbidden execution accounts: `root`, `andris`, `github-runner`;
-- forbidden group authority: `docker`.
+- forbidden group authority: `docker`;
+- numeric UID/GID aliases to any present forbidden account/group are rejected.
 
 The runtime validator fails closed if the account/group is absent, renamed, root, login-capable,
-has a home directory different from `/nonexistent`, belongs to any supplementary group, or otherwise
-drifts from the fixed metadata. The historical `andris` UID/GID 1000 shortcut is not this contract.
+has a home directory different from `/nonexistent`, belongs to any supplementary group, aliases a
+forbidden numeric UID/GID, or otherwise drifts from the fixed metadata. The historical `andris`
+UID/GID 1000 shortcut is not this contract.
 
 No user or group is created by this source change.
 
@@ -67,8 +69,9 @@ No GitHub issue, queue body, socket caller, adapter payload or helper output may
 executable, path, argv, environment, UID, GID, supplementary group, cwd, shell, service or sudo
 target.
 
-The source contains the capability-specific process seam but keeps
-`execution_enabled=false`, `host_wiring_enabled=false`,
+Both the public launcher and its low-level process seam independently require all source activation
+gates to be true before reaching account resolution or `subprocess.run`. In this source gate those
+flags remain false: `execution_enabled=false`, `host_wiring_enabled=false`,
 `access_evidence_resolver_wired=false` and `canary_authorized=false`.
 
 ## Authoritative helper and registration provenance
@@ -91,13 +94,15 @@ prose or caller-supplied provenance.
 ## Minimum fixed input-access contract
 
 A future dedicated identity may receive only the access needed to reach the two reviewed input
-surfaces. The path identity is public-safe but still exact: source fixes `home_root=/home`,
-`owner_account=andris`, and every relative suffix. Runtime absolute paths are derived only from
-those constants; there is no caller-supplied base path, username or suffix.
+surfaces. Public source represents the private host base as the neutral token `<owner-home>` and
+source-fixes `owner_account=andris` plus every relative suffix. The exact absolute path remains
+bound by the frozen reviewed helper provenance and, before any later host wiring, must be resolved
+and revalidated by a separately reviewed trusted-host resolver. No caller may select or override the
+base, account, or suffix.
 
 The desired access evidence is exact and fail-closed:
 
-| Relative path under the fixed owner home | Type | Read/list | Traverse/execute | Write |
+| Relative path under `<owner-home>` | Type | Read/list | Traverse/execute | Write |
 | --- | --- | --- | --- | --- |
 | owner-home root | directory | no | yes | no |
 | `hermes-deals-audits` | directory | no | yes | no |
@@ -108,12 +113,13 @@ The desired access evidence is exact and fail-closed:
 | `hermes-deals-netto-corpus/flyers` | directory | yes | yes | no |
 
 The ellipses in this explanatory table are not implementation paths. The machine contract stores
-the exact source-fixed relative suffixes plus the fixed home root/account binding. Generic owner-home
+the exact source-fixed relative suffixes plus the neutral owner-home token. Generic owner-home
 read/list authority is explicitly forbidden.
 
-This source gate does not decide how that minimum access will be realized. Account creation,
-group membership, ACLs, ownership, `chmod`/`chown`, or another host permission mechanism are
-separate LIVE/trust-boundary decisions and require fresh host evidence before selection.
+This source gate does not decide how that minimum access will be realized. Absolute host-path
+resolution, account creation, group membership, ACLs, ownership, `chmod`/`chown`, or another host
+permission mechanism are separate later trust-boundary decisions and require fresh host evidence
+and separate authorization where mutation is involved.
 
 ## Bounded sanitized result
 
@@ -129,17 +135,18 @@ after that point does not produce an automatic retry, cleanup, rollback or alter
 
 Source-ready means only:
 
-- dedicated identity/account metadata is fixed;
+- dedicated identity/account metadata and numeric-alias rejection are fixed;
 - helper and registration provenance gates are fixed;
-- minimal input-access evidence is fixed;
-- privilege-drop argv/environment/resource bounds are fixed;
+- minimal input-access requirements are fixed as public-safe logical paths;
+- privilege-drop argv/environment/resource bounds and low-level disabled gate are fixed;
 - adversarial tests prove caller authority cannot widen those surfaces;
 - the existing origin broker/composition pattern is named as the required architecture;
 - every execution/host/canary flag remains false.
 
 Runtime-ready is **not** established by merge. Before any host wiring, a later gate must freshly
 revalidate current `RPi5_main/main`, exact-main CI, frozen Hermes provenance and trusted-host state,
-then separately review the exact account/group/access mechanism and broker integration.
+then separately review the exact absolute-path resolver, account/group/access mechanism and broker
+integration.
 
 Any account/group/ACL/path-permission mutation or broker/service/socket installation is a separate
 owner-authorized LIVE transaction. After that transaction, STOP and prove the installed identity,
