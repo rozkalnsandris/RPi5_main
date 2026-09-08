@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "schema": "rozkalns.auto-live-repository-manifest.v1",
+  "manifest_id": "dashboard-rpi5.production-release.v1",
+  "source_repository": "rozkalnsandris/dashboard_RPi5",
+  "target_alias": "dashboard-rpi5-production-release",
+  "static_operation_id": "dashboard-rpi5.production-release.v1",
+  "shared_policy_commit_sha": "f2aeb5152371a876268bb116bb98806cddbc8e15",
+  "activation": {
+    "state": "INACTIVE_SOURCE_ONLY",
+    "automatic_mutation_enabled": false,
+    "first_activation_requires_separate_owner_live_authorization": true
+  },
+  "classifier": {
+    "kind": "ORDERED_PATH_RULES_V1",
+    "range": "FULL_PRODUCTION_BASELINE_TO_TARGET",
+    "latest_commit_only": false,
+    "precedence": [
+      "DB_HOST_APPLY_REQUIRED",
+      "MANUAL_ROLLOUT_REQUIRED",
+      "AUTO_DEPLOY_SAFE",
+      "NO_DEPLOY"
+    ],
+    "rules": {
+      "NO_DEPLOY": {
+        "exact_paths": [
+          "README.md",
+          "SECURITY.md",
+          "AGENTS.md",
+          ".github/pull_request_template.md",
+          ".github/PULL_REQUEST_TEMPLATE.md"
+        ],
+        "path_prefixes": [
+          "docs/",
+          ".github/ISSUE_TEMPLATE/",
+          "tests/"
+        ]
+      },
+      "AUTO_DEPLOY_SAFE": {
+        "exact_paths": [],
+        "path_prefixes": [
+          "apps/web/"
+        ]
+      },
+      "MANUAL_ROLLOUT_REQUIRED": {
+        "exact_paths": [
+          ".node-version",
+          "package.json",
+          "package-lock.json",
+          "eslint.config.js",
+          "playwright.config.ts",
+          "tsconfig.json"
+        ],
+        "path_prefixes": [
+          "apps/server/",
+          "apps/agent/",
+          "apps/terminal-agent/",
+          "packages/contracts/"
+        ]
+      },
+      "DB_HOST_APPLY_REQUIRED": {
+        "exact_paths": [],
+        "path_prefixes": [
+          ".github/workflows/",
+          "ops/",
+          "tools/"
+        ]
+      }
+    },
+    "unmatched_path_result": "BLOCKED",
+    "mixed_range_result": "HIGHEST_PRECEDENCE_MATCH"
+  },
+  "required_ci": {
+    "exact_target_sha_required": true,
+    "workflow_path": ".github/workflows/ci.yml",
+    "workflow_name": "CI",
+    "required_gate": "FAST-LANE Merge Gate",
+    "required_conclusion": "success"
+  },
+  "automatic_eligibility": {
+    "eligible_classes": [
+      "AUTO_DEPLOY_SAFE"
+    ],
+    "static_operation_must_also_be_auto_live_eligible": true,
+    "no_deploy_is_reconciliation_only": true
+  },
+  "baseline": {
+    "resolver_id": "dashboard-release-plan.v1",
+    "must_match_static_operation": true,
+    "production_baseline_to_target_reclassification_required": true
+  },
+  "health_postconditions": [
+    "current release equals the exact reconciled source SHA",
+    "installed candidate digest equals the accepted PLAN candidate SHA-256",
+    "previous release is retained",
+    "apply lock is absent on success and preserved on post-mutation failure",
+    "release deletions are zero"
+  ],
+  "failure_policy": {
+    "rollback_policy": "NONE",
+    "automatic_retry_after_mutation_start": false,
+    "automatic_cleanup_after_mutation_start": false,
+    "automatic_rollback_after_mutation_start": false,
+    "alternate_mutation_path_after_mutation_start": false
+  },
+  "sensitive_exclusions": [
+    "database writes or migrations",
+    "credential or permission changes",
+    "package, systemd, service, Docker, network or Cloudflare mutation",
+    "release deletion",
+    "candidate-checkout JavaScript executed as root",
+    "arbitrary command, path, argv or environment authority"
+  ]
+}
