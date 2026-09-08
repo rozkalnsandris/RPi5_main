@@ -89,9 +89,10 @@ and `extra_groups=()`. The fixed helper and canonical registration remain indepe
 descriptor/provenance validated before any future launch.
 
 The minimum input-access contract grants traversal without generic directory read/list authority
-through `/home/andris` to the exact N9 manifest, and separately to the exact Netto corpus root.
-Every required path is fixed; all writes are forbidden. Actual user/group/ACL/ownership/mode
-changes remain a later separate LIVE gate.
+through the source-fixed owner-home binding (`home_root=/home`, `owner_account=andris`) to the exact
+N9 manifest, and separately to the exact Netto corpus root. Every relative suffix is source-fixed;
+all writes are forbidden and no caller may override the path base/account/suffix. Actual
+user/group/ACL/ownership/mode changes remain a later separate LIVE gate.
 
 The existing Hermes origin privileged broker/composition is the architecture pattern to reuse.
 No second privileged socket/broker or generic command/sudo surface is introduced by this source
