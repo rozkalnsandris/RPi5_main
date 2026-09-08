@@ -31,13 +31,14 @@ def normalize_production_visibility(value:Mapping[str,Any],*,expected_project_id
  if value["projectId"] != expected_project_id or value["repository"] != expected_repository: fail("IDENTITY_MISMATCH")
  if value["mainSha"] != expected_main_sha: fail("MAIN_SHA_MISMATCH")
  if any(type(value[k]) is not str or SHA.fullmatch(value[k]) is None for k in ("mainSha","productionSha")): fail("INVALID_INPUT")
- if value["deployImpact"] not in DEPLOY or value["runtime"] not in RUNTIME or value["health"] not in HEALTH or value["rollback"] not in ROLLBACK: fail("INVALID_INPUT")
+ for key, allowed in (("deployImpact",DEPLOY),("runtime",RUNTIME),("health",HEALTH),("rollback",ROLLBACK)):
+  if type(value[key]) is not str or value[key] not in allowed: fail("INVALID_INPUT")
  observed=parse_time(value["observedAt"]); now=parse_time(now_iso); age=(now-observed).total_seconds()
  if age < 0 or age > 300: fail("STALE_EVIDENCE")
  blockers=value["blockerCodes"]
  if type(blockers) is not list: fail("INVALID_INPUT")
  if len(blockers)>20: fail("TOO_MANY_BLOCKERS")
- if len(blockers)!=len(set(blockers)): fail("DUPLICATE_BLOCKER")
  if any(type(x) is not str or BLOCKER.fullmatch(x) is None for x in blockers): fail("INVALID_INPUT")
+ if len(blockers)!=len(set(blockers)): fail("DUPLICATE_BLOCKER")
  if value["runtime"]=="UNREACHABLE" and value["health"]=="PASS": fail("CONTRADICTORY_EVIDENCE")
  return {k:(list(value[k]) if k=="blockerCodes" else value[k]) for k in FIELDS}

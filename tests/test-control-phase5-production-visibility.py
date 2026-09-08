@@ -22,6 +22,13 @@ class T(unittest.TestCase):
  def test_malformed_rejected(self):
   with self.assertRaises(m.ProductionVisibilityContractError) as c: norm('malformed')
   self.assertEqual(c.exception.code,'INVALID_INPUT')
+ def test_unhashable_malformed_values_fail_closed(self):
+  bad=dict(CASES['valid']); bad['blockerCodes']=[{}]
+  with self.assertRaises(m.ProductionVisibilityContractError) as c: m.normalize_production_visibility(bad,expected_project_id='rpi5-main',expected_repository='rozkalnsandris/RPi5_main',expected_main_sha='504239fb8f98b6785c4aeb6d55681a6c4fdf1399',now_iso='2026-09-08T18:04:00.000Z',provenance=PROV)
+  self.assertEqual(c.exception.code,'INVALID_INPUT')
+  bad=dict(CASES['valid']); bad['runtime']=[]
+  with self.assertRaises(m.ProductionVisibilityContractError) as c: m.normalize_production_visibility(bad,expected_project_id='rpi5-main',expected_repository='rozkalnsandris/RPi5_main',expected_main_sha='504239fb8f98b6785c4aeb6d55681a6c4fdf1399',now_iso='2026-09-08T18:04:00.000Z',provenance=PROV)
+  self.assertEqual(c.exception.code,'INVALID_INPUT')
  def test_wrong_consumer_provenance_rejected(self):
   bad=dict(PROV); bad['consumer_blob_sha']='0'*40
   with self.assertRaises(m.ProductionVisibilityContractError) as c: norm('valid',provenance=bad)
