@@ -97,14 +97,31 @@ FALSE_POSTCONDITIONS = (
     "deployment_performed",
 )
 
-N9_ROOT = (
-    "/home/andris/hermes-deals-audits/"
+INPUT_HOME_ROOT = "/home"
+INPUT_OWNER_ACCOUNT = "andris"
+INPUT_OWNER_HOME = f"{INPUT_HOME_ROOT}/{INPUT_OWNER_ACCOUNT}"
+N9_RELATIVE_ROOT = (
+    "hermes-deals-audits/"
     "netto-n9-visual-cell-validation-pack-v1-20260802T202304Z"
 )
-N9_GENERATED = f"{N9_ROOT}/generated"
-N9_MANIFEST = f"{N9_GENERATED}/fixture-manifest.json"
-CORPUS_PARENT = "/home/andris/hermes-deals-netto-corpus"
-CORPUS_ROOT = f"{CORPUS_PARENT}/flyers"
+N9_RELATIVE_GENERATED = f"{N9_RELATIVE_ROOT}/generated"
+N9_RELATIVE_MANIFEST = f"{N9_RELATIVE_GENERATED}/fixture-manifest.json"
+CORPUS_RELATIVE_PARENT = "hermes-deals-netto-corpus"
+CORPUS_RELATIVE_ROOT = f"{CORPUS_RELATIVE_PARENT}/flyers"
+FIXED_INPUT_RELATIVE_PATHS = (
+    "",
+    "hermes-deals-audits",
+    N9_RELATIVE_ROOT,
+    N9_RELATIVE_GENERATED,
+    N9_RELATIVE_MANIFEST,
+    CORPUS_RELATIVE_PARENT,
+    CORPUS_RELATIVE_ROOT,
+)
+N9_ROOT = f"{INPUT_OWNER_HOME}/{N9_RELATIVE_ROOT}"
+N9_GENERATED = f"{INPUT_OWNER_HOME}/{N9_RELATIVE_GENERATED}"
+N9_MANIFEST = f"{INPUT_OWNER_HOME}/{N9_RELATIVE_MANIFEST}"
+CORPUS_PARENT = f"{INPUT_OWNER_HOME}/{CORPUS_RELATIVE_PARENT}"
+CORPUS_ROOT = f"{INPUT_OWNER_HOME}/{CORPUS_RELATIVE_ROOT}"
 
 
 class HermesDealsNettoExecutionIdentityError(RuntimeError):
@@ -141,9 +158,9 @@ class FixedAccessSnapshot:
 
 
 FIXED_INPUT_ACCESS = (
-    FixedAccessRequirement("/home/andris", "directory", False, True, False),
+    FixedAccessRequirement(INPUT_OWNER_HOME, "directory", False, True, False),
     FixedAccessRequirement(
-        "/home/andris/hermes-deals-audits", "directory", False, True, False
+        f"{INPUT_OWNER_HOME}/hermes-deals-audits", "directory", False, True, False
     ),
     FixedAccessRequirement(N9_ROOT, "directory", False, True, False),
     FixedAccessRequirement(N9_GENERATED, "directory", False, True, False),
@@ -618,6 +635,9 @@ def source_readiness() -> Mapping[str, object]:
         "shell": False,
         "extra_groups": (),
         "invocation_budget": 1,
+        "input_home_root": INPUT_HOME_ROOT,
+        "input_owner_account": INPUT_OWNER_ACCOUNT,
+        "fixed_input_relative_paths": FIXED_INPUT_RELATIVE_PATHS,
         "fixed_input_access": tuple(
             (item.path, item.kind, item.readable, item.executable, item.writable)
             for item in FIXED_INPUT_ACCESS
