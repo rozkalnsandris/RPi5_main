@@ -15,6 +15,24 @@ DEPLOY_CLASSES = frozenset(
     {"NO_DEPLOY", "AUTO_DEPLOY_SAFE", "MANUAL_ROLLOUT_REQUIRED", "DB_HOST_APPLY_REQUIRED"}
 )
 MAX_COMPARE_FILES = 300
+COMPARE_FILE_STATUSES = frozenset({"added", "removed", "modified", "renamed"})
+MUTATION_KEYS = frozenset(
+    {
+        "automatic_mutation_allowed",
+        "mutation_dispatch_enabled",
+        "production_mutation_started",
+        "adapter_apply_invocation",
+        "systemd_or_timer_mutation",
+        "credential_or_permission_mutation",
+        "production_deploy",
+    }
+)
+REQUIRED_CI_SERVER_FILTERS = {
+    "branch": "main",
+    "event": "push",
+    "head_sha": "EXACT_TARGET_SHA",
+    "status": "completed",
+}
 
 
 class AutoLiveControllerError(ValueError):
@@ -158,10 +176,20 @@ def _verify_source_contracts(
         raise AutoLiveControllerError("A3 compare hard limit drifted")
     if github_reads.get("incomplete_compare_result") != "BLOCKED":
         raise AutoLiveControllerError("A3 incomplete compare must fail closed")
+    if github_reads.get("compare_file_status_required") is not True:
+        raise AutoLiveControllerError("A3 compare file status must be authoritative")
+    if github_reads.get("rename_classifies_previous_and_current_path") is not True:
+        raise AutoLiveControllerError("A3 rename classification must include both paths")
+    if github_reads.get("unknown_file_status_result") != "BLOCKED":
+        raise AutoLiveControllerError("A3 unknown compare file status must fail closed")
+    if github_reads.get("required_ci_server_filters") != REQUIRED_CI_SERVER_FILTERS:
+        raise AutoLiveControllerError("A3 required CI server filters drifted")
     mutation = controller.get("mutation")
-    if type(mutation) is not dict or any(mutation.get(key) is not False for key in (
-        "automatic_mutation_allowed", "mutation_dispatch_enabled", "production_mutation_started"
-    )):
+    if (
+        type(mutation) is not dict
+        or set(mutation) != MUTATION_KEYS
+        or any(mutation[key] is not False for key in MUTATION_KEYS)
+    ):
         raise AutoLiveControllerError("A3 mutation flags must all remain false")
 
     index_path = root / controller["manifests_index"]
@@ -249,9 +277,18 @@ def _changed_paths_from_range(
         return None
     paths: list[str] = []
     for item in files:
-        if type(item) is not dict or type(item.get("filename")) is not str or not item["filename"]:
+        if type(item) is not dict:
             return None
-        paths.append(item["filename"])
+        filename = item.get("filename")
+        status = item.get("status")
+        if type(filename) is not str or not filename or status not in COMPARE_FILE_STATUSES:
+            return None
+        paths.append(filename)
+        if status == "renamed":
+            previous_filename = item.get("previous_filename")
+            if type(previous_filename) is not str or not previous_filename:
+                return None
+            paths.append(previous_filename)
     return tuple(sorted(set(paths)))
 
 
@@ -263,7 +300,7 @@ def _required_ci_run_id(
 ) -> int | None:
     runs = _response_value(
         github.get_json(
-            f"/repos/{repository}/actions/runs?head_sha={quote(target, safe='')}&status=completed&per_page=100"
+            f"/repos/{repository}/actions/runs?branch=main&event=push&head_sha={quote(target, safe='')}&status=completed&per_page=100"
         ),
         "workflow runs",
     )
