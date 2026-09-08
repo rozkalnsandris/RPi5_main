@@ -3,22 +3,22 @@
   "capability": "dashboard-rpi5.preverified-handoff-materializer.v1",
   "execution_enabled": false,
   "source_repository": "rozkalnsandris/dashboard_RPi5",
-  "reviewed_source_sha": "066b9a24008dd57439f9e66eae198416c4dfc590",
-  "reviewed_source_tree_sha": "62756ba22fc8d47e44988c086c08dcf37779cfb3",
-  "reviewed_parent_sha": "5f7739348f56398d0ba301c9320e1de0062838fc",
+  "reviewed_source_sha": "343366427441811a22739b05b04d069c10905805",
+  "reviewed_source_tree_sha": "76d69ef0fee15deceb26eb00a479e912312a241f",
+  "reviewed_parent_sha": "066b9a24008dd57439f9e66eae198416c4dfc590",
   "reviewed_producer": {
     "path": "tools/production-candidate-manifest.mjs",
     "blob_sha": "bea0f30602d119ae53b81e70ce2d4c283d369ce8"
   },
   "preverification_binding": {
-    "candidate_sha256": "d12a49de01891e3a4cc188fa16c173c5eb44c786f013d3a6ebfefe95dcaa47b9",
+    "candidate_sha256": "076db053e5dc83016168a1e6cecb291e063587c7a977fc3683c2b4bf9dc861db",
     "file_count": 72,
-    "total_bytes": 6773246,
+    "total_bytes": 6897167,
     "manifest_schema": "dashboard-rpi5.production-candidate.v1",
     "hash_algorithm": "sha256"
   },
   "unprivileged_ingress": {
-    "root_template": "/home/{owner}/.cache/rozkalns-dashboard-preverified-ingress/066b9a24008dd57439f9e66eae198416c4dfc590",
+    "root_template": "/home/{owner}/.cache/rozkalns-dashboard-preverified-ingress/343366427441811a22739b05b04d069c10905805",
     "source_relative": "source",
     "manifest_relative": "candidate-manifest.json",
     "owner": "andris",
@@ -45,16 +45,16 @@
   "root_owned_handoff": {
     "parent": "/var/lib",
     "base": "/var/lib/rozkalns-dashboard-candidate-input",
-    "root": "/var/lib/rozkalns-dashboard-candidate-input/066b9a24008dd57439f9e66eae198416c4dfc590",
-    "source": "/var/lib/rozkalns-dashboard-candidate-input/066b9a24008dd57439f9e66eae198416c4dfc590/source",
-    "manifest": "/var/lib/rozkalns-dashboard-candidate-input/066b9a24008dd57439f9e66eae198416c4dfc590/candidate-manifest.json",
+    "root": "/var/lib/rozkalns-dashboard-candidate-input/343366427441811a22739b05b04d069c10905805",
+    "source": "/var/lib/rozkalns-dashboard-candidate-input/343366427441811a22739b05b04d069c10905805/source",
+    "manifest": "/var/lib/rozkalns-dashboard-candidate-input/343366427441811a22739b05b04d069c10905805/candidate-manifest.json",
     "owner_uid": 0,
     "group_gid": 0,
     "parent_mode_precondition": "0755",
     "base_mode": "0755",
     "directory_mode": "0555",
     "file_mode": "0444",
-    "partial": "/var/lib/rozkalns-dashboard-candidate-input/.066b9a24008dd57439f9e66eae198416c4dfc590.handoff-materializer-partial",
+    "partial": "/var/lib/rozkalns-dashboard-candidate-input/.343366427441811a22739b05b04d069c10905805.handoff-materializer-partial",
     "publish": "renameat2-RENAME_NOREPLACE",
     "post_publish_absolute_reopen": true,
     "target_must_be_absent": true,
@@ -71,8 +71,8 @@
     "symlinks_allowed": false,
     "special_files_allowed": false,
     "exact_file_count": 72,
-    "exact_total_bytes": 6773246,
-    "exact_candidate_sha256": "d12a49de01891e3a4cc188fa16c173c5eb44c786f013d3a6ebfefe95dcaa47b9"
+    "exact_total_bytes": 6897167,
+    "exact_candidate_sha256": "076db053e5dc83016168a1e6cecb291e063587c7a977fc3683c2b4bf9dc861db"
   },
   "mutation_budget": [
     {

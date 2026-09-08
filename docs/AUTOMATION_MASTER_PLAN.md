@@ -1086,3 +1086,10 @@ The accepted terminal receipt is `HERMES_ORIGIN_BROKER_DISPATCH_COMPLETE`: canon
 `PRODUCTION_MUTATION_STARTED=false`
 
 The corrected origin-path replacement is now proven end-to-end, satisfying that prerequisite in `hermes-deals#384`. It does **not** by itself authorize or justify deregistering the persistent `hermes-deals-audit` runner because additional capabilities still depend on that runner surface. The next source-only lane is a deterministic inventory of the remaining audit-runner consumers followed by selection and design of exactly one next capability-specific migration. Runner deregistration/retirement, systemd/host mutation, credentials/permissions and any further genuine audit remain separate owner/LIVE gates.
+
+### Issue #416 bounded source prerequisite lanes — source outcome
+
+- AUTO-RUN source work is bounded to four runnable, conflict-classified lanes; issue-local receipts/PR state are authoritative and `#295` is an aggregate view. `LIVE_EXCLUSIVE` remains globally fail-closed and separate from source concurrency.
+- Dashboard source prerequisite is rebound to application candidate `343366427441811a22739b05b04d069c10905805` with exact tree/digest/count/bytes provenance; no host staging, PLAN or APPLY is implied.
+- Control Phase 5 now has a source-only producer sanitization/provenance contract bound to consumer blob `5546c0fb37072c5903d6e7c6aa02a9eea7baf43d`; actual protected-host observation/transport remains a later gate.
+- Weather/Hermes and legitimate program-order/trust/credential gates are unchanged; source capacity never manufactures READY or transfers authorization across issues.

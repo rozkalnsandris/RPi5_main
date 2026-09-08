@@ -20,7 +20,7 @@
   },
   "execution_model": {
     "canonical_state": "GITHUB",
-    "one_active_issue_at_a_time": true,
+    "one_active_issue_at_a_time": false,
     "chat_history_is_authority": false,
     "primary_resume": "CHATGPT_WORK_GITHUB_EVENT_TRIGGERED_TASK",
     "fallback_watchdog": "CHATGPT_PLUS_SCHEDULED_TASK",
@@ -29,7 +29,13 @@
     "scheduled_watchdog_max_frequency": "PT1H",
     "event_triggered_task_max_runs_per_hour": 30,
     "session_end_is_resumable": true,
-    "manual_turpini_is_resume_only": true
+    "manual_turpini_is_resume_only": true,
+    "lane_policy": ".github/auto-run-lane-policy-v1.json",
+    "max_concurrent_runnable_source_lanes": 4,
+    "issue_local_lane_state_authoritative": true,
+    "controller_issue_role": "AGGREGATE_RECONCILIATION_VIEW",
+    "waiting_ci_or_review_consumes_source_slot": false,
+    "legacy_singleton_controller_state": "FAIL_CLOSED_MIGRATION_INPUT"
   },
   "delivery_unit": {
     "contract": ".github/outcome-delivery-v1.json",
@@ -48,6 +54,7 @@
       "AGENTS.md",
       ".github/start-mode-routing.json",
       ".github/auto-run-full-v2.json",
+      ".github/auto-run-lane-policy-v1.json",
       ".github/outcome-delivery-v1.json",
       "target_issue",
       "current_main",
@@ -147,6 +154,8 @@
     "CORRECTING",
     "WAITING_EVENT_RESUME",
     "WAITING_WATCHDOG_RESUME",
+    "WAITING_EXTERNAL",
+    "WAITING_OWNER",
     "PAUSED_USAGE",
     "PAUSED_PLATFORM_APPROVAL",
     "PAUSED_EXTERNAL",
@@ -198,5 +207,15 @@
     "repository_allow_auto_merge_setting_must_be_enabled_out_of_band_when_not_exposed_by_the_connected_app": true,
     "github_native_stacked_prs_public_preview": true,
     "github_native_stack_auto_merge_supported": false
+  },
+  "lane_concurrency": {
+    "policy": ".github/auto-run-lane-policy-v1.json",
+    "initial_max_concurrent_runnable_source_lanes": 4,
+    "issue_local_receipt_is_authoritative": true,
+    "controller_295_is_aggregate_only": true,
+    "shared_conflict_keys_serialize": true,
+    "unknown_or_stale_classification": "FAIL_CLOSED",
+    "live_exclusive_is_global": true,
+    "queue_when_source_capacity_full": true
   }
 }

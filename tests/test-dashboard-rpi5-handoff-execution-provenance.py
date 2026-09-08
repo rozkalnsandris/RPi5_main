@@ -28,7 +28,7 @@ class T(unittest.TestCase):
   self.assertIsNone(re.search(r'/home/[A-Za-z0-9._-]+',s))
   for x in ['subprocess','os.system(','shell=True','Popen(','execv(','--source','--path','--command']: self.assertNotIn(x,s)
  def test_root_receiver_binds_reviewed_code(self):
-  s=MAT.read_text();self.assertIn("ENTRY_BLOB='9c462cec02d89ab2cd77278c4cf1421b6beda998'",s);self.assertIn("CORE_BLOB='e697b00121e2baa83df77782b1a2a504811d6316'",s);self.assertIn('handoffMaterializations=0',s)
+  s=MAT.read_text();self.assertIn(f"ENTRY_BLOB='{blob(WRAP)}'",s);self.assertIn(f"CORE_BLOB='{blob(CORE)}'",s);self.assertIn('handoffMaterializations=0',s)
   c=json.loads(CON.read_text())['materialization'];self.assertTrue(c['runtime_manifest_is_not_sufficient_code_authority'])
  def test_fixed_emitters(self):
   c=json.loads(CON.read_text())['unprivileged_execution_ingress'];self.assertEqual(c['owner_home_source'],'passwd-db');self.assertEqual(c['root_relative'],'.cache/rozkalns-dashboard-handoff-exec-ingress/v1')

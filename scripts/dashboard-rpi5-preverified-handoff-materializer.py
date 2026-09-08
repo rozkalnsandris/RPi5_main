@@ -19,7 +19,7 @@ TRUSTED_CORE = TRUSTED_EXEC_ROOT / "dashboard-rpi5-preverified-handoff-materiali
 TRUSTED_MANIFEST = TRUSTED_EXEC_ROOT / "execution-manifest.json"
 
 HANDOFF_BASE = Path("/var/lib/rozkalns-dashboard-candidate-input")
-REVIEWED_SOURCE_SHA = "066b9a24008dd57439f9e66eae198416c4dfc590"
+REVIEWED_SOURCE_SHA = "343366427441811a22739b05b04d069c10905805"
 HANDOFF_ROOT = HANDOFF_BASE / REVIEWED_SOURCE_SHA
 HANDOFF_SOURCE = HANDOFF_ROOT / "source"
 HANDOFF_MANIFEST = HANDOFF_ROOT / "candidate-manifest.json"
