@@ -5,8 +5,11 @@ on:
     paths:
       - "scripts/install-hermes-deals-netto-nonroot-preflight-v2.py"
       - "ops/deploy/hermes-deals-netto-nonroot-preflight-v2-installer.json"
+      - "ops/deploy/rpi5-main-netto-v2-trusted-checkout-bootstrap.json"
       - "tests/test-install-hermes-deals-netto-nonroot-preflight-v2.py"
+      - "tests/test-rpi5-main-netto-v2-trusted-checkout-bootstrap.py"
       - "docs/HERMES_DEALS_NETTO_NONROOT_PREFLIGHT_V2_INSTALLATION.md"
+      - "docs/RPI5_MAIN_NETTO_V2_TRUSTED_CHECKOUT_BOOTSTRAP.md"
       - "docs/HERMES_DEALS_NETTO_NONROOT_PREFLIGHT_V2_SOURCE.md"
       - ".github/workflows/netto-v2-installer-contract.yml"
   push:
@@ -15,8 +18,11 @@ on:
     paths:
       - "scripts/install-hermes-deals-netto-nonroot-preflight-v2.py"
       - "ops/deploy/hermes-deals-netto-nonroot-preflight-v2-installer.json"
+      - "ops/deploy/rpi5-main-netto-v2-trusted-checkout-bootstrap.json"
       - "tests/test-install-hermes-deals-netto-nonroot-preflight-v2.py"
+      - "tests/test-rpi5-main-netto-v2-trusted-checkout-bootstrap.py"
       - "docs/HERMES_DEALS_NETTO_NONROOT_PREFLIGHT_V2_INSTALLATION.md"
+      - "docs/RPI5_MAIN_NETTO_V2_TRUSTED_CHECKOUT_BOOTSTRAP.md"
       - "docs/HERMES_DEALS_NETTO_NONROOT_PREFLIGHT_V2_SOURCE.md"
       - ".github/workflows/netto-v2-installer-contract.yml"
 
@@ -33,4 +39,6 @@ jobs:
         with:
           persist-credentials: false
       - name: Validate Netto v2 installer contract
-        run: python3 ./tests/test-install-hermes-deals-netto-nonroot-preflight-v2.py
+        run: |
+          python3 ./tests/test-install-hermes-deals-netto-nonroot-preflight-v2.py
+          python3 ./tests/test-rpi5-main-netto-v2-trusted-checkout-bootstrap.py
