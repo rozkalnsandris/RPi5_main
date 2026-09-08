@@ -97,9 +97,8 @@ FALSE_POSTCONDITIONS = (
     "deployment_performed",
 )
 
-INPUT_HOME_ROOT = "/home"
 INPUT_OWNER_ACCOUNT = "andris"
-INPUT_OWNER_HOME = f"{INPUT_HOME_ROOT}/{INPUT_OWNER_ACCOUNT}"
+INPUT_OWNER_HOME_TOKEN = "<owner-home>"
 N9_RELATIVE_ROOT = (
     "hermes-deals-audits/"
     "netto-n9-visual-cell-validation-pack-v1-20260802T202304Z"
@@ -117,11 +116,11 @@ FIXED_INPUT_RELATIVE_PATHS = (
     CORPUS_RELATIVE_PARENT,
     CORPUS_RELATIVE_ROOT,
 )
-N9_ROOT = f"{INPUT_OWNER_HOME}/{N9_RELATIVE_ROOT}"
-N9_GENERATED = f"{INPUT_OWNER_HOME}/{N9_RELATIVE_GENERATED}"
-N9_MANIFEST = f"{INPUT_OWNER_HOME}/{N9_RELATIVE_MANIFEST}"
-CORPUS_PARENT = f"{INPUT_OWNER_HOME}/{CORPUS_RELATIVE_PARENT}"
-CORPUS_ROOT = f"{INPUT_OWNER_HOME}/{CORPUS_RELATIVE_ROOT}"
+N9_ROOT = f"{INPUT_OWNER_HOME_TOKEN}/{N9_RELATIVE_ROOT}"
+N9_GENERATED = f"{INPUT_OWNER_HOME_TOKEN}/{N9_RELATIVE_GENERATED}"
+N9_MANIFEST = f"{INPUT_OWNER_HOME_TOKEN}/{N9_RELATIVE_MANIFEST}"
+CORPUS_PARENT = f"{INPUT_OWNER_HOME_TOKEN}/{CORPUS_RELATIVE_PARENT}"
+CORPUS_ROOT = f"{INPUT_OWNER_HOME_TOKEN}/{CORPUS_RELATIVE_ROOT}"
 
 
 class HermesDealsNettoExecutionIdentityError(RuntimeError):
@@ -158,9 +157,13 @@ class FixedAccessSnapshot:
 
 
 FIXED_INPUT_ACCESS = (
-    FixedAccessRequirement(INPUT_OWNER_HOME, "directory", False, True, False),
+    FixedAccessRequirement(INPUT_OWNER_HOME_TOKEN, "directory", False, True, False),
     FixedAccessRequirement(
-        f"{INPUT_OWNER_HOME}/hermes-deals-audits", "directory", False, True, False
+        f"{INPUT_OWNER_HOME_TOKEN}/hermes-deals-audits",
+        "directory",
+        False,
+        True,
+        False,
     ),
     FixedAccessRequirement(N9_ROOT, "directory", False, True, False),
     FixedAccessRequirement(N9_GENERATED, "directory", False, True, False),
@@ -221,6 +224,27 @@ class NettoLaunchReceipt:
     production_mutation_started: bool = False
 
 
+def _reject_numeric_identity_aliases(account_uid: int, primary_gid: int) -> None:
+    for forbidden_user in FORBIDDEN_EXECUTION_USERS:
+        try:
+            forbidden_account = pwd.getpwnam(forbidden_user)
+        except KeyError:
+            continue
+        if forbidden_account.pw_uid == account_uid:
+            raise HermesDealsNettoExecutionIdentityError(
+                "dedicated Netto account aliases a forbidden numeric UID"
+            )
+    for forbidden_group in FORBIDDEN_GROUPS:
+        try:
+            group_record = grp.getgrnam(forbidden_group)
+        except KeyError:
+            continue
+        if group_record.gr_gid == primary_gid:
+            raise HermesDealsNettoExecutionIdentityError(
+                "dedicated Netto group aliases a forbidden numeric GID"
+            )
+
+
 def resolve_execution_identity() -> ExecutionIdentitySnapshot:
     try:
         account = pwd.getpwnam(EXECUTION_USER)
@@ -229,6 +253,7 @@ def resolve_execution_identity() -> ExecutionIdentitySnapshot:
         raise HermesDealsNettoExecutionIdentityError(
             "dedicated Netto execution identity is absent"
         ) from exc
+    _reject_numeric_identity_aliases(account.pw_uid, account.pw_gid)
     supplementary = tuple(
         sorted(
             group.gr_name
@@ -429,6 +454,15 @@ def _validate_launch_plan(plan: NettoLaunchPlan) -> None:
 
 def _run_fixed_process(plan: NettoLaunchPlan) -> FixedProcessResult:
     """Future fixed privilege-drop seam; the runner re-resolves the fixed account."""
+    if not (
+        EXECUTION_ENABLED
+        and HOST_WIRING_ENABLED
+        and ACCESS_EVIDENCE_RESOLVER_WIRED
+        and CANARY_AUTHORIZED
+    ):
+        raise HermesDealsNettoExecutionIdentityError(
+            "fixed Netto process seam remains source-disabled and unwired"
+        )
     _validate_launch_plan(plan)
     resolved_identity = resolve_execution_identity()
     if plan != fixed_launch_plan(resolved_identity):
@@ -635,8 +669,8 @@ def source_readiness() -> Mapping[str, object]:
         "shell": False,
         "extra_groups": (),
         "invocation_budget": 1,
-        "input_home_root": INPUT_HOME_ROOT,
         "input_owner_account": INPUT_OWNER_ACCOUNT,
+        "input_owner_home_token": INPUT_OWNER_HOME_TOKEN,
         "fixed_input_relative_paths": FIXED_INPUT_RELATIVE_PATHS,
         "fixed_input_access": tuple(
             (item.path, item.kind, item.readable, item.executable, item.writable)
