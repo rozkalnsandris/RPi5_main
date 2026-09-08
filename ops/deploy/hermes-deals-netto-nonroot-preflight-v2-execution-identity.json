@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "schema": "rozkalns.hermes-deals.netto-v2-execution-identity.v1",
+  "status": "SOURCE_ONLY_EXECUTION_DISABLED",
+  "tracking_issue": 425,
+  "operation_id": "hermes-deals.netto-missing-normal-price-nonroot-preflight-v2.v1",
+  "source": {
+    "repository": "rozkalnsandris/hermes-deals",
+    "registered_source_sha": "067db7bd4b8057bc16a9bf0ef9ed8487127a0a05",
+    "helper_path": "tools/runner/netto_missing_normal_price_nonroot_preflight_v2.py",
+    "installed_helper_path": "/usr/local/libexec/hermes-deals-audits/netto-missing-normal-price-nonroot-preflight-v2/netto_missing_normal_price_nonroot_preflight_v2.py",
+    "helper_sha256": "275b1e3296f8f9c7312447dec1b1acb3ffd5d09beaab62ac5ca216275d98360c",
+    "registration_path": "/etc/hermes-deals-audits.d/netto-missing-normal-price-nonroot-preflight-v2.json",
+    "registration_sha256": "887ad4e9295864307a24df6773e98f75056961aebeedd57b95641ba3e7386a1f"
+  },
+  "execution_identity": {
+    "account": "hermes-netto-audit",
+    "primary_group": "hermes-netto-audit",
+    "home": "/nonexistent",
+    "shell": "/usr/sbin/nologin",
+    "must_be_non_root": true,
+    "forbidden_accounts": [
+      "andris",
+      "github-runner",
+      "root"
+    ],
+    "forbidden_groups": [
+      "docker"
+    ],
+    "supplementary_groups": []
+  },
+  "process": {
+    "interpreter": "/usr/bin/python3",
+    "cwd": "/",
+    "argv": [
+      "/usr/bin/python3",
+      "/usr/local/libexec/hermes-deals-audits/netto-missing-normal-price-nonroot-preflight-v2/netto_missing_normal_price_nonroot_preflight_v2.py",
+      "067db7bd4b8057bc16a9bf0ef9ed8487127a0a05"
+    ],
+    "environment": {
+      "LANG": "C.UTF-8",
+      "LC_ALL": "C.UTF-8",
+      "PATH": "/usr/bin:/bin",
+      "PYTHONUNBUFFERED": "1"
+    },
+    "shell": false,
+    "close_fds": true,
+    "supplementary_groups": [],
+    "timeout_seconds": 50,
+    "stdout_limit_bytes": 32768,
+    "stderr_limit_bytes": 4096,
+    "invocation_budget": 1
+  },
+  "input_access": {
+    "contract_id": "hermes-deals.netto-v2-minimum-fixed-input-access.v1",
+    "generic_home_read_allowed": false,
+    "requirements": [
+      {
+        "path": "/home/andris",
+        "kind": "directory",
+        "readable": false,
+        "executable": true,
+        "writable": false
+      },
+      {
+        "path": "/home/andris/hermes-deals-audits",
+        "kind": "directory",
+        "readable": false,
+        "executable": true,
+        "writable": false
+      },
+      {
+        "path": "/home/andris/hermes-deals-audits/netto-n9-visual-cell-validation-pack-v1-20260802T202304Z",
+        "kind": "directory",
+        "readable": false,
+        "executable": true,
+        "writable": false
+      },
+      {
+        "path": "/home/andris/hermes-deals-audits/netto-n9-visual-cell-validation-pack-v1-20260802T202304Z/generated",
+        "kind": "directory",
+        "readable": false,
+        "executable": true,
+        "writable": false
+      },
+      {
+        "path": "/home/andris/hermes-deals-audits/netto-n9-visual-cell-validation-pack-v1-20260802T202304Z/generated/fixture-manifest.json",
+        "kind": "file",
+        "readable": true,
+        "executable": false,
+        "writable": false
+      },
+      {
+        "path": "/home/andris/hermes-deals-netto-corpus",
+        "kind": "directory",
+        "readable": false,
+        "executable": true,
+        "writable": false
+      },
+      {
+        "path": "/home/andris/hermes-deals-netto-corpus/flyers",
+        "kind": "directory",
+        "readable": true,
+        "executable": true,
+        "writable": false
+      }
+    ]
+  },
+  "architecture": {
+    "reuse_pattern": "deploy_executor.hermes_deals_origin_broker_composition",
+    "parallel_privileged_broker_allowed": false,
+    "generic_privileged_command_surface_allowed": false,
+    "caller_command_path_argv_env_identity_authority": false
+  },
+  "activation": {
+    "execution_enabled": false,
+    "host_wiring_enabled": false,
+    "access_evidence_resolver_wired": false,
+    "canary_authorized": false,
+    "production_mutation_started": false,
+    "first_host_wiring_requires_separate_owner_live_authorization": true,
+    "genuine_canary_requires_later_independent_ready_live_auth": true
+  },
+  "failure_policy": {
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "alternate_mutation_path": false
+  }
+}

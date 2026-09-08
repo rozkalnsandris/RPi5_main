@@ -5,10 +5,15 @@ on:
     paths:
       - "scripts/install-hermes-deals-netto-nonroot-preflight-v2.py"
       - "ops/deploy/hermes-deals-netto-nonroot-preflight-v2-installer.json"
+      - "ops/deploy/hermes-deals-netto-nonroot-preflight-v2-execution-identity.json"
       - "ops/deploy/rpi5-main-netto-v2-trusted-checkout-bootstrap.json"
+      - "ops/lib/deploy_executor/hermes_deals_netto_nonroot_preflight_v2_execution_identity.py"
       - "tests/test-install-hermes-deals-netto-nonroot-preflight-v2.py"
       - "tests/test-rpi5-main-netto-v2-trusted-checkout-bootstrap.py"
+      - "tests/test-deploy-executor-hermes-netto-nonroot-preflight-v2.py"
+      - "tests/test-deploy-executor-hermes-netto-execution-identity.py"
       - "docs/HERMES_DEALS_NETTO_NONROOT_PREFLIGHT_V2_INSTALLATION.md"
+      - "docs/HERMES_DEALS_NETTO_NONROOT_PREFLIGHT_V2_EXECUTION_IDENTITY.md"
       - "docs/RPI5_MAIN_NETTO_V2_TRUSTED_CHECKOUT_BOOTSTRAP.md"
       - "docs/HERMES_DEALS_NETTO_NONROOT_PREFLIGHT_V2_SOURCE.md"
       - ".github/workflows/netto-v2-installer-contract.yml"
@@ -18,10 +23,15 @@ on:
     paths:
       - "scripts/install-hermes-deals-netto-nonroot-preflight-v2.py"
       - "ops/deploy/hermes-deals-netto-nonroot-preflight-v2-installer.json"
+      - "ops/deploy/hermes-deals-netto-nonroot-preflight-v2-execution-identity.json"
       - "ops/deploy/rpi5-main-netto-v2-trusted-checkout-bootstrap.json"
+      - "ops/lib/deploy_executor/hermes_deals_netto_nonroot_preflight_v2_execution_identity.py"
       - "tests/test-install-hermes-deals-netto-nonroot-preflight-v2.py"
       - "tests/test-rpi5-main-netto-v2-trusted-checkout-bootstrap.py"
+      - "tests/test-deploy-executor-hermes-netto-nonroot-preflight-v2.py"
+      - "tests/test-deploy-executor-hermes-netto-execution-identity.py"
       - "docs/HERMES_DEALS_NETTO_NONROOT_PREFLIGHT_V2_INSTALLATION.md"
+      - "docs/HERMES_DEALS_NETTO_NONROOT_PREFLIGHT_V2_EXECUTION_IDENTITY.md"
       - "docs/RPI5_MAIN_NETTO_V2_TRUSTED_CHECKOUT_BOOTSTRAP.md"
       - "docs/HERMES_DEALS_NETTO_NONROOT_PREFLIGHT_V2_SOURCE.md"
       - ".github/workflows/netto-v2-installer-contract.yml"
@@ -38,7 +48,9 @@ jobs:
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           persist-credentials: false
-      - name: Validate Netto v2 installer contract
+      - name: Validate Netto v2 installer and execution-identity contracts
         run: |
           python3 ./tests/test-install-hermes-deals-netto-nonroot-preflight-v2.py
           python3 ./tests/test-rpi5-main-netto-v2-trusted-checkout-bootstrap.py
+          python3 ./tests/test-deploy-executor-hermes-netto-nonroot-preflight-v2.py
+          python3 ./tests/test-deploy-executor-hermes-netto-execution-identity.py
