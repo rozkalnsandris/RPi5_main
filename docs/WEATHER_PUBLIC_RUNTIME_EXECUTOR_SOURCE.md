@@ -94,15 +94,33 @@ The Issue #410 resolver protocol may represent only:
 
 Unknown fields are rejected, including `HOME_LAT`, `HOME_LON`, credentials, raw configuration, exact host database paths, process/container environments and private runtime logs.
 
+## Pre-activation authorization composition — Issue #432
+
+Issue #432 adds `weather_public_runtime_preactivation.py`, a source-only bridge between the existing #236 owner-authorized LIVE-AUTH/READY-queue protocol and the Issue #410 weather bootstrap planner. It deliberately reuses `accept_issue`, `validate_queue_binding` and `verify_authorization_unchanged`; weather does not define a second owner identity, TTL, payload-hash or queue-binding protocol.
+
+The caller supplies only one LIVE-AUTH issue number. Repository-controlled resolvers must independently provide the canonical authorization issue, READY queue, replay/consumption state, weather source/CI evidence and sanitized bootstrap baseline. The composition revalidates the authorization and queue before and after bootstrap planning, then binds a public-safe immutable envelope containing authorization/request identity and hashes, queue hash, exact weather SHA/target, sanitized baseline token, bounded dates/models/run hours/recovery decision and the fixed ordered stage/capability mapping.
+
+This bridge is **pre-activation only**. Source state remains:
+
+- `privileged_dispatch_enabled=false`;
+- `host_wiring_enabled=false`;
+- `production_mutation_enabled=false`;
+- `production_mutation_started=false`;
+- `process_launch_surface=false`;
+- `separate_mutation_gates_required=true`.
+
+Unknown/reordered/duplicate stage identities, authorization edits/expiry, queue drift/not-READY state, replay uncertainty, source/CI/baseline/recovery/date/model drift and private-input expansion fail closed. The module contains no subprocess/shell/network/root transport and does not install or invoke any helper.
+
 ### Future LIVE gate
 
-Merging Issue #410 still does not make weather deployable. A future LIVE gate must freshly bind the exact merged weather SHA, exact target alias, successful exact-SHA CI, reviewed artifact identities, sanitized current baseline, bounded historical dates/model scope, recovery decision and exact mutation budgets. Source state keeps `privileged_dispatch_enabled=false`, `host_wiring_enabled=false` and `production_mutation_started=false`.
+Merging Issues #410 and #432 still does not make weather deployable. A future LIVE gate must freshly bind the exact merged weather SHA, exact target alias, successful exact-SHA CI, reviewed artifact identities, sanitized current baseline, bounded historical dates/model scope, recovery decision and exact mutation budgets. Source state keeps privileged dispatch, host wiring, production mutation enablement and production mutation start disabled.
 
 ## Explicitly separate gates
 
-This static operation and bootstrap source composition do not include or authorize:
+This static operation, bootstrap source composition and pre-activation bridge do not include or authorize:
 
 - RPi5 deploy/redeploy/restart or executor global enablement;
+- privileged dispatch activation, host wiring or helper installation;
 - production SQLite schema initialization;
 - historical forecast/truth corpus writes;
 - corpus backup, restore, deletion or destructive rollback;
