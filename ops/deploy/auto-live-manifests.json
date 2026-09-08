@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "contract": "AUTO-LIVE v1 A2 repository manifests",
+  "status": "A2_SOURCE_ONLY_INACTIVE",
+  "roadmap_issue": 421,
+  "execution_enabled": false,
+  "shared_policy": {
+    "repository": "rozkalnsandris/ops-workflows",
+    "path": "policy/auto-live-v1.json",
+    "commit_sha": "f2aeb5152371a876268bb116bb98806cddbc8e15",
+    "immutable_exact_commit_required": true
+  },
+  "manifest_schema": "rozkalns.auto-live-repository-manifest.v1",
+  "manifest_directory": "ops/deploy/auto-live-manifests",
+  "activation": {
+    "default_state": "INACTIVE_SOURCE_ONLY",
+    "automatic_mutation_enabled": false,
+    "first_activation_requires_separate_owner_live_authorization": true,
+    "historical_live_authorization_reuse": false
+  },
+  "manifests": [
+    {
+      "path": "ops/deploy/auto-live-manifests/dashboard-rpi5.json",
+      "source_repository": "rozkalnsandris/dashboard_RPi5",
+      "target_alias": "dashboard-rpi5-production-release",
+      "static_operation_id": "dashboard-rpi5.production-release.v1"
+    },
+    {
+      "path": "ops/deploy/auto-live-manifests/rozkalns-weather.json",
+      "source_repository": "rozkalnsandris/rozkalns_weather",
+      "target_alias": "rozkalns-weather-public-rpi5",
+      "static_operation_id": "rozkalns-weather.public-runtime-release.v1"
+    }
+  ],
+  "invariants": {
+    "full_production_baseline_to_target_range_required": true,
+    "exact_target_sha_required_ci_success": true,
+    "static_operation_must_exist": true,
+    "manifest_must_be_active_before_automatic_mutation": true,
+    "only_auto_deploy_safe_may_be_automatic": true,
+    "unknown_or_ambiguous_path_result": "BLOCKED",
+    "per_target_serialization_required": true,
+    "post_mutation_automatic_retry": false,
+    "post_mutation_automatic_cleanup": false,
+    "post_mutation_automatic_rollback": false,
+    "post_mutation_alternate_mutation_path": false
+  },
+  "a2_scope": {
+    "source_only": true,
+    "host_mutation": false,
+    "systemd_or_timer_mutation": false,
+    "credential_or_permission_mutation": false,
+    "executor_enablement": false,
+    "production_deploy": false
+  }
+}
