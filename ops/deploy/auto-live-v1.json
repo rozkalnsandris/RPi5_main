@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "policy": "AUTO-LIVE v1",
+  "repository": "rozkalnsandris/RPi5_main",
+  "roadmap_issue": 421,
+  "status": "A0_SOURCE_CONTRACT_ONLY",
+  "execution_enabled": false,
+  "authority": {
+    "merge_is_trigger_not_blanket_live_authority": true,
+    "persistent_auto_live_authority_source": "EXPLICITLY_ACTIVATED_REPOSITORY_MANIFEST_PLUS_STATIC_OPERATION_POLICY",
+    "first_host_activation_requires_separate_live_owner_authorization": true,
+    "runtime_state_must_be_freshly_observed": true,
+    "historical_live_authorization_reuse": false
+  },
+  "steady_state": {
+    "merge_detection": "TRUSTED_RPI5_OUTBOUND_GITHUB_POLL",
+    "reference_poll_interval": "PT2M",
+    "github_actions_push_to_main_may_be_auxiliary_signal": true,
+    "github_actions_event_required_for_correctness": false,
+    "inbound_public_rpi5_webhook": false,
+    "self_hosted_public_repository_actions_runner": false,
+    "remote_desktop_commander_role": "BOOTSTRAP_RECOVERY_AND_OWNER_AUTHORIZED_HOST_MAINTENANCE_ONLY",
+    "remote_desktop_commander_is_merge_detector": false,
+    "remote_desktop_commander_is_authorization_store": false
+  },
+  "reuse": {
+    "auto_run_full_v2": true,
+    "owner_authorized_pull_deploy_executor_issue": 236,
+    "static_operation_registry": "ops/deploy/executor-operations.json",
+    "deploy_impact_classes_from_master_plan": true,
+    "cv_pull_deploy_architecture_reference": true,
+    "generic_second_deploy_transport_forbidden": true
+  },
+  "classes": {
+    "NO_DEPLOY": {
+      "reconcile": true,
+      "automatic_mutation": false
+    },
+    "AUTO_DEPLOY_SAFE": {
+      "reconcile": true,
+      "automatic_mutation_after_activation": true
+    },
+    "MANUAL_ROLLOUT_REQUIRED": {
+      "reconcile": true,
+      "automatic_mutation_after_activation": false
+    },
+    "DB_HOST_APPLY_REQUIRED": {
+      "reconcile": true,
+      "automatic_mutation_after_activation": false
+    },
+    "UNKNOWN": {
+      "reconcile": true,
+      "automatic_mutation_after_activation": false,
+      "result": "FAIL_CLOSED"
+    }
+  },
+  "automatic_mutation_gates": [
+    "EXACT_TARGET_SHA_IS_MERGED_AND_REACHABLE_FROM_CURRENT_MAIN",
+    "EXACT_TARGET_SHA_REQUIRED_CI_SUCCESS",
+    "FULL_PRODUCTION_BASELINE_TO_TARGET_RANGE_IS_AUTO_DEPLOY_SAFE",
+    "REPOSITORY_AUTO_LIVE_MANIFEST_PRESENT_AND_ACTIVE",
+    "STATIC_OPERATION_ID_IS_AUTO_LIVE_ELIGIBLE",
+    "EXACT_TARGET_ALIAS_AND_BASELINE_MATCH",
+    "INSTALLED_ADAPTER_HELPER_IDENTITIES_MATCH_REVIEWED_SOURCE",
+    "TARGET_CONCURRENCY_LOCK_ACQUIRED",
+    "DETERMINISTIC_HEALTH_AND_POSTCONDITIONS_DEFINED",
+    "NO_UNDECLARED_SENSITIVE_MUTATION_CLASS_REQUIRED"
+  ],
+  "sensitive_classes_requiring_separate_policy_or_owner_gate": [
+    "ROOT_OR_SUDO_BOUNDARY_CHANGE",
+    "SYSTEMD_OR_SERVICE_CONTROL_PLANE_CHANGE",
+    "DOCKER_CONTROL_PLANE_CHANGE",
+    "NETWORK_FIREWALL_DNS_OR_CLOUDFLARE_CHANGE",
+    "CREDENTIAL_SECRET_OR_PERMISSION_CHANGE",
+    "DATABASE_MIGRATION_OR_APPLICATION_DATA_WRITE",
+    "DESTRUCTIVE_CLEANUP_OR_HISTORY_REWRITE"
+  ],
+  "concurrency": {
+    "key": "PRODUCTION_TARGET_ALIAS",
+    "max_mutation_capable_deployments_per_target": 1,
+    "newer_target_may_supersede_pending_older_target_before_mutation": true,
+    "supersession_requires_full_range_reclassification": true,
+    "newer_target_may_supersede_after_mutation_started": false
+  },
+  "failure": {
+    "pre_mutation_read_retry": "ONLY_EXISTING_REVIEWED_BOUNDED_READ_POLICY",
+    "post_mutation_error": "PRESERVE_PUBLIC_SAFE_EVIDENCE_AND_STOP_TARGET",
+    "automatic_retry_after_mutation_start": false,
+    "automatic_cleanup_after_mutation_start": false,
+    "automatic_rollback_after_mutation_start": false,
+    "alternate_mutation_path_after_mutation_start": false,
+    "predeclared_transactional_rollback_may_override": true
+  },
+  "credentials": {
+    "preferred": "LEAST_PRIVILEGE_GITHUB_APP_INSTALLATION_TOKEN",
+    "installation_token_expected_short_lived": true,
+    "pat_classic": false,
+    "ssh_command_transport": false,
+    "arbitrary_remote_shell_authority": false
+  },
+  "compatibility": {
+    "github_only_currently_explicit_only": true,
+    "github_only_live_all_retirement_phase": "A1_TO_A5_CONTROLLED_MIGRATION",
+    "a0_removes_existing_command_behavior": false,
+    "historical_queue_evidence_retained": true,
+    "consumer_without_auto_live_manifest": "NO_AUTOMATIC_LIVE_MUTATION"
+  },
+  "phases": [
+    "A0_CANONICAL_SOURCE_CONTRACT",
+    "A1_SHARED_OPS_WORKFLOWS_POLICY",
+    "A2_REPOSITORY_MANIFESTS",
+    "A3_READ_ONLY_CONTROLLER",
+    "A4_FIRST_REAL_CANARY",
+    "A5_SCALE_OUT_AND_COMPATIBILITY_RETIREMENT"
+  ],
+  "a0": {
+    "source_only": true,
+    "host_mutation": false,
+    "credential_or_permission_mutation": false,
+    "executor_enablement": false,
+    "production_deploy": false
+  }
+}

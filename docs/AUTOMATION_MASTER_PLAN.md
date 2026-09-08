@@ -95,6 +95,23 @@ Database migrations/writes, host infrastructure, systemd/backup/Cloudflare owner
 
 Unknown runtime-relevant paths fail toward review, never silently toward `NO_DEPLOY`.
 
+### Cross-cutting Track Y — Post-merge Auto-Live v1 — A0 SOURCE GATE (#421)
+
+The owner has selected a cross-cutting source-only reconciliation to replace the normal `GITHUB-ONLY -> deferred LIVE-ALL` operator loop with durable post-merge Auto-Live. This source gate may proceed alongside the current Phase 4 residual Hermes migration but does not inherit or bypass any Phase 4 LIVE authority.
+
+Binding A0 decisions:
+
+- GitHub remains canonical source/merge/CI authority;
+- Remote Desktop Commander is bootstrap/recovery/owner-maintenance transport only, not the steady-state merge detector or authorization store;
+- reuse the trusted outbound RPi5 polling/controller plane, `AUTO-RUN FULL v2`, #236 primitives, the static operation registry and proven CV deploy classifier/controller pattern;
+- every merged SHA is reconciled, but only an explicitly activated `AUTO_DEPLOY_SAFE` repository/operation manifest may mutate automatically;
+- `MANUAL_ROLLOUT_REQUIRED`, `DB_HOST_APPLY_REQUIRED`, unknown paths and undeclared sensitive classes remain fail-closed/owner-required;
+- merge is a trigger, not blanket root/DB/credential/network/control-plane authority;
+- one target is serialized at a time and post-mutation failure preserves evidence then stops without undeclared retry/cleanup/rollback;
+- A0 keeps runtime behavior unchanged with `execution_enabled=false`; GITHUB-ONLY/LIVE-ALL compatibility is not removed until later consumer migration/canary gates.
+
+Canonical A0 contract: `docs/AUTO_LIVE_V1.md` + `ops/deploy/auto-live-v1.json`. Roadmap/DoD: issue #421.
+
 ## Repository target state
 
 ### `ops-workflows`
