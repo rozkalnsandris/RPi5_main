@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "policy": "AUTO-RUN FULL bounded prerequisite lanes v1",
+  "repository": "rozkalnsandris/RPi5_main",
+  "controller_issue": 295,
+  "source_worker_limit": 4,
+  "controller_role": "AGGREGATE_RECONCILIATION_VIEW",
+  "canonical_authority": "ISSUE_LOCAL_ACTIVATION_RECEIPT_AND_CANONICAL_PR",
+  "lane_classes": {
+    "SOURCE_INDEPENDENT": {
+      "durable": true,
+      "source_lane": true,
+      "live_lane": false,
+      "conflict_keys_required": true
+    },
+    "SOURCE_EXCLUSIVE": {
+      "durable": true,
+      "source_lane": true,
+      "live_lane": false,
+      "conflict_keys_required": true
+    },
+    "LIVE_EXCLUSIVE": {
+      "durable": true,
+      "source_lane": false,
+      "live_lane": true,
+      "global_live_exclusive": true,
+      "runtime_live_authority_required": true
+    },
+    "WAITING_EXTERNAL": {
+      "durable": true,
+      "source_lane": false,
+      "live_lane": false,
+      "consumes_source_worker": false
+    },
+    "WAITING_OWNER": {
+      "durable": true,
+      "source_lane": false,
+      "live_lane": false,
+      "consumes_source_worker": false
+    }
+  },
+  "states": {
+    "runnable_source": [
+      "ACTIVATING",
+      "WORKING",
+      "CORRECTING",
+      "VERIFYING"
+    ],
+    "durable_non_worker": [
+      "WAITING_CI",
+      "WAITING_REVIEW",
+      "WAITING_EXTERNAL",
+      "WAITING_OWNER",
+      "WAITING_EVENT_RESUME",
+      "WAITING_WATCHDOG_RESUME",
+      "PAUSED_USAGE",
+      "PAUSED_PLATFORM_APPROVAL",
+      "PAUSED_EXTERNAL"
+    ],
+    "terminal": [
+      "DONE",
+      "STOP_SCOPE_OR_RISK",
+      "STOP_ERROR"
+    ]
+  },
+  "conflict_evidence": [
+    "repository+issue",
+    "canonical_control_surface",
+    "changed_path_or_ownership_scope",
+    "target_or_runtime_alias",
+    "operation_or_capability_id",
+    "credential_permission_or_trust_class",
+    "explicit_issue_dependency_or_program_order"
+  ],
+  "rules": {
+    "shared_conflict_key": "QUEUE_OR_FAIL_CLOSED",
+    "unrelated_waiting_ci_or_review": "ELIGIBLE_IF_CAPACITY",
+    "source_capacity_exhausted": "QUEUE_NOT_CANCEL",
+    "unknown_or_incomplete_classification": "FAIL_CLOSED",
+    "stale_or_ambiguous_evidence": "FAIL_CLOSED",
+    "live_exclusive": "ONE_GLOBALLY_ACTIVE_LIVE_LANE",
+    "authority_cross_issue": "FORBIDDEN",
+    "authority_cross_lane": "FORBIDDEN",
+    "changed_head_invalidates_only_own_lane_merge_readiness": true,
+    "restart_reconstructs_from_issue_local_github_state": true
+  },
+  "legacy_singleton": {
+    "schema": "rozkalns.auto-run-control.v1",
+    "read_mode": "FAIL_CLOSED_MIGRATION",
+    "active_issue_requires_matching_issue_local_activation_receipt": true
+  }
+}

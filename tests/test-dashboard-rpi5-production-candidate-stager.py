@@ -69,6 +69,11 @@ class CandidateStagerRepairTests(unittest.TestCase):
         self.assertEqual(parsed.candidate_sha256, digest)
         with self.assertRaisesRegex(module.CandidateStagerError, "LIVE binding"):
             module._parse_manifest(raw, expected_digest="0" * 64)
+        old = json.loads(raw)
+        old["sourceSha"] = "066b9a24008dd57439f9e66eae198416c4dfc590"
+        old_raw = json.dumps(old, separators=(",", ":")).encode()
+        with self.assertRaisesRegex(module.CandidateStagerError, "source/schema mismatch"):
+            module._parse_manifest(old_raw, expected_digest=digest)
 
     def test_manifest_path_traversal_and_reserved_components_are_rejected(self) -> None:
         for path in ("../escape", "/absolute", "a/../b", "a//b", "a\\b", "node_modules/x", "candidate-manifest.json"):

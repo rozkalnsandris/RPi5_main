@@ -5,7 +5,7 @@ from pathlib import Path
 
 BASE=Path('/var/lib/rozkalns-dashboard-handoff-exec'); ROOT=BASE/'v1'; PART=BASE/'.v1.execution-bundle-partial'; SELF=BASE/'.bundle-materializer-v1.py'
 ENTRY='dashboard-rpi5-preverified-handoff-materializer.py'; CORE='dashboard-rpi5-preverified-handoff-materializer-core.py'; MAN='execution-manifest.json'
-ENTRY_BLOB='9c462cec02d89ab2cd77278c4cf1421b6beda998'; CORE_BLOB='e697b00121e2baa83df77782b1a2a504811d6316'
+ENTRY_BLOB='da6b3756ec49436de3855a8c13f273954a919d22'; CORE_BLOB='409ea15dcb72e7361278dfd4065228c99fa840d2'
 ACK='RPi5_main#349:MATERIALIZE-DASHBOARD-HANDOFF-EXECUTION-BUNDLE-V1'; MAX=2*1024*1024
 
 class Stop(RuntimeError): pass

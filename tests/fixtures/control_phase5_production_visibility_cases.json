@@ -1,0 +1,87 @@
+{
+  "valid": {
+    "projectId": "rpi5-main",
+    "repository": "rozkalnsandris/RPi5_main",
+    "mainSha": "504239fb8f98b6785c4aeb6d55681a6c4fdf1399",
+    "productionSha": "2222222222222222222222222222222222222222",
+    "deployImpact": "MANUAL_ROLLOUT_REQUIRED",
+    "runtime": "HEALTHY",
+    "health": "PASS",
+    "rollback": "AVAILABLE",
+    "blockerCodes": [
+      "SOURCE_ONLY_SAMPLE"
+    ],
+    "observedAt": "2026-09-08T18:00:00.000Z"
+  },
+  "extra_field": {
+    "projectId": "rpi5-main",
+    "repository": "rozkalnsandris/RPi5_main",
+    "mainSha": "504239fb8f98b6785c4aeb6d55681a6c4fdf1399",
+    "productionSha": "2222222222222222222222222222222222222222",
+    "deployImpact": "MANUAL_ROLLOUT_REQUIRED",
+    "runtime": "HEALTHY",
+    "health": "PASS",
+    "rollback": "AVAILABLE",
+    "blockerCodes": [
+      "SOURCE_ONLY_SAMPLE"
+    ],
+    "observedAt": "2026-09-08T18:00:00.000Z",
+    "unexpected": "x"
+  },
+  "stale": {
+    "projectId": "rpi5-main",
+    "repository": "rozkalnsandris/RPi5_main",
+    "mainSha": "504239fb8f98b6785c4aeb6d55681a6c4fdf1399",
+    "productionSha": "2222222222222222222222222222222222222222",
+    "deployImpact": "MANUAL_ROLLOUT_REQUIRED",
+    "runtime": "HEALTHY",
+    "health": "PASS",
+    "rollback": "AVAILABLE",
+    "blockerCodes": [
+      "SOURCE_ONLY_SAMPLE"
+    ],
+    "observedAt": "2026-09-08T17:58:00.000Z"
+  },
+  "wrong_project": {
+    "projectId": "hermes-deals",
+    "repository": "rozkalnsandris/RPi5_main",
+    "mainSha": "504239fb8f98b6785c4aeb6d55681a6c4fdf1399",
+    "productionSha": "2222222222222222222222222222222222222222",
+    "deployImpact": "MANUAL_ROLLOUT_REQUIRED",
+    "runtime": "HEALTHY",
+    "health": "PASS",
+    "rollback": "AVAILABLE",
+    "blockerCodes": [
+      "SOURCE_ONLY_SAMPLE"
+    ],
+    "observedAt": "2026-09-08T18:00:00.000Z"
+  },
+  "wrong_sha": {
+    "projectId": "rpi5-main",
+    "repository": "rozkalnsandris/RPi5_main",
+    "mainSha": "0000000000000000000000000000000000000000",
+    "productionSha": "2222222222222222222222222222222222222222",
+    "deployImpact": "MANUAL_ROLLOUT_REQUIRED",
+    "runtime": "HEALTHY",
+    "health": "PASS",
+    "rollback": "AVAILABLE",
+    "blockerCodes": [
+      "SOURCE_ONLY_SAMPLE"
+    ],
+    "observedAt": "2026-09-08T18:00:00.000Z"
+  },
+  "malformed": {
+    "projectId": "rpi5-main",
+    "repository": "rozkalnsandris/RPi5_main",
+    "mainSha": "504239fb8f98b6785c4aeb6d55681a6c4fdf1399",
+    "productionSha": "bad",
+    "deployImpact": "MANUAL_ROLLOUT_REQUIRED",
+    "runtime": "HEALTHY",
+    "health": "PASS",
+    "rollback": "AVAILABLE",
+    "blockerCodes": [
+      "SOURCE_ONLY_SAMPLE"
+    ],
+    "observedAt": "2026-09-08T18:00:00.000Z"
+  }
+}

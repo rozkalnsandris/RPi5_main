@@ -80,7 +80,7 @@ Before activation, freshly read:
 8. relevant dependencies/continuity;
 9. controller issue `#295`.
 
-Activation fails closed if another issue is active.
+Activation is lane-aware and fails closed unless classification evidence is complete. Up to **4** disjoint runnable source lanes may coexist; `WAITING_CI`, `WAITING_REVIEW`, `WAITING_EXTERNAL` and `WAITING_OWNER` remain durable without consuming a runnable source worker. Shared conflict keys serialize, and `LIVE_EXCLUSIVE` remains globally exclusive. Issue-local activation receipts and canonical PR state are authoritative per lane; controller `#295` is only an aggregate/reconciliation view. Legacy singleton controller state is accepted only through fail-closed migration.
 
 Materialize an owner-identity activation receipt using schema:
 
@@ -89,6 +89,10 @@ rozkalns.auto-run-full-authorization.v2
 ```
 
 The receipt freezes repository, issue, Definition of Done, allowed source actions, merge authority, any already-declared runtime mutation classes/targets, retry/rollback semantics and explicit exclusions. Later issue edits may reduce or clarify scope but never silently add authority.
+
+### Bounded prerequisite lane classifier
+
+`.github/auto-run-lane-policy-v1.json` and `scripts/auto-run-lane-eligibility.py` define deterministic eligibility from repository+issue identity, canonical control surfaces, changed-path/ownership scopes when known, target/runtime aliases, operation/capability IDs, credential/permission/trust classes and explicit dependencies. Unknown, incomplete, stale or ambiguous evidence fails closed. Capacity exhaustion queues older valid work rather than cancelling it. A PR head change invalidates merge readiness only for that issue-local lane and never transfers authority between lanes.
 
 ## Source convergence loop
 

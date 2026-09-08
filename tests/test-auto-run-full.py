@@ -45,7 +45,13 @@ assert routing["examples"]["AUTO-RUN FULL RPi5_main #301"] == "AUTO-RUN-FULL"
 
 execution = policy["execution_model"]
 assert execution["canonical_state"] == "GITHUB"
-assert execution["one_active_issue_at_a_time"] is True
+assert execution["one_active_issue_at_a_time"] is False
+assert execution["lane_policy"] == ".github/auto-run-lane-policy-v1.json"
+assert execution["max_concurrent_runnable_source_lanes"] == 4
+assert execution["issue_local_lane_state_authoritative"] is True
+assert execution["controller_issue_role"] == "AGGREGATE_RECONCILIATION_VIEW"
+assert execution["waiting_ci_or_review_consumes_source_slot"] is False
+assert execution["legacy_singleton_controller_state"] == "FAIL_CLOSED_MIGRATION_INPUT"
 assert execution["chat_history_is_authority"] is False
 assert execution["primary_resume"] == "CHATGPT_WORK_GITHUB_EVENT_TRIGGERED_TASK"
 assert execution["fallback_watchdog"] == "CHATGPT_PLUS_SCHEDULED_TASK"
@@ -68,6 +74,12 @@ assert delivery["native_stacked_prs_default"] is False
 assert delivery["native_stacked_prs_allowed_under_current_no_history_rewrite_policy"] is False
 
 assert ".github/outcome-delivery-v1.json" in policy["activation"]["fresh_reads_required"]
+assert ".github/auto-run-lane-policy-v1.json" in policy["activation"]["fresh_reads_required"]
+lanes = policy["lane_concurrency"]
+assert lanes["initial_max_concurrent_runnable_source_lanes"] == 4
+assert lanes["issue_local_receipt_is_authoritative"] is True
+assert lanes["controller_295_is_aggregate_only"] is True
+assert lanes["live_exclusive_is_global"] is True
 
 merge = policy["merge"]
 assert merge["auto_run_full_command_is_explicit_owner_merge_authority_for_the_frozen_issue"] is True

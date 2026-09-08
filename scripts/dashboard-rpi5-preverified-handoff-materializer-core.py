@@ -17,13 +17,13 @@ import sys
 from typing import Any
 
 CAPABILITY = "dashboard-rpi5.preverified-handoff-materializer.v1"
-REVIEWED_SOURCE_SHA = "066b9a24008dd57439f9e66eae198416c4dfc590"
-REVIEWED_SOURCE_TREE_SHA = "62756ba22fc8d47e44988c086c08dcf37779cfb3"
-REVIEWED_PARENT_SHA = "5f7739348f56398d0ba301c9320e1de0062838fc"
+REVIEWED_SOURCE_SHA = "343366427441811a22739b05b04d069c10905805"
+REVIEWED_SOURCE_TREE_SHA = "76d69ef0fee15deceb26eb00a479e912312a241f"
+REVIEWED_PARENT_SHA = "066b9a24008dd57439f9e66eae198416c4dfc590"
 REVIEWED_PRODUCER_BLOB_SHA = "bea0f30602d119ae53b81e70ce2d4c283d369ce8"
-EXPECTED_CANDIDATE_SHA256 = "d12a49de01891e3a4cc188fa16c173c5eb44c786f013d3a6ebfefe95dcaa47b9"
+EXPECTED_CANDIDATE_SHA256 = "076db053e5dc83016168a1e6cecb291e063587c7a977fc3683c2b4bf9dc861db"
 EXPECTED_FILE_COUNT = 72
-EXPECTED_TOTAL_BYTES = 6_773_246
+EXPECTED_TOTAL_BYTES = 6_897_167
 MANIFEST_SCHEMA = "dashboard-rpi5.production-candidate.v1"
 MANIFEST_NAME = "candidate-manifest.json"
 SOURCE_NAME = "source"
@@ -40,7 +40,7 @@ HANDOFF_ROOT = HANDOFF_BASE / REVIEWED_SOURCE_SHA
 HANDOFF_SOURCE = HANDOFF_ROOT / SOURCE_NAME
 HANDOFF_MANIFEST = HANDOFF_ROOT / MANIFEST_NAME
 PARTIAL_NAME = f".{REVIEWED_SOURCE_SHA}.handoff-materializer-partial"
-ACK = "I_AUTHORIZED_DASHBOARD_RPI5_PREVERIFIED_HANDOFF_066B9A24"
+ACK = "I_AUTHORIZED_DASHBOARD_RPI5_PREVERIFIED_HANDOFF_34336642"
 
 MAX_MANIFEST_BYTES = 4 * 1024 * 1024
 COPY_BUFFER_BYTES = 64 * 1024
@@ -68,6 +68,13 @@ HANDOFF_MUTATION_BUDGET = (
 
 class HandoffMaterializerError(RuntimeError):
     pass
+
+
+def require_reviewed_candidate_binding(*, source_sha: str, tree_sha: str, parent_sha: str, candidate_sha256: str, file_count: int, total_bytes: int, producer_blob_sha: str) -> None:
+    actual = (source_sha, tree_sha, parent_sha, candidate_sha256, file_count, total_bytes, producer_blob_sha)
+    expected = (REVIEWED_SOURCE_SHA, REVIEWED_SOURCE_TREE_SHA, REVIEWED_PARENT_SHA, EXPECTED_CANDIDATE_SHA256, EXPECTED_FILE_COUNT, EXPECTED_TOTAL_BYTES, REVIEWED_PRODUCER_BLOB_SHA)
+    if actual != expected:
+        raise HandoffMaterializerError("candidate does not match the reviewed exact-provenance binding")
 
 
 @dataclass(frozen=True)
