@@ -80,19 +80,21 @@ separate gates. See `docs/HERMES_DEALS_NETTO_NONROOT_PREFLIGHT_V2_INSTALLATION.m
 
 The fixed future identity is the dedicated account/group `hermes-netto-audit`, with home
 `/nonexistent`, shell `/usr/sbin/nologin`, non-root runtime UID/GID resolved only from those fixed
-names, and no supplementary groups. `root`, `andris`, `github-runner`, Docker-group authority and
-login-capable metadata fail closed.
+names, and no supplementary groups. `root`, `andris`, `github-runner`, Docker-group authority,
+numeric UID/GID aliases to forbidden identities, and login-capable metadata fail closed.
 
 The privilege-drop seam fixes `/usr/bin/python3`, the installed helper path, exact registered
 Hermes SHA, cwd `/`, minimal environment, timeout/output limits, `shell=False`, `close_fds=True`
-and `extra_groups=()`. The fixed helper and canonical registration remain independently
-descriptor/provenance validated before any future launch.
+and `extra_groups=()`. Both launcher and low-level process seam remain disabled unless all reviewed
+execution/host/access/canary gates are true. The fixed helper and canonical registration remain
+independently descriptor/provenance validated before any future launch.
 
 The minimum input-access contract grants traversal without generic directory read/list authority
-through the source-fixed owner-home binding (`home_root=/home`, `owner_account=andris`) to the exact
-N9 manifest, and separately to the exact Netto corpus root. Every relative suffix is source-fixed;
-all writes are forbidden and no caller may override the path base/account/suffix. Actual
-user/group/ACL/ownership/mode changes remain a later separate LIVE gate.
+through a public-safe `<owner-home>` logical token to the exact N9 manifest and exact Netto corpus
+root. `owner_account=andris` and every relative suffix are source-fixed; no caller may override the
+base/account/suffix. Exact absolute host paths remain inherited from frozen helper provenance and
+must be revalidated through a separately reviewed trusted-host resolver before any future wiring.
+Actual user/group/ACL/ownership/mode changes remain a later separate LIVE gate.
 
 The existing Hermes origin privileged broker/composition is the architecture pattern to reuse.
 No second privileged socket/broker or generic command/sudo surface is introduced by this source
@@ -139,14 +141,15 @@ After the #425 source gate is merged and exact-main CI is green, the next sequen
 separately gated:
 
 1. fresh trusted-host read-only evidence for the installed helper/registration, candidate dedicated
-   account/group prestate, current fixed input-path access metadata and existing broker/runtime
-   composition;
+   account/group prestate, exact absolute-path resolution, current fixed input-path access metadata
+   and existing broker/runtime composition;
 2. source review of the exact minimum host-wiring mechanism, if the read-only evidence shows one
    is still required;
 3. separate exact owner LIVE authorization for any account/group/ACL/path-permission or broker
    wiring mutation selected by that reviewed source contract;
 4. mandatory STOP plus fresh read-only proof of the dedicated non-login/non-root/no-Docker identity,
-   empty supplementary groups, minimum fixed access, helper/registration provenance and wiring;
+   no forbidden numeric alias, empty supplementary groups, minimum fixed access,
+   helper/registration provenance and wiring;
 5. a later independent READY/LIVE-AUTH envelope for exactly one genuine read-only Netto helper
    canary;
 6. only after all residual Hermes capability classes have accepted replacements may a separate
