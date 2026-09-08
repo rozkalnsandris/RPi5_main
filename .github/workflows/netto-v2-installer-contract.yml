@@ -1,0 +1,36 @@
+name: Netto v2 installer contract
+
+on:
+  pull_request:
+    paths:
+      - "scripts/install-hermes-deals-netto-nonroot-preflight-v2.py"
+      - "ops/deploy/hermes-deals-netto-nonroot-preflight-v2-installer.json"
+      - "tests/test-install-hermes-deals-netto-nonroot-preflight-v2.py"
+      - "docs/HERMES_DEALS_NETTO_NONROOT_PREFLIGHT_V2_INSTALLATION.md"
+      - "docs/HERMES_DEALS_NETTO_NONROOT_PREFLIGHT_V2_SOURCE.md"
+      - ".github/workflows/netto-v2-installer-contract.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "scripts/install-hermes-deals-netto-nonroot-preflight-v2.py"
+      - "ops/deploy/hermes-deals-netto-nonroot-preflight-v2-installer.json"
+      - "tests/test-install-hermes-deals-netto-nonroot-preflight-v2.py"
+      - "docs/HERMES_DEALS_NETTO_NONROOT_PREFLIGHT_V2_INSTALLATION.md"
+      - "docs/HERMES_DEALS_NETTO_NONROOT_PREFLIGHT_V2_SOURCE.md"
+      - ".github/workflows/netto-v2-installer-contract.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - name: Validate Netto v2 installer contract
+        run: python3 ./tests/test-install-hermes-deals-netto-nonroot-preflight-v2.py

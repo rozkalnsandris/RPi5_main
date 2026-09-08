@@ -1,0 +1,126 @@
+{
+  "directory_targets": [
+    {
+      "group": "root",
+      "mode": "0755",
+      "owner": "root",
+      "path": "/usr/local/libexec/hermes-deals-audits/netto-missing-normal-price-nonroot-preflight-v2"
+    }
+  ],
+  "file_targets": [
+    {
+      "group": "root",
+      "mode": "0555",
+      "owner": "root",
+      "path": "/usr/local/libexec/hermes-deals-audits/netto-missing-normal-price-nonroot-preflight-v2/netto_missing_normal_price_nonroot_preflight_v2.py",
+      "source": "helper"
+    },
+    {
+      "group": "root",
+      "mode": "0444",
+      "owner": "root",
+      "path": "/etc/hermes-deals-audits.d/netto-missing-normal-price-nonroot-preflight-v2.json",
+      "source": "generated-exact-registration"
+    }
+  ],
+  "future_live_precondition": {
+    "checkout_allowed_git_mutations": [
+      "git fetch origin main",
+      "git worktree add --detach <fixed-target> <exact-sha>"
+    ],
+    "checkout_creation_is_outside_installer_mutation_budget": true,
+    "checkout_creation_requires_separate_explicit_live_scope": true,
+    "checkout_exact_sha": "067db7bd4b8057bc16a9bf0ef9ed8487127a0a05",
+    "checkout_manager_repository_derivation": "RPi5_CHECKOUT_PARENT/hermes-deals",
+    "checkout_manager_repository_name": "hermes-deals",
+    "checkout_target_derivation": "RPi5_CHECKOUT_PARENT/hermes-deals-netto-nonroot-preflight-v2-trusted",
+    "checkout_target_name": "hermes-deals-netto-nonroot-preflight-v2-trusted",
+    "reset_rebase_clean_force_allowed": false,
+    "trusted_hermes_checkout_must_exist_before_installer_preflight": true
+  },
+  "hermes_source": {
+    "caller_selectable_path": false,
+    "caller_selectable_sha": false,
+    "checkout_required_state": "EXACT_SHA_DETACHED_CLEAN_CORRECT_ORIGIN_ANCESTOR_OF_LOCAL_ORIGIN_MAIN",
+    "origin": "https://github.com/rozkalnsandris/hermes-deals.git",
+    "repository": "rozkalnsandris/hermes-deals",
+    "sha": "067db7bd4b8057bc16a9bf0ef9ed8487127a0a05",
+    "trusted_checkout_derivation": "RPi5_CHECKOUT_PARENT/hermes-deals-netto-nonroot-preflight-v2-trusted",
+    "trusted_checkout_name": "hermes-deals-netto-nonroot-preflight-v2-trusted"
+  },
+  "installer": {
+    "apply_requires_root": true,
+    "default_mode": "READ_ONLY_PREFLIGHT",
+    "existing_owned_target_policy": "FAIL_CLOSED_NO_ADOPTION_NO_RECONCILIATION",
+    "first_install_only": true,
+    "immutable_rpi_baseline": "89ff3ad82a2829148789edfbe6fd2b742d38b728",
+    "path": "scripts/install-hermes-deals-netto-nonroot-preflight-v2.py",
+    "source_blob": "eff624b0187d91f06a888054b6f7db1afa212e80"
+  },
+  "mutation_budget": [
+    [
+      "trusted-directory-materialization",
+      1
+    ],
+    [
+      "trusted-file-materialization",
+      2
+    ]
+  ],
+  "phase": 4,
+  "post_install_next_gate": "FRESH_READ_ONLY_INSTALL_VERIFICATION_THEN_SEPARATE_EXECUTION_IDENTITY_SOURCE_DECISION",
+  "registration": {
+    "capability": "netto-missing-normal-price-nonroot-preflight-v2",
+    "git_blob": "848773cf981f49265ca3e3a968c71fdd93c8aee2",
+    "group": "root",
+    "helper_sha256": "275b1e3296f8f9c7312447dec1b1acb3ffd5d09beaab62ac5ca216275d98360c",
+    "mode": "0444",
+    "owner": "root",
+    "path": "/etc/hermes-deals-audits.d/netto-missing-normal-price-nonroot-preflight-v2.json",
+    "registered_source_sha": "067db7bd4b8057bc16a9bf0ef9ed8487127a0a05",
+    "schema": "rozkalns.hermes-deals.netto-nonroot-preflight-v2-registration.v1",
+    "sha256": "887ad4e9295864307a24df6773e98f75056961aebeedd57b95641ba3e7386a1f",
+    "size": 291
+  },
+  "repository": "rozkalnsandris/RPi5_main",
+  "reviewed_source": {
+    "git_blob": "0f8b01ed3129323cc59e526262b369cf33346aba",
+    "path": "tools/runner/netto_missing_normal_price_nonroot_preflight_v2.py",
+    "sha256": "275b1e3296f8f9c7312447dec1b1acb3ffd5d09beaab62ac5ca216275d98360c"
+  },
+  "safety": {
+    "automatic_cleanup": false,
+    "automatic_retry": false,
+    "automatic_rollback": false,
+    "canary_authorized": false,
+    "credential_content_read": false,
+    "credential_mutation": false,
+    "database_write": false,
+    "deployment": false,
+    "docker_mutation": false,
+    "execution_wiring_changed": false,
+    "github_api_request": false,
+    "helper_execution": false,
+    "parser_execution": false,
+    "review_write": false,
+    "systemd_mutation": false,
+    "user_group_mutation": false
+  },
+  "schema": "rozkalns.hermes-deals.netto-nonroot-preflight-v2-installer-contract.v1",
+  "shared_parents": [
+    {
+      "group": "root",
+      "mode": "0755",
+      "mutation": false,
+      "owner": "root",
+      "path": "/usr/local/libexec/hermes-deals-audits"
+    },
+    {
+      "group": "root",
+      "mode": "0755",
+      "mutation": false,
+      "owner": "root",
+      "path": "/etc/hermes-deals-audits.d"
+    }
+  ]
+}

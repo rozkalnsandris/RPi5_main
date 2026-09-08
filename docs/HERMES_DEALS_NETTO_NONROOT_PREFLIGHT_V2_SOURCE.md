@@ -1,11 +1,11 @@
 # Hermes Deals Netto non-root preflight v2 — RPi5 source binding
 
-Status: **SOURCE BINDING MERGED / EXECUTION DISABLED / LIVE NOT AUTHORIZED**
+Status: **SOURCE BINDING MERGED / FIRST-INSTALL CONTRACT DEFINED / EXECUTION DISABLED / LIVE NOT AUTHORIZED**
 
 Tracking:
 
-- current post-merge continuity work item: `RPi5_main#412`;
 - merged RPi5 source binding: `RPi5_main#407` / PR #411 at `cb5a7b4098a3f85eff42d9e93202c1fda2bab716`;
+- post-merge reconciliation: `RPi5_main#412` / PR #413;
 - upstream helper source: `hermes-deals#858` / PR #859;
 - Phase 4 umbrella continuity: `RPi5_main#191`;
 - residual runner migration: `hermes-deals#384`.
@@ -19,6 +19,7 @@ The RPi5 binding is frozen to the merged Hermes source:
 - merged source SHA: `067db7bd4b8057bc16a9bf0ef9ed8487127a0a05`;
 - helper source path: `tools/runner/netto_missing_normal_price_nonroot_preflight_v2.py`;
 - helper Git blob: `0f8b01ed3129323cc59e526262b369cf33346aba`;
+- helper SHA-256: `275b1e3296f8f9c7312447dec1b1acb3ffd5d09beaab62ac5ca216275d98360c`;
 - exact-main Hermes CI #1819: `SUCCESS`;
 - GITHUB-ONLY policy drift #136: `SUCCESS`.
 
@@ -41,27 +42,57 @@ The helper also source-fixes its registration/install targets, N9 manifest ident
 
 `HermesDealsNettoNonrootPreflightV2Adapter` accepts only the exact reviewed Hermes SHA and fixed helper provenance/interface. `apply()` always fails closed. The adapter contains no process-launch, shell, socket, sudo, Docker or generic command/path/argv/environment bridge.
 
+## First-install source boundary
+
+`ops/deploy/hermes-deals-netto-nonroot-preflight-v2-installer.json` and
+`scripts/install-hermes-deals-netto-nonroot-preflight-v2.py` define a separate first-install-only
+surface. The default installer mode is read-only preflight; root apply is not implied by this
+source binding.
+
+The installer binds the same frozen Hermes SHA, helper Git blob and helper SHA-256. It owns only
+one fixed capability directory, the exact helper file (`root:root 0555`) and the canonical
+registration (`root:root 0444`). Existing owned targets fail closed and are never adopted or
+reconciled. The complete future apply budget is one directory plus two files.
+
+The installer does not create its fixed Hermes trusted checkout. Checkout preparation, installer
+apply, post-install verification, execution-identity wiring and genuine canary invocation remain
+separate gates. See `docs/HERMES_DEALS_NETTO_NONROOT_PREFLIGHT_V2_INSTALLATION.md`.
+
 ## Trust boundary
 
 The reviewed helper is intentionally non-root and rejects Docker-group authority. Its bounded evidence can expose only sanitized readiness/permission metadata plus fixed false mutation flags. It does not export N9 or corpus file contents and it does not run the parser.
 
-This source binding explicitly excludes:
+Neither the source binding nor the first installer grants:
 
-- root/sudo or Docker authority;
+- arbitrary command/path/argv/environment authority;
+- helper/canary execution;
+- root/sudo authority outside the separately owner-gated exact installer apply;
+- Docker authority or user/group mutation;
 - parser execution;
 - production database writes;
 - Review/publication writes;
 - deployment/cutover;
-- systemd/service/host mutation;
+- systemd/service mutation;
 - runner registration/deregistration;
 - GitHub App, credential or permission mutation;
-- arbitrary command/path/argv/environment authority;
 - automatic retry, cleanup or rollback.
 
 ## Gate separation
 
-The merged source binding proves source compatibility only. It does **not** prove current RPi5 installation, registration, ownership, permissions, corpus accessibility, runner state or runtime health.
+Source proves only reviewed intent and immutable provenance; it never proves current RPi5
+installation, ownership, permissions, corpus accessibility, runner state or runtime health.
 
-The exact next gate is fresh trusted-host read-only evidence. After that evidence is reviewed, any helper installation or host wiring still requires its own explicit LIVE authorization. A genuine read-only Netto canary requires a later independent READY/LIVE-AUTH envelope. Runner retirement remains ineligible until all required Hermes capability classes have accepted runner-independent replacements.
+The next installation sequence is:
 
-Merge never authorizes LIVE work.
+1. freshly verify merged RPi5 source and exact-main CI;
+2. fresh trusted-host read-only installation preflight;
+3. if required, separately authorize creation of the fixed detached Hermes trusted checkout;
+4. separately authorize the exact root first-install `--apply` budget;
+5. freshly verify installed targets read-only;
+6. make a separate source decision for a compliant non-root/no-Docker execution identity;
+7. authorize any genuine read-only Netto canary only in a later independent READY/LIVE-AUTH envelope.
+
+Runner retirement remains ineligible until all required Hermes capability classes have accepted
+runner-independent replacements.
+
+Merge never authorizes LIVE work. Installation never authorizes invocation.
