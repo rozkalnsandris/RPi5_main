@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import re
 from typing import Any, Mapping
 CONTROL_CONSUMER_REPOSITORY="rozkalnsandris/rozkalns-control-center"
-CONTROL_CONSUMER_MAIN_SHA="d481e210aea0f2838547622c7471c381dcbdd467"
+CONTROL_CONSUMER_MAIN_SHA="1da96b628054a32c79cc6e2f201f5a4a5036c12c"
 CONTROL_CONSUMER_PATH="src/shared/production-visibility.ts"
 CONTROL_CONSUMER_BLOB_SHA="5546c0fb37072c5903d6e7c6aa02a9eea7baf43d"
 FIELDS=("projectId","repository","mainSha","productionSha","deployImpact","runtime","health","rollback","blockerCodes","observedAt")
