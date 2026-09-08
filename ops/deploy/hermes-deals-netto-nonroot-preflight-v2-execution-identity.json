@@ -27,7 +27,8 @@
     "forbidden_groups": [
       "docker"
     ],
-    "supplementary_groups": []
+    "supplementary_groups": [],
+    "forbidden_numeric_identity_aliases": true
   },
   "process": {
     "interpreter": "/usr/bin/python3",
@@ -49,13 +50,15 @@
     "timeout_seconds": 50,
     "stdout_limit_bytes": 32768,
     "stderr_limit_bytes": 4096,
-    "invocation_budget": 1
+    "invocation_budget": 1,
+    "direct_low_level_execution_when_disabled": false
   },
   "input_access": {
     "contract_id": "hermes-deals.netto-v2-minimum-fixed-input-access.v1",
     "path_binding": {
-      "home_root": "/home",
+      "base_token": "<owner-home>",
       "owner_account": "andris",
+      "absolute_path_authority": "frozen_helper_provenance_plus_future_trusted_host_resolver",
       "relative_paths_are_source_fixed": true,
       "caller_override_allowed": false
     },
