@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import sys
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "ops" / "lib"))
@@ -35,6 +36,7 @@ class FakeGitHub:
         ci_success: bool = True,
         target_reachable: bool = True,
         compare_status: str = "ahead",
+        compare_files: list[dict[str, object]] | None = None,
     ):
         self.repository = repository
         self.workflow_path = workflow_path
@@ -45,6 +47,7 @@ class FakeGitHub:
         self.ci_success = ci_success
         self.target_reachable = target_reachable
         self.compare_status = compare_status
+        self.compare_files = compare_files
         self.calls: list[str] = []
 
     def get_json(self, path: str):
@@ -60,10 +63,13 @@ class FakeGitHub:
             if suffix.startswith(f"{OLDER_TARGET}...{self.current_main}"):
                 status = "ahead" if self.target_reachable else "diverged"
                 return SimpleNamespace(value={"status": status, "files": []})
+            files = self.compare_files
+            if files is None:
+                files = [{"filename": item, "status": "modified"} for item in self.paths]
             return SimpleNamespace(
                 value={
                     "status": self.compare_status,
-                    "files": [{"filename": item} for item in self.paths],
+                    "files": files,
                 }
             )
         if "/actions/runs?" in path:
@@ -186,6 +192,53 @@ class AutoLiveControllerTests(unittest.TestCase):
         self.assertFalse(any("/actions/runs?" in call for call in github.calls))
         self.assert_read_only(result)
 
+    def test_rename_classifies_previous_and_current_paths(self):
+        result, _github = self.reconcile_dashboard(
+            [],
+            compare_files=[
+                {
+                    "filename": "docs/deploy.yml",
+                    "previous_filename": ".github/workflows/deploy.yml",
+                    "status": "renamed",
+                }
+            ],
+        )
+        self.assertEqual(result.decision, "OWNER_REQUIRED")
+        self.assertEqual(result.classification, "DB_HOST_APPLY_REQUIRED")
+        self.assertEqual(
+            result.changed_paths,
+            (".github/workflows/deploy.yml", "docs/deploy.yml"),
+        )
+        self.assert_read_only(result)
+
+    def test_rename_without_previous_filename_fails_closed(self):
+        result, _github = self.reconcile_dashboard(
+            [],
+            compare_files=[{"filename": "docs/deploy.yml", "status": "renamed"}],
+        )
+        self.assertEqual(result.decision, "BLOCKED")
+        self.assertEqual(result.reason, "FULL_RANGE_COMPARE_INCOMPLETE_OR_NOT_AHEAD")
+        self.assert_read_only(result)
+
+    def test_unknown_compare_file_status_fails_closed(self):
+        result, _github = self.reconcile_dashboard(
+            [],
+            compare_files=[{"filename": "apps/web/src/example.tsx", "status": "unknown"}],
+        )
+        self.assertEqual(result.decision, "BLOCKED")
+        self.assertEqual(result.reason, "FULL_RANGE_COMPARE_INCOMPLETE_OR_NOT_AHEAD")
+        self.assert_read_only(result)
+
+    def test_required_ci_uses_documented_server_side_filters(self):
+        result, github = self.reconcile_dashboard(["apps/web/src/example.tsx"])
+        self.assertEqual(result.decision, "AUTO_DEPLOY_SAFE")
+        run_calls = [call for call in github.calls if "/actions/runs?" in call]
+        self.assertEqual(len(run_calls), 1)
+        self.assertIn("branch=main", run_calls[0])
+        self.assertIn("event=push", run_calls[0])
+        self.assertIn(f"head_sha={TARGET}", run_calls[0])
+        self.assertIn("status=completed", run_calls[0])
+
     def test_exact_target_sha_ci_failure_blocks(self):
         result, _github = self.reconcile_dashboard(
             ["apps/web/src/example.tsx"], ci_success=False
@@ -245,6 +298,32 @@ class AutoLiveControllerTests(unittest.TestCase):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, source)
 
+    def test_source_contract_rejects_mutation_flag_drift(self):
+        import deploy_executor.auto_live_controller as controller_module
+
+        original_read_json = controller_module._read_json
+        for key in sorted(controller_module.MUTATION_KEYS):
+            def drifted_read_json(path, label, *, key=key):
+                value = original_read_json(path, label)
+                if label == "A3 controller contract":
+                    value = dict(value)
+                    mutation = dict(value["mutation"])
+                    mutation[key] = True
+                    value["mutation"] = mutation
+                return value
+
+            with self.subTest(key=key), patch.object(
+                controller_module, "_read_json", side_effect=drifted_read_json
+            ):
+                with self.assertRaisesRegex(
+                    controller_module.AutoLiveControllerError,
+                    "mutation flags must all remain false",
+                ):
+                    _verify_source_contracts(
+                        root=ROOT,
+                        manifest_relative_path=DASHBOARD,
+                    )
+
     def test_machine_contract_keeps_every_mutation_surface_disabled(self):
         contract = json.loads(
             (ROOT / "ops/deploy/auto-live-controller-v1.json").read_text(
@@ -258,6 +337,18 @@ class AutoLiveControllerTests(unittest.TestCase):
             "BLOCKED",
         ])
         self.assertFalse(contract["execution_enabled"])
+        self.assertEqual(
+            set(contract["mutation"]),
+            {
+                "automatic_mutation_allowed",
+                "mutation_dispatch_enabled",
+                "production_mutation_started",
+                "adapter_apply_invocation",
+                "systemd_or_timer_mutation",
+                "credential_or_permission_mutation",
+                "production_deploy",
+            },
+        )
         self.assertTrue(all(value is False for value in contract["mutation"].values()))
 
 

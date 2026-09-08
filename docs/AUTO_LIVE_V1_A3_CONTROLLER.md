@@ -38,8 +38,12 @@ operation ID and baseline resolver still agree before any GitHub reconciliation 
 Classification is always over the production baseline -> exact target SHA range.
 Latest-commit-only classification is forbidden.
 
-Each changed path is evaluated against the repository manifest. Mixed ranges use the
-manifest precedence. An unmatched path is `BLOCKED`.
+Each compare-file entry must carry one of GitHub's documented statuses: `added`,
+`removed`, `modified`, or `renamed`. Added, removed, and modified entries classify the
+reported `filename`. A renamed entry classifies both `previous_filename` and `filename`
+so moving a file out of a sensitive path cannot lower the range classification. Missing
+rename provenance, an unknown status, or an unmatched path is `BLOCKED`. Mixed ranges
+use the manifest precedence.
 
 The GitHub compare file list is treated as bounded evidence. If the response is absent,
 not `ahead`, empty, malformed, or reaches the configured 300-file hard limit, A3 returns
@@ -48,9 +52,10 @@ not `ahead`, empty, malformed, or reaches the configured 300-file hard limit, A3
 ## Exact target and CI
 
 The exact target SHA must be current `main` or an ancestor reachable from current
-`main`. A3 then requires a successful completed push-to-`main` workflow run matching
-the manifest's exact workflow path/name and a successful required gate job for that
-same target SHA.
+`main`. A3 queries workflow runs with GitHub's documented server-side `branch=main`,
+`event=push`, exact `head_sha`, and `status=completed` filters, then requires the
+manifest's exact workflow path/name and a successful required gate job for that same
+target SHA. Client-side identity checks remain in place as defense in depth.
 
 Missing, truncated, malformed or unsuccessful CI evidence is `BLOCKED`.
 
@@ -68,7 +73,8 @@ Unknown, ambiguous, incomplete or contract-mismatched evidence maps to `BLOCKED`
 
 ## Mutation boundary
 
-A3 keeps all of the following false:
+A3 validates the complete declared mutation-key set and keeps all of the following
+false; a missing, extra, or true mutation flag is a contract failure:
 
 - `execution_enabled`
 - `automatic_mutation_allowed`

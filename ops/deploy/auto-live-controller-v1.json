@@ -18,7 +18,16 @@
     "exact_target_sha_ci_required": true,
     "full_range_compare_required": true,
     "compare_file_hard_limit": 300,
-    "incomplete_compare_result": "BLOCKED"
+    "incomplete_compare_result": "BLOCKED",
+    "compare_file_status_required": true,
+    "rename_classifies_previous_and_current_path": true,
+    "unknown_file_status_result": "BLOCKED",
+    "required_ci_server_filters": {
+      "branch": "main",
+      "event": "push",
+      "head_sha": "EXACT_TARGET_SHA",
+      "status": "completed"
+    }
   },
   "mutation": {
     "automatic_mutation_allowed": false,
