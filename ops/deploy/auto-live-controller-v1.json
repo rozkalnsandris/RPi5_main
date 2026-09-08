@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "contract": "AUTO-LIVE v1 A3 read-only controller",
+  "status": "A3_SOURCE_ONLY_MUTATION_DISABLED",
+  "roadmap_issue": 421,
+  "execution_enabled": false,
+  "shared_policy_commit_sha": "f2aeb5152371a876268bb116bb98806cddbc8e15",
+  "manifests_index": "ops/deploy/auto-live-manifests.json",
+  "static_operation_registry": "ops/deploy/executor-operations.json",
+  "decisions": [
+    "NO_DEPLOY",
+    "AUTO_DEPLOY_SAFE",
+    "OWNER_REQUIRED",
+    "BLOCKED"
+  ],
+  "github_reads": {
+    "default_branch": "main",
+    "exact_target_sha_ci_required": true,
+    "full_range_compare_required": true,
+    "compare_file_hard_limit": 300,
+    "incomplete_compare_result": "BLOCKED"
+  },
+  "mutation": {
+    "automatic_mutation_allowed": false,
+    "mutation_dispatch_enabled": false,
+    "production_mutation_started": false,
+    "adapter_apply_invocation": false,
+    "systemd_or_timer_mutation": false,
+    "credential_or_permission_mutation": false,
+    "production_deploy": false
+  }
+}

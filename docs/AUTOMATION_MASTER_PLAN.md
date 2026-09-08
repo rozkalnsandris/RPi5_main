@@ -95,7 +95,7 @@ Database migrations/writes, host infrastructure, systemd/backup/Cloudflare owner
 
 Unknown runtime-relevant paths fail toward review, never silently toward `NO_DEPLOY`.
 
-### Cross-cutting Track Y — Post-merge Auto-Live v1 — A0 SOURCE GATE (#421)
+### Cross-cutting Track Y — Post-merge Auto-Live v1 — A3 READ-ONLY CONTROLLER SOURCE GATE (#421)
 
 The owner has selected a cross-cutting source-only reconciliation to replace the normal `GITHUB-ONLY -> deferred LIVE-ALL` operator loop with durable post-merge Auto-Live. This source gate may proceed alongside the current Phase 4 residual Hermes migration but does not inherit or bypass any Phase 4 LIVE authority.
 
@@ -111,6 +111,12 @@ Binding A0 decisions:
 - A0 keeps runtime behavior unchanged with `execution_enabled=false`; GITHUB-ONLY/LIVE-ALL compatibility is not removed until later consumer migration/canary gates.
 
 Canonical A0 contract: `docs/AUTO_LIVE_V1.md` + `ops/deploy/auto-live-v1.json`. Roadmap/DoD: issue #421.
+
+A0 canonical policy, A1 shared policy and A2 repository manifests are source-complete. Current A3 adds the read-only decision controller only: trusted production baseline -> current GitHub main/reachability -> full-range path classification -> exact-target CI evidence -> deterministic `NO_DEPLOY / AUTO_DEPLOY_SAFE / OWNER_REQUIRED / BLOCKED`.
+
+A3 keeps repository manifests inactive and every mutation surface disabled. It does not install or enable a host controller, change systemd/timers, credentials or permissions, invoke adapters, enable the executor registry, or deploy production.
+
+Canonical A2 contract: `docs/AUTO_LIVE_V1_A2_MANIFESTS.md` + `ops/deploy/auto-live-manifests.json`. Canonical A3 contract: `docs/AUTO_LIVE_V1_A3_CONTROLLER.md` + `ops/deploy/auto-live-controller-v1.json` + `ops/lib/deploy_executor/auto_live_controller.py`.
 
 ## Repository target state
 

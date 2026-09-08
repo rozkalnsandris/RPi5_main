@@ -5,6 +5,7 @@ test:
 	python3 ./tests/test-start-mode-routing.py
 	python3 ./tests/test-auto-run-full.py
 	python3 ./tests/test-auto-live-v1.py
+	python3 ./tests/test-auto-live-controller.py
 	python3 ./tests/test-auto-run-lane-eligibility.py
 	python3 ./tests/test-control-phase5-production-visibility.py
 	python3 ./tests/test-deploy-executor-p1.py
