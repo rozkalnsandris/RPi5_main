@@ -26,8 +26,12 @@ from deploy_executor.hermes_deals_netto_nonroot_preflight_v2_execution_identity 
     FIXED_CWD,
     FIXED_ENV,
     FIXED_INPUT_ACCESS,
+    FIXED_INPUT_RELATIVE_PATHS,
     HELPER_SHA256,
     HOST_WIRING_ENABLED,
+    INPUT_HOME_ROOT,
+    INPUT_OWNER_ACCOUNT,
+    INPUT_OWNER_HOME,
     INSTALLED_HELPER_PATH,
     N9_GENERATED,
     N9_MANIFEST,
@@ -184,18 +188,32 @@ class NettoExecutionIdentityContractTests(unittest.TestCase):
         self.assertEqual(contract["process"]["cwd"], FIXED_CWD)
         self.assertEqual(contract["process"]["environment"], dict(FIXED_ENV))
         self.assertEqual(
+            contract["input_access"]["path_binding"],
+            {
+                "home_root": INPUT_HOME_ROOT,
+                "owner_account": INPUT_OWNER_ACCOUNT,
+                "relative_paths_are_source_fixed": True,
+                "caller_override_allowed": False,
+            },
+        )
+        self.assertEqual(
             contract["input_access"]["requirements"],
             [
                 {
-                    "path": item.path,
+                    "relative_path": relative_path,
                     "kind": item.kind,
                     "readable": item.readable,
                     "executable": item.executable,
                     "writable": item.writable,
                 }
-                for item in FIXED_INPUT_ACCESS
+                for relative_path, item in zip(
+                    FIXED_INPUT_RELATIVE_PATHS, FIXED_INPUT_ACCESS, strict=True
+                )
             ],
         )
+        self.assertEqual(readiness["input_home_root"], INPUT_HOME_ROOT)
+        self.assertEqual(readiness["input_owner_account"], INPUT_OWNER_ACCOUNT)
+        self.assertEqual(readiness["fixed_input_relative_paths"], FIXED_INPUT_RELATIVE_PATHS)
 
         for field in (
             "execution_enabled",
@@ -222,7 +240,7 @@ class NettoExecutionIdentityContractTests(unittest.TestCase):
             _identity(username="root", uid=0, gid=0),
             _identity(uid=0),
             _identity(primary_group="docker"),
-            _identity(home="/home/andris"),
+            _identity(home=INPUT_OWNER_HOME),
             _identity(shell="/bin/bash"),
             _identity(supplementary_groups=("docker",)),
             _identity(supplementary_groups=("adm",)),
@@ -233,12 +251,13 @@ class NettoExecutionIdentityContractTests(unittest.TestCase):
                     validate_execution_identity(snapshot)
 
     def test_fixed_input_access_is_minimal_and_rejects_broad_home_access(self):
+        self.assertEqual(INPUT_OWNER_HOME, f"{INPUT_HOME_ROOT}/{INPUT_OWNER_ACCOUNT}")
         paths = [item.path for item in FIXED_INPUT_ACCESS]
         self.assertEqual(
             paths,
             [
-                "/home/andris",
-                "/home/andris/hermes-deals-audits",
+                INPUT_OWNER_HOME,
+                f"{INPUT_OWNER_HOME}/hermes-deals-audits",
                 N9_ROOT,
                 N9_GENERATED,
                 N9_MANIFEST,
@@ -255,7 +274,7 @@ class NettoExecutionIdentityContractTests(unittest.TestCase):
         validate_fixed_input_access(_access())
 
         broad = list(_access())
-        broad[0] = FixedAccessSnapshot("/home/andris", "directory", True, True, False)
+        broad[0] = FixedAccessSnapshot(INPUT_OWNER_HOME, "directory", True, True, False)
         with self.assertRaisesRegex(HermesDealsNettoExecutionIdentityError, "input-access"):
             validate_fixed_input_access(tuple(broad))
 
