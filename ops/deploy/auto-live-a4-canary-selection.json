@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "contract": "AUTO-LIVE v1 A4 canary candidate selection",
-  "status": "A4_SOURCE_SELECTION_ONLY_LIVE_DISABLED",
+  "status": "A4_OWNER_REQUIRED_LIVE_DISABLED",
   "roadmap_issue": 421,
-  "source_main_at_reconciliation": "9621c601f9bf94c4a29fad76afbdec250557d293",
+  "source_main_at_reconciliation": "9b92b08aa5a9c7f2691ff092ca7099c9dd918900",
   "shared_policy_commit_sha": "f2aeb5152371a876268bb116bb98806cddbc8e15",
   "selection": {
     "source_repository": "rozkalnsandris/dashboard_RPi5",
@@ -14,6 +14,7 @@
     "eligible_path_prefixes": [
       "apps/web/"
     ],
+    "selection_status": "SOURCE_LEVEL_CANDIDATE_ONLY",
     "weather_manifest_path": "ops/deploy/auto-live-manifests/rozkalns-weather.json",
     "weather_not_selected_reason": "NO_AUTOMATIC_ELIGIBLE_CLASS"
   },
@@ -27,16 +28,58 @@
     "observed_main_delta_classification": "NO_DEPLOY",
     "point_in_time_only": true
   },
+  "production_evidence": {
+    "trusted_production_baseline_sha": "066b9a24008dd57439f9e66eae198416c4dfc590",
+    "reviewed_frozen_candidate_sha": "343366427441811a22739b05b04d069c10905805",
+    "observed_dashboard_main_sha": "20e47ff7ba808f183db56e347d4fde3e1d6a129f",
+    "baseline_to_frozen_relation": "DIRECT_CHILD",
+    "baseline_to_frozen_paths": [
+      "apps/web/public/sw.js",
+      "apps/web/src/pwa-register.ts",
+      "apps/web/vite.config.ts",
+      "docs/ISSUE243_PWA_CACHE_LIFECYCLE.md",
+      "package-lock.json",
+      "tests/e2e/pwa.spec.ts"
+    ],
+    "baseline_to_frozen_classification": "MANUAL_ROLLOUT_REQUIRED",
+    "baseline_to_current_paths": [
+      "AGENTS.md",
+      "apps/web/public/sw.js",
+      "apps/web/src/pwa-register.ts",
+      "apps/web/vite.config.ts",
+      "docs/ISSUE243_PWA_CACHE_LIFECYCLE.md",
+      "package-lock.json",
+      "tests/e2e/pwa.spec.ts"
+    ],
+    "baseline_to_current_classification": "MANUAL_ROLLOUT_REQUIRED",
+    "blocking_paths": [
+      "package-lock.json"
+    ],
+    "point_in_time_only": true
+  },
+  "canary_decision": {
+    "decision": "OWNER_REQUIRED",
+    "reason": "FULL_PRODUCTION_RANGE_MANUAL_ROLLOUT_REQUIRED",
+    "canary_selected": false,
+    "selected_target_sha": null,
+    "automatic_live_eligible": false,
+    "future_auto_live_canary_requires_new_auto_deploy_safe_range_or_reviewed_policy_change": true
+  },
   "live_gate": {
     "candidate_selection_is_live_authority": false,
     "observed_dashboard_main_is_automatic_live_target": false,
     "reviewed_frozen_candidate_is_reusable_live_authorization": false,
-    "fresh_trusted_production_baseline_required": true,
-    "full_baseline_to_target_reclassification_required": true,
-    "fresh_exact_target_ci_required": true,
-    "fresh_static_operation_identity_required": true,
-    "fresh_host_provenance_required": true,
-    "separate_owner_live_authorization_required": true
+    "trusted_production_baseline_observed_for_this_reconciliation": true,
+    "full_baseline_to_target_reclassification_complete": true,
+    "full_range_result_must_be_auto_deploy_safe": true,
+    "current_full_range_result": "MANUAL_ROLLOUT_REQUIRED",
+    "canary_blocked": true,
+    "future_canary_requires_fresh_trusted_production_baseline": true,
+    "future_canary_requires_fresh_exact_target_ci": true,
+    "future_canary_requires_fresh_static_operation_identity": true,
+    "future_canary_requires_fresh_host_provenance": true,
+    "separate_owner_live_authorization_required": true,
+    "owner_live_authorization_alone_overrides_classification": false
   },
   "mutation": {
     "execution_enabled": false,
