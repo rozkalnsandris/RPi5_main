@@ -6,7 +6,6 @@ import json
 import os
 from pathlib import Path
 import re
-import shutil
 import stat
 import subprocess
 import urllib.error
@@ -199,31 +198,28 @@ def _validate_request(argv: Sequence[str], activation: Activation) -> tuple[str,
 def _candidate_and_release(source_sha: str) -> tuple[Path, Path]:
     candidate = Path(CANDIDATE_ROOT) / source_sha
     release = Path(RELEASE_ROOT) / source_sha
-    if not candidate.is_dir():
-        _fail("Weather staged candidate is absent")
-    return candidate, release
+    if candidate != release:
+        _fail("Weather release materialization path contract drifted")
+    if not release.is_dir():
+        _fail("Weather exact release is absent")
+    return release, release
 
 
 def _validate_candidate(candidate: Path, source_sha: str, runner: CommandRunner) -> None:
-    head = _require_success(runner(("/usr/bin/git", "-C", str(candidate), "rev-parse", "HEAD")), "candidate HEAD").strip()
+    head = _require_success(runner(("/usr/bin/git", "-C", str(candidate), "rev-parse", "HEAD")), "release HEAD").strip()
     if head != source_sha:
-        _fail("Weather staged candidate HEAD drifted")
-    status_out = _require_success(runner(("/usr/bin/git", "-C", str(candidate), "status", "--porcelain=v1", "--untracked-files=all")), "candidate cleanliness")
+        _fail("Weather exact release HEAD drifted")
+    status_out = _require_success(runner(("/usr/bin/git", "-C", str(candidate), "status", "--porcelain=v1", "--untracked-files=all")), "release cleanliness")
     if status_out:
-        _fail("Weather staged candidate is not clean")
+        _fail("Weather exact release is not clean")
     if any(path.is_symlink() for path in candidate.rglob("*")):
-        _fail("Weather staged candidate symlink surface is forbidden")
+        _fail("Weather exact release symlink surface is forbidden")
 
 
 def _application_release(candidate: Path, release: Path, source_sha: str, runner: CommandRunner) -> int:
-    _validate_candidate(candidate, source_sha, runner)
-    if release.exists():
-        _fail("Weather release already exists; reuse requires an exact checkpoint rather than implicit replay")
-    release.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        shutil.copytree(candidate, release, ignore=shutil.ignore_patterns(".git"), symlinks=False)
-    except OSError as exc:
-        raise WeatherStageHelperError("Weather release materialization failed closed") from exc
+    if candidate != release:
+        _fail("Weather application release would duplicate filesystem materialization")
+    _validate_candidate(release, source_sha, runner)
     _require_success(runner(_compose_argv(release, "build", "weather", "public-ingest", "schema-init", "readiness", "corpus-check")), "Compose build")
     _require_success(runner(_compose_argv(release, "up", "-d", "weather")), "application apply")
     return 1
