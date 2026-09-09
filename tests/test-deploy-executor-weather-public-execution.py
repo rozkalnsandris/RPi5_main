@@ -10,9 +10,17 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "ops" / "lib"))
 
 from deploy_executor.weather_public_runtime_adapter import BASELINE_RESOLVER_ID, OPERATION_ID, SOURCE_REPOSITORY, TARGET_ALIAS
+from deploy_executor.weather_public_runtime_candidate_materializer import (
+    FETCH_IDENTITY,
+    PUBLIC_REPOSITORY_URL,
+    WeatherCandidateMaterializerError,
+    build_candidate_materialization_plan,
+    source_readiness as candidate_source_readiness,
+)
 from deploy_executor.weather_public_runtime_execution import (
     ACTIVATION_FILE,
     ACTIVATION_SCHEMA,
+    CANDIDATE_ROOT,
     HELPER_EXECUTABLE,
     RESULT,
     WeatherExecutionPlanError,
@@ -50,6 +58,7 @@ REGISTRY = ROOT / "ops/deploy/executor-operations.json"
 ENTRYPOINT = ROOT / "ops/bin/rozkalns-weather-public-runtime-stage-helper"
 STAGE_SOURCE = ROOT / "ops/lib/deploy_executor/weather_public_runtime_stage_helper.py"
 LAUNCH_SOURCE = ROOT / "ops/lib/deploy_executor/weather_public_runtime_helper_launch.py"
+MATERIALIZER_SOURCE = ROOT / "ops/lib/deploy_executor/weather_public_runtime_candidate_materializer.py"
 SOURCE_SHA = "a" * 40
 HASH_A = "1" * 64
 HASH_B = "2" * 64
@@ -127,6 +136,7 @@ class WeatherExecutableCapabilityTests(unittest.TestCase):
         self.assertTrue(plan.installable_helper_source_present)
         self.assertEqual(plan.helper_executable, HELPER_EXECUTABLE)
         self.assertEqual(plan.activation_file, ACTIVATION_FILE)
+        self.assertEqual(plan.candidate_root, CANDIDATE_ROOT)
         for flag in (
             "privileged_dispatch_enabled",
             "host_wiring_enabled",
@@ -192,6 +202,30 @@ class WeatherExecutableCapabilityTests(unittest.TestCase):
         with self.assertRaises(WeatherStageHelperError):
             _validate_request(("attacker.helper",) + stage.arguments[1:], activation)
 
+    def test_candidate_materializer_is_source_derived_and_nonroot(self):
+        plan = build_candidate_materialization_plan(SOURCE_SHA)
+        self.assertEqual(plan.source_repository, SOURCE_REPOSITORY)
+        self.assertEqual(plan.public_repository_url, PUBLIC_REPOSITORY_URL)
+        self.assertEqual(plan.fetch_identity, FETCH_IDENTITY)
+        self.assertEqual(plan.candidate_root, f"{CANDIDATE_ROOT}/{SOURCE_SHA}")
+        self.assertEqual(plan.partial_root, f"{CANDIDATE_ROOT}/.{SOURCE_SHA}.candidate-materializer-partial")
+        self.assertEqual(plan.clone_argv[:4], ("/usr/sbin/runuser", "-u", FETCH_IDENTITY, "--"))
+        self.assertIn("/usr/bin/env", plan.clone_argv)
+        self.assertIn("-i", plan.clone_argv)
+        self.assertIn(PUBLIC_REPOSITORY_URL, plan.clone_argv)
+        self.assertIn(SOURCE_SHA, plan.ancestry_argv)
+        self.assertIn(SOURCE_SHA, plan.checkout_argv)
+        readiness = candidate_source_readiness()
+        self.assertFalse(readiness["network_fetch_runs_as_root"])
+        self.assertFalse(readiness["credentialed_fetch_required"])
+        self.assertFalse(readiness["caller_supplied_repository_url"])
+        self.assertFalse(readiness["caller_supplied_path"])
+        self.assertFalse(readiness["caller_supplied_argv"])
+        self.assertFalse(readiness["caller_supplied_environment"])
+        self.assertEqual(readiness["atomic_publish"], "renameat2-RENAME_NOREPLACE")
+        with self.assertRaises(WeatherCandidateMaterializerError):
+            build_candidate_materialization_plan("../../attacker")
+
     def test_launcher_revalidates_and_has_no_retry(self):
         env, host, plan = self.plan()
         stage = next(item for item in plan.stages if item.stage_id == "readiness_schema_privacy")
@@ -224,24 +258,39 @@ class WeatherExecutableCapabilityTests(unittest.TestCase):
         registry = json.loads(REGISTRY.read_text(encoding="utf-8"))
         execution = execution_source_readiness()
         launch = launch_source_readiness()
+        materializer = candidate_source_readiness()
         self.assertEqual(contract["status"], "SOURCE_IMPLEMENTED_HOST_INACTIVE")
         self.assertTrue(contract["execution_capability_implemented"])
         self.assertTrue(contract["installable_helper_source_present"])
+        self.assertTrue(contract["candidate_materialization_source_present"])
+        self.assertEqual(contract["candidate_materialization"]["candidate_root"], CANDIDATE_ROOT)
+        self.assertFalse(contract["candidate_materialization"]["network_fetch_runs_as_root"])
+        self.assertFalse(contract["candidate_materialization"]["credentialed_fetch_required"])
         self.assertFalse(contract["helper_process_launch_wired"])
         self.assertFalse(registry["execution_enabled"])
         self.assertFalse(execution["helper_invocation_enabled"])
         self.assertFalse(launch["helper_process_launch_wired"])
+        self.assertEqual(materializer["candidate_root"], CANDIDATE_ROOT)
         self.assertTrue(ENTRYPOINT.is_file())
+        self.assertTrue(MATERIALIZER_SOURCE.is_file())
 
     def test_process_surfaces_are_fixed_and_shell_false(self):
         launch_source = LAUNCH_SOURCE.read_text(encoding="utf-8")
         stage_source = STAGE_SOURCE.read_text(encoding="utf-8")
+        materializer_source = MATERIALIZER_SOURCE.read_text(encoding="utf-8")
+        entrypoint_source = ENTRYPOINT.read_text(encoding="utf-8")
         self.assertIn("shell=False", launch_source)
         self.assertIn("shell=False", stage_source)
         self.assertIn("ACTIVATION_FILE", stage_source)
-        for forbidden in ("bash -c", "sh -c", "eval(", "exec(", "os.system(", "shell=True"):
-            self.assertNotIn(forbidden, launch_source)
-            self.assertNotIn(forbidden, stage_source)
+        self.assertIn('"/usr/sbin/runuser"', materializer_source)
+        self.assertIn('"/usr/bin/env"', materializer_source)
+        self.assertIn('"GIT_TERMINAL_PROMPT=0"', materializer_source)
+        self.assertIn("RENAME_NOREPLACE", materializer_source)
+        self.assertLess(entrypoint_source.index("_validate_request(args, activation)"), entrypoint_source.index("materialize_candidate(source_sha"))
+        self.assertIn("--no-optional-locks", entrypoint_source)
+        for source in (launch_source, stage_source, materializer_source, entrypoint_source):
+            for forbidden in ("bash -c", "sh -c", "eval(", "exec(", "os.system(", "shell=True"):
+                self.assertNotIn(forbidden, source)
 
 
 if __name__ == "__main__":
