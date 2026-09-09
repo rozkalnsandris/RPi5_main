@@ -7,6 +7,10 @@
   "operation_id": "rozkalns-weather.public-runtime-release.v1",
   "authorization_class": "STRICT",
   "ordinary_live_all_eligible": false,
+  "trusted_checkout_bootstrap_contract": "ops/deploy/rpi5-main-weather-public-runtime-trusted-checkout-bootstrap.json",
+  "trusted_checkout_target": "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-trusted",
+  "trusted_checkout_required_before_live_installation": true,
+  "ordinary_manager_checkout_install_source_allowed": false,
   "caller_authority": ["authorization_issue_number"],
   "execution_plan_module": "ops/lib/deploy_executor/weather_public_runtime_execution.py",
   "helper_launcher_module": "ops/lib/deploy_executor/weather_public_runtime_helper_launch.py",
@@ -76,6 +80,7 @@
   "later_live_revalidation_required": true,
   "explicit_exclusions": [
     "host installation or activation by this source issue",
+    "ordinary manager checkout as helper installation source",
     "WeatherNext or private BigQuery access",
     "HOME_LAT, HOME_LON or exact home coordinates",
     "credentials or secrets",
