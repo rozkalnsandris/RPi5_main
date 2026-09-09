@@ -1,5 +1,5 @@
 from __future__ import annotations
-import hashlib,json,re
+import hashlib,json,re,sys,tempfile
 from pathlib import Path
 import unittest
 
@@ -40,4 +40,12 @@ class T(unittest.TestCase):
  def test_wrapper_before_import_and_old_auth_invalid(self):
   s=WRAP.read_text();m=s[s.index('def main('):];self.assertLess(m.index('_verify_execution_bundle()'),m.index('_load_core_from_trusted_bundle()'))
   h=json.loads(HAND.read_text());self.assertTrue(h['privileged_execution']['root_owned_bundle_required']);self.assertFalse(h['privileged_execution']['direct_git_checkout_execution_allowed']);self.assertTrue(h['source_state']['invalidates_pre_issue_349_repaired_handoff_live_authority'])
+ def test_trusted_core_import_does_not_write_bytecode(self):
+  s=WRAP.read_text();self.assertLess(s.index('sys.dont_write_bytecode = True'),s.index('loader.exec_module(core)'));c=json.loads(CON.read_text())['runtime_execution'];self.assertFalse(c['bytecode_cache_writes_allowed']);self.assertFalse(c['bundle_tree_mutation_by_core_import_allowed'])
+  old_flag=sys.dont_write_bytecode;module_name='dashboard_handoff_materializer_core'
+  try:
+   with tempfile.TemporaryDirectory() as d:
+    root=Path(d);wrapper=root/WRAP.name;core=root/CORE.name;wrapper.write_bytes(WRAP.read_bytes());core.write_bytes(CORE.read_bytes());ns={'__file__':str(wrapper),'__name__':'test_dashboard_handoff_wrapper'};exec(compile(wrapper.read_text(),str(wrapper),'exec'),ns);sys.dont_write_bytecode=False;ns['TRUSTED_CORE']=core;ns['_load_core_from_trusted_bundle']();self.assertFalse((root/'__pycache__').exists())
+  finally:
+   sys.dont_write_bytecode=old_flag;sys.modules.pop(module_name,None)
 if __name__=='__main__':unittest.main(verbosity=2)

@@ -333,6 +333,7 @@ def _verify_execution_bundle(
 
 
 def _load_core_from_trusted_bundle() -> Any:
+    sys.dont_write_bytecode = True
     loader = importlib.machinery.SourceFileLoader(
         "dashboard_handoff_materializer_core",
         str(TRUSTED_CORE),
