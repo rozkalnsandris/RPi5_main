@@ -22,6 +22,7 @@ from deploy_executor.weather_public_runtime_execution import (
     ACTIVATION_SCHEMA,
     CANDIDATE_ROOT,
     HELPER_EXECUTABLE,
+    RELEASE_ROOT,
     RESULT,
     WeatherExecutionPlanError,
     build_weather_executable_plan,
@@ -136,7 +137,9 @@ class WeatherExecutableCapabilityTests(unittest.TestCase):
         self.assertTrue(plan.installable_helper_source_present)
         self.assertEqual(plan.helper_executable, HELPER_EXECUTABLE)
         self.assertEqual(plan.activation_file, ACTIVATION_FILE)
-        self.assertEqual(plan.candidate_root, CANDIDATE_ROOT)
+        self.assertEqual(plan.candidate_root, RELEASE_ROOT)
+        self.assertEqual(plan.release_root, RELEASE_ROOT)
+        self.assertEqual(CANDIDATE_ROOT, RELEASE_ROOT)
         for flag in (
             "privileged_dispatch_enabled",
             "host_wiring_enabled",
@@ -202,13 +205,13 @@ class WeatherExecutableCapabilityTests(unittest.TestCase):
         with self.assertRaises(WeatherStageHelperError):
             _validate_request(("attacker.helper",) + stage.arguments[1:], activation)
 
-    def test_candidate_materializer_is_source_derived_and_nonroot(self):
+    def test_candidate_materializer_is_single_release_materialization_and_nonroot(self):
         plan = build_candidate_materialization_plan(SOURCE_SHA)
         self.assertEqual(plan.source_repository, SOURCE_REPOSITORY)
         self.assertEqual(plan.public_repository_url, PUBLIC_REPOSITORY_URL)
         self.assertEqual(plan.fetch_identity, FETCH_IDENTITY)
-        self.assertEqual(plan.candidate_root, f"{CANDIDATE_ROOT}/{SOURCE_SHA}")
-        self.assertEqual(plan.partial_root, f"{CANDIDATE_ROOT}/.{SOURCE_SHA}.candidate-materializer-partial")
+        self.assertEqual(plan.release_root, f"{RELEASE_ROOT}/{SOURCE_SHA}")
+        self.assertEqual(plan.partial_root, f"{RELEASE_ROOT}/.{SOURCE_SHA}.release-materializer-partial")
         self.assertEqual(plan.clone_argv[:4], ("/usr/sbin/runuser", "-u", FETCH_IDENTITY, "--"))
         self.assertIn("/usr/bin/env", plan.clone_argv)
         self.assertIn("-i", plan.clone_argv)
@@ -216,6 +219,8 @@ class WeatherExecutableCapabilityTests(unittest.TestCase):
         self.assertIn(SOURCE_SHA, plan.ancestry_argv)
         self.assertIn(SOURCE_SHA, plan.checkout_argv)
         readiness = candidate_source_readiness()
+        self.assertEqual(readiness["release_root"], RELEASE_ROOT)
+        self.assertEqual(readiness["filesystem_release_materializations"], 1)
         self.assertFalse(readiness["network_fetch_runs_as_root"])
         self.assertFalse(readiness["credentialed_fetch_required"])
         self.assertFalse(readiness["caller_supplied_repository_url"])
@@ -263,14 +268,18 @@ class WeatherExecutableCapabilityTests(unittest.TestCase):
         self.assertTrue(contract["execution_capability_implemented"])
         self.assertTrue(contract["installable_helper_source_present"])
         self.assertTrue(contract["candidate_materialization_source_present"])
-        self.assertEqual(contract["candidate_materialization"]["candidate_root"], CANDIDATE_ROOT)
-        self.assertFalse(contract["candidate_materialization"]["network_fetch_runs_as_root"])
-        self.assertFalse(contract["candidate_materialization"]["credentialed_fetch_required"])
+        self.assertEqual(contract["release_materialization"]["release_root"], RELEASE_ROOT)
+        self.assertEqual(contract["release_materialization"]["filesystem_release_materializations"], 1)
+        self.assertFalse(contract["release_materialization"]["application_stage_performs_second_filesystem_copy"])
+        self.assertFalse(contract["release_materialization"]["network_fetch_runs_as_root"])
+        self.assertFalse(contract["release_materialization"]["credentialed_fetch_required"])
         self.assertFalse(contract["helper_process_launch_wired"])
         self.assertFalse(registry["execution_enabled"])
         self.assertFalse(execution["helper_invocation_enabled"])
         self.assertFalse(launch["helper_process_launch_wired"])
-        self.assertEqual(materializer["candidate_root"], CANDIDATE_ROOT)
+        self.assertTrue(execution["candidate_root_equals_release_root"])
+        self.assertEqual(materializer["release_root"], RELEASE_ROOT)
+        self.assertEqual(materializer["filesystem_release_materializations"], 1)
         self.assertTrue(ENTRYPOINT.is_file())
         self.assertTrue(MATERIALIZER_SOURCE.is_file())
 
@@ -286,6 +295,8 @@ class WeatherExecutableCapabilityTests(unittest.TestCase):
         self.assertIn('"/usr/bin/env"', materializer_source)
         self.assertIn('"GIT_TERMINAL_PROMPT=0"', materializer_source)
         self.assertIn("RENAME_NOREPLACE", materializer_source)
+        self.assertIn("candidate != release", stage_source)
+        self.assertNotIn("shutil.copytree", stage_source)
         self.assertLess(entrypoint_source.index("_validate_request(args, activation)"), entrypoint_source.index("materialize_candidate(source_sha"))
         self.assertIn("--no-optional-locks", entrypoint_source)
         for source in (launch_source, stage_source, materializer_source, entrypoint_source):
