@@ -13,7 +13,14 @@
   "candidate_materializer_module": "ops/lib/deploy_executor/weather_public_runtime_candidate_materializer.py",
   "stage_helper_module": "ops/lib/deploy_executor/weather_public_runtime_stage_helper.py",
   "stage_helper_entrypoint_source": "ops/bin/rozkalns-weather-public-runtime-stage-helper",
+  "helper_install_manifest": "ops/deploy/weather-public-runtime-helper-install.json",
   "installed_stage_helper_path": "/usr/local/libexec/rozkalns-weather-public-runtime-stage-helper",
+  "installed_helper_support_root": "/usr/local/libexec/rozkalns-weather-public-runtime",
+  "installed_helper_package_root": "/usr/local/libexec/rozkalns-weather-public-runtime/deploy_executor",
+  "installed_helper_artifact_count": 13,
+  "clean_environment_import_required": true,
+  "ambient_pythonpath_allowed": false,
+  "existing_executor_package_mutation_allowed": false,
   "activation_file": "/etc/rozkalns-weather/public-runtime-helper-activation.json",
   "activation_schema": "rozkalns-weather.public-runtime-helper-activation.v1",
   "activation_file_required_root_owner": true,
@@ -76,6 +83,7 @@
     "credentialed/private repository fetch",
     "package installation or generic sudo/root authority",
     "caller-selected command, executable path, repository URL, argv or environment",
+    "ambient repository checkout, PYTHONPATH, user site-packages or existing deploy-executor package mutation",
     "automatic retry, cleanup, rollback, restore or alternate route"
   ]
 }

@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "contract": "rozkalns-weather.public-runtime-helper-install.v1",
+  "status": "SOURCE_ONLY_INSTALL_DISABLED",
+  "source_repository": "rozkalnsandris/RPi5_main",
+  "target_alias": "rozkalns-weather-public-rpi5",
+  "operation_id": "rozkalns-weather.public-runtime-release.v1",
+  "authorization_class": "STRICT",
+  "ordinary_live_all_eligible": false,
+  "install_root": "/usr/local/libexec/rozkalns-weather-public-runtime",
+  "executable_path": "/usr/local/libexec/rozkalns-weather-public-runtime-stage-helper",
+  "package_root": "/usr/local/libexec/rozkalns-weather-public-runtime/deploy_executor",
+  "required_owner_uid": 0,
+  "required_owner_gid": 0,
+  "directory_mode": "0755",
+  "entrypoint_mode": "0755",
+  "module_mode": "0644",
+  "artifact_count": 13,
+  "artifacts": [
+    {
+      "source": "ops/bin/rozkalns-weather-public-runtime-stage-helper",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime-stage-helper",
+      "kind": "entrypoint",
+      "mode": "0755"
+    },
+    {
+      "source": "ops/lib/weather_public_runtime_helper_package/__init__.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime/deploy_executor/__init__.py",
+      "kind": "package_init",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/adapters.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime/deploy_executor/adapters.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/queue_normalizer.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime/deploy_executor/queue_normalizer.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/registry.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime/deploy_executor/registry.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/protocol.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime/deploy_executor/protocol.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/weather_public_runtime_adapter.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime/deploy_executor/weather_public_runtime_adapter.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/weather_public_runtime_bootstrap.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime/deploy_executor/weather_public_runtime_bootstrap.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/weather_public_runtime_preactivation.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime/deploy_executor/weather_public_runtime_preactivation.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/weather_public_runtime_host_wiring.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime/deploy_executor/weather_public_runtime_host_wiring.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/weather_public_runtime_execution.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime/deploy_executor/weather_public_runtime_execution.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/weather_public_runtime_candidate_materializer.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime/deploy_executor/weather_public_runtime_candidate_materializer.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/weather_public_runtime_stage_helper.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime/deploy_executor/weather_public_runtime_stage_helper.py",
+      "kind": "module",
+      "mode": "0644"
+    }
+  ],
+  "closure_policy": {
+    "exact_list_only": true,
+    "wildcard_copy": false,
+    "ambient_repository_checkout_required": false,
+    "pythonpath_required": false,
+    "user_site_packages_required": false,
+    "existing_deploy_executor_package_mutation": false,
+    "unrelated_transport_state_credential_modules_installed": false,
+    "package_initializer_imports_other_modules": false
+  },
+  "activation": {
+    "helper_installation_enabled": false,
+    "helper_invocation_enabled": false,
+    "process_launch_wired": false,
+    "production_mutation_enabled": false,
+    "production_mutation_started": false,
+    "self_install": false
+  },
+  "later_live_requirements": [
+    "exact merged RPi5_main SHA and exact-main CI",
+    "exact trusted host and target alias",
+    "fresh sanitized Weather runtime baseline",
+    "exact artifact list and destination identities from this manifest",
+    "root ownership and exact file modes verified after installation",
+    "clean-environment helper import proof repeated against installed tree",
+    "whole preactivation SHA-256 and fixed helper identities",
+    "separate exact STRICT LIVE authorization before first installation mutation"
+  ],
+  "explicit_exclusions": [
+    "installation or activation by this source contract",
+    "caller-selected source or destination path",
+    "caller-selected module, argv, environment or PYTHONPATH",
+    "wildcard package copy",
+    "overwrite or upgrade of /usr/local/libexec/rozkalns-deploy-executor/deploy_executor",
+    "credentials, secrets, WeatherNext/private BigQuery or home coordinates",
+    "Cloudflare, network, package, permission or ownership mutation",
+    "Docker, systemd, SQLite, corpus mutation or automatic retry/cleanup/rollback"
+  ]
+}

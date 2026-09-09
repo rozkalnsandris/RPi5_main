@@ -171,9 +171,23 @@ After Issue #438 source merge the default state still remains inactive:
 
 Therefore Issue #438 makes the narrow implementation **available in reviewed source**, but it does not install the helper, create the root-owned activation file, enable dispatch, invoke Docker/systemd, initialize/write SQLite, backfill corpus data, start a service, or otherwise mutate RPi5. The first actual installation/activation/rollout remains one separately authorized exact `STRICT` LIVE envelope and must revalidate the current merged RPi5_main SHA, exact Weather SHA/CI, current sanitized host baseline, helper source identity, whole preactivation hash, mutation budgets and postconditions immediately before mutation.
 
+## Isolated helper install layout — Issue #443
+
+Issue #443 closes the source-side installability gap discovered after #438: the fixed stage-helper entrypoint imported `deploy_executor.*`, but #438 did not freeze where that package would be installed on a clean host.
+
+The exact source-only install contract is now `ops/deploy/weather-public-runtime-helper-install.json`. It preserves the #438 executable identity `/usr/local/libexec/rozkalns-weather-public-runtime-stage-helper` and defines one dedicated sibling support root `/usr/local/libexec/rozkalns-weather-public-runtime` with package root `/usr/local/libexec/rozkalns-weather-public-runtime/deploy_executor`.
+
+The manifest lists exactly 13 artifacts: the fixed entrypoint, a dedicated import-free `deploy_executor/__init__.py`, and the 11 reviewed transitive Python modules needed by the stage-helper path. It does not wildcard-copy the full deploy executor package and does not install unrelated state, transport, credential or project adapter modules. In particular, it does not overwrite or upgrade `/usr/local/libexec/rozkalns-deploy-executor/deploy_executor`.
+
+The entrypoint derives the support root only from its own fixed filename and sibling directory, inserts that exact root into `sys.path`, imports `deploy_executor`, and verifies that the loaded package initializer resolves to the expected sibling file before importing Weather modules. There is no caller-provided `PYTHONPATH`, site-package dependency, ambient repository checkout, working-directory dependency or shell-profile dependency.
+
+`tests/test-deploy-executor-weather-public-helper-install.py` assembles the manifest into a temporary host-like filesystem and runs the entrypoint with `python -I` plus a scrubbed environment. The expected terminal result is the existing fail-closed activation error with exit code 78; `ModuleNotFoundError`, `ImportError` or the dedicated install-layout error are failures. The same test composes the #438 execution invariant suite so installability cannot bypass the fixed helper/stage/budget/security contract.
+
+Issue #443 remains **source only**. The manifest does not self-install, and all execution/installation/activation state remains false: global executor execution, privileged dispatch, host wiring, helper installation/invocation, process-launch wiring and production mutation are still disabled. Creating `/usr/local` files, writing the root-owned activation file, updating a trusted checkout, changing ownership/modes on the host, invoking the helper or starting the Weather rollout all require a later separately authorized exact `STRICT` LIVE envelope.
+
 ## Explicitly separate gates
 
-The static operation, bootstrap source composition, pre-activation bridge, host-wiring bridge and executable helper source do not themselves authorize:
+The static operation, bootstrap source composition, pre-activation bridge, host-wiring bridge, executable helper source and isolated install manifest do not themselves authorize:
 
 - RPi5 deploy/redeploy/restart or executor global enablement;
 - privileged dispatch activation, live host wiring, helper installation or helper invocation;
@@ -184,6 +198,7 @@ The static operation, bootstrap source composition, pre-activation bridge, host-
 - `HOME_LAT`, `HOME_LON` or exact home coordinates;
 - Cloudflare, network or firewall mutation;
 - package installation, generic `sudo`/root authority or arbitrary shell/path/argv/environment authority;
+- ambient repository/PYTHONPATH authority or mutation of the existing deploy-executor package;
 - repository settings, rulesets, permissions or secrets changes.
 
 Application rollback, if a later reviewed LIVE capability is activated, must never imply SQLite rollback, deletion or restore. The `weather_data` corpus volume is retained across application replacement by contract.
