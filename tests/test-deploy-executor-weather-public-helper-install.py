@@ -12,6 +12,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "ops/deploy/weather-public-runtime-helper-install.json"
+EXECUTION_CONTRACT = ROOT / "ops/deploy/weather-public-runtime-execution.json"
 ENTRYPOINT_SOURCE = ROOT / "ops/bin/rozkalns-weather-public-runtime-stage-helper"
 EXECUTION_TEST = ROOT / "tests/test-deploy-executor-weather-public-execution.py"
 DEDICATED_ROOT = "/usr/local/libexec/rozkalns-weather-public-runtime"
@@ -38,6 +39,7 @@ class WeatherHelperInstallLayoutTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        cls.execution_contract = json.loads(EXECUTION_CONTRACT.read_text(encoding="utf-8"))
         cls.artifacts = cls.manifest["artifacts"]
 
     def test_manifest_is_exact_isolated_and_inactive(self) -> None:
@@ -61,7 +63,8 @@ class WeatherHelperInstallLayoutTests(unittest.TestCase):
             destination = item["destination"]
             self.assertTrue(destination == EXECUTABLE or destination.startswith(PACKAGE_ROOT + "/"))
             self.assertFalse(destination.startswith(EXISTING_EXECUTOR_ROOT + "/"))
-            self.assertIn(item["mode"], {"0755", "0644"})
+            expected_mode = value["entrypoint_mode"] if item["kind"] == "entrypoint" else value["module_mode"]
+            self.assertEqual(item["mode"], expected_mode)
 
         closure = value["closure_policy"]
         self.assertTrue(closure["exact_list_only"])
@@ -77,6 +80,27 @@ class WeatherHelperInstallLayoutTests(unittest.TestCase):
             self.assertFalse(closure[key])
         for enabled in value["activation"].values():
             self.assertFalse(enabled)
+
+    def test_execution_contract_is_exactly_bound_to_install_manifest(self) -> None:
+        execution = self.execution_contract
+        self.assertEqual(execution["helper_install_manifest"], str(MANIFEST.relative_to(ROOT)))
+        self.assertEqual(execution["installed_stage_helper_path"], self.manifest["executable_path"])
+        self.assertEqual(execution["installed_helper_support_root"], self.manifest["install_root"])
+        self.assertEqual(execution["installed_helper_package_root"], self.manifest["package_root"])
+        self.assertEqual(execution["installed_helper_artifact_count"], self.manifest["artifact_count"])
+        self.assertTrue(execution["clean_environment_import_required"])
+        self.assertFalse(execution["ambient_pythonpath_allowed"])
+        self.assertFalse(execution["existing_executor_package_mutation_allowed"])
+        for key in (
+            "helper_process_launch_wired",
+            "privileged_dispatch_enabled",
+            "host_wiring_enabled",
+            "helper_installation_enabled",
+            "helper_invocation_enabled",
+            "production_mutation_enabled",
+            "production_mutation_started",
+        ):
+            self.assertFalse(execution[key])
 
     def test_manifest_contains_only_the_transitive_weather_import_closure(self) -> None:
         module_artifacts = {
