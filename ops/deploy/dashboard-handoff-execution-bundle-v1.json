@@ -8,7 +8,7 @@
     "merged_tree_sha": "fresh-post-merge-tree-required",
     "entrypoint": {
       "repo_path": "scripts/dashboard-rpi5-preverified-handoff-materializer.py",
-      "git_blob_sha": "da6b3756ec49436de3855a8c13f273954a919d22"
+      "git_blob_sha": "d2463e61fade6a3fa0a60f9d09a52c1a479b3f86"
     },
     "core": {
       "repo_path": "scripts/dashboard-rpi5-preverified-handoff-materializer-core.py",
@@ -31,7 +31,7 @@
     },
     "bundle_materializer": {
       "repo_path": "scripts/dashboard-rpi5-handoff-execution-bundle-materializer.py",
-      "git_blob_sha": "78dcf901b6c48db11024909946e47cd62b558c10",
+      "git_blob_sha": "f4e90e26b3e9fbd89b5da74c23c778678ad4da5b",
       "privileged_execution": true
     },
     "proof": {
@@ -85,7 +85,7 @@
   "materialization": {
     "payload_transport": "unprivileged-verified-wrapper-core-manifest-json-to-root-stdin",
     "root_reads_user_controlled_path": false,
-    "root_materializer_hardcodes_entrypoint_git_blob": "da6b3756ec49436de3855a8c13f273954a919d22",
+    "root_materializer_hardcodes_entrypoint_git_blob": "d2463e61fade6a3fa0a60f9d09a52c1a479b3f86",
     "root_materializer_hardcodes_core_git_blob": "409ea15dcb72e7361278dfd4065228c99fa840d2",
     "runtime_manifest_is_not_sufficient_code_authority": true,
     "root_destination_rehash_required": true,
@@ -100,6 +100,8 @@
   "runtime_execution": {
     "only_entrypoint": "/var/lib/rozkalns-dashboard-handoff-exec/v1/dashboard-rpi5-preverified-handoff-materializer.py",
     "bundle_verified_before_core_import": true,
+    "bytecode_cache_writes_allowed": false,
+    "bundle_tree_mutation_by_core_import_allowed": false,
     "direct_user_checkout_execution": "fail-closed"
   },
   "failure_policy": {

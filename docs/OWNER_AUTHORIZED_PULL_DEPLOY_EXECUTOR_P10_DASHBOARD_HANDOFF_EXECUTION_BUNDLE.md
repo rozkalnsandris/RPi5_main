@@ -64,7 +64,7 @@ The only privileged handoff entrypoint is:
 
 `/var/lib/rozkalns-dashboard-handoff-exec/v1/dashboard-rpi5-preverified-handoff-materializer.py`
 
-That wrapper verifies its root-owned absolute bundle, exact tree, manifest, its own Git blob and the core Git blob **before importing the core**. Direct execution from the normal checkout fails closed.
+That wrapper verifies its root-owned absolute bundle, exact tree, manifest, its own Git blob and the core Git blob **before importing the core**. Direct execution from the normal checkout fails closed. Before the trusted core import it disables Python bytecode-cache writes, so importing reviewed code cannot add `__pycache__` or `.pyc` entries and invalidate the exact three-file bundle tree.
 
 Required order:
 
