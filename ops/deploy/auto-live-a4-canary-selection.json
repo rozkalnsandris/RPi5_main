@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "contract": "AUTO-LIVE v1 A4 canary candidate selection",
+  "status": "A4_SOURCE_SELECTION_ONLY_LIVE_DISABLED",
+  "roadmap_issue": 421,
+  "source_main_at_reconciliation": "9621c601f9bf94c4a29fad76afbdec250557d293",
+  "shared_policy_commit_sha": "f2aeb5152371a876268bb116bb98806cddbc8e15",
+  "selection": {
+    "source_repository": "rozkalnsandris/dashboard_RPi5",
+    "target_alias": "dashboard-rpi5-production-release",
+    "manifest_path": "ops/deploy/auto-live-manifests/dashboard-rpi5.json",
+    "static_operation_id": "dashboard-rpi5.production-release.v1",
+    "eligible_class": "AUTO_DEPLOY_SAFE",
+    "eligible_path_prefixes": [
+      "apps/web/"
+    ],
+    "weather_manifest_path": "ops/deploy/auto-live-manifests/rozkalns-weather.json",
+    "weather_not_selected_reason": "NO_AUTOMATIC_ELIGIBLE_CLASS"
+  },
+  "github_evidence": {
+    "observed_dashboard_main_sha": "20e47ff7ba808f183db56e347d4fde3e1d6a129f",
+    "reviewed_frozen_candidate_sha": "343366427441811a22739b05b04d069c10905805",
+    "relation": "DIRECT_CHILD",
+    "observed_main_delta_paths": [
+      "AGENTS.md"
+    ],
+    "observed_main_delta_classification": "NO_DEPLOY",
+    "point_in_time_only": true
+  },
+  "live_gate": {
+    "candidate_selection_is_live_authority": false,
+    "observed_dashboard_main_is_automatic_live_target": false,
+    "reviewed_frozen_candidate_is_reusable_live_authorization": false,
+    "fresh_trusted_production_baseline_required": true,
+    "full_baseline_to_target_reclassification_required": true,
+    "fresh_exact_target_ci_required": true,
+    "fresh_static_operation_identity_required": true,
+    "fresh_host_provenance_required": true,
+    "separate_owner_live_authorization_required": true
+  },
+  "mutation": {
+    "execution_enabled": false,
+    "manifest_activation_enabled": false,
+    "automatic_mutation_enabled": false,
+    "mutation_dispatch_enabled": false,
+    "adapter_apply_invocation": false,
+    "systemd_or_timer_mutation": false,
+    "credential_or_permission_mutation": false,
+    "production_deploy": false,
+    "production_mutation_started": false
+  }
+}
