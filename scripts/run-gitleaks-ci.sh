@@ -1,4 +1,23 @@
 #!/usr/bin/env bash
+
+resolve_gitleaks_release_arch() {
+  case "${1:-}" in
+    x86_64|amd64)
+      printf '%s\n' "x64"
+      ;;
+    aarch64|arm64)
+      printf '%s\n' "arm64"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+  return 0
+fi
+
 set -Eeuo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
@@ -13,7 +32,12 @@ GITLEAKS_CONFIG=".gitleaks.toml"
 # report demonstrates this release detects the same canonical GitHub PAT shape
 # that v8.30.1 missed. Our runtime canaries remain the final trust gate.
 GITLEAKS_VERSION="8.18.4"
-archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+machine_arch="$(uname -m)"
+if ! gitleaks_arch="$(resolve_gitleaks_release_arch "$machine_arch")"; then
+  echo "Gitleaks CI: FAIL: unsupported machine architecture: $machine_arch" >&2
+  exit 1
+fi
+archive="gitleaks_${GITLEAKS_VERSION}_linux_${gitleaks_arch}.tar.gz"
 release_base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
 
 tmp="$(mktemp -d)"

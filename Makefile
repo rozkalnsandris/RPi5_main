@@ -2,6 +2,7 @@
 
 test:
 	./tests/test-shell-syntax.sh
+	bash ./tests/test-run-gitleaks-ci-arch.sh
 	python3 ./tests/test-start-mode-routing.py
 	python3 ./tests/test-auto-run-full.py
 	python3 ./tests/test-auto-live-v1.py
