@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import sys
+from typing import Sequence
+
+from deploy_executor.weather_public_runtime_candidate_materializer import (
+    WeatherCandidateMaterializerError,
+    materialize_candidate,
+)
+from deploy_executor.weather_public_runtime_host_wiring import expected_helper_bindings
+from deploy_executor.weather_public_runtime_stage_helper import (
+    WeatherStageHelperError,
+    _validate_request,
+    execute_stage,
+    read_activation,
+    run_command,
+)
+
+APPLICATION_RELEASE_HELPER_ID = next(
+    binding.helper_id
+    for binding in expected_helper_bindings()
+    if binding.stage_id == "application_release"
+)
+
+
+def _safe_runner(argv: Sequence[str]):
+    fixed = tuple(argv)
+    if fixed and fixed[0] == "/usr/bin/git" and (len(fixed) < 2 or fixed[1] != "--no-optional-locks"):
+        fixed = (fixed[0], "--no-optional-locks", *fixed[1:])
+    return run_command(fixed)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = tuple(sys.argv[1:] if argv is None else argv)
+    try:
+        activation = read_activation()
+        helper_id, source_sha, _digest, _start, _end, _recovery, _extra = _validate_request(args, activation)
+        if helper_id == APPLICATION_RELEASE_HELPER_ID:
+            materialize_candidate(source_sha, _safe_runner)
+        receipt = execute_stage(args, activation=activation, runner=_safe_runner)
+    except (WeatherStageHelperError, WeatherCandidateMaterializerError) as exc:
+        print(f"WEATHER_STAGE_HELPER=STOP error={type(exc).__name__}", file=sys.stderr)
+        return 78
+    print(json.dumps(receipt, sort_keys=True, separators=(",", ":")))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
