@@ -7,8 +7,19 @@ import json
 import re
 from typing import Any
 
-from .weather_public_runtime_adapter import OPERATION_ID, SOURCE_REPOSITORY, TARGET_ALIAS
-from .weather_public_runtime_bootstrap import FORECAST_MODELS, MAX_BACKFILL_DAYS, RECOVERY_DECISIONS, RUN_HOURS, TRUTH_STATION_ID
+from .weather_public_runtime_adapter import (
+    BASELINE_RESOLVER_ID,
+    OPERATION_ID,
+    SOURCE_REPOSITORY,
+    TARGET_ALIAS,
+)
+from .weather_public_runtime_bootstrap import (
+    FORECAST_MODELS,
+    MAX_BACKFILL_DAYS,
+    RECOVERY_DECISIONS,
+    RUN_HOURS,
+    TRUTH_STATION_ID,
+)
 from .weather_public_runtime_preactivation import (
     ENVELOPE_SCHEMA as PREACTIVATION_ENVELOPE_SCHEMA,
     RESULT as PREACTIVATION_RESULT,
@@ -233,6 +244,8 @@ def _validate_preactivation(envelope: WeatherPreactivationEnvelope) -> None:
         _fail("weather target alias drifted")
     if envelope.release_operation_id != OPERATION_ID:
         _fail("weather release operation drifted")
+    if envelope.release_baseline_resolver_id != BASELINE_RESOLVER_ID:
+        _fail("weather release baseline resolver drifted")
     for name, value in (
         ("authorization payload", envelope.authorization_payload_sha256),
         ("authorization raw body", envelope.authorization_raw_body_sha256),
