@@ -1,0 +1,130 @@
+{
+  "schema": "rozkalns.rpi5-main.weather-public-runtime-trusted-checkout-bootstrap.v1",
+  "repository": "rozkalnsandris/RPi5_main",
+  "source_only": true,
+  "purpose": "Prepare one exact detached RPi5_main checkout for the Weather public-runtime helper install and first STRICT LIVE rollout without mutating the ordinary manager checkout working tree.",
+  "manager_checkout": {
+    "repository": "rozkalnsandris/RPi5_main",
+    "name": "RPi5_main",
+    "derivation": "RPi5_CHECKOUT_PARENT/RPi5_main",
+    "origin": "https://github.com/rozkalnsandris/RPi5_main.git",
+    "working_tree_content_may_be_dirty": true,
+    "head_may_be_detached": true,
+    "working_tree_content_mutation_allowed": false,
+    "index_mutation_allowed": false,
+    "head_advance_allowed": false
+  },
+  "trusted_checkout": {
+    "name": "RPi5_main-weather-public-runtime-trusted",
+    "derivation": "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-trusted",
+    "must_be_absent_before_first_mutation": true,
+    "expected_sha_authority": "EXPLICIT_COMPOSITE_STRICT_LIVE_EXACT_RPI5_MAIN_SHA",
+    "expected_sha_format": "LOWERCASE_40_HEX",
+    "fresh_origin_main_must_equal_expected_sha": true,
+    "minimum_reviewed_ancestor": "95b6b95b132614cbc330d6d764d0557079a67534",
+    "required_post_state": "EXACT_SHA_DETACHED_CLEAN_CORRECT_ORIGIN",
+    "required_paths": [
+      "ops/deploy/weather-public-runtime-helper-install.json",
+      "ops/deploy/weather-public-runtime-execution.json",
+      "ops/deploy/weather-public-runtime-host-wiring.json",
+      "ops/bin/rozkalns-weather-public-runtime-stage-helper"
+    ]
+  },
+  "preflight": {
+    "must_validate_before_first_mutation": [
+      "manager checkout resolves to the fixed repository root",
+      "manager origin exactly matches the reviewed GitHub origin",
+      "trusted checkout target is absent without following symlinks",
+      "expected SHA is lowercase 40-character hex"
+    ],
+    "protected_runtime_data_read": false,
+    "credentials_content_read": false
+  },
+  "allowed_git_mutations": [
+    {
+      "order": 1,
+      "repository": "RPi5_CHECKOUT_PARENT/RPi5_main",
+      "argv": [
+        "git",
+        "fetch",
+        "origin",
+        "main"
+      ],
+      "working_tree_content_mutation": false
+    },
+    {
+      "order": 2,
+      "repository": "RPi5_CHECKOUT_PARENT/RPi5_main",
+      "argv": [
+        "git",
+        "worktree",
+        "add",
+        "--detach",
+        "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-trusted",
+        "EXPLICIT_COMPOSITE_STRICT_LIVE_EXACT_RPI5_MAIN_SHA"
+      ],
+      "working_tree_content_mutation": false
+    }
+  ],
+  "post_fetch_gate": {
+    "require_origin_main_equals_expected_sha": true,
+    "require_expected_sha_descends_from_minimum_reviewed_ancestor": true,
+    "main_drift_behavior": "STOP_NO_WORKTREE_CREATION"
+  },
+  "post_create_verification": {
+    "required": [
+      "trusted checkout resolves to the fixed target path",
+      "HEAD equals the exact authorized SHA",
+      "HEAD is detached",
+      "status porcelain including untracked files is empty",
+      "origin exactly matches the reviewed GitHub origin",
+      "every trusted_checkout.required_paths entry exists at the exact authorized SHA"
+    ]
+  },
+  "forbidden_git_operations": [
+    "reset",
+    "rebase",
+    "clean",
+    "checkout",
+    "switch",
+    "merge",
+    "pull",
+    "worktree remove",
+    "worktree prune",
+    "branch",
+    "commit",
+    "push",
+    "force"
+  ],
+  "failure": {
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "manager_repair": false,
+    "alternate_checkout_route": false,
+    "after_first_mutation_error": "STOP_PRESERVE_READ_ONLY_EVIDENCE"
+  },
+  "safety": {
+    "sudo_or_root": false,
+    "package_mutation": false,
+    "systemd_mutation": false,
+    "docker_mutation": false,
+    "network_or_firewall_mutation": false,
+    "credential_mutation": false,
+    "database_write": false,
+    "corpus_write": false,
+    "helper_installation": false,
+    "helper_activation": false,
+    "helper_execution": false,
+    "activation_file_write": false,
+    "execution_wiring_changed": false
+  },
+  "followup": {
+    "helper_install_contract": "ops/deploy/weather-public-runtime-helper-install.json",
+    "execution_contract": "ops/deploy/weather-public-runtime-execution.json",
+    "target_alias": "rozkalns-weather-public-rpi5",
+    "operation_id": "rozkalns-weather.public-runtime-release.v1",
+    "next_gate": "FIRST_PUBLIC_ONLY_WEATHER_COMPOSITE_STRICT_LIVE",
+    "merge_never_authorizes_live": true
+  }
+}
