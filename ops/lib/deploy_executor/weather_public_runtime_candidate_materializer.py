@@ -12,12 +12,12 @@ import stat
 from typing import Callable, Protocol, Sequence
 
 from .weather_public_runtime_adapter import SOURCE_REPOSITORY
-from .weather_public_runtime_execution import CANDIDATE_ROOT
+from .weather_public_runtime_execution import RELEASE_ROOT
 
 PUBLIC_REPOSITORY_URL = "https://github.com/rozkalnsandris/rozkalns_weather.git"
 FETCH_IDENTITY = "rozkalns-deploy-executor"
 FETCH_GROUP = "rozkalns-deploy-executor"
-PARTIAL_SUFFIX = ".candidate-materializer-partial"
+PARTIAL_SUFFIX = ".release-materializer-partial"
 ROOT_UID = 0
 ROOT_GID = 0
 ROOT_DIRECTORY_MODE = 0o755
@@ -49,7 +49,7 @@ class CandidateMaterializationPlan:
     source_sha: str
     public_repository_url: str
     fetch_identity: str
-    candidate_root: str
+    release_root: str
     partial_root: str
     clone_argv: tuple[str, ...]
     ancestry_argv: tuple[str, ...]
@@ -80,9 +80,9 @@ def _fixed_git_prefix() -> tuple[str, ...]:
 
 def build_candidate_materialization_plan(source_sha: str) -> CandidateMaterializationPlan:
     if type(source_sha) is not str or _SHA40_RE.fullmatch(source_sha) is None:
-        _fail("Weather candidate source SHA is invalid")
-    base = Path(CANDIDATE_ROOT)
-    candidate = base / source_sha
+        _fail("Weather release source SHA is invalid")
+    base = Path(RELEASE_ROOT)
+    release = base / source_sha
     partial = base / f".{source_sha}{PARTIAL_SUFFIX}"
     prefix = _fixed_git_prefix()
     clone = prefix + (
@@ -112,7 +112,7 @@ def build_candidate_materialization_plan(source_sha: str) -> CandidateMaterializ
         source_sha=source_sha,
         public_repository_url=PUBLIC_REPOSITORY_URL,
         fetch_identity=FETCH_IDENTITY,
-        candidate_root=str(candidate),
+        release_root=str(release),
         partial_root=str(partial),
         clone_argv=clone,
         ancestry_argv=ancestry,
@@ -123,13 +123,13 @@ def build_candidate_materialization_plan(source_sha: str) -> CandidateMaterializ
 def _require_success(runner: CommandRunner, argv: Sequence[str], where: str) -> str:
     result = runner(tuple(argv))
     if not hasattr(result, "returncode") or result.returncode != 0:
-        _fail(f"Weather candidate {where} failed closed")
+        _fail(f"Weather release {where} failed closed")
     stdout = getattr(result, "stdout", None)
     stderr = getattr(result, "stderr", None)
     if type(stdout) is not str or type(stderr) is not str:
-        _fail(f"Weather candidate {where} returned unsupported output")
+        _fail(f"Weather release {where} returned unsupported output")
     if len(stdout.encode("utf-8")) > MAX_COMMAND_OUTPUT_BYTES or len(stderr.encode("utf-8")) > MAX_COMMAND_OUTPUT_BYTES:
-        _fail(f"Weather candidate {where} output exceeded source limit")
+        _fail(f"Weather release {where} output exceeded source limit")
     return stdout
 
 
@@ -184,14 +184,14 @@ def _lock_tree(root: Path) -> None:
     try:
         st = root.lstat()
     except OSError as exc:
-        raise WeatherCandidateMaterializerError("Weather candidate partial lstat failed") from exc
+        raise WeatherCandidateMaterializerError("Weather release partial lstat failed") from exc
     if not stat.S_ISDIR(st.st_mode):
-        _fail("Weather candidate partial is not a directory")
+        _fail("Weather release partial is not a directory")
     try:
         os.chown(root, ROOT_UID, ROOT_GID)
         os.chmod(root, BUILD_DIRECTORY_MODE)
     except OSError as exc:
-        raise WeatherCandidateMaterializerError("Weather candidate partial root lock failed") from exc
+        raise WeatherCandidateMaterializerError("Weather release partial root lock failed") from exc
 
     for current, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):
         current_path = Path(current)
@@ -199,14 +199,14 @@ def _lock_tree(root: Path) -> None:
             child = current_path / name
             st = child.lstat()
             if stat.S_ISLNK(st.st_mode) or not stat.S_ISDIR(st.st_mode):
-                _fail("Weather candidate contains a symlink or non-directory tree entry")
+                _fail("Weather release contains a symlink or non-directory tree entry")
             os.chown(child, ROOT_UID, ROOT_GID)
             os.chmod(child, BUILD_DIRECTORY_MODE)
         for name in filenames:
             child = current_path / name
             st = child.lstat()
             if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode):
-                _fail("Weather candidate contains a symlink or special file")
+                _fail("Weather release contains a symlink or special file")
             executable = bool(_mode(st) & 0o111)
             os.chown(child, ROOT_UID, ROOT_GID)
             os.chmod(child, FINAL_EXECUTABLE_MODE if executable else FINAL_FILE_MODE)
@@ -216,14 +216,14 @@ def _lock_tree(root: Path) -> None:
         os.chown(current, ROOT_UID, ROOT_GID)
 
 
-def _validate_locked_candidate(candidate: Path, source_sha: str, runner: CommandRunner) -> None:
+def _validate_locked_release(release: Path, source_sha: str, runner: CommandRunner) -> None:
     head = _require_success(
         runner,
-        ("/usr/bin/git", "--no-optional-locks", "-C", str(candidate), "rev-parse", "HEAD"),
+        ("/usr/bin/git", "--no-optional-locks", "-C", str(release), "rev-parse", "HEAD"),
         "locked HEAD validation",
     ).strip()
     if head != source_sha:
-        _fail("Weather candidate locked HEAD drifted")
+        _fail("Weather release locked HEAD drifted")
 
     _require_success(
         runner,
@@ -231,7 +231,7 @@ def _validate_locked_candidate(candidate: Path, source_sha: str, runner: Command
             "/usr/bin/git",
             "--no-optional-locks",
             "-C",
-            str(candidate),
+            str(release),
             "merge-base",
             "--is-ancestor",
             source_sha,
@@ -246,7 +246,7 @@ def _validate_locked_candidate(candidate: Path, source_sha: str, runner: Command
             "/usr/bin/git",
             "--no-optional-locks",
             "-C",
-            str(candidate),
+            str(release),
             "status",
             "--porcelain=v1",
             "--untracked-files=all",
@@ -254,11 +254,11 @@ def _validate_locked_candidate(candidate: Path, source_sha: str, runner: Command
         "locked cleanliness validation",
     )
     if status_out:
-        _fail("Weather candidate locked tree is not clean")
+        _fail("Weather release locked tree is not clean")
 
     stage_out = _require_success(
         runner,
-        ("/usr/bin/git", "--no-optional-locks", "-C", str(candidate), "ls-files", "--stage"),
+        ("/usr/bin/git", "--no-optional-locks", "-C", str(release), "ls-files", "--stage"),
         "locked tracked-mode validation",
     )
     tracked = 0
@@ -267,22 +267,22 @@ def _validate_locked_candidate(candidate: Path, source_sha: str, runner: Command
             continue
         mode = raw_line.split(" ", 1)[0]
         if mode not in {"100644", "100755"}:
-            _fail("Weather candidate symlink, gitlink, or unsupported tracked mode is forbidden")
+            _fail("Weather release symlink, gitlink, or unsupported tracked mode is forbidden")
         tracked += 1
     if tracked == 0:
-        _fail("Weather candidate contains no tracked files")
+        _fail("Weather release contains no tracked files")
 
 
 def _rename_noreplace(base: Path, source_name: str, destination_name: str) -> None:
     try:
         base_fd = os.open(base, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     except OSError as exc:
-        raise WeatherCandidateMaterializerError("Weather candidate base open failed") from exc
+        raise WeatherCandidateMaterializerError("Weather release base open failed") from exc
     try:
         libc = ctypes.CDLL(None, use_errno=True)
         renameat2 = getattr(libc, "renameat2", None)
         if renameat2 is None:
-            _fail("Weather candidate atomic publish requires renameat2")
+            _fail("Weather release atomic publish requires renameat2")
         renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
         renameat2.restype = ctypes.c_int
         result = renameat2(
@@ -295,7 +295,7 @@ def _rename_noreplace(base: Path, source_name: str, destination_name: str) -> No
         if result != 0:
             err = ctypes.get_errno()
             if err == errno.EEXIST:
-                _fail("Weather candidate target appeared before atomic publish")
+                _fail("Weather release target appeared before atomic publish")
             raise OSError(err, os.strerror(err), destination_name)
         os.fsync(base_fd)
     finally:
@@ -303,16 +303,18 @@ def _rename_noreplace(base: Path, source_name: str, destination_name: str) -> No
 
 
 def materialize_candidate(source_sha: str, runner: CommandRunner) -> Path:
+    """Materialize exactly one immutable release checkout; the historical name is kept for API compatibility."""
+
     plan = build_candidate_materialization_plan(source_sha)
-    base = Path(CANDIDATE_ROOT)
+    base = Path(RELEASE_ROOT)
     parent = base.parent
-    candidate = Path(plan.candidate_root)
+    release = Path(plan.release_root)
     partial = Path(plan.partial_root)
 
-    _ensure_root_dir(parent, "Weather candidate namespace")
-    _ensure_root_dir(base, "Weather candidate root")
-    _path_absent(candidate, "Weather candidate target")
-    _path_absent(partial, "Weather candidate partial")
+    _ensure_root_dir(parent, "Weather release namespace")
+    _ensure_root_dir(base, "Weather release root")
+    _path_absent(release, "Weather release target")
+    _path_absent(partial, "Weather release partial")
 
     fetch_uid, fetch_gid = _identity_ids()
     try:
@@ -320,17 +322,17 @@ def materialize_candidate(source_sha: str, runner: CommandRunner) -> Path:
         os.chown(partial, fetch_uid, fetch_gid)
         os.chmod(partial, BUILD_DIRECTORY_MODE)
     except OSError as exc:
-        raise WeatherCandidateMaterializerError("Weather candidate partial creation failed") from exc
+        raise WeatherCandidateMaterializerError("Weather release partial creation failed") from exc
 
     _require_success(runner, plan.clone_argv, "public repository clone")
     _require_success(runner, plan.ancestry_argv, "source ancestry")
     _require_success(runner, plan.checkout_argv, "exact source checkout")
 
     _lock_tree(partial)
-    _validate_locked_candidate(partial, source_sha, runner)
-    _rename_noreplace(base, partial.name, candidate.name)
-    _validate_locked_candidate(candidate, source_sha, runner)
-    return candidate
+    _validate_locked_release(partial, source_sha, runner)
+    _rename_noreplace(base, partial.name, release.name)
+    _validate_locked_release(release, source_sha, runner)
+    return release
 
 
 def source_readiness() -> dict[str, object]:
@@ -338,15 +340,16 @@ def source_readiness() -> dict[str, object]:
         "source_repository": SOURCE_REPOSITORY,
         "public_repository_url": PUBLIC_REPOSITORY_URL,
         "fetch_identity": FETCH_IDENTITY,
-        "candidate_root": CANDIDATE_ROOT,
-        "candidate_path_source_derived_only": True,
+        "release_root": RELEASE_ROOT,
+        "release_path_source_derived_only": True,
         "network_fetch_runs_as_root": False,
         "credentialed_fetch_required": False,
         "source_sha_main_ancestry_required": True,
         "symlinks_allowed": False,
         "gitlinks_allowed": False,
         "atomic_publish": "renameat2-RENAME_NOREPLACE",
-        "preexisting_candidate_reuse": False,
+        "filesystem_release_materializations": 1,
+        "preexisting_release_reuse": False,
         "automatic_retry": False,
         "automatic_cleanup": False,
         "automatic_rollback": False,
