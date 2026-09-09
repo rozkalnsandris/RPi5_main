@@ -172,7 +172,7 @@ class WeatherExecutableCapabilityTests(unittest.TestCase):
         self.assertEqual(activation.allowed_helper_ids, tuple(item.helper_id for item in expected_helper_bindings()))
         invalid = (
             {**value, "enabled": False},
-            {**value, "source_sha": "b" * 40},
+            {**value, "source_sha": "not-a-sha"},
             {**value, "allowed_helper_ids": value["allowed_helper_ids"][:-1]},
             {**value, "command": "bash -c whoami"},
         )
@@ -238,7 +238,7 @@ class WeatherExecutableCapabilityTests(unittest.TestCase):
         stage_source = STAGE_SOURCE.read_text(encoding="utf-8")
         self.assertIn("shell=False", launch_source)
         self.assertIn("shell=False", stage_source)
-        self.assertIn(ACTIVATION_FILE, stage_source)
+        self.assertIn("ACTIVATION_FILE", stage_source)
         for forbidden in ("bash -c", "sh -c", "eval(", "exec(", "os.system(", "shell=True"):
             self.assertNotIn(forbidden, launch_source)
             self.assertNotIn(forbidden, stage_source)
