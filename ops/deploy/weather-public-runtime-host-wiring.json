@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "contract": "rozkalns-weather.public-runtime-host-wiring.v1",
+  "status": "SOURCE_ONLY_HOST_WIRING_DISABLED",
+  "source_repository": "rozkalnsandris/rozkalns_weather",
+  "target_alias": "rozkalns-weather-public-rpi5",
+  "release_operation_id": "rozkalns-weather.public-runtime-release.v1",
+  "authorization_class": "STRICT",
+  "ordinary_live_all_eligible": false,
+  "preactivation_schema": "rozkalns-weather.public-runtime-preactivation-envelope.v1",
+  "whole_preactivation_sha256_required": true,
+  "helper_interface_source_present": true,
+  "privileged_dispatch_enabled": false,
+  "host_wiring_enabled": false,
+  "helper_installation_enabled": false,
+  "helper_invocation_enabled": false,
+  "production_mutation_enabled": false,
+  "production_mutation_started": false,
+  "process_launch_surface": false,
+  "generic_shell_authority": false,
+  "runtime_live_authority": false,
+  "automatic_retry_cleanup_rollback": false,
+  "weather_next_required": false,
+  "home_coordinates_required": false,
+  "caller_supplied_command_allowed": false,
+  "caller_supplied_path_allowed": false,
+  "caller_supplied_argv_allowed": false,
+  "caller_supplied_environment_allowed": false,
+  "helpers": [
+    {
+      "stage_id": "application_release",
+      "helper_id": "rozkalns-weather.host-helper.application-release.v1",
+      "capability_id": "rozkalns-weather.public-runtime-release.v1",
+      "mutation_class": "application-release",
+      "max_operations": 1,
+      "read_only": false
+    },
+    {
+      "stage_id": "persistent_volume_ensure",
+      "helper_id": "rozkalns-weather.host-helper.volume-ensure.v1",
+      "capability_id": "rozkalns-weather.public-runtime-volume.v1",
+      "mutation_class": "docker.named-volume-ensure",
+      "max_operations": 1,
+      "read_only": false
+    },
+    {
+      "stage_id": "explicit_schema_init",
+      "helper_id": "rozkalns-weather.host-helper.schema-init.v1",
+      "capability_id": "rozkalns-weather.public-runtime-schema-init.v1",
+      "mutation_class": "sqlite.schema-init",
+      "max_operations": 1,
+      "read_only": false
+    },
+    {
+      "stage_id": "readiness_schema_privacy",
+      "helper_id": "rozkalns-weather.host-helper.readiness.v1",
+      "capability_id": "rozkalns-weather.public-runtime-readiness.v1",
+      "mutation_class": null,
+      "max_operations": 1,
+      "read_only": true
+    },
+    {
+      "stage_id": "public_smoke_read_only",
+      "helper_id": "rozkalns-weather.host-helper.public-smoke.v1",
+      "capability_id": "rozkalns-weather.public-runtime-smoke.v1",
+      "mutation_class": null,
+      "max_operations": 1,
+      "read_only": true
+    },
+    {
+      "stage_id": "bounded_dwd_truth_backfill",
+      "helper_id": "rozkalns-weather.host-helper.truth-backfill.v1",
+      "capability_id": "rozkalns-weather.public-runtime-truth-backfill.v1",
+      "mutation_class": "sqlite.corpus-truth-backfill",
+      "max_operations": 1,
+      "read_only": false
+    },
+    {
+      "stage_id": "bounded_deterministic_forecast_backfill",
+      "helper_id": "rozkalns-weather.host-helper.forecast-backfill.v1",
+      "capability_id": "rozkalns-weather.public-runtime-forecast-backfill.v1",
+      "mutation_class": "sqlite.corpus-forecast-backfill",
+      "max_operations": 3,
+      "read_only": false
+    },
+    {
+      "stage_id": "corpus_integrity_check",
+      "helper_id": "rozkalns-weather.host-helper.integrity.v1",
+      "capability_id": "rozkalns-weather.public-runtime-integrity.v1",
+      "mutation_class": null,
+      "max_operations": 3,
+      "read_only": true
+    },
+    {
+      "stage_id": "recurring_public_ingest_schedule",
+      "helper_id": "rozkalns-weather.host-helper.ingest-schedule.v1",
+      "capability_id": "rozkalns-weather.public-runtime-ingest-schedule.v1",
+      "mutation_class": "systemd.public-ingest-schedule-install-or-update",
+      "max_operations": 1,
+      "read_only": false
+    }
+  ],
+  "later_live_prerequisites": [
+    "exact trusted host and target alias",
+    "exact merged weather source SHA and exact-SHA CI success",
+    "current RPi5_main SHA",
+    "current sanitized weather runtime baseline",
+    "exact reviewed host-wiring source and helper identities",
+    "whole preactivation envelope SHA-256 binding",
+    "bounded dates, WMO 10416, exact model set and 00/06/12/18 run hours",
+    "explicit recovery decision",
+    "exact mutation classes and operation budgets",
+    "health, readiness, provider, schema, storage and corpus-integrity postconditions"
+  ],
+  "exclusions": [
+    "host deployment or restart",
+    "helper installation, enablement or invocation",
+    "global executor enablement",
+    "arbitrary command, path, argv or environment authority",
+    "credentials or private home coordinates",
+    "Google Cloud or BigQuery private access",
+    "Cloudflare or network mutation",
+    "root, sudo, package or ownership mutation",
+    "database backup, restore, deletion, cleanup or destructive rollback",
+    "automatic retry, cleanup or rollback"
+  ]
+}
