@@ -2,21 +2,52 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 import sys
 from typing import Sequence
 
-from deploy_executor.weather_public_runtime_candidate_materializer import (
-    WeatherCandidateMaterializerError,
-    materialize_candidate,
-)
-from deploy_executor.weather_public_runtime_host_wiring import expected_helper_bindings
-from deploy_executor.weather_public_runtime_stage_helper import (
-    WeatherStageHelperError,
-    _validate_request,
-    execute_stage,
-    read_activation,
-    run_command,
-)
+_ENTRYPOINT_NAME = "rozkalns-weather-public-runtime-stage-helper"
+_SUPPORT_DIR_NAME = "rozkalns-weather-public-runtime"
+_HERE = Path(__file__).resolve().parent
+_SUPPORT_ROOT = _HERE / _SUPPORT_DIR_NAME
+_PACKAGE_INIT = _SUPPORT_ROOT / "deploy_executor" / "__init__.py"
+
+
+def _install_layout_stop() -> None:
+    print("WEATHER_STAGE_HELPER=STOP error=WeatherHelperInstallLayoutError", file=sys.stderr)
+    raise SystemExit(78)
+
+
+if Path(__file__).name != _ENTRYPOINT_NAME or not _PACKAGE_INIT.is_file():
+    _install_layout_stop()
+
+# The fixed sibling support root is the only project package path added by this
+# privileged entrypoint. The launcher environment does not carry PYTHONPATH and
+# the package initializer is intentionally import-free.
+sys.path.insert(0, str(_SUPPORT_ROOT))
+try:
+    import deploy_executor
+except ImportError:
+    _install_layout_stop()
+
+if Path(deploy_executor.__file__ or "").resolve() != _PACKAGE_INIT.resolve():
+    _install_layout_stop()
+
+try:
+    from deploy_executor.weather_public_runtime_candidate_materializer import (
+        WeatherCandidateMaterializerError,
+        materialize_candidate,
+    )
+    from deploy_executor.weather_public_runtime_host_wiring import expected_helper_bindings
+    from deploy_executor.weather_public_runtime_stage_helper import (
+        WeatherStageHelperError,
+        _validate_request,
+        execute_stage,
+        read_activation,
+        run_command,
+    )
+except ImportError:
+    _install_layout_stop()
 
 APPLICATION_RELEASE_HELPER_ID = next(
     binding.helper_id
