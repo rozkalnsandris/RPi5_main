@@ -19,8 +19,11 @@ HELPER_EXECUTABLE = "/usr/local/libexec/rozkalns-weather-public-runtime-stage-he
 ACTIVATION_FILE = "/etc/rozkalns-weather/public-runtime-helper-activation.json"
 ACTIVATION_SCHEMA = "rozkalns-weather.public-runtime-helper-activation.v1"
 COMPOSE_PROJECT = "rozkalns-weather-public"
-CANDIDATE_ROOT = "/var/lib/rozkalns-weather-public-runtime/candidates"
 RELEASE_ROOT = "/opt/rozkalns-weather/releases"
+# The exact-source checkout is atomically published directly into RELEASE_ROOT.
+# Keeping CANDIDATE_ROOT equal to RELEASE_ROOT preserves the older helper interface
+# without introducing a second filesystem materialization class.
+CANDIDATE_ROOT = RELEASE_ROOT
 CALLER_AUTHORITY = ("authorization_issue_number",)
 _SHA40_RE = re.compile(r"^[0-9a-f]{40}$")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -221,6 +224,8 @@ def source_readiness() -> Mapping[str, Any]:
         "activation_file": ACTIVATION_FILE,
         "activation_schema": ACTIVATION_SCHEMA,
         "candidate_root": CANDIDATE_ROOT,
+        "release_root": RELEASE_ROOT,
+        "candidate_root_equals_release_root": True,
         "caller_authority": CALLER_AUTHORITY,
         "execution_capability_implemented": True,
         "installable_helper_source_present": True,
