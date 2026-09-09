@@ -19,7 +19,7 @@ HELPER_EXECUTABLE = "/usr/local/libexec/rozkalns-weather-public-runtime-stage-he
 ACTIVATION_FILE = "/etc/rozkalns-weather/public-runtime-helper-activation.json"
 ACTIVATION_SCHEMA = "rozkalns-weather.public-runtime-helper-activation.v1"
 COMPOSE_PROJECT = "rozkalns-weather-public"
-CANDIDATE_ROOT = "/var/lib/rozkalns-deploy-executor/weather-candidates"
+CANDIDATE_ROOT = "/var/lib/rozkalns-weather-public-runtime/candidates"
 RELEASE_ROOT = "/opt/rozkalns-weather/releases"
 CALLER_AUTHORITY = ("authorization_issue_number",)
 _SHA40_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -220,9 +220,11 @@ def source_readiness() -> Mapping[str, Any]:
         "helper_executable": HELPER_EXECUTABLE,
         "activation_file": ACTIVATION_FILE,
         "activation_schema": ACTIVATION_SCHEMA,
+        "candidate_root": CANDIDATE_ROOT,
         "caller_authority": CALLER_AUTHORITY,
         "execution_capability_implemented": True,
         "installable_helper_source_present": True,
+        "candidate_materialization_source_present": True,
         "privileged_dispatch_enabled": False,
         "host_wiring_enabled": False,
         "helper_installation_enabled": False,
