@@ -208,6 +208,13 @@ class WeatherPublicHostWiringTests(unittest.TestCase):
         invalid_cases = (
             (replace(preactivation_envelope(), source_sha="A" * 40), "source SHA"),
             (replace(preactivation_envelope(), target_alias="attacker-target"), "target alias"),
+            (
+                replace(
+                    preactivation_envelope(),
+                    release_baseline_resolver_id="attacker.baseline.v1",
+                ),
+                "baseline resolver",
+            ),
             (replace(preactivation_envelope(), home_coordinates_required=True), "private inputs"),
             (replace(preactivation_envelope(), weather_next_required=True), "private inputs"),
             (replace(preactivation_envelope(), privileged_dispatch_enabled=True), "execution"),
