@@ -185,9 +185,19 @@ The entrypoint derives the support root only from its own fixed filename and sib
 
 Issue #443 remains **source only**. The manifest does not self-install, and all execution/installation/activation state remains false: global executor execution, privileged dispatch, host wiring, helper installation/invocation, process-launch wiring and production mutation are still disabled. Creating `/usr/local` files, writing the root-owned activation file, updating a trusted checkout, changing ownership/modes on the host, invoking the helper or starting the Weather rollout all require a later separately authorized exact `STRICT` LIVE envelope.
 
+## Weather trusted RPi5 checkout bootstrap — Issue #446
+
+Issue #446 freezes the source provenance boundary that must exist before the #443 install manifest can be used on a real host. The contract is `ops/deploy/rpi5-main-weather-public-runtime-trusted-checkout-bootstrap.json` and the only trusted checkout target is `RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-trusted`.
+
+The ordinary `RPi5_main` manager checkout is explicitly allowed to be stale, dirty or detached only as a Git object/ref manager. The bootstrap grants no authority to modify its working-tree bytes, index or HEAD. A future separately authorized Composite STRICT LIVE transaction may perform exactly two Git mutations in order: `git fetch origin main`, then one `git worktree add --detach` for the fixed Weather target and exact authorized `RPi5_main` SHA. Reset, rebase, clean, checkout/switch, merge/pull, worktree removal/pruning, branch/commit/push and force operations are forbidden.
+
+After fetch and before worktree creation, `origin/main` must equal the exact authorized SHA and that SHA must descend from the reviewed #443 merge baseline `95b6b95b132614cbc330d6d764d0557079a67534`. The target must be absent before the first mutation. The created checkout must be exact, detached, clean, bound to the canonical GitHub origin and contain the reviewed Weather helper install/execution/host-wiring contracts plus the fixed stage-helper entrypoint.
+
+Both `weather-public-runtime-helper-install.json` and `weather-public-runtime-execution.json` bind this exact checkout contract and target. The ordinary manager checkout is not an accepted helper installation source. Source merge does not create the checkout and does not authorize helper installation, activation, invocation, Docker/systemd/SQLite/corpus mutation or any other LIVE step.
+
 ## Explicitly separate gates
 
-The static operation, bootstrap source composition, pre-activation bridge, host-wiring bridge, executable helper source and isolated install manifest do not themselves authorize:
+The static operation, bootstrap source composition, pre-activation bridge, host-wiring bridge, executable helper source, isolated install manifest and trusted-checkout contract do not themselves authorize:
 
 - RPi5 deploy/redeploy/restart or executor global enablement;
 - privileged dispatch activation, live host wiring, helper installation or helper invocation;
