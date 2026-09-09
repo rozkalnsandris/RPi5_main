@@ -1,5 +1,5 @@
 from __future__ import annotations
-import hashlib,json,re,sys,tempfile
+import ast,hashlib,json,re,sys,tempfile
 from pathlib import Path
 import unittest
 
@@ -27,6 +27,11 @@ class T(unittest.TestCase):
   p=PREP.read_text();b=BOOT.read_text();e=EMIT.read_text();rb=RBOOT.read_text();re_=REMIT.read_text();self.assertIn('materializer bytes differ from committed Git blob',b);self.assertIn('remediator bytes differ from committed Git blob',rb);self.assertIn('bundle materializer bytes differ from committed Git blob',re_);self.assertIn('Path(pwd.getpwnam(OWNER).pw_dir)',p)
   for s in (b,e,rb,re_):
    for x in ['--source','--path','--command','--script','--env','sudo']:self.assertNotIn(x,s)
+ def test_remediation_payload_emitter_writes_json_whitespace_newline(self):
+  tree=ast.parse(REMIT.read_text());writes=[]
+  for node in ast.walk(tree):
+   if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and node.func.attr=='write' and isinstance(node.func.value,ast.Attribute) and node.func.value.attr=='stdout': writes.append(node)
+  self.assertEqual(len(writes),1);arg=writes[0].args[0];self.assertIsInstance(arg,ast.BinOp);self.assertIsInstance(arg.right,ast.Constant);self.assertEqual(arg.right.value,'\n')
  def test_gate_and_failure(self):
   c=json.loads(CON.read_text());seq=c['gate_sequence'];want=['unprivileged-execution-ingress-preparation','separate-execution-bundle-materialization-live-root-gate','read-only-execution-bundle-proof','fresh-handoff-materialization-live-root-gate'];self.assertEqual([seq.index(x) for x in want],sorted(seq.index(x) for x in want));p=c['failure_policy'];self.assertEqual((p['automatic_retry'],p['automatic_cleanup'],p['automatic_rollback'],p['deletion_budget']),(False,False,False,0))
  def test_wrapper_before_import_and_old_auth_invalid(self):
