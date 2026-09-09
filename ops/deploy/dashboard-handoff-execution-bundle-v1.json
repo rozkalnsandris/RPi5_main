@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "capability": "dashboard-rpi5.handoff-execution-bundle.v1",
   "execution_enabled": false,
   "source_repository": "rozkalnsandris/RPi5_main",
@@ -39,7 +39,27 @@
       "git_blob_sha": "50c79610c4d26422c68b2aee3622874680519996",
       "privileged_execution": false
     },
-    "caller_selectable_source": false
+    "caller_selectable_source": false,
+    "remediation_bootstrap_emitter": {
+      "repo_path": "scripts/dashboard-rpi5-handoff-execution-remediation-bootstrap-emitter.py",
+      "git_blob_sha": "165d84a8b3ce8f0075b41a8cf3d28b7e33f80ac9",
+      "privileged_execution": false
+    },
+    "remediation_payload_emitter": {
+      "repo_path": "scripts/dashboard-rpi5-handoff-execution-remediation-payload-emitter.py",
+      "git_blob_sha": "35b4c7bf8f639c4850e8947dde496d24b499b098",
+      "privileged_execution": false
+    },
+    "bundle_remediator": {
+      "repo_path": "scripts/dashboard-rpi5-handoff-execution-bundle-remediator.py",
+      "git_blob_sha": "8f98062c9f393a2a4e87259dea2987a8b5ffae90",
+      "privileged_execution": true
+    },
+    "remediation_proof": {
+      "repo_path": "scripts/dashboard-rpi5-handoff-execution-bytecode-remediation-proof.py",
+      "git_blob_sha": "118ca2a8c5bb66a5ba59f93867b834b32b20d62d",
+      "privileged_execution": false
+    }
   },
   "unprivileged_execution_ingress": {
     "owner_home_source": "passwd-db",
@@ -129,13 +149,70 @@
     "handoff materialization by execution-bundle materialization",
     "candidate staging or /opt/dashboard_RPi5 mutation",
     "PLAN/APPLY/deploy or package/systemd/Docker/network/database mutation",
-    "automatic retry/cleanup/rollback/deletion"
+    "automatic retry/cleanup/rollback/deletion",
+    "using bytecode incident remediation for any prestate other than its exact hard-coded observed bundle/bootstrap identities"
   ],
   "source_state": {
     "registry_execution_enabled_must_remain": false,
     "live_authority": false,
     "merge_authorizes_execution_bundle_materialization": false,
     "merge_authorizes_handoff_materialization": false,
-    "previous_repaired_handoff_live_authority_reusable": false
+    "previous_repaired_handoff_live_authority_reusable": false,
+    "bytecode_incident_remediation_live_authority": false,
+    "live_all_authorizes_strict_bytecode_remediation": false
+  },
+  "bytecode_incident_remediation": {
+    "status": "SOURCE_ONLY_EXECUTION_DISABLED",
+    "reason": "pre-437 trusted core import created exact observed bytecode cache inside immutable bundle",
+    "documentation": "docs/OWNER_AUTHORIZED_PULL_DEPLOY_EXECUTOR_P10_DASHBOARD_HANDOFF_EXECUTION_BUNDLE_BYTECODE_REMEDIATION.md",
+    "ordinary_live_all_eligible": false,
+    "separate_live_root_gate_required": true,
+    "fixed_root_remediator": "/var/lib/rozkalns-dashboard-handoff-exec/.bundle-remediator-v1.py",
+    "remediator_transport": "unprivileged-verified-remediator-bytes-to-fixed-root-stdin-destination",
+    "payload_transport": "unprivileged-verified-current-materializer-wrapper-core-manifest-json-to-root-stdin",
+    "exact_prestate": {
+      "bootstrap_git_blob_sha": "78dcf901b6c48db11024909946e47cd62b558c10",
+      "bootstrap_sha256": "94610eaf208c81b165a48636458150811f12e3579bc8b28994e575d08069dd4d",
+      "source_main_sha": "112f272ebcbce1f4a20bae32d4bf37d2927ee603",
+      "source_tree_sha": "92036c09964f79bdc36ec2a0a1175d1ef0bddf51",
+      "entrypoint_git_blob_sha": "da6b3756ec49436de3855a8c13f273954a919d22",
+      "core_git_blob_sha": "409ea15dcb72e7361278dfd4065228c99fa840d2",
+      "manifest_sha256": "0850a5e3efdea8a5ec5eec30e8b17bc9041eef0eb49565e0143832f26e7f0e1c",
+      "bytecode_relative_path": "__pycache__/dashboard-rpi5-preverified-handoff-materializer-core.cpython-311.pyc",
+      "bytecode_sha256": "5b1e05afbd99bf03ce1bc277b4242dd79f8fc26e61bc8f5e7d36cebbe185bc95",
+      "bytecode_directory_mode": "0755",
+      "bytecode_file_mode": "0644"
+    },
+    "fixed_quarantine": {
+      "bootstrap": "/var/lib/rozkalns-dashboard-handoff-exec/.bundle-materializer-v1.py.stale-78dcf901-112f272e",
+      "bundle": "/var/lib/rozkalns-dashboard-handoff-exec/.v1.stale-112f272e-92036c09-bytecode-5b1e05af",
+      "no_replace": true,
+      "deletions": 0
+    },
+    "fresh_publication": {
+      "bootstrap_partial": "/var/lib/rozkalns-dashboard-handoff-exec/.bundle-materializer-v1.py.remediation-partial",
+      "bundle_partial": "/var/lib/rozkalns-dashboard-handoff-exec/.v1.execution-bundle-remediation-partial",
+      "bootstrap_final": "/var/lib/rozkalns-dashboard-handoff-exec/.bundle-materializer-v1.py",
+      "bundle_final": "/var/lib/rozkalns-dashboard-handoff-exec/v1",
+      "publish": "renameat2-RENAME_NOREPLACE",
+      "fresh_merged_main_tree_manifest_required": true
+    },
+    "mutation_budget": {
+      "bootstrap_partial_files": 1,
+      "bundle_partial_directories": 1,
+      "bundle_partial_files": 3,
+      "quarantine_renames": 2,
+      "publish_renames": 2,
+      "deletions": 0,
+      "handoff_materializations": 0,
+      "candidate_staging": 0,
+      "plan_apply": 0,
+      "automatic_retry": 0,
+      "automatic_cleanup": 0,
+      "automatic_rollback": 0
+    },
+    "gate_position": "replaces the normal absent-only execution-bundle materialization gate only for this exact prestate",
+    "postcondition": "independent read-only remediation proof must PASS before any handoff/candidate gate",
+    "live_authority": false
   }
 }
