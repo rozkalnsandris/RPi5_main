@@ -47,7 +47,7 @@
     },
     "remediation_payload_emitter": {
       "repo_path": "scripts/dashboard-rpi5-handoff-execution-remediation-payload-emitter.py",
-      "git_blob_sha": "35b4c7bf8f639c4850e8947dde496d24b499b098",
+      "git_blob_sha": "9f1eb9c002f6991ebde774d07ebe271dbffdee5c",
       "privileged_execution": false
     },
     "bundle_remediator": {

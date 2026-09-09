@@ -65,7 +65,7 @@ def main():
         x=m.get(k)
         if type(x) is not dict or x.get('repo_path')!=path or x.get('git_blob_sha')!=b or blob(data)!=b or x.get('sha256')!=hashlib.sha256(data).hexdigest(): raise Stop(k+' binding mismatch')
     p={'schema':'dashboard-rpi5.handoff-execution-bytecode-remediation-payload.v1','bundle_materializer_b64':base64.b64encode(materializer).decode(),'entrypoint_b64':base64.b64encode(e).decode(),'core_b64':base64.b64encode(c).decode(),'manifest_b64':base64.b64encode(r).decode()}
-    sys.stdout.write(json.dumps(p,sort_keys=True,separators=(',',':'))+'\\n')
+    sys.stdout.write(json.dumps(p,sort_keys=True,separators=(',',':'))+'\n')
 if __name__=='__main__':
     try: main()
     except Exception as e: print(f'P10_DASHBOARD_HANDOFF_EXEC_REMEDIATION_PAYLOAD_EMITTER=STOP reason={type(e).__name__}:{e}',file=sys.stderr); raise SystemExit(1)
