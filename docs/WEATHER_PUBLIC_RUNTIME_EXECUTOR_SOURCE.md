@@ -115,12 +115,42 @@ Unknown/reordered/duplicate stage identities, authorization edits/expiry, queue 
 
 Merging Issues #410 and #432 still does not make weather deployable. A future LIVE gate must freshly bind the exact merged weather SHA, exact target alias, successful exact-SHA CI, reviewed artifact identities, sanitized current baseline, bounded historical dates/model scope, recovery decision and exact mutation budgets. Source state keeps privileged dispatch, host wiring, production mutation enablement and production mutation start disabled.
 
+## Trusted host-wiring source bridge — Issue #435
+
+Issue #435 adds `weather_public_runtime_host_wiring.py` plus the machine contract `ops/deploy/weather-public-runtime-host-wiring.json`. The host-wiring interface is implemented in source but remains disabled on the host. This source bridge consumes the already validated `WeatherPreactivationEnvelope`; it does not create a second LIVE-AUTH, READY-queue, replay or owner-identity protocol.
+
+The bridge binds every field of the pre-activation envelope into a canonical SHA-256. A later source revalidation compares the bound plan with that whole-envelope digest, so edits to authorization/queue hashes, source SHA, target, baseline token, dates, recovery decision or stage list cannot be silently accepted after binding.
+
+The nine reviewed bootstrap stages are mapped to nine fixed logical helper identities. They are **identities only**, not executable paths or shell fragments. The mapping preserves the existing capability ID, mutation class, read-only flag and maximum operation count for each stage. Missing, reordered or altered stages, helper-budget drift, private-input expansion and execution-state expansion fail closed.
+
+After Issue #435 source merge, all activation state is still false:
+
+- global `ops/deploy/executor-operations.json` remains `execution_enabled=false`;
+- Weather remains authorization class `STRICT` and `ordinary_live_all_eligible=false`;
+- `privileged_dispatch_enabled=false`;
+- `host_wiring_enabled=false`;
+- `helper_installation_enabled=false`;
+- `helper_invocation_enabled=false`;
+- `production_mutation_enabled=false`;
+- `production_mutation_started=false`;
+- `process_launch_surface=false`;
+- `runtime_live_authority=false`;
+- automatic retry/cleanup/rollback remains disabled.
+
+There is still no installer invocation, subprocess/shell transport, Docker/systemd call, SQLite operation, network call, root/sudo path or generic command/path/argv/environment authority in this source bridge. `HOME_LAT`, `HOME_LON`, WeatherNext/private BigQuery inputs, credentials, protected host paths, raw runtime configuration and private logs remain outside the public-only contract.
+
+### Future activation after Issue #435
+
+Issue #435 does not itself activate Weather. Before any first public-only runtime mutation, a **separate exact LIVE authorization** must freshly bind the trusted host and target alias, exact merged Weather SHA and exact-SHA CI, current `RPi5_main` SHA, sanitized runtime baseline, reviewed host-wiring/helper identities, whole preactivation SHA-256, bounded date/model/run-hour scope, WMO `10416`, recovery decision, exact mutation budgets and health/readiness/provider/schema/storage/corpus-integrity postconditions.
+
+The first selected runtime mutation consumes that later LIVE authorization. Any error, ambiguity or source/host drift after mutation start requires STOP with no undeclared retry, rollback, cleanup or alternate mutation route. Application rollback still never implies SQLite restore/delete/cleanup.
+
 ## Explicitly separate gates
 
-This static operation, bootstrap source composition and pre-activation bridge do not include or authorize:
+This static operation, bootstrap source composition, pre-activation bridge and disabled host-wiring source bridge do not include or authorize:
 
 - RPi5 deploy/redeploy/restart or executor global enablement;
-- privileged dispatch activation, host wiring or helper installation;
+- privileged dispatch activation, live host wiring or helper installation/invocation;
 - production SQLite schema initialization;
 - historical forecast/truth corpus writes;
 - corpus backup, restore, deletion or destructive rollback;
