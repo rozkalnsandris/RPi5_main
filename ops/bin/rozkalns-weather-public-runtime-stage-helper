@@ -22,8 +22,8 @@ if Path(__file__).name != _ENTRYPOINT_NAME or not _PACKAGE_INIT.is_file():
     _install_layout_stop()
 
 # The fixed sibling support root is the only project package path added by this
-# privileged entrypoint. The launcher environment does not carry PYTHONPATH and
-# the package initializer is intentionally import-free.
+# privileged entrypoint. The launcher environment carries no caller-provided
+# Python module search path, and the package initializer is import-free.
 sys.path.insert(0, str(_SUPPORT_ROOT))
 try:
     import deploy_executor
