@@ -1163,3 +1163,40 @@ The next sequence is fail-closed and split by authority class:
 
 Merge of this source gate is not LIVE authority. This reconciliation does not install or enable controllers, mutate systemd/timers, change credentials/App permissions, invoke adapters, deploy Dashboard/Weather, change databases/network/Cloudflare, retire GITHUB-ONLY compatibility, or infer runtime state from repository source.
 
+## Current supersession — Auto-Live A4 production-baseline fail-closed reconciliation (2026-09-09)
+
+This section supersedes the A4 candidate-selection next-action wording immediately above. The earlier source-level Dashboard candidate remains historical selection evidence only. The trusted production baseline has now been observed through a minimum-sufficient read-only preflight and the full range fails the `AUTO_DEPLOY_SAFE` gate.
+
+Fresh source and read-only evidence for this reconciliation:
+
+- `RPi5_main/main=9b92b08aa5a9c7f2691ff092ca7099c9dd918900` at source-work activation;
+- Dashboard current GitHub `main=20e47ff7ba808f183db56e347d4fde3e1d6a129f`;
+- reviewed/frozen Dashboard source candidate `343366427441811a22739b05b04d069c10905805`;
+- trusted production baseline `066b9a24008dd57439f9e66eae198416c4dfc590`;
+- the baseline-to-frozen range includes `apps/web/*`, documentation/test changes and `package-lock.json`;
+- the existing Dashboard manifest classifies `package-lock.json` as `MANUAL_ROLLOUT_REQUIRED`, which outranks `AUTO_DEPLOY_SAFE`;
+- therefore the complete baseline-to-frozen range is `MANUAL_ROLLOUT_REQUIRED`;
+- the baseline-to-current range adds only `AGENTS.md` / `NO_DEPLOY` and therefore remains `MANUAL_ROLLOUT_REQUIRED`;
+- the source classifier is not relaxed by this reconciliation.
+
+Binding classification:
+
+`AUTO_LIVE_TRACK_Y_CURRENT=A4_OWNER_REQUIRED_RECONCILIATION`
+`A4_SOURCE_CANDIDATE=dashboard-rpi5.production-release.v1`
+`A4_TRUSTED_PRODUCTION_BASELINE=066b9a24008dd57439f9e66eae198416c4dfc590`
+`A4_FROZEN_CANDIDATE=343366427441811a22739b05b04d069c10905805`
+`A4_CURRENT_DASHBOARD_MAIN=20e47ff7ba808f183db56e347d4fde3e1d6a129f`
+`A4_FULL_RANGE_CLASSIFICATION=MANUAL_ROLLOUT_REQUIRED`
+`A4_CANARY_SELECTED=false`
+`A4_FIRST_ACTIVATION_AUTHORIZED=false`
+`A4_CANARY_AUTHORIZED=false`
+`AUTO_LIVE_EXECUTION_ENABLED=false`
+`AUTO_LIVE_MANIFEST_ACTIVATION_ENABLED=false`
+`AUTO_LIVE_MUTATION_DISPATCH_ENABLED=false`
+`PRODUCTION_MUTATION_STARTED=false`
+
+A4 is therefore fail-closed to owner review with **no Auto-Live canary selected**. Neither the frozen candidate nor current Dashboard main is promoted into a live target.
+
+A future A4 Auto-Live canary requires a fresh full production-baseline-to-target range that is genuinely `AUTO_DEPLOY_SAFE`, or a separately reviewed project-specific source-policy change that explicitly narrows the exact currently manual class. Any future real canary would additionally require fresh exact-target CI/provenance and a separate bounded owner LIVE authorization. LIVE authorization alone does not override this source classification.
+
+This reconciliation is source/docs/tests only. It does not activate a manifest or controller, invoke an adapter, stage a candidate, mutate host/runtime/systemd/Docker/credentials/permissions/database/network/Cloudflare state, deploy production, retire compatibility behavior, or start production mutation.
