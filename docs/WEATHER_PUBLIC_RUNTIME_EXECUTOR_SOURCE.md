@@ -145,12 +145,38 @@ Issue #435 does not itself activate Weather. Before any first public-only runtim
 
 The first selected runtime mutation consumes that later LIVE authorization. Any error, ambiguity or source/host drift after mutation start requires STOP with no undeclared retry, rollback, cleanup or alternate mutation route. Application rollback still never implies SQLite restore/delete/cleanup.
 
+## Executable/installable Weather capability source — Issue #438
+
+Issue #438 closes the remaining **source-side execution gap** without activating the host. It adds:
+
+- `weather_public_runtime_execution.py`, which recompiles a validated `WeatherHostWiringPlan` into an immutable `WeatherExecutablePlan` and derives every helper argv only from canonical source/authorization/baseline/date/model/run-hour/recovery evidence;
+- `weather_public_runtime_helper_launch.py`, a one-shot fixed process launcher that revalidates the executable plan immediately before launch, uses `shell=False`, a fixed environment, bounded output/timeout, one invocation per stage and no retry/cleanup/rollback;
+- `weather_public_runtime_stage_helper.py` plus `ops/bin/rozkalns-weather-public-runtime-stage-helper`, the installable capability-specific helper source for the nine reviewed Weather stages;
+- `ops/deploy/weather-public-runtime-execution.json`, the machine-readable installation/activation boundary.
+
+The installed helper path is fixed at `/usr/local/libexec/rozkalns-weather-public-runtime-stage-helper`. The helper cannot run merely because source is merged: it requires the fixed root-owned `/etc/rozkalns-weather/public-runtime-helper-activation.json` contract with mode `0600`, exact target/operation, exact Weather source SHA, whole preactivation SHA-256, bounded dates, recovery decision and the complete ordered helper-ID allowlist. That activation file is a **future LIVE mutation** and is not created by Issue #438.
+
+The source implementation resolves helper IDs to fixed Weather stage implementations for application release, logical volume ensure, explicit schema init, readiness, public smoke, bounded DWD WMO `10416` truth backfill, bounded deterministic ICON-D2/IFS/AIFS backfill, corpus integrity and the 30-minute public-ingest schedule. Generic shell text, caller-selected executable paths, arbitrary argv/environment, WeatherNext/private BigQuery inputs and home coordinates are not accepted authority.
+
+After Issue #438 source merge the default state still remains inactive:
+
+- global `executor-operations.json` remains `execution_enabled=false`;
+- `helper_process_launch_wired=false`;
+- `privileged_dispatch_enabled=false`;
+- `host_wiring_enabled=false`;
+- `helper_installation_enabled=false`;
+- `helper_invocation_enabled=false`;
+- `production_mutation_enabled=false`;
+- `production_mutation_started=false`.
+
+Therefore Issue #438 makes the narrow implementation **available in reviewed source**, but it does not install the helper, create the root-owned activation file, enable dispatch, invoke Docker/systemd, initialize/write SQLite, backfill corpus data, start a service, or otherwise mutate RPi5. The first actual installation/activation/rollout remains one separately authorized exact `STRICT` LIVE envelope and must revalidate the current merged RPi5_main SHA, exact Weather SHA/CI, current sanitized host baseline, helper source identity, whole preactivation hash, mutation budgets and postconditions immediately before mutation.
+
 ## Explicitly separate gates
 
-This static operation, bootstrap source composition, pre-activation bridge and disabled host-wiring source bridge do not include or authorize:
+The static operation, bootstrap source composition, pre-activation bridge, host-wiring bridge and executable helper source do not themselves authorize:
 
 - RPi5 deploy/redeploy/restart or executor global enablement;
-- privileged dispatch activation, live host wiring or helper installation/invocation;
+- privileged dispatch activation, live host wiring, helper installation or helper invocation;
 - production SQLite schema initialization;
 - historical forecast/truth corpus writes;
 - corpus backup, restore, deletion or destructive rollback;
@@ -160,6 +186,6 @@ This static operation, bootstrap source composition, pre-activation bridge and d
 - package installation, generic `sudo`/root authority or arbitrary shell/path/argv/environment authority;
 - repository settings, rulesets, permissions or secrets changes.
 
-Application rollback, if a later reviewed LIVE capability is introduced, must never imply SQLite rollback, deletion or restore. The `weather_data` corpus volume is retained across application replacement by contract.
+Application rollback, if a later reviewed LIVE capability is activated, must never imply SQLite rollback, deletion or restore. The `weather_data` corpus volume is retained across application replacement by contract.
 
 DWD remains the authoritative severe-weather warning source. WeatherNext remains research output and is optional/access-pending in this public-only runtime class.
