@@ -1116,3 +1116,50 @@ The corrected origin-path replacement is now proven end-to-end, satisfying that 
 - Dashboard source prerequisite is rebound to application candidate `343366427441811a22739b05b04d069c10905805` with exact tree/digest/count/bytes provenance; no host staging, PLAN or APPLY is implied.
 - Control Phase 5 now has a source-only producer sanitization/provenance contract bound to consumer blob `5546c0fb37072c5903d6e7c6aa02a9eea7baf43d`; actual protected-host observation/transport remains a later gate.
 - Weather/Hermes and legitimate program-order/trust/credential gates are unchanged; source capacity never manufactures READY or transfers authorization across issues.
+
+## Current supersession — Auto-Live A4 candidate-selection source reconciliation (2026-09-09)
+
+This section supersedes the earlier Track Y wording that still names A3 as the current source gate. A0 through A3 are source-complete; A4 has not been activated on the host and no first real Auto-Live canary is authorized by this source reconciliation.
+
+Fresh GitHub/source evidence at this reconciliation:
+
+- `RPi5_main/main=9621c601f9bf94c4a29fad76afbdec250557d293` at branch creation/recovery;
+- A2 manifests remain `INACTIVE_SOURCE_ONLY` and automatic mutation remains disabled;
+- A3 controller remains source-only with `execution_enabled=false` and mutation dispatch disabled;
+- Dashboard manifest `dashboard-rpi5.production-release.v1` is the deterministic A4 source-level candidate because it alone exposes `AUTO_DEPLOY_SAFE`, limited to `apps/web/`;
+- Weather has no automatic-eligible class and its static operation remains STRICT, so Weather is not the A4 automatic canary candidate;
+- current Dashboard `main=20e47ff7ba808f183db56e347d4fde3e1d6a129f` is a direct child of frozen reviewed candidate `343366427441811a22739b05b04d069c10905805`; the observed delta is only `AGENTS.md`, which the Dashboard manifest classifies `NO_DEPLOY`;
+- this Dashboard relation is point-in-time GitHub source evidence only. Neither SHA is promoted into a production target or reusable LIVE authorization by this document.
+
+Canonical A4 source contracts:
+
+- `docs/AUTO_LIVE_V1_A4_CANARY_SELECTION.md`;
+- `ops/deploy/auto-live-a4-canary-selection.json`;
+- `tests/test-auto-live-a4-canary-selection.py`.
+
+Binding classification:
+
+`AUTO_LIVE_TRACK_Y_CURRENT=A4_SOURCE_RECONCILIATION`
+`A0_SOURCE_COMPLETE=true`
+`A1_SHARED_POLICY_COMPLETE=true`
+`A2_MANIFESTS_SOURCE_COMPLETE=true`
+`A3_READ_ONLY_CONTROLLER_SOURCE_COMPLETE=true`
+`A4_SOURCE_CANDIDATE=dashboard-rpi5.production-release.v1`
+`A4_FIRST_ACTIVATION_AUTHORIZED=false`
+`A4_CANARY_AUTHORIZED=false`
+`AUTO_LIVE_EXECUTION_ENABLED=false`
+`AUTO_LIVE_MANIFEST_ACTIVATION_ENABLED=false`
+`AUTO_LIVE_MUTATION_DISPATCH_ENABLED=false`
+`PRODUCTION_MUTATION_STARTED=false`
+
+The next sequence is fail-closed and split by authority class:
+
+1. finish this focused source/docs/tests reconciliation through Draft PR, exact-head CI/review and Ready;
+2. STOP for a separate explicit owner MERGE decision;
+3. after merge, freshly bind exact `RPi5_main/main`, exact-main CI and current Dashboard GitHub evidence;
+4. before any A4 activation decision, obtain a fresh trusted-host read-only production baseline and revalidate the full baseline-to-target range, exact target CI, static operation/adapter/helper identities and current host provenance;
+5. only if those read-only gates pass may a separate bounded owner LIVE authorization activate exactly the reviewed Dashboard Auto-Live path and perform one real canary;
+6. any first mutation consumes that future LIVE authorization; error, ambiguity or drift after mutation start requires STOP with no undeclared retry, rollback, cleanup or alternate mutation path.
+
+Merge of this source gate is not LIVE authority. This reconciliation does not install or enable controllers, mutate systemd/timers, change credentials/App permissions, invoke adapters, deploy Dashboard/Weather, change databases/network/Cloudflare, retire GITHUB-ONLY compatibility, or infer runtime state from repository source.
+
