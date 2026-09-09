@@ -13,6 +13,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "ops/deploy/weather-public-runtime-helper-install.json"
 ENTRYPOINT_SOURCE = ROOT / "ops/bin/rozkalns-weather-public-runtime-stage-helper"
+EXECUTION_TEST = ROOT / "tests/test-deploy-executor-weather-public-execution.py"
 DEDICATED_ROOT = "/usr/local/libexec/rozkalns-weather-public-runtime"
 EXECUTABLE = "/usr/local/libexec/rozkalns-weather-public-runtime-stage-helper"
 PACKAGE_ROOT = f"{DEDICATED_ROOT}/deploy_executor"
@@ -159,6 +160,25 @@ class WeatherHelperInstallLayoutTests(unittest.TestCase):
         self.assertIn("Path(deploy_executor.__file__", source)
         for forbidden in ("PYTHONPATH", "site-packages", "ops/lib", "os.environ", "sys.path.append"):
             self.assertNotIn(forbidden, source)
+
+    def test_existing_weather_execution_invariants_remain_green(self) -> None:
+        result = subprocess.run(
+            [sys.executable, str(EXECUTION_TEST)],
+            cwd=ROOT,
+            env={
+                "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+                "LANG": "C.UTF-8",
+                "LC_ALL": "C.UTF-8",
+                "PYTHONNOUSERSITE": "1",
+            },
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":
