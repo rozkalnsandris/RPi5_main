@@ -7,6 +7,10 @@
   "operation_id": "rozkalns-weather.public-runtime-release.v1",
   "authorization_class": "STRICT",
   "ordinary_live_all_eligible": false,
+  "trusted_checkout_bootstrap_contract": "ops/deploy/rpi5-main-weather-public-runtime-trusted-checkout-bootstrap.json",
+  "trusted_checkout_target": "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-trusted",
+  "trusted_checkout_required_before_live_installation": true,
+  "ordinary_manager_checkout_install_source_allowed": false,
   "install_root": "/usr/local/libexec/rozkalns-weather-public-runtime",
   "executable_path": "/usr/local/libexec/rozkalns-weather-public-runtime-stage-helper",
   "package_root": "/usr/local/libexec/rozkalns-weather-public-runtime/deploy_executor",
@@ -117,6 +121,8 @@
   "later_live_requirements": [
     "exact merged RPi5_main SHA and exact-main CI",
     "exact trusted host and target alias",
+    "fixed Weather trusted checkout created from the reviewed checkout bootstrap contract",
+    "trusted checkout exact HEAD equals the authorized RPi5_main SHA and is detached and clean",
     "fresh sanitized Weather runtime baseline",
     "exact artifact list and destination identities from this manifest",
     "root ownership and exact file modes verified after installation",
@@ -126,6 +132,7 @@
   ],
   "explicit_exclusions": [
     "installation or activation by this source contract",
+    "ordinary manager checkout as helper installation source",
     "caller-selected source or destination path",
     "caller-selected module, argv, environment or PYTHONPATH",
     "wildcard package copy",
