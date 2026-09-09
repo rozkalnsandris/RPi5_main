@@ -11,7 +11,6 @@ sys.path.insert(0, str(ROOT / "ops" / "lib"))
 
 from deploy_executor.weather_public_runtime_adapter import BASELINE_RESOLVER_ID, OPERATION_ID, SOURCE_REPOSITORY, TARGET_ALIAS
 from deploy_executor.weather_public_runtime_candidate_materializer import (
-    FETCH_IDENTITY,
     PUBLIC_REPOSITORY_URL,
     WeatherCandidateMaterializerError,
     build_candidate_materialization_plan,
@@ -205,23 +204,23 @@ class WeatherExecutableCapabilityTests(unittest.TestCase):
         with self.assertRaises(WeatherStageHelperError):
             _validate_request(("attacker.helper",) + stage.arguments[1:], activation)
 
-    def test_candidate_materializer_is_single_release_materialization_and_nonroot(self):
+    def test_release_materializer_is_single_budget_fixed_root_and_credential_free(self):
         plan = build_candidate_materialization_plan(SOURCE_SHA)
         self.assertEqual(plan.source_repository, SOURCE_REPOSITORY)
         self.assertEqual(plan.public_repository_url, PUBLIC_REPOSITORY_URL)
-        self.assertEqual(plan.fetch_identity, FETCH_IDENTITY)
         self.assertEqual(plan.release_root, f"{RELEASE_ROOT}/{SOURCE_SHA}")
         self.assertEqual(plan.partial_root, f"{RELEASE_ROOT}/.{SOURCE_SHA}.release-materializer-partial")
-        self.assertEqual(plan.clone_argv[:4], ("/usr/sbin/runuser", "-u", FETCH_IDENTITY, "--"))
-        self.assertIn("/usr/bin/env", plan.clone_argv)
-        self.assertIn("-i", plan.clone_argv)
+        self.assertEqual(plan.clone_argv[:2], ("/usr/bin/env", "-i"))
+        self.assertIn("HOME=/nonexistent", plan.clone_argv)
+        self.assertIn("GIT_TERMINAL_PROMPT=0", plan.clone_argv)
+        self.assertIn("GIT_CONFIG_NOSYSTEM=1", plan.clone_argv)
         self.assertIn(PUBLIC_REPOSITORY_URL, plan.clone_argv)
         self.assertIn(SOURCE_SHA, plan.ancestry_argv)
         self.assertIn(SOURCE_SHA, plan.checkout_argv)
         readiness = candidate_source_readiness()
         self.assertEqual(readiness["release_root"], RELEASE_ROOT)
         self.assertEqual(readiness["filesystem_release_materializations"], 1)
-        self.assertFalse(readiness["network_fetch_runs_as_root"])
+        self.assertTrue(readiness["fixed_root_git_read"])
         self.assertFalse(readiness["credentialed_fetch_required"])
         self.assertFalse(readiness["caller_supplied_repository_url"])
         self.assertFalse(readiness["caller_supplied_path"])
@@ -271,7 +270,8 @@ class WeatherExecutableCapabilityTests(unittest.TestCase):
         self.assertEqual(contract["release_materialization"]["release_root"], RELEASE_ROOT)
         self.assertEqual(contract["release_materialization"]["filesystem_release_materializations"], 1)
         self.assertFalse(contract["release_materialization"]["application_stage_performs_second_filesystem_copy"])
-        self.assertFalse(contract["release_materialization"]["network_fetch_runs_as_root"])
+        self.assertTrue(contract["release_materialization"]["fixed_root_git_read"])
+        self.assertTrue(contract["release_materialization"]["git_environment_scrubbed"])
         self.assertFalse(contract["release_materialization"]["credentialed_fetch_required"])
         self.assertFalse(contract["helper_process_launch_wired"])
         self.assertFalse(registry["execution_enabled"])
@@ -291,10 +291,10 @@ class WeatherExecutableCapabilityTests(unittest.TestCase):
         self.assertIn("shell=False", launch_source)
         self.assertIn("shell=False", stage_source)
         self.assertIn("ACTIVATION_FILE", stage_source)
-        self.assertIn('"/usr/sbin/runuser"', materializer_source)
         self.assertIn('"/usr/bin/env"', materializer_source)
         self.assertIn('"GIT_TERMINAL_PROMPT=0"', materializer_source)
         self.assertIn("RENAME_NOREPLACE", materializer_source)
+        self.assertNotIn("runuser", materializer_source)
         self.assertIn("candidate != release", stage_source)
         self.assertNotIn("shutil.copytree", stage_source)
         self.assertLess(entrypoint_source.index("_validate_request(args, activation)"), entrypoint_source.index("materialize_candidate(source_sha"))
