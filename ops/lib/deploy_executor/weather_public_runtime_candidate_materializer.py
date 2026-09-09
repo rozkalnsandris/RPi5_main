@@ -3,10 +3,8 @@ from __future__ import annotations
 import ctypes
 from dataclasses import dataclass
 import errno
-import grp
 import os
 from pathlib import Path
-import pwd
 import re
 import stat
 from typing import Callable, Protocol, Sequence
@@ -15,8 +13,6 @@ from .weather_public_runtime_adapter import SOURCE_REPOSITORY
 from .weather_public_runtime_execution import RELEASE_ROOT
 
 PUBLIC_REPOSITORY_URL = "https://github.com/rozkalnsandris/rozkalns_weather.git"
-FETCH_IDENTITY = "rozkalns-deploy-executor"
-FETCH_GROUP = "rozkalns-deploy-executor"
 PARTIAL_SUFFIX = ".release-materializer-partial"
 ROOT_UID = 0
 ROOT_GID = 0
@@ -48,7 +44,6 @@ class CandidateMaterializationPlan:
     source_repository: str
     source_sha: str
     public_repository_url: str
-    fetch_identity: str
     release_root: str
     partial_root: str
     clone_argv: tuple[str, ...]
@@ -62,10 +57,6 @@ def _fail(message: str) -> None:
 
 def _fixed_git_prefix() -> tuple[str, ...]:
     return (
-        "/usr/sbin/runuser",
-        "-u",
-        FETCH_IDENTITY,
-        "--",
         "/usr/bin/env",
         "-i",
         "PATH=/usr/bin:/bin",
@@ -87,6 +78,9 @@ def build_candidate_materialization_plan(source_sha: str) -> CandidateMaterializ
     prefix = _fixed_git_prefix()
     clone = prefix + (
         "clone",
+        "--single-branch",
+        "--branch",
+        "main",
         "--no-tags",
         "--no-checkout",
         PUBLIC_REPOSITORY_URL,
@@ -111,7 +105,6 @@ def build_candidate_materialization_plan(source_sha: str) -> CandidateMaterializ
         source_repository=SOURCE_REPOSITORY,
         source_sha=source_sha,
         public_repository_url=PUBLIC_REPOSITORY_URL,
-        fetch_identity=FETCH_IDENTITY,
         release_root=str(release),
         partial_root=str(partial),
         clone_argv=clone,
@@ -171,15 +164,6 @@ def _path_absent(path: Path, label: str) -> None:
     _fail(f"{label} already exists; implicit reuse or retry is forbidden")
 
 
-def _identity_ids() -> tuple[int, int]:
-    try:
-        uid = pwd.getpwnam(FETCH_IDENTITY).pw_uid
-        gid = grp.getgrnam(FETCH_GROUP).gr_gid
-    except KeyError as exc:
-        raise WeatherCandidateMaterializerError("fixed deploy-executor identity is unavailable") from exc
-    return uid, gid
-
-
 def _lock_tree(root: Path) -> None:
     try:
         st = root.lstat()
@@ -187,8 +171,9 @@ def _lock_tree(root: Path) -> None:
         raise WeatherCandidateMaterializerError("Weather release partial lstat failed") from exc
     if not stat.S_ISDIR(st.st_mode):
         _fail("Weather release partial is not a directory")
+    if st.st_uid != ROOT_UID or st.st_gid != ROOT_GID:
+        _fail("Weather release partial ownership drifted")
     try:
-        os.chown(root, ROOT_UID, ROOT_GID)
         os.chmod(root, BUILD_DIRECTORY_MODE)
     except OSError as exc:
         raise WeatherCandidateMaterializerError("Weather release partial root lock failed") from exc
@@ -200,20 +185,21 @@ def _lock_tree(root: Path) -> None:
             st = child.lstat()
             if stat.S_ISLNK(st.st_mode) or not stat.S_ISDIR(st.st_mode):
                 _fail("Weather release contains a symlink or non-directory tree entry")
-            os.chown(child, ROOT_UID, ROOT_GID)
+            if st.st_uid != ROOT_UID or st.st_gid != ROOT_GID:
+                _fail("Weather release directory ownership drifted")
             os.chmod(child, BUILD_DIRECTORY_MODE)
         for name in filenames:
             child = current_path / name
             st = child.lstat()
             if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode):
                 _fail("Weather release contains a symlink or special file")
+            if st.st_uid != ROOT_UID or st.st_gid != ROOT_GID:
+                _fail("Weather release file ownership drifted")
             executable = bool(_mode(st) & 0o111)
-            os.chown(child, ROOT_UID, ROOT_GID)
             os.chmod(child, FINAL_EXECUTABLE_MODE if executable else FINAL_FILE_MODE)
 
     for current, _dirnames, _filenames in os.walk(root, topdown=False, followlinks=False):
         os.chmod(current, FINAL_DIRECTORY_MODE)
-        os.chown(current, ROOT_UID, ROOT_GID)
 
 
 def _validate_locked_release(release: Path, source_sha: str, runner: CommandRunner) -> None:
@@ -303,7 +289,7 @@ def _rename_noreplace(base: Path, source_name: str, destination_name: str) -> No
 
 
 def materialize_candidate(source_sha: str, runner: CommandRunner) -> Path:
-    """Materialize exactly one immutable release checkout; the historical name is kept for API compatibility."""
+    """Materialize one exact public source checkout directly as the immutable release."""
 
     plan = build_candidate_materialization_plan(source_sha)
     base = Path(RELEASE_ROOT)
@@ -315,14 +301,6 @@ def materialize_candidate(source_sha: str, runner: CommandRunner) -> Path:
     _ensure_root_dir(base, "Weather release root")
     _path_absent(release, "Weather release target")
     _path_absent(partial, "Weather release partial")
-
-    fetch_uid, fetch_gid = _identity_ids()
-    try:
-        partial.mkdir(mode=BUILD_DIRECTORY_MODE)
-        os.chown(partial, fetch_uid, fetch_gid)
-        os.chmod(partial, BUILD_DIRECTORY_MODE)
-    except OSError as exc:
-        raise WeatherCandidateMaterializerError("Weather release partial creation failed") from exc
 
     _require_success(runner, plan.clone_argv, "public repository clone")
     _require_success(runner, plan.ancestry_argv, "source ancestry")
@@ -339,10 +317,9 @@ def source_readiness() -> dict[str, object]:
     return {
         "source_repository": SOURCE_REPOSITORY,
         "public_repository_url": PUBLIC_REPOSITORY_URL,
-        "fetch_identity": FETCH_IDENTITY,
         "release_root": RELEASE_ROOT,
         "release_path_source_derived_only": True,
-        "network_fetch_runs_as_root": False,
+        "fixed_root_git_read": True,
         "credentialed_fetch_required": False,
         "source_sha_main_ancestry_required": True,
         "symlinks_allowed": False,
