@@ -9,6 +9,7 @@ import re
 import shutil
 import stat
 import subprocess
+import urllib.error
 import urllib.request
 from typing import Any, Callable, Mapping, Sequence
 
@@ -217,14 +218,12 @@ def _validate_candidate(candidate: Path, source_sha: str, runner: CommandRunner)
 def _application_release(candidate: Path, release: Path, source_sha: str, runner: CommandRunner) -> int:
     _validate_candidate(candidate, source_sha, runner)
     if release.exists():
-        if not release.is_dir():
-            _fail("Weather release identity path drifted")
-    else:
-        release.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            shutil.copytree(candidate, release, ignore=shutil.ignore_patterns(".git"), symlinks=False)
-        except OSError as exc:
-            raise WeatherStageHelperError("Weather release materialization failed closed") from exc
+        _fail("Weather release already exists; reuse requires an exact checkpoint rather than implicit replay")
+    release.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        shutil.copytree(candidate, release, ignore=shutil.ignore_patterns(".git"), symlinks=False)
+    except OSError as exc:
+        raise WeatherStageHelperError("Weather release materialization failed closed") from exc
     _require_success(runner(_compose_argv(release, "build", "weather", "public-ingest", "schema-init", "readiness", "corpus-check")), "Compose build")
     _require_success(runner(_compose_argv(release, "up", "-d", "weather")), "application apply")
     return 1
