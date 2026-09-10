@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import sys
+from typing import Sequence
+
+_CHECKOUT_NAME = "RPi5_main-weather-public-runtime-install-trusted"
+_CHECKOUT = Path(__file__).resolve().parents[2]
+_ENTRYPOINT = _CHECKOUT / "ops/bin/rozkalns-weather-public-runtime-privileged-install"
+_LIB = _CHECKOUT / "ops/lib"
+
+
+def _stop(error: str) -> int:
+    print(f"WEATHER_PRIVILEGED_INSTALL=STOP error={error}", file=sys.stderr)
+    return 78
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Install and activate the fixed Weather public-runtime helper capability")
+    parser.add_argument("--issue-number", type=int, required=True)
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    if (
+        _CHECKOUT.name != _CHECKOUT_NAME
+        or Path(__file__).resolve() != _ENTRYPOINT
+        or os.geteuid() != 0
+        or not _LIB.is_dir()
+    ):
+        return _stop("WeatherPrivilegedInstallLayoutError")
+    sys.path.insert(0, str(_LIB))
+    try:
+        from deploy_executor.weather_public_runtime_privileged_install import (
+            WeatherPrivilegedInstallError,
+            public_receipt,
+            run_privileged_install_activation,
+        )
+    except ImportError:
+        return _stop("WeatherPrivilegedInstallImportError")
+    args = _parser().parse_args(tuple(sys.argv[1:] if argv is None else argv))
+    try:
+        receipt = run_privileged_install_activation(args.issue_number)
+    except WeatherPrivilegedInstallError:
+        return _stop("WeatherPrivilegedInstallError")
+    except Exception:
+        return _stop("WeatherPrivilegedInstallUnexpectedError")
+    print(json.dumps(public_receipt(receipt), sort_keys=True, separators=(",", ":")))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

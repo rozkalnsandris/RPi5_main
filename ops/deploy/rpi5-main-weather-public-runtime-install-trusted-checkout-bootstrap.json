@@ -1,0 +1,69 @@
+{
+  "schema": "rozkalns.rpi5-main.weather-public-runtime-install-trusted-checkout-bootstrap.v1",
+  "repository": "rozkalnsandris/RPi5_main",
+  "source_only": true,
+  "purpose": "Create one successor exact detached RPi5_main checkout for the Weather privileged helper install/activation bridge after a prior fail-closed LIVE left the original trusted checkout pinned to an older SHA.",
+  "legacy_checkout": {
+    "derivation": "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-trusted",
+    "may_remain_present": true,
+    "mutation_allowed": false,
+    "cleanup_allowed": false,
+    "authority_source": false
+  },
+  "manager_checkout": {
+    "derivation": "RPi5_CHECKOUT_PARENT/RPi5_main",
+    "origin": "https://github.com/rozkalnsandris/RPi5_main.git",
+    "working_tree_content_mutation_allowed": false,
+    "index_mutation_allowed": false,
+    "head_advance_allowed": false
+  },
+  "trusted_checkout": {
+    "name": "RPi5_main-weather-public-runtime-install-trusted",
+    "derivation": "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-install-trusted",
+    "must_be_absent_before_first_mutation": true,
+    "expected_sha_authority": "EXPLICIT_COMPOSITE_STRICT_LIVE_EXACT_RPI5_MAIN_SHA",
+    "fresh_origin_main_must_equal_expected_sha": true,
+    "required_post_state": "EXACT_SHA_DETACHED_CLEAN_CORRECT_ORIGIN",
+    "required_paths": [
+      "ops/deploy/weather-public-runtime-helper-install.json",
+      "ops/deploy/weather-public-runtime-privileged-install-activation.json",
+      "ops/bin/rozkalns-weather-public-runtime-privileged-install",
+      "ops/lib/deploy_executor/weather_public_runtime_privileged_install.py"
+    ]
+  },
+  "allowed_git_mutations": [
+    {
+      "order": 1,
+      "repository": "RPi5_CHECKOUT_PARENT/RPi5_main",
+      "argv": ["git", "fetch", "origin", "main"],
+      "mutation_category": "git.trusted-checkout-fetch",
+      "max_operations": 1
+    },
+    {
+      "order": 2,
+      "repository": "RPi5_CHECKOUT_PARENT/RPi5_main",
+      "argv": ["git", "worktree", "add", "--detach", "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-install-trusted", "EXPLICIT_COMPOSITE_STRICT_LIVE_EXACT_RPI5_MAIN_SHA"],
+      "mutation_category": "git.trusted-checkout-worktree-add",
+      "max_operations": 1
+    }
+  ],
+  "post_create_verification": [
+    "target resolves to the fixed successor path",
+    "HEAD equals the exact authorized RPi5_main SHA",
+    "HEAD is detached",
+    "status porcelain including untracked files is empty",
+    "origin exactly equals the reviewed GitHub origin",
+    "all required_paths are regular files at the exact authorized SHA"
+  ],
+  "forbidden_git_operations": ["reset", "rebase", "clean", "checkout", "switch", "merge", "pull", "worktree remove", "worktree prune", "branch", "commit", "push", "force"],
+  "failure": {
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "legacy_checkout_mutation": false,
+    "manager_repair": false,
+    "alternate_checkout_route": false,
+    "after_first_mutation_error": "STOP_PRESERVE_READ_ONLY_EVIDENCE"
+  },
+  "source_merge_enables_live": false
+}
