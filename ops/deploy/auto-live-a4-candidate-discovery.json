@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "contract": "AUTO-LIVE v1 A4 deterministic eligible-canary discovery",
+  "status": "A4_DISCOVERY_SOURCE_READY_LIVE_DISABLED",
+  "roadmap_issue": 421,
+  "implementation_issue": 459,
+  "candidate_source": {
+    "index": "ops/deploy/auto-live-manifests.json",
+    "manifest_directory": "ops/deploy/auto-live-manifests/",
+    "static_operation_registry": "ops/deploy/executor-operations.json",
+    "undeclared_candidate_result": "BLOCKED",
+    "candidate_order": "target_alias_then_manifest_path"
+  },
+  "source_evidence": {
+    "default_branch": "main",
+    "current_head_read_fresh_each_evaluation": true,
+    "current_head_sha_is_point_in_time_output_only": true,
+    "persist_current_head_as_continuity_binding": false,
+    "exact_target_ci_required": true,
+    "current_tip_parent_count_required": 1,
+    "current_tip_range_classified_before_live_baseline": true,
+    "manual_or_db_host_current_tip_result": "OWNER_REQUIRED",
+    "unknown_or_incomplete_current_tip_result": "BLOCKED"
+  },
+  "eligibility": {
+    "supported_classifier": "ORDERED_PATH_RULES_V1",
+    "only_eligible_class": "AUTO_DEPLOY_SAFE",
+    "static_operation_authorization_class": "ORDINARY",
+    "static_operation_deploy_class": "AUTO_DEPLOY_SAFE",
+    "static_operation_ordinary_eligibility_required": true,
+    "health_postconditions_required": true,
+    "sensitive_exclusions_required": true,
+    "failure_policy_rollback": "NONE",
+    "post_mutation_retry_cleanup_rollback_or_alternate_path_allowed": false
+  },
+  "production_baseline_evidence": {
+    "schema": "rozkalns.auto-live-production-baseline-evidence.v1",
+    "accepted_source": "TRUSTED_RPI5_READ_ONLY_PREFLIGHT",
+    "trusted_true_required": true,
+    "fresh_true_required": true,
+    "bind_source_repository_target_alias_resolver_and_target_sha": true,
+    "missing_result": "NEEDS_FRESH_LIVE_PREFLIGHT",
+    "stale_untrusted_or_mismatched_result": "BLOCKED",
+    "repository_source_may_infer_production_baseline": false,
+    "chat_or_historical_evidence_may_supply_current_baseline": false
+  },
+  "full_range": {
+    "production_baseline_to_target_required": true,
+    "complete_compare_required": true,
+    "auto_deploy_safe_result": "ELIGIBLE_CANARY",
+    "no_deploy_result": "NO_ELIGIBLE_CANARY",
+    "manual_or_db_host_result": "OWNER_REQUIRED",
+    "unknown_or_incomplete_result": "BLOCKED",
+    "already_current_result": "NO_ELIGIBLE_CANARY"
+  },
+  "decisions": [
+    "ELIGIBLE_CANARY",
+    "NO_ELIGIBLE_CANARY",
+    "NEEDS_FRESH_LIVE_PREFLIGHT",
+    "OWNER_REQUIRED",
+    "BLOCKED"
+  ],
+  "aggregate": {
+    "eligible_candidate_tie_break": "target_alias_then_manifest_path",
+    "tie_break_never_expands_eligibility": true,
+    "no_eligible_precedence": [
+      "BLOCKED",
+      "NEEDS_FRESH_LIVE_PREFLIGHT",
+      "OWNER_REQUIRED",
+      "NO_ELIGIBLE_CANARY"
+    ]
+  },
+  "continuity": {
+    "state_based": true,
+    "volatile_candidate_sha_is_canonical_state": false,
+    "candidate_repository_merge_requires_rpi5_main_continuity_pr": false,
+    "continuity_changes_only_when_a4_policy_or_durable_state_changes": true
+  },
+  "mutation": {
+    "execution_enabled": false,
+    "manifest_activation_enabled": false,
+    "automatic_mutation_enabled": false,
+    "mutation_dispatch_enabled": false,
+    "adapter_apply_invocation": false,
+    "systemd_or_timer_mutation": false,
+    "credential_or_permission_mutation": false,
+    "production_deploy": false,
+    "production_mutation_started": false
+  }
+}

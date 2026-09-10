@@ -7,6 +7,8 @@ test:
 	python3 ./tests/test-auto-run-full.py
 	python3 ./tests/test-auto-live-v1.py
 	python3 ./tests/test-auto-live-controller.py
+	python3 ./tests/test-auto-live-a4-canary-selection.py
+	python3 ./tests/test-auto-live-a4-candidate-discovery.py
 	python3 ./tests/test-auto-run-lane-eligibility.py
 	python3 ./tests/test-control-phase5-production-visibility.py
 	python3 ./tests/test-control-phase5-observation-transport.py
