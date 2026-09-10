@@ -116,7 +116,7 @@ A0 canonical policy, A1 shared policy, A2 repository manifests and the A3 read-o
 
 Fresh 2026-09-10 source evidence rejects current Dashboard `main=a15a276c88d20d4a69895fc2fc0d95007ded8cbb` as an automatic canary: its current source range includes `apps/server/` and `packages/contracts/`, both `MANUAL_ROLLOUT_REQUIRED` under the unchanged manifest. The exact current Dashboard `FAST-LANE Merge Gate` passed, but CI success does not override deploy classification. No current LIVE baseline is needed to reject this source target; if production already equals current main the canary is a no-op, otherwise the current target range contains the manual latest commit.
 
-Canonical A2 contract: `docs/AUTO_LIVE_V1_A2_MANIFESTS.md` + `ops/deploy/auto-live-manifests.json`. Canonical A3 contract: `docs/AUTO_LIVE_V1_A3_CONTROLLER.md` + `ops/deploy/auto-live-controller-v1.json` + `ops/lib/deploy_executor/auto_live_controller.py`. Canonical A4 contract: `docs/AUTO_LIVE_V1_A4_CANARY_SELECTION.md` + `ops/deploy/auto-live-a4-canary-selection.json`.
+Canonical A2 contract: `docs/AUTO_LIVE_V1_A2_MANIFESTS.md` + `ops/deploy/auto-live-manifests.json`. Canonical A3 contract: `docs/AUTO_LIVE_V1_A3_CONTROLLER.md` + `ops/deploy/auto-live-controller-v1.json` + `ops/lib/deploy_executor/auto_live_controller.py`. Canonical A4 contract: `docs/AUTO_LIVE_V1_A4_CANARY_SELECTION.md` + `ops/deploy/auto-live-a4-canary-selection.json` + `ops/deploy/auto-live-a4-candidate-discovery.json` + `ops/lib/deploy_executor/auto_live_a4_discovery.py`.
 
 ## Repository target state
 
@@ -1233,3 +1233,32 @@ Binding current classification:
 A future A4 candidate evaluation must fetch the then-current Dashboard `main`, resolve a fresh trusted production baseline, classify the complete production-baseline-to-target range, and verify exact-target CI/provenance. Only a genuinely `AUTO_DEPLOY_SAFE` full range can advance to a separately owner-authorized LIVE canary. A source-head change alone does not change this canonical owner-required state.
 
 This is source/docs/tests continuity only. It does not activate manifests/controllers, invoke adapters, mutate the host, deploy production or authorize LIVE work.
+
+## Current supersession — Auto-Live A4 deterministic discovery ready (#459, 2026-09-10)
+
+Issue #459 supersedes the prior A4 owner-wait wording with a durable source-side candidate-discovery capability. The candidate set is derived only from the A2 manifests index; repository heads and exact-SHA CI are freshly observed evidence and are never persisted as canonical current state.
+
+The discovery engine first validates manifest/static-operation/health/exclusion/failure-policy invariants and exact-target CI. For automatic-eligible candidates it classifies the current tip before requesting production evidence. A manual/DB-host/unknown current tip fails closed without a LIVE baseline read. A source-safe tip yields `NEEDS_FRESH_LIVE_PREFLIGHT` until separately obtained trusted read-only production-baseline evidence is supplied and the complete baseline-to-target range is classified.
+
+Binding current classification:
+
+`AUTO_LIVE_TRACK_Y_CURRENT=A4_DISCOVERY_READY_NO_CANARY_SELECTED`
+`A4_DISCOVERY_CONTRACT=ops/deploy/auto-live-a4-candidate-discovery.json`
+`A4_DISCOVERY_ENGINE=ops/lib/deploy_executor/auto_live_a4_discovery.py`
+`A4_CANDIDATE_SET_SOURCE=ops/deploy/auto-live-manifests.json`
+`A4_VOLATILE_CANDIDATE_SHA_PERSISTED=false`
+`A4_FRESH_SOURCE_HEAD_AND_EXACT_CI_REQUIRED=true`
+`A4_FRESH_TRUSTED_PRODUCTION_BASELINE_REQUIRED_WHEN_SOURCE_TIP_SAFE=true`
+`A4_FULL_PRODUCTION_BASELINE_TO_TARGET_RECLASSIFICATION_REQUIRED=true`
+`A4_AUTO_DEPLOY_SAFE_FULL_RANGE_REQUIRED=true`
+`A4_CANARY_SELECTED=false`
+`A4_FIRST_ACTIVATION_AUTHORIZED=false`
+`A4_CANARY_AUTHORIZED=false`
+`AUTO_LIVE_EXECUTION_ENABLED=false`
+`AUTO_LIVE_MANIFEST_ACTIVATION_ENABLED=false`
+`AUTO_LIVE_MUTATION_DISPATCH_ENABLED=false`
+`PRODUCTION_MUTATION_STARTED=false`
+
+The dynamic discovery result vocabulary is `ELIGIBLE_CANARY / NO_ELIGIBLE_CANARY / NEEDS_FRESH_LIVE_PREFLIGHT / OWNER_REQUIRED / BLOCKED`. `ELIGIBLE_CANARY` still does not authorize LIVE: first activation/canary remains a separate bounded owner gate with fresh host provenance.
+
+This #459 outcome is source/docs/tests only and does not read protected runtime state, activate an executor/manifest, invoke an adapter, deploy production, or mutate host/systemd/Docker/credentials/permissions/database/network/Cloudflare state.

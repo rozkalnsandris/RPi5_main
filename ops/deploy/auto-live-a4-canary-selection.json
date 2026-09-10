@@ -1,126 +1,136 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "contract": "AUTO-LIVE v1 A4 canary candidate selection",
-  "status": "A4_OWNER_REQUIRED_LIVE_DISABLED",
+  "status": "A4_DISCOVERY_READY_NO_CANARY_SELECTED_LIVE_DISABLED",
   "roadmap_issue": 421,
-  "source_main_at_reconciliation": "c4accd5ea08343f8e4fce30534a6e7734a461e5f",
+  "implementation_issue": 459,
   "shared_policy_commit_sha": "f2aeb5152371a876268bb116bb98806cddbc8e15",
-  "selection": {
-    "source_repository": "rozkalnsandris/dashboard_RPi5",
-    "target_alias": "dashboard-rpi5-production-release",
-    "manifest_path": "ops/deploy/auto-live-manifests/dashboard-rpi5.json",
-    "static_operation_id": "dashboard-rpi5.production-release.v1",
-    "eligible_class": "AUTO_DEPLOY_SAFE",
-    "eligible_path_prefixes": [
-      "apps/web/"
+  "discovery": {
+    "contract_path": "ops/deploy/auto-live-a4-candidate-discovery.json",
+    "engine_path": "ops/lib/deploy_executor/auto_live_a4_discovery.py",
+    "candidate_index_path": "ops/deploy/auto-live-manifests.json",
+    "decisions": [
+      "ELIGIBLE_CANARY",
+      "NO_ELIGIBLE_CANARY",
+      "NEEDS_FRESH_LIVE_PREFLIGHT",
+      "OWNER_REQUIRED",
+      "BLOCKED"
     ],
-    "selection_status": "SOURCE_LEVEL_CANDIDATE_ONLY",
+    "fresh_evaluation_required": true,
+    "volatile_source_sha_persisted_as_current_state": false,
+    "production_baseline_inferred_from_source": false
+  },
+  "candidate_policy": {
+    "dashboard_manifest_path": "ops/deploy/auto-live-manifests/dashboard-rpi5.json",
+    "dashboard_target_alias": "dashboard-rpi5-production-release",
+    "dashboard_static_operation_id": "dashboard-rpi5.production-release.v1",
+    "dashboard_eligible_classes": [
+      "AUTO_DEPLOY_SAFE"
+    ],
     "weather_manifest_path": "ops/deploy/auto-live-manifests/rozkalns-weather.json",
-    "weather_not_selected_reason": "NO_AUTOMATIC_ELIGIBLE_CLASS"
+    "weather_eligible_classes": [],
+    "candidate_set_is_manifest_index_derived": true,
+    "undeclared_candidate_result": "BLOCKED"
   },
-  "github_evidence": {
-    "observed_dashboard_main_sha": "b5838741d094ad7f70987bf5a5060be11371a6ae",
-    "reviewed_frozen_candidate_sha": "343366427441811a22739b05b04d069c10905805",
-    "relation": "ANCESTOR",
-    "observed_main_delta_paths": [
-      "AGENTS.md",
-      "apps/server/src/history-policy.test.ts",
-      "apps/server/src/history-policy.ts",
-      "apps/server/src/history-route.test.ts",
-      "apps/server/src/host-history.test.ts",
-      "apps/server/src/prometheus-normalize.test.ts",
-      "apps/server/src/prometheus-normalize.ts",
-      "apps/server/src/prometheus-query-registry.ts",
-      "apps/web/src/history-panel.css",
-      "apps/web/src/history-ui.test.ts",
-      "apps/web/src/history-ui.ts",
-      "apps/web/src/pages/HistoryPanel.tsx",
-      "docs/DATA_SOURCES.md",
-      "docs/ISSUE265_CONTAINER_METRICS_SOURCE_READINESS.md",
-      "docs/PHASE4A_PROMETHEUS_HISTORY.md",
-      "ops/production/container-metrics-source-contract.json",
-      "package.json",
-      "packages/contracts/src/history.ts",
-      "tests/e2e/history.spec.ts",
-      "tools/issue265-container-metrics-source-readiness.test.mjs"
-    ],
-    "observed_main_delta_classification": "DB_HOST_APPLY_REQUIRED",
-    "point_in_time_only": true,
-    "previous_observed_dashboard_main_sha": "a15a276c88d20d4a69895fc2fc0d95007ded8cbb",
-    "blocking_paths": [
-      "ops/production/container-metrics-source-contract.json",
-      "tools/issue265-container-metrics-source-readiness.test.mjs"
-    ],
-    "exact_target_ci": {
-      "required_gate": "FAST-LANE Merge Gate",
-      "conclusion": "success",
-      "check_run_id": 102962645727,
-      "workflow_run_id": 34504055304,
-      "point_in_time_only": true
-    }
+  "historical_evidence": {
+    "reconciliation_source_sha": "c4accd5ea08343f8e4fce30534a6e7734a461e5f",
+    "github": {
+      "observed_dashboard_main_sha": "b5838741d094ad7f70987bf5a5060be11371a6ae",
+      "reviewed_frozen_candidate_sha": "343366427441811a22739b05b04d069c10905805",
+      "relation": "ANCESTOR",
+      "observed_main_delta_paths": [
+        "AGENTS.md",
+        "apps/server/src/history-policy.test.ts",
+        "apps/server/src/history-policy.ts",
+        "apps/server/src/history-route.test.ts",
+        "apps/server/src/host-history.test.ts",
+        "apps/server/src/prometheus-normalize.test.ts",
+        "apps/server/src/prometheus-normalize.ts",
+        "apps/server/src/prometheus-query-registry.ts",
+        "apps/web/src/history-panel.css",
+        "apps/web/src/history-ui.test.ts",
+        "apps/web/src/history-ui.ts",
+        "apps/web/src/pages/HistoryPanel.tsx",
+        "docs/DATA_SOURCES.md",
+        "docs/ISSUE265_CONTAINER_METRICS_SOURCE_READINESS.md",
+        "docs/PHASE4A_PROMETHEUS_HISTORY.md",
+        "ops/production/container-metrics-source-contract.json",
+        "package.json",
+        "packages/contracts/src/history.ts",
+        "tests/e2e/history.spec.ts",
+        "tools/issue265-container-metrics-source-readiness.test.mjs"
+      ],
+      "observed_main_delta_classification": "DB_HOST_APPLY_REQUIRED",
+      "point_in_time_only": true,
+      "previous_observed_dashboard_main_sha": "a15a276c88d20d4a69895fc2fc0d95007ded8cbb",
+      "blocking_paths": [
+        "ops/production/container-metrics-source-contract.json",
+        "tools/issue265-container-metrics-source-readiness.test.mjs"
+      ],
+      "exact_target_ci": {
+        "required_gate": "FAST-LANE Merge Gate",
+        "conclusion": "success",
+        "check_run_id": 102962645727,
+        "workflow_run_id": 34504055304,
+        "point_in_time_only": true
+      }
+    },
+    "production": {
+      "trusted_production_baseline_sha": "066b9a24008dd57439f9e66eae198416c4dfc590",
+      "reviewed_frozen_candidate_sha": "343366427441811a22739b05b04d069c10905805",
+      "observed_dashboard_main_sha": "20e47ff7ba808f183db56e347d4fde3e1d6a129f",
+      "baseline_to_frozen_relation": "DIRECT_CHILD",
+      "baseline_to_frozen_paths": [
+        "apps/web/public/sw.js",
+        "apps/web/src/pwa-register.ts",
+        "apps/web/vite.config.ts",
+        "docs/ISSUE243_PWA_CACHE_LIFECYCLE.md",
+        "package-lock.json",
+        "tests/e2e/pwa.spec.ts"
+      ],
+      "baseline_to_frozen_classification": "MANUAL_ROLLOUT_REQUIRED",
+      "baseline_to_current_paths": [
+        "AGENTS.md",
+        "apps/web/public/sw.js",
+        "apps/web/src/pwa-register.ts",
+        "apps/web/vite.config.ts",
+        "docs/ISSUE243_PWA_CACHE_LIFECYCLE.md",
+        "package-lock.json",
+        "tests/e2e/pwa.spec.ts"
+      ],
+      "baseline_to_current_classification": "MANUAL_ROLLOUT_REQUIRED",
+      "blocking_paths": [
+        "package-lock.json"
+      ],
+      "point_in_time_only": true,
+      "reconciled_at_utc_date": "2026-09-09",
+      "historical_only": true
+    },
+    "historical_only": true,
+    "not_current_runtime_or_source_truth": true
   },
-  "production_evidence": {
-    "trusted_production_baseline_sha": "066b9a24008dd57439f9e66eae198416c4dfc590",
-    "reviewed_frozen_candidate_sha": "343366427441811a22739b05b04d069c10905805",
-    "observed_dashboard_main_sha": "20e47ff7ba808f183db56e347d4fde3e1d6a129f",
-    "baseline_to_frozen_relation": "DIRECT_CHILD",
-    "baseline_to_frozen_paths": [
-      "apps/web/public/sw.js",
-      "apps/web/src/pwa-register.ts",
-      "apps/web/vite.config.ts",
-      "docs/ISSUE243_PWA_CACHE_LIFECYCLE.md",
-      "package-lock.json",
-      "tests/e2e/pwa.spec.ts"
-    ],
-    "baseline_to_frozen_classification": "MANUAL_ROLLOUT_REQUIRED",
-    "baseline_to_current_paths": [
-      "AGENTS.md",
-      "apps/web/public/sw.js",
-      "apps/web/src/pwa-register.ts",
-      "apps/web/vite.config.ts",
-      "docs/ISSUE243_PWA_CACHE_LIFECYCLE.md",
-      "package-lock.json",
-      "tests/e2e/pwa.spec.ts"
-    ],
-    "baseline_to_current_classification": "MANUAL_ROLLOUT_REQUIRED",
-    "blocking_paths": [
-      "package-lock.json"
-    ],
-    "point_in_time_only": true,
-    "reconciled_at_utc_date": "2026-09-09",
-    "historical_only": true
-  },
-  "canary_decision": {
-    "decision": "OWNER_REQUIRED",
-    "reason": "NO_SELECTED_AUTO_DEPLOY_SAFE_FULL_RANGE",
+  "canary_state": {
+    "durable_state": "A4_DISCOVERY_READY_NO_CANARY_SELECTED",
     "canary_selected": false,
     "selected_target_sha": null,
     "automatic_live_eligible": false,
-    "future_auto_live_canary_requires_new_auto_deploy_safe_range_or_reviewed_policy_change": true,
-    "evaluated_source_sha": "b5838741d094ad7f70987bf5a5060be11371a6ae",
-    "evaluated_source_range_classification": "DB_HOST_APPLY_REQUIRED",
-    "evaluated_source_is_point_in_time_only": true,
-    "canonical_gate_is_sha_independent": true,
-    "next_candidate_evaluation_requires_fresh_source_head": true,
-    "next_candidate_evaluation_requires_fresh_live_baseline": true
+    "dynamic_decision_must_be_recomputed_from_fresh_evidence": true,
+    "eligible_canary_requires_full_range_auto_deploy_safe": true,
+    "safe_source_tip_without_fresh_baseline_result": "NEEDS_FRESH_LIVE_PREFLIGHT",
+    "manual_or_db_host_current_tip_result": "OWNER_REQUIRED",
+    "unknown_missing_or_stale_evidence_result": "BLOCKED"
   },
   "live_gate": {
-    "candidate_selection_is_live_authority": false,
-    "observed_dashboard_main_is_automatic_live_target": false,
-    "reviewed_frozen_candidate_is_reusable_live_authorization": false,
-    "trusted_production_baseline_observed_for_this_reconciliation": false,
-    "full_baseline_to_target_reclassification_complete": false,
-    "full_range_result_must_be_auto_deploy_safe": true,
-    "current_full_range_result": "SOURCE_REJECTED_BEFORE_LIVE_BASELINE_REFRESH",
-    "canary_blocked": true,
-    "future_canary_requires_fresh_trusted_production_baseline": true,
-    "future_canary_requires_fresh_exact_target_ci": true,
-    "future_canary_requires_fresh_static_operation_identity": true,
-    "future_canary_requires_fresh_host_provenance": true,
-    "separate_owner_live_authorization_required": true,
+    "candidate_discovery_is_live_authority": false,
+    "fresh_trusted_production_baseline_may_be_required": true,
+    "fresh_live_preflight_is_separate_owner_gate": true,
+    "full_baseline_to_target_reclassification_required": true,
+    "fresh_exact_target_ci_required": true,
+    "fresh_static_operation_identity_required": true,
+    "fresh_host_provenance_required_before_any_later_canary": true,
+    "separate_owner_live_authorization_required_for_activation": true,
     "owner_live_authorization_alone_overrides_classification": false,
-    "fresh_live_baseline_required_to_reject_current_source_target": false,
-    "previous_trusted_production_baseline_is_historical_evidence_only": true
+    "historical_production_baseline_is_reusable_authority": false
   },
   "mutation": {
     "execution_enabled": false,
@@ -133,17 +143,11 @@
     "production_deploy": false,
     "production_mutation_started": false
   },
-  "reconciliation": {
-    "as_of_utc_date": "2026-09-10",
-    "kind": "STATE_BASED_CONTINUITY_REFRESH",
-    "live_baseline_refreshed": false,
-    "volatile_source_head_binding_removed": true
-  },
   "continuity_policy": {
     "canonical_gate_is_state_based": true,
-    "observed_dashboard_main_sha_is_current_binding": false,
-    "new_dashboard_merge_requires_rpi5_main_continuity_update": false,
-    "fresh_dashboard_main_required_at_each_candidate_evaluation": true,
-    "continuity_update_required_only_when_a4_state_or_policy_changes": true
+    "volatile_candidate_sha_is_current_binding": false,
+    "candidate_repository_merge_requires_rpi5_main_continuity_update": false,
+    "fresh_candidate_repository_head_required_at_each_evaluation": true,
+    "continuity_update_required_only_when_a4_policy_or_durable_state_changes": true
   }
 }
