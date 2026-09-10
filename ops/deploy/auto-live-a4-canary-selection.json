@@ -3,7 +3,7 @@
   "contract": "AUTO-LIVE v1 A4 canary candidate selection",
   "status": "A4_OWNER_REQUIRED_LIVE_DISABLED",
   "roadmap_issue": 421,
-  "source_main_at_reconciliation": "9b92b08aa5a9c7f2691ff092ca7099c9dd918900",
+  "source_main_at_reconciliation": "782b531728e35e4f9ccda492b6f95886fffe60f0",
   "shared_policy_commit_sha": "f2aeb5152371a876268bb116bb98806cddbc8e15",
   "selection": {
     "source_repository": "rozkalnsandris/dashboard_RPi5",
@@ -19,14 +19,46 @@
     "weather_not_selected_reason": "NO_AUTOMATIC_ELIGIBLE_CLASS"
   },
   "github_evidence": {
-    "observed_dashboard_main_sha": "20e47ff7ba808f183db56e347d4fde3e1d6a129f",
+    "observed_dashboard_main_sha": "a15a276c88d20d4a69895fc2fc0d95007ded8cbb",
     "reviewed_frozen_candidate_sha": "343366427441811a22739b05b04d069c10905805",
-    "relation": "DIRECT_CHILD",
+    "relation": "ANCESTOR",
     "observed_main_delta_paths": [
-      "AGENTS.md"
+      "AGENTS.md",
+      "apps/server/src/history-policy.test.ts",
+      "apps/server/src/history-policy.ts",
+      "apps/server/src/history-route.test.ts",
+      "apps/server/src/host-history.test.ts",
+      "apps/server/src/prometheus-normalize.test.ts",
+      "apps/server/src/prometheus-normalize.ts",
+      "apps/server/src/prometheus-query-registry.ts",
+      "apps/web/src/history-panel.css",
+      "apps/web/src/history-ui.test.ts",
+      "apps/web/src/history-ui.ts",
+      "apps/web/src/pages/HistoryPanel.tsx",
+      "docs/PHASE4A_PROMETHEUS_HISTORY.md",
+      "packages/contracts/src/history.ts",
+      "tests/e2e/history.spec.ts"
     ],
-    "observed_main_delta_classification": "NO_DEPLOY",
-    "point_in_time_only": true
+    "observed_main_delta_classification": "MANUAL_ROLLOUT_REQUIRED",
+    "point_in_time_only": true,
+    "previous_observed_dashboard_main_sha": "20e47ff7ba808f183db56e347d4fde3e1d6a129f",
+    "blocking_paths": [
+      "apps/server/src/history-policy.test.ts",
+      "apps/server/src/history-policy.ts",
+      "apps/server/src/history-route.test.ts",
+      "apps/server/src/host-history.test.ts",
+      "apps/server/src/prometheus-normalize.test.ts",
+      "apps/server/src/prometheus-normalize.ts",
+      "apps/server/src/prometheus-query-registry.ts",
+      "packages/contracts/src/history.ts"
+    ],
+    "exact_target_ci": {
+      "required_gate": "FAST-LANE Merge Gate",
+      "conclusion": "success",
+      "check_run_id": 102636069440,
+      "workflow_run_id": 34401742710,
+      "point_in_time_only": true
+    }
   },
   "production_evidence": {
     "trusted_production_baseline_sha": "066b9a24008dd57439f9e66eae198416c4dfc590",
@@ -55,31 +87,38 @@
     "blocking_paths": [
       "package-lock.json"
     ],
-    "point_in_time_only": true
+    "point_in_time_only": true,
+    "reconciled_at_utc_date": "2026-09-09",
+    "historical_only": true
   },
   "canary_decision": {
     "decision": "OWNER_REQUIRED",
-    "reason": "FULL_PRODUCTION_RANGE_MANUAL_ROLLOUT_REQUIRED",
+    "reason": "CURRENT_DASHBOARD_MAIN_MANUAL_ROLLOUT_REQUIRED",
     "canary_selected": false,
     "selected_target_sha": null,
     "automatic_live_eligible": false,
-    "future_auto_live_canary_requires_new_auto_deploy_safe_range_or_reviewed_policy_change": true
+    "future_auto_live_canary_requires_new_auto_deploy_safe_range_or_reviewed_policy_change": true,
+    "current_source_sha": "a15a276c88d20d4a69895fc2fc0d95007ded8cbb",
+    "current_source_range_classification": "MANUAL_ROLLOUT_REQUIRED",
+    "current_source_rejection_independent_of_fresh_live_baseline": true
   },
   "live_gate": {
     "candidate_selection_is_live_authority": false,
     "observed_dashboard_main_is_automatic_live_target": false,
     "reviewed_frozen_candidate_is_reusable_live_authorization": false,
-    "trusted_production_baseline_observed_for_this_reconciliation": true,
-    "full_baseline_to_target_reclassification_complete": true,
+    "trusted_production_baseline_observed_for_this_reconciliation": false,
+    "full_baseline_to_target_reclassification_complete": false,
     "full_range_result_must_be_auto_deploy_safe": true,
-    "current_full_range_result": "MANUAL_ROLLOUT_REQUIRED",
+    "current_full_range_result": "SOURCE_REJECTED_BEFORE_LIVE_BASELINE_REFRESH",
     "canary_blocked": true,
     "future_canary_requires_fresh_trusted_production_baseline": true,
     "future_canary_requires_fresh_exact_target_ci": true,
     "future_canary_requires_fresh_static_operation_identity": true,
     "future_canary_requires_fresh_host_provenance": true,
     "separate_owner_live_authorization_required": true,
-    "owner_live_authorization_alone_overrides_classification": false
+    "owner_live_authorization_alone_overrides_classification": false,
+    "fresh_live_baseline_required_to_reject_current_source_target": false,
+    "previous_trusted_production_baseline_is_historical_evidence_only": true
   },
   "mutation": {
     "execution_enabled": false,
@@ -91,5 +130,10 @@
     "credential_or_permission_mutation": false,
     "production_deploy": false,
     "production_mutation_started": false
+  },
+  "reconciliation": {
+    "as_of_utc_date": "2026-09-10",
+    "kind": "GITHUB_SOURCE_REFRESH_ONLY",
+    "live_baseline_refreshed": false
   }
 }
