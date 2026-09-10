@@ -20,6 +20,7 @@ test:
 	python3 ./tests/test-deploy-executor-weather-public-runtime.py
 	python3 ./tests/test-deploy-executor-weather-public-bootstrap.py
 	python3 ./tests/test-deploy-executor-weather-public-helper-install.py
+	python3 ./tests/test-deploy-executor-weather-public-composite.py
 	python3 ./tests/test-rpi5-main-weather-public-runtime-trusted-checkout-bootstrap.py
 	python3 ./tests/test-deploy-executor-hermes-deals-origin-dispatch-request.py
 	python3 ./tests/test-deploy-executor-hermes-deals-origin-privileged-consumer.py

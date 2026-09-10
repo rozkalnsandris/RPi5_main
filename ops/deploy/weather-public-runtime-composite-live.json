@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "contract": "rozkalns-weather.public-runtime-composite-live.v1",
+  "status": "SOURCE_IMPLEMENTED_RUNTIME_INACTIVE",
+  "source_repository": "rozkalnsandris/rozkalns_weather",
+  "rpi5_main_repository": "rozkalnsandris/RPi5_main",
+  "target_alias": "rozkalns-weather-public-rpi5",
+  "host_alias": "rpi5",
+  "release_operation_id": "rozkalns-weather.public-runtime-release.v1",
+  "authorization_class": "STRICT",
+  "ordinary_live_all_eligible": false,
+  "caller_authority": [
+    "authorization_issue_number"
+  ],
+  "release_authorization": {
+    "schema": "rozkalns.live-auth.v1",
+    "same_human_issue_required": true,
+    "normalized_ready_queue_required": true,
+    "release_budget_source": "ops/deploy/executor-operations.json",
+    "generic_release_live_auth_sufficient": false,
+    "supplemental_categories_must_not_appear_in_release_budget": true
+  },
+  "supplemental_authorization": {
+    "schema": "rozkalns.weather-composite-live-auth.v1",
+    "start_marker": "<!-- rozkalns-weather-composite-live-auth:v1 -->",
+    "end_marker": "<!-- /rozkalns-weather-composite-live-auth:v1 -->",
+    "exact_fields": [
+      "schema",
+      "host_alias",
+      "rpi5_main_sha",
+      "expected_bootstrap_baseline_token",
+      "start_date",
+      "end_date",
+      "recovery_decision",
+      "helper_install_artifact_count",
+      "additional_mutation_budget"
+    ],
+    "host_alias": "rpi5",
+    "helper_install_artifact_count": 13,
+    "additional_mutation_budget": [
+      {
+        "category": "git.trusted-checkout-fetch",
+        "max_operations": 1
+      },
+      {
+        "category": "git.trusted-checkout-worktree-add",
+        "max_operations": 1
+      },
+      {
+        "category": "filesystem.weather-helper-install-transaction",
+        "max_operations": 1
+      },
+      {
+        "category": "filesystem.weather-helper-activation-publish",
+        "max_operations": 1
+      },
+      {
+        "category": "sqlite.schema-init",
+        "max_operations": 1
+      },
+      {
+        "category": "sqlite.corpus-truth-backfill",
+        "max_operations": 1
+      },
+      {
+        "category": "sqlite.corpus-forecast-backfill",
+        "max_operations": 3
+      }
+    ]
+  },
+  "release_mutation_budget": [
+    {
+      "category": "filesystem.release-materialization",
+      "max_operations": 1
+    },
+    {
+      "category": "docker.named-volume-ensure",
+      "max_operations": 1
+    },
+    {
+      "category": "docker.compose-build",
+      "max_operations": 1
+    },
+    {
+      "category": "docker.compose-application-apply",
+      "max_operations": 1
+    },
+    {
+      "category": "systemd.public-ingest-schedule-install-or-update",
+      "max_operations": 1
+    }
+  ],
+  "read_only_stage_budget": [
+    {
+      "stage_id": "readiness_schema_privacy",
+      "max_operations": 1
+    },
+    {
+      "stage_id": "public_smoke_read_only",
+      "max_operations": 1
+    },
+    {
+      "stage_id": "corpus_integrity_check",
+      "max_operations": 3
+    }
+  ],
+  "gate_order": [
+    "trusted_checkout_fetch",
+    "trusted_checkout_worktree_add",
+    "helper_install",
+    "activation_publish",
+    "application_release",
+    "persistent_volume_ensure",
+    "explicit_schema_init",
+    "readiness_schema_privacy",
+    "public_smoke_read_only",
+    "bounded_dwd_truth_backfill",
+    "bounded_deterministic_forecast_backfill",
+    "corpus_integrity_check",
+    "recurring_public_ingest_schedule"
+  ],
+  "trusted_checkout": {
+    "contract": "ops/deploy/rpi5-main-weather-public-runtime-trusted-checkout-bootstrap.json",
+    "target": "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-trusted",
+    "manager_checkout_install_source_allowed": false,
+    "exact_current_rpi5_main_sha_required": true,
+    "minimum_reviewed_ancestor": "95b6b95b132614cbc330d6d764d0557079a67534",
+    "allowed_git_mutation_count": 2
+  },
+  "helper_installation": {
+    "manifest": "ops/deploy/weather-public-runtime-helper-install.json",
+    "artifact_count": 13,
+    "required_owner_uid": 0,
+    "required_owner_gid": 0,
+    "directory_mode": "0755",
+    "entrypoint_mode": "0755",
+    "module_mode": "0644",
+    "install_transaction_max_operations": 1
+  },
+  "activation": {
+    "path": "/etc/rozkalns-weather/public-runtime-helper-activation.json",
+    "schema": "rozkalns-weather.public-runtime-helper-activation.v1",
+    "required_owner_uid": 0,
+    "required_owner_gid": 0,
+    "required_mode": "0600",
+    "whole_preactivation_sha256_required": true,
+    "fixed_helper_ids_source": "ops/deploy/weather-public-runtime-host-wiring.json",
+    "publication_max_operations": 1
+  },
+  "host_wiring_contract": "ops/deploy/weather-public-runtime-host-wiring.json",
+  "execution_contract": "ops/deploy/weather-public-runtime-execution.json",
+  "canonical_revalidator_module": "ops/lib/deploy_executor/weather_public_runtime_composite.py",
+  "bootstrap_scope": {
+    "runtime_class": "public-only-rpi5",
+    "truth_provider": "dwd_observations",
+    "truth_station_id": "10416",
+    "forecast_models": [
+      "icon_d2",
+      "ecmwf_ifs",
+      "ecmwf_aifs"
+    ],
+    "run_hours": [
+      0,
+      6,
+      12,
+      18
+    ],
+    "truth_chunk_days": 14,
+    "max_backfill_days": 180,
+    "public_ingest_cadence": "PT30M",
+    "recovery_decisions": [
+      "verified-backup-available",
+      "owner-accepted-no-prewrite-backup"
+    ],
+    "weather_next_required": false,
+    "home_coordinates_required": false,
+    "private_bigquery_required": false,
+    "automatic_backup_restore_delete_cleanup": false
+  },
+  "jit_revalidation": {
+    "human_live_auth_owner_identity_ttl_immutability_required": true,
+    "replay_availability_required": true,
+    "ready_queue_binding_required": true,
+    "weather_source_reachable_from_current_main_required": true,
+    "weather_exact_source_sha_ci_success_required": true,
+    "rpi5_main_exact_current_main_required": true,
+    "rpi5_main_exact_sha_ci_success_required": true,
+    "rpi5_main_minimum_reviewed_ancestor_required": true,
+    "fixed_host_and_target_required": true,
+    "sanitized_bootstrap_baseline_token_match_required": true,
+    "final_live_auth_reread_required": true,
+    "final_ready_queue_reread_required": true,
+    "control_plane_reader": "existing reviewed private read-only GitHub App clients",
+    "source_reader": "credential-free fixed public GitHub API reader"
+  },
+  "failure": {
+    "authorization_consumed_at_first_future_mutation": true,
+    "after_first_mutation_error": "STOP_PRESERVE_MINIMUM_READ_ONLY_EVIDENCE",
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "automatic_restore": false,
+    "automatic_delete": false,
+    "manager_checkout_repair": false,
+    "alternate_mutation_route": false
+  },
+  "source_state": {
+    "runtime_live_authority": false,
+    "trusted_checkout_enabled": false,
+    "helper_installation_enabled": false,
+    "activation_publication_enabled": false,
+    "helper_invocation_enabled": false,
+    "privileged_dispatch_enabled": false,
+    "host_wiring_enabled": false,
+    "production_mutation_enabled": false,
+    "production_mutation_started": false,
+    "generic_shell_path_argv_environment_authority": false
+  },
+  "explicit_exclusions": [
+    "source merge, READY queue or generic release LIVE-AUTH as standalone runtime authority",
+    "caller-selected command, executable path, repository URL, argv, environment, helper ID, model, run hour, station, Docker target, systemd unit or database path",
+    "ordinary manager checkout as helper installation source",
+    "generic sudo/root bridge or arbitrary filesystem copy",
+    "ambient PYTHONPATH, user site-packages or existing deploy-executor package mutation",
+    "credentialed/private Weather or RPi5_main source fetch",
+    "WeatherNext, private BigQuery, HOME_LAT, HOME_LON or exact home coordinates",
+    "Cloudflare, network, firewall, package, user, group or unrelated permission mutation",
+    "backup creation, restore, corpus delete, cleanup or destructive SQLite rollback",
+    "automatic retry, cleanup, rollback, restore, delete or alternate mutation path"
+  ]
+}
