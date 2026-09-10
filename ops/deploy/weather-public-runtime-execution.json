@@ -11,7 +11,13 @@
   "trusted_checkout_target": "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-trusted",
   "trusted_checkout_required_before_live_installation": true,
   "ordinary_manager_checkout_install_source_allowed": false,
-  "caller_authority": ["authorization_issue_number"],
+  "composite_live_authority_contract": "ops/deploy/weather-public-runtime-composite-live.json",
+  "composite_live_authority_module": "ops/lib/deploy_executor/weather_public_runtime_composite.py",
+  "composite_live_authority_required_before_live_installation": true,
+  "generic_release_live_auth_sufficient": false,
+  "caller_authority": [
+    "authorization_issue_number"
+  ],
   "execution_plan_module": "ops/lib/deploy_executor/weather_public_runtime_execution.py",
   "helper_launcher_module": "ops/lib/deploy_executor/weather_public_runtime_helper_launch.py",
   "candidate_materializer_module": "ops/lib/deploy_executor/weather_public_runtime_candidate_materializer.py",
@@ -56,6 +62,7 @@
     "caller_supplied_argv": false,
     "caller_supplied_environment": false
   },
+  "composite_authority_source_implemented": true,
   "execution_capability_implemented": true,
   "installable_helper_source_present": true,
   "candidate_materialization_source_present": true,
@@ -80,6 +87,7 @@
   "later_live_revalidation_required": true,
   "explicit_exclusions": [
     "host installation or activation by this source issue",
+    "generic release LIVE-AUTH as standalone authority for trusted checkout, helper installation, activation or SQLite/backfill",
     "ordinary manager checkout as helper installation source",
     "WeatherNext or private BigQuery access",
     "HOME_LAT, HOME_LON or exact home coordinates",
