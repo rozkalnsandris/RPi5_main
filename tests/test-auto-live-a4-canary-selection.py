@@ -15,8 +15,13 @@ assert contract["schema_version"] == 1
 assert contract["contract"] == "AUTO-LIVE v1 A4 canary candidate selection"
 assert contract["status"] == "A4_OWNER_REQUIRED_LIVE_DISABLED"
 assert contract["roadmap_issue"] == 421
-assert contract["source_main_at_reconciliation"] == "9b92b08aa5a9c7f2691ff092ca7099c9dd918900"
+assert contract["source_main_at_reconciliation"] == "782b531728e35e4f9ccda492b6f95886fffe60f0"
 assert contract["shared_policy_commit_sha"] == "f2aeb5152371a876268bb116bb98806cddbc8e15"
+assert contract["reconciliation"] == {
+    "as_of_utc_date": "2026-09-10",
+    "kind": "GITHUB_SOURCE_REFRESH_ONLY",
+    "live_baseline_refreshed": False,
+}
 
 selection = contract["selection"]
 assert selection["source_repository"] == dashboard["source_repository"] == "rozkalnsandris/dashboard_RPi5"
@@ -66,19 +71,29 @@ def classify_range(manifest, paths):
 
 
 evidence = contract["github_evidence"]
-assert evidence["observed_dashboard_main_sha"] == "20e47ff7ba808f183db56e347d4fde3e1d6a129f"
+assert evidence["previous_observed_dashboard_main_sha"] == "20e47ff7ba808f183db56e347d4fde3e1d6a129f"
+assert evidence["observed_dashboard_main_sha"] == "a15a276c88d20d4a69895fc2fc0d95007ded8cbb"
 assert evidence["reviewed_frozen_candidate_sha"] == "343366427441811a22739b05b04d069c10905805"
 assert evidence["observed_dashboard_main_sha"] != evidence["reviewed_frozen_candidate_sha"]
-assert evidence["relation"] == "DIRECT_CHILD"
-assert evidence["observed_main_delta_paths"] == ["AGENTS.md"]
-assert evidence["observed_main_delta_classification"] == "NO_DEPLOY"
-assert classify(dashboard, "AGENTS.md") == "NO_DEPLOY"
+assert evidence["relation"] == "ANCESTOR"
+assert evidence["observed_main_delta_classification"] == "MANUAL_ROLLOUT_REQUIRED"
+assert classify_range(dashboard, evidence["observed_main_delta_paths"]) == "MANUAL_ROLLOUT_REQUIRED"
+assert all(classify(dashboard, path) == "MANUAL_ROLLOUT_REQUIRED" for path in evidence["blocking_paths"])
+assert "apps/server/src/history-policy.ts" in evidence["blocking_paths"]
+assert "packages/contracts/src/history.ts" in evidence["blocking_paths"]
+assert evidence["exact_target_ci"] == {
+    "required_gate": "FAST-LANE Merge Gate",
+    "conclusion": "success",
+    "check_run_id": 102636069440,
+    "workflow_run_id": 34401742710,
+    "point_in_time_only": True,
+}
 assert evidence["point_in_time_only"] is True
 
 production = contract["production_evidence"]
 assert production["trusted_production_baseline_sha"] == "066b9a24008dd57439f9e66eae198416c4dfc590"
 assert production["reviewed_frozen_candidate_sha"] == evidence["reviewed_frozen_candidate_sha"]
-assert production["observed_dashboard_main_sha"] == evidence["observed_dashboard_main_sha"]
+assert production["observed_dashboard_main_sha"] == evidence["previous_observed_dashboard_main_sha"]
 assert production["baseline_to_frozen_relation"] == "DIRECT_CHILD"
 assert classify(dashboard, "package-lock.json") == "MANUAL_ROLLOUT_REQUIRED"
 assert classify_range(dashboard, production["baseline_to_frozen_paths"]) == "MANUAL_ROLLOUT_REQUIRED"
@@ -86,25 +101,32 @@ assert classify_range(dashboard, production["baseline_to_current_paths"]) == "MA
 assert production["baseline_to_frozen_classification"] == "MANUAL_ROLLOUT_REQUIRED"
 assert production["baseline_to_current_classification"] == "MANUAL_ROLLOUT_REQUIRED"
 assert production["blocking_paths"] == ["package-lock.json"]
+assert production["reconciled_at_utc_date"] == "2026-09-09"
+assert production["historical_only"] is True
 assert production["point_in_time_only"] is True
 
 decision = contract["canary_decision"]
 assert decision["decision"] == "OWNER_REQUIRED"
-assert decision["reason"] == "FULL_PRODUCTION_RANGE_MANUAL_ROLLOUT_REQUIRED"
+assert decision["reason"] == "CURRENT_DASHBOARD_MAIN_MANUAL_ROLLOUT_REQUIRED"
 assert decision["canary_selected"] is False
 assert decision["selected_target_sha"] is None
 assert decision["automatic_live_eligible"] is False
+assert decision["current_source_sha"] == evidence["observed_dashboard_main_sha"]
+assert decision["current_source_range_classification"] == "MANUAL_ROLLOUT_REQUIRED"
+assert decision["current_source_rejection_independent_of_fresh_live_baseline"] is True
 assert decision["future_auto_live_canary_requires_new_auto_deploy_safe_range_or_reviewed_policy_change"] is True
 
 live_gate = contract["live_gate"]
 assert live_gate["candidate_selection_is_live_authority"] is False
 assert live_gate["observed_dashboard_main_is_automatic_live_target"] is False
 assert live_gate["reviewed_frozen_candidate_is_reusable_live_authorization"] is False
-assert live_gate["trusted_production_baseline_observed_for_this_reconciliation"] is True
-assert live_gate["full_baseline_to_target_reclassification_complete"] is True
+assert live_gate["trusted_production_baseline_observed_for_this_reconciliation"] is False
+assert live_gate["full_baseline_to_target_reclassification_complete"] is False
 assert live_gate["full_range_result_must_be_auto_deploy_safe"] is True
-assert live_gate["current_full_range_result"] == "MANUAL_ROLLOUT_REQUIRED"
+assert live_gate["current_full_range_result"] == "SOURCE_REJECTED_BEFORE_LIVE_BASELINE_REFRESH"
 assert live_gate["canary_blocked"] is True
+assert live_gate["fresh_live_baseline_required_to_reject_current_source_target"] is False
+assert live_gate["previous_trusted_production_baseline_is_historical_evidence_only"] is True
 assert live_gate["future_canary_requires_fresh_trusted_production_baseline"] is True
 assert live_gate["future_canary_requires_fresh_exact_target_ci"] is True
 assert live_gate["future_canary_requires_fresh_static_operation_identity"] is True
@@ -127,13 +149,16 @@ assert contract["mutation"] == {
 assert manifests_index["status"] == "A2_SOURCE_ONLY_INACTIVE"
 assert manifests_index["execution_enabled"] is False
 assert manifests_index["activation"]["automatic_mutation_enabled"] is False
-assert "Current supersession — Auto-Live A4 production-baseline fail-closed reconciliation (2026-09-09)" in master
-assert "AUTO_LIVE_TRACK_Y_CURRENT=A4_OWNER_REQUIRED_RECONCILIATION" in master
-assert "A4_TRUSTED_PRODUCTION_BASELINE=066b9a24008dd57439f9e66eae198416c4dfc590" in master
-assert "A4_FULL_RANGE_CLASSIFICATION=MANUAL_ROLLOUT_REQUIRED" in master
-assert "A4_CANARY_SELECTED=false" in master
+assert "A4 FIRST-CANARY SOURCE GATE (#421)" in master
+assert "Current supersession — Auto-Live A4 current-source rejection (2026-09-10)" in master
+assert "AUTO_LIVE_TRACK_Y_CURRENT=A4_OWNER_REQUIRED_CURRENT_SOURCE_REJECTION" in master
+assert "A4_CURRENT_DASHBOARD_MAIN=a15a276c88d20d4a69895fc2fc0d95007ded8cbb" in master
+assert "A4_CURRENT_SOURCE_RANGE_CLASSIFICATION=MANUAL_ROLLOUT_REQUIRED" in master
+assert "A4_CURRENT_LIVE_BASELINE_REFRESHED=false" in master
 assert "A4 OWNER REQUIRED / NO CANARY SELECTED / LIVE DISABLED" in doc
+assert "dashboard_RPi5/main = a15a276c88d20d4a69895fc2fc0d95007ded8cbb" in doc
+assert "No trusted-host read was needed for this source-only rejection." in doc
 assert "No A4 Auto-Live canary is selected." in doc
 assert "LIVE authorization alone cannot override the source classification." in doc
 
-print("AUTO-LIVE v1 A4 production-baseline fail-closed contract: PASS")
+print("AUTO-LIVE v1 A4 current-source fail-closed contract: PASS")

@@ -95,7 +95,7 @@ Database migrations/writes, host infrastructure, systemd/backup/Cloudflare owner
 
 Unknown runtime-relevant paths fail toward review, never silently toward `NO_DEPLOY`.
 
-### Cross-cutting Track Y — Post-merge Auto-Live v1 — A3 READ-ONLY CONTROLLER SOURCE GATE (#421)
+### Cross-cutting Track Y — Post-merge Auto-Live v1 — A4 FIRST-CANARY SOURCE GATE (#421)
 
 The owner has selected a cross-cutting source-only reconciliation to replace the normal `GITHUB-ONLY -> deferred LIVE-ALL` operator loop with durable post-merge Auto-Live. This source gate may proceed alongside the current Phase 4 residual Hermes migration but does not inherit or bypass any Phase 4 LIVE authority.
 
@@ -112,11 +112,11 @@ Binding A0 decisions:
 
 Canonical A0 contract: `docs/AUTO_LIVE_V1.md` + `ops/deploy/auto-live-v1.json`. Roadmap/DoD: issue #421.
 
-A0 canonical policy, A1 shared policy and A2 repository manifests are source-complete. Current A3 adds the read-only decision controller only: trusted production baseline -> current GitHub main/reachability -> full-range path classification -> exact-target CI evidence -> deterministic `NO_DEPLOY / AUTO_DEPLOY_SAFE / OWNER_REQUIRED / BLOCKED`.
+A0 canonical policy, A1 shared policy, A2 repository manifests and the A3 read-only controller are source-complete. Current A4 evaluates the first real canary candidate while every mutation surface remains disabled.
 
-A3 keeps repository manifests inactive and every mutation surface disabled. It does not install or enable a host controller, change systemd/timers, credentials or permissions, invoke adapters, enable the executor registry, or deploy production.
+Fresh 2026-09-10 source evidence rejects current Dashboard `main=a15a276c88d20d4a69895fc2fc0d95007ded8cbb` as an automatic canary: its current source range includes `apps/server/` and `packages/contracts/`, both `MANUAL_ROLLOUT_REQUIRED` under the unchanged manifest. The exact current Dashboard `FAST-LANE Merge Gate` passed, but CI success does not override deploy classification. No current LIVE baseline is needed to reject this source target; if production already equals current main the canary is a no-op, otherwise the current target range contains the manual latest commit.
 
-Canonical A2 contract: `docs/AUTO_LIVE_V1_A2_MANIFESTS.md` + `ops/deploy/auto-live-manifests.json`. Canonical A3 contract: `docs/AUTO_LIVE_V1_A3_CONTROLLER.md` + `ops/deploy/auto-live-controller-v1.json` + `ops/lib/deploy_executor/auto_live_controller.py`.
+Canonical A2 contract: `docs/AUTO_LIVE_V1_A2_MANIFESTS.md` + `ops/deploy/auto-live-manifests.json`. Canonical A3 contract: `docs/AUTO_LIVE_V1_A3_CONTROLLER.md` + `ops/deploy/auto-live-controller-v1.json` + `ops/lib/deploy_executor/auto_live_controller.py`. Canonical A4 contract: `docs/AUTO_LIVE_V1_A4_CANARY_SELECTION.md` + `ops/deploy/auto-live-a4-canary-selection.json`.
 
 ## Repository target state
 
@@ -1128,7 +1128,7 @@ Fresh GitHub/source evidence at this reconciliation:
 - A3 controller remains source-only with `execution_enabled=false` and mutation dispatch disabled;
 - Dashboard manifest `dashboard-rpi5.production-release.v1` is the deterministic A4 source-level candidate because it alone exposes `AUTO_DEPLOY_SAFE`, limited to `apps/web/`;
 - Weather has no automatic-eligible class and its static operation remains STRICT, so Weather is not the A4 automatic canary candidate;
-- current Dashboard `main=20e47ff7ba808f183db56e347d4fde3e1d6a129f` is a direct child of frozen reviewed candidate `343366427441811a22739b05b04d069c10905805`; the observed delta is only `AGENTS.md`, which the Dashboard manifest classifies `NO_DEPLOY`;
+- then-current Dashboard `main=20e47ff7ba808f183db56e347d4fde3e1d6a129f` is a direct child of frozen reviewed candidate `343366427441811a22739b05b04d069c10905805`; the observed delta is only `AGENTS.md`, which the Dashboard manifest classifies `NO_DEPLOY`;
 - this Dashboard relation is point-in-time GitHub source evidence only. Neither SHA is promoted into a production target or reusable LIVE authorization by this document.
 
 Canonical A4 source contracts:
@@ -1139,18 +1139,18 @@ Canonical A4 source contracts:
 
 Binding classification:
 
-`AUTO_LIVE_TRACK_Y_CURRENT=A4_SOURCE_RECONCILIATION`
-`A0_SOURCE_COMPLETE=true`
-`A1_SHARED_POLICY_COMPLETE=true`
-`A2_MANIFESTS_SOURCE_COMPLETE=true`
-`A3_READ_ONLY_CONTROLLER_SOURCE_COMPLETE=true`
-`A4_SOURCE_CANDIDATE=dashboard-rpi5.production-release.v1`
-`A4_FIRST_ACTIVATION_AUTHORIZED=false`
-`A4_CANARY_AUTHORIZED=false`
-`AUTO_LIVE_EXECUTION_ENABLED=false`
-`AUTO_LIVE_MANIFEST_ACTIVATION_ENABLED=false`
-`AUTO_LIVE_MUTATION_DISPATCH_ENABLED=false`
-`PRODUCTION_MUTATION_STARTED=false`
+`AUTO_LIVE_TRACK_Y_2026_09_09_SOURCE_SELECTION=A4_SOURCE_RECONCILIATION`
+`A4_2026_09_09_A0_SOURCE_COMPLETE=true`
+`A4_2026_09_09_A1_SHARED_POLICY_COMPLETE=true`
+`A4_2026_09_09_A2_MANIFESTS_SOURCE_COMPLETE=true`
+`A4_2026_09_09_A3_READ_ONLY_CONTROLLER_SOURCE_COMPLETE=true`
+`A4_2026_09_09_SOURCE_SELECTION_CANDIDATE=dashboard-rpi5.production-release.v1`
+`A4_2026_09_09_SOURCE_SELECTION_FIRST_ACTIVATION_AUTHORIZED=false`
+`A4_2026_09_09_SOURCE_SELECTION_CANARY_AUTHORIZED=false`
+`AUTO_LIVE_2026_09_09_SOURCE_SELECTION_EXECUTION_ENABLED=false`
+`AUTO_LIVE_2026_09_09_SOURCE_SELECTION_MANIFEST_ACTIVATION_ENABLED=false`
+`AUTO_LIVE_2026_09_09_SOURCE_SELECTION_MUTATION_DISPATCH_ENABLED=false`
+`PRODUCTION_2026_09_09_SOURCE_SELECTION_MUTATION_STARTED=false`
 
 The next sequence is fail-closed and split by authority class:
 
@@ -1181,12 +1181,48 @@ Fresh source and read-only evidence for this reconciliation:
 
 Binding classification:
 
-`AUTO_LIVE_TRACK_Y_CURRENT=A4_OWNER_REQUIRED_RECONCILIATION`
-`A4_SOURCE_CANDIDATE=dashboard-rpi5.production-release.v1`
-`A4_TRUSTED_PRODUCTION_BASELINE=066b9a24008dd57439f9e66eae198416c4dfc590`
+`AUTO_LIVE_TRACK_Y_2026_09_09=A4_OWNER_REQUIRED_RECONCILIATION`
+`A4_2026_09_09_SOURCE_CANDIDATE=dashboard-rpi5.production-release.v1`
+`A4_2026_09_09_TRUSTED_PRODUCTION_BASELINE=066b9a24008dd57439f9e66eae198416c4dfc590`
+`A4_2026_09_09_FROZEN_CANDIDATE=343366427441811a22739b05b04d069c10905805`
+`A4_2026_09_09_DASHBOARD_MAIN=20e47ff7ba808f183db56e347d4fde3e1d6a129f`
+`A4_2026_09_09_FULL_RANGE_CLASSIFICATION=MANUAL_ROLLOUT_REQUIRED`
+`A4_2026_09_09_CANARY_SELECTED=false`
+`A4_2026_09_09_FIRST_ACTIVATION_AUTHORIZED=false`
+`A4_2026_09_09_CANARY_AUTHORIZED=false`
+`AUTO_LIVE_2026_09_09_EXECUTION_ENABLED=false`
+`AUTO_LIVE_2026_09_09_MANIFEST_ACTIVATION_ENABLED=false`
+`AUTO_LIVE_2026_09_09_MUTATION_DISPATCH_ENABLED=false`
+`PRODUCTION_2026_09_09_MUTATION_STARTED=false`
+
+A4 is therefore fail-closed to owner review with **no Auto-Live canary selected**. Neither the frozen candidate nor current Dashboard main is promoted into a live target.
+
+A future A4 Auto-Live canary requires a fresh full production-baseline-to-target range that is genuinely `AUTO_DEPLOY_SAFE`, or a separately reviewed project-specific source-policy change that explicitly narrows the exact currently manual class. Any future real canary would additionally require fresh exact-target CI/provenance and a separate bounded owner LIVE authorization. LIVE authorization alone does not override this source classification.
+
+This reconciliation is source/docs/tests only. It does not activate a manifest or controller, invoke an adapter, stage a candidate, mutate host/runtime/systemd/Docker/credentials/permissions/database/network/Cloudflare state, deploy production, retire compatibility behavior, or start production mutation.
+
+## Current supersession — Auto-Live A4 current-source rejection (2026-09-10)
+
+This section supersedes the 2026-09-09 A4 point-in-time `current Dashboard main` wording while retaining that older production-baseline evidence as history.
+
+Fresh GitHub-only evidence:
+
+- `RPi5_main/main=782b531728e35e4f9ccda492b6f95886fffe60f0`;
+- Dashboard current `main=a15a276c88d20d4a69895fc2fc0d95007ded8cbb`;
+- reviewed/frozen candidate remains `343366427441811a22739b05b04d069c10905805`;
+- current Dashboard exact-SHA `FAST-LANE Merge Gate=success`;
+- frozen-to-current paths now include `apps/server/` and `packages/contracts/`;
+- the unchanged Dashboard manifest classifies both prefixes `MANUAL_ROLLOUT_REQUIRED`;
+- therefore current Dashboard main is not `AUTO_DEPLOY_SAFE` and no A4 canary is selected.
+
+Binding current classification:
+
+`AUTO_LIVE_TRACK_Y_CURRENT=A4_OWNER_REQUIRED_CURRENT_SOURCE_REJECTION`
 `A4_FROZEN_CANDIDATE=343366427441811a22739b05b04d069c10905805`
-`A4_CURRENT_DASHBOARD_MAIN=20e47ff7ba808f183db56e347d4fde3e1d6a129f`
-`A4_FULL_RANGE_CLASSIFICATION=MANUAL_ROLLOUT_REQUIRED`
+`A4_CURRENT_DASHBOARD_MAIN=a15a276c88d20d4a69895fc2fc0d95007ded8cbb`
+`A4_CURRENT_SOURCE_RANGE_CLASSIFICATION=MANUAL_ROLLOUT_REQUIRED`
+`A4_CURRENT_EXACT_TARGET_CI=success`
+`A4_CURRENT_LIVE_BASELINE_REFRESHED=false`
 `A4_CANARY_SELECTED=false`
 `A4_FIRST_ACTIVATION_AUTHORIZED=false`
 `A4_CANARY_AUTHORIZED=false`
@@ -1195,8 +1231,6 @@ Binding classification:
 `AUTO_LIVE_MUTATION_DISPATCH_ENABLED=false`
 `PRODUCTION_MUTATION_STARTED=false`
 
-A4 is therefore fail-closed to owner review with **no Auto-Live canary selected**. Neither the frozen candidate nor current Dashboard main is promoted into a live target.
+No trusted-host read is required to reject this exact current target: if production is an ancestor, the latest manual-class commit is in the range; if production already equals current main, the candidate has no genuine source delta. A future different candidate still requires a fresh trusted production baseline, full-range classification, exact-target CI/provenance and separate owner LIVE authorization before any real canary.
 
-A future A4 Auto-Live canary requires a fresh full production-baseline-to-target range that is genuinely `AUTO_DEPLOY_SAFE`, or a separately reviewed project-specific source-policy change that explicitly narrows the exact currently manual class. Any future real canary would additionally require fresh exact-target CI/provenance and a separate bounded owner LIVE authorization. LIVE authorization alone does not override this source classification.
-
-This reconciliation is source/docs/tests only. It does not activate a manifest or controller, invoke an adapter, stage a candidate, mutate host/runtime/systemd/Docker/credentials/permissions/database/network/Cloudflare state, deploy production, retire compatibility behavior, or start production mutation.
+This is source/docs/tests continuity only. It does not activate manifests/controllers, invoke adapters, mutate the host, deploy production or authorize LIVE work.

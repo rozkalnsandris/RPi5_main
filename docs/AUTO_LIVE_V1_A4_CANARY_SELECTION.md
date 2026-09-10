@@ -12,62 +12,55 @@ A0 policy, A1 shared policy, A2 repository manifests and the A3 read-only contro
 
 ## Source-level candidate
 
-Before trusted production-baseline evidence was available, the deterministic source-level A4 candidate was `rozkalnsandris/dashboard_RPi5` / `dashboard-rpi5-production-release` using static operation `dashboard-rpi5.production-release.v1`.
+Dashboard remains the only current A2 manifest with an automatic-eligible class, `AUTO_DEPLOY_SAFE`, limited to `apps/web/`. Its reviewed static operation is `dashboard-rpi5.production-release.v1`. Weather has no automatic-eligible class.
 
-That source-level selection remains useful evidence, but it is not an Auto-Live target selection:
+The original reviewed/frozen Dashboard source candidate remains `343366427441811a22739b05b04d069c10905805`. It is historical selection evidence only and is not reusable LIVE authority.
 
-- Dashboard is the only current A2 manifest with an automatic-eligible class, `AUTO_DEPLOY_SAFE`;
-- that class is limited to `apps/web/`;
-- the Dashboard static operation is the reviewed ordinary operation for the same target alias;
-- Weather has no automatic-eligible class and remains outside the first ordinary Auto-Live canary.
+## Current GitHub source evidence — 2026-09-10
 
-## Current GitHub evidence
+Fresh source reconciliation observed:
 
-At this reconciliation checkpoint:
+- `RPi5_main/main = 782b531728e35e4f9ccda492b6f95886fffe60f0`;
+- `dashboard_RPi5/main = a15a276c88d20d4a69895fc2fc0d95007ded8cbb`;
+- previous A4-observed Dashboard main = `20e47ff7ba808f183db56e347d4fde3e1d6a129f`;
+- reviewed/frozen Dashboard source candidate = `343366427441811a22739b05b04d069c10905805`;
+- current Dashboard exact-SHA `FAST-LANE Merge Gate` = `success`.
 
-- `RPi5_main/main = 9b92b08aa5a9c7f2691ff092ca7099c9dd918900`;
-- `dashboard_RPi5/main = 20e47ff7ba808f183db56e347d4fde3e1d6a129f`;
-- the reviewed/frozen Dashboard source candidate is `343366427441811a22739b05b04d069c10905805`;
-- current Dashboard `main` is a direct child of that reviewed SHA;
-- the complete frozen-to-current delta is only `AGENTS.md`, which the Dashboard manifest classifies as `NO_DEPLOY`.
+The frozen-candidate-to-current range now includes `apps/server/`, `apps/web/`, `packages/contracts/`, documentation, tests and `AGENTS.md`. Under the existing manifest, `apps/server/` and `packages/contracts/` are `MANUAL_ROLLOUT_REQUIRED`, which outranks `AUTO_DEPLOY_SAFE`.
 
-These are point-in-time source facts. Current Dashboard `main` is not automatically promoted into a live target, and the reviewed/frozen SHA is not reusable LIVE authorization.
-
-## Trusted production-baseline reconciliation
-
-The minimum-sufficient trusted-host read-only preflight observed current Dashboard production release:
-
-`066b9a24008dd57439f9e66eae198416c4dfc590`
-
-No production mutation, candidate activation, host wiring or privilege widening was performed by that read-only evidence collection.
-
-The complete production-baseline-to-frozen-candidate range contains:
-
-- `apps/web/public/sw.js`
-- `apps/web/src/pwa-register.ts`
-- `apps/web/vite.config.ts`
-- `docs/ISSUE243_PWA_CACHE_LIFECYCLE.md`
-- `package-lock.json`
-- `tests/e2e/pwa.spec.ts`
-
-Under the existing Dashboard manifest, `apps/web/` is `AUTO_DEPLOY_SAFE`, documentation/tests are `NO_DEPLOY`, and `package-lock.json` is `MANUAL_ROLLOUT_REQUIRED`. The manifest precedence places `MANUAL_ROLLOUT_REQUIRED` above `AUTO_DEPLOY_SAFE`, so the complete production-baseline-to-frozen-candidate range is deterministically:
+Therefore the current source range is deterministically:
 
 `MANUAL_ROLLOUT_REQUIRED`
 
-The complete production-baseline-to-current-main range adds only `AGENTS.md`, which is `NO_DEPLOY`. It therefore remains `MANUAL_ROLLOUT_REQUIRED`.
+## Why a fresh LIVE baseline is not needed to reject this current target
+
+A genuine first canary requires a production baseline different from the target and a full production-baseline-to-target range that is `AUTO_DEPLOY_SAFE`.
+
+For current Dashboard main `a15a276c88d20d4a69895fc2fc0d95007ded8cbb`:
+
+- if production is any reachable ancestor before current main, the range necessarily contains the latest Dashboard commit, which changes `apps/server/` and therefore classifies `MANUAL_ROLLOUT_REQUIRED`;
+- if production already equals current main, there is no genuine source delta and the canary would be a no-op.
+
+So current Dashboard main cannot be the first automatic Auto-Live canary under the present manifest. No trusted-host read was needed for this source-only rejection.
+
+## Historical trusted production evidence — 2026-09-09
+
+The previous minimum-sufficient trusted-host read-only preflight observed Dashboard production release `066b9a24008dd57439f9e66eae198416c4dfc590`.
+
+At that checkpoint the complete baseline-to-frozen range already classified `MANUAL_ROLLOUT_REQUIRED` because it contained `package-lock.json`. That production evidence remains historical point-in-time provenance; it is not asserted as the current production baseline on 2026-09-10.
 
 ## A4 decision
 
-A4 fails closed to `OWNER_REQUIRED`.
+A4 remains fail-closed to `OWNER_REQUIRED`.
 
-No A4 Auto-Live canary is selected. Neither `343366427441811a22739b05b04d069c10905805` nor `20e47ff7ba808f183db56e347d4fde3e1d6a129f` is an automatic live target.
+No A4 Auto-Live canary is selected. Current Dashboard main `a15a276c88d20d4a69895fc2fc0d95007ded8cbb` is not an automatic live target.
 
-This reconciliation does **not** relax the classifier. In particular, it does not reclassify `package-lock.json` as `AUTO_DEPLOY_SAFE`. A future A4 canary requires either:
+A future A4 canary requires either:
 
-1. a genuinely `AUTO_DEPLOY_SAFE` full production-baseline-to-target range established from a fresh trusted production baseline, with fresh exact-target CI and provenance; or
+1. a later genuinely `AUTO_DEPLOY_SAFE` full production-baseline-to-target range, established with fresh trusted production baseline and exact-target CI/provenance; or
 2. a separately reviewed project-specific source-policy change that explicitly narrows the exact currently manual class.
 
-A later owner LIVE authorization is still necessary for any real canary, but LIVE authorization alone cannot override the source classification.
+LIVE authorization alone cannot override the source classification.
 
 ## Mutation boundary
 
@@ -83,6 +76,4 @@ All activation and mutation surfaces remain disabled:
 - production deployment disabled;
 - `production_mutation_started=false`.
 
-No RPi5 host state, service, Docker state, production release, database, credential, permission, network or Cloudflare state is changed by this source reconciliation.
-
-Merge of this source gate would not be LIVE authority. The immediate outcome is a reviewed fail-closed A4 record with no canary selected.
+No RPi5 host state, service, Docker state, production release, database, credential, permission, network or Cloudflare state was read or changed by this source refresh.
