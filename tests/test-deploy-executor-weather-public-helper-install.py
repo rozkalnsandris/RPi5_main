@@ -52,6 +52,10 @@ class WeatherHelperInstallLayoutTests(unittest.TestCase):
         self.assertEqual(value["required_owner_uid"], 0)
         self.assertEqual(value["required_owner_gid"], 0)
         self.assertEqual(value["artifact_count"], 13)
+        self.assertEqual(value["trusted_checkout_bootstrap_contract"], "ops/deploy/rpi5-main-weather-public-runtime-install-trusted-checkout-bootstrap.json")
+        self.assertEqual(value["trusted_checkout_target"], "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-install-trusted")
+        self.assertTrue(value["trusted_checkout_required_before_live_installation"])
+        self.assertFalse(value["ordinary_manager_checkout_install_source_allowed"])
         self.assertEqual(len(self.artifacts), 13)
 
         destinations = [item["destination"] for item in self.artifacts]
@@ -91,8 +95,8 @@ class WeatherHelperInstallLayoutTests(unittest.TestCase):
         self.assertTrue(execution["clean_environment_import_required"])
         self.assertFalse(execution["ambient_pythonpath_allowed"])
         self.assertFalse(execution["existing_executor_package_mutation_allowed"])
+        self.assertTrue(execution["helper_process_launch_wired"])
         for key in (
-            "helper_process_launch_wired",
             "privileged_dispatch_enabled",
             "host_wiring_enabled",
             "helper_installation_enabled",

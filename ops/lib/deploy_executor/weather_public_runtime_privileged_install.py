@@ -81,6 +81,11 @@ _EXPECTED_ARTIFACTS = (
 )
 
 
+def expected_install_artifacts() -> tuple[tuple[str, str, int], ...]:
+    """Return the immutable helper-install allowlist for trusted controller composition."""
+    return _EXPECTED_ARTIFACTS
+
+
 class WeatherPrivilegedInstallError(RuntimeError):
     pass
 
@@ -249,6 +254,10 @@ def _load_install_manifest() -> tuple[tuple[str, str, int], ...]:
         "required_owner_uid": ROOT_UID,
         "required_owner_gid": ROOT_GID,
         "artifact_count": len(_EXPECTED_ARTIFACTS),
+        "trusted_checkout_bootstrap_contract": "ops/deploy/rpi5-main-weather-public-runtime-install-trusted-checkout-bootstrap.json",
+        "trusted_checkout_target": TRUSTED_INSTALL_CHECKOUT_DERIVATION,
+        "trusted_checkout_required_before_live_installation": True,
+        "ordinary_manager_checkout_install_source_allowed": False,
         "directory_mode": "0755",
         "entrypoint_mode": "0755",
         "module_mode": "0644",

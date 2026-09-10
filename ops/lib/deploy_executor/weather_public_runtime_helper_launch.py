@@ -18,7 +18,7 @@ from .weather_public_runtime_host_wiring import WeatherHostWiringPlan
 from .weather_public_runtime_preactivation import WeatherPreactivationEnvelope
 
 HELPER_PROCESS_LAUNCH_IMPLEMENTED = True
-HELPER_PROCESS_LAUNCH_WIRED = False
+HELPER_PROCESS_LAUNCH_WIRED = True
 HELPER_TIMEOUT_SECONDS = 1800
 MAX_STDOUT_BYTES = 4096
 MAX_STDERR_BYTES = 4096

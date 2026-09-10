@@ -220,18 +220,20 @@ def _application_release(candidate: Path, release: Path, source_sha: str, runner
     if candidate != release:
         _fail("Weather application release would duplicate filesystem materialization")
     _validate_candidate(release, source_sha, runner)
+    # Build only. Starting the service here would implicitly create the declared
+    # named volume and launder docker.named-volume-ensure into this earlier gate.
     _require_success(runner(_compose_argv(release, "build", "weather", "public-ingest", "schema-init", "readiness", "corpus-check")), "Compose build")
-    _require_success(runner(_compose_argv(release, "up", "-d", "weather")), "application apply")
     return 1
 
 
-def _volume_ensure(runner: CommandRunner) -> int:
+def _volume_ensure(release: Path, runner: CommandRunner) -> int:
     out = _require_success(runner(("/usr/bin/docker", "volume", "ls", "--filter", f"name=^{HOST_VOLUME}$", "--format", "{{.Name}}")), "volume discovery").strip()
-    if out == HOST_VOLUME:
-        return 0
     if out:
-        _fail("Weather volume discovery returned ambiguous identity")
+        _fail("first-rollout Weather volume must be absent before explicit ensure")
     _require_success(runner(("/usr/bin/docker", "volume", "create", HOST_VOLUME)), "volume create")
+    # Application apply is deliberately after the separately budgeted volume
+    # creation so Compose cannot create weather_data as a hidden side effect.
+    _require_success(runner(_compose_argv(release, "up", "-d", "weather")), "application apply")
     return 1
 
 
@@ -354,7 +356,7 @@ def execute_stage(argv: Sequence[str], *, activation: Activation, runner: Comman
     if binding.stage_id == "application_release":
         operations = _application_release(candidate, release, source_sha, runner)
     elif binding.stage_id == "persistent_volume_ensure":
-        operations = _volume_ensure(runner)
+        operations = _volume_ensure(release, runner)
     elif binding.stage_id == "explicit_schema_init":
         operations = _schema_init(release, runner)
     elif binding.stage_id == "readiness_schema_privacy":

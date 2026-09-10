@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "execution_enabled": false,
+  "operations": [
+    {
+      "operation_id": "rozkalns-weather.public-runtime-release.v1",
+      "source_repository": "rozkalnsandris/rozkalns_weather",
+      "queue_match": {
+        "target_alias": "rozkalns-weather-public-rpi5",
+        "execution_location_class": "trusted-home-host",
+        "repository_entrypoint": "deploy/runtime-descriptor.json",
+        "deploy_class": "STRICT_LIVE_AUTH_REQUIRED"
+      },
+      "target_alias": "rozkalns-weather-public-rpi5",
+      "adapter_id": "rozkalns-weather.public-runtime-release.v1",
+      "authorization_class": "STRICT",
+      "ordinary_live_all_eligible": false,
+      "baseline": {
+        "kind": "resolver",
+        "resolver_id": "rozkalns-weather.public-runtime-baseline.v1"
+      },
+      "mutation_budget": [
+        {
+          "category": "filesystem.release-materialization",
+          "max_operations": 1
+        },
+        {
+          "category": "docker.named-volume-ensure",
+          "max_operations": 1
+        },
+        {
+          "category": "docker.compose-build",
+          "max_operations": 1
+        },
+        {
+          "category": "docker.compose-application-apply",
+          "max_operations": 1
+        },
+        {
+          "category": "systemd.public-ingest-schedule-install-or-update",
+          "max_operations": 1
+        }
+      ],
+      "rollback_policy": "NONE",
+      "exclusions": [
+        "arbitrary command/path/argv/environment authority",
+        "credentials, HOME_LAT, HOME_LON or exact home coordinates",
+        "Google Cloud, BigQuery or WeatherNext private access",
+        "Cloudflare, network or firewall mutation",
+        "SQLite schema initialization or historical corpus backfill",
+        "corpus delete, restore, backup or destructive rollback",
+        "package install or generic sudo/root authority",
+        "repository settings, rulesets, permissions or secrets changes",
+        "automatic retry, cleanup or rollback"
+      ],
+      "dependencies": [
+        "source-repository-id:1359499204",
+        "handoff-design-source-sha:6296556e783967c0897abc4e27368295a1158c7e",
+        "runtime-descriptor-blob:dde970523486123e2809388bff9ed8b643cb6940",
+        "compose-public-blob:41b40d614907acd7f257c2fd4eea368de47fb1ea",
+        "public-ingest-schedule-blob:d67dd0bb606f6d25922972729a4ff1ad33a68224",
+        "handoff-doc-blob:8004da2243aa3bb3e1fb9917bc8819134f117cf8",
+        "runtime-class:public-only-rpi5",
+        "compose-services:schema-init,weather,public-ingest,readiness",
+        "persistent-volume:weather_data",
+        "database-url:sqlite:///data/weather.db",
+        "readiness-endpoint:/ready",
+        "weathernext-required:false",
+        "home-coordinates-required:false"
+      ],
+      "preflight": [
+        "READY and any later LIVE-AUTH bind one exact weather source SHA and target alias",
+        "weather repository stable ID is 1359499204 and authorized SHA is merged/reachable from current main",
+        "exact authorized weather source SHA CI is successful",
+        "runtime descriptor, Compose, schedule and handoff contract identities match reviewed source evidence",
+        "baseline resolver reports only sanitized deployment identity and no private runtime data",
+        "WeatherNext credentials and home coordinates are absent from the public-only operation",
+        "operation remains STRICT and globally execution-disabled until a separate reviewed LIVE gate"
+      ],
+      "postconditions": [
+        "deployed application identity would equal the exact authorized weather source SHA",
+        "/ready would report privacy-safe readiness without coordinates, credentials or host database path",
+        "persistent weather_data corpus volume would be retained across application replacement",
+        "WeatherNext would remain optional and access_pending until separately activated",
+        "recurring public ingest scheduling would remain independent from WeatherNext scheduling",
+        "application rollback would never imply SQLite rollback, delete or restore"
+      ],
+      "required_github_evidence": [
+        "weather repository stable identity",
+        "authorized weather SHA is merged/reachable from current main",
+        "exact-SHA weather CI completed successfully",
+        "reviewed runtime descriptor, Compose, ingest schedule and handoff blob identities",
+        "READY queue contract hash",
+        "separate owner LIVE-AUTH for any future exact normalized execution envelope"
+      ]
+    }
+  ]
+}

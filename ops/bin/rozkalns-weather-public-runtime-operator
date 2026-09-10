@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+from dataclasses import asdict
+import argparse
+import json
+from pathlib import Path
+import sys
+
+SUPPORT_ROOT = Path('/usr/local/libexec/rozkalns-weather-public-runtime-operator')
+PACKAGE_INIT = SUPPORT_ROOT / 'deploy_executor' / '__init__.py'
+
+
+def _stop(reason: str, *, issue_number: int | None = None, reuse_forbidden: bool = False, host_started: bool = False, production_started: bool = False) -> int:
+    payload = {
+        'schema': 'rozkalns-weather.public-runtime-composite-operator-receipt.v1',
+        'result': 'FAIL_CLOSED',
+        'authorization_issue_number': issue_number,
+        'safe_stage': reason,
+        'authorization_reuse_forbidden': reuse_forbidden,
+        'host_mutation_started': host_started,
+        'production_mutation_started': production_started,
+        'automatic_retry': False,
+        'automatic_cleanup': False,
+        'automatic_rollback': False,
+    }
+    print(json.dumps(payload, sort_keys=True, separators=(',', ':')))
+    return 78
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description='Run one exact owner-authorized Weather Composite STRICT LIVE request')
+    parser.add_argument('--issue-number', type=int, required=True)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parser().parse_args(argv)
+    if not PACKAGE_INIT.is_file():
+        return _stop('operator_install_layout', issue_number=args.issue_number)
+    sys.path.insert(0, str(SUPPORT_ROOT))
+    try:
+        from deploy_executor.weather_public_runtime_operator import (
+            WeatherCompositeOperatorError,
+            build_runtime_operator,
+        )
+    except ImportError:
+        return _stop('operator_import', issue_number=args.issue_number)
+    try:
+        receipt = build_runtime_operator().execute(args.issue_number)
+    except WeatherCompositeOperatorError as exc:
+        return _stop(
+            exc.stage,
+            issue_number=args.issue_number,
+            reuse_forbidden=exc.authorization_reuse_forbidden,
+            host_started=exc.host_mutation_started,
+            production_started=exc.production_mutation_started,
+        )
+    print(json.dumps(asdict(receipt), sort_keys=True, separators=(',', ':')))
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

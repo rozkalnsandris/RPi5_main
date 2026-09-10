@@ -19,6 +19,8 @@ EXPECTED_ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
 TARGET = "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-trusted"
 AUTH_SHA = "EXPLICIT_COMPOSITE_STRICT_LIVE_EXACT_RPI5_MAIN_SHA"
 CONTRACT_PATH = "ops/deploy/rpi5-main-weather-public-runtime-trusted-checkout-bootstrap.json"
+SUCCESSOR_CONTRACT_PATH = "ops/deploy/rpi5-main-weather-public-runtime-install-trusted-checkout-bootstrap.json"
+SUCCESSOR_TARGET = "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-install-trusted"
 REQUIRED_PATHS = [
     "ops/deploy/weather-public-runtime-helper-install.json",
     "ops/deploy/weather-public-runtime-execution.json",
@@ -156,16 +158,21 @@ class WeatherTrustedCheckoutBootstrapContractTests(unittest.TestCase):
             "rozkalns-weather.public-runtime-release.v1",
         )
 
-    def test_install_and_execution_contracts_bind_the_trusted_checkout(self) -> None:
+    def test_legacy_contract_is_preserved_but_current_surfaces_bind_successor(self) -> None:
+        validate_contract_shape(self.contract)
         for surface in (self.install, self.execution):
-            self.assertEqual(surface["trusted_checkout_bootstrap_contract"], CONTRACT_PATH)
-            self.assertEqual(surface["trusted_checkout_target"], TARGET)
+            self.assertEqual(surface["trusted_checkout_bootstrap_contract"], SUCCESSOR_CONTRACT_PATH)
+            self.assertEqual(surface["trusted_checkout_target"], SUCCESSOR_TARGET)
+            self.assertNotEqual(surface["trusted_checkout_target"], TARGET)
             self.assertIs(surface["trusted_checkout_required_before_live_installation"], True)
             self.assertIs(surface["ordinary_manager_checkout_install_source_allowed"], False)
 
     def test_docs_and_validate_target_are_wired(self) -> None:
         self.assertIn("RPi5_main-weather-public-runtime-trusted", self.doc)
         self.assertIn(CONTRACT_PATH, self.doc)
+        self.assertIn(SUCCESSOR_CONTRACT_PATH, self.doc)
+        self.assertIn(SUCCESSOR_TARGET, self.doc)
+        self.assertIn("evidence-only", self.doc)
         self.assertIn("git worktree add --detach", self.doc)
         self.assertIn(
             "python3 ./tests/test-rpi5-main-weather-public-runtime-trusted-checkout-bootstrap.py",
