@@ -156,6 +156,7 @@ class WeatherCompositeAuthorityEvidence:
     authorization_raw_body_sha256: str
     composite_authorization_sha256: str
     queue_issue_number: int
+    queue_contract_sha256: str
     source_sha: str
     weather_current_main_sha: str
     weather_ci_run_id: int
@@ -174,6 +175,7 @@ class WeatherCompositeAuthorityEvidence:
     authorization_ttl_valid: bool = True
     authorization_body_unchanged: bool = True
     authorization_replay_available: bool = True
+    authorization_replay_consumed: bool = False
     queue_ready: bool = True
     queue_binding_valid: bool = True
     registry_execution_enabled: bool = False
@@ -224,6 +226,8 @@ class FixedPublicSourceEvidence:
 
 class AuthorizationReplayAvailability(Protocol):
     def is_available(self, accepted: AcceptedAuthorization) -> bool: ...
+
+    def is_consumed(self, accepted: AcceptedAuthorization) -> bool: ...
 
 
 class SanitizedWeatherBaselineProvider(Protocol):
@@ -843,14 +847,26 @@ class ConcreteCanonicalWeatherCompositeRevalidator:
     def revalidate_composite(
         self, authorization_issue_number: int
     ) -> WeatherCompositeAuthorityEvidence:
+        return self._revalidate_entry(authorization_issue_number, replay_state="available")
+
+    def revalidate_consumed_composite(
+        self, authorization_issue_number: int
+    ) -> WeatherCompositeAuthorityEvidence:
+        return self._revalidate_entry(authorization_issue_number, replay_state="consumed")
+
+    def _revalidate_entry(
+        self, authorization_issue_number: int, *, replay_state: str
+    ) -> WeatherCompositeAuthorityEvidence:
         if type(authorization_issue_number) is not int or not (
             1 <= authorization_issue_number <= 2_147_483_647
         ):
             raise WeatherCompositeAuthorityError(
                 "Weather authorization issue number is invalid"
             )
+        if replay_state not in {"available", "consumed"}:
+            raise WeatherCompositeAuthorityError("Weather replay state is invalid")
         try:
-            return self._revalidate_composite(authorization_issue_number)
+            return self._revalidate_composite(authorization_issue_number, replay_state=replay_state)
         except WeatherCompositeAuthorityError:
             raise
         except Exception:
@@ -891,7 +907,7 @@ class ConcreteCanonicalWeatherCompositeRevalidator:
         )
 
     def _revalidate_composite(
-        self, issue_number: int
+        self, issue_number: int, *, replay_state: str
     ) -> WeatherCompositeAuthorityEvidence:
         _require_read_clients(
             self._authorization_client,
@@ -991,11 +1007,19 @@ class ConcreteCanonicalWeatherCompositeRevalidator:
             )
         _require_rpi5_minimum_ancestor(rpi5_client, rpi5_source)
 
-        replay_available = self._replay_availability.is_available(accepted)
-        if type(replay_available) is not bool or replay_available is not True:
-            raise WeatherCompositeAuthorityError(
-                "Weather authorization is unavailable for one-shot consumption"
-            )
+        if replay_state == "available":
+            replay_ok = self._replay_availability.is_available(accepted)
+            replay_error = "Weather authorization is unavailable for one-shot consumption"
+        else:
+            consumed = getattr(self._replay_availability, "is_consumed", None)
+            if not callable(consumed):
+                raise WeatherCompositeAuthorityError(
+                    "Weather consumed replay verification is unavailable"
+                )
+            replay_ok = consumed(accepted)
+            replay_error = "Weather authorization is not durably consumed by this request"
+        if type(replay_ok) is not bool or replay_ok is not True:
+            raise WeatherCompositeAuthorityError(replay_error)
 
         require_isolated_auth_surface(self._auth_surface)
         final_issue_response = self._authorization_client.get_json(
@@ -1042,6 +1066,20 @@ class ConcreteCanonicalWeatherCompositeRevalidator:
             raise WeatherCompositeAuthorityError(
                 "Weather READY queue drifted during canonical revalidation"
             )
+        if replay_state == "available":
+            final_replay_ok = self._replay_availability.is_available(accepted)
+        else:
+            final_replay_ok = self._replay_availability.is_consumed(accepted)
+        if type(final_replay_ok) is not bool or final_replay_ok is not True:
+            raise WeatherCompositeAuthorityError(
+                "Weather replay state drifted during canonical revalidation"
+            )
+        queue_contract_sha256 = hashlib.sha256(
+            json.dumps(
+                protocol_queue, sort_keys=True, separators=(",", ":"),
+                ensure_ascii=True, allow_nan=False,
+            ).encode("utf-8", "strict")
+        ).hexdigest()
 
         return WeatherCompositeAuthorityEvidence(
             authorization_issue_number=accepted.issue_number,
@@ -1055,6 +1093,7 @@ class ConcreteCanonicalWeatherCompositeRevalidator:
             authorization_raw_body_sha256=accepted.raw_body_sha256,
             composite_authorization_sha256=supplement.canonical_sha256,
             queue_issue_number=queue_issue_number,
+            queue_contract_sha256=queue_contract_sha256,
             source_sha=weather_source.source_sha,
             weather_current_main_sha=weather_source.current_main_sha,
             weather_ci_run_id=weather_source.run_id,
@@ -1069,6 +1108,8 @@ class ConcreteCanonicalWeatherCompositeRevalidator:
             release_mutation_budget=RELEASE_MUTATION_BUDGET,
             additional_mutation_budget=ADDITIONAL_MUTATION_BUDGET,
             full_mutation_budget=FULL_MUTATION_BUDGET,
+            authorization_replay_available=replay_state == "available",
+            authorization_replay_consumed=replay_state == "consumed",
         )
 
 
@@ -1221,6 +1262,8 @@ def source_readiness() -> Mapping[str, object]:
         "rpi5_minimum_reviewed_ancestor": RPI5_MIN_REVIEWED_ANCESTOR,
         "caller_authority": ("authorization_issue_number",),
         "concrete_canonical_revalidator_implemented": True,
+        "post_consume_revalidation_implemented": True,
+        "queue_contract_sha256_bound": True,
         "composite_supplement_required": True,
         "generic_release_live_auth_sufficient": False,
         "runtime_live_authority": False,

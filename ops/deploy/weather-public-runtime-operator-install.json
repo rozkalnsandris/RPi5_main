@@ -1,0 +1,169 @@
+{
+  "schema_version": 1,
+  "contract": "rozkalns-weather.public-runtime-operator-install.v1",
+  "status": "SOURCE_READY_INSTALL_DISABLED",
+  "repository": "rozkalnsandris/RPi5_main",
+  "issue": 454,
+  "entrypoint": "/usr/local/sbin/rozkalns-weather-public-runtime-operator",
+  "support_root": "/usr/local/libexec/rozkalns-weather-public-runtime-operator",
+  "package_root": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/deploy_executor",
+  "artifact_count": 23,
+  "required_owner_uid": 0,
+  "required_owner_gid": 0,
+  "entrypoint_mode": "0755",
+  "module_mode": "0644",
+  "contract_mode": "0644",
+  "artifacts": [
+    {
+      "source": "ops/bin/rozkalns-weather-public-runtime-operator",
+      "destination": "/usr/local/sbin/rozkalns-weather-public-runtime-operator",
+      "kind": "entrypoint",
+      "mode": "0755"
+    },
+    {
+      "source": "ops/lib/deploy_executor/__init__.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/deploy_executor/__init__.py",
+      "kind": "package_init",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/adapters.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/deploy_executor/adapters.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/github_app_auth.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/deploy_executor/github_app_auth.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/p9_canary.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/deploy_executor/p9_canary.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/p9_isolated_auth_surface.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/deploy_executor/p9_isolated_auth_surface.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/p9_runtime.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/deploy_executor/p9_runtime.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/protocol.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/deploy_executor/protocol.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/queue_normalizer.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/deploy_executor/queue_normalizer.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/registry.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/deploy_executor/registry.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/state.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/deploy_executor/state.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/transport.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/deploy_executor/transport.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/weather_public_runtime_adapter.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/deploy_executor/weather_public_runtime_adapter.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/weather_public_runtime_bootstrap.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/deploy_executor/weather_public_runtime_bootstrap.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/weather_public_runtime_composite.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/deploy_executor/weather_public_runtime_composite.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/weather_public_runtime_execution.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/deploy_executor/weather_public_runtime_execution.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/weather_public_runtime_helper_launch.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/deploy_executor/weather_public_runtime_helper_launch.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/weather_public_runtime_host_wiring.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/deploy_executor/weather_public_runtime_host_wiring.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/weather_public_runtime_operator.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/deploy_executor/weather_public_runtime_operator.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/weather_public_runtime_preactivation.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/deploy_executor/weather_public_runtime_preactivation.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/weather_public_runtime_stage_helper.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/deploy_executor/weather_public_runtime_stage_helper.py",
+      "kind": "module",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/deploy/weather-public-runtime-operator-registry.json",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/executor-operations.json",
+      "kind": "contract",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/lib/deploy_executor/weather_public_runtime_privileged_install.py",
+      "destination": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/deploy_executor/weather_public_runtime_privileged_install.py",
+      "kind": "module",
+      "mode": "0644"
+    }
+  ],
+  "activation": {
+    "source_merge_authorizes_install": false,
+    "host_installed": false,
+    "separate_explicit_live_authorization_required": true,
+    "caller_selected_path": false,
+    "caller_selected_argv": false,
+    "caller_selected_environment": false,
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false
+  },
+  "canonical_privileged_install_contract": "ops/deploy/weather-public-runtime-privileged-install-activation.json",
+  "canonical_successor_checkout_contract": "ops/deploy/rpi5-main-weather-public-runtime-install-trusted-checkout-bootstrap.json"
+}

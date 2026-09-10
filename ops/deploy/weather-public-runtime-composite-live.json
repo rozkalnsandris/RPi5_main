@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "contract": "rozkalns-weather.public-runtime-composite-live.v1",
-  "status": "SOURCE_IMPLEMENTED_RUNTIME_INACTIVE",
+  "status": "SOURCE_READY_OPERATOR_HOST_INACTIVE",
   "source_repository": "rozkalnsandris/rozkalns_weather",
   "rpi5_main_repository": "rozkalnsandris/RPi5_main",
   "target_alias": "rozkalns-weather-public-rpi5",
@@ -120,12 +120,14 @@
     "recurring_public_ingest_schedule"
   ],
   "trusted_checkout": {
-    "contract": "ops/deploy/rpi5-main-weather-public-runtime-trusted-checkout-bootstrap.json",
-    "target": "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-trusted",
+    "contract": "ops/deploy/rpi5-main-weather-public-runtime-install-trusted-checkout-bootstrap.json",
+    "target": "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-install-trusted",
     "manager_checkout_install_source_allowed": false,
     "exact_current_rpi5_main_sha_required": true,
     "minimum_reviewed_ancestor": "95b6b95b132614cbc330d6d764d0557079a67534",
-    "allowed_git_mutation_count": 2
+    "allowed_git_mutation_count": 2,
+    "legacy_target": "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-trusted",
+    "legacy_target_mutation_allowed": false
   },
   "helper_installation": {
     "manifest": "ops/deploy/weather-public-runtime-helper-install.json",
@@ -191,7 +193,10 @@
     "final_live_auth_reread_required": true,
     "final_ready_queue_reread_required": true,
     "control_plane_reader": "existing reviewed private read-only GitHub App clients",
-    "source_reader": "credential-free fixed public GitHub API reader"
+    "source_reader": "credential-free fixed public GitHub API reader",
+    "pre_consume_replay_availability_required": true,
+    "post_consume_same_request_state_required": "CONSUMED",
+    "post_consume_before_each_privileged_boundary": true
   },
   "failure": {
     "authorization_consumed_at_first_future_mutation": true,
@@ -214,7 +219,10 @@
     "host_wiring_enabled": false,
     "production_mutation_enabled": false,
     "production_mutation_started": false,
-    "generic_shell_path_argv_environment_authority": false
+    "generic_shell_path_argv_environment_authority": false,
+    "operator_source_ready": true,
+    "operator_host_installed": false,
+    "helper_process_launch_source_wired": true
   },
   "explicit_exclusions": [
     "source merge, READY queue or generic release LIVE-AUTH as standalone runtime authority",
@@ -227,5 +235,9 @@
     "Cloudflare, network, firewall, package, user, group or unrelated permission mutation",
     "backup creation, restore, corpus delete, cleanup or destructive SQLite rollback",
     "automatic retry, cleanup, rollback, restore, delete or alternate mutation path"
-  ]
+  ],
+  "operator_contract": "ops/deploy/weather-public-runtime-operator.json",
+  "operator_install_manifest": "ops/deploy/weather-public-runtime-operator-install.json",
+  "operator_entrypoint_source": "ops/bin/rozkalns-weather-public-runtime-operator",
+  "privileged_install_activation_contract": "ops/deploy/weather-public-runtime-privileged-install-activation.json"
 }

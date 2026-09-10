@@ -80,7 +80,7 @@ database rollback, corpus deletion, cleanup, or destructive recovery.
 WeatherNext/private BigQuery inputs and `HOME_LAT`/`HOME_LON` are outside this
 public-only runtime class.
 
-## Pre-activation and host-wiring — Issues #432 and #435
+## Pre-activation and host-wiring — Issue #432 and Issue #435
 
 `weather_public_runtime_preactivation.py` reuses the existing owner
 `rozkalns.live-auth.v1` protocol, normalized READY queue binding, authorization
@@ -90,6 +90,8 @@ envelope; it does not grant host execution.
 `weather_public_runtime_host_wiring.py` binds the whole preactivation envelope
 to a SHA-256 and maps the nine bootstrap stages to the fixed helper identities in
 `ops/deploy/weather-public-runtime-host-wiring.json`.
+The host-wiring interface is implemented in source but remains disabled on the host;
+any later activation still requires a separate exact LIVE authorization.
 
 The read-only stages remain readiness, optional public smoke, and corpus
 integrity. SQLite schema/truth/forecast writes remain separate mutation classes.
@@ -135,21 +137,27 @@ The Composite revalidator introduced by #449 is a controller-side source
 authority component and is intentionally not added to this 13-artifact helper
 runtime closure.
 
-## Weather trusted checkout — Issue #446
+## Weather trusted checkout — Issue #446 (legacy evidence contract)
 
-The canonical contract is
+The original contract is
 `ops/deploy/rpi5-main-weather-public-runtime-trusted-checkout-bootstrap.json`.
+After the fail-closed LIVE attempt described under Issue #455, this original
+checkout is retained as evidence-only and is no longer current mutation authority.
 
 The ordinary `RPi5_main` manager checkout may be stale, dirty or detached only
 as a Git object/ref manager. Its working tree, index and HEAD are not mutation
 authority.
 
-A future separately authorized Composite STRICT LIVE may perform exactly:
+Under the original #446 contract, a separately authorized Composite STRICT LIVE
+could perform exactly:
 
 1. `git fetch origin main`;
 2. one fixed `git worktree add --detach` at
    `RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-trusted` for the exact
    authorized current `RPi5_main` SHA.
+
+That original target is now legacy evidence only; current mutation authority uses
+the #455 successor contract described below.
 
 The authorized SHA must equal fresh `origin/main` and descend from reviewed
 minimum ancestor `95b6b95b132614cbc330d6d764d0557079a67534`.
@@ -228,6 +236,69 @@ authorized mutation consumes that authorization. After mutation start, any
 error, timeout, drift, lock conflict, health regression or authorization
 ambiguity requires STOP with minimum read-only evidence and no undeclared retry,
 cleanup, rollback or alternate route.
+
+## Privileged install successor bridge — Issue #455
+
+After a fail-closed first LIVE attempt created the original trusted checkout but
+stopped before helper installation, Issue #455 introduced the reviewed successor
+contract `ops/deploy/rpi5-main-weather-public-runtime-install-trusted-checkout-bootstrap.json`
+and checkout `RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-install-trusted`.
+The legacy `RPi5_main-weather-public-runtime-trusted` checkout is evidence-only:
+it is never reset, updated, removed, cleaned or reused as mutation authority.
+The #454 operator binds this successor contract and the #455 canonical 13-artifact
+allowlist; it does not create a second independent helper-install identity.
+
+## Composite LIVE operator wiring — Issue #454
+
+Issue #454 adds the reviewed source-side operator composition that was deliberately
+absent after #449. The machine contract is
+`ops/deploy/weather-public-runtime-operator.json`; its source state is
+`SOURCE_READY_HOST_NOT_INSTALLED`.
+
+The only caller-controlled value remains `authorization_issue_number`. The
+operator composes the existing canonical Composite revalidator with durable replay
+consumption, the exact trusted-checkout contract, the fixed 13-artifact helper
+install transaction, atomic activation publication and the existing
+`WeatherOneShotStageLauncher`. No caller-selected path, executable, argv,
+environment, repository URL, helper identity, Docker target, systemd unit or
+SQLite path is added.
+
+Immediately before the first mutation the same human LIVE-AUTH must still pass
+owner/TTL/raw-body immutability, READY queue binding, Weather exact-SHA CI,
+exact-current `RPi5_main` SHA/CI/ancestor and sanitized host-baseline validation.
+The first mutation is the durable SQLite replay consume. From the instant that
+consume is attempted, authorization reuse is forbidden. Every later privileged
+boundary revalidates the same authorization and requires that exact request to be
+`CONSUMED`; it must not become `AVAILABLE` again.
+
+The fixed gate order remains unchanged. One implementation correction keeps its
+mutation classes honest: `application_release` validates/materializes the exact
+release and performs Compose build only. It does **not** run `compose up`, because
+the Weather service declares `weather_data` and Compose can create a declared
+named volume while starting a service. `persistent_volume_ensure` therefore
+creates the exact named volume first and only then performs the fixed Weather
+application apply. This prevents implicit volume creation from laundering the
+`docker.named-volume-ensure` budget into the earlier application gate.
+
+The sanitized stage baseline never derives deployed provenance from the Compose
+project name alone. A deployed result requires the exact immutable release Git
+HEAD/clean tree and the running Weather container image ID to match the image ID
+resolved from that exact release Compose file. Readiness parsing retains only the
+privacy-safe schema state; credentials, coordinates, database paths and raw logs
+are not returned.
+
+The operator's future host-install closure is frozen separately in
+`ops/deploy/weather-public-runtime-operator-install.json`. It contains the fixed
+entrypoint, exact transitive controller modules (including the #455 canonical
+privileged-install allowlist source) and the Weather-only execution-disabled registry. This operator closure is **not** part of the
+13-artifact stage-helper budget. Source merge does not install it. Host installation
+still requires a separate explicit owner LIVE gate before a fresh Composite
+LIVE-AUTH can be executed.
+
+Failure semantics remain fail closed. After replay-consume attempt or any later
+mutation attempt, an error/timeout/drift/lock/health/authorization ambiguity means
+STOP with minimum public-safe evidence. There is no automatic retry, cleanup,
+rollback, restore, delete, manager-checkout repair or alternate route.
 
 ## Explicitly separate gates
 

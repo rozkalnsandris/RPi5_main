@@ -76,6 +76,9 @@ class WeatherPrivilegedInstallSourceTests(unittest.TestCase):
         self.assertEqual(expected, bridge._EXPECTED_ARTIFACTS)
         self.assertEqual(len(expected), 13)
         self.assertEqual(len({destination for _, destination, _ in expected}), 13)
+        self.assertEqual(manifest["trusted_checkout_bootstrap_contract"], "ops/deploy/rpi5-main-weather-public-runtime-install-trusted-checkout-bootstrap.json")
+        self.assertEqual(manifest["trusted_checkout_target"], TRUSTED_DERIVATION)
+        self.assertEqual(expected, bridge.expected_install_artifacts())
 
     def test_activation_payload_is_exact_and_parseable(self) -> None:
         fake = SimpleNamespace(source_sha="a" * 40, preactivation_sha256="b" * 64, start_date="2026-03-15", end_date="2026-09-10", recovery_decision="owner-accepted-no-prewrite-backup")
