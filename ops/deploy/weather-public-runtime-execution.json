@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
   "contract": "rozkalns-weather.public-runtime-execution-capability.v1",
-  "status": "SOURCE_IMPLEMENTED_HOST_INACTIVE",
+  "status": "SOURCE_READY_OPERATOR_HOST_INACTIVE",
   "source_repository": "rozkalnsandris/rozkalns_weather",
   "target_alias": "rozkalns-weather-public-rpi5",
   "operation_id": "rozkalns-weather.public-runtime-release.v1",
   "authorization_class": "STRICT",
   "ordinary_live_all_eligible": false,
-  "trusted_checkout_bootstrap_contract": "ops/deploy/rpi5-main-weather-public-runtime-trusted-checkout-bootstrap.json",
-  "trusted_checkout_target": "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-trusted",
+  "trusted_checkout_bootstrap_contract": "ops/deploy/rpi5-main-weather-public-runtime-install-trusted-checkout-bootstrap.json",
+  "trusted_checkout_target": "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-install-trusted",
   "trusted_checkout_required_before_live_installation": true,
   "ordinary_manager_checkout_install_source_allowed": false,
   "composite_live_authority_contract": "ops/deploy/weather-public-runtime-composite-live.json",
@@ -67,7 +67,7 @@
   "installable_helper_source_present": true,
   "candidate_materialization_source_present": true,
   "helper_process_launch_implemented": true,
-  "helper_process_launch_wired": false,
+  "helper_process_launch_wired": true,
   "privileged_dispatch_enabled": false,
   "host_wiring_enabled": false,
   "helper_installation_enabled": false,
@@ -98,5 +98,15 @@
     "caller-selected command, executable path, repository URL, argv or environment",
     "ambient repository checkout, PYTHONPATH, user site-packages or existing deploy-executor package mutation",
     "automatic retry, cleanup, rollback, restore or alternate route"
-  ]
+  ],
+  "composite_operator_contract": "ops/deploy/weather-public-runtime-operator.json",
+  "composite_operator_module": "ops/lib/deploy_executor/weather_public_runtime_operator.py",
+  "composite_operator_entrypoint_source": "ops/bin/rozkalns-weather-public-runtime-operator",
+  "composite_operator_install_manifest": "ops/deploy/weather-public-runtime-operator-install.json",
+  "composite_operator_registry": "ops/deploy/weather-public-runtime-operator-registry.json",
+  "operator_source_ready": true,
+  "operator_host_installed": false,
+  "operator_installation_enabled": false,
+  "privileged_install_activation_contract": "ops/deploy/weather-public-runtime-privileged-install-activation.json",
+  "privileged_install_activation_module": "ops/lib/deploy_executor/weather_public_runtime_privileged_install.py"
 }

@@ -62,7 +62,7 @@ SURFACE_PATH = ROOT / "ops/deploy/executor-p9-isolated-auth-surface.json"
 MACHINE_PATH = ROOT / "ops/deploy/weather-public-runtime-composite-live.json"
 EXECUTION_PATH = ROOT / "ops/deploy/weather-public-runtime-execution.json"
 HELPER_INSTALL_PATH = ROOT / "ops/deploy/weather-public-runtime-helper-install.json"
-CHECKOUT_PATH = ROOT / "ops/deploy/rpi5-main-weather-public-runtime-trusted-checkout-bootstrap.json"
+CHECKOUT_PATH = ROOT / "ops/deploy/rpi5-main-weather-public-runtime-install-trusted-checkout-bootstrap.json"
 HOST_WIRING_PATH = ROOT / "ops/deploy/weather-public-runtime-host-wiring.json"
 SOURCE_PATH = ROOT / "ops/lib/deploy_executor/weather_public_runtime_composite.py"
 DOC_PATH = ROOT / "docs/WEATHER_PUBLIC_RUNTIME_EXECUTOR_SOURCE.md"
@@ -339,13 +339,18 @@ def client(provider: object, sender: FixtureSender) -> GitHubRestClient:
 
 
 class ReplayAvailability:
-    def __init__(self, available: bool = True):
+    def __init__(self, available: bool = True, *, consumed: bool = False):
         self.available = available
+        self.consumed = consumed
         self.calls: list[str] = []
 
     def is_available(self, accepted: object) -> bool:
         self.calls.append(accepted.request_id)
         return self.available
+
+    def is_consumed(self, accepted: object) -> bool:
+        self.calls.append(accepted.request_id)
+        return self.consumed
 
 
 class BaselineProvider:
@@ -399,6 +404,16 @@ class WeatherCompositeCanonicalTests(unittest.TestCase):
         self.assertTrue(sender.public_authorization_headers)
         self.assertFalse(any(sender.public_authorization_headers))
         self.assertTrue(all(call.startswith("/repos/") for call in sender.calls))
+
+    def test_post_consume_revalidator_requires_durable_consumed_identity(self):
+        replay = ReplayAvailability(False, consumed=True)
+        target, _sender, _replay = revalidator(replay=replay)
+        evidence = target.revalidate_consumed_composite(AUTH_ISSUE_NUMBER)
+        self.assertTrue(evidence.authorization_replay_consumed)
+        self.assertFalse(evidence.authorization_replay_available)
+        replay.consumed = False
+        with self.assertRaisesRegex(WeatherCompositeAuthorityError, "not durably consumed|replay state drifted"):
+            target.revalidate_consumed_composite(AUTH_ISSUE_NUMBER)
 
     def test_composer_keeps_runtime_inactive_and_public_scope_fixed(self):
         value, _, _ = revalidator()
@@ -495,7 +510,7 @@ class WeatherCompositeMachineContractTests(unittest.TestCase):
     def test_machine_contract_freezes_exact_authority_partition_and_bootstrap_scope(self):
         machine = json.loads(MACHINE_PATH.read_text(encoding="utf-8"))
         self.assertEqual(machine["contract"], "rozkalns-weather.public-runtime-composite-live.v1")
-        self.assertEqual(machine["status"], "SOURCE_IMPLEMENTED_RUNTIME_INACTIVE")
+        self.assertEqual(machine["status"], "SOURCE_READY_OPERATOR_HOST_INACTIVE")
         self.assertEqual(machine["host_alias"], "rpi5")
         self.assertEqual(machine["target_alias"], TARGET_ALIAS)
         self.assertFalse(machine["release_authorization"]["generic_release_live_auth_sufficient"])
@@ -536,7 +551,7 @@ class WeatherCompositeMachineContractTests(unittest.TestCase):
 
         self.assertEqual(
             machine["trusted_checkout"]["contract"],
-            "ops/deploy/rpi5-main-weather-public-runtime-trusted-checkout-bootstrap.json",
+            "ops/deploy/rpi5-main-weather-public-runtime-install-trusted-checkout-bootstrap.json",
         )
         self.assertEqual(
             [row["argv"] for row in checkout["allowed_git_mutations"]],
@@ -547,10 +562,21 @@ class WeatherCompositeMachineContractTests(unittest.TestCase):
                     "worktree",
                     "add",
                     "--detach",
-                    "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-trusted",
+                    "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-install-trusted",
                     "EXPLICIT_COMPOSITE_STRICT_LIVE_EXACT_RPI5_MAIN_SHA",
                 ],
             ],
+        )
+        self.assertFalse(checkout["legacy_checkout"]["mutation_allowed"])
+        self.assertFalse(checkout["legacy_checkout"]["cleanup_allowed"])
+        self.assertEqual(
+            machine["trusted_checkout"]["legacy_target"],
+            "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-trusted",
+        )
+        self.assertFalse(machine["trusted_checkout"]["legacy_target_mutation_allowed"])
+        self.assertEqual(
+            machine["privileged_install_activation_contract"],
+            "ops/deploy/weather-public-runtime-privileged-install-activation.json",
         )
         self.assertEqual(install["artifact_count"], 13)
         self.assertEqual(install["required_owner_uid"], 0)
@@ -567,6 +593,10 @@ class WeatherCompositeMachineContractTests(unittest.TestCase):
             "ops/deploy/weather-public-runtime-composite-live.json",
         )
         self.assertFalse(execution["generic_release_live_auth_sufficient"])
+        self.assertEqual(
+            execution["privileged_install_activation_contract"],
+            "ops/deploy/weather-public-runtime-privileged-install-activation.json",
+        )
         self.assertEqual(execution["activation_file_required_mode"], "0600")
         self.assertTrue(execution["activation_file_required_root_owner"])
         self.assertTrue(execution["whole_preactivation_sha256_required"])
@@ -575,8 +605,8 @@ class WeatherCompositeMachineContractTests(unittest.TestCase):
             tuple(row["stage_id"] for row in wiring["helpers"]),
             COMPOSITE_GATE_ORDER[4:],
         )
+        self.assertTrue(execution["helper_process_launch_wired"])
         for field in (
-            "helper_process_launch_wired",
             "privileged_dispatch_enabled",
             "host_wiring_enabled",
             "helper_installation_enabled",
