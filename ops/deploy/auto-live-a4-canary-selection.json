@@ -3,7 +3,7 @@
   "contract": "AUTO-LIVE v1 A4 canary candidate selection",
   "status": "A4_OWNER_REQUIRED_LIVE_DISABLED",
   "roadmap_issue": 421,
-  "source_main_at_reconciliation": "782b531728e35e4f9ccda492b6f95886fffe60f0",
+  "source_main_at_reconciliation": "c4accd5ea08343f8e4fce30534a6e7734a461e5f",
   "shared_policy_commit_sha": "f2aeb5152371a876268bb116bb98806cddbc8e15",
   "selection": {
     "source_repository": "rozkalnsandris/dashboard_RPi5",
@@ -19,7 +19,7 @@
     "weather_not_selected_reason": "NO_AUTOMATIC_ELIGIBLE_CLASS"
   },
   "github_evidence": {
-    "observed_dashboard_main_sha": "a15a276c88d20d4a69895fc2fc0d95007ded8cbb",
+    "observed_dashboard_main_sha": "b5838741d094ad7f70987bf5a5060be11371a6ae",
     "reviewed_frozen_candidate_sha": "343366427441811a22739b05b04d069c10905805",
     "relation": "ANCESTOR",
     "observed_main_delta_paths": [
@@ -35,28 +35,27 @@
       "apps/web/src/history-ui.test.ts",
       "apps/web/src/history-ui.ts",
       "apps/web/src/pages/HistoryPanel.tsx",
+      "docs/DATA_SOURCES.md",
+      "docs/ISSUE265_CONTAINER_METRICS_SOURCE_READINESS.md",
       "docs/PHASE4A_PROMETHEUS_HISTORY.md",
+      "ops/production/container-metrics-source-contract.json",
+      "package.json",
       "packages/contracts/src/history.ts",
-      "tests/e2e/history.spec.ts"
+      "tests/e2e/history.spec.ts",
+      "tools/issue265-container-metrics-source-readiness.test.mjs"
     ],
-    "observed_main_delta_classification": "MANUAL_ROLLOUT_REQUIRED",
+    "observed_main_delta_classification": "DB_HOST_APPLY_REQUIRED",
     "point_in_time_only": true,
-    "previous_observed_dashboard_main_sha": "20e47ff7ba808f183db56e347d4fde3e1d6a129f",
+    "previous_observed_dashboard_main_sha": "a15a276c88d20d4a69895fc2fc0d95007ded8cbb",
     "blocking_paths": [
-      "apps/server/src/history-policy.test.ts",
-      "apps/server/src/history-policy.ts",
-      "apps/server/src/history-route.test.ts",
-      "apps/server/src/host-history.test.ts",
-      "apps/server/src/prometheus-normalize.test.ts",
-      "apps/server/src/prometheus-normalize.ts",
-      "apps/server/src/prometheus-query-registry.ts",
-      "packages/contracts/src/history.ts"
+      "ops/production/container-metrics-source-contract.json",
+      "tools/issue265-container-metrics-source-readiness.test.mjs"
     ],
     "exact_target_ci": {
       "required_gate": "FAST-LANE Merge Gate",
       "conclusion": "success",
-      "check_run_id": 102636069440,
-      "workflow_run_id": 34401742710,
+      "check_run_id": 102962645727,
+      "workflow_run_id": 34504055304,
       "point_in_time_only": true
     }
   },
@@ -93,14 +92,17 @@
   },
   "canary_decision": {
     "decision": "OWNER_REQUIRED",
-    "reason": "CURRENT_DASHBOARD_MAIN_MANUAL_ROLLOUT_REQUIRED",
+    "reason": "NO_SELECTED_AUTO_DEPLOY_SAFE_FULL_RANGE",
     "canary_selected": false,
     "selected_target_sha": null,
     "automatic_live_eligible": false,
     "future_auto_live_canary_requires_new_auto_deploy_safe_range_or_reviewed_policy_change": true,
-    "current_source_sha": "a15a276c88d20d4a69895fc2fc0d95007ded8cbb",
-    "current_source_range_classification": "MANUAL_ROLLOUT_REQUIRED",
-    "current_source_rejection_independent_of_fresh_live_baseline": true
+    "evaluated_source_sha": "b5838741d094ad7f70987bf5a5060be11371a6ae",
+    "evaluated_source_range_classification": "DB_HOST_APPLY_REQUIRED",
+    "evaluated_source_is_point_in_time_only": true,
+    "canonical_gate_is_sha_independent": true,
+    "next_candidate_evaluation_requires_fresh_source_head": true,
+    "next_candidate_evaluation_requires_fresh_live_baseline": true
   },
   "live_gate": {
     "candidate_selection_is_live_authority": false,
@@ -133,7 +135,15 @@
   },
   "reconciliation": {
     "as_of_utc_date": "2026-09-10",
-    "kind": "GITHUB_SOURCE_REFRESH_ONLY",
-    "live_baseline_refreshed": false
+    "kind": "STATE_BASED_CONTINUITY_REFRESH",
+    "live_baseline_refreshed": false,
+    "volatile_source_head_binding_removed": true
+  },
+  "continuity_policy": {
+    "canonical_gate_is_state_based": true,
+    "observed_dashboard_main_sha_is_current_binding": false,
+    "new_dashboard_merge_requires_rpi5_main_continuity_update": false,
+    "fresh_dashboard_main_required_at_each_candidate_evaluation": true,
+    "continuity_update_required_only_when_a4_state_or_policy_changes": true
   }
 }

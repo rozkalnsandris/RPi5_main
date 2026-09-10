@@ -1201,29 +1201,28 @@ A future A4 Auto-Live canary requires a fresh full production-baseline-to-target
 
 This reconciliation is source/docs/tests only. It does not activate a manifest or controller, invoke an adapter, stage a candidate, mutate host/runtime/systemd/Docker/credentials/permissions/database/network/Cloudflare state, deploy production, retire compatibility behavior, or start production mutation.
 
-## Current supersession — Auto-Live A4 current-source rejection (2026-09-10)
+## Current supersession — Auto-Live A4 state-based owner gate (2026-09-10)
 
-This section supersedes the 2026-09-09 A4 point-in-time `current Dashboard main` wording while retaining that older production-baseline evidence as history.
+This section supersedes exact Dashboard `main` SHA as a canonical continuity binding. Dashboard `main` is volatile and must be read fresh from GitHub whenever A4 candidate eligibility is evaluated. A newer Dashboard merge by itself does **not** make `RPi5_main` continuity stale and does not require a new central continuity PR.
 
-Fresh GitHub-only evidence:
+Point-in-time GitHub evidence snapshot (non-binding):
 
-- `RPi5_main/main=782b531728e35e4f9ccda492b6f95886fffe60f0`;
-- Dashboard current `main=a15a276c88d20d4a69895fc2fc0d95007ded8cbb`;
+- `RPi5_main` evidence base = `c4accd5ea08343f8e4fce30534a6e7734a461e5f`;
+- evaluated Dashboard SHA = `b5838741d094ad7f70987bf5a5060be11371a6ae`;
 - reviewed/frozen candidate remains `343366427441811a22739b05b04d069c10905805`;
-- current Dashboard exact-SHA `FAST-LANE Merge Gate=success`;
-- frozen-to-current paths now include `apps/server/` and `packages/contracts/`;
-- the unchanged Dashboard manifest classifies both prefixes `MANUAL_ROLLOUT_REQUIRED`;
-- therefore current Dashboard main is not `AUTO_DEPLOY_SAFE` and no A4 canary is selected.
+- evaluated Dashboard exact-SHA `FAST-LANE Merge Gate=success`;
+- frozen-to-evaluated paths include `ops/production/`, `tools/`, `package.json`, `apps/server/` and `packages/contracts/`;
+- the unchanged Dashboard manifest classifies `ops/` and `tools/` as `DB_HOST_APPLY_REQUIRED`, which outranks `MANUAL_ROLLOUT_REQUIRED` and `AUTO_DEPLOY_SAFE`;
+- therefore this evaluated SHA was not an automatic canary. This SHA is evidence only, not the canonical A4 state.
 
 Binding current classification:
 
-`AUTO_LIVE_TRACK_Y_CURRENT=A4_OWNER_REQUIRED_CURRENT_SOURCE_REJECTION`
-`A4_FROZEN_CANDIDATE=343366427441811a22739b05b04d069c10905805`
-`A4_CURRENT_DASHBOARD_MAIN=a15a276c88d20d4a69895fc2fc0d95007ded8cbb`
-`A4_CURRENT_SOURCE_RANGE_CLASSIFICATION=MANUAL_ROLLOUT_REQUIRED`
-`A4_CURRENT_EXACT_TARGET_CI=success`
-`A4_CURRENT_LIVE_BASELINE_REFRESHED=false`
+`AUTO_LIVE_TRACK_Y_CURRENT=A4_OWNER_REQUIRED_PENDING_FRESH_ELIGIBLE_CANDIDATE`
 `A4_CANARY_SELECTED=false`
+`A4_FRESH_SOURCE_HEAD_REQUIRED_FOR_EACH_EVALUATION=true`
+`A4_FULL_PRODUCTION_BASELINE_TO_TARGET_RECLASSIFICATION_REQUIRED=true`
+`A4_AUTO_DEPLOY_SAFE_FULL_RANGE_REQUIRED=true`
+`A4_NEW_DASHBOARD_MERGE_REQUIRES_CONTINUITY_PR=false`
 `A4_FIRST_ACTIVATION_AUTHORIZED=false`
 `A4_CANARY_AUTHORIZED=false`
 `AUTO_LIVE_EXECUTION_ENABLED=false`
@@ -1231,6 +1230,6 @@ Binding current classification:
 `AUTO_LIVE_MUTATION_DISPATCH_ENABLED=false`
 `PRODUCTION_MUTATION_STARTED=false`
 
-No trusted-host read is required to reject this exact current target: if production is an ancestor, the latest manual-class commit is in the range; if production already equals current main, the candidate has no genuine source delta. A future different candidate still requires a fresh trusted production baseline, full-range classification, exact-target CI/provenance and separate owner LIVE authorization before any real canary.
+A future A4 candidate evaluation must fetch the then-current Dashboard `main`, resolve a fresh trusted production baseline, classify the complete production-baseline-to-target range, and verify exact-target CI/provenance. Only a genuinely `AUTO_DEPLOY_SAFE` full range can advance to a separately owner-authorized LIVE canary. A source-head change alone does not change this canonical owner-required state.
 
 This is source/docs/tests continuity only. It does not activate manifests/controllers, invoke adapters, mutate the host, deploy production or authorize LIVE work.
