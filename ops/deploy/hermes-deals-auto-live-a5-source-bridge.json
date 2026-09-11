@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "schema": "rozkalns.hermes-deals.auto-live-a5-source-bridge.v1",
+  "status": "SOURCE_DESCRIPTOR_ONLY_NOT_ACTIVE",
+  "roadmap_issue": 421,
+  "implementation_issue": 470,
+  "source_repository": "rozkalnsandris/hermes-deals",
+  "source_anchor_sha": "8015d6175b2b3c260fdb26546021bb17dcc5f4fb",
+  "target_alias": "hermes-deals-production",
+  "static_operation_id": "hermes-deals.production-release.v1",
+  "manifest_descriptor": {
+    "manifest_id": "hermes-deals.production-release.v1",
+    "schema": "rozkalns.auto-live-repository-manifest.v1",
+    "activation_state": "INACTIVE_SOURCE_ONLY",
+    "automatic_mutation_enabled": false,
+    "first_activation_requires_separate_owner_live_authorization": true,
+    "full_production_baseline_to_target_range_required": true,
+    "exact_target_sha_required_ci_success": true,
+    "classifier_source": "HERMES_DEALS_REVIEWED_DEPLOY_IMPACT_CLASSIFIER_REQUIRED_AT_EVALUATION",
+    "latest_commit_only": false,
+    "eligible_classes": ["AUTO_DEPLOY_SAFE"],
+    "owner_required_classes": ["MANUAL_ROLLOUT_REQUIRED", "DB_HOST_APPLY_REQUIRED"],
+    "unknown_or_ambiguous_path_result": "BLOCKED",
+    "stable_concurrency_key": "hermes-deals:production"
+  },
+  "static_operation_descriptor": {
+    "operation_id": "hermes-deals.production-release.v1",
+    "adapter_id": "hermes-deals.production-release.v1",
+    "authorization_class": "ORDINARY_FUTURE_AUTO_LIVE_SAFE_ONLY",
+    "ordinary_auto_live_eligible_now": false,
+    "baseline": {
+      "kind": "resolver",
+      "resolver_id": "HERMES_DEALS_PRODUCTION_BASELINE_REQUIRED"
+    },
+    "mutation_budget": [
+      {
+        "category": "application_release",
+        "max_operations": 1
+      }
+    ],
+    "rollback_policy": "NONE",
+    "required_source_identities": {
+      "workflow_path": ".github/workflows/deploy-main.yml",
+      "workflow_blob": "c45e14765881a82eb7e3d1bc3fe2f4f50cb0c38f",
+      "release_installer_path": "tools/runner/install-rpi5-release-dispatcher.sh",
+      "release_installer_blob": "5ce5fa19e09db576b9daa9318c05bd9d8771900c",
+      "main_deploy_installer_path": "tools/runner/install-github-main-deploy.sh",
+      "main_deploy_installer_blob": "8aaeebb805dd884bf131f1a98fbb0c47a3cfbf23"
+    },
+    "required_github_evidence": [
+      "exact source repository identity",
+      "exact target SHA merged and reachable from current main",
+      "exact target SHA required CI success",
+      "complete production baseline to target range classification",
+      "current reviewed helper and registration identities"
+    ],
+    "preconditions": [
+      "complete range is AUTO_DEPLOY_SAFE",
+      "fresh production baseline matches",
+      "static operation and helper identities match reviewed source",
+      "one mutation-capable deployment is serialized for the target",
+      "no credential permission database host control-plane parser collector scheduler or destructive scope is required"
+    ],
+    "postconditions": [
+      "production identity equals exact authorized target SHA",
+      "deterministic application health verification passes",
+      "no database migration or write is performed by this operation class",
+      "no runner or repository settings mutation is performed",
+      "no automatic retry cleanup rollback or alternate mutation path occurs after mutation start"
+    ],
+    "exclusions": [
+      "MANUAL_ROLLOUT_REQUIRED range",
+      "DB_HOST_APPLY_REQUIRED range",
+      "unknown or ambiguous classification",
+      "credentials secrets permissions GitHub App changes",
+      "systemd service Docker network Cloudflare host or runner mutation",
+      "database Review publication parser collector or scheduler mutation",
+      "arbitrary command path argv environment or generic privileged execution"
+    ]
+  },
+  "registration": {
+    "global_executor_operation_registered": false,
+    "auto_live_manifest_indexed": false,
+    "registration_is_live_activation": false,
+    "source_descriptor_review_required_before_registration": true
+  },
+  "failure_policy": {
+    "unknown_or_drifted_state": "BLOCKED",
+    "automatic_retry_after_mutation_start": false,
+    "automatic_cleanup_after_mutation_start": false,
+    "automatic_rollback_after_mutation_start": false,
+    "alternate_mutation_path_after_mutation_start": false
+  },
+  "mutation": {
+    "manifest_activation": false,
+    "executor_activation": false,
+    "adapter_invocation": false,
+    "production_deploy": false,
+    "host_runtime": false,
+    "database": false,
+    "credential_or_permission": false,
+    "runner_or_repository_settings": false
+  }
+}
