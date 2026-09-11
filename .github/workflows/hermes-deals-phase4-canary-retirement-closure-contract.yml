@@ -1,0 +1,40 @@
+name: Hermes Deals Phase 4 canary retirement closure contract
+
+on:
+  pull_request:
+    paths:
+      - ops/contracts/hermes-deals-phase4-canary-retirement-closure-v1.json
+      - ops/lib/deploy_executor/hermes_deals_phase4_canary_retirement_closure.py
+      - tests/test-hermes-deals-phase4-canary-retirement-closure.py
+      - docs/HERMES_DEALS_PHASE4_CANARY_RETIREMENT_CLOSURE_SOURCE.md
+      - .github/workflows/hermes-deals-phase4-canary-retirement-closure-contract.yml
+  push:
+    branches:
+      - main
+    paths:
+      - ops/contracts/hermes-deals-phase4-canary-retirement-closure-v1.json
+      - ops/lib/deploy_executor/hermes_deals_phase4_canary_retirement_closure.py
+      - tests/test-hermes-deals-phase4-canary-retirement-closure.py
+      - docs/HERMES_DEALS_PHASE4_CANARY_RETIREMENT_CLOSURE_SOURCE.md
+      - .github/workflows/hermes-deals-phase4-canary-retirement-closure-contract.yml
+
+permissions:
+  contents: read
+
+jobs:
+  phase4-canary-retirement-closure-contract:
+    name: phase4 canary-retirement closure contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+
+      - name: Compile source model
+        run: python3 -m py_compile ops/lib/deploy_executor/hermes_deals_phase4_canary_retirement_closure.py
+
+      - name: Run contract regression tests
+        run: python3 tests/test-hermes-deals-phase4-canary-retirement-closure.py
