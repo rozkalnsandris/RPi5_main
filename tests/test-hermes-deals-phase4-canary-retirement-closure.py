@@ -74,7 +74,8 @@ class HermesDealsPhase4ClosureTests(unittest.TestCase):
 
     def test_source_sync_and_release_stay_live_disabled(self) -> None:
         sync = self.data["source_sync_readiness"]
-        self.assertEqual(sync["source_checkout_path"], "/home/andris/hermes-deals")
+        self.assertEqual(sync["source_checkout_identity"], "HERMES_DEALS_CANONICAL_SOURCE_CHECKOUT")
+        self.assertFalse(sync["caller_selectable_checkout_path"])
         self.assertFalse(sync["generic_checkout_path_authority"])
         self.assertFalse(sync["generic_git_subcommand_authority"])
         self.assertFalse(sync["runtime_execution_enabled"])
