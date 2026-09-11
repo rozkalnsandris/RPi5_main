@@ -93,7 +93,7 @@ class WeatherOperatorInstallerSourceTests(unittest.TestCase):
             repo.mkdir()
             subprocess.run(["/usr/bin/git", "init", "-q"], cwd=repo, check=True)
             subprocess.run(["/usr/bin/git", "config", "user.name", "Weather Test"], cwd=repo, check=True)
-            subprocess.run(["/usr/bin/git", "config", "user.email", "weather-test@example.invalid"], cwd=repo, check=True)
+            subprocess.run(["/usr/bin/git", "config", "user.email", "fixture.invalid"], cwd=repo, check=True)
             source = repo / "ops/example.txt"
             source.parent.mkdir(parents=True)
             source.write_text("reviewed\n", encoding="utf-8")
