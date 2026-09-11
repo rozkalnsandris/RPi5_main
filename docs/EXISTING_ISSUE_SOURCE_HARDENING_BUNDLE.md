@@ -10,7 +10,7 @@ require runtime evidence or a later owner-authorized mutation.
 
 | Job | Parent | Source result | Evidence / remaining gate |
 | --- | --- | --- | --- |
-| 1 | #453 | DONE | `ops/contracts/existing-issue-source-hardening-v1.json` now freezes the echt host/cross-repo gaps, canonical owner class, required evidence class and future gate. |
+| 1 | #453 | DONE | `ops/contracts/existing-issue-source-hardening-v1.json` now freezes the exact host/cross-repo gaps, canonical owner class, required evidence class and future gate. |
 | 2 | #27 | DONE | Existing bounded AdGuard collector/verifier/tests already implement the privacy-safe source tooling; four live samples remain a later read-only evidence requirement. |
 | 3 | #93 | DONE | The shared-UID publisher threat boundary, dedicated identity target, raw-credential isolation and retirement sequence are frozen in the machine contract. |
 | 4 | #110 | SOURCE_READY_LIVE_LATER | `ops/lib/hermes_publisher_guard.py` validates immutable repository/branch/base/parent/subject/path/remote-main evidence with no Git/SSH/shell execution. Exact Hermes generated-path binding, credential placement, installation and real publication remain future gates. |
@@ -25,7 +25,7 @@ require runtime evidence or a later owner-authorized mutation.
 
 The guard is deliberately inert. It accepts a source-owned immutable
 `PublicationSpec` and observed Git metadata, then either fails closed or returns
-`SOURCE_VALIDATED_NO_PUSH@ it derporms no subprocess, network push, SSH, credential
+`SOURCE_VALIDATED_NO_PUSH`; it performs no subprocess, network push, SSH, credential
 read or shell execution.
 
 The source guard requires:
