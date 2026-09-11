@@ -30,6 +30,12 @@
       "source_repository": "rozkalnsandris/rozkalns_weather",
       "target_alias": "rozkalns-weather-public-rpi5",
       "static_operation_id": "rozkalns-weather.public-runtime-release.v1"
+    },
+    {
+      "path": "ops/deploy/auto-live-manifests/hermes-deals.json",
+      "source_repository": "rozkalnsandris/hermes-deals",
+      "target_alias": "hermes-deals-production",
+      "static_operation_id": "hermes-deals.production-release.v1"
     }
   ],
   "invariants": {
