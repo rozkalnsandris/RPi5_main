@@ -125,8 +125,10 @@ def validate_contract(contract: Mapping[str, Any]) -> None:
         raise HermesDealsPhase4ClosureError("read-only canary receipt must remain pre-production")
 
     sync = contract["source_sync_readiness"]
-    if sync["source_checkout_path"] != "/home/andris/hermes-deals":
-        raise HermesDealsPhase4ClosureError("source-sync target path drift")
+    if sync["source_checkout_identity"] != "HERMES_DEALS_CANONICAL_SOURCE_CHECKOUT":
+        raise HermesDealsPhase4ClosureError("source-sync checkout identity drift")
+    if sync["caller_selectable_checkout_path"] is not False:
+        raise HermesDealsPhase4ClosureError("source-sync checkout path became caller-selectable")
     if sync["allowed_future_mutation"] != "FAST_FORWARD_TO_EXACT_MERGED_REACHABLE_SHA":
         raise HermesDealsPhase4ClosureError("source-sync mutation class drift")
     if sync["generic_checkout_path_authority"] is not False or sync["generic_git_subcommand_authority"] is not False:
