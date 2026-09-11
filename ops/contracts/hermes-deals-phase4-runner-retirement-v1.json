@@ -1,0 +1,217 @@
+{
+  "schema_version": 1,
+  "contract": "Hermes Deals Phase 4 residual runner retirement and Auto-Live source bundle",
+  "implementation_issue": 466,
+  "status": "SOURCE_ONLY_BUNDLE_READY_LIVE_DISABLED",
+  "source_anchors": {
+    "rpi5_main_activation_sha": "2672451d1f3ddc6cffcc70a3627c6b758db8abe0",
+    "hermes_deals_activation_sha": "c9ef2460d9361664f3afcf6fe95277a4a7f0df98",
+    "hermes_deals_observed_main_sha": "87eeb9a6dcfbd802158e42bc8501b5ad8629431f",
+    "hermes_deals_observed_main_parent": "c9ef2460d9361664f3afcf6fe95277a4a7f0df98",
+    "observed_main_delta_class": "DOCS_ONLY_PROJECT_PROGRESS",
+    "source_runtime_state_inferred": false
+  },
+  "jobs": [
+    {"job": 1, "result": "DONE", "evidence": ["residual_runner_paths"]},
+    {"job": 2, "result": "DONE", "evidence": ["capability_classes"]},
+    {"job": 3, "result": "NO_OP_ALREADY_RECONCILED", "evidence": ["ops/lib/deploy_executor/hermes_deals_origin_adapter.py", "ops/deploy/executor-operations.json"]},
+    {"job": 4, "result": "SOURCE_READY_LIVE_LATER", "evidence": ["approved_audit_operations"]},
+    {"job": 5, "result": "SOURCE_READY_LIVE_LATER", "evidence": ["source_sync_contract"]},
+    {"job": 6, "result": "SOURCE_READY_LIVE_LATER", "evidence": ["production_release_contract"]},
+    {"job": 7, "result": "NO_OP_ALREADY_RECONCILED", "evidence": ["ops/deploy/hermes-deals-netto-nonroot-preflight-v2-execution-identity.json", "ops/lib/deploy_executor/hermes_deals_netto_nonroot_preflight_v2_execution_identity.py"]},
+    {"job": 8, "result": "DONE", "evidence": ["public_event_adversarial_matrix", "tests/test-hermes-deals-phase4-runner-retirement.py"]},
+    {"job": 9, "result": "SOURCE_READY_LIVE_LATER", "evidence": ["runner_retirement"]},
+    {"job": 10, "result": "DONE", "evidence": ["auto_live_and_full_boundary"]}
+  ],
+  "residual_runner_paths": [
+    {
+      "capability_id": "origin_path_audit",
+      "workflow_path": ".github/workflows/origin-path-rpi5-audit.yml",
+      "workflow_blob": "99a18c5f669e7880a8a8288c3f964285df87ae22",
+      "runner_label": "hermes-deals-audit",
+      "capability_class": "read_only_audit",
+      "replacement_operation_id": "hermes-deals.origin-path-audit.v1",
+      "replacement_status": "PROVEN_EXISTING_SOURCE_CONTRACT",
+      "owner_numeric_id_required": true,
+      "merged_reachable_sha_required": true,
+      "exact_ci_success_required": true,
+      "public_event_direct_execution": false,
+      "generic_command_authority": false,
+      "generic_path_authority": false,
+      "generic_argv_authority": false,
+      "generic_environment_authority": false
+    },
+    {
+      "capability_id": "approved_audit_command",
+      "workflow_path": ".github/workflows/rpi5-audit-command.yml",
+      "workflow_blob": "c9107e7597ff3ce1214cb32fb740346fa9d190aa",
+      "runner_label": "hermes-deals-audit",
+      "capability_class": "read_only_audit",
+      "replacement_operation_id": "hermes-deals.approved-audit-command.v1",
+      "replacement_status": "SOURCE_CONTRACT_READY_LIVE_LATER",
+      "owner_numeric_id_required": true,
+      "merged_reachable_sha_required": true,
+      "exact_ci_success_required": true,
+      "public_event_direct_execution": false,
+      "generic_command_authority": false,
+      "generic_path_authority": false,
+      "generic_argv_authority": false,
+      "generic_environment_authority": false
+    },
+    {
+      "capability_id": "source_sync",
+      "workflow_path": ".github/workflows/rpi-source-sync.yml",
+      "workflow_blob": "b2f4eee1d1c503cf0c47b6099e748d6e6fd6d560",
+      "runner_label": "hermes-deals-audit",
+      "capability_class": "source_sync_registration",
+      "replacement_operation_id": "hermes-deals.source-sync.v1",
+      "replacement_status": "SOURCE_CONTRACT_READY_LIVE_LATER",
+      "owner_numeric_id_required": true,
+      "merged_reachable_sha_required": true,
+      "exact_ci_success_required": true,
+      "public_event_direct_execution": false,
+      "generic_command_authority": false,
+      "generic_path_authority": false,
+      "generic_argv_authority": false,
+      "generic_environment_authority": false
+    },
+    {
+      "capability_id": "production_release",
+      "workflow_path": ".github/workflows/deploy-main.yml",
+      "workflow_blob": "c45e14765881a82eb7e3d1bc3fe2f4f50cb0c38f",
+      "runner_label": "hermes-deals-release",
+      "capability_class": "production_release",
+      "replacement_operation_id": "hermes-deals.production-release.v1",
+      "replacement_status": "SOURCE_CONTRACT_READY_LIVE_LATER",
+      "owner_numeric_id_required": true,
+      "merged_reachable_sha_required": true,
+      "exact_ci_success_required": true,
+      "public_event_direct_execution": false,
+      "generic_command_authority": false,
+      "generic_path_authority": false,
+      "generic_argv_authority": false,
+      "generic_environment_authority": false
+    }
+  ],
+  "capability_classes": {
+    "read_only_audit": {
+      "source_evidence": ["owner_numeric_identity", "merged_reachable_sha", "exact_ci_success"],
+      "future_mutation_class": "read_only_capability_invocation",
+      "requires_separate_live_authorization": true
+    },
+    "source_sync_registration": {
+      "source_evidence": ["owner_numeric_identity", "merged_reachable_sha", "exact_ci_success"],
+      "future_mutation_class": "trusted_source_checkout_fast_forward",
+      "requires_separate_live_authorization": true
+    },
+    "production_release": {
+      "source_evidence": ["owner_numeric_identity", "merged_reachable_sha", "exact_ci_success", "full_baseline_to_target_classification"],
+      "future_mutation_class": "application_release",
+      "requires_separate_live_authorization_for_sensitive_classes": true
+    }
+  },
+  "approved_audit_operations": [
+    {"legacy_selector": "runner-smoke", "operation_id": "hermes-deals.runner-smoke-audit.v1", "read_only": true, "static_allowlist_only": true, "caller_command_selector": false},
+    {"legacy_selector": "b15m2-v08", "operation_id": "hermes-deals.b15m2-v08-audit.v1", "read_only": true, "static_allowlist_only": true, "caller_command_selector": false}
+  ],
+  "source_sync_contract": {
+    "operation_id": "hermes-deals.source-sync.v1",
+    "target": "fixed_primary_source_checkout",
+    "allowed_future_mutation": "FAST_FORWARD_TO_EXACT_MERGED_REACHABLE_SHA",
+    "owner_numeric_id_required": true,
+    "exact_ci_success_required": true,
+    "same_repository_pr_required": true,
+    "generic_checkout_path_authority": false,
+    "generic_git_subcommand_authority": false,
+    "runtime_execution_enabled": false,
+    "requires_separate_live_authorization": true
+  },
+  "production_release_contract": {
+    "operation_id": "hermes-deals.production-release.v1",
+    "full_production_baseline_to_target_range_required": true,
+    "automatic_candidate_class": "AUTO_DEPLOY_SAFE",
+    "reconciliation_only_class": "NO_DEPLOY",
+    "owner_required_classes": ["MANUAL_ROLLOUT_REQUIRED", "DB_HOST_APPLY_REQUIRED"],
+    "unknown_or_ambiguous_path_result": "BLOCKED",
+    "automatic_mutation_enabled": false,
+    "legacy_release_runner_retirement_enabled": false,
+    "requires_exact_target_sha_ci": true
+  },
+  "netto_identity": {
+    "authoritative_issue": 425,
+    "authoritative_pr": 431,
+    "superseded_issue": 424,
+    "superseded_pr": 426,
+    "model": "DEDICATED_NON_LOGIN_NON_ROOT_NO_DOCKER",
+    "account": "hermes-netto-audit",
+    "primary_group": "hermes-netto-audit",
+    "home": "/nonexistent",
+    "shell": "/usr/sbin/nologin",
+    "supplementary_groups": [],
+    "forbidden_accounts": ["root", "andris", "github-runner"],
+    "docker_group_authority_allowed": false,
+    "caller_selectable_identity": false,
+    "execution_enabled": false,
+    "host_wiring_enabled": false,
+    "canary_authorized": false
+  },
+  "public_event_adversarial_matrix": [
+    {"case": "fork_pull_request", "expected": "REJECT_DIRECT_RPI5_EXECUTION"},
+    {"case": "untrusted_issue_comment", "expected": "REJECT_DIRECT_RPI5_EXECUTION"},
+    {"case": "malformed_repository_dispatch", "expected": "REJECT_UNKNOWN_OPERATION"},
+    {"case": "unknown_operation_id", "expected": "REJECT_UNKNOWN_OPERATION"},
+    {"case": "caller_selected_command_path_argv_env", "expected": "REJECT_UNREPRESENTABLE_AUTHORITY"},
+    {"case": "unmerged_source_sha", "expected": "REJECT_SOURCE"},
+    {"case": "failed_exact_sha_ci", "expected": "REJECT_SOURCE"},
+    {"case": "wrong_owner_numeric_identity", "expected": "REJECT_OWNER"},
+    {"case": "consumed_authorization_replay", "expected": "REJECT_REPLAY"},
+    {"case": "cross_capability_operation_swap", "expected": "REJECT_OPERATION_ID"}
+  ],
+  "runner_retirement": {
+    "unknown_or_missing_evidence_result": "NOT_ELIGIBLE",
+    "runner_labels": {
+      "hermes-deals-audit": {
+        "capabilities": ["origin_path_audit", "approved_audit_command", "source_sync"],
+        "current_source_eligibility": "NOT_ELIGIBLE",
+        "requires": ["replacement_source_ready", "runtime_wiring_proven", "genuine_canary_proven_when_required", "legacy_fallback_dependency_removed", "fresh_final_runner_inventory"]
+      },
+      "hermes-deals-release": {
+        "capabilities": ["production_release"],
+        "current_source_eligibility": "NOT_ELIGIBLE",
+        "requires": ["replacement_source_ready", "runtime_wiring_proven", "genuine_release_canary_proven", "legacy_fallback_dependency_removed", "fresh_final_runner_inventory"]
+      }
+    }
+  },
+  "auto_live_and_full_boundary": {
+    "auto_live_roadmap_issue": 421,
+    "auto_run_full_roadmap_issue": 315,
+    "pull_executor_roadmap_issue": 236,
+    "candidate_manifest_indexed": false,
+    "candidate_static_operation_registered": false,
+    "automatic_mutation_enabled": false,
+    "full_baseline_to_target_range_required": true,
+    "exact_target_sha_ci_required": true,
+    "stable_per_target_concurrency_required": true,
+    "immutable_operation_id_required": true,
+    "auto_live_eligible_classes": ["AUTO_DEPLOY_SAFE"],
+    "owner_required_classes": ["MANUAL_ROLLOUT_REQUIRED", "DB_HOST_APPLY_REQUIRED"],
+    "unknown_class_result": "BLOCKED",
+    "auto_run_full_merge_authority_is_live_authority": false,
+    "post_mutation_automatic_retry": false,
+    "post_mutation_automatic_cleanup": false,
+    "post_mutation_automatic_rollback": false,
+    "alternate_mutation_path_after_start": false
+  },
+  "mutation": {
+    "runtime_live_authority": false,
+    "production_mutation_started": false,
+    "runner_registration_mutation_enabled": false,
+    "runner_retirement_enabled": false,
+    "github_repository_settings_mutation_enabled": false,
+    "systemd_or_service_mutation_enabled": false,
+    "docker_or_container_mutation_enabled": false,
+    "credential_or_permission_mutation_enabled": false,
+    "database_or_application_write_enabled": false,
+    "deployment_enabled": false
+  }
+}
