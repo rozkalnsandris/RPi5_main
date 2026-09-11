@@ -1,0 +1,56 @@
+name: Hermes Deals Phase 4 operational readiness contract
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/hermes-deals-phase4-operational-readiness-contract.yml
+      - docs/HERMES_DEALS_PHASE4_OPERATIONAL_READINESS_SOURCE.md
+      - ops/contracts/hermes-deals-phase4-operational-readiness-v1.json
+      - ops/deploy/hermes-deals-auto-live-a5-source-bridge.json
+      - ops/lib/deploy_executor/hermes_deals_phase4_operational_readiness.py
+      - tests/test-hermes-deals-phase4-operational-readiness.py
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/hermes-deals-phase4-operational-readiness-contract.yml
+      - docs/HERMES_DEALS_PHASE4_OPERATIONAL_READINESS_SOURCE.md
+      - ops/contracts/hermes-deals-phase4-operational-readiness-v1.json
+      - ops/deploy/hermes-deals-auto-live-a5-source-bridge.json
+      - ops/lib/deploy_executor/hermes_deals_phase4_operational_readiness.py
+      - tests/test-hermes-deals-phase4-operational-readiness.py
+
+permissions:
+  contents: read
+
+jobs:
+  phase4-operational-readiness-contract:
+    name: phase4 operational-readiness contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout exact workflow revision
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+
+      - name: Compile fail-closed evaluator
+        run: python3 -m py_compile ops/lib/deploy_executor/hermes_deals_phase4_operational_readiness.py
+
+      - name: Validate JSON source contracts
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          for path in (
+              Path("ops/contracts/hermes-deals-phase4-operational-readiness-v1.json"),
+              Path("ops/deploy/hermes-deals-auto-live-a5-source-bridge.json"),
+          ):
+              json.loads(path.read_text(encoding="utf-8"))
+              print(f"JSON_OK={path}")
+          PY
+
+      - name: Run focused operational-readiness regression suite
+        run: python3 tests/test-hermes-deals-phase4-operational-readiness.py
