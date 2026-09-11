@@ -88,6 +88,7 @@ test:
 	bash ./tests/test-backup-ownership.sh
 	python3 ./tests/test-dashboard-evidence.py
 	python3 ./tests/test-hermes-tech-restore-drill.py
+	python3 ./tests/test-existing-issue-source-hardening.py
 	bash ./tests/test-maintenance-updater-status.sh
 	bash ./tests/test-maintenance-updater-locks.sh
 	bash ./tests/test-maintenance-updater-reboot.sh
