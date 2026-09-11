@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "schema": "rozkalns.auto-live-repository-manifest.v1",
+  "manifest_id": "hermes-deals.production-release.v1",
+  "source_repository": "rozkalnsandris/hermes-deals",
+  "target_alias": "hermes-deals-production",
+  "static_operation_id": "hermes-deals.production-release.v1",
+  "shared_policy_commit_sha": "f2aeb5152371a876268bb116bb98806cddbc8e15",
+  "activation": {
+    "state": "INACTIVE_SOURCE_ONLY",
+    "automatic_mutation_enabled": false,
+    "first_activation_requires_separate_owner_live_authorization": true
+  },
+  "classifier": {
+    "kind": "ORDERED_PATH_RULES_V1",
+    "range": "FULL_PRODUCTION_BASELINE_TO_TARGET",
+    "latest_commit_only": false,
+    "precedence": [
+      "DB_HOST_APPLY_REQUIRED",
+      "MANUAL_ROLLOUT_REQUIRED",
+      "AUTO_DEPLOY_SAFE",
+      "NO_DEPLOY"
+    ],
+    "rules": {
+      "NO_DEPLOY": {
+        "exact_paths": [
+          "README.md",
+          "AGENTS.md",
+          "SECURITY.md",
+          ".github/pull_request_template.md",
+          ".github/PULL_REQUEST_TEMPLATE.md"
+        ],
+        "path_prefixes": [
+          "docs/",
+          "tests/"
+        ]
+      },
+      "AUTO_DEPLOY_SAFE": {
+        "exact_paths": [],
+        "path_prefixes": []
+      },
+      "MANUAL_ROLLOUT_REQUIRED": {
+        "exact_paths": [
+          "pyproject.toml",
+          "backend/Dockerfile",
+          "backend/requirements.txt",
+          "backend/package.json",
+          "backend/package-lock.json"
+        ],
+        "path_prefixes": [
+          "backend/app/",
+          "backend/frontend/"
+        ]
+      },
+      "DB_HOST_APPLY_REQUIRED": {
+        "exact_paths": [
+          "docker-compose.yml",
+          "compose.yml",
+          ".env.example"
+        ],
+        "path_prefixes": [
+          ".github/workflows/",
+          "tools/runner/",
+          "backend/alembic/",
+          "deploy/",
+          "ops/"
+        ]
+      }
+    },
+    "unmatched_path_result": "BLOCKED",
+    "mixed_range_result": "HIGHEST_PRECEDENCE_MATCH"
+  },
+  "required_ci": {
+    "exact_target_sha_required": true,
+    "workflow_path": ".github/workflows/ci.yml",
+    "workflow_name": "Hermes Deals CI checks",
+    "required_gate": "FAST-LANE Merge Gate",
+    "required_conclusion": "success"
+  },
+  "automatic_eligibility": {
+    "eligible_classes": [
+      "AUTO_DEPLOY_SAFE"
+    ],
+    "static_operation_must_also_be_auto_live_eligible": true,
+    "owner_required_classes": [
+      "MANUAL_ROLLOUT_REQUIRED",
+      "DB_HOST_APPLY_REQUIRED"
+    ],
+    "no_deploy_is_reconciliation_only": true
+  },
+  "baseline": {
+    "resolver_id": "HERMES_DEALS_PRODUCTION_BASELINE_REQUIRED",
+    "must_match_static_operation": true,
+    "production_baseline_to_target_reclassification_required": true
+  },
+  "health_postconditions": [
+    "production identity equals the exact authorized target SHA",
+    "deterministic application health verification passes",
+    "no database migration or write is performed by AUTO_DEPLOY_SAFE operation class",
+    "no runner or repository settings mutation is performed",
+    "no automatic retry cleanup rollback or alternate mutation path occurs after mutation start"
+  ],
+  "failure_policy": {
+    "rollback_policy": "NONE",
+    "automatic_retry_after_mutation_start": false,
+    "automatic_cleanup_after_mutation_start": false,
+    "automatic_rollback_after_mutation_start": false,
+    "alternate_mutation_path_after_mutation_start": false
+  },
+  "sensitive_exclusions": [
+    "MANUAL_ROLLOUT_REQUIRED range",
+    "DB_HOST_APPLY_REQUIRED range",
+    "unknown or ambiguous classification",
+    "credentials secrets permissions or GitHub App changes",
+    "systemd service Docker network Cloudflare host or runner mutation",
+    "database Review publication parser collector or scheduler mutation",
+    "arbitrary command path argv environment or generic privileged execution"
+  ]
+}
