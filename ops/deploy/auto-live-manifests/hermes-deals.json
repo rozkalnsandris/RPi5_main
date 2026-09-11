@@ -89,7 +89,7 @@
     "no_deploy_is_reconciliation_only": true
   },
   "baseline": {
-    "resolver_id": "HERMES_DEALS_PRODUCTION_BASELINE_REQUIRED",
+    "resolver_id": "hermes-deals.production-baseline.v1",
     "must_match_static_operation": true,
     "production_baseline_to_target_reclassification_required": true
   },

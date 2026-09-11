@@ -32,7 +32,7 @@
     "ordinary_auto_live_eligible_now": false,
     "baseline": {
       "kind": "resolver",
-      "resolver_id": "HERMES_DEALS_PRODUCTION_BASELINE_REQUIRED"
+      "resolver_id": "hermes-deals.production-baseline.v1"
     },
     "mutation_budget": [
       {
