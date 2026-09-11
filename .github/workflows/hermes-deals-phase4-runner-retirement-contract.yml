@@ -1,0 +1,35 @@
+name: Hermes Deals Phase 4 runner-retirement source contract
+
+on:
+  pull_request:
+    paths:
+      - "ops/contracts/hermes-deals-phase4-runner-retirement-v1.json"
+      - "ops/lib/deploy_executor/hermes_deals_phase4_runner_retirement.py"
+      - "tests/test-hermes-deals-phase4-runner-retirement.py"
+      - "docs/HERMES_DEALS_PHASE4_RUNNER_RETIREMENT_SOURCE_BUNDLE.md"
+      - ".github/workflows/hermes-deals-phase4-runner-retirement-contract.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "ops/contracts/hermes-deals-phase4-runner-retirement-v1.json"
+      - "ops/lib/deploy_executor/hermes_deals_phase4_runner_retirement.py"
+      - "tests/test-hermes-deals-phase4-runner-retirement.py"
+      - "docs/HERMES_DEALS_PHASE4_RUNNER_RETIREMENT_SOURCE_BUNDLE.md"
+      - ".github/workflows/hermes-deals-phase4-runner-retirement-contract.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: phase4 runner-retirement contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - name: Validate source-only runner-retirement bundle
+        run: python3 ./tests/test-hermes-deals-phase4-runner-retirement.py
