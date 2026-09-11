@@ -1,0 +1,318 @@
+{
+  "schema_version": 1,
+  "contract": "RPi5_main existing-issue source hardening bundle",
+  "implementation_issue": 464,
+  "status": "SOURCE_ONLY_BUNDLE_READY_LIVE_DISABLED",
+  "jobs": [
+    {
+      "job": 1,
+      "issue": 453,
+      "result": "DONE",
+      "evidence": [
+        "host_gap_map"
+      ]
+    },
+    {
+      "job": 2,
+      "issue": 27,
+      "result": "DONE",
+      "evidence": [
+        "scripts/collect-adguard-memory-attribution.py",
+        "scripts/verify-adguard-memory-attribution.py",
+        "tests/test-adguard-memory-attribution.sh"
+      ]
+    },
+    {
+      "job": 3,
+      "issue": 93,
+      "result": "DONE",
+      "evidence": [
+        "publisher_boundary",
+        "docs/EXISTING_ISSUE_SOURCE_HARDENING_BUNDLE.md"
+      ]
+    },
+    {
+      "job": 4,
+      "issue": 110,
+      "result": "SOURCE_READY_LIVE_LATER",
+      "evidence": [
+        "ops/lib/hermes_publisher_guard.py",
+        "tests/test-existing-issue-source-hardening.py"
+      ]
+    },
+    {
+      "job": 5,
+      "issue": 117,
+      "result": "DONE",
+      "evidence": [
+        "ops/bin/hermes-tech-restore-drill",
+        "tests/test-hermes-tech-restore-drill.py",
+        "docs/HERMES_TECH_RESTORE_DRILL.md"
+      ]
+    },
+    {
+      "job": 6,
+      "issue": 177,
+      "result": "DONE",
+      "evidence": [
+        "ops/contracts/cloudflare-hostname-policy.yaml",
+        "docs/CLOUDFLARE_ZERO_TRUST_MOBILE_AUDIT_2026-08-17.md"
+      ]
+    },
+    {
+      "job": 7,
+      "issue": 179,
+      "result": "SOURCE_READY_LIVE_LATER",
+      "evidence": [
+        "scripts/cloudflare_zero_trust_reconcile.py",
+        "tests/test-cloudflare-zero-trust-reconcile.py",
+        "docs/CLOUDFLARE_P0_RECONCILIATION_OPERATOR.md"
+      ]
+    },
+    {
+      "job": 8,
+      "issue": 206,
+      "result": "SOURCE_READY_LIVE_LATER",
+      "evidence": [
+        "cloudflare_compensating_controls"
+      ]
+    },
+    {
+      "job": 9,
+      "issue": 207,
+      "result": "SOURCE_READY_LIVE_LATER",
+      "evidence": [
+        "m2m_endpoint_classes"
+      ]
+    },
+    {
+      "job": 10,
+      "issue": 189,
+      "result": "SOURCE_READY_LIVE_LATER",
+      "evidence": [
+        "mqtt_legacy_credential_migration"
+      ]
+    }
+  ],
+  "host_gap_map": [
+    {
+      "id": "resource_headroom",
+      "owner": "RPi5_main",
+      "state": "OPEN_HOST_GAP",
+      "required_evidence": "sanitized_read_only_metrics",
+      "future_gate": "SOURCE_POLICY_THEN_LIVE_IF_MUTATION_REQUIRED"
+    },
+    {
+      "id": "docker_socket_privileged_exceptions",
+      "owner": "RPi5_main+service-owner",
+      "state": "OPEN_CROSS_REPO_GAP",
+      "required_evidence": "source_capability_inventory",
+      "future_gate": "SOURCE_REVIEW"
+    },
+    {
+      "id": "persistent_workload_backup_restore",
+      "owner": "RPi5_main",
+      "state": "OPEN_HOST_GAP",
+      "required_evidence": "public_safe_inventory+rpo_rto+restore_proof",
+      "future_gate": "SOURCE_REVIEW_THEN_SEPARATE_RESTORE_GATE"
+    },
+    {
+      "id": "nvme_pcie_smart_aer",
+      "owner": "RPi5_main",
+      "state": "OPEN_HOST_GAP",
+      "required_evidence": "sanitized_read_only_storage_telemetry",
+      "future_gate": "SOURCE_POLICY"
+    },
+    {
+      "id": "container_least_privilege",
+      "owner": "RPi5_main+service-owner",
+      "state": "OPEN_CROSS_REPO_GAP",
+      "required_evidence": "source_capability_matrix",
+      "future_gate": "PER_SERVICE_SOURCE_REVIEW"
+    },
+    {
+      "id": "ext4_commit_60_durability",
+      "owner": "RPi5_main",
+      "state": "OPEN_HOST_GAP",
+      "required_evidence": "storage_policy+ups_backup_context",
+      "future_gate": "OWNER_DECISION_BEFORE_LIVE"
+    },
+    {
+      "id": "docker_live_restore",
+      "owner": "RPi5_main",
+      "state": "OPEN_HOST_GAP",
+      "required_evidence": "daemon_policy_compatibility_analysis",
+      "future_gate": "OWNER_DECISION_BEFORE_LIVE"
+    },
+    {
+      "id": "ups_nut_power_resilience",
+      "owner": "RPi5_main",
+      "state": "OPEN_HOST_GAP",
+      "required_evidence": "power_policy+shutdown_restart_test_plan",
+      "future_gate": "SOURCE_REVIEW_THEN_LIVE"
+    }
+  ],
+  "publisher_boundary": {
+    "shared_uid_risk": "write credential readable by unrelated same-UID compromise",
+    "target_identity_class": "dedicated_non_login_publisher",
+    "raw_write_credential_visible_to_runtime": false,
+    "immutable_inputs": [
+      "expected_repository",
+      "expected_branch",
+      "expected_base_sha",
+      "expected_publication_sha",
+      "expected_parent_sha",
+      "expected_subject",
+      "expected_changed_paths",
+      "expected_remote_main_sha"
+    ],
+    "required_checks": [
+      "repository_exact",
+      "branch_exact",
+      "base_sha_exact",
+      "direct_parent_exact",
+      "subject_exact",
+      "changed_paths_exact",
+      "remote_main_race_guard",
+      "fast_forward_only_intent",
+      "post_push_exact_sha_future_gate"
+    ],
+    "generic_git_authority": false,
+    "generic_ssh_authority": false,
+    "generic_shell_authority": false,
+    "production_wiring_enabled": false,
+    "credential_placement_enabled": false,
+    "real_push_enabled": false,
+    "future_live_gates": [
+      "publisher_identity_install",
+      "credential_placement",
+      "one_controlled_publication_canary",
+      "old_shared_uid_credential_retirement"
+    ]
+  },
+  "cloudflare_compensating_controls": {
+    "bot_fight_mode_dependency": false,
+    "preserve": [
+      "always_on_ddos",
+      "managed_waf",
+      "access_and_application_auth"
+    ],
+    "forbidden_primary_identity": [
+      "dynamic_cloud_runner_ip",
+      "user_agent"
+    ],
+    "proposals": [
+      {
+        "id": "public_expensive_path_rate_limit",
+        "trust_class": "PUBLIC",
+        "path_class": "expensive_public_operation",
+        "methods": [
+          "POST"
+        ],
+        "control": "narrow_rate_limit",
+        "rationale": "bound abuse cost without replacing application auth",
+        "rollback": "remove_exact_rule"
+      },
+      {
+        "id": "admin_mutation_shape_guard",
+        "trust_class": "ADMIN",
+        "path_class": "authenticated_mutation",
+        "methods": [
+          "POST",
+          "PUT",
+          "PATCH",
+          "DELETE"
+        ],
+        "control": "exact_path_method_waf",
+        "rationale": "defense in depth behind Access/application auth",
+        "rollback": "remove_exact_rule"
+      },
+      {
+        "id": "machine_webhook_shape_guard",
+        "trust_class": "MACHINE",
+        "path_class": "provider_webhook",
+        "methods": [
+          "POST"
+        ],
+        "control": "body_method_content_type_guard",
+        "rationale": "reject malformed traffic before expensive processing",
+        "rollback": "remove_exact_rule"
+      }
+    ],
+    "live_apply_enabled": false
+  },
+  "m2m_endpoint_classes": [
+    {
+      "class": "provider_webhook",
+      "auth": "provider_hmac_sha256_original_bytes",
+      "replay": "provider_delivery_id_atomic_dedupe",
+      "methods": [
+        "POST"
+      ],
+      "content_types": [
+        "application/json"
+      ],
+      "body_limit_required": true,
+      "timeout_required": true,
+      "raw_request_logging": false,
+      "rate_limit_role": "defense_in_depth"
+    },
+    {
+      "class": "service_auth_api",
+      "auth": "cloudflare_service_auth_plus_application_auth_when_required",
+      "replay": "request_identity_or_idempotency_key_for_mutations",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "content_types": [
+        "application/json"
+      ],
+      "body_limit_required": true,
+      "timeout_required": true,
+      "raw_request_logging": false,
+      "rate_limit_role": "abuse_cost_control"
+    },
+    {
+      "class": "readonly_health",
+      "auth": "public_or_access_by_registry_class",
+      "replay": "not_applicable",
+      "methods": [
+        "GET"
+      ],
+      "content_types": [
+        "application/json",
+        "text/plain"
+      ],
+      "body_limit_required": true,
+      "timeout_required": true,
+      "raw_request_logging": false,
+      "rate_limit_role": "availability_protection"
+    }
+  ],
+  "mqtt_legacy_credential_migration": {
+    "stages": [
+      "sanitized_consumer_identity_inventory",
+      "dedicated_least_privilege_replacement_identity_design",
+      "per_consumer_preflight",
+      "per_consumer_migration_under_separate_live_gate",
+      "per_consumer_postcondition",
+      "final_legacy_revocation_under_separate_live_gate"
+    ],
+    "credential_values_in_git": false,
+    "credential_values_in_argv": false,
+    "mqtt_publish_authorized": false,
+    "service_restart_authorized": false,
+    "legacy_revocation_authorized": false,
+    "rollback_requires_predeclared_per_consumer_plan": true
+  },
+  "mutation": {
+    "runtime_live_authority": false,
+    "production_mutation_started": false,
+    "cloudflare_write_enabled": false,
+    "mqtt_write_enabled": false,
+    "docker_or_systemd_mutation_enabled": false,
+    "backup_restore_execution_enabled": false,
+    "credential_mutation_enabled": false
+  }
+}
