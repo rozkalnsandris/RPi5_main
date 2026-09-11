@@ -164,6 +164,29 @@
     "automatic_cleanup": false,
     "automatic_rollback": false
   },
+  "installer_bridge": {
+    "issue": 462,
+    "status": "SOURCE_ONLY_INSTALLER_BRIDGE_INACTIVE",
+    "source_entrypoint": "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-install-trusted/ops/bin/rozkalns-weather-public-runtime-operator-install",
+    "source_module": "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-install-trusted/ops/lib/deploy_executor/weather_public_runtime_operator_install.py",
+    "caller_arguments": [],
+    "requires_euid": 0,
+    "requires_detached_clean_checkout": true,
+    "requires_head_equals_origin_main": true,
+    "publication_order": [
+      "support_root",
+      "entrypoint"
+    ],
+    "partial_support_without_entrypoint_is_inert": true,
+    "source_merge_enables_install": false,
+    "generic_shell_authority": false,
+    "caller_selected_path": false,
+    "caller_selected_argv": false,
+    "caller_selected_environment": false,
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false
+  },
   "canonical_privileged_install_contract": "ops/deploy/weather-public-runtime-privileged-install-activation.json",
   "canonical_successor_checkout_contract": "ops/deploy/rpi5-main-weather-public-runtime-install-trusted-checkout-bootstrap.json"
 }
