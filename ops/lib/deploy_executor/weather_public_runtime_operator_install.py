@@ -7,7 +7,7 @@ from pathlib import Path, PurePosixPath
 import re
 import stat
 import subprocess
-from typing import Any
+from typing import Any, Sequence
 
 from deploy_executor.weather_public_runtime_privileged_install import (
     _copy_exact,
@@ -30,8 +30,16 @@ ROOT_UID = 0
 ROOT_GID = 0
 ARTIFACT_COUNT = 23
 MAX_ARTIFACT_BYTES = 2 * 1024 * 1024
+MAX_GIT_OUTPUT = 65536
 _SHA40_RE = re.compile(r"^[0-9a-f]{40}$")
-_FIXED_ENV = {"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"}
+_FIXED_ENV = {
+    "PATH": "/usr/bin:/bin",
+    "LANG": "C.UTF-8",
+    "LC_ALL": "C.UTF-8",
+    "HOME": "/nonexistent",
+    "GIT_TERMINAL_PROMPT": "0",
+    "GIT_CONFIG_NOSYSTEM": "1",
+}
 
 _EXPECTED_ARTIFACTS = (
     ("ops/bin/rozkalns-weather-public-runtime-operator", "/usr/local/sbin/rozkalns-weather-public-runtime-operator", 0o755),
@@ -68,6 +76,15 @@ def _fail(message: str) -> None:
     raise WeatherOperatorInstallError(message)
 
 
+def _strict_object(pairs: Sequence[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            _fail(f"duplicate JSON field is forbidden: {key}")
+        result[key] = value
+    return result
+
+
 def source_readiness() -> dict[str, Any]:
     return {
         "schema": "rozkalns-weather.public-runtime-operator-installer-source.v1",
@@ -97,17 +114,27 @@ def expected_install_artifacts() -> tuple[tuple[str, str, int], ...]:
 
 
 def _git(checkout: Path, *args: str) -> str:
-    result = subprocess.run(
-        ["/usr/bin/git", "-c", f"safe.directory={checkout}", "-C", str(checkout), *args],
-        check=False,
-        capture_output=True,
-        text=True,
-        shell=False,
-        env=_FIXED_ENV,
-        timeout=10,
-    )
+    try:
+        result = subprocess.run(
+            ["/usr/bin/git", "--no-optional-locks", "-c", f"safe.directory={checkout}", "-C", str(checkout), *args],
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="strict",
+            shell=False,
+            close_fds=True,
+            env=_FIXED_ENV,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError, UnicodeError) as exc:
+        raise WeatherOperatorInstallError("trusted checkout Git read failed to run") from exc
     if result.returncode != 0:
         _fail(f"trusted checkout Git read failed rc={result.returncode}")
+    if len(result.stdout.encode("utf-8")) > MAX_GIT_OUTPUT or len(result.stderr.encode("utf-8")) > MAX_GIT_OUTPUT:
+        _fail("trusted checkout Git read output exceeded limit")
     return result.stdout
 
 
@@ -144,8 +171,10 @@ def _load_contract(checkout: Path) -> dict[str, Any]:
     if not stat.S_ISREG(meta.st_mode) or meta.st_nlink != 1 or meta.st_size > MAX_ARTIFACT_BYTES:
         _fail("operator install contract source shape drifted")
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        value = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_strict_object)
+    except WeatherOperatorInstallError:
+        raise
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
         raise WeatherOperatorInstallError("operator install contract is unreadable") from exc
     if type(value) is not dict:
         _fail("operator install contract must be an object")
@@ -257,15 +286,26 @@ def _read_bound_source(checkout: Path, relative_text: str) -> tuple[bytes, str]:
         opened = os.fstat(fd)
         if (opened.st_dev, opened.st_ino, opened.st_size) != (before.st_dev, before.st_ino, before.st_size):
             _fail(f"operator source changed before read: {relative_text}")
-        data = b""
-        while len(data) < opened.st_size:
-            chunk = os.read(fd, min(131072, opened.st_size - len(data)))
+        chunks: list[bytes] = []
+        remaining = opened.st_size
+        while remaining:
+            chunk = os.read(fd, min(131072, remaining))
             if not chunk:
                 _fail(f"operator source short read: {relative_text}")
-            data += chunk
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        if os.read(fd, 1):
+            _fail(f"operator source grew during read: {relative_text}")
         after = os.fstat(fd)
-        if (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns) != (opened.st_dev, opened.st_ino, opened.st_size, opened.st_mtime_ns):
+        if (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns) != (
+            opened.st_dev,
+            opened.st_ino,
+            opened.st_size,
+            opened.st_mtime_ns,
+            opened.st_ctime_ns,
+        ):
             _fail(f"operator source changed during read: {relative_text}")
+        data = b"".join(chunks)
     finally:
         os.close(fd)
     git_hash = hashlib.sha1(usedforsecurity=False)
