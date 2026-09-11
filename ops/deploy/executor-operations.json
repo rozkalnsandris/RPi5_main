@@ -261,8 +261,8 @@
         "pull-helper-source-path:tools/runner/netto_missing_normal_price_nonroot_preflight_v2.py",
         "pull-helper-source-blob:0f8b01ed3129323cc59e526262b369cf33346aba",
         "pull-helper-capability:netto-missing-normal-price-nonroot-preflight-v2",
-        "pull-helper-registration-schema:rozkalns.hermes-deals.netto-nonroot-preflight-v2-registration.v1",
-        "pull-helper-evidence-schema:rozkalns.hermes-deals.netto-nonroot-preflight-v2-evidence.v1",
+        "pull-helper-registration-schema:rozkalns.hermes-deals.netto-missing-normal-price-nonroot-preflight-v2-registration.v1",
+        "pull-helper-evidence-schema:rozkalns.hermes-deals.netto-missing-normal-price-nonroot-preflight-v2-evidence.v1",
         "pull-helper-arguments:registered_source_sha",
         "n9-manifest-sha256:2b180d67af4c5d1e586704088e3d685cff21ae2e12f3052254daf4553dd4e147",
         "execution-boundary:nonroot-no-docker"
@@ -307,7 +307,7 @@
       },
       "target_alias": "hermes-deals-production",
       "adapter_id": "hermes-deals.production-release.v1",
-      "authorization_class": "ORDINARY",
+      "authorization_class": "STRICT",
       "ordinary_live_all_eligible": false,
       "baseline": {
         "kind": "resolver",
