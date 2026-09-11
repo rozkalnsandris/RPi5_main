@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "contract": "Hermes Deals Phase 4 canary readiness and runner-retirement closure source bundle",
+  "implementation_issue": 467,
+  "status": "SOURCE_ONLY_BUNDLE_READY_LIVE_DISABLED",
+  "source_anchors": {
+    "rpi5_main_activation_sha": "9ce80d2dddec084a5c52f3de7f52bc990e1de0f8",
+    "predecessor_issue": 466,
+    "predecessor_merge_sha": "9ce80d2dddec084a5c52f3de7f52bc990e1de0f8",
+    "hermes_deals_main_sha": "87eeb9a6dcfbd802158e42bc8501b5ad8629431f",
+    "phase4_current_work_item": "HERMES_POSTCANARY_INCREMENTAL_CAPABILITY_MIGRATION_SOURCE",
+    "source_runtime_state_inferred": false
+  },
+  "source_path_drift": {
+    "stale_path": "tools/install-hermes-deals-audit-runner.sh",
+    "stale_path_is_current_authority": false,
+    "stale_path_observed_in_current_workflow_watch_only": true,
+    "resolution": "CAPABILITY_SPECIFIC_TOOLS_RUNNER_PATHS",
+    "current_paths": [
+      {"capability_id": "origin_path_audit", "path": "tools/runner/origin_path_rpi5_pull_helper.py", "blob": "4ef95c3f02b810b6b25721aa1b1b53d43b8ca572"},
+      {"capability_id": "approved_audit_command", "path": "tools/runner/install-rpi5-audit-dispatcher.sh", "blob": "baa3febc76a0a533fe103cf8699eb1ee32230b4c"},
+      {"capability_id": "source_sync", "path": "tools/runner/install-rpi-source-sync-bridge.sh", "blob": "0e258f3b6285a43637f54eca4b10ae4efb2416d8"},
+      {"capability_id": "source_sync", "path": "tools/runner/hermes-deals-rpi-source-sync-dispatch", "blob": "6110be33d1ed6bb394e650b187e17f612cfcb005"},
+      {"capability_id": "production_release", "path": "tools/runner/install-rpi5-release-dispatcher.sh", "blob": "5ce5fa19e09db576b9daa9318c05bd9d8771900c"},
+      {"capability_id": "production_release", "path": "tools/runner/install-github-main-deploy.sh", "blob": "8aaeebb805dd884bf131f1a98fbb0c47a3cfbf23"}
+    ]
+  },
+  "predecessor": {
+    "contract_path": "ops/contracts/hermes-deals-phase4-runner-retirement-v1.json",
+    "canonical_pr": 468,
+    "canonical_pr_head": "92b0ef25510bb26066a0fbb26bcf551ae42aa354",
+    "terminal_exact_head_ci_success": true,
+    "terminal_results": ["DONE", "DONE", "NO_OP_ALREADY_RECONCILED", "SOURCE_READY_LIVE_LATER", "SOURCE_READY_LIVE_LATER", "SOURCE_READY_LIVE_LATER", "NO_OP_ALREADY_RECONCILED", "DONE", "SOURCE_READY_LIVE_LATER", "DONE"]
+  },
+  "jobs": [
+    {"job": 1, "result": "DONE", "evidence": ["predecessor"]},
+    {"job": 2, "result": "DONE", "evidence": ["residual_capabilities", "source_path_drift"]},
+    {"job": 3, "result": "SOURCE_READY_LIVE_LATER", "evidence": ["canary_readiness"]},
+    {"job": 4, "result": "SOURCE_READY_LIVE_LATER", "evidence": ["source_sync_readiness"]},
+    {"job": 5, "result": "SOURCE_READY_LIVE_LATER", "evidence": ["production_release_readiness"]},
+    {"job": 6, "result": "NO_OP_ALREADY_RECONCILED", "evidence": ["netto_identity_supersession"]},
+    {"job": 7, "result": "SOURCE_READY_LIVE_LATER", "evidence": ["runtime_preflight_operators"]},
+    {"job": 8, "result": "DONE", "evidence": ["runner_retirement_graph"]},
+    {"job": 9, "result": "SOURCE_READY_LIVE_LATER", "evidence": ["auto_live_scale_out"]},
+    {"job": 10, "result": "DONE", "evidence": ["phase4_closure"]}
+  ],
+  "residual_capabilities": [
+    {
+      "capability_id": "origin_path_audit", "capability_class": "read_only_audit", "workflow_path": ".github/workflows/origin-path-rpi5-audit.yml", "workflow_blob": "99a18c5f669e7880a8a8288c3f964285df87ae22", "runner_label": "hermes-deals-audit", "operation_id": "hermes-deals.origin-path-audit.v1", "helper_source_path": "tools/runner/origin_path_rpi5_pull_helper.py", "helper_source_blob": "4ef95c3f02b810b6b25721aa1b1b53d43b8ca572", "source_replacement_ready": true, "runtime_wiring_asserted_by_bundle": false, "future_mutation_class": "read_only_capability_invocation", "owner_numeric_id_required": 277435981, "merged_reachable_sha_required": true, "exact_sha_ci_success_required": true, "registration_identity_contract": "origin-path-rpi5-pull-registration.v1", "execution_identity_contract": "fixed-reviewed-metadata-only"
+    },
+    {
+      "capability_id": "approved_audit_command", "capability_class": "read_only_audit", "workflow_path": ".github/workflows/rpi5-audit-command.yml", "workflow_blob": "c9107e7597ff3ce1214cb32fb740346fa9d190aa", "runner_label": "hermes-deals-audit", "operation_id": "hermes-deals.approved-audit-command.v1", "helper_source_path": "tools/runner/install-rpi5-audit-dispatcher.sh", "helper_source_blob": "baa3febc76a0a533fe103cf8699eb1ee32230b4c", "source_replacement_ready": true, "runtime_wiring_asserted_by_bundle": false, "future_mutation_class": "read_only_capability_invocation", "owner_numeric_id_required": 277435981, "merged_reachable_sha_required": true, "exact_sha_ci_success_required": true, "registration_identity_contract": "runner-independent-capability-registration-required-before-live", "execution_identity_contract": "runner-independent-fixed-identity-required-before-live"
+    },
+    {
+      "capability_id": "source_sync", "capability_class": "source_sync_registration", "workflow_path": ".github/workflows/rpi-source-sync.yml", "workflow_blob": "b2f4eee1d1c503cf0c47b6099e748d6e6fd6d560", "runner_label": "hermes-deals-audit", "operation_id": "hermes-deals.source-sync.v1", "helper_source_path": "tools/runner/install-rpi-source-sync-bridge.sh", "helper_source_blob": "0e258f3b6285a43637f54eca4b10ae4efb2416d8", "source_replacement_ready": true, "runtime_wiring_asserted_by_bundle": false, "future_mutation_class": "trusted_source_checkout_fast_forward", "owner_numeric_id_required": 277435981, "merged_reachable_sha_required": true, "exact_sha_ci_success_required": true, "registration_identity_contract": "fixed-source-sync-bridge-registration.v1", "execution_identity_contract": "fixed-reviewed-source-sync-identity"
+    },
+    {
+      "capability_id": "production_release", "capability_class": "production_release", "workflow_path": ".github/workflows/deploy-main.yml", "workflow_blob": "c45e14765881a82eb7e3d1bc3fe2f4f50cb0c38f", "runner_label": "hermes-deals-release", "operation_id": "hermes-deals.production-release.v1", "helper_source_path": "tools/runner/install-rpi5-release-dispatcher.sh", "helper_source_blob": "5ce5fa19e09db576b9daa9318c05bd9d8771900c", "source_replacement_ready": true, "runtime_wiring_asserted_by_bundle": false, "future_mutation_class": "application_release", "owner_numeric_id_required": 277435981, "merged_reachable_sha_required": true, "exact_sha_ci_success_required": true, "registration_identity_contract": "fixed-production-release-registration.v1", "execution_identity_contract": "fixed-reviewed-production-release-identity"
+    }
+  ],
+  "canary_readiness": {
+    "capability_id": "approved_audit_command",
+    "operation_id": "hermes-deals.runner-smoke-audit.v1",
+    "target_alias": "hermes-deals-runner-smoke-audit",
+    "source_sha": "87eeb9a6dcfbd802158e42bc8501b5ad8629431f",
+    "workflow_blob": "c9107e7597ff3ce1214cb32fb740346fa9d190aa",
+    "legacy_dispatcher_installer_path": "tools/runner/install-rpi5-audit-dispatcher.sh",
+    "legacy_dispatcher_installer_blob": "baa3febc76a0a533fe103cf8699eb1ee32230b4c",
+    "runner_independent_helper_source_required_before_live": true,
+    "runner_independent_registration_identity_required_before_live": true,
+    "identity_only_inputs": ["authorization_issue_number", "operation_id", "source_sha", "target_alias"],
+    "caller_command_path_argv_environment_authority": false,
+    "expected_receipt": {"schema": "rozkalns.hermes-deals.runner-smoke-canary-evidence.v1", "status_values": ["PASS", "BLOCKED"], "production_mutation_started": false, "production_apply_authorized": false, "database_write_performed": false, "deployment_performed": false, "runner_mutation_performed": false, "credential_read_performed": false, "sanitized_output_required": true, "stdout_limit_bytes": 32768, "stderr_limit_bytes": 4096},
+    "replay": {"durable_one_shot_required": true, "consume_immediately_before_first_helper_invocation": true, "automatic_retry_after_helper_start": false, "automatic_cleanup_after_helper_start": false, "automatic_rollback_after_helper_start": false},
+    "ready_or_live_auth_created": false,
+    "genuine_canary_performed": false
+  },
+  "source_sync_readiness": {
+    "operation_id": "hermes-deals.source-sync.v1", "target_alias": "hermes-deals-source-sync", "source_checkout_path": "/home/andris/hermes-deals", "allowed_future_mutation": "FAST_FORWARD_TO_EXACT_MERGED_REACHABLE_SHA", "read_only_discovery_preflight_required": true, "same_repository_pr_required": true, "owner_numeric_id_required": 277435981, "exact_target_sha_ci_required": true, "helper_installer_path": "tools/runner/install-rpi-source-sync-bridge.sh", "helper_installer_blob": "0e258f3b6285a43637f54eca4b10ae4efb2416d8", "dispatcher_source_path": "tools/runner/hermes-deals-rpi-source-sync-dispatch", "dispatcher_source_blob": "6110be33d1ed6bb394e650b187e17f612cfcb005", "generic_checkout_path_authority": false, "generic_git_subcommand_authority": false, "runtime_execution_enabled": false, "requires_separate_live_authorization": true
+  },
+  "production_release_readiness": {
+    "operation_id": "hermes-deals.production-release.v1", "target_alias": "hermes-deals-production", "workflow_blob": "c45e14765881a82eb7e3d1bc3fe2f4f50cb0c38f", "release_installer_path": "tools/runner/install-rpi5-release-dispatcher.sh", "release_installer_blob": "5ce5fa19e09db576b9daa9318c05bd9d8771900c", "main_deploy_installer_path": "tools/runner/install-github-main-deploy.sh", "main_deploy_installer_blob": "8aaeebb805dd884bf131f1a98fbb0c47a3cfbf23", "full_production_baseline_to_target_range_required": true, "future_auto_live_candidate_class": "AUTO_DEPLOY_SAFE", "owner_required_classes": ["MANUAL_ROLLOUT_REQUIRED", "DB_HOST_APPLY_REQUIRED"], "unknown_or_ambiguous_path_result": "BLOCKED", "exact_target_sha_ci_required": true, "stable_concurrency_key": "hermes-deals:production", "manifest_indexed": false, "static_operation_registered": false, "automatic_mutation_enabled": false
+  },
+  "netto_identity_supersession": {
+    "authoritative_issue": 425, "authoritative_pr": 431, "superseded_issue": 424, "superseded_pr": 426, "contract_path": "ops/deploy/hermes-deals-netto-nonroot-preflight-v2-execution-identity.json", "contract_blob": "efc9ac3bb03fbda14c2909af50a75d13fb1fd796", "model": "DEDICATED_NON_LOGIN_NON_ROOT_NO_DOCKER", "account": "hermes-netto-audit", "shell": "/usr/sbin/nologin", "supplementary_groups": [], "forbidden_accounts": ["root", "andris", "github-runner"], "forbidden_groups": ["docker"], "caller_selectable_identity": false, "execution_enabled": false, "host_wiring_enabled": false, "result": "NO_OP_ALREADY_RECONCILED"
+  },
+  "runtime_preflight_operators": [
+    {"capability_id": "origin_path_audit", "operation_id": "hermes-deals.origin-path-audit.preflight.v1", "target_alias": "hermes-deals-origin-path-audit", "helper_source_path": "tools/runner/origin_path_rpi5_pull_helper.py", "helper_source_blob": "4ef95c3f02b810b6b25721aa1b1b53d43b8ca572", "read_only": true, "helper_execution_enabled": false, "protected_credential_reads_enabled": false, "host_writes_enabled": false, "required_metadata": ["exact_source_sha", "exact_sha_ci_success", "helper_source_identity", "registration_identity", "execution_identity"], "registration_identity_contract": "origin-path-rpi5-pull-registration.v1", "execution_identity_contract": "fixed-reviewed-metadata-only"},
+    {"capability_id": "approved_audit_command", "operation_id": "hermes-deals.approved-audit-command.preflight.v1", "target_alias": "hermes-deals-approved-audit-command", "helper_source_path": "tools/runner/install-rpi5-audit-dispatcher.sh", "helper_source_blob": "baa3febc76a0a533fe103cf8699eb1ee32230b4c", "read_only": true, "helper_execution_enabled": false, "protected_credential_reads_enabled": false, "host_writes_enabled": false, "required_metadata": ["exact_source_sha", "exact_sha_ci_success", "helper_source_identity", "registration_identity", "execution_identity"], "registration_identity_contract": "runner-independent-capability-registration-required-before-live", "execution_identity_contract": "runner-independent-fixed-identity-required-before-live"},
+    {"capability_id": "source_sync", "operation_id": "hermes-deals.source-sync.preflight.v1", "target_alias": "hermes-deals-source-sync", "helper_source_path": "tools/runner/install-rpi-source-sync-bridge.sh", "helper_source_blob": "0e258f3b6285a43637f54eca4b10ae4efb2416d8", "read_only": true, "helper_execution_enabled": false, "protected_credential_reads_enabled": false, "host_writes_enabled": false, "required_metadata": ["exact_source_sha", "exact_sha_ci_success", "helper_source_identity", "registration_identity", "execution_identity"], "registration_identity_contract": "fixed-source-sync-bridge-registration.v1", "execution_identity_contract": "fixed-reviewed-source-sync-identity"},
+    {"capability_id": "production_release", "operation_id": "hermes-deals.production-release.preflight.v1", "target_alias": "hermes-deals-production-release", "helper_source_path": "tools/runner/install-rpi5-release-dispatcher.sh", "helper_source_blob": "5ce5fa19e09db576b9daa9318c05bd9d8771900c", "read_only": true, "helper_execution_enabled": false, "protected_credential_reads_enabled": false, "host_writes_enabled": false, "required_metadata": ["exact_source_sha", "exact_sha_ci_success", "helper_source_identity", "registration_identity", "execution_identity"], "registration_identity_contract": "fixed-production-release-registration.v1", "execution_identity_contract": "fixed-reviewed-production-release-identity"}
+  ],
+  "runner_retirement_graph": {
+    "unknown_or_missing_evidence_result": "NOT_ELIGIBLE",
+    "runner_labels": {"hermes-deals-audit": {"capabilities": ["origin_path_audit", "approved_audit_command", "source_sync"], "current_source_eligibility": "NOT_ELIGIBLE"}, "hermes-deals-release": {"capabilities": ["production_release"], "current_source_eligibility": "NOT_ELIGIBLE"}},
+    "required_evidence": ["replacement_source_ready", "runtime_wiring_proven", "genuine_canary_or_e2e_proven", "legacy_fallback_dependency_removed", "fresh_final_runner_inventory"],
+    "runner_deregistration_authorized": false
+  },
+  "auto_live_scale_out": {
+    "roadmap_issue": 421, "auto_run_full_issue": 315, "pull_executor_issue": 236, "exact_merged_sha_required": true, "exact_sha_ci_required": true, "full_baseline_to_target_range_required": true, "stable_per_target_concurrency_required": true, "immutable_operation_id_required": true, "helper_identity_required": true, "unknown_class_result": "BLOCKED", "auto_live_eligible_classes": ["AUTO_DEPLOY_SAFE"], "owner_required_classes": ["MANUAL_ROLLOUT_REQUIRED", "DB_HOST_APPLY_REQUIRED"], "post_mutation_automatic_retry": false, "auto_run_full_merge_authority_is_live_authority": false,
+    "capabilities": {"origin_path_audit": {"deploy_class": "NO_DEPLOY", "automatic_mutation_enabled": false, "concurrency_key": "hermes-deals:origin-path-audit"}, "approved_audit_command": {"deploy_class": "NO_DEPLOY", "automatic_mutation_enabled": false, "concurrency_key": "hermes-deals:approved-audit"}, "source_sync": {"deploy_class": "MANUAL_ROLLOUT_REQUIRED", "automatic_mutation_enabled": false, "concurrency_key": "hermes-deals:source-sync"}, "production_release": {"deploy_class": "AUTO_DEPLOY_SAFE", "automatic_mutation_enabled": false, "concurrency_key": "hermes-deals:production"}}
+  },
+  "phase4_closure": {
+    "source_contract_defined": true, "current_phase4_state": "NOT_CLOSED_LIVE_EVIDENCE_REQUIRED", "fresh_final_capability_inventory_required": true, "replacement_and_canary_status_required_for_every_capability": true, "exact_runner_label_dependency_resolution_required": true, "acceptable_runner_end_states": ["RUNNER_COUNT_TARGET=0", "NARROW_RESIDUAL_RUNNER_WITH_EXPLICIT_OWNER_ACCEPTANCE"], "owner_gates_still_required": ["capability-specific runtime wiring/provenance activation", "genuine canary/e2e execution where required", "fresh final runner inventory", "runner deregistration and GitHub repository settings mutation", "host runner service/runtime retirement", "explicit owner acceptance for any narrowly justified residual runner"], "source_evidence_alone_can_close_phase4": false
+  },
+  "mutation": {
+    "runtime_live_authority": false, "production_mutation_started": false, "ready_or_live_auth_created": false, "genuine_canary_performed": false, "helper_execution_enabled": false, "protected_runtime_inspection_enabled": false, "runner_registration_mutation_enabled": false, "runner_retirement_enabled": false, "github_repository_settings_mutation_enabled": false, "systemd_or_service_mutation_enabled": false, "docker_or_container_mutation_enabled": false, "credential_or_permission_mutation_enabled": false, "database_or_application_write_enabled": false, "deployment_enabled": false
+  }
+}
