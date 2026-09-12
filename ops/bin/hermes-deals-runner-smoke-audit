@@ -15,6 +15,7 @@ REGISTRATION_SCHEMA = "rozkalns.hermes-deals.runner-smoke-registration.v2"
 OPERATION_ID = "hermes-deals.runner-smoke-audit.v1"
 TARGET_ALIAS = "hermes-deals-runner-smoke-audit"
 EXECUTION_ACCOUNT = "hermes-deals-audit-canary"
+EXPECTED_PRIMARY_GROUP = "hermes-deals-audit-canary"
 EXPECTED_SHELL = "/usr/sbin/nologin"
 HELPER_PATH = Path("/usr/local/libexec/rozkalns-deploy/hermes-deals-runner-smoke-audit")
 REGISTRATION_PATH = Path("/etc/rozkalns-deploy/hermes-deals-runner-smoke-audit.json")
@@ -99,6 +100,12 @@ def validate_runtime_identity() -> tuple[pwd.struct_passwd, tuple[str, ...]]:
         fail("unexpected execution account")
     if entry.pw_shell != EXPECTED_SHELL:
         fail("execution account shell drift")
+    try:
+        primary_group = grp.getgrgid(entry.pw_gid)
+    except KeyError:
+        fail("execution account primary group is unknown")
+    if primary_group.gr_name != EXPECTED_PRIMARY_GROUP or primary_group.gr_gid == 0:
+        fail("execution account primary group drift")
     group_names = []
     for gid in os.getgroups():
         if gid == entry.pw_gid:
@@ -113,7 +120,7 @@ def validate_runtime_identity() -> tuple[pwd.struct_passwd, tuple[str, ...]]:
         docker = grp.getgrnam("docker")
     except KeyError:
         docker = None
-    if docker is not None and EXECUTION_ACCOUNT in docker.gr_mem:
+    if docker is not None and (entry.pw_gid == docker.gr_gid or EXECUTION_ACCOUNT in docker.gr_mem):
         fail("docker group membership is forbidden")
     return entry, tuple(group_names)
 

@@ -2,6 +2,7 @@ import importlib.util
 import json
 from pathlib import Path
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "ops/lib/deploy_executor/hermes_deals_runner_smoke_install.py"
@@ -169,6 +170,31 @@ class RunnerSmokeInstallTests(unittest.TestCase):
             with self.subTest(changed=changed):
                 with self.assertRaises(mod.RunnerSmokeInstallError):
                     mod.validate_live_envelope(live_envelope(**changed))
+
+    def test_identity_rejects_root_or_docker_primary_gid_aliases(self):
+        account = type("Account", (), {
+            "pw_uid": 1234, "pw_gid": 2000, "pw_dir": mod.EXECUTION_HOME, "pw_shell": mod.EXECUTION_SHELL
+        })()
+        dedicated = type("Group", (), {"gr_gid": 2000})()
+        docker = type("Group", (), {"gr_gid": 2000})()
+        with mock.patch.object(mod.pwd, "getpwnam", return_value=account), \
+             mock.patch.object(mod.grp, "getgrnam", side_effect=lambda name: dedicated if name == mod.EXECUTION_GROUP else docker), \
+             mock.patch.object(mod.grp, "getgrall", return_value=[]):
+            self.assertEqual(mod.PosixFixedInstallBackend._identity_state(), "CONFLICT")
+
+        root_gid_account = type("Account", (), {
+            "pw_uid": 1234, "pw_gid": 0, "pw_dir": mod.EXECUTION_HOME, "pw_shell": mod.EXECUTION_SHELL
+        })()
+        root_gid_group = type("Group", (), {"gr_gid": 0})()
+        with mock.patch.object(mod.pwd, "getpwnam", return_value=root_gid_account), \
+             mock.patch.object(mod.grp, "getgrnam", return_value=root_gid_group):
+            self.assertEqual(mod.PosixFixedInstallBackend._identity_state(), "CONFLICT")
+
+    def test_helper_source_enforces_exact_nonroot_primary_group_and_docker_gid(self):
+        helper = (ROOT / "ops/bin/hermes-deals-runner-smoke-audit").read_text()
+        self.assertIn('EXPECTED_PRIMARY_GROUP = "hermes-deals-audit-canary"', helper)
+        self.assertIn('primary_group.gr_gid == 0', helper)
+        self.assertIn('entry.pw_gid == docker.gr_gid', helper)
 
     def test_fixed_artifact_hashes_match_source(self):
         helper = ROOT / "ops/bin/hermes-deals-runner-smoke-audit"

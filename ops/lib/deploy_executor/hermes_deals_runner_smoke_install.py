@@ -27,8 +27,8 @@ HELPER_SOURCE_RELATIVE = Path("ops/bin/hermes-deals-runner-smoke-audit")
 REGISTRATION_SOURCE_RELATIVE = Path("ops/deploy/hermes-deals-runner-smoke-audit-registration.json")
 HELPER_DESTINATION = Path("/usr/local/libexec/rozkalns-deploy/hermes-deals-runner-smoke-audit")
 REGISTRATION_DESTINATION = Path("/etc/rozkalns-deploy/hermes-deals-runner-smoke-audit.json")
-HELPER_SHA256 = "545a401b6eef1dfd7e207f8f30472172d181a710c1604d1e3d27e59eb0b7f661"
-REGISTRATION_SHA256 = "0bccc6a0fe1ef686cde6a0bb1b426ad656fc79feedd05ad4c515f4d629e33036"
+HELPER_SHA256 = "fc8ccc8a2179c23670d28bbe166e45f85769b8bd13c319e423f56c4f65b17bd4"
+REGISTRATION_SHA256 = "3bc7771d8480ac3a5a5de6ab7f0eb6710cf3aaa458c8a60eaffb5c8d8aaf5c10"
 HELPER_MODE = 0o755
 REGISTRATION_MODE = 0o644
 ROOT_UID = 0
@@ -372,9 +372,17 @@ class PosixFixedInstallBackend:
             return "ABSENT"
         if account is None or group is None:
             return "CONFLICT"
-        if account.pw_uid == 0 or account.pw_gid != group.gr_gid:
+        if account.pw_uid == 0 or account.pw_gid == ROOT_GID or group.gr_gid == ROOT_GID:
+            return "CONFLICT"
+        if account.pw_gid != group.gr_gid:
             return "CONFLICT"
         if account.pw_dir != EXECUTION_HOME or account.pw_shell != EXECUTION_SHELL:
+            return "CONFLICT"
+        try:
+            docker_group = grp.getgrnam("docker")
+        except KeyError:
+            docker_group = None
+        if docker_group is not None and account.pw_gid == docker_group.gr_gid:
             return "CONFLICT"
         for item in grp.getgrall():
             if EXECUTION_ACCOUNT in item.gr_mem:

@@ -7,7 +7,7 @@
     "supplementary_groups": []
   },
   "helper_path": "/usr/local/libexec/rozkalns-deploy/hermes-deals-runner-smoke-audit",
-  "helper_sha256": "545a401b6eef1dfd7e207f8f30472172d181a710c1604d1e3d27e59eb0b7f661",
+  "helper_sha256": "fc8ccc8a2179c23670d28bbe166e45f85769b8bd13c319e423f56c4f65b17bd4",
   "operation_id": "hermes-deals.runner-smoke-audit.v1",
   "production_apply_authorized": false,
   "schema": "rozkalns.hermes-deals.runner-smoke-registration.v2",

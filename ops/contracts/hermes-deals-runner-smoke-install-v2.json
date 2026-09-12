@@ -41,7 +41,7 @@
       "mode": "0755",
       "owner_gid": 0,
       "owner_uid": 0,
-      "sha256": "545a401b6eef1dfd7e207f8f30472172d181a710c1604d1e3d27e59eb0b7f661",
+      "sha256": "fc8ccc8a2179c23670d28bbe166e45f85769b8bd13c319e423f56c4f65b17bd4",
       "source": "ops/bin/hermes-deals-runner-smoke-audit"
     },
     {
@@ -50,7 +50,7 @@
       "mode": "0644",
       "owner_gid": 0,
       "owner_uid": 0,
-      "sha256": "0bccc6a0fe1ef686cde6a0bb1b426ad656fc79feedd05ad4c515f4d629e33036",
+      "sha256": "3bc7771d8480ac3a5a5de6ab7f0eb6710cf3aaa458c8a60eaffb5c8d8aaf5c10",
       "source": "ops/deploy/hermes-deals-runner-smoke-audit-registration.json"
     }
   ],
@@ -87,6 +87,15 @@
     "ready_queue_created": false,
     "runtime_installation_performed": false,
     "source_merge_authorizes_live": false
+  },
+  "helper_output": {
+    "authorization_metadata_in_helper_output": false,
+    "canonical_canary_receipt_schema": "rozkalns.hermes-deals.runner-smoke-canary-evidence.v1",
+    "canonical_receipt_composed_by_future_live_wrapper": true,
+    "runtime_observation": true,
+    "sanitized": true,
+    "schema": "rozkalns.hermes-deals.runner-smoke-helper-output.v2",
+    "synthetic_pass_allowed": false
   },
   "implementation_issue": 476,
   "plan": {
@@ -129,14 +138,5 @@
     "ordinary_live_all_eligible": false,
     "registry": "ops/deploy/executor-operations.json"
   },
-  "status": "SOURCE_READY_LIVE_DISABLED",
-  "helper_output": {
-    "schema": "rozkalns.hermes-deals.runner-smoke-helper-output.v2",
-    "sanitized": true,
-    "runtime_observation": true,
-    "authorization_metadata_in_helper_output": false,
-    "canonical_canary_receipt_schema": "rozkalns.hermes-deals.runner-smoke-canary-evidence.v1",
-    "canonical_receipt_composed_by_future_live_wrapper": true,
-    "synthetic_pass_allowed": false
-  }
+  "status": "SOURCE_READY_LIVE_DISABLED"
 }
