@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+import argparse, hashlib, json, os, re, subprocess, tempfile
+from pathlib import Path
+from typing import Iterable
+SCHEMA="rpi5.homeassistant.compose-resource-envelope.v1"
+ALLOWED_KEYS=("mem_limit","mem_reservation","memswap_limit")
+SERVICE_LINE=re.compile(r"^(?P<indent> {2})homeassistant:\s*(?:#.*)?(?P<nl>\r?\n)?$")
+KEY_LINE=re.compile(r"^(?P<indent> {4})(?P<key>mem_limit|mem_reservation|memswap_limit):[ \t]*(?P<value>[^#\r\n]*?)[ \t]*(?:#.*)?(?P<nl>\r?\n)?$")
+class EnvelopeError(RuntimeError): pass
+def sha256_file(path: Path)->str:
+ h=hashlib.sha256()
+ with path.open("rb") as f:
+  for chunk in iter(lambda:f.read(1024*1024),b""): h.update(chunk)
+ return h.hexdigest()
+def load_contract(path: Path)->dict:
+ data=json.loads(path.read_text(encoding="utf-8"))
+ if data.get("schema")!=SCHEMA: raise EnvelopeError("contract_schema_mismatch")
+ if data.get("service")!="homeassistant": raise EnvelopeError("contract_service_mismatch")
+ values=data.get("resource_keys")
+ if not isinstance(values,dict) or set(values)!=set(ALLOWED_KEYS): raise EnvelopeError("contract_resource_keys_mismatch")
+ for key in ALLOWED_KEYS:
+  value=values.get(key)
+  if not isinstance(value,str) or not value or "\n" in value or "#" in value: raise EnvelopeError(f"contract_invalid_value:{key}")
+ safety=data.get("safety") or {}
+ if safety.get("requires_exact_input_sha256") is not True: raise EnvelopeError("contract_missing_exact_sha_requirement")
+ if safety.get("requires_compose_config_validation") is not True: raise EnvelopeError("contract_missing_compose_validation_requirement")
+ return data
+def _line_indent(line:str)->int|None:
+ stripped=line.lstrip(" ")
+ if not stripped or stripped.startswith("#") or stripped in ("\n","\r\n"): return None
+ return len(line)-len(stripped)
+def _service_bounds(lines:list[str])->tuple[int,int]:
+ matches=[i for i,line in enumerate(lines) if SERVICE_LINE.match(line)]
+ if len(matches)!=1: raise EnvelopeError(f"homeassistant_service_count:{len(matches)}")
+ start=matches[0]; end=len(lines)
+ for i in range(start+1,len(lines)):
+  indent=_line_indent(lines[i])
+  if indent is not None and indent<=2: end=i; break
+ return start,end
+def render_candidate(text:str,desired:dict[str,str])->tuple[str,list[dict[str,str|None]]]:
+ lines=text.splitlines(keepends=True); service_start,service_end=_service_bounds(lines)
+ found={}; current={}
+ for i in range(service_start+1,service_end):
+  m=KEY_LINE.match(lines[i])
+  if not m: continue
+  key=m.group("key")
+  if key in found: raise EnvelopeError(f"duplicate_resource_key:{key}")
+  found[key]=i; current[key]=m.group("value").strip()
+ changes=[]
+ for key in ALLOWED_KEYS:
+  if key in found:
+   if current[key]!=desired[key]:
+    nl="\r\n" if lines[found[key]].endswith("\r\n") else "\n"
+    lines[found[key]]=f"    {key}: {desired[key]}{nl}"
+    changes.append({"key":key,"from":current[key],"to":desired[key]})
+  else: changes.append({"key":key,"from":None,"to":desired[key]})
+ missing=[key for key in ALLOWED_KEYS if key not in found]
+ if missing:
+  insert_at=min(found.values()) if found else service_start+1
+  nl="\r\n" if text.count("\r\n")>text.count("\n")/2 else "\n"
+  for offset,key in enumerate(missing): lines.insert(insert_at+offset,f"    {key}: {desired[key]}{nl}")
+ return "".join(lines),changes
+def verify_expected_sha(path:Path,expected:str)->str:
+ if not re.fullmatch(r"[0-9a-f]{64}",expected): raise EnvelopeError("expected_sha256_format")
+ observed=sha256_file(path)
+ if observed!=expected: raise EnvelopeError("input_sha256_drift")
+ return observed
+def validate_compose_candidate(target:Path,candidate:Path,compose_files:Iterable[Path],project_directory:Path,docker_bin:str="docker")->None:
+ files=[Path(p) for p in compose_files]
+ if not files: raise EnvelopeError("compose_files_required")
+ resolved_target=target.resolve(); replaced=0
+ cmd=[docker_bin,"compose","--project-directory",str(project_directory)]
+ for f in files:
+  chosen=candidate if f.resolve()==resolved_target else f
+  if f.resolve()==resolved_target: replaced+=1
+  cmd+=["-f",str(chosen)]
+ if replaced!=1: raise EnvelopeError(f"target_compose_file_count:{replaced}")
+ cmd+=["config","--quiet"]
+ proc=subprocess.run(cmd,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=False)
+ if proc.returncode!=0: raise EnvelopeError("compose_candidate_validation_failed")
+def write_candidate_atomic(target:Path,candidate_text:str)->str:
+ mode=target.stat().st_mode & 0o777
+ fd,tmp_name=tempfile.mkstemp(prefix=f".{target.name}.",suffix=".candidate",dir=target.parent); tmp=Path(tmp_name)
+ try:
+  with os.fdopen(fd,"wb") as f:
+   f.write(candidate_text.encode("utf-8")); f.flush(); os.fsync(f.fileno())
+  os.chmod(tmp,mode); os.replace(tmp,target)
+  dir_fd=os.open(target.parent,os.O_RDONLY)
+  try: os.fsync(dir_fd)
+  finally: os.close(dir_fd)
+ finally:
+  if tmp.exists(): tmp.unlink()
+ return sha256_file(target)
+def build_parser()->argparse.ArgumentParser:
+ p=argparse.ArgumentParser(description="Plan/apply the Home Assistant Compose resource envelope.")
+ p.add_argument("--contract",type=Path,required=True); p.add_argument("--target",type=Path,required=True)
+ sub=p.add_subparsers(dest="command",required=True); sub.add_parser("plan")
+ a=sub.add_parser("apply"); a.add_argument("--expected-sha256",required=True); a.add_argument("--project-directory",type=Path,required=True); a.add_argument("--compose-file",action="append",type=Path,required=True); a.add_argument("--docker-bin",default="docker")
+ return p
+def main(argv:list[str]|None=None)->int:
+ args=build_parser().parse_args(argv); contract=load_contract(args.contract); desired=contract["resource_keys"]
+ before_sha=sha256_file(args.target); raw=args.target.read_bytes()
+ try: text=raw.decode("utf-8")
+ except UnicodeDecodeError as exc: raise EnvelopeError("target_not_utf8") from exc
+ candidate,changes=render_candidate(text,desired); result="ALREADY_MATCHES" if not changes else "CHANGE_REQUIRED"
+ if args.command=="plan":
+  print(json.dumps({"status":"PLAN","result":result,"service":"homeassistant","input_sha256":before_sha,"change_keys":[c["key"] for c in changes]},sort_keys=True)); return 0
+ verify_expected_sha(args.target,args.expected_sha256)
+ if not changes:
+  print(json.dumps({"status":"APPLY","result":"ALREADY_MATCHES","service":"homeassistant","input_sha256":before_sha,"output_sha256":before_sha},sort_keys=True)); return 0
+ fd,tmp_name=tempfile.mkstemp(prefix=f".{args.target.name}.",suffix=".validate",dir=args.target.parent); tmp=Path(tmp_name)
+ try:
+  with os.fdopen(fd,"wb") as f:
+   f.write(candidate.encode("utf-8")); f.flush(); os.fsync(f.fileno())
+  os.chmod(tmp,args.target.stat().st_mode & 0o777)
+  validate_compose_candidate(args.target,tmp,args.compose_file,args.project_directory,args.docker_bin)
+ finally:
+  if tmp.exists(): tmp.unlink()
+ verify_expected_sha(args.target,args.expected_sha256)
+ after_sha=write_candidate_atomic(args.target,candidate)
+ print(json.dumps({"status":"APPLY","result":"UPDATED","service":"homeassistant","input_sha256":before_sha,"output_sha256":after_sha,"change_keys":[c["key"] for c in changes]},sort_keys=True)); return 0
+if __name__=="__main__":
+ try: raise SystemExit(main())
+ except EnvelopeError as exc:
+  print(json.dumps({"status":"ERROR","reason":str(exc)},sort_keys=True)); raise SystemExit(2)
