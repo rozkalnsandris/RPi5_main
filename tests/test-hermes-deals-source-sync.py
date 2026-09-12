@@ -31,7 +31,7 @@ class HermesDealsSourceSyncContractTests(unittest.TestCase):
     def test_fixed_identity_matches_reviewed_workflow(self):
         fixed = self.contract["fixed_checkout_identity"]
         anchors = self.contract["source_anchors"]
-        self.assertEqual(fixed["path"], "/home/andris/hermes-deals")
+        self.assertEqual(fixed["path"], "RPi5_CHECKOUT_PARENT/hermes-deals")
         self.assertEqual(fixed["branch"], "main")
         self.assertEqual(fixed["ref"], "refs/heads/main")
         self.assertEqual(fixed["upstream"], "origin/main")
@@ -103,7 +103,7 @@ class HermesDealsSourceSyncContractTests(unittest.TestCase):
         doc = DOC_PATH.read_text()
         for value in (
             "hermes-deals.source-sync.v1",
-            "/home/andris/hermes-deals",
+            "RPi5_CHECKOUT_PARENT/hermes-deals",
             "refs/heads/main",
             "origin/main",
             "b2f4eee1d1c503cf0c47b6099e748d6e6fd6d560",

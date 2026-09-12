@@ -8,7 +8,7 @@ Issue #484 implements Phase 4 bundle #472 Job 6 as **source-only** trust-boundar
 - Future LIVE gate: `hermes-deals.source-sync.sync.v1`
 - Target alias: `hermes-deals-source-sync`
 - Repository: `rozkalnsandris/hermes-deals` (`1317143994`)
-- Canonical checkout: `/home/andris/hermes-deals`
+- Canonical checkout: `RPi5_CHECKOUT_PARENT/hermes-deals`
 - Branch/ref/upstream: `main` / `refs/heads/main` / `origin/main`
 - Reviewed workflow: `.github/workflows/rpi-source-sync.yml`
 - Reviewed workflow blob: `b2f4eee1d1c503cf0c47b6099e748d6e6fd6d560`

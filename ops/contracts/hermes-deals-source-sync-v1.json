@@ -25,7 +25,7 @@
     "rollback_policy": "NONE"
   },
   "fixed_checkout_identity": {
-    "path": "/home/andris/hermes-deals",
+    "path": "RPi5_CHECKOUT_PARENT/hermes-deals",
     "branch": "main",
     "ref": "refs/heads/main",
     "upstream": "origin/main",

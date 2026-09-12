@@ -483,7 +483,7 @@
         "rpi5-main-repository-id:1323383044",
         "workflow-path:.github/workflows/rpi-source-sync.yml",
         "workflow-blob:b2f4eee1d1c503cf0c47b6099e748d6e6fd6d560",
-        "canonical-checkout:/home/andris/hermes-deals",
+        "canonical-checkout:RPi5_CHECKOUT_PARENT/hermes-deals",
         "canonical-branch:main",
         "canonical-ref:refs/heads/main",
         "canonical-upstream:origin/main",
@@ -494,7 +494,7 @@
         "future authorization binds one exact 40-hex target SHA for hermes-deals.source-sync.v1",
         "target SHA is derived from a merged same-repository PR and is reachable from current Hermes main",
         "exact target SHA CI succeeds or reviewed tree-equivalent PR-head CI matches the workflow contract",
-        "canonical checkout is /home/andris/hermes-deals on main with refs/heads/main and origin/main",
+        "canonical checkout is RPi5_CHECKOUT_PARENT/hermes-deals on main with refs/heads/main and origin/main",
         "canonical checkout exists as a clean Git worktree with exact repository and remote identity",
         "current checkout HEAD can advance to the exact target by fast-forward only",
         "operation remains STRICT and globally execution-disabled until later reviewed LIVE activation"
