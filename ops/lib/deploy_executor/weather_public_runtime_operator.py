@@ -49,10 +49,7 @@ from .weather_public_runtime_execution import (
 )
 from .weather_public_runtime_helper_launch import WeatherHelperLaunchReceipt, WeatherOneShotStageLauncher
 from .weather_public_runtime_host_wiring import build_weather_host_wiring_plan, expected_helper_bindings
-from .weather_public_runtime_privileged_install import (
-    TRUSTED_INSTALL_CHECKOUT_NAME as PRIVILEGED_INSTALL_CHECKOUT_NAME,
-    expected_install_artifacts,
-)
+from .weather_public_runtime_privileged_install import expected_install_artifacts
 from .weather_public_runtime_preactivation import (
     ENVELOPE_SCHEMA,
     RESULT as PREACTIVATION_RESULT,
@@ -67,14 +64,14 @@ OPERATOR_STATUS = "SOURCE_READY_HOST_NOT_INSTALLED"
 CALLER_AUTHORITY = ("authorization_issue_number",)
 FIXED_OWNER_ACCOUNT = "andris"
 MANAGER_CHECKOUT_NAME = "RPi5_main"
-TRUSTED_CHECKOUT_NAME = PRIVILEGED_INSTALL_CHECKOUT_NAME
+TRUSTED_CHECKOUT_NAME = "RPi5_main-weather-public-runtime-composite-trusted"
 RPi5_ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
 STATE_DB_PATH = Path("/var/lib/rozkalns-deploy-executor-p9/state.sqlite3")
 AUTH_SURFACE_PATH = Path("/etc/rozkalns-deploy-executor-p9/executor-p9-isolated-auth-surface.json")
 EXECUTOR_KEY_PATH = Path("/etc/rozkalns-deploy-executor/github-app.pem")
 OPERATOR_SUPPORT_ROOT = Path("/usr/local/libexec/rozkalns-weather-public-runtime-operator")
 OPERATOR_REGISTRY_PATH = OPERATOR_SUPPORT_ROOT / "executor-operations.json"
-HELPER_MANIFEST_RELATIVE = Path("ops/deploy/weather-public-runtime-helper-install.json")
+HELPER_MANIFEST_RELATIVE = Path("ops/deploy/weather-public-runtime-helper-install-composite.json")
 HELPER_SUPPORT_ROOT = Path("/usr/local/libexec/rozkalns-weather-public-runtime")
 HELPER_EXECUTABLE = Path("/usr/local/libexec/rozkalns-weather-public-runtime-stage-helper")
 ACTIVATION_PATH = Path(ACTIVATION_FILE)
@@ -628,7 +625,7 @@ class ConcreteWeatherOperatorHostMutator:
             value = json.loads(manifest_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             raise RuntimeError("Weather helper manifest is invalid") from exc
-        if value.get("contract") != "rozkalns-weather.public-runtime-helper-install.v1" or value.get("artifact_count") != 13:
+        if value.get("contract") != "rozkalns-weather.public-runtime-helper-install-composite.v1" or value.get("artifact_count") != 13:
             _fail("Weather helper manifest identity drifted")
         artifacts = value.get("artifacts")
         if type(artifacts) is not list or len(artifacts) != 13:

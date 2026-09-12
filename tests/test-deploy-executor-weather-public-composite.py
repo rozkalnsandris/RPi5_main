@@ -61,8 +61,8 @@ QUEUE_PATH = ROOT / "tests/fixtures/deploy_executor/queue_issue_weather_public_r
 SURFACE_PATH = ROOT / "ops/deploy/executor-p9-isolated-auth-surface.json"
 MACHINE_PATH = ROOT / "ops/deploy/weather-public-runtime-composite-live.json"
 EXECUTION_PATH = ROOT / "ops/deploy/weather-public-runtime-execution.json"
-HELPER_INSTALL_PATH = ROOT / "ops/deploy/weather-public-runtime-helper-install.json"
-CHECKOUT_PATH = ROOT / "ops/deploy/rpi5-main-weather-public-runtime-install-trusted-checkout-bootstrap.json"
+HELPER_INSTALL_PATH = ROOT / "ops/deploy/weather-public-runtime-helper-install-composite.json"
+CHECKOUT_PATH = ROOT / "ops/deploy/rpi5-main-weather-public-runtime-composite-trusted-checkout-bootstrap.json"
 HOST_WIRING_PATH = ROOT / "ops/deploy/weather-public-runtime-host-wiring.json"
 SOURCE_PATH = ROOT / "ops/lib/deploy_executor/weather_public_runtime_composite.py"
 DOC_PATH = ROOT / "docs/WEATHER_PUBLIC_RUNTIME_EXECUTOR_SOURCE.md"
@@ -551,7 +551,7 @@ class WeatherCompositeMachineContractTests(unittest.TestCase):
 
         self.assertEqual(
             machine["trusted_checkout"]["contract"],
-            "ops/deploy/rpi5-main-weather-public-runtime-install-trusted-checkout-bootstrap.json",
+            "ops/deploy/rpi5-main-weather-public-runtime-composite-trusted-checkout-bootstrap.json",
         )
         self.assertEqual(
             [row["argv"] for row in checkout["allowed_git_mutations"]],
@@ -562,13 +562,14 @@ class WeatherCompositeMachineContractTests(unittest.TestCase):
                     "worktree",
                     "add",
                     "--detach",
-                    "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-install-trusted",
+                    "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-composite-trusted",
                     "EXPLICIT_COMPOSITE_STRICT_LIVE_EXACT_RPI5_MAIN_SHA",
                 ],
             ],
         )
-        self.assertFalse(checkout["legacy_checkout"]["mutation_allowed"])
-        self.assertFalse(checkout["legacy_checkout"]["cleanup_allowed"])
+        historical = {row["derivation"]: row for row in checkout["historical_checkouts"]}
+        self.assertFalse(historical["RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-install-trusted"]["mutation_allowed"])
+        self.assertFalse(historical["RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-install-trusted"]["cleanup_allowed"])
         self.assertEqual(
             machine["trusted_checkout"]["legacy_target"],
             "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-trusted",

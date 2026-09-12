@@ -248,17 +248,23 @@ it is never reset, updated, removed, cleaned or reused as mutation authority.
 The #454 operator binds this successor contract and the #455 canonical 13-artifact
 allowlist; it does not create a second independent helper-install identity.
 
-Issue #482 reconciles Composite execution with that intentionally persistent successor
-checkout. Before durable replay consume, the operator now performs a fixed, read-only
-compatibility preflight. An existing successor checkout is reusable only when it is the
-exact authorized current `RPi5_main` SHA, detached, clean, bound to the fixed origin,
-descends from the reviewed minimum ancestor, and contains the canonical helper manifest
-and fixed source identities. That verified-existing path performs **zero** fetch/worktree
-mutations. If the fixed target is absent, the existing bounded fetch + detached-worktree
-creation path remains available. Wrong SHA, dirty/attached state, wrong origin, unsafe
-filesystem identity or source-closure drift fails before replay consume, so authorization
-reuse remains allowed and no host/production mutation is reported. The operator never
-repairs, resets, cleans, updates, removes or overwrites an existing checkout.
+Issue #482 originally reconciled Composite execution with that intentionally persistent
+successor checkout. Post-#487 host convergence proved that making the historical install
+checkout also serve as the moving exact-current Composite source creates a deterministic
+conflict as `RPi5_main/main` advances. Issue #491 therefore gives Composite execution a new dedicated contract,
+`ops/deploy/rpi5-main-weather-public-runtime-composite-trusted-checkout-bootstrap.json`,
+and a new fixed identity:
+
+`RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-composite-trusted`
+
+The historical install and prior operator-upgrade checkouts remain immutable evidence and
+are never reset, updated, removed, cleaned, switched, pruned or overwritten. The dedicated
+Composite checkout is bound to the same freshly JIT-verified exact current `RPi5_main` SHA
+and exact-SHA CI as the authorization. If absent, only one bounded `git fetch origin main`
+and one fixed detached `git worktree add` are eligible. If already present, reuse is allowed
+only when HEAD is the exact authorized current SHA, detached, clean, correct-origin,
+reviewed-ancestor compliant and the fixed helper source closure is intact; verified reuse
+performs zero Git mutations. Any mismatch fails before durable replay consume.
 
 
 ## Installed operator compatibility upgrade — Issue #487
@@ -304,6 +310,45 @@ operator, or promote `ops-workflows#46` to READY. A separate exact LIVE
 authorization remains required, followed by fresh installed-closure proof and a
 fresh sanitized first-deployment baseline before the Weather rollout can become
 eligible.
+
+## Dedicated Composite checkout + operator compatibility upgrade v2 — Issue #491
+
+Issue #491 removes the remaining deterministic pre-consume conflict without weakening
+current-main proof. The historical #455 helper manifest remains
+bound to its immutable install checkout; Composite uses the versioned
+`ops/deploy/weather-public-runtime-helper-install-composite.json`, which preserves the
+exact same 13-artifact closure while binding the dedicated Composite checkout. Composite execution now uses its own fixed exact-current checkout:
+
+`RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-composite-trusted`
+
+The historical install checkout and the #487 operator-upgrade checkout remain immutable
+evidence and are never reset, updated, removed, cleaned, switched, pruned or overwritten.
+The new Composite checkout still binds the freshly JIT-verified exact current
+`RPi5_main` SHA/CI and uses only the existing bounded fetch + detached-worktree mutation
+categories. Wrong SHA, dirty/attached state, wrong origin or source-closure drift fails
+before durable replay consume.
+
+Because the checkout identity changes the installed operator module, source readiness also
+includes a second, distinct capability-specific upgrade bridge:
+
+- contract `ops/deploy/weather-public-runtime-operator-upgrade-v2.json`;
+- checkout `RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-operator-upgrade-v2-trusted`;
+- entrypoint `ops/bin/rozkalns-weather-public-runtime-operator-upgrade-v2`;
+- module `ops/lib/deploy_executor/weather_public_runtime_operator_upgrade_v2.py`.
+
+The v2 bridge accepts no caller arguments and freezes predecessor source
+`36ce218ffd65af8c1bb904bd30037920f847808d`. Its source-diff guard permits exactly one
+changed artifact in the canonical 23-artifact installed operator closure:
+`ops/lib/deploy_executor/weather_public_runtime_operator.py`. Before any write it validates
+the complete installed closure, requiring the target module to match the #487-installed
+SHA-256 and every non-target artifact to match the exact target checkout. The only allowed
+publication is one same-directory atomic replacement of that module. There is no automatic
+retry, cleanup, rollback, backup restore, checkout repair or alternate mutation route.
+
+Source merge does not create the v2 checkout, execute the upgrade, invoke Composite, create
+or consume LIVE authorization, or make `ops-workflows#46` READY. Host convergence remains a
+separate exact owner LIVE gate followed by fresh 23/23 installed-closure proof and sanitized
+first-deployment baseline revalidation.
 
 ## Composite LIVE operator wiring — Issue #454
 
