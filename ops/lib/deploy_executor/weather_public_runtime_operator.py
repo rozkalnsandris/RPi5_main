@@ -136,6 +136,11 @@ class WeatherOperatorMutationReceipt:
 
 
 @dataclass(frozen=True)
+class WeatherTrustedCheckoutPreflight:
+    state: str
+
+
+@dataclass(frozen=True)
 class WeatherCompositeOperatorReceipt:
     schema: str
     result: str
@@ -144,6 +149,7 @@ class WeatherCompositeOperatorReceipt:
     source_sha: str
     rpi5_main_sha: str
     target_alias: str
+    trusted_checkout_state: str
     completed_gates: tuple[str, ...]
     mutation_counts: tuple[tuple[str, int], ...]
     read_only_invocations: tuple[tuple[str, int], ...]
@@ -161,6 +167,7 @@ class FixedCommandRunner(Protocol):
 
 
 class WeatherOperatorHostMutator(Protocol):
+    def preflight_trusted_checkout(self, expected_sha: str) -> WeatherTrustedCheckoutPreflight: ...
     def trusted_checkout_fetch(self, expected_sha: str) -> WeatherOperatorMutationReceipt: ...
     def trusted_checkout_worktree_add(self, expected_sha: str) -> WeatherOperatorMutationReceipt: ...
     def install_helper(self, expected_sha: str) -> WeatherOperatorMutationReceipt: ...
@@ -509,6 +516,7 @@ class ConcreteWeatherOperatorHostMutator:
 
     def __init__(self, runner: FixedCommandRunner = run_fixed_command):
         self._runner = runner
+        self._checkout_state: str | None = None
         self._fetch_done = False
         self._worktree_done = False
         self._helper_done = False
@@ -518,8 +526,6 @@ class ConcreteWeatherOperatorHostMutator:
         if type(expected_sha) is not str or _SHA40_RE.fullmatch(expected_sha) is None:
             _fail("Weather expected RPi5_main SHA is invalid")
         account, manager, trusted = _owner_paths()
-        if trusted.exists() or trusted.is_symlink():
-            _fail("Weather trusted checkout target must be absent")
         top = _require_success(_fixed_git(self._runner, manager, account, "-C", str(manager), "rev-parse", "--show-toplevel"), "manager root").strip()
         if top != str(manager):
             _fail("Weather manager checkout root drifted")
@@ -528,10 +534,62 @@ class ConcreteWeatherOperatorHostMutator:
             _fail("Weather manager origin drifted")
         return account, manager, trusted
 
+    @staticmethod
+    def _require_checkout_absent(trusted: Path) -> None:
+        if trusted.exists() or trusted.is_symlink():
+            _fail("Weather trusted checkout target changed from absent baseline")
+
+    def _verify_existing_checkout(self, expected_sha: str, account: pwd.struct_passwd, trusted: Path) -> None:
+        try:
+            meta = trusted.lstat()
+        except OSError as exc:
+            raise RuntimeError("Weather trusted checkout disappeared") from exc
+        if (
+            not stat.S_ISDIR(meta.st_mode)
+            or stat.S_ISLNK(meta.st_mode)
+            or meta.st_uid != account.pw_uid
+            or meta.st_gid != account.pw_gid
+            or stat.S_IMODE(meta.st_mode) & 0o022
+        ):
+            _fail("Weather trusted checkout filesystem identity is unsafe")
+        top = _require_success(_fixed_git(self._runner, trusted, account, "-C", str(trusted), "rev-parse", "--show-toplevel"), "trusted checkout root").strip()
+        head = _require_success(_fixed_git(self._runner, trusted, account, "-C", str(trusted), "rev-parse", "HEAD"), "trusted checkout HEAD").strip()
+        clean = _require_success(_fixed_git(self._runner, trusted, account, "-C", str(trusted), "status", "--porcelain=v1", "--untracked-files=all"), "trusted checkout status")
+        symbolic = _fixed_git(self._runner, trusted, account, "-C", str(trusted), "symbolic-ref", "-q", "HEAD")
+        origin = _require_success(_fixed_git(self._runner, trusted, account, "-C", str(trusted), "remote", "get-url", "origin"), "trusted checkout origin").strip()
+        ancestor = _fixed_git(self._runner, trusted, account, "-C", str(trusted), "merge-base", "--is-ancestor", RPI5_MIN_REVIEWED_ANCESTOR, expected_sha)
+        if top != str(trusted) or head != expected_sha or clean or symbolic.returncode != 1 or origin != RPi5_ORIGIN or ancestor.returncode != 0:
+            _fail("Weather trusted checkout is incompatible with authorized source")
+        manifest = self._manifest(trusted)
+        for artifact in manifest["artifacts"]:
+            source = trusted / _safe_relative(artifact["source"], "Weather verified-reuse source")
+            _require_regular(source, uid=account.pw_uid, gid=account.pw_gid)
+
+    def preflight_trusted_checkout(self, expected_sha: str) -> WeatherTrustedCheckoutPreflight:
+        if self._checkout_state is not None:
+            _fail("Weather trusted checkout preflight already completed")
+        account, _manager, trusted = self._manager_preflight(expected_sha)
+        if not trusted.exists() and not trusted.is_symlink():
+            state = "absent"
+        else:
+            self._verify_existing_checkout(expected_sha, account, trusted)
+            state = "verified_existing"
+        self._checkout_state = state
+        return WeatherTrustedCheckoutPreflight(state=state)
+
     def trusted_checkout_fetch(self, expected_sha: str) -> WeatherOperatorMutationReceipt:
-        if self._fetch_done:
-            _fail("Weather trusted-checkout fetch budget already consumed")
-        account, manager, _trusted = self._manager_preflight(expected_sha)
+        if self._checkout_state not in {"absent", "verified_existing"} or self._fetch_done:
+            _fail("Weather trusted-checkout fetch gate order drifted")
+        account, manager, trusted = self._manager_preflight(expected_sha)
+        if self._checkout_state == "verified_existing":
+            self._verify_existing_checkout(expected_sha, account, trusted)
+            self._fetch_done = True
+            return WeatherOperatorMutationReceipt(
+                "trusted_checkout_fetch_verified_existing",
+                (("git.trusted-checkout-fetch", 0),),
+                False,
+            )
+        self._require_checkout_absent(trusted)
         self._fetch_done = True
         _require_success(_fixed_git(self._runner, manager, account, "-C", str(manager), "fetch", "origin", "main"), "trusted checkout fetch")
         origin_main = _require_success(_fixed_git(self._runner, manager, account, "-C", str(manager), "rev-parse", "refs/remotes/origin/main"), "origin/main proof").strip()
@@ -543,20 +601,24 @@ class ConcreteWeatherOperatorHostMutator:
         return WeatherOperatorMutationReceipt("trusted_checkout_fetch", (("git.trusted-checkout-fetch", 1),), True)
 
     def trusted_checkout_worktree_add(self, expected_sha: str) -> WeatherOperatorMutationReceipt:
-        if not self._fetch_done or self._worktree_done:
+        if not self._fetch_done or self._worktree_done or self._checkout_state not in {"absent", "verified_existing"}:
             _fail("Weather trusted-checkout worktree gate order drifted")
         account, manager, trusted = self._manager_preflight(expected_sha)
+        if self._checkout_state == "verified_existing":
+            self._verify_existing_checkout(expected_sha, account, trusted)
+            self._worktree_done = True
+            return WeatherOperatorMutationReceipt(
+                "trusted_checkout_worktree_add_verified_existing",
+                (("git.trusted-checkout-worktree-add", 0),),
+                False,
+            )
+        self._require_checkout_absent(trusted)
         origin_main = _require_success(_fixed_git(self._runner, manager, account, "-C", str(manager), "rev-parse", "refs/remotes/origin/main"), "origin/main recheck").strip()
         if origin_main != expected_sha:
             _fail("origin/main drifted before worktree creation")
         self._worktree_done = True
         _require_success(_fixed_git(self._runner, manager, account, "-C", str(manager), "worktree", "add", "--detach", str(trusted), expected_sha), "trusted checkout worktree add")
-        head = _require_success(_fixed_git(self._runner, trusted, account, "-C", str(trusted), "rev-parse", "HEAD"), "trusted checkout HEAD").strip()
-        status_out = _require_success(_fixed_git(self._runner, trusted, account, "-C", str(trusted), "status", "--porcelain=v1", "--untracked-files=all"), "trusted checkout status")
-        symbolic = _fixed_git(self._runner, trusted, account, "-C", str(trusted), "symbolic-ref", "-q", "HEAD")
-        origin = _require_success(_fixed_git(self._runner, trusted, account, "-C", str(trusted), "remote", "get-url", "origin"), "trusted checkout origin").strip()
-        if head != expected_sha or status_out or symbolic.returncode != 1 or origin != RPI5_ORIGIN:
-            _fail("trusted checkout postcondition failed")
+        self._verify_existing_checkout(expected_sha, account, trusted)
         return WeatherOperatorMutationReceipt("trusted_checkout_worktree_add", (("git.trusted-checkout-worktree-add", 1),), True)
 
     def _manifest(self, trusted: Path) -> dict[str, Any]:
@@ -837,6 +899,11 @@ class WeatherCompositeOperator:
             host_plan = build_weather_host_wiring_plan(envelope)
             executable = build_weather_executable_plan(host_plan, envelope)
 
+            active_stage = "trusted_checkout_preflight"
+            checkout = self._host.preflight_trusted_checkout(authority.rpi5_main_sha)
+            if checkout.state not in {"absent", "verified_existing"}:
+                _fail("Weather trusted checkout preflight state drifted")
+
             # First mutation boundary: durable replay consume. From the instant this
             # call is attempted the authorization is non-reusable, even if SQLite
             # fails before a CONSUMED receipt can be returned.
@@ -865,14 +932,14 @@ class WeatherCompositeOperator:
 
             active_stage = "trusted_checkout_fetch"
             jit("trusted_checkout_fetch")
-            host_started = True
+            if checkout.state == "absent":
+                host_started = True
             receipt = self._host.trusted_checkout_fetch(authority.rpi5_main_sha)
             add_mutations(receipt.mutation_categories)
             completed.append("trusted_checkout_fetch")
 
             active_stage = "trusted_checkout_worktree_add"
             jit("trusted_checkout_worktree_add")
-            host_started = True
             receipt = self._host.trusted_checkout_worktree_add(authority.rpi5_main_sha)
             add_mutations(receipt.mutation_categories)
             completed.append("trusted_checkout_worktree_add")
@@ -936,6 +1003,7 @@ class WeatherCompositeOperator:
                 source_sha=authority.source_sha,
                 rpi5_main_sha=authority.rpi5_main_sha,
                 target_alias=TARGET_ALIAS,
+                trusted_checkout_state=checkout.state,
                 completed_gates=tuple(completed),
                 mutation_counts=tuple((category, counts[category]) for category, _limit in FULL_MUTATION_BUDGET),
                 read_only_invocations=tuple((name, read_only[name]) for name in _READ_ONLY_LIMITS),
@@ -993,6 +1061,9 @@ def source_readiness() -> Mapping[str, Any]:
         "first_mutation": "durable_replay_consume",
         "post_consume_revalidation": True,
         "jit_before_each_privileged_boundary": True,
+        "trusted_checkout_preconsume_compatibility_check": True,
+        "trusted_checkout_verified_reuse_enabled": True,
+        "trusted_checkout_absent_path_mutations_implemented": True,
         "trusted_checkout_mutations_implemented": True,
         "helper_install_transaction_implemented": True,
         "activation_publication_implemented": True,
