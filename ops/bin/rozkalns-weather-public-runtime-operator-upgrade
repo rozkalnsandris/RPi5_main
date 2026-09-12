@@ -1,0 +1,40 @@
+#!/usr/bin/python3 -I
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import sys
+
+_CHECKOUT_NAME = "RPi5_main-weather-public-runtime-operator-upgrade-trusted"
+_CHECKOUT = Path(__file__).resolve().parents[2]
+_ENTRYPOINT = _CHECKOUT / "ops/bin/rozkalns-weather-public-runtime-operator-upgrade"
+_LIB = _CHECKOUT / "ops/lib"
+_MODULE = _CHECKOUT / "ops/lib/deploy_executor/weather_public_runtime_operator_upgrade.py"
+
+
+def main() -> int:
+    if len(sys.argv) != 1:
+        raise RuntimeError("Weather operator upgrade accepts no caller arguments")
+    if os.geteuid() != 0:
+        raise RuntimeError("Weather operator upgrade must run as root")
+    if _CHECKOUT.name != _CHECKOUT_NAME or Path(__file__).resolve() != _ENTRYPOINT.resolve():
+        raise RuntimeError("Weather operator upgrade is not in the fixed trusted upgrade checkout")
+    if not _MODULE.is_file():
+        raise RuntimeError("Weather operator upgrade module is absent")
+    sys.path.insert(0, str(_LIB))
+    import deploy_executor.weather_public_runtime_operator_upgrade as upgrade
+
+    if Path(upgrade.__file__).resolve() != _MODULE.resolve():
+        raise RuntimeError("Weather operator upgrade module provenance mismatch")
+    receipt = upgrade.execute_upgrade()
+    print(json.dumps(receipt, sort_keys=True, separators=(",", ":")))
+    return 0 if receipt.get("result") == "PASS" else 1
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except Exception as exc:
+        print(f"WEATHER_OPERATOR_UPGRADE=STOP reason={type(exc).__name__}:{exc}", file=sys.stderr)
+        raise SystemExit(1)

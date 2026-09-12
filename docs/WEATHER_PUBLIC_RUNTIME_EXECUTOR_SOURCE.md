@@ -260,6 +260,51 @@ filesystem identity or source-closure drift fails before replay consume, so auth
 reuse remains allowed and no host/production mutation is reported. The operator never
 repairs, resets, cleans, updates, removes or overwrites an existing checkout.
 
+
+## Installed operator compatibility upgrade — Issue #487
+
+Issue #487 adds a source-only bridge for the narrow post-#482 compatibility gap
+between the earlier reviewed Weather operator installation and the corrected
+Composite source contract. The historical checkout
+`RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-install-trusted` remains
+immutable evidence and is never reset, cleaned, switched, removed, pruned or
+advanced in place.
+
+The upgrade uses a new fixed checkout identity:
+
+`RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-operator-upgrade-trusted`
+
+Its source contract permits at most one reviewed-manager `git fetch origin main`
+and one fixed detached `git worktree add` for the exact separately authorized
+current `RPi5_main` SHA. No caller selects a path, repository URL, command, argv
+or environment, and there is no manager-checkout repair or alternate checkout
+route.
+
+`ops/deploy/weather-public-runtime-operator-upgrade.json` freezes the predecessor
+source at `7b54434d296bcd7030464f3fc13e4a601acaa2d9` and permits exactly one changed
+artifact in the canonical 23-artifact operator closure:
+`ops/lib/deploy_executor/weather_public_runtime_operator.py`. A source-diff guard
+must fail closed if any other installed artifact changes between that predecessor
+and the exact upgrade checkout.
+
+Before any runtime write, the capability-specific zero-argument upgrade bridge
+must verify the complete installed operator closure, exact membership,
+ownership/modes and hashes. Every non-target installed artifact must already
+match the exact target checkout byte-for-byte, while the target module must match
+the frozen predecessor hash. The only allowed runtime publication is a
+same-directory, no-follow, exclusive temporary file followed by one atomic
+replacement of
+`/usr/local/libexec/rozkalns-weather-public-runtime-operator/deploy_executor/weather_public_runtime_operator.py`,
+with file and parent-directory fsync. There is no automatic retry, cleanup,
+rollback or backup restore; a failure after temporary-file creation preserves
+evidence for an explicit owner recovery decision.
+
+Source merge does not create the new checkout, run the upgrade, invoke the
+operator, or promote `ops-workflows#46` to READY. A separate exact LIVE
+authorization remains required, followed by fresh installed-closure proof and a
+fresh sanitized first-deployment baseline before the Weather rollout can become
+eligible.
+
 ## Composite LIVE operator wiring — Issue #454
 
 Issue #454 adds the reviewed source-side operator composition that was deliberately
