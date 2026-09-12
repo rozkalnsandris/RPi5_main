@@ -46,6 +46,7 @@ class P5InterfaceSecurityTests(unittest.TestCase):
                 "hermes-deals.origin-path-audit.v1",
                 "hermes-deals.netto-missing-normal-price-nonroot-preflight-v2.v1",
                 "hermes-deals.production-release.v1",
+                "hermes-deals.runner-smoke-audit.v1",
                 "rozkalns-weather.public-runtime-release.v1",
             },
         )
@@ -76,6 +77,11 @@ class P5InterfaceSecurityTests(unittest.TestCase):
         self.assertEqual(production.baseline.kind, "resolver")
         self.assertEqual(production.baseline.resolver_id, "hermes-deals.production-baseline.v1")
         self.assertEqual(production.rollback_policy, "NONE")
+        runner_smoke = operations["hermes-deals.runner-smoke-audit.v1"]
+        self.assertEqual(runner_smoke.authorization_class, "STRICT")
+        self.assertFalse(runner_smoke.ordinary_live_all_eligible)
+        self.assertEqual(runner_smoke.rollback_policy, "NONE")
+        self.assertEqual(runner_smoke.queue_match.deploy_class, "STRICT_LIVE_AUTH_REQUIRED")
         weather = operations["rozkalns-weather.public-runtime-release.v1"]
         self.assertEqual(weather.authorization_class, "STRICT")
         self.assertFalse(weather.ordinary_live_all_eligible)

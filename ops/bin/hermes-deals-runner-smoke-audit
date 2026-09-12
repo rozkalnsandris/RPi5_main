@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import grp
+import hashlib
+import json
+import os
+from pathlib import Path
+import pwd
+import stat
+import sys
+
+SCHEMA = "rozkalns.hermes-deals.runner-smoke-helper-output.v2"
+REGISTRATION_SCHEMA = "rozkalns.hermes-deals.runner-smoke-registration.v2"
+OPERATION_ID = "hermes-deals.runner-smoke-audit.v1"
+TARGET_ALIAS = "hermes-deals-runner-smoke-audit"
+EXECUTION_ACCOUNT = "hermes-deals-audit-canary"
+EXPECTED_PRIMARY_GROUP = "hermes-deals-audit-canary"
+EXPECTED_SHELL = "/usr/sbin/nologin"
+HELPER_PATH = Path("/usr/local/libexec/rozkalns-deploy/hermes-deals-runner-smoke-audit")
+REGISTRATION_PATH = Path("/etc/rozkalns-deploy/hermes-deals-runner-smoke-audit.json")
+MAX_REGISTRATION_BYTES = 16 * 1024
+
+
+class RunnerSmokeHelperError(RuntimeError):
+    pass
+
+
+def fail(message: str) -> None:
+    raise RunnerSmokeHelperError(message)
+
+
+def require_regular_root_owned(path: Path, mode: int) -> bytes:
+    meta = path.lstat()
+    if not stat.S_ISREG(meta.st_mode) or meta.st_nlink != 1:
+        fail("registration must be a single-link regular file")
+    if meta.st_uid != 0 or meta.st_gid != 0 or stat.S_IMODE(meta.st_mode) != mode:
+        fail("registration owner/mode drifted")
+    if meta.st_size > MAX_REGISTRATION_BYTES:
+        fail("registration exceeds size limit")
+    raw = path.read_bytes()
+    if len(raw) != meta.st_size:
+        fail("registration changed while reading")
+    return raw
+
+
+def load_registration() -> dict[str, object]:
+    try:
+        raw = require_regular_root_owned(REGISTRATION_PATH, 0o644)
+        value = json.loads(raw)
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise RunnerSmokeHelperError("registration is unavailable or invalid") from exc
+    if type(value) is not dict:
+        fail("registration must be an object")
+    required = {
+        "schema",
+        "operation_id",
+        "target_alias",
+        "source_repository",
+        "source_sha",
+        "helper_path",
+        "helper_sha256",
+        "execution_identity",
+        "production_apply_authorized",
+    }
+    if set(value) != required:
+        fail("registration field drift")
+    if value["schema"] != REGISTRATION_SCHEMA:
+        fail("registration schema drift")
+    if value["operation_id"] != OPERATION_ID or value["target_alias"] != TARGET_ALIAS:
+        fail("registration operation identity drift")
+    if value["source_repository"] != "rozkalnsandris/hermes-deals":
+        fail("registration source repository drift")
+    source_sha = value["source_sha"]
+    if type(source_sha) is not str or len(source_sha) != 40 or any(c not in "0123456789abcdef" for c in source_sha):
+        fail("registration source SHA invalid")
+    if value["helper_path"] != str(HELPER_PATH):
+        fail("registration helper path drift")
+    helper_sha256 = value["helper_sha256"]
+    if type(helper_sha256) is not str or len(helper_sha256) != 64 or any(c not in "0123456789abcdef" for c in helper_sha256):
+        fail("registration helper identity invalid")
+    if value["execution_identity"] != {
+        "account": EXECUTION_ACCOUNT,
+        "login_shell": EXPECTED_SHELL,
+        "root": False,
+        "docker_group": False,
+        "supplementary_groups": [],
+    }:
+        fail("registration execution identity drift")
+    if value["production_apply_authorized"] is not False:
+        fail("registration unexpectedly authorizes production apply")
+    return value
+
+
+def validate_runtime_identity() -> tuple[pwd.struct_passwd, tuple[str, ...]]:
+    if os.geteuid() == 0:
+        fail("runner-smoke helper must never execute as root")
+    entry = pwd.getpwuid(os.geteuid())
+    if entry.pw_name != EXECUTION_ACCOUNT:
+        fail("unexpected execution account")
+    if entry.pw_shell != EXPECTED_SHELL:
+        fail("execution account shell drift")
+    try:
+        primary_group = grp.getgrgid(entry.pw_gid)
+    except KeyError:
+        fail("execution account primary group is unknown")
+    if primary_group.gr_name != EXPECTED_PRIMARY_GROUP or primary_group.gr_gid == 0:
+        fail("execution account primary group drift")
+    group_names = []
+    for gid in os.getgroups():
+        if gid == entry.pw_gid:
+            continue
+        try:
+            group_names.append(grp.getgrgid(gid).gr_name)
+        except KeyError:
+            fail("unknown supplementary group")
+    if group_names:
+        fail("supplementary groups are forbidden")
+    try:
+        docker = grp.getgrnam("docker")
+    except KeyError:
+        docker = None
+    if docker is not None and (entry.pw_gid == docker.gr_gid or EXECUTION_ACCOUNT in docker.gr_mem):
+        fail("docker group membership is forbidden")
+    return entry, tuple(group_names)
+
+
+def main() -> int:
+    if len(sys.argv) != 1:
+        fail("runner-smoke helper accepts no caller-selected arguments")
+    registration = load_registration()
+    validate_runtime_identity()
+    helper_bytes = HELPER_PATH.read_bytes()
+    observed_helper_sha256 = hashlib.sha256(helper_bytes).hexdigest()
+    if observed_helper_sha256 != registration["helper_sha256"]:
+        fail("installed helper content drift")
+    receipt = {
+        "schema": SCHEMA,
+        "status": "PASS",
+        "operation_id": OPERATION_ID,
+        "target_alias": TARGET_ALIAS,
+        "source_sha": registration["source_sha"],
+        "execution_identity": EXECUTION_ACCOUNT,
+        "supplementary_groups": [],
+        "docker_group": False,
+        "production_apply_authorized": False,
+        "sanitized": True,
+        "runtime_observation": True,
+    }
+    sys.stdout.write(json.dumps(receipt, sort_keys=True, separators=(",", ":")) + "\n")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except RunnerSmokeHelperError as exc:
+        print(f"BLOCKED: {exc}", file=sys.stderr)
+        raise SystemExit(78)

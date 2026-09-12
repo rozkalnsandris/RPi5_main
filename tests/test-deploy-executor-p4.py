@@ -44,7 +44,7 @@ class P4RegistryAndNormalizationTests(unittest.TestCase):
     def test_production_registry_contains_reviewed_disabled_operations(self):
         registry = load_registry(PRODUCTION_REGISTRY)
         self.assertFalse(registry.execution_enabled)
-        self.assertEqual(len(registry.operations), 6)
+        self.assertEqual(len(registry.operations), 7)
         operations = {item.operation_id: item for item in registry.operations}
         p9 = operations["rozkalns-control-center.merge-postcanary-reconcile.v1"]
         self.assertEqual(p9.adapter_id, "rozkalns-control-center.merge-postcanary-reconcile.v1")
@@ -80,6 +80,13 @@ class P4RegistryAndNormalizationTests(unittest.TestCase):
         self.assertEqual(production.baseline.kind, "resolver")
         self.assertEqual(production.baseline.resolver_id, "hermes-deals.production-baseline.v1")
         self.assertEqual(production.rollback_policy, "NONE")
+        runner_smoke = operations["hermes-deals.runner-smoke-audit.v1"]
+        self.assertEqual(runner_smoke.adapter_id, "hermes-deals.runner-smoke-audit.v1")
+        self.assertEqual(runner_smoke.authorization_class, "STRICT")
+        self.assertFalse(runner_smoke.ordinary_live_all_eligible)
+        self.assertEqual(runner_smoke.queue_match.target_alias, "hermes-deals-runner-smoke-audit")
+        self.assertEqual(runner_smoke.baseline.resolver_id, "hermes-deals.runner-smoke-registration.v2")
+        self.assertEqual(runner_smoke.rollback_policy, "NONE")
         weather = operations["rozkalns-weather.public-runtime-release.v1"]
         self.assertEqual(weather.adapter_id, "rozkalns-weather.public-runtime-release.v1")
         self.assertEqual(weather.authorization_class, "STRICT")
