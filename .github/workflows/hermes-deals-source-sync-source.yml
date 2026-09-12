@@ -1,0 +1,41 @@
+name: Hermes Deals source-sync source
+
+on:
+  pull_request:
+    paths:
+      - ops/contracts/hermes-deals-source-sync-v1.json
+      - ops/deploy/executor-operations.json
+      - tests/test-hermes-deals-source-sync.py
+      - tests/test-deploy-executor-p4.py
+      - tests/test-hermes-deals-runner-smoke-install.py
+      - docs/HERMES_DEALS_SOURCE_SYNC.md
+      - .github/workflows/hermes-deals-source-sync-source.yml
+  push:
+    branches:
+      - main
+    paths:
+      - ops/contracts/hermes-deals-source-sync-v1.json
+      - ops/deploy/executor-operations.json
+      - tests/test-hermes-deals-source-sync.py
+      - tests/test-deploy-executor-p4.py
+      - tests/test-hermes-deals-runner-smoke-install.py
+      - docs/HERMES_DEALS_SOURCE_SYNC.md
+      - .github/workflows/hermes-deals-source-sync-source.yml
+
+permissions:
+  contents: read
+
+jobs:
+  source-sync-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - name: Validate source-sync static boundary
+        run: |
+          python3 ./tests/test-hermes-deals-source-sync.py
+          python3 ./tests/test-deploy-executor-p4.py
+          python3 ./tests/test-hermes-deals-runner-smoke-install.py
