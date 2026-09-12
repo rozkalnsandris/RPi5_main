@@ -54,6 +54,27 @@
       "source": "ops/deploy/hermes-deals-runner-smoke-audit-registration.json"
     }
   ],
+  "authorization_consumer": {
+    "app_authored_allowed": false,
+    "caller_argv_allowed": false,
+    "caller_command_allowed": false,
+    "caller_environment_allowed": false,
+    "caller_path_allowed": false,
+    "canonical_live_envelope_schema": "rozkalns.hermes-deals.runner-smoke-install-live-envelope.v1",
+    "canonical_revalidation_passes": 2,
+    "external_entrypoint_enabled": false,
+    "implementation": "ops/lib/deploy_executor/hermes_deals_runner_smoke_install_consumer.py:prepare_install_live_envelope",
+    "implementation_issue": 481,
+    "max_authorization_age_seconds": 600,
+    "max_revalidation_time_drift_seconds": 30,
+    "mutation_boundary": "ops/lib/deploy_executor/hermes_deals_runner_smoke_install.py:apply_install",
+    "owner_numeric_id": 277435981,
+    "owner_type": "User",
+    "request_authority": [
+      "authorization_issue_number"
+    ],
+    "runtime_activation_enabled": false
+  },
   "capability": {
     "canary_target_alias": "hermes-deals-runner-smoke-audit",
     "exact_sha_ci_required": true,
@@ -82,6 +103,8 @@
   "handoff": {
     "helper_invoked": false,
     "live_auth_created": false,
+    "live_envelope_consumer_enabled": false,
+    "live_envelope_consumer_implemented": true,
     "next_owner_gate": "SEPARATE_EXACT_LIVE_AUTHORIZATION_AFTER_MERGE_AND_EXACT_MAIN_CI",
     "production_mutation_started": false,
     "ready_queue_created": false,
