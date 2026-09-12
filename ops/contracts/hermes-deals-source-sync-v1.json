@@ -99,5 +99,15 @@
     "live_authorization_required_before_future_mutation": true,
     "ready_or_live_auth_created_here": false,
     "runtime_receipt_created_here": false
+  },
+  "job_7_source": {
+    "implementation_issue": 490,
+    "outcome": "SOURCE_READY_LIVE_LATER",
+    "contract_path": "ops/contracts/hermes-deals-source-sync-evidence-v1.json",
+    "module_path": "ops/lib/deploy_executor/hermes_deals_source_sync_evidence.py",
+    "test_path": "tests/test-hermes-deals-source-sync-evidence.py",
+    "focused_ci": ".github/workflows/hermes-deals-source-sync-source.yml",
+    "source_execution_enabled": false,
+    "runtime_live_authority": false
   }
 }

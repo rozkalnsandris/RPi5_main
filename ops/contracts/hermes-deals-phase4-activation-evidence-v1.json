@@ -239,7 +239,11 @@
     "alternate_mutation_path_after_mutation_start": false,
     "ready_queue_created": false,
     "live_auth_created": false,
-    "source_sync_executed": false
+    "source_sync_executed": false,
+    "dedicated_job7_contract": "ops/contracts/hermes-deals-source-sync-evidence-v1.json",
+    "implementation_issue": 490,
+    "source_execution_enabled": false,
+    "runtime_live_authority": false
   },
   "auto_live_a5_registration": {
     "status": "INACTIVE_SOURCE_REGISTRATION",
