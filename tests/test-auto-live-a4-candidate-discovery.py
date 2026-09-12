@@ -106,7 +106,14 @@ class DiscoveryTests(unittest.TestCase):
 
     def test_candidate_set_comes_only_from_a2_index(self):
         result, github = self.run_discovery(["apps/web/src/app.tsx"])
-        self.assertEqual([c.target_alias for c in result.candidates], [DASHBOARD, "rozkalns-weather-public-rpi5"])
+        self.assertEqual(
+            [c.target_alias for c in result.candidates],
+            [DASHBOARD, "hermes-deals-production", "rozkalns-weather-public-rpi5"],
+        )
+        hermes = next(c for c in result.candidates if c.target_alias == "hermes-deals-production")
+        self.assertEqual(hermes.decision, "NO_ELIGIBLE_CANARY")
+        self.assertEqual(hermes.reason, "STATIC_OPERATION_NOT_AUTO_LIVE_ELIGIBLE")
+        self.assertFalse(any("hermes-deals" in call for call in github.calls))
         weather = next(c for c in result.candidates if c.target_alias == "rozkalns-weather-public-rpi5")
         self.assertEqual(weather.decision, "NO_ELIGIBLE_CANARY")
         self.assertEqual(weather.reason, "MANIFEST_HAS_NO_AUTOMATIC_ELIGIBLE_CLASS")
@@ -208,6 +215,7 @@ class DiscoveryTests(unittest.TestCase):
             "ops/deploy/auto-live-controller-v1.json",
             "ops/deploy/auto-live-manifests.json",
             "ops/deploy/auto-live-manifests/dashboard-rpi5.json",
+            "ops/deploy/auto-live-manifests/hermes-deals.json",
             "ops/deploy/auto-live-manifests/rozkalns-weather.json",
             "ops/deploy/executor-operations.json",
         ]

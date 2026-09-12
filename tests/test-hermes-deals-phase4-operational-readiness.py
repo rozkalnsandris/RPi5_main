@@ -174,8 +174,12 @@ class HermesDealsPhase4OperationalReadinessTests(unittest.TestCase):
         self.assertFalse(manifest["automatic_mutation_enabled"])
         self.assertEqual(manifest["eligible_classes"], ["AUTO_DEPLOY_SAFE"])
         self.assertEqual(manifest["unknown_or_ambiguous_path_result"], "BLOCKED")
-        self.assertFalse(bridge["registration"]["global_executor_operation_registered"])
-        self.assertFalse(bridge["registration"]["auto_live_manifest_indexed"])
+        registration = bridge["registration"]
+        self.assertTrue(registration["global_executor_operation_registered"])
+        self.assertTrue(registration["auto_live_manifest_indexed"])
+        self.assertFalse(registration["registration_is_live_activation"])
+        self.assertFalse(registration["global_execution_enabled"])
+        self.assertEqual(registration["manifest_activation_state"], "INACTIVE_SOURCE_ONLY")
         self.assertTrue(all(value is False for value in bridge["mutation"].values()))
 
     def test_auto_live_source_evaluation_never_grants_execution(self) -> None:

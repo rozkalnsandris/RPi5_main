@@ -45,6 +45,7 @@ class P5InterfaceSecurityTests(unittest.TestCase):
                 "dashboard-rpi5.production-release.v1",
                 "hermes-deals.origin-path-audit.v1",
                 "hermes-deals.netto-missing-normal-price-nonroot-preflight-v2.v1",
+                "hermes-deals.production-release.v1",
                 "rozkalns-weather.public-runtime-release.v1",
             },
         )
@@ -68,6 +69,13 @@ class P5InterfaceSecurityTests(unittest.TestCase):
             "hermes-deals.netto-nonroot-preflight-v2-registration.v1",
         )
         self.assertEqual(netto.rollback_policy, "NONE")
+        production = operations["hermes-deals.production-release.v1"]
+        self.assertEqual(production.authorization_class, "STRICT")
+        self.assertFalse(production.ordinary_live_all_eligible)
+        self.assertEqual(production.queue_match.deploy_class, "AUTO_DEPLOY_SAFE")
+        self.assertEqual(production.baseline.kind, "resolver")
+        self.assertEqual(production.baseline.resolver_id, "hermes-deals.production-baseline.v1")
+        self.assertEqual(production.rollback_policy, "NONE")
         weather = operations["rozkalns-weather.public-runtime-release.v1"]
         self.assertEqual(weather.authorization_class, "STRICT")
         self.assertFalse(weather.ordinary_live_all_eligible)

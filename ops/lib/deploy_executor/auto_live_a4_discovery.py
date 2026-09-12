@@ -214,7 +214,7 @@ def _evaluate_candidate(
     )
     if not static_auto:
         return CandidateDecision(
-            decision="BLOCKED", reason="STATIC_OPERATION_NOT_AUTO_LIVE_ELIGIBLE",
+            decision="NO_ELIGIBLE_CANARY", reason="STATIC_OPERATION_NOT_AUTO_LIVE_ELIGIBLE",
             target_sha=None, classification=None, required_ci_run_id=None, changed_paths=(), **common
         )
     target = _current_main(github, manifest["source_repository"])

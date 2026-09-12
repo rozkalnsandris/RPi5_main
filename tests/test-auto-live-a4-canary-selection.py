@@ -82,7 +82,11 @@ assert discovery["aggregate"]["eligible_candidate_tie_break"] == "target_alias_t
 assert all(value is False for value in discovery["mutation"].values())
 
 manifest_paths = {row["path"] for row in index["manifests"]}
-assert manifest_paths == {policy["dashboard_manifest_path"], policy["weather_manifest_path"]}
+assert manifest_paths == {
+    policy["dashboard_manifest_path"],
+    "ops/deploy/auto-live-manifests/hermes-deals.json",
+    policy["weather_manifest_path"],
+}
 operations = {row["operation_id"]: row for row in executor["operations"]}
 dop = operations[dashboard["static_operation_id"]]
 assert dop["authorization_class"] == "ORDINARY"

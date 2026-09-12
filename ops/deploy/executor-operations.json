@@ -297,6 +297,78 @@
       ]
     },
     {
+      "operation_id": "hermes-deals.production-release.v1",
+      "source_repository": "rozkalnsandris/hermes-deals",
+      "queue_match": {
+        "target_alias": "hermes-deals-production",
+        "execution_location_class": "trusted-home-host",
+        "repository_entrypoint": "tools/runner/release/hermes-deals-deploy-main",
+        "deploy_class": "AUTO_DEPLOY_SAFE"
+      },
+      "target_alias": "hermes-deals-production",
+      "adapter_id": "hermes-deals.production-release.v1",
+      "authorization_class": "STRICT",
+      "ordinary_live_all_eligible": false,
+      "baseline": {
+        "kind": "resolver",
+        "resolver_id": "hermes-deals.production-baseline.v1"
+      },
+      "mutation_budget": [
+        {
+          "category": "application_release",
+          "max_operations": 1
+        }
+      ],
+      "rollback_policy": "NONE",
+      "exclusions": [
+        "MANUAL_ROLLOUT_REQUIRED range",
+        "DB_HOST_APPLY_REQUIRED range",
+        "unknown or ambiguous classification",
+        "credentials secrets permissions GitHub App changes",
+        "systemd service Docker network Cloudflare host or runner mutation",
+        "database Review publication parser collector or scheduler mutation",
+        "arbitrary command path argv environment or generic privileged execution",
+        "automatic retry cleanup rollback or alternate mutation path after mutation start"
+      ],
+      "dependencies": [
+        "source-repository-id:1317143994",
+        "source-anchor-sha:8015d6175b2b3c260fdb26546021bb17dcc5f4fb",
+        "workflow-source-blob:c45e14765881a82eb7e3d1bc3fe2f4f50cb0c38f",
+        "release-installer-source-blob:5ce5fa19e09db576b9daa9318c05bd9d8771900c",
+        "main-deploy-installer-source-blob:8aaeebb805dd884bf131f1a98fbb0c47a3cfbf23",
+        "required-ci-workflow-blob:89059e310ab3270001daef43fd8f22a38b258c99",
+        "required-ci-gate:FAST-LANE Merge Gate",
+        "auto-live-manifest:ops/deploy/auto-live-manifests/hermes-deals.json",
+        "manifest-state:INACTIVE_SOURCE_ONLY",
+        "global-execution:disabled"
+      ],
+      "preflight": [
+        "manifest is explicitly ACTIVE before any automatic mutation; current source state is INACTIVE_SOURCE_ONLY",
+        "complete production baseline to exact target range is classified and every mutating path is AUTO_DEPLOY_SAFE",
+        "exact target SHA is merged and reachable from current Hermes Deals main",
+        "exact target SHA FAST-LANE Merge Gate is successful",
+        "fresh production baseline matches the static operation resolver",
+        "reviewed release helper and installer identities match the registered source identities",
+        "one mutation-capable deployment is serialized for hermes-deals:production",
+        "no owner-required or unknown path classification exists in the complete range"
+      ],
+      "postconditions": [
+        "production identity equals the exact authorized target SHA",
+        "deterministic application health verification passes",
+        "no database migration or write is performed by AUTO_DEPLOY_SAFE operation class",
+        "no runner or repository settings mutation is performed",
+        "no automatic retry cleanup rollback or alternate mutation path occurs after mutation start"
+      ],
+      "required_github_evidence": [
+        "exact Hermes Deals repository and target SHA",
+        "target SHA is merged/reachable from current main",
+        "exact-SHA FAST-LANE Merge Gate completed successfully",
+        "complete production baseline to target range classification is AUTO_DEPLOY_SAFE",
+        "current reviewed workflow and release installer identities",
+        "active manifest identity and separate applicable LIVE authority"
+      ]
+    },
+    {
       "operation_id": "rozkalns-weather.public-runtime-release.v1",
       "source_repository": "rozkalnsandris/rozkalns_weather",
       "queue_match": {

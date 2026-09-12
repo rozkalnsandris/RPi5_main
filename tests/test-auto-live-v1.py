@@ -108,6 +108,7 @@ assert manifests_index["activation"]["historical_live_authorization_reuse"] is F
 
 expected_manifest_paths = {
     "ops/deploy/auto-live-manifests/dashboard-rpi5.json",
+    "ops/deploy/auto-live-manifests/hermes-deals.json",
     "ops/deploy/auto-live-manifests/rozkalns-weather.json",
 }
 assert {item["path"] for item in manifests_index["manifests"]} == expected_manifest_paths

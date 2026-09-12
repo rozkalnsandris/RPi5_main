@@ -11,6 +11,7 @@
   "manifest_descriptor": {
     "manifest_id": "hermes-deals.production-release.v1",
     "schema": "rozkalns.auto-live-repository-manifest.v1",
+    "manifest_path": "ops/deploy/auto-live-manifests/hermes-deals.json",
     "activation_state": "INACTIVE_SOURCE_ONLY",
     "automatic_mutation_enabled": false,
     "first_activation_requires_separate_owner_live_authorization": true,
@@ -26,11 +27,12 @@
   "static_operation_descriptor": {
     "operation_id": "hermes-deals.production-release.v1",
     "adapter_id": "hermes-deals.production-release.v1",
+    "registry_path": "ops/deploy/executor-operations.json",
     "authorization_class": "ORDINARY_FUTURE_AUTO_LIVE_SAFE_ONLY",
     "ordinary_auto_live_eligible_now": false,
     "baseline": {
       "kind": "resolver",
-      "resolver_id": "HERMES_DEALS_PRODUCTION_BASELINE_REQUIRED"
+      "resolver_id": "hermes-deals.production-baseline.v1"
     },
     "mutation_budget": [
       {
@@ -79,10 +81,12 @@
     ]
   },
   "registration": {
-    "global_executor_operation_registered": false,
-    "auto_live_manifest_indexed": false,
+    "global_executor_operation_registered": true,
+    "auto_live_manifest_indexed": true,
     "registration_is_live_activation": false,
-    "source_descriptor_review_required_before_registration": true
+    "source_descriptor_review_required_before_registration": true,
+    "global_execution_enabled": false,
+    "manifest_activation_state": "INACTIVE_SOURCE_ONLY"
   },
   "failure_policy": {
     "unknown_or_drifted_state": "BLOCKED",
