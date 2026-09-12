@@ -27,6 +27,7 @@ test:
 	python3 ./tests/test-deploy-executor-weather-public-helper-install.py
 	python3 ./tests/test-deploy-executor-weather-public-composite-helper-install.py
 	python3 ./tests/test-deploy-executor-weather-public-composite.py
+	python3 ./tests/test-deploy-executor-weather-public-consumed-jit-hardening.py
 	python3 ./tests/test-deploy-executor-weather-public-privileged-install.py
 	python3 ./tests/test-deploy-executor-weather-public-operator.py
 	python3 ./tests/test-deploy-executor-weather-public-operator-install.py
