@@ -1,0 +1,21 @@
+{
+  "schema": "rpi5.homeassistant.compose-resource-envelope.v1",
+  "service": "homeassistant",
+  "resource_keys": {
+    "mem_limit": "768m",
+    "mem_reservation": "350m",
+    "memswap_limit": "1g"
+  },
+  "safety": {
+    "requires_exact_input_sha256": true,
+    "requires_compose_config_validation": true,
+    "allowed_mutation_keys": [
+      "mem_limit",
+      "mem_reservation",
+      "memswap_limit"
+    ],
+    "container_restart_allowed": false,
+    "container_recreate_allowed": false,
+    "image_upgrade_allowed": false
+  }
+}
