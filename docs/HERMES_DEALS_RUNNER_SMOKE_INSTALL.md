@@ -14,9 +14,9 @@ Reviewed Hermes Deals source is `0e3b834f155cef7f9e964ddf02228c6a7ad1950c`; runn
 
 The only execution identity is `hermes-deals-audit-canary`: system account, primary group of the same name, home `/nonexistent`, shell `/usr/sbin/nologin`, non-root, no Docker group and no supplementary groups.
 
-Helper destination: `/usr/local/libexec/rozkalns-deploy/hermes-deals-runner-smoke-audit`, root-owned `0755`, SHA-256 `545a401b6eef1dfd7e207f8f30472172d181a710c1604d1e3d27e59eb0b7f661`.
+Helper destination: `/usr/local/libexec/rozkalns-deploy/hermes-deals-runner-smoke-audit`, root-owned `0755`, SHA-256 `fc8ccc8a2179c23670d28bbe166e45f85769b8bd13c319e423f56c4f65b17bd4`.
 
-Registration destination: `/etc/rozkalns-deploy/hermes-deals-runner-smoke-audit.json`, root-owned `0644`, SHA-256 `0bccc6a0fe1ef686cde6a0bb1b426ad656fc79feedd05ad4c515f4d629e33036`.
+Registration destination: `/etc/rozkalns-deploy/hermes-deals-runner-smoke-audit.json`, root-owned `0644`, SHA-256 `3bc7771d8480ac3a5a5de6ab7f0eb6710cf3aaa458c8a60eaffb5c8d8aaf5c10`.
 
 No caller may select command, executable path, destination path, argv, environment, account, group or mutation sequence. Existing exact state is idempotent; symlink, non-regular, wrong-owner, wrong-mode, wrong-content or otherwise conflicting state is `BLOCKED`.
 

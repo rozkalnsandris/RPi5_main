@@ -220,6 +220,12 @@ class RunnerSmokeInstallTests(unittest.TestCase):
         self.assertEqual(op.queue_match.repository_entrypoint, ".github/workflows/rpi5-audit-command.yml")
         self.assertEqual(op.baseline.resolver_id, "hermes-deals.runner-smoke-registration.v2")
         self.assertEqual(op.rollback_policy, "NONE")
+        self.assertIn(f"helper-sha256:{mod.HELPER_SHA256}", op.dependencies)
+        self.assertIn(f"registration-sha256:{mod.REGISTRATION_SHA256}", op.dependencies)
+
+        doc = (ROOT / "docs/HERMES_DEALS_RUNNER_SMOKE_INSTALL.md").read_text()
+        self.assertIn(mod.HELPER_SHA256, doc)
+        self.assertIn(mod.REGISTRATION_SHA256, doc)
 
     def test_helper_output_is_not_canonical_canary_receipt(self):
         contract = json.loads((ROOT / "ops/contracts/hermes-deals-runner-smoke-install-v2.json").read_text())
