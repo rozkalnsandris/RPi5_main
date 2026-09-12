@@ -1,0 +1,142 @@
+{
+  "apply": {
+    "alternate_mutation_path_after_mutation_start": false,
+    "automatic_cleanup_after_mutation_start": false,
+    "automatic_retry_after_mutation_start": false,
+    "automatic_rollback_after_mutation_start": false,
+    "caller_argv_allowed": false,
+    "caller_command_allowed": false,
+    "caller_environment_allowed": false,
+    "caller_path_allowed": false,
+    "credential_read_allowed": false,
+    "docker_mutation_allowed": false,
+    "external_entrypoint_enabled": false,
+    "fixed_mutations": [
+      "create_exact_system_group_if_absent",
+      "create_exact_system_user_if_absent",
+      "install_exact_helper_if_absent",
+      "install_exact_registration_if_absent"
+    ],
+    "generic_shell_allowed": false,
+    "generic_sudo_allowed": false,
+    "helper_invocation_allowed": false,
+    "idempotent_exact_state_allowed": true,
+    "implementation": "ops/lib/deploy_executor/hermes_deals_runner_smoke_install.py:apply_install",
+    "network_mutation_allowed": false,
+    "non_regular_destination_allowed": false,
+    "overwrite_allowed": false,
+    "owner_numeric_id": 277435981,
+    "privileged_boundary_input": [
+      "authorization_issue_number"
+    ],
+    "required_live_envelope_schema": "rozkalns.hermes-deals.runner-smoke-install-live-envelope.v1",
+    "rollback_policy": "NONE",
+    "symlink_follow_allowed": false,
+    "systemd_mutation_allowed": false
+  },
+  "artifacts": [
+    {
+      "destination": "/usr/local/libexec/rozkalns-deploy/hermes-deals-runner-smoke-audit",
+      "kind": "helper",
+      "mode": "0755",
+      "owner_gid": 0,
+      "owner_uid": 0,
+      "sha256": "545a401b6eef1dfd7e207f8f30472172d181a710c1604d1e3d27e59eb0b7f661",
+      "source": "ops/bin/hermes-deals-runner-smoke-audit"
+    },
+    {
+      "destination": "/etc/rozkalns-deploy/hermes-deals-runner-smoke-audit.json",
+      "kind": "registration",
+      "mode": "0644",
+      "owner_gid": 0,
+      "owner_uid": 0,
+      "sha256": "0bccc6a0fe1ef686cde6a0bb1b426ad656fc79feedd05ad4c515f4d629e33036",
+      "source": "ops/deploy/hermes-deals-runner-smoke-audit-registration.json"
+    }
+  ],
+  "capability": {
+    "canary_target_alias": "hermes-deals-runner-smoke-audit",
+    "exact_sha_ci_required": true,
+    "future_live_gate_id": "hermes-deals.runner-smoke-audit.install.v1",
+    "install_target_alias": "hermes-deals-runner-smoke-audit-install",
+    "merged_reachable_required": true,
+    "operation_id": "hermes-deals.runner-smoke-audit.v1",
+    "source_repository": "rozkalnsandris/hermes-deals",
+    "source_repository_id": 1317143994,
+    "source_sha": "0e3b834f155cef7f9e964ddf02228c6a7ad1950c",
+    "workflow_blob": "c9107e7597ff3ce1214cb32fb740346fa9d190aa",
+    "workflow_path": ".github/workflows/rpi5-audit-command.yml"
+  },
+  "contract": "rozkalns.hermes-deals.runner-smoke-install.v2",
+  "execution_identity": {
+    "account": "hermes-deals-audit-canary",
+    "caller_selectable": false,
+    "docker_group": false,
+    "home": "/nonexistent",
+    "login_shell": "/usr/sbin/nologin",
+    "primary_group": "hermes-deals-audit-canary",
+    "root": false,
+    "supplementary_groups": [],
+    "system_account": true
+  },
+  "handoff": {
+    "helper_invoked": false,
+    "live_auth_created": false,
+    "next_owner_gate": "SEPARATE_EXACT_LIVE_AUTHORIZATION_AFTER_MERGE_AND_EXACT_MAIN_CI",
+    "production_mutation_started": false,
+    "ready_queue_created": false,
+    "runtime_installation_performed": false,
+    "source_merge_authorizes_live": false
+  },
+  "implementation_issue": 476,
+  "plan": {
+    "allowed_artifact_states": [
+      "ABSENT",
+      "EXACT"
+    ],
+    "allowed_identity_states": [
+      "ABSENT",
+      "EXACT"
+    ],
+    "conflicting_or_unknown_state": "BLOCKED",
+    "default_read_only": true,
+    "helper_execution_allowed": false,
+    "host_write_allowed": false,
+    "live_authority_consumed": false,
+    "required_evidence": [
+      "rpi5_main_sha",
+      "rpi5_main_merged_reachable",
+      "rpi5_main_ci_success",
+      "hermes_source_sha",
+      "hermes_source_merged_reachable",
+      "hermes_source_ci_success",
+      "execution_identity_state",
+      "helper_destination_state",
+      "registration_destination_state"
+    ],
+    "schema": "rozkalns.hermes-deals.runner-smoke-install-plan.v2"
+  },
+  "predecessor": {
+    "contract": "ops/contracts/hermes-deals-phase4-activation-evidence-v1.json",
+    "historical_apply_entrypoint_present": false,
+    "implementation_issue": 472,
+    "merge_sha": "c615baca553b0715b9601547d1def8bc4d8b60dc"
+  },
+  "schema_version": 1,
+  "static_operation": {
+    "authorization_class": "STRICT",
+    "global_execution_enabled": false,
+    "ordinary_live_all_eligible": false,
+    "registry": "ops/deploy/executor-operations.json"
+  },
+  "status": "SOURCE_READY_LIVE_DISABLED",
+  "helper_output": {
+    "schema": "rozkalns.hermes-deals.runner-smoke-helper-output.v2",
+    "sanitized": true,
+    "runtime_observation": true,
+    "authorization_metadata_in_helper_output": false,
+    "canonical_canary_receipt_schema": "rozkalns.hermes-deals.runner-smoke-canary-evidence.v1",
+    "canonical_receipt_composed_by_future_live_wrapper": true,
+    "synthetic_pass_allowed": false
+  }
+}

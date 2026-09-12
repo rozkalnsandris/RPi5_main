@@ -369,6 +369,82 @@
       ]
     },
     {
+      "operation_id": "hermes-deals.runner-smoke-audit.v1",
+      "source_repository": "rozkalnsandris/hermes-deals",
+      "queue_match": {
+        "target_alias": "hermes-deals-runner-smoke-audit",
+        "execution_location_class": "trusted-home-host",
+        "repository_entrypoint": ".github/workflows/rpi5-audit-command.yml",
+        "deploy_class": "STRICT_LIVE_AUTH_REQUIRED"
+      },
+      "target_alias": "hermes-deals-runner-smoke-audit",
+      "adapter_id": "hermes-deals.runner-smoke-audit.v1",
+      "authorization_class": "STRICT",
+      "ordinary_live_all_eligible": false,
+      "baseline": {
+        "kind": "resolver",
+        "resolver_id": "hermes-deals.runner-smoke-registration.v2"
+      },
+      "mutation_budget": [
+        {
+          "category": "hermes-deals.read-only-runner-smoke-invocation",
+          "max_operations": 1
+        }
+      ],
+      "rollback_policy": "NONE",
+      "exclusions": [
+        "arbitrary command/path/argv/environment authority",
+        "root or generic sudo execution",
+        "Docker authority or supplementary-group authority",
+        "systemd/service/network/firewall/DNS/Cloudflare mutation",
+        "credentials/secrets/tokens/private-key reads or changes",
+        "database/Review/publication/parser/collector/scheduler mutation",
+        "production deployment/cutover",
+        "runner registration/deregistration or repository settings mutation",
+        "automatic retry/cleanup/rollback/alternate mutation path"
+      ],
+      "dependencies": [
+        "source-repository-id:1317143994",
+        "source-sha:0e3b834f155cef7f9e964ddf02228c6a7ad1950c",
+        "workflow-source-blob:c9107e7597ff3ce1214cb32fb740346fa9d190aa",
+        "source-contract:RPi5_main#476",
+        "install-contract:ops/contracts/hermes-deals-runner-smoke-install-v2.json",
+        "helper-sha256:545a401b6eef1dfd7e207f8f30472172d181a710c1604d1e3d27e59eb0b7f661",
+        "registration-sha256:0bccc6a0fe1ef686cde6a0bb1b426ad656fc79feedd05ad4c515f4d629e33036",
+        "execution-identity:hermes-deals-audit-canary-nologin-nonroot-no-docker-no-supplementary-groups",
+        "first-live-install-gate:hermes-deals.runner-smoke-audit.install.v1",
+        "global-execution:disabled"
+      ],
+      "preflight": [
+        "READY eligibility and separate owner LIVE-AUTH are independently revalidated before any helper invocation",
+        "Hermes source repository stable ID is 1317143994 and exact source SHA is merged/reachable from current main",
+        "exact Hermes source SHA CI is successful and reviewed audit workflow blob is c9107e7597ff3ce1214cb32fb740346fa9d190aa",
+        "runner-smoke capability-specific host installation is separately proven from merged RPi5_main source with exact-main CI",
+        "installed helper and registration match fixed SHA-256 owner mode and no-follow regular-file identities",
+        "execution identity is exactly hermes-deals-audit-canary with /usr/sbin/nologin non-root no Docker and no supplementary groups",
+        "helper takes no caller-selected command path argv or environment and operation remains STRICT",
+        "registry remains globally execution-disabled until a separate reviewed control-plane activation"
+      ],
+      "postconditions": [
+        "sanitized runner-smoke helper output is bound to the registered exact Hermes source SHA",
+        "helper executes only as hermes-deals-audit-canary and never as root",
+        "supplementary group and Docker authority remain absent",
+        "production_apply_authorized is false",
+        "production deployment database Review publication parser collector scheduler systemd Docker network and runner mutations are absent",
+        "automatic retry cleanup rollback and alternate mutation paths are absent"
+      ],
+      "required_github_evidence": [
+        "Hermes source repository stable identity",
+        "authorized Hermes source SHA is merged/reachable from current main",
+        "exact Hermes source SHA CI completed successfully",
+        "reviewed audit workflow blob matches the frozen source identity",
+        "merged RPi5_main #476 install source and exact-main CI",
+        "fixed helper and registration content identities",
+        "READY queue contract hash",
+        "separate owner LIVE-AUTH for the exact normalized canary envelope"
+      ]
+    },
+    {
       "operation_id": "rozkalns-weather.public-runtime-release.v1",
       "source_repository": "rozkalnsandris/rozkalns_weather",
       "queue_match": {

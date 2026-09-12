@@ -1,0 +1,17 @@
+{
+  "execution_identity": {
+    "account": "hermes-deals-audit-canary",
+    "docker_group": false,
+    "login_shell": "/usr/sbin/nologin",
+    "root": false,
+    "supplementary_groups": []
+  },
+  "helper_path": "/usr/local/libexec/rozkalns-deploy/hermes-deals-runner-smoke-audit",
+  "helper_sha256": "545a401b6eef1dfd7e207f8f30472172d181a710c1604d1e3d27e59eb0b7f661",
+  "operation_id": "hermes-deals.runner-smoke-audit.v1",
+  "production_apply_authorized": false,
+  "schema": "rozkalns.hermes-deals.runner-smoke-registration.v2",
+  "source_repository": "rozkalnsandris/hermes-deals",
+  "source_sha": "0e3b834f155cef7f9e964ddf02228c6a7ad1950c",
+  "target_alias": "hermes-deals-runner-smoke-audit"
+}
