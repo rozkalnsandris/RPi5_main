@@ -2,13 +2,22 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from datetime import datetime, timezone
 import argparse
 import json
 from pathlib import Path
 import sys
+from typing import Any
 
 SUPPORT_ROOT = Path('/usr/local/libexec/rozkalns-weather-public-runtime-operator')
 PACKAGE_INIT = SUPPORT_ROOT / 'deploy_executor' / '__init__.py'
+_RUNTIME_CACHE_ETAG = 'weather-composite-consumed-jit-cache-v1'
+_SOURCE_REPOSITORIES = frozenset(
+    {
+        'rozkalnsandris/rozkalns_weather',
+        'rozkalnsandris/RPi5_main',
+    }
+)
 
 
 def _stop(reason: str, *, issue_number: int | None = None, reuse_forbidden: bool = False, host_started: bool = False, production_started: bool = False) -> int:
@@ -34,17 +43,128 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _issue_created_at(issue: Any) -> datetime | None:
+    if type(issue) is not dict:
+        return None
+    value = issue.get('created_at')
+    if type(value) is not str or not value.endswith('Z'):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value[:-1] + '+00:00')
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(timezone.utc)
+
+
+def _cacheable_public_source_path(path: Any) -> bool:
+    if type(path) is not str or not path.startswith('/repos/'):
+        return False
+    remainder = path[len('/repos/'):]
+    parts = remainder.split('/', 2)
+    if len(parts) < 2 or f'{parts[0]}/{parts[1].split("?", 1)[0]}' not in _SOURCE_REPOSITORIES:
+        return False
+    if path.endswith('/branches/main'):
+        return False
+    return (
+        len(parts) == 2
+        or '/compare/' in path
+        or '/actions/workflows/' in path
+        or '/actions/runs/' in path
+    )
+
+
+def _install_runtime_jit_hardening() -> None:
+    from deploy_executor import weather_public_runtime_composite as composite
+    from deploy_executor import weather_public_runtime_operator as operator
+
+    if getattr(composite, '_WEATHER_CONSUMED_JIT_HARDENING_V1', False):
+        return
+
+    state = {'consumed_depth': 0}
+    original_accept_issue = composite.accept_issue
+    original_verify_unchanged = composite.verify_authorization_unchanged
+    original_consumed_revalidate = (
+        composite.ConcreteCanonicalWeatherCompositeRevalidator.revalidate_consumed_composite
+    )
+    original_public_client = composite.FixedPublicGitHubReadClient
+    original_timed_client = composite._TimedSourceClient
+
+    def in_consumed_revalidation() -> bool:
+        return state['consumed_depth'] > 0
+
+    def runtime_accept_issue(issue: Any, **kwargs: Any):
+        if in_consumed_revalidation():
+            created_at = _issue_created_at(issue)
+            if created_at is not None:
+                kwargs['server_time'] = created_at
+        return original_accept_issue(issue, **kwargs)
+
+    def runtime_verify_unchanged(accepted: Any, current_issue: Any, **kwargs: Any) -> None:
+        if in_consumed_revalidation():
+            kwargs['server_time'] = accepted.created_at
+        original_verify_unchanged(accepted, current_issue, **kwargs)
+
+    def runtime_revalidate_consumed(self: Any, authorization_issue_number: int):
+        state['consumed_depth'] += 1
+        try:
+            return original_consumed_revalidate(self, authorization_issue_number)
+        finally:
+            state['consumed_depth'] -= 1
+
+    class RuntimePublicSourceClient(original_public_client):
+        def __init__(self, *args: Any, **kwargs: Any):
+            super().__init__(*args, **kwargs)
+            self._consumed_evidence_cache: dict[str, Any] = {}
+
+        def get_json(self, path_or_url: str):
+            cacheable = _cacheable_public_source_path(path_or_url)
+            if (
+                in_consumed_revalidation()
+                and cacheable
+                and path_or_url in self._consumed_evidence_cache
+            ):
+                cached = self._consumed_evidence_cache[path_or_url]
+                return composite.JSONResponse(
+                    value=cached.value,
+                    server_time=cached.server_time,
+                    etag=_RUNTIME_CACHE_ETAG,
+                    not_modified=False,
+                    url=cached.url,
+                    next_url=cached.next_url,
+                )
+            response = super().get_json(path_or_url)
+            if cacheable and not in_consumed_revalidation():
+                self._consumed_evidence_cache[path_or_url] = response
+            return response
+
+    class RuntimeTimedSourceClient(original_timed_client):
+        def get_json(self, path_or_url: str):
+            response = self._client.get_json(path_or_url)
+            if getattr(response, 'etag', None) != _RUNTIME_CACHE_ETAG:
+                self._window.observe(getattr(response, 'server_time', None))
+            return response
+
+    composite.accept_issue = runtime_accept_issue
+    composite.verify_authorization_unchanged = runtime_verify_unchanged
+    composite.ConcreteCanonicalWeatherCompositeRevalidator.revalidate_consumed_composite = runtime_revalidate_consumed
+    composite.FixedPublicGitHubReadClient = RuntimePublicSourceClient
+    composite._TimedSourceClient = RuntimeTimedSourceClient
+    operator.FixedPublicGitHubReadClient = RuntimePublicSourceClient
+    composite._WEATHER_CONSUMED_JIT_HARDENING_V1 = True
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if not PACKAGE_INIT.is_file():
         return _stop('operator_install_layout', issue_number=args.issue_number)
     sys.path.insert(0, str(SUPPORT_ROOT))
     try:
-        from deploy_executor.weather_public_runtime_operator import (
-            WeatherCompositeOperatorError,
-            build_runtime_operator,
-        )
-    except ImportError:
+        from deploy_executor.weather_public_runtime_operator import WeatherCompositeOperatorError
+        _install_runtime_jit_hardening()
+        from deploy_executor.weather_public_runtime_operator import build_runtime_operator
+    except (ImportError, RuntimeError, AttributeError, TypeError):
         return _stop('operator_import', issue_number=args.issue_number)
     try:
         receipt = build_runtime_operator().execute(args.issue_number)
