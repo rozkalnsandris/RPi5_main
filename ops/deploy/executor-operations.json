@@ -445,6 +445,76 @@
       ]
     },
     {
+      "operation_id": "hermes-deals.source-sync.v1",
+      "source_repository": "rozkalnsandris/hermes-deals",
+      "queue_match": {
+        "target_alias": "hermes-deals-source-sync",
+        "execution_location_class": "trusted-home-host",
+        "repository_entrypoint": ".github/workflows/rpi-source-sync.yml",
+        "deploy_class": "STRICT_LIVE_AUTH_REQUIRED"
+      },
+      "target_alias": "hermes-deals-source-sync",
+      "adapter_id": "hermes-deals.source-sync.v1",
+      "authorization_class": "STRICT",
+      "ordinary_live_all_eligible": false,
+      "baseline": {
+        "kind": "resolver",
+        "resolver_id": "hermes-deals.source-sync-canonical-checkout.v1"
+      },
+      "mutation_budget": [
+        {
+          "category": "source-checkout-fast-forward",
+          "max_operations": 1
+        }
+      ],
+      "rollback_policy": "NONE",
+      "exclusions": [
+        "caller-selected Git subcommand, command, path, argv or environment authority",
+        "caller-selected checkout path, remote URL, branch, ref or upstream authority",
+        "reset, force checkout, rebase, hard clean or history rewrite",
+        "arbitrary ref fetch or generic privileged shell transport",
+        "production deployment, database, Review, publication or retained-evidence mutation",
+        "systemd, Docker, network, Cloudflare, package, user, group, credential or runner mutation",
+        "READY, LIVE-AUTH, replay consumption or synthetic runtime receipt creation in Job 6",
+        "automatic retry, cleanup, rollback or alternate mutation after mutation start"
+      ],
+      "dependencies": [
+        "source-repository-id:1317143994",
+        "rpi5-main-repository-id:1323383044",
+        "workflow-path:.github/workflows/rpi-source-sync.yml",
+        "workflow-blob:b2f4eee1d1c503cf0c47b6099e748d6e6fd6d560",
+        "canonical-checkout:/home/andris/hermes-deals",
+        "canonical-branch:main",
+        "canonical-ref:refs/heads/main",
+        "canonical-upstream:origin/main",
+        "future-live-gate:hermes-deals.source-sync.sync.v1",
+        "source-contract:ops/contracts/hermes-deals-source-sync-v1.json"
+      ],
+      "preflight": [
+        "future authorization binds one exact 40-hex target SHA for hermes-deals.source-sync.v1",
+        "target SHA is derived from a merged same-repository PR and is reachable from current Hermes main",
+        "exact target SHA CI succeeds or reviewed tree-equivalent PR-head CI matches the workflow contract",
+        "canonical checkout is /home/andris/hermes-deals on main with refs/heads/main and origin/main",
+        "canonical checkout exists as a clean Git worktree with exact repository and remote identity",
+        "current checkout HEAD can advance to the exact target by fast-forward only",
+        "operation remains STRICT and globally execution-disabled until later reviewed LIVE activation"
+      ],
+      "postconditions": [
+        "future successful execution ends at the exact authorized target SHA on clean main",
+        "canonical repository, checkout path, remote, branch, ref and upstream identities remain unchanged",
+        "no reset, rebase, force checkout, clean or history rewrite occurs",
+        "no production deploy, database, Review, publication, evidence, scheduler or service mutation occurs",
+        "post-mutation failure has no automatic retry, cleanup, rollback or alternate mutation path"
+      ],
+      "required_github_evidence": [
+        "Hermes source repository stable identity 1317143994",
+        "target SHA is from a merged same-repository PR and reachable from current main",
+        "exact-SHA CI success or explicitly validated tree-equivalent exact PR-head CI",
+        "reviewed source-sync workflow blob b2f4eee1d1c503cf0c47b6099e748d6e6fd6d560",
+        "separate owner LIVE authorization before any canonical checkout mutation"
+      ]
+    },
+    {
       "operation_id": "rozkalns-weather.public-runtime-release.v1",
       "source_repository": "rozkalnsandris/rozkalns_weather",
       "queue_match": {

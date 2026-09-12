@@ -47,6 +47,7 @@ class P5InterfaceSecurityTests(unittest.TestCase):
                 "hermes-deals.netto-missing-normal-price-nonroot-preflight-v2.v1",
                 "hermes-deals.production-release.v1",
                 "hermes-deals.runner-smoke-audit.v1",
+                "hermes-deals.source-sync.v1",
                 "rozkalns-weather.public-runtime-release.v1",
             },
         )

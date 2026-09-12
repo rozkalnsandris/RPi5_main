@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "contract": "Hermes Deals source-sync static operation adapter contract",
+  "implementation_issue": 484,
+  "status": "SOURCE_CONTRACT_ONLY_LIVE_DISABLED",
+  "source_anchors": {
+    "rpi5_main_sha": "06eb2c670b3716f003a76cf588bf91651a0d60b8",
+    "hermes_deals_observed_main_sha": "f105f972bef13864b392bd4e3edc555bcd0ae2e9",
+    "source_repository": "rozkalnsandris/hermes-deals",
+    "source_repository_id": 1317143994,
+    "rpi5_main_repository_id": 1323383044,
+    "workflow_path": ".github/workflows/rpi-source-sync.yml",
+    "workflow_blob": "b2f4eee1d1c503cf0c47b6099e748d6e6fd6d560",
+    "source_runtime_state_inferred": false
+  },
+  "operation": {
+    "operation_id": "hermes-deals.source-sync.v1",
+    "future_live_gate_id": "hermes-deals.source-sync.sync.v1",
+    "target_alias": "hermes-deals-source-sync",
+    "authorization_class": "STRICT",
+    "ordinary_live_all_eligible": false,
+    "global_execution_enabled": false,
+    "external_apply_entrypoint_enabled": false,
+    "runtime_live_authority": false,
+    "rollback_policy": "NONE"
+  },
+  "fixed_checkout_identity": {
+    "path": "/home/andris/hermes-deals",
+    "branch": "main",
+    "ref": "refs/heads/main",
+    "upstream": "origin/main",
+    "repository": "rozkalnsandris/hermes-deals",
+    "repository_id": 1317143994,
+    "caller_selectable": false
+  },
+  "target_authority": {
+    "format": "40-char-lowercase-or-uppercase-hex-sha-normalized-to-lowercase",
+    "source": "trusted authorization envelope derived from merged same-repository PR evidence",
+    "caller_selectable_operation": false,
+    "caller_selectable_checkout_path": false,
+    "caller_selectable_remote_url": false,
+    "caller_selectable_branch_or_ref": false,
+    "caller_selectable_git_subcommand": false,
+    "caller_selectable_command": false,
+    "caller_selectable_argv": false,
+    "caller_selectable_environment": false,
+    "generic_shell_authority": false
+  },
+  "provenance": {
+    "same_repository_pr_required": true,
+    "merged_pr_required": true,
+    "target_reachable_from_current_main_required": true,
+    "exact_target_sha_ci_success_required": true,
+    "tree_equivalent_exact_pr_head_ci_allowed_when_explicitly_validated": true,
+    "workflow_blob_required": "b2f4eee1d1c503cf0c47b6099e748d6e6fd6d560"
+  },
+  "future_preflight": [
+    "canonical checkout exists and is a Git worktree",
+    "repository identity and remote URL are exact",
+    "branch is main and upstream is origin/main",
+    "checkout is clean",
+    "current HEAD is valid and target provenance plus CI are valid",
+    "target is a fast-forward descendant of current checkout HEAD"
+  ],
+  "future_mutation": {
+    "allowed": "FAST_FORWARD_TO_EXACT_AUTHORIZED_SHA_ONLY",
+    "max_operations": 1,
+    "network_fetch_in_job_6": false,
+    "checkout_write_in_job_6": false,
+    "dispatcher_invocation_in_job_6": false,
+    "reset_allowed": false,
+    "force_checkout_allowed": false,
+    "rebase_allowed": false,
+    "hard_clean_allowed": false,
+    "history_rewrite_allowed": false,
+    "arbitrary_ref_fetch_allowed": false
+  },
+  "future_postconditions": [
+    "HEAD equals exact authorized target SHA",
+    "checkout is clean and remains on main",
+    "repository, remote, ref and upstream identities remain exact",
+    "no production deploy, database, Review, publication or evidence mutation",
+    "no scheduler, systemd, Docker, network, package, user, group, credential or runner mutation"
+  ],
+  "fail_closed": {
+    "unknown_or_conflicting_state": "REJECT",
+    "non_fast_forward": "REJECT",
+    "dirty_checkout": "REJECT",
+    "identity_drift": "REJECT",
+    "provenance_or_ci_drift": "REJECT",
+    "post_mutation_automatic_retry": false,
+    "post_mutation_automatic_cleanup": false,
+    "post_mutation_automatic_rollback": false,
+    "alternate_mutation_path_after_start": false
+  },
+  "job_boundary": {
+    "job_6": "STATIC_OPERATION_AND_ADAPTER_CONTRACT_ONLY",
+    "job_7": "EXECUTABLE_PREFLIGHT_POSTCONDITION_AND_SANITIZED_CANARY_EVIDENCE",
+    "live_authorization_required_before_future_mutation": true,
+    "ready_or_live_auth_created_here": false,
+    "runtime_receipt_created_here": false
+  }
+}
