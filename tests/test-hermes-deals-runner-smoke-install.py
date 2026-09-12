@@ -222,7 +222,7 @@ class RunnerSmokeInstallTests(unittest.TestCase):
     def test_static_operation_is_strict_and_globally_disabled(self):
         registry = load_registry(ROOT / "ops/deploy/executor-operations.json")
         self.assertFalse(registry.execution_enabled)
-        self.assertEqual(len(registry.operations), 7)
+        self.assertEqual(len(registry.operations), 8)
         op = {item.operation_id: item for item in registry.operations}[mod.OPERATION_ID]
         self.assertEqual(op.authorization_class, "STRICT")
         self.assertFalse(op.ordinary_live_all_eligible)
