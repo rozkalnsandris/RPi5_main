@@ -209,6 +209,16 @@ class RunnerSmokeInstallTests(unittest.TestCase):
         self.assertFalse(reg["execution_identity"]["docker_group"])
         self.assertEqual(reg["execution_identity"]["supplementary_groups"], [])
 
+    def test_registry_and_operator_doc_bind_current_artifact_hashes(self):
+        registry_raw = json.loads((ROOT / "ops/deploy/executor-operations.json").read_text())
+        operation = next(item for item in registry_raw["operations"] if item["operation_id"] == mod.OPERATION_ID)
+        self.assertIn(f"helper-sha256:{mod.HELPER_SHA256}", operation["dependencies"])
+        self.assertIn(f"registration-sha256:{mod.REGISTRATION_SHA256}", operation["dependencies"])
+
+        operator_doc = (ROOT / "docs/HERMES_DEALS_RUNNER_SMOKE_INSTALL.md").read_text()
+        self.assertIn(mod.HELPER_SHA256, operator_doc)
+        self.assertIn(mod.REGISTRATION_SHA256, operator_doc)
+
     def test_static_operation_is_strict_and_globally_disabled(self):
         registry = load_registry(ROOT / "ops/deploy/executor-operations.json")
         self.assertFalse(registry.execution_enabled)
