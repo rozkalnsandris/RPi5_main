@@ -160,7 +160,7 @@ class HermesDealsPhase4ActivationEvidenceTests(unittest.TestCase):
     def test_source_sync_remains_fixed_checkout_fast_forward_only_and_live_disabled(self) -> None:
         sync = self.data["source_sync_operation"]
         self.assertEqual(sync["canonical_checkout_identity"], "HERMES_DEALS_CANONICAL_SOURCE_CHECKOUT")
-        self.assertEqual(sync["fixed_checkout_path"], "/home/andris/hermes-deals")
+        self.assertNotIn("fixed_checkout_path", sync)
         self.assertEqual(sync["allowed_future_mutation"], "FAST_FORWARD_TO_EXACT_MERGED_REACHABLE_SHA")
         self.assertFalse(sync["caller_selectable_checkout_path"])
         self.assertFalse(sync["generic_git_subcommand_authority"])

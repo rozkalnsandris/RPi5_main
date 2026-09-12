@@ -209,7 +209,6 @@
     "operation_id": "hermes-deals.source-sync.v1",
     "target_alias": "hermes-deals-source-sync",
     "canonical_checkout_identity": "HERMES_DEALS_CANONICAL_SOURCE_CHECKOUT",
-    "fixed_checkout_path": "/home/andris/hermes-deals",
     "fixed_fetch_repository": "https://github.com/rozkalnsandris/hermes-deals.git",
     "target_must_be_exact_merged_reachable_sha": true,
     "exact_sha_ci_required": true,

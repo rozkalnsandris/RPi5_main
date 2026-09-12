@@ -233,8 +233,8 @@ def validate_contract(contract: Mapping[str, Any]) -> None:
         raise HermesDealsPhase4ActivationEvidenceError("source-sync operation drift")
     if sync["canonical_checkout_identity"] != "HERMES_DEALS_CANONICAL_SOURCE_CHECKOUT":
         raise HermesDealsPhase4ActivationEvidenceError("source-sync checkout identity drift")
-    if sync["fixed_checkout_path"] != "/home/andris/hermes-deals":
-        raise HermesDealsPhase4ActivationEvidenceError("source-sync fixed path drift")
+    if "fixed_checkout_path" in sync:
+        raise HermesDealsPhase4ActivationEvidenceError("source-sync concrete checkout path exposed")
     if sync["allowed_future_mutation"] != "FAST_FORWARD_TO_EXACT_MERGED_REACHABLE_SHA":
         raise HermesDealsPhase4ActivationEvidenceError("source-sync mutation class widened")
     for field in (
