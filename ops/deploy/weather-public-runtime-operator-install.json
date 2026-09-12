@@ -188,5 +188,23 @@
     "automatic_rollback": false
   },
   "canonical_privileged_install_contract": "ops/deploy/weather-public-runtime-privileged-install-activation.json",
-  "canonical_successor_checkout_contract": "ops/deploy/rpi5-main-weather-public-runtime-install-trusted-checkout-bootstrap.json"
+  "canonical_successor_checkout_contract": "ops/deploy/rpi5-main-weather-public-runtime-install-trusted-checkout-bootstrap.json",
+  "compatibility_upgrade_bridge": {
+    "issue": 487,
+    "status": "SOURCE_ONLY_UPGRADE_BRIDGE_INACTIVE",
+    "contract": "ops/deploy/weather-public-runtime-operator-upgrade.json",
+    "checkout_contract": "ops/deploy/rpi5-main-weather-public-runtime-operator-upgrade-trusted-checkout-bootstrap.json",
+    "source_entrypoint": "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-operator-upgrade-trusted/ops/bin/rozkalns-weather-public-runtime-operator-upgrade",
+    "source_module": "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-operator-upgrade-trusted/ops/lib/deploy_executor/weather_public_runtime_operator_upgrade.py",
+    "caller_arguments": [],
+    "upgradable_artifact": "ops/lib/deploy_executor/weather_public_runtime_operator.py",
+    "source_merge_enables_upgrade": false,
+    "generic_shell_authority": false,
+    "caller_selected_path": false,
+    "caller_selected_argv": false,
+    "caller_selected_environment": false,
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false
+  }
 }
