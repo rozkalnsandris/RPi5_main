@@ -511,10 +511,11 @@ class WeatherCompositeOperatorTests(unittest.TestCase):
         self.assertEqual(contract["status"], "SOURCE_READY_HOST_NOT_INSTALLED")
         self.assertEqual(contract["caller_authority"], ["authorization_issue_number"])
         self.assertEqual(contract["gate_order"], list(COMPOSITE_GATE_ORDER))
-        self.assertEqual(TRUSTED_CHECKOUT_NAME, TRUSTED_INSTALL_CHECKOUT_NAME)
+        self.assertEqual(TRUSTED_INSTALL_CHECKOUT_NAME, "RPi5_main-weather-public-runtime-install-trusted")
+        self.assertEqual(TRUSTED_CHECKOUT_NAME, "RPi5_main-weather-public-runtime-composite-trusted")
         self.assertEqual(
             contract["trusted_checkout_contract"],
-            "ops/deploy/rpi5-main-weather-public-runtime-install-trusted-checkout-bootstrap.json",
+            "ops/deploy/rpi5-main-weather-public-runtime-composite-trusted-checkout-bootstrap.json",
         )
         self.assertEqual(
             contract["privileged_install_activation_contract"],
@@ -527,7 +528,7 @@ class WeatherCompositeOperatorTests(unittest.TestCase):
         artifacts = install["artifacts"]
         self.assertEqual(len(artifacts), len({row["destination"] for row in artifacts}))
         self.assertTrue(all((ROOT / row["source"]).is_file() for row in artifacts))
-        helper_install = json.loads((ROOT / "ops/deploy/weather-public-runtime-helper-install.json").read_text())
+        helper_install = json.loads((ROOT / "ops/deploy/weather-public-runtime-helper-install-composite.json").read_text())
         manifest_identity = tuple(
             (row["source"], row["destination"], int(row["mode"], 8))
             for row in helper_install["artifacts"]

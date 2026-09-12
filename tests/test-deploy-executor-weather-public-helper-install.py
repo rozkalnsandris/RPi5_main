@@ -12,6 +12,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "ops/deploy/weather-public-runtime-helper-install.json"
+COMPOSITE_MANIFEST = ROOT / "ops/deploy/weather-public-runtime-helper-install-composite.json"
 EXECUTION_CONTRACT = ROOT / "ops/deploy/weather-public-runtime-execution.json"
 ENTRYPOINT_SOURCE = ROOT / "ops/bin/rozkalns-weather-public-runtime-stage-helper"
 EXECUTION_TEST = ROOT / "tests/test-deploy-executor-weather-public-execution.py"
@@ -39,6 +40,7 @@ class WeatherHelperInstallLayoutTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        cls.composite_manifest = json.loads(COMPOSITE_MANIFEST.read_text(encoding="utf-8"))
         cls.execution_contract = json.loads(EXECUTION_CONTRACT.read_text(encoding="utf-8"))
         cls.artifacts = cls.manifest["artifacts"]
 
@@ -85,13 +87,15 @@ class WeatherHelperInstallLayoutTests(unittest.TestCase):
         for enabled in value["activation"].values():
             self.assertFalse(enabled)
 
-    def test_execution_contract_is_exactly_bound_to_install_manifest(self) -> None:
+    def test_execution_contract_is_exactly_bound_to_composite_install_manifest(self) -> None:
         execution = self.execution_contract
-        self.assertEqual(execution["helper_install_manifest"], str(MANIFEST.relative_to(ROOT)))
-        self.assertEqual(execution["installed_stage_helper_path"], self.manifest["executable_path"])
-        self.assertEqual(execution["installed_helper_support_root"], self.manifest["install_root"])
-        self.assertEqual(execution["installed_helper_package_root"], self.manifest["package_root"])
-        self.assertEqual(execution["installed_helper_artifact_count"], self.manifest["artifact_count"])
+        composite = self.composite_manifest
+        self.assertEqual(execution["helper_install_manifest"], str(COMPOSITE_MANIFEST.relative_to(ROOT)))
+        self.assertEqual(composite["artifacts"], self.manifest["artifacts"])
+        self.assertEqual(execution["installed_stage_helper_path"], composite["executable_path"])
+        self.assertEqual(execution["installed_helper_support_root"], composite["install_root"])
+        self.assertEqual(execution["installed_helper_package_root"], composite["package_root"])
+        self.assertEqual(execution["installed_helper_artifact_count"], composite["artifact_count"])
         self.assertTrue(execution["clean_environment_import_required"])
         self.assertFalse(execution["ambient_pythonpath_allowed"])
         self.assertFalse(execution["existing_executor_package_mutation_allowed"])
