@@ -127,7 +127,20 @@
     "minimum_reviewed_ancestor": "95b6b95b132614cbc330d6d764d0557079a67534",
     "allowed_git_mutation_count": 2,
     "legacy_target": "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-trusted",
-    "legacy_target_mutation_allowed": false
+    "legacy_target_mutation_allowed": false,
+    "pre_consume_compatibility_check_required": true,
+    "existing_target_policy": "verified-reuse-only",
+    "verified_existing_requirements": [
+      "exact-authorized-rpi5-main-sha",
+      "detached-head",
+      "clean-worktree",
+      "exact-origin",
+      "reviewed-minimum-ancestor",
+      "fixed-helper-manifest-and-source-identities"
+    ],
+    "verified_existing_git_mutation_count": 0,
+    "absent_target_git_mutation_count_max": 2,
+    "repair_cleanup_reset_update_overwrite_allowed": false
   },
   "helper_installation": {
     "manifest": "ops/deploy/weather-public-runtime-helper-install.json",
@@ -196,7 +209,8 @@
     "source_reader": "credential-free fixed public GitHub API reader",
     "pre_consume_replay_availability_required": true,
     "post_consume_same_request_state_required": "CONSUMED",
-    "post_consume_before_each_privileged_boundary": true
+    "post_consume_before_each_privileged_boundary": true,
+    "trusted_checkout_compatibility_pre_consume_required": true
   },
   "failure": {
     "authorization_consumed_at_first_future_mutation": true,
@@ -207,7 +221,9 @@
     "automatic_restore": false,
     "automatic_delete": false,
     "manager_checkout_repair": false,
-    "alternate_mutation_route": false
+    "alternate_mutation_route": false,
+    "deterministic_checkout_incompatibility_before_replay_consume": true,
+    "pre_consume_checkout_failure_authorization_reusable": true
   },
   "source_state": {
     "runtime_live_authority": false,

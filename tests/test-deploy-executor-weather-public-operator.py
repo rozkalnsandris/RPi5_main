@@ -29,16 +29,20 @@ from deploy_executor.weather_public_runtime_composite import (
 )
 from deploy_executor.weather_public_runtime_helper_launch import WeatherHelperLaunchReceipt
 from deploy_executor.weather_public_runtime_operator import (
+    HELPER_MANIFEST_RELATIVE,
     HOST_VOLUME,
     OPERATOR_STATUS,
+    RPi5_ORIGIN,
     TRUSTED_CHECKOUT_NAME,
     ConcreteSanitizedWeatherBaselineProvider,
+    ConcreteWeatherOperatorHostMutator,
     ConcreteWeatherReplayAuthority,
     CommandResult,
     WeatherCompositeOperator,
     WeatherCompositeOperatorError,
     WeatherOperatorMutationReceipt,
     WeatherReplayConsumptionReceipt,
+    WeatherTrustedCheckoutPreflight,
     _safe_relative,
     source_readiness,
 )
@@ -138,17 +142,31 @@ class FakeBaseline:
 
 
 class FakeHost:
-    def __init__(self, log, *, fail_gate=None, excess_gate=None):
+    def __init__(self, log, *, fail_gate=None, excess_gate=None, checkout_state="absent", fail_preflight=False):
         self.log=log; self.fail_gate=fail_gate; self.excess_gate=excess_gate
+        self.checkout_state=checkout_state; self.fail_preflight=fail_preflight
+    def preflight_trusted_checkout(self, expected_sha):
+        assert expected_sha == RPI5_SHA
+        self.log.append(("preflight", self.checkout_state))
+        if self.fail_preflight: raise RuntimeError("synthetic checkout incompatibility")
+        return WeatherTrustedCheckoutPreflight(self.checkout_state)
     def _one(self, gate, category):
         self.log.append(("host", gate))
         if self.fail_gate == gate: raise RuntimeError("synthetic host failure")
         count = 2 if self.excess_gate == gate else 1
         return WeatherOperatorMutationReceipt(gate, ((category, count),), True)
     def trusted_checkout_fetch(self, expected_sha):
-        assert expected_sha == RPI5_SHA; return self._one("trusted_checkout_fetch", "git.trusted-checkout-fetch")
+        assert expected_sha == RPI5_SHA
+        if self.checkout_state == "verified_existing":
+            self.log.append(("reuse", "trusted_checkout_fetch"))
+            return WeatherOperatorMutationReceipt("trusted_checkout_fetch_verified_existing", (("git.trusted-checkout-fetch", 0),), False)
+        return self._one("trusted_checkout_fetch", "git.trusted-checkout-fetch")
     def trusted_checkout_worktree_add(self, expected_sha):
-        assert expected_sha == RPI5_SHA; return self._one("trusted_checkout_worktree_add", "git.trusted-checkout-worktree-add")
+        assert expected_sha == RPI5_SHA
+        if self.checkout_state == "verified_existing":
+            self.log.append(("reuse", "trusted_checkout_worktree_add"))
+            return WeatherOperatorMutationReceipt("trusted_checkout_worktree_add_verified_existing", (("git.trusted-checkout-worktree-add", 0),), False)
+        return self._one("trusted_checkout_worktree_add", "git.trusted-checkout-worktree-add")
     def install_helper(self, expected_sha):
         assert expected_sha == RPI5_SHA; return self._one("helper_install", "filesystem.weather-helper-install-transaction")
     def publish_activation(self, plan):
@@ -179,13 +197,20 @@ class FakeLauncher:
         )
 
 
-def operator(*, fail_host=None, excess_host=None, fail_stage=None, fail_consume=False):
+def operator(*, fail_host=None, excess_host=None, fail_stage=None, fail_consume=False, checkout_state="absent", fail_preflight=False, host_mutator=None):
     log=[]; baseline=FakeBaseline(log)
+    host = host_mutator or FakeHost(
+        log,
+        fail_gate=fail_host,
+        excess_gate=excess_host,
+        checkout_state=checkout_state,
+        fail_preflight=fail_preflight,
+    )
     return WeatherCompositeOperator(
         revalidator=FakeRevalidator(log),
         replay_authority=FakeReplay(log, fail=fail_consume),
         baseline_provider=baseline,
-        host_mutator=FakeHost(log, fail_gate=fail_host, excess_gate=excess_host),
+        host_mutator=host,
         launcher=FakeLauncher(log, baseline, fail_stage=fail_stage),
     ), log
 
@@ -197,6 +222,8 @@ class WeatherCompositeOperatorTests(unittest.TestCase):
         self.assertEqual(tuple(inspect.signature(WeatherCompositeOperator.execute).parameters), ("self", "authorization_issue_number"))
         self.assertEqual(readiness["caller_authority"], ("authorization_issue_number",))
         self.assertTrue(readiness["fixed_helper_launcher_wired"])
+        self.assertTrue(readiness["trusted_checkout_preconsume_compatibility_check"])
+        self.assertTrue(readiness["trusted_checkout_verified_reuse_enabled"])
         self.assertFalse(readiness["host_installed"])
         self.assertFalse(readiness["runtime_live_authority"])
         self.assertFalse(readiness["generic_shell_authority"])
@@ -217,6 +244,122 @@ class WeatherCompositeOperatorTests(unittest.TestCase):
         self.assertEqual(sum(1 for row in log if row[0] == "host"), 4)
         self.assertEqual(sum(1 for row in log if row[0] == "launch"), 9)
         self.assertGreaterEqual(sum(1 for row in log if row[0] == "jit-consumed"), len(COMPOSITE_GATE_ORDER) + 1)
+
+    def _concrete_checkout_fixture(self, root, *, present=True, head=RPI5_SHA, clean=True, detached=True, origin=RPi5_ORIGIN):
+        manager = root / "RPi5_main"
+        trusted = root / TRUSTED_CHECKOUT_NAME
+        manager.mkdir()
+        account = mock.Mock(pw_uid=os.getuid(), pw_gid=os.getgid(), pw_dir=str(root))
+        if present:
+            trusted.mkdir(mode=0o755)
+            manifest = json.loads((ROOT / HELPER_MANIFEST_RELATIVE).read_text())
+            manifest_path = trusted / HELPER_MANIFEST_RELATIVE
+            manifest_path.parent.mkdir(parents=True)
+            manifest_path.write_text(json.dumps(manifest))
+            for artifact in manifest["artifacts"]:
+                source = trusted / artifact["source"]
+                source.parent.mkdir(parents=True, exist_ok=True)
+                source.write_text("fixture\n")
+        calls = []
+
+        def runner(argv, *, env=None, user=None, group=None):
+            argv = tuple(argv); calls.append(argv)
+            self.assertEqual(argv[0], "/usr/bin/git")
+            cwd = argv[argv.index("-C") + 1]
+            tail = argv[argv.index("-C") + 2:]
+            if cwd == str(manager):
+                if tail == ("rev-parse", "--show-toplevel"):
+                    return CommandResult(0, str(manager) + "\n", "")
+                if tail == ("remote", "get-url", "origin"):
+                    return CommandResult(0, RPi5_ORIGIN + "\n", "")
+            if cwd == str(trusted):
+                if tail == ("rev-parse", "--show-toplevel"):
+                    return CommandResult(0, str(trusted) + "\n", "")
+                if tail == ("rev-parse", "HEAD"):
+                    return CommandResult(0, head + "\n", "")
+                if tail == ("status", "--porcelain=v1", "--untracked-files=all"):
+                    return CommandResult(0, "" if clean else " M fixture\n", "")
+                if tail == ("symbolic-ref", "-q", "HEAD"):
+                    return CommandResult(1 if detached else 0, "" if detached else "refs/heads/main\n", "")
+                if tail == ("remote", "get-url", "origin"):
+                    return CommandResult(0, origin + "\n", "")
+                if tail[:2] == ("merge-base", "--is-ancestor"):
+                    return CommandResult(0, "", "")
+            raise AssertionError(argv)
+
+        return account, manager, trusted, runner, calls
+
+    def test_concrete_existing_checkout_exact_is_verified_read_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            account, manager, trusted, runner, calls = self._concrete_checkout_fixture(root)
+            with mock.patch(
+                "deploy_executor.weather_public_runtime_operator._owner_paths",
+                return_value=(account, manager, trusted),
+            ):
+                result = ConcreteWeatherOperatorHostMutator(runner=runner).preflight_trusted_checkout(RPI5_SHA)
+            self.assertEqual(result.state, "verified_existing")
+            self.assertFalse(any("fetch" in argv or "worktree" in argv for argv in calls))
+
+    def test_concrete_existing_checkout_drift_fails_before_consume(self):
+        cases = {
+            "wrong-sha": {"head": "c" * 40},
+            "dirty": {"clean": False},
+            "attached": {"detached": False},
+            "wrong-origin": {"origin": "https://github.com/example/drift.git"},
+        }
+        for label, overrides in cases.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                account, manager, trusted, runner, _calls = self._concrete_checkout_fixture(root, **overrides)
+                concrete = ConcreteWeatherOperatorHostMutator(runner=runner)
+                target, log = operator(host_mutator=concrete)
+                with mock.patch(
+                    "deploy_executor.weather_public_runtime_operator._owner_paths",
+                    return_value=(account, manager, trusted),
+                ), self.assertRaises(WeatherCompositeOperatorError) as caught:
+                    target.execute(ISSUE)
+                self.assertEqual(caught.exception.stage, "trusted_checkout_preflight")
+                self.assertFalse(caught.exception.authorization_reuse_forbidden)
+                self.assertFalse(caught.exception.host_mutation_started)
+                self.assertFalse(caught.exception.production_mutation_started)
+                self.assertFalse(any(row[0] == "consume" for row in log))
+
+    def test_concrete_absent_checkout_preflight_is_read_only_and_explicit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            account, manager, trusted, runner, calls = self._concrete_checkout_fixture(root, present=False)
+            with mock.patch(
+                "deploy_executor.weather_public_runtime_operator._owner_paths",
+                return_value=(account, manager, trusted),
+            ):
+                result = ConcreteWeatherOperatorHostMutator(runner=runner).preflight_trusted_checkout(RPI5_SHA)
+            self.assertEqual(result.state, "absent")
+            self.assertFalse(trusted.exists())
+            self.assertFalse(any("fetch" in argv or "worktree" in argv for argv in calls))
+
+    def test_verified_existing_checkout_is_preflighted_before_consume_and_skips_git_mutations(self):
+        target, log = operator(checkout_state="verified_existing")
+        receipt = target.execute(ISSUE)
+        self.assertLess(log.index(("preflight", "verified_existing")), log.index(("consume", REQUEST_ID)))
+        self.assertEqual(receipt.trusted_checkout_state, "verified_existing")
+        counts = dict(receipt.mutation_counts)
+        self.assertEqual(counts["git.trusted-checkout-fetch"], 0)
+        self.assertEqual(counts["git.trusted-checkout-worktree-add"], 0)
+        self.assertIn(("reuse", "trusted_checkout_fetch"), log)
+        self.assertIn(("reuse", "trusted_checkout_worktree_add"), log)
+        self.assertTrue(receipt.authorization_reuse_forbidden)
+
+    def test_deterministic_checkout_incompatibility_fails_before_replay_consume(self):
+        target, log = operator(fail_preflight=True)
+        with self.assertRaises(WeatherCompositeOperatorError) as caught:
+            target.execute(ISSUE)
+        self.assertEqual(caught.exception.stage, "trusted_checkout_preflight")
+        self.assertFalse(caught.exception.authorization_reuse_forbidden)
+        self.assertFalse(caught.exception.host_mutation_started)
+        self.assertFalse(caught.exception.production_mutation_started)
+        self.assertFalse(any(row[0] == "consume" for row in log))
+        self.assertFalse(any(row[0] == "host" for row in log))
 
     def test_consume_failure_is_terminal_before_host_mutation(self):
         target, log = operator(fail_consume=True)

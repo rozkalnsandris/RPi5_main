@@ -248,6 +248,18 @@ it is never reset, updated, removed, cleaned or reused as mutation authority.
 The #454 operator binds this successor contract and the #455 canonical 13-artifact
 allowlist; it does not create a second independent helper-install identity.
 
+Issue #482 reconciles Composite execution with that intentionally persistent successor
+checkout. Before durable replay consume, the operator now performs a fixed, read-only
+compatibility preflight. An existing successor checkout is reusable only when it is the
+exact authorized current `RPi5_main` SHA, detached, clean, bound to the fixed origin,
+descends from the reviewed minimum ancestor, and contains the canonical helper manifest
+and fixed source identities. That verified-existing path performs **zero** fetch/worktree
+mutations. If the fixed target is absent, the existing bounded fetch + detached-worktree
+creation path remains available. Wrong SHA, dirty/attached state, wrong origin, unsafe
+filesystem identity or source-closure drift fails before replay consume, so authorization
+reuse remains allowed and no host/production mutation is reported. The operator never
+repairs, resets, cleans, updates, removes or overwrites an existing checkout.
+
 ## Composite LIVE operator wiring — Issue #454
 
 Issue #454 adds the reviewed source-side operator composition that was deliberately

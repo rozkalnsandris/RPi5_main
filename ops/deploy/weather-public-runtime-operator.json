@@ -47,7 +47,11 @@
     "ready_queue_binding": true,
     "weather_exact_sha_ci": true,
     "rpi5_main_exact_current_sha_ci_and_ancestor": true,
-    "sanitized_stage_baseline": true
+    "sanitized_stage_baseline": true,
+    "trusted_checkout_compatibility_pre_consume": true,
+    "trusted_checkout_existing_policy": "verified-reuse-only",
+    "trusted_checkout_verified_existing_git_mutations": 0,
+    "trusted_checkout_absent_git_mutations_max": 2
   },
   "fixed_mutation_categories": [
     "filesystem.release-materialization",
@@ -77,7 +81,8 @@
     "automatic_rollback": false,
     "weather_next_required": false,
     "private_bigquery_required": false,
-    "home_coordinates_required": false
+    "home_coordinates_required": false,
+    "trusted_checkout_repair": false
   },
   "privileged_install_activation_contract": "ops/deploy/weather-public-runtime-privileged-install-activation.json",
   "privileged_install_module": "ops/lib/deploy_executor/weather_public_runtime_privileged_install.py"
