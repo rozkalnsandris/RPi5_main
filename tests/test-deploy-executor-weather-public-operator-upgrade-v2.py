@@ -20,6 +20,7 @@ CHECKOUT_CONTRACT = ROOT / "ops/deploy/rpi5-main-weather-public-runtime-operator
 INSTALL_CONTRACT = ROOT / "ops/deploy/weather-public-runtime-operator-install.json"
 DOC = ROOT / "docs/WEATHER_PUBLIC_RUNTIME_EXECUTOR_SOURCE.md"
 MAKEFILE = ROOT / "Makefile"
+V2_TARGET_SOURCE_SHA = "3a8ac3bfc777a9ddfd3fc843d81e4e84d83afebe"
 sys.path.insert(0, str(ROOT / "ops/lib"))
 
 from deploy_executor import weather_public_runtime_operator_upgrade_v2 as upgrade
@@ -168,7 +169,11 @@ class WeatherOperatorUpgradeSourceTests(unittest.TestCase):
 
     def test_source_diff_guard_allows_exactly_operator_module(self) -> None:
         artifacts = upgrade._install_artifacts(ROOT)
-        source_sha = run_git(ROOT, "rev-parse", "HEAD")
+        source_sha = V2_TARGET_SOURCE_SHA
+        self.assertEqual(
+            run_git(ROOT, "merge-base", "--is-ancestor", source_sha, "HEAD"),
+            "",
+        )
         reviewed = upgrade._source_diff_guard(ROOT, source_sha, artifacts)
         self.assertEqual(hashlib.sha256(reviewed).hexdigest(), upgrade.TARGET_NEW_SHA256)
 
