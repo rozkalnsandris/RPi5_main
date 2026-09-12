@@ -4,6 +4,9 @@ on:
   pull_request:
     paths:
       - ops/contracts/hermes-deals-source-sync-v1.json
+      - ops/contracts/hermes-deals-source-sync-evidence-v1.json
+      - ops/lib/deploy_executor/hermes_deals_source_sync_evidence.py
+      - tests/test-hermes-deals-source-sync-evidence.py
       - ops/deploy/executor-operations.json
       - tests/test-hermes-deals-source-sync.py
       - tests/test-deploy-executor-p4.py
@@ -15,6 +18,9 @@ on:
       - main
     paths:
       - ops/contracts/hermes-deals-source-sync-v1.json
+      - ops/contracts/hermes-deals-source-sync-evidence-v1.json
+      - ops/lib/deploy_executor/hermes_deals_source_sync_evidence.py
+      - tests/test-hermes-deals-source-sync-evidence.py
       - ops/deploy/executor-operations.json
       - tests/test-hermes-deals-source-sync.py
       - tests/test-deploy-executor-p4.py
@@ -37,5 +43,6 @@ jobs:
       - name: Validate source-sync static boundary
         run: |
           python3 ./tests/test-hermes-deals-source-sync.py
+          python3 ./tests/test-hermes-deals-source-sync-evidence.py
           python3 ./tests/test-deploy-executor-p4.py
           python3 ./tests/test-hermes-deals-runner-smoke-install.py
