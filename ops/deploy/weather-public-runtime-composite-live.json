@@ -120,8 +120,8 @@
     "recurring_public_ingest_schedule"
   ],
   "trusted_checkout": {
-    "contract": "ops/deploy/rpi5-main-weather-public-runtime-install-trusted-checkout-bootstrap.json",
-    "target": "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-install-trusted",
+    "contract": "ops/deploy/rpi5-main-weather-public-runtime-composite-trusted-checkout-bootstrap.json",
+    "target": "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-composite-trusted",
     "manager_checkout_install_source_allowed": false,
     "exact_current_rpi5_main_sha_required": true,
     "minimum_reviewed_ancestor": "95b6b95b132614cbc330d6d764d0557079a67534",
@@ -131,7 +131,7 @@
     "pre_consume_compatibility_check_required": true,
     "existing_target_policy": "verified-reuse-only",
     "verified_existing_requirements": [
-      "exact-authorized-rpi5-main-sha",
+      "exact-authorized-current-rpi5-main-sha",
       "detached-head",
       "clean-worktree",
       "exact-origin",
@@ -143,7 +143,7 @@
     "repair_cleanup_reset_update_overwrite_allowed": false
   },
   "helper_installation": {
-    "manifest": "ops/deploy/weather-public-runtime-helper-install.json",
+    "manifest": "ops/deploy/weather-public-runtime-helper-install-composite.json",
     "artifact_count": 13,
     "required_owner_uid": 0,
     "required_owner_gid": 0,

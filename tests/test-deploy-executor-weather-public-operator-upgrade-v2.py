@@ -13,16 +13,17 @@ import unittest
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
-MODULE = ROOT / "ops/lib/deploy_executor/weather_public_runtime_operator_upgrade.py"
-ENTRYPOINT_SOURCE = ROOT / "ops/bin/rozkalns-weather-public-runtime-operator-upgrade"
-UPGRADE_CONTRACT = ROOT / "ops/deploy/weather-public-runtime-operator-upgrade.json"
-CHECKOUT_CONTRACT = ROOT / "ops/deploy/rpi5-main-weather-public-runtime-operator-upgrade-trusted-checkout-bootstrap.json"
+MODULE = ROOT / "ops/lib/deploy_executor/weather_public_runtime_operator_upgrade_v2.py"
+ENTRYPOINT_SOURCE = ROOT / "ops/bin/rozkalns-weather-public-runtime-operator-upgrade-v2"
+UPGRADE_CONTRACT = ROOT / "ops/deploy/weather-public-runtime-operator-upgrade-v2.json"
+CHECKOUT_CONTRACT = ROOT / "ops/deploy/rpi5-main-weather-public-runtime-operator-upgrade-v2-trusted-checkout-bootstrap.json"
 INSTALL_CONTRACT = ROOT / "ops/deploy/weather-public-runtime-operator-install.json"
 DOC = ROOT / "docs/WEATHER_PUBLIC_RUNTIME_EXECUTOR_SOURCE.md"
 MAKEFILE = ROOT / "Makefile"
+V2_TARGET_SOURCE_SHA = "3a8ac3bfc777a9ddfd3fc843d81e4e84d83afebe"
 sys.path.insert(0, str(ROOT / "ops/lib"))
 
-from deploy_executor import weather_public_runtime_operator_upgrade as upgrade
+from deploy_executor import weather_public_runtime_operator_upgrade_v2 as upgrade
 
 
 def run_git(repo: Path, *args: str) -> str:
@@ -36,25 +37,14 @@ def run_git(repo: Path, *args: str) -> str:
     ).stdout.strip()
 
 
-V1_TARGET_SHA = "36ce218ffd65af8c1bb904bd30037920f847808d"
-
-
 class WeatherOperatorUpgradeSourceTests(unittest.TestCase):
-    @contextmanager
-    def reviewed_target_checkout(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            checkout = Path(tmp) / "reviewed-v1"
-            subprocess.run(["/usr/bin/git", "clone", "-q", "--no-hardlinks", str(ROOT), str(checkout)], check=True)
-            subprocess.run(["/usr/bin/git", "-C", str(checkout), "checkout", "--detach", "-q", V1_TARGET_SHA], check=True)
-            yield checkout
-
     def test_source_readiness_is_zero_input_and_inactive(self) -> None:
         ready = upgrade.source_readiness()
-        self.assertEqual(ready["issue"], 487)
+        self.assertEqual(ready["issue"], 491)
         self.assertEqual(ready["caller_authority"], ())
         self.assertEqual(
             ready["trusted_upgrade_checkout"],
-            "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-operator-upgrade-trusted",
+            "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-operator-upgrade-v2-trusted",
         )
         self.assertEqual(ready["predecessor_sha"], upgrade.PREDECESSOR_SHA)
         self.assertEqual(ready["mutation_target_count"], 1)
@@ -81,7 +71,7 @@ class WeatherOperatorUpgradeSourceTests(unittest.TestCase):
         self.assertTrue(source.startswith("#!/usr/bin/python3 -I\n"))
         self.assertIn("if len(sys.argv) != 1:", source)
         self.assertIn(
-            '_CHECKOUT_NAME = "RPi5_main-weather-public-runtime-operator-upgrade-trusted"',
+            '_CHECKOUT_NAME = "RPi5_main-weather-public-runtime-operator-upgrade-v2-trusted"',
             source,
         )
         self.assertIn("Path(__file__).resolve().parents[2]", source)
@@ -121,8 +111,8 @@ class WeatherOperatorUpgradeSourceTests(unittest.TestCase):
 
     def test_install_contract_links_inactive_upgrade_bridge(self) -> None:
         contract = json.loads(INSTALL_CONTRACT.read_text(encoding="utf-8"))
-        bridge = contract["compatibility_upgrade_bridge"]
-        self.assertEqual(bridge["issue"], 487)
+        bridge = contract["compatibility_upgrade_bridge_v2"]
+        self.assertEqual(bridge["issue"], 491)
         self.assertEqual(bridge["status"], "SOURCE_ONLY_UPGRADE_BRIDGE_INACTIVE")
         self.assertEqual(bridge["caller_arguments"], [])
         self.assertEqual(bridge["upgradable_artifact"], upgrade.TARGET_SOURCE)
@@ -134,11 +124,11 @@ class WeatherOperatorUpgradeSourceTests(unittest.TestCase):
 
     def test_checkout_contract_is_fixed_and_bounded(self) -> None:
         contract = json.loads(CHECKOUT_CONTRACT.read_text(encoding="utf-8"))
-        target = "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-operator-upgrade-trusted"
-        auth_sha = "EXPLICIT_WEATHER_OPERATOR_UPGRADE_LIVE_EXACT_RPI5_MAIN_SHA"
+        target = "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-operator-upgrade-v2-trusted"
+        auth_sha = "EXPLICIT_WEATHER_OPERATOR_UPGRADE_V2_LIVE_EXACT_RPI5_MAIN_SHA"
         self.assertEqual(
             contract["schema"],
-            "rozkalns.rpi5-main.weather-public-runtime-operator-upgrade-trusted-checkout-bootstrap.v1",
+            "rozkalns.rpi5-main.weather-public-runtime-operator-upgrade-v2-trusted-checkout-bootstrap.v1",
         )
         self.assertTrue(contract["source_only"])
         self.assertEqual(contract["manager_checkout"]["origin"], upgrade.REVIEWED_ORIGIN)
@@ -178,28 +168,31 @@ class WeatherOperatorUpgradeSourceTests(unittest.TestCase):
         self.assertFalse(contract["failure"]["alternate_checkout_route"])
 
     def test_source_diff_guard_allows_exactly_operator_module(self) -> None:
-        with self.reviewed_target_checkout() as reviewed_root:
-            artifacts = upgrade._install_artifacts(reviewed_root)
-            source_sha = run_git(reviewed_root, "rev-parse", "HEAD")
-            reviewed = upgrade._source_diff_guard(reviewed_root, source_sha, artifacts)
-            self.assertEqual(hashlib.sha256(reviewed).hexdigest(), upgrade.TARGET_NEW_SHA256)
+        artifacts = upgrade._install_artifacts(ROOT)
+        source_sha = V2_TARGET_SOURCE_SHA
+        self.assertEqual(
+            run_git(ROOT, "merge-base", "--is-ancestor", source_sha, "HEAD"),
+            "",
+        )
+        reviewed = upgrade._source_diff_guard(ROOT, source_sha, artifacts)
+        self.assertEqual(hashlib.sha256(reviewed).hexdigest(), upgrade.TARGET_NEW_SHA256)
 
-            original = upgrade._git_blob_sha_at
-            non_target = next(source for source, _destination, _mode in artifacts if source != upgrade.TARGET_SOURCE)
+        original = upgrade._git_blob_sha_at
+        non_target = next(source for source, _destination, _mode in artifacts if source != upgrade.TARGET_SOURCE)
 
-            def injected(checkout: Path, commit: str, relative: str) -> str:
-                value = original(checkout, commit, relative)
-                if commit == source_sha and relative == non_target:
-                    return "f" * 40
-                return value
+        def injected(checkout: Path, commit: str, relative: str) -> str:
+            value = original(checkout, commit, relative)
+            if commit == source_sha and relative == non_target:
+                return "f" * 40
+            return value
 
-            with mock.patch.object(upgrade, "_git_blob_sha_at", side_effect=injected):
-                with self.assertRaises(upgrade.WeatherOperatorUpgradeError):
-                    upgrade._source_diff_guard(reviewed_root, source_sha, artifacts)
+        with mock.patch.object(upgrade, "_git_blob_sha_at", side_effect=injected):
+            with self.assertRaises(upgrade.WeatherOperatorUpgradeError):
+                upgrade._source_diff_guard(ROOT, source_sha, artifacts)
 
     @contextmanager
-    def installed_fixture(self, source_checkout=ROOT):
-        artifacts = upgrade._install_artifacts(source_checkout)
+    def installed_fixture(self):
+        artifacts = upgrade._install_artifacts(ROOT)
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
             libexec = base / "libexec"
@@ -224,7 +217,7 @@ class WeatherOperatorUpgradeSourceTests(unittest.TestCase):
                         stdout=subprocess.PIPE,
                     ).stdout
                 else:
-                    data = (source_checkout / source).read_bytes()
+                    data = (ROOT / source).read_bytes()
                 canonical = Path(destination)
                 if canonical == upgrade.CANONICAL_ENTRYPOINT:
                     actual = entrypoint
@@ -244,9 +237,8 @@ class WeatherOperatorUpgradeSourceTests(unittest.TestCase):
                 yield artifacts, entrypoint, support, package
 
     def test_exact_predecessor_installed_closure_passes_pre_mutation_validation(self) -> None:
-        with self.reviewed_target_checkout() as reviewed_root:
-            with self.installed_fixture(reviewed_root) as (artifacts, _entrypoint, _support, _package):
-                upgrade._validate_installed_closure(reviewed_root, artifacts)
+        with self.installed_fixture() as (artifacts, _entrypoint, _support, _package):
+            upgrade._validate_installed_closure(ROOT, artifacts)
 
     def test_wrong_predecessor_hash_fails_before_mutation(self) -> None:
         with self.installed_fixture() as (artifacts, _entrypoint, _support, package):
@@ -265,47 +257,45 @@ class WeatherOperatorUpgradeSourceTests(unittest.TestCase):
             self.assertFalse((package / upgrade.TEMP_NAME).exists())
 
     def test_atomic_publish_replaces_exactly_one_fixed_destination(self) -> None:
-        with self.reviewed_target_checkout() as reviewed_root:
-            with self.installed_fixture(reviewed_root) as (_artifacts, entrypoint, support, package):
-                before = {
-                    path.relative_to(support).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
-                    for path in support.rglob("*")
-                    if path.is_file()
-                }
-                entry_before = hashlib.sha256(entrypoint.read_bytes()).hexdigest()
-                reviewed = (reviewed_root / upgrade.TARGET_SOURCE).read_bytes()
-                state = {"mutation_started": False, "target_replaced": False}
-                upgrade._replace_exact_target(reviewed, state)
-                self.assertEqual(state, {"mutation_started": True, "target_replaced": True})
-                self.assertEqual(
-                    hashlib.sha256((package / upgrade.TARGET_FILENAME).read_bytes()).hexdigest(),
-                    upgrade.TARGET_NEW_SHA256,
-                )
-                after = {
-                    path.relative_to(support).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
-                    for path in support.rglob("*")
-                    if path.is_file()
-                }
-                changed = {name for name in before if before[name] != after[name]}
-                self.assertEqual(changed, {f"deploy_executor/{upgrade.TARGET_FILENAME}"})
-                self.assertEqual(hashlib.sha256(entrypoint.read_bytes()).hexdigest(), entry_before)
-                self.assertFalse((package / upgrade.TEMP_NAME).exists())
+        with self.installed_fixture() as (_artifacts, entrypoint, support, package):
+            before = {
+                path.relative_to(support).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in support.rglob("*")
+                if path.is_file()
+            }
+            entry_before = hashlib.sha256(entrypoint.read_bytes()).hexdigest()
+            reviewed = (ROOT / upgrade.TARGET_SOURCE).read_bytes()
+            state = {"mutation_started": False, "target_replaced": False}
+            upgrade._replace_exact_target(reviewed, state)
+            self.assertEqual(state, {"mutation_started": True, "target_replaced": True})
+            self.assertEqual(
+                hashlib.sha256((package / upgrade.TARGET_FILENAME).read_bytes()).hexdigest(),
+                upgrade.TARGET_NEW_SHA256,
+            )
+            after = {
+                path.relative_to(support).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in support.rglob("*")
+                if path.is_file()
+            }
+            changed = {name for name in before if before[name] != after[name]}
+            self.assertEqual(changed, {f"deploy_executor/{upgrade.TARGET_FILENAME}"})
+            self.assertEqual(hashlib.sha256(entrypoint.read_bytes()).hexdigest(), entry_before)
+            self.assertFalse((package / upgrade.TEMP_NAME).exists())
 
     def test_failure_after_first_write_preserves_temp_and_old_target(self) -> None:
-        with self.reviewed_target_checkout() as reviewed_root:
-            with self.installed_fixture(reviewed_root) as (_artifacts, _entrypoint, _support, package):
-                target = package / upgrade.TARGET_FILENAME
-                old = target.read_bytes()
-                reviewed = (reviewed_root / upgrade.TARGET_SOURCE).read_bytes()
-                state = {"mutation_started": False, "target_replaced": False}
-                with mock.patch.object(os, "replace", side_effect=OSError("synthetic replace failure")):
-                    with self.assertRaises(OSError):
-                        upgrade._replace_exact_target(reviewed, state)
-                self.assertEqual(state, {"mutation_started": True, "target_replaced": False})
-                self.assertEqual(target.read_bytes(), old)
-                temp = package / upgrade.TEMP_NAME
-                self.assertTrue(temp.exists())
-                self.assertEqual(temp.read_bytes(), reviewed)
+        with self.installed_fixture() as (_artifacts, _entrypoint, _support, package):
+            target = package / upgrade.TARGET_FILENAME
+            old = target.read_bytes()
+            reviewed = (ROOT / upgrade.TARGET_SOURCE).read_bytes()
+            state = {"mutation_started": False, "target_replaced": False}
+            with mock.patch.object(os, "replace", side_effect=OSError("synthetic replace failure")):
+                with self.assertRaises(OSError):
+                    upgrade._replace_exact_target(reviewed, state)
+            self.assertEqual(state, {"mutation_started": True, "target_replaced": False})
+            self.assertEqual(target.read_bytes(), old)
+            temp = package / upgrade.TEMP_NAME
+            self.assertTrue(temp.exists())
+            self.assertEqual(temp.read_bytes(), reviewed)
 
     @contextmanager
     def trusted_checkout_fixture(self):
@@ -389,15 +379,15 @@ class WeatherOperatorUpgradeSourceTests(unittest.TestCase):
     def test_docs_and_validate_target_are_wired(self) -> None:
         doc = DOC.read_text(encoding="utf-8")
         makefile = MAKEFILE.read_text(encoding="utf-8")
-        self.assertIn("Issue #487", doc)
-        self.assertIn("RPi5_main-weather-public-runtime-operator-upgrade-trusted", doc)
-        self.assertIn("weather-public-runtime-operator-upgrade.json", doc)
+        self.assertIn("Issue #491", doc)
+        self.assertIn("RPi5_main-weather-public-runtime-operator-upgrade-v2-trusted", doc)
+        self.assertIn("weather-public-runtime-operator-upgrade-v2.json", doc)
         self.assertIn(
             "python3 ./tests/test-deploy-executor-weather-public-operator-install.py",
             makefile,
         )
         self.assertIn(
-            "python3 ./tests/test-deploy-executor-weather-public-operator-upgrade.py",
+            "python3 ./tests/test-deploy-executor-weather-public-operator-upgrade-v2.py",
             makefile,
         )
 

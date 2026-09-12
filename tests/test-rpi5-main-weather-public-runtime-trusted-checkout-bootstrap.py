@@ -19,8 +19,8 @@ EXPECTED_ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
 TARGET = "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-trusted"
 AUTH_SHA = "EXPLICIT_COMPOSITE_STRICT_LIVE_EXACT_RPI5_MAIN_SHA"
 CONTRACT_PATH = "ops/deploy/rpi5-main-weather-public-runtime-trusted-checkout-bootstrap.json"
-SUCCESSOR_CONTRACT_PATH = "ops/deploy/rpi5-main-weather-public-runtime-install-trusted-checkout-bootstrap.json"
-SUCCESSOR_TARGET = "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-install-trusted"
+SUCCESSOR_CONTRACT_PATH = "ops/deploy/rpi5-main-weather-public-runtime-composite-trusted-checkout-bootstrap.json"
+SUCCESSOR_TARGET = "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-composite-trusted"
 REQUIRED_PATHS = [
     "ops/deploy/weather-public-runtime-helper-install.json",
     "ops/deploy/weather-public-runtime-execution.json",
@@ -160,12 +160,24 @@ class WeatherTrustedCheckoutBootstrapContractTests(unittest.TestCase):
 
     def test_legacy_contract_is_preserved_but_current_surfaces_bind_successor(self) -> None:
         validate_contract_shape(self.contract)
-        for surface in (self.install, self.execution):
-            self.assertEqual(surface["trusted_checkout_bootstrap_contract"], SUCCESSOR_CONTRACT_PATH)
-            self.assertEqual(surface["trusted_checkout_target"], SUCCESSOR_TARGET)
-            self.assertNotEqual(surface["trusted_checkout_target"], TARGET)
-            self.assertIs(surface["trusted_checkout_required_before_live_installation"], True)
-            self.assertIs(surface["ordinary_manager_checkout_install_source_allowed"], False)
+
+        self.assertEqual(
+            self.install["trusted_checkout_bootstrap_contract"],
+            "ops/deploy/rpi5-main-weather-public-runtime-install-trusted-checkout-bootstrap.json",
+        )
+        self.assertEqual(
+            self.install["trusted_checkout_target"],
+            "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-install-trusted",
+        )
+
+        self.assertEqual(
+            self.execution["trusted_checkout_bootstrap_contract"],
+            SUCCESSOR_CONTRACT_PATH,
+        )
+        self.assertEqual(self.execution["trusted_checkout_target"], SUCCESSOR_TARGET)
+        self.assertNotEqual(self.execution["trusted_checkout_target"], TARGET)
+        self.assertTrue(self.execution["trusted_checkout_required_before_live_installation"])
+        self.assertFalse(self.execution["ordinary_manager_checkout_install_source_allowed"])
 
     def test_docs_and_validate_target_are_wired(self) -> None:
         self.assertIn("RPi5_main-weather-public-runtime-trusted", self.doc)
