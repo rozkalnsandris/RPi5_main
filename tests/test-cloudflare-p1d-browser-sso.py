@@ -3,16 +3,23 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+
+import cloudflare_owner_browser_sso_session_update as session_update  # noqa: E402
+
 CONTRACT = ROOT / "ops/contracts/cloudflare-p1d-browser-sso.json"
 REGISTRY = ROOT / "ops/contracts/cloudflare-hostname-policy.yaml"
 DECISION = ROOT / "docs/CLOUDFLARE_P1D_BROWSER_SSO_DECISION.md"
 OLD_DECISION = ROOT / "docs/CLOUDFLARE_P1D_OWNER_PHONE_POSTURE_DECISION.md"
 OWNER_CONTRACT = ROOT / "docs/CLOUDFLARE_OWNER_PHONE_ACCESS_CONTRACT.md"
 OLD_POSTURE = ROOT / "ops/contracts/cloudflare-p1d-owner-phone-posture.json"
+SESSION_WRITER = ROOT / "scripts/cloudflare_owner_browser_sso_session_update.py"
+SESSION_WRAPPER = ROOT / "ops/bin/cloudflare-owner-browser-sso-session-update"
 
 
 class CloudflareP1DBrowserSSOTests(unittest.TestCase):
@@ -73,6 +80,7 @@ class CloudflareP1DBrowserSSOTests(unittest.TestCase):
         self.assertTrue(all(not item["authorized"] for item in canaries))
         write = canaries[1]
         self.assertEqual(write["allowed_diff"], ["organization-session_duration-to-720h"])
+        self.assertEqual(write["operator"], "ops/bin/cloudflare-owner-browser-sso-session-update")
         self.assertIn("access-policy-change", write["forbidden_diff"])
         self.assertIn("device-posture-change", write["forbidden_diff"])
         self.assertTrue(canaries[3]["separate_live_authorization_required"])
@@ -88,11 +96,85 @@ class CloudflareP1DBrowserSSOTests(unittest.TestCase):
         for forbidden in ("owner-email", "account-id", "access-app-id", "cookie", "jwt", "api-token"):
             self.assertIn(forbidden, preflight["forbidden_output"])
 
+    def test_p1d04_writer_contract_is_narrow_and_non_authorizing(self) -> None:
+        writer = self.contract["organization_session_writer"]
+        self.assertEqual(writer["api_method"], "PUT")
+        self.assertEqual(writer["target_session_duration"], "720h")
+        self.assertTrue(writer["response_only_fields_never_in_payload"])
+        self.assertFalse(writer["automatic_retry"])
+        self.assertFalse(writer["automatic_rollback"])
+        self.assertEqual(writer["allowed_semantic_diff"], ["session_duration-to-720h"])
+        for key in ("cache_device_posture", "has_migrated_private_apps", "trusted_accounts", "created_at", "updated_at"):
+            self.assertIn(key, writer["response_only_fields"])
+            self.assertNotIn(key, writer["writable_projection_fields"])
+        self.assertFalse(self.contract["authorization_contract"]["source_merge_authorizes_live"])
+
+    def test_p1d04_projection_changes_only_session_duration(self) -> None:
+        before = {
+            "auth_domain": "private.cloudflareaccess.com",
+            "name": "private-team",
+            "deny_unmatched_requests": True,
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z",
+            "cache_device_posture": True,
+            "has_migrated_private_apps": False,
+            "trusted_accounts": ["private-account"],
+        }
+        plan = session_update.build_update_plan(before)
+        self.assertEqual(plan.current_effective_session, "24h")
+        self.assertEqual(plan.payload["session_duration"], "720h")
+        self.assertEqual(session_update._semantic_diff(plan.before_writable, plan.payload), {"session_duration"})
+        for key in session_update.RESPONSE_ONLY_FIELDS:
+            self.assertNotIn(key, plan.payload)
+
+    def test_p1d04_unclassified_response_field_blocks_before_write(self) -> None:
+        before = {
+            "auth_domain": "private.cloudflareaccess.com",
+            "name": "private-team",
+            "surprise_server_field": True,
+        }
+        with self.assertRaisesRegex(session_update.AuditError, "organization_response_field_unclassified"):
+            session_update.build_update_plan(before)
+
+    def test_p1d04_response_only_or_writable_drift_fails_post_write(self) -> None:
+        before = {
+            "auth_domain": "private.cloudflareaccess.com",
+            "name": "private-team",
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z",
+            "cache_device_posture": True,
+            "has_migrated_private_apps": False,
+            "trusted_accounts": ["private-account"],
+        }
+        plan = session_update.build_update_plan(before)
+        after_response_drift = dict(before)
+        after_response_drift["session_duration"] = "720h"
+        after_response_drift["trusted_accounts"] = ["changed-private-account"]
+        with self.assertRaisesRegex(session_update.AuditError, "post_write_response_only_state_changed"):
+            session_update.verify_post_write(plan, after_response_drift)
+
+        after_writable_drift = dict(before)
+        after_writable_drift["session_duration"] = "720h"
+        after_writable_drift["name"] = "unexpected-name"
+        with self.assertRaisesRegex(session_update.AuditError, "post_write_writable_projection_changed"):
+            session_update.verify_post_write(plan, after_writable_drift)
+
+    def test_p1d04_source_has_one_fixed_put_and_no_other_write_method(self) -> None:
+        source = SESSION_WRITER.read_text(encoding="utf-8")
+        wrapper = SESSION_WRAPPER.read_text(encoding="utf-8")
+        self.assertEqual(source.count('method="PUT"'), 1)
+        for forbidden in ('method="POST"', 'method="PATCH"', 'method="DELETE"'):
+            self.assertNotIn(forbidden, source)
+        self.assertIn(session_update.CANARY_ID, wrapper)
+        self.assertIn("exact canary id", wrapper)
+        self.assertIn("custom CLOUDFLARE_API_BASE forbidden", wrapper)
+
     def test_source_references_are_official_cloudflare_docs(self) -> None:
         for ref in self.contract["source_references"]:
             self.assertTrue(ref.startswith("https://developers.cloudflare.com/"))
         self.assertIn("global session token", self.decision.lower())
         self.assertIn("one month", self.decision.lower())
+        self.assertIn("response/server-managed", self.decision.lower())
 
     def test_public_source_contains_no_private_identity_or_secret(self) -> None:
         combined = "\n".join([
