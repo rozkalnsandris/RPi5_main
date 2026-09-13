@@ -398,19 +398,51 @@ def _actual_artifact_path(destination: str) -> Path:
     return SUPPORT_ROOT / relative
 
 
+def _validate_runtime_pycache(cache: Path, package_sources: set[str]) -> None:
+    _require_directory(cache, exact_mode=0o755)
+    for child in cache.iterdir():
+        meta = child.lstat()
+        match = re.fullmatch(
+            r"(?P<stem>[A-Za-z0-9_]+)\.cpython-[0-9]+(?:\.opt-[0-9]+)?\.pyc",
+            child.name,
+        )
+        if (
+            match is None
+            or not stat.S_ISREG(meta.st_mode)
+            or stat.S_ISLNK(meta.st_mode)
+            or meta.st_nlink != 1
+            or meta.st_uid != ROOT_UID
+            or meta.st_gid != ROOT_GID
+            or stat.S_IMODE(meta.st_mode) != 0o644
+            or meta.st_size > MAX_ARTIFACT_BYTES
+            or f"{match.group('stem')}.py" not in package_sources
+        ):
+            _fail("operator deploy_executor __pycache__ entry drifted")
+
+
 def _observed_support_membership() -> set[str]:
     observed: set[str] = set()
+    runtime_cache: Path | None = None
     for item in SUPPORT_ROOT.iterdir():
         if item.name == "deploy_executor":
             _require_directory(item, exact_mode=0o755)
+            package_sources: set[str] = set()
             for child in item.iterdir():
+                if child.name == "__pycache__":
+                    if runtime_cache is not None:
+                        _fail("operator deploy_executor runtime cache identity is ambiguous")
+                    runtime_cache = child
+                    continue
                 meta = child.lstat()
-                if not stat.S_ISREG(meta.st_mode) or stat.S_ISLNK(meta.st_mode):
+                if not stat.S_ISREG(meta.st_mode) or stat.S_ISLNK(meta.st_mode) or meta.st_nlink != 1:
                     _fail("operator deploy_executor package contains a non-regular entry")
+                package_sources.add(child.name)
                 observed.add(f"deploy_executor/{child.name}")
+            if runtime_cache is not None:
+                _validate_runtime_pycache(runtime_cache, package_sources)
             continue
         meta = item.lstat()
-        if not stat.S_ISREG(meta.st_mode) or stat.S_ISLNK(meta.st_mode):
+        if not stat.S_ISREG(meta.st_mode) or stat.S_ISLNK(meta.st_mode) or meta.st_nlink != 1:
             _fail("operator support root contains an unexpected non-regular entry")
         observed.add(item.name)
     return observed
