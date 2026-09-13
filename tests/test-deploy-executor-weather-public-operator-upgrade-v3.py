@@ -261,6 +261,23 @@ class WeatherOperatorEntrypointUpgradeV3Tests(unittest.TestCase):
             with self.assertRaises(upgrade.WeatherOperatorUpgradeError):
                 upgrade._validate_installed_closure(ROOT, artifacts)
 
+        with self.installed_fixture() as (artifacts, _actual_paths, _entrypoint, support):
+            package = support / "deploy_executor"
+            target = package / "cache-target"
+            target.mkdir(mode=0o755)
+            (target / "weather_public_runtime_operator.cpython-311.pyc").write_bytes(b"cache")
+            (package / "__pycache__").symlink_to(target.name, target_is_directory=True)
+            with self.assertRaises(upgrade.WeatherOperatorUpgradeError):
+                upgrade._validate_installed_closure(ROOT, artifacts)
+
+        with self.installed_fixture() as (artifacts, _actual_paths, _entrypoint, support):
+            cache = self.add_valid_runtime_pycache(support)
+            source = cache / "weather_public_runtime_operator.cpython-311.pyc"
+            linked = cache / "weather_public_runtime_composite.cpython-311.pyc"
+            linked.hardlink_to(source)
+            with self.assertRaises(upgrade.WeatherOperatorUpgradeError):
+                upgrade._validate_installed_closure(ROOT, artifacts)
+
     def test_unexpected_package_directory_still_fails_closed(self) -> None:
         with self.installed_fixture() as (artifacts, _actual_paths, _entrypoint, support):
             extra = support / "deploy_executor" / "unexpected"
