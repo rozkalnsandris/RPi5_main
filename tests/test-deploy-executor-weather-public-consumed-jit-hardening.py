@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import redirect_stdout
+from datetime import datetime, timezone
 from importlib.machinery import SourceFileLoader
 from importlib.util import module_from_spec, spec_from_loader
 import io
@@ -9,6 +10,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+from types import MethodType
 import unittest
 from unittest import mock
 from urllib.parse import urlsplit
@@ -28,21 +30,22 @@ def _load_module(name: str, path: Path):
 
 
 ENTRYPOINT = _load_module(
-    "weather_public_runtime_operator_entrypoint_494",
+    "weather_public_runtime_operator_entrypoint_525",
     ROOT / "ops/bin/rozkalns-weather-public-runtime-operator",
 )
 ENTRYPOINT._install_runtime_jit_hardening()
 FIXTURE = _load_module(
-    "weather_public_runtime_composite_fixture_494",
+    "weather_public_runtime_composite_fixture_525",
     ROOT / "tests/test-deploy-executor-weather-public-composite.py",
 )
 
 from deploy_executor.state import StateStore
-from deploy_executor.transport import HTTPResponse, NetworkFailure
+from deploy_executor.transport import HTTPResponse, JSONResponse, NetworkFailure
 from deploy_executor.weather_public_runtime_operator import (
     ConcreteWeatherReplayAuthority,
     WeatherCompositeOperatorError,
 )
+from deploy_executor import weather_public_runtime_composite as COMPOSITE_MODULE
 from deploy_executor import weather_public_runtime_operator as OPERATOR_MODULE
 
 
@@ -77,8 +80,48 @@ class PostConsumePublicFailureSender(FIXTURE.FixtureSender):
                         headers={"date": FIXTURE.SERVER_DATE},
                         body=b"{}",
                     )
+                if self.mode in {"missing_date", "invalid_date"}:
+                    response = super().send(method=method, url=url, headers=headers)
+                    response_headers = dict(response.headers)
+                    if self.mode == "missing_date":
+                        response_headers.pop("date", None)
+                    else:
+                        response_headers["date"] = "not-a-github-http-date"
+                    return HTTPResponse(
+                        status=response.status,
+                        headers=response_headers,
+                        body=response.body,
+                    )
                 raise AssertionError(self.mode)
         return super().send(method=method, url=url, headers=headers)
+
+
+class SequencedDateSender(FIXTURE.FixtureSender):
+    def __init__(self):
+        super().__init__()
+        self.date_headers: list[str] = []
+        self.repeat_last: str | None = None
+
+    def set_dates(self, *values: str) -> None:
+        self.date_headers = list(values)
+        self.repeat_last = values[-1] if values else None
+
+    def send(self, *, method: str, url: str, headers: object) -> HTTPResponse:
+        response = super().send(method=method, url=url, headers=headers)
+        if self.date_headers:
+            observed = self.date_headers.pop(0)
+            self.repeat_last = observed
+        elif self.repeat_last is not None:
+            observed = self.repeat_last
+        else:
+            return response
+        response_headers = dict(response.headers)
+        response_headers["date"] = observed
+        return HTTPResponse(
+            status=response.status,
+            headers=response_headers,
+            body=response.body,
+        )
 
 
 class WeatherConsumedJITHardeningTests(unittest.TestCase):
@@ -103,6 +146,24 @@ class WeatherConsumedJITHardeningTests(unittest.TestCase):
         ):
             target.revalidate_composite(FIXTURE.AUTH_ISSUE_NUMBER)
 
+    def test_preconsume_time_window_still_rejects_regression(self):
+        window = COMPOSITE_MODULE._GitHubTimeWindow()
+        window.observe(datetime(2026, 9, 10, 4, 1, 0, tzinfo=timezone.utc))
+        with self.assertRaisesRegex(
+            FIXTURE.WeatherCompositeAuthorityError,
+            "regressed during Weather revalidation",
+        ):
+            window.observe(datetime(2026, 9, 10, 4, 0, 59, tzinfo=timezone.utc))
+
+    def test_preconsume_time_window_still_rejects_spread_over_30_seconds(self):
+        window = COMPOSITE_MODULE._GitHubTimeWindow()
+        window.observe(datetime(2026, 9, 10, 4, 1, 0, tzinfo=timezone.utc))
+        with self.assertRaisesRegex(
+            FIXTURE.WeatherCompositeAuthorityError,
+            "inconsistent during Weather revalidation",
+        ):
+            window.observe(datetime(2026, 9, 10, 4, 1, 31, tzinfo=timezone.utc))
+
     def test_consumed_authority_survives_admission_ttl(self):
         target, _sender, _replay, initial = self._accepted_then_consumed()
         FIXTURE.SERVER_DATE = "Thu, 10 Sep 2026 04:11:01 GMT"
@@ -115,6 +176,57 @@ class WeatherConsumedJITHardeningTests(unittest.TestCase):
         self.assertEqual(current.queue_contract_sha256, initial.queue_contract_sha256)
         self.assertTrue(current.authorization_replay_consumed)
         self.assertFalse(current.authorization_replay_available)
+
+    def test_consumed_time_window_tolerates_regression_and_long_span(self):
+        sender = SequencedDateSender()
+        target, _sender, _replay, initial = self._accepted_then_consumed(sender=sender)
+        sender.set_dates(
+            "Thu, 10 Sep 2026 04:02:00 GMT",
+            "Thu, 10 Sep 2026 04:01:59 GMT",
+            "Thu, 10 Sep 2026 04:02:45 GMT",
+            "Thu, 10 Sep 2026 04:02:10 GMT",
+        )
+        current = target.revalidate_consumed_composite(FIXTURE.AUTH_ISSUE_NUMBER)
+        self.assertEqual(current.request_id, initial.request_id)
+        self.assertEqual(current.github_server_time, "2026-09-10T04:02:45Z")
+        self.assertIsNone(ENTRYPOINT._LAST_CONSUMED_JIT_FAILURE_CODE)
+
+    def test_consumed_time_window_still_rejects_missing_public_time(self):
+        sender = PostConsumePublicFailureSender(mode="missing_date", failures=1)
+        target, _sender, _replay, _initial = self._accepted_then_consumed(sender=sender)
+        with self.assertRaises(FIXTURE.WeatherCompositeAuthorityError):
+            target.revalidate_consumed_composite(FIXTURE.AUTH_ISSUE_NUMBER)
+        self.assertEqual(
+            ENTRYPOINT._LAST_CONSUMED_JIT_FAILURE_CODE,
+            "github_time_unavailable_or_invalid",
+        )
+
+    def test_consumed_time_window_still_rejects_noncanonical_time(self):
+        target, _sender, _replay, _initial = self._accepted_then_consumed()
+        source_client = target._source_client
+        original = source_client.get_json
+        weather_branch = f"/repos/{FIXTURE.SOURCE_REPOSITORY}/branches/main"
+
+        def noncanonical(this, path_or_url):
+            response = original(path_or_url)
+            if path_or_url == weather_branch:
+                return JSONResponse(
+                    value=response.value,
+                    server_time=response.server_time.replace(microsecond=1),
+                    etag=response.etag,
+                    not_modified=response.not_modified,
+                    url=response.url,
+                    next_url=response.next_url,
+                )
+            return response
+
+        source_client.get_json = MethodType(noncanonical, source_client)
+        with self.assertRaises(FIXTURE.WeatherCompositeAuthorityError):
+            target.revalidate_consumed_composite(FIXTURE.AUTH_ISSUE_NUMBER)
+        self.assertEqual(
+            ENTRYPOINT._LAST_CONSUMED_JIT_FAILURE_CODE,
+            "github_time_noncanonical",
+        )
 
     def test_consumed_jit_reuses_only_immutable_public_evidence(self):
         target, sender, _replay, initial = self._accepted_then_consumed()
@@ -219,7 +331,11 @@ class WeatherConsumedJITHardeningTests(unittest.TestCase):
 
     def test_failure_classifier_is_bounded_and_public_safe(self):
         cases = {
-            RuntimeError("GitHub response time regressed during Weather revalidation"): "github_time",
+            RuntimeError("GitHub response time is unavailable"): "github_time_unavailable_or_invalid",
+            RuntimeError("public GitHub source response omitted Date header"): "github_time_unavailable_or_invalid",
+            RuntimeError("GitHub response time is not canonical to whole seconds"): "github_time_noncanonical",
+            RuntimeError("GitHub response time regressed during Weather revalidation"): "github_time_regressed",
+            RuntimeError("GitHub response times are inconsistent during Weather revalidation"): "github_time_spread_exceeded",
             RuntimeError("Weather authorization is not durably consumed by this request"): "replay_state",
             RuntimeError("Weather initial bootstrap baseline drifted before first deployment apply"): "baseline_drift",
             RuntimeError("Weather source repository numeric identity drifted"): "authority_or_source_drift",
@@ -255,7 +371,7 @@ class WeatherConsumedJITHardeningTests(unittest.TestCase):
         ):
             output = io.StringIO()
             with redirect_stdout(output):
-                rc = ENTRYPOINT.main(["--issue-number", "23"])
+                rc = ENTRYPOINT.main(["--issue-number", "24"])
         self.assertEqual(rc, 78)
         payload = json.loads(output.getvalue())
         self.assertEqual(payload["safe_stage"], "trusted_checkout_fetch")
