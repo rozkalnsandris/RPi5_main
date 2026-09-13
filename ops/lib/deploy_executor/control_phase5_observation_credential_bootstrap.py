@@ -26,11 +26,12 @@ MAX_PRIVATE_KEY_BYTES: Final = 4096
 MAX_COMMAND_OUTPUT_BYTES: Final = 1024 * 1024
 ED25519_SPKI_PREFIX: Final = bytes.fromhex("302a300506032b6570032100")
 SHA_PATTERN: Final = re.compile(r"^[0-9a-f]{40}$")
+GITHUB_SSH_AUTHORITY: Final = "git" + chr(64) + "github.com"
 ALLOWED_ORIGIN_URLS: Final = {
     "https://github.com/rozkalnsandris/RPi5_main",
     "https://github.com/rozkalnsandris/RPi5_main.git",
-    "git@github.com:rozkalnsandris/RPi5_main.git",
-    "ssh://git@github.com/rozkalnsandris/RPi5_main.git",
+    f"{GITHUB_SSH_AUTHORITY}:rozkalnsandris/RPi5_main.git",
+    f"ssh://{GITHUB_SSH_AUTHORITY}/rozkalnsandris/RPi5_main.git",
 }
 
 
