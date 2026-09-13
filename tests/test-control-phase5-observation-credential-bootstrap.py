@@ -210,7 +210,7 @@ class ControlPhase5ObservationCredentialBootstrapTests(unittest.TestCase):
             target = credstore / bootstrap.PRIVATE_KEY_FILENAME
             target.symlink_to(other.name)
             with self.assertRaises(bootstrap.Phase5CredentialBootstrapError) as caught:
-                bootstrap._preflight_at(**private_args(alias if False else credstore, repo, sha))
+                bootstrap._preflight_at(**private_args(credstore, repo, sha))
             self.assertEqual(caught.exception.code, "TARGET_EXISTS")
             self.assertFalse(caught.exception.mutation_started)
             self.assertEqual(other.read_text(encoding="utf-8"), "keep-me")
