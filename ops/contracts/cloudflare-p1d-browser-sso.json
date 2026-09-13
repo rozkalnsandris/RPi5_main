@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "p1d04-source-writer-defined-plan-only",
+  "status": "p1d04-github-delivery-defined-plan-only",
   "canonical_issue": 179,
   "decision_date": "2026-09-13",
   "mutation_authorized": false,
@@ -121,6 +121,50 @@
       "response-only-field-binding-unchanged"
     ]
   },
+  "github_delivery": {
+    "workflow": ".github/workflows/cloudflare-p1d04-browser-sso-session.yml",
+    "authorizer": "scripts/github_p1d04_browser_sso_bridge.py",
+    "exact_main_gate": "scripts/github_p1d04_exact_main_gate.py",
+    "actions_adapter": "scripts/cloudflare_owner_browser_sso_session_update_actions.py",
+    "trigger": "issue-comment-created",
+    "trigger_issue": 179,
+    "owner_identity_binding": {
+      "login": "rozkalnsandris",
+      "numeric_user_id": 277435981,
+      "user_type": "User",
+      "author_association": "OWNER",
+      "github_app_authored_comment_allowed": false
+    },
+    "command_contract": "/rpi5-p1d04 apply HEAD=<exact-main-sha> CANARY=p1d-04-global-browser-sso-session",
+    "exact_sha_bound": true,
+    "workflow_rerun_allowed": false,
+    "concurrency_cancel_in_progress": false,
+    "checkout_persist_credentials": false,
+    "github_permissions": [
+      "contents:read",
+      "actions:read"
+    ],
+    "github_write_permissions": [],
+    "required_exact_main_push_workflows": [
+      "Validate",
+      "FAST-LANE policy drift",
+      "GITHUB-ONLY policy drift"
+    ],
+    "cloudflare_secret_inputs": [
+      "CLOUDFLARE_P1D04_ACCOUNT_ID",
+      "CLOUDFLARE_P1D04_READ_API_TOKEN",
+      "CLOUDFLARE_P1D04_WRITE_API_TOKEN"
+    ],
+    "secret_provisioning_authorized_by_source": false,
+    "cloudflare_api_base_override_allowed": false,
+    "read_write_tokens_must_differ": true,
+    "maximum_forward_put_requests": 1,
+    "automatic_retry": false,
+    "automatic_rollback": false,
+    "automatic_github_result_comment": false,
+    "source_merge_authorizes_workflow_execution": false,
+    "fresh_separate_live_authorization_required": true
+  },
   "future_canaries": [
     {
       "id": "p1d-03-browser-sso-preflight",
@@ -132,6 +176,7 @@
       "kind": "organization-session-write",
       "authorized": false,
       "operator": "ops/bin/cloudflare-owner-browser-sso-session-update",
+      "delivery_workflow": ".github/workflows/cloudflare-p1d04-browser-sso-session.yml",
       "condition": "fresh-preflight-proves-global-session-duration-is-not-720h",
       "target": "zero-trust-organization-session-duration",
       "allowed_diff": [
