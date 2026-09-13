@@ -1,0 +1,77 @@
+name: Cloudflare P1D-03 browser SSO preflight
+
+on:
+  issue_comment:
+    types:
+      - created
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: cloudflare-p1d03-browser-sso-preflight
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    name: Authorize exact owner P1D-03 command
+    if: github.event.issue.pull_request == null && github.event.issue.number == 179 && startsWith(github.event.comment.body, '/rpi5-p1d03 ')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+
+    outputs:
+      expected_sha: ${{ steps.authorize.outputs.expected_sha }}
+      canary: ${{ steps.authorize.outputs.canary }}
+      issue_number: ${{ steps.authorize.outputs.issue_number }}
+      comment_id: ${{ steps.authorize.outputs.comment_id }}
+      trigger_actor: ${{ steps.authorize.outputs.trigger_actor }}
+
+    steps:
+      - name: Checkout default-branch authorizer
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validate exact issue, owner, canary and SHA-bound command
+        id: authorize
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/github_p1d03_browser_sso_bridge.py
+
+  preflight:
+    name: Run GET-only P1D-03 preflight
+    needs: authorize
+    if: needs.authorize.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - name: Checkout exact authorized main source
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          ref: ${{ needs.authorize.outputs.expected_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Run exact P1D-03 GET-only canary
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          P1D03_EXPECTED_SHA: ${{ needs.authorize.outputs.expected_sha }}
+          P1D03_CANARY: ${{ needs.authorize.outputs.canary }}
+          CLOUDFLARE_P1D03_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_P1D03_ACCOUNT_ID }}
+          CLOUDFLARE_P1D03_READ_API_TOKEN: ${{ secrets.CLOUDFLARE_P1D03_READ_API_TOKEN }}
+          CLOUDFLARE_P1D03_OWNER_EMAIL: ${{ secrets.CLOUDFLARE_P1D03_OWNER_EMAIL }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          python3 scripts/cloudflare_owner_browser_sso_preflight_actions.py
