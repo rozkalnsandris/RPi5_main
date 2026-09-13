@@ -316,7 +316,7 @@ def _require_directory(path: Path, *, exact_mode: int | None = None) -> os.stat_
         raise WeatherOperatorUpgradeError(f"required directory is unavailable: {path}") from exc
     if not stat.S_ISDIR(meta.st_mode) or stat.S_ISLNK(meta.st_mode):
         _fail(f"required path is not a real directory: {path}")
-    if meta.st_uid != ROOT_UID or meta.st_gid != ROOT_GID or stat.S_IMODE(meta.st_mode) != 0o755):
+    if meta.st_uid != ROOT_UID or meta.st_gid != ROOT_GID:
         _fail(f"required directory owner/group drifted: {path}")
     mode = stat.S_IMODE(meta.st_mode)
     if exact_mode is not None:
@@ -349,4 +349,341 @@ def _read_regular_exact(path: Path, *, mode: int, sha256: str) -> bytes:
         raise WeatherOperatorUpgradeError(f"installed operator artifact cannot be opened safely: {path}") from exc
     try:
         opened = os.fstat(fd)
-        if (opened.st_dev, opened.st_ino, opened.st_size) != (before.st_dev, before.st_ino,
+        if (opened.st_dev, opened.st_ino, opened.st_size) != (before.st_dev, before.st_ino, before.st_size):
+            _fail(f"installed operator artifact changed before read: {path}")
+        chunks: list[bytes] = []
+        remaining = opened.st_size
+        while remaining:
+            chunk = os.read(fd, min(131072, remaining))
+            if not chunk:
+                _fail(f"installed operator artifact short read: {path}")
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        if os.read(fd, 1):
+            _fail(f"installed operator artifact grew during read: {path}")
+        after = os.fstat(fd)
+        if (
+            after.st_dev,
+            after.st_ino,
+            after.st_size,
+            after.st_mtime_ns,
+            after.st_ctime_ns,
+        ) != (
+            opened.st_dev,
+            opened.st_ino,
+            opened.st_size,
+            opened.st_mtime_ns,
+            opened.st_ctime_ns,
+        ):
+            _fail(f"installed operator artifact changed during read: {path}")
+        data = b"".join(chunks)
+    finally:
+        os.close(fd)
+    now = path.lstat()
+    if (now.st_dev, now.st_ino) != (before.st_dev, before.st_ino):
+        _fail(f"installed operator artifact path changed during read: {path}")
+    if hashlib.sha256(data).hexdigest() != sha256:
+        _fail(f"installed operator artifact content drifted: {path}")
+    return data
+
+
+def _actual_artifact_path(destination: str) -> Path:
+    canonical = Path(destination)
+    if canonical == CANONICAL_ENTRYPOINT:
+        return ENTRYPOINT
+    try:
+        relative = canonical.relative_to(CANONICAL_SUPPORT_ROOT)
+    except ValueError as exc:
+        raise WeatherOperatorUpgradeError("operator artifact escaped the fixed support root") from exc
+    return SUPPORT_ROOT / relative
+
+
+def _validate_runtime_pycache(cache: Path, package_sources: set[str]) -> None:
+    _require_directory(cache, exact_mode=0o755)
+    for child in cache.iterdir():
+        meta = child.lstat()
+        match = re.fullmatch(
+            r"(?P<stem>[A-Za-z0-9_]+)\.cpython-[0-9]+(?:\.opt-[0-9]+)?\.pyc",
+            child.name,
+        )
+        if (
+            match is None
+            or not stat.S_ISREG(meta.st_mode)
+            or stat.S_ISLNK(meta.st_mode)
+            or meta.st_nlink != 1
+            or meta.st_uid != ROOT_UID
+            or meta.st_gid != ROOT_GID
+            or stat.S_IMODE(meta.st_mode) != 0o644
+            or meta.st_size > MAX_ARTIFACT_BYTES
+            or f"{match.group('stem')}.py" not in package_sources
+        ):
+            _fail("operator deploy_executor __pycache__ entry drifted")
+
+
+def _observed_support_membership() -> set[str]:
+    observed: set[str] = set()
+    runtime_cache: Path | None = None
+    for item in SUPPORT_ROOT.iterdir():
+        if item.name == "deploy_executor":
+            _require_directory(item, exact_mode=0o755)
+            package_sources: set[str] = set()
+            for child in item.iterdir():
+                if child.name == "__pycache__":
+                    if runtime_cache is not None:
+                        _fail("operator deploy_executor runtime cache identity is ambiguous")
+                    runtime_cache = child
+                    continue
+                meta = child.lstat()
+                if not stat.S_ISREG(meta.st_mode) or stat.S_ISLNK(meta.st_mode) or meta.st_nlink != 1:
+                    _fail("operator deploy_executor package contains a non-regular entry")
+                package_sources.add(child.name)
+                observed.add(f"deploy_executor/{child.name}")
+            if runtime_cache is not None:
+                _validate_runtime_pycache(runtime_cache, package_sources)
+            continue
+        meta = item.lstat()
+        if not stat.S_ISREG(meta.st_mode) or stat.S_ISLNK(meta.st_mode) or meta.st_nlink != 1:
+            _fail("operator support root contains an unexpected non-regular entry")
+        observed.add(item.name)
+    return observed
+
+
+def _validate_installed_closure(
+    checkout: Path,
+    artifacts: tuple[tuple[str, str, int], ...],
+) -> None:
+    _require_directory(SUPPORT_ROOT.parent)
+    _require_directory(ENTRYPOINT.parent)
+    _require_directory(SUPPORT_ROOT, exact_mode=0o755)
+    _require_directory(PACKAGE_ROOT, exact_mode=0o755)
+    expected_membership: set[str] = set()
+    current_hashes: dict[str, str] = {}
+    for source, destination, mode in artifacts:
+        _data, digest = _read_bound_source(checkout, source)
+        current_hashes[source] = digest
+        actual = _actual_artifact_path(destination)
+        if actual != ENTRYPOINT:
+            expected_membership.add(actual.relative_to(SUPPORT_ROOT).as_posix())
+        expected = TARGET_OLD_SHA256 if source == TARGET_SOURCE else digest
+        _read_regular_exact(actual, mode=mode, sha256=expected)
+    if _observed_support_membership() != expected_membership:
+        _fail("installed operator support tree membership drifted")
+    if current_hashes[TARGET_SOURCE] != TARGET_NEW_SHA256:
+        _fail("current operator entrypoint source hash drifted")
+
+
+def _open_target_parent_fd() -> int:
+    _require_directory(ENTRYPOINT.parent)
+    flags = os.O_RDONLY | os.O_CLOEXEC | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(ENTRYPOINT.parent, flags)
+    except OSError as exc:
+        raise WeatherOperatorUpgradeError("unable to open fixed operator entrypoint directory") from exc
+    opened = os.fstat(fd)
+    if (
+        not stat.S_ISDIR(opened.st_mode)
+        or opened.st_uid != ROOT_UID
+        or opened.st_gid != ROOT_GID
+        or stat.S_IMODE(opened.st_mode) & 0o022
+    ):
+        os.close(fd)
+        _fail("opened operator entrypoint directory metadata drifted")
+    return fd
+
+
+def _require_temp_absent(parent_fd: int) -> None:
+    try:
+        os.stat(TEMP_NAME, dir_fd=parent_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    _fail("fixed operator upgrade temporary target already exists")
+
+
+def _open_target_fd(parent_fd: int) -> int:
+    flags = os.O_RDONLY | os.O_CLOEXEC | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        return os.open(TARGET_FILENAME, flags, dir_fd=parent_fd)
+    except OSError as exc:
+        raise WeatherOperatorUpgradeError("unable to open fixed installed operator entrypoint") from exc
+
+
+def _read_fd_all(fd: int) -> bytes:
+    opened = os.fstat(fd)
+    if opened.st_size > MAX_ARTIFACT_BYTES:
+        _fail("operator entrypoint exceeds reviewed size bound")
+    chunks: list[bytes] = []
+    os.lseek(fd, 0, os.SEEK_SET)
+    remaining = opened.st_size
+    while remaining:
+        chunk = os.read(fd, min(131072, remaining))
+        if not chunk:
+            _fail("operator entrypoint short read")
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    if os.read(fd, 1):
+        _fail("operator entrypoint grew during read")
+    return b"".join(chunks)
+
+
+def _require_old_target(parent_fd: int, fd: int) -> os.stat_result:
+    opened = os.fstat(fd)
+    if (
+        not stat.S_ISREG(opened.st_mode)
+        or opened.st_nlink != 1
+        or opened.st_uid != ROOT_UID
+        or opened.st_gid != ROOT_GID
+        or stat.S_IMODE(opened.st_mode) != 0o755
+    ):
+        _fail("installed operator entrypoint metadata drifted")
+    if hashlib.sha256(_read_fd_all(fd)).hexdigest() != TARGET_OLD_SHA256:
+        _fail("installed operator entrypoint is not the reviewed predecessor")
+    current = os.stat(TARGET_FILENAME, dir_fd=parent_fd, follow_symlinks=False)
+    if not stat.S_ISREG(current.st_mode) or stat.S_ISLNK(current.st_mode):
+        _fail("installed operator entrypoint path is no longer a regular file")
+    if (current.st_dev, current.st_ino) != (opened.st_dev, opened.st_ino):
+        _fail("installed operator entrypoint path changed during validation")
+    return opened
+
+
+def _write_all(fd: int, data: bytes) -> None:
+    view = memoryview(data)
+    offset = 0
+    while offset < len(view):
+        count = os.write(fd, view[offset:])
+        if count <= 0:
+            _fail("short write while preparing operator entrypoint replacement")
+        offset += count
+
+
+def _replace_exact_target(reviewed: bytes, state: dict[str, bool]) -> None:
+    parent_fd = _open_target_parent_fd()
+    target_fd = -1
+    temp_fd = -1
+    try:
+        target_fd = _open_target_fd(parent_fd)
+        opened = _require_old_target(parent_fd, target_fd)
+        _require_temp_absent(parent_fd)
+        flags = os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC | getattr(os, "O_NOFOLLOW", 0)
+        state["mutation_started"] = True
+        try:
+            temp_fd = os.open(TEMP_NAME, flags, 0o600, dir_fd=parent_fd)
+        except OSError as exc:
+            raise WeatherOperatorUpgradeError("unable to create fixed operator replacement target") from exc
+        temp_meta = os.fstat(temp_fd)
+        if not stat.S_ISREG(temp_meta.st_mode) or temp_meta.st_nlink != 1:
+            _fail("created operator replacement target is not a single-link regular file")
+        _write_all(temp_fd, reviewed)
+        if (temp_meta.st_uid, temp_meta.st_gid) != (ROOT_UID, ROOT_GID):
+            os.fchown(temp_fd, ROOT_UID, ROOT_GID)
+        os.fchmod(temp_fd, 0o755)
+        os.fsync(temp_fd)
+        prepared = os.fstat(temp_fd)
+        if (
+            prepared.st_uid != ROOT_UID
+            or prepared.st_gid != ROOT_GID
+            or stat.S_IMODE(prepared.st_mode) != 0o755
+            or hashlib.sha256(_read_fd_all(temp_fd)).hexdigest() != TARGET_NEW_SHA256
+        ):
+            _fail("prepared operator entrypoint replacement verification failed")
+        current = _require_old_target(parent_fd, target_fd)
+        if (current.st_dev, current.st_ino) != (opened.st_dev, opened.st_ino):
+            _fail("installed operator entrypoint inode changed before replacement")
+        os.replace(TEMP_NAME, TARGET_FILENAME, src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
+        state["target_replaced"] = True
+        os.fsync(parent_fd)
+        verified_fd = _open_target_fd(parent_fd)
+        try:
+            verified = os.fstat(verified_fd)
+            if (
+                not stat.S_ISREG(verified.st_mode)
+                or verified.st_nlink != 1
+                or verified.st_uid != ROOT_UID
+                or verified.st_gid != ROOT_GID
+                or stat.S_IMODE(verified.st_mode) != 0o755
+                or hashlib.sha256(_read_fd_all(verified_fd)).hexdigest() != TARGET_NEW_SHA256
+            ):
+                _fail("post-replace operator entrypoint verification failed")
+        finally:
+            os.close(verified_fd)
+    finally:
+        if temp_fd >= 0:
+            os.close(temp_fd)
+        if target_fd >= 0:
+            os.close(target_fd)
+        os.close(parent_fd)
+
+
+def _derive_checkout() -> Path:
+    checkout = Path(__file__).resolve().parents[3]
+    expected = checkout / UPGRADE_MODULE_RELATIVE
+    if checkout.name != TRUSTED_CHECKOUT_NAME or Path(__file__).resolve() != expected.resolve():
+        _fail("Weather operator upgrade module is not in the fixed trusted upgrade checkout")
+    return checkout
+
+
+def _preflight(checkout: Path) -> tuple[str, bytes]:
+    source_sha = _validate_trusted_checkout(checkout)
+    _validate_upgrade_contract(_load_upgrade_contract(checkout))
+    artifacts = _install_artifacts(checkout)
+    reviewed = _source_diff_guard(checkout, source_sha, artifacts)
+    if os.geteuid() != 0:
+        _fail("Weather operator compatibility upgrade must run as root")
+    _validate_installed_closure(checkout, artifacts)
+    parent_fd = _open_target_parent_fd()
+    try:
+        _require_temp_absent(parent_fd)
+    finally:
+        os.close(parent_fd)
+    return source_sha, reviewed
+
+
+def _receipt(
+    *,
+    result: str,
+    source_sha: str | None,
+    state: dict[str, bool],
+    reason: str | None = None,
+) -> dict[str, Any]:
+    value: dict[str, Any] = {
+        "schema": "rozkalns-weather.public-runtime-operator-upgrade-v5-receipt.v1",
+        "result": result,
+        "source_sha": source_sha,
+        "predecessor_sha": PREDECESSOR_SHA,
+        "old_sha256": TARGET_OLD_SHA256,
+        "new_sha256": TARGET_NEW_SHA256,
+        "mutation_started": state["mutation_started"],
+        "target_replaced": state["target_replaced"],
+        "mutation_target_count": 1,
+        "operator_invoked": False,
+        "helper_invoked": False,
+        "docker_mutation": False,
+        "systemd_mutation": False,
+        "sqlite_or_corpus_mutation": False,
+        "network_or_secret_mutation": False,
+        "automatic_retry": False,
+        "automatic_cleanup": False,
+        "automatic_rollback": False,
+    }
+    if reason is not None:
+        value["reason"] = reason
+    return value
+
+
+def execute_upgrade() -> dict[str, Any]:
+    state = {"mutation_started": False, "target_replaced": False}
+    source_sha: str | None = None
+    try:
+        checkout = _derive_checkout()
+        source_sha, reviewed = _preflight(checkout)
+        source_sha_again, reviewed_again = _preflight(checkout)
+        if source_sha_again != source_sha or reviewed_again != reviewed:
+            _fail("operator upgrade preflight drifted before mutation")
+        _replace_exact_target(reviewed, state)
+    except (WeatherOperatorUpgradeError, install.WeatherOperatorInstallError, OSError) as exc:
+        return _receipt(
+            result="FAIL_CLOSED",
+            source_sha=source_sha,
+            state=state,
+            reason=str(exc),
+        )
+    return _receipt(result="PASS", source_sha=source_sha, state=state)
