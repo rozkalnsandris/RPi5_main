@@ -113,7 +113,7 @@ class ControlPhase5ObservationTransportTests(unittest.TestCase):
     def test_control_transport_provenance_is_exact_and_current(self):
         self.assertEqual(
             transport.CONTROL_TRANSPORT_MAIN_SHA,
-            "1da96b628054a32c79cc6e2f201f5a4a5036c12c",
+            "42d2087fc42079cdcfb4a2a1ecbc255f0284080e",
         )
         self.assertEqual(
             transport.CONTROL_TRANSPORT_BLOB_SHA,

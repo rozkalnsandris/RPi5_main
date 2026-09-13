@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Mapping
 
 CONTROL_TRANSPORT_REPOSITORY = "rozkalnsandris/rozkalns-control-center"
-CONTROL_TRANSPORT_MAIN_SHA = "1da96b628054a32c79cc6e2f201f5a4a5036c12c"
+CONTROL_TRANSPORT_MAIN_SHA = "42d2087fc42079cdcfb4a2a1ecbc255f0284080e"
 CONTROL_TRANSPORT_PATH = "src/shared/rpi5-observation-transport.ts"
 CONTROL_TRANSPORT_BLOB_SHA = "cae7864f9a1053b5141353ac192c9c2d512f955a"
 CONTROL_TRANSPORT_CONTRACT_MODE = "SOURCE_ONLY_NO_RUNTIME_TRANSPORT_AUTHORITY"
