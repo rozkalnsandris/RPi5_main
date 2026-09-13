@@ -45,7 +45,26 @@ class CloudflareOwnerBrowserSSOPreflightTests(unittest.TestCase):
         self.assertEqual(report["dashboard"]["application_session_duration"], "24h")
         self.assertEqual(report["dashboard"]["policy_session_durations"], ["24h"])
         self.assertTrue(report["global_session"]["change_required"])
+        self.assertEqual(report["global_session"]["current_duration_source"], "api_explicit")
         self.assertEqual(report["remaining_gates"], ["p1d-04-global-browser-sso-session"])
+
+    def test_omitted_global_session_uses_documented_24h_default(self) -> None:
+        state = base_state()
+        del state["organization"]["session_duration"]
+        report = preflight.build_report(OWNER, state)
+        self.assertEqual(report["result"], "PASS")
+        self.assertEqual(report["global_session"]["current_duration"], "24h")
+        self.assertEqual(report["global_session"]["current_duration_source"], "cloudflare_documented_default")
+        self.assertTrue(report["global_session"]["change_required"])
+        self.assertEqual(report["remaining_gates"], ["p1d-04-global-browser-sso-session"])
+
+    def test_present_but_invalid_global_session_blocks(self) -> None:
+        state = base_state()
+        state["organization"]["session_duration"] = None
+        report = preflight.build_report(OWNER, state)
+        self.assertEqual(report["result"], "BLOCKED")
+        self.assertIn("global_session_duration_invalid", report["blockers"])
+        self.assertEqual(report["global_session"]["current_duration_source"], "api_invalid")
 
     def test_already_720h_routes_directly_to_browser_canary(self) -> None:
         state = base_state()
