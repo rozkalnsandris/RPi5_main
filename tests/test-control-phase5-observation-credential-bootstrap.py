@@ -11,6 +11,7 @@ import sys
 import tempfile
 import textwrap
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "ops/lib/deploy_executor/control_phase5_observation_credential_bootstrap.py"
@@ -119,6 +120,40 @@ class ControlPhase5ObservationCredentialBootstrapTests(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, 2)
                 self.assertIn(b"unrecognized arguments", result.stderr)
+
+    def test_git_trust_is_exact_command_scoped_without_env_widening(self):
+        repo = Path("/tmp/phase5-exact-trusted-root")
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=b"ok\n",
+            stderr=b"",
+        )
+        state = bootstrap._OperationState()
+        with mock.patch.object(
+            bootstrap.subprocess,
+            "run",
+            return_value=completed,
+        ) as run_process:
+            stdout = bootstrap._run_git(repo, ["rev-parse", "HEAD"], state)
+
+        self.assertEqual(stdout, b"ok\n")
+        argv = run_process.call_args.args[0]
+        self.assertEqual(
+            argv[:5],
+            [
+                bootstrap.GIT_BINARY,
+                "-c",
+                f"safe.directory={repo}",
+                "-C",
+                str(repo),
+            ],
+        )
+        self.assertNotIn("safe.directory=*", argv)
+        self.assertNotIn("--global", argv)
+        self.assertNotIn("--system", argv)
+        self.assertEqual(run_process.call_args.kwargs["env"], {"LC_ALL": "C"})
+        self.assertNotIn("SUDO_UID", run_process.call_args.kwargs["env"])
 
     def test_preflight_is_non_mutating_and_public_safe(self):
         with tempfile.TemporaryDirectory() as raw:
