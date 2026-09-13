@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "source-decision-complete-plan-only",
+  "status": "p1d04-source-writer-defined-plan-only",
   "canonical_issue": 179,
   "decision_date": "2026-09-13",
   "mutation_authorized": false,
@@ -74,6 +74,53 @@
     },
     "exact_main_push_ci_must_be_positively_green_before_live_execution": true
   },
+  "organization_session_writer": {
+    "operator": "ops/bin/cloudflare-owner-browser-sso-session-update",
+    "canary_id": "p1d-04-global-browser-sso-session",
+    "api_method": "PUT",
+    "api_surface": "/accounts/{account_id}/access/organizations",
+    "target_session_duration": "720h",
+    "writable_projection_fields": [
+      "allow_authenticate_via_warp",
+      "auth_domain",
+      "auto_redirect_to_identity",
+      "custom_pages",
+      "deny_unmatched_requests",
+      "deny_unmatched_requests_exempted_zone_names",
+      "is_ui_read_only",
+      "login_design",
+      "mfa_config",
+      "mfa_piv_key_requirements",
+      "mfa_required_for_all_apps",
+      "name",
+      "session_duration",
+      "ui_read_only_toggle_reason",
+      "user_seat_expiration_inactive_time",
+      "warp_auth_non_browser_401",
+      "warp_auth_session_duration"
+    ],
+    "response_only_fields": [
+      "created_at",
+      "updated_at",
+      "cache_device_posture",
+      "has_migrated_private_apps",
+      "trusted_accounts"
+    ],
+    "response_only_fields_never_in_payload": true,
+    "unknown_top_level_response_field": "BLOCKED",
+    "allowed_semantic_diff": [
+      "session_duration-to-720h"
+    ],
+    "automatic_retry": false,
+    "automatic_rollback": false,
+    "private_full_organization_preimage_required": true,
+    "post_write_proof": [
+      "fresh-organization-get",
+      "session_duration-is-explicit-720h",
+      "writable-projection-equals-intended-payload",
+      "response-only-field-binding-unchanged"
+    ]
+  },
   "future_canaries": [
     {
       "id": "p1d-03-browser-sso-preflight",
@@ -84,6 +131,7 @@
       "id": "p1d-04-global-browser-sso-session",
       "kind": "organization-session-write",
       "authorized": false,
+      "operator": "ops/bin/cloudflare-owner-browser-sso-session-update",
       "condition": "fresh-preflight-proves-global-session-duration-is-not-720h",
       "target": "zero-trust-organization-session-duration",
       "allowed_diff": [
@@ -137,13 +185,15 @@
     "fresh_get_before_organization_session_write": true,
     "fresh_get_after_organization_session_write": true,
     "private_full_organization_preimage_required_before_write": true,
-    "predeclared_exact-preimage-rollback-required": true,
+    "predeclared_rollback_required_before_live": true,
+    "automatic_rollback_authorized_by_source": false,
     "stop_on_unexpected_diff": true
   },
   "source_references": [
     "https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/",
     "https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/",
     "https://developers.cloudflare.com/cloudflare-one/access-controls/policies/",
-    "https://developers.cloudflare.com/api/resources/zero_trust/subresources/organizations/"
+    "https://developers.cloudflare.com/api/resources/zero_trust/subresources/organizations/",
+    "https://developers.cloudflare.com/api/resources/zero_trust/subresources/organizations/methods/update/"
   ]
 }
