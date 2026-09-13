@@ -169,7 +169,14 @@ def _validate_platform_capabilities(state: _OperationState) -> None:
 
 def _run_git(repo_root: Path, args: list[str], state: _OperationState) -> bytes:
     result = _run_command(
-        [GIT_BINARY, "-C", str(repo_root), *args],
+        [
+            GIT_BINARY,
+            "-c",
+            f"safe.directory={repo_root}",
+            "-C",
+            str(repo_root),
+            *args,
+        ],
         state=state,
     )
     if result.returncode != 0:
