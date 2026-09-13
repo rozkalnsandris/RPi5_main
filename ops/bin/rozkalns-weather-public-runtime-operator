@@ -66,7 +66,8 @@ def _classify_consumed_jit_failure(exc: BaseException) -> str:
 
 
 def _record_consumed_jit_failure(exc: BaseException) -> None:
-    _set_consumed_jit_failure(_classify_consumed_jit_failure(exc))
+    if _LAST_CONSUMED_JIT_FAILURE_CODE is None:
+        _set_consumed_jit_failure(_classify_consumed_jit_failure(exc))
 
 
 def _stop(
@@ -195,7 +196,7 @@ def _install_runtime_jit_hardening() -> None:
             for attempt in range(_PUBLIC_SOURCE_MAX_ATTEMPTS):
                 try:
                     return super().get_json(path_or_url)
-                except NetworkFailure as exc:
+                except NetworkFailure:
                     if attempt + 1 >= _PUBLIC_SOURCE_MAX_ATTEMPTS:
                         if in_consumed_revalidation():
                             _set_consumed_jit_failure('public_source_network')
