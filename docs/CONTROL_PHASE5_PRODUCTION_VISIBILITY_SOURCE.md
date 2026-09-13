@@ -1,6 +1,6 @@
 # Control Phase 5 RPi5 production visibility source contract
 
-This source-only contract is bound to the reviewed Control consumer at `rozkalnsandris/rozkalns-control-center@1da96b628054a32c79cc6e2f201f5a4a5036c12c`, path `src/shared/production-visibility.ts`, blob `5546c0fb37072c5903d6e7c6aa02a9eea7baf43d`.
+This source-only contract is bound to the reviewed Control consumer at `rozkalnsandris/rozkalns-control-center@42d2087fc42079cdcfb4a2a1ecbc255f0284080e`, path `src/shared/production-visibility.ts`, blob `5546c0fb37072c5903d6e7c6aa02a9eea7baf43d`.
 
 `ops/lib/deploy_executor/control_phase5_production_visibility.py` emits only the consumer's ten sanitized fields, rejects extra/missing fields, requires an exact expected project/repository/main SHA, applies the same 5-minute freshness window and contradiction/blocker rules, and fails closed on consumer-provenance drift.
 
