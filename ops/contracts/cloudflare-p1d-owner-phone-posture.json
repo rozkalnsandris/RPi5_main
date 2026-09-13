@@ -5,6 +5,8 @@
   "decision_date": "2026-08-19",
   "last_revalidated": "2026-08-23",
   "mutation_authorized": false,
+  "selected_for_current_owner_phone_access": false,
+  "superseded_by": "ops/contracts/cloudflare-p1d-browser-sso.json",
   "supersedes_for_p1d_only": "docs/CLOUDFLARE_P1_EXACT_WRITE_PLAN.md#9-p1d-owner-phone-posture--intentionally-blocked-pending-source-decision",
   "design_documents": [
     "docs/CLOUDFLARE_P1D_OWNER_PHONE_POSTURE_DECISION.md",

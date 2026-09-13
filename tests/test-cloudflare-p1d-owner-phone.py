@@ -47,16 +47,29 @@ class CloudflareP1DOwnerPhoneTests(unittest.TestCase):
         self.assertIn("consumer WARP", self.decision)
         self.assertIn("reusable Gateway posture", self.owner)
 
-    def test_registry_matches_p1d_decision(self) -> None:
+    def test_registry_selects_browser_sso_while_gateway_contract_is_historical(self) -> None:
         self.assertRegex(
             self.registry,
-            r"(?m)^\s*owner_phone_initial_posture:\s*require_gateway\s*$",
+            r"(?m)^\s*owner_phone_identity_model:\s*access_browser_sso\s*$",
         )
-        self.assertNotRegex(
+        self.assertRegex(
             self.registry,
-            r"(?m)^\s*owner_phone_initial_posture:\s*require_warp\s*$",
+            r"(?m)^\s*owner_phone_initial_posture:\s*none\s*$",
         )
-        self.assertRegex(self.registry, r"(?m)^last_reviewed:\s*2026-08-19\s*$")
+        self.assertRegex(
+            self.registry,
+            r"(?m)^\s*owner_phone_global_session_target:\s*720h\s*$",
+        )
+        self.assertRegex(
+            self.registry,
+            r"(?m)^\s*owner_phone_posture_required:\s*false\s*$",
+        )
+        self.assertRegex(self.registry, r"(?m)^last_reviewed:\s*2026-09-13\s*$")
+        self.assertFalse(self.contract["selected_for_current_owner_phone_access"])
+        self.assertEqual(
+            self.contract["superseded_by"],
+            "ops/contracts/cloudflare-p1d-browser-sso.json",
+        )
 
     def test_policy_shape_keeps_identity_and_gateway_conjunctive(self) -> None:
         shape = self.contract["policy_shape"]
