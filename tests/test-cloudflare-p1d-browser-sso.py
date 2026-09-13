@@ -11,6 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import cloudflare_owner_browser_sso_session_update as session_update  # noqa: E402
+import github_p1d04_browser_sso_bridge as p1d04_bridge  # noqa: E402
+import github_p1d04_exact_main_gate as p1d04_gate  # noqa: E402
 
 CONTRACT = ROOT / "ops/contracts/cloudflare-p1d-browser-sso.json"
 REGISTRY = ROOT / "ops/contracts/cloudflare-hostname-policy.yaml"
@@ -20,6 +22,10 @@ OWNER_CONTRACT = ROOT / "docs/CLOUDFLARE_OWNER_PHONE_ACCESS_CONTRACT.md"
 OLD_POSTURE = ROOT / "ops/contracts/cloudflare-p1d-owner-phone-posture.json"
 SESSION_WRITER = ROOT / "scripts/cloudflare_owner_browser_sso_session_update.py"
 SESSION_WRAPPER = ROOT / "ops/bin/cloudflare-owner-browser-sso-session-update"
+DELIVERY_WORKFLOW = ROOT / ".github/workflows/cloudflare-p1d04-browser-sso-session.yml"
+ACTIONS_ADAPTER = ROOT / "scripts/cloudflare_owner_browser_sso_session_update_actions.py"
+AUTHORIZE_BRIDGE = ROOT / "scripts/github_p1d04_browser_sso_bridge.py"
+EXACT_MAIN_GATE = ROOT / "scripts/github_p1d04_exact_main_gate.py"
 
 
 class CloudflareP1DBrowserSSOTests(unittest.TestCase):
@@ -81,6 +87,10 @@ class CloudflareP1DBrowserSSOTests(unittest.TestCase):
         write = canaries[1]
         self.assertEqual(write["allowed_diff"], ["organization-session_duration-to-720h"])
         self.assertEqual(write["operator"], "ops/bin/cloudflare-owner-browser-sso-session-update")
+        self.assertEqual(
+            write["delivery_workflow"],
+            ".github/workflows/cloudflare-p1d04-browser-sso-session.yml",
+        )
         self.assertIn("access-policy-change", write["forbidden_diff"])
         self.assertIn("device-posture-change", write["forbidden_diff"])
         self.assertTrue(canaries[3]["separate_live_authorization_required"])
@@ -108,6 +118,170 @@ class CloudflareP1DBrowserSSOTests(unittest.TestCase):
             self.assertIn(key, writer["response_only_fields"])
             self.assertNotIn(key, writer["writable_projection_fields"])
         self.assertFalse(self.contract["authorization_contract"]["source_merge_authorizes_live"])
+
+    def test_p1d04_github_delivery_contract_is_narrow_and_non_authorizing(self) -> None:
+        delivery = self.contract["github_delivery"]
+        self.assertEqual(
+            delivery["workflow"],
+            ".github/workflows/cloudflare-p1d04-browser-sso-session.yml",
+        )
+        self.assertEqual(delivery["trigger"], "issue-comment-created")
+        self.assertEqual(delivery["trigger_issue"], 179)
+        self.assertIn(session_update.CANARY_ID, delivery["command_contract"])
+        self.assertTrue(delivery["exact_sha_bound"])
+        self.assertFalse(delivery["workflow_rerun_allowed"])
+        self.assertFalse(delivery["concurrency_cancel_in_progress"])
+        self.assertFalse(delivery["checkout_persist_credentials"])
+        self.assertEqual(delivery["github_write_permissions"], [])
+        self.assertEqual(
+            set(delivery["required_exact_main_push_workflows"]),
+            {"Validate", "FAST-LANE policy drift", "GITHUB-ONLY policy drift"},
+        )
+        self.assertEqual(
+            delivery["cloudflare_secret_inputs"],
+            [
+                "CLOUDFLARE_P1D04_ACCOUNT_ID",
+                "CLOUDFLARE_P1D04_READ_API_TOKEN",
+                "CLOUDFLARE_P1D04_WRITE_API_TOKEN",
+            ],
+        )
+        self.assertFalse(delivery["secret_provisioning_authorized_by_source"])
+        self.assertFalse(delivery["cloudflare_api_base_override_allowed"])
+        self.assertTrue(delivery["read_write_tokens_must_differ"])
+        self.assertEqual(delivery["maximum_forward_put_requests"], 1)
+        self.assertFalse(delivery["automatic_retry"])
+        self.assertFalse(delivery["automatic_rollback"])
+        self.assertFalse(delivery["automatic_github_result_comment"])
+        self.assertFalse(delivery["source_merge_authorizes_workflow_execution"])
+        self.assertTrue(delivery["fresh_separate_live_authorization_required"])
+
+    def test_p1d04_owner_comment_authorizer_binds_owner_issue_canary_and_sha(self) -> None:
+        sha = "a" * 40
+        event = {
+            "action": "created",
+            "issue": {"number": 179},
+            "comment": {
+                "id": 12345,
+                "body": f"/rpi5-p1d04 apply HEAD={sha} CANARY={p1d04_bridge.CANARY_ID}",
+                "author_association": "OWNER",
+                "performed_via_github_app": None,
+                "user": {
+                    "login": "rozkalnsandris",
+                    "id": 277435981,
+                    "type": "User",
+                },
+            },
+            "sender": {
+                "login": "rozkalnsandris",
+                "id": 277435981,
+                "type": "User",
+            },
+        }
+        result = p1d04_bridge.authorize_event(
+            event,
+            repository="rozkalnsandris/RPi5_main",
+            github_sha=sha,
+            run_attempt="1",
+        )
+        self.assertEqual(result["expected_sha"], sha)
+        self.assertEqual(result["canary"], p1d04_bridge.CANARY_ID)
+
+        with self.assertRaisesRegex(p1d04_bridge.AuthorizationError, "workflow_rerun_forbidden"):
+            p1d04_bridge.authorize_event(
+                event,
+                repository="rozkalnsandris/RPi5_main",
+                github_sha=sha,
+                run_attempt="2",
+            )
+
+        app_event = json.loads(json.dumps(event))
+        app_event["comment"]["performed_via_github_app"] = {"id": 1}
+        with self.assertRaisesRegex(p1d04_bridge.AuthorizationError, "app_authored_comment_forbidden"):
+            p1d04_bridge.authorize_event(
+                app_event,
+                repository="rozkalnsandris/RPi5_main",
+                github_sha=sha,
+                run_attempt="1",
+            )
+
+        issue_event = json.loads(json.dumps(event))
+        issue_event["issue"]["number"] = 180
+        with self.assertRaisesRegex(p1d04_bridge.AuthorizationError, "issue_mismatch"):
+            p1d04_bridge.authorize_event(
+                issue_event,
+                repository="rozkalnsandris/RPi5_main",
+                github_sha=sha,
+                run_attempt="1",
+            )
+
+        drift_event = json.loads(json.dumps(event))
+        drift_event["comment"]["body"] = (
+            f"/rpi5-p1d04 apply HEAD={'b' * 40} CANARY={p1d04_bridge.CANARY_ID}"
+        )
+        with self.assertRaisesRegex(p1d04_bridge.AuthorizationError, "command_sha_not_event_main"):
+            p1d04_bridge.authorize_event(
+                drift_event,
+                repository="rozkalnsandris/RPi5_main",
+                github_sha=sha,
+                run_attempt="1",
+            )
+
+    def test_p1d04_exact_main_gate_requires_current_sha_and_green_push_workflows(self) -> None:
+        sha = "b" * 40
+        branch = {"name": "main", "commit": {"sha": sha}}
+        runs = {
+            "workflow_runs": [
+                {
+                    "id": index,
+                    "name": name,
+                    "head_sha": sha,
+                    "head_branch": "main",
+                    "event": "push",
+                    "status": "completed",
+                    "conclusion": "success",
+                }
+                for index, name in enumerate(p1d04_gate.REQUIRED_WORKFLOWS, start=1)
+            ]
+        }
+        result = p1d04_gate.validate_gate_payloads(
+            branch,
+            runs,
+            expected_sha=sha,
+            github_sha=sha,
+            run_attempt="1",
+        )
+        self.assertTrue(result["all_required_workflows_green"])
+        self.assertEqual(set(result["required_workflows"]), set(p1d04_gate.REQUIRED_WORKFLOWS))
+
+        failed_runs = json.loads(json.dumps(runs))
+        failed_runs["workflow_runs"][0]["conclusion"] = "failure"
+        with self.assertRaisesRegex(p1d04_gate.GateError, "required_exact_main_workflow_not_green"):
+            p1d04_gate.validate_gate_payloads(
+                branch,
+                failed_runs,
+                expected_sha=sha,
+                github_sha=sha,
+                run_attempt="1",
+            )
+
+        drifted_branch = {"name": "main", "commit": {"sha": "c" * 40}}
+        with self.assertRaisesRegex(p1d04_gate.GateError, "current_main_drifted"):
+            p1d04_gate.validate_gate_payloads(
+                drifted_branch,
+                runs,
+                expected_sha=sha,
+                github_sha=sha,
+                run_attempt="1",
+            )
+
+        with self.assertRaisesRegex(p1d04_gate.GateError, "workflow_rerun_forbidden"):
+            p1d04_gate.validate_gate_payloads(
+                branch,
+                runs,
+                expected_sha=sha,
+                github_sha=sha,
+                run_attempt="2",
+            )
 
     def test_p1d04_projection_changes_only_session_duration(self) -> None:
         before = {
@@ -169,12 +343,41 @@ class CloudflareP1DBrowserSSOTests(unittest.TestCase):
         self.assertIn("exact canary id", wrapper)
         self.assertIn("custom CLOUDFLARE_API_BASE forbidden", wrapper)
 
+    def test_p1d04_delivery_workflow_has_read_only_github_surface(self) -> None:
+        workflow = DELIVERY_WORKFLOW.read_text(encoding="utf-8")
+        adapter = ACTIONS_ADAPTER.read_text(encoding="utf-8")
+        bridge = AUTHORIZE_BRIDGE.read_text(encoding="utf-8")
+        gate = EXACT_MAIN_GATE.read_text(encoding="utf-8")
+
+        self.assertIn("issue_comment:", workflow)
+        self.assertNotIn("workflow_dispatch:", workflow)
+        for forbidden in ("issues: write", "contents: write", "actions: write", "upload-artifact"):
+            self.assertNotIn(forbidden, workflow)
+        self.assertGreaterEqual(workflow.count("persist-credentials: false"), 2)
+        self.assertIn("scripts/cloudflare_owner_browser_sso_session_update_actions.py", workflow)
+        for secret in (
+            "CLOUDFLARE_P1D04_ACCOUNT_ID",
+            "CLOUDFLARE_P1D04_READ_API_TOKEN",
+            "CLOUDFLARE_P1D04_WRITE_API_TOKEN",
+        ):
+            self.assertIn(secret, workflow)
+        self.assertIn("github_p1d04_exact_main_gate", adapter)
+        self.assertIn("execute_canary", adapter)
+        self.assertIn("custom_cloudflare_api_base_forbidden", adapter)
+        self.assertIn("workflow_rerun_forbidden", adapter)
+        self.assertIn("performed_via_github_app", bridge)
+        self.assertIn("workflow_rerun_forbidden", gate)
+        self.assertNotIn('method="POST"', adapter)
+        self.assertNotIn('method="PATCH"', adapter)
+        self.assertNotIn('method="DELETE"', adapter)
+
     def test_source_references_are_official_cloudflare_docs(self) -> None:
         for ref in self.contract["source_references"]:
             self.assertTrue(ref.startswith("https://developers.cloudflare.com/"))
         self.assertIn("global session token", self.decision.lower())
         self.assertIn("one month", self.decision.lower())
         self.assertIn("response/server-managed", self.decision.lower())
+        self.assertIn("no-rdc github delivery path", self.decision.lower())
 
     def test_public_source_contains_no_private_identity_or_secret(self) -> None:
         combined = "\n".join([
@@ -185,6 +388,15 @@ class CloudflareP1DBrowserSSOTests(unittest.TestCase):
         ])
         self.assertIsNone(re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", combined))
         self.assertNotIn("Authorization: Bearer", combined)
+
+        delivery_source = "\n".join([
+            DELIVERY_WORKFLOW.read_text(encoding="utf-8"),
+            ACTIONS_ADAPTER.read_text(encoding="utf-8"),
+            AUTHORIZE_BRIDGE.read_text(encoding="utf-8"),
+            EXACT_MAIN_GATE.read_text(encoding="utf-8"),
+        ])
+        self.assertIsNone(re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", delivery_source))
+        self.assertNotRegex(delivery_source, r"\b[A-Fa-f0-9]{32}\b")
 
 
 if __name__ == "__main__":
