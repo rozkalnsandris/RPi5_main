@@ -221,6 +221,70 @@ class WeatherOperatorEntrypointUpgradeV3Tests(unittest.TestCase):
             ):
                 yield artifacts, actual_paths, entrypoint, support
 
+    def add_valid_runtime_pycache(self, support: Path) -> Path:
+        package = support / "deploy_executor"
+        cache = package / "__pycache__"
+        cache.mkdir(mode=0o755)
+        cached = cache / "weather_public_runtime_operator.cpython-311.pyc"
+        cached.write_bytes(b"runtime cache fixture")
+        cached.chmod(0o644)
+        return cache
+
+    def test_runtime_pycache_is_allowed_but_not_canonical_membership(self) -> None:
+        with self.installed_fixture() as (artifacts, _actual_paths, _entrypoint, support):
+            self.add_valid_runtime_pycache(support)
+            upgrade._validate_installed_closure(ROOT, artifacts)
+            observed = upgrade._observed_support_membership()
+            self.assertFalse(any("__pycache__" in item for item in observed))
+
+    def test_runtime_pycache_rejects_unknown_or_unsafe_entries(self) -> None:
+        with self.installed_fixture() as (artifacts, _actual_paths, _entrypoint, support):
+            cache = self.add_valid_runtime_pycache(support)
+            unknown = cache / "unknown_module.cpython-311.pyc"
+            unknown.write_bytes(b"stale cache")
+            unknown.chmod(0o644)
+            with self.assertRaises(upgrade.WeatherOperatorUpgradeError):
+                upgrade._validate_installed_closure(ROOT, artifacts)
+
+        with self.installed_fixture() as (artifacts, _actual_paths, _entrypoint, support):
+            cache = self.add_valid_runtime_pycache(support)
+            nested = cache / "nested"
+            nested.mkdir(mode=0o755)
+            with self.assertRaises(upgrade.WeatherOperatorUpgradeError):
+                upgrade._validate_installed_closure(ROOT, artifacts)
+
+        with self.installed_fixture() as (artifacts, _actual_paths, _entrypoint, support):
+            cache = self.add_valid_runtime_pycache(support)
+            target = cache / "weather_public_runtime_operator.cpython-311.pyc"
+            link = cache / "weather_public_runtime_composite.cpython-311.pyc"
+            link.symlink_to(target.name)
+            with self.assertRaises(upgrade.WeatherOperatorUpgradeError):
+                upgrade._validate_installed_closure(ROOT, artifacts)
+
+        with self.installed_fixture() as (artifacts, _actual_paths, _entrypoint, support):
+            package = support / "deploy_executor"
+            target = package / "cache-target"
+            target.mkdir(mode=0o755)
+            (target / "weather_public_runtime_operator.cpython-311.pyc").write_bytes(b"cache")
+            (package / "__pycache__").symlink_to(target.name, target_is_directory=True)
+            with self.assertRaises(upgrade.WeatherOperatorUpgradeError):
+                upgrade._validate_installed_closure(ROOT, artifacts)
+
+        with self.installed_fixture() as (artifacts, _actual_paths, _entrypoint, support):
+            cache = self.add_valid_runtime_pycache(support)
+            source = cache / "weather_public_runtime_operator.cpython-311.pyc"
+            linked = cache / "weather_public_runtime_composite.cpython-311.pyc"
+            linked.hardlink_to(source)
+            with self.assertRaises(upgrade.WeatherOperatorUpgradeError):
+                upgrade._validate_installed_closure(ROOT, artifacts)
+
+    def test_unexpected_package_directory_still_fails_closed(self) -> None:
+        with self.installed_fixture() as (artifacts, _actual_paths, _entrypoint, support):
+            extra = support / "deploy_executor" / "unexpected"
+            extra.mkdir(mode=0o755)
+            with self.assertRaises(upgrade.WeatherOperatorUpgradeError):
+                upgrade._validate_installed_closure(ROOT, artifacts)
+
     def test_exact_predecessor_closure_passes_and_wrong_entrypoint_hash_fails(self) -> None:
         with self.installed_fixture() as (artifacts, _actual_paths, entrypoint, _support):
             upgrade._validate_installed_closure(ROOT, artifacts)
