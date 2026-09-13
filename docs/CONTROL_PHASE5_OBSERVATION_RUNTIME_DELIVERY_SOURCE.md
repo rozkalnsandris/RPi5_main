@@ -45,13 +45,16 @@ The public success receipt contains only public identities, project/source ident
 
 ## LIVE sequence remains separate
 
-After this source package is merged and exact-main CI is green, a future RPi5-owned operation must freshly revalidate current repository rules and exact identities. The intended sequence is:
+Issue #510 adds the preceding source-only credential bootstrap contract documented in `CONTROL_PHASE5_OBSERVATION_CREDENTIAL_BOOTSTRAP_SOURCE.md`. The ordered runtime sequence is now intentionally split across separate owner gates:
 
-1. obtain fresh Control GET-only post-activation evidence and a fresh `PHASE5_RPI5_SIGNER_HANDOFF_V1` manifest;
-2. run the source entrypoint in `--validate-only` mode against the exact sanitized observation input;
-3. STOP for one bounded Composite LIVE authorization that explicitly names the exact RPi5 SHA/target, protected credential/key prerequisite, one-shot delivery mutation class and exclusions;
-4. only through that reviewed envelope, satisfy any separately approved key/runtime prerequisite and execute one exact signed observation delivery;
-5. require the public-safe delivery receipt and then perform Control-side read-only reconciliation of the accepted observation/projection;
-6. on any error or ambiguity after the first authorized mutation, preserve sanitized evidence and STOP with no undeclared retry, rollback, cleanup or alternate path.
+1. merge the credential-bootstrap source and require exact-main CI;
+2. run fresh RPi5 read-only/preflight evidence for the exact merged source SHA;
+3. under a separate RPi5 STRICT/LIVE authorization, create exactly one Phase 5 Ed25519 credential and retain only its public-safe key receipt;
+4. under a separate Control LIVE authorization, reconcile/provision the Control verification-key binding from that public receipt;
+5. obtain fresh Control GET-only post-activation evidence and a fresh `PHASE5_RPI5_SIGNER_HANDOFF_V1`;
+6. run this delivery source in `--validate-only` mode against the exact fresh handoff and sanitized observation input;
+7. under a separate RPi5 runtime/delivery LIVE authorization, execute one exact signed observation delivery;
+8. require the public-safe delivery receipt and then perform Control-side read-only reconciliation;
+9. on any error or ambiguity after an authorized mutation starts, preserve sanitized evidence and STOP with no undeclared retry, rollback, cleanup or alternate path.
 
-Source merge never authorizes step 3 or later. This source package installs no unit, service, timer, credential, package or host configuration and performs no production request by itself.
+Source merge never authorizes the credential, Control binding or delivery mutations. This source package installs no unit, service, timer, credential, package or host configuration and performs no production request by itself.
