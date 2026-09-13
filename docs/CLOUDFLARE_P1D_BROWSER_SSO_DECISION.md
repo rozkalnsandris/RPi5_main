@@ -26,6 +26,8 @@ A Wi-Fi MAC is not a usable Cloudflare Access identity across Internet/cellular 
 
 Cloudflare's current session-management documentation distinguishes the global session token from per-application tokens. The global token is stored at the team domain and provides SSO across Access applications. The documented global-session range is 15 minutes to one month.
 
+Cloudflare documents the global session default as `24h`. The organization API models `session_duration` as optional, so an omitted field is interpreted by this preflight as the documented effective default `24h`; a present but invalid value remains fail-closed. The sanitized report records whether the effective value came from an explicit API field or the documented default.
+
 Cloudflare also documents that the global token cannot directly access an application; an application token is still required and Access re-evaluates policy before refreshing it. This is why a longer global session is preferred over extending every application token.
 
 ## GET-only preflight

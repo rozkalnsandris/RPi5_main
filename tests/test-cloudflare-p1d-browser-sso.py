@@ -35,6 +35,7 @@ class CloudflareP1DBrowserSSOTests(unittest.TestCase):
         self.assertFalse(decision["device_posture_required"])
         self.assertFalse(decision["mac_binding_allowed"])
         self.assertEqual(decision["global_session_target"], "720h")
+        self.assertEqual(decision["global_session_documented_default"], "24h")
         self.assertFalse(decision["application_or_policy_session_extension_required"])
         self.assertTrue(decision["preserve_existing_application_and_policy_session_durations"])
 
@@ -82,6 +83,8 @@ class CloudflareP1DBrowserSSOTests(unittest.TestCase):
         self.assertFalse(preflight["mutation_performed"])
         self.assertEqual(len(preflight["get_surfaces"]), 4)
         self.assertTrue(all(surface.startswith("/") for surface in preflight["get_surfaces"]))
+        self.assertEqual(preflight["session_duration_field_semantics"]["omitted"], "effective-24h-cloudflare-documented-default")
+        self.assertEqual(preflight["session_duration_field_semantics"]["present_but_invalid"], "BLOCKED")
         for forbidden in ("owner-email", "account-id", "access-app-id", "cookie", "jwt", "api-token"):
             self.assertIn(forbidden, preflight["forbidden_output"])
 

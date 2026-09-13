@@ -9,6 +9,7 @@ from cloudflare_zero_trust_reconcile import ACCOUNT_ID_RE, APP_ID_RE, AuditError
 OWNER_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 DASHBOARD_HOSTNAME = "dash.rozkalns.net"
 TARGET_GLOBAL_SESSION = "720h"
+DOCUMENTED_DEFAULT_GLOBAL_SESSION = "24h"
 
 
 def validate_owner_email(value: str) -> str:
@@ -173,10 +174,17 @@ def build_report(owner_email: str, state: dict[str, Any]) -> dict[str, Any]:
     blockers: list[str] = []
     if not organization.get("auth_domain"):
         blockers.append("organization_binding_missing")
-    current_global = organization.get("session_duration")
-    if not isinstance(current_global, str) or not current_global:
-        current_global = None
-        blockers.append("global_session_duration_missing")
+    if "session_duration" not in organization:
+        current_global = DOCUMENTED_DEFAULT_GLOBAL_SESSION
+        current_global_source = "cloudflare_documented_default"
+    else:
+        current_global = organization.get("session_duration")
+        if isinstance(current_global, str) and current_global:
+            current_global_source = "api_explicit"
+        else:
+            current_global = None
+            current_global_source = "api_invalid"
+            blockers.append("global_session_duration_invalid")
     dashboard, dashboard_blockers = _dashboard_summary(apps, policies, owner)
     blockers.extend(dashboard_blockers)
     change_required = current_global != TARGET_GLOBAL_SESSION
@@ -193,6 +201,7 @@ def build_report(owner_email: str, state: dict[str, Any]) -> dict[str, Any]:
         "organization_binding_present": bool(organization.get("auth_domain")),
         "global_session": {
             "current_duration": current_global,
+            "current_duration_source": current_global_source,
             "target_duration": TARGET_GLOBAL_SESSION,
             "change_required": change_required,
         },

@@ -12,6 +12,7 @@
     "device_posture_required": false,
     "mac_binding_allowed": false,
     "global_session_target": "720h",
+    "global_session_documented_default": "24h",
     "global_session_documented_maximum": "one-month",
     "application_or_policy_session_extension_required": false,
     "preserve_existing_application_and_policy_session_durations": true
@@ -50,7 +51,7 @@
     ],
     "proves": [
       "organization-binding-present",
-      "current-global-session-duration",
+      "effective-current-global-session-duration-with-documented-default-when-api-field-omitted",
       "dashboard-exact-application-resolution",
       "dashboard-exact-owner-allow-policy-without-bypass-or-broad-selector",
       "dashboard-application-and-policy-session-durations-without-private-identifiers"
@@ -67,6 +68,10 @@
       "jwt",
       "api-token"
     ],
+    "session_duration_field_semantics": {
+      "omitted": "effective-24h-cloudflare-documented-default",
+      "present_but_invalid": "BLOCKED"
+    },
     "exact_main_push_ci_must_be_positively_green_before_live_execution": true
   },
   "future_canaries": [
