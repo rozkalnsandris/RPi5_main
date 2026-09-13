@@ -241,10 +241,17 @@ class WeatherConsumedJITHardeningTests(unittest.TestCase):
                     production_mutation_started=False,
                 )
 
-        with mock.patch.object(
-            OPERATOR_MODULE,
-            "build_runtime_operator",
-            return_value=FailingOperator(),
+        with (
+            mock.patch.object(
+                ENTRYPOINT,
+                "PACKAGE_INIT",
+                ROOT / "ops/lib/deploy_executor/__init__.py",
+            ),
+            mock.patch.object(
+                OPERATOR_MODULE,
+                "build_runtime_operator",
+                return_value=FailingOperator(),
+            ),
         ):
             output = io.StringIO()
             with redirect_stdout(output):
