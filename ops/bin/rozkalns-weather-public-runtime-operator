@@ -7,6 +7,7 @@ import argparse
 import json
 from pathlib import Path
 import sys
+import time
 from typing import Any
 
 SUPPORT_ROOT = Path('/usr/local/libexec/rozkalns-weather-public-runtime-operator')
@@ -18,9 +19,65 @@ _SOURCE_REPOSITORIES = frozenset(
         'rozkalnsandris/RPi5_main',
     }
 )
+_PUBLIC_SOURCE_MAX_ATTEMPTS = 3
+_PUBLIC_SOURCE_BACKOFF_SECONDS = (1.0, 2.0)
+_TRANSIENT_HTTP_STATUSES = frozenset({502, 503, 504})
+_LAST_CONSUMED_JIT_FAILURE_CODE: str | None = None
 
 
-def _stop(reason: str, *, issue_number: int | None = None, reuse_forbidden: bool = False, host_started: bool = False, production_started: bool = False) -> int:
+def _set_consumed_jit_failure(code: str) -> None:
+    global _LAST_CONSUMED_JIT_FAILURE_CODE
+    _LAST_CONSUMED_JIT_FAILURE_CODE = code
+
+
+def _classify_consumed_jit_failure(exc: BaseException) -> str:
+    name = type(exc).__name__
+    status = getattr(exc, 'status', None)
+    if name == 'NetworkFailure':
+        return 'public_source_network'
+    if name == 'HTTPStatusError':
+        if status in _TRANSIENT_HTTP_STATUSES:
+            return 'public_source_transient_http'
+        return 'public_source_http_nonretryable'
+    text = str(exc).lower()
+    if 'github response time' in text or 'github time' in text:
+        return 'github_time'
+    if 'replay' in text or 'consum' in text:
+        return 'replay_state'
+    if 'baseline' in text:
+        return 'baseline_drift'
+    if any(
+        token in text
+        for token in (
+            'authorization',
+            'authority',
+            'queue',
+            'source',
+            'repository',
+            'current main',
+            'main sha',
+            'ancestor',
+            'workflow',
+            'ci ',
+        )
+    ):
+        return 'authority_or_source_drift'
+    return 'canonical_revalidation'
+
+
+def _record_consumed_jit_failure(exc: BaseException) -> None:
+    _set_consumed_jit_failure(_classify_consumed_jit_failure(exc))
+
+
+def _stop(
+    reason: str,
+    *,
+    issue_number: int | None = None,
+    reuse_forbidden: bool = False,
+    host_started: bool = False,
+    production_started: bool = False,
+    failure_reason_code: str | None = None,
+) -> int:
     payload = {
         'schema': 'rozkalns-weather.public-runtime-composite-operator-receipt.v1',
         'result': 'FAIL_CLOSED',
@@ -33,6 +90,8 @@ def _stop(reason: str, *, issue_number: int | None = None, reuse_forbidden: bool
         'automatic_cleanup': False,
         'automatic_rollback': False,
     }
+    if failure_reason_code is not None:
+        payload['failure_reason_code'] = failure_reason_code
     print(json.dumps(payload, sort_keys=True, separators=(',', ':')))
     return 78
 
@@ -78,11 +137,12 @@ def _cacheable_public_source_path(path: Any) -> bool:
 def _install_runtime_jit_hardening() -> None:
     from deploy_executor import weather_public_runtime_composite as composite
     from deploy_executor import weather_public_runtime_operator as operator
+    from deploy_executor.transport import HTTPStatusError, NetworkFailure
 
     if getattr(composite, '_WEATHER_CONSUMED_JIT_HARDENING_V1', False):
         return
 
-    state = {'consumed_depth': 0}
+    state = {'consumed_depth': 0, 'post_consume_seen': False}
     original_accept_issue = composite.accept_issue
     original_verify_unchanged = composite.verify_authorization_unchanged
     original_consumed_revalidate = (
@@ -90,6 +150,7 @@ def _install_runtime_jit_hardening() -> None:
     )
     original_public_client = composite.FixedPublicGitHubReadClient
     original_timed_client = composite._TimedSourceClient
+    original_baseline_for_gate = operator._baseline_for_gate
 
     def in_consumed_revalidation() -> bool:
         return state['consumed_depth'] > 0
@@ -107,16 +168,49 @@ def _install_runtime_jit_hardening() -> None:
         original_verify_unchanged(accepted, current_issue, **kwargs)
 
     def runtime_revalidate_consumed(self: Any, authorization_issue_number: int):
+        state['post_consume_seen'] = True
         state['consumed_depth'] += 1
         try:
             return original_consumed_revalidate(self, authorization_issue_number)
+        except Exception as exc:
+            _record_consumed_jit_failure(exc)
+            raise
         finally:
             state['consumed_depth'] -= 1
+
+    def runtime_baseline_for_gate(provider: Any, authority: Any, gate: str):
+        try:
+            return original_baseline_for_gate(provider, authority, gate)
+        except Exception as exc:
+            if state['post_consume_seen']:
+                _record_consumed_jit_failure(exc)
+            raise
 
     class RuntimePublicSourceClient(original_public_client):
         def __init__(self, *args: Any, **kwargs: Any):
             super().__init__(*args, **kwargs)
             self._consumed_evidence_cache: dict[str, Any] = {}
+
+        def _fresh_get_with_retry(self, path_or_url: str):
+            for attempt in range(_PUBLIC_SOURCE_MAX_ATTEMPTS):
+                try:
+                    return super().get_json(path_or_url)
+                except NetworkFailure as exc:
+                    if attempt + 1 >= _PUBLIC_SOURCE_MAX_ATTEMPTS:
+                        if in_consumed_revalidation():
+                            _set_consumed_jit_failure('public_source_network')
+                        raise
+                except HTTPStatusError as exc:
+                    if exc.status not in _TRANSIENT_HTTP_STATUSES:
+                        if in_consumed_revalidation():
+                            _set_consumed_jit_failure('public_source_http_nonretryable')
+                        raise
+                    if attempt + 1 >= _PUBLIC_SOURCE_MAX_ATTEMPTS:
+                        if in_consumed_revalidation():
+                            _set_consumed_jit_failure('public_source_transient_http')
+                        raise
+                time.sleep(_PUBLIC_SOURCE_BACKOFF_SECONDS[attempt])
+            raise RuntimeError('unreachable public source retry state')
 
         def get_json(self, path_or_url: str):
             cacheable = _cacheable_public_source_path(path_or_url)
@@ -134,7 +228,7 @@ def _install_runtime_jit_hardening() -> None:
                     url=cached.url,
                     next_url=cached.next_url,
                 )
-            response = super().get_json(path_or_url)
+            response = self._fresh_get_with_retry(path_or_url)
             if cacheable and not in_consumed_revalidation():
                 self._consumed_evidence_cache[path_or_url] = response
             return response
@@ -152,10 +246,13 @@ def _install_runtime_jit_hardening() -> None:
     composite.FixedPublicGitHubReadClient = RuntimePublicSourceClient
     composite._TimedSourceClient = RuntimeTimedSourceClient
     operator.FixedPublicGitHubReadClient = RuntimePublicSourceClient
+    operator._baseline_for_gate = runtime_baseline_for_gate
     composite._WEATHER_CONSUMED_JIT_HARDENING_V1 = True
 
 
 def main(argv: list[str] | None = None) -> int:
+    global _LAST_CONSUMED_JIT_FAILURE_CODE
+    _LAST_CONSUMED_JIT_FAILURE_CODE = None
     args = _parser().parse_args(argv)
     if not PACKAGE_INIT.is_file():
         return _stop('operator_install_layout', issue_number=args.issue_number)
@@ -175,6 +272,11 @@ def main(argv: list[str] | None = None) -> int:
             reuse_forbidden=exc.authorization_reuse_forbidden,
             host_started=exc.host_mutation_started,
             production_started=exc.production_mutation_started,
+            failure_reason_code=(
+                _LAST_CONSUMED_JIT_FAILURE_CODE
+                if exc.authorization_reuse_forbidden
+                else None
+            ),
         )
     print(json.dumps(asdict(receipt), sort_keys=True, separators=(',', ':')))
     return 0
