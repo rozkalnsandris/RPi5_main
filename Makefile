@@ -141,6 +141,8 @@ test:
 	python3 ./tests/test-cloudflare-p1-write-plan.py
 	python3 ./tests/test-cloudflare-p1a08-control-aud-override.py
 	python3 ./tests/test-cloudflare-p1d-owner-phone.py
+	python3 ./tests/test-cloudflare-p1d-browser-sso.py
+	python3 ./tests/test-cloudflare-owner-browser-sso-preflight.py
 	python3 ./tests/test-cloudflare-p1d-client-session-compat.py
 	python3 ./tests/test-cloudflare-owner-phone-preflight.py
 	python3 ./tests/test-cloudflare-owner-phone-enrollment-create.py

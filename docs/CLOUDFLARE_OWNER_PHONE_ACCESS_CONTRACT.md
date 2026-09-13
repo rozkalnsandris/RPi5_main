@@ -6,6 +6,13 @@ P1D posture decision: `docs/CLOUDFLARE_P1D_OWNER_PHONE_POSTURE_DECISION.md`
 P1D read-only operator: `ops/bin/cloudflare-owner-phone-preflight`  
 Tracking issues: #177, #179
 
+> **Current decision (2026-09-13): browser SSO, no required One Client/VPN.**
+> `docs/CLOUDFLARE_P1D_BROWSER_SSO_DECISION.md` and
+> `ops/contracts/cloudflare-p1d-browser-sso.json` supersede the Gateway posture
+> sequence below for future owner-phone access. The existing Gateway material is
+> retained as historical evidence only and must not be executed unless a later
+> source decision explicitly re-selects it.
+
 ## Goal
 
 Allow the owner's Android phone to reach ADMIN applications with minimal friction on both trusted Wi-Fi and cellular networks **without replacing Zero Trust identity with network-location trust**.

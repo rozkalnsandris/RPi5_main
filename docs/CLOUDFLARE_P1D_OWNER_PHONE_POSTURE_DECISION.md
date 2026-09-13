@@ -1,5 +1,7 @@
 # Cloudflare P1D owner-phone posture decision — issue #179
 
+> **Superseded for future owner-phone access on 2026-09-13.** The Gateway/One Client design below is retained as historical evidence and optional hardening only. Current decision: `docs/CLOUDFLARE_P1D_BROWSER_SSO_DECISION.md`.
+
 Status: **GET-ONLY PREFLIGHT SOURCE PREPARED / PLAN ONLY / NO PRODUCTION WRITE AUTHORIZED**  
 Decision date: 2026-08-19  
 Source revalidation: 2026-08-22  

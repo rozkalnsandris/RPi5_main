@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "status": "source-decision-complete-plan-only",
+  "canonical_issue": 179,
+  "decision_date": "2026-09-13",
+  "mutation_authorized": false,
+  "supersedes_for_future_owner_phone_access": "ops/contracts/cloudflare-p1d-owner-phone-posture.json",
+  "decision": {
+    "identity_requirement": "exact-owner-identity",
+    "access_model": "browser-global-sso",
+    "persistent_cloudflare_one_client_required": false,
+    "device_posture_required": false,
+    "mac_binding_allowed": false,
+    "global_session_target": "720h",
+    "global_session_documented_maximum": "one-month",
+    "application_or_policy_session_extension_required": false,
+    "preserve_existing_application_and_policy_session_durations": true
+  },
+  "policy_invariants": {
+    "human_action": "allow",
+    "include": [
+      "exact-owner-identity-private-input"
+    ],
+    "require": [],
+    "exclude": [],
+    "forbidden_actions": [
+      "bypass",
+      "non_identity"
+    ],
+    "forbidden_selectors": [
+      "everyone",
+      "ip",
+      "email_domain",
+      "service_token"
+    ]
+  },
+  "readonly_preflight": {
+    "operator": "ops/bin/cloudflare-owner-browser-sso-preflight",
+    "mutation_performed": false,
+    "private_inputs": [
+      "cloudflare-account-id-env",
+      "cloudflare-api-token-hidden-stdin",
+      "exact-owner-email-hidden-stdin"
+    ],
+    "get_surfaces": [
+      "/user/tokens/verify",
+      "/accounts/{account_id}/access/organizations",
+      "/accounts/{account_id}/access/apps",
+      "/accounts/{account_id}/access/apps/{app_id}/policies"
+    ],
+    "proves": [
+      "organization-binding-present",
+      "current-global-session-duration",
+      "dashboard-exact-application-resolution",
+      "dashboard-exact-owner-allow-policy-without-bypass-or-broad-selector",
+      "dashboard-application-and-policy-session-durations-without-private-identifiers"
+    ],
+    "forbidden_output": [
+      "owner-email",
+      "account-id",
+      "auth-domain",
+      "team-name",
+      "access-app-id",
+      "access-policy-id",
+      "access-aud",
+      "cookie",
+      "jwt",
+      "api-token"
+    ],
+    "exact_main_push_ci_must_be_positively_green_before_live_execution": true
+  },
+  "future_canaries": [
+    {
+      "id": "p1d-03-browser-sso-preflight",
+      "kind": "read-only",
+      "authorized": false
+    },
+    {
+      "id": "p1d-04-global-browser-sso-session",
+      "kind": "organization-session-write",
+      "authorized": false,
+      "condition": "fresh-preflight-proves-global-session-duration-is-not-720h",
+      "target": "zero-trust-organization-session-duration",
+      "allowed_diff": [
+        "organization-session_duration-to-720h"
+      ],
+      "forbidden_diff": [
+        "access-application-change",
+        "access-policy-change",
+        "client-session-change",
+        "device-posture-change",
+        "device-enrollment-change",
+        "idp-change",
+        "tunnel-dns-worker-or-rpi5-host-change"
+      ]
+    },
+    {
+      "id": "p1d-05-a55-browser-sso-canary",
+      "kind": "interactive-browser-validation",
+      "authorized": false,
+      "preconditions": [
+        "p1d-03-browser-sso-preflight-pass",
+        "global-session-duration-720h"
+      ],
+      "required_canaries": [
+        "normal-browser-owner-login-once",
+        "dashboard-authorized",
+        "second-protected-application-authorized-without-new-idp-prompt",
+        "incognito-or-cookie-free-context-intercepted",
+        "public-host-regressions-pass"
+      ]
+    },
+    {
+      "id": "p1d-06-owner-phone-client-cleanup",
+      "kind": "optional-device-cleanup",
+      "authorized": false,
+      "condition": "browser-sso-canary-accepted-and-owner-chooses-client-removal",
+      "separate_live_authorization_required": true
+    }
+  ],
+  "recovery": {
+    "lost_or_compromised_phone": [
+      "revoke-owner-access-sessions",
+      "disable-owner-idp-identity-if-compromise-requires-it",
+      "verify-protected-app-access-is-denied",
+      "never-add-ip-mac-or-everyone-bypass-as-recovery"
+    ]
+  },
+  "authorization_contract": {
+    "source_merge_authorizes_live": false,
+    "explicit_owner_authorization_required_for_each_state_change": true,
+    "fresh_get_before_organization_session_write": true,
+    "fresh_get_after_organization_session_write": true,
+    "private_full_organization_preimage_required_before_write": true,
+    "predeclared_exact-preimage-rollback-required": true,
+    "stop_on_unexpected_diff": true
+  },
+  "source_references": [
+    "https://developers.cloudflare.com/cloudflare-one/access-controls/access-settings/session-management/",
+    "https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/",
+    "https://developers.cloudflare.com/cloudflare-one/access-controls/policies/",
+    "https://developers.cloudflare.com/api/resources/zero_trust/subresources/organizations/"
+  ]
+}
