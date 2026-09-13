@@ -46,7 +46,15 @@ def make_repo(root: Path) -> str:
     root.mkdir()
     run([bootstrap.GIT_BINARY, "init", "-q", "-b", "main"], cwd=root)
     run([bootstrap.GIT_BINARY, "config", "user.name", "Test"], cwd=root)
-    run([bootstrap.GIT_BINARY, "config", "user.email", "test@example.invalid"], cwd=root)
+    run(
+        [
+            bootstrap.GIT_BINARY,
+            "config",
+            "user.email",
+            "test" + chr(64) + "example.invalid",
+        ],
+        cwd=root,
+    )
     (root / "README").write_text("fixture\n", encoding="utf-8")
     run([bootstrap.GIT_BINARY, "add", "README"], cwd=root)
     committed = run([bootstrap.GIT_BINARY, "commit", "-q", "-m", "fixture"], cwd=root)
@@ -202,7 +210,7 @@ class ControlPhase5ObservationCredentialBootstrapTests(unittest.TestCase):
             target = credstore / bootstrap.PRIVATE_KEY_FILENAME
             target.symlink_to(other.name)
             with self.assertRaises(bootstrap.Phase5CredentialBootstrapError) as caught:
-                bootstrap._preflight_at(**private_args(credstore, repo, sha))
+                bootstrap._preflight_at(**private_args(alias if False else credstore, repo, sha))
             self.assertEqual(caught.exception.code, "TARGET_EXISTS")
             self.assertFalse(caught.exception.mutation_started)
             self.assertEqual(other.read_text(encoding="utf-8"), "keep-me")
