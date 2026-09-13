@@ -8,7 +8,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-HISTORICAL_SHA = "5da5365cd45d856c6ebbebdc3921b07a6719b9df"
+HISTORICAL_SHA = "14501ddbe2853d8072464291b338c29a029dd3cf"
 FROZEN_PATHS = (
     "ops/bin/rozkalns-weather-public-runtime-operator-upgrade-v3",
     "ops/deploy/rpi5-main-weather-public-runtime-operator-upgrade-v3-trusted-checkout-bootstrap.json",
@@ -20,10 +20,17 @@ FROZEN_PATHS = (
     "ops/deploy/weather-public-runtime-operator-upgrade-v4.json",
     "ops/lib/deploy_executor/weather_public_runtime_operator_upgrade_v4.py",
     "tests/test-deploy-executor-weather-public-operator-upgrade-v4.py",
+    "ops/bin/rozkalns-weather-public-runtime-operator-upgrade-v5",
+    "ops/deploy/rpi5-main-weather-public-runtime-operator-upgrade-v5-trusted-checkout-bootstrap.json",
+    "ops/deploy/weather-public-runtime-operator-upgrade-v5.json",
+    "ops/lib/deploy_executor/weather_public_runtime_operator_upgrade_v5.py",
 )
 HISTORICAL_TESTS = (
     "tests/test-deploy-executor-weather-public-operator-upgrade-v3.py",
     "tests/test-deploy-executor-weather-public-operator-upgrade-v4.py",
+)
+CURRENT_TESTS = (
+    "tests/test-deploy-executor-weather-public-operator-upgrade-v6.py",
 )
 
 
@@ -38,7 +45,7 @@ def git_bytes(*args: str) -> bytes:
 
 
 class HistoricalWeatherOperatorUpgradeTests(unittest.TestCase):
-    def test_v3_v4_sources_remain_exact_historical_evidence(self) -> None:
+    def test_v3_v5_sources_remain_exact_historical_evidence(self) -> None:
         for path in FROZEN_PATHS:
             with self.subTest(path=path):
                 current = git_bytes("show", f"HEAD:{path}")
@@ -90,6 +97,18 @@ class HistoricalWeatherOperatorUpgradeTests(unittest.TestCase):
                     stdin=subprocess.DEVNULL,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
+                )
+
+    def test_current_v6_positive_suite_runs(self) -> None:
+        env = dict(os.environ)
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
+        for relative in CURRENT_TESTS:
+            with self.subTest(test=relative):
+                subprocess.run(
+                    [sys.executable, str(ROOT / relative)],
+                    cwd=ROOT,
+                    env=env,
+                    check=True,
                 )
 
 
