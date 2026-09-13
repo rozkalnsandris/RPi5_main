@@ -8,8 +8,9 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-HISTORICAL_SHA = "14501ddbe2853d8072464291b338c29a029dd3cf"
-FROZEN_PATHS = (
+LEGACY_HISTORICAL_SHA = "c99f6b9df47603703f7d1e67ddc7d88c77ed726a"
+V5_HISTORICAL_SHA = "14501ddbe2853d8072464291b338c29a029dd3cf"
+LEGACY_FROZEN_PATHS = (
     "ops/bin/rozkalns-weather-public-runtime-operator-upgrade-v3",
     "ops/deploy/rpi5-main-weather-public-runtime-operator-upgrade-v3-trusted-checkout-bootstrap.json",
     "ops/deploy/weather-public-runtime-operator-upgrade-v3.json",
@@ -20,12 +21,14 @@ FROZEN_PATHS = (
     "ops/deploy/weather-public-runtime-operator-upgrade-v4.json",
     "ops/lib/deploy_executor/weather_public_runtime_operator_upgrade_v4.py",
     "tests/test-deploy-executor-weather-public-operator-upgrade-v4.py",
+)
+V5_FROZEN_PATHS = (
     "ops/bin/rozkalns-weather-public-runtime-operator-upgrade-v5",
     "ops/deploy/rpi5-main-weather-public-runtime-operator-upgrade-v5-trusted-checkout-bootstrap.json",
     "ops/deploy/weather-public-runtime-operator-upgrade-v5.json",
     "ops/lib/deploy_executor/weather_public_runtime_operator_upgrade_v5.py",
 )
-HISTORICAL_TESTS = (
+LEGACY_HISTORICAL_TESTS = (
     "tests/test-deploy-executor-weather-public-operator-upgrade-v3.py",
     "tests/test-deploy-executor-weather-public-operator-upgrade-v4.py",
 )
@@ -45,11 +48,18 @@ def git_bytes(*args: str) -> bytes:
 
 
 class HistoricalWeatherOperatorUpgradeTests(unittest.TestCase):
-    def test_v3_v5_sources_remain_exact_historical_evidence(self) -> None:
-        for path in FROZEN_PATHS:
+    def test_v3_v4_sources_remain_exact_historical_evidence(self) -> None:
+        for path in LEGACY_FROZEN_PATHS:
             with self.subTest(path=path):
                 current = git_bytes("show", f"HEAD:{path}")
-                historical = git_bytes("show", f"{HISTORICAL_SHA}:{path}")
+                historical = git_bytes("show", f"{LEGACY_HISTORICAL_SHA}:{path}")
+                self.assertEqual(current, historical)
+
+    def test_v5_sources_remain_exact_historical_evidence(self) -> None:
+        for path in V5_FROZEN_PATHS:
+            with self.subTest(path=path):
+                current = git_bytes("show", f"HEAD:{path}")
+                historical = git_bytes("show", f"{V5_HISTORICAL_SHA}:{path}")
                 self.assertEqual(current, historical)
 
     def test_v3_v4_positive_suites_run_at_reviewed_historical_snapshot(self) -> None:
@@ -64,7 +74,7 @@ class HistoricalWeatherOperatorUpgradeTests(unittest.TestCase):
                     "add",
                     "--detach",
                     str(checkout),
-                    HISTORICAL_SHA,
+                    LEGACY_HISTORICAL_SHA,
                 ],
                 check=True,
                 stdin=subprocess.DEVNULL,
@@ -74,7 +84,7 @@ class HistoricalWeatherOperatorUpgradeTests(unittest.TestCase):
             try:
                 env = dict(os.environ)
                 env["PYTHONDONTWRITEBYTECODE"] = "1"
-                for relative in HISTORICAL_TESTS:
+                for relative in LEGACY_HISTORICAL_TESTS:
                     with self.subTest(test=relative):
                         subprocess.run(
                             [sys.executable, str(checkout / relative)],
