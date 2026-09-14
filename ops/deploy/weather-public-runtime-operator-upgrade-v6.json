@@ -1,0 +1,60 @@
+{
+  "schema": "rozkalns-weather.public-runtime-operator-upgrade-v6.v1",
+  "repository": "rozkalnsandris/RPi5_main",
+  "issue": 525,
+  "status": "SOURCE_ONLY_UPGRADE_BRIDGE_INACTIVE",
+  "predecessor_sha": "14501ddbe2853d8072464291b338c29a029dd3cf",
+  "minimum_target_ancestor": "09e39bcfa5d5d01ad19fd6a3730a20b6748ada9b",
+  "operator_install_manifest": "ops/deploy/weather-public-runtime-operator-install.json",
+  "trusted_upgrade_checkout_contract": "ops/deploy/rpi5-main-weather-public-runtime-operator-upgrade-v6-trusted-checkout-bootstrap.json",
+  "trusted_upgrade_checkout": "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-operator-upgrade-v6-trusted",
+  "source_entrypoint": "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-operator-upgrade-v6-trusted/ops/bin/rozkalns-weather-public-runtime-operator-upgrade-v6",
+  "source_module": "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-operator-upgrade-v6-trusted/ops/lib/deploy_executor/weather_public_runtime_operator_upgrade_v6.py",
+  "caller_arguments": [],
+  "target_source": "ops/bin/rozkalns-weather-public-runtime-operator",
+  "target_destination": "/usr/local/sbin/rozkalns-weather-public-runtime-operator",
+  "old_blob": "b0f7b7269b9462605e8ef9e608f3441baf0f6392",
+  "new_blob": "e3d5b438c0876dc8dc59103493aa5d9783e2ceb1",
+  "old_sha256": "4058f89227b38dc62788b20fc82041113a9363a90b7fb9fd78743dd4fe41d27f",
+  "new_sha256": "f6255bf1e80d2918555b0814b0690add739041ac11512297d904fce5e8fc0cf1",
+  "required_owner_uid": 0,
+  "required_owner_gid": 0,
+  "required_mode": "0755",
+  "mutation_target_count": 1,
+  "allowed_changed_artifacts": [
+    "ops/bin/rozkalns-weather-public-runtime-operator"
+  ],
+  "replacement": {
+    "temporary_name": ".rozkalns-weather-public-runtime-operator.compatibility-upgrade-v6.tmp",
+    "same_directory": true,
+    "no_follow": true,
+    "exclusive_create": true,
+    "fsync_before_replace": true,
+    "atomic_replace": true,
+    "parent_fsync_after_replace": true,
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "backup_restore": false
+  },
+  "safety": {
+    "source_merge_authorizes_live": false,
+    "runtime_live_authority": false,
+    "generic_shell_authority": false,
+    "caller_selected_path": false,
+    "caller_selected_argv": false,
+    "caller_selected_environment": false,
+    "caller_selected_repository_url": false,
+    "trusted_checkout_repair": false,
+    "docker_mutation": false,
+    "systemd_mutation": false,
+    "sqlite_or_corpus_mutation": false,
+    "network_or_secret_mutation": false
+  },
+  "followup": {
+    "separate_exact_live_authorization_required": true,
+    "post_upgrade_installed_closure_verification_required": true,
+    "fresh_sanitized_weather_baseline_required": true,
+    "fresh_composite_strict_live_authorization_required": true
+  }
+}
