@@ -40,8 +40,26 @@ def _classify_consumed_jit_failure(exc: BaseException) -> str:
             return 'public_source_transient_http'
         return 'public_source_http_nonretryable'
     text = str(exc).lower()
+    if any(
+        token in text
+        for token in (
+            'response time is unavailable',
+            'omitted date header',
+            'date header is invalid',
+            'date header is malformed',
+            'date header has no timezone',
+            'date header is not timezone-aware',
+        )
+    ):
+        return 'github_time_unavailable_or_invalid'
+    if 'not canonical to whole seconds' in text:
+        return 'github_time_noncanonical'
+    if 'regressed during weather revalidation' in text:
+        return 'github_time_regressed'
+    if 'inconsistent during weather revalidation' in text:
+        return 'github_time_spread_exceeded'
     if 'github response time' in text or 'github time' in text:
-        return 'github_time'
+        return 'github_time_other'
     if 'replay' in text or 'consum' in text:
         return 'replay_state'
     if 'baseline' in text:
@@ -140,7 +158,7 @@ def _install_runtime_jit_hardening() -> None:
     from deploy_executor import weather_public_runtime_operator as operator
     from deploy_executor.transport import HTTPStatusError, NetworkFailure
 
-    if getattr(composite, '_WEATHER_CONSUMED_JIT_HARDENING_V1', False):
+    if getattr(composite, '_WEATHER_CONSUMED_JIT_HARDENING_V2', False):
         return
 
     state = {'consumed_depth': 0, 'post_consume_seen': False}
@@ -151,6 +169,7 @@ def _install_runtime_jit_hardening() -> None:
     )
     original_public_client = composite.FixedPublicGitHubReadClient
     original_timed_client = composite._TimedSourceClient
+    original_time_window = composite._GitHubTimeWindow
     original_baseline_for_gate = operator._baseline_for_gate
 
     def in_consumed_revalidation() -> bool:
@@ -186,6 +205,29 @@ def _install_runtime_jit_hardening() -> None:
             if state['post_consume_seen']:
                 _record_consumed_jit_failure(exc)
             raise
+
+    class RuntimeGitHubTimeWindow(original_time_window):
+        def observe(self, value: Any) -> None:
+            if not in_consumed_revalidation():
+                return super().observe(value)
+            if not isinstance(value, datetime) or value.tzinfo is None:
+                raise composite.WeatherCompositeAuthorityError(
+                    'GitHub response time is unavailable'
+                )
+            observed = value.astimezone(timezone.utc)
+            if observed.microsecond != 0:
+                raise composite.WeatherCompositeAuthorityError(
+                    'GitHub response time is not canonical to whole seconds'
+                )
+            if self.first is None:
+                self.first = observed
+            # Admission already enforced owner TTL and the strict 30-second sequence
+            # before durable replay consume. Post-consume JIT must still require a
+            # canonical GitHub timestamp, but transport duration or cross-surface Date
+            # ordering must not burn the one-shot authority. Keep the newest observed
+            # value so returned evidence never moves backward.
+            if self.last is None or observed > self.last:
+                self.last = observed
 
     class RuntimePublicSourceClient(original_public_client):
         def __init__(self, *args: Any, **kwargs: Any):
@@ -246,9 +288,10 @@ def _install_runtime_jit_hardening() -> None:
     composite.ConcreteCanonicalWeatherCompositeRevalidator.revalidate_consumed_composite = runtime_revalidate_consumed
     composite.FixedPublicGitHubReadClient = RuntimePublicSourceClient
     composite._TimedSourceClient = RuntimeTimedSourceClient
+    composite._GitHubTimeWindow = RuntimeGitHubTimeWindow
     operator.FixedPublicGitHubReadClient = RuntimePublicSourceClient
     operator._baseline_for_gate = runtime_baseline_for_gate
-    composite._WEATHER_CONSUMED_JIT_HARDENING_V1 = True
+    composite._WEATHER_CONSUMED_JIT_HARDENING_V2 = True
 
 
 def main(argv: list[str] | None = None) -> int:
