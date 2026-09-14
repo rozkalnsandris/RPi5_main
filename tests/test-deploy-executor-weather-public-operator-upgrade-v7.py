@@ -69,6 +69,7 @@ class WeatherOperatorEntrypointUpgradeV7Tests(unittest.TestCase):
         self.assertEqual(entry.split()[0], "100755")
         self.assertIn("if len(sys.argv) != 1:", source)
         self.assertIn("execute_upgrade()", source)
+        self.assertNotIn("upgrade v6", source)
         for forbidden in (
             "argparse",
             "--path",

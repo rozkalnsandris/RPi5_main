@@ -15,18 +15,18 @@ _MODULE = _CHECKOUT / "ops/lib/deploy_executor/weather_public_runtime_operator_u
 
 def main() -> int:
     if len(sys.argv) != 1:
-        raise RuntimeError("Weather operator upgrade v6 accepts no caller arguments")
+        raise RuntimeError("Weather operator upgrade v7 accepts no caller arguments")
     if os.geteuid() != 0:
-        raise RuntimeError("Weather operator upgrade v6 must run as root")
+        raise RuntimeError("Weather operator upgrade v7 must run as root")
     if _CHECKOUT.name != _CHECKOUT_NAME or Path(__file__).resolve() != _ENTRYPOINT.resolve():
-        raise RuntimeError("Weather operator upgrade v6 is not in the fixed trusted upgrade checkout")
+        raise RuntimeError("Weather operator upgrade v7 is not in the fixed trusted upgrade checkout")
     if not _MODULE.is_file():
-        raise RuntimeError("Weather operator upgrade v6 module is absent")
+        raise RuntimeError("Weather operator upgrade v7 module is absent")
     sys.path.insert(0, str(_LIB))
     import deploy_executor.weather_public_runtime_operator_upgrade_v7 as upgrade
 
     if Path(upgrade.__file__).resolve() != _MODULE.resolve():
-        raise RuntimeError("Weather operator upgrade v6 module provenance mismatch")
+        raise RuntimeError("Weather operator upgrade v7 module provenance mismatch")
     receipt = upgrade.execute_upgrade()
     print(json.dumps(receipt, sort_keys=True, separators=(",", ":")))
     return 0 if receipt.get("result") == "PASS" else 1
