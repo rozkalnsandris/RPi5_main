@@ -39,6 +39,10 @@ The existing runtime signer remains unchanged: systemd delivers this credential 
 
 Preflight does not create a file and does not open/read a production private key. Its receipt always has `mutation_started=false` and `authorization_consumed=false`.
 
+## Existing-target handling
+
+If the fixed final target already exists, bootstrap preflight and apply continue to fail closed with `TARGET_EXISTS`. The bootstrap never adopts, reads, replaces, deletes or rotates that object. Issue #530 provides a separate source-only public-identity reconciliation capability for that case; executing it against the protected production target requires its own later LIVE authorization.
+
 ## Atomic no-overwrite creation
 
 `--apply` is source capability only until a later explicit RPi5 STRICT/LIVE authorization permits exactly this mutation.
