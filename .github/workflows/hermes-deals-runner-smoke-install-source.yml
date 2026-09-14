@@ -9,6 +9,8 @@ on:
       - ops/deploy/executor-operations.json
       - ops/lib/deploy_executor/hermes_deals_runner_smoke_install.py
       - ops/lib/deploy_executor/hermes_deals_runner_smoke_install_consumer.py
+      - ops/lib/deploy_executor/hermes_deals_runner_smoke_install_execution_bridge.py
+      - tests/test-hermes-deals-runner-smoke-install-execution-bridge.py
       - tests/test-hermes-deals-runner-smoke-install-consumer.py
       - tests/test-hermes-deals-runner-smoke-install.py
       - tests/test-deploy-executor-p4.py
@@ -24,6 +26,8 @@ on:
       - ops/deploy/executor-operations.json
       - ops/lib/deploy_executor/hermes_deals_runner_smoke_install.py
       - ops/lib/deploy_executor/hermes_deals_runner_smoke_install_consumer.py
+      - ops/lib/deploy_executor/hermes_deals_runner_smoke_install_execution_bridge.py
+      - tests/test-hermes-deals-runner-smoke-install-execution-bridge.py
       - tests/test-hermes-deals-runner-smoke-install-consumer.py
       - tests/test-hermes-deals-runner-smoke-install.py
       - tests/test-deploy-executor-p4.py
@@ -46,9 +50,11 @@ jobs:
         run: |
           python3 ./tests/test-hermes-deals-runner-smoke-install.py
           python3 ./tests/test-hermes-deals-runner-smoke-install-consumer.py
+          python3 ./tests/test-hermes-deals-runner-smoke-install-execution-bridge.py
           python3 ./tests/test-deploy-executor-p4.py
           python3 -m py_compile \
             ./ops/bin/hermes-deals-runner-smoke-audit \
             ./ops/lib/deploy_executor/hermes_deals_runner_smoke_install.py \
-            ./ops/lib/deploy_executor/hermes_deals_runner_smoke_install_consumer.py
+            ./ops/lib/deploy_executor/hermes_deals_runner_smoke_install_consumer.py \
+            ./ops/lib/deploy_executor/hermes_deals_runner_smoke_install_execution_bridge.py
           test -x ./ops/bin/hermes-deals-runner-smoke-audit
