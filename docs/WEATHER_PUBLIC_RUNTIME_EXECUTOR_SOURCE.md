@@ -419,3 +419,9 @@ None of the reviewed source contracts authorize by themselves:
 DWD remains the authoritative severe-weather warning source in Germany.
 WeatherNext remains a first-class research model and must never be presented as
 an official warning source.
+
+## Weather operator upgrade v7 successor — Issue #537
+
+The v6 convergence attempt is consumed historical evidence: its fixed checkout exists at exact `RPi5_main@9136c37156e84da3918e58d5d467c8b1e5cc403a`, but the v6 upgrade entrypoint was Git mode `100644`, so privileged direct execution failed before the runtime target was replaced. The v6 checkout must not be repaired, cleaned, removed, retried or reused as authority.
+
+Issue #537 adds a new fixed checkout `RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-operator-upgrade-v7-trusted`, a zero-input v7 entrypoint committed as `100755`, a dedicated v7 module/contract, and regression coverage that asserts the executable Git mode. The one-target transition is unchanged: installed operator SHA-256 `4058f89227b38dc62788b20fc82041113a9363a90b7fb9fd78743dd4fe41d27f` may be atomically replaced only by reviewed SHA-256 `f6255bf1e80d2918555b0814b0690add739041ac11512297d904fce5e8fc0cf1`. There is no generic shell/path/argv/environment authority and no automatic retry, cleanup, rollback or backup restore. Merge remains source-only and requires a later fresh exact LIVE authorization for v7.
