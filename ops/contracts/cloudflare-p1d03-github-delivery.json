@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "status": "p1d03-github-getonly-delivery-defined-plan-only",
+  "canonical_issue": 179,
+  "implementation_issue": 519,
+  "parent_contract": "ops/contracts/cloudflare-p1d-browser-sso.json",
+  "canary_id": "p1d-03-browser-sso-preflight",
+  "mutation_authorized": false,
+  "delivery": {
+    "workflow": ".github/workflows/cloudflare-p1d03-browser-sso-preflight.yml",
+    "authorizer": "scripts/github_p1d03_browser_sso_bridge.py",
+    "exact_main_gate": "scripts/github_p1d04_exact_main_gate.py",
+    "actions_adapter": "scripts/cloudflare_owner_browser_sso_preflight_actions.py",
+    "existing_preflight": "scripts/cloudflare_owner_browser_sso_preflight.py",
+    "trigger": "issue-comment-created",
+    "trigger_issue": 179,
+    "owner_identity_binding": {
+      "login": "rozkalnsandris",
+      "numeric_user_id": 277435981,
+      "user_type": "User",
+      "author_association": "OWNER",
+      "github_app_authored_comment_allowed": false
+    },
+    "command_contract": "/rpi5-p1d03 check HEAD=<exact-main-sha> CANARY=p1d-03-browser-sso-preflight",
+    "exact_sha_bound": true,
+    "workflow_rerun_allowed": false,
+    "concurrency_cancel_in_progress": false,
+    "checkout_persist_credentials": false,
+    "github_permissions": [
+      "contents:read",
+      "actions:read"
+    ],
+    "github_write_permissions": [],
+    "required_exact_main_push_workflows": [
+      "Validate",
+      "FAST-LANE policy drift",
+      "GITHUB-ONLY policy drift"
+    ],
+    "cloudflare_secret_inputs": [
+      "CLOUDFLARE_P1D03_ACCOUNT_ID",
+      "CLOUDFLARE_P1D03_READ_API_TOKEN",
+      "CLOUDFLARE_P1D03_OWNER_EMAIL"
+    ],
+    "secret_provisioning_authorized_by_source": false,
+    "cloudflare_api_base_override_allowed": false,
+    "cloudflare_allowed_methods": [
+      "GET"
+    ],
+    "cloudflare_write_methods": [],
+    "automatic_retry": false,
+    "automatic_github_result_comment": false,
+    "source_merge_authorizes_workflow_execution": false
+  },
+  "preflight": {
+    "operator": "ops/bin/cloudflare-owner-browser-sso-preflight",
+    "mutation_performed": false,
+    "get_surfaces": [
+      "/user/tokens/verify",
+      "/accounts/{account_id}/access/organizations",
+      "/accounts/{account_id}/access/apps",
+      "/accounts/{account_id}/access/apps/{app_id}/policies"
+    ],
+    "session_duration_field_semantics": {
+      "omitted": "effective-24h-cloudflare-documented-default",
+      "present_but_invalid": "BLOCKED"
+    },
+    "forbidden_output": [
+      "owner-email",
+      "account-id",
+      "auth-domain",
+      "team-name",
+      "access-app-id",
+      "access-policy-id",
+      "access-aud",
+      "cookie",
+      "jwt",
+      "api-token"
+    ]
+  },
+  "authorization_contract": {
+    "source_merge_authorizes_live": false,
+    "source_merge_authorizes_secret_provisioning": false,
+    "p1d03_pass_authorizes_p1d04": false,
+    "p1d04_requires_fresh_separate_live_authorization": true
+  }
+}

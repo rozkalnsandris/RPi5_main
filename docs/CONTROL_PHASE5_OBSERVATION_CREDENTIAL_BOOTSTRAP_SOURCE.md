@@ -28,7 +28,7 @@ The existing runtime signer remains unchanged: systemd delivers this credential 
 
 1. the required Linux no-follow/dir-fd link/stat/unlink capabilities and `/proc/self/fd` are available;
 2. execution is from the exact Git worktree root embedded by the source module;
-3. fixed `/usr/bin/git` is a root-owned regular executable and is not group/world writable;
+3. fixed `/usr/bin/git` is a root-owned regular executable and is not group/world writable; every Git provenance invocation uses only command-scoped `-c safe.directory=<exact resolved worktree root>` so a root preflight can validate the owner-created trusted checkout without widening root global/system Git trust or inheriting `SUDO_UID`;
 4. Git `origin` identifies `rozkalnsandris/RPi5_main` using one of the fixed canonical URL forms;
 5. current `HEAD` equals the supplied 40-character lowercase `--approved-source-sha`;
 6. tracked worktree state is clean;
@@ -38,6 +38,10 @@ The existing runtime signer remains unchanged: systemd delivers this credential 
 10. neither the exact final credential nor the fixed staging name exists, including as a symlink.
 
 Preflight does not create a file and does not open/read a production private key. Its receipt always has `mutation_started=false` and `authorization_consumed=false`.
+
+## Existing-target handling
+
+If the fixed final target already exists, bootstrap preflight and apply continue to fail closed with `TARGET_EXISTS`. The bootstrap never adopts, reads, replaces, deletes or rotates that object. Issue #530 provides a separate source-only public-identity reconciliation capability for that case; executing it against the protected production target requires its own later LIVE authorization.
 
 ## Atomic no-overwrite creation
 
@@ -72,6 +76,8 @@ The source emits only the fixed public-safe receipt surface:
 Receipts do not contain private-key bytes, PEM text, temporary or protected filesystem paths, OpenSSL stderr, command output, protected directory contents or arbitrary exception text.
 
 ## Source provenance and failure semantics
+
+A first owner-run root preflight against the trusted detached Phase 5 checkout failed closed before credential mutation with `SOURCE_PROVENANCE_INVALID`, `mutation_started=false` and `authorization_consumed=false`. The checkout was clean, exact-SHA and canonical-origin, but it was owned by the operator account while the bootstrap intentionally replaced the subprocess environment with only `LC_ALL=C`. That removed Git's `SUDO_UID` ownership exception and exposed the same root-side ownership class previously repaired in the repository's broker installer. The bounded repair is command-scoped exact `safe.directory`; wildcard trust, root global/system Git configuration, environment widening and credential-surface changes remain forbidden.
 
 The later LIVE authorization must bind one exact merged `RPi5_main` SHA. Both preflight and apply require the supplied SHA to equal current `HEAD` and require the fixed repository identity. No reset, rebase, clean, checkout rewrite, force push or source-repair behavior exists in this operator.
 

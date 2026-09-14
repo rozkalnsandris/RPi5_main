@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "p1d04-github-delivery-defined-plan-only",
+  "status": "p1d04-prelive-prep-defined-plan-only",
   "canonical_issue": 179,
   "decision_date": "2026-09-13",
   "mutation_authorized": false,
@@ -165,6 +165,72 @@
     "source_merge_authorizes_workflow_execution": false,
     "fresh_separate_live_authorization_required": true
   },
+  "prelive_preparation": {
+    "canary_id": "p1d-04-prelive-prep",
+    "workflow": ".github/workflows/cloudflare-p1d04-prelive-prep.yml",
+    "authorizer": "scripts/github_p1d04_prelive_prep_bridge.py",
+    "exact_main_gate": "scripts/github_p1d04_exact_main_gate.py",
+    "actions_adapter": "scripts/cloudflare_owner_browser_sso_prelive_prep_actions.py",
+    "preparation_logic": "scripts/cloudflare_owner_browser_sso_prelive_prep.py",
+    "trigger": "issue-comment-created",
+    "trigger_issue": 179,
+    "command_contract": "/rpi5-p1d04 prep HEAD=<exact-main-sha> CANARY=p1d-04-prelive-prep",
+    "exact_sha_bound": true,
+    "workflow_rerun_allowed": false,
+    "concurrency_cancel_in_progress": false,
+    "checkout_persist_credentials": false,
+    "github_permissions": [
+      "contents:read",
+      "actions:read"
+    ],
+    "github_write_permissions": [],
+    "required_exact_main_push_workflows": [
+      "Validate",
+      "FAST-LANE policy drift",
+      "GITHUB-ONLY policy drift"
+    ],
+    "cloudflare_secret_inputs": [
+      "CLOUDFLARE_P1D04_ACCOUNT_ID",
+      "CLOUDFLARE_P1D04_READ_API_TOKEN",
+      "CLOUDFLARE_P1D04_WRITE_API_TOKEN"
+    ],
+    "read_write_tokens_must_differ": true,
+    "both_tokens_must_verify_active": true,
+    "get_only": true,
+    "get_surfaces": [
+      "/user/tokens/verify",
+      "/accounts/{account_id}/access/organizations"
+    ],
+    "cloudflare_write_primitives": [],
+    "organization_shape_reuses_writer_projection": true,
+    "unknown_top_level_response_field": "BLOCKED",
+    "already_target_session_duration": "BLOCKED",
+    "target_session_duration": "720h",
+    "private_full_organization_preimage_retained_in_runner_memory": true,
+    "emitted_preimage_evidence": "sha256-canonical-json-fingerprint-only",
+    "forbidden_output": [
+      "account-id",
+      "auth-domain",
+      "team-name",
+      "api-token",
+      "github-token",
+      "full-organization-preimage",
+      "intended-update-payload",
+      "response-only-values"
+    ],
+    "rollback": {
+      "kind": "organization-session-duration",
+      "target_from_fresh_effective_prewrite_session": true,
+      "omitted_session_duration_target": "24h",
+      "automatic": false,
+      "fresh_get_required_before_rollback_write": true,
+      "separate_owner_authorization_required": true
+    },
+    "automatic_github_result_comment": false,
+    "source_merge_authorizes_execution": false,
+    "fresh_separate_owner_authorization_required": true,
+    "source_merge_authorizes_live": false
+  },
   "future_canaries": [
     {
       "id": "p1d-03-browser-sso-preflight",
@@ -231,6 +297,7 @@
     "fresh_get_after_organization_session_write": true,
     "private_full_organization_preimage_required_before_write": true,
     "predeclared_rollback_required_before_live": true,
+    "prelive_preparation_execution_requires_fresh_owner_authorization": true,
     "automatic_rollback_authorized_by_source": false,
     "stop_on_unexpected_diff": true
   },

@@ -1,4 +1,4 @@
-name: Cloudflare P1D-04 browser SSO session
+name: Cloudflare P1D-04 pre-LIVE prep
 
 on:
   issue_comment:
@@ -10,13 +10,13 @@ permissions:
   actions: read
 
 concurrency:
-  group: cloudflare-p1d04-browser-sso-session
+  group: cloudflare-p1d04-prelive-prep
   cancel-in-progress: false
 
 jobs:
   authorize:
-    name: Authorize exact owner P1D-04 command
-    if: github.event.issue.pull_request == null && github.event.issue.number == 179 && startsWith(github.event.comment.body, '/rpi5-p1d04 apply ')
+    name: Authorize exact owner P1D-04 pre-LIVE prep command
+    if: github.event.issue.pull_request == null && github.event.issue.number == 179 && startsWith(github.event.comment.body, '/rpi5-p1d04 prep ')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -37,15 +37,15 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Validate exact issue, owner, canary and SHA-bound command
+      - name: Validate exact issue, owner, canary and SHA-bound prep command
         id: authorize
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 scripts/github_p1d04_browser_sso_bridge.py
+          python3 scripts/github_p1d04_prelive_prep_bridge.py
 
-  apply:
-    name: Apply one guarded Organization session update
+  prepare:
+    name: Build private GET-only Organization preimage evidence
     needs: authorize
     if: needs.authorize.result == 'success'
     runs-on: ubuntu-latest
@@ -62,11 +62,11 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Run exact P1D-04 canary
+      - name: Run exact GET-only P1D-04 pre-LIVE prep
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          P1D04_EXPECTED_SHA: ${{ needs.authorize.outputs.expected_sha }}
-          P1D04_CANARY: ${{ needs.authorize.outputs.canary }}
+          P1D04_PRELIVE_EXPECTED_SHA: ${{ needs.authorize.outputs.expected_sha }}
+          P1D04_PRELIVE_CANARY: ${{ needs.authorize.outputs.canary }}
           CLOUDFLARE_P1D04_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_P1D04_ACCOUNT_ID }}
           CLOUDFLARE_P1D04_READ_API_TOKEN: ${{ secrets.CLOUDFLARE_P1D04_READ_API_TOKEN }}
           CLOUDFLARE_P1D04_WRITE_API_TOKEN: ${{ secrets.CLOUDFLARE_P1D04_WRITE_API_TOKEN }}
@@ -74,4 +74,4 @@ jobs:
         run: |
           set -Eeuo pipefail
           umask 077
-          python3 scripts/cloudflare_owner_browser_sso_session_update_actions.py
+          python3 scripts/cloudflare_owner_browser_sso_prelive_prep_actions.py
