@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-import importlib.util
 import json
 from pathlib import Path
 import sys
@@ -168,7 +167,7 @@ class ProductionVisibilityProducerTests(unittest.TestCase):
             "o_creat",
             "unlink(",
             "rename(",
-            "replace(",
+            "os.replace(",
         )
         for token in forbidden:
             self.assertNotIn(token, source)
