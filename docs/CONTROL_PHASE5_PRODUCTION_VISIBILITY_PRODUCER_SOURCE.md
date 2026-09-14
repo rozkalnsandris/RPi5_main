@@ -15,11 +15,12 @@ It never treats repository source as proof of production state.
 ## Source mapping
 
 - library: `ops/lib/deploy_executor/control_phase5_production_visibility_producer.py`
-- CLI: `ops/bin/rpi5-control-phase5-production-visibility`
+- CLI source: `ops/bin/rpi5-control-phase5-production-visibility`
 - tests: `tests/test-control-phase5-production-visibility-producer.py`
 
-The CLI is source-only until a separately reviewed production invocation. A
-repository merge does not install, activate, or execute it on the host.
+The CLI source is invoked through `python3` from an exact reviewed checkout; no
+installed executable is created by this slice. A repository merge does not
+install, activate, or execute it on the host.
 
 ## Exact observation authority
 
@@ -96,7 +97,7 @@ to the exact current `RPi5_main/main` SHA with required checks passing. With
 that SHA `<MAIN_SHA>`, the reviewed GET-only invocation is:
 
 ```text
-sudo /path/to/exact-reviewed-checkout/ops/bin/rpi5-control-phase5-production-visibility --expected-main-sha <MAIN_SHA>
+sudo python3 /path/to/exact-reviewed-checkout/ops/bin/rpi5-control-phase5-production-visibility --expected-main-sha <MAIN_SHA>
 ```
 
 The checkout/source provenance for that future invocation must itself be
