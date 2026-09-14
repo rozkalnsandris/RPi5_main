@@ -11,6 +11,7 @@ test:
 	python3 ./tests/test-auto-live-a4-candidate-discovery.py
 	python3 ./tests/test-auto-run-lane-eligibility.py
 	python3 ./tests/test-control-phase5-production-visibility.py
+	python3 ./tests/test-control-phase5-production-visibility-producer.py
 	python3 ./tests/test-control-phase5-observation-transport.py
 	python3 ./tests/test-control-phase5-observation-signer.py
 	python3 ./tests/test-control-phase5-observation-credential-bootstrap.py
