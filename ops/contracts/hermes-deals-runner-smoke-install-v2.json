@@ -89,6 +89,27 @@
     "workflow_path": ".github/workflows/rpi5-audit-command.yml"
   },
   "contract": "rozkalns.hermes-deals.runner-smoke-install.v2",
+  "execution_bridge": {
+    "caller_argv_allowed": false,
+    "caller_command_allowed": false,
+    "caller_environment_allowed": false,
+    "caller_hash_or_sha_allowed": false,
+    "caller_identity_allowed": false,
+    "caller_mutation_sequence_allowed": false,
+    "caller_path_allowed": false,
+    "caller_target_or_operation_allowed": false,
+    "canonical_revalidation_immediately_before_apply": true,
+    "external_entrypoint_enabled": false,
+    "fixed_apply_target": "ops/lib/deploy_executor/hermes_deals_runner_smoke_install.py:apply_install",
+    "global_executor_execution_enabled": false,
+    "implementation": "ops/lib/deploy_executor/hermes_deals_runner_smoke_install_execution_bridge.py:execute_install_for_authorization",
+    "implementation_issue": 534,
+    "prebuilt_live_envelope_allowed": false,
+    "request_authority": [
+      "authorization_issue_number"
+    ],
+    "runtime_activation_enabled": false
+  },
   "execution_identity": {
     "account": "hermes-deals-audit-canary",
     "caller_selectable": false,
@@ -101,11 +122,14 @@
     "system_account": true
   },
   "handoff": {
+    "execution_bridge_external_entrypoint_enabled": false,
+    "execution_bridge_implemented": true,
+    "future_live_gate_source_reachable": true,
     "helper_invoked": false,
     "live_auth_created": false,
     "live_envelope_consumer_enabled": false,
     "live_envelope_consumer_implemented": true,
-    "next_owner_gate": "SEPARATE_EXACT_LIVE_AUTHORIZATION_AFTER_MERGE_AND_EXACT_MAIN_CI",
+    "next_owner_gate": "SEPARATE_MERGE_AUTHORIZATION_FOR_ISSUE_534_PR_THEN_LATER_EXACT_LIVE_AUTHORIZATION",
     "production_mutation_started": false,
     "ready_queue_created": false,
     "runtime_installation_performed": false,
@@ -161,5 +185,5 @@
     "ordinary_live_all_eligible": false,
     "registry": "ops/deploy/executor-operations.json"
   },
-  "status": "SOURCE_READY_LIVE_DISABLED"
+  "status": "SOURCE_READY_LIVE_DISABLED_EXECUTION_BRIDGE"
 }
