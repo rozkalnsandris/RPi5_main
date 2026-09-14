@@ -15,6 +15,7 @@ test:
 	python3 ./tests/test-control-phase5-observation-transport.py
 	python3 ./tests/test-control-phase5-observation-signer.py
 	python3 ./tests/test-control-phase5-observation-credential-bootstrap.py
+	python3 ./tests/test-control-phase5-observation-credential-reconciliation.py
 	python3 ./tests/test-control-phase5-signer-handoff.py
 	python3 ./tests/test-control-phase5-observation-delivery.py
 	python3 ./tests/test-deploy-executor-p1.py

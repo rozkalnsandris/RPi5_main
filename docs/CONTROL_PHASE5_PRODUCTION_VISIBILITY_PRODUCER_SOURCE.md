@@ -77,8 +77,7 @@ separately reviewed observation authority exists.
 ## Failure behavior
 
 Unsafe, missing, malformed, contradictory, wrong-repository, wrong-schema, or
-wrong-commit controlled-deploy state emits only a public-safe STOP code. The CLI
-also fails closed for a non-root production execution identity.
+wrong-commit controlled-deploy state emits only a public-safe STOP code.
 
 STOP receipts state:
 
@@ -97,8 +96,12 @@ to the exact current `RPi5_main/main` SHA with required checks passing. With
 that SHA `<MAIN_SHA>`, the reviewed GET-only invocation is:
 
 ```text
-sudo python3 /path/to/exact-reviewed-checkout/ops/bin/rpi5-control-phase5-production-visibility --expected-main-sha <MAIN_SHA>
+python3 /path/to/exact-reviewed-checkout/ops/bin/rpi5-control-phase5-production-visibility --expected-main-sha <MAIN_SHA>
 ```
+
+The CLI neither requires nor elevates privilege. Its execution identity must
+already have sufficient read/search permissions for the reviewed observation
+path; the producer does not alter permissions or invoke `sudo`.
 
 The checkout/source provenance for that future invocation must itself be
 revalidated before execution. This document does not authorize executing the

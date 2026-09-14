@@ -175,5 +175,13 @@ class ProductionVisibilityProducerTests(unittest.TestCase):
         self.assertIn("normalize_production_visibility", source)
 
 
+    def test_cli_and_docs_do_not_require_root_or_sudo(self):
+        cli = (ROOT / "ops/bin/rpi5-control-phase5-production-visibility").read_text().lower()
+        docs = (ROOT / "docs/CONTROL_PHASE5_PRODUCTION_VISIBILITY_PRODUCER_SOURCE.md").read_text().lower()
+        self.assertNotIn("geteuid", cli)
+        self.assertNotIn("execution_identity_invalid", cli)
+        self.assertNotIn("sudo", cli)
+        self.assertNotIn("sudo python3", docs)
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

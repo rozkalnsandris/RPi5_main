@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
 import sys
 
@@ -32,8 +31,6 @@ def main() -> int:
     parser = argparse.ArgumentParser(add_help=True)
     parser.add_argument("--expected-main-sha", required=True)
     args = parser.parse_args()
-    if os.geteuid() != 0:
-        return stop("EXECUTION_IDENTITY_INVALID")
     try:
         value = producer.observe_production_visibility(
             expected_main_sha=args.expected_main_sha,
