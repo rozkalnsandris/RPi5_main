@@ -7,10 +7,11 @@ script="$repo/scripts/rpi5-deploy"
 python="$repo/scripts/rpi5_deploy.py"
 lib="$repo/scripts/rpi5_deploy_lib.py"
 tx="$repo/scripts/rpi5_deploy_tx.py"
+weathernext_bootstrap="$repo/scripts/rpi5_weathernext_bootstrap.py"
 manifest="$repo/ops/deploy/targets.json"
 
 bash -n "$script"
-python3 -m py_compile "$python" "$lib" "$tx"
+python3 -m py_compile "$python" "$lib" "$tx" "$weathernext_bootstrap"
 python3 - "$manifest" <<'PY'
 import json
 import sys
@@ -93,6 +94,7 @@ for relative in \
     scripts/rpi5_deploy.py \
     scripts/rpi5_deploy_lib.py \
     scripts/rpi5_deploy_tx.py \
+    scripts/rpi5_weathernext_bootstrap.py \
     ops/deploy/targets.json \
     ops/bin/rpi5-backup \
     ops/bin/rpi5-backup-serialized \
@@ -129,6 +131,7 @@ old_rotate_sha="$(sha256sum "$fake_root/etc/logrotate.d/rpi5-backup" | awk '{pri
     git config user.email test@example.invalid
     git add \
         scripts/rpi5-deploy scripts/rpi5_deploy.py scripts/rpi5_deploy_lib.py scripts/rpi5_deploy_tx.py \
+        scripts/rpi5_weathernext_bootstrap.py \
         ops/deploy/targets.json ops/bin/rpi5-backup ops/bin/rpi5-backup-serialized \
         ops/lib/rpi5-maintenance-locks.sh ops/cron.d/rpi5-backup ops/logrotate.d/rpi5-backup \
         ops/backup/rpi5-backup.conf.example baselines/runtime/current.json
