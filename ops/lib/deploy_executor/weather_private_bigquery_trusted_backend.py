@@ -73,6 +73,8 @@ def _is_git_sha(value: str) -> bool:
 class CanonicalPrivateFacts:
     authorization_issue_number: int
     owner_authorized: bool
+    authorization_operation_id: str
+    authorization_contract_id: str
     rpi5_main_source_sha: str
     rpi5_main_ci_success: bool
     weather_source_sha: str
@@ -158,6 +160,10 @@ def validate_canonical_private_facts(
         raise WeatherNextPrivateTrustedBackendError("owner authorization issue identity mismatch")
     if not facts.owner_authorized:
         raise WeatherNextPrivateTrustedBackendError("owner authorization is not active")
+    if facts.authorization_operation_id != BRIDGE_OPERATION_ID:
+        raise WeatherNextPrivateTrustedBackendError("owner authorization operation identity mismatch")
+    if facts.authorization_contract_id != CONTRACT_ID:
+        raise WeatherNextPrivateTrustedBackendError("owner authorization contract identity mismatch")
     if facts.target_alias != TARGET_ALIAS:
         raise WeatherNextPrivateTrustedBackendError("private target must remain rpi5")
     if not _is_git_sha(facts.rpi5_main_source_sha):
