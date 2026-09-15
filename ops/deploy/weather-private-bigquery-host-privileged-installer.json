@@ -14,7 +14,10 @@
   "privileged_dispatch_enabled": false,
   "source_merge_authorizes_live": false,
   "privileged_boundary": {
-    "status": "SOURCE_READY_HOST_BOOTSTRAP_REQUIRED",
+    "status": "SOURCE_READY_V12_ENGINE_UPGRADE_REQUIRED",
+    "manager_checkout": "/home/andris/RPi5_main",
+    "manager_origin": "https://github.com/rozkalnsandris/RPi5_main.git",
+    "manager_role": "git-object-and-reviewed-origin-source-only",
     "trusted_checkout": "/var/lib/rpi5-deploy/RPi5_main-weathernext-private-installer-trusted",
     "entrypoint_source": "ops/bin/rpi5-weathernext-private-host-privileged-install",
     "entrypoint_destination": "/usr/local/sbin/rpi5-weathernext-private-host-privileged-install",
@@ -23,6 +26,8 @@
     "entrypoint_owner_gid": 0,
     "bootstrap_operation_id": "rpi5.weathernext-private-installer-boundary.install.v1",
     "bootstrap_target_alias": "rpi5-weathernext-private-installer-boundary",
+    "bootstrap_command": "bash ./scripts/rpi5-deploy weather-private-installer-bootstrap --authorization-issue-number <issue>",
+    "caller_authority": ["authorization_issue_number"],
     "bootstrap_mutation_budget": [
       {"category": "git.weathernext-private-installer-checkout-fetch", "max_operations": 1},
       {"category": "git.weathernext-private-installer-checkout-worktree-add", "max_operations": 1},
@@ -32,6 +37,31 @@
     "agent_sudo_allowed": false,
     "generic_root_shell_allowed": false,
     "generic_command_path_argv_environment_allowed": false
+  },
+  "v12_engine_activation": {
+    "status_before_activation": "SOURCE_READY_V12_ENGINE_UPGRADE_REQUIRED",
+    "status_after_verified_activation": "HOST_V12_WEATHERNEXT_BOOTSTRAP_CAPABILITY_INSTALLED",
+    "activation_is_separate_live_gate": true,
+    "source_merge_authorizes_activation": false,
+    "manager_checkout": "/home/andris/RPi5_main",
+    "trusted_engine_source_checkout": "/home/andris/RPi5_main-v12-engine-trusted",
+    "reviewed_origin": "https://github.com/rozkalnsandris/RPi5_main.git",
+    "source_staging": [
+      "git ls-remote origin refs/heads/main and bind exact merged main SHA before mutation",
+      "git fetch --no-tags origin refs/heads/main:refs/remotes/origin/main",
+      "git update-ref refs/heads/main <exact-merged-main-sha>",
+      "git worktree add /home/andris/RPi5_main-v12-engine-trusted refs/heads/main"
+    ],
+    "manager_worktree_index_head_must_remain_unchanged": true,
+    "trusted_engine_source_must_be_clean_main_at_exact_sha": true,
+    "engine_install_command": "bash /home/andris/RPi5_main-v12-engine-trusted/scripts/rpi5-deploy install-engine --confirm <12-character-exact-merged-main-sha>",
+    "verification_command": "bash /home/andris/RPi5_main-v12-engine-trusted/scripts/rpi5-deploy engine-status",
+    "expected_release": "/usr/local/libexec/rpi5-deploy/releases/<exact-merged-main-sha>",
+    "expected_wrapper": "/usr/local/sbin/rpi5-deploy",
+    "weather_bootstrap_executes_during_engine_upgrade": false,
+    "automatic_retry_after_failure": false,
+    "automatic_cleanup_after_failure": false,
+    "automatic_rollback_after_failure": false
   },
   "capability_install": {
     "trusted_checkout": "/var/lib/rpi5-deploy/RPi5_main-weathernext-private-host-trusted",
@@ -94,6 +124,6 @@
     "bigquery_executed": false,
     "sqlite_write_executed": false
   },
-  "next_gate_after_merge": "ONE_TIME_WEATHERNEXT_PRIVATE_PRIVILEGED_BOUNDARY_BOOTSTRAP_THEN_CAPABILITY_INSTALL",
+  "next_gate_after_merge": "OWNER_AUTHORIZED_EXACT_SHA_V12_ENGINE_UPGRADE_THEN_RESUME_556",
   "production_mutation_started": false
 }
