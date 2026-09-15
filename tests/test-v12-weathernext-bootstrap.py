@@ -217,7 +217,10 @@ for forbidden in (
 ):
     assert forbidden not in bootstrap_source, f"forbidden bootstrap authority/mechanism present: {forbidden!r}"
 
-assert '_manager_git(manager, "fetch"' in bootstrap_source
+fetch_source_block = bootstrap_source[bootstrap_source.index("def _fetch_source"):bootstrap_source.index("def _add_trusted_worktree")]
+assert '"fetch",' in fetch_source_block
+assert '"--no-tags",' in fetch_source_block
+assert '"refs/heads/main:refs/remotes/origin/main",' in fetch_source_block
 assert '_git_checkout(manager, "worktree", "add", "--detach"' in bootstrap_source
 assert '"hash-object", "--no-filters"' in bootstrap_source
 assert "O_CREAT" not in bootstrap_source[bootstrap_source.index("def _existing_operation_lock"):bootstrap_source.index("def _final_authority_revalidation")]
