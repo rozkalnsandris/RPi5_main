@@ -77,6 +77,7 @@ def main() -> None:
             "scripts/rpi5_deploy.py",
             "scripts/rpi5_deploy_lib.py",
             "scripts/rpi5_deploy_tx.py",
+            "scripts/rpi5_weathernext_bootstrap.py",
             "ops/deploy/targets.json",
             "ops/bin/rpi5-backup",
             "ops/bin/rpi5-backup-serialized",
