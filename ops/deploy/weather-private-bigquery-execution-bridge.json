@@ -1,0 +1,56 @@
+{
+  "authorization_class": "STRICT",
+  "authorized_stage_sequence": [
+    "weathernext_private_application_staging",
+    "weathernext_private_runtime_materialization",
+    "google_auth_binding",
+    "google_project_binding",
+    "analytics_hub_link_create",
+    "read_only_private_bigquery"
+  ],
+  "caller_controls": {
+    "argv": false,
+    "command": false,
+    "credential_material": false,
+    "environment": false,
+    "executable": false,
+    "mutation_sequence": false,
+    "path": false,
+    "private_google_identity": false,
+    "query_text": false,
+    "source_sha": false,
+    "target": false
+  },
+  "execution_enabled": false,
+  "failure_semantics": {
+    "alternate_project_or_dataset": false,
+    "authorization_consumed_before_first_authorized_action": true,
+    "automatic_cleanup": false,
+    "automatic_retry": false,
+    "automatic_rollback": false,
+    "credential_substitution": false,
+    "sqlite_recovery": false
+  },
+  "first_access": {
+    "dry_run_required": true,
+    "forecast_hours": 6,
+    "home_scope_enabled": false,
+    "location_id": "station_10416",
+    "maximum_bytes_billed_per_query_hard_ceiling": 1073741824,
+    "required_surfaces": [
+      "0p05_station",
+      "0p1_surface"
+    ],
+    "sqlite_write_enabled": false,
+    "use_smallest_defensible_fresh_dry_run_cap": true
+  },
+  "operation_id": "rozkalns-weather.weathernext-private-execution-bridge.v1",
+  "ordinary_live_all_eligible": false,
+  "request_authority": [
+    "authorization_issue_number"
+  ],
+  "schema": "rozkalns-weather.weathernext-private-execution-bridge-source.v1",
+  "separate_later_gate": "production_sqlite_forecast_snapshot_write",
+  "source_merge_authorizes_live": false,
+  "target_alias": "rpi5"
+}
