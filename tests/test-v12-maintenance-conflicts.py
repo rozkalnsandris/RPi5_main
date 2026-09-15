@@ -172,7 +172,7 @@ control_source = ast.get_source_segment(deploy_source, control_state) or ""
 assert "lock_path.exists()" not in control_source
 assert "lock_path.lstat()" not in control_source
 assert "_probe_deploy_lock()" in control_source
-assert 'Path("/var/lib/rpi5-deploy/deploy.lock")' in deploy_source
+assert 'pathlib.Path("/var/lib/rpi5-deploy/deploy.lock")' in deploy_source
 assert '"sudo", "/usr/bin/stat", "--printf=%f:%u:%g:%h"' in deploy_source
 
 print("V12 maintenance conflict and root-only control-state regression: PASS")
