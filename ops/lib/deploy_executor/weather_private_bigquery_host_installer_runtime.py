@@ -26,9 +26,6 @@ from .state import EXPECTED_COLUMNS, STATE_DB_APPLICATION_ID, STATE_DB_SCHEMA_VE
 from .weather_private_bigquery_host_installer import (
     ADAPTER_ID,
     BASELINE_RESOLVER_ID,
-    DEPENDENCIES if False else ADAPTER_ID,
-)
-from .weather_private_bigquery_host_installer import (
     CanonicalInstallEvidence,
     PosixFixedInstallBackend,
     REQUIRED_EXCLUSIONS,
@@ -378,6 +375,7 @@ def _require_stable_evidence(first: CanonicalInstallEvidence, final: CanonicalIn
     for field in (
         "authorization_issue_number",
         "authorization_issue_id",
+        "authorization_created_at",
         "request_id",
         "request_body_sha256",
         "operation_id",
