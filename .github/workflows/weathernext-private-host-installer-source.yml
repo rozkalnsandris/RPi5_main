@@ -8,6 +8,7 @@ on:
       - "ops/bin/rpi5-weathernext-private-host-privileged-install"
       - "ops/deploy/weather-private-bigquery-host-privileged-installer.json"
       - "tests/test-deploy-executor-weather-private-bigquery-host-installer.py"
+      - "tests/test-deploy-executor-weather-private-bigquery-host-installer-git-trust.py"
       - "docs/WEATHERNEXT_PRIVATE_HOST_INSTALLER.md"
       - ".github/workflows/weathernext-private-host-installer-source.yml"
   push:
@@ -18,6 +19,7 @@ on:
       - "ops/bin/rpi5-weathernext-private-host-privileged-install"
       - "ops/deploy/weather-private-bigquery-host-privileged-installer.json"
       - "tests/test-deploy-executor-weather-private-bigquery-host-installer.py"
+      - "tests/test-deploy-executor-weather-private-bigquery-host-installer-git-trust.py"
       - "docs/WEATHERNEXT_PRIVATE_HOST_INSTALLER.md"
       - ".github/workflows/weathernext-private-host-installer-source.yml"
 
@@ -48,6 +50,7 @@ jobs:
           set -euo pipefail
           python3 tests/test-deploy-executor-weather-private-bigquery-host-runtime.py
           python3 tests/test-deploy-executor-weather-private-bigquery-host-installer.py
+          python3 tests/test-deploy-executor-weather-private-bigquery-host-installer-git-trust.py
       - name: Validate closed installer contract
         run: |
           set -euo pipefail
