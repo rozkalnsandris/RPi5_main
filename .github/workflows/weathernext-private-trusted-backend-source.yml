@@ -1,0 +1,65 @@
+name: WeatherNext private trusted backend source
+
+on:
+  pull_request:
+    paths:
+      - "ops/lib/deploy_executor/weather_private_bigquery_trusted_backend.py"
+      - "ops/deploy/weather-private-bigquery-trusted-backend.json"
+      - "tests/test-deploy-executor-weather-private-bigquery-trusted-backend.py"
+      - "docs/WEATHERNEXT_PRIVATE_BIGQUERY_TRUSTED_BACKEND.md"
+      - ".github/workflows/weathernext-private-trusted-backend-source.yml"
+      - "ops/lib/deploy_executor/weather_private_bigquery_execution_bridge.py"
+      - "ops/lib/deploy_executor/weather_private_bigquery_runtime_materialization.py"
+      - "ops/lib/deploy_executor/weather_private_bigquery_contract.py"
+  push:
+    branches:
+      - main
+    paths:
+      - "ops/lib/deploy_executor/weather_private_bigquery_trusted_backend.py"
+      - "ops/deploy/weather-private-bigquery-trusted-backend.json"
+      - "tests/test-deploy-executor-weather-private-bigquery-trusted-backend.py"
+      - "docs/WEATHERNEXT_PRIVATE_BIGQUERY_TRUSTED_BACKEND.md"
+      - ".github/workflows/weathernext-private-trusted-backend-source.yml"
+      - "ops/lib/deploy_executor/weather_private_bigquery_execution_bridge.py"
+      - "ops/lib/deploy_executor/weather_private_bigquery_runtime_materialization.py"
+      - "ops/lib/deploy_executor/weather_private_bigquery_contract.py"
+
+permissions:
+  contents: read
+
+jobs:
+  source-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate private WeatherNext trusted backend
+        run: |
+          set -euo pipefail
+          python3 ./tests/test-deploy-executor-weather-private-bigquery.py
+          python3 ./tests/test-deploy-executor-weather-private-bigquery-runtime.py
+          python3 ./tests/test-deploy-executor-weather-private-bigquery-execution-bridge.py
+          python3 ./tests/test-deploy-executor-weather-private-bigquery-trusted-backend.py
+          python3 -m py_compile \
+            ops/lib/deploy_executor/weather_private_bigquery_contract.py \
+            ops/lib/deploy_executor/weather_private_bigquery_runtime_materialization.py \
+            ops/lib/deploy_executor/weather_private_bigquery_execution_bridge.py \
+            ops/lib/deploy_executor/weather_private_bigquery_trusted_backend.py
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("ops/deploy/weather-private-bigquery-trusted-backend.json")
+          value = json.loads(path.read_text(encoding="utf-8"))
+          if value["schema"] != "rozkalns-weather.weathernext-private-trusted-backend-source.v1":
+              raise SystemExit("trusted backend contract schema mismatch")
+          if value["execution_enabled"] is not False:
+              raise SystemExit("trusted backend source must remain execution-disabled")
+          if value["source_merge_authorizes_live"] is not False:
+              raise SystemExit("source merge must not authorize LIVE")
+          PY
