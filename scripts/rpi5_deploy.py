@@ -7,6 +7,7 @@ import json
 import os
 import pathlib
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -16,10 +17,10 @@ import rpi5_deploy_lib as deploy_lib
 from rpi5_deploy_lib import (CTX, ENGINE_INSTALLED_FILES, ENGINE_RELEASES,
     ENGINE_SCHEMA, ENGINE_SOURCE_FILES, EXPECTED_REPOSITORY, DeployError,
     append_log, atomic_json, build_plan, engine_source_preflight, ensure_no_conflicts,
-    expected_fingerprint, fingerprint, git, github_checks, host_identity,
+    expected_fingerprint, fingerprint, fsync_dir, git, github_checks, host_identity,
     host_preflight, load_plan, operation_lock, read_manifest,
     repository_preflight, require_normal_user, require_root, run, safe_file,
-    sha256_file, verify_engine_integrity, verify_plan_targets)
+    sha256_file, verify_dir, verify_engine_integrity, verify_plan_targets)
 from rpi5_deploy_tx import apply_plan, latest_transaction, manual_rollback
 
 WEATHERNEXT_ENGINE_SOURCE = "scripts/rpi5_weathernext_bootstrap.py"
@@ -200,11 +201,78 @@ def stage_engine_release(
     return metadata_path, wrapper_path
 
 
+def engine_install_repository_preflight() -> dict[str, str]:
+    if CTX.test_mode:
+        return repository_preflight(validate=True)
+    remote = git("remote", "get-url", "origin")
+    if not deploy_lib.REMOTE_RE.fullmatch(remote):
+        raise DeployError("origin is not the approved credential-free GitHub remote")
+    branch = git("branch", "--show-current")
+    if branch not in {"", "main"}:
+        raise DeployError("engine installation requires exact main or a clean detached exact-main worktree")
+    if git("status", "--porcelain=v1", "--untracked-files=all"):
+        raise DeployError("engine installation repository working tree is not clean")
+    git("fetch", "--prune", "origin", "main")
+    head = git("rev-parse", "HEAD")
+    origin = git("rev-parse", "origin/main")
+    if head != origin:
+        raise DeployError("engine installation HEAD does not equal origin/main")
+    if branch == "main" and git("rev-parse", "main") != head:
+        raise DeployError("engine installation main branch does not equal HEAD")
+    run(["make", "validate"], cwd=CTX.repo, capture=False, timeout=1200, as_user=True)
+    return {
+        "branch": branch or "detached",
+        "head": head,
+        "origin_main": origin,
+        "remote": "github.com/rozkalnsandris/RPi5_main",
+    }
+
+
+def _require_fixed_control_file(path: pathlib.Path, mode: int) -> None:
+    info = path.lstat()
+    if (
+        not stat.S_ISREG(info.st_mode)
+        or stat.S_ISLNK(info.st_mode)
+        or info.st_nlink != 1
+        or info.st_uid != 0
+        or info.st_gid != 0
+        or stat.S_IMODE(info.st_mode) != mode
+    ):
+        raise DeployError(f"deploy engine control file drifted: {path}")
+
+
+def ensure_engine_control_state() -> None:
+    state_dir = pathlib.Path("/var/lib/rpi5-deploy")
+    lock_path = state_dir / "deploy.lock"
+    if state_dir.exists():
+        info = verify_dir(state_dir, root_owned=True)
+        if info.st_gid != 0 or stat.S_IMODE(info.st_mode) != 0o700:
+            raise DeployError("deploy engine state directory metadata drifted")
+    else:
+        run([
+            "sudo", "install", "-d", "-o", "root", "-g", "root", "-m", "0700",
+            str(state_dir),
+        ], capture=False)
+    if lock_path.exists():
+        _require_fixed_control_file(lock_path, 0o600)
+    else:
+        with tempfile.NamedTemporaryFile(prefix="rpi5-deploy-lock-", delete=False) as handle:
+            temporary = pathlib.Path(handle.name)
+        try:
+            run([
+                "sudo", "install", "-o", "root", "-g", "root", "-m", "0600",
+                str(temporary), str(lock_path),
+            ], capture=False)
+        finally:
+            temporary.unlink(missing_ok=True)
+    _require_fixed_control_file(lock_path, 0o600)
+
+
 def install_engine(confirm: str) -> None:
     require_normal_user()
     if CTX.installed_engine:
         raise DeployError("install-engine must run from the repository controller")
-    repository = repository_preflight(validate=True)
+    repository = engine_install_repository_preflight()
     require_target_contract()
     checks = github_checks(repository["head"])
     require_repo_checks(checks)
@@ -247,6 +315,7 @@ def install_engine(confirm: str) -> None:
                          "/usr/bin/python3", str(release / "rpi5_deploy.py"), "engine-status",
                          "--release-only"]
         run(direct_engine, capture=False, timeout=300)
+        ensure_engine_control_state()
         run(["sudo", "install", "-o", "root", "-g", "root", "-m", "0700",
              str(wrapper_path), str(system_wrapper_tmp)], capture=False)
         run(["sudo", "mv", "-f", "--", str(system_wrapper_tmp), str(system_wrapper)], capture=False)
@@ -416,10 +485,11 @@ def main() -> int:
             logs(args.lines)
     except (DeployError, OSError, json.JSONDecodeError, subprocess.TimeoutExpired) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
-        try:
-            append_log(f"FAIL command={args.command} reason={str(exc)[:500]}")
-        except Exception:
-            pass
+        if args.command != "weather-private-installer-bootstrap":
+            try:
+                append_log(f"FAIL command={args.command} reason={str(exc)[:500]}")
+            except Exception:
+                pass
         return 1
     return 0
 

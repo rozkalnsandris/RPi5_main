@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import email.utils
+import fcntl
 import hashlib
 import json
 import os
 import pathlib
+import pwd
 import re
 import stat
 import uuid
@@ -22,7 +24,6 @@ from rpi5_deploy_lib import (
     fsync_dir,
     github_checks,
     host_identity,
-    operation_lock,
     require_root,
     run,
     safe_target_parent,
@@ -75,10 +76,8 @@ FIXED_DEPENDENCIES = [
     "identity-only-live-auth-issue-number",
 ]
 
-# Fresh read-only host evidence for #557 established this as the only compatible
-# existing operator-owned RPi5_main manager checkout. It is Git object/remote
-# source only; its checked-out content is never execution authority.
-MANAGER_CHECKOUT = "/home/andris/RPi5_main"
+MANAGER_CHECKOUT_BASENAME = "RPi5_main"
+MANAGER_CHECKOUT_RESOLVER = "repo-owner-home/RPi5_main"
 TRUSTED_CHECKOUT = "/var/lib/rpi5-deploy/RPi5_main-weathernext-private-installer-trusted"
 ENTRYPOINT_SOURCE = "ops/bin/rpi5-weathernext-private-host-privileged-install"
 ENTRYPOINT_DESTINATION = "/usr/local/sbin/rpi5-weathernext-private-host-privileged-install"
@@ -143,11 +142,15 @@ class BootstrapStop(DeployError):
 
 def capability_descriptor() -> dict[str, str]:
     return {
-        "status": "SOURCE_READY_V12_ENGINE_UPGRADE_REQUIRED",
+        "status": (
+            "HOST_V12_WEATHERNEXT_BOOTSTRAP_CAPABILITY_INSTALLED"
+            if CTX.installed_engine
+            else "SOURCE_READY_V12_ENGINE_UPGRADE_REQUIRED"
+        ),
         "operation": OPERATION_ID,
         "target": TARGET_ALIAS,
         "caller_input": "authorization_issue_number",
-        "manager_checkout": MANAGER_CHECKOUT,
+        "manager_checkout_resolver": MANAGER_CHECKOUT_RESOLVER,
         "rollback_policy": ROLLBACK_POLICY,
     }
 
@@ -218,8 +221,12 @@ def _server_time(value: str) -> datetime:
 
 def _gh_api_json(path: str) -> tuple[Mapping[str, Any], datetime]:
     result = run(
-        ["gh", "api", "-i", "-H", "Accept: application/vnd.github+json",
-         "-H", "X-GitHub-Api-Version: 2022-11-28", path],
+        [
+            "gh", "api", "-i",
+            "-H", "Accept: application/vnd.github+json",
+            "-H", "X-GitHub-Api-Version: 2022-11-28",
+            path,
+        ],
         cwd=CTX.repo,
         timeout=120,
         as_user=True,
@@ -266,8 +273,8 @@ def _validate_payload(payload: Mapping[str, Any]) -> Mapping[str, Any]:
         raise BootstrapStop("LIVE-AUTH rollback policy mismatch")
     if payload.get("exclusions") != EXCLUSIONS:
         raise BootstrapStop("LIVE-AUTH exclusions mismatch")
-    deps = payload.get("dependencies")
-    if type(deps) is not list or not all(type(item) is str for item in deps):
+    dependencies = payload.get("dependencies")
+    if type(dependencies) is not list or not all(type(item) is str for item in dependencies):
         raise BootstrapStop("LIVE-AUTH dependencies are invalid")
     return payload
 
@@ -301,10 +308,10 @@ def accept_authorization(issue: Mapping[str, Any], *, server_time: datetime) -> 
         raise BootstrapStop("LIVE-AUTH body is invalid or too large")
     if body.count(START_MARKER) != 1 or body.count(END_MARKER) != 1:
         raise BootstrapStop("LIVE-AUTH authority block count is invalid")
-    match = PAYLOAD_RE.search(body)
-    if match is None:
+    body_match = PAYLOAD_RE.search(body)
+    if body_match is None:
         raise BootstrapStop("LIVE-AUTH authority block is malformed")
-    payload = _validate_payload(_strict_json(match.group("payload")))
+    payload = _validate_payload(_strict_json(body_match.group("payload")))
     canonical = _canonical_json(payload)
     return AcceptedAuthorization(
         issue_id=issue_id,
@@ -316,9 +323,13 @@ def accept_authorization(issue: Mapping[str, Any], *, server_time: datetime) -> 
     )
 
 
-def verify_authorization_unchanged(accepted: AcceptedAuthorization, issue: Mapping[str, Any], *, server_time: datetime) -> None:
-    current = accept_authorization(issue, server_time=server_time)
-    if current != accepted:
+def verify_authorization_unchanged(
+    accepted: AcceptedAuthorization,
+    issue: Mapping[str, Any],
+    *,
+    server_time: datetime,
+) -> None:
+    if accept_authorization(issue, server_time=server_time) != accepted:
         raise BootstrapStop("LIVE-AUTH changed after acceptance")
 
 
@@ -379,6 +390,7 @@ def normalize_ready_queue(issue: Mapping[str, Any]) -> NormalizedQueue:
         if _leading_code(fields, key) != expected:
             raise BootstrapStop(f"queue fixed machine field mismatch: {key}")
     contract_sha = _sha256_text(_canonical_json(dict(sorted(fields.items()))))
+    dependencies = [*FIXED_DEPENDENCIES, f"queue-contract-sha256:{contract_sha}"]
     normalized = {
         "repository": QUEUE_REPOSITORY,
         "issue_number": issue_number,
@@ -391,12 +403,13 @@ def normalize_ready_queue(issue: Mapping[str, Any]) -> NormalizedQueue:
         "mutation_budget": MUTATION_BUDGET,
         "rollback_policy": ROLLBACK_POLICY,
         "exclusions": EXCLUSIONS,
-        "dependencies": [*FIXED_DEPENDENCIES, f"queue-contract-sha256:{contract_sha}"],
+        "dependencies": dependencies,
     }
+    canonical = _canonical_json(normalized)
     return NormalizedQueue(
         issue_id=issue_id,
         issue_number=issue_number,
-        canonical_json=_canonical_json(normalized),
+        canonical_json=canonical,
         raw_body_sha256=_sha256_text(str(body)),
         contract_sha256=contract_sha,
     )
@@ -425,11 +438,21 @@ def validate_queue_binding(accepted: AcceptedAuthorization, queue: NormalizedQue
 
 def verify_queue_unchanged(accepted: NormalizedQueue, issue: Mapping[str, Any]) -> None:
     current = normalize_ready_queue(issue)
-    if current != accepted:
+    if (
+        current.issue_id != accepted.issue_id
+        or current.issue_number != accepted.issue_number
+        or current.canonical_json != accepted.canonical_json
+        or current.raw_body_sha256 != accepted.raw_body_sha256
+    ):
         raise BootstrapStop("READY queue changed after acceptance")
 
 
-def _git_checkout(path: pathlib.Path, *args: str, check: bool = True, as_manager_user: bool = False) -> str:
+def _git_checkout(
+    path: pathlib.Path,
+    *args: str,
+    check: bool = True,
+    as_manager_user: bool = False,
+) -> str:
     result = run(
         ["git", "-c", f"safe.directory={path}", "-C", str(path), *args],
         check=check,
@@ -444,7 +467,11 @@ def _manager_git(manager: pathlib.Path, *args: str, check: bool = True) -> str:
 
 
 def _manager_checkout() -> pathlib.Path:
-    manager = pathlib.Path(MANAGER_CHECKOUT) if not CTX.test_mode else CTX.rooted(MANAGER_CHECKOUT)
+    if CTX.test_mode:
+        manager = CTX.fake_root / "manager-home" / MANAGER_CHECKOUT_BASENAME
+    else:
+        owner_home = pathlib.Path(pwd.getpwnam(CTX.deploy_user).pw_dir)
+        manager = owner_home / MANAGER_CHECKOUT_BASENAME
     info = manager.lstat()
     if not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode):
         raise BootstrapStop("fixed manager checkout is not a real directory")
@@ -472,7 +499,12 @@ def _require_manager_snapshot(manager: pathlib.Path, before: tuple[str, str]) ->
 def _remote_main_sha(manager: pathlib.Path) -> str:
     output = _manager_git(manager, "ls-remote", "--exit-code", "origin", "refs/heads/main")
     rows = [line.split() for line in output.splitlines() if line.strip()]
-    if len(rows) != 1 or len(rows[0]) != 2 or rows[0][1] != "refs/heads/main" or SHA_RE.fullmatch(rows[0][0]) is None:
+    if (
+        len(rows) != 1
+        or len(rows[0]) != 2
+        or rows[0][1] != "refs/heads/main"
+        or SHA_RE.fullmatch(rows[0][0]) is None
+    ):
         raise BootstrapStop("reviewed origin main ref response is invalid")
     return rows[0][0]
 
@@ -485,7 +517,9 @@ def _require_source_current(source_sha: str) -> None:
     obj = ref.get("object") if type(ref) is dict else None
     if type(obj) is not dict or obj.get("type") != "commit" or obj.get("sha") != source_sha:
         raise BootstrapStop("authorized source SHA is not current RPi5_main/main")
-    comparison, _ = _gh_api_json(f"repos/{SOURCE_REPOSITORY}/compare/{MINIMUM_REVIEWED_ANCESTOR}...{source_sha}")
+    comparison, _ = _gh_api_json(
+        f"repos/{SOURCE_REPOSITORY}/compare/{MINIMUM_REVIEWED_ANCESTOR}...{source_sha}"
+    )
     merge_base = comparison.get("merge_base_commit") if type(comparison) is dict else None
     if type(merge_base) is not dict or merge_base.get("sha") != MINIMUM_REVIEWED_ANCESTOR:
         raise BootstrapStop("authorized source is not descended from the reviewed WeatherNext baseline")
@@ -504,6 +538,20 @@ def _read_queue(issue_number: int) -> NormalizedQueue:
     _require_repo_identity(QUEUE_REPOSITORY, QUEUE_REPOSITORY_ID)
     issue, _ = _gh_api_json(f"repos/{QUEUE_REPOSITORY}/issues/{issue_number}")
     return normalize_ready_queue(issue)
+
+
+def _expected_blob(manager: pathlib.Path, source_sha: str) -> str:
+    blob = _manager_git(manager, "rev-parse", f"{source_sha}:{ENTRYPOINT_SOURCE}")
+    if SHA_RE.fullmatch(blob) is None:
+        raise BootstrapStop("reviewed entrypoint blob identity is invalid")
+    return blob
+
+
+def _source_blob(path: pathlib.Path, source: pathlib.Path) -> str:
+    blob = _git_checkout(path, "hash-object", "--no-filters", str(source))
+    if SHA_RE.fullmatch(blob) is None:
+        raise BootstrapStop("entrypoint checkout blob identity is invalid")
+    return blob
 
 
 def _trusted_checkout_state(manager: pathlib.Path, source_sha: str) -> str:
@@ -529,16 +577,20 @@ def _trusted_checkout_state(manager: pathlib.Path, source_sha: str) -> str:
     source_info = source.lstat()
     if not stat.S_ISREG(source_info.st_mode) or stat.S_ISLNK(source_info.st_mode) or source_info.st_nlink != 1:
         raise BootstrapStop("WeatherNext bootstrap entrypoint source is unsafe")
-    reviewed_bytes = _manager_git(manager, "show", f"{source_sha}:{ENTRYPOINT_SOURCE}").encode("utf-8")
-    if source.read_bytes() != reviewed_bytes:
+    if _source_blob(trusted, source) != _expected_blob(manager, source_sha):
         raise BootstrapStop("WeatherNext trusted checkout entrypoint differs from reviewed Git object")
+    reviewed = source.read_bytes()
     dest_info = destination.lstat()
     expected_uid = os.getuid() if CTX.test_mode else 0
     expected_gid = os.getgid() if CTX.test_mode else 0
     if (
-        not stat.S_ISREG(dest_info.st_mode) or stat.S_ISLNK(dest_info.st_mode) or dest_info.st_nlink != 1
-        or dest_info.st_uid != expected_uid or dest_info.st_gid != expected_gid
-        or stat.S_IMODE(dest_info.st_mode) != ENTRYPOINT_MODE or destination.read_bytes() != reviewed_bytes
+        not stat.S_ISREG(dest_info.st_mode)
+        or stat.S_ISLNK(dest_info.st_mode)
+        or dest_info.st_nlink != 1
+        or dest_info.st_uid != expected_uid
+        or dest_info.st_gid != expected_gid
+        or stat.S_IMODE(dest_info.st_mode) != ENTRYPOINT_MODE
+        or destination.read_bytes() != reviewed
     ):
         raise BootstrapStop("installed WeatherNext bootstrap entrypoint conflicts with reviewed state")
     return "EXACT"
@@ -573,27 +625,42 @@ def _consume_authorization(accepted: AcceptedAuthorization, source_sha: str) -> 
     }
     raw = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
-    fd = os.open(marker, flags, 0o600)
+    descriptor = os.open(marker, flags, 0o600)
     try:
-        os.write(fd, raw)
-        os.fchmod(fd, 0o600)
+        offset = 0
+        while offset < len(raw):
+            written = os.write(descriptor, raw[offset:])
+            if written <= 0:
+                raise BootstrapStop("authorization consume marker write failed")
+            offset += written
+        os.fchmod(descriptor, 0o600)
         if not CTX.test_mode:
-            os.fchown(fd, 0, 0)
-        os.fsync(fd)
+            os.fchown(descriptor, 0, 0)
+        os.fsync(descriptor)
     finally:
-        os.close(fd)
+        os.close(descriptor)
     fsync_dir(CTX.state_dir)
     return marker
 
 
 def _fetch_source(manager: pathlib.Path, source_sha: str) -> None:
-    _manager_git(manager, "fetch", "--no-tags", "origin", "refs/heads/main:refs/remotes/origin/main")
+    _manager_git(
+        manager,
+        "fetch",
+        "--no-tags",
+        "origin",
+        "refs/heads/main:refs/remotes/origin/main",
+    )
     if _manager_git(manager, "rev-parse", "refs/remotes/origin/main^{commit}") != source_sha:
         raise BootstrapStop("fetched origin/main differs from authorized source SHA")
     result = run(
-        ["git", "-c", f"safe.directory={manager}", "-C", str(manager),
-         "merge-base", "--is-ancestor", MINIMUM_REVIEWED_ANCESTOR, source_sha],
-        check=False, timeout=60, as_user=True,
+        [
+            "git", "-c", f"safe.directory={manager}", "-C", str(manager),
+            "merge-base", "--is-ancestor", MINIMUM_REVIEWED_ANCESTOR, source_sha,
+        ],
+        check=False,
+        timeout=60,
+        as_user=True,
     )
     if result.returncode != 0:
         raise BootstrapStop("fetched authorized source failed reviewed ancestry check")
@@ -603,8 +670,6 @@ def _add_trusted_worktree(manager: pathlib.Path, source_sha: str) -> pathlib.Pat
     trusted = CTX.rooted(TRUSTED_CHECKOUT)
     if os.path.lexists(trusted):
         raise BootstrapStop("WeatherNext trusted checkout appeared before worktree creation")
-    # This exact worktree-add runs as root only because the fixed destination parent
-    # is root-owned 0700. It cannot select another path or source SHA.
     _git_checkout(manager, "worktree", "add", "--detach", str(trusted), source_sha)
     return trusted
 
@@ -620,10 +685,9 @@ def _reviewed_source_bytes(manager: pathlib.Path, trusted: pathlib.Path, source_
     info = source.lstat()
     if not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode) or info.st_nlink != 1:
         raise BootstrapStop("new trusted checkout entrypoint source is unsafe")
-    reviewed = _manager_git(manager, "show", f"{source_sha}:{ENTRYPOINT_SOURCE}").encode("utf-8")
-    if source.read_bytes() != reviewed:
+    if _source_blob(trusted, source) != _expected_blob(manager, source_sha):
         raise BootstrapStop("new trusted checkout entrypoint differs from reviewed Git object")
-    return reviewed
+    return source.read_bytes()
 
 
 def _install_entrypoint(reviewed: bytes) -> pathlib.Path:
@@ -632,35 +696,71 @@ def _install_entrypoint(reviewed: bytes) -> pathlib.Path:
     if os.path.lexists(destination):
         raise BootstrapStop("WeatherNext bootstrap entrypoint appeared before install")
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
-    fd = os.open(destination, flags, ENTRYPOINT_MODE)
+    descriptor = os.open(destination, flags, ENTRYPOINT_MODE)
     try:
         offset = 0
         while offset < len(reviewed):
-            written = os.write(fd, reviewed[offset:])
+            written = os.write(descriptor, reviewed[offset:])
             if written <= 0:
                 raise BootstrapStop("WeatherNext bootstrap entrypoint write failed")
             offset += written
-        os.fchmod(fd, ENTRYPOINT_MODE)
+        os.fchmod(descriptor, ENTRYPOINT_MODE)
         if not CTX.test_mode:
-            os.fchown(fd, 0, 0)
-        os.fsync(fd)
+            os.fchown(descriptor, 0, 0)
+        os.fsync(descriptor)
     finally:
-        os.close(fd)
+        os.close(descriptor)
     fsync_dir(destination.parent)
     info = destination.lstat()
     expected_uid = os.getuid() if CTX.test_mode else 0
     expected_gid = os.getgid() if CTX.test_mode else 0
     if (
-        not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode) or info.st_nlink != 1
-        or info.st_uid != expected_uid or info.st_gid != expected_gid
-        or stat.S_IMODE(info.st_mode) != ENTRYPOINT_MODE or destination.read_bytes() != reviewed
+        not stat.S_ISREG(info.st_mode)
+        or stat.S_ISLNK(info.st_mode)
+        or info.st_nlink != 1
+        or info.st_uid != expected_uid
+        or info.st_gid != expected_gid
+        or stat.S_IMODE(info.st_mode) != ENTRYPOINT_MODE
+        or destination.read_bytes() != reviewed
     ):
         raise BootstrapStop("installed WeatherNext bootstrap entrypoint verification failed")
     return destination
 
 
-def _final_authority_revalidation(accepted: AcceptedAuthorization, queue: NormalizedQueue, manager: pathlib.Path, manager_before: tuple[str, str]) -> None:
-    issue, server_time = _gh_api_json(f"repos/{AUTHORIZATION_REPOSITORY}/issues/{accepted.issue_number}")
+def _existing_operation_lock() -> Any:
+    verify_dir(CTX.state_dir, root_owned=not CTX.test_mode)
+    flags = os.O_RDWR | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(CTX.lock_path, flags)
+    info = os.fstat(descriptor)
+    expected_uid = os.getuid() if CTX.test_mode else 0
+    expected_gid = os.getgid() if CTX.test_mode else 0
+    if (
+        not stat.S_ISREG(info.st_mode)
+        or info.st_nlink != 1
+        or info.st_uid != expected_uid
+        or info.st_gid != expected_gid
+        or stat.S_IMODE(info.st_mode) != 0o600
+    ):
+        os.close(descriptor)
+        raise BootstrapStop("existing V12 deploy lock is unsafe")
+    handle = os.fdopen(descriptor, "a+")
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError as exc:
+        handle.close()
+        raise BootstrapStop("another RPi5 deploy operation is active") from exc
+    return handle
+
+
+def _final_authority_revalidation(
+    accepted: AcceptedAuthorization,
+    queue: NormalizedQueue,
+    manager: pathlib.Path,
+    manager_before: tuple[str, str],
+) -> None:
+    issue, server_time = _gh_api_json(
+        f"repos/{AUTHORIZATION_REPOSITORY}/issues/{accepted.issue_number}"
+    )
     verify_authorization_unchanged(accepted, issue, server_time=server_time)
     queue_issue, _ = _gh_api_json(f"repos/{QUEUE_REPOSITORY}/issues/{queue.issue_number}")
     verify_queue_unchanged(queue, queue_issue)
@@ -680,7 +780,7 @@ def execute_weathernext_bootstrap(authorization_issue_number: int) -> dict[str, 
     _positive_int(authorization_issue_number, "authorization_issue_number")
     require_root()
     stage = "preflight"
-    with operation_lock():
+    with _existing_operation_lock():
         engine_source_preflight()
         host_identity()
         manager = _manager_checkout()
@@ -694,7 +794,9 @@ def execute_weathernext_bootstrap(authorization_issue_number: int) -> dict[str, 
             raise BootstrapStop("reviewed origin main does not equal authorized current main")
         state = _trusted_checkout_state(manager, source_sha)
         if state == "EXACT":
-            issue, server_time = _gh_api_json(f"repos/{AUTHORIZATION_REPOSITORY}/issues/{accepted.issue_number}")
+            issue, server_time = _gh_api_json(
+                f"repos/{AUTHORIZATION_REPOSITORY}/issues/{accepted.issue_number}"
+            )
             verify_authorization_unchanged(accepted, issue, server_time=server_time)
             queue_issue, _ = _gh_api_json(f"repos/{QUEUE_REPOSITORY}/issues/{queue.issue_number}")
             verify_queue_unchanged(queue, queue_issue)
@@ -716,21 +818,27 @@ def execute_weathernext_bootstrap(authorization_issue_number: int) -> dict[str, 
             stage = "checkout-fetch"
             _fetch_source(manager, source_sha)
             _require_manager_snapshot(manager, manager_before)
+
             stage = "worktree-add"
             trusted = _add_trusted_worktree(manager, source_sha)
             _require_manager_snapshot(manager, manager_before)
             reviewed = _reviewed_source_bytes(manager, trusted, source_sha)
+
             stage = "entrypoint-install"
             _install_entrypoint(reviewed)
             if _trusted_checkout_state(manager, source_sha) != "EXACT":
                 raise BootstrapStop("WeatherNext bootstrap postcondition is not exact")
         except Exception as exc:
             try:
-                append_log(f"WEATHERNEXT_BOOTSTRAP STOP consumed=1 stage={stage} retry=NO cleanup=NO rollback=NO")
+                append_log(
+                    f"WEATHERNEXT_BOOTSTRAP STOP consumed=1 stage={stage} "
+                    "retry=NO cleanup=NO rollback=NO"
+                )
             except Exception:
                 pass
             raise BootstrapStop(
-                f"WeatherNext bootstrap stopped after authorization consume at stage={stage}; retry/cleanup/rollback forbidden"
+                f"WeatherNext bootstrap stopped after authorization consume at stage={stage}; "
+                "retry/cleanup/rollback forbidden"
             ) from exc
 
         append_log(
@@ -738,7 +846,7 @@ def execute_weathernext_bootstrap(authorization_issue_number: int) -> dict[str, 
             "fetch=1 worktree_add=1 entrypoint_install=1 rollback=NONE"
         )
         return {
-            "result": "HOST_V12_WEATHERNEXT_BOOTSTRAP_CAPABILITY_INSTALLED",
+            "result": "HOST_V12_WEATHERNEXT_BOOTSTRAP_CAPABILITY_EXECUTED",
             "source_sha": source_sha,
             "trusted_checkout": TRUSTED_CHECKOUT,
             "entrypoint_destination": ENTRYPOINT_DESTINATION,
