@@ -12,6 +12,7 @@ import sys
 import tempfile
 import time
 
+import rpi5_deploy_lib as deploy_lib
 from rpi5_deploy_lib import (CTX, ENGINE_INSTALLED_FILES, ENGINE_RELEASES,
     ENGINE_SCHEMA, ENGINE_SOURCE_FILES, EXPECTED_REPOSITORY, DeployError,
     append_log, atomic_json, build_plan, engine_source_preflight, ensure_no_conflicts,
@@ -20,6 +21,14 @@ from rpi5_deploy_lib import (CTX, ENGINE_INSTALLED_FILES, ENGINE_RELEASES,
     repository_preflight, require_normal_user, require_root, run, safe_file,
     sha256_file, verify_engine_integrity, verify_plan_targets)
 from rpi5_deploy_tx import apply_plan, latest_transaction, manual_rollback
+
+WEATHERNEXT_ENGINE_SOURCE = "scripts/rpi5_weathernext_bootstrap.py"
+if WEATHERNEXT_ENGINE_SOURCE not in deploy_lib.ENGINE_SOURCE_FILES:
+    deploy_lib.ENGINE_SOURCE_FILES = (*deploy_lib.ENGINE_SOURCE_FILES, WEATHERNEXT_ENGINE_SOURCE)
+ENGINE_SOURCE_FILES = deploy_lib.ENGINE_SOURCE_FILES
+ENGINE_INSTALLED_FILES["rpi5_weathernext_bootstrap.py"] = "0400"
+
+from rpi5_weathernext_bootstrap import capability_descriptor, execute_weathernext_bootstrap
 
 
 REQUIRED_GITHUB_CHECKS = {"validate"}
@@ -153,7 +162,10 @@ def stage_engine_release(
         "rpi5_deploy.py": "scripts/rpi5_deploy.py",
         "rpi5_deploy_lib.py": "scripts/rpi5_deploy_lib.py",
         "rpi5_deploy_tx.py": "scripts/rpi5_deploy_tx.py",
+        "rpi5_weathernext_bootstrap.py": WEATHERNEXT_ENGINE_SOURCE,
     }
+    if set(source_by_name) != set(ENGINE_INSTALLED_FILES):
+        raise DeployError("deploy engine installed-file inventory drifted")
     for name, relative in source_by_name.items():
         source = CTX.repo / relative
         destination = stage / name
@@ -247,8 +259,14 @@ def engine_status(release_only: bool) -> None:
     integrity = verify_engine_integrity()
     source = engine_source_preflight()
     scope = "release" if release_only else "system"
+    capability = capability_descriptor()
     print(f"ENGINE PASS scope={scope} release={integrity['release']} repo={CTX.repo}")
     print(f"source_files={source.get('source_count', 0)} installed_from={integrity['installed_from_commit']}")
+    print(
+        "weathernext_capability="
+        f"{capability['operation']} caller_input={capability['caller_input']} "
+        f"status={capability['status']}"
+    )
 
 
 def plan() -> None:
@@ -336,6 +354,11 @@ def rollback(confirm: str, latest: bool) -> None:
     print("ROLLBACK PASS")
 
 
+def weather_private_installer_bootstrap(authorization_issue_number: int) -> None:
+    result = execute_weathernext_bootstrap(authorization_issue_number)
+    print(json.dumps(result, sort_keys=True, separators=(",", ":")))
+
+
 def logs(lines: int) -> None:
     require_root()
     if not 1 <= lines <= 1000:
@@ -361,6 +384,8 @@ def parser() -> argparse.ArgumentParser:
     undo = sub.add_parser("rollback")
     undo.add_argument("--latest", action="store_true")
     undo.add_argument("--confirm", required=True)
+    weather = sub.add_parser("weather-private-installer-bootstrap")
+    weather.add_argument("--authorization-issue-number", type=int, required=True)
     tail = sub.add_parser("logs")
     tail.add_argument("--lines", type=int, default=100)
     return result
@@ -385,6 +410,8 @@ def main() -> int:
             status()
         elif args.command == "rollback":
             rollback(args.confirm, args.latest)
+        elif args.command == "weather-private-installer-bootstrap":
+            weather_private_installer_bootstrap(args.authorization_issue_number)
         elif args.command == "logs":
             logs(args.lines)
     except (DeployError, OSError, json.JSONDecodeError, subprocess.TimeoutExpired) as exc:
