@@ -44,7 +44,7 @@ class P4RegistryAndNormalizationTests(unittest.TestCase):
     def test_production_registry_contains_reviewed_disabled_operations(self):
         registry = load_registry(PRODUCTION_REGISTRY)
         self.assertFalse(registry.execution_enabled)
-        self.assertEqual(len(registry.operations), 8)
+        self.assertEqual(len(registry.operations), 9)
         operations = {item.operation_id: item for item in registry.operations}
         p9 = operations["rozkalns-control-center.merge-postcanary-reconcile.v1"]
         self.assertEqual(p9.adapter_id, "rozkalns-control-center.merge-postcanary-reconcile.v1")
@@ -87,6 +87,13 @@ class P4RegistryAndNormalizationTests(unittest.TestCase):
         self.assertEqual(runner_smoke.queue_match.target_alias, "hermes-deals-runner-smoke-audit")
         self.assertEqual(runner_smoke.baseline.resolver_id, "hermes-deals.runner-smoke-registration.v2")
         self.assertEqual(runner_smoke.rollback_policy, "NONE")
+        weather_v7 = operations["rpi5-main.weather-operator-upgrade-v7.v1"]
+        self.assertEqual(weather_v7.adapter_id, "rpi5-main.weather-operator-upgrade-v7.v1")
+        self.assertEqual(weather_v7.authorization_class, "STRICT")
+        self.assertFalse(weather_v7.ordinary_live_all_eligible)
+        self.assertEqual(weather_v7.queue_match.target_alias, "rpi5-main-weather-operator-upgrade-v7")
+        self.assertEqual(weather_v7.baseline.resolver_id, "rpi5-main.weather-operator-upgrade-v7-baseline.v1")
+        self.assertEqual(weather_v7.rollback_policy, "NONE")
         weather = operations["rozkalns-weather.public-runtime-release.v1"]
         self.assertEqual(weather.adapter_id, "rozkalns-weather.public-runtime-release.v1")
         self.assertEqual(weather.authorization_class, "STRICT")
