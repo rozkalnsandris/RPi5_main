@@ -7,6 +7,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import stat
 import subprocess
 import sys
@@ -156,7 +157,7 @@ with tempfile.TemporaryDirectory() as tmp:
     trusted = Path(tmp) / "trusted"
     subprocess.run(["git", "init", str(manager)], check=True, stdout=subprocess.DEVNULL)
     git(manager, "config", "user.name", "test")
-    git(manager, "config", "user.email", "test@example.invalid")
+    git(manager, "config", "user.email", "test@example.com")
     source = manager / wn.ENTRYPOINT_SOURCE
     source.parent.mkdir(parents=True)
     expected_bytes = b"#!/bin/sh\nprintf '%s\\n' exact\n"
@@ -206,7 +207,7 @@ contract = json.loads(contract_path.read_text(encoding="utf-8"))
 doc_source = (ROOT / "docs/V12_WEATHERNEXT_BOOTSTRAP.md").read_text(encoding="utf-8")
 
 for text in (bootstrap_source, deploy_source, contract_path.read_text(encoding="utf-8"), doc_source):
-    assert "/home/andris/" not in text
+    assert re.search(r"/home/[A-Za-z0-9._-]+/", text) is None
     assert "safe.directory=*" not in text
     assert "update-ref" not in text
 
