@@ -27,14 +27,17 @@ permissions:
 jobs:
   source-contract:
     runs-on: ubuntu-latest
+    timeout-minutes: 6
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Check out repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
-          python-version: "3.13"
+          fetch-depth: 0
+          persist-credentials: false
       - name: Compile WeatherNext private installer source
         run: |
-          python -m py_compile \
+          set -euo pipefail
+          python3 -m py_compile \
             ops/lib/deploy_executor/weather_private_bigquery_host_installer.py \
             ops/lib/deploy_executor/weather_private_bigquery_host_installer_runtime.py \
             ops/lib/deploy_executor/weather_private_bigquery_host_runtime.py \
@@ -42,11 +45,13 @@ jobs:
             ops/bin/rpi5-weathernext-private-host
       - name: Run focused WeatherNext private installer tests
         run: |
-          python tests/test-deploy-executor-weather-private-bigquery-host-runtime.py
-          python tests/test-deploy-executor-weather-private-bigquery-host-installer.py
+          set -euo pipefail
+          python3 tests/test-deploy-executor-weather-private-bigquery-host-runtime.py
+          python3 tests/test-deploy-executor-weather-private-bigquery-host-installer.py
       - name: Validate closed installer contract
         run: |
-          python - <<'PY'
+          set -euo pipefail
+          python3 - <<'PY'
           import json
           from pathlib import Path
 
