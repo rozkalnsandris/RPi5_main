@@ -235,7 +235,7 @@ class SourceContractTests(unittest.TestCase):
         self.assertFalse(value["global_executor_execution_enabled"])
         self.assertFalse(value["privileged_dispatch_enabled"])
         self.assertFalse(value["source_merge_authorizes_live"])
-        self.assertEqual(value["privileged_boundary"]["status"], "SOURCE_READY_HOST_BOOTSTRAP_REQUIRED")
+        self.assertEqual(value["privileged_boundary"]["status"], "SOURCE_READY_V12_ENGINE_UPGRADE_REQUIRED")
         self.assertEqual(value["privileged_boundary"]["rollback_policy"], "NONE")
         self.assertFalse(value["privileged_boundary"]["agent_sudo_allowed"])
         self.assertEqual(
