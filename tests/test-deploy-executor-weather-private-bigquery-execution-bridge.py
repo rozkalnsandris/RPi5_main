@@ -38,7 +38,7 @@ class T(unittest.TestCase):
         self.assertEqual(b.calls,[READ_ONLY_PRIVATE_BIGQUERY]);self.assertEqual(c.calls,[(700,READ_ONLY_PRIVATE_BIGQUERY)]);self.assertTrue(all(r.status=='already_present' for r in out['stage_receipts'][:5]))
     def test_invalid(self):
         e=envelope()
-        for bad in (replace(e,contract_id=PUBLIC_RUNTIME_OPERATION_ID),replace(e,target_alias='x'),replace(e,rpi5_main_source_sha='bad'),replace(e,weather_source_sha='bad'),replace(e,forecast_hours=7),replace(e,home_scope_enabled=True),replace(e,sqlite_write_enabled=True),replace(e,authorized_stages=tuple(reversed(bridge.AUTHORIZED_STAGE_SEQUENCE))):
+        for bad in (replace(e,contract_id=PUBLIC_RUNTIME_OPERATION_ID),replace(e,target_alias='x'),replace(e,rpi5_main_source_sha='bad'),replace(e,weather_source_sha='bad'),replace(e,forecast_hours=7),replace(e,home_scope_enabled=True),replace(e,sqlite_write_enabled=True),replace(e,authorized_stages=tuple(reversed(bridge.AUTHORIZED_STAGE_SEQUENCE)))):
             with self.assertRaises(Exception):bridge.validate_private_execution_envelope(bad)
     def test_failure_stops(self):
         b=B(GOOGLE_PROJECT_BINDING);c=C()
