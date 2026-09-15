@@ -42,6 +42,8 @@ def canonical_facts(**overrides: Any) -> trusted.CanonicalPrivateFacts:
     values = dict(
         authorization_issue_number=900,
         owner_authorized=True,
+        authorization_operation_id=trusted.BRIDGE_OPERATION_ID,
+        authorization_contract_id=CONTRACT_ID,
         rpi5_main_source_sha="1" * 40,
         rpi5_main_ci_success=True,
         weather_source_sha="2" * 40,
@@ -210,6 +212,8 @@ class WeatherNextPrivateTrustedBackendTests(unittest.TestCase):
         invalid = (
             canonical_facts(authorization_issue_number=901),
             canonical_facts(owner_authorized=False),
+            canonical_facts(authorization_operation_id="other.operation"),
+            canonical_facts(authorization_contract_id="other.contract"),
             canonical_facts(rpi5_main_source_sha="bad"),
             canonical_facts(rpi5_main_ci_success=False),
             canonical_facts(weather_source_sha="bad"),
