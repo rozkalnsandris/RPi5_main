@@ -123,6 +123,9 @@ def _fail(message: str) -> None:
 def _run_git(checkout: Path, *args: str, mutation: bool = False) -> subprocess.CompletedProcess[str]:
     read_ops = {"rev-parse", "symbolic-ref", "status", "remote", "merge-base"}
     mutation_ops = {"fetch", "worktree"}
+    fixed_checkouts = (MANAGER_CHECKOUT, TRUSTED_CHECKOUT)
+    if checkout not in fixed_checkouts:
+        _fail("git checkout escaped fixed allowlist")
     if not args:
         _fail("git operation is empty")
     if mutation:
@@ -130,7 +133,15 @@ def _run_git(checkout: Path, *args: str, mutation: bool = False) -> subprocess.C
             _fail("git mutation escaped reviewed allowlist")
     elif args[0] not in read_ops:
         _fail("git read escaped reviewed allowlist")
-    argv = ("/usr/bin/git", "--no-optional-locks", "-C", str(checkout), *args)
+    argv = (
+        "/usr/bin/git",
+        "-c",
+        f"safe.directory={checkout}",
+        "--no-optional-locks",
+        "-C",
+        str(checkout),
+        *args,
+    )
     try:
         result = subprocess.run(
             argv,
