@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from dataclasses import replace
@@ -18,6 +19,8 @@ from deploy_executor.weather_private_bigquery_contract import (
     PUBLIC_RUNTIME_OPERATION_ID,
     READ_ONLY_PRIVATE_BIGQUERY,
 )
+
+CONTRACT_PATH = ROOT / "ops/deploy/weather-private-bigquery-execution-bridge.json"
 
 
 def baseline(**overrides: bool) -> bridge.PrivateExecutionBaseline:
@@ -97,6 +100,28 @@ class Backend:
 
 
 class WeatherNextPrivateExecutionBridgeTests(unittest.TestCase):
+    def test_source_contract_json_matches_bridge_identity_and_safety(self) -> None:
+        contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(contract["schema"], "rozkalns-weather.weathernext-private-execution-bridge-source.v1")
+        self.assertEqual(contract["operation_id"], bridge.BRIDGE_OPERATION_ID)
+        self.assertEqual(contract["target_alias"], bridge.TARGET_ALIAS)
+        self.assertEqual(tuple(contract["authorized_stage_sequence"]), bridge.AUTHORIZED_STAGE_SEQUENCE)
+        self.assertEqual(contract["request_authority"], ["authorization_issue_number"])
+        self.assertEqual(contract["authorization_class"], "STRICT")
+        self.assertFalse(contract["execution_enabled"])
+        self.assertFalse(contract["ordinary_live_all_eligible"])
+        self.assertFalse(contract["source_merge_authorizes_live"])
+        self.assertEqual(contract["separate_later_gate"], "production_sqlite_forecast_snapshot_write")
+        self.assertTrue(contract["first_access"]["dry_run_required"])
+        self.assertEqual(contract["first_access"]["forecast_hours"], 6)
+        self.assertEqual(contract["first_access"]["location_id"], "station_10416")
+        self.assertFalse(contract["first_access"]["home_scope_enabled"])
+        self.assertFalse(contract["first_access"]["sqlite_write_enabled"])
+        self.assertTrue(all(value is False for value in contract["caller_controls"].values()))
+        self.assertFalse(contract["failure_semantics"]["automatic_retry"])
+        self.assertFalse(contract["failure_semantics"]["automatic_cleanup"])
+        self.assertFalse(contract["failure_semantics"]["automatic_rollback"])
+
     def test_exact_order_and_read_only_receipt_is_non_mutating(self) -> None:
         consumer = Consumer()
         backend = Backend()
