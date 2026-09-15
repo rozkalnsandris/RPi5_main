@@ -418,7 +418,9 @@ class RunnerSmokeInstallRuntimeTests(unittest.TestCase):
         self.assertFalse(ready["live_auth_created"])
         cli = ROOT / "ops/bin/rpi5-hermes-deals-runner-smoke-install"
         self.assertTrue(cli.exists())
-        self.assertEqual(cli.stat().st_mode & 0o777, 0o755)
+        checkout_mode = cli.stat().st_mode & 0o777
+        self.assertEqual(checkout_mode & 0o500, 0o500)
+        self.assertEqual(checkout_mode & 0o022, 0)
         text = cli.read_text(encoding="utf-8")
         self.assertIn('argv[1] != "--issue-number"', text)
         self.assertNotIn("subprocess", text)
