@@ -228,17 +228,55 @@ def engine_install_repository_preflight() -> dict[str, str]:
     }
 
 
-def _require_fixed_control_file(path: pathlib.Path, mode: int) -> None:
-    info = path.lstat()
+def _require_deploy_lock_metadata(
+    *, raw_mode: int, uid: int, gid: int, nlink: int
+) -> None:
+    lock_path = pathlib.Path("/var/lib/rpi5-deploy/deploy.lock")
     if (
-        not stat.S_ISREG(info.st_mode)
-        or stat.S_ISLNK(info.st_mode)
-        or info.st_nlink != 1
-        or info.st_uid != 0
-        or info.st_gid != 0
-        or stat.S_IMODE(info.st_mode) != mode
+        not stat.S_ISREG(raw_mode)
+        or stat.S_ISLNK(raw_mode)
+        or nlink != 1
+        or uid != 0
+        or gid != 0
+        or stat.S_IMODE(raw_mode) != 0o600
     ):
-        raise DeployError(f"deploy engine control file drifted: {path}")
+        raise DeployError(f"deploy engine control file drifted: {lock_path}")
+
+
+def _probe_deploy_lock() -> bool:
+    lock_path = pathlib.Path("/var/lib/rpi5-deploy/deploy.lock")
+
+    symlink = run(["sudo", "/usr/bin/test", "-L", str(lock_path)], check=False)
+    if symlink.returncode not in {0, 1}:
+        raise DeployError("deploy engine control symlink probe failed")
+    if symlink.returncode == 0:
+        raise DeployError(f"deploy engine control file drifted: {lock_path}")
+
+    exists = run(["sudo", "/usr/bin/test", "-e", str(lock_path)], check=False)
+    if exists.returncode not in {0, 1}:
+        raise DeployError("deploy engine control existence probe failed")
+    if exists.returncode == 1:
+        return False
+
+    metadata = run([
+        "sudo", "/usr/bin/stat", "--printf=%f:%u:%g:%h", "--", str(lock_path),
+    ], check=False)
+    if metadata.returncode != 0:
+        raise DeployError("deploy engine control metadata probe failed")
+    fields = metadata.stdout.strip().split(":")
+    if len(fields) != 4:
+        raise DeployError("deploy engine control metadata probe returned invalid output")
+    try:
+        raw_mode = int(fields[0], 16)
+        uid = int(fields[1], 10)
+        gid = int(fields[2], 10)
+        nlink = int(fields[3], 10)
+    except ValueError as exc:
+        raise DeployError("deploy engine control metadata probe returned invalid output") from exc
+    _require_deploy_lock_metadata(
+        raw_mode=raw_mode, uid=uid, gid=gid, nlink=nlink
+    )
+    return True
 
 
 def ensure_engine_control_state() -> None:
@@ -253,9 +291,11 @@ def ensure_engine_control_state() -> None:
             "sudo", "install", "-d", "-o", "root", "-g", "root", "-m", "0700",
             str(state_dir),
         ], capture=False)
-    if lock_path.exists():
-        _require_fixed_control_file(lock_path, 0o600)
-    else:
+        info = verify_dir(state_dir, root_owned=True)
+        if info.st_gid != 0 or stat.S_IMODE(info.st_mode) != 0o700:
+            raise DeployError("deploy engine state directory metadata drifted")
+
+    if not _probe_deploy_lock():
         with tempfile.NamedTemporaryFile(prefix="rpi5-deploy-lock-", delete=False) as handle:
             temporary = pathlib.Path(handle.name)
         try:
@@ -265,7 +305,8 @@ def ensure_engine_control_state() -> None:
             ], capture=False)
         finally:
             temporary.unlink(missing_ok=True)
-    _require_fixed_control_file(lock_path, 0o600)
+    if not _probe_deploy_lock():
+        raise DeployError("deploy engine control file is missing after installation")
 
 
 def install_engine(confirm: str) -> None:
