@@ -141,11 +141,30 @@ def _already_present(stage: str) -> StageReceipt:
     return StageReceipt(stage=stage, status="already_present", mutation_performed=False)
 
 
-def _validate_receipt(receipt: StageReceipt, expected_stage: str) -> StageReceipt:
+def _validate_receipt(
+    receipt: StageReceipt,
+    expected_stage: str,
+    *,
+    expected_mutation: bool,
+    allow_already_present: bool = False,
+) -> StageReceipt:
     if receipt.stage != expected_stage:
         raise WeatherNextPrivateExecutionBridgeError("backend receipt stage mismatch")
     if receipt.status not in {"completed", "already_present"}:
         raise WeatherNextPrivateExecutionBridgeError("backend receipt status rejected")
+    if receipt.status == "already_present":
+        if not allow_already_present:
+            raise WeatherNextPrivateExecutionBridgeError(
+                "backend cannot skip a stage that canonical baseline marked required"
+            )
+        if receipt.mutation_performed:
+            raise WeatherNextPrivateExecutionBridgeError(
+                "already-present stage cannot report a mutation"
+            )
+    elif receipt.mutation_performed != expected_mutation:
+        raise WeatherNextPrivateExecutionBridgeError(
+            "backend receipt mutation classification mismatch"
+        )
     if not receipt.sanitized:
         raise WeatherNextPrivateExecutionBridgeError("backend receipt must be sanitized")
     if receipt.retry_performed or receipt.cleanup_performed or receipt.rollback_performed:
@@ -189,12 +208,51 @@ def execute_private_execution_for_authorization(
     authorization_consumer.consume_once(authorization_issue_number, first_stage=pending[0])
     b = envelope.baseline
     receipts = [
-        _validate_receipt(backend.stage_application(envelope) if not b.application_staged else _already_present(PRIVATE_APPLICATION_STAGING), PRIVATE_APPLICATION_STAGING),
-        _validate_receipt(backend.materialize_runtime(envelope) if not b.runtime_present else _already_present(PRIVATE_RUNTIME_MATERIALIZATION), PRIVATE_RUNTIME_MATERIALIZATION),
-        _validate_receipt(backend.bind_google_auth(envelope) if not b.auth_binding_present else _already_present(GOOGLE_AUTH_BINDING), GOOGLE_AUTH_BINDING),
-        _validate_receipt(backend.bind_google_project(envelope) if not b.project_binding_present else _already_present(GOOGLE_PROJECT_BINDING), GOOGLE_PROJECT_BINDING),
-        _validate_receipt(backend.create_analytics_hub_link(envelope) if not b.linked_dataset_present else _already_present(ANALYTICS_HUB_LINK_CREATE), ANALYTICS_HUB_LINK_CREATE),
-        _validate_receipt(backend.run_read_only_first_access(envelope), READ_ONLY_PRIVATE_BIGQUERY),
+        _validate_receipt(
+            backend.stage_application(envelope)
+            if not b.application_staged
+            else _already_present(PRIVATE_APPLICATION_STAGING),
+            PRIVATE_APPLICATION_STAGING,
+            expected_mutation=not b.application_staged,
+            allow_already_present=b.application_staged,
+        ),
+        _validate_receipt(
+            backend.materialize_runtime(envelope)
+            if not b.runtime_present
+            else _already_present(PRIVATE_RUNTIME_MATERIALIZATION),
+            PRIVATE_RUNTIME_MATERIALIZATION,
+            expected_mutation=not b.runtime_present,
+            allow_already_present=b.runtime_present,
+        ),
+        _validate_receipt(
+            backend.bind_google_auth(envelope)
+            if not b.auth_binding_present
+            else _already_present(GOOGLE_AUTH_BINDING),
+            GOOGLE_AUTH_BINDING,
+            expected_mutation=not b.auth_binding_present,
+            allow_already_present=b.auth_binding_present,
+        ),
+        _validate_receipt(
+            backend.bind_google_project(envelope)
+            if not b.project_binding_present
+            else _already_present(GOOGLE_PROJECT_BINDING),
+            GOOGLE_PROJECT_BINDING,
+            expected_mutation=not b.project_binding_present,
+            allow_already_present=b.project_binding_present,
+        ),
+        _validate_receipt(
+            backend.create_analytics_hub_link(envelope)
+            if not b.linked_dataset_present
+            else _already_present(ANALYTICS_HUB_LINK_CREATE),
+            ANALYTICS_HUB_LINK_CREATE,
+            expected_mutation=not b.linked_dataset_present,
+            allow_already_present=b.linked_dataset_present,
+        ),
+        _validate_receipt(
+            backend.run_read_only_first_access(envelope),
+            READ_ONLY_PRIVATE_BIGQUERY,
+            expected_mutation=False,
+        ),
     ]
     return {
         "status": "private_execution_sequence_completed",

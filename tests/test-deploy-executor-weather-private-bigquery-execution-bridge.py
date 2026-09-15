@@ -1,51 +1,249 @@
 from __future__ import annotations
-import sys, unittest
+
+import sys
+import unittest
 from dataclasses import replace
 from pathlib import Path
-ROOT=Path(__file__).resolve().parents[1]
-sys.path.insert(0,str(ROOT/'ops/lib'))
-from deploy_executor import weather_private_bigquery_execution_bridge as bridge
-from deploy_executor.weather_private_bigquery_contract import *
+from typing import Any
 
-def baseline(**kw):
-    v=dict(application_staged=False,runtime_present=False,auth_binding_present=False,project_binding_present=False,linked_dataset_present=False);v.update(kw);return bridge.PrivateExecutionBaseline(**v)
-def envelope(**kw):
-    v=dict(authorization_issue_number=700,rpi5_main_source_sha='1'*40,weather_source_sha='2'*40,baseline=baseline());v.update(kw);return bridge.PrivateExecutionEnvelope(**v)
-class R:
-    def __init__(self,e):self.e=e
-    def prepare_private_execution(self,n):return self.e
-class C:
-    def __init__(self):self.calls=[]
-    def consume_once(self,n,*,first_stage):self.calls.append((n,first_stage))
-class B:
-    def __init__(self,fail=None):self.calls=[];self.fail=fail
-    def x(self,s):
-        self.calls.append(s)
-        if s==self.fail:raise bridge.WeatherNextPrivateExecutionBridgeError('fixture failure')
-        return bridge.StageReceipt(stage=s,status='completed',mutation_performed=True)
-    def stage_application(self,e):return self.x(bridge.PRIVATE_APPLICATION_STAGING)
-    def materialize_runtime(self,e):return self.x(PRIVATE_RUNTIME_MATERIALIZATION)
-    def bind_google_auth(self,e):return self.x(GOOGLE_AUTH_BINDING)
-    def bind_google_project(self,e):return self.x(GOOGLE_PROJECT_BINDING)
-    def create_analytics_hub_link(self,e):return self.x(ANALYTICS_HUB_LINK_CREATE)
-    def run_read_only_first_access(self,e):return self.x(READ_ONLY_PRIVATE_BIGQUERY)
-class T(unittest.TestCase):
-    def test_order(self):
-        c=C();b=B();out=bridge.execute_private_execution_for_authorization(700,canonical_revalidator=R(envelope()),authorization_consumer=c,backend=b)
-        self.assertEqual(tuple(b.calls),bridge.AUTHORIZED_STAGE_SEQUENCE);self.assertEqual(c.calls,[(700,bridge.PRIVATE_APPLICATION_STAGING)]);self.assertFalse(out['sqlite_write_performed'])
-    def test_skip(self):
-        e=envelope(baseline=baseline(application_staged=True,runtime_present=True,auth_binding_present=True,project_binding_present=True,linked_dataset_present=True));c=C();b=B();out=bridge.execute_private_execution_for_authorization(700,canonical_revalidator=R(e),authorization_consumer=c,backend=b)
-        self.assertEqual(b.calls,[READ_ONLY_PRIVATE_BIGQUERY]);self.assertEqual(c.calls,[(700,READ_ONLY_PRIVATE_BIGQUERY)]);self.assertTrue(all(r.status=='already_present' for r in out['stage_receipts'][:5]))
-    def test_invalid(self):
-        e=envelope()
-        for bad in (replace(e,contract_id=PUBLIC_RUNTIME_OPERATION_ID),replace(e,target_alias='x'),replace(e,rpi5_main_source_sha='bad'),replace(e,weather_source_sha='bad'),replace(e,forecast_hours=7),replace(e,home_scope_enabled=True),replace(e,sqlite_write_enabled=True),replace(e,authorized_stages=tuple(reversed(bridge.AUTHORIZED_STAGE_SEQUENCE)))):
-            with self.assertRaises(Exception):bridge.validate_private_execution_envelope(bad)
-    def test_failure_stops(self):
-        b=B(GOOGLE_PROJECT_BINDING);c=C()
-        with self.assertRaises(bridge.WeatherNextPrivateExecutionBridgeError):bridge.execute_private_execution_for_authorization(700,canonical_revalidator=R(envelope()),authorization_consumer=c,backend=b)
-        self.assertEqual(b.calls,[bridge.PRIVATE_APPLICATION_STAGING,PRIVATE_RUNTIME_MATERIALIZATION,GOOGLE_AUTH_BINDING,GOOGLE_PROJECT_BINDING]);self.assertEqual(len(c.calls),1)
-    def test_source_surface(self):
-        s=(ROOT/'ops/lib/deploy_executor/weather_private_bigquery_execution_bridge.py').read_text()
-        for token in ('subprocess','os.environ','Popen(','shell=True','sudo ','pip install','apt ','GOOGLE_APPLICATION_CREDENTIALS','HOME_LAT','HOME_LON','.env'):self.assertNotIn(token,s)
-        r=bridge.source_readiness();self.assertTrue(r['bridge_source_implemented']);self.assertFalse(r['external_entrypoint_enabled']);self.assertFalse(r['source_merge_authorizes_live'])
-if __name__=='__main__':unittest.main()
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "ops/lib"))
+
+from deploy_executor import weather_private_bigquery_execution_bridge as bridge
+from deploy_executor.weather_private_bigquery_contract import (
+    ANALYTICS_HUB_LINK_CREATE,
+    GOOGLE_AUTH_BINDING,
+    GOOGLE_PROJECT_BINDING,
+    PRIVATE_RUNTIME_MATERIALIZATION,
+    PUBLIC_RUNTIME_OPERATION_ID,
+    READ_ONLY_PRIVATE_BIGQUERY,
+)
+
+
+def baseline(**overrides: bool) -> bridge.PrivateExecutionBaseline:
+    values = dict(
+        application_staged=False,
+        runtime_present=False,
+        auth_binding_present=False,
+        project_binding_present=False,
+        linked_dataset_present=False,
+    )
+    values.update(overrides)
+    return bridge.PrivateExecutionBaseline(**values)
+
+
+def envelope(**overrides: Any) -> bridge.PrivateExecutionEnvelope:
+    values = dict(
+        authorization_issue_number=700,
+        rpi5_main_source_sha="1" * 40,
+        weather_source_sha="2" * 40,
+        baseline=baseline(),
+    )
+    values.update(overrides)
+    return bridge.PrivateExecutionEnvelope(**values)
+
+
+class Revalidator:
+    def __init__(self, prepared: bridge.PrivateExecutionEnvelope):
+        self.prepared = prepared
+
+    def prepare_private_execution(self, authorization_issue_number: int) -> bridge.PrivateExecutionEnvelope:
+        return self.prepared
+
+
+class Consumer:
+    def __init__(self):
+        self.calls: list[tuple[int, str]] = []
+
+    def consume_once(self, authorization_issue_number: int, *, first_stage: str) -> None:
+        self.calls.append((authorization_issue_number, first_stage))
+
+
+class Backend:
+    def __init__(self, *, fail_stage: str | None = None, already_stage: str | None = None):
+        self.calls: list[str] = []
+        self.fail_stage = fail_stage
+        self.already_stage = already_stage
+
+    def _run(self, stage: str) -> bridge.StageReceipt:
+        self.calls.append(stage)
+        if stage == self.fail_stage:
+            raise bridge.WeatherNextPrivateExecutionBridgeError("fixture failure")
+        if stage == self.already_stage:
+            return bridge.StageReceipt(stage=stage, status="already_present", mutation_performed=False)
+        return bridge.StageReceipt(
+            stage=stage,
+            status="completed",
+            mutation_performed=stage != READ_ONLY_PRIVATE_BIGQUERY,
+        )
+
+    def stage_application(self, prepared: bridge.PrivateExecutionEnvelope) -> bridge.StageReceipt:
+        return self._run(bridge.PRIVATE_APPLICATION_STAGING)
+
+    def materialize_runtime(self, prepared: bridge.PrivateExecutionEnvelope) -> bridge.StageReceipt:
+        return self._run(PRIVATE_RUNTIME_MATERIALIZATION)
+
+    def bind_google_auth(self, prepared: bridge.PrivateExecutionEnvelope) -> bridge.StageReceipt:
+        return self._run(GOOGLE_AUTH_BINDING)
+
+    def bind_google_project(self, prepared: bridge.PrivateExecutionEnvelope) -> bridge.StageReceipt:
+        return self._run(GOOGLE_PROJECT_BINDING)
+
+    def create_analytics_hub_link(self, prepared: bridge.PrivateExecutionEnvelope) -> bridge.StageReceipt:
+        return self._run(ANALYTICS_HUB_LINK_CREATE)
+
+    def run_read_only_first_access(self, prepared: bridge.PrivateExecutionEnvelope) -> bridge.StageReceipt:
+        return self._run(READ_ONLY_PRIVATE_BIGQUERY)
+
+
+class WeatherNextPrivateExecutionBridgeTests(unittest.TestCase):
+    def test_exact_order_and_read_only_receipt_is_non_mutating(self) -> None:
+        consumer = Consumer()
+        backend = Backend()
+        result = bridge.execute_private_execution_for_authorization(
+            700,
+            canonical_revalidator=Revalidator(envelope()),
+            authorization_consumer=consumer,
+            backend=backend,
+        )
+        self.assertEqual(tuple(backend.calls), bridge.AUTHORIZED_STAGE_SEQUENCE)
+        self.assertEqual(consumer.calls, [(700, bridge.PRIVATE_APPLICATION_STAGING)])
+        self.assertFalse(result["stage_receipts"][-1].mutation_performed)
+        self.assertFalse(result["sqlite_write_performed"])
+
+    def test_present_prerequisites_are_skipped_only_from_canonical_baseline(self) -> None:
+        prepared = envelope(
+            baseline=baseline(
+                application_staged=True,
+                runtime_present=True,
+                auth_binding_present=True,
+                project_binding_present=True,
+                linked_dataset_present=True,
+            )
+        )
+        consumer = Consumer()
+        backend = Backend()
+        result = bridge.execute_private_execution_for_authorization(
+            700,
+            canonical_revalidator=Revalidator(prepared),
+            authorization_consumer=consumer,
+            backend=backend,
+        )
+        self.assertEqual(backend.calls, [READ_ONLY_PRIVATE_BIGQUERY])
+        self.assertEqual(consumer.calls, [(700, READ_ONLY_PRIVATE_BIGQUERY)])
+        self.assertTrue(all(receipt.status == "already_present" for receipt in result["stage_receipts"][:5]))
+
+    def test_invalid_identity_scope_or_sequence_is_rejected(self) -> None:
+        prepared = envelope()
+        invalid = (
+            replace(prepared, operation_id="other.operation"),
+            replace(prepared, contract_id=PUBLIC_RUNTIME_OPERATION_ID),
+            replace(prepared, target_alias="other"),
+            replace(prepared, rpi5_main_source_sha="bad"),
+            replace(prepared, weather_source_sha="bad"),
+            replace(prepared, forecast_hours=7),
+            replace(prepared, home_scope_enabled=True),
+            replace(prepared, sqlite_write_enabled=True),
+            replace(prepared, authorized_stages=tuple(reversed(bridge.AUTHORIZED_STAGE_SEQUENCE))),
+        )
+        for candidate in invalid:
+            with self.subTest(candidate=candidate):
+                with self.assertRaises(Exception):
+                    bridge.validate_private_execution_envelope(candidate)
+
+    def test_required_stage_cannot_claim_already_present_after_baseline(self) -> None:
+        consumer = Consumer()
+        backend = Backend(already_stage=GOOGLE_AUTH_BINDING)
+        with self.assertRaisesRegex(
+            bridge.WeatherNextPrivateExecutionBridgeError,
+            "cannot skip a stage",
+        ):
+            bridge.execute_private_execution_for_authorization(
+                700,
+                canonical_revalidator=Revalidator(envelope()),
+                authorization_consumer=consumer,
+                backend=backend,
+            )
+        self.assertEqual(
+            backend.calls,
+            [
+                bridge.PRIVATE_APPLICATION_STAGING,
+                PRIVATE_RUNTIME_MATERIALIZATION,
+                GOOGLE_AUTH_BINDING,
+            ],
+        )
+        self.assertEqual(len(consumer.calls), 1)
+
+    def test_failure_stops_later_stages_without_retry_or_cleanup(self) -> None:
+        backend = Backend(fail_stage=GOOGLE_PROJECT_BINDING)
+        consumer = Consumer()
+        with self.assertRaises(bridge.WeatherNextPrivateExecutionBridgeError):
+            bridge.execute_private_execution_for_authorization(
+                700,
+                canonical_revalidator=Revalidator(envelope()),
+                authorization_consumer=consumer,
+                backend=backend,
+            )
+        self.assertEqual(
+            backend.calls,
+            [
+                bridge.PRIVATE_APPLICATION_STAGING,
+                PRIVATE_RUNTIME_MATERIALIZATION,
+                GOOGLE_AUTH_BINDING,
+                GOOGLE_PROJECT_BINDING,
+            ],
+        )
+        self.assertEqual(len(consumer.calls), 1)
+
+    def test_validation_evidence_has_no_private_binding_identifiers(self) -> None:
+        evidence = bridge.validate_private_execution_envelope(envelope())
+
+        def collect_keys(value: Any) -> set[str]:
+            keys: set[str] = set()
+            if isinstance(value, dict):
+                for key, item in value.items():
+                    keys.add(str(key))
+                    keys.update(collect_keys(item))
+            elif isinstance(value, (tuple, list)):
+                for item in value:
+                    keys.update(collect_keys(item))
+            return keys
+
+        forbidden_keys = {
+            "project_id",
+            "dataset_id",
+            "account_email",
+            "credential_material",
+            "credential_path",
+            "home_lat",
+            "home_lon",
+            "raw_provider_value",
+        }
+        self.assertTrue(forbidden_keys.isdisjoint(collect_keys(evidence)))
+
+    def test_source_surface_has_no_generic_execution_or_secret_authority(self) -> None:
+        source = (
+            ROOT / "ops/lib/deploy_executor/weather_private_bigquery_execution_bridge.py"
+        ).read_text(encoding="utf-8")
+        for token in (
+            "subprocess",
+            "os.environ",
+            "Popen(",
+            "shell=True",
+            "sudo ",
+            "pip install",
+            "apt ",
+            "GOOGLE_APPLICATION_CREDENTIALS",
+            "HOME_LAT",
+            "HOME_LON",
+            ".env",
+        ):
+            self.assertNotIn(token, source)
+        readiness = bridge.source_readiness()
+        self.assertTrue(readiness["bridge_source_implemented"])
+        self.assertFalse(readiness["external_entrypoint_enabled"])
+        self.assertFalse(readiness["source_merge_authorizes_live"])
+
+
+if __name__ == "__main__":
+    unittest.main()
