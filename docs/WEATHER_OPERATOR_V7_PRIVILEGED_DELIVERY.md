@@ -69,12 +69,20 @@ A later exact owner LIVE authorization for source delivery may allow at most one
 
 Successful source delivery grants no authority to run `--apply`. It only creates the exact clean source from which `scripts/install-weather-operator-v7-host-capability.py` can later be re-preflighted and, under a separate host-install LIVE gate, executed. The source-delivery gate cannot install the capability, mutate systemd, create the later operator-v7 checkout, replace the operator, deploy Weather or mutate DB/corpus/network/secrets.
 
+## Issue #586 sudo Git trust correction
+
+The first owner `sudo ... --apply` attempt from the #574 trusted checkout failed inside `preflight()` before `mutation_started` because the installer intentionally supplied Git a minimal environment but accidentally omitted sudo's `SUDO_UID`. Git's ownership protection therefore treated the user-owned trusted worktree as foreign when Git ran as root and rejected `git rev-parse HEAD` with exit 128. No capability, systemd, replay-state, operator or Weather mutation started.
+
+The correction keeps the Git child environment minimal and adds only a validated decimal `SUDO_UID` when the installer itself is running as root. It does not inherit arbitrary sudo/user environment variables, does not add `safe.directory=*`, does not write Git configuration and does not change repository ownership or permissions. Invalid or reserved `SUDO_UID` values fail closed before any host mutation.
+
+The original #574 checkout remains immutable evidence and must not be updated, removed, cleaned or reused for the corrected source. The corrected source-delivery identity is `RPi5_main-weather-v7-host-capability-installer-source-v2-trusted`, governed by `ops/deploy/rpi5-main-weather-v7-host-capability-installer-source-v2-trusted-checkout-bootstrap.json`. A later owner LIVE gate must materialize that new checkout at the then-current exact merged `RPi5_main` SHA before the host-capability install is retried.
+
 ## Owner gate order
 
 The required order is intentionally explicit:
 
-1. **source merge + exact-main CI** for the reviewed `RPi5_main#543`, `RPi5_main#571` and `RPi5_main#574` source outcomes;
-2. a separate owner-gated **trusted exact-main #571-installer source delivery** if sanitized evidence reports that checkout absent;
+1. **source merge + exact-main CI** for the reviewed `RPi5_main#543`, `RPi5_main#571`, `RPi5_main#574` and `RPi5_main#586` source outcomes;
+2. a separate owner-gated **corrected exact-main #571-installer v2 source delivery** if the v2 checkout is absent;
 3. **sanitized source-checkout verification** proving exact SHA, detached-clean state and reviewed origin;
 4. a separate owner-gated **one-time privileged-boundary host install/upgrade**, if sanitized evidence still reports the capability absent;
 5. **sanitized capability verification** proving the fixed capability identity without protected runtime data;
