@@ -4,7 +4,6 @@
   "status": "SOURCE_READY_LIVE_DISABLED",
   "implementation_issue": 570,
   "checkout_isolation_issue": 584,
-  "payload_closure_issue": 588,
   "repository": "rozkalnsandris/RPi5_main",
   "historical_trusted_checkout_name": "RPi5_main-runner-smoke-broker-bootstrap-trusted",
   "trusted_checkout_name": "RPi5_main-runner-smoke-broker-bootstrap-v2-trusted",
@@ -28,24 +27,6 @@
     "systemctl-daemon-reload",
     "enable-start-fixed-socket"
   ],
-  "legacy_exact_upgrade": {
-    "supported": true,
-    "exact_predecessor_release_sha": "db6deecffbc3a46a475d1fd9db97fc679eb15cf8",
-    "required_filesystem_state": "LEGACY_EXACT",
-    "required_socket_enabled_state": "enabled",
-    "required_socket_active_state": "active",
-    "mutation_sequence": [
-      "publish-root-owned-sha-release",
-      "switch-current-symlink"
-    ],
-    "fixed_next_link": "/usr/local/libexec/rozkalns-runner-smoke-install/current.next",
-    "atomic_current_switch": true,
-    "preserve_predecessor_release": true,
-    "systemd_mutation_required": false,
-    "cleanup_allowed": false,
-    "rollback_allowed": false,
-    "automatic_retry": false
-  },
   "authority": {
     "caller_arguments": [],
     "caller_selected_command": false,
@@ -73,11 +54,9 @@
   "excluded_mutations": [
     "trusted source delivery Git mutation",
     "historical v1 trusted checkout mutation or cleanup",
-    "legacy exact broker release deletion or rewrite",
     "runner-smoke helper invocation",
     "LIVE-AUTH creation or replay consume",
-    "runner-smoke final payload destination mutation",
-    "runner-smoke execution identity mutation",
+    "runner-smoke payload identity/helper/registration mutation",
     "Docker/network/firewall/DNS/Cloudflare mutation",
     "database mutation",
     "credential/secret mutation",
