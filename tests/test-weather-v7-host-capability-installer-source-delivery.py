@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_PATH = ROOT / "ops/deploy/rpi5-main-weather-v7-host-capability-installer-source-trusted-checkout-bootstrap.json"
+V2_CONTRACT_PATH = ROOT / "ops/deploy/rpi5-main-weather-v7-host-capability-installer-source-v2-trusted-checkout-bootstrap.json"
 OPERATOR_BOOTSTRAP_PATH = ROOT / "ops/deploy/rpi5-main-weather-public-runtime-operator-upgrade-v7-trusted-checkout-bootstrap.json"
 DOC_PATH = ROOT / "docs/WEATHER_OPERATOR_V7_PRIVILEGED_DELIVERY.md"
 WORKFLOW_PATH = ROOT / ".github/workflows/validate.yml"
@@ -18,6 +19,7 @@ def require(condition: bool, message: str) -> None:
 
 def main() -> None:
     contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+    v2 = json.loads(V2_CONTRACT_PATH.read_text(encoding="utf-8"))
     operator = json.loads(OPERATOR_BOOTSTRAP_PATH.read_text(encoding="utf-8"))
     doc = DOC_PATH.read_text(encoding="utf-8")
     workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
@@ -85,8 +87,26 @@ def main() -> None:
     require(handoff["source_delivery_authorizes_operator_upgrade"] is False, "source delivery must not authorize operator upgrade")
     require(handoff["source_delivery_authorizes_weather_rollout"] is False, "source delivery must not authorize Weather rollout")
 
+    require(v2["schema"] == "rozkalns.rpi5-main.weather-v7-host-capability-installer-source-trusted-checkout-bootstrap.v2", "v2 schema drifted")
+    require(v2["issue"] == 586, "v2 issue binding drifted")
+    require(v2["source_only"] is True, "v2 source-only boundary disabled")
+    require(v2["source_merge_enables_live"] is False, "v2 source merge must not authorize LIVE")
+    v2_target = v2["trusted_checkout"]
+    require(v2_target["name"] == "RPi5_main-weather-v7-host-capability-installer-source-v2-trusted", "v2 target drifted")
+    require(v2_target["name"] != target["name"], "v2 must not mutate/reuse predecessor checkout")
+    require(v2_target["name"] != operator_target, "v2 installer checkout must remain distinct from operator-v7 checkout")
+    require(v2["predecessor_checkout"]["mutation_allowed"] is False, "predecessor checkout mutation enabled")
+    require(v2["predecessor_checkout"]["cleanup_allowed"] is False, "predecessor checkout cleanup enabled")
+    require(v2_target["expected_sha_authority"] == "EXPLICIT_WEATHER_V7_HOST_CAPABILITY_INSTALLER_SOURCE_V2_LIVE_EXACT_RPI5_MAIN_SHA", "v2 SHA authority drifted")
+    require(v2["allowed_git_mutations"][0]["argv"] == ["git", "fetch", "origin", "main"], "v2 fetch argv drifted")
+    require(v2["allowed_git_mutations"][1]["argv"][4] == v2_target["derivation"], "v2 worktree target drifted")
+    require(v2["failure"]["automatic_retry"] is False, "v2 automatic retry must remain disabled")
+    require(v2["failure"]["automatic_cleanup"] is False, "v2 automatic cleanup must remain disabled")
+    require(v2["failure"]["automatic_rollback"] is False, "v2 automatic rollback must remain disabled")
+
     require("Issue #574 trusted installer source delivery" in doc, "#574 continuity documentation missing")
-    require("python3 ./tests/test-weather-v7-host-capability-installer-source-delivery.py" in workflow, "#574 security test is not wired into Validate")
+    require("Issue #586 sudo Git trust correction" in doc, "#586 continuity documentation missing")
+    require("python3 ./tests/test-weather-v7-host-capability-installer-source-delivery.py" in workflow, "#574/#586 source-delivery security test is not wired into Validate")
 
     print("weather-v7 host-capability installer source delivery contract: PASS")
 
