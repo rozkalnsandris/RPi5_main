@@ -403,6 +403,14 @@ def _systemctl_state(action: str, unit: str) -> str:
     if len(result.stdout.encode("utf-8")) > MAX_SYSTEMCTL_OUTPUT or len(result.stderr.encode("utf-8")) > MAX_SYSTEMCTL_OUTPUT:
         _fail("systemctl observation output exceeded limit")
     value = result.stdout.strip()
+    absent_unit_stderr = f"Failed to get unit file state for {unit}: No such file or directory"
+    if (
+        action == "is-enabled"
+        and result.returncode == 1
+        and value == ""
+        and result.stderr.strip() == absent_unit_stderr
+    ):
+        return "not-found"
     allowed = {
         "is-enabled": {"enabled", "disabled", "not-found", "static", "indirect", "masked", "generated"},
         "is-active": {"active", "inactive", "failed", "unknown", "activating", "deactivating"},

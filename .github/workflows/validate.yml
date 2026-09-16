@@ -29,6 +29,9 @@ jobs:
           PUBLIC_SAFETY_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: make validate
 
+      - name: Validate runner-smoke absent systemd unit observation
+        run: python3 ./tests/test-hermes-deals-runner-smoke-systemctl-state.py
+
       - name: Validate V12 WeatherNext bootstrap boundary
         run: python3 ./tests/test-v12-weathernext-bootstrap.py
 
