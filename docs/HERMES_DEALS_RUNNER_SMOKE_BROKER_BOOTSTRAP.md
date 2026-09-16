@@ -69,16 +69,34 @@ V2 source-delivery preflight has exactly three states:
 
 Source delivery does not authorize the host bootstrap to run. The host bootstrap remains a second separate owner LIVE gate after sanitized v2 checkout verification.
 
+## Issue #588 payload closure and exact predecessor upgrade
+
+LIVE-AUTH `deploy-authorizations#31` reached the fixed install mutation boundary and created the dedicated `hermes-deals-audit-canary` group/user, then failed before the helper destination parent existed. Read-only poststate showed helper, registration and both destination parents still `ABSENT`. The root cause was that the active SHA-addressed broker release did not contain the two non-import payload source artifacts consumed by `PosixFixedInstallBackend._source_artifact()`.
+
+The active predecessor broker release is fixed to:
+
+`db6deecffbc3a46a475d1fd9db97fc679eb15cf8`
+
+That release is never rewritten or deleted. The v2 bootstrap recognizes it as `LEGACY_EXACT` only when all of the following hold simultaneously: the release root/release tree/files/modes/ownership match the historical fixed closure, `current` points exactly to that release, the fixed systemd unit bytes are exact, and the socket remains `enabled/active`. Any extra/missing file, alternate SHA, unit drift, socket drift or partial previous upgrade is `DRIFT` and fails closed.
+
+A later separately authorized upgrade from `LEGACY_EXACT` has only two mutation classes:
+
+1. publish one new root-owned SHA release containing the repaired fixed closure;
+2. atomically switch the fixed `current` symlink via the fixed `current.next` path.
+
+The predecessor release is preserved. Existing systemd unit files are not rewritten, `daemon-reload` is not called, and the socket is not restarted/re-enabled during this upgrade. There is no automatic retry, cleanup, rollback or predecessor deletion. Any error after the first mutation is STOP and requires a new explicit recovery decision after minimum read-only evidence.
+
 ## Host bootstrap state machine
 
-Only two host pre-mutation states are accepted:
+Only these host pre-mutation states are accepted:
 
 - `ABSENT`: capability-owned release/unit paths are absent and the fixed socket is not active/enabled. The plan is `INSTALL_REQUIRED_EXPLICIT_LIVE`.
-- `EXACT`: the source bytes, owner/modes, SHA release, `current` link, two systemd unit files, enabled state and active socket all match. The result is `ALREADY_EXACT_NO_MUTATION`.
+- `LEGACY_EXACT`: the exact `db6deecf…` predecessor release, units and active/enabled socket are mechanically exact. The plan is `UPGRADE_REQUIRED_EXPLICIT_LIVE`.
+- `EXACT`: the current source release is exact. It may either be the sole release after a fresh install or coexist with the preserved exact `db6deecf…` predecessor after the bounded upgrade. The result is `ALREADY_EXACT_NO_MUTATION`.
 
 Any mixed, partial, stale or conflicting host state fails closed before the first new mutation.
 
-The future fixed host mutation sequence remains limited to:
+A fresh install from `ABSENT` remains limited to:
 
 1. publish the root-owned SHA release;
 2. publish the fixed `current` symlink;
@@ -86,19 +104,21 @@ The future fixed host mutation sequence remains limited to:
 4. run `systemctl daemon-reload`;
 5. run `systemctl enable --now rozkalns-hermes-deals-runner-smoke-install.socket`.
 
+The `LEGACY_EXACT` upgrade instead uses only the two-step release publication/current-switch sequence documented above.
+
 After the first future mutation, any error is terminal for that authorization context. There is no automatic retry, cleanup, rollback, alternate release or alternate systemd action.
 
 ## Required owner-gate order
 
-1. merge the reviewed v2 source and require exact-main CI;
-2. if the fixed v2 checkout is `ABSENT`, separately authorize exact-main v2 source delivery;
-3. verify the v2 checkout is detached, clean, at the exact SHA and reviewed origin while v1 remains untouched;
-4. separately authorize the runner-smoke broker host bootstrap if host state is still `ABSENT`;
-5. verify the exact release, unit bytes, ownership/modes and active/enabled fixed socket;
-6. only then continue to later runner-smoke canary/runtime-evidence gates under the parent Phase 4 plan.
+1. merge the reviewed source repair and require exact-main CI;
+2. materialize/revalidate the exact current v2 trusted checkout under its own separately authorized source-delivery gate if required;
+3. verify the current broker host state read-only;
+4. if it is still exact `db6deecf…`, separately authorize only the bounded `LEGACY_EXACT` broker upgrade and verify `current` points to the repaired exact release while the predecessor remains preserved;
+5. only after that broker upgrade succeeds, re-evaluate the partial runner-smoke install poststate and prepare a new separately owner-authorized capability-install recovery envelope; LIVE-AUTH #31 is permanently non-reusable;
+6. only after exact capability install verification may a later genuine runner-smoke canary be considered under its own gate.
 
 ## Explicit exclusions
 
-This bootstrap does not invoke the runner-smoke helper, install helper/registration payloads into `/usr/local/libexec/rozkalns-deploy` or `/etc/rozkalns-deploy`, create or consume LIVE-AUTH/replay state, mutate the runner-smoke execution identity, change RDC `NoNewPrivileges`, mutate Docker/network/firewall/DNS/Cloudflare/DB/credentials/secrets/runner settings, mutate or clean manager/v1/Weather worktrees, or deploy production.
+This source merge does not authorize the broker upgrade or capability-install recovery. The bootstrap does not invoke the runner-smoke helper, install helper/registration payloads into `/usr/local/libexec/rozkalns-deploy` or `/etc/rozkalns-deploy`, create or consume LIVE-AUTH/replay state, mutate the runner-smoke execution identity, delete/rewrite the `db6deecf…` predecessor release, change RDC `NoNewPrivileges`, mutate Docker/network/firewall/DNS/Cloudflare/DB/credentials/secrets/runner settings, mutate or clean manager/v1/Weather worktrees, or deploy production.
 
 Before any host execution, a separate explicit LIVE authorization must bind the exact reviewed `RPi5_main` SHA, exact current CI, v2 trusted checkout state, expected host baseline, exact mutation envelope, verification and recovery semantics.
