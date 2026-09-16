@@ -24,6 +24,7 @@ test:
 	python3 ./tests/test-deploy-executor-p5.py
 	python3 ./tests/test-deploy-executor-hermes-deals-origin.py
 	python3 ./tests/test-hermes-deals-runner-smoke-install-runtime.py
+	python3 ./tests/test-hermes-deals-runner-smoke-github-time-window.py
 	python3 ./tests/test-deploy-executor-hermes-netto-nonroot-preflight-v2.py
 	python3 ./tests/test-deploy-executor-weather-public-runtime.py
 	python3 ./tests/test-deploy-executor-weather-public-bootstrap.py
