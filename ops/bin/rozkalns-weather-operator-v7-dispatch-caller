@@ -1,0 +1,13 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+from pathlib import Path
+import sys
+
+SUPPORT_ROOT = Path("/usr/local/libexec/rozkalns-weather-operator-v7-capability")
+sys.path.insert(0, str(SUPPORT_ROOT))
+
+from deploy_executor.weather_operator_upgrade_v7_dispatch_caller import runtime_main
+
+if __name__ == "__main__":
+    raise SystemExit(runtime_main())
