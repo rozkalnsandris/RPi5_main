@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import importlib.util
 from pathlib import Path
 import sys
 import unittest
@@ -10,6 +11,16 @@ from deploy_executor.hermes_deals_runner_smoke_install_runtime import (  # noqa:
     RunnerSmokeInstallRuntimeError,
     _GitHubTimeWindow,
 )
+
+# Keep the capability-specific broker regression suite in the existing
+# runner-smoke validation lane without widening the top-level Makefile surface.
+BROKER_TEST = ROOT / "tests" / "test-hermes-deals-runner-smoke-install-broker.py"
+BROKER_SPEC = importlib.util.spec_from_file_location("runner_smoke_install_broker_tests", BROKER_TEST)
+assert BROKER_SPEC is not None and BROKER_SPEC.loader is not None
+BROKER_MODULE = importlib.util.module_from_spec(BROKER_SPEC)
+sys.modules[BROKER_SPEC.name] = BROKER_MODULE
+BROKER_SPEC.loader.exec_module(BROKER_MODULE)
+RunnerSmokeInstallBrokerTests = BROKER_MODULE.RunnerSmokeInstallBrokerTests
 
 
 class RunnerSmokeGitHubTimeWindowTests(unittest.TestCase):
