@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import sys
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def main() -> int:
+    if len(sys.argv) != 1:
+        print("runner-smoke broker bootstrap accepts no arguments", file=sys.stderr)
+        return 64
+    repo_root = _repo_root()
+    sys.path.insert(0, str(repo_root / "ops" / "lib"))
+    from deploy_executor.hermes_deals_runner_smoke_broker_bootstrap import (
+        RunnerSmokeBrokerBootstrapApplyError,
+        RunnerSmokeBrokerBootstrapError,
+        apply_bootstrap,
+        failure_receipt,
+    )
+
+    try:
+        receipt = apply_bootstrap(repo_root)
+    except RunnerSmokeBrokerBootstrapApplyError as exc:
+        print(json.dumps(failure_receipt(mutation_started=exc.mutation_started), sort_keys=True, separators=(",", ":")))
+        return 71
+    except RunnerSmokeBrokerBootstrapError:
+        print(json.dumps(failure_receipt(mutation_started=False), sort_keys=True, separators=(",", ":")))
+        return 70
+    print(json.dumps(dict(receipt), sort_keys=True, separators=(",", ":")))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "contract": "rozkalns.hermes-deals.runner-smoke-broker-bootstrap.v1",
+  "status": "SOURCE_READY_LIVE_DISABLED",
+  "implementation_issue": 570,
+  "repository": "rozkalnsandris/RPi5_main",
+  "trusted_checkout_name": "RPi5_main-v12-engine-trusted",
+  "reviewed_origin": "https://github.com/rozkalnsandris/RPi5_main.git",
+  "expected_branch": "main",
+  "release_root": "/usr/local/libexec/rozkalns-runner-smoke-install",
+  "releases_root": "/usr/local/libexec/rozkalns-runner-smoke-install/releases",
+  "current_link": "/usr/local/libexec/rozkalns-runner-smoke-install/current",
+  "broker_entrypoint": "/usr/local/libexec/rozkalns-runner-smoke-install/current/ops/bin/rpi5-hermes-deals-runner-smoke-install-broker",
+  "socket_source": "ops/systemd/rozkalns-hermes-deals-runner-smoke-install.socket",
+  "socket_destination": "/etc/systemd/system/rozkalns-hermes-deals-runner-smoke-install.socket",
+  "service_source": "ops/systemd/rozkalns-hermes-deals-runner-smoke-install@.service",
+  "service_destination": "/etc/systemd/system/rozkalns-hermes-deals-runner-smoke-install@.service",
+  "socket_unit": "rozkalns-hermes-deals-runner-smoke-install.socket",
+  "activation_sequence": [
+    "publish-root-owned-sha-release",
+    "publish-current-symlink",
+    "publish-fixed-systemd-units",
+    "systemctl-daemon-reload",
+    "enable-start-fixed-socket"
+  ],
+  "authority": {
+    "caller_arguments": [],
+    "caller_selected_command": false,
+    "caller_selected_path": false,
+    "caller_selected_argv": false,
+    "caller_selected_environment": false,
+    "caller_selected_unit": false,
+    "generic_sudo": false,
+    "dynamic_module_discovery": false,
+    "whole_repository_copy": false
+  },
+  "activation": {
+    "source_merge_authorizes_live": false,
+    "runtime_activation_enabled": false,
+    "systemd_socket_installed": false,
+    "separate_explicit_live_authorization_required": true,
+    "rdc_no_new_privileges_must_remain": true,
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false
+  },
+  "excluded_mutations": [
+    "runner-smoke helper invocation",
+    "LIVE-AUTH creation or replay consume",
+    "runner-smoke payload identity/helper/registration mutation",
+    "Docker/network/firewall/DNS/Cloudflare mutation",
+    "database mutation",
+    "credential/secret mutation",
+    "runner settings mutation",
+    "production deployment"
+  ]
+}
