@@ -26,6 +26,8 @@ SOCKET_DESTINATION = Path("/etc/systemd/system/rozkalns-hermes-deals-runner-smok
 SERVICE_DESTINATION = Path("/etc/systemd/system/rozkalns-hermes-deals-runner-smoke-install@.service")
 SOCKET_UNIT = "rozkalns-hermes-deals-runner-smoke-install.socket"
 BROKER_ENTRYPOINT = Path("ops/bin/rpi5-hermes-deals-runner-smoke-install-broker")
+RUNNER_SMOKE_HELPER_SOURCE = Path("ops/bin/hermes-deals-runner-smoke-audit")
+RUNNER_SMOKE_REGISTRATION_SOURCE = Path("ops/deploy/hermes-deals-runner-smoke-audit-registration.json")
 PACKAGE_ROOT = Path("ops/lib/deploy_executor")
 ROOT_UID = 0
 ROOT_GID = 0
@@ -77,6 +79,21 @@ PACKAGE_MODULES = (
     "source_evidence.py",
     "state.py",
     "transport.py",
+)
+
+# The fixed installer loads these immutable payload bytes relative to its installed
+# module's release root. They therefore belong to the broker release closure even
+# though they are not Python import dependencies.
+RUNTIME_PAYLOADS = (
+    (RUNNER_SMOKE_HELPER_SOURCE, EXECUTABLE_MODE),
+    (RUNNER_SMOKE_REGISTRATION_SOURCE, MODULE_MODE),
+)
+RELEASE_DIRECTORIES = (
+    Path("ops"),
+    Path("ops/bin"),
+    Path("ops/deploy"),
+    Path("ops/lib"),
+    Path("ops/lib/deploy_executor"),
 )
 
 MUTATION_SEQUENCE = (
@@ -136,7 +153,8 @@ def source_readiness() -> Mapping[str, Any]:
         "socket_destination": str(SOCKET_DESTINATION),
         "service_destination": str(SERVICE_DESTINATION),
         "socket_unit": SOCKET_UNIT,
-        "runtime_artifact_count": 1 + len(PACKAGE_MODULES),
+        "runtime_artifact_count": 1 + len(RUNTIME_PAYLOADS) + len(PACKAGE_MODULES),
+        "runtime_payloads": tuple(str(path) for path, _ in RUNTIME_PAYLOADS),
         "package_modules": PACKAGE_MODULES,
         "caller_authority": (),
         "generic_sudo_allowed": False,
@@ -163,6 +181,7 @@ def runtime_artifacts() -> tuple[tuple[Path, Path, int], ...]:
     artifacts: list[tuple[Path, Path, int]] = [
         (BROKER_ENTRYPOINT, BROKER_ENTRYPOINT, EXECUTABLE_MODE),
     ]
+    artifacts.extend((source, source, mode) for source, mode in RUNTIME_PAYLOADS)
     artifacts.extend(
         (PACKAGE_ROOT / name, PACKAGE_ROOT / name, MODULE_MODE)
         for name in PACKAGE_MODULES
@@ -311,7 +330,7 @@ def _current_link_exact(path: Path, source_sha: str, *, uid: int, gid: int) -> b
 
 def _release_tree_has_only_expected(release: Path, destinations: Sequence[Path]) -> bool:
     expected_files = {str(path) for path in destinations}
-    expected_dirs = {"ops", "ops/bin", "ops/lib", "ops/lib/deploy_executor"}
+    expected_dirs = {str(path) for path in RELEASE_DIRECTORIES}
     try:
         observed_files: set[str] = set()
         observed_dirs: set[str] = set()
@@ -350,10 +369,7 @@ def _filesystem_state(
         release_root,
         releases_root,
         release,
-        release / "ops",
-        release / "ops/bin",
-        release / "ops/lib",
-        release / "ops/lib/deploy_executor",
+        *(release / relative for relative in RELEASE_DIRECTORIES),
     )
     if not all(_directory_exact(path, DIRECTORY_MODE, uid=uid, gid=gid) for path in required_dirs):
         return "DRIFT"
@@ -533,7 +549,7 @@ def _publish_absent_state(checkout: Path, source_sha: str) -> None:
     _mkdir_root_owned(release_root)
     _mkdir_root_owned(releases_root)
     _mkdir_root_owned(release)
-    for relative in (Path("ops"), Path("ops/bin"), Path("ops/lib"), Path("ops/lib/deploy_executor")):
+    for relative in RELEASE_DIRECTORIES:
         _mkdir_root_owned(release / relative)
     for relative, data, mode in desired_artifact_bytes(checkout):
         _write_root_owned(release / relative, data, mode)

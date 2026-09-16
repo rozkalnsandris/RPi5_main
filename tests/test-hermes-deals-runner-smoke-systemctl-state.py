@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -14,10 +15,13 @@ sys.path.insert(0, str(ROOT / "ops" / "lib"))
 
 from deploy_executor import hermes_deals_runner_smoke_broker_bootstrap as bootstrap_v1
 from deploy_executor import hermes_deals_runner_smoke_broker_bootstrap_v2 as bootstrap_v2
+from deploy_executor import hermes_deals_runner_smoke_broker_bootstrap_v3 as bootstrap_v3
 
 V1_SOURCE_CONTRACT = ROOT / "ops/deploy/rpi5-main-runner-smoke-broker-bootstrap-source-trusted-checkout-bootstrap.json"
 V2_SOURCE_CONTRACT = ROOT / "ops/deploy/rpi5-main-runner-smoke-broker-bootstrap-v2-source-trusted-checkout-bootstrap.json"
+V3_SOURCE_CONTRACT = ROOT / "ops/deploy/rpi5-main-runner-smoke-broker-bootstrap-v3-source-trusted-checkout-bootstrap.json"
 V2_HOST_CONTRACT = ROOT / "ops/deploy/hermes-deals-runner-smoke-broker-bootstrap-v2.json"
+V3_HOST_CONTRACT = ROOT / "ops/deploy/hermes-deals-runner-smoke-broker-bootstrap-v3.json"
 ENTRYPOINT = ROOT / "ops/bin/rpi5-hermes-deals-runner-smoke-broker-bootstrap"
 
 
@@ -55,89 +59,256 @@ class RunnerSmokeSystemctlStateTests(unittest.TestCase):
             with self.assertRaises(bootstrap_v1.RunnerSmokeBrokerBootstrapError):
                 bootstrap_v1._systemctl_state("is-enabled", bootstrap_v1.SOCKET_UNIT)
 
-    def test_v1_checkout_is_preserved_but_v2_is_the_only_current_authority(self) -> None:
+    def test_v3_is_only_current_authority_and_preserves_v1_v2(self) -> None:
         self.assertEqual(
             bootstrap_v1.TRUSTED_CHECKOUT_NAME,
             "RPi5_main-runner-smoke-broker-bootstrap-trusted",
-        )
-        self.assertEqual(
-            bootstrap_v2.HISTORICAL_TRUSTED_CHECKOUT_NAME,
-            bootstrap_v1.TRUSTED_CHECKOUT_NAME,
         )
         self.assertEqual(
             bootstrap_v2.TRUSTED_CHECKOUT_NAME,
             "RPi5_main-runner-smoke-broker-bootstrap-v2-trusted",
         )
-        ready = bootstrap_v2.source_readiness()
-        self.assertEqual(ready["checkout_isolation_issue"], 584)
-        self.assertEqual(ready["trusted_checkout_name"], bootstrap_v2.TRUSTED_CHECKOUT_NAME)
         self.assertEqual(
-            ready["historical_trusted_checkout_name"],
+            bootstrap_v3.HISTORICAL_V1_TRUSTED_CHECKOUT_NAME,
             bootstrap_v1.TRUSTED_CHECKOUT_NAME,
         )
-        self.assertEqual(ready["source_delivery_contract"], str(bootstrap_v2.SOURCE_DELIVERY_CONTRACT))
+        self.assertEqual(
+            bootstrap_v3.HISTORICAL_V2_TRUSTED_CHECKOUT_NAME,
+            bootstrap_v2.TRUSTED_CHECKOUT_NAME,
+        )
+        self.assertEqual(
+            bootstrap_v3.TRUSTED_CHECKOUT_NAME,
+            "RPi5_main-runner-smoke-broker-bootstrap-v3-trusted",
+        )
+        ready = bootstrap_v3.source_readiness()
+        self.assertEqual(ready["payload_closure_issue"], 588)
+        self.assertEqual(ready["trusted_checkout_name"], bootstrap_v3.TRUSTED_CHECKOUT_NAME)
+        self.assertEqual(
+            ready["historical_v1_trusted_checkout_name"],
+            bootstrap_v1.TRUSTED_CHECKOUT_NAME,
+        )
+        self.assertEqual(
+            ready["historical_v2_trusted_checkout_name"],
+            bootstrap_v2.TRUSTED_CHECKOUT_NAME,
+        )
+        self.assertEqual(ready["source_delivery_contract"], str(bootstrap_v3.SOURCE_DELIVERY_CONTRACT))
+        self.assertEqual(ready["legacy_exact_release_sha"], bootstrap_v3.LEGACY_EXACT_RELEASE_SHA)
+        self.assertEqual(ready["legacy_bytes_authority"], "FIXED_GIT_BLOBS_AT_LEGACY_RELEASE_SHA")
+        self.assertTrue(ready["legacy_exact_upgrade_supported"])
+        self.assertTrue(ready["legacy_release_preserved_after_upgrade"])
+        self.assertEqual(ready["upgrade_mutation_sequence"], bootstrap_v3.UPGRADE_MUTATION_SEQUENCE)
         self.assertFalse(ready["source_merge_authorizes_live"])
         self.assertTrue(ready["rdc_no_new_privileges_must_remain"])
 
         entrypoint = ENTRYPOINT.read_text(encoding="utf-8")
-        self.assertIn("hermes_deals_runner_smoke_broker_bootstrap_v2", entrypoint)
-        self.assertNotIn(
-            "from deploy_executor.hermes_deals_runner_smoke_broker_bootstrap import (",
-            entrypoint,
-        )
+        self.assertIn("hermes_deals_runner_smoke_broker_bootstrap_v3", entrypoint)
+        self.assertNotIn("hermes_deals_runner_smoke_broker_bootstrap_v2 import (", entrypoint)
 
         sha = "a" * 40
         with tempfile.TemporaryDirectory() as temp_dir:
-            v2_checkout = Path(temp_dir) / bootstrap_v2.TRUSTED_CHECKOUT_NAME
-            v2_checkout.mkdir()
+            v3_checkout = Path(temp_dir) / bootstrap_v3.TRUSTED_CHECKOUT_NAME
+            v3_checkout.mkdir()
 
             def fake_git(_: Path, *args: str) -> str:
                 values = {
-                    ("rev-parse", "--show-toplevel"): f"{v2_checkout.resolve()}\n",
-                    ("config", "--get", "remote.origin.url"): f"{bootstrap_v2.REVIEWED_ORIGIN}\n",
+                    ("rev-parse", "--show-toplevel"): f"{v3_checkout.resolve()}\n",
+                    ("config", "--get", "remote.origin.url"): f"{bootstrap_v3.REVIEWED_ORIGIN}\n",
                     ("rev-parse", "--abbrev-ref", "HEAD"): "HEAD\n",
                     ("status", "--porcelain=v1", "--untracked-files=all"): "",
                     ("rev-parse", "HEAD"): f"{sha}\n",
                     ("rev-parse", "refs/remotes/origin/main"): f"{sha}\n",
+                    (
+                        "merge-base",
+                        "--is-ancestor",
+                        bootstrap_v3.LEGACY_EXACT_RELEASE_SHA,
+                        "HEAD",
+                    ): "",
                 }
                 return values[args]
 
             with mock.patch.object(bootstrap_v1, "_git", side_effect=fake_git):
-                self.assertEqual(bootstrap_v2.validate_trusted_checkout(v2_checkout), sha)
+                self.assertEqual(bootstrap_v3.validate_trusted_checkout(v3_checkout), sha)
 
-            v1_checkout = Path(temp_dir) / bootstrap_v1.TRUSTED_CHECKOUT_NAME
-            v1_checkout.mkdir()
-            with self.assertRaises(bootstrap_v1.RunnerSmokeBrokerBootstrapError):
-                bootstrap_v2.validate_trusted_checkout(v1_checkout)
+            for historical_name in (
+                bootstrap_v1.TRUSTED_CHECKOUT_NAME,
+                bootstrap_v2.TRUSTED_CHECKOUT_NAME,
+            ):
+                historical = Path(temp_dir) / historical_name
+                historical.mkdir()
+                with self.subTest(historical_name=historical_name):
+                    with self.assertRaises(bootstrap_v1.RunnerSmokeBrokerBootstrapError):
+                        bootstrap_v3.validate_trusted_checkout(historical)
 
-    def test_v2_source_delivery_is_bounded_and_preserves_v1(self) -> None:
+    def test_legacy_git_blob_is_fixed_binary_read_at_exact_predecessor(self) -> None:
+        payload = b"legacy-bytes\x00are-preserved\n"
+        result = subprocess.CompletedProcess(args=[], returncode=0, stdout=payload, stderr=b"")
+        with mock.patch.object(bootstrap_v3.subprocess, "run", return_value=result) as run:
+            value = bootstrap_v3._legacy_git_blob(ROOT, Path("ops/bin/rpi5-hermes-deals-runner-smoke-install-broker"))
+        self.assertEqual(value, payload)
+        argv = run.call_args.args[0]
+        self.assertEqual(argv[:2], ["/usr/bin/git", "--no-optional-locks"])
+        self.assertEqual(argv[-2], "show")
+        self.assertEqual(
+            argv[-1],
+            f"{bootstrap_v3.LEGACY_EXACT_RELEASE_SHA}:ops/bin/rpi5-hermes-deals-runner-smoke-install-broker",
+        )
+        self.assertFalse(run.call_args.kwargs["text"])
+        self.assertFalse(run.call_args.kwargs["shell"])
+        with self.assertRaises(bootstrap_v1.RunnerSmokeBrokerBootstrapError):
+            bootstrap_v3._legacy_git_blob(ROOT, Path("../escape"))
+
+    def test_exact_legacy_release_is_upgradeable_and_preserved_post_upgrade(self) -> None:
+        uid = os.getuid()
+        gid = os.getgid()
+        source_sha = "a" * 40
+
+        def make_dir(path: Path) -> None:
+            path.mkdir(parents=True, exist_ok=True)
+            path.chmod(0o755)
+
+        def legacy_bytes(path: Path) -> bytes:
+            return f"legacy:{path.as_posix()}\n".encode("utf-8")
+
+        def write_release(
+            release: Path,
+            directories: tuple[Path, ...],
+            artifacts: tuple[tuple[Path, Path, int], ...],
+            *,
+            historical: bool,
+        ) -> None:
+            make_dir(release)
+            for relative in directories:
+                make_dir(release / relative)
+            for source, destination, mode in artifacts:
+                target = release / destination
+                target.write_bytes(legacy_bytes(source) if historical else (ROOT / source).read_bytes())
+                target.chmod(mode)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            host_root = Path(temp_dir)
+            release_root = host_root / bootstrap_v1.RELEASE_ROOT.relative_to("/")
+            releases_root = host_root / bootstrap_v1.RELEASES_ROOT.relative_to("/")
+            make_dir(release_root)
+            make_dir(releases_root)
+
+            legacy_release = releases_root / bootstrap_v3.LEGACY_EXACT_RELEASE_SHA
+            write_release(
+                legacy_release,
+                bootstrap_v3.LEGACY_RELEASE_DIRECTORIES,
+                bootstrap_v3._legacy_runtime_artifacts(),
+                historical=True,
+            )
+            current = host_root / bootstrap_v1.CURRENT_LINK.relative_to("/")
+            current.symlink_to(f"releases/{bootstrap_v3.LEGACY_EXACT_RELEASE_SHA}")
+
+            socket_destination = host_root / bootstrap_v1.SOCKET_DESTINATION.relative_to("/")
+            service_destination = host_root / bootstrap_v1.SERVICE_DESTINATION.relative_to("/")
+            make_dir(socket_destination.parent)
+            socket_destination.write_bytes(legacy_bytes(bootstrap_v1.SOCKET_SOURCE))
+            socket_destination.chmod(0o644)
+            service_destination.write_bytes(legacy_bytes(bootstrap_v1.SERVICE_SOURCE))
+            service_destination.chmod(0o644)
+
+            with mock.patch.object(
+                bootstrap_v3,
+                "_legacy_git_blob",
+                side_effect=lambda _checkout, path: legacy_bytes(path),
+            ):
+                self.assertEqual(
+                    bootstrap_v3._filesystem_state_v3(
+                        ROOT,
+                        source_sha,
+                        host_root=host_root,
+                        uid=uid,
+                        gid=gid,
+                    ),
+                    "LEGACY_EXACT",
+                )
+                plan = bootstrap_v3.plan_bootstrap(
+                    bootstrap_v3.BootstrapObservation(
+                        source_sha=source_sha,
+                        filesystem_state="LEGACY_EXACT",
+                        socket_enabled_state="enabled",
+                        socket_active_state="active",
+                    )
+                )
+                self.assertEqual(plan.decision, "UPGRADE_REQUIRED_EXPLICIT_LIVE")
+                self.assertEqual(plan.mutations_required, bootstrap_v3.UPGRADE_MUTATION_SEQUENCE)
+
+                current.unlink()
+                current_release = releases_root / source_sha
+                write_release(
+                    current_release,
+                    bootstrap_v1.RELEASE_DIRECTORIES,
+                    bootstrap_v1.runtime_artifacts(),
+                    historical=False,
+                )
+                current.symlink_to(f"releases/{source_sha}")
+
+                self.assertTrue(legacy_release.is_dir())
+                self.assertEqual(
+                    bootstrap_v3._filesystem_state_v3(
+                        ROOT,
+                        source_sha,
+                        host_root=host_root,
+                        uid=uid,
+                        gid=gid,
+                    ),
+                    "EXACT",
+                )
+
+    def test_legacy_state_requires_active_enabled_socket(self) -> None:
+        sha = "a" * 40
+        for enabled, active in (("disabled", "active"), ("enabled", "inactive")):
+            with self.subTest(enabled=enabled, active=active):
+                observation = bootstrap_v3.BootstrapObservation(
+                    source_sha=sha,
+                    filesystem_state="LEGACY_EXACT",
+                    socket_enabled_state=enabled,
+                    socket_active_state=active,
+                )
+                with self.assertRaises(bootstrap_v1.RunnerSmokeBrokerBootstrapError):
+                    bootstrap_v3.plan_bootstrap(observation)
+
+    def test_v2_contract_remains_historical_and_v3_source_delivery_is_bounded(self) -> None:
         v1 = json.loads(V1_SOURCE_CONTRACT.read_text(encoding="utf-8"))
-        self.assertEqual(v1["issue"], 576)
-        self.assertEqual(
-            v1["trusted_checkout"]["name"],
-            "RPi5_main-runner-smoke-broker-bootstrap-trusted",
-        )
-
         v2 = json.loads(V2_SOURCE_CONTRACT.read_text(encoding="utf-8"))
+        v2_host = json.loads(V2_HOST_CONTRACT.read_text(encoding="utf-8"))
+        self.assertEqual(v1["issue"], 576)
         self.assertEqual(v2["issue"], 584)
-        self.assertTrue(v2["source_only"])
-        self.assertFalse(v2["source_merge_enables_live"])
-        self.assertEqual(v2["trusted_checkout"]["name"], bootstrap_v2.TRUSTED_CHECKOUT_NAME)
         self.assertEqual(
-            v2["trusted_checkout"]["derivation"],
-            "RPi5_CHECKOUT_PARENT/RPi5_main-runner-smoke-broker-bootstrap-v2-trusted",
+            v2["trusted_checkout"]["name"],
+            "RPi5_main-runner-smoke-broker-bootstrap-v2-trusted",
         )
-        preserved = v2["preserved_checkout_namespaces"]
-        v1_preserved = next(
-            item for item in preserved
-            if item.get("name") == "RPi5_main-runner-smoke-broker-bootstrap-trusted"
-        )
-        self.assertFalse(v1_preserved["mutation_allowed"])
-        self.assertFalse(v1_preserved["cleanup_allowed"])
-        self.assertFalse(v1_preserved["authority_source"])
-        self.assertEqual(set(v2["preflight_states"]), {"ABSENT", "EXACT_CLEAN", "CONFLICT"})
+        self.assertEqual(v2_host["checkout_isolation_issue"], 584)
+        self.assertNotIn("payload_closure_issue", v2_host)
 
-        mutations = v2["allowed_git_mutations"]
+        v3 = json.loads(V3_SOURCE_CONTRACT.read_text(encoding="utf-8"))
+        self.assertEqual(v3["issue"], 588)
+        self.assertTrue(v3["source_only"])
+        self.assertFalse(v3["source_merge_enables_live"])
+        self.assertEqual(v3["trusted_checkout"]["name"], bootstrap_v3.TRUSTED_CHECKOUT_NAME)
+        self.assertEqual(
+            v3["trusted_checkout"]["derivation"],
+            "RPi5_CHECKOUT_PARENT/RPi5_main-runner-smoke-broker-bootstrap-v3-trusted",
+        )
+        required_paths = set(v3["trusted_checkout"]["required_paths"])
+        self.assertIn("ops/lib/deploy_executor/hermes_deals_runner_smoke_broker_bootstrap_v3.py", required_paths)
+        self.assertIn("ops/bin/hermes-deals-runner-smoke-audit", required_paths)
+        self.assertIn("ops/deploy/hermes-deals-runner-smoke-audit-registration.json", required_paths)
+
+        preserved = v3["preserved_checkout_namespaces"]
+        for historical_name in (
+            bootstrap_v1.TRUSTED_CHECKOUT_NAME,
+            bootstrap_v2.TRUSTED_CHECKOUT_NAME,
+        ):
+            item = next(value for value in preserved if value.get("name") == historical_name)
+            self.assertFalse(item["mutation_allowed"])
+            self.assertFalse(item["cleanup_allowed"])
+            self.assertFalse(item["authority_source"])
+
+        self.assertEqual(set(v3["preflight_states"]), {"ABSENT", "EXACT_CLEAN", "CONFLICT"})
+        mutations = v3["allowed_git_mutations"]
         self.assertEqual(len(mutations), 2)
         self.assertEqual(mutations[0]["argv"], ["git", "fetch", "origin", "main"])
         self.assertEqual(mutations[0]["max_operations"], 1)
@@ -148,29 +319,42 @@ class RunnerSmokeSystemctlStateTests(unittest.TestCase):
                 "worktree",
                 "add",
                 "--detach",
-                v2["trusted_checkout"]["derivation"],
-                v2["trusted_checkout"]["expected_sha_authority"],
+                v3["trusted_checkout"]["derivation"],
+                v3["trusted_checkout"]["expected_sha_authority"],
             ],
         )
         self.assertEqual(mutations[1]["max_operations"], 1)
-        forbidden = set(v2["forbidden_git_operations"])
+        forbidden = set(v3["forbidden_git_operations"])
         for operation in (
             "reset", "rebase", "clean", "checkout", "switch", "merge", "pull",
             "worktree remove", "worktree prune", "worktree repair", "push", "force",
         ):
             self.assertIn(operation, forbidden)
-        self.assertFalse(v2["failure"]["automatic_retry"])
-        self.assertFalse(v2["failure"]["automatic_cleanup"])
-        self.assertFalse(v2["failure"]["automatic_rollback"])
+        self.assertFalse(v3["failure"]["automatic_retry"])
+        self.assertFalse(v3["failure"]["automatic_cleanup"])
+        self.assertFalse(v3["failure"]["automatic_rollback"])
 
-        host = json.loads(V2_HOST_CONTRACT.read_text(encoding="utf-8"))
-        self.assertEqual(host["checkout_isolation_issue"], 584)
-        self.assertEqual(host["historical_trusted_checkout_name"], bootstrap_v1.TRUSTED_CHECKOUT_NAME)
-        self.assertEqual(host["trusted_checkout_name"], bootstrap_v2.TRUSTED_CHECKOUT_NAME)
-        self.assertEqual(host["source_delivery_contract"], str(bootstrap_v2.SOURCE_DELIVERY_CONTRACT))
-        self.assertEqual(tuple(host["activation_sequence"]), bootstrap_v1.MUTATION_SEQUENCE)
+        host = json.loads(V3_HOST_CONTRACT.read_text(encoding="utf-8"))
+        self.assertEqual(host["payload_closure_issue"], 588)
+        self.assertEqual(host["trusted_checkout_name"], bootstrap_v3.TRUSTED_CHECKOUT_NAME)
+        self.assertEqual(host["historical_v1_trusted_checkout_name"], bootstrap_v1.TRUSTED_CHECKOUT_NAME)
+        self.assertEqual(host["historical_v2_trusted_checkout_name"], bootstrap_v2.TRUSTED_CHECKOUT_NAME)
+        self.assertEqual(host["source_delivery_contract"], str(bootstrap_v3.SOURCE_DELIVERY_CONTRACT))
+        self.assertEqual(tuple(host["fresh_install_sequence"]), bootstrap_v1.MUTATION_SEQUENCE)
+        upgrade = host["legacy_exact_upgrade"]
+        self.assertTrue(upgrade["supported"])
+        self.assertEqual(upgrade["exact_predecessor_release_sha"], bootstrap_v3.LEGACY_EXACT_RELEASE_SHA)
+        self.assertEqual(tuple(upgrade["mutation_sequence"]), bootstrap_v3.UPGRADE_MUTATION_SEQUENCE)
+        self.assertEqual(upgrade["fixed_next_link"], str(bootstrap_v3.CURRENT_NEXT_LINK))
+        self.assertTrue(upgrade["atomic_current_switch"])
+        self.assertTrue(upgrade["preserve_predecessor_release"])
+        self.assertFalse(upgrade["systemd_mutation_required"])
+        self.assertFalse(upgrade["cleanup_allowed"])
+        self.assertFalse(upgrade["rollback_allowed"])
+        self.assertFalse(upgrade["automatic_retry"])
         self.assertFalse(host["authority"]["generic_sudo"])
         self.assertFalse(host["authority"]["historical_v1_checkout_authority"])
+        self.assertFalse(host["authority"]["historical_v2_checkout_authority"])
         self.assertFalse(host["activation"]["source_merge_authorizes_live"])
         self.assertFalse(host["activation"]["source_delivery_live_authorized"])
         self.assertTrue(host["activation"]["rdc_no_new_privileges_must_remain"])
