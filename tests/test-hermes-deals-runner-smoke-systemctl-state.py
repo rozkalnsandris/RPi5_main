@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -70,12 +71,17 @@ class RunnerSmokeSystemctlStateTests(unittest.TestCase):
         )
         ready = bootstrap_v2.source_readiness()
         self.assertEqual(ready["checkout_isolation_issue"], 584)
+        self.assertEqual(ready["payload_closure_issue"], 588)
         self.assertEqual(ready["trusted_checkout_name"], bootstrap_v2.TRUSTED_CHECKOUT_NAME)
         self.assertEqual(
             ready["historical_trusted_checkout_name"],
             bootstrap_v1.TRUSTED_CHECKOUT_NAME,
         )
         self.assertEqual(ready["source_delivery_contract"], str(bootstrap_v2.SOURCE_DELIVERY_CONTRACT))
+        self.assertEqual(ready["legacy_exact_release_sha"], bootstrap_v2.LEGACY_EXACT_RELEASE_SHA)
+        self.assertTrue(ready["legacy_exact_upgrade_supported"])
+        self.assertTrue(ready["legacy_release_preserved_after_upgrade"])
+        self.assertEqual(ready["upgrade_mutation_sequence"], bootstrap_v2.UPGRADE_MUTATION_SEQUENCE)
         self.assertFalse(ready["source_merge_authorizes_live"])
         self.assertTrue(ready["rdc_no_new_privileges_must_remain"])
 
@@ -109,6 +115,107 @@ class RunnerSmokeSystemctlStateTests(unittest.TestCase):
             v1_checkout.mkdir()
             with self.assertRaises(bootstrap_v1.RunnerSmokeBrokerBootstrapError):
                 bootstrap_v2.validate_trusted_checkout(v1_checkout)
+
+    def test_exact_legacy_release_is_upgradeable_and_preserved_post_upgrade(self) -> None:
+        uid = os.getuid()
+        gid = os.getgid()
+        source_sha = "a" * 40
+
+        def make_dir(path: Path) -> None:
+            path.mkdir(parents=True, exist_ok=True)
+            path.chmod(0o755)
+
+        def write_release(
+            release: Path,
+            directories: tuple[Path, ...],
+            artifacts: tuple[tuple[Path, Path, int], ...],
+        ) -> None:
+            make_dir(release)
+            for relative in directories:
+                make_dir(release / relative)
+            for source, destination, mode in artifacts:
+                target = release / destination
+                target.write_bytes((ROOT / source).read_bytes())
+                target.chmod(mode)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            host_root = Path(temp_dir)
+            release_root = host_root / bootstrap_v1.RELEASE_ROOT.relative_to("/")
+            releases_root = host_root / bootstrap_v1.RELEASES_ROOT.relative_to("/")
+            make_dir(release_root)
+            make_dir(releases_root)
+
+            legacy_release = releases_root / bootstrap_v2.LEGACY_EXACT_RELEASE_SHA
+            write_release(
+                legacy_release,
+                bootstrap_v2.LEGACY_RELEASE_DIRECTORIES,
+                bootstrap_v2._legacy_runtime_artifacts(),
+            )
+            current = host_root / bootstrap_v1.CURRENT_LINK.relative_to("/")
+            current.symlink_to(f"releases/{bootstrap_v2.LEGACY_EXACT_RELEASE_SHA}")
+
+            socket_destination = host_root / bootstrap_v1.SOCKET_DESTINATION.relative_to("/")
+            service_destination = host_root / bootstrap_v1.SERVICE_DESTINATION.relative_to("/")
+            make_dir(socket_destination.parent)
+            socket_destination.write_bytes((ROOT / bootstrap_v1.SOCKET_SOURCE).read_bytes())
+            socket_destination.chmod(0o644)
+            service_destination.write_bytes((ROOT / bootstrap_v1.SERVICE_SOURCE).read_bytes())
+            service_destination.chmod(0o644)
+
+            self.assertEqual(
+                bootstrap_v2._filesystem_state_v2(
+                    ROOT,
+                    source_sha,
+                    host_root=host_root,
+                    uid=uid,
+                    gid=gid,
+                ),
+                "LEGACY_EXACT",
+            )
+            plan = bootstrap_v2.plan_bootstrap(
+                bootstrap_v2.BootstrapObservation(
+                    source_sha=source_sha,
+                    filesystem_state="LEGACY_EXACT",
+                    socket_enabled_state="enabled",
+                    socket_active_state="active",
+                )
+            )
+            self.assertEqual(plan.decision, "UPGRADE_REQUIRED_EXPLICIT_LIVE")
+            self.assertEqual(plan.mutations_required, bootstrap_v2.UPGRADE_MUTATION_SEQUENCE)
+
+            current.unlink()
+            current_release = releases_root / source_sha
+            write_release(
+                current_release,
+                bootstrap_v1.RELEASE_DIRECTORIES,
+                bootstrap_v1.runtime_artifacts(),
+            )
+            current.symlink_to(f"releases/{source_sha}")
+
+            self.assertTrue(legacy_release.is_dir())
+            self.assertEqual(
+                bootstrap_v2._filesystem_state_v2(
+                    ROOT,
+                    source_sha,
+                    host_root=host_root,
+                    uid=uid,
+                    gid=gid,
+                ),
+                "EXACT",
+            )
+
+    def test_legacy_state_requires_active_enabled_socket_and_exact_predecessor(self) -> None:
+        sha = "a" * 40
+        for enabled, active in (("disabled", "active"), ("enabled", "inactive")):
+            with self.subTest(enabled=enabled, active=active):
+                observation = bootstrap_v2.BootstrapObservation(
+                    source_sha=sha,
+                    filesystem_state="LEGACY_EXACT",
+                    socket_enabled_state=enabled,
+                    socket_active_state=active,
+                )
+                with self.assertRaises(bootstrap_v1.RunnerSmokeBrokerBootstrapError):
+                    bootstrap_v2.plan_bootstrap(observation)
 
     def test_v2_source_delivery_is_bounded_and_preserves_v1(self) -> None:
         v1 = json.loads(V1_SOURCE_CONTRACT.read_text(encoding="utf-8"))
@@ -165,10 +272,22 @@ class RunnerSmokeSystemctlStateTests(unittest.TestCase):
 
         host = json.loads(V2_HOST_CONTRACT.read_text(encoding="utf-8"))
         self.assertEqual(host["checkout_isolation_issue"], 584)
+        self.assertEqual(host["payload_closure_issue"], 588)
         self.assertEqual(host["historical_trusted_checkout_name"], bootstrap_v1.TRUSTED_CHECKOUT_NAME)
         self.assertEqual(host["trusted_checkout_name"], bootstrap_v2.TRUSTED_CHECKOUT_NAME)
         self.assertEqual(host["source_delivery_contract"], str(bootstrap_v2.SOURCE_DELIVERY_CONTRACT))
         self.assertEqual(tuple(host["activation_sequence"]), bootstrap_v1.MUTATION_SEQUENCE)
+        upgrade = host["legacy_exact_upgrade"]
+        self.assertTrue(upgrade["supported"])
+        self.assertEqual(upgrade["exact_predecessor_release_sha"], bootstrap_v2.LEGACY_EXACT_RELEASE_SHA)
+        self.assertEqual(tuple(upgrade["mutation_sequence"]), bootstrap_v2.UPGRADE_MUTATION_SEQUENCE)
+        self.assertEqual(upgrade["fixed_next_link"], str(bootstrap_v2.CURRENT_NEXT_LINK))
+        self.assertTrue(upgrade["atomic_current_switch"])
+        self.assertTrue(upgrade["preserve_predecessor_release"])
+        self.assertFalse(upgrade["systemd_mutation_required"])
+        self.assertFalse(upgrade["cleanup_allowed"])
+        self.assertFalse(upgrade["rollback_allowed"])
+        self.assertFalse(upgrade["automatic_retry"])
         self.assertFalse(host["authority"]["generic_sudo"])
         self.assertFalse(host["authority"]["historical_v1_checkout_authority"])
         self.assertFalse(host["activation"]["source_merge_authorizes_live"])
