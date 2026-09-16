@@ -43,6 +43,7 @@ test:
 	python3 ./tests/test-deploy-executor-weather-public-operator-upgrade-v2.py
 	python3 ./tests/test-deploy-executor-weather-public-historical-operator-upgrades.py
 	python3 ./tests/test-deploy-executor-weather-public-operator-upgrade-v5.py
+	python3 ./tests/test-deploy-executor-weather-operator-upgrade-v7-privileged-delivery.py
 	python3 ./tests/test-rpi5-main-weather-public-runtime-trusted-checkout-bootstrap.py
 	python3 ./tests/test-deploy-executor-hermes-deals-origin-dispatch-request.py
 	python3 ./tests/test-deploy-executor-hermes-deals-origin-privileged-consumer.py
