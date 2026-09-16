@@ -141,6 +141,29 @@ class WeatherV7DispatchCallerTests(unittest.TestCase):
         self.assertFalse(source_delivery["source_merge_enables_live"])
         self.assertEqual(len(source_delivery["allowed_git_mutations"]), 2)
 
+    def test_installer_verifies_full_installed_support_closure(self) -> None:
+        installer = (ROOT / "scripts/install-weather-operator-v7-dispatch-caller.py").read_text()
+        required_support = (
+            "__init__.py",
+            "dispatch_contract.py",
+            "github_app_auth.py",
+            "p9_canary.py",
+            "p9_isolated_auth_surface.py",
+            "p9_runtime.py",
+            "protocol.py",
+            "queue_normalizer.py",
+            "registry.py",
+            "state.py",
+            "transport.py",
+            "weather_operator_upgrade_v7_host_capability.py",
+            "rozkalns-weather-operator-v7-privileged-broker",
+            "rozkalns-weather-operator-v7-privileged-broker.socket",
+            "rozkalns-weather-operator-v7-privileged-broker@.service",
+        )
+        for artifact in required_support:
+            self.assertIn(artifact, installer)
+        self.assertIn('"verified_prerequisite_artifact_count": len(PREREQUISITES)', installer)
+
     def test_source_has_fixed_socket_and_no_generic_process_launch(self) -> None:
         source = (ROOT / "ops/lib/deploy_executor/weather_operator_upgrade_v7_dispatch_caller.py").read_text()
         self.assertIn("socket.AF_UNIX", source)
