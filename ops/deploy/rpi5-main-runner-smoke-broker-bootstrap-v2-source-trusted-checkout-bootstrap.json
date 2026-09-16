@@ -1,0 +1,172 @@
+{
+  "schema": "rozkalns.rpi5-main.runner-smoke-broker-bootstrap-v2-source-trusted-checkout-bootstrap.v1",
+  "repository": "rozkalnsandris/RPi5_main",
+  "issue": 584,
+  "source_only": true,
+  "status": "SOURCE_READY_FOR_TRUSTED_RUNNER_SMOKE_BOOTSTRAP_V2_SOURCE_DELIVERY",
+  "purpose": "Create one clean detached exact-main RPi5_main checkout dedicated to runner-smoke broker host bootstrap v2 while preserving the existing v1 checkout as immutable historical evidence.",
+  "reviewed_origin": "https://github.com/rozkalnsandris/RPi5_main.git",
+  "manager_checkout": {
+    "derivation": "RPi5_CHECKOUT_PARENT/RPi5_main",
+    "origin": "https://github.com/rozkalnsandris/RPi5_main.git",
+    "working_tree_content_may_be_dirty": true,
+    "head_may_be_detached": true,
+    "working_tree_content_mutation_allowed": false,
+    "index_mutation_allowed": false,
+    "head_advance_allowed": false,
+    "reset_allowed": false,
+    "stash_allowed": false,
+    "clean_allowed": false
+  },
+  "preserved_checkout_namespaces": [
+    {
+      "name": "RPi5_main-runner-smoke-broker-bootstrap-trusted",
+      "mutation_allowed": false,
+      "cleanup_allowed": false,
+      "authority_source": false,
+      "purpose": "runner-smoke v1 checkout is immutable historical evidence"
+    },
+    {
+      "name": "RPi5_main-v12-engine-trusted",
+      "mutation_allowed": false,
+      "cleanup_allowed": false,
+      "authority_source": false,
+      "purpose": "Weather-v12 evidence checkout is not runner-smoke authority"
+    },
+    {
+      "prefix": "RPi5_main-weather-",
+      "mutation_allowed": false,
+      "cleanup_allowed": false,
+      "authority_source": false,
+      "purpose": "all Weather trusted checkouts remain outside runner-smoke source-delivery authority"
+    }
+  ],
+  "trusted_checkout": {
+    "name": "RPi5_main-runner-smoke-broker-bootstrap-v2-trusted",
+    "derivation": "RPi5_CHECKOUT_PARENT/RPi5_main-runner-smoke-broker-bootstrap-v2-trusted",
+    "expected_sha_authority": "EXPLICIT_RUNNER_SMOKE_BROKER_BOOTSTRAP_V2_SOURCE_LIVE_EXACT_RPI5_MAIN_SHA",
+    "expected_sha_format": "LOWERCASE_40_HEX",
+    "fresh_origin_main_must_equal_expected_sha": true,
+    "exact_current_main_required": true,
+    "exact_main_ci_required": true,
+    "required_post_state": "EXACT_SHA_DETACHED_CLEAN_CORRECT_ORIGIN",
+    "required_paths": [
+      "ops/bin/rpi5-hermes-deals-runner-smoke-broker-bootstrap",
+      "ops/lib/deploy_executor/hermes_deals_runner_smoke_broker_bootstrap.py",
+      "ops/lib/deploy_executor/hermes_deals_runner_smoke_broker_bootstrap_v2.py",
+      "ops/deploy/hermes-deals-runner-smoke-broker-bootstrap-v2.json",
+      "ops/bin/rpi5-hermes-deals-runner-smoke-install-broker",
+      "ops/systemd/rozkalns-hermes-deals-runner-smoke-install.socket",
+      "ops/systemd/rozkalns-hermes-deals-runner-smoke-install@.service"
+    ]
+  },
+  "preflight_states": {
+    "ABSENT": "fixed v2 target checkout path and worktree registration are absent; source delivery may proceed only under a fresh exact owner LIVE authorization",
+    "EXACT_CLEAN": "fixed v2 target exists at the exact authorized SHA, detached, clean and at the reviewed origin; no Git mutation is required",
+    "CONFLICT": "any v2 target path/worktree/origin/SHA/attachment/dirty mismatch; STOP with read-only evidence and no cleanup or alternate target"
+  },
+  "required_exact_main_checks": [
+    "validate",
+    "gitleaks",
+    "GITHUB-ONLY policy drift / GITHUB-ONLY policy drift",
+    "policy-drift / FAST-LANE v2.2 policy drift",
+    "public-automation-baseline / public automation policy"
+  ],
+  "allowed_git_mutations": [
+    {
+      "order": 1,
+      "repository": "RPi5_CHECKOUT_PARENT/RPi5_main",
+      "argv": ["git", "fetch", "origin", "main"],
+      "mutation_category": "git.runner-smoke-broker-bootstrap-v2-source-fetch",
+      "max_operations": 1,
+      "working_tree_content_mutation": false
+    },
+    {
+      "order": 2,
+      "repository": "RPi5_CHECKOUT_PARENT/RPi5_main",
+      "argv": [
+        "git",
+        "worktree",
+        "add",
+        "--detach",
+        "RPi5_CHECKOUT_PARENT/RPi5_main-runner-smoke-broker-bootstrap-v2-trusted",
+        "EXPLICIT_RUNNER_SMOKE_BROKER_BOOTSTRAP_V2_SOURCE_LIVE_EXACT_RPI5_MAIN_SHA"
+      ],
+      "mutation_category": "git.runner-smoke-broker-bootstrap-v2-source-worktree-add",
+      "max_operations": 1,
+      "working_tree_content_mutation": false
+    }
+  ],
+  "post_fetch_gate": {
+    "require_origin_main_equals_expected_sha": true,
+    "require_expected_sha_is_current_github_main": true,
+    "require_exact_main_ci_success": true,
+    "main_or_ci_drift_behavior": "STOP_NO_WORKTREE_CREATION"
+  },
+  "post_create_verification": [
+    "target resolves to the fixed runner-smoke broker bootstrap v2 source checkout path",
+    "HEAD equals the exact owner-authorized current RPi5_main SHA",
+    "HEAD is detached",
+    "status porcelain including untracked files is empty",
+    "origin exactly equals the reviewed GitHub origin",
+    "all required_paths are regular files at the exact authorized SHA",
+    "runner-smoke v1 checkout remains untouched and is not authority",
+    "dirty manager checkout remains outside mutation authority",
+    "Weather-v12 and all RPi5_main-weather-* trusted checkouts remain untouched"
+  ],
+  "handoff": {
+    "next_gate": "SEPARATE_OWNER_LIVE_RUNNER_SMOKE_BROKER_HOST_BOOTSTRAP",
+    "bootstrap_entrypoint": "ops/bin/rpi5-hermes-deals-runner-smoke-broker-bootstrap",
+    "bootstrap_must_run_from_this_exact_checkout": true,
+    "source_delivery_authorizes_host_bootstrap_apply": false,
+    "source_delivery_authorizes_helper_invocation": false,
+    "source_delivery_authorizes_production_deployment": false
+  },
+  "forbidden_git_operations": [
+    "reset",
+    "rebase",
+    "clean",
+    "stash",
+    "checkout",
+    "switch",
+    "merge",
+    "pull",
+    "worktree remove",
+    "worktree prune",
+    "worktree repair",
+    "branch",
+    "commit",
+    "push",
+    "force"
+  ],
+  "forbidden_authority": [
+    "caller-selected repository",
+    "caller-selected target path",
+    "caller-selected branch or ref",
+    "caller-selected command or argv",
+    "caller-selected environment mutation",
+    "alternate checkout path",
+    "manager checkout repair",
+    "runner-smoke v1 checkout mutation or cleanup",
+    "Weather trusted checkout mutation or cleanup",
+    "host bootstrap apply",
+    "systemd mutation",
+    "runner-smoke helper invocation",
+    "production deployment",
+    "database mutation",
+    "Cloudflare or network mutation",
+    "credential or secret content access",
+    "runner settings mutation"
+  ],
+  "failure": {
+    "authorization_consumed_at_first_git_mutation": true,
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "manager_repair": false,
+    "historical_checkout_mutation": false,
+    "alternate_checkout_route": false,
+    "after_first_mutation_error": "STOP_PRESERVE_MINIMUM_READ_ONLY_EVIDENCE"
+  },
+  "source_merge_enables_live": false
+}
