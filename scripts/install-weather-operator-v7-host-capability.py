@@ -22,6 +22,7 @@ SYSTEMD_ROOT = Path("/etc/systemd/system")
 SOCKET_NAME = "rozkalns-weather-operator-v7-privileged-broker.socket"
 SERVICE_NAME = "rozkalns-weather-operator-v7-privileged-broker@.service"
 ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
+MAX_UID = (1 << 32) - 2
 ARTIFACTS = (
     ("ops/lib/deploy_executor/__init__.py", PACKAGE_ROOT / "__init__.py", 0o644),
     ("ops/lib/deploy_executor/dispatch_contract.py", PACKAGE_ROOT / "dispatch_contract.py", 0o644),
@@ -49,16 +50,37 @@ def fail(message: str) -> None:
     raise InstallError(message)
 
 
+def git_environment() -> dict[str, str]:
+    env = {"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"}
+    if os.geteuid() != 0:
+        return env
+
+    sudo_uid = os.environ.get("SUDO_UID")
+    if sudo_uid is None:
+        return env
+    if not sudo_uid.isascii() or not sudo_uid.isdecimal():
+        fail("SUDO_UID must be an ASCII decimal UID")
+    uid = int(sudo_uid, 10)
+    if uid > MAX_UID:
+        fail("SUDO_UID is outside the supported uid_t range")
+    env["SUDO_UID"] = str(uid)
+    return env
+
+
 def run_git(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["/usr/bin/git", "-C", str(ROOT), *args],
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        env={"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"},
-        check=check,
-    )
+    try:
+        return subprocess.run(
+            ["/usr/bin/git", "-C", str(ROOT), *args],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=git_environment(),
+            check=check,
+        )
+    except subprocess.CalledProcessError as exc:
+        command = args[0] if args else "git"
+        raise InstallError(f"git source preflight failed: {command}") from exc
 
 
 def source_sha() -> str:
