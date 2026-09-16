@@ -1,7 +1,12 @@
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+import sys
 import unittest
 
-from ops.lib.deploy_executor.hermes_deals_runner_smoke_install_runtime import (
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "ops" / "lib"))
+
+from deploy_executor.hermes_deals_runner_smoke_install_runtime import (  # noqa: E402
     RunnerSmokeInstallRuntimeError,
     _GitHubTimeWindow,
 )
