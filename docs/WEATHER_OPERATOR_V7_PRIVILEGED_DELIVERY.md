@@ -76,7 +76,7 @@ The required order is intentionally explicit:
 1. **source merge + exact-main CI** for the reviewed `RPi5_main#543`, `RPi5_main#571` and `RPi5_main#574` source outcomes;
 2. a separate owner-gated **trusted exact-main #571-installer source delivery** if sanitized evidence reports that checkout absent;
 3. **sanitized source-checkout verification** proving exact SHA, detached-clean state and reviewed origin;
-4. a separate owner-gated **one-time privileged-boundary host capability install**, if sanitized evidence still reports the capability absent;
+4. a separate owner-gated **one-time privileged-boundary host install/upgrade**, if sanitized evidence still reports the capability absent;
 5. **sanitized capability verification** proving the fixed capability identity without protected runtime data;
 6. a **fresh exact Weather v7 LIVE authorization** binding the then-current reviewed `RPi5_main` SHA, fixed target, predecessor identity and exact 1+1+1 mutation budget;
 7. **installed-closure verification** proving the new operator SHA-256 and `root:root 0755`, with v6 still preserved;
