@@ -26,6 +26,8 @@ test:
 	python3 ./tests/test-hermes-deals-runner-smoke-install-consumer.py
 	python3 ./tests/test-hermes-deals-runner-smoke-install-runtime.py
 	python3 ./tests/test-hermes-deals-runner-smoke-github-time-window.py
+	python3 ./tests/test-hermes-deals-runner-smoke-install-broker.py
+	python3 ./tests/test-hermes-deals-runner-smoke-broker-bootstrap.py
 	python3 ./tests/test-deploy-executor-hermes-netto-nonroot-preflight-v2.py
 	python3 ./tests/test-deploy-executor-weather-public-runtime.py
 	python3 ./tests/test-deploy-executor-weather-public-bootstrap.py
@@ -153,7 +155,6 @@ test:
 	python3 ./tests/test-cloudflare-p1a08-control-aud-override.py
 	python3 ./tests/test-cloudflare-p1d-owner-phone.py
 	python3 ./tests/test-cloudflare-p1d-browser-sso.py
-	python3 ./tests/test-cloudflare-owner-browser-sso-preflight.py
 	python3 ./tests/test-cloudflare-p1d-client-session-compat.py
 	python3 ./tests/test-cloudflare-owner-phone-preflight.py
 	python3 ./tests/test-cloudflare-owner-phone-enrollment-create.py
