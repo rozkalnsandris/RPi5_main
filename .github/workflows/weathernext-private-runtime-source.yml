@@ -1,0 +1,176 @@
+name: WeatherNext private runtime source
+
+on:
+  pull_request:
+    paths:
+      - "ops/lib/deploy_executor/weather_private_bigquery_runtime_materialization.py"
+      - "ops/lib/deploy_executor/weather_private_bigquery_runtime_lock.json"
+      - "tests/test-deploy-executor-weather-private-bigquery.py"
+      - "tests/test-deploy-executor-weather-private-bigquery-runtime.py"
+      - "docs/WEATHERNEXT_PRIVATE_BIGQUERY_SOURCE.md"
+      - "docs/WEATHERNEXT_PRIVATE_BIGQUERY_RUNTIME.md"
+      - "docs/ROADMAP.md"
+      - "Makefile"
+      - ".github/workflows/weathernext-private-runtime-source.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "ops/lib/deploy_executor/weather_private_bigquery_runtime_materialization.py"
+      - "ops/lib/deploy_executor/weather_private_bigquery_runtime_lock.json"
+      - "tests/test-deploy-executor-weather-private-bigquery.py"
+      - "tests/test-deploy-executor-weather-private-bigquery-runtime.py"
+      - "docs/WEATHERNEXT_PRIVATE_BIGQUERY_SOURCE.md"
+      - "docs/WEATHERNEXT_PRIVATE_BIGQUERY_RUNTIME.md"
+      - "docs/ROADMAP.md"
+      - "Makefile"
+      - ".github/workflows/weathernext-private-runtime-source.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  source-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate private WeatherNext runtime source
+        run: |
+          python3 ./tests/test-deploy-executor-weather-private-bigquery.py
+          python3 ./tests/test-deploy-executor-weather-private-bigquery-runtime.py
+          python3 -m py_compile \
+            ops/lib/deploy_executor/weather_private_bigquery_contract.py \
+            ops/lib/deploy_executor/weather_private_bigquery_runtime_materialization.py
+
+  deterministic-wheelhouse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Build exact aarch64 wheelhouse artifact
+        run: |
+          set -euo pipefail
+          rm -rf .weathernext-private-runtime-build
+          mkdir -p .weathernext-private-runtime-build/wheelhouse
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import io
+          import json
+          import os
+          import pathlib
+          import subprocess
+          import sys
+          import tarfile
+
+          root = pathlib.Path(".")
+          build = root / ".weathernext-private-runtime-build"
+          wheelhouse = build / "wheelhouse"
+          lock_path = root / "ops/lib/deploy_executor/weather_private_bigquery_runtime_lock.json"
+          lock = json.loads(lock_path.read_text(encoding="utf-8"))
+          source_sha = os.environ["SOURCE_SHA"]
+          if len(source_sha) != 40 or any(c not in "0123456789abcdef" for c in source_sha):
+              raise SystemExit("SOURCE_SHA must be one exact Git commit SHA")
+
+          requirements = [f"{item['name']}=={item['version']}" for item in lock["packages"]]
+          command = [
+              sys.executable,
+              "-m",
+              "pip",
+              "download",
+              "--disable-pip-version-check",
+              "--no-deps",
+              "--only-binary=:all:",
+              "--platform",
+              lock["target"]["pip_platform"],
+              "--python-version",
+              "313",
+              "--implementation",
+              "cp",
+              "--abi",
+              "cp313",
+              "--abi",
+              "abi3",
+              "--dest",
+              str(wheelhouse),
+              *requirements,
+          ]
+          subprocess.run(command, check=True)
+
+          expected = {item["filename"]: item["sha256"] for item in lock["packages"]}
+          observed = {path.name for path in wheelhouse.iterdir() if path.is_file()}
+          if observed != set(expected):
+              raise SystemExit(f"wheelhouse filename mismatch: missing={sorted(set(expected)-observed)} extra={sorted(observed-set(expected))}")
+          for filename, expected_sha in sorted(expected.items()):
+              digest = hashlib.sha256((wheelhouse / filename).read_bytes()).hexdigest()
+              if digest != expected_sha:
+                  raise SystemExit(f"wheel digest mismatch for {filename}")
+
+          metadata = {
+              "schema": "rozkalns-weather.weathernext-private-runtime-artifact.v1",
+              "source_sha": source_sha,
+              "closure_sha256": lock["closure_sha256"],
+              "target_os": lock["target"]["os"],
+              "target_architecture": lock["target"]["architecture"],
+              "target_python_version": lock["target"]["python_version"],
+              "target_python_abi": lock["target"]["python_abi"],
+              "target_platform": lock["target"]["pip_platform"],
+              "package_count": lock["package_count"],
+          }
+          metadata_bytes = (json.dumps(metadata, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+
+          artifact_path = build / "weathernext-private-runtime.tar"
+          with tarfile.open(artifact_path, mode="w") as archive:
+              entries = [("runtime-closure.json", metadata_bytes)]
+              entries.extend((f"wheelhouse/{filename}", (wheelhouse / filename).read_bytes()) for filename in sorted(expected))
+              for name, data in entries:
+                  info = tarfile.TarInfo(name)
+                  info.size = len(data)
+                  info.mode = 0o644
+                  info.uid = 0
+                  info.gid = 0
+                  info.uname = ""
+                  info.gname = ""
+                  info.mtime = 0
+                  archive.addfile(info, io.BytesIO(data))
+
+          artifact_bytes = artifact_path.read_bytes()
+          receipt = {
+              "source_sha": source_sha,
+              "closure_sha256": lock["closure_sha256"],
+              "artifact_sha256": hashlib.sha256(artifact_bytes).hexdigest(),
+              "artifact_size_bytes": len(artifact_bytes),
+              "artifact_format": "normalized-wheelhouse-tar-v1",
+              "target_os": lock["target"]["os"],
+              "target_architecture": lock["target"]["architecture"],
+              "target_python_version": lock["target"]["python_version"],
+              "target_python_abi": lock["target"]["python_abi"],
+              "target_platform": lock["target"]["pip_platform"],
+          }
+          (build / "runtime-artifact-receipt.json").write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print(json.dumps({"status":"runtime_artifact_built","source_sha":source_sha,"closure_sha256":receipt["closure_sha256"],"artifact_sha256":receipt["artifact_sha256"],"artifact_size_bytes":receipt["artifact_size_bytes"],"package_count":lock["package_count"]}, sort_keys=True))
+          PY
+
+      - name: Upload reviewed runtime artifact and receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: weathernext-private-runtime-${{ env.SOURCE_SHA }}
+          path: |
+            .weathernext-private-runtime-build/weathernext-private-runtime.tar
+            .weathernext-private-runtime-build/runtime-artifact-receipt.json
+          if-no-files-found: error
+          retention-days: 14

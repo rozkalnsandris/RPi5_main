@@ -12,7 +12,7 @@ case "$command_name" in
         fi
         exec python3 "$repo/scripts/rpi5_deploy.py" "$@"
         ;;
-    plan|deploy|status|rollback|logs|engine-status)
+    plan|deploy|status|rollback|logs|engine-status|weather-private-installer-bootstrap)
         if [[ "${RPI5_DEPLOY_TEST_MODE:-0}" == "1" ]]; then
             exec python3 "$repo/scripts/rpi5_deploy.py" "$@"
         fi

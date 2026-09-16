@@ -23,6 +23,9 @@ test:
 	python3 ./tests/test-deploy-executor-p4.py
 	python3 ./tests/test-deploy-executor-p5.py
 	python3 ./tests/test-deploy-executor-hermes-deals-origin.py
+	python3 ./tests/test-hermes-deals-runner-smoke-install-consumer.py
+	python3 ./tests/test-hermes-deals-runner-smoke-install-runtime.py
+	python3 ./tests/test-hermes-deals-runner-smoke-github-time-window.py
 	python3 ./tests/test-deploy-executor-hermes-netto-nonroot-preflight-v2.py
 	python3 ./tests/test-deploy-executor-weather-public-runtime.py
 	python3 ./tests/test-deploy-executor-weather-public-bootstrap.py
@@ -159,6 +162,7 @@ test:
 	python3 ./tests/test-controlled-deploy-rollback.py
 	python3 ./tests/test-vscode-deploy-tasks.py
 	python3 ./tests/test-v12-maintenance-conflicts.py
+	python3 ./tests/test-v12-github-checks.py
 	python3 ./tests/test-deals-route-cutover.py
 	python3 ./tests/test-github-app-readonly.py
 	python3 ./tests/test-github-app-read-token.py

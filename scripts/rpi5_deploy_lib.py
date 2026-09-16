@@ -474,8 +474,12 @@ def github_checks(commit: str) -> dict[str, Any]:
     checks = data.get("check_runs", [])
     if not checks:
         raise DeployError("no GitHub check runs found for exact commit")
+    # GitHub treats completed success, skipped, and neutral conclusions as successful
+    # terminal status-check outcomes. Everything else remains fail-closed here.
+    successful_conclusions = {"success", "skipped", "neutral"}
     bad = [{"name": c.get("name"), "status": c.get("status"), "conclusion": c.get("conclusion")}
-           for c in checks if c.get("status") != "completed" or c.get("conclusion") != "success"]
+           for c in checks
+           if c.get("status") != "completed" or c.get("conclusion") not in successful_conclusions]
     if bad:
         raise DeployError(f"exact-commit GitHub checks are not all successful: {bad}")
     return {"count": len(checks), "names": sorted(str(c.get("name")) for c in checks)}

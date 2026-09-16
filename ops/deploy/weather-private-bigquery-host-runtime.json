@@ -1,0 +1,107 @@
+{
+  "schema": "rozkalns-weather.weathernext-private-host-runtime-source.v1",
+  "implementation_issue": 552,
+  "host_capability_id": "rpi5.weathernext-private-backend.v1",
+  "install_operation_id": "rpi5.weathernext-private-backend.install.v1",
+  "private_bridge_operation_id": "rozkalns-weather.weathernext-private-execution-bridge.v1",
+  "private_contract_id": "rozkalns-weather.weathernext-private-bigquery-first-access.v1",
+  "target_alias": "rpi5",
+  "install_target_alias": "rpi5-weathernext-private-backend-install",
+  "authorization_class": "STRICT",
+  "ordinary_live_all_eligible": false,
+  "execution_enabled": false,
+  "runtime_activation_enabled": false,
+  "caller_authority": ["authorization_issue_number"],
+  "source_repositories": [
+    {"repository": "rozkalnsandris/RPi5_main", "repository_id": 1323383044},
+    {"repository": "rozkalnsandris/rozkalns_weather", "repository_id": 1359499204}
+  ],
+  "install_package": {
+    "trusted_checkout": "/var/lib/rpi5-deploy/RPi5_main-weathernext-private-host-trusted",
+    "operator_source": "ops/bin/rpi5-weathernext-private-host",
+    "operator_destination": "/usr/local/sbin/rpi5-weathernext-private-host",
+    "activation_marker": "/var/lib/rpi5-deploy/weather-private-host/capability.json",
+    "source_files": [
+      "ops/lib/deploy_executor/weather_private_bigquery_host_runtime.py",
+      "ops/lib/deploy_executor/weather_private_bigquery_host_bindings.py",
+      "ops/bin/rpi5-weathernext-private-host",
+      "ops/deploy/weather-private-bigquery-host-runtime.json"
+    ],
+    "trusted_checkout_owner_uid": 0,
+    "trusted_checkout_owner_gid": 0,
+    "trusted_checkout_mode": "0755",
+    "operator_owner_uid": 0,
+    "operator_owner_gid": 0,
+    "operator_mode": "0755",
+    "activation_marker_owner_uid": 0,
+    "activation_marker_owner_gid": 0,
+    "activation_marker_mode": "0644",
+    "no_follow_required": true,
+    "no_overwrite_or_exact_required": true,
+    "exact_source_sha_required": true
+  },
+  "install_mutation_budget": [
+    {"category": "git.weathernext-private-host-checkout-fetch", "max_operations": 1},
+    {"category": "git.weathernext-private-host-checkout-worktree-add", "max_operations": 1},
+    {"category": "filesystem.weathernext-private-host-operator-install", "max_operations": 1},
+    {"category": "filesystem.weathernext-private-host-activation-marker-write", "max_operations": 1}
+  ],
+  "runtime_composition": {
+    "concrete_canonical_facts_provider": true,
+    "fixed_public_source_evidence": true,
+    "owner_authorization_via_reviewed_private_control_plane": true,
+    "sanitized_host_observer": true,
+    "durable_one_shot_replay": true,
+    "fixed_application_stager": true,
+    "reviewed_runtime_materializer_reused": true,
+    "fixed_google_auth_slot": "weathernext-private-google-auth-v1",
+    "fixed_google_project_slot": "weathernext-private-google-project-v1",
+    "fixed_analytics_hub_link_slot": "weathernext-private-approved-linked-dataset-v1",
+    "fixed_first_access_entrypoint": "rozkalns_weather.weathernext_access.read_first_access_canary"
+  },
+  "first_access": {
+    "model_version_contract": "3.0.0",
+    "location_id": "station_10416",
+    "forecast_hours": 6,
+    "required_surfaces": ["0p05_station", "0p1_surface"],
+    "dry_run_required": true,
+    "maximum_bytes_billed_per_query_hard_ceiling": 1073741824,
+    "real_query_uses_smallest_defensible_fresh_dry_run_cap": true,
+    "home_scope_enabled": false,
+    "sqlite_write_enabled": false,
+    "caller_query_allowed": false
+  },
+  "protected_runtime_binding_policy": {
+    "private_values_committed_to_git": false,
+    "private_values_emitted_to_github": false,
+    "credential_path_caller_controlled": false,
+    "project_identity_caller_controlled": false,
+    "dataset_identity_caller_controlled": false,
+    "binding_state_public_surface": ["absent", "ready", "mismatch"],
+    "protected_values_read_only_after_authorization_consumption": true,
+    "credential_reference_root": "/var/lib/rpi5-deploy/weather-private-bindings/credentials",
+    "ambient_adc_allowed": false,
+    "credential_reference_is_basename_only": true
+  },
+  "failure_semantics": {
+    "authorization_consumed_before_first_authorized_mutation": true,
+    "rollback_policy": "NONE",
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "credential_substitution": false,
+    "alternate_account_project_dataset_or_link": false,
+    "error_or_drift": "STOP"
+  },
+  "execution_switches": {
+    "global_executor_execution_enabled": false,
+    "host_capability_installed": false,
+    "google_control_plane_execution_enabled": false,
+    "read_only_bigquery_execution_enabled": false,
+    "sqlite_write_execution_enabled": false
+  },
+  "shared_registry_modified": false,
+  "source_merge_authorizes_live": false,
+  "production_mutation_started": false,
+  "next_gate_after_merge": "ONE_TIME_WEATHERNEXT_PRIVATE_HOST_CAPABILITY_INSTALL_ACTIVATION"
+}

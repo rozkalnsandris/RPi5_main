@@ -1,0 +1,115 @@
+{
+  "schema": "rozkalns-weather.weathernext-private-trusted-backend-source.v1",
+  "operation_id": "rozkalns-weather.weathernext-private-trusted-backend.v1",
+  "bridge_operation_id": "rozkalns-weather.weathernext-private-execution-bridge.v1",
+  "contract_id": "rozkalns-weather.weathernext-private-bigquery-first-access.v1",
+  "host_capability_id": "rpi5.weathernext-private-backend.v1",
+  "target_alias": "rpi5",
+  "status": "SOURCE_READY_HOST_CAPABILITY_INSTALL_REQUIRED",
+  "authorization_class": "STRICT",
+  "ordinary_live_all_eligible": false,
+  "execution_enabled": false,
+  "host_capability_install_required": true,
+  "request_authority": [
+    "authorization_issue_number"
+  ],
+  "canonical_revalidation": {
+    "required_immediately_before_first_mutation": true,
+    "exact_rpi5_main_sha_and_ci": true,
+    "exact_weather_sha_and_ci": true,
+    "target_alias_fixed": true,
+    "sanitized_prerequisite_state_only": true
+  },
+  "application_staging": {
+    "stage_id": "rozkalns-weather.weathernext-private-application-stage.v1",
+    "fixed_root": "/var/lib/rpi5-deploy/weather-private-application",
+    "caller_path_allowed": false,
+    "caller_source_sha_allowed": false
+  },
+  "runtime": {
+    "strategy": "isolated-reviewed-python-closure",
+    "reviewed_python_abi": "cp313",
+    "system_python_substitution_allowed": false,
+    "reviewed_materializer_reused": true,
+    "live_network_install_allowed": false,
+    "package_manager_allowed": false
+  },
+  "binding_slots": {
+    "google_auth": {
+      "slot_id": "weathernext-private-google-auth-v1",
+      "mechanism": "root-owned-runtime-credential-reference"
+    },
+    "google_project": {
+      "slot_id": "weathernext-private-google-project-v1"
+    },
+    "analytics_hub_link": {
+      "slot_id": "weathernext-private-approved-linked-dataset-v1"
+    }
+  },
+  "first_access": {
+    "gate_issue": 122,
+    "entrypoint": "rozkalns_weather.weathernext_access.read_first_access_canary",
+    "model_version_contract": "3.0.0",
+    "location_id": "station_10416",
+    "forecast_hours": 6,
+    "required_surfaces": [
+      "0p05_station",
+      "0p1_surface"
+    ],
+    "dry_run_required": true,
+    "maximum_bytes_billed_per_query_hard_ceiling": 1073741824,
+    "use_smallest_defensible_fresh_dry_run_cap": true,
+    "home_scope_enabled": false,
+    "sqlite_write_enabled": false,
+    "caller_query_allowed": false
+  },
+  "readiness_states": [
+    "backend_source_implemented",
+    "host_capability_installed",
+    "application_staged",
+    "runtime_materialized",
+    "auth_bound",
+    "project_bound",
+    "linked_dataset_present",
+    "read_only_first_access_authorized",
+    "read_only_first_access_executed"
+  ],
+  "caller_controls": {
+    "command": false,
+    "executable": false,
+    "path": false,
+    "argv": false,
+    "environment": false,
+    "source_sha": false,
+    "target": false,
+    "credential_material": false,
+    "credential_path": false,
+    "google_account_identity": false,
+    "google_project_identity": false,
+    "dataset_identity": false,
+    "analytics_hub_listing_identity": false,
+    "query_or_sql": false,
+    "mutation_sequence": false
+  },
+  "execution_switches": {
+    "external_entrypoint_enabled": false,
+    "global_executor_execution_enabled": false,
+    "credential_binding_execution_enabled": false,
+    "google_control_plane_execution_enabled": false,
+    "read_only_bigquery_execution_enabled": false,
+    "sqlite_write_execution_enabled": false
+  },
+  "failure_semantics": {
+    "authorization_consumed_before_first_authorized_mutation": true,
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "credential_substitution": false,
+    "alternate_account_project_dataset_or_link": false,
+    "sqlite_recovery": false,
+    "error_or_drift": "STOP"
+  },
+  "separate_later_gate": "production_sqlite_forecast_snapshot_write",
+  "source_merge_authorizes_live": false,
+  "production_mutation_started": false
+}

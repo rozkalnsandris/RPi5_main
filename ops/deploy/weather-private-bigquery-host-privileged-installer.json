@@ -1,0 +1,174 @@
+{
+  "schema": "rozkalns-weather.weathernext-private-host-privileged-installer-source.v1",
+  "implementation_issue": 554,
+  "v12_extension_issue": 557,
+  "source_repository": "rozkalnsandris/RPi5_main",
+  "host_capability_id": "rpi5.weathernext-private-backend.v1",
+  "capability_install_operation_id": "rpi5.weathernext-private-backend.install.v1",
+  "capability_install_target_alias": "rpi5-weathernext-private-backend-install",
+  "authorization_class": "STRICT",
+  "ordinary_live_all_eligible": false,
+  "caller_authority": [
+    "authorization_issue_number"
+  ],
+  "fixed_registry_execution_enabled": false,
+  "global_executor_execution_enabled": false,
+  "runtime_activation_enabled": false,
+  "privileged_dispatch_enabled": false,
+  "source_merge_authorizes_live": false,
+  "privileged_boundary": {
+    "status": "SOURCE_READY_V12_ENGINE_UPGRADE_REQUIRED",
+    "manager_checkout_resolver": "repo-owner-home/RPi5_main",
+    "manager_origin": "https://github.com/rozkalnsandris/RPi5_main.git",
+    "manager_role": "git-object-and-reviewed-origin-source-only",
+    "trusted_checkout": "/var/lib/rpi5-deploy/RPi5_main-weathernext-private-installer-trusted",
+    "entrypoint_source": "ops/bin/rpi5-weathernext-private-host-privileged-install",
+    "entrypoint_destination": "/usr/local/sbin/rpi5-weathernext-private-host-privileged-install",
+    "entrypoint_mode": "0755",
+    "entrypoint_owner_uid": 0,
+    "entrypoint_owner_gid": 0,
+    "bootstrap_operation_id": "rpi5.weathernext-private-installer-boundary.install.v1",
+    "bootstrap_target_alias": "rpi5-weathernext-private-installer-boundary",
+    "bootstrap_command": "bash ./scripts/rpi5-deploy weather-private-installer-bootstrap --authorization-issue-number <issue>",
+    "caller_authority": [
+      "authorization_issue_number"
+    ],
+    "bootstrap_mutation_budget": [
+      {
+        "category": "git.weathernext-private-installer-checkout-fetch",
+        "max_operations": 1
+      },
+      {
+        "category": "git.weathernext-private-installer-checkout-worktree-add",
+        "max_operations": 1
+      },
+      {
+        "category": "filesystem.weathernext-private-installer-entrypoint-install",
+        "max_operations": 1
+      }
+    ],
+    "rollback_policy": "NONE",
+    "authorization_consumed_before_first_persistent_mutation": true,
+    "preconsume_persistent_logging_allowed": false,
+    "existing_v12_lock_required": true,
+    "agent_sudo_allowed": false,
+    "generic_root_shell_allowed": false,
+    "generic_command_path_argv_environment_allowed": false
+  },
+  "v12_engine_activation": {
+    "status_before_activation": "SOURCE_READY_V12_ENGINE_UPGRADE_REQUIRED",
+    "status_after_verified_activation": "HOST_V12_WEATHERNEXT_BOOTSTRAP_CAPABILITY_INSTALLED",
+    "activation_is_separate_live_gate": true,
+    "source_merge_authorizes_activation": false,
+    "manager_checkout_resolver": "repo-owner-home/RPi5_main",
+    "trusted_engine_source_checkout_resolver": "repo-owner-home/RPi5_main-v12-engine-trusted",
+    "reviewed_origin": "https://github.com/rozkalnsandris/RPi5_main.git",
+    "current_engine_baseline_required": true,
+    "exact_merged_main_sha_required": true,
+    "exact_main_ci_required": true,
+    "source_staging": [
+      "resolve the repository owner's home and require its fixed RPi5_main checkout with the reviewed origin",
+      "snapshot manager worktree/index/HEAD before any mutation",
+      "git fetch --no-tags origin refs/heads/main:refs/remotes/origin/main",
+      "require refs/remotes/origin/main equals the exact merged current-main SHA",
+      "git worktree add --detach <repo-owner-home>/RPi5_main-v12-engine-trusted <exact-merged-main-sha>",
+      "require the manager worktree/index/HEAD snapshot unchanged",
+      "require the trusted engine-source checkout clean detached at the exact merged SHA"
+    ],
+    "manager_branch_ref_mutation_allowed": false,
+    "manager_reset_clean_switch_pull_merge_rebase_allowed": false,
+    "engine_install_command": "bash <repo-owner-home>/RPi5_main-v12-engine-trusted/scripts/rpi5-deploy install-engine --confirm <12-character-exact-merged-main-sha>",
+    "verification_command": "bash <repo-owner-home>/RPi5_main-v12-engine-trusted/scripts/rpi5-deploy engine-status",
+    "engine_install_accepts_exact_detached_current_main": true,
+    "engine_control_state": {
+      "directory": "/var/lib/rpi5-deploy",
+      "directory_mode": "0700",
+      "lock": "/var/lib/rpi5-deploy/deploy.lock",
+      "lock_mode": "0600",
+      "owner": "root:root",
+      "created_only_if_absent": true,
+      "conflicting_existing_metadata_fails_closed": true
+    },
+    "expected_release": "/usr/local/libexec/rpi5-deploy/releases/<exact-merged-main-sha>",
+    "expected_wrapper": "/usr/local/sbin/rpi5-deploy",
+    "weather_bootstrap_executes_during_engine_upgrade": false,
+    "automatic_retry_after_failure": false,
+    "automatic_cleanup_after_failure": false,
+    "automatic_rollback_after_failure": false
+  },
+  "capability_install": {
+    "trusted_checkout": "/var/lib/rpi5-deploy/RPi5_main-weathernext-private-host-trusted",
+    "manager_checkout": "/var/lib/rpi5-deploy/RPi5_main",
+    "reviewed_origin": "https://github.com/rozkalnsandris/RPi5_main.git",
+    "operator_source": "ops/bin/rpi5-weathernext-private-host",
+    "operator_destination": "/usr/local/sbin/rpi5-weathernext-private-host",
+    "activation_marker": "/var/lib/rpi5-deploy/weather-private-host/capability.json",
+    "trusted_checkout_mode": "0755",
+    "operator_mode": "0755",
+    "activation_marker_mode": "0644",
+    "owner_uid": 0,
+    "owner_gid": 0,
+    "no_follow_required": true,
+    "no_overwrite_or_exact_required": true,
+    "exact_current_main_required": true,
+    "exact_main_ci_required": true,
+    "minimum_reviewed_ancestor": "1fa9ace14aa8b0b7c3c46ac465f1a5093d35d0a7",
+    "mutation_budget": [
+      {
+        "category": "git.weathernext-private-host-checkout-fetch",
+        "max_operations": 1
+      },
+      {
+        "category": "git.weathernext-private-host-checkout-worktree-add",
+        "max_operations": 1
+      },
+      {
+        "category": "filesystem.weathernext-private-host-operator-install",
+        "max_operations": 1
+      },
+      {
+        "category": "filesystem.weathernext-private-host-activation-marker-write",
+        "max_operations": 1
+      }
+    ],
+    "rollback_policy": "NONE",
+    "authorization_consumed_before_first_mutation": true,
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false
+  },
+  "revalidation": {
+    "owner_authored_non_app_live_auth_required": true,
+    "ready_queue_required": true,
+    "exact_operation_required": true,
+    "exact_target_required": true,
+    "exact_source_repository_required": true,
+    "exact_current_main_required": true,
+    "exact_main_required_ci_success": true,
+    "identical_authorization_refetch_required": true,
+    "durable_one_shot_replay_required": true,
+    "fixed_host_observation_required_immediately_before_consume": true
+  },
+  "explicit_exclusions": [
+    "caller-selected command/path/argv/environment/repository authority",
+    "generic root shell or generic sudo authority",
+    "package/service/systemd/Docker/network/Cloudflare mutation",
+    "credential/ADC/service-account/IAM read or mutation",
+    "Google project/API/Analytics Hub/BigQuery action",
+    "Weather application staging or private runtime materialization",
+    "SQLite/schema/corpus/snapshot mutation",
+    "automatic retry/cleanup/rollback/alternate mutation after consume"
+  ],
+  "post_install": {
+    "trusted_checkout_exact_detached_clean": true,
+    "operator_exact_root_owned_0755": true,
+    "activation_marker_exact_root_owned_0644": true,
+    "weather_application_staging_executed": false,
+    "private_runtime_materialization_executed": false,
+    "google_binding_executed": false,
+    "bigquery_executed": false,
+    "sqlite_write_executed": false
+  },
+  "next_gate_after_merge": "OWNER_AUTHORIZED_EXACT_SHA_V12_ENGINE_UPGRADE_THEN_RESUME_556",
+  "production_mutation_started": false
+}
