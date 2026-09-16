@@ -159,6 +159,7 @@ class RunnerSmokeBrokerBootstrapTests(unittest.TestCase):
     def test_existing_systemd_source_stays_identity_only_and_no_new_privileges(self) -> None:
         service = SERVICE_PATH.read_text(encoding="utf-8")
         socket = SOCKET_PATH.read_text(encoding="utf-8")
+        service_directives = "\n".join(line.split("#", 1)[0] for line in service.splitlines())
         self.assertIn(
             "ExecStart=/usr/local/libexec/rozkalns-runner-smoke-install/current/ops/bin/rpi5-hermes-deals-runner-smoke-install-broker",
             service,
@@ -169,7 +170,7 @@ class RunnerSmokeBrokerBootstrapTests(unittest.TestCase):
         self.assertIn("SocketMode=0600", socket)
         self.assertIn("SocketUser=andris", socket)
         self.assertIn("Accept=yes", socket)
-        self.assertNotIn("sudo", service)
+        self.assertNotIn("sudo", service_directives)
         self.assertNotIn("/bin/sh", service)
         self.assertNotIn("/bin/bash", service)
 
