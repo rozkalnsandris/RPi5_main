@@ -49,18 +49,40 @@ The source planner can return only:
 
 None of those source states performs a mutation or grants LIVE authority.
 
+## Issue #571 one-time host-capability installer
+
+`RPi5_main#571` adds the missing source-only installation boundary. Its machine contract is `ops/deploy/weather-public-runtime-operator-upgrade-v7-host-capability-installer.json`, the default installer command is the read-only `scripts/install-weather-operator-v7-host-capability.py` preflight, and the source state is `SOURCE_READY_FOR_HOST_CAPABILITY_INSTALL`.
+
+The installer is first-install-only. A later separately authorized root execution with `--apply` may install the isolated Weather-v7 support package, an identity-only systemd socket/broker, a dedicated replay-state database and a root-owned registration, then `daemon-reload` and enable/start only the fixed Weather-v7 socket. The install gate does **not** create the v7 checkout, replace the Weather operator, deploy the Weather application, alter SQLite/corpus data, change Cloudflare/network state, or enable global/P8 mutation dispatch.
+
+The installed broker accepts only `rozkalns.deploy-dispatch-request.v1`. It independently requires a fresh owner/TTL-bound Weather-v7 authorization issue, a separate matching open `READY` deploy-queue issue, exact current `RPi5_main` source/CI, the reviewed predecessor hash, preserved v6 checkout and its own root-owned registration. Only after durable one-shot replay consumption may it use the frozen maximum budget of one `git fetch`, one detached v7 `git worktree add`, and one zero-argument v7 operator replacement. Caller-selected command, path, argv, environment, repository, source SHA, target and mutation plan are not accepted.
+
+A successful source merge changes only the source state from “installer missing” to `SOURCE_READY_FOR_HOST_CAPABILITY_INSTALL`; it does not claim `HOST_CAPABILITY_INSTALLED`. The latter requires sanitized read-only evidence after the separately authorized host installation.
+
+## Issue #574 trusted installer source delivery
+
+`RPi5_main#574` defines the source-only bootstrap required because the #571 installer itself must run from a clean exact `RPi5_main` checkout while the long-lived manager checkout may legitimately be stale or dirty. The machine contract is `ops/deploy/rpi5-main-weather-v7-host-capability-installer-source-trusted-checkout-bootstrap.json`.
+
+The dedicated checkout identity is `RPi5_main-weather-v7-host-capability-installer-source-trusted`. It is intentionally distinct from the later operator-upgrade checkout `RPi5_main-weather-public-runtime-operator-upgrade-v7-trusted`; neither checkout can serve as authority for the other gate. The manager checkout may remain dirty, but its working tree, index and HEAD are outside mutation authority.
+
+A later exact owner LIVE authorization for source delivery may allow at most one `git fetch origin main` followed by one detached `git worktree add` at the exact owner-authorized current `RPi5_main` SHA. Before worktree creation, fresh `origin/main` must equal that SHA and the exact-main required checks must be successful. Preflight state is exactly `ABSENT`, `EXACT_CLEAN` or `CONFLICT`; any conflict fails closed without cleanup, reset, stash, prune, repair or alternate target.
+
+Successful source delivery grants no authority to run `--apply`. It only creates the exact clean source from which `scripts/install-weather-operator-v7-host-capability.py` can later be re-preflighted and, under a separate host-install LIVE gate, executed. The source-delivery gate cannot install the capability, mutate systemd, create the later operator-v7 checkout, replace the operator, deploy Weather or mutate DB/corpus/network/secrets.
+
 ## Owner gate order
 
 The required order is intentionally explicit:
 
-1. **source merge + exact-main CI** for the reviewed `RPi5_main#543` outcome;
-2. a separate owner-gated **one-time privileged-boundary host install/upgrade**, if fresh sanitized evidence still reports the capability absent;
-3. **sanitized capability verification** proving the fixed capability identity without protected runtime data;
-4. a **fresh exact Weather v7 LIVE authorization** binding the then-current reviewed `RPi5_main` SHA, fixed target, predecessor identity and exact 1+1+1 mutation budget;
-5. **installed-closure verification** proving the new operator SHA-256 and `root:root 0755`, with v6 still preserved;
-6. return to **rozkalns_weather public rollout reconciliation** before any Weather application rollout.
+1. **source merge + exact-main CI** for the reviewed `RPi5_main#543`, `RPi5_main#571` and `RPi5_main#574` source outcomes;
+2. a separate owner-gated **trusted exact-main #571-installer source delivery** if sanitized evidence reports that checkout absent;
+3. **sanitized source-checkout verification** proving exact SHA, detached-clean state and reviewed origin;
+4. a separate owner-gated **one-time privileged-boundary host install/upgrade**, if sanitized evidence still reports the capability absent;
+5. **sanitized capability verification** proving the fixed capability identity without protected runtime data;
+6. a **fresh exact Weather v7 LIVE authorization** binding the then-current reviewed `RPi5_main` SHA, fixed target, predecessor identity and exact 1+1+1 mutation budget;
+7. **installed-closure verification** proving the new operator SHA-256 and `root:root 0755`, with v6 still preserved;
+8. return to **rozkalns_weather public rollout reconciliation** before any Weather application rollout.
 
-**Source merge does not authorize LIVE.** The host capability installation and the later Weather v7 operator execution remain separate owner gates. Neither gate authorizes the public Weather rollout, Docker/systemd application changes, database/corpus writes, Cloudflare/network changes or private WeatherNext credentials.
+**Source merge does not authorize LIVE.** Trusted installer source delivery, host capability installation and the later Weather v7 operator execution remain separate owner gates. None authorizes the public Weather rollout, Docker/systemd application changes, database/corpus writes, Cloudflare/network changes or private WeatherNext credentials.
 
 ## Fail-closed semantics
 

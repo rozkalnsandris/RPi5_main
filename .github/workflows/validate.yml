@@ -32,6 +32,12 @@ jobs:
       - name: Validate V12 WeatherNext bootstrap boundary
         run: python3 ./tests/test-v12-weathernext-bootstrap.py
 
+      - name: Validate Weather v7 host capability installer
+        run: python3 ./tests/test-weather-operator-v7-host-capability-installer.py
+
+      - name: Validate Weather v7 installer source delivery
+        run: python3 ./tests/test-weather-v7-host-capability-installer-source-delivery.py
+
   gitleaks:
     runs-on: ubuntu-latest
     timeout-minutes: 5
