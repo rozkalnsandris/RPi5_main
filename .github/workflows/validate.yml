@@ -38,6 +38,9 @@ jobs:
       - name: Validate Weather v7 host capability installer
         run: python3 ./tests/test-weather-operator-v7-host-capability-installer.py
 
+      - name: Validate Weather v7 sudo Git trust boundary
+        run: python3 ./tests/test-weather-v7-host-capability-sudo-git-trust.py
+
       - name: Validate Weather v7 installer source delivery
         run: python3 ./tests/test-weather-v7-host-capability-installer-source-delivery.py
 
