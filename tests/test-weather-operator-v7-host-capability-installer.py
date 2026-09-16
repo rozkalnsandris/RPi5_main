@@ -206,7 +206,9 @@ class WeatherV7HostCapabilityTests(unittest.TestCase):
         self.assertIn("os.geteuid() != 0", self.installer)
         self.assertIn('systemctl("daemon-reload")', self.installer)
         self.assertIn('systemctl("enable", "--now", SOCKET_NAME)', self.installer)
-        self.assertNotIn("sudo", self.installer)
+        self.assertIn('os.environ.get("SUDO_UID")', self.installer)
+        self.assertNotIn("/usr/bin/sudo", self.installer)
+        self.assertNotIn('["sudo"', self.installer)
         self.assertNotIn("shell=True", self.installer)
         self.assertIn("no retry/cleanup/rollback is authorized", self.installer)
 
