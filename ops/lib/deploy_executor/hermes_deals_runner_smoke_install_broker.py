@@ -16,7 +16,7 @@ from .hermes_deals_runner_smoke_install_runtime import (
 REQUEST_SCHEMA = "rozkalns.hermes-deals.runner-smoke-install-request.v1"
 FAILURE_SCHEMA = "rozkalns.hermes-deals.runner-smoke-install-runtime-failure.v1"
 SOCKET_PATH = "/run/rozkalns-hermes-deals-runner-smoke-install/request.sock"
-BROKER_INSTALL_PATH = "/usr/local/libexec/rozkalns-deploy/hermes-deals-runner-smoke-install-broker"
+BROKER_INSTALL_PATH = "/usr/local/libexec/rozkalns-runner-smoke-install/current/ops/bin/rpi5-hermes-deals-runner-smoke-install-broker"
 SOCKET_UNIT = "rozkalns-hermes-deals-runner-smoke-install.socket"
 SERVICE_UNIT = "rozkalns-hermes-deals-runner-smoke-install@.service"
 REQUEST_MAX_BYTES = 192
@@ -89,7 +89,7 @@ def execute_broker_request(raw: bytes) -> Mapping[str, Any]:
         return _failure(issue_number, stage="install_execution", reuse_forbidden=True)
     result = dict(receipt_dict(receipt))
     if result.get("schema") != APPLY_RECEIPT_SCHEMA or result.get("authorization_issue_number") != issue_number:
-        raise RunnerSmokeInstallBrokerError("runtime receipt identity drifted")
+        return _failure(issue_number, stage="install_execution", reuse_forbidden=True)
     return result
 
 
@@ -122,6 +122,7 @@ def source_readiness() -> Mapping[str, Any]:
         "caller_target_or_operation_allowed": False,
         "generic_sudo_allowed": GENERIC_SUDO_ALLOWED,
         "rdc_no_new_privileges_must_remain": True,
+        "root_owned_release_layout_required": True,
         "runtime_activation_enabled": RUNTIME_ACTIVATION_ENABLED,
         "systemd_socket_installed": SYSTEMD_SOCKET_INSTALLED,
         "source_merge_authorizes_live": False,
