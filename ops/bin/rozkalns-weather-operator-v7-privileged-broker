@@ -1,0 +1,24 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+
+from deploy_executor.weather_operator_upgrade_v7_host_capability import (
+    WeatherV7HostCapabilityError,
+    runtime_main,
+)
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(runtime_main())
+    except WeatherV7HostCapabilityError as exc:
+        print(json.dumps({
+            "schema": "rozkalns.rpi5-main.weather-operator-upgrade-v7-broker-receipt.v1",
+            "result": "FAIL_CLOSED",
+            "reason": str(exc),
+            "authorization_reuse_forbidden_if_state_mutation_started": True,
+            "automatic_retry": False,
+            "automatic_cleanup": False,
+            "automatic_rollback": False,
+        }, sort_keys=True, separators=(",", ":")))
+        raise SystemExit(78)
