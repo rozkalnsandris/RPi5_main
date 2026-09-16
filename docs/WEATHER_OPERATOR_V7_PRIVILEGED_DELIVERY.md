@@ -49,11 +49,21 @@ The source planner can return only:
 
 None of those source states performs a mutation or grants LIVE authority.
 
+## Issue #571 one-time host-capability installer
+
+`RPi5_main#571` adds the missing source-only installation boundary. Its machine contract is `ops/deploy/weather-public-runtime-operator-upgrade-v7-host-capability-installer.json`, the default installer command is the read-only `scripts/install-weather-operator-v7-host-capability.py` preflight, and the source state is `SOURCE_READY_FOR_HOST_CAPABILITY_INSTALL`.
+
+The installer is first-install-only. A later separately authorized root execution with `--apply` may install the isolated Weather-v7 support package, an identity-only systemd socket/broker, a dedicated replay-state database and a root-owned registration, then `daemon-reload` and enable/start only the fixed Weather-v7 socket. The install gate does **not** create the v7 checkout, replace the Weather operator, deploy the Weather application, alter SQLite/corpus data, change Cloudflare/network state, or enable global/P8 mutation dispatch.
+
+The installed broker accepts only `rozkalns.deploy-dispatch-request.v1`. It independently requires a fresh owner/TTL-bound Weather-v7 authorization issue, a separate matching open `READY` deploy-queue issue, exact current `RPi5_main` source/CI, the reviewed predecessor hash, preserved v6 checkout and its own root-owned registration. Only after durable one-shot replay consumption may it use the frozen maximum budget of one `git fetch`, one detached v7 `git worktree add`, and one zero-argument v7 operator replacement. Caller-selected command, path, argv, environment, repository, source SHA, target and mutation plan are not accepted.
+
+A successful source merge changes only the source state from “installer missing” to `SOURCE_READY_FOR_HOST_CAPABILITY_INSTALL`; it does not claim `HOST_CAPABILITY_INSTALLED`. The latter requires sanitized read-only evidence after the separately authorized host installation.
+
 ## Owner gate order
 
 The required order is intentionally explicit:
 
-1. **source merge + exact-main CI** for the reviewed `RPi5_main#543` outcome;
+1. **source merge + exact-main CI** for the reviewed `RPi5_main#543` / `RPi5_main#571` source outcomes;
 2. a separate owner-gated **one-time privileged-boundary host install/upgrade**, if fresh sanitized evidence still reports the capability absent;
 3. **sanitized capability verification** proving the fixed capability identity without protected runtime data;
 4. a **fresh exact Weather v7 LIVE authorization** binding the then-current reviewed `RPi5_main` SHA, fixed target, predecessor identity and exact 1+1+1 mutation budget;
