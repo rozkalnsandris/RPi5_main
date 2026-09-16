@@ -1,6 +1,6 @@
 # Hermes Deals runner-smoke broker bootstrap
 
-Issues: `RPi5_main#570`, checkout-isolation hardening `RPi5_main#576`, versioned checkout continuation `RPi5_main#584`
+Issues: `RPi5_main#570`, checkout-isolation hardening `RPi5_main#576`, versioned checkout continuation `RPi5_main#584`, payload-closure repair `RPi5_main#588`
 
 This package is the source-side host-install bridge for the identity-only runner-smoke broker introduced by `#568/#569`. It does not grant LIVE authority and source merge does not install or activate anything.
 
@@ -32,7 +32,12 @@ A future authorized install publishes one SHA-addressed release below `releases/
 
 `/usr/local/libexec/rozkalns-runner-smoke-install/current/ops/bin/rpi5-hermes-deals-runner-smoke-install-broker`
 
-The runtime package remains the same fixed minimal module closure. The installer does not dynamically discover imports and does not copy the whole repository.
+The runtime package is a fixed minimal closure. It contains the broker entrypoint, the explicit Python module dependency set, and exactly two non-import payload source artifacts required by the fixed installer:
+
+- `ops/bin/hermes-deals-runner-smoke-audit`;
+- `ops/deploy/hermes-deals-runner-smoke-audit-registration.json`.
+
+The installer resolves its source root from its installed module location inside the SHA release and validates these two payloads against the already-fixed helper/registration SHA-256 identities before any destination write. The bootstrap therefore publishes the immutable source bytes inside its own release but does not invoke the helper or install either payload into the final runner-smoke destinations. The exact-tree verifier rejects missing payloads, unreviewed extras and unexpected directories. There is no dynamic import discovery and no whole-repository copy.
 
 ## Issue #576 trusted source isolation
 
@@ -94,6 +99,6 @@ After the first future mutation, any error is terminal for that authorization co
 
 ## Explicit exclusions
 
-This bootstrap does not invoke the runner-smoke helper, create or consume LIVE-AUTH/replay state, mutate the runner-smoke payload identity/helper/registration, change RDC `NoNewPrivileges`, mutate Docker/network/firewall/DNS/Cloudflare/DB/credentials/secrets/runner settings, mutate or clean manager/v1/Weather worktrees, or deploy production.
+This bootstrap does not invoke the runner-smoke helper, install helper/registration payloads into `/usr/local/libexec/rozkalns-deploy` or `/etc/rozkalns-deploy`, create or consume LIVE-AUTH/replay state, mutate the runner-smoke execution identity, change RDC `NoNewPrivileges`, mutate Docker/network/firewall/DNS/Cloudflare/DB/credentials/secrets/runner settings, mutate or clean manager/v1/Weather worktrees, or deploy production.
 
 Before any host execution, a separate explicit LIVE authorization must bind the exact reviewed `RPi5_main` SHA, exact current CI, v2 trusted checkout state, expected host baseline, exact mutation envelope, verification and recovery semantics.
