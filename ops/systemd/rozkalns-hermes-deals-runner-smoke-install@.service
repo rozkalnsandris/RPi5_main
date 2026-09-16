@@ -1,0 +1,31 @@
+[Unit]
+Description=Rozkalns Hermes Deals runner-smoke fixed install broker
+
+[Service]
+Type=oneshot
+UMask=0077
+ExecStart=/usr/local/libexec/rozkalns-runner-smoke-install/current/ops/bin/rpi5-hermes-deals-runner-smoke-install-broker
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal
+
+# This process is already started as root by systemd. No privilege escalation,
+# shell, sudo or caller-selected executable is permitted inside this boundary.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectHostname=true
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER CAP_SETGID CAP_SETUID
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
