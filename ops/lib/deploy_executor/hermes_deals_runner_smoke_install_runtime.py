@@ -119,13 +119,12 @@ class _GitHubTimeWindow:
         observed = value.astimezone(timezone.utc)
         if observed.microsecond != 0:
             raise RunnerSmokeInstallRuntimeError("GitHub response time is not canonical")
-        if self.last is not None and observed < self.last:
-            raise RunnerSmokeInstallRuntimeError("GitHub response time regressed")
-        if self.first is None:
-            self.first = observed
-        if (observed - self.first).total_seconds() > MAX_GITHUB_TIMESTAMP_SPREAD_SECONDS:
+        candidate_first = observed if self.first is None else min(self.first, observed)
+        candidate_last = observed if self.last is None else max(self.last, observed)
+        if (candidate_last - candidate_first).total_seconds() > MAX_GITHUB_TIMESTAMP_SPREAD_SECONDS:
             raise RunnerSmokeInstallRuntimeError("GitHub response time spread is too large")
-        self.last = observed
+        self.first = candidate_first
+        self.last = candidate_last
 
     def canonical_last(self) -> str:
         if self.last is None:
