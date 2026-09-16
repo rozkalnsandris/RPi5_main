@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -16,6 +17,8 @@ sys.path.insert(0, str(ROOT / "ops" / "lib"))
 from deploy_executor import hermes_deals_runner_smoke_broker_bootstrap as bootstrap
 
 CONTRACT_PATH = ROOT / "ops/deploy/hermes-deals-runner-smoke-broker-bootstrap.json"
+SOURCE_DELIVERY_CONTRACT_PATH = ROOT / "ops/deploy/rpi5-main-runner-smoke-broker-bootstrap-source-trusted-checkout-bootstrap.json"
+DOC_PATH = ROOT / "docs/HERMES_DEALS_RUNNER_SMOKE_BROKER_BOOTSTRAP.md"
 ENTRYPOINT_PATH = ROOT / "ops/bin/rpi5-hermes-deals-runner-smoke-broker-bootstrap"
 SERVICE_PATH = ROOT / "ops/systemd/rozkalns-hermes-deals-runner-smoke-install@.service"
 SOCKET_PATH = ROOT / "ops/systemd/rozkalns-hermes-deals-runner-smoke-install.socket"
@@ -25,6 +28,13 @@ class RunnerSmokeBrokerBootstrapTests(unittest.TestCase):
     def test_source_readiness_is_fixed_and_live_disabled(self) -> None:
         ready = bootstrap.source_readiness()
         self.assertEqual(ready["implementation_issue"], 570)
+        self.assertEqual(ready["checkout_isolation_issue"], 576)
+        self.assertEqual(ready["trusted_checkout_name"], "RPi5_main-runner-smoke-broker-bootstrap-trusted")
+        self.assertEqual(ready["expected_head_mode"], "detached")
+        self.assertEqual(ready["source_delivery_contract"], str(bootstrap.SOURCE_DELIVERY_CONTRACT))
+        self.assertTrue(ready["trusted_checkout_must_equal_origin_main"])
+        self.assertTrue(ready["prior_source_delivery_exact_main_required"])
+        self.assertFalse(ready["source_delivery_live_authorized"])
         self.assertEqual(ready["caller_authority"], ())
         self.assertFalse(ready["generic_sudo_allowed"])
         self.assertFalse(ready["caller_command_allowed"])
@@ -53,6 +63,40 @@ class RunnerSmokeBrokerBootstrapTests(unittest.TestCase):
         ):
             self.assertNotIn(prohibited, source)
         self.assertEqual(tuple(inspect.signature(bootstrap.apply_bootstrap).parameters), ("checkout",))
+
+    def test_trusted_checkout_requires_dedicated_detached_exact_origin_main(self) -> None:
+        sha = "a" * 40
+        with tempfile.TemporaryDirectory() as temp_dir:
+            checkout = Path(temp_dir) / bootstrap.TRUSTED_CHECKOUT_NAME
+            checkout.mkdir()
+
+            def fake_git(_: Path, *args: str) -> str:
+                values = {
+                    ("rev-parse", "--show-toplevel"): f"{checkout.resolve()}\n",
+                    ("config", "--get", "remote.origin.url"): f"{bootstrap.REVIEWED_ORIGIN}\n",
+                    ("rev-parse", "--abbrev-ref", "HEAD"): "HEAD\n",
+                    ("status", "--porcelain=v1", "--untracked-files=all"): "",
+                    ("rev-parse", "HEAD"): f"{sha}\n",
+                    ("rev-parse", "refs/remotes/origin/main"): f"{sha}\n",
+                }
+                return values[args]
+
+            with mock.patch.object(bootstrap, "_git", side_effect=fake_git):
+                self.assertEqual(bootstrap.validate_trusted_checkout(checkout), sha)
+
+            def attached_git(_: Path, *args: str) -> str:
+                if args == ("rev-parse", "--abbrev-ref", "HEAD"):
+                    return "main\n"
+                return fake_git(_, *args)
+
+            with mock.patch.object(bootstrap, "_git", side_effect=attached_git):
+                with self.assertRaises(bootstrap.RunnerSmokeBrokerBootstrapError):
+                    bootstrap.validate_trusted_checkout(checkout)
+
+            weather_checkout = Path(temp_dir) / "RPi5_main-v12-engine-trusted"
+            weather_checkout.mkdir()
+            with self.assertRaises(bootstrap.RunnerSmokeBrokerBootstrapError):
+                bootstrap.validate_trusted_checkout(weather_checkout)
 
     def test_runtime_manifest_is_fixed_minimal_transitive_relative_import_closure(self) -> None:
         module_set = set(bootstrap.PACKAGE_MODULES)
@@ -144,8 +188,12 @@ class RunnerSmokeBrokerBootstrapTests(unittest.TestCase):
     def test_contract_matches_fixed_source_surface(self) -> None:
         value = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
         self.assertEqual(value["implementation_issue"], 570)
+        self.assertEqual(value["checkout_isolation_issue"], 576)
         self.assertEqual(value["status"], "SOURCE_READY_LIVE_DISABLED")
         self.assertEqual(value["trusted_checkout_name"], bootstrap.TRUSTED_CHECKOUT_NAME)
+        self.assertEqual(value["expected_head_mode"], "detached")
+        self.assertTrue(value["require_head_equals_origin_main"])
+        self.assertEqual(value["source_delivery_contract"], str(bootstrap.SOURCE_DELIVERY_CONTRACT))
         self.assertEqual(value["release_root"], str(bootstrap.RELEASE_ROOT))
         self.assertEqual(value["current_link"], str(bootstrap.CURRENT_LINK))
         self.assertEqual(value["socket_destination"], str(bootstrap.SOCKET_DESTINATION))
@@ -154,7 +202,98 @@ class RunnerSmokeBrokerBootstrapTests(unittest.TestCase):
         self.assertEqual(value["authority"]["caller_arguments"], [])
         self.assertFalse(value["authority"]["generic_sudo"])
         self.assertFalse(value["activation"]["source_merge_authorizes_live"])
+        self.assertFalse(value["activation"]["source_delivery_live_authorized"])
+        self.assertTrue(value["activation"]["separate_source_delivery_live_authorization_required"])
         self.assertTrue(value["activation"]["separate_explicit_live_authorization_required"])
+
+    def test_source_delivery_contract_is_dedicated_fail_closed_and_bounded(self) -> None:
+        value = json.loads(SOURCE_DELIVERY_CONTRACT_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(
+            value["schema"],
+            "rozkalns.rpi5-main.runner-smoke-broker-bootstrap-source-trusted-checkout-bootstrap.v1",
+        )
+        self.assertEqual(value["issue"], 576)
+        self.assertTrue(value["source_only"])
+        self.assertFalse(value["source_merge_enables_live"])
+        self.assertEqual(value["reviewed_origin"], bootstrap.REVIEWED_ORIGIN)
+
+        manager = value["manager_checkout"]
+        self.assertTrue(manager["working_tree_content_may_be_dirty"])
+        for key in (
+            "working_tree_content_mutation_allowed",
+            "index_mutation_allowed",
+            "head_advance_allowed",
+            "reset_allowed",
+            "stash_allowed",
+            "clean_allowed",
+        ):
+            self.assertFalse(manager[key], key)
+
+        target = value["trusted_checkout"]
+        self.assertEqual(target["name"], bootstrap.TRUSTED_CHECKOUT_NAME)
+        self.assertEqual(
+            target["derivation"],
+            "RPi5_CHECKOUT_PARENT/RPi5_main-runner-smoke-broker-bootstrap-trusted",
+        )
+        self.assertEqual(
+            target["expected_sha_authority"],
+            "EXPLICIT_RUNNER_SMOKE_BROKER_BOOTSTRAP_SOURCE_LIVE_EXACT_RPI5_MAIN_SHA",
+        )
+        self.assertTrue(target["exact_current_main_required"])
+        self.assertTrue(target["exact_main_ci_required"])
+        self.assertEqual(target["required_post_state"], "EXACT_SHA_DETACHED_CLEAN_CORRECT_ORIGIN")
+        self.assertIn("ops/bin/rpi5-hermes-deals-runner-smoke-broker-bootstrap", target["required_paths"])
+
+        self.assertEqual(set(value["preflight_states"]), {"ABSENT", "EXACT_CLEAN", "CONFLICT"})
+        mutations = value["allowed_git_mutations"]
+        self.assertEqual(len(mutations), 2)
+        self.assertEqual(mutations[0]["argv"], ["git", "fetch", "origin", "main"])
+        self.assertEqual(mutations[0]["max_operations"], 1)
+        self.assertEqual(mutations[1]["argv"][:4], ["git", "worktree", "add", "--detach"])
+        self.assertEqual(mutations[1]["argv"][4], target["derivation"])
+        self.assertEqual(mutations[1]["argv"][5], target["expected_sha_authority"])
+        self.assertEqual(mutations[1]["max_operations"], 1)
+        self.assertTrue(all(item["working_tree_content_mutation"] is False for item in mutations))
+
+        preserved = value["preserved_checkout_namespaces"]
+        self.assertTrue(any(item.get("name") == "RPi5_main-v12-engine-trusted" for item in preserved))
+        self.assertTrue(any(item.get("prefix") == "RPi5_main-weather-" for item in preserved))
+        for item in preserved:
+            self.assertFalse(item["mutation_allowed"])
+            self.assertFalse(item["cleanup_allowed"])
+            self.assertFalse(item["authority_source"])
+
+        required_checks = set(value["required_exact_main_checks"])
+        self.assertEqual(required_checks, {
+            "validate",
+            "gitleaks",
+            "GITHUB-ONLY policy drift / GITHUB-ONLY policy drift",
+            "policy-drift / FAST-LANE v2.2 policy drift",
+            "public-automation-baseline / public automation policy",
+        })
+
+        forbidden = set(value["forbidden_git_operations"])
+        for op in ("reset", "clean", "stash", "worktree remove", "worktree prune", "worktree repair", "rebase", "push", "force"):
+            self.assertIn(op, forbidden)
+
+        failure = value["failure"]
+        self.assertTrue(failure["authorization_consumed_at_first_git_mutation"])
+        self.assertFalse(failure["automatic_retry"])
+        self.assertFalse(failure["automatic_cleanup"])
+        self.assertFalse(failure["automatic_rollback"])
+        self.assertEqual(failure["after_first_mutation_error"], "STOP_PRESERVE_MINIMUM_READ_ONLY_EVIDENCE")
+
+        handoff = value["handoff"]
+        self.assertEqual(handoff["next_gate"], "SEPARATE_OWNER_LIVE_RUNNER_SMOKE_BROKER_HOST_BOOTSTRAP")
+        self.assertEqual(handoff["bootstrap_entrypoint"], "ops/bin/rpi5-hermes-deals-runner-smoke-broker-bootstrap")
+        self.assertTrue(handoff["bootstrap_must_run_from_this_exact_checkout"])
+        self.assertFalse(handoff["source_delivery_authorizes_host_bootstrap_apply"])
+        self.assertFalse(handoff["source_delivery_authorizes_helper_invocation"])
+        self.assertFalse(handoff["source_delivery_authorizes_production_deployment"])
+
+        doc = DOC_PATH.read_text(encoding="utf-8")
+        self.assertIn("Issue #576 trusted source isolation", doc)
+        self.assertIn("RPi5_main-runner-smoke-broker-bootstrap-trusted", doc)
 
     def test_existing_systemd_source_stays_identity_only_and_no_new_privileges(self) -> None:
         service = SERVICE_PATH.read_text(encoding="utf-8")

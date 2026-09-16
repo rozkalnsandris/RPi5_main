@@ -1,6 +1,6 @@
 # Hermes Deals runner-smoke broker bootstrap
 
-Issue: `RPi5_main#570`
+Issues: `RPi5_main#570`, checkout-isolation hardening `RPi5_main#576`
 
 This package is the source-side host-install bridge for the identity-only runner-smoke broker introduced by `#568/#569`. It does not grant LIVE authority and source merge does not install or activate anything.
 
@@ -10,7 +10,13 @@ The root-only source entrypoint is:
 
 `ops/bin/rpi5-hermes-deals-runner-smoke-broker-bootstrap`
 
-It accepts no arguments. The implementation fixes the trusted checkout identity, repository origin, branch, release root, runtime dependency closure, systemd source/destination paths and socket unit. It does not accept caller-selected command, path, argv, environment, unit, UID/GID, SHA, operation or mutation sequence.
+It accepts no arguments. The implementation fixes the dedicated trusted checkout identity, repository origin, detached-head requirement, release root, runtime dependency closure, systemd source/destination paths and socket unit. It does not accept caller-selected command, path, argv, environment, unit, UID/GID, SHA, operation or mutation sequence.
+
+The runner-smoke bootstrap authority checkout is now exclusively:
+
+`RPi5_main-runner-smoke-broker-bootstrap-trusted`
+
+It must be clean, detached, at the reviewed `https://github.com/rozkalnsandris/RPi5_main.git` origin, and its `HEAD` must equal the locally fetched `origin/main`. The former Weather-v12 checkout `RPi5_main-v12-engine-trusted` and every `RPi5_main-weather-*` checkout are explicitly outside runner-smoke authority and cleanup scope.
 
 The release root is:
 
@@ -22,16 +28,32 @@ A future authorized install publishes one SHA-addressed release below `releases/
 
 The runtime package is a fixed minimal module closure. The installer does not dynamically discover imports and does not copy the whole repository.
 
-## State machine
+## Issue #576 trusted source isolation
 
-Only two pre-mutation states are accepted:
+The machine source-delivery contract is:
+
+`ops/deploy/rpi5-main-runner-smoke-broker-bootstrap-source-trusted-checkout-bootstrap.json`
+
+The long-lived manager checkout may remain stale, dirty or detached and is not mutated. A later separate source-delivery LIVE authorization may permit at most one `git fetch origin main` in the manager repository metadata and one detached `git worktree add` at the exact owner-authorized current `RPi5_main/main` SHA. Before worktree creation, fresh `origin/main` must equal that SHA and the required exact-main GitHub checks must be successful.
+
+Source-delivery preflight has exactly three states:
+
+- `ABSENT`: the fixed dedicated checkout path and worktree registration are absent;
+- `EXACT_CLEAN`: the fixed checkout exists at the exact authorized SHA, detached, clean and at the reviewed origin;
+- `CONFLICT`: any wrong path, registration, origin, SHA, attached branch or dirty state.
+
+`CONFLICT` fails closed. There is no reset, rebase, clean, stash, worktree remove/prune/repair, alternate checkout, retry, cleanup or rollback authority. Source delivery does not authorize this host bootstrap to run; the host bootstrap remains a separate owner LIVE gate after sanitized checkout verification.
+
+## Host bootstrap state machine
+
+Only two host pre-mutation states are accepted:
 
 - `ABSENT`: capability-owned release/unit paths are absent and the fixed socket is not active/enabled. The plan is `INSTALL_REQUIRED_EXPLICIT_LIVE`.
 - `EXACT`: the source bytes, owner/modes, SHA release, `current` link, two systemd unit files, enabled state and active socket all match. The result is `ALREADY_EXACT_NO_MUTATION`.
 
-Any mixed, partial, stale or conflicting state fails closed before the first new mutation.
+Any mixed, partial, stale or conflicting host state fails closed before the first new mutation.
 
-The future fixed mutation sequence is limited to:
+The future fixed host mutation sequence remains limited to:
 
 1. publish the root-owned SHA release;
 2. publish the fixed `current` symlink;
@@ -41,8 +63,17 @@ The future fixed mutation sequence is limited to:
 
 After the first future mutation, any error is terminal for that authorization context. There is no automatic retry, cleanup, rollback, alternate release or alternate systemd action.
 
+## Required owner-gate order
+
+1. merge the reviewed source and require exact-main CI;
+2. if the dedicated checkout is `ABSENT`, separately authorize its exact-main source delivery;
+3. verify the checkout is detached, clean, at the exact SHA and reviewed origin;
+4. separately authorize the runner-smoke broker host bootstrap if host state is still `ABSENT`;
+5. verify the exact release, unit bytes, ownership/modes and active/enabled fixed socket;
+6. only then continue to later runner-smoke canary/runtime-evidence gates under the parent Phase 4 plan.
+
 ## Explicit exclusions
 
-This bootstrap does not invoke the runner-smoke helper, create or consume LIVE-AUTH/replay state, mutate the runner-smoke payload identity/helper/registration, change RDC `NoNewPrivileges`, mutate Docker/network/firewall/DNS/Cloudflare/DB/credentials/secrets/runner settings, or deploy production.
+This bootstrap does not invoke the runner-smoke helper, create or consume LIVE-AUTH/replay state, mutate the runner-smoke payload identity/helper/registration, change RDC `NoNewPrivileges`, mutate Docker/network/firewall/DNS/Cloudflare/DB/credentials/secrets/runner settings, mutate or clean manager/Weather worktrees, or deploy production.
 
 Before any host execution, a separate explicit LIVE authorization must bind the exact reviewed `RPi5_main` SHA, exact current CI, trusted checkout state, expected host baseline, exact mutation envelope, verification and recovery semantics.

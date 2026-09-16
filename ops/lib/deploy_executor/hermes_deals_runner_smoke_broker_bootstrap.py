@@ -10,9 +10,13 @@ import subprocess
 from typing import Any, Mapping, Sequence
 
 IMPLEMENTATION_ISSUE = 570
-TRUSTED_CHECKOUT_NAME = "RPi5_main-v12-engine-trusted"
+CHECKOUT_ISOLATION_ISSUE = 576
+TRUSTED_CHECKOUT_NAME = "RPi5_main-runner-smoke-broker-bootstrap-trusted"
 REVIEWED_ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
-EXPECTED_BRANCH = "main"
+EXPECTED_HEAD_MODE = "detached"
+SOURCE_DELIVERY_CONTRACT = Path(
+    "ops/deploy/rpi5-main-runner-smoke-broker-bootstrap-source-trusted-checkout-bootstrap.json"
+)
 RELEASE_ROOT = Path("/usr/local/libexec/rozkalns-runner-smoke-install")
 RELEASES_ROOT = RELEASE_ROOT / "releases"
 CURRENT_LINK = RELEASE_ROOT / "current"
@@ -119,9 +123,14 @@ def source_readiness() -> Mapping[str, Any]:
     return {
         "schema": PLAN_SCHEMA,
         "implementation_issue": IMPLEMENTATION_ISSUE,
+        "checkout_isolation_issue": CHECKOUT_ISOLATION_ISSUE,
         "trusted_checkout_name": TRUSTED_CHECKOUT_NAME,
         "reviewed_origin": REVIEWED_ORIGIN,
-        "expected_branch": EXPECTED_BRANCH,
+        "expected_head_mode": EXPECTED_HEAD_MODE,
+        "source_delivery_contract": str(SOURCE_DELIVERY_CONTRACT),
+        "trusted_checkout_must_equal_origin_main": True,
+        "prior_source_delivery_exact_main_required": True,
+        "source_delivery_live_authorized": False,
         "release_root": str(RELEASE_ROOT),
         "current_link": str(CURRENT_LINK),
         "socket_destination": str(SOCKET_DESTINATION),
@@ -207,8 +216,8 @@ def validate_trusted_checkout(checkout: Path) -> str:
         _fail("trusted checkout top-level drifted")
     if _git(checkout, "config", "--get", "remote.origin.url").strip() != REVIEWED_ORIGIN:
         _fail("trusted checkout origin drifted")
-    if _git(checkout, "rev-parse", "--abbrev-ref", "HEAD").strip() != EXPECTED_BRANCH:
-        _fail("trusted checkout branch drifted")
+    if _git(checkout, "rev-parse", "--abbrev-ref", "HEAD").strip() != "HEAD":
+        _fail("trusted checkout must be detached")
     if _git(checkout, "status", "--porcelain=v1", "--untracked-files=all"):
         _fail("trusted checkout is not clean")
     head = _git(checkout, "rev-parse", "HEAD").strip()
