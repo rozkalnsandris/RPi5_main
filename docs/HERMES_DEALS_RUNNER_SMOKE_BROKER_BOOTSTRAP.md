@@ -1,6 +1,6 @@
 # Hermes Deals runner-smoke broker bootstrap
 
-Issues: `RPi5_main#570`, checkout-isolation hardening `RPi5_main#576`
+Issues: `RPi5_main#570`, checkout-isolation hardening `RPi5_main#576`, versioned checkout continuation `RPi5_main#584`
 
 This package is the source-side host-install bridge for the identity-only runner-smoke broker introduced by `#568/#569`. It does not grant LIVE authority and source merge does not install or activate anything.
 
@@ -12,13 +12,19 @@ The root-only source entrypoint is:
 
 It accepts no arguments. The implementation fixes the dedicated trusted checkout identity, repository origin, detached-head requirement, release root, runtime dependency closure, systemd source/destination paths and socket unit. It does not accept caller-selected command, path, argv, environment, unit, UID/GID, SHA, operation or mutation sequence.
 
-The runner-smoke bootstrap authority checkout is now exclusively:
+The current runner-smoke bootstrap authority checkout is exclusively:
+
+`RPi5_main-runner-smoke-broker-bootstrap-v2-trusted`
+
+It must be clean, detached, at the reviewed `https://github.com/rozkalnsandris/RPi5_main.git` origin, and its `HEAD` must equal the locally fetched `origin/main`.
+
+The historical v1 checkout:
 
 `RPi5_main-runner-smoke-broker-bootstrap-trusted`
 
-It must be clean, detached, at the reviewed `https://github.com/rozkalnsandris/RPi5_main.git` origin, and its `HEAD` must equal the locally fetched `origin/main`. The former Weather-v12 checkout `RPi5_main-v12-engine-trusted` and every `RPi5_main-weather-*` checkout are explicitly outside runner-smoke authority and cleanup scope.
+is immutable evidence only. It is not current bootstrap authority and must not be reset, switched, cleaned, removed, repaired or reused for v2 source delivery. The former Weather-v12 checkout `RPi5_main-v12-engine-trusted` and every `RPi5_main-weather-*` checkout are also explicitly outside runner-smoke authority and cleanup scope.
 
-The release root is:
+The release root remains:
 
 `/usr/local/libexec/rozkalns-runner-smoke-install`
 
@@ -26,23 +32,37 @@ A future authorized install publishes one SHA-addressed release below `releases/
 
 `/usr/local/libexec/rozkalns-runner-smoke-install/current/ops/bin/rpi5-hermes-deals-runner-smoke-install-broker`
 
-The runtime package is a fixed minimal module closure. The installer does not dynamically discover imports and does not copy the whole repository.
+The runtime package remains the same fixed minimal module closure. The installer does not dynamically discover imports and does not copy the whole repository.
 
 ## Issue #576 trusted source isolation
 
-The machine source-delivery contract is:
+The historical v1 machine source-delivery contract is:
 
 `ops/deploy/rpi5-main-runner-smoke-broker-bootstrap-source-trusted-checkout-bootstrap.json`
 
-The long-lived manager checkout may remain stale, dirty or detached and is not mutated. A later separate source-delivery LIVE authorization may permit at most one `git fetch origin main` in the manager repository metadata and one detached `git worktree add` at the exact owner-authorized current `RPi5_main/main` SHA. Before worktree creation, fresh `origin/main` must equal that SHA and the required exact-main GitHub checks must be successful.
+That contract created `RPi5_main-runner-smoke-broker-bootstrap-trusted`. After `#580/#583` advanced `main`, the v1 checkout intentionally became historical evidence rather than being mutated in place.
 
-Source-delivery preflight has exactly three states:
+## Issue #584 versioned v2 source authority
 
-- `ABSENT`: the fixed dedicated checkout path and worktree registration are absent;
-- `EXACT_CLEAN`: the fixed checkout exists at the exact authorized SHA, detached, clean and at the reviewed origin;
-- `CONFLICT`: any wrong path, registration, origin, SHA, attached branch or dirty state.
+The current machine source-delivery contract is:
 
-`CONFLICT` fails closed. There is no reset, rebase, clean, stash, worktree remove/prune/repair, alternate checkout, retry, cleanup or rollback authority. Source delivery does not authorize this host bootstrap to run; the host bootstrap remains a separate owner LIVE gate after sanitized checkout verification.
+`ops/deploy/rpi5-main-runner-smoke-broker-bootstrap-v2-source-trusted-checkout-bootstrap.json`
+
+The matching host-bootstrap contract is:
+
+`ops/deploy/hermes-deals-runner-smoke-broker-bootstrap-v2.json`
+
+The long-lived manager checkout may remain stale, dirty or detached and its working tree is not mutated. A later separate source-delivery LIVE authorization may permit at most one `git fetch origin main` in manager repository metadata and one detached `git worktree add` at the fixed v2 path and exact owner-authorized current `RPi5_main/main` SHA. Before worktree creation, fresh `origin/main` must equal that SHA and all five exact-main GitHub checks must be successful.
+
+V2 source-delivery preflight has exactly three states:
+
+- `ABSENT`: the fixed v2 checkout path and worktree registration are absent;
+- `EXACT_CLEAN`: the fixed v2 checkout exists at the exact authorized SHA, detached, clean and at the reviewed origin;
+- `CONFLICT`: any wrong v2 path, registration, origin, SHA, attached branch or dirty state.
+
+`CONFLICT` fails closed. There is no reset, rebase, clean, stash, checkout/switch, worktree remove/prune/repair, alternate checkout, retry, cleanup or rollback authority. The v1 checkout is explicitly preserved with `mutation_allowed=false`, `cleanup_allowed=false` and `authority_source=false`.
+
+Source delivery does not authorize the host bootstrap to run. The host bootstrap remains a second separate owner LIVE gate after sanitized v2 checkout verification.
 
 ## Host bootstrap state machine
 
@@ -65,15 +85,15 @@ After the first future mutation, any error is terminal for that authorization co
 
 ## Required owner-gate order
 
-1. merge the reviewed source and require exact-main CI;
-2. if the dedicated checkout is `ABSENT`, separately authorize its exact-main source delivery;
-3. verify the checkout is detached, clean, at the exact SHA and reviewed origin;
+1. merge the reviewed v2 source and require exact-main CI;
+2. if the fixed v2 checkout is `ABSENT`, separately authorize exact-main v2 source delivery;
+3. verify the v2 checkout is detached, clean, at the exact SHA and reviewed origin while v1 remains untouched;
 4. separately authorize the runner-smoke broker host bootstrap if host state is still `ABSENT`;
 5. verify the exact release, unit bytes, ownership/modes and active/enabled fixed socket;
 6. only then continue to later runner-smoke canary/runtime-evidence gates under the parent Phase 4 plan.
 
 ## Explicit exclusions
 
-This bootstrap does not invoke the runner-smoke helper, create or consume LIVE-AUTH/replay state, mutate the runner-smoke payload identity/helper/registration, change RDC `NoNewPrivileges`, mutate Docker/network/firewall/DNS/Cloudflare/DB/credentials/secrets/runner settings, mutate or clean manager/Weather worktrees, or deploy production.
+This bootstrap does not invoke the runner-smoke helper, create or consume LIVE-AUTH/replay state, mutate the runner-smoke payload identity/helper/registration, change RDC `NoNewPrivileges`, mutate Docker/network/firewall/DNS/Cloudflare/DB/credentials/secrets/runner settings, mutate or clean manager/v1/Weather worktrees, or deploy production.
 
-Before any host execution, a separate explicit LIVE authorization must bind the exact reviewed `RPi5_main` SHA, exact current CI, trusted checkout state, expected host baseline, exact mutation envelope, verification and recovery semantics.
+Before any host execution, a separate explicit LIVE authorization must bind the exact reviewed `RPi5_main` SHA, exact current CI, v2 trusted checkout state, expected host baseline, exact mutation envelope, verification and recovery semantics.
