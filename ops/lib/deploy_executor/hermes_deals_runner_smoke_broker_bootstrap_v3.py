@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import subprocess
 from typing import Any, Mapping, Sequence
 
 from . import hermes_deals_runner_smoke_broker_bootstrap as base
@@ -50,6 +51,7 @@ def source_readiness() -> Mapping[str, Any]:
             "legacy_exact_release_sha": LEGACY_EXACT_RELEASE_SHA,
             "legacy_exact_upgrade_supported": True,
             "legacy_release_preserved_after_upgrade": True,
+            "legacy_bytes_authority": "FIXED_GIT_BLOBS_AT_LEGACY_RELEASE_SHA",
             "upgrade_mutation_sequence": UPGRADE_MUTATION_SEQUENCE,
         }
     )
@@ -75,6 +77,7 @@ def validate_trusted_checkout(checkout: Path) -> str:
         base._fail("trusted checkout SHA is malformed")
     if head != origin_main:
         base._fail("trusted checkout HEAD does not equal origin/main")
+    base._git(checkout, "merge-base", "--is-ancestor", LEGACY_EXACT_RELEASE_SHA, "HEAD")
     return head
 
 
@@ -89,12 +92,56 @@ def _legacy_runtime_artifacts() -> tuple[tuple[Path, Path, int], ...]:
     return tuple(artifacts)
 
 
+def _legacy_git_blob(checkout: Path, relative: Path) -> bytes:
+    if relative.is_absolute() or not relative.parts or ".." in relative.parts:
+        base._fail("legacy blob path escaped the fixed repository surface")
+    try:
+        result = subprocess.run(
+            [
+                "/usr/bin/git",
+                "--no-optional-locks",
+                "-c",
+                f"safe.directory={checkout}",
+                "-C",
+                str(checkout),
+                "show",
+                f"{LEGACY_EXACT_RELEASE_SHA}:{relative.as_posix()}",
+            ],
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=False,
+            shell=False,
+            close_fds=True,
+            env=base._FIXED_ENV,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RunnerSmokeBrokerBootstrapError("legacy Git blob read failed to run") from exc
+    if result.returncode != 0:
+        base._fail("legacy Git blob read failed closed")
+    if len(result.stdout) > base.MAX_ARTIFACT_BYTES or len(result.stderr) > base.MAX_GIT_OUTPUT:
+        base._fail("legacy Git blob read output exceeded limit")
+    return bytes(result.stdout)
+
+
 def _desired_for(
     checkout: Path,
     artifacts: Sequence[tuple[Path, Path, int]],
 ) -> tuple[tuple[Path, bytes, int], ...]:
     return tuple(
         (destination, base._read_source(checkout, source), mode)
+        for source, destination, mode in artifacts
+    )
+
+
+def _legacy_desired_for(
+    checkout: Path,
+    artifacts: Sequence[tuple[Path, Path, int]],
+) -> tuple[tuple[Path, bytes, int], ...]:
+    return tuple(
+        (destination, _legacy_git_blob(checkout, source), mode)
         for source, destination, mode in artifacts
     )
 
@@ -143,20 +190,41 @@ def _release_contents_exact(
     )
 
 
-def _unit_files_exact(checkout: Path, *, host_root: Path, uid: int, gid: int) -> bool:
+def _legacy_release_contents_exact(
+    checkout: Path,
+    release: Path,
+    *,
+    uid: int,
+    gid: int,
+) -> bool:
+    required_dirs = (release, *(release / relative for relative in LEGACY_RELEASE_DIRECTORIES))
+    if not all(base._directory_exact(path, base.DIRECTORY_MODE, uid=uid, gid=gid) for path in required_dirs):
+        return False
+    desired = _legacy_desired_for(checkout, _legacy_runtime_artifacts())
+    for relative, data, mode in desired:
+        if not base._regular_exact(release / relative, data, mode, uid=uid, gid=gid):
+            return False
+    return _release_tree_has_only_expected(
+        release,
+        [relative for relative, _, _ in desired],
+        LEGACY_RELEASE_DIRECTORIES,
+    )
+
+
+def _legacy_unit_files_exact(checkout: Path, *, host_root: Path, uid: int, gid: int) -> bool:
     socket_destination = base._host_path(host_root, base.SOCKET_DESTINATION)
     service_destination = base._host_path(host_root, base.SERVICE_DESTINATION)
     return (
         base._regular_exact(
             socket_destination,
-            base._read_source(checkout, base.SOCKET_SOURCE),
+            _legacy_git_blob(checkout, base.SOCKET_SOURCE),
             base.UNIT_MODE,
             uid=uid,
             gid=gid,
         )
         and base._regular_exact(
             service_destination,
-            base._read_source(checkout, base.SERVICE_SOURCE),
+            _legacy_git_blob(checkout, base.SERVICE_SOURCE),
             base.UNIT_MODE,
             uid=uid,
             gid=gid,
@@ -189,16 +257,14 @@ def _legacy_filesystem_exact(
         return False
     if not base._current_link_exact(current_link, LEGACY_EXACT_RELEASE_SHA, uid=uid, gid=gid):
         return False
-    if not _release_contents_exact(
+    if not _legacy_release_contents_exact(
         checkout,
         legacy_release,
-        _legacy_runtime_artifacts(),
-        LEGACY_RELEASE_DIRECTORIES,
         uid=uid,
         gid=gid,
     ):
         return False
-    return _unit_files_exact(checkout, host_root=host_root, uid=uid, gid=gid)
+    return _legacy_unit_files_exact(checkout, host_root=host_root, uid=uid, gid=gid)
 
 
 def _upgraded_filesystem_exact(
@@ -230,11 +296,9 @@ def _upgraded_filesystem_exact(
         return False
     if not base._current_link_exact(current_link, source_sha, uid=uid, gid=gid):
         return False
-    if not _release_contents_exact(
+    if not _legacy_release_contents_exact(
         checkout,
         legacy_release,
-        _legacy_runtime_artifacts(),
-        LEGACY_RELEASE_DIRECTORIES,
         uid=uid,
         gid=gid,
     ):
@@ -248,7 +312,7 @@ def _upgraded_filesystem_exact(
         gid=gid,
     ):
         return False
-    return _unit_files_exact(checkout, host_root=host_root, uid=uid, gid=gid)
+    return _legacy_unit_files_exact(checkout, host_root=host_root, uid=uid, gid=gid)
 
 
 def _filesystem_state_v3(
