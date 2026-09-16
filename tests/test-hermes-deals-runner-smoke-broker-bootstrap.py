@@ -35,6 +35,17 @@ class RunnerSmokeBrokerBootstrapTests(unittest.TestCase):
         self.assertTrue(ready["trusted_checkout_must_equal_origin_main"])
         self.assertTrue(ready["prior_source_delivery_exact_main_required"])
         self.assertFalse(ready["source_delivery_live_authorized"])
+        self.assertEqual(
+            ready["runtime_payloads"],
+            (
+                str(bootstrap.RUNNER_SMOKE_HELPER_SOURCE),
+                str(bootstrap.RUNNER_SMOKE_REGISTRATION_SOURCE),
+            ),
+        )
+        self.assertEqual(
+            ready["runtime_artifact_count"],
+            1 + len(bootstrap.RUNTIME_PAYLOADS) + len(bootstrap.PACKAGE_MODULES),
+        )
         self.assertEqual(ready["caller_authority"], ())
         self.assertFalse(ready["generic_sudo_allowed"])
         self.assertFalse(ready["caller_command_allowed"])
@@ -116,12 +127,74 @@ class RunnerSmokeBrokerBootstrapTests(unittest.TestCase):
                         self.assertIn(required, module_set)
 
         artifacts = bootstrap.runtime_artifacts()
-        self.assertEqual(len(artifacts), 1 + len(bootstrap.PACKAGE_MODULES))
+        self.assertEqual(
+            len(artifacts),
+            1 + len(bootstrap.RUNTIME_PAYLOADS) + len(bootstrap.PACKAGE_MODULES),
+        )
         self.assertEqual(artifacts[0], (bootstrap.BROKER_ENTRYPOINT, bootstrap.BROKER_ENTRYPOINT, 0o755))
-        for source, destination, mode in artifacts[1:]:
+        self.assertEqual(
+            artifacts[1:3],
+            (
+                (bootstrap.RUNNER_SMOKE_HELPER_SOURCE, bootstrap.RUNNER_SMOKE_HELPER_SOURCE, 0o755),
+                (
+                    bootstrap.RUNNER_SMOKE_REGISTRATION_SOURCE,
+                    bootstrap.RUNNER_SMOKE_REGISTRATION_SOURCE,
+                    0o644,
+                ),
+            ),
+        )
+        for source, destination, mode in artifacts[3:]:
             self.assertEqual(source, destination)
             self.assertTrue(str(source).startswith("ops/lib/deploy_executor/"))
             self.assertEqual(mode, 0o644)
+
+        self.assertEqual(
+            bootstrap.RELEASE_DIRECTORIES,
+            (
+                Path("ops"),
+                Path("ops/bin"),
+                Path("ops/deploy"),
+                Path("ops/lib"),
+                Path("ops/lib/deploy_executor"),
+            ),
+        )
+        desired = bootstrap.desired_artifact_bytes(ROOT)
+        self.assertEqual(tuple(path for path, _, _ in desired), tuple(path for _, path, _ in artifacts))
+        self.assertEqual(
+            dict((path, mode) for path, _, mode in desired)[bootstrap.RUNNER_SMOKE_HELPER_SOURCE],
+            0o755,
+        )
+        self.assertEqual(
+            dict((path, mode) for path, _, mode in desired)[bootstrap.RUNNER_SMOKE_REGISTRATION_SOURCE],
+            0o644,
+        )
+
+    def test_release_tree_requires_payloads_and_rejects_extra_drift(self) -> None:
+        destinations = tuple(destination for _, destination, _ in bootstrap.runtime_artifacts())
+        with tempfile.TemporaryDirectory() as temp_dir:
+            release = Path(temp_dir) / "release"
+            release.mkdir()
+            for relative in bootstrap.RELEASE_DIRECTORIES:
+                (release / relative).mkdir(parents=True, exist_ok=True)
+            for destination in destinations:
+                path = release / destination
+                path.write_bytes(b"fixture")
+
+            self.assertTrue(bootstrap._release_tree_has_only_expected(release, destinations))
+
+            helper = release / bootstrap.RUNNER_SMOKE_HELPER_SOURCE
+            helper.unlink()
+            self.assertFalse(bootstrap._release_tree_has_only_expected(release, destinations))
+            helper.write_bytes(b"fixture")
+
+            registration = release / bootstrap.RUNNER_SMOKE_REGISTRATION_SOURCE
+            registration.unlink()
+            self.assertFalse(bootstrap._release_tree_has_only_expected(release, destinations))
+            registration.write_bytes(b"fixture")
+
+            extra = release / "ops/deploy/unreviewed.json"
+            extra.write_text("{}", encoding="utf-8")
+            self.assertFalse(bootstrap._release_tree_has_only_expected(release, destinations))
 
     def test_plan_accepts_only_absent_or_exact_terminal_states(self) -> None:
         sha = "a" * 40
