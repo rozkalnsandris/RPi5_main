@@ -93,6 +93,7 @@ class RunnerSmokeSystemctlStateTests(unittest.TestCase):
         )
         self.assertEqual(ready["source_delivery_contract"], str(bootstrap_v3.SOURCE_DELIVERY_CONTRACT))
         self.assertEqual(ready["legacy_exact_release_sha"], bootstrap_v3.LEGACY_EXACT_RELEASE_SHA)
+        self.assertEqual(ready["legacy_bytes_authority"], "FIXED_GIT_BLOBS_AT_LEGACY_RELEASE_SHA")
         self.assertTrue(ready["legacy_exact_upgrade_supported"])
         self.assertTrue(ready["legacy_release_preserved_after_upgrade"])
         self.assertEqual(ready["upgrade_mutation_sequence"], bootstrap_v3.UPGRADE_MUTATION_SEQUENCE)
@@ -116,6 +117,12 @@ class RunnerSmokeSystemctlStateTests(unittest.TestCase):
                     ("status", "--porcelain=v1", "--untracked-files=all"): "",
                     ("rev-parse", "HEAD"): f"{sha}\n",
                     ("rev-parse", "refs/remotes/origin/main"): f"{sha}\n",
+                    (
+                        "merge-base",
+                        "--is-ancestor",
+                        bootstrap_v3.LEGACY_EXACT_RELEASE_SHA,
+                        "HEAD",
+                    ): "",
                 }
                 return values[args]
 
@@ -132,6 +139,24 @@ class RunnerSmokeSystemctlStateTests(unittest.TestCase):
                     with self.assertRaises(bootstrap_v1.RunnerSmokeBrokerBootstrapError):
                         bootstrap_v3.validate_trusted_checkout(historical)
 
+    def test_legacy_git_blob_is_fixed_binary_read_at_exact_predecessor(self) -> None:
+        payload = b"legacy-bytes\x00are-preserved\n"
+        result = subprocess.CompletedProcess(args=[], returncode=0, stdout=payload, stderr=b"")
+        with mock.patch.object(bootstrap_v3.subprocess, "run", return_value=result) as run:
+            value = bootstrap_v3._legacy_git_blob(ROOT, Path("ops/bin/rpi5-hermes-deals-runner-smoke-install-broker"))
+        self.assertEqual(value, payload)
+        argv = run.call_args.args[0]
+        self.assertEqual(argv[:2], ["/usr/bin/git", "--no-optional-locks"])
+        self.assertEqual(argv[-2], "show")
+        self.assertEqual(
+            argv[-1],
+            f"{bootstrap_v3.LEGACY_EXACT_RELEASE_SHA}:ops/bin/rpi5-hermes-deals-runner-smoke-install-broker",
+        )
+        self.assertFalse(run.call_args.kwargs["text"])
+        self.assertFalse(run.call_args.kwargs["shell"])
+        with self.assertRaises(bootstrap_v1.RunnerSmokeBrokerBootstrapError):
+            bootstrap_v3._legacy_git_blob(ROOT, Path("../escape"))
+
     def test_exact_legacy_release_is_upgradeable_and_preserved_post_upgrade(self) -> None:
         uid = os.getuid()
         gid = os.getgid()
@@ -141,17 +166,22 @@ class RunnerSmokeSystemctlStateTests(unittest.TestCase):
             path.mkdir(parents=True, exist_ok=True)
             path.chmod(0o755)
 
+        def legacy_bytes(path: Path) -> bytes:
+            return f"legacy:{path.as_posix()}\n".encode("utf-8")
+
         def write_release(
             release: Path,
             directories: tuple[Path, ...],
             artifacts: tuple[tuple[Path, Path, int], ...],
+            *,
+            historical: bool,
         ) -> None:
             make_dir(release)
             for relative in directories:
                 make_dir(release / relative)
             for source, destination, mode in artifacts:
                 target = release / destination
-                target.write_bytes((ROOT / source).read_bytes())
+                target.write_bytes(legacy_bytes(source) if historical else (ROOT / source).read_bytes())
                 target.chmod(mode)
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -166,6 +196,7 @@ class RunnerSmokeSystemctlStateTests(unittest.TestCase):
                 legacy_release,
                 bootstrap_v3.LEGACY_RELEASE_DIRECTORIES,
                 bootstrap_v3._legacy_runtime_artifacts(),
+                historical=True,
             )
             current = host_root / bootstrap_v1.CURRENT_LINK.relative_to("/")
             current.symlink_to(f"releases/{bootstrap_v3.LEGACY_EXACT_RELEASE_SHA}")
@@ -173,52 +204,58 @@ class RunnerSmokeSystemctlStateTests(unittest.TestCase):
             socket_destination = host_root / bootstrap_v1.SOCKET_DESTINATION.relative_to("/")
             service_destination = host_root / bootstrap_v1.SERVICE_DESTINATION.relative_to("/")
             make_dir(socket_destination.parent)
-            socket_destination.write_bytes((ROOT / bootstrap_v1.SOCKET_SOURCE).read_bytes())
+            socket_destination.write_bytes(legacy_bytes(bootstrap_v1.SOCKET_SOURCE))
             socket_destination.chmod(0o644)
-            service_destination.write_bytes((ROOT / bootstrap_v1.SERVICE_SOURCE).read_bytes())
+            service_destination.write_bytes(legacy_bytes(bootstrap_v1.SERVICE_SOURCE))
             service_destination.chmod(0o644)
 
-            self.assertEqual(
-                bootstrap_v3._filesystem_state_v3(
-                    ROOT,
-                    source_sha,
-                    host_root=host_root,
-                    uid=uid,
-                    gid=gid,
-                ),
-                "LEGACY_EXACT",
-            )
-            plan = bootstrap_v3.plan_bootstrap(
-                bootstrap_v3.BootstrapObservation(
-                    source_sha=source_sha,
-                    filesystem_state="LEGACY_EXACT",
-                    socket_enabled_state="enabled",
-                    socket_active_state="active",
+            with mock.patch.object(
+                bootstrap_v3,
+                "_legacy_git_blob",
+                side_effect=lambda _checkout, path: legacy_bytes(path),
+            ):
+                self.assertEqual(
+                    bootstrap_v3._filesystem_state_v3(
+                        ROOT,
+                        source_sha,
+                        host_root=host_root,
+                        uid=uid,
+                        gid=gid,
+                    ),
+                    "LEGACY_EXACT",
                 )
-            )
-            self.assertEqual(plan.decision, "UPGRADE_REQUIRED_EXPLICIT_LIVE")
-            self.assertEqual(plan.mutations_required, bootstrap_v3.UPGRADE_MUTATION_SEQUENCE)
+                plan = bootstrap_v3.plan_bootstrap(
+                    bootstrap_v3.BootstrapObservation(
+                        source_sha=source_sha,
+                        filesystem_state="LEGACY_EXACT",
+                        socket_enabled_state="enabled",
+                        socket_active_state="active",
+                    )
+                )
+                self.assertEqual(plan.decision, "UPGRADE_REQUIRED_EXPLICIT_LIVE")
+                self.assertEqual(plan.mutations_required, bootstrap_v3.UPGRADE_MUTATION_SEQUENCE)
 
-            current.unlink()
-            current_release = releases_root / source_sha
-            write_release(
-                current_release,
-                bootstrap_v1.RELEASE_DIRECTORIES,
-                bootstrap_v1.runtime_artifacts(),
-            )
-            current.symlink_to(f"releases/{source_sha}")
+                current.unlink()
+                current_release = releases_root / source_sha
+                write_release(
+                    current_release,
+                    bootstrap_v1.RELEASE_DIRECTORIES,
+                    bootstrap_v1.runtime_artifacts(),
+                    historical=False,
+                )
+                current.symlink_to(f"releases/{source_sha}")
 
-            self.assertTrue(legacy_release.is_dir())
-            self.assertEqual(
-                bootstrap_v3._filesystem_state_v3(
-                    ROOT,
-                    source_sha,
-                    host_root=host_root,
-                    uid=uid,
-                    gid=gid,
-                ),
-                "EXACT",
-            )
+                self.assertTrue(legacy_release.is_dir())
+                self.assertEqual(
+                    bootstrap_v3._filesystem_state_v3(
+                        ROOT,
+                        source_sha,
+                        host_root=host_root,
+                        uid=uid,
+                        gid=gid,
+                    ),
+                    "EXACT",
+                )
 
     def test_legacy_state_requires_active_enabled_socket(self) -> None:
         sha = "a" * 40
