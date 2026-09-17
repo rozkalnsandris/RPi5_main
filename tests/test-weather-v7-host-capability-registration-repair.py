@@ -34,7 +34,7 @@ class WeatherV7RegistrationRepairTests(unittest.TestCase):
         self.assertIn('run_git("rev-parse", "--path-format=absolute", "--git-common-dir")', self.installer)
         self.assertIn('if common.name != ".git"', self.installer)
         self.assertIn('if manager.name != "RPi5_main"', self.installer)
-        self.assertIn('"manager_checkout": manager', self.installer)
+        self.assertIn('"manager_checkout": str(manager)', self.installer)
         self.assertNotIn('"manager_checkout": str(ROOT)', self.installer)
 
     def test_linked_worktree_resolves_to_primary_rpi5_main_manager(self) -> None:
