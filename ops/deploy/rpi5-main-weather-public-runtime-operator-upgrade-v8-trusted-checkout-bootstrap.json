@@ -75,7 +75,7 @@
     "expected_sha_authority": "EXPLICIT_WEATHER_OPERATOR_UPGRADE_V8_LIVE_EXACT_RPI5_MAIN_SHA",
     "expected_sha_format": "LOWERCASE_40_HEX",
     "fresh_origin_main_must_equal_expected_sha": true,
-    "minimum_reviewed_ancestor": "7b205c357b1789091157aa1cb1993f270a19b1dc",
+    "minimum_reviewed_ancestor": "0b1f03b86200b215ccd00449a659917cce574d39",
     "required_post_state": "EXACT_SHA_DETACHED_CLEAN_CORRECT_ORIGIN",
     "required_paths": [
       "ops/deploy/weather-public-runtime-operator-install.json",
