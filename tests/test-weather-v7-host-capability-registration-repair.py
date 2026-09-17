@@ -67,7 +67,7 @@ class WeatherV7RegistrationRepairTests(unittest.TestCase):
                 [
                     "git", "-C", str(manager),
                     "-c", "user.name=Weather v7 test",
-                    "-c", "user.email=weather-v7-test@example.invalid",
+                    "-c", "user.email=weather-v7-test.invalid",
                     "commit", "--allow-empty", "-m", "fixture",
                 ],
                 stdin=subprocess.DEVNULL,
