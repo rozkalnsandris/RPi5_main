@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 LEGACY_HISTORICAL_SHA = "c99f6b9df47603703f7d1e67ddc7d88c77ed726a"
 V5_HISTORICAL_SHA = "14501ddbe2853d8072464291b338c29a029dd3cf"
 V6_HISTORICAL_SHA = "9136c37156e84da3918e58d5d467c8b1e5cc403a"
+V7_HISTORICAL_SHA = "db7946fc64067c11d16a5b10902edf1157544db5"
 LEGACY_FROZEN_PATHS = (
     "ops/bin/rozkalns-weather-public-runtime-operator-upgrade-v3",
     "ops/deploy/rpi5-main-weather-public-runtime-operator-upgrade-v3-trusted-checkout-bootstrap.json",
@@ -36,12 +37,22 @@ V6_FROZEN_PATHS = (
     "ops/lib/deploy_executor/weather_public_runtime_operator_upgrade_v6.py",
     "tests/test-deploy-executor-weather-public-operator-upgrade-v6.py",
 )
+V7_FROZEN_PATHS = (
+    "ops/bin/rozkalns-weather-public-runtime-operator-upgrade-v7",
+    "ops/deploy/rpi5-main-weather-public-runtime-operator-upgrade-v7-trusted-checkout-bootstrap.json",
+    "ops/deploy/weather-public-runtime-operator-upgrade-v7.json",
+    "ops/lib/deploy_executor/weather_public_runtime_operator_upgrade_v7.py",
+    "tests/test-deploy-executor-weather-public-operator-upgrade-v7.py",
+)
 LEGACY_HISTORICAL_TESTS = (
     "tests/test-deploy-executor-weather-public-operator-upgrade-v3.py",
     "tests/test-deploy-executor-weather-public-operator-upgrade-v4.py",
 )
-CURRENT_TESTS = (
+V7_HISTORICAL_TESTS = (
     "tests/test-deploy-executor-weather-public-operator-upgrade-v7.py",
+)
+CURRENT_TESTS = (
+    "tests/test-deploy-executor-weather-public-operator-upgrade-v8.py",
 )
 
 
@@ -53,6 +64,53 @@ def git_bytes(*args: str) -> bytes:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     ).stdout
+
+
+def run_historical_tests(sha: str, tests: tuple[str, ...]) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        checkout = Path(tmp) / "reviewed"
+        subprocess.run(
+            [
+                "/usr/bin/git",
+                "-C",
+                str(ROOT),
+                "worktree",
+                "add",
+                "--detach",
+                str(checkout),
+                sha,
+            ],
+            check=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        try:
+            env = dict(os.environ)
+            env["PYTHONDONTWRITEBYTECODE"] = "1"
+            for relative in tests:
+                subprocess.run(
+                    [sys.executable, str(checkout / relative)],
+                    cwd=checkout,
+                    env=env,
+                    check=True,
+                )
+        finally:
+            subprocess.run(
+                [
+                    "/usr/bin/git",
+                    "-C",
+                    str(ROOT),
+                    "worktree",
+                    "remove",
+                    "--force",
+                    str(checkout),
+                ],
+                check=False,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
 
 
 class HistoricalWeatherOperatorUpgradeTests(unittest.TestCase):
@@ -77,54 +135,20 @@ class HistoricalWeatherOperatorUpgradeTests(unittest.TestCase):
                 historical = git_bytes("show", f"{V6_HISTORICAL_SHA}:{path}")
                 self.assertEqual(current, historical)
 
-    def test_v3_v4_positive_suites_run_at_reviewed_historical_snapshot(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            checkout = Path(tmp) / "reviewed"
-            subprocess.run(
-                [
-                    "/usr/bin/git",
-                    "-C",
-                    str(ROOT),
-                    "worktree",
-                    "add",
-                    "--detach",
-                    str(checkout),
-                    LEGACY_HISTORICAL_SHA,
-                ],
-                check=True,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            try:
-                env = dict(os.environ)
-                env["PYTHONDONTWRITEBYTECODE"] = "1"
-                for relative in LEGACY_HISTORICAL_TESTS:
-                    with self.subTest(test=relative):
-                        subprocess.run(
-                            [sys.executable, str(checkout / relative)],
-                            cwd=checkout,
-                            env=env,
-                            check=True,
-                        )
-            finally:
-                subprocess.run(
-                    [
-                        "/usr/bin/git",
-                        "-C",
-                        str(ROOT),
-                        "worktree",
-                        "remove",
-                        "--force",
-                        str(checkout),
-                    ],
-                    check=False,
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                )
+    def test_v7_sources_remain_exact_historical_evidence(self) -> None:
+        for path in V7_FROZEN_PATHS:
+            with self.subTest(path=path):
+                current = git_bytes("show", f"HEAD:{path}")
+                historical = git_bytes("show", f"{V7_HISTORICAL_SHA}:{path}")
+                self.assertEqual(current, historical)
 
-    def test_current_v7_positive_suite_runs(self) -> None:
+    def test_v3_v4_positive_suites_run_at_reviewed_historical_snapshot(self) -> None:
+        run_historical_tests(LEGACY_HISTORICAL_SHA, LEGACY_HISTORICAL_TESTS)
+
+    def test_v7_positive_suite_runs_at_reviewed_historical_snapshot(self) -> None:
+        run_historical_tests(V7_HISTORICAL_SHA, V7_HISTORICAL_TESTS)
+
+    def test_current_v8_positive_suite_runs(self) -> None:
         env = dict(os.environ)
         env["PYTHONDONTWRITEBYTECODE"] = "1"
         for relative in CURRENT_TESTS:
