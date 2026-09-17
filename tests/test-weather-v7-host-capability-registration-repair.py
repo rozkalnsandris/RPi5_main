@@ -2,9 +2,13 @@
 from __future__ import annotations
 
 import ast
+import importlib.util
 import json
 from pathlib import Path
+import subprocess
+import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLER = ROOT / "scripts/install-weather-operator-v7-host-capability.py"
@@ -13,6 +17,7 @@ REPAIR = ROOT / "scripts/repair-weather-operator-v7-host-capability-registration
 CONTRACT = ROOT / "ops/deploy/weather-public-runtime-operator-upgrade-v7-host-capability-repair.json"
 DOC = ROOT / "docs/WEATHER_OPERATOR_V7_REPAIR_593.md"
 WORKFLOW = ROOT / ".github/workflows/validate.yml"
+ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
 
 
 class WeatherV7RegistrationRepairTests(unittest.TestCase):
@@ -31,6 +36,54 @@ class WeatherV7RegistrationRepairTests(unittest.TestCase):
         self.assertIn('if manager.name != "RPi5_main"', self.installer)
         self.assertIn('"manager_checkout": manager', self.installer)
         self.assertNotIn('"manager_checkout": str(ROOT)', self.installer)
+
+    def test_linked_worktree_resolves_to_primary_rpi5_main_manager(self) -> None:
+        spec = importlib.util.spec_from_file_location("weather_v7_installer_593_test", INSTALLER)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader if spec is not None else None)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            manager = base / "RPi5_main"
+            worktree = base / "RPi5_main-weather-v7-host-capability-repair-source-trusted"
+            subprocess.run(
+                ["git", "init", "-b", "main", str(manager)],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(manager), "remote", "add", "origin", ORIGIN],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=True,
+            )
+            subprocess.run(
+                [
+                    "git", "-C", str(manager),
+                    "-c", "user.name=Weather v7 test",
+                    "-c", "user.email=weather-v7-test@example.invalid",
+                    "commit", "--allow-empty", "-m", "fixture",
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(manager), "worktree", "add", "--detach", str(worktree), "HEAD"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=True,
+            )
+            with mock.patch.object(module, "ROOT", worktree):
+                self.assertEqual(module.canonical_manager_checkout(), manager.resolve())
 
     def test_broker_git_trust_is_exact_command_scoped_and_not_persistent(self) -> None:
         self.assertIn('f"safe.directory={reviewed}"', self.broker)
@@ -88,7 +141,7 @@ class WeatherV7RegistrationRepairTests(unittest.TestCase):
         self.assertFalse(self.contract["failure"]["automatic_rollback"])
         self.assertFalse(self.contract["failed_authorization"]["reuse_allowed"])
 
-    def test_repair_installer_binds_known_predecessor_and_has_read_only_default(self) -> None:
+    def test_repair_installer_binds_known_predecessor_and_mutation_boundary(self) -> None:
         self.assertIn(
             'PREDECESSOR_SOURCE_SHA = "76496822e73e8ce628915978a1fea7970a2230ea"',
             self.repair,
@@ -99,8 +152,12 @@ class WeatherV7RegistrationRepairTests(unittest.TestCase):
         )
         self.assertIn('parser.add_argument("--apply", action="store_true")', self.repair)
         self.assertIn("os.geteuid() != 0", self.repair)
-        self.assertIn("atomic_replace(BROKER_TARGET", self.repair)
-        self.assertIn("atomic_replace(REGISTRATION", self.repair)
+        self.assertIn("atomic_replace(installer.BROKER_TARGET", self.repair)
+        self.assertIn("atomic_replace(installer.REGISTRATION", self.repair)
+        self.assertLess(
+            self.repair.index("mutation_started = True"),
+            self.repair.index("atomic_replace(installer.BROKER_TARGET"),
+        )
         self.assertNotIn("systemctl(", self.repair)
         self.assertNotIn("/usr/bin/sudo", self.repair)
         self.assertNotIn("safe.directory=*", self.repair)
