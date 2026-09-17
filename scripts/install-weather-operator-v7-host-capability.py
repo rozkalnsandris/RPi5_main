@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import stat
 import subprocess
 import sys
 
@@ -23,6 +24,7 @@ SOCKET_NAME = "rozkalns-weather-operator-v7-privileged-broker.socket"
 SERVICE_NAME = "rozkalns-weather-operator-v7-privileged-broker@.service"
 ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
 MAX_UID = (1 << 32) - 2
+REGISTRATION_SCHEMA = "rozkalns.rpi5-main.weather-operator-upgrade-v7-host-capability-registration.v2"
 ARTIFACTS = (
     ("ops/lib/deploy_executor/__init__.py", PACKAGE_ROOT / "__init__.py", 0o644),
     ("ops/lib/deploy_executor/dispatch_contract.py", PACKAGE_ROOT / "dispatch_contract.py", 0o644),
@@ -54,7 +56,6 @@ def git_environment() -> dict[str, str]:
     env = {"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"}
     if os.geteuid() != 0:
         return env
-
     sudo_uid = os.environ.get("SUDO_UID")
     if sudo_uid is None:
         return env
@@ -115,6 +116,27 @@ def canonical_manager_checkout() -> Path:
     return manager
 
 
+def manager_identity(manager: Path) -> tuple[int, int]:
+    try:
+        info = manager.lstat()
+    except OSError as exc:
+        raise InstallError("canonical manager checkout metadata is unavailable") from exc
+    if not stat.S_ISDIR(info.st_mode) or manager.is_symlink():
+        fail("canonical manager checkout must be a real directory")
+    uid = info.st_uid
+    gid = info.st_gid
+    if type(uid) is not int or type(gid) is not int or not (0 < uid <= MAX_UID) or not (0 < gid <= MAX_UID):
+        fail("canonical manager checkout owner identity is invalid")
+    home = manager.parent
+    try:
+        home_info = home.lstat()
+    except OSError as exc:
+        raise InstallError("canonical manager home metadata is unavailable") from exc
+    if not stat.S_ISDIR(home_info.st_mode) or home.is_symlink() or home_info.st_uid != uid:
+        fail("canonical manager home owner identity drifted")
+    return uid, gid
+
+
 def source_sha() -> str:
     sha = run_git("rev-parse", "HEAD").stdout.strip()
     if len(sha) != 40 or any(c not in "0123456789abcdef" for c in sha):
@@ -144,6 +166,7 @@ def sha256(data: bytes) -> str:
 def preflight() -> dict[str, object]:
     sha = source_sha()
     manager = canonical_manager_checkout()
+    manager_uid, manager_gid = manager_identity(manager)
     contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
     if contract.get("schema") != "rozkalns.rpi5-main.weather-operator-upgrade-v7-host-capability-installer.v1":
         fail("installer contract schema drifted")
@@ -155,14 +178,25 @@ def preflight() -> dict[str, object]:
             fail(f"contract does not bind fixed target: {target}")
         if contract["fixed_targets"][str(target)] != format(mode, "04o"):
             fail(f"contract mode drifted for {target}")
-    for target in [TARGET_ROOT, BROKER_TARGET, CONFIG_ROOT, REGISTRATION, SYSTEMD_ROOT / SOCKET_NAME, SYSTEMD_ROOT / SERVICE_NAME, STATE_ROOT, STATE_DB]:
+    for target in [
+        TARGET_ROOT,
+        BROKER_TARGET,
+        CONFIG_ROOT,
+        REGISTRATION,
+        SYSTEMD_ROOT / SOCKET_NAME,
+        SYSTEMD_ROOT / SERVICE_NAME,
+        STATE_ROOT,
+        STATE_DB,
+    ]:
         if target.exists():
             fail(f"first-install target already exists: {target}")
     return {
-        "schema": "rozkalns.rpi5-main.weather-operator-upgrade-v7-host-capability-installer-preflight.v1",
+        "schema": "rozkalns.rpi5-main.weather-operator-upgrade-v7-host-capability-installer-preflight.v2",
         "result": "PASS",
         "source_sha": sha,
         "manager_checkout": str(manager),
+        "manager_uid": manager_uid,
+        "manager_gid": manager_gid,
         "artifact_count": len(ARTIFACTS),
         "host_mutation_started": False,
         "source_merge_authorizes_live": False,
@@ -176,7 +210,12 @@ def write_exclusive(path: Path, data: bytes, mode: int) -> None:
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC, mode)
     try:
-        os.write(fd, data)
+        view = memoryview(data)
+        while view:
+            written = os.write(fd, view)
+            if written <= 0:
+                fail("installer write made no progress")
+            view = view[written:]
         os.fsync(fd)
         os.fchmod(fd, mode)
         os.fchown(fd, 0, 0)
@@ -187,6 +226,7 @@ def write_exclusive(path: Path, data: bytes, mode: int) -> None:
 def bootstrap_state() -> None:
     sys.path.insert(0, str(ROOT / "ops/lib"))
     from deploy_executor.state import StateStore
+
     STATE_ROOT.mkdir(parents=True, exist_ok=False, mode=0o700)
     os.chown(STATE_ROOT, 0, 0)
     with StateStore(STATE_DB, bootstrap=True):
@@ -213,6 +253,8 @@ def apply() -> dict[str, object]:
     evidence = preflight()
     sha = str(evidence["source_sha"])
     manager = str(evidence["manager_checkout"])
+    manager_uid = int(evidence["manager_uid"])
+    manager_gid = int(evidence["manager_gid"])
     mutation_started = False
     try:
         TARGET_ROOT.mkdir(parents=True, exist_ok=False, mode=0o755)
@@ -231,9 +273,11 @@ def apply() -> dict[str, object]:
 
         bootstrap_state()
         registration = {
-            "schema": "rozkalns.rpi5-main.weather-operator-upgrade-v7-host-capability-registration.v1",
+            "schema": REGISTRATION_SCHEMA,
             "capability_source_sha": sha,
             "manager_checkout": manager,
+            "manager_uid": manager_uid,
+            "manager_gid": manager_gid,
             "artifact_count": len(ARTIFACTS),
             "module_sha256": hashes[str(PACKAGE_ROOT / "weather_operator_upgrade_v7_host_capability.py")],
             "broker_sha256": hashes[str(BROKER_TARGET)],
@@ -253,10 +297,12 @@ def apply() -> dict[str, object]:
         ) from exc
 
     return {
-        "schema": "rozkalns.rpi5-main.weather-operator-upgrade-v7-host-capability-install-receipt.v1",
+        "schema": "rozkalns.rpi5-main.weather-operator-upgrade-v7-host-capability-install-receipt.v2",
         "result": "PASS",
         "source_sha": sha,
         "manager_checkout": manager,
+        "manager_uid": manager_uid,
+        "manager_gid": manager_gid,
         "artifact_count": len(ARTIFACTS),
         "host_mutation_started": mutation_started,
         "capability_installed": True,

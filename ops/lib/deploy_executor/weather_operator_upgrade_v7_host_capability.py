@@ -36,6 +36,7 @@ PRESERVED_V6_CHECKOUT_NAME = "RPi5_main-weather-public-runtime-operator-upgrade-
 REVIEWED_ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
 MINIMUM_REVIEWED_ANCESTOR = "09e39bcfa5d5d01ad19fd6a3730a20b6748ada9b"
 TARGET_PATH = Path("/usr/local/sbin/rozkalns-weather-public-runtime-operator")
+TARGET_TEMP_PATH = TARGET_PATH.parent / ".rozkalns-weather-public-runtime-operator.weather-v7-broker.tmp"
 OLD_SHA256 = "4058f89227b38dc62788b20fc82041113a9363a90b7fb9fd78743dd4fe41d27f"
 NEW_SHA256 = "f6255bf1e80d2918555b0814b0690add739041ac11512297d904fce5e8fc0cf1"
 MUTATION_BUDGET = (
@@ -49,7 +50,8 @@ AUTH_SCHEMA = "rozkalns.rpi5-main.weather-operator-upgrade-v7-live-auth.v1"
 AUTH_TITLE = "[LIVE-AUTH][PENDING] rpi5-main-weather-operator-upgrade-v7"
 AUTH_TTL_SECONDS = 600
 OWNER_USER_ID = 277435981
-REGISTRATION_SCHEMA = "rozkalns.rpi5-main.weather-operator-upgrade-v7-host-capability-registration.v1"
+MAX_UID = (1 << 32) - 2
+REGISTRATION_SCHEMA = "rozkalns.rpi5-main.weather-operator-upgrade-v7-host-capability-registration.v2"
 REGISTRATION_PATH = Path("/etc/rozkalns-weather-operator-v7-capability/registration.json")
 SUPPORT_ROOT = Path("/usr/local/libexec/rozkalns-weather-operator-v7-capability")
 STATE_DB_PATH = Path("/var/lib/rozkalns-weather-operator-v7-capability/state.sqlite3")
@@ -95,6 +97,8 @@ class WeatherV7Authorization:
 class WeatherV7BrokerPlan:
     authorization: WeatherV7Authorization
     manager_checkout: Path
+    manager_uid: int
+    manager_gid: int
     trusted_checkout: Path
     v6_checkout: Path
     checkout_state: str
@@ -109,7 +113,13 @@ def _fail(message: str) -> None:
 
 def _canonical_json(value: Mapping[str, Any]) -> bytes:
     try:
-        return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8")
+        return json.dumps(
+            value,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
     except (TypeError, ValueError, UnicodeError) as exc:
         raise WeatherV7HostCapabilityError("authorization cannot be canonicalized") from exc
 
@@ -165,6 +175,8 @@ def parse_authorization_issue(
     user = issue.get("user")
     if type(user) is not dict or user.get("id") != OWNER_USER_ID or user.get("type") != "User":
         _fail("authorization owner identity drifted")
+    if issue.get("performed_via_github_app") is not None:
+        _fail("authorization must be directly owner-authored, not app-mediated")
     created = _parse_utc(issue.get("created_at"), "authorization created_at")
     if not isinstance(server_time, datetime) or server_time.tzinfo is None:
         _fail("GitHub server time is unavailable")
@@ -236,7 +248,10 @@ def fixed_registry() -> OperationRegistry:
         authorization_class=AUTHORIZATION_CLASS,
         ordinary_live_all_eligible=False,
         baseline=BaselineContract(kind="resolver", resolver_id=BASELINE_RESOLVER_ID),
-        mutation_budget=tuple(MutationBudget(category=c, max_operations=n) for c, n in MUTATION_BUDGET),
+        mutation_budget=tuple(
+            MutationBudget(category=category, max_operations=maximum)
+            for category, maximum in MUTATION_BUDGET
+        ),
         rollback_policy=ROLLBACK_POLICY,
         exclusions=REQUIRED_EXCLUSIONS,
         dependencies=(
@@ -270,7 +285,7 @@ def _public_json(path: str) -> tuple[Mapping[str, Any], datetime]:
         value = json.loads(response.body.decode("utf-8", "strict"))
     except (UnicodeError, json.JSONDecodeError) as exc:
         raise WeatherV7HostCapabilityError("public source response is malformed") from exc
-    date_value = next((v for k, v in response.headers.items() if k.lower() == "date"), None)
+    date_value = next((value for key, value in response.headers.items() if key.lower() == "date"), None)
     if type(date_value) is not str:
         _fail("public source response omitted Date")
     try:
@@ -340,8 +355,16 @@ def load_registration() -> Mapping[str, Any]:
     except (UnicodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
         raise WeatherV7HostCapabilityError("host capability registration is malformed") from exc
     required = {
-        "schema", "capability_source_sha", "manager_checkout", "artifact_count",
-        "module_sha256", "broker_sha256", "socket_sha256", "service_sha256",
+        "schema",
+        "capability_source_sha",
+        "manager_checkout",
+        "manager_uid",
+        "manager_gid",
+        "artifact_count",
+        "module_sha256",
+        "broker_sha256",
+        "socket_sha256",
+        "service_sha256",
     }
     if type(value) is not dict or set(value) != required:
         _fail("host capability registration fields drifted")
@@ -351,6 +374,10 @@ def load_registration() -> Mapping[str, Any]:
         _fail("capability source SHA is invalid")
     if type(value["manager_checkout"]) is not str or not value["manager_checkout"].startswith("/"):
         _fail("manager checkout registration is invalid")
+    for key in ("manager_uid", "manager_gid"):
+        candidate = value[key]
+        if type(candidate) is not int or not (0 < candidate <= MAX_UID):
+            _fail(f"{key} registration is invalid")
     if value["artifact_count"] != 15:
         _fail("host capability artifact count drifted")
     for key in ("module_sha256", "broker_sha256", "socket_sha256", "service_sha256"):
@@ -361,7 +388,11 @@ def load_registration() -> Mapping[str, Any]:
 
 def verify_installed_capability(registration: Mapping[str, Any]) -> None:
     targets = (
-        (SUPPORT_ROOT / "deploy_executor" / "weather_operator_upgrade_v7_host_capability.py", 0o644, registration["module_sha256"]),
+        (
+            SUPPORT_ROOT / "deploy_executor" / "weather_operator_upgrade_v7_host_capability.py",
+            0o644,
+            registration["module_sha256"],
+        ),
         (BROKER_PATH, 0o755, registration["broker_sha256"]),
         (Path("/etc/systemd/system") / SOCKET_UNIT, 0o644, registration["socket_sha256"]),
         (Path("/etc/systemd/system") / SERVICE_UNIT, 0o644, registration["service_sha256"]),
@@ -373,15 +404,7 @@ def verify_installed_capability(registration: Mapping[str, Any]) -> None:
 
 
 def _run_git(manager: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["/usr/bin/git", "-C", str(manager), *args],
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        env={"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"},
-        check=check,
-    )
+    _fail("manager-identity Git backend is not installed")
 
 
 def _require_predecessor() -> None:
@@ -399,22 +422,7 @@ def _require_manager(manager: Path) -> None:
 
 
 def _checkout_state(manager: Path, source_sha: str) -> tuple[str, Path, Path]:
-    parent = manager.parent
-    v7 = parent / TRUSTED_CHECKOUT_NAME
-    v6 = parent / PRESERVED_V6_CHECKOUT_NAME
-    if not v6.is_dir():
-        _fail("preserved v6 checkout is absent")
-    if not v7.exists():
-        return "ABSENT", v7, v6
-    if not v7.is_dir():
-        _fail("v7 checkout path is not a directory")
-    head = _run_git(v7, "rev-parse", "HEAD").stdout.strip()
-    status = _run_git(v7, "status", "--porcelain", "--untracked-files=all").stdout
-    symbolic = _run_git(v7, "symbolic-ref", "-q", "HEAD", check=False)
-    origin = _run_git(v7, "remote", "get-url", "origin").stdout.strip()
-    if head != source_sha or status != "" or symbolic.returncode == 0 or origin != REVIEWED_ORIGIN:
-        _fail("existing v7 checkout is not exact detached clean reviewed source")
-    return "EXACT_SHA_DETACHED_CLEAN", v7, v6
+    _fail("manager-identity worktree backend is not installed")
 
 
 def _fetch_issue(client: Any, number: int) -> tuple[Mapping[str, Any], datetime]:
@@ -435,7 +443,9 @@ def prepare_plan(
     if type(raw_request) is not bytes or not (1 <= len(raw_request) <= MAX_REQUEST_BYTES) or b"\n" in raw_request.rstrip(b"\n"):
         _fail("broker request framing is invalid")
     try:
-        request_value = json.loads(raw_request.decode("utf-8", "strict"), object_pairs_hook=_strict_object)
+        request_value = json.loads(
+            raw_request.decode("utf-8", "strict"), object_pairs_hook=_strict_object
+        )
     except (UnicodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
         raise WeatherV7HostCapabilityError("broker request JSON is malformed") from exc
     request = parse_dispatch_request(request_value)
@@ -443,11 +453,17 @@ def prepare_plan(
     manager = Path(str(registration["manager_checkout"]))
     _require_manager(manager)
     _require_predecessor()
+    if TARGET_TEMP_PATH.exists():
+        _fail("fixed operator replacement temp path already exists")
 
     first_issue, first_time = _fetch_issue(queue_client, request.authorization_issue_number)
     auth = parse_authorization_issue(first_issue, server_time=first_time, request=request)
     queue_issue, _ = _fetch_issue(queue_client, auth.queue_issue)
-    normalized = normalize_ready_queue(queue_issue, repository_full_name=QUEUE_REPOSITORY, registry=fixed_registry())
+    normalized = normalize_ready_queue(
+        queue_issue,
+        repository_full_name=QUEUE_REPOSITORY,
+        registry=fixed_registry(),
+    )
     if normalized.execution_enabled is not False:
         _fail("global/P8 mutation execution unexpectedly enabled")
     protocol_queue = normalized.as_protocol_queue()
@@ -456,8 +472,13 @@ def prepare_plan(
         or protocol_queue.get("source_sha") != auth.source_sha
         or protocol_queue.get("operation_id") != OPERATION_ID
         or protocol_queue.get("target_alias") != TARGET_ALIAS
-        or protocol_queue.get("expected_baseline") != {"kind": "resolver", "value": BASELINE_RESOLVER_ID}
-        or tuple((x["category"], x["max_operations"]) for x in protocol_queue.get("mutation_budget", [])) != MUTATION_BUDGET
+        or protocol_queue.get("expected_baseline")
+        != {"kind": "resolver", "value": BASELINE_RESOLVER_ID}
+        or tuple(
+            (item["category"], item["max_operations"])
+            for item in protocol_queue.get("mutation_budget", [])
+        )
+        != MUTATION_BUDGET
         or protocol_queue.get("rollback_policy") != ROLLBACK_POLICY
     ):
         _fail("READY queue binding drifted")
@@ -469,12 +490,18 @@ def prepare_plan(
     if final != auth:
         _fail("authorization drifted during privileged revalidation")
     final_queue, _ = _fetch_issue(queue_client, auth.queue_issue)
-    final_normalized = normalize_ready_queue(final_queue, repository_full_name=QUEUE_REPOSITORY, registry=fixed_registry())
+    final_normalized = normalize_ready_queue(
+        final_queue,
+        repository_full_name=QUEUE_REPOSITORY,
+        registry=fixed_registry(),
+    )
     if final_normalized.canonical_json != normalized.canonical_json:
         _fail("READY queue drifted during privileged revalidation")
     return WeatherV7BrokerPlan(
         authorization=auth,
         manager_checkout=manager,
+        manager_uid=int(registration["manager_uid"]),
+        manager_gid=int(registration["manager_gid"]),
         trusted_checkout=v7,
         v6_checkout=v6,
         checkout_state=state,
@@ -512,65 +539,11 @@ def _admit_and_consume(plan: WeatherV7BrokerPlan) -> None:
 
 
 def _bootstrap_checkout(plan: WeatherV7BrokerPlan) -> None:
-    if plan.checkout_state != "ABSENT":
-        return
-    _run_git(plan.manager_checkout, "fetch", "origin", "main")
-    origin_main = _run_git(plan.manager_checkout, "rev-parse", "refs/remotes/origin/main").stdout.strip()
-    if origin_main != plan.authorization.source_sha:
-        _fail("origin/main drifted after the single authorized fetch")
-    ancestor = _run_git(
-        plan.manager_checkout,
-        "merge-base",
-        "--is-ancestor",
-        MINIMUM_REVIEWED_ANCESTOR,
-        plan.authorization.source_sha,
-        check=False,
-    )
-    if ancestor.returncode != 0:
-        _fail("authorized source no longer descends from reviewed minimum ancestor")
-    subprocess.run(
-        [
-            "/usr/bin/git", "-C", str(plan.manager_checkout), "worktree", "add", "--detach",
-            str(plan.trusted_checkout), plan.authorization.source_sha,
-        ],
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        env={"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"},
-        check=True,
-    )
-    _checkout_state(plan.manager_checkout, plan.authorization.source_sha)
+    _fail("manager-identity worktree bootstrap backend is not installed")
 
 
 def _run_fixed_upgrade(plan: WeatherV7BrokerPlan) -> Mapping[str, Any]:
-    entrypoint = plan.trusted_checkout / ENTRYPOINT
-    if not entrypoint.is_file():
-        _fail("fixed v7 entrypoint is absent")
-    result = subprocess.run(
-        [str(entrypoint)],
-        cwd=plan.trusted_checkout,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        env={"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C", "PYTHONDONTWRITEBYTECODE": "1"},
-        check=False,
-    )
-    if result.returncode != 0:
-        _fail("fixed v7 upgrade entrypoint failed")
-    lines = [line for line in result.stdout.splitlines() if line.strip()]
-    if not lines:
-        _fail("fixed v7 upgrade emitted no receipt")
-    try:
-        receipt = json.loads(lines[-1])
-    except json.JSONDecodeError as exc:
-        raise WeatherV7HostCapabilityError("fixed v7 upgrade receipt is malformed") from exc
-    if type(receipt) is not dict or receipt.get("result") != "PASS":
-        _fail("fixed v7 upgrade receipt did not report PASS")
-    if receipt.get("new_sha256") != NEW_SHA256 or receipt.get("target_replaced") is not True:
-        _fail("fixed v7 upgrade receipt identity drifted")
-    return receipt
+    _fail("fixed root-owned operator replacement backend is not installed")
 
 
 def execute_plan(plan: WeatherV7BrokerPlan) -> Mapping[str, Any]:
@@ -580,8 +553,6 @@ def execute_plan(plan: WeatherV7BrokerPlan) -> Mapping[str, Any]:
     raw = _safe_file(TARGET_PATH, uid=0, gid=0, mode=0o755, max_bytes=2 * 1024 * 1024)
     if hashlib.sha256(raw).hexdigest() != NEW_SHA256:
         _fail("installed v7 operator postcondition failed")
-    if not plan.v6_checkout.is_dir():
-        _fail("v6 checkout preservation postcondition failed")
     return {
         "schema": "rozkalns.rpi5-main.weather-operator-upgrade-v7-broker-receipt.v1",
         "result": "PASS",

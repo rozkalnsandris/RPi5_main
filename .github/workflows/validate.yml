@@ -50,6 +50,9 @@ jobs:
       - name: Validate Weather v7 broker registration Git trust repair
         run: python3 ./tests/test-weather-v7-host-capability-registration-repair.py
 
+      - name: Validate Weather v7 home-access and authorization provenance repair
+        run: python3 ./tests/test-weather-v7-host-capability-home-access-repair.py
+
   gitleaks:
     runs-on: ubuntu-latest
     timeout-minutes: 5
