@@ -67,10 +67,10 @@ def git_environment() -> dict[str, str]:
     return env
 
 
-def run_git(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+def run_git_at(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     try:
         return subprocess.run(
-            ["/usr/bin/git", "-C", str(ROOT), *args],
+            ["/usr/bin/git", "-C", str(repo), *args],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -81,6 +81,38 @@ def run_git(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     except subprocess.CalledProcessError as exc:
         command = args[0] if args else "git"
         raise InstallError(f"git source preflight failed: {command}") from exc
+
+
+def run_git(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    return run_git_at(ROOT, *args, check=check)
+
+
+def canonical_manager_checkout() -> Path:
+    raw = run_git("rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip()
+    if not raw.startswith("/"):
+        fail("Git common directory is not absolute")
+    try:
+        common = Path(raw).resolve(strict=True)
+    except OSError as exc:
+        raise InstallError("Git common directory cannot be resolved") from exc
+    if common.name != ".git":
+        fail("Git common directory is not the primary RPi5_main .git directory")
+    manager = common.parent
+    if manager.name != "RPi5_main" or not manager.is_dir():
+        fail("canonical RPi5_main manager checkout identity drifted")
+    manager_common_raw = run_git_at(
+        manager, "rev-parse", "--path-format=absolute", "--git-common-dir"
+    ).stdout.strip()
+    try:
+        manager_common = Path(manager_common_raw).resolve(strict=True)
+    except OSError as exc:
+        raise InstallError("canonical manager Git directory cannot be resolved") from exc
+    if manager_common != common:
+        fail("linked worktree does not resolve to the canonical RPi5_main manager checkout")
+    origin = run_git_at(manager, "remote", "get-url", "origin").stdout.strip()
+    if origin != ORIGIN:
+        fail("canonical manager checkout origin drifted")
+    return manager
 
 
 def source_sha() -> str:
@@ -111,6 +143,7 @@ def sha256(data: bytes) -> str:
 
 def preflight() -> dict[str, object]:
     sha = source_sha()
+    manager = canonical_manager_checkout()
     contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
     if contract.get("schema") != "rozkalns.rpi5-main.weather-operator-upgrade-v7-host-capability-installer.v1":
         fail("installer contract schema drifted")
@@ -129,6 +162,7 @@ def preflight() -> dict[str, object]:
         "schema": "rozkalns.rpi5-main.weather-operator-upgrade-v7-host-capability-installer-preflight.v1",
         "result": "PASS",
         "source_sha": sha,
+        "manager_checkout": str(manager),
         "artifact_count": len(ARTIFACTS),
         "host_mutation_started": False,
         "source_merge_authorizes_live": False,
@@ -178,6 +212,7 @@ def apply() -> dict[str, object]:
         fail("--apply requires an owner-authorized root process")
     evidence = preflight()
     sha = str(evidence["source_sha"])
+    manager = str(evidence["manager_checkout"])
     mutation_started = False
     try:
         TARGET_ROOT.mkdir(parents=True, exist_ok=False, mode=0o755)
@@ -198,7 +233,7 @@ def apply() -> dict[str, object]:
         registration = {
             "schema": "rozkalns.rpi5-main.weather-operator-upgrade-v7-host-capability-registration.v1",
             "capability_source_sha": sha,
-            "manager_checkout": str(ROOT),
+            "manager_checkout": manager,
             "artifact_count": len(ARTIFACTS),
             "module_sha256": hashes[str(PACKAGE_ROOT / "weather_operator_upgrade_v7_host_capability.py")],
             "broker_sha256": hashes[str(BROKER_TARGET)],
@@ -221,6 +256,7 @@ def apply() -> dict[str, object]:
         "schema": "rozkalns.rpi5-main.weather-operator-upgrade-v7-host-capability-install-receipt.v1",
         "result": "PASS",
         "source_sha": sha,
+        "manager_checkout": manager,
         "artifact_count": len(ARTIFACTS),
         "host_mutation_started": mutation_started,
         "capability_installed": True,

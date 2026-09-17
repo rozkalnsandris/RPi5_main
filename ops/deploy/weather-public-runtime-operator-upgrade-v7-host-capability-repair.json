@@ -1,0 +1,106 @@
+{
+  "schema": "rozkalns.rpi5-main.weather-operator-upgrade-v7-host-capability-repair.v1",
+  "issue": 593,
+  "status": "SOURCE_READY_FOR_OWNER_GATED_HOST_CAPABILITY_REPAIR",
+  "source_repository": "rozkalnsandris/RPi5_main",
+  "operation_id": "rpi5-main.weather-operator-upgrade-v7.v1",
+  "source_merge_authorizes_live": false,
+  "root_cause": {
+    "registration_manager_binding": "Gate-2 installer registered its linked installer worktree while the broker requires the canonical RPi5_main manager checkout",
+    "root_git_trust": "systemd root broker requires exact command-scoped safe.directory trust for the canonical manager checkout"
+  },
+  "trusted_source_checkout": {
+    "name": "RPi5_main-weather-v7-host-capability-repair-source-trusted",
+    "derivation": "$HOME/RPi5_main-weather-v7-host-capability-repair-source-trusted",
+    "reviewed_origin": "https://github.com/rozkalnsandris/RPi5_main.git",
+    "exact_current_main_required": true,
+    "exact_main_ci_required": true,
+    "required_post_state": "EXACT_SHA_DETACHED_CLEAN_CORRECT_ORIGIN",
+    "manager_worktree_mutation_allowed": false
+  },
+  "source_delivery_mutation_budget": [
+    {
+      "category": "git.weather-v7-host-capability-repair-source-fetch",
+      "max_operations": 1
+    },
+    {
+      "category": "git.weather-v7-host-capability-repair-source-worktree-add",
+      "max_operations": 1
+    }
+  ],
+  "predecessor": {
+    "capability_source_sha": "76496822e73e8ce628915978a1fea7970a2230ea",
+    "broker_sha256": "69d203453f4769e694f93a7840b3f81881d1cb49ea105322d3ad508a5b55925f",
+    "operator_sha256": "4058f89227b38dc62788b20fc82041113a9363a90b7fb9fd78743dd4fe41d27f",
+    "broken_manager_checkout_name": "RPi5_main-weather-v7-host-capability-installer-source-v2-trusted",
+    "v7_checkout_expected": "ABSENT",
+    "v6_checkout_required": "PRESENT"
+  },
+  "repair": {
+    "installer": "scripts/repair-weather-operator-v7-host-capability-registration.py",
+    "installer_default_mode": "READ_ONLY_PREFLIGHT",
+    "apply_flag": "--apply",
+    "apply_requires_owner_authorized_root": true,
+    "fixed_targets": {
+      "/usr/local/libexec/rozkalns-weather-operator-v7-privileged-broker": "0755",
+      "/etc/rozkalns-weather-operator-v7-capability/registration.json": "0600"
+    },
+    "mutation_budget": [
+      {
+        "category": "filesystem.weather-v7-capability-broker-atomic-replace",
+        "max_operations": 1
+      },
+      {
+        "category": "filesystem.weather-v7-capability-registration-atomic-replace",
+        "max_operations": 1
+      }
+    ],
+    "unchanged_installed_artifact_count": 14,
+    "systemd_mutation": false,
+    "operator_replacement": false,
+    "v7_checkout_creation": false,
+    "weather_runtime_mutation": false
+  },
+  "git_trust": {
+    "runtime_scope": "COMMAND_SCOPED_ONLY",
+    "safe_directory_value": "REGISTERED_CANONICAL_RPI5_MAIN_MANAGER_CHECKOUT",
+    "wildcard_safe_directory_allowed": false,
+    "global_git_config_mutation_allowed": false,
+    "system_git_config_mutation_allowed": false,
+    "filesystem_ownership_mutation_allowed": false
+  },
+  "failed_authorization": {
+    "repository": "rozkalnsandris/ops-workflows",
+    "issue": 65,
+    "request_id": "73a9beec-8ae5-4c9e-aee8-739427543a6e",
+    "reuse_allowed": false
+  },
+  "failure": {
+    "authorization_consumed_at_first_mutation": true,
+    "after_first_mutation_error": "STOP_PRESERVE_MINIMUM_READ_ONLY_EVIDENCE",
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false
+  },
+  "exclusions": [
+    "no sudo/root authority for the conversational agent",
+    "no safe.directory wildcard or persistent Git config mutation",
+    "no systemd/socket/timer mutation",
+    "no Weather operator replacement or v7 operator checkout creation",
+    "no Docker/Weather application/SQLite/corpus mutation",
+    "no network/firewall/DNS/Cloudflare mutation",
+    "no credentials/secrets/permissions/repository-settings mutation",
+    "no retry/cleanup/rollback/worktree remove/prune/repair"
+  ],
+  "recovery_order": [
+    "source merge + exact-main CI",
+    "materialize exact detached clean repair source checkout",
+    "owner-gated host-capability repair",
+    "sanitized repaired closure verification",
+    "JIT rebind ops-workflows#63 to current exact main",
+    "create a brand-new non-reused Weather v7 LIVE-AUTH UUID",
+    "Gate-3 broker dispatch",
+    "installed operator closure verification",
+    "return to rozkalns_weather#136"
+  ]
+}
