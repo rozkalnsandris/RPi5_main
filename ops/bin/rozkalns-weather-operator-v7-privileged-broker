@@ -2,16 +2,144 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
+import subprocess
 
-from deploy_executor.weather_operator_upgrade_v7_host_capability import (
-    WeatherV7HostCapabilityError,
-    runtime_main,
-)
+from deploy_executor import weather_operator_upgrade_v7_host_capability as cap
+
+GIT_ENV = {"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"}
+
+
+def _reviewed_manager(manager: Path) -> Path:
+    if not manager.is_absolute() or manager.name != "RPi5_main":
+        raise cap.WeatherV7HostCapabilityError("registered manager checkout identity drifted")
+    try:
+        resolved = manager.resolve(strict=True)
+    except OSError as exc:
+        raise cap.WeatherV7HostCapabilityError("registered manager checkout cannot be resolved") from exc
+    if resolved != manager or not manager.is_dir():
+        raise cap.WeatherV7HostCapabilityError("registered manager checkout is not a canonical directory")
+    return manager
+
+
+def _bounded_run_git(
+    manager: Path, *args: str, check: bool = True
+) -> subprocess.CompletedProcess[str]:
+    reviewed = _reviewed_manager(manager)
+    command = [
+        "/usr/bin/git",
+        "-c",
+        f"safe.directory={reviewed}",
+        "-C",
+        str(reviewed),
+        *args,
+    ]
+    try:
+        return subprocess.run(
+            command,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=GIT_ENV,
+            check=check,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise cap.WeatherV7HostCapabilityError("bounded manager Git command failed") from exc
+
+
+def _checkout_state(manager: Path, source_sha: str) -> tuple[str, Path, Path]:
+    reviewed = _reviewed_manager(manager)
+    parent = reviewed.parent
+    v7 = parent / cap.TRUSTED_CHECKOUT_NAME
+    v6 = parent / cap.PRESERVED_V6_CHECKOUT_NAME
+    if not v6.is_dir():
+        raise cap.WeatherV7HostCapabilityError("preserved v6 checkout is absent")
+    if v7.exists():
+        raise cap.WeatherV7HostCapabilityError(
+            "existing v7 checkout requires separate fail-closed recovery"
+        )
+    return "ABSENT", v7, v6
+
+
+def _worktree_records(text: str) -> list[dict[str, str | bool]]:
+    records: list[dict[str, str | bool]] = []
+    for block in text.strip().split("\n\n") if text.strip() else []:
+        record: dict[str, str | bool] = {}
+        for line in block.splitlines():
+            key, separator, value = line.partition(" ")
+            if separator:
+                record[key] = value
+            else:
+                record[key] = True
+        records.append(record)
+    return records
+
+
+def _require_created_worktree(manager: Path, target: Path, source_sha: str) -> None:
+    result = _bounded_run_git(manager, "worktree", "list", "--porcelain")
+    matches = [
+        record for record in _worktree_records(result.stdout)
+        if record.get("worktree") == str(target)
+    ]
+    if len(matches) != 1:
+        raise cap.WeatherV7HostCapabilityError("created v7 worktree registration drifted")
+    record = matches[0]
+    if record.get("HEAD") != source_sha or record.get("detached") is not True:
+        raise cap.WeatherV7HostCapabilityError("created v7 worktree identity drifted")
+    if record.get("locked") is not None or record.get("prunable") is not None:
+        raise cap.WeatherV7HostCapabilityError("created v7 worktree state drifted")
+    if not target.is_dir():
+        raise cap.WeatherV7HostCapabilityError("created v7 worktree directory is absent")
+
+
+def _bootstrap_checkout(plan: cap.WeatherV7BrokerPlan) -> None:
+    if plan.checkout_state != "ABSENT":
+        return
+    _bounded_run_git(plan.manager_checkout, "fetch", "origin", "main")
+    origin_main = _bounded_run_git(
+        plan.manager_checkout, "rev-parse", "refs/remotes/origin/main"
+    ).stdout.strip()
+    if origin_main != plan.authorization.source_sha:
+        raise cap.WeatherV7HostCapabilityError(
+            "origin/main drifted after the single authorized fetch"
+        )
+    ancestor = _bounded_run_git(
+        plan.manager_checkout,
+        "merge-base",
+        "--is-ancestor",
+        cap.MINIMUM_REVIEWED_ANCESTOR,
+        plan.authorization.source_sha,
+        check=False,
+    )
+    if ancestor.returncode != 0:
+        raise cap.WeatherV7HostCapabilityError(
+            "authorized source no longer descends from reviewed minimum ancestor"
+        )
+    _bounded_run_git(
+        plan.manager_checkout,
+        "worktree",
+        "add",
+        "--detach",
+        str(plan.trusted_checkout),
+        plan.authorization.source_sha,
+    )
+    _require_created_worktree(
+        plan.manager_checkout, plan.trusted_checkout, plan.authorization.source_sha
+    )
+
+
+def _install_bounded_git_runtime() -> None:
+    cap._run_git = _bounded_run_git
+    cap._checkout_state = _checkout_state
+    cap._bootstrap_checkout = _bootstrap_checkout
+
 
 if __name__ == "__main__":
+    _install_bounded_git_runtime()
     try:
-        raise SystemExit(runtime_main())
-    except WeatherV7HostCapabilityError as exc:
+        raise SystemExit(cap.runtime_main())
+    except cap.WeatherV7HostCapabilityError as exc:
         print(json.dumps({
             "schema": "rozkalns.rpi5-main.weather-operator-upgrade-v7-broker-receipt.v1",
             "result": "FAIL_CLOSED",
