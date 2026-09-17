@@ -2,16 +2,15 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
 import stat
-import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
+INSTALLER_PATH = ROOT / "scripts/install-weather-operator-v7-host-capability.py"
 CONTRACT = ROOT / "ops/deploy/weather-public-runtime-operator-upgrade-v7-host-capability-repair.json"
-ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
 TRUSTED_SOURCE_CHECKOUT_NAME = "RPi5_main-weather-v7-host-capability-repair-source-trusted"
 PREDECESSOR_SOURCE_SHA = "76496822e73e8ce628915978a1fea7970a2230ea"
 PREDECESSOR_BROKER_SHA256 = "69d203453f4769e694f93a7840b3f81881d1cb49ea105322d3ad508a5b55925f"
@@ -19,34 +18,7 @@ PREDECESSOR_OPERATOR_SHA256 = "4058f89227b38dc62788b20fc82041113a9363a90b7fb9fd7
 BROKEN_MANAGER_CHECKOUT_NAME = "RPi5_main-weather-v7-host-capability-installer-source-v2-trusted"
 V7_CHECKOUT_NAME = "RPi5_main-weather-public-runtime-operator-upgrade-v7-trusted"
 V6_CHECKOUT_NAME = "RPi5_main-weather-public-runtime-operator-upgrade-v6-trusted"
-MAX_UID = (1 << 32) - 2
-
-TARGET_ROOT = Path("/usr/local/libexec/rozkalns-weather-operator-v7-capability")
-PACKAGE_ROOT = TARGET_ROOT / "deploy_executor"
-BROKER_TARGET = Path("/usr/local/libexec/rozkalns-weather-operator-v7-privileged-broker")
-REGISTRATION = Path("/etc/rozkalns-weather-operator-v7-capability/registration.json")
-SYSTEMD_ROOT = Path("/etc/systemd/system")
-SOCKET_NAME = "rozkalns-weather-operator-v7-privileged-broker.socket"
-SERVICE_NAME = "rozkalns-weather-operator-v7-privileged-broker@.service"
 OPERATOR_TARGET = Path("/usr/local/sbin/rozkalns-weather-public-runtime-operator")
-
-ARTIFACTS = (
-    ("ops/lib/deploy_executor/__init__.py", PACKAGE_ROOT / "__init__.py", 0o644),
-    ("ops/lib/deploy_executor/dispatch_contract.py", PACKAGE_ROOT / "dispatch_contract.py", 0o644),
-    ("ops/lib/deploy_executor/github_app_auth.py", PACKAGE_ROOT / "github_app_auth.py", 0o644),
-    ("ops/lib/deploy_executor/p9_canary.py", PACKAGE_ROOT / "p9_canary.py", 0o644),
-    ("ops/lib/deploy_executor/p9_isolated_auth_surface.py", PACKAGE_ROOT / "p9_isolated_auth_surface.py", 0o644),
-    ("ops/lib/deploy_executor/p9_runtime.py", PACKAGE_ROOT / "p9_runtime.py", 0o644),
-    ("ops/lib/deploy_executor/protocol.py", PACKAGE_ROOT / "protocol.py", 0o644),
-    ("ops/lib/deploy_executor/queue_normalizer.py", PACKAGE_ROOT / "queue_normalizer.py", 0o644),
-    ("ops/lib/deploy_executor/registry.py", PACKAGE_ROOT / "registry.py", 0o644),
-    ("ops/lib/deploy_executor/state.py", PACKAGE_ROOT / "state.py", 0o644),
-    ("ops/lib/deploy_executor/transport.py", PACKAGE_ROOT / "transport.py", 0o644),
-    ("ops/lib/deploy_executor/weather_operator_upgrade_v7_host_capability.py", PACKAGE_ROOT / "weather_operator_upgrade_v7_host_capability.py", 0o644),
-    ("ops/bin/rozkalns-weather-operator-v7-privileged-broker", BROKER_TARGET, 0o755),
-    ("ops/systemd/rozkalns-weather-operator-v7-privileged-broker.socket", SYSTEMD_ROOT / SOCKET_NAME, 0o644),
-    ("ops/systemd/rozkalns-weather-operator-v7-privileged-broker@.service", SYSTEMD_ROOT / SERVICE_NAME, 0o644),
-)
 
 
 class RepairError(RuntimeError):
@@ -57,93 +29,24 @@ def fail(message: str) -> None:
     raise RepairError(message)
 
 
-def git_environment() -> dict[str, str]:
-    env = {"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"}
-    if os.geteuid() != 0:
-        return env
-    sudo_uid = os.environ.get("SUDO_UID")
-    if sudo_uid is None:
-        return env
-    if not sudo_uid.isascii() or not sudo_uid.isdecimal():
-        fail("SUDO_UID must be an ASCII decimal UID")
-    uid = int(sudo_uid, 10)
-    if uid > MAX_UID:
-        fail("SUDO_UID is outside the supported uid_t range")
-    env["SUDO_UID"] = str(uid)
-    return env
+def load_installer():
+    spec = importlib.util.spec_from_file_location("weather_v7_host_capability_installer", INSTALLER_PATH)
+    if spec is None or spec.loader is None:
+        fail("host-capability installer module cannot be loaded")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
-def run_git_at(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    try:
-        return subprocess.run(
-            ["/usr/bin/git", "-C", str(repo), *args],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            env=git_environment(),
-            check=check,
-        )
-    except subprocess.CalledProcessError as exc:
-        command = args[0] if args else "git"
-        raise RepairError(f"Git preflight failed: {command}") from exc
-
-
-def source_sha() -> str:
-    if ROOT.name != TRUSTED_SOURCE_CHECKOUT_NAME:
-        fail("repair installer must run from the dedicated trusted source checkout")
-    sha = run_git_at(ROOT, "rev-parse", "HEAD").stdout.strip()
-    if len(sha) != 40 or any(c not in "0123456789abcdef" for c in sha):
-        fail("repair source HEAD is not an exact lowercase SHA")
-    if run_git_at(ROOT, "remote", "get-url", "origin").stdout.strip() != ORIGIN:
-        fail("repair source origin drifted")
-    if run_git_at(ROOT, "status", "--porcelain", "--untracked-files=all").stdout != "":
-        fail("repair source checkout must be clean")
-    symbolic = run_git_at(ROOT, "symbolic-ref", "-q", "HEAD", check=False)
-    if symbolic.returncode == 0:
-        fail("repair source checkout must be detached")
-    return sha
-
-
-def canonical_manager_checkout() -> Path:
-    raw = run_git_at(ROOT, "rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip()
-    if not raw.startswith("/"):
-        fail("Git common directory is not absolute")
-    try:
-        common = Path(raw).resolve(strict=True)
-    except OSError as exc:
-        raise RepairError("Git common directory cannot be resolved") from exc
-    if common.name != ".git":
-        fail("Git common directory is not the primary RPi5_main .git directory")
-    manager = common.parent
-    if manager.name != "RPi5_main" or not manager.is_dir():
-        fail("canonical RPi5_main manager checkout identity drifted")
-    manager_common_raw = run_git_at(
-        manager, "rev-parse", "--path-format=absolute", "--git-common-dir"
-    ).stdout.strip()
-    try:
-        manager_common = Path(manager_common_raw).resolve(strict=True)
-    except OSError as exc:
-        raise RepairError("canonical manager Git directory cannot be resolved") from exc
-    if manager_common != common:
-        fail("repair worktree does not resolve to the canonical RPi5_main manager checkout")
-    if run_git_at(manager, "remote", "get-url", "origin").stdout.strip() != ORIGIN:
-        fail("canonical manager checkout origin drifted")
-    return manager
-
-
-def source_bytes(path: str) -> bytes:
-    source = ROOT / path
-    if not source.is_file():
-        fail(f"required repair source artifact is absent: {path}")
-    data = source.read_bytes()
-    if not data:
-        fail(f"required repair source artifact is empty: {path}")
-    return data
+installer = load_installer()
 
 
 def sha256(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
+    return installer.sha256(data)
+
+
+def source_bytes(path: str) -> bytes:
+    return installer.source_bytes(path)
 
 
 def safe_file(path: Path, *, mode: int, max_bytes: int = 2 * 1024 * 1024) -> bytes:
@@ -171,7 +74,7 @@ def safe_file(path: Path, *, mode: int, max_bytes: int = 2 * 1024 * 1024) -> byt
 
 
 def load_registration() -> dict[str, object]:
-    raw = safe_file(REGISTRATION, mode=0o600, max_bytes=8192)
+    raw = safe_file(installer.REGISTRATION, mode=0o600, max_bytes=8192)
     try:
         value = json.loads(raw.decode("utf-8", "strict"))
     except (UnicodeError, json.JSONDecodeError) as exc:
@@ -185,22 +88,48 @@ def load_registration() -> dict[str, object]:
     return value
 
 
-def preflight() -> dict[str, object]:
-    sha = source_sha()
-    manager = canonical_manager_checkout()
+def repair_source_identity() -> tuple[str, Path]:
+    if ROOT.name != TRUSTED_SOURCE_CHECKOUT_NAME:
+        fail("repair installer must run from the dedicated trusted source checkout")
+    sha = installer.source_sha()
+    symbolic = installer.run_git("symbolic-ref", "-q", "HEAD", check=False)
+    if symbolic.returncode == 0:
+        fail("repair source checkout must be detached")
+    return sha, installer.canonical_manager_checkout()
+
+
+def require_contract() -> None:
     contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
     if contract.get("schema") != "rozkalns.rpi5-main.weather-operator-upgrade-v7-host-capability-repair.v1":
         fail("repair contract schema drifted")
     if contract.get("issue") != 593:
         fail("repair contract issue binding drifted")
+    repair = contract.get("repair")
+    if type(repair) is not dict:
+        fail("repair contract repair section drifted")
+    if repair.get("fixed_targets") != {
+        str(installer.BROKER_TARGET): "0755",
+        str(installer.REGISTRATION): "0600",
+    }:
+        fail("repair contract fixed targets drifted")
+    if repair.get("mutation_budget") != [
+        {"category": "filesystem.weather-v7-capability-broker-atomic-replace", "max_operations": 1},
+        {"category": "filesystem.weather-v7-capability-registration-atomic-replace", "max_operations": 1},
+    ]:
+        fail("repair mutation budget drifted")
+
+
+def preflight() -> dict[str, object]:
+    sha, manager = repair_source_identity()
+    require_contract()
 
     hashes: dict[str, str] = {}
-    for source, target, mode in ARTIFACTS:
+    for source, target, mode in installer.ARTIFACTS:
         expected = source_bytes(source)
         installed = safe_file(target, mode=mode)
         installed_hash = sha256(installed)
         hashes[str(target)] = installed_hash
-        if target == BROKER_TARGET:
+        if target == installer.BROKER_TARGET:
             if installed_hash != PREDECESSOR_BROKER_SHA256:
                 fail("installed predecessor broker identity drifted")
         elif installed != expected:
@@ -214,19 +143,18 @@ def preflight() -> dict[str, object]:
         fail("installed registration predecessor source drifted")
     if registration.get("manager_checkout") != str(expected_broken_manager):
         fail("installed registration no longer matches the known broken manager binding")
-    if registration.get("artifact_count") != len(ARTIFACTS):
+    if registration.get("artifact_count") != len(installer.ARTIFACTS):
         fail("installed registration artifact count drifted")
     if registration.get("broker_sha256") != PREDECESSOR_BROKER_SHA256:
         fail("installed registration predecessor broker hash drifted")
-    if registration.get("module_sha256") != hashes[str(PACKAGE_ROOT / "weather_operator_upgrade_v7_host_capability.py")]:
+    if registration.get("module_sha256") != hashes[str(installer.PACKAGE_ROOT / "weather_operator_upgrade_v7_host_capability.py")]:
         fail("installed registration module hash drifted")
-    if registration.get("socket_sha256") != hashes[str(SYSTEMD_ROOT / SOCKET_NAME)]:
+    if registration.get("socket_sha256") != hashes[str(installer.SYSTEMD_ROOT / installer.SOCKET_NAME)]:
         fail("installed registration socket hash drifted")
-    if registration.get("service_sha256") != hashes[str(SYSTEMD_ROOT / SERVICE_NAME)]:
+    if registration.get("service_sha256") != hashes[str(installer.SYSTEMD_ROOT / installer.SERVICE_NAME)]:
         fail("installed registration service hash drifted")
 
-    operator = safe_file(OPERATOR_TARGET, mode=0o755)
-    if sha256(operator) != PREDECESSOR_OPERATOR_SHA256:
+    if sha256(safe_file(OPERATOR_TARGET, mode=0o755)) != PREDECESSOR_OPERATOR_SHA256:
         fail("Weather operator predecessor identity drifted")
     if (manager.parent / V7_CHECKOUT_NAME).exists():
         fail("v7 operator checkout already exists")
@@ -237,18 +165,17 @@ def preflight() -> dict[str, object]:
     new_broker_hash = sha256(new_broker)
     if new_broker_hash == PREDECESSOR_BROKER_SHA256:
         fail("repair broker source did not change")
-    for target in (BROKER_TARGET, REGISTRATION):
-        temp = target.parent / f".{target.name}.repair-593.tmp"
-        if temp.exists():
-            fail(f"repair temp path already exists: {temp.name}")
+    for target in (installer.BROKER_TARGET, installer.REGISTRATION):
+        if (target.parent / f".{target.name}.repair-593.tmp").exists():
+            fail(f"repair temp path already exists: {target.name}")
 
     return {
         "schema": "rozkalns.rpi5-main.weather-operator-upgrade-v7-host-capability-repair-preflight.v1",
         "result": "PASS",
         "source_sha": sha,
         "manager_checkout": str(manager),
-        "artifact_count": len(ARTIFACTS),
-        "verified_unchanged_artifact_count": len(ARTIFACTS) - 1,
+        "artifact_count": len(installer.ARTIFACTS),
+        "verified_unchanged_artifact_count": len(installer.ARTIFACTS) - 1,
         "predecessor_broker_sha256": PREDECESSOR_BROKER_SHA256,
         "target_broker_sha256": new_broker_hash,
         "host_mutation_started": False,
@@ -292,11 +219,10 @@ def apply() -> dict[str, object]:
     manager = str(evidence["manager_checkout"])
     broker_data = source_bytes("ops/bin/rozkalns-weather-operator-v7-privileged-broker")
     broker_hash = sha256(broker_data)
-    mutation_started = False
-    try:
-        atomic_replace(BROKER_TARGET, broker_data, 0o755)
-        mutation_started = True
 
+    mutation_started = True
+    try:
+        atomic_replace(installer.BROKER_TARGET, broker_data, 0o755)
         registration = load_registration()
         registration["capability_source_sha"] = sha
         registration["manager_checkout"] = manager
@@ -304,24 +230,21 @@ def apply() -> dict[str, object]:
         registration_data = (
             json.dumps(registration, sort_keys=True, separators=(",", ":")).encode("utf-8") + b"\n"
         )
-        atomic_replace(REGISTRATION, registration_data, 0o600)
-    except Exception as exc:
-        if mutation_started:
-            raise RepairError(
-                "host-capability repair failed closed after mutation; no retry/cleanup/rollback is authorized"
-            ) from exc
-        raise
+        atomic_replace(installer.REGISTRATION, registration_data, 0o600)
 
-    final_broker = safe_file(BROKER_TARGET, mode=0o755)
-    final_registration = load_registration()
-    if sha256(final_broker) != broker_hash:
-        fail("repaired broker postcondition failed")
-    if final_registration.get("capability_source_sha") != sha:
-        fail("repaired registration source postcondition failed")
-    if final_registration.get("manager_checkout") != manager:
-        fail("repaired registration manager postcondition failed")
-    if final_registration.get("broker_sha256") != broker_hash:
-        fail("repaired registration broker postcondition failed")
+        if sha256(safe_file(installer.BROKER_TARGET, mode=0o755)) != broker_hash:
+            fail("repaired broker postcondition failed")
+        final_registration = load_registration()
+        if final_registration.get("capability_source_sha") != sha:
+            fail("repaired registration source postcondition failed")
+        if final_registration.get("manager_checkout") != manager:
+            fail("repaired registration manager postcondition failed")
+        if final_registration.get("broker_sha256") != broker_hash:
+            fail("repaired registration broker postcondition failed")
+    except Exception as exc:
+        raise RepairError(
+            "host-capability repair failed closed after mutation; no retry/cleanup/rollback is authorized"
+        ) from exc
 
     return {
         "schema": "rozkalns.rpi5-main.weather-operator-upgrade-v7-host-capability-repair-receipt.v1",
