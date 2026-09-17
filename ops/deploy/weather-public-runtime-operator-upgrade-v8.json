@@ -4,7 +4,7 @@
   "issue": 597,
   "status": "SOURCE_ONLY_UPGRADE_BRIDGE_INACTIVE",
   "predecessor_sha": "db7946fc64067c11d16a5b10902edf1157544db5",
-  "minimum_target_ancestor": "7b205c357b1789091157aa1cb1993f270a19b1dc",
+  "minimum_target_ancestor": "0b1f03b86200b215ccd00449a659917cce574d39",
   "operator_install_manifest": "ops/deploy/weather-public-runtime-operator-install.json",
   "trusted_upgrade_checkout_contract": "ops/deploy/rpi5-main-weather-public-runtime-operator-upgrade-v8-trusted-checkout-bootstrap.json",
   "trusted_upgrade_checkout": "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-operator-upgrade-v8-trusted",
