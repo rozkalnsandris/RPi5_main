@@ -23,11 +23,6 @@ V7_CHECKOUT_NAME = "RPi5_main-weather-public-runtime-operator-upgrade-v7-trusted
 V6_CHECKOUT_NAME = "RPi5_main-weather-public-runtime-operator-upgrade-v6-trusted"
 V6_SHA = "9136c37156e84da3918e58d5d467c8b1e5cc403a"
 OPERATOR_TARGET = Path("/usr/local/sbin/rozkalns-weather-public-runtime-operator")
-UPDATED_SOURCES = {
-    "ops/lib/deploy_executor/weather_operator_upgrade_v7_host_capability.py",
-    "ops/bin/rozkalns-weather-operator-v7-privileged-broker",
-    "ops/systemd/rozkalns-weather-operator-v7-privileged-broker@.service",
-}
 
 
 class RepairError(RuntimeError):
@@ -39,7 +34,9 @@ def fail(message: str) -> None:
 
 
 def load_installer():
-    spec = importlib.util.spec_from_file_location("weather_v7_host_capability_installer_595", INSTALLER_PATH)
+    spec = importlib.util.spec_from_file_location(
+        "weather_v7_host_capability_installer_595", INSTALLER_PATH
+    )
     if spec is None or spec.loader is None:
         fail("host-capability installer module cannot be loaded")
     module = importlib.util.module_from_spec(spec)
@@ -161,12 +158,18 @@ def require_contract() -> dict[str, object]:
     ]:
         fail("repair mutation budget drifted")
     sandbox = contract.get("service_sandbox")
-    if type(sandbox) is not dict or sandbox.get("capability_bounding_set") != ["CAP_SETUID", "CAP_SETGID"]:
+    if type(sandbox) is not dict:
+        fail("repair service sandbox contract drifted")
+    if sandbox.get("capability_bounding_set") != ["CAP_SETUID", "CAP_SETGID"]:
         fail("repair service capability contract drifted")
     if sandbox.get("cap_dac_override_allowed") is not False:
         fail("repair must not allow CAP_DAC_OVERRIDE")
     if sandbox.get("cap_dac_read_search_allowed") is not False:
         fail("repair must not allow CAP_DAC_READ_SEARCH")
+    if sandbox.get("service_template_manager_parent_placeholder") != installer.SERVICE_MANAGER_PARENT_TOKEN.decode("ascii"):
+        fail("repair service manager-parent placeholder drifted")
+    if sandbox.get("home_write_allowlist") != ["REGISTERED_CANONICAL_MANAGER_PARENT"]:
+        fail("repair home write allowlist drifted")
     return contract
 
 
@@ -180,6 +183,10 @@ def require_v6(manager: Path) -> None:
     v6 = manager.parent / V6_CHECKOUT_NAME
     if installer.run_git_at(v6, "status", "--porcelain", "--untracked-files=all").stdout != "":
         fail("preserved v6 checkout is dirty")
+
+
+def target_service_bytes(manager: Path) -> bytes:
+    return installer.render_service_unit(source_bytes(installer.SERVICE_SOURCE), manager)
 
 
 def preflight() -> dict[str, object]:
@@ -232,7 +239,7 @@ def preflight() -> dict[str, object]:
         "module_sha256": sha256(source_bytes("ops/lib/deploy_executor/weather_operator_upgrade_v7_host_capability.py")),
         "broker_sha256": sha256(source_bytes("ops/bin/rozkalns-weather-operator-v7-privileged-broker")),
         "socket_sha256": installed_hashes[str(installer.SYSTEMD_ROOT / installer.SOCKET_NAME)],
-        "service_sha256": sha256(source_bytes("ops/systemd/rozkalns-weather-operator-v7-privileged-broker@.service")),
+        "service_sha256": sha256(target_service_bytes(manager)),
     }
     return {
         "schema": "rozkalns.rpi5-main.weather-operator-upgrade-v7-host-capability-repair-preflight.v2",
@@ -294,7 +301,7 @@ def apply() -> dict[str, object]:
         fail("--apply requires an owner-authorized root process")
     evidence = preflight()
     sha = str(evidence["source_sha"])
-    manager = str(evidence["manager_checkout"])
+    manager_path = Path(str(evidence["manager_checkout"]))
     manager_uid = int(evidence["manager_uid"])
     manager_gid = int(evidence["manager_gid"])
     target_hashes = dict(evidence["target_hashes"])
@@ -303,11 +310,11 @@ def apply() -> dict[str, object]:
     service_target = installer.SYSTEMD_ROOT / installer.SERVICE_NAME
     module_data = source_bytes("ops/lib/deploy_executor/weather_operator_upgrade_v7_host_capability.py")
     broker_data = source_bytes("ops/bin/rozkalns-weather-operator-v7-privileged-broker")
-    service_data = source_bytes("ops/systemd/rozkalns-weather-operator-v7-privileged-broker@.service")
+    service_data = target_service_bytes(manager_path)
     registration = {
         "schema": TARGET_REGISTRATION_SCHEMA,
         "capability_source_sha": sha,
-        "manager_checkout": manager,
+        "manager_checkout": str(manager_path),
         "manager_uid": manager_uid,
         "manager_gid": manager_gid,
         "artifact_count": len(installer.ARTIFACTS),
@@ -349,7 +356,7 @@ def apply() -> dict[str, object]:
         "schema": "rozkalns.rpi5-main.weather-operator-upgrade-v7-host-capability-repair-receipt.v2",
         "result": "PASS",
         "source_sha": sha,
-        "manager_checkout": manager,
+        "manager_checkout": str(manager_path),
         "manager_uid": manager_uid,
         "manager_gid": manager_gid,
         "host_mutation_started": mutation_started,
@@ -371,7 +378,7 @@ def apply() -> dict[str, object]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Repair Weather v7 broker home access and LIVE-AUTH provenance boundary"
+        description="Repair Weather v7 broker manager access and LIVE-AUTH provenance boundary"
     )
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()

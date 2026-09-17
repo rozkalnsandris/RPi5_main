@@ -6,7 +6,7 @@
   "operation_id": "rpi5-main.weather-operator-upgrade-v7.v1",
   "source_merge_authorizes_live": false,
   "root_cause": {
-    "home_access": "root broker lacks DAC bypass and cannot traverse the 0700 manager home while running Git against the user-owned canonical manager checkout",
+    "home_access": "root broker lacks DAC bypass and cannot traverse the mode-0700 canonical manager parent while running Git against the user-owned manager checkout",
     "authorization_provenance": "owner numeric identity alone is insufficient when GitHub reports performed_via_github_app != null"
   },
   "trusted_source_checkout": {
@@ -82,7 +82,8 @@
     "cap_dac_override_allowed": false,
     "cap_dac_read_search_allowed": false,
     "protect_home": "read-only",
-    "home_write_allowlist": ["/home/andris"],
+    "service_template_manager_parent_placeholder": "@@WEATHER_V7_MANAGER_PARENT@@",
+    "home_write_allowlist": ["REGISTERED_CANONICAL_MANAGER_PARENT"],
     "broad_home_write_allowlist_allowed": false
   },
   "manager_identity": {

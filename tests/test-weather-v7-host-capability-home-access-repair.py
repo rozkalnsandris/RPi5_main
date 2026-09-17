@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import importlib.util
 import json
 from pathlib import Path
 import sys
@@ -22,6 +23,18 @@ CONTRACT = ROOT / "ops/deploy/weather-public-runtime-operator-upgrade-v7-host-ca
 DOC = ROOT / "docs/WEATHER_OPERATOR_V7_REPAIR_595.md"
 WORKFLOW = ROOT / ".github/workflows/validate.yml"
 REQUEST_ID = "123e4567-e89b-42d3-a456-426614174595"
+
+
+def load_installer():
+    spec = importlib.util.spec_from_file_location("weather_v7_host_capability_installer_test", INSTALLER)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("installer module cannot be loaded")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+installer = load_installer()
 
 
 def request() -> cap.DispatchRequest:
@@ -92,7 +105,7 @@ class WeatherV7HomeAccessRepairTests(unittest.TestCase):
         valid = {
             "schema": cap.REGISTRATION_SCHEMA,
             "capability_source_sha": "a" * 40,
-            "manager_checkout": "/home/andris/RPi5_main",
+            "manager_checkout": "/srv/test-owner/RPi5_main",
             "manager_uid": 1000,
             "manager_gid": 1000,
             "artifact_count": 15,
@@ -112,7 +125,7 @@ class WeatherV7HomeAccessRepairTests(unittest.TestCase):
                 with self.assertRaises(cap.WeatherV7HostCapabilityError):
                     cap.load_registration()
 
-    def test_git_and_home_access_children_drop_to_registered_identity(self) -> None:
+    def test_git_and_manager_access_children_drop_to_registered_identity(self) -> None:
         self.assertIn("user=uid", self.broker)
         self.assertIn("group=gid", self.broker)
         self.assertIn("extra_groups=()", self.broker)
@@ -122,7 +135,7 @@ class WeatherV7HomeAccessRepairTests(unittest.TestCase):
         for forbidden in ("--global", "--system", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM"):
             self.assertNotIn(forbidden, self.broker)
 
-    def test_root_broker_does_not_execute_upgrade_code_from_user_home(self) -> None:
+    def test_root_broker_does_not_execute_upgrade_code_from_manager_tree(self) -> None:
         self.assertNotIn("[str(entrypoint)]", self.broker)
         self.assertNotIn("cwd=plan.trusted_checkout", self.broker)
         self.assertIn('"show"', self.broker)
@@ -131,7 +144,7 @@ class WeatherV7HomeAccessRepairTests(unittest.TestCase):
         self.assertIn("_atomic_replace_operator(data)", self.broker)
         self.assertIn("os.replace(temp, cap.TARGET_PATH)", self.broker)
 
-    def test_service_has_only_identity_drop_capabilities_and_narrow_home_write_path(self) -> None:
+    def test_service_has_only_identity_drop_capabilities_and_template_path(self) -> None:
         self.assertIn("User=root", self.service)
         self.assertIn("NoNewPrivileges=true", self.service)
         self.assertIn("ProtectHome=read-only", self.service)
@@ -139,11 +152,23 @@ class WeatherV7HomeAccessRepairTests(unittest.TestCase):
         self.assertIn("AmbientCapabilities=\n", self.service)
         self.assertNotIn("CAP_DAC_OVERRIDE", self.service)
         self.assertNotIn("CAP_DAC_READ_SEARCH", self.service)
-        self.assertIn("ReadWritePaths=/home/andris", self.service)
+        self.assertIn("ReadWritePaths=@@WEATHER_V7_MANAGER_PARENT@@", self.service)
         self.assertNotIn("ReadWritePaths=/home\n", self.service)
 
+    def test_installer_renders_exact_manager_parent_without_committing_private_path(self) -> None:
+        manager = Path("/srv/test-owner/RPi5_main")
+        rendered = installer.render_service_unit(self.service.encode("utf-8"), manager)
+        self.assertIn(b"ReadWritePaths=/srv/test-owner\n", rendered)
+        self.assertNotIn(installer.SERVICE_MANAGER_PARENT_TOKEN, rendered)
+        self.assertIn("SERVICE_MANAGER_PARENT_TOKEN", self.installer)
+        self.assertIn("installed_bytes(source, manager)", self.installer)
+        self.assertIn("target_service_bytes(manager)", self.repair)
+
     def test_first_install_registration_contains_manager_uid_gid(self) -> None:
-        self.assertIn('REGISTRATION_SCHEMA = "rozkalns.rpi5-main.weather-operator-upgrade-v7-host-capability-registration.v2"', self.installer)
+        self.assertIn(
+            'REGISTRATION_SCHEMA = "rozkalns.rpi5-main.weather-operator-upgrade-v7-host-capability-registration.v2"',
+            self.installer,
+        )
         self.assertIn('"manager_uid": manager_uid', self.installer)
         self.assertIn('"manager_gid": manager_gid', self.installer)
         self.assertIn("manager_identity(manager)", self.installer)
@@ -151,11 +176,14 @@ class WeatherV7HomeAccessRepairTests(unittest.TestCase):
     def test_repair_contract_is_exact_and_does_not_restart_runtime(self) -> None:
         self.assertEqual(self.contract["issue"], 595)
         self.assertFalse(self.contract["source_merge_authorizes_live"])
+        sandbox = self.contract["service_sandbox"]
+        self.assertEqual(sandbox["capability_bounding_set"], ["CAP_SETUID", "CAP_SETGID"])
+        self.assertFalse(sandbox["cap_dac_override_allowed"])
         self.assertEqual(
-            self.contract["service_sandbox"]["capability_bounding_set"],
-            ["CAP_SETUID", "CAP_SETGID"],
+            sandbox["service_template_manager_parent_placeholder"],
+            "@@WEATHER_V7_MANAGER_PARENT@@",
         )
-        self.assertFalse(self.contract["service_sandbox"]["cap_dac_override_allowed"])
+        self.assertEqual(sandbox["home_write_allowlist"], ["REGISTERED_CANONICAL_MANAGER_PARENT"])
         self.assertFalse(self.contract["authorization_provenance"]["app_mediated_live_auth_allowed"])
         categories = [item["category"] for item in self.contract["repair"]["mutation_budget"]]
         self.assertEqual(categories, [
@@ -194,6 +222,7 @@ class WeatherV7HomeAccessRepairTests(unittest.TestCase):
         self.assertIn("performed_via_github_app", self.doc)
         self.assertIn("extra_groups=()", self.doc)
         self.assertIn("CAP_DAC_OVERRIDE", self.doc)
+        self.assertIn("@@WEATHER_V7_MANAGER_PARENT@@", self.doc)
         self.assertIn(
             "python3 ./tests/test-weather-v7-host-capability-home-access-repair.py",
             self.workflow,

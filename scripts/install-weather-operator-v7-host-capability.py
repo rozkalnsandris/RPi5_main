@@ -22,6 +22,8 @@ STATE_DB = STATE_ROOT / "state.sqlite3"
 SYSTEMD_ROOT = Path("/etc/systemd/system")
 SOCKET_NAME = "rozkalns-weather-operator-v7-privileged-broker.socket"
 SERVICE_NAME = "rozkalns-weather-operator-v7-privileged-broker@.service"
+SERVICE_SOURCE = "ops/systemd/rozkalns-weather-operator-v7-privileged-broker@.service"
+SERVICE_MANAGER_PARENT_TOKEN = b"@@WEATHER_V7_MANAGER_PARENT@@"
 ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
 MAX_UID = (1 << 32) - 2
 REGISTRATION_SCHEMA = "rozkalns.rpi5-main.weather-operator-upgrade-v7-host-capability-registration.v2"
@@ -40,7 +42,7 @@ ARTIFACTS = (
     ("ops/lib/deploy_executor/weather_operator_upgrade_v7_host_capability.py", PACKAGE_ROOT / "weather_operator_upgrade_v7_host_capability.py", 0o644),
     ("ops/bin/rozkalns-weather-operator-v7-privileged-broker", BROKER_TARGET, 0o755),
     ("ops/systemd/rozkalns-weather-operator-v7-privileged-broker.socket", SYSTEMD_ROOT / SOCKET_NAME, 0o644),
-    ("ops/systemd/rozkalns-weather-operator-v7-privileged-broker@.service", SYSTEMD_ROOT / SERVICE_NAME, 0o644),
+    (SERVICE_SOURCE, SYSTEMD_ROOT / SERVICE_NAME, 0o644),
 )
 
 
@@ -127,14 +129,28 @@ def manager_identity(manager: Path) -> tuple[int, int]:
     gid = info.st_gid
     if type(uid) is not int or type(gid) is not int or not (0 < uid <= MAX_UID) or not (0 < gid <= MAX_UID):
         fail("canonical manager checkout owner identity is invalid")
-    home = manager.parent
+    parent = manager.parent
     try:
-        home_info = home.lstat()
+        parent_info = parent.lstat()
     except OSError as exc:
-        raise InstallError("canonical manager home metadata is unavailable") from exc
-    if not stat.S_ISDIR(home_info.st_mode) or home.is_symlink() or home_info.st_uid != uid:
-        fail("canonical manager home owner identity drifted")
+        raise InstallError("canonical manager parent metadata is unavailable") from exc
+    if not stat.S_ISDIR(parent_info.st_mode) or parent.is_symlink() or parent_info.st_uid != uid:
+        fail("canonical manager parent owner identity drifted")
     return uid, gid
+
+
+def render_service_unit(data: bytes, manager: Path) -> bytes:
+    if data.count(SERVICE_MANAGER_PARENT_TOKEN) != 1:
+        fail("Weather-v7 broker service manager-parent placeholder drifted")
+    parent = str(manager.parent)
+    if not parent.startswith("/") or any(ch.isspace() for ch in parent):
+        fail("canonical manager parent cannot be rendered safely into systemd unit")
+    if any(ch in parent for ch in ('%', '"', "'", "\\")):
+        fail("canonical manager parent contains unsupported systemd path characters")
+    rendered = data.replace(SERVICE_MANAGER_PARENT_TOKEN, parent.encode("utf-8"), 1)
+    if SERVICE_MANAGER_PARENT_TOKEN in rendered:
+        fail("Weather-v7 broker service manager-parent placeholder was not fully rendered")
+    return rendered
 
 
 def source_sha() -> str:
@@ -159,6 +175,13 @@ def source_bytes(path: str) -> bytes:
     return data
 
 
+def installed_bytes(source: str, manager: Path) -> bytes:
+    data = source_bytes(source)
+    if source == SERVICE_SOURCE:
+        return render_service_unit(data, manager)
+    return data
+
+
 def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -173,7 +196,7 @@ def preflight() -> dict[str, object]:
     if contract.get("artifact_count") != len(ARTIFACTS):
         fail("installer artifact count drifted")
     for source, target, mode in ARTIFACTS:
-        source_bytes(source)
+        installed_bytes(source, manager)
         if str(target) not in contract["fixed_targets"]:
             fail(f"contract does not bind fixed target: {target}")
         if contract["fixed_targets"][str(target)] != format(mode, "04o"):
@@ -252,7 +275,7 @@ def apply() -> dict[str, object]:
         fail("--apply requires an owner-authorized root process")
     evidence = preflight()
     sha = str(evidence["source_sha"])
-    manager = str(evidence["manager_checkout"])
+    manager = Path(str(evidence["manager_checkout"]))
     manager_uid = int(evidence["manager_uid"])
     manager_gid = int(evidence["manager_gid"])
     mutation_started = False
@@ -267,7 +290,7 @@ def apply() -> dict[str, object]:
 
         hashes: dict[str, str] = {}
         for source, target, mode in ARTIFACTS:
-            data = source_bytes(source)
+            data = installed_bytes(source, manager)
             write_exclusive(target, data, mode)
             hashes[str(target)] = sha256(data)
 
@@ -275,7 +298,7 @@ def apply() -> dict[str, object]:
         registration = {
             "schema": REGISTRATION_SCHEMA,
             "capability_source_sha": sha,
-            "manager_checkout": manager,
+            "manager_checkout": str(manager),
             "manager_uid": manager_uid,
             "manager_gid": manager_gid,
             "artifact_count": len(ARTIFACTS),
@@ -300,7 +323,7 @@ def apply() -> dict[str, object]:
         "schema": "rozkalns.rpi5-main.weather-operator-upgrade-v7-host-capability-install-receipt.v2",
         "result": "PASS",
         "source_sha": sha,
-        "manager_checkout": manager,
+        "manager_checkout": str(manager),
         "manager_uid": manager_uid,
         "manager_gid": manager_gid,
         "artifact_count": len(ARTIFACTS),

@@ -6,7 +6,7 @@ This document is the canonical source recovery handoff for `RPi5_main#595`. It r
 
 ## Proven failure
 
-The Weather-v7 broker is intentionally root-owned, but its systemd capability bounding set does not include DAC bypass. The canonical manager checkout is user-owned under `/home/andris/RPi5_main`, while the parent home is mode `0700`. A root process without `CAP_DAC_OVERRIDE` therefore cannot safely traverse the manager home merely because its effective UID is zero.
+The Weather-v7 broker is intentionally root-owned, but its systemd capability bounding set does not include DAC bypass. The canonical manager checkout is user-owned below a mode-`0700` manager-parent directory. A root process without `CAP_DAC_OVERRIDE` therefore cannot safely traverse that parent merely because its effective UID is zero.
 
 The previous `safe.directory=<exact manager>` repair solved Git's repository-ownership trust rule, but it did not solve Unix path traversal. `safe.directory` must remain exact and command-scoped; it is not a filesystem-permission bypass.
 
@@ -16,7 +16,7 @@ A second defect is authorization provenance. GitHub may report the configured ow
 
 The repaired broker remains `User=root` only because the final operator target is root-owned. It receives exactly `CAP_SETUID` and `CAP_SETGID`; it does **not** receive `CAP_DAC_OVERRIDE` or `CAP_DAC_READ_SEARCH`.
 
-All Git and home-access subprocesses are launched with the registration-bound manager identity:
+All Git and manager-tree access subprocesses are launched with the registration-bound manager identity:
 
 - `user=<manager_uid>`;
 - `group=<manager_gid>`;
@@ -27,7 +27,7 @@ All Git and home-access subprocesses are launched with the registration-bound ma
 
 Python's POSIX `subprocess` contract explicitly supports `user=`, `group=` and `extra_groups=`. The Python documentation also notes that setting only `user=` does not drop supplementary groups, which is why this repair requires `extra_groups=()`.
 
-The broker does not execute an upgrade script from the user home. The manager-identity Git child verifies the fixed reviewed source blob identities and returns the exact operator bytes. The root broker then performs only the single fixed atomic replacement of `/usr/local/sbin/rozkalns-weather-public-runtime-operator` already present in the Gate-3 1+1+1 mutation budget.
+The broker does not execute an upgrade script from the manager tree. The manager-identity Git child verifies the fixed reviewed source blob identities and returns the exact operator bytes. The root broker then performs only the single fixed atomic replacement of `/usr/local/sbin/rozkalns-weather-public-runtime-operator` already present in the Gate-3 1+1+1 mutation budget.
 
 ## Registration v2
 
@@ -48,7 +48,7 @@ Its capability bounding set is exactly:
 CAP_SETUID CAP_SETGID
 ```
 
-`CAP_DAC_OVERRIDE` and `CAP_DAC_READ_SEARCH` remain absent. The broad `ReadWritePaths=/home` exception is removed; the only home write exception is the reviewed `/home/andris` subtree needed by the manager-owned Git child for the fixed sibling worktree.
+`CAP_DAC_OVERRIDE` and `CAP_DAC_READ_SEARCH` remain absent. The broad home-root write exception is removed. Public source contains the neutral token `@@WEATHER_V7_MANAGER_PARENT@@`; the trusted installer/repair renders it exactly once to the already-validated canonical manager-parent directory before the unit is installed. The installed unit therefore gets only the reviewed manager-parent subtree needed for the fixed sibling worktree, while the public repository contains no machine-specific user-home path.
 
 ## LIVE-AUTH provenance
 
@@ -70,7 +70,7 @@ After a dedicated trusted exact-main source checkout and a separately authorized
 
 1. `weather_operator_upgrade_v7_host_capability.py`;
 2. `rozkalns-weather-operator-v7-privileged-broker`;
-3. `rozkalns-weather-operator-v7-privileged-broker@.service`;
+3. the rendered `rozkalns-weather-operator-v7-privileged-broker@.service`;
 4. `registration.json` with schema v2;
 5. one `systemctl daemon-reload`.
 
@@ -80,9 +80,9 @@ It does not restart the broker socket or caller timer, replace the Weather opera
 
 1. Merge the reviewed `RPi5_main#595` source and require successful exact-main CI.
 2. Materialize the dedicated repair-v2 source checkout under a separate bounded owner LIVE gate.
-3. Run the repair entrypoint in read-only mode and prove the exact `99c5568...` installed predecessor closure.
+3. Run the repair entrypoint in read-only mode and prove the exact predecessor closure identified by the repair contract.
 4. Under a separate exact owner LIVE repair authorization, replace only the four fixed files and run one `daemon-reload`.
-5. Verify registration v2, exact broker/module/service hashes, unchanged socket/caller state, predecessor operator, absent v7 checkout and preserved v6 checkout.
+5. Verify registration v2, exact broker/module/rendered-service hashes, unchanged socket/caller state, predecessor operator, absent v7 checkout and preserved v6 checkout.
 6. JIT reconcile `ops-workflows#63` to the then-current exact `RPi5_main/main`.
 7. Create a brand-new **directly owner-authored** Weather-v7 LIVE-AUTH in GitHub; `performed_via_github_app` must be null.
 8. Allow the existing timer/caller to submit it once.
