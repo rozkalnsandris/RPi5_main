@@ -89,7 +89,7 @@ class WeatherOperatorEntrypointUpgradeV8Tests(unittest.TestCase):
         contract = json.loads(UPGRADE_CONTRACT.read_text(encoding="utf-8"))
         upgrade._validate_upgrade_contract(contract)
         self.assertEqual(contract["predecessor_sha"], "db7946fc64067c11d16a5b10902edf1157544db5")
-        self.assertEqual(contract["minimum_target_ancestor"], "7b205c357b1789091157aa1cb1993f270a19b1dc")
+        self.assertEqual(contract["minimum_target_ancestor"], "0b1f03b86200b215ccd00449a659917cce574d39")
         self.assertEqual(contract["old_blob"], "e3d5b438c0876dc8dc59103493aa5d9783e2ceb1")
         self.assertEqual(contract["new_blob"], "319e864d0b7af4235ab1af662e9582c59abea8de")
         self.assertEqual(contract["old_sha256"], "f6255bf1e80d2918555b0814b0690add739041ac11512297d904fce5e8fc0cf1")
