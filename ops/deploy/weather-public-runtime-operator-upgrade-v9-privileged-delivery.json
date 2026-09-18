@@ -1,0 +1,98 @@
+{
+  "schema": "rozkalns.rpi5-main.weather-operator-upgrade-v9-privileged-delivery.v1",
+  "issue": 603,
+  "status": "SOURCE_READY_HOST_CAPABILITY_AND_CALLER_INSTALL_REQUIRED",
+  "registry_scope": "CAPABILITY_LOCAL_FIXED_REGISTRY",
+  "global_executor_registration": false,
+  "operation": {
+    "operation_id": "rpi5-main.weather-operator-upgrade-v9.v1",
+    "source_repository": "rozkalnsandris/RPi5_main",
+    "queue_match": {
+      "target_alias": "rpi5-main-weather-operator-upgrade-v9",
+      "execution_location_class": "trusted-home-host",
+      "repository_entrypoint": "ops/bin/rozkalns-weather-public-runtime-operator-upgrade-v9",
+      "deploy_class": "STRICT_LIVE_AUTH_REQUIRED"
+    },
+    "target_alias": "rpi5-main-weather-operator-upgrade-v9",
+    "adapter_id": "rpi5-main.weather-operator-upgrade-v9.v1",
+    "authorization_class": "STRICT",
+    "ordinary_live_all_eligible": false,
+    "baseline": {
+      "kind": "resolver",
+      "resolver_id": "rpi5-main.weather-operator-upgrade-v9-baseline.v1"
+    },
+    "mutation_budget": [
+      {
+        "category": "git.weather-operator-upgrade-v9-checkout-fetch",
+        "max_operations": 1
+      },
+      {
+        "category": "git.weather-operator-upgrade-v9-checkout-worktree-add",
+        "max_operations": 1
+      },
+      {
+        "category": "filesystem.weather-operator-upgrade-v9-atomic-replace",
+        "max_operations": 1
+      }
+    ],
+    "rollback_policy": "NONE",
+    "exclusions": [
+      "no generic sudo/root shell or caller-selected command/path/argv/environment",
+      "no cleanup/retry/rollback/worktree remove/prune/repair",
+      "no Docker/systemd application mutation",
+      "no SQLite/corpus/snapshot/database mutation",
+      "no network/firewall/DNS/Cloudflare mutation",
+      "no credential/secret/permission/repository-settings mutation",
+      "no v7 authorization or checkout authority reuse"
+    ],
+    "dependencies": [
+      "source-contract:RPi5_main#601",
+      "privileged-delivery:RPi5_main#603",
+      "p8-global-mutation-dispatch:disabled",
+      "privileged-boundary:identity-only",
+      "v7-authority-reuse:forbidden"
+    ],
+    "preflight": [
+      "fresh authorization, READY queue, exact current main/CI and v9 predecessor"
+    ],
+    "postconditions": [
+      "v9 operator module exact reviewed hash and v8 preserved"
+    ],
+    "required_github_evidence": [
+      "owner authorization, READY queue, exact source/CI"
+    ]
+  },
+  "operation_id": "rpi5-main.weather-operator-upgrade-v9.v1",
+  "target_alias": "rpi5-main-weather-operator-upgrade-v9",
+  "authorization_class": "STRICT",
+  "ordinary_live_all_eligible": false,
+  "source_repository": "rozkalnsandris/RPi5_main",
+  "repository_entrypoint": "ops/bin/rozkalns-weather-public-runtime-operator-upgrade-v9",
+  "target": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/deploy_executor/weather_public_runtime_operator.py",
+  "predecessor_sha256": "48c8c5fb0cdc005bf0e4fbb05a203297e05d7ef62689ddd0d6d717c13acc0fcb",
+  "target_sha256": "d153db5707b1e37e8a3268fc80e57e75ae7248c5ea9f7ab169357b77849ed1a3",
+  "trusted_checkout": "RPi5_main-weather-public-runtime-operator-upgrade-v9-trusted",
+  "mutation_budget": [
+    {
+      "category": "git.weather-operator-upgrade-v9-checkout-fetch",
+      "max_operations": 1
+    },
+    {
+      "category": "git.weather-operator-upgrade-v9-checkout-worktree-add",
+      "max_operations": 1
+    },
+    {
+      "category": "filesystem.weather-operator-upgrade-v9-atomic-replace",
+      "max_operations": 1
+    }
+  ],
+  "rollback_policy": "NONE",
+  "identity_only": true,
+  "v7_authority_reuse": false,
+  "p8_mutation_dispatch_enabled": false,
+  "global_executor_execution_enabled": false,
+  "source_merge_authorizes_live": false,
+  "automatic_retry": false,
+  "automatic_cleanup": false,
+  "automatic_rollback": false
+}

@@ -1,0 +1,77 @@
+{
+  "schema": "rozkalns.rpi5-main.weather-v9-dispatch-caller-installer.v1",
+  "issue": 603,
+  "status": "SOURCE_READY_FOR_CALLER_HOST_INSTALL",
+  "source_repository": "rozkalnsandris/RPi5_main",
+  "operation_id": "rpi5-main.weather-operator-upgrade-v9.v1",
+  "authorization_class": "STRICT",
+  "ordinary_live_all_eligible": false,
+  "identity_only_dispatch_schema": "rozkalns.deploy-dispatch-request.v1",
+  "prerequisite_capability": {
+    "socket_unit": "rozkalns-weather-operator-v9-privileged-broker.socket",
+    "socket_path": "/run/rozkalns-weather-operator-v9-capability/request.sock",
+    "socket_group": "rozkalns-deploy-executor",
+    "socket_mode": "0660",
+    "must_be_enabled": true,
+    "must_be_active": true,
+    "registration": "/etc/rozkalns-weather-operator-v9-capability/registration.json"
+  },
+  "fixed_targets": {
+    "/usr/local/libexec/rozkalns-weather-operator-v9-capability/deploy_executor/weather_operator_upgrade_v9_dispatch_caller.py": "0644",
+    "/usr/local/libexec/rozkalns-weather-operator-v9-dispatch-caller": "0755",
+    "/etc/systemd/system/rozkalns-weather-operator-v9-dispatch-caller.service": "0644",
+    "/etc/systemd/system/rozkalns-weather-operator-v9-dispatch-caller.timer": "0644"
+  },
+  "generated_runtime_state": {
+    "state_directory": "/var/lib/rozkalns-weather-operator-v9-dispatch-caller",
+    "state_directory_mode": "0700",
+    "attempt_ledger": "attempted.json",
+    "attempt_is_persisted_before_socket_dispatch": true,
+    "same_request_automatic_retry": false
+  },
+  "caller": {
+    "service_user": "rozkalns-deploy-executor",
+    "service_group": "rozkalns-deploy-executor",
+    "credential_source": "/etc/rozkalns-deploy-executor/github-app.pem",
+    "credential_delivery": "systemd LoadCredential",
+    "fixed_socket": "/run/rozkalns-weather-operator-v9-capability/request.sock",
+    "caller_selected_command": false,
+    "caller_selected_path": false,
+    "caller_selected_argv": false,
+    "caller_selected_environment": false,
+    "caller_selected_source_or_target": false
+  },
+  "host_install_gate": {
+    "source_merge_authorizes_live": false,
+    "requires_separate_exact_owner_live_authorization": true,
+    "installer_default_mode": "READ_ONLY_PREFLIGHT",
+    "apply_flag": "--apply",
+    "apply_requires_root": true,
+    "first_install_only": true,
+    "allowed_install_mutations": [
+      "filesystem.weather-v9-dispatch-caller-first-install",
+      "systemd.weather-v9-dispatch-caller-daemon-reload",
+      "systemd.weather-v9-dispatch-caller-timer-enable-start"
+    ],
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false
+  },
+  "separation": {
+    "v7_authority_reused": false,
+    "broker_replacement": false,
+    "socket_permission_or_acl_mutation": false,
+    "user_or_group_membership_mutation": false,
+    "sudoers_or_root_shell_authority": false,
+    "p8_mutation_dispatch_enabled": false,
+    "global_executor_execution_enabled": false,
+    "weather_operator_replacement_during_install": false,
+    "v9_operator_checkout_creation_during_install": false,
+    "docker_or_weather_runtime_mutation": false,
+    "database_or_corpus_mutation": false,
+    "network_or_cloudflare_mutation": false,
+    "credential_or_secret_mutation": false
+  },
+  "post_install_state": "CALLER_ARMED_NO_LIVE_AUTHORIZATION",
+  "next_gate": "FRESH_OWNER_LIVE_WEATHER_V9_OPERATOR_UPGRADE_AUTHORIZATION"
+}
