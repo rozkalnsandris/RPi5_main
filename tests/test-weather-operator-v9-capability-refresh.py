@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import subprocess
 import sys
 import unittest
 
@@ -45,6 +46,16 @@ def valid_plan(**overrides: object) -> refresh.RefreshPlan:
     }
     values.update(overrides)
     return refresh.build_refresh_plan(**values)  # type: ignore[arg-type]
+
+
+def git_bytes(commit: str, path: str) -> bytes:
+    return subprocess.run(
+        ["/usr/bin/git", "-C", str(ROOT), "show", f"{commit}:{path}"],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=True,
+    ).stdout
 
 
 class WeatherV9CapabilityRefreshTests(unittest.TestCase):
@@ -92,6 +103,18 @@ class WeatherV9CapabilityRefreshTests(unittest.TestCase):
         self.assertEqual(decoded["manager_gid"], registration()["manager_gid"])
         self.assertEqual(decoded["artifact_count"], 15)
         self.assertEqual(decoded["capability_source_sha"], "a" * 40)
+
+    def test_current_source_delta_is_broker_only_for_installed_capability_artifacts(self) -> None:
+        unchanged = (
+            "ops/lib/deploy_executor/weather_operator_upgrade_v9_host_capability.py",
+            "ops/systemd/rozkalns-weather-operator-v9-privileged-broker.socket",
+            "ops/systemd/rozkalns-weather-operator-v9-privileged-broker@.service",
+        )
+        for path in unchanged:
+            with self.subTest(path=path):
+                self.assertEqual(git_bytes("HEAD", path), git_bytes(refresh.PREDECESSOR_SOURCE_SHA, path))
+        broker = "ops/bin/rozkalns-weather-operator-v9-privileged-broker"
+        self.assertNotEqual(git_bytes("HEAD", broker), git_bytes(refresh.PREDECESSOR_SOURCE_SHA, broker))
 
     def test_contract_and_operator_preserve_fail_closed_recovery_boundary(self) -> None:
         contract = json.loads(
