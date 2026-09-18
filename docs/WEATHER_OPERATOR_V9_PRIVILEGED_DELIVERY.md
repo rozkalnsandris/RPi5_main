@@ -48,6 +48,14 @@ The caller writes its request UUID to a private attempt ledger before opening th
 
 After any authorized mutation starts, error, timeout, source/head/CI/authorization/queue drift, worktree conflict, predecessor mismatch, replacement failure or postcondition failure requires minimum sanitized read-only evidence and STOP. There is no automatic retry, cleanup, rollback, backup restore, checkout repair, alternate checkout or alternate privileged transport.
 
+## Recovery after the v9 worktree mode failure
+
+`RPi5_main#605` records the source-only recovery after owner LIVE authorization `ops-workflows#70` was consumed and the first v9 worktree was materialized under the broker service `UMask=0077`. Git preserved the reviewed executable bit semantically, but the inherited restrictive umask produced filesystem mode `0700`; the broker then rejected the fixed v9 entrypoint because its contract requires exact mode `0755`.
+
+The recovery preserves the service-level `UMask=0077` and scopes `umask=0022` only to the manager-identity child process that performs the single authorized `git worktree add`. The broker process umask is not changed, fetch behavior is unchanged, and the mutation budget remains one fetch + one detached worktree add + one atomic replacement.
+
+Authorization `ops-workflows#70` is spent and non-reusable. The partial v9 checkout, preserved v8 checkout and installed predecessor remain evidence; source recovery does not authorize retry, cleanup, rollback, `chmod`, worktree removal/repair or any LIVE/systemd/runtime mutation.
+
 ## Required later gate order
 
 1. Merge #603 and require exact-main CI.
@@ -57,5 +65,7 @@ After any authorized mutation starts, error, timeout, source/head/CI/authorizati
 5. Create a fresh owner-authored v9 LIVE-AUTH and READY queue binding; no historical authorization is reusable.
 6. Let the v9 caller dispatch once; verify the installed operator module is exactly `d153db57…`.
 7. Only then perform fresh Weather public-runtime incident recovery / rollout reconciliation.
+
+After #605 recovery is merged, the pre-recovery queue binding is stale. Any resumed v9 execution must bind a freshly reviewed source SHA and use a fresh owner LIVE authorization; neither `ops-workflows#69` nor spent authorization `ops-workflows#70` is sufficient authority for a new mutation.
 
 None of these source contracts authorizes Docker application mutation, systemd Weather application restart, SQLite/corpus writes, cleanup/rollback of the partial Weather runtime, Cloudflare/network changes, secrets/credentials, or reuse of consumed Gate4 authorization #33.
