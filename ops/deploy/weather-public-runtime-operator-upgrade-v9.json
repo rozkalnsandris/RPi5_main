@@ -1,0 +1,52 @@
+{
+  "schema": "rozkalns-weather.public-runtime-operator-upgrade-v9.v1",
+  "repository": "rozkalnsandris/RPi5_main",
+  "issue": 601,
+  "status": "SOURCE_ONLY_UPGRADE_BRIDGE_INACTIVE",
+  "predecessor_sha": "77482a16fb77338d87b92a39ff8c63a5b6ce142d",
+  "minimum_target_ancestor": "77482a16fb77338d87b92a39ff8c63a5b6ce142d",
+  "operator_install_manifest": "ops/deploy/weather-public-runtime-operator-install.json",
+  "trusted_upgrade_checkout_contract": "ops/deploy/rpi5-main-weather-public-runtime-operator-upgrade-v9-trusted-checkout-bootstrap.json",
+  "trusted_upgrade_checkout": "RPi5_CHECKOUT_PARENT/RPi5_main-weather-public-runtime-operator-upgrade-v9-trusted",
+  "target_source": "ops/lib/deploy_executor/weather_public_runtime_operator.py",
+  "target_destination": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/deploy_executor/weather_public_runtime_operator.py",
+  "old_blob": "c7f089f4535779e3ef507af4564b3fbadb2bbd2a",
+  "new_blob": "b1ae25b956441d6f86bfff65cdd04110a72da4d6",
+  "old_sha256": "48c8c5fb0cdc005bf0e4fbb05a203297e05d7ef62689ddd0d6d717c13acc0fcb",
+  "new_sha256": "d153db5707b1e37e8a3268fc80e57e75ae7248c5ea9f7ab169357b77849ed1a3",
+  "required_owner_uid": 0,
+  "required_owner_gid": 0,
+  "required_mode": "0644",
+  "mutation_target_count": 1,
+  "caller_arguments": [],
+  "allowed_changed_artifacts": [
+    "ops/lib/deploy_executor/weather_public_runtime_operator.py"
+  ],
+  "replacement": {
+    "temporary_name": ".weather_public_runtime_operator.py.compatibility-upgrade-v9.tmp",
+    "same_directory": true,
+    "no_follow": true,
+    "exclusive_create": true,
+    "fsync_before_replace": true,
+    "atomic_replace": true,
+    "parent_fsync_after_replace": true,
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "backup_restore": false
+  },
+  "safety": {
+    "source_merge_authorizes_live": false,
+    "runtime_live_authority": false,
+    "generic_shell_authority": false,
+    "caller_selected_path": false,
+    "caller_selected_argv": false,
+    "caller_selected_environment": false,
+    "caller_selected_repository_url": false,
+    "trusted_checkout_repair": false,
+    "docker_mutation": false,
+    "systemd_mutation": false,
+    "sqlite_or_corpus_mutation": false,
+    "network_or_secret_mutation": false
+  }
+}
