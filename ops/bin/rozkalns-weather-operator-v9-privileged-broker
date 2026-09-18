@@ -14,6 +14,7 @@ from deploy_executor import weather_operator_upgrade_v9_host_capability as cap
 GIT_ENV = {"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"}
 UPGRADE_ENTRYPOINT_BLOB = "a2a94480322a4b5ebc50a447e5f52fe31fe7e9bb"
 UPGRADE_MODULE_BLOB = "e4a4051b5a9e73fe62a543d097af31e2c2fc0875"
+WORKTREE_ADD_UMASK = 0o022
 _MANAGER_PATH: Path | None = None
 _MANAGER_UID: int | None = None
 _MANAGER_GID: int | None = None
@@ -52,7 +53,7 @@ def _reviewed_manager(manager: Path) -> Path:
 
 
 def _manager_subprocess(
-    argv: list[str], *, text: bool, check: bool = True
+    argv: list[str], *, text: bool, check: bool = True, umask: int = -1
 ) -> subprocess.CompletedProcess[Any]:
     _manager, uid, gid = _manager_identity()
     try:
@@ -66,6 +67,7 @@ def _manager_subprocess(
             user=uid,
             group=gid,
             extra_groups=(),
+            umask=umask,
             check=check,
         )
     except subprocess.CalledProcessError as exc:
@@ -77,6 +79,7 @@ def _bounded_run_git(
     *args: str,
     check: bool = True,
     repo: Path | None = None,
+    child_umask: int = -1,
 ) -> subprocess.CompletedProcess[str]:
     reviewed = _reviewed_manager(manager)
     working = reviewed if repo is None else repo
@@ -95,7 +98,7 @@ def _bounded_run_git(
         str(working),
         *args,
     ]
-    return _manager_subprocess(command, text=True, check=check)
+    return _manager_subprocess(command, text=True, check=check, umask=child_umask)
 
 
 def _home_test(path: Path, predicate: str) -> bool:
@@ -209,6 +212,7 @@ def _bootstrap_checkout(plan: cap.WeatherV9BrokerPlan) -> None:
         "--detach",
         str(plan.trusted_checkout),
         plan.authorization.source_sha,
+        child_umask=WORKTREE_ADD_UMASK,
     )
     _require_created_worktree(plan.manager_checkout, plan.trusted_checkout, plan.authorization.source_sha)
 
