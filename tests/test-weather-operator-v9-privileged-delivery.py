@@ -197,7 +197,7 @@ class WeatherV9PrivilegedDeliveryTests(unittest.TestCase):
                     "-c",
                     "user.name=Weather v9 test",
                     "-c",
-                    "user.email=weather-v9-test@example.invalid",
+                    "user.email=weather-v9-test.invalid",
                     "commit",
                     "-m",
                     "fixture",
