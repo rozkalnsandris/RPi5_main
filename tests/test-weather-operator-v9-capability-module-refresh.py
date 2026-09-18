@@ -11,7 +11,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "ops/lib"))
 
-from deploy_executor import weather_operator_upgrade_v9_capability_module_refresh as refresh
+from deploy_executor import weather_operator_v9_capability_module_refresh as refresh
 from deploy_executor import weather_operator_v9_capability_refresh as old_refresh
 from deploy_executor import weather_operator_upgrade_v9_host_capability as cap
 
