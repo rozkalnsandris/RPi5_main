@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import ast
+import hashlib
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -12,6 +15,9 @@ LEGACY_HISTORICAL_SHA = "c99f6b9df47603703f7d1e67ddc7d88c77ed726a"
 V5_HISTORICAL_SHA = "14501ddbe2853d8072464291b338c29a029dd3cf"
 V6_HISTORICAL_SHA = "9136c37156e84da3918e58d5d467c8b1e5cc403a"
 V7_HISTORICAL_SHA = "db7946fc64067c11d16a5b10902edf1157544db5"
+V9_MODULE_PATH = "ops/lib/deploy_executor/weather_public_runtime_operator_upgrade_v9.py"
+V9_CONTRACT_PATH = "ops/deploy/weather-public-runtime-operator-upgrade-v9.json"
+TARGET_SOURCE_PATH = "ops/lib/deploy_executor/weather_public_runtime_operator.py"
 LEGACY_FROZEN_PATHS = (
     "ops/bin/rozkalns-weather-public-runtime-operator-upgrade-v3",
     "ops/deploy/rpi5-main-weather-public-runtime-operator-upgrade-v3-trusted-checkout-bootstrap.json",
@@ -65,6 +71,19 @@ def git_bytes(*args: str) -> bytes:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     ).stdout
+
+
+def python_string_constant(relative: str, name: str) -> str:
+    tree = ast.parse((ROOT / relative).read_text(encoding="utf-8"))
+    for node in tree.body:
+        if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Constant):
+            continue
+        if type(node.value.value) is not str:
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name) and target.id == name:
+                return node.value.value
+    raise AssertionError(f"missing string constant {name} in {relative}")
 
 
 def run_historical_tests(sha: str, tests: tuple[str, ...]) -> None:
@@ -160,6 +179,24 @@ class HistoricalWeatherOperatorUpgradeTests(unittest.TestCase):
                     env=env,
                     check=True,
                 )
+
+    def test_v9_target_bindings_match_exact_target_source_bytes(self) -> None:
+        source = (ROOT / TARGET_SOURCE_PATH).read_bytes()
+        source_sha256 = hashlib.sha256(source).hexdigest()
+        blob_header = f"blob {len(source)}\0".encode("ascii")
+        source_blob_sha1 = hashlib.sha1(blob_header + source).hexdigest()
+        contract = json.loads((ROOT / V9_CONTRACT_PATH).read_text(encoding="utf-8"))
+
+        self.assertEqual(
+            python_string_constant(V9_MODULE_PATH, "TARGET_NEW_SHA256"),
+            source_sha256,
+        )
+        self.assertEqual(contract["new_sha256"], source_sha256)
+        self.assertEqual(
+            python_string_constant(V9_MODULE_PATH, "TARGET_NEW_BLOB"),
+            source_blob_sha1,
+        )
+        self.assertEqual(contract["new_blob"], source_blob_sha1)
 
 
 if __name__ == "__main__":
