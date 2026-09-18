@@ -161,7 +161,8 @@ class WeatherV9PrivilegedDeliveryTests(unittest.TestCase):
 
     def test_broker_delegates_replacement_to_merged_v9_entrypoint(self) -> None:
         source = (ROOT / "ops/bin/rozkalns-weather-operator-v9-privileged-broker").read_text()
-        self.assertIn("rozkalns-weather-public-runtime-operator-upgrade-v9", source)
+        self.assertEqual(cap.ENTRYPOINT, "ops/bin/rozkalns-weather-public-runtime-operator-upgrade-v9")
+        self.assertIn("entrypoint = plan.trusted_checkout / cap.ENTRYPOINT", source)
         self.assertIn("UPGRADE_ENTRYPOINT_BLOB", source)
         self.assertIn("UPGRADE_MODULE_BLOB", source)
         self.assertNotIn("os.replace(", source)
