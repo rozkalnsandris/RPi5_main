@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+import hashlib
 import json
 from pathlib import Path
+import subprocess
 import sys
 import unittest
 
@@ -60,6 +62,28 @@ class WeatherV9CanonicalOperationTests(unittest.TestCase):
         self.assertEqual(budget, cap.MUTATION_BUDGET)
         self.assertIn("p8-global-mutation-dispatch:disabled", operation["dependencies"])
         self.assertIn("v7-authority-reuse:forbidden", operation["dependencies"])
+
+    def test_host_capability_postcondition_matches_exact_v9_target_bytes(self) -> None:
+        target = (ROOT / "ops/lib/deploy_executor/weather_public_runtime_operator.py").read_bytes()
+        contract = json.loads(
+            (ROOT / "ops/deploy/weather-public-runtime-operator-upgrade-v9.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        expected = hashlib.sha256(target).hexdigest()
+        self.assertEqual(cap.NEW_SHA256, expected)
+        self.assertEqual(contract["new_sha256"], expected)
+
+    def test_post_614_capability_module_refresh_regression_suite(self) -> None:
+        subprocess.run(
+            [sys.executable, str(ROOT / "tests/test-weather-operator-v9-capability-module-refresh.py")],
+            cwd=ROOT,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True,
+        )
 
 
 if __name__ == "__main__":
