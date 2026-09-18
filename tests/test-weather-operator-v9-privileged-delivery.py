@@ -165,9 +165,71 @@ class WeatherV9PrivilegedDeliveryTests(unittest.TestCase):
         self.assertIn("entrypoint = plan.trusted_checkout / cap.ENTRYPOINT", source)
         self.assertIn("UPGRADE_ENTRYPOINT_BLOB", source)
         self.assertIn("UPGRADE_MODULE_BLOB", source)
+        self.assertIn("WORKTREE_ADD_UMASK = 0o022", source)
+        self.assertIn("umask=umask", source)
+        self.assertIn("child_umask=WORKTREE_ADD_UMASK", source)
         self.assertNotIn("os.replace(", source)
         self.assertNotIn("/usr/bin/sudo", source)
         self.assertNotIn("shell=True", source)
+
+    def test_worktree_add_child_umask_preserves_executable_mode(self) -> None:
+        os_module = __import__("os")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manager = root / "RPi5_main"
+            subprocess.run(
+                ["git", "init", str(manager)],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=True,
+            )
+            entrypoint = manager / "entrypoint"
+            entrypoint.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            entrypoint.chmod(0o755)
+            subprocess.run(["git", "-C", str(manager), "add", "entrypoint"], check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(manager),
+                    "-c",
+                    "user.name=Weather v9 test",
+                    "-c",
+                    "user.email=weather-v9-test@example.invalid",
+                    "commit",
+                    "-m",
+                    "fixture",
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=True,
+            )
+            head = subprocess.run(
+                ["git", "-C", str(manager), "rev-parse", "HEAD"],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=True,
+            ).stdout.strip()
+            target = root / "weather-v9-worktree"
+            original_umask = os_module.umask(0o077)
+            try:
+                subprocess.run(
+                    ["git", "-C", str(manager), "worktree", "add", "--detach", str(target), head],
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    check=True,
+                    umask=0o022,
+                )
+            finally:
+                os_module.umask(original_umask)
+            self.assertEqual((target / "entrypoint").stat().st_mode & 0o777, 0o755)
 
     def test_systemd_and_installers_are_v9_specific_and_source_only(self) -> None:
         socket_unit = (ROOT / "ops/systemd/rozkalns-weather-operator-v9-privileged-broker.socket").read_text()
@@ -177,6 +239,7 @@ class WeatherV9PrivilegedDeliveryTests(unittest.TestCase):
         caller_installer = (ROOT / "scripts/install-weather-operator-v9-dispatch-caller.py").read_text()
         self.assertIn("/run/rozkalns-weather-operator-v9-capability/request.sock", socket_unit)
         self.assertIn("User=root", service_unit)
+        self.assertIn("UMask=0077", service_unit)
         self.assertIn("NoNewPrivileges=true", service_unit)
         self.assertIn("@@WEATHER_V9_MANAGER_PARENT@@", service_unit)
         self.assertIn("User=rozkalns-deploy-executor", caller_unit)
