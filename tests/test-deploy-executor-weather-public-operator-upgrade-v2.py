@@ -37,6 +37,38 @@ def run_git(repo: Path, *args: str) -> str:
     ).stdout.strip()
 
 
+def historical_v2_target_bytes() -> bytes:
+    payload = subprocess.run(
+        [
+            "/usr/bin/git",
+            "-C",
+            str(ROOT),
+            "show",
+            f"{V2_TARGET_SOURCE_SHA}:{upgrade.TARGET_SOURCE}",
+        ],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    ).stdout
+    if hashlib.sha256(payload).hexdigest() != upgrade.TARGET_NEW_SHA256:
+        raise AssertionError("historical v2 target bytes drifted")
+    return payload
+
+
+@contextmanager
+def historical_v2_target_binding():
+    payload = historical_v2_target_bytes()
+    original = upgrade._read_bound_source
+
+    def bound_source(checkout: Path, relative: str) -> tuple[bytes, str]:
+        if relative == upgrade.TARGET_SOURCE:
+            return payload, upgrade.TARGET_NEW_SHA256
+        return original(checkout, relative)
+
+    with mock.patch.object(upgrade, "_read_bound_source", side_effect=bound_source):
+        yield
+
+
 class WeatherOperatorUpgradeSourceTests(unittest.TestCase):
     def test_source_readiness_is_zero_input_and_inactive(self) -> None:
         ready = upgrade.source_readiness()
@@ -174,7 +206,8 @@ class WeatherOperatorUpgradeSourceTests(unittest.TestCase):
             run_git(ROOT, "merge-base", "--is-ancestor", source_sha, "HEAD"),
             "",
         )
-        reviewed = upgrade._source_diff_guard(ROOT, source_sha, artifacts)
+        with historical_v2_target_binding():
+            reviewed = upgrade._source_diff_guard(ROOT, source_sha, artifacts)
         self.assertEqual(hashlib.sha256(reviewed).hexdigest(), upgrade.TARGET_NEW_SHA256)
 
         original = upgrade._git_blob_sha_at
@@ -238,7 +271,8 @@ class WeatherOperatorUpgradeSourceTests(unittest.TestCase):
 
     def test_exact_predecessor_installed_closure_passes_pre_mutation_validation(self) -> None:
         with self.installed_fixture() as (artifacts, _entrypoint, _support, _package):
-            upgrade._validate_installed_closure(ROOT, artifacts)
+            with historical_v2_target_binding():
+                upgrade._validate_installed_closure(ROOT, artifacts)
 
     def test_wrong_predecessor_hash_fails_before_mutation(self) -> None:
         with self.installed_fixture() as (artifacts, _entrypoint, _support, package):
@@ -264,7 +298,7 @@ class WeatherOperatorUpgradeSourceTests(unittest.TestCase):
                 if path.is_file()
             }
             entry_before = hashlib.sha256(entrypoint.read_bytes()).hexdigest()
-            reviewed = (ROOT / upgrade.TARGET_SOURCE).read_bytes()
+            reviewed = historical_v2_target_bytes()
             state = {"mutation_started": False, "target_replaced": False}
             upgrade._replace_exact_target(reviewed, state)
             self.assertEqual(state, {"mutation_started": True, "target_replaced": True})
@@ -286,7 +320,7 @@ class WeatherOperatorUpgradeSourceTests(unittest.TestCase):
         with self.installed_fixture() as (_artifacts, _entrypoint, _support, package):
             target = package / upgrade.TARGET_FILENAME
             old = target.read_bytes()
-            reviewed = (ROOT / upgrade.TARGET_SOURCE).read_bytes()
+            reviewed = historical_v2_target_bytes()
             state = {"mutation_started": False, "target_replaced": False}
             with mock.patch.object(os, "replace", side_effect=OSError("synthetic replace failure")):
                 with self.assertRaises(OSError):
