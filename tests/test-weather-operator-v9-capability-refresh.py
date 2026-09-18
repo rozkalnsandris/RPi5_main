@@ -141,6 +141,21 @@ class WeatherV9CapabilityRefreshTests(unittest.TestCase):
         self.assertNotIn("worktree remove", operator)
         self.assertNotIn("worktree prune", operator)
 
+    def test_operator_binds_root_git_to_exact_reviewed_checkout_command_scope(self) -> None:
+        operator = (ROOT / "scripts/refresh-weather-operator-v9-host-capability.py").read_text()
+        exact_argv = """return [
+        "/usr/bin/git",
+        "-c",
+        f"safe.directory={ROOT}",
+        "-C",
+        str(ROOT),
+        *args,
+    ]"""
+        self.assertIn(exact_argv, operator)
+        self.assertEqual(operator.count("root_git_argv("), 3)
+        self.assertNotIn("git config --global", operator)
+        self.assertNotIn("git config --system", operator)
+
 
 if __name__ == "__main__":
     unittest.main()
