@@ -42,10 +42,21 @@ def fail(message: str) -> None:
     raise CapabilityRefreshOperatorError(message)
 
 
+def root_git_argv(*args: str) -> list[str]:
+    return [
+        "/usr/bin/git",
+        "-c",
+        f"safe.directory={ROOT}",
+        "-C",
+        str(ROOT),
+        *args,
+    ]
+
+
 def run_git(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     try:
         return subprocess.run(
-            ["/usr/bin/git", "-C", str(ROOT), *args],
+            root_git_argv(*args),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -78,7 +89,7 @@ def git_blob(commit: str, path: str) -> bytes:
     if refresh.SHA40_RE.fullmatch(commit) is None:
         fail("fixed source commit is invalid")
     result = subprocess.run(
-        ["/usr/bin/git", "-C", str(ROOT), "show", f"{commit}:{path}"],
+        root_git_argv("show", f"{commit}:{path}"),
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
