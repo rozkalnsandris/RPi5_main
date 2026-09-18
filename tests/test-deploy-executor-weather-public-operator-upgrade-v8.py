@@ -16,6 +16,7 @@ MODULE = ROOT / "ops/lib/deploy_executor/weather_public_runtime_operator_upgrade
 ENTRYPOINT_SOURCE = ROOT / "ops/bin/rozkalns-weather-public-runtime-operator-upgrade-v8"
 UPGRADE_CONTRACT = ROOT / "ops/deploy/weather-public-runtime-operator-upgrade-v8.json"
 CHECKOUT_CONTRACT = ROOT / "ops/deploy/rpi5-main-weather-public-runtime-operator-upgrade-v8-trusted-checkout-bootstrap.json"
+V8_TARGET_SOURCE_SHA = "77482a16fb77338d87b92a39ff8c63a5b6ce142d"
 sys.path.insert(0, str(ROOT / "ops/lib"))
 
 from deploy_executor import weather_public_runtime_operator_upgrade_v8 as upgrade
@@ -123,7 +124,11 @@ class WeatherOperatorEntrypointUpgradeV8Tests(unittest.TestCase):
 
     def test_source_diff_guard_allows_exactly_entrypoint(self) -> None:
         artifacts = upgrade._install_artifacts(ROOT)
-        source_sha = run_git(ROOT, "rev-parse", "HEAD")
+        source_sha = V8_TARGET_SOURCE_SHA
+        self.assertEqual(
+            run_git(ROOT, "merge-base", "--is-ancestor", source_sha, "HEAD"),
+            "",
+        )
         self.assertEqual(
             run_git(ROOT, "merge-base", "--is-ancestor", upgrade.MINIMUM_TARGET_ANCESTOR, source_sha),
             "",

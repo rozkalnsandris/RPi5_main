@@ -84,6 +84,7 @@ MAX_COMMAND_OUTPUT = 65536
 RENAME_NOREPLACE = 1
 _SHA40_RE = re.compile(r"^[0-9a-f]{40}$")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_IMAGE_ID_RE = re.compile(r"^(?:sha256:)?([0-9a-f]{64})$")
 FIXED_COMMAND_ENV = {
     "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
     "LANG": "C.UTF-8",
@@ -212,6 +213,15 @@ def _require_success(result: CommandResult, where: str) -> str:
     if type(result) is not CommandResult or result.returncode != 0:
         _fail(f"{where} failed closed")
     return result.stdout
+
+
+def _canonical_image_id(value: str, where: str) -> str:
+    if type(value) is not str:
+        _fail(f"{where} image identity is invalid")
+    match = _IMAGE_ID_RE.fullmatch(value)
+    if match is None:
+        _fail(f"{where} image identity is invalid")
+    return f"sha256:{match.group(1)}"
 
 
 def _write_all(fd: int, raw: bytes) -> None:
@@ -401,15 +411,21 @@ class ConcreteSanitizedWeatherBaselineProvider:
             exact = tuple(item.strip() for item in exact_ids if item.strip())
             if len(exact) != 1 or exact[0] not in set(project_ids):
                 _fail("Weather baseline project is not bound to one exact weather service")
-            container_image = self._run(
-                ("/usr/bin/docker", "inspect", "--format", "{{.Image}}", exact[0]),
-                "container image identity",
-            ).stdout.strip()
-            compose_image = self._run(
-                ("/usr/bin/docker", "compose", "-p", COMPOSE_PROJECT, "-f", str(compose), "images", "-q", "weather"),
-                "compose image identity",
-            ).stdout.strip()
-            if not container_image or container_image != compose_image:
+            container_image = _canonical_image_id(
+                self._run(
+                    ("/usr/bin/docker", "inspect", "--format", "{{.Image}}", exact[0]),
+                    "container image identity",
+                ).stdout.strip(),
+                "Weather running",
+            )
+            compose_image = _canonical_image_id(
+                self._run(
+                    ("/usr/bin/docker", "compose", "-p", COMPOSE_PROJECT, "-f", str(compose), "images", "-q", "weather"),
+                    "compose image identity",
+                ).stdout.strip(),
+                "Weather release",
+            )
+            if container_image != compose_image:
                 _fail("Weather running image is not the exact release image")
             deployment_state = "deployed"
             current_source_sha: str | None = source_sha
@@ -901,9 +917,6 @@ class WeatherCompositeOperator:
             if checkout.state not in {"absent", "verified_existing"}:
                 _fail("Weather trusted checkout preflight state drifted")
 
-            # First mutation boundary: durable replay consume. From the instant this
-            # call is attempted the authorization is non-reusable, even if SQLite
-            # fails before a CONSUMED receipt can be returned.
             active_stage = "durable_replay_consume"
             consumed = True
             replay = self._replay.consume(authority.request_id)
