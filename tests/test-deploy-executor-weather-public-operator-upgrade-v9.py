@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -67,7 +68,11 @@ class WeatherOperatorUpgradeV9Tests(unittest.TestCase):
         contract = json.loads(path.read_text(encoding="utf-8"))
         upgrade._validate_upgrade_contract(contract)
         self.assertEqual(contract["old_blob"], "c7f089f4535779e3ef507af4564b3fbadb2bbd2a")
-        self.assertEqual(contract["new_blob"], "b1ae25b956441d6f86bfff65cdd04110a72da4d6")
+        self.assertEqual(contract["new_blob"], "185bfeecbc5707bccaae1eefea3791948a906331")
+        self.assertEqual(
+            hashlib.sha256((ROOT / upgrade.TARGET_SOURCE).read_bytes()).hexdigest(),
+            upgrade.TARGET_NEW_SHA256,
+        )
         self.assertEqual(contract["required_mode"], "0644")
         self.assertEqual(contract["allowed_changed_artifacts"], [upgrade.TARGET_SOURCE])
         self.assertFalse(contract["safety"]["source_merge_authorizes_live"])

@@ -571,7 +571,7 @@ class ConcreteWeatherOperatorHostMutator:
         symbolic = _fixed_git(self._runner, trusted, account, "-C", str(trusted), "symbolic-ref", "-q", "HEAD")
         origin = _require_success(_fixed_git(self._runner, trusted, account, "-C", str(trusted), "remote", "get-url", "origin"), "trusted checkout origin").strip()
         ancestor = _fixed_git(self._runner, trusted, account, "-C", str(trusted), "merge-base", "--is-ancestor", RPI5_MIN_REVIEWED_ANCESTOR, expected_sha)
-        if top != str(trusted) or head != expected_sha or clean or symbolic.returncode != 1 or origin != RPI5_ORIGIN or ancestor.returncode != 0:
+        if top != str(trusted) or head != expected_sha or clean or symbolic.returncode != 1 or origin != RPi5_ORIGIN or ancestor.returncode != 0:
             _fail("Weather trusted checkout is incompatible with authorized source")
         manifest = self._manifest(trusted)
         for artifact in manifest["artifacts"]:

@@ -456,9 +456,9 @@ class WeatherCompositeOperatorTests(unittest.TestCase):
             if argv[:2] == ("/usr/bin/docker", "compose") and "ps" in argv:
                 return CommandResult(0, "container-1\n", "")
             if argv[:3] == ("/usr/bin/docker", "inspect", "--format"):
-                return CommandResult(0, "sha256:exact\n", "")
+                return CommandResult(0, f"sha256:{SHA256_A}\n", "")
             if argv[:2] == ("/usr/bin/docker", "compose") and "images" in argv:
-                return CommandResult(0, ("sha256:exact" if image_match["value"] else "sha256:drift") + "\n", "")
+                return CommandResult(0, (SHA256_A if image_match["value"] else SHA256_B) + "\n", "")
             if argv[:2] == ("/usr/bin/docker", "compose") and "exec" in argv:
                 payload={"schema_version":1,"database":{"state":"ready"},"privacy":{"coordinates_exposed":False,"credentials_exposed":False,"database_path_exposed":False}}
                 return CommandResult(0, json.dumps(payload), "")
