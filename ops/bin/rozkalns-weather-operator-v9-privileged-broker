@@ -1,0 +1,304 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+from pathlib import Path
+import stat
+import subprocess
+from typing import Any, Mapping
+
+from deploy_executor import weather_operator_upgrade_v9_host_capability as cap
+
+GIT_ENV = {"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"}
+UPGRADE_ENTRYPOINT_BLOB = "a2a94480322a4b5ebc50a447e5f52fe31fe7e9bb"
+UPGRADE_MODULE_BLOB = "e4a4051b5a9e73fe62a543d097af31e2c2fc0875"
+_MANAGER_PATH: Path | None = None
+_MANAGER_UID: int | None = None
+_MANAGER_GID: int | None = None
+MAX_CHILD_OUTPUT = 65536
+
+
+def _fail(message: str) -> None:
+    raise cap.WeatherV9HostCapabilityError(message)
+
+
+def _configure_registration(registration: Mapping[str, Any]) -> None:
+    global _MANAGER_PATH, _MANAGER_UID, _MANAGER_GID
+    manager = Path(str(registration.get("manager_checkout", "")))
+    uid = registration.get("manager_uid")
+    gid = registration.get("manager_gid")
+    if not manager.is_absolute() or manager.name != "RPi5_main":
+        _fail("registered manager checkout identity drifted")
+    if type(uid) is not int or type(gid) is not int or uid <= 0 or gid <= 0:
+        _fail("registered manager identity is invalid")
+    _MANAGER_PATH = manager
+    _MANAGER_UID = uid
+    _MANAGER_GID = gid
+
+
+def _manager_identity() -> tuple[Path, int, int]:
+    if _MANAGER_PATH is None or _MANAGER_UID is None or _MANAGER_GID is None:
+        _fail("registered manager identity backend is not configured")
+    return _MANAGER_PATH, _MANAGER_UID, _MANAGER_GID
+
+
+def _reviewed_manager(manager: Path) -> Path:
+    registered, _uid, _gid = _manager_identity()
+    if manager != registered or not manager.is_absolute() or manager.name != "RPi5_main":
+        _fail("registered manager checkout identity drifted")
+    return manager
+
+
+def _manager_subprocess(
+    argv: list[str], *, text: bool, check: bool = True
+) -> subprocess.CompletedProcess[Any]:
+    _manager, uid, gid = _manager_identity()
+    try:
+        return subprocess.run(
+            argv,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=text,
+            env=GIT_ENV,
+            user=uid,
+            group=gid,
+            extra_groups=(),
+            check=check,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise cap.WeatherV9HostCapabilityError("manager-identity child process failed") from exc
+
+
+def _bounded_run_git(
+    manager: Path,
+    *args: str,
+    check: bool = True,
+    repo: Path | None = None,
+) -> subprocess.CompletedProcess[str]:
+    reviewed = _reviewed_manager(manager)
+    working = reviewed if repo is None else repo
+    allowed = {
+        reviewed,
+        reviewed.parent / cap.PRESERVED_V8_CHECKOUT_NAME,
+        reviewed.parent / cap.TRUSTED_CHECKOUT_NAME,
+    }
+    if working not in allowed:
+        _fail("Git working directory is outside the fixed Weather-v9 checkout set")
+    command = [
+        "/usr/bin/git",
+        "-c",
+        f"safe.directory={reviewed}",
+        "-C",
+        str(working),
+        *args,
+    ]
+    return _manager_subprocess(command, text=True, check=check)
+
+
+def _home_test(path: Path, predicate: str) -> bool:
+    manager, _uid, _gid = _manager_identity()
+    allowed = {
+        manager,
+        manager.parent / cap.PRESERVED_V8_CHECKOUT_NAME,
+        manager.parent / cap.TRUSTED_CHECKOUT_NAME,
+    }
+    if path not in allowed:
+        _fail("home-access check is outside the fixed Weather-v9 checkout set")
+    result = _manager_subprocess(["/usr/bin/test", predicate, str(path)], text=True, check=False)
+    if result.returncode not in (0, 1):
+        _fail("manager-identity home-access check failed")
+    return result.returncode == 0
+
+
+def _worktree_records(text: str) -> list[dict[str, str | bool]]:
+    records: list[dict[str, str | bool]] = []
+    for block in text.strip().split("\n\n") if text.strip() else []:
+        record: dict[str, str | bool] = {}
+        for line in block.splitlines():
+            key, separator, value = line.partition(" ")
+            record[key] = value if separator else True
+        records.append(record)
+    return records
+
+
+def _record_for(records: list[dict[str, str | bool]], path: Path) -> dict[str, str | bool] | None:
+    matches = [record for record in records if record.get("worktree") == str(path)]
+    if len(matches) > 1:
+        _fail("duplicate worktree registration detected")
+    return matches[0] if matches else None
+
+
+def _require_v8(manager: Path, records: list[dict[str, str | bool]]) -> Path:
+    v8 = manager.parent / cap.PRESERVED_V8_CHECKOUT_NAME
+    record = _record_for(records, v8)
+    if record is None or record.get("HEAD") != cap.PRESERVED_V8_SHA or record.get("detached") is not True:
+        _fail("preserved v8 worktree identity drifted")
+    if record.get("locked") is not None or record.get("prunable") is not None:
+        _fail("preserved v8 worktree state drifted")
+    if not _home_test(v8, "-d"):
+        _fail("preserved v8 checkout is absent")
+    if _bounded_run_git(manager, "status", "--porcelain", "--untracked-files=all", repo=v8).stdout != "":
+        _fail("preserved v8 checkout is dirty")
+    if _bounded_run_git(manager, "remote", "get-url", "origin", repo=v8).stdout.strip() != cap.REVIEWED_ORIGIN:
+        _fail("preserved v8 checkout origin drifted")
+    return v8
+
+
+def _checkout_state(manager: Path, source_sha: str) -> tuple[str, Path, Path]:
+    reviewed = _reviewed_manager(manager)
+    records = _worktree_records(_bounded_run_git(reviewed, "worktree", "list", "--porcelain").stdout)
+    v8 = _require_v8(reviewed, records)
+    v9 = reviewed.parent / cap.TRUSTED_CHECKOUT_NAME
+    record = _record_for(records, v9)
+    if record is None:
+        if _home_test(v9, "-e"):
+            _fail("unregistered v9 checkout path exists")
+        return "ABSENT", v9, v8
+    if record.get("HEAD") != source_sha or record.get("detached") is not True:
+        _fail("existing v9 checkout identity drifted")
+    if record.get("locked") is not None or record.get("prunable") is not None:
+        _fail("existing v9 checkout state drifted")
+    if not _home_test(v9, "-d"):
+        _fail("registered v9 checkout directory is absent")
+    if _bounded_run_git(reviewed, "status", "--porcelain", "--untracked-files=all", repo=v9).stdout != "":
+        _fail("existing v9 checkout is dirty")
+    if _bounded_run_git(reviewed, "remote", "get-url", "origin", repo=v9).stdout.strip() != cap.REVIEWED_ORIGIN:
+        _fail("existing v9 checkout origin drifted")
+    return "EXACT_SHA_DETACHED_CLEAN", v9, v8
+
+
+def _require_created_worktree(manager: Path, target: Path, source_sha: str) -> None:
+    records = _worktree_records(_bounded_run_git(manager, "worktree", "list", "--porcelain").stdout)
+    record = _record_for(records, target)
+    if record is None or record.get("HEAD") != source_sha or record.get("detached") is not True:
+        _fail("created v9 worktree identity drifted")
+    if record.get("locked") is not None or record.get("prunable") is not None:
+        _fail("created v9 worktree state drifted")
+    if not _home_test(target, "-d"):
+        _fail("created v9 worktree directory is absent")
+    if _bounded_run_git(manager, "status", "--porcelain", "--untracked-files=all", repo=target).stdout != "":
+        _fail("created v9 worktree is dirty")
+
+
+def _bootstrap_checkout(plan: cap.WeatherV9BrokerPlan) -> None:
+    if plan.checkout_state != "ABSENT":
+        return
+    _bounded_run_git(plan.manager_checkout, "fetch", "origin", "main")
+    origin_main = _bounded_run_git(
+        plan.manager_checkout, "rev-parse", "refs/remotes/origin/main"
+    ).stdout.strip()
+    if origin_main != plan.authorization.source_sha:
+        _fail("origin/main drifted after the single authorized fetch")
+    ancestor = _bounded_run_git(
+        plan.manager_checkout,
+        "merge-base",
+        "--is-ancestor",
+        cap.MINIMUM_REVIEWED_ANCESTOR,
+        plan.authorization.source_sha,
+        check=False,
+    )
+    if ancestor.returncode != 0:
+        _fail("authorized source no longer descends from reviewed minimum ancestor")
+    _bounded_run_git(
+        plan.manager_checkout,
+        "worktree",
+        "add",
+        "--detach",
+        str(plan.trusted_checkout),
+        plan.authorization.source_sha,
+    )
+    _require_created_worktree(plan.manager_checkout, plan.trusted_checkout, plan.authorization.source_sha)
+
+
+def _require_source_blob(manager: Path, source_sha: str, path: str, expected_blob: str) -> None:
+    observed = _bounded_run_git(manager, "rev-parse", f"{source_sha}:{path}").stdout.strip()
+    if observed != expected_blob:
+        _fail(f"reviewed source blob drifted: {path}")
+
+
+def _run_fixed_upgrade(plan: cap.WeatherV9BrokerPlan) -> Mapping[str, Any]:
+    _require_source_blob(plan.manager_checkout, plan.authorization.source_sha, cap.ENTRYPOINT, UPGRADE_ENTRYPOINT_BLOB)
+    _require_source_blob(plan.manager_checkout, plan.authorization.source_sha, cap.UPGRADE_MODULE, UPGRADE_MODULE_BLOB)
+    entrypoint = plan.trusted_checkout / cap.ENTRYPOINT
+    try:
+        meta = entrypoint.lstat()
+    except OSError as exc:
+        raise cap.WeatherV9HostCapabilityError("fixed v9 entrypoint is unavailable") from exc
+    if (
+        not stat.S_ISREG(meta.st_mode)
+        or stat.S_ISLNK(meta.st_mode)
+        or meta.st_nlink != 1
+        or stat.S_IMODE(meta.st_mode) != 0o755
+    ):
+        _fail("fixed v9 entrypoint metadata drifted")
+    try:
+        result = subprocess.run(
+            [str(entrypoint)],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=GIT_ENV,
+            shell=False,
+            close_fds=True,
+            timeout=90,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise cap.WeatherV9HostCapabilityError("fixed v9 upgrade invocation failed to run") from exc
+    if len(result.stdout) > MAX_CHILD_OUTPUT or len(result.stderr) > MAX_CHILD_OUTPUT:
+        _fail("fixed v9 upgrade output exceeded limit")
+    if result.returncode != 0:
+        _fail("fixed v9 upgrade did not report success")
+    lines = [line for line in result.stdout.splitlines() if line.strip()]
+    if not lines:
+        _fail("fixed v9 upgrade emitted no receipt")
+    try:
+        receipt = json.loads(lines[-1])
+    except json.JSONDecodeError as exc:
+        raise cap.WeatherV9HostCapabilityError("fixed v9 upgrade receipt is malformed") from exc
+    if (
+        type(receipt) is not dict
+        or receipt.get("result") != "PASS"
+        or receipt.get("source_sha") != plan.authorization.source_sha
+        or receipt.get("new_sha256") != cap.NEW_SHA256
+        or receipt.get("mutation_started") is not True
+        or receipt.get("target_replaced") is not True
+    ):
+        _fail("fixed v9 upgrade receipt identity drifted")
+    return receipt
+
+
+def _install_bounded_runtime(registration: Mapping[str, Any]) -> None:
+    _configure_registration(registration)
+    cap._run_git = _bounded_run_git
+    cap._checkout_state = _checkout_state
+    cap._bootstrap_checkout = _bootstrap_checkout
+    cap._run_fixed_upgrade = _run_fixed_upgrade
+
+
+if __name__ == "__main__":
+    try:
+        registration = cap.load_registration()
+        _install_bounded_runtime(registration)
+        raise SystemExit(cap.runtime_main())
+    except cap.WeatherV9HostCapabilityError as exc:
+        print(
+            json.dumps(
+                {
+                    "schema": "rozkalns.rpi5-main.weather-operator-upgrade-v9-broker-receipt.v1",
+                    "result": "FAIL_CLOSED",
+                    "reason": str(exc),
+                    "authorization_reuse_forbidden_if_state_mutation_started": True,
+                    "automatic_retry": False,
+                    "automatic_cleanup": False,
+                    "automatic_rollback": False,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        )
+        raise SystemExit(78)
