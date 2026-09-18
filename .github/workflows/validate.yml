@@ -56,6 +56,9 @@ jobs:
       - name: Validate Weather v9 privileged delivery successor
         run: python3 ./tests/test-weather-operator-v9-privileged-delivery.py
 
+      - name: Validate Weather v9 capability-local canonical operation
+        run: python3 ./tests/test-weather-operator-v9-canonical-operation.py
+
   gitleaks:
     runs-on: ubuntu-latest
     timeout-minutes: 5
