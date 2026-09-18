@@ -53,6 +53,7 @@ V7_HISTORICAL_TESTS = (
 )
 CURRENT_TESTS = (
     "tests/test-deploy-executor-weather-public-operator-upgrade-v8.py",
+    "tests/test-weather-operator-v9-capability-refresh.py",
 )
 
 

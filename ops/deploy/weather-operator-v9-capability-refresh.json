@@ -1,0 +1,81 @@
+{
+  "schema": "rozkalns.rpi5-main.weather-operator-v9-capability-refresh.v1",
+  "issue": 607,
+  "purpose": "Rebind the installed Weather v9 privileged capability from the pre-605 source identity to the exact reviewed post-605 source before any fresh v9 queue/authorization can execute.",
+  "predecessor_source_sha": "68ef2b73dc8600dd63cf2a3b6920814e27313600",
+  "target_source": "EXACT_CURRENT_RPI5_MAIN_AT_SEPARATE_LIVE_GATE",
+  "fixed_targets": {
+    "broker": "/usr/local/libexec/rozkalns-weather-operator-v9-privileged-broker",
+    "registration": "/etc/rozkalns-weather-operator-v9-capability/registration.json",
+    "state_db": "/var/lib/rozkalns-weather-operator-v9-capability/state.sqlite3"
+  },
+  "allowed_active_replacements": [
+    "broker",
+    "registration"
+  ],
+  "must_remain_byte_identical_to_predecessor_source": [
+    "ops/lib/deploy_executor/weather_operator_upgrade_v9_host_capability.py",
+    "ops/systemd/rozkalns-weather-operator-v9-privileged-broker.socket",
+    "ops/systemd/rozkalns-weather-operator-v9-privileged-broker@.service"
+  ],
+  "mutation_budget": [
+    {
+      "category": "filesystem.weather-operator-v9-capability-refresh-stage",
+      "max_operations": 2
+    },
+    {
+      "category": "filesystem.weather-operator-v9-capability-refresh-atomic-replace",
+      "max_operations": 2
+    }
+  ],
+  "state_db_policy": "PRESERVE_EXISTING_UNCHANGED",
+  "systemd_mutation": false,
+  "queue_or_live_auth_creation": false,
+  "preflight_requires": [
+    "source checkout is clean, reviewed-origin and descendant of predecessor source",
+    "registration is exact root-owned 0600 and bound to predecessor source",
+    "installed module/broker/socket/service hashes exactly match predecessor source",
+    "target module/socket/service remain byte-identical to predecessor source",
+    "target broker differs from predecessor and is executable in Git",
+    "durable replay/state DB exists with exact root-owned 0600 metadata",
+    "fixed staging paths are absent"
+  ],
+  "apply_order": [
+    "stage target broker",
+    "stage target registration",
+    "atomic replace broker",
+    "fsync broker parent",
+    "atomic replace registration",
+    "fsync registration parent",
+    "verify all registered artifact hashes and replay/state DB metadata unchanged"
+  ],
+  "partial_failure_semantics": "FAIL_CLOSED_NO_RETRY_CLEANUP_ROLLBACK_OR_ALTERNATE_PATH",
+  "automatic_retry": false,
+  "automatic_cleanup": false,
+  "automatic_rollback": false,
+  "historical_authority": {
+    "ops-workflows#69": "STALE_PRE_RECOVERY_QUEUE_DO_NOT_REUSE",
+    "ops-workflows#70": "SPENT_LIVE_AUTH_DO_NOT_REUSE"
+  },
+  "later_gate_order": [
+    "source merge and exact-main CI",
+    "fresh read-only live preflight against exact installed predecessor evidence",
+    "separate owner LIVE capability refresh bound to exact reviewed main SHA and fixed 2-stage-plus-2-replace budget",
+    "post-refresh identity and replay-state preservation verification",
+    "fresh READY queue bound to post-refresh exact source",
+    "fresh direct-owner LIVE-AUTH with new request identity",
+    "one Weather v9 dispatch",
+    "fresh Weather public-runtime rollout reconciliation"
+  ],
+  "explicit_exclusions": [
+    "no systemd daemon-reload/enable/start/stop/restart",
+    "no Weather application Docker/systemd mutation",
+    "no SQLite/corpus/snapshot/database mutation",
+    "no worktree cleanup/remove/prune/repair",
+    "no generic sudo/root shell or caller-selected command/path/argv/environment",
+    "no network/firewall/DNS/Cloudflare mutation",
+    "no credential/secret/user/group/ACL/permission/settings mutation",
+    "no READY queue or LIVE-AUTH creation by this operator",
+    "no reuse of ops-workflows#69 or ops-workflows#70"
+  ]
+}

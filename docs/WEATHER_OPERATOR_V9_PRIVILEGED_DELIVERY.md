@@ -68,4 +68,25 @@ Authorization `ops-workflows#70` is spent and non-reusable. The partial v9 check
 
 After #605 recovery is merged, the pre-recovery queue binding is stale. Any resumed v9 execution must bind a freshly reviewed source SHA and use a fresh owner LIVE authorization; neither `ops-workflows#69` nor spent authorization `ops-workflows#70` is sufficient authority for a new mutation.
 
+## Post-#605 capability refresh gate
+
+Issue #607 adds the source-only repair needed because the live v9 capability had already been first-installed from pre-recovery source `68ef2b73dc8600dd63cf2a3b6920814e27313600`. The first-install installer remains intentionally unchanged and continues to reject existing targets. It is not repurposed as an upgrade mechanism.
+
+The reviewed #607 mechanism is a narrow in-place capability refresh described by `ops/deploy/weather-operator-v9-capability-refresh.json` and implemented by `scripts/refresh-weather-operator-v9-host-capability.py`. Its default mode is read-only preflight. A later `--apply` requires a separate owner LIVE authorization and root process.
+
+The refresh admits only the exact pre-#605 installed state: registration must still bind the predecessor source; installed module, broker, socket and service hashes must exactly match that predecessor source; the durable replay/state database must remain present with fixed root-owned metadata; and both fixed staging paths must be absent. Target source must still keep the host-capability module, socket and rendered service byte-identical to the predecessor. Only the broker is allowed to differ.
+
+The fixed mutation budget is two same-directory staging writes followed by two atomic replacements: broker first, registration second. No `systemctl` action is part of the refresh. The replay/state database contents are never read by the refresh operator and its metadata snapshot must be unchanged after the operation. If execution stops after broker replacement but before registration replacement, the old registration hash no longer matches the new broker and the capability therefore remains fail-closed rather than accepting a mixed identity. No automatic retry, cleanup or rollback is authorized.
+
+After #607 source merge, the canonical gate order superseding the pre-recovery queue step is:
+
+1. require exact merged `RPi5_main/main` and exact-main CI;
+2. collect fresh bounded read-only live evidence that the installed capability exactly matches the expected `68ef…` predecessor identity and that the replay/state database is preserved;
+3. obtain a separate owner LIVE authorization for the fixed #607 capability-refresh target and exact source SHA;
+4. run one refresh and verify broker/registration identity plus unchanged replay-state metadata;
+5. only then create a new READY queue bound to the post-refresh exact source; `ops-workflows#69` remains stale historical evidence;
+6. create a fresh direct-owner LIVE-AUTH with a new request identity; `ops-workflows#70` remains spent and non-reusable;
+7. allow one v9 dispatch and verify the installed Weather operator module target hash;
+8. only then resume Weather public-runtime rollout reconciliation.
+
 None of these source contracts authorizes Docker application mutation, systemd Weather application restart, SQLite/corpus writes, cleanup/rollback of the partial Weather runtime, Cloudflare/network changes, secrets/credentials, or reuse of consumed Gate4 authorization #33.
