@@ -43,7 +43,7 @@ TARGET_PATH = Path(
 )
 TARGET_TEMP_PATH = TARGET_PATH.parent / ".weather_public_runtime_operator.py.compatibility-upgrade-v9.tmp"
 OLD_SHA256 = "48c8c5fb0cdc005bf0e4fbb05a203297e05d7ef62689ddd0d6d717c13acc0fcb"
-NEW_SHA256 = "d153db5707b1e37e8a3268fc80e57e75ae7248c5ea9f7ab169357b77849ed1a3"
+NEW_SHA256 = "542412bc15123e6dc8c3f6505983676ba5c9622793ea7611693aacf13fb36974"
 MUTATION_BUDGET = (
     ("git.weather-operator-upgrade-v9-checkout-fetch", 1),
     ("git.weather-operator-upgrade-v9-checkout-worktree-add", 1),
