@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "issue": 623,
+  "operation": "weather_v9_capability_state_bootstrap",
+  "accepted_baseline": {
+    "registration": "absent",
+    "state_db": "absent"
+  },
+  "fixed_paths": {
+    "registration": "/etc/rozkalns-weather-operator-v9-capability/registration.json",
+    "state_db": "/var/lib/rozkalns-weather-operator-v9-capability/state.sqlite3",
+    "support_module": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/weather_operator_upgrade_v9.py",
+    "broker": "/usr/local/libexec/rozkalns-weather-public-runtime-operator/weather-operator-v9-capability-broker",
+    "socket_unit": "/etc/systemd/system/rozkalns-weather-operator-v9-capability.socket",
+    "service_unit": "/etc/systemd/system/rozkalns-weather-operator-v9-capability.service"
+  },
+  "allowed_mutations": [
+    "create canonical replay DB through StateStore(..., bootstrap=True)",
+    "publish canonical registration.json after successful replay DB bootstrap"
+  ],
+  "forbidden_mutations": [
+    "replace support/module/broker/socket/service artifacts",
+    "systemctl reload/start/stop/restart/enable/disable",
+    "Docker/network/Cloudflare mutation",
+    "manager checkout mutation",
+    "credential or secret mutation",
+    "existing DB migration/cleanup",
+    "automatic retry/rollback/cleanup",
+    "generic root shell execution"
+  ],
+  "fail_closed": true,
+  "registration_published_last": true
+}
