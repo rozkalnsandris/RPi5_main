@@ -12,7 +12,7 @@ The fixed runtime transition remains exactly the merged v9 transition:
 
 - target: `/usr/local/libexec/rozkalns-weather-public-runtime-operator/deploy_executor/weather_public_runtime_operator.py`;
 - predecessor SHA-256: `48c8c5fb0cdc005bf0e4fbb05a203297e05d7ef62689ddd0d6d717c13acc0fcb`;
-- target SHA-256: `d153db5707b1e37e8a3268fc80e57e75ae7248c5ea9f7ab169357b77849ed1a3`;
+- target SHA-256: `542412bc15123e6dc8c3f6505983676ba5c9622793ea7611693aacf13fb36974`;
 - checkout: `RPi5_main-weather-public-runtime-operator-upgrade-v9-trusted`;
 - mutation budget: one fixed checkout fetch, one fixed detached worktree add and one atomic module replacement;
 - rollback policy: `NONE`.
@@ -63,7 +63,7 @@ Authorization `ops-workflows#70` is spent and non-reusable. The partial v9 check
 3. Separate bounded owner LIVE: install the v9 host capability and identity-only caller from that exact trusted checkout (these tightly coupled first-install steps may share one explicitly frozen Composite LIVE envelope).
 4. Verify installed hashes/ownership/modes, socket/timer state and absence of v7 mutation.
 5. Create a fresh owner-authored v9 LIVE-AUTH and READY queue binding; no historical authorization is reusable.
-6. Let the v9 caller dispatch once; verify the installed operator module is exactly `d153db57…`.
+6. Let the v9 caller dispatch once; verify the installed operator module is exactly `542412bc15123e6dc8c3f6505983676ba5c9622793ea7611693aacf13fb36974`.
 7. Only then perform fresh Weather public-runtime incident recovery / rollout reconciliation.
 
 After #605 recovery is merged, the pre-recovery queue binding is stale. Any resumed v9 execution must bind a freshly reviewed source SHA and use a fresh owner LIVE authorization; neither `ops-workflows#69` nor spent authorization `ops-workflows#70` is sufficient authority for a new mutation.
@@ -89,4 +89,24 @@ After #607 source merge, the canonical gate order superseding the pre-recovery q
 7. allow one v9 dispatch and verify the installed Weather operator module target hash;
 8. only then resume Weather public-runtime rollout reconciliation.
 
-None of these source contracts authorizes Docker application mutation, systemd Weather application restart, SQLite/corpus writes, cleanup/rollback of the partial Weather runtime, Cloudflare/network changes, secrets/credentials, or reuse of consumed Gate4 authorization #33.
+## Post-#614 target-digest and capability-module refresh gate
+
+Issue #613 / PR #614 corrected the v9 upgrade-entrypoint target digest to the SHA-256 independently derived from the exact target source bytes: `542412bc15123e6dc8c3f6505983676ba5c9622793ea7611693aacf13fb36974`. The installed v9 host-capability module had already been refreshed to source `0659059ea712b64ad7b718db556f77c67e1d03eb`, whose broker postcondition still carried the old `d153…` digest. A new dispatch must not be attempted while that stale capability module remains installed because the entrypoint could perform the correct replacement and the broker would then fail its postcondition after mutation.
+
+Issue #615 therefore adds a second, separate refresh mechanism instead of widening the #607 broker-refresh contract. `ops/deploy/weather-operator-v9-capability-module-refresh.json` and `scripts/refresh-weather-operator-v9-host-capability-module.py` admit only the exact `0659059…` capability identity. Registration plus installed module, broker, socket and rendered service must all match that predecessor source before the refresh is eligible.
+
+The target source may differ only in `weather_operator_upgrade_v9_host_capability.py`; broker, socket and rendered service must remain byte-identical to `0659059…`. The future mutation budget is two same-directory staging writes followed by two atomic replacements: module first, registration second. The replay/state database is metadata-snapshotted and must remain unchanged. No systemd action, queue creation, LIVE-AUTH creation, retry, cleanup or rollback is part of this refresh.
+
+After #615 source merge, the required order is:
+
+1. require exact merged `RPi5_main/main` and exact-main CI;
+2. run the owner-root **read-only** module-refresh preflight from an exact clean trusted source checkout and require registration/installed artifacts to match `0659059…`;
+3. obtain one separate bounded owner LIVE authorization for module + registration replacement only;
+4. verify the refreshed module/registration exact target identity and unchanged replay-state metadata;
+5. reconcile the stale canonical v9 checkout created by spent `ops-workflows#72` without reusing that authorization;
+6. create a fresh READY queue bound to the exact new main;
+7. create a fresh direct-owner LIVE-AUTH with a new request identity;
+8. allow one v9 dispatch and verify installed Weather operator SHA-256 `542412bc15123e6dc8c3f6505983676ba5c9622793ea7611693aacf13fb36974`;
+9. only then resume Weather public-runtime rollout reconciliation.
+
+None of these source contracts authorizes Docker application mutation, systemd Weather application restart, SQLite/corpus writes, cleanup/rollback of the partial Weather runtime, Cloudflare/network changes, secrets/credentials, or reuse of consumed Gate4 authorization #33 or spent `ops-workflows#72`.

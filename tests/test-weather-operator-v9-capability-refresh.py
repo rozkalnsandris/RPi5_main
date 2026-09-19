@@ -12,6 +12,8 @@ sys.path.insert(0, str(ROOT / "ops/lib"))
 
 from deploy_executor import weather_operator_v9_capability_refresh as refresh
 
+POST_607_SOURCE_SHA = "0659059ea712b64ad7b718db556f77c67e1d03eb"
+
 
 def artifact_hashes(*, broker: str = "b") -> dict[str, str]:
     return {
@@ -104,7 +106,7 @@ class WeatherV9CapabilityRefreshTests(unittest.TestCase):
         self.assertEqual(decoded["artifact_count"], 15)
         self.assertEqual(decoded["capability_source_sha"], "a" * 40)
 
-    def test_current_source_delta_is_broker_only_for_installed_capability_artifacts(self) -> None:
+    def test_post_607_source_delta_is_broker_only_for_installed_capability_artifacts(self) -> None:
         unchanged = (
             "ops/lib/deploy_executor/weather_operator_upgrade_v9_host_capability.py",
             "ops/systemd/rozkalns-weather-operator-v9-privileged-broker.socket",
@@ -112,9 +114,15 @@ class WeatherV9CapabilityRefreshTests(unittest.TestCase):
         )
         for path in unchanged:
             with self.subTest(path=path):
-                self.assertEqual(git_bytes("HEAD", path), git_bytes(refresh.PREDECESSOR_SOURCE_SHA, path))
+                self.assertEqual(
+                    git_bytes(POST_607_SOURCE_SHA, path),
+                    git_bytes(refresh.PREDECESSOR_SOURCE_SHA, path),
+                )
         broker = "ops/bin/rozkalns-weather-operator-v9-privileged-broker"
-        self.assertNotEqual(git_bytes("HEAD", broker), git_bytes(refresh.PREDECESSOR_SOURCE_SHA, broker))
+        self.assertNotEqual(
+            git_bytes(POST_607_SOURCE_SHA, broker),
+            git_bytes(refresh.PREDECESSOR_SOURCE_SHA, broker),
+        )
 
     def test_contract_and_operator_preserve_fail_closed_recovery_boundary(self) -> None:
         contract = json.loads(
