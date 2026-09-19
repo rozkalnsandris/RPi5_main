@@ -16,6 +16,8 @@ from deploy_executor import weather_operator_v9_capability_refresh as old_refres
 from deploy_executor import weather_operator_upgrade_v9_host_capability as cap
 
 POST_615_SOURCE_SHA = "dd0230aa1387a553db81bf59a02e4358f6432a1f"
+V9_REVIEWED_TARGET_SOURCE_SHA = "84e129909831bd8111c4f4c1f6618b7fff2a803b"
+V9_TARGET_SOURCE_PATH = "ops/lib/deploy_executor/weather_public_runtime_operator.py"
 
 
 def artifact_hashes(*, module: str = "1") -> dict[str, str]:
@@ -135,8 +137,8 @@ class WeatherV9CapabilityModuleRefreshTests(unittest.TestCase):
                     git_bytes(refresh.PREDECESSOR_SOURCE_SHA, path),
                 )
 
-    def test_host_capability_postcondition_is_bound_to_exact_target_source(self) -> None:
-        target = (ROOT / "ops/lib/deploy_executor/weather_public_runtime_operator.py").read_bytes()
+    def test_host_capability_postcondition_is_bound_to_reviewed_v9_target_source(self) -> None:
+        target = git_bytes(V9_REVIEWED_TARGET_SOURCE_SHA, V9_TARGET_SOURCE_PATH)
         merged = json.loads(
             (ROOT / "ops/deploy/weather-public-runtime-operator-upgrade-v9.json").read_text(
                 encoding="utf-8"
