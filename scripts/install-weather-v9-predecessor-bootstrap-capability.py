@@ -64,22 +64,30 @@ def _git(uid: int, gid: int, *args: str, check: bool = True) -> subprocess.Compl
     )
     if not allowed:
         fail("installer Git argv escaped fixed allowlist")
+
+    run_kwargs: dict[str, object] = {
+        "stdin": subprocess.DEVNULL,
+        "stdout": subprocess.PIPE,
+        "stderr": subprocess.PIPE,
+        "text": True,
+        "env": {"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"},
+        "shell": False,
+        "close_fds": True,
+        "check": check,
+    }
+    euid = os.geteuid()
+    egid = os.getegid()
+    if euid == ROOT_UID:
+        run_kwargs.update(user=uid, group=gid, extra_groups=())
+    elif euid != uid or egid != gid:
+        fail("installer Git preflight identity does not match source owner")
+
     try:
         return subprocess.run(
             ["/usr/bin/git", "-C", str(ROOT), *args],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            env={"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"},
-            user=uid,
-            group=gid,
-            extra_groups=(),
-            shell=False,
-            close_fds=True,
-            check=check,
+            **run_kwargs,
         )
-    except subprocess.CalledProcessError as exc:
+    except (subprocess.CalledProcessError, OSError) as exc:
         raise InstallError("installer source Git preflight failed") from exc
 
 def source_identity() -> tuple[str, Path, int, int]:
