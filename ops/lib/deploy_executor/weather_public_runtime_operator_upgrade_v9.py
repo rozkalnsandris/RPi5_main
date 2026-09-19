@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
+import stat
 from typing import Any
 
 from deploy_executor import weather_public_runtime_operator_upgrade_v2 as _engine
@@ -24,6 +26,7 @@ CHECKOUT_CONTRACT_RELATIVE = Path("ops/deploy/rpi5-main-weather-public-runtime-o
 UPGRADE_ENTRYPOINT_RELATIVE = Path("ops/bin/rozkalns-weather-public-runtime-operator-upgrade-v9")
 UPGRADE_MODULE_RELATIVE = Path("ops/lib/deploy_executor/weather_public_runtime_operator_upgrade_v9.py")
 TEMP_NAME = ".weather_public_runtime_operator.py.compatibility-upgrade-v9.tmp"
+PYTHON_CACHE_DIR = "__pycache__"
 ROOT_UID = 0
 ROOT_GID = 0
 
@@ -116,6 +119,67 @@ def _validate_upgrade_contract(value: dict[str, Any]) -> None:
         raise WeatherOperatorUpgradeError("operator upgrade safety contract drifted")
 
 
+def _validate_python_cache_directory(path: Path, package_sources: set[str]) -> None:
+    _engine._require_directory(path, exact_mode=0o755)
+    try:
+        children = tuple(path.iterdir())
+    except OSError as exc:
+        raise WeatherOperatorUpgradeError("Python cache directory cannot be enumerated") from exc
+    for child in children:
+        try:
+            child_meta = child.lstat()
+        except OSError as exc:
+            raise WeatherOperatorUpgradeError("Python cache entry is unavailable") from exc
+        match = re.fullmatch(
+            r"(?P<stem>[A-Za-z0-9_]+)\.cpython-[0-9]+(?:\.opt-[0-9]+)?\.pyc",
+            child.name,
+        )
+        if (
+            match is None
+            or not stat.S_ISREG(child_meta.st_mode)
+            or stat.S_ISLNK(child_meta.st_mode)
+            or child_meta.st_nlink != 1
+            or child_meta.st_uid != _engine.ROOT_UID
+            or child_meta.st_gid != _engine.ROOT_GID
+            or stat.S_IMODE(child_meta.st_mode) != 0o644
+            or child_meta.st_size > _engine.MAX_ARTIFACT_BYTES
+            or f"{match.group('stem')}.py" not in package_sources
+        ):
+            raise WeatherOperatorUpgradeError("Python cache entry metadata drifted")
+
+
+def _observed_support_membership() -> set[str]:
+    observed: set[str] = set()
+    runtime_cache: Path | None = None
+    for item in _engine.SUPPORT_ROOT.iterdir():
+        if item.name == "deploy_executor":
+            _engine._require_directory(item, exact_mode=0o755)
+            package_sources: set[str] = set()
+            for child in item.iterdir():
+                if child.name == PYTHON_CACHE_DIR:
+                    if runtime_cache is not None:
+                        raise WeatherOperatorUpgradeError("operator deploy_executor runtime cache identity is ambiguous")
+                    runtime_cache = child
+                    continue
+                meta = child.lstat()
+                if (
+                    not stat.S_ISREG(meta.st_mode)
+                    or stat.S_ISLNK(meta.st_mode)
+                    or meta.st_nlink != 1
+                ):
+                    raise WeatherOperatorUpgradeError("operator deploy_executor package contains a non-regular entry")
+                package_sources.add(child.name)
+                observed.add(f"deploy_executor/{child.name}")
+            if runtime_cache is not None:
+                _validate_python_cache_directory(runtime_cache, package_sources)
+            continue
+        meta = item.lstat()
+        if not stat.S_ISREG(meta.st_mode) or stat.S_ISLNK(meta.st_mode) or meta.st_nlink != 1:
+            raise WeatherOperatorUpgradeError("operator support root contains an unexpected non-regular entry")
+        observed.add(item.name)
+    return observed
+
+
 def _derive_checkout() -> Path:
     checkout = Path(__file__).resolve().parents[3]
     expected = checkout / UPGRADE_MODULE_RELATIVE
@@ -177,6 +241,7 @@ def _configure_engine() -> None:
         "ROOT_UID": ROOT_UID,
         "ROOT_GID": ROOT_GID,
         "_validate_upgrade_contract": _validate_upgrade_contract,
+        "_observed_support_membership": _observed_support_membership,
         "_derive_checkout": _derive_checkout,
         "_receipt": _receipt,
     }
