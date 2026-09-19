@@ -7,6 +7,7 @@ export LC_ALL=C
 export LANG=C
 
 readonly EVIDENCE_HELPER="/usr/local/lib/rpi5-maintenance/dashboard-evidence.py"
+readonly PHASE5_VISIBILITY_HELPER="/usr/local/lib/rpi5-maintenance/phase5-production-visibility-evidence.py"
 readonly UPDATE_UNIT="rpi5-update.service"
 
 log() { printf '[%s] %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*"; }
@@ -38,6 +39,10 @@ normalize_maintenance_result() {
 [[ ${EUID:-$(id -u)} -eq 0 ]] || { echo "rpi5-dashboard-evidence must run as root." >&2; exit 1; }
 require_root_controlled_file "$EVIDENCE_HELPER" || {
     echo "unsafe or missing dashboard evidence helper: $EVIDENCE_HELPER" >&2
+    exit 1
+}
+require_root_controlled_file "$PHASE5_VISIBILITY_HELPER" || {
+    echo "unsafe or missing Phase 5 visibility evidence helper: $PHASE5_VISIBILITY_HELPER" >&2
     exit 1
 }
 
@@ -122,6 +127,14 @@ sync_deployment() {
     fi
 }
 
+sync_phase5_visibility() {
+    local rc=0
+    python3 "$PHASE5_VISIBILITY_HELPER" >/dev/null 2>&1 || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        log "WARN Phase 5 visibility evidence sync unavailable rc=${rc}; broker snapshot remains fail-closed."
+    fi
+}
+
 observe_throttle() {
     local output raw_hex observed_at
     [[ -x /usr/bin/vcgencmd ]] || return 0
@@ -152,5 +165,6 @@ for entry in "${ENDPOINTS[@]}"; do
 done
 observe_maintenance
 sync_deployment
+sync_phase5_visibility
 observe_throttle
 log "dashboard evidence collection complete"
