@@ -1,0 +1,1 @@
+Fail closed on drift. No retry, rollback, cleanup, systemd, Docker, network, secrets, or manager checkout mutation.
