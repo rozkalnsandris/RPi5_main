@@ -1,0 +1,72 @@
+{
+  "schema": "rozkalns.rpi5-main.weather-operator-v10-successor-broker-refresh.v1",
+  "issue": 643,
+  "purpose": "Replace only the installed Weather privileged broker plus registration with the reviewed v10 successor transport while preserving the installed v9 capability module, systemd units, credential surface and durable replay DB.",
+  "minimum_predecessor_ancestor": "80261255b3be2aa7dd40986254d4ea478b4e2e1b",
+  "predecessor_source_authority": "ROOT_OWNED_INSTALLED_REGISTRATION_CAPABILITY_SOURCE_SHA",
+  "target_source": "EXACT_CURRENT_RPI5_MAIN_AT_SEPARATE_LIVE_GATE",
+  "predecessor_broker_source": "ops/bin/rozkalns-weather-operator-v9-privileged-broker",
+  "target_broker_source": "ops/bin/rozkalns-weather-operator-v10-successor-privileged-broker",
+  "fixed_targets": {
+    "broker": "/usr/local/libexec/rozkalns-weather-operator-v9-privileged-broker",
+    "registration": "/etc/rozkalns-weather-operator-v9-capability/registration.json",
+    "state_db": "/var/lib/rozkalns-weather-operator-v9-capability/state.sqlite3"
+  },
+  "allowed_active_replacements": ["broker", "registration"],
+  "must_remain_byte_identical_to_installed_predecessor_source": [
+    "ops/lib/deploy_executor/weather_operator_upgrade_v9_host_capability.py",
+    "ops/systemd/rozkalns-weather-operator-v9-privileged-broker.socket",
+    "ops/systemd/rozkalns-weather-operator-v9-privileged-broker@.service"
+  ],
+  "successor_operation": {
+    "operation_id": "rpi5-main.weather-operator-upgrade-v10.v1",
+    "target_alias": "rpi5-main-weather-operator-upgrade-v10",
+    "entrypoint": "ops/bin/rozkalns-weather-public-runtime-operator-upgrade-v10",
+    "module": "ops/lib/deploy_executor/weather_public_runtime_operator_upgrade_v10.py",
+    "expected_predecessor_sha256": "48c8c5fb0cdc005bf0e4fbb05a203297e05d7ef62689ddd0d6d717c13acc0fcb",
+    "expected_target_sha256": "a36e7e7673855e1d9aa49b676133e188ee2a24a0711ba46f2844af6f60240a03"
+  },
+  "mutation_budget": [
+    {"category": "filesystem.weather-operator-v10-successor-broker-refresh-stage", "max_operations": 2},
+    {"category": "filesystem.weather-operator-v10-successor-broker-refresh-atomic-replace", "max_operations": 2}
+  ],
+  "state_db_policy": "PRESERVE_EXISTING_UNCHANGED",
+  "systemd_mutation": false,
+  "queue_or_live_auth_creation": false,
+  "source_merge_authorizes_live": false,
+  "preflight_requires": [
+    "source checkout is clean and reviewed-origin",
+    "registration is exact root-owned 0600 and provides the runtime predecessor source SHA",
+    "runtime predecessor source descends from the reviewed v9 capability floor and is an ancestor of target source",
+    "installed module/broker/socket/service hashes exactly match blobs represented by the registered predecessor source",
+    "target module/socket/service remain byte-identical to the installed predecessor source",
+    "target successor broker is executable in Git and differs from predecessor broker",
+    "durable replay/state DB exists with exact root-owned 0600 metadata",
+    "fixed staging paths are absent"
+  ],
+  "replacement_order": ["broker", "registration"],
+  "partial_failure_semantics": "FAIL_CLOSED_NO_RETRY_CLEANUP_ROLLBACK_OR_ALTERNATE_PATH",
+  "automatic_retry": false,
+  "automatic_cleanup": false,
+  "automatic_rollback": false,
+  "later_gate_order": [
+    "source merge and exact-main CI",
+    "fresh root-capable read-only live preflight resolving the installed predecessor from registration",
+    "separate owner LIVE broker+registration refresh bound to exact reviewed main SHA",
+    "post-refresh broker/registration identity and replay-state preservation verification",
+    "fresh READY queue and direct-owner v10 LIVE-AUTH",
+    "one Weather v10 dispatch",
+    "fresh Weather baseline/JIT reconciliation before application rollout"
+  ],
+  "explicit_exclusions": [
+    "no systemd daemon-reload/enable/start/stop/restart",
+    "no Weather application Docker/systemd mutation",
+    "no SQLite/corpus/snapshot/database mutation",
+    "no historical worktree cleanup/remove/prune/repair",
+    "no generic sudo/root shell or caller-selected command/path/argv/environment",
+    "no network/firewall/DNS/Cloudflare mutation",
+    "no credential/secret/user/group/ACL/permission/settings mutation",
+    "no READY queue or LIVE-AUTH creation by this refresh operator",
+    "no v9 LIVE authorization reuse"
+  ]
+}

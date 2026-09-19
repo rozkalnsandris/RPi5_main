@@ -80,6 +80,9 @@ jobs:
       - name: Validate Weather v9 predecessor installer identity handling
         run: python3 ./tests/test-weather-v9-predecessor-bootstrap-installer-identity.py
 
+      - name: Validate Weather v10 successor privileged broker bridge
+        run: python3 ./tests/test-weather-operator-v10-successor-broker.py
+
   gitleaks:
     runs-on: ubuntu-latest
     timeout-minutes: 5
