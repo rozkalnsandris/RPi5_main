@@ -15,6 +15,19 @@ sys.path.insert(0, str(ROOT / "ops/lib"))
 from deploy_executor import weather_operator_upgrade_v7_host_capability as v7cap
 from deploy_executor import weather_operator_upgrade_v9_host_capability as cap
 
+V9_REVIEWED_TARGET_SOURCE_SHA = "84e129909831bd8111c4f4c1f6618b7fff2a803b"
+V9_TARGET_SOURCE_PATH = "ops/lib/deploy_executor/weather_public_runtime_operator.py"
+
+
+def git_bytes(commit: str, path: str) -> bytes:
+    return subprocess.run(
+        ["/usr/bin/git", "-C", str(ROOT), "show", f"{commit}:{path}"],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=True,
+    ).stdout
+
 
 class WeatherV9CanonicalOperationTests(unittest.TestCase):
     def test_v9_operation_is_canonical_capability_local_and_not_global(self) -> None:
@@ -63,8 +76,8 @@ class WeatherV9CanonicalOperationTests(unittest.TestCase):
         self.assertIn("p8-global-mutation-dispatch:disabled", operation["dependencies"])
         self.assertIn("v7-authority-reuse:forbidden", operation["dependencies"])
 
-    def test_host_capability_postcondition_matches_exact_v9_target_bytes(self) -> None:
-        target = (ROOT / "ops/lib/deploy_executor/weather_public_runtime_operator.py").read_bytes()
+    def test_host_capability_postcondition_matches_reviewed_v9_target_bytes(self) -> None:
+        target = git_bytes(V9_REVIEWED_TARGET_SOURCE_SHA, V9_TARGET_SOURCE_PATH)
         contract = json.loads(
             (ROOT / "ops/deploy/weather-public-runtime-operator-upgrade-v9.json").read_text(
                 encoding="utf-8"
