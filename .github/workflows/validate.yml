@@ -65,6 +65,9 @@ jobs:
       - name: Validate Weather v9 predecessor state bootstrap recovery
         run: python3 ./tests/test-weather-v9-predecessor-state-bootstrap.py
 
+      - name: Validate Weather v9 predecessor bootstrap privileged execution
+        run: python3 ./tests/test-weather-v9-predecessor-bootstrap-privileged.py
+
   gitleaks:
     runs-on: ubuntu-latest
     timeout-minutes: 5
