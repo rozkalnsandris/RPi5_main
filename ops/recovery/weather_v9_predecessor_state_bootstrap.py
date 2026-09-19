@@ -50,9 +50,9 @@ REGISTRATION_SCHEMA = base.REGISTRATION_SCHEMA
 REGISTRATION_FIELDS = base.REGISTRATION_FIELDS
 MAX_REGISTRATION_BYTES = base.MAX_REGISTRATION_BYTES
 
-
-class RecoveryError(RuntimeError):
-    pass
+# Use the canonical bootstrap error type so failures raised by reused base
+# preflight helpers stay inside this operator's fail-closed CLI boundary.
+RecoveryError = base.RecoveryError
 
 
 @dataclass(frozen=True)
