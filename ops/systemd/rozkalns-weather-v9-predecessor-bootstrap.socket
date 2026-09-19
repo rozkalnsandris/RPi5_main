@@ -1,0 +1,14 @@
+[Unit]
+Description=Rozkalns Weather v9 predecessor bootstrap capability socket
+
+[Socket]
+ListenStream=/run/rozkalns-weather-v9-predecessor-bootstrap/request.sock
+SocketMode=0600
+SocketUser=andris
+SocketGroup=andris
+Accept=yes
+Backlog=1
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target

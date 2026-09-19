@@ -1,0 +1,55 @@
+{
+  "schema": "rozkalns.rpi5-main.weather-v9-predecessor-bootstrap-privileged-capability.v1",
+  "issue": 628,
+  "status": "SOURCE_ONLY_LIVE_LATER",
+  "purpose": "Provide a narrow root execution boundary for Weather v9 predecessor durable-state bootstrap without weakening root-owned 0700 runtime directories.",
+  "request_schema": "rozkalns.rpi5-main.weather-v9-predecessor-bootstrap-request.v1",
+  "operations": [
+    "preflight",
+    "apply"
+  ],
+  "apply_caller_authority": [
+    "authorization_issue_number"
+  ],
+  "source_repository": "rozkalnsandris/RPi5_main",
+  "predecessor_source_sha": "80261255b3be2aa7dd40986254d4ea478b4e2e1b",
+  "socket_path": "/run/rozkalns-weather-v9-predecessor-bootstrap/request.sock",
+  "broker_install_path": "/usr/local/libexec/rozkalns-weather-v9-predecessor-bootstrap/current/ops/bin/rozkalns-weather-v9-predecessor-bootstrap-broker",
+  "registration_path": "/etc/rozkalns-weather-v9-predecessor-bootstrap/registration.json",
+  "replay_path": "/var/lib/rozkalns-weather-v9-predecessor-bootstrap/consumed.json",
+  "socket_unit": "rozkalns-weather-v9-predecessor-bootstrap.socket",
+  "service_unit": "rozkalns-weather-v9-predecessor-bootstrap@.service",
+  "caller_command_allowed": false,
+  "caller_path_allowed": false,
+  "caller_argv_allowed": false,
+  "caller_environment_allowed": false,
+  "caller_identity_allowed": false,
+  "caller_hash_or_sha_allowed": false,
+  "caller_target_allowed": false,
+  "generic_shell_allowed": false,
+  "generic_sudo_allowed": false,
+  "preflight_requires_live_authorization": false,
+  "apply_requires_live_authorization": true,
+  "authorization_ttl_seconds": 600,
+  "authorization_double_refetch_required": true,
+  "authorization_consumed_before_weather_mutation": true,
+  "root_git_runs_as_manager_identity": true,
+  "protect_system": "strict",
+  "protect_home": "read-only",
+  "no_new_privileges": true,
+  "capability_bounding_set": [
+    "CAP_CHOWN",
+    "CAP_SETUID",
+    "CAP_SETGID"
+  ],
+  "read_write_paths": [
+    "/etc/rozkalns-weather-operator-v9-capability",
+    "/var/lib/rozkalns-weather-operator-v9-capability",
+    "/var/lib/rozkalns-weather-v9-predecessor-bootstrap"
+  ],
+  "installation_activates_systemd": false,
+  "source_merge_authorizes_live": false,
+  "automatic_retry": false,
+  "automatic_cleanup": false,
+  "automatic_rollback": false
+}
