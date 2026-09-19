@@ -15,8 +15,10 @@ LEGACY_HISTORICAL_SHA = "c99f6b9df47603703f7d1e67ddc7d88c77ed726a"
 V5_HISTORICAL_SHA = "14501ddbe2853d8072464291b338c29a029dd3cf"
 V6_HISTORICAL_SHA = "9136c37156e84da3918e58d5d467c8b1e5cc403a"
 V7_HISTORICAL_SHA = "db7946fc64067c11d16a5b10902edf1157544db5"
+V9_HISTORICAL_SHA = "84e129909831bd8111c4f4c1f6618b7fff2a803b"
 V9_MODULE_PATH = "ops/lib/deploy_executor/weather_public_runtime_operator_upgrade_v9.py"
 V9_CONTRACT_PATH = "ops/deploy/weather-public-runtime-operator-upgrade-v9.json"
+V9_CHECKOUT_CONTRACT_PATH = "ops/deploy/rpi5-main-weather-public-runtime-operator-upgrade-v9-trusted-checkout-bootstrap.json"
 V9_BROKER_PATH = "ops/bin/rozkalns-weather-operator-v9-privileged-broker"
 V9_ENTRYPOINT_PATH = "ops/bin/rozkalns-weather-public-runtime-operator-upgrade-v9"
 TARGET_SOURCE_PATH = "ops/lib/deploy_executor/weather_public_runtime_operator.py"
@@ -51,6 +53,13 @@ V7_FROZEN_PATHS = (
     "ops/deploy/weather-public-runtime-operator-upgrade-v7.json",
     "ops/lib/deploy_executor/weather_public_runtime_operator_upgrade_v7.py",
     "tests/test-deploy-executor-weather-public-operator-upgrade-v7.py",
+)
+V9_FROZEN_PATHS = (
+    V9_ENTRYPOINT_PATH,
+    V9_CHECKOUT_CONTRACT_PATH,
+    V9_CONTRACT_PATH,
+    V9_MODULE_PATH,
+    V9_BROKER_PATH,
 )
 LEGACY_HISTORICAL_TESTS = (
     "tests/test-deploy-executor-weather-public-operator-upgrade-v3.py",
@@ -168,6 +177,13 @@ class HistoricalWeatherOperatorUpgradeTests(unittest.TestCase):
                 historical = git_bytes("show", f"{V7_HISTORICAL_SHA}:{path}")
                 self.assertEqual(current, historical)
 
+    def test_v9_sources_remain_exact_historical_evidence(self) -> None:
+        for path in V9_FROZEN_PATHS:
+            with self.subTest(path=path):
+                current = git_bytes("show", f"HEAD:{path}")
+                historical = git_bytes("show", f"{V9_HISTORICAL_SHA}:{path}")
+                self.assertEqual(current, historical)
+
     def test_v3_v4_positive_suites_run_at_reviewed_historical_snapshot(self) -> None:
         run_historical_tests(LEGACY_HISTORICAL_SHA, LEGACY_HISTORICAL_TESTS)
 
@@ -186,8 +202,8 @@ class HistoricalWeatherOperatorUpgradeTests(unittest.TestCase):
                     check=True,
                 )
 
-    def test_v9_target_bindings_match_exact_target_source_bytes(self) -> None:
-        source = (ROOT / TARGET_SOURCE_PATH).read_bytes()
+    def test_v9_target_bindings_match_exact_historical_target_source_bytes(self) -> None:
+        source = git_bytes("show", f"{V9_HISTORICAL_SHA}:{TARGET_SOURCE_PATH}")
         source_sha256 = hashlib.sha256(source).hexdigest()
         source_blob_sha1 = git_blob_sha1(source)
         contract = json.loads((ROOT / V9_CONTRACT_PATH).read_text(encoding="utf-8"))
