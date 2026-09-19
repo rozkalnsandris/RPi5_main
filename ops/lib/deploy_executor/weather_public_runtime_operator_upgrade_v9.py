@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import stat
 from typing import Any
 
 from deploy_executor import weather_public_runtime_operator_upgrade_v2 as _engine
@@ -24,6 +25,7 @@ CHECKOUT_CONTRACT_RELATIVE = Path("ops/deploy/rpi5-main-weather-public-runtime-o
 UPGRADE_ENTRYPOINT_RELATIVE = Path("ops/bin/rozkalns-weather-public-runtime-operator-upgrade-v9")
 UPGRADE_MODULE_RELATIVE = Path("ops/lib/deploy_executor/weather_public_runtime_operator_upgrade_v9.py")
 TEMP_NAME = ".weather_public_runtime_operator.py.compatibility-upgrade-v9.tmp"
+PYTHON_CACHE_DIR = "__pycache__"
 ROOT_UID = 0
 ROOT_GID = 0
 
@@ -116,6 +118,58 @@ def _validate_upgrade_contract(value: dict[str, Any]) -> None:
         raise WeatherOperatorUpgradeError("operator upgrade safety contract drifted")
 
 
+def _validate_python_cache_directory(path: Path) -> None:
+    try:
+        meta = path.lstat()
+    except OSError as exc:
+        raise WeatherOperatorUpgradeError("Python cache directory is unavailable") from exc
+    if (
+        not stat.S_ISDIR(meta.st_mode)
+        or stat.S_ISLNK(meta.st_mode)
+        or stat.S_IMODE(meta.st_mode) & 0o022
+    ):
+        raise WeatherOperatorUpgradeError("Python cache directory metadata drifted")
+    try:
+        children = tuple(path.iterdir())
+    except OSError as exc:
+        raise WeatherOperatorUpgradeError("Python cache directory cannot be enumerated") from exc
+    for child in children:
+        try:
+            child_meta = child.lstat()
+        except OSError as exc:
+            raise WeatherOperatorUpgradeError("Python cache entry is unavailable") from exc
+        if (
+            not child.name.endswith(".pyc")
+            or not stat.S_ISREG(child_meta.st_mode)
+            or stat.S_ISLNK(child_meta.st_mode)
+            or child_meta.st_nlink != 1
+            or stat.S_IMODE(child_meta.st_mode) & 0o022
+            or child_meta.st_size > _engine.MAX_ARTIFACT_BYTES
+        ):
+            raise WeatherOperatorUpgradeError("Python cache entry metadata drifted")
+
+
+def _observed_support_membership() -> set[str]:
+    observed: set[str] = set()
+    for item in _engine.SUPPORT_ROOT.iterdir():
+        if item.name == "deploy_executor":
+            _engine._require_directory(item, exact_mode=0o755)
+            for child in item.iterdir():
+                if child.name == PYTHON_CACHE_DIR:
+                    _validate_python_cache_directory(child)
+                    continue
+                meta = child.lstat()
+                if not stat.S_ISREG(meta.st_mode) or stat.S_ISLNK(meta.st_mode):
+                    raise WeatherOperatorUpgradeError("operator deploy_executor package contains a non-regular entry")
+                observed.add(f"deploy_executor/{child.name}")
+            continue
+        meta = item.lstat()
+        if not stat.S_ISREG(meta.st_mode) or stat.S_ISLNK(meta.st_mode):
+            raise WeatherOperatorUpgradeError("operator support root contains an unexpected non-regular entry")
+        observed.add(item.name)
+    return observed
+
+
 def _derive_checkout() -> Path:
     checkout = Path(__file__).resolve().parents[3]
     expected = checkout / UPGRADE_MODULE_RELATIVE
@@ -177,6 +231,7 @@ def _configure_engine() -> None:
         "ROOT_UID": ROOT_UID,
         "ROOT_GID": ROOT_GID,
         "_validate_upgrade_contract": _validate_upgrade_contract,
+        "_observed_support_membership": _observed_support_membership,
         "_derive_checkout": _derive_checkout,
         "_receipt": _receipt,
     }
