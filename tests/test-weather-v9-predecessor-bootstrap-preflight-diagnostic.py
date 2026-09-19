@@ -9,7 +9,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 DIAGNOSTIC = ROOT / "scripts/diagnose-weather-v9-predecessor-bootstrap-preflight.py"
-CONTRACT = ROOT / "ops/recovery/weather_v9-predecessor-bootstrap-preflight-diagnostic.contract.json"
+CONTRACT = ROOT / "ops/recovery/weather-v9-predecessor-bootstrap-preflight-diagnostic.contract.json"
 
 
 def load(path: Path, name: str):
@@ -34,9 +34,7 @@ class PassProbe:
         self.diagnostic_source_sha = "6" * 40
         self.registration = Registration()
 
-    def _call(self, name):
-        self.calls.append(name)
-
+    def _call(self, name): self.calls.append(name)
     def source_identity(self): self._call("source_identity")
     def bootstrap_capability(self): self._call("bootstrap_capability")
     def predecessor_contract(self): self._call("predecessor_contract")
@@ -77,18 +75,15 @@ class Tests(unittest.TestCase):
             if stage == "INTERNAL":
                 continue
             code = sorted(codes)[0]
-            probe = FailingProbe(
-                "source_identity",
-                diag.SafeDiagnosticFailure(stage, code),
-            )
-            value = diag.diagnose(probe)
+            value = diag.diagnose(FailingProbe(
+                "source_identity", diag.SafeDiagnosticFailure(stage, code)
+            ))
             self.assertEqual((value["failure_stage"], value["failure_code"]), (stage, code))
             self.assertIs(value["host_mutation_started"], False)
 
     def test_unknown_failures_collapse_to_internal_without_text_leak(self):
         secret = "synthetic-secret /protected/arbitrary/path"
-        probe = FailingProbe("source_identity", RuntimeError(secret))
-        value = diag.diagnose(probe)
+        value = diag.diagnose(FailingProbe("source_identity", RuntimeError(secret)))
         encoded = json.dumps(value, sort_keys=True)
         self.assertEqual((value["failure_stage"], value["failure_code"]), ("INTERNAL", "UNCLASSIFIED"))
         self.assertNotIn("synthetic-secret", encoded)
@@ -98,9 +93,10 @@ class Tests(unittest.TestCase):
 
     def test_contract_matches_fixed_enum_and_denies_mutation(self):
         contract = json.loads(CONTRACT.read_text())
-        expected = {stage: sorted(codes) for stage, codes in diag.FAILURE_CODES.items()}
         self.assertEqual(contract["issue"], 636)
-        self.assertEqual(contract["failure_codes"], expected)
+        self.assertEqual(contract["failure_codes"], {
+            stage: sorted(codes) for stage, codes in diag.FAILURE_CODES.items()
+        })
         self.assertTrue(contract["root_read_only"])
         for field in (
             "writes_allowed", "systemd_mutation", "replay_mutation", "weather_runtime_mutation",

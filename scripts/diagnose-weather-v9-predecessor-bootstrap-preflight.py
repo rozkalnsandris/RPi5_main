@@ -5,7 +5,6 @@ import importlib.util
 import json
 import os
 from pathlib import Path
-import stat
 import sys
 from typing import Any
 
@@ -14,7 +13,7 @@ sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLER_PATH = ROOT / "scripts/install-weather-v9-predecessor-bootstrap-capability.py"
 CORE_PATH = ROOT / "ops/lib/deploy_executor/weather_v9_predecessor_bootstrap_privileged.py"
-CONTRACT_PATH = ROOT / "ops/recovery/weather_v9_predecessor_bootstrap_preflight_diagnostic.contract.json"
+CONTRACT_PATH = ROOT / "ops/recovery/weather-v9-predecessor-bootstrap-preflight-diagnostic.contract.json"
 SCHEMA = "rozkalns.rpi5-main.weather-v9-predecessor-bootstrap-preflight-diagnostic.v1"
 PREDECESSOR_SHA = "80261255b3be2aa7dd40986254d4ea478b4e2e1b"
 ROOT_UID = 0
@@ -119,11 +118,19 @@ class CanonicalProbe:
     def durable_baseline(self) -> None:
         recovery = self.recovery
         base = recovery.base
-        if base._lstat_optional(recovery.REGISTRATION_PATH) is not None:
+        try:
+            registration = base._lstat_optional(recovery.REGISTRATION_PATH)
+            state_db = base._lstat_optional(recovery.STATE_DB_PATH)
+            staging_present = any(
+                base._lstat_optional(path) is not None for path in recovery.KNOWN_STAGING_PATHS
+            )
+        except Exception as exc:
+            raise SafeDiagnosticFailure("DURABLE_BASELINE", "CONFIG_ROOT_METADATA_INVALID") from exc
+        if registration is not None:
             raise SafeDiagnosticFailure("DURABLE_BASELINE", "REGISTRATION_PRESENT")
-        if base._lstat_optional(recovery.STATE_DB_PATH) is not None:
+        if state_db is not None:
             raise SafeDiagnosticFailure("DURABLE_BASELINE", "STATE_DB_PRESENT")
-        if any(base._lstat_optional(path) is not None for path in recovery.KNOWN_STAGING_PATHS):
+        if staging_present:
             raise SafeDiagnosticFailure("DURABLE_BASELINE", "STAGING_RESIDUE_PRESENT")
         try:
             base._require_root_directory(recovery.CONFIG_ROOT, 0o700)
