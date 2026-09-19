@@ -36,8 +36,8 @@ core = load(CORE, "weather_v9_predecessor_bootstrap_privileged_test")
 def registration() -> object:
     return core.Registration(
         source_sha="5" * 40,
-        source_checkout=Path("/home/andris/RPi5_main-weather-v9-predecessor-bootstrap-test"),
-        manager_checkout=Path("/home/andris/RPi5_main"),
+        source_checkout=Path("/srv/fixture/RPi5_main-weather-v9-predecessor-bootstrap-test"),
+        manager_checkout=Path("/srv/fixture/RPi5_main"),
         manager_uid=1000,
         manager_gid=1000,
         release_files={name: "a" * 64 for name in core.RELEASE_FILES},
