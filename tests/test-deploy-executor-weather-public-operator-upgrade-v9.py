@@ -164,6 +164,34 @@ class WeatherOperatorUpgradeV9Tests(unittest.TestCase):
             with self.assertRaises(upgrade.WeatherOperatorUpgradeError):
                 upgrade._observed_support_membership()
 
+    def test_support_membership_rejects_orphan_python_cache_entry(self) -> None:
+        tmp, support, package = self.membership_fixture()
+        self.addCleanup(tmp.cleanup)
+        cache = package / "__pycache__"
+        cache.mkdir()
+        cache.chmod(0o755)
+        orphan = cache / "orphan.cpython-311.pyc"
+        orphan.write_bytes(b"orphan bytecode cache")
+        orphan.chmod(0o644)
+        uid_patch, gid_patch, support_patch = self.membership_patches(support)
+        with uid_patch, gid_patch, support_patch:
+            with self.assertRaises(upgrade.WeatherOperatorUpgradeError):
+                upgrade._observed_support_membership()
+
+    def test_support_membership_rejects_writable_python_cache_entry(self) -> None:
+        tmp, support, package = self.membership_fixture()
+        self.addCleanup(tmp.cleanup)
+        cache = package / "__pycache__"
+        cache.mkdir()
+        cache.chmod(0o755)
+        writable = cache / "module.cpython-311.pyc"
+        writable.write_bytes(b"writable bytecode cache")
+        writable.chmod(0o664)
+        uid_patch, gid_patch, support_patch = self.membership_patches(support)
+        with uid_patch, gid_patch, support_patch:
+            with self.assertRaises(upgrade.WeatherOperatorUpgradeError):
+                upgrade._observed_support_membership()
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
