@@ -1,0 +1,15 @@
+[Unit]
+Description=Rozkalns Weather v10 successor read-only privileged preflight socket
+
+[Socket]
+ListenStream=/run/rozkalns-weather-operator-v10-successor-preflight/request.sock
+SocketUser=andris
+SocketGroup=andris
+SocketMode=0600
+Accept=yes
+Backlog=1
+MaxConnections=1
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target

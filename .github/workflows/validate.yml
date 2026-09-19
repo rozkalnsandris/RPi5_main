@@ -83,6 +83,9 @@ jobs:
       - name: Validate Weather v10 successor privileged broker bridge
         run: python3 ./tests/test-weather-operator-v10-successor-broker.py
 
+      - name: Validate Weather v10 successor read-only preflight transport
+        run: python3 ./tests/test-weather-operator-v10-successor-preflight.py
+
   gitleaks:
     runs-on: ubuntu-latest
     timeout-minutes: 5

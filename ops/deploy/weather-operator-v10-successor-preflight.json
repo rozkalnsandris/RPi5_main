@@ -1,0 +1,31 @@
+{
+  "schema": "rozkalns.rpi5-main.weather-operator-v10-successor-preflight-contract.v1",
+  "issue": 647,
+  "purpose": "bounded read-only root evidence for Weather v10 successor broker preflight",
+  "request_schema": "rozkalns.rpi5-main.weather-operator-v10-successor-preflight.request.v1",
+  "receipt_schema": "rozkalns.rpi5-main.weather-operator-v10-successor-preflight.receipt.v1",
+  "fixed_operation": "preflight",
+  "fixed_socket": "/run/rozkalns-weather-operator-v10-successor-preflight/request.sock",
+  "fixed_entrypoint": "/usr/local/libexec/rozkalns-weather-operator-v10-successor-preflight/current/ops/bin/rozkalns-weather-operator-v10-successor-preflight-broker",
+  "predecessor_source_authority": "ROOT_OWNED_INSTALLED_WEATHER_HOST_CAPABILITY_REGISTRATION",
+  "read_only_evidence": [
+    "capability_source_sha",
+    "registered_artifact_hashes_match_installed_fixed_artifacts",
+    "durable_state_db_metadata_valid",
+    "broker_refresh_staging_paths_absent"
+  ],
+  "root_preflight_performs_git": false,
+  "root_preflight_performs_network": false,
+  "root_preflight_performs_systemd_mutation": false,
+  "root_preflight_performs_filesystem_mutation": false,
+  "root_preflight_reads_database_content": false,
+  "caller_selected_command_path_argv_environment": false,
+  "source_merge_authorizes_live": false,
+  "installation_requires_fresh_live_authorization": true,
+  "systemd_activation_requires_fresh_live_authorization": true,
+  "broker_refresh_requires_separate_live_authorization": true,
+  "weather_operator_upgrade_requires_separate_live_authorization": true,
+  "automatic_retry": false,
+  "automatic_cleanup": false,
+  "automatic_rollback": false
+}

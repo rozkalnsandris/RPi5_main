@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import importlib.machinery
+import importlib.util
+import os
+from pathlib import Path
+import sys
+
+sys.dont_write_bytecode = True
+HERE = Path(__file__).resolve()
+ROOT = HERE.parents[2]
+PACKAGE_NAME = "deploy_executor"
+PACKAGE_ROOT = ROOT / "ops/lib/deploy_executor"
+
+
+def _install_isolated_package() -> None:
+    for name in tuple(sys.modules):
+        if name == PACKAGE_NAME or name.startswith(PACKAGE_NAME + "."):
+            del sys.modules[name]
+    spec = importlib.machinery.ModuleSpec(PACKAGE_NAME, loader=None, is_package=True)
+    spec.submodule_search_locations = [str(PACKAGE_ROOT)]
+    package = importlib.util.module_from_spec(spec)
+    if list(package.__path__) != [str(PACKAGE_ROOT)]:
+        raise RuntimeError("isolated deploy_executor package path drifted")
+    sys.modules[PACKAGE_NAME] = package
+
+
+_install_isolated_package()
+
+from deploy_executor.weather_operator_v10_successor_preflight import (
+    REQUEST_MAX_BYTES,
+    WeatherV10SuccessorPreflightError,
+    encode_receipt,
+    execute_request,
+    failure_receipt,
+)
+
+
+def main() -> int:
+    if len(sys.argv) != 1:
+        return 64
+    if os.geteuid() != 0:
+        return 77
+    raw = sys.stdin.buffer.read(REQUEST_MAX_BYTES + 1)
+    try:
+        receipt = execute_request(raw)
+    except WeatherV10SuccessorPreflightError:
+        receipt = failure_receipt()
+    encoded = encode_receipt(receipt)
+    sys.stdout.buffer.write(encoded)
+    sys.stdout.buffer.flush()
+    return 0 if receipt.get("result") == "PASS" else 78
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
