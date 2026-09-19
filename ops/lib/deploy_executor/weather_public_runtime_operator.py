@@ -371,11 +371,58 @@ class ConcreteSanitizedWeatherBaselineProvider:
             _fail(f"Weather baseline {where} failed closed")
         return result
 
+    def _current_release_from_project(self, project_ids: tuple[str, ...]) -> tuple[str, Path, Path]:
+        release_root = Path(RELEASE_ROOT)
+        try:
+            root_meta = release_root.lstat()
+        except OSError as exc:
+            raise RuntimeError("Weather release root is unavailable") from exc
+        if not stat.S_ISDIR(root_meta.st_mode) or stat.S_ISLNK(root_meta.st_mode):
+            _fail("Weather release root identity is unsafe")
+
+        observed: list[tuple[str, Path]] = []
+        label_template = '{{ index .Config.Labels "com.docker.compose.project.config_files" }}'
+        for container_id in project_ids:
+            raw = self._run(
+                ("/usr/bin/docker", "inspect", "--format", label_template, container_id),
+                "project config provenance",
+            ).stdout.strip()
+            if not raw or "\x00" in raw or "," in raw:
+                _fail("Weather Compose config provenance is invalid")
+            config_path = Path(raw)
+            try:
+                relative = config_path.relative_to(release_root)
+            except ValueError:
+                _fail("Weather Compose config provenance escaped release root")
+            expected_parts = (relative.parts[0], *COMPOSE_RELATIVE.parts) if relative.parts else ()
+            if (
+                len(relative.parts) != len(COMPOSE_RELATIVE.parts) + 1
+                or tuple(relative.parts) != expected_parts
+                or _SHA40_RE.fullmatch(relative.parts[0]) is None
+            ):
+                _fail("Weather Compose config provenance is not a canonical release path")
+            current_sha = relative.parts[0]
+            canonical = release_root / current_sha / COMPOSE_RELATIVE
+            if config_path != canonical:
+                _fail("Weather Compose config provenance is not canonical")
+            observed.append((current_sha, config_path))
+
+        if len(set(observed)) != 1:
+            _fail("Weather deployed release provenance is ambiguous")
+        current_sha, compose = observed[0]
+        release = release_root / current_sha
+        try:
+            release_meta = release.lstat()
+        except OSError as exc:
+            raise RuntimeError("Weather deployed release is unavailable") from exc
+        if not stat.S_ISDIR(release_meta.st_mode) or stat.S_ISLNK(release_meta.st_mode):
+            _fail("Weather deployed release directory identity is unsafe")
+        _require_regular(compose)
+        return current_sha, release, compose
+
     def resolve(self, *, source_sha: str, target_alias: str) -> Mapping[str, Any]:
         if target_alias != TARGET_ALIAS or type(source_sha) is not str or _SHA40_RE.fullmatch(source_sha) is None:
             _fail("Weather baseline identity drifted")
-        release = Path(RELEASE_ROOT) / source_sha
-        compose = release / COMPOSE_RELATIVE
         project = self._run(
             ("/usr/bin/docker", "ps", "-a", "--filter", f"label=com.docker.compose.project={COMPOSE_PROJECT}", "--format", "{{.ID}}"),
             "project discovery",
@@ -392,8 +439,9 @@ class ConcreteSanitizedWeatherBaselineProvider:
             _fail("Weather baseline volume identity is ambiguous")
         volume_state = "present" if volume_out == HOST_VOLUME else "absent"
 
+        compose: Path | None = None
         if project_ids:
-            _require_regular(compose)
+            current_source_sha, release, compose = self._current_release_from_project(project_ids)
             head = self._run(
                 ("/usr/bin/git", "--no-optional-locks", "-C", str(release), "rev-parse", "HEAD"),
                 "release HEAD",
@@ -402,7 +450,7 @@ class ConcreteSanitizedWeatherBaselineProvider:
                 ("/usr/bin/git", "--no-optional-locks", "-C", str(release), "status", "--porcelain=v1", "--untracked-files=all"),
                 "release cleanliness",
             ).stdout
-            if head != source_sha or clean:
+            if head != current_source_sha or clean:
                 _fail("Weather deployed release provenance drifted")
             exact_ids = self._run(
                 ("/usr/bin/docker", "compose", "-p", COMPOSE_PROJECT, "-f", str(compose), "ps", "-aq", "weather"),
@@ -428,7 +476,6 @@ class ConcreteSanitizedWeatherBaselineProvider:
             if container_image != compose_image:
                 _fail("Weather running image is not the exact release image")
             deployment_state = "deployed"
-            current_source_sha: str | None = source_sha
         else:
             deployment_state = "not_deployed"
             current_source_sha = None
@@ -436,6 +483,8 @@ class ConcreteSanitizedWeatherBaselineProvider:
         schema_state = "absent"
         schema_version: int | None = None
         if deployment_state == "deployed":
+            if compose is None:
+                _fail("Weather deployed baseline lost Compose provenance")
             readiness = self._run(
                 ("/usr/bin/docker", "compose", "-p", COMPOSE_PROJECT, "-f", str(compose), "exec", "-T", "weather", "rozkalns-weather", "readiness"),
                 "readiness",
@@ -571,7 +620,7 @@ class ConcreteWeatherOperatorHostMutator:
         symbolic = _fixed_git(self._runner, trusted, account, "-C", str(trusted), "symbolic-ref", "-q", "HEAD")
         origin = _require_success(_fixed_git(self._runner, trusted, account, "-C", str(trusted), "remote", "get-url", "origin"), "trusted checkout origin").strip()
         ancestor = _fixed_git(self._runner, trusted, account, "-C", str(trusted), "merge-base", "--is-ancestor", RPI5_MIN_REVIEWED_ANCESTOR, expected_sha)
-        if top != str(trusted) or head != expected_sha or clean or symbolic.returncode != 1 or origin != RPi5_ORIGIN or ancestor.returncode != 0:
+        if top != str(trusted) or head != expected_sha or clean or symbolic.returncode != 1 or origin != RPI5_ORIGIN or ancestor.returncode != 0:
             _fail("Weather trusted checkout is incompatible with authorized source")
         manifest = self._manifest(trusted)
         for artifact in manifest["artifacts"]:
