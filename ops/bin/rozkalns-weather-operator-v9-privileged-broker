@@ -13,7 +13,7 @@ from deploy_executor import weather_operator_upgrade_v9_host_capability as cap
 
 GIT_ENV = {"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"}
 UPGRADE_ENTRYPOINT_BLOB = "a2a94480322a4b5ebc50a447e5f52fe31fe7e9bb"
-UPGRADE_MODULE_BLOB = "e4a4051b5a9e73fe62a543d097af31e2c2fc0875"
+UPGRADE_MODULE_BLOB = "3ecb42f4543cd611d62011debcd6d6433264a458"
 WORKTREE_ADD_UMASK = 0o022
 _MANAGER_PATH: Path | None = None
 _MANAGER_UID: int | None = None

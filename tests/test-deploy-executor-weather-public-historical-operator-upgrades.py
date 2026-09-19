@@ -17,6 +17,8 @@ V6_HISTORICAL_SHA = "9136c37156e84da3918e58d5d467c8b1e5cc403a"
 V7_HISTORICAL_SHA = "db7946fc64067c11d16a5b10902edf1157544db5"
 V9_MODULE_PATH = "ops/lib/deploy_executor/weather_public_runtime_operator_upgrade_v9.py"
 V9_CONTRACT_PATH = "ops/deploy/weather-public-runtime-operator-upgrade-v9.json"
+V9_BROKER_PATH = "ops/bin/rozkalns-weather-operator-v9-privileged-broker"
+V9_ENTRYPOINT_PATH = "ops/bin/rozkalns-weather-public-runtime-operator-upgrade-v9"
 TARGET_SOURCE_PATH = "ops/lib/deploy_executor/weather_public_runtime_operator.py"
 LEGACY_FROZEN_PATHS = (
     "ops/bin/rozkalns-weather-public-runtime-operator-upgrade-v3",
@@ -84,6 +86,10 @@ def python_string_constant(relative: str, name: str) -> str:
             if isinstance(target, ast.Name) and target.id == name:
                 return node.value.value
     raise AssertionError(f"missing string constant {name} in {relative}")
+
+
+def git_blob_sha1(data: bytes) -> str:
+    return hashlib.sha1(f"blob {len(data)}\0".encode("ascii") + data).hexdigest()
 
 
 def run_historical_tests(sha: str, tests: tuple[str, ...]) -> None:
@@ -183,8 +189,7 @@ class HistoricalWeatherOperatorUpgradeTests(unittest.TestCase):
     def test_v9_target_bindings_match_exact_target_source_bytes(self) -> None:
         source = (ROOT / TARGET_SOURCE_PATH).read_bytes()
         source_sha256 = hashlib.sha256(source).hexdigest()
-        blob_header = f"blob {len(source)}\0".encode("ascii")
-        source_blob_sha1 = hashlib.sha1(blob_header + source).hexdigest()
+        source_blob_sha1 = git_blob_sha1(source)
         contract = json.loads((ROOT / V9_CONTRACT_PATH).read_text(encoding="utf-8"))
 
         self.assertEqual(
@@ -197,6 +202,18 @@ class HistoricalWeatherOperatorUpgradeTests(unittest.TestCase):
             source_blob_sha1,
         )
         self.assertEqual(contract["new_blob"], source_blob_sha1)
+
+    def test_v9_broker_bindings_match_exact_upgrade_source_bytes(self) -> None:
+        entrypoint_blob = git_blob_sha1((ROOT / V9_ENTRYPOINT_PATH).read_bytes())
+        module_blob = git_blob_sha1((ROOT / V9_MODULE_PATH).read_bytes())
+        self.assertEqual(
+            python_string_constant(V9_BROKER_PATH, "UPGRADE_ENTRYPOINT_BLOB"),
+            entrypoint_blob,
+        )
+        self.assertEqual(
+            python_string_constant(V9_BROKER_PATH, "UPGRADE_MODULE_BLOB"),
+            module_blob,
+        )
 
 
 if __name__ == "__main__":

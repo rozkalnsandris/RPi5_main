@@ -15,6 +15,8 @@ from deploy_executor import weather_operator_v9_capability_module_refresh as ref
 from deploy_executor import weather_operator_v9_capability_refresh as old_refresh
 from deploy_executor import weather_operator_upgrade_v9_host_capability as cap
 
+POST_615_SOURCE_SHA = "dd0230aa1387a553db81bf59a02e4358f6432a1f"
+
 
 def artifact_hashes(*, module: str = "1") -> dict[str, str]:
     return {
@@ -116,16 +118,22 @@ class WeatherV9CapabilityModuleRefreshTests(unittest.TestCase):
         self.assertEqual(decoded["module_sha256"], "c" * 64)
         self.assertEqual(decoded["broker_sha256"], "2" * 64)
 
-    def test_current_source_delta_is_module_only_from_post_610_predecessor(self) -> None:
+    def test_post_615_source_delta_is_module_only_from_post_610_predecessor(self) -> None:
         module = "ops/lib/deploy_executor/weather_operator_upgrade_v9_host_capability.py"
-        self.assertNotEqual(git_bytes("HEAD", module), git_bytes(refresh.PREDECESSOR_SOURCE_SHA, module))
+        self.assertNotEqual(
+            git_bytes(POST_615_SOURCE_SHA, module),
+            git_bytes(refresh.PREDECESSOR_SOURCE_SHA, module),
+        )
         for path in (
             "ops/bin/rozkalns-weather-operator-v9-privileged-broker",
             "ops/systemd/rozkalns-weather-operator-v9-privileged-broker.socket",
             "ops/systemd/rozkalns-weather-operator-v9-privileged-broker@.service",
         ):
             with self.subTest(path=path):
-                self.assertEqual(git_bytes("HEAD", path), git_bytes(refresh.PREDECESSOR_SOURCE_SHA, path))
+                self.assertEqual(
+                    git_bytes(POST_615_SOURCE_SHA, path),
+                    git_bytes(refresh.PREDECESSOR_SOURCE_SHA, path),
+                )
 
     def test_host_capability_postcondition_is_bound_to_exact_target_source(self) -> None:
         target = (ROOT / "ops/lib/deploy_executor/weather_public_runtime_operator.py").read_bytes()
