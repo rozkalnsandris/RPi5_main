@@ -439,10 +439,12 @@ class WeatherCompositeOperatorTests(unittest.TestCase):
         for forbidden in ("shell=True", "os.system(", "subprocess.Popen(", "eval(", "exec("):
             self.assertNotIn(forbidden, source)
 
-
-    def test_sanitized_baseline_binds_release_head_and_running_image(self):
+    def test_sanitized_baseline_binds_deployed_provenance_not_prospective_target(self):
         calls=[]
+        current_sha="c" * 40
         image_match={"value": True}
+        config_provenance={"value": ""}
+        label_template='{{ index .Config.Labels "com.docker.compose.project.config_files" }}'
         def runner(argv, *, env=None, user=None, group=None):
             argv=tuple(argv); calls.append(argv)
             if argv[:4] == ("/usr/bin/docker", "ps", "-a", "--filter"):
@@ -450,13 +452,16 @@ class WeatherCompositeOperatorTests(unittest.TestCase):
             if argv[:4] == ("/usr/bin/docker", "volume", "ls", "--filter"):
                 return CommandResult(0, HOST_VOLUME + "\n", "")
             if argv[0:2] == ("/usr/bin/git", "--no-optional-locks") and "rev-parse" in argv:
-                return CommandResult(0, WEATHER_SHA + "\n", "")
+                return CommandResult(0, current_sha + "\n", "")
             if argv[0:2] == ("/usr/bin/git", "--no-optional-locks") and "status" in argv:
                 return CommandResult(0, "", "")
             if argv[:2] == ("/usr/bin/docker", "compose") and "ps" in argv:
                 return CommandResult(0, "container-1\n", "")
             if argv[:3] == ("/usr/bin/docker", "inspect", "--format"):
-                return CommandResult(0, f"sha256:{SHA256_A}\n", "")
+                if argv[3] == label_template:
+                    return CommandResult(0, config_provenance["value"] + "\n", "")
+                if argv[3] == "{{.Image}}":
+                    return CommandResult(0, f"sha256:{SHA256_A}\n", "")
             if argv[:2] == ("/usr/bin/docker", "compose") and "images" in argv:
                 return CommandResult(0, (SHA256_A if image_match["value"] else SHA256_B) + "\n", "")
             if argv[:2] == ("/usr/bin/docker", "compose") and "exec" in argv:
@@ -465,16 +470,25 @@ class WeatherCompositeOperatorTests(unittest.TestCase):
             raise AssertionError(argv)
         with tempfile.TemporaryDirectory() as tmp:
             release_root=Path(tmp)/"releases"
-            compose=release_root/WEATHER_SHA/"deploy/docker-compose.public.yml"
+            compose=release_root/current_sha/"deploy/docker-compose.public.yml"
             compose.parent.mkdir(parents=True)
             compose.write_text("services: {}\n")
+            config_provenance["value"]=str(compose)
             timer=Path(tmp)/"missing.timer"
+            prospective_release=release_root/WEATHER_SHA
+            self.assertFalse(prospective_release.exists())
             with mock.patch("deploy_executor.weather_public_runtime_operator.RELEASE_ROOT", str(release_root)), mock.patch("deploy_executor.weather_public_runtime_operator.SYSTEMD_TIMER_PATH", timer):
                 provider=ConcreteSanitizedWeatherBaselineProvider(runner=runner)
                 value=provider.resolve(source_sha=WEATHER_SHA, target_alias=TARGET_ALIAS)
                 parsed=parse_weather_bootstrap_baseline(value)
-                self.assertEqual(parsed.current_source_sha, WEATHER_SHA)
+                self.assertEqual(parsed.current_source_sha, current_sha)
                 self.assertEqual(parsed.schema_state, "ready")
+                self.assertFalse(prospective_release.exists())
+                self.assertFalse(any(str(prospective_release) in item for argv in calls for item in argv))
+                config_provenance["value"]=str(Path(tmp)/"outside/docker-compose.public.yml")
+                with self.assertRaises(RuntimeError):
+                    provider.resolve(source_sha=WEATHER_SHA, target_alias=TARGET_ALIAS)
+                config_provenance["value"]=str(compose)
                 image_match["value"]=False
                 with self.assertRaises(RuntimeError):
                     provider.resolve(source_sha=WEATHER_SHA, target_alias=TARGET_ALIAS)
