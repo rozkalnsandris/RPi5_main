@@ -59,6 +59,9 @@ jobs:
       - name: Validate Weather v9 capability-local canonical operation
         run: python3 ./tests/test-weather-operator-v9-canonical-operation.py
 
+      - name: Validate Weather v9 capability-state bootstrap recovery
+        run: python3 ./tests/test-weather-v9-capability-state-bootstrap.py
+
   gitleaks:
     runs-on: ubuntu-latest
     timeout-minutes: 5
