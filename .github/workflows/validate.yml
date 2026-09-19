@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Check out repository
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -70,7 +70,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Check out full repository history
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -82,3 +82,9 @@ jobs:
     uses: rozkalnsandris/ops-workflows/.github/workflows/public-repo-baseline.yml@e2fa7ecb1b1cdfab0711d8e3e147b5ae03a9a3f2
     with:
       forbid_self_hosted: true
+
+  workflow-security:
+    name: GitHub Actions static analysis
+    uses: rozkalnsandris/ops-workflows/.github/workflows/workflow-security.yml@0450e662093c41e98ca96802b523ac91eb02e5fe
+    permissions:
+      contents: read
