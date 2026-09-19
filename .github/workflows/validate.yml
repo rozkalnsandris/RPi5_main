@@ -71,6 +71,9 @@ jobs:
       - name: Validate Weather v9 predecessor bootstrap installed release imports
         run: python3 ./tests/test-weather-v9-predecessor-bootstrap-release-imports.py
 
+      - name: Validate Weather v9 predecessor capability repair
+        run: python3 ./tests/test-weather-v9-predecessor-bootstrap-capability-repair.py
+
       - name: Validate Weather v9 predecessor installer identity handling
         run: python3 ./tests/test-weather-v9-predecessor-bootstrap-installer-identity.py
 
