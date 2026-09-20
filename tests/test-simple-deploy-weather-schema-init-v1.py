@@ -61,7 +61,7 @@ class Fixture:
 class Tests(unittest.TestCase):
     def test_contract_and_installer_keep_schema_gate_separate(self):
         c=json.loads((ROOT/"ops/deploy/simple-deploy-weather-schema-init-v1.json").read_text())
-        self.assertFalse(c["source_merge_authorizes_live"]); self.assertIn("ordinary-reconciliation-before-schema-ready",c["forbidden"]); self.assertEqual(c["consumer_source_sha"], bridge.EXPECTED_CONSUMER_SOURCE_SHA)
+        self.assertFalse(c["source_merge_authorizes_live"]); self.assertIn("ordinary-reconciliation-before-schema-ready",c["forbidden"]); self.assertIn("fixed-schema-container-absent-when-readiness-503",c["preconditions"]); self.assertEqual(c["consumer_source_sha"], bridge.EXPECTED_CONSUMER_SOURCE_SHA)
         install=json.loads((ROOT/"ops/deploy/simple-deploy-installer-v1.json").read_text())
         self.assertIn("database-or-data-mutation",install["not_performed_by_installer"])
         self.assertTrue(any(x.get("source")=="ops/bin/rozkalns-simple-deploy-weather-schema-init" for x in install["files"]))

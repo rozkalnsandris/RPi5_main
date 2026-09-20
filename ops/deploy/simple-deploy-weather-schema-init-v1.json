@@ -25,7 +25,7 @@
     "simple-deploy-install-only-complete",
     "generic-service-and-timer-not-activated",
     "existing-host-volume-exact-name",
-    "fixed-schema-container-absent",
+    "fixed-schema-container-absent-when-readiness-503",
     "readiness-is-503-or-no-op-200",
     "public-anonymous-image-contract-valid"
   ],
