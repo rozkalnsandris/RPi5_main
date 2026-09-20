@@ -1,0 +1,67 @@
+{
+  "schema": "rozkalns.rpi5-main.simple-deploy-host.v1",
+  "issue": 666,
+  "status": "SOURCE_CONTRACT_INERT_NOT_INSTALLED",
+  "shared_contract": {
+    "repository": "rozkalnsandris/ops-workflows",
+    "revision": "e05ed760791a127c7c9628696806ef39c9fe329c",
+    "policy": "policy/simple-deploy-v1.json",
+    "workflow": ".github/workflows/simple-deploy.yml"
+  },
+  "runtime": {
+    "service": "rozkalns-simple-deployer.service",
+    "timer": "rozkalns-simple-deployer.timer",
+    "user": "rozkalns-simple-deployer",
+    "registry": "/etc/rozkalns-simple-deployer/targets.json",
+    "identity": "/etc/rozkalns-simple-deployer/identity.json",
+    "compose_root": "/etc/rozkalns-simple-deployer/compose",
+    "state_root": "/var/lib/rozkalns-simple-deployer"
+  },
+  "registry": {
+    "schema": "rozkalns.rpi5-main.simple-deploy.targets.v1",
+    "tracked_source": "ops/deploy/simple-deploy-targets-v1.json",
+    "execution_enabled_in_source": false,
+    "initial_targets": 0,
+    "target_adoption_requires_tracked_source_change": true,
+    "architecture": "linux/arm64",
+    "pull_profiles": ["public-anonymous-pull", "private-read-only"],
+    "private_read_only_profile_activated": false
+  },
+  "deployment_identity": {
+    "production_tag": "production",
+    "production_tag_is_discovery_only": true,
+    "canonical_identity": "immutable_registry_digest",
+    "candidate_frozen_per_attempt": true,
+    "consumer_source_from_image_label": "org.opencontainers.image.revision",
+    "shared_revision_from_image_label": "io.rozkalns.simple-deploy.shared-revision"
+  },
+  "ordinary_mutation": {
+    "compose_pull": true,
+    "compose_up_wait": true,
+    "arbitrary_shell": false,
+    "arbitrary_argv": false,
+    "arbitrary_path": false,
+    "arbitrary_repository": false,
+    "arbitrary_service": false,
+    "database_or_data_mutation": false,
+    "destructive_cleanup": false,
+    "network_or_cloudflare_mutation": false,
+    "secret_or_permission_mutation": false,
+    "unrelated_systemd_mutation": false
+  },
+  "failure": {
+    "per_target_lock": true,
+    "pre_mutation_fail_closed": true,
+    "post_mutation_stop_error_blocks_future_automatic_attempts": true,
+    "automatic_rollback": false,
+    "automatic_retry": false,
+    "alternate_image_or_tag": false
+  },
+  "activation": {
+    "source_merge_installs_or_enables_runtime": false,
+    "separate_exact_live_cutover_required": true,
+    "cutover_must_bind_exact_rpi5_main_sha": true,
+    "cutover_must_bind_exact_initial_targets": true,
+    "ordinary_release_requires_fresh_live_after_successful_cutover": false
+  }
+}

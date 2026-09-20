@@ -1,0 +1,6 @@
+{
+  "schema": "rozkalns.rpi5-main.simple-deploy.targets.v1",
+  "schema_version": 1,
+  "execution_enabled": false,
+  "targets": []
+}
