@@ -4,7 +4,7 @@ This is the active local FAST-LANE startup contract. The older versioned filenam
 
 ## Core rule
 
-**The human approves the RISK / DECISION. Automation executes the TECHNICAL STEPS.** Read-only checks never create owner gates. STRICT describes host/runtime mutation risk, not approval-per-command.
+**The human approves the RISK / DECISION. Automation executes the TECHNICAL STEPS.** Read-only checks never create owner gates. STRICT describes host/runtime mutation risk, not approval-per-command or a mandatory executor implementation.
 
 ## Lane role
 
@@ -77,14 +77,16 @@ For an active, valid `AUTO-RUN FULL RPi5_main #<issue>` authorization:
 - a changed head voids prior merge readiness and requires fresh review/checks before auto-merge may be enabled again;
 - native stacked PRs remain disabled under the current no-history-rewrite policy;
 - a turn/session ending is resumable and must persist state to GitHub;
-- runtime mutation is permitted only when the activation envelope froze the exact mutation class/target and the existing reviewed executor protocol accepts it;
-- AUTO-RUN never gives the conversational agent direct root/sudo/secret/protected-runtime access.
+- runtime mutation is permitted only when the activation envelope froze the exact mutation class and target;
+- execution of that authorized live operation may use an existing reviewed repository executor or direct RDC/host-shell execution as `andris`; executor choice does not widen the frozen authority;
+- direct Docker and `sudo`/root are allowed only for the exact frozen live class/target and only when technical OS/RDC/sudoers permissions allow them;
+- secret, credential and protected-runtime inspection remain separate mutation/access classes and are never implied by Docker or sudo authority.
 
 ## Composite STRICT
 
 One live authorization may cover tightly coupled operations required for one bounded host/runtime action when it binds exact Git SHA, exact host/target, allowed mutation categories, hard limits, explicit exclusions and expected baseline. A trusted local checkout may perform only explicitly allowed `git fetch` + `git merge --ff-only` inside the same envelope when needed; this never implies `reset`, `rebase`, `clean` or force operations.
 
-A valid AUTO-RUN FULL activation may serve as that up-front live decision only for mutation categories frozen in its owner-identity activation receipt. When the existing `#236` deferred pull executor requires a short-lived LIVE-AUTH GitHub issue, AUTO-RUN may materialize it later only after fresh revalidation and only for the already-frozen target/operation class.
+A valid AUTO-RUN FULL activation may serve as that up-front live decision only for mutation categories frozen in its owner-identity activation receipt. When the existing `#236` deferred pull executor is the selected execution path and requires a short-lived LIVE-AUTH GitHub issue, AUTO-RUN may materialize it later only after fresh revalidation and only for the already-frozen target/operation class. Direct RDC is an alternative executor when the same frozen authorization explicitly permits the operation; it does not require inventing a narrow executor solely because the caller is the conversational agent.
 
 Preflight is the beginning of the same fail-closed one-shot. Revalidate SHA/host/baseline immediately before first mutation and stop on drift. Use pinned tooling and exact artifacts where applicable.
 
@@ -92,7 +94,7 @@ Preflight is the beginning of the same fail-closed one-shot. Revalidate SHA/host
 
 Sudo/root, packages, services/timers, Docker, networking/firewall/DNS/Cloudflare Tunnel, SSH/users/mounts/kernel, backups, databases/application data, secrets/credentials, protected configuration/runtime inspection or another host/runtime mutation require Composite Live authorization or an exact equivalent frozen AUTO-RUN FULL authorization. Uncertain live classification is STRICT.
 
-AUTO-RUN FULL does not authorize the agent to run `sudo` or read protected paths. It may only drive an already-reviewed narrow executor/operation through the repository's declared authorization boundary.
+After that exact authority exists, the conversational agent may execute the authorized host operation directly through RDC as `andris`, including Docker or `sudo`/root when technically permitted. This never creates generic root/shell authority, never widens the approved target or mutation class, and never implies protected-data/secret access.
 
 ## Failure and evidence
 
