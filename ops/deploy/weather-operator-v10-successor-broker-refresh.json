@@ -1,11 +1,15 @@
 {
   "schema": "rozkalns.rpi5-main.weather-operator-v10-successor-broker-refresh.v1",
-  "issue": 643,
-  "purpose": "Replace only the installed Weather privileged broker plus registration with the reviewed v10 successor transport while preserving the installed v9 capability module, systemd units, credential surface and durable replay DB.",
+  "issue": 664,
+  "purpose": "Replace only the installed Weather privileged broker plus registration with the reviewed v10 successor transport, accepting either the historical v9 broker or an already-installed reviewed v10 successor broker as predecessor only when the root-owned registration broker hash matches exactly one fixed Git source at the registered predecessor commit.",
   "minimum_predecessor_ancestor": "80261255b3be2aa7dd40986254d4ea478b4e2e1b",
   "predecessor_source_authority": "ROOT_OWNED_INSTALLED_REGISTRATION_CAPABILITY_SOURCE_SHA",
   "target_source": "EXACT_CURRENT_RPI5_MAIN_AT_SEPARATE_LIVE_GATE",
-  "predecessor_broker_source": "ops/bin/rozkalns-weather-operator-v9-privileged-broker",
+  "predecessor_broker_sources": [
+    "ops/bin/rozkalns-weather-operator-v9-privileged-broker",
+    "ops/bin/rozkalns-weather-operator-v10-successor-privileged-broker"
+  ],
+  "predecessor_selection": "REGISTRATION_BROKER_SHA256_EXACTLY_ONE_FIXED_GIT_SOURCE",
   "target_broker_source": "ops/bin/rozkalns-weather-operator-v10-successor-privileged-broker",
   "fixed_targets": {
     "broker": "/usr/local/libexec/rozkalns-weather-operator-v9-privileged-broker",
@@ -36,9 +40,10 @@
   "source_merge_authorizes_live": false,
   "preflight_requires": [
     "source checkout is clean and reviewed-origin",
-    "registration is exact root-owned 0600 and provides the runtime predecessor source SHA",
+    "registration is exact root-owned 0600 and provides the runtime predecessor source SHA and broker SHA-256",
+    "registered broker SHA-256 matches exactly one existing executable Git blob from the fixed historical-v9/v10-successor broker source allowlist at the registered predecessor source",
     "runtime predecessor source descends from the reviewed v9 capability floor and is an ancestor of target source",
-    "installed module/broker/socket/service hashes exactly match blobs represented by the registered predecessor source",
+    "installed module/broker/socket/service hashes exactly match the selected predecessor identity",
     "target module/socket/service remain byte-identical to the installed predecessor source",
     "target successor broker is executable in Git and differs from predecessor broker",
     "durable replay/state DB exists with exact root-owned 0600 metadata",
@@ -59,6 +64,7 @@
     "fresh Weather baseline/JIT reconciliation before application rollout"
   ],
   "explicit_exclusions": [
+    "no predecessor broker source outside the fixed historical-v9/v10-successor allowlist",
     "no systemd daemon-reload/enable/start/stop/restart",
     "no Weather application Docker/systemd mutation",
     "no SQLite/corpus/snapshot/database mutation",
