@@ -127,6 +127,16 @@ Database/schema/data mutation, host infrastructure, systemd/control-plane change
 
 Unknown runtime-relevant paths fail toward review, never silently toward `NO_DEPLOY` or automatic deployment.
 
+### Cross-cutting Track Y — Post-merge Auto-Live v1
+
+Auto-Live v1 is retained as an architectural foundation for post-merge exact-target reconciliation and fail-closed automatic eligibility. It is not a competing current deployment framework.
+
+Canonical A0 contract: `docs/AUTO_LIVE_V1.md` + `ops/deploy/auto-live-v1.json`. Roadmap/DoD: issue #421.
+
+The A0/A2 source contracts remain useful for exact source/target identity, full production-baseline-to-target classification, target serialization, least privilege and first-activation owner-gate semantics. Historical Auto-Live source state with `execution_enabled=false` must not be interpreted as current runtime activation.
+
+SIMPLE-DEPLOY v1 is now the concrete shared application-release profile for compatible Docker/Compose services. Where old Auto-Live manifests or controllers conflict with the accepted SIMPLE-DEPLOY consumer/runtime contract, reconcile them as compatibility/history rather than creating another deployment engine.
+
 ## 5. Current cross-project priority — SIMPLE-DEPLOY v1 Weather canary
 
 The current priority is the accepted shared SIMPLE-DEPLOY rollout, not the historical Weather v10 broker/operator/JIT path and not an unconditional return to older Phase 3/4 program checkpoints.
