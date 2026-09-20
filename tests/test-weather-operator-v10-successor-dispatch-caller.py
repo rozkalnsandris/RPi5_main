@@ -273,7 +273,7 @@ class WeatherV10SuccessorDispatchCallerTests(unittest.TestCase):
             "rozkalns.rpi5-main.weather-operator-v10-successor-dispatch-caller-refresh.v2",
         )
         self.assertEqual(value["issue"], 658)
-        self.assertEqual(value["historical_predecessor_source_sha"], PREDECESSOR)
+        self.assertEqual(value["legacy_predecessor_source_sha"], PREDECESSOR)
         self.assertEqual(
             value["installed_successor_predecessor_source_sha"],
             INSTALLED_SUCCESSOR_PREDECESSOR,
