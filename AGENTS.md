@@ -4,12 +4,12 @@ These rules are durable instructions for Codex and every other agent.
 
 ## Production safety boundary
 
-- Work inside this repository unless a task explicitly allows a narrowly scoped, read-only inspection.
-- Never obtain autonomous root access or run `sudo`.
-- Do not change production configuration without a separate task that identifies the exact target and rollback.
-- Do not install, remove, or upgrade packages; alter services, timers, Docker, networking, firewall, DNS, Cloudflare Tunnel, SSH, users, mounts, kernel, backups, databases, or application data.
-- Do not restart, reload, stop, enable, or disable services.
-- Do not read process/container environments, use `docker inspect`, or copy configuration trees.
+- Work inside this repository by default. Direct RDC/host-shell work outside the repository is allowed only when the current owner command explicitly authorizes the exact LIVE mutation class and target; otherwise external inspection must remain narrowly scoped and read-only.
+- Direct RDC/host-shell execution as `andris` is an allowed executor after exact current owner LIVE authority exists. Docker and `sudo`/root may be used only inside that frozen class/target envelope and only when OS/RDC/sudoers permissions allow them; no generic root or shell authority is implied.
+- Do not change production configuration without a current owner authorization that identifies the exact target, allowed mutation class and applicable recovery semantics.
+- Do not install, remove, or upgrade packages; alter services, timers, Docker, networking, firewall, DNS, Cloudflare Tunnel, SSH, users, mounts, kernel, backups, databases, or application data unless that exact mutation category and target are explicitly owner-authorized for the current LIVE operation.
+- Do not restart, reload, stop, enable, or disable services unless the exact service lifecycle mutation is explicitly owner-authorized for the current LIVE operation.
+- Do not read process/container environments, use `docker inspect`, or copy protected configuration trees unless protected-runtime inspection is itself separately and explicitly authorized; Docker or sudo authority alone does not grant protected-data access.
 
 ## Forbidden paths and data
 
@@ -69,6 +69,7 @@ Read `docs/FAST_LANE_V2_2.md` as the active RPi5-specific FAST contract.
 - Composite Live must bind exact Git SHA, exact host/target, allowed mutation categories, hard limits where practical, explicit exclusions and expected baseline. It may include only explicitly named trusted `git fetch` + `git merge --ff-only`; it never implies reset/rebase/clean/force.
 - Authorization is consumed at the first authorized mutation. Any later error, ambiguity or drift requires evidence preservation and STOP; no automatic retry, rollback, cleanup, reset, rebase or alternate mutation path unless explicitly pre-authorized.
 - **STRICT is the default for host/runtime work**: sudo/root, packages, services/timers, Docker, networking/firewall/DNS/Cloudflare Tunnel, SSH/users/mounts/kernel, backups, databases/application data, secrets/credentials and protected runtime inspection.
+- Direct RDC/host-shell execution is an allowed executor after exact Composite Live authority exists for the named class/target; STRICT classifies authority and risk, not a mandatory executor implementation.
 - Put any remaining owner decision visibly at the end under `ACTION REQUIRED` and provide exact copyable input when needed.
 - Merge remains explicit owner authority in FAST and never by itself authorizes host/runtime mutation. A valid `AUTO-RUN FULL RPi5_main #<issue>` activation is a separate explicit owner decision with its own frozen merge/live envelope; it is never inferred from FAST continuation.
 
@@ -90,8 +91,8 @@ Canonical local contract: `.github/auto-run-full-v2.json` and `docs/AUTO_RUN_FUL
 - If the PR head changes, previous merge readiness is void. Freshly review/revalidate the new head before auto-merge may be enabled again.
 - Repository rulesets remain authoritative; no bypass, force merge, reset/rebase/force-push or history rewrite is allowed.
 - If repository auto-merge capability is unavailable, direct exact-head merge is only a fallback after the same final readiness gate and only inside the frozen FULL merge authority.
-- Runtime/live authority exists only for mutation classes and targets frozen at activation. Use existing reviewed operation registries, queue/baseline checks and the `#236` LIVE-AUTH protocol where applicable; do not create arbitrary SSH/sudo/shell authority.
-- The agent itself still must not run `sudo`, obtain autonomous root, read protected secrets/configuration or bypass the earlier production safety boundary. AUTO-RUN may drive an already-reviewed narrow executor only through its declared GitHub authorization protocol.
+- Runtime/live authority exists only for mutation classes and targets frozen at activation. Use existing reviewed operation registries, queue/baseline checks and the `#236` LIVE-AUTH protocol where applicable. Direct RDC/host-shell execution as `andris` is also an allowed executor for those exact frozen classes/targets when technical permissions allow; neither path creates generic root/shell authority.
+- The agent may use Docker or `sudo`/root through authorized RDC only when the frozen issue/activation explicitly includes that exact live mutation class and target and technical permissions permit it. Secret/credential/protected configuration access remains a separate class that must be explicitly frozen; Docker or sudo authority alone never grants it.
 - A ChatGPT turn/session ending is resumable state, not a STOP. Persist continuation in GitHub and allow event-triggered Work, the hourly watchdog or manual `turpini` to resume the already-active frozen issue.
 - If ChatGPT/app permissions require a product-level confirmation, persist `PAUSED_PLATFORM_APPROVAL`; repository policy cannot suppress a platform-mandated approval.
 - Provider LLM API keys, token-billed fallback and automatic paid-credit purchase are forbidden by default.
