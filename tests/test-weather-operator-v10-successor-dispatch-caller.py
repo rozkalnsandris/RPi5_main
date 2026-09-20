@@ -19,6 +19,7 @@ from deploy_executor import weather_operator_upgrade_v10_dispatch_caller as call
 from deploy_executor import weather_operator_upgrade_v9_dispatch_caller as legacy
 
 PREDECESSOR = "4ed279e04b240858fc8a2ce69e95f9c546e3a26b"
+REQUEST_ID = "123e4567-e89b-42d3-a456-426614174000"
 ENTRYPOINT = ROOT / "ops/bin/rozkalns-weather-operator-v9-dispatch-caller"
 SUCCESSOR = ROOT / "ops/lib/deploy_executor/weather_operator_upgrade_v10_dispatch_caller.py"
 LEGACY = ROOT / "ops/lib/deploy_executor/weather_operator_upgrade_v9_dispatch_caller.py"
@@ -41,7 +42,7 @@ class FakeClient:
         return SimpleNamespace(value=self.rows, next_url=None, server_time=self.now)
 
 
-def payload(request_id: str = "weather-v10-test-request") -> dict[str, object]:
+def payload(request_id: str = REQUEST_ID) -> dict[str, object]:
     return {
         "schema": caller.AUTH_SCHEMA,
         "request_id": request_id,
@@ -59,7 +60,7 @@ def payload(request_id: str = "weather-v10-test-request") -> dict[str, object]:
     }
 
 
-def issue(now: datetime, *, number: int = 87, title: str = caller.AUTH_TITLE, request_id: str = "weather-v10-test-request", age: int = 0) -> dict[str, object]:
+def issue(now: datetime, *, number: int = 87, title: str = caller.AUTH_TITLE, request_id: str = REQUEST_ID, age: int = 0) -> dict[str, object]:
     body = caller.AUTH_START + "\n```json\n" + json.dumps(payload(request_id), sort_keys=True, separators=(",", ":")) + "\n```\n" + caller.AUTH_END
     return {
         "id": 900000 + number,
@@ -108,7 +109,7 @@ class WeatherV10SuccessorDispatchCallerTests(unittest.TestCase):
         self.assertIsNotNone(candidate)
         assert candidate is not None
         self.assertEqual(candidate.request.authorization_issue_number, 87)
-        self.assertEqual(candidate.request.request_id, "weather-v10-test-request")
+        self.assertEqual(candidate.request.request_id, REQUEST_ID)
 
     def test_v9_authorization_is_not_reused_by_successor(self) -> None:
         row = issue(self.now, title="[LIVE-AUTH][PENDING] rpi5-main-weather-operator-upgrade-v9")
@@ -149,7 +150,7 @@ class WeatherV10SuccessorDispatchCallerTests(unittest.TestCase):
             second = caller.run_once(client, state_dir=state, dispatcher=dispatch)
         self.assertEqual(first["result"], "PASS")
         self.assertEqual(second["result"], "AUTHORIZATION_ALREADY_ATTEMPTED")
-        self.assertEqual(calls, ["weather-v10-test-request"])
+        self.assertEqual(calls, [REQUEST_ID])
 
     def test_malformed_multiple_stale_and_app_auth_fail_closed(self) -> None:
         malformed = issue(self.now)
