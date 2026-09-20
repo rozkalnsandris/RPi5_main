@@ -65,6 +65,33 @@ class WeatherV10SuccessorBrokerTests(unittest.TestCase):
         self.assertEqual(git_blob_sha(V10_ENTRYPOINT), "86f1f311c252e42a201d75d6e92f38bf255ecf5a")
         self.assertEqual(git_blob_sha(V10_MODULE), "07e1908870f5051119aa61a2e899d0ae9ba466ab")
 
+    def test_predecessor_source_selection_accepts_historical_or_successor(self) -> None:
+        historical, successor = refresh.PREDECESSOR_BROKER_SOURCES
+        candidates = {
+            historical: "a" * 64,
+            successor: "b" * 64,
+        }
+        self.assertEqual(refresh.select_predecessor_broker_source("a" * 64, candidates), historical)
+        self.assertEqual(refresh.select_predecessor_broker_source("b" * 64, candidates), successor)
+
+    def test_predecessor_source_selection_rejects_zero_ambiguous_or_widened_match(self) -> None:
+        historical, successor = refresh.PREDECESSOR_BROKER_SOURCES
+        with self.assertRaises(refresh.WeatherV10SuccessorBrokerRefreshError):
+            refresh.select_predecessor_broker_source(
+                "c" * 64,
+                {historical: "a" * 64, successor: "b" * 64},
+            )
+        with self.assertRaises(refresh.WeatherV10SuccessorBrokerRefreshError):
+            refresh.select_predecessor_broker_source(
+                "a" * 64,
+                {historical: "a" * 64, successor: "a" * 64},
+            )
+        with self.assertRaises(refresh.WeatherV10SuccessorBrokerRefreshError):
+            refresh.select_predecessor_broker_source(
+                "a" * 64,
+                {"ops/bin/unreviewed-broker": "a" * 64},
+            )
+
     def test_dynamic_predecessor_plan_preserves_nonbroker_artifacts(self) -> None:
         predecessor_sha = "1" * 40
         target_sha = "2" * 40
@@ -139,8 +166,10 @@ class WeatherV10SuccessorBrokerTests(unittest.TestCase):
 
     def test_contract_keeps_live_as_separate_gate(self) -> None:
         value = json.loads(CONTRACT.read_text(encoding="utf-8"))
-        self.assertEqual(value["issue"], 643)
+        self.assertEqual(value["issue"], 664)
         self.assertEqual(value["predecessor_source_authority"], "ROOT_OWNED_INSTALLED_REGISTRATION_CAPABILITY_SOURCE_SHA")
+        self.assertEqual(value["predecessor_broker_sources"], list(refresh.PREDECESSOR_BROKER_SOURCES))
+        self.assertEqual(value["predecessor_selection"], "REGISTRATION_BROKER_SHA256_EXACTLY_ONE_FIXED_GIT_SOURCE")
         self.assertFalse(value["systemd_mutation"])
         self.assertFalse(value["queue_or_live_auth_creation"])
         self.assertFalse(value["source_merge_authorizes_live"])
