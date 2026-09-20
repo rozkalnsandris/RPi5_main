@@ -4,6 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "ops/maintenance/rpi5-maintenance-integration.json"
+DEPLOY_TARGETS = ROOT / "ops/deploy/targets.json"
 
 with CONTRACT.open(encoding="utf-8") as handle:
     contract = json.load(handle)
@@ -33,7 +34,6 @@ for relative in removed_runtime_duplicates:
 
 removed_source_duplicates = (
     "ops/lib/rpi5-maintenance-health.sh",
-    "ops/lib/rpi5-maintenance-locks.sh",
     "ops/lib/rpi5-maintenance-telegram.py",
     "ops/lib/rpi5-update-apt-policy.sh",
     "ops/lib/rpi5-update-cleanup-policy.sh",
@@ -85,5 +85,22 @@ for relative in removed_implementation_tests:
 # Backup ownership remains intentionally outside the extracted maintenance boundary.
 assert (ROOT / "ops/bin/rpi5-backup").is_file()
 assert (ROOT / "ops/bin/rpi5-backup-serialized").is_file()
+
+# The shared lock library is an explicit retained backup integration dependency,
+# not a general exception allowing predecessor maintenance implementation copies.
+expected_exception = [{
+    "id": "backup-shared-lock-lib",
+    "source": "ops/lib/rpi5-maintenance-locks.sh",
+    "consumer": "ops/deploy/targets.json#maintenance-lock-lib",
+    "reason": "Backup controlled-deploy still attests and stages the shared lock library as part of the separately retained RPi5_main backup ownership boundary.",
+}]
+assert contract["retained_source_exceptions"] == expected_exception
+assert (ROOT / expected_exception[0]["source"]).is_file()
+
+with DEPLOY_TARGETS.open(encoding="utf-8") as handle:
+    deploy_targets = json.load(handle)
+by_id = {item["id"]: item for item in deploy_targets["targets"]}
+assert by_id["maintenance-lock-lib"]["source"] == expected_exception[0]["source"]
+assert by_id["maintenance-lock-lib"]["target"] == "/usr/local/lib/rpi5-maintenance/rpi5-maintenance-locks.sh"
 
 print("RPi5 maintenance integration boundary: PASS")

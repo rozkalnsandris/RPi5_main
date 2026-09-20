@@ -26,6 +26,10 @@ Repository source is not runtime evidence. Live identity must be verified from t
 
 `RPi5_main` may retain host/control-plane integrations that consume maintenance contracts without becoming the maintenance implementation owner. This includes Weather/control-plane lock coordination and separately defined backup ownership. In particular, `ops/bin/rpi5-backup` and `ops/bin/rpi5-backup-serialized` remain governed by their existing ownership contract and are not removed by the maintenance extraction cleanup.
 
+One explicit source exception remains: `ops/lib/rpi5-maintenance-locks.sh`. The active controlled-deploy manifest `ops/deploy/targets.json` still uses it as the `maintenance-lock-lib` source for the retained backup bundle. This is a backup integration dependency, not authority for `RPi5_main` to carry the rest of the maintenance implementation. The exception is machine-recorded in `ops/maintenance/rpi5-maintenance-integration.json` and must not be generalized to other maintenance helpers.
+
+Removing or rebinding that shared-lock source requires a separate coherent migration of the backup controlled-deploy contract; deleting it as an orphan would break the current repository validation and deployment model.
+
 ## Recovery and history
 
 Historical maintenance source remains recoverable from Git history, while the extracted implementation and release/recovery lineage live in `RPi5-maintenance`. Do not restore predecessor copies into active `RPi5_main` ownership as a rollback mechanism.

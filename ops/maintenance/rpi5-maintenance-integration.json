@@ -15,5 +15,13 @@
     "backup",
     "host-control-plane-integrations"
   ],
+  "retained_source_exceptions": [
+    {
+      "id": "backup-shared-lock-lib",
+      "source": "ops/lib/rpi5-maintenance-locks.sh",
+      "consumer": "ops/deploy/targets.json#maintenance-lock-lib",
+      "reason": "Backup controlled-deploy still attests and stages the shared lock library as part of the separately retained RPi5_main backup ownership boundary."
+    }
+  ],
   "live_mutation_authorized": false
 }
