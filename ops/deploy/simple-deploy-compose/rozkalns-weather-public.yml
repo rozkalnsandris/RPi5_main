@@ -1,0 +1,122 @@
+# SIMPLE-DEPLOY v1 consumer Compose. The :production tag below is discovery/default metadata only.
+# Runtime mutation for the weather service must use the generic RPi5 deployer's frozen exact image@sha256 digest override.
+# Bootstrap/jobs are separately gated operations and must likewise bind a reviewed exact image digest when executed.
+services:
+  schema-init:
+    image: ghcr.io/rozkalnsandris/rozkalns_weather:production
+    command: ["rozkalns-weather", "init-database"]
+    environment:
+      WEATHER_RUNTIME_MODE: public-only
+      WEATHER_CONFIG_PROFILE: deployment
+      WEATHER_CONFIG_SCHEMA_VERSION: "1"
+      DATABASE_INIT_MODE: require-existing
+      DATABASE_URL: sqlite:///data/weather.db
+      HOME_TIMEZONE: Europe/Berlin
+    volumes:
+      - weather_data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: "no"
+    profiles: ["bootstrap"]
+
+  weather:
+    image: ghcr.io/rozkalnsandris/rozkalns_weather:production
+    environment:
+      WEATHER_RUNTIME_MODE: public-only
+      WEATHER_CONFIG_PROFILE: deployment
+      WEATHER_CONFIG_SCHEMA_VERSION: "1"
+      DATABASE_INIT_MODE: require-existing
+      DATABASE_URL: sqlite:///data/weather.db
+      HOME_TIMEZONE: Europe/Berlin
+    ports:
+      - "${WEATHER_PORT:-9180}:8000"
+    volumes:
+      - weather_data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  public-ingest:
+    image: ghcr.io/rozkalnsandris/rozkalns_weather:production
+    command: ["rozkalns-weather", "ingest-public"]
+    environment:
+      WEATHER_RUNTIME_MODE: public-only
+      WEATHER_CONFIG_PROFILE: deployment
+      WEATHER_CONFIG_SCHEMA_VERSION: "1"
+      DATABASE_INIT_MODE: require-existing
+      DATABASE_URL: sqlite:///data/weather.db
+      HOME_TIMEZONE: Europe/Berlin
+    volumes:
+      - weather_data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: "no"
+    profiles: ["jobs"]
+
+  readiness:
+    image: ghcr.io/rozkalnsandris/rozkalns_weather:production
+    command: ["rozkalns-weather", "readiness"]
+    environment:
+      WEATHER_RUNTIME_MODE: public-only
+      WEATHER_CONFIG_PROFILE: deployment
+      WEATHER_CONFIG_SCHEMA_VERSION: "1"
+      DATABASE_INIT_MODE: require-existing
+      DATABASE_URL: sqlite:///data/weather.db
+      HOME_TIMEZONE: Europe/Berlin
+    volumes:
+      - weather_data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: "no"
+    profiles: ["checks"]
+
+  corpus-check:
+    image: ghcr.io/rozkalnsandris/rozkalns_weather:production
+    command: ["rozkalns-weather", "corpus-check"]
+    environment:
+      WEATHER_RUNTIME_MODE: public-only
+      WEATHER_CONFIG_PROFILE: deployment
+      WEATHER_CONFIG_SCHEMA_VERSION: "1"
+      DATABASE_INIT_MODE: require-existing
+      DATABASE_URL: sqlite:///data/weather.db
+      HOME_TIMEZONE: Europe/Berlin
+    volumes:
+      - weather_data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: "no"
+    profiles: ["checks"]
+
+volumes:
+  weather_data:
