@@ -15,6 +15,10 @@ REGISTRATION_FIELDS = _base.REGISTRATION_FIELDS
 validate_registration = _base.validate_registration
 registration_bytes = _base.registration_bytes
 sha256 = _base.sha256
+PREDECESSOR_BROKER_SOURCES = (
+    "ops/bin/rozkalns-weather-operator-v9-privileged-broker",
+    "ops/bin/rozkalns-weather-operator-v10-successor-privileged-broker",
+)
 MUTATION_BUDGET = (
     ("filesystem.weather-operator-v10-successor-broker-refresh-stage", 2),
     ("filesystem.weather-operator-v10-successor-broker-refresh-atomic-replace", 2),
@@ -50,6 +54,30 @@ def _require_hashes(value: Mapping[str, Any], where: str) -> dict[str, str]:
             _fail(f"{where} {key} is invalid")
         result[key] = digest
     return result
+
+
+def select_predecessor_broker_source(
+    registration_broker_sha256: str,
+    candidate_hashes: Mapping[str, str],
+) -> str:
+    if type(registration_broker_sha256) is not str or SHA256_RE.fullmatch(registration_broker_sha256) is None:
+        _fail("registration predecessor broker hash is invalid")
+    if type(candidate_hashes) is not dict or not candidate_hashes:
+        _fail("predecessor broker source candidates are unavailable")
+    unknown = set(candidate_hashes) - set(PREDECESSOR_BROKER_SOURCES)
+    if unknown:
+        _fail("predecessor broker source candidate widened outside the fixed allowlist")
+    for source, digest in candidate_hashes.items():
+        if type(digest) is not str or SHA256_RE.fullmatch(digest) is None:
+            _fail(f"predecessor broker source candidate hash is invalid: {source}")
+    matches = [
+        source
+        for source in PREDECESSOR_BROKER_SOURCES
+        if candidate_hashes.get(source) == registration_broker_sha256
+    ]
+    if len(matches) != 1:
+        _fail("registration predecessor broker identity must match exactly one fixed Git source")
+    return matches[0]
 
 
 def build_refresh_plan(
