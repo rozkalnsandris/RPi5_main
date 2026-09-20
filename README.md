@@ -44,7 +44,7 @@ Every change follows: **branch → tests → draft PR → CI → review → squa
 
 Any production apply must bind to an exact Git commit and include preflight checks, a backup plan, verification, and a documented rollback. A merge never deploys automatically.
 
-The generic SIMPLE-DEPLOY v1 trusted host reconciler is documented in `docs/SIMPLE_DEPLOY_HOST_V1.md`. The reviewed Weather target has completed its one-time cutover: the deployer is installed, the generic timer is enabled, and the first genuine post-cutover `AUTO_DEPLOY_SAFE` Weather release reconciled successfully through the standing path with `/health=200` and `/ready=200`. Ordinary eligible releases may use only that fixed reviewed target contract; schema/data, corpus/backfill/ingest, secrets/permissions, network/Cloudflare, target widening and unrelated host control remain separately exact-gated.
+The generic SIMPLE-DEPLOY v1 trusted host reconciler is documented in `docs/SIMPLE_DEPLOY_HOST_V1.md`. Accepted continuity records that the reviewed Weather target completed its one-time cutover: the deployer was installed, the generic timer was enabled, and the first genuine post-cutover `AUTO_DEPLOY_SAFE` Weather release reconciled successfully through the standing path with `/health=200` and `/ready=200`. Fresh runtime state must still be revalidated before any consequential host action. Ordinary eligible releases may use only that fixed reviewed target contract; schema/data, corpus/backfill/ingest, secrets/permissions, network/Cloudflare, target widening and unrelated host control remain separately exact-gated.
 
 ## Controlled deploy
 
