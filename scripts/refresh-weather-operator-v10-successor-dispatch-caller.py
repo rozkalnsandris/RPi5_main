@@ -13,7 +13,8 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "ops/deploy/weather-operator-v10-successor-dispatch-caller-refresh.json"
 ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
-PREDECESSOR_SOURCE_SHA = "4ed279e04b240858fc8a2ce69e95f9c546e3a26b"
+LEGACY_PREDECESSOR_SOURCE_SHA = "4ed279e04b240858fc8a2ce69e95f9c546e3a26b"
+INSTALLED_SUCCESSOR_PREDECESSOR_SOURCE_SHA = "811884275d4859e185ea4b12c5dac8dd92d0f1c8"
 LEGACY_MODULE_SOURCE = "ops/lib/deploy_executor/weather_operator_upgrade_v9_dispatch_caller.py"
 LEGACY_MODULE_TARGET = Path("/usr/local/libexec/rozkalns-weather-operator-v9-capability/deploy_executor/weather_operator_upgrade_v9_dispatch_caller.py")
 SUCCESSOR_MODULE_SOURCE = "ops/lib/deploy_executor/weather_operator_upgrade_v10_dispatch_caller.py"
@@ -67,9 +68,15 @@ def source_sha() -> str:
         fail("source origin drifted")
     if run_git("status", "--porcelain", "--untracked-files=all").stdout != "":
         fail("source checkout must be clean")
-    ancestor = run_git("merge-base", "--is-ancestor", PREDECESSOR_SOURCE_SHA, head, check=False)
+    ancestor = run_git(
+        "merge-base",
+        "--is-ancestor",
+        INSTALLED_SUCCESSOR_PREDECESSOR_SOURCE_SHA,
+        head,
+        check=False,
+    )
     if ancestor.returncode != 0:
-        fail("source HEAD does not descend from reviewed predecessor")
+        fail("source HEAD does not descend from installed reviewed successor predecessor")
     origin_main = run_git("rev-parse", "refs/remotes/origin/main").stdout.strip()
     if origin_main != head:
         fail("source HEAD is not exact fetched origin/main")
@@ -117,13 +124,18 @@ def validate_contract() -> None:
         str(ENTRYPOINT_TARGET): "0755",
     }
     if (
-        value.get("schema") != "rozkalns.rpi5-main.weather-operator-v10-successor-dispatch-caller-refresh.v1"
-        or value.get("issue") != 650
-        or value.get("predecessor_source_sha") != PREDECESSOR_SOURCE_SHA
+        value.get("schema") != "rozkalns.rpi5-main.weather-operator-v10-successor-dispatch-caller-refresh.v2"
+        or value.get("issue") != 658
+        or value.get("historical_initial_install_issue") != 650
+        or value.get("legacy_predecessor_source_sha") != LEGACY_PREDECESSOR_SOURCE_SHA
+        or value.get("installed_successor_predecessor_source_sha") != INSTALLED_SUCCESSOR_PREDECESSOR_SOURCE_SHA
+        or value.get("desired_source_binding") != "current_exact_head"
         or value.get("origin") != ORIGIN
+        or value.get("existing_successor_required") is not True
         or fixed != expected_fixed
         or value.get("replacement_order") != ["successor_module", "dispatch_caller_entrypoint"]
         or budget != MUTATION_BUDGET
+        or value.get("target_predelete_allowed") is not False
         or value.get("systemd_mutation") is not False
         or value.get("broker_mutation") is not False
         or value.get("registration_mutation") is not False
@@ -141,27 +153,37 @@ def validate_contract() -> None:
 def preflight() -> dict[str, object]:
     validate_contract()
     head = source_sha()
-    predecessor_legacy = git_blob(PREDECESSOR_SOURCE_SHA, LEGACY_MODULE_SOURCE)
-    predecessor_entrypoint = git_blob(PREDECESSOR_SOURCE_SHA, ENTRYPOINT_SOURCE)
+    predecessor_legacy = git_blob(LEGACY_PREDECESSOR_SOURCE_SHA, LEGACY_MODULE_SOURCE)
+    predecessor_successor = git_blob(
+        INSTALLED_SUCCESSOR_PREDECESSOR_SOURCE_SHA,
+        SUCCESSOR_MODULE_SOURCE,
+    )
+    predecessor_entrypoint = git_blob(
+        INSTALLED_SUCCESSOR_PREDECESSOR_SOURCE_SHA,
+        ENTRYPOINT_SOURCE,
+    )
     successor_module = git_blob(head, SUCCESSOR_MODULE_SOURCE)
     successor_entrypoint = git_blob(head, ENTRYPOINT_SOURCE)
     fixed_file(LEGACY_MODULE_TARGET, mode=0o644, expected=predecessor_legacy)
+    fixed_file(SUCCESSOR_MODULE_TARGET, mode=0o644, expected=predecessor_successor)
     fixed_file(ENTRYPOINT_TARGET, mode=0o755, expected=predecessor_entrypoint)
-    if SUCCESSOR_MODULE_TARGET.exists() or SUCCESSOR_MODULE_TARGET.is_symlink():
-        fail("successor caller module target already exists")
     if SUCCESSOR_TEMP.exists() or SUCCESSOR_TEMP.is_symlink() or ENTRYPOINT_TEMP.exists() or ENTRYPOINT_TEMP.is_symlink():
         fail("fixed caller-refresh staging path already exists")
     return {
-        "schema": "rozkalns.rpi5-main.weather-operator-v10-successor-dispatch-caller-refresh-preflight.v1",
+        "schema": "rozkalns.rpi5-main.weather-operator-v10-successor-dispatch-caller-refresh-preflight.v2",
         "result": "PASS",
         "source_sha": head,
-        "predecessor_source_sha": PREDECESSOR_SOURCE_SHA,
-        "successor_module_sha256": sha256(successor_module),
-        "dispatch_caller_entrypoint_sha256": sha256(successor_entrypoint),
+        "legacy_predecessor_source_sha": LEGACY_PREDECESSOR_SOURCE_SHA,
+        "installed_successor_predecessor_source_sha": INSTALLED_SUCCESSOR_PREDECESSOR_SOURCE_SHA,
+        "installed_predecessor_successor_module_sha256": sha256(predecessor_successor),
+        "installed_predecessor_entrypoint_sha256": sha256(predecessor_entrypoint),
+        "desired_successor_module_sha256": sha256(successor_module),
+        "desired_dispatch_caller_entrypoint_sha256": sha256(successor_entrypoint),
         "mutation_budget": [
             {"category": category, "max_operations": maximum}
             for category, maximum in MUTATION_BUDGET
         ],
+        "target_predelete_allowed": False,
         "host_mutation_started": False,
         "systemd_mutation": False,
         "broker_mutation": False,
@@ -209,22 +231,26 @@ def apply() -> dict[str, object]:
         stage(SUCCESSOR_TEMP, successor_module, 0o644)
         stage(ENTRYPOINT_TEMP, successor_entrypoint, 0o755)
         os.replace(SUCCESSOR_TEMP, SUCCESSOR_MODULE_TARGET)
-        os.replace(ENTRYPOINT_TEMP, ENTRYPOINT_TARGET)
         require_target(SUCCESSOR_MODULE_TARGET, mode=0o644, expected=successor_module)
+        os.replace(ENTRYPOINT_TEMP, ENTRYPOINT_TARGET)
         require_target(ENTRYPOINT_TARGET, mode=0o755, expected=successor_entrypoint)
     except Exception as exc:
         raise CallerRefreshError(
             "caller refresh failed closed after mutation; no retry/cleanup/rollback is authorized"
         ) from exc
     return {
-        "schema": "rozkalns.rpi5-main.weather-operator-v10-successor-dispatch-caller-refresh-receipt.v1",
+        "schema": "rozkalns.rpi5-main.weather-operator-v10-successor-dispatch-caller-refresh-receipt.v2",
         "result": "PASS",
         "source_sha": head,
-        "predecessor_source_sha": PREDECESSOR_SOURCE_SHA,
-        "successor_module_sha256": evidence["successor_module_sha256"],
-        "dispatch_caller_entrypoint_sha256": evidence["dispatch_caller_entrypoint_sha256"],
+        "legacy_predecessor_source_sha": LEGACY_PREDECESSOR_SOURCE_SHA,
+        "installed_successor_predecessor_source_sha": INSTALLED_SUCCESSOR_PREDECESSOR_SOURCE_SHA,
+        "installed_predecessor_successor_module_sha256": evidence["installed_predecessor_successor_module_sha256"],
+        "installed_predecessor_entrypoint_sha256": evidence["installed_predecessor_entrypoint_sha256"],
+        "successor_module_sha256": evidence["desired_successor_module_sha256"],
+        "dispatch_caller_entrypoint_sha256": evidence["desired_dispatch_caller_entrypoint_sha256"],
+        "target_predelete_allowed": False,
         "host_mutation_started": _MUTATION_STARTED,
-        "successor_module_installed": True,
+        "successor_module_replaced": True,
         "dispatch_caller_entrypoint_replaced": True,
         "systemd_mutation": False,
         "broker_mutation": False,
@@ -246,7 +272,7 @@ def main() -> int:
         result = apply() if args.apply else preflight()
     except CallerRefreshError as exc:
         print(json.dumps({
-            "schema": "rozkalns.rpi5-main.weather-operator-v10-successor-dispatch-caller-refresh-receipt.v1",
+            "schema": "rozkalns.rpi5-main.weather-operator-v10-successor-dispatch-caller-refresh-receipt.v2",
             "result": "FAIL_CLOSED",
             "reason": str(exc),
             "host_mutation_started": _MUTATION_STARTED,

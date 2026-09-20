@@ -19,6 +19,7 @@ from deploy_executor import weather_operator_upgrade_v10_dispatch_caller as call
 from deploy_executor import weather_operator_upgrade_v9_dispatch_caller as legacy
 
 PREDECESSOR = "4ed279e04b240858fc8a2ce69e95f9c546e3a26b"
+INSTALLED_SUCCESSOR_PREDECESSOR = "811884275d4859e185ea4b12c5dac8dd92d0f1c8"
 REQUEST_ID = "123e4567-e89b-42d3-a456-426614174000"
 ENTRYPOINT = ROOT / "ops/bin/rozkalns-weather-operator-v9-dispatch-caller"
 SUCCESSOR = ROOT / "ops/lib/deploy_executor/weather_operator_upgrade_v10_dispatch_caller.py"
@@ -267,8 +268,19 @@ class WeatherV10SuccessorDispatchCallerTests(unittest.TestCase):
 
     def test_refresh_contract_is_fixed_and_has_no_systemd_mutation(self) -> None:
         value = json.loads(CONTRACT.read_text(encoding="utf-8"))
-        self.assertEqual(value["issue"], 650)
-        self.assertEqual(value["predecessor_source_sha"], PREDECESSOR)
+        self.assertEqual(
+            value["schema"],
+            "rozkalns.rpi5-main.weather-operator-v10-successor-dispatch-caller-refresh.v2",
+        )
+        self.assertEqual(value["issue"], 658)
+        self.assertEqual(value["legacy_predecessor_source_sha"], PREDECESSOR)
+        self.assertEqual(
+            value["installed_successor_predecessor_source_sha"],
+            INSTALLED_SUCCESSOR_PREDECESSOR,
+        )
+        self.assertEqual(value["desired_source_binding"], "current_exact_head")
+        self.assertTrue(value["existing_successor_required"])
+        self.assertFalse(value["target_predelete_allowed"])
         self.assertEqual(value["replacement_order"], ["successor_module", "dispatch_caller_entrypoint"])
         self.assertEqual(value["fixed_targets"], {
             "/usr/local/libexec/rozkalns-weather-operator-v9-capability/deploy_executor/weather_operator_upgrade_v10_dispatch_caller.py": "0644",

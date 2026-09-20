@@ -86,6 +86,9 @@ jobs:
       - name: Validate Weather v10 successor dispatch caller transport
         run: python3 ./tests/test-weather-operator-v10-successor-dispatch-caller.py
 
+      - name: Validate Weather v10 successor dispatch caller refresh replacement
+        run: python3 ./tests/test-weather-operator-v10-successor-dispatch-caller-refresh.py
+
   gitleaks:
     runs-on: ubuntu-latest
     timeout-minutes: 5
