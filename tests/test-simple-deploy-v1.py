@@ -172,10 +172,30 @@ class RegistryTests(unittest.TestCase):
     def tearDown(self):
         self.fx.close()
 
-    def test_repository_registry_is_inert_and_empty(self):
+    def test_repository_registry_binds_exact_weather_canary(self):
         registry = sd.load_registry(ROOT / "ops/deploy/simple-deploy-targets-v1.json")
-        self.assertFalse(registry.execution_enabled)
-        self.assertEqual(registry.targets, ())
+        self.assertTrue(registry.execution_enabled)
+        self.assertEqual(len(registry.targets), 1)
+        target = registry.get("rozkalns-weather-public-rpi5")
+        self.assertEqual(target.consumer_repository, "rozkalnsandris/rozkalns_weather")
+        self.assertEqual(target.image, "ghcr.io/rozkalnsandris/rozkalns_weather")
+        self.assertEqual(target.shared_workflow_sha, SHARED_SHA)
+        self.assertEqual(target.compose.project, "rozkalns-weather-public")
+        self.assertEqual(target.compose.file, "rozkalns-weather-public.yml")
+        self.assertEqual(target.compose.service, "weather")
+        self.assertEqual(target.health.liveness_url, "http://127.0.0.1:9180/health")
+        self.assertEqual(target.health.readiness_url, "http://127.0.0.1:9180/ready")
+        self.assertEqual(target.wait_timeout_seconds, 180)
+        self.assertEqual(target.persistent_volumes, ("weather_data",))
+        self.assertEqual(target.registry_pull_profile, "public-anonymous-pull")
+
+        compose = ROOT / "ops/deploy/simple-deploy-compose" / target.compose.file
+        self.assertTrue(compose.is_file())
+        self.assertEqual(sha256(compose), target.compose.file_sha256)
+        self.assertEqual(
+            target.compose.file_sha256,
+            "80e2b47e4ed039c38285094e0b273fbc884f0a34ff34d8b201d8e93323af1f32",
+        )
 
     def test_valid_static_target_parses(self):
         registry = self.fx.write_registry()
@@ -405,24 +425,33 @@ class ReconcileTests(unittest.TestCase):
 
 
 class ContractTests(unittest.TestCase):
-    def test_machine_contract_is_inert_and_pins_merged_shared_revision(self):
+    def test_machine_contract_is_ready_but_not_installed_and_pins_shared_revision(self):
         contract = json.loads((ROOT / "ops/contracts/simple-deploy-host-v1.json").read_text())
         self.assertEqual(contract["issue"], 666)
-        self.assertEqual(contract["status"], "SOURCE_CONTRACT_INERT_NOT_INSTALLED")
+        self.assertEqual(contract["status"], "SOURCE_READY_FOR_SEPARATE_LIVE_CUTOVER_NOT_INSTALLED")
         self.assertEqual(contract["shared_contract"]["revision"], SHARED_SHA)
-        self.assertFalse(contract["registry"]["execution_enabled_in_source"])
-        self.assertEqual(contract["registry"]["initial_targets"], 0)
+        self.assertTrue(contract["registry"]["execution_enabled_in_source"])
+        self.assertEqual(contract["registry"]["initial_targets"], 1)
         self.assertTrue(contract["registry"]["target_adoption_requires_tracked_source_change"])
+        reviewed = contract["registry"]["reviewed_targets"]
+        self.assertEqual(len(reviewed), 1)
+        self.assertEqual(reviewed[0]["target_alias"], "rozkalns-weather-public-rpi5")
+        self.assertEqual(
+            reviewed[0]["consumer_contract_revision"],
+            "606981d10eee59d13b802f6a682abf1daa2aa8a5",
+        )
+        self.assertEqual(reviewed[0]["wait_timeout_seconds"], 180)
         self.assertTrue(contract["activation"]["separate_exact_live_cutover_required"])
         self.assertFalse(contract["activation"]["source_merge_installs_or_enables_runtime"])
 
     def test_normative_doc_keeps_activation_separate(self):
         doc = (ROOT / "docs/SIMPLE_DEPLOY_HOST_V1.md").read_text(encoding="utf-8")
-        self.assertIn("source contract only; inert and not installed", doc)
+        self.assertIn("source contract ready for a separate one-time LIVE cutover; not installed", doc)
         self.assertIn("separate exact LIVE authorization", doc)
-        self.assertIn("execution_enabled: false", doc)
-        self.assertIn("targets: []", doc)
-        self.assertIn("Adding a target is a tracked source review", doc)
+        self.assertIn("execution_enabled: true", doc)
+        self.assertIn("rozkalns-weather-public-rpi5", doc)
+        self.assertIn("Target adoption remains a tracked source review", doc)
+        self.assertIn("Source readiness is not LIVE authority", doc)
 
 
 class SourceBoundaryTests(unittest.TestCase):

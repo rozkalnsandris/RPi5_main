@@ -2,7 +2,7 @@
 
 Issue: `#666`
 
-Status: **source contract only; inert and not installed**.
+Status: **source contract ready for a separate one-time LIVE cutover; not installed**.
 
 This repository owns the trusted RPi5/runtime half of SIMPLE-DEPLOY v1. The merged GitHub-side contract is `rozkalnsandris/ops-workflows@e05ed760791a127c7c9628696806ef39c9fe329c`. Source merge here does not install, enable, start, restart or mutate the live RPi5.
 
@@ -12,18 +12,36 @@ This repository owns the trusted RPi5/runtime half of SIMPLE-DEPLOY v1. The merg
 
 `RPi5_main` owns one generic pull reconciler. Consumers do not supply shell, argv, host paths, Compose paths, repository names, service names or environment values at runtime. Every mutation-capable value comes from the tracked, reviewed static RPi5 target registry.
 
-Consumer repositories remain responsible only for their application contract. The first planned canary is `rozkalnsandris/rozkalns_weather#142`.
+Consumer repositories remain responsible only for their application contract. The first canary, `rozkalnsandris/rozkalns_weather#142`, is merged at `606981d10eee59d13b802f6a682abf1daa2aa8a5` and fixes the Weather target identities used below.
 
 ## Source artifacts
 
 - `ops/lib/deploy_executor/simple_deploy_v1.py` — strict parser, discovery, reconciliation, health verification, receipt and fail-closed state machine.
 - `ops/bin/rozkalns-simple-deployer` — fixed CLI exposing only `--all` or one reviewed `--target` alias.
 - `ops/deploy/simple-deploy-targets-v1.json` — tracked static target registry.
+- `ops/deploy/simple-deploy-compose/rozkalns-weather-public.yml` — exact reviewed Weather Compose source copied from the merged consumer revision and hash-pinned by the registry.
 - `ops/contracts/simple-deploy-host-v1.json` — machine-readable host/trust-boundary contract.
 - `ops/systemd/rozkalns-simple-deployer.service` and `.timer` — future activation source, not installed by this change.
-- `tests/test-simple-deploy-v1.py` — focused adversarial and reconciliation tests.
+- `tests/test-simple-deploy-v1.py` — focused adversarial, reconciliation and tracked-target tests.
 
-The tracked registry intentionally starts with `execution_enabled: false` and `targets: []`. Do not guess the Weather target identities before `rozkalns_weather#142` fixes its final Compose/service/health/persistence contract. Adding a target is a tracked source review, not a runtime parameter.
+The tracked registry now has `execution_enabled: true` and exactly one reviewed target, `rozkalns-weather-public-rpi5`. This is source readiness only: nothing reads this repository file on the production host until a separate LIVE cutover installs the exact reviewed registry, Compose file, deployer identity and units. Target adoption remains a tracked source review, never a runtime parameter.
+
+## Weather canary binding
+
+The Weather target is derived from the merged consumer contract at `rozkalnsandris/rozkalns_weather@606981d10eee59d13b802f6a682abf1daa2aa8a5`:
+
+- image: `ghcr.io/rozkalnsandris/rozkalns_weather`;
+- target alias: `rozkalns-weather-public-rpi5`;
+- architecture: `linux/arm64`;
+- Compose project/service: `rozkalns-weather-public` / `weather`;
+- installed Compose basename: `rozkalns-weather-public.yml`;
+- Compose SHA-256: `80e2b47e4ed039c38285094e0b273fbc884f0a34ff34d8b201d8e93323af1f32`;
+- loopback liveness/readiness: `http://127.0.0.1:9180/health` / `http://127.0.0.1:9180/ready`;
+- persistent volume: `weather_data`;
+- registry profile: `public-anonymous-pull`;
+- bounded Compose wait timeout: 180 seconds.
+
+The 180-second wait is bounded below the host-policy 300-second ceiling and covers the Weather Compose health window with margin. It does not authorize bootstrap, corpus/data work or any other profile service.
 
 ## Immutable desired state
 
@@ -50,7 +68,7 @@ A target binds exactly: alias, consumer repository/image, `linux/arm64`, accepte
 
 Unknown fields fail closed. Compose file names cannot contain directories. Health URLs must be explicit `http://127.0.0.1:<port>/<path>` values with no credentials, query or fragment. The image must be exactly the GHCR image derived from the consumer repository.
 
-`public-anonymous-pull` is the only active v1 pull profile. `private-read-only` is schema-reserved but fails before mutation until a separate reviewed credential/auth contract exists.
+`public-anonymous-pull` is the only active v1 pull profile. `private-read-only` is schema-reserved but fails before mutation until a separate reviewed credential/auth contract exists. The one-time cutover must freshly prove anonymous pull; package visibility/auth changes are not fallback authority.
 
 ## Mutation and failure semantics
 
@@ -62,12 +80,12 @@ Mutation-capable work is serialized per target by a non-blocking lock. A blocked
 
 ## One-time activation gate
 
-After this source is merged and the first consumer contract is ready, activation still requires a separate exact LIVE authorization. That authorization must bind the host `rpi5`, exact merged `RPi5_main` SHA, exact deployer/module/unit/timer artifacts, exact initial tracked target registry and Compose files, runtime baseline, installation/enable mutations, verification and any explicitly reviewed rollback semantics.
+Source readiness is not LIVE authority. Activation still requires a separate exact LIVE authorization binding host `rpi5`, the exact merged `RPi5_main` SHA, deployer/module/unit/timer artifacts, the exact tracked registry and Weather Compose bytes, a minimum-sufficient runtime baseline, installation/enable mutations, verification and any explicitly reviewed rollback semantics.
 
-The cutover must materialize an identity file with schema `rozkalns.rpi5-main.simple-deploy.identity.v1`, repository `rozkalnsandris/RPi5_main` and the exact activated source SHA. It must install the reviewed registry and Compose files as root-owned, non-group/world-writable regular files. No target may be invented or widened during the live gate.
+The cutover must materialize an identity file with schema `rozkalns.rpi5-main.simple-deploy.identity.v1`, repository `rozkalnsandris/RPi5_main` and the exact activated source SHA. It must install the reviewed registry and Compose files as root-owned, non-group/world-writable regular files. No target may be invented, edited or widened during the live gate.
 
 After a successful cutover, ordinary `AUTO_DEPLOY_SAFE` releases for already-adopted targets may reconcile without a fresh per-release LIVE decision. Database/data, destructive recovery, secrets/permissions, Cloudflare/network, private-provider activation and unrelated host-control classes remain separate exact gates.
 
 ## Current sequence
 
-`ops-workflows#97` is merged at `e05ed760791a127c7c9628696806ef39c9fe329c`. This #666 source contract is next. Then Weather #142 fixes the first consumer identities. Only after both source sides are ready may the one-time Weather/RPi5 LIVE cutover be proposed.
+`ops-workflows#97` is merged at `e05ed760791a127c7c9628696806ef39c9fe329c`; the generic RPi5 executor is merged at `ff20fcf64ba62c95e5f15eeb481c3c66bb5c9708`; Weather #142 is merged at `606981d10eee59d13b802f6a682abf1daa2aa8a5`. This source reconciliation binds the first static Weather target and exact Compose hash. The next boundary after this source is merged and revalidated is a separate one-time Weather/RPi5 LIVE cutover authorization.
