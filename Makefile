@@ -18,6 +18,7 @@ test:
 	python3 ./tests/test-control-phase5-observation-credential-reconciliation.py
 	python3 ./tests/test-control-phase5-signer-handoff.py
 	python3 ./tests/test-control-phase5-observation-delivery.py
+	python3 ./tests/test-simple-deploy-v1.py
 	python3 ./tests/test-deploy-executor-p1.py
 	python3 ./tests/test-deploy-executor-p2.py
 	python3 ./tests/test-deploy-executor-p4.py

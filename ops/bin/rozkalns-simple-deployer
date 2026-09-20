@@ -1,0 +1,20 @@
+#!/usr/bin/python3
+from __future__ import annotations
+
+from pathlib import Path
+import sys
+
+HERE = Path(__file__).resolve().parent
+SOURCE_MODULE = HERE.parent / "lib" / "deploy_executor"
+INSTALLED_MODULE = HERE
+
+if (INSTALLED_MODULE / "simple_deploy_v1.py").is_file():
+    sys.path.insert(0, str(INSTALLED_MODULE))
+elif (SOURCE_MODULE / "simple_deploy_v1.py").is_file():
+    sys.path.insert(0, str(SOURCE_MODULE))
+else:
+    raise SystemExit("SIMPLE_DEPLOY result=FAIL error_code=INSTALLATION_INVALID mutation_started=false")
+
+from simple_deploy_v1 import main  # noqa: E402
+
+raise SystemExit(main())

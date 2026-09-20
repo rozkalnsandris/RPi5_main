@@ -44,6 +44,8 @@ Every change follows: **branch → tests → draft PR → CI → review → squa
 
 Any production apply must bind to an exact Git commit and include preflight checks, a backup plan, verification, and a documented rollback. A merge never deploys automatically.
 
+The source-only generic SIMPLE-DEPLOY v1 trusted host reconciler is documented in `docs/SIMPLE_DEPLOY_HOST_V1.md`. Its tracked target registry remains disabled and empty until consumer identities are separately reviewed; merge alone does not install or activate it.
+
 ## Controlled deploy
 
 V12 adds a VS Code-friendly operator workflow for the exact non-secret V10 backup implementation files already owned by this repository:
