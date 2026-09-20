@@ -1,8 +1,12 @@
 {
-  "schema": "rozkalns.rpi5-main.weather-operator-v10-successor-dispatch-caller-refresh.v1",
-  "issue": 650,
-  "predecessor_source_sha": "4ed279e04b240858fc8a2ce69e95f9c546e3a26b",
+  "schema": "rozkalns.rpi5-main.weather-operator-v10-successor-dispatch-caller-refresh.v2",
+  "issue": 658,
+  "historical_initial_install_issue": 650,
+  "legacy_predecessor_source_sha": "4ed279e04b240858fc8a2ce69e95f9c546e3a26b",
+  "installed_successor_predecessor_source_sha": "811884275d4859e185ea4b12c5dac8dd92d0f1c8",
+  "desired_source_binding": "current_exact_head",
   "origin": "https://github.com/rozkalnsandris/RPi5_main.git",
+  "existing_successor_required": true,
   "fixed_targets": {
     "/usr/local/libexec/rozkalns-weather-operator-v9-capability/deploy_executor/weather_operator_upgrade_v10_dispatch_caller.py": "0644",
     "/usr/local/libexec/rozkalns-weather-operator-v9-dispatch-caller": "0755"
@@ -21,6 +25,7 @@
       "max_operations": 2
     }
   ],
+  "target_predelete_allowed": false,
   "systemd_mutation": false,
   "broker_mutation": false,
   "registration_mutation": false,
@@ -32,6 +37,7 @@
   "automatic_rollback": false,
   "source_merge_authorizes_live": false,
   "explicit_exclusions": [
+    "no target unlink/delete/rename-aside before replacement",
     "no systemd daemon-reload/enable/start/stop/restart",
     "no broker/registration/replay-state mutation",
     "no Weather Docker/application/SQLite/corpus mutation",
