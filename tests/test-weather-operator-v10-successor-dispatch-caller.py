@@ -93,6 +93,12 @@ class WeatherV10SuccessorDispatchCallerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.now = datetime(2026, 9, 20, 8, 0, tzinfo=timezone.utc)
 
+    def request(self):
+        candidate = caller.discover_candidate(FakeClient([issue(self.now)], self.now))
+        self.assertIsNotNone(candidate)
+        assert candidate is not None
+        return candidate.request
+
     def test_sources_compile_and_entrypoint_selects_successor(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             for source in (SUCCESSOR, ENTRYPOINT, REFRESH):
@@ -116,9 +122,8 @@ class WeatherV10SuccessorDispatchCallerTests(unittest.TestCase):
         self.assertIsNone(caller.discover_candidate(FakeClient([row], self.now)))
 
     def test_dispatch_payload_remains_identity_only(self) -> None:
-        candidate = caller.discover_candidate(FakeClient([issue(self.now)], self.now))
-        assert candidate is not None
-        value = json.loads(legacy._request_payload(candidate.request).decode("utf-8"))
+        request = self.request()
+        value = json.loads(legacy._request_payload(request).decode("utf-8"))
         self.assertEqual(set(value), {
             "schema",
             "authorization_repository",
@@ -129,6 +134,83 @@ class WeatherV10SuccessorDispatchCallerTests(unittest.TestCase):
         })
         forbidden = {"source_sha", "operation_id", "target_alias", "path", "argv", "env", "mutation_budget"}
         self.assertFalse(forbidden.intersection(value))
+
+    def test_pass_broker_receipt_preserves_identity_validation(self) -> None:
+        request = self.request()
+        receipt = {
+            "result": "PASS",
+            "authorization_issue_number": request.authorization_issue_number,
+            "request_id": request.request_id,
+        }
+        parsed = caller._parse_broker_response(
+            json.dumps(receipt, separators=(",", ":")).encode("utf-8"),
+            request,
+        )
+        self.assertEqual(parsed, receipt)
+        receipt["request_id"] = "00000000-0000-4000-8000-000000000000"
+        with self.assertRaises(legacy.WeatherV9DispatchCallerError):
+            caller._parse_broker_response(
+                json.dumps(receipt, separators=(",", ":")).encode("utf-8"),
+                request,
+            )
+
+    def test_known_broker_failure_maps_to_bounded_code_without_raw_reason(self) -> None:
+        request = self.request()
+        reason = "fixed v10 entrypoint metadata drifted"
+        raw = json.dumps({
+            "schema": caller.BROKER_RECEIPT_SCHEMA,
+            "result": "FAIL_CLOSED",
+            "reason": reason,
+        }, separators=(",", ":")).encode("utf-8")
+        with self.assertRaises(caller.WeatherV10BrokerFailure) as raised:
+            caller._parse_broker_response(raw, request)
+        self.assertEqual(raised.exception.broker_failure_code, "V10_ENTRYPOINT_METADATA_DRIFT")
+        self.assertNotIn(reason, str(raised.exception))
+        terminal = caller._terminal_failure(raised.exception)
+        self.assertEqual(terminal["broker_failure_code"], "V10_ENTRYPOINT_METADATA_DRIFT")
+        self.assertFalse(terminal["automatic_retry"])
+        self.assertFalse(terminal["production_mutation_started"])
+        self.assertNotIn("reason", terminal)
+
+    def test_prefixed_and_unknown_broker_reasons_never_leak_raw_text(self) -> None:
+        request = self.request()
+        cases = (
+            ("reviewed v10 source blob drifted: /private/example", "V10_SOURCE_BLOB_DRIFT"),
+            ("arbitrary server text /secret/path TOKEN=value", caller.BROKER_FAIL_CLOSED_UNKNOWN),
+        )
+        for reason, expected in cases:
+            with self.subTest(expected=expected):
+                raw = json.dumps({
+                    "schema": caller.BROKER_RECEIPT_SCHEMA,
+                    "result": "FAIL_CLOSED",
+                    "reason": reason,
+                }, separators=(",", ":")).encode("utf-8")
+                with self.assertRaises(caller.WeatherV10BrokerFailure) as raised:
+                    caller._parse_broker_response(raw, request)
+                self.assertEqual(raised.exception.broker_failure_code, expected)
+                self.assertNotIn(reason, str(raised.exception))
+                terminal = caller._terminal_failure(raised.exception)
+                self.assertEqual(terminal["broker_failure_code"], expected)
+                self.assertNotIn(reason, json.dumps(terminal, sort_keys=True))
+
+    def test_malformed_empty_and_oversize_broker_receipts_fail_closed(self) -> None:
+        request = self.request()
+        for raw in (
+            b"",
+            b"{not-json",
+            b"x" * (legacy.MAX_RESPONSE_BYTES + 1),
+        ):
+            with self.subTest(size=len(raw)):
+                with self.assertRaises(legacy.WeatherV9DispatchCallerError):
+                    caller._parse_broker_response(raw, request)
+        wrong_schema = json.dumps({
+            "schema": "unexpected",
+            "result": "FAIL_CLOSED",
+            "reason": "fixed v10 entrypoint metadata drifted",
+        }).encode("utf-8")
+        with self.assertRaises(caller.WeatherV10BrokerFailure) as raised:
+            caller._parse_broker_response(wrong_schema, request)
+        self.assertEqual(raised.exception.broker_failure_code, caller.BROKER_FAIL_CLOSED_UNKNOWN)
 
     def test_one_request_id_has_at_most_one_dispatch_attempt(self) -> None:
         rows = [issue(self.now)]
@@ -149,6 +231,23 @@ class WeatherV10SuccessorDispatchCallerTests(unittest.TestCase):
             first = caller.run_once(client, state_dir=state, dispatcher=dispatch)
             second = caller.run_once(client, state_dir=state, dispatcher=dispatch)
         self.assertEqual(first["result"], "PASS")
+        self.assertEqual(second["result"], "AUTHORIZATION_ALREADY_ATTEMPTED")
+        self.assertEqual(calls, [REQUEST_ID])
+
+    def test_broker_failure_is_one_attempt_without_retry(self) -> None:
+        client = FakeClient([issue(self.now)], self.now)
+        calls: list[str] = []
+
+        def dispatch(request):
+            calls.append(request.request_id)
+            raise caller.WeatherV10BrokerFailure("V10_UPGRADE_FAILED")
+
+        with tempfile.TemporaryDirectory() as temp:
+            state = Path(temp)
+            os.chmod(state, 0o700)
+            with self.assertRaises(caller.WeatherV10BrokerFailure):
+                caller.run_once(client, state_dir=state, dispatcher=dispatch)
+            second = caller.run_once(client, state_dir=state, dispatcher=dispatch)
         self.assertEqual(second["result"], "AUTHORIZATION_ALREADY_ATTEMPTED")
         self.assertEqual(calls, [REQUEST_ID])
 
