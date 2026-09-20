@@ -54,5 +54,6 @@
     "automatic-cleanup",
     "automatic-rollback"
   ],
-  "source_merge_authorizes_live": false
+  "source_merge_authorizes_live": false,
+  "consumer_source_sha": "606981d10eee59d13b802f6a682abf1daa2aa8a5"
 }

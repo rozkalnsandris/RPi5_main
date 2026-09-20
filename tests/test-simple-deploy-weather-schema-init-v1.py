@@ -20,7 +20,7 @@ assert spec2 and spec2.loader
 bridge = importlib.util.module_from_spec(spec2); sys.modules[spec2.name] = bridge; spec2.loader.exec_module(bridge)
 
 DIGEST = "sha256:" + "1" * 64
-SOURCE_SHA = "a" * 40
+SOURCE_SHA = bridge.EXPECTED_CONSUMER_SOURCE_SHA
 SHARED_SHA = "e05ed760791a127c7c9628696806ef39c9fe329c"
 
 class FakeHttp:
@@ -29,8 +29,8 @@ class FakeHttp:
         self.calls.append(url); return self.values.pop(0)
 
 class FakeRunner:
-    def __init__(self, *, pointer_after=DIGEST, fail_marker=None, volume=bridge.HOST_VOLUME, prior_container=""):
-        self.calls=[]; self.pointer_calls=0; self.pointer_after=pointer_after; self.fail_marker=fail_marker; self.volume=volume; self.prior_container=prior_container
+    def __init__(self, *, pointer_after=DIGEST, fail_marker=None, volume=bridge.HOST_VOLUME, prior_container="", source_sha=SOURCE_SHA):
+        self.calls=[]; self.pointer_calls=0; self.pointer_after=pointer_after; self.fail_marker=fail_marker; self.volume=volume; self.prior_container=prior_container; self.source_sha=source_sha
     def run(self, argv, *, timeout_seconds, stdin_text=None):
         call=tuple(argv); self.calls.append((call, stdin_text)); joined=" ".join(argv)
         if self.fail_marker and self.fail_marker in joined: return bridge.CommandResult(1,"","fail")
@@ -39,7 +39,7 @@ class FakeRunner:
             if ref.endswith(":production"):
                 self.pointer_calls += 1; digest = DIGEST if self.pointer_calls == 1 else self.pointer_after
                 return bridge.CommandResult(0,json.dumps({"digest":digest})+"\n","")
-            return bridge.CommandResult(0,json.dumps({"os":"linux","architecture":"arm64","config":{"Labels":{"org.opencontainers.image.revision":SOURCE_SHA,"io.rozkalns.simple-deploy.target":bridge.TARGET_ALIAS,"io.rozkalns.simple-deploy.shared-revision":SHARED_SHA}}})+"\n","")
+            return bridge.CommandResult(0,json.dumps({"os":"linux","architecture":"arm64","config":{"Labels":{"org.opencontainers.image.revision":self.source_sha,"io.rozkalns.simple-deploy.target":bridge.TARGET_ALIAS,"io.rozkalns.simple-deploy.shared-revision":SHARED_SHA}}})+"\n","")
         if tuple(argv[:3]) == ("docker","volume","inspect"): return bridge.CommandResult(0,self.volume+"\n","")
         if tuple(argv[:3]) == ("docker","ps","-a"): return bridge.CommandResult(0,self.prior_container+"\n","")
         if tuple(argv[:2]) == ("docker","pull"): return bridge.CommandResult(0,"","")
@@ -61,7 +61,7 @@ class Fixture:
 class Tests(unittest.TestCase):
     def test_contract_and_installer_keep_schema_gate_separate(self):
         c=json.loads((ROOT/"ops/deploy/simple-deploy-weather-schema-init-v1.json").read_text())
-        self.assertFalse(c["source_merge_authorizes_live"]); self.assertIn("ordinary-reconciliation-before-schema-ready",c["forbidden"])
+        self.assertFalse(c["source_merge_authorizes_live"]); self.assertIn("ordinary-reconciliation-before-schema-ready",c["forbidden"]); self.assertEqual(c["consumer_source_sha"], bridge.EXPECTED_CONSUMER_SOURCE_SHA)
         install=json.loads((ROOT/"ops/deploy/simple-deploy-installer-v1.json").read_text())
         self.assertIn("database-or-data-mutation",install["not_performed_by_installer"])
         self.assertTrue(any(x.get("source")=="ops/bin/rozkalns-simple-deploy-weather-schema-init" for x in install["files"]))
@@ -74,9 +74,9 @@ class Tests(unittest.TestCase):
             override=json.loads(compose[1]); self.assertEqual(override["services"]["schema-init"]["image"],f"{bridge.IMAGE}@{DIGEST}"); self.assertEqual(override["volumes"]["weather_data"],{"external":True,"name":bridge.HOST_VOLUME})
         finally: fx.close()
     def test_ready_is_noop_before_any_docker_mutation(self):
-        fx=Fixture(http=FakeHttp([200]))
+        fx=Fixture(runner=FakeRunner(prior_container=bridge.SCHEMA_CONTAINER),http=FakeHttp([200]))
         try:
-            r=fx.subject.apply(); self.assertEqual(r["result"],"NO_OP_ALREADY_READY"); self.assertFalse(r["mutation_started"]); self.assertFalse(any(c[0][:2] in (("docker","pull"),("docker","compose")) for c in fx.runner.calls))
+            r=fx.subject.apply(); self.assertEqual(r["result"],"NO_OP_ALREADY_READY"); self.assertFalse(r["mutation_started"]); self.assertFalse(any(c[0][:2] in (("docker","pull"),("docker","compose")) for c in fx.runner.calls)); self.assertFalse(any(c[0][:3] == ("docker","ps","-a") for c in fx.runner.calls))
         finally: fx.close()
     def test_missing_or_wrong_volume_fails_before_mutation(self):
         fx=Fixture(runner=FakeRunner(volume="wrong"),http=FakeHttp([503]))
@@ -95,6 +95,13 @@ class Tests(unittest.TestCase):
         try:
             with self.assertRaisesRegex(bridge.SchemaInitError,"neither 200 nor expected 503"): fx.subject.apply()
             self.assertFalse(any(c[0][:2] == ("docker","pull") for c in fx.runner.calls))
+        finally: fx.close()
+    def test_wrong_consumer_source_sha_fails_before_mutation(self):
+        fx=Fixture(runner=FakeRunner(source_sha="b"*40),http=FakeHttp([503]))
+        try:
+            with self.assertRaises(bridge.SchemaInitError) as cm: fx.subject.apply()
+            self.assertEqual(cm.exception.code,"CONSUMER_SOURCE_DRIFT"); self.assertFalse(cm.exception.mutation_started)
+            self.assertFalse(any(c[0][:2] in (("docker","pull"),("docker","compose")) for c in fx.runner.calls))
         finally: fx.close()
     def test_schema_failure_is_post_mutation_and_no_retry_cleanup(self):
         fx=Fixture(runner=FakeRunner(fail_marker=" schema-init"),http=FakeHttp([503]))

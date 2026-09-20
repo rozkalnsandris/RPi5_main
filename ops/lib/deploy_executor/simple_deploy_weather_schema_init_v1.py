@@ -14,6 +14,7 @@ import simple_deploy_v1 as sd
 TARGET_ALIAS = "rozkalns-weather-public-rpi5"
 CONSUMER_REPOSITORY = "rozkalnsandris/rozkalns_weather"
 IMAGE = "ghcr.io/rozkalnsandris/rozkalns_weather"
+EXPECTED_CONSUMER_SOURCE_SHA = "606981d10eee59d13b802f6a682abf1daa2aa8a5"
 COMPOSE_PROJECT = "rozkalns-weather-public"
 COMPOSE_FILE = "rozkalns-weather-public.yml"
 COMPOSE_SERVICE = "weather"
@@ -146,6 +147,8 @@ class WeatherSchemaInit:
             compose_file = deployer._verify_compose_file(target)
             digest = deployer._resolve_pointer(target)
             metadata = deployer._inspect_image(target, digest)
+            if metadata.source_sha != EXPECTED_CONSUMER_SOURCE_SHA:
+                raise SchemaInitError("CONSUMER_SOURCE_DRIFT", "Weather consumer source is not the reviewed canary revision")
         except sd.SimpleDeployError as exc:
             raise SchemaInitError("IMAGE_CONTRACT_FAILED", "immutable image contract validation failed") from exc
         volume = _required(
@@ -154,18 +157,19 @@ class WeatherSchemaInit:
         ).strip()
         if volume != HOST_VOLUME:
             raise SchemaInitError("VOLUME_IDENTITY_FAILED", "existing Weather volume identity does not match")
-        existing = _required(
-            self.runner.run(("docker", "ps", "-a", "--filter", f"name=^/{SCHEMA_CONTAINER}$", "--format", "{{.Names}}"), timeout_seconds=30),
-            "SCHEMA_CONTAINER_DISCOVERY_FAILED", mutation_started=False,
-        ).strip()
-        if existing:
-            raise SchemaInitError("PRIOR_ATTEMPT_PRESENT", "fixed schema-init evidence container already exists")
         try:
             readiness = self.http.get(target.health.readiness_url, timeout_seconds=10)
         except SchemaInitError:
             raise
         if readiness not in (200, EXPECTED_PRE_SCHEMA_READINESS):
             raise SchemaInitError("PRE_SCHEMA_READINESS_DRIFT", "pre-schema readiness status is neither 200 nor expected 503")
+        if readiness == EXPECTED_PRE_SCHEMA_READINESS:
+            existing = _required(
+                self.runner.run(("docker", "ps", "-a", "--filter", f"name=^/{SCHEMA_CONTAINER}$", "--format", "{{.Names}}"), timeout_seconds=30),
+                "SCHEMA_CONTAINER_DISCOVERY_FAILED", mutation_started=False,
+            ).strip()
+            if existing:
+                raise SchemaInitError("PRIOR_ATTEMPT_PRESENT", "fixed schema-init evidence container already exists")
         return Preflight(target, compose_file, digest, metadata, readiness)
 
     def apply(self) -> dict[str, object]:
