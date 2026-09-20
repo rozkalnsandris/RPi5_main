@@ -153,36 +153,36 @@ The current priority remains the accepted shared SIMPLE-DEPLOY rollout, not the 
 
 - shared SIMPLE-DEPLOY: `ops-workflows@e05ed760791a127c7c9628696806ef39c9fe329c`;
 - Weather consumer/canary: `rozkalns_weather@606981d10eee59d13b802f6a682abf1daa2aa8a5`;
-- historical #672 source-only deterministic installer/principal prerequisite merged via PR #673;
-- #674 sequencing outcome merged via PR #675 as `RPi5_main@b57ed42d5eb01f15b62c1f53459ffe0539a57d9c`;
-- Phase A install-only completed from that exact baseline, including the reviewed principal provisioning, and stopped without daemon-reload, service/timer activation, Docker command, target reconciliation or database/data mutation;
-- Phase B then stopped before Docker/data mutation with `IMAGE_CONTRACT_FAILED` caused by `POINTER_RESOLUTION_FAILED`.
+- historical #672 source-only deterministic installer/principal prerequisite merged via PR #673, including the reviewed principal provisioning path;
+- #674 install/schema-init/activation sequencing merged via PR #675 at `RPi5_main@b57ed42d5eb01f15b62c1f53459ffe0539a57d9c`;
+- Phase A install-only completed from that exact baseline and stopped without daemon-reload, service/timer activation, Docker reconciliation or database/data mutation;
+- the Phase-B Docker-state/runtime-identity correction merged via PR #676 as `RPi5_main@7c6c7a8a80ca62d783c7f378b5865fae348a3fe9`, with exact-main CI green;
+- the separately authorized post-install Phase-B repair completed without Docker, systemd activation, reconciliation or database/data mutation;
+- Phase B schema-init completed against the preserved `rozkalns-weather-public_weather_data` volume: `/ready` changed `503 -> 200`, the production pointer remained unchanged, and the frozen image was `sha256:d495d10b2d5e002a3c19b6532746624955269e0d483996c42ad6dea87e7afc38`;
+- Phase C activation completed: the first bounded reconciliation returned `SUCCESS` for that same immutable digest, `/health=200`, `/ready=200`, and the reviewed `rozkalns-simple-deployer.timer` was enabled/started;
+- post-activation read-only verification observed the timer active/enabled, a successful timer trigger, service result `success`/exit `0`, and `/health=200` plus `/ready=200`.
 
-The Phase-B failure exposed a source/trust-contract defect: the schema-init bridge fixed `DOCKER_CONFIG` under root-owned `/etc`, while Docker Buildx uses client configuration/state/logs and the intended execution principal is the non-root `rozkalns-simple-deployer` account. The generic reconciler already uses runtime-owned `/var/lib/rozkalns-simple-deployer`; the schema-init bridge must use the same state boundary and must freeze its effective execution identity.
+These receipts complete the one-time Weather SIMPLE-DEPLOY cutover. They do not create reusable authority for database/data work, unrelated host control, credentials, network/Cloudflare changes or any other sensitive mutation class.
 
 ### Current exact Weather gate
 
-`RPi5_main#669` remains the canonical runtime/data gate. Issue existence and source merge grant no LIVE authority. #672/#674 issue metadata may remain open after merged source outcomes; that does not reopen consumed Phase-A authority.
+`RPi5_main#669` is the historical/canonical one-time cutover gate whose Phase A/B/C Definition of Done is now satisfied by the accepted receipts above. Its issue body and #674 metadata remain stale until separately reconciled; they must not be interpreted as reopening or reauthorizing consumed one-shot gates.
 
-The current #674 follow-up source correction must remain source/docs/tests only. It may define a narrowly bounded post-install repair path because the Phase-A host has old installed helper bytes and the first-install-only installer cannot be rerun safely. That repair path is a separate future owner-gated filesystem/identity mutation and must not run Docker, systemd activation, target reconciliation or database/data mutation.
+The standing ordinary reconciliation contract is now active only for the already-adopted fixed target `rozkalns-weather-public-rpi5` and only for eligible `AUTO_DEPLOY_SAFE` releases within the reviewed static target contract. The next Weather acceptance lane is to prove one genuine newly merged Weather release reaches this fixed target end to end through shared SIMPLE-DEPLOY and records exact source/image/shared-workflow identity plus health/readiness.
 
-Required sequence:
+Current sequence from this checkpoint:
 
 ```text
-Phase A install-only at b57ed42... — COMPLETE; authority consumed
--> #674 source correction: fixed runtime identity + runtime-owned anonymous Docker/Buildx state + exact preflight mode
--> source review/merge + exact-main CI
--> separately exact owner-gated post-install Phase-B repair only
-   (schema-init module + generated source identity + runtime-owned state dirs; no Docker/data/systemd activation)
--> fresh minimum-sufficient Phase-B preflight under the fixed runtime principal
--> only on PRECHECK_READY: separately exact owner Phase-B schema/data authorization
--> fixed immutable-digest schema-init against preserved weather_data
--> prove /ready=200 and unchanged production pointer
--> separately exact owner Phase-C daemon-reload/timer activation + first bounded reconciliation
--> later corpus/backfill/recurring-ingest gates
+one-time Weather SIMPLE-DEPLOY Phase A/B/C cutover — COMPLETE
+-> reconcile stale source/continuity documentation
+-> prove one genuine newly merged Weather AUTO_DEPLOY_SAFE release end to end
+-> verify exact source/shared-workflow/image digest + /health=200 + /ready=200 receipt
+-> separately gate any corpus/backfill/recurring-ingest work still required for usable public Weather
+-> usable Weather UI/provider/corpus acceptance
+-> migrate/test additional compatible consumers
 ```
 
-No alternate Docker config path, helper retry, cleanup, rollback or alternate schema-init path may substitute for the reviewed sequence.
+No consumed Phase-A/B/C authorization is reusable. No alternate Docker config path, helper retry, cleanup, rollback or historical broker/JIT path is authorized by this continuity update.
 
 ### Historical Weather v10 path
 
@@ -226,13 +226,13 @@ Rules:
 
 ## 7. Weather acceptance sequence after #669
 
-After the one-time cutover passes:
+The one-time cutover has passed. The current acceptance sequence is:
 
-1. prove one genuine merged Weather release reaches the fixed SIMPLE-DEPLOY target end to end;
+1. prove one genuine newly merged Weather release reaches the fixed SIMPLE-DEPLOY target end to end through the standing ordinary reconciliation path;
 2. verify exact deployed source/image digest and shared workflow revision;
 3. record `/health` truthfully;
-4. record `/ready` truthfully — a pre-existing data-readiness blocker is not an application-deploy failure and must never be fabricated as PASS;
-5. separately initialize the first production SQLite schema/public corpus if still required;
+4. record `/ready` truthfully; the completed schema-init currently established `/ready=200`, but future regressions must fail closed rather than be fabricated as PASS;
+5. treat the first SQLite schema initialization as complete, while any public corpus bootstrap/backfill remains a separate data gate if still required;
 6. separately enable recurring public ingest only through its own exact host/scheduler gate;
 7. require real public DWD/ICON-D2/ECMWF state and corpus integrity before declaring Weather usable;
 8. close the Weather UI master only after real UI/provider/readiness evidence passes.
@@ -308,36 +308,36 @@ Do not use historical SHAs in this ledger as current source/runtime identity.
 
 ```text
 1. Phase A install-only at b57ed42... — COMPLETE; authority consumed
-2. #674 Phase-B execution-identity/Docker-state source correction
-3. focused source PR + exact-head CI/review + explicit owner merge
-4. exact-main CI after merge
-5. separately exact owner-gated post-install Phase-B repair only
-6. fresh non-mutating Phase-B --preflight under rozkalns-simple-deployer
-7. only on PRECHECK_READY: separately exact owner Phase-B schema/data gate
-8. prove /ready=200 and unchanged production pointer
-9. separately exact owner Phase-C activation + first bounded reconciliation
-10. later corpus/backfill/recurring-ingest gates
-11. prove one genuine merged Weather release end to end
-12. then migrate/test additional compatible consumers
+2. #674 Phase-B correction + PR #676 merge at 7c6c7a8... — COMPLETE
+3. separately gated post-install Phase-B repair — COMPLETE; authority consumed
+4. Phase-B schema-init against preserved weather_data — PASS; /ready=200; authority consumed
+5. Phase-C activation + first bounded reconciliation — PASS; timer active; authority consumed
+6. source/continuity reconciliation for the completed cutover — CURRENT SOURCE LANE
+7. prove one genuine newly merged Weather AUTO_DEPLOY_SAFE release end to end
+8. separately gate corpus/backfill/recurring-ingest work still required for usable public Weather
+9. complete Weather UI/provider/corpus acceptance
+10. then migrate/test additional compatible consumers
 ```
 
-If fresh GitHub or host evidence proves a step already complete or invalid, reclassify before action. Never rerun a consumed gate, improvise a Docker/config path, or treat source merge as LIVE authority.
+If fresh GitHub or host evidence invalidates an accepted receipt, reclassify before action. Never rerun a consumed one-shot gate, improvise a Docker/config path, or treat a source merge as authority for a separately sensitive mutation class.
 
 ## 13. Current authorization state
 
-Current authority is source/docs/tests work only through Ready. There is no merge authority and no reusable LIVE authority. Phase-A authority is consumed.
+Current authority is source/docs/tests work only through Ready. There is no merge authority and no fresh one-shot LIVE authority.
 
-This source correction does **not** authorize:
+The Phase-A install, post-install repair, Phase-B schema/data and Phase-C activation authorizations were consumed by their completed attempts and are non-reusable. The successful Phase-C cutover activated only the reviewed standing ordinary `AUTO_DEPLOY_SAFE` reconciliation contract for the already-adopted static Weather target.
 
-- merge of its PR;
-- the post-install `--phase-b-repair --apply` filesystem/identity mutation;
-- invoking the schema-init no-argument apply path or any database/schema/data mutation;
-- `systemctl daemon-reload`, service/timer enable/start or first target reconciliation;
-- alternate Docker configuration, root execution, retry, cleanup or rollback;
-- secrets/credentials/permissions beyond the separately reviewed exact future repair;
-- Cloudflare/DNS/network or private-provider mutation.
+That standing contract does **not** authorize:
 
-After source merge and exact-main green, the next genuine owner gate is the narrowly frozen post-install Phase-B repair. Only after its PASS and a fresh `--preflight` PASS may a separate Phase-B schema/data authorization be considered.
+- merge of this continuity PR or any consumer PR;
+- database/schema/data migration, corpus bootstrap/backfill, recurring-ingest activation or destructive recovery;
+- target/registry/Compose/service identity widening outside reviewed source;
+- unrelated Docker/systemd/host-control, package or filesystem-permission mutation;
+- secrets/credentials/private-provider changes;
+- Cloudflare/DNS/network mutation;
+- retry, cleanup, rollback or alternate recovery after a fail-closed ordinary deployment error unless a separately reviewed recovery contract authorizes it.
+
+After this continuity source reaches Ready, the immediate owner gate is only explicit merge of that exact PR. After merge and fresh exact-main CI, the next Weather acceptance lane is a genuine newly merged eligible Weather release using the already-activated ordinary SIMPLE-DEPLOY path; any sensitive prerequisite discovered by that work remains separately exact-gated.
 
 ## 14. Continuity references
 
