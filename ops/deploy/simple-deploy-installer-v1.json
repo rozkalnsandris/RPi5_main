@@ -1,0 +1,129 @@
+{
+  "schema": "rozkalns.rpi5-main.simple-deploy-installer.v1",
+  "issue": 672,
+  "status": "SOURCE_ONLY_NOT_EXECUTED",
+  "source_repository": "rozkalnsandris/RPi5_main",
+  "entrypoint": "scripts/install-simple-deploy-v1.py",
+  "activation_issue": 669,
+  "principal": {
+    "mechanism": "systemd-sysusers",
+    "source": "ops/sysusers/rozkalns-simple-deployer.conf",
+    "install_target": "/usr/local/lib/sysusers.d/rozkalns-simple-deployer.conf",
+    "user": "rozkalns-simple-deployer",
+    "group": "rozkalns-simple-deployer",
+    "supplementary_groups": [
+      "docker"
+    ],
+    "home": "/var/lib/rozkalns-simple-deployer",
+    "shell": "/usr/sbin/nologin",
+    "first_install_requires_user_group_absent": true,
+    "docker_group_must_preexist": true
+  },
+  "directories": [
+    {
+      "path": "/usr/local/lib/sysusers.d",
+      "mode": "0755",
+      "owner": "root:root"
+    },
+    {
+      "path": "/usr/local/libexec/rozkalns-simple-deployer",
+      "mode": "0755",
+      "owner": "root:root"
+    },
+    {
+      "path": "/etc/rozkalns-simple-deployer",
+      "mode": "0755",
+      "owner": "root:root"
+    },
+    {
+      "path": "/etc/rozkalns-simple-deployer/compose",
+      "mode": "0755",
+      "owner": "root:root"
+    }
+  ],
+  "files": [
+    {
+      "source": "ops/sysusers/rozkalns-simple-deployer.conf",
+      "target": "/usr/local/lib/sysusers.d/rozkalns-simple-deployer.conf",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/bin/rozkalns-simple-deployer",
+      "target": "/usr/local/libexec/rozkalns-simple-deployer/rozkalns-simple-deployer",
+      "mode": "0555"
+    },
+    {
+      "source": "ops/lib/deploy_executor/simple_deploy_v1.py",
+      "target": "/usr/local/libexec/rozkalns-simple-deployer/simple_deploy_v1.py",
+      "mode": "0444"
+    },
+    {
+      "source": "ops/deploy/simple-deploy-targets-v1.json",
+      "target": "/etc/rozkalns-simple-deployer/targets.json",
+      "mode": "0444"
+    },
+    {
+      "source": "GENERATED_EXACT_SOURCE_IDENTITY",
+      "target": "/etc/rozkalns-simple-deployer/identity.json",
+      "mode": "0444"
+    },
+    {
+      "source": "ops/deploy/simple-deploy-compose/rozkalns-weather-public.yml",
+      "target": "/etc/rozkalns-simple-deployer/compose/rozkalns-weather-public.yml",
+      "mode": "0444"
+    },
+    {
+      "source": "ops/systemd/rozkalns-simple-deployer.service",
+      "target": "/etc/systemd/system/rozkalns-simple-deployer.service",
+      "mode": "0644"
+    },
+    {
+      "source": "ops/systemd/rozkalns-simple-deployer.timer",
+      "target": "/etc/systemd/system/rozkalns-simple-deployer.timer",
+      "mode": "0644"
+    }
+  ],
+  "identity": {
+    "schema": "rozkalns.rpi5-main.simple-deploy.identity.v1",
+    "repository": "rozkalnsandris/RPi5_main",
+    "source_sha": "EXPECTED_SOURCE_SHA_ARGUMENT"
+  },
+  "preflight": {
+    "exact_head_required": true,
+    "exact_origin_required": true,
+    "clean_checkout_required": true,
+    "all_install_targets_absent": true,
+    "sysusers_dry_run_required": true,
+    "source_bytes_read_from_exact_git_commit": true
+  },
+  "mutation_budget": [
+    {
+      "category": "filesystem.simple-deploy-directory-materialization",
+      "max_operations": 4
+    },
+    {
+      "category": "filesystem.simple-deploy-file-materialization",
+      "max_operations": 8
+    },
+    {
+      "category": "identity.simple-deploy-system-user-group-provision",
+      "max_operations": 1
+    }
+  ],
+  "not_performed_by_installer": [
+    "systemd-daemon-reload",
+    "service-start",
+    "timer-enable",
+    "timer-start",
+    "docker-command",
+    "target-reconciliation",
+    "database-or-data-mutation"
+  ],
+  "failure": {
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "post_first_mutation": "STOP_FAIL_CLOSED"
+  },
+  "source_merge_authorizes_live": false
+}
