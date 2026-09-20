@@ -23,6 +23,8 @@ Consumer repositories remain responsible only for their application contract. Th
 - `ops/contracts/simple-deploy-host-v1.json` — machine-readable host/trust-boundary contract.
 - `ops/systemd/rozkalns-simple-deployer.service` and `.timer` — future activation source, not installed by this change.
 - `tests/test-simple-deploy-v1.py` — focused adversarial, reconciliation and tracked-target tests.
+- `ops/sysusers/rozkalns-simple-deployer.conf` — declarative static runtime principal plus explicit `docker` supplementary-group membership.
+- `scripts/install-simple-deploy-v1.py` + `ops/deploy/simple-deploy-installer-v1.json` — exact-SHA, first-install-only, fail-closed installer source. The installer does not reload systemd, start/enable the timer, run Docker or reconcile a target.
 
 The tracked registry now has `execution_enabled: true` and exactly one reviewed target, `rozkalns-weather-public-rpi5`. This is source readiness only: nothing reads this repository file on the production host until a separate LIVE cutover installs the exact reviewed registry, Compose file, deployer identity and units. Target adoption remains a tracked source review, never a runtime parameter.
 
@@ -84,8 +86,14 @@ Source readiness is not LIVE authority. Activation still requires a separate exa
 
 The cutover must materialize an identity file with schema `rozkalns.rpi5-main.simple-deploy.identity.v1`, repository `rozkalnsandris/RPi5_main` and the exact activated source SHA. It must install the reviewed registry and Compose files as root-owned, non-group/world-writable regular files. No target may be invented, edited or widened during the live gate.
 
+The first-install prerequisite is source-controlled by #672. The reviewed installer accepts one exact expected `RPi5_main` SHA, requires that exact clean checkout and origin, verifies every install target is absent before the first mutation, installs only fixed reviewed bytes, and provisions the static `rozkalns-simple-deployer` user/group through the tracked `sysusers.d` declaration. The declaration also makes the account a member of the already-existing `docker` group required by the unit. This user/group plus Docker-group membership change is a LIVE permission boundary; source merge does not authorize or execute it. `StateDirectory=rozkalns-simple-deployer` keeps `/var/lib/rozkalns-simple-deployer` ownership systemd-managed when the service is later started.
+
+The installer stops at `SIMPLE_DEPLOY_INSTALLED_NOT_ACTIVATED`: it does **not** call `systemctl daemon-reload`, enable/start the timer or service, pull an image, run Compose or reconcile Weather. Those activation operations remain a later exact LIVE envelope. If any privileged installer mutation has started and a later installer step fails, there is no automatic retry, cleanup or rollback.
+
+The current #669 issue text predates discovery of the missing runtime principal and explicitly excludes user/group/permission mutation. #672 does not silently widen #669. After this source prerequisite is merged and exact-main CI is green, #669 must be freshly reconciled and the owner LIVE authorization must explicitly include the reviewed principal provisioning before any installer apply.
+
 After a successful cutover, ordinary `AUTO_DEPLOY_SAFE` releases for already-adopted targets may reconcile without a fresh per-release LIVE decision. Database/data, destructive recovery, secrets/permissions, Cloudflare/network, private-provider activation and unrelated host-control classes remain separate exact gates.
 
 ## Current sequence
 
-`ops-workflows#97` is merged at `e05ed760791a127c7c9628696806ef39c9fe329c`; the generic RPi5 executor is merged at `ff20fcf64ba62c95e5f15eeb481c3c66bb5c9708`; Weather #142 is merged at `606981d10eee59d13b802f6a682abf1daa2aa8a5`. This source reconciliation binds the first static Weather target and exact Compose hash. The next boundary after this source is merged and revalidated is a separate one-time Weather/RPi5 LIVE cutover authorization.
+`ops-workflows#97` is merged at `e05ed760791a127c7c9628696806ef39c9fe329c`; the generic RPi5 executor is merged; Weather #142 is merged at `606981d10eee59d13b802f6a682abf1daa2aa8a5`; and the first static Weather target is tracked. The first #669 read-only host preflight then proved that the unit-required `rozkalns-simple-deployer` principal was absent and no reviewed provisioning path existed. #672 is the source-only prerequisite that closes that gap. Only after #672 is merged/revalidated and #669 is freshly reconciled may a one-time Weather/RPi5 LIVE cutover authorization be requested.

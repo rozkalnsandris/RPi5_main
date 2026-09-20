@@ -166,14 +166,19 @@ These identities are historical once `main` moves; fresh state always wins.
 
 `RPi5_main#669` — `[LIVE GATE][SIMPLE-DEPLOY v1] One-time Weather canary cutover and activation`.
 
-#669 is the current Weather deployment lane after this source-plan reconciliation. Issue existence does not authorize mutation.
+#669 remains the intended Weather LIVE gate, but the first minimum-sufficient read-only host preflight found a source prerequisite: the reviewed service requires static `rozkalns-simple-deployer` user/group plus `docker` membership, while the host has no such principal and the accepted source had no reviewed provisioning path. Source issue #672 is therefore the immediate prerequisite. Issue existence does not authorize mutation.
+
+#672 is source/docs/tests only. It defines a deterministic exact-SHA first installer and declarative `sysusers.d` principal; it performs no host install/enable/start/Docker work when merged. Because the current #669 body explicitly excludes user/group/permission mutation, #672 does not expand #669 authority: after #672 merge + exact-main CI, #669 must be freshly reconciled before any LIVE authorization.
 
 Required sequence:
 
 ```text
 source-plan reconciliation
--> #669 minimum-sufficient read-only preflight
--> exact owner LIVE cutover authorization
+-> #669 minimum-sufficient read-only preflight (principal gap found)
+-> #672 source-only deterministic installer/principal prerequisite
+-> #672 merge + exact-main CI
+-> fresh #669 reconciliation + read-only preflight
+-> exact owner LIVE cutover authorization explicitly including principal provisioning
 -> install/enable reviewed generic SIMPLE-DEPLOY host artifacts
 -> activate only the reviewed Weather target
 -> resolve production pointer to one immutable GHCR digest

@@ -15,7 +15,12 @@
     "registry": "/etc/rozkalns-simple-deployer/targets.json",
     "identity": "/etc/rozkalns-simple-deployer/identity.json",
     "compose_root": "/etc/rozkalns-simple-deployer/compose",
-    "state_root": "/var/lib/rozkalns-simple-deployer"
+    "state_root": "/var/lib/rozkalns-simple-deployer",
+    "group": "rozkalns-simple-deployer",
+    "supplementary_groups": [
+      "docker"
+    ],
+    "state_directory_managed_by_systemd": true
   },
   "registry": {
     "schema": "rozkalns.rpi5-main.simple-deploy.targets.v1",
@@ -76,6 +81,22 @@
     "separate_exact_live_cutover_required": true,
     "cutover_must_bind_exact_rpi5_main_sha": true,
     "cutover_must_bind_exact_initial_targets": true,
-    "ordinary_release_requires_fresh_live_after_successful_cutover": false
+    "ordinary_release_requires_fresh_live_after_successful_cutover": false,
+    "cutover_requires_reviewed_first_installer": true,
+    "cutover_requires_runtime_principal_provisioning": true,
+    "runtime_principal_docker_membership_is_live_permission_mutation": true,
+    "current_issue_669_must_be_freshly_reconciled_before_live": true
+  },
+  "installer": {
+    "issue": 672,
+    "entrypoint": "scripts/install-simple-deploy-v1.py",
+    "contract": "ops/deploy/simple-deploy-installer-v1.json",
+    "principal_source": "ops/sysusers/rozkalns-simple-deployer.conf",
+    "principal_mechanism": "systemd-sysusers",
+    "first_install_only": true,
+    "source_merge_executes_installer": false,
+    "installer_runs_daemon_reload": false,
+    "installer_starts_service_or_timer": false,
+    "installer_runs_docker_or_reconciliation": false
   }
 }
