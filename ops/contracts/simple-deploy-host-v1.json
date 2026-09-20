@@ -1,7 +1,7 @@
 {
   "schema": "rozkalns.rpi5-main.simple-deploy-host.v1",
   "issue": 666,
-  "status": "SOURCE_READY_FOR_SEPARATE_LIVE_CUTOVER_NOT_INSTALLED",
+  "status": "SOURCE_PHASE_B_CORRECTION_READY_REQUIRES_SEPARATE_REPAIR_AND_DATA_GATES",
   "shared_contract": {
     "repository": "rozkalnsandris/ops-workflows",
     "revision": "e05ed760791a127c7c9628696806ef39c9fe329c",
@@ -20,7 +20,8 @@
     "supplementary_groups": [
       "docker"
     ],
-    "state_directory_managed_by_systemd": true
+    "state_directory_managed_by_systemd": true,
+    "state_directory_prepared_before_phase_b_by_reviewed_repair": true
   },
   "registry": {
     "schema": "rozkalns.rpi5-main.simple-deploy.targets.v1",
@@ -105,6 +106,16 @@
     "installed_by_first_installer": true,
     "ordinary_reconciler_runs_schema_init": false,
     "requires_separate_exact_data_authority": true,
-    "activation_requires_schema_ready": true
+    "activation_requires_schema_ready": true,
+    "execution_user": "rozkalns-simple-deployer",
+    "docker_state_root": "/var/lib/rozkalns-simple-deployer",
+    "docker_config": "/var/lib/rozkalns-simple-deployer/docker-anonymous",
+    "buildx_config": "/var/lib/rozkalns-simple-deployer/docker-anonymous/buildx",
+    "exact_preflight_argv": [
+      "--preflight"
+    ],
+    "post_install_repair_required_after_phase_a_base_b57ed42": true,
+    "post_install_repair_mode": "--phase-b-repair",
+    "post_install_repair_runs_docker_or_data": false
   }
 }
