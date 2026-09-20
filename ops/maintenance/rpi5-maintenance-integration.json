@@ -1,0 +1,19 @@
+{
+  "schema": "rpi5-main.maintenance-integration.v1",
+  "canonical_repository": "rozkalnsandris/RPi5-maintenance",
+  "stable_release": "0.2.0",
+  "release_commit": "7a5685908e06cc35aa4bb623dd9fa6a3081c4416",
+  "runtime_source_model": "installed-artifacts-no-checkout-dependency",
+  "installed_entrypoints": [
+    "/usr/local/sbin/rpi5-update",
+    "/usr/local/sbin/rpi5-monitor",
+    "/usr/local/sbin/rpi5-post-reboot",
+    "/usr/local/sbin/rpi5-maintenance-notify"
+  ],
+  "installed_unit_root": "/etc/systemd/system",
+  "retained_rpi5_main_ownership": [
+    "backup",
+    "host-control-plane-integrations"
+  ],
+  "live_mutation_authorized": false
+}
