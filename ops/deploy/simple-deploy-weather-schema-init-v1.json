@@ -1,0 +1,58 @@
+{
+  "schema": "rozkalns.rpi5-main.simple-deploy.weather-schema-init.v1",
+  "issue": 674,
+  "status": "SOURCE_ONLY_NOT_EXECUTED",
+  "prerequisite_for_issue": 669,
+  "target_alias": "rozkalns-weather-public-rpi5",
+  "consumer_repository": "rozkalnsandris/rozkalns_weather",
+  "compose_project": "rozkalns-weather-public",
+  "compose_file": "rozkalns-weather-public.yml",
+  "schema_service": "schema-init",
+  "schema_container": "rozkalns-weather-schema-init-v1",
+  "logical_volume": "weather_data",
+  "host_volume": "rozkalns-weather-public_weather_data",
+  "entrypoint": "/usr/local/libexec/rozkalns-simple-deployer/rozkalns-simple-deploy-weather-schema-init",
+  "image_identity": {
+    "source": "production-pointer-read-only-resolution",
+    "execution": "immutable-image-digest-only",
+    "required_labels": [
+      "org.opencontainers.image.revision",
+      "io.rozkalns.simple-deploy.target",
+      "io.rozkalns.simple-deploy.shared-revision"
+    ]
+  },
+  "preconditions": [
+    "simple-deploy-install-only-complete",
+    "generic-service-and-timer-not-activated",
+    "existing-host-volume-exact-name",
+    "fixed-schema-container-absent",
+    "readiness-is-503-or-no-op-200",
+    "public-anonymous-image-contract-valid"
+  ],
+  "mutation_sequence": [
+    "pull-frozen-image-digest",
+    "compose-schema-init-one-shot-with-external-existing-volume"
+  ],
+  "postconditions": [
+    "readiness-http-200",
+    "production-pointer-unchanged",
+    "existing-volume-preserved",
+    "schema-container-preserved-as-evidence"
+  ],
+  "activation_after_pass": [
+    "systemd-daemon-reload-if-separately-authorized",
+    "enable-start-simple-deploy-timer-if-separately-authorized",
+    "first-bounded-reconciliation-if-separately-authorized"
+  ],
+  "forbidden": [
+    "ordinary-reconciliation-before-schema-ready",
+    "volume-create-delete-recreate",
+    "corpus-backfill",
+    "recurring-ingest-activation",
+    "arbitrary-command-path-argv-environment",
+    "automatic-retry",
+    "automatic-cleanup",
+    "automatic-rollback"
+  ],
+  "source_merge_authorizes_live": false
+}

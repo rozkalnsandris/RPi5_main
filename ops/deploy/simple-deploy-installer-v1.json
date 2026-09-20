@@ -1,7 +1,7 @@
 {
   "schema": "rozkalns.rpi5-main.simple-deploy-installer.v1",
   "issue": 672,
-  "status": "SOURCE_ONLY_NOT_EXECUTED",
+  "status": "SOURCE_ONLY_RECONCILED_FOR_INSTALL_SCHEMA_ACTIVATION_SPLIT",
   "source_repository": "rozkalnsandris/RPi5_main",
   "entrypoint": "scripts/install-simple-deploy-v1.py",
   "activation_issue": 669,
@@ -39,6 +39,11 @@
       "path": "/etc/rozkalns-simple-deployer/compose",
       "mode": "0755",
       "owner": "root:root"
+    },
+    {
+      "path": "/etc/rozkalns-simple-deployer/docker-anonymous",
+      "mode": "0755",
+      "owner": "root:root"
     }
   ],
   "files": [
@@ -55,6 +60,16 @@
     {
       "source": "ops/lib/deploy_executor/simple_deploy_v1.py",
       "target": "/usr/local/libexec/rozkalns-simple-deployer/simple_deploy_v1.py",
+      "mode": "0444"
+    },
+    {
+      "source": "ops/bin/rozkalns-simple-deploy-weather-schema-init",
+      "target": "/usr/local/libexec/rozkalns-simple-deployer/rozkalns-simple-deploy-weather-schema-init",
+      "mode": "0555"
+    },
+    {
+      "source": "ops/lib/deploy_executor/simple_deploy_weather_schema_init_v1.py",
+      "target": "/usr/local/libexec/rozkalns-simple-deployer/simple_deploy_weather_schema_init_v1.py",
       "mode": "0444"
     },
     {
@@ -99,11 +114,11 @@
   "mutation_budget": [
     {
       "category": "filesystem.simple-deploy-directory-materialization",
-      "max_operations": 4
+      "max_operations": 5
     },
     {
       "category": "filesystem.simple-deploy-file-materialization",
-      "max_operations": 8
+      "max_operations": 10
     },
     {
       "category": "identity.simple-deploy-system-user-group-provision",
@@ -125,5 +140,11 @@
     "automatic_rollback": false,
     "post_first_mutation": "STOP_FAIL_CLOSED"
   },
-  "source_merge_authorizes_live": false
+  "source_merge_authorizes_live": false,
+  "schema_init_bridge": {
+    "contract": "ops/deploy/simple-deploy-weather-schema-init-v1.json",
+    "installed_but_not_executed": true,
+    "source_merge_authorizes_data_mutation": false
+  },
+  "reconciled_by_issue": 674
 }

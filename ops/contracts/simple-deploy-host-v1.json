@@ -98,5 +98,13 @@
     "installer_runs_daemon_reload": false,
     "installer_starts_service_or_timer": false,
     "installer_runs_docker_or_reconciliation": false
+  },
+  "schema_init_bridge": {
+    "issue": 674,
+    "contract": "ops/deploy/simple-deploy-weather-schema-init-v1.json",
+    "installed_by_first_installer": true,
+    "ordinary_reconciler_runs_schema_init": false,
+    "requires_separate_exact_data_authority": true,
+    "activation_requires_schema_ready": true
   }
 }

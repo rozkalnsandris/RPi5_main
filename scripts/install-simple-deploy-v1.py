@@ -42,10 +42,11 @@ DIRECTORY_TARGETS = (
     (Path("/usr/local/libexec/rozkalns-simple-deployer"), 0o755),
     (Path("/etc/rozkalns-simple-deployer"), 0o755),
     (Path("/etc/rozkalns-simple-deployer/compose"), 0o755),
+    (Path("/etc/rozkalns-simple-deployer/docker-anonymous"), 0o755),
 )
 INSTALL_MUTATION_BUDGET = (
-    ("filesystem.simple-deploy-directory-materialization", len(DIRECTORY_TARGETS)),
-    ("filesystem.simple-deploy-file-materialization", 8),
+    ("filesystem.simple-deploy-directory-materialization", 5),
+    ("filesystem.simple-deploy-file-materialization", 10),
     ("identity.simple-deploy-system-user-group-provision", 1),
 )
 
@@ -79,6 +80,8 @@ TRACKED_FILES = (
     FileTarget("ops/sysusers/rozkalns-simple-deployer.conf", Path("/usr/local/lib/sysusers.d/rozkalns-simple-deployer.conf"), 0o644),
     FileTarget("ops/bin/rozkalns-simple-deployer", Path("/usr/local/libexec/rozkalns-simple-deployer/rozkalns-simple-deployer"), 0o555),
     FileTarget("ops/lib/deploy_executor/simple_deploy_v1.py", Path("/usr/local/libexec/rozkalns-simple-deployer/simple_deploy_v1.py"), 0o444),
+    FileTarget("ops/bin/rozkalns-simple-deploy-weather-schema-init", Path("/usr/local/libexec/rozkalns-simple-deployer/rozkalns-simple-deploy-weather-schema-init"), 0o555),
+    FileTarget("ops/lib/deploy_executor/simple_deploy_weather_schema_init_v1.py", Path("/usr/local/libexec/rozkalns-simple-deployer/simple_deploy_weather_schema_init_v1.py"), 0o444),
     FileTarget("ops/deploy/simple-deploy-targets-v1.json", Path("/etc/rozkalns-simple-deployer/targets.json"), 0o444),
     FileTarget(None, Path("/etc/rozkalns-simple-deployer/identity.json"), 0o444),
     FileTarget("ops/deploy/simple-deploy-compose/rozkalns-weather-public.yml", Path("/etc/rozkalns-simple-deployer/compose/rozkalns-weather-public.yml"), 0o444),

@@ -401,3 +401,6 @@ Historical validator markers for the runtime-adapter source checkpoint:
 `PRODUCTION_MUTATION_STARTED=false`
 
 These values are retained solely for source-contract regression compatibility. They are not current-state assertions and do not alter SIMPLE-DEPLOY/#669 sequencing.
+### SIMPLE-DEPLOY Weather canary sequencing correction (#674)
+
+Current canary activation is split to preserve strict readiness and Weather data authority: `install-only -> separate exact schema-init gate -> /ready=200 -> SIMPLE-DEPLOY activation/first reconciliation -> later corpus + ingest`. The generic reconciler remains forbidden from schema/data mutation. #669 must be freshly reconciled after #674 source merge; its earlier cutover-before-schema sequence is not executable while Weather uses `DATABASE_INIT_MODE=require-existing`.

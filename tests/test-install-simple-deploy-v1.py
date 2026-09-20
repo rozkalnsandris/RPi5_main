@@ -36,17 +36,19 @@ class SimpleDeployInstallerSourceTests(unittest.TestCase):
 
     def test_installer_contract_matches_fixed_source_targets(self) -> None:
         self.assertEqual(CONTRACT["issue"], 672)
+        self.assertEqual(CONTRACT["reconciled_by_issue"], 674)
         self.assertEqual(CONTRACT["activation_issue"], 669)
-        self.assertEqual(CONTRACT["status"], "SOURCE_ONLY_NOT_EXECUTED")
+        self.assertEqual(CONTRACT["status"], "SOURCE_ONLY_RECONCILED_FOR_INSTALL_SCHEMA_ACTIVATION_SPLIT")
         self.assertEqual(CONTRACT["principal"]["mechanism"], "systemd-sysusers")
         self.assertEqual(CONTRACT["principal"]["supplementary_groups"], ["docker"])
         self.assertTrue(CONTRACT["principal"]["first_install_requires_user_group_absent"])
         expected = [(str(t.target), f"{t.mode:04o}") for t in installer.TRACKED_FILES]
         actual = [(item["target"], item["mode"]) for item in CONTRACT["files"]]
         self.assertEqual(actual, expected)
-        self.assertEqual(len(actual), 8)
-        self.assertEqual(len(CONTRACT["directories"]), 4)
+        self.assertEqual(len(actual), 10)
+        self.assertEqual(len(CONTRACT["directories"]), 5)
         self.assertFalse(CONTRACT["source_merge_authorizes_live"])
+        self.assertTrue(any(item["path"] == "/etc/rozkalns-simple-deployer/docker-anonymous" for item in CONTRACT["directories"]))
 
     def test_identity_is_exact_sha_only_and_parser_compatible(self) -> None:
         source_sha = "a" * 40
@@ -131,6 +133,9 @@ class SimpleDeployInstallerSourceTests(unittest.TestCase):
 
     def test_host_contract_exposes_installer_without_live_side_effects(self) -> None:
         self.assertEqual(HOST["installer"]["issue"], 672)
+        self.assertEqual(HOST["schema_init_bridge"]["issue"], 674)
+        self.assertTrue(HOST["schema_init_bridge"]["requires_separate_exact_data_authority"])
+        self.assertTrue(HOST["schema_init_bridge"]["activation_requires_schema_ready"])
         self.assertEqual(HOST["installer"]["entrypoint"], "scripts/install-simple-deploy-v1.py")
         self.assertEqual(HOST["installer"]["principal_mechanism"], "systemd-sysusers")
         self.assertFalse(HOST["installer"]["source_merge_executes_installer"])

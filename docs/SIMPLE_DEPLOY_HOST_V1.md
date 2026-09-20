@@ -97,3 +97,12 @@ After a successful cutover, ordinary `AUTO_DEPLOY_SAFE` releases for already-ado
 ## Current sequence
 
 `ops-workflows#97` is merged at `e05ed760791a127c7c9628696806ef39c9fe329c`; the generic RPi5 executor is merged; Weather #142 is merged at `606981d10eee59d13b802f6a682abf1daa2aa8a5`; and the first static Weather target is tracked. The first #669 read-only host preflight then proved that the unit-required `rozkalns-simple-deployer` principal was absent and no reviewed provisioning path existed. #672 is the source-only prerequisite that closes that gap. Only after #672 is merged/revalidated and #669 is freshly reconciled may a one-time Weather/RPi5 LIVE cutover authorization be requested.
+## Weather canary first-activation sequencing (#674)
+
+Fresh #669 preflight proved that Weather cannot safely run the first ordinary reconciliation while production schema is absent: the reviewed Compose healthcheck and generic reconciler both require `/ready=200`, while Weather intentionally uses `DATABASE_INIT_MODE=require-existing`.
+
+The one-time canary sequence is therefore frozen as **install-only -> separately authorized schema init -> readiness 200 -> activation/reconciliation**. The #672/#674 first installer still performs no daemon-reload, service/timer start, Docker command, reconciliation or database/data mutation. It only installs the fixed `rozkalns-simple-deploy-weather-schema-init` companion source in addition to the generic deployer.
+
+The companion is not part of ordinary SIMPLE-DEPLOY. A later exact data gate may invoke it with no caller arguments. It reuses the static Weather target, reviewed Compose hash and generic production-pointer/image-label validation, requires the existing `rozkalns-weather-public_weather_data` volume, freezes one immutable `image@sha256` reference, and runs only the reviewed `schema-init` service with that volume declared external. It never creates/deletes/recreates the volume, backfills corpus, activates ingest or starts the generic timer.
+
+A PASS requires `/ready=200` and an unchanged production pointer after schema init. Any post-mutation error is STOP with no automatic retry, cleanup or rollback. Only after a PASS may #669 be freshly rebound to a separate activation gate for daemon-reload/timer enable/start and first bounded reconciliation. Source merge does not authorize any of those LIVE/data operations.
