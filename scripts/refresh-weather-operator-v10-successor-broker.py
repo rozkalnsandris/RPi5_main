@@ -14,7 +14,7 @@ from deploy_executor import weather_operator_v10_successor_broker_refresh as ref
 
 BASE_OPERATOR = ROOT / "scripts/refresh-weather-operator-v9-host-capability-broker.py"
 CONTRACT = ROOT / "ops/deploy/weather-operator-v10-successor-broker-refresh.json"
-PREDECESSOR_BROKER_SOURCE = "ops/bin/rozkalns-weather-operator-v9-privileged-broker"
+PREDECESSOR_BROKER_SOURCES = refresh.PREDECESSOR_BROKER_SOURCES
 TARGET_BROKER_SOURCE = "ops/bin/rozkalns-weather-operator-v10-successor-privileged-broker"
 
 
@@ -54,6 +54,17 @@ def _artifact_hashes(commit: str, manager: Path, broker_source: str) -> dict[str
     }
 
 
+def _candidate_broker_hashes(commit: str) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for broker_source in PREDECESSOR_BROKER_SOURCES:
+        exists = base.run_git("cat-file", "-e", f"{commit}:{broker_source}", check=False)
+        if exists.returncode != 0:
+            continue
+        base.require_executable_git_mode(commit, broker_source)
+        result[broker_source] = refresh.sha256(base.git_blob(commit, broker_source))
+    return result
+
+
 def _validate_contract() -> None:
     try:
         value = json.loads(CONTRACT.read_text(encoding="utf-8"))
@@ -66,9 +77,10 @@ def _validate_contract() -> None:
     )
     if (
         value.get("schema") != "rozkalns.rpi5-main.weather-operator-v10-successor-broker-refresh.v1"
-        or value.get("issue") != 643
+        or value.get("issue") != 664
         or value.get("minimum_predecessor_ancestor") != refresh.MINIMUM_PREDECESSOR_ANCESTOR
-        or value.get("predecessor_broker_source") != PREDECESSOR_BROKER_SOURCE
+        or value.get("predecessor_broker_sources") != list(PREDECESSOR_BROKER_SOURCES)
+        or value.get("predecessor_selection") != "REGISTRATION_BROKER_SHA256_EXACTLY_ONE_FIXED_GIT_SOURCE"
         or value.get("target_broker_source") != TARGET_BROKER_SOURCE
         or value.get("replacement_order") != ["broker", "registration"]
         or budget != refresh.MUTATION_BUDGET
@@ -95,7 +107,14 @@ def _preflight_material():
     if not manager.is_absolute() or manager.name != "RPi5_main":
         base.fail("registered manager checkout identity drifted")
 
-    predecessor = _artifact_hashes(predecessor_sha, manager, PREDECESSOR_BROKER_SOURCE)
+    try:
+        predecessor_broker_source = refresh.select_predecessor_broker_source(
+            str(registration["broker_sha256"]),
+            _candidate_broker_hashes(predecessor_sha),
+        )
+    except refresh.WeatherV10SuccessorBrokerRefreshError as exc:
+        raise base.CapabilityBrokerRefreshOperatorError(str(exc)) from exc
+    predecessor = _artifact_hashes(predecessor_sha, manager, predecessor_broker_source)
     target = _artifact_hashes(target_sha, manager, TARGET_BROKER_SOURCE)
     installed = base.installed_hashes()
     before_state = base.state_snapshot()
