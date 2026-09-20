@@ -297,6 +297,12 @@ def _verify_file(target: FileTarget, desired: bytes) -> None:
         data = b"".join(chunks)
         if len(data) > len(desired):
             _fail(f"installed target exceeds reviewed size: {target.target}")
+        try:
+            now = os.stat(target.target, follow_symlinks=False)
+        except OSError as exc:
+            _fail(f"installed target cannot be re-inspected safely: {target.target}: {exc.strerror}")
+        if (now.st_dev, now.st_ino) != (opened.st_dev, opened.st_ino):
+            _fail(f"installed target changed during validation: {target.target}")
     finally:
         os.close(fd)
     if data != desired or hashlib.sha256(data).digest() != hashlib.sha256(desired).digest():

@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import re
 import sys
+import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -73,6 +74,35 @@ class SimpleDeployInstallerSourceTests(unittest.TestCase):
         self.assertNotIn('subprocess.call', source)
         self.assertNotIn('os.system(', source)
         self.assertNotIn('systemctl', source)
+
+    def test_existing_install_target_is_rejected_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            existing = Path(temp) / "existing-target"
+            existing.write_text("occupied\n", encoding="utf-8")
+            with self.assertRaisesRegex(
+                installer.SimpleDeployInstallerError,
+                "first-install target already exists",
+            ):
+                installer._require_absent(existing)
+
+            existing.unlink()
+            existing.symlink_to("missing-target")
+            with self.assertRaisesRegex(
+                installer.SimpleDeployInstallerError,
+                "first-install target already exists",
+            ):
+                installer._require_absent(existing)
+
+    def test_receipt_keeps_activation_and_docker_side_effects_false(self) -> None:
+        receipt = json.loads(
+            installer._receipt("TEST", "a" * 40, installer.Progress())
+        )
+        self.assertFalse(receipt["daemon_reload_performed"])
+        self.assertFalse(receipt["service_started"])
+        self.assertFalse(receipt["timer_enabled_or_started"])
+        self.assertFalse(receipt["docker_command_executed"])
+        self.assertFalse(receipt["target_reconciliation_executed"])
+        self.assertFalse(receipt["database_or_data_mutation"])
 
     def test_installer_stops_before_activation_or_docker(self) -> None:
         excluded = set(CONTRACT["not_performed_by_installer"])
