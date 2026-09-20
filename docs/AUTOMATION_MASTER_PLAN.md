@@ -135,6 +135,14 @@ Canonical A0 contract: `docs/AUTO_LIVE_V1.md` + `ops/deploy/auto-live-v1.json`. 
 
 The A0/A2 source contracts remain useful for exact source/target identity, full production-baseline-to-target classification, target serialization, least privilege and first-activation owner-gate semantics. Historical Auto-Live source state with `execution_enabled=false` must not be interpreted as current runtime activation.
 
+The retained A4 source-contract compatibility state is historical/non-authorizing and exists so current validators can distinguish durable policy state from volatile candidate SHAs:
+
+`AUTO_LIVE_TRACK_Y_CURRENT=A4_DISCOVERY_READY_NO_CANARY_SELECTED`  
+`A4_DISCOVERY_CONTRACT=ops/deploy/auto-live-a4-candidate-discovery.json`  
+`A4_VOLATILE_CANDIDATE_SHA_PERSISTED=false`
+
+These A4 markers do not select the current deployment lane, do not activate Auto-Live, and do not override #669.
+
 SIMPLE-DEPLOY v1 is now the concrete shared application-release profile for compatible Docker/Compose services. Where old Auto-Live manifests or controllers conflict with the accepted SIMPLE-DEPLOY consumer/runtime contract, reconcile them as compatibility/history rather than creating another deployment engine.
 
 ## 5. Current cross-project priority — SIMPLE-DEPLOY v1 Weather canary
