@@ -83,6 +83,9 @@ jobs:
       - name: Validate Weather v10 successor privileged broker bridge
         run: python3 ./tests/test-weather-operator-v10-successor-broker.py
 
+      - name: Validate Weather v10 post-consume failure codes
+        run: python3 ./tests/test-weather-v10-post-consume-failure-codes.py
+
       - name: Validate Weather v10 successor dispatch caller transport
         run: python3 ./tests/test-weather-operator-v10-successor-dispatch-caller.py
 
