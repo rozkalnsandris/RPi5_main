@@ -7,7 +7,7 @@ import sys
 SUPPORT_ROOT = Path("/usr/local/libexec/rozkalns-weather-operator-v9-capability")
 sys.path.insert(0, str(SUPPORT_ROOT))
 
-from deploy_executor.weather_operator_upgrade_v9_dispatch_caller import runtime_main
+from deploy_executor.weather_operator_upgrade_v10_dispatch_caller import runtime_main
 
 if __name__ == "__main__":
     raise SystemExit(runtime_main())

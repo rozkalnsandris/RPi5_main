@@ -1,0 +1,43 @@
+{
+  "schema": "rozkalns.rpi5-main.weather-operator-v10-successor-dispatch-caller-refresh.v1",
+  "issue": 650,
+  "predecessor_source_sha": "4ed279e04b240858fc8a2ce69e95f9c546e3a26b",
+  "origin": "https://github.com/rozkalnsandris/RPi5_main.git",
+  "fixed_targets": {
+    "/usr/local/libexec/rozkalns-weather-operator-v9-capability/deploy_executor/weather_operator_upgrade_v10_dispatch_caller.py": "0644",
+    "/usr/local/libexec/rozkalns-weather-operator-v9-dispatch-caller": "0755"
+  },
+  "replacement_order": [
+    "successor_module",
+    "dispatch_caller_entrypoint"
+  ],
+  "mutation_budget": [
+    {
+      "category": "filesystem.weather-operator-v10-successor-dispatch-caller-refresh-stage",
+      "max_operations": 2
+    },
+    {
+      "category": "filesystem.weather-operator-v10-successor-dispatch-caller-refresh-atomic-replace",
+      "max_operations": 2
+    }
+  ],
+  "systemd_mutation": false,
+  "broker_mutation": false,
+  "registration_mutation": false,
+  "replay_state_db_mutation": false,
+  "weather_runtime_mutation": false,
+  "queue_or_live_auth_creation": false,
+  "automatic_retry": false,
+  "automatic_cleanup": false,
+  "automatic_rollback": false,
+  "source_merge_authorizes_live": false,
+  "explicit_exclusions": [
+    "no systemd daemon-reload/enable/start/stop/restart",
+    "no broker/registration/replay-state mutation",
+    "no Weather Docker/application/SQLite/corpus mutation",
+    "no network/firewall/DNS/Cloudflare mutation",
+    "no credential/secret/user/group/ACL/permission/settings mutation",
+    "no generic root shell or caller-selected path/argv/environment",
+    "no cleanup/retry/rollback or alternate dispatch"
+  ]
+}
