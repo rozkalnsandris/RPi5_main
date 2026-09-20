@@ -8,6 +8,8 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 SD_PATH = ROOT / "ops/lib/deploy_executor/simple_deploy_v1.py"
@@ -49,7 +51,7 @@ class FakeRunner:
 class Fixture:
     def __init__(self, runner=None, http=None):
         self.tmp=tempfile.TemporaryDirectory(); self.root=Path(self.tmp.name); self.compose_root=self.root/"compose"; self.compose_root.mkdir()
-        self.compose=self.compose_root/bridge.COMPOSE_FILE; self.compose.write_text((ROOT/"ops/deploy/simple-deploy-compose"/bridge.COMPOSE_FILE).read_text())
+        self.compose=self.compose_root/bridge.COMPOSE_FILE; self.compose.write_text((ROOT/"ops/deploy/simple-deploy-compose"/bridge.COMPOSE_FILE).read_text()); self.compose.chmod(0o600)
         digest=hashlib.sha256(self.compose.read_bytes()).hexdigest()
         payload=json.loads((ROOT/"ops/deploy/simple-deploy-targets-v1.json").read_text()); payload["targets"][0]["compose"]["file_sha256"]=digest
         self.registry=self.root/"targets.json"; self.registry.write_text(json.dumps(payload))
@@ -116,9 +118,44 @@ class Tests(unittest.TestCase):
             with self.assertRaises(bridge.SchemaInitError) as cm: fx.subject.apply()
             self.assertEqual(cm.exception.code,"POINTER_CHANGED"); self.assertTrue(cm.exception.mutation_started)
         finally: fx.close()
-    def test_no_caller_arguments_or_arbitrary_authority_fields(self):
+    def test_production_runner_uses_runtime_owned_anonymous_docker_state(self):
+        with tempfile.TemporaryDirectory() as temp:
+            state=Path(temp); runner=bridge.SubprocessRunner(state_root=state)
+            completed=SimpleNamespace(returncode=0,stdout="",stderr="")
+            with mock.patch.object(bridge.subprocess,"run",return_value=completed) as run:
+                runner.run(("docker","version"),timeout_seconds=1)
+            env=run.call_args.kwargs["env"]
+            self.assertEqual(env["HOME"],str(state)); self.assertEqual(env["DOCKER_CONFIG"],str(state/"docker-anonymous")); self.assertEqual(env["BUILDX_CONFIG"],str(state/"docker-anonymous"/"buildx"))
+            self.assertNotIn("/etc/rozkalns-simple-deployer/docker-anonymous",env.values())
+
+    def test_execution_identity_and_anonymous_state_fail_closed(self):
+        user=SimpleNamespace(pw_uid=1234,pw_gid=1235,pw_dir=str(bridge.PRODUCTION_STATE_ROOT),pw_shell="/usr/sbin/nologin")
+        primary=SimpleNamespace(gr_gid=1235); docker=SimpleNamespace(gr_gid=999,gr_mem=[bridge.RUNTIME_USER])
+        with mock.patch.object(bridge,"_runtime_identity",return_value=(user,primary,docker)), mock.patch.object(bridge.os,"geteuid",return_value=1234), mock.patch.object(bridge.os,"getegid",return_value=1235), mock.patch.object(bridge.os,"getgroups",return_value=[999]):
+            self.assertEqual(bridge._require_execution_identity(),(1234,1235))
+        with mock.patch.object(bridge,"_runtime_identity",return_value=(user,primary,docker)), mock.patch.object(bridge.os,"geteuid",return_value=0), mock.patch.object(bridge.os,"getegid",return_value=0), mock.patch.object(bridge.os,"getgroups",return_value=[999]):
+            with self.assertRaisesRegex(bridge.SchemaInitError,"fixed SIMPLE-DEPLOY runtime principal"): bridge._require_execution_identity()
+
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)/"state"; root.mkdir(mode=0o700); config=root/"docker-anonymous"; config.mkdir(mode=0o700)
+            uid=bridge.os.getuid(); gid=bridge.os.getgid()
+            with mock.patch.object(bridge,"PRODUCTION_STATE_ROOT",root):
+                bridge._require_anonymous_state(uid,gid)
+                credential_config=config/"config.json"; credential_config.write_text("{}")
+                with self.assertRaisesRegex(bridge.SchemaInitError,"refuses Docker credential"): bridge._require_anonymous_state(uid,gid)
+                credential_config.unlink(); credential_config.symlink_to(config/"missing-target")
+                with self.assertRaisesRegex(bridge.SchemaInitError,"refuses Docker credential"): bridge._require_anonymous_state(uid,gid)
+
+    def test_preflight_receipt_is_explicitly_non_mutating(self):
+        fx=Fixture(http=FakeHttp([503]))
+        try:
+            receipt=bridge._preflight_receipt(fx.subject.preflight())
+            self.assertEqual(receipt["result"],"PRECHECK_READY"); self.assertFalse(receipt["mutation_started"]); self.assertFalse(receipt["database_schema_mutation"])
+        finally: fx.close()
+
+    def test_no_arbitrary_authority_fields_or_cli_modes(self):
         source=SCHEMA_PATH.read_text(); wrapper=(ROOT/"ops/bin/rozkalns-simple-deploy-weather-schema-init").read_text()
-        self.assertIn("if args:",source); self.assertNotIn("shell=True",source+wrapper); self.assertNotIn("os.system",source+wrapper)
-        self.assertNotIn("rm ",source); self.assertNotIn("docker volume create",source); self.assertIn("/etc/rozkalns-simple-deployer/docker-anonymous",source)
+        self.assertIn('args not in ((), ("--preflight",))',source); self.assertNotIn("shell=True",source+wrapper); self.assertNotIn("os.system",source+wrapper)
+        self.assertNotIn("rm ",source); self.assertNotIn("docker volume create",source); self.assertIn("/var/lib/rozkalns-simple-deployer",source); self.assertIn("BUILDX_CONFIG",source)
 
 if __name__ == "__main__": unittest.main()

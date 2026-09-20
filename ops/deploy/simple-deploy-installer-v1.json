@@ -146,5 +146,55 @@
     "installed_but_not_executed": true,
     "source_merge_authorizes_data_mutation": false
   },
-  "reconciled_by_issue": 674
+  "reconciled_by_issue": 674,
+  "phase_b_post_install_repair": {
+    "issue": 674,
+    "base_source_sha": "b57ed42d5eb01f15b62c1f53459ffe0539a57d9c",
+    "entrypoint": "scripts/install-simple-deploy-v1.py",
+    "mode": "--phase-b-repair",
+    "purpose": "reconcile-only-the-installed-schema-init-module-and-source-identity-plus-runtime-owned-anonymous-docker-state",
+    "state_directories": [
+      {
+        "path": "/var/lib/rozkalns-simple-deployer",
+        "mode": "0700",
+        "owner": "rozkalns-simple-deployer:rozkalns-simple-deployer"
+      },
+      {
+        "path": "/var/lib/rozkalns-simple-deployer/docker-anonymous",
+        "mode": "0700",
+        "owner": "rozkalns-simple-deployer:rozkalns-simple-deployer"
+      }
+    ],
+    "allowed_replaced_files": [
+      "/usr/local/libexec/rozkalns-simple-deployer/simple_deploy_weather_schema_init_v1.py",
+      "/etc/rozkalns-simple-deployer/identity.json"
+    ],
+    "legacy_etc_docker_anonymous": "retained-root-owned-unused-no-cleanup",
+    "mutation_budget": [
+      {
+        "category": "filesystem.simple-deploy-phase-b-state-directory-materialization",
+        "max_operations": 2
+      },
+      {
+        "category": "filesystem.simple-deploy-phase-b-file-reconciliation",
+        "max_operations": 2
+      }
+    ],
+    "not_performed": [
+      "systemd-daemon-reload",
+      "service-start",
+      "timer-enable",
+      "timer-start",
+      "docker-command",
+      "target-reconciliation",
+      "database-or-data-mutation"
+    ],
+    "failure": {
+      "automatic_retry": false,
+      "automatic_cleanup": false,
+      "automatic_rollback": false,
+      "post_first_mutation": "STOP_FAIL_CLOSED"
+    },
+    "source_merge_authorizes_live": false
+  }
 }

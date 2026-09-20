@@ -30,6 +30,10 @@ DOCKER_GROUP = "docker"
 RUNTIME_HOME = "/var/lib/rozkalns-simple-deployer"
 RUNTIME_SHELL = "/usr/sbin/nologin"
 IDENTITY_SCHEMA = "rozkalns.rpi5-main.simple-deploy.identity.v1"
+PHASE_B_REPAIR_BASE_SHA = "b57ed42d5eb01f15b62c1f53459ffe0539a57d9c"
+PHASE_B_STATE_ROOT = Path("/var/lib/rozkalns-simple-deployer")
+PHASE_B_DOCKER_CONFIG = PHASE_B_STATE_ROOT / "docker-anonymous"
+PHASE_B_SCHEMA_MODULE_TARGET = Path("/usr/local/libexec/rozkalns-simple-deployer/simple_deploy_weather_schema_init_v1.py")
 
 SHARED_PARENTS = (
     (Path("/usr/local/lib"), 0o755),
@@ -153,10 +157,16 @@ def _require_absent(path: Path) -> None:
     _fail(f"first-install target already exists and needs separate reconciliation: {path}")
 
 
-def _source_bytes(expected_sha: str, target: FileTarget) -> bytes:
+def _source_bytes_at(source_sha: str, target: FileTarget) -> bytes:
     if target.source_path is None:
-        return _identity_bytes(expected_sha)
-    return _git_stdout("show", f"{expected_sha}:{target.source_path}")
+        return _identity_bytes(source_sha)
+    if FULL_SHA.fullmatch(source_sha) is None:
+        _fail("source SHA must be lowercase 40-character hex")
+    return _git_stdout("show", f"{source_sha}:{target.source_path}")
+
+
+def _source_bytes(expected_sha: str, target: FileTarget) -> bytes:
+    return _source_bytes_at(expected_sha, target)
 
 
 def _identity_bytes(expected_sha: str) -> bytes:
@@ -392,18 +402,182 @@ def apply(expected_sha: str) -> str:
     return _receipt("SIMPLE_DEPLOY_INSTALLED_NOT_ACTIVATED", expected_sha, progress)
 
 
+def _phase_b_runtime_ids() -> tuple[int, int]:
+    _verify_principal()
+    user = pwd.getpwnam(RUNTIME_USER)
+    primary = grp.getgrnam(RUNTIME_GROUP)
+    return user.pw_uid, primary.gr_gid
+
+
+def _require_phase_b_state_absent() -> None:
+    for path in (PHASE_B_DOCKER_CONFIG, PHASE_B_STATE_ROOT):
+        try:
+            os.lstat(path)
+        except FileNotFoundError:
+            continue
+        _fail(f"Phase-B runtime state target already exists and requires separate reconciliation: {path}")
+
+
+def _phase_b_changed_targets(expected_sha: str) -> tuple[tuple[FileTarget, bytes], ...]:
+    changed: list[tuple[FileTarget, bytes]] = []
+    for target in TRACKED_FILES:
+        if target.source_path is None:
+            continue
+        before = _source_bytes_at(PHASE_B_REPAIR_BASE_SHA, target)
+        after = _source_bytes_at(expected_sha, target)
+        if before != after:
+            if target.target != PHASE_B_SCHEMA_MODULE_TARGET:
+                _fail(f"Phase-B repair scope would change an unauthorized installed target: {target.target}")
+            changed.append((target, after))
+    if tuple(target.target for target, _ in changed) != (PHASE_B_SCHEMA_MODULE_TARGET,):
+        _fail("Phase-B repair requires exactly the reviewed schema-init module delta")
+    return tuple(changed)
+
+
+def _phase_b_repair_preflight(expected_sha: str) -> tuple[tuple[FileTarget, bytes], ...]:
+    _require_source_checkout(expected_sha)
+    if expected_sha == PHASE_B_REPAIR_BASE_SHA:
+        _fail("Phase-B repair target source must advance beyond the installed Phase-A base")
+    for path, mode in SHARED_PARENTS + DIRECTORY_TARGETS:
+        _require_directory(path, mode)
+    _phase_b_runtime_ids()
+    for target in TRACKED_FILES:
+        _verify_file(target, _source_bytes_at(PHASE_B_REPAIR_BASE_SHA, target))
+    _require_phase_b_state_absent()
+    return _phase_b_changed_targets(expected_sha)
+
+
+def _create_phase_b_state_directory(path: Path, *, uid: int, gid: int) -> None:
+    parent = path.parent
+    if path == PHASE_B_STATE_ROOT:
+        _require_directory(parent, 0o755)
+    else:
+        info = os.lstat(parent)
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+            _fail(f"Phase-B state parent is not a real directory: {parent}")
+        if info.st_uid != uid or info.st_gid != gid or stat.S_IMODE(info.st_mode) != 0o700:
+            _fail(f"Phase-B state parent metadata drifted: {parent}")
+    try:
+        os.mkdir(path, 0o700)
+        os.chown(path, uid, gid)
+        os.chmod(path, 0o700)
+        info = os.lstat(path)
+    except OSError as exc:
+        _fail(f"Phase-B state directory materialization failed: {path}: {exc.strerror}")
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != uid or info.st_gid != gid or stat.S_IMODE(info.st_mode) != 0o700:
+        _fail(f"Phase-B state directory metadata drifted after materialization: {path}")
+
+
+def _atomic_replace_file(target: FileTarget, desired: bytes) -> None:
+    _require_directory(target.target.parent, _parent_mode(target.target.parent))
+    temp = target.target.parent / f".{target.target.name}.phase-b-repair"
+    _require_absent(temp)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        fd = os.open(temp, flags, 0o600)
+        try:
+            view = memoryview(desired)
+            offset = 0
+            while offset < len(desired):
+                written = os.write(fd, view[offset:])
+                if written <= 0:
+                    _fail(f"short write while reconciling {target.target}")
+                offset += written
+            os.fsync(fd)
+            os.fchown(fd, ROOT_UID, ROOT_GID)
+            os.fchmod(fd, target.mode)
+        finally:
+            os.close(fd)
+        os.replace(temp, target.target)
+        parent_fd = os.open(target.target.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(parent_fd)
+        finally:
+            os.close(parent_fd)
+    except OSError as exc:
+        _fail(f"Phase-B file reconciliation failed: {target.target}: {exc.strerror}")
+
+
+def _phase_b_receipt(result: str, expected_sha: str, progress: Progress, *, reason: str | None = None) -> str:
+    value = {
+        "schema": "rozkalns.rpi5-main.simple-deploy.phase-b-repair.v1",
+        "result": result,
+        "base_source_sha": PHASE_B_REPAIR_BASE_SHA,
+        "source_sha": expected_sha,
+        "state_directories_materialized": progress.directories_materialized,
+        "files_reconciled": progress.files_materialized,
+        "mutation_started": progress.mutation_started,
+        "runtime_user": RUNTIME_USER,
+        "runtime_group": RUNTIME_GROUP,
+        "docker_state_root": str(PHASE_B_STATE_ROOT),
+        "docker_config": str(PHASE_B_DOCKER_CONFIG),
+        "daemon_reload_performed": False,
+        "service_started": False,
+        "timer_enabled_or_started": False,
+        "docker_command_executed": False,
+        "target_reconciliation_executed": False,
+        "database_or_data_mutation": False,
+        "automatic_retry": False,
+        "automatic_cleanup": False,
+        "automatic_rollback": False,
+    }
+    if reason is not None:
+        value["reason"] = reason
+    return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+
+def phase_b_repair_preflight(expected_sha: str) -> str:
+    _phase_b_repair_preflight(expected_sha)
+    return _phase_b_receipt("SIMPLE_DEPLOY_PHASE_B_REPAIR_PREFLIGHT_READY", expected_sha, Progress())
+
+
+def phase_b_repair_apply(expected_sha: str) -> str:
+    if os.geteuid() != ROOT_UID:
+        _fail("Phase-B repair --apply requires root and a separate exact LIVE authorization")
+    changed = _phase_b_repair_preflight(expected_sha)
+    uid, gid = _phase_b_runtime_ids()
+    progress = Progress()
+    try:
+        for path in (PHASE_B_STATE_ROOT, PHASE_B_DOCKER_CONFIG):
+            progress.mutation_started = True
+            _create_phase_b_state_directory(path, uid=uid, gid=gid)
+            progress.directories_materialized += 1
+        for target, desired in changed:
+            progress.mutation_started = True
+            _atomic_replace_file(target, desired)
+            progress.files_materialized += 1
+            _verify_file(target, desired)
+        identity_target = next(target for target in TRACKED_FILES if target.source_path is None)
+        progress.mutation_started = True
+        _atomic_replace_file(identity_target, _identity_bytes(expected_sha))
+        progress.files_materialized += 1
+        for target in TRACKED_FILES:
+            _verify_file(target, _source_bytes(expected_sha, target))
+    except SimpleDeployInstallerError as exc:
+        raise ApplyFailure(str(exc), progress) from exc
+    return _phase_b_receipt("SIMPLE_DEPLOY_PHASE_B_REPAIRED_NOT_EXECUTED", expected_sha, progress)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Fail-closed first installer for SIMPLE-DEPLOY v1")
+    parser = argparse.ArgumentParser(description="Fail-closed installer/reconciler for SIMPLE-DEPLOY v1")
     parser.add_argument("expected_source_sha")
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--phase-b-repair", action="store_true")
     args = parser.parse_args(argv)
     try:
-        output = apply(args.expected_source_sha) if args.apply else preflight(args.expected_source_sha)
+        if args.phase_b_repair:
+            output = phase_b_repair_apply(args.expected_source_sha) if args.apply else phase_b_repair_preflight(args.expected_source_sha)
+        else:
+            output = apply(args.expected_source_sha) if args.apply else preflight(args.expected_source_sha)
     except ApplyFailure as exc:
-        print(_receipt("FAIL_CLOSED", args.expected_source_sha, exc.progress, reason=str(exc)), file=sys.stderr)
+        receipt = _phase_b_receipt if args.phase_b_repair else _receipt
+        print(receipt("FAIL_CLOSED", args.expected_source_sha, exc.progress, reason=str(exc)), file=sys.stderr)
         return 1
     except SimpleDeployInstallerError as exc:
-        print(_receipt("FAIL_CLOSED", args.expected_source_sha, Progress(), reason=str(exc)), file=sys.stderr)
+        receipt = _phase_b_receipt if args.phase_b_repair else _receipt
+        print(receipt("FAIL_CLOSED", args.expected_source_sha, Progress(), reason=str(exc)), file=sys.stderr)
         return 1
     print(output)
     return 0

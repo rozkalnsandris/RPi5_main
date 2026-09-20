@@ -8,6 +8,7 @@ import re
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLER_PATH = ROOT / "scripts/install-simple-deploy-v1.py"
@@ -49,6 +50,12 @@ class SimpleDeployInstallerSourceTests(unittest.TestCase):
         self.assertEqual(len(CONTRACT["directories"]), 5)
         self.assertFalse(CONTRACT["source_merge_authorizes_live"])
         self.assertTrue(any(item["path"] == "/etc/rozkalns-simple-deployer/docker-anonymous" for item in CONTRACT["directories"]))
+        repair = CONTRACT["phase_b_post_install_repair"]
+        self.assertEqual(repair["base_source_sha"], installer.PHASE_B_REPAIR_BASE_SHA)
+        self.assertEqual(repair["mode"], "--phase-b-repair")
+        self.assertFalse(repair["source_merge_authorizes_live"])
+        self.assertEqual(repair["allowed_replaced_files"], [str(installer.PHASE_B_SCHEMA_MODULE_TARGET), "/etc/rozkalns-simple-deployer/identity.json"])
+        self.assertEqual([item["path"] for item in repair["state_directories"]], [str(installer.PHASE_B_STATE_ROOT), str(installer.PHASE_B_DOCKER_CONFIG)])
 
     def test_identity_is_exact_sha_only_and_parser_compatible(self) -> None:
         source_sha = "a" * 40
@@ -99,6 +106,39 @@ class SimpleDeployInstallerSourceTests(unittest.TestCase):
         receipt = json.loads(
             installer._receipt("TEST", "a" * 40, installer.Progress())
         )
+        self.assertFalse(receipt["daemon_reload_performed"])
+        self.assertFalse(receipt["service_started"])
+        self.assertFalse(receipt["timer_enabled_or_started"])
+        self.assertFalse(receipt["docker_command_executed"])
+        self.assertFalse(receipt["target_reconciliation_executed"])
+        self.assertFalse(receipt["database_or_data_mutation"])
+
+    def test_phase_b_repair_is_base_sha_pinned_and_scope_bounded(self) -> None:
+        self.assertEqual(installer.PHASE_B_REPAIR_BASE_SHA, "b57ed42d5eb01f15b62c1f53459ffe0539a57d9c")
+        self.assertEqual(str(installer.PHASE_B_STATE_ROOT), "/var/lib/rozkalns-simple-deployer")
+        self.assertEqual(str(installer.PHASE_B_DOCKER_CONFIG), "/var/lib/rozkalns-simple-deployer/docker-anonymous")
+        schema_target = installer.PHASE_B_SCHEMA_MODULE_TARGET
+
+        def changed_only_schema(source_sha, target):
+            marker = b"new" if source_sha != installer.PHASE_B_REPAIR_BASE_SHA and target.target == schema_target else b"old"
+            return marker
+
+        with mock.patch.object(installer, "_source_bytes_at", side_effect=changed_only_schema):
+            changed = installer._phase_b_changed_targets("a" * 40)
+        self.assertEqual([target.target for target, _ in changed], [schema_target])
+
+        other = next(target for target in installer.TRACKED_FILES if target.source_path and target.target != schema_target)
+        def unauthorized_change(source_sha, target):
+            if source_sha != installer.PHASE_B_REPAIR_BASE_SHA and target.target in (schema_target, other.target):
+                return b"new"
+            return b"old"
+        with mock.patch.object(installer, "_source_bytes_at", side_effect=unauthorized_change):
+            with self.assertRaisesRegex(installer.SimpleDeployInstallerError, "unauthorized installed target"):
+                installer._phase_b_changed_targets("a" * 40)
+
+    def test_phase_b_repair_receipt_keeps_runtime_and_data_actions_false(self) -> None:
+        receipt = json.loads(installer._phase_b_receipt("TEST", "a" * 40, installer.Progress()))
+        self.assertEqual(receipt["base_source_sha"], installer.PHASE_B_REPAIR_BASE_SHA)
         self.assertFalse(receipt["daemon_reload_performed"])
         self.assertFalse(receipt["service_started"])
         self.assertFalse(receipt["timer_enabled_or_started"])

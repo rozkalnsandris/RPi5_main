@@ -2,7 +2,7 @@
 
 Issue: `#666`
 
-Status: **source contract ready for a separate one-time LIVE cutover; not installed**.
+Status: **Phase A install-only completed at `b57ed42d5eb01f15b62c1f53459ffe0539a57d9c`; Phase B is stopped pre-mutation pending the reviewed execution-identity/Docker-state source correction.** Fresh GitHub/#191 state must be re-read before any consequential continuation.
 
 This repository owns the trusted RPi5/runtime half of SIMPLE-DEPLOY v1. The merged GitHub-side contract is `rozkalnsandris/ops-workflows@e05ed760791a127c7c9628696806ef39c9fe329c`. Source merge here does not install, enable, start, restart or mutate the live RPi5.
 
@@ -106,3 +106,13 @@ The one-time canary sequence is therefore frozen as **install-only -> separately
 The companion is not part of ordinary SIMPLE-DEPLOY. A later exact data gate may invoke it with no caller arguments. It reuses the static Weather target, reviewed Compose hash and generic production-pointer/image-label validation, additionally requires the exact reviewed Weather consumer source `606981d10eee59d13b802f6a682abf1daa2aa8a5`, requires the existing `rozkalns-weather-public_weather_data` volume, freezes one immutable `image@sha256` reference, and runs only the reviewed `schema-init` service with that volume declared external. It never creates/deletes/recreates the volume, backfills corpus, activates ingest or starts the generic timer.
 
 A PASS requires `/ready=200` and an unchanged production pointer after schema init. Any post-mutation error is STOP with no automatic retry, cleanup or rollback. Only after a PASS may #669 be freshly rebound to a separate activation gate for daemon-reload/timer enable/start and first bounded reconciliation. Source merge does not authorize any of those LIVE/data operations.
+
+## Phase-B post-install execution/state correction (#674 follow-up)
+
+The first Phase-B preflight after Phase A stopped before Docker/data mutation with `IMAGE_CONTRACT_FAILED` / `POINTER_RESOLUTION_FAILED`. The source defect was deterministic: the schema-init bridge forced `DOCKER_CONFIG=/etc/rozkalns-simple-deployer/docker-anonymous`, while that first-installer directory is intentionally `root:root 0755`. Docker Buildx uses client-side configuration/state under its Buildx configuration directory, so the non-root runtime principal cannot prove the registry/image contract through that path.
+
+The corrected bridge freezes execution as `rozkalns-simple-deployer:rozkalns-simple-deployer` with the reviewed supplementary `docker` group and refuses root/other execution. It uses only `/var/lib/rozkalns-simple-deployer/docker-anonymous` for anonymous Docker client state and `/var/lib/rozkalns-simple-deployer/docker-anonymous/buildx` for Buildx state. Both parent directories must already be real `0700` directories owned by the fixed runtime principal; a Docker `config.json` is forbidden for the public-anonymous profile. The legacy root-owned `/etc/rozkalns-simple-deployer/docker-anonymous` directory is retained as inert Phase-A evidence and is no longer used by the bridge.
+
+Because Phase A already installed the pre-correction helper bytes, source merge alone cannot repair the host. `scripts/install-simple-deploy-v1.py --phase-b-repair` is a one-shot, base-SHA-pinned post-install reconciliation mode. It accepts only the exact Phase-A base `b57ed42d5eb01f15b62c1f53459ffe0539a57d9c`, permits only the schema-init module plus generated source identity to change, and creates only the two runtime-owned state directories. It performs no `systemctl`, Docker, reconciliation or database/data action. Its apply path is a separate LIVE filesystem/identity gate; source merge does not authorize it.
+
+After that repair PASS, the installed schema-init companion exposes exactly one non-mutating CLI mode, `--preflight`, in addition to the no-argument apply path. All other arguments remain forbidden. A successful `PRECHECK_READY` proves the fixed target/Compose/image labels, immutable digest, existing Weather volume, expected `/ready` state and absence of prior schema-init evidence before any schema/data authority is requested. The Phase-B data mutation and later Phase-C activation remain separate exact owner gates. There is no automatic retry, cleanup or rollback.

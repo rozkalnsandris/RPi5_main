@@ -425,10 +425,10 @@ class ReconcileTests(unittest.TestCase):
 
 
 class ContractTests(unittest.TestCase):
-    def test_machine_contract_is_ready_but_not_installed_and_pins_shared_revision(self):
+    def test_machine_contract_tracks_phase_b_correction_and_pins_shared_revision(self):
         contract = json.loads((ROOT / "ops/contracts/simple-deploy-host-v1.json").read_text())
         self.assertEqual(contract["issue"], 666)
-        self.assertEqual(contract["status"], "SOURCE_READY_FOR_SEPARATE_LIVE_CUTOVER_NOT_INSTALLED")
+        self.assertEqual(contract["status"], "SOURCE_PHASE_B_CORRECTION_READY_REQUIRES_SEPARATE_REPAIR_AND_DATA_GATES")
         self.assertEqual(contract["shared_contract"]["revision"], SHARED_SHA)
         self.assertTrue(contract["registry"]["execution_enabled_in_source"])
         self.assertEqual(contract["registry"]["initial_targets"], 1)
@@ -443,10 +443,18 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(reviewed[0]["wait_timeout_seconds"], 180)
         self.assertTrue(contract["activation"]["separate_exact_live_cutover_required"])
         self.assertFalse(contract["activation"]["source_merge_installs_or_enables_runtime"])
+        bridge = contract["schema_init_bridge"]
+        self.assertEqual(bridge["execution_user"], "rozkalns-simple-deployer")
+        self.assertEqual(bridge["docker_state_root"], "/var/lib/rozkalns-simple-deployer")
+        self.assertEqual(bridge["exact_preflight_argv"], ["--preflight"])
+        self.assertTrue(bridge["post_install_repair_required_after_phase_a_base_b57ed42"])
+        self.assertFalse(bridge["post_install_repair_runs_docker_or_data"])
 
     def test_normative_doc_keeps_activation_separate(self):
         doc = (ROOT / "docs/SIMPLE_DEPLOY_HOST_V1.md").read_text(encoding="utf-8")
-        self.assertIn("source contract ready for a separate one-time LIVE cutover; not installed", doc)
+        self.assertIn("Phase A install-only completed", doc)
+        self.assertIn("Phase B is stopped pre-mutation", doc)
+        self.assertIn("Phase-B post-install execution/state correction", doc)
         self.assertIn("separate exact LIVE authorization", doc)
         self.assertIn("execution_enabled: true", doc)
         self.assertIn("rozkalns-weather-public-rpi5", doc)

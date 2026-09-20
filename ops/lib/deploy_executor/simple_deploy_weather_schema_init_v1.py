@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import grp
 import json
+import os
 from pathlib import Path
+import pwd
+import stat
 import subprocess
 import sys
 import urllib.error
@@ -26,6 +30,10 @@ EXPECTED_PRE_SCHEMA_READINESS = 503
 PRODUCTION_REGISTRY_PATH = Path("/etc/rozkalns-simple-deployer/targets.json")
 PRODUCTION_IDENTITY_PATH = Path("/etc/rozkalns-simple-deployer/identity.json")
 PRODUCTION_COMPOSE_ROOT = Path("/etc/rozkalns-simple-deployer/compose")
+PRODUCTION_STATE_ROOT = Path("/var/lib/rozkalns-simple-deployer")
+RUNTIME_USER = "rozkalns-simple-deployer"
+RUNTIME_GROUP = "rozkalns-simple-deployer"
+DOCKER_GROUP = "docker"
 
 
 class SchemaInitError(RuntimeError):
@@ -51,6 +59,11 @@ class Http(Protocol):
 
 
 class SubprocessRunner:
+    def __init__(self, *, state_root: Path):
+        self.state_root = state_root
+        self.docker_config = state_root / "docker-anonymous"
+        self.buildx_config = self.docker_config / "buildx"
+
     def run(self, argv: Sequence[str], *, timeout_seconds: int, stdin_text: str | None = None) -> CommandResult:
         if not argv or any(type(part) is not str or not part for part in argv):
             raise SchemaInitError("COMMAND_CONTRACT", "fixed argv contract invalid")
@@ -58,8 +71,9 @@ class SubprocessRunner:
             "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
             "LANG": "C.UTF-8",
             "LC_ALL": "C.UTF-8",
-            "HOME": "/nonexistent",
-            "DOCKER_CONFIG": "/etc/rozkalns-simple-deployer/docker-anonymous",
+            "HOME": str(self.state_root),
+            "DOCKER_CONFIG": str(self.docker_config),
+            "BUILDX_CONFIG": str(self.buildx_config),
         }
         try:
             completed = subprocess.run(
@@ -237,30 +251,101 @@ class WeatherSchemaInit:
         }
 
 
+def _runtime_identity() -> tuple[pwd.struct_passwd, grp.struct_group, grp.struct_group]:
+    try:
+        user = pwd.getpwnam(RUNTIME_USER)
+        primary = grp.getgrnam(RUNTIME_GROUP)
+        docker = grp.getgrnam(DOCKER_GROUP)
+    except KeyError as exc:
+        raise SchemaInitError("EXECUTION_IDENTITY_INVALID", "fixed SIMPLE-DEPLOY runtime principal is missing") from exc
+    if user.pw_gid != primary.gr_gid or user.pw_dir != str(PRODUCTION_STATE_ROOT) or user.pw_shell != "/usr/sbin/nologin":
+        raise SchemaInitError("EXECUTION_IDENTITY_INVALID", "fixed SIMPLE-DEPLOY runtime principal metadata drifted")
+    if RUNTIME_USER not in docker.gr_mem:
+        raise SchemaInitError("EXECUTION_IDENTITY_INVALID", "fixed SIMPLE-DEPLOY runtime principal lacks docker group membership")
+    return user, primary, docker
+
+
+def _require_execution_identity() -> tuple[int, int]:
+    user, primary, docker = _runtime_identity()
+    if os.geteuid() != user.pw_uid or os.getegid() != primary.gr_gid:
+        raise SchemaInitError("EXECUTION_IDENTITY_INVALID", "schema-init must run as the fixed SIMPLE-DEPLOY runtime principal")
+    if docker.gr_gid not in os.getgroups():
+        raise SchemaInitError("EXECUTION_IDENTITY_INVALID", "schema-init process lacks the fixed docker supplementary group")
+    return user.pw_uid, primary.gr_gid
+
+
+def _require_private_directory(path: Path, *, uid: int, gid: int) -> None:
+    try:
+        info = path.lstat()
+    except FileNotFoundError as exc:
+        raise SchemaInitError("DOCKER_STATE_INVALID", f"required Docker client state directory is missing: {path}") from exc
+    if path.is_symlink() or not stat.S_ISDIR(info.st_mode):
+        raise SchemaInitError("DOCKER_STATE_INVALID", f"Docker client state path is not a real directory: {path}")
+    if info.st_uid != uid or info.st_gid != gid or stat.S_IMODE(info.st_mode) != 0o700:
+        raise SchemaInitError("DOCKER_STATE_INVALID", f"Docker client state directory metadata drifted: {path}")
+
+
+def _require_anonymous_state(uid: int, gid: int) -> None:
+    _require_private_directory(PRODUCTION_STATE_ROOT, uid=uid, gid=gid)
+    docker_config = PRODUCTION_STATE_ROOT / "docker-anonymous"
+    _require_private_directory(docker_config, uid=uid, gid=gid)
+    config_path = docker_config / "config.json"
+    try:
+        config_path.lstat()
+    except FileNotFoundError:
+        pass
+    else:
+        raise SchemaInitError("AUTH_PROFILE_INVALID", "public anonymous profile refuses Docker credential configuration")
+
+
 def production_bridge() -> WeatherSchemaInit:
     sd._require_production_file(PRODUCTION_REGISTRY_PATH)
     sd._require_production_file(PRODUCTION_IDENTITY_PATH)
+    uid, gid = _require_execution_identity()
+    _require_anonymous_state(uid, gid)
     return WeatherSchemaInit(
         registry_path=PRODUCTION_REGISTRY_PATH,
         identity_path=PRODUCTION_IDENTITY_PATH,
         compose_root=PRODUCTION_COMPOSE_ROOT,
-        runner=SubprocessRunner(), http=LoopbackHttp(), require_root_owned=True,
+        runner=SubprocessRunner(state_root=PRODUCTION_STATE_ROOT), http=LoopbackHttp(), require_root_owned=True,
     )
+
+
+def _preflight_receipt(preflight: Preflight) -> dict[str, object]:
+    return {
+        "schema": "rozkalns.rpi5-main.simple-deploy.weather-schema-init.v1",
+        "result": "PRECHECK_ALREADY_READY" if preflight.readiness_before == 200 else "PRECHECK_READY",
+        "target_alias": TARGET_ALIAS,
+        "consumer_repository": CONSUMER_REPOSITORY,
+        "consumer_source_sha": preflight.metadata.source_sha,
+        "shared_workflow_sha": preflight.metadata.shared_workflow_sha,
+        "image_ref": f"{preflight.target.image}@{preflight.digest}",
+        "persistent_volume": HOST_VOLUME,
+        "readiness_before": preflight.readiness_before,
+        "mutation_started": False,
+        "database_schema_mutation": False,
+        "automatic_retry": False,
+        "automatic_cleanup": False,
+        "automatic_rollback": False,
+    }
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = tuple(sys.argv[1:] if argv is None else argv)
-    if args:
+    if args not in ((), ("--preflight",)):
         print(json.dumps({"result": "PRE_MUTATION_FAILURE", "error_code": "ARGUMENTS_FORBIDDEN", "mutation_started": False}, sort_keys=True))
         return 2
     try:
-        receipt = production_bridge().apply()
-    except SchemaInitError as exc:
+        bridge = production_bridge()
+        receipt = _preflight_receipt(bridge.preflight()) if args == ("--preflight",) else bridge.apply()
+    except (SchemaInitError, sd.SimpleDeployError) as exc:
+        mutation_started = bool(getattr(exc, "mutation_started", False))
+        error_code = getattr(exc, "code", "INSTALLATION_INVALID")
         print(json.dumps({
             "schema": "rozkalns.rpi5-main.simple-deploy.weather-schema-init.v1",
-            "result": "STOP_ERROR" if exc.mutation_started else "PRE_MUTATION_FAILURE",
-            "error_code": exc.code,
-            "mutation_started": exc.mutation_started,
+            "result": "STOP_ERROR" if mutation_started else "PRE_MUTATION_FAILURE",
+            "error_code": error_code,
+            "mutation_started": mutation_started,
             "automatic_retry": False,
             "automatic_cleanup": False,
             "automatic_rollback": False,
