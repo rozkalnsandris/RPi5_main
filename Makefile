@@ -108,35 +108,9 @@ test:
 	python3 ./tests/test-dashboard-evidence.py
 	python3 ./tests/test-hermes-tech-restore-drill.py
 	python3 ./tests/test-existing-issue-source-hardening.py
-	bash ./tests/test-maintenance-updater-status.sh
-	bash ./tests/test-maintenance-updater-locks.sh
-	bash ./tests/test-maintenance-updater-reboot.sh
-	bash ./tests/test-maintenance-updater-compose-health.sh
-	bash ./tests/test-maintenance-updater-compose-policy.sh
-	python3 ./tests/test-maintenance-compose-policy-activation.py
-	bash ./tests/test-maintenance-updater-space-policy.sh
-	bash ./tests/test-maintenance-updater-origin-policy.sh
-	bash ./tests/test-maintenance-updater-http-health.sh
-	bash ./tests/test-maintenance-updater-apt-policy.sh
-	python3 ./tests/test-maintenance-v27-activation.py
-	python3 ./tests/test-maintenance-v27-activation-transaction.py
-	bash ./tests/test-maintenance-updater-provenance.sh
-	bash ./tests/test-maintenance-updater-source.sh
-	python3 ./tests/test-maintenance-updater-source-validator.py
-	python3 ./tests/test-maintenance-updater-telegram.py
-	bash ./tests/test-maintenance-health.sh
-	bash ./tests/test-maintenance-health-entrypoints.sh
+	python3 ./tests/test-rpi5-maintenance-integration-boundary.py
 	bash ./tests/test-tmp-headroom-monitor.sh
 	bash ./tests/test-tmp-headroom-activation.sh
-	python3 ./tests/test-maintenance-telegram-credentials.py
-	bash ./tests/test-maintenance-systemd-units.sh
-	python3 ./tests/test-maintenance-systemd-cutover.py
-	bash ./tests/test-maintenance-systemd-notify.sh
-	bash ./tests/test-maintenance-cleanup-policy.sh
-	python3 ./tests/test-maintenance-cleanup-source.py
-	bash ./tests/test-maintenance-shared-lock.sh
-	python3 ./tests/test-maintenance-shared-lock-source.py
-	python3 ./tests/test-maintenance-lock-cutover.py
 	bash ./tests/test-adguard-memory-attribution.sh
 	bash ./tests/test-controlled-deploy.sh
 	bash ./tests/test-cloudflare-tunnel-ownership.sh
@@ -175,7 +149,7 @@ test:
 	python3 ./tests/test-cv-controller-activation.py
 	python3 ./tests/test-cv-classifier-host-alignment.py
 	python3 ./tests/test-cv-pull-deploy-canary.py
-	python3 -m py_compile scripts/*.py ops/lib/rpi5-update-telegram.py ops/lib/rpi5-maintenance-telegram.py ops/lib/dashboard-evidence.py ops/bin/hermes-tech-restore-drill ops/lib/balkons-bot.py ops/bin/balkons-bot-preflight ops/bin/balkons-bot-deploy-verifier ops/lib/deploy_executor/*.py
+	python3 -m py_compile scripts/*.py ops/lib/dashboard-evidence.py ops/bin/hermes-tech-restore-drill ops/lib/balkons-bot.py ops/bin/balkons-bot-preflight ops/bin/balkons-bot-deploy-verifier ops/lib/deploy_executor/*.py
 
 secret-scan:
 	./scripts/check-no-secrets.sh
