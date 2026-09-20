@@ -354,3 +354,33 @@ For fresh state, read in this order when relevant:
 8. minimum-sufficient live evidence only when the exact current gate requires it.
 
 GitHub source state never proves live deployment/runtime state.
+
+## 15. Historical compatibility appendix — Hermes Phase 4 validators
+
+This appendix preserves exact historical section identifiers and source-state markers that repository regression tests use to prove ordering and non-expansion of the old Hermes Phase 4 trust boundary. It is **historical compatibility evidence only**. None of these sections selects the current lane, proves current host state, grants LIVE authority, or overrides the current SIMPLE-DEPLOY Weather gate #669.
+
+## Current supersession — Hermes source auth + bounded helper launch gate (2026-09-04)
+
+Historical source checkpoint: the Source App composition and bounded fixed helper-launch design existed, while concrete production revalidation/host evidence and live wiring remained separate later gates.
+
+## Current supersession — Hermes canonical source-integration gate (2026-09-04)
+
+Historical source checkpoint: the concrete canonical Hermes revalidator, sanitized host-evidence resolver and inert broker composition were source-integrated without converting repository source into runtime proof.
+
+## Current supersession — Hermes broker-entrypoint wiring source gate (2026-09-06)
+
+Historical source checkpoint: the broker entrypoint was source-wired to the fixed runtime composition, with caller authority still limited to `authorization_issue_number` and durable replay consume required before helper launch.
+
+## Current supersession — Hermes broker runtime upgrade/provenance source gate (2026-09-06)
+
+Historical validator markers from the final superseding source gate in that sequence:
+
+`PHASE4_CURRENT_WORK_ITEM=EXACT_BROKER_RUNTIME_UPGRADE_PROVENANCE_AND_MINIMAL_REPLAY_WRITE_PERMISSION`
+`BROKER_ENTRYPOINT_WIRED=true`
+`CURRENT_SERVICE_REPLAY_WRITE_AUTHORITY_PROVEN=false`
+`RUNTIME_UPGRADE_PREFLIGHT_PROVEN=false`
+`RUNTIME_UPGRADE_APPLIED=false`
+`LIVE_INSTALL_ELIGIBLE=false`
+`PRODUCTION_MUTATION_STARTED=false`
+
+These markers deliberately retain their historical values. They must not be interpreted as current mutable state, a current Phase 4 priority, or authorization to revive the old Hermes control path.
