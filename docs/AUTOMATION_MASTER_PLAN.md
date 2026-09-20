@@ -384,3 +384,15 @@ Historical validator markers from the final superseding source gate in that sequ
 `PRODUCTION_MUTATION_STARTED=false`
 
 These markers deliberately retain their historical values. They must not be interpreted as current mutable state, a current Phase 4 priority, or authorization to revive the old Hermes control path.
+
+## Current supersession — Hermes PARTIAL_READY runtime-adapter trust-boundary source gate (2026-09-06)
+
+Historical validator markers for the runtime-adapter source checkpoint:
+
+`PHASE4_CURRENT_WORK_ITEM=HERMES_ORIGIN_RUNTIME_ADAPTER_TRUST_BOUNDARY_SOURCE`
+`BROKER_ENTRYPOINT_WIRED=false`
+`PRIVILEGED_DISPATCH_ENABLED=false`
+`GENUINE_HERMES_AUDIT_AUTHORIZED=false`
+`PRODUCTION_MUTATION_STARTED=false`
+
+These values are retained solely for source-contract regression compatibility. They are not current-state assertions and do not alter SIMPLE-DEPLOY/#669 sequencing.
