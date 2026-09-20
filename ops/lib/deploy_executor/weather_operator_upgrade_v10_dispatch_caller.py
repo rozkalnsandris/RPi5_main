@@ -40,6 +40,7 @@ _CAP_FIELDS = (
     "AUTH_START",
     "AUTH_END",
     "AUTH_SCHEMA",
+    "AUTH_TITLE",
     "OLD_SHA256",
     "MUTATION_BUDGET",
     "REQUIRED_EXCLUSIONS",
@@ -58,6 +59,7 @@ def successor_profile() -> Iterator[None]:
         cap.AUTH_START = AUTH_START
         cap.AUTH_END = AUTH_END
         cap.AUTH_SCHEMA = AUTH_SCHEMA
+        cap.AUTH_TITLE = AUTH_TITLE
         cap.OLD_SHA256 = OLD_SHA256
         cap.MUTATION_BUDGET = MUTATION_BUDGET
         cap.REQUIRED_EXCLUSIONS = REQUIRED_EXCLUSIONS
