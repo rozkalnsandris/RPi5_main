@@ -1,0 +1,99 @@
+{
+  "schema": "rozkalns.rpi5-main.simple-deploy.weather-data.v1",
+  "issue": 682,
+  "status": "SOURCE_ONLY_DATA_COMPANION_NOT_INSTALLED_OR_EXECUTED",
+  "host_repository": "rozkalnsandris/RPi5_main",
+  "consumer_repository": "rozkalnsandris/rozkalns_weather",
+  "reviewed_bootstrap_consumer_source_sha": "789a79820807829cc9b057d9ffafc56e0e41afe9",
+  "target": {
+    "alias": "rozkalns-weather-public-rpi5",
+    "compose_project": "rozkalns-weather-public",
+    "compose_file": "rozkalns-weather-public.yml",
+    "compose_service": "weather",
+    "persistent_volume": "rozkalns-weather-public_weather_data",
+    "database_url": "sqlite:///data/weather.db",
+    "registry_pull_profile": "public-anonymous-pull",
+    "shared_simple_deploy_target_lock_required": true
+  },
+  "bootstrap": {
+    "start_date": "2026-04-02",
+    "end_date": "2026-09-10",
+    "truth_station_id": "10416",
+    "truth_chunk_days": 14,
+    "models": [
+      "icon_d2",
+      "ecmwf_ifs",
+      "ecmwf_aifs"
+    ],
+    "run_hours_utc": [
+      0,
+      6,
+      12,
+      18
+    ],
+    "rate_limit_seconds": 1.0,
+    "recovery_decisions": [
+      "verified_backup_available",
+      "owner_accepts_proceeding_without_prewrite_backup"
+    ],
+    "plan_command": "rozkalns-weather production-bootstrap-plan",
+    "backfill_command": "python -m rozkalns_weather.backfill",
+    "checkpoint_root": "/app/data/production-bootstrap-v1/<bootstrap_fingerprint>",
+    "first_attempt_requires_all_fixed_checkpoint_files_absent": true,
+    "prior_checkpoint_state": "STOP_REQUIRES_SEPARATE_EXPLICIT_RESUME_RECOVERY_DECISION",
+    "automatic_resume": false
+  },
+  "integrity": {
+    "coverage_command": "rozkalns-weather corpus-report --start 2026-04-02 --end 2026-09-10",
+    "coverage_required_state": "PASS",
+    "database_command": "rozkalns-weather corpus-check",
+    "database_required_ok": true,
+    "required_before_recurring_enable": true
+  },
+  "actions": [
+    "--preflight",
+    "--bootstrap-verified-backup",
+    "--bootstrap-accept-no-backup",
+    "--integrity",
+    "--enable-preflight",
+    "--ingest-once"
+  ],
+  "recurring": {
+    "service_unit": "rozkalns-weather-public-ingest.service",
+    "timer_unit": "rozkalns-weather-public-ingest.timer",
+    "on_calendar": "*:0/30",
+    "persistent": true,
+    "randomized_delay_seconds": 60,
+    "accuracy_seconds": 60,
+    "service_exec_start": "/usr/local/libexec/rozkalns-simple-deployer/rozkalns-simple-deploy-weather-data --ingest-once",
+    "installed_disabled_by_default": true,
+    "enable_requires_fresh_enable_preflight": true,
+    "ingest_action_self_gates_on_integrity": true
+  },
+  "installer": {
+    "entrypoint": "scripts/install-simple-deploy-weather-data-v1.py",
+    "source_merge_executes_installer": false,
+    "source_merge_authorizes_live": false,
+    "daemon_reload": false,
+    "service_start": false,
+    "timer_enable_or_start": false,
+    "docker_command": false,
+    "database_or_data_mutation": false
+  },
+  "failure": {
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "automatic_restore": false,
+    "automatic_delete": false,
+    "post_first_runtime_or_data_mutation": "STOP_FAIL_CLOSED",
+    "target_busy": "FAIL_CLOSED_NO_RETRY"
+  },
+  "authority": {
+    "merge_authorizes_live": false,
+    "production_data_write_requires_separate_exact_live_authority": true,
+    "systemd_enable_start_requires_separate_exact_live_authority": true,
+    "secrets_credentials_network_cloudflare_authorized": false,
+    "weathernext_private_authorized": false
+  }
+}
