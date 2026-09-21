@@ -37,7 +37,35 @@ class FakeRunner:
         return self.responses.pop(0)
 
 
+def _preflight(source_sha: str = "d" * 40):
+    return SimpleNamespace(
+        compose_file=Path("/fixed/compose.yml"),
+        digest="sha256:" + "1" * 64,
+        metadata=SimpleNamespace(source_sha=source_sha),
+        capability_source_sha="c" * 40,
+        target=SimpleNamespace(image=bridge.IMAGE),
+        container_id="a" * 64,
+        local_image_id="sha256:" + "2" * 64,
+    )
+
+
 class Tests(unittest.TestCase):
+    def _subject(self, runner=None):
+        return bridge.WeatherDataBridge(
+            registry_path=Path("/fixed/registry"),
+            identity_path=Path("/fixed/identity"),
+            capability_identity_path=Path("/fixed/capability"),
+            compose_root=Path("/fixed"),
+            runner=runner or FakeRunner(),
+        )
+
+    def _lock_patch(self, subject):
+        return mock.patch.object(
+            subject,
+            "_target_lock",
+            return_value=mock.MagicMock(__enter__=mock.Mock(return_value=None), __exit__=mock.Mock(return_value=False)),
+        )
+
     def test_fixed_bootstrap_scope_and_checkpoint_paths(self):
         fingerprint = "a" * 64
         commands = bridge.fixed_bootstrap_commands(fingerprint)
@@ -45,8 +73,8 @@ class Tests(unittest.TestCase):
         self.assertEqual(commands[0][:6], ("python", "-m", "rozkalns_weather.backfill", "--database-url", bridge.DATABASE_URL, "truth"))
         self.assertEqual([command[command.index("--model") + 1] for command in commands[1:]], list(bridge.MODELS))
         for command in commands:
-            self.assertEqual(command[command.index("--start") + 1], bridge.START_DATE)
-            self.assertEqual(command[command.index("--end") + 1], bridge.END_DATE)
+            self.assertEqual(command[command.index("--start") + 1], bridge.BOOTSTRAP_START_DATE)
+            self.assertEqual(command[command.index("--end") + 1], bridge.BOOTSTRAP_END_DATE)
             checkpoint = command[command.index("--checkpoint") + 1]
             self.assertTrue(checkpoint.startswith(f"/app/data/production-bootstrap-v1/{fingerprint}/"))
         for command in commands[1:]:
@@ -80,62 +108,93 @@ class Tests(unittest.TestCase):
                 "ecmwf_aifs.json": False,
             }), "")
         ])
-        subject = bridge.WeatherDataBridge(
-            registry_path=Path("/fixed/registry"),
-            identity_path=Path("/fixed/identity"),
-            capability_identity_path=Path("/fixed/capability"),
-            compose_root=Path("/fixed"),
-            runner=runner,
-        )
+        subject = self._subject(runner)
         with self.assertRaises(bridge.WeatherDataError) as cm:
             subject._require_fresh_checkpoint_root(preflight, "a" * 64)
         self.assertEqual(cm.exception.code, "PRIOR_BOOTSTRAP_STATE_PRESENT")
         self.assertTrue(cm.exception.mutation_started)
 
-    def test_integrity_requires_exact_pass_before_enable_ready(self):
-        preflight = SimpleNamespace(
-            compose_file=Path("/fixed/compose.yml"),
-            digest="sha256:" + "1" * 64,
-            metadata=SimpleNamespace(source_sha=bridge.EXPECTED_BOOTSTRAP_SOURCE_SHA),
-            capability_source_sha="c" * 40,
-            target=SimpleNamespace(image=bridge.IMAGE),
-        )
+    def test_bootstrap_path_keeps_historical_source_pin(self):
+        subject = self._subject()
+        preflight = _preflight(bridge.EXPECTED_BOOTSTRAP_SOURCE_SHA)
+        plan = {"bootstrap_fingerprint": "a" * 64}
+        with self._lock_patch(subject), \
+             mock.patch.object(subject, "preflight", return_value=preflight) as preflight_call, \
+             mock.patch.object(subject, "_production_plan", return_value=plan), \
+             mock.patch.object(subject, "_require_fresh_checkpoint_root"), \
+             mock.patch.object(bridge, "fixed_bootstrap_commands", return_value=()), \
+             mock.patch.object(subject, "_strict_integrity"), \
+             mock.patch.object(subject, "_recheck_pointer"):
+            subject.bootstrap(bridge.RECOVERY_ACCEPT_NO_BACKUP)
+        preflight_call.assert_called_once_with(require_bootstrap_source=True, require_recurring_disabled=True)
+
+    def test_nonblocking_warn_allows_enable_for_later_reviewed_consumer(self):
         runner = FakeRunner([
-            bridge.CommandResult(0, json.dumps({"state": "WARN"}), ""),
+            bridge.CommandResult(0, json.dumps({
+                "state": "WARN",
+                "block_reasons": [],
+                "warn_reasons": ["ECMWF_IFS_MODEL_VERSION_MISSING"],
+            }), ""),
+            bridge.CommandResult(0, json.dumps({"ok": True}), ""),
         ])
-        subject = bridge.WeatherDataBridge(
-            registry_path=Path("/fixed/registry"),
-            identity_path=Path("/fixed/identity"),
-            capability_identity_path=Path("/fixed/capability"),
-            compose_root=Path("/fixed"),
-            runner=runner,
-        )
-        with mock.patch.object(subject, "_target_lock", return_value=mock.MagicMock(__enter__=mock.Mock(return_value=None), __exit__=mock.Mock(return_value=False))), mock.patch.object(subject, "preflight", return_value=preflight):
+        subject = self._subject(runner)
+        preflight = _preflight("d" * 40)
+        with self._lock_patch(subject), \
+             mock.patch.object(subject, "preflight", return_value=preflight) as preflight_call, \
+             mock.patch.object(subject, "_recheck_pointer"):
+            receipt = subject.enable_preflight()
+        self.assertEqual(receipt["result"], "RECURRING_ENABLE_READY")
+        self.assertEqual(receipt["consumer_source_sha"], "d" * 40)
+        self.assertFalse(receipt["timer_enabled_or_started"])
+        preflight_call.assert_called_once_with(require_bootstrap_source=False, require_recurring_disabled=True)
+        report_call = runner.calls[0][0]
+        self.assertIn(bridge.RECURRING_INTEGRITY_START_DATE, report_call)
+        self.assertIn(bridge.RECURRING_INTEGRITY_END_DATE, report_call)
+
+    def test_blocked_or_malformed_warn_still_blocks_enable(self):
+        for report in (
+            {"state": "BLOCKED", "block_reasons": ["X"], "warn_reasons": []},
+            {"state": "WARN", "block_reasons": ["X"], "warn_reasons": ["Y"]},
+            {"state": "WARN", "block_reasons": [], "warn_reasons": []},
+        ):
+            with self.subTest(report=report):
+                runner = FakeRunner([bridge.CommandResult(0, json.dumps(report), "")])
+                subject = self._subject(runner)
+                with self._lock_patch(subject), mock.patch.object(subject, "preflight", return_value=_preflight()):
+                    with self.assertRaises(bridge.WeatherDataError) as cm:
+                        subject.enable_preflight()
+                self.assertEqual(cm.exception.code, "CORPUS_REPORT_NOT_PASS")
+
+    def test_corpus_check_failure_still_blocks_enable(self):
+        runner = FakeRunner([
+            bridge.CommandResult(0, json.dumps({"state": "PASS"}), ""),
+            bridge.CommandResult(0, json.dumps({"ok": False}), ""),
+        ])
+        subject = self._subject(runner)
+        with self._lock_patch(subject), mock.patch.object(subject, "preflight", return_value=_preflight()):
             with self.assertRaises(bridge.WeatherDataError) as cm:
                 subject.enable_preflight()
-        self.assertEqual(cm.exception.code, "CORPUS_REPORT_NOT_PASS")
-        self.assertTrue(cm.exception.mutation_started)
+        self.assertEqual(cm.exception.code, "CORPUS_CHECK_NOT_PASS")
+
+    def test_timer_must_be_disabled_and_inactive_before_enable(self):
+        runner = FakeRunner([
+            bridge.CommandResult(0, "enabled\n", ""),
+            bridge.CommandResult(3, "inactive\n", ""),
+            bridge.CommandResult(3, "inactive\n", ""),
+        ])
+        subject = self._subject(runner)
+        with self.assertRaises(bridge.WeatherDataError) as cm:
+            subject._systemd_state(require_disabled=True, mutation_started=False)
+        self.assertEqual(cm.exception.code, "TIMER_NOT_DISABLED")
+        self.assertFalse(cm.exception.mutation_started)
 
     def test_integrity_pass_allows_enable_preflight_but_never_enables_systemd(self):
-        preflight = SimpleNamespace(
-            compose_file=Path("/fixed/compose.yml"),
-            digest="sha256:" + "1" * 64,
-            metadata=SimpleNamespace(source_sha=bridge.EXPECTED_BOOTSTRAP_SOURCE_SHA),
-            capability_source_sha="c" * 40,
-            target=SimpleNamespace(image=bridge.IMAGE),
-        )
         runner = FakeRunner([
             bridge.CommandResult(0, json.dumps({"state": "PASS"}), ""),
             bridge.CommandResult(0, json.dumps({"ok": True}), ""),
         ])
-        subject = bridge.WeatherDataBridge(
-            registry_path=Path("/fixed/registry"),
-            identity_path=Path("/fixed/identity"),
-            capability_identity_path=Path("/fixed/capability"),
-            compose_root=Path("/fixed"),
-            runner=runner,
-        )
-        with mock.patch.object(subject, "_target_lock", return_value=mock.MagicMock(__enter__=mock.Mock(return_value=None), __exit__=mock.Mock(return_value=False))), mock.patch.object(subject, "preflight", return_value=preflight), mock.patch.object(subject, "_recheck_pointer"):
+        subject = self._subject(runner)
+        with self._lock_patch(subject), mock.patch.object(subject, "preflight", return_value=_preflight()), mock.patch.object(subject, "_recheck_pointer"):
             receipt = subject.enable_preflight()
         self.assertEqual(receipt["result"], "RECURRING_ENABLE_READY")
         self.assertFalse(receipt["timer_enabled_or_started"])
@@ -157,7 +216,10 @@ class Tests(unittest.TestCase):
     def test_contract_and_cli_expose_only_fixed_actions(self):
         contract = json.loads((ROOT / "ops/deploy/simple-deploy-weather-data-v1.json").read_text())
         self.assertEqual(contract["issue"], 682)
+        self.assertEqual(contract["reconciliation_issue"], 684)
         self.assertEqual(contract["reviewed_bootstrap_consumer_source_sha"], bridge.EXPECTED_BOOTSTRAP_SOURCE_SHA)
+        self.assertEqual(contract["integrity"]["recurring_window_start"], bridge.RECURRING_INTEGRITY_START_DATE)
+        self.assertEqual(contract["integrity"]["recurring_window_end"], bridge.RECURRING_INTEGRITY_END_DATE)
         self.assertEqual(contract["actions"], [
             "--preflight",
             "--bootstrap-verified-backup",

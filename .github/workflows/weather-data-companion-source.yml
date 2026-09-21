@@ -27,6 +27,8 @@ jobs:
         run: |
           python3 ./tests/test-simple-deploy-weather-data-v1.py
           python3 ./tests/test-install-simple-deploy-weather-data-v1.py
+          python3 ./tests/test-reconcile-simple-deploy-weather-data-v1.py
           python3 -m py_compile \
             ./ops/lib/deploy_executor/simple_deploy_weather_data_v1.py \
-            ./scripts/install-simple-deploy-weather-data-v1.py
+            ./scripts/install-simple-deploy-weather-data-v1.py \
+            ./scripts/reconcile-simple-deploy-weather-data-v1.py
