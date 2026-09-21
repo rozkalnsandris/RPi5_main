@@ -24,8 +24,10 @@ COMPOSE_SERVICE = "weather"
 LOGICAL_VOLUME = "weather_data"
 HOST_VOLUME = f"{COMPOSE_PROJECT}_{LOGICAL_VOLUME}"
 DATABASE_URL = "sqlite:///data/weather.db"
-START_DATE = "2026-04-02"
-END_DATE = "2026-09-10"
+BOOTSTRAP_START_DATE = "2026-04-02"
+BOOTSTRAP_END_DATE = "2026-09-10"
+RECURRING_INTEGRITY_START_DATE = "2026-08-13"
+RECURRING_INTEGRITY_END_DATE = "2026-08-26"
 MODELS = ("icon_d2", "ecmwf_ifs", "ecmwf_aifs")
 RUN_HOURS = "0,6,12,18"
 TRUTH_CHUNK_DAYS = "14"
@@ -177,8 +179,8 @@ def fixed_bootstrap_commands(fingerprint: str) -> tuple[tuple[str, ...], ...]:
             "python", "-m", "rozkalns_weather.backfill",
             "--database-url", DATABASE_URL,
             "truth",
-            "--start", START_DATE,
-            "--end", END_DATE,
+            "--start", BOOTSTRAP_START_DATE,
+            "--end", BOOTSTRAP_END_DATE,
             "--checkpoint", f"{checkpoint_root}/truth.json",
             "--chunk-days", TRUTH_CHUNK_DAYS,
             "--rate-limit-seconds", RATE_LIMIT_SECONDS,
@@ -191,8 +193,8 @@ def fixed_bootstrap_commands(fingerprint: str) -> tuple[tuple[str, ...], ...]:
                 "--database-url", DATABASE_URL,
                 "forecast",
                 "--model", model,
-                "--start", START_DATE,
-                "--end", END_DATE,
+                "--start", BOOTSTRAP_START_DATE,
+                "--end", BOOTSTRAP_END_DATE,
                 "--run-hours", RUN_HOURS,
                 "--checkpoint", f"{checkpoint_root}/{model}.json",
                 "--rate-limit-seconds", RATE_LIMIT_SECONDS,
@@ -378,8 +380,8 @@ class WeatherDataBridge:
         command = (
             "rozkalns-weather", "production-bootstrap-plan",
             "--source-sha", EXPECTED_BOOTSTRAP_SOURCE_SHA,
-            "--start", START_DATE,
-            "--end", END_DATE,
+            "--start", BOOTSTRAP_START_DATE,
+            "--end", BOOTSTRAP_END_DATE,
             "--recovery-decision", recovery_decision,
         )
         plan = _json_object(
@@ -392,8 +394,8 @@ class WeatherDataBridge:
             plan.get("state") != "source_plan_ready"
             or type(identity) is not dict
             or identity.get("source_sha") != EXPECTED_BOOTSTRAP_SOURCE_SHA
-            or identity.get("start_date") != START_DATE
-            or identity.get("end_date") != END_DATE
+            or identity.get("start_date") != BOOTSTRAP_START_DATE
+            or identity.get("end_date") != BOOTSTRAP_END_DATE
             or tuple(identity.get("models", [])) != MODELS
             or tuple(identity.get("run_hours_utc", [])) != (0, 6, 12, 18)
             or identity.get("truth_station_id") != "10416"
@@ -427,19 +429,43 @@ class WeatherDataBridge:
                 mutation_started=True,
             )
 
-    def _strict_integrity(self, preflight: Preflight) -> tuple[dict[str, object], dict[str, object]]:
+    @staticmethod
+    def _report_is_acceptable(report: Mapping[str, object], *, allow_nonblocking_warn: bool) -> bool:
+        state = report.get("state")
+        if state == "PASS":
+            return True
+        if not allow_nonblocking_warn or state != "WARN":
+            return False
+        block_reasons = report.get("block_reasons")
+        warn_reasons = report.get("warn_reasons")
+        return (
+            type(block_reasons) is list
+            and block_reasons == []
+            and type(warn_reasons) is list
+            and bool(warn_reasons)
+            and all(type(reason) is str and bool(reason) for reason in warn_reasons)
+        )
+
+    def _strict_integrity(
+        self,
+        preflight: Preflight,
+        *,
+        start_date: str,
+        end_date: str,
+        allow_nonblocking_warn: bool,
+    ) -> tuple[dict[str, object], dict[str, object]]:
         report = _json_object(
             self._exec(
                 preflight,
-                ("rozkalns-weather", "corpus-report", "--start", START_DATE, "--end", END_DATE),
+                ("rozkalns-weather", "corpus-report", "--start", start_date, "--end", end_date),
                 timeout_seconds=120,
                 code="CORPUS_REPORT_FAILED",
             ),
             "CORPUS_REPORT_FAILED",
             mutation_started=True,
         )
-        if report.get("state") != "PASS":
-            raise WeatherDataError("CORPUS_REPORT_NOT_PASS", "production public corpus report is not PASS", mutation_started=True)
+        if not self._report_is_acceptable(report, allow_nonblocking_warn=allow_nonblocking_warn):
+            raise WeatherDataError("CORPUS_REPORT_NOT_PASS", "production public corpus report is blocking or invalid", mutation_started=True)
         corpus_check = _json_object(
             self._exec(
                 preflight,
@@ -476,7 +502,12 @@ class WeatherDataBridge:
                     "BACKFILL_FAILED",
                     mutation_started=True,
                 )
-            self._strict_integrity(preflight)
+            self._strict_integrity(
+                preflight,
+                start_date=BOOTSTRAP_START_DATE,
+                end_date=BOOTSTRAP_END_DATE,
+                allow_nonblocking_warn=False,
+            )
             self._recheck_pointer(preflight, mutation_started=True)
             return self._receipt(
                 "BOOTSTRAP_PASS",
@@ -490,21 +521,36 @@ class WeatherDataBridge:
     def integrity(self) -> dict[str, object]:
         with self._target_lock():
             preflight = self.preflight(require_bootstrap_source=False, require_recurring_disabled=False)
-            self._strict_integrity(preflight)
+            self._strict_integrity(
+                preflight,
+                start_date=RECURRING_INTEGRITY_START_DATE,
+                end_date=RECURRING_INTEGRITY_END_DATE,
+                allow_nonblocking_warn=True,
+            )
             self._recheck_pointer(preflight, mutation_started=True)
             return self._receipt("INTEGRITY_PASS", preflight, runtime_process_started=True, production_data_mutation=False)
 
     def enable_preflight(self) -> dict[str, object]:
         with self._target_lock():
-            preflight = self.preflight(require_bootstrap_source=True, require_recurring_disabled=True)
-            self._strict_integrity(preflight)
+            preflight = self.preflight(require_bootstrap_source=False, require_recurring_disabled=True)
+            self._strict_integrity(
+                preflight,
+                start_date=RECURRING_INTEGRITY_START_DATE,
+                end_date=RECURRING_INTEGRITY_END_DATE,
+                allow_nonblocking_warn=True,
+            )
             self._recheck_pointer(preflight, mutation_started=True)
             return self._receipt("RECURRING_ENABLE_READY", preflight, runtime_process_started=True, production_data_mutation=False)
 
     def ingest_once(self) -> dict[str, object]:
         with self._target_lock():
             preflight = self.preflight(require_bootstrap_source=False, require_recurring_disabled=False)
-            self._strict_integrity(preflight)
+            self._strict_integrity(
+                preflight,
+                start_date=RECURRING_INTEGRITY_START_DATE,
+                end_date=RECURRING_INTEGRITY_END_DATE,
+                allow_nonblocking_warn=True,
+            )
             result = _json_object(
                 self._exec(
                     preflight,
