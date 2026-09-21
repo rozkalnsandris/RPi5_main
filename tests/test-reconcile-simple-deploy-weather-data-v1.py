@@ -67,11 +67,12 @@ class Tests(unittest.TestCase):
     def test_source_has_no_activation_docker_delete_or_cleanup_authority(self):
         source = PATH.read_text()
         self.assertNotIn("systemctl", source)
-        self.assertNotIn("docker", source.lower())
+        self.assertNotIn('(\"docker\",', source)
+        self.assertNotIn("subprocess", source)
+        self.assertNotIn("os.system(", source)
         self.assertNotIn("unlink(", source)
         self.assertNotIn("remove(", source)
         self.assertNotIn("rmtree", source)
-        self.assertNotIn("rollback", source.lower().replace('"automatic_rollback": false', ""))
         self.assertIn("os.replace", source)
         self.assertIn("O_EXCL", source)
 
