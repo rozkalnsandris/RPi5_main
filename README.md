@@ -44,7 +44,7 @@ Every change follows: **branch → tests → draft PR → CI → review → squa
 
 Any production apply must bind to an exact Git commit and include preflight checks, a backup plan, verification, and a documented rollback. A merge never deploys automatically.
 
-The source-only generic SIMPLE-DEPLOY v1 trusted host reconciler is documented in `docs/SIMPLE_DEPLOY_HOST_V1.md`. Its tracked registry now contains the reviewed Weather canary target and exact Compose hash, but the deployer is still not installed or enabled on RPi5; source merge alone performs no LIVE/runtime mutation.
+The generic SIMPLE-DEPLOY v1 trusted host reconciler is documented in `docs/SIMPLE_DEPLOY_HOST_V1.md`. Accepted continuity records that the reviewed Weather target completed its one-time cutover: the deployer was installed, the generic timer was enabled, and the first genuine post-cutover `AUTO_DEPLOY_SAFE` Weather release reconciled successfully through the standing path with `/health=200` and `/ready=200`. Fresh runtime state must still be revalidated before any consequential host action. Ordinary eligible releases may use only that fixed reviewed target contract; schema/data, corpus/backfill/ingest, secrets/permissions, network/Cloudflare, target widening and unrelated host control remain separately exact-gated.
 
 ## Controlled deploy
 
