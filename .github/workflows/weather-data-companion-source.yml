@@ -25,6 +25,7 @@ jobs:
 
       - name: Validate Weather data companion
         run: |
+          python3 ./tests/test-weather-data-blocked-source-policy.py
           python3 ./tests/test-simple-deploy-weather-data-v1.py
           python3 ./tests/test-install-simple-deploy-weather-data-v1.py
           python3 -m py_compile \

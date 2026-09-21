@@ -1,10 +1,20 @@
 {
   "schema": "rozkalns.rpi5-main.simple-deploy.weather-data.v1",
   "issue": 682,
-  "status": "SOURCE_ONLY_DATA_COMPANION_NOT_INSTALLED_OR_EXECUTED",
+  "status": "SOURCE_BLOCKED_NO_VERIFIED_DWD_HISTORICAL_TRANSPORT",
   "host_repository": "rozkalnsandris/RPi5_main",
   "consumer_repository": "rozkalnsandris/rozkalns_weather",
   "reviewed_bootstrap_consumer_source_sha": "789a79820807829cc9b057d9ffafc56e0e41afe9",
+  "blocked_current_consumer_source": {
+    "source_sha": "df6095db68ae575155016275ad8fd2780ff7486f",
+    "consumer_bootstrap_contract_status": "SOURCE_BLOCKED_NO_VERIFIED_DWD_HISTORICAL_TRANSPORT",
+    "consumer_bootstrap_plan_state": "BLOCKED_BY_TRUTH_TRANSPORT_CAPABILITY",
+    "block_reason": "TRUTH_TRANSPORT_HISTORICAL_CAPABILITY_UNVERIFIED",
+    "historical_transport_status": "no_verified_dwd_historical_transport",
+    "wmo_to_cdc_station_mapping_status": "UNVERIFIED",
+    "live_backfill_allowed": false,
+    "bootstrap_source_binding_must_not_advance_while_blocked": true
+  },
   "target": {
     "alias": "rozkalns-weather-public-rpi5",
     "compose_project": "rozkalns-weather-public",
