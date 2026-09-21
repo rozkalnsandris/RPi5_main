@@ -11,6 +11,14 @@ These rules are durable instructions for Codex and every other agent.
 - Do not restart, reload, stop, enable, or disable services unless the exact service lifecycle mutation is explicitly owner-authorized for the current LIVE operation.
 - Do not read process/container environments, use `docker inspect`, or copy protected configuration trees unless protected-runtime inspection is itself separately and explicitly authorized; Docker or sudo authority alone does not grant protected-data access.
 
+## GitHub-first tool and transport priority
+
+- GitHub is the default and preferred control, read, and write surface whenever the requested repository, issue, pull request, branch, file, Actions/CI, review, comment, or other source-level operation can be completed through the connected GitHub tooling with equivalent correctness and required evidence. Do not use RDC merely because a local checkout, shell, `git`, `gh`, or `curl` could perform the same GitHub-side operation.
+- Use RDC/host shell only for work that genuinely requires RPi5-local execution or observation and cannot be obtained or performed through GitHub: host/runtime evidence, local filesystem or process state, `sudo`/root commands, systemd, Docker, packages, networking, mounts, or other commands that must execute on the RPi5 itself. Read-only host inspection remains subject to the production-safety and forbidden-data rules above.
+- When a task spans both surfaces, complete the GitHub-side portion through GitHub first, use RDC only for the smallest necessary host-local step, then return to GitHub for canonical source, PR/CI/review, and continuity/evidence work when repository policy requires it.
+- Never use RDC as a substitute for GitHub to edit repository source, create branches/commits/PRs, inspect GitHub CI/reviews/issues, or perform other GitHub-native work when the connected GitHub tooling supports the required operation.
+- RDC is execution/transport only, never source or authorization authority. Choosing RDC never widens the owner-authorized mutation class, target, protected-data access, retry/rollback/cleanup authority, merge authority, repository-settings authority, or secrets/permissions authority.
+
 ## Forbidden paths and data
 
 Never read, print, copy, or commit `.env` files, secrets, credentials, tokens, cookies, password stores, SSH keys or authorized-key contents, database data/dumps, backups, browser/session data, shell history, Docker volume/runtime data, or raw application configuration. In particular, do not read:
