@@ -1,7 +1,8 @@
 {
   "schema": "rozkalns.rpi5-main.simple-deploy.weather-data.v1",
   "issue": 682,
-  "status": "SOURCE_ONLY_DATA_COMPANION_NOT_INSTALLED_OR_EXECUTED",
+  "reconciliation_issue": 684,
+  "status": "INSTALLED_DISABLED_SOURCE_RECONCILIATION_READY",
   "host_repository": "rozkalnsandris/RPi5_main",
   "consumer_repository": "rozkalnsandris/rozkalns_weather",
   "reviewed_bootstrap_consumer_source_sha": "789a79820807829cc9b057d9ffafc56e0e41afe9",
@@ -16,21 +17,13 @@
     "shared_simple_deploy_target_lock_required": true
   },
   "bootstrap": {
+    "historical_frozen_contract": true,
     "start_date": "2026-04-02",
     "end_date": "2026-09-10",
     "truth_station_id": "10416",
     "truth_chunk_days": 14,
-    "models": [
-      "icon_d2",
-      "ecmwf_ifs",
-      "ecmwf_aifs"
-    ],
-    "run_hours_utc": [
-      0,
-      6,
-      12,
-      18
-    ],
+    "models": ["icon_d2", "ecmwf_ifs", "ecmwf_aifs"],
+    "run_hours_utc": [0, 6, 12, 18],
     "rate_limit_seconds": 1.0,
     "recovery_decisions": [
       "verified_backup_available",
@@ -44,8 +37,11 @@
     "automatic_resume": false
   },
   "integrity": {
-    "coverage_command": "rozkalns-weather corpus-report --start 2026-04-02 --end 2026-09-10",
-    "coverage_required_state": "PASS",
+    "bootstrap_coverage_required_state": "PASS",
+    "recurring_window_start": "2026-08-13",
+    "recurring_window_end": "2026-08-26",
+    "recurring_coverage_accepted_states": ["PASS", "WARN_WITH_EMPTY_BLOCK_REASONS"],
+    "blocking_state": "BLOCKED",
     "database_command": "rozkalns-weather corpus-check",
     "database_required_ok": true,
     "required_before_recurring_enable": true
@@ -59,6 +55,8 @@
     "--ingest-once"
   ],
   "recurring": {
+    "consumer_source_policy": "CURRENT_REVIEWED_SIMPLE_DEPLOY_RUNTIME_IDENTITY",
+    "historical_bootstrap_source_pin_required": false,
     "service_unit": "rozkalns-weather-public-ingest.service",
     "timer_unit": "rozkalns-weather-public-ingest.timer",
     "on_calendar": "*:0/30",
@@ -72,7 +70,13 @@
   },
   "installer": {
     "entrypoint": "scripts/install-simple-deploy-weather-data-v1.py",
+    "initial_install_remains_create_only": true,
+    "reconciliation_entrypoint": "scripts/reconcile-simple-deploy-weather-data-v1.py",
+    "reconciliation_predecessor_source_sha": "7be2772ca8c0dddefd00181c805bd693bc06a9ed",
+    "reconciliation_requires_exact_preimage_and_metadata": true,
+    "reconciliation_replaces_only_changed_tracked_files": true,
     "source_merge_executes_installer": false,
+    "source_merge_executes_reconciliation": false,
     "source_merge_authorizes_live": false,
     "daemon_reload": false,
     "service_start": false,
@@ -91,6 +95,7 @@
   },
   "authority": {
     "merge_authorizes_live": false,
+    "companion_reconciliation_requires_separate_exact_live_authority": true,
     "production_data_write_requires_separate_exact_live_authority": true,
     "systemd_enable_start_requires_separate_exact_live_authority": true,
     "secrets_credentials_network_cloudflare_authorized": false,
