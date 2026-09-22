@@ -153,7 +153,8 @@ The one-time Weather SIMPLE-DEPLOY cutover, first standing release proof, public
 
 - shared SIMPLE-DEPLOY: `ops-workflows@e05ed760791a127c7c9628696806ef39c9fe329c`;
 - initial Weather cutover consumer: `rozkalns_weather@606981d10eee59d13b802f6a682abf1daa2aa8a5`;
-- historical #672 installer/principal prerequisite and #674 sequencing work merged and enabled the reviewed Phase A/B/C path;
+- historical #672 source-only deterministic installer/principal prerequisite merged via PR #673, including the reviewed principal provisioning path;
+- #674 sequencing work merged and enabled the reviewed Phase A/B/C path;
 - Phase A install-only, post-install Phase-B repair, Phase B schema-init and Phase C activation all completed under their separate consumed owner authorizations;
 - Phase B preserved `rozkalns-weather-public_weather_data` and changed `/ready` from `503` to `200`;
 - Phase C completed the first bounded reconciliation and activated the reviewed generic SIMPLE-DEPLOY scheduler for the fixed Weather target;
