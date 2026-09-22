@@ -35,7 +35,7 @@
     "dry_run_required": true,
     "forecast_hours": 6,
     "home_scope_enabled": false,
-    "location_id": "station_10416",
+    "location_id": "station_05480",
     "maximum_bytes_billed_per_query_hard_ceiling": 1073741824,
     "required_surfaces": [
       "0p05_station",

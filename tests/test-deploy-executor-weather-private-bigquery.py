@@ -51,6 +51,7 @@ class WeatherNextPrivateBigQueryContractTests(unittest.TestCase):
 
     def test_initial_scope_accepts_only_bounded_station_canary(self):
         scope = validate_first_access_scope(FirstAccessScope(max_bytes_billed_per_query=64 * 1024 * 1024))
+        self.assertEqual(INITIAL_LOCATION_ID, "station_05480")
         self.assertEqual(scope["location_id"], INITIAL_LOCATION_ID)
         self.assertEqual(scope["forecast_hours"], 6)
         self.assertEqual(scope["required_surfaces"], REQUIRED_SURFACES)
@@ -62,7 +63,8 @@ class WeatherNextPrivateBigQueryContractTests(unittest.TestCase):
 
     def test_scope_rejects_any_material_widening(self):
         cases = (
-            (FirstAccessScope(location_id="home"), "station_10416"),
+            (FirstAccessScope(location_id="station_10416"), "station_05480"),
+            (FirstAccessScope(location_id="home"), "station_05480"),
             (FirstAccessScope(forecast_hours=24), "exactly 6h"),
             (FirstAccessScope(dry_run_required=False), "dry-run"),
             (FirstAccessScope(max_bytes_billed_per_query=MAX_BYTES_BILLED_PER_QUERY + 1), "1 GiB"),

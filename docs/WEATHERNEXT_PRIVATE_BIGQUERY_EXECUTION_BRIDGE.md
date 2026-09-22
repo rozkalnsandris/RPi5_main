@@ -25,7 +25,7 @@ A future separately reviewed LIVE wrapper may drive only this order:
 
 ## First-access invariants
 
-The bridge reuses the existing private BigQuery contract: WeatherNext 3 `3.0.0`, `station_10416`, exactly six forecast hours, both required product surfaces, mandatory dry-run before canary, a hard per-query ceiling of 1 GiB, home scope disabled, and SQLite write disabled. A later LIVE gate must tighten the real cap to the smallest defensible value from fresh dry-run evidence.
+The bridge reuses the existing private BigQuery contract: WeatherNext 3 `3.0.0`, canonical benchmark `station_05480`, exactly six forecast hours, both required product surfaces, mandatory dry-run before canary, a hard per-query ceiling of 1 GiB, home scope disabled, and SQLite write disabled. Legacy `station_10416` is not a valid private first-access location. A later LIVE gate must tighten the real cap to the smallest defensible value from fresh dry-run evidence.
 
 ## Binding adapters and failure semantics
 

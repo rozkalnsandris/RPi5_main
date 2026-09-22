@@ -13,7 +13,7 @@ The implementation reuses, rather than bypasses:
 - `weather_private_bigquery_execution_bridge.py` for fixed stage order and one-shot authorization consumption;
 - `weather_private_bigquery_runtime_materialization.py` for the exact offline CPython 3.13 / `cp313` runtime;
 - the fixed Weather first-access entrypoint `rozkalns_weather.weathernext_access.read_first_access_canary`;
-- the existing WeatherNext 3 first-access scope: `station_10416`, exactly 6 forecast hours, both required product surfaces, mandatory dry-run, hard ceiling `<= 1 GiB/query`, home disabled, SQLite disabled.
+- the existing WeatherNext 3 first-access scope: canonical benchmark `station_05480`, exactly 6 forecast hours, both required product surfaces, mandatory dry-run, hard ceiling `<= 1 GiB/query`, home disabled, SQLite disabled. Legacy `station_10416` is compatibility/MOSMIX-only and is not valid for private first access.
 
 DWD remains the authoritative severe-weather warning source in Germany. WeatherNext remains `primary_research` forecast output.
 
