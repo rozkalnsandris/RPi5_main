@@ -54,7 +54,7 @@ The read-only first-access adapter requires:
 - reviewed private `cp313` runtime;
 - all three fixed binding slots ready;
 - WeatherNext 3 model contract `3.0.0`;
-- logical location `station_10416`;
+- canonical benchmark location `station_05480` (legacy `station_10416` is not valid for private first access);
 - exactly six forecast hours;
 - both required product surfaces;
 - a fresh mandatory dry-run with source hard ceiling `<= 1 GiB/query`;
