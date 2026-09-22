@@ -1,0 +1,71 @@
+{
+  "schema": "rozkalns.rpi5-main.simple-deploy-hermes-compat.v1",
+  "issue": 690,
+  "status": "SOURCE_COMPATIBILITY_ONLY_TARGET_NOT_REGISTERED",
+  "consumer": {
+    "repository": "rozkalnsandris/hermes-deals",
+    "revision": "13f9fb69b9576d8e97ab3a85334927f3c576ca1c",
+    "future_target_alias": "hermes-deals",
+    "image": "ghcr.io/rozkalnsandris/hermes-deals",
+    "architecture": "linux/arm64"
+  },
+  "ordinary_api_compose": {
+    "source": "ops/deploy/simple-deploy-compose/hermes-deals-api.yml",
+    "project": "hermes-deals",
+    "service": "api",
+    "services_in_model": [
+      "api"
+    ],
+    "external_network": "hermes-deals_internal",
+    "depends_on_allowed": false,
+    "remove_orphans_allowed": false,
+    "profile_services_allowed": false,
+    "local_build_allowed": false
+  },
+  "private_runtime_config": {
+    "path": "/etc/rozkalns-simple-deployer/private/hermes-deals-api.env",
+    "format": "compose-service-env-file",
+    "required_keys": [
+      "DATABASE_URL",
+      "HTTP_USER_AGENT"
+    ],
+    "secret_values_in_git": false,
+    "provisioning_or_copy_performed_by_issue_690": false,
+    "future_live_provisioning_requires_separate_exact_authority": true
+  },
+  "bind_mounts": [
+    {
+      "source": "/var/lib/rozkalns-simple-deployer/hermes-deals/data/raw",
+      "target": "/data/raw",
+      "read_only": false,
+      "create_host_path": false
+    },
+    {
+      "source": "/var/lib/rozkalns-simple-deployer/hermes-deals/config",
+      "target": "/app/config",
+      "read_only": true,
+      "create_host_path": false
+    }
+  ],
+  "dependency_isolation": {
+    "database_service": "db",
+    "existing_web_service": "web",
+    "profile_only_worker": "worker",
+    "ordinary_compose_model_excludes_all_three": true,
+    "api_uses_existing_external_project_network": true,
+    "generic_reconciler_targets_only_api": true
+  },
+  "caller_authority": {
+    "project_directory": false,
+    "env_file": false,
+    "host_path": false,
+    "environment": false,
+    "secret": false,
+    "credential": false,
+    "argv": false,
+    "command": false
+  },
+  "target_registration_performed": false,
+  "host_runtime_mutation_performed": false,
+  "source_merge_authorizes_live": false
+}
