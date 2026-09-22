@@ -50,7 +50,7 @@
     "gate_issue": 122,
     "entrypoint": "rozkalns_weather.weathernext_access.read_first_access_canary",
     "model_version_contract": "3.0.0",
-    "location_id": "station_10416",
+    "location_id": "station_05480",
     "forecast_hours": 6,
     "required_surfaces": [
       "0p05_station",
