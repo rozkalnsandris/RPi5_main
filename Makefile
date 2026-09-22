@@ -123,7 +123,7 @@ test:
 	bash ./tests/test-hermes-tech-web-runtime.sh
 	bash ./tests/test-hermes-tech-http-policy.sh
 	bash ./tests/test-hermes-tech-http-policy-activation.sh
-	bash ./tests/test-hermes-tech-v20-retry.sh
+	bash ./tests/test-hermes-tech-http-policy-v20-retry.sh
 	bash ./tests/test-hermes-tech-v20-git-index-owner.sh
 	bash ./tests/test-rpi5-main-git-index-owner-bootstrap.sh
 	bash ./tests/test-v20-operator-executable-mode.sh
@@ -137,6 +137,7 @@ test:
 	python3 ./tests/test-cloudflare-p1d-owner-phone.py
 	python3 ./tests/test-cloudflare-p1d-browser-sso.py
 	python3 ./tests/test-cloudflare-owner-browser-sso-preflight.py
+	python3 ./tests/test-cloudflare-p1d-client-session-compat.py
 	python3 ./tests/test-cloudflare-owner-phone-preflight.py
 	python3 ./tests/test-cloudflare-owner-phone-enrollment-create.py
 	bash ./tests/test-cloudflare-zero-trust-wrapper.sh
