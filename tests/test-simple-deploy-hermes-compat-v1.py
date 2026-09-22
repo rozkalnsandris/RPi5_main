@@ -14,9 +14,10 @@ EXECUTOR_PATH = ROOT / "ops/lib/deploy_executor/simple_deploy_v1.py"
 
 EXPECTED_CONSUMER_SHA = "13f9fb69b9576d8e97ab3a85334927f3c576ca1c"
 EXPECTED_ENV_PATH = "/etc/rozkalns-simple-deployer/private/hermes-deals-api.env"
+EXPECTED_HOST_ROOT = "/var/lib/rozkalns-simple-deployer/hermes-deals"
 EXPECTED_BINDS = {
-    "/home/andris/hermes-deals/data/raw": "/data/raw",
-    "/home/andris/hermes-deals/config": "/app/config",
+    f"{EXPECTED_HOST_ROOT}/data/raw": "/data/raw",
+    f"{EXPECTED_HOST_ROOT}/config": "/app/config",
 }
 
 
@@ -112,6 +113,7 @@ class HermesSimpleDeployCompatibilityTests(unittest.TestCase):
             EXPECTED_BINDS,
         )
         self.assertTrue(all(item["create_host_path"] is False for item in mounts))
+        self.assertTrue(all(item["source"].startswith(f"{EXPECTED_HOST_ROOT}/") for item in mounts))
         self.assertNotIn("source: ./", self.compose)
         for source, target in EXPECTED_BINDS.items():
             with self.subTest(source=source):

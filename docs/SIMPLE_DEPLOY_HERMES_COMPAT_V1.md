@@ -20,10 +20,12 @@ The adapter freezes:
 - service identity `api`;
 - image identity `ghcr.io/rozkalnsandris/hermes-deals:production` as the discovery placeholder that the generic reconciler later overrides with the frozen immutable digest;
 - existing external Docker network `hermes-deals_internal` and network alias `api`;
-- absolute reviewed bind sources `/home/andris/hermes-deals/data/raw` and `/home/andris/hermes-deals/config`;
+- absolute reviewed bind sources `/var/lib/rozkalns-simple-deployer/hermes-deals/data/raw` and `/var/lib/rozkalns-simple-deployer/hermes-deals/config`;
 - `create_host_path: false` for both bind mounts;
 - private runtime configuration lookup only through `/etc/rozkalns-simple-deployer/private/hermes-deals-api.env`;
 - the existing API healthcheck.
+
+The `/var/lib/rozkalns-simple-deployer/hermes-deals` namespace is a public-safe, fixed host-owned identity inside the generic deployer's existing state boundary. Issue #690 does not create, copy or migrate those directories or their contents; any future materialization or migration is a separate exact owner-authorized host/runtime operation.
 
 The adapter does not define `db`, `web` or `worker`, does not contain `depends_on`, and does not enable `--remove-orphans`. Therefore the ordinary generic `docker compose ... pull api` / `up ... api` lifecycle has no Compose dependency graph through which it could recreate or restart those unrelated services.
 
@@ -53,7 +55,7 @@ Focused tests must prove that:
 1. the compatibility Compose model contains exactly `api`;
 2. `db`, `web` and `worker` are absent and no dependency edge can start them;
 3. private runtime configuration has one fixed `/etc/rozkalns-simple-deployer` path and no secret values are committed;
-4. relative consumer bind sources are replaced by exact reviewed absolute host sources with `create_host_path: false`;
+4. relative consumer bind sources are replaced by exact reviewed absolute host sources inside `/var/lib/rozkalns-simple-deployer/hermes-deals` with `create_host_path: false`;
 5. the existing project network identity is static;
 6. the generic executor has not gained project-directory/env-file/no-deps caller authority;
 7. `ops/deploy/simple-deploy-targets-v1.json` still contains only the existing Weather target.
@@ -62,4 +64,4 @@ Focused tests must prove that:
 
 After #690 is reviewed and merged under separate merge authority, Hermes target adoption is still a separate outcome. That later source outcome must hash-pin the reviewed adapter and add the static `hermes-deals` target only after fresh GitHub revalidation.
 
-A later LIVE/cutover decision must separately cover any required private runtime-config provisioning and exact host/runtime reconciliation. Source merge alone never provisions secrets, changes the host, starts containers, or makes Hermes LIVE through SIMPLE-DEPLOY.
+A later LIVE/cutover decision must separately cover any required host namespace materialization, private runtime-config provisioning and exact host/runtime reconciliation. Source merge alone never provisions secrets, changes the host, starts containers, or makes Hermes LIVE through SIMPLE-DEPLOY.

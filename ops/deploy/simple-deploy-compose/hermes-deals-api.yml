@@ -14,12 +14,12 @@ services:
       HERMES_UI_ASSET_MODE: inline-w3
     volumes:
       - type: bind
-        source: /home/andris/hermes-deals/data/raw
+        source: /var/lib/rozkalns-simple-deployer/hermes-deals/data/raw
         target: /data/raw
         bind:
           create_host_path: false
       - type: bind
-        source: /home/andris/hermes-deals/config
+        source: /var/lib/rozkalns-simple-deployer/hermes-deals/config
         target: /app/config
         read_only: true
         bind:
