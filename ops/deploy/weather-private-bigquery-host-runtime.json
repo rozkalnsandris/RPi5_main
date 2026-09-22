@@ -61,7 +61,7 @@
   },
   "first_access": {
     "model_version_contract": "3.0.0",
-    "location_id": "station_10416",
+    "location_id": "station_05480",
     "forecast_hours": 6,
     "required_surfaces": ["0p05_station", "0p1_surface"],
     "dry_run_required": true,
