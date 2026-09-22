@@ -141,53 +141,53 @@ The retained A4 source-contract compatibility state is historical/non-authorizin
 `A4_DISCOVERY_CONTRACT=ops/deploy/auto-live-a4-candidate-discovery.json`  
 `A4_VOLATILE_CANDIDATE_SHA_PERSISTED=false`
 
-These A4 markers do not select the current deployment lane, do not activate Auto-Live, and do not override #669.
+These A4 markers do not select the current deployment lane, do not activate Auto-Live, and do not override current fresh Weather continuity.
 
 SIMPLE-DEPLOY v1 is now the concrete shared application-release profile for compatible Docker/Compose services. Where old Auto-Live manifests or controllers conflict with the accepted SIMPLE-DEPLOY consumer/runtime contract, reconcile them as compatibility/history rather than creating another deployment engine.
 
-## 5. Current cross-project priority — SIMPLE-DEPLOY v1 Weather canary
+## 5. Current cross-project priority — SIMPLE-DEPLOY v1 Weather public acceptance
 
-The current priority remains the accepted shared SIMPLE-DEPLOY rollout, not the historical Weather v10 broker/operator/JIT path and not an unconditional return to older Phase 3/4 checkpoints. Fresh GitHub state and the latest #191 continuity comment remain authoritative over this point-in-time plan text.
+The one-time Weather SIMPLE-DEPLOY cutover, first standing release proof, public corpus bootstrap/integrity and recurring public ingest are now accepted historical/runtime evidence. The current public Weather focus is truthful current-observation freshness/provenance plus consumer UI acceptance. Fresh GitHub state and the latest relevant #191 continuity receipt remain authoritative over point-in-time values in this plan.
 
 ### Accepted source/runtime chain
 
 - shared SIMPLE-DEPLOY: `ops-workflows@e05ed760791a127c7c9628696806ef39c9fe329c`;
 - initial Weather cutover consumer: `rozkalns_weather@606981d10eee59d13b802f6a682abf1daa2aa8a5`;
-- historical #672 source-only deterministic installer/principal prerequisite merged via PR #673, including the reviewed principal provisioning path;
-- #674 install/schema-init/activation sequencing merged via PR #675 at `RPi5_main@b57ed42d5eb01f15b62c1f53459ffe0539a57d9c`;
-- Phase A install-only completed from that exact baseline and stopped without daemon-reload, service/timer activation, Docker reconciliation or database/data mutation;
-- the Phase-B Docker-state/runtime-identity correction merged via PR #676 as `RPi5_main@7c6c7a8a80ca62d783c7f378b5865fae348a3fe9`, with exact-main CI green;
-- the separately authorized post-install Phase-B repair completed without Docker, systemd activation, reconciliation or database/data mutation;
-- Phase B schema-init completed against the preserved `rozkalns-weather-public_weather_data` volume: `/ready` changed `503 -> 200`, the production pointer remained unchanged, and the frozen image was `sha256:d495d10b2d5e002a3c19b6532746624955269e0d483996c42ad6dea87e7afc38`;
-- Phase C activation completed: the first bounded reconciliation returned `SUCCESS` for that same immutable digest, `/health=200`, `/ready=200`, and the reviewed `rozkalns-simple-deployer.timer` was enabled/started;
-- post-activation read-only verification observed the timer active/enabled, a successful timer trigger, service result `success`/exit `0`, and `/health=200` plus `/ready=200`;
-- the first genuine post-cutover standing release is also proven: `rozkalns_weather@789a79820807829cc9b057d9ffafc56e0e41afe9` was published through pinned `ops-workflows@e05ed760791a127c7c9628696806ef39c9fe329c` to immutable digest `sha256:72031b1918d6bec064a26c303450d8b9e1ed2c66021ca3cb9acc3af55ec52c20`; the standing reconciler recorded `SUCCESS`, later scheduled cycles returned `NO_OP_CURRENT`, and `/health=200` plus `/ready=200` remained true;
-- Weather public-data companion source #682 completed via PR #683 at `RPi5_main@a78d53404f1e614386550f77c6635881b73cc88e`. It adds fixed-contract corpus bootstrap/integrity/recurring-ingest source plus disabled-by-default installer/unit source only; merge did not install or execute the capability, mutate production data, or enable/start the recurring timer.
+- historical #672 installer/principal prerequisite and #674 sequencing work merged and enabled the reviewed Phase A/B/C path;
+- Phase A install-only, post-install Phase-B repair, Phase B schema-init and Phase C activation all completed under their separate consumed owner authorizations;
+- Phase B preserved `rozkalns-weather-public_weather_data` and changed `/ready` from `503` to `200`;
+- Phase C completed the first bounded reconciliation and activated the reviewed generic SIMPLE-DEPLOY scheduler for the fixed Weather target;
+- the first genuine post-cutover standing release `rozkalns_weather@789a79820807829cc9b057d9ffafc56e0e41afe9` reached the fixed target through pinned `ops-workflows@e05ed760791a127c7c9628696806ef39c9fe329c` and recorded `/health=200` plus `/ready=200`;
+- Weather public-data companion source #682 / PR #683 merged at `RPi5_main@a78d53404f1e614386550f77c6635881b73cc88e`;
+- source reconciliation #684 / PR #685 merged at `RPi5_main@edc5003fba34523e4b400fc18e2a5446c3928a93`, separating historical bootstrap source pinning from post-bootstrap recurring-enable semantics and providing deterministic installed-artifact reconciliation;
+- later separately owner-authorized runtime work reconciled the installed companion, completed the production public corpus/integrity path and enabled recurring public ingest;
+- fresh read-only acceptance receipt #191 comment `5779640396` on 2026-09-22 observed `rozkalns-weather-public-ingest.timer` enabled/active/waiting, a successful oneshot exit `0`, `/health=200`, `/ready=200`, corpus integrity `ok=true`, populated corpus, and populated `station_05480`-scoped hourly/daily forecasts.
 
-These receipts complete the one-time Weather SIMPLE-DEPLOY cutover, the first genuine standing-release proof, and the source-only Weather public-data companion needed for the later DATA lane. They do not create reusable authority for database/data work, companion installation, recurring-ingest activation, unrelated host control, credentials, network/Cloudflare changes or any other sensitive mutation class.
+These receipts do not create reusable authority for database/data recovery, destructive cleanup, credentials, network/Cloudflare changes, private-provider activation or unrelated host control. Consumed one-shot authorizations remain non-reusable.
 
 ### Current exact Weather gate
 
-`RPi5_main#669` is the historical/canonical one-time cutover gate whose Phase A/B/C Definition of Done is now satisfied by the accepted receipts above. Its issue body and #674 metadata remain stale until separately reconciled; they must not be interpreted as reopening or reauthorizing consumed one-shot gates.
+`RPi5_main#669` is historical one-time cutover metadata. Its Phase A/B/C Definition of Done is satisfied; stale issue text must not be interpreted as reopening or reauthorizing those gates.
 
-The standing ordinary reconciliation contract is active only for the already-adopted fixed target `rozkalns-weather-public-rpi5` and only for eligible `AUTO_DEPLOY_SAFE` releases within the reviewed static target contract. The first genuine newly merged Weather release has now reached this fixed target end to end through shared SIMPLE-DEPLOY with exact source/image/shared-workflow identity and truthful health/readiness evidence. Deployment success alone does not prove public corpus/provider/UI usability.
+The standing ordinary reconciliation contract is active only for the already-adopted fixed target `rozkalns-weather-public-rpi5` and eligible `AUTO_DEPLOY_SAFE` releases within the reviewed static target contract.
 
 Current sequence from this checkpoint:
 
 ```text
 one-time Weather SIMPLE-DEPLOY Phase A/B/C cutover — COMPLETE
--> first genuine newly merged Weather AUTO_DEPLOY_SAFE release proof — COMPLETE
--> Weather public-data companion source #682/#683 — COMPLETE / SOURCE ONLY
--> separately exact-gated install/reconcile of the reviewed Weather data capability
--> explicit recovery decision before any production corpus write
--> one-time bootstrap/resume under that exact decision
--> corpus integrity PASS
--> separately exact-gated recurring-ingest timer enable/start
--> verify provider/current endpoints and usable Weather UI/provider/corpus acceptance
+-> first genuine Weather AUTO_DEPLOY_SAFE standing release proof — COMPLETE
+-> Weather public-data companion source/reconciliation — COMPLETE
+-> one-time public corpus bootstrap + integrity — COMPLETE
+-> recurring public-ingest timer — ACTIVE / READ-ONLY VERIFIED
+-> resolve/understand DWD current-observation freshness + provenance
+-> verify truthful consumer UI with real provider/current/corpus evidence
+-> complete public Weather acceptance when its own DoD passes
 -> migrate/test additional compatible consumers when explicitly selected
 ```
 
-No consumed Phase-A/B/C authorization is reusable. PR #683/source completion is not LIVE authority. No alternate Docker config path, helper retry, cleanup, rollback or historical broker/JIT path is authorized by this continuity update.
+Fresh read-only evidence on 2026-09-22 found `/api/current` correctly bound to canonical DWD CDC `station_05480`, but its newest stored observation was `2026-09-21T23:00:00Z`; provider health reported `dwd_observations = ok / unknown / SOURCE_TIME_MISSING`. This is a remaining acceptance concern, not permission to rerun bootstrap or scheduler activation. The consumer UI source already contains explicit stale semantics and must continue to avoid presenting old observations as current-now.
+
+WeatherNext/private BigQuery remains a separate optional research lane. It is not required for public-runtime health and is not authorized by public Weather receipts.
 
 ### Historical Weather v10 path
 
@@ -231,26 +231,24 @@ Rules:
 
 ## 7. Weather acceptance sequence after #669
 
-The one-time cutover and first genuine standing-release proof have passed. The current acceptance sequence is:
+The one-time cutover, standing release proof and public DATA lane have advanced to recurring operation. The current acceptance sequence is:
 
-1. **COMPLETE** — genuine merged Weather source `789a79820807829cc9b057d9ffafc56e0e41afe9` reached the fixed SIMPLE-DEPLOY target through the standing ordinary reconciliation path;
-2. **COMPLETE** — exact shared workflow `e05ed760791a127c7c9628696806ef39c9fe329c` and immutable image digest `sha256:72031b1918d6bec064a26c303450d8b9e1ed2c66021ca3cb9acc3af55ec52c20` were recorded;
-3. **COMPLETE** — `/health=200` was observed after reconciliation;
-4. **COMPLETE** — `/ready=200` was observed after reconciliation; future regressions must still fail closed rather than be fabricated as PASS;
-5. **COMPLETE / SOURCE ONLY** — #682/PR #683 merged the fixed Weather public-data companion source at `a78d53404f1e614386550f77c6635881b73cc88e`; it remains uninstalled/unexecuted until fresh exact LIVE authority exists;
-6. separately exact-gate installation/reconciliation of that reviewed capability and revalidate fixed target/image/volume identity before any production data mutation;
-7. require the explicit recovery decision defined by the source contract before the first production corpus write, then perform only the separately authorized one-time bootstrap/resume path;
-8. require corpus integrity PASS before recurring ingest may be enabled;
-9. separately exact-gate recurring public-ingest timer enable/start, then verify recurring ingest and real provider/current endpoint state;
-10. close the Weather UI master only after real UI/provider/readiness/corpus evidence passes.
+1. **COMPLETE** — fixed SIMPLE-DEPLOY Weather target activated and standing ordinary release path proven;
+2. **COMPLETE** — `/health=200` and `/ready=200` accepted after reconciliation and again in later read-only evidence;
+3. **COMPLETE** — #682/PR #683 public-data companion source plus #684/PR #685 source reconciliation;
+4. **COMPLETE** — separately authorized installed-capability reconciliation and one-time production public corpus bootstrap/integrity path;
+5. **ACTIVE / READ-ONLY VERIFIED** — recurring public-ingest timer; 2026-09-22 evidence recorded an enabled/active timer and successful oneshot;
+6. **PASS at audit point** — corpus integrity `ok=true` and station-scoped hourly/daily forecast endpoints populated;
+7. **REMAINING ACCEPTANCE** — investigate/resolve canonical DWD `station_05480` current-observation freshness/provenance; latest sampled observation was stale and provider health reported `SOURCE_TIME_MISSING`;
+8. **REMAINING ACCEPTANCE** — verify the consumer UI truthfully renders real current/provider/corpus evidence, including stale-state behavior, before public Weather acceptance is closed.
 
-Deployment health/readiness proves the ordinary release path; it is necessary but not sufficient evidence for usable Weather provider/corpus/UI acceptance.
+Deployment health/readiness and forecast corpus availability are necessary but not sufficient evidence for final consumer UI acceptance. Never fabricate freshness or silently substitute legacy station `10416` for canonical measured benchmark `05480`.
 
 WeatherNext/private-home activation is not required for the first usable public Weather UI and remains separate.
 
 ## 8. Fleet rollout after Weather
 
-Weather has now proved SIMPLE-DEPLOY end to end. Fleet reuse is eligible to proceed when explicitly selected, but it does not by itself supersede remaining Weather provider/corpus/UI acceptance work. When fleet rollout is selected:
+Weather has proved SIMPLE-DEPLOY end to end. Fleet reuse is eligible to proceed when explicitly selected, but it does not supersede remaining Weather current-observation/UI acceptance work. When fleet rollout is selected:
 
 1. migrate at least one additional compatible Docker/Compose consumer;
 2. then migrate other compatible services one at a time;
@@ -285,7 +283,7 @@ Current Queue v1/A1 or historical Simple LIVE text must not be interpreted as al
 
 ### Owner-authorized pull deploy executor — #236
 
-#236 remains a valid trust-boundary/architecture roadmap and historical source for deterministic owner-authorized operations. It does not override the exact current Weather SIMPLE-DEPLOY lane.
+#236 remains a valid trust-boundary/architecture roadmap and historical source for deterministic owner-authorized operations. It does not override the current Weather public acceptance lane.
 
 Use its owner identity, replay, exact source/target, fail-closed and static-operation principles where they remain applicable, but do not revive project-specific old Weather broker/JIT execution as steady state.
 
@@ -295,7 +293,7 @@ Use its owner identity, replay, exact source/target, fail-closed and static-oper
 
 ### Hermes residual migration
 
-Hermes migration history and residual work remain valid backlog/program state. It may proceed only when it is the explicitly selected current lane. It does not automatically outrank the accepted SIMPLE-DEPLOY Weather canary cutover merely because historical Phase 4 was once marked incomplete.
+Hermes migration history and residual work remain valid backlog/program state. It may proceed only when it is the explicitly selected current lane. It does not automatically outrank the accepted Weather public acceptance lane merely because historical Phase 4 was once marked incomplete.
 
 The old Phase 4 detailed chronology remains available in Git history and #191. Historical evidence is intentionally not duplicated as current mutable state in this concise plan.
 
@@ -316,18 +314,17 @@ Do not use historical SHAs in this ledger as current source/runtime identity.
 ## 12. Current canonical sequencing
 
 ```text
-1. Phase A install-only at b57ed42... — COMPLETE; authority consumed
-2. #674 Phase-B correction + PR #676 merge at 7c6c7a8... — COMPLETE
-3. separately gated post-install Phase-B repair — COMPLETE; authority consumed
-4. Phase-B schema-init against preserved weather_data — PASS; /ready=200; authority consumed
-5. Phase-C activation + first bounded reconciliation — PASS; timer active; authority consumed
-6. source/continuity reconciliation for the completed cutover — COMPLETE via PR #679 at 3f10614...
-7. first genuine newly merged Weather AUTO_DEPLOY_SAFE release — COMPLETE at 789a798... -> sha256:72031b...; /health=200; /ready=200
-8. Weather public-data companion source — COMPLETE via #682 / PR #683 at a78d534...
-9. separately exact-gate companion install/reconcile + explicit recovery decision + one-time bootstrap/resume + corpus integrity PASS
-10. separately exact-gate recurring-ingest timer enable/start and verify provider/current endpoints
-11. complete Weather UI/provider/corpus acceptance
-12. then migrate/test additional compatible consumers when explicitly selected
+1. Phase A install-only — COMPLETE; authority consumed
+2. Phase-B correction/repair + schema-init against preserved weather_data — COMPLETE; /ready=200; authorities consumed
+3. Phase-C activation + first bounded reconciliation — COMPLETE; standing ordinary target activated; authority consumed
+4. first genuine newly merged Weather AUTO_DEPLOY_SAFE release — COMPLETE
+5. Weather public-data companion source #682/#683 — COMPLETE
+6. Weather data companion source reconciliation #684/#685 — COMPLETE
+7. separately authorized installed-capability reconciliation + one-time public corpus bootstrap/integrity — COMPLETE
+8. recurring public-ingest timer enable/start — COMPLETE; recurring operation READ-ONLY VERIFIED on 2026-09-22
+9. DWD station_05480 measured-current freshness/provenance — CURRENT PUBLIC ACCEPTANCE WORK
+10. truthful consumer UI/provider/corpus acceptance — CURRENT PUBLIC ACCEPTANCE WORK
+11. migrate/test additional compatible consumers when explicitly selected
 ```
 
 If fresh GitHub or host evidence invalidates an accepted receipt, reclassify before action. Never rerun a consumed one-shot gate, improvise a Docker/config path, or treat a source merge as authority for a separately sensitive mutation class.
@@ -336,19 +333,19 @@ If fresh GitHub or host evidence invalidates an accepted receipt, reclassify bef
 
 Current durable authority state has no inferred merge authority, no active AUTO-RUN FULL authority and no fresh one-shot LIVE authority. Bare FAST continuation may perform source/docs/tests work only within the current command through Ready; merge remains explicit owner authority.
 
-The Phase-A install, post-install repair, Phase-B schema/data and Phase-C activation authorizations were consumed by their completed attempts and are non-reusable. The successful Phase-C cutover activated only the reviewed standing ordinary `AUTO_DEPLOY_SAFE` reconciliation contract for the already-adopted static Weather target.
+The completed cutover, data bootstrap and recurring-ingest activation authorizations were consumed by their completed attempts and are non-reusable. Their historical success does not grant authority to rerun them.
 
-That standing contract does **not** authorize:
+The successful Weather cutover activated only the reviewed standing ordinary `AUTO_DEPLOY_SAFE` reconciliation contract for the already-adopted static Weather target. That standing contract does **not** authorize:
 
 - merge of any PR without the exact authority required by the active repository lane;
-- database/schema/data migration, corpus bootstrap/backfill, recurring-ingest activation or destructive recovery;
+- database/schema/data migration, destructive recovery, corpus rewrite/backfill replay or scheduler reconfiguration;
 - target/registry/Compose/service identity widening outside reviewed source;
 - unrelated Docker/systemd/host-control, package or filesystem-permission mutation;
 - secrets/credentials/private-provider changes;
 - Cloudflare/DNS/network mutation;
 - retry, cleanup, rollback or alternate recovery after a fail-closed ordinary deployment error unless a separately reviewed recovery contract authorizes it.
 
-The source-only Weather data companion from #682/PR #683 is merged, but it does not prove current host installation/runtime state and grants no DATA/systemd authority. Before any companion installation, production corpus write, integrity-dependent recurring enablement or timer start, freshly revalidate current source and minimum-sufficient host identity and obtain a separate exact Composite LIVE authorization for the named mutation classes and target.
+Fresh read-only runtime evidence may verify state, but it never creates mutation authority. Any new data repair, timer/systemd change, private-provider activation or other sensitive mutation requires the exact current owner gate.
 
 ## 14. Continuity references
 
@@ -358,8 +355,8 @@ For fresh state, read in this order when relevant:
 2. current `docs/AUTOMATION_MASTER_PLAN.md`;
 3. #295 controller;
 4. #103 umbrella tracker;
-5. latest relevant #191 handoff/comment;
-6. exact selected work item from fresh bootstrap; #669 is the historical/canonical one-time cutover gate and #682/#683 are source-only Weather DATA-lane evidence, not standing LIVE authority;
+5. latest relevant #191 handoff/comment, including Weather public-data acceptance receipt `5779640396`;
+6. exact selected work item from fresh bootstrap; #669 is historical cutover metadata, #682/#684 are completed source/data-lane history, and #688 is the current continuity reconciliation issue until merged;
 7. exact current `main` and required CI/review/ruleset state;
 8. minimum-sufficient live evidence only when the exact current gate requires it.
 
@@ -367,7 +364,7 @@ GitHub source state never proves live deployment/runtime state.
 
 ## 15. Historical compatibility appendix — Hermes Phase 4 validators
 
-This appendix preserves exact historical section identifiers and source-state markers that repository regression tests use to prove ordering and non-expansion of the old Hermes Phase 4 trust boundary. It is **historical compatibility evidence only**. None of these sections selects the current lane, proves current host state, grants LIVE authority, or overrides the current SIMPLE-DEPLOY Weather gate #669.
+This appendix preserves exact historical section identifiers and source-state markers that repository regression tests use to prove ordering and non-expansion of the old Hermes Phase 4 trust boundary. It is **historical compatibility evidence only**. None of these sections selects the current lane, proves current host state, grants LIVE authority, or overrides the current Weather public acceptance lane.
 
 ## Current supersession — Hermes source auth + bounded helper launch gate (2026-09-04)
 
@@ -405,7 +402,8 @@ Historical validator markers for the runtime-adapter source checkpoint:
 `GENUINE_HERMES_AUDIT_AUTHORIZED=false`
 `PRODUCTION_MUTATION_STARTED=false`
 
-These values are retained solely for source-contract regression compatibility. They are not current-state assertions and do not alter SIMPLE-DEPLOY/#669 sequencing.
+These values are retained solely for source-contract regression compatibility. They are not current-state assertions and do not alter current Weather public-acceptance sequencing.
+
 ### SIMPLE-DEPLOY Weather canary sequencing correction (#674)
 
-Current canary activation is split to preserve strict readiness and Weather data authority: `install-only -> separate exact schema-init gate -> /ready=200 -> SIMPLE-DEPLOY activation/first reconciliation -> later corpus + ingest`. The generic reconciler remains forbidden from schema/data mutation. #669 must be freshly reconciled after #674 source merge; its earlier cutover-before-schema sequence is not executable while Weather uses `DATABASE_INIT_MODE=require-existing`.
+Historical sequencing correction: the original canary activation was split to preserve strict readiness and Weather data authority: `install-only -> separate exact schema-init gate -> /ready=200 -> SIMPLE-DEPLOY activation/first reconciliation -> later corpus + ingest`. That correction remains important historical safety evidence, but every named one-time stage through recurring-ingest activation has since completed under separately accepted gates. It must not be interpreted as a current instruction to rerun those mutations.
