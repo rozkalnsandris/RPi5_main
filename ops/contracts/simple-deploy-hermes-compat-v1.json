@@ -1,7 +1,7 @@
 {
   "schema": "rozkalns.rpi5-main.simple-deploy-hermes-compat.v1",
   "issue": 690,
-  "status": "SOURCE_COMPATIBILITY_ONLY_TARGET_NOT_REGISTERED",
+  "status": "SOURCE_COMPATIBILITY_TARGET_REGISTERED_NOT_INSTALLED",
   "consumer": {
     "repository": "rozkalnsandris/hermes-deals",
     "revision": "13f9fb69b9576d8e97ab3a85334927f3c576ca1c",
@@ -65,7 +65,9 @@
     "argv": false,
     "command": false
   },
-  "target_registration_performed": false,
+  "source_target_registration_issue": 692,
+  "target_registration_performed": true,
+  "target_installation_performed": false,
   "host_runtime_mutation_performed": false,
   "source_merge_authorizes_live": false
 }
