@@ -19,7 +19,7 @@ The first-access model contract remains WeatherNext 3 `3.0.0` with exact tables 
 
 ## Fixed first-access scope
 
-The initial canary remains `station_10416`, exactly 6 forecast hours, with private home scope disabled. Both `0p05_station` and `0p1_surface` are required. A BigQuery dry-run is mandatory before a real query. Every query must have an explicit bytes cap no greater than 1 GiB, and a future LIVE gate should tighten that cap from fresh dry-run evidence when possible.
+The initial canary is the canonical measured benchmark `station_05480` (DWD CDC Werl 05480), exactly 6 forecast hours, with private home scope disabled. Legacy `station_10416` remains non-first-access compatibility/MOSMIX context and is rejected as a private first-access canary. Both `0p05_station` and `0p1_surface` are required. A BigQuery dry-run is mandatory before a real query. Every query must have an explicit bytes cap no greater than 1 GiB, and a future LIVE gate should tighten that cap from fresh dry-run evidence when possible.
 
 No SQLite write is part of this first-access contract.
 
