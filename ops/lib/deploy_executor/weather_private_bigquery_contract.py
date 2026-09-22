@@ -16,7 +16,7 @@ EXPECTED_TABLES = (
     "weathernext_3_0_0_0p1deg",
 )
 REQUIRED_SURFACES = ("0p05_station", "0p1_surface")
-INITIAL_LOCATION_ID = "station_10416"
+INITIAL_LOCATION_ID = "station_05480"
 INITIAL_FORECAST_HOURS = 6
 MAX_BYTES_BILLED_PER_QUERY = 1_073_741_824
 BIGQUERY_DEPENDENCY = "google-cloud-bigquery>=3.36,<4"
@@ -82,7 +82,7 @@ class PrivateRuntimeReadiness:
 
 def validate_first_access_scope(scope: FirstAccessScope) -> Mapping[str, Any]:
     if scope.location_id != INITIAL_LOCATION_ID:
-        raise WeatherNextPrivateContractError("initial canary location must remain station_10416")
+        raise WeatherNextPrivateContractError("initial canary location must remain station_05480")
     if scope.forecast_hours != INITIAL_FORECAST_HOURS:
         raise WeatherNextPrivateContractError("initial canary forecast window must remain exactly 6h")
     if not scope.dry_run_required:
