@@ -114,7 +114,7 @@ class WeatherNextPrivateExecutionBridgeTests(unittest.TestCase):
         self.assertEqual(contract["separate_later_gate"], "production_sqlite_forecast_snapshot_write")
         self.assertTrue(contract["first_access"]["dry_run_required"])
         self.assertEqual(contract["first_access"]["forecast_hours"], 6)
-        self.assertEqual(contract["first_access"]["location_id"], "station_10416")
+        self.assertEqual(contract["first_access"]["location_id"], "station_05480")
         self.assertFalse(contract["first_access"]["home_scope_enabled"])
         self.assertFalse(contract["first_access"]["sqlite_write_enabled"])
         self.assertTrue(all(value is False for value in contract["caller_controls"].values()))
@@ -166,6 +166,7 @@ class WeatherNextPrivateExecutionBridgeTests(unittest.TestCase):
             replace(prepared, target_alias="other"),
             replace(prepared, rpi5_main_source_sha="bad"),
             replace(prepared, weather_source_sha="bad"),
+            replace(prepared, location_id="station_10416"),
             replace(prepared, forecast_hours=7),
             replace(prepared, home_scope_enabled=True),
             replace(prepared, sqlite_write_enabled=True),
