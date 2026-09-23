@@ -146,6 +146,8 @@ Compatibility marker retained: **Phase A install-only completed**.
 
 The schema-init companion remains outside ordinary SIMPLE-DEPLOY. Its accepted one-time execution preserved the existing Weather data volume, did not backfill corpus or activate ingest, and produced `/ready=200`. Its completed one-shot authorization is not reusable.
 
+Historical first-install authority marker: #672 was the source-only principal/installer prerequisite. It did not itself authorize host activation, and its one-time role remains historical/non-reusable.
+
 ## Phase-B post-install execution/state correction (#674 follow-up) — historical/completed
 
 Compatibility marker retained: **Phase B is stopped pre-mutation** described an earlier resolved checkpoint after `IMAGE_CONTRACT_FAILED` / `POINTER_RESOLUTION_FAILED`.
