@@ -163,6 +163,7 @@ No source registration, tracker update or master-plan update grants LIVE authori
 The following are completed historical/accepted evidence rather than gates to rerun:
 
 - one-time Weather SIMPLE-DEPLOY Phase A/B/C cutover;
+- historical #672 source-only deterministic installer/principal prerequisite completed with reviewed principal provisioning;
 - first genuine standing `AUTO_DEPLOY_SAFE` Weather release proof;
 - public-data companion source/reconciliation;
 - production public corpus bootstrap/integrity;
