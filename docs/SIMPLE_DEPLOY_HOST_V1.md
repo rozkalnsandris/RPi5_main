@@ -146,7 +146,7 @@ Compatibility marker retained: **Phase A install-only completed**.
 
 The schema-init companion remains outside ordinary SIMPLE-DEPLOY. Its accepted one-time execution preserved the existing Weather data volume, did not backfill corpus or activate ingest, and produced `/ready=200`. Its completed one-shot authorization is not reusable.
 
-Historical first-install authority marker: #672 was the source-only principal/installer prerequisite. It did not itself authorize host activation, and its one-time role remains historical/non-reusable.
+Historical first-install authority boundary retained for contract compatibility: #672 was the source-only principal/installer prerequisite and does not silently widen #669. At that checkpoint, the rule was that #669 must be freshly reconciled after #672 merged before any separately authorized installer/LIVE apply. That rule was satisfied by the later exact owner-gated Phase A/B/C sequence; it is retained here as history, not as a current pending gate.
 
 ## Phase-B post-install execution/state correction (#674 follow-up) — historical/completed
 
