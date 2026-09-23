@@ -5,8 +5,12 @@ on:
     paths:
       - "ops/lib/deploy_executor/weather_private_bigquery_runtime_materialization.py"
       - "ops/lib/deploy_executor/weather_private_bigquery_runtime_lock.json"
+      - "ops/lib/deploy_executor/weather_private_bigquery_runtime_transport.py"
+      - "ops/lib/deploy_executor/weather_private_privileged_dispatch.py"
+      - "ops/deploy/weather-private-runtime-materialization.json"
       - "tests/test-deploy-executor-weather-private-bigquery.py"
       - "tests/test-deploy-executor-weather-private-bigquery-runtime.py"
+      - "tests/test-deploy-executor-weather-private-runtime-transport.py"
       - "docs/WEATHERNEXT_PRIVATE_BIGQUERY_SOURCE.md"
       - "docs/WEATHERNEXT_PRIVATE_BIGQUERY_RUNTIME.md"
       - "docs/ROADMAP.md"
@@ -18,8 +22,12 @@ on:
     paths:
       - "ops/lib/deploy_executor/weather_private_bigquery_runtime_materialization.py"
       - "ops/lib/deploy_executor/weather_private_bigquery_runtime_lock.json"
+      - "ops/lib/deploy_executor/weather_private_bigquery_runtime_transport.py"
+      - "ops/lib/deploy_executor/weather_private_privileged_dispatch.py"
+      - "ops/deploy/weather-private-runtime-materialization.json"
       - "tests/test-deploy-executor-weather-private-bigquery.py"
       - "tests/test-deploy-executor-weather-private-bigquery-runtime.py"
+      - "tests/test-deploy-executor-weather-private-runtime-transport.py"
       - "docs/WEATHERNEXT_PRIVATE_BIGQUERY_SOURCE.md"
       - "docs/WEATHERNEXT_PRIVATE_BIGQUERY_RUNTIME.md"
       - "docs/ROADMAP.md"
@@ -44,9 +52,12 @@ jobs:
         run: |
           python3 ./tests/test-deploy-executor-weather-private-bigquery.py
           python3 ./tests/test-deploy-executor-weather-private-bigquery-runtime.py
+          python3 ./tests/test-deploy-executor-weather-private-runtime-transport.py
           python3 -m py_compile \
             ops/lib/deploy_executor/weather_private_bigquery_contract.py \
-            ops/lib/deploy_executor/weather_private_bigquery_runtime_materialization.py
+            ops/lib/deploy_executor/weather_private_bigquery_runtime_materialization.py \
+            ops/lib/deploy_executor/weather_private_bigquery_runtime_transport.py \
+            ops/lib/deploy_executor/weather_private_privileged_dispatch.py
 
   deterministic-wheelhouse:
     runs-on: ubuntu-latest

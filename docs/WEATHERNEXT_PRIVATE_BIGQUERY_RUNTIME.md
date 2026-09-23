@@ -76,3 +76,19 @@ After this source is merged, the ordered owner-gated path remains:
 5. separate `production_sqlite_forecast_snapshot_write`.
 
 No later authority is implied by this source or by its merge. DWD remains the official severe-weather warning authority in Germany; WeatherNext remains research forecast output.
+
+## Reviewed host transport — issue #704
+
+Issue #704 wires the existing deterministic artifact and materializer into the WeatherNext privileged boundary without granting the boundary GitHub Actions download or credential authority.
+
+The host transport has three deliberately separate states:
+
+1. **external acquisition / fixed handoff** — a separately authorized process must place exactly `runtime-artifact-receipt.json` and `weathernext-private-runtime.tar` in `/var/lib/rpi5-deploy/weather-private-runtime/incoming`; #704 does not implement an Actions downloader, use the P9 Issues-only GitHub App for artifact access, or consume a user token;
+2. **validated root cache import** — the privileged transport accepts only that fixed incoming root, root-owned regular files, exact receipt identity, exact source SHA, closure/platform/Python identity, byte size, artifact SHA-256 and complete reviewed archive contents, then publishes one fixed cache directory with no-replace semantics;
+3. **runtime materialization** — after the cache is exact, the existing offline materializer unpacks the reviewed wheel closure and no-replace publishes the fixed cp313 runtime.
+
+The privileged CLI still accepts only an authorization issue number. The requested operation is derived from the canonical owner-authored non-App LIVE-AUTH and READY Queue; callers cannot select a URL, repository, source SHA, artifact digest, path, filename, interpreter, command, argv or environment.
+
+The runtime transport has no Actions artifact download, credential acquisition, network install, package-manager, Google, Analytics Hub, BigQuery, SQLite, Docker, systemd or network-control authority. Source merge grants no LIVE authority.
+
+A future LIVE execution therefore still requires two independently bounded things to be true before consume: the exact reviewed artifact must already be present in the fixed incoming handoff, and a fresh owner LIVE-AUTH/READY Queue must bind the current `RPi5_main` source and runtime operation. Any missing, partial, conflicting or mismatched state fails closed with no automatic retry, cleanup or rollback.

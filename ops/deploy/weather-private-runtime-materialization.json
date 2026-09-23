@@ -1,0 +1,47 @@
+{
+  "actions_artifact_download_authority": false,
+  "analytics_hub_action_allowed": false,
+  "artifact_handoff": {
+    "acquisition_is_separate_gate": true,
+    "artifact_source": "existing deterministic GitHub Actions runtime-source workflow",
+    "cache_root": "/var/lib/rpi5-deploy/weather-private-runtime/artifacts",
+    "incoming_artifact": "weathernext-private-runtime.tar",
+    "incoming_receipt": "runtime-artifact-receipt.json",
+    "incoming_root": "/var/lib/rpi5-deploy/weather-private-runtime/incoming"
+  },
+  "automatic_cleanup": false,
+  "automatic_retry": false,
+  "automatic_rollback": false,
+  "bigquery_action_allowed": false,
+  "caller_authority": [
+    "authorization_issue_number"
+  ],
+  "conflicting_or_partial_state_fails_closed": true,
+  "credential_acquisition_authority": false,
+  "docker_action_allowed": false,
+  "exact_existing_state_is_noop": true,
+  "implementation_issue": 704,
+  "mutation_budget": [
+    {
+      "category": "filesystem.weathernext-private-runtime-artifact-cache-publish",
+      "max_operations": 1
+    },
+    {
+      "category": "filesystem.weathernext-private-runtime-materialization",
+      "max_operations": 1
+    }
+  ],
+  "network_control_action_allowed": false,
+  "network_install_authority": false,
+  "operation_id": "rozkalns-weather.weathernext-private-runtime-materialization.v1",
+  "package_manager_authority": false,
+  "production_mutation_started": false,
+  "repository_entrypoint": "ops/bin/rpi5-weathernext-private-host-privileged-install",
+  "rollback_policy": "NONE",
+  "schema": "rpi5.weathernext-private-runtime-materialization-source.v1",
+  "source_merge_authorizes_live": false,
+  "source_repository": "rozkalnsandris/RPi5_main",
+  "sqlite_write_allowed": false,
+  "systemd_action_allowed": false,
+  "target_alias": "rpi5-weathernext-private-runtime-materialization"
+}
