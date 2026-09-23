@@ -5,6 +5,8 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
+import stat
 import sys
 import tarfile
 import tempfile
@@ -160,12 +162,28 @@ class WeatherNextPrivateRuntimeTests(unittest.TestCase):
             artifact = cache/f"{receipt.artifact_sha256}.tar"
             artifact.write_bytes(blob)
             provisional.unlink()
-            with (mock.patch.object(module,"LOCK_PATH",lock_path),mock.patch.object(module,"ARTIFACT_CACHE_ROOT",cache),mock.patch.object(module,"RUNTIME_BASE",runtime)):
-                result = module.materialize_reviewed_runtime(module.PRIVATE_CONTRACT_ID, receipt, expected_source_sha=source_sha)
+            previous_umask = os.umask(0o077)
+            try:
+                with (mock.patch.object(module,"LOCK_PATH",lock_path),mock.patch.object(module,"ARTIFACT_CACHE_ROOT",cache),mock.patch.object(module,"RUNTIME_BASE",runtime)):
+                    result = module.materialize_reviewed_runtime(module.PRIVATE_CONTRACT_ID, receipt, expected_source_sha=source_sha)
+            finally:
+                os.umask(previous_umask)
             self.assertEqual(result["status"], "runtime_materialized")
             self.assertFalse(result["network_access_performed"])
             self.assertFalse(result["package_manager_performed"])
             self.assertTrue((runtime/"site-packages/google/cloud/bigquery/__init__.py").is_file())
+            for directory in (
+                runtime,
+                runtime/"site-packages",
+                runtime/"site-packages/google",
+                runtime/"site-packages/google/cloud",
+                runtime/"site-packages/google/cloud/bigquery",
+            ):
+                self.assertEqual(
+                    stat.S_IMODE(directory.stat().st_mode),
+                    module.FIXED_DIRECTORY_MODE,
+                    str(directory),
+                )
             marker = json.loads((runtime/module.RUNTIME_MARKER_NAME).read_text())
             self.assertFalse(marker["credential_binding"])
             self.assertFalse(marker["bigquery_access"])
