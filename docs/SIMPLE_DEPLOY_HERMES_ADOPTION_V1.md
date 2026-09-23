@@ -1,7 +1,7 @@
 # SIMPLE-DEPLOY Hermes existing-install adoption v1
 
 Status: SOURCE-READY / NOT LIVE  
-Issue: `RPi5_main#698`
+Issue: `RPi5_main#698`; post-merge baseline correction: `RPi5_main#708`
 
 ## Purpose
 
@@ -16,12 +16,15 @@ The later LIVE operation is deliberately limited to two installed target deltas:
 
 ## Reviewed baseline
 
-The accepted Weather installation provenance is the verified Phase-A install receipt recorded against:
+The accepted Weather installation is a composite of unchanged Phase-A artifacts plus the completed Phase-B generated-identity refresh:
 
 - repository: `rozkalnsandris/RPi5_main`;
-- identity source SHA: `b57ed42d5eb01f15b62c1f53459ffe0539a57d9c`;
-- Weather-only registry SHA-256: `c8b97e3274b732cdd0cdd2ddedb79515ebd9a6a433b094443594bdd8f74114ad`;
-- Weather compose SHA-256: `80e2b47e4ed039c38285094e0b273fbc884f0a34ff34d8b201d8e93323af1f32`.
+- installed identity source SHA after the completed Phase-B repair: `7c6c7a8a80ca62d783c7f378b5865fae348a3fe9`;
+- exact canonical installed identity SHA-256: `244abc1480a20937acb3d702760289631700aa27d0e518b454a7271dbd777df1`;
+- Weather-only registry SHA-256, unchanged from Phase A: `c8b97e3274b732cdd0cdd2ddedb79515ebd9a6a433b094443594bdd8f74114ad`;
+- Weather compose SHA-256, unchanged from Phase A: `80e2b47e4ed039c38285094e0b273fbc884f0a34ff34d8b201d8e93323af1f32`.
+
+The earlier #698/#699 source text froze Phase-A identity `b57ed42d5eb01f15b62c1f53459ffe0539a57d9c`, but the separately authorized Phase-B post-install repair intentionally regenerated the installed identity and the completed Weather cutover continuity records `7c6c7a8a...` as the accepted corrected state. Issue #708 reconciles the Hermes adoption baseline to that real accepted installation without widening any mutation authority.
 
 Before any staging write, `scripts/adopt-simple-deploy-hermes-v1.py` requires the fixed installed identity, Weather-only registry, Weather compose adapter and generic executor to be real root-owned regular files with their reviewed modes. The identity and Weather artifacts must match the exact baseline above. The Hermes compose destination, both fixed staging paths and the non-canonical `public_targets.json` name must be absent.
 
