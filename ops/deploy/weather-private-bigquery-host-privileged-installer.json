@@ -98,8 +98,15 @@
   },
   "capability_install": {
     "trusted_checkout": "/var/lib/rpi5-deploy/RPi5_main-weathernext-private-host-trusted",
-    "manager_checkout": "/var/lib/rpi5-deploy/RPi5_main",
-    "reviewed_origin": "https://github.com/rozkalnsandris/RPi5_main.git",
+    "manager_checkout_resolver": "repo-owner-home/RPi5_main",
+    "manager_origin": "https://github.com/rozkalnsandris/RPi5_main.git",
+    "manager_role": "git-object-and-reviewed-origin-source-only",
+    "manager_fetch_as_repository_owner": true,
+    "manager_worktree_add_as_root_only": true,
+    "manager_snapshot_must_remain_unchanged": true,
+    "manager_hidden_clone_or_repair_allowed": false,
+    "recovery_issue": 695,
+    "failed_authorization_issue": 34,
     "operator_source": "ops/bin/rpi5-weathernext-private-host",
     "operator_destination": "/usr/local/sbin/rpi5-weathernext-private-host",
     "activation_marker": "/var/lib/rpi5-deploy/weather-private-host/capability.json",
@@ -147,7 +154,8 @@
     "exact_main_required_ci_success": true,
     "identical_authorization_refetch_required": true,
     "durable_one_shot_replay_required": true,
-    "fixed_host_observation_required_immediately_before_consume": true
+    "fixed_host_observation_required_immediately_before_consume": true,
+    "manager_provenance_required_before_consume": true
   },
   "explicit_exclusions": [
     "caller-selected command/path/argv/environment/repository authority",
@@ -163,12 +171,13 @@
     "trusted_checkout_exact_detached_clean": true,
     "operator_exact_root_owned_0755": true,
     "activation_marker_exact_root_owned_0644": true,
+    "manager_snapshot_unchanged": true,
     "weather_application_staging_executed": false,
     "private_runtime_materialization_executed": false,
     "google_binding_executed": false,
     "bigquery_executed": false,
     "sqlite_write_executed": false
   },
-  "next_gate_after_merge": "OWNER_AUTHORIZED_EXACT_SHA_V12_ENGINE_UPGRADE_THEN_RESUME_556",
+  "next_gate_after_merge": "FRESH_BACKEND_QUEUE_AND_HUMAN_OWNER_LIVE_AUTH_AFTER_SANITIZED_PREFLIGHT",
   "production_mutation_started": false
 }
