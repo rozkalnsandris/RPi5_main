@@ -102,6 +102,8 @@
     "manager_origin": "https://github.com/rozkalnsandris/RPi5_main.git",
     "manager_role": "git-object-and-reviewed-origin-source-only",
     "manager_fetch_as_repository_owner": true,
+    "manager_global_git_config_read_only_allowed": true,
+    "manager_git_config_mutation_allowed": false,
     "manager_worktree_add_as_root_only": true,
     "manager_snapshot_must_remain_unchanged": true,
     "manager_hidden_clone_or_repair_allowed": false,
@@ -178,6 +180,15 @@
     "bigquery_executed": false,
     "sqlite_write_executed": false
   },
-  "next_gate_after_merge": "FRESH_BACKEND_QUEUE_AND_HUMAN_OWNER_LIVE_AUTH_AFTER_SANITIZED_PREFLIGHT",
+  "post_merge_continuity": {
+    "installed_privileged_installer_imports_from_trusted_checkout": true,
+    "source_merge_updates_installed_privileged_installer": false,
+    "initial_bootstrap_is_upgrade_path": false,
+    "installed_boundary_exact_new_source_required_before_backend_queue": true,
+    "boundary_mismatch_state": "SOURCE_PREREQUISITE_REQUIRED",
+    "backend_ready_queue_allowed_before_boundary_rebind": false,
+    "backend_live_auth_allowed_before_boundary_rebind": false
+  },
+  "next_gate_after_merge": "SOURCE_PREREQUISITE_WEATHERNEXT_INSTALLER_BOUNDARY_UPGRADE_REBIND_THEN_FRESH_BACKEND_QUEUE_AND_LIVE_AUTH",
   "production_mutation_started": false
 }
