@@ -76,3 +76,21 @@ After this source is merged, the ordered owner-gated path remains:
 5. separate `production_sqlite_forecast_snapshot_write`.
 
 No later authority is implied by this source or by its merge. DWD remains the official severe-weather warning authority in Germany; WeatherNext remains research forecast output.
+
+## Reviewed host transport — issue #704
+
+Issue #704 wires the existing deterministic artifact and materializer into the WeatherNext privileged boundary without granting the boundary GitHub Actions download or credential authority.
+
+The host transport has three deliberately separate states:
+
+1. **external acquisition / fixed handoff** — a separately authorized process must place exactly `runtime-artifact-receipt.json`, `weathernext-private-runtime.tar`, and `actions-artifact-handoff.json` in `/var/lib/rpi5-deploy/weather-private-runtime/incoming`; #704 does not implement an Actions downloader, use the P9 Issues-only GitHub App for artifact access, or consume a user token;
+2. **validated root cache import** — the privileged transport independently reads public metadata for the exact successful `weathernext-private-runtime-source.yml` main run, derives the one non-expired artifact named `weathernext-private-runtime-<source-sha>`, and requires the fixed handoff metadata to match its run ID, artifact ID, name and GitHub-provided SHA-256 artifact digest. It then validates root ownership, exact receipt/source/closure/platform/Python identity, byte size, inner artifact SHA-256 and complete reviewed archive contents before no-replace publication into the fixed root cache;
+3. **runtime materialization** — after the cache and retained Actions provenance are exact, the existing offline materializer unpacks the reviewed wheel closure and no-replace publishes the fixed cp313 runtime.
+
+The public metadata check is credential-free and read-only. It does **not** download an Actions archive or widen the installed P9 App beyond its Issues-only authorization surface. Archive acquisition remains a separate owner-gated prerequisite. The root cache retains the exact `actions-artifact-handoff.json` alongside the runtime receipt and tar so later reconciliation can prove which reviewed Actions run/artifact the handoff claimed.
+
+The privileged CLI still accepts only an authorization issue number. The requested operation is derived from the canonical owner-authored non-App LIVE-AUTH and READY Queue; callers cannot select a URL, repository, source SHA, artifact digest, path, filename, interpreter, command, argv or environment.
+
+The runtime transport has no Actions artifact download, credential acquisition, network install, package-manager, Google, Analytics Hub, BigQuery, SQLite, Docker, systemd or network-control authority. Source merge grants no LIVE authority.
+
+A future LIVE execution therefore still requires two independently bounded things to be true before consume: the exact reviewed artifact plus matching Actions handoff evidence must already be present in the fixed incoming handoff, and a fresh owner LIVE-AUTH/READY Queue must bind the current `RPi5_main` source and runtime operation. Any missing, partial, conflicting or mismatched state fails closed with no automatic retry, cleanup or rollback.

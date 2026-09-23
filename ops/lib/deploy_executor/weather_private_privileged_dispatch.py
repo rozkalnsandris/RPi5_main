@@ -25,6 +25,11 @@ from .weather_private_bigquery_host_installer_runtime import (
     INSTALL_OPERATION_ID,
     run_privileged_install,
 )
+from .weather_private_bigquery_runtime_materialization import OPERATION_ID as RUNTIME_MATERIALIZATION_OPERATION_ID
+from .weather_private_bigquery_runtime_transport import (
+    WeatherNextPrivateRuntimeTransportError,
+    run_privileged_runtime_materialization,
+)
 
 
 class WeatherNextPrivatePrivilegedDispatchError(RuntimeError):
@@ -60,7 +65,11 @@ def _route_operation(issue_number: int) -> str:
         raise
     except Exception:
         _fail("privileged dispatch operation discovery failed closed")
-    if operation not in {INSTALL_OPERATION_ID, APPLICATION_STAGE_OPERATION_ID}:
+    if operation not in {
+        INSTALL_OPERATION_ID,
+        APPLICATION_STAGE_OPERATION_ID,
+        RUNTIME_MATERIALIZATION_OPERATION_ID,
+    }:
         _fail("authorization operation is outside the fixed WeatherNext privileged allowlist")
     return operation
 
@@ -72,6 +81,12 @@ def run_privileged_request(issue_number: int) -> Mapping[str, Any]:
             return dict(public_receipt(run_privileged_install(issue_number)))
         if operation == APPLICATION_STAGE_OPERATION_ID:
             return dict(run_privileged_application_stage(issue_number))
-    except (WeatherNextPrivateHostInstallerError, WeatherNextPrivateApplicationStageRuntimeError) as exc:
+        if operation == RUNTIME_MATERIALIZATION_OPERATION_ID:
+            return dict(run_privileged_runtime_materialization(issue_number))
+    except (
+        WeatherNextPrivateHostInstallerError,
+        WeatherNextPrivateApplicationStageRuntimeError,
+        WeatherNextPrivateRuntimeTransportError,
+    ) as exc:
         raise WeatherNextPrivatePrivilegedDispatchError(str(exc)) from exc
     _fail("fixed WeatherNext privileged dispatch reached unreachable state")
