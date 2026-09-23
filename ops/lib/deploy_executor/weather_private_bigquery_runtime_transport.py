@@ -31,11 +31,13 @@ from .weather_private_bigquery_host_installer_runtime import DurableInstallRepla
 from .weather_private_bigquery_host_runtime import RPI5_MAIN_REPOSITORY, RPI5_MAIN_REPOSITORY_ID
 from .weather_private_bigquery_runtime_materialization import (
     ARTIFACT_CACHE_ROOT,
+    FIXED_DIRECTORY_MODE,
     MAX_ARTIFACT_BYTES,
     OPERATION_ID,
     PRIVATE_CONTRACT_ID,
     RUNTIME_BASE,
     RUNTIME_MARKER_NAME,
+    RUNTIME_SITE_PACKAGES_NAME,
     TARGET_PIP_PLATFORM,
     TARGET_PYTHON_ABI,
     ObservedRuntimeIdentity,
@@ -323,7 +325,7 @@ def _cache_state(
         or stat.S_ISLNK(st.st_mode)
         or st.st_uid != 0
         or st.st_gid != 0
-        or stat.S_IMODE(st.st_mode) != 0o755
+        or stat.S_IMODE(st.st_mode) != FIXED_DIRECTORY_MODE
     ):
         return "CONFLICT"
     artifact = ARTIFACT_CACHE_ROOT / f"{receipt.artifact_sha256}.tar"
@@ -346,6 +348,8 @@ def _runtime_state(receipt: RuntimeArtifactReceipt) -> str:
         st = RUNTIME_BASE.lstat()
         marker_path = RUNTIME_BASE / RUNTIME_MARKER_NAME
         marker_st = marker_path.lstat()
+        site_packages_path = RUNTIME_BASE / RUNTIME_SITE_PACKAGES_NAME
+        site_packages_st = site_packages_path.lstat()
         value = json.loads(marker_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return "CONFLICT"
@@ -354,6 +358,12 @@ def _runtime_state(receipt: RuntimeArtifactReceipt) -> str:
         or stat.S_ISLNK(st.st_mode)
         or st.st_uid != 0
         or st.st_gid != 0
+        or stat.S_IMODE(st.st_mode) != FIXED_DIRECTORY_MODE
+        or not stat.S_ISDIR(site_packages_st.st_mode)
+        or stat.S_ISLNK(site_packages_st.st_mode)
+        or site_packages_st.st_uid != 0
+        or site_packages_st.st_gid != 0
+        or stat.S_IMODE(site_packages_st.st_mode) != FIXED_DIRECTORY_MODE
         or not stat.S_ISREG(marker_st.st_mode)
         or stat.S_ISLNK(marker_st.st_mode)
         or marker_st.st_uid != 0
@@ -449,6 +459,11 @@ def public_plan(plan: RuntimeTransportPlan) -> Mapping[str, Any]:
     }
 
 
+def _mkdir_cache_partial_exact(path: Path) -> None:
+    path.mkdir(mode=FIXED_DIRECTORY_MODE)
+    os.chmod(path, FIXED_DIRECTORY_MODE)
+
+
 def _publish_cache(
     receipt: RuntimeArtifactReceipt,
     actions_evidence: RuntimeActionsEvidence,
@@ -470,7 +485,7 @@ def _publish_cache(
     partial = parent / f".{ARTIFACT_CACHE_ROOT.name}.{receipt.artifact_sha256}.partial"
     if partial.exists() or partial.is_symlink():
         _fail("runtime artifact cache partial state exists")
-    partial.mkdir(mode=0o755)
+    _mkdir_cache_partial_exact(partial)
     receipt_path = partial / CACHE_RECEIPT.name
     actions_path = partial / CACHE_ACTIONS_EVIDENCE.name
     artifact_path = partial / f"{receipt.artifact_sha256}.tar"
