@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+import stat
+import tempfile
 from types import SimpleNamespace
 import sys
 import unittest
@@ -273,6 +276,23 @@ class WeatherNextPrivateRuntimeTransportTests(unittest.TestCase):
             "mutation_budget",
         ):
             transport._require_live_authority(bad)
+
+    def test_cache_partial_directory_mode_is_umask_independent(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            partial = Path(temp) / "cache.partial"
+            previous_umask = os.umask(0o077)
+            try:
+                transport._mkdir_cache_partial_exact(partial)
+            finally:
+                os.umask(previous_umask)
+            self.assertEqual(
+                stat.S_IMODE(partial.stat().st_mode),
+                materialization.FIXED_DIRECTORY_MODE,
+            )
+        source = (
+            ROOT / "ops/lib/deploy_executor/weather_private_bigquery_runtime_transport.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("_mkdir_cache_partial_exact(partial)", source)
 
     def test_no_generic_download_credential_or_shell_surface(self) -> None:
         source = (
