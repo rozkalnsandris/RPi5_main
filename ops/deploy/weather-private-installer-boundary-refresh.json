@@ -1,0 +1,72 @@
+{
+  "schema": "rozkalns-weather.weathernext-private-installer-boundary-refresh.v1",
+  "implementation_issue": 700,
+  "source_repository": "rozkalnsandris/RPi5_main",
+  "operation_id": "rpi5.weathernext-private-installer-boundary.refresh.v1",
+  "target_alias": "rpi5-weathernext-private-installer-boundary-refresh",
+  "authorization_class": "STRICT",
+  "ordinary_live_all_eligible": false,
+  "source_merge_authorizes_live": false,
+  "caller_authority": [
+    "authorization_issue_number"
+  ],
+  "reviewed_origin": "https://github.com/rozkalnsandris/RPi5_main.git",
+  "manager_checkout_resolver": "repo-owner-home/RPi5_main",
+  "trusted_checkout": "/var/lib/rpi5-deploy/RPi5_main-weathernext-private-installer-trusted",
+  "entrypoint_source": "ops/bin/rpi5-weathernext-private-host-privileged-install",
+  "entrypoint_destination": "/usr/local/sbin/rpi5-weathernext-private-host-privileged-install",
+  "required_prestate": {
+    "trusted_checkout": "present-root-owned-0755-clean-detached-reviewed-origin-reviewed-ancestor",
+    "installed_entrypoint": "present-root-owned-0755-exactly-matches-reviewed-stale-head",
+    "manager_origin": "https://github.com/rozkalnsandris/RPi5_main.git",
+    "manager_snapshot": "unchanged",
+    "current_main": "exact-owner-authorized-source-sha",
+    "exact_main_ci": "success"
+  },
+  "preconsume_noop_state": "EXACT",
+  "absent_state_action": "USE_INITIAL_BOOTSTRAP_NOT_REFRESH",
+  "conflict_state_action": "STOP",
+  "mutation_budget": [
+    {
+      "category": "git.weathernext-private-installer-checkout-fetch",
+      "max_operations": 1
+    },
+    {
+      "category": "git.weathernext-private-installer-trusted-checkout-advance",
+      "max_operations": 1
+    },
+    {
+      "category": "filesystem.weathernext-private-installer-entrypoint-replace",
+      "max_operations": 1
+    }
+  ],
+  "postconditions": [
+    "trusted checkout clean detached at exact owner-authorized current-main SHA",
+    "trusted checkout reviewed origin exact",
+    "installed entrypoint root-owned 0755 and byte-exact to reviewed exact-source blob",
+    "manager HEAD/index/worktree snapshot unchanged"
+  ],
+  "forbidden_git_operations": [
+    "clone",
+    "reset",
+    "clean",
+    "pull",
+    "merge",
+    "rebase",
+    "force",
+    "manager branch switch"
+  ],
+  "rollback_policy": "NONE",
+  "authorization_consumed_before_first_mutation": true,
+  "automatic_retry": false,
+  "automatic_cleanup": false,
+  "automatic_rollback": false,
+  "backend_install_allowed": false,
+  "google_action_allowed": false,
+  "bigquery_action_allowed": false,
+  "sqlite_write_allowed": false,
+  "weather_application_stage_allowed": false,
+  "private_runtime_materialization_allowed": false,
+  "docker_systemd_network_cloudflare_allowed": false,
+  "next_gate_after_source_merge": "FRESH_READ_ONLY_HOST_PREFLIGHT_THEN_SEPARATE_EXACT_OWNER_LIVE_BOUNDARY_REFRESH"
+}
