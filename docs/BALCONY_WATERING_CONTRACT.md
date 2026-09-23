@@ -31,17 +31,25 @@ The controller fails closed before pump ON when any required entity is missing, 
 
 ## Watering-cycle contract
 
-After the sensor gate passes, the primary controller preserves the established behavior:
+After the sensor gate passes, the primary controller uses Home Assistant service calls only as requests. HTTP 200 by itself is **not** treated as pump-state acknowledgement.
 
-1. request pump ON with up to three Home Assistant attempts;
-2. water for 60 seconds by default;
-3. request pump OFF with up to three attempts;
-4. pause for 300 seconds by default;
-5. repeat one more 60-second watering cycle;
-6. explicitly request OFF at the end of each cycle;
-7. keep `PUMP_IS_ON=1` until OFF is acknowledged so the EXIT/INT/TERM trap can retry OFF after a failed normal OFF path.
+For each transition the controller reads the exact switch entity and requires the expected `on` or `off` state within a bounded five-sample confirmation window with one-second spacing.
 
-The firmware's independent pump fail-safe remains a separate device-side safety layer and is not replaced by this host controller.
+The cycle contract is:
+
+1. before an ON request, set the local hazard flag `PUMP_IS_ON=1`, meaning the pump **may** be energized or the ON result may be ambiguous;
+2. issue exactly one ON service request for that cycle — ON is duplicate-sensitive because a repeated command can extend an already-running ESP32 session;
+3. require the switch entity to report `on`; if it does not, fail closed and let the EXIT/INT/TERM cleanup request OFF;
+4. water for 60 seconds by default only after `on` is confirmed;
+5. request OFF with up to three attempts because repeated OFF is fail-safe/idempotent at the relay boundary;
+6. require the switch entity to report `off` before clearing `PUMP_IS_ON`;
+7. if OFF cannot be confirmed, fail the run and keep the cleanup obligation active;
+8. pause for 300 seconds by default;
+9. repeat the same confirmed ON/OFF sequence once more.
+
+The `PUMP_IS_ON` name is retained for compatibility, but its safety meaning is conservative: `1` means **may be ON**, not “physical current was independently measured.” It is cleared only after Home Assistant reports `off`.
+
+Home Assistant switch-state confirmation is software-path evidence from the ESP32/MQTT state topic. It is stronger than service-call HTTP status but is **not** independent pump-current, water-flow, or relay-contact sensing. The firmware's independent 180-second pump fail-safe remains a separate device-side safety layer and is not replaced by this host controller.
 
 ## 14:00 temperature gate
 
@@ -95,11 +103,14 @@ A later production mapping may provide these inputs through a protected host-onl
 4. one required sensor unavailable => skip;
 5. one required sensor unknown => skip;
 6. empty Home Assistant response => skip;
-7. malformed state JSON => skip;
+7. malformed sensor-state JSON => skip;
 8. no runtime `last_updated` dependency;
-9. failed OFF retries preserve the trap-OFF safety path;
-10. below 27 C => no delegation, at 27 C => delegation;
-11. all `curl` traffic remains inside the local mock.
+9. failed OFF HTTP requests preserve the trap-OFF safety path;
+10. HTTP 200 for ON without a switch transition does not start the timed watering window and does not trigger a duplicate ON retry;
+11. HTTP 200 for OFF without an `off` state keeps the cleanup obligation active;
+12. malformed switch-state feedback fails closed and never triggers a second ON;
+13. below 27 C => no delegation, at 27 C => delegation;
+14. all `curl` traffic remains inside the local mock.
 
 The repository-wide `make validate` gate includes this regression together with shell syntax, secret scanning, and public-repository safety checks.
 
