@@ -172,29 +172,55 @@ class RegistryTests(unittest.TestCase):
     def tearDown(self):
         self.fx.close()
 
-    def test_repository_registry_binds_exact_weather_canary(self):
+    def test_repository_registry_binds_exact_reviewed_targets(self):
         registry = sd.load_registry(ROOT / "ops/deploy/simple-deploy-targets-v1.json")
         self.assertTrue(registry.execution_enabled)
-        self.assertEqual(len(registry.targets), 1)
-        target = registry.get("rozkalns-weather-public-rpi5")
-        self.assertEqual(target.consumer_repository, "rozkalnsandris/rozkalns_weather")
-        self.assertEqual(target.image, "ghcr.io/rozkalnsandris/rozkalns_weather")
-        self.assertEqual(target.shared_workflow_sha, SHARED_SHA)
-        self.assertEqual(target.compose.project, "rozkalns-weather-public")
-        self.assertEqual(target.compose.file, "rozkalns-weather-public.yml")
-        self.assertEqual(target.compose.service, "weather")
-        self.assertEqual(target.health.liveness_url, "http://127.0.0.1:9180/health")
-        self.assertEqual(target.health.readiness_url, "http://127.0.0.1:9180/ready")
-        self.assertEqual(target.wait_timeout_seconds, 180)
-        self.assertEqual(target.persistent_volumes, ("weather_data",))
-        self.assertEqual(target.registry_pull_profile, "public-anonymous-pull")
+        self.assertEqual(len(registry.targets), 2)
 
-        compose = ROOT / "ops/deploy/simple-deploy-compose" / target.compose.file
-        self.assertTrue(compose.is_file())
-        self.assertEqual(sha256(compose), target.compose.file_sha256)
+        weather = registry.get("rozkalns-weather-public-rpi5")
+        self.assertEqual(weather.consumer_repository, "rozkalnsandris/rozkalns_weather")
+        self.assertEqual(weather.image, "ghcr.io/rozkalnsandris/rozkalns_weather")
+        self.assertEqual(weather.shared_workflow_sha, SHARED_SHA)
+        self.assertEqual(weather.compose.project, "rozkalns-weather-public")
+        self.assertEqual(weather.compose.file, "rozkalns-weather-public.yml")
+        self.assertEqual(weather.compose.service, "weather")
+        self.assertEqual(weather.health.liveness_url, "http://127.0.0.1:9180/health")
+        self.assertEqual(weather.health.readiness_state, "required")
+        self.assertEqual(weather.health.readiness_url, "http://127.0.0.1:9180/ready")
+        self.assertEqual(weather.wait_timeout_seconds, 180)
+        self.assertEqual(weather.persistent_volumes, ("weather_data",))
+        self.assertEqual(weather.registry_pull_profile, "public-anonymous-pull")
+        self.assertEqual(weather.forbidden_operations, sd.FORBIDDEN_OPERATIONS)
+
+        weather_compose = ROOT / "ops/deploy/simple-deploy-compose" / weather.compose.file
+        self.assertTrue(weather_compose.is_file())
+        self.assertEqual(sha256(weather_compose), weather.compose.file_sha256)
         self.assertEqual(
-            target.compose.file_sha256,
+            weather.compose.file_sha256,
             "80e2b47e4ed039c38285094e0b273fbc884f0a34ff34d8b201d8e93323af1f32",
+        )
+
+        hermes = registry.get("hermes-deals")
+        self.assertEqual(hermes.consumer_repository, "rozkalnsandris/hermes-deals")
+        self.assertEqual(hermes.image, "ghcr.io/rozkalnsandris/hermes-deals")
+        self.assertEqual(hermes.shared_workflow_sha, SHARED_SHA)
+        self.assertEqual(hermes.compose.project, "hermes-deals")
+        self.assertEqual(hermes.compose.file, "hermes-deals-api.yml")
+        self.assertEqual(hermes.compose.service, "api")
+        self.assertEqual(hermes.health.liveness_url, "http://127.0.0.1:9128/api/health")
+        self.assertEqual(hermes.health.readiness_state, "not-applicable")
+        self.assertIsNone(hermes.health.readiness_url)
+        self.assertEqual(hermes.wait_timeout_seconds, 180)
+        self.assertEqual(hermes.persistent_volumes, ("hermes_deals_pgdata",))
+        self.assertEqual(hermes.registry_pull_profile, "public-anonymous-pull")
+        self.assertEqual(hermes.forbidden_operations, sd.FORBIDDEN_OPERATIONS)
+
+        hermes_compose = ROOT / "ops/deploy/simple-deploy-compose" / hermes.compose.file
+        self.assertTrue(hermes_compose.is_file())
+        self.assertEqual(sha256(hermes_compose), hermes.compose.file_sha256)
+        self.assertEqual(
+            hermes.compose.file_sha256,
+            "644dc72da5dc13ee532dd29693db31358451669bb44de4df4b62c41736903f1c",
         )
 
     def test_valid_static_target_parses(self):
@@ -255,6 +281,7 @@ class RegistryTests(unittest.TestCase):
                 self.fx.registry_path.write_text(json.dumps(payload), encoding="utf-8")
                 with self.assertRaises(sd.SimpleDeployError):
                     sd.load_registry(self.fx.registry_path)
+
 
 class ReconcileTests(unittest.TestCase):
     def setUp(self):
@@ -425,24 +452,49 @@ class ReconcileTests(unittest.TestCase):
 
 
 class ContractTests(unittest.TestCase):
-    def test_machine_contract_tracks_phase_b_correction_and_pins_shared_revision(self):
+    def test_machine_contract_tracks_reviewed_targets_and_pins_shared_revision(self):
         contract = json.loads((ROOT / "ops/contracts/simple-deploy-host-v1.json").read_text())
         self.assertEqual(contract["issue"], 666)
-        self.assertEqual(contract["status"], "SOURCE_PHASE_B_CORRECTION_READY_REQUIRES_SEPARATE_REPAIR_AND_DATA_GATES")
+        self.assertEqual(
+            contract["status"],
+            "WEATHER_ACTIVE_HERMES_SOURCE_TARGET_REGISTERED_LIVE_CUTOVER_REQUIRED",
+        )
         self.assertEqual(contract["shared_contract"]["revision"], SHARED_SHA)
         self.assertTrue(contract["registry"]["execution_enabled_in_source"])
         self.assertEqual(contract["registry"]["initial_targets"], 1)
+        self.assertEqual(contract["registry"]["current_reviewed_targets"], 2)
         self.assertTrue(contract["registry"]["target_adoption_requires_tracked_source_change"])
         reviewed = contract["registry"]["reviewed_targets"]
-        self.assertEqual(len(reviewed), 1)
+        self.assertEqual(len(reviewed), 2)
         self.assertEqual(reviewed[0]["target_alias"], "rozkalns-weather-public-rpi5")
         self.assertEqual(
             reviewed[0]["consumer_contract_revision"],
             "606981d10eee59d13b802f6a682abf1daa2aa8a5",
         )
         self.assertEqual(reviewed[0]["wait_timeout_seconds"], 180)
+        self.assertEqual(reviewed[1]["target_alias"], "hermes-deals")
+        self.assertEqual(
+            reviewed[1]["consumer_contract_revision"],
+            "13f9fb69b9576d8e97ab3a85334927f3c576ca1c",
+        )
+        self.assertEqual(reviewed[1]["compatibility_prerequisite_issue"], 690)
+        self.assertEqual(reviewed[1]["source_registration_issue"], 692)
+        self.assertEqual(
+            reviewed[1]["compose_sha256"],
+            "644dc72da5dc13ee532dd29693db31358451669bb44de4df4b62c41736903f1c",
+        )
+        self.assertEqual(reviewed[1]["liveness_url"], "http://127.0.0.1:9128/api/health")
+        self.assertEqual(reviewed[1]["readiness_state"], "not-applicable")
+        self.assertEqual(reviewed[1]["wait_timeout_seconds"], 180)
+        self.assertEqual(reviewed[1]["registry_pull_profile"], "public-anonymous-pull")
         self.assertTrue(contract["activation"]["separate_exact_live_cutover_required"])
         self.assertFalse(contract["activation"]["source_merge_installs_or_enables_runtime"])
+        self.assertTrue(
+            contract["activation"]["hermes_target_installation_requires_separate_exact_live_cutover"]
+        )
+        self.assertTrue(
+            contract["activation"]["hermes_private_runtime_config_provisioning_requires_separate_exact_authority"]
+        )
         bridge = contract["schema_init_bridge"]
         self.assertEqual(bridge["execution_user"], "rozkalns-simple-deployer")
         self.assertEqual(bridge["docker_state_root"], "/var/lib/rozkalns-simple-deployer")
@@ -458,6 +510,7 @@ class ContractTests(unittest.TestCase):
         self.assertIn("separate exact LIVE authorization", doc)
         self.assertIn("execution_enabled: true", doc)
         self.assertIn("rozkalns-weather-public-rpi5", doc)
+        self.assertIn("hermes-deals", doc)
         self.assertIn("Target adoption remains a tracked source review", doc)
         self.assertIn("Source readiness is not LIVE authority", doc)
 

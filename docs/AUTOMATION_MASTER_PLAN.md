@@ -30,7 +30,7 @@ Bare `START`, `START RPi5_main`, `SYNC RPi5_main` and `turpini` remain FAST-LANE
 
 GitHub is canonical for source, policy, tests, CI, reviews, issues, PRs and continuity.
 
-FAST-LANE may perform safe repository reads and source/docs/tests work through Ready. Merge remains explicit owner authority unless an exact current AUTO-RUN FULL issue activation grants issue-scoped merge authority under the repository-local contract.
+FAST-LANE may perform safe repository reads and source/docs/tests work through Ready. Merge remains explicit owner authority under the project-level operating contract, even when repository-local automation can otherwise carry an issue through source convergence.
 
 ### Runtime/LIVE work
 
@@ -133,70 +133,65 @@ Auto-Live v1 is retained as an architectural foundation for post-merge exact-tar
 
 Canonical A0 contract: `docs/AUTO_LIVE_V1.md` + `ops/deploy/auto-live-v1.json`. Roadmap/DoD: issue #421.
 
-The A0/A2 source contracts remain useful for exact source/target identity, full production-baseline-to-target classification, target serialization, least privilege and first-activation owner-gate semantics. Historical Auto-Live source state with `execution_enabled=false` must not be interpreted as current runtime activation.
-
-The retained A4 source-contract compatibility state is historical/non-authorizing and exists so current validators can distinguish durable policy state from volatile candidate SHAs:
+The retained A4 source-contract compatibility state is historical/non-authorizing:
 
 `AUTO_LIVE_TRACK_Y_CURRENT=A4_DISCOVERY_READY_NO_CANARY_SELECTED`  
 `A4_DISCOVERY_CONTRACT=ops/deploy/auto-live-a4-candidate-discovery.json`  
 `A4_VOLATILE_CANDIDATE_SHA_PERSISTED=false`
 
-These A4 markers do not select the current deployment lane, do not activate Auto-Live, and do not override current fresh Weather continuity.
+These markers do not select the current deployment lane or activate Auto-Live.
 
-SIMPLE-DEPLOY v1 is now the concrete shared application-release profile for compatible Docker/Compose services. Where old Auto-Live manifests or controllers conflict with the accepted SIMPLE-DEPLOY consumer/runtime contract, reconcile them as compatibility/history rather than creating another deployment engine.
+SIMPLE-DEPLOY v1 is the concrete shared application-release profile for compatible Docker/Compose services. Where old Auto-Live manifests or controllers conflict with the accepted SIMPLE-DEPLOY consumer/runtime contract, reconcile them as compatibility/history rather than creating another deployment engine.
 
-## 5. Current cross-project priority — SIMPLE-DEPLOY v1 Weather public acceptance
+## 5. Current cross-project priority — SIMPLE-DEPLOY v1 first non-Weather reuse
 
-The one-time Weather SIMPLE-DEPLOY cutover, first standing release proof, public corpus bootstrap/integrity and recurring public ingest are now accepted historical/runtime evidence. The current public Weather focus is truthful current-observation freshness/provenance plus consumer UI acceptance. Fresh GitHub state and the latest relevant #191 continuity receipt remain authoritative over point-in-time values in this plan.
+Weather public acceptance is now **COMPLETE**. `rozkalns_weather#176` closed after fresh post-#177 runtime/API evidence and real consumer UI acceptance proved canonical DWD `station_05480` current-now behavior, populated forecast surfaces and truthful presentation. The older Weather freshness/UI wording in historical issues and receipts must not be treated as a current blocker.
 
-### Accepted source/runtime chain
+The current cross-project priority is the first non-Weather reuse proof through Hermes Deals:
 
-- shared SIMPLE-DEPLOY: `ops-workflows@e05ed760791a127c7c9628696806ef39c9fe329c`;
-- initial Weather cutover consumer: `rozkalns_weather@606981d10eee59d13b802f6a682abf1daa2aa8a5`;
-- historical #672 source-only deterministic installer/principal prerequisite merged via PR #673, including the reviewed principal provisioning path;
-- #674 sequencing work merged and enabled the reviewed Phase A/B/C path;
-- Phase A install-only, post-install Phase-B repair, Phase B schema-init and Phase C activation all completed under their separate consumed owner authorizations;
-- Phase B preserved `rozkalns-weather-public_weather_data` and changed `/ready` from `503` to `200`;
-- Phase C completed the first bounded reconciliation and activated the reviewed generic SIMPLE-DEPLOY scheduler for the fixed Weather target;
-- the first genuine post-cutover standing release `rozkalns_weather@789a79820807829cc9b057d9ffafc56e0e41afe9` reached the fixed target through pinned `ops-workflows@e05ed760791a127c7c9628696806ef39c9fe329c` and recorded `/health=200` plus `/ready=200`;
-- Weather public-data companion source #682 / PR #683 merged at `RPi5_main@a78d53404f1e614386550f77c6635881b73cc88e`;
-- source reconciliation #684 / PR #685 merged at `RPi5_main@edc5003fba34523e4b400fc18e2a5446c3928a93`, separating historical bootstrap source pinning from post-bootstrap recurring-enable semantics and providing deterministic installed-artifact reconciliation;
-- later separately owner-authorized runtime work reconciled the installed companion, completed the production public corpus/integrity path and enabled recurring public ingest;
-- fresh read-only acceptance receipt #191 comment `5779640396` on 2026-09-22 observed `rozkalns-weather-public-ingest.timer` enabled/active/waiting, a successful oneshot exit `0`, `/health=200`, `/ready=200`, corpus integrity `ok=true`, populated corpus, and populated `station_05480`-scoped hourly/daily forecasts.
+- shared SIMPLE-DEPLOY remains pinned to accepted `ops-workflows@e05ed760791a127c7c9628696806ef39c9fe329c`;
+- Weather remains the activated standing canary target;
+- Hermes consumer caller/contract was accepted at `rozkalnsandris/hermes-deals@13f9fb69b9576d8e97ab3a85334927f3c576ca1c`;
+- Hermes compatibility prerequisite #690 / PR #691 is merged into `RPi5_main`;
+- issue #692 is the current source-only static target-binding outcome;
+- after #692 source merge and exact-main verification, Hermes still requires a separate exact host materialization/cutover/E2E gate before it is an activated target.
 
-These receipts do not create reusable authority for database/data recovery, destructive cleanup, credentials, network/Cloudflare changes, private-provider activation or unrelated host control. Consumed one-shot authorizations remain non-reusable.
+No source registration, tracker update or master-plan update grants LIVE authority.
 
-### Current exact Weather gate
+### Accepted Weather source/runtime chain
 
-`RPi5_main#669` is historical one-time cutover metadata. Its Phase A/B/C Definition of Done is satisfied; stale issue text must not be interpreted as reopening or reauthorizing those gates.
+The following are completed historical/accepted evidence rather than gates to rerun:
 
-The standing ordinary reconciliation contract is active only for the already-adopted fixed target `rozkalns-weather-public-rpi5` and eligible `AUTO_DEPLOY_SAFE` releases within the reviewed static target contract.
+- one-time Weather SIMPLE-DEPLOY Phase A/B/C cutover;
+- historical #672 source-only deterministic installer/principal prerequisite completed with reviewed principal provisioning;
+- first genuine standing `AUTO_DEPLOY_SAFE` Weather release proof;
+- public-data companion source/reconciliation;
+- production public corpus bootstrap/integrity;
+- recurring public-ingest activation and read-only verification;
+- DWD current-observation provenance correction;
+- dedicated exact-station current-now source adoption;
+- final public API/runtime/UI acceptance under `rozkalns_weather#176`.
 
-Current sequence from this checkpoint:
+Consumed one-shot Weather authorizations remain non-reusable. Weather acceptance does not authorize database/data recovery, destructive cleanup, credentials, network/Cloudflare changes, private-provider activation or unrelated host control.
+
+### Current SIMPLE-DEPLOY sequence
 
 ```text
-one-time Weather SIMPLE-DEPLOY Phase A/B/C cutover — COMPLETE
--> first genuine Weather AUTO_DEPLOY_SAFE standing release proof — COMPLETE
--> Weather public-data companion source/reconciliation — COMPLETE
--> one-time public corpus bootstrap + integrity — COMPLETE
--> recurring public-ingest timer — ACTIVE / READ-ONLY VERIFIED
--> resolve/understand DWD current-observation freshness + provenance
--> verify truthful consumer UI with real provider/current/corpus evidence
--> complete public Weather acceptance when its own DoD passes
--> migrate/test additional compatible consumers when explicitly selected
+shared SIMPLE-DEPLOY policy/workflow — COMPLETE
+-> Weather static target + one-time activation — COMPLETE
+-> Weather standing release proof — COMPLETE
+-> Weather public data/runtime/UI acceptance — COMPLETE
+-> Hermes consumer SIMPLE-DEPLOY contract — COMPLETE
+-> Hermes RPi5 compatibility prerequisite #690/#691 — COMPLETE
+-> Hermes static source target binding #692 — CURRENT SOURCE OUTCOME
+-> exact-main verification after source merge
+-> separate exact Hermes host materialization/cutover + first reconciliation/E2E proof
+-> migrate/test another compatible consumer as required for reuse confidence
+-> declare SIMPLE-DEPLOY stable/default only after reuse criteria are actually satisfied
+-> ONLY THEN revisit ops-workflows#96 Queue vNext
 ```
 
-Fresh read-only evidence on 2026-09-22 found `/api/current` correctly bound to canonical DWD CDC `station_05480`, but its newest stored observation was `2026-09-21T23:00:00Z`; provider health reported `dwd_observations = ok / unknown / SOURCE_TIME_MISSING`. This is a remaining acceptance concern, not permission to rerun bootstrap or scheduler activation. The consumer UI source already contains explicit stale semantics and must continue to avoid presenting old observations as current-now.
-
-WeatherNext/private BigQuery remains a separate optional research lane. It is not required for public-runtime health and is not authorized by public Weather receipts.
-
-### Historical Weather v10 path
-
-`RPi5_main#663` is CLOSED/not_planned and superseded for steady-state ordinary Weather deployment.
-
-The Weather-specific successor broker / registration / operator / queue / JIT / Composite path remains historical evidence only. Do not execute it merely because old source, issues or handoff text still exists.
-
-No new v11/v12 successor to that ordinary-release control plane should be created while Weather fits SIMPLE-DEPLOY.
+WeatherNext/private BigQuery remains a separate optional research lane and is not required for public-runtime health or Hermes adoption.
 
 ## 6. SIMPLE-DEPLOY steady-state contract
 
@@ -224,39 +219,60 @@ Rules:
 - build once; RPi5 does not rebuild application source during ordinary deployment;
 - mutable production tag/channel is discovery only;
 - immutable resolved digest is deployment identity;
-- one target is serialized at a time;
+- targets are independently serialized;
 - persistent volumes/data are preserved;
 - ordinary app deploy does not initialize, migrate, backfill, restore, delete or clean databases/corpora;
 - ordinary app deploy does not mutate Cloudflare/network/secrets/private providers;
 - failure after mutation is fail-closed and does not authorize fallback to an old deployment framework.
 
-## 7. Weather acceptance sequence after #669
+## 7. Weather acceptance — completed historical gate
 
-The one-time cutover, standing release proof and public DATA lane have advanced to recurring operation. The current acceptance sequence is:
+The Weather acceptance chain is complete:
 
 1. **COMPLETE** — fixed SIMPLE-DEPLOY Weather target activated and standing ordinary release path proven;
-2. **COMPLETE** — `/health=200` and `/ready=200` accepted after reconciliation and again in later read-only evidence;
-3. **COMPLETE** — #682/PR #683 public-data companion source plus #684/PR #685 source reconciliation;
-4. **COMPLETE** — separately authorized installed-capability reconciliation and one-time production public corpus bootstrap/integrity path;
-5. **ACTIVE / READ-ONLY VERIFIED** — recurring public-ingest timer; 2026-09-22 evidence recorded an enabled/active timer and successful oneshot;
-6. **PASS at audit point** — corpus integrity `ok=true` and station-scoped hourly/daily forecast endpoints populated;
-7. **REMAINING ACCEPTANCE** — investigate/resolve canonical DWD `station_05480` current-observation freshness/provenance; latest sampled observation was stale and provider health reported `SOURCE_TIME_MISSING`;
-8. **REMAINING ACCEPTANCE** — verify the consumer UI truthfully renders real current/provider/corpus evidence, including stale-state behavior, before public Weather acceptance is closed.
+2. **COMPLETE** — `/health=200` and `/ready=200` accepted after reconciliation;
+3. **COMPLETE** — public-data companion source and source reconciliation;
+4. **COMPLETE** — installed-capability reconciliation and production public corpus bootstrap/integrity;
+5. **COMPLETE / STANDING** — recurring public-ingest timer activation and subsequent successful operation;
+6. **COMPLETE** — corpus integrity and station-scoped hourly/daily forecast surfaces;
+7. **COMPLETE** — canonical DWD `station_05480` current-observation source-time/provenance semantics, including dedicated current-now feed work;
+8. **COMPLETE** — real consumer UI acceptance in `rozkalns_weather#176`, including truthful freshness and official-warning separation.
 
-Deployment health/readiness and forecast corpus availability are necessary but not sufficient evidence for final consumer UI acceptance. Never fabricate freshness or silently substitute legacy station `10416` for canonical measured benchmark `05480`.
+Historical observations of stale data or `SOURCE_TIME_MISSING` are evidence of the problem that was resolved; they are not current runtime assertions.
 
-WeatherNext/private-home activation is not required for the first usable public Weather UI and remains separate.
+WeatherNext/private-home activation remains separate and optional.
 
 ## 8. Fleet rollout after Weather
 
-Weather has proved SIMPLE-DEPLOY end to end. Fleet reuse is eligible to proceed when explicitly selected, but it does not supersede remaining Weather current-observation/UI acceptance work. When fleet rollout is selected:
+Fleet reuse is now the selected current SIMPLE-DEPLOY lane.
 
-1. migrate at least one additional compatible Docker/Compose consumer;
-2. then migrate other compatible services one at a time;
-3. preserve per-service application/data invariants;
-4. use the same shared `ops-workflows` implementation and the same generic RPi5 deployer;
-5. avoid per-project deployment frameworks;
-6. declare SIMPLE-DEPLOY stable/default only after at least Weather plus one non-Weather consumer prove reuse.
+### Hermes Deals — first non-Weather consumer
+
+Hermes uses the same shared GitHub-side workflow and the same generic RPi5 reconciler rather than a new project-specific deployment engine.
+
+Accepted source facts:
+
+- consumer contract: `hermes-deals@13f9fb69b9576d8e97ab3a85334927f3c576ca1c`;
+- source compatibility prerequisite #690 / PR #691: COMPLETE;
+- RPi5-owned API-only adapter: `ops/deploy/simple-deploy-compose/hermes-deals-api.yml`;
+- target alias: `hermes-deals`;
+- liveness: `http://127.0.0.1:9128/api/health`;
+- readiness: `not-applicable`;
+- persistent database-volume identity: `hermes_deals_pgdata`;
+- private runtime config and host namespace remain separately LIVE-gated.
+
+Issue #692 adds the reviewed source target to the static registry and host contract. It does not install that registry, create host paths, provision private configuration or run Docker.
+
+After source merge/exact-main verification, a separate exact LIVE/cutover decision must prove minimum host materialization, target installation and first reconciliation/E2E before Hermes counts as activated reuse.
+
+### Reuse/stability rule
+
+1. prove Hermes source adoption and separately prove its live E2E cutover;
+2. migrate/test additional compatible consumers one at a time as needed to prove reuse beyond a one-off second target;
+3. preserve each service's data and application invariants;
+4. keep the generic executor shared and target configuration static;
+5. do not revive old project-specific control planes for ordinary releases;
+6. declare SIMPLE-DEPLOY stable/default only when Weather plus non-Weather reuse evidence satisfies the current program criteria.
 
 New compatible projects should bootstrap from the shared caller + manifest model rather than inventing deployment infrastructure.
 
@@ -266,7 +282,9 @@ New compatible projects should bootstrap from the shared caller + manifest model
 
 Do not implement or activate it in parallel with SIMPLE-DEPLOY rollout.
 
-Only after SIMPLE-DEPLOY is stable/default across intended compatible consumers may Queue vNext provide one explicit ordered activation such as:
+It remains **BLOCKED** until shared implementation, generic deployer, Weather E2E, non-Weather reuse, intended compatible-consumer migration/testing and stable ordinary-flow criteria are actually satisfied.
+
+Only after SIMPLE-DEPLOY is stable/default may Queue vNext provide one explicit ordered activation such as:
 
 ```text
 AUTO-RUN FULL QUEUE repo #1 #2 #3 #4
@@ -276,27 +294,23 @@ AUTO-RUN FULL QUEUE repo #1 #2 #3 #4
 ...
 ```
 
-Normal successful items should then advance without another owner approval between them. Real scope/risk/CI/runtime failures still STOP and require owner input. Sensitive DB/secret/network/host-control operations remain separate.
-
-Current Queue v1/A1 or historical Simple LIVE text must not be interpreted as already granting this future vNext authority.
+Sensitive DB/secret/network/host-control operations remain separate even if Queue vNext is later activated.
 
 ## 10. Other active architecture programs
 
 ### Owner-authorized pull deploy executor — #236
 
-#236 remains a valid trust-boundary/architecture roadmap and historical source for deterministic owner-authorized operations. It does not override the current Weather public acceptance lane.
+#236 remains a valid trust-boundary/architecture roadmap and historical source for deterministic owner-authorized operations. It does not override the selected SIMPLE-DEPLOY fleet-adoption lane.
 
-Use its owner identity, replay, exact source/target, fail-closed and static-operation principles where they remain applicable, but do not revive project-specific old Weather broker/JIT execution as steady state.
+Use its owner identity, replay, exact source/target, fail-closed and static-operation principles where applicable, but do not revive project-specific old Weather or Hermes broker/JIT execution as the ordinary release path.
 
 ### AUTO-RUN FULL controller — #295
 
-#295 is durable controller state for explicit issue-scoped AUTO-RUN FULL. Bare START/continuation never infers FULL from controller state.
+#295 is the aggregate durable controller view for explicit issue-scoped AUTO-RUN FULL. Issue-local activation receipts remain authoritative per lane. Bare START/continuation never infers FULL from controller state.
 
 ### Hermes residual migration
 
-Hermes migration history and residual work remain valid backlog/program state. It may proceed only when it is the explicitly selected current lane. It does not automatically outrank the accepted Weather public acceptance lane merely because historical Phase 4 was once marked incomplete.
-
-The old Phase 4 detailed chronology remains available in Git history and #191. Historical evidence is intentionally not duplicated as current mutable state in this concise plan.
+Older Hermes Phase-4/control-plane issues such as #472 remain separate historical/backlog architecture. They must not be repurposed as an alternative ordinary deployment framework now that Hermes fits the SIMPLE-DEPLOY application-release profile.
 
 ## 11. Historical phase ledger
 
@@ -315,38 +329,34 @@ Do not use historical SHAs in this ledger as current source/runtime identity.
 ## 12. Current canonical sequencing
 
 ```text
-1. Phase A install-only — COMPLETE; authority consumed
-2. Phase-B correction/repair + schema-init against preserved weather_data — COMPLETE; /ready=200; authorities consumed
-3. Phase-C activation + first bounded reconciliation — COMPLETE; standing ordinary target activated; authority consumed
-4. first genuine newly merged Weather AUTO_DEPLOY_SAFE release — COMPLETE
-5. Weather public-data companion source #682/#683 — COMPLETE
-6. Weather data companion source reconciliation #684/#685 — COMPLETE
-7. separately authorized installed-capability reconciliation + one-time public corpus bootstrap/integrity — COMPLETE
-8. recurring public-ingest timer enable/start — COMPLETE; recurring operation READ-ONLY VERIFIED on 2026-09-22
-9. DWD station_05480 measured-current freshness/provenance — CURRENT PUBLIC ACCEPTANCE WORK
-10. truthful consumer UI/provider/corpus acceptance — CURRENT PUBLIC ACCEPTANCE WORK
-11. migrate/test additional compatible consumers when explicitly selected
+1. Weather Phase A install-only — COMPLETE; authority consumed
+2. Weather Phase-B correction/repair + schema-init — COMPLETE; authorities consumed
+3. Weather Phase-C activation + first bounded reconciliation — COMPLETE; authority consumed
+4. first genuine Weather AUTO_DEPLOY_SAFE release — COMPLETE
+5. Weather public-data companion source/reconciliation — COMPLETE
+6. production public corpus bootstrap/integrity — COMPLETE
+7. recurring public ingest — COMPLETE / STANDING
+8. DWD station_05480 provenance/current-now + real UI acceptance — COMPLETE (#176)
+9. Hermes SIMPLE-DEPLOY consumer contract — COMPLETE
+10. Hermes RPi5 compatibility prerequisite #690/#691 — COMPLETE
+11. Hermes static source target binding #692 — CURRENT SOURCE OUTCOME
+12. exact-main verification after #692 merge — NEXT SOURCE GATE
+13. separate exact Hermes host materialization/cutover + first reconciliation/E2E — LATER LIVE GATE
+14. further compatible-consumer reuse/stability proof
+15. only after stable/default criteria: ops-workflows#96 Queue vNext
 ```
 
 If fresh GitHub or host evidence invalidates an accepted receipt, reclassify before action. Never rerun a consumed one-shot gate, improvise a Docker/config path, or treat a source merge as authority for a separately sensitive mutation class.
 
 ## 13. Current authorization state
 
-Current durable authority state has no inferred merge authority, no active AUTO-RUN FULL authority and no fresh one-shot LIVE authority. Bare FAST continuation may perform source/docs/tests work only within the current command through Ready; merge remains explicit owner authority.
+No plan, tracker or source merge grants inferred LIVE authority.
 
-The completed cutover, data bootstrap and recurring-ingest activation authorizations were consumed by their completed attempts and are non-reusable. Their historical success does not grant authority to rerun them.
+The current Hermes source-adoption outcome is source/docs/tests only. Its eventual source merge will not install the target on the running RPi5, materialize `/etc` or `/var/lib` state, provision private runtime configuration, run Docker/systemd, or authorize database/network/secret changes.
 
-The successful Weather cutover activated only the reviewed standing ordinary `AUTO_DEPLOY_SAFE` reconciliation contract for the already-adopted static Weather target. That standing contract does **not** authorize:
+The completed Weather cutover/data/UI authorizations were consumed by their completed attempts and are non-reusable. The successful Weather cutover activated only the reviewed standing ordinary `AUTO_DEPLOY_SAFE` reconciliation contract for the already-adopted static Weather target.
 
-- merge of any PR without the exact authority required by the active repository lane;
-- database/schema/data migration, destructive recovery, corpus rewrite/backfill replay or scheduler reconfiguration;
-- target/registry/Compose/service identity widening outside reviewed source;
-- unrelated Docker/systemd/host-control, package or filesystem-permission mutation;
-- secrets/credentials/private-provider changes;
-- Cloudflare/DNS/network mutation;
-- retry, cleanup, rollback or alternate recovery after a fail-closed ordinary deployment error unless a separately reviewed recovery contract authorizes it.
-
-Fresh read-only runtime evidence may verify state, but it never creates mutation authority. Any new data repair, timer/systemd change, private-provider activation or other sensitive mutation requires the exact current owner gate.
+Any new target cutover, data repair, timer/systemd change, private-provider activation or other sensitive mutation requires the exact current owner gate.
 
 ## 14. Continuity references
 
@@ -354,18 +364,19 @@ For fresh state, read in this order when relevant:
 
 1. current `AGENTS.md` and routing policy;
 2. current `docs/AUTOMATION_MASTER_PLAN.md`;
-3. #295 controller;
+3. #295 aggregate controller;
 4. #103 umbrella tracker;
-5. latest relevant #191 handoff/comment, including Weather public-data acceptance receipt `5779640396`;
-6. exact selected work item from fresh bootstrap; #669 is historical cutover metadata, #682/#684 are completed source/data-lane history, and #688 is the current continuity reconciliation issue until merged;
-7. exact current `main` and required CI/review/ruleset state;
-8. minimum-sufficient live evidence only when the exact current gate requires it.
+5. latest relevant #191 handoff/comment;
+6. accepted Weather public acceptance evidence in `rozkalns_weather#176`;
+7. Hermes compatibility prerequisite #690/#691 and current source-adoption issue #692;
+8. exact current `main` and required CI/review/ruleset state;
+9. minimum-sufficient live evidence only when the exact current gate requires it.
 
-GitHub source state never proves live deployment/runtime state.
+Closed #688 is historical continuity work, not a current gate. GitHub source state never proves live deployment/runtime state.
 
 ## 15. Historical compatibility appendix — Hermes Phase 4 validators
 
-This appendix preserves exact historical section identifiers and source-state markers that repository regression tests use to prove ordering and non-expansion of the old Hermes Phase 4 trust boundary. It is **historical compatibility evidence only**. None of these sections selects the current lane, proves current host state, grants LIVE authority, or overrides the current Weather public acceptance lane.
+This appendix preserves exact historical section identifiers and source-state markers that repository regression tests use to prove ordering and non-expansion of the old Hermes Phase 4 trust boundary. It is **historical compatibility evidence only**. None of these sections selects the current lane, proves current host state, grants LIVE authority, or overrides the current SIMPLE-DEPLOY fleet-adoption lane.
 
 ## Current supersession — Hermes source auth + bounded helper launch gate (2026-09-04)
 
@@ -403,8 +414,8 @@ Historical validator markers for the runtime-adapter source checkpoint:
 `GENUINE_HERMES_AUDIT_AUTHORIZED=false`
 `PRODUCTION_MUTATION_STARTED=false`
 
-These values are retained solely for source-contract regression compatibility. They are not current-state assertions and do not alter current Weather public-acceptance sequencing.
+These values are retained solely for source-contract regression compatibility. They are not current-state assertions and do not alter current SIMPLE-DEPLOY fleet sequencing.
 
 ### SIMPLE-DEPLOY Weather canary sequencing correction (#674)
 
-Historical sequencing correction: the original canary activation was split to preserve strict readiness and Weather data authority: `install-only -> separate exact schema-init gate -> /ready=200 -> SIMPLE-DEPLOY activation/first reconciliation -> later corpus + ingest`. That correction remains important historical safety evidence, but every named one-time stage through recurring-ingest activation has since completed under separately accepted gates. It must not be interpreted as a current instruction to rerun those mutations.
+Historical sequencing correction: the original canary activation was split to preserve strict readiness and Weather data authority: `install-only -> separate exact schema-init gate -> /ready=200 -> SIMPLE-DEPLOY activation/first reconciliation -> later corpus + ingest`. Every named one-time stage through final public acceptance has since completed under separately accepted gates. It must not be interpreted as a current instruction to rerun those mutations.

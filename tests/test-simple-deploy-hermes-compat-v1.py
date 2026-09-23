@@ -54,7 +54,7 @@ class HermesSimpleDeployCompatibilityTests(unittest.TestCase):
         self.assertEqual(self.contract["issue"], 690)
         self.assertEqual(
             self.contract["status"],
-            "SOURCE_COMPATIBILITY_ONLY_TARGET_NOT_REGISTERED",
+            "SOURCE_COMPATIBILITY_TARGET_REGISTERED_NOT_INSTALLED",
         )
         self.assertEqual(
             self.contract["consumer"],
@@ -66,7 +66,9 @@ class HermesSimpleDeployCompatibilityTests(unittest.TestCase):
                 "architecture": "linux/arm64",
             },
         )
-        self.assertFalse(self.contract["target_registration_performed"])
+        self.assertEqual(self.contract["source_target_registration_issue"], 692)
+        self.assertTrue(self.contract["target_registration_performed"])
+        self.assertFalse(self.contract["target_installation_performed"])
         self.assertFalse(self.contract["host_runtime_mutation_performed"])
         self.assertFalse(self.contract["source_merge_authorizes_live"])
 
@@ -144,15 +146,17 @@ class HermesSimpleDeployCompatibilityTests(unittest.TestCase):
                 "command": False,
             },
         )
-        # #690 must not widen the generic reconciler CLI/runtime authority surface.
+        # #690/#692 must not widen the generic reconciler CLI/runtime authority surface.
         for marker in ("--project-directory", "--env-file", "--no-deps"):
             with self.subTest(marker=marker):
                 self.assertNotIn(marker, self.executor)
 
-    def test_hermes_target_is_not_registered_by_prerequisite(self) -> None:
+    def test_hermes_target_registration_is_static_and_not_live(self) -> None:
         aliases = [target["target_alias"] for target in self.targets["targets"]]
-        self.assertEqual(aliases, ["rozkalns-weather-public-rpi5"])
-        self.assertNotIn("hermes-deals", aliases)
+        self.assertEqual(aliases, ["rozkalns-weather-public-rpi5", "hermes-deals"])
+        self.assertTrue(self.contract["target_registration_performed"])
+        self.assertFalse(self.contract["target_installation_performed"])
+        self.assertFalse(self.contract["host_runtime_mutation_performed"])
 
 
 if __name__ == "__main__":
