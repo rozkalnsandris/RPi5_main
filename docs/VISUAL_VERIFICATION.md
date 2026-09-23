@@ -63,7 +63,7 @@ Verified on 2026-09-23 against the weather UI at `http://127.0.0.1:9180`:
 The verification evidence was created under:
 
 ```text
-/home/andris/.local/share/ui-proof/weather-20260923-playwright-verify/
+~/.local/share/ui-proof/weather-20260923-playwright-verify/
 ```
 
 That run contained one desktop browser-console `404` resource message whose exact resource was not identified. It did not produce a `pageerror` and did not prevent either render. Treat future console/resource errors as target-specific evidence to inspect, not as permission to ignore them.
