@@ -1,0 +1,50 @@
+name: WeatherNext private application staging source
+
+on:
+  pull_request:
+    paths:
+      - "ops/lib/deploy_executor/weather_private_application_staging.py"
+      - "ops/lib/deploy_executor/weather_private_application_staging_runtime.py"
+      - "ops/lib/deploy_executor/weather_private_privileged_dispatch.py"
+      - "ops/bin/rpi5-weathernext-private-host-privileged-install"
+      - "ops/deploy/weather-private-application-stage.json"
+      - "tests/test-deploy-executor-weather-private-application-staging.py"
+      - "docs/WEATHERNEXT_PRIVATE_APPLICATION_STAGING.md"
+      - ".github/workflows/weathernext-private-application-staging-source.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "ops/lib/deploy_executor/weather_private_application_staging.py"
+      - "ops/lib/deploy_executor/weather_private_application_staging_runtime.py"
+      - "ops/lib/deploy_executor/weather_private_privileged_dispatch.py"
+      - "ops/bin/rpi5-weathernext-private-host-privileged-install"
+      - "ops/deploy/weather-private-application-stage.json"
+      - "tests/test-deploy-executor-weather-private-application-staging.py"
+      - "docs/WEATHERNEXT_PRIVATE_APPLICATION_STAGING.md"
+      - ".github/workflows/weathernext-private-application-staging-source.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  source-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate WeatherNext private application staging source
+        run: |
+          set -euo pipefail
+          python3 ./tests/test-deploy-executor-weather-private-application-staging.py
+          python3 ./tests/test-deploy-executor-weather-private-bigquery-host-runtime.py
+          python3 -m py_compile \
+            ops/lib/deploy_executor/weather_private_application_staging.py \
+            ops/lib/deploy_executor/weather_private_application_staging_runtime.py \
+            ops/lib/deploy_executor/weather_private_privileged_dispatch.py \
+            ops/bin/rpi5-weathernext-private-host-privileged-install

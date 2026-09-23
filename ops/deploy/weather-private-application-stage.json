@@ -1,0 +1,46 @@
+{
+  "schema": "rpi5.weathernext-private-application-stage-source.v1",
+  "implementation_issue": 702,
+  "operation_id": "rpi5.weathernext-private-application-stage.v1",
+  "target_alias": "rpi5-weathernext-private-application-stage",
+  "source_repository": "rozkalnsandris/rozkalns_weather",
+  "reviewed_origin": "https://github.com/rozkalnsandris/rozkalns_weather.git",
+  "stage_id": "rozkalns-weather.weathernext-private-application-stage.v1",
+  "stage_root": "/var/lib/rpi5-deploy/weather-private-application",
+  "marker": "/var/lib/rpi5-deploy/weather-private-application/source-stage.json",
+  "caller_authority": [
+    "authorization_issue_number"
+  ],
+  "mutation_budget": [
+    {
+      "category": "git.weathernext-private-application-stage-clone-checkout",
+      "max_operations": 1
+    },
+    {
+      "category": "filesystem.weathernext-private-application-stage-marker-write",
+      "max_operations": 1
+    },
+    {
+      "category": "filesystem.weathernext-private-application-stage-publish",
+      "max_operations": 1
+    }
+  ],
+  "rollback_policy": "NONE",
+  "exact_existing_state_is_noop": true,
+  "conflicting_state_fails_closed": true,
+  "automatic_retry": false,
+  "automatic_cleanup": false,
+  "automatic_rollback": false,
+  "private_runtime_materialization_allowed": false,
+  "google_action_allowed": false,
+  "analytics_hub_action_allowed": false,
+  "bigquery_action_allowed": false,
+  "sqlite_write_allowed": false,
+  "docker_action_allowed": false,
+  "systemd_action_allowed": false,
+  "package_manager_action_allowed": false,
+  "network_control_action_allowed": false,
+  "shared_registry_modified": false,
+  "source_merge_authorizes_live": false,
+  "production_mutation_started": false
+}
