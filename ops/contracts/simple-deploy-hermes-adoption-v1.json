@@ -1,0 +1,61 @@
+{
+  "schema": "rozkalns.rpi5-main.simple-deploy-hermes-adoption.v1",
+  "schema_version": 1,
+  "issue": 698,
+  "status": "SOURCE_ADOPTION_PATH_REVIEWED_NOT_LIVE",
+  "baseline": {
+    "identity_path": "/etc/rozkalns-simple-deployer/identity.json",
+    "identity_source_sha": "b57ed42d5eb01f15b62c1f53459ffe0539a57d9c",
+    "registry_path": "/etc/rozkalns-simple-deployer/targets.json",
+    "registry_sha256": "c8b97e3274b732cdd0cdd2ddedb79515ebd9a6a433b094443594bdd8f74114ad",
+    "weather_compose_path": "/etc/rozkalns-simple-deployer/compose/rozkalns-weather-public.yml",
+    "weather_compose_sha256": "80e2b47e4ed039c38285094e0b273fbc884f0a34ff34d8b201d8e93323af1f32",
+    "executor_path": "/usr/local/libexec/rozkalns-simple-deployer/simple_deploy_v1.py",
+    "public_targets_path_is_not_canonical": true
+  },
+  "desired": {
+    "registry_source": "ops/deploy/simple-deploy-targets-v1.json",
+    "registry_sha256": "75660aefcf82bbc2b0b9d91cada515d9777804a7be2752f86d9d071c0ad9dbba",
+    "target_aliases": [
+      "rozkalns-weather-public-rpi5",
+      "hermes-deals"
+    ],
+    "hermes_compose_source": "ops/deploy/simple-deploy-compose/hermes-deals-api.yml",
+    "hermes_compose_sha256": "644dc72da5dc13ee532dd29693db31358451669bb44de4df4b62c41736903f1c"
+  },
+  "installed_target_delta": [
+    {
+      "operation": "create",
+      "path": "/etc/rozkalns-simple-deployer/compose/hermes-deals-api.yml"
+    },
+    {
+      "operation": "replace",
+      "path": "/etc/rozkalns-simple-deployer/targets.json"
+    }
+  ],
+  "staging": {
+    "same_filesystem": true,
+    "fixed_paths": [
+      "/etc/rozkalns-simple-deployer/compose/.hermes-deals-api.yml.adoption-v1.staged",
+      "/etc/rozkalns-simple-deployer/.targets.json.hermes-adoption-v1.staged"
+    ],
+    "automatic_retry": false,
+    "automatic_rollback": false,
+    "automatic_cleanup_after_mutation": false
+  },
+  "authority": {
+    "source_docs_tests_only": true,
+    "merge_authorizes_live": false,
+    "docker": false,
+    "systemd": false,
+    "database_or_data": false,
+    "secrets_or_credentials": false,
+    "cloudflare_or_network": false,
+    "arbitrary_path_or_command": false
+  },
+  "first_install": {
+    "entrypoint": "scripts/install-simple-deploy-v1.py",
+    "overloaded_as_upgrade": false,
+    "fail_closed_existing_target_semantics_preserved": true
+  }
+}

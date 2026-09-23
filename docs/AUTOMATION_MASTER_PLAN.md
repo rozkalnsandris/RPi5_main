@@ -152,9 +152,10 @@ The current cross-project priority is the first non-Weather reuse proof through 
 - shared SIMPLE-DEPLOY remains pinned to accepted `ops-workflows@e05ed760791a127c7c9628696806ef39c9fe329c`;
 - Weather remains the activated standing canary target;
 - Hermes consumer caller/contract was accepted at `rozkalnsandris/hermes-deals@13f9fb69b9576d8e97ab3a85334927f3c576ca1c`;
-- Hermes compatibility prerequisite #690 / PR #691 is merged into `RPi5_main`;
-- issue #692 is the current source-only static target-binding outcome;
-- after #692 source merge and exact-main verification, Hermes still requires a separate exact host materialization/cutover/E2E gate before it is an activated target.
+- Hermes compatibility prerequisite #690 / PR #691 is COMPLETE;
+- Hermes static source target binding #692 / PR #693 is COMPLETE;
+- issue #698 / PR #699 is the current source-only existing-install adoption outcome needed before any Hermes host cutover;
+- after #698 source merge and exact-main verification, Hermes still requires a separate exact host materialization/cutover/E2E gate before it is an activated target.
 
 No source registration, tracker update or master-plan update grants LIVE authority.
 
@@ -183,8 +184,9 @@ shared SIMPLE-DEPLOY policy/workflow — COMPLETE
 -> Weather public data/runtime/UI acceptance — COMPLETE
 -> Hermes consumer SIMPLE-DEPLOY contract — COMPLETE
 -> Hermes RPi5 compatibility prerequisite #690/#691 — COMPLETE
--> Hermes static source target binding #692 — CURRENT SOURCE OUTCOME
--> exact-main verification after source merge
+-> Hermes static source target binding #692/#693 — COMPLETE
+-> Hermes existing-install adoption source #698/#699 — CURRENT SOURCE OUTCOME
+-> exact-main verification after #698 merge
 -> separate exact Hermes host materialization/cutover + first reconciliation/E2E proof
 -> migrate/test another compatible consumer as required for reuse confidence
 -> declare SIMPLE-DEPLOY stable/default only after reuse criteria are actually satisfied
@@ -254,6 +256,8 @@ Accepted source facts:
 
 - consumer contract: `hermes-deals@13f9fb69b9576d8e97ab3a85334927f3c576ca1c`;
 - source compatibility prerequisite #690 / PR #691: COMPLETE;
+- static target binding #692 / PR #693: COMPLETE;
+- current existing-install adoption source: #698 / PR #699;
 - RPi5-owned API-only adapter: `ops/deploy/simple-deploy-compose/hermes-deals-api.yml`;
 - target alias: `hermes-deals`;
 - liveness: `http://127.0.0.1:9128/api/health`;
@@ -261,9 +265,9 @@ Accepted source facts:
 - persistent database-volume identity: `hermes_deals_pgdata`;
 - private runtime config and host namespace remain separately LIVE-gated.
 
-Issue #692 adds the reviewed source target to the static registry and host contract. It does not install that registry, create host paths, provision private configuration or run Docker.
+Issue #692 completed the reviewed source target registration. Issue #698 now defines the bounded fail-closed path for adopting that already-registered target into an existing Weather-only SIMPLE-DEPLOY host installation. Neither source outcome installs the target, creates host paths, provisions private configuration or runs Docker.
 
-After source merge/exact-main verification, a separate exact LIVE/cutover decision must prove minimum host materialization, target installation and first reconciliation/E2E before Hermes counts as activated reuse.
+After #698 source merge and exact-main verification, a separate exact LIVE/cutover decision must prove minimum host materialization, target installation and first reconciliation/E2E before Hermes counts as activated reuse.
 
 ### Reuse/stability rule
 
@@ -339,11 +343,12 @@ Do not use historical SHAs in this ledger as current source/runtime identity.
 8. DWD station_05480 provenance/current-now + real UI acceptance — COMPLETE (#176)
 9. Hermes SIMPLE-DEPLOY consumer contract — COMPLETE
 10. Hermes RPi5 compatibility prerequisite #690/#691 — COMPLETE
-11. Hermes static source target binding #692 — CURRENT SOURCE OUTCOME
-12. exact-main verification after #692 merge — NEXT SOURCE GATE
-13. separate exact Hermes host materialization/cutover + first reconciliation/E2E — LATER LIVE GATE
-14. further compatible-consumer reuse/stability proof
-15. only after stable/default criteria: ops-workflows#96 Queue vNext
+11. Hermes static source target binding #692/#693 — COMPLETE
+12. Hermes existing-install adoption source #698/#699 — CURRENT SOURCE OUTCOME
+13. exact-main verification after #698 merge — NEXT SOURCE GATE
+14. separate exact Hermes host materialization/cutover + first reconciliation/E2E — LATER LIVE GATE
+15. further compatible-consumer reuse/stability proof
+16. only after stable/default criteria: ops-workflows#96 Queue vNext
 ```
 
 If fresh GitHub or host evidence invalidates an accepted receipt, reclassify before action. Never rerun a consumed one-shot gate, improvise a Docker/config path, or treat a source merge as authority for a separately sensitive mutation class.
@@ -352,7 +357,7 @@ If fresh GitHub or host evidence invalidates an accepted receipt, reclassify bef
 
 No plan, tracker or source merge grants inferred LIVE authority.
 
-The current Hermes source-adoption outcome is source/docs/tests only. Its eventual source merge will not install the target on the running RPi5, materialize `/etc` or `/var/lib` state, provision private runtime configuration, run Docker/systemd, or authorize database/network/secret changes.
+The current Hermes existing-install adoption outcome #698 is source/docs/tests only. Its eventual source merge will not install the target on the running RPi5, materialize `/etc` or `/var/lib` state, provision private runtime configuration, run Docker/systemd, or authorize database/network/secret changes.
 
 The completed Weather cutover/data/UI authorizations were consumed by their completed attempts and are non-reusable. The successful Weather cutover activated only the reviewed standing ordinary `AUTO_DEPLOY_SAFE` reconciliation contract for the already-adopted static Weather target.
 
@@ -368,7 +373,7 @@ For fresh state, read in this order when relevant:
 4. #103 umbrella tracker;
 5. latest relevant #191 handoff/comment;
 6. accepted Weather public acceptance evidence in `rozkalns_weather#176`;
-7. Hermes compatibility prerequisite #690/#691 and current source-adoption issue #692;
+7. Hermes compatibility prerequisite #690/#691, completed static target binding #692/#693, and current existing-install adoption issue #698/#699;
 8. exact current `main` and required CI/review/ruleset state;
 9. minimum-sufficient live evidence only when the exact current gate requires it.
 

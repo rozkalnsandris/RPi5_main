@@ -1,0 +1,39 @@
+{
+  "schema": "rozkalns.rpi5-main.simple-deploy.targets.v1",
+  "schema_version": 1,
+  "execution_enabled": true,
+  "targets": [
+    {
+      "target_alias": "rozkalns-weather-public-rpi5",
+      "consumer_repository": "rozkalnsandris/rozkalns_weather",
+      "image": "ghcr.io/rozkalnsandris/rozkalns_weather",
+      "architecture": "linux/arm64",
+      "shared_workflow_sha": "e05ed760791a127c7c9628696806ef39c9fe329c",
+      "compose": {
+        "project": "rozkalns-weather-public",
+        "file": "rozkalns-weather-public.yml",
+        "file_sha256": "80e2b47e4ed039c38285094e0b273fbc884f0a34ff34d8b201d8e93323af1f32",
+        "service": "weather"
+      },
+      "health": {
+        "liveness_url": "http://127.0.0.1:9180/health",
+        "readiness_state": "required",
+        "readiness_url": "http://127.0.0.1:9180/ready"
+      },
+      "wait_timeout_seconds": 180,
+      "receipt_name": "rozkalns-weather-public-rpi5.json",
+      "persistent_volumes": [
+        "weather_data"
+      ],
+      "registry_pull_profile": "public-anonymous-pull",
+      "forbidden_operations": [
+        "database-schema-data-mutation",
+        "destructive-recovery",
+        "secrets-credentials-permissions",
+        "cloudflare-dns-network",
+        "private-provider-activation",
+        "unrelated-host-control"
+      ]
+    }
+  ]
+}
