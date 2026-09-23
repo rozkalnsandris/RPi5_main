@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import json
 from pathlib import Path
 from types import SimpleNamespace
 import subprocess
@@ -175,6 +176,50 @@ class WeatherNextPrivateHostInstallerGitTrustTests(unittest.TestCase):
             ):
                 backend.observe("a" * 40)
 
+    def test_manager_fetch_preserves_owner_global_credential_context_read_only(self):
+        manager = installer.ManagerCheckout(
+            path=Path("/home/fixture-owner/RPi5_main"),
+            username="fixture-owner",
+            uid=1001,
+            gid=1001,
+            home=Path("/home/fixture-owner"),
+        )
+        completed = subprocess.CompletedProcess(
+            args=(),
+            returncode=0,
+            stdout="",
+            stderr="",
+        )
+        with (
+            mock.patch.object(installer.os, "geteuid", return_value=installer.ROOT_UID),
+            mock.patch.object(installer.subprocess, "run", return_value=completed) as run_process,
+        ):
+            installer._run_manager_git(
+                manager,
+                "fetch",
+                "--no-tags",
+                "origin",
+                "refs/heads/main:refs/remotes/origin/main",
+                mutation=True,
+            )
+
+        argv = run_process.call_args.args[0]
+        self.assertEqual(
+            argv[:6],
+            (
+                "/usr/sbin/runuser",
+                "-u",
+                "fixture-owner",
+                "--",
+                "/usr/bin/env",
+                "-i",
+            ),
+        )
+        self.assertIn("GIT_CONFIG_NOSYSTEM=1", argv)
+        self.assertNotIn("GIT_CONFIG_GLOBAL=/dev/null", argv)
+        self.assertNotIn("config", argv)
+        self.assertFalse(run_process.call_args.kwargs["shell"])
+
     def test_manager_git_surface_forbids_hidden_repair(self):
         source = (
             ROOT
@@ -199,6 +244,30 @@ class WeatherNextPrivateHostInstallerGitTrustTests(unittest.TestCase):
         )
         self.assertTrue(readiness["manager_fetch_as_repository_owner"])
         self.assertTrue(readiness["manager_worktree_add_as_root_only"])
+
+    def test_contract_requires_boundary_refresh_before_backend_authority(self):
+        value = json.loads(
+            (
+                ROOT
+                / "ops/deploy/weather-private-bigquery-host-privileged-installer.json"
+            ).read_text(encoding="utf-8")
+        )
+        capability = value["capability_install"]
+        self.assertTrue(capability["manager_global_git_config_read_only_allowed"])
+        self.assertFalse(capability["manager_git_config_mutation_allowed"])
+
+        continuity = value["post_merge_continuity"]
+        self.assertTrue(continuity["installed_privileged_installer_imports_from_trusted_checkout"])
+        self.assertFalse(continuity["source_merge_updates_installed_privileged_installer"])
+        self.assertFalse(continuity["initial_bootstrap_is_upgrade_path"])
+        self.assertTrue(continuity["installed_boundary_exact_new_source_required_before_backend_queue"])
+        self.assertEqual(continuity["boundary_mismatch_state"], "SOURCE_PREREQUISITE_REQUIRED")
+        self.assertFalse(continuity["backend_ready_queue_allowed_before_boundary_rebind"])
+        self.assertFalse(continuity["backend_live_auth_allowed_before_boundary_rebind"])
+        self.assertEqual(
+            value["next_gate_after_merge"],
+            "SOURCE_PREREQUISITE_WEATHERNEXT_INSTALLER_BOUNDARY_UPGRADE_REBIND_THEN_FRESH_BACKEND_QUEUE_AND_LIVE_AUTH",
+        )
 
 
 if __name__ == "__main__":
