@@ -227,7 +227,6 @@ def _manager_env(manager: ManagerCheckout) -> Mapping[str, str]:
         "LOGNAME": manager.username,
         "GIT_TERMINAL_PROMPT": "0",
         "GIT_CONFIG_NOSYSTEM": "1",
-        "GIT_CONFIG_GLOBAL": "/dev/null",
     }
 
 
@@ -275,7 +274,6 @@ def _run_manager_git(
         "LC_ALL=C.UTF-8",
         "GIT_TERMINAL_PROMPT=0",
         "GIT_CONFIG_NOSYSTEM=1",
-        "GIT_CONFIG_GLOBAL=/dev/null",
         *git_argv,
     )
     return _bounded_run(
@@ -381,7 +379,7 @@ def _read_bounded(path: Path) -> bytes:
             opened.st_ino,
             opened.st_size,
         ):
-            _fail("reviewed source changed during bounded read")
+            _fail("reviewed source path changed during bounded read")
         return raw
     finally:
         os.close(fd)
