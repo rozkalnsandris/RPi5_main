@@ -158,10 +158,13 @@ class WeatherNextPrivateApplicationStageTests(unittest.TestCase):
         parameters = tuple(inspect.signature(runtime.run_privileged_application_stage).parameters)
         self.assertEqual(parameters, ("authorization_issue_number",))
 
-    def test_dispatch_is_fixed_allowlist_not_generic_execution(self) -> None:
+    def test_dispatch_is_fixed_allowlist_and_uses_canonical_auth_parser(self) -> None:
         source = DISPATCH_PATH.read_text(encoding="utf-8")
         self.assertIn("INSTALL_OPERATION_ID", source)
         self.assertIn("APPLICATION_STAGE_OPERATION_ID", source)
+        self.assertIn("accept_issue(", source)
+        self.assertIn("AUTHORIZATION_REPOSITORY_ID", source)
+        self.assertNotIn('json.loads(value["body"])', source)
         for forbidden in (
             "shell=True", "os.system", "eval(", "exec(", "--operation", "subprocess",
         ):
