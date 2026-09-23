@@ -13,12 +13,9 @@ LIB = TRUSTED_ROOT / "ops" / "lib"
 if str(LIB) not in sys.path:
     sys.path.insert(0, str(LIB))
 
-from deploy_executor.weather_private_bigquery_host_installer import (  # noqa: E402
-    WeatherNextPrivateHostInstallerError,
-    public_receipt,
-)
-from deploy_executor.weather_private_bigquery_host_installer_runtime import (  # noqa: E402
-    run_privileged_install,
+from deploy_executor.weather_private_privileged_dispatch import (  # noqa: E402
+    WeatherNextPrivatePrivilegedDispatchError,
+    run_privileged_request,
 )
 
 
@@ -34,13 +31,13 @@ def _issue_number(value: str) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Execute one canonical WeatherNext private host installation."
+        description="Execute one canonical WeatherNext private privileged request."
     )
     parser.add_argument("--issue-number", type=_issue_number, required=True)
     args = parser.parse_args(argv)
     try:
-        receipt = run_privileged_install(args.issue_number)
-    except WeatherNextPrivateHostInstallerError as exc:
+        receipt = run_privileged_request(args.issue_number)
+    except WeatherNextPrivatePrivilegedDispatchError as exc:
         print(
             json.dumps(
                 {
@@ -58,7 +55,7 @@ def main(argv: list[str] | None = None) -> int:
             json.dumps(
                 {
                     "status": "STOP",
-                    "reason": "WeatherNext private privileged install failed closed",
+                    "reason": "WeatherNext private privileged dispatch failed closed",
                     "production_mutation_started": "unknown_after_boundary_entry",
                 },
                 sort_keys=True,
@@ -66,7 +63,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return 1
-    print(json.dumps(dict(public_receipt(receipt)), sort_keys=True, separators=(",", ":")))
+    print(json.dumps(dict(receipt), sort_keys=True, separators=(",", ":")))
     return 0
 
 
