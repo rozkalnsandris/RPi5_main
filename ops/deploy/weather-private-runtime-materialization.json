@@ -5,6 +5,7 @@
     "acquisition_is_separate_gate": true,
     "artifact_source": "existing deterministic GitHub Actions runtime-source workflow",
     "cache_root": "/var/lib/rpi5-deploy/weather-private-runtime/artifacts",
+    "incoming_actions_evidence": "actions-artifact-handoff.json",
     "incoming_artifact": "weathernext-private-runtime.tar",
     "incoming_receipt": "runtime-artifact-receipt.json",
     "incoming_root": "/var/lib/rpi5-deploy/weather-private-runtime/incoming"
@@ -38,6 +39,7 @@
   "production_mutation_started": false,
   "repository_entrypoint": "ops/bin/rpi5-weathernext-private-host-privileged-install",
   "rollback_policy": "NONE",
+  "runtime_actions_metadata_evidence_required": true,
   "schema": "rpi5.weathernext-private-runtime-materialization-source.v1",
   "source_merge_authorizes_live": false,
   "source_repository": "rozkalnsandris/RPi5_main",

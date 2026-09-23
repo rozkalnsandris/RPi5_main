@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 import sys
 import unittest
 from unittest import mock
@@ -34,6 +35,16 @@ def receipt() -> materialization.RuntimeArtifactReceipt:
     )
 
 
+def actions_evidence(source_sha: str = "1" * 40) -> transport.RuntimeActionsEvidence:
+    return transport.RuntimeActionsEvidence(
+        source_sha=source_sha,
+        run_id=123,
+        artifact_id=456,
+        artifact_name=f"weathernext-private-runtime-{source_sha}",
+        artifact_digest="sha256:" + "3" * 64,
+    )
+
+
 class WeatherNextPrivateRuntimeTransportTests(unittest.TestCase):
     def test_source_contract_is_fixed_and_non_authoritative(self) -> None:
         summary = transport.source_readiness()
@@ -46,6 +57,11 @@ class WeatherNextPrivateRuntimeTransportTests(unittest.TestCase):
                 ("filesystem.weathernext-private-runtime-artifact-cache-publish", 1),
                 ("filesystem.weathernext-private-runtime-materialization", 1),
             ),
+        )
+        self.assertTrue(summary["runtime_actions_metadata_evidence_required"])
+        self.assertEqual(
+            summary["incoming_actions_evidence"],
+            str(transport.INCOMING_ACTIONS_EVIDENCE),
         )
         for key in (
             "actions_artifact_download_authority",
@@ -78,12 +94,13 @@ class WeatherNextPrivateRuntimeTransportTests(unittest.TestCase):
 
     def test_plan_rejects_conflict_and_never_selects_caller_paths(self) -> None:
         base = receipt()
+        actions = actions_evidence(base.source_sha)
         with (
             mock.patch.object(transport, "_incoming_receipt", return_value=base),
             mock.patch.object(transport, "_cache_state", return_value="ABSENT"),
             mock.patch.object(transport, "_runtime_state", return_value="ABSENT"),
         ):
-            plan = transport.build_transport_plan(base.source_sha)
+            plan = transport.build_transport_plan(base.source_sha, actions)
         self.assertEqual(
             plan.mutation_categories,
             (
@@ -92,6 +109,8 @@ class WeatherNextPrivateRuntimeTransportTests(unittest.TestCase):
             ),
         )
         public = transport.public_plan(plan)
+        self.assertEqual(public["actions_run_id"], actions.run_id)
+        self.assertEqual(public["actions_artifact_id"], actions.artifact_id)
         self.assertNotIn("incoming_path", public)
         self.assertNotIn("url", public)
         self.assertNotIn("argv", public)
@@ -105,17 +124,126 @@ class WeatherNextPrivateRuntimeTransportTests(unittest.TestCase):
                 transport.WeatherNextPrivateRuntimeTransportError,
                 "conflicts",
             ):
-                transport.build_transport_plan(base.source_sha)
+                transport.build_transport_plan(base.source_sha, actions)
 
     def test_exact_existing_transport_is_a_noop_plan(self) -> None:
         base = receipt()
+        actions = actions_evidence(base.source_sha)
         with (
             mock.patch.object(transport, "_incoming_receipt", return_value=base),
             mock.patch.object(transport, "_cache_state", return_value="EXACT"),
             mock.patch.object(transport, "_runtime_state", return_value="EXACT"),
         ):
-            plan = transport.build_transport_plan(base.source_sha)
+            plan = transport.build_transport_plan(base.source_sha, actions)
         self.assertEqual(plan.mutation_categories, ())
+
+    def test_runtime_actions_evidence_is_exact_successful_main_artifact(self) -> None:
+        source_sha = "1" * 40
+        expected_name = f"weathernext-private-runtime-{source_sha}"
+        client = transport.FixedPublicGitHubReadClient(sender=object())
+
+        def get_json(path_or_url: str) -> SimpleNamespace:
+            if "/workflows/" in path_or_url:
+                return SimpleNamespace(
+                    value={
+                        "workflow_runs": [
+                            {
+                                "id": 123,
+                                "head_sha": source_sha,
+                                "head_branch": "main",
+                                "event": "push",
+                                "status": "completed",
+                                "conclusion": "success",
+                            }
+                        ]
+                    }
+                )
+            if "/actions/runs/123/artifacts" in path_or_url:
+                return SimpleNamespace(
+                    value={
+                        "artifacts": [
+                            {
+                                "id": 456,
+                                "name": expected_name,
+                                "expired": False,
+                                "digest": "sha256:" + "3" * 64,
+                                "workflow_run": {
+                                    "id": 123,
+                                    "head_sha": source_sha,
+                                },
+                            }
+                        ]
+                    }
+                )
+            raise AssertionError(path_or_url)
+
+        with mock.patch.object(client, "get_json", side_effect=get_json):
+            observed = transport._runtime_actions_evidence(client, source_sha)
+        self.assertEqual(observed, actions_evidence(source_sha))
+
+    def test_runtime_actions_evidence_rejects_wrong_or_ambiguous_artifact(self) -> None:
+        source_sha = "1" * 40
+        client = transport.FixedPublicGitHubReadClient(sender=object())
+
+        def get_json(path_or_url: str) -> SimpleNamespace:
+            if "/workflows/" in path_or_url:
+                return SimpleNamespace(
+                    value={
+                        "workflow_runs": [
+                            {
+                                "id": 123,
+                                "head_sha": source_sha,
+                                "head_branch": "main",
+                                "event": "push",
+                                "status": "completed",
+                                "conclusion": "success",
+                            }
+                        ]
+                    }
+                )
+            return SimpleNamespace(
+                value={
+                    "artifacts": [
+                        {
+                            "id": 456,
+                            "name": "wrong",
+                            "expired": False,
+                            "digest": "sha256:" + "3" * 64,
+                            "workflow_run": {"id": 123, "head_sha": source_sha},
+                        }
+                    ]
+                }
+            )
+
+        with mock.patch.object(client, "get_json", side_effect=get_json):
+            with self.assertRaisesRegex(
+                transport.WeatherNextPrivateRuntimeTransportError,
+                "unavailable or ambiguous",
+            ):
+                transport._runtime_actions_evidence(client, source_sha)
+
+    def test_fixed_actions_handoff_must_equal_fresh_actions_identity(self) -> None:
+        expected = actions_evidence()
+        exact = {
+            "schema": "rpi5.weathernext-private-runtime-actions-handoff.v1",
+            "source_sha": expected.source_sha,
+            "workflow": transport.RUNTIME_WORKFLOW,
+            "run_id": expected.run_id,
+            "artifact_id": expected.artifact_id,
+            "artifact_name": expected.artifact_name,
+            "artifact_digest": expected.artifact_digest,
+        }
+        with mock.patch.object(transport, "_read_json_regular", return_value=exact):
+            transport._require_actions_handoff(expected)
+
+        drifted = dict(exact)
+        drifted["artifact_id"] = 999
+        with mock.patch.object(transport, "_read_json_regular", return_value=drifted):
+            with self.assertRaisesRegex(
+                transport.WeatherNextPrivateRuntimeTransportError,
+                "identity drifted",
+            ):
+                transport._require_actions_handoff(expected)
 
     def test_live_authority_requires_exact_mutation_budget_and_exclusions(self) -> None:
         class Accepted:
@@ -156,6 +284,8 @@ class WeatherNextPrivateRuntimeTransportTests(unittest.TestCase):
             "shell=True",
             "requests.",
             "urllib",
+            "archive_download_url",
+            "/actions/artifacts/",
             "gh run",
             "gh api",
             "curl ",
@@ -186,10 +316,15 @@ class WeatherNextPrivateRuntimeTransportTests(unittest.TestCase):
         self.assertEqual(contract["operation_id"], materialization.OPERATION_ID)
         self.assertFalse(contract["actions_artifact_download_authority"])
         self.assertFalse(contract["credential_acquisition_authority"])
+        self.assertTrue(contract["runtime_actions_metadata_evidence_required"])
         self.assertFalse(contract["source_merge_authorizes_live"])
         self.assertEqual(
             contract["artifact_handoff"]["incoming_root"],
             str(transport.INCOMING_ROOT),
+        )
+        self.assertEqual(
+            contract["artifact_handoff"]["incoming_actions_evidence"],
+            transport.INCOMING_ACTIONS_EVIDENCE.name,
         )
         self.assertEqual(
             contract["artifact_handoff"]["cache_root"],
