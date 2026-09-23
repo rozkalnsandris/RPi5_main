@@ -26,9 +26,9 @@ The running privileged installer derives the Git common directory from its fixed
 
 The manager checkout is Git object/remote provenance only. Its checked-out content is never install content authority. A stale or dirty manager is allowed, but its HEAD plus worktree/index status are snapshotted before the install plan and must remain unchanged through the operation.
 
-The single allowed manager `fetch` runs as the repository owner with command-scoped `safe.directory`, system/global Git configuration disabled, and a fixed refspec for `origin/main`. The detached trusted worktree add remains the only root-side manager Git mutation because the destination lives below the root-owned deploy-state boundary.
+The single allowed manager `fetch` runs as the repository owner with command-scoped `safe.directory`, system Git configuration disabled, the repository owner's existing global Git configuration available read-only for its credential helper, and a fixed refspec for `origin/main`. The installer does not mutate Git configuration and does not widen trust. The detached trusted worktree add remains the only root-side manager Git mutation because the destination lives below the root-owned deploy-state boundary.
 
-There is no clone, reset, clean, pull, merge, rebase, switch, manager checkout creation, wildcard `safe.directory`, or Git trust widening. Missing or incompatible provenance fails during pre-consume observation.
+There is no clone, reset, clean, pull, merge, rebase, switch, manager checkout creation, wildcard `safe.directory`, Git configuration mutation, or generic Git trust widening. Missing or incompatible provenance fails during pre-consume observation.
 
 ## Preserved backend install envelope
 
@@ -49,14 +49,18 @@ Fixed targets remain unchanged:
 
 ## Post-merge continuation
 
-The old queue #101 is historical eligibility for the pre-fix source and is not reusable authority after the source SHA changes. After this recovery merges and exact-main CI is green:
+The old queue #101 is historical eligibility for the pre-fix source and is not reusable authority after the source SHA changes.
 
-1. perform a fresh sanitized read-only host preflight;
-2. create/reconcile a READY queue bound to the new exact `RPi5_main/main` SHA;
-3. create a fresh human-owner, non-App LIVE-AUTH;
-4. execute `rpi5.weathernext-private-backend.install.v1` once under that new envelope;
-5. verify only the sanitized fixed capability postconditions.
+The installed privileged entrypoint `/usr/local/sbin/rpi5-weathernext-private-host-privileged-install` imports its backend implementation from the fixed trusted installer checkout `/var/lib/rpi5-deploy/RPi5_main-weathernext-private-installer-trusted`. Therefore merging #695 does **not** by itself make the new backend source live on the host. The existing bootstrap contract is no-overwrite/no-cleanup and must not be reused as an implicit upgrade path.
 
-Google authentication/project binding, Analytics Hub/BigQuery first access, `rozkalns_weather#122`, and any SQLite snapshot remain later separate gates.
+After this recovery merges and exact-main CI is green:
+
+1. perform a fresh sanitized read-only host preflight that records the installed privileged-installer trusted-checkout source identity and entrypoint identity;
+2. if that installed boundary is not already exact to the new merged `RPi5_main/main` source, treat the state as `SOURCE_PREREQUISITE_REQUIRED` and define/review a separate bounded installer-boundary upgrade/rebind path; do not create a backend READY queue or LIVE-AUTH yet;
+3. only after that separate source outcome is merged, separately owner-authorized on `rpi5`, and sanitized verification proves the privileged-installer boundary is exact to the required source, create/reconcile a READY queue bound to the then-current exact `RPi5_main/main` SHA;
+4. create a fresh human-owner, non-App LIVE-AUTH;
+5. execute `rpi5.weathernext-private-backend.install.v1` once under that new envelope and verify only the sanitized fixed capability postconditions.
+
+`deploy-authorizations#34` remains consumed/failed and is never reusable. Google authentication/project binding, Analytics Hub/BigQuery first access, `rozkalns_weather#122`, and any SQLite snapshot remain later separate gates.
 
 DWD remains the authoritative severe-weather warning source. WeatherNext remains `primary_research` and is not an official warning source.
