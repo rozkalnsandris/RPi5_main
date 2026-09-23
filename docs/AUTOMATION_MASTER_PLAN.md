@@ -362,3 +362,65 @@ The current Hermes existing-install adoption outcome #698 is source/docs/tests o
 The completed Weather cutover/data/UI authorizations were consumed by their completed attempts and are non-reusable. The successful Weather cutover activated only the reviewed standing ordinary `AUTO_DEPLOY_SAFE` reconciliation contract for the already-adopted static Weather target.
 
 Any new target cutover, data repair, timer/systemd change, private-provider activation or other sensitive mutation requires the exact current owner gate.
+
+## 14. Continuity references
+
+For fresh state, read in this order when relevant:
+
+1. current `AGENTS.md` and routing policy;
+2. current `docs/AUTOMATION_MASTER_PLAN.md`;
+3. #295 aggregate controller;
+4. #103 umbrella tracker;
+5. latest relevant #191 handoff/comment;
+6. accepted Weather public acceptance evidence in `rozkalns_weather#176`;
+7. Hermes compatibility prerequisite #690/#691, completed static target binding #692/#693, and current existing-install adoption issue #698/#699;
+8. exact current `main` and required CI/review/ruleset state;
+9. minimum-sufficient live evidence only when the exact current gate requires it.
+
+Closed #688 is historical continuity work, not a current gate. GitHub source state never proves live deployment/runtime state.
+
+## 15. Historical compatibility appendix — Hermes Phase 4 validators
+
+This appendix preserves exact historical section identifiers and source-state markers that repository regression tests use to prove ordering and non-expansion of the old Hermes Phase 4 trust boundary. It is **historical compatibility evidence only**. None of these sections selects the current lane, proves current host state, grants LIVE authority, or overrides the current SIMPLE-DEPLOY fleet-adoption lane.
+
+## Current supersession — Hermes source auth + bounded helper launch gate (2026-09-04)
+
+Historical source checkpoint: the Source App composition and bounded fixed helper-launch design existed, while concrete production revalidation/host evidence and live wiring remained separate later gates.
+
+## Current supersession — Hermes canonical source-integration gate (2026-09-04)
+
+Historical source checkpoint: the concrete canonical Hermes revalidator, sanitized host-evidence resolver and inert broker composition were source-integrated without converting repository source into runtime proof.
+
+## Current supersession — Hermes broker-entrypoint wiring source gate (2026-09-06)
+
+Historical source checkpoint: the broker entrypoint was source-wired to the fixed runtime composition, with caller authority still limited to `authorization_issue_number` and durable replay consume required before helper launch.
+
+## Current supersession — Hermes broker runtime upgrade/provenance source gate (2026-09-06)
+
+Historical validator markers from the final superseding source gate in that sequence:
+
+`PHASE4_CURRENT_WORK_ITEM=EXACT_BROKER_RUNTIME_UPGRADE_PROVENANCE_AND_MINIMAL_REPLAY_WRITE_PERMISSION`
+`BROKER_ENTRYPOINT_WIRED=true`
+`CURRENT_SERVICE_REPLAY_WRITE_AUTHORITY_PROVEN=false`
+`RUNTIME_UPGRADE_PREFLIGHT_PROVEN=false`
+`RUNTIME_UPGRADE_APPLIED=false`
+`LIVE_INSTALL_ELIGIBLE=false`
+`PRODUCTION_MUTATION_STARTED=false`
+
+These markers deliberately retain their historical values. They must not be interpreted as current mutable state, a current Phase 4 priority, or authorization to revive the old Hermes control path.
+
+## Current supersession — Hermes PARTIAL_READY runtime-adapter trust-boundary source gate (2026-09-06)
+
+Historical validator markers for the runtime-adapter source checkpoint:
+
+`PHASE4_CURRENT_WORK_ITEM=HERMES_ORIGIN_RUNTIME_ADAPTER_TRUST_BOUNDARY_SOURCE`
+`BROKER_ENTRYPOINT_WIRED=false`
+`PRIVILEGED_DISPATCH_ENABLED=false`
+`GENUINE_HERMES_AUDIT_AUTHORIZED=false`
+`PRODUCTION_MUTATION_STARTED=false`
+
+These values are retained solely for source-contract regression compatibility. They are not current-state assertions and do not alter current SIMPLE-DEPLOY fleet sequencing.
+
+### SIMPLE-DEPLOY Weather canary sequencing correction (#674)
+
+Historical sequencing correction: the original canary activation was split to preserve strict readiness and Weather data authority: `install-only -> separate exact schema-init gate -> /ready=200 -> SIMPLE-DEPLOY activation/first reconciliation -> later corpus + ingest`. Every named one-time stage through final public acceptance has since completed under separately accepted gates. It must not be interpreted as a current instruction to rerun those mutations.
