@@ -26,6 +26,7 @@ TARGET_PIP_PLATFORM = "manylinux2014_aarch64"
 ARTIFACT_FORMAT = "normalized-wheelhouse-tar-v1"
 MAX_ARTIFACT_BYTES = 64 * 1024 * 1024
 MAX_METADATA_BYTES = 64 * 1024
+FIXED_DIRECTORY_MODE = 0o755
 
 LOCK_PATH = Path(__file__).with_name("weather_private_bigquery_runtime_lock.json")
 ARTIFACT_CACHE_ROOT = Path("/var/lib/rpi5-deploy/weather-private-runtime/artifacts")
@@ -337,6 +338,38 @@ def _wheel_target(parts: tuple[str, ...]) -> tuple[str, ...]:
     return parts
 
 
+def _chmod_directory_exact(path: Path) -> None:
+    try:
+        st = path.lstat()
+    except OSError as exc:
+        raise WeatherNextRuntimeMaterializationError("runtime directory is unavailable") from exc
+    if stat.S_ISLNK(st.st_mode) or not stat.S_ISDIR(st.st_mode):
+        raise WeatherNextRuntimeMaterializationError("runtime directory must be a real directory")
+    os.chmod(path, FIXED_DIRECTORY_MODE)
+
+
+def _mkdir_directory_exact(
+    path: Path,
+    *,
+    parents: bool = False,
+    exist_ok: bool = False,
+) -> None:
+    path.mkdir(parents=parents, mode=FIXED_DIRECTORY_MODE, exist_ok=exist_ok)
+    _chmod_directory_exact(path)
+
+
+def _mkdir_beneath_exact(root: Path, target: Path) -> None:
+    try:
+        relative = target.relative_to(root)
+    except ValueError as exc:
+        raise WeatherNextRuntimeMaterializationError("runtime directory escaped site-packages") from exc
+    _chmod_directory_exact(root)
+    current = root
+    for part in relative.parts:
+        current = current / part
+        _mkdir_directory_exact(current, exist_ok=True)
+
+
 def _extract_wheel_bytes(data: bytes, site_packages: Path, occupied: set[Path]) -> None:
     try:
         archive = zipfile.ZipFile(io.BytesIO(data), mode="r")
@@ -351,12 +384,12 @@ def _extract_wheel_bytes(data: bytes, site_packages: Path, occupied: set[Path]) 
             mapped = _wheel_target(parts)
             target = site_packages.joinpath(*mapped)
             if info.is_dir():
-                target.mkdir(parents=True, exist_ok=True)
+                _mkdir_beneath_exact(site_packages, target)
                 continue
             if target in occupied:
                 raise WeatherNextRuntimeMaterializationError("duplicate runtime wheel target")
             occupied.add(target)
-            target.parent.mkdir(parents=True, exist_ok=True)
+            _mkdir_beneath_exact(site_packages, target.parent)
             with archive.open(info, "r") as source, target.open("xb") as destination:
                 while True:
                     block = source.read(1024 * 1024)
@@ -474,10 +507,10 @@ def materialize_reviewed_runtime(
 
     _metadata, wheels = _load_archive_payload(artifact_path, lock, receipt)
 
-    runtime_path.parent.mkdir(parents=True, mode=0o755, exist_ok=True)
-    staging_path.mkdir(mode=0o755)
+    _mkdir_directory_exact(runtime_path.parent, parents=True, exist_ok=True)
+    _mkdir_directory_exact(staging_path)
     site_packages = staging_path / RUNTIME_SITE_PACKAGES_NAME
-    site_packages.mkdir(mode=0o755)
+    _mkdir_directory_exact(site_packages)
     occupied: set[Path] = set()
     for package in lock["packages"]:
         _extract_wheel_bytes(wheels[package["filename"]], site_packages, occupied)
