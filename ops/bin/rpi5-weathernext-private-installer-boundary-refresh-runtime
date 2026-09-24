@@ -24,6 +24,16 @@ ROOT_UID = 0
 ROOT_GID = 0
 _SHA40 = set("0123456789abcdef")
 
+PRECONSUME_FAILURE_TELEMETRY = {
+    "runtime_setup": "PRECONSUME_RUNTIME_SETUP_FAILED",
+    "revalidate_first": "PRECONSUME_REVALIDATE_FIRST_FAILED",
+    "revalidate_final": "PRECONSUME_REVALIDATE_FINAL_FAILED",
+    "stability_first_final": "PRECONSUME_STABILITY_FIRST_FINAL_FAILED",
+    "revalidate_preconsume": "PRECONSUME_REVALIDATE_PRECONSUME_FAILED",
+    "stability_final_preconsume": "PRECONSUME_STABILITY_FINAL_PRECONSUME_FAILED",
+    "preconsume_finalize": "PRECONSUME_FINALIZE_FAILED",
+}
+
 
 class BootstrapRuntimeAdapterError(RuntimeError):
     pass
@@ -266,6 +276,100 @@ def _trusted_dependency_root() -> Path:
     return TRUSTED_LIB
 
 
+def _telemetry_error(runtime_error: type[Exception], stage: str) -> Exception:
+    code = PRECONSUME_FAILURE_TELEMETRY.get(stage)
+    if code is None:
+        _fail("pre-consume telemetry stage escaped fixed allowlist")
+    error = runtime_error("WeatherNext private installer-boundary refresh failed closed")
+    setattr(error, "failure_stage", stage)
+    setattr(error, "error_code", code)
+    return error
+
+
+def _instrumented_runtime_entry(namespace: dict[str, Any]) -> Callable[[int], Mapping[str, Any]]:
+    entry = namespace.get("run_privileged_installer_boundary_refresh")
+    runtime_error = namespace.get("WeatherNextPrivateInstallerBoundaryRefreshRuntimeError")
+    revalidator_type = namespace.get("ConcreteBoundaryRefreshRevalidator")
+    stable = namespace.get("_stable")
+    execute_prevalidated = namespace.get("execute_prevalidated_refresh")
+    if (
+        not callable(entry)
+        or not isinstance(runtime_error, type)
+        or not isinstance(revalidator_type, type)
+        or not callable(stable)
+        or not callable(execute_prevalidated)
+    ):
+        _fail("verified refresh runtime telemetry interface drifted")
+    original_revalidate = getattr(revalidator_type, "revalidate", None)
+    if not callable(original_revalidate):
+        _fail("verified refresh runtime revalidation interface drifted")
+
+    def instrumented_entry(issue_number: int) -> Mapping[str, Any]:
+        state = {"revalidate": 0, "stable": 0, "entered_execute": False}
+        revalidate_stages = (
+            "revalidate_first",
+            "revalidate_final",
+            "revalidate_preconsume",
+        )
+        stable_stages = (
+            "stability_first_final",
+            "stability_final_preconsume",
+        )
+
+        def revalidate_wrapper(self: Any, number: int) -> Any:
+            index = state["revalidate"]
+            state["revalidate"] += 1
+            stage = revalidate_stages[index] if index < len(revalidate_stages) else "preconsume_finalize"
+            try:
+                return original_revalidate(self, number)
+            except Exception as exc:
+                if (
+                    isinstance(exc, runtime_error)
+                    and PRECONSUME_FAILURE_TELEMETRY.get(getattr(exc, "failure_stage", None))
+                    == getattr(exc, "error_code", None)
+                ):
+                    raise
+                raise _telemetry_error(runtime_error, stage) from None
+
+        def stable_wrapper(first: Any, final: Any) -> None:
+            index = state["stable"]
+            state["stable"] += 1
+            stage = stable_stages[index] if index < len(stable_stages) else "preconsume_finalize"
+            try:
+                stable(first, final)
+            except Exception:
+                raise _telemetry_error(runtime_error, stage) from None
+
+        def execute_wrapper(*args: Any, **kwargs: Any) -> Mapping[str, object]:
+            state["entered_execute"] = True
+            return execute_prevalidated(*args, **kwargs)
+
+        setattr(revalidator_type, "revalidate", revalidate_wrapper)
+        namespace["_stable"] = stable_wrapper
+        namespace["execute_prevalidated_refresh"] = execute_wrapper
+        try:
+            return entry(issue_number)
+        except Exception as exc:
+            if (
+                isinstance(exc, runtime_error)
+                and PRECONSUME_FAILURE_TELEMETRY.get(getattr(exc, "failure_stage", None))
+                == getattr(exc, "error_code", None)
+            ):
+                raise
+            if not state["entered_execute"]:
+                stage = "runtime_setup"
+                if state["revalidate"] >= 3 and state["stable"] >= 2:
+                    stage = "preconsume_finalize"
+                raise _telemetry_error(runtime_error, stage) from None
+            raise
+        finally:
+            setattr(revalidator_type, "revalidate", original_revalidate)
+            namespace["_stable"] = stable
+            namespace["execute_prevalidated_refresh"] = execute_prevalidated
+
+    return instrumented_entry
+
+
 def _load_verified_runtime(data: bytes) -> Callable[[int], Mapping[str, Any]]:
     dependency_root = _trusted_dependency_root()
     previous_path = tuple(sys.path)
@@ -289,10 +393,7 @@ def _load_verified_runtime(data: bytes) -> Callable[[int], Mapping[str, Any]]:
             raise BootstrapRuntimeAdapterError("verified refresh runtime module failed to load") from exc
     finally:
         sys.path[:] = previous_path
-    entry = namespace.get("run_privileged_installer_boundary_refresh")
-    if not callable(entry):
-        _fail("verified refresh runtime module has no fixed privileged entrypoint")
-    return entry
+    return _instrumented_runtime_entry(namespace)
 
 
 def run_from_bootstrap(

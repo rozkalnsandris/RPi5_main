@@ -29,9 +29,28 @@ ROOT_UID = 0
 ROOT_GID = 0
 _SHA40 = set("0123456789abcdef")
 
+PRECONSUME_FAILURE_TELEMETRY = {
+    "runtime_setup": "PRECONSUME_RUNTIME_SETUP_FAILED",
+    "revalidate_first": "PRECONSUME_REVALIDATE_FIRST_FAILED",
+    "revalidate_final": "PRECONSUME_REVALIDATE_FINAL_FAILED",
+    "stability_first_final": "PRECONSUME_STABILITY_FIRST_FINAL_FAILED",
+    "revalidate_preconsume": "PRECONSUME_REVALIDATE_PRECONSUME_FAILED",
+    "stability_final_preconsume": "PRECONSUME_STABILITY_FINAL_PRECONSUME_FAILED",
+    "preconsume_finalize": "PRECONSUME_FINALIZE_FAILED",
+}
+
 
 class BootstrapReachabilityError(RuntimeError):
-    pass
+    def __init__(
+        self,
+        message: str,
+        *,
+        failure_stage: str | None = None,
+        error_code: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.failure_stage = failure_stage
+        self.error_code = error_code
 
 
 def _fail(message: str) -> None:
@@ -339,6 +358,36 @@ def _load_runtime(data: bytes) -> Callable[[int], Mapping[str, Any]]:
     return entry
 
 
+def _runtime_failure(exc: Exception) -> BootstrapReachabilityError:
+    stage = getattr(exc, "failure_stage", None)
+    code = getattr(exc, "error_code", None)
+    if type(stage) is str and PRECONSUME_FAILURE_TELEMETRY.get(stage) == code:
+        return BootstrapReachabilityError(
+            "verified refresh runtime failed closed",
+            failure_stage=stage,
+            error_code=code,
+        )
+    return BootstrapReachabilityError("verified refresh runtime failed closed")
+
+
+def _failure_receipt(exc: BootstrapReachabilityError) -> Mapping[str, Any]:
+    receipt: dict[str, Any] = {
+        "schema": "rozkalns.weathernext-private-installer-boundary-bootstrap-failure.v1",
+        "result": "STOP",
+        "reason": "verified installer-boundary bootstrap failed closed",
+        "automatic_retry": False,
+        "automatic_cleanup": False,
+        "automatic_rollback": False,
+    }
+    stage = getattr(exc, "failure_stage", None)
+    code = getattr(exc, "error_code", None)
+    if type(stage) is str and PRECONSUME_FAILURE_TELEMETRY.get(stage) == code:
+        receipt["reason"] = "verified refresh runtime failed closed"
+        receipt["failure_stage"] = stage
+        receipt["error_code"] = code
+    return receipt
+
+
 def execute(
     issue_number: int,
     *,
@@ -356,7 +405,7 @@ def execute(
     try:
         receipt = entry(issue_number)
     except Exception as exc:
-        raise BootstrapReachabilityError("verified refresh runtime failed closed") from exc
+        raise _runtime_failure(exc) from None
     if not isinstance(receipt, Mapping):
         _fail("verified refresh runtime returned unsupported receipt")
     after = _manager_snapshot(manager, runner=runner)
@@ -374,20 +423,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         receipt = execute(args.issue_number)
     except BootstrapReachabilityError as exc:
-        print(
-            json.dumps(
-                {
-                    "schema": "rozkalns.weathernext-private-installer-boundary-bootstrap-failure.v1",
-                    "result": "STOP",
-                    "reason": str(exc),
-                    "automatic_retry": False,
-                    "automatic_cleanup": False,
-                    "automatic_rollback": False,
-                },
-                sort_keys=True,
-                separators=(",", ":"),
-            )
-        )
+        print(json.dumps(_failure_receipt(exc), sort_keys=True, separators=(",", ":")))
         return 78
     print(json.dumps(receipt, sort_keys=True, separators=(",", ":")))
     return 0
