@@ -1,0 +1,96 @@
+{
+  "schema": "rozkalns.rpi5-main.simple-deploy-hermes-prerequisite-materialization.v3",
+  "schema_version": 3,
+  "issue": 719,
+  "status": "SOURCE_RECOVERY_REVIEWED_NOT_LIVE",
+  "supersedes": {
+    "materialization_v2_issue": 713,
+    "materialization_v2_pr": 714,
+    "reason": "the first v2 Composite LIVE exposed an incompatible legacy env projection and a root Git-index side effect before the declared materialization boundary"
+  },
+  "preserved_failure_evidence": {
+    "trusted_checkout_identity": "RPi5_main-hermes-simple-deploy-first-live-trusted",
+    "repair_or_cleanup_authorized": false,
+    "historical_v2_entrypoint": "scripts/materialize-simple-deploy-hermes-prerequisites-v2.py"
+  },
+  "inherits": {
+    "phase_b_parent_and_publication_semantics_from": "ops/contracts/simple-deploy-hermes-prerequisite-materialization-v2.json",
+    "protected_tree_copy_helpers_from": "scripts/materialize-simple-deploy-hermes-prerequisites-v1.py"
+  },
+  "source": {
+    "owner_user": "andris",
+    "home_resolution": "passwd_database",
+    "checkout_relative": "hermes-deals",
+    "within_checkout": {
+      "data": "data/raw",
+      "config": "config",
+      "private_env": ".env"
+    },
+    "protected_content_read_requires_future_live_authority": true
+  },
+  "source_verification": {
+    "root_safe_read_only": true,
+    "git_optional_locks": false,
+    "git_status_allowed": false,
+    "git_environment": {
+      "GIT_OPTIONAL_LOCKS": "0"
+    },
+    "git_global_option": "--no-optional-locks",
+    "clean_checks": [
+      "git diff-files --quiet --",
+      "git diff-index --cached --quiet HEAD --",
+      "git ls-files --others --exclude-standard"
+    ],
+    "git_index_write_or_refresh_authorized": false,
+    "working_tree_or_git_admin_metadata_mutation_authorized": false
+  },
+  "private_env": {
+    "source_required_keys": [
+      "POSTGRES_USER",
+      "POSTGRES_PASSWORD",
+      "POSTGRES_DB",
+      "HTTP_USER_AGENT"
+    ],
+    "destination_keys": ["DATABASE_URL", "HTTP_USER_AGENT"],
+    "projection_order": ["DATABASE_URL", "HTTP_USER_AGENT"],
+    "database_url_template": "postgresql+psycopg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@db:5432/{POSTGRES_DB}",
+    "destination_values_are_single_quoted": true,
+    "empty_control_or_unsupported_quote_values_fail_closed": true,
+    "missing_or_duplicate_required_source_keys_fail_closed": true,
+    "values_may_be_emitted_to_logs_or_receipts": false
+  },
+  "materialization": {
+    "entrypoint": "scripts/materialize-simple-deploy-hermes-prerequisites-v3.py",
+    "reuses_v2_phase_b_preflight_and_apply": true,
+    "reuses_v1_protected_tree_copy_and_digest_helpers": true,
+    "state_parent_creation_or_reownership": false,
+    "silent_merge_or_overwrite": false,
+    "automatic_retry": false,
+    "automatic_rollback": false,
+    "automatic_cleanup_after_failure": false,
+    "failure_after_first_mutation": "STOP_WITH_EVIDENCE"
+  },
+  "cli": {
+    "options": ["--expected-source-sha", "--apply"],
+    "caller_selectable_path": false,
+    "caller_selectable_env_file": false,
+    "caller_selectable_key": false,
+    "caller_selectable_repository": false,
+    "caller_selectable_target": false,
+    "caller_selectable_command_or_argv": false
+  },
+  "authority": {
+    "issue_719_source_docs_tests_ci_only": true,
+    "merge_authorizes_recovery": false,
+    "merge_authorizes_live": false,
+    "host_access_or_mutation": false,
+    "protected_config_or_secret_access": false,
+    "trusted_checkout_repair_or_cleanup": false,
+    "target_adoption": false,
+    "docker": false,
+    "systemd": false,
+    "database_or_schema": false,
+    "cloudflare_or_network": false,
+    "permissions_or_credentials": false
+  }
+}

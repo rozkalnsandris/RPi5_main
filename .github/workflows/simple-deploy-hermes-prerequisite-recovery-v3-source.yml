@@ -1,0 +1,56 @@
+name: Hermes SIMPLE-DEPLOY prerequisite recovery v3 source
+
+on:
+  pull_request:
+    paths:
+      - "scripts/materialize-simple-deploy-hermes-prerequisites-v3.py"
+      - "ops/contracts/simple-deploy-hermes-prerequisite-materialization-v3.json"
+      - "docs/SIMPLE_DEPLOY_HERMES_PREREQUISITE_MATERIALIZATION_V3.md"
+      - "tests/test-simple-deploy-hermes-prerequisite-recovery-v3.py"
+      - "scripts/materialize-simple-deploy-hermes-prerequisites-v2.py"
+      - "ops/contracts/simple-deploy-hermes-prerequisite-materialization-v2.json"
+      - "tests/test-simple-deploy-hermes-prerequisite-phase-b-parent-v2.py"
+      - "scripts/materialize-simple-deploy-hermes-prerequisites-v1.py"
+      - "tests/test-simple-deploy-hermes-prerequisite-materialization-v1.py"
+      - ".github/workflows/simple-deploy-hermes-prerequisite-recovery-v3-source.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "scripts/materialize-simple-deploy-hermes-prerequisites-v3.py"
+      - "ops/contracts/simple-deploy-hermes-prerequisite-materialization-v3.json"
+      - "docs/SIMPLE_DEPLOY_HERMES_PREREQUISITE_MATERIALIZATION_V3.md"
+      - "tests/test-simple-deploy-hermes-prerequisite-recovery-v3.py"
+      - "scripts/materialize-simple-deploy-hermes-prerequisites-v2.py"
+      - "ops/contracts/simple-deploy-hermes-prerequisite-materialization-v2.json"
+      - "tests/test-simple-deploy-hermes-prerequisite-phase-b-parent-v2.py"
+      - "scripts/materialize-simple-deploy-hermes-prerequisites-v1.py"
+      - "tests/test-simple-deploy-hermes-prerequisite-materialization-v1.py"
+      - ".github/workflows/simple-deploy-hermes-prerequisite-recovery-v3-source.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rpi5-main-hermes-prerequisite-recovery-v3-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate Hermes prerequisite recovery v3
+        run: |
+          python3 ./tests/test-simple-deploy-hermes-prerequisite-materialization-v1.py
+          python3 ./tests/test-simple-deploy-hermes-prerequisite-phase-b-parent-v2.py
+          python3 ./tests/test-simple-deploy-hermes-prerequisite-recovery-v3.py
+          python3 ./tests/test-simple-deploy-hermes-compat-v1.py
+          python3 ./tests/test-simple-deploy-hermes-adoption-v1.py
+          python3 ./tests/test-simple-deploy-hermes-adoption-phase-b-identity.py
+          python3 -m py_compile ./scripts/materialize-simple-deploy-hermes-prerequisites-v3.py
