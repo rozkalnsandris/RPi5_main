@@ -9,24 +9,27 @@ Hermes is the first non-Weather reuse of the generic SIMPLE-DEPLOY v1 host recon
 
 The operation is separate from `scripts/adopt-simple-deploy-hermes-v1.py`. Prerequisite materialization prepares the fixed host data/config/private-env inputs; target adoption later installs the reviewed Hermes Compose adapter and two-target registry. A future owner may authorize both in one bounded Composite LIVE, but source merge never authorizes either operation.
 
-## Fixed identities
+## Fixed source identity without publishing a user-home path
 
-Source identities are not caller-selectable:
+The source account is fixed as `andris`. The concrete home directory is resolved from the operating system passwd database for that account; it is not accepted from CLI input, environment, GitHub intent or another caller-controlled source.
 
-- checkout: `/home/andris/hermes-deals`;
-- data: `/home/andris/hermes-deals/data/raw`;
-- config: `/home/andris/hermes-deals/config`;
-- protected env source: `/home/andris/hermes-deals/.env`;
-- source owner account: `andris`.
+Within that passwd-resolved home, the source identities are fixed structurally:
 
-Destination identities are also fixed:
+- checkout relative path: `hermes-deals`;
+- data relative to checkout: `data/raw`;
+- config relative to checkout: `config`;
+- protected env relative to checkout: `.env`.
+
+This representation preserves the exact host identity while keeping concrete user-home paths out of the public repository. The resolved home must be absolute and the source metadata must match the fixed account.
+
+Destination identities remain absolute, public-safe and fixed:
 
 - state root: `/var/lib/rozkalns-simple-deployer/hermes-deals`;
 - data: `/var/lib/rozkalns-simple-deployer/hermes-deals/data/raw`;
 - config: `/var/lib/rozkalns-simple-deployer/hermes-deals/config`;
 - private env: `/etc/rozkalns-simple-deployer/private/hermes-deals-api.env`.
 
-The CLI exposes only `--expected-source-sha` and `--apply`. There is no path, project-directory, env-file, key, repository, target, command, argv, Docker or systemd caller surface.
+The CLI exposes only `--expected-source-sha` and `--apply`. There is no caller-selectable home, path, project-directory, env-file, key, repository, target, command, argv, Docker or systemd surface.
 
 ## Public-safe default preflight
 
@@ -47,7 +50,7 @@ It returns one of three states:
 Inside that future authority the entrypoint:
 
 1. requires public preflight `ABSENT` or verifies an already-`EXACT_READY` destination;
-2. reads only the fixed protected sources;
+2. reads only the fixed protected sources derived from the fixed account's passwd-resolved home;
 3. rejects source symlinks, special files, ownership drift, world-writable/setuid/setgid entries and malformed protected env input;
 4. projects exactly `DATABASE_URL` and `HTTP_USER_AGENT`, in that order, into the private env destination;
 5. never emits either value in logs, diagnostics or receipts;
@@ -82,7 +85,8 @@ The focused synthetic suite must prove:
 - no overwrite of existing final destinations;
 - no automatic cleanup after a post-mutation publication failure;
 - CLI authority remains limited to the two reviewed options;
-- machine contract keeps prerequisite materialization distinct from Hermes target adoption.
+- machine contract keeps prerequisite materialization distinct from Hermes target adoption;
+- source identity remains fixed through passwd-account resolution without a concrete user-home literal in public source.
 
 CI uses synthetic fixtures only. It never reads the production `.env`, application data/config or RPi5 runtime.
 

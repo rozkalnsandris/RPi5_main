@@ -11,11 +11,12 @@
   },
   "source": {
     "owner_user": "andris",
-    "paths": {
-      "checkout": "/home/andris/hermes-deals",
-      "data": "/home/andris/hermes-deals/data/raw",
-      "config": "/home/andris/hermes-deals/config",
-      "private_env": "/home/andris/hermes-deals/.env"
+    "home_resolution": "passwd_database",
+    "checkout_relative": "hermes-deals",
+    "within_checkout": {
+      "data": "data/raw",
+      "config": "config",
+      "private_env": ".env"
     },
     "metadata_policy": {
       "owner_and_primary_group_must_match_fixed_owner": true,
@@ -25,6 +26,7 @@
       "setuid_or_setgid_allowed": false,
       "private_env_group_or_world_writable_allowed": false
     },
+    "home_is_caller_selectable": false,
     "protected_content_read_requires_future_live_authority": true
   },
   "destination": {

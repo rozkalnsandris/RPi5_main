@@ -22,6 +22,21 @@ CONTRACT_RELATIVE = 'ops/contracts/simple-deploy-hermes-prerequisite-materializa
 FULL_SHA = re.compile(r'^[0-9a-f]{40}$')
 ENV_KEY = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
 SOURCE_USER = 'andris'
+SOURCE_HOME_RESOLUTION = 'passwd_database'
+SOURCE_CHECKOUT_RELATIVE = Path('hermes-deals')
+SOURCE_DATA_RELATIVE = Path('data/raw')
+SOURCE_CONFIG_RELATIVE = Path('config')
+SOURCE_ENV_RELATIVE = Path('.env')
+ETC_ROOT = Path('/etc/rozkalns-simple-deployer')
+STATE_PARENT = Path('/var/lib/rozkalns-simple-deployer')
+TARGET_ROOT = STATE_PARENT / 'hermes-deals'
+TARGET_DATA_PARENT = TARGET_ROOT / 'data'
+TARGET_DATA = TARGET_DATA_PARENT / 'raw'
+TARGET_CONFIG = TARGET_ROOT / 'config'
+PRIVATE_ROOT = ETC_ROOT / 'private'
+TARGET_ENV = PRIVATE_ROOT / 'hermes-deals-api.env'
+STATE_STAGE = STATE_PARENT / '.hermes-deals-prerequisites-v1.staged'
+ENV_STAGE = PRIVATE_ROOT / '.hermes-deals-api.env.prerequisites-v1.staged'
 ROOT_UID = 0
 ROOT_GID = 0
 REQUIRED_ENV_KEYS = ('DATABASE_URL', 'HTTP_USER_AGENT')
@@ -49,22 +64,24 @@ class MaterializationPaths:
     env_stage: Path
 
 
-PRODUCTION_PATHS = MaterializationPaths(
-    checkout=Path('/home/andris/hermes-deals'),
-    source_data=Path('/home/andris/hermes-deals/data/raw'),
-    source_config=Path('/home/andris/hermes-deals/config'),
-    source_env=Path('/home/andris/hermes-deals/.env'),
-    etc_root=Path('/etc/rozkalns-simple-deployer'),
-    state_parent=Path('/var/lib/rozkalns-simple-deployer'),
-    target_root=Path('/var/lib/rozkalns-simple-deployer/hermes-deals'),
-    target_data_parent=Path('/var/lib/rozkalns-simple-deployer/hermes-deals/data'),
-    target_data=Path('/var/lib/rozkalns-simple-deployer/hermes-deals/data/raw'),
-    target_config=Path('/var/lib/rozkalns-simple-deployer/hermes-deals/config'),
-    private_root=Path('/etc/rozkalns-simple-deployer/private'),
-    target_env=Path('/etc/rozkalns-simple-deployer/private/hermes-deals-api.env'),
-    state_stage=Path('/var/lib/rozkalns-simple-deployer/.hermes-deals-prerequisites-v1.staged'),
-    env_stage=Path('/etc/rozkalns-simple-deployer/private/.hermes-deals-api.env.prerequisites-v1.staged'),
-)
+def _production_paths(source_home: Path) -> MaterializationPaths:
+    checkout = source_home / SOURCE_CHECKOUT_RELATIVE
+    return MaterializationPaths(
+        checkout=checkout,
+        source_data=checkout / SOURCE_DATA_RELATIVE,
+        source_config=checkout / SOURCE_CONFIG_RELATIVE,
+        source_env=checkout / SOURCE_ENV_RELATIVE,
+        etc_root=ETC_ROOT,
+        state_parent=STATE_PARENT,
+        target_root=TARGET_ROOT,
+        target_data_parent=TARGET_DATA_PARENT,
+        target_data=TARGET_DATA,
+        target_config=TARGET_CONFIG,
+        private_root=PRIVATE_ROOT,
+        target_env=TARGET_ENV,
+        state_stage=STATE_STAGE,
+        env_stage=ENV_STAGE,
+    )
 
 
 class MaterializationError(RuntimeError):
@@ -106,8 +123,12 @@ def _fail(message: str) -> None:
 
 def _run(argv: Sequence[str], *, cwd: Path) -> subprocess.CompletedProcess[bytes]:
     return subprocess.run(
-        tuple(argv), cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        check=False, shell=False,
+        tuple(argv),
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+        shell=False,
         env={'PATH': '/usr/bin:/bin', 'LANG': 'C.UTF-8', 'LC_ALL': 'C.UTF-8'},
     )
 
@@ -191,16 +212,26 @@ def _validate_machine_contract() -> None:
         _fail('materialization contract schema drifted')
     if contract.get('issue') != 711:
         _fail('materialization contract issue binding drifted')
-    expected_sources = {
-        'checkout': str(PRODUCTION_PATHS.checkout), 'data': str(PRODUCTION_PATHS.source_data),
-        'config': str(PRODUCTION_PATHS.source_config), 'private_env': str(PRODUCTION_PATHS.source_env),
+    expected_source = {
+        'owner_user': SOURCE_USER,
+        'home_resolution': SOURCE_HOME_RESOLUTION,
+        'checkout_relative': SOURCE_CHECKOUT_RELATIVE.as_posix(),
+        'within_checkout': {
+            'data': SOURCE_DATA_RELATIVE.as_posix(),
+            'config': SOURCE_CONFIG_RELATIVE.as_posix(),
+            'private_env': SOURCE_ENV_RELATIVE.as_posix(),
+        },
     }
+    source = contract.get('source', {})
+    for key, expected in expected_source.items():
+        if source.get(key) != expected:
+            _fail('materialization contract source identity drifted')
     expected_destinations = {
-        'state_root': str(PRODUCTION_PATHS.target_root), 'data': str(PRODUCTION_PATHS.target_data),
-        'config': str(PRODUCTION_PATHS.target_config), 'private_env': str(PRODUCTION_PATHS.target_env),
+        'state_root': str(TARGET_ROOT),
+        'data': str(TARGET_DATA),
+        'config': str(TARGET_CONFIG),
+        'private_env': str(TARGET_ENV),
     }
-    if contract.get('source', {}).get('paths') != expected_sources:
-        _fail('materialization contract source paths drifted')
     if contract.get('destination', {}).get('paths') != expected_destinations:
         _fail('materialization contract destination paths drifted')
     if tuple(contract.get('private_env', {}).get('required_keys', ())) != REQUIRED_ENV_KEYS:
@@ -209,19 +240,25 @@ def _validate_machine_contract() -> None:
         _fail('materialization contract CLI authority drifted')
 
 
-def _public_preflight(paths: MaterializationPaths, *, source_uid: int, source_gid: int,
-                      root_uid: int = ROOT_UID, root_gid: int = ROOT_GID) -> Classification:
+def _public_preflight(
+    paths: MaterializationPaths,
+    *,
+    source_uid: int,
+    source_gid: int,
+    root_uid: int = ROOT_UID,
+    root_gid: int = ROOT_GID,
+) -> Classification:
     reasons: list[str] = []
     for path, kind, private in (
-        (paths.checkout, 'directory', False), (paths.source_data, 'directory', False),
-        (paths.source_config, 'directory', False), (paths.source_env, 'file', True),
+        (paths.checkout, 'directory', False),
+        (paths.source_data, 'directory', False),
+        (paths.source_config, 'directory', False),
+        (paths.source_env, 'file', True),
     ):
         reason = _source_reason(path, kind=kind, uid=source_uid, gid=source_gid, private=private)
         if reason:
             reasons.append(reason)
-    etc_reason = _destination_reason(paths.etc_root, kind='directory', mode=0o755,
-                                     uid=root_uid, gid=root_gid)
-    if etc_reason:
+    if _destination_reason(paths.etc_root, kind='directory', mode=0o755, uid=root_uid, gid=root_gid):
         reasons.append('SIMPLE-DEPLOY etc root metadata drifted')
     if _lstat(paths.state_stage) is not None or _lstat(paths.env_stage) is not None:
         reasons.append('fixed staging path is unexpectedly present')
@@ -233,16 +270,18 @@ def _public_preflight(paths: MaterializationPaths, *, source_uid: int, source_gi
         for parent, expected_mode in ((paths.state_parent, 0o755), (paths.private_root, 0o700)):
             if _lstat(parent) is None:
                 continue
-            if _destination_reason(parent, kind='directory', mode=expected_mode,
-                                   uid=root_uid, gid=root_gid):
+            if _destination_reason(parent, kind='directory', mode=expected_mode, uid=root_uid, gid=root_gid):
                 return Classification(STATUS_PARTIAL_CONFLICT, ('fixed parent directory metadata drifted',))
         return Classification(STATUS_ABSENT, ())
     if not root_present or not env_present:
         return Classification(STATUS_PARTIAL_CONFLICT, ('only part of the fixed prerequisite destination exists',))
     for path, kind, expected_mode in (
-        (paths.state_parent, 'directory', 0o755), (paths.target_root, 'directory', 0o755),
-        (paths.target_data_parent, 'directory', 0o755), (paths.target_data, 'directory', 0o755),
-        (paths.target_config, 'directory', 0o755), (paths.private_root, 'directory', 0o700),
+        (paths.state_parent, 'directory', 0o755),
+        (paths.target_root, 'directory', 0o755),
+        (paths.target_data_parent, 'directory', 0o755),
+        (paths.target_data, 'directory', 0o755),
+        (paths.target_config, 'directory', 0o755),
+        (paths.private_root, 'directory', 0o700),
         (paths.target_env, 'file', 0o600),
     ):
         reason = _destination_reason(path, kind=kind, mode=expected_mode, uid=root_uid, gid=root_gid)
@@ -303,8 +342,14 @@ def _extract_required_env(raw: bytes) -> bytes:
     return ''.join(f'{key}={values[key]}\n' for key in REQUIRED_ENV_KEYS).encode('utf-8')
 
 
-def _tree_digest(root: Path, *, expected_uid: int, expected_gid: int,
-                 protected_label: str, normalized: bool = False) -> tuple[str, int]:
+def _tree_digest(
+    root: Path,
+    *,
+    expected_uid: int,
+    expected_gid: int,
+    protected_label: str,
+    normalized: bool = False,
+) -> tuple[str, int]:
     info = _lstat(root)
     if info is None or stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
         raise MaterializationError(f'{protected_label} protected tree root is not a real directory')
@@ -355,15 +400,30 @@ def _prepare_protected(paths: MaterializationPaths, *, source_uid: int, source_g
     if env_reason:
         raise MaterializationError(env_reason)
     env_bytes = _extract_required_env(_read_regular_bytes_no_follow(paths.source_env))
-    data_digest, data_files = _tree_digest(paths.source_data, expected_uid=source_uid,
-                                           expected_gid=source_gid, protected_label='data')
-    config_digest, config_files = _tree_digest(paths.source_config, expected_uid=source_uid,
-                                               expected_gid=source_gid, protected_label='config')
+    data_digest, data_files = _tree_digest(
+        paths.source_data,
+        expected_uid=source_uid,
+        expected_gid=source_gid,
+        protected_label='data',
+    )
+    config_digest, config_files = _tree_digest(
+        paths.source_config,
+        expected_uid=source_uid,
+        expected_gid=source_gid,
+        protected_label='config',
+    )
     return ProtectedPlan(data_digest, config_digest, env_bytes, data_files + config_files)
 
 
-def _ensure_directory(path: Path, *, mode: int, uid: int, gid: int,
-                      progress: Progress, parent: bool = False) -> None:
+def _ensure_directory(
+    path: Path,
+    *,
+    mode: int,
+    uid: int,
+    gid: int,
+    progress: Progress,
+    parent: bool = False,
+) -> None:
     if _lstat(path) is not None:
         if _destination_reason(path, kind='directory', mode=mode, uid=uid, gid=gid):
             raise ApplyFailure('fixed parent directory metadata drifted before mutation', progress)
@@ -381,8 +441,16 @@ def _ensure_directory(path: Path, *, mode: int, uid: int, gid: int,
         raise ApplyFailure('fixed directory creation failed', progress) from exc
 
 
-def _copy_regular(source: Path, destination: Path, *, source_uid: int, source_gid: int,
-                  root_uid: int, root_gid: int, progress: Progress) -> None:
+def _copy_regular(
+    source: Path,
+    destination: Path,
+    *,
+    source_uid: int,
+    source_gid: int,
+    root_uid: int,
+    root_gid: int,
+    progress: Progress,
+) -> None:
     try:
         info = os.lstat(source)
     except OSError as exc:
@@ -397,8 +465,11 @@ def _copy_regular(source: Path, destination: Path, *, source_uid: int, source_gi
         raise ApplyFailure('protected source file open failed', progress) from exc
     try:
         try:
-            destination_fd = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
-                                     getattr(os, 'O_NOFOLLOW', 0), 0o600)
+            destination_fd = os.open(
+                destination,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, 'O_NOFOLLOW', 0),
+                0o600,
+            )
         except OSError as exc:
             raise ApplyFailure('protected tree file staging failed', progress) from exc
         progress.mutation_started = True
@@ -426,8 +497,16 @@ def _copy_regular(source: Path, destination: Path, *, source_uid: int, source_gi
         os.close(source_fd)
 
 
-def _copy_tree(source_root: Path, destination_root: Path, *, source_uid: int, source_gid: int,
-               root_uid: int, root_gid: int, progress: Progress) -> None:
+def _copy_tree(
+    source_root: Path,
+    destination_root: Path,
+    *,
+    source_uid: int,
+    source_gid: int,
+    root_uid: int,
+    root_gid: int,
+    progress: Progress,
+) -> None:
     if _lstat(destination_root) is not None:
         raise ApplyFailure('fixed staging tree destination already exists', progress)
     _ensure_directory(destination_root, mode=0o755, uid=root_uid, gid=root_gid, progress=progress)
@@ -448,8 +527,15 @@ def _copy_tree(source_root: Path, destination_root: Path, *, source_uid: int, so
         if stat.S_ISDIR(info.st_mode):
             _ensure_directory(destination, mode=0o755, uid=root_uid, gid=root_gid, progress=progress)
         elif stat.S_ISREG(info.st_mode):
-            _copy_regular(source, destination, source_uid=source_uid, source_gid=source_gid,
-                          root_uid=root_uid, root_gid=root_gid, progress=progress)
+            _copy_regular(
+                source,
+                destination,
+                source_uid=source_uid,
+                source_gid=source_gid,
+                root_uid=root_uid,
+                root_gid=root_gid,
+                progress=progress,
+            )
         else:
             raise ApplyFailure('protected source tree contains an unsupported file type', progress)
 
@@ -489,12 +575,27 @@ def _fsync_dir(path: Path, progress: Progress) -> None:
         raise ApplyFailure('directory fsync failed', progress) from exc
 
 
-def _verify_exact_ready_protected(paths: MaterializationPaths, plan: ProtectedPlan, *,
-                                  root_uid: int, root_gid: int) -> None:
-    data_digest, _ = _tree_digest(paths.target_data, expected_uid=root_uid, expected_gid=root_gid,
-                                  protected_label='installed data', normalized=True)
-    config_digest, _ = _tree_digest(paths.target_config, expected_uid=root_uid, expected_gid=root_gid,
-                                    protected_label='installed config', normalized=True)
+def _verify_exact_ready_protected(
+    paths: MaterializationPaths,
+    plan: ProtectedPlan,
+    *,
+    root_uid: int,
+    root_gid: int,
+) -> None:
+    data_digest, _ = _tree_digest(
+        paths.target_data,
+        expected_uid=root_uid,
+        expected_gid=root_gid,
+        protected_label='installed data',
+        normalized=True,
+    )
+    config_digest, _ = _tree_digest(
+        paths.target_config,
+        expected_uid=root_uid,
+        expected_gid=root_gid,
+        protected_label='installed config',
+        normalized=True,
+    )
     if data_digest != plan.source_data_digest:
         _fail('installed protected data tree does not match the fixed source')
     if config_digest != plan.source_config_digest:
@@ -503,33 +604,67 @@ def _verify_exact_ready_protected(paths: MaterializationPaths, plan: ProtectedPl
         _fail('installed private env projection does not match the fixed protected source')
 
 
-def _apply(paths: MaterializationPaths, plan: ProtectedPlan, *, source_uid: int, source_gid: int,
-           root_uid: int = ROOT_UID, root_gid: int = ROOT_GID) -> Progress:
-    if _public_preflight(paths, source_uid=source_uid, source_gid=source_gid,
-                         root_uid=root_uid, root_gid=root_gid).status != STATUS_ABSENT:
+def _apply(
+    paths: MaterializationPaths,
+    plan: ProtectedPlan,
+    *,
+    source_uid: int,
+    source_gid: int,
+    root_uid: int = ROOT_UID,
+    root_gid: int = ROOT_GID,
+) -> Progress:
+    if _public_preflight(
+        paths,
+        source_uid=source_uid,
+        source_gid=source_gid,
+        root_uid=root_uid,
+        root_gid=root_gid,
+    ).status != STATUS_ABSENT:
         _fail('apply requires exact ABSENT prerequisite destination state')
     progress = Progress()
     try:
-        _ensure_directory(paths.state_parent, mode=0o755, uid=root_uid, gid=root_gid,
-                          progress=progress, parent=True)
-        _ensure_directory(paths.private_root, mode=0o700, uid=root_uid, gid=root_gid,
-                          progress=progress, parent=True)
+        _ensure_directory(paths.state_parent, mode=0o755, uid=root_uid, gid=root_gid, progress=progress, parent=True)
+        _ensure_directory(paths.private_root, mode=0o700, uid=root_uid, gid=root_gid, progress=progress, parent=True)
         _ensure_directory(paths.state_stage, mode=0o700, uid=root_uid, gid=root_gid, progress=progress)
         stage_data_parent = paths.state_stage / 'data'
         _ensure_directory(stage_data_parent, mode=0o755, uid=root_uid, gid=root_gid, progress=progress)
-        _copy_tree(paths.source_data, stage_data_parent / 'raw', source_uid=source_uid,
-                   source_gid=source_gid, root_uid=root_uid, root_gid=root_gid, progress=progress)
-        _copy_tree(paths.source_config, paths.state_stage / 'config', source_uid=source_uid,
-                   source_gid=source_gid, root_uid=root_uid, root_gid=root_gid, progress=progress)
+        _copy_tree(
+            paths.source_data,
+            stage_data_parent / 'raw',
+            source_uid=source_uid,
+            source_gid=source_gid,
+            root_uid=root_uid,
+            root_gid=root_gid,
+            progress=progress,
+        )
+        _copy_tree(
+            paths.source_config,
+            paths.state_stage / 'config',
+            source_uid=source_uid,
+            source_gid=source_gid,
+            root_uid=root_uid,
+            root_gid=root_gid,
+            progress=progress,
+        )
         os.chown(paths.state_stage, root_uid, root_gid)
         os.chmod(paths.state_stage, 0o755)
         _write_env_stage(paths.env_stage, plan.env_bytes, uid=root_uid, gid=root_gid, progress=progress)
         if _lstat(paths.target_root) is not None or _lstat(paths.target_env) is not None:
             raise ApplyFailure('fixed final prerequisite destination appeared after preflight', progress)
-        staged_data, _ = _tree_digest(stage_data_parent / 'raw', expected_uid=root_uid,
-                                      expected_gid=root_gid, protected_label='staged data', normalized=True)
-        staged_config, _ = _tree_digest(paths.state_stage / 'config', expected_uid=root_uid,
-                                        expected_gid=root_gid, protected_label='staged config', normalized=True)
+        staged_data, _ = _tree_digest(
+            stage_data_parent / 'raw',
+            expected_uid=root_uid,
+            expected_gid=root_gid,
+            protected_label='staged data',
+            normalized=True,
+        )
+        staged_config, _ = _tree_digest(
+            paths.state_stage / 'config',
+            expected_uid=root_uid,
+            expected_gid=root_gid,
+            protected_label='staged config',
+            normalized=True,
+        )
         if staged_data != plan.source_data_digest or staged_config != plan.source_config_digest:
             raise ApplyFailure('staged protected tree verification failed', progress)
         if _read_regular_bytes_no_follow(paths.env_stage) != plan.env_bytes:
@@ -551,8 +686,13 @@ def _apply(paths: MaterializationPaths, plan: ProtectedPlan, *, source_uid: int,
         except OSError as exc:
             raise ApplyFailure('private-env staging unlink failed after publication', progress) from exc
         _fsync_dir(paths.private_root, progress)
-        final = _public_preflight(paths, source_uid=source_uid, source_gid=source_gid,
-                                  root_uid=root_uid, root_gid=root_gid)
+        final = _public_preflight(
+            paths,
+            source_uid=source_uid,
+            source_gid=source_gid,
+            root_uid=root_uid,
+            root_gid=root_gid,
+        )
         if final.status != STATUS_EXACT_READY:
             raise ApplyFailure('public-safe postcondition did not reach EXACT_READY', progress)
         _verify_exact_ready_protected(paths, plan, root_uid=root_uid, root_gid=root_gid)
@@ -568,7 +708,9 @@ def _apply(paths: MaterializationPaths, plan: ProtectedPlan, *, source_uid: int,
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description='Fail-closed Hermes SIMPLE-DEPLOY host-prerequisite materialization v1')
+    parser = argparse.ArgumentParser(
+        description='Fail-closed Hermes SIMPLE-DEPLOY host-prerequisite materialization v1'
+    )
     parser.add_argument('--expected-source-sha', required=True)
     parser.add_argument('--apply', action='store_true')
     return parser
@@ -576,8 +718,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _public_result(classification: Classification) -> dict[str, object]:
     return {
-        'schema': PUBLIC_SCHEMA, 'status': classification.status, 'reasons': list(classification.reasons),
-        'mutation_started': False, 'protected_data_read': False, 'protected_values_emitted': False,
+        'schema': PUBLIC_SCHEMA,
+        'status': classification.status,
+        'reasons': list(classification.reasons),
+        'mutation_started': False,
+        'protected_data_read': False,
+        'protected_values_emitted': False,
     }
 
 
@@ -590,38 +736,57 @@ def main(argv: Sequence[str] | None = None) -> int:
             account = pwd.getpwnam(SOURCE_USER)
         except KeyError as exc:
             raise MaterializationError('fixed source owner account is absent') from exc
-        classification = _public_preflight(PRODUCTION_PATHS, source_uid=account.pw_uid, source_gid=account.pw_gid)
+        source_home = Path(account.pw_dir)
+        if not source_home.is_absolute():
+            _fail('fixed source owner home is not absolute')
+        paths = _production_paths(source_home)
+        classification = _public_preflight(paths, source_uid=account.pw_uid, source_gid=account.pw_gid)
         if not args.apply:
             print(json.dumps(_public_result(classification), sort_keys=True, separators=(',', ':')))
             return 0 if classification.status != STATUS_PARTIAL_CONFLICT else 3
         if classification.status == STATUS_PARTIAL_CONFLICT:
             _fail('protected apply is blocked by PARTIAL_CONFLICT')
-        plan = _prepare_protected(PRODUCTION_PATHS, source_uid=account.pw_uid, source_gid=account.pw_gid)
+        plan = _prepare_protected(paths, source_uid=account.pw_uid, source_gid=account.pw_gid)
         if classification.status == STATUS_EXACT_READY:
-            _verify_exact_ready_protected(PRODUCTION_PATHS, plan, root_uid=ROOT_UID, root_gid=ROOT_GID)
-            print(json.dumps({'schema': PUBLIC_SCHEMA, 'status': STATUS_EXACT_READY,
-                              'mutation_started': False, 'protected_data_read': True,
-                              'protected_values_emitted': False}, sort_keys=True, separators=(',', ':')))
+            _verify_exact_ready_protected(paths, plan, root_uid=ROOT_UID, root_gid=ROOT_GID)
+            print(json.dumps({
+                'schema': PUBLIC_SCHEMA,
+                'status': STATUS_EXACT_READY,
+                'mutation_started': False,
+                'protected_data_read': True,
+                'protected_values_emitted': False,
+            }, sort_keys=True, separators=(',', ':')))
             return 0
-        progress = _apply(PRODUCTION_PATHS, plan, source_uid=account.pw_uid, source_gid=account.pw_gid)
-        print(json.dumps({'schema': PUBLIC_SCHEMA, 'status': STATUS_EXACT_READY,
-                          'mutation_started': progress.mutation_started,
-                          'parent_directories_created': progress.parent_directories_created,
-                          'staged_directories_created': progress.staged_directories_created,
-                          'staged_files_created': progress.staged_files_created,
-                          'published_targets': progress.published_targets,
-                          'protected_values_emitted': False}, sort_keys=True, separators=(',', ':')))
+        progress = _apply(paths, plan, source_uid=account.pw_uid, source_gid=account.pw_gid)
+        print(json.dumps({
+            'schema': PUBLIC_SCHEMA,
+            'status': STATUS_EXACT_READY,
+            'mutation_started': progress.mutation_started,
+            'parent_directories_created': progress.parent_directories_created,
+            'staged_directories_created': progress.staged_directories_created,
+            'staged_files_created': progress.staged_files_created,
+            'published_targets': progress.published_targets,
+            'protected_values_emitted': False,
+        }, sort_keys=True, separators=(',', ':')))
         return 0
     except ApplyFailure as exc:
-        print(json.dumps({'schema': PUBLIC_SCHEMA, 'status': 'ERROR', 'error': str(exc),
-                          'mutation_started': exc.progress.mutation_started,
-                          'published_targets': exc.progress.published_targets,
-                          'protected_values_emitted': False}, sort_keys=True, separators=(',', ':')), file=sys.stderr)
+        print(json.dumps({
+            'schema': PUBLIC_SCHEMA,
+            'status': 'ERROR',
+            'error': str(exc),
+            'mutation_started': exc.progress.mutation_started,
+            'published_targets': exc.progress.published_targets,
+            'protected_values_emitted': False,
+        }, sort_keys=True, separators=(',', ':')), file=sys.stderr)
         return 4
     except MaterializationError as exc:
-        print(json.dumps({'schema': PUBLIC_SCHEMA, 'status': 'ERROR', 'error': str(exc),
-                          'mutation_started': False, 'protected_values_emitted': False},
-                         sort_keys=True, separators=(',', ':')), file=sys.stderr)
+        print(json.dumps({
+            'schema': PUBLIC_SCHEMA,
+            'status': 'ERROR',
+            'error': str(exc),
+            'mutation_started': False,
+            'protected_values_emitted': False,
+        }, sort_keys=True, separators=(',', ':')), file=sys.stderr)
         return 2
 
 
