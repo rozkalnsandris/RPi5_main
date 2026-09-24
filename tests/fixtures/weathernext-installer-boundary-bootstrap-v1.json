@@ -1,0 +1,9 @@
+{
+  "schema": "rpi5.weathernext-private-installer-boundary-bootstrap-fixture.v1",
+  "known_stale_head": "79372e48ac53bf6d00142578b6543bc33a72a692",
+  "known_entrypoint_blob": "23599df1edffc69eb7ec8ab699052660cf3e078e",
+  "known_stale_dispatch_blob": "98218e3138f821390bece6dc10b770bd0b578cd9",
+  "stale_dispatch_knows_refresh_operation": false,
+  "bootstrap_entrypoint_is_distinct_from_stale_entrypoint": true,
+  "current_main_only_dispatch_route_is_insufficient": true
+}

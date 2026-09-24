@@ -1,0 +1,361 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import pwd
+import stat
+import subprocess
+import sys
+from typing import Any, Callable, Mapping, Sequence
+
+SOURCE_REPOSITORY = "rozkalnsandris/RPi5_main"
+REVIEWED_ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
+MANAGER_USERNAME = "andris"
+MANAGER_REPO_BASENAME = "RPi5_main"
+KNOWN_STALE_HEAD = "79372e48ac53bf6d00142578b6543bc33a72a692"
+KNOWN_ENTRYPOINT_BLOB = "23599df1edffc69eb7ec8ab699052660cf3e078e"
+KNOWN_STALE_DISPATCH_BLOB = "98218e3138f821390bece6dc10b770bd0b578cd9"
+TRUSTED_CHECKOUT = Path("/var/lib/rpi5-deploy/RPi5_main-weathernext-private-installer-trusted")
+INSTALLED_ENTRYPOINT = Path("/usr/local/sbin/rpi5-weathernext-private-host-privileged-install")
+STALE_DISPATCH_RELATIVE = Path("ops/lib/deploy_executor/weather_private_privileged_dispatch.py")
+RUNTIME_RELATIVE = Path("ops/bin/rpi5-weathernext-private-installer-boundary-refresh-runtime")
+BOOTSTRAP_INTERFACE = "rozkalns.weathernext-private-installer-boundary-refresh-bootstrap-callable.v1"
+MAX_RUNTIME_BYTES = 2 * 1024 * 1024
+ROOT_UID = 0
+ROOT_GID = 0
+_SHA40 = set("0123456789abcdef")
+
+
+class BootstrapReachabilityError(RuntimeError):
+    pass
+
+
+def _fail(message: str) -> None:
+    raise BootstrapReachabilityError(message)
+
+
+def _is_sha40(value: str) -> bool:
+    return len(value) == 40 and all(ch in _SHA40 for ch in value)
+
+
+def _issue_number(value: str) -> int:
+    try:
+        number = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("issue number must be an integer") from exc
+    if not 1 <= number <= 2_147_483_647:
+        raise argparse.ArgumentTypeError("issue number must be positive")
+    return number
+
+
+def _git_blob_sha1(data: bytes) -> str:
+    header = f"blob {len(data)}\0".encode("ascii")
+    return hashlib.sha1(header + data).hexdigest()
+
+
+def _bounded_run(
+    argv: Sequence[str],
+    *,
+    runner: Callable[..., Any] = subprocess.run,
+) -> subprocess.CompletedProcess[str]:
+    try:
+        result = runner(
+            tuple(argv),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="strict",
+            env={
+                "PATH": "/usr/bin:/bin",
+                "LANG": "C.UTF-8",
+                "LC_ALL": "C.UTF-8",
+                "GIT_TERMINAL_PROMPT": "0",
+                "GIT_CONFIG_NOSYSTEM": "1",
+                "GIT_CONFIG_GLOBAL": "/dev/null",
+            },
+            shell=False,
+            close_fds=True,
+            timeout=30,
+            check=False,
+        )
+    except TypeError:
+        result = runner(tuple(argv))
+    except Exception as exc:
+        raise BootstrapReachabilityError("fixed Git command failed to run") from exc
+    if (
+        type(getattr(result, "returncode", None)) is not int
+        or type(getattr(result, "stdout", None)) is not str
+        or type(getattr(result, "stderr", None)) is not str
+    ):
+        _fail("fixed Git command returned unsupported result")
+    if result.returncode != 0:
+        _fail("fixed Git command failed closed")
+    if len(result.stdout.encode("utf-8")) > 64 * 1024 or len(result.stderr.encode("utf-8")) > 64 * 1024:
+        _fail("fixed Git command output exceeded source limit")
+    return result
+
+
+def _git(repo: Path, *args: str, runner: Callable[..., Any] = subprocess.run) -> str:
+    if not repo.is_absolute():
+        _fail("Git repository path is not absolute")
+    read_ops = {"rev-parse", "remote", "status", "ls-tree"}
+    if not args or args[0] not in read_ops:
+        _fail("Git argv escaped read-only bootstrap allowlist")
+    return _bounded_run(
+        ("/usr/bin/git", "--no-optional-locks", "-C", str(repo), *args),
+        runner=runner,
+    ).stdout
+
+
+def _remote_main(*, runner: Callable[..., Any] = subprocess.run) -> str:
+    output = _bounded_run(
+        ("/usr/bin/git", "ls-remote", REVIEWED_ORIGIN, "refs/heads/main"),
+        runner=runner,
+    ).stdout.strip()
+    fields = output.split()
+    if len(fields) != 2 or fields[1] != "refs/heads/main" or not _is_sha40(fields[0]):
+        _fail("reviewed origin main identity is malformed")
+    return fields[0]
+
+
+def _regular_bytes(
+    path: Path,
+    *,
+    uid: int,
+    gid: int,
+    mode: int,
+    maximum: int,
+) -> bytes:
+    try:
+        before = path.lstat()
+    except OSError as exc:
+        raise BootstrapReachabilityError(f"required fixed file unavailable: {path}") from exc
+    if (
+        not stat.S_ISREG(before.st_mode)
+        or stat.S_ISLNK(before.st_mode)
+        or before.st_nlink != 1
+        or before.st_uid != uid
+        or before.st_gid != gid
+        or stat.S_IMODE(before.st_mode) != mode
+        or before.st_size < 1
+        or before.st_size > maximum
+    ):
+        _fail(f"required fixed file metadata drifted: {path}")
+    try:
+        data = path.read_bytes()
+    except OSError as exc:
+        raise BootstrapReachabilityError(f"required fixed file cannot be read: {path}") from exc
+    after = path.lstat()
+    if (
+        before.st_dev,
+        before.st_ino,
+        before.st_size,
+        before.st_mtime_ns,
+        before.st_ctime_ns,
+    ) != (
+        after.st_dev,
+        after.st_ino,
+        after.st_size,
+        after.st_mtime_ns,
+        after.st_ctime_ns,
+    ):
+        _fail(f"required fixed file changed while being read: {path}")
+    return data
+
+
+def _root_dir(path: Path, mode: int) -> None:
+    try:
+        meta = path.lstat()
+    except OSError as exc:
+        raise BootstrapReachabilityError(f"required fixed directory unavailable: {path}") from exc
+    if (
+        not stat.S_ISDIR(meta.st_mode)
+        or stat.S_ISLNK(meta.st_mode)
+        or meta.st_uid != ROOT_UID
+        or meta.st_gid != ROOT_GID
+        or stat.S_IMODE(meta.st_mode) != mode
+    ):
+        _fail(f"required fixed directory metadata drifted: {path}")
+
+
+def _manager_checkout(*, pwd_lookup: Callable[[str], Any] = pwd.getpwnam) -> tuple[Path, int, int]:
+    try:
+        account = pwd_lookup(MANAGER_USERNAME)
+    except Exception as exc:
+        raise BootstrapReachabilityError("manager account lookup failed") from exc
+    if type(account.pw_uid) is not int or type(account.pw_gid) is not int or account.pw_uid <= 0 or account.pw_gid <= 0:
+        _fail("manager account identity is invalid")
+    home = Path(str(account.pw_dir))
+    checkout = home / MANAGER_REPO_BASENAME
+    try:
+        meta = checkout.lstat()
+    except OSError as exc:
+        raise BootstrapReachabilityError("canonical manager checkout is unavailable") from exc
+    if (
+        not stat.S_ISDIR(meta.st_mode)
+        or stat.S_ISLNK(meta.st_mode)
+        or meta.st_uid != account.pw_uid
+        or meta.st_gid != account.pw_gid
+    ):
+        _fail("canonical manager checkout identity drifted")
+    return checkout, account.pw_uid, account.pw_gid
+
+
+def _manager_snapshot(manager: Path, *, runner: Callable[..., Any] = subprocess.run) -> tuple[str, str]:
+    head = _git(manager, "rev-parse", "HEAD", runner=runner).strip()
+    if not _is_sha40(head):
+        _fail("manager HEAD is malformed")
+    status = _git(manager, "status", "--porcelain", "--untracked-files=all", runner=runner)
+    if status != "":
+        _fail("manager checkout is not clean")
+    origin = _git(manager, "remote", "get-url", "origin", runner=runner).strip()
+    if origin != REVIEWED_ORIGIN:
+        _fail("manager origin drifted")
+    return head, status
+
+
+def _known_stale_boundary(*, runner: Callable[..., Any] = subprocess.run) -> None:
+    _root_dir(TRUSTED_CHECKOUT, 0o755)
+    head = _git(TRUSTED_CHECKOUT, "rev-parse", "HEAD", runner=runner).strip()
+    if head != KNOWN_STALE_HEAD:
+        _fail("trusted installer boundary is no longer the known stale head")
+    if _git(TRUSTED_CHECKOUT, "status", "--porcelain", "--untracked-files=all", runner=runner) != "":
+        _fail("trusted installer boundary is not clean")
+    if _git(TRUSTED_CHECKOUT, "remote", "get-url", "origin", runner=runner).strip() != REVIEWED_ORIGIN:
+        _fail("trusted installer boundary origin drifted")
+    entrypoint = _regular_bytes(
+        INSTALLED_ENTRYPOINT,
+        uid=ROOT_UID,
+        gid=ROOT_GID,
+        mode=0o755,
+        maximum=MAX_RUNTIME_BYTES,
+    )
+    if _git_blob_sha1(entrypoint) != KNOWN_ENTRYPOINT_BLOB:
+        _fail("installed privileged entrypoint no longer matches the known stale provenance")
+    stale_dispatch = _regular_bytes(
+        TRUSTED_CHECKOUT / STALE_DISPATCH_RELATIVE,
+        uid=ROOT_UID,
+        gid=ROOT_GID,
+        mode=0o644,
+        maximum=MAX_RUNTIME_BYTES,
+    )
+    if _git_blob_sha1(stale_dispatch) != KNOWN_STALE_DISPATCH_BLOB:
+        _fail("known stale privileged dispatch provenance drifted")
+
+
+def _runtime_bytes(
+    manager: Path,
+    uid: int,
+    gid: int,
+    *,
+    runner: Callable[..., Any] = subprocess.run,
+) -> tuple[str, bytes]:
+    before = _manager_snapshot(manager, runner=runner)
+    remote_main = _remote_main(runner=runner)
+    if before[0] != remote_main:
+        _fail("manager checkout is not exact current reviewed main")
+    relative = RUNTIME_RELATIVE.as_posix()
+    line = _git(manager, "ls-tree", before[0], "--", relative, runner=runner).strip()
+    prefix = "100755 blob "
+    suffix = "\t" + relative
+    if not line.startswith(prefix) or not line.endswith(suffix):
+        _fail("fixed bootstrap runtime is missing or not executable in exact main")
+    blob = line[len(prefix) : -len(suffix)]
+    if not _is_sha40(blob):
+        _fail("fixed bootstrap runtime blob identity is malformed")
+    data = _regular_bytes(
+        manager / RUNTIME_RELATIVE,
+        uid=uid,
+        gid=gid,
+        mode=0o755,
+        maximum=MAX_RUNTIME_BYTES,
+    )
+    if _git_blob_sha1(data) != blob:
+        _fail("fixed bootstrap runtime bytes do not match exact-main Git blob")
+    after = _manager_snapshot(manager, runner=runner)
+    if after != before:
+        _fail("manager HEAD/index/worktree snapshot drifted during bootstrap verification")
+    return before[0], data
+
+
+def _load_runtime(data: bytes) -> Callable[[int], Mapping[str, Any]]:
+    namespace: dict[str, Any] = {
+        "__name__": "rpi5_weathernext_private_installer_boundary_refresh_runtime",
+        "__file__": str(RUNTIME_RELATIVE),
+        "__builtins__": __builtins__,
+    }
+    try:
+        code = compile(data, str(RUNTIME_RELATIVE), "exec", dont_inherit=True)
+        exec(code, namespace, namespace)
+    except Exception as exc:
+        raise BootstrapReachabilityError("verified refresh runtime failed to load") from exc
+    if namespace.get("BOOTSTRAP_INTERFACE") != BOOTSTRAP_INTERFACE:
+        _fail("verified refresh runtime bootstrap interface mismatch")
+    entry = namespace.get("run_from_bootstrap")
+    if not callable(entry):
+        _fail("verified refresh runtime has no fixed bootstrap entrypoint")
+    return entry
+
+
+def execute(
+    issue_number: int,
+    *,
+    runner: Callable[..., Any] = subprocess.run,
+    pwd_lookup: Callable[[str], Any] = pwd.getpwnam,
+) -> Mapping[str, Any]:
+    if type(issue_number) is not int or not 1 <= issue_number <= 2_147_483_647:
+        _fail("authorization issue number is invalid")
+    if os.geteuid() != ROOT_UID:
+        _fail("bootstrap launcher requires root execution")
+    _known_stale_boundary(runner=runner)
+    manager, uid, gid = _manager_checkout(pwd_lookup=pwd_lookup)
+    source_sha, data = _runtime_bytes(manager, uid, gid, runner=runner)
+    entry = _load_runtime(data)
+    try:
+        receipt = entry(issue_number)
+    except Exception as exc:
+        raise BootstrapReachabilityError("verified refresh runtime failed closed") from exc
+    if not isinstance(receipt, Mapping):
+        _fail("verified refresh runtime returned unsupported receipt")
+    after = _manager_snapshot(manager, runner=runner)
+    if after[0] != source_sha:
+        _fail("manager HEAD drifted after refresh runtime")
+    return dict(receipt)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Execute the fixed WeatherNext installer-boundary refresh runtime bootstrap."
+    )
+    parser.add_argument("--issue-number", required=True, type=_issue_number)
+    args = parser.parse_args(argv)
+    try:
+        receipt = execute(args.issue_number)
+    except BootstrapReachabilityError as exc:
+        print(
+            json.dumps(
+                {
+                    "schema": "rozkalns.weathernext-private-installer-boundary-bootstrap-failure.v1",
+                    "result": "STOP",
+                    "reason": str(exc),
+                    "automatic_retry": False,
+                    "automatic_cleanup": False,
+                    "automatic_rollback": False,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        )
+        return 78
+    print(json.dumps(receipt, sort_keys=True, separators=(",", ":")))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
