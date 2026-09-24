@@ -154,10 +154,18 @@ The current cross-project priority is the first non-Weather reuse proof through 
 - Hermes consumer caller/contract was accepted at `rozkalnsandris/hermes-deals@13f9fb69b9576d8e97ab3a85334927f3c576ca1c`;
 - Hermes compatibility prerequisite #690 / PR #691 is COMPLETE;
 - Hermes static source target binding #692 / PR #693 is COMPLETE;
-- issue #698 / PR #699 is the current source-only existing-install adoption outcome needed before any Hermes host cutover;
-- after #698 source merge and exact-main verification, Hermes still requires a separate exact host materialization/cutover/E2E gate before it is an activated target.
+- Hermes existing-install adoption source #698 / PR #699 is COMPLETE;
+- Hermes post-Phase-B identity correction #708 / PR #709 is COMPLETE;
+- Hermes host-prerequisite materialization v1 source #711 / PR #712 is COMPLETE, with its Phase-B parent/preflight semantics superseded by v2;
+- Hermes Phase-B state-parent/preflight correction #713 / PR #714 is COMPLETE;
+- the #715 reconciliation baseline is `RPi5_main/main=97423548083ac7c8324a5ea766c781d473b64fc9`, whose exact-main push CI was 6/6 SUCCESS;
+- the next host gate is a separately owner-authorized **privileged READ-ONLY metadata-only preflight** against the fixed v2 classifier, not materialization/cutover.
 
-No source registration, tracker update or master-plan update grants LIVE authority.
+That privileged preflight may inspect only the minimum fixed path metadata required by the reviewed contract: presence, object type, UID/GID and mode. It must not read `.env` values, application data/config contents or other protected runtime content, and it must not mutate the host.
+
+Only after a successful privileged metadata-only preflight may the owner consider a distinct exact Composite LIVE decision for prerequisite materialization, the reviewed exact two-key protected-config projection, exact Hermes target adoption and bounded Docker reconciliation/E2E.
+
+No source registration, tracker update, plan update or read-only preflight grants LIVE authority.
 
 ### Accepted Weather source/runtime chain
 
@@ -185,9 +193,12 @@ shared SIMPLE-DEPLOY policy/workflow — COMPLETE
 -> Hermes consumer SIMPLE-DEPLOY contract — COMPLETE
 -> Hermes RPi5 compatibility prerequisite #690/#691 — COMPLETE
 -> Hermes static source target binding #692/#693 — COMPLETE
--> Hermes existing-install adoption source #698/#699 — CURRENT SOURCE OUTCOME
--> exact-main verification after #698 merge
--> separate exact Hermes host materialization/cutover + first reconciliation/E2E proof
+-> Hermes existing-install adoption source #698/#699 — COMPLETE
+-> Hermes post-Phase-B identity correction #708/#709 — COMPLETE
+-> Hermes host-prerequisite materialization v1 source #711/#712 — COMPLETE / parent+preflight semantics superseded by v2
+-> Hermes Phase-B parent/preflight correction #713/#714 — COMPLETE
+-> separately owner-authorized privileged READ-ONLY metadata-only preflight — NEXT HOST GATE
+-> only after successful preflight: separate exact Composite LIVE materialization + exact two-key projection + target adoption + bounded Docker reconciliation/E2E
 -> migrate/test another compatible consumer as required for reuse confidence
 -> declare SIMPLE-DEPLOY stable/default only after reuse criteria are actually satisfied
 -> ONLY THEN revisit ops-workflows#96 Queue vNext
@@ -257,7 +268,10 @@ Accepted source facts:
 - consumer contract: `hermes-deals@13f9fb69b9576d8e97ab3a85334927f3c576ca1c`;
 - source compatibility prerequisite #690 / PR #691: COMPLETE;
 - static target binding #692 / PR #693: COMPLETE;
-- current existing-install adoption source: #698 / PR #699;
+- existing-install adoption source #698 / PR #699: COMPLETE;
+- post-Phase-B identity correction #708 / PR #709: COMPLETE;
+- host-prerequisite materialization v1 source #711 / PR #712: COMPLETE, with Phase-B parent/preflight semantics superseded by v2;
+- Phase-B state-parent/preflight correction #713 / PR #714: COMPLETE;
 - RPi5-owned API-only adapter: `ops/deploy/simple-deploy-compose/hermes-deals-api.yml`;
 - target alias: `hermes-deals`;
 - liveness: `http://127.0.0.1:9128/api/health`;
@@ -265,9 +279,13 @@ Accepted source facts:
 - persistent database-volume identity: `hermes_deals_pgdata`;
 - private runtime config and host namespace remain separately LIVE-gated.
 
-Issue #692 completed the reviewed source target registration. Issue #698 now defines the bounded fail-closed path for adopting that already-registered target into an existing Weather-only SIMPLE-DEPLOY host installation. Neither source outcome installs the target, creates host paths, provisions private configuration or runs Docker.
+The completed source chain through #714 defines the bounded fail-closed path for adopting Hermes into the existing Weather-only SIMPLE-DEPLOY host installation. None of those source outcomes installs the target, creates host prerequisite paths, provisions private configuration or runs Docker.
 
-After #698 source merge and exact-main verification, a separate exact LIVE/cutover decision must prove minimum host materialization, target installation and first reconciliation/E2E before Hermes counts as activated reuse.
+The v2 correction preserves `/var/lib/rozkalns-simple-deployer` as the accepted fixed runtime-principal-owned `0700` Phase-B security boundary. Unprivileged inability to observe fixed Hermes child metadata beneath that boundary is represented fail-closed as `PRIVILEGED_METADATA_REQUIRED`; it must never be interpreted as `ABSENT` or `EXACT_READY`.
+
+The next host step is therefore a separately owner-authorized privileged READ-ONLY metadata-only preflight. It may inspect only fixed path presence/type/UID/GID/mode required by the reviewed classifier and must not read protected contents or mutate host state.
+
+Only after that preflight succeeds may a separate exact Composite LIVE/cutover decision prove minimum prerequisite materialization, the exact two-key protected-config projection, target adoption and first bounded reconciliation/E2E before Hermes counts as activated reuse.
 
 ### Reuse/stability rule
 
@@ -344,11 +362,14 @@ Do not use historical SHAs in this ledger as current source/runtime identity.
 9. Hermes SIMPLE-DEPLOY consumer contract — COMPLETE
 10. Hermes RPi5 compatibility prerequisite #690/#691 — COMPLETE
 11. Hermes static source target binding #692/#693 — COMPLETE
-12. Hermes existing-install adoption source #698/#699 — CURRENT SOURCE OUTCOME
-13. exact-main verification after #698 merge — NEXT SOURCE GATE
-14. separate exact Hermes host materialization/cutover + first reconciliation/E2E — LATER LIVE GATE
-15. further compatible-consumer reuse/stability proof
-16. only after stable/default criteria: ops-workflows#96 Queue vNext
+12. Hermes existing-install adoption source #698/#699 — COMPLETE
+13. Hermes post-Phase-B identity correction #708/#709 — COMPLETE
+14. Hermes host-prerequisite materialization v1 source #711/#712 — COMPLETE; Phase-B parent/preflight semantics superseded by v2
+15. Hermes Phase-B parent/preflight correction #713/#714 — COMPLETE
+16. separately owner-authorized privileged READ-ONLY metadata-only preflight — NEXT HOST GATE
+17. only after successful preflight: separate exact Composite LIVE prerequisite materialization + exact two-key projection + target adoption + bounded first reconciliation/E2E — LATER LIVE GATE
+18. further compatible-consumer reuse/stability proof
+19. only after stable/default criteria: ops-workflows#96 Queue vNext
 ```
 
 If fresh GitHub or host evidence invalidates an accepted receipt, reclassify before action. Never rerun a consumed one-shot gate, improvise a Docker/config path, or treat a source merge as authority for a separately sensitive mutation class.
@@ -357,7 +378,11 @@ If fresh GitHub or host evidence invalidates an accepted receipt, reclassify bef
 
 No plan, tracker or source merge grants inferred LIVE authority.
 
-The current Hermes existing-install adoption outcome #698 is source/docs/tests only. Its eventual source merge will not install the target on the running RPi5, materialize `/etc` or `/var/lib` state, provision private runtime configuration, run Docker/systemd, or authorize database/network/secret changes.
+The Hermes source chain through #713/#714 is complete. Those outcomes did not install the Hermes target, materialize `/etc` or `/var/lib` prerequisites, provision private runtime configuration, read protected values, run Docker/systemd or authorize database/network/secret changes.
+
+The next host gate is a separately owner-authorized privileged READ-ONLY metadata-only preflight against the fixed v2 classifier. That gate may inspect only fixed path presence/type/UID/GID/mode needed by the reviewed contract; it must not read protected contents and must not mutate host state.
+
+A successful metadata-only preflight still does not authorize materialization or cutover. Any prerequisite filesystem/application-data materialization, exact two-key protected-config projection, target adoption, Docker reconciliation/E2E or other sensitive mutation requires a distinct exact current Composite LIVE owner gate.
 
 The completed Weather cutover/data/UI authorizations were consumed by their completed attempts and are non-reusable. The successful Weather cutover activated only the reviewed standing ordinary `AUTO_DEPLOY_SAFE` reconciliation contract for the already-adopted static Weather target.
 
@@ -373,7 +398,7 @@ For fresh state, read in this order when relevant:
 4. #103 umbrella tracker;
 5. latest relevant #191 handoff/comment;
 6. accepted Weather public acceptance evidence in `rozkalns_weather#176`;
-7. Hermes compatibility prerequisite #690/#691, completed static target binding #692/#693, and current existing-install adoption issue #698/#699;
+7. Hermes compatibility #690/#691, static target binding #692/#693, existing-install adoption #698/#699, post-Phase-B identity correction #708/#709, materialization v1 #711/#712, and Phase-B parent/preflight correction #713/#714;
 8. exact current `main` and required CI/review/ruleset state;
 9. minimum-sufficient live evidence only when the exact current gate requires it.
 
