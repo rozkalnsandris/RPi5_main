@@ -1,0 +1,123 @@
+{
+  "schema": "rozkalns.rpi5-main.simple-deploy-hermes-prerequisite-materialization.v1",
+  "schema_version": 1,
+  "issue": 711,
+  "status": "SOURCE_CONTRACT_REVIEWED_NOT_LIVE",
+  "depends_on": {
+    "compatibility": [690, 691],
+    "target_binding": [692, 693],
+    "existing_install_adoption": [698, 699],
+    "post_phase_b_identity_correction": [708, 709]
+  },
+  "source": {
+    "owner_user": "andris",
+    "home_resolution": "passwd_database",
+    "checkout_relative": "hermes-deals",
+    "within_checkout": {
+      "data": "data/raw",
+      "config": "config",
+      "private_env": ".env"
+    },
+    "metadata_policy": {
+      "owner_and_primary_group_must_match_fixed_owner": true,
+      "symlinks_allowed": false,
+      "special_files_allowed": false,
+      "world_writable_allowed": false,
+      "setuid_or_setgid_allowed": false,
+      "private_env_group_or_world_writable_allowed": false
+    },
+    "home_is_caller_selectable": false,
+    "protected_content_read_requires_future_live_authority": true
+  },
+  "destination": {
+    "paths": {
+      "state_root": "/var/lib/rozkalns-simple-deployer/hermes-deals",
+      "data": "/var/lib/rozkalns-simple-deployer/hermes-deals/data/raw",
+      "config": "/var/lib/rozkalns-simple-deployer/hermes-deals/config",
+      "private_env": "/etc/rozkalns-simple-deployer/private/hermes-deals-api.env"
+    },
+    "parents": {
+      "state_parent": "/var/lib/rozkalns-simple-deployer",
+      "private_root": "/etc/rozkalns-simple-deployer/private"
+    },
+    "owner": "root:root",
+    "modes": {
+      "state_parent": "0755",
+      "state_root": "0755",
+      "data_parent": "0755",
+      "data": "0755",
+      "config": "0755",
+      "private_root": "0700",
+      "private_env": "0600",
+      "materialized_tree_directory": "0755",
+      "materialized_tree_file": "0644"
+    },
+    "top_level_shape": {
+      "state_root": ["data", "config"],
+      "data_parent": ["raw"]
+    }
+  },
+  "classifier": {
+    "default_is_non_mutating": true,
+    "default_reads_protected_values": false,
+    "statuses": ["ABSENT", "EXACT_READY", "PARTIAL_CONFLICT"],
+    "partial_or_metadata_drift_fails_closed": true,
+    "staging_presence_is_conflict": true,
+    "exact_ready_public_check_is_metadata_and_fixed_shape_only": true,
+    "protected_content_equivalence_is_verified_only_inside_future_apply_authority": true
+  },
+  "private_env": {
+    "required_keys": ["DATABASE_URL", "HTTP_USER_AGENT"],
+    "projection_order": ["DATABASE_URL", "HTTP_USER_AGENT"],
+    "emit_only_required_keys": true,
+    "reject_missing_required_keys": true,
+    "reject_duplicate_required_keys": true,
+    "reject_malformed_assignments": true,
+    "values_may_be_emitted_to_logs_or_receipts": false
+  },
+  "materialization": {
+    "entrypoint": "scripts/materialize-simple-deploy-hermes-prerequisites-v1.py",
+    "state_staging_path": "/var/lib/rozkalns-simple-deployer/.hermes-deals-prerequisites-v1.staged",
+    "private_env_staging_path": "/etc/rozkalns-simple-deployer/private/.hermes-deals-api.env.prerequisites-v1.staged",
+    "normalize_destination_tree_metadata": true,
+    "silent_merge_or_overwrite": false,
+    "source_content_preserved": true,
+    "publish_state_root_before_private_env": true,
+    "success_path_unlinks_only_own_private_env_staging_file": true,
+    "automatic_retry": false,
+    "automatic_rollback": false,
+    "automatic_cleanup_after_failure": false,
+    "failure_after_first_mutation": "STOP_WITH_EVIDENCE"
+  },
+  "separation": {
+    "generic_simple_deploy_executor_changed": false,
+    "generic_first_installer_changed": false,
+    "hermes_adoption_entrypoint": "scripts/adopt-simple-deploy-hermes-v1.py",
+    "hermes_adoption_contract": "ops/contracts/simple-deploy-hermes-adoption-v1.json",
+    "prerequisites_and_target_adoption_are_distinct_operations": true,
+    "api_only_adapter_is_preserved": true,
+    "db_web_worker_lifecycle_authority": false,
+    "remove_orphans_authority": false
+  },
+  "cli": {
+    "options": ["--expected-source-sha", "--apply"],
+    "caller_selectable_path": false,
+    "caller_selectable_env_file": false,
+    "caller_selectable_key": false,
+    "caller_selectable_repository": false,
+    "caller_selectable_target": false,
+    "caller_selectable_command_or_argv": false
+  },
+  "authority": {
+    "issue_711_source_docs_tests_ci_only": true,
+    "merge_authorizes_live": false,
+    "host_filesystem_or_application_data": false,
+    "protected_config_or_secret_access": false,
+    "target_adoption": false,
+    "docker": false,
+    "systemd": false,
+    "database_or_schema": false,
+    "cloudflare_or_network": false,
+    "permissions_or_credentials": false
+  }
+}
