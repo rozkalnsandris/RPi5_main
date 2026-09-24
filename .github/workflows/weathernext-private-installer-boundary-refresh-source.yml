@@ -26,5 +26,8 @@ jobs:
       - name: Validate WeatherNext private installer boundary refresh
         run: |
           python3 ./tests/test-weather-private-installer-boundary-refresh.py
+          python3 ./tests/test-weather-private-installer-boundary-refresh-runtime.py
           python3 -m py_compile \
-            ./ops/lib/deploy_executor/weather_private_installer_boundary_refresh.py
+            ./ops/lib/deploy_executor/weather_private_installer_boundary_refresh.py \
+            ./ops/lib/deploy_executor/weather_private_installer_boundary_refresh_runtime.py \
+            ./ops/lib/deploy_executor/weather_private_privileged_dispatch.py
