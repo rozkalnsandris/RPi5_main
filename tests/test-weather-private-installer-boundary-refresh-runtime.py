@@ -130,12 +130,19 @@ def evidence(plan: contract.RefreshPlan) -> runtime.CanonicalBoundaryRefreshEvid
 
 
 def prepared(plan: contract.RefreshPlan) -> runtime.PreparedBoundary:
+    fixture_root = Path("/srv/repo-owner")
     return runtime.PreparedBoundary(
         exact_source_sha=CURRENT,
         exact_entrypoint_sha256="b" * 64,
         stale_head_sha=STALE,
         stale_entrypoint_sha256="b" * 64,
-        manager=runtime.ManagerCheckout(Path("/home/andris/RPi5_main"), "andris", 1000, 1000, Path("/home/andris")),
+        manager=runtime.ManagerCheckout(
+            fixture_root / "RPi5_main",
+            "repo-owner",
+            1000,
+            1000,
+            fixture_root,
+        ),
         manager_snapshot=("d" * 40, "e" * 64),
         plan=plan,
     )
