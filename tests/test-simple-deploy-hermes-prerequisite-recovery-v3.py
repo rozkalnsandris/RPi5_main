@@ -23,12 +23,21 @@ sys.modules[spec.name] = materialize
 spec.loader.exec_module(materialize)
 
 
+def _env_text(assignments: tuple[tuple[str, str], ...]) -> str:
+    return "".join(f"{key}={value}\n" for key, value in assignments)
+
+
+def _env_bytes(assignments: tuple[tuple[str, str], ...]) -> bytes:
+    return _env_text(assignments).encode("utf-8")
+
+
 class Fixture:
     def __init__(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
         self.base = Path(self.temp.name)
         self.uid = os.getuid()
         self.gid = os.getgid()
+        self.credential_value = "SyntheticCredential42"
         checkout = self.base / "home/andris/hermes-deals"
         source_data = checkout / "data/raw"
         source_config = checkout / "config"
@@ -51,11 +60,15 @@ class Fixture:
         os.chmod(source_data / "snapshot.json", 0o644)
         os.chmod(source_config / "sources.json", 0o644)
         source_env.write_text(
-            "OTHER=ignored\n"
-            "POSTGRES_DB=hermes_db\n"
-            "POSTGRES_USER=hermes_user\n"
-            "POSTGRES_PASSWORD=SyntheticPassword42\n"
-            'HTTP_USER_AGENT="Mozilla/5.0 Synthetic Hermes Agent"\n',
+            _env_text(
+                (
+                    ("OTHER", "ignored"),
+                    ("POSTGRES_DB", "hermes_db"),
+                    ("POSTGRES_USER", "hermes_user"),
+                    ("POSTGRES_PASSWORD", self.credential_value),
+                    ("HTTP_USER_AGENT", '"Mozilla/5.0 Synthetic Hermes Agent"'),
+                )
+            ),
             encoding="utf-8",
         )
         os.chmod(source_env, 0o600)
@@ -118,45 +131,59 @@ class HermesPrerequisiteRecoveryV3Tests(unittest.TestCase):
 
     def test_legacy_four_key_source_projects_exact_two_key_destination(self) -> None:
         plan = self.fx.plan()
-        self.assertEqual(
-            plan.env_bytes,
-            b"DATABASE_URL='postgresql+psycopg://hermes_user:SyntheticPassword42@db:5432/hermes_db'\n"
-            b"HTTP_USER_AGENT='Mozilla/5.0 Synthetic Hermes Agent'\n",
-        )
+        expected = (
+            "DATABASE_URL='postgresql+psycopg://"
+            f"hermes_user:{self.fx.credential_value}@db:5432/hermes_db'\n"
+            "HTTP_USER_AGENT='Mozilla/5.0 Synthetic Hermes Agent'\n"
+        ).encode("utf-8")
+        self.assertEqual(plan.env_bytes, expected)
         self.assertEqual(
             tuple(line.split(b"=", 1)[0].decode("ascii") for line in plan.env_bytes.splitlines()),
             materialize.DESTINATION_ENV_KEYS,
         )
 
     def test_missing_source_key_fails_without_value_disclosure(self) -> None:
-        raw = (
-            b"POSTGRES_USER=synthetic-user\n"
-            b"POSTGRES_PASSWORD=DoNotLeakSyntheticValue\n"
-            b"POSTGRES_DB=synthetic-db\n"
+        protected_fixture = "DoNotLeakSyntheticValue"
+        raw = _env_bytes(
+            (
+                ("POSTGRES_USER", "synthetic-user"),
+                ("POSTGRES_PASSWORD", protected_fixture),
+                ("POSTGRES_DB", "synthetic-db"),
+            )
         )
         with self.assertRaises(materialize.MaterializationError) as ctx:
             materialize._extract_source_env(raw)
         message = str(ctx.exception)
         self.assertIn("HTTP_USER_AGENT", message)
-        self.assertNotIn("DoNotLeakSyntheticValue", message)
+        self.assertNotIn(protected_fixture, message)
 
     def test_duplicate_required_source_key_fails_closed(self) -> None:
-        raw = (
-            b"POSTGRES_USER=one\nPOSTGRES_USER=two\nPOSTGRES_PASSWORD=pw\n"
-            b"POSTGRES_DB=db\nHTTP_USER_AGENT=agent\n"
+        raw = _env_bytes(
+            (
+                ("POSTGRES_USER", "one"),
+                ("POSTGRES_USER", "two"),
+                ("POSTGRES_PASSWORD", "fixture-value"),
+                ("POSTGRES_DB", "db"),
+                ("HTTP_USER_AGENT", "agent"),
+            )
         )
         with self.assertRaisesRegex(materialize.MaterializationError, "duplicates required key POSTGRES_USER"):
             materialize._extract_source_env(raw)
 
     def test_unsupported_quote_fails_closed_without_echoing_value(self) -> None:
-        raw = (
-            b"POSTGRES_USER=user\nPOSTGRES_PASSWORD=synthetic'quote\n"
-            b"POSTGRES_DB=db\nHTTP_USER_AGENT=agent\n"
+        protected_fixture = "synthetic'quote"
+        raw = _env_bytes(
+            (
+                ("POSTGRES_USER", "user"),
+                ("POSTGRES_PASSWORD", protected_fixture),
+                ("POSTGRES_DB", "db"),
+                ("HTTP_USER_AGENT", "agent"),
+            )
         )
         with self.assertRaises(materialize.MaterializationError) as ctx:
             materialize._extract_source_env(raw)
         self.assertIn("POSTGRES_PASSWORD", str(ctx.exception))
-        self.assertNotIn("synthetic'quote", str(ctx.exception))
+        self.assertNotIn(protected_fixture, str(ctx.exception))
 
     def test_root_safe_git_invocation_disables_optional_locks(self) -> None:
         completed = subprocess.CompletedProcess(args=(), returncode=0, stdout=b"", stderr=b"")
