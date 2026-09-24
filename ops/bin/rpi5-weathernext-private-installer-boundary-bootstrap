@@ -101,16 +101,52 @@ def _bounded_run(
     return result
 
 
-def _git(repo: Path, *args: str, runner: Callable[..., Any] = subprocess.run) -> str:
-    if not repo.is_absolute():
-        _fail("Git repository path is not absolute")
-    read_ops = {"rev-parse", "remote", "status", "ls-tree"}
+def _root_git(repo: Path, *args: str, runner: Callable[..., Any] = subprocess.run) -> str:
+    if repo != TRUSTED_CHECKOUT:
+        _fail("root Git escaped fixed trusted checkout")
+    read_ops = {"rev-parse", "remote", "status"}
     if not args or args[0] not in read_ops:
-        _fail("Git argv escaped read-only bootstrap allowlist")
+        _fail("root Git escaped read-only bootstrap allowlist")
     return _bounded_run(
         ("/usr/bin/git", "--no-optional-locks", "-C", str(repo), *args),
         runner=runner,
     ).stdout
+
+
+def _manager_git(
+    manager: Path,
+    *args: str,
+    runner: Callable[..., Any] = subprocess.run,
+) -> str:
+    read_ops = {"rev-parse", "remote", "status", "ls-tree"}
+    if not args or args[0] not in read_ops:
+        _fail("manager Git escaped read-only bootstrap allowlist")
+    git_argv = (
+        "/usr/bin/git",
+        "--no-optional-locks",
+        "-C",
+        str(manager),
+        *args,
+    )
+    argv = (
+        "/usr/sbin/runuser",
+        "-u",
+        MANAGER_USERNAME,
+        "--",
+        "/usr/bin/env",
+        "-i",
+        f"HOME={manager.parent}",
+        f"USER={MANAGER_USERNAME}",
+        f"LOGNAME={MANAGER_USERNAME}",
+        "PATH=/usr/bin:/bin",
+        "LANG=C.UTF-8",
+        "LC_ALL=C.UTF-8",
+        "GIT_TERMINAL_PROMPT=0",
+        "GIT_CONFIG_NOSYSTEM=1",
+        "GIT_CONFIG_GLOBAL=/dev/null",
+        *git_argv,
+    )
+    return _bounded_run(argv, runner=runner).stdout
 
 
 def _remote_main(*, runner: Callable[..., Any] = subprocess.run) -> str:
@@ -208,13 +244,13 @@ def _manager_checkout(*, pwd_lookup: Callable[[str], Any] = pwd.getpwnam) -> tup
 
 
 def _manager_snapshot(manager: Path, *, runner: Callable[..., Any] = subprocess.run) -> tuple[str, str]:
-    head = _git(manager, "rev-parse", "HEAD", runner=runner).strip()
+    head = _manager_git(manager, "rev-parse", "HEAD", runner=runner).strip()
     if not _is_sha40(head):
         _fail("manager HEAD is malformed")
-    status = _git(manager, "status", "--porcelain", "--untracked-files=all", runner=runner)
+    status = _manager_git(manager, "status", "--porcelain", "--untracked-files=all", runner=runner)
     if status != "":
         _fail("manager checkout is not clean")
-    origin = _git(manager, "remote", "get-url", "origin", runner=runner).strip()
+    origin = _manager_git(manager, "remote", "get-url", "origin", runner=runner).strip()
     if origin != REVIEWED_ORIGIN:
         _fail("manager origin drifted")
     return head, status
@@ -222,12 +258,12 @@ def _manager_snapshot(manager: Path, *, runner: Callable[..., Any] = subprocess.
 
 def _known_stale_boundary(*, runner: Callable[..., Any] = subprocess.run) -> None:
     _root_dir(TRUSTED_CHECKOUT, 0o755)
-    head = _git(TRUSTED_CHECKOUT, "rev-parse", "HEAD", runner=runner).strip()
+    head = _root_git(TRUSTED_CHECKOUT, "rev-parse", "HEAD", runner=runner).strip()
     if head != KNOWN_STALE_HEAD:
         _fail("trusted installer boundary is no longer the known stale head")
-    if _git(TRUSTED_CHECKOUT, "status", "--porcelain", "--untracked-files=all", runner=runner) != "":
+    if _root_git(TRUSTED_CHECKOUT, "status", "--porcelain", "--untracked-files=all", runner=runner) != "":
         _fail("trusted installer boundary is not clean")
-    if _git(TRUSTED_CHECKOUT, "remote", "get-url", "origin", runner=runner).strip() != REVIEWED_ORIGIN:
+    if _root_git(TRUSTED_CHECKOUT, "remote", "get-url", "origin", runner=runner).strip() != REVIEWED_ORIGIN:
         _fail("trusted installer boundary origin drifted")
     entrypoint = _regular_bytes(
         INSTALLED_ENTRYPOINT,
@@ -261,7 +297,7 @@ def _runtime_bytes(
     if before[0] != remote_main:
         _fail("manager checkout is not exact current reviewed main")
     relative = RUNTIME_RELATIVE.as_posix()
-    line = _git(manager, "ls-tree", before[0], "--", relative, runner=runner).strip()
+    line = _manager_git(manager, "ls-tree", before[0], "--", relative, runner=runner).strip()
     prefix = "100755 blob "
     suffix = "\t" + relative
     if not line.startswith(prefix) or not line.endswith(suffix):

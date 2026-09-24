@@ -140,9 +140,17 @@ def test_end_to_end_reachability_from_known_stale_boundary():
             argv = tuple(argv)
             if argv[:2] == ("/usr/bin/git", "ls-remote"):
                 return result(argv, f"{source_sha}\trefs/heads/main\n")
-            repo = Path(argv[3])
-            args = argv[4:]
+            try:
+                git_index = argv.index("/usr/bin/git")
+            except ValueError as exc:
+                raise AssertionError(f"missing fixed git executable: {argv}") from exc
+            git_argv = argv[git_index:]
+            assert git_argv[:2] == ("/usr/bin/git", "--no-optional-locks")
+            assert git_argv[2] == "-C"
+            repo = Path(git_argv[3])
+            args = git_argv[4:]
             if repo == trusted:
+                assert argv[0] == "/usr/bin/git"
                 if args == ("rev-parse", "HEAD"):
                     return result(argv, module.KNOWN_STALE_HEAD + "\n")
                 if args == ("status", "--porcelain", "--untracked-files=all"):
@@ -150,6 +158,12 @@ def test_end_to_end_reachability_from_known_stale_boundary():
                 if args == ("remote", "get-url", "origin"):
                     return result(argv, module.REVIEWED_ORIGIN + "\n")
             if repo == manager:
+                assert argv[:4] == (
+                    "/usr/sbin/runuser",
+                    "-u",
+                    module.MANAGER_USERNAME,
+                    "--",
+                )
                 if args == ("rev-parse", "HEAD"):
                     return result(argv, source_sha + "\n")
                 if args == ("status", "--porcelain", "--untracked-files=all"):
@@ -182,6 +196,7 @@ def test_broker_is_identity_only_and_independent_of_stale_dispatch():
     assert "from deploy_executor.weather_private_privileged_dispatch" not in source
     assert "import deploy_executor.weather_private_privileged_dispatch" not in source
     assert "shell=False" in source
+    assert "/usr/sbin/runuser" in source
     assert "git fetch" not in source
     assert "git reset" not in source
     assert "git clean" not in source
