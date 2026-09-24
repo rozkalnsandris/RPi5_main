@@ -1,6 +1,8 @@
 {
   "schema": "rozkalns-weather.weathernext-private-installer-boundary-refresh.v1",
   "implementation_issue": 700,
+  "transport_implementation_issue": 721,
+  "bootstrap_prerequisite_issue": 723,
   "source_repository": "rozkalnsandris/RPi5_main",
   "operation_id": "rpi5.weathernext-private-installer-boundary.refresh.v1",
   "target_alias": "rpi5-weathernext-private-installer-boundary-refresh",
@@ -10,6 +12,12 @@
   "caller_authority": [
     "authorization_issue_number"
   ],
+  "bootstrap_entrypoint": "/usr/local/sbin/rpi5-weathernext-private-installer-boundary-bootstrap",
+  "bootstrap_runtime": "ops/bin/rpi5-weathernext-private-installer-boundary-refresh-runtime",
+  "bootstrap_interface": "rozkalns.weathernext-private-installer-boundary-refresh-bootstrap-callable.v1",
+  "runtime_module": "ops/lib/deploy_executor/weather_private_installer_boundary_refresh_runtime.py",
+  "privileged_dispatch": "ops/lib/deploy_executor/weather_private_privileged_dispatch.py",
+  "repository_entrypoint": "ops/bin/rpi5-weathernext-private-host-privileged-install",
   "reviewed_origin": "https://github.com/rozkalnsandris/RPi5_main.git",
   "manager_checkout_resolver": "repo-owner-home/RPi5_main",
   "trusted_checkout": "/var/lib/rpi5-deploy/RPi5_main-weathernext-private-installer-trusted",
@@ -40,6 +48,7 @@
       "max_operations": 1
     }
   ],
+  "entrypoint_replace_semantics": "OPTIONAL_WHEN_CURRENT_BYTES_ALREADY_EXACT",
   "postconditions": [
     "trusted checkout clean detached at exact owner-authorized current-main SHA",
     "trusted checkout reviewed origin exact",

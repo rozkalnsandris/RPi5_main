@@ -27,6 +27,11 @@ jobs:
         run: |
           python3 ./tests/test-weather-private-installer-boundary-refresh.py
           python3 ./tests/test-weather-private-installer-boundary-bootstrap.py
+          python3 ./tests/test-weather-private-installer-boundary-refresh-runtime.py
+          python3 ./tests/test-weather-private-installer-boundary-refresh-bootstrap-runtime.py
           python3 -m py_compile \
             ./ops/lib/deploy_executor/weather_private_installer_boundary_refresh.py \
-            ./ops/bin/rpi5-weathernext-private-installer-boundary-bootstrap
+            ./ops/lib/deploy_executor/weather_private_installer_boundary_refresh_runtime.py \
+            ./ops/lib/deploy_executor/weather_private_privileged_dispatch.py \
+            ./ops/bin/rpi5-weathernext-private-installer-boundary-bootstrap \
+            ./ops/bin/rpi5-weathernext-private-installer-boundary-refresh-runtime

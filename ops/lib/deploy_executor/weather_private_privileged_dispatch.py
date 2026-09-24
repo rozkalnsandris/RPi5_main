@@ -35,6 +35,13 @@ from .weather_private_bigquery_runtime_mode_recovery import (
     WeatherNextPrivateRuntimeModeRecoveryError,
     run_privileged_runtime_mode_recovery,
 )
+from .weather_private_installer_boundary_refresh import (
+    OPERATION_ID as INSTALLER_BOUNDARY_REFRESH_OPERATION_ID,
+)
+from .weather_private_installer_boundary_refresh_runtime import (
+    WeatherNextPrivateInstallerBoundaryRefreshRuntimeError,
+    run_privileged_installer_boundary_refresh,
+)
 
 
 class WeatherNextPrivatePrivilegedDispatchError(RuntimeError):
@@ -75,6 +82,7 @@ def _route_operation(issue_number: int) -> str:
         APPLICATION_STAGE_OPERATION_ID,
         RUNTIME_MATERIALIZATION_OPERATION_ID,
         RUNTIME_MODE_RECOVERY_OPERATION_ID,
+        INSTALLER_BOUNDARY_REFRESH_OPERATION_ID,
     }:
         _fail("authorization operation is outside the fixed WeatherNext privileged allowlist")
     return operation
@@ -91,11 +99,14 @@ def run_privileged_request(issue_number: int) -> Mapping[str, Any]:
             return dict(run_privileged_runtime_materialization(issue_number))
         if operation == RUNTIME_MODE_RECOVERY_OPERATION_ID:
             return dict(run_privileged_runtime_mode_recovery(issue_number))
+        if operation == INSTALLER_BOUNDARY_REFRESH_OPERATION_ID:
+            return dict(run_privileged_installer_boundary_refresh(issue_number))
     except (
         WeatherNextPrivateHostInstallerError,
         WeatherNextPrivateApplicationStageRuntimeError,
         WeatherNextPrivateRuntimeTransportError,
         WeatherNextPrivateRuntimeModeRecoveryError,
+        WeatherNextPrivateInstallerBoundaryRefreshRuntimeError,
     ) as exc:
         raise WeatherNextPrivatePrivilegedDispatchError(str(exc)) from exc
     _fail("fixed WeatherNext privileged dispatch reached unreachable state")

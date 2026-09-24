@@ -1,0 +1,326 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import hashlib
+import importlib
+import os
+from pathlib import Path
+import pwd
+import stat
+import subprocess
+import sys
+from typing import Any, Callable, Mapping, Sequence
+
+BOOTSTRAP_INTERFACE = "rozkalns.weathernext-private-installer-boundary-refresh-bootstrap-callable.v1"
+SOURCE_REPOSITORY = "rozkalnsandris/RPi5_main"
+REVIEWED_ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
+MANAGER_USERNAME = "andris"
+MANAGER_REPO_BASENAME = "RPi5_main"
+RUNTIME_MODULE_RELATIVE = Path("ops/lib/deploy_executor/weather_private_installer_boundary_refresh_runtime.py")
+TRUSTED_CHECKOUT = Path("/var/lib/rpi5-deploy/RPi5_main-weathernext-private-installer-trusted")
+TRUSTED_LIB = TRUSTED_CHECKOUT / "ops/lib"
+MAX_RUNTIME_BYTES = 2 * 1024 * 1024
+ROOT_UID = 0
+ROOT_GID = 0
+_SHA40 = set("0123456789abcdef")
+
+
+class BootstrapRuntimeAdapterError(RuntimeError):
+    pass
+
+
+def _fail(message: str) -> None:
+    raise BootstrapRuntimeAdapterError(message)
+
+
+def _is_sha40(value: str) -> bool:
+    return len(value) == 40 and all(ch in _SHA40 for ch in value)
+
+
+def _git_blob_sha1(data: bytes) -> str:
+    return hashlib.sha1(f"blob {len(data)}\0".encode("ascii") + data).hexdigest()
+
+
+def _bounded_run(
+    argv: Sequence[str],
+    *,
+    runner: Callable[..., Any] = subprocess.run,
+) -> subprocess.CompletedProcess[str]:
+    try:
+        result = runner(
+            tuple(argv),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="strict",
+            env={
+                "PATH": "/usr/bin:/bin",
+                "LANG": "C.UTF-8",
+                "LC_ALL": "C.UTF-8",
+                "GIT_TERMINAL_PROMPT": "0",
+                "GIT_CONFIG_NOSYSTEM": "1",
+                "GIT_CONFIG_GLOBAL": "/dev/null",
+            },
+            shell=False,
+            close_fds=True,
+            timeout=30,
+            check=False,
+        )
+    except TypeError:
+        result = runner(tuple(argv))
+    except Exception as exc:
+        raise BootstrapRuntimeAdapterError("fixed runtime-adapter Git command failed to run") from exc
+    if (
+        type(getattr(result, "returncode", None)) is not int
+        or type(getattr(result, "stdout", None)) is not str
+        or type(getattr(result, "stderr", None)) is not str
+    ):
+        _fail("fixed runtime-adapter command returned unsupported result")
+    if result.returncode != 0:
+        _fail("fixed runtime-adapter command failed closed")
+    if len(result.stdout.encode("utf-8")) > 64 * 1024 or len(result.stderr.encode("utf-8")) > 64 * 1024:
+        _fail("fixed runtime-adapter command output exceeded source limit")
+    return result
+
+
+def _manager_checkout(*, pwd_lookup: Callable[[str], Any] = pwd.getpwnam) -> tuple[Path, int, int, Path]:
+    try:
+        account = pwd_lookup(MANAGER_USERNAME)
+    except Exception as exc:
+        raise BootstrapRuntimeAdapterError("manager account lookup failed") from exc
+    if type(account.pw_uid) is not int or type(account.pw_gid) is not int or account.pw_uid <= 0 or account.pw_gid <= 0:
+        _fail("manager account identity is invalid")
+    home = Path(str(account.pw_dir))
+    manager = home / MANAGER_REPO_BASENAME
+    try:
+        meta = manager.lstat()
+    except OSError as exc:
+        raise BootstrapRuntimeAdapterError("canonical manager checkout is unavailable") from exc
+    if (
+        not stat.S_ISDIR(meta.st_mode)
+        or stat.S_ISLNK(meta.st_mode)
+        or meta.st_uid != account.pw_uid
+        or meta.st_gid != account.pw_gid
+    ):
+        _fail("canonical manager checkout identity drifted")
+    return manager, account.pw_uid, account.pw_gid, home
+
+
+def _manager_git(
+    manager: Path,
+    home: Path,
+    *args: str,
+    runner: Callable[..., Any] = subprocess.run,
+) -> str:
+    read_ops = {"rev-parse", "status", "remote", "ls-tree"}
+    if not args or args[0] not in read_ops:
+        _fail("manager Git escaped read-only runtime-adapter allowlist")
+    argv = (
+        "/usr/sbin/runuser",
+        "-u",
+        MANAGER_USERNAME,
+        "--",
+        "/usr/bin/env",
+        "-i",
+        f"HOME={home}",
+        f"USER={MANAGER_USERNAME}",
+        f"LOGNAME={MANAGER_USERNAME}",
+        "PATH=/usr/bin:/bin",
+        "LANG=C.UTF-8",
+        "LC_ALL=C.UTF-8",
+        "GIT_TERMINAL_PROMPT=0",
+        "GIT_CONFIG_NOSYSTEM=1",
+        "GIT_CONFIG_GLOBAL=/dev/null",
+        "/usr/bin/git",
+        "--no-optional-locks",
+        "-C",
+        str(manager),
+        *args,
+    )
+    return _bounded_run(argv, runner=runner).stdout
+
+
+def _manager_snapshot(
+    manager: Path,
+    home: Path,
+    *,
+    runner: Callable[..., Any] = subprocess.run,
+) -> tuple[str, str]:
+    head = _manager_git(manager, home, "rev-parse", "HEAD", runner=runner).strip()
+    if not _is_sha40(head):
+        _fail("manager HEAD is malformed")
+    status_text = _manager_git(
+        manager,
+        home,
+        "status",
+        "--porcelain",
+        "--untracked-files=all",
+        runner=runner,
+    )
+    if status_text != "":
+        _fail("manager checkout is not clean")
+    origin = _manager_git(manager, home, "remote", "get-url", "origin", runner=runner).strip()
+    if origin != REVIEWED_ORIGIN:
+        _fail("manager origin drifted")
+    return head, hashlib.sha256(status_text.encode("utf-8", "strict")).hexdigest()
+
+
+def _regular_bytes(path: Path, *, uid: int, gid: int, mode: int) -> bytes:
+    try:
+        before = path.lstat()
+    except OSError as exc:
+        raise BootstrapRuntimeAdapterError("verified runtime module is unavailable") from exc
+    if (
+        not stat.S_ISREG(before.st_mode)
+        or stat.S_ISLNK(before.st_mode)
+        or before.st_nlink != 1
+        or before.st_uid != uid
+        or before.st_gid != gid
+        or stat.S_IMODE(before.st_mode) != mode
+        or before.st_size < 1
+        or before.st_size > MAX_RUNTIME_BYTES
+    ):
+        _fail("verified runtime module metadata drifted")
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(path, flags)
+    except OSError as exc:
+        raise BootstrapRuntimeAdapterError("verified runtime module cannot be opened") from exc
+    try:
+        opened = os.fstat(fd)
+        if (opened.st_dev, opened.st_ino, opened.st_size) != (before.st_dev, before.st_ino, before.st_size):
+            _fail("verified runtime module changed before read")
+        chunks: list[bytes] = []
+        total = 0
+        while total <= MAX_RUNTIME_BYTES:
+            chunk = os.read(fd, min(65536, MAX_RUNTIME_BYTES + 1 - total))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            total += len(chunk)
+        data = b"".join(chunks)
+        if len(data) != opened.st_size or len(data) > MAX_RUNTIME_BYTES:
+            _fail("verified runtime module changed during read")
+    finally:
+        os.close(fd)
+    after = path.lstat()
+    if (
+        after.st_dev,
+        after.st_ino,
+        after.st_size,
+        after.st_mtime_ns,
+        after.st_ctime_ns,
+    ) != (
+        before.st_dev,
+        before.st_ino,
+        before.st_size,
+        before.st_mtime_ns,
+        before.st_ctime_ns,
+    ):
+        _fail("verified runtime module path changed during read")
+    return data
+
+
+def _verified_runtime_bytes(
+    manager: Path,
+    uid: int,
+    gid: int,
+    home: Path,
+    *,
+    runner: Callable[..., Any] = subprocess.run,
+) -> tuple[tuple[str, str], bytes]:
+    before = _manager_snapshot(manager, home, runner=runner)
+    relative = RUNTIME_MODULE_RELATIVE.as_posix()
+    line = _manager_git(manager, home, "ls-tree", before[0], "--", relative, runner=runner).strip()
+    prefix = "100644 blob "
+    suffix = "\t" + relative
+    if not line.startswith(prefix) or not line.endswith(suffix):
+        _fail("fixed refresh runtime module is missing or has wrong Git mode")
+    blob = line[len(prefix) : -len(suffix)]
+    if not _is_sha40(blob):
+        _fail("fixed refresh runtime module blob is malformed")
+    data = _regular_bytes(manager / RUNTIME_MODULE_RELATIVE, uid=uid, gid=gid, mode=0o644)
+    if _git_blob_sha1(data) != blob:
+        _fail("fixed refresh runtime module bytes do not match manager HEAD")
+    after = _manager_snapshot(manager, home, runner=runner)
+    if after != before:
+        _fail("manager HEAD/index/worktree snapshot drifted during runtime verification")
+    return before, data
+
+
+def _trusted_dependency_root() -> Path:
+    for path in (TRUSTED_CHECKOUT, TRUSTED_LIB, TRUSTED_LIB / "deploy_executor"):
+        try:
+            meta = path.lstat()
+        except OSError as exc:
+            raise BootstrapRuntimeAdapterError("trusted dependency root is unavailable") from exc
+        if (
+            not stat.S_ISDIR(meta.st_mode)
+            or stat.S_ISLNK(meta.st_mode)
+            or meta.st_uid != ROOT_UID
+            or meta.st_gid != ROOT_GID
+        ):
+            _fail("trusted dependency root metadata drifted")
+    return TRUSTED_LIB
+
+
+def _load_verified_runtime(data: bytes) -> Callable[[int], Mapping[str, Any]]:
+    dependency_root = _trusted_dependency_root()
+    previous_path = tuple(sys.path)
+    try:
+        sys.path.insert(0, str(dependency_root))
+        package = importlib.import_module("deploy_executor")
+        package_file = Path(str(package.__file__)).resolve()
+        expected_parent = (dependency_root / "deploy_executor").resolve()
+        if package_file.parent != expected_parent:
+            _fail("deploy_executor package escaped trusted dependency root")
+        namespace: dict[str, Any] = {
+            "__name__": "deploy_executor.weather_private_installer_boundary_refresh_runtime_bootstrap",
+            "__package__": "deploy_executor",
+            "__file__": str(RUNTIME_MODULE_RELATIVE),
+            "__builtins__": __builtins__,
+        }
+        try:
+            code = compile(data, str(RUNTIME_MODULE_RELATIVE), "exec", dont_inherit=True)
+            exec(code, namespace, namespace)
+        except Exception as exc:
+            raise BootstrapRuntimeAdapterError("verified refresh runtime module failed to load") from exc
+    finally:
+        sys.path[:] = previous_path
+    entry = namespace.get("run_privileged_installer_boundary_refresh")
+    if not callable(entry):
+        _fail("verified refresh runtime module has no fixed privileged entrypoint")
+    return entry
+
+
+def run_from_bootstrap(
+    issue_number: int,
+    *,
+    runner: Callable[..., Any] = subprocess.run,
+    pwd_lookup: Callable[[str], Any] = pwd.getpwnam,
+) -> Mapping[str, Any]:
+    if type(issue_number) is not int or not 1 <= issue_number <= 2_147_483_647:
+        _fail("authorization issue number is invalid")
+    if os.geteuid() != ROOT_UID:
+        _fail("bootstrap refresh runtime requires root execution")
+    manager, uid, gid, home = _manager_checkout(pwd_lookup=pwd_lookup)
+    before, data = _verified_runtime_bytes(manager, uid, gid, home, runner=runner)
+    entry = _load_verified_runtime(data)
+    result = entry(issue_number)
+    if not isinstance(result, Mapping):
+        _fail("verified refresh runtime returned unsupported receipt")
+    after = _manager_snapshot(manager, home, runner=runner)
+    if after != before:
+        _fail("manager HEAD/index/worktree snapshot drifted after refresh runtime")
+    return dict(result)
+
+
+def main() -> int:
+    _fail("direct execution is forbidden; use the installed bootstrap launcher")
+    return 78
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
