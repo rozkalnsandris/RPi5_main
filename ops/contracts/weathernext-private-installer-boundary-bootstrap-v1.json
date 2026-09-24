@@ -1,0 +1,68 @@
+{
+  "schema": "rpi5.weathernext-private-installer-boundary-bootstrap.v1",
+  "implementation_issue": 723,
+  "source_repository": "rozkalnsandris/RPi5_main",
+  "source_entrypoint": "ops/bin/rpi5-weathernext-private-installer-boundary-bootstrap",
+  "installed_entrypoint": "/usr/local/sbin/rpi5-weathernext-private-installer-boundary-bootstrap",
+  "installed_mode": "0755",
+  "installed_owner": "root:root",
+  "operation_id": "rpi5.weathernext-private-installer-boundary-bootstrap.install.v1",
+  "target_alias": "rpi5-weathernext-private-installer-boundary-bootstrap",
+  "caller_authority": [
+    "authorization_issue_number"
+  ],
+  "future_refresh_operation": "rpi5.weathernext-private-installer-boundary.refresh.v1",
+  "future_refresh_runtime": "ops/bin/rpi5-weathernext-private-installer-boundary-refresh-runtime",
+  "bootstrap_interface": "rozkalns.weathernext-private-installer-boundary-refresh-bootstrap-callable.v1",
+  "known_stale_boundary": {
+    "trusted_checkout": "/var/lib/rpi5-deploy/RPi5_main-weathernext-private-installer-trusted",
+    "trusted_head": "79372e48ac53bf6d00142578b6543bc33a72a692",
+    "installed_entrypoint": "/usr/local/sbin/rpi5-weathernext-private-host-privileged-install",
+    "entrypoint_blob": "23599df1edffc69eb7ec8ab699052660cf3e078e",
+    "stale_dispatch_blob": "98218e3138f821390bece6dc10b770bd0b578cd9"
+  },
+  "bootstrap_runtime_source": {
+    "manager_checkout_resolver": "passwd:andris/RPi5_main",
+    "reviewed_origin": "https://github.com/rozkalnsandris/RPi5_main.git",
+    "requires_clean_manager": true,
+    "requires_manager_head_equal_remote_main": true,
+    "runtime_path_fixed": true,
+    "runtime_git_blob_must_match": true,
+    "runtime_bytes_executed_after_single_verified_read": true,
+    "manager_head_index_worktree_must_remain_unchanged": true
+  },
+  "mutation_budget": [
+    {
+      "category": "filesystem.weathernext-private-installer-boundary-bootstrap-install",
+      "max_operations": 1
+    }
+  ],
+  "separate_from_refresh_mutation_budget": true,
+  "refresh_operation_executed_by_bootstrap_install": false,
+  "source_merge_authorizes_live": false,
+  "runtime_live_authority": false,
+  "authorization_consumed_before_first_mutation": true,
+  "rollback_policy": "NONE",
+  "automatic_retry": false,
+  "automatic_cleanup": false,
+  "automatic_rollback": false,
+  "explicit_exclusions": [
+    "no caller-selected repository/path/command/argv/environment/destination",
+    "no generic shell or generic Git mutation surface",
+    "no clone/reset/clean/pull/merge/rebase/force/manager branch switch",
+    "no #700 refresh mutation during bootstrap installation",
+    "no backend/application/private-runtime materialization",
+    "no Google/ADC/IAM/project/Analytics Hub/BigQuery action",
+    "no SQLite/schema/corpus mutation",
+    "no Docker/systemd/package/network/Cloudflare mutation",
+    "no secrets/config/protected-data access"
+  ],
+  "handoff": [
+    "merge #723 source and verify exact-main CI",
+    "fresh read-only preflight must re-confirm the known stale boundary and bootstrap target state",
+    "obtain separate exact owner LIVE authorization for the one bootstrap-install mutation",
+    "install and verify the exact root-owned 0755 bootstrap entrypoint",
+    "only then resume #721 source work using the fixed bootstrap interface",
+    "after #721 merge, obtain a separate exact owner LIVE authorization for #700/#721 refresh"
+  ]
+}
