@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
 from pathlib import Path
 import sys
@@ -78,6 +79,21 @@ def exact_plan() -> contract.RefreshPlan:
 @dataclass
 class Accepted:
     request_id: str = "request-1"
+
+
+@dataclass
+class JsonResponse:
+    value: object
+
+
+class PublicClient:
+    def __init__(self, value: object):
+        self.value = value
+        self.paths: list[str] = []
+
+    def get_json(self, path: str):
+        self.paths.append(path)
+        return JsonResponse(self.value)
 
 
 class Replay:
@@ -176,6 +192,45 @@ class InstallerBoundaryRefreshRuntimeTests(unittest.TestCase):
         )
         self.assertEqual(operation.rollback_policy, "NONE")
         self.assertFalse(operation.ordinary_live_all_eligible)
+
+    def test_public_entrypoint_accepts_unwrapped_lf_and_crlf_base64(self):
+        expected = b"#!/usr/bin/env python3\nprint('entrypoint')\n"
+        encoded = base64.b64encode(expected).decode("ascii")
+        variants = (
+            encoded,
+            "\n".join(encoded[index : index + 8] for index in range(0, len(encoded), 8)),
+            "\r\n".join(encoded[index : index + 8] for index in range(0, len(encoded), 8)),
+        )
+        for content in variants:
+            with self.subTest(content=content):
+                client = PublicClient({"encoding": "base64", "content": content})
+                self.assertEqual(runtime._public_entrypoint(client, CURRENT), expected)
+                self.assertEqual(
+                    client.paths,
+                    [f"/repos/{contract.SOURCE_REPOSITORY}/contents/{contract.ENTRYPOINT_SOURCE}?ref={CURRENT}"],
+                )
+
+    def test_public_entrypoint_rejects_non_linebreak_base64_junk(self):
+        encoded = base64.b64encode(b"entrypoint").decode("ascii")
+        client = PublicClient({"encoding": "base64", "content": encoded[:4] + "!" + encoded[4:]})
+        with self.assertRaisesRegex(
+            runtime.WeatherNextPrivateInstallerBoundaryRefreshRuntimeError,
+            "reviewed exact-source entrypoint payload is malformed",
+        ):
+            runtime._public_entrypoint(client, CURRENT)
+
+    def test_public_entrypoint_rejects_malformed_contents_shape(self):
+        for value in (
+            {"encoding": "utf-8", "content": "ZW50cnlwb2ludA=="},
+            {"encoding": "base64", "content": b"ZW50cnlwb2ludA=="},
+            ["not", "an", "object"],
+        ):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(
+                    runtime.WeatherNextPrivateInstallerBoundaryRefreshRuntimeError,
+                    "reviewed exact-source entrypoint response is malformed",
+                ):
+                    runtime._public_entrypoint(PublicClient(value), CURRENT)
 
     def test_exact_state_is_preconsume_noop(self):
         plan = exact_plan()
