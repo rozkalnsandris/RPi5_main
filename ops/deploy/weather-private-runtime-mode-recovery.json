@@ -1,0 +1,45 @@
+{
+  "actions_artifact_download_authority": false,
+  "analytics_hub_action_allowed": false,
+  "automatic_cleanup": false,
+  "automatic_retry": false,
+  "automatic_rollback": false,
+  "bigquery_action_allowed": false,
+  "caller_selected_path_allowed": false,
+  "credential_acquisition_authority": false,
+  "directory_allowlist_source": "validated historical runtime artifact wheel payload and fixed runtime roots only",
+  "docker_action_allowed": false,
+  "exact_existing_state_is_noop": true,
+  "expected_baseline": {
+    "kind": "resolver",
+    "value": "rpi5.weathernext-private-runtime-mode-recovery.fixed-state-v1"
+  },
+  "expected_exact_directory_mode": "0755",
+  "expected_incident_directory_mode": "0700",
+  "generic_recursive_chmod_allowed": false,
+  "historical_live_authorization_reusable": false,
+  "historical_queue_reusable": false,
+  "implementation_issue": 717,
+  "incident_source_sha": "79372e48ac53bf6d00142578b6543bc33a72a692",
+  "mutation_budget": [
+    {
+      "category": "filesystem.weathernext-private-runtime-directory-mode-reconciliation",
+      "max_operations": 1
+    }
+  ],
+  "network_control_action_allowed": false,
+  "operation_id": "rpi5.weathernext-private-runtime-mode-recovery.v1",
+  "package_manager_authority": false,
+  "partial_or_conflicting_state_fails_closed": true,
+  "production_mutation_started": false,
+  "repository_entrypoint": "ops/bin/rpi5-weathernext-private-host-privileged-install",
+  "rollback_policy": "NONE",
+  "runtime_artifact_republish_authority": false,
+  "runtime_rematerialization_authority": false,
+  "schema": "rpi5.weathernext-private-runtime-mode-recovery-source.v1",
+  "source_merge_authorizes_live": false,
+  "source_repository": "rozkalnsandris/RPi5_main",
+  "sqlite_write_allowed": false,
+  "systemd_action_allowed": false,
+  "target_alias": "rpi5-weathernext-private-runtime-mode-recovery"
+}

@@ -1,0 +1,44 @@
+name: WeatherNext private runtime mode recovery source
+
+on:
+  pull_request:
+    paths:
+      - "ops/lib/deploy_executor/weather_private_bigquery_runtime_mode_recovery.py"
+      - "ops/lib/deploy_executor/weather_private_privileged_dispatch.py"
+      - "ops/deploy/weather-private-runtime-mode-recovery.json"
+      - "tests/test-deploy-executor-weather-private-runtime-mode-recovery.py"
+      - "tests/test-deploy-executor-weather-private-runtime-mode-recovery-safety.py"
+      - ".github/workflows/weathernext-private-runtime-mode-recovery-source.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "ops/lib/deploy_executor/weather_private_bigquery_runtime_mode_recovery.py"
+      - "ops/lib/deploy_executor/weather_private_privileged_dispatch.py"
+      - "ops/deploy/weather-private-runtime-mode-recovery.json"
+      - "tests/test-deploy-executor-weather-private-runtime-mode-recovery.py"
+      - "tests/test-deploy-executor-weather-private-runtime-mode-recovery-safety.py"
+      - ".github/workflows/weathernext-private-runtime-mode-recovery-source.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  source-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate WeatherNext private runtime mode recovery
+        run: |
+          python3 ./tests/test-deploy-executor-weather-private-runtime-mode-recovery.py
+          python3 ./tests/test-deploy-executor-weather-private-runtime-mode-recovery-safety.py
+          python3 ./tests/test-deploy-executor-weather-private-runtime-transport.py
+          python3 -m py_compile \
+            ops/lib/deploy_executor/weather_private_bigquery_runtime_mode_recovery.py \
+            ops/lib/deploy_executor/weather_private_privileged_dispatch.py
