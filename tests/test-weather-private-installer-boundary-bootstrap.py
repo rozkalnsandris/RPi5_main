@@ -84,6 +84,43 @@ def test_git_blob_hash_and_runtime_interface():
         raise AssertionError("wrong bootstrap interface must fail closed")
 
 
+def test_failure_receipt_exposes_only_allowlisted_preconsume_telemetry():
+    module = load_broker()
+    stage = "revalidate_first"
+    code = module.PRECONSUME_FAILURE_TELEMETRY[stage]
+    underlying = RuntimeError("secret-token /private/path should-never-appear")
+    underlying.failure_stage = stage
+    underlying.error_code = code
+
+    sanitized = module._runtime_failure(underlying)
+    receipt = module._failure_receipt(sanitized)
+    encoded = json.dumps(receipt, sort_keys=True)
+    assert receipt["failure_stage"] == stage
+    assert receipt["error_code"] == code
+    assert receipt["reason"] == "verified refresh runtime failed closed"
+    assert receipt["automatic_retry"] is False
+    assert receipt["automatic_cleanup"] is False
+    assert receipt["automatic_rollback"] is False
+    assert "secret-token" not in encoded
+    assert "/private/path" not in encoded
+
+    mismatched = module.BootstrapReachabilityError(
+        "another secret",
+        failure_stage=stage,
+        error_code="NOT_ALLOWLISTED",
+    )
+    generic = module._failure_receipt(mismatched)
+    assert "failure_stage" not in generic
+    assert "error_code" not in generic
+    assert generic["reason"] == "verified installer-boundary bootstrap failed closed"
+    assert "another secret" not in json.dumps(generic, sort_keys=True)
+
+    plain = module._failure_receipt(module.BootstrapReachabilityError("raw internal path"))
+    assert "failure_stage" not in plain
+    assert "error_code" not in plain
+    assert "raw internal path" not in json.dumps(plain, sort_keys=True)
+
+
 def test_end_to_end_reachability_from_known_stale_boundary():
     module = load_broker()
     uid = os.getuid()
@@ -210,6 +247,7 @@ def test_broker_is_identity_only_and_independent_of_stale_dispatch():
 if __name__ == "__main__":
     test_contract_and_frozen_anchors()
     test_git_blob_hash_and_runtime_interface()
+    test_failure_receipt_exposes_only_allowlisted_preconsume_telemetry()
     test_end_to_end_reachability_from_known_stale_boundary()
     test_broker_is_identity_only_and_independent_of_stale_dispatch()
     print("WeatherNext installer-boundary bootstrap tests: PASS")
