@@ -390,8 +390,9 @@ def _public_entrypoint(public_client: FixedPublicGitHubReadClient, source_sha: s
     ).value
     if type(response) is not dict or response.get("encoding") != "base64" or type(response.get("content")) is not str:
         _fail("reviewed exact-source entrypoint response is malformed")
+    content = response["content"].replace("\r", "").replace("\n", "")
     try:
-        raw = base64.b64decode(response["content"], validate=True)
+        raw = base64.b64decode(content, validate=True)
     except (ValueError, TypeError) as exc:
         raise WeatherNextPrivateInstallerBoundaryRefreshRuntimeError(
             "reviewed exact-source entrypoint payload is malformed"
