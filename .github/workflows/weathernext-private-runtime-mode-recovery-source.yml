@@ -7,6 +7,7 @@ on:
       - "ops/lib/deploy_executor/weather_private_privileged_dispatch.py"
       - "ops/deploy/weather-private-runtime-mode-recovery.json"
       - "tests/test-deploy-executor-weather-private-runtime-mode-recovery.py"
+      - "tests/test-deploy-executor-weather-private-runtime-mode-recovery-safety.py"
       - ".github/workflows/weathernext-private-runtime-mode-recovery-source.yml"
   push:
     branches:
@@ -16,6 +17,7 @@ on:
       - "ops/lib/deploy_executor/weather_private_privileged_dispatch.py"
       - "ops/deploy/weather-private-runtime-mode-recovery.json"
       - "tests/test-deploy-executor-weather-private-runtime-mode-recovery.py"
+      - "tests/test-deploy-executor-weather-private-runtime-mode-recovery-safety.py"
       - ".github/workflows/weathernext-private-runtime-mode-recovery-source.yml"
 
 permissions:
@@ -35,6 +37,7 @@ jobs:
       - name: Validate WeatherNext private runtime mode recovery
         run: |
           python3 ./tests/test-deploy-executor-weather-private-runtime-mode-recovery.py
+          python3 ./tests/test-deploy-executor-weather-private-runtime-mode-recovery-safety.py
           python3 ./tests/test-deploy-executor-weather-private-runtime-transport.py
           python3 -m py_compile \
             ops/lib/deploy_executor/weather_private_bigquery_runtime_mode_recovery.py \
