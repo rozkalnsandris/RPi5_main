@@ -1,0 +1,52 @@
+name: Hermes SIMPLE-DEPLOY adoption source
+
+on:
+  pull_request:
+    paths:
+      - "scripts/adopt-simple-deploy-hermes-v1.py"
+      - "ops/contracts/simple-deploy-hermes-adoption-v1.json"
+      - "ops/deploy/baselines/simple-deploy-targets-weather-only-v1.json"
+      - "ops/deploy/simple-deploy-targets-v1.json"
+      - "ops/deploy/simple-deploy-compose/hermes-deals-api.yml"
+      - "ops/deploy/simple-deploy-compose/rozkalns-weather-public.yml"
+      - "tests/test-simple-deploy-hermes-adoption-v1.py"
+      - "tests/test-simple-deploy-hermes-adoption-phase-b-identity.py"
+      - "docs/SIMPLE_DEPLOY_HERMES_ADOPTION_V1.md"
+      - ".github/workflows/simple-deploy-hermes-adoption-source.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "scripts/adopt-simple-deploy-hermes-v1.py"
+      - "ops/contracts/simple-deploy-hermes-adoption-v1.json"
+      - "ops/deploy/baselines/simple-deploy-targets-weather-only-v1.json"
+      - "ops/deploy/simple-deploy-targets-v1.json"
+      - "ops/deploy/simple-deploy-compose/hermes-deals-api.yml"
+      - "ops/deploy/simple-deploy-compose/rozkalns-weather-public.yml"
+      - "tests/test-simple-deploy-hermes-adoption-v1.py"
+      - "tests/test-simple-deploy-hermes-adoption-phase-b-identity.py"
+      - "docs/SIMPLE_DEPLOY_HERMES_ADOPTION_V1.md"
+      - ".github/workflows/simple-deploy-hermes-adoption-source.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rpi5-main-hermes-simple-deploy-adoption-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate Hermes SIMPLE-DEPLOY adoption
+        run: |
+          python3 ./tests/test-simple-deploy-hermes-adoption-v1.py
+          python3 ./tests/test-simple-deploy-hermes-adoption-phase-b-identity.py
+          python3 -m py_compile ./scripts/adopt-simple-deploy-hermes-v1.py
