@@ -143,27 +143,33 @@ These markers do not select the current deployment lane or activate Auto-Live.
 
 SIMPLE-DEPLOY v1 is the concrete shared application-release profile for compatible Docker/Compose services. Where old Auto-Live manifests or controllers conflict with the accepted SIMPLE-DEPLOY consumer/runtime contract, reconcile them as compatibility/history rather than creating another deployment engine.
 
-## 5. Current cross-project priority — SIMPLE-DEPLOY v1 first non-Weather reuse
+## 5. Current cross-project priority — SIMPLE-DEPLOY v1 fleet source adaptation
 
 Weather public acceptance is now **COMPLETE**. `rozkalns_weather#176` closed after fresh post-#177 runtime/API evidence and real consumer UI acceptance proved canonical DWD `station_05480` current-now behavior, populated forecast surfaces and truthful presentation. The older Weather freshness/UI wording in historical issues and receipts must not be treated as a current blocker.
 
-The current cross-project priority is the first non-Weather reuse proof through Hermes Deals:
+The owner-selected fleet order now prioritizes source adaptation of the remaining compatible consumers before Hermes Deals operational activation:
 
 - shared SIMPLE-DEPLOY remains pinned to accepted `ops-workflows@e05ed760791a127c7c9628696806ef39c9fe329c`;
 - Weather remains the activated standing canary target;
+- `rozkalnsandris/hermes-tech` is the **next source-adaptation candidate**;
+- Hermes Tech is a candidate only for its public static/Hugo origin under the ordinary image/Compose profile; digest generation, SQLite state, scheduled publication, generated-content Git synchronization, publisher credentials and schema/data operations remain outside ordinary SIMPLE-DEPLOY;
+- the Hermes Tech source adaptation must first establish a tiny immutable-SHA-pinned caller, consumer manifest, Dockerfile/Compose origin contract and fixed health/readiness semantics in the consumer repository before any RPi5 target registration or runtime activation is considered;
+- `dashboard_RPi5` is not an ordinary SIMPLE-DEPLOY v1 whole-service candidate because its production design includes root-owned immutable release-controller, systemd, Unix-socket and Docker-broker trust boundaries;
+- `rozkalns-control-center` is not an RPi5 Docker/Compose candidate because its runtime is Cloudflare Worker/Static Assets/D1/Queues;
+- Hermes Deals already has substantial source preparation, but its **operational activation/cutover is deliberately fleet-last** and must not preempt the remaining compatible-consumer source work;
+- no target registry, allowlist, host/runtime or protected configuration change is implied by this sequencing decision.
+
+The existing Hermes Deals source chain remains accepted historical/source preparation rather than discarded work:
+
 - Hermes consumer caller/contract was accepted at `rozkalnsandris/hermes-deals@13f9fb69b9576d8e97ab3a85334927f3c576ca1c`;
 - Hermes compatibility prerequisite #690 / PR #691 is COMPLETE;
 - Hermes static source target binding #692 / PR #693 is COMPLETE;
 - Hermes existing-install adoption source #698 / PR #699 is COMPLETE;
 - Hermes post-Phase-B identity correction #708 / PR #709 is COMPLETE;
 - Hermes host-prerequisite materialization v1 source #711 / PR #712 is COMPLETE, with its Phase-B parent/preflight semantics superseded by v2;
-- Hermes Phase-B state-parent/preflight correction #713 / PR #714 is COMPLETE;
-- the #715 reconciliation baseline is `RPi5_main/main=97423548083ac7c8324a5ea766c781d473b64fc9`, whose exact-main push CI was 6/6 SUCCESS;
-- the next host gate is a separately owner-authorized **privileged READ-ONLY metadata-only preflight** against the fixed v2 classifier, not materialization/cutover.
+- Hermes Phase-B state-parent/preflight correction #713 / PR #714 is COMPLETE.
 
-That privileged preflight may inspect only the minimum fixed path metadata required by the reviewed contract: presence, object type, UID/GID and mode. It must not read `.env` values, application data/config contents or other protected runtime content, and it must not mutate the host.
-
-Only after a successful privileged metadata-only preflight may the owner consider a distinct exact Composite LIVE decision for prerequisite materialization, the reviewed exact two-key protected-config projection, exact Hermes target adoption and bounded Docker reconciliation/E2E.
+Any Hermes Deals metadata-only preflight or later Composite LIVE cutover must be freshly revalidated when the fleet reaches that final operational stage. Earlier source completion, tracker wording or target registration does not create standing authority to execute it now.
 
 No source registration, tracker update, plan update or read-only preflight grants LIVE authority.
 
@@ -190,21 +196,16 @@ shared SIMPLE-DEPLOY policy/workflow — COMPLETE
 -> Weather static target + one-time activation — COMPLETE
 -> Weather standing release proof — COMPLETE
 -> Weather public data/runtime/UI acceptance — COMPLETE
--> Hermes consumer SIMPLE-DEPLOY contract — COMPLETE
--> Hermes RPi5 compatibility prerequisite #690/#691 — COMPLETE
--> Hermes static source target binding #692/#693 — COMPLETE
--> Hermes existing-install adoption source #698/#699 — COMPLETE
--> Hermes post-Phase-B identity correction #708/#709 — COMPLETE
--> Hermes host-prerequisite materialization v1 source #711/#712 — COMPLETE / parent+preflight semantics superseded by v2
--> Hermes Phase-B parent/preflight correction #713/#714 — COMPLETE
--> separately owner-authorized privileged READ-ONLY metadata-only preflight — NEXT HOST GATE
--> only after successful preflight: separate exact Composite LIVE materialization + exact two-key projection + target adoption + bounded Docker reconciliation/E2E
--> migrate/test another compatible consumer as required for reuse confidence
--> declare SIMPLE-DEPLOY stable/default only after reuse criteria are actually satisfied
+-> Hermes Tech source compatibility/adaptation — NEXT SOURCE GATE
+-> Hermes Tech exact-head CI/review/Ready; merge remains separately owner-authorized
+-> after source acceptance: separate RPi5 target/allowlist source review and separate one-time LIVE activation only if the final contract still fits SIMPLE-DEPLOY v1
+-> migrate/test other compatible consumers one at a time
+-> Hermes Deals operational activation/cutover — FLEET-LAST
+-> prove final intended compatible-consumer set and declare SIMPLE-DEPLOY stable/default only after reuse criteria are actually satisfied
 -> ONLY THEN revisit ops-workflows#96 Queue vNext
 ```
 
-WeatherNext/private BigQuery remains a separate optional research lane and is not required for public-runtime health or Hermes adoption.
+WeatherNext/private BigQuery remains a separate optional research lane and is not required for public-runtime health or fleet source adaptation.
 
 ## 6. SIMPLE-DEPLOY steady-state contract
 
@@ -257,13 +258,40 @@ WeatherNext/private-home activation remains separate and optional.
 
 ## 8. Fleet rollout after Weather
 
-Fleet reuse is now the selected current SIMPLE-DEPLOY lane.
+Fleet reuse remains the selected SIMPLE-DEPLOY program, but source adaptation and operational cutover are deliberately sequenced separately.
 
-### Hermes Deals — first non-Weather consumer
+### Hermes Tech — next source candidate
 
-Hermes uses the same shared GitHub-side workflow and the same generic RPi5 reconciler rather than a new project-specific deployment engine.
+Hermes Tech is the next repository to evaluate and adapt at source level.
 
-Accepted source facts:
+The intended v1 boundary is narrow:
+
+- candidate runtime: the public static/Hugo web origin only;
+- shared workflow pin: immutable accepted `ops-workflows` full SHA;
+- public build/publish runner: GitHub-hosted;
+- candidate image must contain only public site/runtime bytes and no private runtime configuration;
+- future Compose identity and health/readiness must be fixed and declarative;
+- the existing shared Cloudflare connector remains RPi5 infrastructure and is not owned or restarted by the consumer deployment.
+
+Explicitly outside the ordinary Hermes Tech SIMPLE-DEPLOY profile:
+
+- RSS collection and AI digest generation;
+- SQLite schema/data lifecycle or migration;
+- scheduled publication/cron/timer behavior;
+- generated-content Git synchronization/push authority;
+- publisher/deploy credentials or secret movement;
+- backup/restore and destructive recovery;
+- Cloudflare/network or unrelated host-control changes.
+
+The source-adaptation PR in `rozkalnsandris/hermes-tech` must prove that the static origin can be packaged independently of those excluded publication/data operations. If that separation cannot be proven without widening the ordinary deploy profile, classify Hermes Tech non-compatible rather than weakening SIMPLE-DEPLOY.
+
+No `RPi5_main` target/allowlist mutation is part of this fleet-order reconciliation. A future target registration is a separate source change after the consumer contract is reviewed; live activation remains a later separate owner gate.
+
+### Hermes Deals — operationally last
+
+Hermes Deals already has reviewed source preparation and an existing static target definition, but the owner-selected fleet order makes its first production SIMPLE-DEPLOY activation the final operational cutover among the intended current candidates.
+
+Accepted source facts remain valid as historical/source preparation:
 
 - consumer contract: `hermes-deals@13f9fb69b9576d8e97ab3a85334927f3c576ca1c`;
 - source compatibility prerequisite #690 / PR #691: COMPLETE;
@@ -279,22 +307,19 @@ Accepted source facts:
 - persistent database-volume identity: `hermes_deals_pgdata`;
 - private runtime config and host namespace remain separately LIVE-gated.
 
-The completed source chain through #714 defines the bounded fail-closed path for adopting Hermes into the existing Weather-only SIMPLE-DEPLOY host installation. None of those source outcomes installs the target, creates host prerequisite paths, provisions private configuration or runs Docker.
+None of those source outcomes installs the target, creates host prerequisite paths, provisions private configuration or runs Docker. Their existence also does not require the current fleet to execute the previously next metadata-only preflight immediately.
 
-The v2 correction preserves `/var/lib/rozkalns-simple-deployer` as the accepted fixed runtime-principal-owned `0700` Phase-B security boundary. Unprivileged inability to observe fixed Hermes child metadata beneath that boundary is represented fail-closed as `PRIVILEGED_METADATA_REQUIRED`; it must never be interpreted as `ABSENT` or `EXACT_READY`.
-
-The next host step is therefore a separately owner-authorized privileged READ-ONLY metadata-only preflight. It may inspect only fixed path presence/type/UID/GID/mode required by the reviewed classifier and must not read protected contents or mutate host state.
-
-Only after that preflight succeeds may a separate exact Composite LIVE/cutover decision prove minimum prerequisite materialization, the exact two-key protected-config projection, target adoption and first bounded reconciliation/E2E before Hermes counts as activated reuse.
+When Hermes Deals reaches the fleet-last stage, freshly re-run the minimum required source/host evidence from current state before any owner gate. Do not reuse stale preflight conclusions, old LIVE authorization, old target baseline or historical runtime assumptions.
 
 ### Reuse/stability rule
 
-1. prove Hermes source adoption and separately prove its live E2E cutover;
-2. migrate/test additional compatible consumers one at a time as needed to prove reuse beyond a one-off second target;
-3. preserve each service's data and application invariants;
+1. adapt and test Hermes Tech at source level first, failing closed if its static origin cannot be separated from publication/data authority;
+2. migrate/test any other compatible consumers one at a time before the final Deals cutover;
+3. preserve each service's data, publication and application invariants;
 4. keep the generic executor shared and target configuration static;
 5. do not revive old project-specific control planes for ordinary releases;
-6. declare SIMPLE-DEPLOY stable/default only when Weather plus non-Weather reuse evidence satisfies the current program criteria.
+6. execute Hermes Deals operational activation only at the fleet-last stage after fresh source/runtime revalidation and a separate exact owner LIVE gate;
+7. declare SIMPLE-DEPLOY stable/default only when the intended compatible set, including fleet-last Deals, has the required source and runtime evidence.
 
 New compatible projects should bootstrap from the shared caller + manifest model rather than inventing deployment infrastructure.
 
@@ -337,7 +362,6 @@ Older Hermes Phase-4/control-plane issues such as #472 remain separate historica
 ## 11. Historical phase ledger
 
 Completed or historical program phases are retained as references, not current-state assertions:
-
 - Phase 0 — control plan/tracker: COMPLETE;
 - Phase 1 — reusable baseline proof: COMPLETE;
 - Phase 1B — split shared workflows into `ops-workflows`: COMPLETE;
@@ -359,17 +383,16 @@ Do not use historical SHAs in this ledger as current source/runtime identity.
 6. production public corpus bootstrap/integrity — COMPLETE
 7. recurring public ingest — COMPLETE / STANDING
 8. DWD station_05480 provenance/current-now + real UI acceptance — COMPLETE (#176)
-9. Hermes SIMPLE-DEPLOY consumer contract — COMPLETE
-10. Hermes RPi5 compatibility prerequisite #690/#691 — COMPLETE
-11. Hermes static source target binding #692/#693 — COMPLETE
-12. Hermes existing-install adoption source #698/#699 — COMPLETE
-13. Hermes post-Phase-B identity correction #708/#709 — COMPLETE
-14. Hermes host-prerequisite materialization v1 source #711/#712 — COMPLETE; Phase-B parent/preflight semantics superseded by v2
-15. Hermes Phase-B parent/preflight correction #713/#714 — COMPLETE
-16. separately owner-authorized privileged READ-ONLY metadata-only preflight — NEXT HOST GATE
-17. only after successful preflight: separate exact Composite LIVE prerequisite materialization + exact two-key projection + target adoption + bounded first reconciliation/E2E — LATER LIVE GATE
-18. further compatible-consumer reuse/stability proof
-19. only after stable/default criteria: ops-workflows#96 Queue vNext
+9. Hermes Tech source compatibility/adaptation — NEXT SOURCE GATE
+10. Hermes Tech exact-head CI/review/Ready — source-only; merge remains separately owner-authorized
+11. after consumer source acceptance: separate RPi5 target/allowlist source review if still compatible — LATER SOURCE GATE
+12. separate one-time Hermes Tech activation/cutover — LATER LIVE GATE
+13. additional compatible-consumer source/runtime reuse proof as required
+14. Hermes Deals source chain #690/#691, #692/#693, #698/#699, #708/#709, #711/#712, #713/#714 — COMPLETE SOURCE PREPARATION / PARKED OPERATIONALLY
+15. Hermes Deals fresh final-stage metadata/source/runtime preflight — FLEET-LAST PRE-CUTOVER GATE
+16. Hermes Deals exact Composite LIVE prerequisite materialization + exact two-key projection + target adoption + bounded first reconciliation/E2E — FLEET-LAST LIVE GATE
+17. final intended compatible-consumer stability/default declaration
+18. only after stable/default criteria: ops-workflows#96 Queue vNext
 ```
 
 If fresh GitHub or host evidence invalidates an accepted receipt, reclassify before action. Never rerun a consumed one-shot gate, improvise a Docker/config path, or treat a source merge as authority for a separately sensitive mutation class.
@@ -378,11 +401,11 @@ If fresh GitHub or host evidence invalidates an accepted receipt, reclassify bef
 
 No plan, tracker or source merge grants inferred LIVE authority.
 
-The Hermes source chain through #713/#714 is complete. Those outcomes did not install the Hermes target, materialize `/etc` or `/var/lib` prerequisites, provision private runtime configuration, read protected values, run Docker/systemd or authorize database/network/secret changes.
+The selected next fleet step is source-only work in `rozkalnsandris/hermes-tech`: prove or reject the narrow static-origin SIMPLE-DEPLOY consumer contract through that repository's normal branch -> source/tests/docs -> Draft PR -> exact-head CI/review -> Ready flow. This plan does not authorize a Hermes Tech merge, RPi5 target registration, target allowlist change, host/runtime mutation, production deploy, secret/configuration access or Cloudflare change.
 
-The next host gate is a separately owner-authorized privileged READ-ONLY metadata-only preflight against the fixed v2 classifier. That gate may inspect only fixed path presence/type/UID/GID/mode needed by the reviewed contract; it must not read protected contents and must not mutate host state.
+The Hermes Deals source chain through #713/#714 remains completed preparation, but its operational progression is parked until the fleet-last stage. Do not treat the older tracker/master-plan wording that named a Hermes metadata-only preflight as the immediate current fleet gate. When Deals becomes current again, refresh the minimum required metadata/source/runtime evidence before asking for any Composite LIVE decision.
 
-A successful metadata-only preflight still does not authorize materialization or cutover. Any prerequisite filesystem/application-data materialization, exact two-key protected-config projection, target adoption, Docker reconciliation/E2E or other sensitive mutation requires a distinct exact current Composite LIVE owner gate.
+Any future prerequisite filesystem/application-data materialization, protected-config projection, target adoption, Docker reconciliation/E2E or other sensitive mutation requires a distinct exact current owner gate. A successful read-only preflight never authorizes those mutations.
 
 The completed Weather cutover/data/UI authorizations were consumed by their completed attempts and are non-reusable. The successful Weather cutover activated only the reviewed standing ordinary `AUTO_DEPLOY_SAFE` reconciliation contract for the already-adopted static Weather target.
 
@@ -395,12 +418,13 @@ For fresh state, read in this order when relevant:
 1. current `AGENTS.md` and routing policy;
 2. current `docs/AUTOMATION_MASTER_PLAN.md`;
 3. #295 aggregate controller;
-4. #103 umbrella tracker;
+4. #103 umbrella tracker, treating any fleet-order wording that conflicts with the newer canonical plan as stale until separately reconciled;
 5. latest relevant #191 handoff/comment;
 6. accepted Weather public acceptance evidence in `rozkalns_weather#176`;
-7. Hermes compatibility #690/#691, static target binding #692/#693, existing-install adoption #698/#699, post-Phase-B identity correction #708/#709, materialization v1 #711/#712, and Phase-B parent/preflight correction #713/#714;
-8. exact current `main` and required CI/review/ruleset state;
-9. minimum-sufficient live evidence only when the exact current gate requires it.
+7. current `rozkalnsandris/hermes-tech` rules/README/source when executing the next source-adaptation lane;
+8. Hermes Deals compatibility #690/#691, static target binding #692/#693, existing-install adoption #698/#699, post-Phase-B identity correction #708/#709, materialization v1 #711/#712, and Phase-B parent/preflight correction #713/#714 only when the fleet reaches the final Deals stage;
+9. exact current `main` and required CI/review/ruleset state;
+10. minimum-sufficient live evidence only when the exact current gate requires it.
 
 Closed #688 is historical continuity work, not a current gate. GitHub source state never proves live deployment/runtime state.
 
