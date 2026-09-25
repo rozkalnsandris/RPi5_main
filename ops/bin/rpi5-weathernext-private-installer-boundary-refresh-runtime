@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import importlib.util
 import os
 from pathlib import Path
 import pwd
@@ -17,6 +18,7 @@ REVIEWED_ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
 MANAGER_USERNAME = "andris"
 MANAGER_REPO_BASENAME = "RPi5_main"
 RUNTIME_MODULE_RELATIVE = Path("ops/lib/deploy_executor/weather_private_installer_boundary_refresh_runtime.py")
+VERIFIED_RUNTIME_MODULE_NAME = "deploy_executor.weather_private_installer_boundary_refresh_runtime_bootstrap"
 TRUSTED_CHECKOUT = Path("/var/lib/rpi5-deploy/RPi5_main-weathernext-private-installer-trusted")
 TRUSTED_LIB = TRUSTED_CHECKOUT / "ops/lib"
 MAX_RUNTIME_BYTES = 2 * 1024 * 1024
@@ -286,6 +288,13 @@ def _telemetry_error(runtime_error: type[Exception], stage: str) -> Exception:
     return error
 
 
+def _runtime_setup_error() -> BootstrapRuntimeAdapterError:
+    error = BootstrapRuntimeAdapterError("WeatherNext private installer-boundary refresh failed closed")
+    setattr(error, "failure_stage", "runtime_setup")
+    setattr(error, "error_code", PRECONSUME_FAILURE_TELEMETRY["runtime_setup"])
+    return error
+
+
 def _instrumented_runtime_entry(namespace: dict[str, Any]) -> Callable[[int], Mapping[str, Any]]:
     entry = namespace.get("run_privileged_installer_boundary_refresh")
     runtime_error = namespace.get("WeatherNextPrivateInstallerBoundaryRefreshRuntimeError")
@@ -373,6 +382,8 @@ def _instrumented_runtime_entry(namespace: dict[str, Any]) -> Callable[[int], Ma
 def _load_verified_runtime(data: bytes) -> Callable[[int], Mapping[str, Any]]:
     dependency_root = _trusted_dependency_root()
     previous_path = tuple(sys.path)
+    module_missing = object()
+    previous_module = sys.modules.get(VERIFIED_RUNTIME_MODULE_NAME, module_missing)
     try:
         sys.path.insert(0, str(dependency_root))
         package = importlib.import_module("deploy_executor")
@@ -380,17 +391,24 @@ def _load_verified_runtime(data: bytes) -> Callable[[int], Mapping[str, Any]]:
         expected_parent = (dependency_root / "deploy_executor").resolve()
         if package_file.parent != expected_parent:
             _fail("deploy_executor package escaped trusted dependency root")
-        namespace: dict[str, Any] = {
-            "__name__": "deploy_executor.weather_private_installer_boundary_refresh_runtime_bootstrap",
-            "__package__": "deploy_executor",
-            "__file__": str(RUNTIME_MODULE_RELATIVE),
-            "__builtins__": __builtins__,
-        }
+        spec = importlib.util.spec_from_loader(VERIFIED_RUNTIME_MODULE_NAME, loader=None)
+        if spec is None:
+            _fail("verified refresh runtime module spec is unavailable")
+        module = importlib.util.module_from_spec(spec)
+        namespace = module.__dict__
+        namespace["__file__"] = str(RUNTIME_MODULE_RELATIVE)
+        namespace["__builtins__"] = __builtins__
         try:
+            sys.modules[VERIFIED_RUNTIME_MODULE_NAME] = module
             code = compile(data, str(RUNTIME_MODULE_RELATIVE), "exec", dont_inherit=True)
             exec(code, namespace, namespace)
         except Exception as exc:
             raise BootstrapRuntimeAdapterError("verified refresh runtime module failed to load") from exc
+        finally:
+            if previous_module is module_missing:
+                sys.modules.pop(VERIFIED_RUNTIME_MODULE_NAME, None)
+            else:
+                sys.modules[VERIFIED_RUNTIME_MODULE_NAME] = previous_module
     finally:
         sys.path[:] = previous_path
     return _instrumented_runtime_entry(namespace)
@@ -408,7 +426,10 @@ def run_from_bootstrap(
         _fail("bootstrap refresh runtime requires root execution")
     manager, uid, gid, home = _manager_checkout(pwd_lookup=pwd_lookup)
     before, data = _verified_runtime_bytes(manager, uid, gid, home, runner=runner)
-    entry = _load_verified_runtime(data)
+    try:
+        entry = _load_verified_runtime(data)
+    except Exception:
+        raise _runtime_setup_error() from None
     result = entry(issue_number)
     if not isinstance(result, Mapping):
         _fail("verified refresh runtime returned unsupported receipt")
