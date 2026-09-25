@@ -143,21 +143,23 @@ These markers do not select the current deployment lane or activate Auto-Live.
 
 SIMPLE-DEPLOY v1 is the concrete shared application-release profile for compatible Docker/Compose services. Where old Auto-Live manifests or controllers conflict with the accepted SIMPLE-DEPLOY consumer/runtime contract, reconcile them as compatibility/history rather than creating another deployment engine.
 
-## 5. Current cross-project priority — SIMPLE-DEPLOY v1 fleet source adaptation
+## 5. Current cross-project priority — deploy standardization + SIMPLE-DEPLOY fleet source adaptation
 
 Weather public acceptance is now **COMPLETE**. `rozkalns_weather#176` closed after fresh post-#177 runtime/API evidence and real consumer UI acceptance proved canonical DWD `station_05480` current-now behavior, populated forecast surfaces and truthful presentation. The older Weather freshness/UI wording in historical issues and receipts must not be treated as a current blocker.
 
-The owner-selected fleet order now prioritizes source adaptation of the remaining compatible consumers before Hermes Deals operational activation:
+The owner-selected order now prioritizes `rozkalns-control-center` deploy-standardization source work before the remaining compatible SIMPLE-DEPLOY consumers, while preserving each repository's native production architecture and keeping Hermes Deals operational activation fleet-last:
 
 - shared SIMPLE-DEPLOY remains pinned to accepted `ops-workflows@e05ed760791a127c7c9628696806ef39c9fe329c`;
 - Weather remains the activated standing canary target;
-- `rozkalnsandris/hermes-tech` is the **next source-adaptation candidate**;
-- Hermes Tech is a candidate only for its public static/Hugo origin under the ordinary image/Compose profile; digest generation, SQLite state, scheduled publication, generated-content Git synchronization, publisher credentials and schema/data operations remain outside ordinary SIMPLE-DEPLOY;
+- `rozkalnsandris/rozkalns-control-center` is the **next deploy-standardization candidate**, but it remains a Cloudflare Worker/Static Assets/D1/Queues application and is **not** an RPi5 Docker/Compose SIMPLE-DEPLOY target;
+- Control Center source work must preserve the Cloudflare architecture and standardize only a deterministic source/deploy contract: exact source SHA, build/test evidence, bounded Worker/Static Assets publication semantics, fail-closed verification and explicit deploy-impact classification;
+- D1 schema/data migration or remote apply, Queue mutation, Cloudflare Access/DNS/Tunnel/network changes, credentials/secrets, GitHub App permission expansion and any production Worker deployment remain separately exact-gated and are not implied by deploy-standardization source work;
+- `rozkalnsandris/hermes-tech` follows Control Center as the next ordinary SIMPLE-DEPLOY source-adaptation candidate;
+- Hermes Tech remains a candidate only for its public static/Hugo origin under the ordinary image/Compose profile; digest generation, SQLite state, scheduled publication, generated-content Git synchronization, publisher credentials and schema/data operations remain outside ordinary SIMPLE-DEPLOY;
 - the Hermes Tech source adaptation must first establish a tiny immutable-SHA-pinned caller, consumer manifest, Dockerfile/Compose origin contract and fixed health/readiness semantics in the consumer repository before any RPi5 target registration or runtime activation is considered;
 - `dashboard_RPi5` is not an ordinary SIMPLE-DEPLOY v1 whole-service candidate because its production design includes root-owned immutable release-controller, systemd, Unix-socket and Docker-broker trust boundaries;
-- `rozkalns-control-center` is not an RPi5 Docker/Compose candidate because its runtime is Cloudflare Worker/Static Assets/D1/Queues;
-- Hermes Deals already has substantial source preparation, but its **operational activation/cutover is deliberately fleet-last** and must not preempt the remaining compatible-consumer source work;
-- no target registry, allowlist, host/runtime or protected configuration change is implied by this sequencing decision.
+- Hermes Deals already has substantial source preparation, but its **operational activation/cutover is deliberately fleet-last** and must not preempt the remaining source work;
+- no target registry, allowlist, host/runtime, Cloudflare, D1, Queue, protected configuration or secrets/permissions change is implied by this sequencing decision.
 
 The existing Hermes Deals source chain remains accepted historical/source preparation rather than discarded work:
 
@@ -189,16 +191,19 @@ The following are completed historical/accepted evidence rather than gates to re
 
 Consumed one-shot Weather authorizations remain non-reusable. Weather acceptance does not authorize database/data recovery, destructive cleanup, credentials, network/Cloudflare changes, private-provider activation or unrelated host control.
 
-### Current SIMPLE-DEPLOY sequence
+### Current deployment-standardization / SIMPLE-DEPLOY sequence
 
 ```text
 shared SIMPLE-DEPLOY policy/workflow — COMPLETE
 -> Weather static target + one-time activation — COMPLETE
 -> Weather standing release proof — COMPLETE
 -> Weather public data/runtime/UI acceptance — COMPLETE
--> Hermes Tech source compatibility/adaptation — NEXT SOURCE GATE
+-> Control Center Cloudflare deploy-standardization source contract — NEXT SOURCE GATE
+-> Control Center exact-head CI/review/Ready; merge remains separately owner-authorized
+-> any later Control Center production Worker/Static Assets publication, D1/Queue change, credential or Cloudflare mutation — SEPARATE EXACT LIVE GATE
+-> Hermes Tech source compatibility/adaptation — FOLLOWING SIMPLE-DEPLOY SOURCE GATE
 -> Hermes Tech exact-head CI/review/Ready; merge remains separately owner-authorized
--> after source acceptance: separate RPi5 target/allowlist source review and separate one-time LIVE activation only if the final contract still fits SIMPLE-DEPLOY v1
+-> after Hermes Tech source acceptance: separate RPi5 target/allowlist source review and separate one-time LIVE activation only if the final contract still fits SIMPLE-DEPLOY v1
 -> migrate/test other compatible consumers one at a time
 -> Hermes Deals operational activation/cutover — FLEET-LAST
 -> prove final intended compatible-consumer set and declare SIMPLE-DEPLOY stable/default only after reuse criteria are actually satisfied
@@ -258,11 +263,44 @@ WeatherNext/private-home activation remains separate and optional.
 
 ## 8. Fleet rollout after Weather
 
-Fleet reuse remains the selected SIMPLE-DEPLOY program, but source adaptation and operational cutover are deliberately sequenced separately.
+The selected program now has two deployment-standardization tracks: platform-native standardization for non-RPi5 applications, followed by ordinary SIMPLE-DEPLOY reuse for compatible Docker/Compose consumers. Do not force unlike architectures into the RPi5 SIMPLE-DEPLOY profile merely to make the fleet uniform.
 
-### Hermes Tech — next source candidate
+### Control Center — next deploy-standardization candidate
 
-Hermes Tech is the next repository to evaluate and adapt at source level.
+`rozkalnsandris/rozkalns-control-center` is the next repository to standardize at source level.
+
+Its production architecture remains Cloudflare-native:
+
+- frontend/runtime: React + TypeScript + Vite with Workers Static Assets;
+- backend/API: Cloudflare Worker;
+- structured state: D1;
+- event ingestion: Queues + DLQ;
+- human authentication and other Cloudflare infrastructure remain separate trust-boundary concerns.
+
+The intended source-only deploy-standardization boundary is:
+
+- bind releases to an exact reviewed Git SHA;
+- require repository CI/build/test evidence before any deploy-eligible state;
+- define deterministic Worker/Static Assets build and publication inputs/outputs without moving the runtime to RPi5 or Docker;
+- fail closed when deploy identity, expected environment or required evidence is stale/unknown;
+- classify source-only/no-deploy, ordinary publication and strict-live changes distinctly;
+- keep credentials, protected configuration and Cloudflare account authority out of source and public evidence.
+
+Explicitly outside this source-standardization gate:
+
+- production Worker or Static Assets deployment/promotion;
+- D1 schema/data migration or remote apply;
+- Queue/DLQ mutation;
+- Cloudflare Access, DNS, Tunnel, network or account-setting mutation;
+- credential/secret creation, rotation, export or binding mutation;
+- GitHub App permission/repository-selection expansion;
+- any RPi5 target, allowlist, Docker, systemd or host mutation.
+
+A future Control Center source PR may establish this deterministic Cloudflare deployment contract through that repository's own architecture and CI. Any production publication or other Cloudflare/D1/Queue mutation remains a separate exact owner gate under the Control Center repository's rules.
+
+### Hermes Tech — following SIMPLE-DEPLOY source candidate
+
+Hermes Tech follows Control Center and remains the next repository to evaluate for ordinary SIMPLE-DEPLOY source adaptation.
 
 The intended v1 boundary is narrow:
 
@@ -313,15 +351,16 @@ When Hermes Deals reaches the fleet-last stage, freshly re-run the minimum requi
 
 ### Reuse/stability rule
 
-1. adapt and test Hermes Tech at source level first, failing closed if its static origin cannot be separated from publication/data authority;
-2. migrate/test any other compatible consumers one at a time before the final Deals cutover;
-3. preserve each service's data, publication and application invariants;
-4. keep the generic executor shared and target configuration static;
-5. do not revive old project-specific control planes for ordinary releases;
-6. execute Hermes Deals operational activation only at the fleet-last stage after fresh source/runtime revalidation and a separate exact owner LIVE gate;
-7. declare SIMPLE-DEPLOY stable/default only when the intended compatible set, including fleet-last Deals, has the required source and runtime evidence.
+1. standardize Control Center's Cloudflare-native source/deploy contract first without introducing RPi5 Docker SIMPLE-DEPLOY semantics or performing live Cloudflare/D1/Queue mutation;
+2. adapt and test Hermes Tech at source level next, failing closed if its static origin cannot be separated from publication/data authority;
+3. migrate/test any other compatible consumers one at a time before the final Deals cutover;
+4. preserve each service's data, publication and application invariants;
+5. keep the generic SIMPLE-DEPLOY executor shared and target configuration static for compatible RPi5 consumers;
+6. do not revive old project-specific control planes for ordinary releases;
+7. execute Hermes Deals operational activation only at the fleet-last stage after fresh source/runtime revalidation and a separate exact owner LIVE gate;
+8. declare SIMPLE-DEPLOY stable/default only when the intended compatible set, including fleet-last Deals, has the required source and runtime evidence.
 
-New compatible projects should bootstrap from the shared caller + manifest model rather than inventing deployment infrastructure.
+New compatible RPi5 projects should bootstrap from the shared caller + manifest model rather than inventing deployment infrastructure. Non-RPi5 platforms should keep their native runtime architecture and adopt equivalent exact-SHA, fail-closed and least-authority deployment invariants rather than copying the Docker/Compose implementation.
 
 ## 9. AUTO-RUN FULL Queue vNext — deliberately later
 
@@ -383,16 +422,19 @@ Do not use historical SHAs in this ledger as current source/runtime identity.
 6. production public corpus bootstrap/integrity — COMPLETE
 7. recurring public ingest — COMPLETE / STANDING
 8. DWD station_05480 provenance/current-now + real UI acceptance — COMPLETE (#176)
-9. Hermes Tech source compatibility/adaptation — NEXT SOURCE GATE
-10. Hermes Tech exact-head CI/review/Ready — source-only; merge remains separately owner-authorized
-11. after consumer source acceptance: separate RPi5 target/allowlist source review if still compatible — LATER SOURCE GATE
-12. separate one-time Hermes Tech activation/cutover — LATER LIVE GATE
-13. additional compatible-consumer source/runtime reuse proof as required
-14. Hermes Deals source chain #690/#691, #692/#693, #698/#699, #708/#709, #711/#712, #713/#714 — COMPLETE SOURCE PREPARATION / PARKED OPERATIONALLY
-15. Hermes Deals fresh final-stage metadata/source/runtime preflight — FLEET-LAST PRE-CUTOVER GATE
-16. Hermes Deals exact Composite LIVE prerequisite materialization + exact two-key projection + target adoption + bounded first reconciliation/E2E — FLEET-LAST LIVE GATE
-17. final intended compatible-consumer stability/default declaration
-18. only after stable/default criteria: ops-workflows#96 Queue vNext
+9. Control Center Cloudflare deploy-standardization source contract — NEXT SOURCE GATE
+10. Control Center exact-head CI/review/Ready — source-only; merge remains separately owner-authorized
+11. any Control Center production Worker/Static Assets publication, D1/Queue change, credentials or Cloudflare mutation — SEPARATE LATER LIVE GATE
+12. Hermes Tech source compatibility/adaptation — FOLLOWING SIMPLE-DEPLOY SOURCE GATE
+13. Hermes Tech exact-head CI/review/Ready — source-only; merge remains separately owner-authorized
+14. after Hermes Tech source acceptance: separate RPi5 target/allowlist source review if still compatible — LATER SOURCE GATE
+15. separate one-time Hermes Tech activation/cutover — LATER LIVE GATE
+16. additional compatible-consumer source/runtime reuse proof as required
+17. Hermes Deals source chain #690/#691, #692/#693, #698/#699, #708/#709, #711/#712, #713/#714 — COMPLETE SOURCE PREPARATION / PARKED OPERATIONALLY
+18. Hermes Deals fresh final-stage metadata/source/runtime preflight — FLEET-LAST PRE-CUTOVER GATE
+19. Hermes Deals exact Composite LIVE prerequisite materialization + exact two-key projection + target adoption + bounded first reconciliation/E2E — FLEET-LAST LIVE GATE
+20. final intended compatible-consumer stability/default declaration
+21. only after stable/default criteria: ops-workflows#96 Queue vNext
 ```
 
 If fresh GitHub or host evidence invalidates an accepted receipt, reclassify before action. Never rerun a consumed one-shot gate, improvise a Docker/config path, or treat a source merge as authority for a separately sensitive mutation class.
@@ -401,7 +443,9 @@ If fresh GitHub or host evidence invalidates an accepted receipt, reclassify bef
 
 No plan, tracker or source merge grants inferred LIVE authority.
 
-The selected next fleet step is source-only work in `rozkalnsandris/hermes-tech`: prove or reject the narrow static-origin SIMPLE-DEPLOY consumer contract through that repository's normal branch -> source/tests/docs -> Draft PR -> exact-head CI/review -> Ready flow. This plan does not authorize a Hermes Tech merge, RPi5 target registration, target allowlist change, host/runtime mutation, production deploy, secret/configuration access or Cloudflare change.
+The selected next fleet step is source-only work in `rozkalnsandris/rozkalns-control-center`: standardize its Cloudflare-native deployment contract through that repository's normal source/docs/tests -> Draft PR -> exact-head CI/review -> Ready flow while preserving Worker/Static Assets/D1/Queues architecture. This plan does not authorize a Control Center merge, production Worker or Static Assets publication, D1 schema/data apply, Queue mutation, Cloudflare Access/DNS/Tunnel/network change, credential/secret mutation, GitHub App permission expansion, RPi5 target/allowlist change or host/runtime mutation.
+
+After that source lane, Hermes Tech remains the following ordinary SIMPLE-DEPLOY candidate for its narrow static/Hugo origin. Its source adaptation and any later RPi5 target registration or activation remain separately gated.
 
 The Hermes Deals source chain through #713/#714 remains completed preparation, but its operational progression is parked until the fleet-last stage. Do not treat the older tracker/master-plan wording that named a Hermes metadata-only preflight as the immediate current fleet gate. When Deals becomes current again, refresh the minimum required metadata/source/runtime evidence before asking for any Composite LIVE decision.
 
@@ -421,10 +465,11 @@ For fresh state, read in this order when relevant:
 4. #103 umbrella tracker, treating any fleet-order wording that conflicts with the newer canonical plan as stale until separately reconciled;
 5. latest relevant #191 handoff/comment;
 6. accepted Weather public acceptance evidence in `rozkalns_weather#176`;
-7. current `rozkalnsandris/hermes-tech` rules/README/source when executing the next source-adaptation lane;
-8. Hermes Deals compatibility #690/#691, static target binding #692/#693, existing-install adoption #698/#699, post-Phase-B identity correction #708/#709, materialization v1 #711/#712, and Phase-B parent/preflight correction #713/#714 only when the fleet reaches the final Deals stage;
-9. exact current `main` and required CI/review/ruleset state;
-10. minimum-sufficient live evidence only when the exact current gate requires it.
+7. current `rozkalnsandris/rozkalns-control-center` rules, master issue #1, relevant handoff/current issue, source and CI when executing the next deploy-standardization lane;
+8. current `rozkalnsandris/hermes-tech` rules/README/source when the following SIMPLE-DEPLOY source-adaptation lane becomes current;
+9. Hermes Deals compatibility #690/#691, static target binding #692/#693, existing-install adoption #698/#699, post-Phase-B identity correction #708/#709, materialization v1 #711/#712, and Phase-B parent/preflight correction #713/#714 only when the fleet reaches the final Deals stage;
+10. exact current `main` and required CI/review/ruleset state;
+11. minimum-sufficient live evidence only when the exact current gate requires it.
 
 Closed #688 is historical continuity work, not a current gate. GitHub source state never proves live deployment/runtime state.
 
