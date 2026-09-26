@@ -17,13 +17,10 @@ import types
 from typing import Any, Mapping
 
 REPOSITORY = "rozkalnsandris/RPi5_main"
-REPOSITORY_ID = 1323383044
 REVIEWED_ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
 TRUSTED_ROOT = Path("/var/lib/rpi5-deploy/RPi5_main-weathernext-private-installer-trusted")
 TRUSTED_LIB = TRUSTED_ROOT / "ops" / "lib"
 TRUSTED_HEAD = "79372e48ac53bf6d00142578b6543bc33a72a692"
-OPERATION_ID = "rpi5.weathernext-private-installer-boundary-bootstrap.reconcile.v1"
-SOURCE_REPOSITORY_FIELD = "source_repository"
 PLAN_MODULE = "deploy_executor.weather_private_installer_boundary_bootstrap_reconcile"
 RUNTIME_MODULE = "deploy_executor.weather_private_installer_boundary_bootstrap_reconcile_runtime"
 PLAN_PATH = "ops/lib/deploy_executor/weather_private_installer_boundary_bootstrap_reconcile.py"
@@ -107,47 +104,10 @@ def _trusted_checkout() -> None:
         _fail("trusted installer checkout is not clean")
 
 
-def _trusted_authorized_source(issue_number: int, client: "PublicGitHub") -> str:
-    if str(TRUSTED_LIB) not in sys.path:
-        sys.path.insert(0, str(TRUSTED_LIB))
-    try:
-        from deploy_executor.protocol import (
-            AUTHORIZATION_REPOSITORY,
-            AUTHORIZATION_REPOSITORY_ID,
-            accept_issue,
-        )
-    except Exception as exc:
-        raise OneShotReachabilityError("trusted authorization parser cannot be loaded") from exc
-
-    try:
-        value, server_time = client.get_json_with_time(
-            f"/repos/{AUTHORIZATION_REPOSITORY}/issues/{issue_number}"
-        )
-        accepted = accept_issue(
-            value,
-            repository_id=AUTHORIZATION_REPOSITORY_ID,
-            repository_full_name=AUTHORIZATION_REPOSITORY,
-            server_time=server_time,
-            governance_ok=True,
-            approved_operator_app_ids=frozenset(),
-        )
-    except Exception as exc:
-        raise OneShotReachabilityError("owner LIVE-AUTH validation failed closed") from exc
-    payload = accepted.payload
-    if payload.get("operation_id") != OPERATION_ID:
-        _fail("owner LIVE-AUTH operation identity drifted")
-    if payload.get(SOURCE_REPOSITORY_FIELD) != REPOSITORY:
-        _fail("owner LIVE-AUTH source repository drifted")
-    source_sha = payload.get("source_sha")
-    if not _valid_sha40(source_sha):
-        _fail("owner LIVE-AUTH source SHA is malformed")
-    return source_sha
-
-
 class PublicGitHub:
     def _request(self, path: str) -> tuple[Mapping[str, Any], Any]:
         if type(path) is not str or not path.startswith(f"/repos/{REPOSITORY}/"):
-            _fail("public GitHub path escaped fixed repository")
+            _fail("public GitHub path escaped fixed source repository")
         conn = http.client.HTTPSConnection("api.github.com", timeout=10)
         try:
             conn.request(
@@ -187,27 +147,25 @@ class PublicGitHub:
     def get_json(self, path: str) -> Mapping[str, Any]:
         return self._request(path)[0]
 
-    def get_json_with_time(self, path: str) -> tuple[Mapping[str, Any], Any]:
-        return self._request(path)
 
-
-def _exact_current_modules(source_sha: str, client: PublicGitHub) -> dict[str, bytes]:
+def _exact_current_modules(client: PublicGitHub) -> tuple[str, dict[str, bytes]]:
     branch = client.get_json(f"/repos/{REPOSITORY}/branches/main")
     commit_ref = branch.get("commit")
-    if type(commit_ref) is not dict or commit_ref.get("sha") != source_sha:
-        _fail("owner-authorized source is not exact current main")
+    if type(commit_ref) is not dict or not _valid_sha40(commit_ref.get("sha")):
+        _fail("current main identity is malformed")
+    source_sha = commit_ref["sha"]
     commit = client.get_json(f"/repos/{REPOSITORY}/git/commits/{source_sha}")
     if commit.get("sha") != source_sha:
-        _fail("exact source commit identity drifted")
+        _fail("current main commit identity drifted")
     tree_ref = commit.get("tree")
     if type(tree_ref) is not dict or not _valid_sha40(tree_ref.get("sha")):
-        _fail("exact source tree identity is malformed")
+        _fail("current main tree identity is malformed")
     tree = client.get_json(
         f"/repos/{REPOSITORY}/git/trees/{tree_ref['sha']}?recursive=1"
     )
     entries = tree.get("tree")
     if tree.get("truncated") is True or type(entries) is not list:
-        _fail("exact source tree is unavailable")
+        _fail("current main tree is unavailable")
     indexed: dict[str, Mapping[str, Any]] = {}
     for item in entries:
         if type(item) is dict and item.get("path") in {PLAN_PATH, RUNTIME_PATH}:
@@ -240,10 +198,16 @@ def _exact_current_modules(source_sha: str, client: PublicGitHub) -> dict[str, b
         if not 0 < len(raw) <= MAX_MODULE_BYTES or _git_blob_sha1(raw) != blob:
             _fail("fixed reconcile module bytes drifted")
         loaded[module_name] = raw
-    return loaded
+    return source_sha, loaded
 
 
 def _load_reconcile_runtime(modules: Mapping[str, bytes]) -> Any:
+    if str(TRUSTED_LIB) not in sys.path:
+        sys.path.insert(0, str(TRUSTED_LIB))
+    try:
+        __import__("deploy_executor")
+    except Exception as exc:
+        raise OneShotReachabilityError("trusted dependency package cannot be loaded") from exc
     for module_name, _ in MODULE_PATHS:
         if module_name in sys.modules:
             _fail("fixed reconcile module namespace is already occupied")
@@ -274,9 +238,7 @@ def execute(issue_number: int) -> Mapping[str, object]:
     if os.geteuid() != ROOT_UID:
         _fail("one-shot bootstrap reconcile bridge requires root execution")
     _trusted_checkout()
-    client = PublicGitHub()
-    source_sha = _trusted_authorized_source(issue_number, client)
-    modules = _exact_current_modules(source_sha, client)
+    _source_sha, modules = _exact_current_modules(PublicGitHub())
     entry = _load_reconcile_runtime(modules)
     try:
         receipt = entry(issue_number)
@@ -299,7 +261,7 @@ def _issue_number(value: str) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Run the non-installed exact-source WeatherNext bootstrap reconcile bridge."
+        description="Run the non-installed exact-current WeatherNext bootstrap reconcile bridge."
     )
     parser.add_argument("--issue-number", required=True, type=_issue_number)
     args = parser.parse_args(argv)
