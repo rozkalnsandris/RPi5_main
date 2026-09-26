@@ -37,6 +37,44 @@
       "max_operations": 1
     }
   ],
+  "reconciliation": {
+    "implementation_issue": 743,
+    "operation_id": "rpi5.weathernext-private-installer-boundary-bootstrap.reconcile.v1",
+    "target_alias": "rpi5-weathernext-private-installer-boundary-bootstrap-reconcile",
+    "source_repository": "rozkalnsandris/RPi5_main",
+    "source_path": "ops/bin/rpi5-weathernext-private-installer-boundary-bootstrap",
+    "destination": "/usr/local/sbin/rpi5-weathernext-private-installer-boundary-bootstrap",
+    "required_type": "regular-one-link",
+    "required_owner": "root:root",
+    "required_mode": "0755",
+    "target_identity": {
+      "source_ref": "exact-current-main",
+      "required_git_mode": "100755",
+      "git_blob_derived_from_exact_current_main": true,
+      "sha256_derived_from_exact_current_main_bytes": true,
+      "contents_must_match_git_blob": true,
+      "required_exact_main_ci": true
+    },
+    "recognized_preimage_sha256": [
+      "7ddf7d6ca0537592fc55b48e576be006ca144becf8e0d3f8ae67fd20c8e5b9c2"
+    ],
+    "exact_current_is_preconsume_noop": true,
+    "unknown_preimage_stops_before_mutation": true,
+    "mutation_budget": [
+      {
+        "category": "filesystem.weathernext-private-installer-boundary-bootstrap-reconcile",
+        "max_operations": 1
+      }
+    ],
+    "separate_from_installer_boundary_refresh_budget": true,
+    "authorization_consumed_before_first_mutation": true,
+    "rollback_policy": "NONE",
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "source_merge_authorizes_live": false,
+    "runtime_live_authority": false
+  },
   "separate_from_refresh_mutation_budget": true,
   "refresh_operation_executed_by_bootstrap_install": false,
   "source_merge_authorizes_live": false,
@@ -50,7 +88,7 @@
     "no caller-selected repository/path/command/argv/environment/destination",
     "no generic shell or generic Git mutation surface",
     "no clone/reset/clean/pull/merge/rebase/force/manager branch switch",
-    "no #700 refresh mutation during bootstrap installation",
+    "no #700/#721 refresh mutation during bootstrap installation or reconciliation",
     "no backend/application/private-runtime materialization",
     "no Google/ADC/IAM/project/Analytics Hub/BigQuery action",
     "no SQLite/schema/corpus mutation",
@@ -58,11 +96,11 @@
     "no secrets/config/protected-data access"
   ],
   "handoff": [
-    "merge #723 source and verify exact-main CI",
-    "fresh read-only preflight must re-confirm the known stale boundary and bootstrap target state",
-    "obtain separate exact owner LIVE authorization for the one bootstrap-install mutation",
-    "install and verify the exact root-owned 0755 bootstrap entrypoint",
-    "only then resume #721 source work using the fixed bootstrap interface",
-    "after #721 merge, obtain a separate exact owner LIVE authorization for #700/#721 refresh"
+    "after reviewed source updates, fresh read-only preflight must classify the installed bootstrap as exact-current or the one recognized predecessor",
+    "derive the target executable Git blob and SHA-256 from exact current RPi5_main main at execution; callers cannot select source content or path",
+    "if exact-current, reconciliation is a no-op before authorization consume",
+    "if the recognized predecessor is present, obtain a new READY Queue item plus exact owner LIVE-AUTH for the one bootstrap-reconcile mutation",
+    "after reconciliation, verify the exact root-owned one-link 0755 reviewed bootstrap",
+    "only then construct a new Queue/LIVE-AUTH for the separate #700/#721 installer-boundary refresh"
   ]
 }
