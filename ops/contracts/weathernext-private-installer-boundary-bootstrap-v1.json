@@ -68,7 +68,7 @@
     ],
     "reachability_recovery": {
       "recovery_issue": 743,
-      "transport": "one-shot-exact-source",
+      "transport": "one-shot-exact-current-source",
       "bridge_path": "ops/bin/rpi5-weathernext-private-installer-boundary-bootstrap-reconcile-oneshot",
       "standing_install": false,
       "new_sudoers_or_service_surface": false,
@@ -77,17 +77,18 @@
       "manager_checkout_required": false,
       "manager_checkout_mutation_allowed": false,
       "trusted_checkout_mutation_allowed": false,
-      "owner_live_auth_validated_before_current_module_load": true,
-      "source_sha_from_accepted_live_auth_only": true,
-      "source_sha_must_equal_current_main": true,
+      "caller_selected_source_sha_allowed": false,
+      "current_main_derived_from_public_source_repository": true,
       "current_module_paths_fixed": [
         "ops/lib/deploy_executor/weather_private_installer_boundary_bootstrap_reconcile.py",
         "ops/lib/deploy_executor/weather_private_installer_boundary_bootstrap_reconcile_runtime.py"
       ],
       "current_module_git_blob_and_bytes_must_match": true,
+      "bridge_reads_live_auth_or_credentials": false,
+      "existing_reconcile_runtime_revalidates_owner_live_auth_and_queue_before_mutation": true,
       "bridge_source_must_be_exact_sha256_bound_before_root_execution": true,
       "bridge_source_merge_authorizes_execution": false,
-      "reuses_existing_authorization_substrate_without_permission_widening": true,
+      "adds_no_new_credential_or_permission_surface": true,
       "delegates_to_same_reconcile_runtime_and_mutation_budget": true
     },
     "separate_from_installer_boundary_refresh_budget": true,
@@ -123,8 +124,9 @@
     "after reviewed source updates, fresh read-only preflight must classify the installed bootstrap as exact-current or the one recognized predecessor",
     "derive the target executable Git blob and SHA-256 from exact current RPi5_main main at execution; callers cannot select source content or path",
     "if exact-current, reconciliation is a no-op before authorization consume",
-    "if the recognized predecessor is present and the installed trusted dispatcher cannot reach the current reconcile runtime, use only the reviewed non-installed one-shot reachability bridge bound to the exact current source SHA and bridge SHA-256",
-    "the one-shot bridge must validate the recognized trusted dependency head and owner LIVE-AUTH before loading the two fixed exact-current reconcile modules; it may not mutate manager or trusted checkouts",
+    "if the recognized predecessor is present and the installed trusted dispatcher cannot reach the current reconcile runtime, use only the reviewed non-installed one-shot reachability bridge bound to the exact current bridge SHA-256",
+    "the one-shot bridge must validate the recognized trusted dependency head and derive the two fixed reconcile modules from public exact-current RPi5_main main; it may not accept a caller source SHA or mutate manager/trusted checkouts",
+    "the loaded existing reconcile runtime remains solely responsible for READY Queue, owner LIVE-AUTH, exact-main CI, source binding, replay and authorization-consume validation before mutation",
     "obtain a new READY Queue item plus exact owner LIVE-AUTH for the one bootstrap-reconcile mutation; source merge alone never authorizes bridge execution",
     "after reconciliation, verify the exact root-owned one-link 0755 reviewed bootstrap",
     "only then construct a new Queue/LIVE-AUTH for the separate #700/#721 installer-boundary refresh"
