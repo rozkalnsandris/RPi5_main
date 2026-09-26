@@ -1,0 +1,22 @@
+name: rozkalns-cv SIMPLE-DEPLOY compatibility source
+
+on:
+  pull_request:
+    paths:
+      - "ops/contracts/simple-deploy-rozkalns-cv-compat-v1.json"
+      - "ops/deploy/simple-deploy-compose/rozkalns-cv.yml"
+      - "docs/SIMPLE_DEPLOY_ROZKALNS_CV_COMPAT_V1.md"
+      - "tests/test-simple-deploy-rozkalns-cv-compat-v1.py"
+      - ".github/workflows/simple-deploy-rozkalns-cv-compat-source.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Validate rozkalns-cv compatibility prerequisite
+        run: python3 ./tests/test-simple-deploy-rozkalns-cv-compat-v1.py
