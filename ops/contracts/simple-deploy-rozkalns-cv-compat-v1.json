@@ -1,0 +1,52 @@
+{
+  "schema": "rozkalns.rpi5-main.simple-deploy-rozkalns-cv-compat.v1",
+  "status": "SOURCE_COMPATIBILITY_PREREQUISITE_READY_TARGET_REGISTRATION_PENDING",
+  "consumer": {
+    "repository": "rozkalnsandris/rozkalns-cv",
+    "consumer_contract_revision": "139fb7046c77e1e58ec4a0876db3dddb96c85cb5",
+    "target_alias": "rozkalns-cv-rpi5",
+    "image": "ghcr.io/rozkalnsandris/rozkalns-cv",
+    "architecture": "linux/arm64",
+    "manifest_named_volumes": [],
+    "consumer_compose_uses_persistent_bind": true
+  },
+  "shared_contract": {
+    "repository": "rozkalnsandris/ops-workflows",
+    "revision": "e05ed760791a127c7c9628696806ef39c9fe329c",
+    "workflow": ".github/workflows/simple-deploy.yml"
+  },
+  "host_adapter": {
+    "compose_source": "ops/deploy/simple-deploy-compose/rozkalns-cv.yml",
+    "compose_sha256": "be7f021c9d64192905c908bcbb127dbc7ec1c2514d898f05cbf8de4c44ffa4a2",
+    "project": "rozkalns-cv",
+    "service": "cv",
+    "registry_pull_profile": "public-anonymous-pull",
+    "private_runtime_config_path": "/etc/rozkalns-simple-deployer/private/rozkalns-cv.env",
+    "persistent_data_path": "/var/lib/rozkalns-simple-deployer/rozkalns-cv/data",
+    "persistent_data_create_host_path": false,
+    "liveness_url": "http://127.0.0.1:8088/api/health",
+    "readiness_state": "required",
+    "readiness_url": "http://127.0.0.1:8088/api/health/ready",
+    "wait_timeout_seconds": 180
+  },
+  "boundaries": {
+    "source_merge_registers_target": false,
+    "source_merge_installs_or_enables_runtime": false,
+    "target_registration_requires_follow_up_tracked_source_change": true,
+    "target_installation_requires_separate_exact_live_cutover": true,
+    "private_runtime_config_provisioning_requires_separate_exact_authority": true,
+    "persistent_data_adoption_requires_separate_exact_data_authority": true,
+    "ordinary_reconciler_initializes_migrates_or_recovers_database": false,
+    "existing_runtime_retirement_requires_separate_exact_live_authority": true,
+    "source_merge_runs_compose_or_docker": false,
+    "source_merge_mutates_cloudflare_or_network": false
+  },
+  "forbidden_operations": [
+    "database-schema-data-mutation",
+    "destructive-recovery",
+    "secrets-credentials-permissions",
+    "cloudflare-dns-network",
+    "private-provider-activation",
+    "unrelated-host-control"
+  ]
+}
