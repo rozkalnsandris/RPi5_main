@@ -9,17 +9,17 @@ Umbrella tracker: `RPi5_main#103`
 AUTO-RUN FULL controller: `RPi5_main#295`  
 Owner-authorized pull-deploy roadmap: `RPi5_main#236`
 
-## Current fleet reconciliation — 2026-09-25
+## Current fleet reconciliation — 2026-09-26
 
 This dated reconciliation is authoritative for **current lane selection** and supersedes older `NEXT` / `FOLLOWING` sequencing labels later in this document where they conflict with the facts below. Historical architecture and safety boundaries remain unchanged.
 
 - Control Center Cloudflare-native deploy-standardization source work is **COMPLETE** at `rozkalnsandris/rozkalns-control-center@8a43dc4902ddad43a49d55e043964f1ae61b8c71`. No production Worker/Static Assets, D1, Queue, Cloudflare, credential or RPi5 mutation is implied.
 - Hermes Tech public static/Hugo SIMPLE-DEPLOY consumer source and GitHub-side publication proof are **COMPLETE** at `rozkalnsandris/hermes-tech@3d8e2400e26e7bf4e992539e1239120f9bc1af44`; SIMPLE-DEPLOY run `36149826529` completed successfully against immutable shared workflow `ops-workflows@e05ed760791a127c7c9628696806ef39c9fe329c`.
-- `rozkalns-cv` SIMPLE-DEPLOY consumer source and GitHub-side publication proof are **COMPLETE** at `rozkalnsandris/rozkalns-cv@139fb7046c77e1e58ec4a0876db3dddb96c85cb5`; SIMPLE-DEPLOY run `36150943895` completed successfully against the same immutable shared workflow.
-- These GitHub-side publication proofs do **not** register either consumer as an RPi5 target and do not authorize host/runtime activation. The current `ops/deploy/simple-deploy-targets-v1.json` registry contains the standing Weather target and the parked Hermes Deals target, but no Hermes Tech or CV target alias.
-- **NEXT SOURCE GATE:** review and prepare the Hermes Tech RPi5 target/allowlist source contract, preserving the narrow public static/Hugo boundary. Carry source/tests through Draft PR, exact-head CI/review and Ready only; merge remains separately owner-authorized.
-- **FOLLOWING SOURCE GATE:** review and prepare the `rozkalns-cv` RPi5 target/allowlist source contract one consumer at a time after the Hermes Tech source gate is accepted.
-- Each new target's one-time activation/cutover remains a separate exact LIVE gate after its target/allowlist source change is merged and freshly revalidated. No target registry, Compose adapter, allowlist, systemd, Docker, host, secret, Cloudflare or database mutation is authorized by this reconciliation itself.
+- Hermes Tech RPi5 target/allowlist source registration is **COMPLETE** in `RPi5_main` via merged PR #737 at exact `main` `57098e4244752abc306f984b9ed155c9baac9c6c`; exact-main push `Validate` run `36230598079` completed successfully. The registry now contains `hermes-tech-public-rpi5` alongside Weather and the parked Hermes Deals target.
+- Hermes Tech target registration is **source-only**. It does not prove host/runtime installation and does not authorize the one-time target activation/cutover, retirement/replacement of the existing V14 runtime, Docker/Compose execution, GHCR publication, protected configuration access or any other LIVE mutation.
+- `rozkalns-cv` SIMPLE-DEPLOY consumer source and GitHub-side publication proof are **COMPLETE** at `rozkalnsandris/rozkalns-cv@139fb7046c77e1e58ec4a0876db3dddb96c85cb5`; SIMPLE-DEPLOY run `36150943895` completed successfully against the same immutable shared workflow, but CV is not yet registered as an RPi5 target.
+- **NEXT SOURCE GATE:** review and prepare the `rozkalns-cv` RPi5 target/allowlist source contract one consumer at a time, preserving the accepted SIMPLE-DEPLOY safety boundary. Carry source/tests through Draft PR, exact-head CI/review and Ready only; merge remains separately owner-authorized.
+- Any Hermes Tech or future CV one-time activation/cutover remains a separate exact LIVE gate after the relevant target/allowlist source change is merged and freshly revalidated. No target installation, Compose execution, systemd, Docker, host, secret, Cloudflare or database mutation is authorized by this reconciliation itself.
 - `dashboard_RPi5` remains outside the ordinary whole-service SIMPLE-DEPLOY profile; Hermes Deals operational activation remains fleet-last; `ops-workflows#96` Queue vNext remains blocked until the intended compatible-consumer rollout and stability criteria are actually satisfied.
 
 ## 1. Mandatory operating rule
