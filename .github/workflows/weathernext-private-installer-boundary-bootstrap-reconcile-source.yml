@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "ops/bin/rpi5-weathernext-private-installer-boundary-bootstrap"
+      - "ops/bin/rpi5-weathernext-private-installer-boundary-bootstrap-reconcile-oneshot"
       - "ops/contracts/weathernext-private-installer-boundary-bootstrap-v1.json"
       - "ops/lib/deploy_executor/weather_private_installer_boundary_bootstrap_reconcile.py"
       - "ops/lib/deploy_executor/weather_private_installer_boundary_bootstrap_reconcile_runtime.py"
@@ -12,12 +13,14 @@ on:
       - "tests/test-weather-private-installer-boundary-manager-runtime-mode.py"
       - "tests/test-weather-private-installer-boundary-bootstrap-reconcile.py"
       - "tests/test-weather-private-installer-boundary-bootstrap-reconcile-runtime.py"
+      - "tests/test-weather-private-installer-boundary-bootstrap-reconcile-oneshot.py"
       - ".github/workflows/weathernext-private-installer-boundary-bootstrap-reconcile-source.yml"
   push:
     branches:
       - main
     paths:
       - "ops/bin/rpi5-weathernext-private-installer-boundary-bootstrap"
+      - "ops/bin/rpi5-weathernext-private-installer-boundary-bootstrap-reconcile-oneshot"
       - "ops/contracts/weathernext-private-installer-boundary-bootstrap-v1.json"
       - "ops/lib/deploy_executor/weather_private_installer_boundary_bootstrap_reconcile.py"
       - "ops/lib/deploy_executor/weather_private_installer_boundary_bootstrap_reconcile_runtime.py"
@@ -26,6 +29,7 @@ on:
       - "tests/test-weather-private-installer-boundary-manager-runtime-mode.py"
       - "tests/test-weather-private-installer-boundary-bootstrap-reconcile.py"
       - "tests/test-weather-private-installer-boundary-bootstrap-reconcile-runtime.py"
+      - "tests/test-weather-private-installer-boundary-bootstrap-reconcile-oneshot.py"
       - ".github/workflows/weathernext-private-installer-boundary-bootstrap-reconcile-source.yml"
 
 permissions:
@@ -40,6 +44,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Validate WeatherNext bootstrap reconcile source
         run: |
@@ -47,7 +52,9 @@ jobs:
           python3 ./tests/test-weather-private-installer-boundary-manager-runtime-mode.py
           python3 ./tests/test-weather-private-installer-boundary-bootstrap-reconcile.py
           python3 ./tests/test-weather-private-installer-boundary-bootstrap-reconcile-runtime.py
+          python3 ./tests/test-weather-private-installer-boundary-bootstrap-reconcile-oneshot.py
           python3 -m py_compile \
+            ./ops/bin/rpi5-weathernext-private-installer-boundary-bootstrap-reconcile-oneshot \
             ./ops/lib/deploy_executor/weather_private_installer_boundary_bootstrap_reconcile.py \
             ./ops/lib/deploy_executor/weather_private_installer_boundary_bootstrap_reconcile_runtime.py \
             ./ops/lib/deploy_executor/weather_private_privileged_dispatch.py
