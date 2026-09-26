@@ -180,25 +180,36 @@ def _remote_main(*, runner: Callable[..., Any] = subprocess.run) -> str:
     return fields[0]
 
 
+def _manager_runtime_mode_allowed(mode: int) -> bool:
+    required = stat.S_IRUSR | stat.S_IXUSR
+    forbidden = stat.S_IWGRP | stat.S_IWOTH | stat.S_ISUID | stat.S_ISGID | stat.S_ISVTX
+    return (mode & required) == required and (mode & forbidden) == 0
+
+
 def _regular_bytes(
     path: Path,
     *,
     uid: int,
     gid: int,
-    mode: int,
+    mode: int | None = None,
+    mode_check: Callable[[int], bool] | None = None,
     maximum: int,
 ) -> bytes:
+    if (mode is None) == (mode_check is None):
+        _fail("required fixed file mode policy is invalid")
     try:
         before = path.lstat()
     except OSError as exc:
         raise BootstrapReachabilityError(f"required fixed file unavailable: {path}") from exc
+    physical_mode = stat.S_IMODE(before.st_mode)
     if (
         not stat.S_ISREG(before.st_mode)
         or stat.S_ISLNK(before.st_mode)
         or before.st_nlink != 1
         or before.st_uid != uid
         or before.st_gid != gid
-        or stat.S_IMODE(before.st_mode) != mode
+        or (mode is not None and physical_mode != mode)
+        or (mode_check is not None and not mode_check(physical_mode))
         or before.st_size < 1
         or before.st_size > maximum
     ):
@@ -329,7 +340,7 @@ def _runtime_bytes(
         manager / RUNTIME_RELATIVE,
         uid=uid,
         gid=gid,
-        mode=0o755,
+        mode_check=_manager_runtime_mode_allowed,
         maximum=MAX_RUNTIME_BYTES,
     )
     if _git_blob_sha1(data) != blob:

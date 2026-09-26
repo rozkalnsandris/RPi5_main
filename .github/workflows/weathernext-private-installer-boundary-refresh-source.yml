@@ -27,6 +27,7 @@ jobs:
         run: |
           python3 ./tests/test-weather-private-installer-boundary-refresh.py
           python3 ./tests/test-weather-private-installer-boundary-bootstrap.py
+          python3 ./tests/test-weather-private-installer-boundary-manager-runtime-mode.py
           python3 ./tests/test-weather-private-installer-boundary-refresh-runtime.py
           python3 ./tests/test-weather-private-installer-boundary-refresh-bootstrap-runtime.py
           python3 ./tests/test-weather-private-installer-boundary-refresh-module-registration.py
