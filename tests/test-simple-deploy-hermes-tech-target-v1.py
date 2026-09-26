@@ -56,7 +56,7 @@ class HermesTechTargetTests(unittest.TestCase):
         self.assertNotIn('volumes:', text)
         self.assertNotIn('environment:', text)
         self.assertNotIn('build:', text)
-        self.assertNotIn('/home/andris/hermes-tech', text)
+        self.assertNotIn('/home/', text)
 
     def test_host_contract_records_exact_consumer_revision_and_live_gate(self):
         contract = json.loads((ROOT / "ops/contracts/simple-deploy-host-v1.json").read_text(encoding="utf-8"))
