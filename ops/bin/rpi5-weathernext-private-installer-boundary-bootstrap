@@ -36,6 +36,7 @@ PRECONSUME_FAILURE_TELEMETRY = {
     "stability_first_final": "PRECONSUME_STABILITY_FIRST_FINAL_FAILED",
     "revalidate_preconsume": "PRECONSUME_REVALIDATE_PRECONSUME_FAILED",
     "stability_final_preconsume": "PRECONSUME_STABILITY_FINAL_PRECONSUME_FAILED",
+    "replay_consume": "PRECONSUME_REPLAY_CONSUME_FAILED",
     "preconsume_finalize": "PRECONSUME_FINALIZE_FAILED",
 }
 

@@ -33,6 +33,7 @@ PRECONSUME_FAILURE_TELEMETRY = {
     "stability_first_final": "PRECONSUME_STABILITY_FIRST_FINAL_FAILED",
     "revalidate_preconsume": "PRECONSUME_REVALIDATE_PRECONSUME_FAILED",
     "stability_final_preconsume": "PRECONSUME_STABILITY_FINAL_PRECONSUME_FAILED",
+    "replay_consume": "PRECONSUME_REPLAY_CONSUME_FAILED",
     "preconsume_finalize": "PRECONSUME_FINALIZE_FAILED",
 }
 
@@ -325,6 +326,19 @@ def _instrumented_runtime_entry(namespace: dict[str, Any]) -> Callable[[int], Ma
             "stability_final_preconsume",
         )
 
+        class ReplayConsumeTelemetryProxy:
+            def __init__(self, replay: Any) -> None:
+                self._replay = replay
+
+            def consume(self, request_id: str) -> Any:
+                try:
+                    return self._replay.consume(request_id)
+                except Exception:
+                    raise _telemetry_error(runtime_error, "replay_consume") from None
+
+            def mark_succeeded(self, request_id: str) -> Any:
+                return self._replay.mark_succeeded(request_id)
+
         def revalidate_wrapper(self: Any, number: int) -> Any:
             index = state["revalidate"]
             state["revalidate"] += 1
@@ -351,7 +365,12 @@ def _instrumented_runtime_entry(namespace: dict[str, Any]) -> Callable[[int], Ma
 
         def execute_wrapper(*args: Any, **kwargs: Any) -> Mapping[str, object]:
             state["entered_execute"] = True
-            return execute_prevalidated(*args, **kwargs)
+            replay = kwargs.get("replay")
+            if replay is None:
+                return execute_prevalidated(*args, **kwargs)
+            wrapped_kwargs = dict(kwargs)
+            wrapped_kwargs["replay"] = ReplayConsumeTelemetryProxy(replay)
+            return execute_prevalidated(*args, **wrapped_kwargs)
 
         setattr(revalidator_type, "revalidate", revalidate_wrapper)
         namespace["_stable"] = stable_wrapper

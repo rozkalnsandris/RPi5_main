@@ -213,6 +213,95 @@ def test_adapter_sanitizes_fixed_preconsume_stage_codes():
             _cleanup_adapter_entry(td, previous)
 
 
+def test_adapter_sanitizes_replay_consume_boundary_before_backend_apply():
+    adapter = load(RUNTIME_ADAPTER, "boundary_runtime_adapter_replay_consume")
+    backend_calls: list[object] = []
+
+    class RuntimeErrorType(RuntimeError):
+        pass
+
+    class Revalidator:
+        def revalidate(self, issue_number):
+            return issue_number
+
+    def stable(first, final):
+        return None
+
+    class Replay:
+        def consume(self, request_id):
+            raise RuntimeError("secret-durable-consume-detail")
+
+        def mark_succeeded(self, request_id):
+            raise AssertionError("mark_succeeded must not run")
+
+    class Backend:
+        def apply(self, prepared):
+            backend_calls.append(prepared)
+            return {"status": "PASS", "authorization_consumed": True}
+
+    replay = Replay()
+    backend = Backend()
+
+    def execute_prevalidated_refresh(evidence, *, prepared, accepted, replay, backend):
+        replay.consume("request-1")
+        receipt = dict(backend.apply(prepared))
+        replay.mark_succeeded("request-1")
+        receipt["authorization_consumed"] = True
+        return receipt
+
+    def run_privileged_installer_boundary_refresh(issue_number):
+        revalidator = Revalidator()
+        first = revalidator.revalidate(issue_number)
+        final = revalidator.revalidate(issue_number)
+        stable(first, final)
+        preconsume = revalidator.revalidate(issue_number)
+        stable(final, preconsume)
+        return execute_prevalidated_refresh(
+            preconsume,
+            prepared=object(),
+            accepted=object(),
+            replay=replay,
+            backend=backend,
+        )
+
+    namespace = {
+        "run_privileged_installer_boundary_refresh": run_privileged_installer_boundary_refresh,
+        "WeatherNextPrivateInstallerBoundaryRefreshRuntimeError": RuntimeErrorType,
+        "ConcreteBoundaryRefreshRevalidator": Revalidator,
+        "_stable": stable,
+        "execute_prevalidated_refresh": execute_prevalidated_refresh,
+    }
+    entry = adapter._instrumented_runtime_entry(namespace)
+    try:
+        entry(721)
+    except Exception as exc:
+        assert getattr(exc, "failure_stage", None) == "replay_consume"
+        assert getattr(exc, "error_code", None) == "PRECONSUME_REPLAY_CONSUME_FAILED"
+        assert str(exc) == "WeatherNext private installer-boundary refresh failed closed"
+        assert "secret" not in str(exc)
+    else:
+        raise AssertionError("replay consume failure must fail closed")
+    assert backend_calls == []
+
+
+def test_bootstrap_preserves_replay_consume_stage_without_consumed_claim():
+    bootstrap = load(BOOTSTRAP, "boundary_bootstrap_replay_consume")
+    runtime_error = RuntimeError("secret-durable-consume-detail")
+    setattr(runtime_error, "failure_stage", "replay_consume")
+    setattr(runtime_error, "error_code", "PRECONSUME_REPLAY_CONSUME_FAILED")
+    converted = bootstrap._runtime_failure(runtime_error)
+    receipt = bootstrap._failure_receipt(converted)
+    assert receipt["result"] == "STOP"
+    assert receipt["failure_stage"] == "replay_consume"
+    assert receipt["error_code"] == "PRECONSUME_REPLAY_CONSUME_FAILED"
+    assert receipt["automatic_retry"] is False
+    assert receipt["automatic_cleanup"] is False
+    assert receipt["automatic_rollback"] is False
+    assert "authorization_consumed" not in receipt
+    assert "mutation_categories" not in receipt
+    assert "secret" not in json.dumps(receipt, sort_keys=True)
+
+
 def test_adapter_never_labels_postconsume_failure_as_preconsume():
     adapter = load(RUNTIME_ADAPTER, "boundary_runtime_adapter_postconsume")
     td, previous, entry = _load_adapter_entry(adapter, _runtime_payload(fail_stage="postconsume"))
@@ -254,6 +343,8 @@ if __name__ == "__main__":
     test_adapter_verifies_manager_runtime_blob_without_mutation()
     test_adapter_loads_verified_module_against_root_owned_dependency_surface()
     test_adapter_sanitizes_fixed_preconsume_stage_codes()
+    test_adapter_sanitizes_replay_consume_boundary_before_backend_apply()
+    test_bootstrap_preserves_replay_consume_stage_without_consumed_claim()
     test_adapter_never_labels_postconsume_failure_as_preconsume()
     test_contract_binds_bootstrap_and_refresh_runtime_without_live_authority()
     print("WeatherNext installer-boundary refresh bootstrap runtime tests: PASS")
