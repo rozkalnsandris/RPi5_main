@@ -1,0 +1,22 @@
+# SIMPLE-DEPLOY v1 RPi5-owned Hermes Tech public static origin adapter.
+# The :production tag is discovery/default metadata only; the generic deployer
+# must freeze and apply an exact image@sha256 digest override before mutation.
+services:
+  hermes-tech:
+    image: ghcr.io/rozkalnsandris/hermes-tech:production
+    ports:
+      - "127.0.0.1:8089:8080"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--output-document=-", "http://127.0.0.1:8080/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
