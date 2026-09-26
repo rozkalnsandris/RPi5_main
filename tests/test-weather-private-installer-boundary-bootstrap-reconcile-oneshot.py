@@ -86,8 +86,8 @@ class BridgeTests(unittest.TestCase):
             },
         )
         source = SCRIPT.read_text()
+        self.assertNotRegex(source, r"/home/[A-Za-z0-9._-]+/RPi5_main")
         for forbidden in (
-            "/home/andris/RPi5_main",
             "deploy-authorizations",
             "github-app.pem",
             "git fetch",
