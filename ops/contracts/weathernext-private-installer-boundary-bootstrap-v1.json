@@ -66,6 +66,30 @@
         "max_operations": 1
       }
     ],
+    "reachability_recovery": {
+      "recovery_issue": 743,
+      "transport": "one-shot-exact-source",
+      "bridge_path": "ops/bin/rpi5-weathernext-private-installer-boundary-bootstrap-reconcile-oneshot",
+      "standing_install": false,
+      "new_sudoers_or_service_surface": false,
+      "recognized_trusted_dependency_head": "79372e48ac53bf6d00142578b6543bc33a72a692",
+      "trusted_dependency_checkout_read_only": true,
+      "manager_checkout_required": false,
+      "manager_checkout_mutation_allowed": false,
+      "trusted_checkout_mutation_allowed": false,
+      "owner_live_auth_validated_before_current_module_load": true,
+      "source_sha_from_accepted_live_auth_only": true,
+      "source_sha_must_equal_current_main": true,
+      "current_module_paths_fixed": [
+        "ops/lib/deploy_executor/weather_private_installer_boundary_bootstrap_reconcile.py",
+        "ops/lib/deploy_executor/weather_private_installer_boundary_bootstrap_reconcile_runtime.py"
+      ],
+      "current_module_git_blob_and_bytes_must_match": true,
+      "bridge_source_must_be_exact_sha256_bound_before_root_execution": true,
+      "bridge_source_merge_authorizes_execution": false,
+      "reuses_existing_authorization_substrate_without_permission_widening": true,
+      "delegates_to_same_reconcile_runtime_and_mutation_budget": true
+    },
     "separate_from_installer_boundary_refresh_budget": true,
     "authorization_consumed_before_first_mutation": true,
     "rollback_policy": "NONE",
@@ -99,7 +123,9 @@
     "after reviewed source updates, fresh read-only preflight must classify the installed bootstrap as exact-current or the one recognized predecessor",
     "derive the target executable Git blob and SHA-256 from exact current RPi5_main main at execution; callers cannot select source content or path",
     "if exact-current, reconciliation is a no-op before authorization consume",
-    "if the recognized predecessor is present, obtain a new READY Queue item plus exact owner LIVE-AUTH for the one bootstrap-reconcile mutation",
+    "if the recognized predecessor is present and the installed trusted dispatcher cannot reach the current reconcile runtime, use only the reviewed non-installed one-shot reachability bridge bound to the exact current source SHA and bridge SHA-256",
+    "the one-shot bridge must validate the recognized trusted dependency head and owner LIVE-AUTH before loading the two fixed exact-current reconcile modules; it may not mutate manager or trusted checkouts",
+    "obtain a new READY Queue item plus exact owner LIVE-AUTH for the one bootstrap-reconcile mutation; source merge alone never authorizes bridge execution",
     "after reconciliation, verify the exact root-owned one-link 0755 reviewed bootstrap",
     "only then construct a new Queue/LIVE-AUTH for the separate #700/#721 installer-boundary refresh"
   ]
