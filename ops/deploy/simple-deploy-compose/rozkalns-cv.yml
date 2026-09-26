@@ -1,0 +1,39 @@
+# SIMPLE-DEPLOY v1 RPi5-owned rozkalns-cv adapter.
+# The :production tag is discovery/default metadata only; the generic deployer
+# must freeze and apply an exact image@sha256 digest override before mutation.
+# Source merge does not provision private runtime configuration, create/adopt
+# persistent data, retire an existing runtime, or authorize any LIVE cutover.
+name: rozkalns-cv
+
+services:
+  cv:
+    image: ghcr.io/rozkalnsandris/rozkalns-cv:production
+    restart: unless-stopped
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 192
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777
+    env_file:
+      - /etc/rozkalns-simple-deployer/private/rozkalns-cv.env
+    environment:
+      ASSISTANT_DB_PATH: /app/data/assistant.sqlite3
+      TRUSTED_PROXY_CIDRS: 127.0.0.1/32
+    volumes:
+      - type: bind
+        source: /var/lib/rozkalns-simple-deployer/rozkalns-cv/data
+        target: /app/data
+        bind:
+          create_host_path: false
+    ports:
+      - "127.0.0.1:8088:8080"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/health/ready', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
