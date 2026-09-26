@@ -60,10 +60,30 @@ def _stable(first, final):
         raise RuntimeError("secret-path-stability-two")
 
 
-def execute_prevalidated_refresh(*args, **kwargs):
-    if {fail_stage!r} == "postconsume":
-        raise RuntimeError("postconsume-secret-must-not-be-preconsume")
-    return {{"status": "PASS", "issue": args[0][0]}}
+class Replay:
+    def consume(self, request_id):
+        if {fail_stage!r} == "replay_consume":
+            raise RuntimeError("secret-durable-consume-detail")
+
+    def mark_succeeded(self, request_id):
+        return None
+
+
+class Backend:
+    def apply(self, prepared):
+        if {fail_stage!r} == "replay_consume":
+            raise AssertionError("backend apply must not run after failed consume")
+        if {fail_stage!r} == "postconsume":
+            raise RuntimeError("postconsume-secret-must-not-be-preconsume")
+        return {{"status": "PASS"}}
+
+
+def execute_prevalidated_refresh(evidence, *, prepared, accepted, replay, backend):
+    replay.consume("request-1")
+    receipt = dict(backend.apply(prepared))
+    replay.mark_succeeded("request-1")
+    receipt["issue"] = evidence[0]
+    return receipt
 
 
 def run_privileged_installer_boundary_refresh(issue_number):
@@ -75,7 +95,13 @@ def run_privileged_installer_boundary_refresh(issue_number):
     _stable(final, preconsume)
     if {fail_stage!r} == "preconsume_finalize":
         raise RuntimeError("secret-finalize")
-    return execute_prevalidated_refresh(preconsume)
+    return execute_prevalidated_refresh(
+        preconsume,
+        prepared=revalidator.prepared,
+        accepted=revalidator.accepted,
+        replay=Replay(),
+        backend=Backend(),
+    )
 '''.encode("utf-8")
 
 
@@ -215,73 +241,19 @@ def test_adapter_sanitizes_fixed_preconsume_stage_codes():
 
 def test_adapter_sanitizes_replay_consume_boundary_before_backend_apply():
     adapter = load(RUNTIME_ADAPTER, "boundary_runtime_adapter_replay_consume")
-    backend_calls: list[object] = []
-
-    class RuntimeErrorType(RuntimeError):
-        pass
-
-    class Revalidator:
-        def revalidate(self, issue_number):
-            return issue_number
-
-    def stable(first, final):
-        return None
-
-    class Replay:
-        def consume(self, request_id):
-            raise RuntimeError("secret-durable-consume-detail")
-
-        def mark_succeeded(self, request_id):
-            raise AssertionError("mark_succeeded must not run")
-
-    class Backend:
-        def apply(self, prepared):
-            backend_calls.append(prepared)
-            return {"status": "PASS", "authorization_consumed": True}
-
-    replay = Replay()
-    backend = Backend()
-
-    def execute_prevalidated_refresh(evidence, *, prepared, accepted, replay, backend):
-        replay.consume("request-1")
-        receipt = dict(backend.apply(prepared))
-        replay.mark_succeeded("request-1")
-        receipt["authorization_consumed"] = True
-        return receipt
-
-    def run_privileged_installer_boundary_refresh(issue_number):
-        revalidator = Revalidator()
-        first = revalidator.revalidate(issue_number)
-        final = revalidator.revalidate(issue_number)
-        stable(first, final)
-        preconsume = revalidator.revalidate(issue_number)
-        stable(final, preconsume)
-        return execute_prevalidated_refresh(
-            preconsume,
-            prepared=object(),
-            accepted=object(),
-            replay=replay,
-            backend=backend,
-        )
-
-    namespace = {
-        "run_privileged_installer_boundary_refresh": run_privileged_installer_boundary_refresh,
-        "WeatherNextPrivateInstallerBoundaryRefreshRuntimeError": RuntimeErrorType,
-        "ConcreteBoundaryRefreshRevalidator": Revalidator,
-        "_stable": stable,
-        "execute_prevalidated_refresh": execute_prevalidated_refresh,
-    }
-    entry = adapter._instrumented_runtime_entry(namespace)
+    td, previous, entry = _load_adapter_entry(adapter, _runtime_payload(fail_stage="replay_consume"))
     try:
-        entry(721)
-    except Exception as exc:
-        assert getattr(exc, "failure_stage", None) == "replay_consume"
-        assert getattr(exc, "error_code", None) == "PRECONSUME_REPLAY_CONSUME_FAILED"
-        assert str(exc) == "WeatherNext private installer-boundary refresh failed closed"
-        assert "secret" not in str(exc)
-    else:
-        raise AssertionError("replay consume failure must fail closed")
-    assert backend_calls == []
+        try:
+            entry(721)
+        except Exception as exc:
+            assert getattr(exc, "failure_stage", None) == "replay_consume"
+            assert getattr(exc, "error_code", None) == "PRECONSUME_REPLAY_CONSUME_FAILED"
+            assert str(exc) == "WeatherNext private installer-boundary refresh failed closed"
+            assert "secret" not in str(exc)
+        else:
+            raise AssertionError("replay consume failure must fail closed")
+    finally:
+        _cleanup_adapter_entry(td, previous)
 
 
 def test_bootstrap_preserves_replay_consume_stage_without_consumed_claim():
