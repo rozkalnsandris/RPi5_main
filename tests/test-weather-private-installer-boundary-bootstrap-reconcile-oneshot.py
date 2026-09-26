@@ -74,14 +74,10 @@ class BridgeTests(unittest.TestCase):
         for name in (self.bridge.PLAN_MODULE, self.bridge.RUNTIME_MODULE):
             sys.modules.pop(name, None)
 
-    def test_fixed_reachability_identity(self):
+    def test_fixed_reachability_identity_and_no_new_privileged_surface(self):
         b = self.bridge
         self.assertEqual(b.TRUSTED_HEAD, "79372e48ac53bf6d00142578b6543bc33a72a692")
         self.assertEqual(b.REPOSITORY, "rozkalnsandris/RPi5_main")
-        self.assertEqual(
-            b.OPERATION_ID,
-            "rpi5.weathernext-private-installer-boundary-bootstrap.reconcile.v1",
-        )
         self.assertEqual(
             {b.PLAN_PATH, b.RUNTIME_PATH},
             {
@@ -92,6 +88,8 @@ class BridgeTests(unittest.TestCase):
         source = SCRIPT.read_text()
         for forbidden in (
             "/home/andris/RPi5_main",
+            "deploy-authorizations",
+            "github-app.pem",
             "git fetch",
             "git reset",
             "git checkout",
@@ -100,34 +98,30 @@ class BridgeTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, source)
 
-    def test_execute_orders_auth_before_current_module_load(self):
+    def test_execute_orders_current_source_load_before_existing_runtime_auth(self):
         b = self.bridge
         events = []
         b.os.geteuid = lambda: 0
         b._trusted_checkout = lambda: events.append("trusted")
-        b._trusted_authorized_source = lambda issue, client: events.append(("auth", issue)) or ("a" * 40)
-        b._exact_current_modules = lambda sha, client: events.append(("modules", sha)) or {}
+        b._exact_current_modules = lambda client: events.append("modules") or ("a" * 40, {})
         b._load_reconcile_runtime = lambda modules: events.append("load") or (
             lambda issue: events.append(("runtime", issue)) or {"ok": issue}
         )
         self.assertEqual(b.execute(743), {"ok": 743})
-        self.assertEqual(
-            events,
-            ["trusted", ("auth", 743), ("modules", "a" * 40), "load", ("runtime", 743)],
-        )
+        self.assertEqual(events, ["trusted", "modules", "load", ("runtime", 743)])
 
-    def test_current_main_mismatch_stops_before_module_bytes(self):
+    def test_malformed_current_main_stops_before_module_bytes(self):
         b = self.bridge
         client = FakeClient(
             b,
-            "b" * 40,
+            "bad",
             {b.PLAN_PATH: b"X=1\n", b.RUNTIME_PATH: b"Y=1\n"},
         )
-        with self.assertRaisesRegex(b.OneShotReachabilityError, "exact current main"):
-            b._exact_current_modules("a" * 40, client)
+        with self.assertRaisesRegex(b.OneShotReachabilityError, "current main identity"):
+            b._exact_current_modules(client)
         self.assertEqual(client.paths, [f"/repos/{b.REPOSITORY}/branches/main"])
 
-    def test_only_fixed_module_paths_are_fetched_and_blob_verified(self):
+    def test_only_fixed_current_main_module_paths_are_fetched_and_blob_verified(self):
         b = self.bridge
         sha = "a" * 40
         files = {
@@ -135,7 +129,8 @@ class BridgeTests(unittest.TestCase):
             b.RUNTIME_PATH: b"IMPLEMENTATION_ISSUE=743\ndef run_privileged_bootstrap_reconcile(issue): return {'ok': issue}\n",
         }
         client = FakeClient(b, sha, files)
-        loaded = b._exact_current_modules(sha, client)
+        observed_sha, loaded = b._exact_current_modules(client)
+        self.assertEqual(observed_sha, sha)
         self.assertEqual(loaded[b.PLAN_MODULE], files[b.PLAN_PATH])
         self.assertEqual(loaded[b.RUNTIME_MODULE], files[b.RUNTIME_PATH])
         self.assertEqual(
@@ -148,23 +143,39 @@ class BridgeTests(unittest.TestCase):
 
     def test_loader_exposes_only_fixed_runtime_entrypoint(self):
         b = self.bridge
-        entry = b._load_reconcile_runtime(
-            {
-                b.PLAN_MODULE: b"X=1\n",
-                b.RUNTIME_MODULE: (
-                    b"IMPLEMENTATION_ISSUE=743\n"
-                    b"def run_privileged_bootstrap_reconcile(issue): return {'ok': issue}\n"
-                ),
-            }
-        )
-        self.assertEqual(entry(17), {"ok": 17})
+        old_path = list(sys.path)
+        old_modules = {
+            name: module
+            for name, module in sys.modules.items()
+            if name == "deploy_executor" or name.startswith("deploy_executor.")
+        }
+        try:
+            for name in list(sys.modules):
+                if name == "deploy_executor" or name.startswith("deploy_executor."):
+                    sys.modules.pop(name, None)
+            sys.path.insert(0, str(REPO_ROOT / "ops/lib"))
+            entry = b._load_reconcile_runtime(
+                {
+                    b.PLAN_MODULE: b"X=1\n",
+                    b.RUNTIME_MODULE: (
+                        b"IMPLEMENTATION_ISSUE=743\n"
+                        b"def run_privileged_bootstrap_reconcile(issue): return {'ok': issue}\n"
+                    ),
+                }
+            )
+            self.assertEqual(entry(17), {"ok": 17})
+        finally:
+            for name in list(sys.modules):
+                if name == "deploy_executor" or name.startswith("deploy_executor."):
+                    sys.modules.pop(name, None)
+            sys.modules.update(old_modules)
+            sys.path[:] = old_path
 
     def test_runtime_error_becomes_post_entry_fail_closed(self):
         b = self.bridge
         b.os.geteuid = lambda: 0
         b._trusted_checkout = lambda: None
-        b._trusted_authorized_source = lambda issue, client: "a" * 40
-        b._exact_current_modules = lambda sha, client: {}
+        b._exact_current_modules = lambda client: ("a" * 40, {})
         b._load_reconcile_runtime = lambda modules: (
             lambda issue: (_ for _ in ()).throw(RuntimeError("boom"))
         )
@@ -196,7 +207,6 @@ class BridgeTests(unittest.TestCase):
                     if name == "deploy_executor" or name.startswith("deploy_executor."):
                         sys.modules.pop(name, None)
                 sys.path.insert(0, str(Path(td) / "ops/lib"))
-                __import__("deploy_executor")
                 entry = b._load_reconcile_runtime(
                     {
                         b.PLAN_MODULE: (REPO_ROOT / b.PLAN_PATH).read_bytes(),
