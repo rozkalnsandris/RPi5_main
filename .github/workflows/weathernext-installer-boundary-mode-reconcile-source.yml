@@ -1,0 +1,30 @@
+name: WeatherNext installer boundary mode reconcile source
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rpi5-main-weathernext-installer-boundary-mode-reconcile-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate WeatherNext installer boundary mode reconcile
+        run: |
+          python3 ./tests/test-weather-private-installer-boundary-mode-reconcile.py
+          python3 -m py_compile \
+            ./ops/lib/deploy_executor/weather_private_installer_boundary_mode_reconcile.py

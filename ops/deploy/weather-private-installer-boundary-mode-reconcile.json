@@ -1,0 +1,76 @@
+{
+  "schema": "rozkalns-weather.weathernext-private-installer-boundary-mode-reconcile.v1",
+  "source_repository": "rozkalnsandris/RPi5_main",
+  "source_anchor": "b4374e735ef0e5d6efa26acee85669de5433cb67",
+  "reviewed_origin": "https://github.com/rozkalnsandris/RPi5_main.git",
+  "manager_checkout_resolver": "repo-owner-home/RPi5_main",
+  "trusted_checkout": "/var/lib/rpi5-deploy/RPi5_main-weathernext-private-installer-trusted",
+  "known_stale_head": "79372e48ac53bf6d00142578b6543bc33a72a692",
+  "operation_id": "rpi5.weathernext-private-installer-boundary.mode-reconcile.v1",
+  "target_alias": "rpi5-weathernext-private-installer-boundary-mode-reconcile",
+  "authorization_class": "STRICT",
+  "source_merge_authorizes_live": false,
+  "required_prestate": "all three fixed reviewed files must be in the restrictive mode set with exact owner, Git mode/blob and content identity; mixed state is conflict",
+  "exact_noop_state": "all three fixed reviewed files already have canonical modes",
+  "files": [
+    {
+      "key": "runtime_adapter",
+      "scope": "manager",
+      "relative_path": "ops/bin/rpi5-weathernext-private-installer-boundary-refresh-runtime",
+      "owner_class": "manager",
+      "git_mode": "100755",
+      "git_blob": "b9e607dfcfdaec9dbd138dd16c41588c5e65dd0b",
+      "restrictive_mode": "0700",
+      "exact_mode": "0755"
+    },
+    {
+      "key": "runtime_module",
+      "scope": "manager",
+      "relative_path": "ops/lib/deploy_executor/weather_private_installer_boundary_refresh_runtime.py",
+      "owner_class": "manager",
+      "git_mode": "100644",
+      "git_blob": "4fa33b16a87bc6e0f1eb495067d8ad689057292e",
+      "restrictive_mode": "0600",
+      "exact_mode": "0644"
+    },
+    {
+      "key": "stale_dispatch",
+      "scope": "trusted",
+      "relative_path": "ops/lib/deploy_executor/weather_private_privileged_dispatch.py",
+      "owner_class": "root",
+      "git_mode": "100644",
+      "git_blob": "98218e3138f821390bece6dc10b770bd0b578cd9",
+      "restrictive_mode": "0600",
+      "exact_mode": "0644"
+    }
+  ],
+  "mutation_budget": [
+    {
+      "category": "filesystem.weathernext-private-installer-boundary-mode-reconcile",
+      "max_operations": 3
+    }
+  ],
+  "mutation_semantics": [
+    "mode-only on the three fixed files",
+    "no content write",
+    "no owner/group change",
+    "no path creation/deletion/rename",
+    "authorization consumed before first mode mutation",
+    "any error after first mutation is STOP"
+  ],
+  "rollback_policy": "NONE",
+  "automatic_retry": false,
+  "automatic_cleanup": false,
+  "automatic_rollback": false,
+  "explicit_exclusions": [
+    "no caller-selected repository/path/command/argv/environment",
+    "no content replacement",
+    "no chown",
+    "no Git mutation",
+    "no manager checkout repair",
+    "no service/Docker/package/network/Cloudflare mutation",
+    "no Google/BigQuery/SQLite/application/runtime mutation",
+    "no secret/config/protected-data access"
+  ],
+  "next_gate_after_source_merge": "fresh exact-SHA privileged read-only preflight, then separate exact owner LIVE mode reconciliation, then fresh #700/#721 boundary preflight"
+}
