@@ -19,7 +19,7 @@ sys.modules[spec.name] = adopt
 spec.loader.exec_module(adopt)
 
 BASELINE = ROOT / "ops/deploy/baselines/simple-deploy-targets-weather-only-v1.json"
-DESIRED = ROOT / "ops/deploy/simple-deploy-targets-v1.json"
+DESIRED = ROOT / "ops/deploy/baselines/simple-deploy-targets-weather-hermes-v1.json"
 WEATHER = ROOT / "ops/deploy/simple-deploy-compose/rozkalns-weather-public.yml"
 HERMES = ROOT / "ops/deploy/simple-deploy-compose/hermes-deals-api.yml"
 CONTRACT = ROOT / "ops/contracts/simple-deploy-hermes-adoption-v1.json"

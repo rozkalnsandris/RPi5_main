@@ -34,7 +34,7 @@ Any mismatch stops before mutation. There is no repair, cleanup, deletion, reins
 
 The source checkout must be clean, correct-origin and exactly match the caller-provided reviewed source SHA. The source artifacts are fixed:
 
-- registry: `ops/deploy/simple-deploy-targets-v1.json`;
+- registry: `ops/deploy/baselines/simple-deploy-targets-weather-hermes-v1.json`;
 - Hermes adapter: `ops/deploy/simple-deploy-compose/hermes-deals-api.yml`.
 
 The desired registry SHA-256 is `75660aefcf82bbc2b0b9d91cada515d9777804a7be2752f86d9d071c0ad9dbba` and its exact aliases are:

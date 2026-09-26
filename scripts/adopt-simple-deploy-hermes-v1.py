@@ -32,7 +32,7 @@ WEATHER_ALIAS = "rozkalns-weather-public-rpi5"
 HERMES_ALIAS = "hermes-deals"
 
 BASELINE_FIXTURE = ROOT / "ops/deploy/baselines/simple-deploy-targets-weather-only-v1.json"
-DESIRED_REGISTRY_SOURCE = ROOT / "ops/deploy/simple-deploy-targets-v1.json"
+DESIRED_REGISTRY_SOURCE = ROOT / "ops/deploy/baselines/simple-deploy-targets-weather-hermes-v1.json"
 HERMES_COMPOSE_SOURCE = ROOT / "ops/deploy/simple-deploy-compose/hermes-deals-api.yml"
 
 
