@@ -381,7 +381,7 @@ class ReconcileTests(unittest.TestCase):
         runner = FakeRunner(failures={" pull weather"})
         deployer = self.fx.deployer(runner=runner)
         with self.assertRaisesRegex(sd.SimpleDeployError, "COMPOSE_PULL_FAILED") as caught:
-            self.fx.deployer(runner=runner).reconcile("weather-canary")
+            deployer.reconcile("weather-canary")
         self.assertTrue(caught.exception.mutation_started)
         status = json.loads((self.fx.state_root / "status/weather-canary.json").read_text())
         self.assertEqual(status["result"], "STOP_ERROR")
