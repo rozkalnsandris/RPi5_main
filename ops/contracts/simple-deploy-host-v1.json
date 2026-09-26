@@ -1,7 +1,7 @@
 {
   "schema": "rozkalns.rpi5-main.simple-deploy-host.v1",
   "issue": 666,
-  "status": "WEATHER_ACTIVE_HERMES_SOURCE_TARGET_REGISTERED_LIVE_CUTOVER_REQUIRED",
+  "status": "WEATHER_ACTIVE_HERMES_DEALS_AND_TECH_SOURCE_TARGETS_REGISTERED_LIVE_CUTOVERS_REQUIRED",
   "shared_contract": {
     "repository": "rozkalnsandris/ops-workflows",
     "revision": "e05ed760791a127c7c9628696806ef39c9fe329c",
@@ -28,7 +28,7 @@
     "tracked_source": "ops/deploy/simple-deploy-targets-v1.json",
     "execution_enabled_in_source": true,
     "initial_targets": 1,
-    "current_reviewed_targets": 2,
+    "current_reviewed_targets": 3,
     "target_adoption_requires_tracked_source_change": true,
     "architecture": "linux/arm64",
     "pull_profiles": [
@@ -56,6 +56,18 @@
         "compose_sha256": "644dc72da5dc13ee532dd29693db31358451669bb44de4df4b62c41736903f1c",
         "liveness_url": "http://127.0.0.1:9128/api/health",
         "readiness_state": "not-applicable",
+        "wait_timeout_seconds": 180,
+        "registry_pull_profile": "public-anonymous-pull"
+      },
+      {
+        "target_alias": "hermes-tech-public-rpi5",
+        "consumer_repository": "rozkalnsandris/hermes-tech",
+        "consumer_contract_revision": "3d8e2400e26e7bf4e992539e1239120f9bc1af44",
+        "compose_source": "ops/deploy/simple-deploy-compose/hermes-tech-public.yml",
+        "compose_sha256": "fd1ca0d00c79bfb5e5cd1be589ae13b378c5c223be0b61d3f14f31da687fe6b9",
+        "liveness_url": "http://127.0.0.1:8089/health",
+        "readiness_state": "required",
+        "readiness_url": "http://127.0.0.1:8089/ready",
         "wait_timeout_seconds": 180,
         "registry_pull_profile": "public-anonymous-pull"
       }
@@ -103,7 +115,9 @@
     "current_issue_669_must_be_freshly_reconciled_before_live": true,
     "hermes_source_registration_issue": 692,
     "hermes_target_installation_requires_separate_exact_live_cutover": true,
-    "hermes_private_runtime_config_provisioning_requires_separate_exact_authority": true
+    "hermes_private_runtime_config_provisioning_requires_separate_exact_authority": true,
+    "hermes_tech_target_installation_requires_separate_exact_live_cutover": true,
+    "hermes_tech_existing_v14_runtime_retirement_requires_separate_exact_live_authority": true
   },
   "installer": {
     "issue": 672,
