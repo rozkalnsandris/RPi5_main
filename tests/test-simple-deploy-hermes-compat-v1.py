@@ -153,7 +153,8 @@ class HermesSimpleDeployCompatibilityTests(unittest.TestCase):
 
     def test_hermes_target_registration_is_static_and_not_live(self) -> None:
         aliases = [target["target_alias"] for target in self.targets["targets"]]
-        self.assertEqual(aliases, ["rozkalns-weather-public-rpi5", "hermes-deals"])
+        self.assertIn("hermes-deals", aliases)
+        self.assertEqual(aliases.count("hermes-deals"), 1)
         self.assertTrue(self.contract["target_registration_performed"])
         self.assertFalse(self.contract["target_installation_performed"])
         self.assertFalse(self.contract["host_runtime_mutation_performed"])

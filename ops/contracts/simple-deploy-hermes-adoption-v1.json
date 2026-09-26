@@ -16,7 +16,7 @@
     "public_targets_path_is_not_canonical": true
   },
   "desired": {
-    "registry_source": "ops/deploy/simple-deploy-targets-v1.json",
+    "registry_source": "ops/deploy/baselines/simple-deploy-targets-weather-hermes-v1.json",
     "registry_sha256": "75660aefcf82bbc2b0b9d91cada515d9777804a7be2752f86d9d071c0ad9dbba",
     "target_aliases": [
       "rozkalns-weather-public-rpi5",
