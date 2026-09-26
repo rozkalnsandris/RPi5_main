@@ -1,0 +1,54 @@
+{
+  "schema": "rozkalns.work-cycle-v23.consumer.v1",
+  "repository": "rozkalnsandris/RPi5_main",
+  "canonical_repository": "rozkalnsandris/ops-workflows",
+  "canonical_revision": "274d58f2d9d3cb86feded2751b8f9009a4501f6b",
+  "tracking_issue": 124,
+  "bootstrap_manifest": {
+    "status": "ADOPTED",
+    "path": ".github/agent-bootstrap.json",
+    "profile": "custom",
+    "mutable_operational_truth_allowed": false
+  },
+  "start_contract": {
+    "safe_auto_continuation": true,
+    "compact_terminal_response": true,
+    "single_selected_current_lane_per_start": true,
+    "unnecessary_technical_stop_allowed": false,
+    "local_owner_gates_preserved": true
+  },
+  "write_preflight": {
+    "status": "ADOPTED",
+    "contract": "WRITE_PREFLIGHT_COMPACT_V1",
+    "existing_github_api_adapter": ".github/github-api-access-v1.json",
+    "exact_existing_intent": "RECONCILE_OR_NOOP",
+    "conflicting_identity": "STOP",
+    "stale_writer": "STOP",
+    "duplicate_framework_created": false
+  },
+  "auto_run_full_normalized_state": {
+    "status": "BLOCKED_LOCAL_MULTI_LANE",
+    "shared_single_issue_contract": "AUTO_RUN_FULL_SINGLE_ISSUE_STATE_V2",
+    "reason": "RPi5_main already has an accepted multi-lane FULL model with up to four concurrent runnable source lanes and controller #295 as aggregate reconciliation view; the shared singleton controller requires maximum_active_runs=1.",
+    "current_lane_policy": ".github/auto-run-lane-policy-v1.json",
+    "current_controller_issue": 295,
+    "current_max_concurrent_runnable_source_lanes": 4,
+    "historical_or_active_state_rewritten": false,
+    "second_controller_framework_created": false,
+    "next_step": "Define or accept a shared multi-lane adapter contract before changing RPi5_main FULL state ownership."
+  },
+  "local_stricter_rules": {
+    "fast_merge_requires_explicit_owner_decision": true,
+    "runtime_live_requires_exact_owner_authority": true,
+    "protected_runtime_inspection_requires_exact_owner_authority": true,
+    "rdc_never_widens_authority": true,
+    "merge_implies_live": false
+  },
+  "authority": {
+    "source_authority_widened": false,
+    "merge_authority_widened": false,
+    "live_authority_widened": false,
+    "retry_rollback_cleanup_authority_created": false,
+    "queue_vnext_activated": false
+  }
+}
