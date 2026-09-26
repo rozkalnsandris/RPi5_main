@@ -105,7 +105,7 @@ class BridgeTests(unittest.TestCase):
         events = []
         b.os.geteuid = lambda: 0
         b._trusted_checkout = lambda: events.append("trusted")
-        b._trusted_authorized_source = lambda issue: events.append(("auth", issue)) or ("a" * 40)
+        b._trusted_authorized_source = lambda issue, client: events.append(("auth", issue)) or ("a" * 40)
         b._exact_current_modules = lambda sha, client: events.append(("modules", sha)) or {}
         b._load_reconcile_runtime = lambda modules: events.append("load") or (
             lambda issue: events.append(("runtime", issue)) or {"ok": issue}
@@ -163,7 +163,7 @@ class BridgeTests(unittest.TestCase):
         b = self.bridge
         b.os.geteuid = lambda: 0
         b._trusted_checkout = lambda: None
-        b._trusted_authorized_source = lambda issue: "a" * 40
+        b._trusted_authorized_source = lambda issue, client: "a" * 40
         b._exact_current_modules = lambda sha, client: {}
         b._load_reconcile_runtime = lambda modules: (
             lambda issue: (_ for _ in ()).throw(RuntimeError("boom"))
