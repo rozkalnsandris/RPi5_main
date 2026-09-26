@@ -1,0 +1,355 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import base64
+import hashlib
+import http.client
+import json
+import os
+from pathlib import Path
+import re
+import stat
+import subprocess
+import sys
+import types
+from typing import Any, Mapping
+
+REPOSITORY = "rozkalnsandris/RPi5_main"
+REPOSITORY_ID = 1323383044
+REVIEWED_ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
+TRUSTED_ROOT = Path("/var/lib/rpi5-deploy/RPi5_main-weathernext-private-installer-trusted")
+TRUSTED_LIB = TRUSTED_ROOT / "ops" / "lib"
+TRUSTED_HEAD = "79372e48ac53bf6d00142578b6543bc33a72a692"
+OPERATION_ID = "rpi5.weathernext-private-installer-boundary-bootstrap.reconcile.v1"
+SOURCE_REPOSITORY_FIELD = "source_repository"
+PLAN_MODULE = "deploy_executor.weather_private_installer_boundary_bootstrap_reconcile"
+RUNTIME_MODULE = "deploy_executor.weather_private_installer_boundary_bootstrap_reconcile_runtime"
+PLAN_PATH = "ops/lib/deploy_executor/weather_private_installer_boundary_bootstrap_reconcile.py"
+RUNTIME_PATH = "ops/lib/deploy_executor/weather_private_installer_boundary_bootstrap_reconcile_runtime.py"
+MODULE_PATHS = ((PLAN_MODULE, PLAN_PATH), (RUNTIME_MODULE, RUNTIME_PATH))
+AUTH_SURFACE = Path("/etc/rozkalns-deploy-executor-p9/executor-p9-isolated-auth-surface.json")
+EXECUTOR_PRIVATE_KEY = Path("/etc/rozkalns-deploy-executor/github-app.pem")
+MAX_MODULE_BYTES = 2 * 1024 * 1024
+ROOT_UID = 0
+_SHA40 = re.compile(r"^[0-9a-f]{40}$")
+
+
+class OneShotReachabilityError(RuntimeError):
+    pass
+
+
+class RuntimeEnteredError(OneShotReachabilityError):
+    pass
+
+
+def _fail(message: str) -> None:
+    raise OneShotReachabilityError(message)
+
+
+def _valid_sha40(value: Any) -> bool:
+    return type(value) is str and _SHA40.fullmatch(value) is not None
+
+
+def _git_blob_sha1(raw: bytes) -> str:
+    return hashlib.sha1(f"blob {len(raw)}\0".encode("ascii") + raw).hexdigest()
+
+
+def _trusted_checkout() -> None:
+    try:
+        meta = TRUSTED_ROOT.lstat()
+    except OSError as exc:
+        raise OneShotReachabilityError("trusted installer checkout is unavailable") from exc
+    if not stat.S_ISDIR(meta.st_mode) or stat.S_ISLNK(meta.st_mode) or meta.st_uid != ROOT_UID:
+        _fail("trusted installer checkout filesystem identity drifted")
+    env = {
+        "PATH": "/usr/bin:/bin",
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": "/dev/null",
+    }
+
+    def git(*args: str) -> str:
+        allowed = {
+            ("rev-parse", "HEAD"),
+            ("remote", "get-url", "origin"),
+            ("status", "--porcelain", "--untracked-files=all"),
+        }
+        if tuple(args) not in allowed:
+            _fail("trusted Git argv escaped read-only allowlist")
+        try:
+            result = subprocess.run(
+                ("/usr/bin/git", "--no-optional-locks", "-C", str(TRUSTED_ROOT), *args),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="strict",
+                env=env,
+                shell=False,
+                close_fds=True,
+                timeout=15,
+                check=False,
+            )
+        except Exception as exc:
+            raise OneShotReachabilityError("trusted Git read failed") from exc
+        if result.returncode != 0:
+            _fail("trusted Git read failed closed")
+        return result.stdout
+
+    if git("rev-parse", "HEAD").strip() != TRUSTED_HEAD:
+        _fail("trusted installer checkout is not the recognized reachability predecessor")
+    if git("remote", "get-url", "origin").strip() != REVIEWED_ORIGIN:
+        _fail("trusted installer checkout origin drifted")
+    if git("status", "--porcelain", "--untracked-files=all") != "":
+        _fail("trusted installer checkout is not clean")
+
+
+def _trusted_authorized_source(issue_number: int) -> str:
+    if str(TRUSTED_LIB) not in sys.path:
+        sys.path.insert(0, str(TRUSTED_LIB))
+    try:
+        from deploy_executor.p9_canary import require_isolated_auth_surface
+        from deploy_executor.p9_isolated_auth_surface import load_contract
+        from deploy_executor.p9_runtime import build_p9_read_clients
+        from deploy_executor.protocol import (
+            AUTHORIZATION_REPOSITORY,
+            AUTHORIZATION_REPOSITORY_ID,
+            accept_issue,
+        )
+    except Exception as exc:
+        raise OneShotReachabilityError("trusted authorization substrate cannot be loaded") from exc
+
+    try:
+        auth_surface = load_contract(AUTH_SURFACE)
+        require_isolated_auth_surface(auth_surface)
+        clients = build_p9_read_clients(auth_surface=auth_surface, private_key=EXECUTOR_PRIVATE_KEY)
+        response = clients.authorization.get_json(
+            f"/repos/{AUTHORIZATION_REPOSITORY}/issues/{issue_number}"
+        )
+        accepted = accept_issue(
+            response.value,
+            repository_id=AUTHORIZATION_REPOSITORY_ID,
+            repository_full_name=AUTHORIZATION_REPOSITORY,
+            server_time=response.server_time,
+            governance_ok=True,
+            approved_operator_app_ids=frozenset(),
+        )
+    except Exception as exc:
+        raise OneShotReachabilityError("owner LIVE-AUTH validation failed closed") from exc
+    payload = accepted.payload
+    if payload.get("operation_id") != OPERATION_ID:
+        _fail("owner LIVE-AUTH operation identity drifted")
+    if payload.get(SOURCE_REPOSITORY_FIELD) != REPOSITORY:
+        _fail("owner LIVE-AUTH source repository drifted")
+    source_sha = payload.get("source_sha")
+    if not _valid_sha40(source_sha):
+        _fail("owner LIVE-AUTH source SHA is malformed")
+    return source_sha
+
+
+class PublicGitHub:
+    def get_json(self, path: str) -> Mapping[str, Any]:
+        if type(path) is not str or not path.startswith(f"/repos/{REPOSITORY}/"):
+            _fail("public GitHub path escaped fixed repository")
+        conn = http.client.HTTPSConnection("api.github.com", timeout=10)
+        try:
+            conn.request(
+                "GET",
+                path,
+                headers={
+                    "Accept": "application/vnd.github+json",
+                    "User-Agent": "rpi5-weathernext-bootstrap-reconcile-oneshot/1",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                },
+            )
+            response = conn.getresponse()
+            raw = response.read(4 * 1024 * 1024 + 1)
+        except Exception as exc:
+            raise OneShotReachabilityError("public GitHub read failed") from exc
+        finally:
+            conn.close()
+        if response.status != 200 or len(raw) > 4 * 1024 * 1024:
+            _fail("public GitHub read failed closed")
+        try:
+            value = json.loads(raw.decode("utf-8", "strict"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise OneShotReachabilityError("public GitHub payload is malformed") from exc
+        if type(value) is not dict:
+            _fail("public GitHub payload type is invalid")
+        return value
+
+
+def _exact_current_modules(source_sha: str, client: PublicGitHub) -> dict[str, bytes]:
+    branch = client.get_json(f"/repos/{REPOSITORY}/branches/main")
+    commit_ref = branch.get("commit")
+    if type(commit_ref) is not dict or commit_ref.get("sha") != source_sha:
+        _fail("owner-authorized source is not exact current main")
+    commit = client.get_json(f"/repos/{REPOSITORY}/git/commits/{source_sha}")
+    if commit.get("sha") != source_sha:
+        _fail("exact source commit identity drifted")
+    tree_ref = commit.get("tree")
+    if type(tree_ref) is not dict or not _valid_sha40(tree_ref.get("sha")):
+        _fail("exact source tree identity is malformed")
+    tree = client.get_json(
+        f"/repos/{REPOSITORY}/git/trees/{tree_ref['sha']}?recursive=1"
+    )
+    entries = tree.get("tree")
+    if tree.get("truncated") is True or type(entries) is not list:
+        _fail("exact source tree is unavailable")
+    indexed: dict[str, Mapping[str, Any]] = {}
+    for item in entries:
+        if type(item) is dict and item.get("path") in {PLAN_PATH, RUNTIME_PATH}:
+            indexed[str(item["path"])] = item
+    if set(indexed) != {PLAN_PATH, RUNTIME_PATH}:
+        _fail("fixed reconcile module set is incomplete")
+
+    loaded: dict[str, bytes] = {}
+    for module_name, path in MODULE_PATHS:
+        entry = indexed[path]
+        blob = entry.get("sha")
+        if entry.get("type") != "blob" or entry.get("mode") != "100644" or not _valid_sha40(blob):
+            _fail("fixed reconcile module Git identity drifted")
+        value = client.get_json(f"/repos/{REPOSITORY}/contents/{path}?ref={source_sha}")
+        if (
+            value.get("type") != "file"
+            or value.get("path") != path
+            or value.get("sha") != blob
+            or value.get("encoding") != "base64"
+            or type(value.get("content")) is not str
+        ):
+            _fail("fixed reconcile module contents identity drifted")
+        try:
+            raw = base64.b64decode(
+                value["content"].replace("\r", "").replace("\n", ""),
+                validate=True,
+            )
+        except (TypeError, ValueError) as exc:
+            raise OneShotReachabilityError("fixed reconcile module payload is malformed") from exc
+        if not 0 < len(raw) <= MAX_MODULE_BYTES or _git_blob_sha1(raw) != blob:
+            _fail("fixed reconcile module bytes drifted")
+        loaded[module_name] = raw
+    return loaded
+
+
+def _load_reconcile_runtime(modules: Mapping[str, bytes]) -> Any:
+    for module_name, _ in MODULE_PATHS:
+        if module_name in sys.modules:
+            _fail("fixed reconcile module namespace is already occupied")
+    for module_name, path in MODULE_PATHS:
+        raw = modules.get(module_name)
+        if type(raw) is not bytes:
+            _fail("fixed reconcile module bytes are missing")
+        module = types.ModuleType(module_name)
+        module.__file__ = path
+        module.__package__ = "deploy_executor"
+        sys.modules[module_name] = module
+        try:
+            exec(compile(raw, path, "exec", dont_inherit=True), module.__dict__, module.__dict__)
+        except Exception as exc:
+            raise OneShotReachabilityError("fixed reconcile module failed to load") from exc
+    runtime = sys.modules[RUNTIME_MODULE]
+    if getattr(runtime, "IMPLEMENTATION_ISSUE", None) != 743:
+        _fail("fixed reconcile runtime implementation identity drifted")
+    entry = getattr(runtime, "run_privileged_bootstrap_reconcile", None)
+    if not callable(entry):
+        _fail("fixed reconcile runtime entrypoint is unavailable")
+    return entry
+
+
+def execute(issue_number: int) -> Mapping[str, object]:
+    if type(issue_number) is not int or not 1 <= issue_number <= 2_147_483_647:
+        _fail("authorization issue number is invalid")
+    if os.geteuid() != ROOT_UID:
+        _fail("one-shot bootstrap reconcile bridge requires root execution")
+    _trusted_checkout()
+    source_sha = _trusted_authorized_source(issue_number)
+    modules = _exact_current_modules(source_sha, PublicGitHub())
+    entry = _load_reconcile_runtime(modules)
+    try:
+        receipt = entry(issue_number)
+    except Exception as exc:
+        raise RuntimeEnteredError("fixed reconcile runtime failed closed") from exc
+    if not isinstance(receipt, Mapping):
+        raise RuntimeEnteredError("fixed reconcile runtime returned unsupported receipt")
+    return dict(receipt)
+
+
+def _issue_number(value: str) -> int:
+    try:
+        number = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("issue number must be an integer") from exc
+    if not 1 <= number <= 2_147_483_647:
+        raise argparse.ArgumentTypeError("issue number must be positive")
+    return number
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Run the non-installed exact-source WeatherNext bootstrap reconcile bridge."
+    )
+    parser.add_argument("--issue-number", required=True, type=_issue_number)
+    args = parser.parse_args(argv)
+    try:
+        receipt = execute(args.issue_number)
+    except RuntimeEnteredError as exc:
+        print(
+            json.dumps(
+                {
+                    "schema": "rozkalns.weathernext-private-installer-boundary-bootstrap-reconcile-oneshot-failure.v1",
+                    "result": "STOP",
+                    "reason": str(exc),
+                    "production_mutation_started": "unknown_after_runtime_entry",
+                    "automatic_retry": False,
+                    "automatic_cleanup": False,
+                    "automatic_rollback": False,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        )
+        return 78
+    except OneShotReachabilityError as exc:
+        print(
+            json.dumps(
+                {
+                    "schema": "rozkalns.weathernext-private-installer-boundary-bootstrap-reconcile-oneshot-failure.v1",
+                    "result": "STOP",
+                    "reason": str(exc),
+                    "production_mutation_started": False,
+                    "automatic_retry": False,
+                    "automatic_cleanup": False,
+                    "automatic_rollback": False,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        )
+        return 78
+    except Exception:
+        print(
+            json.dumps(
+                {
+                    "schema": "rozkalns.weathernext-private-installer-boundary-bootstrap-reconcile-oneshot-failure.v1",
+                    "result": "STOP",
+                    "reason": "one-shot reconcile bridge failed closed",
+                    "production_mutation_started": "unknown_after_runtime_entry",
+                    "automatic_retry": False,
+                    "automatic_cleanup": False,
+                    "automatic_rollback": False,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        )
+        return 78
+    print(json.dumps(receipt, sort_keys=True, separators=(",", ":")))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
