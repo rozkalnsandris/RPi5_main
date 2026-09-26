@@ -175,7 +175,7 @@ class RegistryTests(unittest.TestCase):
     def test_repository_registry_binds_exact_reviewed_targets(self):
         registry = sd.load_registry(ROOT / "ops/deploy/simple-deploy-targets-v1.json")
         self.assertTrue(registry.execution_enabled)
-        self.assertEqual(len(registry.targets), 2)
+        self.assertEqual(len(registry.targets), 3)
 
         weather = registry.get("rozkalns-weather-public-rpi5")
         self.assertEqual(weather.consumer_repository, "rozkalnsandris/rozkalns_weather")
@@ -381,7 +381,7 @@ class ReconcileTests(unittest.TestCase):
         runner = FakeRunner(failures={" pull weather"})
         deployer = self.fx.deployer(runner=runner)
         with self.assertRaisesRegex(sd.SimpleDeployError, "COMPOSE_PULL_FAILED") as caught:
-            deployer.reconcile("weather-canary")
+            self.fx.deployer(runner=runner).reconcile("weather-canary")
         self.assertTrue(caught.exception.mutation_started)
         status = json.loads((self.fx.state_root / "status/weather-canary.json").read_text())
         self.assertEqual(status["result"], "STOP_ERROR")
@@ -457,15 +457,15 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(contract["issue"], 666)
         self.assertEqual(
             contract["status"],
-            "WEATHER_ACTIVE_HERMES_SOURCE_TARGET_REGISTERED_LIVE_CUTOVER_REQUIRED",
+            "WEATHER_ACTIVE_HERMES_DEALS_AND_TECH_SOURCE_TARGETS_REGISTERED_LIVE_CUTOVERS_REQUIRED",
         )
         self.assertEqual(contract["shared_contract"]["revision"], SHARED_SHA)
         self.assertTrue(contract["registry"]["execution_enabled_in_source"])
         self.assertEqual(contract["registry"]["initial_targets"], 1)
-        self.assertEqual(contract["registry"]["current_reviewed_targets"], 2)
+        self.assertEqual(contract["registry"]["current_reviewed_targets"], 3)
         self.assertTrue(contract["registry"]["target_adoption_requires_tracked_source_change"])
         reviewed = contract["registry"]["reviewed_targets"]
-        self.assertEqual(len(reviewed), 2)
+        self.assertEqual(len(reviewed), 3)
         self.assertEqual(reviewed[0]["target_alias"], "rozkalns-weather-public-rpi5")
         self.assertEqual(
             reviewed[0]["consumer_contract_revision"],
@@ -487,6 +487,7 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(reviewed[1]["readiness_state"], "not-applicable")
         self.assertEqual(reviewed[1]["wait_timeout_seconds"], 180)
         self.assertEqual(reviewed[1]["registry_pull_profile"], "public-anonymous-pull")
+        self.assertEqual(reviewed[2]["target_alias"], "hermes-tech-public-rpi5")
         self.assertTrue(contract["activation"]["separate_exact_live_cutover_required"])
         self.assertFalse(contract["activation"]["source_merge_installs_or_enables_runtime"])
         self.assertTrue(
