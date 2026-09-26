@@ -5,6 +5,7 @@ import argparse
 import base64
 import hashlib
 import http.client
+from email.utils import parsedate_to_datetime
 import json
 import os
 from pathlib import Path
@@ -28,8 +29,6 @@ RUNTIME_MODULE = "deploy_executor.weather_private_installer_boundary_bootstrap_r
 PLAN_PATH = "ops/lib/deploy_executor/weather_private_installer_boundary_bootstrap_reconcile.py"
 RUNTIME_PATH = "ops/lib/deploy_executor/weather_private_installer_boundary_bootstrap_reconcile_runtime.py"
 MODULE_PATHS = ((PLAN_MODULE, PLAN_PATH), (RUNTIME_MODULE, RUNTIME_PATH))
-AUTH_SURFACE = Path("/etc/rozkalns-deploy-executor-p9/executor-p9-isolated-auth-surface.json")
-EXECUTOR_PRIVATE_KEY = Path("/etc/rozkalns-deploy-executor/github-app.pem")
 MAX_MODULE_BYTES = 2 * 1024 * 1024
 ROOT_UID = 0
 _SHA40 = re.compile(r"^[0-9a-f]{40}$")
@@ -108,33 +107,27 @@ def _trusted_checkout() -> None:
         _fail("trusted installer checkout is not clean")
 
 
-def _trusted_authorized_source(issue_number: int) -> str:
+def _trusted_authorized_source(issue_number: int, client: "PublicGitHub") -> str:
     if str(TRUSTED_LIB) not in sys.path:
         sys.path.insert(0, str(TRUSTED_LIB))
     try:
-        from deploy_executor.p9_canary import require_isolated_auth_surface
-        from deploy_executor.p9_isolated_auth_surface import load_contract
-        from deploy_executor.p9_runtime import build_p9_read_clients
         from deploy_executor.protocol import (
             AUTHORIZATION_REPOSITORY,
             AUTHORIZATION_REPOSITORY_ID,
             accept_issue,
         )
     except Exception as exc:
-        raise OneShotReachabilityError("trusted authorization substrate cannot be loaded") from exc
+        raise OneShotReachabilityError("trusted authorization parser cannot be loaded") from exc
 
     try:
-        auth_surface = load_contract(AUTH_SURFACE)
-        require_isolated_auth_surface(auth_surface)
-        clients = build_p9_read_clients(auth_surface=auth_surface, private_key=EXECUTOR_PRIVATE_KEY)
-        response = clients.authorization.get_json(
+        value, server_time = client.get_json_with_time(
             f"/repos/{AUTHORIZATION_REPOSITORY}/issues/{issue_number}"
         )
         accepted = accept_issue(
-            response.value,
+            value,
             repository_id=AUTHORIZATION_REPOSITORY_ID,
             repository_full_name=AUTHORIZATION_REPOSITORY,
-            server_time=response.server_time,
+            server_time=server_time,
             governance_ok=True,
             approved_operator_app_ids=frozenset(),
         )
@@ -152,7 +145,7 @@ def _trusted_authorized_source(issue_number: int) -> str:
 
 
 class PublicGitHub:
-    def get_json(self, path: str) -> Mapping[str, Any]:
+    def _request(self, path: str) -> tuple[Mapping[str, Any], Any]:
         if type(path) is not str or not path.startswith(f"/repos/{REPOSITORY}/"):
             _fail("public GitHub path escaped fixed repository")
         conn = http.client.HTTPSConnection("api.github.com", timeout=10)
@@ -168,6 +161,7 @@ class PublicGitHub:
             )
             response = conn.getresponse()
             raw = response.read(4 * 1024 * 1024 + 1)
+            date_header = response.getheader("Date")
         except Exception as exc:
             raise OneShotReachabilityError("public GitHub read failed") from exc
         finally:
@@ -180,7 +174,21 @@ class PublicGitHub:
             raise OneShotReachabilityError("public GitHub payload is malformed") from exc
         if type(value) is not dict:
             _fail("public GitHub payload type is invalid")
-        return value
+        if type(date_header) is not str:
+            _fail("public GitHub server time is unavailable")
+        try:
+            server_time = parsedate_to_datetime(date_header)
+        except (TypeError, ValueError) as exc:
+            raise OneShotReachabilityError("public GitHub server time is malformed") from exc
+        if server_time.tzinfo is None:
+            _fail("public GitHub server time is malformed")
+        return value, server_time
+
+    def get_json(self, path: str) -> Mapping[str, Any]:
+        return self._request(path)[0]
+
+    def get_json_with_time(self, path: str) -> tuple[Mapping[str, Any], Any]:
+        return self._request(path)
 
 
 def _exact_current_modules(source_sha: str, client: PublicGitHub) -> dict[str, bytes]:
@@ -266,8 +274,9 @@ def execute(issue_number: int) -> Mapping[str, object]:
     if os.geteuid() != ROOT_UID:
         _fail("one-shot bootstrap reconcile bridge requires root execution")
     _trusted_checkout()
-    source_sha = _trusted_authorized_source(issue_number)
-    modules = _exact_current_modules(source_sha, PublicGitHub())
+    client = PublicGitHub()
+    source_sha = _trusted_authorized_source(issue_number, client)
+    modules = _exact_current_modules(source_sha, client)
     entry = _load_reconcile_runtime(modules)
     try:
         receipt = entry(issue_number)
