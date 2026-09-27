@@ -1,6 +1,6 @@
-# rozkalns-cv SIMPLE-DEPLOY compatibility prerequisite v1
+# rozkalns-cv SIMPLE-DEPLOY compatibility and target registration v1
 
-Status: source-only prerequisite; target registration remains pending.
+Status: source compatibility accepted; static RPi5 target registered in source; one-time LIVE cutover remains separately gated.
 
 ## Accepted consumer evidence
 
@@ -13,7 +13,7 @@ Status: source-only prerequisite; target registration remains pending.
 - liveness: `/api/health`
 - readiness: `/api/health/ready`
 
-The consumer contract is not stateless. Its Compose source uses a private environment file and a persistent bind for `/app/data`, while the manifest's named-volume list is empty. The application stores durable SQLite state beneath `/app/data` and can initialize or maintain that database as part of normal application startup/runtime behavior. That boundary must not be converted into an implicit data/config migration by target registration.
+The consumer contract is not stateless. Its Compose source uses a private environment file and a persistent bind for `/app/data`, while the manifest's named-volume list is empty. The application stores durable SQLite state beneath `/app/data` and can initialize or maintain that database as part of normal application startup/runtime behavior. Target registration must not convert that boundary into an implicit data/config migration.
 
 ## RPi5-owned adapter
 
@@ -28,11 +28,17 @@ The consumer contract is not stateless. Its Compose source uses a private enviro
 
 The adapter intentionally removes consumer-relative `${...}` host paths and does not inherit the consumer's fixed custom bridge subnet/static container IP as host authority.
 
+## Static target registration
+
+The follow-up source change after PR #741 registers `rozkalns-cv-rpi5` in `ops/deploy/simple-deploy-targets-v1.json` and records it in `ops/contracts/simple-deploy-host-v1.json`.
+
+The registry intentionally keeps `persistent_volumes` empty because the consumer manifest declares no named volumes. Durable CV state remains represented by the fixed existing-data bind in the RPi5-owned Compose adapter, with `create_host_path: false`; registration therefore cannot create, initialize, migrate or adopt that data path.
+
+Registration is source metadata only. It does not install the target, provision private runtime configuration, materialize/adopt persistent data, retire the existing CV runtime, or run Docker/Compose.
+
 ## Authority boundary
 
-Merging this prerequisite does **not** add `rozkalns-cv-rpi5` to `ops/deploy/simple-deploy-targets-v1.json` and does not install or start anything.
-
-A follow-up tracked source change is required to register the target. Even after registration is merged, separate exact owner authority remains required for:
+Even after source registration is merged, separate exact owner authority remains required for:
 
 1. private runtime configuration provisioning;
 2. adoption/materialization of persistent CV data;
