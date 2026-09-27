@@ -9,18 +9,19 @@ Umbrella tracker: `RPi5_main#103`
 AUTO-RUN FULL controller: `RPi5_main#295`  
 Owner-authorized pull-deploy roadmap: `RPi5_main#236`
 
-## Current fleet reconciliation — 2026-09-26
+## Current fleet reconciliation — 2026-09-27
 
-This dated reconciliation is authoritative for **current lane selection** and supersedes older `NEXT` / `FOLLOWING` sequencing labels later in this document where they conflict with the facts below. Historical architecture and safety boundaries remain unchanged.
+This dated reconciliation is authoritative for **current lane selection**. It supersedes older `NEXT` / `FOLLOWING` wording and the historical sequencing snapshots in sections 5, 8, 12 and 13 where they conflict with the facts below. Historical architecture and safety boundaries remain unchanged.
 
+- Canonical `RPi5_main/main` is `4f32e76443d8b1e11d5ffd245f6a2a2a24b67318`, the squash merge of PR #749 (`feat: register rozkalns-cv SIMPLE-DEPLOY target`). Exact-main push CI for that SHA completed green across all six observed workflows, including `Validate` run `36321389742` (#1472), `FAST-LANE policy drift` run `36321389760` (#931) and `GITHUB-ONLY policy drift` run `36321389755` (#916).
 - Control Center Cloudflare-native deploy-standardization source work is **COMPLETE** at `rozkalnsandris/rozkalns-control-center@8a43dc4902ddad43a49d55e043964f1ae61b8c71`. No production Worker/Static Assets, D1, Queue, Cloudflare, credential or RPi5 mutation is implied.
-- Hermes Tech public static/Hugo SIMPLE-DEPLOY consumer source and GitHub-side publication proof are **COMPLETE** at `rozkalnsandris/hermes-tech@3d8e2400e26e7bf4e992539e1239120f9bc1af44`; SIMPLE-DEPLOY run `36149826529` completed successfully against immutable shared workflow `ops-workflows@e05ed760791a127c7c9628696806ef39c9fe329c`.
-- Hermes Tech RPi5 target/allowlist source registration is **COMPLETE** in `RPi5_main` via merged PR #737 at exact `main` `57098e4244752abc306f984b9ed155c9baac9c6c`; exact-main push `Validate` run `36230598079` completed successfully. The registry now contains `hermes-tech-public-rpi5` alongside Weather and the parked Hermes Deals target.
-- Hermes Tech target registration is **source-only**. It does not prove host/runtime installation and does not authorize the one-time target activation/cutover, retirement/replacement of the existing V14 runtime, Docker/Compose execution, GHCR publication, protected configuration access or any other LIVE mutation.
-- `rozkalns-cv` SIMPLE-DEPLOY consumer source and GitHub-side publication proof are **COMPLETE** at `rozkalnsandris/rozkalns-cv@139fb7046c77e1e58ec4a0876db3dddb96c85cb5`; SIMPLE-DEPLOY run `36150943895` completed successfully against the same immutable shared workflow, but CV is not yet registered as an RPi5 target.
-- **NEXT SOURCE GATE:** review and prepare the `rozkalns-cv` RPi5 target/allowlist source contract one consumer at a time, preserving the accepted SIMPLE-DEPLOY safety boundary. Carry source/tests through Draft PR, exact-head CI/review and Ready only; merge remains separately owner-authorized.
-- Any Hermes Tech or future CV one-time activation/cutover remains a separate exact LIVE gate after the relevant target/allowlist source change is merged and freshly revalidated. No target installation, Compose execution, systemd, Docker, host, secret, Cloudflare or database mutation is authorized by this reconciliation itself.
-- `dashboard_RPi5` remains outside the ordinary whole-service SIMPLE-DEPLOY profile; Hermes Deals operational activation remains fleet-last; `ops-workflows#96` Queue vNext remains blocked until the intended compatible-consumer rollout and stability criteria are actually satisfied.
+- Hermes Tech public static/Hugo SIMPLE-DEPLOY consumer source and GitHub-side publication proof are **COMPLETE** at accepted deployment-contract revision `rozkalnsandris/hermes-tech@3d8e2400e26e7bf4e992539e1239120f9bc1af44`; SIMPLE-DEPLOY run `36149826529` completed successfully against immutable shared workflow `ops-workflows@e05ed760791a127c7c9628696806ef39c9fe329c`.
+- Hermes Tech RPi5 target/allowlist source registration is **COMPLETE** via merged PR #737 at `57098e4244752abc306f984b9ed155c9baac9c6c`. The reviewed target alias is `hermes-tech-public-rpi5`.
+- `rozkalns-cv` SIMPLE-DEPLOY consumer source and GitHub-side publication proof are **COMPLETE** at accepted deployment-contract revision `rozkalnsandris/rozkalns-cv@139fb7046c77e1e58ec4a0876db3dddb96c85cb5`; SIMPLE-DEPLOY run `36150943895` completed successfully against the same immutable shared workflow.
+- `rozkalns-cv` RPi5 target/allowlist source registration is now **COMPLETE** via merged PR #749 at current `main` `4f32e76443d8b1e11d5ffd245f6a2a2a24b67318`. The reviewed target alias is `rozkalns-cv-rpi5`; this was source-only registration and did not install or activate the target.
+- Hermes Tech and CV target registrations remain **source-only**. Neither proves current host/runtime installation nor authorizes one-time target activation/cutover, retirement/replacement of an existing runtime, Docker/Compose execution, protected configuration access, persistent-data adoption, database/schema/data mutation, Cloudflare/network mutation or any other LIVE class.
+- **CURRENT NEXT GATE:** no additional ordinary compatible-consumer source-registration target is selected by this plan. Do not infer a LIVE target from older sequencing text. Any one-time Hermes Tech or CV activation/cutover requires a new exact owner LIVE decision after fresh cross-repository producer/consumer and minimum-sufficient host preflight for the selected target. Until such a target is explicitly selected, unrelated source-only work proceeds only from its own fresh issue/lane selection.
+- `dashboard_RPi5` remains outside the ordinary whole-service SIMPLE-DEPLOY profile; Hermes Deals operational activation remains fleet-last; `ops-workflows#96` Queue vNext remains explicitly blocked until the intended compatible-consumer rollout, non-Weather runtime reuse and stable ordinary-flow criteria are actually satisfied.
 
 ## 1. Mandatory operating rule
 
@@ -156,7 +157,9 @@ These markers do not select the current deployment lane or activate Auto-Live.
 
 SIMPLE-DEPLOY v1 is the concrete shared application-release profile for compatible Docker/Compose services. Where old Auto-Live manifests or controllers conflict with the accepted SIMPLE-DEPLOY consumer/runtime contract, reconcile them as compatibility/history rather than creating another deployment engine.
 
-## 5. Current cross-project priority — deploy standardization + SIMPLE-DEPLOY fleet source adaptation
+## 5. Historical cross-project priority snapshot — deploy standardization + SIMPLE-DEPLOY fleet source adaptation
+
+This section is retained as historical sequencing context. Current lane selection is governed by the dated reconciliation at the top of this file; future-looking labels below are superseded where they conflict with that reconciliation.
 
 Weather public acceptance is now **COMPLETE**. `rozkalns_weather#176` closed after fresh post-#177 runtime/API evidence and real consumer UI acceptance proved canonical DWD `station_05480` current-now behavior, populated forecast surfaces and truthful presentation. The older Weather freshness/UI wording in historical issues and receipts must not be treated as a current blocker.
 
@@ -204,7 +207,7 @@ The following are completed historical/accepted evidence rather than gates to re
 
 Consumed one-shot Weather authorizations remain non-reusable. Weather acceptance does not authorize database/data recovery, destructive cleanup, credentials, network/Cloudflare changes, private-provider activation or unrelated host control.
 
-### Current deployment-standardization / SIMPLE-DEPLOY sequence
+### Historical deployment-standardization / SIMPLE-DEPLOY sequence
 
 ```text
 shared SIMPLE-DEPLOY policy/workflow — COMPLETE
@@ -247,7 +250,6 @@ AUTO-RUN FULL consumer issue
 ```
 
 Rules:
-
 - build once; RPi5 does not rebuild application source during ordinary deployment;
 - mutable production tag/channel is discovery only;
 - immutable resolved digest is deployment identity;
@@ -274,11 +276,13 @@ Historical observations of stale data or `SOURCE_TIME_MISSING` are evidence of t
 
 WeatherNext/private-home activation remains separate and optional.
 
-## 8. Fleet rollout after Weather
+## 8. Historical fleet rollout snapshot after Weather
+
+This section preserves the earlier fleet-order rationale and boundaries. Its `next` / `following` language is historical; current lane selection is governed by the dated reconciliation at the top of this file.
 
 The selected program now has two deployment-standardization tracks: platform-native standardization for non-RPi5 applications, followed by ordinary SIMPLE-DEPLOY reuse for compatible Docker/Compose consumers. Do not force unlike architectures into the RPi5 SIMPLE-DEPLOY profile merely to make the fleet uniform.
 
-### Control Center — next deploy-standardization candidate
+### Control Center — historical next deploy-standardization candidate
 
 `rozkalnsandris/rozkalns-control-center` is the next repository to standardize at source level.
 
@@ -311,7 +315,7 @@ Explicitly outside this source-standardization gate:
 
 A future Control Center source PR may establish this deterministic Cloudflare deployment contract through that repository's own architecture and CI. Any production publication or other Cloudflare/D1/Queue mutation remains a separate exact owner gate under the Control Center repository's rules.
 
-### Hermes Tech — following SIMPLE-DEPLOY source candidate
+### Hermes Tech — historical following SIMPLE-DEPLOY source candidate
 
 Hermes Tech follows Control Center and remains the next repository to evaluate for ordinary SIMPLE-DEPLOY source adaptation.
 
@@ -424,7 +428,9 @@ Completed or historical program phases are retained as references, not current-s
 
 Do not use historical SHAs in this ledger as current source/runtime identity.
 
-## 12. Current canonical sequencing
+## 12. Historical sequencing snapshot
+
+This sequence is retained as program history. Its former `NEXT` / `FOLLOWING` labels are non-authorizing and superseded by the dated current reconciliation at the top of this file.
 
 ```text
 1. Weather Phase A install-only — COMPLETE; authority consumed
@@ -452,7 +458,9 @@ Do not use historical SHAs in this ledger as current source/runtime identity.
 
 If fresh GitHub or host evidence invalidates an accepted receipt, reclassify before action. Never rerun a consumed one-shot gate, improvise a Docker/config path, or treat a source merge as authority for a separately sensitive mutation class.
 
-## 13. Current authorization state
+## 13. Historical authorization snapshot
+
+This section records the authorization posture before the 2026-09-27 reconciliation. It is retained for provenance only; current authority is defined by the dated reconciliation at the top plus fresh owner commands and repository rules.
 
 No plan, tracker or source merge grants inferred LIVE authority.
 
@@ -497,7 +505,6 @@ Historical source checkpoint: the Source App composition and bounded fixed helpe
 ## Current supersession — Hermes canonical source-integration gate (2026-09-04)
 
 Historical source checkpoint: the concrete canonical Hermes revalidator, sanitized host-evidence resolver and inert broker composition were source-integrated without converting repository source into runtime proof.
-
 ## Current supersession — Hermes broker-entrypoint wiring source gate (2026-09-06)
 
 Historical source checkpoint: the broker entrypoint was source-wired to the fixed runtime composition, with caller authority still limited to `authorization_issue_number` and durable replay consume required before helper launch.
