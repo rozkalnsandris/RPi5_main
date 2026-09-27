@@ -25,11 +25,28 @@
     "manager_checkout_resolver": "passwd:andris/RPi5_main",
     "reviewed_origin": "https://github.com/rozkalnsandris/RPi5_main.git",
     "requires_clean_manager": true,
-    "requires_manager_head_equal_remote_main": true,
+    "manager_head_may_lag_when_runtime_pair_exact_current": true,
+    "exact_current_source_repository": "rozkalnsandris/RPi5_main",
+    "exact_current_source_ref": "main",
+    "exact_current_public_reads_credential_free": true,
+    "exact_current_commit_tree_must_match": true,
+    "exact_current_runtime_paths": [
+      "ops/bin/rpi5-weathernext-private-installer-boundary-refresh-runtime",
+      "ops/lib/deploy_executor/weather_private_installer_boundary_refresh_runtime.py"
+    ],
+    "exact_current_runtime_git_modes": {
+      "ops/bin/rpi5-weathernext-private-installer-boundary-refresh-runtime": "100755",
+      "ops/lib/deploy_executor/weather_private_installer_boundary_refresh_runtime.py": "100644"
+    },
+    "exact_current_runtime_git_blob_and_contents_must_match": true,
+    "manager_runtime_pair_git_blobs_must_equal_exact_current": true,
+    "manager_runtime_pair_worktree_bytes_must_equal_exact_current": true,
+    "runtime_adapter_filesystem_mode_uses_safe_policy": true,
+    "runtime_module_filesystem_mode": "0644",
     "runtime_path_fixed": true,
-    "runtime_git_blob_must_match": true,
     "runtime_bytes_executed_after_single_verified_read": true,
-    "manager_head_index_worktree_must_remain_unchanged": true
+    "manager_head_index_worktree_must_remain_unchanged": true,
+    "manager_checkout_mutation_allowed": false
   },
   "mutation_budget": [
     {
@@ -112,7 +129,7 @@
   "explicit_exclusions": [
     "no caller-selected repository/path/command/argv/environment/destination",
     "no generic shell or generic Git mutation surface",
-    "no clone/reset/clean/pull/merge/rebase/force/manager branch switch",
+    "no clone/fetch/checkout/reset/clean/pull/merge/rebase/force/manager branch switch",
     "no #700/#721 refresh mutation during bootstrap installation or reconciliation",
     "no backend/application/private-runtime materialization",
     "no Google/ADC/IAM/project/Analytics Hub/BigQuery action",
@@ -122,7 +139,8 @@
   ],
   "handoff": [
     "after reviewed source updates, fresh read-only preflight must classify the installed bootstrap as exact-current or the one recognized predecessor",
-    "derive the target executable Git blob and SHA-256 from exact current RPi5_main main at execution; callers cannot select source content or path",
+    "derive the exact-current refresh runtime pair from credential-free fixed-repository GitHub branch/commit/tree/content evidence; callers cannot select source SHA, repository, paths or content",
+    "a clean reviewed-origin manager checkout may lag current main only when both fixed runtime Git blobs and working-tree bytes equal the exact-current public proof and its HEAD/index/worktree snapshot remains unchanged",
     "if exact-current, reconciliation is a no-op before authorization consume",
     "if the recognized predecessor is present and the installed trusted dispatcher cannot reach the current reconcile runtime, use only the reviewed non-installed one-shot reachability bridge bound to the exact current bridge SHA-256",
     "the one-shot bridge must validate the recognized trusted dependency head and derive the two fixed reconcile modules from public exact-current RPi5_main main; it may not accept a caller source SHA or mutate manager/trusted checkouts",
