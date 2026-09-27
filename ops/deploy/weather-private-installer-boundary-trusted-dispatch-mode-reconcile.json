@@ -1,0 +1,61 @@
+{
+  "schema": "rozkalns-weather.weathernext-private-installer-boundary-trusted-dispatch-mode-reconcile.v1",
+  "source_repository": "rozkalnsandris/RPi5_main",
+  "source_base_main": "f6834d0799b3f68e4f9f63833a3ea39272052e2c",
+  "reviewed_origin": "https://github.com/rozkalnsandris/RPi5_main.git",
+  "trusted_checkout": "/var/lib/rpi5-deploy/RPi5_main-weathernext-private-installer-trusted",
+  "known_stale_head": "79372e48ac53bf6d00142578b6543bc33a72a692",
+  "operation_id": "rpi5.weathernext-private-installer-boundary.trusted-dispatch-mode-reconcile.v1",
+  "target_alias": "rpi5-weathernext-private-installer-boundary-trusted-dispatch-mode-reconcile",
+  "authorization_class": "STRICT",
+  "source_merge_authorizes_live": false,
+  "manager_checkout_mode_mutation_authorized": false,
+  "required_prestate": "the fixed reviewed trusted dispatch is root:root regular one-link, Git mode/blob/content exact at the known stale trusted head, and filesystem mode is 0600",
+  "exact_noop_state": "the same fixed reviewed trusted dispatch identity is already filesystem mode 0644",
+  "file": {
+    "key": "stale_dispatch",
+    "scope": "trusted",
+    "relative_path": "ops/lib/deploy_executor/weather_private_privileged_dispatch.py",
+    "uid": 0,
+    "gid": 0,
+    "git_mode": "100644",
+    "git_blob": "98218e3138f821390bece6dc10b770bd0b578cd9",
+    "restrictive_mode": "0600",
+    "exact_mode": "0644"
+  },
+  "mutation_budget": [
+    {
+      "category": "filesystem.weathernext-private-installer-boundary-trusted-dispatch-mode-reconcile",
+      "max_operations": 1
+    }
+  ],
+  "mutation_semantics": [
+    "mode-only on the one fixed trusted dispatch file",
+    "no content write",
+    "no owner/group change",
+    "no path creation/deletion/rename",
+    "no manager checkout mode mutation",
+    "authorization consumed before the first and only mode mutation",
+    "any error after mutation starts is STOP"
+  ],
+  "rollback_policy": "NONE",
+  "automatic_retry": false,
+  "automatic_cleanup": false,
+  "automatic_rollback": false,
+  "explicit_exclusions": [
+    "no caller-selected repository/path/command/argv/environment",
+    "no manager checkout chmod/chown or mode normalization",
+    "no runtime adapter or runtime module mode mutation",
+    "no content replacement",
+    "no chown",
+    "no Git mutation",
+    "no installer-boundary refresh execution",
+    "no backend/application/private-runtime mutation",
+    "no service/Docker/package/network/Cloudflare mutation",
+    "no Google/BigQuery/SQLite action",
+    "no secret/config/protected-data access"
+  ],
+  "supersedes_source_pr": 726,
+  "supersede_reason": "later #745 source intentionally accepts restrictive manager runtime mode, and fresh current evidence already has the manager runtime module at canonical 0644; only the fixed trusted stale dispatch mode prerequisite remains",
+  "next_gate_after_source_merge": "fresh privileged metadata-only preflight of the fixed trusted checkout/dispatch identity, then separate exact owner LIVE authorization only if the trusted dispatch is still the recognized 0600 prestate; only after exact 0644 may #700/#721 boundary preflight resume"
+}
