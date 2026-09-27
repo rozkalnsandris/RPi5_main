@@ -1,0 +1,42 @@
+name: WeatherNext trusted dispatch mode reconcile source
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/weathernext-installer-boundary-trusted-dispatch-mode-reconcile-source.yml"
+      - "docs/WEATHERNEXT_PRIVATE_INSTALLER_BOUNDARY_TRUSTED_DISPATCH_MODE_RECONCILE.md"
+      - "ops/deploy/weather-private-installer-boundary-trusted-dispatch-mode-reconcile.json"
+      - "ops/lib/deploy_executor/weather_private_installer_boundary_trusted_dispatch_mode_reconcile.py"
+      - "tests/test-weather-private-installer-boundary-trusted-dispatch-mode-reconcile.py"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/weathernext-installer-boundary-trusted-dispatch-mode-reconcile-source.yml"
+      - "docs/WEATHERNEXT_PRIVATE_INSTALLER_BOUNDARY_TRUSTED_DISPATCH_MODE_RECONCILE.md"
+      - "ops/deploy/weather-private-installer-boundary-trusted-dispatch-mode-reconcile.json"
+      - "ops/lib/deploy_executor/weather_private_installer_boundary_trusted_dispatch_mode_reconcile.py"
+      - "tests/test-weather-private-installer-boundary-trusted-dispatch-mode-reconcile.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rpi5-main-weathernext-trusted-dispatch-mode-reconcile-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate trusted dispatch mode reconcile source
+        run: |
+          python3 ./tests/test-weather-private-installer-boundary-trusted-dispatch-mode-reconcile.py
+          python3 -m py_compile \
+            ./ops/lib/deploy_executor/weather_private_installer_boundary_trusted_dispatch_mode_reconcile.py
