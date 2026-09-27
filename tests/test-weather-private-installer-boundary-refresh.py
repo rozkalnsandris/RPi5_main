@@ -59,6 +59,12 @@ class BoundaryRefreshTests(unittest.TestCase):
         )
         self.assertEqual(plan.trusted_checkout, boundary_refresh.TRUSTED_CHECKOUT)
         self.assertEqual(plan.entrypoint_destination, boundary_refresh.ENTRYPOINT_DESTINATION)
+        self.assertEqual(plan.execution_entrypoint, boundary_refresh.BOOTSTRAP_ENTRYPOINT)
+        self.assertNotEqual(plan.execution_entrypoint, plan.entrypoint_destination)
+        self.assertEqual(
+            boundary_refresh.public_plan(plan)["execution_entrypoint"],
+            boundary_refresh.BOOTSTRAP_ENTRYPOINT,
+        )
         self.assertEqual(plan.rollback_policy, "NONE")
         self.assertTrue(plan.authorization_consumed_before_first_mutation)
         self.assertFalse(plan.automatic_retry)
@@ -74,6 +80,8 @@ class BoundaryRefreshTests(unittest.TestCase):
         )
         plan = boundary_refresh.build_refresh_plan(exact)
         self.assertEqual(plan.prior_state, "EXACT")
+        self.assertIsNone(plan.execution_entrypoint)
+        self.assertIsNone(boundary_refresh.public_plan(plan)["execution_entrypoint"])
         self.assertEqual(plan.steps, ())
 
     def test_absent_boundary_must_use_initial_bootstrap(self):
@@ -134,6 +142,10 @@ class BoundaryRefreshTests(unittest.TestCase):
             plan.entrypoint_destination,
             "/usr/local/sbin/rpi5-weathernext-private-host-privileged-install",
         )
+        self.assertEqual(
+            plan.execution_entrypoint,
+            "/usr/local/sbin/rpi5-weathernext-private-installer-boundary-bootstrap",
+        )
         self.assertFalse(plan.backend_install_allowed)
         self.assertFalse(plan.google_action_allowed)
         self.assertFalse(plan.bigquery_action_allowed)
@@ -152,6 +164,19 @@ class BoundaryRefreshTests(unittest.TestCase):
         self.assertEqual(
             descriptor["entrypoint_destination"],
             boundary_refresh.ENTRYPOINT_DESTINATION,
+        )
+        self.assertEqual(
+            descriptor["bootstrap_entrypoint"],
+            boundary_refresh.BOOTSTRAP_ENTRYPOINT,
+        )
+        self.assertEqual(
+            descriptor["stale_execution_entrypoint"],
+            boundary_refresh.BOOTSTRAP_ENTRYPOINT,
+        )
+        self.assertFalse(descriptor["generic_repository_entrypoint_allowed_for_stale"])
+        self.assertNotEqual(
+            descriptor["stale_execution_entrypoint"],
+            descriptor["entrypoint_destination"],
         )
         self.assertEqual(
             tuple(

@@ -10,6 +10,7 @@ MANAGER_CHECKOUT_RESOLVER = "repo-owner-home/RPi5_main"
 TRUSTED_CHECKOUT = "/var/lib/rpi5-deploy/RPi5_main-weathernext-private-installer-trusted"
 ENTRYPOINT_SOURCE = "ops/bin/rpi5-weathernext-private-host-privileged-install"
 ENTRYPOINT_DESTINATION = "/usr/local/sbin/rpi5-weathernext-private-host-privileged-install"
+BOOTSTRAP_ENTRYPOINT = "/usr/local/sbin/rpi5-weathernext-private-installer-boundary-bootstrap"
 OPERATION_ID = "rpi5.weathernext-private-installer-boundary.refresh.v1"
 TARGET_ALIAS = "rpi5-weathernext-private-installer-boundary-refresh"
 ROLLBACK_POLICY = "NONE"
@@ -77,6 +78,7 @@ class RefreshPlan:
     trusted_checkout: str
     entrypoint_destination: str
     prior_state: BoundaryState
+    execution_entrypoint: str | None
     steps: tuple[RefreshStep, ...]
     rollback_policy: str = ROLLBACK_POLICY
     authorization_consumed_before_first_mutation: bool = True
@@ -155,6 +157,7 @@ def build_refresh_plan(evidence: BoundaryEvidence) -> RefreshPlan:
             trusted_checkout=TRUSTED_CHECKOUT,
             entrypoint_destination=ENTRYPOINT_DESTINATION,
             prior_state=state,
+            execution_entrypoint=None,
             steps=(),
         )
     if state == "ABSENT":
@@ -201,6 +204,7 @@ def build_refresh_plan(evidence: BoundaryEvidence) -> RefreshPlan:
         trusted_checkout=TRUSTED_CHECKOUT,
         entrypoint_destination=ENTRYPOINT_DESTINATION,
         prior_state=state,
+        execution_entrypoint=BOOTSTRAP_ENTRYPOINT,
         steps=steps,
     )
 
@@ -216,6 +220,7 @@ def public_plan(plan: RefreshPlan) -> dict[str, object]:
         "trusted_checkout": plan.trusted_checkout,
         "entrypoint_destination": plan.entrypoint_destination,
         "prior_state": plan.prior_state,
+        "execution_entrypoint": plan.execution_entrypoint,
         "mutation_budget": [
             {"category": step.category, "max_operations": step.maximum}
             for step in plan.steps
