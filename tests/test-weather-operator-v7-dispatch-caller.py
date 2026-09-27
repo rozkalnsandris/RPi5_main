@@ -141,6 +141,18 @@ class WeatherV7DispatchCallerTests(unittest.TestCase):
         self.assertFalse(source_delivery["source_merge_enables_live"])
         self.assertEqual(len(source_delivery["allowed_git_mutations"]), 2)
 
+    def test_timer_is_boot_bounded_and_fail_closed_contract_stays_non_retrying(self) -> None:
+        timer = (ROOT / "ops/systemd/rozkalns-weather-operator-v7-dispatch-caller.timer").read_text()
+        source = (ROOT / "ops/lib/deploy_executor/weather_operator_upgrade_v7_dispatch_caller.py").read_text()
+        self.assertIn("OnBootSec=2min", timer)
+        self.assertIn("Persistent=false", timer)
+        self.assertNotIn("OnUnitInactiveSec=", timer)
+        self.assertNotIn("OnUnitActiveSec=", timer)
+        self.assertNotIn("OnCalendar=", timer)
+        self.assertIn("return 78", source)
+        self.assertIn('"automatic_retry": False', source)
+        self.assertIn('"production_mutation_started": False', source)
+
     def test_installer_verifies_full_installed_support_closure(self) -> None:
         installer = (ROOT / "scripts/install-weather-operator-v7-dispatch-caller.py").read_text()
         required_support = (
