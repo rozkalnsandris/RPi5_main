@@ -13,6 +13,7 @@ SHARED_SHA = "e05ed760791a127c7c9628696806ef39c9fe329c"
 COMPOSE_SHA = "be7f021c9d64192905c908bcbb127dbc7ec1c2514d898f05cbf8de4c44ffa4a2"
 COMPOSE_PATH = ROOT / "ops/deploy/simple-deploy-compose/rozkalns-cv.yml"
 CONTRACT_PATH = ROOT / "ops/contracts/simple-deploy-rozkalns-cv-compat-v1.json"
+HOST_CONTRACT_PATH = ROOT / "ops/contracts/simple-deploy-host-v1.json"
 REGISTRY_PATH = ROOT / "ops/deploy/simple-deploy-targets-v1.json"
 
 FORBIDDEN_OPERATIONS = [
@@ -36,7 +37,7 @@ class RozkalnsCvCompatibilityTests(unittest.TestCase):
         )
         self.assertEqual(
             self.contract["status"],
-            "SOURCE_COMPATIBILITY_PREREQUISITE_READY_TARGET_REGISTRATION_PENDING",
+            "SOURCE_COMPATIBILITY_COMPLETE_TARGET_REGISTERED_LIVE_CUTOVER_REQUIRED",
         )
         consumer = self.contract["consumer"]
         self.assertEqual(consumer["repository"], "rozkalnsandris/rozkalns-cv")
@@ -76,10 +77,7 @@ class RozkalnsCvCompatibilityTests(unittest.TestCase):
             "/var/lib/rozkalns-simple-deployer/rozkalns-cv/data",
         )
         self.assertFalse(adapter["persistent_data_create_host_path"])
-        self.assertEqual(
-            adapter["liveness_url"],
-            "http://127.0.0.1:8088/api/health",
-        )
+        self.assertEqual(adapter["liveness_url"], "http://127.0.0.1:8088/api/health")
         self.assertEqual(adapter["readiness_state"], "required")
         self.assertEqual(
             adapter["readiness_url"],
@@ -94,10 +92,7 @@ class RozkalnsCvCompatibilityTests(unittest.TestCase):
         self.assertIn("no-new-privileges:true", text)
         self.assertIn("cap_drop:", text)
         self.assertIn("pids_limit: 192", text)
-        self.assertIn(
-            "/etc/rozkalns-simple-deployer/private/rozkalns-cv.env",
-            text,
-        )
+        self.assertIn("/etc/rozkalns-simple-deployer/private/rozkalns-cv.env", text)
         self.assertIn(
             "source: /var/lib/rozkalns-simple-deployer/rozkalns-cv/data",
             text,
@@ -111,11 +106,11 @@ class RozkalnsCvCompatibilityTests(unittest.TestCase):
         self.assertNotIn("network_mode:", text)
         self.assertNotIn("/var/run/docker.sock", text)
 
-    def test_source_prerequisite_does_not_register_or_activate_target(self) -> None:
+    def test_registration_is_source_only_and_preserves_live_gates(self) -> None:
         boundaries = self.contract["boundaries"]
-        self.assertFalse(boundaries["source_merge_registers_target"])
+        self.assertTrue(boundaries["source_merge_registers_target"])
         self.assertFalse(boundaries["source_merge_installs_or_enables_runtime"])
-        self.assertTrue(
+        self.assertFalse(
             boundaries["target_registration_requires_follow_up_tracked_source_change"]
         )
         self.assertTrue(
@@ -140,9 +135,64 @@ class RozkalnsCvCompatibilityTests(unittest.TestCase):
         self.assertFalse(boundaries["source_merge_runs_compose_or_docker"])
         self.assertFalse(boundaries["source_merge_mutates_cloudflare_or_network"])
 
+    def test_registry_and_host_contract_bind_exact_cv_target(self) -> None:
         registry = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
-        aliases = {item["target_alias"] for item in registry["targets"]}
-        self.assertNotIn(TARGET_ALIAS, aliases)
+        self.assertEqual(registry["schema"], "rozkalns.rpi5-main.simple-deploy.targets.v1")
+        self.assertTrue(registry["execution_enabled"])
+        self.assertEqual(len(registry["targets"]), 4)
+        targets = {item["target_alias"]: item for item in registry["targets"]}
+        self.assertIn(TARGET_ALIAS, targets)
+        target = targets[TARGET_ALIAS]
+        self.assertEqual(target["consumer_repository"], "rozkalnsandris/rozkalns-cv")
+        self.assertEqual(target["image"], "ghcr.io/rozkalnsandris/rozkalns-cv")
+        self.assertEqual(target["architecture"], "linux/arm64")
+        self.assertEqual(target["shared_workflow_sha"], SHARED_SHA)
+        self.assertEqual(target["compose"]["project"], "rozkalns-cv")
+        self.assertEqual(target["compose"]["file"], "rozkalns-cv.yml")
+        self.assertEqual(target["compose"]["file_sha256"], COMPOSE_SHA)
+        self.assertEqual(target["compose"]["service"], "cv")
+        self.assertEqual(target["health"]["liveness_url"], "http://127.0.0.1:8088/api/health")
+        self.assertEqual(target["health"]["readiness_state"], "required")
+        self.assertEqual(
+            target["health"]["readiness_url"],
+            "http://127.0.0.1:8088/api/health/ready",
+        )
+        self.assertEqual(target["wait_timeout_seconds"], 180)
+        self.assertEqual(target["receipt_name"], "rozkalns-cv-rpi5.json")
+        self.assertEqual(target["persistent_volumes"], [])
+        self.assertEqual(target["registry_pull_profile"], "public-anonymous-pull")
+        self.assertEqual(target["forbidden_operations"], FORBIDDEN_OPERATIONS)
+
+        host = json.loads(HOST_CONTRACT_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(host["registry"]["current_reviewed_targets"], 4)
+        reviewed = {
+            item["target_alias"]: item
+            for item in host["registry"]["reviewed_targets"]
+        }
+        self.assertIn(TARGET_ALIAS, reviewed)
+        cv = reviewed[TARGET_ALIAS]
+        self.assertEqual(cv["consumer_contract_revision"], CONSUMER_SHA)
+        self.assertEqual(cv["compatibility_prerequisite_pr"], 741)
+        self.assertEqual(cv["compose_sha256"], COMPOSE_SHA)
+        self.assertFalse(cv["persistent_data_create_host_path"])
+
+        activation = host["activation"]
+        self.assertTrue(
+            activation["rozkalns_cv_target_installation_requires_separate_exact_live_cutover"]
+        )
+        self.assertTrue(
+            activation[
+                "rozkalns_cv_private_runtime_config_provisioning_requires_separate_exact_authority"
+            ]
+        )
+        self.assertTrue(
+            activation["rozkalns_cv_persistent_data_adoption_requires_separate_exact_data_authority"]
+        )
+        self.assertTrue(
+            activation[
+                "rozkalns_cv_existing_runtime_retirement_requires_separate_exact_live_authority"
+            ]
+        )
 
 
 if __name__ == "__main__":
