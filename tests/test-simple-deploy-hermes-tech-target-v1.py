@@ -28,7 +28,7 @@ class HermesTechTargetTests(unittest.TestCase):
         registry = sd.load_registry(ROOT / "ops/deploy/simple-deploy-targets-v1.json")
         target = registry.get(TARGET_ALIAS)
 
-        self.assertEqual(len(registry.targets), 3)
+        self.assertEqual(len(registry.targets), 4)
         self.assertEqual(target.consumer_repository, "rozkalnsandris/hermes-tech")
         self.assertEqual(target.image, "ghcr.io/rozkalnsandris/hermes-tech")
         self.assertEqual(target.architecture, "linux/arm64")
@@ -60,7 +60,7 @@ class HermesTechTargetTests(unittest.TestCase):
 
     def test_host_contract_records_exact_consumer_revision_and_live_gate(self):
         contract = json.loads((ROOT / "ops/contracts/simple-deploy-host-v1.json").read_text(encoding="utf-8"))
-        self.assertEqual(contract["registry"]["current_reviewed_targets"], 3)
+        self.assertEqual(contract["registry"]["current_reviewed_targets"], 4)
         targets = {
             item["target_alias"]: item
             for item in contract["registry"]["reviewed_targets"]
