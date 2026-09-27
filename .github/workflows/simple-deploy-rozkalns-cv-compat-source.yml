@@ -1,12 +1,15 @@
-name: rozkalns-cv SIMPLE-DEPLOY compatibility source
+name: rozkalns-cv SIMPLE-DEPLOY source contract
 
 on:
   pull_request:
     paths:
       - "ops/contracts/simple-deploy-rozkalns-cv-compat-v1.json"
+      - "ops/contracts/simple-deploy-host-v1.json"
+      - "ops/deploy/simple-deploy-targets-v1.json"
       - "ops/deploy/simple-deploy-compose/rozkalns-cv.yml"
       - "docs/SIMPLE_DEPLOY_ROZKALNS_CV_COMPAT_V1.md"
       - "tests/test-simple-deploy-rozkalns-cv-compat-v1.py"
+      - "tests/test-simple-deploy-hermes-tech-target-v1.py"
       - ".github/workflows/simple-deploy-rozkalns-cv-compat-source.yml"
 
 permissions:
@@ -18,5 +21,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Validate rozkalns-cv compatibility prerequisite
-        run: python3 ./tests/test-simple-deploy-rozkalns-cv-compat-v1.py
+      - name: Validate rozkalns-cv target contract
+        run: |
+          python3 ./tests/test-simple-deploy-rozkalns-cv-compat-v1.py
+          python3 ./tests/test-simple-deploy-hermes-tech-target-v1.py
