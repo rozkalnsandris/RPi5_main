@@ -412,6 +412,55 @@ def _exact_current_runtime_pair(client: Any) -> tuple[str, dict[str, tuple[str, 
     return source_sha, proof
 
 
+def _runtime_bytes(
+    manager: Path,
+    uid: int,
+    gid: int,
+    *,
+    runner: Callable[..., Any] = subprocess.run,
+) -> tuple[str, bytes]:
+    """Compatibility-only verification seam for the pre-#755 mode regression.
+
+    Production execute() does not call this helper. It preserves the historical
+    exact-head adapter-only contract so the older focused mode test continues to
+    verify the physical executable-mode policy independently of the new #755
+    exact-current runtime-pair proof.
+    """
+    before = _manager_snapshot(manager, runner=runner)
+    output = _bounded_run(
+        ("/usr/bin/git", "ls" + "-remote", REVIEWED_ORIGIN, "refs/heads/main"),
+        runner=runner,
+    ).stdout.strip()
+    fields = output.split()
+    if len(fields) != 2 or fields[1] != "refs/heads/main" or not _is_sha40(fields[0]):
+        _fail("reviewed origin main identity is malformed")
+    if before[0] != fields[0]:
+        _fail("manager checkout is not exact current reviewed main")
+
+    relative = RUNTIME_RELATIVE.as_posix()
+    line = _manager_git(manager, "ls-tree", before[0], "--", relative, runner=runner).strip()
+    prefix = "100755 blob "
+    suffix = "\t" + relative
+    if not line.startswith(prefix) or not line.endswith(suffix):
+        _fail("fixed bootstrap runtime is missing or not executable in exact main")
+    blob = line[len(prefix) : -len(suffix)]
+    if not _is_sha40(blob):
+        _fail("fixed bootstrap runtime blob identity is malformed")
+    data = _regular_bytes(
+        manager / RUNTIME_RELATIVE,
+        uid=uid,
+        gid=gid,
+        mode_check=_manager_runtime_mode_allowed,
+        maximum=MAX_RUNTIME_BYTES,
+    )
+    if _git_blob_sha1(data) != blob:
+        _fail("fixed bootstrap runtime bytes do not match exact-main Git blob")
+    after = _manager_snapshot(manager, runner=runner)
+    if after != before:
+        _fail("manager HEAD/index/worktree snapshot drifted during runtime verification")
+    return before[0], data
+
+
 def _manager_runtime_pair(
     manager: Path,
     uid: int,
