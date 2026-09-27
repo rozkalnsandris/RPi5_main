@@ -250,6 +250,7 @@ AUTO-RUN FULL consumer issue
 ```
 
 Rules:
+
 - build once; RPi5 does not rebuild application source during ordinary deployment;
 - mutable production tag/channel is discovery only;
 - immutable resolved digest is deployment identity;
@@ -505,6 +506,7 @@ Historical source checkpoint: the Source App composition and bounded fixed helpe
 ## Current supersession — Hermes canonical source-integration gate (2026-09-04)
 
 Historical source checkpoint: the concrete canonical Hermes revalidator, sanitized host-evidence resolver and inert broker composition were source-integrated without converting repository source into runtime proof.
+
 ## Current supersession — Hermes broker-entrypoint wiring source gate (2026-09-06)
 
 Historical source checkpoint: the broker entrypoint was source-wired to the fixed runtime composition, with caller authority still limited to `authorization_issue_number` and durable replay consume required before helper launch.
