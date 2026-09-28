@@ -34,6 +34,7 @@ from .weather_private_installer_boundary_bootstrap_reconcile import (
     MUTATION_BUDGET,
     OPERATION_ID,
     RECOGNIZED_PREDECESSOR_SHA256,
+    RECOGNIZED_PREDECESSOR_SHA256S,
     ROLLBACK_POLICY,
     ROOT_GID,
     ROOT_UID,
@@ -99,6 +100,15 @@ def _sha256(raw: bytes) -> str:
 def _git_blob_sha1(raw: bytes) -> str:
     header = f"blob {len(raw)}\0".encode("ascii")
     return hashlib.sha1(header + raw).hexdigest()
+
+
+def _require_recognized_preimage(prepared_sha256: str, observed_sha256: str) -> None:
+    if (
+        prepared_sha256 not in RECOGNIZED_PREDECESSOR_SHA256S
+        or observed_sha256 not in RECOGNIZED_PREDECESSOR_SHA256S
+        or prepared_sha256 != observed_sha256
+    ):
+        _fail("bootstrap preimage drifted before replacement")
 
 
 def _is_sha40(value: Any) -> bool:
@@ -448,11 +458,7 @@ def _atomic_replace(prepared: PreparedReconcile) -> Mapping[str, object]:
         _fail("bootstrap replacement source identity drifted")
     destination = Path(DESTINATION)
     _, before = _read_fixed_regular(destination)
-    if (
-        _sha256(before) != RECOGNIZED_PREDECESSOR_SHA256
-        or prepared.installed_sha256 != RECOGNIZED_PREDECESSOR_SHA256
-    ):
-        _fail("bootstrap preimage drifted before replacement")
+    _require_recognized_preimage(prepared.installed_sha256, _sha256(before))
     if TEMP_DESTINATION.exists():
         _fail("fixed bootstrap reconcile temp evidence already exists")
     flags = (
