@@ -37,6 +37,7 @@ WRITABLE_FIELDS = frozenset(
         "mfa_piv_key_requirements",
         "mfa_required_for_all_apps",
         "name",
+        "service_token_inactivity",
         "session_duration",
         "ui_read_only_toggle_reason",
         "user_seat_expiration_inactive_time",
@@ -84,6 +85,8 @@ _DICT_FIELDS = frozenset(
     }
 )
 _STRING_LIST_FIELDS = frozenset({"deny_unmatched_requests_exempted_zone_names"})
+_SERVICE_TOKEN_INACTIVITY_FIELDS = frozenset({"action", "enabled", "inactivity_threshold_days"})
+_SERVICE_TOKEN_INACTIVITY_ACTIONS = frozenset({"disable", "delete"})
 
 
 class CloudflareOrganizationUpdateAttemptError(AuditError):
@@ -176,9 +179,24 @@ def collect_organization(client: CloudflareGetClient, account_id: str) -> dict[s
     return _unwrap_organization(client.get(f"/accounts/{account_id}/access/organizations"))
 
 
+def _validate_service_token_inactivity(value: Any) -> None:
+    if not isinstance(value, dict) or set(value) != _SERVICE_TOKEN_INACTIVITY_FIELDS:
+        raise AuditError("organization_service_token_inactivity_shape_invalid")
+    if value["action"] not in _SERVICE_TOKEN_INACTIVITY_ACTIONS:
+        raise AuditError("organization_service_token_inactivity_action_invalid")
+    if not isinstance(value["enabled"], bool):
+        raise AuditError("organization_service_token_inactivity_enabled_invalid")
+    threshold = value["inactivity_threshold_days"]
+    if isinstance(threshold, bool) or not isinstance(threshold, int) or not 30 <= threshold <= 365:
+        raise AuditError("organization_service_token_inactivity_threshold_invalid")
+
+
 def _validate_writable_value(key: str, value: Any) -> None:
     if value is None:
         raise AuditError("organization_writable_field_null")
+    if key == "service_token_inactivity":
+        _validate_service_token_inactivity(value)
+        return
     if key in _BOOL_FIELDS:
         if not isinstance(value, bool):
             raise AuditError("organization_writable_field_type_invalid")
