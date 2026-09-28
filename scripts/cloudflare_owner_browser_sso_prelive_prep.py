@@ -10,6 +10,9 @@ from cloudflare_owner_browser_sso_session_update import (
     CANONICAL_ISSUE,
     RESPONSE_ONLY_FIELDS,
     TARGET_GLOBAL_SESSION,
+    _effective_session,
+    _response_only_binding,
+    _writable_projection,
     build_update_plan,
     collect_organization,
 )
@@ -67,39 +70,50 @@ def execute_prep(
 
     try:
         organization = collect_organization_fn(read_client, account_id)
-        plan = build_update_plan(organization)
-        if not _SESSION_RE.fullmatch(plan.current_effective_session):
+        before_writable = _writable_projection(organization)
+        current_effective, current_source = _effective_session(organization)
+        response_only_binding = _response_only_binding(organization)
+        if not _SESSION_RE.fullmatch(current_effective):
             raise AuditError("global_session_duration_invalid")
         if not _SESSION_RE.fullmatch(TARGET_GLOBAL_SESSION):
             raise AuditError("target_global_session_duration_invalid")
         fingerprint = _preimage_fingerprint(organization)
+        change_required = current_effective != TARGET_GLOBAL_SESSION
+        if change_required:
+            plan = build_update_plan(organization)
+            before_writable = plan.before_writable
+            response_only_binding = plan.response_only_binding
+            current_effective = plan.current_effective_session
+            current_source = plan.current_session_source
     except (AuditError, TypeError, ValueError) as exc:
         report["reason"] = str(exc) or "prelive_prep_failed"
         return report
 
     present_response_only = sum(
         1
-        for binding in plan.response_only_binding.values()
+        for binding in response_only_binding.values()
         if binding.get("present") is True
     )
     report["organization"] = {
         "preimage_fingerprint": fingerprint,
         "top_level_field_count": len(organization),
-        "writable_projection_field_count": len(plan.before_writable),
+        "writable_projection_field_count": len(before_writable),
         "response_only_field_count": present_response_only,
         "known_response_only_field_count": len(RESPONSE_ONLY_FIELDS),
-        "current_session_duration": plan.current_effective_session,
-        "current_session_source": plan.current_session_source,
+        "current_session_duration": current_effective,
+        "current_session_source": current_source,
         "target_session_duration": TARGET_GLOBAL_SESSION,
-        "change_required": True,
-        "semantic_diff": ["session_duration"],
+        "change_required": change_required,
+        "live_apply_required": change_required,
+        "semantic_diff": ["session_duration"] if change_required else [],
     }
-    report["rollback"] = {
-        "kind": "organization-session-duration",
-        "target_session_duration": plan.current_effective_session,
-        "automatic": False,
-        "fresh_get_required": True,
-        "separate_owner_authorization_required": True,
-    }
+    if change_required:
+        report["rollback"] = {
+            "kind": "organization-session-duration",
+            "target_session_duration": current_effective,
+            "automatic": False,
+            "fresh_get_required": True,
+            "separate_owner_authorization_required": True,
+        }
     report["result"] = "PASS"
     return report

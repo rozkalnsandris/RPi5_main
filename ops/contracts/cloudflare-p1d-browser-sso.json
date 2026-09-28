@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "p1d04-prelive-prep-defined-plan-only",
+  "status": "p1d04-prelive-converged-no-write-aware",
   "canonical_issue": 179,
   "decision_date": "2026-09-13",
   "mutation_authorized": false,
@@ -221,7 +221,9 @@
     "cloudflare_write_primitives": [],
     "organization_shape_reuses_writer_projection": true,
     "unknown_top_level_response_field": "BLOCKED",
-    "already_target_session_duration": "BLOCKED",
+    "already_target_session_duration": "PASS_NO_CHANGE_REQUIRED",
+    "already_target_live_apply_required": false,
+    "already_target_semantic_diff": [],
     "target_session_duration": "720h",
     "private_full_organization_preimage_retained_in_runner_memory": true,
     "emitted_preimage_evidence": "sha256-canonical-json-fingerprint-only",
@@ -239,6 +241,7 @@
       "kind": "organization-session-duration",
       "target_from_fresh_effective_prewrite_session": true,
       "omitted_session_duration_target": "24h",
+      "omitted_when_no_change_required": true,
       "automatic": false,
       "fresh_get_required_before_rollback_write": true,
       "separate_owner_authorization_required": true
@@ -316,6 +319,7 @@
     "private_full_organization_preimage_required_before_write": true,
     "predeclared_rollback_required_before_live": true,
     "prelive_preparation_execution_requires_fresh_owner_authorization": true,
+    "already_target_skips_live_writer": true,
     "automatic_rollback_authorized_by_source": false,
     "stop_on_unexpected_diff": true
   },
