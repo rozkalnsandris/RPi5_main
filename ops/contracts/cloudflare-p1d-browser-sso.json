@@ -93,6 +93,7 @@
       "mfa_piv_key_requirements",
       "mfa_required_for_all_apps",
       "name",
+      "service_token_inactivity",
       "session_duration",
       "ui_read_only_toggle_reason",
       "user_seat_expiration_inactive_time",
