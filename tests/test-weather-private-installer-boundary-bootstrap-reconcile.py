@@ -47,7 +47,7 @@ class WeatherNextBootstrapReconcileTests(unittest.TestCase):
         self.assertFalse(public["automatic_rollback"])
         self.assertFalse(public["installer_boundary_refresh_allowed"])
 
-    def test_recognized_predecessor_yields_exactly_one_fixed_replacement(self) -> None:
+    def test_historical_recognized_predecessor_yields_exactly_one_fixed_replacement(self) -> None:
         plan = reconcile.build_reconcile_plan(
             evidence(installed_sha256=reconcile.RECOGNIZED_PREDECESSOR_SHA256)
         )
@@ -63,6 +63,23 @@ class WeatherNextBootstrapReconcileTests(unittest.TestCase):
             [{"category": reconcile.MUTATION_BUDGET[0][0], "max_operations": 1}],
         )
         self.assertEqual(public["rollback_policy"], "NONE")
+
+    def test_immediate_reviewed_predecessor_yields_exactly_one_fixed_replacement(self) -> None:
+        self.assertIsInstance(reconcile.RECOGNIZED_PREDECESSOR_SHA256S, tuple)
+        self.assertEqual(
+            reconcile.RECOGNIZED_PREDECESSOR_SHA256S,
+            (
+                reconcile.RECOGNIZED_PREDECESSOR_SHA256,
+                "5c480bd98bbcf8ab0ba6fb43036ca2f7e4837665af2be3ce42c1404c22090730",
+            ),
+        )
+        plan = reconcile.build_reconcile_plan(
+            evidence(installed_sha256=reconcile.RECOGNIZED_PREDECESSOR_SHA256S[1])
+        )
+        self.assertEqual(plan.prior_state, "RECOGNIZED_PREDECESSOR")
+        self.assertEqual(len(plan.steps), 1)
+        self.assertEqual(plan.steps[0].maximum, 1)
+        self.assertEqual(plan.steps[0].target, reconcile.DESTINATION)
 
     def test_unknown_preimage_stops_before_mutation(self) -> None:
         with self.assertRaisesRegex(reconcile.BootstrapReconcileError, "recognized preimage"):
@@ -112,7 +129,7 @@ class WeatherNextBootstrapReconcileTests(unittest.TestCase):
         self.assertTrue(item["target_identity"]["required_exact_main_ci"])
         self.assertEqual(
             item["recognized_preimage_sha256"],
-            [reconcile.RECOGNIZED_PREDECESSOR_SHA256],
+            list(reconcile.RECOGNIZED_PREDECESSOR_SHA256S),
         )
         self.assertTrue(item["exact_current_is_preconsume_noop"])
         self.assertTrue(item["unknown_preimage_stops_before_mutation"])

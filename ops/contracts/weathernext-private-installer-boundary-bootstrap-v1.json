@@ -73,7 +73,8 @@
       "required_exact_main_ci": true
     },
     "recognized_preimage_sha256": [
-      "7ddf7d6ca0537592fc55b48e576be006ca144becf8e0d3f8ae67fd20c8e5b9c2"
+      "7ddf7d6ca0537592fc55b48e576be006ca144becf8e0d3f8ae67fd20c8e5b9c2",
+      "5c480bd98bbcf8ab0ba6fb43036ca2f7e4837665af2be3ce42c1404c22090730"
     ],
     "exact_current_is_preconsume_noop": true,
     "unknown_preimage_stops_before_mutation": true,
