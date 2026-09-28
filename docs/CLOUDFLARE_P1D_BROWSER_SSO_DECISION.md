@@ -1,7 +1,8 @@
 # Cloudflare P1D browser SSO decision — issue #179
 
-Status: **CURRENT SOURCE DECISION / P1D-04 WRITER + GITHUB DELIVERY + PRE-LIVE PREP DEFINED / NO PRODUCTION WRITE AUTHORIZED**
+Status: **CURRENT SOURCE DECISION / P1D-04 WRITER + GITHUB DELIVERY + CONVERGENCE-AWARE PRE-LIVE PREP DEFINED / NO PRODUCTION WRITE AUTHORIZED**
 Decision date: 2026-09-13
+Convergence recovery update: 2026-09-28
 Machine contract: `ops/contracts/cloudflare-p1d-browser-sso.json`
 
 ## Decision
@@ -44,18 +45,20 @@ The writer is deliberately narrow:
 
 - exactly one fixed `PUT /accounts/{account_id}/access/organizations` primitive;
 - no generic URL, method, command, path, or payload authority;
-- the payload is built only from the current Organization fields admitted by Cloudflare's documented update schema;
+- the payload is an exact minimal object containing only `session_duration=720h`;
 - `session_duration=720h` is the only allowed semantic difference;
 - documented response-only `created_at` / `updated_at` and the observed server-managed fields `cache_device_posture`, `has_migrated_private_apps`, and `trusted_accounts` are never copied into the PUT payload;
+- unrelated admitted writable Organization state, including `service_token_inactivity`, is retained only as private pre/post binding evidence and is never echoed into the PUT payload;
 - those response-only fields are bound separately and must remain unchanged across the future authorized write;
 - any previously unclassified top-level Organization field blocks before mutation so a schema expansion cannot silently gain write authority;
-- after a successful PUT, a fresh GET must prove an explicit `720h` session, the exact intended writable projection, and unchanged response-only binding;
+- after a successful PUT, a fresh GET must prove an explicit `720h` session, the exact pre-write writable projection except for the intended session change, and unchanged response-only binding;
+- if a fresh pre-write GET already reports the target `720h`, the writer remains fail-closed with `global_session_already_target` so a redundant PUT cannot be attempted;
 - one forward request maximum; no retry and no automatic rollback;
 - full Organization preimage remains private and is never emitted in the sanitized report.
 
 Before LIVE, a bounded rollback must be separately predeclared from the fresh private preimage/effective pre-write session. Source code itself does not authorize or automatically execute that rollback.
 
-The observed `cache_device_posture`, `has_migrated_private_apps`, and `trusted_accounts` keys are treated as response/server-managed state because they were present in the fresh GET that stopped the earlier provisional writer, but they are not admitted by the current official Organization update body schema.
+The observed `cache_device_posture`, `has_migrated_private_apps`, and `trusted_accounts` keys are treated as response/server-managed state because they were present in fresh GET evidence but are not admitted by the current official Organization update body schema.
 
 ## No-RDC GitHub delivery path
 
@@ -64,7 +67,7 @@ The source-only GitHub Actions delivery path allows a future P1D-04 execution wi
 The delivery path is capability-specific and fail-closed:
 
 - trigger is only an `issue_comment` `created` event on issue #179;
-- the LIVE workflow dispatch filter is narrowed to `/rpi5-p1d04 apply ` so the new pre-LIVE command cannot accidentally enter the writer authorization job;
+- the LIVE workflow dispatch filter is narrowed to `/rpi5-p1d04 apply ` so the pre-LIVE command cannot accidentally enter the writer authorization job;
 - the comment author and event sender must be the exact repository owner identity, type `User`, with `OWNER` association, and the comment must not be GitHub-App-authored;
 - the exact LIVE command shape is `/rpi5-p1d04 apply HEAD=<exact-main-sha> CANARY=p1d-04-global-browser-sso-session`;
 - the command SHA must equal the default-branch event SHA, and the operator checkout is pinned to that exact SHA with persisted Git credentials disabled;
@@ -86,26 +89,27 @@ The exact owner command is `/rpi5-p1d04 prep HEAD=<exact-main-sha> CANARY=p1d-04
 
 The prep path consumes only the dedicated P1D-04 account/read/write secret names already defined by the contract. It verifies that the read/write token values differ and verifies both tokens as active with `GET /user/tokens/verify`. It then uses only the read token for one fresh `GET /accounts/{account_id}/access/organizations`.
 
-The prep logic reuses the existing writer's Organization schema/projection and intended `session_duration -> 720h` plan construction, but it never imports or invokes the Organization write client. Unknown top-level Organization fields, an already-target `720h` session, an invalid explicit duration, SHA/CI/token mismatch, or privacy invariant failure block before any future LIVE mutation.
+The prep logic reuses the writer's Organization validation/projection but separates read-only observation from mutation planning. Unknown top-level Organization fields, an invalid explicit duration, SHA/CI/token mismatch, or privacy invariant failure still block. An already-target explicit `720h` session is instead **PASS / no change required**: `change_required=false`, `live_apply_required=false`, `semantic_diff=[]`, no rollback descriptor, zero forward requests, and zero mutation. The LIVE writer itself continues to reject `global_session_already_target`, so convergence cannot cause a redundant PUT.
 
-The full Organization preimage and intended update payload remain private in runner memory. Public output contains only a deterministic `sha256:` fingerprint of canonical JSON, field counts, effective/current session evidence, target session, and the single intended semantic diff. Account ID, auth domain, team name, tokens, full preimage, intended payload, and response-only values are never emitted.
+When the current effective session differs from `720h`, prep remains PASS with `change_required=true`, `live_apply_required=true`, and the only semantic diff `session_duration`. The full Organization preimage and intended update state remain private in runner memory. Public output contains only a deterministic `sha256:` fingerprint of canonical JSON, field counts, effective/current session evidence, target session, change requirement, LIVE-apply requirement, and the bounded semantic diff. Account ID, auth domain, team name, tokens, full preimage, intended payload, and response-only values are never emitted.
 
-The sanitized result also predeclares a bounded inverse recovery descriptor. Its target is the fresh effective pre-write session. When `session_duration` is omitted, the inverse target is explicitly `24h`, matching the documented default. Rollback is never automatic: any rollback write requires a fresh Organization GET and a separate owner authorization.
+A bounded inverse recovery descriptor is emitted only when a future write would actually be required. Its target is the fresh effective pre-write session. When `session_duration` is omitted, the inverse target is explicitly `24h`, matching the documented default. If the state is already converged at `720h`, rollback is `null` because no write should be authorized or attempted. Rollback is never automatic: any rollback write requires a fresh Organization GET and a separate owner authorization.
 
 The prep path contains no Cloudflare `POST`, `PUT`, `PATCH`, or `DELETE` primitive and no generic execution authority.
 
 ## Future live sequence
 
-1. Merge the P1D-04 pre-LIVE prep source and obtain positively green exact-main push CI.
-2. Run `p1d-03-browser-sso-preflight` GET-only again from exact merged source and prove the global session is still not `720h`.
+1. Merge the convergence-aware P1D-04 pre-LIVE prep source and obtain positively green exact-main push CI.
+2. Run `p1d-03-browser-sso-preflight` GET-only again from exact merged source and record the current global-session state and exact owner-only policy shape.
 3. Confirm the dedicated P1D-04 credential names are provisioned under separate credential authority; do not broaden Cloudflare permissions or create generic execution authority.
-4. Under a fresh owner authorization, run `/rpi5-p1d04 prep HEAD=<exact-main-sha> CANARY=p1d-04-prelive-prep`. Require PASS with a private-preimage fingerprint, exact schema/session evidence, and the predeclared bounded rollback descriptor.
-5. Revalidate exact `main`, exact-main CI, credential readiness, and the prep evidence. No prep or source merge authorizes LIVE.
-6. Request a fresh exact LIVE authorization bound to current `main` and `p1d-04-global-browser-sso-session`. The resulting `/rpi5-p1d04 apply ...` owner comment is the one-shot LIVE trigger.
-7. The LIVE workflow must stop before mutation on any owner/issue/SHA/CI/secret/schema mismatch. If the Organization PUT is attempted, that LIVE authorization is consumed; any later error means STOP with no retry or automatic rollback.
-8. On PASS, require the writer's fresh post-write Organization GET proof to show explicit `720h`, unchanged admitted writable projection apart from the intended session change, and unchanged response-only binding.
-9. Run the A55 normal-browser canary: authenticate once, open Dashboard, then open a second protected application without a new IdP prompt. A cookie-free/incognito context must still be intercepted.
-10. Only after acceptance may One Agent disable/uninstall and device-registration cleanup be considered, under a separate LIVE authorization.
+4. Under a fresh owner authorization, run `/rpi5-p1d04 prep HEAD=<exact-main-sha> CANARY=p1d-04-prelive-prep` and require PASS with private-preimage fingerprint and exact schema/session evidence.
+5. If prep returns `change_required=false` / `live_apply_required=false`, **do not request or execute P1D-04 LIVE apply**. Freshly revalidate exact `main` and the converged `720h` evidence, then proceed to the A55 browser canary.
+6. Only if prep returns `change_required=true`, revalidate exact `main`, exact-main CI, credential readiness, and prep evidence. No prep or source merge authorizes LIVE.
+7. For a required change only, request a fresh exact LIVE authorization bound to current `main` and `p1d-04-global-browser-sso-session`. The resulting `/rpi5-p1d04 apply ...` owner comment is the one-shot LIVE trigger.
+8. The LIVE workflow must stop before mutation on any owner/issue/SHA/CI/secret/schema mismatch. If the Organization PUT is attempted, that LIVE authorization is consumed; any later error means STOP with no retry or automatic rollback.
+9. On LIVE PASS, require the writer's fresh post-write Organization GET proof to show explicit `720h`, unchanged admitted writable projection apart from the intended session change, and unchanged response-only binding.
+10. Run the A55 normal-browser canary: authenticate once, open Dashboard, then open a second protected application without a new IdP prompt. A cookie-free/incognito context must still be intercepted.
+11. Only after acceptance may One Agent disable/uninstall and device-registration cleanup be considered, under a separate LIVE authorization.
 
 No source merge authorizes Cloudflare, credential, device, DNS, Tunnel, Worker, GitHub secret, or RPi5 runtime mutation.
 

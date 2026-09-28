@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import cloudflare_owner_browser_sso_prelive_prep as prep  # noqa: E402
 import cloudflare_owner_browser_sso_prelive_prep_actions as prep_actions  # noqa: E402
+import cloudflare_owner_browser_sso_session_update as session_update  # noqa: E402
 import github_p1d04_prelive_prep_bridge as prep_bridge  # noqa: E402
 
 ACCOUNT_ID = "a" * 32
@@ -78,6 +79,8 @@ class CloudflareP1D04PrelivePrepTests(unittest.TestCase):
         self.assertEqual(result["organization"]["current_session_duration"], "24h")
         self.assertEqual(result["organization"]["current_session_source"], "cloudflare_documented_default")
         self.assertEqual(result["organization"]["target_session_duration"], "720h")
+        self.assertTrue(result["organization"]["change_required"])
+        self.assertTrue(result["organization"]["live_apply_required"])
         self.assertEqual(result["organization"]["semantic_diff"], ["session_duration"])
         self.assertEqual(result["rollback"]["target_session_duration"], "24h")
         self.assertFalse(result["rollback"]["automatic"])
@@ -104,20 +107,33 @@ class CloudflareP1D04PrelivePrepTests(unittest.TestCase):
         result = prep.execute_prep(FakeGetClient(organization), ACCOUNT_ID)
         self.assertEqual(result["result"], "PASS")
         self.assertEqual(result["organization"]["current_session_source"], "api_explicit")
+        self.assertTrue(result["organization"]["change_required"])
+        self.assertTrue(result["organization"]["live_apply_required"])
         self.assertEqual(result["rollback"]["target_session_duration"], "12h")
 
-    def test_unknown_field_already_target_and_invalid_session_fail_closed(self) -> None:
+    def test_already_target_is_pass_no_change_and_writer_stays_fail_closed(self) -> None:
+        organization = self.base_organization()
+        organization["session_duration"] = "720h"
+        result = prep.execute_prep(FakeGetClient(organization), ACCOUNT_ID)
+        self.assertEqual(result["result"], "PASS")
+        self.assertFalse(result["forward_request_attempted"])
+        self.assertEqual(result["forward_request_count"], 0)
+        self.assertFalse(result["mutation_performed"])
+        self.assertEqual(result["organization"]["current_session_duration"], "720h")
+        self.assertEqual(result["organization"]["current_session_source"], "api_explicit")
+        self.assertFalse(result["organization"]["change_required"])
+        self.assertFalse(result["organization"]["live_apply_required"])
+        self.assertEqual(result["organization"]["semantic_diff"], [])
+        self.assertIsNone(result["rollback"])
+        with self.assertRaisesRegex(session_update.AuditError, "global_session_already_target"):
+            session_update.build_update_plan(organization)
+
+    def test_unknown_field_and_invalid_session_fail_closed(self) -> None:
         unknown = self.base_organization()
         unknown["surprise_server_field"] = True
         result = prep.execute_prep(FakeGetClient(unknown), ACCOUNT_ID)
         self.assertEqual(result["result"], "BLOCKED")
         self.assertEqual(result["reason"], "organization_response_field_unclassified")
-
-        already = self.base_organization()
-        already["session_duration"] = "720h"
-        result = prep.execute_prep(FakeGetClient(already), ACCOUNT_ID)
-        self.assertEqual(result["result"], "BLOCKED")
-        self.assertEqual(result["reason"], "global_session_already_target")
 
         invalid = self.base_organization()
         invalid["session_duration"] = "forever"
@@ -272,10 +288,14 @@ class CloudflareP1D04PrelivePrepTests(unittest.TestCase):
         self.assertEqual(prelive["cloudflare_write_primitives"], [])
         self.assertFalse(prelive["source_merge_authorizes_execution"])
         self.assertTrue(prelive["fresh_separate_owner_authorization_required"])
+        self.assertEqual(prelive["already_target_session_duration"], "PASS_NO_CHANGE_REQUIRED")
+        self.assertFalse(prelive["already_target_live_apply_required"])
+        self.assertTrue(prelive["rollback"]["omitted_when_no_change_required"])
         self.assertEqual(prelive["rollback"]["omitted_session_duration_target"], "24h")
         docs = (ROOT / "docs/CLOUDFLARE_P1D_BROWSER_SSO_DECISION.md").read_text(encoding="utf-8")
         self.assertIn("## No-RDC P1D-04 pre-LIVE preparation", docs)
         self.assertIn("/rpi5-p1d04 prep HEAD=<exact-main-sha> CANARY=p1d-04-prelive-prep", docs)
+        self.assertIn("PASS / no change required", docs)
         self.assertIn("separate owner authorization", docs)
 
 
