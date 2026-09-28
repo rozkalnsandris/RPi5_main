@@ -297,7 +297,10 @@ class CloudflareP1DBrowserSSOTests(unittest.TestCase):
         plan = session_update.build_update_plan(before)
         self.assertEqual(plan.current_effective_session, "24h")
         self.assertEqual(plan.payload["session_duration"], "720h")
-        self.assertEqual(session_update._semantic_diff(plan.before_writable, plan.payload), {"session_duration"})
+        self.assertEqual(plan.payload, {"session_duration": "720h"})
+        expected_after = dict(plan.before_writable)
+        expected_after["session_duration"] = "720h"
+        self.assertEqual(session_update._semantic_diff(plan.before_writable, expected_after), {"session_duration"})
         for key in session_update.RESPONSE_ONLY_FIELDS:
             self.assertNotIn(key, plan.payload)
 

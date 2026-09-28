@@ -118,9 +118,25 @@
     "post_write_proof": [
       "fresh-organization-get",
       "session_duration-is-explicit-720h",
-      "writable-projection-equals-intended-payload",
+      "writable-projection-equals-prewrite-projection-except-session_duration",
       "response-only-field-binding-unchanged"
-    ]
+    ],
+    "forward_request_fields": [
+      "session_duration"
+    ],
+    "forward_request_must_be_exact_minimal_object": true,
+    "service_token_inactivity_handling": {
+      "classification": "opaque-observed-writable-state",
+      "documented_action_values": [
+        "disable",
+        "delete"
+      ],
+      "runtime_schema_drift_observed": true,
+      "nested_field_names_must_match_documented_shape": true,
+      "opaque_state_max_canonical_json_bytes": 1024,
+      "forwarded": false,
+      "exact_pre_post_binding_required": true
+    }
   },
   "github_delivery": {
     "workflow": ".github/workflows/cloudflare-p1d04-browser-sso-session.yml",
@@ -230,7 +246,8 @@
     "automatic_github_result_comment": false,
     "source_merge_authorizes_execution": false,
     "fresh_separate_owner_authorization_required": true,
-    "source_merge_authorizes_live": false
+    "source_merge_authorizes_live": false,
+    "service_token_inactivity_values_treated_as_opaque_observed_state": true
   },
   "future_canaries": [
     {
