@@ -17,6 +17,10 @@ ROOT_UID = 0
 ROOT_GID = 0
 DESTINATION_MODE = 0o755
 RECOGNIZED_PREDECESSOR_SHA256 = "7ddf7d6ca0537592fc55b48e576be006ca144becf8e0d3f8ae67fd20c8e5b9c2"
+RECOGNIZED_PREDECESSOR_SHA256S = (
+    RECOGNIZED_PREDECESSOR_SHA256,
+    "5c480bd98bbcf8ab0ba6fb43036ca2f7e4837665af2be3ce42c1404c22090730",
+)
 MUTATION_BUDGET = (("filesystem.weathernext-private-installer-boundary-bootstrap-reconcile", 1),)
 _SHA40 = re.compile(r"^[0-9a-f]{40}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -115,7 +119,7 @@ def classify_installed(evidence: BootstrapEvidence) -> InstalledState:
         return "CONFLICT"
     if evidence.installed_sha256 == evidence.source_sha256:
         return "EXACT"
-    if evidence.installed_sha256 == RECOGNIZED_PREDECESSOR_SHA256:
+    if evidence.installed_sha256 in RECOGNIZED_PREDECESSOR_SHA256S:
         return "RECOGNIZED_PREDECESSOR"
     return "CONFLICT"
 
@@ -133,8 +137,8 @@ def build_reconcile_plan(evidence: BootstrapEvidence) -> ReconcilePlan:
                 target=DESTINATION,
                 invariant=(
                     "replace only the fixed root-owned 0755 one-link regular bootstrap when its "
-                    "preimage SHA-256 equals the reviewed predecessor; postimage must equal the "
-                    "executable Git blob and SHA-256 derived from exact current main"
+                    "preimage SHA-256 equals one of the explicit reviewed predecessors; postimage "
+                    "must equal the executable Git blob and SHA-256 derived from exact current main"
                 ),
             ),
         )
