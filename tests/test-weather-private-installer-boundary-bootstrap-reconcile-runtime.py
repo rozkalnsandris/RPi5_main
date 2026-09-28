@@ -125,6 +125,27 @@ class WeatherNextBootstrapReconcileRuntimeTests(unittest.TestCase):
                 with self.assertRaises(runtime.BootstrapReconcileRuntimeError):
                     runtime._reviewed_source(client, "a" * 40)
 
+    def test_preimage_guard_accepts_each_reviewed_predecessor_when_unchanged(self) -> None:
+        self.assertGreaterEqual(len(reconcile.RECOGNIZED_PREDECESSOR_SHA256S), 2)
+        for digest in reconcile.RECOGNIZED_PREDECESSOR_SHA256S:
+            with self.subTest(digest=digest):
+                runtime._require_recognized_preimage(digest, digest)
+
+    def test_preimage_guard_rejects_unknown_and_cross_predecessor_drift(self) -> None:
+        first, second = reconcile.RECOGNIZED_PREDECESSOR_SHA256S[:2]
+        cases = (
+            ("e" * 64, "e" * 64),
+            (first, second),
+            (second, first),
+        )
+        for prepared, observed in cases:
+            with self.subTest(prepared=prepared, observed=observed):
+                with self.assertRaisesRegex(
+                    runtime.BootstrapReconcileRuntimeError,
+                    "preimage drifted before replacement",
+                ):
+                    runtime._require_recognized_preimage(prepared, observed)
+
     def test_exact_current_returns_noop_without_replay_consume(self) -> None:
         raw = b"current reviewed bootstrap\n"
         digest = hashlib.sha256(raw).hexdigest()
