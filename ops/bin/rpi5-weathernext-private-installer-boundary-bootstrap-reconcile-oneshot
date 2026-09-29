@@ -21,6 +21,8 @@ REVIEWED_ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
 TRUSTED_ROOT = Path("/var/lib/rpi5-deploy/RPi5_main-weathernext-private-installer-trusted")
 TRUSTED_LIB = TRUSTED_ROOT / "ops" / "lib"
 TRUSTED_HEAD = "79372e48ac53bf6d00142578b6543bc33a72a692"
+POST_REFRESH_TRUSTED_HEAD = "c7aaeb44be68990e0a825f63683d48f78fc3a334"
+TRUSTED_HEADS = (TRUSTED_HEAD, POST_REFRESH_TRUSTED_HEAD)
 PLAN_MODULE = "deploy_executor.weather_private_installer_boundary_bootstrap_reconcile"
 RUNTIME_MODULE = "deploy_executor.weather_private_installer_boundary_bootstrap_reconcile_runtime"
 PLAN_PATH = "ops/lib/deploy_executor/weather_private_installer_boundary_bootstrap_reconcile.py"
@@ -45,6 +47,10 @@ def _fail(message: str) -> None:
 
 def _valid_sha40(value: Any) -> bool:
     return type(value) is str and _SHA40.fullmatch(value) is not None
+
+
+def _trusted_head_is_recognized(value: Any) -> bool:
+    return type(value) is str and value in TRUSTED_HEADS
 
 
 def _git_blob_sha1(raw: bytes) -> str:
@@ -96,8 +102,8 @@ def _trusted_checkout() -> None:
             _fail("trusted Git read failed closed")
         return result.stdout
 
-    if git("rev-parse", "HEAD").strip() != TRUSTED_HEAD:
-        _fail("trusted installer checkout is not the recognized reachability predecessor")
+    if not _trusted_head_is_recognized(git("rev-parse", "HEAD").strip()):
+        _fail("trusted installer checkout is not a recognized reachability dependency head")
     if git("remote", "get-url", "origin").strip() != REVIEWED_ORIGIN:
         _fail("trusted installer checkout origin drifted")
     if git("status", "--porcelain", "--untracked-files=all") != "":
