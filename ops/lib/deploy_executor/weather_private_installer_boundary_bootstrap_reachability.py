@@ -8,7 +8,8 @@ SOURCE_REPOSITORY = "rozkalnsandris/RPi5_main"
 REVIEWED_ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
 MANAGER_CHECKOUT_RESOLVER = "repo-owner-home/RPi5_main"
 MANAGER_BRANCH_REF = "refs/heads/main"
-REACHABILITY_ISSUE = 768
+MANAGER_DETACHED_REF = "DETACHED"
+REACHABILITY_ISSUE = 770
 MANAGER_SYNC_OPERATION_ID = "rpi5.weathernext-private-installer-manager-source-sync.v1"
 MANAGER_SYNC_TARGET_ALIAS = "rpi5-weathernext-private-installer-manager-source-sync"
 BOUNDARY_REFRESH_OPERATION_ID = "rpi5.weathernext-private-installer-boundary.refresh.v1"
@@ -44,6 +45,12 @@ MANAGER_FETCH_ARGV = (
     "origin",
     "refs/heads/main:refs/remotes/origin/main",
 )
+MANAGER_SWITCH_MAIN_ARGV = (
+    "/usr/bin/git",
+    *GIT_FIXED_CONFIG,
+    "switch",
+    "main",
+)
 MANAGER_FAST_FORWARD_ARGV = (
     "/usr/bin/git",
     *GIT_FIXED_CONFIG,
@@ -53,6 +60,7 @@ MANAGER_FAST_FORWARD_ARGV = (
 )
 MANAGER_SYNC_MUTATION_BUDGET = (
     ("git.rpi5-main-manager-checkout-fetch", 1),
+    ("git.rpi5-main-manager-checkout-switch-main", 1),
     ("git.rpi5-main-manager-checkout-fast-forward", 1),
 )
 _SHA40 = re.compile(r"^[0-9a-f]{40}$")
@@ -75,9 +83,11 @@ class BootstrapReachabilityEvidence:
     exact_main_ci_success: bool
     manager_head_sha: str
     manager_branch_ref: str
+    manager_local_main_sha: str
     manager_origin: str
     manager_clean: bool
     manager_head_reviewed_ancestor: bool
+    manager_local_main_reviewed_ancestor_of_head: bool
     manager_runtime_pair_exact_current: bool
     installed_bootstrap_recognized: bool
     installed_privileged_dispatch_exact_current: bool
@@ -117,6 +127,46 @@ def _valid_sha(value: str) -> bool:
     return isinstance(value, str) and _SHA40.fullmatch(value) is not None
 
 
+def _manager_sync_steps(*, detached: bool) -> tuple[ManagerSyncStep, ...]:
+    steps: list[ManagerSyncStep] = [
+        ManagerSyncStep(
+            category=MANAGER_SYNC_MUTATION_BUDGET[0][0],
+            maximum=1,
+            argv=MANAGER_FETCH_ARGV,
+            invariant=(
+                "fetch only reviewed origin/main into refs/remotes/origin/main; fetched ref must "
+                "equal exact current main before any branch attachment or fast-forward"
+            ),
+        )
+    ]
+    if detached:
+        steps.append(
+            ManagerSyncStep(
+                category=MANAGER_SYNC_MUTATION_BUDGET[1][0],
+                maximum=1,
+                argv=MANAGER_SWITCH_MAIN_ARGV,
+                invariant=(
+                    "after fetch, local refs/heads/main must remain a reviewed ancestor of the "
+                    "detached reviewed HEAD and that HEAD must remain a reviewed ancestor of exact "
+                    "current main; switch only to literal local branch main with hooks disabled"
+                ),
+            )
+        )
+    steps.append(
+        ManagerSyncStep(
+            category=MANAGER_SYNC_MUTATION_BUDGET[2][0],
+            maximum=1,
+            argv=MANAGER_FAST_FORWARD_ARGV,
+            invariant=(
+                "after fetched ref equals exact current main and HEAD is attached to fixed main, "
+                "fast-forward only to refs/remotes/origin/main; reset rebase clean pull force or "
+                "any other branch switch remain forbidden"
+            ),
+        )
+    )
+    return tuple(steps)
+
+
 def build_reachability_plan(
     evidence: BootstrapReachabilityEvidence,
 ) -> BootstrapReachabilityPlan:
@@ -128,14 +178,41 @@ def build_reachability_plan(
         _fail("exact-main required CI is not successful")
     if not _valid_sha(evidence.manager_head_sha):
         _fail("manager HEAD is invalid")
-    if evidence.manager_branch_ref != MANAGER_BRANCH_REF:
-        _fail("manager checkout is not on the fixed main branch")
+    if not _valid_sha(evidence.manager_local_main_sha):
+        _fail("manager local main ref is invalid")
+    if evidence.manager_branch_ref not in {MANAGER_BRANCH_REF, MANAGER_DETACHED_REF}:
+        _fail("manager checkout is neither fixed main nor reviewed detached state")
     if evidence.manager_origin != REVIEWED_ORIGIN:
         _fail("manager origin drifted")
     if not evidence.manager_clean:
         _fail("manager checkout is not clean")
     if evidence.installed_privileged_dispatch_reconcile_route and not evidence.installed_privileged_dispatch_exact_current:
         _fail("reconcile route provenance is not exact-current")
+
+    detached = evidence.manager_branch_ref == MANAGER_DETACHED_REF
+    if detached:
+        if evidence.manager_local_main_sha == evidence.manager_head_sha:
+            _fail("detached manager HEAD unexpectedly equals local main")
+        if not evidence.manager_local_main_reviewed_ancestor_of_head:
+            _fail("local main is not a reviewed ancestor of detached manager HEAD")
+        if not evidence.manager_head_reviewed_ancestor:
+            _fail("detached manager HEAD is not a reviewed ancestor of exact current source")
+        if not evidence.installed_bootstrap_recognized:
+            _fail("installed bootstrap provenance is not recognized")
+        return BootstrapReachabilityPlan(
+            decision="MANAGER_SYNC_REQUIRED",
+            exact_source_sha=evidence.exact_source_sha,
+            next_operation_id=MANAGER_SYNC_OPERATION_ID,
+            execution_entrypoint=None,
+            manager_checkout_resolver=MANAGER_CHECKOUT_RESOLVER,
+            manager_branch_ref=MANAGER_BRANCH_REF,
+            fixed_environment=MANAGER_SYNC_FIXED_ENV,
+            steps=_manager_sync_steps(detached=True),
+        )
+
+    if evidence.manager_local_main_sha != evidence.manager_head_sha:
+        _fail("attached manager main ref does not equal HEAD")
+
     if evidence.installed_privileged_dispatch_exact_current:
         if not evidence.installed_privileged_dispatch_reconcile_route:
             _fail("exact-current privileged dispatch lacks reconcile route")
@@ -170,27 +247,6 @@ def build_reachability_plan(
     if not evidence.manager_head_reviewed_ancestor:
         _fail("manager HEAD is not a reviewed ancestor of exact current source")
 
-    steps = (
-        ManagerSyncStep(
-            category=MANAGER_SYNC_MUTATION_BUDGET[0][0],
-            maximum=1,
-            argv=MANAGER_FETCH_ARGV,
-            invariant=(
-                "fetch only reviewed origin/main into refs/remotes/origin/main; fetched ref must "
-                "equal exact current main before fast-forward"
-            ),
-        ),
-        ManagerSyncStep(
-            category=MANAGER_SYNC_MUTATION_BUDGET[1][0],
-            maximum=1,
-            argv=MANAGER_FAST_FORWARD_ARGV,
-            invariant=(
-                "after fetched ref equals exact current main, fast-forward only the clean fixed "
-                "manager main branch; hooks are disabled and reset rebase clean force pull or "
-                "branch switch remain forbidden"
-            ),
-        ),
-    )
     return BootstrapReachabilityPlan(
         decision="MANAGER_SYNC_REQUIRED",
         exact_source_sha=evidence.exact_source_sha,
@@ -199,7 +255,7 @@ def build_reachability_plan(
         manager_checkout_resolver=MANAGER_CHECKOUT_RESOLVER,
         manager_branch_ref=MANAGER_BRANCH_REF,
         fixed_environment=MANAGER_SYNC_FIXED_ENV,
-        steps=steps,
+        steps=_manager_sync_steps(detached=False),
     )
 
 

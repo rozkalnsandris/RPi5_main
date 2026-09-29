@@ -23,9 +23,11 @@ class BootstrapReachabilityTests(unittest.TestCase):
             exact_main_ci_success=True,
             manager_head_sha="b" * 40,
             manager_branch_ref=reachability.MANAGER_BRANCH_REF,
+            manager_local_main_sha="b" * 40,
             manager_origin=reachability.REVIEWED_ORIGIN,
             manager_clean=True,
             manager_head_reviewed_ancestor=True,
+            manager_local_main_reviewed_ancestor_of_head=True,
             manager_runtime_pair_exact_current=False,
             installed_bootstrap_recognized=True,
             installed_privileged_dispatch_exact_current=False,
@@ -33,7 +35,7 @@ class BootstrapReachabilityTests(unittest.TestCase):
         )
         return replace(value, **overrides)
 
-    def test_stale_manager_requires_only_fixed_fetch_and_fast_forward(self):
+    def test_stale_attached_manager_requires_fixed_fetch_and_fast_forward(self):
         plan = reachability.build_reachability_plan(self.evidence())
         self.assertEqual(plan.decision, "MANAGER_SYNC_REQUIRED")
         self.assertEqual(plan.next_operation_id, reachability.MANAGER_SYNC_OPERATION_ID)
@@ -41,20 +43,49 @@ class BootstrapReachabilityTests(unittest.TestCase):
         self.assertEqual(plan.manager_branch_ref, "refs/heads/main")
         self.assertEqual(plan.fixed_environment, reachability.MANAGER_SYNC_FIXED_ENV)
         self.assertEqual(
-            tuple((step.category, step.maximum) for step in plan.steps),
-            reachability.MANAGER_SYNC_MUTATION_BUDGET,
+            [(step.category, step.maximum) for step in plan.steps],
+            [
+                reachability.MANAGER_SYNC_MUTATION_BUDGET[0],
+                reachability.MANAGER_SYNC_MUTATION_BUDGET[2],
+            ],
         )
         self.assertEqual(plan.steps[0].argv, reachability.MANAGER_FETCH_ARGV)
         self.assertEqual(plan.steps[1].argv, reachability.MANAGER_FAST_FORWARD_ARGV)
-        for argv in (reachability.MANAGER_FETCH_ARGV, reachability.MANAGER_FAST_FORWARD_ARGV):
-            self.assertIn("core.hooksPath=/dev/null", argv)
-            self.assertIn("credential.helper=", argv)
-            self.assertIn("protocol.file.allow=never", argv)
+        self.assertNotIn(reachability.MANAGER_SWITCH_MAIN_ARGV, [step.argv for step in plan.steps])
         self.assertEqual(plan.live_gate, "COMPOSITE_LIVE_REQUIRED")
         self.assertEqual(plan.rollback_policy, "NONE")
         self.assertFalse(plan.automatic_retry)
         self.assertFalse(plan.automatic_cleanup)
         self.assertFalse(plan.automatic_rollback)
+
+    def test_reviewed_detached_manager_requires_fetch_switch_main_and_fast_forward(self):
+        plan = reachability.build_reachability_plan(
+            self.evidence(
+                manager_branch_ref=reachability.MANAGER_DETACHED_REF,
+                manager_local_main_sha="c" * 40,
+                manager_runtime_pair_exact_current=True,
+            )
+        )
+        self.assertEqual(plan.decision, "MANAGER_SYNC_REQUIRED")
+        self.assertEqual(plan.next_operation_id, reachability.MANAGER_SYNC_OPERATION_ID)
+        self.assertIsNone(plan.execution_entrypoint)
+        self.assertEqual(
+            [(step.category, step.maximum, step.argv) for step in plan.steps],
+            [
+                (*reachability.MANAGER_SYNC_MUTATION_BUDGET[0], reachability.MANAGER_FETCH_ARGV),
+                (*reachability.MANAGER_SYNC_MUTATION_BUDGET[1], reachability.MANAGER_SWITCH_MAIN_ARGV),
+                (*reachability.MANAGER_SYNC_MUTATION_BUDGET[2], reachability.MANAGER_FAST_FORWARD_ARGV),
+            ],
+        )
+        for argv in (
+            reachability.MANAGER_FETCH_ARGV,
+            reachability.MANAGER_SWITCH_MAIN_ARGV,
+            reachability.MANAGER_FAST_FORWARD_ARGV,
+        ):
+            self.assertIn("core.hooksPath=/dev/null", argv)
+            self.assertIn("credential.helper=", argv)
+            self.assertIn("protocol.file.allow=never", argv)
+        self.assertEqual(reachability.MANAGER_SWITCH_MAIN_ARGV[-2:], ("switch", "main"))
 
     def test_exact_runtime_pair_makes_installed_bootstrap_the_first_privileged_hop(self):
         plan = reachability.build_reachability_plan(
@@ -82,6 +113,8 @@ class BootstrapReachabilityTests(unittest.TestCase):
             self.evidence(current_main_sha="c" * 40),
             self.evidence(exact_main_ci_success=False),
             self.evidence(manager_branch_ref="refs/heads/feature"),
+            self.evidence(manager_local_main_sha="invalid"),
+            self.evidence(manager_local_main_sha="c" * 40),
             self.evidence(manager_origin="https://example.invalid/unreviewed.git"),
             self.evidence(manager_clean=False),
             self.evidence(manager_head_reviewed_ancestor=False),
@@ -96,7 +129,22 @@ class BootstrapReachabilityTests(unittest.TestCase):
             ),
             self.evidence(
                 manager_head_sha="a" * 40,
+                manager_local_main_sha="a" * 40,
                 manager_runtime_pair_exact_current=False,
+            ),
+            self.evidence(
+                manager_branch_ref=reachability.MANAGER_DETACHED_REF,
+                manager_local_main_sha="c" * 40,
+                manager_local_main_reviewed_ancestor_of_head=False,
+            ),
+            self.evidence(
+                manager_branch_ref=reachability.MANAGER_DETACHED_REF,
+                manager_local_main_sha="b" * 40,
+            ),
+            self.evidence(
+                manager_branch_ref=reachability.MANAGER_DETACHED_REF,
+                manager_local_main_sha="c" * 40,
+                manager_head_reviewed_ancestor=False,
             ),
         )
         for evidence in cases:
@@ -105,32 +153,51 @@ class BootstrapReachabilityTests(unittest.TestCase):
                     reachability.build_reachability_plan(evidence)
 
     def test_public_plan_exposes_only_fixed_manager_sync_authority(self):
-        plan = reachability.build_reachability_plan(self.evidence())
-        public = reachability.public_plan(plan)
-        self.assertEqual(public["manager_branch_ref"], "refs/heads/main")
+        attached = reachability.public_plan(reachability.build_reachability_plan(self.evidence()))
+        detached = reachability.public_plan(
+            reachability.build_reachability_plan(
+                self.evidence(
+                    manager_branch_ref=reachability.MANAGER_DETACHED_REF,
+                    manager_local_main_sha="c" * 40,
+                )
+            )
+        )
+        self.assertEqual(attached["manager_branch_ref"], "refs/heads/main")
         self.assertEqual(
-            public["fixed_environment"],
+            attached["fixed_environment"],
             [
                 {"name": name, "value": value}
                 for name, value in reachability.MANAGER_SYNC_FIXED_ENV
             ],
         )
         self.assertEqual(
-            [item["argv"] for item in public["mutation_budget"]],
+            [item["argv"] for item in attached["mutation_budget"]],
             [list(reachability.MANAGER_FETCH_ARGV), list(reachability.MANAGER_FAST_FORWARD_ARGV)],
         )
+        self.assertEqual(
+            [item["argv"] for item in detached["mutation_budget"]],
+            [
+                list(reachability.MANAGER_FETCH_ARGV),
+                list(reachability.MANAGER_SWITCH_MAIN_ARGV),
+                list(reachability.MANAGER_FAST_FORWARD_ARGV),
+            ],
+        )
 
-    def test_contract_binds_the_same_reachability_chain_and_forbids_generic_git(self):
+    def test_contract_binds_detached_recovery_without_generic_branch_authority(self):
         contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
         recovery = contract["reconciliation"]["reachability_recovery"]
         sync = recovery["manager_source_sync_prerequisite"]
-        self.assertEqual(recovery["recovery_issue"], 768)
+        self.assertEqual(recovery["recovery_issue"], 770)
         self.assertEqual(
             recovery["planner_module"],
             "ops/lib/deploy_executor/weather_private_installer_boundary_bootstrap_reachability.py",
         )
         self.assertEqual(sync["operation_id"], reachability.MANAGER_SYNC_OPERATION_ID)
-        self.assertEqual(sync["required_branch_ref"], reachability.MANAGER_BRANCH_REF)
+        self.assertEqual(sync["required_attached_branch_ref"], reachability.MANAGER_BRANCH_REF)
+        self.assertEqual(sync["accepted_detached_branch_ref"], reachability.MANAGER_DETACHED_REF)
+        self.assertTrue(sync["detached_recovery_allowed"])
+        self.assertTrue(sync["requires_local_main_reviewed_ancestor_of_detached_head"])
+        self.assertTrue(sync["requires_detached_head_reviewed_ancestor_of_exact_current_main"])
         self.assertEqual(
             sync["fixed_environment"],
             [
@@ -140,18 +207,16 @@ class BootstrapReachabilityTests(unittest.TestCase):
         )
         self.assertEqual(
             sync["allowed_argv"],
-            [list(reachability.MANAGER_FETCH_ARGV), list(reachability.MANAGER_FAST_FORWARD_ARGV)],
+            [
+                list(reachability.MANAGER_FETCH_ARGV),
+                list(reachability.MANAGER_SWITCH_MAIN_ARGV),
+                list(reachability.MANAGER_FAST_FORWARD_ARGV),
+            ],
         )
-        self.assertIn("must equal", sync["post_fetch_read_only_checkpoint"])
         self.assertEqual(
-            recovery["first_privileged_hop"]["entrypoint"],
-            reachability.INSTALLED_BOOTSTRAP,
+            [(item["category"], item["max_operations"]) for item in sync["mutation_budget"]],
+            list(reachability.MANAGER_SYNC_MUTATION_BUDGET),
         )
-        self.assertEqual(
-            recovery["reconcile_hop"]["installed_entrypoint"],
-            reachability.INSTALLED_PRIVILEGED_DISPATCH,
-        )
-        self.assertFalse(recovery["legacy_noninstalled_oneshot"]["privileged_execution_transport"])
         forbidden = set(sync["explicitly_forbidden"])
         self.assertTrue(
             {
@@ -160,12 +225,19 @@ class BootstrapReachabilityTests(unittest.TestCase):
                 "pull",
                 "rebase",
                 "force",
-                "git-hooks",
+                "arbitrary-branch-switch",
+                "caller-selected-branch",
                 "caller-selected-argv",
             }.issubset(forbidden)
         )
+        self.assertNotIn("branch-switch", forbidden)
         self.assertTrue(sync["owner_live_authorization_required"])
         self.assertFalse(sync["source_merge_authorizes_live"])
+        self.assertEqual(
+            recovery["first_privileged_hop"]["entrypoint"],
+            reachability.INSTALLED_BOOTSTRAP,
+        )
+        self.assertFalse(recovery["legacy_noninstalled_oneshot"]["privileged_execution_transport"])
 
     def test_current_dispatch_contains_the_fixed_reconcile_route(self):
         source = DISPATCH.read_text(encoding="utf-8")
