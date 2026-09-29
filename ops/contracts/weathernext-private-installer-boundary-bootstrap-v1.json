@@ -85,7 +85,7 @@
       }
     ],
     "reachability_recovery": {
-      "recovery_issue": 768,
+      "recovery_issue": 770,
       "planner_module": "ops/lib/deploy_executor/weather_private_installer_boundary_bootstrap_reachability.py",
       "primary_transport": "installed-bootstrap-then-current-privileged-dispatch",
       "caller_selected_source_sha_allowed": false,
@@ -96,10 +96,15 @@
         "operation_id": "rpi5.weathernext-private-installer-manager-source-sync.v1",
         "target_alias": "rpi5-weathernext-private-installer-manager-source-sync",
         "manager_checkout_resolver": "repo-owner-home/RPi5_main",
-        "required_branch_ref": "refs/heads/main",
+        "required_attached_branch_ref": "refs/heads/main",
+        "accepted_detached_branch_ref": "DETACHED",
+        "detached_recovery_allowed": true,
         "requires_clean_checkout": true,
         "requires_reviewed_origin": true,
         "requires_head_reviewed_ancestor_of_exact_current_main": true,
+        "requires_local_main_reviewed_ancestor_of_detached_head": true,
+        "requires_detached_head_reviewed_ancestor_of_exact_current_main": true,
+        "attached_main_ref_must_equal_head": true,
         "exact_current_main_and_required_ci_revalidated_before_mutation": true,
         "fixed_environment": [
           {
@@ -149,15 +154,30 @@
             "credential.helper=",
             "-c",
             "protocol.file.allow=never",
+            "switch",
+            "main"
+          ],
+          [
+            "/usr/bin/git",
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "credential.helper=",
+            "-c",
+            "protocol.file.allow=never",
             "merge",
             "--ff-only",
             "refs/remotes/origin/main"
           ]
         ],
-        "post_fetch_read_only_checkpoint": "refs/remotes/origin/main must equal the freshly revalidated exact current main SHA before merge --ff-only; mismatch stops with no merge or retry",
+        "post_fetch_read_only_checkpoint": "refs/remotes/origin/main must equal freshly revalidated exact current main; for detached recovery local refs/heads/main must remain a reviewed ancestor of detached HEAD and detached HEAD a reviewed ancestor of exact current main before fixed switch main; any mismatch stops with no switch, merge or retry",
         "mutation_budget": [
           {
             "category": "git.rpi5-main-manager-checkout-fetch",
+            "max_operations": 1
+          },
+          {
+            "category": "git.rpi5-main-manager-checkout-switch-main",
             "max_operations": 1
           },
           {
@@ -173,14 +193,16 @@
           "pull",
           "rebase",
           "force",
-          "branch-switch",
+          "arbitrary-branch-switch",
+          "switch-other-than-main",
           "git-hooks",
+          "caller-selected-branch",
           "caller-selected-ref",
           "caller-selected-repository",
           "caller-selected-argv",
           "caller-selected-environment"
         ],
-        "postcondition": "manager HEAD equals exact current main on refs/heads/main; checkout remains clean at reviewed origin and both fixed refresh runtime Git blobs/worktree bytes equal exact-current public proof",
+        "postcondition": "manager HEAD and local refs/heads/main equal exact current main; checkout is attached to refs/heads/main, clean at reviewed origin, and both fixed refresh runtime Git blobs/worktree bytes equal exact-current public proof",
         "owner_live_authorization_required": true,
         "source_merge_authorizes_live": false,
         "rollback_policy": "NONE",
@@ -238,8 +260,8 @@
   "explicit_exclusions": [
     "no caller-selected repository/path/command/argv/environment/destination",
     "no generic root shell or generic Git mutation surface",
-    "manager source sync is a separate LIVE prerequisite limited to fixed reviewed-origin fetch plus merge --ff-only with hooks disabled and fixed environment",
-    "no checkout/reset/clean/pull/rebase/force/manager branch switch",
+    "manager source sync is a separate LIVE prerequisite limited to fixed reviewed-origin fetch, optional fixed switch to literal main only for a reviewed detached baseline, and merge --ff-only with hooks disabled and fixed environment",
+    "no checkout/reset/clean/pull/rebase/force or arbitrary manager branch switch",
     "no #700/#721 refresh mutation during bootstrap installation or reconciliation; refresh is a separately authorized hop",
     "no manager or trusted-checkout Git mutation inside bootstrap reconciliation",
     "no backend/application/private-runtime materialization",
@@ -250,10 +272,11 @@
   ],
   "handoff": [
     "freshly derive exact current RPi5_main main and required CI before any transport prerequisite or privileged hop",
-    "run the source-only reachability planner; missing, unreviewed or drifted manager/bootstrap/dispatch provenance, including a non-main manager branch, must stop closed",
-    "if manager source sync is required, obtain separate Composite LIVE authority for only the fixed clean reviewed-origin fetch plus merge --ff-only mutation budget with the fixed environment and hooks disabled; source merge alone never authorizes it",
-    "after the authorized fetch, verify refs/remotes/origin/main equals the freshly revalidated exact current main before merge; any mismatch stops with no merge, retry, rollback or cleanup",
-    "after manager sync, verify manager HEAD equals exact current main on refs/heads/main, checkout remains clean, and both fixed refresh runtime Git blobs/worktree bytes equal the public exact-current proof",
+    "run the source-only reachability planner; missing, unreviewed or drifted manager/bootstrap/dispatch provenance must stop closed",
+    "an attached manager checkout is valid only on refs/heads/main with local main equal HEAD; a detached baseline is valid only when clean at reviewed origin with local main a reviewed ancestor of detached HEAD and detached HEAD a reviewed ancestor of exact current main",
+    "if manager source sync is required, obtain separate Composite LIVE authority for the fixed reviewed-origin fetch, optional fixed switch to literal main for the reviewed detached case, and merge --ff-only mutation budgets; source merge alone never authorizes them",
+    "after the authorized fetch, verify refs/remotes/origin/main equals freshly revalidated exact current main and revalidate all detached ancestry predicates before any switch; any mismatch stops with no switch, merge, retry, rollback or cleanup",
+    "after manager sync, verify manager HEAD and local main equal exact current main, checkout is attached to refs/heads/main and clean, and both fixed refresh runtime Git blobs/worktree bytes equal the public exact-current proof",
     "construct a fresh #700/#721 installer-boundary refresh Queue and owner LIVE-AUTH; execute it only through the already installed root-owned bootstrap",
     "verify the trusted installer checkout and installed privileged dispatch are exact current and the fixed dispatch contains the bootstrap-reconcile route",
     "construct a fresh bootstrap-reconcile Queue and exact owner LIVE-AUTH; execute reconciliation through the installed current privileged dispatch",
