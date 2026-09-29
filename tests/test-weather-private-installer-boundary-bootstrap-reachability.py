@@ -22,6 +22,7 @@ class BootstrapReachabilityTests(unittest.TestCase):
             current_main_sha="a" * 40,
             exact_main_ci_success=True,
             manager_head_sha="b" * 40,
+            manager_branch_ref=reachability.MANAGER_BRANCH_REF,
             manager_origin=reachability.REVIEWED_ORIGIN,
             manager_clean=True,
             manager_head_reviewed_ancestor=True,
@@ -37,12 +38,18 @@ class BootstrapReachabilityTests(unittest.TestCase):
         self.assertEqual(plan.decision, "MANAGER_SYNC_REQUIRED")
         self.assertEqual(plan.next_operation_id, reachability.MANAGER_SYNC_OPERATION_ID)
         self.assertIsNone(plan.execution_entrypoint)
+        self.assertEqual(plan.manager_branch_ref, "refs/heads/main")
+        self.assertEqual(plan.fixed_environment, reachability.MANAGER_SYNC_FIXED_ENV)
         self.assertEqual(
             tuple((step.category, step.maximum) for step in plan.steps),
             reachability.MANAGER_SYNC_MUTATION_BUDGET,
         )
         self.assertEqual(plan.steps[0].argv, reachability.MANAGER_FETCH_ARGV)
         self.assertEqual(plan.steps[1].argv, reachability.MANAGER_FAST_FORWARD_ARGV)
+        for argv in (reachability.MANAGER_FETCH_ARGV, reachability.MANAGER_FAST_FORWARD_ARGV):
+            self.assertIn("core.hooksPath=/dev/null", argv)
+            self.assertIn("credential.helper=", argv)
+            self.assertIn("protocol.file.allow=never", argv)
         self.assertEqual(plan.live_gate, "COMPOSITE_LIVE_REQUIRED")
         self.assertEqual(plan.rollback_policy, "NONE")
         self.assertFalse(plan.automatic_retry)
@@ -74,6 +81,7 @@ class BootstrapReachabilityTests(unittest.TestCase):
         cases = (
             self.evidence(current_main_sha="c" * 40),
             self.evidence(exact_main_ci_success=False),
+            self.evidence(manager_branch_ref="refs/heads/feature"),
             self.evidence(manager_origin="https://example.invalid/unreviewed.git"),
             self.evidence(manager_clean=False),
             self.evidence(manager_head_reviewed_ancestor=False),
@@ -96,22 +104,45 @@ class BootstrapReachabilityTests(unittest.TestCase):
                 with self.assertRaises(reachability.BootstrapReachabilityContractError):
                     reachability.build_reachability_plan(evidence)
 
+    def test_public_plan_exposes_only_fixed_manager_sync_authority(self):
+        plan = reachability.build_reachability_plan(self.evidence())
+        public = reachability.public_plan(plan)
+        self.assertEqual(public["manager_branch_ref"], "refs/heads/main")
+        self.assertEqual(
+            public["fixed_environment"],
+            [
+                {"name": name, "value": value}
+                for name, value in reachability.MANAGER_SYNC_FIXED_ENV
+            ],
+        )
+        self.assertEqual(
+            [item["argv"] for item in public["mutation_budget"]],
+            [list(reachability.MANAGER_FETCH_ARGV), list(reachability.MANAGER_FAST_FORWARD_ARGV)],
+        )
+
     def test_contract_binds_the_same_reachability_chain_and_forbids_generic_git(self):
         contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
         recovery = contract["reconciliation"]["reachability_recovery"]
+        sync = recovery["manager_source_sync_prerequisite"]
         self.assertEqual(recovery["recovery_issue"], 768)
         self.assertEqual(
             recovery["planner_module"],
             "ops/lib/deploy_executor/weather_private_installer_boundary_bootstrap_reachability.py",
         )
+        self.assertEqual(sync["operation_id"], reachability.MANAGER_SYNC_OPERATION_ID)
+        self.assertEqual(sync["required_branch_ref"], reachability.MANAGER_BRANCH_REF)
         self.assertEqual(
-            recovery["manager_source_sync_prerequisite"]["operation_id"],
-            reachability.MANAGER_SYNC_OPERATION_ID,
+            sync["fixed_environment"],
+            [
+                {"name": name, "value": value}
+                for name, value in reachability.MANAGER_SYNC_FIXED_ENV
+            ],
         )
         self.assertEqual(
-            recovery["manager_source_sync_prerequisite"]["allowed_argv"],
+            sync["allowed_argv"],
             [list(reachability.MANAGER_FETCH_ARGV), list(reachability.MANAGER_FAST_FORWARD_ARGV)],
         )
+        self.assertIn("must equal", sync["post_fetch_read_only_checkpoint"])
         self.assertEqual(
             recovery["first_privileged_hop"]["entrypoint"],
             reachability.INSTALLED_BOOTSTRAP,
@@ -121,10 +152,20 @@ class BootstrapReachabilityTests(unittest.TestCase):
             reachability.INSTALLED_PRIVILEGED_DISPATCH,
         )
         self.assertFalse(recovery["legacy_noninstalled_oneshot"]["privileged_execution_transport"])
-        forbidden = set(recovery["manager_source_sync_prerequisite"]["explicitly_forbidden"])
-        self.assertTrue({"reset", "clean", "pull", "rebase", "force", "caller-selected-argv"}.issubset(forbidden))
-        self.assertTrue(recovery["manager_source_sync_prerequisite"]["owner_live_authorization_required"])
-        self.assertFalse(recovery["manager_source_sync_prerequisite"]["source_merge_authorizes_live"])
+        forbidden = set(sync["explicitly_forbidden"])
+        self.assertTrue(
+            {
+                "reset",
+                "clean",
+                "pull",
+                "rebase",
+                "force",
+                "git-hooks",
+                "caller-selected-argv",
+            }.issubset(forbidden)
+        )
+        self.assertTrue(sync["owner_live_authorization_required"])
+        self.assertFalse(sync["source_merge_authorizes_live"])
 
     def test_current_dispatch_contains_the_fixed_reconcile_route(self):
         source = DISPATCH.read_text(encoding="utf-8")

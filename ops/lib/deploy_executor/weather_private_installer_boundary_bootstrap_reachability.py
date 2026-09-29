@@ -7,6 +7,7 @@ from typing import Literal
 SOURCE_REPOSITORY = "rozkalnsandris/RPi5_main"
 REVIEWED_ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
 MANAGER_CHECKOUT_RESOLVER = "repo-owner-home/RPi5_main"
+MANAGER_BRANCH_REF = "refs/heads/main"
 REACHABILITY_ISSUE = 768
 MANAGER_SYNC_OPERATION_ID = "rpi5.weathernext-private-installer-manager-source-sync.v1"
 MANAGER_SYNC_TARGET_ALIAS = "rpi5-weathernext-private-installer-manager-source-sync"
@@ -19,8 +20,25 @@ INSTALLED_PRIVILEGED_DISPATCH = "/usr/local/sbin/rpi5-weathernext-private-host-p
 PRIVILEGED_DISPATCH_SOURCE = "ops/bin/rpi5-weathernext-private-host-privileged-install"
 ROLLBACK_POLICY = "NONE"
 LIVE_GATE = "COMPOSITE_LIVE_REQUIRED"
+GIT_FIXED_CONFIG = (
+    "-c",
+    "core.hooksPath=/dev/null",
+    "-c",
+    "credential.helper=",
+    "-c",
+    "protocol.file.allow=never",
+)
+MANAGER_SYNC_FIXED_ENV = (
+    ("PATH", "/usr/bin:/bin"),
+    ("LANG", "C.UTF-8"),
+    ("LC_ALL", "C.UTF-8"),
+    ("GIT_TERMINAL_PROMPT", "0"),
+    ("GIT_CONFIG_NOSYSTEM", "1"),
+    ("GIT_CONFIG_GLOBAL", "/dev/null"),
+)
 MANAGER_FETCH_ARGV = (
     "/usr/bin/git",
+    *GIT_FIXED_CONFIG,
     "fetch",
     "--no-tags",
     "origin",
@@ -28,6 +46,7 @@ MANAGER_FETCH_ARGV = (
 )
 MANAGER_FAST_FORWARD_ARGV = (
     "/usr/bin/git",
+    *GIT_FIXED_CONFIG,
     "merge",
     "--ff-only",
     "refs/remotes/origin/main",
@@ -55,6 +74,7 @@ class BootstrapReachabilityEvidence:
     current_main_sha: str
     exact_main_ci_success: bool
     manager_head_sha: str
+    manager_branch_ref: str
     manager_origin: str
     manager_clean: bool
     manager_head_reviewed_ancestor: bool
@@ -79,6 +99,8 @@ class BootstrapReachabilityPlan:
     next_operation_id: str
     execution_entrypoint: str | None
     manager_checkout_resolver: str
+    manager_branch_ref: str
+    fixed_environment: tuple[tuple[str, str], ...]
     steps: tuple[ManagerSyncStep, ...]
     live_gate: str = LIVE_GATE
     rollback_policy: str = ROLLBACK_POLICY
@@ -106,6 +128,8 @@ def build_reachability_plan(
         _fail("exact-main required CI is not successful")
     if not _valid_sha(evidence.manager_head_sha):
         _fail("manager HEAD is invalid")
+    if evidence.manager_branch_ref != MANAGER_BRANCH_REF:
+        _fail("manager checkout is not on the fixed main branch")
     if evidence.manager_origin != REVIEWED_ORIGIN:
         _fail("manager origin drifted")
     if not evidence.manager_clean:
@@ -121,6 +145,8 @@ def build_reachability_plan(
             next_operation_id=BOOTSTRAP_RECONCILE_OPERATION_ID,
             execution_entrypoint=INSTALLED_PRIVILEGED_DISPATCH,
             manager_checkout_resolver=MANAGER_CHECKOUT_RESOLVER,
+            manager_branch_ref=MANAGER_BRANCH_REF,
+            fixed_environment=MANAGER_SYNC_FIXED_ENV,
             steps=(),
         )
 
@@ -134,6 +160,8 @@ def build_reachability_plan(
             next_operation_id=BOUNDARY_REFRESH_OPERATION_ID,
             execution_entrypoint=INSTALLED_BOOTSTRAP,
             manager_checkout_resolver=MANAGER_CHECKOUT_RESOLVER,
+            manager_branch_ref=MANAGER_BRANCH_REF,
+            fixed_environment=MANAGER_SYNC_FIXED_ENV,
             steps=(),
         )
 
@@ -157,8 +185,9 @@ def build_reachability_plan(
             maximum=1,
             argv=MANAGER_FAST_FORWARD_ARGV,
             invariant=(
-                "fast-forward only the clean fixed manager checkout to the already verified "
-                "origin/main; no reset rebase clean force pull or branch switch"
+                "after fetched ref equals exact current main, fast-forward only the clean fixed "
+                "manager main branch; hooks are disabled and reset rebase clean force pull or "
+                "branch switch remain forbidden"
             ),
         ),
     )
@@ -168,6 +197,8 @@ def build_reachability_plan(
         next_operation_id=MANAGER_SYNC_OPERATION_ID,
         execution_entrypoint=None,
         manager_checkout_resolver=MANAGER_CHECKOUT_RESOLVER,
+        manager_branch_ref=MANAGER_BRANCH_REF,
+        fixed_environment=MANAGER_SYNC_FIXED_ENV,
         steps=steps,
     )
 
@@ -179,6 +210,10 @@ def public_plan(plan: BootstrapReachabilityPlan) -> dict[str, object]:
         "next_operation_id": plan.next_operation_id,
         "execution_entrypoint": plan.execution_entrypoint,
         "manager_checkout_resolver": plan.manager_checkout_resolver,
+        "manager_branch_ref": plan.manager_branch_ref,
+        "fixed_environment": [
+            {"name": name, "value": value} for name, value in plan.fixed_environment
+        ],
         "mutation_budget": [
             {
                 "category": step.category,
