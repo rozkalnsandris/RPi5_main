@@ -77,6 +77,14 @@ class BridgeTests(unittest.TestCase):
     def test_fixed_reachability_identity_and_no_new_privileged_surface(self):
         b = self.bridge
         self.assertEqual(b.TRUSTED_HEAD, "79372e48ac53bf6d00142578b6543bc33a72a692")
+        self.assertEqual(
+            b.POST_REFRESH_TRUSTED_HEAD,
+            "c7aaeb44be68990e0a825f63683d48f78fc3a334",
+        )
+        self.assertEqual(
+            b.TRUSTED_HEADS,
+            (b.TRUSTED_HEAD, b.POST_REFRESH_TRUSTED_HEAD),
+        )
         self.assertEqual(b.REPOSITORY, "rozkalnsandris/RPi5_main")
         self.assertEqual(
             {b.PLAN_PATH, b.RUNTIME_PATH},
@@ -94,9 +102,17 @@ class BridgeTests(unittest.TestCase):
             "git reset",
             "git checkout",
             "git clean",
+            "merge-base",
             "shell=True",
         ):
             self.assertNotIn(forbidden, source)
+
+    def test_trusted_dependency_head_allowlist_is_finite_and_fail_closed(self):
+        b = self.bridge
+        self.assertTrue(b._trusted_head_is_recognized(b.TRUSTED_HEAD))
+        self.assertTrue(b._trusted_head_is_recognized(b.POST_REFRESH_TRUSTED_HEAD))
+        self.assertFalse(b._trusted_head_is_recognized("0" * 40))
+        self.assertFalse(b._trusted_head_is_recognized(None))
 
     def test_execute_orders_current_source_load_before_existing_runtime_auth(self):
         b = self.bridge
@@ -182,11 +198,11 @@ class BridgeTests(unittest.TestCase):
         with self.assertRaises(b.RuntimeEnteredError):
             b.execute(743)
 
-    def test_current_runtime_imports_against_trusted_predecessor_dependencies(self):
+    def _assert_current_runtime_imports_against_trusted_head(self, trusted_head: str):
         b = self.bridge
         with tempfile.TemporaryDirectory() as td:
             archive = subprocess.run(
-                ["git", "archive", b.TRUSTED_HEAD, "ops/lib/deploy_executor"],
+                ["git", "archive", trusted_head, "ops/lib/deploy_executor"],
                 cwd=REPO_ROOT,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -220,6 +236,14 @@ class BridgeTests(unittest.TestCase):
                         sys.modules.pop(name, None)
                 sys.modules.update(old_modules)
                 sys.path[:] = old_path
+
+    def test_current_runtime_imports_against_trusted_predecessor_dependencies(self):
+        self._assert_current_runtime_imports_against_trusted_head(self.bridge.TRUSTED_HEAD)
+
+    def test_current_runtime_imports_against_post_refresh_dependencies(self):
+        self._assert_current_runtime_imports_against_trusted_head(
+            self.bridge.POST_REFRESH_TRUSTED_HEAD
+        )
 
 
 if __name__ == "__main__":
