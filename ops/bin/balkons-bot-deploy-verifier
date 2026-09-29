@@ -21,16 +21,21 @@ SOURCE_TARGET = Path("/usr/local/lib/rpi5-balkons-bot.py")
 DROPIN_TARGET = Path("/etc/systemd/system/balkons-bot.service.d/95-rpi5-source-credentials.conf")
 K10_DROPIN_TARGET = Path("/etc/systemd/system/balkons-bot.service.d/90-rpi5-no-sigkill.conf")
 
+ENCRYPTED_CREDENTIAL_IDS = (
+    "telegram-token", "telegram-chat-id", "mqtt-host", "mqtt-username", "mqtt-secret",
+)
+ENCRYPTED_CREDENTIAL_LINES = {
+    "LoadCredentialEncrypted=telegram-token:/etc/credstore.encrypted/balkons-bot-telegram-token",
+    "LoadCredentialEncrypted=telegram-chat-id:/etc/credstore.encrypted/balkons-bot-telegram-chat-id",
+    "LoadCredentialEncrypted=mqtt-host:/etc/credstore.encrypted/balkons-bot-mqtt-host",
+    "LoadCredentialEncrypted=mqtt-username:/etc/credstore.encrypted/balkons-bot-mqtt-username",
+    "LoadCredentialEncrypted=mqtt-secret:/etc/credstore.encrypted/balkons-bot-mqtt-secret",
+}
+
 PYTHON = "/usr/bin/python3"
 GIT = "/usr/bin/git"
 SYSTEMCTL = "/usr/bin/systemctl"
-COMMAND_ENV = {
-    "PATH": "/usr/bin:/bin",
-    "LC_ALL": "C",
-    "LANG": "C",
-    "GIT_OPTIONAL_LOCKS": "0",
-}
-
+COMMAND_ENV = {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C", "GIT_OPTIONAL_LOCKS": "0"}
 CANONICAL_H3_LIVE_SOURCE_SHA256 = "54e7c58bae49a4a78fc033bd86eaa752cf21583bb86a0ba10d7ba9a617b1afd9"
 CANONICAL_PYTHON_PATH_SHA256 = "31f2aee4e71d21fbe5cf8b01ff0e069b9275f58929596ceb00d14d90e3e16cd6"
 BASELINE_RESTART = "always"
@@ -71,13 +76,8 @@ def sha256_file(path: Path) -> str:
 def run_command(command: Sequence[str]) -> CommandResult:
     try:
         completed = subprocess.run(
-            list(command),
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            timeout=15,
-            env=COMMAND_ENV,
+            list(command), check=False, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            text=True, timeout=15, env=COMMAND_ENV,
         )
     except (OSError, subprocess.SubprocessError):
         raise DeployVerifyError("command_execution_failed") from None
@@ -124,8 +124,7 @@ def build_git_tracked_command(repo_root: Path) -> tuple[str, ...]:
 
 def build_preflight_command(preflight_path: Path, repo_sha: str, live_sha: str) -> tuple[str, ...]:
     return (
-        PYTHON, "-I", str(preflight_path),
-        "--expected-repo-sha", repo_sha,
+        PYTHON, "-I", str(preflight_path), "--expected-repo-sha", repo_sha,
         "--expected-live-source-sha256", live_sha,
     )
 
@@ -154,39 +153,47 @@ def parse_preflight(raw: str) -> dict[str, object]:
     return report
 
 
+def validate_encrypted_credential_report(report: dict[str, object]) -> None:
+    credentials = report.get("encrypted_credentials")
+    if not isinstance(credentials, dict):
+        raise DeployVerifyError("preflight_encrypted_credentials_missing")
+    if credentials.get("contract") != "systemd_load_credential_encrypted_host_bound_v1":
+        raise DeployVerifyError("preflight_encrypted_credentials_contract_mismatch")
+    if credentials.get("ids") != list(ENCRYPTED_CREDENTIAL_IDS):
+        raise DeployVerifyError("preflight_encrypted_credentials_ids_mismatch")
+    if credentials.get("expected_count") != len(ENCRYPTED_CREDENTIAL_IDS):
+        raise DeployVerifyError("preflight_encrypted_credentials_count_mismatch")
+    if credentials.get("metadata_valid_count") != len(ENCRYPTED_CREDENTIAL_IDS):
+        raise DeployVerifyError("preflight_encrypted_credentials_metadata_invalid")
+    if credentials.get("all_metadata_valid") is not True:
+        raise DeployVerifyError("preflight_encrypted_credentials_metadata_invalid")
+    if credentials.get("content_read") is not False or credentials.get("content_hashed") is not False:
+        raise DeployVerifyError("preflight_encrypted_credentials_content_boundary_invalid")
+
+
 def validate_preflight_report(
     report: dict[str, object], *, repo_sha: str, live_sha: str,
     live_path_sha: str, fragment_sha: str, user_sha: str,
 ) -> None:
     metadata = report.get("service_metadata")
     if (
-        report.get("preflight") != "PASS"
-        or report.get("blockers") != []
-        or report.get("scope") != "READ_ONLY"
-        or report.get("expected_repo_sha") != repo_sha
-        or report.get("observed_repo_sha") != repo_sha
-        or report.get("live_source_sha256") != live_sha
+        report.get("preflight") != "PASS" or report.get("blockers") != []
+        or report.get("scope") != "READ_ONLY" or report.get("expected_repo_sha") != repo_sha
+        or report.get("observed_repo_sha") != repo_sha or report.get("live_source_sha256") != live_sha
         or report.get("live_source_provenance_match") is not True
-        or report.get("critical_worktree_clean") is not True
-        or report.get("critical_paths_tracked") is not True
-        or report.get("mutation_started") is not False
-        or report.get("writes_performed") is not False
+        or report.get("critical_worktree_clean") is not True or report.get("critical_paths_tracked") is not True
+        or report.get("mutation_started") is not False or report.get("writes_performed") is not False
         or not isinstance(metadata, dict)
     ):
         raise DeployVerifyError("preflight_acceptance_failed")
+    validate_encrypted_credential_report(report)
     expected = {
-        "load_state": "loaded",
-        "active_state": "active",
-        "sub_state": "running",
-        "user_sha256": user_sha,
-        "user_is_root": False,
+        "load_state": "loaded", "active_state": "active", "sub_state": "running",
+        "user_sha256": user_sha, "user_is_root": False,
         "python_executable_path_sha256": CANONICAL_PYTHON_PATH_SHA256,
-        "live_source_path_sha256": live_path_sha,
-        "fragment_path_sha256": fragment_sha,
-        "restart": BASELINE_RESTART,
-        "restart_usec": BASELINE_RESTART_USEC,
-        "timeout_stop_usec": BASELINE_TIMEOUT_STOP_USEC,
-        "send_sigkill": "no",
+        "live_source_path_sha256": live_path_sha, "fragment_path_sha256": fragment_sha,
+        "restart": BASELINE_RESTART, "restart_usec": BASELINE_RESTART_USEC,
+        "timeout_stop_usec": BASELINE_TIMEOUT_STOP_USEC, "send_sigkill": "no",
     }
     for key, value in expected.items():
         if metadata.get(key) != value:
@@ -205,7 +212,7 @@ def validate_public_file(path: Path, expected_sha: str, expected_uid: int = 0) -
         st = path.lstat()
     except OSError:
         raise DeployVerifyError("required_public_file_missing") from None
-    if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode):
+    if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
         raise DeployVerifyError("required_public_file_unsafe")
     if st.st_uid != expected_uid:
         raise DeployVerifyError("required_public_file_owner_mismatch")
@@ -213,6 +220,26 @@ def validate_public_file(path: Path, expected_sha: str, expected_uid: int = 0) -
         raise DeployVerifyError("required_public_file_mode_mismatch")
     if sha256_file(path) != expected_sha:
         raise DeployVerifyError("required_public_file_hash_mismatch")
+
+
+def validate_overlay_contract(path: Path) -> None:
+    """Validate only the public tracked overlay; no credential target is opened here."""
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError):
+        raise DeployVerifyError("overlay_contract_unreadable") from None
+    if lines.count("LoadCredential=") != 1:
+        raise DeployVerifyError("overlay_plain_credential_reset_invalid")
+    if any(line.startswith("LoadCredential=") and line != "LoadCredential=" for line in lines):
+        raise DeployVerifyError("overlay_plain_credential_mapping_present")
+    if lines.count("LoadCredentialEncrypted=") != 1:
+        raise DeployVerifyError("overlay_encrypted_credential_reset_invalid")
+    actual = {
+        line for line in lines
+        if line.startswith("LoadCredentialEncrypted=") and line != "LoadCredentialEncrypted="
+    }
+    if actual != ENCRYPTED_CREDENTIAL_LINES:
+        raise DeployVerifyError("overlay_encrypted_credential_mapping_mismatch")
 
 
 def parse_main_pid(raw: str) -> int:
@@ -255,12 +282,9 @@ def validate_repo_bindings(
         raise DeployVerifyError("must_run_as_checkout_owner")
     if sha256_text(str(root)) != checkout_fingerprint:
         raise DeployVerifyError("checkout_fingerprint_mismatch")
-
     results = (
-        runner(build_git_head_command(root)),
-        runner(build_git_branch_command(root)),
-        runner(build_git_status_command(root)),
-        runner(build_git_tracked_command(root)),
+        runner(build_git_head_command(root)), runner(build_git_branch_command(root)),
+        runner(build_git_status_command(root)), runner(build_git_tracked_command(root)),
     )
     if any(result.returncode != 0 for result in results):
         raise DeployVerifyError("repo_git_check_failed")
@@ -274,17 +298,15 @@ def validate_repo_bindings(
     required = {str(SELF_REL), str(SOURCE_REL), str(DROPIN_REL), str(PREFLIGHT_REL)}
     if parse_tracked_paths(tracked.stdout) != required:
         raise DeployVerifyError("required_paths_not_tracked")
-
     for path, expected_sha in (
-        (root / SELF_REL, verifier_sha),
-        (root / SOURCE_REL, source_sha),
-        (root / DROPIN_REL, dropin_sha),
-        (root / PREFLIGHT_REL, preflight_sha),
+        (root / SELF_REL, verifier_sha), (root / SOURCE_REL, source_sha),
+        (root / DROPIN_REL, dropin_sha), (root / PREFLIGHT_REL, preflight_sha),
     ):
         if not path.is_file() or path.is_symlink():
             raise DeployVerifyError("required_source_file_unsafe")
         if sha256_file(path) != expected_sha:
             raise DeployVerifyError("required_source_hash_mismatch")
+    validate_overlay_contract(root / DROPIN_REL)
 
 
 def collect(
@@ -310,23 +332,17 @@ def collect(
         (expected_user_sha256, "expected_user_sha256_invalid"),
     ):
         require_sha(value, SHA256_RE, code)
-
     root = (repo_root or Path(__file__).resolve().parents[2]).resolve()
     uid = os.geteuid() if effective_uid is None else effective_uid
     validate_repo_bindings(
-        repo_root=root, repo_sha=expected_repo_sha,
-        checkout_fingerprint=expected_checkout_fingerprint,
+        repo_root=root, repo_sha=expected_repo_sha, checkout_fingerprint=expected_checkout_fingerprint,
         verifier_sha=expected_verifier_sha256, source_sha=expected_source_sha256,
         dropin_sha=expected_dropin_sha256, preflight_sha=expected_preflight_sha256,
         runner=runner, effective_uid=uid,
     )
-    validate_public_file(
-        map_absolute(K10_DROPIN_TARGET, root_prefix), expected_k10_dropin_sha256,
-        expected_root_owner_uid,
-    )
+    validate_public_file(map_absolute(K10_DROPIN_TARGET, root_prefix), expected_k10_dropin_sha256, expected_root_owner_uid)
     source_target = map_absolute(SOURCE_TARGET, root_prefix)
     dropin_target = map_absolute(DROPIN_TARGET, root_prefix)
-
     if mode == "check":
         if source_target.exists() or source_target.is_symlink():
             raise DeployVerifyError("deploy_source_target_already_exists")
@@ -340,14 +356,14 @@ def collect(
             fragment_sha=expected_fragment_path_sha256, user_sha=expected_user_sha256,
         )
         return {
-            "schema": "rpi5.balkons_bot_deploy_verifier.v1", "mode": "check",
-            "result": "READY", "preflight": report, "credential_content_read": False,
+            "schema": "rpi5.balkons_bot_deploy_verifier.v1", "mode": "check", "result": "READY",
+            "preflight": report, "credential_content_read": False, "credential_content_hashed": False,
             "mutation_started": False, "writes_performed": False,
         }
-
     if mode == "verify":
         validate_public_file(source_target, expected_source_sha256, expected_root_owner_uid)
         validate_public_file(dropin_target, expected_dropin_sha256, expected_root_owner_uid)
+        validate_overlay_contract(dropin_target)
         report = run_preflight(root, expected_repo_sha, expected_source_sha256, runner)
         validate_preflight_report(
             report, repo_sha=expected_repo_sha, live_sha=expected_source_sha256,
@@ -364,20 +380,18 @@ def collect(
             raise DeployVerifyError("mainpid_changed_during_argv_check")
         validate_process_argv(argv_raw)
         return {
-            "schema": "rpi5.balkons_bot_deploy_verifier.v1", "mode": "verify",
-            "result": "PASS", "preflight": report,
-            "process_argv_shape": "exact_python_and_deployed_source_only",
-            "credential_content_read": False, "mutation_started": False,
-            "writes_performed": False,
+            "schema": "rpi5.balkons_bot_deploy_verifier.v1", "mode": "verify", "result": "PASS",
+            "preflight": report, "process_argv_shape": "exact_python_and_deployed_source_only",
+            "credential_content_read": False, "credential_content_hashed": False,
+            "mutation_started": False, "writes_performed": False,
         }
-
     raise DeployVerifyError("mode_invalid")
 
 
 def blocked_report(code: str, mode: str | None) -> dict[str, object]:
     return {
-        "schema": "rpi5.balkons_bot_deploy_verifier.v1", "mode": mode,
-        "result": "BLOCKED", "blockers": [code], "credential_content_read": False,
+        "schema": "rpi5.balkons_bot_deploy_verifier.v1", "mode": mode, "result": "BLOCKED",
+        "blockers": [code], "credential_content_read": False, "credential_content_hashed": False,
         "mutation_started": False, "writes_performed": False,
     }
 
@@ -405,8 +419,7 @@ def main() -> int:
     mode = "check" if args.check else "verify"
     try:
         report = collect(
-            mode=mode,
-            expected_repo_sha=args.expected_repo_sha,
+            mode=mode, expected_repo_sha=args.expected_repo_sha,
             expected_checkout_fingerprint=args.expected_checkout_fingerprint,
             expected_verifier_sha256=args.expected_verifier_sha256,
             expected_source_sha256=args.expected_source_sha256,

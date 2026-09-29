@@ -3,7 +3,8 @@
 
 No writes and no service lifecycle actions are performed. The artifact reads only
 a strict systemd metadata allowlist, hashes the current live Python source without
-printing it, and probes Paho compatibility through the service interpreter.
+printing it, validates encrypted-credential file metadata without opening credential
+files, and probes Paho compatibility through the service interpreter.
 """
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ import hashlib
 import json
 import re
 import shlex
+import stat
 import subprocess
 from pathlib import Path
 from typing import Callable, Sequence
@@ -22,8 +24,20 @@ CANONICAL_H3_LIVE_SOURCE_SHA256 = (
 )
 SOURCE_REL = Path("ops/lib/balkons-bot.py")
 TEMPLATE_REL = Path("ops/systemd/balkons-bot.service.in")
+DROPIN_REL = Path("ops/systemd/balkons-bot-runtime-override.conf")
 PREFLIGHT_REL = Path("ops/bin/balkons-bot-preflight")
-CRITICAL_RELS = (SOURCE_REL, TEMPLATE_REL, PREFLIGHT_REL)
+CRITICAL_RELS = (SOURCE_REL, TEMPLATE_REL, DROPIN_REL, PREFLIGHT_REL)
+
+ENCRYPTED_CREDENTIAL_MODE = 0o400
+ENCRYPTED_CREDENTIAL_MAX_BYTES = 65536
+ENCRYPTED_CREDENTIAL_SPECS = (
+    ("telegram-token", Path("/etc/credstore.encrypted/balkons-bot-telegram-token")),
+    ("telegram-chat-id", Path("/etc/credstore.encrypted/balkons-bot-telegram-chat-id")),
+    ("mqtt-host", Path("/etc/credstore.encrypted/balkons-bot-mqtt-host")),
+    ("mqtt-username", Path("/etc/credstore.encrypted/balkons-bot-mqtt-username")),
+    ("mqtt-secret", Path("/etc/credstore.encrypted/balkons-bot-mqtt-secret")),
+)
+ENCRYPTED_CREDENTIAL_IDS = tuple(item[0] for item in ENCRYPTED_CREDENTIAL_SPECS)
 
 SHA1_RE = re.compile(r"^[0-9a-f]{40}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -101,25 +115,14 @@ def build_git_head_command(repo_root: Path) -> tuple[str, ...]:
 
 def build_git_status_command(repo_root: Path) -> tuple[str, ...]:
     return (
-        "git",
-        "-C",
-        str(repo_root),
-        "status",
-        "--porcelain=v1",
-        "--untracked-files=no",
-        "--",
+        "git", "-C", str(repo_root), "status", "--porcelain=v1", "--untracked-files=no", "--",
         *(str(path) for path in CRITICAL_RELS),
     )
 
 
 def build_git_tracked_command(repo_root: Path) -> tuple[str, ...]:
     return (
-        "git",
-        "-C",
-        str(repo_root),
-        "ls-files",
-        "--stage",
-        "--",
+        "git", "-C", str(repo_root), "ls-files", "--stage", "--",
         *(str(path) for path in CRITICAL_RELS),
     )
 
@@ -164,12 +167,10 @@ def parse_exec_start(raw: str) -> tuple[Path, Path]:
     path_match = re.search(r"(?:^|[ {;])path=(/[^ ;}]+)", raw)
     argv_match = re.search(
         r"(?:^|[ {;])argv\[\]=(.+?)(?:\s+;\s+"
-        r"(?:ignore_errors|start_time|stop_time|pid|code|status)=|$)",
-        raw,
+        r"(?:ignore_errors|start_time|stop_time|pid|code|status)=|$)", raw,
     )
     if not path_match or not argv_match:
         raise PreflightError("execstart_shape_invalid")
-
     python_executable = Path(path_match.group(1))
     if (
         python_executable.parent not in (Path("/usr/bin"), Path("/usr/local/bin"))
@@ -180,20 +181,13 @@ def parse_exec_start(raw: str) -> tuple[Path, Path]:
         argv = shlex.split(argv_match.group(1), posix=True)
     except ValueError:
         raise PreflightError("execstart_argv_invalid") from None
-
     if not argv or not Path(argv[0]).is_absolute():
         raise PreflightError("execstart_argv_invalid")
     if Path(argv[0]) != python_executable:
         raise PreflightError("execstart_python_mismatch")
-
-    source_candidates = [
-        Path(value)
-        for value in argv[1:]
-        if value.startswith("/") and value.endswith(".py")
-    ]
+    source_candidates = [Path(value) for value in argv[1:] if value.startswith("/") and value.endswith(".py")]
     if len(source_candidates) != 1:
         raise PreflightError("execstart_source_ambiguous")
-
     live_source = source_candidates[0]
     if not live_source.is_absolute():
         raise PreflightError("execstart_source_invalid")
@@ -208,81 +202,101 @@ def probe_paho(python_executable: Path, runner: Runner) -> dict[str, str]:
         payload = json.loads(result.stdout)
     except json.JSONDecodeError:
         raise PreflightError("paho_probe_shape_invalid") from None
-
     version = payload.get("version") if isinstance(payload, dict) else None
     versioned = payload.get("callback_api_versioned") if isinstance(payload, dict) else None
-    if (
-        not isinstance(version, str)
-        or not PAHO_VERSION_RE.fullmatch(version)
-        or not isinstance(versioned, bool)
-    ):
+    if not isinstance(version, str) or not PAHO_VERSION_RE.fullmatch(version) or not isinstance(versioned, bool):
         raise PreflightError("paho_probe_shape_invalid")
-    return {
-        "version": version,
-        "callback_api_class": "versioned" if versioned else "legacy",
+    return {"version": version, "callback_api_class": "versioned" if versioned else "legacy"}
+
+
+def map_absolute(path: Path, root_prefix: Path | None) -> Path:
+    return path if root_prefix is None else root_prefix / path.relative_to("/")
+
+
+def collect_encrypted_credential_metadata(
+    *, root_prefix: Path | None = None, expected_owner_uid: int = 0,
+) -> tuple[dict[str, object], list[str]]:
+    """Validate ciphertext metadata only; credential bytes are never opened or hashed."""
+    blockers: list[str] = []
+    valid_count = 0
+    for credential_id, absolute_path in ENCRYPTED_CREDENTIAL_SPECS:
+        path = map_absolute(absolute_path, root_prefix)
+        try:
+            metadata = path.lstat()
+        except OSError:
+            blockers.append(f"encrypted_credential_{credential_id.replace('-', '_')}_missing")
+            continue
+        regular_one_link = stat.S_ISREG(metadata.st_mode) and metadata.st_nlink == 1
+        owner_matches = metadata.st_uid == expected_owner_uid
+        mode_matches = stat.S_IMODE(metadata.st_mode) == ENCRYPTED_CREDENTIAL_MODE
+        size_bounded = 0 < metadata.st_size <= ENCRYPTED_CREDENTIAL_MAX_BYTES
+        if regular_one_link and owner_matches and mode_matches and size_bounded:
+            valid_count += 1
+            continue
+        blockers.append(f"encrypted_credential_{credential_id.replace('-', '_')}_metadata_invalid")
+    report: dict[str, object] = {
+        "contract": "systemd_load_credential_encrypted_host_bound_v1",
+        "ids": list(ENCRYPTED_CREDENTIAL_IDS),
+        "expected_count": len(ENCRYPTED_CREDENTIAL_SPECS),
+        "metadata_valid_count": valid_count,
+        "all_metadata_valid": valid_count == len(ENCRYPTED_CREDENTIAL_SPECS),
+        "content_read": False,
+        "content_hashed": False,
     }
+    return report, blockers
 
 
 def collect_preflight(
-    expected_repo_sha: str,
-    expected_live_source_sha256: str,
-    *,
-    repo_root: Path | None = None,
-    runner: Runner = run_command,
+    expected_repo_sha: str, expected_live_source_sha256: str, *,
+    repo_root: Path | None = None, runner: Runner = run_command,
+    credential_root_prefix: Path | None = None, expected_credential_owner_uid: int = 0,
 ) -> dict[str, object]:
     if not SHA1_RE.fullmatch(expected_repo_sha):
         raise PreflightError("expected_repo_sha_invalid")
     if not SHA256_RE.fullmatch(expected_live_source_sha256):
         raise PreflightError("expected_live_source_sha256_invalid")
-
     root = (repo_root or Path(__file__).resolve().parents[2]).resolve()
     artifact_path = root / PREFLIGHT_REL
     tracked_source = root / SOURCE_REL
     tracked_template = root / TEMPLATE_REL
-
+    tracked_dropin = root / DROPIN_REL
     for path, code in (
         (artifact_path, "preflight_artifact_missing"),
         (tracked_source, "tracked_source_missing"),
         (tracked_template, "tracked_template_missing"),
+        (tracked_dropin, "tracked_dropin_missing"),
     ):
         if not path.is_file():
             raise PreflightError(code)
-
     head = runner(build_git_head_command(root))
     if head.returncode != 0:
         raise PreflightError("repo_head_unreadable")
     observed_repo_sha = head.stdout.strip()
     if not SHA1_RE.fullmatch(observed_repo_sha):
         raise PreflightError("repo_head_invalid")
-
-    status = runner(build_git_status_command(root))
-    if status.returncode != 0:
+    status_result = runner(build_git_status_command(root))
+    if status_result.returncode != 0:
         raise PreflightError("repo_status_unreadable")
-    critical_worktree_clean = status.stdout.strip() == ""
-
+    critical_worktree_clean = status_result.stdout.strip() == ""
     tracked = runner(build_git_tracked_command(root))
     if tracked.returncode != 0:
         raise PreflightError("repo_tracked_unreadable")
-    critical_paths_tracked = parse_tracked_paths(tracked.stdout) == {
-        str(path) for path in CRITICAL_RELS
-    }
-
+    critical_paths_tracked = parse_tracked_paths(tracked.stdout) == {str(path) for path in CRITICAL_RELS}
     systemd = runner(build_systemctl_command())
     if systemd.returncode != 0:
         raise PreflightError("systemd_show_failed")
     properties = parse_properties(systemd.stdout)
-
     python_executable, live_source = parse_exec_start(properties["ExecStart"])
     if not live_source.is_file():
         raise PreflightError("live_source_missing")
-
     live_source_sha256 = sha256_file(live_source)
     paho = probe_paho(python_executable, runner)
-
+    encrypted_credentials, credential_blockers = collect_encrypted_credential_metadata(
+        root_prefix=credential_root_prefix, expected_owner_uid=expected_credential_owner_uid,
+    )
     user = properties["User"]
     fragment_path = properties["FragmentPath"]
-    blockers: list[str] = []
-
+    blockers: list[str] = list(credential_blockers)
     if observed_repo_sha != expected_repo_sha:
         blockers.append("repo_head_mismatch")
     if not critical_worktree_clean:
@@ -301,7 +315,6 @@ def collect_preflight(
         blockers.append("send_sigkill_not_disabled")
     if live_source_sha256 != expected_live_source_sha256:
         blockers.append("live_source_provenance_mismatch")
-
     report: dict[str, object] = {
         "schema": "rpi5.balkons_bot_preflight.v1",
         "scope": "READ_ONLY",
@@ -311,28 +324,21 @@ def collect_preflight(
         "preflight_artifact_sha256": sha256_file(artifact_path),
         "tracked_source_sha256": sha256_file(tracked_source),
         "tracked_template_sha256": sha256_file(tracked_template),
+        "tracked_dropin_sha256": sha256_file(tracked_dropin),
         "live_source_sha256": live_source_sha256,
-        "live_source_provenance_match": (
-            live_source_sha256 == expected_live_source_sha256
-        ),
+        "live_source_provenance_match": live_source_sha256 == expected_live_source_sha256,
         "critical_worktree_clean": critical_worktree_clean,
         "critical_paths_tracked": critical_paths_tracked,
         "service_metadata": {
-            "load_state": properties["LoadState"],
-            "active_state": properties["ActiveState"],
-            "sub_state": properties["SubState"],
-            "user_sha256": sha256_text(user) if user else None,
-            "user_is_root": user == "root",
-            "python_executable_path_sha256": sha256_text(str(python_executable)),
+            "load_state": properties["LoadState"], "active_state": properties["ActiveState"],
+            "sub_state": properties["SubState"], "user_sha256": sha256_text(user) if user else None,
+            "user_is_root": user == "root", "python_executable_path_sha256": sha256_text(str(python_executable)),
             "live_source_path_sha256": sha256_text(str(live_source)),
-            "fragment_path_sha256": (
-                sha256_text(fragment_path) if fragment_path.startswith("/") else None
-            ),
-            "restart": properties["Restart"],
-            "restart_usec": properties["RestartUSec"],
-            "timeout_stop_usec": properties["TimeoutStopUSec"],
-            "send_sigkill": properties["SendSIGKILL"],
+            "fragment_path_sha256": sha256_text(fragment_path) if fragment_path.startswith("/") else None,
+            "restart": properties["Restart"], "restart_usec": properties["RestartUSec"],
+            "timeout_stop_usec": properties["TimeoutStopUSec"], "send_sigkill": properties["SendSIGKILL"],
         },
+        "encrypted_credentials": encrypted_credentials,
         "paho": paho,
         "blockers": sorted(blockers),
         "preflight": "PASS" if not blockers else "BLOCKED",
@@ -344,40 +350,26 @@ def collect_preflight(
 
 def blocked_report(code: str) -> dict[str, object]:
     return {
-        "schema": "rpi5.balkons_bot_preflight.v1",
-        "scope": "READ_ONLY",
-        "service": SERVICE,
-        "blockers": [code],
-        "preflight": "BLOCKED",
-        "mutation_started": False,
-        "writes_performed": False,
+        "schema": "rpi5.balkons_bot_preflight.v1", "scope": "READ_ONLY", "service": SERVICE,
+        "blockers": [code], "preflight": "BLOCKED", "mutation_started": False, "writes_performed": False,
     }
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Sanitized read-only balkons-bot production preflight"
-    )
+    parser = argparse.ArgumentParser(description="Sanitized read-only balkons-bot production preflight")
     parser.add_argument("--expected-repo-sha", required=True)
-    parser.add_argument(
-        "--expected-live-source-sha256",
-        default=CANONICAL_H3_LIVE_SOURCE_SHA256,
-    )
+    parser.add_argument("--expected-live-source-sha256", default=CANONICAL_H3_LIVE_SOURCE_SHA256)
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     try:
-        report = collect_preflight(
-            args.expected_repo_sha,
-            args.expected_live_source_sha256,
-        )
+        report = collect_preflight(args.expected_repo_sha, args.expected_live_source_sha256)
     except PreflightError as exc:
         report = blocked_report(exc.code)
     except Exception:
         report = blocked_report("internal_error")
-
     print(json.dumps(report, sort_keys=True, separators=(",", ":")))
     return 0 if report["preflight"] == "PASS" else 2
 

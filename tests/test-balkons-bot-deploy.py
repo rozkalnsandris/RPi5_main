@@ -93,6 +93,15 @@ class FakeRunner:
                     "timeout_stop_usec": verifier.BASELINE_TIMEOUT_STOP_USEC,
                     "send_sigkill": "no",
                 },
+                "encrypted_credentials": {
+                    "contract": "systemd_load_credential_encrypted_host_bound_v1",
+                    "ids": list(verifier.ENCRYPTED_CREDENTIAL_IDS),
+                    "expected_count": len(verifier.ENCRYPTED_CREDENTIAL_IDS),
+                    "metadata_valid_count": len(verifier.ENCRYPTED_CREDENTIAL_IDS),
+                    "all_metadata_valid": True,
+                    "content_read": False,
+                    "content_hashed": False,
+                },
                 "paho": {"version": "1.6.1", "callback_api_class": "legacy"},
                 "blockers": [],
                 "preflight": "PASS",
@@ -157,6 +166,7 @@ class BalkonsBotDeployVerifierTests(unittest.TestCase):
         report = verifier.collect(mode="check", **kwargs)
         self.assertEqual(report["result"], "READY")
         self.assertFalse(report["credential_content_read"])
+        self.assertFalse(report["credential_content_hashed"])
         self.assertFalse(report["mutation_started"])
         self.assertFalse(report["writes_performed"])
 
@@ -209,6 +219,22 @@ class BalkonsBotDeployVerifierTests(unittest.TestCase):
             verifier.collect(mode="check", **kwargs)
         self.assertEqual(caught.exception.code, "preflight_metadata_restart_mismatch")
 
+    def test_preflight_rejects_missing_encrypted_credential_contract(self):
+        report = {
+            "encrypted_credentials": {
+                "contract": "systemd_load_credential_encrypted_host_bound_v1",
+                "ids": list(verifier.ENCRYPTED_CREDENTIAL_IDS),
+                "expected_count": 5,
+                "metadata_valid_count": 4,
+                "all_metadata_valid": False,
+                "content_read": False,
+                "content_hashed": False,
+            }
+        }
+        with self.assertRaises(verifier.DeployVerifyError) as caught:
+            verifier.validate_encrypted_credential_report(report)
+        self.assertEqual(caught.exception.code, "preflight_encrypted_credentials_metadata_invalid")
+
     def test_interpreter_preflight_and_subprocess_environment_are_isolated(self):
         text = MODULE_PATH.read_text(encoding="utf-8")
         self.assertEqual(text.splitlines()[0], "#!/usr/bin/python3 -I")
@@ -230,34 +256,32 @@ class BalkonsBotDeployVerifierTests(unittest.TestCase):
         for token in (
             "sudo", "daemon-reload", "systemctl restart", "systemctl stop", "systemctl start",
             "systemctl kill", "journalctl", "docker inspect", "/proc/*/environ",
-            "CREDENTIALS_DIRECTORY", "/etc/credstore", "write_text(", "write_bytes(",
-            ".unlink(", "os.remove(", "os.chmod(", "os.chown(",
+            "CREDENTIALS_DIRECTORY", "/etc/credstore/", "systemd-creds decrypt",
+            "write_text(", "write_bytes(", ".unlink(", "os.remove(", "os.chmod(", "os.chown(",
         ):
             self.assertNotIn(token, text)
         self.assertIn("/proc/{pid}/cmdline", text)
+        self.assertIn("/etc/credstore.encrypted/", text)
         self.assertEqual(verifier.GIT, "/usr/bin/git")
         self.assertEqual(verifier.SYSTEMCTL, "/usr/bin/systemctl")
 
-    def test_runtime_overlay_is_exact_scoped_contract(self):
+    def test_runtime_overlay_is_exact_encrypted_credential_contract(self):
         text = OVERLAY_PATH.read_text(encoding="utf-8")
         lines = text.splitlines()
         for reset in (
             "ExecStartPre=", "ExecStart=", "ExecStartPost=", "ExecReload=", "ExecStop=",
-            "ExecStopPost=", "LoadCredential=", "Environment=", "EnvironmentFile=", "PassEnvironment=",
+            "ExecStopPost=", "LoadCredential=", "LoadCredentialEncrypted=",
+            "Environment=", "EnvironmentFile=", "PassEnvironment=",
         ):
             self.assertEqual(lines.count(reset), 1)
         self.assertIn("ExecStart=/usr/bin/python3 /usr/local/lib/rpi5-balkons-bot.py", lines)
-        expected_credentials = {
-            "LoadCredential=telegram-token:/etc/credstore/balkons-bot-telegram-token",
-            "LoadCredential=telegram-chat-id:/etc/credstore/balkons-bot-telegram-chat-id",
-            "LoadCredential=mqtt-host:/etc/credstore/balkons-bot-mqtt-host",
-            "LoadCredential=mqtt-username:/etc/credstore/balkons-bot-mqtt-username",
-            "LoadCredential=mqtt-secret:/etc/credstore/balkons-bot-mqtt-secret",
+        plain = {line for line in lines if line.startswith("LoadCredential=") and line != "LoadCredential="}
+        self.assertEqual(plain, set())
+        encrypted = {
+            line for line in lines
+            if line.startswith("LoadCredentialEncrypted=") and line != "LoadCredentialEncrypted="
         }
-        self.assertEqual(
-            {line for line in lines if line.startswith("LoadCredential=") and line != "LoadCredential="},
-            expected_credentials,
-        )
+        self.assertEqual(encrypted, verifier.ENCRYPTED_CREDENTIAL_LINES)
         self.assertIn("Environment=PYTHONDONTWRITEBYTECODE=1", lines)
         unset_lines = [line for line in lines if line.startswith("UnsetEnvironment=")]
         self.assertEqual(len(unset_lines), 1)
