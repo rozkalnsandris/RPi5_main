@@ -2,111 +2,110 @@
 
 This is the canonical host-side visual verification path for RPi5-hosted web UIs.
 
-## Default rule
+## Canonical entrypoint
 
-When pixel-level visual inspection of an RPi5-hosted web UI is needed, use Playwright with the system Chromium. Do not use raw `chromium --screenshot` as the normal verification path; on this host it produced D-Bus/GCM lifecycle noise and could hang after rendering.
+Pixel-level visual inspection uses Playwright with the system Chromium. Raw `chromium --screenshot` is not a supported normal path because it previously produced lifecycle noise and could hang after rendering.
 
-The renderer remains `ui-proof`, but issue #775 adds a tracked fail-closed lifecycle guard around browser-backed commands:
-
-- source CLI: `ops/bin/rpi5-browser-lifecycle`;
-- source library: `ops/lib/browser_lifecycle.py`;
-- default state root after installation: `~/.local/state/rpi5-browser-lifecycle`;
-- default resource preflight: at least 512 MiB `MemAvailable` and no more than 85% swap used.
-
-**Source/runtime boundary:** merging the guard source does not install it and does not silently replace the currently installed `~/.local/bin/ui-proof`. Host installation/activation is a separate LIVE operation. Until that later activation is explicitly authorized and verified, do not claim that production `ui-proof` is protected by the new guard.
-
-After an authorized activation, the intended canonical invocation shape is:
+The renderer remains `ui-proof`, but the canonical operator entrypoint is the guarded launcher:
 
 ```bash
-/usr/bin/python3 -I ~/.local/bin/rpi5-browser-lifecycle \
-  run --label ui-proof --timeout-seconds 180 -- \
-  ~/.local/bin/ui-proof <URL> [label] [output-dir]
+~/.local/bin/ui-proof-guarded <URL> [label] [output-dir]
 ```
 
-Never put a URL, cookie, token, account identifier or other private value in `--label`; use a fixed public-safe label such as `ui-proof`.
+The launcher source is `ops/bin/ui-proof-guarded`. It uses fixed installed paths for both trusted components:
 
-Running either `ui-proof` or the lifecycle guard is host/runtime execution and requires current applicable LIVE authority under `AGENTS.md`. This document grants no runtime, cleanup, retry, rollback or deploy authority.
+- lifecycle guard: `/home/andris/.local/bin/rpi5-browser-lifecycle`;
+- renderer: `/home/andris/.local/bin/ui-proof`.
+
+It never resolves either trusted executable through `PATH` and never copies the URL or renderer label into lifecycle ownership metadata. The lifecycle label is always the public-safe fixed value `ui-proof`.
+
+Direct `~/.local/bin/ui-proof` is non-canonical after guarded-launcher activation. Automation must not bypass a missing or unhealthy guarded launcher by falling back to direct `ui-proof` or raw Chromium.
+
+Running any visual-verification browser path is host/runtime execution and requires current applicable LIVE authority under `AGENTS.md`.
+
+## Source/runtime boundary
+
+Issue #775 / PR #776 added the tracked fail-closed browser lifecycle guard. Issue #778 adds the source-owned guarded `ui-proof` entrypoint and routes repository automation to it.
+
+A source merge does **not** install or replace `/home/andris/.local/bin/ui-proof-guarded`, `rpi5-browser-lifecycle`, or `ui-proof` on the host. Installing or updating the host launcher remains a separate exact LIVE operation. Until that activation is explicitly authorized and verified, a missing guarded launcher is a STOP condition rather than permission to use the renderer directly.
+
+## Guarded launch sequence
+
+For every canonical render the launcher performs exactly this high-level sequence:
+
+1. Verify the fixed lifecycle guard and renderer paths are real, current-user-owned regular files, are not symlinks, are not group/world writable, and are owner-executable.
+2. Run read-only lifecycle `health` and require exit code `0`.
+3. Run the renderer only through:
+
+   ```bash
+   /usr/bin/python3 -I /home/andris/.local/bin/rpi5-browser-lifecycle \
+     run --label ui-proof --timeout-seconds 180 -- \
+     /home/andris/.local/bin/ui-proof <URL> [label] [output-dir]
+   ```
+
+4. Run lifecycle `health` again after the guarded renderer exits.
+5. Preserve a non-zero renderer/guarded-run exit code, including timeout `124`.
+6. If the renderer succeeds but post-run health fails, report failure rather than claiming visual verification success.
+
+The launcher never invokes `cleanup-stale`. Stale-session recovery is a separate mutation class and requires a separate current owner authorization.
 
 ## Browser lifecycle ownership
 
-The lifecycle guard is deliberately ownership-based rather than name-based.
-
-For each guarded invocation it:
+The lifecycle guard is ownership-based rather than process-name-based. For each guarded invocation it:
 
 1. enables Linux child-subreaper behavior for the wrapper process;
 2. starts the renderer in a fresh session/process group;
 3. records only public-safe ownership metadata: opaque run ID, fixed label, wrapper PID/start-time, leader PID/start-time, timeout and exact observed member PID/start-time identities;
-4. periodically refreshes exact child/session ownership while the run is alive;
-5. on normal exit, timeout, SIGINT or SIGTERM, sends signals only to processes whose current `/proc/<pid>/stat` identity still matches the recorded ownership evidence;
+4. refreshes exact child/session ownership while the run is alive;
+5. on normal exit, timeout, SIGINT or SIGTERM, signals only processes whose current `/proc/<pid>/stat` identity still matches recorded ownership evidence;
 6. removes the run-state record only after no owned process remains.
 
-It never uses `pkill chromium`, `killall`, process-name-only cleanup or caller-selected PID lists. A PID/start-time mismatch, unsafe state-file metadata, ambiguous process-group reuse or another ownership conflict fails closed instead of killing a process.
+It never uses process-name-only cleanup, caller-selected PIDs or broad Chromium cleanup. PID/start-time mismatch, unsafe state metadata, ambiguous process-group reuse or another ownership conflict fails closed.
 
-The guard does **not** read process environments, command lines, browser profiles, cookies, browser storage or page/session data. Browser-like unrelated processes are counted using kernel `comm` metadata only and are never treated as owned merely because their name looks like Chromium.
+The lifecycle guard does not read process environments, command lines, browser profiles, cookies, browser storage or page/session data. Unrelated browser-like processes are counted only through kernel `comm` metadata and are never treated as owned because of their name.
 
-## Read-only health/preflight
+## Read-only lifecycle health
 
-After installation, the public-safe read-only preflight is:
+The underlying public-safe health command is:
 
 ```bash
-/usr/bin/python3 -I ~/.local/bin/rpi5-browser-lifecycle health
+/usr/bin/python3 -I /home/andris/.local/bin/rpi5-browser-lifecycle health
 ```
 
-The JSON report contains only bounded metadata such as:
+The JSON report is limited to bounded lifecycle/resource metadata, including:
 
-- active owned session count;
-- stale owned session count;
-- ambiguous owned-state count;
+- active/stale/ambiguous owned-session counts;
 - unrelated browser-process count;
 - `MemAvailable` in MiB;
 - swap-used percentage;
 - blocker codes.
 
-`PASS` means there is no stale/ambiguous owned record and the configured memory/swap thresholds are satisfied. Unrelated browser processes are reported but are not automatically killed and do not by themselves establish ownership.
+Default resource thresholds are at least 512 MiB `MemAvailable` and no more than 85% swap used.
 
-`BLOCKED` is expected for any of these conditions:
+`PASS` means there is no stale/ambiguous owned record and the resource thresholds pass. Unrelated browser processes alone do not establish ownership and are not automatically killed.
 
-- stale owned session;
-- malformed or metadata-unsafe state record;
-- duplicate ownership identity;
-- PID/process-group/session reuse ambiguity;
-- an unproven process in a numerically matching old group/session;
-- available memory below the configured floor;
-- swap usage above the configured ceiling.
+`BLOCKED` includes stale owned state, unsafe/malformed state records, duplicate ownership identity, PID/group/session ambiguity, low available memory or excessive swap use. Do not lower thresholds or delete state to bypass a blocker.
 
-Do not bypass a blocker by lowering thresholds or deleting state unless the current owner authorization explicitly covers the intended recovery.
+## Separately authorized stale recovery
 
-## Stale-session recovery
-
-The tracked recovery command is:
+The tracked recovery command remains:
 
 ```bash
-/usr/bin/python3 -I ~/.local/bin/rpi5-browser-lifecycle \
+/usr/bin/python3 -I /home/andris/.local/bin/rpi5-browser-lifecycle \
   cleanup-stale --min-age-seconds 300
 ```
 
-This is **not** a standing cleanup permission. It mutates host process/state and therefore requires a current exact LIVE authorization before use.
-
-Recovery is idempotent and may act only when:
-
-- the recorded wrapper PID/start-time is no longer alive;
-- the record is at least the requested age;
-- current process identities still match exact recorded ownership, or continuity of the original owned session/process group is mechanically proven;
-- no PID reuse, duplicate ownership or unproven group member makes ownership ambiguous.
-
-If ownership is ambiguous, the command stops without signalling that process tree. It never falls back to broad process-name matching.
+This command mutates process/state and is **not** part of normal visual verification. It requires current exact LIVE authorization. Recovery may act only on exact recorded ownership with the wrapper gone and the configured minimum age reached; ambiguity stops without signalling the tree.
 
 ## Standard viewports
 
 - Desktop: `1440x900`
-- Mobile reference device: Samsung Galaxy A55 / `SM-A556B`
+- Mobile reference: Samsung Galaxy A55 / `SM-A556B`
 - Galaxy A55 browser viewport: `412x892`
 
-The Galaxy A55 user agent is emitted by the renderer for the mobile capture.
+## Required renderer evidence
 
-## Required evidence
-
-A successful `ui-proof` render should produce an evidence directory containing:
+A successful render should produce:
 
 - `desktop-1440x900.png`
 - `mobile-galaxy-a55-412x892.png`
@@ -115,74 +114,41 @@ A successful `ui-proof` render should produce an evidence directory containing:
 - `pageerrors.log`
 - `manifest.txt`
 
-`manifest.txt` records the target URL, capture time, desktop/mobile HTTP status, Chromium version, engine, mobile model/viewport, console/page-error counts, and SHA-256 hashes for the core evidence files.
+`manifest.txt` records target/capture metadata, desktop/mobile HTTP status, Chromium version, engine, mobile model/viewport, console/page-error counts and SHA-256 hashes for the core evidence files. Lifecycle state deliberately does not duplicate page/session evidence.
 
-The browser lifecycle state deliberately does **not** duplicate those page/evidence details. Its state is limited to process ownership metadata required for safe cleanup.
-
-## Inspection bridge
-
-After capture, use RDC only for the host-local evidence step: open the generated PNG files with RDC image reading and visually inspect the rendered pixels. GitHub remains the canonical source for repository state, code, issues, PRs, CI, and durable documentation.
-
-After the lifecycle guard is separately activated, the expected flow is:
-
-1. Run `rpi5-browser-lifecycle health` and require `PASS`.
-2. Run `ui-proof` through `rpi5-browser-lifecycle run`, not directly.
-3. Require guarded process exit code `0` and review `manifest.txt`.
-4. Review `console.log` and `pageerrors.log` separately; a browser console resource error is not automatically a JavaScript `pageerror`.
-5. Open both desktop and Galaxy A55 PNG evidence with RDC and perform visual PASS/FAIL inspection.
-6. Run lifecycle `health` again and require no stale/ambiguous owned session.
-7. Preserve the evidence path in the work report when it matters to the deployment or acceptance decision.
-
-A timeout returns exit code `124` only after the guard has attempted exact-owned cleanup. Signal-driven interruption returns the conventional `128 + signal` code after the same cleanup path. Ownership ambiguity is a fail-closed blocker rather than permission to kill more broadly.
+After capture, RDC is used only for the host-local evidence step: open the generated PNG files and visually inspect rendered pixels. GitHub remains canonical for source, issues, PRs, CI and durable documentation.
 
 ## Source verification
 
-`tests/test-browser-lifecycle.py` is wired into `make test` through `tests/test-shell-syntax.sh`. It deterministically covers:
+`tests/test-browser-lifecycle.py` proves the underlying ownership guard. `tests/test-ui-proof-guarded.py` proves the canonical launcher contract, including:
 
-- a successful parent that leaves a descendant behind;
-- timeout cleanup;
-- crash/SIGKILL followed by exact stale recovery;
-- idempotent repeated stale cleanup;
-- preservation and reporting of an unrelated process named `chromium`;
-- PID reuse ambiguity;
-- repeated guarded runs without state/process accumulation;
-- absence of broad `pkill`/`killall` cleanup in the tracked implementation.
+- missing guard fails before renderer execution;
+- blocked pre-health prevents renderer start;
+- exact guarded invocation uses fixed label and timeout;
+- renderer URL/label/output arguments stay after the renderer boundary and never enter lifecycle label/state;
+- timeout/non-zero renderer exits remain non-success;
+- failed post-health converts apparent renderer success to failure;
+- the launcher contains no broad process cleanup or stale-cleanup fallback;
+- routing points to `~/.local/bin/ui-proof-guarded`;
+- repeated synthetic launcher runs do not create launcher-owned state.
 
-These tests prove source semantics only. They do not prove that the production host has installed or adopted the guard.
+Both test suites are wired into normal repository validation through `tests/test-shell-syntax.sh`.
 
-## Verified renderer baseline
-
-Verified on 2026-09-23 against the weather UI at `http://127.0.0.1:9180`:
-
-- engine: `playwright-system-chromium`
-- system Chromium: `153.0.8010.47`
-- desktop HTTP status: `200`
-- Galaxy A55 HTTP status: `200`
-- Playwright process exit: `0`
-- page errors: `0`
-- desktop and Galaxy A55 screenshots: successfully generated and visually readable through RDC
-
-The verification evidence was created under:
-
-```text
-~/.local/share/ui-proof/weather-20260923-playwright-verify/
-```
-
-That run contained one desktop browser-console `404` resource message whose exact resource was not identified. It did not produce a `pageerror` and did not prevent either render. Treat future console/resource errors as target-specific evidence to inspect, not as permission to ignore them.
+These tests prove source semantics only. They do not prove host installation or authorize runtime browser execution.
 
 ## STOP conditions
 
 Stop rather than improvise when:
 
-- lifecycle `health` is `BLOCKED` and the blocker cannot be resolved without a new mutation class;
-- stale cleanup reports PID/group/session ambiguity;
-- a state path is a symlink, has the wrong owner or has group/world access;
-- the guarded renderer cannot enter a dedicated session/process group;
-- owned cleanup still has remaining processes after bounded TERM/KILL handling;
-- resolving the incident would require a Hermes/`agent-browser` package upgrade, scheduler change, service restart, secret/profile/session inspection or a generic process killer.
+- the canonical guarded launcher is missing on the host;
+- lifecycle `health` is `BLOCKED`;
+- guard/renderer path metadata is not trusted;
+- stale recovery reports PID/group/session ambiguity;
+- owned cleanup still has remaining processes after bounded lifecycle handling;
+- resolving the incident would require a package upgrade, scheduler/service change, secret/profile/session inspection, or generic process killer.
 
-Those are separate scope/risk decisions and are not authorized by the #775 source outcome.
+Those are separate scope/risk decisions.
 
 ## Durable operator reminder
 
-When an owner asks to **see**, **visually verify**, **compare the rendered UI**, or asks whether a deployed page **looks correct**, use the Playwright `ui-proof` path. Once the lifecycle guard has been separately activated, run it through the guard by default. Do not fall back to the Lenovo/Opera workflow unless the task specifically depends on the user's desktop session, extensions, local authentication, or another client-only condition.
+When the owner asks to **see**, **visually verify**, **compare the rendered UI**, or asks whether a deployed page **looks correct**, use `ui-proof-guarded`. Do not fall back to direct `ui-proof`, raw Chromium, or the Lenovo/Opera workflow unless the task specifically depends on the user's desktop session, extensions, local authentication or another client-only condition.
