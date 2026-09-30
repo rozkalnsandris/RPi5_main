@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from importlib.machinery import SourceFileLoader
 from pathlib import Path
 from unittest import mock
 
@@ -15,7 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = ROOT / "ops" / "bin" / "ui-proof-guarded"
 ROUTING = ROOT / ".github" / "start-mode-routing.json"
 
-spec = importlib.util.spec_from_file_location("ui_proof_guarded", LAUNCHER)
+loader = SourceFileLoader("ui_proof_guarded", str(LAUNCHER))
+spec = importlib.util.spec_from_loader(loader.name, loader)
 assert spec and spec.loader
 launcher = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = launcher
