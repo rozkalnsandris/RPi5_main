@@ -687,6 +687,89 @@
         "READY queue contract hash",
         "separate owner LIVE-AUTH for any future exact normalized execution envelope"
       ]
+    },
+    {
+      "operation_id": "rpi5-main.hermes-tech-simple-deploy-cutover.v1",
+      "source_repository": "rozkalnsandris/RPi5_main",
+      "queue_match": {
+        "target_alias": "hermes-tech-public-rpi5",
+        "execution_location_class": "trusted-home-host",
+        "repository_entrypoint": "ops/deploy/hermes-tech-simple-deploy-cutover-v1.json",
+        "deploy_class": "STRICT_LIVE_AUTH_REQUIRED"
+      },
+      "target_alias": "hermes-tech-public-rpi5",
+      "adapter_id": "rpi5-main.hermes-tech-simple-deploy-cutover.v1",
+      "authorization_class": "STRICT",
+      "ordinary_live_all_eligible": false,
+      "baseline": {
+        "kind": "resolver",
+        "resolver_id": "rpi5-main.hermes-tech-simple-deploy-cutover-baseline.v1"
+      },
+      "mutation_budget": [
+        {
+          "category": "systemd.hermes-tech-legacy-runtime-retirement",
+          "max_operations": 1
+        },
+        {
+          "category": "filesystem.hermes-tech-simple-deploy-materialization",
+          "max_operations": 1
+        },
+        {
+          "category": "docker.hermes-tech-simple-deploy-application-apply",
+          "max_operations": 1
+        }
+      ],
+      "rollback_policy": "NONE",
+      "exclusions": [
+        "generic sudo/root shell or arbitrary command execution",
+        "caller-selected command/path/argv/environment authority",
+        "unrelated service, timer, Docker, filesystem or host mutation",
+        "database schema or data mutation",
+        "credentials, secrets, permissions or protected configuration access",
+        "network, firewall, DNS or Cloudflare mutation",
+        "package, user, group, runner or repository-settings mutation",
+        "automatic retry, cleanup, rollback or alternate mutation path"
+      ],
+      "dependencies": [
+        "cutover-contract:ops/deploy/hermes-tech-simple-deploy-cutover-v1.json",
+        "simple-deploy-target-registry:ops/deploy/simple-deploy-targets-v1.json",
+        "simple-deploy-compose:ops/deploy/simple-deploy-compose/hermes-tech-public.yml",
+        "simple-deploy-compose-sha256:fd1ca0d00c79bfb5e5cd1be589ae13b378c5c223be0b61d3f14f31da687fe6b9",
+        "legacy-web-unit:hermes-tech-web.service",
+        "legacy-pull-timer-unit:hermes-tech-pull-deploy.timer",
+        "legacy-pull-service-unit:hermes-tech-pull-deploy.service",
+        "loopback-bind:127.0.0.1:8089",
+        "liveness:/health",
+        "readiness:/ready",
+        "global-execution:disabled"
+      ],
+      "preflight": [
+        "READY and separate owner LIVE-AUTH bind this exact STRICT target before any host mutation",
+        "authorized RPi5_main SHA is current/reachable and exact-SHA required CI is successful",
+        "cutover contract, SIMPLE-DEPLOY target registry and Hermes Tech Compose source match reviewed identities",
+        "legacy hermes-tech-web.service is loaded and active and owns 127.0.0.1:8089 before mutation",
+        "legacy hermes-tech-pull-deploy.timer is loaded and active before mutation",
+        "legacy hermes-tech-pull-deploy.service is loaded and neither activating, deactivating nor failed",
+        "Hermes Tech SIMPLE-DEPLOY destination Compose and receipt are absent before first cutover",
+        "exact immutable Hermes Tech image digest is frozen before apply",
+        "operation and global executor registry remain execution-disabled until separately authorized host/live activation"
+      ],
+      "postconditions": [
+        "legacy Hermes Tech pull timer/service and web runtime are retired according to the reviewed one-time contract",
+        "Hermes Tech SIMPLE-DEPLOY Compose is materialized from the exact reviewed source identity",
+        "127.0.0.1:8089 ownership transfers from hermes-tech-web.service through an observed unbound state to hermes-tech-public/hermes-tech",
+        "GET /health and GET /ready on 127.0.0.1:8089 return HTTP 200",
+        "SIMPLE-DEPLOY receipt exists for hermes-tech-public-rpi5 and binds the exact deployed image digest",
+        "no database, secret, network, unrelated host or repository-settings mutation occurs",
+        "post-mutation failure has no automatic retry, cleanup, rollback or alternate mutation path"
+      ],
+      "required_github_evidence": [
+        "exact RPi5_main source SHA and successful exact-SHA CI",
+        "reviewed Hermes Tech cutover contract identity",
+        "reviewed SIMPLE-DEPLOY target registry and Compose source identities",
+        "READY queue envelope for hermes-tech-public-rpi5",
+        "separate owner LIVE-AUTH for the exact one-time Hermes Tech cutover"
+      ]
     }
   ]
 }
