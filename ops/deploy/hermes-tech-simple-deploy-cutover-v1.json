@@ -1,0 +1,131 @@
+{
+  "schema": "rozkalns.rpi5-main.hermes-tech-simple-deploy-cutover.v1",
+  "schema_version": 1,
+  "operation_id": "rpi5-main.hermes-tech-simple-deploy-cutover.v1",
+  "execution_enabled": false,
+  "target_alias": "hermes-tech-public-rpi5",
+  "authorization_class": "STRICT",
+  "one_time": true,
+  "source_contract": {
+    "target_registry_path": "ops/deploy/simple-deploy-targets-v1.json",
+    "target_alias": "hermes-tech-public-rpi5",
+    "compose_source_path": "ops/deploy/simple-deploy-compose/hermes-tech-public.yml",
+    "compose_source_sha256": "fd1ca0d00c79bfb5e5cd1be589ae13b378c5c223be0b61d3f14f31da687fe6b9",
+    "compose_project": "hermes-tech-public",
+    "compose_service": "hermes-tech",
+    "image": "ghcr.io/rozkalnsandris/hermes-tech",
+    "exact_digest_required": true,
+    "mutable_tag_is_authority": false
+  },
+  "legacy_runtime": {
+    "web_unit": {
+      "name": "hermes-tech-web.service",
+      "required_load_state": "loaded",
+      "required_initial_active_state": "active",
+      "retirement": [
+        "stop",
+        "disable"
+      ]
+    },
+    "pull_timer_unit": {
+      "name": "hermes-tech-pull-deploy.timer",
+      "required_load_state": "loaded",
+      "required_initial_active_state": "active",
+      "retirement": [
+        "stop",
+        "disable"
+      ]
+    },
+    "pull_service_unit": {
+      "name": "hermes-tech-pull-deploy.service",
+      "required_load_state": "loaded",
+      "allowed_initial_active_states": [
+        "active",
+        "inactive"
+      ],
+      "retirement": [
+        "stop-if-active",
+        "disable-if-enabled"
+      ],
+      "forbidden_initial_active_states": [
+        "activating",
+        "deactivating",
+        "failed"
+      ]
+    }
+  },
+  "target_materialization": {
+    "source_path": "ops/deploy/simple-deploy-compose/hermes-tech-public.yml",
+    "source_sha256": "fd1ca0d00c79bfb5e5cd1be589ae13b378c5c223be0b61d3f14f31da687fe6b9",
+    "destination_path": "/etc/rozkalns-simple-deployer/compose/hermes-tech-public.yml",
+    "required_initial_destination_state": "absent",
+    "materialization": "atomic-exact-source-copy",
+    "required_owner": "root",
+    "required_group": "root",
+    "required_mode": "0644"
+  },
+  "port_ownership_transition": {
+    "bind": "127.0.0.1:8089",
+    "required_before_owner": "hermes-tech-web.service",
+    "required_between_state": "unbound",
+    "required_after_owner": "compose:hermes-tech-public/hermes-tech",
+    "parallel_bind_forbidden": true
+  },
+  "generic_simple_deploy_apply": {
+    "required": true,
+    "target_alias": "hermes-tech-public-rpi5",
+    "exact_image_digest_required": true,
+    "caller_selected_command_forbidden": true,
+    "caller_selected_path_forbidden": true,
+    "caller_selected_environment_forbidden": true
+  },
+  "verification": {
+    "liveness_url": "http://127.0.0.1:8089/health",
+    "readiness_url": "http://127.0.0.1:8089/ready",
+    "required_http_status": 200,
+    "receipt_path": "/var/lib/rozkalns-simple-deployer/receipts/hermes-tech-public-rpi5.json",
+    "receipt_required_on_success": true
+  },
+  "ordered_steps": [
+    "revalidate-exact-owner-live-authority-and-ready-envelope",
+    "revalidate-exact-source-contract-and-compose-sha256",
+    "revalidate-legacy-unit-identities-and-initial-states",
+    "revalidate-127.0.0.1:8089-is-owned-by-hermes-tech-web.service",
+    "revalidate-compose-destination-is-absent",
+    "stop-and-disable-hermes-tech-pull-deploy.timer",
+    "stop-hermes-tech-pull-deploy.service-if-active-and-disable-if-enabled",
+    "stop-and-disable-hermes-tech-web.service",
+    "verify-127.0.0.1:8089-is-unbound",
+    "materialize-exact-hermes-tech-public-compose",
+    "apply-hermes-tech-public-rpi5-through-reviewed-generic-simple-deploy-with-exact-image-digest",
+    "verify-127.0.0.1:8089-is-owned-by-hermes-tech-public-compose",
+    "verify-health-200",
+    "verify-ready-200",
+    "verify-simple-deploy-receipt"
+  ],
+  "failure_semantics": {
+    "fail_closed": true,
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "alternate_mutation_path": false,
+    "preserve_evidence": true,
+    "stop_after_first_post_mutation_error_or_ambiguity": true
+  },
+  "forbidden_operations": [
+    "generic-shell-or-arbitrary-command-execution",
+    "caller-selected-command-path-argv-or-environment",
+    "unrelated-service-timer-or-docker-mutation",
+    "database-schema-or-data-mutation",
+    "secrets-credentials-permissions-or-protected-config-access",
+    "network-firewall-dns-or-cloudflare-mutation",
+    "package-user-group-or-runner-mutation",
+    "repository-settings-rulesets-or-secrets-mutation",
+    "automatic-retry-cleanup-rollback-or-alternate-mutation-path"
+  ],
+  "source_only_state": {
+    "live_authorized": false,
+    "runtime_mutation_permitted_by_this_file": false,
+    "merge_authorized": false
+  }
+}

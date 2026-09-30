@@ -20,6 +20,7 @@ test:
 	python3 ./tests/test-control-phase5-observation-delivery.py
 	python3 ./tests/test-simple-deploy-v1.py
 	python3 ./tests/test-simple-deploy-hermes-compat-v1.py
+	python3 ./tests/test_hermes_tech_simple_deploy_cutover_contract.py
 	python3 ./tests/test-simple-deploy-weather-schema-init-v1.py
 	python3 ./tests/test-simple-deploy-weather-data-v1.py
 	python3 ./tests/test-install-simple-deploy-v1.py
