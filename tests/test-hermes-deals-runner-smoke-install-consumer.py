@@ -143,14 +143,31 @@ class RunnerSmokeInstallConsumerTests(unittest.TestCase):
                 with self.assertRaises(RunnerSmokeInstallConsumerError):
                     prepare_install_live_envelope(17, canonical_revalidator=FakeCanonicalRevalidator(evidence))
 
+    def test_bounded_negative_github_time_skew_is_accepted(self):
+        first = canonical_evidence()
+        earlier = replace(first, github_server_time="2026-09-12T16:00:09Z")
+        envelope = prepare_install_live_envelope(
+            17,
+            canonical_revalidator=FakeCanonicalRevalidator(first, earlier),
+        )
+        self.assertEqual(envelope["authorization_issue_number"], 17)
+
     def test_second_revalidation_drift_fails_closed(self):
         first = canonical_evidence()
         second = replace(first, request_body_sha256="3" * 64)
         with self.assertRaisesRegex(RunnerSmokeInstallConsumerError, "evidence drifted"):
             prepare_install_live_envelope(17, canonical_revalidator=FakeCanonicalRevalidator(first, second))
-        later = replace(first, github_server_time="2026-09-12T16:00:41Z")
-        with self.assertRaisesRegex(RunnerSmokeInstallConsumerError, "GitHub time drifted"):
-            prepare_install_live_envelope(17, canonical_revalidator=FakeCanonicalRevalidator(first, later))
+        for out_of_window in (
+            "2026-09-12T16:00:41Z",
+            "2026-09-12T15:59:39Z",
+        ):
+            with self.subTest(out_of_window=out_of_window):
+                drifted = replace(first, github_server_time=out_of_window)
+                with self.assertRaisesRegex(RunnerSmokeInstallConsumerError, "GitHub time drifted"):
+                    prepare_install_live_envelope(
+                        17,
+                        canonical_revalidator=FakeCanonicalRevalidator(first, drifted),
+                    )
 
     def test_consumer_has_no_apply_or_execution_primitive(self):
         source = (ROOT / "ops/lib/deploy_executor/hermes_deals_runner_smoke_install_consumer.py").read_text()

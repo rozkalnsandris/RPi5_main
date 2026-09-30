@@ -1,0 +1,15 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+from pathlib import Path
+import sys
+
+HERE = Path(__file__).resolve().parent
+SOURCE_LIB = Path(__file__).resolve().parents[1] / "lib" / "deploy_executor"
+LIB = HERE if (HERE / "simple_deploy_weather_schema_init_v1.py").is_file() else SOURCE_LIB
+sys.path.insert(0, str(LIB))
+
+from simple_deploy_weather_schema_init_v1 import main
+
+if __name__ == "__main__":
+    raise SystemExit(main())

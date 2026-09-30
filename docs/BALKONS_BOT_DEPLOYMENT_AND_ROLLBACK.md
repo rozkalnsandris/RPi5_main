@@ -2,231 +2,195 @@
 
 Issue: `RPi5_main#192`
 
-Status: **source-only deployment design; no production authorization**.
+Status: **source-only design; no production authorization**.
 
-## Purpose and accepted baseline
+## Current decision: encrypted systemd credentials
 
-Phase K10 removed the effective-systemd lifecycle blocker and proved the current
-`balkons-bot.service` baseline is loaded, active/running, non-root, still executing
-the reviewed H3 historical live source, and effective `SendSIGKILL=no` without a
-service restart.
+The historical plaintext `/etc/credstore/balkons-bot-*` contract is superseded.
+The reviewed target uses systemd encrypted credentials so the long-lived host files
+contain ciphertext only.
 
-This document defines the next source-only layer: an exact additive deployment of
-the reviewed secret-free bot source and its systemd credential references. Nothing
-here authorizes a host write, credential read/change, service restart, MQTT
-operation, broker change, Home Assistant change, ESP32 change, or pump command.
+The service receives exactly five credential IDs through its private
+`$CREDENTIALS_DIRECTORY`:
 
-## Additive deployment design
+- `telegram-token`
+- `telegram-chat-id`
+- `mqtt-host`
+- `mqtt-username`
+- `mqtt-secret`
 
-The deployment does not replace, copy, or read the raw live base unit and does not
-copy the historical secret-bearing Python source. Those objects remain untouched.
-The forward change is limited to two public reviewable files:
+The corresponding ciphertext objects are fixed at:
+
+- `/etc/credstore.encrypted/balkons-bot-telegram-token`
+- `/etc/credstore.encrypted/balkons-bot-telegram-chat-id`
+- `/etc/credstore.encrypted/balkons-bot-mqtt-host`
+- `/etc/credstore.encrypted/balkons-bot-mqtt-username`
+- `/etc/credstore.encrypted/balkons-bot-mqtt-secret`
+
+`ops/systemd/balkons-bot-runtime-override.conf` clears both the plaintext and
+encrypted credential lists, then adds exactly these five
+`LoadCredentialEncrypted=ID:PATH` mappings. No non-empty `LoadCredential=` mapping
+is allowed.
+
+The application source remains unchanged: it reads only the five IDs from
+`$CREDENTIALS_DIRECTORY`; it does not know or read the ciphertext paths.
+
+## Why this matches Debian/systemd 252
+
+Debian 12's systemd 252 supports `LoadCredentialEncrypted=` and
+`systemd-creds encrypt`. The encrypted object is authenticated/decrypted by systemd
+when the service is started and is then exposed under the service credential
+directory. The reviewed provisioning form binds each encrypted object to its exact
+credential ID:
+
+```text
+/usr/bin/systemd-creds encrypt --with-key=host --name=<ID> - <OUTPUT_PATH>
+```
+
+The explicit `--name=<ID>` is required even though the output filename is stable;
+it makes credential-purpose binding reviewable and prevents silent repurposing.
+`--with-key=host` binds encryption to the systemd host credential key. Ciphertext
+objects and the host credential key are never committed to Git.
+
+## Owner-run provisioning boundary
+
+Provisioning is a **separate owner-run secret operation**. It is not performed by
+this repository source change and must not be performed by an agent that would need
+to read existing plaintext credentials.
+
+For each of the five IDs, the owner-run flow is:
+
+1. ensure `/etc/credstore.encrypted` exists as a real root-owned directory and is
+   not group/world writable;
+2. supply the plaintext credential to standard input from a trusted local source;
+   never place it in argv, shell history, Git, chat, a temporary plaintext file or
+   logs;
+3. execute the fixed systemd 252 command form above with the matching ID and fixed
+   output path;
+4. leave only the encrypted output on disk;
+5. set the encrypted object to root ownership, mode `0400`, regular-file type and
+   one hard link;
+6. do not run `systemd-creds decrypt` as part of normal provisioning or verification.
+
+Example command shape, with the value supplied privately on standard input:
+
+```text
+sudo /usr/bin/systemd-creds encrypt --with-key=host --name=telegram-token - /etc/credstore.encrypted/balkons-bot-telegram-token
+```
+
+Repeat only with the matching reviewed ID/path pair. The command examples contain
+no credential values.
+
+## Metadata-only credential preflight
+
+Tracked `ops/bin/balkons-bot-preflight` validates ciphertext **metadata only**. It
+does not open or hash any credential object.
+
+Every fixed encrypted object must be:
+
+- present at the exact reviewed path;
+- a regular file with link count 1, never a symlink;
+- owned by root;
+- mode `0400`;
+- non-empty and no larger than 65536 bytes.
+
+The public-safe report contains only fixed public IDs, counts/booleans and blocker
+codes. It records `content_read=false` and `content_hashed=false`. Missing or
+metadata-drifted objects block deployment before mutation.
+
+## Additive source/service deployment
+
+The later deployment remains limited to two public reviewable files:
 
 1. `/usr/local/lib/rpi5-balkons-bot.py`
    - exact bytes of tracked `ops/lib/balkons-bot.py`;
-   - regular, non-symlink, root-owned, mode `0644`.
+   - regular one-link root-owned file, mode `0644`.
 2. `/etc/systemd/system/balkons-bot.service.d/95-rpi5-source-credentials.conf`
    - exact bytes of tracked `ops/systemd/balkons-bot-runtime-override.conf`;
-   - regular, non-symlink, root-owned, mode `0644`.
+   - regular one-link root-owned file, mode `0644`.
 
-The K10 `90-rpi5-no-sigkill.conf` remains untouched. Rollback is therefore
-removal-only for the two forward files and never needs a raw unit/source backup.
+The existing K10 `90-rpi5-no-sigkill.conf` remains untouched. The overlay preserves
+the existing private service identity and lifecycle values, clears historical
+command/environment credential surfaces, keeps `SendSIGKILL=no`, and applies the
+reviewed hardening directives.
 
-## Runtime overlay
-
-The overlay establishes a deterministic tracked execution environment while
-preserving the private service identity and K10 lifecycle values:
-
-- clear `ExecStartPre=`, `ExecStart=`, `ExecStartPost=`, `ExecReload=`, `ExecStop=`
-  and `ExecStopPost=` lists; then set exactly
-  `/usr/bin/python3 /usr/local/lib/rpi5-balkons-bot.py`;
-- reset `LoadCredential=` and add exactly the five reviewed credential names;
-- clear `Environment=`, `EnvironmentFile=` and `PassEnvironment=` sources; then add
-  only `PYTHONDONTWRITEBYTECODE=1`;
-- use `UnsetEnvironment=` for the known historical/canonical credential-variable
-  names without inspecting any environment values;
-- keep `SendSIGKILL=no` and apply the tracked non-secret hardening directives;
-- do not redefine `User=`, `Restart=`, `RestartSec=`, `TimeoutStopSec=`, enablement,
-  dependencies, broker settings, or any private identity value.
-
-The five fixed credential source paths are:
-
-- `/etc/credstore/balkons-bot-telegram-token`
-- `/etc/credstore/balkons-bot-telegram-chat-id`
-- `/etc/credstore/balkons-bot-mqtt-host`
-- `/etc/credstore/balkons-bot-mqtt-username`
-- `/etc/credstore/balkons-bot-mqtt-secret`
-
-No credential content appears in Git, argv, the overlay, verifier output, rollback
-manifest, or deferred deployment queue.
-
-## Credential prerequisite — separate STRICT gate
-
-This workstream does not provision, recover, rotate, or inspect credential values.
-Before the first future deployment mutation, separately owner-authorized STRICT
-preflight must inspect metadata only and fail closed unless every fixed credential
-file is:
-
-- present at the exact fixed path;
-- a regular non-symlink file;
-- root-owned;
-- mode `0400` or `0600`;
-- non-empty and no larger than 4096 bytes.
-
-Credential contents must not be opened, hashed, copied or printed. The same gate
-must query effective `LoadCredential` metadata in memory and accept only an empty
-current list; output is only `EMPTY`/`NONEMPTY`, never the raw entries. No equivalent
-environment-content inspection is needed or permitted because the overlay clears
-unit environment sources and uses `UnsetEnvironment=` for known secret names.
-
-Supplying or changing credential values is a separate owner-managed secret
-operation. Merge, `turpini`, `GITHUB-ONLY` and `LIVE-ALL` do not authorize it.
+No source merge authorizes installation, credential provisioning, `daemon-reload`,
+service restart, MQTT/broker changes, Home Assistant/ESP32 changes or a pump command.
 
 ## Read-only deployment verifier
 
 Tracked artifact: `ops/bin/balkons-bot-deploy-verifier`.
 
-The verifier is deliberately non-root and read-only. Its executable shebang is
-pinned to `/usr/bin/python3 -I`, every subprocess receives a minimal fixed
-environment, Git/systemd commands use fixed `/usr/bin` paths, and the nested
-production preflight is invoked explicitly as `/usr/bin/python3 -I <preflight>`.
-This prevents user-writable checkout/import or inherited-environment shadowing from
-becoming part of the trusted verification path.
+The verifier remains non-root and read-only. It binds the exact Git SHA and
+verifier/source/overlay/preflight hashes, checks the public overlay contract, calls
+the preflight, and accepts the credential prerequisite only when all five encrypted
+objects have valid metadata with `content_read=false` and `content_hashed=false`.
 
 ### `--check`
 
-Before deployment it requires:
+Before any deployment mutation it requires:
 
 - exact reviewed repository SHA on branch `main`;
-- exact trusted checkout fingerprint and checkout-owner execution;
-- verifier/source/overlay/preflight paths Git-tracked, clean and SHA256-bound;
-- exact K10 drop-in root-owned mode-0644 hash;
-- both forward targets absent;
-- complete production preflight PASS against the H3 historical live-source SHA;
-- K10 service identity/lifecycle hashes and values unchanged.
+- clean/tracked verifier, source, overlay and preflight paths;
+- exact K10 drop-in baseline;
+- both forward deployment targets absent;
+- current service/source baseline still accepted;
+- all five encrypted ciphertext objects metadata-valid;
+- exact overlay containing no plaintext `LoadCredential=` mapping and exactly five
+  reviewed `LoadCredentialEncrypted=` mappings.
 
-Success returns `READY`, `credential_content_read=false`,
-`mutation_started=false`, and `writes_performed=false`.
+Success returns `READY` with no mutation and no credential-content access.
 
 ### `--verify`
 
-After an authorized deployment/restart it additionally requires:
+After a separately authorized deployment/restart it additionally requires:
 
-- both forward targets regular non-symlink root-owned mode-0644 and exact hashes;
-- complete production preflight PASS with the tracked source SHA256 as expected
-  live-source provenance;
-- unchanged service user, fragment, system Python and K10 lifecycle contract;
-- stable `MainPID` across one bounded `/proc/<MainPID>/cmdline` read;
+- exact deployed source/overlay hashes and metadata;
+- the deployed overlay still satisfies the encrypted-credential contract;
+- complete preflight PASS;
+- stable `MainPID` during the bounded argv check;
 - process argv exactly `/usr/bin/python3` and
   `/usr/local/lib/rpi5-balkons-bot.py`.
 
-Raw argv and process environment are never printed/read respectively.
+Raw argv is never emitted and process environments are never read.
 
-## Root trust boundary
+## Future LIVE sequence
 
-No repository executable is to execute or be copied as root. The privileged part
-of any future Composite STRICT transaction must use fixed system binaries and exact
-reviewed public bytes/hashes only. The non-root verifier first proves exact
-Git/artifact bindings; the root segment then materializes only the bound public
-source/overlay bytes and independently verifies target owner/mode/SHA256 before a
-`daemon-reload` or restart.
+Only after this source revision is merged and exact-main CI passes may a later,
+separately explicit owner LIVE decision consider production work. The intended
+ordering is:
 
-## Root-only rollback manifest
+1. fresh exact-source and host metadata preflight;
+2. owner-run encrypted credential provisioning if the five ciphertext objects are
+   not already ready;
+3. re-run metadata-only preflight and require PASS;
+4. exact non-root deployment verifier `--check`;
+5. exact bounded installation of the two reviewed public files;
+6. one `systemctl daemon-reload` and one `systemctl restart balkons-bot.service` if
+   explicitly authorized;
+7. deployment verifier `--verify` and service-health confirmation.
 
-Before the first forward file is created, the future transaction must create and
-verify:
+Credential provisioning and service mutation are distinct sensitive classes. An
+authorization must explicitly include the class it permits. Authorization is
+consumed at the first authorized mutation; later error or ambiguity means evidence
+plus STOP, with no undeclared retry/cleanup/rollback/alternate path.
 
-`/var/lib/rpi5-rollback/issue192-balkons-bot-v1.json`
+## Rollback
 
-The parent directory is root-owned mode `0700` if created; the manifest is regular,
-non-symlink, root-owned mode `0600`. It contains only public identifiers, hashes and
-boolean pre-state facts. It must bind at least:
+Rollback remains a separate owner decision. A reviewed rollback may remove only the
+exact #192 source/overlay deployment files, perform the explicitly authorized
+systemd lifecycle actions, and prove the historical service baseline again.
 
-- exact repository SHA;
-- verifier/source/overlay/preflight/K10-drop-in SHA256 values;
-- exact two forward target paths and proof both were absent immediately before
-  forward mutation;
-- K10 sanitized identity/lifecycle hashes;
-- expected H3 historical live-source SHA256.
+Rollback must **not** delete, replace, decrypt, rotate or otherwise mutate the five
+encrypted credential objects unless a separate credential rollback/rotation action
+is explicitly authorized. It must not alter broker, HA, ESP32, network, packages,
+Docker, data or pump state.
 
-The manifest is evidence and a rollback authorization input, never automatic
-rollback.
+## Remaining scope boundary
 
-## Deferred deployment queue
+This revision only moves the balkons-bot runtime credential transport from
+long-lived plaintext files to host-bound encrypted systemd credential objects while
+keeping application behavior unchanged.
 
-The accepted `GITHUB-ONLY / LIVE-ALL v1` policy requires deferred rollout state to
-live in public-safe `[DEPLOY-QUEUE]` issues in `rozkalnsandris/ops-workflows`, not
-chat or memory.
-
-For this workstream the queue item is `ops-workflows#13`. While this PR is unmerged,
-it remains `[DEPLOY-QUEUE][WAITING]` with `WAITING_MERGE`. Even after merge it must
-remain `WAITING` while the separate credential prerequisite is outstanding.
-
-This rollout is classified `COMPOSITE_STRICT_SEPARATE_GATE`, not an ordinary
-`LIVE-ALL` item while credential/secret work or another prerequisite owner decision
-is required. PR Ready-for-merge is never deploy-queue READY.
-
-After explicit merge, safe GitHub-only reconciliation must:
-
-1. replace `WAITING_MERGE` with the exact merged/current deployable SHA;
-2. compute exact merged verifier/source/overlay/preflight hashes;
-3. bind the reviewed verifier as the repository preflight/verification entrypoint;
-4. prepare/hash the exact separately owner-gated transaction artifact if needed;
-5. re-evaluate the credential prerequisite;
-6. keep the queue `WAITING` unless no separate prerequisite owner gate remains.
-
-No private checkout path, credential value, protected configuration or sensitive
-log may be placed in the public queue.
-
-## Future Composite STRICT forward sequence
-
-Only after source review, explicit merge, post-merge reconciliation and a fresh
-owner authorization may one fail-closed transaction proceed. It must bind the exact
-merged SHA, target alias, trusted checkout identity, transaction artifact where
-used, component SHA256 values, K10 baseline, fixed targets and exclusions.
-
-Intended sequence:
-
-1. fresh GitHub/source reconciliation;
-2. non-root deployment verifier `--check`;
-3. separately authorized metadata-only credential readiness and effective
-   `LoadCredential=EMPTY` gate;
-4. immediate exact SHA/target-absence revalidation;
-5. create and verify the root-only rollback manifest;
-6. materialize exact reviewed source target;
-7. materialize exact reviewed overlay target;
-8. verify both owner/mode/SHA256 values;
-9. exactly one `systemctl daemon-reload`;
-10. exactly one `systemctl restart balkons-bot.service`;
-11. non-root deployment verifier `--verify`.
-
-Authorization is consumed at the first authorized host mutation. Any error, drift
-or ambiguity after that point preserves sanitized evidence and STOPs. No automatic
-retry, cleanup, rollback, alternate path, generic kill or SIGKILL fallback exists.
-
-## Separately authorized rollback
-
-Rollback is never automatic and requires fresh owner authorization. It first
-verifies the root-only manifest and exact forward hashes, then may:
-
-1. remove only the exact `95-rpi5-source-credentials.conf` target;
-2. remove only `/usr/local/lib/rpi5-balkons-bot.py`;
-3. run one `systemctl daemon-reload`;
-4. run one `systemctl restart balkons-bot.service`;
-5. run the already-reviewed K10 verifier to prove the historical H3 source is active
-   again with effective `SendSIGKILL=no`.
-
-Rollback must not alter credential files, the K10 drop-in, rollback manifest, base
-unit, broker/HA/ESP32 state, MQTT topics, packages, Docker, network/storage/backups,
-or pump state.
-
-## Acceptance and remaining boundary
-
-A successful deployment proves only the #192 source/credential-path migration:
-tracked secret-free source is running, argv is exactly the system Python plus the
-tracked source path, systemd credential references are the reviewed five fixed
-names/paths, K10 lifecycle identity remains accepted, and the service is
-active/running after the one authorized restart.
-
-It does not rotate or revoke the legacy shared MQTT credential; that remains #189.
-Delivery/client-ID semantics remain separate #194 work.
+Legacy shared MQTT credential rotation/revocation remains `RPi5_main#189`; this
+source revision does not perform that migration.

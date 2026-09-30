@@ -1,0 +1,117 @@
+{
+  "schema": "rozkalns.rpi5-main.weather-operator-upgrade-v7-host-capability-repair.v2",
+  "issue": 595,
+  "status": "SOURCE_READY_FOR_OWNER_GATED_HOST_CAPABILITY_REPAIR_V2",
+  "source_repository": "rozkalnsandris/RPi5_main",
+  "operation_id": "rpi5-main.weather-operator-upgrade-v7.v1",
+  "source_merge_authorizes_live": false,
+  "root_cause": {
+    "home_access": "root broker lacks DAC bypass and cannot traverse the mode-0700 canonical manager parent while running Git against the user-owned manager checkout",
+    "authorization_provenance": "owner numeric identity alone is insufficient when GitHub reports performed_via_github_app != null"
+  },
+  "trusted_source_checkout": {
+    "name": "RPi5_main-weather-v7-host-capability-repair-v2-source-trusted",
+    "reviewed_origin": "https://github.com/rozkalnsandris/RPi5_main.git",
+    "exact_current_main_required": true,
+    "exact_main_ci_required": true,
+    "required_post_state": "EXACT_SHA_DETACHED_CLEAN_CORRECT_ORIGIN",
+    "manager_worktree_mutation_allowed": false
+  },
+  "source_delivery_mutation_budget": [
+    {
+      "category": "git.weather-v7-host-capability-repair-v2-source-fetch",
+      "max_operations": 1
+    },
+    {
+      "category": "git.weather-v7-host-capability-repair-v2-source-worktree-add",
+      "max_operations": 1
+    }
+  ],
+  "predecessor": {
+    "capability_source_sha": "99c5568e4a6f0433546c728642b5375abd9a1189",
+    "broker_sha256": "d84004ec46ce802c264a29ea70e0ab8dda6f99785257649ebc9a655611d599be",
+    "registration_schema": "rozkalns.rpi5-main.weather-operator-upgrade-v7-host-capability-registration.v1",
+    "operator_sha256": "4058f89227b38dc62788b20fc82041113a9363a90b7fb9fd78743dd4fe41d27f",
+    "v7_checkout_expected": "ABSENT",
+    "v6_checkout_required_sha": "9136c37156e84da3918e58d5d467c8b1e5cc403a"
+  },
+  "repair": {
+    "installer": "scripts/repair-weather-operator-v7-host-capability-home-access.py",
+    "installer_default_mode": "READ_ONLY_PREFLIGHT",
+    "apply_flag": "--apply",
+    "apply_requires_owner_authorized_root": true,
+    "fixed_targets": {
+      "/usr/local/libexec/rozkalns-weather-operator-v7-capability/deploy_executor/weather_operator_upgrade_v7_host_capability.py": "0644",
+      "/usr/local/libexec/rozkalns-weather-operator-v7-privileged-broker": "0755",
+      "/etc/systemd/system/rozkalns-weather-operator-v7-privileged-broker@.service": "0644",
+      "/etc/rozkalns-weather-operator-v7-capability/registration.json": "0600"
+    },
+    "mutation_budget": [
+      {
+        "category": "filesystem.weather-v7-capability-module-atomic-replace",
+        "max_operations": 1
+      },
+      {
+        "category": "filesystem.weather-v7-capability-broker-atomic-replace",
+        "max_operations": 1
+      },
+      {
+        "category": "filesystem.weather-v7-capability-service-template-atomic-replace",
+        "max_operations": 1
+      },
+      {
+        "category": "filesystem.weather-v7-capability-registration-v2-atomic-replace",
+        "max_operations": 1
+      },
+      {
+        "category": "systemd.weather-v7-capability-daemon-reload",
+        "max_operations": 1
+      }
+    ],
+    "socket_restart": false,
+    "caller_timer_restart": false,
+    "operator_replacement": false,
+    "v7_checkout_creation": false,
+    "weather_runtime_mutation": false
+  },
+  "service_sandbox": {
+    "user": "root",
+    "no_new_privileges": true,
+    "capability_bounding_set": ["CAP_SETUID", "CAP_SETGID"],
+    "ambient_capabilities": [],
+    "cap_dac_override_allowed": false,
+    "cap_dac_read_search_allowed": false,
+    "protect_home": "read-only",
+    "service_template_manager_parent_placeholder": "@@WEATHER_V7_MANAGER_PARENT@@",
+    "home_write_allowlist": ["REGISTERED_CANONICAL_MANAGER_PARENT"],
+    "broad_home_write_allowlist_allowed": false
+  },
+  "manager_identity": {
+    "registration_schema": "rozkalns.rpi5-main.weather-operator-upgrade-v7-host-capability-registration.v2",
+    "bind_uid": true,
+    "bind_gid": true,
+    "git_child_user_from_registration": true,
+    "git_child_group_from_registration": true,
+    "git_child_extra_groups": [],
+    "caller_selected_identity_allowed": false
+  },
+  "git_trust": {
+    "runtime_scope": "COMMAND_SCOPED_ONLY",
+    "safe_directory_value": "REGISTERED_CANONICAL_RPI5_MAIN_MANAGER_CHECKOUT",
+    "wildcard_safe_directory_allowed": false,
+    "global_git_config_mutation_allowed": false,
+    "system_git_config_mutation_allowed": false,
+    "filesystem_ownership_mutation_allowed": false
+  },
+  "authorization_provenance": {
+    "owner_numeric_identity_required": true,
+    "performed_via_github_app_must_be_null": true,
+    "app_mediated_live_auth_allowed": false
+  },
+  "failure": {
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "alternate_privileged_transport": false
+  }
+}

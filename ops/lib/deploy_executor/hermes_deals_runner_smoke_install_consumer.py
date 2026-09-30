@@ -200,8 +200,8 @@ def prepare_install_live_envelope(
 
     first_time = _github_time(first.github_server_time, "github_server_time")
     final_time = _github_time(final.github_server_time, "github_server_time")
-    drift = (final_time - first_time).total_seconds()
-    if not 0 <= drift <= MAX_REVALIDATION_TIME_DRIFT_SECONDS:
+    drift = abs((final_time - first_time).total_seconds())
+    if drift > MAX_REVALIDATION_TIME_DRIFT_SECONDS:
         _fail("canonical GitHub time drifted during install-envelope revalidation")
 
     return _envelope(final)

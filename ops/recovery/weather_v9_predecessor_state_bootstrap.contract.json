@@ -1,0 +1,79 @@
+{
+  "schema": "rozkalns.rpi5-main.weather-operator-v9-predecessor-state-bootstrap.v1",
+  "issue": 625,
+  "status": "SOURCE_ONLY_LIVE_LATER",
+  "purpose": "Recover only the observed Weather v9 partial install as predecessor-bound durable state before the post-#83 broker refresh.",
+  "predecessor_source_sha": "80261255b3be2aa7dd40986254d4ea478b4e2e1b",
+  "registration_binding_source_sha": "80261255b3be2aa7dd40986254d4ea478b4e2e1b",
+  "execution_source_policy": "CLEAN_REVIEWED_ORIGIN_DESCENDANT_OF_PREDECESSOR",
+  "accepted_baseline": {
+    "registration": "ABSENT",
+    "state_db": "ABSENT"
+  },
+  "fixed_targets": {
+    "support_root": "/usr/local/libexec/rozkalns-weather-operator-v9-capability",
+    "broker": "/usr/local/libexec/rozkalns-weather-operator-v9-privileged-broker",
+    "registration": "/etc/rozkalns-weather-operator-v9-capability/registration.json",
+    "state_root": "/var/lib/rozkalns-weather-operator-v9-capability",
+    "state_db": "/var/lib/rozkalns-weather-operator-v9-capability/state.sqlite3",
+    "socket_unit": "/etc/systemd/system/rozkalns-weather-operator-v9-privileged-broker.socket",
+    "service_unit": "/etc/systemd/system/rozkalns-weather-operator-v9-privileged-broker@.service",
+    "module": "/usr/local/libexec/rozkalns-weather-operator-v9-capability/deploy_executor/weather_operator_upgrade_v9_host_capability.py"
+  },
+  "artifact_count": 15,
+  "registration_schema": "rozkalns.rpi5-main.weather-operator-upgrade-v9-host-capability-registration.v1",
+  "state_root_policy": "ABSENT_OR_ROOT_0700_DIRECTORY; CREATE_ROOT_0700_ONLY_IF_ABSENT",
+  "known_staging_paths": [
+    "/usr/local/libexec/.rozkalns-weather-operator-v9-privileged-broker.refresh.tmp",
+    "/etc/rozkalns-weather-operator-v9-capability/.registration.json.refresh.tmp",
+    "/usr/local/libexec/.rozkalns-weather-operator-v9-privileged-broker.broker-refresh.tmp",
+    "/etc/rozkalns-weather-operator-v9-capability/.registration.json.broker-refresh.tmp",
+    "/usr/local/libexec/rozkalns-weather-operator-v9-capability/deploy_executor/.weather_operator_upgrade_v9_host_capability.py.module-refresh.tmp",
+    "/etc/rozkalns-weather-operator-v9-capability/.registration.json.module-refresh.tmp",
+    "/etc/rozkalns-weather-operator-v9-capability/.registration.json.state-bootstrap.tmp",
+    "/var/lib/rozkalns-weather-operator-v9-capability/state.sqlite3-wal",
+    "/var/lib/rozkalns-weather-operator-v9-capability/state.sqlite3-shm"
+  ],
+  "preflight_requires": [
+    "execution source checkout is clean, reviewed-origin and descends from predecessor",
+    "all 15 installed artifacts exactly match predecessor Git blob identity, reviewed modes and rendered service identity",
+    "registration and state DB are both absent",
+    "all fixed refresh/bootstrap staging paths and SQLite sidecars are absent",
+    "config root is exact root-owned 0700",
+    "state root is absent or exact root-owned 0700"
+  ],
+  "allowed_mutations": [
+    "create the fixed state root as root-owned 0700 only when absent",
+    "create the canonical replay DB only through StateStore(..., bootstrap=True)",
+    "set the newly-created replay DB to root-owned 0600 and verify it through normal StateStore open",
+    "stage and atomically publish predecessor-bound strict root-owned 0600 registration after replay DB verification"
+  ],
+  "forbidden_mutations": [
+    "replace or modify any installed host-capability artifact",
+    "systemd daemon-reload/enable/start/stop/restart",
+    "Docker/network/firewall/DNS/Cloudflare mutation",
+    "manager or trusted-source checkout mutation",
+    "credential/secret/user/group/ACL/repository-settings mutation",
+    "existing replay DB migration/cleanup/restore",
+    "worktree cleanup/remove/prune/repair",
+    "automatic retry/rollback/cleanup",
+    "generic root shell or caller-selected command/path/argv/environment"
+  ],
+  "registration_published_last": true,
+  "systemd_mutation": false,
+  "automatic_retry": false,
+  "automatic_cleanup": false,
+  "automatic_rollback": false,
+  "source_merge_authorizes_live": false,
+  "partial_failure_semantics": "FAIL_CLOSED_NO_RETRY_CLEANUP_ROLLBACK_OR_ALTERNATE_MUTATION",
+  "later_gate_order": [
+    "source merge and exact-main CI",
+    "separate bounded LIVE authorization for exact source materialization if target commit is absent on host",
+    "fresh canonical predecessor-bootstrap read-only preflight",
+    "separate owner LIVE authorization for predecessor durable-state bootstrap",
+    "post-bootstrap registration/state identity verification",
+    "fresh post-#83 broker-refresh read-only preflight",
+    "separate owner LIVE authorization for broker + registration refresh",
+    "only then resume Weather v9 queue/dispatch/public-runtime reconciliation"
+  ]
+}

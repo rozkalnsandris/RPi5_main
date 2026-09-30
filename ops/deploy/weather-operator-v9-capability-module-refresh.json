@@ -1,0 +1,48 @@
+{
+  "schema": "rozkalns.rpi5-main.weather-operator-v9-capability-module-refresh.v1",
+  "issue": 615,
+  "status": "SOURCE_ONLY_LIVE_LATER",
+  "predecessor_source_sha": "0659059ea712b64ad7b718db556f77c67e1d03eb",
+  "fixed_targets": {
+    "module": "/usr/local/libexec/rozkalns-weather-operator-v9-capability/deploy_executor/weather_operator_upgrade_v9_host_capability.py",
+    "registration": "/etc/rozkalns-weather-operator-v9-capability/registration.json",
+    "state_db": "/var/lib/rozkalns-weather-operator-v9-capability/state.sqlite3"
+  },
+  "target_delta_policy": {
+    "module": "MAY_DIFFER",
+    "broker": "MUST_EQUAL_PREDECESSOR",
+    "socket": "MUST_EQUAL_PREDECESSOR",
+    "service": "MUST_EQUAL_PREDECESSOR"
+  },
+  "mutation_budget": [
+    {
+      "category": "filesystem.weather-operator-v9-capability-module-refresh-stage",
+      "max_operations": 2
+    },
+    {
+      "category": "filesystem.weather-operator-v9-capability-module-refresh-atomic-replace",
+      "max_operations": 2
+    }
+  ],
+  "replacement_order": [
+    "module",
+    "registration"
+  ],
+  "state_db_policy": "PRESERVE_EXISTING_UNCHANGED",
+  "systemd_mutation": false,
+  "queue_or_live_auth_creation": false,
+  "automatic_retry": false,
+  "automatic_cleanup": false,
+  "automatic_rollback": false,
+  "historical_authority": {
+    "ops-workflows#72": "SPENT_LIVE_AUTH_DO_NOT_REUSE"
+  },
+  "post_merge_gates": [
+    "owner root read-only module-refresh preflight",
+    "separate owner LIVE authorization for one module+registration refresh",
+    "canonical v9 checkout reconciliation",
+    "fresh READY queue bound to exact merged main",
+    "fresh direct-owner v9 LIVE-AUTH with new request identity",
+    "one v9 dispatch and exact operator-module verification"
+  ]
+}

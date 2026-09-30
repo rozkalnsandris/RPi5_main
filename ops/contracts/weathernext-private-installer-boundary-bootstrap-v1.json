@@ -1,0 +1,287 @@
+{
+  "schema": "rpi5.weathernext-private-installer-boundary-bootstrap.v1",
+  "implementation_issue": 723,
+  "source_repository": "rozkalnsandris/RPi5_main",
+  "source_entrypoint": "ops/bin/rpi5-weathernext-private-installer-boundary-bootstrap",
+  "installed_entrypoint": "/usr/local/sbin/rpi5-weathernext-private-installer-boundary-bootstrap",
+  "installed_mode": "0755",
+  "installed_owner": "root:root",
+  "operation_id": "rpi5.weathernext-private-installer-boundary-bootstrap.install.v1",
+  "target_alias": "rpi5-weathernext-private-installer-boundary-bootstrap",
+  "caller_authority": [
+    "authorization_issue_number"
+  ],
+  "future_refresh_operation": "rpi5.weathernext-private-installer-boundary.refresh.v1",
+  "future_refresh_runtime": "ops/bin/rpi5-weathernext-private-installer-boundary-refresh-runtime",
+  "bootstrap_interface": "rozkalns.weathernext-private-installer-boundary-refresh-bootstrap-callable.v1",
+  "known_stale_boundary": {
+    "trusted_checkout": "/var/lib/rpi5-deploy/RPi5_main-weathernext-private-installer-trusted",
+    "trusted_head": "79372e48ac53bf6d00142578b6543bc33a72a692",
+    "installed_entrypoint": "/usr/local/sbin/rpi5-weathernext-private-host-privileged-install",
+    "entrypoint_blob": "23599df1edffc69eb7ec8ab699052660cf3e078e",
+    "stale_dispatch_blob": "98218e3138f821390bece6dc10b770bd0b578cd9"
+  },
+  "bootstrap_runtime_source": {
+    "manager_checkout_resolver": "passwd:andris/RPi5_main",
+    "reviewed_origin": "https://github.com/rozkalnsandris/RPi5_main.git",
+    "requires_clean_manager": true,
+    "manager_head_may_lag_when_runtime_pair_exact_current": true,
+    "exact_current_source_repository": "rozkalnsandris/RPi5_main",
+    "exact_current_source_ref": "main",
+    "exact_current_public_reads_credential_free": true,
+    "exact_current_commit_tree_must_match": true,
+    "exact_current_runtime_paths": [
+      "ops/bin/rpi5-weathernext-private-installer-boundary-refresh-runtime",
+      "ops/lib/deploy_executor/weather_private_installer_boundary_refresh_runtime.py"
+    ],
+    "exact_current_runtime_git_modes": {
+      "ops/bin/rpi5-weathernext-private-installer-boundary-refresh-runtime": "100755",
+      "ops/lib/deploy_executor/weather_private_installer_boundary_refresh_runtime.py": "100644"
+    },
+    "exact_current_runtime_git_blob_and_contents_must_match": true,
+    "manager_runtime_pair_git_blobs_must_equal_exact_current": true,
+    "manager_runtime_pair_worktree_bytes_must_equal_exact_current": true,
+    "runtime_adapter_filesystem_mode_uses_safe_policy": true,
+    "runtime_module_filesystem_mode": "0644",
+    "runtime_path_fixed": true,
+    "runtime_bytes_executed_after_single_verified_read": true,
+    "manager_head_index_worktree_must_remain_unchanged": true,
+    "manager_checkout_mutation_allowed": false
+  },
+  "mutation_budget": [
+    {
+      "category": "filesystem.weathernext-private-installer-boundary-bootstrap-install",
+      "max_operations": 1
+    }
+  ],
+  "reconciliation": {
+    "implementation_issue": 743,
+    "operation_id": "rpi5.weathernext-private-installer-boundary-bootstrap.reconcile.v1",
+    "target_alias": "rpi5-weathernext-private-installer-boundary-bootstrap-reconcile",
+    "source_repository": "rozkalnsandris/RPi5_main",
+    "source_path": "ops/bin/rpi5-weathernext-private-installer-boundary-bootstrap",
+    "destination": "/usr/local/sbin/rpi5-weathernext-private-installer-boundary-bootstrap",
+    "required_type": "regular-one-link",
+    "required_owner": "root:root",
+    "required_mode": "0755",
+    "target_identity": {
+      "source_ref": "exact-current-main",
+      "required_git_mode": "100755",
+      "git_blob_derived_from_exact_current_main": true,
+      "sha256_derived_from_exact_current_main_bytes": true,
+      "contents_must_match_git_blob": true,
+      "required_exact_main_ci": true
+    },
+    "recognized_preimage_sha256": [
+      "7ddf7d6ca0537592fc55b48e576be006ca144becf8e0d3f8ae67fd20c8e5b9c2",
+      "5c480bd98bbcf8ab0ba6fb43036ca2f7e4837665af2be3ce42c1404c22090730"
+    ],
+    "exact_current_is_preconsume_noop": true,
+    "unknown_preimage_stops_before_mutation": true,
+    "mutation_budget": [
+      {
+        "category": "filesystem.weathernext-private-installer-boundary-bootstrap-reconcile",
+        "max_operations": 1
+      }
+    ],
+    "reachability_recovery": {
+      "recovery_issue": 770,
+      "planner_module": "ops/lib/deploy_executor/weather_private_installer_boundary_bootstrap_reachability.py",
+      "primary_transport": "installed-bootstrap-then-current-privileged-dispatch",
+      "caller_selected_source_sha_allowed": false,
+      "source_repository": "rozkalnsandris/RPi5_main",
+      "exact_source_ref": "main",
+      "reviewed_origin": "https://github.com/rozkalnsandris/RPi5_main.git",
+      "manager_source_sync_prerequisite": {
+        "operation_id": "rpi5.weathernext-private-installer-manager-source-sync.v1",
+        "target_alias": "rpi5-weathernext-private-installer-manager-source-sync",
+        "manager_checkout_resolver": "repo-owner-home/RPi5_main",
+        "required_attached_branch_ref": "refs/heads/main",
+        "accepted_detached_branch_ref": "DETACHED",
+        "detached_recovery_allowed": true,
+        "requires_clean_checkout": true,
+        "requires_reviewed_origin": true,
+        "requires_head_reviewed_ancestor_of_exact_current_main": true,
+        "requires_local_main_reviewed_ancestor_of_detached_head": true,
+        "requires_detached_head_reviewed_ancestor_of_exact_current_main": true,
+        "attached_main_ref_must_equal_head": true,
+        "exact_current_main_and_required_ci_revalidated_before_mutation": true,
+        "fixed_environment": [
+          {
+            "name": "PATH",
+            "value": "/usr/bin:/bin"
+          },
+          {
+            "name": "LANG",
+            "value": "C.UTF-8"
+          },
+          {
+            "name": "LC_ALL",
+            "value": "C.UTF-8"
+          },
+          {
+            "name": "GIT_TERMINAL_PROMPT",
+            "value": "0"
+          },
+          {
+            "name": "GIT_CONFIG_NOSYSTEM",
+            "value": "1"
+          },
+          {
+            "name": "GIT_CONFIG_GLOBAL",
+            "value": "/dev/null"
+          }
+        ],
+        "allowed_argv": [
+          [
+            "/usr/bin/git",
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "credential.helper=",
+            "-c",
+            "protocol.file.allow=never",
+            "fetch",
+            "--no-tags",
+            "origin",
+            "refs/heads/main:refs/remotes/origin/main"
+          ],
+          [
+            "/usr/bin/git",
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "credential.helper=",
+            "-c",
+            "protocol.file.allow=never",
+            "switch",
+            "main"
+          ],
+          [
+            "/usr/bin/git",
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "credential.helper=",
+            "-c",
+            "protocol.file.allow=never",
+            "merge",
+            "--ff-only",
+            "refs/remotes/origin/main"
+          ]
+        ],
+        "post_fetch_read_only_checkpoint": "refs/remotes/origin/main must equal freshly revalidated exact current main; for detached recovery local refs/heads/main must remain a reviewed ancestor of detached HEAD and detached HEAD a reviewed ancestor of exact current main before fixed switch main; any mismatch stops with no switch, merge or retry",
+        "mutation_budget": [
+          {
+            "category": "git.rpi5-main-manager-checkout-fetch",
+            "max_operations": 1
+          },
+          {
+            "category": "git.rpi5-main-manager-checkout-switch-main",
+            "max_operations": 1
+          },
+          {
+            "category": "git.rpi5-main-manager-checkout-fast-forward",
+            "max_operations": 1
+          }
+        ],
+        "explicitly_forbidden": [
+          "clone",
+          "checkout",
+          "reset",
+          "clean",
+          "pull",
+          "rebase",
+          "force",
+          "arbitrary-branch-switch",
+          "switch-other-than-main",
+          "git-hooks",
+          "caller-selected-branch",
+          "caller-selected-ref",
+          "caller-selected-repository",
+          "caller-selected-argv",
+          "caller-selected-environment"
+        ],
+        "postcondition": "manager HEAD and local refs/heads/main equal exact current main; checkout is attached to refs/heads/main, clean at reviewed origin, and both fixed refresh runtime Git blobs/worktree bytes equal exact-current public proof",
+        "owner_live_authorization_required": true,
+        "source_merge_authorizes_live": false,
+        "rollback_policy": "NONE",
+        "automatic_retry": false,
+        "automatic_cleanup": false,
+        "automatic_rollback": false
+      },
+      "first_privileged_hop": {
+        "entrypoint": "/usr/local/sbin/rpi5-weathernext-private-installer-boundary-bootstrap",
+        "operation_id": "rpi5.weathernext-private-installer-boundary.refresh.v1",
+        "implementation_issue": 721,
+        "requires_installed_bootstrap_recognized": true,
+        "requires_manager_refresh_runtime_pair_exact_current": true,
+        "runtime_pair_provenance_derived_from_public_exact_current_git_tree_and_contents": true,
+        "separate_ready_queue_and_owner_live_authorization_required": true,
+        "bootstrap_does_not_mutate_manager_checkout": true
+      },
+      "reconcile_hop": {
+        "entrypoint_source": "ops/bin/rpi5-weathernext-private-host-privileged-install",
+        "installed_entrypoint": "/usr/local/sbin/rpi5-weathernext-private-host-privileged-install",
+        "operation_id": "rpi5.weathernext-private-installer-boundary-bootstrap.reconcile.v1",
+        "requires_privileged_dispatch_exact_current": true,
+        "requires_fixed_bootstrap_reconcile_route": true,
+        "separate_ready_queue_and_owner_live_authorization_required": true
+      },
+      "legacy_noninstalled_oneshot": {
+        "path": "ops/bin/rpi5-weathernext-private-installer-boundary-bootstrap-reconcile-oneshot",
+        "standing_install": false,
+        "privileged_execution_transport": false,
+        "may_not_substitute_for_manager_sync_or_boundary_refresh": true,
+        "adds_no_new_sudoers_service_credential_or_permission_surface": true
+      },
+      "manager_checkout_mutation_inside_bootstrap_or_reconcile_allowed": false,
+      "trusted_checkout_mutation_inside_bootstrap_reconcile_allowed": false,
+      "source_merge_authorizes_execution": false
+    },
+    "separate_from_installer_boundary_refresh_budget": true,
+    "authorization_consumed_before_first_mutation": true,
+    "rollback_policy": "NONE",
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "source_merge_authorizes_live": false,
+    "runtime_live_authority": false
+  },
+  "separate_from_refresh_mutation_budget": true,
+  "refresh_operation_executed_by_bootstrap_install": false,
+  "source_merge_authorizes_live": false,
+  "runtime_live_authority": false,
+  "authorization_consumed_before_first_mutation": true,
+  "rollback_policy": "NONE",
+  "automatic_retry": false,
+  "automatic_cleanup": false,
+  "automatic_rollback": false,
+  "explicit_exclusions": [
+    "no caller-selected repository/path/command/argv/environment/destination",
+    "no generic root shell or generic Git mutation surface",
+    "manager source sync is a separate LIVE prerequisite limited to fixed reviewed-origin fetch, optional fixed switch to literal main only for a reviewed detached baseline, and merge --ff-only with hooks disabled and fixed environment",
+    "no checkout/reset/clean/pull/rebase/force or arbitrary manager branch switch",
+    "no #700/#721 refresh mutation during bootstrap installation or reconciliation; refresh is a separately authorized hop",
+    "no manager or trusted-checkout Git mutation inside bootstrap reconciliation",
+    "no backend/application/private-runtime materialization",
+    "no Google/ADC/IAM/project/Analytics Hub/BigQuery action",
+    "no SQLite/schema/corpus mutation",
+    "no Docker/systemd/package/network/Cloudflare mutation",
+    "no secrets/config/protected-data access"
+  ],
+  "handoff": [
+    "freshly derive exact current RPi5_main main and required CI before any transport prerequisite or privileged hop",
+    "run the source-only reachability planner; missing, unreviewed or drifted manager/bootstrap/dispatch provenance must stop closed",
+    "an attached manager checkout is valid only on refs/heads/main with local main equal HEAD; a detached baseline is valid only when clean at reviewed origin with local main a reviewed ancestor of detached HEAD and detached HEAD a reviewed ancestor of exact current main",
+    "if manager source sync is required, obtain separate Composite LIVE authority for the fixed reviewed-origin fetch, optional fixed switch to literal main for the reviewed detached case, and merge --ff-only mutation budgets; source merge alone never authorizes them",
+    "after the authorized fetch, verify refs/remotes/origin/main equals freshly revalidated exact current main and revalidate all detached ancestry predicates before any switch; any mismatch stops with no switch, merge, retry, rollback or cleanup",
+    "after manager sync, verify manager HEAD and local main equal exact current main, checkout is attached to refs/heads/main and clean, and both fixed refresh runtime Git blobs/worktree bytes equal the public exact-current proof",
+    "construct a fresh #700/#721 installer-boundary refresh Queue and owner LIVE-AUTH; execute it only through the already installed root-owned bootstrap",
+    "verify the trusted installer checkout and installed privileged dispatch are exact current and the fixed dispatch contains the bootstrap-reconcile route",
+    "construct a fresh bootstrap-reconcile Queue and exact owner LIVE-AUTH; execute reconciliation through the installed current privileged dispatch",
+    "the non-installed reconcile one-shot is not an authorized privileged transport and may not substitute for manager sync, boundary refresh, Queue or LIVE-AUTH prerequisites",
+    "after reconciliation, verify the exact root-owned one-link 0755 reviewed bootstrap",
+    "historical Queue snapshots including ops-workflows#143 are not promoted in place; reconstruct fresh Queue evidence after this source correction is merged and validated"
+  ]
+}

@@ -1,0 +1,43 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import sys
+
+HERE = Path(__file__).resolve()
+ROOT = HERE.parents[2]
+LIB = ROOT / "ops" / "lib"
+if str(LIB) not in sys.path:
+    sys.path.insert(0, str(LIB))
+
+from deploy_executor.hermes_deals_runner_smoke_install_broker import (
+    REQUEST_MAX_BYTES,
+    RunnerSmokeInstallBrokerError,
+    encode_broker_receipt,
+    execute_broker_request,
+)
+
+
+def main() -> int:
+    if len(sys.argv) != 1:
+        print("RUNNER_SMOKE_INSTALL_BROKER=REJECTED reason=no_arguments_allowed", file=sys.stderr)
+        return 64
+    if os.geteuid() != 0:
+        print("RUNNER_SMOKE_INSTALL_BROKER=REJECTED reason=root_service_required", file=sys.stderr)
+        return 77
+    raw = sys.stdin.buffer.read(REQUEST_MAX_BYTES + 1)
+    try:
+        receipt = execute_broker_request(raw)
+        encoded = encode_broker_receipt(receipt)
+    except RunnerSmokeInstallBrokerError:
+        print("RUNNER_SMOKE_INSTALL_BROKER=REJECTED reason=invalid_identity_request", file=sys.stderr)
+        return 64
+    sys.stdout.buffer.write(encoded)
+    sys.stdout.buffer.flush()
+    return 0 if receipt.get("result") != "FAIL_CLOSED" else 71
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

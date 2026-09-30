@@ -40,7 +40,15 @@ The fixed mutation sequence may only create the exact dedicated system group/use
 
 Issue `#534` adds `execute_install_for_authorization()`, the fixed composition boundary between the #481 canonical LIVE-envelope consumer and the existing `apply_install()` implementation. The only caller-controlled authority remains one positive `authorization_issue_number`; the canonical revalidator, replay consumer and fixed backend are trusted keyword-only capability adapters, not caller-selected execution data. The bridge accepts no prebuilt LIVE envelope, command, path, argv, environment, identity, hash/SHA, target, operation or mutation sequence.
 
-The bridge performs the existing double canonical revalidation and then immediately calls the existing fixed `apply_install()` boundary. No alternate mutation implementation exists in the bridge. Source merge makes the future install gate source-reachable but does **not** make it runtime-reachable: there is still no CLI, sudo rule, systemd/service/timer, dispatcher registration, global executor enablement or helper invocation. `external_entrypoint_enabled=false` and `runtime_activation_enabled=false` remain mandatory until a later separately reviewed and owner-authorized LIVE activation.
+The bridge performs the existing double canonical revalidation and then immediately calls the existing fixed `apply_install()` boundary. No alternate mutation implementation exists in the bridge. PR #536 made the future install gate source-reachable while deliberately leaving runtime activation disabled.
+
+## Concrete runtime composition source
+
+Issue `#546` adds the reviewed source-side runtime composition needed before any later LIVE install: a runner-smoke-specific concrete canonical revalidator, a fixed no-argument runtime factory, a durable one-shot replay adapter, and `ops/bin/rpi5-hermes-deals-runner-smoke-install`. The source-tree operator accepts exactly `--issue-number <positive-int>` and exposes no repository, path, command, argv, environment, identity, SHA/hash, target, operation, backend or prebuilt-envelope selectors.
+
+The revalidator uses the isolated P9 Issues-read clients for `deploy-authorizations` and `ops-workflows`, the existing single-repository Hermes Source App client for the reviewed Hermes SHA, and a credential-free reader restricted to public `rozkalnsandris/RPi5_main` for current-main provenance. It reconstructs and refetches the owner-authored non-App LIVE-AUTH, normalizes one READY Queue issue against an isolated install-only registry, proves the reviewed Hermes SHA and current RPi5_main exact-main CI, and checks durable replay availability before the existing double-pass consumer enters `apply_install()`.
+
+The install-only registry remains `execution_enabled=false`. Source merge still installs no CLI, sudoers, systemd unit, service, timer, socket or dispatcher and creates no Queue or LIVE-AUTH object. Therefore `runtime_activation_enabled=false` remains the host truth until a later explicit owner LIVE authorization executes reviewed source from an exact trusted checkout. A genuine READY Queue item and owner-authored LIVE-AUTH are still independent prerequisites; placeholders are forbidden.
 
 ## Helper output and canary receipt
 

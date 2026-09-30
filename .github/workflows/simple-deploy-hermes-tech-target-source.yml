@@ -1,0 +1,22 @@
+name: Hermes Tech SIMPLE-DEPLOY target source
+
+on:
+  pull_request:
+    paths:
+      - "ops/deploy/simple-deploy-targets-v1.json"
+      - "ops/deploy/simple-deploy-compose/hermes-tech-public.yml"
+      - "ops/contracts/simple-deploy-host-v1.json"
+      - "tests/test-simple-deploy-hermes-tech-target-v1.py"
+      - ".github/workflows/simple-deploy-hermes-tech-target-source.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Validate Hermes Tech target contract
+        run: python3 ./tests/test-simple-deploy-hermes-tech-target-v1.py

@@ -1,0 +1,36 @@
+name: WeatherNext private BigQuery source
+
+on:
+  pull_request:
+    paths:
+      - "ops/lib/deploy_executor/weather_private_bigquery_contract.py"
+      - "tests/test-deploy-executor-weather-private-bigquery.py"
+      - "docs/WEATHERNEXT_PRIVATE_BIGQUERY_SOURCE.md"
+      - ".github/workflows/weathernext-private-bigquery-source.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "ops/lib/deploy_executor/weather_private_bigquery_contract.py"
+      - "tests/test-deploy-executor-weather-private-bigquery.py"
+      - "docs/WEATHERNEXT_PRIVATE_BIGQUERY_SOURCE.md"
+      - ".github/workflows/weathernext-private-bigquery-source.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate private WeatherNext source boundary
+        run: |
+          python3 ./tests/test-deploy-executor-weather-private-bigquery.py
+          python3 -m py_compile ops/lib/deploy_executor/weather_private_bigquery_contract.py

@@ -1,0 +1,84 @@
+name: WeatherNext private host runtime source
+
+on:
+  pull_request:
+    paths:
+      - "ops/lib/deploy_executor/weather_private_bigquery_host_runtime.py"
+      - "ops/lib/deploy_executor/weather_private_bigquery_host_bindings.py"
+      - "ops/bin/rpi5-weathernext-private-host"
+      - "ops/deploy/weather-private-bigquery-host-runtime.json"
+      - "tests/test-deploy-executor-weather-private-bigquery-host-runtime.py"
+      - "docs/WEATHERNEXT_PRIVATE_HOST_RUNTIME.md"
+      - ".github/workflows/weathernext-private-host-runtime-source.yml"
+      - "ops/lib/deploy_executor/weather_private_bigquery_contract.py"
+      - "ops/lib/deploy_executor/weather_private_bigquery_runtime_materialization.py"
+      - "ops/lib/deploy_executor/weather_private_bigquery_execution_bridge.py"
+      - "ops/lib/deploy_executor/weather_private_bigquery_trusted_backend.py"
+  push:
+    branches:
+      - main
+    paths:
+      - "ops/lib/deploy_executor/weather_private_bigquery_host_runtime.py"
+      - "ops/lib/deploy_executor/weather_private_bigquery_host_bindings.py"
+      - "ops/bin/rpi5-weathernext-private-host"
+      - "ops/deploy/weather-private-bigquery-host-runtime.json"
+      - "tests/test-deploy-executor-weather-private-bigquery-host-runtime.py"
+      - "docs/WEATHERNEXT_PRIVATE_HOST_RUNTIME.md"
+      - ".github/workflows/weathernext-private-host-runtime-source.yml"
+      - "ops/lib/deploy_executor/weather_private_bigquery_contract.py"
+      - "ops/lib/deploy_executor/weather_private_bigquery_runtime_materialization.py"
+      - "ops/lib/deploy_executor/weather_private_bigquery_execution_bridge.py"
+      - "ops/lib/deploy_executor/weather_private_bigquery_trusted_backend.py"
+
+permissions:
+  contents: read
+
+jobs:
+  source-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate WeatherNext private host runtime source
+        run: |
+          set -euo pipefail
+          python3 ./tests/test-deploy-executor-weather-private-bigquery.py
+          python3 ./tests/test-deploy-executor-weather-private-bigquery-runtime.py
+          python3 ./tests/test-deploy-executor-weather-private-bigquery-execution-bridge.py
+          python3 ./tests/test-deploy-executor-weather-private-bigquery-trusted-backend.py
+          python3 ./tests/test-deploy-executor-weather-private-bigquery-host-runtime.py
+          python3 -m py_compile \
+            ops/lib/deploy_executor/weather_private_bigquery_contract.py \
+            ops/lib/deploy_executor/weather_private_bigquery_runtime_materialization.py \
+            ops/lib/deploy_executor/weather_private_bigquery_execution_bridge.py \
+            ops/lib/deploy_executor/weather_private_bigquery_trusted_backend.py \
+            ops/lib/deploy_executor/weather_private_bigquery_host_runtime.py \
+            ops/lib/deploy_executor/weather_private_bigquery_host_bindings.py \
+            ops/bin/rpi5-weathernext-private-host
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          value = json.loads(
+              Path("ops/deploy/weather-private-bigquery-host-runtime.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          if value["schema"] != "rozkalns-weather.weathernext-private-host-runtime-source.v1":
+              raise SystemExit("WeatherNext private host runtime schema mismatch")
+          if value["execution_enabled"] is not False:
+              raise SystemExit("source contract must remain execution-disabled")
+          if value["runtime_activation_enabled"] is not False:
+              raise SystemExit("source contract must remain runtime-inactive")
+          if value["shared_registry_modified"] is not False:
+              raise SystemExit("#552 must not claim shared-registry mutation")
+          if value["source_merge_authorizes_live"] is not False:
+              raise SystemExit("source merge must not authorize LIVE")
+          if value["production_mutation_started"] is not False:
+              raise SystemExit("CI/source contract cannot claim production mutation")
+          PY

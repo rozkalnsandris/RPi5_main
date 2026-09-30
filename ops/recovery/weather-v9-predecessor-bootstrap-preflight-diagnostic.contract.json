@@ -1,0 +1,55 @@
+{
+  "schema": "rozkalns.rpi5-main.weather-v9-predecessor-bootstrap-preflight-diagnostic-contract.v1",
+  "issue": 636,
+  "purpose": "Classify the canonical Weather v9 predecessor-bootstrap read-only preflight failure without exposing protected runtime details or modifying the installed capability.",
+  "root_read_only": true,
+  "source_repository": "rozkalnsandris/RPi5_main",
+  "predecessor_source_sha": "80261255b3be2aa7dd40986254d4ea478b4e2e1b",
+  "failure_codes": {
+    "ARTIFACT_IDENTITY": ["ARTIFACT_IDENTITY_INVALID"],
+    "BOOTSTRAP_CAPABILITY": ["CAPABILITY_CLOSURE_INVALID"],
+    "DURABLE_BASELINE": [
+      "CONFIG_ROOT_METADATA_INVALID",
+      "REGISTRATION_PRESENT",
+      "STAGING_RESIDUE_PRESENT",
+      "STATE_DB_PRESENT",
+      "STATE_ROOT_METADATA_INVALID"
+    ],
+    "EXECUTION_PROVENANCE": ["EXECUTION_PROVENANCE_INVALID"],
+    "INTERNAL": ["UNCLASSIFIED"],
+    "POSTCONDITION": ["CANONICAL_PREFLIGHT_REJECTED"],
+    "PREDECESSOR_CONTRACT": ["CONTRACT_INVALID"],
+    "SOURCE_IDENTITY": ["SOURCE_IDENTITY_INVALID"]
+  },
+  "failure_output_forbids": [
+    "raw_exception_text",
+    "protected_paths",
+    "file_contents",
+    "git_stderr",
+    "environment_values",
+    "credentials",
+    "arbitrary_runtime_state"
+  ],
+  "success_fields": [
+    "schema",
+    "result",
+    "diagnostic_source_sha",
+    "execution_source_sha",
+    "predecessor_source_sha",
+    "host_mutation_started",
+    "automatic_retry",
+    "automatic_cleanup",
+    "automatic_rollback"
+  ],
+  "writes_allowed": false,
+  "systemd_mutation": false,
+  "replay_mutation": false,
+  "weather_runtime_mutation": false,
+  "database_mutation": false,
+  "corpus_mutation": false,
+  "permission_mutation": false,
+  "automatic_retry": false,
+  "automatic_cleanup": false,
+  "automatic_rollback": false,
+  "source_merge_authorizes_live": false
+}

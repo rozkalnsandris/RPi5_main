@@ -7,19 +7,29 @@ import json
 import os
 import pathlib
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
 import time
 
+import rpi5_deploy_lib as deploy_lib
 from rpi5_deploy_lib import (CTX, ENGINE_INSTALLED_FILES, ENGINE_RELEASES,
     ENGINE_SCHEMA, ENGINE_SOURCE_FILES, EXPECTED_REPOSITORY, DeployError,
     append_log, atomic_json, build_plan, engine_source_preflight, ensure_no_conflicts,
-    expected_fingerprint, fingerprint, git, github_checks, host_identity,
+    expected_fingerprint, fingerprint, fsync_dir, git, github_checks, host_identity,
     host_preflight, load_plan, operation_lock, read_manifest,
     repository_preflight, require_normal_user, require_root, run, safe_file,
-    sha256_file, verify_engine_integrity, verify_plan_targets)
+    sha256_file, verify_dir, verify_engine_integrity, verify_plan_targets)
 from rpi5_deploy_tx import apply_plan, latest_transaction, manual_rollback
+
+WEATHERNEXT_ENGINE_SOURCE = "scripts/rpi5_weathernext_bootstrap.py"
+if WEATHERNEXT_ENGINE_SOURCE not in deploy_lib.ENGINE_SOURCE_FILES:
+    deploy_lib.ENGINE_SOURCE_FILES = (*deploy_lib.ENGINE_SOURCE_FILES, WEATHERNEXT_ENGINE_SOURCE)
+ENGINE_SOURCE_FILES = deploy_lib.ENGINE_SOURCE_FILES
+ENGINE_INSTALLED_FILES["rpi5_weathernext_bootstrap.py"] = "0400"
+
+from rpi5_weathernext_bootstrap import capability_descriptor, execute_weathernext_bootstrap
 
 
 REQUIRED_GITHUB_CHECKS = {"validate"}
@@ -153,7 +163,10 @@ def stage_engine_release(
         "rpi5_deploy.py": "scripts/rpi5_deploy.py",
         "rpi5_deploy_lib.py": "scripts/rpi5_deploy_lib.py",
         "rpi5_deploy_tx.py": "scripts/rpi5_deploy_tx.py",
+        "rpi5_weathernext_bootstrap.py": WEATHERNEXT_ENGINE_SOURCE,
     }
+    if set(source_by_name) != set(ENGINE_INSTALLED_FILES):
+        raise DeployError("deploy engine installed-file inventory drifted")
     for name, relative in source_by_name.items():
         source = CTX.repo / relative
         destination = stage / name
@@ -188,11 +201,119 @@ def stage_engine_release(
     return metadata_path, wrapper_path
 
 
+def engine_install_repository_preflight() -> dict[str, str]:
+    if CTX.test_mode:
+        return repository_preflight(validate=True)
+    remote = git("remote", "get-url", "origin")
+    if not deploy_lib.REMOTE_RE.fullmatch(remote):
+        raise DeployError("origin is not the approved credential-free GitHub remote")
+    branch = git("branch", "--show-current")
+    if branch not in {"", "main"}:
+        raise DeployError("engine installation requires exact main or a clean detached exact-main worktree")
+    if git("status", "--porcelain=v1", "--untracked-files=all"):
+        raise DeployError("engine installation repository working tree is not clean")
+    git("fetch", "--prune", "origin", "main")
+    head = git("rev-parse", "HEAD")
+    origin = git("rev-parse", "origin/main")
+    if head != origin:
+        raise DeployError("engine installation HEAD does not equal origin/main")
+    if branch == "main" and git("rev-parse", "main") != head:
+        raise DeployError("engine installation main branch does not equal HEAD")
+    run(["make", "validate"], cwd=CTX.repo, capture=False, timeout=1200, as_user=True)
+    return {
+        "branch": branch or "detached",
+        "head": head,
+        "origin_main": origin,
+        "remote": "github.com/rozkalnsandris/RPi5_main",
+    }
+
+
+def _require_deploy_lock_metadata(
+    *, raw_mode: int, uid: int, gid: int, nlink: int
+) -> None:
+    lock_path = pathlib.Path("/var/lib/rpi5-deploy/deploy.lock")
+    if (
+        not stat.S_ISREG(raw_mode)
+        or stat.S_ISLNK(raw_mode)
+        or nlink != 1
+        or uid != 0
+        or gid != 0
+        or stat.S_IMODE(raw_mode) != 0o600
+    ):
+        raise DeployError(f"deploy engine control file drifted: {lock_path}")
+
+
+def _probe_deploy_lock() -> bool:
+    lock_path = pathlib.Path("/var/lib/rpi5-deploy/deploy.lock")
+
+    symlink = run(["sudo", "/usr/bin/test", "-L", str(lock_path)], check=False)
+    if symlink.returncode not in {0, 1}:
+        raise DeployError("deploy engine control symlink probe failed")
+    if symlink.returncode == 0:
+        raise DeployError(f"deploy engine control file drifted: {lock_path}")
+
+    exists = run(["sudo", "/usr/bin/test", "-e", str(lock_path)], check=False)
+    if exists.returncode not in {0, 1}:
+        raise DeployError("deploy engine control existence probe failed")
+    if exists.returncode == 1:
+        return False
+
+    metadata = run([
+        "sudo", "/usr/bin/stat", "--printf=%f:%u:%g:%h", "--", str(lock_path),
+    ], check=False)
+    if metadata.returncode != 0:
+        raise DeployError("deploy engine control metadata probe failed")
+    fields = metadata.stdout.strip().split(":")
+    if len(fields) != 4:
+        raise DeployError("deploy engine control metadata probe returned invalid output")
+    try:
+        raw_mode = int(fields[0], 16)
+        uid = int(fields[1], 10)
+        gid = int(fields[2], 10)
+        nlink = int(fields[3], 10)
+    except ValueError as exc:
+        raise DeployError("deploy engine control metadata probe returned invalid output") from exc
+    _require_deploy_lock_metadata(
+        raw_mode=raw_mode, uid=uid, gid=gid, nlink=nlink
+    )
+    return True
+
+
+def ensure_engine_control_state() -> None:
+    state_dir = pathlib.Path("/var/lib/rpi5-deploy")
+    lock_path = state_dir / "deploy.lock"
+    if state_dir.exists():
+        info = verify_dir(state_dir, root_owned=True)
+        if info.st_gid != 0 or stat.S_IMODE(info.st_mode) != 0o700:
+            raise DeployError("deploy engine state directory metadata drifted")
+    else:
+        run([
+            "sudo", "install", "-d", "-o", "root", "-g", "root", "-m", "0700",
+            str(state_dir),
+        ], capture=False)
+        info = verify_dir(state_dir, root_owned=True)
+        if info.st_gid != 0 or stat.S_IMODE(info.st_mode) != 0o700:
+            raise DeployError("deploy engine state directory metadata drifted")
+
+    if not _probe_deploy_lock():
+        with tempfile.NamedTemporaryFile(prefix="rpi5-deploy-lock-", delete=False) as handle:
+            temporary = pathlib.Path(handle.name)
+        try:
+            run([
+                "sudo", "install", "-o", "root", "-g", "root", "-m", "0600",
+                str(temporary), str(lock_path),
+            ], capture=False)
+        finally:
+            temporary.unlink(missing_ok=True)
+    if not _probe_deploy_lock():
+        raise DeployError("deploy engine control file is missing after installation")
+
+
 def install_engine(confirm: str) -> None:
     require_normal_user()
     if CTX.installed_engine:
         raise DeployError("install-engine must run from the repository controller")
-    repository = repository_preflight(validate=True)
+    repository = engine_install_repository_preflight()
     require_target_contract()
     checks = github_checks(repository["head"])
     require_repo_checks(checks)
@@ -235,6 +356,7 @@ def install_engine(confirm: str) -> None:
                          "/usr/bin/python3", str(release / "rpi5_deploy.py"), "engine-status",
                          "--release-only"]
         run(direct_engine, capture=False, timeout=300)
+        ensure_engine_control_state()
         run(["sudo", "install", "-o", "root", "-g", "root", "-m", "0700",
              str(wrapper_path), str(system_wrapper_tmp)], capture=False)
         run(["sudo", "mv", "-f", "--", str(system_wrapper_tmp), str(system_wrapper)], capture=False)
@@ -247,8 +369,14 @@ def engine_status(release_only: bool) -> None:
     integrity = verify_engine_integrity()
     source = engine_source_preflight()
     scope = "release" if release_only else "system"
+    capability = capability_descriptor()
     print(f"ENGINE PASS scope={scope} release={integrity['release']} repo={CTX.repo}")
     print(f"source_files={source.get('source_count', 0)} installed_from={integrity['installed_from_commit']}")
+    print(
+        "weathernext_capability="
+        f"{capability['operation']} caller_input={capability['caller_input']} "
+        f"status={capability['status']}"
+    )
 
 
 def plan() -> None:
@@ -336,6 +464,11 @@ def rollback(confirm: str, latest: bool) -> None:
     print("ROLLBACK PASS")
 
 
+def weather_private_installer_bootstrap(authorization_issue_number: int) -> None:
+    result = execute_weathernext_bootstrap(authorization_issue_number)
+    print(json.dumps(result, sort_keys=True, separators=(",", ":")))
+
+
 def logs(lines: int) -> None:
     require_root()
     if not 1 <= lines <= 1000:
@@ -361,6 +494,8 @@ def parser() -> argparse.ArgumentParser:
     undo = sub.add_parser("rollback")
     undo.add_argument("--latest", action="store_true")
     undo.add_argument("--confirm", required=True)
+    weather = sub.add_parser("weather-private-installer-bootstrap")
+    weather.add_argument("--authorization-issue-number", type=int, required=True)
     tail = sub.add_parser("logs")
     tail.add_argument("--lines", type=int, default=100)
     return result
@@ -385,14 +520,17 @@ def main() -> int:
             status()
         elif args.command == "rollback":
             rollback(args.confirm, args.latest)
+        elif args.command == "weather-private-installer-bootstrap":
+            weather_private_installer_bootstrap(args.authorization_issue_number)
         elif args.command == "logs":
             logs(args.lines)
     except (DeployError, OSError, json.JSONDecodeError, subprocess.TimeoutExpired) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
-        try:
-            append_log(f"FAIL command={args.command} reason={str(exc)[:500]}")
-        except Exception:
-            pass
+        if args.command != "weather-private-installer-bootstrap":
+            try:
+                append_log(f"FAIL command={args.command} reason={str(exc)[:500]}")
+            except Exception:
+                pass
         return 1
     return 0
 

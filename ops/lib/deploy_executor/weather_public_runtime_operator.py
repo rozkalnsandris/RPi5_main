@@ -84,6 +84,7 @@ MAX_COMMAND_OUTPUT = 65536
 RENAME_NOREPLACE = 1
 _SHA40_RE = re.compile(r"^[0-9a-f]{40}$")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_IMAGE_ID_RE = re.compile(r"^(?:sha256:)?([0-9a-f]{64})$")
 FIXED_COMMAND_ENV = {
     "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
     "LANG": "C.UTF-8",
@@ -212,6 +213,15 @@ def _require_success(result: CommandResult, where: str) -> str:
     if type(result) is not CommandResult or result.returncode != 0:
         _fail(f"{where} failed closed")
     return result.stdout
+
+
+def _canonical_image_id(value: str, where: str) -> str:
+    if type(value) is not str:
+        _fail(f"{where} image identity is invalid")
+    match = _IMAGE_ID_RE.fullmatch(value)
+    if match is None:
+        _fail(f"{where} image identity is invalid")
+    return f"sha256:{match.group(1)}"
 
 
 def _write_all(fd: int, raw: bytes) -> None:
@@ -361,11 +371,58 @@ class ConcreteSanitizedWeatherBaselineProvider:
             _fail(f"Weather baseline {where} failed closed")
         return result
 
+    def _current_release_from_project(self, project_ids: tuple[str, ...]) -> tuple[str, Path, Path]:
+        release_root = Path(RELEASE_ROOT)
+        try:
+            root_meta = release_root.lstat()
+        except OSError as exc:
+            raise RuntimeError("Weather release root is unavailable") from exc
+        if not stat.S_ISDIR(root_meta.st_mode) or stat.S_ISLNK(root_meta.st_mode):
+            _fail("Weather release root identity is unsafe")
+
+        observed: list[tuple[str, Path]] = []
+        label_template = '{{ index .Config.Labels "com.docker.compose.project.config_files" }}'
+        for container_id in project_ids:
+            raw = self._run(
+                ("/usr/bin/docker", "inspect", "--format", label_template, container_id),
+                "project config provenance",
+            ).stdout.strip()
+            if not raw or "\x00" in raw or "," in raw:
+                _fail("Weather Compose config provenance is invalid")
+            config_path = Path(raw)
+            try:
+                relative = config_path.relative_to(release_root)
+            except ValueError:
+                _fail("Weather Compose config provenance escaped release root")
+            expected_parts = (relative.parts[0], *COMPOSE_RELATIVE.parts) if relative.parts else ()
+            if (
+                len(relative.parts) != len(COMPOSE_RELATIVE.parts) + 1
+                or tuple(relative.parts) != expected_parts
+                or _SHA40_RE.fullmatch(relative.parts[0]) is None
+            ):
+                _fail("Weather Compose config provenance is not a canonical release path")
+            current_sha = relative.parts[0]
+            canonical = release_root / current_sha / COMPOSE_RELATIVE
+            if config_path != canonical:
+                _fail("Weather Compose config provenance is not canonical")
+            observed.append((current_sha, config_path))
+
+        if len(set(observed)) != 1:
+            _fail("Weather deployed release provenance is ambiguous")
+        current_sha, compose = observed[0]
+        release = release_root / current_sha
+        try:
+            release_meta = release.lstat()
+        except OSError as exc:
+            raise RuntimeError("Weather deployed release is unavailable") from exc
+        if not stat.S_ISDIR(release_meta.st_mode) or stat.S_ISLNK(release_meta.st_mode):
+            _fail("Weather deployed release directory identity is unsafe")
+        _require_regular(compose)
+        return current_sha, release, compose
+
     def resolve(self, *, source_sha: str, target_alias: str) -> Mapping[str, Any]:
         if target_alias != TARGET_ALIAS or type(source_sha) is not str or _SHA40_RE.fullmatch(source_sha) is None:
             _fail("Weather baseline identity drifted")
-        release = Path(RELEASE_ROOT) / source_sha
-        compose = release / COMPOSE_RELATIVE
         project = self._run(
             ("/usr/bin/docker", "ps", "-a", "--filter", f"label=com.docker.compose.project={COMPOSE_PROJECT}", "--format", "{{.ID}}"),
             "project discovery",
@@ -382,8 +439,9 @@ class ConcreteSanitizedWeatherBaselineProvider:
             _fail("Weather baseline volume identity is ambiguous")
         volume_state = "present" if volume_out == HOST_VOLUME else "absent"
 
+        compose: Path | None = None
         if project_ids:
-            _require_regular(compose)
+            current_source_sha, release, compose = self._current_release_from_project(project_ids)
             head = self._run(
                 ("/usr/bin/git", "--no-optional-locks", "-C", str(release), "rev-parse", "HEAD"),
                 "release HEAD",
@@ -392,7 +450,7 @@ class ConcreteSanitizedWeatherBaselineProvider:
                 ("/usr/bin/git", "--no-optional-locks", "-C", str(release), "status", "--porcelain=v1", "--untracked-files=all"),
                 "release cleanliness",
             ).stdout
-            if head != source_sha or clean:
+            if head != current_source_sha or clean:
                 _fail("Weather deployed release provenance drifted")
             exact_ids = self._run(
                 ("/usr/bin/docker", "compose", "-p", COMPOSE_PROJECT, "-f", str(compose), "ps", "-aq", "weather"),
@@ -401,18 +459,23 @@ class ConcreteSanitizedWeatherBaselineProvider:
             exact = tuple(item.strip() for item in exact_ids if item.strip())
             if len(exact) != 1 or exact[0] not in set(project_ids):
                 _fail("Weather baseline project is not bound to one exact weather service")
-            container_image = self._run(
-                ("/usr/bin/docker", "inspect", "--format", "{{.Image}}", exact[0]),
-                "container image identity",
-            ).stdout.strip()
-            compose_image = self._run(
-                ("/usr/bin/docker", "compose", "-p", COMPOSE_PROJECT, "-f", str(compose), "images", "-q", "weather"),
-                "compose image identity",
-            ).stdout.strip()
-            if not container_image or container_image != compose_image:
+            container_image = _canonical_image_id(
+                self._run(
+                    ("/usr/bin/docker", "inspect", "--format", "{{.Image}}", exact[0]),
+                    "container image identity",
+                ).stdout.strip(),
+                "Weather running",
+            )
+            compose_image = _canonical_image_id(
+                self._run(
+                    ("/usr/bin/docker", "compose", "-p", COMPOSE_PROJECT, "-f", str(compose), "images", "-q", "weather"),
+                    "compose image identity",
+                ).stdout.strip(),
+                "Weather release",
+            )
+            if container_image != compose_image:
                 _fail("Weather running image is not the exact release image")
             deployment_state = "deployed"
-            current_source_sha: str | None = source_sha
         else:
             deployment_state = "not_deployed"
             current_source_sha = None
@@ -420,6 +483,8 @@ class ConcreteSanitizedWeatherBaselineProvider:
         schema_state = "absent"
         schema_version: int | None = None
         if deployment_state == "deployed":
+            if compose is None:
+                _fail("Weather deployed baseline lost Compose provenance")
             readiness = self._run(
                 ("/usr/bin/docker", "compose", "-p", COMPOSE_PROJECT, "-f", str(compose), "exec", "-T", "weather", "rozkalns-weather", "readiness"),
                 "readiness",
@@ -901,9 +966,6 @@ class WeatherCompositeOperator:
             if checkout.state not in {"absent", "verified_existing"}:
                 _fail("Weather trusted checkout preflight state drifted")
 
-            # First mutation boundary: durable replay consume. From the instant this
-            # call is attempted the authorization is non-reusable, even if SQLite
-            # fails before a CONSUMED receipt can be returned.
             active_stage = "durable_replay_consume"
             consumed = True
             replay = self._replay.consume(authority.request_id)

@@ -1,0 +1,13 @@
+[Unit]
+Description=Poll for one fresh Weather v9 LIVE authorization
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=1min
+AccuracySec=15s
+RandomizedDelaySec=10s
+Unit=rozkalns-weather-operator-v9-dispatch-caller.service
+Persistent=false
+
+[Install]
+WantedBy=timers.target

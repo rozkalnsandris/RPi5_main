@@ -4,14 +4,17 @@ on:
   pull_request:
     paths:
       - ops/bin/hermes-deals-runner-smoke-audit
+      - ops/bin/rpi5-hermes-deals-runner-smoke-install
       - ops/contracts/hermes-deals-runner-smoke-install-v2.json
       - ops/deploy/hermes-deals-runner-smoke-audit-registration.json
       - ops/deploy/executor-operations.json
       - ops/lib/deploy_executor/hermes_deals_runner_smoke_install.py
       - ops/lib/deploy_executor/hermes_deals_runner_smoke_install_consumer.py
       - ops/lib/deploy_executor/hermes_deals_runner_smoke_install_execution_bridge.py
+      - ops/lib/deploy_executor/hermes_deals_runner_smoke_install_runtime.py
       - tests/test-hermes-deals-runner-smoke-install-execution-bridge.py
       - tests/test-hermes-deals-runner-smoke-install-consumer.py
+      - tests/test-hermes-deals-runner-smoke-install-runtime.py
       - tests/test-hermes-deals-runner-smoke-install.py
       - tests/test-deploy-executor-p4.py
       - docs/HERMES_DEALS_RUNNER_SMOKE_INSTALL.md
@@ -21,14 +24,17 @@ on:
       - main
     paths:
       - ops/bin/hermes-deals-runner-smoke-audit
+      - ops/bin/rpi5-hermes-deals-runner-smoke-install
       - ops/contracts/hermes-deals-runner-smoke-install-v2.json
       - ops/deploy/hermes-deals-runner-smoke-audit-registration.json
       - ops/deploy/executor-operations.json
       - ops/lib/deploy_executor/hermes_deals_runner_smoke_install.py
       - ops/lib/deploy_executor/hermes_deals_runner_smoke_install_consumer.py
       - ops/lib/deploy_executor/hermes_deals_runner_smoke_install_execution_bridge.py
+      - ops/lib/deploy_executor/hermes_deals_runner_smoke_install_runtime.py
       - tests/test-hermes-deals-runner-smoke-install-execution-bridge.py
       - tests/test-hermes-deals-runner-smoke-install-consumer.py
+      - tests/test-hermes-deals-runner-smoke-install-runtime.py
       - tests/test-hermes-deals-runner-smoke-install.py
       - tests/test-deploy-executor-p4.py
       - docs/HERMES_DEALS_RUNNER_SMOKE_INSTALL.md
@@ -51,10 +57,14 @@ jobs:
           python3 ./tests/test-hermes-deals-runner-smoke-install.py
           python3 ./tests/test-hermes-deals-runner-smoke-install-consumer.py
           python3 ./tests/test-hermes-deals-runner-smoke-install-execution-bridge.py
+          python3 ./tests/test-hermes-deals-runner-smoke-install-runtime.py
           python3 ./tests/test-deploy-executor-p4.py
           python3 -m py_compile \
             ./ops/bin/hermes-deals-runner-smoke-audit \
+            ./ops/bin/rpi5-hermes-deals-runner-smoke-install \
             ./ops/lib/deploy_executor/hermes_deals_runner_smoke_install.py \
             ./ops/lib/deploy_executor/hermes_deals_runner_smoke_install_consumer.py \
-            ./ops/lib/deploy_executor/hermes_deals_runner_smoke_install_execution_bridge.py
+            ./ops/lib/deploy_executor/hermes_deals_runner_smoke_install_execution_bridge.py \
+            ./ops/lib/deploy_executor/hermes_deals_runner_smoke_install_runtime.py
           test -x ./ops/bin/hermes-deals-runner-smoke-audit
+          test -x ./ops/bin/rpi5-hermes-deals-runner-smoke-install

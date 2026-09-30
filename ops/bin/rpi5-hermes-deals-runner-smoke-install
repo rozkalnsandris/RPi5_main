@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[2]
+LIB = ROOT / "ops" / "lib"
+if str(LIB) not in sys.path:
+    sys.path.insert(0, str(LIB))
+
+from deploy_executor.hermes_deals_runner_smoke_install import receipt_dict
+from deploy_executor.hermes_deals_runner_smoke_install_runtime import (
+    RunnerSmokeInstallRuntimeError,
+    build_runner_smoke_install_runtime,
+)
+
+FAILURE_SCHEMA = "rozkalns.hermes-deals.runner-smoke-install-runtime-failure.v1"
+
+
+def _json(value: dict[str, object]) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+
+def _issue_number(argv: list[str]) -> int | None:
+    if len(argv) != 3 or argv[1] != "--issue-number":
+        return None
+    try:
+        value = int(argv[2], 10)
+    except ValueError:
+        return None
+    return value if 1 <= value <= 2_147_483_647 else None
+
+
+def _failure(issue_number: int, *, stage: str, reuse_forbidden: bool) -> str:
+    return _json(
+        {
+            "schema": FAILURE_SCHEMA,
+            "result": "FAIL_CLOSED",
+            "authorization_issue_number": issue_number,
+            "safe_stage": stage,
+            "authorization_reuse_forbidden": reuse_forbidden,
+            "mutation_state": "UNKNOWN_FAIL_CLOSED" if reuse_forbidden else "NOT_STARTED",
+            "automatic_retry": False,
+            "automatic_cleanup": False,
+            "automatic_rollback": False,
+        }
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv if argv is None else argv)
+    issue_number = _issue_number(argv)
+    if issue_number is None:
+        print("RUNNER_SMOKE_INSTALL=REJECTED reason=exact_issue_number_required", file=sys.stderr)
+        return 64
+
+    try:
+        runtime = build_runner_smoke_install_runtime()
+    except RunnerSmokeInstallRuntimeError:
+        print(_failure(issue_number, stage="runtime_composition", reuse_forbidden=False))
+        return 70
+
+    try:
+        receipt = runtime.execute(issue_number)
+    except RunnerSmokeInstallRuntimeError:
+        print(_failure(issue_number, stage="install_execution", reuse_forbidden=True))
+        return 71
+
+    print(_json(dict(receipt_dict(receipt))))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

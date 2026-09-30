@@ -1,0 +1,60 @@
+{
+  "issue": 634,
+  "later_live_sequence": [
+    "materialize_exact_merged_repair_source",
+    "owner_interactive_root_read_only_repair_preflight",
+    "separate_exact_owner_live_repair_apply",
+    "read_only_post_repair_closure_verification",
+    "one_new_root_broker_read_only_preflight",
+    "fresh_predecessor_bootstrap_apply_authorization_if_preflight_passes"
+  ],
+  "predecessor": {
+    "broker_sha256": "4e484763444027ded541429944ae5a1ebacd3beaf81b00198c7be07954fa2676",
+    "registration_schema": "rozkalns.rpi5-main.weather-v9-predecessor-bootstrap-capability-registration.v1",
+    "source_sha": "7beb7da3908b3f74ffc96cba6297402523096c2b"
+  },
+  "preserve": {
+    "permissions_and_ownership": true,
+    "release_files_except_broker": 8,
+    "replay_root_and_state": true,
+    "service_unit": true,
+    "socket_activation_state": true,
+    "socket_unit": true
+  },
+  "purpose": "Repair the already-installed Weather v9 predecessor-bootstrap broker import closure without reinstalling or widening the privileged capability.",
+  "repair": {
+    "apply_requires_separate_live_authorization": true,
+    "automatic_cleanup": false,
+    "automatic_retry": false,
+    "automatic_rollback": false,
+    "bootstrap_apply": false,
+    "fixed_targets": {
+      "/etc/rozkalns-weather-v9-predecessor-bootstrap/registration.json": "0600",
+      "/usr/local/libexec/rozkalns-weather-v9-predecessor-bootstrap/current/ops/bin/rozkalns-weather-v9-predecessor-bootstrap-broker": "0755"
+    },
+    "mutation_budget": [
+      {
+        "category": "filesystem.weather-v9-bootstrap-registration-atomic-replace",
+        "max_operations": 1
+      },
+      {
+        "category": "filesystem.weather-v9-bootstrap-broker-atomic-replace",
+        "max_operations": 1
+      }
+    ],
+    "other_release_file_mutation": false,
+    "preflight_is_read_only": true,
+    "preflight_requires_root": true,
+    "replay_mutation": false,
+    "systemd_mutation": false,
+    "weather_runtime_mutation": false
+  },
+  "schema": "rozkalns.rpi5-main.weather-v9-predecessor-bootstrap-capability-repair.v1",
+  "source_merge_authorizes_live": false,
+  "status": "SOURCE_ONLY_LIVE_LATER",
+  "target": {
+    "broker_sha256": "f7bcf225166fe1598139abbbaf26c713b81170ef49ccbd94b32d046957c4a892",
+    "source_sha": "DERIVE_FROM_EXACT_MERGED_TRUSTED_REPAIR_CHECKOUT",
+    "trusted_source_checkout_name": "RPi5_main-weather-v9-predecessor-bootstrap-capability-repair-source-trusted"
+  }
+}

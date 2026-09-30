@@ -1,0 +1,16 @@
+[Unit]
+Description=Rozkalns Weather v9 capability identity socket
+
+[Socket]
+ListenStream=/run/rozkalns-weather-operator-v9-capability/request.sock
+Accept=yes
+SocketUser=root
+SocketGroup=rozkalns-deploy-executor
+SocketMode=0660
+DirectoryMode=0755
+RemoveOnStop=yes
+Backlog=4
+MaxConnections=1
+
+[Install]
+WantedBy=sockets.target

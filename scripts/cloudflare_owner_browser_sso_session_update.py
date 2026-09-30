@@ -37,6 +37,7 @@ WRITABLE_FIELDS = frozenset(
         "mfa_piv_key_requirements",
         "mfa_required_for_all_apps",
         "name",
+        "service_token_inactivity",
         "session_duration",
         "ui_read_only_toggle_reason",
         "user_seat_expiration_inactive_time",
@@ -84,6 +85,9 @@ _DICT_FIELDS = frozenset(
     }
 )
 _STRING_LIST_FIELDS = frozenset({"deny_unmatched_requests_exempted_zone_names"})
+_SERVICE_TOKEN_INACTIVITY_FIELDS = frozenset({"action", "enabled", "inactivity_threshold_days"})
+FORWARD_REQUEST_FIELDS = frozenset({"session_duration"})
+_SERVICE_TOKEN_INACTIVITY_MAX_BYTES = 1024
 
 
 class CloudflareOrganizationUpdateAttemptError(AuditError):
@@ -176,9 +180,38 @@ def collect_organization(client: CloudflareGetClient, account_id: str) -> dict[s
     return _unwrap_organization(client.get(f"/accounts/{account_id}/access/organizations"))
 
 
+def _validate_service_token_inactivity(value: Any) -> None:
+    if not isinstance(value, dict) or set(value) != _SERVICE_TOKEN_INACTIVITY_FIELDS:
+        raise AuditError("organization_service_token_inactivity_shape_invalid")
+    # Cloudflare currently documents action=disable|delete and a 30..365 day
+    # threshold, but live GET evidence has returned a value outside that schema.
+    # This unrelated object is therefore bound as opaque observed state and is
+    # never echoed into the PUT request. Keep only structural/size guarantees.
+    if any(
+        item is not None and type(item) not in {str, bool, int, float}
+        for item in value.values()
+    ):
+        raise AuditError("organization_service_token_inactivity_value_invalid")
+    try:
+        encoded = json.dumps(
+            value,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
+    except (TypeError, ValueError, UnicodeEncodeError) as exc:
+        raise AuditError("organization_service_token_inactivity_value_invalid") from exc
+    if len(encoded) > _SERVICE_TOKEN_INACTIVITY_MAX_BYTES:
+        raise AuditError("organization_service_token_inactivity_value_invalid")
+
+
 def _validate_writable_value(key: str, value: Any) -> None:
     if value is None:
         raise AuditError("organization_writable_field_null")
+    if key == "service_token_inactivity":
+        _validate_service_token_inactivity(value)
+        return
     if key in _BOOL_FIELDS:
         if not isinstance(value, bool):
             raise AuditError("organization_writable_field_type_invalid")
@@ -252,10 +285,11 @@ def build_update_plan(organization: dict[str, Any]) -> UpdatePlan:
     current_effective, current_source = _effective_session(organization)
     if current_effective == TARGET_GLOBAL_SESSION:
         raise AuditError("global_session_already_target")
-    payload = deepcopy(before)
-    payload["session_duration"] = TARGET_GLOBAL_SESSION
-    if _semantic_diff(before, payload) != {"session_duration"}:
+    expected_after = deepcopy(before)
+    expected_after["session_duration"] = TARGET_GLOBAL_SESSION
+    if _semantic_diff(before, expected_after) != {"session_duration"}:
         raise AuditError("organization_update_diff_not_session_only")
+    payload = {"session_duration": TARGET_GLOBAL_SESSION}
     _validate_payload(payload)
     return UpdatePlan(
         payload=payload,
@@ -267,13 +301,10 @@ def build_update_plan(organization: dict[str, Any]) -> UpdatePlan:
 
 
 def _validate_payload(payload: dict[str, Any]) -> None:
-    if not isinstance(payload, dict) or not payload:
-        raise AuditError("organization_update_payload_invalid")
-    if set(payload) - WRITABLE_FIELDS:
-        raise AuditError("organization_update_payload_contains_nonwritable_field")
-    for key, value in payload.items():
-        _validate_writable_value(key, value)
-    if payload.get("session_duration") != TARGET_GLOBAL_SESSION:
+    if not isinstance(payload, dict) or set(payload) != FORWARD_REQUEST_FIELDS:
+        raise AuditError("organization_update_payload_not_minimal")
+    _validate_writable_value("session_duration", payload["session_duration"])
+    if payload["session_duration"] != TARGET_GLOBAL_SESSION:
         raise AuditError("organization_update_target_invalid")
 
 
@@ -281,14 +312,16 @@ def verify_post_write(plan: UpdatePlan, organization: dict[str, Any]) -> dict[st
     after = _writable_projection(organization)
     if after.get("session_duration") != TARGET_GLOBAL_SESSION:
         raise AuditError("post_write_global_session_not_target")
-    if after != plan.payload:
+    expected_after = deepcopy(plan.before_writable)
+    expected_after["session_duration"] = TARGET_GLOBAL_SESSION
+    if after != expected_after:
         raise AuditError("post_write_writable_projection_changed")
     response_only_unchanged = _response_only_binding(organization) == plan.response_only_binding
     if not response_only_unchanged:
         raise AuditError("post_write_response_only_state_changed")
     return {
         "global_session_target_applied": True,
-        "writable_projection_matches_intended_payload": True,
+        "writable_projection_matches_preimage_except_session_duration": True,
         "response_only_fields_unchanged": True,
     }
 
@@ -339,6 +372,9 @@ def execute_canary(
         "current_session_source": plan.current_session_source,
         "target_session": TARGET_GLOBAL_SESSION,
         "writable_field_count": len(plan.before_writable),
+        "forward_request_field_count": len(plan.payload),
+        "forward_request_is_minimal_session_only": set(plan.payload) == FORWARD_REQUEST_FIELDS,
+        "service_token_inactivity_forwarded": "service_token_inactivity" in plan.payload,
         "response_only_field_count": len(plan.response_only_binding),
         "response_only_fields_bound_separately": True,
         "payload_contains_response_only_fields": False,

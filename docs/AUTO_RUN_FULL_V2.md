@@ -110,7 +110,7 @@ Each worker run makes the maximum coherent progress supported by fresh GitHub ev
 10. perform the final exact-head merge gate;
 11. use GitHub auto-merge when repository capability is enabled and the exact head is already fully ready;
 12. verify exact post-merge `main` and Definition of Done;
-13. continue only into runtime/live classes already frozen by activation;
+13. continue only into runtime/live classes already frozen by activation, using either a reviewed repository executor or direct RDC host execution when that executor is permitted by the frozen envelope and technical permissions;
 14. write terminal receipt and return controller to `IDLE`.
 
 Three materially identical failed attempts without a materially new safe hypothesis produce `STOP_ERROR`.
@@ -155,13 +155,17 @@ Strict checks may require a new head/check run after base drift. Any changed hea
 
 ## Runtime/live boundary
 
-AUTO-RUN FULL is not arbitrary root, sudo, secret or infrastructure authority.
+AUTO-RUN FULL is not generic or unbounded root, sudo, secret or infrastructure authority. Authority must exist before executor choice.
 
-For `RPi5_main`, the up-front command may cover live execution only for exact mutation classes and targets frozen before the first live mutation and only through existing reviewed repository executor protocols. `#236` remains the deterministic GitHub-to-RPi5 execution trust boundary where applicable.
+For `RPi5_main`, the up-front command may cover live execution only for exact mutation classes and targets frozen before the first live mutation. Once that exact authority exists, the operation may run through an existing reviewed repository executor protocol or directly through the authorized RDC transport as `andris`. Direct host-shell, Docker and `sudo`/root execution are allowed only inside that exact frozen class/target envelope and only when OS/RDC/sudoers permissions technically permit them.
+
+`#236` remains the deterministic GitHub-to-RPi5 execution trust boundary when that reviewed executor path is selected or required by the operation. It is not a categorical requirement to manufacture a narrow executor when direct RDC execution is already explicitly owner-authorized for the frozen operation.
+
+Direct RDC authority never implies generic host-shell authority, a different target, a different mutation class, secret/credential access, protected configuration/runtime inspection, database/data mutation, networking/DNS/Cloudflare changes, permission/trust-boundary changes, reboot/destructive work, retry, rollback or cleanup. Those remain separate classes and must be frozen explicitly when needed.
 
 New secret/credential/permission/trust-boundary classes, undeclared DB/infrastructure mutation, a different production target or another unbound live operation produce `STOP_SCOPE_OR_RISK`.
 
-After source merge and exact-main verification, one bounded Composite LIVE may cover tightly coupled runtime steps only if those mutation classes/targets were frozen by the active authorization model and accepted by the reviewed executor protocol.
+After source merge and exact-main verification, one bounded Composite LIVE may cover tightly coupled runtime steps only if those mutation classes/targets were frozen by the active authorization model. The selected executor may be a reviewed repository operation or direct RDC host execution; executor choice does not expand authority.
 
 After a live mutation starts, recovery follows only retry/rollback/cleanup semantics already frozen by authorization. Otherwise an error or ambiguous result is `STOP_ERROR`; no improvisational retry, rollback, cleanup or alternate mutation path.
 

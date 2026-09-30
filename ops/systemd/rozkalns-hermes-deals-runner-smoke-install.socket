@@ -1,0 +1,13 @@
+[Unit]
+Description=Rozkalns Hermes Deals runner-smoke install identity socket
+
+[Socket]
+ListenStream=/run/rozkalns-hermes-deals-runner-smoke-install/request.sock
+SocketMode=0600
+SocketUser=andris
+Accept=yes
+Backlog=1
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target

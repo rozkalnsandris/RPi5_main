@@ -1,0 +1,43 @@
+name: hermes-deals
+
+services:
+  api:
+    image: ghcr.io/rozkalnsandris/hermes-deals:production
+    restart: unless-stopped
+    env_file:
+      - /etc/rozkalns-simple-deployer/private/hermes-deals-api.env
+    environment:
+      APP_ENV: production
+      LOG_LEVEL: INFO
+      RAW_SNAPSHOT_DIR: /data/raw
+      SOURCES_CONFIG: /app/config/sources.json
+      HERMES_UI_ASSET_MODE: inline-w3
+    volumes:
+      - type: bind
+        source: /var/lib/rozkalns-simple-deployer/hermes-deals/data/raw
+        target: /data/raw
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /var/lib/rozkalns-simple-deployer/hermes-deals/config
+        target: /app/config
+        read_only: true
+        bind:
+          create_host_path: false
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      internal:
+        aliases:
+          - api
+
+networks:
+  internal:
+    external: true
+    name: hermes-deals_internal

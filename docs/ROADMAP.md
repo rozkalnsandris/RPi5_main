@@ -100,6 +100,12 @@ Issue #438 adds the missing executable/installable **source** capability: an imm
 
 After #438 source merge the global registry still remains `execution_enabled=false`; helper launch wiring, privileged dispatch, host wiring, helper installation/invocation and production mutation all remain false. Therefore #438 completes the **source implementation prerequisite**, not the deployment. The next Weather phase is a separately authorized exact `STRICT LIVE` install/activation/first-rollout envelope with fresh merged RPi5_main SHA, exact Weather SHA/CI, sanitized host baseline, whole preactivation hash, bounded dates/recovery/mutation budgets and explicit postconditions. Production corpus write/recovery and private WeatherNext/BigQuery inputs remain separately bounded classes.
 
+## WeatherNext private BigQuery — source trust boundary
+
+Issue #540 introduces a separate execution-disabled source contract for the private WeatherNext 3 BigQuery path. It deliberately does not expand `rozkalns-weather.public-runtime-release.v1`; public Weather authority continues to exclude Google Cloud, BigQuery and WeatherNext private access. See [the WeatherNext private BigQuery source boundary](WEATHERNEXT_PRIVATE_BIGQUERY_SOURCE.md).
+
+The first-access scope is fixed to `station_10416`, 6 forecast hours, mandatory dry-run, a hard 1 GiB/query bytes ceiling, both `0p05_station` and `0p1_surface`, no home scope and no SQLite write. Private runtime materialization, Google authentication/project binding, Analytics Hub link creation, read-only BigQuery first access and the first SQLite snapshot remain distinct later owner-gated mutation classes. Exact Weather source SHA/CI must be JIT-verified before future execution.
+
 ## Later phases
 
 Each remaining subsystem is imported separately with redaction, tests, rollback instructions and a pull request. Docker Compose, Home Assistant, monitoring, update scripts and application repositories remain outside the V12 target set until their own contracts are reviewed. Cloudflare runtime ownership is defined by V13, while application-origin/runtime hardening is imported one reviewed subsystem at a time beginning with V14.

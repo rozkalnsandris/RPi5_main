@@ -1,0 +1,113 @@
+{
+  "schema": "rozkalns.rpi5-main.weather-v7-host-capability-installer-source-trusted-checkout-bootstrap.v2",
+  "repository": "rozkalnsandris/RPi5_main",
+  "issue": 586,
+  "source_only": true,
+  "status": "SOURCE_READY_FOR_CORRECTED_TRUSTED_INSTALLER_SOURCE_DELIVERY",
+  "purpose": "Create a new immutable clean detached exact-main RPi5_main checkout for the corrected #571 Weather v7 host-capability installer after the sudo Git trust preflight fix, without mutating the original installer-source checkout.",
+  "reviewed_origin": "https://github.com/rozkalnsandris/RPi5_main.git",
+  "predecessor_checkout": {
+    "name": "RPi5_main-weather-v7-host-capability-installer-source-trusted",
+    "mutation_allowed": false,
+    "cleanup_allowed": false,
+    "authority_source": false
+  },
+  "trusted_checkout": {
+    "name": "RPi5_main-weather-v7-host-capability-installer-source-v2-trusted",
+    "derivation": "RPi5_CHECKOUT_PARENT/RPi5_main-weather-v7-host-capability-installer-source-v2-trusted",
+    "distinct_from_predecessor_checkout": "RPi5_main-weather-v7-host-capability-installer-source-trusted",
+    "distinct_from_later_operator_checkout": "RPi5_main-weather-public-runtime-operator-upgrade-v7-trusted",
+    "expected_sha_authority": "EXPLICIT_WEATHER_V7_HOST_CAPABILITY_INSTALLER_SOURCE_V2_LIVE_EXACT_RPI5_MAIN_SHA",
+    "expected_sha_format": "LOWERCASE_40_HEX",
+    "fresh_origin_main_must_equal_expected_sha": true,
+    "exact_current_main_required": true,
+    "exact_main_ci_required": true,
+    "required_post_state": "EXACT_SHA_DETACHED_CLEAN_CORRECT_ORIGIN",
+    "required_paths": [
+      "scripts/install-weather-operator-v7-host-capability.py",
+      "tests/test-weather-v7-host-capability-sudo-git-trust.py",
+      "ops/deploy/weather-public-runtime-operator-upgrade-v7-host-capability-installer.json",
+      "ops/bin/rozkalns-weather-operator-v7-privileged-broker",
+      "ops/systemd/rozkalns-weather-operator-v7-privileged-broker.socket",
+      "ops/systemd/rozkalns-weather-operator-v7-privileged-broker@.service"
+    ]
+  },
+  "preflight_states": {
+    "ABSENT": "fixed v2 target checkout path and worktree registration are absent; source delivery may proceed only under a fresh exact owner LIVE authorization",
+    "EXACT_CLEAN": "fixed v2 target exists at the exact authorized SHA, detached, clean and at the reviewed origin; no Git mutation is required",
+    "CONFLICT": "any target path/worktree/origin/SHA/attachment/dirty mismatch; STOP with read-only evidence and no cleanup or alternate target"
+  },
+  "required_exact_main_checks": [
+    "validate",
+    "gitleaks",
+    "GITHUB-ONLY policy drift / GITHUB-ONLY policy drift",
+    "policy-drift / FAST-LANE v2.2 policy drift",
+    "public-automation-baseline / public automation policy"
+  ],
+  "allowed_git_mutations": [
+    {
+      "order": 1,
+      "repository": "RPi5_CHECKOUT_PARENT/RPi5_main",
+      "argv": ["git", "fetch", "origin", "main"],
+      "mutation_category": "git.weather-v7-host-capability-installer-source-v2-fetch",
+      "max_operations": 1,
+      "working_tree_content_mutation": false
+    },
+    {
+      "order": 2,
+      "repository": "RPi5_CHECKOUT_PARENT/RPi5_main",
+      "argv": [
+        "git",
+        "worktree",
+        "add",
+        "--detach",
+        "RPi5_CHECKOUT_PARENT/RPi5_main-weather-v7-host-capability-installer-source-v2-trusted",
+        "EXPLICIT_WEATHER_V7_HOST_CAPABILITY_INSTALLER_SOURCE_V2_LIVE_EXACT_RPI5_MAIN_SHA"
+      ],
+      "mutation_category": "git.weather-v7-host-capability-installer-source-v2-worktree-add",
+      "max_operations": 1,
+      "working_tree_content_mutation": false
+    }
+  ],
+  "post_fetch_gate": {
+    "require_origin_main_equals_expected_sha": true,
+    "require_expected_sha_is_current_github_main": true,
+    "require_exact_main_ci_success": true,
+    "main_or_ci_drift_behavior": "STOP_NO_WORKTREE_CREATION"
+  },
+  "handoff": {
+    "next_gate": "SEPARATE_OWNER_LIVE_WEATHER_V7_HOST_CAPABILITY_INSTALL",
+    "installer_entrypoint": "scripts/install-weather-operator-v7-host-capability.py",
+    "installer_must_run_from_this_exact_checkout": true,
+    "source_delivery_authorizes_installer_apply": false,
+    "source_delivery_authorizes_operator_upgrade": false,
+    "source_delivery_authorizes_weather_rollout": false
+  },
+  "forbidden_git_operations": [
+    "reset",
+    "rebase",
+    "clean",
+    "stash",
+    "checkout",
+    "switch",
+    "merge",
+    "pull",
+    "worktree remove",
+    "worktree prune",
+    "worktree repair",
+    "branch",
+    "commit",
+    "push",
+    "force"
+  ],
+  "failure": {
+    "authorization_consumed_at_first_git_mutation": true,
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "predecessor_checkout_cleanup": false,
+    "alternate_checkout_route": false,
+    "after_first_mutation_error": "STOP_PRESERVE_MINIMUM_READ_ONLY_EVIDENCE"
+  },
+  "source_merge_enables_live": false
+}

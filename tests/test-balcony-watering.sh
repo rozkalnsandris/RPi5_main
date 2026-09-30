@@ -11,6 +11,7 @@ trap 'rm -rf -- "$tmp"' EXIT
 mkdir -p "$tmp/bin"
 actions="$tmp/actions.log"
 logfile="$tmp/watering.log"
+switch_state="$tmp/switch-state"
 
 cat >"$tmp/bin/curl" <<'MOCK_CURL'
 #!/usr/bin/env bash
@@ -24,12 +25,31 @@ done
 
 case "$url" in
     */api/services/switch/turn_on)
+        code="${MOCK_ON_CODE:-200}"
         printf 'on\n' >>"${MOCK_ACTIONS:?}"
-        printf '%s' "${MOCK_ON_CODE:-200}"
+        if [[ "$code" == "200" && "${MOCK_ON_APPLY:-1}" == "1" ]]; then
+            printf 'on\n' >"${MOCK_SWITCH_STATE_FILE:?}"
+        fi
+        printf '%s' "$code"
         ;;
     */api/services/switch/turn_off)
+        code="${MOCK_OFF_CODE:-200}"
         printf 'off\n' >>"${MOCK_ACTIONS:?}"
-        printf '%s' "${MOCK_OFF_CODE:-200}"
+        if [[ "$code" == "200" && "${MOCK_OFF_APPLY:-1}" == "1" ]]; then
+            printf 'off\n' >"${MOCK_SWITCH_STATE_FILE:?}"
+        fi
+        printf '%s' "$code"
+        ;;
+    */api/states/switch.balkona_laistisana_suknis)
+        case "${MOCK_SWITCH_STATE_MODE:-valid}" in
+            empty) exit 0 ;;
+            malformed) printf '{bad-json' ;;
+            valid)
+                state="$(cat "${MOCK_SWITCH_STATE_FILE:?}")"
+                printf '{"state":"%s"}' "$state"
+                ;;
+            *) echo "unknown MOCK_SWITCH_STATE_MODE" >&2; exit 96 ;;
+        esac
         ;;
     */api/states/weather.forecast_home)
         case "${MOCK_WEATHER_MODE:-valid}" in
@@ -90,6 +110,7 @@ export BALCONY_WATERING_PAUSE_SECONDS=0
 export BALCONY_WATERING_LOCKFILE="$tmp/watering.lock"
 export BALCONY_WATERING_LOGFILE="$logfile"
 export MOCK_ACTIONS="$actions"
+export MOCK_SWITCH_STATE_FILE="$switch_state"
 unset TELEGRAM_TOKEN CHAT_ID
 
 fail() {
@@ -104,9 +125,14 @@ assert_actions() {
     [[ "$actual" == "$expected" ]] || fail "expected actions '$expected', got '$actual'"
 }
 
-run_primary() {
+reset_run() {
     : >"$actions"
     : >"$logfile"
+    printf 'off\n' >"$switch_state"
+}
+
+run_primary() {
+    reset_run
     bash "$primary" >"$tmp/stdout" 2>"$tmp/stderr"
 }
 
@@ -118,12 +144,14 @@ bash -n "$heat_gate"
 
 # 1-2: all 14 required sensors valid; flower 5 is absent and does not block.
 export MOCK_SENSOR_MODE=valid MOCK_ON_CODE=200 MOCK_OFF_CODE=200
+export MOCK_ON_APPLY=1 MOCK_OFF_APPLY=1 MOCK_SWITCH_STATE_MODE=valid
 run_primary
 assert_actions 'on,off,on,off'
 
-# 3-7: every uncertainty case skips before pump ON.
+# 3-7: every sensor uncertainty case skips before pump ON.
 for mode in missing unavailable unknown empty malformed; do
     export MOCK_SENSOR_MODE="$mode" MOCK_ON_CODE=200 MOCK_OFF_CODE=200
+    export MOCK_ON_APPLY=1 MOCK_OFF_APPLY=1 MOCK_SWITCH_STATE_MODE=valid
     run_primary
     assert_actions ''
 done
@@ -133,30 +161,68 @@ if grep -Ev '^[[:space:]]*#' "$primary" | grep -q 'last_updated'; then
     fail "runtime code must not depend on last_updated"
 fi
 
-# 9: an OFF failure retries three times, then EXIT cleanup retries OFF three
-# more times while PUMP_IS_ON remains set. No second ON may occur.
+# 9: an OFF HTTP failure retries three times, then EXIT cleanup retries OFF
+# three more times while the may-be-ON hazard flag remains set.
 export MOCK_SENSOR_MODE=valid MOCK_ON_CODE=200 MOCK_OFF_CODE=500
-: >"$actions"
+export MOCK_ON_APPLY=1 MOCK_OFF_APPLY=1 MOCK_SWITCH_STATE_MODE=valid
+reset_run
 set +e
 bash "$primary" >"$tmp/stdout" 2>"$tmp/stderr"
 rc=$?
 set -e
-[[ "$rc" -ne 0 ]] || fail "persistent pump-OFF failure must fail the run"
+[[ "$rc" -ne 0 ]] || fail "persistent pump-OFF HTTP failure must fail the run"
 assert_actions 'on,off,off,off,off,off,off'
 
-# 10: heat gate below threshold never delegates; at threshold it delegates to
-# the primary controller, which still performs its own 14-sensor guard.
+# 10: HTTP 200 for ON is not enough. If the switch never reports ON, the
+# duplicate-sensitive ON is not retried and the trap performs a confirmed OFF.
+export MOCK_SENSOR_MODE=valid MOCK_ON_CODE=200 MOCK_OFF_CODE=200
+export MOCK_ON_APPLY=0 MOCK_OFF_APPLY=1 MOCK_SWITCH_STATE_MODE=valid
+reset_run
+set +e
+bash "$primary" >"$tmp/stdout" 2>"$tmp/stderr"
+rc=$?
+set -e
+[[ "$rc" -ne 0 ]] || fail "unconfirmed pump ON must fail the run"
+assert_actions 'on,off'
+
+# 11: HTTP 200 for OFF is not enough either. Repeated OFF is safe, so normal
+# retries and the trap continue while the switch still reports ON.
+export MOCK_SENSOR_MODE=valid MOCK_ON_CODE=200 MOCK_OFF_CODE=200
+export MOCK_ON_APPLY=1 MOCK_OFF_APPLY=0 MOCK_SWITCH_STATE_MODE=valid
+reset_run
+set +e
+bash "$primary" >"$tmp/stdout" 2>"$tmp/stderr"
+rc=$?
+set -e
+[[ "$rc" -ne 0 ]] || fail "unconfirmed pump OFF must fail the run"
+assert_actions 'on,off,off,off,off,off,off'
+
+# 12: malformed switch-state feedback after an accepted ON is uncertainty.
+# The controller must fail and attempt only OFF cleanup, never a second ON.
+export MOCK_SENSOR_MODE=valid MOCK_ON_CODE=200 MOCK_OFF_CODE=200
+export MOCK_ON_APPLY=1 MOCK_OFF_APPLY=1 MOCK_SWITCH_STATE_MODE=malformed
+reset_run
+set +e
+bash "$primary" >"$tmp/stdout" 2>"$tmp/stderr"
+rc=$?
+set -e
+[[ "$rc" -ne 0 ]] || fail "malformed switch-state feedback must fail the run"
+assert_actions 'on,off,off,off'
+
+# 13: heat gate below threshold never delegates; at threshold it delegates to
+# the primary controller, which still performs its own 14-sensor/state gates.
 export MOCK_SENSOR_MODE=valid MOCK_ON_CODE=200 MOCK_OFF_CODE=200 MOCK_WEATHER_MODE=valid
+export MOCK_ON_APPLY=1 MOCK_OFF_APPLY=1 MOCK_SWITCH_STATE_MODE=valid
 export BALCONY_WATERING_PRIMARY="$primary"
 export MOCK_TEMP=26.9
-: >"$actions"
+reset_run
 bash "$heat_gate" >"$tmp/stdout" 2>"$tmp/stderr"
 assert_actions ''
 
 export MOCK_TEMP=27.0
-: >"$actions"
+reset_run
 bash "$heat_gate" >"$tmp/stdout" 2>"$tmp/stderr"
 assert_actions 'on,off,on,off'
 
-# 11: all network-capable curl calls were forced through the local mock above.
-printf 'Balcony watering regression: PASS (offline guard, cleanup, heat gate)\n'
+# 14: all network-capable curl calls were forced through the local mock above.
+printf 'Balcony watering regression: PASS (offline guard, state confirmation, cleanup, heat gate)\n'

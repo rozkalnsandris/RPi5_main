@@ -1,0 +1,93 @@
+{
+  "schema": "rozkalns.rpi5-main.weather-operator-upgrade-v9-host-capability-installer.v1",
+  "issue": 603,
+  "status": "SOURCE_READY_FOR_HOST_CAPABILITY_INSTALL",
+  "source_repository": "rozkalnsandris/RPi5_main",
+  "operation_id": "rpi5-main.weather-operator-upgrade-v9.v1",
+  "authorization_class": "STRICT",
+  "ordinary_live_all_eligible": false,
+  "identity_only_dispatch_schema": "rozkalns.deploy-dispatch-request.v1",
+  "authorization_repository": "rozkalnsandris/ops-workflows",
+  "future_ready_queue_required": true,
+  "artifact_count": 15,
+  "fixed_targets": {
+    "/usr/local/libexec/rozkalns-weather-operator-v9-capability/deploy_executor/__init__.py": "0644",
+    "/usr/local/libexec/rozkalns-weather-operator-v9-capability/deploy_executor/dispatch_contract.py": "0644",
+    "/usr/local/libexec/rozkalns-weather-operator-v9-capability/deploy_executor/github_app_auth.py": "0644",
+    "/usr/local/libexec/rozkalns-weather-operator-v9-capability/deploy_executor/p9_canary.py": "0644",
+    "/usr/local/libexec/rozkalns-weather-operator-v9-capability/deploy_executor/p9_isolated_auth_surface.py": "0644",
+    "/usr/local/libexec/rozkalns-weather-operator-v9-capability/deploy_executor/p9_runtime.py": "0644",
+    "/usr/local/libexec/rozkalns-weather-operator-v9-capability/deploy_executor/protocol.py": "0644",
+    "/usr/local/libexec/rozkalns-weather-operator-v9-capability/deploy_executor/queue_normalizer.py": "0644",
+    "/usr/local/libexec/rozkalns-weather-operator-v9-capability/deploy_executor/registry.py": "0644",
+    "/usr/local/libexec/rozkalns-weather-operator-v9-capability/deploy_executor/state.py": "0644",
+    "/usr/local/libexec/rozkalns-weather-operator-v9-capability/deploy_executor/transport.py": "0644",
+    "/usr/local/libexec/rozkalns-weather-operator-v9-capability/deploy_executor/weather_operator_upgrade_v9_host_capability.py": "0644",
+    "/usr/local/libexec/rozkalns-weather-operator-v9-privileged-broker": "0755",
+    "/etc/systemd/system/rozkalns-weather-operator-v9-privileged-broker.socket": "0644",
+    "/etc/systemd/system/rozkalns-weather-operator-v9-privileged-broker@.service": "0644"
+  },
+  "generated_runtime_state": {
+    "registration": "/etc/rozkalns-weather-operator-v9-capability/registration.json",
+    "registration_mode": "0600",
+    "replay_database": "/var/lib/rozkalns-weather-operator-v9-capability/state.sqlite3",
+    "replay_database_mode": "0600",
+    "first_install_only": true
+  },
+  "socket": {
+    "path": "/run/rozkalns-weather-operator-v9-capability/request.sock",
+    "user": "root",
+    "group": "rozkalns-deploy-executor",
+    "mode": "0660",
+    "accept": true,
+    "max_connections": 1
+  },
+  "credential": {
+    "source": "/etc/rozkalns-deploy-executor/github-app.pem",
+    "delivery": "systemd LoadCredential",
+    "caller_selectable": false,
+    "source_issue_access": false
+  },
+  "future_operator_mutation_budget": [
+    {
+      "category": "git.weather-operator-upgrade-v9-checkout-fetch",
+      "max_operations": 1
+    },
+    {
+      "category": "git.weather-operator-upgrade-v9-checkout-worktree-add",
+      "max_operations": 1
+    },
+    {
+      "category": "filesystem.weather-operator-upgrade-v9-atomic-replace",
+      "max_operations": 1
+    }
+  ],
+  "host_install_gate": {
+    "source_merge_authorizes_live": false,
+    "requires_separate_exact_owner_live_authorization": true,
+    "installer_default_mode": "READ_ONLY_PREFLIGHT",
+    "apply_flag": "--apply",
+    "apply_requires_root": true,
+    "allowed_install_mutations": [
+      "filesystem.weather-v9-capability-first-install",
+      "sqlite.weather-v9-capability-replay-state-bootstrap",
+      "systemd.weather-v9-capability-daemon-reload",
+      "systemd.weather-v9-capability-socket-enable-start"
+    ],
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false
+  },
+  "separation": {
+    "v7_authority_reused": false,
+    "p8_mutation_dispatch_enabled": false,
+    "global_executor_execution_enabled": false,
+    "weather_runtime_rollout": false,
+    "weather_operator_replacement_during_install": false,
+    "v9_checkout_creation_during_install": false,
+    "database_or_corpus_mutation": false,
+    "network_or_cloudflare_mutation": false,
+    "repository_settings_mutation": false
+  },
+  "post_install_state": "HOST_CAPABILITY_INSTALLED_CALLER_INSTALL_REQUIRED_OPERATOR_UPGRADE_NOT_AUTHORIZED"
+}

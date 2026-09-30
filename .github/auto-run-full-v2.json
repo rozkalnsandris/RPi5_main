@@ -37,6 +37,18 @@
     "waiting_ci_or_review_consumes_source_slot": false,
     "legacy_singleton_controller_state": "FAIL_CLOSED_MIGRATION_INPUT"
   },
+  "runtime_executor_model": {
+    "authority_precedes_executor_choice": true,
+    "direct_rdc_allowed_after_exact_live_authority": true,
+    "direct_rdc_execution_identity": "andris",
+    "direct_host_shell_allowed_after_exact_live_authority": true,
+    "direct_docker_allowed_after_exact_live_authority": true,
+    "direct_sudo_or_root_allowed_after_exact_live_authority_when_technically_permitted": true,
+    "reviewed_repository_executor_is_an_allowed_but_not_exclusive_executor": true,
+    "technical_os_rdc_sudoers_permissions_still_apply": true,
+    "generic_unbounded_root_or_shell_authority": false,
+    "protected_data_access_requires_separately_frozen_authority": true
+  },
   "delivery_unit": {
     "contract": ".github/outcome-delivery-v1.json",
     "default": "SINGLE_OUTCOME_PR",
@@ -97,6 +109,7 @@
     "POST_MERGE_READ_ONLY_REVALIDATION",
     "MATERIALIZE_EXISTING_REVIEWED_LIVE_AUTH_WHEN_THE_FROZEN_ENVELOPE_ALREADY_AUTHORIZES_IT",
     "EXECUTE_ONLY_PREDECLARED_REVIEWED_RUNTIME_OPERATION_CLASSES",
+    "DIRECT_RDC_HOST_EXECUTION_FOR_EXACT_FROZEN_LIVE_CLASS_TARGET_WHEN_TECHNICALLY_PERMITTED",
     "POST_OPERATION_VERIFICATION_AND_RECEIPTS"
   ],
   "never_implied": [
@@ -105,7 +118,7 @@
     "NEW_PERMISSION_OR_TRUST_BOUNDARY",
     "NEW_DATABASE_WRITE_OR_MIGRATION_CLASS",
     "NEW_CLOUDFLARE_OR_INFRASTRUCTURE_MUTATION_CLASS",
-    "ARBITRARY_SSH_OR_SHELL_AUTHORITY",
+    "UNBOUNDED_OR_UNSCOPED_SSH_OR_SHELL_AUTHORITY",
     "RESET_REBASE_FORCE_OR_HISTORY_REWRITE",
     "NATIVE_STACK_REBASE_OR_FORCE_WITH_LEASE_UNDER_CURRENT_POLICY",
     "UNDECLARED_CLEANUP",
@@ -138,10 +151,17 @@
   "live": {
     "auto_run_full_command_may_be_up_front_live_authority_only_for_frozen_predeclared_mutation_classes": true,
     "exact_target_and_operation_identity_required_before_first_live_mutation": true,
+    "authority_precedes_executor_choice": true,
+    "direct_rdc_allowed_for_exact_frozen_class_target": true,
+    "direct_rdc_execution_identity": "andris",
+    "direct_docker_allowed_when_frozen_and_technically_permitted": true,
+    "direct_sudo_or_root_allowed_when_frozen_and_technically_permitted": true,
+    "reviewed_repository_executor_required_exclusively": false,
     "use_existing_236_live_auth_protocol_when_applicable": true,
     "live_auth_must_be_owner_identity_on_github": true,
     "prefer_one_bounded_composite_live_for_tightly_coupled_same_outcome_steps": true,
     "merge_authorizes_live": false,
+    "protected_data_or_secret_access_implied_by_docker_or_sudo": false,
     "new_mutation_class_after_activation": "STOP_SCOPE_OR_RISK",
     "post_mutation_error": "STOP_ERROR_NO_UNDECLARED_RETRY_CLEANUP_ROLLBACK_OR_ALTERNATE_PATH"
   },

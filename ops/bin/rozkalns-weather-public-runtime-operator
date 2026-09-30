@@ -35,6 +35,8 @@ def _classify_consumed_jit_failure(exc: BaseException) -> str:
     status = getattr(exc, 'status', None)
     if name == 'NetworkFailure':
         return 'public_source_network'
+    if name == 'RateLimitError':
+        return 'public_source_rate_limited'
     if name == 'HTTPStatusError':
         if status in _TRANSIENT_HTTP_STATUSES:
             return 'public_source_transient_http'
@@ -143,10 +145,9 @@ def _cacheable_public_source_path(path: Any) -> bool:
     parts = remainder.split('/', 2)
     if len(parts) < 2 or f'{parts[0]}/{parts[1].split("?", 1)[0]}' not in _SOURCE_REPOSITORIES:
         return False
-    if path.endswith('/branches/main'):
-        return False
     return (
         len(parts) == 2
+        or path.endswith('/branches/main')
         or '/compare/' in path
         or '/actions/workflows/' in path
         or '/actions/runs/' in path
@@ -156,7 +157,7 @@ def _cacheable_public_source_path(path: Any) -> bool:
 def _install_runtime_jit_hardening() -> None:
     from deploy_executor import weather_public_runtime_composite as composite
     from deploy_executor import weather_public_runtime_operator as operator
-    from deploy_executor.transport import HTTPStatusError, NetworkFailure
+    from deploy_executor.transport import HTTPStatusError, NetworkFailure, RateLimitError
 
     if getattr(composite, '_WEATHER_CONSUMED_JIT_HARDENING_V2', False):
         return
@@ -229,9 +230,36 @@ def _install_runtime_jit_hardening() -> None:
             if self.last is None or observed > self.last:
                 self.last = observed
 
+    class RuntimePublicSourceSender:
+        def __init__(self, sender: Any):
+            self._sender = sender
+
+        def send(self, *, method: str, url: str, headers: Any):
+            response = self._sender.send(method=method, url=url, headers=headers)
+            response_headers = {
+                str(key).lower(): str(value).strip()
+                for key, value in response.headers.items()
+            }
+            rate_limited = (
+                response.status == 429
+                or (
+                    response.status == 403
+                    and (
+                        response_headers.get('x-ratelimit-remaining') == '0'
+                        or 'retry-after' in response_headers
+                    )
+                )
+            )
+            if rate_limited:
+                retry_after_text = response_headers.get('retry-after', '')
+                retry_after = int(retry_after_text) if retry_after_text.isdigit() else 0
+                raise RateLimitError(response.status, retry_after)
+            return response
+
     class RuntimePublicSourceClient(original_public_client):
         def __init__(self, *args: Any, **kwargs: Any):
             super().__init__(*args, **kwargs)
+            self._sender = RuntimePublicSourceSender(self._sender)
             self._consumed_evidence_cache: dict[str, Any] = {}
 
         def _fresh_get_with_retry(self, path_or_url: str):
@@ -243,6 +271,10 @@ def _install_runtime_jit_hardening() -> None:
                         if in_consumed_revalidation():
                             _set_consumed_jit_failure('public_source_network')
                         raise
+                except RateLimitError:
+                    if in_consumed_revalidation():
+                        _set_consumed_jit_failure('public_source_rate_limited')
+                    raise
                 except HTTPStatusError as exc:
                     if exc.status not in _TRANSIENT_HTTP_STATUSES:
                         if in_consumed_revalidation():

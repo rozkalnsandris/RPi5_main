@@ -18,11 +18,22 @@ test:
 	python3 ./tests/test-control-phase5-observation-credential-reconciliation.py
 	python3 ./tests/test-control-phase5-signer-handoff.py
 	python3 ./tests/test-control-phase5-observation-delivery.py
+	python3 ./tests/test-simple-deploy-v1.py
+	python3 ./tests/test-simple-deploy-hermes-compat-v1.py
+	python3 ./tests/test-simple-deploy-weather-schema-init-v1.py
+	python3 ./tests/test-simple-deploy-weather-data-v1.py
+	python3 ./tests/test-install-simple-deploy-v1.py
+	python3 ./tests/test-install-simple-deploy-weather-data-v1.py
 	python3 ./tests/test-deploy-executor-p1.py
 	python3 ./tests/test-deploy-executor-p2.py
 	python3 ./tests/test-deploy-executor-p4.py
 	python3 ./tests/test-deploy-executor-p5.py
 	python3 ./tests/test-deploy-executor-hermes-deals-origin.py
+	python3 ./tests/test-hermes-deals-runner-smoke-install-consumer.py
+	python3 ./tests/test-hermes-deals-runner-smoke-install-runtime.py
+	python3 ./tests/test-hermes-deals-runner-smoke-github-time-window.py
+	python3 ./tests/test-hermes-deals-runner-smoke-install-broker.py
+	python3 ./tests/test-hermes-deals-runner-smoke-broker-bootstrap.py
 	python3 ./tests/test-deploy-executor-hermes-netto-nonroot-preflight-v2.py
 	python3 ./tests/test-deploy-executor-weather-public-runtime.py
 	python3 ./tests/test-deploy-executor-weather-public-bootstrap.py
@@ -39,7 +50,9 @@ test:
 	python3 ./tests/test-deploy-executor-weather-public-operator-upgrade.py
 	python3 ./tests/test-deploy-executor-weather-public-operator-upgrade-v2.py
 	python3 ./tests/test-deploy-executor-weather-public-historical-operator-upgrades.py
+	python3 ./tests/test-deploy-executor-weather-public-operator-upgrade-v10.py
 	python3 ./tests/test-deploy-executor-weather-public-operator-upgrade-v5.py
+	python3 ./tests/test-deploy-executor-weather-operator-upgrade-v7-privileged-delivery.py
 	python3 ./tests/test-rpi5-main-weather-public-runtime-trusted-checkout-bootstrap.py
 	python3 ./tests/test-deploy-executor-hermes-deals-origin-dispatch-request.py
 	python3 ./tests/test-deploy-executor-hermes-deals-origin-privileged-consumer.py
@@ -101,35 +114,9 @@ test:
 	python3 ./tests/test-dashboard-evidence.py
 	python3 ./tests/test-hermes-tech-restore-drill.py
 	python3 ./tests/test-existing-issue-source-hardening.py
-	bash ./tests/test-maintenance-updater-status.sh
-	bash ./tests/test-maintenance-updater-locks.sh
-	bash ./tests/test-maintenance-updater-reboot.sh
-	bash ./tests/test-maintenance-updater-compose-health.sh
-	bash ./tests/test-maintenance-updater-compose-policy.sh
-	python3 ./tests/test-maintenance-compose-policy-activation.py
-	bash ./tests/test-maintenance-updater-space-policy.sh
-	bash ./tests/test-maintenance-updater-origin-policy.sh
-	bash ./tests/test-maintenance-updater-http-health.sh
-	bash ./tests/test-maintenance-updater-apt-policy.sh
-	python3 ./tests/test-maintenance-v27-activation.py
-	python3 ./tests/test-maintenance-v27-activation-transaction.py
-	bash ./tests/test-maintenance-updater-provenance.sh
-	bash ./tests/test-maintenance-updater-source.sh
-	python3 ./tests/test-maintenance-updater-source-validator.py
-	python3 ./tests/test-maintenance-updater-telegram.py
-	bash ./tests/test-maintenance-health.sh
-	bash ./tests/test-maintenance-health-entrypoints.sh
+	python3 ./tests/test-rpi5-maintenance-integration-boundary.py
 	bash ./tests/test-tmp-headroom-monitor.sh
 	bash ./tests/test-tmp-headroom-activation.sh
-	python3 ./tests/test-maintenance-telegram-credentials.py
-	bash ./tests/test-maintenance-systemd-units.sh
-	python3 ./tests/test-maintenance-systemd-cutover.py
-	bash ./tests/test-maintenance-systemd-notify.sh
-	bash ./tests/test-maintenance-cleanup-policy.sh
-	python3 ./tests/test-maintenance-cleanup-source.py
-	bash ./tests/test-maintenance-shared-lock.sh
-	python3 ./tests/test-maintenance-shared-lock-source.py
-	python3 ./tests/test-maintenance-lock-cutover.py
 	bash ./tests/test-adguard-memory-attribution.sh
 	bash ./tests/test-controlled-deploy.sh
 	bash ./tests/test-cloudflare-tunnel-ownership.sh
@@ -158,6 +145,7 @@ test:
 	python3 ./tests/test-controlled-deploy-rollback.py
 	python3 ./tests/test-vscode-deploy-tasks.py
 	python3 ./tests/test-v12-maintenance-conflicts.py
+	python3 ./tests/test-v12-github-checks.py
 	python3 ./tests/test-deals-route-cutover.py
 	python3 ./tests/test-github-app-readonly.py
 	python3 ./tests/test-github-app-read-token.py
@@ -167,7 +155,7 @@ test:
 	python3 ./tests/test-cv-controller-activation.py
 	python3 ./tests/test-cv-classifier-host-alignment.py
 	python3 ./tests/test-cv-pull-deploy-canary.py
-	python3 -m py_compile scripts/*.py ops/lib/rpi5-update-telegram.py ops/lib/rpi5-maintenance-telegram.py ops/lib/dashboard-evidence.py ops/bin/hermes-tech-restore-drill ops/lib/balkons-bot.py ops/bin/balkons-bot-preflight ops/bin/balkons-bot-deploy-verifier ops/lib/deploy_executor/*.py
+	python3 -m py_compile scripts/*.py ops/lib/dashboard-evidence.py ops/bin/hermes-tech-restore-drill ops/lib/balkons-bot.py ops/bin/balkons-bot-preflight ops/bin/balkons-bot-deploy-verifier ops/lib/deploy_executor/*.py
 
 secret-scan:
 	./scripts/check-no-secrets.sh

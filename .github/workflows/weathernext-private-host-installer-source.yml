@@ -1,0 +1,80 @@
+name: WeatherNext private host installer source
+
+on:
+  pull_request:
+    paths:
+      - "ops/lib/deploy_executor/weather_private_bigquery_host_installer.py"
+      - "ops/lib/deploy_executor/weather_private_bigquery_host_installer_runtime.py"
+      - "ops/bin/rpi5-weathernext-private-host-privileged-install"
+      - "ops/deploy/weather-private-bigquery-host-privileged-installer.json"
+      - "tests/test-deploy-executor-weather-private-bigquery-host-installer.py"
+      - "tests/test-deploy-executor-weather-private-bigquery-host-installer-git-trust.py"
+      - "docs/WEATHERNEXT_PRIVATE_HOST_INSTALLER.md"
+      - ".github/workflows/weathernext-private-host-installer-source.yml"
+  push:
+    branches: [main]
+    paths:
+      - "ops/lib/deploy_executor/weather_private_bigquery_host_installer.py"
+      - "ops/lib/deploy_executor/weather_private_bigquery_host_installer_runtime.py"
+      - "ops/bin/rpi5-weathernext-private-host-privileged-install"
+      - "ops/deploy/weather-private-bigquery-host-privileged-installer.json"
+      - "tests/test-deploy-executor-weather-private-bigquery-host-installer.py"
+      - "tests/test-deploy-executor-weather-private-bigquery-host-installer-git-trust.py"
+      - "docs/WEATHERNEXT_PRIVATE_HOST_INSTALLER.md"
+      - ".github/workflows/weathernext-private-host-installer-source.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  source-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Compile WeatherNext private installer source
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            ops/lib/deploy_executor/weather_private_bigquery_host_installer.py \
+            ops/lib/deploy_executor/weather_private_bigquery_host_installer_runtime.py \
+            ops/lib/deploy_executor/weather_private_bigquery_host_runtime.py \
+            ops/bin/rpi5-weathernext-private-host-privileged-install \
+            ops/bin/rpi5-weathernext-private-host
+      - name: Run focused WeatherNext private installer tests
+        run: |
+          set -euo pipefail
+          python3 tests/test-deploy-executor-weather-private-bigquery-host-runtime.py
+          python3 tests/test-deploy-executor-weather-private-bigquery-host-installer.py
+          python3 tests/test-deploy-executor-weather-private-bigquery-host-installer-git-trust.py
+      - name: Validate closed installer contract
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          value = json.loads(
+              Path("ops/deploy/weather-private-bigquery-host-privileged-installer.json")
+              .read_text(encoding="utf-8")
+          )
+          assert value["schema"] == "rozkalns-weather.weathernext-private-host-privileged-installer-source.v1"
+          assert value["implementation_issue"] == 554
+          assert value["authorization_class"] == "STRICT"
+          assert value["ordinary_live_all_eligible"] is False
+          assert value["caller_authority"] == ["authorization_issue_number"]
+          assert value["fixed_registry_execution_enabled"] is False
+          assert value["global_executor_execution_enabled"] is False
+          assert value["runtime_activation_enabled"] is False
+          assert value["privileged_dispatch_enabled"] is False
+          assert value["source_merge_authorizes_live"] is False
+          assert value["capability_install"]["rollback_policy"] == "NONE"
+          assert value["capability_install"]["automatic_retry"] is False
+          assert value["capability_install"]["automatic_cleanup"] is False
+          assert value["capability_install"]["automatic_rollback"] is False
+          assert value["production_mutation_started"] is False
+          PY

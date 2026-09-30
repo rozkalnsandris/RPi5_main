@@ -1,0 +1,32 @@
+[Unit]
+Description=Weather v9 identity-only privileged dispatch caller
+After=network-online.target rozkalns-weather-operator-v9-privileged-broker.socket
+Wants=network-online.target
+Requires=rozkalns-weather-operator-v9-privileged-broker.socket
+
+[Service]
+Type=oneshot
+User=rozkalns-deploy-executor
+Group=rozkalns-deploy-executor
+LoadCredential=github-app.pem:/etc/rozkalns-deploy-executor/github-app.pem
+StateDirectory=rozkalns-weather-operator-v9-dispatch-caller
+StateDirectoryMode=0700
+ExecStart=/usr/local/libexec/rozkalns-weather-operator-v9-dispatch-caller
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictNamespaces=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/rozkalns-weather-operator-v9-dispatch-caller
+UMask=0077

@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "contract": "rozkalns.hermes-deals.runner-smoke-broker-bootstrap.v3",
+  "status": "SOURCE_READY_LIVE_DISABLED",
+  "implementation_issue": 570,
+  "payload_closure_issue": 588,
+  "repository": "rozkalnsandris/RPi5_main",
+  "historical_v1_trusted_checkout_name": "RPi5_main-runner-smoke-broker-bootstrap-trusted",
+  "historical_v2_trusted_checkout_name": "RPi5_main-runner-smoke-broker-bootstrap-v2-trusted",
+  "trusted_checkout_name": "RPi5_main-runner-smoke-broker-bootstrap-v3-trusted",
+  "reviewed_origin": "https://github.com/rozkalnsandris/RPi5_main.git",
+  "expected_head_mode": "detached",
+  "require_head_equals_origin_main": true,
+  "source_delivery_contract": "ops/deploy/rpi5-main-runner-smoke-broker-bootstrap-v3-source-trusted-checkout-bootstrap.json",
+  "release_root": "/usr/local/libexec/rozkalns-runner-smoke-install",
+  "releases_root": "/usr/local/libexec/rozkalns-runner-smoke-install/releases",
+  "current_link": "/usr/local/libexec/rozkalns-runner-smoke-install/current",
+  "broker_entrypoint": "/usr/local/libexec/rozkalns-runner-smoke-install/current/ops/bin/rpi5-hermes-deals-runner-smoke-install-broker",
+  "runtime_payload_sources": [
+    "ops/bin/hermes-deals-runner-smoke-audit",
+    "ops/deploy/hermes-deals-runner-smoke-audit-registration.json"
+  ],
+  "socket_source": "ops/systemd/rozkalns-hermes-deals-runner-smoke-install.socket",
+  "socket_destination": "/etc/systemd/system/rozkalns-hermes-deals-runner-smoke-install.socket",
+  "service_source": "ops/systemd/rozkalns-hermes-deals-runner-smoke-install@.service",
+  "service_destination": "/etc/systemd/system/rozkalns-hermes-deals-runner-smoke-install@.service",
+  "socket_unit": "rozkalns-hermes-deals-runner-smoke-install.socket",
+  "fresh_install_sequence": [
+    "publish-root-owned-sha-release",
+    "publish-current-symlink",
+    "publish-fixed-systemd-units",
+    "systemctl-daemon-reload",
+    "enable-start-fixed-socket"
+  ],
+  "legacy_exact_upgrade": {
+    "supported": true,
+    "exact_predecessor_release_sha": "db6deecffbc3a46a475d1fd9db97fc679eb15cf8",
+    "required_filesystem_state": "LEGACY_EXACT",
+    "required_socket_enabled_state": "enabled",
+    "required_socket_active_state": "active",
+    "mutation_sequence": [
+      "publish-root-owned-sha-release",
+      "switch-current-symlink"
+    ],
+    "fixed_next_link": "/usr/local/libexec/rozkalns-runner-smoke-install/current.next",
+    "atomic_current_switch": true,
+    "preserve_predecessor_release": true,
+    "systemd_mutation_required": false,
+    "cleanup_allowed": false,
+    "rollback_allowed": false,
+    "automatic_retry": false
+  },
+  "authority": {
+    "caller_arguments": [],
+    "caller_selected_command": false,
+    "caller_selected_path": false,
+    "caller_selected_argv": false,
+    "caller_selected_environment": false,
+    "caller_selected_unit": false,
+    "generic_sudo": false,
+    "dynamic_module_discovery": false,
+    "whole_repository_copy": false,
+    "historical_v1_checkout_authority": false,
+    "historical_v2_checkout_authority": false
+  },
+  "activation": {
+    "source_merge_authorizes_live": false,
+    "source_delivery_live_authorized": false,
+    "runtime_activation_enabled": false,
+    "systemd_socket_installed": false,
+    "separate_source_delivery_live_authorization_required": true,
+    "separate_explicit_live_authorization_required": true,
+    "rdc_no_new_privileges_must_remain": true,
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false
+  },
+  "excluded_mutations": [
+    "trusted source delivery Git mutation without its separate v3 gate",
+    "historical v1 or v2 trusted checkout mutation or cleanup",
+    "legacy exact broker release deletion or rewrite",
+    "runner-smoke helper invocation",
+    "LIVE-AUTH creation or replay consume",
+    "runner-smoke final payload destination mutation",
+    "runner-smoke execution identity mutation",
+    "Docker/network/firewall/DNS/Cloudflare mutation",
+    "database mutation",
+    "credential/secret mutation",
+    "runner settings mutation",
+    "production deployment"
+  ]
+}

@@ -11,6 +11,8 @@ PAUSE="${BALCONY_WATERING_PAUSE_SECONDS:-300}"
 LOCKFILE="${BALCONY_WATERING_LOCKFILE:-/tmp/balcony-watering-2x.lock}"
 LOGFILE="${BALCONY_WATERING_LOGFILE:-${HOME}/.local/state/balcony-watering/watering.log}"
 AUTH_HEADER_NAME="Authorization"
+STATE_CONFIRM_ATTEMPTS=5
+STATE_CONFIRM_INTERVAL_SECONDS=1
 
 [[ "$DURATION" =~ ^[0-9]+$ ]] || { echo "Invalid BALCONY_WATERING_DURATION_SECONDS" >&2; exit 2; }
 [[ "$PAUSE" =~ ^[0-9]+$ ]] || { echo "Invalid BALCONY_WATERING_PAUSE_SECONDS" >&2; exit 2; }
@@ -103,37 +105,108 @@ call_ha() {
     printf '%s\n' "${http:-000}"
 }
 
-retry_ha() {
-    local action="$1"
-    local label="${2:-$action}"
-    local http=""
+read_switch_state() {
+    local resp state
+
+    resp=$(curl -s --max-time 10 \
+        -H "${AUTH_HEADER_NAME}: Bearer ${HASS_TOKEN}" \
+        "${HASS_URL}/api/states/${ENTITY}") || resp=""
+
+    if [[ -z "$resp" ]]; then
+        printf 'UNAVAILABLE\n'
+        return 1
+    fi
+
+    state=$(printf '%s' "$resp" | python3 -c '
+import json
+import sys
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    print("PARSE_FAIL")
+    raise SystemExit(0)
+state = data.get("state") if isinstance(data, dict) else None
+print(state if isinstance(state, str) and state else "PARSE_FAIL")
+') || state="PARSE_FAIL"
+
+    printf '%s\n' "$state"
+    [[ "$state" != "PARSE_FAIL" ]]
+}
+
+wait_for_switch_state() {
+    local expected="$1"
+    local observed="UNAVAILABLE"
     local i
 
-    for i in 1 2 3; do
-        http=$(call_ha "$action")
-        if [[ "$http" == "200" ]]; then
-            log "${label} succeeded (attempt ${i})"
-            printf '200\n'
+    for ((i = 1; i <= STATE_CONFIRM_ATTEMPTS; i++)); do
+        observed=$(read_switch_state) || true
+        if [[ "$observed" == "$expected" ]]; then
             return 0
         fi
-        log "${label} attempt ${i} failed (${http}); waiting 3s"
-        sleep 3
+        if (( i < STATE_CONFIRM_ATTEMPTS )); then
+            sleep "$STATE_CONFIRM_INTERVAL_SECONDS"
+        fi
     done
 
-    log "${label} failed after 3 attempts (${http})"
-    printf '%s\n' "$http"
+    log "STATE-CHECK FAIL: expected ${expected}, observed ${observed}"
     return 1
 }
 
+request_ha_confirmed() {
+    local action="$1"
+    local label="${2:-$action}"
+    local max_attempts=3
+    local http=""
+    local i
+
+    # ON is duplicate-sensitive: a repeated ON can extend an already-running
+    # firmware session. One ambiguous ON request therefore fails closed into
+    # the OFF cleanup path instead of being retried automatically.
+    if [[ "$action" == "on" ]]; then
+        max_attempts=1
+    fi
+
+    for ((i = 1; i <= max_attempts; i++)); do
+        http=$(call_ha "$action")
+        if [[ "$http" == "200" ]]; then
+            if wait_for_switch_state "$action"; then
+                log "${label} confirmed ${action} (attempt ${i})"
+                return 0
+            fi
+
+            log "${label} HTTP 200 but ${action} state was not confirmed"
+            if [[ "$action" == "on" ]]; then
+                return 1
+            fi
+        else
+            log "${label} attempt ${i} failed (${http})"
+            if [[ "$action" == "on" ]]; then
+                log "${label} not retried because ON delivery is duplicate-sensitive"
+                return 1
+            fi
+        fi
+
+        if (( i < max_attempts )); then
+            log "${label} waiting 3s before retry"
+            sleep 3
+        fi
+    done
+
+    log "${label} failed after ${max_attempts} attempt(s)"
+    return 1
+}
+
+# Safety meaning: 1 means the pump may be energized or an ON request is
+# ambiguous. It is cleared only after Home Assistant positively reports OFF.
 PUMP_IS_ON=0
 cleanup() {
     if [[ "$PUMP_IS_ON" == "1" ]]; then
         log "CLEANUP: requesting pump OFF (trap)"
-        if retry_ha "off" "CLEANUP pump OFF" >/dev/null 2>&1; then
+        if request_ha_confirmed "off" "CLEANUP pump OFF" >/dev/null 2>&1; then
             PUMP_IS_ON=0
-            log "CLEANUP OK: pump OFF acknowledged"
+            log "CLEANUP OK: pump OFF confirmed"
         else
-            log "CLEANUP FAIL: pump may still be ON"
+            log "CLEANUP FAIL: pump state remains uncertain"
         fi
     fi
 }
@@ -144,16 +217,16 @@ check_required_sensors
 log "===== starting 2x balcony watering cycle ====="
 
 log "--- cycle 1: requesting pump ON ---"
-if ! retry_ha "on" "cycle 1 pump ON" >/dev/null; then
-    log "FAIL: cycle 1 pump ON was not acknowledged"
+PUMP_IS_ON=1
+if ! request_ha_confirmed "on" "cycle 1 pump ON" >/dev/null; then
+    log "FAIL: cycle 1 pump ON was not state-confirmed"
     exit 1
 fi
-PUMP_IS_ON=1
 log "cycle 1: watering for ${DURATION}s"
 sleep "$DURATION"
 
-if ! retry_ha "off" "cycle 1 pump OFF" >/dev/null; then
-    log "FAIL: cycle 1 pump OFF was not acknowledged"
+if ! request_ha_confirmed "off" "cycle 1 pump OFF" >/dev/null; then
+    log "FAIL: cycle 1 pump OFF was not state-confirmed"
     exit 1
 fi
 PUMP_IS_ON=0
@@ -163,16 +236,16 @@ log "--- pause ${PAUSE}s between cycles ---"
 sleep "$PAUSE"
 
 log "--- cycle 2: requesting pump ON ---"
-if ! retry_ha "on" "cycle 2 pump ON" >/dev/null; then
-    log "FAIL: cycle 2 pump ON was not acknowledged"
+PUMP_IS_ON=1
+if ! request_ha_confirmed "on" "cycle 2 pump ON" >/dev/null; then
+    log "FAIL: cycle 2 pump ON was not state-confirmed"
     exit 1
 fi
-PUMP_IS_ON=1
 log "cycle 2: watering for ${DURATION}s"
 sleep "$DURATION"
 
-if ! retry_ha "off" "cycle 2 pump OFF" >/dev/null; then
-    log "FAIL: cycle 2 pump OFF was not acknowledged"
+if ! request_ha_confirmed "off" "cycle 2 pump OFF" >/dev/null; then
+    log "FAIL: cycle 2 pump OFF was not state-confirmed"
     exit 1
 fi
 PUMP_IS_ON=0

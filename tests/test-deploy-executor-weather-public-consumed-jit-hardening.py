@@ -10,7 +10,6 @@ import os
 from pathlib import Path
 import sys
 import tempfile
-from types import MethodType
 import unittest
 from unittest import mock
 from urllib.parse import urlsplit
@@ -40,7 +39,7 @@ FIXTURE = _load_module(
 )
 
 from deploy_executor.state import StateStore
-from deploy_executor.transport import HTTPResponse, JSONResponse, NetworkFailure
+from deploy_executor.transport import HTTPResponse, HTTPStatusError, NetworkFailure, RateLimitError
 from deploy_executor.weather_public_runtime_operator import (
     ConcreteWeatherReplayAuthority,
     WeatherCompositeOperatorError,
@@ -77,6 +76,21 @@ class PostConsumePublicFailureSender(FIXTURE.FixtureSender):
                 if self.mode == "403":
                     return HTTPResponse(
                         status=403,
+                        headers={
+                            "date": FIXTURE.SERVER_DATE,
+                            "x-ratelimit-remaining": "0",
+                        },
+                        body=b"{}",
+                    )
+                if self.mode == "403_forbidden":
+                    return HTTPResponse(
+                        status=403,
+                        headers={"date": FIXTURE.SERVER_DATE},
+                        body=b"{}",
+                    )
+                if self.mode == "429":
+                    return HTTPResponse(
+                        status=429,
                         headers={"date": FIXTURE.SERVER_DATE},
                         body=b"{}",
                     )
@@ -191,47 +205,25 @@ class WeatherConsumedJITHardeningTests(unittest.TestCase):
         self.assertEqual(current.github_server_time, "2026-09-10T04:02:45Z")
         self.assertIsNone(ENTRYPOINT._LAST_CONSUMED_JIT_FAILURE_CODE)
 
-    def test_consumed_time_window_still_rejects_missing_public_time(self):
+    def test_consumed_jit_does_not_reopen_public_source_time_surface(self):
         sender = PostConsumePublicFailureSender(mode="missing_date", failures=1)
-        target, _sender, _replay, _initial = self._accepted_then_consumed(sender=sender)
-        with self.assertRaises(FIXTURE.WeatherCompositeAuthorityError):
-            target.revalidate_consumed_composite(FIXTURE.AUTH_ISSUE_NUMBER)
-        self.assertEqual(
-            ENTRYPOINT._LAST_CONSUMED_JIT_FAILURE_CODE,
-            "github_time_unavailable_or_invalid",
-        )
+        target, _sender, _replay, initial = self._accepted_then_consumed(sender=sender)
+        initial_public_calls = len(sender.public_authorization_headers)
 
-    def test_consumed_time_window_still_rejects_noncanonical_time(self):
-        target, _sender, _replay, _initial = self._accepted_then_consumed()
-        source_client = target._source_client
-        original = source_client.get_json
-        weather_branch = f"/repos/{FIXTURE.SOURCE_REPOSITORY}/branches/main"
+        current = target.revalidate_consumed_composite(FIXTURE.AUTH_ISSUE_NUMBER)
 
-        def noncanonical(this, path_or_url):
-            response = original(path_or_url)
-            if path_or_url == weather_branch:
-                return JSONResponse(
-                    value=response.value,
-                    server_time=response.server_time.replace(microsecond=1),
-                    etag=response.etag,
-                    not_modified=response.not_modified,
-                    url=response.url,
-                    next_url=response.next_url,
-                )
-            return response
+        self.assertEqual(current.request_id, initial.request_id)
+        self.assertEqual(sender.failure_attempts, 0)
+        self.assertEqual(len(sender.public_authorization_headers), initial_public_calls)
+        self.assertIsNone(ENTRYPOINT._LAST_CONSUMED_JIT_FAILURE_CODE)
 
-        source_client.get_json = MethodType(noncanonical, source_client)
-        with self.assertRaises(FIXTURE.WeatherCompositeAuthorityError):
-            target.revalidate_consumed_composite(FIXTURE.AUTH_ISSUE_NUMBER)
-        self.assertEqual(
-            ENTRYPOINT._LAST_CONSUMED_JIT_FAILURE_CODE,
-            "github_time_noncanonical",
-        )
-
-    def test_consumed_jit_reuses_only_immutable_public_evidence(self):
-        target, sender, _replay, initial = self._accepted_then_consumed()
+    def test_consumed_jit_freezes_public_evidence_and_refreshes_mutable_control_plane(self):
+        target, sender, replay, initial = self._accepted_then_consumed()
         initial_public_calls = len(sender.public_authorization_headers)
         initial_action_calls = sum("/actions/" in path for path in sender.calls)
+        initial_auth_reads = sender.auth_reads
+        initial_queue_reads = sender.queue_reads
+        initial_replay_calls = len(replay.calls)
         iterations = len(FIXTURE.COMPOSITE_GATE_ORDER) + 1
 
         for _ in range(iterations):
@@ -242,23 +234,39 @@ class WeatherConsumedJITHardeningTests(unittest.TestCase):
         final_public_calls = len(sender.public_authorization_headers)
         final_action_calls = sum("/actions/" in path for path in sender.calls)
         self.assertEqual(final_action_calls, initial_action_calls)
-        self.assertEqual(final_public_calls, initial_public_calls + (2 * iterations))
-        self.assertLess(final_public_calls, 60)
+        self.assertEqual(final_public_calls, initial_public_calls)
+        self.assertEqual(sender.auth_reads, initial_auth_reads + (2 * iterations))
+        self.assertEqual(sender.queue_reads, initial_queue_reads + (2 * iterations))
+        self.assertEqual(len(replay.calls), initial_replay_calls + (2 * iterations))
         self.assertTrue(sender.public_authorization_headers)
         self.assertFalse(any(sender.public_authorization_headers))
 
-    def test_consumed_jit_still_detects_current_main_drift(self):
-        target, sender, _replay, _initial = self._accepted_then_consumed()
+    def test_consumed_jit_does_not_requery_current_main_after_consume(self):
+        target, sender, _replay, initial = self._accepted_then_consumed()
+        initial_public_calls = len(sender.public_authorization_headers)
         sender.rpi5_exact_main = False
+
+        current = target.revalidate_consumed_composite(FIXTURE.AUTH_ISSUE_NUMBER)
+
+        self.assertEqual(current.rpi5_main_sha, initial.rpi5_main_sha)
+        self.assertEqual(current.rpi5_main_ci_run_id, initial.rpi5_main_ci_run_id)
+        self.assertEqual(len(sender.public_authorization_headers), initial_public_calls)
+        self.assertIsNone(ENTRYPOINT._LAST_CONSUMED_JIT_FAILURE_CODE)
+
+    def test_consumed_jit_still_detects_ready_queue_drift(self):
+        target, sender, _replay, _initial = self._accepted_then_consumed()
+        sender.final_queue_state = "closed"
+        with self.assertRaises(FIXTURE.WeatherCompositeAuthorityError):
+            target.revalidate_consumed_composite(FIXTURE.AUTH_ISSUE_NUMBER)
+
+    def test_consumed_jit_still_detects_replay_drift(self):
+        target, _sender, replay, _initial = self._accepted_then_consumed()
+        replay.consumed = False
         with self.assertRaisesRegex(
             FIXTURE.WeatherCompositeAuthorityError,
-            "exact current main|canonical Weather Composite revalidation failed closed",
+            "durably consumed|canonical Weather Composite revalidation failed closed",
         ):
             target.revalidate_consumed_composite(FIXTURE.AUTH_ISSUE_NUMBER)
-        self.assertEqual(
-            ENTRYPOINT._LAST_CONSUMED_JIT_FAILURE_CODE,
-            "authority_or_source_drift",
-        )
 
     def test_real_sqlite_replay_crosses_first_consumed_jit_boundary(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -281,56 +289,94 @@ class WeatherConsumedJITHardeningTests(unittest.TestCase):
                 self.assertTrue(current.authorization_replay_consumed)
                 self.assertFalse(current.authorization_replay_available)
 
-    def test_one_postconsume_network_failure_recovers_inside_fixed_budget(self):
+    @staticmethod
+    def _fresh_public_client(sender):
+        sender.weather_branch_calls = 1
+        return COMPOSITE_MODULE.FixedPublicGitHubReadClient(sender=sender)
+
+    def test_public_source_network_failure_recovers_inside_fixed_budget(self):
         sender = PostConsumePublicFailureSender(mode="network", failures=1)
-        target, _sender, _replay, initial = self._accepted_then_consumed(sender=sender)
+        client = self._fresh_public_client(sender)
+        weather_branch = f"/repos/{FIXTURE.SOURCE_REPOSITORY}/branches/main"
         with mock.patch.object(ENTRYPOINT.time, "sleep", return_value=None) as sleeper:
-            current = target.revalidate_consumed_composite(FIXTURE.AUTH_ISSUE_NUMBER)
-        self.assertEqual(current.request_id, initial.request_id)
+            response = client._fresh_get_with_retry(weather_branch)
+        self.assertEqual(response.value["commit"]["sha"], FIXTURE.WEATHER_MAIN_SHA)
         self.assertEqual(sender.failure_attempts, 1)
         sleeper.assert_called_once_with(1.0)
-        self.assertIsNone(ENTRYPOINT._LAST_CONSUMED_JIT_FAILURE_CODE)
 
-    def test_repeated_postconsume_network_failure_stops_with_public_code(self):
+    def test_repeated_public_source_network_failure_stops_inside_fixed_budget(self):
         sender = PostConsumePublicFailureSender(mode="network", failures=3)
-        target, _sender, _replay, _initial = self._accepted_then_consumed(sender=sender)
+        client = self._fresh_public_client(sender)
+        weather_branch = f"/repos/{FIXTURE.SOURCE_REPOSITORY}/branches/main"
         with mock.patch.object(ENTRYPOINT.time, "sleep", return_value=None) as sleeper:
-            with self.assertRaises(FIXTURE.WeatherCompositeAuthorityError):
-                target.revalidate_consumed_composite(FIXTURE.AUTH_ISSUE_NUMBER)
+            with self.assertRaises(NetworkFailure):
+                client._fresh_get_with_retry(weather_branch)
         self.assertEqual(sender.failure_attempts, 3)
         self.assertEqual(sleeper.call_args_list, [mock.call(1.0), mock.call(2.0)])
-        self.assertEqual(
-            ENTRYPOINT._LAST_CONSUMED_JIT_FAILURE_CODE,
-            "public_source_network",
-        )
 
-    def test_repeated_postconsume_503_stops_with_public_code(self):
+    def test_repeated_public_source_503_stops_inside_fixed_budget(self):
         sender = PostConsumePublicFailureSender(mode="503", failures=3)
-        target, _sender, _replay, _initial = self._accepted_then_consumed(sender=sender)
-        with mock.patch.object(ENTRYPOINT.time, "sleep", return_value=None):
-            with self.assertRaises(FIXTURE.WeatherCompositeAuthorityError):
-                target.revalidate_consumed_composite(FIXTURE.AUTH_ISSUE_NUMBER)
-        self.assertEqual(sender.failure_attempts, 3)
-        self.assertEqual(
-            ENTRYPOINT._LAST_CONSUMED_JIT_FAILURE_CODE,
-            "public_source_transient_http",
-        )
-
-    def test_postconsume_403_is_never_retried(self):
-        sender = PostConsumePublicFailureSender(mode="403", failures=3)
-        target, _sender, _replay, _initial = self._accepted_then_consumed(sender=sender)
+        client = self._fresh_public_client(sender)
+        weather_branch = f"/repos/{FIXTURE.SOURCE_REPOSITORY}/branches/main"
         with mock.patch.object(ENTRYPOINT.time, "sleep", return_value=None) as sleeper:
-            with self.assertRaises(FIXTURE.WeatherCompositeAuthorityError):
-                target.revalidate_consumed_composite(FIXTURE.AUTH_ISSUE_NUMBER)
+            with self.assertRaises(HTTPStatusError) as caught:
+                client._fresh_get_with_retry(weather_branch)
+        self.assertEqual(caught.exception.status, 503)
+        self.assertEqual(sender.failure_attempts, 3)
+        self.assertEqual(sleeper.call_args_list, [mock.call(1.0), mock.call(2.0)])
+
+    def test_public_source_403_rate_limit_is_never_retried(self):
+        sender = PostConsumePublicFailureSender(mode="403", failures=3)
+        client = self._fresh_public_client(sender)
+        weather_branch = f"/repos/{FIXTURE.SOURCE_REPOSITORY}/branches/main"
+        with mock.patch.object(ENTRYPOINT.time, "sleep", return_value=None) as sleeper:
+            with self.assertRaises(RateLimitError) as caught:
+                client._fresh_get_with_retry(weather_branch)
+        self.assertEqual(caught.exception.status, 403)
         self.assertEqual(sender.failure_attempts, 1)
         sleeper.assert_not_called()
         self.assertEqual(
-            ENTRYPOINT._LAST_CONSUMED_JIT_FAILURE_CODE,
+            ENTRYPOINT._classify_consumed_jit_failure(caught.exception),
+            "public_source_rate_limited",
+        )
+
+    def test_public_source_429_rate_limit_is_never_retried(self):
+        sender = PostConsumePublicFailureSender(mode="429", failures=3)
+        client = self._fresh_public_client(sender)
+        weather_branch = f"/repos/{FIXTURE.SOURCE_REPOSITORY}/branches/main"
+        with mock.patch.object(ENTRYPOINT.time, "sleep", return_value=None) as sleeper:
+            with self.assertRaises(RateLimitError) as caught:
+                client._fresh_get_with_retry(weather_branch)
+        self.assertEqual(caught.exception.status, 429)
+        self.assertEqual(sender.failure_attempts, 1)
+        sleeper.assert_not_called()
+        self.assertEqual(
+            ENTRYPOINT._classify_consumed_jit_failure(caught.exception),
+            "public_source_rate_limited",
+        )
+
+    def test_public_source_generic_403_is_nonretryable_not_rate_limit(self):
+        sender = PostConsumePublicFailureSender(mode="403_forbidden", failures=3)
+        client = self._fresh_public_client(sender)
+        weather_branch = f"/repos/{FIXTURE.SOURCE_REPOSITORY}/branches/main"
+        with mock.patch.object(ENTRYPOINT.time, "sleep", return_value=None) as sleeper:
+            with self.assertRaises(HTTPStatusError) as caught:
+                client._fresh_get_with_retry(weather_branch)
+        self.assertEqual(caught.exception.status, 403)
+        self.assertEqual(sender.failure_attempts, 1)
+        sleeper.assert_not_called()
+        self.assertEqual(
+            ENTRYPOINT._classify_consumed_jit_failure(caught.exception),
             "public_source_http_nonretryable",
         )
 
     def test_failure_classifier_is_bounded_and_public_safe(self):
         cases = {
+            RateLimitError(403, 0): "public_source_rate_limited",
+            RateLimitError(429, 0): "public_source_rate_limited",
+            HTTPStatusError(403): "public_source_http_nonretryable",
+            HTTPStatusError(503): "public_source_transient_http",
+            HTTPStatusError(404): "public_source_http_nonretryable",
             RuntimeError("GitHub response time is unavailable"): "github_time_unavailable_or_invalid",
             RuntimeError("public GitHub source response omitted Date header"): "github_time_unavailable_or_invalid",
             RuntimeError("GitHub response time is not canonical to whole seconds"): "github_time_noncanonical",
