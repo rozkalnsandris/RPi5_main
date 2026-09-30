@@ -13,5 +13,6 @@ python3 ./tests/test-deploy-executor-weather-public-privileged-install.py
 python3 ./tests/test-deploy-executor-weather-public-operator-install.py
 python3 ./tests/test-cloudflare-p1d04-prelive-prep.py
 python3 ./tests/test-browser-lifecycle.py
+python3 ./tests/test-ui-proof-guarded.py
 
 echo "Shell syntax: PASS (${count} files)"
