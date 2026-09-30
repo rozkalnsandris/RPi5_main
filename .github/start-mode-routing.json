@@ -9,13 +9,13 @@
   },
   "visual_verification": {
     "policy": "docs/VISUAL_VERIFICATION.md",
-    "default_host_tool": "~/.local/bin/ui-proof",
+    "default_host_tool": "~/.local/bin/ui-proof-guarded",
     "engine": "playwright-system-chromium",
     "desktop_viewport": "1440x900",
     "mobile_model": "SM-A556B",
     "mobile_viewport": "412x892",
     "inspection_bridge": "RDC_IMAGE_READ",
-    "rule": "When pixel-level visual inspection of an RPi5-hosted web UI is needed, read docs/VISUAL_VERIFICATION.md and use ui-proof by default; raw Chromium CLI is not the standard path. Runtime execution still requires applicable current LIVE authority."
+    "rule": "When pixel-level visual inspection of an RPi5-hosted web UI is needed, read docs/VISUAL_VERIFICATION.md and use the guarded ui-proof launcher by default; direct ui-proof and raw Chromium CLI are non-canonical. Runtime execution still requires applicable current LIVE authority."
   },
   "lane_roles": {
     "FAST-LANE v2.2": "SAFE_DISCOVERY_AUDIT_AND_NON_FULL_CONTINUATION",

@@ -1,0 +1,87 @@
+#!/usr/bin/python3
+from __future__ import annotations
+
+import os
+import stat
+import subprocess
+import sys
+from pathlib import Path
+from typing import Callable, Sequence
+
+PYTHON = Path("/usr/bin/python3")
+USER_HOME = Path.home()
+GUARD = USER_HOME / ".local" / "bin" / "rpi5-browser-lifecycle"
+RENDERER = USER_HOME / ".local" / "bin" / "ui-proof"
+LABEL = "ui-proof"
+TIMEOUT_SECONDS = "180"
+BLOCKED_RC = 75
+POST_HEALTH_FAILED_RC = 76
+
+Runner = Callable[..., subprocess.CompletedProcess[object]]
+
+
+def _trusted_user_file(path: Path, *, require_executable: bool) -> bool:
+    try:
+        info = path.lstat()
+    except OSError:
+        return False
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+        return False
+    if info.st_uid != os.getuid() or (info.st_mode & 0o022) != 0:
+        return False
+    if require_executable and (info.st_mode & stat.S_IXUSR) == 0:
+        return False
+    return True
+
+
+def _health_command() -> list[str]:
+    return [str(PYTHON), "-I", str(GUARD), "health"]
+
+
+def _run_command(renderer_args: Sequence[str]) -> list[str]:
+    return [
+        str(PYTHON),
+        "-I",
+        str(GUARD),
+        "run",
+        "--label",
+        LABEL,
+        "--timeout-seconds",
+        TIMEOUT_SECONDS,
+        "--",
+        str(RENDERER),
+        *renderer_args,
+    ]
+
+
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    runner: Runner = subprocess.run,
+) -> int:
+    renderer_args = list(sys.argv[1:] if argv is None else argv)
+
+    if not _trusted_user_file(GUARD, require_executable=True):
+        print("guarded ui-proof blocked: lifecycle guard identity is not trusted", file=sys.stderr)
+        return BLOCKED_RC
+    if not _trusted_user_file(RENDERER, require_executable=True):
+        print("guarded ui-proof blocked: renderer identity is not trusted", file=sys.stderr)
+        return BLOCKED_RC
+
+    pre = runner(_health_command(), check=False)
+    if pre.returncode != 0:
+        return int(pre.returncode)
+
+    render = runner(_run_command(renderer_args), check=False)
+    post = runner(_health_command(), check=False)
+
+    if render.returncode != 0:
+        return int(render.returncode)
+    if post.returncode != 0:
+        print("guarded ui-proof blocked: post-render lifecycle health failed", file=sys.stderr)
+        return POST_HEALTH_FAILED_RC
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
