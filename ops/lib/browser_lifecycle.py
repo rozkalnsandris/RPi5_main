@@ -157,6 +157,7 @@ def _parse_stat(text: str) -> ProcInfo:
     fields = text[right + 1 :].strip().split()
     if len(fields) < 20:
         raise LifecycleError("short proc stat")
+    # fields[0] is kernel stat field 3 (state); starttime is field 22.
     return ProcInfo(
         pid=pid,
         ppid=int(fields[1]),
@@ -221,6 +222,24 @@ def collect_owned(record: RunRecord, snapshot: Mapping[int, ProcInfo]) -> Owners
             continue
         owned[pid] = info
 
+    # While the wrapper is alive it is a child subreaper. Prove descendants first:
+    # a very short launcher may already have exited while its browser child has
+    # been reparented to the still-live wrapper. That child is exact owned evidence
+    # and can safely establish continuity of the original session/process group.
+    owner_matches = owner is not None and owner.start_ticks == record.owner_start_ticks
+    if owner_matches:
+        parent_ids = {record.owner_pid} | set(owned)
+        changed = True
+        while changed:
+            changed = False
+            for info in snapshot.values():
+                if info.pid in owned:
+                    continue
+                if info.ppid in parent_ids:
+                    owned[info.pid] = info
+                    parent_ids.add(info.pid)
+                    changed = True
+
     leader_matches = leader is not None and leader.start_ticks == record.leader_start_ticks
     group_candidates = [
         info
@@ -235,21 +254,9 @@ def collect_owned(record: RunRecord, snapshot: Mapping[int, ProcInfo]) -> Owners
         for info in group_candidates:
             owned[info.pid] = info
     elif group_candidates:
+        # A matching numeric PGID/SID without a live exact leader, exact tracked
+        # member or live-wrapper descendant may be PID/PGID reuse. Never claim it.
         blockers.add("unproven_group_members")
-
-    owner_matches = owner is not None and owner.start_ticks == record.owner_start_ticks
-    if owner_matches:
-        parent_ids = {record.owner_pid} | set(owned)
-        changed = True
-        while changed:
-            changed = False
-            for info in snapshot.values():
-                if info.pid in owned:
-                    continue
-                if info.ppid in parent_ids:
-                    owned[info.pid] = info
-                    parent_ids.add(info.pid)
-                    changed = True
 
     owned.pop(record.owner_pid, None)
     return OwnershipView(owned=owned, blockers=tuple(sorted(blockers)))
@@ -296,8 +303,9 @@ def write_record(state_dir: Path, record: RunRecord) -> None:
 
 
 def remove_record(state_dir: Path, run_id: str) -> None:
+    target = _state_path(state_dir, run_id)
     try:
-        _state_path(state_dir, run_id).unlink()
+        target.unlink()
     except FileNotFoundError:
         return
 
@@ -350,13 +358,16 @@ def _signal_exact(info: ProcInfo, sig: int, proc_root: Path = Path("/proc")) -> 
         raise LifecycleError(f"permission denied signalling owned pid:{info.pid}") from exc
 
 
-def _reap_children() -> None:
+def _reap_children(exclude_pid: int | None = None) -> None:
     while True:
         try:
             pid, _status = os.waitpid(-1, os.WNOHANG)
         except ChildProcessError:
             return
         if pid == 0:
+            return
+        if exclude_pid is not None and pid == exclude_pid:
+            # This should not happen after Popen.wait/poll has reaped the leader.
             return
 
 
@@ -372,6 +383,8 @@ def cleanup_record(
     if view.blockers:
         return CleanupResult(False, len(view.owned), view.blockers)
 
+    # Persist every identity seen before signalling. This makes a wrapper crash
+    # during cleanup recoverable without broad process matching.
     changed = False
     for info in view.owned.values():
         if record.members.get(info.pid) != info.start_ticks:
@@ -479,7 +492,9 @@ def health_report(
             ambiguous += 1
             blockers.extend(view.blockers)
             continue
-        owner_matches = _identity_matches(snapshot, record.owner_pid, record.owner_start_ticks)
+        owner_matches = _identity_matches(
+            snapshot, record.owner_pid, record.owner_start_ticks
+        )
         if owner_matches:
             active += 1
         elif view.owned:
@@ -574,6 +589,7 @@ def cleanup_stale_records(
 
     cleaned = 0
     for record in eligible:
+        # Empty stale records are metadata-only leftovers and can be removed.
         view = collect_owned(record, snapshot_processes(proc_root))
         if view.blockers:
             return {
@@ -708,10 +724,13 @@ def run_guarded(
                 break
             time.sleep(poll_seconds)
 
-        result = cleanup_record(state_dir, record, term_grace_seconds=term_grace_seconds)
+        result = cleanup_record(
+            state_dir, record, term_grace_seconds=term_grace_seconds
+        )
         if not result.cleaned:
             raise LifecycleError("owned cleanup blocked:" + ",".join(result.blockers))
 
+        # Ensure the Popen leader is reaped if cleanup terminated it.
         try:
             child.wait(timeout=0.2)
         except Exception:
