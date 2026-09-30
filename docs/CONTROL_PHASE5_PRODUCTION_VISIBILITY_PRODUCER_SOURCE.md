@@ -2,126 +2,143 @@
 
 ## Purpose
 
-This source slice provides a bounded protected-host producer for the existing
-`ProductionVisibility` contract. It closes the source gap for authoritative
-`RPi5_main` production SHA observation without granting broad runtime, secret,
-network, database, Docker, systemd, or credential authority.
+This source slice provides a bounded non-root producer for the existing
+`ProductionVisibility` contract without granting that producer direct access to
+root-owned controlled-deploy state.
 
-The producer is intentionally conservative. It observes only the already
-reviewed controlled-deploy state below `/var/lib/rpi5-deploy` and passes its
-result through `control_phase5_production_visibility.normalize_production_visibility`.
-It never treats repository source as proof of production state.
+The trust boundary is split in two:
+
+1. the existing root-run `rpi5-dashboard-evidence` broker reads the already
+   reviewed `/var/lib/rpi5-deploy` controlled-deploy state;
+2. a dedicated broker helper publishes one sanitized, full-SHA Phase 5 snapshot
+   below `/var/lib/dashboard-rpi5/evidence` for the non-root producer.
+
+Repository source or GitHub state is never treated as proof of production state.
 
 ## Source mapping
 
-- library: `ops/lib/deploy_executor/control_phase5_production_visibility_producer.py`
-- CLI source: `ops/bin/rpi5-control-phase5-production-visibility`
-- tests: `tests/test-control-phase5-production-visibility-producer.py`
+- root broker helper: `ops/lib/phase5-production-visibility-evidence.py`
+- existing broker wrapper: `ops/bin/rpi5-dashboard-evidence`
+- non-root producer: `ops/lib/deploy_executor/control_phase5_production_visibility_producer.py`
+- producer CLI: `ops/bin/rpi5-control-phase5-production-visibility`
+- focused tests: `tests/test-control-phase5-production-visibility-producer.py`
 
-The CLI source is invoked through `python3` from an exact reviewed checkout; no
-installed executable is created by this slice. A repository merge does not
-install, activate, or execute it on the host.
+The existing `ops/lib/dashboard-evidence.py` deployment evidence contract and
+`deployments.json` remain unchanged. The existing systemd service and timer
+source also remain unchanged.
 
-## Exact observation authority
+## Root broker authority
 
-The only production observation root is `/var/lib/rpi5-deploy`.
-
-The producer reads exactly this chain:
+Only the root broker helper may read `/var/lib/rpi5-deploy`. It reads exactly:
 
 1. `/var/lib/rpi5-deploy/latest-success`;
 2. the selected `/var/lib/rpi5-deploy/transactions/<transaction-id>` directory;
 3. that directory's `transaction.json`.
 
-The transaction id must match the reviewed controlled-deploy id format. The
-transaction must use schema `rpi5.controlled-deploy-transaction.v1`, identify
-repository `rozkalnsandris/RPi5_main`, have status `success`, contain a full
-lowercase 40-character commit whose prefix matches the transaction id, and
-contain a UTC completion timestamp.
+The controlled-deploy transaction must use schema
+`rpi5.controlled-deploy-transaction.v1`, identify repository
+`rozkalnsandris/RPi5_main`, have status `success`, contain a full lowercase
+40-character commit whose prefix matches the transaction id, and contain a UTC
+completion timestamp. Directories/files must be real objects rather than
+symlinks, root-owned in production, and not group/world writable. Reads are
+bounded and use `O_NOFOLLOW`.
 
-Production directories/files must be real objects rather than symlinks. The
-producer uses bounded `O_RDONLY|O_NOFOLLOW` reads; production metadata must be
-root-owned and not group/world writable. Pointer and transaction byte sizes are
-bounded. Duplicate JSON keys fail closed.
+Before attempting the raw-state read, every broker run atomically publishes an
+`UNAVAILABLE` snapshot. A successful validated observation replaces it with an
+`AVAILABLE` snapshot. This prevents a fresh previously valid observation from
+remaining authoritative when the current raw observation fails.
 
-No other host path is an observation authority for this slice.
+## Sanitized Phase 5 snapshot
 
-## Output semantics
+The only non-root observation authority is:
 
-Success is exactly the existing ten-field `ProductionVisibility` object:
+`/var/lib/dashboard-rpi5/evidence/phase5-production-visibility.json`
 
-- `projectId = rpi5-main`;
-- `repository = rozkalnsandris/RPi5_main`;
-- `mainSha` is the explicit expected fresh GitHub main SHA supplied by the caller;
-- `productionSha` is the full controlled-deploy commit;
-- `observedAt` is the current UTC read time and is validated by the existing
-  sanitizer in the same call.
+The exact schema is `rpi5.phase5-production-visibility-evidence.v1` with fields:
+
+- `schema`;
+- `status` (`AVAILABLE` or `UNAVAILABLE`);
+- `repository`;
+- `transactionId`;
+- `productionSha`;
+- `completedAt`;
+- `observedAt`.
+
+For `AVAILABLE`, `transactionId`, `productionSha`, and `completedAt` are
+concrete validated values and `productionSha` is always the full 40-character
+SHA. For `UNAVAILABLE`, those three fields are `null`. The snapshot is bounded,
+atomically replaced, mode `0644`, root-owned in production, and contains no
+secret/config/runtime-environment data.
+
+The existing broker wrapper requires both helper files to be root-owned and not
+group/world writable before invoking them. No ACL, supplementary group,
+capability, permission, service, or timer expansion is part of this source fix.
+
+## Non-root producer authority
+
+`rpi5-control-phase5-production-visibility` reads only the sanitized snapshot;
+it no longer reads `/var/lib/rpi5-deploy` directly. The producer validates:
+
+- real root-owned broker evidence directory/file metadata in production;
+- exact field set and schema;
+- repository identity;
+- `AVAILABLE` status;
+- transaction id format;
+- full 40-character SHA and transaction-prefix agreement;
+- canonical UTC `completedAt` and `observedAt` timestamps;
+- `completedAt <= observedAt`.
+
+The broker's actual `observedAt` is passed into the existing
+`normalize_production_visibility` boundary. That existing contract fails closed
+when evidence is from the future or older than 300 seconds. The producer does
+not replace broker observation time with its own current time.
 
 If `productionSha == mainSha`, `deployImpact` is `NO_DEPLOY`. If the SHAs differ,
-this source does **not** guess rollout semantics: `deployImpact` is `UNKNOWN`
-and blocker codes include `PRODUCTION_SHA_DIFFERS_FROM_MAIN` and
-`DEPLOY_IMPACT_OBSERVATION_UNAVAILABLE`.
-
-No reviewed Phase 5 source currently authorizes this producer to infer runtime,
-health, or rollback state from endpoint dashboards, source files, systemd,
-Docker, databases, logs, or configuration. Those fields therefore remain
-`UNKNOWN` with deterministic blockers:
-
-- `RUNTIME_OBSERVATION_UNAVAILABLE`;
-- `HEALTH_OBSERVATION_UNAVAILABLE`;
-- `ROLLBACK_OBSERVATION_UNAVAILABLE`.
-
-This is fail-closed evidence, not a fabricated PASS. A downstream gate that
-requires concrete runtime/health/rollback evidence must remain blocked until a
-separately reviewed observation authority exists.
+`deployImpact` remains `UNKNOWN` with deterministic blocker codes. Runtime,
+health, and rollback remain `UNKNOWN`; this source does not infer them from
+systemd, Docker, endpoints, databases, logs, configuration, or repository state.
 
 ## Failure behavior
 
-Unsafe, missing, malformed, contradictory, wrong-repository, wrong-schema, or
-wrong-commit controlled-deploy state emits only a public-safe STOP code.
+Missing, unsafe, malformed, unavailable, stale, contradictory, wrong-repository,
+wrong-schema, or wrong-commit broker evidence fails closed with public-safe STOP
+codes. The producer performs no retry, repair, fallback observation, permission
+change, or alternate target selection.
 
-STOP receipts state:
+The producer CLI STOP receipt continues to state:
 
 - `authorization_consumed=false`;
 - `mutation_started=false`;
 - `credential_access=NO`;
 - `network_request=NO`.
 
-No retry, repair, cleanup, write, fallback source, or alternate target is
-performed by the producer.
+## Source readiness versus production state
 
-## GET-only preflight sequence
+This change is source-only. Merge does not install the new broker helper, replace
+the installed broker wrapper, run the broker, change systemd, or make the new
+snapshot exist in production.
 
-A future production preflight must first refresh GitHub and bind the invocation
-to the exact current `RPi5_main/main` SHA with required checks passing. With
-that SHA `<MAIN_SHA>`, the reviewed GET-only invocation is:
+A later production sequence must separately authorize and prove the exact
+runtime rollout of the reviewed broker helper/wrapper before the GET-only
+producer is retried. After that rollout, preflight must refresh the exact current
+`RPi5_main/main` SHA and required CI, verify exact checkout/source provenance,
+verify a fresh broker snapshot, and only then invoke:
 
 ```text
 python3 /path/to/exact-reviewed-checkout/ops/bin/rpi5-control-phase5-production-visibility --expected-main-sha <MAIN_SHA>
 ```
 
-The CLI neither requires nor elevates privilege. Its execution identity must
-already have sufficient read/search permissions for the reviewed observation
-path; the producer does not alter permissions or invoke `sudo`.
-
-The checkout/source provenance for that future invocation must itself be
-revalidated before execution. This document does not authorize executing the
-command in production, creating a checkout, changing `/var/lib/rpi5-deploy`, or
-performing any later signer/network delivery.
-
-The successful JSON can be supplied as the `visibility` member of the existing
-Phase 5 observation delivery envelope. Because runtime/health/rollback remain
-UNKNOWN in this source slice, success here alone is not a production verification
-PASS and does not authorize signer activation, credential access, delivery,
-merge, deploy, or LIVE mutation.
+The producer itself neither requires nor elevates privilege. It must run under an
+identity that can read the sanitized `0644` broker snapshot. No direct permission
+to `/var/lib/rpi5-deploy` is required or authorized.
 
 ## Explicit non-authorities
 
-This source does not read or expose:
+This source does not authorize or perform:
 
-- secrets, private keys, credential contents, process/container environments;
+- secrets, private keys, credentials, process/container environments;
 - application configuration, databases, backups, request/application logs;
-- Docker or systemd runtime state;
-- Cloudflare, Worker, D1, Queue, DNS, routes, bindings, or network endpoints.
-
-It performs no filesystem write, service change, network request, cleanup,
-rollback, deploy, or other production mutation.
+- ACL/group/permission changes or capabilities;
+- service/timer installation, restart, reload, enablement, or activation;
+- Docker, networking, Cloudflare, D1, Queue, DNS, routes, or bindings;
+- signer activation, network delivery, deploy, rollback, or other production mutation.
