@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import ctypes
 import importlib.util
 import json
 import os
@@ -30,6 +31,15 @@ def wait_gone(pid: int, timeout: float = 3.0) -> bool:
             return True
         time.sleep(0.05)
     return not Path(f"/proc/{pid}").exists()
+
+
+def wait_file(path: Path, timeout: float = 3.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if path.exists():
+            return True
+        time.sleep(0.05)
+    return path.exists()
 
 
 class BrowserLifecycleTests(unittest.TestCase):
@@ -156,6 +166,31 @@ class BrowserLifecycleTests(unittest.TestCase):
             unrelated.terminate()
             unrelated.wait(timeout=3)
 
+    def test_live_subreaper_descendant_proves_group_after_short_leader_exit(self) -> None:
+        record = bl.RunRecord(
+            run_id="b" * 32,
+            label="test",
+            owner_pid=100,
+            owner_start_ticks=10,
+            leader_pid=200,
+            leader_start_ticks=20,
+            created_at=time.time(),
+            timeout_seconds=30,
+            members={200: 20},
+        )
+        descendant = bl.ProcInfo(
+            pid=201, ppid=100, pgrp=200, sid=200, start_ticks=30, comm="chromium"
+        )
+        snapshot = {
+            100: bl.ProcInfo(
+                pid=100, ppid=1, pgrp=100, sid=100, start_ticks=10, comm="python3"
+            ),
+            201: descendant,
+        }
+        view = bl.collect_owned(record, snapshot)
+        self.assertEqual(view.blockers, ())
+        self.assertEqual(view.owned, {201: descendant})
+
     def test_pid_reuse_is_ambiguous_and_not_owned(self) -> None:
         record = bl.RunRecord(
             run_id="a" * 32,
@@ -212,7 +247,7 @@ class BrowserLifecycleTests(unittest.TestCase):
             )
             try:
                 deadline = time.monotonic() + 3
-                state_files: list[Path] = []
+                state_files = []
                 while time.monotonic() < deadline:
                     state_files = list(state_dir.glob("*.json"))
                     if state_files:
