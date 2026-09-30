@@ -9,8 +9,9 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 PYTHON = Path("/usr/bin/python3")
-GUARD = Path("/home/andris/.local/bin/rpi5-browser-lifecycle")
-RENDERER = Path("/home/andris/.local/bin/ui-proof")
+USER_HOME = Path.home()
+GUARD = USER_HOME / ".local" / "bin" / "rpi5-browser-lifecycle"
+RENDERER = USER_HOME / ".local" / "bin" / "ui-proof"
 LABEL = "ui-proof"
 TIMEOUT_SECONDS = "180"
 BLOCKED_RC = 75

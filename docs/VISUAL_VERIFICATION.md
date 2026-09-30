@@ -12,12 +12,12 @@ The renderer remains `ui-proof`, but the canonical operator entrypoint is the gu
 ~/.local/bin/ui-proof-guarded <URL> [label] [output-dir]
 ```
 
-The launcher source is `ops/bin/ui-proof-guarded`. It uses fixed installed paths for both trusted components:
+The launcher source is `ops/bin/ui-proof-guarded`. It uses fixed current-user install locations for both trusted components:
 
-- lifecycle guard: `/home/andris/.local/bin/rpi5-browser-lifecycle`;
-- renderer: `/home/andris/.local/bin/ui-proof`.
+- lifecycle guard: `~/.local/bin/rpi5-browser-lifecycle`;
+- renderer: `~/.local/bin/ui-proof`.
 
-It never resolves either trusted executable through `PATH` and never copies the URL or renderer label into lifecycle ownership metadata. The lifecycle label is always the public-safe fixed value `ui-proof`.
+At runtime the launcher resolves those locations from the executing user's home directory. It never resolves either trusted executable through `PATH` and never copies the URL or renderer label into lifecycle ownership metadata. The lifecycle label is always the public-safe fixed value `ui-proof`.
 
 Direct `~/.local/bin/ui-proof` is non-canonical after guarded-launcher activation. Automation must not bypass a missing or unhealthy guarded launcher by falling back to direct `ui-proof` or raw Chromium.
 
@@ -27,7 +27,7 @@ Running any visual-verification browser path is host/runtime execution and requi
 
 Issue #775 / PR #776 added the tracked fail-closed browser lifecycle guard. Issue #778 adds the source-owned guarded `ui-proof` entrypoint and routes repository automation to it.
 
-A source merge does **not** install or replace `/home/andris/.local/bin/ui-proof-guarded`, `rpi5-browser-lifecycle`, or `ui-proof` on the host. Installing or updating the host launcher remains a separate exact LIVE operation. Until that activation is explicitly authorized and verified, a missing guarded launcher is a STOP condition rather than permission to use the renderer directly.
+A source merge does **not** install or replace `~/.local/bin/ui-proof-guarded`, `rpi5-browser-lifecycle`, or `ui-proof` on the host. Installing or updating the host launcher remains a separate exact LIVE operation. Until that activation is explicitly authorized and verified, a missing guarded launcher is a STOP condition rather than permission to use the renderer directly.
 
 ## Guarded launch sequence
 
@@ -38,9 +38,9 @@ For every canonical render the launcher performs exactly this high-level sequenc
 3. Run the renderer only through:
 
    ```bash
-   /usr/bin/python3 -I /home/andris/.local/bin/rpi5-browser-lifecycle \
+   /usr/bin/python3 -I ~/.local/bin/rpi5-browser-lifecycle \
      run --label ui-proof --timeout-seconds 180 -- \
-     /home/andris/.local/bin/ui-proof <URL> [label] [output-dir]
+     ~/.local/bin/ui-proof <URL> [label] [output-dir]
    ```
 
 4. Run lifecycle `health` again after the guarded renderer exits.
@@ -69,7 +69,7 @@ The lifecycle guard does not read process environments, command lines, browser p
 The underlying public-safe health command is:
 
 ```bash
-/usr/bin/python3 -I /home/andris/.local/bin/rpi5-browser-lifecycle health
+/usr/bin/python3 -I ~/.local/bin/rpi5-browser-lifecycle health
 ```
 
 The JSON report is limited to bounded lifecycle/resource metadata, including:
@@ -91,7 +91,7 @@ Default resource thresholds are at least 512 MiB `MemAvailable` and no more than
 The tracked recovery command remains:
 
 ```bash
-/usr/bin/python3 -I /home/andris/.local/bin/rpi5-browser-lifecycle \
+/usr/bin/python3 -I ~/.local/bin/rpi5-browser-lifecycle \
   cleanup-stale --min-age-seconds 300
 ```
 
