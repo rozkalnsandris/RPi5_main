@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "operation_id": "rpi5.networkmanager-phase2-recovery-reactivate.v1",
+  "issue": 788,
+  "phase": "PHASE2_HOST_RESOLVER_RECOVERY",
+  "source_only": true,
+  "execution_enabled": false,
+  "target": {
+    "application": "NetworkManager",
+    "configuration_scope": "already_hardened_active_default_route_connection_profile",
+    "runtime_scope": "single_active_default_route_device"
+  },
+  "required_fresh_preflight": {
+    "collector_schema": "rpi5.adguard-host-resolver-recovery-preflight.v1",
+    "verifier_schema": "rpi5.adguard-host-resolver-recovery-readiness.v1",
+    "required_verifier_status": "READY_PHASE2_RECOVERY",
+    "networkmanager_version_exact": "1.42.4",
+    "saved_profile_ipv4_dns_classes": [
+      "loopback"
+    ],
+    "saved_profile_ipv6_ignore_auto_dns": true,
+    "runtime_dns_classes": [
+      "ipv6_link_local",
+      "loopback"
+    ],
+    "dhcp6_name_servers_option_present": true,
+    "single_effective_connection_required": true,
+    "single_connected_nonloopback_device_required": true,
+    "system_dns_healthy": true,
+    "adguard_loopback_dns_healthy": true,
+    "tcp_udp_53_listeners_required": true
+  },
+  "rationale": {
+    "networkmanager_1_58_fix_reference": "https://networkmanager.dev/blog/networkmanager-1-58/",
+    "observed_1_42_behavior": "device reapply preserved DHCPv6-provided DNS despite saved ipv6.ignore-auto-dns=yes",
+    "recovery_goal": "force one full activation of the already-hardened single-connect profile so DHCPv6 runtime state is rebuilt from saved policy"
+  },
+  "mutation": {
+    "class": "NETWORKMANAGER_SINGLE_PROFILE_REACTIVATION",
+    "max_forward_writes": 1,
+    "reactivation_write": {
+      "ordinal": 1,
+      "tool": "nmcli",
+      "argv_template": [
+        "--wait",
+        "90",
+        "connection",
+        "up",
+        "uuid",
+        "<fresh-active-profile-uuid>",
+        "ifname",
+        "<fresh-default-route-device>"
+      ],
+      "requires_profile_already_active": true,
+      "requires_effective_single_connect": true,
+      "expected_transient_connectivity_interruption": true,
+      "explicit_connection_down_command_allowed": false,
+      "device_disconnect_command_allowed": false,
+      "networkmanager_restart_allowed": false,
+      "profile_property_write_allowed": false
+    },
+    "package_upgrade_allowed": false,
+    "resolv_conf_direct_write_allowed": false,
+    "systemd_resolved_mutation_allowed": false,
+    "adguard_mutation_allowed": false,
+    "docker_mutation_allowed": false,
+    "firewall_mutation_allowed": false,
+    "router_mutation_allowed": false
+  },
+  "authorization": {
+    "required_after_source_merge": true,
+    "binds": [
+      "exact_merged_rpi5_main_sha",
+      "operation_id",
+      "fresh_recovery_preflight_evidence_identity",
+      "active_profile_fingerprint",
+      "default_route_device_fingerprint",
+      "networkmanager_version",
+      "max_forward_writes"
+    ],
+    "consumed_at": "connection_reactivation_command_dispatch"
+  },
+  "postconditions": {
+    "saved_profile_ipv4_dns_classes_must_equal": [
+      "loopback"
+    ],
+    "saved_profile_ipv4_dns_count_must_equal": 1,
+    "saved_profile_ipv6_ignore_auto_dns_must_be": true,
+    "runtime_dns_classes_must_equal": [
+      "loopback"
+    ],
+    "resolv_conf_nameserver_classes_must_equal": [
+      "loopback"
+    ],
+    "resolv_conf_nameserver_count_must_equal": 1,
+    "system_dns_must_answer": true,
+    "adguard_loopback_dns_must_answer": true,
+    "tcp_udp_53_listeners_must_remain": true
+  },
+  "transport_failure": {
+    "if_control_channel_drops_after_dispatch": "WAIT_FOR_TRANSPORT_RETURN_THEN_READ_ONLY_EVIDENCE_ONLY",
+    "retry_command_after_transport_drop": false
+  },
+  "failure": {
+    "after_mutation_started": "STOP_WITH_SANITIZED_EVIDENCE",
+    "automatic_retry": false,
+    "automatic_rollback": false,
+    "automatic_restart": false,
+    "automatic_reconnect": false,
+    "automatic_cleanup": false,
+    "alternate_mutation_path": false
+  },
+  "separate_later_gates": [
+    "NetworkManager package upgrade or OS release migration",
+    "IPv6 router DHCP/RDNSS capability",
+    "LAN outbound DNS or DoT enforcement",
+    "AdGuard access-control and rate-limit hardening",
+    "container image pinning and Docker hardening"
+  ]
+}
