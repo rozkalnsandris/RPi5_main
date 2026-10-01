@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+import argparse,json,re,sys
+from pathlib import Path
+SCHEMA="rpi5.adguard-lan-dns-phase3-capability-preflight.v1"
+RESULT_SCHEMA="rpi5.adguard-lan-dns-phase3-capability-readiness.v1"
+CAPABILITY_KEYS=("dhcpv4_custom_dns","ipv6_custom_dns_or_rdnss","outbound_dns53_enforcement","dot_enforcement")
+CAPABILITY_VALUES={"SUPPORTED","UNSUPPORTED","UNKNOWN"}
+SHA256_RE=re.compile(r"^[0-9a-f]{64}$")
+class VerifyError(RuntimeError): pass
+def require_dict(v,n):
+    if not isinstance(v,dict): raise VerifyError(f"{n}_invalid")
+    return v
+def verify(payload):
+    if payload.get("schema")!=SCHEMA: raise VerifyError("schema_invalid")
+    if payload.get("status")!="PASS": raise VerifyError("collection_not_pass")
+    if payload.get("mutation_started") is not False: raise VerifyError("mutation_boundary_invalid")
+    if payload.get("authorization_consumed") is not False: raise VerifyError("authorization_boundary_invalid")
+    evidence=payload.get("evidence_identity_sha256")
+    if not isinstance(evidence,str) or not SHA256_RE.fullmatch(evidence): raise VerifyError("evidence_identity_invalid")
+    router=require_dict(payload.get("router"),"router")
+    if router.get("model_class")!="vodafone_ultra_hub_7_kabel": raise VerifyError("router_model_unexpected")
+    if router.get("authenticated") is not True: raise VerifyError("authenticated_inspection_required")
+    if router.get("expert_mode") is not True: raise VerifyError("expert_mode_required")
+    if router.get("relevant_scope_complete") is not True: raise VerifyError("inspection_scope_incomplete")
+    privacy=require_dict(payload.get("privacy"),"privacy")
+    expected={"raw_router_config_emitted","credential_material_emitted","session_material_emitted","client_identity_emitted","raw_network_addresses_emitted"}
+    if set(privacy)!=expected or any(v is not False for v in privacy.values()): raise VerifyError("privacy_boundary_invalid")
+    prov=require_dict(payload.get("provenance"),"provenance")
+    if prov.get("observation_class")!="authenticated_ui_allowlisted_observation": raise VerifyError("observation_class_invalid")
+    if prov.get("public_docs_only_are_not_capability_proof") is not True: raise VerifyError("public_doc_boundary_invalid")
+    caps=require_dict(payload.get("capabilities"),"capabilities")
+    if set(caps)!=set(CAPABILITY_KEYS): raise VerifyError("capability_set_invalid")
+    for k in CAPABILITY_KEYS:
+        if caps.get(k) not in CAPABILITY_VALUES: raise VerifyError(f"{k}_invalid")
+    if any(caps[k]=="UNKNOWN" for k in CAPABILITY_KEYS): raise VerifyError("capability_unknown")
+    return {"schema":RESULT_SCHEMA,"status":"READY_PHASE3_CAPABILITY_DECISION","mutation_started":False,"authorization_consumed":False,"evidence_identity_sha256":evidence,"capabilities":{k:caps[k] for k in CAPABILITY_KEYS},"mutation_contract_defined":False}
+def load_payload(path):
+    try:
+        raw=Path(path).read_text() if path else sys.stdin.read()
+        value=json.loads(raw)
+    except (OSError,json.JSONDecodeError): raise VerifyError("input_invalid")
+    return require_dict(value,"input")
+def main():
+    p=argparse.ArgumentParser(); p.add_argument("path",nargs="?"); a=p.parse_args()
+    try: result=verify(load_payload(a.path)); code=0
+    except VerifyError as e: result={"schema":RESULT_SCHEMA,"status":"BLOCKED","blocker":str(e),"mutation_started":False,"authorization_consumed":False}; code=2
+    print(json.dumps(result,sort_keys=True,separators=(",",":"))); return code
+if __name__=="__main__": raise SystemExit(main())
