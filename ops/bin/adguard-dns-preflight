@@ -17,6 +17,7 @@ from typing import Callable, Sequence
 SCHEMA = "rpi5.adguard-dns-preflight.v1"
 CONTAINER = "adguard"
 VERSION_RE = re.compile(r"AdGuard Home,\s+version\s+(v[0-9A-Za-z.+_-]+)")
+DNS_KEY_RE = re.compile(r"^IP[46]\.DNS(?:\[\d+\])?$")
 Runner = Callable[[Sequence[str]], "CommandResult"]
 
 
@@ -92,9 +93,15 @@ def classify_address(value: str, gateway: str) -> str:
 def parse_nmcli_dns(raw: str, gateway: str) -> list[str]:
     classes: list[str] = []
     for line in raw.splitlines():
-        value = line.strip()
-        if not value:
+        if not line.strip():
             continue
+        if ":" not in line:
+            raise PreflightError("resolver_output_invalid")
+        key, value = line.split(":", 1)
+        key = key.strip()
+        value = value.strip()
+        if not DNS_KEY_RE.fullmatch(key) or not value:
+            raise PreflightError("resolver_output_invalid")
         cls = classify_address(value, gateway)
         if cls == "invalid":
             raise PreflightError("resolver_address_invalid")
@@ -164,7 +171,7 @@ def collect(runner: Runner = run_command) -> dict[str, object]:
     listeners = parse_dns_listeners(listeners_raw)
 
     nm_raw = require_ok(
-        runner(("nmcli", "-e", "no", "-g", "IP4.DNS,IP6.DNS", "device", "show", device)),
+        runner(("nmcli", "-m", "multiline", "-t", "-e", "no", "-f", "IP4.DNS,IP6.DNS", "device", "show", device)),
         "resolver_probe_failed",
     )
     resolver_classes = parse_nmcli_dns(nm_raw, gateway)
