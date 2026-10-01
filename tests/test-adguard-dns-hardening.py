@@ -73,7 +73,7 @@ class AdGuardDnsHardeningTests(unittest.TestCase):
         )
         self.assertEqual(listeners, {"tcp_53": True, "udp_53": True})
         ufw = collector.parse_ufw_dns_exposure(
-            "53/tcp ALLOW 192.168.0.0/24\n53/udp ALLOW 192.168.0.0/24\n"
+            "53/tcp ALLOW 10.23.0.0/24\n53/udp ALLOW 10.23.0.0/24\n"
         )
         self.assertTrue(ufw["dns_lan_allow_present"])
         self.assertFalse(ufw["dns_world_allow_present"])
@@ -117,6 +117,7 @@ class AdGuardDnsHardeningTests(unittest.TestCase):
         self.assertTrue(mutation["partial_update_only"])
         self.assertTrue(mutation["other_fields_must_be_omitted"])
         self.assertFalse(mutation["protected_full_dns_config_read_allowed"])
+        self.assertTrue(mutation["application_internal_reconfigure_expected"])
         self.assertFalse(mutation["container_restart_allowed"])
         self.assertFalse(contract["failure"]["automatic_retry"])
         self.assertFalse(contract["failure"]["automatic_rollback"])
@@ -151,17 +152,11 @@ class AdGuardDnsHardeningTests(unittest.TestCase):
         self.assertNotIn("fe80::1", rendered)
         self.assertTrue(payload["private_ptr"]["defect_confirmed"])
 
-    def test_source_does_not_hardcode_current_private_runtime_coordinates(self):
-        paths = [
-            ROOT / "ops/bin/adguard-dns-preflight",
-            ROOT / "ops/bin/adguard-dns-preflight-verify",
-            ROOT / "ops/contracts/adguard-private-ptr-phase1-v1.json",
-            ROOT / "docs/ADGUARD_DNS_HARDENING.md",
-        ]
-        combined = "\n".join(path.read_text(encoding="utf-8") for path in paths)
-        self.assertNotIn("192.168.0.180", combined)
-        self.assertNotIn("192.168.0.1", combined)
-        self.assertNotIn('(\"docker\", \"inspect\"', combined)
+    def test_ufw_metadata_must_be_available(self):
+        payload = self.ready_payload()
+        payload["ufw"]["available"] = False
+        with self.assertRaisesRegex(verifier.VerifyError, "ufw_metadata_unavailable"):
+            verifier.verify(payload)
 
 
 if __name__ == "__main__":

@@ -36,6 +36,7 @@
       "source": "fresh_verified_default_ipv4_gateway",
       "cardinality": 1
     },
+    "application_internal_reconfigure_expected": true,
     "container_restart_allowed": false,
     "docker_mutation_allowed": false,
     "networkmanager_mutation_allowed": false,

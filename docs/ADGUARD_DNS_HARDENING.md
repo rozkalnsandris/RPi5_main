@@ -65,6 +65,9 @@ The future operation may perform **at most one** forward AdGuard API write:
 - value: exactly one freshly verified default IPv4 gateway;
 - every other DNS configuration key must be omitted;
 - reading the protected full DNS configuration is not part of this operation;
+- the API write is expected to trigger AdGuard Home's own in-process DNS
+  `Reconfigure` path for this restartable setting; this is part of the single
+  application write, not permission for a second write or container lifecycle action;
 - no container restart, Docker mutation, NetworkManager change, firewall
   change, router change, or alternate mutation path is allowed.
 
@@ -106,6 +109,8 @@ sources for the observed stable release `v0.107.79`:
 - tag commit: `AdguardTeam/AdGuardHome@05ba17b282da1c4393d6a4ba4db0cf519194a362`;
 - `client/src/actions/dnsConfig.ts` sends only keys present in the supplied
   partial object and separately normalizes `local_ptr_upstreams`;
+- `internal/dnsforward/http.go` updates only non-nil request fields and routes
+  `LocalPTRUpstreams` through the application's internal `Reconfigure` path;
 - the AdGuard Home API documents `POST /control/dns_config` and the optional
   `local_ptr_upstreams` DNSConfig field;
 - the configuration reference states that an empty `local_ptr_upstreams`
