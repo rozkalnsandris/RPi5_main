@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "operation_id": "rpi5.adguard-dhcpv4-authority-migration.v1",
+  "issue": 797,
+  "phase": "PHASE4_DHCPV4_AUTHORITY_MIGRATION",
+  "source_only": true,
+  "execution_enabled": false,
+  "target_topology": {
+    "gateway": "vodafone_ultra_hub_7",
+    "wifi_router": "vodafone_ultra_hub_7",
+    "dhcpv4_authority_after_cutover": "adguard_home_on_rpi5",
+    "rpi5_is_lan_gateway": false,
+    "ipv6_unchanged": true
+  },
+  "required_fresh_preflight": {
+    "collector_schema": "rpi5.adguard-dhcpv4-migration-preflight.v1",
+    "verifier_schema": "rpi5.adguard-dhcpv4-migration-readiness.v1",
+    "required_verifier_status": "READY_PHASE4_DHCPV4_MIGRATION",
+    "router_dhcpv4_enabled": true,
+    "single_active_dhcpv4_authority": true,
+    "adguard_dhcp_available": true,
+    "adguard_dhcpv4_disabled": true,
+    "rpi5_static_lan_identity": true,
+    "adguard_dns_healthy": true
+  },
+  "mutation": {
+    "allowed_only_after_separate_live_authorization": true,
+    "max_forward_writes": 3,
+    "authorization_consumed_at_first_write": true,
+    "ordered_writes": [
+      {
+        "sequence": 1,
+        "class": "ADGUARD_DHCPV4_STAGE_DISABLED",
+        "effect": "set exact reviewed DHCPv4 parameters with enabled=false"
+      },
+      {
+        "sequence": 2,
+        "class": "ULTRAHUB_DHCPV4_DISABLE",
+        "effect": "disable only Local DHCPv4 Server and apply"
+      },
+      {
+        "sequence": 3,
+        "class": "ADGUARD_DHCPV4_ENABLE",
+        "effect": "enable DHCPv4 using exact staged parameter fingerprint"
+      }
+    ],
+    "intentional_dual_dhcp_window_allowed": false,
+    "automatic_retry_allowed": false,
+    "automatic_rollback_allowed": false,
+    "automatic_cleanup_allowed": false,
+    "alternate_path_allowed": false
+  },
+  "required_postconditions": {
+    "ultrahub_dhcpv4_disabled": true,
+    "adguard_dhcpv4_enabled": true,
+    "single_dhcpv4_authority": true,
+    "authorized_parameter_fingerprint_matches": true,
+    "advertised_gateway_is_ultrahub": true,
+    "advertised_dns_is_rpi5_adguard_only": true,
+    "adguard_dns_healthy": true,
+    "ordinary_client_lease_acquisition_proven": true
+  },
+  "privacy": {
+    "raw_lease_table_allowed": false,
+    "client_identity_allowed": false,
+    "raw_network_addresses_allowed": false,
+    "raw_router_config_allowed": false,
+    "credential_or_session_material_allowed": false,
+    "raw_adguard_config_allowed": false
+  },
+  "forbidden": [
+    "ipv6_ra_or_rdnss_change",
+    "routing_or_nat_change",
+    "rpi5_gateway_role",
+    "networkmanager_address_change",
+    "firewall_change",
+    "docker_network_change",
+    "package_upgrade",
+    "adguard_filter_or_access_control_change",
+    "client_configuration_change",
+    "dns_or_dot_enforcement"
+  ],
+  "rollback": {
+    "ultrahub_dhcpv4_reenable_requires_new_owner_authorization": true
+  }
+}

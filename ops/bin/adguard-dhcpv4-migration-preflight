@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+import argparse, hashlib, json
+from typing import Sequence
+
+SCHEMA = "rpi5.adguard-dhcpv4-migration-preflight.v1"
+
+def fp_payload(payload):
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(raw).hexdigest()
+
+def parser():
+    p = argparse.ArgumentParser()
+    p.add_argument("--router-dhcpv4-enabled", action="store_true")
+    p.add_argument("--single-active-dhcpv4-authority", action="store_true")
+    p.add_argument("--adguard-dhcp-available", action="store_true")
+    p.add_argument("--adguard-dhcpv4-disabled", action="store_true")
+    p.add_argument("--rpi5-static-lan-identity", action="store_true")
+    p.add_argument("--candidate-gateway-matches-router", action="store_true")
+    p.add_argument("--candidate-subnet-matches-lan", action="store_true")
+    p.add_argument("--candidate-pool-valid", action="store_true")
+    p.add_argument("--candidate-pool-excludes-infra", action="store_true")
+    p.add_argument("--candidate-dns-is-rpi5-only", action="store_true")
+    p.add_argument("--ipv6-unchanged", action="store_true")
+    p.add_argument("--adguard-dns-healthy", action="store_true")
+    p.add_argument("--candidate-parameter-fingerprint", required=True)
+    return p
+
+def collect(argv: Sequence[str] | None = None):
+    a = parser().parse_args(argv)
+    payload = {
+        "schema": SCHEMA,
+        "status": "PASS",
+        "mutation_started": False,
+        "authorization_consumed": False,
+        "baseline": {
+            "router_dhcpv4_enabled": bool(a.router_dhcpv4_enabled),
+            "single_active_dhcpv4_authority": bool(a.single_active_dhcpv4_authority),
+            "adguard_dhcp_available": bool(a.adguard_dhcp_available),
+            "adguard_dhcpv4_disabled": bool(a.adguard_dhcpv4_disabled),
+            "rpi5_static_lan_identity": bool(a.rpi5_static_lan_identity),
+            "adguard_dns_healthy": bool(a.adguard_dns_healthy),
+        },
+        "candidate": {
+            "gateway_matches_router": bool(a.candidate_gateway_matches_router),
+            "subnet_matches_lan": bool(a.candidate_subnet_matches_lan),
+            "pool_valid": bool(a.candidate_pool_valid),
+            "pool_excludes_infra": bool(a.candidate_pool_excludes_infra),
+            "dns_is_rpi5_only": bool(a.candidate_dns_is_rpi5_only),
+            "ipv6_unchanged": bool(a.ipv6_unchanged),
+            "parameter_fingerprint": a.candidate_parameter_fingerprint,
+        },
+        "privacy": {
+            "raw_lease_table_emitted": False,
+            "client_identity_emitted": False,
+            "raw_network_addresses_emitted": False,
+            "raw_router_config_emitted": False,
+            "credential_or_session_material_emitted": False,
+            "raw_adguard_config_emitted": False,
+        },
+    }
+    payload["evidence_identity_sha256"] = fp_payload(payload)
+    return payload
+
+def main():
+    print(json.dumps(collect(), sort_keys=True, separators=(",", ":")))
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())
