@@ -17,5 +17,6 @@ python3 ./tests/test-ui-proof-guarded.py
 python3 ./tests/test-adguard-dns-hardening.py
 python3 ./tests/test-adguard-resolver-phase2.py
 python3 ./tests/test-adguard-resolver-phase2-recovery.py
+python3 ./tests/test-adguard-dhcpv4-migration.py
 
 echo "Shell syntax: PASS (${count} files)"

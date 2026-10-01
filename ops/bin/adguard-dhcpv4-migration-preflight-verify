@@ -1,0 +1,109 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+import argparse, json, re, sys
+from pathlib import Path
+
+SCHEMA = "rpi5.adguard-dhcpv4-migration-preflight.v1"
+RESULT_SCHEMA = "rpi5.adguard-dhcpv4-migration-readiness.v1"
+SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+FP_RE = re.compile(r"^[0-9a-f]{16,64}$")
+
+class VerifyError(RuntimeError):
+    pass
+
+def req_dict(v, n):
+    if not isinstance(v, dict):
+        raise VerifyError(f"{n}_invalid")
+    return v
+
+def verify(payload):
+    if payload.get("schema") != SCHEMA:
+        raise VerifyError("schema_invalid")
+    if payload.get("status") != "PASS":
+        raise VerifyError("collection_not_pass")
+    if payload.get("mutation_started") is not False:
+        raise VerifyError("mutation_boundary_invalid")
+    if payload.get("authorization_consumed") is not False:
+        raise VerifyError("authorization_boundary_invalid")
+    evidence = payload.get("evidence_identity_sha256")
+    if not isinstance(evidence, str) or not SHA256_RE.fullmatch(evidence):
+        raise VerifyError("evidence_identity_invalid")
+
+    baseline = req_dict(payload.get("baseline"), "baseline")
+    expected_baseline = {
+        "router_dhcpv4_enabled",
+        "single_active_dhcpv4_authority",
+        "adguard_dhcp_available",
+        "adguard_dhcpv4_disabled",
+        "rpi5_static_lan_identity",
+        "adguard_dns_healthy",
+    }
+    if set(baseline) != expected_baseline or any(baseline[k] is not True for k in expected_baseline):
+        raise VerifyError("baseline_not_ready")
+
+    candidate = req_dict(payload.get("candidate"), "candidate")
+    bool_keys = {
+        "gateway_matches_router",
+        "subnet_matches_lan",
+        "pool_valid",
+        "pool_excludes_infra",
+        "dns_is_rpi5_only",
+        "ipv6_unchanged",
+    }
+    if any(candidate.get(k) is not True for k in bool_keys):
+        raise VerifyError("candidate_not_ready")
+    fp = candidate.get("parameter_fingerprint")
+    if not isinstance(fp, str) or not FP_RE.fullmatch(fp):
+        raise VerifyError("candidate_fingerprint_invalid")
+
+    privacy = req_dict(payload.get("privacy"), "privacy")
+    expected_privacy = {
+        "raw_lease_table_emitted",
+        "client_identity_emitted",
+        "raw_network_addresses_emitted",
+        "raw_router_config_emitted",
+        "credential_or_session_material_emitted",
+        "raw_adguard_config_emitted",
+    }
+    if set(privacy) != expected_privacy or any(privacy[k] is not False for k in expected_privacy):
+        raise VerifyError("privacy_boundary_invalid")
+
+    return {
+        "schema": RESULT_SCHEMA,
+        "status": "READY_PHASE4_DHCPV4_MIGRATION",
+        "mutation_started": False,
+        "authorization_consumed": False,
+        "evidence_identity_sha256": evidence,
+        "candidate_parameter_fingerprint": fp,
+        "max_forward_writes": 3,
+        "cutover_order": [
+            "STAGE_ADGUARD_DHCPV4_DISABLED",
+            "DISABLE_ULTRAHUB_DHCPV4",
+            "ENABLE_ADGUARD_DHCPV4",
+        ],
+        "rollback_requires_new_authorization": True,
+    }
+
+def load(path):
+    try:
+        raw = Path(path).read_text() if path else sys.stdin.read()
+        value = json.loads(raw)
+    except (OSError, json.JSONDecodeError):
+        raise VerifyError("input_invalid")
+    return req_dict(value, "input")
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("path", nargs="?")
+    a = p.parse_args()
+    try:
+        out = verify(load(a.path))
+        rc = 0
+    except VerifyError as exc:
+        out = {"schema": RESULT_SCHEMA, "status": "BLOCKED", "blocker": str(exc), "mutation_started": False, "authorization_consumed": False}
+        rc = 2
+    print(json.dumps(out, sort_keys=True, separators=(",", ":")))
+    return rc
+
+if __name__ == "__main__":
+    raise SystemExit(main())
