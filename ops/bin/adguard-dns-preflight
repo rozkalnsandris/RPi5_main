@@ -1,0 +1,235 @@
+#!/usr/bin/env python3
+"""Sanitized read-only AdGuard Home DNS-path preflight for RPi5_main#788.
+
+This collector never reads raw AdGuard configuration, query logs, client identities,
+container environments, credentials, or Docker inspect output. It emits only bounded
+health booleans, version text, listener presence, and resolver *classes*.
+"""
+from __future__ import annotations
+
+import ipaddress
+import json
+import re
+import subprocess
+from dataclasses import dataclass
+from typing import Callable, Sequence
+
+SCHEMA = "rpi5.adguard-dns-preflight.v1"
+CONTAINER = "adguard"
+VERSION_RE = re.compile(r"AdGuard Home,\s+version\s+(v[0-9A-Za-z.+_-]+)")
+Runner = Callable[[Sequence[str]], "CommandResult"]
+
+
+class PreflightError(RuntimeError):
+    def __init__(self, code: str) -> None:
+        self.code = code
+        super().__init__(code)
+
+
+@dataclass(frozen=True)
+class CommandResult:
+    returncode: int
+    stdout: str
+
+
+def run_command(command: Sequence[str]) -> CommandResult:
+    try:
+        completed = subprocess.run(
+            list(command),
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=8,
+        )
+    except (OSError, subprocess.SubprocessError):
+        raise PreflightError("command_execution_failed") from None
+    return CommandResult(completed.returncode, completed.stdout)
+
+
+def require_ok(result: CommandResult, code: str) -> str:
+    if result.returncode != 0:
+        raise PreflightError(code)
+    return result.stdout
+
+
+def parse_default_route(raw: str) -> tuple[str, str]:
+    matches: list[tuple[str, str]] = []
+    for line in raw.splitlines():
+        fields = line.split()
+        if not fields or fields[0] != "default" or "via" not in fields or "dev" not in fields:
+            continue
+        try:
+            gateway = fields[fields.index("via") + 1]
+            device = fields[fields.index("dev") + 1]
+            ip = ipaddress.ip_address(gateway)
+        except (ValueError, IndexError):
+            continue
+        if ip.version == 4:
+            matches.append((str(ip), device))
+    if len(matches) != 1:
+        raise PreflightError("default_ipv4_route_ambiguous")
+    return matches[0]
+
+
+def classify_address(value: str, gateway: str) -> str:
+    try:
+        ip = ipaddress.ip_address(value.strip())
+        gw = ipaddress.ip_address(gateway)
+    except ValueError:
+        return "invalid"
+    if ip.is_loopback:
+        return "loopback"
+    if ip == gw:
+        return "default_gateway"
+    if ip.version == 4:
+        return "ipv4_private_other" if ip.is_private else "ipv4_public"
+    if ip.is_link_local:
+        return "ipv6_link_local"
+    return "ipv6_private_other" if ip.is_private else "ipv6_public"
+
+
+def parse_nmcli_dns(raw: str, gateway: str) -> list[str]:
+    classes: list[str] = []
+    for line in raw.splitlines():
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        if key not in {"IP4.DNS", "IP6.DNS"} or not value:
+            continue
+        cls = classify_address(value, gateway)
+        if cls == "invalid":
+            raise PreflightError("resolver_address_invalid")
+        classes.append(cls)
+    return sorted(set(classes))
+
+
+def parse_dns_listeners(raw: str) -> dict[str, bool]:
+    tcp = False
+    udp = False
+    for line in raw.splitlines():
+        fields = line.split()
+        if len(fields) < 5:
+            continue
+        proto = fields[0].lower()
+        local = fields[4]
+        if not re.search(r":53$", local):
+            continue
+        tcp = tcp or proto.startswith("tcp")
+        udp = udp or proto.startswith("udp")
+    return {"tcp_53": tcp, "udp_53": udp}
+
+
+def parse_ufw_dns_exposure(raw: str) -> dict[str, bool]:
+    lan_allow = False
+    world_allow = False
+    for line in raw.splitlines():
+        normalized = " ".join(line.split())
+        if not normalized or "53/" not in normalized or "ALLOW" not in normalized:
+            continue
+        if re.search(r"\b53/(tcp|udp)\b", normalized):
+            if re.search(r"\bAnywhere\b|\b0\.0\.0\.0/0\b|\b::/0\b", normalized):
+                world_allow = True
+            if re.search(r"\b10\.\d+\.\d+\.\d+/\d+\b|\b172\.(1[6-9]|2\d|3[01])\.\d+\.\d+/\d+\b|\b192\.168\.\d+\.\d+/\d+\b", normalized):
+                lan_allow = True
+    return {"dns_lan_allow_present": lan_allow, "dns_world_allow_present": world_allow}
+
+
+def dig_has_answer(server: str, name: str, record_type: str, runner: Runner) -> bool:
+    result = runner(("dig", "+time=2", "+tries=1", "+short", f"@{server}", name, record_type))
+    return result.returncode == 0 and bool(result.stdout.strip())
+
+
+def reverse_name(ipv4: str) -> str:
+    return ipaddress.ip_address(ipv4).reverse_pointer + "."
+
+
+def collect(runner: Runner = run_command) -> dict[str, object]:
+    route = require_ok(runner(("ip", "-4", "route", "show", "default")), "default_route_probe_failed")
+    gateway, device = parse_default_route(route)
+
+    running_raw = require_ok(
+        runner(("docker", "ps", "--filter", f"name=^{CONTAINER}$", "--format", "{{.Names}}")),
+        "docker_ps_failed",
+    )
+    running = CONTAINER in {line.strip() for line in running_raw.splitlines() if line.strip()}
+
+    version_raw = require_ok(
+        runner(("docker", "exec", CONTAINER, "/opt/adguardhome/AdGuardHome", "--version")),
+        "adguard_version_probe_failed",
+    )
+    match = VERSION_RE.search(version_raw)
+    if not match:
+        raise PreflightError("adguard_version_shape_invalid")
+
+    listeners_raw = require_ok(runner(("ss", "-H", "-lntu")), "listener_probe_failed")
+    listeners = parse_dns_listeners(listeners_raw)
+
+    nm_raw = require_ok(
+        runner(("nmcli", "-t", "-e", "no", "-f", "IP4.DNS,IP6.DNS", "device", "show", device)),
+        "resolver_probe_failed",
+    )
+    resolver_classes = parse_nmcli_dns(nm_raw, gateway)
+
+    ufw_result = runner(("sudo", "-n", "/usr/sbin/ufw", "status"))
+    ufw = (
+        parse_ufw_dns_exposure(ufw_result.stdout)
+        if ufw_result.returncode == 0
+        else {"dns_lan_allow_present": False, "dns_world_allow_present": False}
+    )
+
+    ordinary_dns_ok = dig_has_answer("127.0.0.1", "example.com.", "A", runner)
+    ptr_name = reverse_name(gateway)
+    direct_gateway_ptr_ok = dig_has_answer(gateway, ptr_name, "PTR", runner)
+    adguard_ptr_ok = dig_has_answer("127.0.0.1", ptr_name, "PTR", runner)
+    defect_confirmed = direct_gateway_ptr_ok and not adguard_ptr_ok
+
+    return {
+        "schema": SCHEMA,
+        "status": "PASS",
+        "mutation_started": False,
+        "authorization_consumed": False,
+        "privacy": {
+            "raw_query_log_read": False,
+            "client_identity_exported": False,
+            "raw_adguard_config_read": False,
+            "container_environment_read": False,
+            "docker_inspect_used": False,
+            "credentials_read": False,
+            "raw_network_addresses_emitted": False,
+        },
+        "adguard": {"running": running, "version": match.group(1)},
+        "dns_listeners": listeners,
+        "host_resolver_classes": resolver_classes,
+        "ufw": {
+            "available": ufw_result.returncode == 0,
+            **ufw,
+        },
+        "ordinary_dns": {"adguard_loopback_answered": ordinary_dns_ok},
+        "private_ptr": {
+            "direct_gateway_answered": direct_gateway_ptr_ok,
+            "adguard_loopback_answered": adguard_ptr_ok,
+            "defect_confirmed": defect_confirmed,
+        },
+    }
+
+
+def main() -> int:
+    try:
+        payload = collect()
+    except PreflightError as exc:
+        payload = {
+            "schema": SCHEMA,
+            "status": "BLOCKED",
+            "blocker": exc.code,
+            "mutation_started": False,
+            "authorization_consumed": False,
+        }
+        print(json.dumps(payload, sort_keys=True, separators=(",", ":")))
+        return 2
+    print(json.dumps(payload, sort_keys=True, separators=(",", ":")))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
