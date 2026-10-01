@@ -22,6 +22,7 @@ ARGS = [
     "--adguard-dhcp-available",
     "--adguard-dhcpv4-disabled",
     "--rpi5-static-lan-identity",
+    "--dhcpv4-firewall-ready",
     "--candidate-gateway-matches-router",
     "--candidate-subnet-matches-lan",
     "--candidate-pool-valid",
@@ -52,6 +53,18 @@ class T(unittest.TestCase):
     def test_baseline_blocks(self):
         p = self.payload()
         p["baseline"]["router_dhcpv4_enabled"] = False
+        with self.assertRaisesRegex(verifier.VerifyError, "baseline_not_ready"):
+            verifier.verify(p)
+
+    def test_firewall_readiness_false_blocks(self):
+        p = self.payload()
+        p["baseline"]["dhcpv4_firewall_ready"] = False
+        with self.assertRaisesRegex(verifier.VerifyError, "baseline_not_ready"):
+            verifier.verify(p)
+
+    def test_firewall_readiness_missing_blocks(self):
+        p = self.payload()
+        del p["baseline"]["dhcpv4_firewall_ready"]
         with self.assertRaisesRegex(verifier.VerifyError, "baseline_not_ready"):
             verifier.verify(p)
 
