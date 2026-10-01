@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "operation_id": "rpi5.adguard-private-ptr-upstream.v1",
+  "issue": 788,
+  "phase": "PHASE1_PRIVATE_PTR_CORRECTNESS",
+  "source_only": true,
+  "execution_enabled": false,
+  "target": {
+    "alias": "adguard-home-private-ptr",
+    "application": "AdGuard Home",
+    "configuration_field": "local_ptr_upstreams"
+  },
+  "required_fresh_preflight": {
+    "collector_schema": "rpi5.adguard-dns-preflight.v1",
+    "verifier_schema": "rpi5.adguard-dns-readiness.v1",
+    "required_verifier_status": "READY_PHASE1",
+    "private_ptr_defect_confirmed": true,
+    "ordinary_dns_healthy": true,
+    "tcp_udp_53_listeners_required": true
+  },
+  "mutation": {
+    "class": "DNS_APPLICATION_CONFIGURATION",
+    "max_forward_writes": 1,
+    "method": "POST",
+    "path": "/control/dns_config",
+    "partial_update_only": true,
+    "allowed_request_keys": [
+      "local_ptr_upstreams"
+    ],
+    "required_request_keys": [
+      "local_ptr_upstreams"
+    ],
+    "other_fields_must_be_omitted": true,
+    "protected_full_dns_config_read_allowed": false,
+    "local_ptr_upstreams": {
+      "source": "fresh_verified_default_ipv4_gateway",
+      "cardinality": 1
+    },
+    "application_internal_reconfigure_expected": true,
+    "container_restart_allowed": false,
+    "docker_mutation_allowed": false,
+    "networkmanager_mutation_allowed": false,
+    "firewall_mutation_allowed": false,
+    "router_mutation_allowed": false
+  },
+  "authorization": {
+    "required_after_source_merge": true,
+    "binds": [
+      "exact_merged_rpi5_main_sha",
+      "operation_id",
+      "target.alias",
+      "fresh_preflight_evidence_identity",
+      "fresh_verified_default_ipv4_gateway",
+      "max_forward_writes"
+    ],
+    "consumed_at": "first_configuration_write"
+  },
+  "postconditions": {
+    "private_gateway_ptr_via_adguard_must_answer": true,
+    "ordinary_dns_via_adguard_must_answer": true,
+    "tcp_udp_53_listeners_must_remain": true
+  },
+  "failure": {
+    "after_mutation_started": "STOP_WITH_SANITIZED_EVIDENCE",
+    "automatic_retry": false,
+    "automatic_rollback": false,
+    "automatic_restart": false,
+    "automatic_cleanup": false,
+    "alternate_mutation_path": false
+  },
+  "separate_later_gates": [
+    "RPi5 NetworkManager resolver self-consistency",
+    "IPv6 RDNSS and router DHCP capability",
+    "LAN outbound DNS or DoT enforcement",
+    "AdGuard access-control and rate-limit hardening",
+    "container image pinning and Docker hardening",
+    "filter cleanup and telemetry changes"
+  ]
+}

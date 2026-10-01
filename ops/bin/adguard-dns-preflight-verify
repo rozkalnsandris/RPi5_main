@@ -1,0 +1,145 @@
+#!/usr/bin/env python3
+"""Fail-closed verifier for the sanitized RPi5_main#788 AdGuard DNS preflight."""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+from typing import Any
+
+SCHEMA = "rpi5.adguard-dns-preflight.v1"
+RESULT_SCHEMA = "rpi5.adguard-dns-readiness.v1"
+VERSION_RE = re.compile(r"^v[0-9A-Za-z.+_-]+$")
+ALLOWED_RESOLVER_CLASSES = {
+    "loopback",
+    "default_gateway",
+    "ipv4_private_other",
+    "ipv4_public",
+    "ipv6_link_local",
+    "ipv6_private_other",
+    "ipv6_public",
+}
+
+
+class VerifyError(RuntimeError):
+    pass
+
+
+def require_dict(value: Any, name: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise VerifyError(f"{name}_invalid")
+    return value
+
+
+def require_bool(obj: dict[str, Any], key: str) -> bool:
+    value = obj.get(key)
+    if not isinstance(value, bool):
+        raise VerifyError(f"{key}_invalid")
+    return value
+
+
+def verify(payload: dict[str, Any]) -> dict[str, Any]:
+    if payload.get("schema") != SCHEMA:
+        raise VerifyError("schema_invalid")
+    if payload.get("status") != "PASS":
+        raise VerifyError("collection_not_pass")
+    if payload.get("mutation_started") is not False or payload.get("authorization_consumed") is not False:
+        raise VerifyError("read_only_boundary_invalid")
+
+    privacy = require_dict(payload.get("privacy"), "privacy")
+    expected_privacy = {
+        "raw_query_log_read",
+        "client_identity_exported",
+        "raw_adguard_config_read",
+        "container_environment_read",
+        "docker_inspect_used",
+        "credentials_read",
+        "raw_network_addresses_emitted",
+    }
+    if set(privacy) != expected_privacy or any(value is not False for value in privacy.values()):
+        raise VerifyError("privacy_boundary_invalid")
+
+    adguard = require_dict(payload.get("adguard"), "adguard")
+    if require_bool(adguard, "running") is not True:
+        raise VerifyError("adguard_not_running")
+    version = adguard.get("version")
+    if not isinstance(version, str) or not VERSION_RE.fullmatch(version):
+        raise VerifyError("adguard_version_invalid")
+
+    listeners = require_dict(payload.get("dns_listeners"), "dns_listeners")
+    if not require_bool(listeners, "tcp_53") or not require_bool(listeners, "udp_53"):
+        raise VerifyError("dns_listener_missing")
+
+    resolver_classes = payload.get("host_resolver_classes")
+    if not isinstance(resolver_classes, list) or not resolver_classes or not all(
+        isinstance(item, str) and item in ALLOWED_RESOLVER_CLASSES for item in resolver_classes
+    ):
+        raise VerifyError("resolver_classes_invalid")
+    if resolver_classes != sorted(set(resolver_classes)):
+        raise VerifyError("resolver_classes_not_canonical")
+
+    ufw = require_dict(payload.get("ufw"), "ufw")
+    ufw_available = require_bool(ufw, "available")
+    if not ufw_available:
+        raise VerifyError("ufw_metadata_unavailable")
+    if require_bool(ufw, "dns_world_allow_present"):
+        raise VerifyError("dns_world_exposure_detected")
+
+    ordinary = require_dict(payload.get("ordinary_dns"), "ordinary_dns")
+    if not require_bool(ordinary, "adguard_loopback_answered"):
+        raise VerifyError("ordinary_dns_unhealthy")
+
+    private_ptr = require_dict(payload.get("private_ptr"), "private_ptr")
+    direct = require_bool(private_ptr, "direct_gateway_answered")
+    via_adguard = require_bool(private_ptr, "adguard_loopback_answered")
+    claimed = require_bool(private_ptr, "defect_confirmed")
+    if claimed != (direct and not via_adguard) or not claimed:
+        raise VerifyError("private_ptr_defect_not_proven")
+
+    return {
+        "schema": RESULT_SCHEMA,
+        "status": "READY_PHASE1",
+        "mutation_started": False,
+        "authorization_consumed": False,
+        "private_ptr_defect_confirmed": True,
+        "phase2_parallel_host_resolver_present": any(
+            item in {"ipv4_public", "ipv6_public"} for item in resolver_classes
+        ),
+        "phase3_ipv6_router_resolver_present": "ipv6_link_local" in resolver_classes,
+        "ufw_metadata_available": ufw_available,
+    }
+
+
+def load_payload(path: str | None) -> dict[str, Any]:
+    try:
+        raw = Path(path).read_text(encoding="utf-8") if path else sys.stdin.read()
+        payload = json.loads(raw)
+    except (OSError, json.JSONDecodeError):
+        raise VerifyError("input_invalid") from None
+    return require_dict(payload, "input")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("path", nargs="?")
+    args = parser.parse_args()
+    try:
+        result = verify(load_payload(args.path))
+    except VerifyError as exc:
+        result = {
+            "schema": RESULT_SCHEMA,
+            "status": "BLOCKED",
+            "blocker": str(exc),
+            "mutation_started": False,
+            "authorization_consumed": False,
+        }
+        print(json.dumps(result, sort_keys=True, separators=(",", ":")))
+        return 2
+    print(json.dumps(result, sort_keys=True, separators=(",", ":")))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
