@@ -60,11 +60,15 @@ class AdGuardDnsHardeningTests(unittest.TestCase):
     def test_route_and_resolver_classification(self):
         gateway, device = collector.parse_default_route("default via 192.0.2.1 dev eth0 metric 100\n")
         self.assertEqual((gateway, device), ("192.0.2.1", "eth0"))
-        raw = "IP4.DNS:127.0.0.1\nIP4.DNS:1.1.1.1\nIP6.DNS:fe80::1\n"
+        raw = "127.0.0.1\n1.1.1.1\nfe80::1\n"
         self.assertEqual(
             collector.parse_nmcli_dns(raw, gateway),
             ["ipv4_public", "ipv6_link_local", "loopback"],
         )
+
+    def test_nmcli_dns_values_only_format_fails_closed_on_labels(self):
+        with self.assertRaisesRegex(collector.PreflightError, "resolver_address_invalid"):
+            collector.parse_nmcli_dns("IP4.DNS[1]:127.0.0.1\n", "192.0.2.1")
 
     def test_listener_and_ufw_reduction(self):
         listeners = collector.parse_dns_listeners(
@@ -133,8 +137,12 @@ class AdGuardDnsHardeningTests(unittest.TestCase):
                 return collector.CommandResult(0, "AdGuard Home, version v0.107.79\n")
             if cmd[:4] == ("ss", "-H", "-lntu"):
                 return collector.CommandResult(0, "udp UNCONN 0 0 *:53 *:*\ntcp LISTEN 0 4096 *:53 *:*\n")
-            if cmd[:2] == ("nmcli", "-t"):
-                return collector.CommandResult(0, "IP4.DNS:127.0.0.1\nIP4.DNS:1.1.1.1\nIP6.DNS:fe80::1\n")
+            if cmd[:3] == ("nmcli", "-e", "no"):
+                self.assertEqual(
+                    cmd,
+                    ("nmcli", "-e", "no", "-g", "IP4.DNS,IP6.DNS", "device", "show", "eth0"),
+                )
+                return collector.CommandResult(0, "127.0.0.1\n1.1.1.1\nfe80::1\n")
             if cmd[:3] == ("sudo", "-n", "/usr/sbin/ufw"):
                 return collector.CommandResult(0, "Status: active\n")
             if cmd[0] == "dig" and "example.com." in cmd:
