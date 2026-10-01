@@ -15,5 +15,6 @@ python3 ./tests/test-cloudflare-p1d04-prelive-prep.py
 python3 ./tests/test-browser-lifecycle.py
 python3 ./tests/test-ui-proof-guarded.py
 python3 ./tests/test-adguard-dns-hardening.py
+python3 ./tests/test-adguard-resolver-phase2.py
 
 echo "Shell syntax: PASS (${count} files)"
