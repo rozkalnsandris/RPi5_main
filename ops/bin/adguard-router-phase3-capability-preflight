@@ -1,0 +1,32 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+import argparse, hashlib, json
+from typing import Sequence
+SCHEMA="rpi5.adguard-lan-dns-phase3-capability-preflight.v1"
+MODEL_CLASS="vodafone_ultra_hub_7_kabel"
+CAPABILITY_KEYS=("dhcpv4_custom_dns","ipv6_custom_dns_or_rdnss","outbound_dns53_enforcement","dot_enforcement")
+CAPABILITY_VALUES=("SUPPORTED","UNSUPPORTED","UNKNOWN")
+def fingerprint_payload(payload):
+    raw=json.dumps(payload,sort_keys=True,separators=(",",":")).encode()
+    return hashlib.sha256(raw).hexdigest()
+def build_parser():
+    p=argparse.ArgumentParser()
+    p.add_argument("--authenticated",action="store_true")
+    p.add_argument("--expert-mode",action="store_true")
+    p.add_argument("--scope-complete",action="store_true")
+    for key in CAPABILITY_KEYS:
+        p.add_argument("--"+key.replace("_","-"),choices=CAPABILITY_VALUES,required=True)
+    return p
+def collect(argv: Sequence[str]|None=None):
+    a=build_parser().parse_args(argv)
+    payload={"schema":SCHEMA,"status":"PASS","mutation_started":False,"authorization_consumed":False,
+      "router":{"model_class":MODEL_CLASS,"authenticated":bool(a.authenticated),"expert_mode":bool(a.expert_mode),"relevant_scope_complete":bool(a.scope_complete)},
+      "capabilities":{k:getattr(a,k) for k in CAPABILITY_KEYS},
+      "privacy":{"raw_router_config_emitted":False,"credential_material_emitted":False,"session_material_emitted":False,"client_identity_emitted":False,"raw_network_addresses_emitted":False},
+      "provenance":{"observation_class":"authenticated_ui_allowlisted_observation","public_docs_only_are_not_capability_proof":True}}
+    payload["evidence_identity_sha256"]=fingerprint_payload(payload)
+    return payload
+def main():
+    print(json.dumps(collect(),sort_keys=True,separators=(",",":")))
+    return 0
+if __name__=="__main__": raise SystemExit(main())

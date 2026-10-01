@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "operation_id": "rpi5.ultrahub7-phase3-capability-inspection.v1",
+  "issue": 794,
+  "phase": "PHASE3_LAN_DNS_CAPABILITY",
+  "source_only": true,
+  "execution_enabled": false,
+  "target": {
+    "device_class": "vodafone_ultra_hub_7_kabel",
+    "inspection_surface": "authenticated_expert_web_ui",
+    "mutation_allowed": false
+  },
+  "public_documentation_baseline": {
+    "local_network_menu_exposes_dhcp_parameters": true,
+    "custom_dns_or_rdnss_support_proven": false,
+    "dns53_or_dot_enforcement_support_proven": false
+  },
+  "required_fresh_preflight": {
+    "collector_schema": "rpi5.adguard-lan-dns-phase3-capability-preflight.v1",
+    "verifier_schema": "rpi5.adguard-lan-dns-phase3-capability-readiness.v1",
+    "required_verifier_status": "READY_PHASE3_CAPABILITY_DECISION",
+    "authenticated_inspection_required": true,
+    "expert_mode_required": true,
+    "relevant_scope_complete_required": true,
+    "capabilities_must_be_decided": [
+      "dhcpv4_custom_dns",
+      "ipv6_custom_dns_or_rdnss",
+      "outbound_dns53_enforcement",
+      "dot_enforcement"
+    ]
+  },
+  "privacy": {
+    "raw_router_config_allowed": false,
+    "credential_material_allowed": false,
+    "session_material_allowed": false,
+    "client_identity_allowed": false,
+    "raw_network_addresses_allowed": false,
+    "sanitized_capability_enums_only": true
+  },
+  "capability_semantics": {
+    "SUPPORTED": "an authenticated expert-mode control explicitly exposes the capability without applying it",
+    "UNSUPPORTED": "the relevant authenticated expert-mode inspection scope is complete and exposes no such capability",
+    "UNKNOWN": "the inspection is incomplete, ambiguous, inaccessible, or cannot establish the capability"
+  },
+  "mutation": {
+    "allowed": false,
+    "router_write_allowed": false,
+    "dhcp_write_allowed": false,
+    "ipv6_write_allowed": false,
+    "firewall_write_allowed": false,
+    "adguard_write_allowed": false
+  },
+  "decision_rules": {
+    "unknown_blocks_architecture_decision": true,
+    "rpi5_ufw_must_not_be_treated_as_lan_enforcement_for_non_routed_clients": true,
+    "future_mutation_contract_must_be_defined_only_after_capability_proof": true
+  },
+  "separate_later_gates": [
+    "router or DHCP mutation",
+    "IPv6 RDNSS mutation",
+    "LAN DNS redirect or block",
+    "DoT or encrypted-DNS enforcement",
+    "bridge-mode or replacement-router architecture",
+    "AdGuard allowed-client or rate-limit hardening"
+  ]
+}
