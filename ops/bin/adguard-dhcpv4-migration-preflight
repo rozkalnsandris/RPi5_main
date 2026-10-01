@@ -16,6 +16,7 @@ def parser():
     p.add_argument("--adguard-dhcp-available", action="store_true")
     p.add_argument("--adguard-dhcpv4-disabled", action="store_true")
     p.add_argument("--rpi5-static-lan-identity", action="store_true")
+    p.add_argument("--dhcpv4-firewall-ready", action="store_true")
     p.add_argument("--candidate-gateway-matches-router", action="store_true")
     p.add_argument("--candidate-subnet-matches-lan", action="store_true")
     p.add_argument("--candidate-pool-valid", action="store_true")
@@ -39,6 +40,7 @@ def collect(argv: Sequence[str] | None = None):
             "adguard_dhcp_available": bool(a.adguard_dhcp_available),
             "adguard_dhcpv4_disabled": bool(a.adguard_dhcpv4_disabled),
             "rpi5_static_lan_identity": bool(a.rpi5_static_lan_identity),
+            "dhcpv4_firewall_ready": bool(a.dhcpv4_firewall_ready),
             "adguard_dns_healthy": bool(a.adguard_dns_healthy),
         },
         "candidate": {

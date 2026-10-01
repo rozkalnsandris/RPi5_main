@@ -1,6 +1,7 @@
 # AdGuard DNS Phase 4 — DHCPv4 authority migration
 
-Issue: `RPi5_main#797`
+Issue: `RPi5_main#797`  
+Firewall-readiness follow-up: `RPi5_main#799`
 
 ## Target topology
 
@@ -12,6 +13,8 @@ AdGuard Home supports a built-in DHCP server. Its DHCPv4 configuration includes 
 
 This package defines readiness and a future cutover envelope. It performs no runtime mutation. Fresh read-only preflight after merge must derive the exact DHCPv4 parameters from current evidence without emitting raw client identities.
 
+Firewall readiness is a read-only preflight fact, not permission to change firewall state. The preflight must prove that the host firewall path accepts inbound DHCPv4 server traffic on the selected LAN interface (UDP/67). If that proof is absent or false, readiness is blocked. Any firewall mutation remains outside this package and requires its own explicit owner authorization.
+
 ## Required preflight facts
 
 The preflight must prove all of the following:
@@ -19,6 +22,7 @@ The preflight must prove all of the following:
 - Ultra Hub DHCPv4 is currently enabled and is the only active DHCPv4 authority;
 - AdGuard Home reports DHCP capability available and DHCPv4 disabled;
 - RPi5 has a stable LAN identity suitable for DHCP/DNS service;
+- the RPi5 firewall path accepts inbound DHCPv4 server traffic on the selected LAN interface (UDP/67), without changing firewall state;
 - the candidate subnet and gateway match the current LAN;
 - the candidate pool is inside the LAN subnet and excludes the gateway, RPi5, infrastructure/static addresses, and current reserved addresses;
 - the staged DHCP payload advertises Ultra Hub as gateway and RPi5/AdGuard as DNS;

@@ -21,6 +21,7 @@
     "adguard_dhcp_available": true,
     "adguard_dhcpv4_disabled": true,
     "rpi5_static_lan_identity": true,
+    "dhcpv4_firewall_ready": true,
     "adguard_dns_healthy": true
   },
   "mutation": {
