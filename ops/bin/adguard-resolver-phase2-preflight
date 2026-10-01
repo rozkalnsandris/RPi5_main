@@ -1,0 +1,252 @@
+#!/usr/bin/env python3
+"""Sanitized read-only Phase-2 host resolver preflight for RPi5_main#788."""
+from __future__ import annotations
+
+import hashlib
+import ipaddress
+import json
+import re
+import subprocess
+import uuid
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable, Sequence
+
+SCHEMA = "rpi5.adguard-host-resolver-preflight.v1"
+DNS_KEY_RE = re.compile(r"^IP[46]\.DNS(?:\[\d+\])?$")
+PROFILE_KEYS = {
+    "ipv4.method", "ipv4.dns", "ipv4.ignore-auto-dns",
+    "ipv6.method", "ipv6.dns", "ipv6.ignore-auto-dns",
+}
+Runner = Callable[[Sequence[str]], "CommandResult"]
+ResolvReader = Callable[[], tuple[str, str]]
+
+class PreflightError(RuntimeError):
+    def __init__(self, code: str) -> None:
+        self.code = code
+        super().__init__(code)
+
+@dataclass(frozen=True)
+class CommandResult:
+    returncode: int
+    stdout: str
+
+def run_command(command: Sequence[str]) -> CommandResult:
+    try:
+        completed = subprocess.run(list(command), check=False, stdout=subprocess.PIPE,
+                                   stderr=subprocess.DEVNULL, text=True, timeout=8)
+    except (OSError, subprocess.SubprocessError):
+        raise PreflightError("command_execution_failed") from None
+    return CommandResult(completed.returncode, completed.stdout)
+
+def require_ok(result: CommandResult, code: str) -> str:
+    if result.returncode != 0:
+        raise PreflightError(code)
+    return result.stdout
+
+def parse_default_route(raw: str) -> tuple[str, str]:
+    matches: list[tuple[str, str]] = []
+    for line in raw.splitlines():
+        fields = line.split()
+        if not fields or fields[0] != "default" or "via" not in fields or "dev" not in fields:
+            continue
+        try:
+            gateway = str(ipaddress.ip_address(fields[fields.index("via") + 1]))
+            device = fields[fields.index("dev") + 1]
+        except (ValueError, IndexError):
+            continue
+        if ipaddress.ip_address(gateway).version == 4 and device:
+            matches.append((gateway, device))
+    if len(matches) != 1:
+        raise PreflightError("default_ipv4_route_ambiguous")
+    return matches[0]
+
+def classify_address(value: str, gateway: str) -> str:
+    try:
+        ip = ipaddress.ip_address(value.strip())
+        gw = ipaddress.ip_address(gateway)
+    except ValueError:
+        return "invalid"
+    if ip.is_loopback:
+        return "loopback"
+    if ip == gw:
+        return "default_gateway"
+    if ip.version == 4:
+        return "ipv4_private_other" if ip.is_private else "ipv4_public"
+    if ip.is_link_local:
+        return "ipv6_link_local"
+    return "ipv6_private_other" if ip.is_private else "ipv6_public"
+
+def fingerprint(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
+
+def parse_runtime_dns(raw: str, gateway: str) -> tuple[list[str], int]:
+    classes: list[str] = []
+    count = 0
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        key, sep, value = line.partition(":")
+        if not sep or not DNS_KEY_RE.fullmatch(key.strip()) or not value.strip():
+            raise PreflightError("runtime_resolver_output_invalid")
+        cls = classify_address(value.strip(), gateway)
+        if cls == "invalid":
+            raise PreflightError("runtime_resolver_address_invalid")
+        classes.append(cls)
+        count += 1
+    return sorted(set(classes)), count
+
+def parse_dns_list(value: str, version: int, gateway: str) -> tuple[list[str], int]:
+    stripped = value.strip()
+    if not stripped or stripped == "--":
+        return [], 0
+    parts = [part.strip() for part in stripped.split(",")]
+    if any(not part for part in parts):
+        raise PreflightError("profile_dns_output_invalid")
+    classes: list[str] = []
+    for part in parts:
+        try:
+            ip = ipaddress.ip_address(part)
+        except ValueError:
+            raise PreflightError("profile_dns_address_invalid") from None
+        if ip.version != version:
+            raise PreflightError("profile_dns_family_invalid")
+        classes.append(classify_address(part, gateway))
+    return sorted(set(classes)), len(parts)
+
+def parse_bool(value: str, code: str) -> bool:
+    normalized = value.strip().lower()
+    if normalized in {"yes", "true", "1"}:
+        return True
+    if normalized in {"no", "false", "0"}:
+        return False
+    raise PreflightError(code)
+
+def parse_profile(raw: str, gateway: str) -> dict[str, object]:
+    values: dict[str, str] = {}
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        key, sep, value = line.partition(":")
+        key = key.strip()
+        if not sep or key not in PROFILE_KEYS or key in values:
+            raise PreflightError("profile_output_invalid")
+        values[key] = value.strip()
+    if set(values) != PROFILE_KEYS:
+        raise PreflightError("profile_output_incomplete")
+    ipv4_classes, ipv4_count = parse_dns_list(values["ipv4.dns"], 4, gateway)
+    ipv6_classes, ipv6_count = parse_dns_list(values["ipv6.dns"], 6, gateway)
+    return {
+        "ipv4_method": values["ipv4.method"],
+        "ipv4_dns_classes": ipv4_classes,
+        "ipv4_dns_count": ipv4_count,
+        "ipv4_ignore_auto_dns": parse_bool(values["ipv4.ignore-auto-dns"], "ipv4_ignore_auto_dns_invalid"),
+        "ipv6_method": values["ipv6.method"],
+        "ipv6_dns_classes": ipv6_classes,
+        "ipv6_dns_count": ipv6_count,
+        "ipv6_ignore_auto_dns": parse_bool(values["ipv6.ignore-auto-dns"], "ipv6_ignore_auto_dns_invalid"),
+    }
+
+def parse_resolv_conf(raw: str, resolved_path: str, gateway: str) -> dict[str, object]:
+    classes: list[str] = []
+    count = 0
+    rotate = False
+    for line in raw.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        fields = stripped.split()
+        if fields[0] == "nameserver":
+            if len(fields) != 2:
+                raise PreflightError("resolv_conf_nameserver_invalid")
+            cls = classify_address(fields[1], gateway)
+            if cls == "invalid":
+                raise PreflightError("resolv_conf_address_invalid")
+            classes.append(cls)
+            count += 1
+        elif fields[0] == "options" and "rotate" in fields[1:]:
+            rotate = True
+    nm_owned = "/run/NetworkManager/" in resolved_path or "# Generated by NetworkManager" in raw
+    return {
+        "owner_class": "networkmanager_generated" if nm_owned else "other_or_unknown",
+        "nameserver_classes": sorted(set(classes)),
+        "nameserver_count": count,
+        "rotate_present": rotate,
+    }
+
+def read_resolv_conf() -> tuple[str, str]:
+    path = Path("/etc/resolv.conf")
+    try:
+        return path.read_text(encoding="utf-8"), str(path.resolve())
+    except OSError:
+        raise PreflightError("resolv_conf_read_failed") from None
+
+def parse_dns_listeners(raw: str) -> dict[str, bool]:
+    tcp = False
+    udp = False
+    for line in raw.splitlines():
+        fields = line.split()
+        if len(fields) < 5:
+            continue
+        proto = fields[0].lower()
+        local = fields[4]
+        if not re.search(r":53$", local):
+            continue
+        tcp = tcp or proto.startswith("tcp")
+        udp = udp or proto.startswith("udp")
+    return {"tcp_53": tcp, "udp_53": udp}
+
+def dig_answered(command: Sequence[str], runner: Runner) -> bool:
+    result = runner(command)
+    return result.returncode == 0 and bool(result.stdout.strip())
+
+def collect(runner: Runner = run_command, resolv_reader: ResolvReader = read_resolv_conf) -> dict[str, object]:
+    route_raw = require_ok(runner(("ip", "-4", "route", "show", "default")), "default_route_probe_failed")
+    gateway, device = parse_default_route(route_raw)
+    version = require_ok(runner(("nmcli", "--version")), "networkmanager_version_probe_failed").strip()
+    if not version or len(version) > 120:
+        raise PreflightError("networkmanager_version_invalid")
+    uuid_raw = require_ok(runner(("nmcli", "-g", "GENERAL.CON-UUID", "device", "show", device)), "active_profile_probe_failed").strip()
+    try:
+        profile_uuid = str(uuid.UUID(uuid_raw))
+    except ValueError:
+        raise PreflightError("active_profile_uuid_invalid") from None
+    profile_raw = require_ok(runner(("nmcli", "-m", "multiline", "-t", "-e", "no", "-f",
+        "ipv4.method,ipv4.dns,ipv4.ignore-auto-dns,ipv6.method,ipv6.dns,ipv6.ignore-auto-dns",
+        "connection", "show", "uuid", profile_uuid)), "profile_probe_failed")
+    profile = parse_profile(profile_raw, gateway)
+    runtime_raw = require_ok(runner(("nmcli", "-m", "multiline", "-t", "-e", "no", "-f",
+        "IP4.DNS,IP6.DNS", "device", "show", device)), "runtime_resolver_probe_failed")
+    runtime_classes, runtime_count = parse_runtime_dns(runtime_raw, gateway)
+    resolv_raw, resolved_path = resolv_reader()
+    resolv_conf = parse_resolv_conf(resolv_raw, resolved_path, gateway)
+    resolved_result = runner(("systemctl", "is-active", "systemd-resolved"))
+    systemd_resolved_active = resolved_result.returncode == 0 and resolved_result.stdout.strip() == "active"
+    listeners = parse_dns_listeners(require_ok(runner(("ss", "-H", "-lntu")), "listener_probe_failed"))
+    system_dns_ok = dig_answered(("dig", "+time=2", "+tries=1", "+short", "example.com.", "A"), runner)
+    loopback_dns_ok = dig_answered(("dig", "+time=2", "+tries=1", "+short", "@127.0.0.1", "example.com.", "A"), runner)
+    return {
+        "schema": SCHEMA, "status": "PASS", "mutation_started": False, "authorization_consumed": False,
+        "privacy": {"raw_network_addresses_emitted": False, "connection_identity_emitted": False,
+                    "raw_networkmanager_profile_read": False, "credentials_read": False},
+        "networkmanager": {"version": version, "default_route_device_fingerprint": fingerprint(device),
+                           "active_profile_fingerprint": fingerprint(profile_uuid), "profile": profile,
+                           "runtime_dns_classes": runtime_classes, "runtime_dns_count": runtime_count},
+        "resolv_conf": resolv_conf, "systemd_resolved_active": systemd_resolved_active,
+        "dns_listeners": listeners,
+        "ordinary_dns": {"system_resolver_answered": system_dns_ok, "adguard_loopback_answered": loopback_dns_ok},
+    }
+
+def main() -> int:
+    try:
+        payload = collect()
+    except PreflightError as exc:
+        payload = {"schema": SCHEMA, "status": "BLOCKED", "blocker": exc.code,
+                   "mutation_started": False, "authorization_consumed": False}
+        print(json.dumps(payload, sort_keys=True, separators=(",", ":")))
+        return 2
+    print(json.dumps(payload, sort_keys=True, separators=(",", ":")))
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())

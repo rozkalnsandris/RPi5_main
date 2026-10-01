@@ -1,0 +1,119 @@
+#!/usr/bin/env python3
+"""Fail-closed verifier for the sanitized RPi5_main#788 Phase-2 resolver preflight."""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+from typing import Any
+
+SCHEMA = "rpi5.adguard-host-resolver-preflight.v1"
+RESULT_SCHEMA = "rpi5.adguard-host-resolver-readiness.v1"
+FINGERPRINT_RE = re.compile(r"^[0-9a-f]{16}$")
+
+class VerifyError(RuntimeError):
+    pass
+
+def require_dict(value: Any, name: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise VerifyError(f"{name}_invalid")
+    return value
+
+def require_bool(obj: dict[str, Any], key: str) -> bool:
+    value = obj.get(key)
+    if not isinstance(value, bool):
+        raise VerifyError(f"{key}_invalid")
+    return value
+
+def require_exact_classes(value: Any, expected: list[str], code: str) -> None:
+    if value != expected:
+        raise VerifyError(code)
+
+def verify(payload: dict[str, Any]) -> dict[str, Any]:
+    if payload.get("schema") != SCHEMA:
+        raise VerifyError("schema_invalid")
+    if payload.get("status") != "PASS":
+        raise VerifyError("collection_not_pass")
+    if payload.get("mutation_started") is not False or payload.get("authorization_consumed") is not False:
+        raise VerifyError("read_only_boundary_invalid")
+    privacy = require_dict(payload.get("privacy"), "privacy")
+    expected_privacy = {"raw_network_addresses_emitted", "connection_identity_emitted",
+                        "raw_networkmanager_profile_read", "credentials_read"}
+    if set(privacy) != expected_privacy or any(value is not False for value in privacy.values()):
+        raise VerifyError("privacy_boundary_invalid")
+    nm = require_dict(payload.get("networkmanager"), "networkmanager")
+    version = nm.get("version")
+    if not isinstance(version, str) or not version.startswith("nmcli tool, version "):
+        raise VerifyError("networkmanager_version_invalid")
+    for key in ("default_route_device_fingerprint", "active_profile_fingerprint"):
+        value = nm.get(key)
+        if not isinstance(value, str) or not FINGERPRINT_RE.fullmatch(value):
+            raise VerifyError(f"{key}_invalid")
+    profile = require_dict(nm.get("profile"), "profile")
+    if profile.get("ipv4_method") != "manual":
+        raise VerifyError("ipv4_method_unexpected")
+    require_exact_classes(profile.get("ipv4_dns_classes"), ["ipv4_public", "loopback"], "ipv4_profile_dns_shape_unexpected")
+    if profile.get("ipv4_dns_count") != 2:
+        raise VerifyError("ipv4_profile_dns_count_unexpected")
+    if require_bool(profile, "ipv4_ignore_auto_dns") is not True:
+        raise VerifyError("ipv4_ignore_auto_dns_unexpected")
+    if profile.get("ipv6_method") != "auto":
+        raise VerifyError("ipv6_method_unexpected")
+    require_exact_classes(profile.get("ipv6_dns_classes"), [], "ipv6_profile_dns_shape_unexpected")
+    if profile.get("ipv6_dns_count") != 0:
+        raise VerifyError("ipv6_profile_dns_count_unexpected")
+    if require_bool(profile, "ipv6_ignore_auto_dns") is not False:
+        raise VerifyError("ipv6_ignore_auto_dns_unexpected")
+    require_exact_classes(nm.get("runtime_dns_classes"), ["ipv4_public", "ipv6_link_local", "loopback"], "runtime_dns_shape_unexpected")
+    if nm.get("runtime_dns_count") != 3:
+        raise VerifyError("runtime_dns_count_unexpected")
+    resolv = require_dict(payload.get("resolv_conf"), "resolv_conf")
+    if resolv.get("owner_class") != "networkmanager_generated":
+        raise VerifyError("resolv_conf_owner_unexpected")
+    require_exact_classes(resolv.get("nameserver_classes"), ["ipv4_public", "ipv6_link_local", "loopback"], "resolv_conf_dns_shape_unexpected")
+    if resolv.get("nameserver_count") != 3:
+        raise VerifyError("resolv_conf_dns_count_unexpected")
+    if require_bool(resolv, "rotate_present"):
+        raise VerifyError("resolv_conf_rotate_unexpected")
+    if payload.get("systemd_resolved_active") is not False:
+        raise VerifyError("systemd_resolved_state_unexpected")
+    listeners = require_dict(payload.get("dns_listeners"), "dns_listeners")
+    if not require_bool(listeners, "tcp_53") or not require_bool(listeners, "udp_53"):
+        raise VerifyError("dns_listener_missing")
+    ordinary = require_dict(payload.get("ordinary_dns"), "ordinary_dns")
+    if not require_bool(ordinary, "system_resolver_answered"):
+        raise VerifyError("system_dns_unhealthy")
+    if not require_bool(ordinary, "adguard_loopback_answered"):
+        raise VerifyError("adguard_loopback_dns_unhealthy")
+    return {"schema": RESULT_SCHEMA, "status": "READY_PHASE2", "mutation_started": False,
+            "authorization_consumed": False, "profile_public_ipv4_fallback_confirmed": True,
+            "ipv6_auto_dns_fallback_confirmed": True,
+            "default_route_device_fingerprint": nm["default_route_device_fingerprint"],
+            "active_profile_fingerprint": nm["active_profile_fingerprint"]}
+
+def load_payload(path: str | None) -> dict[str, Any]:
+    try:
+        raw = Path(path).read_text(encoding="utf-8") if path else sys.stdin.read()
+        payload = json.loads(raw)
+    except (OSError, json.JSONDecodeError):
+        raise VerifyError("input_invalid") from None
+    return require_dict(payload, "input")
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("path", nargs="?")
+    args = parser.parse_args()
+    try:
+        result = verify(load_payload(args.path))
+    except VerifyError as exc:
+        result = {"schema": RESULT_SCHEMA, "status": "BLOCKED", "blocker": str(exc),
+                  "mutation_started": False, "authorization_consumed": False}
+        print(json.dumps(result, sort_keys=True, separators=(",", ":")))
+        return 2
+    print(json.dumps(result, sort_keys=True, separators=(",", ":")))
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())
