@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "operation_id": "rpi5.networkmanager-adguard-only-resolver.v1",
+  "issue": 788,
+  "phase": "PHASE2_HOST_RESOLVER_SELF_CONSISTENCY",
+  "source_only": true,
+  "execution_enabled": false,
+  "target": {
+    "application": "NetworkManager",
+    "configuration_scope": "active_default_route_connection_profile",
+    "runtime_scope": "active_default_route_device"
+  },
+  "required_fresh_preflight": {
+    "collector_schema": "rpi5.adguard-host-resolver-preflight.v1",
+    "verifier_schema": "rpi5.adguard-host-resolver-readiness.v1",
+    "required_verifier_status": "READY_PHASE2",
+    "profile_public_ipv4_fallback_confirmed": true,
+    "ipv6_auto_dns_fallback_confirmed": true,
+    "system_dns_healthy": true,
+    "adguard_loopback_dns_healthy": true,
+    "tcp_udp_53_listeners_required": true
+  },
+  "mutation": {
+    "class": "NETWORKMANAGER_PROFILE_AND_REAPPLY",
+    "max_forward_writes": 2,
+    "persistent_profile_write": {
+      "ordinal": 1,
+      "tool": "nmcli",
+      "argv_template": [
+        "connection",
+        "modify",
+        "uuid",
+        "<fresh-active-profile-uuid>",
+        "ipv4.dns",
+        "127.0.0.1",
+        "ipv6.ignore-auto-dns",
+        "yes"
+      ],
+      "allowed_properties": [
+        "ipv4.dns",
+        "ipv6.ignore-auto-dns"
+      ],
+      "required_exact_values": {
+        "ipv4.dns": [
+          "127.0.0.1"
+        ],
+        "ipv6.ignore-auto-dns": true
+      },
+      "ipv4_ignore_auto_dns_must_remain_unchanged": true,
+      "ipv4_addressing_routes_gateway_must_remain_unchanged": true,
+      "ipv6_addressing_routes_gateway_must_remain_unchanged": true
+    },
+    "runtime_reapply_write": {
+      "ordinal": 2,
+      "requires_previous_write_success": true,
+      "tool": "nmcli",
+      "argv_template": [
+        "device",
+        "reapply",
+        "<fresh-default-route-device>"
+      ],
+      "connection_down_up_allowed": false,
+      "device_disconnect_allowed": false,
+      "networkmanager_restart_allowed": false
+    },
+    "resolv_conf_direct_write_allowed": false,
+    "systemd_resolved_mutation_allowed": false,
+    "adguard_mutation_allowed": false,
+    "docker_mutation_allowed": false,
+    "firewall_mutation_allowed": false,
+    "router_mutation_allowed": false
+  },
+  "authorization": {
+    "required_after_source_merge": true,
+    "binds": [
+      "exact_merged_rpi5_main_sha",
+      "operation_id",
+      "fresh_preflight_evidence_identity",
+      "active_profile_fingerprint",
+      "default_route_device_fingerprint",
+      "max_forward_writes"
+    ],
+    "consumed_at": "first_networkmanager_profile_write"
+  },
+  "postconditions": {
+    "profile_ipv4_dns_classes_must_equal": [
+      "loopback"
+    ],
+    "profile_ipv4_dns_count_must_equal": 1,
+    "profile_ipv6_ignore_auto_dns_must_be": true,
+    "runtime_dns_classes_must_equal": [
+      "loopback"
+    ],
+    "resolv_conf_nameserver_classes_must_equal": [
+      "loopback"
+    ],
+    "resolv_conf_nameserver_count_must_equal": 1,
+    "system_dns_must_answer": true,
+    "adguard_loopback_dns_must_answer": true,
+    "tcp_udp_53_listeners_must_remain": true
+  },
+  "failure": {
+    "after_mutation_started": "STOP_WITH_SANITIZED_EVIDENCE",
+    "automatic_retry": false,
+    "automatic_rollback": false,
+    "automatic_restart": false,
+    "automatic_reconnect": false,
+    "automatic_cleanup": false,
+    "alternate_mutation_path": false
+  },
+  "separate_later_gates": [
+    "IPv6 RDNSS and router DHCP capability",
+    "LAN outbound DNS or DoT enforcement",
+    "AdGuard access-control and rate-limit hardening",
+    "container image pinning and Docker hardening",
+    "filter cleanup and telemetry changes"
+  ]
+}
