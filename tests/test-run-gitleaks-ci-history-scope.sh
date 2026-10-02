@@ -27,7 +27,7 @@ git init -q "$repo"
 (
   cd "$repo"
   git config user.name "Scope Test"
-  git config user.email "scope-test@example.invalid"
+  git config user.email "scope-test.invalid"
 
   printf '%s\n' "root-marker" > root.txt
   git add root.txt
