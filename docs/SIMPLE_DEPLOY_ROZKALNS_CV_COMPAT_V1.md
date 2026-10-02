@@ -1,31 +1,76 @@
 # rozkalns-cv SIMPLE-DEPLOY compatibility and first adoption v1
 
 Status: **source-ready only; LIVE remains separately owner-gated**  
-Current simplification: `RPi5_main#821`
+Follow-up: private-env accessibility correction after the read-only #821 cutover preflight.
 
 ## Operator model
 
-After the one-time legacy adoption, the normal delivery path is intentionally small:
+The steady-state delivery path remains intentionally small:
 
 `consumer merge → SIMPLE-DEPLOY → production`
 
-SIMPLE-DEPLOY already owns the technical host reconciliation: resolve the immutable production digest, pull it, run `docker compose up -d --wait`, verify the running image identity, liveness/readiness and write the deployment receipt. There is no separate owner-facing “RPi5 reconcile” phase.
+The one-time legacy adoption is an internal transition only. After it succeeds, future CV releases use the ordinary generic SIMPLE-DEPLOY target.
 
-## Docker Compose basis
+## Why the private env needs an /etc boundary
 
-The RPi5-owned production adapter follows Docker Compose's ordinary host-path model. The resolved account-home prefix stays host-local: the source Compose uses required interpolation variables, and the one-time cutover writes only those two resolved path values into `/etc/rozkalns-simple-deployer/compose/.env` for future ordinary SIMPLE-DEPLOY runs:
+The generic SIMPLE-DEPLOY service runs as the dedicated `rozkalns-simple-deployer` user with `ProtectHome=true`.
 
-- `env_file` supplies container environment variables from an external file;
-- the existing private env is reused in place from fixed relative path `docker/cv/bot/.env` under the passwd-resolved legacy account home;
-- the existing durable data directory is reused in place from fixed relative path `docker/cv/bot/data` under that same passwd-resolved home;
-- the bind uses long syntax with `create_host_path: false`, so a missing source fails instead of silently creating an empty directory;
-- absolute paths are deliberate because this is a host-owned RPi5 production adapter, not a portable developer Compose file;
-- public non-secret provider literals are overridden in Compose as `LLM_BASE_URL=https://api.openai.com` and `LLM_MODEL=gpt-5.6-luna`; secret values remain external.
+Docker Compose reads an `env_file` itself. Relative `env_file` paths are resolved from the Compose file directory. Therefore the CV app env cannot safely remain an `env_file` under a protected account home that the service cannot traverse.
 
-Official Docker references:
+The reviewed adapter now uses:
 
-- https://docs.docker.com/reference/compose-file/services/
-- https://docs.docker.com/reference/cli/docker/compose/up/
+`../private/rozkalns-cv.env`
+
+from the installed Compose file at:
+
+`/etc/rozkalns-simple-deployer/compose/rozkalns-cv.yml`
+
+which resolves to:
+
+`/etc/rozkalns-simple-deployer/private/rozkalns-cv.env`
+
+The protected boundary is:
+
+- parent: `/etc/rozkalns-simple-deployer/private`, `root:rozkalns-simple-deployer`, mode `0750`;
+- file: `/etc/rozkalns-simple-deployer/private/rozkalns-cv.env`, `root:rozkalns-simple-deployer`, mode `0640`;
+- source discovery: exactly one passwd home containing both fixed relative paths `docker/cv/bot/.env` and `docker/cv/bot/data`;
+- preflight: metadata only; secret contents are not read or emitted;
+- LIVE materialization: the reviewed fixed helper copies the private env bytes without logging them and does not modify the source file;
+- public non-secret overrides remain in Compose: `LLM_BASE_URL=https://api.openai.com` and `LLM_MODEL=gpt-5.6-luna`.
+
+Reviewed helper:
+
+`scripts/materialize-simple-deploy-rozkalns-cv-private-env-v1.py`
+
+This is part of the one-time cutover, not a second owner-facing deploy phase.
+
+Official references:
+
+- Docker Compose `env_file`: https://docs.docker.com/reference/compose-file/services/#env_file
+- Docker bind mounts: https://docs.docker.com/engine/storage/bind-mounts/
+- systemd `ProtectHome=`: https://www.freedesktop.org/software/systemd/man/systemd.exec.html#ProtectHome=
+
+## Durable data remains in place
+
+The existing persistent data directory is **not copied, migrated, reowned or deleted**.
+
+The source adapter keeps only one host-local Compose interpolation value:
+
+`ROZKALNS_CV_DATA_PATH`
+
+The resolved absolute path is written to:
+
+`/etc/rozkalns-simple-deployer/compose/.env`
+
+That file contains path metadata only, not app secrets.
+
+Docker bind mounts are created on the Docker daemon host. The generic deployer therefore passes the reviewed host path to Docker while the durable data remains at its existing host location. The bind keeps `create_host_path: false`, so a missing source fails closed instead of creating an empty directory.
+
+The legacy and candidate `bot/storage.py` Git blob remains identical:
+
+`7a7ce05021223b43686cd93513208bb0a249d9bc`
+
+Both runtimes use application UID/GID `10001:10001`. No database query or schema migration is part of the cutover.
 
 ## Current exact release
 
@@ -34,53 +79,40 @@ Official Docker references:
 - immutable image digest: `sha256:ba9e24c82eccd833cfe42d6a4aa61ef76c584bcfd4c27efbced13c3a408d2a1a`;
 - shared SIMPLE-DEPLOY workflow: `rozkalnsandris/ops-workflows@e05ed760791a127c7c9628696806ef39c9fe329c`;
 - target: `rozkalns-cv-rpi5`;
-- RPi5 Compose SHA-256: `deb4787f91d7a8c978d2ca1eb7b05d05ed0db28b467a295ddfcbbb55b2420de0`;
+- RPi5 Compose SHA-256: `d4c7e9ed5c36245d92ce7da199194ec032c74de6ea03f2b522e31a43ffaf3277`;
 - liveness: `http://127.0.0.1:8088/api/health`;
 - readiness: `http://127.0.0.1:8088/api/health/ready`.
 
-The legacy production baseline for the first adoption remains `4986a6d80460bd6d7681c70e09e61a15e31007f4`.
+The required legacy production baseline remains:
 
-## Existing state is reused, not migrated
-
-The legacy and current candidate `bot/storage.py` Git blob is identical:
-
-`7a7ce05021223b43686cd93513208bb0a249d9bc`
-
-Both legacy and SIMPLE-DEPLOY application runtimes use UID/GID `10001:10001`.
-
-Therefore the first adoption does not create a second data tree, copy the SQLite database, run a schema migration or change ownership. The existing data directory is mounted in place.
-
-Likewise, SIMPLE-DEPLOY does not create a second private env file. It reuses the existing host file. Source work and cutover preflight may validate only path metadata; they do not read, print, copy or rewrite secret contents.
+`4986a6d80460bd6d7681c70e09e61a15e31007f4`
 
 ## One-time legacy adoption
 
-The one-time cutover remains a single STRICT LIVE operation because the old `cv` and `cvbot` containers already own the production runtime.
+The STRICT cutover remains one owner-authorized operation:
 
-Internally it performs only the technical transition needed to reach the steady state:
+1. revalidate exact RPi5/CV source, CI, production pointer, legacy containers, port ownership and existing env/data metadata;
+2. materialize and verify the protected CV env boundary **before legacy retirement**;
+3. quiesce the generic SIMPLE-DEPLOY timer and install the Weather+CV registry, exact RPi5 identity, reviewed CV Compose and data-path-only interpolation metadata;
+4. retire the exact legacy `cvbot` and `cv` containers and require `127.0.0.1:8088` to become unbound;
+5. invoke generic SIMPLE-DEPLOY for the exact immutable candidate;
+6. require receipt identity, liveness/readiness HTTP 200 and the public UI v2 marker;
+7. restart the generic SIMPLE-DEPLOY timer only after successful verification.
 
-1. revalidate exact source/digest, current production pointer, legacy baseline and existing env/data path metadata;
-2. quiesce the generic SIMPLE-DEPLOY timer while its target registry/Compose binding is installed;
-3. retire the exact legacy `cvbot` and `cv` containers;
-4. prove `127.0.0.1:8088` is unbound;
-5. invoke the normal generic SIMPLE-DEPLOY target for the exact immutable digest;
-6. require receipt identity plus liveness/readiness HTTP 200 and the public UI v2 marker;
-7. resume the generic timer only after success.
+If private-env materialization fails, legacy runtime retirement has not started. After any mutation error the process remains fail-closed: no automatic retry, cleanup, rollback or alternate deployment path.
 
-These are implementation details of the one-time adoption, not recurring owner gates.
+## Authority boundary
 
-After success, future CV releases use the ordinary SIMPLE-DEPLOY path only.
+This source change does **not** authorize:
 
-## Failure and authority boundary
+- private env materialization on the host;
+- secret content display or repository publication;
+- legacy runtime retirement;
+- Docker/Compose execution;
+- production deploy;
+- persistent-data copy/migration/reownership/deletion/content inspection;
+- database query/schema/data migration;
+- Cloudflare/network mutation;
+- repository settings/permissions/secrets mutation.
 
-The cutover is fail-closed after the first mutation: no automatic retry, cleanup, rollback or alternate deployment path.
-
-Source merge does not authorize the one-time LIVE cutover. This source lane also does not authorize:
-
-- secret/env content reads or writes;
-- persistent-data copy, migration, reownership, deletion or inspection;
-- database queries/schema/data migration;
-- unrelated Docker/systemd/filesystem mutation;
-- Cloudflare/network changes;
-- repository settings/permissions/secrets changes.
-
-Any LIVE execution still requires a separate exact owner authorization bound to the final merged RPi5 source and exact CV release.
+A later LIVE cutover still requires separate exact owner authorization bound to the final merged RPi5 source and exact CV release.
