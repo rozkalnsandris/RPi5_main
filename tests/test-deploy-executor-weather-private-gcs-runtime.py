@@ -275,7 +275,9 @@ class WeatherNextPrivateGCSRuntimeTests(unittest.TestCase):
     def test_materializer_unpacks_only_reviewed_offline_gcs_wheelhouse(self):
         source_sha = "1" * 40
         wheels = {
+            "google_auth-2.59.1-py3-none-any.whl": wheel_bytes("google/auth/__init__.py"),
             "obstore-0.11.1-py3-none-any.whl": wheel_bytes("obstore/__init__.py"),
+            "requests-2.34.2-py3-none-any.whl": wheel_bytes("requests/__init__.py"),
             "xarray-2026.9.0-py3-none-any.whl": wheel_bytes("xarray/__init__.py"),
             "zarr-3.4.0-py3-none-any.whl": wheel_bytes("zarr/__init__.py"),
         }
@@ -328,7 +330,9 @@ class WeatherNextPrivateGCSRuntimeTests(unittest.TestCase):
     def test_materializer_fails_closed_on_prior_partial_without_cleanup(self):
         source_sha = "1" * 40
         wheels = {
+            "google_auth-2.59.1-py3-none-any.whl": wheel_bytes("google/auth/__init__.py"),
             "obstore-0.11.1-py3-none-any.whl": wheel_bytes("obstore/__init__.py"),
+            "requests-2.34.2-py3-none-any.whl": wheel_bytes("requests/__init__.py"),
             "xarray-2026.9.0-py3-none-any.whl": wheel_bytes("xarray/__init__.py"),
             "zarr-3.4.0-py3-none-any.whl": wheel_bytes("zarr/__init__.py"),
         }
