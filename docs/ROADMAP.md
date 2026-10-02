@@ -109,3 +109,19 @@ The first-access scope is fixed to `station_10416`, 6 forecast hours, mandatory 
 ## Later phases
 
 Each remaining subsystem is imported separately with redaction, tests, rollback instructions and a pull request. Docker Compose, Home Assistant, monitoring, update scripts and application repositories remain outside the V12 target set until their own contracts are reviewed. Cloudflare runtime ownership is defined by V13, while application-origin/runtime hardening is imported one reviewed subsystem at a time beginning with V14.
+
+
+## WeatherNext private GCS — source trust boundary
+
+Issue #825 defines a separate execution-disabled RPi5 trust boundary for the
+bounded WeatherNext 3 GCS statistics path from `rozkalns_weather#122`. It does
+not widen or replace the historical BigQuery bridge. The GCS authority class is
+`read_only_private_gcs` and its fixed sequence contains only exact Weather
+application staging, a GCS-specific reviewed private runtime, the fixed Google
+auth binding and the bounded GCS read.
+
+Project/dataset binding, Analytics Hub, BigQuery, billing-project headers,
+Requester Pays full-ensemble fallback, home scope and production SQLite/corpus
+writes are excluded. #825 does not implement the GCS runtime dependency closure
+and keeps all host/runtime execution disabled; that runtime materialization is
+the next separate source prerequisite before any LIVE preflight.
