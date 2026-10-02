@@ -1,6 +1,5 @@
 from datetime import datetime, timezone
-
-import pytest
+import unittest
 
 from deploy_executor.weather_private_gcs_contract import (
     GCS_RUNTIME_MATERIALIZATION,
@@ -88,60 +87,63 @@ class _Read:
         return GCSStageReceipt(READ_ONLY_PRIVATE_GCS, "completed", False)
 
 
-def test_canonical_gcs_facts_have_no_project_or_dataset_readiness() -> None:
-    facts = _Facts().load_gcs_facts(825)
-    validated = validate_canonical_gcs_facts(facts, requested_issue_number=825)
-    assert validated["source_status"] == SOURCE_STATUS
-    assert validated["auth_bound"] is True
-    assert validated["scope"]["location_id"] == "station_05480"
-    assert "project_bound" not in validated
-    assert "linked_dataset_present" not in validated
-
-    with pytest.raises(
-        WeatherNextPrivateGCSTrustedBackendError,
-        match="Google auth binding mismatch",
-    ):
-        validate_canonical_gcs_facts(
-            _Facts(auth_state="mismatch").load_gcs_facts(825),
-            requested_issue_number=825,
+class WeatherPrivateGCSTrustedBackendTests(unittest.TestCase):
+    def test_canonical_gcs_facts_have_no_project_or_dataset_readiness(self):
+        facts = _Facts().load_gcs_facts(825)
+        validated = validate_canonical_gcs_facts(
+            facts, requested_issue_number=825
         )
+        self.assertEqual(validated["source_status"], SOURCE_STATUS)
+        self.assertTrue(validated["auth_bound"])
+        self.assertEqual(validated["scope"]["location_id"], "station_05480")
+        self.assertNotIn("project_bound", validated)
+        self.assertNotIn("linked_dataset_present", validated)
 
+        with self.assertRaisesRegex(
+            WeatherNextPrivateGCSTrustedBackendError,
+            "Google auth binding mismatch",
+        ):
+            validate_canonical_gcs_facts(
+                _Facts(auth_state="mismatch").load_gcs_facts(825),
+                requested_issue_number=825,
+            )
 
-def test_trusted_wrapper_uses_fixed_weather_gcs_entrypoint() -> None:
-    read = _Read()
-    backend = TrustedWeatherNextGCSBackend(
-        TrustedGCSCapabilitySet(
-            application_stager=_App(),
-            runtime_materializer=_Runtime(),
-            google_auth=_Auth(),
-            first_access=read,
+    def test_trusted_wrapper_uses_fixed_weather_gcs_entrypoint(self):
+        read = _Read()
+        backend = TrustedWeatherNextGCSBackend(
+            TrustedGCSCapabilitySet(
+                application_stager=_App(),
+                runtime_materializer=_Runtime(),
+                google_auth=_Auth(),
+                first_access=read,
+            )
         )
-    )
-    consumer = _Consumer()
-    wrapper = TrustedGCSHostEntrypoint(
-        canonical_revalidator=CanonicalWeatherNextGCSRevalidator(_Facts()),
-        authorization_consumer=consumer,
-        backend=backend,
-    )
+        consumer = _Consumer()
+        wrapper = TrustedGCSHostEntrypoint(
+            canonical_revalidator=CanonicalWeatherNextGCSRevalidator(_Facts()),
+            authorization_consumer=consumer,
+            backend=backend,
+        )
+        result = wrapper.dispatch(825)
+        self.assertEqual(consumer.first_stage, READ_ONLY_PRIVATE_GCS)
+        self.assertEqual(read.entrypoint, WEATHER_ENTRYPOINT)
+        self.assertEqual(result["status"], "private_gcs_execution_sequence_completed")
+        self.assertFalse(result["bigquery_performed"])
 
-    result = wrapper.dispatch(825)
+    def test_source_contract_exposes_runtime_materialization_as_next_prerequisite(self):
+        source = trusted_backend_source_contract()
+        self.assertEqual(source["source_status"], SOURCE_STATUS)
+        self.assertTrue(source["canonical_revalidator_implemented"])
+        self.assertTrue(source["source_wrapper_implemented"])
+        self.assertFalse(source["gcs_runtime_materializer_implementation_present"])
+        self.assertFalse(source["external_entrypoint_enabled"])
+        self.assertFalse(source["credential_read_enabled"])
+        self.assertFalse(source["read_only_gcs_execution_enabled"])
+        self.assertFalse(source["project_binding_execution_enabled"])
+        self.assertFalse(source["analytics_hub_execution_enabled"])
+        self.assertFalse(source["bigquery_execution_enabled"])
+        self.assertFalse(source["source_merge_authorizes_live"])
 
-    assert consumer.first_stage == READ_ONLY_PRIVATE_GCS
-    assert read.entrypoint == WEATHER_ENTRYPOINT
-    assert result["status"] == "private_gcs_execution_sequence_completed"
-    assert result["bigquery_performed"] is False
 
-
-def test_source_contract_exposes_runtime_materialization_as_next_prerequisite() -> None:
-    source = trusted_backend_source_contract()
-    assert source["source_status"] == SOURCE_STATUS
-    assert source["canonical_revalidator_implemented"] is True
-    assert source["source_wrapper_implemented"] is True
-    assert source["gcs_runtime_materializer_implementation_present"] is False
-    assert source["external_entrypoint_enabled"] is False
-    assert source["credential_read_enabled"] is False
-    assert source["read_only_gcs_execution_enabled"] is False
-    assert source["project_binding_execution_enabled"] is False
-    assert source["analytics_hub_execution_enabled"] is False
-    assert source["bigquery_execution_enabled"] is False
-    assert source["source_merge_authorizes_live"] is False
+if __name__ == "__main__":
+    unittest.main()
