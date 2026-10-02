@@ -34,9 +34,9 @@ permissions:
   contents: read
 
 jobs:
-  resolve-closure-proposal:
+  source-contract:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - name: Check out repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
@@ -44,181 +44,167 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Resolve public PyPI closure proposal
+      - name: Validate private WeatherNext GCS runtime source
+        run: |
+          python3 ./tests/test-deploy-executor-weather-private-gcs-runtime.py
+          python3 ./tests/test_weather_private_gcs_execution_bridge.py
+          python3 ./tests/test_weather_private_gcs_trusted_backend.py
+          python3 -m py_compile \
+            ops/lib/deploy_executor/weather_private_gcs_contract.py \
+            ops/lib/deploy_executor/weather_private_gcs_execution_bridge.py \
+            ops/lib/deploy_executor/weather_private_gcs_runtime_materialization.py \
+            ops/lib/deploy_executor/weather_private_gcs_trusted_backend.py
+
+  deterministic-wheelhouse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Build exact GCS aarch64 wheelhouse artifact
         run: |
           set -euo pipefail
-          rm -rf .weathernext-private-gcs-runtime-proposal
-          mkdir -p .weathernext-private-gcs-runtime-proposal/wheelhouse
+          rm -rf .weathernext-private-gcs-runtime-build
+          mkdir -p .weathernext-private-gcs-runtime-build/wheelhouse
           python3 - <<'PY'
           from __future__ import annotations
 
           import hashlib
+          import io
           import json
+          import os
           import pathlib
-          import re
           import subprocess
           import sys
-          import zipfile
-          from email.parser import Parser
+          import tarfile
 
-          roots = (
-              "obstore>=0.11.1,<0.12",
-              "xarray>=2026.9,<2027",
-              "zarr>=3.4,<4",
-          )
-          build = pathlib.Path(".weathernext-private-gcs-runtime-proposal")
+          root = pathlib.Path(".")
+          build = root / ".weathernext-private-gcs-runtime-build"
           wheelhouse = build / "wheelhouse"
+          lock_path = root / "ops/lib/deploy_executor/weather_private_gcs_runtime_lock.json"
+          lock = json.loads(lock_path.read_text(encoding="utf-8"))
+          source_sha = os.environ["SOURCE_SHA"]
+          if len(source_sha) != 40 or any(c not in "0123456789abcdef" for c in source_sha):
+              raise SystemExit("SOURCE_SHA must be one exact Git commit SHA")
+
+          requirements = [f"{item['name']}=={item['version']}" for item in lock["packages"]]
           command = [
               sys.executable,
               "-m",
               "pip",
               "download",
               "--disable-pip-version-check",
+              "--no-deps",
               "--only-binary=:all:",
-              "--platform",
-              "manylinux_2_28_aarch64",
-              "--platform",
-              "manylinux_2_27_aarch64",
-              "--platform",
-              "manylinux_2_26_aarch64",
-              "--platform",
-              "manylinux_2_25_aarch64",
-              "--platform",
-              "manylinux_2_24_aarch64",
-              "--platform",
-              "manylinux_2_23_aarch64",
-              "--platform",
-              "manylinux_2_22_aarch64",
-              "--platform",
-              "manylinux_2_21_aarch64",
-              "--platform",
-              "manylinux_2_20_aarch64",
-              "--platform",
-              "manylinux_2_19_aarch64",
-              "--platform",
-              "manylinux_2_18_aarch64",
-              "--platform",
-              "manylinux_2_17_aarch64",
-              "--platform",
-              "manylinux2014_aarch64",
-              "--python-version",
-              "313",
-              "--implementation",
-              "cp",
-              "--abi",
-              "cp313",
-              "--abi",
-              "abi3",
-              "--dest",
-              str(wheelhouse),
-              *roots,
           ]
+          for platform in lock["target"]["accepted_wheel_platforms"]:
+              command.extend(["--platform", platform])
+          command.extend(
+              [
+                  "--python-version",
+                  "313",
+                  "--implementation",
+                  "cp",
+                  "--abi",
+                  "cp313",
+                  "--abi",
+                  "abi3",
+                  "--dest",
+                  str(wheelhouse),
+                  *requirements,
+              ]
+          )
           subprocess.run(command, check=True)
 
-          def canonical(name: str) -> str:
-              return re.sub(r"[-_.]+", "-", name).lower()
-
-          packages = []
-          for path in sorted(wheelhouse.glob("*.whl")):
-              with zipfile.ZipFile(path, "r") as archive:
-                  metadata_names = [
-                      name
-                      for name in archive.namelist()
-                      if name.endswith(".dist-info/METADATA")
-                  ]
-                  if len(metadata_names) != 1:
-                      raise SystemExit(f"unexpected METADATA count for {path.name}")
-                  metadata = Parser().parsestr(
-                      archive.read(metadata_names[0]).decode("utf-8")
-                  )
-              name = canonical(metadata["Name"])
-              version = metadata["Version"]
-              if not name or not version:
-                  raise SystemExit(f"missing package metadata for {path.name}")
-              packages.append(
-                  {
-                      "name": name,
-                      "version": version,
-                      "filename": path.name,
-                      "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-                  }
+          expected = {item["filename"]: item["sha256"] for item in lock["packages"]}
+          observed = {path.name for path in wheelhouse.iterdir() if path.is_file()}
+          if observed != set(expected):
+              raise SystemExit(
+                  f"wheelhouse filename mismatch: missing={sorted(set(expected)-observed)} "
+                  f"extra={sorted(observed-set(expected))}"
               )
+          for filename, expected_sha in sorted(expected.items()):
+              digest = hashlib.sha256((wheelhouse / filename).read_bytes()).hexdigest()
+              if digest != expected_sha:
+                  raise SystemExit(f"wheel digest mismatch for {filename}")
 
-          packages.sort(key=lambda item: item["name"])
-          if len({item["name"] for item in packages}) != len(packages):
-              raise SystemExit("duplicate canonical package name")
-          names = {item["name"] for item in packages}
-          required_roots = {"obstore", "xarray", "zarr"}
-          if not required_roots.issubset(names):
-              raise SystemExit("required root package missing")
-          if "google-cloud-bigquery" in names:
-              raise SystemExit("BigQuery package is forbidden in GCS runtime closure")
-
-          projected = [
-              {
-                  "name": item["name"],
-                  "version": item["version"],
-                  "filename": item["filename"],
-                  "sha256": item["sha256"],
-              }
-              for item in packages
-          ]
-          closure_sha256 = hashlib.sha256(
-              json.dumps(
-                  projected,
-                  sort_keys=True,
-                  separators=(",", ":"),
-              ).encode("utf-8")
-          ).hexdigest()
-          versions = {item["name"]: item["version"] for item in packages}
-          proposal = {
-              "schema": "rozkalns-weather.weathernext-private-gcs-runtime-lock.v1",
-              "operation_id": "rozkalns-weather.weathernext-private-gcs-runtime-materialization.v1",
-              "weather_source_sha": "b7f04385ff33ab613a30e0ab89c734aa4ba444ca",
-              "weather_extra": "weathernext-gcs",
-              "upstream_requirements": list(roots),
-              "resolved_roots": {
-                  "obstore": versions["obstore"],
-                  "xarray": versions["xarray"],
-                  "zarr": versions["zarr"],
-              },
-              "target": {
-                  "os": "linux",
-                  "architecture": "aarch64",
-                  "python_version": "3.13",
-                  "python_abi": "cp313",
-                  "pip_platform": "manylinux_2_28_aarch64",
-                  "accepted_abi": ["cp313", "abi3", "none"],
-                  "accepted_wheel_platforms": [
-                      "manylinux_2_28_aarch64",
-                      "manylinux_2_27_aarch64",
-                      "manylinux_2_26_aarch64",
-                      "manylinux_2_25_aarch64",
-                      "manylinux_2_24_aarch64",
-                      "manylinux_2_23_aarch64",
-                      "manylinux_2_22_aarch64",
-                      "manylinux_2_21_aarch64",
-                      "manylinux_2_20_aarch64",
-                      "manylinux_2_19_aarch64",
-                      "manylinux_2_18_aarch64",
-                      "manylinux_2_17_aarch64",
-                      "manylinux2014_aarch64",
-                  ],
-              },
-              "package_count": len(packages),
-              "closure_sha256": closure_sha256,
-              "packages": packages,
-              "provenance": {
-                  "registry": "https://pypi.org/simple",
-                  "resolver": "pip download public proposal",
-                  "resolved_at": "2026-10-02",
-              },
-              "live_network_install_allowed": False,
-              "live_package_manager_install_allowed": False,
-              "credential_material_in_lock": False,
-              "private_google_identity_in_lock": False,
+          metadata = {
+              "schema": "rozkalns-weather.weathernext-private-gcs-runtime-artifact.v1",
+              "source_sha": source_sha,
+              "closure_sha256": lock["closure_sha256"],
+              "target_os": lock["target"]["os"],
+              "target_architecture": lock["target"]["architecture"],
+              "target_python_version": lock["target"]["python_version"],
+              "target_python_abi": lock["target"]["python_abi"],
+              "target_platform": lock["target"]["pip_platform"],
+              "package_count": lock["package_count"],
           }
-          print("GCS_RUNTIME_LOCK_PROPOSAL_BEGIN")
-          print(json.dumps(proposal, sort_keys=True, separators=(",", ":")))
-          print("GCS_RUNTIME_LOCK_PROPOSAL_END")
+          metadata_bytes = (
+              json.dumps(metadata, sort_keys=True, separators=(",", ":")) + "\n"
+          ).encode("utf-8")
+
+          artifact_path = build / "weathernext-private-gcs-runtime.tar"
+          with tarfile.open(artifact_path, mode="w") as archive:
+              entries = [("runtime-closure.json", metadata_bytes)]
+              entries.extend(
+                  (f"wheelhouse/{filename}", (wheelhouse / filename).read_bytes())
+                  for filename in sorted(expected)
+              )
+              for name, data in entries:
+                  info = tarfile.TarInfo(name)
+                  info.size = len(data)
+                  info.mode = 0o644
+                  info.uid = 0
+                  info.gid = 0
+                  info.uname = ""
+                  info.gname = ""
+                  info.mtime = 0
+                  archive.addfile(info, io.BytesIO(data))
+
+          artifact_bytes = artifact_path.read_bytes()
+          receipt = {
+              "source_sha": source_sha,
+              "closure_sha256": lock["closure_sha256"],
+              "artifact_sha256": hashlib.sha256(artifact_bytes).hexdigest(),
+              "artifact_size_bytes": len(artifact_bytes),
+              "artifact_format": "normalized-wheelhouse-tar-v1",
+              "target_os": lock["target"]["os"],
+              "target_architecture": lock["target"]["architecture"],
+              "target_python_version": lock["target"]["python_version"],
+              "target_python_abi": lock["target"]["python_abi"],
+              "target_platform": lock["target"]["pip_platform"],
+          }
+          (build / "runtime-artifact-receipt.json").write_text(
+              json.dumps(receipt, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(
+              json.dumps(
+                  {
+                      "status": "gcs_runtime_artifact_built",
+                      "source_sha": source_sha,
+                      "closure_sha256": receipt["closure_sha256"],
+                      "artifact_sha256": receipt["artifact_sha256"],
+                      "artifact_size_bytes": receipt["artifact_size_bytes"],
+                      "package_count": lock["package_count"],
+                  },
+                  sort_keys=True,
+              )
+          )
           PY
+
+      - name: Upload reviewed GCS runtime artifact and receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: weathernext-private-gcs-runtime-${{ env.SOURCE_SHA }}
+          path: |
+            .weathernext-private-gcs-runtime-build/weathernext-private-gcs-runtime.tar
+            .weathernext-private-gcs-runtime-build/runtime-artifact-receipt.json
+          if-no-files-found: error
+          retention-days: 14

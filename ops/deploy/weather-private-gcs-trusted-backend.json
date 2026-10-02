@@ -3,7 +3,7 @@
   "implementation_issue": 825,
   "weather_issue": 122,
   "source_only": true,
-  "source_status": "SOURCE_READY_GCS_RUNTIME_MATERIALIZATION_REQUIRED",
+  "source_status": "SOURCE_READY_GCS_HOST_WIRING_REQUIRED",
   "host_capability_id": "rpi5.weathernext-private-gcs-backend.v1",
   "bridge_operation_id": "rozkalns-weather.weathernext-private-gcs-execution-bridge.v1",
   "private_contract_id": "rozkalns-weather.weathernext-private-gcs-first-access.v1",
@@ -64,14 +64,19 @@
     "mutation_sequence": false
   },
   "runtime_prerequisite": {
-    "gcs_runtime_materializer_implemented": false,
-    "separate_source_work_required": true,
+    "gcs_runtime_materializer_implemented": true,
+    "separate_source_work_required": false,
     "runtime_dependencies": [
       "obstore",
       "xarray",
       "zarr"
     ],
-    "live_network_install_allowed": false
+    "live_network_install_allowed": false,
+    "runtime_lock": "ops/lib/deploy_executor/weather_private_gcs_runtime_lock.json",
+    "runtime_materializer": "ops/lib/deploy_executor/weather_private_gcs_runtime_materialization.py",
+    "closure_sha256": "df79ccff739c3f8f3b3a76732f10624027924aadd45d40ee7f62af670f8e65ab",
+    "package_count": 14,
+    "host_wiring_required": true
   },
   "failure_semantics": {
     "automatic_retry": false,

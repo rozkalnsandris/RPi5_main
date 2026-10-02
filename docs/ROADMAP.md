@@ -122,6 +122,11 @@ auth binding and the bounded GCS read.
 
 Project/dataset binding, Analytics Hub, BigQuery, billing-project headers,
 Requester Pays full-ensemble fallback, home scope and production SQLite/corpus
-writes are excluded. #825 does not implement the GCS runtime dependency closure
-and keeps all host/runtime execution disabled; that runtime materialization is
-the next separate source prerequisite before any LIVE preflight.
+writes are excluded.
+
+Issue #828 adds the separate deterministic GCS runtime source closure: 14 exact
+aarch64/cp313 wheels rooted in `obstore 0.11.1`, `xarray 2026.9.0` and
+`zarr 3.4.0`, verified by exact filename/SHA-256 and materialized only from an
+offline normalized wheelhouse artifact. The GCS materializer remains unwired
+and execution-disabled; the next prerequisite is GCS-specific host/runtime
+wiring plus sanitized readiness before any LIVE preflight.
