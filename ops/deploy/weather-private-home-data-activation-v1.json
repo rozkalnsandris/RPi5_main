@@ -1,0 +1,137 @@
+{
+  "schema": "rozkalns.rpi5-main.weather-private-home-data-activation.v1",
+  "schema_version": 1,
+  "issue": 812,
+  "operation_id": "rpi5-main.weather-private-home-data-activation.v1",
+  "execution_enabled": false,
+  "authorization_class": "STRICT",
+  "phase": "B",
+  "phase_a_operation_id": "rpi5-main.weather-private-home-cutover.v1",
+  "target_alias": "rozkalns-weather-public-rpi5",
+  "candidate_release": {
+    "consumer_repository": "rozkalnsandris/rozkalns_weather",
+    "source_sha": "f658041dfcd6f84994594ddac776b3cf9702e174",
+    "image": "ghcr.io/rozkalnsandris/rozkalns_weather",
+    "image_digest": "sha256:fc40d6e824be1d0e0783b060f51d9a2a2d1dafdd0b0a3861b39ffdbadcd0dcc6",
+    "mutable_production_tag_is_authority": false
+  },
+  "preconditions": {
+    "phase_a_must_be_completed_and_verified": true,
+    "runtime_mode": "private-home",
+    "home_coordinate_pair_present": true,
+    "coordinate_values_must_not_be_output": true,
+    "container_health": "healthy",
+    "liveness_http_status": 200,
+    "readiness_http_status": 200,
+    "required_source_sha": "f658041dfcd6f84994594ddac776b3cf9702e174",
+    "required_image_digest": "sha256:fc40d6e824be1d0e0783b060f51d9a2a2d1dafdd0b0a3861b39ffdbadcd0dcc6",
+    "weather_ingest_timer_enabled_state": "enabled",
+    "weather_ingest_timer_active_state": "inactive",
+    "weather_ingest_service_active_state": "inactive",
+    "simple_deployer_timer_enabled_state": "enabled",
+    "simple_deployer_timer_active_state": "active",
+    "simple_deployer_service_active_state": "inactive",
+    "fresh_read_only_revalidation_required": true
+  },
+  "first_ingest": {
+    "helper": "/usr/local/libexec/rozkalns-simple-deployer/rozkalns-simple-deploy-weather-data",
+    "argv": [
+      "--ingest-once"
+    ],
+    "target_lock_required": true,
+    "helper_integrity_gate_required": true,
+    "expected_receipt_result": "INGEST_PASS",
+    "production_data_mutation": true,
+    "mutation_scope": [
+      "existing-public-ingest-location-ensure",
+      "dwd-public-observation-ingest",
+      "station_05480-public-forecast-ingest",
+      "home-location-ensure",
+      "home-icon_d2-forecast-ingest",
+      "home-ecmwf_ifs-forecast-ingest",
+      "home-ecmwf_aifs-forecast-ingest",
+      "provider-ingest-status-update"
+    ],
+    "schema_migration": false,
+    "destructive_data_operation": false,
+    "weathernext_query": false,
+    "google_private_provider_access": false
+  },
+  "post_ingest_read_only_verification": {
+    "database": "sqlite:///data/weather.db",
+    "location_id": "home",
+    "required_forecast_providers": [
+      "icon_d2",
+      "ecmwf_ifs",
+      "ecmwf_aifs"
+    ],
+    "required_forecast_run_count_per_provider_minimum": 1,
+    "required_forecast_value_count_per_provider_minimum": 1,
+    "coordinate_values_must_not_be_read_or_output": true,
+    "forecast_values_must_not_be_output": true,
+    "verification_is_read_only": true
+  },
+  "recurring_activation": {
+    "timer_unit": "rozkalns-weather-public-ingest.timer",
+    "service_unit": "rozkalns-weather-public-ingest.service",
+    "exact_start_operation": [
+      "systemctl",
+      "start",
+      "rozkalns-weather-public-ingest.timer"
+    ],
+    "timer_is_already_enabled_required": true,
+    "persistent_timer_may_trigger_immediate_catchup": true,
+    "standing_recurring_production_write_authority_required": true,
+    "start_only_after_first_ingest_and_read_only_verification_success": true,
+    "final_timer_enabled_state": "enabled",
+    "final_timer_active_state": "active",
+    "final_service_state_after_bounded_settle": "inactive",
+    "bounded_settle_required_if_persistent_catchup_runs": true
+  },
+  "authority": {
+    "phase_a_authority_does_not_authorize_phase_b": true,
+    "explicit_production_data_write_authority_required": true,
+    "explicit_systemd_timer_start_authority_required": true,
+    "explicit_standing_recurring_write_authority_required": true,
+    "merge_authorizes_live": false
+  },
+  "ordered_steps": [
+    "revalidate-exact-phase-b-owner-authority",
+    "revalidate-rpi5-main-weather-release-and-phase-a-success",
+    "revalidate-private-home-runtime-health-and-home-pair-presence-without-values",
+    "verify-weather-ingest-timer-enabled-inactive-and-service-inactive",
+    "execute-fixed-weather-data-helper-ingest-once",
+    "verify-ingest-pass-receipt",
+    "read-only-verify-home-provider-run-and-value-counts",
+    "start-fixed-weather-ingest-timer",
+    "handle-persistent-immediate-catchup-as-authorized-recurring-write-if-triggered",
+    "verify-weather-ingest-timer-enabled-active-and-service-inactive-after-bounded-settle"
+  ],
+  "failure_semantics": {
+    "fail_closed": true,
+    "authorization_consumed_at_first_data_or_systemd_mutation": true,
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "alternate_mutation_path": false,
+    "failure_after_first_ingest": "stop-with-weather-ingest-timer-inactive-unless-timer-start-phase-already-began",
+    "timer_start_or_catchup_ambiguity": "preserve-observed-states-and-stop-no-cleanup"
+  },
+  "forbidden_operations": [
+    "coordinate-values-in-github-or-evidence",
+    "forecast-values-in-activation-evidence",
+    "weathernext-or-bigquery-query",
+    "schema-migration",
+    "destructive-database-operation",
+    "cloudflare-dns-network-mutation",
+    "unrelated-service-container-or-host-control",
+    "automatic-retry-cleanup-rollback-or-alternate-mutation-path"
+  ],
+  "source_only_state": {
+    "live_authorized": false,
+    "production_data_write_authorized": false,
+    "systemd_timer_start_authorized": false,
+    "standing_recurring_write_authorized": false,
+    "merge_authorized": false
+  }
+}
