@@ -44,7 +44,7 @@
       "compose": {
         "project": "rozkalns-cv",
         "file": "rozkalns-cv.yml",
-        "file_sha256": "a1ded554dc931c8451eb7e606c9cd9c6bac1c4b4126e56e533ad9ea38ee2c3d8",
+        "file_sha256": "deb4787f91d7a8c978d2ca1eb7b05d05ed0db28b467a295ddfcbbb55b2420de0",
         "service": "cv"
       },
       "health": {
