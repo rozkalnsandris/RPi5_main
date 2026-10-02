@@ -56,6 +56,8 @@ test:
 	python3 ./tests/test-deploy-executor-weather-public-operator-upgrade-v5.py
 	python3 ./tests/test-deploy-executor-weather-operator-upgrade-v7-privileged-delivery.py
 	python3 ./tests/test-rpi5-main-weather-public-runtime-trusted-checkout-bootstrap.py
+	python3 ./tests/test_weather_private_gcs_execution_bridge.py
+	python3 ./tests/test_weather_private_gcs_trusted_backend.py
 	python3 ./tests/test-deploy-executor-hermes-deals-origin-dispatch-request.py
 	python3 ./tests/test-deploy-executor-hermes-deals-origin-privileged-consumer.py
 	python3 ./tests/test-deploy-executor-hermes-deals-origin-privileged-dispatcher.py
@@ -143,6 +145,7 @@ test:
 	python3 ./tests/test-cloudflare-p1d-browser-sso.py
 	python3 ./tests/test-cloudflare-owner-browser-sso-preflight.py
 	python3 ./tests/test-cloudflare-phase4-admin-access-scope.py
+	python3 ./tests/test-cloudflare-phase4-admin-route-origin.py
 	python3 ./tests/test-cloudflare-p1d-client-session-compat.py
 	python3 ./tests/test-cloudflare-owner-phone-preflight.py
 	python3 ./tests/test-cloudflare-owner-phone-enrollment-create.py

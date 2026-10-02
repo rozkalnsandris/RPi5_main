@@ -1,0 +1,95 @@
+{
+  "schema": "rozkalns-weather.weathernext-private-gcs-trusted-backend-source.v1",
+  "implementation_issue": 825,
+  "weather_issue": 122,
+  "source_only": true,
+  "source_status": "SOURCE_READY_GCS_RUNTIME_MATERIALIZATION_REQUIRED",
+  "host_capability_id": "rpi5.weathernext-private-gcs-backend.v1",
+  "bridge_operation_id": "rozkalns-weather.weathernext-private-gcs-execution-bridge.v1",
+  "private_contract_id": "rozkalns-weather.weathernext-private-gcs-first-access.v1",
+  "mutation_class": "read_only_private_gcs",
+  "target_alias": "rpi5",
+  "authorization_class": "STRICT",
+  "ordinary_live_all_eligible": false,
+  "execution_enabled": false,
+  "caller_authority": [
+    "authorization_issue_number"
+  ],
+  "source_prerequisite": {
+    "repository": "rozkalnsandris/rozkalns_weather",
+    "merged_source_sha": "b7f04385ff33ab613a30e0ab89c734aa4ba444ca",
+    "contract_path": "deploy/weathernext-gcs-private-readonly-gate.json",
+    "entrypoint": "rozkalns_weather.weathernext_gcs_transport.read_private_first_access_gcs",
+    "future_live_must_refresh_sha_and_ci": true
+  },
+  "first_access": {
+    "model_version_contract": "3.0.0",
+    "location_id": "station_05480",
+    "selected_init": "one exact authorization-bound UTC hour",
+    "forecast_hours": 6,
+    "bucket": "weathernext3_statistics_spatial",
+    "required_permissions": [
+      "storage.objects.list",
+      "storage.objects.get"
+    ],
+    "materialized_scalar_ceiling": 288,
+    "requester_pays": false,
+    "billing_project_header_required": false,
+    "home_scope_enabled": false,
+    "sqlite_write_enabled": false
+  },
+  "stage_sequence": [
+    "weathernext_private_application_staging",
+    "weathernext_private_gcs_runtime_materialization",
+    "google_auth_binding",
+    "read_only_private_gcs"
+  ],
+  "explicitly_not_required": [
+    "google_project_binding",
+    "analytics_hub_link_create",
+    "read_only_private_bigquery"
+  ],
+  "caller_controls": {
+    "command": false,
+    "path": false,
+    "argv": false,
+    "environment": false,
+    "source_sha": false,
+    "target": false,
+    "bucket": false,
+    "prefix": false,
+    "coordinates": false,
+    "credential_material": false,
+    "private_google_identity": false,
+    "mutation_sequence": false
+  },
+  "runtime_prerequisite": {
+    "gcs_runtime_materializer_implemented": false,
+    "separate_source_work_required": true,
+    "runtime_dependencies": [
+      "obstore",
+      "xarray",
+      "zarr"
+    ],
+    "live_network_install_allowed": false
+  },
+  "failure_semantics": {
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "alternate_source_or_init": false,
+    "full_ensemble_fallback": false,
+    "error_or_drift": "STOP"
+  },
+  "authority": {
+    "source_merge_authorizes_live": false,
+    "credential_read_authorized": false,
+    "credential_mutation_authorized": false,
+    "iam_or_quota_mutation_authorized": false,
+    "project_or_dataset_mutation_authorized": false,
+    "analytics_hub_mutation_authorized": false,
+    "docker_or_systemd_mutation_authorized": false,
+    "network_mutation_authorized": false,
+    "production_sqlite_or_corpus_write_authorized": false
+  }
+}
