@@ -63,6 +63,16 @@ Because the live Weather image already equals the private-home-capable candidate
 
 Any LIVE execution remains separately STRICT-gated; source acceptance does not authorize protected config access, Docker, systemd or runtime mutation.
 
+The #806 hardening adds two mandatory cutover quiesce boundaries:
+
+- `rozkalns-weather-public-ingest.service` must already be `inactive` before the first mutation. The cutover never stops or kills an active ingest run.
+- `rozkalns-weather-public-ingest.timer` must be `enabled` + `active` before cutover, is stopped before private config/registry/Compose mutation, and must be observed `inactive` with the ingest service still `inactive` before proceeding.
+- the generic `rozkalns-simple-deployer.timer` remains independently quiesced as before.
+- only after exact image/source, `/health`, `/ready`, `private-home` mode and home-pair presence all pass may both timers be started in the final fixed re-enable phase.
+- any failure or ambiguity after mutation starts remains STOP with no retry, cleanup, rollback or automatic re-quiesce; if failure happens during final timer re-enable, preserve and report the observed timer states instead of claiming they were restored.
+
+The protected parent directory is also deterministic: `/etc/rozkalns-simple-deployer/private` must be a non-symlink directory owned by `root:rozkalns-simple-deployer` with mode `0750`. If absent, it may be created only under the later explicit protected-config mutation authority; if present with different metadata, cutover fails before mutation. Recursive ownership/permission changes are forbidden.
+
 ## Hermes Deals binding — source registered, not installed
 
 The first non-Weather reuse target is frozen against accepted consumer revision `rozkalnsandris/hermes-deals@13f9fb69b9576d8e97ab3a85334927f3c576ca1c` and compatibility prerequisite #690:

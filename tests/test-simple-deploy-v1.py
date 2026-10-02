@@ -578,6 +578,57 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(contract["same_digest_transition"]["fixed_service"], "weather")
         self.assertTrue(contract["failure_semantics"]["fail_closed"])
         self.assertFalse(contract["source_only_state"]["live_authorized"])
+
+        parent = contract["protected_runtime_config"]["parent_directory"]
+        self.assertEqual(parent["path"], "/etc/rozkalns-simple-deployer/private")
+        self.assertEqual(parent["required_owner"], "root")
+        self.assertEqual(parent["required_group"], "rozkalns-simple-deployer")
+        self.assertEqual(parent["required_mode"], "0750")
+        self.assertEqual(parent["allowed_initial_state"], "absent_or_exact_metadata")
+        self.assertTrue(parent["recursive_owner_or_permission_change_forbidden"])
+
+        ingest = contract["recurring_ingest_quiesce"]
+        self.assertEqual(ingest["timer_unit"], "rozkalns-weather-public-ingest.timer")
+        self.assertEqual(ingest["service_unit"], "rozkalns-weather-public-ingest.service")
+        self.assertEqual(ingest["pre_mutation_required_timer_enabled_state"], "enabled")
+        self.assertEqual(ingest["pre_mutation_required_timer_active_state"], "active")
+        self.assertEqual(ingest["pre_mutation_required_service_active_state"], "inactive")
+        self.assertTrue(ingest["active_ingest_service_must_not_be_stopped_or_killed_by_cutover"])
+        self.assertTrue(ingest["timer_stop_required_before_first_config_or_compose_mutation"])
+        self.assertEqual(ingest["post_stop_required_timer_active_state"], "inactive")
+        self.assertEqual(ingest["post_stop_required_service_active_state"], "inactive")
+        self.assertTrue(ingest["reenable_only_after_successful_runtime_verification"])
+
+        failure = contract["failure_semantics"]
+        self.assertTrue(failure["before_final_timer_reenable_both_timers_intentionally_quiesced"])
+        self.assertTrue(failure["final_timer_reenable_is_last_mutation_phase"])
+        self.assertEqual(
+            failure["timer_reenable_failure_or_verification_ambiguity"],
+            "preserve_observed_states_and_stop_no_cleanup",
+        )
+        self.assertFalse(failure["automatic_requiesce_after_reenable_failure"])
+
+        self.assertIn("stop-weather-ingest-timer", contract["ordered_steps"])
+        self.assertIn(
+            "verify-weather-ingest-timer-inactive-and-service-inactive",
+            contract["ordered_steps"],
+        )
+        self.assertEqual(
+            contract["ordered_steps"][-2:],
+            [
+                "start-weather-ingest-and-generic-simple-deployer-timers-in-one-fixed-transaction",
+                "verify-both-timers-enabled-and-active",
+            ],
+        )
+        self.assertIn(
+            "stop-or-kill-active-weather-ingest-service",
+            contract["forbidden_operations"],
+        )
+        self.assertIn(
+            "recursive-private-config-directory-permission-or-ownership-change",
+            contract["forbidden_operations"],
+        )
+
         rendered = json.dumps(contract, sort_keys=True)
         self.assertNotIn("HOME_LAT=", rendered)
         self.assertNotIn("HOME_LON=", rendered)
