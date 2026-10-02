@@ -1,6 +1,6 @@
 {
   "schema": "rozkalns-weather.weathernext-private-gcs-host-runtime-source.v1",
-  "implementation_issue": 843,
+  "implementation_issue": 835,
   "host_capability_id": "rpi5.weathernext-private-gcs-backend.v1",
   "install_operation_id": "rpi5.weathernext-private-gcs-backend.install.v1",
   "private_bridge_operation_id": "rozkalns-weather.weathernext-private-gcs-execution-bridge.v1",

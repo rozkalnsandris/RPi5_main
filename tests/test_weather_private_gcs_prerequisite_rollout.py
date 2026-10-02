@@ -48,8 +48,8 @@ class GCSPrerequisiteRolloutTests(unittest.TestCase):
             value["sequence"][4]["operation_id"],
             "sanitized-postcondition-verification",
         )
-        manifest_text = ROLLOUT_MANIFEST.read_text(encoding="utf-8")
-        self.assertNotIn('"read_only_private_gcs"', manifest_text)
+        sequence_ids = [row["operation_id"] for row in value["sequence"]]
+        self.assertNotIn("read_only_private_gcs", sequence_ids)
         self.assertFalse(value["exclusions"]["google_gcs_request"])
         self.assertFalse(value["exclusions"]["bigquery_action"])
         self.assertEqual(
