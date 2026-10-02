@@ -151,14 +151,11 @@ class WeatherConsumedJITHardeningTests(unittest.TestCase):
         replay.consumed = True
         return target, sender, replay, initial
 
-    def test_preconsume_ttl_remains_strict(self):
+    def test_preconsume_wall_clock_age_does_not_expire_authority(self):
         target, _sender, _replay = FIXTURE.revalidator()
         FIXTURE.SERVER_DATE = "Thu, 10 Sep 2026 04:10:01 GMT"
-        with self.assertRaisesRegex(
-            FIXTURE.WeatherCompositeAuthorityError,
-            "AUTH_EXPIRED|canonical Weather Composite revalidation failed closed",
-        ):
-            target.revalidate_composite(FIXTURE.AUTH_ISSUE_NUMBER)
+        current = target.revalidate_composite(FIXTURE.AUTH_ISSUE_NUMBER)
+        self.assertTrue(current.authorization_time_valid)
 
     def test_preconsume_time_window_still_rejects_regression(self):
         window = COMPOSITE_MODULE._GitHubTimeWindow()
@@ -178,7 +175,7 @@ class WeatherConsumedJITHardeningTests(unittest.TestCase):
         ):
             window.observe(datetime(2026, 9, 10, 4, 1, 31, tzinfo=timezone.utc))
 
-    def test_consumed_authority_survives_admission_ttl(self):
+    def test_consumed_authority_survives_long_wall_clock_age(self):
         target, _sender, _replay, initial = self._accepted_then_consumed()
         FIXTURE.SERVER_DATE = "Thu, 10 Sep 2026 04:11:01 GMT"
         current = target.revalidate_consumed_composite(FIXTURE.AUTH_ISSUE_NUMBER)
