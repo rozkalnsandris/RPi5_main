@@ -126,6 +126,36 @@
         "private-provider-activation",
         "unrelated-host-control"
       ]
+    },
+    {
+      "target_alias": "coloring-pages-public-rpi5",
+      "consumer_repository": "rozkalnsandris/coloring-pages",
+      "image": "ghcr.io/rozkalnsandris/coloring-pages",
+      "architecture": "linux/arm64",
+      "shared_workflow_sha": "94187cc447fc80757db10ac25d49717d00dc8430",
+      "compose": {
+        "project": "coloring-pages-public",
+        "file": "coloring-pages-public.yml",
+        "file_sha256": "77c71da44896b393002b7a13449d6fbaca76b38c6d982580d23156b674fe2941",
+        "service": "coloring-pages"
+      },
+      "health": {
+        "liveness_url": "http://127.0.0.1:9191/health",
+        "readiness_state": "required",
+        "readiness_url": "http://127.0.0.1:9191/ready"
+      },
+      "wait_timeout_seconds": 180,
+      "receipt_name": "coloring-pages-public-rpi5.json",
+      "persistent_volumes": [],
+      "registry_pull_profile": "public-anonymous-pull",
+      "forbidden_operations": [
+        "database-schema-data-mutation",
+        "destructive-recovery",
+        "secrets-credentials-permissions",
+        "cloudflare-dns-network",
+        "private-provider-activation",
+        "unrelated-host-control"
+      ]
     }
   ]
 }

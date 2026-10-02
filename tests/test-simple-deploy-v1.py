@@ -175,7 +175,7 @@ class RegistryTests(unittest.TestCase):
     def test_repository_registry_binds_exact_reviewed_targets(self):
         registry = sd.load_registry(ROOT / "ops/deploy/simple-deploy-targets-v1.json")
         self.assertTrue(registry.execution_enabled)
-        self.assertEqual(len(registry.targets), 4)
+        self.assertEqual(len(registry.targets), 5)
 
         weather = registry.get("rozkalns-weather-public-rpi5")
         self.assertEqual(weather.consumer_repository, "rozkalnsandris/rozkalns_weather")
@@ -465,15 +465,15 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(contract["issue"], 666)
         self.assertEqual(
             contract["status"],
-            "WEATHER_ACTIVE_HERMES_DEALS_TECH_AND_CV_SOURCE_TARGETS_REGISTERED_LIVE_CUTOVERS_REQUIRED",
+            "WEATHER_ACTIVE_HERMES_DEALS_TECH_CV_AND_COLORING_PAGES_SOURCE_TARGETS_REGISTERED_LIVE_CUTOVERS_REQUIRED",
         )
         self.assertEqual(contract["shared_contract"]["revision"], SHARED_SHA)
         self.assertTrue(contract["registry"]["execution_enabled_in_source"])
         self.assertEqual(contract["registry"]["initial_targets"], 1)
-        self.assertEqual(contract["registry"]["current_reviewed_targets"], 4)
+        self.assertEqual(contract["registry"]["current_reviewed_targets"], 5)
         self.assertTrue(contract["registry"]["target_adoption_requires_tracked_source_change"])
         reviewed = contract["registry"]["reviewed_targets"]
-        self.assertEqual(len(reviewed), 4)
+        self.assertEqual(len(reviewed), 5)
         self.assertEqual(reviewed[0]["target_alias"], "rozkalns-weather-public-rpi5")
         self.assertEqual(
             reviewed[0]["consumer_contract_revision"],
@@ -537,6 +537,21 @@ class ContractTests(unittest.TestCase):
         )
         self.assertEqual(reviewed[3]["wait_timeout_seconds"], 180)
         self.assertEqual(reviewed[3]["registry_pull_profile"], "public-anonymous-pull")
+        self.assertEqual(reviewed[4]["target_alias"], "coloring-pages-public-rpi5")
+        self.assertEqual(
+            reviewed[4]["consumer_contract_revision"],
+            "dd9204581d46be618f1c7b0a6bafde90bcb691df",
+        )
+        self.assertEqual(reviewed[4]["source_registration_issue"], 838)
+        self.assertEqual(
+            reviewed[4]["compose_sha256"],
+            "77c71da44896b393002b7a13449d6fbaca76b38c6d982580d23156b674fe2941",
+        )
+        self.assertEqual(reviewed[4]["liveness_url"], "http://127.0.0.1:9191/health")
+        self.assertEqual(reviewed[4]["readiness_state"], "required")
+        self.assertEqual(reviewed[4]["readiness_url"], "http://127.0.0.1:9191/ready")
+        self.assertEqual(reviewed[4]["wait_timeout_seconds"], 180)
+        self.assertEqual(reviewed[4]["registry_pull_profile"], "public-anonymous-pull")
         self.assertTrue(contract["activation"]["separate_exact_live_cutover_required"])
         self.assertTrue(
             contract["activation"]["rozkalns_cv_private_runtime_config_materialized_during_cutover"]
@@ -545,6 +560,10 @@ class ContractTests(unittest.TestCase):
             contract["activation"]["rozkalns_cv_existing_persistent_data_reused_in_place"]
         )
         self.assertFalse(contract["activation"]["source_merge_installs_or_enables_runtime"])
+        self.assertEqual(contract["activation"]["coloring_pages_source_registration_issue"], 838)
+        self.assertTrue(
+            contract["activation"]["coloring_pages_target_installation_requires_separate_exact_live_cutover"]
+        )
         self.assertTrue(
             contract["activation"]["hermes_target_installation_requires_separate_exact_live_cutover"]
         )
