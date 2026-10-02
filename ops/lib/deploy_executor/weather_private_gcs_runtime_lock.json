@@ -1,15 +1,19 @@
 {
   "schema": "rozkalns-weather.weathernext-private-gcs-runtime-lock.v1",
   "operation_id": "rozkalns-weather.weathernext-private-gcs-runtime-materialization.v1",
-  "weather_source_sha": "b7f04385ff33ab613a30e0ab89c734aa4ba444ca",
+  "weather_source_sha": "1fc7ea70efde88cb826c2e4a0baf26925078375c",
   "weather_extra": "weathernext-gcs",
   "upstream_requirements": [
+    "google-auth>=2.59.1,<3",
     "obstore>=0.11.1,<0.12",
+    "requests>=2.34.2,<3",
     "xarray>=2026.9,<2027",
     "zarr>=3.4,<4"
   ],
   "resolved_roots": {
+    "google-auth": "2.59.1",
     "obstore": "0.11.1",
+    "requests": "2.34.2",
     "xarray": "2026.9.0",
     "zarr": "3.4.0"
   },
@@ -40,9 +44,33 @@
       "manylinux2014_aarch64"
     ]
   },
-  "package_count": 14,
-  "closure_sha256": "df79ccff739c3f8f3b3a76732f10624027924aadd45d40ee7f62af670f8e65ab",
+  "package_count": 25,
+  "closure_sha256": "4ef3d22c8ebc76901c3840d0304124ab390afaf3978883a4ad377a6da4991148",
   "packages": [
+    {
+      "filename": "certifi-2026.7.22-py3-none-any.whl",
+      "name": "certifi",
+      "sha256": "62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775",
+      "version": "2026.7.22"
+    },
+    {
+      "filename": "cffi-2.1.1-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.whl",
+      "name": "cffi",
+      "sha256": "f16c709686a78c727bbbf059f92b0bf41c6fc60deec706d2dc19f529175a6125",
+      "version": "2.1.1"
+    },
+    {
+      "filename": "charset_normalizer-3.5.2-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl",
+      "name": "charset-normalizer",
+      "sha256": "849df64e889b2e17230d58410a03dba311a65b163508fd33679b2b737d4b7858",
+      "version": "3.5.2"
+    },
+    {
+      "filename": "cryptography-50.0.2-cp311-abi3-manylinux_2_28_aarch64.whl",
+      "name": "cryptography",
+      "sha256": "f9f6143a8c75945eb960d9eb98905a441394abfa24afaae239d514ffb2586480",
+      "version": "50.0.2"
+    },
     {
       "filename": "donfig-0.8.1.post1-py3-none-any.whl",
       "name": "donfig",
@@ -50,10 +78,22 @@
       "version": "0.8.1.post1"
     },
     {
+      "filename": "google_auth-2.59.1-py3-none-any.whl",
+      "name": "google-auth",
+      "sha256": "89c3f931683a482ac97e61df7eb9da5e08a91703f3c752b2377d72cfb7d69e6a",
+      "version": "2.59.1"
+    },
+    {
       "filename": "google_crc32c-1.9.0-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.whl",
       "name": "google-crc32c",
       "sha256": "4488f1553a9ab7e86cdedc833374a7e904031803b995dc0bd0be48c271fa6556",
       "version": "1.9.0"
+    },
+    {
+      "filename": "idna-3.20-py3-none-any.whl",
+      "name": "idna",
+      "sha256": "ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c",
+      "version": "3.20"
     },
     {
       "filename": "msgspec-0.22.0-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl",
@@ -92,6 +132,24 @@
       "version": "3.0.6"
     },
     {
+      "filename": "pyasn1-0.6.4-py3-none-any.whl",
+      "name": "pyasn1",
+      "sha256": "deda9277cfd454080ec40b207fb6df82206a3a2688735233cdcd8d3d565f088b",
+      "version": "0.6.4"
+    },
+    {
+      "filename": "pyasn1_modules-0.4.2-py3-none-any.whl",
+      "name": "pyasn1-modules",
+      "sha256": "29253a9207ce32b64c3ac6600edc75368f98473906e8fd1043bd6b5b1de2c14a",
+      "version": "0.4.2"
+    },
+    {
+      "filename": "pycparser-3.0-py3-none-any.whl",
+      "name": "pycparser",
+      "sha256": "b727414169a36b7d524c1c3e31839a521725078d7b2ff038656844266160a992",
+      "version": "3.0"
+    },
+    {
       "filename": "python_dateutil-2.9.0.post0-py2.py3-none-any.whl",
       "name": "python-dateutil",
       "sha256": "a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427",
@@ -104,6 +162,12 @@
       "version": "6.0.3"
     },
     {
+      "filename": "requests-2.34.2-py3-none-any.whl",
+      "name": "requests",
+      "sha256": "2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0",
+      "version": "2.34.2"
+    },
+    {
       "filename": "six-1.17.0-py2.py3-none-any.whl",
       "name": "six",
       "sha256": "4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274",
@@ -114,6 +178,12 @@
       "name": "typing-extensions",
       "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8",
       "version": "4.16.0"
+    },
+    {
+      "filename": "urllib3-2.8.0-py3-none-any.whl",
+      "name": "urllib3",
+      "sha256": "0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3",
+      "version": "2.8.0"
     },
     {
       "filename": "xarray-2026.9.0-py3-none-any.whl",
@@ -132,8 +202,8 @@
     "registry": "https://pypi.org/simple",
     "resolver": "pip download public proposal",
     "resolved_at": "2026-10-02",
-    "proposal_pr": 829,
-    "proposal_head": "32b668ce92c8bd35acf15dc6b05251fae08d7689",
+    "proposal_pr": 834,
+    "proposal_head": "99211d725a7a23228206709e939c77bc0db7f3c4",
     "note": "Public package provenance only; final CI re-downloads exact locked wheels with --no-deps and verifies every SHA-256."
   },
   "live_network_install_allowed": false,
