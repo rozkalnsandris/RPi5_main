@@ -112,11 +112,11 @@ One normal GitHub Issue in `rozkalnsandris/ops-workflows`:
 
 It must be an Issue, not a pull request, and the authorization-surface governance invariant above must be currently satisfied.
 
-### Fixed TTL
+### Revocable one-time lifetime
 
-Protocol v1 TTL is exactly **600 seconds (10 minutes)** from GitHub server `created_at`. It is not caller-selectable and is not extended by edits, comments, labels, reactions, retries, polling delays or restarts.
+Protocol v1 has **no wall-clock expiration** for an otherwise valid, unconsumed LIVE-AUTH issue. GitHub `created_at` remains mandatory, and authenticated server time is still required to reject malformed or materially future-dated authorization timestamps.
 
-Age should be evaluated against the authenticated GitHub response `Date` header. Missing/malformed server time, material clock inconsistency or age above 600 seconds fails closed.
+An authorization remains eligible only while the Issue is still open and PENDING, the owner identity and raw/canonical body digests remain unchanged, durable replay state shows it unconsumed, and fresh Queue/source/CI/baseline/operation-envelope revalidation still passes. Closing or cancelling the Issue before consume revokes authority immediately. Age by itself does not extend, refresh or invalidate authority.
 
 ### Payload block
 
@@ -172,7 +172,7 @@ All checks are mandatory and ordered:
 3. resource is an open Issue, not a PR;
 4. title matches LIVE-AUTH v1;
 5. GitHub `user.id == 277435981` and `user.type == User`;
-6. GitHub server time proves request age is within 600 seconds;
+6. GitHub server time is available and the authorization timestamp is not materially in the future; wall-clock age alone is not a rejection condition;
 7. strict payload parsing succeeds;
 8. GitHub issue ID and `request_id` are unseen in durable local state;
 9. referenced queue issue is still open and exactly READY;
@@ -271,7 +271,7 @@ and the helper identity, rollback scope and operation counts are revalidated. `r
 | Executor App edits owner issue/comment | No executor Issues write on authorization repo |
 | Another collaborator/App/workflow rewrites owner issue | Reviewed authorization-surface governance; mutation disabled on unknown/write-scope drift; isolated auth repo fallback |
 | Trusted operator integration compromised | Treat as owner-boundary compromise; revoke/review integration and disable executor until trust is re-established |
-| Stale authorization | Fixed 600-second server-time TTL |
+| Stale or abandoned authorization | Issue must remain open/PENDING; owner can revoke by close/cancel; durable one-time consume plus fresh Queue/source/CI/baseline/body revalidation blocks replay or drift |
 | Edited authorization | Raw-body + canonical-payload digests re-fetched before dispatch |
 | Replay after success/failure/crash | Durable unique IDs; atomic `CONSUMED` before privileged boundary |
 | Queue drift | Fresh READY/envelope revalidation |
