@@ -13,10 +13,10 @@ HOST_POLICY_PATH = ROOT / "ops" / "contracts" / "cloudflare-hostname-policy.yaml
 DOC_PATH = ROOT / "docs" / "INGRESS_ADMIN_ZONE_VERIFICATION_V1.md"
 
 PRIVATE_COORDINATE_PATTERNS = [
-    re.compile(r"\\b10\\.(?:\\d{1,3}\\.){2}\\d{1,3}\\b"),
-    re.compile(r"\\b192\\.168\\.(?:\\d{1,3}\\.)\\d{1,3}\\b"),
-    re.compile(r"\\b172\\.(?:1[6-9]|2\\d|3[01])\\.(?:\\d{1,3}\\.)\\d{1,3}\\b"),
-    re.compile(r"\\b127\\.0\\.0\\.1\\b"),
+    re.compile(r"\b10\.(?:\d{1,3}\.){2}\d{1,3}\b"),
+    re.compile(r"\b192\.168\.(?:\d{1,3}\.)\d{1,3}\b"),
+    re.compile(r"\b172\.(?:1[6-9]|2\d|3[01])\.(?:\d{1,3}\.)\d{1,3}\b"),
+    re.compile(r"\b127\.0\.0\.1\b"),
 ]
 
 
@@ -94,7 +94,7 @@ class AdminZoneVerificationV1Tests(unittest.TestCase):
         for projected in self.contract["service_projections"]:
             hostname = re.escape(projected["hostname"])
             match = re.search(
-                rf"(?ms)^  - hostname: {hostname}\\n(?P<body>.*?)(?=^  - hostname:|\\Z)",
+                rf"(?ms)^  - hostname: {hostname}\n(?P<body>.*?)(?=^  - hostname:|\Z)",
                 self.host_policy,
             )
             self.assertIsNotNone(match, projected["hostname"])
@@ -155,7 +155,7 @@ class AdminZoneVerificationV1Tests(unittest.TestCase):
         for pattern in PRIVATE_COORDINATE_PATTERNS:
             self.assertIsNone(pattern.search(combined))
         self.assertIsNone(
-            re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}", combined)
+            re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", combined)
         )
         self.assertNotIn("/etc/cloudflared/", combined)
 
