@@ -136,6 +136,24 @@ class IngressRegistryV1Tests(unittest.TestCase):
             {"PRIVATE"},
         )
 
+    def test_coloring_pages_is_registered_as_public_loopback(self) -> None:
+        coloring = next(
+            service
+            for service in self.services
+            if service["hostname"] == "coloring.rozkalns.net"
+        )
+        self.assertEqual(coloring["service_id"], "coloring-pages")
+        self.assertEqual(coloring["zone"], "PUBLIC")
+        self.assertEqual(coloring["current_origin_class"], "loopback")
+        self.assertEqual(coloring["desired_origin_class"], "loopback")
+        self.assertEqual(coloring["runtime_owner"], "rozkalnsandris/RPi5_main")
+        self.assertEqual(coloring["repository_owner"], "rozkalnsandris/coloring-pages")
+        self.assertFalse(coloring["access_required"])
+        self.assertEqual(coloring["access_class"], "NONE")
+        self.assertEqual(coloring["lan_break_glass"], "forbidden")
+        self.assertIn("hostname: coloring.rozkalns.net", self.hostname_policy)
+        self.assertIn("audit_route_presence: absent", self.hostname_policy)
+
     def test_newer_hostname_policy_explicitly_resolves_hermes_zone(self) -> None:
         hermes = next(
             service for service in self.services if service["hostname"] == "hermes.rozkalns.net"
