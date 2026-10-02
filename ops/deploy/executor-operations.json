@@ -798,10 +798,6 @@
           "max_operations": 3
         },
         {
-          "category": "docker.rozkalns-cv-candidate-prepull",
-          "max_operations": 1
-        },
-        {
           "category": "docker.rozkalns-cv-legacy-runtime-retirement",
           "max_operations": 2
         },
@@ -815,41 +811,37 @@
         "generic sudo/root shell or arbitrary command execution",
         "caller-selected command/path/argv/environment authority",
         "unrelated service, timer, Docker, filesystem or host mutation",
-        "private runtime configuration provisioning or content read",
-        "persistent data adoption/copy/migration or content read",
-        "database schema or data mutation",
+        "private env content read/write/copy/materialization",
+        "persistent data copy/migration/reownership/delete/content inspection",
+        "database query/schema migration/content transformation",
         "legacy CV network deletion or reconfiguration",
-        "credentials, secrets, permissions or protected configuration access",
         "network, firewall, DNS or Cloudflare mutation",
         "package, user, group, runner or repository-settings mutation",
         "automatic retry, cleanup, rollback or alternate mutation path"
       ],
       "dependencies": [
-        "issue:RPi5_main#802",
+        "issue:RPi5_main#821",
         "cutover-contract:ops/deploy/rozkalns-cv-simple-deploy-cutover-v1.json",
         "activation-registry:ops/deploy/baselines/simple-deploy-targets-weather-cv-v1.json",
         "activation-registry-aliases:rozkalns-weather-public-rpi5,rozkalns-cv-rpi5",
         "simple-deploy-compose:ops/deploy/simple-deploy-compose/rozkalns-cv.yml",
-        "simple-deploy-compose-sha256:be7f021c9d64192905c908bcbb127dbc7ec1c2514d898f05cbf8de4c44ffa4a2",
-        "consumer-source-sha:645717e63596a6ece415d9f4ef69367b9e6ecafc",
-        "candidate-image-digest:sha256:bc6cb2ab3c0e944db49b6c403212802d5289eabaf77db4dd30082856a9fdaadc",
+        "simple-deploy-compose-sha256:33174cd778df2c1e4012735c5b01ba4af2d6873ec14f3f1ade985f2f2d62b7f0",
+        "consumer-source-sha:d75863d0ce4cfdac0015150137523abbaccf5914",
+        "candidate-image-digest:sha256:ba9e24c82eccd833cfe42d6a4aa61ef76c584bcfd4c27efbced13c3a408d2a1a",
         "legacy-production-sha:4986a6d80460bd6d7681c70e09e61a15e31007f4",
-        "private-runtime-config:/etc/rozkalns-simple-deployer/private/rozkalns-cv.env",
-        "persistent-data:/var/lib/rozkalns-simple-deployer/rozkalns-cv/data",
+        "existing-private-env:/home/andris/docker/cv/bot/.env",
+        "existing-persistent-data:/home/andris/docker/cv/bot/data",
         "loopback-bind:127.0.0.1:8088",
         "global-execution:disabled"
       ],
       "preflight": [
-        "READY and separate owner LIVE-AUTH bind this exact STRICT target before any host mutation",
+        "READY and separate owner LIVE authority bind this exact STRICT target before any host mutation",
         "authorized RPi5_main SHA is current/reachable and exact-SHA required CI is successful",
-        "candidate CV source remains exact current accepted source and SIMPLE-DEPLOY publication run/digest evidence is successful",
-        "mutable production pointer resolves to the exact pinned candidate digest before mutation and is revalidated before apply",
-        "installed generic deployer core code is compatible and generic timer is enabled/active before quiesce",
-        "installed target registry is the accepted Weather-only baseline before activation",
-        "private runtime config path is present by metadata only; cutover never reads/provisions its contents",
-        "persistent data path is present by metadata only; cutover never creates/adopts/copies/migrates its contents",
+        "candidate CV source and immutable digest equal the reviewed cutover contract and current production pointer",
+        "existing CV private env is a present regular non-symlink file by metadata only; contents are not read or copied",
+        "existing CV data is a present non-symlink directory by metadata only and remains in place",
         "legacy production state is exactly 4986a6d80460bd6d7681c70e09e61a15e31007f4",
-        "legacy cv and cvbot container identities are exact and cv owns 127.0.0.1:8088",
+        "legacy cv and cvbot identities are exact and cv owns 127.0.0.1:8088",
         "legacy CV pull-deploy timer/service remain inactive and are not reactivated by this cutover",
         "CV SIMPLE-DEPLOY Compose destination and receipt are absent before first cutover",
         "operation and global executor registry remain execution-disabled until separately authorized LIVE execution"
@@ -858,24 +850,24 @@
         "host target registry contains exactly Weather plus rozkalns-cv-rpi5",
         "host deployer identity binds the exact authorized RPi5_main cutover source SHA",
         "CV SIMPLE-DEPLOY Compose is materialized from the exact reviewed source identity",
-        "legacy cv and cvbot containers are retired without deleting or migrating protected data/config/network state",
-        "127.0.0.1:8088 ownership transfers from legacy container cv through an observed unbound state to rozkalns-cv/cv",
-        "deployed source SHA is 645717e63596a6ece415d9f4ef69367b9e6ecafc",
-        "deployed digest is sha256:bc6cb2ab3c0e944db49b6c403212802d5289eabaf77db4dd30082856a9fdaadc",
+        "existing private env and persistent data paths are reused in place without copy, migration, reownership or deletion",
+        "legacy cv and cvbot containers are retired",
+        "127.0.0.1:8088 ownership transfers from legacy cv through an observed unbound state to rozkalns-cv/cv",
+        "deployed source SHA is d75863d0ce4cfdac0015150137523abbaccf5914",
+        "deployed digest is sha256:ba9e24c82eccd833cfe42d6a4aa61ef76c584bcfd4c27efbced13c3a408d2a1a",
         "GET /api/health and GET /api/health/ready on 127.0.0.1:8088 return HTTP 200",
-        "SIMPLE-DEPLOY receipt exists for rozkalns-cv-rpi5 and binds the exact candidate source SHA and digest",
+        "SIMPLE-DEPLOY receipt binds the exact source SHA and digest",
+        "public rozkalns.net/en/ exposes the reviewed UI v2 marker and app asset",
         "generic SIMPLE-DEPLOY timer is active again only after successful verification",
-        "no database, secret, protected-data, network, unrelated host or repository-settings mutation occurs",
         "post-mutation failure has no automatic retry, cleanup, rollback or alternate mutation path"
       ],
       "required_github_evidence": [
         "exact RPi5_main source SHA and successful exact-SHA CI",
-        "exact CV source SHA 645717e63596a6ece415d9f4ef69367b9e6ecafc and successful publication run 36241004385",
-        "immutable CV image digest sha256:bc6cb2ab3c0e944db49b6c403212802d5289eabaf77db4dd30082856a9fdaadc",
+        "exact CV source SHA d75863d0ce4cfdac0015150137523abbaccf5914",
+        "immutable CV image digest sha256:ba9e24c82eccd833cfe42d6a4aa61ef76c584bcfd4c27efbced13c3a408d2a1a",
         "reviewed CV cutover contract, Weather+CV activation registry and Compose source identities",
-        "READY queue envelope for rozkalns-cv-rpi5",
-        "separate owner LIVE-AUTH for the exact one-time CV cutover",
-        "separate exact owner authority for any missing private-config or persistent-data prerequisite"
+        "READY deployment envelope for rozkalns-cv-rpi5",
+        "separate owner LIVE authorization for the exact one-time CV cutover"
       ]
     }
   ]
