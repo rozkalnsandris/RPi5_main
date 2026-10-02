@@ -253,9 +253,9 @@ def _copy_directory_contents(
             if entry.is_symlink():
                 _fail("protected data tree contains a symlink")
             if entry.is_dir(follow_symlinks=False):
-                os.mkdir(target, 0o750)
+                os.mkdir(target, 0o710)
                 os.chown(target, app_uid, runtime_gid)
-                os.chmod(target, 0o750)
+                os.chmod(target, 0o710)
                 _copy_directory_contents(
                     source,
                     target,
@@ -286,15 +286,15 @@ def _apply() -> dict[str, object]:
 
     mutation_started = False
     try:
-        os.mkdir(STAGING_ROOT, 0o750)
+        os.mkdir(STAGING_ROOT, 0o710)
         mutation_started = True
         os.chown(STAGING_ROOT, APP_UID, runtime_gid)
-        os.chmod(STAGING_ROOT, 0o750)
+        os.chmod(STAGING_ROOT, 0o710)
 
         staging_data = STAGING_ROOT / "data"
-        os.mkdir(staging_data, 0o750)
+        os.mkdir(staging_data, 0o710)
         os.chown(staging_data, APP_UID, runtime_gid)
-        os.chmod(staging_data, 0o750)
+        os.chmod(staging_data, 0o710)
 
         _copy_directory_contents(
             SOURCE_DATA,

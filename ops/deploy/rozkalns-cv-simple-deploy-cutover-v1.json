@@ -87,7 +87,7 @@
       "required_mode": "0640",
       "required_parent_owner": "root",
       "required_parent_group": "rozkalns-simple-deployer",
-      "required_parent_mode": "0750",
+      "required_parent_mode": "0710",
       "public_provider_literals": {
         "LLM_BASE_URL": "https://api.openai.com",
         "LLM_MODEL": "gpt-5.6-luna"

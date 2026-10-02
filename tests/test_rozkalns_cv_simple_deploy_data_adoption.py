@@ -128,7 +128,7 @@ class CvDataAdoptionContractTests(unittest.TestCase):
             self.assertEqual((target / "assistant.sqlite3").read_bytes(), b"sqlite-bytes")
             self.assertEqual((target / "nested" / "state.bin").read_bytes(), b"state-bytes")
             self.assertEqual((target / "assistant.sqlite3").stat().st_mode & 0o777, 0o600)
-            self.assertEqual((target / "nested").stat().st_mode & 0o777, 0o750)
+            self.assertEqual((target / "nested").stat().st_mode & 0o777, 0o710)
 
             symlink_source = root / "symlink-source"
             symlink_target = root / "symlink-target"

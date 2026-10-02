@@ -32,7 +32,7 @@
     "container_uid": 10001,
     "container_gid": 10001,
     "runtime_traverse_group": "rozkalns-simple-deployer",
-    "directory_mode": "0750",
+    "directory_mode": "0710",
     "file_mode": "0600",
     "files_remain_private_from_runtime_deployer": true
   },
