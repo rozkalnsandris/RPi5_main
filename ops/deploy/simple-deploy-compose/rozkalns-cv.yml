@@ -1,9 +1,9 @@
 # SIMPLE-DEPLOY v1 RPi5-owned rozkalns-cv adapter.
 # The :production tag is discovery/default metadata only; the generic deployer
 # must freeze and apply an exact image@sha256 digest override before mutation.
-# The first adoption reuses the existing CV private env and durable-data paths
-# in place; public source keeps their account-home prefix out of the repository
-# and resolves it through fixed Compose interpolation metadata at cutover.
+# The first adoption materializes the private app env behind the deployer-owned
+# /etc boundary while durable data remains reused in place through a host-only
+# Compose interpolation value.
 name: rozkalns-cv
 
 services:
@@ -20,7 +20,7 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777
     env_file:
-      - ${ROZKALNS_CV_ENV_FILE:?ROZKALNS_CV_ENV_FILE must be set}
+      - ../private/rozkalns-cv.env
     environment:
       ASSISTANT_DB_PATH: /app/data/assistant.sqlite3
       TRUSTED_PROXY_CIDRS: 127.0.0.1/32

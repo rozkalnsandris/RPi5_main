@@ -12,7 +12,10 @@ on:
       - "ops/deploy/simple-deploy-compose/rozkalns-cv.yml"
       - "docs/SIMPLE_DEPLOY_ROZKALNS_CV_COMPAT_V1.md"
       - "tests/test-simple-deploy-rozkalns-cv-compat-v1.py"
+      - "tests/test-simple-deploy-v1.py"
+      - "tests/test_rozkalns_cv_private_env_materializer.py"
       - "tests/test_rozkalns_cv_simple_deploy_cutover_contract.py"
+      - "scripts/materialize-simple-deploy-rozkalns-cv-private-env-v1.py"
       - "tests/test-deploy-executor-p4.py"
       - "Makefile"
       - "tests/test-simple-deploy-hermes-tech-target-v1.py"
@@ -30,6 +33,8 @@ jobs:
       - name: Validate rozkalns-cv target contract
         run: |
           python3 ./tests/test-simple-deploy-rozkalns-cv-compat-v1.py
+          python3 ./tests/test-simple-deploy-v1.py
+          python3 ./tests/test_rozkalns_cv_private_env_materializer.py
           python3 ./tests/test_rozkalns_cv_simple_deploy_cutover_contract.py
           python3 ./tests/test-deploy-executor-p4.py
           python3 ./tests/test-simple-deploy-hermes-tech-target-v1.py

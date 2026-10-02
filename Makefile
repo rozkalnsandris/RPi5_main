@@ -19,6 +19,8 @@ test:
 	python3 ./tests/test-control-phase5-signer-handoff.py
 	python3 ./tests/test-control-phase5-observation-delivery.py
 	python3 ./tests/test-simple-deploy-v1.py
+	python3 ./tests/test-simple-deploy-rozkalns-cv-compat-v1.py
+	python3 ./tests/test_rozkalns_cv_private_env_materializer.py
 	python3 ./tests/test-simple-deploy-hermes-compat-v1.py
 	python3 ./tests/test_hermes_tech_simple_deploy_cutover_contract.py
 	python3 ./tests/test_rozkalns_cv_simple_deploy_cutover_contract.py
