@@ -1,0 +1,268 @@
+{
+  "schema": "rozkalns.rpi5-main.admin-zone-verification.v1",
+  "schema_version": 1,
+  "status": "source-verification-contract",
+  "roadmap_issue": 60,
+  "implementation_issue": 819,
+  "registry_ref": "ops/contracts/ingress-registry-v1.json",
+  "hostname_policy_ref": "ops/contracts/cloudflare-hostname-policy.yaml",
+  "authority": {
+    "source_merge_proves_runtime_state": false,
+    "source_merge_authorizes_runtime_verification": false,
+    "source_merge_authorizes_protected_admin_verification": false,
+    "source_merge_authorizes_live_mutation": false,
+    "infrastructure_verification_requires_fresh_owner_authorization": true,
+    "protected_admin_verification_requires_separate_owner_authorization": true,
+    "remediation_requires_separate_issue_and_owner_authorization": true
+  },
+  "admin_service_selection": {
+    "source": "registry-zone-filter",
+    "zone": "ADMIN",
+    "expected_service_ids": [
+      "hermes-admin",
+      "portainer",
+      "grafana",
+      "home-assistant",
+      "adguard-ui",
+      "uptime-kuma",
+      "prometheus",
+      "dashboard-rpi5"
+    ],
+    "expected_hostnames": [
+      "hermes.rozkalns.net",
+      "portainer.rozkalns.net",
+      "grafana.rozkalns.net",
+      "ha.rozkalns.net",
+      "adguard.rozkalns.net",
+      "kuma.rozkalns.net",
+      "prometheus.rozkalns.net",
+      "dash.rozkalns.net"
+    ]
+  },
+  "policy_semantics": {
+    "access_required": true,
+    "access_class": "ADMIN",
+    "allowed_access_application_scopes": [
+      "exact-owner",
+      "exact-or-narrow-admin"
+    ],
+    "persistent_bypass_allowed": false,
+    "alternate_public_bypass_allowed": false,
+    "unauthenticated_external_expected": [
+      "access-challenge",
+      "denied"
+    ],
+    "authorized_admin_result_values": [
+      "PASS",
+      "FAIL",
+      "UNKNOWN"
+    ],
+    "protected_identity_material_in_evidence_allowed": false
+  },
+  "lan_break_glass_semantics": {
+    "required_allowed_runtime_states": [
+      "present"
+    ],
+    "allowed_allowed_runtime_states": [
+      "present",
+      "absent"
+    ],
+    "forbidden_allowed_runtime_states": [
+      "absent"
+    ]
+  },
+  "service_projections": [
+    {
+      "service_id": "hermes-admin",
+      "hostname": "hermes.rozkalns.net",
+      "expected_access_application_scope": "exact-or-narrow-admin",
+      "expected_origin_class": "lan",
+      "lan_break_glass": "allowed",
+      "runtime_owner": "rozkalnsandris/RPi5_main",
+      "recovery_ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md"
+    },
+    {
+      "service_id": "portainer",
+      "hostname": "portainer.rozkalns.net",
+      "expected_access_application_scope": "exact-or-narrow-admin",
+      "expected_origin_class": "lan",
+      "lan_break_glass": "allowed",
+      "runtime_owner": "rozkalnsandris/RPi5_main",
+      "recovery_ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md"
+    },
+    {
+      "service_id": "grafana",
+      "hostname": "grafana.rozkalns.net",
+      "expected_access_application_scope": "exact-or-narrow-admin",
+      "expected_origin_class": "lan",
+      "lan_break_glass": "allowed",
+      "runtime_owner": "rozkalnsandris/RPi5_main",
+      "recovery_ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md"
+    },
+    {
+      "service_id": "home-assistant",
+      "hostname": "ha.rozkalns.net",
+      "expected_access_application_scope": "exact-or-narrow-admin",
+      "expected_origin_class": "lan",
+      "lan_break_glass": "required",
+      "runtime_owner": "rozkalnsandris/RPi5_main",
+      "recovery_ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md"
+    },
+    {
+      "service_id": "adguard-ui",
+      "hostname": "adguard.rozkalns.net",
+      "expected_access_application_scope": "exact-or-narrow-admin",
+      "expected_origin_class": "lan",
+      "lan_break_glass": "required",
+      "runtime_owner": "rozkalnsandris/RPi5_main",
+      "recovery_ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md"
+    },
+    {
+      "service_id": "uptime-kuma",
+      "hostname": "kuma.rozkalns.net",
+      "expected_access_application_scope": "exact-or-narrow-admin",
+      "expected_origin_class": "lan",
+      "lan_break_glass": "allowed",
+      "runtime_owner": "rozkalnsandris/RPi5_main",
+      "recovery_ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md"
+    },
+    {
+      "service_id": "prometheus",
+      "hostname": "prometheus.rozkalns.net",
+      "expected_access_application_scope": "exact-or-narrow-admin",
+      "expected_origin_class": "lan",
+      "lan_break_glass": "allowed",
+      "runtime_owner": "rozkalnsandris/RPi5_main",
+      "recovery_ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md"
+    },
+    {
+      "service_id": "dashboard-rpi5",
+      "hostname": "dash.rozkalns.net",
+      "expected_access_application_scope": "exact-owner",
+      "expected_origin_class": "loopback",
+      "lan_break_glass": "forbidden",
+      "runtime_owner": "rozkalnsandris/RPi5_main",
+      "recovery_ref": "docs/V13_CLOUDFLARE_TUNNEL_OWNERSHIP_CONTRACT.md"
+    }
+  ],
+  "evidence_schema": {
+    "schema": "rozkalns.rpi5-main.admin-zone-verification-evidence.v1",
+    "status": "sanitized-read-only-evidence",
+    "required_top_level_fields": [
+      "schema",
+      "observed_at",
+      "source_main_sha",
+      "verification_class",
+      "services",
+      "result"
+    ],
+    "allowed_verification_classes": [
+      "unauthenticated-infrastructure",
+      "protected-authorized-admin"
+    ],
+    "allowed_service_fields": [
+      "service_id",
+      "hostname",
+      "access_scope_class",
+      "unauthenticated_external_class",
+      "authorized_admin_result",
+      "route_origin_class",
+      "listener_bind_class",
+      "lan_path_class",
+      "alternate_public_bypass_present",
+      "runtime_owner_matches",
+      "recovery_ref_present",
+      "result"
+    ],
+    "allowed_access_scope_classes": [
+      "exact-owner",
+      "exact-or-narrow-admin",
+      "broader-than-admin",
+      "missing",
+      "unknown"
+    ],
+    "allowed_unauthenticated_classes": [
+      "access-challenge",
+      "denied",
+      "public",
+      "network-error",
+      "unknown"
+    ],
+    "allowed_authorized_admin_results": [
+      "PASS",
+      "FAIL",
+      "UNKNOWN"
+    ],
+    "allowed_origin_classes": [
+      "loopback",
+      "lan",
+      "other",
+      "unknown"
+    ],
+    "allowed_bind_classes": [
+      "loopback",
+      "lan",
+      "wildcard",
+      "mixed",
+      "other",
+      "none",
+      "unknown"
+    ],
+    "allowed_lan_path_classes": [
+      "present",
+      "absent",
+      "unknown"
+    ],
+    "allowed_result_values": [
+      "PASS",
+      "FAIL",
+      "UNKNOWN"
+    ],
+    "forbidden_evidence": [
+      "response-content",
+      "request-or-response-cookies",
+      "authorization-material",
+      "identity-values",
+      "session-material",
+      "credential-values",
+      "token-values",
+      "account-identifiers",
+      "tunnel-identifiers",
+      "access-audience-values",
+      "private-origin-coordinates",
+      "process-environments",
+      "application-config",
+      "application-logs",
+      "application-data"
+    ]
+  },
+  "pass_criteria": {
+    "source_projection_match": true,
+    "per_service": {
+      "access_scope_class": "matches-service-projection",
+      "unauthenticated_external_class": [
+        "access-challenge",
+        "denied"
+      ],
+      "authorized_admin_result": "PASS",
+      "route_origin_class": "matches-service-projection",
+      "lan_path_class": "matches-lan-break-glass-semantics",
+      "alternate_public_bypass_present": false,
+      "runtime_owner_matches": true,
+      "recovery_ref_present": true,
+      "result": "PASS"
+    },
+    "overall_result": "PASS"
+  },
+  "runtime_gates": {
+    "unauthenticated_infrastructure": {
+      "separately_authorized": true,
+      "protected_identity_context_allowed": false
+    },
+    "protected_authorized_admin": {
+      "separately_authorized": true,
+      "existing_protected_access_context_required": true,
+      "identity_session_material_persistence_allowed": false
+    }
+  }
+}
