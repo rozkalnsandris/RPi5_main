@@ -1,6 +1,6 @@
 # WeatherNext private GCS trusted execution boundary
 
-Status: **SOURCE READY / GCS RUNTIME MATERIALIZATION SOURCE REQUIRED**  
+Status: **SOURCE READY / GCS HOST WIRING REQUIRED**  
 Issue: `RPi5_main#825`  
 Weather gate: `rozkalns_weather#122`  
 Host capability identity: `rpi5.weathernext-private-gcs-backend.v1`
@@ -51,20 +51,26 @@ fallback, private-home scope or SQLite/corpus write.
 The bridge, envelope validation, canonical fact validation and fixed trusted
 adapter composition are implemented and fixture-testable.
 
-The **real GCS runtime materializer is not implemented in this issue**.
-Accordingly:
+Issue #828 now provides the reviewed **GCS-specific runtime materializer
+source** and deterministic offline wheelhouse closure. The closure is separate
+from the historical BigQuery runtime, contains 14 exact wheels rooted in
+`obstore 0.11.1`, `xarray 2026.9.0` and `zarr 3.4.0`, and is bound by
+closure SHA-256
+`df79ccff739c3f8f3b3a76732f10624027924aadd45d40ee7f62af670f8e65ab`.
+
+This does **not** install or wire the materializer on the host. Accordingly:
 
 - no host capability is installed;
 - no external entrypoint is enabled;
 - no credential is read;
 - no Google request can run through this source;
-- no runtime dependency is installed or materialized;
+- no runtime dependency is installed or materialized on RPi5;
 - source merge does not authorize LIVE.
 
-The next source prerequisite is an offline/reviewed GCS runtime closure for
-`obstore + xarray + zarr`, with no live-network installation. Only after that
-source prerequisite is merged may a future minimum-sufficient read-only runtime
-preflight determine whether staging/runtime/auth markers are present.
+The next source prerequisite is fixed host/runtime wiring plus sanitized
+readiness classification for the GCS runtime marker. Only after that source is
+merged may a future minimum-sufficient read-only runtime preflight determine
+whether application/runtime/auth prerequisites are present.
 
 ## Failure semantics
 
