@@ -284,7 +284,7 @@ class GCSHostRuntimeTests(unittest.TestCase):
         self.assertFalse(manifest["source_merge_authorizes_live"])
         self.assertEqual(
             manifest["next_gate_after_merge"],
-            "MINIMUM_SUFFICIENT_READ_ONLY_RPI5_GCS_PREFLIGHT",
+            "COMPOSITE_STRICT_LIVE_GCS_PREREQUISITE_ROLLOUT",
         )
 
     def test_sanitized_observer_exposes_only_reviewed_identity(self) -> None:
