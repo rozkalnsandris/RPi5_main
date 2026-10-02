@@ -25,28 +25,29 @@
       "rozkalns-cv-rpi5"
     ],
     "compose_source_path": "ops/deploy/simple-deploy-compose/rozkalns-cv.yml",
-    "compose_source_sha256": "deb4787f91d7a8c978d2ca1eb7b05d05ed0db28b467a295ddfcbbb55b2420de0",
+    "compose_source_sha256": "d4c7e9ed5c36245d92ce7da199194ec032c74de6ea03f2b522e31a43ffaf3277",
     "compose_project": "rozkalns-cv",
     "compose_service": "cv",
     "host_registry_destination": "/etc/rozkalns-simple-deployer/targets.json",
     "host_identity_destination": "/etc/rozkalns-simple-deployer/identity.json",
     "host_compose_destination": "/etc/rozkalns-simple-deployer/compose/rozkalns-cv.yml",
-    "compose_interpolation_env_destination": "/etc/rozkalns-simple-deployer/compose/.env"
+    "compose_interpolation_env_destination": "/etc/rozkalns-simple-deployer/compose/.env",
+    "private_env_materializer_path": "scripts/materialize-simple-deploy-rozkalns-cv-private-env-v1.py"
   },
   "existing_runtime_inputs": {
     "private_env": {
       "home_resolution": "passwd_database",
       "relative_path": "docker/cv/bot/.env",
-      "compose_interpolation_variable": "ROZKALNS_CV_ENV_FILE",
       "required_before_cutover": true,
       "required_type": "regular-file-nonsymlink",
-      "reused_in_place": true,
       "content_read_by_cutover_preflight": false,
-      "provisioned_or_copied_by_cutover": false,
       "compose_public_overrides": {
         "LLM_BASE_URL": "https://api.openai.com",
         "LLM_MODEL": "gpt-5.6-luna"
-      }
+      },
+      "copied_to_private_boundary_during_cutover": true,
+      "source_modified_by_cutover": false,
+      "content_emitted_by_materializer": false
     },
     "persistent_data": {
       "home_resolution": "passwd_database",
@@ -133,10 +134,13 @@
   "ordered_steps": [
     "revalidate-exact-owner-live-authority-rpi5-source-ci-and-candidate-release",
     "revalidate-production-pointer-equals-exact-candidate-digest",
-    "revalidate-existing-runtime-inputs-through-passwd-home-metadata-only",
+    "revalidate-existing-private-env-and-data-metadata-only",
+    "revalidate-private-env-boundary-destination-absent-and-materializer-source",
     "revalidate-legacy-production-sha-container-identities-and-127.0.0.1:8088-owner",
+    "materialize-private-env-boundary-through-reviewed-helper",
+    "verify-private-env-boundary-metadata-and-source-unchanged",
     "stop-generic-simple-deployer.timer-and-verify-service-inactive",
-    "materialize-reviewed-weather-plus-cv-registry-identity-compose-and-path-interpolation",
+    "materialize-reviewed-weather-plus-cv-registry-identity-compose-and-data-path-interpolation",
     "stop-and-remove-exact-legacy-cvbot-and-cv-containers",
     "verify-127.0.0.1:8088-unbound",
     "revalidate-production-pointer-still-equals-candidate-digest",
@@ -152,35 +156,59 @@
     "alternate_mutation_path": false,
     "preserve_evidence": true,
     "stop_after_first_post_mutation_error_or_ambiguity": true,
-    "generic_timer_remains_stopped_on_post_mutation_failure": true
+    "generic_timer_state_preserved_on_private_env_materialization_failure": true,
+    "generic_timer_remains_stopped_on_post_timer_stop_failure": true,
+    "private_env_materialization_precedes_legacy_retirement": true
   },
   "forbidden_operations": [
     "generic-shell-or-arbitrary-command-execution",
     "caller-selected-command-path-argv-or-environment",
     "unrelated-service-timer-or-docker-mutation",
-    "private-app-env-content-read-write-copy-or-materialization",
+    "private-app-env-content-access-or-materialization-outside-reviewed-helper",
     "persistent-data-copy-migration-reownership-delete-or-content-inspection",
     "database-query-schema-migration-or-content-transformation",
     "legacy-cv-network-delete-or-reconfigure",
     "network-firewall-dns-or-cloudflare-mutation",
     "package-user-group-or-runner-mutation",
     "repository-settings-rulesets-or-secrets-mutation",
-    "automatic-retry-cleanup-rollback-or-alternate-mutation-path"
+    "automatic-retry-cleanup-rollback-or-alternate-mutation-path",
+    "legacy-private-env-source-modification-or-delete"
   ],
   "source_only_state": {
     "live_authorized": false,
     "runtime_mutation_permitted_by_this_file": false,
     "protected_runtime_content_access_authorized": false,
-    "merge_authorized": false
+    "merge_authorized": false,
+    "private_env_materialization_requires_live_authority": true
   },
   "host_path_binding": {
     "destination_path": "/etc/rozkalns-simple-deployer/compose/.env",
-    "materialization": "atomic-generated-path-interpolation-only",
-    "source": "passwd-home-plus-fixed-relative-paths",
+    "materialization": "atomic-generated-data-path-interpolation-only",
+    "source": "passwd-home-plus-fixed-data-relative-path",
+    "variables": [
+      "ROZKALNS_CV_DATA_PATH"
+    ],
     "contains_secret_values": false,
     "public_repository_contains_resolved_home_path": false,
     "required_owner": "root",
     "required_group": "root",
     "required_mode": "0444"
+  },
+  "protected_private_env": {
+    "path": "/etc/rozkalns-simple-deployer/private/rozkalns-cv.env",
+    "parent_path": "/etc/rozkalns-simple-deployer/private",
+    "required_initial_state": "absent",
+    "materialized_during_cutover": true,
+    "materializer_entrypoint": "scripts/materialize-simple-deploy-rozkalns-cv-private-env-v1.py",
+    "required_owner": "root",
+    "required_group": "rozkalns-simple-deployer",
+    "required_mode": "0640",
+    "required_parent_owner": "root",
+    "required_parent_group": "rozkalns-simple-deployer",
+    "required_parent_mode": "0750",
+    "secret_content_emitted": false,
+    "source_secret_modified": false,
+    "separate_owner_gate_required": false,
+    "exact_live_authority_required": true
   }
 }
