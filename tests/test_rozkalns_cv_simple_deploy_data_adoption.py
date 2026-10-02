@@ -31,10 +31,13 @@ class CvDataAdoptionContractTests(unittest.TestCase):
         )
         self.assertEqual(self.contract["issue"], 808)
         self.assertEqual(self.contract["status"], "SOURCE_REVIEWED_NOT_LIVE")
+        self.assertEqual(self.contract["source"]["owner_user"], "andris")
+        self.assertEqual(self.contract["source"]["home_resolution"], "passwd_database")
         self.assertEqual(
-            self.contract["source"]["data_path"],
-            "/home/andris/docker/cv/bot/data",
+            self.contract["source"]["data_relative_path"],
+            "docker/cv/bot/data",
         )
+        self.assertFalse(self.contract["source"]["home_is_caller_selectable"])
         self.assertEqual(
             self.contract["destination"]["data_path"],
             "/var/lib/rozkalns-simple-deployer/rozkalns-cv/data",

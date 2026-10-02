@@ -8,12 +8,15 @@
   "source": {
     "production_state_path": "/var/lib/rozkalns-cv-deploy/current-sha",
     "required_production_sha": "4986a6d80460bd6d7681c70e09e61a15e31007f4",
-    "data_path": "/home/andris/docker/cv/bot/data",
     "required_type": "directory-nonsymlink",
     "required_container_name": "cvbot",
     "required_container_image": "rozkalns-cv-cvbot:4986a6d80460bd6d7681c70e09e61a15e31007f4",
     "required_container_state_for_apply": "exited",
-    "legacy_storage_blob": "7a7ce05021223b43686cd93513208bb0a249d9bc"
+    "legacy_storage_blob": "7a7ce05021223b43686cd93513208bb0a249d9bc",
+    "owner_user": "andris",
+    "home_resolution": "passwd_database",
+    "data_relative_path": "docker/cv/bot/data",
+    "home_is_caller_selectable": false
   },
   "candidate": {
     "consumer_repository": "rozkalnsandris/rozkalns-cv",

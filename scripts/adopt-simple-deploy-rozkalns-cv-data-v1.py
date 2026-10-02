@@ -22,7 +22,8 @@ DOCKER = Path("/usr/bin/docker")
 
 LEGACY_STATE = Path("/var/lib/rozkalns-cv-deploy/current-sha")
 LEGACY_SHA = "4986a6d80460bd6d7681c70e09e61a15e31007f4"
-SOURCE_DATA = Path("/home/andris/docker/cv/bot/data")
+SOURCE_OWNER = "andris"
+SOURCE_DATA_RELATIVE = Path("docker/cv/bot/data")
 DEST_ROOT = Path("/var/lib/rozkalns-simple-deployer/rozkalns-cv")
 DEST_DATA = DEST_ROOT / "data"
 STAGING_ROOT = Path("/var/lib/rozkalns-simple-deployer/.rozkalns-cv-data-adoption-v1.staged")
@@ -173,6 +174,16 @@ def _docker_cvbot_state() -> str:
     return fields[2]
 
 
+def _source_data_path() -> Path:
+    try:
+        home = Path(pwd.getpwnam(SOURCE_OWNER).pw_dir)
+    except KeyError as exc:
+        raise AdoptionError("fixed legacy source owner is absent") from exc
+    if not home.is_absolute():
+        _fail("fixed legacy source home is invalid")
+    return home / SOURCE_DATA_RELATIVE
+
+
 def _runtime_gid() -> int:
     try:
         return grp.getgrnam(RUNTIME_GROUP).gr_gid
@@ -182,7 +193,8 @@ def _runtime_gid() -> int:
 
 def _public_preflight() -> dict[str, object]:
     _read_legacy_state()
-    _require_directory(SOURCE_DATA)
+    source_data = _source_data_path()
+    _require_directory(source_data)
     _require_directory(STATE_PARENT)
     _require_absent(DEST_ROOT, label="destination root")
     _require_absent(STAGING_ROOT, label="staging root")
@@ -276,7 +288,8 @@ def _apply() -> dict[str, object]:
     if os.geteuid() != 0:
         _fail("--apply requires root and exact LIVE authority")
     _read_legacy_state()
-    _require_directory(SOURCE_DATA)
+    source_data = _source_data_path()
+    _require_directory(source_data)
     _require_directory(STATE_PARENT)
     _require_absent(DEST_ROOT, label="destination root")
     _require_absent(STAGING_ROOT, label="staging root")
@@ -297,7 +310,7 @@ def _apply() -> dict[str, object]:
         os.chmod(staging_data, 0o710)
 
         _copy_directory_contents(
-            SOURCE_DATA,
+            source_data,
             staging_data,
             app_uid=APP_UID,
             app_gid=APP_GID,
@@ -338,8 +351,15 @@ def _validate_machine_contract() -> None:
         _fail("data-adoption contract schema drifted")
     if contract.get("issue") != 808:
         _fail("data-adoption issue binding drifted")
-    if contract.get("source", {}).get("data_path") != str(SOURCE_DATA):
-        _fail("data-adoption source path drifted")
+    source = contract.get("source", {})
+    if source.get("owner_user") != SOURCE_OWNER:
+        _fail("data-adoption source owner drifted")
+    if source.get("home_resolution") != "passwd_database":
+        _fail("data-adoption source home-resolution drifted")
+    if source.get("data_relative_path") != SOURCE_DATA_RELATIVE.as_posix():
+        _fail("data-adoption source relative path drifted")
+    if source.get("home_is_caller_selectable") is not False:
+        _fail("data-adoption source home authority drifted")
     if contract.get("destination", {}).get("app_root") != str(DEST_ROOT):
         _fail("data-adoption destination path drifted")
     if contract.get("helper", {}).get("entrypoint") != SCRIPT_RELATIVE:

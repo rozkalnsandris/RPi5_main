@@ -100,7 +100,6 @@
       "required_before_cutover": false,
       "materialized_during_cutover": true,
       "create_host_path": false,
-      "legacy_source_path": "/home/andris/docker/cv/bot/data",
       "adoption_contract": "ops/contracts/simple-deploy-rozkalns-cv-data-adoption-v1.json",
       "adoption_entrypoint": "scripts/adopt-simple-deploy-rozkalns-cv-data-v1.py",
       "legacy_storage_blob": "7a7ce05021223b43686cd93513208bb0a249d9bc",
@@ -110,7 +109,10 @@
       "cvbot_restart_on_success_path": false,
       "database_queries_or_schema_migrations": false,
       "contents_read_only_inside_exact_live_adoption_authority": true,
-      "separate_pre_cutover_data_authority_required": false
+      "separate_pre_cutover_data_authority_required": false,
+      "legacy_source_owner_user": "andris",
+      "legacy_source_home_resolution": "passwd_database",
+      "legacy_source_relative_path": "docker/cv/bot/data"
     }
   },
   "legacy_runtime": {
