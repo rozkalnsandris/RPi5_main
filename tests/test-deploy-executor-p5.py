@@ -49,6 +49,7 @@ class P5InterfaceSecurityTests(unittest.TestCase):
                 "hermes-deals.runner-smoke-audit.v1",
                 "hermes-deals.source-sync.v1",
                 "rpi5-main.hermes-tech-simple-deploy-cutover.v1",
+                "rpi5-main.rozkalns-cv-simple-deploy-cutover.v1",
                 "rpi5-main.weather-operator-upgrade-v7.v1",
                 "rozkalns-weather.public-runtime-release.v1",
             },
