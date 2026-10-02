@@ -1,18 +1,18 @@
 {
   "schema": "rozkalns.rpi5-main.rozkalns-cv-simple-deploy-cutover.v1",
   "schema_version": 1,
-  "issue": 802,
+  "issue": 821,
   "operation_id": "rpi5-main.rozkalns-cv-simple-deploy-cutover.v1",
   "execution_enabled": false,
   "target_alias": "rozkalns-cv-rpi5",
   "authorization_class": "STRICT",
   "one_time": true,
+  "operator_model": "consumer-merge -> SIMPLE-DEPLOY -> production",
   "candidate_release": {
     "consumer_repository": "rozkalnsandris/rozkalns-cv",
-    "source_sha": "645717e63596a6ece415d9f4ef69367b9e6ecafc",
-    "simple_deploy_run_id": 36241004385,
+    "source_sha": "d75863d0ce4cfdac0015150137523abbaccf5914",
     "image": "ghcr.io/rozkalnsandris/rozkalns-cv",
-    "image_digest": "sha256:bc6cb2ab3c0e944db49b6c403212802d5289eabaf77db4dd30082856a9fdaadc",
+    "image_digest": "sha256:ba9e24c82eccd833cfe42d6a4aa61ef76c584bcfd4c27efbced13c3a408d2a1a",
     "shared_workflow_sha": "e05ed760791a127c7c9628696806ef39c9fe329c",
     "production_pointer_must_match_candidate_before_mutation": true,
     "mutable_production_tag_is_authority": false
@@ -25,94 +25,39 @@
       "rozkalns-cv-rpi5"
     ],
     "compose_source_path": "ops/deploy/simple-deploy-compose/rozkalns-cv.yml",
-    "compose_source_sha256": "be7f021c9d64192905c908bcbb127dbc7ec1c2514d898f05cbf8de4c44ffa4a2",
+    "compose_source_sha256": "33174cd778df2c1e4012735c5b01ba4af2d6873ec14f3f1ade985f2f2d62b7f0",
     "compose_project": "rozkalns-cv",
     "compose_service": "cv",
     "host_registry_destination": "/etc/rozkalns-simple-deployer/targets.json",
     "host_identity_destination": "/etc/rozkalns-simple-deployer/identity.json",
-    "host_compose_destination": "/etc/rozkalns-simple-deployer/compose/rozkalns-cv.yml",
-    "data_adoption_contract_path": "ops/contracts/simple-deploy-rozkalns-cv-data-adoption-v1.json",
-    "data_adoption_entrypoint": "scripts/adopt-simple-deploy-rozkalns-cv-data-v1.py"
+    "host_compose_destination": "/etc/rozkalns-simple-deployer/compose/rozkalns-cv.yml"
   },
-  "installed_generic_deployer": {
-    "observed_source_sha": "7c6c7a8a80ca62d783c7f378b5865fae348a3fe9",
-    "core_entrypoint": "/usr/local/libexec/rozkalns-simple-deployer/rozkalns-simple-deployer",
-    "core_code_drift_to_issue_base": false,
-    "required_timer_unit": "rozkalns-simple-deployer.timer",
-    "required_timer_enabled_state": "enabled",
-    "required_timer_initial_active_state": "active",
-    "required_service_unit": "rozkalns-simple-deployer.service",
-    "required_service_state_before_registry_change": "inactive",
-    "timer_must_be_stopped_before_registry_change": true,
-    "timer_must_restart_only_after_success": true
-  },
-  "host_materialization": {
-    "activation_registry": {
-      "source_path": "ops/deploy/baselines/simple-deploy-targets-weather-cv-v1.json",
-      "destination_path": "/etc/rozkalns-simple-deployer/targets.json",
-      "materialization": "atomic-exact-source-copy",
-      "required_owner": "root",
-      "required_group": "root",
-      "required_mode": "0444"
-    },
-    "identity": {
-      "destination_path": "/etc/rozkalns-simple-deployer/identity.json",
-      "source_sha": "EXACT_AUTHORIZED_RPI5_MAIN_SHA",
-      "materialization": "atomic-generated-exact-source-identity",
-      "required_owner": "root",
-      "required_group": "root",
-      "required_mode": "0444"
-    },
-    "compose": {
-      "source_path": "ops/deploy/simple-deploy-compose/rozkalns-cv.yml",
-      "source_sha256": "be7f021c9d64192905c908bcbb127dbc7ec1c2514d898f05cbf8de4c44ffa4a2",
-      "destination_path": "/etc/rozkalns-simple-deployer/compose/rozkalns-cv.yml",
-      "required_initial_destination_state": "absent",
-      "materialization": "atomic-exact-source-copy",
-      "required_owner": "root",
-      "required_group": "root",
-      "required_mode": "0444"
-    }
-  },
-  "protected_prerequisites": {
-    "private_runtime_config": {
-      "path": "/etc/rozkalns-simple-deployer/private/rozkalns-cv.env",
+  "existing_runtime_inputs": {
+    "private_env": {
+      "path": "/home/andris/docker/cv/bot/.env",
       "required_before_cutover": true,
       "required_type": "regular-file-nonsymlink",
+      "reused_in_place": true,
       "content_read_by_cutover_preflight": false,
-      "provisioned_by_cutover": false,
-      "separate_exact_authority_required_if_absent": true,
-      "required_owner": "root",
-      "required_group": "rozkalns-simple-deployer",
-      "required_mode": "0640",
-      "required_parent_owner": "root",
-      "required_parent_group": "rozkalns-simple-deployer",
-      "required_parent_mode": "0710",
-      "public_provider_literals": {
+      "provisioned_or_copied_by_cutover": false,
+      "compose_public_overrides": {
         "LLM_BASE_URL": "https://api.openai.com",
         "LLM_MODEL": "gpt-5.6-luna"
-      },
-      "provider_secret_key": "LLM_API_KEY",
-      "provider_secret_must_not_be_inferred_from_legacy": true
+      }
     },
     "persistent_data": {
-      "path": "/var/lib/rozkalns-simple-deployer/rozkalns-cv/data",
-      "required_before_cutover": false,
-      "materialized_during_cutover": true,
+      "path": "/home/andris/docker/cv/bot/data",
+      "required_before_cutover": true,
+      "required_type": "directory-nonsymlink",
+      "reused_in_place": true,
       "create_host_path": false,
-      "adoption_contract": "ops/contracts/simple-deploy-rozkalns-cv-data-adoption-v1.json",
-      "adoption_entrypoint": "scripts/adopt-simple-deploy-rozkalns-cv-data-v1.py",
+      "copied_migrated_or_reowned_by_cutover": false,
       "legacy_storage_blob": "7a7ce05021223b43686cd93513208bb0a249d9bc",
       "candidate_storage_blob": "7a7ce05021223b43686cd93513208bb0a249d9bc",
       "storage_implementation_identical": true,
-      "cvbot_must_be_stopped_before_copy": true,
-      "cvbot_restart_on_success_path": false,
-      "database_queries_or_schema_migrations": false,
-      "contents_read_only_inside_exact_live_adoption_authority": true,
-      "separate_pre_cutover_data_authority_required": false,
-      "legacy_source_owner_user": "andris",
-      "legacy_source_home_resolution": "passwd_database",
-      "legacy_source_relative_path": "docker/cv/bot/data"
+      "database_schema_migration_required": false,
+      "application_uid": 10001,
+      "application_gid": 10001
     }
   },
   "legacy_runtime": {
@@ -132,8 +77,8 @@
         "name": "cvbot",
         "required_runtime_image": "rozkalns-cv-cvbot:4986a6d80460bd6d7681c70e09e61a15e31007f4",
         "retirement": [
-          "stop-before-data-adoption",
-          "remove-after-data-adoption"
+          "stop",
+          "remove"
         ]
       }
     ],
@@ -148,8 +93,7 @@
       "required_active_state": "inactive",
       "mutation_by_cutover": "forbidden"
     },
-    "legacy_network_mutation": "forbidden",
-    "legacy_data_or_config_mutation": "forbidden"
+    "existing_env_or_data_deletion": "forbidden"
   },
   "port_ownership_transition": {
     "bind": "127.0.0.1:8088",
@@ -161,8 +105,8 @@
   "generic_simple_deploy_apply": {
     "required": true,
     "target_alias": "rozkalns-cv-rpi5",
-    "expected_consumer_source_sha": "645717e63596a6ece415d9f4ef69367b9e6ecafc",
-    "expected_image_digest": "sha256:bc6cb2ab3c0e944db49b6c403212802d5289eabaf77db4dd30082856a9fdaadc",
+    "expected_consumer_source_sha": "d75863d0ce4cfdac0015150137523abbaccf5914",
+    "expected_image_digest": "sha256:ba9e24c82eccd833cfe42d6a4aa61ef76c584bcfd4c27efbced13c3a408d2a1a",
     "exact_image_digest_required": true,
     "exact_source_sha_required": true,
     "caller_selected_command_forbidden": true,
@@ -176,37 +120,23 @@
     "receipt_path": "/var/lib/rozkalns-simple-deployer/receipts/rozkalns-cv-rpi5.json",
     "receipt_required_on_success": true,
     "receipt_source_sha_must_equal_candidate": true,
-    "receipt_digest_must_equal_candidate": true
+    "receipt_digest_must_equal_candidate": true,
+    "public_url": "https://rozkalns.net/en/",
+    "public_ui_v2_marker": "Linux Operations Lab",
+    "public_app_asset": "assets/app.e29b029635cc.mjs"
   },
   "ordered_steps": [
-    "revalidate-exact-owner-live-authority-and-ready-envelope",
-    "revalidate-rpi5-main-exact-source-and-ci",
-    "revalidate-candidate-source-sha-digest-and-simple-deploy-publication",
-    "revalidate-production-pointer-equals-candidate-digest",
-    "revalidate-legacy-production-sha-and-runtime-container-identities",
-    "revalidate-weather-only-installed-registry-baseline",
-    "revalidate-private-runtime-config-metadata-only-prerequisite-present",
-    "revalidate-data-adoption-source-and-destination-metadata-only",
-    "revalidate-127.0.0.1:8088-owned-by-legacy-cv",
-    "stop-generic-simple-deployer.timer",
-    "verify-generic-simple-deployer.service-inactive",
-    "materialize-weather-plus-cv-activation-registry",
-    "materialize-exact-rpi5-main-identity",
-    "materialize-exact-rozkalns-cv-compose",
-    "prepull-exact-candidate-image-digest",
-    "revalidate-candidate-source-sha-and-digest-after-prepull",
-    "stop-legacy-cvbot-container",
-    "materialize-persistent-data-through-reviewed-byte-copy-helper",
-    "stop-and-remove-legacy-cv-container",
-    "remove-stopped-legacy-cvbot-container",
+    "revalidate-exact-owner-live-authority-rpi5-source-ci-and-candidate-release",
+    "revalidate-production-pointer-equals-exact-candidate-digest",
+    "revalidate-existing-private-env-and-data-paths-metadata-only",
+    "revalidate-legacy-production-sha-container-identities-and-127.0.0.1:8088-owner",
+    "stop-generic-simple-deployer.timer-and-verify-service-inactive",
+    "materialize-reviewed-weather-plus-cv-registry-identity-and-compose",
+    "stop-and-remove-exact-legacy-cvbot-and-cv-containers",
     "verify-127.0.0.1:8088-unbound",
     "revalidate-production-pointer-still-equals-candidate-digest",
-    "apply-rozkalns-cv-rpi5-through-reviewed-generic-simple-deploy",
-    "verify-deployer-result-source-sha-and-digest-exact-candidate",
-    "verify-127.0.0.1:8088-owned-by-rozkalns-cv-compose",
-    "verify-health-200",
-    "verify-ready-200",
-    "verify-simple-deploy-receipt-source-sha-and-digest",
+    "apply-rozkalns-cv-rpi5-through-generic-simple-deploy",
+    "verify-exact-receipt-health-readiness-and-public-ui-v2-marker",
     "start-generic-simple-deployer.timer"
   ],
   "failure_semantics": {
@@ -223,20 +153,19 @@
     "generic-shell-or-arbitrary-command-execution",
     "caller-selected-command-path-argv-or-environment",
     "unrelated-service-timer-or-docker-mutation",
-    "private-runtime-config-provisioning-or-content-read",
+    "private-env-content-read-write-copy-or-materialization",
+    "persistent-data-copy-migration-reownership-delete-or-content-inspection",
+    "database-query-schema-migration-or-content-transformation",
     "legacy-cv-network-delete-or-reconfigure",
-    "secrets-credentials-permissions-or-protected-config-access",
     "network-firewall-dns-or-cloudflare-mutation",
     "package-user-group-or-runner-mutation",
     "repository-settings-rulesets-or-secrets-mutation",
-    "automatic-retry-cleanup-rollback-or-alternate-mutation-path",
-    "persistent-data-mutation-beyond-reviewed-byte-copy-adoption",
-    "database-query-schema-migration-or-content-transformation"
+    "automatic-retry-cleanup-rollback-or-alternate-mutation-path"
   ],
   "source_only_state": {
     "live_authorized": false,
     "runtime_mutation_permitted_by_this_file": false,
-    "protected_prerequisite_materialization_authorized": false,
+    "protected_runtime_content_access_authorized": false,
     "merge_authorized": false
   }
 }
