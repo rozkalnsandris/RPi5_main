@@ -1,0 +1,216 @@
+{
+  "schema": "rozkalns.rpi5-main.rozkalns-cv-simple-deploy-cutover.v1",
+  "schema_version": 1,
+  "issue": 802,
+  "operation_id": "rpi5-main.rozkalns-cv-simple-deploy-cutover.v1",
+  "execution_enabled": false,
+  "target_alias": "rozkalns-cv-rpi5",
+  "authorization_class": "STRICT",
+  "one_time": true,
+  "candidate_release": {
+    "consumer_repository": "rozkalnsandris/rozkalns-cv",
+    "source_sha": "645717e63596a6ece415d9f4ef69367b9e6ecafc",
+    "simple_deploy_run_id": 36241004385,
+    "image": "ghcr.io/rozkalnsandris/rozkalns-cv",
+    "image_digest": "sha256:bc6cb2ab3c0e944db49b6c403212802d5289eabaf77db4dd30082856a9fdaadc",
+    "shared_workflow_sha": "e05ed760791a127c7c9628696806ef39c9fe329c",
+    "production_pointer_must_match_candidate_before_mutation": true,
+    "mutable_production_tag_is_authority": false
+  },
+  "source_contract": {
+    "reviewed_target_registry_path": "ops/deploy/simple-deploy-targets-v1.json",
+    "activation_registry_path": "ops/deploy/baselines/simple-deploy-targets-weather-cv-v1.json",
+    "activation_registry_exact_aliases": [
+      "rozkalns-weather-public-rpi5",
+      "rozkalns-cv-rpi5"
+    ],
+    "compose_source_path": "ops/deploy/simple-deploy-compose/rozkalns-cv.yml",
+    "compose_source_sha256": "be7f021c9d64192905c908bcbb127dbc7ec1c2514d898f05cbf8de4c44ffa4a2",
+    "compose_project": "rozkalns-cv",
+    "compose_service": "cv",
+    "host_registry_destination": "/etc/rozkalns-simple-deployer/targets.json",
+    "host_identity_destination": "/etc/rozkalns-simple-deployer/identity.json",
+    "host_compose_destination": "/etc/rozkalns-simple-deployer/compose/rozkalns-cv.yml"
+  },
+  "installed_generic_deployer": {
+    "observed_source_sha": "7c6c7a8a80ca62d783c7f378b5865fae348a3fe9",
+    "core_entrypoint": "/usr/local/libexec/rozkalns-simple-deployer/rozkalns-simple-deployer",
+    "core_code_drift_to_issue_base": false,
+    "required_timer_unit": "rozkalns-simple-deployer.timer",
+    "required_timer_enabled_state": "enabled",
+    "required_timer_initial_active_state": "active",
+    "required_service_unit": "rozkalns-simple-deployer.service",
+    "required_service_state_before_registry_change": "inactive",
+    "timer_must_be_stopped_before_registry_change": true,
+    "timer_must_restart_only_after_success": true
+  },
+  "host_materialization": {
+    "activation_registry": {
+      "source_path": "ops/deploy/baselines/simple-deploy-targets-weather-cv-v1.json",
+      "destination_path": "/etc/rozkalns-simple-deployer/targets.json",
+      "materialization": "atomic-exact-source-copy",
+      "required_owner": "root",
+      "required_group": "root",
+      "required_mode": "0444"
+    },
+    "identity": {
+      "destination_path": "/etc/rozkalns-simple-deployer/identity.json",
+      "source_sha": "EXACT_AUTHORIZED_RPI5_MAIN_SHA",
+      "materialization": "atomic-generated-exact-source-identity",
+      "required_owner": "root",
+      "required_group": "root",
+      "required_mode": "0444"
+    },
+    "compose": {
+      "source_path": "ops/deploy/simple-deploy-compose/rozkalns-cv.yml",
+      "source_sha256": "be7f021c9d64192905c908bcbb127dbc7ec1c2514d898f05cbf8de4c44ffa4a2",
+      "destination_path": "/etc/rozkalns-simple-deployer/compose/rozkalns-cv.yml",
+      "required_initial_destination_state": "absent",
+      "materialization": "atomic-exact-source-copy",
+      "required_owner": "root",
+      "required_group": "root",
+      "required_mode": "0444"
+    }
+  },
+  "protected_prerequisites": {
+    "private_runtime_config": {
+      "path": "/etc/rozkalns-simple-deployer/private/rozkalns-cv.env",
+      "required_before_cutover": true,
+      "required_type": "regular-file-nonsymlink",
+      "content_read_by_cutover_preflight": false,
+      "provisioned_by_cutover": false,
+      "separate_exact_authority_required_if_absent": true
+    },
+    "persistent_data": {
+      "path": "/var/lib/rozkalns-simple-deployer/rozkalns-cv/data",
+      "required_before_cutover": true,
+      "required_type": "directory-nonsymlink",
+      "create_host_path": false,
+      "contents_read_by_cutover_preflight": false,
+      "adopted_or_materialized_by_cutover": false,
+      "separate_exact_data_authority_required_if_absent": true
+    }
+  },
+  "legacy_runtime": {
+    "production_state_path": "/var/lib/rozkalns-cv-deploy/current-sha",
+    "required_production_sha": "4986a6d80460bd6d7681c70e09e61a15e31007f4",
+    "containers": [
+      {
+        "name": "cv",
+        "source_declared_image": "nginx:1.31.4-alpine@sha256:db35bfc6b2951e7f8a72db5db120288c127ffaeeb4a6d4b95a26fead017d5913",
+        "required_port_bind": "127.0.0.1:8088",
+        "retirement": [
+          "stop",
+          "remove"
+        ]
+      },
+      {
+        "name": "cvbot",
+        "required_runtime_image": "rozkalns-cv-cvbot:4986a6d80460bd6d7681c70e09e61a15e31007f4",
+        "retirement": [
+          "stop",
+          "remove"
+        ]
+      }
+    ],
+    "pull_timer": {
+      "name": "rozkalns-cv-pull-deploy.timer",
+      "required_enabled_state": "disabled",
+      "required_active_state": "inactive",
+      "mutation_by_cutover": "forbidden"
+    },
+    "pull_service": {
+      "name": "rozkalns-cv-pull-deploy.service",
+      "required_active_state": "inactive",
+      "mutation_by_cutover": "forbidden"
+    },
+    "legacy_network_mutation": "forbidden",
+    "legacy_data_or_config_mutation": "forbidden"
+  },
+  "port_ownership_transition": {
+    "bind": "127.0.0.1:8088",
+    "required_before_owner": "container:cv",
+    "required_between_state": "unbound",
+    "required_after_owner": "compose:rozkalns-cv/cv",
+    "parallel_bind_forbidden": true
+  },
+  "generic_simple_deploy_apply": {
+    "required": true,
+    "target_alias": "rozkalns-cv-rpi5",
+    "expected_consumer_source_sha": "645717e63596a6ece415d9f4ef69367b9e6ecafc",
+    "expected_image_digest": "sha256:bc6cb2ab3c0e944db49b6c403212802d5289eabaf77db4dd30082856a9fdaadc",
+    "exact_image_digest_required": true,
+    "exact_source_sha_required": true,
+    "caller_selected_command_forbidden": true,
+    "caller_selected_path_forbidden": true,
+    "caller_selected_environment_forbidden": true
+  },
+  "verification": {
+    "liveness_url": "http://127.0.0.1:8088/api/health",
+    "readiness_url": "http://127.0.0.1:8088/api/health/ready",
+    "required_http_status": 200,
+    "receipt_path": "/var/lib/rozkalns-simple-deployer/receipts/rozkalns-cv-rpi5.json",
+    "receipt_required_on_success": true,
+    "receipt_source_sha_must_equal_candidate": true,
+    "receipt_digest_must_equal_candidate": true
+  },
+  "ordered_steps": [
+    "revalidate-exact-owner-live-authority-and-ready-envelope",
+    "revalidate-rpi5-main-exact-source-and-ci",
+    "revalidate-candidate-source-sha-digest-and-simple-deploy-publication",
+    "revalidate-production-pointer-equals-candidate-digest",
+    "revalidate-legacy-production-sha-and-runtime-container-identities",
+    "revalidate-weather-only-installed-registry-baseline",
+    "revalidate-private-runtime-config-metadata-only-prerequisite-present",
+    "revalidate-persistent-data-metadata-only-prerequisite-present",
+    "revalidate-127.0.0.1:8088-owned-by-legacy-cv",
+    "stop-generic-simple-deployer.timer",
+    "verify-generic-simple-deployer.service-inactive",
+    "materialize-weather-plus-cv-activation-registry",
+    "materialize-exact-rpi5-main-identity",
+    "materialize-exact-rozkalns-cv-compose",
+    "prepull-exact-candidate-image-digest",
+    "revalidate-candidate-source-sha-and-digest-after-prepull",
+    "stop-and-remove-legacy-cv-container",
+    "stop-and-remove-legacy-cvbot-container",
+    "verify-127.0.0.1:8088-unbound",
+    "revalidate-production-pointer-still-equals-candidate-digest",
+    "apply-rozkalns-cv-rpi5-through-reviewed-generic-simple-deploy",
+    "verify-deployer-result-source-sha-and-digest-exact-candidate",
+    "verify-127.0.0.1:8088-owned-by-rozkalns-cv-compose",
+    "verify-health-200",
+    "verify-ready-200",
+    "verify-simple-deploy-receipt-source-sha-and-digest",
+    "start-generic-simple-deployer.timer"
+  ],
+  "failure_semantics": {
+    "fail_closed": true,
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "alternate_mutation_path": false,
+    "preserve_evidence": true,
+    "stop_after_first_post_mutation_error_or_ambiguity": true,
+    "generic_timer_remains_stopped_on_post_mutation_failure": true
+  },
+  "forbidden_operations": [
+    "generic-shell-or-arbitrary-command-execution",
+    "caller-selected-command-path-argv-or-environment",
+    "unrelated-service-timer-or-docker-mutation",
+    "private-runtime-config-provisioning-or-content-read",
+    "persistent-data-adoption-copy-migration-or-content-read",
+    "database-schema-or-data-mutation",
+    "legacy-cv-network-delete-or-reconfigure",
+    "secrets-credentials-permissions-or-protected-config-access",
+    "network-firewall-dns-or-cloudflare-mutation",
+    "package-user-group-or-runner-mutation",
+    "repository-settings-rulesets-or-secrets-mutation",
+    "automatic-retry-cleanup-rollback-or-alternate-mutation-path"
+  ],
+  "source_only_state": {
+    "live_authorized": false,
+    "runtime_mutation_permitted_by_this_file": false,
+    "protected_prerequisite_materialization_authorized": false,
+    "merge_authorized": false
+  }
+}

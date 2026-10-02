@@ -1,6 +1,6 @@
 # rozkalns-cv SIMPLE-DEPLOY compatibility and target registration v1
 
-Status: source compatibility accepted; static RPi5 target registered in source; one-time LIVE cutover remains separately gated.
+Status: source compatibility accepted; static RPi5 target registered; deterministic one-time cutover source contract tracked by #802; LIVE remains separately gated.
 
 ## Accepted consumer evidence
 
@@ -35,6 +35,26 @@ The follow-up source change after PR #741 registers `rozkalns-cv-rpi5` in `ops/d
 The registry intentionally keeps `persistent_volumes` empty because the consumer manifest declares no named volumes. Durable CV state remains represented by the fixed existing-data bind in the RPi5-owned Compose adapter, with `create_host_path: false`; registration therefore cannot create, initialize, migrate or adopt that data path.
 
 Registration is source metadata only. It does not install the target, provision private runtime configuration, materialize/adopt persistent data, retire the existing CV runtime, or run Docker/Compose.
+
+
+## Selected one-time cutover source contract (#802)
+
+The selected source lane now freezes a deterministic first activation for `rozkalns-cv-rpi5` without granting LIVE authority:
+
+- candidate CV source: `645717e63596a6ece415d9f4ef69367b9e6ecafc`;
+- successful SIMPLE-DEPLOY publication run: `36241004385`;
+- immutable candidate digest: `sha256:bc6cb2ab3c0e944db49b6c403212802d5289eabaf77db4dd30082856a9fdaadc`;
+- observed legacy production source baseline: `4986a6d80460bd6d7681c70e09e61a15e31007f4`;
+- cutover contract: `ops/deploy/rozkalns-cv-simple-deploy-cutover-v1.json`;
+- host activation registry: `ops/deploy/baselines/simple-deploy-targets-weather-cv-v1.json`.
+
+The activation registry intentionally contains **only Weather + CV**. It must not copy the full reviewed four-target source registry into the host, because Hermes Tech and Hermes Deals are source-registered but not activated by the CV decision.
+
+The one-time cutover requires the fixed private runtime-config path and fixed persistent-data path to exist **before** the first cutover mutation. The cutover contract neither reads/provisions protected config nor creates/adopts/copies/migrates persistent data. If either prerequisite is absent, that prerequisite remains a separate exact owner-authorized operation.
+
+The cutover also quiesces the generic SIMPLE-DEPLOY timer before host registry/identity/Compose materialization, prestages the exact pinned image digest, retires only the fixed legacy `cv` and `cvbot` application containers, observes `127.0.0.1:8088` unbound, and then applies the reviewed generic target. Any post-mutation error remains fail-closed with no automatic retry, cleanup, rollback or alternate path.
+
+Source acceptance of #802 therefore still does not authorize merge, private-config/data materialization, legacy runtime retirement, Docker/Compose execution, systemd mutation or LIVE activation.
 
 ## Authority boundary
 

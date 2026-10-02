@@ -44,7 +44,7 @@ class P4RegistryAndNormalizationTests(unittest.TestCase):
     def test_production_registry_contains_reviewed_disabled_operations(self):
         registry = load_registry(PRODUCTION_REGISTRY)
         self.assertFalse(registry.execution_enabled)
-        self.assertEqual(len(registry.operations), 10)
+        self.assertEqual(len(registry.operations), 11)
         operations = {item.operation_id: item for item in registry.operations}
         p9 = operations["rozkalns-control-center.merge-postcanary-reconcile.v1"]
         self.assertEqual(p9.adapter_id, "rozkalns-control-center.merge-postcanary-reconcile.v1")
@@ -104,6 +104,13 @@ class P4RegistryAndNormalizationTests(unittest.TestCase):
             "rozkalns-weather.public-runtime-baseline.v1",
         )
         self.assertEqual(weather.rollback_policy, "NONE")
+        cv_cutover = operations["rpi5-main.rozkalns-cv-simple-deploy-cutover.v1"]
+        self.assertEqual(cv_cutover.adapter_id, "rpi5-main.rozkalns-cv-simple-deploy-cutover.v1")
+        self.assertEqual(cv_cutover.authorization_class, "STRICT")
+        self.assertFalse(cv_cutover.ordinary_live_all_eligible)
+        self.assertEqual(cv_cutover.queue_match.target_alias, "rozkalns-cv-rpi5")
+        self.assertEqual(cv_cutover.baseline.resolver_id, "rpi5-main.rozkalns-cv-simple-deploy-cutover-baseline.v1")
+        self.assertEqual(cv_cutover.rollback_policy, "NONE")
 
     def test_inert_fixture_registry_loads(self):
         registry = load_registry(FIXTURES / "operations_inert.json")
