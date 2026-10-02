@@ -1,0 +1,327 @@
+{
+  "schema": "rozkalns.rpi5-main.ingress-registry.v1",
+  "schema_version": 1,
+  "status": "source-policy",
+  "canonical_roadmap_issue": 60,
+  "implementation_issue": 814,
+  "authority": {
+    "source_merge_proves_runtime_state": false,
+    "source_merge_authorizes_live": false,
+    "runtime_verification_requires_fresh_authorized_evidence": true,
+    "remediation_requires_separate_owner_authorization": true
+  },
+  "semantics": {
+    "zone_values": [
+      "PUBLIC",
+      "ADMIN",
+      "PRIVATE"
+    ],
+    "origin_class_values": [
+      "loopback",
+      "lan",
+      "other",
+      "unknown"
+    ],
+    "access_class_values": [
+      "NONE",
+      "ADMIN",
+      "PRIVATE"
+    ],
+    "lan_break_glass_values": [
+      "required",
+      "allowed",
+      "forbidden"
+    ],
+    "current_origin_class": "Latest accepted source or dated historical evidence classification only; never a live-state assertion.",
+    "desired_origin_class": "Reviewed source policy target; applying it is a separate LIVE action when mutation is required."
+  },
+  "source_policy": {
+    "hostname_policy": "ops/contracts/cloudflare-hostname-policy.yaml",
+    "historical_runtime_audit": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md",
+    "shared_tunnel_contract": "docs/V13_CLOUDFLARE_TUNNEL_OWNERSHIP_CONTRACT.md"
+  },
+  "scope_exclusions": [
+    {
+      "hostname": "control.rozkalns.net",
+      "reason": "Cloudflare Worker runtime; not an RPi5-hosted origin.",
+      "source_policy_ref": "ops/contracts/cloudflare-hostname-policy.yaml"
+    }
+  ],
+  "services": [
+    {
+      "service_id": "apex-web",
+      "roadmap_aliases": [
+        "apex website"
+      ],
+      "hostname": "rozkalns.net",
+      "zone": "PUBLIC",
+      "current_origin_class": "loopback",
+      "desired_origin_class": "loopback",
+      "runtime_owner": "rozkalnsandris/RPi5_main",
+      "repository_owner": "rozkalnsandris/rozkalns-cv",
+      "access_required": false,
+      "access_class": "NONE",
+      "lan_break_glass": "forbidden",
+      "firewall_expectation": "no-lan-origin-required",
+      "health_check_method": "anonymous-http-contract",
+      "health_contract_ref": "ops/contracts/cloudflare-hostname-policy.yaml",
+      "recovery_ref": "docs/V13_CLOUDFLARE_TUNNEL_OWNERSHIP_CONTRACT.md",
+      "last_verified_evidence": {
+        "as_of": "2026-09-13",
+        "ref": "ops/contracts/cloudflare-hostname-policy.yaml",
+        "kind": "source-accepted",
+        "runtime_current": false
+      }
+    },
+    {
+      "service_id": "hermes-tech",
+      "roadmap_aliases": [
+        "Hermes Tech"
+      ],
+      "hostname": "tech.rozkalns.net",
+      "zone": "PUBLIC",
+      "current_origin_class": "loopback",
+      "desired_origin_class": "loopback",
+      "runtime_owner": "rozkalnsandris/RPi5_main",
+      "repository_owner": "rozkalnsandris/hermes-tech",
+      "access_required": false,
+      "access_class": "NONE",
+      "lan_break_glass": "forbidden",
+      "firewall_expectation": "no-lan-origin-required",
+      "health_check_method": "anonymous-http-contract",
+      "health_contract_ref": "ops/contracts/cloudflare-hostname-policy.yaml",
+      "recovery_ref": "docs/V13_CLOUDFLARE_TUNNEL_OWNERSHIP_CONTRACT.md",
+      "last_verified_evidence": {
+        "as_of": "2026-09-13",
+        "ref": "ops/contracts/cloudflare-hostname-policy.yaml",
+        "kind": "source-accepted",
+        "runtime_current": false
+      }
+    },
+    {
+      "service_id": "hermes-deals",
+      "roadmap_aliases": [
+        "Hermes Deals"
+      ],
+      "hostname": "deals.rozkalns.net",
+      "zone": "PRIVATE",
+      "current_origin_class": "loopback",
+      "desired_origin_class": "loopback",
+      "runtime_owner": "rozkalnsandris/RPi5_main",
+      "repository_owner": "rozkalnsandris/hermes-deals",
+      "access_required": true,
+      "access_class": "PRIVATE",
+      "lan_break_glass": "forbidden",
+      "firewall_expectation": "no-lan-origin-required",
+      "health_check_method": "access-authenticated-http-contract",
+      "health_contract_ref": "ops/contracts/cloudflare-hostname-policy.yaml",
+      "recovery_ref": "docs/V19_DEALS_CLOUDFLARE_ROUTE_CUTOVER.md",
+      "last_verified_evidence": {
+        "as_of": "2026-10-02",
+        "ref": "hermes-deals#307",
+        "kind": "completed-source-and-cutover-continuity",
+        "runtime_current": false
+      }
+    },
+    {
+      "service_id": "hermes-admin",
+      "roadmap_aliases": [
+        "Hermes private application"
+      ],
+      "hostname": "hermes.rozkalns.net",
+      "zone": "ADMIN",
+      "current_origin_class": "lan",
+      "desired_origin_class": "lan",
+      "runtime_owner": "rozkalnsandris/RPi5_main",
+      "repository_owner": "rozkalnsandris/RPi5_main",
+      "access_required": true,
+      "access_class": "ADMIN",
+      "lan_break_glass": "allowed",
+      "firewall_expectation": "explicit-admin-lan-break-glass-only",
+      "health_check_method": "access-authenticated-admin-http",
+      "health_contract_ref": "ops/contracts/cloudflare-hostname-policy.yaml",
+      "recovery_ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md",
+      "last_verified_evidence": {
+        "as_of": "2026-08-07",
+        "ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md",
+        "kind": "historical-runtime-evidence",
+        "runtime_current": false
+      }
+    },
+    {
+      "service_id": "portainer",
+      "roadmap_aliases": [
+        "Portainer"
+      ],
+      "hostname": "portainer.rozkalns.net",
+      "zone": "ADMIN",
+      "current_origin_class": "lan",
+      "desired_origin_class": "lan",
+      "runtime_owner": "rozkalnsandris/RPi5_main",
+      "repository_owner": "rozkalnsandris/RPi5_main",
+      "access_required": true,
+      "access_class": "ADMIN",
+      "lan_break_glass": "allowed",
+      "firewall_expectation": "explicit-admin-lan-break-glass-only",
+      "health_check_method": "access-authenticated-admin-http",
+      "health_contract_ref": "ops/contracts/cloudflare-hostname-policy.yaml",
+      "recovery_ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md",
+      "last_verified_evidence": {
+        "as_of": "2026-08-07",
+        "ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md",
+        "kind": "historical-runtime-evidence",
+        "runtime_current": false
+      }
+    },
+    {
+      "service_id": "grafana",
+      "roadmap_aliases": [
+        "Grafana"
+      ],
+      "hostname": "grafana.rozkalns.net",
+      "zone": "ADMIN",
+      "current_origin_class": "lan",
+      "desired_origin_class": "lan",
+      "runtime_owner": "rozkalnsandris/RPi5_main",
+      "repository_owner": "rozkalnsandris/RPi5_main",
+      "access_required": true,
+      "access_class": "ADMIN",
+      "lan_break_glass": "allowed",
+      "firewall_expectation": "explicit-admin-lan-break-glass-only",
+      "health_check_method": "access-authenticated-admin-http",
+      "health_contract_ref": "ops/contracts/cloudflare-hostname-policy.yaml",
+      "recovery_ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md",
+      "last_verified_evidence": {
+        "as_of": "2026-08-07",
+        "ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md",
+        "kind": "historical-runtime-evidence",
+        "runtime_current": false
+      }
+    },
+    {
+      "service_id": "home-assistant",
+      "roadmap_aliases": [
+        "Home Assistant"
+      ],
+      "hostname": "ha.rozkalns.net",
+      "zone": "ADMIN",
+      "current_origin_class": "other",
+      "desired_origin_class": "lan",
+      "runtime_owner": "rozkalnsandris/RPi5_main",
+      "repository_owner": "rozkalnsandris/home-assistant-config",
+      "access_required": true,
+      "access_class": "ADMIN",
+      "lan_break_glass": "required",
+      "firewall_expectation": "explicit-admin-lan-break-glass-only",
+      "health_check_method": "trusted-proxy-admin-http",
+      "health_contract_ref": "docs/HOME_ASSISTANT_TRUSTED_PROXY_PRODUCTION_GATE.md",
+      "recovery_ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md",
+      "last_verified_evidence": {
+        "as_of": "2026-08-07",
+        "ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md",
+        "kind": "historical-runtime-evidence",
+        "runtime_current": false
+      }
+    },
+    {
+      "service_id": "adguard-ui",
+      "roadmap_aliases": [
+        "AdGuard Home UI"
+      ],
+      "hostname": "adguard.rozkalns.net",
+      "zone": "ADMIN",
+      "current_origin_class": "other",
+      "desired_origin_class": "lan",
+      "runtime_owner": "rozkalnsandris/RPi5_main",
+      "repository_owner": "rozkalnsandris/RPi5_main",
+      "access_required": true,
+      "access_class": "ADMIN",
+      "lan_break_glass": "required",
+      "firewall_expectation": "explicit-admin-lan-break-glass-only",
+      "health_check_method": "access-authenticated-admin-http",
+      "health_contract_ref": "ops/contracts/cloudflare-hostname-policy.yaml",
+      "recovery_ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md",
+      "last_verified_evidence": {
+        "as_of": "2026-08-07",
+        "ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md",
+        "kind": "historical-runtime-evidence",
+        "runtime_current": false
+      }
+    },
+    {
+      "service_id": "uptime-kuma",
+      "roadmap_aliases": [
+        "Uptime Kuma"
+      ],
+      "hostname": "kuma.rozkalns.net",
+      "zone": "ADMIN",
+      "current_origin_class": "other",
+      "desired_origin_class": "lan",
+      "runtime_owner": "rozkalnsandris/RPi5_main",
+      "repository_owner": "rozkalnsandris/RPi5_main",
+      "access_required": true,
+      "access_class": "ADMIN",
+      "lan_break_glass": "allowed",
+      "firewall_expectation": "explicit-admin-lan-break-glass-only",
+      "health_check_method": "access-authenticated-admin-http",
+      "health_contract_ref": "ops/contracts/cloudflare-hostname-policy.yaml",
+      "recovery_ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md",
+      "last_verified_evidence": {
+        "as_of": "2026-08-07",
+        "ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md",
+        "kind": "historical-runtime-evidence",
+        "runtime_current": false
+      }
+    },
+    {
+      "service_id": "prometheus",
+      "roadmap_aliases": [
+        "Prometheus"
+      ],
+      "hostname": "prometheus.rozkalns.net",
+      "zone": "ADMIN",
+      "current_origin_class": "lan",
+      "desired_origin_class": "lan",
+      "runtime_owner": "rozkalnsandris/RPi5_main",
+      "repository_owner": "rozkalnsandris/RPi5_main",
+      "access_required": true,
+      "access_class": "ADMIN",
+      "lan_break_glass": "allowed",
+      "firewall_expectation": "explicit-admin-lan-break-glass-only",
+      "health_check_method": "access-authenticated-admin-http",
+      "health_contract_ref": "ops/contracts/cloudflare-hostname-policy.yaml",
+      "recovery_ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md",
+      "last_verified_evidence": {
+        "as_of": "2026-08-07",
+        "ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md",
+        "kind": "historical-runtime-evidence",
+        "runtime_current": false
+      }
+    },
+    {
+      "service_id": "dashboard-rpi5",
+      "roadmap_aliases": [
+        "Dashboard"
+      ],
+      "hostname": "dash.rozkalns.net",
+      "zone": "ADMIN",
+      "current_origin_class": "loopback",
+      "desired_origin_class": "loopback",
+      "runtime_owner": "rozkalnsandris/RPi5_main",
+      "repository_owner": "rozkalnsandris/dashboard_RPi5",
+      "access_required": true,
+      "access_class": "ADMIN",
+      "lan_break_glass": "forbidden",
+      "firewall_expectation": "no-lan-origin-required",
+      "health_check_method": "access-authenticated-admin-http",
+      "health_contract_ref": "ops/contracts/cloudflare-hostname-policy.yaml",
+      "recovery_ref": "docs/V13_CLOUDFLARE_TUNNEL_OWNERSHIP_CONTRACT.md",
+      "last_verified_evidence": {
+        "as_of": "2026-09-13",
+        "ref": "ops/contracts/cloudflare-hostname-policy.yaml",
+        "kind": "source-accepted",
+        "runtime_current": false
+      }
+    }
+  ]
+}
