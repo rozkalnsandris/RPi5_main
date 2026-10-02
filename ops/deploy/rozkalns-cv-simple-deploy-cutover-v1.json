@@ -30,7 +30,9 @@
     "compose_service": "cv",
     "host_registry_destination": "/etc/rozkalns-simple-deployer/targets.json",
     "host_identity_destination": "/etc/rozkalns-simple-deployer/identity.json",
-    "host_compose_destination": "/etc/rozkalns-simple-deployer/compose/rozkalns-cv.yml"
+    "host_compose_destination": "/etc/rozkalns-simple-deployer/compose/rozkalns-cv.yml",
+    "data_adoption_contract_path": "ops/contracts/simple-deploy-rozkalns-cv-data-adoption-v1.json",
+    "data_adoption_entrypoint": "scripts/adopt-simple-deploy-rozkalns-cv-data-v1.py"
   },
   "installed_generic_deployer": {
     "observed_source_sha": "7c6c7a8a80ca62d783c7f378b5865fae348a3fe9",
@@ -79,16 +81,36 @@
       "required_type": "regular-file-nonsymlink",
       "content_read_by_cutover_preflight": false,
       "provisioned_by_cutover": false,
-      "separate_exact_authority_required_if_absent": true
+      "separate_exact_authority_required_if_absent": true,
+      "required_owner": "root",
+      "required_group": "rozkalns-simple-deployer",
+      "required_mode": "0640",
+      "required_parent_owner": "root",
+      "required_parent_group": "rozkalns-simple-deployer",
+      "required_parent_mode": "0750",
+      "public_provider_literals": {
+        "LLM_BASE_URL": "https://api.openai.com",
+        "LLM_MODEL": "gpt-5.6-luna"
+      },
+      "provider_secret_key": "LLM_API_KEY",
+      "provider_secret_must_not_be_inferred_from_legacy": true
     },
     "persistent_data": {
       "path": "/var/lib/rozkalns-simple-deployer/rozkalns-cv/data",
-      "required_before_cutover": true,
-      "required_type": "directory-nonsymlink",
+      "required_before_cutover": false,
+      "materialized_during_cutover": true,
       "create_host_path": false,
-      "contents_read_by_cutover_preflight": false,
-      "adopted_or_materialized_by_cutover": false,
-      "separate_exact_data_authority_required_if_absent": true
+      "legacy_source_path": "/home/andris/docker/cv/bot/data",
+      "adoption_contract": "ops/contracts/simple-deploy-rozkalns-cv-data-adoption-v1.json",
+      "adoption_entrypoint": "scripts/adopt-simple-deploy-rozkalns-cv-data-v1.py",
+      "legacy_storage_blob": "7a7ce05021223b43686cd93513208bb0a249d9bc",
+      "candidate_storage_blob": "7a7ce05021223b43686cd93513208bb0a249d9bc",
+      "storage_implementation_identical": true,
+      "cvbot_must_be_stopped_before_copy": true,
+      "cvbot_restart_on_success_path": false,
+      "database_queries_or_schema_migrations": false,
+      "contents_read_only_inside_exact_live_adoption_authority": true,
+      "separate_pre_cutover_data_authority_required": false
     }
   },
   "legacy_runtime": {
@@ -108,8 +130,8 @@
         "name": "cvbot",
         "required_runtime_image": "rozkalns-cv-cvbot:4986a6d80460bd6d7681c70e09e61a15e31007f4",
         "retirement": [
-          "stop",
-          "remove"
+          "stop-before-data-adoption",
+          "remove-after-data-adoption"
         ]
       }
     ],
@@ -162,7 +184,7 @@
     "revalidate-legacy-production-sha-and-runtime-container-identities",
     "revalidate-weather-only-installed-registry-baseline",
     "revalidate-private-runtime-config-metadata-only-prerequisite-present",
-    "revalidate-persistent-data-metadata-only-prerequisite-present",
+    "revalidate-data-adoption-source-and-destination-metadata-only",
     "revalidate-127.0.0.1:8088-owned-by-legacy-cv",
     "stop-generic-simple-deployer.timer",
     "verify-generic-simple-deployer.service-inactive",
@@ -171,8 +193,10 @@
     "materialize-exact-rozkalns-cv-compose",
     "prepull-exact-candidate-image-digest",
     "revalidate-candidate-source-sha-and-digest-after-prepull",
+    "stop-legacy-cvbot-container",
+    "materialize-persistent-data-through-reviewed-byte-copy-helper",
     "stop-and-remove-legacy-cv-container",
-    "stop-and-remove-legacy-cvbot-container",
+    "remove-stopped-legacy-cvbot-container",
     "verify-127.0.0.1:8088-unbound",
     "revalidate-production-pointer-still-equals-candidate-digest",
     "apply-rozkalns-cv-rpi5-through-reviewed-generic-simple-deploy",
@@ -198,14 +222,14 @@
     "caller-selected-command-path-argv-or-environment",
     "unrelated-service-timer-or-docker-mutation",
     "private-runtime-config-provisioning-or-content-read",
-    "persistent-data-adoption-copy-migration-or-content-read",
-    "database-schema-or-data-mutation",
     "legacy-cv-network-delete-or-reconfigure",
     "secrets-credentials-permissions-or-protected-config-access",
     "network-firewall-dns-or-cloudflare-mutation",
     "package-user-group-or-runner-mutation",
     "repository-settings-rulesets-or-secrets-mutation",
-    "automatic-retry-cleanup-rollback-or-alternate-mutation-path"
+    "automatic-retry-cleanup-rollback-or-alternate-mutation-path",
+    "persistent-data-mutation-beyond-reviewed-byte-copy-adoption",
+    "database-query-schema-migration-or-content-transformation"
   ],
   "source_only_state": {
     "live_authorized": false,

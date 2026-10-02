@@ -50,9 +50,13 @@ The selected source lane now freezes a deterministic first activation for `rozka
 
 The activation registry intentionally contains **only Weather + CV**. It must not copy the full reviewed four-target source registry into the host, because Hermes Tech and Hermes Deals are source-registered but not activated by the CV decision.
 
-The one-time cutover requires the fixed private runtime-config path and fixed persistent-data path to exist **before** the first cutover mutation. The cutover contract neither reads/provisions protected config nor creates/adopts/copies/migrates persistent data. If either prerequisite is absent, that prerequisite remains a separate exact owner-authorized operation.
+Fresh privileged metadata-only preflight later proved both fixed prerequisite destinations absent. Issue #808 simplifies the durable-data side without weakening the private-config boundary.
 
-The cutover also quiesces the generic SIMPLE-DEPLOY timer before host registry/identity/Compose materialization, prestages the exact pinned image digest, retires only the fixed legacy `cv` and `cvbot` application containers, observes `127.0.0.1:8088` unbound, and then applies the reviewed generic target. Any post-mutation error remains fail-closed with no automatic retry, cleanup, rollback or alternate path.
+The fixed private runtime-config path must still exist **before** the first cutover mutation. It is not provisioned by the cutover. The legacy assistant intentionally migrated from DeepSeek to OpenAI Responses in consumer PR #429, so the legacy provider secret is not assumed compatible. The destination env contract pins public non-secret values `LLM_BASE_URL=https://api.openai.com` and `LLM_MODEL=gpt-5.6-luna`; `LLM_API_KEY` remains separately exact-gated secret material. Because the generic deployer runs as `rozkalns-simple-deployer`, the reviewed env metadata is root-owned, group-readable only by that runtime principal (`root:rozkalns-simple-deployer 0640`) under a non-world-readable traversable private parent.
+
+Durable data no longer needs a stale pre-cutover copy. The reviewed #808 helper uses only the fixed legacy source `/home/andris/docker/cv/bot/data` and fixed destination `/var/lib/rozkalns-simple-deployer/rozkalns-cv/data`. During the same one-time cutover, after all prechecks and exact-image pre-pull, the exact legacy `cvbot` writer is stopped; the helper then performs a byte-for-byte recursive copy through a fixed staging path and atomic publish. The helper does not stop/start/remove containers itself and does not query SQLite, migrate schema, transform DB content, print protected content, silently merge or overwrite an existing destination. Legacy and candidate `bot/storage.py` are byte-identical, so this is adoption only, not a schema migration. On the success path legacy `cvbot` is not restarted; the cutover immediately retires the remaining legacy containers and starts the exact new digest, preventing the adopted copy from becoming stale.
+
+The cutover also quiesces the generic SIMPLE-DEPLOY timer before host registry/identity/Compose materialization, prestages the exact pinned image digest, observes `127.0.0.1:8088` unbound after legacy retirement, and then applies the reviewed generic target. Any post-mutation error remains fail-closed with no automatic retry, cleanup, rollback or alternate path.
 
 Source acceptance of #802 therefore still does not authorize merge, private-config/data materialization, legacy runtime retirement, Docker/Compose execution, systemd mutation or LIVE activation.
 
@@ -60,9 +64,7 @@ Source acceptance of #802 therefore still does not authorize merge, private-conf
 
 Even after source registration is merged, separate exact owner authority remains required for:
 
-1. private runtime configuration provisioning;
-2. adoption/materialization of persistent CV data;
-3. retirement/replacement of the existing CV runtime;
-4. the one-time SIMPLE-DEPLOY target installation/cutover.
+1. private runtime configuration provisioning, including a valid OpenAI provider secret;
+2. the composite one-time LIVE cutover authority that includes exact legacy `cvbot` stop, reviewed byte-copy data adoption, legacy retirement and SIMPLE-DEPLOY activation.
 
 Ordinary SIMPLE-DEPLOY must not perform database/schema/data migration, recovery or cleanup, secret/permission mutation, Cloudflare/network mutation, private-provider activation or unrelated host control. Source merge runs no Docker/Compose command and grants no LIVE authority.
