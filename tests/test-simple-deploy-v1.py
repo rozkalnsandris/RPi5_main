@@ -509,16 +509,12 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(reviewed[3]["compatibility_prerequisite_pr"], 741)
         self.assertEqual(
             reviewed[3]["compose_sha256"],
-            "a1ded554dc931c8451eb7e606c9cd9c6bac1c4b4126e56e533ad9ea38ee2c3d8",
+            "deb4787f91d7a8c978d2ca1eb7b05d05ed0db28b467a295ddfcbbb55b2420de0",
         )
-        self.assertEqual(
-            reviewed[3]["private_runtime_config_path"],
-            "/home/andris/docker/cv/bot/.env",
-        )
-        self.assertEqual(
-            reviewed[3]["persistent_data_path"],
-            "/home/andris/docker/cv/bot/data",
-        )
+        self.assertEqual(reviewed[3]["runtime_home_resolution"], "passwd_database")
+        self.assertEqual(reviewed[3]["private_runtime_config_relative_path"], "docker/cv/bot/.env")
+        self.assertEqual(reviewed[3]["persistent_data_relative_path"], "docker/cv/bot/data")
+        self.assertEqual(reviewed[3]["compose_interpolation_env_path"], "/etc/rozkalns-simple-deployer/compose/.env")
         self.assertFalse(reviewed[3]["persistent_data_create_host_path"])
         self.assertTrue(reviewed[3]["reuses_existing_runtime_inputs"])
         self.assertEqual(reviewed[3]["liveness_url"], "http://127.0.0.1:8088/api/health")
