@@ -25,16 +25,19 @@
       "rozkalns-cv-rpi5"
     ],
     "compose_source_path": "ops/deploy/simple-deploy-compose/rozkalns-cv.yml",
-    "compose_source_sha256": "a1ded554dc931c8451eb7e606c9cd9c6bac1c4b4126e56e533ad9ea38ee2c3d8",
+    "compose_source_sha256": "deb4787f91d7a8c978d2ca1eb7b05d05ed0db28b467a295ddfcbbb55b2420de0",
     "compose_project": "rozkalns-cv",
     "compose_service": "cv",
     "host_registry_destination": "/etc/rozkalns-simple-deployer/targets.json",
     "host_identity_destination": "/etc/rozkalns-simple-deployer/identity.json",
-    "host_compose_destination": "/etc/rozkalns-simple-deployer/compose/rozkalns-cv.yml"
+    "host_compose_destination": "/etc/rozkalns-simple-deployer/compose/rozkalns-cv.yml",
+    "compose_interpolation_env_destination": "/etc/rozkalns-simple-deployer/compose/.env"
   },
   "existing_runtime_inputs": {
     "private_env": {
-      "path": "/home/andris/docker/cv/bot/.env",
+      "home_resolution": "passwd_database",
+      "relative_path": "docker/cv/bot/.env",
+      "compose_interpolation_variable": "ROZKALNS_CV_ENV_FILE",
       "required_before_cutover": true,
       "required_type": "regular-file-nonsymlink",
       "reused_in_place": true,
@@ -46,7 +49,9 @@
       }
     },
     "persistent_data": {
-      "path": "/home/andris/docker/cv/bot/data",
+      "home_resolution": "passwd_database",
+      "relative_path": "docker/cv/bot/data",
+      "compose_interpolation_variable": "ROZKALNS_CV_DATA_PATH",
       "required_before_cutover": true,
       "required_type": "directory-nonsymlink",
       "reused_in_place": true,
@@ -128,10 +133,10 @@
   "ordered_steps": [
     "revalidate-exact-owner-live-authority-rpi5-source-ci-and-candidate-release",
     "revalidate-production-pointer-equals-exact-candidate-digest",
-    "revalidate-existing-private-env-and-data-paths-metadata-only",
+    "revalidate-existing-runtime-inputs-through-passwd-home-metadata-only",
     "revalidate-legacy-production-sha-container-identities-and-127.0.0.1:8088-owner",
     "stop-generic-simple-deployer.timer-and-verify-service-inactive",
-    "materialize-reviewed-weather-plus-cv-registry-identity-and-compose",
+    "materialize-reviewed-weather-plus-cv-registry-identity-compose-and-path-interpolation",
     "stop-and-remove-exact-legacy-cvbot-and-cv-containers",
     "verify-127.0.0.1:8088-unbound",
     "revalidate-production-pointer-still-equals-candidate-digest",
@@ -153,7 +158,7 @@
     "generic-shell-or-arbitrary-command-execution",
     "caller-selected-command-path-argv-or-environment",
     "unrelated-service-timer-or-docker-mutation",
-    "private-env-content-read-write-copy-or-materialization",
+    "private-app-env-content-read-write-copy-or-materialization",
     "persistent-data-copy-migration-reownership-delete-or-content-inspection",
     "database-query-schema-migration-or-content-transformation",
     "legacy-cv-network-delete-or-reconfigure",
@@ -167,5 +172,15 @@
     "runtime_mutation_permitted_by_this_file": false,
     "protected_runtime_content_access_authorized": false,
     "merge_authorized": false
+  },
+  "host_path_binding": {
+    "destination_path": "/etc/rozkalns-simple-deployer/compose/.env",
+    "materialization": "atomic-generated-path-interpolation-only",
+    "source": "passwd-home-plus-fixed-relative-paths",
+    "contains_secret_values": false,
+    "public_repository_contains_resolved_home_path": false,
+    "required_owner": "root",
+    "required_group": "root",
+    "required_mode": "0444"
   }
 }
