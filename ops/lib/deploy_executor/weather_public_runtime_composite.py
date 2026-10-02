@@ -172,7 +172,7 @@ class WeatherCompositeAuthorityEvidence:
     additional_mutation_budget: tuple[tuple[str, int], ...]
     full_mutation_budget: tuple[tuple[str, int], ...]
     authorization_owner_verified: bool = True
-    authorization_ttl_valid: bool = True
+    authorization_time_valid: bool = True
     authorization_body_unchanged: bool = True
     authorization_replay_available: bool = True
     authorization_replay_consumed: bool = False

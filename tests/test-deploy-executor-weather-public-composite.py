@@ -453,13 +453,17 @@ class WeatherCompositeCanonicalTests(unittest.TestCase):
         with self.assertRaises(WeatherCompositeAuthorityError):
             parse_weather_composite_supplement(auth_issue(supplement=wrong)["body"])
 
-    def test_stale_app_authored_replay_and_body_or_queue_drift_fail_closed(self):
-        stale = auth_issue(created_at="2026-09-10T03:40:00Z")
+    def test_old_unconsumed_authorization_remains_valid(self):
+        old = auth_issue(created_at="2026-09-10T03:40:00Z")
+        value, _, _ = revalidator(FixtureSender(authorization_issue=old))
+        evidence = value.revalidate_composite(AUTH_ISSUE_NUMBER)
+        self.assertTrue(evidence.authorization_time_valid)
+
+    def test_app_authored_replay_and_body_or_queue_drift_fail_closed(self):
         app = auth_issue(app_authored=True)
         drifted = auth_issue()
         drifted["body"] += "\n"
         cases = (
-            (FixtureSender(authorization_issue=stale), ReplayAvailability()),
             (FixtureSender(authorization_issue=app), ReplayAvailability()),
             (FixtureSender(), ReplayAvailability(False)),
             (
