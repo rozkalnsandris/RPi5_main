@@ -509,17 +509,18 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(reviewed[3]["compatibility_prerequisite_pr"], 741)
         self.assertEqual(
             reviewed[3]["compose_sha256"],
-            "be7f021c9d64192905c908bcbb127dbc7ec1c2514d898f05cbf8de4c44ffa4a2",
+            "a1ded554dc931c8451eb7e606c9cd9c6bac1c4b4126e56e533ad9ea38ee2c3d8",
         )
         self.assertEqual(
             reviewed[3]["private_runtime_config_path"],
-            "/etc/rozkalns-simple-deployer/private/rozkalns-cv.env",
+            "/home/andris/docker/cv/bot/.env",
         )
         self.assertEqual(
             reviewed[3]["persistent_data_path"],
-            "/var/lib/rozkalns-simple-deployer/rozkalns-cv/data",
+            "/home/andris/docker/cv/bot/data",
         )
         self.assertFalse(reviewed[3]["persistent_data_create_host_path"])
+        self.assertTrue(reviewed[3]["reuses_existing_runtime_inputs"])
         self.assertEqual(reviewed[3]["liveness_url"], "http://127.0.0.1:8088/api/health")
         self.assertEqual(reviewed[3]["readiness_state"], "required")
         self.assertEqual(
@@ -529,6 +530,7 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(reviewed[3]["wait_timeout_seconds"], 180)
         self.assertEqual(reviewed[3]["registry_pull_profile"], "public-anonymous-pull")
         self.assertTrue(contract["activation"]["separate_exact_live_cutover_required"])
+        self.assertTrue(contract["activation"]["rozkalns_cv_existing_runtime_inputs_reused_in_place"])
         self.assertFalse(contract["activation"]["source_merge_installs_or_enables_runtime"])
         self.assertTrue(
             contract["activation"]["hermes_target_installation_requires_separate_exact_live_cutover"]
