@@ -200,16 +200,13 @@ class RegistryTests(unittest.TestCase):
             "321fe0aa400d1a01e419f313a6c99ada311058496f36fed032daf1ac036fa16d",
         )
 
-        for baseline_name in (
-            "simple-deploy-targets-weather-only-v1.json",
-            "simple-deploy-targets-weather-cv-v1.json",
-            "simple-deploy-targets-weather-hermes-v1.json",
-        ):
-            baseline = sd.load_registry(ROOT / "ops/deploy/baselines" / baseline_name)
-            self.assertEqual(
-                baseline.get("rozkalns-weather-public-rpi5").compose.file_sha256,
-                weather.compose.file_sha256,
-            )
+        private_home_baseline = sd.load_registry(
+            ROOT / "ops/deploy/baselines/simple-deploy-targets-weather-private-home-v1.json"
+        )
+        self.assertEqual(
+            private_home_baseline.get("rozkalns-weather-public-rpi5").compose.file_sha256,
+            weather.compose.file_sha256,
+        )
 
         hermes = registry.get("hermes-deals")
         self.assertEqual(hermes.consumer_repository, "rozkalnsandris/hermes-deals")

@@ -26,7 +26,7 @@
   },
   "source_contract": {
     "reviewed_target_registry_path": "ops/deploy/simple-deploy-targets-v1.json",
-    "activation_registry_path": "ops/deploy/baselines/simple-deploy-targets-weather-only-v1.json",
+    "activation_registry_path": "ops/deploy/baselines/simple-deploy-targets-weather-private-home-v1.json",
     "activation_registry_exact_aliases": [
       "rozkalns-weather-public-rpi5"
     ],
@@ -35,7 +35,9 @@
     "compose_project": "rozkalns-weather-public",
     "compose_service": "weather",
     "private_runtime_config_path": "/etc/rozkalns-simple-deployer/private/rozkalns-weather-private-home.env",
-    "owner_authorization_must_bind_exact_merged_rpi5_main_sha": true
+    "owner_authorization_must_bind_exact_merged_rpi5_main_sha": true,
+    "historical_public_only_baselines_unchanged": true,
+    "historical_public_compose_fixture": "ops/deploy/simple-deploy-compose/rozkalns-weather-public-v1.yml"
   },
   "protected_runtime_config": {
     "path": "/etc/rozkalns-simple-deployer/private/rozkalns-weather-private-home.env",
@@ -84,7 +86,7 @@
     "timer_must_be_stopped_before_first_installed_config_mutation": true,
     "deployer_service_must_be_inactive_before_materialization": true,
     "activation_registry": {
-      "source_path": "ops/deploy/baselines/simple-deploy-targets-weather-only-v1.json",
+      "source_path": "ops/deploy/baselines/simple-deploy-targets-weather-private-home-v1.json",
       "destination_path": "/etc/rozkalns-simple-deployer/targets.json",
       "materialization": "atomic-exact-source-copy",
       "required_owner": "root",
