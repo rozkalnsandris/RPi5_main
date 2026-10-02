@@ -597,28 +597,21 @@ class ContractTests(unittest.TestCase):
         self.assertTrue(ingest["timer_stop_required_before_first_config_or_compose_mutation"])
         self.assertEqual(ingest["post_stop_required_timer_active_state"], "inactive")
         self.assertEqual(ingest["post_stop_required_service_active_state"], "inactive")
-        self.assertTrue(ingest["reenable_only_after_successful_runtime_verification"])
+        self.assertFalse(ingest["reenable_during_config_cutover"])
 
         failure = contract["failure_semantics"]
-        self.assertTrue(failure["before_final_timer_reenable_both_timers_intentionally_quiesced"])
-        self.assertTrue(failure["final_timer_reenable_is_last_mutation_phase"])
+        self.assertTrue(failure["weather_ingest_timer_remains_quiesced_after_successful_phase_a"])
+        self.assertTrue(failure["generic_timer_reenable_is_final_phase_a_mutation"])
         self.assertEqual(
-            failure["timer_reenable_failure_or_verification_ambiguity"],
+            failure["generic_timer_reenable_failure_or_verification_ambiguity"],
             "preserve_observed_states_and_stop_no_cleanup",
         )
-        self.assertFalse(failure.get("automatic_requiesce_after_reenable_failure", False))
+        self.assertTrue(failure["automatic_weather_ingest_start_forbidden"])
 
         self.assertIn("stop-weather-ingest-timer", contract["ordered_steps"])
         self.assertIn(
-            "verify-weather-ingest-timer-inactive-and-service-inactive",
+            "verify-weather-ingest-timer-enabled-inactive-and-service-inactive",
             contract["ordered_steps"],
-        )
-        self.assertEqual(
-            contract["ordered_steps"][-2:],
-            [
-                "start-weather-ingest-and-generic-simple-deployer-timers-in-one-fixed-transaction",
-                "verify-both-timers-enabled-and-active",
-            ],
         )
         self.assertIn(
             "stop-or-kill-active-weather-ingest-service",
