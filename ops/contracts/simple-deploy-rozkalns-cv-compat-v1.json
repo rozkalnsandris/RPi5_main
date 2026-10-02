@@ -1,6 +1,6 @@
 {
   "schema": "rozkalns.rpi5-main.simple-deploy-rozkalns-cv-compat.v1",
-  "status": "SOURCE_COMPATIBILITY_COMPLETE_TARGET_REGISTERED_SIMPLE_CUTOVER_REQUIRED",
+  "status": "SOURCE_COMPATIBILITY_COMPLETE_TARGET_REGISTERED_LIVE_CUTOVER_REQUIRED",
   "consumer": {
     "repository": "rozkalnsandris/rozkalns-cv",
     "consumer_contract_revision": "139fb7046c77e1e58ec4a0876db3dddb96c85cb5",
