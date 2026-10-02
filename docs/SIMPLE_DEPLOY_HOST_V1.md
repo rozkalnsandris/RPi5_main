@@ -36,7 +36,7 @@ The tracked registry has `execution_enabled: true` and two reviewed source targe
 
 ## Weather canary binding — activated standing target
 
-The Weather target is derived from the accepted consumer contract at `rozkalnsandris/rozkalns_weather@606981d10eee59d13b802f6a682abf1daa2aa8a5`:
+The Weather target is derived from the accepted consumer contract at `rozkalnsandris/rozkalns_weather@3826175b5bc2c4c7ad1fd5638741258506dd254d`:
 
 - image: `ghcr.io/rozkalnsandris/rozkalns_weather`;
 - target alias: `rozkalns-weather-public-rpi5`;
