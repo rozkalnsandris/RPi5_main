@@ -794,6 +794,10 @@
           "max_operations": 2
         },
         {
+          "category": "filesystem.simple-deploy-cv-private-env-boundary",
+          "max_operations": 1
+        },
+        {
           "category": "filesystem.simple-deploy-cv-activation-materialization",
           "max_operations": 4
         },
@@ -811,13 +815,14 @@
         "generic sudo/root shell or arbitrary command execution",
         "caller-selected command/path/argv/environment authority",
         "unrelated service, timer, Docker, filesystem or host mutation",
-        "private app env content read/write/copy/materialization",
+        "private app env content access or materialization outside the reviewed fixed helper",
         "persistent data copy/migration/reownership/delete/content inspection",
         "database query/schema migration/content transformation",
         "legacy CV network deletion or reconfiguration",
         "network, firewall, DNS or Cloudflare mutation",
         "package, user, group, runner or repository-settings mutation",
-        "automatic retry, cleanup, rollback or alternate mutation path"
+        "automatic retry, cleanup, rollback or alternate mutation path",
+        "legacy private env modification or deletion"
       ],
       "dependencies": [
         "issue:RPi5_main#821",
@@ -830,8 +835,10 @@
         "legacy-production-sha:4986a6d80460bd6d7681c70e09e61a15e31007f4",
         "loopback-bind:127.0.0.1:8088",
         "global-execution:disabled",
-        "simple-deploy-compose-sha256:deb4787f91d7a8c978d2ca1eb7b05d05ed0db28b467a295ddfcbbb55b2420de0",
-        "existing-private-env:passwd-home+docker/cv/bot/.env",
+        "simple-deploy-compose-sha256:d4c7e9ed5c36245d92ce7da199194ec032c74de6ea03f2b522e31a43ffaf3277",
+        "private-env-source:passwd-home+docker/cv/bot/.env",
+        "private-env-boundary:/etc/rozkalns-simple-deployer/private/rozkalns-cv.env",
+        "private-env-materializer:scripts/materialize-simple-deploy-rozkalns-cv-private-env-v1.py",
         "existing-persistent-data:passwd-home+docker/cv/bot/data",
         "compose-path-interpolation:/etc/rozkalns-simple-deployer/compose/.env"
       ],
@@ -840,6 +847,7 @@
         "authorized RPi5_main SHA is current/reachable and exact-SHA required CI is successful",
         "candidate CV source and immutable digest equal the reviewed cutover contract and current production pointer",
         "existing CV private env resolves from the legacy account passwd home plus fixed relative path; metadata only, contents are not read or copied",
+        "CV private env boundary destination is absent before first cutover and parent is absent or exact root:rozkalns-simple-deployer metadata",
         "existing CV data resolves from the same passwd home plus fixed relative path and remains in place",
         "legacy production state is exactly 4986a6d80460bd6d7681c70e09e61a15e31007f4",
         "legacy cv and cvbot identities are exact and cv owns 127.0.0.1:8088",
@@ -851,7 +859,8 @@
         "host target registry contains exactly Weather plus rozkalns-cv-rpi5",
         "host deployer identity binds the exact authorized RPi5_main cutover source SHA",
         "CV SIMPLE-DEPLOY Compose is materialized from the exact reviewed source identity",
-        "host-local Compose interpolation .env contains only resolved path metadata and no secret values",
+        "protected CV private env is root:rozkalns-simple-deployer 0640 under an exact 0750 parent",
+        "host-local Compose interpolation .env contains only the resolved persistent-data path and no secret values",
         "existing private env and persistent data are reused in place through host-local Compose path interpolation without copy, migration, reownership or deletion",
         "legacy cv and cvbot containers are retired",
         "127.0.0.1:8088 ownership transfers from legacy cv through an observed unbound state to rozkalns-cv/cv",
@@ -869,7 +878,8 @@
         "immutable CV image digest sha256:ba9e24c82eccd833cfe42d6a4aa61ef76c584bcfd4c27efbced13c3a408d2a1a",
         "reviewed CV cutover contract, Weather+CV activation registry and Compose source identities",
         "READY deployment envelope for rozkalns-cv-rpi5",
-        "separate owner LIVE authorization for the exact one-time CV cutover"
+        "separate owner LIVE authorization for the exact one-time CV cutover",
+        "reviewed CV private-env materializer source identity"
       ]
     }
   ]

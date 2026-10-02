@@ -509,14 +509,26 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(reviewed[3]["compatibility_prerequisite_pr"], 741)
         self.assertEqual(
             reviewed[3]["compose_sha256"],
-            "deb4787f91d7a8c978d2ca1eb7b05d05ed0db28b467a295ddfcbbb55b2420de0",
+            "d4c7e9ed5c36245d92ce7da199194ec032c74de6ea03f2b522e31a43ffaf3277",
         )
-        self.assertEqual(reviewed[3]["runtime_home_resolution"], "passwd_database")
-        self.assertEqual(reviewed[3]["private_runtime_config_relative_path"], "docker/cv/bot/.env")
+        self.assertEqual(reviewed[3]["persistent_data_home_resolution"], "passwd_database")
         self.assertEqual(reviewed[3]["persistent_data_relative_path"], "docker/cv/bot/data")
         self.assertEqual(reviewed[3]["compose_interpolation_env_path"], "/etc/rozkalns-simple-deployer/compose/.env")
+        self.assertEqual(
+            reviewed[3]["compose_interpolation_variables"],
+            {"persistent_data": "ROZKALNS_CV_DATA_PATH"},
+        )
         self.assertFalse(reviewed[3]["persistent_data_create_host_path"])
-        self.assertTrue(reviewed[3]["reuses_existing_runtime_inputs"])
+        self.assertEqual(
+            reviewed[3]["private_runtime_config_path"],
+            "/etc/rozkalns-simple-deployer/private/rozkalns-cv.env",
+        )
+        self.assertEqual(
+            reviewed[3]["private_runtime_config_materializer"],
+            "scripts/materialize-simple-deploy-rozkalns-cv-private-env-v1.py",
+        )
+        self.assertTrue(reviewed[3]["materializes_private_runtime_config_boundary"])
+        self.assertTrue(reviewed[3]["reuses_existing_persistent_data"])
         self.assertEqual(reviewed[3]["liveness_url"], "http://127.0.0.1:8088/api/health")
         self.assertEqual(reviewed[3]["readiness_state"], "required")
         self.assertEqual(
@@ -526,7 +538,12 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(reviewed[3]["wait_timeout_seconds"], 180)
         self.assertEqual(reviewed[3]["registry_pull_profile"], "public-anonymous-pull")
         self.assertTrue(contract["activation"]["separate_exact_live_cutover_required"])
-        self.assertTrue(contract["activation"]["rozkalns_cv_existing_runtime_inputs_reused_in_place"])
+        self.assertTrue(
+            contract["activation"]["rozkalns_cv_private_runtime_config_materialized_during_cutover"]
+        )
+        self.assertTrue(
+            contract["activation"]["rozkalns_cv_existing_persistent_data_reused_in_place"]
+        )
         self.assertFalse(contract["activation"]["source_merge_installs_or_enables_runtime"])
         self.assertTrue(
             contract["activation"]["hermes_target_installation_requires_separate_exact_live_cutover"]

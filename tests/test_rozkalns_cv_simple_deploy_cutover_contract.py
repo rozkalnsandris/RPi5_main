@@ -20,7 +20,7 @@ TARGET_ALIAS = "rozkalns-cv-rpi5"
 CANDIDATE_SOURCE_SHA = "d75863d0ce4cfdac0015150137523abbaccf5914"
 CANDIDATE_DIGEST = "sha256:ba9e24c82eccd833cfe42d6a4aa61ef76c584bcfd4c27efbced13c3a408d2a1a"
 LEGACY_SOURCE_SHA = "4986a6d80460bd6d7681c70e09e61a15e31007f4"
-COMPOSE_SHA = "deb4787f91d7a8c978d2ca1eb7b05d05ed0db28b467a295ddfcbbb55b2420de0"
+COMPOSE_SHA = "d4c7e9ed5c36245d92ce7da199194ec032c74de6ea03f2b522e31a43ffaf3277"
 PRIVATE_ENV_RELATIVE = "docker/cv/bot/.env"
 DATA_PATH_RELATIVE = "docker/cv/bot/data"
 
@@ -77,7 +77,9 @@ class RozkalnsCvSimpleDeployCutoverTests(unittest.TestCase):
         body = COMPOSE_PATH.read_bytes()
         self.assertEqual(hashlib.sha256(body).hexdigest(), COMPOSE_SHA)
         text = body.decode("utf-8")
-        self.assertIn("${ROZKALNS_CV_ENV_FILE:?", text)
+        self.assertIn("env_file:", text)
+        self.assertIn("../private/rozkalns-cv.env", text)
+        self.assertNotIn("ROZKALNS_CV_ENV_FILE", text)
         self.assertIn("source: ${ROZKALNS_CV_DATA_PATH:?", text)
         self.assertIn("target: /app/data", text)
         self.assertIn("create_host_path: false", text)
@@ -92,10 +94,10 @@ class RozkalnsCvSimpleDeployCutoverTests(unittest.TestCase):
         data = existing["persistent_data"]
         self.assertEqual(env["home_resolution"], "passwd_database")
         self.assertEqual(env["relative_path"], PRIVATE_ENV_RELATIVE)
-        self.assertEqual(env["compose_interpolation_variable"], "ROZKALNS_CV_ENV_FILE")
-        self.assertTrue(env["reused_in_place"])
         self.assertFalse(env["content_read_by_cutover_preflight"])
-        self.assertFalse(env["provisioned_or_copied_by_cutover"])
+        self.assertTrue(env["copied_to_private_boundary_during_cutover"])
+        self.assertFalse(env["source_modified_by_cutover"])
+        self.assertFalse(env["content_emitted_by_materializer"])
         self.assertEqual(data["home_resolution"], "passwd_database")
         self.assertEqual(data["relative_path"], DATA_PATH_RELATIVE)
         self.assertEqual(data["compose_interpolation_variable"], "ROZKALNS_CV_DATA_PATH")
@@ -115,21 +117,54 @@ class RozkalnsCvSimpleDeployCutoverTests(unittest.TestCase):
         host = load(HOST_CONTRACT_PATH)
         host_target = by(host["registry"]["reviewed_targets"], "target_alias", TARGET_ALIAS)
         self.assertEqual(host_target["compose_sha256"], COMPOSE_SHA)
-        self.assertEqual(host_target["runtime_home_resolution"], "passwd_database")
-        self.assertEqual(host_target["private_runtime_config_relative_path"], PRIVATE_ENV_RELATIVE)
+        self.assertEqual(host_target["persistent_data_home_resolution"], "passwd_database")
         self.assertEqual(host_target["persistent_data_relative_path"], DATA_PATH_RELATIVE)
         self.assertEqual(host_target["compose_interpolation_env_path"], "/etc/rozkalns-simple-deployer/compose/.env")
-        self.assertTrue(host_target["reuses_existing_runtime_inputs"])
+        self.assertEqual(
+            host_target["compose_interpolation_variables"],
+            {"persistent_data": "ROZKALNS_CV_DATA_PATH"},
+        )
+        self.assertEqual(
+            host_target["private_runtime_config_path"],
+            "/etc/rozkalns-simple-deployer/private/rozkalns-cv.env",
+        )
+        self.assertEqual(
+            host_target["private_runtime_config_materializer"],
+            "scripts/materialize-simple-deploy-rozkalns-cv-private-env-v1.py",
+        )
+        self.assertTrue(host_target["materializes_private_runtime_config_boundary"])
+        self.assertTrue(host_target["reuses_existing_persistent_data"])
 
         compat = load(COMPAT_PATH)
         adapter = compat["host_adapter"]
         self.assertEqual(adapter["compose_sha256"], COMPOSE_SHA)
-        self.assertEqual(adapter["runtime_home_resolution"], "passwd_database")
-        self.assertEqual(adapter["private_runtime_config_relative_path"], PRIVATE_ENV_RELATIVE)
+        self.assertEqual(adapter["persistent_data_home_resolution"], "passwd_database")
         self.assertEqual(adapter["persistent_data_relative_path"], DATA_PATH_RELATIVE)
         self.assertEqual(adapter["compose_interpolation_env_path"], "/etc/rozkalns-simple-deployer/compose/.env")
-        self.assertTrue(adapter["reuses_existing_runtime_inputs"])
-        self.assertTrue(compat["boundaries"]["existing_private_runtime_config_reused_in_place"])
+        self.assertEqual(
+            adapter["compose_interpolation_variables"],
+            {"persistent_data": "ROZKALNS_CV_DATA_PATH"},
+        )
+        self.assertEqual(
+            adapter["private_runtime_config_path"],
+            "/etc/rozkalns-simple-deployer/private/rozkalns-cv.env",
+        )
+        self.assertEqual(
+            adapter["private_runtime_config_materializer"],
+            "scripts/materialize-simple-deploy-rozkalns-cv-private-env-v1.py",
+        )
+        self.assertTrue(adapter["materializes_private_runtime_config_boundary"])
+        self.assertTrue(adapter["reuses_existing_persistent_data"])
+        self.assertFalse(compat["boundaries"]["existing_private_runtime_config_reused_in_place"])
+        self.assertTrue(
+            compat["boundaries"]["private_runtime_config_materialized_during_one_time_cutover"]
+        )
+        self.assertTrue(
+            compat["boundaries"]["private_runtime_config_source_remains_unchanged"]
+        )
+        self.assertTrue(
+            compat["boundaries"]["private_runtime_config_materialization_requires_exact_live_authority"]
+        )
         self.assertTrue(compat["boundaries"]["existing_persistent_data_reused_in_place"])
         self.assertFalse(
             compat["boundaries"]["private_runtime_config_provisioning_requires_separate_exact_authority"]
@@ -209,12 +244,20 @@ class RozkalnsCvSimpleDeployCutoverTests(unittest.TestCase):
         self.assertIn("issue:RPi5_main#821", deps)
         self.assertIn(f"consumer-source-sha:{CANDIDATE_SOURCE_SHA}", deps)
         self.assertIn(f"candidate-image-digest:{CANDIDATE_DIGEST}", deps)
-        self.assertIn("existing-private-env:passwd-home+docker/cv/bot/.env", deps)
+        self.assertIn("private-env-source:passwd-home+docker/cv/bot/.env", deps)
+        self.assertIn(
+            "private-env-boundary:/etc/rozkalns-simple-deployer/private/rozkalns-cv.env",
+            deps,
+        )
+        self.assertIn(
+            "private-env-materializer:scripts/materialize-simple-deploy-rozkalns-cv-private-env-v1.py",
+            deps,
+        )
         self.assertIn("existing-persistent-data:passwd-home+docker/cv/bot/data", deps)
         self.assertIn("compose-path-interpolation:/etc/rozkalns-simple-deployer/compose/.env", deps)
         text = json.dumps(operation)
         self.assertNotIn("data-adoption", text)
-        self.assertNotIn("/etc/rozkalns-simple-deployer/private/rozkalns-cv.env", text)
+        self.assertIn("/etc/rozkalns-simple-deployer/private/rozkalns-cv.env", text)
         self.assertNotIn("/var/lib/rozkalns-simple-deployer/rozkalns-cv/data", text)
 
 
