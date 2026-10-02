@@ -63,6 +63,10 @@ The current private-home candidate is Weather `f658041dfcd6f84994594ddac776b3cf9
 
 Any LIVE execution remains separately STRICT-gated; source acceptance does not authorize protected config access, Docker, systemd or runtime mutation.
 
+Private-home activation is split into two owner-gated phases. Phase A (`weather-private-home-cutover-v1.json`) is config/runtime-only: it stops the Weather ingest timer, performs the reviewed private config + registry/Compose + same-digest Weather recreate, verifies `private-home`, restores only the generic SIMPLE-DEPLOY timer, and intentionally leaves `rozkalns-weather-public-ingest.timer` enabled but inactive. Starting that ingest timer during Phase A is forbidden because private-home `ingest-public` is a production SQLite write path.
+
+Phase B (`weather-private-home-data-activation-v1.json`) is separately STRICT-gated for production data. It uses the existing fixed Weather-data helper `--ingest-once`, whose target lock and corpus-integrity guard remain authoritative. After an `INGEST_PASS` receipt, read-only evidence must show at least one home forecast run and value for each exact provider id `icon_d2`, `ecmwf_ifs` and `ecmwf_aifs` without exposing coordinates or forecast values. Only then may the already-enabled recurring ingest timer be started under explicit systemd plus standing recurring-write authority. Because the timer is `Persistent=true`, an immediate catch-up run after start is treated as an authorized recurring production write and must settle successfully before final acceptance.
+
 The #806 hardening adds two mandatory cutover quiesce boundaries:
 
 - `rozkalns-weather-public-ingest.service` must already be `inactive` before the first mutation. The cutover never stops or kills an active ingest run.
