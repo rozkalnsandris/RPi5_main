@@ -1,6 +1,7 @@
 # SIMPLE-DEPLOY v1 consumer Compose. The :production tag below is discovery/default metadata only.
 # Runtime mutation for the weather service must use the generic RPi5 deployer's frozen exact image@sha256 digest override.
 # Bootstrap/jobs are separately gated operations and must likewise bind a reviewed exact image digest when executed.
+# Private-home coordinates are supplied only through the fixed host-owned env_file below; values never belong in GitHub.
 services:
   schema-init:
     image: ghcr.io/rozkalnsandris/rozkalns_weather:production
@@ -26,8 +27,10 @@ services:
 
   weather:
     image: ghcr.io/rozkalnsandris/rozkalns_weather:production
+    env_file:
+      - /etc/rozkalns-simple-deployer/private/rozkalns-weather-private-home.env
     environment:
-      WEATHER_RUNTIME_MODE: public-only
+      WEATHER_RUNTIME_MODE: private-home
       WEATHER_CONFIG_PROFILE: deployment
       WEATHER_CONFIG_SCHEMA_VERSION: "1"
       DATABASE_INIT_MODE: require-existing
@@ -55,8 +58,10 @@ services:
   public-ingest:
     image: ghcr.io/rozkalnsandris/rozkalns_weather:production
     command: ["rozkalns-weather", "ingest-public"]
+    env_file:
+      - /etc/rozkalns-simple-deployer/private/rozkalns-weather-private-home.env
     environment:
-      WEATHER_RUNTIME_MODE: public-only
+      WEATHER_RUNTIME_MODE: private-home
       WEATHER_CONFIG_PROFILE: deployment
       WEATHER_CONFIG_SCHEMA_VERSION: "1"
       DATABASE_INIT_MODE: require-existing
@@ -77,8 +82,10 @@ services:
   readiness:
     image: ghcr.io/rozkalnsandris/rozkalns_weather:production
     command: ["rozkalns-weather", "readiness"]
+    env_file:
+      - /etc/rozkalns-simple-deployer/private/rozkalns-weather-private-home.env
     environment:
-      WEATHER_RUNTIME_MODE: public-only
+      WEATHER_RUNTIME_MODE: private-home
       WEATHER_CONFIG_PROFILE: deployment
       WEATHER_CONFIG_SCHEMA_VERSION: "1"
       DATABASE_INIT_MODE: require-existing
@@ -99,8 +106,10 @@ services:
   corpus-check:
     image: ghcr.io/rozkalnsandris/rozkalns_weather:production
     command: ["rozkalns-weather", "corpus-check"]
+    env_file:
+      - /etc/rozkalns-simple-deployer/private/rozkalns-weather-private-home.env
     environment:
-      WEATHER_RUNTIME_MODE: public-only
+      WEATHER_RUNTIME_MODE: private-home
       WEATHER_CONFIG_PROFILE: deployment
       WEATHER_CONFIG_SCHEMA_VERSION: "1"
       DATABASE_INIT_MODE: require-existing
