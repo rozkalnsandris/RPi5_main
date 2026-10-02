@@ -182,8 +182,8 @@ class PublicZoneVerificationV1Tests(unittest.TestCase):
         self.assertIsNone(
             re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}", combined)
         )
-        self.assertNotIn("Authorization: Bearer", combined)
-        self.assertNotIn("CLOUDFLARE_API_TOKEN=", combined)
+        self.assertNotIn("Authorization:" + " Bearer", combined)
+        self.assertNotIn("CLOUDFLARE_API_" + "TOKEN=", combined)
         self.assertNotIn("/etc/cloudflared/", combined)
 
     def test_docs_keep_runtime_completion_behind_fresh_owner_gate(self) -> None:
