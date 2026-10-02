@@ -566,7 +566,7 @@ class ContractTests(unittest.TestCase):
         self.assertNotIn("WEATHERNEXT_BIGQUERY_DATASET", compose)
 
         contract = json.loads((ROOT / "ops/deploy/weather-private-home-cutover-v1.json").read_text())
-        self.assertEqual(contract["issue"], 804)
+        self.assertEqual(contract["issue"], 810)
         self.assertFalse(contract["execution_enabled"])
         self.assertEqual(contract["target_alias"], "rozkalns-weather-public-rpi5")
         self.assertEqual(contract["candidate_release"]["source_sha"], "f658041dfcd6f84994594ddac776b3cf9702e174")
