@@ -14,6 +14,17 @@ resolve_gitleaks_release_arch() {
   esac
 }
 
+gitleaks_history_revision() {
+  printf '%s\n' "HEAD"
+}
+
+require_complete_head_history() {
+  local shallow
+  shallow="$(git rev-parse --is-shallow-repository 2>/dev/null)" || return 1
+  [[ "$shallow" == "false" ]] || return 1
+  git rev-parse --verify 'HEAD^{commit}' >/dev/null 2>&1
+}
+
 if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
   return 0
 fi
@@ -21,6 +32,12 @@ fi
 set -Eeuo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
+
+if ! require_complete_head_history; then
+  echo "Gitleaks CI: FAIL: complete HEAD history is required" >&2
+  exit 1
+fi
+history_revision="$(gitleaks_history_revision)"
 
 GITLEAKS_CONFIG=".gitleaks.toml"
 [[ -f "$GITLEAKS_CONFIG" && ! -L "$GITLEAKS_CONFIG" ]] || {
@@ -130,12 +147,12 @@ echo "Gitleaks CI: runtime image false-positive canary PASS"
 # asking this older known-good scanner to execute its own equivalent git-log
 # scan. This prevents a broken repository/history invocation from being treated
 # as a clean result.
-git log -p --all --no-ext-diff --no-textconv -- . >/dev/null
+git log -p "$history_revision" --no-ext-diff --no-textconv -- . >/dev/null
 
 "$tmp/gitleaks" detect \
   --source . \
   --config "$GITLEAKS_CONFIG" \
-  --log-opts="--all --no-ext-diff --no-textconv" \
+  --log-opts="$history_revision --no-ext-diff --no-textconv" \
   --redact \
   --no-banner \
   --no-color
