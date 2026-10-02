@@ -190,7 +190,7 @@ class RozkalnsCvCompatibilityTests(unittest.TestCase):
         self.assertEqual(target["forbidden_operations"], FORBIDDEN_OPERATIONS)
 
         host = json.loads(HOST_CONTRACT_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(host["registry"]["current_reviewed_targets"], 4)
+        self.assertEqual(host["registry"]["current_reviewed_targets"], 5)
         reviewed = {
             item["target_alias"]: item
             for item in host["registry"]["reviewed_targets"]
