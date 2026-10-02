@@ -1,0 +1,141 @@
+{
+  "schema": "rozkalns-weather.weathernext-private-gcs-host-runtime-source.v1",
+  "implementation_issue": 835,
+  "host_capability_id": "rpi5.weathernext-private-gcs-backend.v1",
+  "install_operation_id": "rpi5.weathernext-private-gcs-backend.install.v1",
+  "private_bridge_operation_id": "rozkalns-weather.weathernext-private-gcs-execution-bridge.v1",
+  "private_contract_id": "rozkalns-weather.weathernext-private-gcs-first-access.v1",
+  "target_alias": "rpi5",
+  "install_target_alias": "rpi5-weathernext-private-gcs-backend-install",
+  "authorization_class": "STRICT",
+  "ordinary_live_all_eligible": false,
+  "source_status": "SOURCE_READY_GCS_READONLY_PREFLIGHT",
+  "execution_enabled": false,
+  "runtime_activation_enabled": false,
+  "caller_authority": [
+    "authorization_issue_number"
+  ],
+  "authorization_binding": {
+    "source_repository": "rozkalnsandris/rozkalns_weather",
+    "operation_id": "rozkalns-weather.weathernext-private-gcs-execution-bridge.v1",
+    "contract_id": "rozkalns-weather.weathernext-private-gcs-first-access.v1",
+    "target_alias": "rpi5",
+    "mutation_budget": [
+      {
+        "category": "read_only_private_gcs",
+        "max_operations": 1
+      }
+    ],
+    "rollback_policy": "NONE",
+    "dependencies": [
+      "contract:<exact GCS contract id>",
+      "rpi5-main-sha:<exact reviewed RPi5_main SHA>",
+      "weathernext-init-utc:<exact UTC hour in YYYY-MM-DDTHH:00:00Z>"
+    ]
+  },
+  "install_package": {
+    "trusted_checkout": "/var/lib/rpi5-deploy/RPi5_main-weathernext-private-gcs-host-trusted",
+    "operator_source": "ops/bin/rpi5-weathernext-private-gcs-host",
+    "operator_destination": "/usr/local/sbin/rpi5-weathernext-private-gcs-host",
+    "activation_marker": "/var/lib/rpi5-deploy/weather-private-gcs-host/capability.json",
+    "source_files": [
+      "ops/lib/deploy_executor/weather_private_gcs_host_runtime.py",
+      "ops/lib/deploy_executor/weather_private_gcs_host_bindings.py",
+      "ops/bin/rpi5-weathernext-private-gcs-host",
+      "ops/deploy/weather-private-gcs-host-runtime.json"
+    ],
+    "exact_source_sha_required": true,
+    "no_follow_required": true,
+    "no_overwrite_or_exact_required": true
+  },
+  "runtime_identity": {
+    "weather_source_sha": "1fc7ea70efde88cb826c2e4a0baf26925078375c",
+    "runtime_closure_sha256": "4ef3d22c8ebc76901c3840d0304124ab390afaf3978883a4ad377a6da4991148",
+    "python_abi": "cp313",
+    "target_platform": "manylinux_2_28_aarch64",
+    "host_glibc_floor": "2.28"
+  },
+  "sanitized_host_surface": [
+    "host_capability_installed",
+    "host_capability_source_sha",
+    "application_staged",
+    "application_source_sha",
+    "runtime_present",
+    "runtime_source_sha",
+    "runtime_closure_sha256",
+    "runtime_python_abi",
+    "runtime_target_platform",
+    "host_glibc_compatible",
+    "auth_binding_state",
+    "read_only_first_access_authorized",
+    "read_only_first_access_executed"
+  ],
+  "protected_runtime_binding_policy": {
+    "binding_root": "/var/lib/rpi5-deploy/weather-private-gcs-bindings",
+    "auth_ready_marker": "google-auth.ready.json",
+    "private_binding_file": "first-access-private.json",
+    "credential_reference_root": "/var/lib/rpi5-deploy/weather-private-gcs-bindings/credentials",
+    "fixed_provider_class": "obstore.auth.google.GoogleCredentialProvider",
+    "ambient_adc_allowed": false,
+    "credential_reference_is_basename_only": true,
+    "project_identity_required": false,
+    "dataset_identity_required": false,
+    "analytics_hub_required": false,
+    "billing_project_header_required": false,
+    "protected_values_read_only_after_authorization_consumption": true
+  },
+  "runtime_composition": {
+    "concrete_canonical_facts_provider": true,
+    "fixed_public_source_evidence": true,
+    "owner_authorization_via_reviewed_private_control_plane": true,
+    "durable_one_shot_replay": true,
+    "sanitized_host_observer": true,
+    "fixed_application_stager": true,
+    "fixed_gcs_runtime_materializer": true,
+    "fixed_google_auth_slot": "weathernext-private-google-auth-v1",
+    "fixed_first_access_entrypoint": "rozkalns_weather.weathernext_gcs_transport.read_private_first_access_gcs",
+    "project_binding_stage_present": false,
+    "analytics_hub_stage_present": false,
+    "bigquery_stage_present": false
+  },
+  "first_access": {
+    "model_version_contract": "3.0.0",
+    "location_id": "station_05480",
+    "forecast_hours": 6,
+    "bucket": "weathernext3_statistics_spatial",
+    "required_permissions": [
+      "storage.objects.list",
+      "storage.objects.get"
+    ],
+    "materialized_scalar_ceiling": 288,
+    "requester_pays": false,
+    "home_scope_enabled": false,
+    "sqlite_write_enabled": false,
+    "coordinates_exposed": false,
+    "raw_values_exposed": false
+  },
+  "failure_semantics": {
+    "authorization_consumed_before_protected_credential_use": true,
+    "rollback_policy": "NONE",
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "alternate_init_source_or_bucket": false,
+    "error_or_drift": "STOP"
+  },
+  "execution_switches": {
+    "global_executor_execution_enabled": false,
+    "host_capability_installed": false,
+    "runtime_activation_enabled": false,
+    "credential_binding_execution_enabled": false,
+    "read_only_gcs_execution_enabled": false,
+    "project_binding_execution_enabled": false,
+    "analytics_hub_execution_enabled": false,
+    "bigquery_execution_enabled": false,
+    "sqlite_write_execution_enabled": false
+  },
+  "shared_bigquery_runtime_modified": false,
+  "source_merge_authorizes_live": false,
+  "production_mutation_started": false,
+  "next_gate_after_merge": "MINIMUM_SUFFICIENT_READ_ONLY_RPI5_GCS_PREFLIGHT"
+}

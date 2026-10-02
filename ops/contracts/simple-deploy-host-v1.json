@@ -1,7 +1,7 @@
 {
   "schema": "rozkalns.rpi5-main.simple-deploy-host.v1",
   "issue": 666,
-  "status": "WEATHER_ACTIVE_HERMES_DEALS_TECH_AND_CV_SOURCE_TARGETS_REGISTERED_LIVE_CUTOVERS_REQUIRED",
+  "status": "WEATHER_ACTIVE_HERMES_DEALS_TECH_CV_AND_COLORING_PAGES_SOURCE_TARGETS_REGISTERED_LIVE_CUTOVERS_REQUIRED",
   "shared_contract": {
     "repository": "rozkalnsandris/ops-workflows",
     "revision": "e05ed760791a127c7c9628696806ef39c9fe329c",
@@ -28,7 +28,7 @@
     "tracked_source": "ops/deploy/simple-deploy-targets-v1.json",
     "execution_enabled_in_source": true,
     "initial_targets": 1,
-    "current_reviewed_targets": 4,
+    "current_reviewed_targets": 5,
     "target_adoption_requires_tracked_source_change": true,
     "architecture": "linux/arm64",
     "pull_profiles": [
@@ -101,6 +101,19 @@
         "materializes_private_runtime_config_boundary": true,
         "persistent_data_home_resolution": "passwd_database",
         "reuses_existing_persistent_data": true
+      },
+      {
+        "target_alias": "coloring-pages-public-rpi5",
+        "consumer_repository": "rozkalnsandris/coloring-pages",
+        "consumer_contract_revision": "dd9204581d46be618f1c7b0a6bafde90bcb691df",
+        "source_registration_issue": 838,
+        "compose_source": "ops/deploy/simple-deploy-compose/coloring-pages-public.yml",
+        "compose_sha256": "77c71da44896b393002b7a13449d6fbaca76b38c6d982580d23156b674fe2941",
+        "liveness_url": "http://127.0.0.1:9191/health",
+        "readiness_state": "required",
+        "readiness_url": "http://127.0.0.1:9191/ready",
+        "wait_timeout_seconds": 180,
+        "registry_pull_profile": "public-anonymous-pull"
       }
     ]
   },
@@ -154,7 +167,9 @@
     "weather_private_home_runtime_config_requires_separate_exact_authority": true,
     "weather_private_home_cutover_requires_separate_exact_live_authority": true,
     "rozkalns_cv_private_runtime_config_materialized_during_cutover": true,
-    "rozkalns_cv_existing_persistent_data_reused_in_place": true
+    "rozkalns_cv_existing_persistent_data_reused_in_place": true,
+    "coloring_pages_source_registration_issue": 838,
+    "coloring_pages_target_installation_requires_separate_exact_live_cutover": true
   },
   "installer": {
     "issue": 672,

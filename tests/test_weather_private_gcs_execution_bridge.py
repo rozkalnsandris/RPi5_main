@@ -185,10 +185,10 @@ class WeatherPrivateGCSExecutionBridgeTests(unittest.TestCase):
         )
         self.assertEqual(receipts[3].stage, READ_ONLY_PRIVATE_GCS)
 
-    def test_source_readiness_keeps_execution_disabled_until_gcs_runtime_exists(self):
+    def test_source_readiness_tracks_runtime_source_but_keeps_execution_disabled(self):
         readiness = source_readiness()
         self.assertEqual(readiness["operation_id"], BRIDGE_OPERATION_ID)
-        self.assertFalse(readiness["gcs_runtime_materializer_implemented"])
+        self.assertTrue(readiness["gcs_runtime_materializer_implemented"])
         self.assertFalse(readiness["read_only_gcs_execution_enabled"])
         self.assertFalse(readiness["google_project_binding_execution_enabled"])
         self.assertFalse(readiness["analytics_hub_link_execution_enabled"])
