@@ -25,6 +25,8 @@ CONTRACT_PATH = Path("ops/contracts/admin-zone-verification-v1.json")
 EXPECTED_TUNNEL_NAME = "rpi5-tunnel"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 ALLOWED_CLASSES = {"lan", "loopback", "other", "unknown"}
+ALLOWED_FAILURE_CLASSES = {"permission", "tunnel_lookup", "configuration", "mapping", "binding", "unknown"}
+ALLOWED_TUNNEL_LOOKUP_DETAILS = {"http_error", "api_unsuccessful", "request_failed", "response_shape", "ambiguous", "id_invalid", "unknown"}
 
 
 def _load_contract(path: Path = CONTRACT_PATH) -> dict[str, Any]:
@@ -51,9 +53,16 @@ def _load_contract(path: Path = CONTRACT_PATH) -> dict[str, Any]:
     return decoded
 
 
-def _unknown_report(contract: dict[str, Any]) -> dict[str, Any]:
-    return {
+def _unknown_report(
+    contract: dict[str, Any],
+    failure_class: str,
+    tunnel_lookup_detail: str | None = None,
+) -> dict[str, Any]:
+    if failure_class not in ALLOWED_FAILURE_CLASSES:
+        failure_class = "unknown"
+    report: dict[str, Any] = {
         "result": "BLOCKED",
+        "failure_class": failure_class,
         "services": [
             {
                 "hostname": item["hostname"],
@@ -63,6 +72,38 @@ def _unknown_report(contract: dict[str, Any]) -> dict[str, Any]:
             for item in contract["service_projections"]
         ],
     }
+    if failure_class == "tunnel_lookup":
+        if tunnel_lookup_detail not in ALLOWED_TUNNEL_LOOKUP_DETAILS:
+            tunnel_lookup_detail = "unknown"
+        report["tunnel_lookup_detail"] = tunnel_lookup_detail
+    return report
+
+
+def _failure_class(stage: str, exc: Exception) -> str:
+    if isinstance(exc, AuditError) and str(exc) in {"cloudflare_api_http_401", "cloudflare_api_http_403"}:
+        return "permission"
+    if stage in {"tunnel_lookup", "configuration", "mapping", "binding"}:
+        return stage
+    return "unknown"
+
+
+def _tunnel_lookup_detail(exc: Exception) -> str:
+    if not isinstance(exc, AuditError):
+        return "unknown"
+    reason = str(exc)
+    if reason.startswith("cloudflare_api_http_"):
+        return "http_error"
+    if reason == "cloudflare_api_unsuccessful":
+        return "api_unsuccessful"
+    if reason == "cloudflare_api_request_failed":
+        return "request_failed"
+    if reason == "tunnel_list_shape_invalid":
+        return "response_shape"
+    if reason == "tunnel_lookup_ambiguous":
+        return "ambiguous"
+    if reason == "tunnel_id_invalid":
+        return "id_invalid"
+    return "unknown"
 
 
 def _validate_token(value: str) -> None:
@@ -177,13 +218,18 @@ def build_report(contract: dict[str, Any], config: dict[str, Any]) -> dict[str, 
         })
 
     overall = "PASS" if all(item["result"] == "PASS" for item in services) else "BLOCKED"
-    return {"result": overall, "services": services}
+    report = {"result": overall, "services": services}
+    if overall == "BLOCKED":
+        report["failure_class"] = "mapping"
+    return report
 
 
 def main() -> int:
     contract: dict[str, Any] | None = None
+    stage = "unknown"
     try:
         contract = _load_contract()
+        stage = "binding"
         if os.environ.get("GITHUB_ACTIONS") != "true":
             raise AuditError("github_actions_required")
         if os.environ.get("GITHUB_EVENT_NAME") != "issue_comment":
@@ -233,22 +279,35 @@ def main() -> int:
                 raise AuditError("account_binding_invalid")
             _validate_token(read_token)
             client = CloudflareGetClient(read_token, DEFAULT_API_BASE)
+            stage = "tunnel_lookup"
             tunnel_id = _list_tunnel(client, account_id)
+            stage = "configuration"
             config = _get_config(client, account_id, tunnel_id)
             read_token = ""
             account_id = ""
             tunnel_id = ""
+            stage = "mapping"
             report = build_report(contract, config)
             print(json.dumps(report, indent=2, sort_keys=True))
             return 0 if report["result"] == "PASS" else 3
         finally:
             read_token = ""
             account_id = ""
-    except (AuditError, json.JSONDecodeError, OSError):
+    except (AuditError, json.JSONDecodeError, OSError) as exc:
+        failure_class = _failure_class(stage, exc)
+        tunnel_lookup_detail = (
+            _tunnel_lookup_detail(exc) if failure_class == "tunnel_lookup" else None
+        )
         if contract is None:
-            print(json.dumps({"result": "BLOCKED"}, sort_keys=True))
+            print(json.dumps({"failure_class": "unknown", "result": "BLOCKED"}, sort_keys=True))
         else:
-            print(json.dumps(_unknown_report(contract), indent=2, sort_keys=True))
+            print(
+                json.dumps(
+                    _unknown_report(contract, failure_class, tunnel_lookup_detail),
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
         return 2
 
 

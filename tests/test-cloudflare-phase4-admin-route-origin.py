@@ -119,6 +119,7 @@ class Phase4AdminRouteOriginTests(unittest.TestCase):
         self.assertEqual(report["services"][0]["route_origin_class"], "unknown")
         self.assertEqual(report["services"][0]["result"], "UNKNOWN")
         self.assertEqual(report["result"], "BLOCKED")
+        self.assertEqual(report["failure_class"], "mapping")
 
     def test_duplicate_route_fails_closed_unknown(self) -> None:
         config = good_config(self.contract)
@@ -126,6 +127,7 @@ class Phase4AdminRouteOriginTests(unittest.TestCase):
         report = route.build_report(self.contract, config)
         self.assertEqual(report["services"][0]["route_origin_class"], "unknown")
         self.assertEqual(report["services"][0]["result"], "UNKNOWN")
+        self.assertEqual(report["failure_class"], "mapping")
 
     def test_unexpected_public_origin_is_other_and_fail(self) -> None:
         config = good_config(self.contract)
@@ -133,6 +135,43 @@ class Phase4AdminRouteOriginTests(unittest.TestCase):
         report = route.build_report(self.contract, config)
         self.assertEqual(report["services"][0]["route_origin_class"], "other")
         self.assertEqual(report["services"][0]["result"], "FAIL")
+        self.assertEqual(report["failure_class"], "mapping")
+
+    def test_failure_class_is_allowlisted_and_sanitized(self) -> None:
+        self.assertEqual(route._failure_class("tunnel_lookup", route.AuditError("cloudflare_api_http_403")), "permission")
+        self.assertEqual(route._failure_class("tunnel_lookup", route.AuditError("tunnel_lookup_ambiguous")), "tunnel_lookup")
+        self.assertEqual(route._failure_class("configuration", route.AuditError("configuration_missing")), "configuration")
+        self.assertEqual(route._failure_class("mapping", route.AuditError("ingress_shape_invalid")), "mapping")
+        self.assertEqual(route._failure_class("binding", route.AuditError("read_token_invalid")), "binding")
+        self.assertEqual(route._failure_class("unknown", OSError("private-detail")), "unknown")
+
+        report = route._unknown_report(self.contract, "configuration")
+        rendered = json.dumps(report, sort_keys=True)
+        self.assertEqual(report["failure_class"], "configuration")
+        self.assertNotIn("tunnel_lookup_detail", report)
+        self.assertNotIn("private-detail", rendered)
+
+    def test_tunnel_lookup_detail_is_allowlisted_and_sanitized(self) -> None:
+        cases = {
+            "cloudflare_api_http_500": "http_error",
+            "cloudflare_api_unsuccessful": "api_unsuccessful",
+            "cloudflare_api_request_failed": "request_failed",
+            "tunnel_list_shape_invalid": "response_shape",
+            "tunnel_lookup_ambiguous": "ambiguous",
+            "tunnel_id_invalid": "id_invalid",
+            "private-provider-detail": "unknown",
+        }
+        for reason, expected in cases.items():
+            with self.subTest(reason=reason):
+                self.assertEqual(route._tunnel_lookup_detail(route.AuditError(reason)), expected)
+
+        report = route._unknown_report(self.contract, "tunnel_lookup", "ambiguous")
+        self.assertEqual(report["tunnel_lookup_detail"], "ambiguous")
+        rendered = json.dumps(report, sort_keys=True)
+        self.assertNotIn("private-provider-detail", rendered)
+
+        clamped = route._unknown_report(self.contract, "tunnel_lookup", "private-detail")
+        self.assertEqual(clamped["tunnel_lookup_detail"], "unknown")
 
     def test_workflow_uses_only_existing_read_secret_lane(self) -> None:
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
@@ -151,6 +190,8 @@ class Phase4AdminRouteOriginTests(unittest.TestCase):
         self.assertIn('/configurations"', source)
         self.assertIn('"name": EXPECTED_TUNNEL_NAME', source)
         self.assertIn('"is_deleted": "false"', source)
+        self.assertIn('"failure_class": failure_class', source)
+        self.assertIn('report["tunnel_lookup_detail"] = tunnel_lookup_detail', source)
         for forbidden_output_key in (
             '"tunnel_id":',
             '"account_id":',

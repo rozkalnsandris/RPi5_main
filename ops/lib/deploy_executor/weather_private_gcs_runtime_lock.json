@@ -1,0 +1,213 @@
+{
+  "schema": "rozkalns-weather.weathernext-private-gcs-runtime-lock.v1",
+  "operation_id": "rozkalns-weather.weathernext-private-gcs-runtime-materialization.v1",
+  "weather_source_sha": "1fc7ea70efde88cb826c2e4a0baf26925078375c",
+  "weather_extra": "weathernext-gcs",
+  "upstream_requirements": [
+    "google-auth>=2.59.1,<3",
+    "obstore>=0.11.1,<0.12",
+    "requests>=2.34.2,<3",
+    "xarray>=2026.9,<2027",
+    "zarr>=3.4,<4"
+  ],
+  "resolved_roots": {
+    "google-auth": "2.59.1",
+    "obstore": "0.11.1",
+    "requests": "2.34.2",
+    "xarray": "2026.9.0",
+    "zarr": "3.4.0"
+  },
+  "target": {
+    "os": "linux",
+    "architecture": "aarch64",
+    "python_version": "3.13",
+    "python_abi": "cp313",
+    "pip_platform": "manylinux_2_28_aarch64",
+    "accepted_abi": [
+      "cp313",
+      "abi3",
+      "none"
+    ],
+    "accepted_wheel_platforms": [
+      "manylinux_2_28_aarch64",
+      "manylinux_2_27_aarch64",
+      "manylinux_2_26_aarch64",
+      "manylinux_2_25_aarch64",
+      "manylinux_2_24_aarch64",
+      "manylinux_2_23_aarch64",
+      "manylinux_2_22_aarch64",
+      "manylinux_2_21_aarch64",
+      "manylinux_2_20_aarch64",
+      "manylinux_2_19_aarch64",
+      "manylinux_2_18_aarch64",
+      "manylinux_2_17_aarch64",
+      "manylinux2014_aarch64"
+    ]
+  },
+  "package_count": 25,
+  "closure_sha256": "4ef3d22c8ebc76901c3840d0304124ab390afaf3978883a4ad377a6da4991148",
+  "packages": [
+    {
+      "filename": "certifi-2026.7.22-py3-none-any.whl",
+      "name": "certifi",
+      "sha256": "62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775",
+      "version": "2026.7.22"
+    },
+    {
+      "filename": "cffi-2.1.1-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.whl",
+      "name": "cffi",
+      "sha256": "f16c709686a78c727bbbf059f92b0bf41c6fc60deec706d2dc19f529175a6125",
+      "version": "2.1.1"
+    },
+    {
+      "filename": "charset_normalizer-3.5.2-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl",
+      "name": "charset-normalizer",
+      "sha256": "849df64e889b2e17230d58410a03dba311a65b163508fd33679b2b737d4b7858",
+      "version": "3.5.2"
+    },
+    {
+      "filename": "cryptography-50.0.2-cp311-abi3-manylinux_2_28_aarch64.whl",
+      "name": "cryptography",
+      "sha256": "f9f6143a8c75945eb960d9eb98905a441394abfa24afaae239d514ffb2586480",
+      "version": "50.0.2"
+    },
+    {
+      "filename": "donfig-0.8.1.post1-py3-none-any.whl",
+      "name": "donfig",
+      "sha256": "2a3175ce74a06109ff9307d90a230f81215cbac9a751f4d1c6194644b8204f9d",
+      "version": "0.8.1.post1"
+    },
+    {
+      "filename": "google_auth-2.59.1-py3-none-any.whl",
+      "name": "google-auth",
+      "sha256": "89c3f931683a482ac97e61df7eb9da5e08a91703f3c752b2377d72cfb7d69e6a",
+      "version": "2.59.1"
+    },
+    {
+      "filename": "google_crc32c-1.9.0-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.whl",
+      "name": "google-crc32c",
+      "sha256": "4488f1553a9ab7e86cdedc833374a7e904031803b995dc0bd0be48c271fa6556",
+      "version": "1.9.0"
+    },
+    {
+      "filename": "idna-3.20-py3-none-any.whl",
+      "name": "idna",
+      "sha256": "ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c",
+      "version": "3.20"
+    },
+    {
+      "filename": "msgspec-0.22.0-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl",
+      "name": "msgspec",
+      "sha256": "627bfdfe5a4b3d916b3360b30f4cddeee3a084f56593e33527c6872fa8322ff9",
+      "version": "0.22.0"
+    },
+    {
+      "filename": "numcodecs-0.17.0-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl",
+      "name": "numcodecs",
+      "sha256": "7065b3349b73d54785aa89e00d0b97d80f664e9056757929d28151f9208dc04c",
+      "version": "0.17.0"
+    },
+    {
+      "filename": "numpy-2.5.3-cp313-cp313-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl",
+      "name": "numpy",
+      "sha256": "c76d5dde9f445058f83d0c02af00557a4db91de9a9a57c0df87d1535001d654b",
+      "version": "2.5.3"
+    },
+    {
+      "filename": "obstore-0.11.1-cp311-abi3-manylinux_2_24_aarch64.whl",
+      "name": "obstore",
+      "sha256": "2ba3bceec4263b3a70eea873abedb82e03da9599f2326e80d6505cab0c10d401",
+      "version": "0.11.1"
+    },
+    {
+      "filename": "packaging-26.3-py3-none-any.whl",
+      "name": "packaging",
+      "sha256": "d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c",
+      "version": "26.3"
+    },
+    {
+      "filename": "pandas-3.0.6-cp313-cp313-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl",
+      "name": "pandas",
+      "sha256": "097090508a1dd335013d39106fc10b20f4fd4a171638e47b77d55798ed9dab6c",
+      "version": "3.0.6"
+    },
+    {
+      "filename": "pyasn1-0.6.4-py3-none-any.whl",
+      "name": "pyasn1",
+      "sha256": "deda9277cfd454080ec40b207fb6df82206a3a2688735233cdcd8d3d565f088b",
+      "version": "0.6.4"
+    },
+    {
+      "filename": "pyasn1_modules-0.4.2-py3-none-any.whl",
+      "name": "pyasn1-modules",
+      "sha256": "29253a9207ce32b64c3ac6600edc75368f98473906e8fd1043bd6b5b1de2c14a",
+      "version": "0.4.2"
+    },
+    {
+      "filename": "pycparser-3.0-py3-none-any.whl",
+      "name": "pycparser",
+      "sha256": "b727414169a36b7d524c1c3e31839a521725078d7b2ff038656844266160a992",
+      "version": "3.0"
+    },
+    {
+      "filename": "python_dateutil-2.9.0.post0-py2.py3-none-any.whl",
+      "name": "python-dateutil",
+      "sha256": "a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427",
+      "version": "2.9.0.post0"
+    },
+    {
+      "filename": "pyyaml-6.0.3-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl",
+      "name": "pyyaml",
+      "sha256": "ee2922902c45ae8ccada2c5b501ab86c36525b883eff4255313a253a3160861c",
+      "version": "6.0.3"
+    },
+    {
+      "filename": "requests-2.34.2-py3-none-any.whl",
+      "name": "requests",
+      "sha256": "2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0",
+      "version": "2.34.2"
+    },
+    {
+      "filename": "six-1.17.0-py2.py3-none-any.whl",
+      "name": "six",
+      "sha256": "4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274",
+      "version": "1.17.0"
+    },
+    {
+      "filename": "typing_extensions-4.16.0-py3-none-any.whl",
+      "name": "typing-extensions",
+      "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8",
+      "version": "4.16.0"
+    },
+    {
+      "filename": "urllib3-2.8.0-py3-none-any.whl",
+      "name": "urllib3",
+      "sha256": "0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3",
+      "version": "2.8.0"
+    },
+    {
+      "filename": "xarray-2026.9.0-py3-none-any.whl",
+      "name": "xarray",
+      "sha256": "fe349fa871628b1a0a5217af3fe1283a2862d5485156e6eda354fffb81c3bb7c",
+      "version": "2026.9.0"
+    },
+    {
+      "filename": "zarr-3.4.0-py3-none-any.whl",
+      "name": "zarr",
+      "sha256": "0a5e6c9b5c4139759e612556c7fb32c8ee4e4877a46b3556244093413eb72395",
+      "version": "3.4.0"
+    }
+  ],
+  "provenance": {
+    "registry": "https://pypi.org/simple",
+    "resolver": "pip download public proposal",
+    "resolved_at": "2026-10-02",
+    "proposal_pr": 834,
+    "proposal_head": "99211d725a7a23228206709e939c77bc0db7f3c4",
+    "note": "Public package provenance only; final CI re-downloads exact locked wheels with --no-deps and verifies every SHA-256."
+  },
+  "live_network_install_allowed": false,
+  "live_package_manager_install_allowed": false,
+  "credential_material_in_lock": false,
+  "private_google_identity_in_lock": false
+}

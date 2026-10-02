@@ -1,6 +1,6 @@
 # WeatherNext private GCS trusted execution boundary
 
-Status: **SOURCE READY / GCS RUNTIME MATERIALIZATION SOURCE REQUIRED**  
+Status: **SOURCE READY / GCS HOST WIRING REQUIRED**  
 Issue: `RPi5_main#825`  
 Weather gate: `rozkalns_weather#122`  
 Host capability identity: `rpi5.weathernext-private-gcs-backend.v1`
@@ -51,20 +51,29 @@ fallback, private-home scope or SQLite/corpus write.
 The bridge, envelope validation, canonical fact validation and fixed trusted
 adapter composition are implemented and fixture-testable.
 
-The **real GCS runtime materializer is not implemented in this issue**.
-Accordingly:
+Issue #828 now provides the reviewed **GCS-specific runtime materializer
+source** and deterministic offline wheelhouse closure. The closure is separate
+from the historical BigQuery runtime, contains 25 exact wheels rooted in `google-auth 2.59.1`, `obstore 0.11.1`,
+`requests 2.34.2`, `xarray 2026.9.0` and `zarr 3.4.0`, and is bound by
+closure SHA-256
+`4ef3d22c8ebc76901c3840d0304124ab390afaf3978883a4ad377a6da4991148`.
+Issue #833 regenerates this closure against Weather
+`1fc7ea70efde88cb826c2e4a0baf26925078375c` after the explicit Google
+credential-provider runtime dependencies were added.
+
+This does **not** install or wire the materializer on the host. Accordingly:
 
 - no host capability is installed;
 - no external entrypoint is enabled;
 - no credential is read;
 - no Google request can run through this source;
-- no runtime dependency is installed or materialized;
+- no runtime dependency is installed or materialized on RPi5;
 - source merge does not authorize LIVE.
 
-The next source prerequisite is an offline/reviewed GCS runtime closure for
-`obstore + xarray + zarr`, with no live-network installation. Only after that
-source prerequisite is merged may a future minimum-sufficient read-only runtime
-preflight determine whether staging/runtime/auth markers are present.
+The next source prerequisite is fixed host/runtime wiring plus sanitized
+readiness classification for the GCS runtime marker. Only after that source is
+merged may a future minimum-sufficient read-only runtime preflight determine
+whether application/runtime/auth prerequisites are present.
 
 ## Failure semantics
 

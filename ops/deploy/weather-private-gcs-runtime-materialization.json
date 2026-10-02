@@ -1,0 +1,62 @@
+{
+  "schema": "rpi5.weathernext-private-gcs-runtime-materialization-source.v1",
+  "implementation_issue": 833,
+  "operation_id": "rozkalns-weather.weathernext-private-gcs-runtime-materialization.v1",
+  "private_contract_id": "rozkalns-weather.weathernext-private-gcs-first-access.v1",
+  "mutation_class": "weathernext_private_gcs_runtime_materialization",
+  "source_repository": "rozkalnsandris/RPi5_main",
+  "weather_source_prerequisite": {
+    "repository": "rozkalnsandris/rozkalns_weather",
+    "source_sha": "1fc7ea70efde88cb826c2e4a0baf26925078375c",
+    "extra": "weathernext-gcs"
+  },
+  "target": {
+    "alias": "rpi5",
+    "os": "linux",
+    "architecture": "aarch64",
+    "python_version": "3.13",
+    "python_abi": "cp313",
+    "compatibility_floor": "manylinux_2_28_aarch64"
+  },
+  "lock": {
+    "path": "ops/lib/deploy_executor/weather_private_gcs_runtime_lock.json",
+    "package_count": 25,
+    "closure_sha256": "4ef3d22c8ebc76901c3840d0304124ab390afaf3978883a4ad377a6da4991148",
+    "exact_wheels_required": true
+  },
+  "artifact": {
+    "format": "normalized-wheelhouse-tar-v1",
+    "workflow": ".github/workflows/weathernext-private-gcs-runtime-source.yml",
+    "build_network": "public PyPI only",
+    "live_network_install_allowed": false,
+    "package_resolution_on_live_host": false
+  },
+  "fixed_roots": {
+    "artifact_cache": "/var/lib/rpi5-deploy/weather-private-gcs-runtime/artifacts",
+    "runtime": "/var/lib/rpi5-deploy/weather-private-gcs-runtime/runtime"
+  },
+  "authority": {
+    "source_only": true,
+    "execution_enabled": false,
+    "host_wiring_enabled": false,
+    "source_merge_authorizes_live": false,
+    "credential_read_authorized": false,
+    "google_gcs_request_authorized": false,
+    "bigquery_authorized": false,
+    "iam_or_quota_mutation_authorized": false,
+    "project_or_dataset_mutation_authorized": false,
+    "analytics_hub_mutation_authorized": false,
+    "sqlite_or_corpus_write_authorized": false,
+    "docker_or_systemd_mutation_authorized": false,
+    "network_control_mutation_authorized": false
+  },
+  "failure_semantics": {
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "alternate_artifact": false,
+    "source_build_fallback": false,
+    "conflicting_or_partial_state": "STOP"
+  },
+  "next_prerequisite": "gcs_host_runtime_wiring_and_sanitized_readiness"
+}
