@@ -26,6 +26,7 @@ EXPECTED_TUNNEL_NAME = "rpi5-tunnel"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 ALLOWED_CLASSES = {"lan", "loopback", "other", "unknown"}
 ALLOWED_FAILURE_CLASSES = {"permission", "tunnel_lookup", "configuration", "mapping", "binding", "unknown"}
+ALLOWED_TUNNEL_LOOKUP_DETAILS = {"http_error", "api_unsuccessful", "request_failed", "response_shape", "ambiguous", "id_invalid", "unknown"}
 
 
 def _load_contract(path: Path = CONTRACT_PATH) -> dict[str, Any]:
@@ -52,10 +53,14 @@ def _load_contract(path: Path = CONTRACT_PATH) -> dict[str, Any]:
     return decoded
 
 
-def _unknown_report(contract: dict[str, Any], failure_class: str) -> dict[str, Any]:
+def _unknown_report(
+    contract: dict[str, Any],
+    failure_class: str,
+    tunnel_lookup_detail: str | None = None,
+) -> dict[str, Any]:
     if failure_class not in ALLOWED_FAILURE_CLASSES:
         failure_class = "unknown"
-    return {
+    report: dict[str, Any] = {
         "result": "BLOCKED",
         "failure_class": failure_class,
         "services": [
@@ -67,6 +72,11 @@ def _unknown_report(contract: dict[str, Any], failure_class: str) -> dict[str, A
             for item in contract["service_projections"]
         ],
     }
+    if failure_class == "tunnel_lookup":
+        if tunnel_lookup_detail not in ALLOWED_TUNNEL_LOOKUP_DETAILS:
+            tunnel_lookup_detail = "unknown"
+        report["tunnel_lookup_detail"] = tunnel_lookup_detail
+    return report
 
 
 def _failure_class(stage: str, exc: Exception) -> str:
@@ -74,6 +84,25 @@ def _failure_class(stage: str, exc: Exception) -> str:
         return "permission"
     if stage in {"tunnel_lookup", "configuration", "mapping", "binding"}:
         return stage
+    return "unknown"
+
+
+def _tunnel_lookup_detail(exc: Exception) -> str:
+    if not isinstance(exc, AuditError):
+        return "unknown"
+    reason = str(exc)
+    if reason.startswith("cloudflare_api_http_"):
+        return "http_error"
+    if reason == "cloudflare_api_unsuccessful":
+        return "api_unsuccessful"
+    if reason == "cloudflare_api_request_failed":
+        return "request_failed"
+    if reason == "tunnel_list_shape_invalid":
+        return "response_shape"
+    if reason == "tunnel_lookup_ambiguous":
+        return "ambiguous"
+    if reason == "tunnel_id_invalid":
+        return "id_invalid"
     return "unknown"
 
 
@@ -266,10 +295,19 @@ def main() -> int:
             account_id = ""
     except (AuditError, json.JSONDecodeError, OSError) as exc:
         failure_class = _failure_class(stage, exc)
+        tunnel_lookup_detail = (
+            _tunnel_lookup_detail(exc) if failure_class == "tunnel_lookup" else None
+        )
         if contract is None:
             print(json.dumps({"failure_class": "unknown", "result": "BLOCKED"}, sort_keys=True))
         else:
-            print(json.dumps(_unknown_report(contract, failure_class), indent=2, sort_keys=True))
+            print(
+                json.dumps(
+                    _unknown_report(contract, failure_class, tunnel_lookup_detail),
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
         return 2
 
 
