@@ -1,6 +1,6 @@
 {
   "schema": "rozkalns-weather.weathernext-private-gcs-host-runtime-source.v1",
-  "implementation_issue": 835,
+  "implementation_issue": 843,
   "host_capability_id": "rpi5.weathernext-private-gcs-backend.v1",
   "install_operation_id": "rpi5.weathernext-private-gcs-backend.install.v1",
   "private_bridge_operation_id": "rozkalns-weather.weathernext-private-gcs-execution-bridge.v1",
@@ -9,7 +9,7 @@
   "install_target_alias": "rpi5-weathernext-private-gcs-backend-install",
   "authorization_class": "STRICT",
   "ordinary_live_all_eligible": false,
-  "source_status": "SOURCE_READY_GCS_READONLY_PREFLIGHT",
+  "source_status": "SOURCE_READY_GCS_PREREQUISITE_LIVE_GATE",
   "execution_enabled": false,
   "runtime_activation_enabled": false,
   "caller_authority": [
@@ -137,5 +137,13 @@
   "shared_bigquery_runtime_modified": false,
   "source_merge_authorizes_live": false,
   "production_mutation_started": false,
-  "next_gate_after_merge": "MINIMUM_SUFFICIENT_READ_ONLY_RPI5_GCS_PREFLIGHT"
+  "next_gate_after_merge": "COMPOSITE_STRICT_LIVE_GCS_PREREQUISITE_ROLLOUT",
+  "prerequisite_rollout": {
+    "manifest": "ops/deploy/weather-private-gcs-prerequisite-rollout.json",
+    "host_install_operation": "rpi5.weathernext-private-gcs-backend.install.v1",
+    "application_stage_operation": "rpi5.weathernext-private-application-stage.v1",
+    "runtime_materialization_operation": "rozkalns-weather.weathernext-private-gcs-runtime-materialization.v1",
+    "auth_binding_operation": "rpi5.weathernext-private-gcs-auth-binding.v1",
+    "real_gcs_request_included": false
+  }
 }

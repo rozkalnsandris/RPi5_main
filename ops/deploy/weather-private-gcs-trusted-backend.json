@@ -3,7 +3,7 @@
   "implementation_issue": 825,
   "weather_issue": 122,
   "source_only": true,
-  "source_status": "SOURCE_READY_GCS_READONLY_PREFLIGHT",
+  "source_status": "SOURCE_READY_GCS_PREREQUISITE_LIVE_GATE",
   "host_capability_id": "rpi5.weathernext-private-gcs-backend.v1",
   "bridge_operation_id": "rozkalns-weather.weathernext-private-gcs-execution-bridge.v1",
   "private_contract_id": "rozkalns-weather.weathernext-private-gcs-first-access.v1",
@@ -81,7 +81,8 @@
     "host_wiring_required": false,
     "host_runtime_source_implemented": true,
     "host_runtime": "ops/lib/deploy_executor/weather_private_gcs_host_runtime.py",
-    "host_bindings": "ops/lib/deploy_executor/weather_private_gcs_host_bindings.py"
+    "host_bindings": "ops/lib/deploy_executor/weather_private_gcs_host_bindings.py",
+    "prerequisite_rollout_source_implemented": true
   },
   "failure_semantics": {
     "automatic_retry": false,
@@ -102,5 +103,5 @@
     "network_mutation_authorized": false,
     "production_sqlite_or_corpus_write_authorized": false
   },
-  "next_gate_after_merge": "MINIMUM_SUFFICIENT_READ_ONLY_RPI5_GCS_PREFLIGHT"
+  "next_gate_after_merge": "COMPOSITE_STRICT_LIVE_GCS_PREREQUISITE_ROLLOUT"
 }
