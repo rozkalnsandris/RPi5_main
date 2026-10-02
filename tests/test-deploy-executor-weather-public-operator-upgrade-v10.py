@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "ops/lib"))
 from deploy_executor import weather_public_runtime_operator_upgrade_v10 as upgrade
 
 BASE_SHA = "3a4a95bccf13892c4cc9f997ee934c02b134ccb7"
+V10_TARGET_SHA = "d63c21006e0f19be9f0a4e30290f8e324212b594"
 V9_FROZEN_PATHS = (
     "ops/lib/deploy_executor/weather_public_runtime_operator_upgrade_v9.py",
     "ops/bin/rozkalns-weather-public-runtime-operator-upgrade-v9",
@@ -89,11 +90,10 @@ class WeatherOperatorUpgradeV10Tests(unittest.TestCase):
             self.assertFalse(ready[key], key)
 
     def test_exact_target_blob_and_source_diff_guard_are_bound(self) -> None:
-        head = git_text("rev-parse", "HEAD")
-        target_blob = git_text("rev-parse", f"{head}:{upgrade.TARGET_SOURCE}")
+        target_blob = git_text("rev-parse", f"{V10_TARGET_SHA}:{upgrade.TARGET_SOURCE}")
         self.assertEqual(target_blob, upgrade.TARGET_NEW_BLOB)
         artifacts = upgrade._install_artifacts(ROOT)
-        reviewed = upgrade._source_diff_guard(ROOT, head, artifacts)
+        reviewed = upgrade._source_diff_guard(ROOT, V10_TARGET_SHA, artifacts)
         self.assertEqual(reviewed, (ROOT / upgrade.TARGET_SOURCE).read_bytes())
         self.assertEqual(hashlib.sha256(reviewed).hexdigest(), upgrade.TARGET_NEW_SHA256)
 
