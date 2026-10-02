@@ -1,7 +1,7 @@
 {
   "schema": "rozkalns.rpi5-main.weather-private-home-cutover.v1",
   "schema_version": 1,
-  "issue": 804,
+  "issue": 810,
   "operation_id": "rpi5-main.weather-private-home-cutover.v1",
   "execution_enabled": false,
   "target_alias": "rozkalns-weather-public-rpi5",
@@ -9,9 +9,9 @@
   "one_time": true,
   "candidate_release": {
     "consumer_repository": "rozkalnsandris/rozkalns_weather",
-    "source_sha": "3826175b5bc2c4c7ad1fd5638741258506dd254d",
+    "source_sha": "f658041dfcd6f84994594ddac776b3cf9702e174",
     "image": "ghcr.io/rozkalnsandris/rozkalns_weather",
-    "image_digest": "sha256:7fd373b1c8e22b812b4ede3c0e124860511fa104f563ec77cd6cdd42d5a1d41b",
+    "image_digest": "sha256:fc40d6e824be1d0e0783b060f51d9a2a2d1dafdd0b0a3861b39ffdbadcd0dcc6",
     "production_pointer_must_match_candidate_before_mutation": true,
     "mutable_production_tag_is_authority": false
   },
@@ -22,7 +22,10 @@
     "home_coordinate_pair_present": false,
     "container_health": "healthy",
     "evidence_is_point_in_time_only": true,
-    "fresh_revalidation_required_before_live": true
+    "fresh_revalidation_required_before_live": true,
+    "previous_candidate_source_sha": "3826175b5bc2c4c7ad1fd5638741258506dd254d",
+    "previous_candidate_image_digest": "sha256:7fd373b1c8e22b812b4ede3c0e124860511fa104f563ec77cd6cdd42d5a1d41b",
+    "baseline_candidate_may_be_stale_after_release_refresh": true
   },
   "source_contract": {
     "reviewed_target_registry_path": "ops/deploy/simple-deploy-targets-v1.json",
@@ -37,7 +40,8 @@
     "private_runtime_config_path": "/etc/rozkalns-simple-deployer/private/rozkalns-weather-private-home.env",
     "owner_authorization_must_bind_exact_merged_rpi5_main_sha": true,
     "historical_public_only_baselines_unchanged": true,
-    "historical_public_compose_fixture": "ops/deploy/simple-deploy-compose/rozkalns-weather-public-v1.yml"
+    "historical_public_compose_fixture": "ops/deploy/simple-deploy-compose/rozkalns-weather-public-v1.yml",
+    "release_refresh_reason": "Weather #318 made require-existing application startup DB-read-only"
   },
   "protected_runtime_config": {
     "path": "/etc/rozkalns-simple-deployer/private/rozkalns-weather-private-home.env",
@@ -140,8 +144,8 @@
     "required_runtime_mode": "private-home",
     "required_home_coordinate_pair_present": true,
     "coordinate_values_must_not_be_output": true,
-    "required_image_digest": "sha256:7fd373b1c8e22b812b4ede3c0e124860511fa104f563ec77cd6cdd42d5a1d41b",
-    "required_source_sha": "3826175b5bc2c4c7ad1fd5638741258506dd254d",
+    "required_image_digest": "sha256:fc40d6e824be1d0e0783b060f51d9a2a2d1dafdd0b0a3861b39ffdbadcd0dcc6",
+    "required_source_sha": "f658041dfcd6f84994594ddac776b3cf9702e174",
     "recurring_public_ingest_command": "rozkalns-weather ingest-public",
     "weathernext_query_performed": false
   },
