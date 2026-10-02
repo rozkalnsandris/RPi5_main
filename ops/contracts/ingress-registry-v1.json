@@ -99,6 +99,31 @@
       }
     },
     {
+      "service_id": "coloring-pages",
+      "roadmap_aliases": [
+        "Coloring Pages"
+      ],
+      "hostname": "coloring.rozkalns.net",
+      "zone": "PUBLIC",
+      "current_origin_class": "loopback",
+      "desired_origin_class": "loopback",
+      "runtime_owner": "rozkalnsandris/RPi5_main",
+      "repository_owner": "rozkalnsandris/coloring-pages",
+      "access_required": false,
+      "access_class": "NONE",
+      "lan_break_glass": "forbidden",
+      "firewall_expectation": "no-lan-origin-required",
+      "health_check_method": "anonymous-http-contract",
+      "health_contract_ref": "ops/contracts/cloudflare-hostname-policy.yaml",
+      "recovery_ref": "docs/V13_CLOUDFLARE_TUNNEL_OWNERSHIP_CONTRACT.md",
+      "last_verified_evidence": {
+        "as_of": "2026-10-03",
+        "ref": "RPi5_main#841",
+        "kind": "fresh-read-only-loopback-preflight",
+        "runtime_current": false
+      }
+    },
+    {
       "service_id": "hermes-deals",
       "roadmap_aliases": [
         "Hermes Deals"
