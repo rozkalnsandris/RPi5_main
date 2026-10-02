@@ -13,11 +13,11 @@ SIMPLE-DEPLOY already owns the technical host reconciliation: resolve the immuta
 
 ## Docker Compose basis
 
-The RPi5-owned production adapter follows Docker Compose's ordinary host-path model:
+The RPi5-owned production adapter follows Docker Compose's ordinary host-path model. The resolved account-home prefix stays host-local: the source Compose uses required interpolation variables, and the one-time cutover writes only those two resolved path values into `/etc/rozkalns-simple-deployer/compose/.env` for future ordinary SIMPLE-DEPLOY runs:
 
 - `env_file` supplies container environment variables from an external file;
-- the existing private env is reused directly at `/home/andris/docker/cv/bot/.env`;
-- the existing durable data directory is bind-mounted directly from `/home/andris/docker/cv/bot/data`;
+- the existing private env is reused in place from fixed relative path `docker/cv/bot/.env` under the passwd-resolved legacy account home;
+- the existing durable data directory is reused in place from fixed relative path `docker/cv/bot/data` under that same passwd-resolved home;
 - the bind uses long syntax with `create_host_path: false`, so a missing source fails instead of silently creating an empty directory;
 - absolute paths are deliberate because this is a host-owned RPi5 production adapter, not a portable developer Compose file;
 - public non-secret provider literals are overridden in Compose as `LLM_BASE_URL=https://api.openai.com` and `LLM_MODEL=gpt-5.6-luna`; secret values remain external.
@@ -34,7 +34,7 @@ Official Docker references:
 - immutable image digest: `sha256:ba9e24c82eccd833cfe42d6a4aa61ef76c584bcfd4c27efbced13c3a408d2a1a`;
 - shared SIMPLE-DEPLOY workflow: `rozkalnsandris/ops-workflows@e05ed760791a127c7c9628696806ef39c9fe329c`;
 - target: `rozkalns-cv-rpi5`;
-- RPi5 Compose SHA-256: `a1ded554dc931c8451eb7e606c9cd9c6bac1c4b4126e56e533ad9ea38ee2c3d8`;
+- RPi5 Compose SHA-256: `deb4787f91d7a8c978d2ca1eb7b05d05ed0db28b467a295ddfcbbb55b2420de0`;
 - liveness: `http://127.0.0.1:8088/api/health`;
 - readiness: `http://127.0.0.1:8088/api/health/ready`.
 
