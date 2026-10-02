@@ -200,7 +200,7 @@ The supplemental budget remains distinct:
 - `sqlite.corpus-forecast-backfill <= 3`.
 
 The concrete canonical revalidator accepts only an authorization issue number.
-It revalidates owner identity, TTL, raw-body immutability, replay availability,
+It revalidates owner identity, authorization-time sanity, raw-body immutability, replay availability,
 READY queue binding, Weather source reachability and exact-SHA CI, exact current
 `RPi5_main` SHA and CI, the reviewed RPi5 minimum ancestor, fixed host/target,
 and the sanitized baseline token. Authorization and queue are read again before
@@ -366,7 +366,7 @@ environment, repository URL, helper identity, Docker target, systemd unit or
 SQLite path is added.
 
 Immediately before the first mutation the same human LIVE-AUTH must still pass
-owner/TTL/raw-body immutability, READY queue binding, Weather exact-SHA CI,
+owner/authorization-time-sanity/raw-body immutability, READY queue binding, Weather exact-SHA CI,
 exact-current `RPi5_main` SHA/CI/ancestor and sanitized host-baseline validation.
 The first mutation is the durable SQLite replay consume. From the instant that
 consume is attempted, authorization reuse is forbidden. Every later privileged

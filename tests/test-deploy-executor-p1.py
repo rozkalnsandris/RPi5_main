@@ -164,11 +164,25 @@ class ProtocolTests(unittest.TestCase):
         )
         self.assert_code("DUPLICATE_JSON_KEY", lambda: self.accept(issue))
 
-    def test_expired_rejected(self):
-        self.assert_code(
-            "AUTH_EXPIRED",
-            lambda: self.accept(server_time=SERVER_TIME + timedelta(seconds=301)),
+    def test_old_unconsumed_authorization_remains_valid(self):
+        accepted = self.accept(server_time=SERVER_TIME + timedelta(days=30))
+        self.assertEqual(accepted.request_id, "4a5da3f4-ccf1-4c63-ae8f-3eb8506f2b61")
+        validate_queue_binding(accepted, self.queue)
+
+    def test_old_authorization_can_be_revalidated_when_unchanged(self):
+        accepted = self.accept()
+        verify_authorization_unchanged(
+            accepted,
+            self.issue,
+            server_time=SERVER_TIME + timedelta(days=30),
+            governance_ok=True,
+            approved_operator_app_ids=frozenset(),
         )
+
+    def test_closed_authorization_revoked_before_consume(self):
+        issue = copy.deepcopy(self.issue)
+        issue["state"] = "closed"
+        self.assert_code("ISSUE_NOT_OPEN", lambda: self.accept(issue))
 
     def test_material_future_clock_skew_rejected(self):
         issue = copy.deepcopy(self.issue)

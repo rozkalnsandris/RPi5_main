@@ -47,7 +47,7 @@ def evidence() -> CanonicalRunnerSmokeInstallEvidence:
         registration_sha256=REGISTRATION_SHA256,
         request_body_sha256="2" * 64,
         identical_body_refetch=True,
-        ttl_valid=True,
+        authorization_time_valid=True,
         replay_available=True,
         live_authorized=True,
         rollback_policy="NONE",

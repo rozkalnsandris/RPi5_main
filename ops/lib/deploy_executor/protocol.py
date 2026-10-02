@@ -14,7 +14,6 @@ AUTHORIZATION_REPOSITORY = "rozkalnsandris/deploy-authorizations"
 AUTHORIZATION_REPOSITORY_ID = 1350486101
 OWNER_USER_ID = 277435981
 LIVE_AUTH_SCHEMA = "rozkalns.live-auth.v1"
-TTL_SECONDS = 600
 MAX_FUTURE_SKEW_SECONDS = 30
 MAX_BODY_BYTES = 16 * 1024
 
@@ -291,11 +290,9 @@ def _validate_server_time(created_at: datetime, server_time: datetime) -> None:
     if not isinstance(server_time, datetime) or server_time.tzinfo is None:
         _fail("SERVER_TIME_UNAVAILABLE", "server_time must be a timezone-aware datetime")
     now = server_time.astimezone(timezone.utc)
-    age = (now - created_at).total_seconds()
-    if age < -MAX_FUTURE_SKEW_SECONDS:
+    future_offset = (created_at - now).total_seconds()
+    if future_offset > MAX_FUTURE_SKEW_SECONDS:
         _fail("SERVER_TIME_SKEW", "authorization creation time is too far in the future")
-    if age > TTL_SECONDS:
-        _fail("AUTH_EXPIRED", f"authorization age {age:.0f}s exceeds {TTL_SECONDS}s TTL")
 
 
 def accept_issue(

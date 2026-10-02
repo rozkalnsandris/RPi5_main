@@ -55,7 +55,7 @@ def canonical_evidence() -> CanonicalRunnerSmokeInstallEvidence:
         registration_sha256=REGISTRATION_SHA256,
         request_body_sha256="2" * 64,
         identical_body_refetch=True,
-        ttl_valid=True,
+        authorization_time_valid=True,
         replay_available=True,
         live_authorized=True,
         rollback_policy="NONE",
@@ -114,14 +114,14 @@ class RunnerSmokeInstallConsumerTests(unittest.TestCase):
                 with self.assertRaises(RunnerSmokeInstallConsumerError):
                     prepare_install_live_envelope(17, canonical_revalidator=FakeCanonicalRevalidator(evidence))
 
-    def test_ttl_refetch_replay_and_ci_proofs_fail_closed(self):
+    def test_authorization_time_refetch_replay_and_ci_proofs_fail_closed(self):
         for field in (
             "rpi5_main_merged_reachable",
             "rpi5_main_ci_success",
             "hermes_source_merged_reachable",
             "hermes_source_ci_success",
             "identical_body_refetch",
-            "ttl_valid",
+            "authorization_time_valid",
             "replay_available",
             "live_authorized",
         ):
@@ -129,9 +129,19 @@ class RunnerSmokeInstallConsumerTests(unittest.TestCase):
                 evidence = replace(canonical_evidence(), **{field: False})
                 with self.assertRaises(RunnerSmokeInstallConsumerError):
                     prepare_install_live_envelope(17, canonical_revalidator=FakeCanonicalRevalidator(evidence))
-        stale = replace(canonical_evidence(), authorization_created_at="2026-09-12T15:00:00Z")
-        with self.assertRaises(RunnerSmokeInstallConsumerError):
-            prepare_install_live_envelope(17, canonical_revalidator=FakeCanonicalRevalidator(stale))
+        old = replace(canonical_evidence(), authorization_created_at="2026-09-12T15:00:00Z")
+        envelope = prepare_install_live_envelope(
+            17,
+            canonical_revalidator=FakeCanonicalRevalidator(old),
+        )
+        self.assertEqual(envelope["authorization_issue_number"], 17)
+
+        future = replace(canonical_evidence(), authorization_created_at="2026-09-12T16:01:00Z")
+        with self.assertRaisesRegex(RunnerSmokeInstallConsumerError, "timestamp"):
+            prepare_install_live_envelope(
+                17,
+                canonical_revalidator=FakeCanonicalRevalidator(future),
+            )
 
     def test_body_hash_and_rpi5_sha_are_canonical(self):
         for changed in (
@@ -189,6 +199,8 @@ class RunnerSmokeInstallConsumerTests(unittest.TestCase):
         self.assertFalse(consumer["external_entrypoint_enabled"])
         self.assertFalse(consumer["runtime_activation_enabled"])
         self.assertFalse(consumer["app_authored_allowed"])
+        self.assertNotIn("max_authorization_age_seconds", consumer)
+        self.assertEqual(consumer["max_future_authorization_skew_seconds"], 30)
         self.assertTrue(contract["handoff"]["live_envelope_consumer_implemented"])
         self.assertFalse(contract["handoff"]["live_envelope_consumer_enabled"])
         self.assertFalse(contract["handoff"]["source_merge_authorizes_live"])
