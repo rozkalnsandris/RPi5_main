@@ -477,7 +477,7 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(reviewed[0]["target_alias"], "rozkalns-weather-public-rpi5")
         self.assertEqual(
             reviewed[0]["consumer_contract_revision"],
-            "3826175b5bc2c4c7ad1fd5638741258506dd254d",
+            "f658041dfcd6f84994594ddac776b3cf9702e174",
         )
         self.assertEqual(reviewed[0]["wait_timeout_seconds"], 180)
         self.assertEqual(
@@ -566,11 +566,11 @@ class ContractTests(unittest.TestCase):
         self.assertNotIn("WEATHERNEXT_BIGQUERY_DATASET", compose)
 
         contract = json.loads((ROOT / "ops/deploy/weather-private-home-cutover-v1.json").read_text())
-        self.assertEqual(contract["issue"], 804)
+        self.assertEqual(contract["issue"], 812)
         self.assertFalse(contract["execution_enabled"])
         self.assertEqual(contract["target_alias"], "rozkalns-weather-public-rpi5")
-        self.assertEqual(contract["candidate_release"]["source_sha"], "3826175b5bc2c4c7ad1fd5638741258506dd254d")
-        self.assertEqual(contract["candidate_release"]["image_digest"], "sha256:7fd373b1c8e22b812b4ede3c0e124860511fa104f563ec77cd6cdd42d5a1d41b")
+        self.assertEqual(contract["candidate_release"]["source_sha"], "f658041dfcd6f84994594ddac776b3cf9702e174")
+        self.assertEqual(contract["candidate_release"]["image_digest"], "sha256:fc40d6e824be1d0e0783b060f51d9a2a2d1dafdd0b0a3861b39ffdbadcd0dcc6")
         self.assertEqual(contract["protected_runtime_config"]["path"], "/etc/rozkalns-simple-deployer/private/rozkalns-weather-private-home.env")
         self.assertEqual(contract["protected_runtime_config"]["exact_allowed_keys"], ["HOME_LAT", "HOME_LON"])
         self.assertTrue(contract["protected_runtime_config"]["exact_key_set_required"])
@@ -597,28 +597,21 @@ class ContractTests(unittest.TestCase):
         self.assertTrue(ingest["timer_stop_required_before_first_config_or_compose_mutation"])
         self.assertEqual(ingest["post_stop_required_timer_active_state"], "inactive")
         self.assertEqual(ingest["post_stop_required_service_active_state"], "inactive")
-        self.assertTrue(ingest["reenable_only_after_successful_runtime_verification"])
+        self.assertFalse(ingest["reenable_during_config_cutover"])
 
         failure = contract["failure_semantics"]
-        self.assertTrue(failure["before_final_timer_reenable_both_timers_intentionally_quiesced"])
-        self.assertTrue(failure["final_timer_reenable_is_last_mutation_phase"])
+        self.assertTrue(failure["weather_ingest_timer_remains_quiesced_after_successful_phase_a"])
+        self.assertTrue(failure["generic_timer_reenable_is_final_phase_a_mutation"])
         self.assertEqual(
-            failure["timer_reenable_failure_or_verification_ambiguity"],
+            failure["generic_timer_reenable_failure_or_verification_ambiguity"],
             "preserve_observed_states_and_stop_no_cleanup",
         )
-        self.assertFalse(failure["automatic_requiesce_after_reenable_failure"])
+        self.assertTrue(failure["automatic_weather_ingest_start_forbidden"])
 
         self.assertIn("stop-weather-ingest-timer", contract["ordered_steps"])
         self.assertIn(
-            "verify-weather-ingest-timer-inactive-and-service-inactive",
+            "verify-weather-ingest-timer-enabled-inactive-and-service-inactive",
             contract["ordered_steps"],
-        )
-        self.assertEqual(
-            contract["ordered_steps"][-2:],
-            [
-                "start-weather-ingest-and-generic-simple-deployer-timers-in-one-fixed-transaction",
-                "verify-both-timers-enabled-and-active",
-            ],
         )
         self.assertIn(
             "stop-or-kill-active-weather-ingest-service",
@@ -629,6 +622,70 @@ class ContractTests(unittest.TestCase):
             contract["forbidden_operations"],
         )
 
+        ingest = contract["recurring_ingest_quiesce"]
+        self.assertFalse(ingest["reenable_during_config_cutover"])
+        self.assertEqual(ingest["final_required_timer_enabled_state"], "enabled")
+        self.assertEqual(ingest["final_required_timer_active_state"], "inactive")
+        self.assertEqual(ingest["final_required_service_active_state"], "inactive")
+        self.assertEqual(
+            contract["ordered_steps"][-3:],
+            [
+                "start-generic-simple-deployer-timer",
+                "verify-generic-simple-deployer-timer-enabled-active-and-service-inactive",
+                "verify-weather-ingest-timer-remains-enabled-inactive-and-service-inactive",
+            ],
+        )
+        self.assertIn(
+            "start-weather-ingest-timer-during-config-cutover",
+            contract["forbidden_operations"],
+        )
+
+        rendered = json.dumps(contract, sort_keys=True)
+        self.assertNotIn("HOME_LAT=", rendered)
+        self.assertNotIn("HOME_LON=", rendered)
+
+    def test_weather_private_home_data_activation_is_separately_gated(self):
+        contract = json.loads(
+            (ROOT / "ops/deploy/weather-private-home-data-activation-v1.json").read_text()
+        )
+        self.assertEqual(contract["issue"], 812)
+        self.assertFalse(contract["execution_enabled"])
+        self.assertEqual(contract["phase"], "B")
+        self.assertEqual(
+            contract["candidate_release"]["source_sha"],
+            "f658041dfcd6f84994594ddac776b3cf9702e174",
+        )
+        self.assertEqual(
+            contract["candidate_release"]["image_digest"],
+            "sha256:fc40d6e824be1d0e0783b060f51d9a2a2d1dafdd0b0a3861b39ffdbadcd0dcc6",
+        )
+        self.assertTrue(
+            contract["authority"]["phase_a_authority_does_not_authorize_phase_b"]
+        )
+        self.assertTrue(
+            contract["authority"]["explicit_production_data_write_authority_required"]
+        )
+        self.assertTrue(
+            contract["authority"]["explicit_standing_recurring_write_authority_required"]
+        )
+        self.assertEqual(
+            contract["first_ingest"]["argv"],
+            ["--ingest-once"],
+        )
+        self.assertEqual(
+            contract["post_ingest_read_only_verification"]["required_forecast_providers"],
+            ["icon_d2", "ecmwf_ifs", "ecmwf_aifs"],
+        )
+        self.assertTrue(
+            contract["recurring_activation"]["persistent_timer_may_trigger_immediate_catchup"]
+        )
+        self.assertTrue(
+            contract["recurring_activation"]["standing_recurring_production_write_authority_required"]
+        )
+        self.assertFalse(contract["source_only_state"]["live_authorized"])
+        self.assertFalse(
+            contract["source_only_state"]["production_data_write_authorized"]
+        )
         rendered = json.dumps(contract, sort_keys=True)
         self.assertNotIn("HOME_LAT=", rendered)
         self.assertNotIn("HOME_LON=", rendered)
