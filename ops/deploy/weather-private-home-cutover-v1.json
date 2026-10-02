@@ -56,7 +56,18 @@
     "required_mode": "0640",
     "parent_directory_required_mode": "0750",
     "content_validation_requires_explicit_protected_runtime_authority": true,
-    "materialization_requires_explicit_config_mutation_authority": true
+    "materialization_requires_explicit_config_mutation_authority": true,
+    "parent_directory": {
+      "path": "/etc/rozkalns-simple-deployer/private",
+      "required_type": "directory-nonsymlink",
+      "required_owner": "root",
+      "required_group": "rozkalns-simple-deployer",
+      "required_mode": "0750",
+      "allowed_initial_state": "absent_or_exact_metadata",
+      "if_absent_materialization": "create_exact_directory_under_explicit_protected_config_authority",
+      "if_present_metadata_mismatch": "fail_pre_mutation",
+      "recursive_owner_or_permission_change_forbidden": true
+    }
   },
   "compose_runtime_contract": {
     "schema_init_runtime_mode": "public-only",
@@ -107,8 +118,20 @@
       "materialization": "atomic-owner-supplied-exact-key-file",
       "required_owner": "root",
       "required_group": "rozkalns-simple-deployer",
-      "required_mode": "0640"
-    }
+      "required_mode": "0640",
+      "parent_directory": {
+        "destination_path": "/etc/rozkalns-simple-deployer/private",
+        "materialization": "create-if-absent-only",
+        "required_owner": "root",
+        "required_group": "rozkalns-simple-deployer",
+        "required_mode": "0750",
+        "recursive_mutation_forbidden": true
+      }
+    },
+    "ingest_timer": "rozkalns-weather-public-ingest.timer",
+    "ingest_service": "rozkalns-weather-public-ingest.service",
+    "ingest_timer_must_be_stopped_before_first_installed_config_mutation": true,
+    "ingest_service_must_be_inactive_before_first_mutation": true
   },
   "verification": {
     "liveness_url": "http://127.0.0.1:9180/health",
@@ -127,8 +150,13 @@
     "revalidate-rpi5-main-exact-merged-source-and-ci",
     "revalidate-weather-source-digest-production-pointer-and-live-baseline",
     "revalidate-protected-runtime-config-input-authority-without-outputting-values",
+    "revalidate-private-config-parent-absent-or-exact-metadata",
+    "revalidate-weather-ingest-timer-enabled-active-and-service-inactive",
+    "stop-weather-ingest-timer",
+    "verify-weather-ingest-timer-inactive-and-service-inactive",
     "stop-generic-simple-deployer-timer",
     "verify-generic-simple-deployer-service-inactive",
+    "materialize-protected-private-config-parent-if-absent",
     "materialize-protected-private-home-env-atomically",
     "validate-private-home-env-exact-key-set-without-outputting-values",
     "materialize-weather-only-activation-registry",
@@ -137,7 +165,8 @@
     "force-recreate-only-weather-service-with-wait",
     "verify-exact-image-source-health-and-readiness",
     "verify-runtime-mode-private-home-and-home-pair-presence-without-values",
-    "start-generic-simple-deployer-timer"
+    "start-weather-ingest-and-generic-simple-deployer-timers-in-one-fixed-transaction",
+    "verify-both-timers-enabled-and-active"
   ],
   "failure_semantics": {
     "fail_closed": true,
@@ -147,11 +176,16 @@
     "automatic_rollback": false,
     "alternate_mutation_path": false,
     "preserve_minimum_sanitized_evidence": true,
-    "generic_timer_remains_stopped_on_post_mutation_failure": true
+    "before_final_timer_reenable_both_timers_intentionally_quiesced": true,
+    "final_timer_reenable_is_last_mutation_phase": true,
+    "timer_reenable_failure_or_verification_ambiguity": "preserve_observed_states_and_stop_no_cleanup",
+    "automatic_requiesce_after_reenable_failure": false
   },
   "forbidden_operations": [
     "coordinate-values-in-github-or-evidence",
     "google-or-weathernext-private-provider-activation",
+    "stop-or-kill-active-weather-ingest-service",
+    "recursive-private-config-directory-permission-or-ownership-change",
     "database-schema-data-mutation",
     "destructive-recovery",
     "cloudflare-dns-network-mutation",
@@ -165,5 +199,20 @@
     "protected_config_authorized": false,
     "runtime_mutation_permitted_by_this_file": false,
     "merge_authorized": false
+  },
+  "recurring_ingest_quiesce": {
+    "timer_unit": "rozkalns-weather-public-ingest.timer",
+    "service_unit": "rozkalns-weather-public-ingest.service",
+    "pre_mutation_required_timer_enabled_state": "enabled",
+    "pre_mutation_required_timer_active_state": "active",
+    "pre_mutation_required_service_active_state": "inactive",
+    "active_ingest_service_must_not_be_stopped_or_killed_by_cutover": true,
+    "timer_stop_required_before_first_config_or_compose_mutation": true,
+    "post_stop_required_timer_active_state": "inactive",
+    "post_stop_required_service_active_state": "inactive",
+    "reenable_only_after_successful_runtime_verification": true,
+    "reenable_operation": "fixed_systemctl_start_ingest_and_simple_deploy_timers",
+    "final_required_timer_active_state": "active",
+    "final_required_timer_enabled_state": "enabled"
   }
 }
