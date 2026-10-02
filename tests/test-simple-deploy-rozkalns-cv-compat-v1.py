@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TARGET_ALIAS = "rozkalns-cv-rpi5"
 CONSUMER_SHA = "139fb7046c77e1e58ec4a0876db3dddb96c85cb5"
 SHARED_SHA = "e05ed760791a127c7c9628696806ef39c9fe329c"
-COMPOSE_SHA = "a1ded554dc931c8451eb7e606c9cd9c6bac1c4b4126e56e533ad9ea38ee2c3d8"
+COMPOSE_SHA = "deb4787f91d7a8c978d2ca1eb7b05d05ed0db28b467a295ddfcbbb55b2420de0"
 COMPOSE_PATH = ROOT / "ops/deploy/simple-deploy-compose/rozkalns-cv.yml"
 CONTRACT_PATH = ROOT / "ops/contracts/simple-deploy-rozkalns-cv-compat-v1.json"
 HOST_CONTRACT_PATH = ROOT / "ops/contracts/simple-deploy-host-v1.json"
@@ -68,14 +68,12 @@ class RozkalnsCvCompatibilityTests(unittest.TestCase):
         self.assertEqual(adapter["project"], "rozkalns-cv")
         self.assertEqual(adapter["service"], "cv")
         self.assertEqual(adapter["registry_pull_profile"], "public-anonymous-pull")
-        self.assertEqual(
-            adapter["private_runtime_config_path"],
-            "/home/andris/docker/cv/bot/.env",
-        )
-        self.assertEqual(
-            adapter["persistent_data_path"],
-            "/home/andris/docker/cv/bot/data",
-        )
+        self.assertEqual(adapter["runtime_home_resolution"], "passwd_database")
+        self.assertEqual(adapter["private_runtime_config_relative_path"], "docker/cv/bot/.env")
+        self.assertEqual(adapter["persistent_data_relative_path"], "docker/cv/bot/data")
+        self.assertEqual(adapter["compose_interpolation_env_path"], "/etc/rozkalns-simple-deployer/compose/.env")
+        self.assertEqual(adapter["compose_interpolation_variables"]["private_env"], "ROZKALNS_CV_ENV_FILE")
+        self.assertEqual(adapter["compose_interpolation_variables"]["persistent_data"], "ROZKALNS_CV_DATA_PATH")
         self.assertFalse(adapter["persistent_data_create_host_path"])
         self.assertEqual(adapter["liveness_url"], "http://127.0.0.1:8088/api/health")
         self.assertEqual(adapter["readiness_state"], "required")
@@ -92,11 +90,9 @@ class RozkalnsCvCompatibilityTests(unittest.TestCase):
         self.assertIn("no-new-privileges:true", text)
         self.assertIn("cap_drop:", text)
         self.assertIn("pids_limit: 192", text)
-        self.assertIn("/home/andris/docker/cv/bot/.env", text)
-        self.assertIn(
-            "source: /home/andris/docker/cv/bot/data",
-            text,
-        )
+        self.assertIn("${ROZKALNS_CV_ENV_FILE:?", text)
+        self.assertIn("source: ${ROZKALNS_CV_DATA_PATH:?", text)
+        self.assertNotIn("/home/", text)
         self.assertIn("create_host_path: false", text)
         self.assertIn("http://127.0.0.1:8080/api/health/ready", text)
         self.assertNotIn("${", text)
@@ -176,8 +172,10 @@ class RozkalnsCvCompatibilityTests(unittest.TestCase):
         self.assertEqual(cv["compatibility_prerequisite_pr"], 741)
         self.assertEqual(cv["compose_sha256"], COMPOSE_SHA)
         self.assertFalse(cv["persistent_data_create_host_path"])
-        self.assertEqual(cv["private_runtime_config_path"], "/home/andris/docker/cv/bot/.env")
-        self.assertEqual(cv["persistent_data_path"], "/home/andris/docker/cv/bot/data")
+        self.assertEqual(cv["runtime_home_resolution"], "passwd_database")
+        self.assertEqual(cv["private_runtime_config_relative_path"], "docker/cv/bot/.env")
+        self.assertEqual(cv["persistent_data_relative_path"], "docker/cv/bot/data")
+        self.assertEqual(cv["compose_interpolation_env_path"], "/etc/rozkalns-simple-deployer/compose/.env")
         self.assertTrue(cv["reuses_existing_runtime_inputs"])
 
         activation = host["activation"]
