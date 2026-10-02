@@ -1,0 +1,147 @@
+{
+  "schema": "rozkalns.rpi5-main.public-zone-verification.v1",
+  "schema_version": 1,
+  "status": "source-verification-contract",
+  "roadmap_issue": 60,
+  "implementation_issue": 816,
+  "registry_ref": "ops/contracts/ingress-registry-v1.json",
+  "hostname_policy_ref": "ops/contracts/cloudflare-hostname-policy.yaml",
+  "shared_connector_contract_ref": "docs/V13_CLOUDFLARE_TUNNEL_OWNERSHIP_CONTRACT.md",
+  "authority": {
+    "source_merge_proves_runtime_state": false,
+    "source_merge_authorizes_runtime_verification": false,
+    "source_merge_authorizes_live_mutation": false,
+    "runtime_verification_requires_fresh_owner_authorization": true,
+    "remediation_requires_separate_issue_and_owner_authorization": true
+  },
+  "public_service_selection": {
+    "source": "registry-zone-filter",
+    "zone": "PUBLIC",
+    "expected_service_ids": [
+      "apex-web",
+      "hermes-tech"
+    ],
+    "expected_hostnames": [
+      "rozkalns.net",
+      "tech.rozkalns.net"
+    ]
+  },
+  "expected_policy": {
+    "access_required": false,
+    "access_class": "NONE",
+    "desired_origin_class": "loopback",
+    "lan_break_glass": "forbidden",
+    "firewall_expectation": "no-lan-origin-required",
+    "shared_connector_owner": "rozkalnsandris/RPi5_main"
+  },
+  "external_http_expectation": {
+    "scheme": "https",
+    "method": "GET",
+    "path": "/",
+    "accepted_status_classes": [
+      "2xx",
+      "3xx"
+    ],
+    "access_challenge_expected": false,
+    "response_body_collection_allowed": false,
+    "redirect_policy": "public-endpoint-only"
+  },
+  "connector_health_expectation": {
+    "unit_name": "cloudflared.service",
+    "service_active": true,
+    "service_enabled": true,
+    "exact_unit_source_ref": "ops/systemd/cloudflared.service",
+    "active_edge_connections": 4,
+    "metrics_payload_storage_allowed": false
+  },
+  "evidence_schema": {
+    "schema": "rozkalns.rpi5-main.public-zone-verification-evidence.v1",
+    "status": "sanitized-read-only-evidence",
+    "required_top_level_fields": [
+      "schema",
+      "observed_at",
+      "source_main_sha",
+      "services",
+      "shared_connector",
+      "result"
+    ],
+    "allowed_service_fields": [
+      "service_id",
+      "hostname",
+      "anonymous_http_status_class",
+      "anonymous_http_redirect_class",
+      "access_challenge_present",
+      "route_origin_class",
+      "lan_firewall_exception_present",
+      "result"
+    ],
+    "allowed_connector_fields": [
+      "service_active",
+      "service_enabled",
+      "unit_identity_matches",
+      "active_edge_connections",
+      "result"
+    ],
+    "allowed_result_values": [
+      "PASS",
+      "FAIL"
+    ],
+    "allowed_origin_classes": [
+      "loopback",
+      "lan",
+      "other",
+      "unknown"
+    ],
+    "allowed_http_status_classes": [
+      "2xx",
+      "3xx",
+      "4xx",
+      "5xx",
+      "network-error"
+    ],
+    "allowed_redirect_classes": [
+      "none",
+      "public-endpoint",
+      "access-challenge",
+      "other"
+    ],
+    "forbidden_evidence": [
+      "response-body",
+      "request-or-response-cookies",
+      "authorization-headers",
+      "account-identifiers",
+      "tunnel-identifiers",
+      "access-audience-values",
+      "credential-values",
+      "token-values",
+      "private-origin-coordinates",
+      "process-environments",
+      "application-config",
+      "application-logs"
+    ]
+  },
+  "pass_criteria": {
+    "per_service": {
+      "anonymous_http_status_class": [
+        "2xx",
+        "3xx"
+      ],
+      "anonymous_http_redirect_class": [
+        "none",
+        "public-endpoint"
+      ],
+      "access_challenge_present": false,
+      "route_origin_class": "loopback",
+      "lan_firewall_exception_present": false,
+      "result": "PASS"
+    },
+    "shared_connector": {
+      "service_active": true,
+      "service_enabled": true,
+      "unit_identity_matches": true,
+      "active_edge_connections": 4,
+      "result": "PASS"
+    },
+    "overall_result": "PASS"
+  }
+}
