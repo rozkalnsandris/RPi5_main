@@ -2,31 +2,27 @@
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
 from pathlib import Path
-import sys
 import unittest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_PATH = ROOT / "ops/deploy/rozkalns-cv-simple-deploy-cutover-v1.json"
 ACTIVATION_REGISTRY_PATH = ROOT / "ops/deploy/baselines/simple-deploy-targets-weather-cv-v1.json"
 TARGET_REGISTRY_PATH = ROOT / "ops/deploy/simple-deploy-targets-v1.json"
+HOST_CONTRACT_PATH = ROOT / "ops/contracts/simple-deploy-host-v1.json"
+COMPAT_PATH = ROOT / "ops/contracts/simple-deploy-rozkalns-cv-compat-v1.json"
 EXECUTOR_REGISTRY_PATH = ROOT / "ops/deploy/executor-operations.json"
 COMPOSE_PATH = ROOT / "ops/deploy/simple-deploy-compose/rozkalns-cv.yml"
 
 TARGET_ALIAS = "rozkalns-cv-rpi5"
-CANDIDATE_SOURCE_SHA = "645717e63596a6ece415d9f4ef69367b9e6ecafc"
-CANDIDATE_DIGEST = "sha256:bc6cb2ab3c0e944db49b6c403212802d5289eabaf77db4dd30082856a9fdaadc"
+CANDIDATE_SOURCE_SHA = "d75863d0ce4cfdac0015150137523abbaccf5914"
+CANDIDATE_DIGEST = "sha256:ba9e24c82eccd833cfe42d6a4aa61ef76c584bcfd4c27efbced13c3a408d2a1a"
 LEGACY_SOURCE_SHA = "4986a6d80460bd6d7681c70e09e61a15e31007f4"
-COMPOSE_SHA = "be7f021c9d64192905c908bcbb127dbc7ec1c2514d898f05cbf8de4c44ffa4a2"
-
-MODULE_PATH = ROOT / "ops/lib/deploy_executor/simple_deploy_v1.py"
-spec = importlib.util.spec_from_file_location("simple_deploy_v1_cv_cutover", MODULE_PATH)
-assert spec and spec.loader
-sd = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = sd
-spec.loader.exec_module(sd)
+COMPOSE_SHA = "33174cd778df2c1e4012735c5b01ba4af2d6873ec14f3f1ade985f2f2d62b7f0"
+PRIVATE_ENV = "/home/andris/docker/cv/bot/.env"
+DATA_PATH = "/home/andris/docker/cv/bot/data"
 
 
 def load(path: Path):
@@ -41,157 +37,112 @@ class RozkalnsCvSimpleDeployCutoverTests(unittest.TestCase):
     def setUp(self) -> None:
         self.contract = load(CONTRACT_PATH)
 
-    def test_contract_is_strict_source_only_one_time_and_fail_closed(self) -> None:
+    def test_contract_is_one_strict_source_only_adoption(self) -> None:
         self.assertEqual(
             self.contract["schema"],
             "rozkalns.rpi5-main.rozkalns-cv-simple-deploy-cutover.v1",
         )
-        self.assertEqual(self.contract["issue"], 802)
+        self.assertEqual(self.contract["issue"], 821)
         self.assertEqual(
             self.contract["operation_id"],
             "rpi5-main.rozkalns-cv-simple-deploy-cutover.v1",
         )
         self.assertFalse(self.contract["execution_enabled"])
-        self.assertEqual(self.contract["target_alias"], TARGET_ALIAS)
         self.assertEqual(self.contract["authorization_class"], "STRICT")
         self.assertTrue(self.contract["one_time"])
         self.assertEqual(
-            self.contract["source_only_state"],
-            {
-                "live_authorized": False,
-                "runtime_mutation_permitted_by_this_file": False,
-                "protected_prerequisite_materialization_authorized": False,
-                "merge_authorized": False,
-            },
+            self.contract["operator_model"],
+            "consumer-merge -> SIMPLE-DEPLOY -> production",
         )
-        self.assertTrue(self.contract["failure_semantics"]["fail_closed"])
-        for key in (
-            "automatic_retry",
-            "automatic_cleanup",
-            "automatic_rollback",
-            "alternate_mutation_path",
-        ):
-            self.assertFalse(self.contract["failure_semantics"][key], key)
-        self.assertTrue(
-            self.contract["failure_semantics"][
-                "generic_timer_remains_stopped_on_post_mutation_failure"
-            ]
-        )
+        state = self.contract["source_only_state"]
+        self.assertFalse(state["live_authorized"])
+        self.assertFalse(state["runtime_mutation_permitted_by_this_file"])
+        self.assertFalse(state["protected_runtime_content_access_authorized"])
+        self.assertFalse(state["merge_authorized"])
 
-    def test_candidate_release_is_exact_sha_digest_and_publication(self) -> None:
+    def test_candidate_is_current_exact_release(self) -> None:
         candidate = self.contract["candidate_release"]
         self.assertEqual(candidate["consumer_repository"], "rozkalnsandris/rozkalns-cv")
         self.assertEqual(candidate["source_sha"], CANDIDATE_SOURCE_SHA)
-        self.assertEqual(candidate["simple_deploy_run_id"], 36241004385)
-        self.assertEqual(candidate["image"], "ghcr.io/rozkalnsandris/rozkalns-cv")
         self.assertEqual(candidate["image_digest"], CANDIDATE_DIGEST)
-        self.assertEqual(
-            candidate["shared_workflow_sha"],
-            "e05ed760791a127c7c9628696806ef39c9fe329c",
-        )
         self.assertTrue(candidate["production_pointer_must_match_candidate_before_mutation"])
         self.assertFalse(candidate["mutable_production_tag_is_authority"])
 
-    def test_activation_registry_contains_only_weather_and_cv(self) -> None:
-        activation = load(ACTIVATION_REGISTRY_PATH)
-        canonical = load(TARGET_REGISTRY_PATH)
-        parsed = sd.load_registry(ACTIVATION_REGISTRY_PATH)
-        self.assertTrue(parsed.execution_enabled)
-        aliases = [item["target_alias"] for item in activation["targets"]]
-        self.assertEqual(aliases, ["rozkalns-weather-public-rpi5", TARGET_ALIAS])
-        self.assertNotIn("hermes-deals", aliases)
-        self.assertNotIn("hermes-tech-public-rpi5", aliases)
+        apply = self.contract["generic_simple_deploy_apply"]
+        self.assertEqual(apply["target_alias"], TARGET_ALIAS)
+        self.assertEqual(apply["expected_consumer_source_sha"], CANDIDATE_SOURCE_SHA)
+        self.assertEqual(apply["expected_image_digest"], CANDIDATE_DIGEST)
 
-        canonical_by_alias = {
-            item["target_alias"]: item for item in canonical["targets"]
-        }
-        for item in activation["targets"]:
-            self.assertEqual(item, canonical_by_alias[item["target_alias"]])
-
-    def test_compose_and_host_materialization_are_exact_and_bounded(self) -> None:
+    def test_compose_reuses_existing_env_and_data_in_place(self) -> None:
         body = COMPOSE_PATH.read_bytes()
         self.assertEqual(hashlib.sha256(body).hexdigest(), COMPOSE_SHA)
-        source = self.contract["source_contract"]
-        self.assertEqual(
-            source["activation_registry_path"],
-            "ops/deploy/baselines/simple-deploy-targets-weather-cv-v1.json",
-        )
-        self.assertEqual(
-            source["activation_registry_exact_aliases"],
-            ["rozkalns-weather-public-rpi5", TARGET_ALIAS],
-        )
-        self.assertEqual(source["compose_source_sha256"], COMPOSE_SHA)
+        text = body.decode("utf-8")
+        self.assertIn(f"- {PRIVATE_ENV}", text)
+        self.assertIn(f"source: {DATA_PATH}", text)
+        self.assertIn("target: /app/data", text)
+        self.assertIn("create_host_path: false", text)
+        self.assertIn("LLM_BASE_URL: https://api.openai.com", text)
+        self.assertIn("LLM_MODEL: gpt-5.6-luna", text)
+        self.assertNotIn("/etc/rozkalns-simple-deployer/private/rozkalns-cv.env", text)
+        self.assertNotIn("/var/lib/rozkalns-simple-deployer/rozkalns-cv/data", text)
 
-        materialization = self.contract["host_materialization"]
-        self.assertEqual(
-            materialization["activation_registry"]["destination_path"],
-            "/etc/rozkalns-simple-deployer/targets.json",
-        )
-        self.assertEqual(materialization["activation_registry"]["required_mode"], "0444")
-        self.assertEqual(
-            materialization["identity"]["destination_path"],
-            "/etc/rozkalns-simple-deployer/identity.json",
-        )
-        self.assertEqual(
-            materialization["identity"]["source_sha"],
-            "EXACT_AUTHORIZED_RPI5_MAIN_SHA",
-        )
-        self.assertEqual(
-            materialization["compose"]["destination_path"],
-            "/etc/rozkalns-simple-deployer/compose/rozkalns-cv.yml",
-        )
-        self.assertEqual(materialization["compose"]["required_mode"], "0444")
-
-    def test_private_config_is_precondition_and_data_is_adopted_inside_cutover(self) -> None:
-        protected = self.contract["protected_prerequisites"]
-        config = protected["private_runtime_config"]
-        self.assertEqual(
-            config["path"],
-            "/etc/rozkalns-simple-deployer/private/rozkalns-cv.env",
-        )
-        self.assertTrue(config["required_before_cutover"])
-        self.assertFalse(config["content_read_by_cutover_preflight"])
-        self.assertFalse(config["provisioned_by_cutover"])
-        self.assertEqual(config["required_group"], "rozkalns-simple-deployer")
-        self.assertEqual(config["required_mode"], "0640")
-        self.assertEqual(
-            config["public_provider_literals"],
-            {
-                "LLM_BASE_URL": "https://api.openai.com",
-                "LLM_MODEL": "gpt-5.6-luna",
-            },
-        )
-        self.assertTrue(config["provider_secret_must_not_be_inferred_from_legacy"])
-
-        data = protected["persistent_data"]
-        self.assertEqual(
-            data["path"],
-            "/var/lib/rozkalns-simple-deployer/rozkalns-cv/data",
-        )
-        self.assertFalse(data["required_before_cutover"])
-        self.assertTrue(data["materialized_during_cutover"])
+        existing = self.contract["existing_runtime_inputs"]
+        env = existing["private_env"]
+        data = existing["persistent_data"]
+        self.assertEqual(env["path"], PRIVATE_ENV)
+        self.assertTrue(env["reused_in_place"])
+        self.assertFalse(env["content_read_by_cutover_preflight"])
+        self.assertFalse(env["provisioned_or_copied_by_cutover"])
+        self.assertEqual(data["path"], DATA_PATH)
+        self.assertTrue(data["reused_in_place"])
         self.assertFalse(data["create_host_path"])
-        self.assertEqual(data["legacy_source_owner_user"], "andris")
-        self.assertEqual(data["legacy_source_home_resolution"], "passwd_database")
-        self.assertEqual(data["legacy_source_relative_path"], "docker/cv/bot/data")
+        self.assertFalse(data["copied_migrated_or_reowned_by_cutover"])
         self.assertTrue(data["storage_implementation_identical"])
-        self.assertTrue(data["cvbot_must_be_stopped_before_copy"])
-        self.assertFalse(data["cvbot_restart_on_success_path"])
-        self.assertFalse(data["database_queries_or_schema_migrations"])
-        self.assertFalse(data["separate_pre_cutover_data_authority_required"])
+        self.assertFalse(data["database_schema_migration_required"])
+        self.assertEqual((data["application_uid"], data["application_gid"]), (10001, 10001))
 
-        forbidden = self.contract["forbidden_operations"]
-        self.assertIn("private-runtime-config-provisioning-or-content-read", forbidden)
-        self.assertIn("persistent-data-mutation-beyond-reviewed-byte-copy-adoption", forbidden)
-        self.assertIn("database-query-schema-migration-or-content-transformation", forbidden)
+    def test_all_registered_cv_compose_identities_match(self) -> None:
+        for path in (TARGET_REGISTRY_PATH, ACTIVATION_REGISTRY_PATH):
+            registry = load(path)
+            target = by(registry["targets"], "target_alias", TARGET_ALIAS)
+            self.assertEqual(target["compose"]["file_sha256"], COMPOSE_SHA)
 
-    def test_legacy_baseline_and_port_transition_are_exact(self) -> None:
+        host = load(HOST_CONTRACT_PATH)
+        host_target = by(host["registry"]["reviewed_targets"], "target_alias", TARGET_ALIAS)
+        self.assertEqual(host_target["compose_sha256"], COMPOSE_SHA)
+        self.assertEqual(host_target["private_runtime_config_path"], PRIVATE_ENV)
+        self.assertEqual(host_target["persistent_data_path"], DATA_PATH)
+        self.assertTrue(host_target["reuses_existing_runtime_inputs"])
+
+        compat = load(COMPAT_PATH)
+        adapter = compat["host_adapter"]
+        self.assertEqual(adapter["compose_sha256"], COMPOSE_SHA)
+        self.assertEqual(adapter["private_runtime_config_path"], PRIVATE_ENV)
+        self.assertEqual(adapter["persistent_data_path"], DATA_PATH)
+        self.assertTrue(adapter["reuses_existing_runtime_inputs"])
+        self.assertTrue(compat["boundaries"]["existing_private_runtime_config_reused_in_place"])
+        self.assertTrue(compat["boundaries"]["existing_persistent_data_reused_in_place"])
+        self.assertFalse(
+            compat["boundaries"]["private_runtime_config_provisioning_requires_separate_exact_authority"]
+        )
+        self.assertFalse(
+            compat["boundaries"]["persistent_data_adoption_requires_separate_exact_data_authority"]
+        )
+
+    def test_data_adoption_copy_machinery_is_removed(self) -> None:
+        self.assertFalse(
+            (ROOT / "ops/contracts/simple-deploy-rozkalns-cv-data-adoption-v1.json").exists()
+        )
+        self.assertFalse(
+            (ROOT / "scripts/adopt-simple-deploy-rozkalns-cv-data-v1.py").exists()
+        )
+        self.assertFalse(
+            (ROOT / "tests/test_rozkalns_cv_simple_deploy_data_adoption.py").exists()
+        )
+
+    def test_legacy_transition_is_small_and_fail_closed(self) -> None:
         legacy = self.contract["legacy_runtime"]
         self.assertEqual(legacy["required_production_sha"], LEGACY_SOURCE_SHA)
-        self.assertEqual(
-            legacy["production_state_path"],
-            "/var/lib/rozkalns-cv-deploy/current-sha",
-        )
         containers = {item["name"]: item for item in legacy["containers"]}
         self.assertEqual(set(containers), {"cv", "cvbot"})
         self.assertEqual(containers["cv"]["required_port_bind"], "127.0.0.1:8088")
@@ -199,78 +150,43 @@ class RozkalnsCvSimpleDeployCutoverTests(unittest.TestCase):
             containers["cvbot"]["required_runtime_image"],
             f"rozkalns-cv-cvbot:{LEGACY_SOURCE_SHA}",
         )
-        self.assertEqual(legacy["pull_timer"]["required_enabled_state"], "disabled")
-        self.assertEqual(legacy["pull_timer"]["required_active_state"], "inactive")
-        self.assertEqual(legacy["pull_service"]["required_active_state"], "inactive")
-        self.assertEqual(legacy["legacy_network_mutation"], "forbidden")
-        self.assertEqual(legacy["legacy_data_or_config_mutation"], "forbidden")
 
-        self.assertEqual(
-            self.contract["port_ownership_transition"],
-            {
-                "bind": "127.0.0.1:8088",
-                "required_before_owner": "container:cv",
-                "required_between_state": "unbound",
-                "required_after_owner": "compose:rozkalns-cv/cv",
-                "parallel_bind_forbidden": True,
-            },
-        )
-
-    def test_order_quiesces_timer_then_stops_writer_adopts_data_and_retires_legacy(self) -> None:
         steps = self.contract["ordered_steps"]
-        config = steps.index(
-            "revalidate-private-runtime-config-metadata-only-prerequisite-present"
+        joined = "\n".join(steps)
+        self.assertNotIn("data-adoption", joined)
+        self.assertNotIn("persistent-data-through", joined)
+        self.assertLess(
+            steps.index("stop-and-remove-exact-legacy-cvbot-and-cv-containers"),
+            steps.index("verify-127.0.0.1:8088-unbound"),
         )
-        data_meta = steps.index(
-            "revalidate-data-adoption-source-and-destination-metadata-only"
+        self.assertLess(
+            steps.index("verify-127.0.0.1:8088-unbound"),
+            steps.index("apply-rozkalns-cv-rpi5-through-generic-simple-deploy"),
         )
-        timer_stop = steps.index("stop-generic-simple-deployer.timer")
-        registry = steps.index("materialize-weather-plus-cv-activation-registry")
-        prepull = steps.index("prepull-exact-candidate-image-digest")
-        stop_cvbot = steps.index("stop-legacy-cvbot-container")
-        adopt = steps.index(
-            "materialize-persistent-data-through-reviewed-byte-copy-helper"
-        )
-        legacy_cv = steps.index("stop-and-remove-legacy-cv-container")
-        remove_cvbot = steps.index("remove-stopped-legacy-cvbot-container")
-        unbound = steps.index("verify-127.0.0.1:8088-unbound")
-        apply = steps.index(
-            "apply-rozkalns-cv-rpi5-through-reviewed-generic-simple-deploy"
-        )
-        health = steps.index("verify-health-200")
-        timer_start = steps.index("start-generic-simple-deployer.timer")
 
-        self.assertLess(config, timer_stop)
-        self.assertLess(data_meta, timer_stop)
-        self.assertLess(timer_stop, registry)
-        self.assertLess(registry, prepull)
-        self.assertLess(prepull, stop_cvbot)
-        self.assertLess(stop_cvbot, adopt)
-        self.assertLess(adopt, legacy_cv)
-        self.assertLess(legacy_cv, remove_cvbot)
-        self.assertLess(remove_cvbot, unbound)
-        self.assertLess(unbound, apply)
-        self.assertLess(apply, health)
-        self.assertLess(health, timer_start)
+        failure = self.contract["failure_semantics"]
+        self.assertTrue(failure["fail_closed"])
+        for key in (
+            "automatic_retry",
+            "automatic_cleanup",
+            "automatic_rollback",
+            "alternate_mutation_path",
+        ):
+            self.assertFalse(failure[key], key)
 
-    def test_generic_apply_and_receipt_must_match_exact_candidate(self) -> None:
-        apply = self.contract["generic_simple_deploy_apply"]
-        self.assertEqual(apply["target_alias"], TARGET_ALIAS)
-        self.assertEqual(apply["expected_consumer_source_sha"], CANDIDATE_SOURCE_SHA)
-        self.assertEqual(apply["expected_image_digest"], CANDIDATE_DIGEST)
-        self.assertTrue(apply["exact_source_sha_required"])
-        self.assertTrue(apply["exact_image_digest_required"])
-
+    def test_verification_binds_receipt_health_and_ui_v2(self) -> None:
         verification = self.contract["verification"]
         self.assertEqual(verification["required_http_status"], 200)
-        self.assertEqual(
-            verification["receipt_path"],
-            "/var/lib/rozkalns-simple-deployer/receipts/rozkalns-cv-rpi5.json",
-        )
         self.assertTrue(verification["receipt_source_sha_must_equal_candidate"])
         self.assertTrue(verification["receipt_digest_must_equal_candidate"])
+        self.assertEqual(verification["public_url"], "https://rozkalns.net/en/")
+        self.assertEqual(verification["public_ui_v2_marker"], "Linux Operations Lab")
+        self.assertEqual(
+            verification["public_app_asset"],
+            "assets/app.e29b029635cc.mjs",
+        )
 
-    def test_executor_registry_keeps_cutover_strict_and_globally_disabled(self) -> None:
+    def test_executor_registry_matches_simplified_contract(self) -> None:
         registry = load(EXECUTOR_REGISTRY_PATH)
         operation = by(
             registry["operations"],
@@ -278,15 +194,18 @@ class RozkalnsCvSimpleDeployCutoverTests(unittest.TestCase):
             "rpi5-main.rozkalns-cv-simple-deploy-cutover.v1",
         )
         self.assertFalse(registry["execution_enabled"])
-        self.assertEqual(operation["source_repository"], "rozkalnsandris/RPi5_main")
-        self.assertEqual(operation["target_alias"], TARGET_ALIAS)
         self.assertEqual(operation["authorization_class"], "STRICT")
         self.assertFalse(operation["ordinary_live_all_eligible"])
-        self.assertEqual(operation["rollback_policy"], "NONE")
-        self.assertEqual(
-            operation["queue_match"]["repository_entrypoint"],
-            "ops/deploy/rozkalns-cv-simple-deploy-cutover-v1.json",
-        )
+        deps = operation["dependencies"]
+        self.assertIn("issue:RPi5_main#821", deps)
+        self.assertIn(f"consumer-source-sha:{CANDIDATE_SOURCE_SHA}", deps)
+        self.assertIn(f"candidate-image-digest:{CANDIDATE_DIGEST}", deps)
+        self.assertIn(f"existing-private-env:{PRIVATE_ENV}", deps)
+        self.assertIn(f"existing-persistent-data:{DATA_PATH}", deps)
+        text = json.dumps(operation)
+        self.assertNotIn("data-adoption", text)
+        self.assertNotIn("/etc/rozkalns-simple-deployer/private/rozkalns-cv.env", text)
+        self.assertNotIn("/var/lib/rozkalns-simple-deployer/rozkalns-cv/data", text)
 
 
 if __name__ == "__main__":
