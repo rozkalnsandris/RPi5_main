@@ -79,23 +79,28 @@
         "consumer_contract_revision": "139fb7046c77e1e58ec4a0876db3dddb96c85cb5",
         "compatibility_prerequisite_pr": 741,
         "compose_source": "ops/deploy/simple-deploy-compose/rozkalns-cv.yml",
-        "compose_sha256": "deb4787f91d7a8c978d2ca1eb7b05d05ed0db28b467a295ddfcbbb55b2420de0",
+        "compose_sha256": "d4c7e9ed5c36245d92ce7da199194ec032c74de6ea03f2b522e31a43ffaf3277",
         "persistent_data_create_host_path": false,
         "liveness_url": "http://127.0.0.1:8088/api/health",
         "readiness_state": "required",
         "readiness_url": "http://127.0.0.1:8088/api/health/ready",
         "wait_timeout_seconds": 180,
         "registry_pull_profile": "public-anonymous-pull",
-        "reuses_existing_runtime_inputs": true,
-        "runtime_home_resolution": "passwd_database",
-        "private_runtime_config_relative_path": "docker/cv/bot/.env",
         "persistent_data_relative_path": "docker/cv/bot/data",
         "compose_interpolation_env_path": "/etc/rozkalns-simple-deployer/compose/.env",
         "compose_interpolation_variables": {
-          "private_env": "ROZKALNS_CV_ENV_FILE",
           "persistent_data": "ROZKALNS_CV_DATA_PATH"
         },
-        "public_source_contains_resolved_home_path": false
+        "public_source_contains_resolved_home_path": false,
+        "private_runtime_config_path": "/etc/rozkalns-simple-deployer/private/rozkalns-cv.env",
+        "private_runtime_config_parent_path": "/etc/rozkalns-simple-deployer/private",
+        "private_runtime_config_owner": "root",
+        "private_runtime_config_group": "rozkalns-simple-deployer",
+        "private_runtime_config_mode": "0640",
+        "private_runtime_config_materializer": "scripts/materialize-simple-deploy-rozkalns-cv-private-env-v1.py",
+        "materializes_private_runtime_config_boundary": true,
+        "persistent_data_home_resolution": "passwd_database",
+        "reuses_existing_persistent_data": true
       }
     ]
   },
@@ -148,7 +153,8 @@
     "rozkalns_cv_existing_runtime_retirement_requires_separate_exact_live_authority": true,
     "weather_private_home_runtime_config_requires_separate_exact_authority": true,
     "weather_private_home_cutover_requires_separate_exact_live_authority": true,
-    "rozkalns_cv_existing_runtime_inputs_reused_in_place": true
+    "rozkalns_cv_private_runtime_config_materialized_during_cutover": true,
+    "rozkalns_cv_existing_persistent_data_reused_in_place": true
   },
   "installer": {
     "issue": 672,
