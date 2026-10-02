@@ -142,7 +142,7 @@ class RozkalnsCvSimpleDeployCutoverTests(unittest.TestCase):
         )
         self.assertEqual(materialization["compose"]["required_mode"], "0444")
 
-    def test_protected_config_and_data_are_preconditions_not_cutover_authority(self) -> None:
+    def test_private_config_is_precondition_and_data_is_adopted_inside_cutover(self) -> None:
         protected = self.contract["protected_prerequisites"]
         config = protected["private_runtime_config"]
         self.assertEqual(
@@ -152,23 +152,38 @@ class RozkalnsCvSimpleDeployCutoverTests(unittest.TestCase):
         self.assertTrue(config["required_before_cutover"])
         self.assertFalse(config["content_read_by_cutover_preflight"])
         self.assertFalse(config["provisioned_by_cutover"])
-        self.assertTrue(config["separate_exact_authority_required_if_absent"])
+        self.assertEqual(config["required_group"], "rozkalns-simple-deployer")
+        self.assertEqual(config["required_mode"], "0640")
+        self.assertEqual(
+            config["public_provider_literals"],
+            {
+                "LLM_BASE_URL": "https://api.openai.com",
+                "LLM_MODEL": "gpt-5.6-luna",
+            },
+        )
+        self.assertTrue(config["provider_secret_must_not_be_inferred_from_legacy"])
 
         data = protected["persistent_data"]
         self.assertEqual(
             data["path"],
             "/var/lib/rozkalns-simple-deployer/rozkalns-cv/data",
         )
-        self.assertTrue(data["required_before_cutover"])
+        self.assertFalse(data["required_before_cutover"])
+        self.assertTrue(data["materialized_during_cutover"])
         self.assertFalse(data["create_host_path"])
-        self.assertFalse(data["contents_read_by_cutover_preflight"])
-        self.assertFalse(data["adopted_or_materialized_by_cutover"])
-        self.assertTrue(data["separate_exact_data_authority_required_if_absent"])
+        self.assertEqual(data["legacy_source_owner_user"], "andris")
+        self.assertEqual(data["legacy_source_home_resolution"], "passwd_database")
+        self.assertEqual(data["legacy_source_relative_path"], "docker/cv/bot/data")
+        self.assertTrue(data["storage_implementation_identical"])
+        self.assertTrue(data["cvbot_must_be_stopped_before_copy"])
+        self.assertFalse(data["cvbot_restart_on_success_path"])
+        self.assertFalse(data["database_queries_or_schema_migrations"])
+        self.assertFalse(data["separate_pre_cutover_data_authority_required"])
 
         forbidden = self.contract["forbidden_operations"]
         self.assertIn("private-runtime-config-provisioning-or-content-read", forbidden)
-        self.assertIn("persistent-data-adoption-copy-migration-or-content-read", forbidden)
-        self.assertIn("database-schema-or-data-mutation", forbidden)
+        self.assertIn("persistent-data-mutation-beyond-reviewed-byte-copy-adoption", forbidden)
+        self.assertIn("database-query-schema-migration-or-content-transformation", forbidden)
 
     def test_legacy_baseline_and_port_transition_are_exact(self) -> None:
         legacy = self.contract["legacy_runtime"]
@@ -201,18 +216,23 @@ class RozkalnsCvSimpleDeployCutoverTests(unittest.TestCase):
             },
         )
 
-    def test_order_quiesces_timer_materializes_prepulls_then_retires_legacy(self) -> None:
+    def test_order_quiesces_timer_then_stops_writer_adopts_data_and_retires_legacy(self) -> None:
         steps = self.contract["ordered_steps"]
         config = steps.index(
             "revalidate-private-runtime-config-metadata-only-prerequisite-present"
         )
-        data = steps.index(
-            "revalidate-persistent-data-metadata-only-prerequisite-present"
+        data_meta = steps.index(
+            "revalidate-data-adoption-source-and-destination-metadata-only"
         )
         timer_stop = steps.index("stop-generic-simple-deployer.timer")
         registry = steps.index("materialize-weather-plus-cv-activation-registry")
         prepull = steps.index("prepull-exact-candidate-image-digest")
+        stop_cvbot = steps.index("stop-legacy-cvbot-container")
+        adopt = steps.index(
+            "materialize-persistent-data-through-reviewed-byte-copy-helper"
+        )
         legacy_cv = steps.index("stop-and-remove-legacy-cv-container")
+        remove_cvbot = steps.index("remove-stopped-legacy-cvbot-container")
         unbound = steps.index("verify-127.0.0.1:8088-unbound")
         apply = steps.index(
             "apply-rozkalns-cv-rpi5-through-reviewed-generic-simple-deploy"
@@ -221,11 +241,14 @@ class RozkalnsCvSimpleDeployCutoverTests(unittest.TestCase):
         timer_start = steps.index("start-generic-simple-deployer.timer")
 
         self.assertLess(config, timer_stop)
-        self.assertLess(data, timer_stop)
+        self.assertLess(data_meta, timer_stop)
         self.assertLess(timer_stop, registry)
         self.assertLess(registry, prepull)
-        self.assertLess(prepull, legacy_cv)
-        self.assertLess(legacy_cv, unbound)
+        self.assertLess(prepull, stop_cvbot)
+        self.assertLess(stop_cvbot, adopt)
+        self.assertLess(adopt, legacy_cv)
+        self.assertLess(legacy_cv, remove_cvbot)
+        self.assertLess(remove_cvbot, unbound)
         self.assertLess(unbound, apply)
         self.assertLess(apply, health)
         self.assertLess(health, timer_start)
