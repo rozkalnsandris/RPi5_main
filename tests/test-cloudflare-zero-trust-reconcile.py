@@ -360,15 +360,21 @@ class CloudflareP0Tests(unittest.TestCase):
         registry = cf.load_registry(
             ROOT / "ops" / "contracts" / "cloudflare-hostname-policy.yaml"
         )
-        self.assertGreaterEqual(len(registry), 12)
+        self.assertGreaterEqual(len(registry), 13)
         self.assertEqual(
             registry["dash.rozkalns.net"].audit_route_presence, "present"
         )
         self.assertEqual(
+            registry["coloring.rozkalns.net"].audit_route_presence, "absent"
+        )
+        self.assertEqual(
             registry["control.rozkalns.net"].audit_route_presence, "not-applicable"
         )
-        for item in registry.values():
-            if item.delivery == "shared_rpi5_tunnel":
+        for hostname, item in registry.items():
+            if item.delivery != "shared_rpi5_tunnel":
+                continue
+            self.assertIn(item.audit_route_presence, {"present", "absent"})
+            if hostname != "coloring.rozkalns.net":
                 self.assertEqual(item.audit_route_presence, "present")
 
     def test_repository_registry_tracks_dashboard_live_route_contract(self) -> None:
