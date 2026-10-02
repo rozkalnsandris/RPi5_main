@@ -34,7 +34,7 @@ Official Docker references:
 - immutable image digest: `sha256:ba9e24c82eccd833cfe42d6a4aa61ef76c584bcfd4c27efbced13c3a408d2a1a`;
 - shared SIMPLE-DEPLOY workflow: `rozkalnsandris/ops-workflows@e05ed760791a127c7c9628696806ef39c9fe329c`;
 - target: `rozkalns-cv-rpi5`;
-- RPi5 Compose SHA-256: `33174cd778df2c1e4012735c5b01ba4af2d6873ec14f3f1ade985f2f2d62b7f0`;
+- RPi5 Compose SHA-256: `a1ded554dc931c8451eb7e606c9cd9c6bac1c4b4126e56e533ad9ea38ee2c3d8`;
 - liveness: `http://127.0.0.1:8088/api/health`;
 - readiness: `http://127.0.0.1:8088/api/health/ready`.
 
