@@ -136,6 +136,7 @@ test:
 	bash ./tests/test-cloudflare-lan-origin-audit.sh
 	python3 ./tests/test-ingress-registry-v1.py
 	python3 ./tests/test-ingress-public-zone-verification-v1.py
+	python3 ./tests/test-ingress-admin-zone-verification-v1.py
 	python3 ./tests/test-cloudflare-zero-trust-reconcile.py
 	python3 ./tests/test-cloudflare-p1-write-plan.py
 	python3 ./tests/test-cloudflare-p1a08-control-aud-override.py
