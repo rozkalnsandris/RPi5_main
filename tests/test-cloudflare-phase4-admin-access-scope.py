@@ -57,7 +57,7 @@ def fake_state(contract: dict) -> dict:
             "aud": f"raw-aud-{index}",
         })
         if projected["expected_access_application_scope"] == "exact-owner":
-            include = [{"email": {"email": "private-owner@example.invalid"}}]
+            include = [{"email": {"email": "owner_identity_redacted"}}]
         else:
             include = [{"everyone": {}}]
         policies[app_id] = [{
@@ -105,7 +105,7 @@ class Phase4AdminAccessScopeTests(unittest.TestCase):
 
         rendered = json.dumps(report, sort_keys=True)
         for forbidden in (
-            "private-owner@example.invalid",
+            "owner_identity_redacted",
             "raw-aud-",
             "1111-4111-8111",
         ):
