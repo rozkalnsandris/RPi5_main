@@ -13,7 +13,7 @@ This contract gives `RPi5_main` one public-safe source registry for externally m
 - `ADMIN` — administrator access is required and the Access class is distinct from PRIVATE.
 - `PRIVATE` — non-public application access is required and the Access class is distinct from ADMIN.
 
-The registry is designed for later drift comparison. It records source policy and dated evidence classes; it is **not** a live inventory.
+The registry is designed for later drift comparison. It records source policy and dated evidence classes; it is not a live inventory.
 
 ## Runtime-state boundary
 
