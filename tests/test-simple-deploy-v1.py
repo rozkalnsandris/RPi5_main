@@ -477,7 +477,7 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(reviewed[0]["target_alias"], "rozkalns-weather-public-rpi5")
         self.assertEqual(
             reviewed[0]["consumer_contract_revision"],
-            "3826175b5bc2c4c7ad1fd5638741258506dd254d",
+            "f658041dfcd6f84994594ddac776b3cf9702e174",
         )
         self.assertEqual(reviewed[0]["wait_timeout_seconds"], 180)
         self.assertEqual(
@@ -569,8 +569,8 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(contract["issue"], 804)
         self.assertFalse(contract["execution_enabled"])
         self.assertEqual(contract["target_alias"], "rozkalns-weather-public-rpi5")
-        self.assertEqual(contract["candidate_release"]["source_sha"], "3826175b5bc2c4c7ad1fd5638741258506dd254d")
-        self.assertEqual(contract["candidate_release"]["image_digest"], "sha256:7fd373b1c8e22b812b4ede3c0e124860511fa104f563ec77cd6cdd42d5a1d41b")
+        self.assertEqual(contract["candidate_release"]["source_sha"], "f658041dfcd6f84994594ddac776b3cf9702e174")
+        self.assertEqual(contract["candidate_release"]["image_digest"], "sha256:fc40d6e824be1d0e0783b060f51d9a2a2d1dafdd0b0a3861b39ffdbadcd0dcc6")
         self.assertEqual(contract["protected_runtime_config"]["path"], "/etc/rozkalns-simple-deployer/private/rozkalns-weather-private-home.env")
         self.assertEqual(contract["protected_runtime_config"]["exact_allowed_keys"], ["HOME_LAT", "HOME_LON"])
         self.assertTrue(contract["protected_runtime_config"]["exact_key_set_required"])
