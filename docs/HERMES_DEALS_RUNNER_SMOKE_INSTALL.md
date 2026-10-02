@@ -24,13 +24,13 @@ No caller may select command, executable path, destination path, argv, environme
 
 `build_plan()` is read-only and accepts only merged/reachable + exact-SHA CI evidence and `ABSENT`/`EXACT` state for the dedicated identity/helper/registration. It never consumes LIVE authority.
 
-`apply_install()` is source-implemented but has no externally enabled entrypoint. A future wrapper must supply a canonical LIVE envelope bound to owner numeric identity, exact operation/gate/target, exact Hermes SHA, exact merged RPi5_main SHA, both CI proofs, fixed artifact hashes, canonical request-body hash, identical refetch, TTL validity and replay availability.
+`apply_install()` is source-implemented but has no externally enabled entrypoint. A future wrapper must supply a canonical LIVE envelope bound to owner numeric identity, exact operation/gate/target, exact Hermes SHA, exact merged RPi5_main SHA, both CI proofs, fixed artifact hashes, canonical request-body hash, identical refetch, authorization-time sanity and replay availability.
 
 If all state is exact, APPLY returns no-mutation without consuming authorization. Otherwise authorization is consumed immediately before the first fixed mutation. After consumption there is no automatic retry, cleanup, rollback or alternate mutation path; `rollback_policy=NONE`.
 
 ## LIVE envelope consumer (source-only)
 
-`prepare_install_live_envelope()` accepts only one positive `authorization_issue_number`. A capability-specific canonical revalidator must derive the owner numeric identity/type, non-app authorship, exact operation/gate/target/repository identities, reviewed Hermes SHA reachability + exact-SHA CI, current merged RPi5_main SHA + exact-main CI, both artifact hashes, canonical request-body hash with identical refetch, GitHub-time TTL, replay availability, LIVE authorization and `rollback_policy=NONE`. The complete evidence is revalidated twice and any stable-field drift fails closed.
+`prepare_install_live_envelope()` accepts only one positive `authorization_issue_number`. A capability-specific canonical revalidator must derive the owner numeric identity/type, non-app authorship, exact operation/gate/target/repository identities, reviewed Hermes SHA reachability + exact-SHA CI, current merged RPi5_main SHA + exact-main CI, both artifact hashes, canonical request-body hash with identical refetch, GitHub-time future-skew sanity, replay availability, LIVE authorization and `rollback_policy=NONE`. The complete evidence is revalidated twice and any stable-field drift fails closed.
 
 The consumer validates the exact `rozkalns.hermes-deals.runner-smoke-install-live-envelope.v1` expected by #476, but it does not call `apply_install()` and exposes no CLI, sudo rule, systemd unit, dispatcher registration or generic execution surface. Source merge therefore leaves `external_apply_entrypoint_enabled=false`, global execution disabled, and runtime activation behind a separate explicit LIVE authorization.
 

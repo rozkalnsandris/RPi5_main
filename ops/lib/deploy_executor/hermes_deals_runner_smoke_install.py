@@ -213,7 +213,7 @@ def validate_live_envelope(envelope: Mapping[str, Any]) -> None:
         "registration_sha256",
         "request_body_sha256",
         "identical_body_refetch",
-        "ttl_valid",
+        "authorization_time_valid",
         "replay_available",
         "live_authorized",
         "rollback_policy",
@@ -249,7 +249,7 @@ def validate_live_envelope(envelope: Mapping[str, Any]) -> None:
         "hermes_source_merged_reachable",
         "hermes_source_ci_success",
         "identical_body_refetch",
-        "ttl_valid",
+        "authorization_time_valid",
         "replay_available",
         "live_authorized",
     ):

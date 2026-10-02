@@ -149,7 +149,7 @@ class FixtureSender:
         self,
         *,
         app_authored: bool = False,
-        expired: bool = False,
+        old_authorization: bool = False,
         queue_target_drift: bool = False,
         hermes_ci_success: bool = True,
         rpi5_ci_success: bool = True,
@@ -157,7 +157,7 @@ class FixtureSender:
         dependency_drift: bool = False,
     ):
         self.app_authored = app_authored
-        self.expired = expired
+        self.old_authorization = old_authorization
         self.queue_target_drift = queue_target_drift
         self.hermes_ci_success = hermes_ci_success
         self.rpi5_ci_success = rpi5_ci_success
@@ -179,7 +179,7 @@ class FixtureSender:
             request_id = REQUEST_ID
             if self.body_refetch_drift and self.auth_reads > 1:
                 request_id = "223e4567-e89b-42d3-a456-426614174000"
-            created = "2026-09-15T06:00:00Z" if self.expired else AUTH_CREATED
+            created = "2026-09-15T06:00:00Z" if self.old_authorization else AUTH_CREATED
             value = _authorization_issue(
                 app_authored=self.app_authored,
                 created_at=created,
@@ -307,10 +307,9 @@ class RunnerSmokeInstallRuntimeTests(unittest.TestCase):
         self.assertEqual(envelope["target_alias"], INSTALL_TARGET_ALIAS)
         self.assertEqual(replay.calls, [REQUEST_ID, REQUEST_ID])
 
-    def test_rejects_owner_app_ttl_body_queue_dependency_and_ci_drift(self):
+    def test_rejects_owner_app_body_queue_dependency_and_ci_drift(self):
         cases = (
             FixtureSender(app_authored=True),
-            FixtureSender(expired=True),
             FixtureSender(body_refetch_drift=True),
             FixtureSender(queue_target_drift=True),
             FixtureSender(dependency_drift=True),
@@ -322,6 +321,12 @@ class RunnerSmokeInstallRuntimeTests(unittest.TestCase):
                 revalidator, _, _ = _revalidator(sender)
                 with self.assertRaises(RunnerSmokeInstallRuntimeError):
                     revalidator.revalidate(AUTHORIZATION_ISSUE)
+
+    def test_old_unconsumed_authorization_is_still_eligible(self):
+        revalidator, _, _ = _revalidator(FixtureSender(old_authorization=True))
+        result = revalidator.revalidate(AUTHORIZATION_ISSUE)
+        self.assertEqual(result.authorization_issue_number, AUTHORIZATION_ISSUE)
+        self.assertTrue(result.authorization_time_valid)
 
     def test_rejects_replay_unavailability_and_wrong_source_provider(self):
         revalidator, _, _ = _revalidator(replay=ReplayAvailability(False))

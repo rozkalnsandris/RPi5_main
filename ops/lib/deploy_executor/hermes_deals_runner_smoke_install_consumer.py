@@ -18,8 +18,8 @@ from .hermes_deals_runner_smoke_install import (
     SOURCE_SHA,
     validate_live_envelope,
 )
+from .protocol import MAX_FUTURE_SKEW_SECONDS
 
-MAX_AUTHORIZATION_AGE_SECONDS = 600
 MAX_REVALIDATION_TIME_DRIFT_SECONDS = 30
 _SHA40_RE = re.compile(r"^[0-9a-f]{40}$")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -52,7 +52,7 @@ class CanonicalRunnerSmokeInstallEvidence:
     registration_sha256: str
     request_body_sha256: str
     identical_body_refetch: bool
-    ttl_valid: bool
+    authorization_time_valid: bool
     replay_available: bool
     live_authorized: bool
     rollback_policy: str
@@ -105,9 +105,9 @@ def _validate_evidence(
         "authorization_created_at",
     )
     github_time = _github_time(evidence.github_server_time, "github_server_time")
-    age = (github_time - authorization_time).total_seconds()
-    if age < -30 or age > MAX_AUTHORIZATION_AGE_SECONDS:
-        _fail("canonical authorization TTL is outside the allowed window")
+    future_offset = (authorization_time - github_time).total_seconds()
+    if future_offset > MAX_FUTURE_SKEW_SECONDS:
+        _fail("canonical authorization timestamp is too far in the future")
 
     exact = {
         "owner_numeric_id": (evidence.owner_numeric_id, OWNER_NUMERIC_ID),
@@ -139,7 +139,7 @@ def _validate_evidence(
         "hermes_source_merged_reachable",
         "hermes_source_ci_success",
         "identical_body_refetch",
-        "ttl_valid",
+        "authorization_time_valid",
         "replay_available",
         "live_authorized",
     ):
@@ -167,7 +167,7 @@ def _envelope(evidence: CanonicalRunnerSmokeInstallEvidence) -> dict[str, Any]:
         "registration_sha256": evidence.registration_sha256,
         "request_body_sha256": evidence.request_body_sha256,
         "identical_body_refetch": evidence.identical_body_refetch,
-        "ttl_valid": evidence.ttl_valid,
+        "authorization_time_valid": evidence.authorization_time_valid,
         "replay_available": evidence.replay_available,
         "live_authorized": evidence.live_authorized,
         "rollback_policy": evidence.rollback_policy,
@@ -213,7 +213,7 @@ def source_readiness() -> Mapping[str, Any]:
         "implementation_issue": 481,
         "request_authority": ("authorization_issue_number",),
         "canonical_live_envelope_schema": LIVE_ENVELOPE_SCHEMA,
-        "max_authorization_age_seconds": MAX_AUTHORIZATION_AGE_SECONDS,
+        "max_future_authorization_skew_seconds": MAX_FUTURE_SKEW_SECONDS,
         "max_revalidation_time_drift_seconds": MAX_REVALIDATION_TIME_DRIFT_SECONDS,
         "mutation_boundary": "hermes_deals_runner_smoke_install.apply_install",
         "external_apply_entrypoint_enabled": False,
