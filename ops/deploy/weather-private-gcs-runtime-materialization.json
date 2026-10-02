@@ -1,13 +1,13 @@
 {
   "schema": "rpi5.weathernext-private-gcs-runtime-materialization-source.v1",
-  "implementation_issue": 828,
+  "implementation_issue": 833,
   "operation_id": "rozkalns-weather.weathernext-private-gcs-runtime-materialization.v1",
   "private_contract_id": "rozkalns-weather.weathernext-private-gcs-first-access.v1",
   "mutation_class": "weathernext_private_gcs_runtime_materialization",
   "source_repository": "rozkalnsandris/RPi5_main",
   "weather_source_prerequisite": {
     "repository": "rozkalnsandris/rozkalns_weather",
-    "source_sha": "b7f04385ff33ab613a30e0ab89c734aa4ba444ca",
+    "source_sha": "1fc7ea70efde88cb826c2e4a0baf26925078375c",
     "extra": "weathernext-gcs"
   },
   "target": {
@@ -20,8 +20,8 @@
   },
   "lock": {
     "path": "ops/lib/deploy_executor/weather_private_gcs_runtime_lock.json",
-    "package_count": 14,
-    "closure_sha256": "df79ccff739c3f8f3b3a76732f10624027924aadd45d40ee7f62af670f8e65ab",
+    "package_count": 25,
+    "closure_sha256": "4ef3d22c8ebc76901c3840d0304124ab390afaf3978883a4ad377a6da4991148",
     "exact_wheels_required": true
   },
   "artifact": {

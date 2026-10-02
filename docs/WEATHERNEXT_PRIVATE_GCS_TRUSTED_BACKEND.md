@@ -53,10 +53,13 @@ adapter composition are implemented and fixture-testable.
 
 Issue #828 now provides the reviewed **GCS-specific runtime materializer
 source** and deterministic offline wheelhouse closure. The closure is separate
-from the historical BigQuery runtime, contains 14 exact wheels rooted in
-`obstore 0.11.1`, `xarray 2026.9.0` and `zarr 3.4.0`, and is bound by
+from the historical BigQuery runtime, contains 25 exact wheels rooted in `google-auth 2.59.1`, `obstore 0.11.1`,
+`requests 2.34.2`, `xarray 2026.9.0` and `zarr 3.4.0`, and is bound by
 closure SHA-256
-`df79ccff739c3f8f3b3a76732f10624027924aadd45d40ee7f62af670f8e65ab`.
+`4ef3d22c8ebc76901c3840d0304124ab390afaf3978883a4ad377a6da4991148`.
+Issue #833 regenerates this closure against Weather
+`1fc7ea70efde88cb826c2e4a0baf26925078375c` after the explicit Google
+credential-provider runtime dependencies were added.
 
 This does **not** install or wire the materializer on the host. Accordingly:
 

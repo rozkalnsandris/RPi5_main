@@ -12,23 +12,27 @@ BigQuery private runtime and cannot be dispatched by BigQuery or public Weather
 authority.
 
 The reviewed Weather prerequisite is
-`rozkalns_weather@b7f04385ff33ab613a30e0ab89c734aa4ba444ca`, whose
+`rozkalns_weather@1fc7ea70efde88cb826c2e4a0baf26925078375c`, whose
 `weathernext-gcs` extra declares:
 
+- `google-auth>=2.59.1,<3`;
 - `obstore>=0.11.1,<0.12`;
+- `requests>=2.34.2,<3`;
 - `xarray>=2026.9,<2027`;
 - `zarr>=3.4,<4`.
 
 ## Exact closure
 
-The committed lock contains 14 exact wheels. Root versions are:
+The regenerated lock contains 25 exact wheels. Root versions are:
 
+- `google-auth==2.59.1`;
 - `obstore==0.11.1`;
+- `requests==2.34.2`;
 - `xarray==2026.9.0`;
 - `zarr==3.4.0`.
 
 Closure SHA-256:
-`df79ccff739c3f8f3b3a76732f10624027924aadd45d40ee7f62af670f8e65ab`.
+`4ef3d22c8ebc76901c3840d0304124ab390afaf3978883a4ad377a6da4991148`.
 
 The target is Linux aarch64, CPython 3.13 / cp313, with runtime compatibility
 floor `manylinux_2_28_aarch64`. The deterministic builder explicitly accepts
@@ -46,7 +50,7 @@ wheel basenames and SHA-256 values to match the committed lock exactly.
 CI emits a normalized tar containing only:
 
 - `runtime-closure.json`;
-- the 14 exact files below `wheelhouse/`.
+- the 25 exact files below `wheelhouse/`.
 
 The public-safe receipt binds exact RPi5_main source SHA, closure digest,
 artifact digest/size, target OS/architecture/Python/ABI/platform and format.

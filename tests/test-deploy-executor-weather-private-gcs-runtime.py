@@ -44,7 +44,9 @@ def wheel_bytes(path: str, payload: bytes = b"VALUE = 1\n") -> bytes:
 
 def mini_lock(wheels: dict[str, bytes]) -> dict:
     package_specs = [
+        ("google-auth", "2.59.1", "google_auth-2.59.1-py3-none-any.whl"),
         ("obstore", "0.11.1", "obstore-0.11.1-py3-none-any.whl"),
+        ("requests", "2.34.2", "requests-2.34.2-py3-none-any.whl"),
         ("xarray", "2026.9.0", "xarray-2026.9.0-py3-none-any.whl"),
         ("zarr", "3.4.0", "zarr-3.4.0-py3-none-any.whl"),
     ]
@@ -65,7 +67,9 @@ def mini_lock(wheels: dict[str, bytes]) -> dict:
         "weather_extra": module.WEATHER_EXTRA,
         "upstream_requirements": list(module.UPSTREAM_REQUIREMENTS),
         "resolved_roots": {
+            "google-auth": "2.59.1",
             "obstore": "0.11.1",
+            "requests": "2.34.2",
             "xarray": "2026.9.0",
             "zarr": "3.4.0",
         },
@@ -143,19 +147,27 @@ def make_artifact(
 class WeatherNextPrivateGCSRuntimeTests(unittest.TestCase):
     def test_real_lock_is_exact_hashed_and_has_no_bigquery(self):
         lock = module.load_runtime_lock(LOCK_PATH)
-        self.assertEqual(lock["package_count"], 14)
+        self.assertEqual(lock["package_count"], 25)
         self.assertEqual(
             lock["closure_sha256"],
-            "df79ccff739c3f8f3b3a76732f10624027924aadd45d40ee7f62af670f8e65ab",
+            "4ef3d22c8ebc76901c3840d0304124ab390afaf3978883a4ad377a6da4991148",
         )
         self.assertEqual(
             lock["resolved_roots"],
-            {"obstore": "0.11.1", "xarray": "2026.9.0", "zarr": "3.4.0"},
+            {
+                "google-auth": "2.59.1",
+                "obstore": "0.11.1",
+                "requests": "2.34.2",
+                "xarray": "2026.9.0",
+                "zarr": "3.4.0",
+            },
         )
         self.assertEqual(lock["target"]["pip_platform"], "manylinux_2_28_aarch64")
         names = {item["name"] for item in lock["packages"]}
         self.assertNotIn("google-cloud-bigquery", names)
-        self.assertTrue({"obstore", "xarray", "zarr"}.issubset(names))
+        self.assertTrue(
+            {"google-auth", "obstore", "requests", "xarray", "zarr"}.issubset(names)
+        )
         for package in lock["packages"]:
             self.assertRegex(package["sha256"], r"^[0-9a-f]{64}$")
             self.assertTrue(package["filename"].endswith(".whl"))

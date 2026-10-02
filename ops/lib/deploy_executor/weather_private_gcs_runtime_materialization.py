@@ -19,14 +19,16 @@ BIGQUERY_CONTRACT_ID = "rozkalns-weather.weathernext-private-bigquery-first-acce
 PUBLIC_RUNTIME_OPERATION_ID = "rozkalns-weather.public-runtime-release.v1"
 MUTATION_CLASS = "weathernext_private_gcs_runtime_materialization"
 
-WEATHER_SOURCE_SHA = "b7f04385ff33ab613a30e0ab89c734aa4ba444ca"
+WEATHER_SOURCE_SHA = "1fc7ea70efde88cb826c2e4a0baf26925078375c"
 WEATHER_EXTRA = "weathernext-gcs"
 UPSTREAM_REQUIREMENTS = (
+    "google-auth>=2.59.1,<3",
     "obstore>=0.11.1,<0.12",
+    "requests>=2.34.2,<3",
     "xarray>=2026.9,<2027",
     "zarr>=3.4,<4",
 )
-REQUIRED_ROOTS = ("obstore", "xarray", "zarr")
+REQUIRED_ROOTS = ("google-auth", "obstore", "requests", "xarray", "zarr")
 
 TARGET_OS = "linux"
 TARGET_ARCH = "aarch64"
