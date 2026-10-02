@@ -132,4 +132,6 @@ issue #833 regenerates it as 25 exact aarch64/cp313 wheels rooted in
 and materialized only from an offline normalized wheelhouse artifact. The GCS
 materializer remains unwired and execution-disabled; the next prerequisite is
 GCS-specific host/runtime wiring plus sanitized readiness before any LIVE
-preflight.
+preflight. Issue #835 adds that source-only boundary with separate GCS operator,
+activation/binding roots and read-only preflight as the next gate; execution and
+installation remain disabled.

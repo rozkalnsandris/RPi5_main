@@ -1,0 +1,65 @@
+name: WeatherNext private GCS host runtime source
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/weathernext-private-gcs-host-runtime-source.yml"
+      - "ops/lib/deploy_executor/weather_private_gcs_host_runtime.py"
+      - "ops/lib/deploy_executor/weather_private_gcs_host_bindings.py"
+      - "ops/bin/rpi5-weathernext-private-gcs-host"
+      - "ops/deploy/weather-private-gcs-host-runtime.json"
+      - "tests/test_weather_private_gcs_host_runtime.py"
+      - "ops/lib/deploy_executor/weather_private_gcs_execution_bridge.py"
+      - "ops/lib/deploy_executor/weather_private_gcs_trusted_backend.py"
+      - "ops/deploy/weather-private-gcs-trusted-backend.json"
+      - "tests/test_weather_private_gcs_execution_bridge.py"
+      - "tests/test_weather_private_gcs_trusted_backend.py"
+      - "docs/WEATHERNEXT_PRIVATE_GCS_HOST_RUNTIME.md"
+      - "docs/WEATHERNEXT_PRIVATE_GCS_TRUSTED_BACKEND.md"
+      - "docs/ROADMAP.md"
+      - "Makefile"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/weathernext-private-gcs-host-runtime-source.yml"
+      - "ops/lib/deploy_executor/weather_private_gcs_host_runtime.py"
+      - "ops/lib/deploy_executor/weather_private_gcs_host_bindings.py"
+      - "ops/bin/rpi5-weathernext-private-gcs-host"
+      - "ops/deploy/weather-private-gcs-host-runtime.json"
+      - "tests/test_weather_private_gcs_host_runtime.py"
+      - "ops/lib/deploy_executor/weather_private_gcs_execution_bridge.py"
+      - "ops/lib/deploy_executor/weather_private_gcs_trusted_backend.py"
+      - "ops/deploy/weather-private-gcs-trusted-backend.json"
+      - "tests/test_weather_private_gcs_execution_bridge.py"
+      - "tests/test_weather_private_gcs_trusted_backend.py"
+      - "docs/WEATHERNEXT_PRIVATE_GCS_HOST_RUNTIME.md"
+      - "docs/WEATHERNEXT_PRIVATE_GCS_TRUSTED_BACKEND.md"
+      - "docs/ROADMAP.md"
+      - "Makefile"
+
+permissions:
+  contents: read
+
+jobs:
+  source-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate WeatherNext private GCS host runtime source
+        run: |
+          python3 ./tests/test_weather_private_gcs_host_runtime.py
+          python3 ./tests/test_weather_private_gcs_execution_bridge.py
+          python3 ./tests/test_weather_private_gcs_trusted_backend.py
+          python3 -m py_compile \
+            ops/lib/deploy_executor/weather_private_gcs_host_runtime.py \
+            ops/lib/deploy_executor/weather_private_gcs_host_bindings.py \
+            ops/lib/deploy_executor/weather_private_gcs_execution_bridge.py \
+            ops/lib/deploy_executor/weather_private_gcs_trusted_backend.py \
+            ops/bin/rpi5-weathernext-private-gcs-host
