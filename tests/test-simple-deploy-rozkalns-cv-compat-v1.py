@@ -165,7 +165,7 @@ class RozkalnsCvCompatibilityTests(unittest.TestCase):
         registry = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
         self.assertEqual(registry["schema"], "rozkalns.rpi5-main.simple-deploy.targets.v1")
         self.assertTrue(registry["execution_enabled"])
-        self.assertEqual(len(registry["targets"]), 4)
+        self.assertEqual(len(registry["targets"]), 5)
         targets = {item["target_alias"]: item for item in registry["targets"]}
         self.assertIn(TARGET_ALIAS, targets)
         target = targets[TARGET_ALIAS]
