@@ -1,6 +1,6 @@
 # WeatherNext private GCS trusted execution boundary
 
-Status: **SOURCE READY / GCS HOST WIRING REQUIRED**  
+Status: **SOURCE READY / READ-ONLY RPI5 PREFLIGHT NEXT**  
 Issue: `RPi5_main#825`  
 Weather gate: `rozkalns_weather#122`  
 Host capability identity: `rpi5.weathernext-private-gcs-backend.v1`
@@ -70,10 +70,14 @@ This does **not** install or wire the materializer on the host. Accordingly:
 - no runtime dependency is installed or materialized on RPi5;
 - source merge does not authorize LIVE.
 
-The next source prerequisite is fixed host/runtime wiring plus sanitized
-readiness classification for the GCS runtime marker. Only after that source is
-merged may a future minimum-sufficient read-only runtime preflight determine
-whether application/runtime/auth prerequisites are present.
+Issue #835 now adds the fixed GCS-only host/runtime wiring source, separate
+operator/activation/binding roots, durable authorization boundary and sanitized
+readiness observer. All install/execution switches remain disabled.
+
+After #835 source merge, the next step is a minimum-sufficient **read-only RPi5
+preflight** that may classify only capability/application/runtime identity,
+closure/ABI/platform, glibc compatibility and GCS auth marker state. It must not
+read protected credential or private binding contents.
 
 ## Failure semantics
 

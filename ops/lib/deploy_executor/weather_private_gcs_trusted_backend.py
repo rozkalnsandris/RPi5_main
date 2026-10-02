@@ -25,7 +25,7 @@ from .weather_private_gcs_execution_bridge import (
 )
 
 HOST_CAPABILITY_ID = "rpi5.weathernext-private-gcs-backend.v1"
-SOURCE_STATUS = "SOURCE_READY_GCS_HOST_WIRING_REQUIRED"
+SOURCE_STATUS = "SOURCE_READY_GCS_READONLY_PREFLIGHT"
 APPLICATION_STAGE_ID = "rozkalns-weather.weathernext-private-application-stage.v1"
 APPLICATION_STAGE_ROOT = "/var/lib/rpi5-deploy/weather-private-application"
 GOOGLE_AUTH_SLOT_ID = "weathernext-private-google-auth-v1"
@@ -309,6 +309,9 @@ def trusted_backend_source_contract() -> Mapping[str, Any]:
         "source_wrapper_implemented": True,
         "gcs_runtime_materializer_implementation_present": True,
         "gcs_runtime_materializer_module": "deploy_executor.weather_private_gcs_runtime_materialization",
+        "host_runtime_source_implemented": True,
+        "host_runtime_module": "deploy_executor.weather_private_gcs_host_runtime",
+        "sanitized_host_evidence_source_implemented": True,
         "host_capability_installed": False,
         "external_entrypoint_enabled": False,
         "global_executor_execution_enabled": False,

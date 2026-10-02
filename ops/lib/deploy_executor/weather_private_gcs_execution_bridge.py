@@ -267,7 +267,7 @@ def source_readiness() -> Mapping[str, Any]:
         "request_authority": ("authorization_issue_number",),
         "selected_init_comes_from_authorization": True,
         "canonical_revalidation_required_immediately_before_execution": True,
-        "gcs_runtime_materializer_implemented": False,
+        "gcs_runtime_materializer_implemented": True,
         "host_capability_installed": False,
         "external_entrypoint_enabled": False,
         "runtime_activation_enabled": False,

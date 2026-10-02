@@ -135,12 +135,14 @@ class WeatherPrivateGCSTrustedBackendTests(unittest.TestCase):
         self.assertEqual(result["status"], "private_gcs_execution_sequence_completed")
         self.assertFalse(result["bigquery_performed"])
 
-    def test_source_contract_exposes_runtime_materialization_as_next_prerequisite(self):
+    def test_source_contract_exposes_host_runtime_source_but_keeps_execution_disabled(self):
         source = trusted_backend_source_contract()
         self.assertEqual(source["source_status"], SOURCE_STATUS)
         self.assertTrue(source["canonical_revalidator_implemented"])
         self.assertTrue(source["source_wrapper_implemented"])
         self.assertTrue(source["gcs_runtime_materializer_implementation_present"])
+        self.assertTrue(source["host_runtime_source_implemented"])
+        self.assertTrue(source["sanitized_host_evidence_source_implemented"])
         self.assertFalse(source["host_capability_installed"])
         self.assertFalse(source["read_only_gcs_execution_enabled"])
         self.assertFalse(source["external_entrypoint_enabled"])
