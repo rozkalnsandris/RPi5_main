@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TARGET_ALIAS = "rozkalns-cv-rpi5"
 CONSUMER_SHA = "139fb7046c77e1e58ec4a0876db3dddb96c85cb5"
 SHARED_SHA = "e05ed760791a127c7c9628696806ef39c9fe329c"
-COMPOSE_SHA = "be7f021c9d64192905c908bcbb127dbc7ec1c2514d898f05cbf8de4c44ffa4a2"
+COMPOSE_SHA = "deb4787f91d7a8c978d2ca1eb7b05d05ed0db28b467a295ddfcbbb55b2420de0"
 COMPOSE_PATH = ROOT / "ops/deploy/simple-deploy-compose/rozkalns-cv.yml"
 CONTRACT_PATH = ROOT / "ops/contracts/simple-deploy-rozkalns-cv-compat-v1.json"
 HOST_CONTRACT_PATH = ROOT / "ops/contracts/simple-deploy-host-v1.json"
@@ -68,14 +68,12 @@ class RozkalnsCvCompatibilityTests(unittest.TestCase):
         self.assertEqual(adapter["project"], "rozkalns-cv")
         self.assertEqual(adapter["service"], "cv")
         self.assertEqual(adapter["registry_pull_profile"], "public-anonymous-pull")
-        self.assertEqual(
-            adapter["private_runtime_config_path"],
-            "/etc/rozkalns-simple-deployer/private/rozkalns-cv.env",
-        )
-        self.assertEqual(
-            adapter["persistent_data_path"],
-            "/var/lib/rozkalns-simple-deployer/rozkalns-cv/data",
-        )
+        self.assertEqual(adapter["runtime_home_resolution"], "passwd_database")
+        self.assertEqual(adapter["private_runtime_config_relative_path"], "docker/cv/bot/.env")
+        self.assertEqual(adapter["persistent_data_relative_path"], "docker/cv/bot/data")
+        self.assertEqual(adapter["compose_interpolation_env_path"], "/etc/rozkalns-simple-deployer/compose/.env")
+        self.assertEqual(adapter["compose_interpolation_variables"]["private_env"], "ROZKALNS_CV_ENV_FILE")
+        self.assertEqual(adapter["compose_interpolation_variables"]["persistent_data"], "ROZKALNS_CV_DATA_PATH")
         self.assertFalse(adapter["persistent_data_create_host_path"])
         self.assertEqual(adapter["liveness_url"], "http://127.0.0.1:8088/api/health")
         self.assertEqual(adapter["readiness_state"], "required")
@@ -92,15 +90,14 @@ class RozkalnsCvCompatibilityTests(unittest.TestCase):
         self.assertIn("no-new-privileges:true", text)
         self.assertIn("cap_drop:", text)
         self.assertIn("pids_limit: 192", text)
-        self.assertIn("/etc/rozkalns-simple-deployer/private/rozkalns-cv.env", text)
-        self.assertIn(
-            "source: /var/lib/rozkalns-simple-deployer/rozkalns-cv/data",
-            text,
-        )
+        self.assertIn("${ROZKALNS_CV_ENV_FILE:?", text)
+        self.assertIn("source: ${ROZKALNS_CV_DATA_PATH:?", text)
+        self.assertNotIn("/home/", text)
         self.assertIn("create_host_path: false", text)
         self.assertIn("http://127.0.0.1:8080/api/health/ready", text)
-        self.assertNotIn("${", text)
-        self.assertNotIn("/home/", text)
+        self.assertEqual(text.count("${"), 2)
+        self.assertIn("${ROZKALNS_CV_ENV_FILE:?", text)
+        self.assertIn("${ROZKALNS_CV_DATA_PATH:?", text)
         self.assertNotIn("build:", text)
         self.assertNotIn("privileged:", text)
         self.assertNotIn("network_mode:", text)
@@ -116,14 +113,16 @@ class RozkalnsCvCompatibilityTests(unittest.TestCase):
         self.assertTrue(
             boundaries["target_installation_requires_separate_exact_live_cutover"]
         )
-        self.assertTrue(
+        self.assertFalse(
             boundaries[
                 "private_runtime_config_provisioning_requires_separate_exact_authority"
             ]
         )
-        self.assertTrue(
+        self.assertTrue(boundaries["existing_private_runtime_config_reused_in_place"])
+        self.assertFalse(
             boundaries["persistent_data_adoption_requires_separate_exact_data_authority"]
         )
+        self.assertTrue(boundaries["existing_persistent_data_reused_in_place"])
         self.assertFalse(
             boundaries["ordinary_reconciler_initializes_migrates_or_recovers_database"]
         )
@@ -175,19 +174,17 @@ class RozkalnsCvCompatibilityTests(unittest.TestCase):
         self.assertEqual(cv["compatibility_prerequisite_pr"], 741)
         self.assertEqual(cv["compose_sha256"], COMPOSE_SHA)
         self.assertFalse(cv["persistent_data_create_host_path"])
+        self.assertEqual(cv["runtime_home_resolution"], "passwd_database")
+        self.assertEqual(cv["private_runtime_config_relative_path"], "docker/cv/bot/.env")
+        self.assertEqual(cv["persistent_data_relative_path"], "docker/cv/bot/data")
+        self.assertEqual(cv["compose_interpolation_env_path"], "/etc/rozkalns-simple-deployer/compose/.env")
+        self.assertTrue(cv["reuses_existing_runtime_inputs"])
 
         activation = host["activation"]
         self.assertTrue(
             activation["rozkalns_cv_target_installation_requires_separate_exact_live_cutover"]
         )
-        self.assertTrue(
-            activation[
-                "rozkalns_cv_private_runtime_config_provisioning_requires_separate_exact_authority"
-            ]
-        )
-        self.assertTrue(
-            activation["rozkalns_cv_persistent_data_adoption_requires_separate_exact_data_authority"]
-        )
+        self.assertTrue(activation["rozkalns_cv_existing_runtime_inputs_reused_in_place"])
         self.assertTrue(
             activation[
                 "rozkalns_cv_existing_runtime_retirement_requires_separate_exact_live_authority"

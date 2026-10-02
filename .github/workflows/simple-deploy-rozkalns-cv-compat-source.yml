@@ -8,14 +8,11 @@ on:
       - "ops/deploy/simple-deploy-targets-v1.json"
       - "ops/deploy/baselines/simple-deploy-targets-weather-cv-v1.json"
       - "ops/deploy/rozkalns-cv-simple-deploy-cutover-v1.json"
-      - "ops/contracts/simple-deploy-rozkalns-cv-data-adoption-v1.json"
-      - "scripts/adopt-simple-deploy-rozkalns-cv-data-v1.py"
       - "ops/deploy/executor-operations.json"
       - "ops/deploy/simple-deploy-compose/rozkalns-cv.yml"
       - "docs/SIMPLE_DEPLOY_ROZKALNS_CV_COMPAT_V1.md"
       - "tests/test-simple-deploy-rozkalns-cv-compat-v1.py"
       - "tests/test_rozkalns_cv_simple_deploy_cutover_contract.py"
-      - "tests/test_rozkalns_cv_simple_deploy_data_adoption.py"
       - "tests/test-deploy-executor-p4.py"
       - "Makefile"
       - "tests/test-simple-deploy-hermes-tech-target-v1.py"
@@ -34,6 +31,5 @@ jobs:
         run: |
           python3 ./tests/test-simple-deploy-rozkalns-cv-compat-v1.py
           python3 ./tests/test_rozkalns_cv_simple_deploy_cutover_contract.py
-          python3 ./tests/test_rozkalns_cv_simple_deploy_data_adoption.py
           python3 ./tests/test-deploy-executor-p4.py
           python3 ./tests/test-simple-deploy-hermes-tech-target-v1.py

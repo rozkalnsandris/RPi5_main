@@ -1,8 +1,9 @@
 # SIMPLE-DEPLOY v1 RPi5-owned rozkalns-cv adapter.
 # The :production tag is discovery/default metadata only; the generic deployer
 # must freeze and apply an exact image@sha256 digest override before mutation.
-# Source merge does not provision private runtime configuration, create/adopt
-# persistent data, retire an existing runtime, or authorize any LIVE cutover.
+# The first adoption reuses the existing CV private env and durable-data paths
+# in place; public source keeps their account-home prefix out of the repository
+# and resolves it through fixed Compose interpolation metadata at cutover.
 name: rozkalns-cv
 
 services:
@@ -19,13 +20,15 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777
     env_file:
-      - /etc/rozkalns-simple-deployer/private/rozkalns-cv.env
+      - ${ROZKALNS_CV_ENV_FILE:?ROZKALNS_CV_ENV_FILE must be set}
     environment:
       ASSISTANT_DB_PATH: /app/data/assistant.sqlite3
       TRUSTED_PROXY_CIDRS: 127.0.0.1/32
+      LLM_BASE_URL: https://api.openai.com
+      LLM_MODEL: gpt-5.6-luna
     volumes:
       - type: bind
-        source: /var/lib/rozkalns-simple-deployer/rozkalns-cv/data
+        source: ${ROZKALNS_CV_DATA_PATH:?ROZKALNS_CV_DATA_PATH must be set}
         target: /app/data
         bind:
           create_host_path: false
