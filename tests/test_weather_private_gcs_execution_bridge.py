@@ -1,5 +1,10 @@
 from datetime import datetime, timezone
+from pathlib import Path
+import sys
 import unittest
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "ops/lib"))
 
 from deploy_executor.weather_private_bigquery_contract import CONTRACT_ID as BIGQUERY_CONTRACT_ID
 from deploy_executor.weather_private_bigquery_execution_bridge import (
