@@ -197,7 +197,15 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(sha256(weather_compose), weather.compose.file_sha256)
         self.assertEqual(
             weather.compose.file_sha256,
-            "80e2b47e4ed039c38285094e0b273fbc884f0a34ff34d8b201d8e93323af1f32",
+            "321fe0aa400d1a01e419f313a6c99ada311058496f36fed032daf1ac036fa16d",
+        )
+
+        private_home_baseline = sd.load_registry(
+            ROOT / "ops/deploy/baselines/simple-deploy-targets-weather-private-home-v1.json"
+        )
+        self.assertEqual(
+            private_home_baseline.get("rozkalns-weather-public-rpi5").compose.file_sha256,
+            weather.compose.file_sha256,
         )
 
         hermes = registry.get("hermes-deals")
@@ -469,9 +477,14 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(reviewed[0]["target_alias"], "rozkalns-weather-public-rpi5")
         self.assertEqual(
             reviewed[0]["consumer_contract_revision"],
-            "606981d10eee59d13b802f6a682abf1daa2aa8a5",
+            "3826175b5bc2c4c7ad1fd5638741258506dd254d",
         )
         self.assertEqual(reviewed[0]["wait_timeout_seconds"], 180)
+        self.assertEqual(
+            reviewed[0]["private_runtime_config_path"],
+            "/etc/rozkalns-simple-deployer/private/rozkalns-weather-private-home.env",
+        )
+        self.assertEqual(reviewed[0]["operational_runtime_mode"], "private-home")
         self.assertEqual(reviewed[1]["target_alias"], "hermes-deals")
         self.assertEqual(
             reviewed[1]["consumer_contract_revision"],
@@ -541,6 +554,33 @@ class ContractTests(unittest.TestCase):
         self.assertIn("hermes-deals", doc)
         self.assertIn("Target adoption remains a tracked source review", doc)
         self.assertIn("Source readiness is not LIVE authority", doc)
+        self.assertIn("Weather private-home configuration transition (#804)", doc)
+        self.assertIn("/etc/rozkalns-simple-deployer/private/rozkalns-weather-private-home.env", doc)
+
+    def test_weather_private_home_compose_and_cutover_are_fail_closed(self):
+        compose = (ROOT / "ops/deploy/simple-deploy-compose/rozkalns-weather-public.yml").read_text(encoding="utf-8")
+        self.assertEqual(compose.count("/etc/rozkalns-simple-deployer/private/rozkalns-weather-private-home.env"), 4)
+        self.assertEqual(compose.count("WEATHER_RUNTIME_MODE: private-home"), 4)
+        self.assertEqual(compose.count("WEATHER_RUNTIME_MODE: public-only"), 1)
+        self.assertNotIn("GOOGLE_CLOUD_PROJECT", compose)
+        self.assertNotIn("WEATHERNEXT_BIGQUERY_DATASET", compose)
+
+        contract = json.loads((ROOT / "ops/deploy/weather-private-home-cutover-v1.json").read_text())
+        self.assertEqual(contract["issue"], 804)
+        self.assertFalse(contract["execution_enabled"])
+        self.assertEqual(contract["target_alias"], "rozkalns-weather-public-rpi5")
+        self.assertEqual(contract["candidate_release"]["source_sha"], "3826175b5bc2c4c7ad1fd5638741258506dd254d")
+        self.assertEqual(contract["candidate_release"]["image_digest"], "sha256:7fd373b1c8e22b812b4ede3c0e124860511fa104f563ec77cd6cdd42d5a1d41b")
+        self.assertEqual(contract["protected_runtime_config"]["path"], "/etc/rozkalns-simple-deployer/private/rozkalns-weather-private-home.env")
+        self.assertEqual(contract["protected_runtime_config"]["exact_allowed_keys"], ["HOME_LAT", "HOME_LON"])
+        self.assertTrue(contract["protected_runtime_config"]["exact_key_set_required"])
+        self.assertTrue(contract["same_digest_transition"]["force_recreate_required"])
+        self.assertEqual(contract["same_digest_transition"]["fixed_service"], "weather")
+        self.assertTrue(contract["failure_semantics"]["fail_closed"])
+        self.assertFalse(contract["source_only_state"]["live_authorized"])
+        rendered = json.dumps(contract, sort_keys=True)
+        self.assertNotIn("HOME_LAT=", rendered)
+        self.assertNotIn("HOME_LON=", rendered)
 
 
 class SourceBoundaryTests(unittest.TestCase):

@@ -40,11 +40,13 @@
       {
         "target_alias": "rozkalns-weather-public-rpi5",
         "consumer_repository": "rozkalnsandris/rozkalns_weather",
-        "consumer_contract_revision": "606981d10eee59d13b802f6a682abf1daa2aa8a5",
+        "consumer_contract_revision": "3826175b5bc2c4c7ad1fd5638741258506dd254d",
         "compose_source": "ops/deploy/simple-deploy-compose/rozkalns-weather-public.yml",
-        "compose_sha256": "80e2b47e4ed039c38285094e0b273fbc884f0a34ff34d8b201d8e93323af1f32",
+        "compose_sha256": "321fe0aa400d1a01e419f313a6c99ada311058496f36fed032daf1ac036fa16d",
         "wait_timeout_seconds": 180,
-        "registry_pull_profile": "public-anonymous-pull"
+        "registry_pull_profile": "public-anonymous-pull",
+        "private_runtime_config_path": "/etc/rozkalns-simple-deployer/private/rozkalns-weather-private-home.env",
+        "operational_runtime_mode": "private-home"
       },
       {
         "target_alias": "hermes-deals",
@@ -137,7 +139,9 @@
     "rozkalns_cv_target_installation_requires_separate_exact_live_cutover": true,
     "rozkalns_cv_private_runtime_config_provisioning_requires_separate_exact_authority": true,
     "rozkalns_cv_persistent_data_adoption_requires_separate_exact_data_authority": true,
-    "rozkalns_cv_existing_runtime_retirement_requires_separate_exact_live_authority": true
+    "rozkalns_cv_existing_runtime_retirement_requires_separate_exact_live_authority": true,
+    "weather_private_home_runtime_config_requires_separate_exact_authority": true,
+    "weather_private_home_cutover_requires_separate_exact_live_authority": true
   },
   "installer": {
     "issue": 672,

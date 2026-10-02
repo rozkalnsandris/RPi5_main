@@ -36,20 +36,32 @@ The tracked registry has `execution_enabled: true` and two reviewed source targe
 
 ## Weather canary binding — activated standing target
 
-The Weather target is derived from the accepted consumer contract at `rozkalnsandris/rozkalns_weather@606981d10eee59d13b802f6a682abf1daa2aa8a5`:
+The Weather target is derived from the accepted consumer contract at `rozkalnsandris/rozkalns_weather@3826175b5bc2c4c7ad1fd5638741258506dd254d`:
 
 - image: `ghcr.io/rozkalnsandris/rozkalns_weather`;
 - target alias: `rozkalns-weather-public-rpi5`;
 - architecture: `linux/arm64`;
 - Compose project/service: `rozkalns-weather-public` / `weather`;
 - Compose file: `rozkalns-weather-public.yml`;
-- Compose SHA-256: `80e2b47e4ed039c38285094e0b273fbc884f0a34ff34d8b201d8e93323af1f32`;
+- Compose SHA-256: `321fe0aa400d1a01e419f313a6c99ada311058496f36fed032daf1ac036fa16d`;
+- operational runtime mode: `private-home`;
+- fixed protected runtime config: `/etc/rozkalns-simple-deployer/private/rozkalns-weather-private-home.env` containing only `HOME_LAT` and `HOME_LON`;
 - loopback liveness/readiness: `http://127.0.0.1:9180/health` / `http://127.0.0.1:9180/ready`;
 - persistent volume: `weather_data`;
 - registry profile: `public-anonymous-pull`;
 - bounded Compose wait timeout: 180 seconds.
 
 Weather's one-time Phase A/B/C activation is completed historical evidence. Its standing ordinary `AUTO_DEPLOY_SAFE` release path is active for this fixed target only.
+
+### Weather private-home configuration transition (#804)
+
+The target alias/project/service/volume identities remain unchanged. The reviewed Compose now keeps `schema-init` in `public-only`, while `weather`, `public-ingest`, `readiness` and `corpus-check` use static `WEATHER_RUNTIME_MODE=private-home` and the fixed host-owned env file `/etc/rozkalns-simple-deployer/private/rozkalns-weather-private-home.env`.
+
+The protected file is intentionally limited to exactly `HOME_LAT` and `HOME_LON`. It contains no Google/WeatherNext settings and no caller-selected generic environment. Source merge does not create or read this file.
+
+Because the live Weather image already equals the private-home-capable candidate digest `sha256:7fd373b1c8e22b812b4ede3c0e124860511fa104f563ec77cd6cdd42d5a1d41b`, ordinary SIMPLE-DEPLOY digest reconciliation would return `NO_OP_CURRENT`. The one-time source contract `ops/deploy/weather-private-home-cutover-v1.json` therefore requires an explicitly owner-authorized, fixed-service `--force-recreate` transition after atomic private-config/registry/Compose materialization. It preserves the same image digest and persistent `weather_data` volume, performs no schema/data operation, and verifies `/health`, `/ready`, `private-home` mode and coordinate-pair presence without exposing coordinate values.
+
+Any LIVE execution remains separately STRICT-gated; source acceptance does not authorize protected config access, Docker, systemd or runtime mutation.
 
 ## Hermes Deals binding — source registered, not installed
 

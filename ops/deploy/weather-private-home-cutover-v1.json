@@ -1,0 +1,169 @@
+{
+  "schema": "rozkalns.rpi5-main.weather-private-home-cutover.v1",
+  "schema_version": 1,
+  "issue": 804,
+  "operation_id": "rpi5-main.weather-private-home-cutover.v1",
+  "execution_enabled": false,
+  "target_alias": "rozkalns-weather-public-rpi5",
+  "authorization_class": "STRICT",
+  "one_time": true,
+  "candidate_release": {
+    "consumer_repository": "rozkalnsandris/rozkalns_weather",
+    "source_sha": "3826175b5bc2c4c7ad1fd5638741258506dd254d",
+    "image": "ghcr.io/rozkalnsandris/rozkalns_weather",
+    "image_digest": "sha256:7fd373b1c8e22b812b4ede3c0e124860511fa104f563ec77cd6cdd42d5a1d41b",
+    "production_pointer_must_match_candidate_before_mutation": true,
+    "mutable_production_tag_is_authority": false
+  },
+  "observed_preflight_baseline": {
+    "deployed_source_sha": "3826175b5bc2c4c7ad1fd5638741258506dd254d",
+    "deployed_image_digest": "sha256:7fd373b1c8e22b812b4ede3c0e124860511fa104f563ec77cd6cdd42d5a1d41b",
+    "runtime_mode": "public-only",
+    "home_coordinate_pair_present": false,
+    "container_health": "healthy",
+    "evidence_is_point_in_time_only": true,
+    "fresh_revalidation_required_before_live": true
+  },
+  "source_contract": {
+    "reviewed_target_registry_path": "ops/deploy/simple-deploy-targets-v1.json",
+    "activation_registry_path": "ops/deploy/baselines/simple-deploy-targets-weather-private-home-v1.json",
+    "activation_registry_exact_aliases": [
+      "rozkalns-weather-public-rpi5"
+    ],
+    "compose_source_path": "ops/deploy/simple-deploy-compose/rozkalns-weather-public.yml",
+    "compose_source_sha256": "321fe0aa400d1a01e419f313a6c99ada311058496f36fed032daf1ac036fa16d",
+    "compose_project": "rozkalns-weather-public",
+    "compose_service": "weather",
+    "private_runtime_config_path": "/etc/rozkalns-simple-deployer/private/rozkalns-weather-private-home.env",
+    "owner_authorization_must_bind_exact_merged_rpi5_main_sha": true,
+    "historical_public_only_baselines_unchanged": true,
+    "historical_public_compose_fixture": "ops/deploy/simple-deploy-compose/rozkalns-weather-public-v1.yml"
+  },
+  "protected_runtime_config": {
+    "path": "/etc/rozkalns-simple-deployer/private/rozkalns-weather-private-home.env",
+    "required_before_recreate": true,
+    "exact_allowed_keys": [
+      "HOME_LAT",
+      "HOME_LON"
+    ],
+    "exact_key_set_required": true,
+    "values_runtime_only": true,
+    "values_may_be_committed": false,
+    "values_may_be_emitted_in_evidence": false,
+    "file_type": "regular-file-nonsymlink",
+    "required_owner": "root",
+    "required_group": "rozkalns-simple-deployer",
+    "required_mode": "0640",
+    "parent_directory_required_mode": "0750",
+    "content_validation_requires_explicit_protected_runtime_authority": true,
+    "materialization_requires_explicit_config_mutation_authority": true
+  },
+  "compose_runtime_contract": {
+    "schema_init_runtime_mode": "public-only",
+    "operational_runtime_mode": "private-home",
+    "operational_services": [
+      "weather",
+      "public-ingest",
+      "readiness",
+      "corpus-check"
+    ],
+    "fixed_env_file": "/etc/rozkalns-simple-deployer/private/rozkalns-weather-private-home.env",
+    "google_or_weathernext_environment_forbidden": true,
+    "caller_selected_environment_forbidden": true
+  },
+  "same_digest_transition": {
+    "required": true,
+    "reason": "current deployed image already equals the private-home-capable candidate digest",
+    "ordinary_reconciler_no_op_on_same_digest": true,
+    "force_recreate_required": true,
+    "fixed_service": "weather",
+    "exact_digest_override_required": true,
+    "compose_down_forbidden": true,
+    "remove_orphans_forbidden": true
+  },
+  "host_materialization": {
+    "timer": "rozkalns-simple-deployer.timer",
+    "timer_must_be_stopped_before_first_installed_config_mutation": true,
+    "deployer_service_must_be_inactive_before_materialization": true,
+    "activation_registry": {
+      "source_path": "ops/deploy/baselines/simple-deploy-targets-weather-private-home-v1.json",
+      "destination_path": "/etc/rozkalns-simple-deployer/targets.json",
+      "materialization": "atomic-exact-source-copy",
+      "required_owner": "root",
+      "required_group": "root",
+      "required_mode": "0444"
+    },
+    "compose": {
+      "source_path": "ops/deploy/simple-deploy-compose/rozkalns-weather-public.yml",
+      "source_sha256": "321fe0aa400d1a01e419f313a6c99ada311058496f36fed032daf1ac036fa16d",
+      "destination_path": "/etc/rozkalns-simple-deployer/compose/rozkalns-weather-public.yml",
+      "materialization": "atomic-exact-source-copy",
+      "required_owner": "root",
+      "required_group": "root",
+      "required_mode": "0444"
+    },
+    "private_runtime_config": {
+      "destination_path": "/etc/rozkalns-simple-deployer/private/rozkalns-weather-private-home.env",
+      "materialization": "atomic-owner-supplied-exact-key-file",
+      "required_owner": "root",
+      "required_group": "rozkalns-simple-deployer",
+      "required_mode": "0640"
+    }
+  },
+  "verification": {
+    "liveness_url": "http://127.0.0.1:9180/health",
+    "readiness_url": "http://127.0.0.1:9180/ready",
+    "required_http_status": 200,
+    "required_runtime_mode": "private-home",
+    "required_home_coordinate_pair_present": true,
+    "coordinate_values_must_not_be_output": true,
+    "required_image_digest": "sha256:7fd373b1c8e22b812b4ede3c0e124860511fa104f563ec77cd6cdd42d5a1d41b",
+    "required_source_sha": "3826175b5bc2c4c7ad1fd5638741258506dd254d",
+    "recurring_public_ingest_command": "rozkalns-weather ingest-public",
+    "weathernext_query_performed": false
+  },
+  "ordered_steps": [
+    "revalidate-exact-owner-live-authority-and-ready-envelope",
+    "revalidate-rpi5-main-exact-merged-source-and-ci",
+    "revalidate-weather-source-digest-production-pointer-and-live-baseline",
+    "revalidate-protected-runtime-config-input-authority-without-outputting-values",
+    "stop-generic-simple-deployer-timer",
+    "verify-generic-simple-deployer-service-inactive",
+    "materialize-protected-private-home-env-atomically",
+    "validate-private-home-env-exact-key-set-without-outputting-values",
+    "materialize-weather-only-activation-registry",
+    "materialize-reviewed-weather-compose",
+    "materialize-exact-digest-compose-override",
+    "force-recreate-only-weather-service-with-wait",
+    "verify-exact-image-source-health-and-readiness",
+    "verify-runtime-mode-private-home-and-home-pair-presence-without-values",
+    "start-generic-simple-deployer-timer"
+  ],
+  "failure_semantics": {
+    "fail_closed": true,
+    "authorization_consumed_at_first_mutation": true,
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "alternate_mutation_path": false,
+    "preserve_minimum_sanitized_evidence": true,
+    "generic_timer_remains_stopped_on_post_mutation_failure": true
+  },
+  "forbidden_operations": [
+    "coordinate-values-in-github-or-evidence",
+    "google-or-weathernext-private-provider-activation",
+    "database-schema-data-mutation",
+    "destructive-recovery",
+    "cloudflare-dns-network-mutation",
+    "unrelated-service-container-or-host-control",
+    "package-user-group-mutation",
+    "generic-shell-caller-selected-path-argv-or-environment",
+    "automatic-retry-cleanup-rollback-or-alternate-mutation-path"
+  ],
+  "source_only_state": {
+    "live_authorized": false,
+    "protected_config_authorized": false,
+    "runtime_mutation_permitted_by_this_file": false,
+    "merge_authorized": false
+  }
+}
