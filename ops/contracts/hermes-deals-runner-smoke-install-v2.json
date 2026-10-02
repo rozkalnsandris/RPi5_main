@@ -65,7 +65,7 @@
     "external_entrypoint_enabled": false,
     "implementation": "ops/lib/deploy_executor/hermes_deals_runner_smoke_install_consumer.py:prepare_install_live_envelope",
     "implementation_issue": 481,
-    "max_authorization_age_seconds": 600,
+    "max_future_authorization_skew_seconds": 30,
     "max_revalidation_time_drift_seconds": 30,
     "mutation_boundary": "ops/lib/deploy_executor/hermes_deals_runner_smoke_install.py:apply_install",
     "owner_numeric_id": 277435981,

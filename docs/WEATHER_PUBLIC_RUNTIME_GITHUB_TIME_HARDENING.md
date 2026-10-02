@@ -12,7 +12,7 @@ The historical receipt intentionally did not retain the raw underlying exception
 
 Initial pre-consume admission remains unchanged:
 
-- `rozkalns.live-auth.v1` TTL remains 600 seconds;
+- `rozkalns.live-auth.v1` has no wall-clock expiry; `created_at` is retained for future-timestamp sanity;
 - future skew remains bounded by the protocol;
 - GitHub response timestamps must be timezone-aware and canonical to whole seconds;
 - the canonical pre-consume revalidation window still rejects timestamp regression;
@@ -23,7 +23,7 @@ Initial pre-consume admission remains unchanged:
 
 After durable replay consume, the one-shot authorization cannot become available again. Revalidation still performs the same authorization, queue, source, CI, ancestry, replay-consumed and baseline drift checks, and every GitHub response must still provide a valid canonical timestamp.
 
-The post-consume window differs only in one narrow respect: cross-request `Date` ordering and total wall-clock span are no longer standalone failure reasons. A multi-surface revalidation can legitimately take more than 30 seconds or observe a slightly older `Date` value from another GitHub response path. Burning an already-consumed one-shot authorization for those transport-ordering effects does not add freshness protection because admission TTL and the strict pre-consume sequence were already enforced before the first mutation.
+The post-consume window differs only in one narrow respect: cross-request `Date` ordering and total wall-clock span are no longer standalone failure reasons. A multi-surface revalidation can legitimately take more than 30 seconds or observe a slightly older `Date` value from another GitHub response path. Burning an already-consumed one-shot authorization for those transport-ordering effects does not add freshness protection because owner/body/Queue/source/CI/baseline/replay checks and the strict pre-consume sequence were already enforced before the first mutation.
 
 Post-consume evidence therefore retains the newest canonical GitHub timestamp observed during the revalidation. Missing/invalid or non-whole-second timestamps still fail closed.
 
