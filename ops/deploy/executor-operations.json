@@ -795,7 +795,7 @@
         },
         {
           "category": "filesystem.simple-deploy-cv-activation-materialization",
-          "max_operations": 3
+          "max_operations": 4
         },
         {
           "category": "docker.rozkalns-cv-legacy-runtime-retirement",
@@ -811,7 +811,7 @@
         "generic sudo/root shell or arbitrary command execution",
         "caller-selected command/path/argv/environment authority",
         "unrelated service, timer, Docker, filesystem or host mutation",
-        "private env content read/write/copy/materialization",
+        "private app env content read/write/copy/materialization",
         "persistent data copy/migration/reownership/delete/content inspection",
         "database query/schema migration/content transformation",
         "legacy CV network deletion or reconfiguration",
@@ -825,21 +825,22 @@
         "activation-registry:ops/deploy/baselines/simple-deploy-targets-weather-cv-v1.json",
         "activation-registry-aliases:rozkalns-weather-public-rpi5,rozkalns-cv-rpi5",
         "simple-deploy-compose:ops/deploy/simple-deploy-compose/rozkalns-cv.yml",
-        "simple-deploy-compose-sha256:a1ded554dc931c8451eb7e606c9cd9c6bac1c4b4126e56e533ad9ea38ee2c3d8",
         "consumer-source-sha:d75863d0ce4cfdac0015150137523abbaccf5914",
         "candidate-image-digest:sha256:ba9e24c82eccd833cfe42d6a4aa61ef76c584bcfd4c27efbced13c3a408d2a1a",
         "legacy-production-sha:4986a6d80460bd6d7681c70e09e61a15e31007f4",
-        "existing-private-env:/home/andris/docker/cv/bot/.env",
-        "existing-persistent-data:/home/andris/docker/cv/bot/data",
         "loopback-bind:127.0.0.1:8088",
-        "global-execution:disabled"
+        "global-execution:disabled",
+        "simple-deploy-compose-sha256:deb4787f91d7a8c978d2ca1eb7b05d05ed0db28b467a295ddfcbbb55b2420de0",
+        "existing-private-env:passwd-home+docker/cv/bot/.env",
+        "existing-persistent-data:passwd-home+docker/cv/bot/data",
+        "compose-path-interpolation:/etc/rozkalns-simple-deployer/compose/.env"
       ],
       "preflight": [
         "READY and separate owner LIVE authority bind this exact STRICT target before any host mutation",
         "authorized RPi5_main SHA is current/reachable and exact-SHA required CI is successful",
         "candidate CV source and immutable digest equal the reviewed cutover contract and current production pointer",
-        "existing CV private env is a present regular non-symlink file by metadata only; contents are not read or copied",
-        "existing CV data is a present non-symlink directory by metadata only and remains in place",
+        "existing CV private env resolves from the legacy account passwd home plus fixed relative path; metadata only, contents are not read or copied",
+        "existing CV data resolves from the same passwd home plus fixed relative path and remains in place",
         "legacy production state is exactly 4986a6d80460bd6d7681c70e09e61a15e31007f4",
         "legacy cv and cvbot identities are exact and cv owns 127.0.0.1:8088",
         "legacy CV pull-deploy timer/service remain inactive and are not reactivated by this cutover",
@@ -850,7 +851,8 @@
         "host target registry contains exactly Weather plus rozkalns-cv-rpi5",
         "host deployer identity binds the exact authorized RPi5_main cutover source SHA",
         "CV SIMPLE-DEPLOY Compose is materialized from the exact reviewed source identity",
-        "existing private env and persistent data paths are reused in place without copy, migration, reownership or deletion",
+        "host-local Compose interpolation .env contains only resolved path metadata and no secret values",
+        "existing private env and persistent data are reused in place through host-local Compose path interpolation without copy, migration, reownership or deletion",
         "legacy cv and cvbot containers are retired",
         "127.0.0.1:8088 ownership transfers from legacy cv through an observed unbound state to rozkalns-cv/cv",
         "deployed source SHA is d75863d0ce4cfdac0015150137523abbaccf5914",
