@@ -12,6 +12,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+import warnings
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -315,15 +316,39 @@ class CloudflareClient:
         return result
 
 
-def _read_hidden_provisioning_credentials() -> tuple[str, str]:
+def _ensure_controlling_tty() -> None:
+    flags = os.O_RDWR
+    if hasattr(os, "O_NOCTTY"):
+        flags |= os.O_NOCTTY
     try:
-        with open("/dev/tty", "r+", encoding="utf-8", buffering=1) as tty:
-            if not os.isatty(tty.fileno()):
-                raise OperatorError("local_tty_required")
-            account_id = getpass.getpass("Cloudflare account ID: ", stream=tty).strip()
-            token = getpass.getpass("Cloudflare Access API token: ", stream=tty).strip()
-    except (OSError, EOFError, KeyboardInterrupt) as exc:
+        fd = os.open("/dev/tty", flags)
+    except OSError as exc:
         raise OperatorError("local_tty_required") from exc
+    try:
+        if not os.isatty(fd):
+            raise OperatorError("local_tty_required")
+    finally:
+        os.close(fd)
+
+
+def _hidden_getpass(prompt: str) -> str:
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", getpass.GetPassWarning)
+            return getpass.getpass(prompt).strip()
+    except (
+        OSError,
+        EOFError,
+        KeyboardInterrupt,
+        getpass.GetPassWarning,
+    ) as exc:
+        raise OperatorError("local_tty_required") from exc
+
+
+def _read_hidden_provisioning_credentials() -> tuple[str, str]:
+    _ensure_controlling_tty()
+    account_id = _hidden_getpass("Cloudflare account ID: ")
+    token = _hidden_getpass("Cloudflare Access API token: ")
     if not ACCOUNT_ID_RE.fullmatch(account_id):
         raise OperatorError("secret_payload_invalid")
     if (

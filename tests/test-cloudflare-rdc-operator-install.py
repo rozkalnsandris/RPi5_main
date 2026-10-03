@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import base64
 import hashlib
 import importlib.util
+import json
 import subprocess
 import unittest
 from unittest import mock
@@ -18,6 +20,7 @@ installer = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(installer)
 
 EXPECTED = "a" * 40
+EXPECTED_OLD = "b" * 40
 
 
 class FakeRunner:
@@ -123,6 +126,141 @@ class InstallerTests(unittest.TestCase):
         self.assertTrue(
             any(str(installer.INSTALLED) in call for call in install_calls)
         )
+
+    def test_upgrade_cli_binds_explicit_old_release(self) -> None:
+        args = installer.parse_args([
+            "--expected-main",
+            EXPECTED,
+            "--upgrade-from",
+            EXPECTED_OLD,
+        ])
+        self.assertEqual(args.expected_main, EXPECTED)
+        self.assertEqual(args.upgrade_from, EXPECTED_OLD)
+        self.assertFalse(args.apply)
+
+    def test_upgrade_preflight_requires_exact_installed_release(self) -> None:
+        runner = FakeRunner()
+        observed = {
+            "source_sha": EXPECTED_OLD,
+            "operator_sha256": "c" * 64,
+            "metadata_sha256": "d" * 64,
+        }
+        with mock.patch.object(installer.os, "geteuid", return_value=1000), \
+             mock.patch.object(
+                 installer,
+                 "_inspect_installed_release",
+                 return_value=observed,
+             ) as inspect_release, \
+             mock.patch.object(
+                 installer,
+                 "_target_absent",
+                 return_value=True,
+             ) as target_absent:
+            source, metadata = installer.preflight_upgrade(
+                EXPECTED,
+                EXPECTED_OLD,
+                runner=runner,
+            )
+        self.assertEqual(source, installer.SOURCE.read_bytes())
+        self.assertEqual(
+            metadata,
+            installer.build_release_metadata(EXPECTED, source),
+        )
+        inspect_release.assert_called_once_with(
+            EXPECTED_OLD,
+            runner=runner,
+        )
+        self.assertEqual(
+            [call.args[0] for call in target_absent.call_args_list],
+            [installer.OPERATOR_STAGE, installer.RELEASE_METADATA_STAGE],
+        )
+
+    def test_upgrade_dispatches_one_fixed_root_writer_and_verifies_new_release(self) -> None:
+        source = b"new-operator"
+        metadata = installer.build_release_metadata(EXPECTED, source)
+        calls = []
+
+        def runner(argv, *, input=None, stdout=None, stderr=None, check=False):
+            calls.append((list(argv), input))
+            return subprocess.CompletedProcess(argv, 0, stdout=b"", stderr=b"")
+
+        post = {
+            "source_sha": EXPECTED,
+            "operator_sha256": hashlib.sha256(source).hexdigest(),
+            "metadata_sha256": hashlib.sha256(metadata).hexdigest(),
+        }
+        with mock.patch.object(
+            installer,
+            "preflight_upgrade",
+            return_value=(source, metadata),
+        ), mock.patch.object(
+            installer,
+            "_inspect_installed_release",
+            return_value=post,
+        ) as inspect_release, mock.patch.object(
+            installer,
+            "_target_absent",
+            return_value=True,
+        ):
+            installer.apply_upgrade(
+                EXPECTED,
+                EXPECTED_OLD,
+                runner=runner,
+            )
+
+        self.assertEqual(len(calls), 1)
+        argv, payload_raw = calls[0]
+        self.assertEqual(
+            argv[:4],
+            [installer.SUDO, "-n", installer.PYTHON, "-c"],
+        )
+        self.assertEqual(argv[4], installer.ROOT_UPGRADE_WRITER)
+        self.assertEqual(argv[-2:], [EXPECTED_OLD, EXPECTED])
+        payload = json.loads(payload_raw.decode("utf-8"))
+        self.assertEqual(
+            base64.b64decode(payload["operator_b64"], validate=True),
+            source,
+        )
+        self.assertEqual(
+            base64.b64decode(payload["metadata_b64"], validate=True),
+            metadata,
+        )
+        inspect_release.assert_called_once_with(
+            EXPECTED,
+            runner=runner,
+        )
+
+    def test_upgrade_writer_rechecks_old_release_and_never_auto_cleans(self) -> None:
+        writer = installer.ROOT_UPGRADE_WRITER
+        self.assertIn('current["source_sha"] != expected_old', writer)
+        self.assertIn("/usr/local/sbin/rpi5-cloudflare.next", writer)
+        self.assertIn('metadata_stage = release_dir + "/release.json.next"', writer)
+        self.assertIn("os.replace(operator_stage, operator)", writer)
+        self.assertIn("os.replace(metadata_stage, metadata)", writer)
+        self.assertNotIn("os.unlink", writer)
+        self.assertNotIn("remove(", writer)
+
+    def test_upgrade_writer_failure_is_fail_closed_after_dispatch(self) -> None:
+        source = b"new-operator"
+        metadata = installer.build_release_metadata(EXPECTED, source)
+
+        def failing_runner(argv, *, input=None, stdout=None, stderr=None, check=False):
+            return subprocess.CompletedProcess(argv, 73, stdout=b"", stderr=b"")
+
+        with mock.patch.object(
+            installer,
+            "preflight_upgrade",
+            return_value=(source, metadata),
+        ):
+            with self.assertRaisesRegex(
+                installer.InstallError,
+                "post_mutation_failure",
+            ):
+                installer.apply_upgrade(
+                    EXPECTED,
+                    EXPECTED_OLD,
+                    runner=failing_runner,
+                )
 
     def test_release_metadata_binds_exact_main_and_operator_hash(self) -> None:
         source = b"operator-bytes"
