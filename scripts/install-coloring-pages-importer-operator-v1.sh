@@ -14,7 +14,7 @@ usage() {
     cat >&2 <<'USAGE'
 Usage: sudo bash scripts/install-coloring-pages-importer-operator-v1.sh \
   --expected-rpi5-main-sha <40-hex-sha> \
-  [--source-root /home/andris/RPi5_main]
+  [--source-root <absolute-rpi5-main-path>]
 USAGE
     exit 2
 }
