@@ -22,6 +22,9 @@ from github_p1d04_exact_main_gate import GateError, fetch_and_validate_exact_mai
 AUDIT_NAME = "phase4-admin-route-origin-getonly"
 CANARY_ID = "phase4-admin-route-origin-v1"
 CONTRACT_PATH = Path("ops/contracts/admin-zone-verification-v1.json")
+TUNNEL_READ_BINDING_PATH = Path(
+    "ops/contracts/cloudflare-phase4-tunnel-read-v1.json"
+)
 EXPECTED_TUNNEL_NAME = "rpi5-tunnel"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 ALLOWED_CLASSES = {"lan", "loopback", "other", "unknown"}
@@ -65,7 +68,21 @@ def _load_contract(path: Path = CONTRACT_PATH) -> dict[str, Any]:
     return decoded
 
 
-def _require_tunnel_read_capability(contract: dict[str, Any]) -> None:
+def _load_tunnel_read_binding(
+    path: Path = TUNNEL_READ_BINDING_PATH,
+) -> dict[str, Any]:
+    decoded = json.loads(path.read_text(encoding="utf-8"))
+    if decoded.get("schema") != "rozkalns.rpi5-main.phase4-tunnel-read-capability.v1":
+        raise AuditError("tunnel_read_binding_contract_invalid")
+    if decoded.get("schema_version") != 1:
+        raise AuditError("tunnel_read_binding_contract_invalid")
+    return decoded
+
+
+def _require_tunnel_read_capability(
+    contract: dict[str, Any],
+    binding: dict[str, Any],
+) -> None:
     capability = contract.get("route_origin_runtime_capability")
     if not isinstance(capability, dict):
         raise AuditError("route_origin_capability_contract_missing")
@@ -85,17 +102,80 @@ def _require_tunnel_read_capability(contract: dict[str, Any]) -> None:
         raise AuditError("route_origin_capability_contract_invalid")
 
     status = capability.get("status")
-    if status == "unbound":
-        if capability.get("runtime_execution_allowed") is not False:
-            raise AuditError("route_origin_capability_contract_invalid")
-        raise AuditError("tunnel_read_capability_unbound")
     if status != "bound":
         raise AuditError("route_origin_capability_contract_invalid")
     if capability.get("runtime_execution_allowed") is not True:
         raise AuditError("route_origin_capability_contract_invalid")
-    binding_ref = capability.get("binding_contract_ref")
-    if not isinstance(binding_ref, str) or not binding_ref:
+    if capability.get("runtime_execution_requires_fresh_owner_authorization") is not True:
         raise AuditError("route_origin_capability_contract_invalid")
+    binding_ref = capability.get("binding_contract_ref")
+    if binding_ref != str(TUNNEL_READ_BINDING_PATH):
+        raise AuditError("route_origin_capability_contract_invalid")
+
+    permission = binding.get("cloudflare_permission")
+    api_surface = binding.get("api_surface")
+    secret_binding = binding.get("github_secret_binding")
+    runtime_authority = binding.get("runtime_authority")
+    evidence = binding.get("evidence")
+    if not all(
+        isinstance(item, dict)
+        for item in (
+            permission,
+            api_surface,
+            secret_binding,
+            runtime_authority,
+            evidence,
+        )
+    ):
+        raise AuditError("tunnel_read_binding_contract_invalid")
+
+    if binding.get("status") != "source-bound-secret-unprovisioned":
+        raise AuditError("tunnel_read_binding_contract_invalid")
+    if permission.get("required") != "Cloudflare Tunnel Read":
+        raise AuditError("tunnel_read_binding_contract_invalid")
+    if permission.get("access_level") != "read-only":
+        raise AuditError("tunnel_read_binding_contract_invalid")
+    if permission.get("write_permissions_allowed") is not False:
+        raise AuditError("tunnel_read_binding_contract_invalid")
+    if permission.get("accepted_alternates") != []:
+        raise AuditError("tunnel_read_binding_contract_invalid")
+    if api_surface.get("methods") != ["GET"]:
+        raise AuditError("tunnel_read_binding_contract_invalid")
+    if api_surface.get("paths") != expected_surfaces:
+        raise AuditError("tunnel_read_binding_contract_invalid")
+    if api_surface.get("custom_api_base_allowed") is not False:
+        raise AuditError("tunnel_read_binding_contract_invalid")
+    if secret_binding.get("account_id") != "CLOUDFLARE_PHASE4_TUNNEL_ACCOUNT_ID":
+        raise AuditError("tunnel_read_binding_contract_invalid")
+    if secret_binding.get("api_token") != "CLOUDFLARE_PHASE4_TUNNEL_READ_API_TOKEN":
+        raise AuditError("tunnel_read_binding_contract_invalid")
+    if secret_binding.get("existing_p1d03_secrets_reusable") is not False:
+        raise AuditError("tunnel_read_binding_contract_invalid")
+    if secret_binding.get("secret_values_in_source_allowed") is not False:
+        raise AuditError("tunnel_read_binding_contract_invalid")
+    if secret_binding.get("secret_provisioning_authorized_by_source") is not False:
+        raise AuditError("tunnel_read_binding_contract_invalid")
+    if secret_binding.get("repository_settings_mutation_authorized_by_source") is not False:
+        raise AuditError("tunnel_read_binding_contract_invalid")
+    if runtime_authority.get("source_merge_authorizes_cloudflare_run") is not False:
+        raise AuditError("tunnel_read_binding_contract_invalid")
+    if runtime_authority.get("source_merge_authorizes_runtime_verification") is not False:
+        raise AuditError("tunnel_read_binding_contract_invalid")
+    if runtime_authority.get("fresh_owner_authorization_required") is not True:
+        raise AuditError("tunnel_read_binding_contract_invalid")
+    if runtime_authority.get("cloudflare_mutation_allowed") is not False:
+        raise AuditError("tunnel_read_binding_contract_invalid")
+    if runtime_authority.get("automatic_retry_allowed") is not False:
+        raise AuditError("tunnel_read_binding_contract_invalid")
+    for key in (
+        "account_id_emission_allowed",
+        "api_token_emission_allowed",
+        "tunnel_id_emission_allowed",
+        "raw_api_payload_emission_allowed",
+        "private_origin_coordinates_emission_allowed",
+    ):
+        if evidence.get(key) is not False:
+            raise AuditError("tunnel_read_binding_contract_invalid")
 
 
 def _unknown_report(
@@ -306,8 +386,9 @@ def main() -> int:
     stage = "unknown"
     try:
         contract = _load_contract()
+        binding = _load_tunnel_read_binding()
         stage = "capability_binding"
-        _require_tunnel_read_capability(contract)
+        _require_tunnel_read_capability(contract, binding)
         stage = "binding"
         if os.environ.get("GITHUB_ACTIONS") != "true":
             raise AuditError("github_actions_required")
@@ -329,6 +410,8 @@ def main() -> int:
             "CLOUDFLARE_ACCOUNT_ID",
             "CLOUDFLARE_API_TOKEN",
             "CLOUDFLARE_WRITE_API_TOKEN",
+            "CLOUDFLARE_P1D03_ACCOUNT_ID",
+            "CLOUDFLARE_P1D03_READ_API_TOKEN",
             "CLOUDFLARE_P1D03_OWNER_EMAIL",
             "CLOUDFLARE_P1D04_ACCOUNT_ID",
             "CLOUDFLARE_P1D04_READ_API_TOKEN",
@@ -351,8 +434,33 @@ def main() -> int:
         finally:
             github_token = ""
 
-        stage = "capability_binding"
-        raise AuditError("tunnel_read_capability_binding_not_implemented")
+        account_id = os.environ.pop(
+            "CLOUDFLARE_PHASE4_TUNNEL_ACCOUNT_ID",
+            "",
+        )
+        read_token = os.environ.pop(
+            "CLOUDFLARE_PHASE4_TUNNEL_READ_API_TOKEN",
+            "",
+        )
+        try:
+            if not ACCOUNT_ID_RE.fullmatch(account_id):
+                raise AuditError("account_binding_invalid")
+            _validate_token(read_token)
+            client = CloudflareGetClient(read_token, DEFAULT_API_BASE)
+            stage = "tunnel_lookup"
+            tunnel_id = _list_tunnel(client, account_id)
+            stage = "configuration"
+            config = _get_config(client, account_id, tunnel_id)
+            read_token = ""
+            account_id = ""
+            tunnel_id = ""
+            stage = "mapping"
+            report = build_report(contract, config)
+            print(json.dumps(report, indent=2, sort_keys=True))
+            return 0 if report["result"] == "PASS" else 3
+        finally:
+            read_token = ""
+            account_id = ""
     except (AuditError, json.JSONDecodeError, OSError) as exc:
         failure_class = _failure_class(stage, exc)
         tunnel_lookup_detail = (

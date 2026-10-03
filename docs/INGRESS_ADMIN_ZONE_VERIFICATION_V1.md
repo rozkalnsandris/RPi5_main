@@ -69,14 +69,22 @@ Official references:
 
 The existing GitHub `P1D03` capability contract is **not reusable** for this purpose. Its reviewed GET surface is Cloudflare Access only; it does not establish Tunnel or Connector read authority. Reusing its account/token secrets for Tunnel discovery would silently widen the credential trust boundary.
 
-Therefore `route_origin_runtime_capability.status` is currently `unbound`. While it is unbound:
+The route-origin capability is now source-bound to the dedicated machine contract `ops/contracts/cloudflare-phase4-tunnel-read-v1.json`.
 
-- the route-origin workflow injects no Cloudflare credential secret;
-- the auditor exits `BLOCKED` with only the sanitized classes `capability_requirement=tunnel-read` and `capability_binding=unbound`;
-- no Cloudflare API request is attempted;
-- no account ID, tunnel ID, token, private route coordinate or raw provider payload is emitted.
+That binding is deliberately least privilege:
 
-Changing this state to a usable Tunnel-read binding requires a **separate owner-authorized source change** that names the reviewed capability contract. Provisioning a secret or changing token permissions is an additional separate owner gate. Merely changing `status` to `bound` is insufficient: the current auditor intentionally has no credential wiring and fails closed as `not-wired` until that wiring is reviewed.
+- required Cloudflare permission: `Cloudflare Tunnel Read`;
+- allowed HTTP method: `GET` only;
+- allowed provider surfaces: the two Tunnel inventory/configuration endpoints above;
+- dedicated GitHub secret names: `CLOUDFLARE_PHASE4_TUNNEL_ACCOUNT_ID` and `CLOUDFLARE_PHASE4_TUNNEL_READ_API_TOKEN`;
+- the existing `P1D03` Access secrets remain explicitly non-reusable;
+- no write permission or alternate broader permission is accepted by the source contract;
+- custom Cloudflare API base overrides are forbidden;
+- provider account ID, token, tunnel ID, raw payload and private origin coordinates remain forbidden output.
+
+The source binding does **not** provision either GitHub secret and does not change any Cloudflare token permission. Until those dedicated secrets are separately owner-provisioned, a runtime attempt fails closed during binding validation before a Cloudflare API client is used.
+
+Merging the binding also does not authorize a Cloudflare run. Every route-origin execution still requires a fresh exact owner authorization under the Phase 4 runtime gate. Secret provisioning or repository-settings mutation is a separate owner gate, and any Cloudflare write remains outside this contract.
 
 ## Two runtime authority gates
 
