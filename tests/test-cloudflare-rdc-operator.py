@@ -5,6 +5,7 @@ import importlib.util
 import json
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "scripts" / "cloudflare_rdc_operator.py"
@@ -75,6 +76,18 @@ class FakeClient:
             "require": [],
             "exclude": [],
         }]
+
+
+class ProvisionClient:
+    def __init__(self) -> None:
+        self.active_checks = 0
+        self.access_checks = 0
+
+    def verify_active_token(self) -> None:
+        self.active_checks += 1
+
+    def verify_access_permission(self, account_id: str) -> None:
+        self.access_checks += 1
 
 
 class CloudflareRdcOperatorTests(unittest.TestCase):
@@ -161,6 +174,35 @@ class CloudflareRdcOperatorTests(unittest.TestCase):
                 TARGET_ID,
             )
 
+    def test_provision_action_has_no_token_or_account_id_cli_argument(self) -> None:
+        args = op.parse_args([
+            "provision-access-secret",
+            "--expected-main",
+            "a" * 40,
+            "--confirm",
+            "PROVISION-CLOUDFLARE-ACCESS-SECRET",
+        ])
+        self.assertEqual(args.action, "provision-access-secret")
+        self.assertFalse(hasattr(args, "api_token"))
+        self.assertFalse(hasattr(args, "account_id"))
+        with self.assertRaises(SystemExit):
+            op.parse_args([
+                "provision-access-secret",
+                "--expected-main",
+                "a" * 40,
+                "--api-token",
+                "forbidden",
+            ])
+
+    def test_provision_preflights_token_before_secret_write(self) -> None:
+        client = ProvisionClient()
+        with mock.patch.object(op.ACCESS_SECRET_PATH, "exists", return_value=False), \
+             mock.patch.object(op, "_write_access_secret") as writer:
+            op.provision_access_secret(client, "a" * 32, "t" * 32)
+        self.assertEqual(client.active_checks, 1)
+        self.assertEqual(client.access_checks, 1)
+        writer.assert_called_once_with("a" * 32, "t" * 32)
+
     def test_contract_separates_access_tunnel_and_dns_credentials(self) -> None:
         contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
         lanes = contract["secret_lanes"]
@@ -169,11 +211,33 @@ class CloudflareRdcOperatorTests(unittest.TestCase):
         self.assertTrue(lanes["access"]["implemented"])
         self.assertFalse(lanes["tunnel"]["implemented"])
         self.assertFalse(lanes["dns"]["implemented"])
-        self.assertIn(
-            "Access: Apps and Policies",
+        self.assertEqual(
             lanes["access"]["cloudflare_permission"],
+            "Access: Apps and Policies Write",
         )
         self.assertEqual(lanes["dns"]["scope"], "zone:rozkalns.net")
+
+    def test_contract_freezes_unprivileged_installer_and_local_tty_secret_flow(self) -> None:
+        contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
+        bootstrap = contract["host_bootstrap"]
+        install = bootstrap["install"]
+        self.assertFalse(install["root_executes_repository_python"])
+        self.assertFalse(install["sudoers_mutation"])
+        self.assertTrue(install["requires_clean_exact_main"])
+        provision = bootstrap["access_secret_provisioning"]
+        self.assertEqual(provision["input_channel"], "hidden controlling TTY only")
+        self.assertTrue(provision["argv_secret_forbidden"])
+        self.assertTrue(provision["environment_secret_forbidden"])
+        self.assertTrue(provision["rdc_secret_input_forbidden"])
+        self.assertEqual(
+            provision["required_token_scope"],
+            "Access: Apps and Policies Write only",
+        )
+        self.assertFalse(provision["overwrite_existing_secret"])
+        self.assertFalse(provision["automatic_retry"])
+        self.assertFalse(
+            provision["automatic_rollback_or_cleanup_after_mutation_error"]
+        )
 
     def test_contract_enforces_single_write_and_no_retry_or_rollback(self) -> None:
         contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
