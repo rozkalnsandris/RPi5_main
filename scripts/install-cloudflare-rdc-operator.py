@@ -118,7 +118,6 @@ def _remote_is_canonical(value: str) -> bool:
     return normalized in {
         "https://github.com/rozkalnsandris/RPi5_main",
         "https://github.com/rozkalnsandris/RPi5_main.git",
-        "git@github.com:rozkalnsandris/RPi5_main.git",
     }
 
 
