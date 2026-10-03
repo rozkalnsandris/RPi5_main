@@ -19,7 +19,8 @@
     "allowed_arguments": [
       "--id",
       "--expected-sha256",
-      "--expected-size"
+      "--expected-size",
+      "--resume-preserved"
     ]
   },
   "drive": {
@@ -139,7 +140,7 @@
   "idempotency": {
     "receipt_schema": "rozkalns.rpi5-main.coloring-pages-drive-ingest-receipt.v1",
     "matching_success_receipt": "verify-read-only-and-return-already-processed",
-    "existing_id_without_matching_success_receipt": "stop",
+    "existing_id_without_matching_success_receipt": "stop-unless-explicit-resume-preserved-is-requested-and-exact-state-matches",
     "automatic_overwrite": false,
     "automatic_retry_after_failure": false
   },
@@ -206,5 +207,30 @@
     "https://rclone.org/commands/rclone_cat/",
     "https://rclone.org/drive/",
     "https://www.gnu.org/software/coreutils/manual/html_node/mv-invocation.html"
-  ]
+  ],
+  "recovery": {
+    "preserved_resume_flag": "--resume-preserved",
+    "required_existing_state": [
+      "/srv/coloring-pages-content/state/drive-ingest/<id>.manifest.json",
+      "/srv/coloring-pages-content/inbox/<id>.png"
+    ],
+    "required_absent_state": [
+      "/srv/coloring-pages-content/state/drive-ingest/<id>.receipt.json",
+      "/srv/coloring-pages-content/originals/<id>",
+      "/srv/coloring-pages-content/public/media/<id>",
+      "catalog-entry:<id>"
+    ],
+    "exact_owner_bound_revalidation": [
+      "id",
+      "sha256",
+      "size_bytes",
+      "manifest-schema",
+      "metadata"
+    ],
+    "drive_listing_allowed": false,
+    "drive_download_allowed": false,
+    "overwrite_allowed": false,
+    "cleanup_allowed": false,
+    "retry_without_fresh_authority": false
+  }
 }
