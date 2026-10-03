@@ -115,6 +115,16 @@ class CloudflareRdcOperatorTests(unittest.TestCase):
         ):
             op.preflight_applications([other_app()])
 
+    def test_preflight_refuses_path_specific_exact_target(self) -> None:
+        path_target = target_app()
+        path_target["destinations"] = [
+            {"type": "public", "uri": "coloring.rozkalns.net/private"}
+        ]
+        with self.assertRaisesRegex(
+            op.OperatorError, "exact_target_application_already_exists"
+        ):
+            op.preflight_applications([wildcard_app(), path_target])
+
     def test_apply_uses_one_create_call_and_get_only_post_verification(self) -> None:
         client = FakeClient()
         result = op.run_operator(client, "a" * 32, apply=True)
