@@ -1,0 +1,45 @@
+{
+  "schema": "rozkalns.rpi5-main.simple-deploy-coloring-pages-alignment.v1",
+  "issue": 860,
+  "helper": "scripts/align-simple-deploy-coloring-pages-v1.py",
+  "baseline": {
+    "/etc/rozkalns-simple-deployer/targets.json": "46667f60470d032cd60f356d1fcc32596c75d6dfc38f9d9539531768733c8e6c",
+    "/etc/rozkalns-simple-deployer/identity.json": "68be71f09292496bd4ff5dbe8f322804df59065bc41cfa52bdb5a72ddc99e3a2",
+    "/etc/rozkalns-simple-deployer/compose/coloring-pages-public.yml": "77c71da44896b393002b7a13449d6fbaca76b38c6d982580d23156b674fe2941"
+  },
+  "desired": {
+    "registry_sha256": "e68fb9d674dbc044454563c8c8ba74c757c958ea78ff980dd0003b64d7e7bd7d",
+    "compose_sha256": "142c30bdd1080de90360f287e5b6fae27611c535caef0a41a09a998528bcbbc2",
+    "identity_source_sha": "caller-authorized-exact-main"
+  },
+  "replacement_order": [
+    "/etc/rozkalns-simple-deployer/compose/coloring-pages-public.yml",
+    "/etc/rozkalns-simple-deployer/targets.json",
+    "/etc/rozkalns-simple-deployer/identity.json"
+  ],
+  "fixed_modes": [
+    "0644",
+    "0444",
+    "0444"
+  ],
+  "source_requirements": [
+    "exact-sha",
+    "main-branch",
+    "clean-checkout",
+    "exact-github-origin"
+  ],
+  "authority": {
+    "live": false,
+    "docker": false,
+    "systemd": false,
+    "content_import": false,
+    "network_cloudflare": false,
+    "secrets": false
+  },
+  "failure": {
+    "retry": false,
+    "cleanup": false,
+    "rollback": false,
+    "post_first_mutation": "STOP"
+  }
+}

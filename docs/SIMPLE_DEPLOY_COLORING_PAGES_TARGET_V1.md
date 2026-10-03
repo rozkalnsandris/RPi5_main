@@ -1,80 +1,91 @@
 # Coloring Pages SIMPLE-DEPLOY target v1
 
 Initial target issue: `#838`  
-Media-store update issue: `#855`
-
-This document records the source-owned RPi5 target contract for the Coloring Pages static UI.
+Media-store update issue: `#855`  
+Importer-operator issue: `#858`  
+Installed-target alignment issue: `#860`
 
 ## Consumer identity
 
 - repository: `rozkalnsandris/coloring-pages`
-- reviewed source: `dd9204581d46be618f1c7b0a6bafde90bcb691df`
-- image: `ghcr.io/rozkalnsandris/coloring-pages`
-- architecture: `linux/arm64`
+- media-store source: `eaeed0c8f3d973dc938892abdd69d12437ac049e`
+- importer-capable source: `ab8f874f681fb2adb6f18f4a7c8066b44ace443b`
+- importer-capable image: `ghcr.io/rozkalnsandris/coloring-pages@sha256:5f61560cb674224052bc3ab8ca086c7997930027459f6c2648714d12c60af796`
 - target alias: `coloring-pages-public-rpi5`
-- shared SIMPLE-DEPLOY workflow revision: `94187cc447fc80757db10ac25d49717d00dc8430`
+- architecture: `linux/arm64`
+- shared SIMPLE-DEPLOY revision: `94187cc447fc80757db10ac25d49717d00dc8430`
 
-The reviewed importer-capable consumer publication produced immutable image `ghcr.io/rozkalnsandris/coloring-pages@sha256:5f61560cb674224052bc3ab8ca086c7997930027459f6c2648714d12c60af796`. The RPi5 deployer still resolves and verifies an exact immutable digest per deployment attempt; the mutable `:production` tag is discovery only.
+The mutable `:production` tag is discovery only. Deployment authority always binds an exact immutable digest.
 
-## RPi5-owned adapter
+## RPi5 adapter
 
-- compose project: `coloring-pages-public`
-- compose service: `coloring-pages`
+- compose project/service: `coloring-pages-public/coloring-pages`
 - compose source: `ops/deploy/simple-deploy-compose/coloring-pages-public.yml`
-- compose SHA-256: `77c71da44896b393002b7a13449d6fbaca76b38c6d982580d23156b674fe2941`
-- loopback origin: `127.0.0.1:9191`
+- compose SHA-256: `142c30bdd1080de90360f287e5b6fae27611c535caef0a41a09a998528bcbbc2`
+- origin: `127.0.0.1:9191`
 - liveness: `http://127.0.0.1:9191/health`
 - readiness: `http://127.0.0.1:9191/ready`
-- persistence: none
+- persistence identity: `coloring_pages_content`
+- host source: `/srv/coloring-pages-content/public`
+- container target: `/var/lib/coloring-pages/public`
+- mount: read-only, `create_host_path: false`
 - pull profile: `public-anonymous-pull`
 
-The adapter is read-only, uses `/tmp` tmpfs, `no-new-privileges`, and drops all Linux capabilities.
-
-The consumer repository exposes only the stable persistence identity `coloring_pages_content`; it does not control an arbitrary RPi5 host path. This trusted adapter binds that identity to exactly `/srv/coloring-pages-content/public` and exposes it inside nginx only at `/var/lib/coloring-pages/public`. The bind is read-only and refuses automatic host-path creation. `inbox/`, `originals/`, and `state/` are outside the container surface.
+Only `public/` is visible to the long-running nginx container. `inbox/`, `originals/` and `state/` remain outside it.
 
 ## Importer operator
 
-Issue #858 adds the RPi5-owned one-command production importer boundary:
+Issue #858 provides the reviewed one-command importer boundary:
 
-- source: `ops/bin/coloring-pages-import`;
-- installed path: `/usr/local/bin/coloring-pages-import`;
-- machine contract: `ops/contracts/coloring-pages-importer-operator-v1.json`;
-- installer source: `scripts/install-coloring-pages-importer-operator-v1.sh`;
-- execution owner: `andris`, never root;
-- immutable image: `ghcr.io/rozkalnsandris/coloring-pages@sha256:5f61560cb674224052bc3ab8ca086c7997930027459f6c2648714d12c60af796`;
-- automatic image pull: forbidden;
-- container network: none;
-- root filesystem: read-only;
-- content root: one exact read-write bind only for the one-off importer;
-- production input: direct regular non-symlink PNG child of `/srv/coloring-pages-content/inbox`.
+- source: `ops/bin/coloring-pages-import`
+- installed path: `/usr/local/bin/coloring-pages-import`
+- contract: `ops/contracts/coloring-pages-importer-operator-v1.json`
+- installer: `scripts/install-coloring-pages-importer-operator-v1.sh`
+- execution owner: `andris`, never root
+- image: exact immutable digest above
+- automatic pull: forbidden
+- network: none
+- root filesystem: read-only
+- one exact RW bind: `/srv/coloring-pages-content`
+- input: direct regular non-symlink PNG under `inbox/`
 
-Installing the operator, making the immutable image available locally and running a production import are separate LIVE mutation classes. Source merge grants none of them.
+Wrapper installation, image availability and production import remain separate LIVE mutation classes.
 
-## Port selection
+## Installed-target alignment
 
-The issue initially named `127.0.0.1:9190` as a candidate only.
+The host SIMPLE-DEPLOY files predate the media-store adapter. The first-install installer stays first-install-only.
 
-A fresh read-only activation preflight on the trusted RPi5 found:
+Issue #860 therefore uses one small fixed helper:
 
-- `9190`: already listening and therefore rejected;
-- `9191`: free at preflight time and selected for the reviewed source contract.
+```text
+scripts/align-simple-deploy-coloring-pages-v1.py
+ops/contracts/simple-deploy-coloring-pages-alignment-v1.json
+```
 
-That observation is not durable LIVE proof. Any later cutover must revalidate the exact loopback port immediately before mutation and fail closed on drift.
+It accepts only `--expected-source-sha` and `--apply`. It can replace exactly three files:
+
+1. `/etc/rozkalns-simple-deployer/compose/coloring-pages-public.yml`
+2. `/etc/rozkalns-simple-deployer/targets.json`
+3. `/etc/rozkalns-simple-deployer/identity.json`
+
+Before mutation it requires the reviewed LIVE baseline hashes:
+
+- registry: `46667f60470d032cd60f356d1fcc32596c75d6dfc38f9d9539531768733c8e6c`
+- identity: `68be71f09292496bd4ff5dbe8f322804df59065bc41cfa52bdb5a72ddc99e3a2`
+- Coloring Pages Compose: `77c71da44896b393002b7a13449d6fbaca76b38c6d982580d23156b674fe2941`
+
+Desired source is fixed to:
+
+- registry: `e68fb9d674dbc044454563c8c8ba74c757c958ea78ff980dd0003b64d7e7bd7d`
+- Coloring Pages Compose: `142c30bdd1080de90360f287e5b6fae27611c535caef0a41a09a998528bcbbc2`
+- identity source SHA: the exact owner-authorized `RPi5_main` SHA
+
+All three files are staged before replacement. Compose is replaced first, registry second, identity last. Any baseline/source drift fails before mutation. After mutation starts there is no automatic retry, cleanup or rollback.
 
 ## Authority boundary
 
-Merging the source target does not install, start, replace, or restart any container or service.
+Source merge does not align installed files, install the importer wrapper, pull/deploy an image or import production content.
 
-A later LIVE cutover must separately freeze:
+A later LIVE gate must bind the exact reviewed `RPi5_main` SHA, the fixed 3-file alignment, exact image digest, current content-store/runtime baseline and verification. Production content import remains a separate data mutation.
 
-- exact reviewed RPi5_main SHA;
-- exact target alias and Compose SHA-256;
-- exact Coloring Pages source SHA;
-- exact immutable `image@sha256` identity;
-- existence and expected metadata of `/srv/coloring-pages-content/public`;
-- exact read-only media-store bind semantics;
-- fresh target/port baseline;
-- allowed Docker mutation class;
-- post-mutation verification and failure semantics.
-
-Cloudflare, DNS, tunnel, firewall, protected configuration, secrets, credentials, persistent data and unrelated host control remain outside this target-registration lane.
+Cloudflare, DNS, tunnel, firewall, secrets, credentials and unrelated host control stay outside this lane.
