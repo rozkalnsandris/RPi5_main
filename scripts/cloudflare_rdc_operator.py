@@ -315,6 +315,13 @@ def _application_destinations(app: dict[str, Any]) -> list[tuple[str, str]]:
     return list(dict.fromkeys(_split_destination(value) for value in values))
 
 
+def _matches_hostname(app: dict[str, Any], hostname: str) -> bool:
+    return any(
+        host == hostname.casefold()
+        for host, _path in _application_destinations(app)
+    )
+
+
 def _matches_root(app: dict[str, Any], hostname: str) -> bool:
     return any(
         host == hostname.casefold() and _root_destination(path)
@@ -330,7 +337,7 @@ def _stable_app_projection(app: dict[str, Any]) -> dict[str, Any]:
 
 
 def preflight_applications(apps: list[dict[str, Any]]) -> dict[str, Any]:
-    exact = [app for app in apps if _matches_root(app, TARGET_HOSTNAME)]
+    exact = [app for app in apps if _matches_hostname(app, TARGET_HOSTNAME)]
     if exact:
         raise OperatorError("exact_target_application_already_exists")
     parents = [
