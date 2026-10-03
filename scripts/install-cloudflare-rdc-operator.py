@@ -261,11 +261,13 @@ def _emit(
     reason: str | None = None,
     mutation_performed: bool = False,
     install_ready: bool | None = None,
+    operation: str = "install",
 ) -> None:
     payload: dict[str, Any] = {
         "schema_version": 1,
         "installer": "rpi5-cloudflare-rdc-operator-installer-v1",
         "repository": REPOSITORY,
+        "operation": operation,
         "result": result,
         "mutation_performed": mutation_performed,
         "sudoers_mutation": False,
