@@ -64,8 +64,8 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           PHASE4_EXPECTED_SHA: ${{ needs.authorize.outputs.expected_sha }}
           PHASE4_ROUTE_CANARY: ${{ needs.authorize.outputs.canary }}
-          CLOUDFLARE_P1D03_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_P1D03_ACCOUNT_ID }}
-          CLOUDFLARE_P1D03_READ_API_TOKEN: ${{ secrets.CLOUDFLARE_P1D03_READ_API_TOKEN }}
+          CLOUDFLARE_PHASE4_TUNNEL_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_PHASE4_TUNNEL_ACCOUNT_ID }}
+          CLOUDFLARE_PHASE4_TUNNEL_READ_API_TOKEN: ${{ secrets.CLOUDFLARE_PHASE4_TUNNEL_READ_API_TOKEN }}
         shell: bash
         run: |
           set -Eeuo pipefail
