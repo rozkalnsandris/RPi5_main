@@ -264,5 +264,24 @@
       "existing_protected_access_context_required": true,
       "identity_session_material_persistence_allowed": false
     }
+  },
+  "route_origin_runtime_capability": {
+    "status": "unbound",
+    "purpose": "read-only Cloudflare Tunnel inventory and remotely managed tunnel configuration for Phase 4 route-origin classification",
+    "required_cloudflare_permission": "Cloudflare Tunnel Read",
+    "accepted_permission_family": [
+      "Cloudflare Tunnel Read",
+      "Cloudflare One Connectors Read",
+      "Cloudflare One Connector: cloudflared Read"
+    ],
+    "required_get_surfaces": [
+      "/accounts/{account_id}/cfd_tunnel",
+      "/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations"
+    ],
+    "existing_p1d03_access_lane_reusable": false,
+    "existing_p1d03_reason": "P1D03 contract binds only Access GET surfaces and does not establish Tunnel or Connector read authority",
+    "runtime_execution_allowed": false,
+    "binding_requires_separate_owner_authorized_source_change": true,
+    "secret_or_permission_provisioning_authorized_here": false
   }
 }
