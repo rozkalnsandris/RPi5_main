@@ -105,15 +105,21 @@
       {
         "target_alias": "coloring-pages-public-rpi5",
         "consumer_repository": "rozkalnsandris/coloring-pages",
-        "consumer_contract_revision": "dd9204581d46be618f1c7b0a6bafde90bcb691df",
+        "consumer_contract_revision": "eaeed0c8f3d973dc938892abdd69d12437ac049e",
         "source_registration_issue": 838,
         "compose_source": "ops/deploy/simple-deploy-compose/coloring-pages-public.yml",
-        "compose_sha256": "77c71da44896b393002b7a13449d6fbaca76b38c6d982580d23156b674fe2941",
+        "compose_sha256": "142c30bdd1080de90360f287e5b6fae27611c535caef0a41a09a998528bcbbc2",
         "liveness_url": "http://127.0.0.1:9191/health",
         "readiness_state": "required",
         "readiness_url": "http://127.0.0.1:9191/ready",
         "wait_timeout_seconds": 180,
-        "registry_pull_profile": "public-anonymous-pull"
+        "registry_pull_profile": "public-anonymous-pull",
+        "media_store_update_issue": 855,
+        "persistent_content_identity": "coloring_pages_content",
+        "persistent_content_host_path": "/srv/coloring-pages-content/public",
+        "persistent_content_container_path": "/var/lib/coloring-pages/public",
+        "persistent_content_read_only": true,
+        "persistent_content_create_host_path": false
       }
     ]
   },
