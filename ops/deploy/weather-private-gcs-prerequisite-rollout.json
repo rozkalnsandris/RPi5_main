@@ -1,76 +1,41 @@
 {
-  "schema": "rozkalns-weather.weathernext-private-gcs-prerequisite-rollout.v1",
+  "schema": "rozkalns-weather.weathernext-private-gcs-simple-canary.v1",
   "implementation_issue": 843,
   "source_only": true,
   "execution_enabled": false,
   "source_merge_authorizes_live": false,
-  "fixed_source_identity": {
-    "weather_sha": "70e9ce0a95d2fad0857cd7aae64185c14eb3e8d3",
-    "gcs_runtime_closure_sha256": "4ef3d22c8ebc76901c3840d0304124ab390afaf3978883a4ad377a6da4991148",
-    "target_architecture": "aarch64",
-    "target_python_abi": "cp313",
-    "target_platform": "manylinux_2_28_aarch64"
+  "canonical_weather_repository": "rozkalnsandris/rozkalns_weather",
+  "weather_canary_command": "python -m rozkalns_weather weathernext-gcs-canary --init <exact-UTC-init>",
+  "execution_shape": {
+    "container": "ephemeral",
+    "remove_after_exit": true,
+    "exact_weather_image_required": true,
+    "credential_mount": {
+      "source": "existing-root-owned-google-credential",
+      "target": "/run/secrets/weathernext-google.json",
+      "read_only": true,
+      "caller_selectable_target": false
+    },
+    "database_mount": false,
+    "application_stage": false,
+    "gcs_host_install": false,
+    "separate_gcs_runtime_materialization": false,
+    "credential_copy": false,
+    "gcs_auth_binding_creation": false
   },
-  "sanitized_baseline": {
-    "host_architecture": "aarch64",
-    "host_glibc": "2.36",
-    "host_glibc_compatible": true,
-    "gcs_host_capability": "absent",
-    "weather_application_stage": "stale",
-    "gcs_runtime": "absent",
-    "gcs_auth_binding": "absent"
+  "canary_scope": {
+    "location_id": "station_05480",
+    "forecast_hours": 6,
+    "data_surface": "WeatherNext 3 precomputed statistics GCS/Zarr",
+    "production_write": false,
+    "automatic_retry": false,
+    "alternate_dataset_fallback": false
   },
-  "sequence": [
-    {
-      "order": 1,
-      "operation_id": "rpi5.weathernext-private-gcs-backend.install.v1",
-      "target_alias": "rpi5-weathernext-private-gcs-backend-install",
-      "condition": "if_absent"
-    },
-    {
-      "order": 2,
-      "operation_id": "rpi5.weathernext-private-application-stage.v1",
-      "target_alias": "rpi5-weathernext-private-application-stage",
-      "condition": "if_not_exact_weather_sha",
-      "implementation": "reuse_existing"
-    },
-    {
-      "order": 3,
-      "operation_id": "rozkalns-weather.weathernext-private-gcs-runtime-materialization.v1",
-      "target_alias": "rpi5-weathernext-private-gcs-runtime-materialization",
-      "condition": "if_absent"
-    },
-    {
-      "order": 4,
-      "operation_id": "rpi5.weathernext-private-gcs-auth-binding.v1",
-      "target_alias": "rpi5-weathernext-private-gcs-auth-binding",
-      "condition": "if_absent"
-    },
-    {
-      "order": 5,
-      "operation_id": "sanitized-postcondition-verification",
-      "condition": "always",
-      "mutation": false
-    }
+  "retired_prerequisite_operations": [
+    "rpi5.weathernext-private-gcs-backend.install.v1",
+    "rpi5.weathernext-private-application-stage.v1",
+    "rozkalns-weather.weathernext-private-gcs-runtime-materialization.v1",
+    "rpi5.weathernext-private-gcs-auth-binding.v1"
   ],
-  "protected_auth_binding": {
-    "target_root": "/var/lib/rpi5-deploy/weather-private-gcs-bindings",
-    "source_root": "/var/lib/rpi5-deploy/weather-private-bindings",
-    "source_read_before_authorization_consume": false,
-    "credential_path_caller_controlled": false,
-    "project_dataset_caller_controlled": false,
-    "credential_content_emitted": false,
-    "google_request_performed": false
-  },
-  "exclusions": {
-    "read_only_private_gcs": false,
-    "google_gcs_request": false,
-    "bigquery_action": false,
-    "sqlite_or_corpus_write": false,
-    "package_manager": false,
-    "docker_systemd_network_cloudflare": false,
-    "automatic_retry_cleanup_rollback": false
-  },
-  "next_gate_after_merge": "COMPOSITE_STRICT_LIVE_GCS_PREREQUISITE_ROLLOUT",
-  "later_gate": "READ_ONLY_PRIVATE_GCS_FIRST_ACCESS"
+  "next_gate_after_merge": "OWNER_AUTHORIZED_EPHEMERAL_GCS_CANARY"
 }

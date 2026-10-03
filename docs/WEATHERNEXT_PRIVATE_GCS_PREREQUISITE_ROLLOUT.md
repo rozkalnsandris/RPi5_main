@@ -1,51 +1,76 @@
-# WeatherNext private GCS prerequisite rollout
+# WeatherNext private GCS simple canary
 
-Status: **SOURCE ONLY / COMPOSITE STRICT LIVE GATE NEXT**  
+Status: **SOURCE ONLY / ONE LIVE CANARY GATE NEXT**  
 Issue: `RPi5_main#843`
 
 ## Outcome
 
-This source wires the missing privileged prerequisite operations required before the WeatherNext private GCS first-access canary:
+The previous multi-step GCS prerequisite rollout is retired for the simple private
+Weather app.
 
-1. install the separate GCS host capability when absent;
-2. reuse the existing exact Weather application-stage operation when the staged source is stale;
-3. publish and materialize the exact reviewed GCS runtime artifact when absent;
-4. create the separate protected GCS auth binding when absent;
-5. verify only sanitized postconditions.
+The canonical Weather source now contains the bounded one-shot command:
 
-The sequence stops before `read_only_private_gcs`.
+```text
+python -m rozkalns_weather weathernext-gcs-canary --init <exact-UTC-init>
+```
 
-## Runtime identity
+The RPi5 side no longer needs a separate GCS host installer, Weather application
+staging step, separate GCS runtime materialization, credential copy, or
+GCS-specific auth-binding publication before the canary.
 
-- Weather SHA: `70e9ce0a95d2fad0857cd7aae64185c14eb3e8d3`
-- GCS runtime closure SHA-256:
-  `4ef3d22c8ebc76901c3840d0304124ab390afaf3978883a4ad377a6da4991148`
-- target: Linux aarch64 / CPython 3.13 / cp313 / `manylinux_2_28_aarch64`
+## Runtime shape
 
-## Sanitized host baseline
+A future separately authorized LIVE canary is intentionally small:
 
-The completed read-only preflight found:
+```text
+exact current Weather image
+-> one ephemeral docker run --rm
+-> one existing root-owned Google credential mounted read-only
+   at /run/secrets/weathernext-google.json
+-> weathernext-gcs-canary --init <exact-UTC-init>
+-> sanitized PASS/FAIL evidence
+```
 
-- aarch64, glibc 2.36 — compatible with the reviewed >=2.28 floor;
-- GCS trusted checkout/operator/activation absent;
-- GCS runtime absent;
-- GCS auth-ready marker absent;
-- Weather application stage present but stale.
+There is no database mount and no production persistence.
 
-No credential/private binding content or Google identity was exposed.
+The Weather command itself fixes the canary to:
 
-## Protected auth binding
+- `station_05480`;
+- six forecast hours;
+- WeatherNext 3 precomputed statistics GCS/Zarr;
+- no automatic retry;
+- no alternate dataset fallback;
+- no production write.
 
-The auth-binding operation has no caller path, basename, project, dataset, account or provider selector. Only after durable owner authorization consumption may it inspect the existing root-owned WeatherNext private binding, derive one validated credential basename, no-follow copy that bounded root-owned 0600 credential into the separate GCS credential root, write a GCS-private schema+basename binding and publish the sanitized ready marker.
+## Retired prerequisite chain
 
-It performs no ADC, Google API, IAM, project/dataset, Analytics Hub, billing-project or BigQuery action. Credential contents, paths and hashes are not eligible for GitHub receipts.
+These old prerequisite operations are no longer part of the canonical GCS path:
 
-## Authorization and failure semantics
+- `rpi5.weathernext-private-gcs-backend.install.v1`;
+- `rpi5.weathernext-private-application-stage.v1`;
+- `rozkalns-weather.weathernext-private-gcs-runtime-materialization.v1`;
+- `rpi5.weathernext-private-gcs-auth-binding.v1`.
 
-Each privileged operation remains behind exact LIVE-AUTH + READY Queue + exact-main CI revalidation. Source merge enables no execution. The future Composite Live must bind the merged RPi5_main SHA, exact target aliases, mutation budgets and the sanitized baseline.
+They are removed from the privileged dispatcher allowlist by this source change.
 
-Authorization is consumed immediately before the first mutation (or protected credential read for auth binding). After any mutation starts, error/drift means STOP with no retry, cleanup, rollback or alternate path unless explicitly pre-authorized.
+Historical implementation modules may remain temporarily for provenance and
+safe later cleanup, but they are not canonical execution routes.
 
-## Later gate
+## Authorization boundary
 
-Only after all prerequisite postconditions are exact may a separate owner authorization invoke the GCS one-shot operator for `read_only_private_gcs`. That later authorization remains bounded to station_05480, one explicit init, six forecast hours and the existing materialized-scalar ceiling.
+Source merge performs no RPi5, Docker, credential, Google/GCS or production-data
+mutation.
+
+Before the future canary:
+
+1. resolve the exact current merged Weather `main` SHA and successful required CI;
+2. resolve the exact immutable Weather image for that source;
+3. verify only sanitized metadata needed to prove the existing credential file is
+   available for the fixed read-only mount;
+4. obtain a separate owner LIVE authorization for the exact ephemeral canary.
+
+Credential contents must never be printed or copied into GitHub evidence.
+
+Any error or drift after the authorized container execution begins is fail-closed:
+STOP, with no retry, cleanup, credential substitution or alternate path unless
+separately authorized.
