@@ -42,6 +42,8 @@ Metadata is collectable only when a task provides a strict allowlist and sanitiz
 
 Every user-visible work-cycle response that ends or pauses repository work must finish with exactly one explicit, copy-pasteable command for the owner under `NEXT COMMAND` or, when a real owner decision is required, under `ACTION REQUIRED`. That final operator command — including `ACTION REQUIRED` authorization, `NEXT COMMAND`, `MERGE`, `AUTHORIZE`, `START`, `SYNC`, `turpini`, or any equivalent exact owner command — must be the sole content of its own fenced `text` code block. Never emit the final command as prose, inline code, a list item, a quote, or unfenced/plain text.
 
+Keep owner commands compact: do not repeat standing safety exclusions, routine fresh-state checks, or fail-closed clauses already imposed by this repository/shared policy. Include only the operation, scope/target, and exact binding or exception needed for the decision. Preserve a full immutable SHA and any required target/risk/recovery binding when exact identity or authority requires it; use a longer form only when additional authority must be explicit.
+
 - `ACTION REQUIRED` is reserved for a genuine owner authorization/decision gate. Never invent an authorization gate merely to satisfy this presentation rule.
 - If a real owner gate exists, the final command is the exact authorization command with current identifiers and exact SHA/target bindings where applicable.
 - If no owner gate exists and mutable GitHub/external state must be refreshed, use `SYNC RPi5_main`.
