@@ -1,6 +1,6 @@
 # Cloudflare Tunnel operator v1
 
-Status: **SOURCE-DEFINED / CREDENTIAL NOT YET PROVISIONED**  
+Status: **SOURCE-DEFINED / SECRET STATE EXTERNAL**  
 Initial consumer: `RPi5_main#819`  
 Machine contract: `ops/contracts/cloudflare-tunnel-operator-v1.json`
 
@@ -104,7 +104,7 @@ Future projects should normally be onboarded by adding a reviewed consumer/opera
 
 ## Provisioning and rotation
 
-This source contract does not create the Cloudflare token and does not provision GitHub repository secrets.
+This source contract does not record whether the Cloudflare token or GitHub repository secrets currently exist. That state is external and must be checked at the applicable owner-gated settings step. The source contract does not create the Cloudflare token and does not provision GitHub repository secrets.
 
 Token creation and GitHub secret writes are separate owner-gated settings operations.
 
