@@ -79,6 +79,33 @@ The state directory and inbox must share one filesystem. Publication uses GNU `m
 
 Leftover partial state is preserved and causes STOP. There is no automatic retry, cleanup, rollback or overwrite.
 
+
+## Explicit preserved-state resume
+
+A failed import can leave a fully validated manifest and PNG already preserved locally while no receipt, original, public media or catalog entry exists. That state is not retried automatically.
+
+A fresh owner authorization may explicitly resume that exact preserved state with:
+
+```bash
+coloring-pages-drive-ingest \
+  --id <page-id> \
+  --expected-sha256 <64-lowercase-hex> \
+  --expected-size <bytes> \
+  --resume-preserved
+```
+
+Resume is accepted only when all of these are true:
+
+- no partial staging files exist;
+- the preserved manifest exists as `andris:andris 0600`;
+- the inbox PNG exists as `andris:andris 0600`;
+- the PNG byte size and SHA-256 exactly match the owner-bound arguments;
+- the preserved manifest is re-parsed and revalidated against the same ID/SHA/size and metadata schema;
+- no success receipt exists;
+- no `originals/<id>`, public media directory or catalog entry exists.
+
+The resume path does **not** list Drive and does **not** download either object again. It continues directly with the same immutable importer image, post-import verification and receipt write. Any mismatch fails closed. There is still no overwrite, cleanup, rollback or automatic retry.
+
 ## Immutable importer image
 
 The same publish operator directly runs the reviewed immutable image:
