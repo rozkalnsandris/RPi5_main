@@ -135,3 +135,6 @@ GCS-specific host/runtime wiring plus sanitized readiness before any LIVE
 preflight. Issue #835 adds that source-only boundary with separate GCS operator,
 activation/binding roots and read-only preflight as the next gate; execution and
 installation remain disabled.
+
+
+WeatherNext private GCS prerequisite rollout: issue #843 wires the missing GCS host installer, deterministic runtime transport/materialization and protected auth-binding operations while reusing the existing exact Weather application-stage operation. Source merge keeps execution disabled. The next gate is one bounded COMPOSITE STRICT LIVE prerequisite rollout; real GCS first access remains separate.

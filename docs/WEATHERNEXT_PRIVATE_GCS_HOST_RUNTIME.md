@@ -1,6 +1,6 @@
 # WeatherNext private GCS host runtime
 
-Status: **SOURCE READY / READ-ONLY RPI5 PREFLIGHT NEXT**  
+Status: **SOURCE READY / COMPOSITE STRICT LIVE PREREQUISITE GATE NEXT**  
 Issue: `RPi5_main#835`  
 Weather gate: `rozkalns_weather#122`
 
@@ -85,9 +85,17 @@ This issue is source-only:
 - all execution/install switches remain disabled;
 - source merge does not authorize LIVE.
 
-## Next step after merge
+## Prerequisite rollout source
 
-The next step is a minimum-sufficient **read-only** RPi5 preflight. It may
+Issue #843 adds reviewed privileged source operations for the GCS host install, GCS runtime materialization and GCS auth binding. The existing generic Weather application-stage operation is reused unchanged. These operations remain execution-disabled until a later exact owner LIVE authorization and READY Queue binding.
+
+The completed read-only RPi5 preflight established: aarch64/glibc 2.36 compatible host; GCS host checkout/operator/activation absent; GCS runtime absent; GCS auth-ready marker absent; Weather application stage present but stale.
+
+## Next step after #843 merge
+
+The next step is one bounded **COMPOSITE STRICT LIVE prerequisite rollout**. It may only make those prerequisite states exact and must stop before any `read_only_private_gcs` request.
+
+The earlier minimum-sufficient **read-only** RPi5 preflight It may
 classify only the sanitized fields above and host glibc compatibility. It must
 not read credential or private binding contents.
 

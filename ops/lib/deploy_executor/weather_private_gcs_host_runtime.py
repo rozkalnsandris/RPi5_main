@@ -36,9 +36,10 @@ from .weather_private_gcs_trusted_backend import (
 )
 
 IMPLEMENTATION_ISSUE = 835
+HOST_CAPABILITY_ID = "rpi5.weathernext-private-gcs-backend.v1"
 INSTALL_OPERATION_ID = "rpi5.weathernext-private-gcs-backend.install.v1"
 INSTALL_TARGET_ALIAS = "rpi5-weathernext-private-gcs-backend-install"
-SOURCE_STATUS = "SOURCE_READY_GCS_READONLY_PREFLIGHT"
+SOURCE_STATUS = "SOURCE_READY_GCS_PREREQUISITE_LIVE_GATE"
 RPI5_MAIN_REPOSITORY = "rozkalnsandris/RPi5_main"
 RPI5_MAIN_REPOSITORY_ID = 1323383044
 WEATHER_REPOSITORY = "rozkalnsandris/rozkalns_weather"
@@ -573,7 +574,7 @@ def validate_activation_marker(
 ) -> None:
     expected = {
         "schema": ACTIVATION_MARKER_SCHEMA,
-        "host_capability_id": "rpi5.weathernext-private-gcs-backend.v1",
+        "host_capability_id": HOST_CAPABILITY_ID,
         "operation_id": INSTALL_OPERATION_ID,
         "target_alias": TARGET_ALIAS,
         "rpi5_main_source_sha": exact_rpi5_main_sha,
@@ -591,7 +592,7 @@ def source_readiness() -> Mapping[str, Any]:
     return {
         "implementation_issue": IMPLEMENTATION_ISSUE,
         "schema": CONTRACT_SCHEMA,
-        "host_capability_id": "rpi5.weathernext-private-gcs-backend.v1",
+        "host_capability_id": HOST_CAPABILITY_ID,
         "install_operation_id": INSTALL_OPERATION_ID,
         "install_target_alias": INSTALL_TARGET_ALIAS,
         "source_status": SOURCE_STATUS,
@@ -600,6 +601,8 @@ def source_readiness() -> Mapping[str, Any]:
         "runtime_composition_implemented": True,
         "source_tree_one_shot_operator_implemented": True,
         "sanitized_host_evidence_implemented": True,
+        "gcs_prerequisite_rollout_source_implemented": True,
+        "next_gate": "COMPOSITE_STRICT_LIVE_GCS_PREREQUISITE_ROLLOUT",
         "caller_authority": ("authorization_issue_number",),
         "trusted_checkout": str(TRUSTED_CHECKOUT),
         "operator_destination": str(OPERATOR_DESTINATION),

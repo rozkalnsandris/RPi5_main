@@ -96,3 +96,10 @@ identity, coordinates, raw WeatherNext values or provider payloads.
 
 WeatherNext remains research output. DWD remains the authoritative severe-weather
 warning source in Germany.
+
+
+## GCS prerequisite rollout
+
+Issue #843 wires the source-only privileged prerequisite operations required after the sanitized host preflight: GCS host install, exact application-stage reuse, GCS runtime artifact transport/materialization and protected GCS auth binding. All remain behind separate STRICT LIVE-AUTH + READY Queue contracts. The first-access bridge continues to skip these stages when exact and does not automatically invoke them.
+
+After #843 merge, the next owner gate is one bounded COMPOSITE STRICT LIVE prerequisite rollout. A real `read_only_private_gcs` request remains a later, separate authorization.

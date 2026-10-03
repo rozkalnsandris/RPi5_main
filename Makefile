@@ -62,6 +62,7 @@ test:
 	python3 ./tests/test_weather_private_gcs_execution_bridge.py
 	python3 ./tests/test_weather_private_gcs_trusted_backend.py
 	python3 ./tests/test_weather_private_gcs_host_runtime.py
+	python3 ./tests/test_weather_private_gcs_prerequisite_rollout.py
 	python3 ./tests/test-deploy-executor-weather-private-gcs-runtime.py
 	python3 ./tests/test-deploy-executor-hermes-deals-origin-dispatch-request.py
 	python3 ./tests/test-deploy-executor-hermes-deals-origin-privileged-consumer.py

@@ -35,6 +35,26 @@ from .weather_private_bigquery_runtime_mode_recovery import (
     WeatherNextPrivateRuntimeModeRecoveryError,
     run_privileged_runtime_mode_recovery,
 )
+from .weather_private_gcs_auth_binding import (
+    OPERATION_ID as GCS_AUTH_BINDING_OPERATION_ID,
+    WeatherNextPrivateGCSAuthBindingError,
+)
+from .weather_private_gcs_auth_binding_runtime import run_privileged_gcs_auth_binding
+from .weather_private_gcs_host_installer import (
+    WeatherNextPrivateGCSHostInstallerError,
+    public_receipt as public_gcs_install_receipt,
+)
+from .weather_private_gcs_host_installer_runtime import (
+    INSTALL_OPERATION_ID as GCS_INSTALL_OPERATION_ID,
+    run_privileged_gcs_install,
+)
+from .weather_private_gcs_runtime_materialization import (
+    OPERATION_ID as GCS_RUNTIME_MATERIALIZATION_OPERATION_ID,
+)
+from .weather_private_gcs_runtime_transport import (
+    WeatherNextPrivateGCSRuntimeTransportError,
+    run_privileged_runtime_materialization as run_privileged_gcs_runtime_materialization,
+)
 from .weather_private_installer_boundary_bootstrap_reconcile import (
     OPERATION_ID as BOOTSTRAP_RECONCILE_OPERATION_ID,
 )
@@ -89,6 +109,9 @@ def _route_operation(issue_number: int) -> str:
         APPLICATION_STAGE_OPERATION_ID,
         RUNTIME_MATERIALIZATION_OPERATION_ID,
         RUNTIME_MODE_RECOVERY_OPERATION_ID,
+        GCS_INSTALL_OPERATION_ID,
+        GCS_RUNTIME_MATERIALIZATION_OPERATION_ID,
+        GCS_AUTH_BINDING_OPERATION_ID,
         INSTALLER_BOUNDARY_REFRESH_OPERATION_ID,
         BOOTSTRAP_RECONCILE_OPERATION_ID,
     }:
@@ -107,6 +130,12 @@ def run_privileged_request(issue_number: int) -> Mapping[str, Any]:
             return dict(run_privileged_runtime_materialization(issue_number))
         if operation == RUNTIME_MODE_RECOVERY_OPERATION_ID:
             return dict(run_privileged_runtime_mode_recovery(issue_number))
+        if operation == GCS_INSTALL_OPERATION_ID:
+            return dict(public_gcs_install_receipt(run_privileged_gcs_install(issue_number)))
+        if operation == GCS_RUNTIME_MATERIALIZATION_OPERATION_ID:
+            return dict(run_privileged_gcs_runtime_materialization(issue_number))
+        if operation == GCS_AUTH_BINDING_OPERATION_ID:
+            return dict(run_privileged_gcs_auth_binding(issue_number))
         if operation == INSTALLER_BOUNDARY_REFRESH_OPERATION_ID:
             return dict(run_privileged_installer_boundary_refresh(issue_number))
         if operation == BOOTSTRAP_RECONCILE_OPERATION_ID:
@@ -116,6 +145,9 @@ def run_privileged_request(issue_number: int) -> Mapping[str, Any]:
         WeatherNextPrivateApplicationStageRuntimeError,
         WeatherNextPrivateRuntimeTransportError,
         WeatherNextPrivateRuntimeModeRecoveryError,
+        WeatherNextPrivateGCSHostInstallerError,
+        WeatherNextPrivateGCSRuntimeTransportError,
+        WeatherNextPrivateGCSAuthBindingError,
         WeatherNextPrivateInstallerBoundaryRefreshRuntimeError,
         BootstrapReconcileRuntimeError,
     ) as exc:
