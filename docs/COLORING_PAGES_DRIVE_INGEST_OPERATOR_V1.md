@@ -169,7 +169,7 @@ It requires the installed importer:
 ```text
 /usr/local/bin/coloring-pages-import
 root:root 0755
-Git blob 83f6a25918bb377a407c3fe264b825327172f9e3
+Git blob d07c5a38eb9920b9209dc5719918a6a4cc938305
 ```
 
 Then it passes the already validated metadata as an argv array to that reviewed importer.
