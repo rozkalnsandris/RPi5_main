@@ -297,6 +297,40 @@ class CloudflareP0Tests(unittest.TestCase):
         self.assertNotIn("team-redacted.cloudflareaccess.com", serialized)
         self.assertNotIn('"teamName"', serialized)
 
+    def test_exact_public_bypass_resolves_parent_wildcard_without_auth(self) -> None:
+        public_id = "44444444-4444-4444-8444-444444444444"
+        registry = {
+            "coloring.rozkalns.net": cf.RegistryHost(
+                hostname="coloring.rozkalns.net",
+                delivery="shared_rpi5_tunnel",
+                trust_class="PUBLIC",
+                desired_origin_scope="loopback",
+                access_application_scope="exact-public-bypass",
+                protect_with_access="false",
+                lan_break_glass=False,
+                audit_route_presence="present",
+            )
+        }
+        state = {
+            "organization": {"auth_domain": "team.cloudflareaccess.com"},
+            "apps": [
+                {"id": WILDCARD_ID, "name": "homelab-private", "type": "self_hosted", "domain": "*.rozkalns.net"},
+                {"id": public_id, "name": "Coloring Pages Public", "type": "self_hosted", "domain": "coloring.rozkalns.net"},
+            ],
+            "policies": {
+                WILDCARD_ID: [{"decision": "allow", "include": [{"email": {}}]}],
+                public_id: [{"decision": "bypass", "include": [{"everyone": {}}]}],
+            },
+            "tunnel": {"name": "rpi5-tunnel", "config_src": "cloudflare", "status": "healthy", "connections": [{}] * 4},
+            "config": {"ingress": [
+                {"hostname": "coloring.rozkalns.net", "service": "http://127.0.0.1:9191"},
+                {"service": "http_status:404"},
+            ]},
+        }
+        report = cf.build_report(registry, state)
+        self.assertEqual(report["result"], "PASS")
+        self.assertEqual(report["blockers"], [])
+
     def test_collect_state_uses_only_documented_get_endpoints(self) -> None:
         apps = [
             {
@@ -365,7 +399,7 @@ class CloudflareP0Tests(unittest.TestCase):
             registry["dash.rozkalns.net"].audit_route_presence, "present"
         )
         self.assertEqual(
-            registry["coloring.rozkalns.net"].audit_route_presence, "absent"
+            registry["coloring.rozkalns.net"].audit_route_presence, "present"
         )
         self.assertEqual(
             registry["control.rozkalns.net"].audit_route_presence, "not-applicable"
@@ -374,8 +408,7 @@ class CloudflareP0Tests(unittest.TestCase):
             if item.delivery != "shared_rpi5_tunnel":
                 continue
             self.assertIn(item.audit_route_presence, {"present", "absent"})
-            if hostname != "coloring.rozkalns.net":
-                self.assertEqual(item.audit_route_presence, "present")
+            self.assertEqual(item.audit_route_presence, "present")
 
     def test_repository_registry_tracks_dashboard_live_route_contract(self) -> None:
         registry = cf.load_registry(
