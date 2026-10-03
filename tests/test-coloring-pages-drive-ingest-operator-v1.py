@@ -268,10 +268,10 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
                 )
 
             self.assertEqual(result, 0)
-            list_pending = active[7]
-            secure_stream = active[8]
-            run_importer = active[9]
-            write_receipt = active[11]
+            list_pending = active[8]
+            secure_stream = active[9]
+            run_importer = active[10]
+            write_receipt = active[12]
             list_pending.assert_not_called()
             secure_stream.assert_not_called()
             run_importer.assert_called_once()
