@@ -40,7 +40,7 @@ DRIVE_ROOT_FOLDER_ID = "1F0pxqoRgtZl7JQVcyvYVZxKvx6eOnytn"
 PENDING_DIR = "pending"
 
 IMPORTER = Path("/usr/local/bin/coloring-pages-import")
-IMPORTER_BLOB_SHA = "83f6a25918bb377a407c3fe264b825327172f9e3"
+IMPORTER_BLOB_SHA = "d07c5a38eb9920b9209dc5719918a6a4cc938305"
 CONSUMER_INGESTION_REVISION = "0f5290c57f68de32b4a20f3baded8126c0a6efa6"
 PUBLIC_ORIGIN = "https://coloring.rozkalns.net"
 
