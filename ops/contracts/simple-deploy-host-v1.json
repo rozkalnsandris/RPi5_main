@@ -127,13 +127,8 @@
         "importer_installed_path": "/usr/local/bin/coloring-pages-import",
         "importer_execution_owner": "andris",
         "importer_auto_pull": false,
-        "installed_target_reconciliation_issue": 860,
-        "installed_target_reconciliation_contract": "ops/contracts/simple-deploy-coloring-pages-reconciliation-v1.json",
-        "installed_registry_baseline_sha256": "46667f60470d032cd60f356d1fcc32596c75d6dfc38f9d9539531768733c8e6c",
-        "installed_identity_baseline_sha256": "68be71f09292496bd4ff5dbe8f322804df59065bc41cfa52bdb5a72ddc99e3a2",
-        "installed_coloring_compose_baseline_sha256": "77c71da44896b393002b7a13449d6fbaca76b38c6d982580d23156b674fe2941",
-        "desired_registry_sha256": "e68fb9d674dbc044454563c8c8ba74c757c958ea78ff980dd0003b64d7e7bd7d",
-        "identity_reconciled_to_exact_authorized_rpi5_main_sha": true
+        "installed_target_alignment_issue": 860,
+        "installed_target_alignment_contract": "ops/contracts/simple-deploy-coloring-pages-alignment-v1.json"
       }
     ]
   },
@@ -190,7 +185,7 @@
     "rozkalns_cv_existing_persistent_data_reused_in_place": true,
     "coloring_pages_source_registration_issue": 838,
     "coloring_pages_target_installation_requires_separate_exact_live_cutover": true,
-    "coloring_pages_target_reconciliation_requires_separate_exact_live_authority": true
+    "coloring_pages_target_alignment_requires_separate_exact_live_authority": true
   },
   "installer": {
     "issue": 672,
