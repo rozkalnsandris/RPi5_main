@@ -17,7 +17,7 @@
   ],
   "source_prerequisite": {
     "repository": "rozkalnsandris/rozkalns_weather",
-    "merged_source_sha": "1fc7ea70efde88cb826c2e4a0baf26925078375c",
+    "merged_source_sha": "70e9ce0a95d2fad0857cd7aae64185c14eb3e8d3",
     "contract_path": "deploy/weathernext-gcs-private-readonly-gate.json",
     "entrypoint": "rozkalns_weather.weathernext_gcs_transport.read_private_first_access_gcs",
     "future_live_must_refresh_sha_and_ci": true

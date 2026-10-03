@@ -58,7 +58,7 @@ from the historical BigQuery runtime, contains 25 exact wheels rooted in `google
 closure SHA-256
 `4ef3d22c8ebc76901c3840d0304124ab390afaf3978883a4ad377a6da4991148`.
 Issue #833 regenerates this closure against Weather
-`1fc7ea70efde88cb826c2e4a0baf26925078375c` after the explicit Google
+`70e9ce0a95d2fad0857cd7aae64185c14eb3e8d3` after the explicit Google
 credential-provider runtime dependencies were added.
 
 This does **not** install or wire the materializer on the host. Accordingly:

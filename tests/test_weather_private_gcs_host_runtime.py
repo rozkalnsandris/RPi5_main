@@ -274,7 +274,7 @@ class GCSHostRuntimeTests(unittest.TestCase):
         self.assertEqual(manifest["implementation_issue"], 835)
         self.assertEqual(
             manifest["runtime_identity"]["weather_source_sha"],
-            "1fc7ea70efde88cb826c2e4a0baf26925078375c",
+            "70e9ce0a95d2fad0857cd7aae64185c14eb3e8d3",
         )
         self.assertEqual(
             manifest["runtime_identity"]["runtime_closure_sha256"],
