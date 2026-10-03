@@ -2,20 +2,18 @@
 
 Initial target issue: `#838`  
 Media-store update issue: `#855`  
-Importer-operator issue: `#858`  
 Installed-target alignment issue: `#860`
 
 ## Consumer identity
 
 - repository: `rozkalnsandris/coloring-pages`
 - media-store source: `eaeed0c8f3d973dc938892abdd69d12437ac049e`
-- importer-capable source: `ab8f874f681fb2adb6f18f4a7c8066b44ace443b`
-- importer-capable image: `ghcr.io/rozkalnsandris/coloring-pages@sha256:5f61560cb674224052bc3ab8ca086c7997930027459f6c2648714d12c60af796`
+- publish/import image: `ghcr.io/rozkalnsandris/coloring-pages@sha256:1e6ceaeb9cc84164aef8f4680cee6ee9b4b9a3094e59c6026f590e58a3c043e8`
 - target alias: `coloring-pages-public-rpi5`
 - architecture: `linux/arm64`
 - shared SIMPLE-DEPLOY revision: `94187cc447fc80757db10ac25d49717d00dc8430`
 
-The mutable `:production` tag is discovery only. Deployment authority always binds an exact immutable digest.
+The mutable `:production` tag is discovery only. Deployment and content-import authority bind immutable image digests.
 
 ## RPi5 adapter
 
@@ -33,23 +31,25 @@ The mutable `:production` tag is discovery only. Deployment authority always bin
 
 Only `public/` is visible to the long-running nginx container. `inbox/`, `originals/` and `state/` remain outside it.
 
-## Importer operator
+## One content publish operator
 
-Issue #858 provides the reviewed one-command importer boundary:
+Coloring Pages uses one host command for Drive ingestion and import:
 
-- source: `ops/bin/coloring-pages-import`
-- installed path: `/usr/local/bin/coloring-pages-import`
-- contract: `ops/contracts/coloring-pages-importer-operator-v1.json`
-- installer: `scripts/install-coloring-pages-importer-operator-v1.sh`
+- source: `ops/bin/coloring-pages-drive-ingest`
+- installed path: `/usr/local/bin/coloring-pages-drive-ingest`
+- contract: `ops/contracts/coloring-pages-drive-ingest-operator-v1.json`
+- installer: `scripts/install-coloring-pages-drive-ingest-operator-v1.sh`
 - execution owner: `andris`, never root
-- image: exact immutable digest above
-- automatic pull: forbidden
-- network: none
-- root filesystem: read-only
+- Drive access: read-only
+- importer: exact immutable image digest above
+- automatic image pull: forbidden
+- importer network: none
+- importer root filesystem: read-only
 - one exact RW bind: `/srv/coloring-pages-content`
-- input: direct regular non-symlink PNG under `inbox/`
 
-Wrapper installation, image availability and production import remain separate LIVE mutation classes.
+There is no separate host `coloring-pages-import` wrapper. This removes wrapper-to-wrapper Git blob coupling while preserving the immutable importer image and the existing content safety checks.
+
+Operator installation and production content publication remain separate LIVE mutation classes.
 
 ## Installed-target alignment
 
@@ -76,7 +76,7 @@ Before mutation it requires the reviewed LIVE baseline hashes:
 
 Desired source is fixed to:
 
-- registry: `e68fb9d674dbc044454563c8c8ba74c757c958ea78ff980dd0003b64d7e7bd7d`
+- registry: `88c3acbf304ab9676a6a767e5f3055351f20fd88ca9bf1bf4a2cb1210ef3617f`
 - Coloring Pages Compose: `142c30bdd1080de90360f287e5b6fae27611c535caef0a41a09a998528bcbbc2`
 - identity source SHA: the exact owner-authorized `RPi5_main` SHA
 
@@ -84,8 +84,8 @@ All three files are staged before replacement. Compose is replaced first, regist
 
 ## Authority boundary
 
-Source merge does not align installed files, install the importer wrapper, pull/deploy an image or import production content.
+Source merge does not align installed files, install/update the publish operator, execute Docker/rclone, or import production content.
 
-A later LIVE gate must bind the exact reviewed `RPi5_main` SHA, the fixed 3-file alignment, exact image digest, current content-store/runtime baseline and verification. Production content import remains a separate data mutation.
+A later LIVE gate must bind the exact reviewed `RPi5_main` SHA, current host baseline and the exact content publication identity when content is published.
 
 Cloudflare, DNS, tunnel, firewall, secrets, credentials and unrelated host control stay outside this lane.
