@@ -128,7 +128,15 @@
         "importer_execution_owner": "andris",
         "importer_auto_pull": false,
         "installed_target_alignment_issue": 860,
-        "installed_target_alignment_contract": "ops/contracts/simple-deploy-coloring-pages-alignment-v1.json"
+        "installed_target_alignment_contract": "ops/contracts/simple-deploy-coloring-pages-alignment-v1.json",
+        "drive_ingest_operator_contract": "ops/contracts/coloring-pages-drive-ingest-operator-v1.json",
+        "drive_ingest_installed_path": "/usr/local/bin/coloring-pages-drive-ingest",
+        "drive_ingest_execution_owner": "andris",
+        "drive_ingest_consumer_revision": "0f5290c57f68de32b4a20f3baded8126c0a6efa6",
+        "drive_ingest_remote": "gdrive",
+        "drive_ingest_root_folder_id": "1F0pxqoRgtZl7JQVcyvYVZxKvx6eOnytn",
+        "drive_ingest_mutates_drive": false,
+        "drive_ingest_requires_separate_live_authority": true
       }
     ]
   },
