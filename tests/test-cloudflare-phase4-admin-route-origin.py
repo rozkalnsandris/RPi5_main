@@ -139,7 +139,7 @@ class Phase4AdminRouteOriginTests(unittest.TestCase):
 
     def test_failure_class_is_allowlisted_and_sanitized(self) -> None:
         self.assertEqual(route._failure_class("tunnel_lookup", route.AuditError("cloudflare_api_http_403")), "permission")
-        self.assertEqual(route._failure_class("tunnel_lookup", route.AuditError("tunnel_lookup_ambiguous")), "tunnel_lookup")
+        self.assertEqual(route._failure_class("tunnel_lookup", route.AuditError("tunnel_lookup_none")), "tunnel_lookup")
         self.assertEqual(route._failure_class("configuration", route.AuditError("configuration_missing")), "configuration")
         self.assertEqual(route._failure_class("mapping", route.AuditError("ingress_shape_invalid")), "mapping")
         self.assertEqual(route._failure_class("binding", route.AuditError("read_token_invalid")), "binding")
@@ -157,7 +157,8 @@ class Phase4AdminRouteOriginTests(unittest.TestCase):
             "cloudflare_api_unsuccessful": "api_unsuccessful",
             "cloudflare_api_request_failed": "request_failed",
             "tunnel_list_shape_invalid": "response_shape",
-            "tunnel_lookup_ambiguous": "ambiguous",
+            "tunnel_lookup_none": "ambiguous",
+            "tunnel_lookup_multiple": "ambiguous",
             "tunnel_id_invalid": "id_invalid",
             "private-provider-detail": "unknown",
         }
@@ -165,13 +166,42 @@ class Phase4AdminRouteOriginTests(unittest.TestCase):
             with self.subTest(reason=reason):
                 self.assertEqual(route._tunnel_lookup_detail(route.AuditError(reason)), expected)
 
-        report = route._unknown_report(self.contract, "tunnel_lookup", "ambiguous")
+        report = route._unknown_report(self.contract, "tunnel_lookup", "ambiguous", "none")
         self.assertEqual(report["tunnel_lookup_detail"], "ambiguous")
+        self.assertEqual(report["tunnel_lookup_match_state"], "none")
         rendered = json.dumps(report, sort_keys=True)
         self.assertNotIn("private-provider-detail", rendered)
 
         clamped = route._unknown_report(self.contract, "tunnel_lookup", "private-detail")
         self.assertEqual(clamped["tunnel_lookup_detail"], "unknown")
+        self.assertNotIn("tunnel_lookup_match_state", clamped)
+
+    def test_tunnel_lookup_match_state_is_allowlisted_without_count(self) -> None:
+        self.assertEqual(
+            route._tunnel_lookup_match_state(route.AuditError("tunnel_lookup_none")),
+            "none",
+        )
+        self.assertEqual(
+            route._tunnel_lookup_match_state(route.AuditError("tunnel_lookup_multiple")),
+            "multiple",
+        )
+        self.assertEqual(
+            route._tunnel_lookup_match_state(route.AuditError("private-detail")),
+            "unknown",
+        )
+
+        none_report = route._unknown_report(
+            self.contract, "tunnel_lookup", "ambiguous", "none"
+        )
+        multiple_report = route._unknown_report(
+            self.contract, "tunnel_lookup", "ambiguous", "multiple"
+        )
+        self.assertEqual(none_report["tunnel_lookup_match_state"], "none")
+        self.assertEqual(multiple_report["tunnel_lookup_match_state"], "multiple")
+        for report in (none_report, multiple_report):
+            rendered = json.dumps(report, sort_keys=True)
+            self.assertNotIn("match_count", rendered)
+            self.assertNotIn("matching_tunnels", rendered)
 
     def test_workflow_uses_only_existing_read_secret_lane(self) -> None:
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
@@ -192,12 +222,15 @@ class Phase4AdminRouteOriginTests(unittest.TestCase):
         self.assertIn('"is_deleted": "false"', source)
         self.assertIn('"failure_class": failure_class', source)
         self.assertIn('report["tunnel_lookup_detail"] = tunnel_lookup_detail', source)
+        self.assertIn('report["tunnel_lookup_match_state"] = tunnel_lookup_match_state', source)
         for forbidden_output_key in (
             '"tunnel_id":',
             '"account_id":',
             '"service":',
             '"port":',
             '"raw_api_payload":',
+            '"match_count":',
+            '"matching_tunnels":',
         ):
             self.assertNotIn(forbidden_output_key, source)
 
