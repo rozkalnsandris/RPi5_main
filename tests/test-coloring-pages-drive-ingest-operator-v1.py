@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import contextlib
+import hashlib
 import importlib.machinery
 import importlib.util
 import json
@@ -189,6 +191,112 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
                 expected_sha256="a" * 64,
                 expected_size=1162127,
             )
+
+    def test_explicit_resume_revalidates_preserved_state_without_drive(self) -> None:
+        source = b"preserved-png-bytes"
+        expected_sha256 = hashlib.sha256(source).hexdigest()
+        page_id = "lapsa-001"
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            ingest_state = root / "state" / "drive-ingest"
+            inbox = root / "inbox"
+            originals = root / "originals"
+            media = root / "public" / "media"
+            for path in (ingest_state, inbox, originals, media):
+                path.mkdir(parents=True, exist_ok=True)
+
+            manifest = self.valid_manifest()
+            manifest.update(
+                {
+                    "id": page_id,
+                    "sha256": expected_sha256,
+                    "size_bytes": len(source),
+                    "title": "Lapsa",
+                    "category": "tiere",
+                }
+            )
+            manifest_path = ingest_state / f"{page_id}.manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            os.chmod(manifest_path, 0o600)
+
+            inbox_path = inbox / f"{page_id}.png"
+            inbox_path.write_bytes(source)
+            os.chmod(inbox_path, 0o600)
+
+            patches = (
+                mock.patch.object(drive_ingest, "INGEST_STATE", ingest_state),
+                mock.patch.object(drive_ingest, "INBOX_ROOT", inbox),
+                mock.patch.object(drive_ingest, "ORIGINALS_ROOT", originals),
+                mock.patch.object(drive_ingest, "MEDIA_ROOT", media),
+                mock.patch.object(
+                    drive_ingest,
+                    "operator_ids",
+                    return_value=(os.getuid(), os.getgid()),
+                ),
+                mock.patch.object(drive_ingest, "preflight_host"),
+                mock.patch.object(
+                    drive_ingest,
+                    "acquire_lock",
+                    return_value=contextlib.nullcontext(),
+                ),
+                mock.patch.object(drive_ingest, "catalog_entries", return_value=[]),
+                mock.patch.object(drive_ingest, "list_pending_once"),
+                mock.patch.object(drive_ingest, "secure_stream"),
+                mock.patch.object(drive_ingest, "run_importer"),
+                mock.patch.object(
+                    drive_ingest,
+                    "verify_post_import",
+                    return_value=["https://coloring.rozkalns.net/catalog.json"],
+                ),
+                mock.patch.object(drive_ingest, "write_json_exclusive"),
+                mock.patch.object(drive_ingest, "atomic_move_no_replace"),
+            )
+
+            with contextlib.ExitStack() as stack:
+                active = [stack.enter_context(patch) for patch in patches]
+                result = drive_ingest.main(
+                    [
+                        "--id",
+                        page_id,
+                        "--expected-sha256",
+                        expected_sha256,
+                        "--expected-size",
+                        str(len(source)),
+                        "--resume-preserved",
+                    ]
+                )
+
+            self.assertEqual(result, 0)
+            list_pending = active[7]
+            secure_stream = active[8]
+            run_importer = active[9]
+            write_receipt = active[11]
+            list_pending.assert_not_called()
+            secure_stream.assert_not_called()
+            run_importer.assert_called_once()
+            receipt = write_receipt.call_args.args[1]
+            self.assertTrue(receipt["resume_preserved"])
+            self.assertEqual(receipt["id"], page_id)
+            self.assertEqual(receipt["sha256"], expected_sha256)
+            self.assertEqual(receipt["size_bytes"], len(source))
+
+    def test_resume_contract_is_explicit_and_never_redownloads(self) -> None:
+        self.assertIn(
+            "--resume-preserved",
+            self.contract["operator"]["allowed_arguments"],
+        )
+        recovery = self.contract["recovery"]
+        self.assertEqual(recovery["preserved_resume_flag"], "--resume-preserved")
+        self.assertFalse(recovery["drive_listing_allowed"])
+        self.assertFalse(recovery["drive_download_allowed"])
+        self.assertFalse(recovery["overwrite_allowed"])
+        self.assertFalse(recovery["cleanup_allowed"])
+        self.assertFalse(recovery["retry_without_fresh_authority"])
+        self.assertEqual(
+            recovery["exact_owner_bound_revalidation"][:3],
+            ["id", "sha256", "size_bytes"],
+        )
 
     def test_staging_and_publish_remain_no_overwrite(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
