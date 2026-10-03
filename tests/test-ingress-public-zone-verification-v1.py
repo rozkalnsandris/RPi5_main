@@ -43,21 +43,17 @@ class PublicZoneVerificationV1Tests(unittest.TestCase):
         self.assertTrue(authority["runtime_verification_requires_fresh_owner_authorization"])
         self.assertTrue(authority["remediation_requires_separate_issue_and_owner_authorization"])
 
-    def test_public_set_is_derived_exactly_from_registry(self) -> None:
+    def test_phase3_public_set_remains_a_reviewed_subset_of_current_registry(self) -> None:
         public_services = [
             item for item in self.registry["services"] if item["zone"] == "PUBLIC"
         ]
         expected = self.contract["public_service_selection"]
         self.assertEqual(expected["source"], "registry-zone-filter")
         self.assertEqual(expected["zone"], "PUBLIC")
-        self.assertEqual(
-            [item["service_id"] for item in public_services],
-            expected["expected_service_ids"],
-        )
-        self.assertEqual(
-            [item["hostname"] for item in public_services],
-            expected["expected_hostnames"],
-        )
+
+        # This v1 contract is the historical Phase 3 verification snapshot from
+        # issue #816. Later reviewed PUBLIC registrations must not rewrite which
+        # services that completed verification covered.
         self.assertEqual(
             expected["expected_service_ids"],
             ["apex-web", "hermes-tech"],
@@ -66,6 +62,18 @@ class PublicZoneVerificationV1Tests(unittest.TestCase):
             expected["expected_hostnames"],
             ["rozkalns.net", "tech.rozkalns.net"],
         )
+
+        current_ids = [item["service_id"] for item in public_services]
+        current_hostnames = [item["hostname"] for item in public_services]
+        for service_id in expected["expected_service_ids"]:
+            self.assertIn(service_id, current_ids)
+        for hostname in expected["expected_hostnames"]:
+            self.assertIn(hostname, current_hostnames)
+
+        # Coloring Pages is a new reviewed PUBLIC registration under #841 and
+        # requires its own LIVE verification before it can claim public PASS.
+        self.assertIn("coloring-pages", current_ids)
+        self.assertIn("coloring.rozkalns.net", current_hostnames)
 
     def test_public_registry_entries_match_phase3_policy(self) -> None:
         expected = self.contract["expected_policy"]

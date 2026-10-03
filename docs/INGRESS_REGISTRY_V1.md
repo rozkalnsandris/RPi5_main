@@ -53,6 +53,8 @@ Each service records two different owners:
 
 The shared Cloudflare Tunnel lifecycle remains owned by `RPi5_main`.
 
+`coloring.rozkalns.net` is registered as a PUBLIC, loopback-only Coloring Pages target owned at the application layer by `rozkalnsandris/coloring-pages`. Source registration records policy only: the Cloudflare route/DNS association remains absent until the separately authorized LIVE activation in `RPi5_main#841`.
+
 ## Access and LAN break-glass
 
 `access_class` is one of `NONE`, `ADMIN`, or `PRIVATE`.
@@ -69,7 +71,7 @@ The ADMIN services that retain LAN recovery semantics do so intentionally; this 
 
 ## #60 coverage and supersession
 
-The registry covers every service named by #60 plus the later RPi5 Dashboard hostname.
+The registry covers every service named by #60 plus later reviewed RPi5-hosted services such as the RPi5 Dashboard and Coloring Pages.
 
 One historical naming conflict is resolved explicitly: #60 called the Hermes application a PRIVATE service, while the newer desired-state contract `ops/contracts/cloudflare-hostname-policy.yaml` classifies `hermes.rozkalns.net` as ADMIN. Registry v1 follows the newer source policy and keeps the #60 name as a `roadmap_alias` so coverage is explicit rather than silently dropping the old roadmap item.
 
