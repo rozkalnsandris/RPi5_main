@@ -761,6 +761,7 @@ def main(argv: list[str] | None = None) -> int:
                     "manifest_path": manifest_remote,
                 },
                 "importer_image": IMPORTER_IMAGE,
+                "resume_preserved": args.resume_preserved,
                 "verified_urls": urls,
                 "verified_at": datetime.now(timezone.utc).isoformat(),
             }
