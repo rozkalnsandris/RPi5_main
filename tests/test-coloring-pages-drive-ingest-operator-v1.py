@@ -80,9 +80,13 @@ class ColoringPagesDriveIngestOperatorTests(unittest.TestCase):
         self.assertEqual(drive["pending_subdirectory"], "pending")
         self.assertEqual(
             drive["config_path"],
-            "/home/andris/.config/rclone/rclone.conf",
+            "$OWNER_HOME/.config/rclone/rclone.conf",
         )
         self.assertEqual(drive["config_expected_identity"], "root:andris:0600")
+        self.assertEqual(
+            drive_ingest.RCLONE_CONFIG,
+            Path("/home") / drive_ingest.OWNER / ".config/rclone/rclone.conf",
+        )
         self.assertFalse(drive["config_content_read_or_emit_allowed"])
         self.assertEqual(drive["download_command"], "cat")
         self.assertFalse(drive["copyto_allowed"])
@@ -115,7 +119,7 @@ class ColoringPagesDriveIngestOperatorTests(unittest.TestCase):
 
     def test_operator_only_stats_root_protected_config(self) -> None:
         self.assertIn(
-            'RCLONE_CONFIG = Path("/home/andris/.config/rclone/rclone.conf")',
+            'RCLONE_CONFIG = Path("/home") / OWNER / ".config/rclone/rclone.conf"',
             self.operator,
         )
         self.assertIn(
