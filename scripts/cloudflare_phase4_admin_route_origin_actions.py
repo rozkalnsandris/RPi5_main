@@ -27,6 +27,7 @@ SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 ALLOWED_CLASSES = {"lan", "loopback", "other", "unknown"}
 ALLOWED_FAILURE_CLASSES = {"permission", "tunnel_lookup", "configuration", "mapping", "binding", "unknown"}
 ALLOWED_TUNNEL_LOOKUP_DETAILS = {"http_error", "api_unsuccessful", "request_failed", "response_shape", "ambiguous", "id_invalid", "unknown"}
+ALLOWED_TUNNEL_LOOKUP_MATCH_STATES = {"none", "multiple", "unknown"}
 
 
 def _load_contract(path: Path = CONTRACT_PATH) -> dict[str, Any]:
@@ -57,6 +58,7 @@ def _unknown_report(
     contract: dict[str, Any],
     failure_class: str,
     tunnel_lookup_detail: str | None = None,
+    tunnel_lookup_match_state: str | None = None,
 ) -> dict[str, Any]:
     if failure_class not in ALLOWED_FAILURE_CLASSES:
         failure_class = "unknown"
@@ -76,6 +78,10 @@ def _unknown_report(
         if tunnel_lookup_detail not in ALLOWED_TUNNEL_LOOKUP_DETAILS:
             tunnel_lookup_detail = "unknown"
         report["tunnel_lookup_detail"] = tunnel_lookup_detail
+        if tunnel_lookup_detail == "ambiguous":
+            if tunnel_lookup_match_state not in ALLOWED_TUNNEL_LOOKUP_MATCH_STATES:
+                tunnel_lookup_match_state = "unknown"
+            report["tunnel_lookup_match_state"] = tunnel_lookup_match_state
     return report
 
 
@@ -99,10 +105,21 @@ def _tunnel_lookup_detail(exc: Exception) -> str:
         return "request_failed"
     if reason == "tunnel_list_shape_invalid":
         return "response_shape"
-    if reason == "tunnel_lookup_ambiguous":
+    if reason in {"tunnel_lookup_none", "tunnel_lookup_multiple"}:
         return "ambiguous"
     if reason == "tunnel_id_invalid":
         return "id_invalid"
+    return "unknown"
+
+
+def _tunnel_lookup_match_state(exc: Exception) -> str:
+    if not isinstance(exc, AuditError):
+        return "unknown"
+    reason = str(exc)
+    if reason == "tunnel_lookup_none":
+        return "none"
+    if reason == "tunnel_lookup_multiple":
+        return "multiple"
     return "unknown"
 
 
@@ -126,8 +143,10 @@ def _list_tunnel(client: CloudflareGetClient, account_id: str) -> str:
         and item.get("name") == EXPECTED_TUNNEL_NAME
         and item.get("config_src") == "cloudflare"
     ]
-    if len(matches) != 1:
-        raise AuditError("tunnel_lookup_ambiguous")
+    if not matches:
+        raise AuditError("tunnel_lookup_none")
+    if len(matches) > 1:
+        raise AuditError("tunnel_lookup_multiple")
     tunnel_id = matches[0].get("id")
     if not isinstance(tunnel_id, str) or not TUNNEL_ID_RE.fullmatch(tunnel_id):
         raise AuditError("tunnel_id_invalid")
@@ -298,12 +317,22 @@ def main() -> int:
         tunnel_lookup_detail = (
             _tunnel_lookup_detail(exc) if failure_class == "tunnel_lookup" else None
         )
+        tunnel_lookup_match_state = (
+            _tunnel_lookup_match_state(exc)
+            if failure_class == "tunnel_lookup" and tunnel_lookup_detail == "ambiguous"
+            else None
+        )
         if contract is None:
             print(json.dumps({"failure_class": "unknown", "result": "BLOCKED"}, sort_keys=True))
         else:
             print(
                 json.dumps(
-                    _unknown_report(contract, failure_class, tunnel_lookup_detail),
+                    _unknown_report(
+                        contract,
+                        failure_class,
+                        tunnel_lookup_detail,
+                        tunnel_lookup_match_state,
+                    ),
                     indent=2,
                     sort_keys=True,
                 )
