@@ -25,6 +25,7 @@ BRIDGE_SPEC.loader.exec_module(bridge)
 
 WORKFLOW_PATH = ROOT / ".github" / "workflows" / "cloudflare-phase4-admin-route-origin.yml"
 CONTRACT_PATH = ROOT / "ops" / "contracts" / "admin-zone-verification-v1.json"
+P1D03_CONTRACT_PATH = ROOT / "ops" / "contracts" / "cloudflare-p1d03-github-delivery.json"
 
 OWNER_ID = 277435981
 SHA = "a" * 40
@@ -247,6 +248,21 @@ class Phase4AdminRouteOriginTests(unittest.TestCase):
         self.assertNotIn("account_id", rendered)
         self.assertNotIn("tunnel_id", rendered)
         self.assertNotIn("api_token", rendered)
+
+    def test_p1d03_contract_does_not_bind_tunnel_get_surfaces(self) -> None:
+        p1d03 = json.loads(P1D03_CONTRACT_PATH.read_text(encoding="utf-8"))
+        surfaces = p1d03["preflight"]["get_surfaces"]
+        self.assertNotIn("/accounts/{account_id}/cfd_tunnel", surfaces)
+        self.assertFalse(any("/cfd_tunnel/" in item for item in surfaces))
+
+    def test_route_source_has_no_p1d03_account_or_token_runtime_wiring(self) -> None:
+        source = MODULE_PATH.read_text(encoding="utf-8")
+        self.assertNotIn("CLOUDFLARE_P1D03_ACCOUNT_ID", source)
+        self.assertNotIn("CLOUDFLARE_P1D03_READ_API_TOKEN", source)
+        self.assertIn(
+            'raise AuditError("tunnel_read_capability_binding_not_implemented")',
+            source,
+        )
 
     def test_unbound_capability_blocks_before_cloudflare_client(self) -> None:
         with mock.patch.object(
