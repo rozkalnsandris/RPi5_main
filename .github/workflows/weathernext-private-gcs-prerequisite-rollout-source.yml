@@ -1,23 +1,13 @@
-name: WeatherNext private GCS prerequisite rollout source
+name: WeatherNext private GCS simple canary source
 
 on:
   pull_request:
     paths:
       - ".github/workflows/weathernext-private-gcs-prerequisite-rollout-source.yml"
-      - "ops/lib/deploy_executor/weather_private_gcs_host_runtime.py"
-      - "ops/lib/deploy_executor/weather_private_gcs_host_installer.py"
-      - "ops/lib/deploy_executor/weather_private_gcs_host_installer_runtime.py"
-      - "ops/lib/deploy_executor/weather_private_gcs_runtime_transport.py"
-      - "ops/lib/deploy_executor/weather_private_gcs_auth_binding.py"
-      - "ops/lib/deploy_executor/weather_private_gcs_auth_binding_runtime.py"
       - "ops/lib/deploy_executor/weather_private_privileged_dispatch.py"
       - "ops/deploy/weather-private-gcs-prerequisite-rollout.json"
-      - "ops/deploy/weather-private-gcs-host-runtime.json"
-      - "ops/deploy/weather-private-gcs-trusted-backend.json"
       - "tests/test_weather_private_gcs_prerequisite_rollout.py"
       - "docs/WEATHERNEXT_PRIVATE_GCS_PREREQUISITE_ROLLOUT.md"
-      - "docs/WEATHERNEXT_PRIVATE_GCS_HOST_RUNTIME.md"
-      - "docs/WEATHERNEXT_PRIVATE_GCS_TRUSTED_BACKEND.md"
       - "docs/ROADMAP.md"
       - "Makefile"
   push:
@@ -25,20 +15,10 @@ on:
       - main
     paths:
       - ".github/workflows/weathernext-private-gcs-prerequisite-rollout-source.yml"
-      - "ops/lib/deploy_executor/weather_private_gcs_host_runtime.py"
-      - "ops/lib/deploy_executor/weather_private_gcs_host_installer.py"
-      - "ops/lib/deploy_executor/weather_private_gcs_host_installer_runtime.py"
-      - "ops/lib/deploy_executor/weather_private_gcs_runtime_transport.py"
-      - "ops/lib/deploy_executor/weather_private_gcs_auth_binding.py"
-      - "ops/lib/deploy_executor/weather_private_gcs_auth_binding_runtime.py"
       - "ops/lib/deploy_executor/weather_private_privileged_dispatch.py"
       - "ops/deploy/weather-private-gcs-prerequisite-rollout.json"
-      - "ops/deploy/weather-private-gcs-host-runtime.json"
-      - "ops/deploy/weather-private-gcs-trusted-backend.json"
       - "tests/test_weather_private_gcs_prerequisite_rollout.py"
       - "docs/WEATHERNEXT_PRIVATE_GCS_PREREQUISITE_ROLLOUT.md"
-      - "docs/WEATHERNEXT_PRIVATE_GCS_HOST_RUNTIME.md"
-      - "docs/WEATHERNEXT_PRIVATE_GCS_TRUSTED_BACKEND.md"
       - "docs/ROADMAP.md"
       - "Makefile"
 
@@ -48,7 +28,7 @@ permissions:
 jobs:
   source-contract:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 5
     steps:
       - name: Check out repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
@@ -56,16 +36,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Validate private GCS prerequisite rollout source
+      - name: Validate simple GCS canary boundary
         run: |
           python3 ./tests/test_weather_private_gcs_prerequisite_rollout.py
-          python3 ./tests/test_weather_private_gcs_host_runtime.py
-          python3 ./tests/test-deploy-executor-weather-private-gcs-runtime.py
-          python3 -m py_compile \
-            ops/lib/deploy_executor/weather_private_gcs_host_runtime.py \
-            ops/lib/deploy_executor/weather_private_gcs_host_installer.py \
-            ops/lib/deploy_executor/weather_private_gcs_host_installer_runtime.py \
-            ops/lib/deploy_executor/weather_private_gcs_runtime_transport.py \
-            ops/lib/deploy_executor/weather_private_gcs_auth_binding.py \
-            ops/lib/deploy_executor/weather_private_gcs_auth_binding_runtime.py \
-            ops/lib/deploy_executor/weather_private_privileged_dispatch.py
+          python3 -m py_compile ops/lib/deploy_executor/weather_private_privileged_dispatch.py
