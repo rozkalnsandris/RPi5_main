@@ -60,6 +60,194 @@ finally:
     os.close(fd)
 """
 
+
+ROOT_RELEASE_INSPECTOR = r"""
+import hashlib
+import json
+import os
+import re
+import stat
+
+repository = "rozkalnsandris/RPi5_main"
+operator = "/usr/local/sbin/rpi5-cloudflare"
+release_dir = "/usr/local/libexec/rpi5-cloudflare"
+metadata = release_dir + "/release.json"
+
+def check(path, kind, mode):
+    st = os.lstat(path)
+    if stat.S_ISLNK(st.st_mode):
+        raise SystemExit(41)
+    if kind == "file" and not stat.S_ISREG(st.st_mode):
+        raise SystemExit(42)
+    if kind == "dir" and not stat.S_ISDIR(st.st_mode):
+        raise SystemExit(43)
+    if st.st_uid != 0 or st.st_gid != 0 or stat.S_IMODE(st.st_mode) != mode:
+        raise SystemExit(44)
+
+check(operator, "file", 0o500)
+check(release_dir, "dir", 0o700)
+check(metadata, "file", 0o400)
+
+raw = open(metadata, "rb").read(8192)
+decoded = json.loads(raw.decode("utf-8"))
+if set(decoded) != {"schema_version", "repository", "source_sha", "operator_sha256"}:
+    raise SystemExit(45)
+if decoded["schema_version"] != 1 or decoded["repository"] != repository:
+    raise SystemExit(46)
+if not re.fullmatch(r"[0-9a-f]{40}", decoded["source_sha"]):
+    raise SystemExit(47)
+if not re.fullmatch(r"[0-9a-f]{64}", decoded["operator_sha256"]):
+    raise SystemExit(48)
+
+digest = hashlib.sha256()
+with open(operator, "rb") as handle:
+    for chunk in iter(lambda: handle.read(65536), b""):
+        digest.update(chunk)
+operator_sha = digest.hexdigest()
+if operator_sha != decoded["operator_sha256"]:
+    raise SystemExit(49)
+
+print(json.dumps({
+    "source_sha": decoded["source_sha"],
+    "operator_sha256": operator_sha,
+    "metadata_sha256": hashlib.sha256(raw).hexdigest(),
+}, separators=(",", ":"), sort_keys=True))
+"""
+
+ROOT_UPGRADE_WRITER = r"""
+import base64
+import hashlib
+import json
+import os
+import re
+import stat
+import sys
+
+repository = "rozkalnsandris/RPi5_main"
+operator = "/usr/local/sbin/rpi5-cloudflare"
+operator_stage = "/usr/local/sbin/rpi5-cloudflare.next"
+release_dir = "/usr/local/libexec/rpi5-cloudflare"
+metadata = release_dir + "/release.json"
+metadata_stage = release_dir + "/release.json.next"
+expected_old = sys.argv[1]
+expected_new = sys.argv[2]
+
+if not re.fullmatch(r"[0-9a-f]{40}", expected_old):
+    raise SystemExit(51)
+if not re.fullmatch(r"[0-9a-f]{40}", expected_new):
+    raise SystemExit(52)
+if expected_old == expected_new:
+    raise SystemExit(53)
+
+def check(path, kind, mode):
+    st = os.lstat(path)
+    if stat.S_ISLNK(st.st_mode):
+        raise SystemExit(54)
+    if kind == "file" and not stat.S_ISREG(st.st_mode):
+        raise SystemExit(55)
+    if kind == "dir" and not stat.S_ISDIR(st.st_mode):
+        raise SystemExit(56)
+    if st.st_uid != 0 or st.st_gid != 0 or stat.S_IMODE(st.st_mode) != mode:
+        raise SystemExit(57)
+
+def file_sha(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(65536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+def ensure_absent(path):
+    try:
+        os.lstat(path)
+    except FileNotFoundError:
+        return
+    raise SystemExit(58)
+
+def write_exclusive(path, data, mode):
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    fd = os.open(path, flags, mode)
+    try:
+        os.fchmod(fd, mode)
+        view = memoryview(data)
+        while view:
+            written = os.write(fd, view)
+            if written <= 0:
+                raise OSError("short write")
+            view = view[written:]
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+def fsync_dir(path):
+    flags = os.O_RDONLY
+    if hasattr(os, "O_DIRECTORY"):
+        flags |= os.O_DIRECTORY
+    fd = os.open(path, flags)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+check(operator, "file", 0o500)
+check(release_dir, "dir", 0o700)
+check(metadata, "file", 0o400)
+current_raw = open(metadata, "rb").read(8192)
+current = json.loads(current_raw.decode("utf-8"))
+if set(current) != {"schema_version", "repository", "source_sha", "operator_sha256"}:
+    raise SystemExit(59)
+if current["schema_version"] != 1 or current["repository"] != repository:
+    raise SystemExit(60)
+if current["source_sha"] != expected_old:
+    raise SystemExit(61)
+if not re.fullmatch(r"[0-9a-f]{64}", current["operator_sha256"]):
+    raise SystemExit(62)
+if file_sha(operator) != current["operator_sha256"]:
+    raise SystemExit(63)
+
+ensure_absent(operator_stage)
+ensure_absent(metadata_stage)
+
+payload_raw = sys.stdin.buffer.read(262144)
+payload = json.loads(payload_raw.decode("utf-8"))
+if set(payload) != {"operator_b64", "metadata_b64"}:
+    raise SystemExit(64)
+new_operator = base64.b64decode(payload["operator_b64"], validate=True)
+new_metadata = base64.b64decode(payload["metadata_b64"], validate=True)
+if not new_operator or len(new_operator) > 131072:
+    raise SystemExit(65)
+if not new_metadata or len(new_metadata) > 8192:
+    raise SystemExit(66)
+
+new_decoded = json.loads(new_metadata.decode("utf-8"))
+if set(new_decoded) != {"schema_version", "repository", "source_sha", "operator_sha256"}:
+    raise SystemExit(67)
+if new_decoded["schema_version"] != 1 or new_decoded["repository"] != repository:
+    raise SystemExit(68)
+if new_decoded["source_sha"] != expected_new:
+    raise SystemExit(69)
+if hashlib.sha256(new_operator).hexdigest() != new_decoded["operator_sha256"]:
+    raise SystemExit(70)
+
+write_exclusive(operator_stage, new_operator, 0o500)
+write_exclusive(metadata_stage, new_metadata, 0o400)
+check(operator_stage, "file", 0o500)
+check(metadata_stage, "file", 0o400)
+if file_sha(operator_stage) != new_decoded["operator_sha256"]:
+    raise SystemExit(71)
+if hashlib.sha256(open(metadata_stage, "rb").read()).hexdigest() != hashlib.sha256(new_metadata).hexdigest():
+    raise SystemExit(72)
+
+fsync_dir("/usr/local/sbin")
+fsync_dir(release_dir)
+os.replace(operator_stage, operator)
+fsync_dir("/usr/local/sbin")
+os.replace(metadata_stage, metadata)
+fsync_dir(release_dir)
+"""
+
 Runner = Callable[..., subprocess.CompletedProcess[Any]]
 
 
