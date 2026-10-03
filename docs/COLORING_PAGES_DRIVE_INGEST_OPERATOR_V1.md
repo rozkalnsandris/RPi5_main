@@ -151,15 +151,14 @@ Only after integrity passes may the operator publish:
 
 The state directory and inbox must be on the same filesystem.
 
-The reviewed move uses GNU `mv` with:
+The reviewed move first compares the source and destination parent `st_dev` values and fails unless they are on the same filesystem. It then uses GNU `mv` with:
 
 ```text
---no-copy
 --no-target-directory
 --no-clobber
 ```
 
-`--no-copy` forbids cross-filesystem copy/delete fallback. The operator also verifies that the staging source disappeared and the destination exists, so a silent no-clobber skip is treated as failure.
+This keeps the publish path compatible with the RPi5 host's GNU Coreutils 9.1, where `mv --no-copy` is not available. GNU added `mv --no-copy` in Coreutils 9.2; the existing same-filesystem `st_dev` proof provides the required cross-filesystem fail-closed boundary before `mv` is invoked. The operator also verifies that the staging source disappeared and the destination is a regular non-symlink file, so a silent no-clobber skip is treated as failure.
 
 ## Existing importer remains authoritative
 
