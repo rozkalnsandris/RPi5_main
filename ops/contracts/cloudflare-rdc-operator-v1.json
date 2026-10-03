@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "status": "SOURCE_ONLY_HOST_INSTALL_REQUIRED",
+  "canonical_issue": 841,
+  "repository": "rozkalnsandris/RPi5_main",
+  "operator": {
+    "source_entrypoint": "scripts/cloudflare_rdc_operator.py",
+    "installed_entrypoint": "/usr/local/sbin/rpi5-cloudflare",
+    "release_metadata_path": "/usr/local/libexec/rpi5-cloudflare/release.json",
+    "root_required_for_runtime": true,
+    "caller_selected_command_forbidden": true,
+    "caller_selected_secret_path_forbidden": true,
+    "exact_main_binding_required": true
+  },
+  "secret_lanes": {
+    "access": {
+      "implemented": true,
+      "path": "/etc/rpi5-secrets/cloudflare/access-writer.json",
+      "owner": "root:root",
+      "mode": "0600",
+      "cloudflare_permission": "Access: Apps and Policies Edit",
+      "scope": "account-only"
+    },
+    "tunnel": {
+      "implemented": false,
+      "path": "/etc/rpi5-secrets/cloudflare/tunnel-writer.json",
+      "owner": "root:root",
+      "mode": "0600",
+      "cloudflare_permission": "Cloudflare Tunnel Edit",
+      "scope": "account-only"
+    },
+    "dns": {
+      "implemented": false,
+      "path": "/etc/rpi5-secrets/cloudflare/dns-writer.json",
+      "owner": "root:root",
+      "mode": "0600",
+      "cloudflare_permission": "DNS Edit",
+      "scope": "zone:rozkalns.net"
+    }
+  },
+  "operations": [
+    {
+      "id": "access-public-bypass-coloring-v1",
+      "action": "access-public-bypass",
+      "hostname": "coloring.rozkalns.net",
+      "parent_wildcard_application_name": "homelab-private",
+      "parent_wildcard_destination": "*.rozkalns.net",
+      "cloudflare_method": "POST",
+      "cloudflare_endpoint": "/accounts/{account_id}/access/apps",
+      "max_write_requests": 1,
+      "application": {
+        "name": "Coloring Pages Public",
+        "type": "self_hosted",
+        "destinations": [
+          {
+            "type": "public",
+            "uri": "coloring.rozkalns.net"
+          }
+        ],
+        "policies": [
+          {
+            "name": "public-access",
+            "decision": "bypass",
+            "include": [
+              {
+                "everyone": {}
+              }
+            ]
+          }
+        ]
+      },
+      "preflight": [
+        "exact target Access application absent",
+        "exactly one homelab-private wildcard application covers *.rozkalns.net",
+        "complete application inventory fits one bounded API page",
+        "installed release metadata matches owner-authorized exact main SHA",
+        "root-only Access capability secret passes ownership/mode/shape validation"
+      ],
+      "post_write": [
+        "exact target Access application exists once",
+        "created application identity matches the POST result",
+        "application has exactly one Bypass policy including Everyone",
+        "no Require or Exclude rules exist on the created policy",
+        "all pre-existing Access applications retain their semantic projection"
+      ],
+      "recovery": "After the write begins, any error or ambiguity is STOP_ERROR. No retry, rollback, delete, cleanup, alternate write or second mutation is authorized."
+    }
+  ],
+  "forbidden": [
+    "API token creation or rotation",
+    "API Tokens Edit permission",
+    "Cloudflare Tunnel mutation",
+    "DNS mutation",
+    "wildcard Access application mutation",
+    "unrelated Access application or policy mutation",
+    "caller-provided API endpoint, command, path, hostname or request body",
+    "secret values in argv, environment, logs, GitHub, chat or RDC output",
+    "automatic retry",
+    "automatic rollback or cleanup after write uncertainty"
+  ]
+}
