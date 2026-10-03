@@ -257,6 +257,15 @@ class CloudflareRdcOperatorTests(unittest.TestCase):
             lanes["access"]["cloudflare_permission"],
             "Access: Apps and Policies Write",
         )
+        self.assertEqual(
+            lanes["tunnel"]["cloudflare_permission"],
+            "Cloudflare Tunnel Write",
+        )
+        self.assertEqual(
+            lanes["tunnel"]["shared_capability_contract"],
+            "ops/contracts/cloudflare-tunnel-operator-v1.json",
+        )
+        self.assertIn("same Tunnel-only credential", lanes["tunnel"]["credential_reuse"])
         self.assertEqual(lanes["dns"]["scope"], "zone:rozkalns.net")
 
     def test_contract_freezes_unprivileged_installer_and_local_tty_secret_flow(self) -> None:
