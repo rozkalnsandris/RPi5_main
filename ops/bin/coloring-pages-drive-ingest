@@ -550,7 +550,6 @@ def preflight_host(owner_uid: int, owner_gid: int) -> None:
         fail("operator must run as andris and never as root")
 
     root_uid = pwd.getpwnam("root").pw_uid
-    root_gid = grp.getgrnam("root").gr_gid
     for path in (
         CONTENT_ROOT,
         INBOX_ROOT,
