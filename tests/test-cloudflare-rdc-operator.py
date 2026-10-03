@@ -281,6 +281,31 @@ class CloudflareRdcOperatorTests(unittest.TestCase):
             provision["automatic_rollback_or_cleanup_after_mutation_error"]
         )
 
+    def test_contract_freezes_native_getpass_and_exact_release_upgrade(self) -> None:
+        contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
+        provision = contract["host_bootstrap"]["access_secret_provisioning"]
+        self.assertIn("/dev/tty", provision["tty_precheck"])
+        self.assertIn("no custom stream", provision["getpass_stream"])
+        self.assertIn("GetPassWarning is fatal", provision["getpass_warning_policy"])
+        upgrade = contract["host_bootstrap"]["upgrade"]
+        self.assertTrue(upgrade["expected_installed_release_required"])
+        self.assertTrue(
+            upgrade["root_helper_revalidates_installed_release_before_first_upgrade_mutation"]
+        )
+        self.assertFalse(upgrade["root_executes_repository_python"])
+        self.assertFalse(upgrade["secret_or_cloudflare_access"])
+        self.assertFalse(upgrade["sudoers_mutation"])
+        self.assertFalse(upgrade["automatic_retry"])
+        self.assertFalse(upgrade["automatic_rollback"])
+        self.assertFalse(upgrade["automatic_cleanup_after_mutation_error"])
+        self.assertEqual(
+            upgrade["fixed_stage_paths"],
+            [
+                "/usr/local/sbin/rpi5-cloudflare.next",
+                "/usr/local/libexec/rpi5-cloudflare/release.json.next",
+            ],
+        )
+
     def test_contract_enforces_single_write_and_no_retry_or_rollback(self) -> None:
         contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
         operation = contract["operations"][0]
