@@ -102,10 +102,10 @@
     "same_filesystem_required": true,
     "command": "/usr/bin/mv",
     "required_flags": [
-      "--no-copy",
       "--no-target-directory",
       "--no-clobber"
     ],
+    "cross_filesystem_policy": "reject-via-st_dev-before-mv",
     "destination_must_not_exist": true,
     "source_must_disappear_after_move": true
   },
