@@ -126,7 +126,9 @@
         "importer_image_digest": "sha256:5f61560cb674224052bc3ab8ca086c7997930027459f6c2648714d12c60af796",
         "importer_installed_path": "/usr/local/bin/coloring-pages-import",
         "importer_execution_owner": "andris",
-        "importer_auto_pull": false
+        "importer_auto_pull": false,
+        "installed_target_alignment_issue": 860,
+        "installed_target_alignment_contract": "ops/contracts/simple-deploy-coloring-pages-alignment-v1.json"
       }
     ]
   },
@@ -182,7 +184,8 @@
     "rozkalns_cv_private_runtime_config_materialized_during_cutover": true,
     "rozkalns_cv_existing_persistent_data_reused_in_place": true,
     "coloring_pages_source_registration_issue": 838,
-    "coloring_pages_target_installation_requires_separate_exact_live_cutover": true
+    "coloring_pages_target_installation_requires_separate_exact_live_cutover": true,
+    "coloring_pages_target_alignment_requires_separate_exact_live_authority": true
   },
   "installer": {
     "issue": 672,
