@@ -206,16 +206,20 @@ class ColoringPagesDriveIngestOperatorTests(unittest.TestCase):
                     owner_gid=os.getgid(),
                 )
 
-    def test_atomic_publish_is_same_filesystem_no_copy_no_clobber(self) -> None:
+    def test_atomic_publish_is_same_filesystem_no_clobber(self) -> None:
         atomic = self.contract["atomic_publish"]
         self.assertTrue(atomic["same_filesystem_required"])
         self.assertEqual(atomic["command"], "/usr/bin/mv")
         self.assertEqual(
             atomic["required_flags"],
-            ["--no-copy", "--no-target-directory", "--no-clobber"],
+            ["--no-target-directory", "--no-clobber"],
         )
+        self.assertEqual(
+            atomic["cross_filesystem_policy"],
+            "reject-via-st_dev-before-mv",
+        )
+        self.assertNotIn('"--no-copy"', self.operator)
         for marker in (
-            '"--no-copy"',
             '"--no-target-directory"',
             '"--no-clobber"',
             "source.parent.stat().st_dev != destination.parent.stat().st_dev",
