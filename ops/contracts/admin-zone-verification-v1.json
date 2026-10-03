@@ -279,7 +279,19 @@
     "protected_authorized_admin": {
       "separately_authorized": true,
       "existing_protected_access_context_required": true,
-      "identity_session_material_persistence_allowed": false
+      "identity_session_material_persistence_allowed": false,
+      "protected_verifier": {
+        "contract_ref": "ops/contracts/admin-zone-protected-authorized-verifier-v1.json",
+        "entrypoint": "scripts/phase4_admin_authorized_path_receipt.py",
+        "browser_sso_contract_ref": "ops/contracts/cloudflare-p1d-browser-sso.json",
+        "execution_surface": "owner-operated-normal-browser-plus-sanitized-receipt",
+        "covered_assertions": [
+          "authorized_admin_result"
+        ],
+        "all_admin_services_pass_required": true,
+        "operator_reads_browser_profile_or_session_material": false,
+        "source_merge_authorizes_execution": false
+      }
     }
   },
   "route_origin_runtime_capability": {

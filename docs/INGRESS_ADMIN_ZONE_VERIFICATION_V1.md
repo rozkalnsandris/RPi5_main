@@ -152,6 +152,24 @@ Evidence is limited to `PASS`, `FAIL`, or `UNKNOWN` for the authorized path. The
 
 If a safe protected check cannot be completed without widening that boundary, record `UNKNOWN` and STOP.
 
+## Protected authorized-admin verifier
+
+The protected path is intentionally **not** automated with browser-profile, cookie, token, or credential extraction. The accepted existing mechanism is the standard Cloudflare Access browser SSO model defined by `ops/contracts/cloudflare-p1d-browser-sso.json`. The previously accepted P1D-05 browser canary proves that this browser SSO model works across more than one protected application, but it does not by itself prove all eight current ADMIN service paths required by Phase 4.
+
+The bounded Phase 4 verifier is `ops/contracts/admin-zone-protected-authorized-verifier-v1.json` with receipt validator `scripts/phase4_admin_authorized_path_receipt.py`.
+
+Under a **fresh separate owner authorization**, the owner uses a normal browser and the existing Access browser SSO path to visit each exact ADMIN hostname. Authentication, if required, is completed directly by the owner in the browser. The agent/operator must not read the browser profile, cookies, session state, credentials, identity values, developer-tools/network export, or protected response content.
+
+For each hostname the owner records only one class:
+
+- `PASS` — the intended ADMIN application is reachable through the authorized Access path;
+- `FAIL` — the authorized path does not reach the intended ADMIN application;
+- `UNKNOWN` — a safe determination cannot be made within the protected-data boundary.
+
+The receipt validator accepts only `source_main_sha` plus the exact eight `service_id` / `hostname` / `authorized_admin_result` tuples derived from the ADMIN projection. Any extra input field is rejected, so identity, cookie, session, token, credential, response-content, or application-data fields cannot be admitted to canonical evidence.
+
+All eight services must be `PASS` for the protected-authorized-admin gate to PASS. Any `FAIL` or `UNKNOWN` keeps Phase 4 incomplete. Source merge does not authorize this browser canary.
+
 ## Sanitized evidence schema
 
 The machine contract allowlists every evidence field. Per service it permits only:
