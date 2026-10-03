@@ -1,7 +1,7 @@
 {
   "schema": "rozkalns.rpi5-main.cloudflare-tunnel-operator.v1",
   "schema_version": 1,
-  "status": "source-defined-secret-unprovisioned",
+  "status": "source-defined",
   "repository": "rozkalnsandris/RPi5_main",
   "initial_implementation_issue": 819,
   "purpose": "durable account-scoped Cloudflare Tunnel capability shared by reviewed RPi5_main Tunnel consumers",
