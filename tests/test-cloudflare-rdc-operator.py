@@ -196,7 +196,9 @@ class CloudflareRdcOperatorTests(unittest.TestCase):
 
     def test_provision_preflights_token_before_secret_write(self) -> None:
         client = ProvisionClient()
-        with mock.patch.object(op.ACCESS_SECRET_PATH, "exists", return_value=False), \
+        secret_path = mock.Mock()
+        secret_path.exists.return_value = False
+        with mock.patch.object(op, "ACCESS_SECRET_PATH", secret_path), \
              mock.patch.object(op, "_write_access_secret") as writer:
             op.provision_access_secret(client, "a" * 32, "t" * 32)
         self.assertEqual(client.active_checks, 1)
