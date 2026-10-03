@@ -1,0 +1,204 @@
+{
+  "schema": "rozkalns.rpi5-main.coloring-pages-drive-ingest-operator.v1",
+  "repository": "rozkalnsandris/RPi5_main",
+  "status": "source-defined-not-installed",
+  "consumer": {
+    "repository": "rozkalnsandris/coloring-pages",
+    "ingestion_contract_revision": "0f5290c57f68de32b4a20f3baded8126c0a6efa6",
+    "ingestion_contract_path": "deploy/chat-to-drive-ingestion.json",
+    "importer_operator_contract": "ops/contracts/coloring-pages-importer-operator-v1.json",
+    "importer_installed_path": "/usr/local/bin/coloring-pages-import",
+    "importer_source_blob_sha": "83f6a25918bb377a407c3fe264b825327172f9e3"
+  },
+  "operator": {
+    "source": "ops/bin/coloring-pages-drive-ingest",
+    "installed_path": "/usr/local/bin/coloring-pages-drive-ingest",
+    "installed_owner": "root",
+    "installed_group": "root",
+    "installed_mode": "0755",
+    "execution_owner": "andris",
+    "root_execution_allowed": false,
+    "allowed_arguments": [
+      "--id",
+      "--expected-sha256",
+      "--expected-size"
+    ]
+  },
+  "drive": {
+    "provider": "google-drive",
+    "transport_client": "/usr/bin/rclone",
+    "privilege_bridge": "/usr/bin/sudo -n",
+    "remote": "gdrive",
+    "root_folder_id": "1F0pxqoRgtZl7JQVcyvYVZxKvx6eOnytn",
+    "pending_subdirectory": "pending",
+    "config_path": "/home/andris/.config/rclone/rclone.conf",
+    "config_expected_identity": "root:andris:0600",
+    "config_content_read_or_emit_allowed": false,
+    "listing_command": "lsf",
+    "download_command": "cat",
+    "copyto_allowed": false,
+    "fast_list_allowed": false,
+    "drive_mutation_allowed": false,
+    "workspace_conversion_allowed": false
+  },
+  "staging": {
+    "directory": "/srv/coloring-pages-content/state/drive-ingest",
+    "expected_directory_identity": "andris:andris:0755",
+    "lock_file": "/srv/coloring-pages-content/state/drive-ingest/.lock",
+    "lock_expected_identity": "andris:andris:0600",
+    "manifest_partial": "/srv/coloring-pages-content/state/drive-ingest/<id>.manifest.partial",
+    "manifest_final": "/srv/coloring-pages-content/state/drive-ingest/<id>.manifest.json",
+    "image_partial": "/srv/coloring-pages-content/state/drive-ingest/<id>.png.partial",
+    "receipt_partial": "/srv/coloring-pages-content/state/drive-ingest/<id>.receipt.partial",
+    "receipt_final": "/srv/coloring-pages-content/state/drive-ingest/<id>.receipt.json",
+    "partial_file_identity": "andris:andris:0600",
+    "secure_create": [
+      "O_CREAT",
+      "O_EXCL",
+      "O_NOFOLLOW"
+    ],
+    "streaming_model": "operator-opens-0600-file-as-andris-and-root-rclone-writes-inherited-stdout-fd",
+    "automatic_partial_cleanup_after_failure": false
+  },
+  "manifest": {
+    "schema": "rozkalns.coloring-pages.drive-staging-manifest.v1",
+    "remote_image_name": "pending/<id>.png",
+    "remote_manifest_name": "pending/<id>.json",
+    "manifest_is_readiness_signal": true,
+    "exact_owner_bound_cli_fields": [
+      "id",
+      "sha256",
+      "size_bytes"
+    ],
+    "unknown_fields": "reject",
+    "maximum_manifest_bytes": 65536,
+    "maximum_source_bytes": 20971520,
+    "allowed_age": [
+      "3-6",
+      "4-8"
+    ],
+    "allowed_difficulty": [
+      "easy",
+      "normal",
+      "detailed"
+    ],
+    "allowed_language": [
+      "de"
+    ]
+  },
+  "content": {
+    "root": "/srv/coloring-pages-content",
+    "inbox": "/srv/coloring-pages-content/inbox",
+    "originals": "/srv/coloring-pages-content/originals",
+    "public": "/srv/coloring-pages-content/public",
+    "media": "/srv/coloring-pages-content/public/media",
+    "catalog": "/srv/coloring-pages-content/public/catalog.json",
+    "expected_directory_identity": "andris:andris:0755",
+    "expected_catalog_identity": "andris:andris:0644",
+    "inbox_target": "/srv/coloring-pages-content/inbox/<id>.png",
+    "inbox_file_identity": "andris:andris:0600"
+  },
+  "atomic_publish": {
+    "same_filesystem_required": true,
+    "command": "/usr/bin/mv",
+    "required_flags": [
+      "--no-copy",
+      "--no-target-directory",
+      "--no-clobber"
+    ],
+    "destination_must_not_exist": true,
+    "source_must_disappear_after_move": true
+  },
+  "import": {
+    "invokes_existing_importer_operator": true,
+    "installed_path": "/usr/local/bin/coloring-pages-import",
+    "exact_git_blob_sha_required": "83f6a25918bb377a407c3fe264b825327172f9e3",
+    "image_pull_allowed": false,
+    "application_redeploy_required": false
+  },
+  "post_import_verification": {
+    "public_origin": "https://coloring.rozkalns.net",
+    "required": [
+      "original-source-size-and-sha256-match",
+      "public-source-size-and-sha256-match",
+      "catalog-has-exactly-one-matching-entry",
+      "thumb-webp-exists",
+      "preview-webp-exists",
+      "print-pdf-exists",
+      "public-catalog-http-200",
+      "public-thumb-http-200",
+      "public-preview-http-200",
+      "public-source-http-200",
+      "public-pdf-http-200"
+    ]
+  },
+  "idempotency": {
+    "receipt_schema": "rozkalns.rpi5-main.coloring-pages-drive-ingest-receipt.v1",
+    "matching_success_receipt": "verify-read-only-and-return-already-processed",
+    "existing_id_without_matching_success_receipt": "stop",
+    "automatic_overwrite": false,
+    "automatic_retry_after_failure": false
+  },
+  "oauth_client": {
+    "operator_uses_existing_host_config_only": true,
+    "operator_modifies_client_id": false,
+    "operator_modifies_credentials": false,
+    "custom_client_id_migration": "separate-owner-gated-settings-and-credentials-follow-up"
+  },
+  "installer": {
+    "source": "scripts/install-coloring-pages-drive-ingest-operator-v1.sh",
+    "exact_rpi5_main_sha_required": true,
+    "clean_main_checkout_required": true,
+    "installs_operator_only": true,
+    "creates_bounded_state_directory_and_lock_if_absent": true,
+    "changes_rclone_config": false,
+    "changes_sudoers": false,
+    "runs_rclone": false,
+    "imports_content": false,
+    "changes_systemd": false
+  },
+  "fail_closed": {
+    "conditions": [
+      "drive-object-missing-or-ambiguous",
+      "manifest-invalid",
+      "owner-bound-id-sha-or-size-mismatch",
+      "secure-staging-create-failure",
+      "rclone-download-failure",
+      "source-size-or-sha256-mismatch",
+      "atomic-publish-failure",
+      "page-id-conflict",
+      "importer-failure",
+      "catalog-mismatch",
+      "public-verification-failure",
+      "receipt-write-failure",
+      "authorization-ambiguity"
+    ],
+    "after_first_mutation": "stop-without-retry-rollback-cleanup-or-alternate-mutation"
+  },
+  "forbidden": [
+    "read-or-print-rclone-config",
+    "credential-output",
+    "rclone-copyto-local-staging",
+    "fast-list-pending-discovery",
+    "arbitrary-drive-folder-selection",
+    "arbitrary-drive-file-name",
+    "drive-move-delete-or-archive",
+    "automatic-overwrite",
+    "automatic-retry",
+    "automatic-cleanup-after-failure",
+    "host-python-or-pillow-install",
+    "application-redeploy-per-import",
+    "sudoers-or-credential-mutation"
+  ],
+  "live_authority_required": {
+    "install_operator_and_state_scaffold": true,
+    "drive_read_and_production_import": true,
+    "drive_archive_or_delete": true,
+    "rclone_client_id_or_credential_change": true
+  },
+  "references": [
+    "https://rclone.org/commands/rclone_cat/",
+    "https://rclone.org/drive/",
+    "https://www.gnu.org/software/coreutils/manual/html_node/mv-invocation.html"
+  ]
+}
