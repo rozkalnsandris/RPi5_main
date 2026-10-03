@@ -15,7 +15,8 @@
     "installer_runs_as_root": false,
     "installed_mode": "0500",
     "release_metadata_mode": "0400",
-    "sudoers_mutation": false
+    "sudoers_mutation": false,
+    "tty_input_strategy": "native getpass controlling-terminal flow with explicit /dev/tty isatty precheck; GetPassWarning is fatal"
   },
   "secret_lanes": {
     "access": {
@@ -103,7 +104,9 @@
     "automatic retry",
     "automatic rollback or cleanup after write uncertainty",
     "token value via RDC",
-    "redundant sudoers rule for rpi5-cloudflare"
+    "redundant sudoers rule for rpi5-cloudflare",
+    "echoed stdin fallback for secret provisioning",
+    "operator upgrade without exact installed release binding"
   ],
   "host_bootstrap": {
     "install": {
@@ -169,7 +172,39 @@
       ],
       "overwrite_existing_secret": false,
       "automatic_retry": false,
-      "automatic_rollback_or_cleanup_after_mutation_error": false
+      "automatic_rollback_or_cleanup_after_mutation_error": false,
+      "tty_precheck": "/dev/tty opened with os.open and verified by os.isatty before prompting",
+      "getpass_stream": "default native getpass controlling terminal; no custom stream",
+      "getpass_warning_policy": "GetPassWarning is fatal; no stdin echo fallback accepted"
+    },
+    "upgrade": {
+      "source": "scripts/install-cloudflare-rdc-operator.py",
+      "requires_clean_exact_main": true,
+      "requires_branch": "main",
+      "requires_canonical_origin": true,
+      "expected_installed_release_required": true,
+      "installed_release_validation": [
+        "root:root 0500 installed operator",
+        "root:root 0700 release directory",
+        "root:root 0400 release metadata",
+        "release metadata source_sha equals owner-authorized --upgrade-from SHA",
+        "installed operator SHA-256 equals release metadata operator_sha256"
+      ],
+      "fixed_stage_paths": [
+        "/usr/local/sbin/rpi5-cloudflare.next",
+        "/usr/local/libexec/rpi5-cloudflare/release.json.next"
+      ],
+      "root_executes_repository_python": false,
+      "root_helper_revalidates_installed_release_before_first_upgrade_mutation": true,
+      "upgrade_targets": [
+        "/usr/local/sbin/rpi5-cloudflare",
+        "/usr/local/libexec/rpi5-cloudflare/release.json"
+      ],
+      "secret_or_cloudflare_access": false,
+      "sudoers_mutation": false,
+      "automatic_retry": false,
+      "automatic_rollback": false,
+      "automatic_cleanup_after_mutation_error": false
     }
   }
 }
