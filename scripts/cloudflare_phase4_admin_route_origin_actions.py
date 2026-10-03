@@ -120,7 +120,12 @@ def _unknown_report(
     }
     if failure_class == "capability_binding":
         report["capability_requirement"] = "tunnel-read"
-        report["capability_binding"] = "unbound"
+        capability = contract.get("route_origin_runtime_capability", {})
+        report["capability_binding"] = (
+            "unbound"
+            if isinstance(capability, dict) and capability.get("status") == "unbound"
+            else "not-wired"
+        )
     if failure_class == "tunnel_lookup":
         if tunnel_lookup_detail not in ALLOWED_TUNNEL_LOOKUP_DETAILS:
             tunnel_lookup_detail = "unknown"
@@ -346,27 +351,8 @@ def main() -> int:
         finally:
             github_token = ""
 
-        account_id = os.environ.pop("CLOUDFLARE_P1D03_ACCOUNT_ID", "")
-        read_token = os.environ.pop("CLOUDFLARE_P1D03_READ_API_TOKEN", "")
-        try:
-            if not ACCOUNT_ID_RE.fullmatch(account_id):
-                raise AuditError("account_binding_invalid")
-            _validate_token(read_token)
-            client = CloudflareGetClient(read_token, DEFAULT_API_BASE)
-            stage = "tunnel_lookup"
-            tunnel_id = _list_tunnel(client, account_id)
-            stage = "configuration"
-            config = _get_config(client, account_id, tunnel_id)
-            read_token = ""
-            account_id = ""
-            tunnel_id = ""
-            stage = "mapping"
-            report = build_report(contract, config)
-            print(json.dumps(report, indent=2, sort_keys=True))
-            return 0 if report["result"] == "PASS" else 3
-        finally:
-            read_token = ""
-            account_id = ""
+        stage = "capability_binding"
+        raise AuditError("tunnel_read_capability_binding_not_implemented")
     except (AuditError, json.JSONDecodeError, OSError) as exc:
         failure_class = _failure_class(stage, exc)
         tunnel_lookup_detail = (
