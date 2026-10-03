@@ -1,0 +1,91 @@
+{
+  "schema": "rozkalns.rpi5-main.cloudflare-tunnel-operator.v1",
+  "schema_version": 1,
+  "status": "source-defined",
+  "repository": "rozkalnsandris/RPi5_main",
+  "initial_implementation_issue": 819,
+  "purpose": "durable account-scoped Cloudflare Tunnel capability shared by reviewed RPi5_main Tunnel consumers",
+  "credential_model": {
+    "cloudflare_permission": "Cloudflare Tunnel Write",
+    "resource_scope": "single-reviewed-account",
+    "stable_account_id_secret": "CLOUDFLARE_TUNNEL_ACCOUNT_ID",
+    "stable_api_token_secret": "CLOUDFLARE_TUNNEL_API_TOKEN",
+    "token_value_in_source_allowed": false,
+    "token_creation_or_rotation_authorized_by_source": false,
+    "repository_secret_provisioning_authorized_by_source": false,
+    "reuse_outside_tunnel_capability_allowed": false,
+    "dns_permission_included": false,
+    "access_permission_included": false,
+    "api_tokens_permission_included": false
+  },
+  "execution_model": {
+    "possession_of_token_grants_operation_authority": false,
+    "caller_selected_method_allowed": false,
+    "caller_selected_endpoint_allowed": false,
+    "caller_selected_payload_allowed": false,
+    "reviewed_consumer_contract_required": true,
+    "exact_owner_authorization_required_for_write": true,
+    "write_mutation_budget_required": true,
+    "post_write_fail_closed_required": true,
+    "automatic_retry_after_write_ambiguity_allowed": false,
+    "automatic_rollback_after_write_ambiguity_allowed": false
+  },
+  "consumer_classes": {
+    "read_only": {
+      "allowed_methods": [
+        "GET"
+      ],
+      "write_methods_allowed": false,
+      "fresh_owner_authorization_may_be_required_by_consumer": true
+    },
+    "write": {
+      "allowed_methods": [
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ],
+      "read_preflight_allowed": true,
+      "operation_specific_source_contract_required": true,
+      "exact_target_required": true,
+      "exact_main_binding_required": true,
+      "fresh_explicit_owner_authorization_required": true
+    }
+  },
+  "initial_consumers": [
+    {
+      "id": "phase4-admin-route-origin-read-v1",
+      "issue": 819,
+      "class": "read_only",
+      "source": "scripts/cloudflare_phase4_admin_route_origin_actions.py",
+      "workflow": ".github/workflows/cloudflare-phase4-admin-route-origin.yml",
+      "allowed_methods": [
+        "GET"
+      ],
+      "allowed_paths": [
+        "/accounts/{account_id}/cfd_tunnel",
+        "/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations"
+      ],
+      "cloudflare_mutation_allowed": false
+    }
+  ],
+  "evidence_boundary": {
+    "account_id_emission_allowed": false,
+    "api_token_emission_allowed": false,
+    "tunnel_id_emission_allowed": false,
+    "raw_api_payload_emission_allowed": false,
+    "private_origin_coordinates_emission_allowed": false
+  },
+  "rotation_semantics": {
+    "stable_secret_aliases_preserved": true,
+    "consumer_source_rewire_required_on_token_rotation": false,
+    "token_replacement_requires_separate_owner_settings_authorization": true
+  },
+  "official_references": {
+    "permissions": "https://developers.cloudflare.com/fundamentals/api/reference/permissions/",
+    "token_creation": "https://developers.cloudflare.com/fundamentals/api/get-started/create-token/",
+    "list_tunnels": "https://developers.cloudflare.com/api/resources/zero_trust/subresources/tunnels/subresources/cloudflared/methods/list/",
+    "get_configuration": "https://developers.cloudflare.com/api/resources/zero_trust/subresources/tunnels/subresources/cloudflared/subresources/configurations/methods/get/",
+    "update_configuration": "https://developers.cloudflare.com/tunnel/get-started/"
+  }
+}

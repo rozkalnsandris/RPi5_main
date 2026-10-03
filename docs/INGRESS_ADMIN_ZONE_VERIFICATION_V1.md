@@ -53,38 +53,31 @@ A later read-only verification must classify each ADMIN hostname into one of:
 
 Only the source-projected expected class can PASS. A broad wildcard, persistent bypass, missing Access boundary or ambiguous inheritance is drift and must not be repaired under verification authority.
 
-## Route-origin Tunnel-read capability boundary
+## Route-origin shared Tunnel operator boundary
 
-The Phase 4 route-origin audit needs two Cloudflare Tunnel GET surfaces:
+The Phase 4 route-origin audit is a **read-only consumer** of the durable RPi5_main Tunnel operator contract:
+
+`ops/contracts/cloudflare-tunnel-operator-v1.json`
+
+The shared credential is account-scoped and carries `Cloudflare Tunnel Write` so future reviewed Tunnel operations do not require a new token per project or per action. This does not make the Phase 4 audit writable.
+
+The Phase 4 consumer remains restricted to two GET surfaces:
 
 - `GET /accounts/{account_id}/cfd_tunnel`;
 - `GET /accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations`.
 
-Current Cloudflare API documentation lists Tunnel/Connector read permissions for both surfaces, including `Cloudflare Tunnel Read`.
+Its stable GitHub secret aliases are inherited from the shared operator:
 
-Official references:
+- `CLOUDFLARE_TUNNEL_ACCOUNT_ID`;
+- `CLOUDFLARE_TUNNEL_API_TOKEN`.
 
-- https://developers.cloudflare.com/api/resources/zero_trust/subresources/tunnels/subresources/cloudflared/methods/list/
-- https://developers.cloudflare.com/api/resources/zero_trust/subresources/tunnels/subresources/cloudflared/subresources/configurations/methods/get/
+The existing `P1D03` Access capability is explicitly non-reusable.
 
-The existing GitHub `P1D03` capability contract is **not reusable** for this purpose. Its reviewed GET surface is Cloudflare Access only; it does not establish Tunnel or Connector read authority. Reusing its account/token secrets for Tunnel discovery would silently widen the credential trust boundary.
+The shared operator contract requires every consumer to define its own source gate. Read-only consumers may only use `GET`. Write consumers require an operation-specific reviewed contract, exact target, exact main binding, mutation budget and fresh explicit owner authorization. Possession of the token alone grants no operation authority.
 
-The route-origin capability is now source-bound to the dedicated machine contract `ops/contracts/cloudflare-phase4-tunnel-read-v1.json`.
+This source does not create or rotate the token, provision GitHub secrets, authorize a Cloudflare run or authorize any Tunnel write. Provider account ID, token, tunnel ID, raw payload and private origin coordinates remain forbidden output.
 
-That binding is deliberately least privilege:
-
-- required Cloudflare permission: `Cloudflare Tunnel Read`;
-- allowed HTTP method: `GET` only;
-- allowed provider surfaces: the two Tunnel inventory/configuration endpoints above;
-- dedicated GitHub secret names: `CLOUDFLARE_PHASE4_TUNNEL_ACCOUNT_ID` and `CLOUDFLARE_PHASE4_TUNNEL_READ_API_TOKEN`;
-- the existing `P1D03` Access secrets remain explicitly non-reusable;
-- no write permission or alternate broader permission is accepted by the source contract;
-- custom Cloudflare API base overrides are forbidden;
-- provider account ID, token, tunnel ID, raw payload and private origin coordinates remain forbidden output.
-
-The source binding does **not** provision either GitHub secret and does not change any Cloudflare token permission. Until those dedicated secrets are separately owner-provisioned, a runtime attempt fails closed during binding validation before a Cloudflare API client is used.
-
-Merging the binding also does not authorize a Cloudflare run. Every route-origin execution still requires a fresh exact owner authorization under the Phase 4 runtime gate. Secret provisioning or repository-settings mutation is a separate owner gate, and any Cloudflare write remains outside this contract.
+See `docs/CLOUDFLARE_TUNNEL_OPERATOR_V1.md` for the durable capability contract and rotation semantics.
 
 ## Two runtime authority gates
 

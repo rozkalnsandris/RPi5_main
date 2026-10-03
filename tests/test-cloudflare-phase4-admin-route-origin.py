@@ -26,7 +26,7 @@ BRIDGE_SPEC.loader.exec_module(bridge)
 WORKFLOW_PATH = ROOT / ".github" / "workflows" / "cloudflare-phase4-admin-route-origin.yml"
 CONTRACT_PATH = ROOT / "ops" / "contracts" / "admin-zone-verification-v1.json"
 P1D03_CONTRACT_PATH = ROOT / "ops" / "contracts" / "cloudflare-p1d03-github-delivery.json"
-TUNNEL_BINDING_PATH = ROOT / "ops" / "contracts" / "cloudflare-phase4-tunnel-read-v1.json"
+TUNNEL_OPERATOR_PATH = ROOT / "ops" / "contracts" / "cloudflare-tunnel-operator-v1.json"
 
 OWNER_ID = 277435981
 SHA = "a" * 40
@@ -74,7 +74,7 @@ class Phase4AdminRouteOriginTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
-        cls.binding = json.loads(TUNNEL_BINDING_PATH.read_text(encoding="utf-8"))
+        cls.operator = json.loads(TUNNEL_OPERATOR_PATH.read_text(encoding="utf-8"))
 
     def test_owner_command_is_exact_issue_and_sha_bound(self) -> None:
         body = f"/rpi5-p4-route-origin check HEAD={SHA} CANARY=phase4-admin-route-origin-v1"
@@ -207,85 +207,132 @@ class Phase4AdminRouteOriginTests(unittest.TestCase):
             self.assertNotIn("match_count", rendered)
             self.assertNotIn("matching_tunnels", rendered)
 
-    def test_route_origin_capability_is_bound_to_dedicated_read_contract(self) -> None:
+    def test_route_origin_capability_uses_shared_tunnel_operator(self) -> None:
         capability = self.contract["route_origin_runtime_capability"]
         self.assertEqual(capability["status"], "bound")
         self.assertEqual(
             capability["required_cloudflare_permission"],
-            "Cloudflare Tunnel Read",
-        )
-        self.assertEqual(
-            capability["accepted_permission_family"],
-            ["Cloudflare Tunnel Read"],
+            "Cloudflare Tunnel Write",
         )
         self.assertEqual(
             capability["binding_contract_ref"],
-            "ops/contracts/cloudflare-phase4-tunnel-read-v1.json",
+            "ops/contracts/cloudflare-tunnel-operator-v1.json",
         )
-        self.assertFalse(capability["existing_p1d03_access_lane_reusable"])
+        self.assertEqual(
+            capability["consumer_id"],
+            "phase4-admin-route-origin-read-v1",
+        )
+        self.assertTrue(capability["shared_tunnel_operator_reusable"])
+        self.assertFalse(capability["p1d03_access_lane_reusable"])
         self.assertTrue(capability["runtime_execution_allowed"])
         self.assertTrue(
             capability["runtime_execution_requires_fresh_owner_authorization"]
         )
+        self.assertFalse(capability["cloudflare_mutation_allowed"])
         self.assertFalse(capability["secret_or_permission_provisioning_authorized_here"])
-        route._require_tunnel_read_capability(self.contract, self.binding)
+        route._require_tunnel_operator_read_consumer(self.contract, self.operator)
 
-    def test_tunnel_read_binding_is_least_privilege_and_non_authorizing(self) -> None:
-        permission = self.binding["cloudflare_permission"]
-        surface = self.binding["api_surface"]
-        secrets = self.binding["github_secret_binding"]
-        authority = self.binding["runtime_authority"]
-        evidence = self.binding["evidence"]
+    def test_shared_tunnel_operator_has_one_stable_write_capable_credential(self) -> None:
+        credential = self.operator["credential_model"]
+        execution = self.operator["execution_model"]
+        classes = self.operator["consumer_classes"]
+        rotation = self.operator["rotation_semantics"]
 
-        self.assertEqual(self.binding["status"], "source-bound-secret-unprovisioned")
-        self.assertEqual(permission["required"], "Cloudflare Tunnel Read")
-        self.assertEqual(permission["access_level"], "read-only")
-        self.assertFalse(permission["write_permissions_allowed"])
-        self.assertEqual(permission["accepted_alternates"], [])
-        self.assertEqual(surface["methods"], ["GET"])
         self.assertEqual(
-            surface["paths"],
+            self.operator["schema"],
+            "rozkalns.rpi5-main.cloudflare-tunnel-operator.v1",
+        )
+        self.assertEqual(self.operator["status"], "source-defined")
+        self.assertEqual(
+            credential["cloudflare_permission"],
+            "Cloudflare Tunnel Write",
+        )
+        self.assertEqual(
+            credential["stable_account_id_secret"],
+            "CLOUDFLARE_TUNNEL_ACCOUNT_ID",
+        )
+        self.assertEqual(
+            credential["stable_api_token_secret"],
+            "CLOUDFLARE_TUNNEL_API_TOKEN",
+        )
+        for key in (
+            "token_value_in_source_allowed",
+            "token_creation_or_rotation_authorized_by_source",
+            "repository_secret_provisioning_authorized_by_source",
+            "reuse_outside_tunnel_capability_allowed",
+            "dns_permission_included",
+            "access_permission_included",
+            "api_tokens_permission_included",
+        ):
+            self.assertFalse(credential[key])
+
+        self.assertFalse(execution["possession_of_token_grants_operation_authority"])
+        self.assertFalse(execution["caller_selected_method_allowed"])
+        self.assertFalse(execution["caller_selected_endpoint_allowed"])
+        self.assertFalse(execution["caller_selected_payload_allowed"])
+        self.assertTrue(execution["reviewed_consumer_contract_required"])
+        self.assertTrue(execution["exact_owner_authorization_required_for_write"])
+        self.assertTrue(execution["write_mutation_budget_required"])
+        self.assertTrue(execution["post_write_fail_closed_required"])
+        self.assertFalse(execution["automatic_retry_after_write_ambiguity_allowed"])
+        self.assertFalse(execution["automatic_rollback_after_write_ambiguity_allowed"])
+
+        self.assertEqual(classes["read_only"]["allowed_methods"], ["GET"])
+        self.assertFalse(classes["read_only"]["write_methods_allowed"])
+        self.assertTrue(classes["write"]["operation_specific_source_contract_required"])
+        self.assertTrue(classes["write"]["exact_target_required"])
+        self.assertTrue(classes["write"]["exact_main_binding_required"])
+        self.assertTrue(classes["write"]["fresh_explicit_owner_authorization_required"])
+
+        self.assertTrue(rotation["stable_secret_aliases_preserved"])
+        self.assertFalse(rotation["consumer_source_rewire_required_on_token_rotation"])
+        self.assertTrue(
+            rotation["token_replacement_requires_separate_owner_settings_authorization"]
+        )
+
+    def test_phase4_consumer_is_get_only_even_with_write_capable_token(self) -> None:
+        consumers = [
+            item
+            for item in self.operator["initial_consumers"]
+            if item["id"] == "phase4-admin-route-origin-read-v1"
+        ]
+        self.assertEqual(len(consumers), 1)
+        consumer = consumers[0]
+        self.assertEqual(consumer["class"], "read_only")
+        self.assertEqual(consumer["allowed_methods"], ["GET"])
+        self.assertEqual(
+            consumer["allowed_paths"],
             [
                 "/accounts/{account_id}/cfd_tunnel",
                 "/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations",
             ],
         )
-        self.assertFalse(surface["custom_api_base_allowed"])
-        self.assertEqual(
-            secrets["account_id"],
-            "CLOUDFLARE_PHASE4_TUNNEL_ACCOUNT_ID",
-        )
-        self.assertEqual(
-            secrets["api_token"],
-            "CLOUDFLARE_PHASE4_TUNNEL_READ_API_TOKEN",
-        )
-        self.assertFalse(secrets["existing_p1d03_secrets_reusable"])
-        self.assertFalse(secrets["secret_values_in_source_allowed"])
-        self.assertFalse(secrets["secret_provisioning_authorized_by_source"])
-        self.assertFalse(secrets["repository_settings_mutation_authorized_by_source"])
-        self.assertFalse(authority["source_merge_authorizes_cloudflare_run"])
-        self.assertFalse(authority["source_merge_authorizes_runtime_verification"])
-        self.assertTrue(authority["fresh_owner_authorization_required"])
-        self.assertFalse(authority["cloudflare_mutation_allowed"])
-        self.assertFalse(authority["automatic_retry_allowed"])
-        self.assertTrue(all(value is False for value in evidence.values()))
+        self.assertFalse(consumer["cloudflare_mutation_allowed"])
 
-    def test_tunnel_read_binding_rejects_write_or_broader_permission(self) -> None:
-        binding = json.loads(json.dumps(self.binding))
-        binding["cloudflare_permission"]["write_permissions_allowed"] = True
+    def test_shared_operator_rejects_weakened_read_write_gates(self) -> None:
+        operator = json.loads(json.dumps(self.operator))
+        operator["execution_model"]["caller_selected_method_allowed"] = True
         with self.assertRaisesRegex(
             route.AuditError,
-            "tunnel_read_binding_contract_invalid",
+            "tunnel_operator_contract_invalid",
         ):
-            route._require_tunnel_read_capability(self.contract, binding)
+            route._require_tunnel_operator_read_consumer(self.contract, operator)
 
-        binding = json.loads(json.dumps(self.binding))
-        binding["cloudflare_permission"]["required"] = "Cloudflare Tunnel Write"
+        operator = json.loads(json.dumps(self.operator))
+        operator["consumer_classes"]["read_only"]["write_methods_allowed"] = True
         with self.assertRaisesRegex(
             route.AuditError,
-            "tunnel_read_binding_contract_invalid",
+            "tunnel_operator_contract_invalid",
         ):
-            route._require_tunnel_read_capability(self.contract, binding)
+            route._require_tunnel_operator_read_consumer(self.contract, operator)
+
+        operator = json.loads(json.dumps(self.operator))
+        operator["consumer_classes"]["write"]["fresh_explicit_owner_authorization_required"] = False
+        with self.assertRaisesRegex(
+            route.AuditError,
+            "tunnel_operator_contract_invalid",
+        ):
+            route._require_tunnel_operator_read_consumer(self.contract, operator)
 
     def test_p1d03_contract_does_not_bind_tunnel_get_surfaces(self) -> None:
         p1d03 = json.loads(P1D03_CONTRACT_PATH.read_text(encoding="utf-8"))
@@ -293,10 +340,12 @@ class Phase4AdminRouteOriginTests(unittest.TestCase):
         self.assertNotIn("/accounts/{account_id}/cfd_tunnel", surfaces)
         self.assertFalse(any("/cfd_tunnel/" in item for item in surfaces))
 
-    def test_route_source_uses_only_dedicated_tunnel_runtime_names(self) -> None:
+    def test_route_source_uses_only_shared_tunnel_runtime_names(self) -> None:
         source = MODULE_PATH.read_text(encoding="utf-8")
-        self.assertIn("CLOUDFLARE_PHASE4_TUNNEL_ACCOUNT_ID", source)
-        self.assertIn("CLOUDFLARE_PHASE4_TUNNEL_READ_API_TOKEN", source)
+        self.assertIn("CLOUDFLARE_TUNNEL_ACCOUNT_ID", source)
+        self.assertIn("CLOUDFLARE_TUNNEL_API_TOKEN", source)
+        self.assertNotIn("CLOUDFLARE_PHASE4_TUNNEL_ACCOUNT_ID", source)
+        self.assertNotIn("CLOUDFLARE_PHASE4_TUNNEL_READ_API_TOKEN", source)
         self.assertIn('"CLOUDFLARE_P1D03_ACCOUNT_ID"', source)
         self.assertIn('"CLOUDFLARE_P1D03_READ_API_TOKEN"', source)
         self.assertNotIn(
@@ -326,18 +375,19 @@ class Phase4AdminRouteOriginTests(unittest.TestCase):
         self.assertEqual(rc, 2)
         client.assert_not_called()
 
-    def test_workflow_injects_only_dedicated_tunnel_read_secrets(self) -> None:
+    def test_workflow_injects_only_shared_tunnel_operator_secrets(self) -> None:
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
         self.assertIn(
-            "CLOUDFLARE_PHASE4_TUNNEL_ACCOUNT_ID: "
-            "${{ secrets.CLOUDFLARE_PHASE4_TUNNEL_ACCOUNT_ID }}",
+            "CLOUDFLARE_TUNNEL_ACCOUNT_ID: "
+            "${{ secrets.CLOUDFLARE_TUNNEL_ACCOUNT_ID }}",
             workflow,
         )
         self.assertIn(
-            "CLOUDFLARE_PHASE4_TUNNEL_READ_API_TOKEN: "
-            "${{ secrets.CLOUDFLARE_PHASE4_TUNNEL_READ_API_TOKEN }}",
+            "CLOUDFLARE_TUNNEL_API_TOKEN: "
+            "${{ secrets.CLOUDFLARE_TUNNEL_API_TOKEN }}",
             workflow,
         )
+        self.assertNotIn("CLOUDFLARE_PHASE4_TUNNEL_", workflow)
         for forbidden in (
             "CLOUDFLARE_P1D03_ACCOUNT_ID",
             "CLOUDFLARE_P1D03_READ_API_TOKEN",

@@ -77,8 +77,10 @@ Credentials are split by capability. There is intentionally no master token.
 | Lane | Secret path | Cloudflare capability | v1 implementation |
 |---|---|---|---|
 | Access | `/etc/rpi5-secrets/cloudflare/access-writer.json` | `Access: Apps and Policies Write` | implemented |
-| Tunnel | `/etc/rpi5-secrets/cloudflare/tunnel-writer.json` | `Cloudflare Tunnel Edit` | reserved, not implemented |
+| Tunnel | `/etc/rpi5-secrets/cloudflare/tunnel-writer.json` | `Cloudflare Tunnel Write` | reserved host consumer of the shared Tunnel operator, not implemented |
 | DNS | `/etc/rpi5-secrets/cloudflare/dns-writer.json` | `DNS Edit`, restricted to `rozkalns.net` | reserved, not implemented |
+
+The Tunnel lane is intentionally **one reusable capability credential for Tunnel operations**, not one credential per project or per action. Its canonical source contract is `ops/contracts/cloudflare-tunnel-operator-v1.json`. Reviewed read-only consumers may use the same Tunnel credential but remain GET-only in their own source contracts; any write consumer must define an operation-specific request model, exact target, mutation budget and fresh explicit owner authorization. The Tunnel credential is never reused for Access or DNS.
 
 The operator must never receive `API Tokens Edit`/`API Tokens Write`. Token creation/rotation remains a separate owner action. The provisioning action can verify that the supplied token is active and can read the Access application surface, but it cannot prove the absence of additional undisclosed token permissions without granting broader token-introspection authority. The owner must therefore create the token with only `Access: Apps and Policies Write`.
 
