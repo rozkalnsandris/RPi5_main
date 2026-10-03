@@ -94,7 +94,7 @@ def _require_tunnel_operator_read_consumer(
     ]
     if required_surfaces != expected_surfaces:
         raise AuditError("route_origin_capability_contract_invalid")
-    if capability.get("required_cloudflare_permission") != "Cloudflare Tunnel Write":
+    if capability.get("required_cloudflare_permission") != "Cloudflare One Connector: cloudflared Write":
         raise AuditError("route_origin_capability_contract_invalid")
     if capability.get("p1d03_access_lane_reusable") is not False:
         raise AuditError("route_origin_capability_contract_invalid")
@@ -129,9 +129,22 @@ def _require_tunnel_operator_read_consumer(
 
     if operator.get("status") != "source-defined":
         raise AuditError("tunnel_operator_contract_invalid")
-    if credential.get("cloudflare_permission") != "Cloudflare Tunnel Write":
+    if credential.get("cloudflare_permission") != "Cloudflare One Connector: cloudflared Write":
         raise AuditError("tunnel_operator_contract_invalid")
     if credential.get("resource_scope") != "single-reviewed-account":
+        raise AuditError("tunnel_operator_contract_invalid")
+    ui_mapping = credential.get("dashboard_ui_mapping")
+    if not isinstance(ui_mapping, dict):
+        raise AuditError("tunnel_operator_contract_invalid")
+    if ui_mapping != {
+        "category": "Cloudflare One / Zero Trust",
+        "permission_group": "Cloudflare One Connector: cloudflared",
+        "access": "Edit",
+    }:
+        raise AuditError("tunnel_operator_contract_invalid")
+    if credential.get("exact_permission_required") is not True:
+        raise AuditError("tunnel_operator_contract_invalid")
+    if credential.get("broader_or_legacy_alternates_allowed") is not False:
         raise AuditError("tunnel_operator_contract_invalid")
     if credential.get("stable_account_id_secret") != "CLOUDFLARE_TUNNEL_ACCOUNT_ID":
         raise AuditError("tunnel_operator_contract_invalid")
