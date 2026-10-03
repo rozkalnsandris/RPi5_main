@@ -10,7 +10,11 @@ RPi5_main uses one durable Cloudflare Tunnel capability credential for reviewed 
 
 The credential is scoped to the reviewed Cloudflare account and carries only:
 
-`Cloudflare Tunnel Write`
+`Cloudflare One Connector: cloudflared Write`
+
+In the current Cloudflare dashboard this maps to:
+
+`Cloudflare One / Zero Trust` → `Cloudflare One Connector: cloudflared` → `Edit`
 
 This is intentionally broader than a read-only token so the same Tunnel capability can support future reviewed create/update/delete/configuration operations without minting a new token per project or per workflow.
 
@@ -38,7 +42,7 @@ Explicitly excluded from this credential:
 - API Tokens Read/Write/Edit;
 - unrelated Cloudflare account capabilities.
 
-Current Cloudflare documentation identifies `Cloudflare Tunnel Write` as an account permission for Tunnel management and accepts it for Tunnel read/configuration endpoints as well as Tunnel create/update operations.
+Current Cloudflare API documentation accepts `Cloudflare One Connector: cloudflared Write` for Cloudflare Tunnel create, update and configuration operations. It also lists broader/legacy accepted permissions such as `Cloudflare One Connectors Write` and `Cloudflare Tunnel Write`, but RPi5_main intentionally standardizes on the narrower cloudflared-specific permission and does not treat those alternates as canonical provisioning choices.
 
 Official references:
 

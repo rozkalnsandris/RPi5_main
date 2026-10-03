@@ -212,7 +212,7 @@ class Phase4AdminRouteOriginTests(unittest.TestCase):
         self.assertEqual(capability["status"], "bound")
         self.assertEqual(
             capability["required_cloudflare_permission"],
-            "Cloudflare Tunnel Write",
+            "Cloudflare One Connector: cloudflared Write",
         )
         self.assertEqual(
             capability["binding_contract_ref"],
@@ -245,7 +245,7 @@ class Phase4AdminRouteOriginTests(unittest.TestCase):
         self.assertEqual(self.operator["status"], "source-defined")
         self.assertEqual(
             credential["cloudflare_permission"],
-            "Cloudflare Tunnel Write",
+            "Cloudflare One Connector: cloudflared Write",
         )
         self.assertEqual(
             credential["stable_account_id_secret"],
@@ -255,6 +255,16 @@ class Phase4AdminRouteOriginTests(unittest.TestCase):
             credential["stable_api_token_secret"],
             "CLOUDFLARE_TUNNEL_API_TOKEN",
         )
+        self.assertEqual(
+            credential["dashboard_ui_mapping"],
+            {
+                "category": "Cloudflare One / Zero Trust",
+                "permission_group": "Cloudflare One Connector: cloudflared",
+                "access": "Edit",
+            },
+        )
+        self.assertTrue(credential["exact_permission_required"])
+        self.assertFalse(credential["broader_or_legacy_alternates_allowed"])
         for key in (
             "token_value_in_source_allowed",
             "token_creation_or_rotation_authorized_by_source",
@@ -310,6 +320,22 @@ class Phase4AdminRouteOriginTests(unittest.TestCase):
         self.assertFalse(consumer["cloudflare_mutation_allowed"])
 
     def test_shared_operator_rejects_weakened_read_write_gates(self) -> None:
+        operator = json.loads(json.dumps(self.operator))
+        operator["credential_model"]["cloudflare_permission"] = "Cloudflare Tunnel Write"
+        with self.assertRaisesRegex(
+            route.AuditError,
+            "tunnel_operator_contract_invalid",
+        ):
+            route._require_tunnel_operator_read_consumer(self.contract, operator)
+
+        operator = json.loads(json.dumps(self.operator))
+        operator["credential_model"]["cloudflare_permission"] = "Cloudflare One Connectors Write"
+        with self.assertRaisesRegex(
+            route.AuditError,
+            "tunnel_operator_contract_invalid",
+        ):
+            route._require_tunnel_operator_read_consumer(self.contract, operator)
+
         operator = json.loads(json.dumps(self.operator))
         operator["execution_model"]["caller_selected_method_allowed"] = True
         with self.assertRaisesRegex(

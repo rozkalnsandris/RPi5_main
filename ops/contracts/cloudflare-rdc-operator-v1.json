@@ -32,10 +32,11 @@
       "path": "/etc/rpi5-secrets/cloudflare/tunnel-writer.json",
       "owner": "root:root",
       "mode": "0600",
-      "cloudflare_permission": "Cloudflare Tunnel Write",
+      "cloudflare_permission": "Cloudflare One Connector: cloudflared Write",
       "scope": "account-only",
       "shared_capability_contract": "ops/contracts/cloudflare-tunnel-operator-v1.json",
-      "credential_reuse": "same Tunnel-only credential may back reviewed GitHub and host Tunnel consumers; no Access/DNS reuse"
+      "credential_reuse": "same Tunnel-only credential may back reviewed GitHub and host Tunnel consumers; no Access/DNS reuse",
+      "dashboard_ui_mapping": "Cloudflare One / Zero Trust > Cloudflare One Connector: cloudflared > Edit"
     },
     "dns": {
       "implemented": false,

@@ -259,7 +259,7 @@ class CloudflareRdcOperatorTests(unittest.TestCase):
         )
         self.assertEqual(
             lanes["tunnel"]["cloudflare_permission"],
-            "Cloudflare Tunnel Write",
+            "Cloudflare One Connector: cloudflared Write",
         )
         self.assertEqual(
             lanes["tunnel"]["shared_capability_contract"],
