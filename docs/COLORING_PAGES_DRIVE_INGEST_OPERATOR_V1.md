@@ -1,8 +1,19 @@
-# Coloring Pages Drive ingest operator v1
+# Coloring Pages publish operator v1
 
 ## Purpose
 
-Provide one bounded RPi5 operator for the approved ChatGPT → Google Drive → RPi5 content path without exposing the root-protected rclone configuration and without changing the application deployment.
+Provide one bounded RPi5 command for the approved content path:
+
+```text
+Drive pending PNG + manifest
+  -> verify ID / SHA-256 / size / metadata
+  -> publish PNG to the content inbox
+  -> run the immutable Coloring Pages importer image
+  -> verify catalog/media/public URLs
+  -> write a success receipt
+```
+
+There is no second installed importer wrapper in this design.
 
 Tracked source:
 
@@ -10,39 +21,17 @@ Tracked source:
 ops/bin/coloring-pages-drive-ingest
 ```
 
-Intended installed command:
+Installed command:
 
 ```text
 /usr/local/bin/coloring-pages-drive-ingest
 ```
 
-Source merge does not install or execute this operator.
-
-## Why the canary failed operationally
-
-The first integrity canary proved that Google Drive preserved the PNG bytes exactly, but `sudo rclone copyto ... /tmp/file` created the local destination as `root:root 0600`. A later hash executed as `andris` therefore failed with permission denied.
-
-The reviewed correction does not change ownership after download. Instead:
-
-1. the operator runs as `andris`;
-2. it creates the staging file itself with `O_CREAT|O_EXCL|O_NOFOLLOW` and mode `0600`;
-3. it opens that file descriptor before privilege elevation;
-4. only `sudo -n /usr/bin/rclone ... cat` runs as root;
-5. rclone writes the Drive object to the already-open stdout descriptor.
-
-The resulting file remains `andris:andris 0600`. No `chown` repair is part of the workflow.
-
-This follows rclone's documented `cat` model: a selected remote object is emitted to stdout.
-
-References:
-
-- https://rclone.org/commands/rclone_cat/
-- https://rclone.org/drive/
-- https://www.gnu.org/software/coreutils/manual/html_node/mv-invocation.html
+Source merge does not install or execute the operator.
 
 ## Fixed Drive boundary
 
-The operator does not accept a Drive folder or remote from the caller.
+The operator has no caller-selectable remote, folder or filename.
 
 Reviewed values:
 
@@ -54,11 +43,7 @@ config          <owner-home>/.config/rclone/rclone.conf
 config metadata root:andris 0600
 ```
 
-The exact root folder ID is passed through rclone's Drive `root_folder_id` option, restricting the operator's namespace to that reviewed hierarchy.
-
-The operator never reads or prints the rclone config itself. It checks only file metadata, then lets root rclone consume the existing configuration.
-
-The operator is read-only toward Drive. It does not upload, rename, move, archive or delete Drive objects.
+The operator is read-only toward Drive. It uses normal non-`--fast-list` discovery and `rclone cat`; it never uploads, moves, archives or deletes Drive objects and never reads or prints the rclone configuration contents.
 
 ## Invocation
 
@@ -66,135 +51,72 @@ The only content-selection arguments are:
 
 ```bash
 coloring-pages-drive-ingest \
-  --id aviator-pup-001 \
+  --id <page-id> \
   --expected-sha256 <64-lowercase-hex> \
   --expected-size <bytes>
 ```
 
-These values must be bound by the fresh owner LIVE authorization for the exact approved image.
-
-The caller cannot provide:
-
-- a Drive folder;
-- a Drive filename;
-- an rclone config;
-- an alternate remote;
-- importer metadata;
-- an importer image or entrypoint.
-
-The two Drive filenames are derived from the ID:
+Drive filenames are derived from the ID:
 
 ```text
 pending/<id>.png
 pending/<id>.json
 ```
 
-Before the first local mutation, a normal non-`--fast-list` `rclone lsf` requires exactly one occurrence of each name.
+The manifest must match the reviewed schema and the owner-bound ID, SHA-256 and byte size. Unknown manifest fields are rejected.
 
-## Manifest validation
+## Local staging and no-overwrite
 
-The manifest must use:
+The operator runs as `andris`, uses one lock, creates staging files as `andris:andris 0600`, and never overwrites an existing page ID.
 
-```text
-rozkalns.coloring-pages.drive-staging-manifest.v1
-```
-
-Unknown keys are rejected.
-
-The manifest ID, SHA-256 and byte size must exactly match the owner-bound CLI arguments. This prevents an untrusted or accidentally replaced Drive manifest from changing which content was authorized.
-
-The remaining metadata is bounded to the existing Coloring Pages importer model:
-
-- title: non-empty, one line, maximum 128 characters;
-- character: optional, one line, maximum 128 characters;
-- category: non-empty, one line, maximum 128 characters;
-- age: `3-6` or `4-8`;
-- difficulty: `easy`, `normal` or `detailed`;
-- language: `de`;
-- source kind: `chatgpt-generated-png`;
-- approval class: `explicit-owner-chat-approval`.
-
-Manifest size is capped at 64 KiB. PNG size is capped at 20 MiB.
-
-## Host staging
-
-Installer-owned scaffold:
-
-```text
-/srv/coloring-pages-content/state/drive-ingest/  andris:andris 0755
-└── .lock                                         andris:andris 0600
-```
-
-Per-ID state:
-
-```text
-<id>.manifest.partial
-<id>.manifest.json
-<id>.png.partial
-<id>.receipt.partial
-<id>.receipt.json
-```
-
-Every created state file is `andris:andris 0600`.
-
-The lock serializes ingestion operations. A leftover partial file is not cleaned automatically; it causes STOP and requires explicit recovery authority.
-
-## Atomic inbox publication
-
-The image is downloaded completely under `state/drive-ingest/`, then size and SHA-256 are checked.
-
-Only after integrity passes may the operator publish:
+The downloaded PNG is checked for exact byte size and SHA-256 before it is moved into:
 
 ```text
 /srv/coloring-pages-content/inbox/<id>.png
 ```
 
-The state directory and inbox must be on the same filesystem.
+The state directory and inbox must share one filesystem. Publication uses GNU `mv --no-target-directory --no-clobber` after a same-filesystem check.
 
-The reviewed move first compares the source and destination parent `st_dev` values and fails unless they are on the same filesystem. It then uses GNU `mv` with:
+Leftover partial state is preserved and causes STOP. There is no automatic retry, cleanup, rollback or overwrite.
+
+## Immutable importer image
+
+The same publish operator directly runs the reviewed immutable image:
 
 ```text
---no-target-directory
---no-clobber
+ghcr.io/rozkalnsandris/coloring-pages@sha256:1e6ceaeb9cc84164aef8f4680cee6ee9b4b9a3094e59c6026f590e58a3c043e8
 ```
 
-This keeps the publish path compatible with the RPi5 host's GNU Coreutils 9.1, where `mv --no-copy` is not available. GNU added `mv --no-copy` in Coreutils 9.2; the existing same-filesystem `st_dev` proof provides the required cross-filesystem fail-closed boundary before `mv` is invoked. The operator also verifies that the staging source disappeared and the destination is a regular non-symlink file, so a silent no-clobber skip is treated as failure.
-
-## Existing importer remains authoritative
-
-The Drive operator does not reimplement image validation or derivative generation.
-
-It requires the installed importer:
+Entrypoint:
 
 ```text
 /usr/local/bin/coloring-pages-import
-root:root 0755
-Git blob 83f6a25918bb377a407c3fe264b825327172f9e3
 ```
 
-Then it passes the already validated metadata as an argv array to that reviewed importer.
+The container is run with:
 
-The importer remains responsible for:
+- `--pull=never`;
+- `--network none`;
+- read-only container root filesystem;
+- `--cap-drop ALL`;
+- `no-new-privileges`;
+- the operator user's UID/GID;
+- one RW bind of `/srv/coloring-pages-content`;
+- a bounded tmpfs for `/tmp`.
 
-- PNG/media validation;
-- preserving the original source;
-- generating lossless WebP browse derivatives;
-- generating the A4 PDF;
-- atomically updating `catalog.json`;
-- its immutable image and Docker isolation contract.
+The importer image remains responsible for PNG/media validation, preserving exact source bytes, generating browse derivatives and A4 PDF, and updating `catalog.json`.
 
-No image pull or application redeploy is performed by the Drive operator.
+The host does **not** require a separate `/usr/local/bin/coloring-pages-import` wrapper.
 
 ## Post-import proof
 
-Before a PASS receipt is recorded, the operator verifies:
+Before writing a PASS receipt, the operator verifies:
 
 - canonical original source size and SHA-256;
 - public source size and SHA-256;
-- exactly one matching catalogue record;
-- exact catalogue metadata and derivative paths;
+- exactly one matching catalog entry with exact metadata;
 - non-empty `thumb.webp`, `preview.webp` and `print.pdf`;
-- HTTP 200 from the public catalogue, thumbnail, preview, source PNG and PDF URLs.
+- HTTP 200 for catalog, thumbnail, preview, source PNG and PDF.
 
 Public origin is fixed to:
 
@@ -202,75 +124,32 @@ Public origin is fixed to:
 https://coloring.rozkalns.net
 ```
 
-## Receipt and idempotency
-
-Successful receipt:
+Successful state is recorded at:
 
 ```text
 /srv/coloring-pages-content/state/drive-ingest/<id>.receipt.json
 ```
 
-Schema:
-
-```text
-rozkalns.rpi5-main.coloring-pages-drive-ingest-receipt.v1
-```
-
-A later invocation with the same ID/SHA/size and a matching PASS receipt performs read-only production/public verification and returns `ALREADY_PROCESSED`.
-
-An existing inbox/original/media/catalog ID without a matching success receipt is a STOP.
-
-No overwrite, automatic retry, rollback or failure cleanup is authorized.
+A matching success receipt allows read-only re-verification and returns `ALREADY_PROCESSED`.
 
 ## Installer
 
-Tracked installer:
+The single installer remains:
 
 ```text
 scripts/install-coloring-pages-drive-ingest-operator-v1.sh
 ```
 
-It requires:
-
-- exact authorized `RPi5_main` SHA;
-- clean `main` checkout;
-- tracked source identity.
-
-It may install only:
-
-- `/usr/local/bin/coloring-pages-drive-ingest` as `root:root 0755`;
-- the bounded state directory when absent;
-- the bounded lock file when absent.
-
-It does not:
-
-- read or modify rclone configuration;
-- modify OAuth credentials or client IDs;
-- change sudoers;
-- execute rclone;
-- import content;
-- change Docker/systemd/network/Cloudflare state.
-
-## OAuth client-id follow-up
-
-The live integrity canary emitted rclone's warning that the shared Google Drive client ID is being retired during 2026.
-
-This source change deliberately does not inspect or modify OAuth credentials. Moving the existing `gdrive:` remote to a dedicated Google OAuth client ID is a separate settings/credentials owner gate and should be completed before unattended ingestion is treated as durable.
-
-## Failure semantics
-
-Before the first mutation, any failed preflight exits without local content changes.
-
-After the operator creates the first staging file, any later error leaves current evidence in place and exits FAIL. It does not retry, roll back, delete partials, overwrite a page ID or choose another transport path.
+It may install only the publish operator plus its bounded state directory and lock. It does not run rclone, Docker, import content, change credentials, change sudoers, or alter systemd/network state.
 
 ## Authority boundary
 
 Source merge grants no LIVE authority.
 
-Separate explicit owner authorization is required for:
+Separate explicit owner authorization is required to install/update the host operator and to execute a production content publish. Drive archive/delete, credential changes, Cloudflare/network changes and unrelated host mutations remain outside this path.
 
-- installing the operator/state scaffold;
-- running Drive read + production content import for exact ID/SHA/size;
-- Drive archive/delete operations;
-- rclone OAuth client ID or credential changes;
-- unrelated deploy, Docker/systemd/network/Cloudflare/permissions mutations.
+References:
+
+- https://rclone.org/commands/rclone_cat/
+- https://rclone.org/drive/
+- https://www.gnu.org/software/coreutils/manual/html_node/mv-invocation.html
