@@ -234,7 +234,7 @@ class InstallerTests(unittest.TestCase):
         writer = installer.ROOT_UPGRADE_WRITER
         self.assertIn('current["source_sha"] != expected_old', writer)
         self.assertIn("/usr/local/sbin/rpi5-cloudflare.next", writer)
-        self.assertIn("/usr/local/libexec/rpi5-cloudflare/release.json.next", writer)
+        self.assertIn('metadata_stage = release_dir + "/release.json.next"', writer)
         self.assertIn("os.replace(operator_stage, operator)", writer)
         self.assertIn("os.replace(metadata_stage, metadata)", writer)
         self.assertNotIn("os.unlink", writer)
