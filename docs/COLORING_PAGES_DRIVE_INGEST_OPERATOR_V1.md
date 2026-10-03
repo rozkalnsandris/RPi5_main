@@ -50,7 +50,7 @@ Reviewed values:
 remote          gdrive:
 root folder id  1F0pxqoRgtZl7JQVcyvYVZxKvx6eOnytn
 queue path      pending/
-config          /home/andris/.config/rclone/rclone.conf
+config          <owner-home>/.config/rclone/rclone.conf
 config metadata root:andris 0600
 ```
 
