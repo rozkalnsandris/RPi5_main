@@ -46,7 +46,7 @@ OWNER='andris'
 OPERATOR_REL='ops/bin/coloring-pages-import'
 DEST='/usr/local/bin/coloring-pages-import'
 
-for command_name in bash getent git id install runuser stat; do
+for command_name in awk bash getent git id install runuser stat; do
     command -v "$command_name" >/dev/null 2>&1 \
         || fail "required command is missing: $command_name"
 done
