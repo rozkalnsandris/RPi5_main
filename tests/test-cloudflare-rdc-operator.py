@@ -174,6 +174,46 @@ class CloudflareRdcOperatorTests(unittest.TestCase):
                 TARGET_ID,
             )
 
+    def test_controlling_tty_precheck_requires_real_tty(self) -> None:
+        with mock.patch.object(op.os, "open", return_value=9), \
+             mock.patch.object(op.os, "isatty", return_value=True) as isatty, \
+             mock.patch.object(op.os, "close") as close:
+            op._ensure_controlling_tty()
+        isatty.assert_called_once_with(9)
+        close.assert_called_once_with(9)
+
+        with mock.patch.object(op.os, "open", side_effect=OSError("no tty")):
+            with self.assertRaisesRegex(op.OperatorError, "local_tty_required"):
+                op._ensure_controlling_tty()
+
+    def test_hidden_credentials_use_native_getpass_without_custom_stream(self) -> None:
+        with mock.patch.object(op, "_ensure_controlling_tty"), \
+             mock.patch.object(
+                 op.getpass,
+                 "getpass",
+                 side_effect=["a" * 32, "t" * 32],
+             ) as prompt:
+            account_id, token = op._read_hidden_provisioning_credentials()
+        self.assertEqual(account_id, "a" * 32)
+        self.assertEqual(token, "t" * 32)
+        self.assertEqual(
+            prompt.call_args_list,
+            [
+                mock.call("Cloudflare account ID: "),
+                mock.call("Cloudflare Access API token: "),
+            ],
+        )
+
+    def test_getpass_warning_fails_closed_instead_of_echo_fallback(self) -> None:
+        with mock.patch.object(op, "_ensure_controlling_tty"), \
+             mock.patch.object(
+                 op.getpass,
+                 "getpass",
+                 side_effect=op.getpass.GetPassWarning("echo unavailable"),
+             ):
+            with self.assertRaisesRegex(op.OperatorError, "local_tty_required"):
+                op._read_hidden_provisioning_credentials()
+
     def test_provision_action_has_no_token_or_account_id_cli_argument(self) -> None:
         args = op.parse_args([
             "provision-access-secret",
