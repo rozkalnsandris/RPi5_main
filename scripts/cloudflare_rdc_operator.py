@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import hashlib
 import json
 import os
@@ -22,7 +23,9 @@ TARGET_APP_NAME = "Coloring Pages Public"
 TARGET_POLICY_NAME = "public-access"
 EXPECTED_PARENT_APP_NAME = "homelab-private"
 EXPECTED_PARENT_PATTERN = "*.rozkalns.net"
-ACCESS_SECRET_PATH = Path("/etc/rpi5-secrets/cloudflare/access-writer.json")
+SECRET_ROOT_PATH = Path("/etc/rpi5-secrets")
+SECRET_DIR_PATH = SECRET_ROOT_PATH / "cloudflare"
+ACCESS_SECRET_PATH = SECRET_DIR_PATH / "access-writer.json"
 RELEASE_METADATA_PATH = Path("/usr/local/libexec/rpi5-cloudflare/release.json")
 ACCOUNT_ID_RE = re.compile(r"^[0-9a-fA-F]{32}$")
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -31,6 +34,7 @@ UUID_RE = re.compile(
     r"[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
 )
 CONFIRM_TEXT = "CREATE-COLORING-PUBLIC-BYPASS"
+PROVISION_CONFIRM_TEXT = "PROVISION-CLOUDFLARE-ACCESS-SECRET"
 DYNAMIC_APP_FIELDS = {"created_at", "updated_at", "aud"}
 
 
@@ -44,6 +48,12 @@ class WriteAttemptError(OperatorError):
 
 class PostWriteError(OperatorError):
     pass
+
+
+class SecretProvisionError(OperatorError):
+    def __init__(self, reason: str, mutation_performed: bool) -> None:
+        super().__init__(reason)
+        self.mutation_performed = mutation_performed
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -77,6 +87,14 @@ def _sanitize_reason(value: str) -> str:
         "created_application_identity_mismatch",
         "created_application_policy_shape_invalid",
         "apply_confirmation_missing",
+        "provision_confirmation_missing",
+        "local_tty_required",
+        "token_inactive",
+        "access_permission_check_failed",
+        "secret_already_exists",
+        "secret_parent_invalid",
+        "secret_write_failed",
+        "secret_post_write_verification_failed",
     }
     return value if value in allowed else "operator_error"
 
@@ -230,6 +248,20 @@ class CloudflareClient:
             raise OperatorError("cloudflare_get_unsuccessful")
         return payload
 
+    def verify_active_token(self) -> None:
+        payload = self._request("GET", "/user/tokens/verify")
+        result = payload.get("result")
+        if not isinstance(result, dict) or result.get("status") != "active":
+            raise OperatorError("token_inactive")
+
+    def verify_access_permission(self, account_id: str) -> None:
+        try:
+            self._request(
+                "GET", f"/accounts/{account_id}/access/apps?page=1&per_page=1"
+            )
+        except OperatorError as exc:
+            raise OperatorError("access_permission_check_failed") from exc
+
     def list_applications(self, account_id: str) -> list[dict[str, Any]]:
         payload = self._request(
             "GET", f"/accounts/{account_id}/access/apps?page=1&per_page=200"
@@ -281,6 +313,114 @@ class CloudflareClient:
         if not isinstance(result, dict):
             raise WriteAttemptError("cloudflare_write_shape_invalid")
         return result
+
+
+def _read_hidden_provisioning_credentials() -> tuple[str, str]:
+    try:
+        with open("/dev/tty", "r+", encoding="utf-8", buffering=1) as tty:
+            if not os.isatty(tty.fileno()):
+                raise OperatorError("local_tty_required")
+            account_id = getpass.getpass("Cloudflare account ID: ", stream=tty).strip()
+            token = getpass.getpass("Cloudflare Access API token: ", stream=tty).strip()
+    except (OSError, EOFError, KeyboardInterrupt) as exc:
+        raise OperatorError("local_tty_required") from exc
+    if not ACCOUNT_ID_RE.fullmatch(account_id):
+        raise OperatorError("secret_payload_invalid")
+    if (
+        len(token) < 20
+        or len(token) > 4096
+        or any(ch.isspace() for ch in token)
+    ):
+        raise OperatorError("secret_payload_invalid")
+    return account_id, token
+
+
+def _validate_secret_parent(path: Path) -> None:
+    if not path.exists():
+        return
+    try:
+        st = os.lstat(path)
+    except OSError as exc:
+        raise OperatorError("secret_parent_invalid") from exc
+    if (
+        not stat.S_ISDIR(st.st_mode)
+        or stat.S_ISLNK(st.st_mode)
+        or st.st_uid != 0
+        or st.st_gid != 0
+        or stat.S_IMODE(st.st_mode) != 0o700
+    ):
+        raise OperatorError("secret_parent_invalid")
+
+
+def _write_access_secret(account_id: str, token: str) -> None:
+    if ACCESS_SECRET_PATH.exists():
+        raise OperatorError("secret_already_exists")
+    _validate_secret_parent(SECRET_ROOT_PATH)
+    _validate_secret_parent(SECRET_DIR_PATH)
+
+    payload = (
+        json.dumps(
+            {"account_id": account_id, "api_token": token},
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        + "\n"
+    ).encode("utf-8")
+    mutation_started = False
+    fd: int | None = None
+    try:
+        for path in (SECRET_ROOT_PATH, SECRET_DIR_PATH):
+            if not path.exists():
+                os.mkdir(path, 0o700)
+                mutation_started = True
+                _validate_secret_parent(path)
+
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        fd = os.open(ACCESS_SECRET_PATH, flags, 0o600)
+        mutation_started = True
+        view = memoryview(payload)
+        while view:
+            written = os.write(fd, view)
+            if written <= 0:
+                raise OSError("short write")
+            view = view[written:]
+        os.fsync(fd)
+        os.close(fd)
+        fd = None
+
+        _validate_regular_root_file(ACCESS_SECRET_PATH, 0o600)
+        try:
+            observed = ACCESS_SECRET_PATH.read_bytes()
+        except OSError as exc:
+            raise SecretProvisionError(
+                "secret_post_write_verification_failed", True
+            ) from exc
+        if observed != payload:
+            raise SecretProvisionError(
+                "secret_post_write_verification_failed", True
+            )
+    except SecretProvisionError:
+        raise
+    except (OSError, OperatorError) as exc:
+        raise SecretProvisionError("secret_write_failed", mutation_started) from exc
+    finally:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+
+def provision_access_secret(
+    client: CloudflareClient, account_id: str, token: str
+) -> None:
+    if ACCESS_SECRET_PATH.exists():
+        raise OperatorError("secret_already_exists")
+    client.verify_active_token()
+    client.verify_access_permission(account_id)
+    _write_access_secret(account_id, token)
 
 
 def _split_destination(value: str) -> tuple[str, str]:
@@ -459,11 +599,17 @@ def run_operator(
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(add_help=True)
-    parser.add_argument("action", choices=["access-public-bypass"])
-    parser.add_argument("hostname")
-    parser.add_argument("--expected-main", required=True)
-    parser.add_argument("--apply", action="store_true")
-    parser.add_argument("--confirm", default="")
+    subparsers = parser.add_subparsers(dest="action", required=True)
+
+    access = subparsers.add_parser("access-public-bypass")
+    access.add_argument("hostname")
+    access.add_argument("--expected-main", required=True)
+    access.add_argument("--apply", action="store_true")
+    access.add_argument("--confirm", default="")
+
+    provision = subparsers.add_parser("provision-access-secret")
+    provision.add_argument("--expected-main", required=True)
+    provision.add_argument("--confirm", default="")
     return parser.parse_args(argv)
 
 
@@ -472,24 +618,31 @@ def main(argv: list[str] | None = None) -> int:
     if os.geteuid() != 0:
         _emit("BLOCKED", reason="root_required", apply_ready=False)
         return 2
-    if args.hostname != TARGET_HOSTNAME:
-        _emit(
-            "BLOCKED",
-            reason="hostname_not_allowlisted",
-            apply_ready=False,
-        )
-        return 2
-    if args.apply and args.confirm != CONFIRM_TEXT:
-        _emit(
-            "BLOCKED",
-            reason="apply_confirmation_missing",
-            apply_ready=False,
-        )
-        return 2
 
     operator_path = Path(sys.argv[0]).resolve()
     try:
         load_release_metadata(args.expected_main, operator_path)
+
+        if args.action == "provision-access-secret":
+            if args.confirm != PROVISION_CONFIRM_TEXT:
+                raise OperatorError("provision_confirmation_missing")
+            account_id, token = _read_hidden_provisioning_credentials()
+            client = CloudflareClient(token)
+            provision_access_secret(client, account_id, token)
+            token = ""
+            _emit(
+                "PASS",
+                mutation_performed=True,
+                write_attempted=False,
+                apply_ready=False,
+            )
+            return 0
+
+        if args.hostname != TARGET_HOSTNAME:
+            raise OperatorError("hostname_not_allowlisted")
+        if args.apply and args.confirm != CONFIRM_TEXT:
+            raise OperatorError("apply_confirmation_missing")
+
         account_id, token = load_access_credentials()
         client = CloudflareClient(token)
         token = ""
@@ -512,6 +665,15 @@ def main(argv: list[str] | None = None) -> int:
             apply_ready=False,
         )
         return 5
+    except SecretProvisionError as exc:
+        _emit(
+            "STOP_ERROR",
+            reason=str(exc),
+            mutation_performed=exc.mutation_performed,
+            write_attempted=False,
+            apply_ready=False,
+        )
+        return 6
     except OperatorError as exc:
         _emit(
             "BLOCKED",

@@ -22,7 +22,7 @@ Verified against current Cloudflare documentation on 2026-10-03:
 
 - a self-hosted Access application can be created with `POST /accounts/{account_id}/access/apps`;
 - the create payload may contain an inline application-exclusive policy, so the exact application plus `Bypass` / `Everyone` policy can be one write request;
-- `Access: Apps and Policies Edit` is the least-privilege account capability for the Access lane (Cloudflare API reference pages may render the accepted permission as `Access: Apps and Policies Write`);
+- `Access: Apps and Policies Write` is the current account-level permission accepted by the Access application/policy write endpoints;
 - a more-specific Access application takes precedence over a broader wildcard application;
 - a `Bypass` policy with `Everyone` makes the matching application public and disables Access enforcement/logging for that matching traffic, so it must be scoped to the exact public hostname.
 
@@ -76,11 +76,85 @@ Credentials are split by capability. There is intentionally no master token.
 
 | Lane | Secret path | Cloudflare capability | v1 implementation |
 |---|---|---|---|
-| Access | `/etc/rpi5-secrets/cloudflare/access-writer.json` | `Access: Apps and Policies Edit` | implemented |
+| Access | `/etc/rpi5-secrets/cloudflare/access-writer.json` | `Access: Apps and Policies Write` | implemented |
 | Tunnel | `/etc/rpi5-secrets/cloudflare/tunnel-writer.json` | `Cloudflare Tunnel Edit` | reserved, not implemented |
 | DNS | `/etc/rpi5-secrets/cloudflare/dns-writer.json` | `DNS Edit`, restricted to `rozkalns.net` | reserved, not implemented |
 
-The operator must never receive `API Tokens Edit`. Token creation/rotation and secret provisioning are separate owner-gated operations.
+The operator must never receive `API Tokens Edit`/`API Tokens Write`. Token creation/rotation remains a separate owner action. The provisioning action can verify that the supplied token is active and can read the Access application surface, but it cannot prove the absence of additional undisclosed token permissions without granting broader token-introspection authority. The owner must therefore create the token with only `Access: Apps and Policies Write`.
+
+## Reviewed host installer
+
+The source-only installer is:
+
+```text
+scripts/install-cloudflare-rdc-operator.py
+```
+
+It is deliberately an **unprivileged repository controller**. Running the repository Python itself as root is rejected. Before any install it requires:
+
+- a clean checkout of canonical `rozkalnsandris/RPi5_main`;
+- branch `main`;
+- local `HEAD` exactly equal to the owner-authorized 40-character `main` SHA;
+- canonical `origin`;
+- the operator source tracked by Git;
+- non-interactive `sudo` availability;
+- all three install targets absent.
+
+Read-only install preflight:
+
+```bash
+python3 scripts/install-cloudflare-rdc-operator.py \
+  --expected-main <40-character-reviewed-main>
+```
+
+A later exact LIVE authorization may add:
+
+```bash
+python3 scripts/install-cloudflare-rdc-operator.py \
+  --expected-main <40-character-reviewed-main> \
+  --apply \
+  --confirm INSTALL-CLOUDFLARE-RDC-OPERATOR
+```
+
+The installer may create only:
+
+- `/usr/local/libexec/rpi5-cloudflare/` as `root:root 0700`;
+- `/usr/local/sbin/rpi5-cloudflare` as `root:root 0500`;
+- `/usr/local/libexec/rpi5-cloudflare/release.json` as `root:root 0400`.
+
+It does not install or modify sudoers. It uses the host's already-authorized sudo transport and fails closed if non-interactive sudo is unavailable. After the first install mutation, any command or verification error is `STOP_ERROR`; there is no retry, overwrite, removal or rollback.
+
+## Local Access secret provisioning
+
+After the exact reviewed operator is installed, secret provisioning is performed by that **installed root-owned operator**, not by repository Python and not through an RDC payload.
+
+The fixed command is:
+
+```bash
+sudo -n /usr/local/sbin/rpi5-cloudflare provision-access-secret \
+  --expected-main <40-character-reviewed-main> \
+  --confirm PROVISION-CLOUDFLARE-ACCESS-SECRET
+```
+
+This command must be launched from a human-controlled local/SSH terminal with a controlling TTY. It prompts with terminal echo disabled for:
+
+1. Cloudflare account ID;
+2. the one-time API token created with **only** `Access: Apps and Policies Write`.
+
+The account ID and token are not accepted in argv or environment variables. They must not be pasted into ChatGPT, RDC commands, GitHub, logs or files outside the fixed root-only secret destination.
+
+Before the first filesystem mutation, the installed operator performs only read-only Cloudflare checks:
+
+- `GET /user/tokens/verify` must report the token active;
+- `GET /accounts/{account_id}/access/apps` must succeed.
+
+If those checks pass and no secret already exists, provisioning may create the required root-only parent directories when absent and then exclusively create:
+
+```text
+/etc/rpi5-secrets/cloudflare/access-writer.json
+```
+
+as `root:root 0600`. Existing secret files are never overwritten. After the first directory/file mutation, any error is `STOP_ERROR`; no automatic retry, delete, rollback or cleanup is performed.
 
 ## Coloring Pages operation
 
@@ -135,7 +209,7 @@ sudo -n /usr/local/sbin/rpi5-cloudflare access-public-bypass coloring.rozkalns.n
   --confirm CREATE-COLORING-PUBLIC-BYPASS
 ```
 
-The host install, any sudoers capability, Access token creation, secret provisioning and the LIVE apply remain separate owner gates. Merging this source does none of them.
+The host install, Access token creation, local secret provisioning and the LIVE apply remain separate owner gates. This source does not add a sudoers rule. Merging it performs none of those operations.
 
 ## Failure semantics
 
