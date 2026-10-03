@@ -41,6 +41,7 @@
         "target_alias": "rozkalns-weather-public-rpi5",
         "consumer_repository": "rozkalnsandris/rozkalns_weather",
         "consumer_contract_revision": "f658041dfcd6f84994594ddac776b3cf9702e174",
+        "shared_workflow_sha": "297f554519849ab8dcaadc5517e60b8269a6efaa",
         "compose_source": "ops/deploy/simple-deploy-compose/rozkalns-weather-public.yml",
         "compose_sha256": "321fe0aa400d1a01e419f313a6c99ada311058496f36fed032daf1ac036fa16d",
         "wait_timeout_seconds": 180,

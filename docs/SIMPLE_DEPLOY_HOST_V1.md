@@ -8,7 +8,7 @@ Status: **Weather is the activated standing SIMPLE-DEPLOY target. Hermes Deals i
 
 Historical evidence below retains the phrases `Phase A install-only completed` and `Phase B is stopped pre-mutation` where needed to document resolved Weather checkpoints and preserve validator compatibility.
 
-This repository owns the trusted RPi5/runtime half of SIMPLE-DEPLOY v1. The accepted GitHub-side contract is `rozkalnsandris/ops-workflows@e05ed760791a127c7c9628696806ef39c9fe329c`. Source merge here does not install, enable, start, restart or mutate the live RPi5.
+This repository owns the trusted RPi5/runtime half of SIMPLE-DEPLOY v1. The original shared v1 baseline remains `rozkalnsandris/ops-workflows@e05ed760791a127c7c9628696806ef39c9fe329c`; each tracked target is independently pinned by `shared_workflow_sha`. Weather now accepts `rozkalnsandris/ops-workflows@297f554519849ab8dcaadc5517e60b8269a6efaa` after the reviewed inline-cache-compatible shared update, while the other registered targets retain their existing pins. Source merge here does not install, enable, start, restart or mutate the live RPi5.
 
 ## Ownership boundary
 
@@ -33,6 +33,14 @@ The generic executor remains `ops/lib/deploy_executor/simple_deploy_v1.py`; addi
 - `scripts/install-simple-deploy-v1.py` + `ops/deploy/simple-deploy-installer-v1.json` — exact-SHA first-install source. The installer does not reload systemd, start/enable the timer, run Docker or reconcile a target.
 
 The tracked registry has `execution_enabled: true` and two reviewed source targets: `rozkalns-weather-public-rpi5` and `hermes-deals`. Only Weather has completed the one-time host activation. Target adoption remains a tracked source review, never a runtime parameter; source registration alone does not install a target on the host.
+
+## Weather shared workflow pin alignment (#871)
+
+The active Weather consumer moved its immutable reusable-workflow pin to `297f554519849ab8dcaadc5517e60b8269a6efaa`. The RPi5 target registry must match that exact image label or the trusted reconciler fails closed with `IMAGE_METADATA_INVALID` before runtime mutation.
+
+This source change updates only the Weather target pin. Hermes Deals, Hermes Tech and CV remain on `e05ed760791a127c7c9628696806ef39c9fe329c`; Coloring Pages retains its separate reviewed pin. The whole-registry SHA-256 used by the existing Coloring Pages alignment source contract is updated mechanically because the tracked registry bytes changed.
+
+Merge does **not** update `/etc/rozkalns-simple-deployer/targets.json`. Post-merge host alignment remains one separate exact LIVE filesystem mutation bound to the merged `RPi5_main` SHA and the fixed Weather target. The live preflight must revalidate the installed registry baseline and current healthy Weather runtime before replacement. No Docker/systemd restart, database/data change, network/Cloudflare change or secret access is required for this alignment. The timer may reconcile the already-published Weather candidate only after the installed registry matches the reviewed source.
 
 ## Weather canary binding — activated standing target
 

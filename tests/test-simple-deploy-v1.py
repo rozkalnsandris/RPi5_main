@@ -18,6 +18,7 @@ sys.modules[spec.name] = sd
 spec.loader.exec_module(sd)
 
 SHARED_SHA = "e05ed760791a127c7c9628696806ef39c9fe329c"
+WEATHER_SHARED_SHA = "297f554519849ab8dcaadc5517e60b8269a6efaa"
 SOURCE_SHA = "a" * 40
 DIGEST_A = "sha256:" + "1" * 64
 DIGEST_B = "sha256:" + "2" * 64
@@ -180,7 +181,7 @@ class RegistryTests(unittest.TestCase):
         weather = registry.get("rozkalns-weather-public-rpi5")
         self.assertEqual(weather.consumer_repository, "rozkalnsandris/rozkalns_weather")
         self.assertEqual(weather.image, "ghcr.io/rozkalnsandris/rozkalns_weather")
-        self.assertEqual(weather.shared_workflow_sha, SHARED_SHA)
+        self.assertEqual(weather.shared_workflow_sha, WEATHER_SHARED_SHA)
         self.assertEqual(weather.compose.project, "rozkalns-weather-public")
         self.assertEqual(weather.compose.file, "rozkalns-weather-public.yml")
         self.assertEqual(weather.compose.service, "weather")
@@ -479,6 +480,7 @@ class ContractTests(unittest.TestCase):
             reviewed[0]["consumer_contract_revision"],
             "f658041dfcd6f84994594ddac776b3cf9702e174",
         )
+        self.assertEqual(reviewed[0]["shared_workflow_sha"], WEATHER_SHARED_SHA)
         self.assertEqual(reviewed[0]["wait_timeout_seconds"], 180)
         self.assertEqual(
             reviewed[0]["private_runtime_config_path"],

@@ -8,7 +8,7 @@
     "/etc/rozkalns-simple-deployer/compose/coloring-pages-public.yml": "77c71da44896b393002b7a13449d6fbaca76b38c6d982580d23156b674fe2941"
   },
   "desired": {
-    "registry_sha256": "e68fb9d674dbc044454563c8c8ba74c757c958ea78ff980dd0003b64d7e7bd7d",
+    "registry_sha256": "88c3acbf304ab9676a6a767e5f3055351f20fd88ca9bf1bf4a2cb1210ef3617f",
     "compose_sha256": "142c30bdd1080de90360f287e5b6fae27611c535caef0a41a09a998528bcbbc2",
     "identity_source_sha": "caller-authorized-exact-main"
   },

@@ -23,7 +23,7 @@ bridge = importlib.util.module_from_spec(spec2); sys.modules[spec2.name] = bridg
 
 DIGEST = "sha256:" + "1" * 64
 SOURCE_SHA = bridge.EXPECTED_CONSUMER_SOURCE_SHA
-SHARED_SHA = "e05ed760791a127c7c9628696806ef39c9fe329c"
+SHARED_SHA = "297f554519849ab8dcaadc5517e60b8269a6efaa"
 
 class FakeHttp:
     def __init__(self, values): self.values=list(values); self.calls=[]
