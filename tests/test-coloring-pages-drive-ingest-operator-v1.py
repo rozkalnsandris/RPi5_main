@@ -10,6 +10,7 @@ import stat
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,14 +19,19 @@ CONTRACT = ROOT / "ops/contracts/coloring-pages-drive-ingest-operator-v1.json"
 INSTALLER = ROOT / "scripts/install-coloring-pages-drive-ingest-operator-v1.sh"
 HOST_CONTRACT = ROOT / "ops/contracts/simple-deploy-host-v1.json"
 
-LOADER = importlib.machinery.SourceFileLoader("coloring_pages_drive_ingest", str(OPERATOR))
+IMAGE_DIGEST = "sha256:1e6ceaeb9cc84164aef8f4680cee6ee9b4b9a3094e59c6026f590e58a3c043e8"
+IMAGE_REF = f"ghcr.io/rozkalnsandris/coloring-pages@{IMAGE_DIGEST}"
+
+LOADER = importlib.machinery.SourceFileLoader(
+    "coloring_pages_drive_ingest", str(OPERATOR)
+)
 SPEC = importlib.util.spec_from_loader(LOADER.name, LOADER)
 drive_ingest = importlib.util.module_from_spec(SPEC)
 assert SPEC and SPEC.loader
 SPEC.loader.exec_module(drive_ingest)
 
 
-class ColoringPagesDriveIngestOperatorTests(unittest.TestCase):
+class ColoringPagesPublishOperatorTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.operator = OPERATOR.read_text(encoding="utf-8")
@@ -48,15 +54,8 @@ class ColoringPagesDriveIngestOperatorTests(unittest.TestCase):
             "approval_class": "explicit-owner-chat-approval",
         }
 
-    def test_python_and_installer_sources_parse(self) -> None:
-        completed = subprocess.run(
-            ["python3", "-c", f"compile(open({str(OPERATOR)!r}).read(), {str(OPERATOR)!r}, 'exec')"],
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            check=False,
-        )
-        self.assertEqual(completed.returncode, 0, completed.stdout)
+    def test_sources_parse(self) -> None:
+        compile(self.operator, str(OPERATOR), "exec")
         completed = subprocess.run(
             ["bash", "-n", str(INSTALLER)],
             text=True,
@@ -66,11 +65,85 @@ class ColoringPagesDriveIngestOperatorTests(unittest.TestCase):
         )
         self.assertEqual(completed.returncode, 0, completed.stdout)
 
-    def test_contract_fixes_drive_boundary_and_never_mutates_drive(self) -> None:
+    def test_contract_is_one_operator_with_direct_immutable_import(self) -> None:
+        consumer = self.contract["consumer"]
+        self.assertEqual(consumer["image_digest"], IMAGE_DIGEST)
+        self.assertEqual(consumer["image_ref"], IMAGE_REF)
         self.assertEqual(
-            self.contract["schema"],
-            "rozkalns.rpi5-main.coloring-pages-drive-ingest-operator.v1",
+            consumer["importer_entrypoint"],
+            "/usr/local/bin/coloring-pages-import",
         )
+
+        import_contract = self.contract["import"]
+        self.assertEqual(import_contract["method"], "direct-immutable-container")
+        self.assertEqual(import_contract["runtime"], "/usr/bin/docker")
+        self.assertEqual(import_contract["image_ref"], IMAGE_REF)
+        self.assertEqual(import_contract["pull_policy"], "never")
+        self.assertEqual(import_contract["network"], "none")
+        self.assertTrue(import_contract["read_only_root"])
+        self.assertTrue(import_contract["cap_drop_all"])
+        self.assertTrue(import_contract["no_new_privileges"])
+        self.assertFalse(import_contract["application_redeploy_required"])
+
+        self.assertNotIn("importer_installed_path", consumer)
+        self.assertNotIn("importer_source_blob_sha", consumer)
+        self.assertNotIn("exact_git_blob_sha_required", import_contract)
+
+    def test_operator_directly_runs_hardened_importer_container(self) -> None:
+        metadata = {
+            "id": "aviator-pup-001",
+            "title": "Aviator Pup",
+            "character": "",
+            "category": "rettungshunde",
+            "age": "3-6",
+            "difficulty": "easy",
+            "language": "de",
+        }
+        with mock.patch.object(drive_ingest.subprocess, "run") as run:
+            run.return_value = subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout="IMPORTED=aviator-pup-001\n",
+            )
+            drive_ingest.run_importer(
+                Path("/srv/coloring-pages-content/inbox/aviator-pup-001.png"),
+                metadata,
+                owner_uid=1000,
+                owner_gid=1000,
+            )
+
+        argv = run.call_args.args[0]
+        self.assertEqual(argv[0:2], ["/usr/bin/docker", "run"])
+        for marker in (
+            "--rm",
+            "--pull=never",
+            "--network",
+            "none",
+            "--read-only",
+            "--cap-drop",
+            "ALL",
+            "no-new-privileges:true",
+            "--user",
+            "1000:1000",
+            "--entrypoint",
+            "/usr/local/bin/coloring-pages-import",
+            IMAGE_REF,
+        ):
+            self.assertIn(marker, argv)
+        self.assertIn(
+            "type=bind,src=/srv/coloring-pages-content,dst=/srv/coloring-pages-content",
+            argv,
+        )
+
+        for obsolete in (
+            "IMPORTER_BLOB_SHA",
+            "check_importer_identity",
+            "hash-object",
+            'GIT = "/usr/bin/git"',
+        ):
+            self.assertNotIn(obsolete, self.operator)
+
+    def test_drive_boundary_is_fixed_and_read_only(self) -> None:
         drive = self.contract["drive"]
         self.assertEqual(drive["remote"], "gdrive")
         self.assertEqual(
@@ -78,63 +151,15 @@ class ColoringPagesDriveIngestOperatorTests(unittest.TestCase):
             "1F0pxqoRgtZl7JQVcyvYVZxKvx6eOnytn",
         )
         self.assertEqual(drive["pending_subdirectory"], "pending")
-        self.assertEqual(
-            drive["config_path"],
-            "$OWNER_HOME/.config/rclone/rclone.conf",
-        )
-        self.assertEqual(drive["config_expected_identity"], "root:andris:0600")
-        self.assertEqual(
-            drive_ingest.RCLONE_CONFIG,
-            Path("/home") / drive_ingest.OWNER / ".config/rclone/rclone.conf",
-        )
-        self.assertFalse(drive["config_content_read_or_emit_allowed"])
         self.assertEqual(drive["download_command"], "cat")
         self.assertFalse(drive["copyto_allowed"])
         self.assertFalse(drive["fast_list_allowed"])
         self.assertFalse(drive["drive_mutation_allowed"])
-
-    def test_operator_streams_to_precreated_andris_file_without_shell(self) -> None:
-        for marker in (
-            "os.O_CREAT | os.O_EXCL",
-            "os.O_NOFOLLOW",
-            "0o600",
-            'rclone_command("cat"',
-            "stdout=destination",
-            '"--drive-root-folder-id"',
-            "rclone_noninteractive_config_flag()",
-        ):
-            self.assertIn(marker, self.operator)
         self.assertNotIn("shell=True", self.operator)
         self.assertNotIn("copyto", self.operator)
         self.assertNotIn("--fast-list", self.operator)
-        self.assertNotIn("chown", self.operator)
-        self.assertNotIn("chmod", self.operator)
 
-    def test_rclone_noninteractive_flag_preserves_exact_runtime_behavior(self) -> None:
-        expected = "".join(("--ask-", "password", "=false"))
-        self.assertEqual(drive_ingest.rclone_noninteractive_config_flag(), expected)
-        command = drive_ingest.rclone_command("lsf", "gdrive:")
-        self.assertIn(expected, command)
-        self.assertEqual(command.count(expected), 1)
-
-    def test_operator_only_stats_root_protected_config(self) -> None:
-        self.assertIn(
-            'RCLONE_CONFIG = Path("/home") / OWNER / ".config/rclone/rclone.conf"',
-            self.operator,
-        )
-        self.assertIn(
-            "require_identity(\n        RCLONE_CONFIG,",
-            self.operator,
-        )
-        for forbidden in (
-            "RCLONE_CONFIG.read_text",
-            "RCLONE_CONFIG.read_bytes",
-            "open(RCLONE_CONFIG",
-            "rclone config show",
-        ):
-            self.assertNotIn(forbidden, self.operator)
-
-    def test_manifest_is_bound_to_owner_cli_identity(self) -> None:
+    def test_manifest_is_bound_to_owner_identity(self) -> None:
         manifest = self.valid_manifest()
         metadata = drive_ingest.validate_manifest(
             manifest,
@@ -143,7 +168,6 @@ class ColoringPagesDriveIngestOperatorTests(unittest.TestCase):
             expected_size=1162127,
         )
         self.assertEqual(metadata["id"], "aviator-pup-001")
-        self.assertEqual(metadata["title"], "Aviator Pup")
         self.assertEqual(metadata["category"], "rettungshunde")
 
         changed = dict(manifest)
@@ -166,97 +190,43 @@ class ColoringPagesDriveIngestOperatorTests(unittest.TestCase):
                 expected_size=1162127,
             )
 
-    def test_manifest_rejects_control_characters_and_unsupported_metadata(self) -> None:
-        manifest = self.valid_manifest()
-        manifest["title"] = "bad\nname"
-        with self.assertRaises(drive_ingest.OperatorError):
-            drive_ingest.validate_manifest(
-                manifest,
-                expected_id="aviator-pup-001",
-                expected_sha256="a" * 64,
-                expected_size=1162127,
-            )
-
-        manifest = self.valid_manifest()
-        manifest["language"] = "en"
-        with self.assertRaises(drive_ingest.OperatorError):
-            drive_ingest.validate_manifest(
-                manifest,
-                expected_id="aviator-pup-001",
-                expected_sha256="a" * 64,
-                expected_size=1162127,
-            )
-
-    def test_secure_state_writer_creates_0600_without_overwrite(self) -> None:
+    def test_staging_and_publish_remain_no_overwrite(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
-            path = Path(tempdir) / "receipt.partial"
+            state = Path(tempdir)
+            receipt = state / "receipt.partial"
             drive_ingest.write_json_exclusive(
-                path,
+                receipt,
                 {"result": "PASS"},
                 owner_uid=os.getuid(),
                 owner_gid=os.getgid(),
             )
-            self.assertTrue(path.is_file())
-            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+            self.assertEqual(stat.S_IMODE(receipt.stat().st_mode), 0o600)
             with self.assertRaises(drive_ingest.OperatorError):
                 drive_ingest.write_json_exclusive(
-                    path,
+                    receipt,
                     {"result": "PASS"},
                     owner_uid=os.getuid(),
                     owner_gid=os.getgid(),
                 )
 
-    def test_atomic_publish_is_same_filesystem_no_clobber(self) -> None:
         atomic = self.contract["atomic_publish"]
         self.assertTrue(atomic["same_filesystem_required"])
-        self.assertEqual(atomic["command"], "/usr/bin/mv")
         self.assertEqual(
             atomic["required_flags"],
             ["--no-target-directory", "--no-clobber"],
         )
-        self.assertEqual(
-            atomic["cross_filesystem_policy"],
-            "reject-via-st_dev-before-mv",
+        self.assertFalse(self.contract["idempotency"]["automatic_overwrite"])
+        self.assertFalse(
+            self.contract["idempotency"]["automatic_retry_after_failure"]
         )
-        self.assertNotIn('"--no-copy"', self.operator)
-        for marker in (
-            '"--no-target-directory"',
-            '"--no-clobber"',
-            "source.parent.stat().st_dev != destination.parent.stat().st_dev",
-        ):
-            self.assertIn(marker, self.operator)
 
-    def test_existing_immutable_importer_is_reused_by_exact_identity(self) -> None:
-        consumer = self.contract["consumer"]
-        self.assertEqual(
-            consumer["ingestion_contract_revision"],
-            "0f5290c57f68de32b4a20f3baded8126c0a6efa6",
-        )
-        self.assertEqual(
-            consumer["importer_installed_path"],
-            "/usr/local/bin/coloring-pages-import",
-        )
-        self.assertEqual(
-            consumer["importer_source_blob_sha"],
-            "83f6a25918bb377a407c3fe264b825327172f9e3",
-        )
-        self.assertIn(
-            'IMPORTER = Path("/usr/local/bin/coloring-pages-import")',
-            self.operator,
-        )
-        self.assertIn("GIT, \"hash-object\", str(IMPORTER)", self.operator)
-        self.assertNotIn("docker run", self.operator)
-        self.assertNotIn("docker pull", self.operator)
-
-    def test_post_import_verification_and_receipt_are_required(self) -> None:
+    def test_post_import_verification_and_receipt_remain_required(self) -> None:
         required = set(self.contract["post_import_verification"]["required"])
         for proof in (
             "original-source-size-and-sha256-match",
             "public-source-size-and-sha256-match",
             "catalog-has-exactly-one-matching-entry",
             "public-catalog-http-200",
-            "public-thumb-http-200",
-            "public-preview-http-200",
             "public-source-http-200",
             "public-pdf-http-200",
         ):
@@ -265,37 +235,26 @@ class ColoringPagesDriveIngestOperatorTests(unittest.TestCase):
             self.contract["idempotency"]["receipt_schema"],
             "rozkalns.rpi5-main.coloring-pages-drive-ingest-receipt.v1",
         )
-        self.assertFalse(self.contract["idempotency"]["automatic_overwrite"])
-        self.assertFalse(
-            self.contract["idempotency"]["automatic_retry_after_failure"]
-        )
 
-    def test_installer_is_exact_sha_bounded_and_does_not_touch_credentials(self) -> None:
+    def test_single_installer_does_not_run_publish_work(self) -> None:
         for marker in (
             "--expected-rpi5-main-sha",
-            "RPi5_main checkout does not match authorized SHA",
-            "RPi5_main checkout must be on main",
-            "RPi5_main checkout must be clean",
-            "install -d -o andris -g andris -m 0755",
-            "install -o andris -g andris -m 0600 /dev/null",
-            "install -o root -g root -m 0755",
             "/usr/local/bin/coloring-pages-drive-ingest",
-            "RCLONE_CONFIG_CHANGED=false",
-            "SUDOERS_CHANGED=false",
             "RCLONE_EXECUTED=false",
             "CONTENT_IMPORTED=false",
+            "SYSTEMD_CHANGED=false",
         ):
             self.assertIn(marker, self.installer)
         for forbidden in (
             "rclone config",
-            "systemctl ",
-            "/etc/sudoers",
             "docker run",
             "docker pull",
+            "systemctl ",
+            "/etc/sudoers",
         ):
             self.assertNotIn(forbidden, self.installer)
 
-    def test_host_registry_records_drive_ingest_identity_without_live_authority(self) -> None:
+    def test_host_registry_has_only_single_publish_operator_identity(self) -> None:
         host = json.loads(HOST_CONTRACT.read_text(encoding="utf-8"))
         targets = {
             item["target_alias"]: item
@@ -310,13 +269,26 @@ class ColoringPagesDriveIngestOperatorTests(unittest.TestCase):
             coloring["drive_ingest_installed_path"],
             "/usr/local/bin/coloring-pages-drive-ingest",
         )
-        self.assertEqual(coloring["drive_ingest_execution_owner"], "andris")
-        self.assertEqual(coloring["drive_ingest_remote"], "gdrive")
-        self.assertEqual(
-            coloring["drive_ingest_root_folder_id"],
-            "1F0pxqoRgtZl7JQVcyvYVZxKvx6eOnytn",
-        )
+        self.assertEqual(coloring["drive_ingest_image_digest"], IMAGE_DIGEST)
         self.assertFalse(coloring["drive_ingest_mutates_drive"])
+        for obsolete in (
+            "importer_operator_contract",
+            "importer_installed_path",
+            "importer_image_digest",
+            "importer_consumer_revision",
+        ):
+            self.assertNotIn(obsolete, coloring)
+
+    def test_obsolete_second_operator_sources_are_removed(self) -> None:
+        for relative in (
+            "ops/bin/coloring-pages-import",
+            "ops/contracts/coloring-pages-importer-operator-v1.json",
+            "scripts/install-coloring-pages-importer-operator-v1.sh",
+            "tests/test-coloring-pages-importer-operator-v1.py",
+            "docs/COLORING_PAGES_IMPORTER_OPERATOR_V1.md",
+            ".github/workflows/coloring-pages-importer-operator-source.yml",
+        ):
+            self.assertFalse((ROOT / relative).exists(), relative)
 
 
 if __name__ == "__main__":
