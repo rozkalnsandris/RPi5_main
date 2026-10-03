@@ -59,7 +59,7 @@ The Phase 4 route-origin audit is a **read-only consumer** of the durable RPi5_m
 
 `ops/contracts/cloudflare-tunnel-operator-v1.json`
 
-The shared credential is account-scoped and carries `Cloudflare Tunnel Write` so future reviewed Tunnel operations do not require a new token per project or per action. This does not make the Phase 4 audit writable.
+The shared credential is account-scoped and carries `Cloudflare One Connector: cloudflared Write` so future reviewed Tunnel operations do not require a new token per project or per action. This does not make the Phase 4 audit writable.
 
 The Phase 4 consumer remains restricted to two GET surfaces:
 
