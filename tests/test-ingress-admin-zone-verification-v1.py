@@ -11,6 +11,7 @@ CONTRACT_PATH = ROOT / "ops" / "contracts" / "admin-zone-verification-v1.json"
 REGISTRY_PATH = ROOT / "ops" / "contracts" / "ingress-registry-v1.json"
 HOST_POLICY_PATH = ROOT / "ops" / "contracts" / "cloudflare-hostname-policy.yaml"
 DOC_PATH = ROOT / "docs" / "INGRESS_ADMIN_ZONE_VERIFICATION_V1.md"
+REMAINING_INFRA_PATH = ROOT / "ops" / "contracts" / "admin-zone-remaining-infra-verifier-v1.json"
 
 PRIVATE_COORDINATE_PATTERNS = [
     re.compile(r"\b10\.(?:\d{1,3}\.){2}\d{1,3}\b"),
@@ -27,6 +28,7 @@ class AdminZoneVerificationV1Tests(unittest.TestCase):
         cls.registry = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
         cls.host_policy = HOST_POLICY_PATH.read_text(encoding="utf-8")
         cls.doc = DOC_PATH.read_text(encoding="utf-8")
+        cls.remaining_infra = json.loads(REMAINING_INFRA_PATH.read_text(encoding="utf-8"))
         cls.admin = [item for item in cls.registry["services"] if item["zone"] == "ADMIN"]
 
     def test_contract_is_source_only_and_non_authorizing(self) -> None:
@@ -148,6 +150,47 @@ class AdminZoneVerificationV1Tests(unittest.TestCase):
         )
         self.assertTrue(
             self.contract["runtime_gates"]["protected_authorized_admin"]["separately_authorized"]
+        )
+
+    def test_remaining_infra_verifier_is_canonical_and_non_authorizing(self) -> None:
+        gate = self.contract["runtime_gates"]["unauthenticated_infrastructure"]
+        verifier = gate["remaining_infra_verifier"]
+        self.assertEqual(
+            verifier["contract_ref"],
+            "ops/contracts/admin-zone-remaining-infra-verifier-v1.json",
+        )
+        self.assertEqual(
+            verifier["external_workflow"],
+            ".github/workflows/cloudflare-phase4-admin-remaining-infra.yml",
+        )
+        self.assertEqual(
+            verifier["host_entrypoint"],
+            "scripts/cloudflare_phase4_admin_remaining_infra_host.py",
+        )
+        self.assertTrue(
+            verifier["external_and_host_execution_each_require_fresh_owner_authorization"]
+        )
+        self.assertFalse(verifier["protected_admin_context_allowed"])
+        self.assertEqual(
+            set(verifier["covered_assertions"]),
+            {
+                "unauthenticated_external_class",
+                "listener_bind_class",
+                "lan_path_class",
+                "runtime_owner_matches",
+                "alternate_public_bypass_present",
+                "recovery_ref_present",
+            },
+        )
+        self.assertEqual(
+            self.remaining_infra["schema"],
+            "rozkalns.rpi5-main.phase4-admin-remaining-infra-verifier.v1",
+        )
+        self.assertFalse(
+            self.remaining_infra["authority"]["source_merge_authorizes_runtime_execution"]
+        )
+        self.assertFalse(
+            self.remaining_infra["authority"]["source_merge_authorizes_protected_admin_context"]
         )
 
     def test_new_source_files_contain_no_private_coordinates_or_identity_values(self) -> None:

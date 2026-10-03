@@ -79,6 +79,54 @@ This source does not create or rotate the token, provision GitHub secrets, autho
 
 See `docs/CLOUDFLARE_TUNNEL_OPERATOR_V1.md` for the durable capability contract and rotation semantics.
 
+## Remaining infrastructure verifier
+
+The remaining unauthenticated/infrastructure assertions are implemented by the bounded machine contract `ops/contracts/admin-zone-remaining-infra-verifier-v1.json`.
+
+It deliberately uses two execution surfaces because a GitHub-hosted runner cannot truthfully prove RPi5-local listener or LAN-path state.
+
+### External component
+
+The GitHub-hosted workflow `.github/workflows/cloudflare-phase4-admin-remaining-infra.yml` is triggered only by the exact direct-owner issue command:
+
+`/rpi5-p4-remaining-infra-external check HEAD=<exact-main-sha> CANARY=phase4-admin-remaining-infra-external-v1`
+
+It:
+
+- sends unauthenticated HTTPS GET requests without cookies or Authorization headers;
+- does not follow redirects and never reads response bodies;
+- reduces responses only to `access-challenge`, `denied`, `public`, `network-error` or `unknown`;
+- reuses the existing P1D03 Access GET-only lane only to confirm that no ADMIN bypass policy is present;
+- checks the exact-main registry/runtime-owner projection and recovery-reference presence;
+- emits no redirect URL, account/app/policy identifier, identity value, credential, token or private coordinate.
+
+Only `access-challenge` or `denied` can PASS the unauthenticated assertion.
+
+### RPi5-local component
+
+The host verifier is `scripts/cloudflare_phase4_admin_remaining_infra_host.py`.
+
+A later fresh owner authorization may run it read-only on the RPi5 against an exact reviewed main:
+
+`python3 scripts/cloudflare_phase4_admin_remaining_infra_host.py --expected-main <exact-main-sha>`
+
+The script requires an exact clean tracked checkout and uses only:
+
+- Git read-only identity/cleanliness checks;
+- `ip -j -4 route get` to discover the host's current primary LAN address in memory;
+- `ss -H -lnt` without process metadata;
+- TCP connect-only probes to the locally discovered LAN address.
+
+It does not invoke Docker, systemd, UFW, nftables/iptables, journals, process environments, application config/logs/data or Cloudflare credentials. It never emits the discovered LAN address, listener addresses, ports, process/container identities or raw command output.
+
+Listener evidence is reduced to `loopback`, `lan`, `wildcard`, `mixed`, `other`, `none` or `unknown`. LAN-path evidence is reduced to `present`, `absent` or `unknown`.
+
+The reviewed probe targets are source-bound in the verifier contract. Seven ADMIN targets inherit their probe provenance from the completed V18 LAN-origin audit; the dashboard loopback target is bound to the reviewed `dashboard_RPi5` Phase 11C launch contract. Probe coordinates are implementation inputs only and are forbidden evidence output.
+
+`runtime_owner_matches` means the exact-main canonical registry and ADMIN projection agree that `rozkalnsandris/RPi5_main` owns the ingress/runtime control plane. It is not a process/container identity claim.
+
+Both external and host components must PASS before the remaining infrastructure portion is complete. Source merge does not execute either component and does not authorize protected administrator access.
+
 ## Two runtime authority gates
 
 ### A. Unauthenticated / infrastructure verification
