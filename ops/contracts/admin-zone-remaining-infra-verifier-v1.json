@@ -1,0 +1,211 @@
+{
+  "schema": "rozkalns.rpi5-main.phase4-admin-remaining-infra-verifier.v1",
+  "schema_version": 1,
+  "status": "source-defined",
+  "implementation_issue": 819,
+  "admin_contract_ref": "ops/contracts/admin-zone-verification-v1.json",
+  "registry_ref": "ops/contracts/ingress-registry-v1.json",
+  "authority": {
+    "source_merge_proves_runtime_state": false,
+    "source_merge_authorizes_runtime_execution": false,
+    "source_merge_authorizes_protected_admin_context": false,
+    "source_merge_authorizes_cloudflare_write": false,
+    "source_merge_authorizes_live_mutation": false,
+    "external_execution_requires_fresh_owner_authorization": true,
+    "host_execution_requires_fresh_owner_authorization": true
+  },
+  "external_component": {
+    "execution_surface": "github-hosted-actions",
+    "verification_class": "unauthenticated-infrastructure",
+    "http_method": "GET",
+    "redirect_following_allowed": false,
+    "response_body_read_allowed": false,
+    "request_cookie_allowed": false,
+    "authorization_header_allowed": false,
+    "allowed_classes": [
+      "access-challenge",
+      "denied",
+      "public",
+      "network-error",
+      "unknown"
+    ],
+    "pass_classes": [
+      "access-challenge",
+      "denied"
+    ],
+    "access_state_source": "existing P1D03 GET-only Access lane",
+    "alternate_public_bypass_required": false,
+    "custom_api_base_allowed": false
+  },
+  "host_component": {
+    "execution_surface": "owner-authorized-rpi5-read-only",
+    "root_required": false,
+    "allowed_commands": [
+      "git rev-parse HEAD",
+      "git diff --quiet",
+      "git diff --cached --quiet",
+      "ip -j -4 route get 1.1.1.1",
+      "ss -H -lnt"
+    ],
+    "tcp_probe": "socket.create_connection to locally discovered primary LAN address only",
+    "forbidden_commands_or_reads": [
+      "docker",
+      "systemctl",
+      "journalctl",
+      "ufw",
+      "nft",
+      "iptables",
+      "process-environment",
+      "container-environment",
+      "application-config",
+      "application-logs",
+      "cloudflare-credentials"
+    ],
+    "lan_address_emission_allowed": false,
+    "listener_address_emission_allowed": false,
+    "port_emission_allowed": false,
+    "process_identity_emission_allowed": false,
+    "container_identity_emission_allowed": false
+  },
+  "host_probe_targets": [
+    {
+      "service_id": "hermes-admin",
+      "hostname": "hermes.rozkalns.net",
+      "probe_port": 9119,
+      "port_source_ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md"
+    },
+    {
+      "service_id": "portainer",
+      "hostname": "portainer.rozkalns.net",
+      "probe_port": 9000,
+      "port_source_ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md"
+    },
+    {
+      "service_id": "grafana",
+      "hostname": "grafana.rozkalns.net",
+      "probe_port": 3030,
+      "port_source_ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md"
+    },
+    {
+      "service_id": "home-assistant",
+      "hostname": "ha.rozkalns.net",
+      "probe_port": 8123,
+      "port_source_ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md"
+    },
+    {
+      "service_id": "adguard-ui",
+      "hostname": "adguard.rozkalns.net",
+      "probe_port": 3080,
+      "port_source_ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md"
+    },
+    {
+      "service_id": "uptime-kuma",
+      "hostname": "kuma.rozkalns.net",
+      "probe_port": 3001,
+      "port_source_ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md"
+    },
+    {
+      "service_id": "prometheus",
+      "hostname": "prometheus.rozkalns.net",
+      "probe_port": 9090,
+      "port_source_ref": "docs/V18_CLOUDFLARE_LAN_ORIGIN_AUDIT_CONTRACT.md"
+    },
+    {
+      "service_id": "dashboard-rpi5",
+      "hostname": "dash.rozkalns.net",
+      "probe_port": 8787,
+      "port_source_ref": "rozkalnsandris/dashboard_RPi5:docs/PHASE11C_CLOUDFLARE_LAUNCH.md"
+    }
+  ],
+  "listener_policy": {
+    "loopback_origin_allowed_bind_classes": [
+      "loopback"
+    ],
+    "lan_origin_allowed_bind_classes": [
+      "lan",
+      "wildcard"
+    ],
+    "other_bind_classes_fail_closed": true
+  },
+  "lan_path_policy": {
+    "required": [
+      "present"
+    ],
+    "allowed": [
+      "present",
+      "absent"
+    ],
+    "forbidden": [
+      "absent"
+    ]
+  },
+  "runtime_owner_semantics": {
+    "expected_owner": "rozkalnsandris/RPi5_main",
+    "meaning": "current ingress/runtime control-plane owner recorded by the exact-main canonical registry and projection; not process/container identity",
+    "process_or_container_identity_required": false
+  },
+  "recovery_ref_semantics": {
+    "must_be_nonempty_repo_relative_path": true,
+    "must_exist_in_exact_main": true
+  },
+  "sanitized_output": {
+    "external_service_fields": [
+      "service_id",
+      "hostname",
+      "unauthenticated_external_class",
+      "alternate_public_bypass_present",
+      "runtime_owner_matches",
+      "recovery_ref_present",
+      "result"
+    ],
+    "host_service_fields": [
+      "service_id",
+      "hostname",
+      "listener_bind_class",
+      "lan_path_class",
+      "runtime_owner_matches",
+      "recovery_ref_present",
+      "result"
+    ],
+    "allowed_bind_classes": [
+      "loopback",
+      "lan",
+      "wildcard",
+      "mixed",
+      "other",
+      "none",
+      "unknown"
+    ],
+    "allowed_lan_path_classes": [
+      "present",
+      "absent",
+      "unknown"
+    ],
+    "forbidden_output": [
+      "response-body",
+      "redirect-location",
+      "cookies",
+      "authorization-material",
+      "identity-values",
+      "session-material",
+      "credentials",
+      "tokens",
+      "account-identifiers",
+      "access-audience-values",
+      "private-ip-addresses",
+      "listener-addresses",
+      "ports",
+      "process-identities",
+      "container-identities",
+      "raw-command-output",
+      "application-config",
+      "application-logs",
+      "application-data"
+    ]
+  },
+  "completion": {
+    "external_component_result_required": "PASS",
+    "host_component_result_required": "PASS",
+    "protected_authorized_admin_not_covered": true
+  }
+}
