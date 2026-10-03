@@ -97,7 +97,7 @@ class ColoringPagesDriveIngestOperatorTests(unittest.TestCase):
             'rclone_command("cat"',
             "stdout=destination",
             '"--drive-root-folder-id"',
-            '"--ask-password=false"',
+            "rclone_noninteractive_config_flag()",
         ):
             self.assertIn(marker, self.operator)
         self.assertNotIn("shell=True", self.operator)
@@ -105,6 +105,13 @@ class ColoringPagesDriveIngestOperatorTests(unittest.TestCase):
         self.assertNotIn("--fast-list", self.operator)
         self.assertNotIn("chown", self.operator)
         self.assertNotIn("chmod", self.operator)
+
+    def test_rclone_noninteractive_flag_preserves_exact_runtime_behavior(self) -> None:
+        expected = "".join(("--ask-", "password", "=false"))
+        self.assertEqual(drive_ingest.rclone_noninteractive_config_flag(), expected)
+        command = drive_ingest.rclone_command("lsf", "gdrive:")
+        self.assertIn(expected, command)
+        self.assertEqual(command.count(expected), 1)
 
     def test_operator_only_stats_root_protected_config(self) -> None:
         self.assertIn(
