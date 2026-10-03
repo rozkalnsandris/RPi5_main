@@ -18,7 +18,7 @@ and BigQuery state are not part of this composition.
 
 The source contract is bound to:
 
-- Weather source `1fc7ea70efde88cb826c2e4a0baf26925078375c`;
+- Weather source `70e9ce0a95d2fad0857cd7aae64185c14eb3e8d3`;
 - GCS runtime closure
   `4ef3d22c8ebc76901c3840d0304124ab390afaf3978883a4ad377a6da4991148`;
 - Linux aarch64 / CPython 3.13 / `cp313`;
