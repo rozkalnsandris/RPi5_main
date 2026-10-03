@@ -386,6 +386,107 @@ def preflight_install(
     return source, metadata
 
 
+
+def _inspect_installed_release(
+    expected_installed_release: str,
+    *,
+    runner: Runner = subprocess.run,
+) -> dict[str, str]:
+    if not SHA_RE.fullmatch(expected_installed_release):
+        raise InstallError("installed_release_expected_sha_invalid")
+    completed = _run(
+        [SUDO, "-n", PYTHON, "-c", ROOT_RELEASE_INSPECTOR],
+        runner=runner,
+    )
+    if completed.returncode != 0:
+        raise InstallError("installed_release_invalid")
+    try:
+        decoded = json.loads(completed.stdout.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise InstallError("installed_release_invalid") from exc
+    if set(decoded) != {"source_sha", "operator_sha256", "metadata_sha256"}:
+        raise InstallError("installed_release_invalid")
+    if decoded["source_sha"] != expected_installed_release:
+        raise InstallError("installed_release_mismatch")
+    if not re.fullmatch(r"[0-9a-f]{64}", decoded["operator_sha256"]):
+        raise InstallError("installed_release_invalid")
+    if not re.fullmatch(r"[0-9a-f]{64}", decoded["metadata_sha256"]):
+        raise InstallError("installed_release_invalid")
+    return decoded
+
+
+def build_upgrade_payload(source: bytes, metadata: bytes) -> bytes:
+    payload = {
+        "operator_b64": base64.b64encode(source).decode("ascii"),
+        "metadata_b64": base64.b64encode(metadata).decode("ascii"),
+    }
+    return (
+        json.dumps(payload, separators=(",", ":"), sort_keys=True) + "\n"
+    ).encode("utf-8")
+
+
+def preflight_upgrade(
+    expected_main: str,
+    expected_installed_release: str,
+    *,
+    runner: Runner = subprocess.run,
+) -> tuple[bytes, bytes]:
+    if expected_installed_release == expected_main:
+        raise InstallError("upgrade_source_same_as_installed")
+    source = verify_exact_checkout(expected_main, runner=runner)
+    metadata = build_release_metadata(expected_main, source)
+    _sudo_available(runner=runner)
+    _inspect_installed_release(
+        expected_installed_release,
+        runner=runner,
+    )
+    for path in (OPERATOR_STAGE, RELEASE_METADATA_STAGE):
+        if not _target_absent(path, runner=runner):
+            raise InstallError("upgrade_stage_exists")
+    return source, metadata
+
+
+def apply_upgrade(
+    expected_main: str,
+    expected_installed_release: str,
+    *,
+    runner: Runner = subprocess.run,
+) -> None:
+    source, metadata = preflight_upgrade(
+        expected_main,
+        expected_installed_release,
+        runner=runner,
+    )
+    payload = build_upgrade_payload(source, metadata)
+    completed = _run(
+        [
+            SUDO,
+            "-n",
+            PYTHON,
+            "-c",
+            ROOT_UPGRADE_WRITER,
+            expected_installed_release,
+            expected_main,
+        ],
+        runner=runner,
+        input_bytes=payload,
+    )
+    _require_success(completed, mutation_started=True)
+
+    observed = _inspect_installed_release(
+        expected_main,
+        runner=runner,
+    )
+    if observed["operator_sha256"] != hashlib.sha256(source).hexdigest():
+        raise InstallError("post_mutation_failure")
+    if observed["metadata_sha256"] != hashlib.sha256(metadata).hexdigest():
+        raise InstallError("post_mutation_failure")
+    for path in (OPERATOR_STAGE, RELEASE_METADATA_STAGE):
+        if not _target_absent(path, runner=runner):
+            raise InstallError("post_mutation_failure")
+
+
+
 def _require_success(
     completed: subprocess.CompletedProcess[Any],
     *,
