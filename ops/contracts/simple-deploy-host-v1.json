@@ -121,23 +121,16 @@
         "persistent_content_container_path": "/var/lib/coloring-pages/public",
         "persistent_content_read_only": true,
         "persistent_content_create_host_path": false,
-        "importer_operator_issue": 858,
-        "importer_operator_contract": "ops/contracts/coloring-pages-importer-operator-v1.json",
-        "importer_consumer_revision": "d08a9657c764411de2e19545610218af8188ff5d",
-        "importer_image_digest": "sha256:1e6ceaeb9cc84164aef8f4680cee6ee9b4b9a3094e59c6026f590e58a3c043e8",
-        "importer_installed_path": "/usr/local/bin/coloring-pages-import",
-        "importer_execution_owner": "andris",
-        "importer_auto_pull": false,
         "installed_target_alignment_issue": 860,
         "installed_target_alignment_contract": "ops/contracts/simple-deploy-coloring-pages-alignment-v1.json",
         "drive_ingest_operator_contract": "ops/contracts/coloring-pages-drive-ingest-operator-v1.json",
         "drive_ingest_installed_path": "/usr/local/bin/coloring-pages-drive-ingest",
         "drive_ingest_execution_owner": "andris",
-        "drive_ingest_consumer_revision": "0f5290c57f68de32b4a20f3baded8126c0a6efa6",
         "drive_ingest_remote": "gdrive",
         "drive_ingest_root_folder_id": "1F0pxqoRgtZl7JQVcyvYVZxKvx6eOnytn",
         "drive_ingest_mutates_drive": false,
-        "drive_ingest_requires_separate_live_authority": true
+        "drive_ingest_requires_separate_live_authority": true,
+        "drive_ingest_image_digest": "sha256:1e6ceaeb9cc84164aef8f4680cee6ee9b4b9a3094e59c6026f590e58a3c043e8"
       }
     ]
   },
