@@ -6,7 +6,7 @@
   "initial_implementation_issue": 819,
   "purpose": "durable account-scoped Cloudflare Tunnel capability shared by reviewed RPi5_main Tunnel consumers",
   "credential_model": {
-    "cloudflare_permission": "Cloudflare Tunnel Write",
+    "cloudflare_permission": "Cloudflare One Connector: cloudflared Write",
     "resource_scope": "single-reviewed-account",
     "stable_account_id_secret": "CLOUDFLARE_TUNNEL_ACCOUNT_ID",
     "stable_api_token_secret": "CLOUDFLARE_TUNNEL_API_TOKEN",
@@ -16,7 +16,14 @@
     "reuse_outside_tunnel_capability_allowed": false,
     "dns_permission_included": false,
     "access_permission_included": false,
-    "api_tokens_permission_included": false
+    "api_tokens_permission_included": false,
+    "dashboard_ui_mapping": {
+      "category": "Cloudflare One / Zero Trust",
+      "permission_group": "Cloudflare One Connector: cloudflared",
+      "access": "Edit"
+    },
+    "exact_permission_required": true,
+    "broader_or_legacy_alternates_allowed": false
   },
   "execution_model": {
     "possession_of_token_grants_operation_authority": false,
