@@ -127,7 +127,7 @@ def _require_tunnel_operator_read_consumer(
     ) or not isinstance(consumers, list):
         raise AuditError("tunnel_operator_contract_invalid")
 
-    if operator.get("status") != "source-defined-secret-unprovisioned":
+    if operator.get("status") != "source-defined":
         raise AuditError("tunnel_operator_contract_invalid")
     if credential.get("cloudflare_permission") != "Cloudflare Tunnel Write":
         raise AuditError("tunnel_operator_contract_invalid")
