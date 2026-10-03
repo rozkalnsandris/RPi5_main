@@ -4,11 +4,9 @@
   "status": "source-defined-not-installed",
   "consumer": {
     "repository": "rozkalnsandris/coloring-pages",
-    "ingestion_contract_revision": "0f5290c57f68de32b4a20f3baded8126c0a6efa6",
-    "ingestion_contract_path": "deploy/chat-to-drive-ingestion.json",
-    "importer_operator_contract": "ops/contracts/coloring-pages-importer-operator-v1.json",
-    "importer_installed_path": "/usr/local/bin/coloring-pages-import",
-    "importer_source_blob_sha": "83f6a25918bb377a407c3fe264b825327172f9e3"
+    "image_digest": "sha256:1e6ceaeb9cc84164aef8f4680cee6ee9b4b9a3094e59c6026f590e58a3c043e8",
+    "image_ref": "ghcr.io/rozkalnsandris/coloring-pages@sha256:1e6ceaeb9cc84164aef8f4680cee6ee9b4b9a3094e59c6026f590e58a3c043e8",
+    "importer_entrypoint": "/usr/local/bin/coloring-pages-import"
   },
   "operator": {
     "source": "ops/bin/coloring-pages-drive-ingest",
@@ -110,10 +108,16 @@
     "source_must_disappear_after_move": true
   },
   "import": {
-    "invokes_existing_importer_operator": true,
-    "installed_path": "/usr/local/bin/coloring-pages-import",
-    "exact_git_blob_sha_required": "83f6a25918bb377a407c3fe264b825327172f9e3",
-    "image_pull_allowed": false,
+    "method": "direct-immutable-container",
+    "runtime": "/usr/bin/docker",
+    "image_ref": "ghcr.io/rozkalnsandris/coloring-pages@sha256:1e6ceaeb9cc84164aef8f4680cee6ee9b4b9a3094e59c6026f590e58a3c043e8",
+    "entrypoint": "/usr/local/bin/coloring-pages-import",
+    "pull_policy": "never",
+    "network": "none",
+    "read_only_root": true,
+    "cap_drop_all": true,
+    "no_new_privileges": true,
+    "content_root_bind": "/srv/coloring-pages-content",
     "application_redeploy_required": false
   },
   "post_import_verification": {
@@ -187,8 +191,10 @@
     "automatic-retry",
     "automatic-cleanup-after-failure",
     "host-python-or-pillow-install",
+    "sudoers-or-credential-mutation",
+    "automatic-image-pull",
     "application-redeploy-per-import",
-    "sudoers-or-credential-mutation"
+    "second-installed-importer-wrapper"
   ],
   "live_authority_required": {
     "install_operator_and_state_scaffold": true,
