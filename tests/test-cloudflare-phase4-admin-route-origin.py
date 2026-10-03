@@ -5,6 +5,7 @@ import importlib.util
 import json
 import sys
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -246,6 +247,16 @@ class Phase4AdminRouteOriginTests(unittest.TestCase):
         self.assertNotIn("account_id", rendered)
         self.assertNotIn("tunnel_id", rendered)
         self.assertNotIn("api_token", rendered)
+
+    def test_unbound_capability_blocks_before_cloudflare_client(self) -> None:
+        with mock.patch.object(
+            route,
+            "_load_contract",
+            return_value=self.contract,
+        ), mock.patch.object(route, "CloudflareGetClient") as client:
+            rc = route.main()
+        self.assertEqual(rc, 2)
+        client.assert_not_called()
 
     def test_workflow_injects_no_cloudflare_secret_while_tunnel_read_unbound(self) -> None:
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
