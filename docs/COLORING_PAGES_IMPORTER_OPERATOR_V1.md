@@ -17,8 +17,8 @@ Source merge does not install or execute this command.
 ## Frozen consumer identity
 
 - repository: `rozkalnsandris/coloring-pages`
-- source: `ab8f874f681fb2adb6f18f4a7c8066b44ace443b`
-- immutable image: `ghcr.io/rozkalnsandris/coloring-pages@sha256:5f61560cb674224052bc3ab8ca086c7997930027459f6c2648714d12c60af796`
+- source: `d08a9657c764411de2e19545610218af8188ff5d`
+- immutable image: `ghcr.io/rozkalnsandris/coloring-pages@sha256:1e6ceaeb9cc84164aef8f4680cee6ee9b4b9a3094e59c6026f590e58a3c043e8`
 - image entrypoint: `/usr/local/bin/coloring-pages-import`
 
 The wrapper never uses `:production`, `:latest` or another mutable tag. It also uses `--pull=never`, so a normal content import cannot change the image cache or resolve a new remote image.

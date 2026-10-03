@@ -11,8 +11,8 @@ CONTRACT = ROOT / "ops/contracts/coloring-pages-importer-operator-v1.json"
 INSTALLER = ROOT / "scripts/install-coloring-pages-importer-operator-v1.sh"
 HOST_CONTRACT = ROOT / "ops/contracts/simple-deploy-host-v1.json"
 
-CONSUMER_SHA = "ab8f874f681fb2adb6f18f4a7c8066b44ace443b"
-IMAGE_DIGEST = "sha256:5f61560cb674224052bc3ab8ca086c7997930027459f6c2648714d12c60af796"
+CONSUMER_SHA = "d08a9657c764411de2e19545610218af8188ff5d"
+IMAGE_DIGEST = "sha256:1e6ceaeb9cc84164aef8f4680cee6ee9b4b9a3094e59c6026f590e58a3c043e8"
 IMAGE_REF = f"ghcr.io/rozkalnsandris/coloring-pages@{IMAGE_DIGEST}"
 
 
