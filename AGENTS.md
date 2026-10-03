@@ -40,7 +40,7 @@ Metadata is collectable only when a task provides a strict allowlist and sanitiz
 
 ## Terminal response — Next Command Contract
 
-Every user-visible work-cycle response that ends or pauses repository work must finish with exactly one explicit, copy-pasteable command for the owner under `NEXT COMMAND` or, when a real owner decision is required, under `ACTION REQUIRED`.
+Every user-visible work-cycle response that ends or pauses repository work must finish with exactly one explicit, copy-pasteable command for the owner under `NEXT COMMAND` or, when a real owner decision is required, under `ACTION REQUIRED`. That final operator command — including `ACTION REQUIRED` authorization, `NEXT COMMAND`, `MERGE`, `AUTHORIZE`, `START`, `SYNC`, `turpini`, or any equivalent exact owner command — must be the sole content of its own fenced `text` code block. Never emit the final command as prose, inline code, a list item, a quote, or unfenced/plain text.
 
 - `ACTION REQUIRED` is reserved for a genuine owner authorization/decision gate. Never invent an authorization gate merely to satisfy this presentation rule.
 - If a real owner gate exists, the final command is the exact authorization command with current identifiers and exact SHA/target bindings where applicable.
