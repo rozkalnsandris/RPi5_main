@@ -19,7 +19,7 @@ CONTRACT = ROOT / "ops/contracts/coloring-pages-drive-ingest-operator-v1.json"
 INSTALLER = ROOT / "scripts/install-coloring-pages-drive-ingest-operator-v1.sh"
 HOST_CONTRACT = ROOT / "ops/contracts/simple-deploy-host-v1.json"
 
-IMAGE_DIGEST = "sha256:1e6ceaeb9cc84164aef8f4680cee6ee9b4b9a3094e59c6026f590e58a3c043e8"
+IMAGE_DIGEST = "sha256:7cd9ab20f229eb318ce8ef7a2d3130e19af23fce829fd4c7fbd7ac25eca845e0"
 IMAGE_REF = f"ghcr.io/rozkalnsandris/coloring-pages@{IMAGE_DIGEST}"
 
 LOADER = importlib.machinery.SourceFileLoader(
