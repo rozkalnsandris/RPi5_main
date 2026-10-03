@@ -607,6 +607,9 @@ def build_report(
         if scope == "none":
             if resolved["status"] != "none":
                 blockers.append(f"public_hostname_has_access_application:{hostname}")
+        elif scope == "exact-public-bypass":
+            if resolved["status"] != "exact":
+                blockers.append(f"exact_public_bypass_application_missing:{hostname}")
         else:
             if resolved["status"] == "none":
                 blockers.append(f"access_application_missing:{hostname}")
@@ -615,6 +618,14 @@ def build_report(
 
         if selected_policies:
             actions = _policy_actions(selected_policies)
+            if scope == "exact-public-bypass":
+                bypass_include_selectors = _selector_types_for_action(
+                    selected_policies, "bypass", "include"
+                )
+                if len(selected_policies) != 1 or actions != {"bypass"}:
+                    blockers.append(f"exact_public_bypass_policy_shape_invalid:{hostname}")
+                if "everyone" not in bypass_include_selectors:
+                    blockers.append(f"exact_public_bypass_everyone_missing:{hostname}")
             if desired.trust_class in {"ADMIN", "FAMILY_PRIVATE"} and "bypass" in actions:
                 blockers.append(f"matching_access_application_has_bypass:{hostname}")
             if scope == "exact-owner" and "service_auth" in actions:
