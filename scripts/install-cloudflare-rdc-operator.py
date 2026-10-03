@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -17,8 +18,11 @@ SOURCE = ROOT / "scripts" / "cloudflare_rdc_operator.py"
 INSTALLED = Path("/usr/local/sbin/rpi5-cloudflare")
 RELEASE_DIR = Path("/usr/local/libexec/rpi5-cloudflare")
 RELEASE_METADATA = RELEASE_DIR / "release.json"
+OPERATOR_STAGE = Path("/usr/local/sbin/rpi5-cloudflare.next")
+RELEASE_METADATA_STAGE = RELEASE_DIR / "release.json.next"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 CONFIRM_TEXT = "INSTALL-CLOUDFLARE-RDC-OPERATOR"
+UPGRADE_CONFIRM_TEXT = "UPGRADE-CLOUDFLARE-RDC-OPERATOR"
 SUDO = "/usr/bin/sudo"
 INSTALL = "/usr/bin/install"
 PYTHON = "/usr/bin/python3"
