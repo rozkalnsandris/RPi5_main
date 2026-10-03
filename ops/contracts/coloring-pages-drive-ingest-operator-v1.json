@@ -31,7 +31,7 @@
     "remote": "gdrive",
     "root_folder_id": "1F0pxqoRgtZl7JQVcyvYVZxKvx6eOnytn",
     "pending_subdirectory": "pending",
-    "config_path": "/home/andris/.config/rclone/rclone.conf",
+    "config_path": "$OWNER_HOME/.config/rclone/rclone.conf",
     "config_expected_identity": "root:andris:0600",
     "config_content_read_or_emit_allowed": false,
     "listing_command": "lsf",
