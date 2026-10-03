@@ -119,7 +119,14 @@
         "persistent_content_host_path": "/srv/coloring-pages-content/public",
         "persistent_content_container_path": "/var/lib/coloring-pages/public",
         "persistent_content_read_only": true,
-        "persistent_content_create_host_path": false
+        "persistent_content_create_host_path": false,
+        "importer_operator_issue": 858,
+        "importer_operator_contract": "ops/contracts/coloring-pages-importer-operator-v1.json",
+        "importer_consumer_revision": "ab8f874f681fb2adb6f18f4a7c8066b44ace443b",
+        "importer_image_digest": "sha256:5f61560cb674224052bc3ab8ca086c7997930027459f6c2648714d12c60af796",
+        "importer_installed_path": "/usr/local/bin/coloring-pages-import",
+        "importer_execution_owner": "andris",
+        "importer_auto_pull": false
       }
     ]
   },
