@@ -152,7 +152,9 @@ class IngressRegistryV1Tests(unittest.TestCase):
         self.assertEqual(coloring["access_class"], "NONE")
         self.assertEqual(coloring["lan_break_glass"], "forbidden")
         self.assertIn("hostname: coloring.rozkalns.net", self.hostname_policy)
-        self.assertIn("audit_route_presence: absent", self.hostname_policy)
+        self.assertIn("access_application_scope: exact-public-bypass", self.hostname_policy)
+        self.assertIn("audit_route_presence: present", self.hostname_policy)
+        self.assertIn("Removing or widening the existing wildcard is explicitly not part", self.doc)
 
     def test_newer_hostname_policy_explicitly_resolves_hermes_zone(self) -> None:
         hermes = next(
