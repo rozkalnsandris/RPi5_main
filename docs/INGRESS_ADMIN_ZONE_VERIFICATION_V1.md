@@ -53,6 +53,31 @@ A later read-only verification must classify each ADMIN hostname into one of:
 
 Only the source-projected expected class can PASS. A broad wildcard, persistent bypass, missing Access boundary or ambiguous inheritance is drift and must not be repaired under verification authority.
 
+## Route-origin Tunnel-read capability boundary
+
+The Phase 4 route-origin audit needs two Cloudflare Tunnel GET surfaces:
+
+- `GET /accounts/{account_id}/cfd_tunnel`;
+- `GET /accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations`.
+
+Current Cloudflare API documentation lists Tunnel/Connector read permissions for both surfaces, including `Cloudflare Tunnel Read`.
+
+Official references:
+
+- https://developers.cloudflare.com/api/resources/zero_trust/subresources/tunnels/subresources/cloudflared/methods/list/
+- https://developers.cloudflare.com/api/resources/zero_trust/subresources/tunnels/subresources/cloudflared/subresources/configurations/methods/get/
+
+The existing GitHub `P1D03` capability contract is **not reusable** for this purpose. Its reviewed GET surface is Cloudflare Access only; it does not establish Tunnel or Connector read authority. Reusing its account/token secrets for Tunnel discovery would silently widen the credential trust boundary.
+
+Therefore `route_origin_runtime_capability.status` is currently `unbound`. While it is unbound:
+
+- the route-origin workflow injects no Cloudflare credential secret;
+- the auditor exits `BLOCKED` with only the sanitized classes `capability_requirement=tunnel-read` and `capability_binding=unbound`;
+- no Cloudflare API request is attempted;
+- no account ID, tunnel ID, token, private route coordinate or raw provider payload is emitted.
+
+Changing this state to a usable Tunnel-read binding requires a **separate owner-authorized source change** that names the reviewed capability contract. Provisioning a secret or changing token permissions is an additional separate owner gate. Merely changing `status` to `bound` is insufficient: the current auditor intentionally has no credential wiring and fails closed as `not-wired` until that wiring is reviewed.
+
 ## Two runtime authority gates
 
 ### A. Unauthenticated / infrastructure verification

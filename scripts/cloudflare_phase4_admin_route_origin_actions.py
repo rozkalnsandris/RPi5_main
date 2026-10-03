@@ -25,7 +25,15 @@ CONTRACT_PATH = Path("ops/contracts/admin-zone-verification-v1.json")
 EXPECTED_TUNNEL_NAME = "rpi5-tunnel"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 ALLOWED_CLASSES = {"lan", "loopback", "other", "unknown"}
-ALLOWED_FAILURE_CLASSES = {"permission", "tunnel_lookup", "configuration", "mapping", "binding", "unknown"}
+ALLOWED_FAILURE_CLASSES = {
+    "capability_binding",
+    "permission",
+    "tunnel_lookup",
+    "configuration",
+    "mapping",
+    "binding",
+    "unknown",
+}
 ALLOWED_TUNNEL_LOOKUP_DETAILS = {"http_error", "api_unsuccessful", "request_failed", "response_shape", "ambiguous", "id_invalid", "unknown"}
 ALLOWED_TUNNEL_LOOKUP_MATCH_STATES = {"none", "multiple", "unknown"}
 
@@ -51,7 +59,43 @@ def _load_contract(path: Path = CONTRACT_PATH) -> dict[str, Any]:
             raise AuditError("contract_projection_invalid")
         if item.get("expected_origin_class") not in {"lan", "loopback"}:
             raise AuditError("contract_origin_class_invalid")
+    capability = decoded.get("route_origin_runtime_capability")
+    if not isinstance(capability, dict):
+        raise AuditError("route_origin_capability_contract_missing")
     return decoded
+
+
+def _require_tunnel_read_capability(contract: dict[str, Any]) -> None:
+    capability = contract.get("route_origin_runtime_capability")
+    if not isinstance(capability, dict):
+        raise AuditError("route_origin_capability_contract_missing")
+
+    required_surfaces = capability.get("required_get_surfaces")
+    expected_surfaces = [
+        "/accounts/{account_id}/cfd_tunnel",
+        "/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations",
+    ]
+    if required_surfaces != expected_surfaces:
+        raise AuditError("route_origin_capability_contract_invalid")
+    if capability.get("required_cloudflare_permission") != "Cloudflare Tunnel Read":
+        raise AuditError("route_origin_capability_contract_invalid")
+    if capability.get("existing_p1d03_access_lane_reusable") is not False:
+        raise AuditError("route_origin_capability_contract_invalid")
+    if capability.get("secret_or_permission_provisioning_authorized_here") is not False:
+        raise AuditError("route_origin_capability_contract_invalid")
+
+    status = capability.get("status")
+    if status == "unbound":
+        if capability.get("runtime_execution_allowed") is not False:
+            raise AuditError("route_origin_capability_contract_invalid")
+        raise AuditError("tunnel_read_capability_unbound")
+    if status != "bound":
+        raise AuditError("route_origin_capability_contract_invalid")
+    if capability.get("runtime_execution_allowed") is not True:
+        raise AuditError("route_origin_capability_contract_invalid")
+    binding_ref = capability.get("binding_contract_ref")
+    if not isinstance(binding_ref, str) or not binding_ref:
+        raise AuditError("route_origin_capability_contract_invalid")
 
 
 def _unknown_report(
@@ -74,6 +118,14 @@ def _unknown_report(
             for item in contract["service_projections"]
         ],
     }
+    if failure_class == "capability_binding":
+        report["capability_requirement"] = "tunnel-read"
+        capability = contract.get("route_origin_runtime_capability", {})
+        report["capability_binding"] = (
+            "unbound"
+            if isinstance(capability, dict) and capability.get("status") == "unbound"
+            else "not-wired"
+        )
     if failure_class == "tunnel_lookup":
         if tunnel_lookup_detail not in ALLOWED_TUNNEL_LOOKUP_DETAILS:
             tunnel_lookup_detail = "unknown"
@@ -88,7 +140,13 @@ def _unknown_report(
 def _failure_class(stage: str, exc: Exception) -> str:
     if isinstance(exc, AuditError) and str(exc) in {"cloudflare_api_http_401", "cloudflare_api_http_403"}:
         return "permission"
-    if stage in {"tunnel_lookup", "configuration", "mapping", "binding"}:
+    if stage in {
+        "capability_binding",
+        "tunnel_lookup",
+        "configuration",
+        "mapping",
+        "binding",
+    }:
         return stage
     return "unknown"
 
@@ -248,6 +306,8 @@ def main() -> int:
     stage = "unknown"
     try:
         contract = _load_contract()
+        stage = "capability_binding"
+        _require_tunnel_read_capability(contract)
         stage = "binding"
         if os.environ.get("GITHUB_ACTIONS") != "true":
             raise AuditError("github_actions_required")
@@ -291,27 +351,8 @@ def main() -> int:
         finally:
             github_token = ""
 
-        account_id = os.environ.pop("CLOUDFLARE_P1D03_ACCOUNT_ID", "")
-        read_token = os.environ.pop("CLOUDFLARE_P1D03_READ_API_TOKEN", "")
-        try:
-            if not ACCOUNT_ID_RE.fullmatch(account_id):
-                raise AuditError("account_binding_invalid")
-            _validate_token(read_token)
-            client = CloudflareGetClient(read_token, DEFAULT_API_BASE)
-            stage = "tunnel_lookup"
-            tunnel_id = _list_tunnel(client, account_id)
-            stage = "configuration"
-            config = _get_config(client, account_id, tunnel_id)
-            read_token = ""
-            account_id = ""
-            tunnel_id = ""
-            stage = "mapping"
-            report = build_report(contract, config)
-            print(json.dumps(report, indent=2, sort_keys=True))
-            return 0 if report["result"] == "PASS" else 3
-        finally:
-            read_token = ""
-            account_id = ""
+        stage = "capability_binding"
+        raise AuditError("tunnel_read_capability_binding_not_implemented")
     except (AuditError, json.JSONDecodeError, OSError) as exc:
         failure_class = _failure_class(stage, exc)
         tunnel_lookup_detail = (
