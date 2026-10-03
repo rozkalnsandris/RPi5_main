@@ -1,0 +1,228 @@
+{
+  "schema": "rozkalns.rpi5-main.private-zone-verification.v1",
+  "schema_version": 1,
+  "status": "source-verification-contract",
+  "roadmap_issue": 60,
+  "implementation_issue": 866,
+  "registry_ref": "ops/contracts/ingress-registry-v1.json",
+  "hostname_policy_ref": "ops/contracts/cloudflare-hostname-policy.yaml",
+  "authority": {
+    "source_merge_proves_runtime_state": false,
+    "source_merge_authorizes_runtime_verification": false,
+    "source_merge_authorizes_protected_private_verification": false,
+    "source_merge_authorizes_cloudflare_write": false,
+    "source_merge_authorizes_live_mutation": false,
+    "external_verification_requires_fresh_owner_authorization": true,
+    "host_verification_requires_fresh_owner_authorization": true,
+    "protected_private_verification_requires_separate_owner_authorization": true,
+    "remediation_requires_separate_issue_and_owner_authorization": true
+  },
+  "private_service_selection": {
+    "source": "registry-zone-filter",
+    "zone": "PRIVATE",
+    "expected_service_ids": [
+      "hermes-deals"
+    ],
+    "expected_hostnames": [
+      "deals.rozkalns.net"
+    ]
+  },
+  "policy_semantics": {
+    "registry_access_class": "PRIVATE",
+    "hostname_policy_trust_class": "FAMILY_PRIVATE",
+    "expected_access_application_scope": "exact-or-narrow-family",
+    "public_inheritance_allowed": false,
+    "admin_scope_overlap_allowed": false,
+    "persistent_bypass_allowed": false,
+    "alternate_public_bypass_allowed": false,
+    "unauthenticated_external_expected": [
+      "access-challenge",
+      "denied"
+    ],
+    "authorized_private_result_values": [
+      "PASS",
+      "FAIL",
+      "UNKNOWN"
+    ],
+    "protected_identity_material_in_evidence_allowed": false
+  },
+  "service_projections": [
+    {
+      "service_id": "hermes-deals",
+      "hostname": "deals.rozkalns.net",
+      "expected_access_application_scope": "exact-or-narrow-family",
+      "expected_origin_class": "loopback",
+      "lan_break_glass": "forbidden",
+      "runtime_owner": "rozkalnsandris/RPi5_main",
+      "repository_owner": "rozkalnsandris/hermes-deals",
+      "recovery_ref": "docs/V19_DEALS_CLOUDFLARE_ROUTE_CUTOVER.md"
+    }
+  ],
+  "external_verifier": {
+    "workflow": ".github/workflows/cloudflare-phase5-private-external.yml",
+    "entrypoint": "scripts/cloudflare_phase5_private_external_actions.py",
+    "owner_command": "/rpi5-p5-private-external check HEAD=<exact-main-sha> CANARY=phase5-private-external-v1",
+    "access_state_source": "existing P1D03 GET-only Access lane",
+    "cloudflare_methods": [
+      "GET"
+    ],
+    "response_body_read_allowed": false,
+    "redirect_following_allowed": false,
+    "request_cookie_allowed": false,
+    "authorization_header_allowed": false,
+    "custom_api_base_allowed": false
+  },
+  "route_origin_verifier": {
+    "existing_workflow": ".github/workflows/deals-9128-route-cutover.yml",
+    "existing_entrypoint": "scripts/cloudflare_deals_route.py",
+    "canonical_issue": 61,
+    "allowed_phase5_operation": "verify-loopback",
+    "owner_command": "/rpi5-61 verify",
+    "expected_route_state": "loopback",
+    "config_mutation_allowed_during_verify": false,
+    "new_tunnel_credential_consumer_created": false
+  },
+  "host_verifier": {
+    "entrypoint": "scripts/phase5_private_host_isolation.py",
+    "execution_surface": "owner-authorized-rpi5-read-only",
+    "root_required": false,
+    "allowed_commands": [
+      "git rev-parse HEAD",
+      "git diff --quiet",
+      "git diff --cached --quiet",
+      "ip -j -4 route get 1.1.1.1",
+      "ss -H -lnt"
+    ],
+    "tcp_probe": "socket.create_connection to locally discovered primary LAN address only",
+    "probe_port": 9128,
+    "probe_port_source_ref": "docs/V19_DEALS_CLOUDFLARE_ROUTE_CUTOVER.md",
+    "expected_listener_bind_class": "loopback",
+    "expected_lan_path_class": "absent",
+    "forbidden_commands_or_reads": [
+      "docker",
+      "systemctl",
+      "journalctl",
+      "ufw",
+      "nft",
+      "iptables",
+      "process-environment",
+      "container-environment",
+      "application-config",
+      "application-logs",
+      "application-data",
+      "cloudflare-credentials"
+    ]
+  },
+  "protected_authorized_private": {
+    "entrypoint": "scripts/phase5_private_authorized_path_receipt.py",
+    "execution_surface": "owner-operated-normal-browser-plus-sanitized-receipt",
+    "browser_context": "owner-operated-normal-browser",
+    "allowed_result_values": [
+      "PASS",
+      "FAIL",
+      "UNKNOWN"
+    ],
+    "agent_or_operator_may_handle_credentials": false,
+    "browser_profile_read_allowed": false,
+    "cookie_or_session_material_read_allowed": false,
+    "response_content_persistence_allowed": false
+  },
+  "evidence_schema": {
+    "schema": "rozkalns.rpi5-main.private-zone-verification-evidence.v1",
+    "allowed_verification_classes": [
+      "unauthenticated-external",
+      "route-origin",
+      "host-isolation",
+      "protected-authorized-private"
+    ],
+    "allowed_service_fields": [
+      "service_id",
+      "hostname",
+      "access_scope_class",
+      "unauthenticated_external_class",
+      "authorized_private_result",
+      "route_origin_class",
+      "listener_bind_class",
+      "lan_path_class",
+      "alternate_public_bypass_present",
+      "admin_or_public_scope_overlap_present",
+      "runtime_owner_matches",
+      "recovery_ref_present",
+      "result"
+    ],
+    "allowed_access_scope_classes": [
+      "exact-or-narrow-family",
+      "broader-than-private",
+      "missing",
+      "unknown"
+    ],
+    "allowed_unauthenticated_classes": [
+      "access-challenge",
+      "denied",
+      "public",
+      "network-error",
+      "unknown"
+    ],
+    "allowed_origin_classes": [
+      "loopback",
+      "lan",
+      "other",
+      "unknown"
+    ],
+    "allowed_bind_classes": [
+      "loopback",
+      "lan",
+      "wildcard",
+      "mixed",
+      "other",
+      "none",
+      "unknown"
+    ],
+    "allowed_lan_path_classes": [
+      "present",
+      "absent",
+      "unknown"
+    ],
+    "allowed_result_values": [
+      "PASS",
+      "FAIL",
+      "UNKNOWN"
+    ],
+    "forbidden_evidence": [
+      "response-content",
+      "request-or-response-cookies",
+      "authorization-material",
+      "identity-values",
+      "session-material",
+      "credential-values",
+      "token-values",
+      "account-identifiers",
+      "tunnel-identifiers",
+      "access-audience-values",
+      "private-origin-coordinates",
+      "listener-addresses",
+      "ports",
+      "process-environments",
+      "application-config",
+      "application-logs",
+      "application-data",
+      "database-content"
+    ]
+  },
+  "pass_criteria": {
+    "access_scope_class": "exact-or-narrow-family",
+    "unauthenticated_external_class": [
+      "access-challenge",
+      "denied"
+    ],
+    "authorized_private_result": "PASS",
+    "route_origin_class": "loopback",
+    "listener_bind_class": "loopback",
+    "lan_path_class": "absent",
+    "alternate_public_bypass_present": false,
+    "admin_or_public_scope_overlap_present": false,
+    "runtime_owner_matches": true,
+    "recovery_ref_present": true,
+    "overall_result": "PASS"
+  }
+}

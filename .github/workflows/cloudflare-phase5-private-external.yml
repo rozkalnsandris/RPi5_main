@@ -1,0 +1,62 @@
+name: Phase 5 PRIVATE external GET-only
+on:
+  issue_comment:
+    types: [created]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: phase5-private-external-getonly
+  cancel-in-progress: false
+jobs:
+  authorize:
+    name: Authorize exact owner Phase 5 PRIVATE external command
+    if: github.event.issue.pull_request == null && github.event.issue.number == 866 && startsWith(github.event.comment.body, '/rpi5-p5-private-external ')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      expected_sha: ${{ steps.authorize.outputs.expected_sha }}
+      canary: ${{ steps.authorize.outputs.canary }}
+    steps:
+      - name: Checkout default-branch authorizer
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Validate exact owner command
+        id: authorize
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/github_phase5_private_external_bridge.py
+  audit:
+    name: Run Phase 5 PRIVATE external GET-only audit
+    needs: authorize
+    if: needs.authorize.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout exact authorized main source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ needs.authorize.outputs.expected_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Run bounded PRIVATE Access and anonymous-edge audit
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PHASE5_EXPECTED_SHA: ${{ needs.authorize.outputs.expected_sha }}
+          PHASE5_PRIVATE_CANARY: ${{ needs.authorize.outputs.canary }}
+          CLOUDFLARE_P1D03_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_P1D03_ACCOUNT_ID }}
+          CLOUDFLARE_P1D03_READ_API_TOKEN: ${{ secrets.CLOUDFLARE_P1D03_READ_API_TOKEN }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          python3 scripts/cloudflare_phase5_private_external_actions.py
