@@ -1,0 +1,79 @@
+{
+  "schema": "rozkalns.rpi5-main.phase4-admin-protected-authorized-verifier.v1",
+  "schema_version": 1,
+  "status": "source-defined",
+  "implementation_issue": 819,
+  "admin_contract_ref": "ops/contracts/admin-zone-verification-v1.json",
+  "browser_sso_contract_ref": "ops/contracts/cloudflare-p1d-browser-sso.json",
+  "authority": {
+    "source_merge_proves_runtime_state": false,
+    "source_merge_authorizes_execution": false,
+    "source_merge_authorizes_protected_session_access": false,
+    "source_merge_authorizes_live_mutation": false,
+    "execution_requires_fresh_owner_authorization": true
+  },
+  "protected_access_mechanism": {
+    "class": "standard-cloudflare-access-browser-sso",
+    "source_ref": "ops/contracts/cloudflare-p1d-browser-sso.json",
+    "identity_policy": "exact-owner-identity-kept-private",
+    "browser_context": "owner-operated-normal-browser",
+    "owner_may_complete_interactive_authentication": true,
+    "agent_or_operator_may_handle_credentials": false,
+    "browser_profile_read_allowed": false,
+    "cookie_or_session_material_read_allowed": false,
+    "developer_tools_or_network_export_required": false
+  },
+  "manual_canary": {
+    "target_source": "admin-zone-verification-v1.service_projections",
+    "expected_service_count": 8,
+    "entrypoint": "scripts/phase4_admin_authorized_path_receipt.py",
+    "submission_transport": "stdin-json",
+    "required_top_level_fields": [
+      "source_main_sha",
+      "services"
+    ],
+    "required_service_fields": [
+      "service_id",
+      "hostname",
+      "authorized_admin_result"
+    ],
+    "allowed_result_values": [
+      "PASS",
+      "FAIL",
+      "UNKNOWN"
+    ],
+    "pass_definition": "owner confirms the intended ADMIN application is reachable through the normal Cloudflare Access browser path; no protected response content is copied into evidence",
+    "fail_definition": "owner confirms the authorized path does not reach the intended ADMIN application",
+    "unknown_definition": "the path cannot be safely determined within the protected-data boundary"
+  },
+  "sanitized_output": {
+    "verification_class": "protected-authorized-admin",
+    "allowed_service_fields": [
+      "service_id",
+      "hostname",
+      "authorized_admin_result",
+      "result"
+    ],
+    "forbidden_evidence": [
+      "response-content",
+      "request-or-response-cookies",
+      "authorization-material",
+      "identity-values",
+      "session-material",
+      "credential-values",
+      "token-values",
+      "access-audience-values",
+      "browser-profile-data",
+      "developer-tools-export",
+      "application-config",
+      "application-logs",
+      "application-data"
+    ]
+  },
+  "completion": {
+    "every_admin_service_required": true,
+    "every_authorized_admin_result_required": "PASS",
+    "overall_result_required": "PASS",
+    "fail_or_unknown_blocks_phase4_completion": true
+  }
+}
