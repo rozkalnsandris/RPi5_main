@@ -82,6 +82,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--id", required=True, dest="page_id")
     parser.add_argument("--expected-sha256", required=True)
     parser.add_argument("--expected-size", required=True, type=int)
+    parser.add_argument(
+        "--resume-preserved",
+        action="store_true",
+        help="resume only from an already-preserved manifest+inbox state",
+    )
     return parser.parse_args(argv)
 
 
@@ -631,57 +636,104 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"SHA256={args.expected_sha256}")
                 return 0
 
-            if os.path.lexists(manifest_final):
-                fail("preserved manifest exists without a success receipt")
-            if os.path.lexists(inbox_path):
-                fail("inbox id already exists")
-            if os.path.lexists(ORIGINALS_ROOT / page_id):
-                fail("original id already exists")
-            if os.path.lexists(MEDIA_ROOT / page_id):
-                fail("public media id already exists")
-            if any(entry.get("id") == page_id for entry in catalog_entries()):
-                fail("catalog id already exists")
-
-            list_pending_once(image_name, manifest_name)
-
-            secure_stream(
-                manifest_remote,
-                manifest_partial,
-                owner_uid=owner_uid,
-                owner_gid=owner_gid,
-            )
-            manifest_st = manifest_partial.lstat()
-            if manifest_st.st_size > MAX_MANIFEST_BYTES:
-                fail("manifest exceeds the allowed size")
-            raw_manifest = load_json(manifest_partial, max_bytes=MAX_MANIFEST_BYTES)
-            metadata = validate_manifest(
-                raw_manifest,
-                expected_id=page_id,
-                expected_sha256=args.expected_sha256,
-                expected_size=args.expected_size,
+            original_path = ORIGINALS_ROOT / page_id
+            media_path = MEDIA_ROOT / page_id
+            catalog_has_id = any(
+                entry.get("id") == page_id for entry in catalog_entries()
             )
 
-            secure_stream(
-                image_remote,
-                image_partial,
-                owner_uid=owner_uid,
-                owner_gid=owner_gid,
-            )
-            image_st = image_partial.lstat()
-            if image_st.st_size != args.expected_size:
-                fail("downloaded source size mismatch")
-            if sha256_file(image_partial) != args.expected_sha256:
-                fail("downloaded source sha256 mismatch")
+            if args.resume_preserved:
+                if not os.path.lexists(manifest_final):
+                    fail("resume requires preserved manifest")
+                if not os.path.lexists(inbox_path):
+                    fail("resume requires preserved inbox source")
+                if os.path.lexists(original_path) or os.path.lexists(media_path) or catalog_has_id:
+                    fail("resume requires import outputs to be absent")
 
-            atomic_move_no_replace(manifest_partial, manifest_final)
-            atomic_move_no_replace(image_partial, inbox_path)
-            require_identity(
-                inbox_path,
-                uid=owner_uid,
-                gid=owner_gid,
-                mode=0o600,
-                directory=False,
-            )
+                require_identity(
+                    manifest_final,
+                    uid=owner_uid,
+                    gid=owner_gid,
+                    mode=0o600,
+                    directory=False,
+                )
+                inbox_st = require_identity(
+                    inbox_path,
+                    uid=owner_uid,
+                    gid=owner_gid,
+                    mode=0o600,
+                    directory=False,
+                )
+                if inbox_st.st_size != args.expected_size:
+                    fail("preserved source size mismatch")
+                if sha256_file(inbox_path) != args.expected_sha256:
+                    fail("preserved source sha256 mismatch")
+
+                raw_manifest = load_json(
+                    manifest_final,
+                    max_bytes=MAX_MANIFEST_BYTES,
+                )
+                metadata = validate_manifest(
+                    raw_manifest,
+                    expected_id=page_id,
+                    expected_sha256=args.expected_sha256,
+                    expected_size=args.expected_size,
+                )
+            else:
+                if os.path.lexists(manifest_final):
+                    fail("preserved manifest exists without a success receipt")
+                if os.path.lexists(inbox_path):
+                    fail("inbox id already exists")
+                if os.path.lexists(original_path):
+                    fail("original id already exists")
+                if os.path.lexists(media_path):
+                    fail("public media id already exists")
+                if catalog_has_id:
+                    fail("catalog id already exists")
+
+                list_pending_once(image_name, manifest_name)
+
+                secure_stream(
+                    manifest_remote,
+                    manifest_partial,
+                    owner_uid=owner_uid,
+                    owner_gid=owner_gid,
+                )
+                manifest_st = manifest_partial.lstat()
+                if manifest_st.st_size > MAX_MANIFEST_BYTES:
+                    fail("manifest exceeds the allowed size")
+                raw_manifest = load_json(
+                    manifest_partial,
+                    max_bytes=MAX_MANIFEST_BYTES,
+                )
+                metadata = validate_manifest(
+                    raw_manifest,
+                    expected_id=page_id,
+                    expected_sha256=args.expected_sha256,
+                    expected_size=args.expected_size,
+                )
+
+                secure_stream(
+                    image_remote,
+                    image_partial,
+                    owner_uid=owner_uid,
+                    owner_gid=owner_gid,
+                )
+                image_st = image_partial.lstat()
+                if image_st.st_size != args.expected_size:
+                    fail("downloaded source size mismatch")
+                if sha256_file(image_partial) != args.expected_sha256:
+                    fail("downloaded source sha256 mismatch")
+
+                atomic_move_no_replace(manifest_partial, manifest_final)
+                atomic_move_no_replace(image_partial, inbox_path)
+                require_identity(
+                    inbox_path,
+                    uid=owner_uid,
+                    gid=owner_gid,
+                    mode=0o600,
+                    directory=False,
+                )
 
             run_importer(
                 inbox_path,
