@@ -250,14 +250,31 @@
       "alternate_public_bypass_present": false,
       "runtime_owner_matches": true,
       "recovery_ref_present": true,
-      "result": "PASS"
+      "result": "PASS",
+      "listener_bind_class": "matches-origin-and-bind-policy"
     },
     "overall_result": "PASS"
   },
   "runtime_gates": {
     "unauthenticated_infrastructure": {
       "separately_authorized": true,
-      "protected_identity_context_allowed": false
+      "protected_identity_context_allowed": false,
+      "remaining_infra_verifier": {
+        "contract_ref": "ops/contracts/admin-zone-remaining-infra-verifier-v1.json",
+        "external_workflow": ".github/workflows/cloudflare-phase4-admin-remaining-infra.yml",
+        "external_entrypoint": "scripts/cloudflare_phase4_admin_remaining_infra_actions.py",
+        "host_entrypoint": "scripts/cloudflare_phase4_admin_remaining_infra_host.py",
+        "covered_assertions": [
+          "unauthenticated_external_class",
+          "listener_bind_class",
+          "lan_path_class",
+          "runtime_owner_matches",
+          "alternate_public_bypass_present",
+          "recovery_ref_present"
+        ],
+        "external_and_host_execution_each_require_fresh_owner_authorization": true,
+        "protected_admin_context_allowed": false
+      }
     },
     "protected_authorized_admin": {
       "separately_authorized": true,
