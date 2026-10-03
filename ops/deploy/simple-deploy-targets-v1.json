@@ -136,7 +136,7 @@
       "compose": {
         "project": "coloring-pages-public",
         "file": "coloring-pages-public.yml",
-        "file_sha256": "77c71da44896b393002b7a13449d6fbaca76b38c6d982580d23156b674fe2941",
+        "file_sha256": "142c30bdd1080de90360f287e5b6fae27611c535caef0a41a09a998528bcbbc2",
         "service": "coloring-pages"
       },
       "health": {
@@ -146,7 +146,9 @@
       },
       "wait_timeout_seconds": 180,
       "receipt_name": "coloring-pages-public-rpi5.json",
-      "persistent_volumes": [],
+      "persistent_volumes": [
+        "coloring_pages_content"
+      ],
       "registry_pull_profile": "public-anonymous-pull",
       "forbidden_operations": [
         "database-schema-data-mutation",
