@@ -242,6 +242,7 @@ class Phase4AdminRouteOriginTests(unittest.TestCase):
             self.operator["schema"],
             "rozkalns.rpi5-main.cloudflare-tunnel-operator.v1",
         )
+        self.assertEqual(self.operator["status"], "source-defined")
         self.assertEqual(
             credential["cloudflare_permission"],
             "Cloudflare Tunnel Write",
