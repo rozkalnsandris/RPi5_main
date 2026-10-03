@@ -124,6 +124,41 @@ The installer may create only:
 
 It does not install or modify sudoers. It uses the host's already-authorized sudo transport and fails closed if non-interactive sudo is unavailable. After the first install mutation, any command or verification error is `STOP_ERROR`; there is no retry, overwrite, removal or rollback.
 
+## Reviewed exact-release operator upgrade
+
+An already-installed operator is never overwritten by the initial-install path. A reviewed upgrade requires both the new exact checkout SHA and the exact currently installed release SHA.
+
+Read-only upgrade preflight:
+
+```bash
+python3 scripts/install-cloudflare-rdc-operator.py \
+  --expected-main <40-character-new-reviewed-main> \
+  --upgrade-from <40-character-exact-installed-release>
+```
+
+A later exact LIVE authorization may add:
+
+```bash
+python3 scripts/install-cloudflare-rdc-operator.py \
+  --expected-main <40-character-new-reviewed-main> \
+  --upgrade-from <40-character-exact-installed-release> \
+  --apply \
+  --confirm UPGRADE-CLOUDFLARE-RDC-OPERATOR
+```
+
+Preflight requires a clean canonical `main` checkout at the new SHA and validates, without reading any Cloudflare secret, that the installed operator is `root:root 0500`, release directory is `root:root 0700`, release metadata is `root:root 0400`, metadata `source_sha` equals the exact `--upgrade-from` SHA, and the installed operator SHA-256 equals the metadata hash.
+
+The apply path dispatches one fixed root helper. Immediately before its first mutation, that helper revalidates the exact old release and fixed paths. New operator and metadata bytes are staged only at:
+
+```text
+/usr/local/sbin/rpi5-cloudflare.next
+/usr/local/libexec/rpi5-cloudflare/release.json.next
+```
+
+Both staged files are hash/mode validated before atomic replacement of the installed operator and release metadata. Existing stage files block the upgrade. If the root helper is dispatched and returns any error, the installer reports `STOP_ERROR`; there is no retry, delete, cleanup or rollback. A partially completed replacement is therefore deliberately fail-closed and requires a new owner decision.
+
+The upgrade path does not modify sudoers, read or write Cloudflare credentials, or call Cloudflare APIs.
+
 ## Local Access secret provisioning
 
 After the exact reviewed operator is installed, secret provisioning is performed by that **installed root-owned operator**, not by repository Python and not through an RDC payload.
@@ -136,7 +171,15 @@ sudo -n /usr/local/sbin/rpi5-cloudflare provision-access-secret \
   --confirm PROVISION-CLOUDFLARE-ACCESS-SECRET
 ```
 
-This command must be launched from a human-controlled local/SSH terminal with a controlling TTY. It prompts with terminal echo disabled for:
+This command must be launched from a human-controlled local/SSH terminal with a controlling TTY. Before prompting, the operator opens `/dev/tty` with the low-level `os.open` interface and requires `os.isatty` to pass. It then calls Python's native `getpass.getpass()` **without a custom stream**, allowing the standard library to use the controlling terminal itself. Any `GetPassWarning`, EOF, keyboard interruption or TTY error is converted to `local_tty_required`; echoed `sys.stdin` fallback is never accepted.
+
+This matches Python's documented Unix behavior: with `stream=None`, `getpass` uses the controlling terminal (`/dev/tty`) and issues `GetPassWarning` if echo-free input cannot be provided.
+
+Official reference:
+
+- https://docs.python.org/3.12/library/getpass.html
+
+It prompts with terminal echo disabled for:
 
 1. Cloudflare account ID;
 2. the one-time API token created with **only** `Access: Apps and Policies Write`.
