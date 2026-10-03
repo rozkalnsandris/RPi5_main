@@ -8,7 +8,7 @@
     "ingestion_contract_path": "deploy/chat-to-drive-ingestion.json",
     "importer_operator_contract": "ops/contracts/coloring-pages-importer-operator-v1.json",
     "importer_installed_path": "/usr/local/bin/coloring-pages-import",
-    "importer_source_blob_sha": "83f6a25918bb377a407c3fe264b825327172f9e3"
+    "importer_source_blob_sha": "d07c5a38eb9920b9209dc5719918a6a4cc938305"
   },
   "operator": {
     "source": "ops/bin/coloring-pages-drive-ingest",
@@ -112,7 +112,7 @@
   "import": {
     "invokes_existing_importer_operator": true,
     "installed_path": "/usr/local/bin/coloring-pages-import",
-    "exact_git_blob_sha_required": "83f6a25918bb377a407c3fe264b825327172f9e3",
+    "exact_git_blob_sha_required": "d07c5a38eb9920b9209dc5719918a6a4cc938305",
     "image_pull_allowed": false,
     "application_redeploy_required": false
   },
