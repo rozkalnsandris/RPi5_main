@@ -1,0 +1,50 @@
+name: Coloring Pages SIMPLE-DEPLOY alignment source
+
+on:
+  pull_request:
+    paths:
+      - "scripts/align-simple-deploy-coloring-pages-v1.py"
+      - "ops/contracts/simple-deploy-coloring-pages-alignment-v1.json"
+      - "ops/contracts/simple-deploy-host-v1.json"
+      - "ops/deploy/simple-deploy-targets-v1.json"
+      - "ops/deploy/simple-deploy-compose/coloring-pages-public.yml"
+      - "tests/test-simple-deploy-coloring-pages-alignment-v1.py"
+      - "docs/SIMPLE_DEPLOY_COLORING_PAGES_TARGET_V1.md"
+      - ".github/workflows/simple-deploy-coloring-pages-alignment-source.yml"
+      - "Makefile"
+  push:
+    branches:
+      - main
+    paths:
+      - "scripts/align-simple-deploy-coloring-pages-v1.py"
+      - "ops/contracts/simple-deploy-coloring-pages-alignment-v1.json"
+      - "ops/contracts/simple-deploy-host-v1.json"
+      - "ops/deploy/simple-deploy-targets-v1.json"
+      - "ops/deploy/simple-deploy-compose/coloring-pages-public.yml"
+      - "tests/test-simple-deploy-coloring-pages-alignment-v1.py"
+      - "docs/SIMPLE_DEPLOY_COLORING_PAGES_TARGET_V1.md"
+      - ".github/workflows/simple-deploy-coloring-pages-alignment-source.yml"
+      - "Makefile"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rpi5-main-coloring-pages-alignment-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate Coloring Pages alignment helper
+        run: |
+          python3 ./tests/test-simple-deploy-coloring-pages-alignment-v1.py
+          python3 ./tests/test-simple-deploy-coloring-pages-target-v1.py
+          python3 -m py_compile ./scripts/align-simple-deploy-coloring-pages-v1.py
