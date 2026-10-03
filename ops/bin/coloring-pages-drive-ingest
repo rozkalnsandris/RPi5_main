@@ -253,7 +253,11 @@ def check_mv_capabilities() -> None:
         text=True,
     )
     body = completed.stdout
-    if completed.returncode != 0 or "--no-copy" not in body or "--no-clobber" not in body:
+    if (
+        completed.returncode != 0
+        or "--no-target-directory" not in body
+        or "--no-clobber" not in body
+    ):
         fail("host mv lacks required rename safeguards")
 
 
@@ -351,7 +355,6 @@ def atomic_move_no_replace(source: Path, destination: Path) -> None:
     completed = subprocess.run(
         [
             MV,
-            "--no-copy",
             "--no-target-directory",
             "--no-clobber",
             str(source),
