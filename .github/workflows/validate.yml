@@ -121,68 +121,63 @@ jobs:
           print('GITHUB_API_ACCESS_ROLLOUT=PASS')
           PY
 
-      - name: Validate runner-smoke absent systemd unit observation
-        run: python3 ./tests/test-hermes-deals-runner-smoke-systemctl-state.py
+      - name: Validate targeted legacy regressions
+        env:
+          VALIDATE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
 
-      - name: Validate V12 WeatherNext bootstrap boundary
-        run: python3 ./tests/test-v12-weathernext-bootstrap.py
+          base="${VALIDATE_BASE:-}"
+          run_all=false
+          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
+            run_all=true
+            changed=""
+          else
+            changed="$(git diff --name-only "$base"...HEAD)"
+          fi
 
-      - name: Validate Weather v7 host capability installer
-        run: python3 ./tests/test-weather-operator-v7-host-capability-installer.py
+          run_runner_smoke=$run_all
+          run_weather_legacy=$run_all
 
-      - name: Validate Weather v7 sudo Git trust boundary
-        run: python3 ./tests/test-weather-v7-host-capability-sudo-git-trust.py
+          if [[ "$run_all" == false ]]; then
+            if grep -Eq '(^|/)(hermes-deals-runner-smoke|runner_smoke)|^ops/lib/deploy_executor/|^\.github/workflows/validate\.yml$' <<<"$changed"; then
+              run_runner_smoke=true
+            fi
+            if grep -Eiq '(^|/)(weather|weathernext)|^ops/lib/deploy_executor/|^scripts/rpi5_deploy\.py$|^\.github/workflows/validate\.yml$' <<<"$changed"; then
+              run_weather_legacy=true
+            fi
+          fi
 
-      - name: Validate Weather v7 installer source delivery
-        run: python3 ./tests/test-weather-v7-host-capability-installer-source-delivery.py
+          if [[ "$run_runner_smoke" == true ]]; then
+            python3 ./tests/test-hermes-deals-runner-smoke-systemctl-state.py
+          else
+            echo "runner-smoke legacy regression: not affected"
+          fi
 
-      - name: Validate Weather v7 identity-only dispatch caller
-        run: python3 ./tests/test-weather-operator-v7-dispatch-caller.py
-
-      - name: Validate Weather v7 broker registration Git trust repair
-        run: python3 ./tests/test-weather-v7-host-capability-registration-repair.py
-
-      - name: Validate Weather v7 home-access and authorization provenance repair
-        run: python3 ./tests/test-weather-v7-host-capability-home-access-repair.py
-
-      - name: Validate Weather v9 privileged delivery successor
-        run: python3 ./tests/test-weather-operator-v9-privileged-delivery.py
-
-      - name: Validate Weather v9 capability-local canonical operation
-        run: python3 ./tests/test-weather-operator-v9-canonical-operation.py
-
-      - name: Validate Weather v9 capability-state bootstrap recovery
-        run: python3 ./tests/test-weather-v9-capability-state-bootstrap.py
-
-      - name: Validate Weather v9 predecessor state bootstrap recovery
-        run: python3 ./tests/test-weather-v9-predecessor-state-bootstrap.py
-
-      - name: Validate Weather v9 predecessor bootstrap privileged execution
-        run: python3 ./tests/test-weather-v9-predecessor-bootstrap-privileged.py
-
-      - name: Validate Weather v9 predecessor preflight diagnostic
-        run: python3 ./tests/test-weather-v9-predecessor-bootstrap-preflight-diagnostic.py
-
-      - name: Validate Weather v9 predecessor bootstrap installed release imports
-        run: python3 ./tests/test-weather-v9-predecessor-bootstrap-release-imports.py
-
-      - name: Validate Weather v9 predecessor capability repair
-        run: python3 ./tests/test-weather-v9-predecessor-bootstrap-capability-repair.py
-
-      - name: Validate Weather v9 predecessor installer identity handling
-        run: python3 ./tests/test-weather-v9-predecessor-bootstrap-installer-identity.py
-
-      - name: Validate Weather v10 successor privileged broker bridge
-        run: python3 ./tests/test-weather-operator-v10-successor-broker.py
-
-      - name: Validate Weather v10 post-consume failure codes
-        run: python3 ./tests/test-weather-v10-post-consume-failure-codes.py
-
-      - name: Validate Weather v10 successor dispatch caller transport
-        run: python3 ./tests/test-weather-operator-v10-successor-dispatch-caller.py
-
-      - name: Validate Weather v10 successor dispatch caller refresh replacement
-        run: python3 ./tests/test-weather-operator-v10-successor-dispatch-caller-refresh.py
+          if [[ "$run_weather_legacy" == true ]]; then
+            python3 ./tests/test-v12-weathernext-bootstrap.py
+            python3 ./tests/test-weather-operator-v7-host-capability-installer.py
+            python3 ./tests/test-weather-v7-host-capability-sudo-git-trust.py
+            python3 ./tests/test-weather-v7-host-capability-installer-source-delivery.py
+            python3 ./tests/test-weather-operator-v7-dispatch-caller.py
+            python3 ./tests/test-weather-v7-host-capability-registration-repair.py
+            python3 ./tests/test-weather-v7-host-capability-home-access-repair.py
+            python3 ./tests/test-weather-operator-v9-privileged-delivery.py
+            python3 ./tests/test-weather-operator-v9-canonical-operation.py
+            python3 ./tests/test-weather-v9-capability-state-bootstrap.py
+            python3 ./tests/test-weather-v9-predecessor-state-bootstrap.py
+            python3 ./tests/test-weather-v9-predecessor-bootstrap-privileged.py
+            python3 ./tests/test-weather-v9-predecessor-bootstrap-preflight-diagnostic.py
+            python3 ./tests/test-weather-v9-predecessor-bootstrap-release-imports.py
+            python3 ./tests/test-weather-v9-predecessor-bootstrap-capability-repair.py
+            python3 ./tests/test-weather-v9-predecessor-bootstrap-installer-identity.py
+            python3 ./tests/test-weather-operator-v10-successor-broker.py
+            python3 ./tests/test-weather-v10-post-consume-failure-codes.py
+            python3 ./tests/test-weather-operator-v10-successor-dispatch-caller.py
+            python3 ./tests/test-weather-operator-v10-successor-dispatch-caller-refresh.py
+          else
+            echo "Weather legacy regressions: not affected"
+          fi
 
   gitleaks:
     runs-on: ubuntu-latest
