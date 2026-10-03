@@ -10,7 +10,12 @@
     "root_required_for_runtime": true,
     "caller_selected_command_forbidden": true,
     "caller_selected_secret_path_forbidden": true,
-    "exact_main_binding_required": true
+    "exact_main_binding_required": true,
+    "installer_source": "scripts/install-cloudflare-rdc-operator.py",
+    "installer_runs_as_root": false,
+    "installed_mode": "0500",
+    "release_metadata_mode": "0400",
+    "sudoers_mutation": false
   },
   "secret_lanes": {
     "access": {
@@ -18,7 +23,7 @@
       "path": "/etc/rpi5-secrets/cloudflare/access-writer.json",
       "owner": "root:root",
       "mode": "0600",
-      "cloudflare_permission": "Access: Apps and Policies Edit",
+      "cloudflare_permission": "Access: Apps and Policies Write",
       "scope": "account-only"
     },
     "tunnel": {
@@ -96,6 +101,75 @@
     "caller-provided API endpoint, command, path, hostname or request body",
     "secret values in argv, environment, logs, GitHub, chat or RDC output",
     "automatic retry",
-    "automatic rollback or cleanup after write uncertainty"
-  ]
+    "automatic rollback or cleanup after write uncertainty",
+    "token value via RDC",
+    "redundant sudoers rule for rpi5-cloudflare"
+  ],
+  "host_bootstrap": {
+    "install": {
+      "source": "scripts/install-cloudflare-rdc-operator.py",
+      "requires_clean_exact_main": true,
+      "requires_branch": "main",
+      "requires_canonical_origin": true,
+      "root_executes_repository_python": false,
+      "installed_paths": [
+        {
+          "path": "/usr/local/sbin/rpi5-cloudflare",
+          "owner": "root:root",
+          "mode": "0500"
+        },
+        {
+          "path": "/usr/local/libexec/rpi5-cloudflare",
+          "owner": "root:root",
+          "mode": "0700"
+        },
+        {
+          "path": "/usr/local/libexec/rpi5-cloudflare/release.json",
+          "owner": "root:root",
+          "mode": "0400"
+        }
+      ],
+      "sudoers_mutation": false,
+      "automatic_retry": false,
+      "automatic_rollback": false
+    },
+    "access_secret_provisioning": {
+      "action": "provision-access-secret",
+      "installed_entrypoint": "/usr/local/sbin/rpi5-cloudflare",
+      "input_channel": "hidden controlling TTY only",
+      "argv_secret_forbidden": true,
+      "environment_secret_forbidden": true,
+      "rdc_secret_input_forbidden": true,
+      "cloudflare_token_creation": false,
+      "required_token_scope": "Access: Apps and Policies Write only",
+      "scope_absence_proof": "owner creation contract; helper verifies token active and Access API reachable but does not claim to prove absence of undisclosed additional permissions",
+      "read_only_cloudflare_preflight": [
+        "GET /user/tokens/verify reports active",
+        "GET /accounts/{account_id}/access/apps succeeds"
+      ],
+      "filesystem": [
+        {
+          "path": "/etc/rpi5-secrets",
+          "owner": "root:root",
+          "mode": "0700",
+          "kind": "directory-if-absent"
+        },
+        {
+          "path": "/etc/rpi5-secrets/cloudflare",
+          "owner": "root:root",
+          "mode": "0700",
+          "kind": "directory-if-absent"
+        },
+        {
+          "path": "/etc/rpi5-secrets/cloudflare/access-writer.json",
+          "owner": "root:root",
+          "mode": "0600",
+          "kind": "exclusive-create"
+        }
+      ],
+      "overwrite_existing_secret": false,
+      "automatic_retry": false,
+      "automatic_rollback_or_cleanup_after_mutation_error": false
+    }
+  }
 }
