@@ -1,6 +1,7 @@
 # Coloring Pages SIMPLE-DEPLOY target v1
 
-Issue: `#838`
+Initial target issue: `#838`  
+Media-store update issue: `#855`
 
 This document records the source-owned RPi5 target contract for the Coloring Pages static UI.
 
@@ -13,7 +14,7 @@ This document records the source-owned RPi5 target contract for the Coloring Pag
 - target alias: `coloring-pages-public-rpi5`
 - shared SIMPLE-DEPLOY workflow revision: `94187cc447fc80757db10ac25d49717d00dc8430`
 
-The reviewed consumer publication produced an immutable image digest before this source registration lane. The RPi5 deployer still resolves and verifies an exact immutable digest per deployment attempt; the mutable `:production` tag is discovery only.
+The reviewed consumer publication produced immutable image `ghcr.io/rozkalnsandris/coloring-pages@sha256:81bd8c6a941557b2d7f31f1493e9c99669678e16160a9032c62db8a69ce4f684`. The RPi5 deployer still resolves and verifies an exact immutable digest per deployment attempt; the mutable `:production` tag is discovery only.
 
 ## RPi5-owned adapter
 
@@ -28,6 +29,8 @@ The reviewed consumer publication produced an immutable image digest before this
 - pull profile: `public-anonymous-pull`
 
 The adapter is read-only, uses `/tmp` tmpfs, `no-new-privileges`, and drops all Linux capabilities.
+
+The consumer repository exposes only the stable persistence identity `coloring_pages_content`; it does not control an arbitrary RPi5 host path. This trusted adapter binds that identity to exactly `/srv/coloring-pages-content/public` and exposes it inside nginx only at `/var/lib/coloring-pages/public`. The bind is read-only and refuses automatic host-path creation. `inbox/`, `originals/`, and `state/` are outside the container surface.
 
 ## Port selection
 
@@ -50,6 +53,8 @@ A later LIVE cutover must separately freeze:
 - exact target alias and Compose SHA-256;
 - exact Coloring Pages source SHA;
 - exact immutable `image@sha256` identity;
+- existence and expected metadata of `/srv/coloring-pages-content/public`;
+- exact read-only media-store bind semantics;
 - fresh target/port baseline;
 - allowed Docker mutation class;
 - post-mutation verification and failure semantics.

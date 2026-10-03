@@ -540,12 +540,24 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(reviewed[4]["target_alias"], "coloring-pages-public-rpi5")
         self.assertEqual(
             reviewed[4]["consumer_contract_revision"],
-            "dd9204581d46be618f1c7b0a6bafde90bcb691df",
+            "eaeed0c8f3d973dc938892abdd69d12437ac049e",
         )
         self.assertEqual(reviewed[4]["source_registration_issue"], 838)
+        self.assertEqual(reviewed[4]["media_store_update_issue"], 855)
+        self.assertEqual(reviewed[4]["persistent_content_identity"], "coloring_pages_content")
+        self.assertEqual(
+            reviewed[4]["persistent_content_host_path"],
+            "/srv/coloring-pages-content/public",
+        )
+        self.assertEqual(
+            reviewed[4]["persistent_content_container_path"],
+            "/var/lib/coloring-pages/public",
+        )
+        self.assertTrue(reviewed[4]["persistent_content_read_only"])
+        self.assertFalse(reviewed[4]["persistent_content_create_host_path"])
         self.assertEqual(
             reviewed[4]["compose_sha256"],
-            "77c71da44896b393002b7a13449d6fbaca76b38c6d982580d23156b674fe2941",
+            "142c30bdd1080de90360f287e5b6fae27611c535caef0a41a09a998528bcbbc2",
         )
         self.assertEqual(reviewed[4]["liveness_url"], "http://127.0.0.1:9191/health")
         self.assertEqual(reviewed[4]["readiness_state"], "required")
