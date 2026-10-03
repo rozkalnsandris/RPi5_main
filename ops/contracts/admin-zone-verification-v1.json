@@ -268,7 +268,7 @@
   "route_origin_runtime_capability": {
     "status": "bound",
     "purpose": "read-only Cloudflare Tunnel inventory and remotely managed tunnel configuration for Phase 4 route-origin classification",
-    "required_cloudflare_permission": "Cloudflare Tunnel Write",
+    "required_cloudflare_permission": "Cloudflare One Connector: cloudflared Write",
     "required_get_surfaces": [
       "/accounts/{account_id}/cfd_tunnel",
       "/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations"
