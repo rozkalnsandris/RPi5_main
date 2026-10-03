@@ -238,7 +238,7 @@ class ColoringPagesDriveIngestOperatorTests(unittest.TestCase):
         )
         self.assertEqual(
             consumer["importer_source_blob_sha"],
-            "83f6a25918bb377a407c3fe264b825327172f9e3",
+            "d07c5a38eb9920b9209dc5719918a6a4cc938305",
         )
         self.assertIn(
             'IMPORTER = Path("/usr/local/bin/coloring-pages-import")',
