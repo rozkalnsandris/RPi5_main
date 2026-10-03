@@ -583,6 +583,7 @@ def apply_install(
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--expected-main", required=True)
+    parser.add_argument("--upgrade-from")
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--confirm", default="")
     return parser.parse_args(argv)
@@ -590,15 +591,45 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
+    operation = "upgrade" if args.upgrade_from else "install"
     try:
-        if args.apply:
+        if args.upgrade_from:
+            if args.apply:
+                if args.confirm != UPGRADE_CONFIRM_TEXT:
+                    raise InstallError("upgrade_confirmation_missing")
+                apply_upgrade(args.expected_main, args.upgrade_from)
+                _emit(
+                    "PASS",
+                    mutation_performed=True,
+                    install_ready=False,
+                    operation=operation,
+                )
+            else:
+                preflight_upgrade(args.expected_main, args.upgrade_from)
+                _emit(
+                    "PASS",
+                    mutation_performed=False,
+                    install_ready=True,
+                    operation=operation,
+                )
+        elif args.apply:
             if args.confirm != CONFIRM_TEXT:
                 raise InstallError("install_confirmation_missing")
             apply_install(args.expected_main)
-            _emit("PASS", mutation_performed=True, install_ready=False)
+            _emit(
+                "PASS",
+                mutation_performed=True,
+                install_ready=False,
+                operation=operation,
+            )
         else:
             preflight_install(args.expected_main)
-            _emit("PASS", mutation_performed=False, install_ready=True)
+            _emit(
+                "PASS",
+                mutation_performed=False,
+                install_ready=True,
+                operation=operation,
+            )
         return 0
     except InstallError as exc:
         reason = str(exc)
@@ -608,6 +639,7 @@ def main(argv: list[str] | None = None) -> int:
             reason=reason,
             mutation_performed=mutation,
             install_ready=False,
+            operation=operation,
         )
         return 4 if mutation else 3
 
