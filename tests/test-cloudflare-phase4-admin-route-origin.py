@@ -203,14 +203,59 @@ class Phase4AdminRouteOriginTests(unittest.TestCase):
             self.assertNotIn("match_count", rendered)
             self.assertNotIn("matching_tunnels", rendered)
 
-    def test_workflow_uses_only_existing_read_secret_lane(self) -> None:
+    def test_route_origin_capability_is_explicitly_unbound(self) -> None:
+        capability = self.contract["route_origin_runtime_capability"]
+        self.assertEqual(capability["status"], "unbound")
+        self.assertEqual(
+            capability["required_cloudflare_permission"],
+            "Cloudflare Tunnel Read",
+        )
+        self.assertFalse(capability["existing_p1d03_access_lane_reusable"])
+        self.assertFalse(capability["runtime_execution_allowed"])
+        self.assertTrue(
+            capability["binding_requires_separate_owner_authorized_source_change"]
+        )
+        self.assertFalse(capability["secret_or_permission_provisioning_authorized_here"])
+        with self.assertRaisesRegex(
+            route.AuditError,
+            "tunnel_read_capability_unbound",
+        ):
+            route._require_tunnel_read_capability(self.contract)
+
+    def test_bound_capability_requires_explicit_binding_contract_ref(self) -> None:
+        contract = json.loads(json.dumps(self.contract))
+        capability = contract["route_origin_runtime_capability"]
+        capability["status"] = "bound"
+        capability["runtime_execution_allowed"] = True
+        with self.assertRaisesRegex(
+            route.AuditError,
+            "route_origin_capability_contract_invalid",
+        ):
+            route._require_tunnel_read_capability(contract)
+
+        capability["binding_contract_ref"] = "ops/contracts/example-tunnel-read.json"
+        route._require_tunnel_read_capability(contract)
+
+    def test_unbound_capability_report_is_sanitized(self) -> None:
+        report = route._unknown_report(self.contract, "capability_binding")
+        self.assertEqual(report["result"], "BLOCKED")
+        self.assertEqual(report["failure_class"], "capability_binding")
+        self.assertEqual(report["capability_requirement"], "tunnel-read")
+        self.assertEqual(report["capability_binding"], "unbound")
+        rendered = json.dumps(report, sort_keys=True)
+        self.assertNotIn("account_id", rendered)
+        self.assertNotIn("tunnel_id", rendered)
+        self.assertNotIn("api_token", rendered)
+
+    def test_workflow_injects_no_cloudflare_secret_while_tunnel_read_unbound(self) -> None:
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
-        self.assertIn("CLOUDFLARE_P1D03_ACCOUNT_ID", workflow)
-        self.assertIn("CLOUDFLARE_P1D03_READ_API_TOKEN", workflow)
         for forbidden in (
+            "CLOUDFLARE_P1D03_ACCOUNT_ID",
+            "CLOUDFLARE_P1D03_READ_API_TOKEN",
+            "CLOUDFLARE_P1D03_OWNER_EMAIL",
             "CLOUDFLARE_WRITE_API_TOKEN",
             "CLOUDFLARE_P1D04_WRITE_API_TOKEN",
-            "CLOUDFLARE_P1D03_OWNER_EMAIL",
+            "secrets.",
         ):
             self.assertNotIn(forbidden, workflow)
 
