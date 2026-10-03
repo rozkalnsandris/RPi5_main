@@ -17,9 +17,9 @@ sys.modules[spec.name] = sd
 spec.loader.exec_module(sd)
 
 TARGET_ALIAS = "coloring-pages-public-rpi5"
-CONSUMER_SHA = "dd9204581d46be618f1c7b0a6bafde90bcb691df"
+CONSUMER_SHA = "eaeed0c8f3d973dc938892abdd69d12437ac049e"
 SHARED_SHA = "94187cc447fc80757db10ac25d49717d00dc8430"
-COMPOSE_SHA = "77c71da44896b393002b7a13449d6fbaca76b38c6d982580d23156b674fe2941"
+COMPOSE_SHA = "142c30bdd1080de90360f287e5b6fae27611c535caef0a41a09a998528bcbbc2"
 COMPOSE_PATH = ROOT / "ops/deploy/simple-deploy-compose/coloring-pages-public.yml"
 
 
@@ -40,11 +40,11 @@ class ColoringPagesTargetTests(unittest.TestCase):
         self.assertEqual(target.health.readiness_state, "required")
         self.assertEqual(target.health.readiness_url, "http://127.0.0.1:9191/ready")
         self.assertEqual(target.wait_timeout_seconds, 180)
-        self.assertEqual(target.persistent_volumes, ())
+        self.assertEqual(target.persistent_volumes, ("coloring_pages_content",))
         self.assertEqual(target.registry_pull_profile, "public-anonymous-pull")
         self.assertEqual(target.forbidden_operations, sd.FORBIDDEN_OPERATIONS)
 
-    def test_compose_is_hash_pinned_loopback_only_and_stateless(self):
+    def test_compose_is_hash_pinned_loopback_only_and_media_read_only(self):
         body = COMPOSE_PATH.read_bytes()
         text = body.decode("utf-8")
         self.assertEqual(hashlib.sha256(body).hexdigest(), COMPOSE_SHA)
@@ -54,7 +54,13 @@ class ColoringPagesTargetTests(unittest.TestCase):
         self.assertIn('read_only: true', text)
         self.assertIn('no-new-privileges:true', text)
         self.assertIn('cap_drop:', text)
-        self.assertNotIn('volumes:', text)
+        self.assertIn('source: /srv/coloring-pages-content/public', text)
+        self.assertIn('target: /var/lib/coloring-pages/public', text)
+        self.assertIn('read_only: true', text)
+        self.assertIn('create_host_path: false', text)
+        self.assertNotIn('/srv/coloring-pages-content/inbox', text)
+        self.assertNotIn('/srv/coloring-pages-content/originals', text)
+        self.assertNotIn('/srv/coloring-pages-content/state', text)
         self.assertNotIn('environment:', text)
         self.assertNotIn('build:', text)
         self.assertNotIn('/home/', text)
@@ -72,7 +78,19 @@ class ColoringPagesTargetTests(unittest.TestCase):
         coloring = targets[TARGET_ALIAS]
         self.assertEqual(coloring["consumer_contract_revision"], CONSUMER_SHA)
         self.assertEqual(coloring["source_registration_issue"], 838)
+        self.assertEqual(coloring["media_store_update_issue"], 855)
         self.assertEqual(coloring["compose_sha256"], COMPOSE_SHA)
+        self.assertEqual(coloring["persistent_content_identity"], "coloring_pages_content")
+        self.assertEqual(
+            coloring["persistent_content_host_path"],
+            "/srv/coloring-pages-content/public",
+        )
+        self.assertEqual(
+            coloring["persistent_content_container_path"],
+            "/var/lib/coloring-pages/public",
+        )
+        self.assertTrue(coloring["persistent_content_read_only"])
+        self.assertFalse(coloring["persistent_content_create_host_path"])
         self.assertEqual(coloring["liveness_url"], "http://127.0.0.1:9191/health")
         self.assertEqual(coloring["readiness_url"], "http://127.0.0.1:9191/ready")
         self.assertTrue(
