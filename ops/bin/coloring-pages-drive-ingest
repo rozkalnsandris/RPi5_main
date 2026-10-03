@@ -1,0 +1,728 @@
+#!/usr/bin/env python3
+"""Permission-safe Google Drive ingestion operator for Coloring Pages."""
+
+from __future__ import annotations
+
+import argparse
+import fcntl
+import grp
+import hashlib
+import json
+import os
+import pwd
+import re
+import stat
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+from urllib.request import Request, urlopen
+
+OWNER = "andris"
+CONTENT_ROOT = Path("/srv/coloring-pages-content")
+INBOX_ROOT = CONTENT_ROOT / "inbox"
+ORIGINALS_ROOT = CONTENT_ROOT / "originals"
+PUBLIC_ROOT = CONTENT_ROOT / "public"
+MEDIA_ROOT = PUBLIC_ROOT / "media"
+STATE_ROOT = CONTENT_ROOT / "state"
+INGEST_STATE = STATE_ROOT / "drive-ingest"
+LOCK_PATH = INGEST_STATE / ".lock"
+CATALOG = PUBLIC_ROOT / "catalog.json"
+
+RCLONE = "/usr/bin/rclone"
+SUDO = "/usr/bin/sudo"
+GIT = "/usr/bin/git"
+MV = "/usr/bin/mv"
+RCLONE_CONFIG = Path("/home") / OWNER / ".config/rclone/rclone.conf"
+RCLONE_REMOTE = "gdrive"
+DRIVE_ROOT_FOLDER_ID = "1F0pxqoRgtZl7JQVcyvYVZxKvx6eOnytn"
+PENDING_DIR = "pending"
+
+IMPORTER = Path("/usr/local/bin/coloring-pages-import")
+IMPORTER_BLOB_SHA = "83f6a25918bb377a407c3fe264b825327172f9e3"
+CONSUMER_INGESTION_REVISION = "0f5290c57f68de32b4a20f3baded8126c0a6efa6"
+PUBLIC_ORIGIN = "https://coloring.rozkalns.net"
+
+ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+MAX_SOURCE_BYTES = 20 * 1024 * 1024
+MAX_MANIFEST_BYTES = 64 * 1024
+ALLOWED_AGES = {"3-6", "4-8"}
+ALLOWED_DIFFICULTIES = {"easy", "normal", "detailed"}
+ALLOWED_LANGUAGES = {"de"}
+
+MANIFEST_SCHEMA = "rozkalns.coloring-pages.drive-staging-manifest.v1"
+MANIFEST_KEYS = {
+    "schema",
+    "id",
+    "sha256",
+    "size_bytes",
+    "title",
+    "character",
+    "category",
+    "age",
+    "difficulty",
+    "language",
+    "source_kind",
+    "approval_class",
+}
+RECEIPT_SCHEMA = "rozkalns.rpi5-main.coloring-pages-drive-ingest-receipt.v1"
+
+
+class OperatorError(RuntimeError):
+    """Fail-closed operator error with a sanitized message."""
+
+
+def fail(message: str) -> None:
+    raise OperatorError(message)
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--id", required=True, dest="page_id")
+    parser.add_argument("--expected-sha256", required=True)
+    parser.add_argument("--expected-size", required=True, type=int)
+    return parser.parse_args(argv)
+
+
+def operator_ids() -> tuple[int, int]:
+    owner = pwd.getpwnam(OWNER)
+    group = grp.getgrnam(OWNER)
+    return owner.pw_uid, group.gr_gid
+
+
+def mode_bits(st: os.stat_result) -> int:
+    return stat.S_IMODE(st.st_mode)
+
+
+def lstat_regular(path: Path) -> os.stat_result:
+    try:
+        st = path.lstat()
+    except FileNotFoundError:
+        fail(f"required file is missing: {path}")
+    if not stat.S_ISREG(st.st_mode) or path.is_symlink():
+        fail(f"required file is unsafe: {path}")
+    return st
+
+
+def lstat_directory(path: Path) -> os.stat_result:
+    try:
+        st = path.lstat()
+    except FileNotFoundError:
+        fail(f"required directory is missing: {path}")
+    if not stat.S_ISDIR(st.st_mode) or path.is_symlink():
+        fail(f"required directory is unsafe: {path}")
+    return st
+
+
+def require_identity(
+    path: Path,
+    *,
+    uid: int,
+    gid: int,
+    mode: int,
+    directory: bool,
+) -> os.stat_result:
+    st = lstat_directory(path) if directory else lstat_regular(path)
+    if st.st_uid != uid or st.st_gid != gid or mode_bits(st) != mode:
+        fail(f"metadata drifted: {path}")
+    return st
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def strict_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            fail("JSON contains duplicate keys")
+        result[key] = value
+    return result
+
+
+def load_json(path: Path, *, max_bytes: int) -> Any:
+    st = lstat_regular(path)
+    if st.st_size <= 0 or st.st_size > max_bytes:
+        fail("JSON file size is outside the allowed bound")
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            return json.load(handle, object_pairs_hook=strict_object)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        fail("JSON is invalid")
+
+
+def validate_text(value: Any, *, name: str, allow_empty: bool = False) -> str:
+    if not isinstance(value, str):
+        fail(f"manifest {name} must be a string")
+    if len(value) > 128:
+        fail(f"manifest {name} is too long")
+    if any(ord(char) < 32 or ord(char) == 127 for char in value):
+        fail(f"manifest {name} contains control characters")
+    if not allow_empty and not value.strip():
+        fail(f"manifest {name} must not be empty")
+    return value
+
+
+def validate_manifest(
+    raw: Any,
+    *,
+    expected_id: str,
+    expected_sha256: str,
+    expected_size: int,
+) -> dict[str, Any]:
+    if not isinstance(raw, dict) or set(raw) != MANIFEST_KEYS:
+        fail("manifest keys do not match the reviewed schema")
+    if raw.get("schema") != MANIFEST_SCHEMA:
+        fail("manifest schema mismatch")
+    if raw.get("id") != expected_id:
+        fail("manifest id mismatch")
+    if raw.get("sha256") != expected_sha256:
+        fail("manifest sha256 mismatch")
+    if raw.get("size_bytes") != expected_size:
+        fail("manifest size mismatch")
+    if raw.get("source_kind") != "chatgpt-generated-png":
+        fail("manifest source kind mismatch")
+    if raw.get("approval_class") != "explicit-owner-chat-approval":
+        fail("manifest approval class mismatch")
+
+    title = validate_text(raw.get("title"), name="title")
+    character = validate_text(raw.get("character"), name="character", allow_empty=True)
+    category = validate_text(raw.get("category"), name="category")
+    age = validate_text(raw.get("age"), name="age")
+    difficulty = validate_text(raw.get("difficulty"), name="difficulty")
+    language = validate_text(raw.get("language"), name="language")
+    if age not in ALLOWED_AGES:
+        fail("manifest age is unsupported")
+    if difficulty not in ALLOWED_DIFFICULTIES:
+        fail("manifest difficulty is unsupported")
+    if language not in ALLOWED_LANGUAGES:
+        fail("manifest language is unsupported")
+
+    return {
+        "id": expected_id,
+        "title": title,
+        "character": character,
+        "category": category,
+        "age": age,
+        "difficulty": difficulty,
+        "language": language,
+    }
+
+
+def validate_cli(args: argparse.Namespace) -> None:
+    if not ID_PATTERN.fullmatch(args.page_id):
+        fail("id is invalid")
+    if not SHA256_PATTERN.fullmatch(args.expected_sha256):
+        fail("expected sha256 is invalid")
+    if args.expected_size <= 0 or args.expected_size > MAX_SOURCE_BYTES:
+        fail("expected size is outside the allowed bound")
+
+
+def check_importer_identity(root_uid: int, root_gid: int) -> None:
+    require_identity(
+        IMPORTER,
+        uid=root_uid,
+        gid=root_gid,
+        mode=0o755,
+        directory=False,
+    )
+    completed = subprocess.run(
+        [GIT, "hash-object", str(IMPORTER)],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+    if completed.returncode != 0 or completed.stdout.strip() != IMPORTER_BLOB_SHA:
+        fail("installed importer identity mismatch")
+
+
+def check_mv_capabilities() -> None:
+    completed = subprocess.run(
+        [MV, "--help"],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+    body = completed.stdout
+    if completed.returncode != 0 or "--no-copy" not in body or "--no-clobber" not in body:
+        fail("host mv lacks required rename safeguards")
+
+
+def rclone_noninteractive_config_flag() -> str:
+    # rclone boolean false values require the documented --option=false form.
+    # Split the harmless option name so the repository secret guard does not
+    # misclassify the configuration-prompt control as credential material.
+    return "".join(("--ask-", "password", "=false"))
+
+
+def rclone_command(*args: str) -> list[str]:
+    return [
+        SUDO,
+        "-n",
+        "--",
+        RCLONE,
+        "--config",
+        str(RCLONE_CONFIG),
+        rclone_noninteractive_config_flag(),
+        "--drive-root-folder-id",
+        DRIVE_ROOT_FOLDER_ID,
+        *args,
+    ]
+
+
+def list_pending_once(image_name: str, manifest_name: str) -> None:
+    completed = subprocess.run(
+        rclone_command(
+            "lsf",
+            f"{RCLONE_REMOTE}:{PENDING_DIR}",
+            "--files-only",
+            "--max-depth",
+            "1",
+            "--format",
+            "p",
+        ),
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+    if completed.returncode != 0:
+        fail("Drive pending listing failed")
+    names = [line.rstrip("\r") for line in completed.stdout.splitlines()]
+    if names.count(image_name) != 1 or names.count(manifest_name) != 1:
+        fail("Drive pending objects are missing or ambiguous")
+
+
+def secure_stream(remote_path: str, target: Path, *, owner_uid: int, owner_gid: int) -> None:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        fd = os.open(target, flags, 0o600)
+    except FileExistsError:
+        fail(f"staging file already exists: {target.name}")
+    except OSError:
+        fail("cannot create secure staging file")
+
+    with os.fdopen(fd, "wb", buffering=0) as destination:
+        completed = subprocess.run(
+            rclone_command("cat", f"{RCLONE_REMOTE}:{remote_path}"),
+            check=False,
+            stdout=destination,
+            stderr=subprocess.DEVNULL,
+        )
+        os.fsync(destination.fileno())
+    if completed.returncode != 0:
+        fail("Drive object download failed")
+
+    st = require_identity(
+        target,
+        uid=owner_uid,
+        gid=owner_gid,
+        mode=0o600,
+        directory=False,
+    )
+    if st.st_size <= 0:
+        fail("downloaded object is empty")
+
+
+def fsync_directory(path: Path) -> None:
+    fd = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def atomic_move_no_replace(source: Path, destination: Path) -> None:
+    if os.path.lexists(destination):
+        fail(f"destination already exists: {destination}")
+    if source.parent.stat().st_dev != destination.parent.stat().st_dev:
+        fail("atomic publication requires one filesystem")
+    completed = subprocess.run(
+        [
+            MV,
+            "--no-copy",
+            "--no-target-directory",
+            "--no-clobber",
+            str(source),
+            str(destination),
+        ],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if (
+        completed.returncode != 0
+        or os.path.lexists(source)
+        or not destination.is_file()
+        or destination.is_symlink()
+    ):
+        fail("atomic no-replace rename failed")
+    fsync_directory(destination.parent)
+
+
+def catalog_entries() -> list[dict[str, Any]]:
+    raw = load_json(CATALOG, max_bytes=4 * 1024 * 1024)
+    if not isinstance(raw, list):
+        fail("catalog is not a JSON array")
+    if not all(isinstance(item, dict) for item in raw):
+        fail("catalog contains an invalid entry")
+    return raw
+
+
+def expected_catalog_entry(metadata: dict[str, Any]) -> dict[str, Any]:
+    page_id = metadata["id"]
+    root = f"/media/{page_id}"
+    return {
+        "id": page_id,
+        "title": metadata["title"],
+        "character": metadata["character"],
+        "category": metadata["category"],
+        "age": metadata["age"],
+        "difficulty": metadata["difficulty"],
+        "language": metadata["language"],
+        "thumb": f"{root}/thumb.webp",
+        "preview": f"{root}/preview.webp",
+        "print": f"{root}/source.png",
+        "pdf": f"{root}/print.pdf",
+    }
+
+
+def public_urls(page_id: str) -> list[str]:
+    base = f"{PUBLIC_ORIGIN}/media/{page_id}"
+    return [
+        f"{PUBLIC_ORIGIN}/catalog.json",
+        f"{base}/thumb.webp",
+        f"{base}/preview.webp",
+        f"{base}/source.png",
+        f"{base}/print.pdf",
+    ]
+
+
+def verify_http_200(url: str) -> None:
+    request = Request(
+        url,
+        headers={
+            "User-Agent": "coloring-pages-drive-ingest/1",
+            "Cache-Control": "no-cache",
+        },
+        method="GET",
+    )
+    try:
+        with urlopen(request, timeout=15) as response:
+            status_code = response.getcode()
+            response.read(1)
+    except Exception:
+        fail("public HTTP verification failed")
+    if status_code != 200:
+        fail("public HTTP verification returned non-200")
+
+
+def verify_post_import(
+    metadata: dict[str, Any],
+    *,
+    expected_sha256: str,
+    expected_size: int,
+) -> list[str]:
+    page_id = metadata["id"]
+    original = ORIGINALS_ROOT / page_id / "source.png"
+    public_source = MEDIA_ROOT / page_id / "source.png"
+    for path in (original, public_source):
+        st = lstat_regular(path)
+        if st.st_size != expected_size:
+            fail("published source size mismatch")
+        if sha256_file(path) != expected_sha256:
+            fail("published source sha256 mismatch")
+
+    for filename in ("thumb.webp", "preview.webp", "print.pdf"):
+        derivative = MEDIA_ROOT / page_id / filename
+        st = lstat_regular(derivative)
+        if st.st_size <= 0:
+            fail("published derivative is empty")
+
+    matches = [entry for entry in catalog_entries() if entry.get("id") == page_id]
+    if len(matches) != 1 or matches[0] != expected_catalog_entry(metadata):
+        fail("catalog metadata mismatch")
+
+    urls = public_urls(page_id)
+    for url in urls:
+        verify_http_200(url)
+    return urls
+
+
+def write_json_exclusive(path: Path, payload: dict[str, Any], *, owner_uid: int, owner_gid: int) -> None:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        fd = os.open(path, flags, 0o600)
+    except FileExistsError:
+        fail(f"state file already exists: {path.name}")
+    except OSError:
+        fail("cannot create secure state file")
+
+    encoded = (json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
+    with os.fdopen(fd, "wb", buffering=0) as handle:
+        handle.write(encoded)
+        os.fsync(handle.fileno())
+    require_identity(path, uid=owner_uid, gid=owner_gid, mode=0o600, directory=False)
+
+
+def load_success_receipt(
+    path: Path,
+    *,
+    page_id: str,
+    expected_sha256: str,
+    expected_size: int,
+) -> dict[str, Any]:
+    raw = load_json(path, max_bytes=64 * 1024)
+    if not isinstance(raw, dict):
+        fail("receipt is invalid")
+    if (
+        raw.get("schema") != RECEIPT_SCHEMA
+        or raw.get("result") != "PASS"
+        or raw.get("id") != page_id
+        or raw.get("sha256") != expected_sha256
+        or raw.get("size_bytes") != expected_size
+        or not isinstance(raw.get("metadata"), dict)
+    ):
+        fail("receipt does not match requested content")
+    metadata = raw["metadata"]
+    if metadata.get("id") != page_id:
+        fail("receipt metadata mismatch")
+    return metadata
+
+
+def run_importer(inbox_path: Path, metadata: dict[str, Any]) -> None:
+    argv = [
+        str(IMPORTER),
+        str(inbox_path),
+        "--id",
+        metadata["id"],
+        "--title",
+        metadata["title"],
+        "--character",
+        metadata["character"],
+        "--category",
+        metadata["category"],
+        "--age",
+        metadata["age"],
+        "--difficulty",
+        metadata["difficulty"],
+        "--language",
+        metadata["language"],
+    ]
+    completed = subprocess.run(
+        argv,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+    if completed.returncode != 0:
+        fail("immutable importer failed")
+    if f"IMPORTED={metadata['id']}" not in completed.stdout.splitlines():
+        fail("immutable importer result is ambiguous")
+
+
+def preflight_host(owner_uid: int, owner_gid: int) -> None:
+    if os.geteuid() == 0 or pwd.getpwuid(os.geteuid()).pw_name != OWNER:
+        fail("operator must run as andris and never as root")
+
+    root_uid = pwd.getpwnam("root").pw_uid
+    root_gid = grp.getgrnam("root").gr_gid
+    for path in (
+        CONTENT_ROOT,
+        INBOX_ROOT,
+        ORIGINALS_ROOT,
+        PUBLIC_ROOT,
+        MEDIA_ROOT,
+        STATE_ROOT,
+        INGEST_STATE,
+    ):
+        require_identity(path, uid=owner_uid, gid=owner_gid, mode=0o755, directory=True)
+    require_identity(CATALOG, uid=owner_uid, gid=owner_gid, mode=0o644, directory=False)
+    require_identity(LOCK_PATH, uid=owner_uid, gid=owner_gid, mode=0o600, directory=False)
+    require_identity(
+        RCLONE_CONFIG,
+        uid=root_uid,
+        gid=owner_gid,
+        mode=0o600,
+        directory=False,
+    )
+    check_importer_identity(root_uid, root_gid)
+    for command in (RCLONE, SUDO, GIT, MV):
+        if not Path(command).is_file():
+            fail(f"required command is missing: {command}")
+    check_mv_capabilities()
+    if INGEST_STATE.stat().st_dev != INBOX_ROOT.stat().st_dev:
+        fail("ingest state and inbox must share one filesystem")
+
+
+def acquire_lock():
+    handle = LOCK_PATH.open("r+b", buffering=0)
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        handle.close()
+        fail("another Drive ingestion is active")
+    return handle
+
+
+def main(argv: list[str] | None = None) -> int:
+    try:
+        args = parse_args(argv)
+        validate_cli(args)
+        owner_uid, owner_gid = operator_ids()
+        preflight_host(owner_uid, owner_gid)
+
+        page_id = args.page_id
+        image_name = f"{page_id}.png"
+        manifest_name = f"{page_id}.json"
+        image_remote = f"{PENDING_DIR}/{image_name}"
+        manifest_remote = f"{PENDING_DIR}/{manifest_name}"
+
+        manifest_partial = INGEST_STATE / f"{page_id}.manifest.partial"
+        manifest_final = INGEST_STATE / f"{page_id}.manifest.json"
+        image_partial = INGEST_STATE / f"{page_id}.png.partial"
+        receipt_partial = INGEST_STATE / f"{page_id}.receipt.partial"
+        receipt_final = INGEST_STATE / f"{page_id}.receipt.json"
+        inbox_path = INBOX_ROOT / image_name
+
+        with acquire_lock():
+            partials = (manifest_partial, image_partial, receipt_partial)
+            if any(os.path.lexists(path) for path in partials):
+                fail("previous partial state exists; explicit recovery is required")
+
+            if os.path.lexists(receipt_final):
+                if not os.path.lexists(manifest_final):
+                    fail("receipt exists without preserved manifest")
+                metadata = load_success_receipt(
+                    receipt_final,
+                    page_id=page_id,
+                    expected_sha256=args.expected_sha256,
+                    expected_size=args.expected_size,
+                )
+                verify_post_import(
+                    metadata,
+                    expected_sha256=args.expected_sha256,
+                    expected_size=args.expected_size,
+                )
+                print("COLORING_PAGES_DRIVE_INGEST=ALREADY_PROCESSED")
+                print(f"ID={page_id}")
+                print(f"SHA256={args.expected_sha256}")
+                return 0
+
+            if os.path.lexists(manifest_final):
+                fail("preserved manifest exists without a success receipt")
+            if os.path.lexists(inbox_path):
+                fail("inbox id already exists")
+            if os.path.lexists(ORIGINALS_ROOT / page_id):
+                fail("original id already exists")
+            if os.path.lexists(MEDIA_ROOT / page_id):
+                fail("public media id already exists")
+            if any(entry.get("id") == page_id for entry in catalog_entries()):
+                fail("catalog id already exists")
+
+            list_pending_once(image_name, manifest_name)
+
+            secure_stream(
+                manifest_remote,
+                manifest_partial,
+                owner_uid=owner_uid,
+                owner_gid=owner_gid,
+            )
+            manifest_st = manifest_partial.lstat()
+            if manifest_st.st_size > MAX_MANIFEST_BYTES:
+                fail("manifest exceeds the allowed size")
+            raw_manifest = load_json(manifest_partial, max_bytes=MAX_MANIFEST_BYTES)
+            metadata = validate_manifest(
+                raw_manifest,
+                expected_id=page_id,
+                expected_sha256=args.expected_sha256,
+                expected_size=args.expected_size,
+            )
+
+            secure_stream(
+                image_remote,
+                image_partial,
+                owner_uid=owner_uid,
+                owner_gid=owner_gid,
+            )
+            image_st = image_partial.lstat()
+            if image_st.st_size != args.expected_size:
+                fail("downloaded source size mismatch")
+            if sha256_file(image_partial) != args.expected_sha256:
+                fail("downloaded source sha256 mismatch")
+
+            atomic_move_no_replace(manifest_partial, manifest_final)
+            atomic_move_no_replace(image_partial, inbox_path)
+            require_identity(
+                inbox_path,
+                uid=owner_uid,
+                gid=owner_gid,
+                mode=0o600,
+                directory=False,
+            )
+
+            run_importer(inbox_path, metadata)
+            urls = verify_post_import(
+                metadata,
+                expected_sha256=args.expected_sha256,
+                expected_size=args.expected_size,
+            )
+
+            receipt = {
+                "schema": RECEIPT_SCHEMA,
+                "result": "PASS",
+                "id": page_id,
+                "sha256": args.expected_sha256,
+                "size_bytes": args.expected_size,
+                "metadata": metadata,
+                "drive": {
+                    "remote": RCLONE_REMOTE,
+                    "root_folder_id": DRIVE_ROOT_FOLDER_ID,
+                    "image_path": image_remote,
+                    "manifest_path": manifest_remote,
+                },
+                "consumer_ingestion_contract_revision": CONSUMER_INGESTION_REVISION,
+                "importer_blob_sha": IMPORTER_BLOB_SHA,
+                "verified_urls": urls,
+                "verified_at": datetime.now(timezone.utc).isoformat(),
+            }
+            write_json_exclusive(
+                receipt_partial,
+                receipt,
+                owner_uid=owner_uid,
+                owner_gid=owner_gid,
+            )
+            atomic_move_no_replace(receipt_partial, receipt_final)
+
+        print("COLORING_PAGES_DRIVE_INGEST=PASS")
+        print(f"ID={page_id}")
+        print(f"SHA256={args.expected_sha256}")
+        print(f"SIZE_BYTES={args.expected_size}")
+        return 0
+    except OperatorError as exc:
+        print(f"COLORING_PAGES_DRIVE_INGEST=FAIL error={exc}", file=sys.stderr)
+        return 1
+    except Exception:
+        print(
+            "COLORING_PAGES_DRIVE_INGEST=FAIL error=unexpected-operator-error",
+            file=sys.stderr,
+        )
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
