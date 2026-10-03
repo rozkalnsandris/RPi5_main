@@ -53,7 +53,7 @@ Each service records two different owners:
 
 The shared Cloudflare Tunnel lifecycle remains owned by `RPi5_main`.
 
-`coloring.rozkalns.net` is registered as a PUBLIC, loopback-only Coloring Pages target owned at the application layer by `rozkalnsandris/coloring-pages`. Source registration records policy only: the Cloudflare route/DNS association remains absent until the separately authorized LIVE activation in `RPi5_main#841`.
+`coloring.rozkalns.net` is registered as a PUBLIC, loopback-only Coloring Pages target owned at the application layer by `rozkalnsandris/coloring-pages`. The Tunnel route now exists, but fresh read-only Access evidence shows that the account's `*.rozkalns.net` self-hosted application captures the hostname. Anonymous PUBLIC acceptance therefore remains incomplete until a separately authorized LIVE change installs a more-specific exact-hostname public exception and external anonymous verification passes.
 
 ## Access and LAN break-glass
 
@@ -61,13 +61,15 @@ The shared Cloudflare Tunnel lifecycle remains owned by `RPi5_main`.
 
 Invariants:
 
-- PUBLIC => `access_required=false`, `access_class=NONE`, LAN break-glass forbidden.
+- PUBLIC => `access_required=false`, `access_class=NONE`, LAN break-glass forbidden. PUBLIC normally has no Access application, but when an existing broader wildcard application captures the hostname, the narrowly scoped exception is an exact-hostname Access application whose only policy is `Bypass` for `Everyone`; this preserves anonymous access without weakening the wildcard for unrelated hostnames.
 - ADMIN => `access_required=true`, `access_class=ADMIN`.
 - PRIVATE => `access_required=true`, `access_class=PRIVATE`.
 - ADMIN and PRIVATE are never interchangeable.
 - LAN break-glass is explicit: `required`, `allowed`, or `forbidden`.
 
 The ADMIN services that retain LAN recovery semantics do so intentionally; this is not a blanket rule to expose all ADMIN services on LAN.
+
+For `coloring.rozkalns.net`, source policy uses `access_application_scope=exact-public-bypass`. This is a conflict-resolution scope, not authentication: the exact application must outrank the broader `*.rozkalns.net` Access application, must contain only the anonymous `Bypass` policy, and must not introduce identity, device-posture, service-token, or LAN-bypass requirements. Removing or widening the existing wildcard is explicitly not part of this remediation.
 
 ## #60 coverage and supersession
 
