@@ -161,6 +161,7 @@ test:
 	python3 ./tests/test-v12-maintenance-conflicts.py
 	python3 ./tests/test-v12-github-checks.py
 	python3 ./tests/test-deals-route-cutover.py
+	python3 ./tests/test-coloring-public-ingress.py
 	python3 ./tests/test-github-app-readonly.py
 	python3 ./tests/test-github-app-read-token.py
 	python3 ./tests/test-cv-github-app-auth-boundary.py
