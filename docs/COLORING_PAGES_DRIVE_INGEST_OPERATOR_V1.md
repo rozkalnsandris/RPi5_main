@@ -63,7 +63,7 @@ pending/<id>.png
 pending/<id>.json
 ```
 
-The manifest must match the reviewed schema and the owner-bound ID, SHA-256 and byte size. Unknown manifest fields are rejected.
+The manifest must match the reviewed schema and the owner-bound ID, SHA-256 and byte size. Unknown manifest fields are rejected. Category is also checked against the current reviewed Coloring Pages category set before the PNG is published into the inbox.
 
 ## Local staging and no-overwrite
 
@@ -84,7 +84,7 @@ Leftover partial state is preserved and causes STOP. There is no automatic retry
 The same publish operator directly runs the reviewed immutable image:
 
 ```text
-ghcr.io/rozkalnsandris/coloring-pages@sha256:1e6ceaeb9cc84164aef8f4680cee6ee9b4b9a3094e59c6026f590e58a3c043e8
+ghcr.io/rozkalnsandris/coloring-pages@sha256:243f46860d89f77bfc6e1b47f112522e5a7fa58b0ec665aa795c1a3ae835a576
 ```
 
 Entrypoint:

@@ -19,7 +19,7 @@ CONTRACT = ROOT / "ops/contracts/coloring-pages-drive-ingest-operator-v1.json"
 INSTALLER = ROOT / "scripts/install-coloring-pages-drive-ingest-operator-v1.sh"
 HOST_CONTRACT = ROOT / "ops/contracts/simple-deploy-host-v1.json"
 
-IMAGE_DIGEST = "sha256:1e6ceaeb9cc84164aef8f4680cee6ee9b4b9a3094e59c6026f590e58a3c043e8"
+IMAGE_DIGEST = "sha256:243f46860d89f77bfc6e1b47f112522e5a7fa58b0ec665aa795c1a3ae835a576"
 IMAGE_REF = f"ghcr.io/rozkalnsandris/coloring-pages@{IMAGE_DIGEST}"
 
 LOADER = importlib.machinery.SourceFileLoader(
@@ -46,7 +46,7 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
             "size_bytes": 1162127,
             "title": "Aviator Pup",
             "character": "",
-            "category": "rettungshunde",
+            "category": "tiere",
             "age": "3-6",
             "difficulty": "easy",
             "language": "de",
@@ -94,7 +94,7 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
             "id": "aviator-pup-001",
             "title": "Aviator Pup",
             "character": "",
-            "category": "rettungshunde",
+            "category": "tiere",
             "age": "3-6",
             "difficulty": "easy",
             "language": "de",
@@ -168,7 +168,7 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
             expected_size=1162127,
         )
         self.assertEqual(metadata["id"], "aviator-pup-001")
-        self.assertEqual(metadata["category"], "rettungshunde")
+        self.assertEqual(metadata["category"], "tiere")
 
         changed = dict(manifest)
         changed["sha256"] = "b" * 64
@@ -189,6 +189,21 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
                 expected_sha256="a" * 64,
                 expected_size=1162127,
             )
+
+        changed = dict(manifest)
+        changed["category"] = "rettungshunde"
+        with self.assertRaises(drive_ingest.OperatorError):
+            drive_ingest.validate_manifest(
+                changed,
+                expected_id="aviator-pup-001",
+                expected_sha256="a" * 64,
+                expected_size=1162127,
+            )
+
+        self.assertEqual(
+            set(self.contract["manifest"]["allowed_category"]),
+            {"tiere", "fahrzeuge", "alphabet", "lernen", "figuren", "jahreszeiten"},
+        )
 
     def test_staging_and_publish_remain_no_overwrite(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
