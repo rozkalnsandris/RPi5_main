@@ -25,8 +25,9 @@ A future separately authorized LIVE canary is intentionally small:
 ```text
 exact current Weather image
 -> one ephemeral docker run --rm
--> one existing root-owned Google credential mounted read-only
-   at /run/secrets/weathernext-google.json
+-> one fixed root-owned host credential file
+   /var/lib/rpi5-deploy/weathernext-google.json
+   mounted read-only at /run/secrets/weathernext-google.json
 -> weathernext-gcs-canary --init <exact-UTC-init>
 -> sanitized PASS/FAIL evidence
 ```
@@ -65,8 +66,9 @@ Before the future canary:
 
 1. resolve the exact current merged Weather `main` SHA and successful required CI;
 2. resolve the exact immutable Weather image for that source;
-3. verify only sanitized metadata needed to prove the existing credential file is
-   available for the fixed read-only mount;
+3. verify only sanitized metadata for the fixed host credential file
+   `/var/lib/rpi5-deploy/weathernext-google.json`: regular file, root:root,
+   mode `0600`, one link, no symlink, non-empty and <= 64 KiB;
 4. obtain a separate owner LIVE authorization for the exact ephemeral canary.
 
 Credential contents must never be printed or copied into GitHub evidence.
@@ -74,3 +76,17 @@ Credential contents must never be printed or copied into GitHub evidence.
 Any error or drift after the authorized container execution begins is fail-closed:
 STOP, with no retry, cleanup, credential substitution or alternate path unless
 separately authorized.
+
+
+## Credential file boundary
+
+The host-side source is fixed to
+`/var/lib/rpi5-deploy/weathernext-google.json`. The caller cannot substitute a
+different source or container target. The file must be root-owned, mode
+`0600`, a single-link regular file, not a symlink, non-empty and no larger than
+64 KiB.
+
+The canary receives this file only through a read-only bind mount. Provisioning
+or replacing the host credential is a separate credential mutation and requires
+an exact owner LIVE authorization. The credential payload is never eligible for
+agent output, GitHub evidence or logs.

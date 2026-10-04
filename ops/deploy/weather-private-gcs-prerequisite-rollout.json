@@ -11,9 +11,10 @@
     "remove_after_exit": true,
     "exact_weather_image_required": true,
     "credential_mount": {
-      "source": "existing-root-owned-google-credential",
+      "source": "/var/lib/rpi5-deploy/weathernext-google.json",
       "target": "/run/secrets/weathernext-google.json",
       "read_only": true,
+      "caller_selectable_source": false,
       "caller_selectable_target": false
     },
     "database_mount": false,
@@ -37,5 +38,15 @@
     "rozkalns-weather.weathernext-private-gcs-runtime-materialization.v1",
     "rpi5.weathernext-private-gcs-auth-binding.v1"
   ],
-  "next_gate_after_merge": "OWNER_AUTHORIZED_EPHEMERAL_GCS_CANARY"
+  "next_gate_after_merge": "OWNER_AUTHORIZED_EPHEMERAL_GCS_CANARY",
+  "credential_host_file": {
+    "path": "/var/lib/rpi5-deploy/weathernext-google.json",
+    "uid": 0,
+    "gid": 0,
+    "mode": "0600",
+    "max_bytes": 65536,
+    "regular_file_required": true,
+    "single_link_required": true,
+    "symlink_allowed": false
+  }
 }
