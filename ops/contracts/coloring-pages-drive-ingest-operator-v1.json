@@ -141,6 +141,11 @@
       "public-preview-http-200",
       "public-pdf-http-200"
     ],
+    "current_media_contract": [
+      "print-png-exists",
+      "catalog-print-field-points-to-print-png",
+      "public-print-png-http-200"
+    ],
     "legacy_compatibility": [
       "public-source-size-and-sha256-match-when-present",
       "public-source-http-200-when-present",

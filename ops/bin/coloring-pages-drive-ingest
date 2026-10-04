@@ -383,10 +383,13 @@ def expected_catalog_entry(
         "language": metadata["language"],
         "thumb": f"{root}/thumb.webp",
         "preview": f"{root}/preview.webp",
+        "print": (
+            f"{root}/source.png"
+            if legacy_public_source
+            else f"{root}/print.png"
+        ),
         "pdf": f"{root}/print.pdf",
     }
-    if legacy_public_source:
-        entry["print"] = f"{root}/source.png"
     return entry
 
 
@@ -397,8 +400,11 @@ def public_urls(page_id: str, *, legacy_public_source: bool) -> list[str]:
         f"{base}/thumb.webp",
         f"{base}/preview.webp",
     ]
-    if legacy_public_source:
-        urls.append(f"{base}/source.png")
+    urls.append(
+        f"{base}/source.png"
+        if legacy_public_source
+        else f"{base}/print.png"
+    )
     urls.append(f"{base}/print.pdf")
     return urls
 
@@ -450,6 +456,12 @@ def verify_post_import(
         st = lstat_regular(derivative)
         if st.st_size <= 0:
             fail("published derivative is empty")
+
+    if not legacy_public_source:
+        print_png = MEDIA_ROOT / page_id / "print.png"
+        st = lstat_regular(print_png)
+        if st.st_size <= 0:
+            fail("published print PNG is empty")
 
     matches = [entry for entry in catalog_entries() if entry.get("id") == page_id]
     expected_entry = expected_catalog_entry(

@@ -249,6 +249,14 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
         self.assertNotIn("public-source-size-and-sha256-match", required)
         self.assertNotIn("public-source-http-200", required)
         self.assertEqual(
+            set(self.contract["post_import_verification"]["current_media_contract"]),
+            {
+                "print-png-exists",
+                "catalog-print-field-points-to-print-png",
+                "public-print-png-http-200",
+            },
+        )
+        self.assertEqual(
             set(self.contract["post_import_verification"]["legacy_compatibility"]),
             {
                 "public-source-size-and-sha256-match-when-present",
@@ -275,7 +283,10 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
             metadata,
             legacy_public_source=False,
         )
-        self.assertNotIn("print", current)
+        self.assertEqual(
+            current["print"],
+            "/media/aviator-pup-001/print.png",
+        )
         self.assertEqual(
             current["pdf"],
             "/media/aviator-pup-001/print.pdf",
@@ -289,6 +300,7 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
                 "https://coloring.rozkalns.net/catalog.json",
                 "https://coloring.rozkalns.net/media/aviator-pup-001/thumb.webp",
                 "https://coloring.rozkalns.net/media/aviator-pup-001/preview.webp",
+                "https://coloring.rozkalns.net/media/aviator-pup-001/print.png",
                 "https://coloring.rozkalns.net/media/aviator-pup-001/print.pdf",
             ],
         )
