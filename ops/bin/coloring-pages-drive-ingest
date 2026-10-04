@@ -39,7 +39,7 @@ RCLONE_REMOTE = "gdrive"
 DRIVE_ROOT_FOLDER_ID = "1F0pxqoRgtZl7JQVcyvYVZxKvx6eOnytn"
 PENDING_DIR = "pending"
 
-IMPORTER_IMAGE = "ghcr.io/rozkalnsandris/coloring-pages@sha256:bee3a24a3b0b022d54967831d42fb96e21fbd3edf73b47c7bb8ca6f1c60c3d90"
+IMPORTER_IMAGE = "ghcr.io/rozkalnsandris/coloring-pages@sha256:61f99aa6a81ced5ce1d6b18c9c5ee832fc9d948b17c7b732636ee33a2f490abd"
 IMPORTER_ENTRYPOINT = "/usr/local/bin/coloring-pages-import"
 PUBLIC_ORIGIN = "https://coloring.rozkalns.net"
 
