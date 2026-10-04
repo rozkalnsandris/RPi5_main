@@ -26,11 +26,29 @@ class GCSSimpleCanaryBoundaryTests(unittest.TestCase):
         self.assertTrue(shape["remove_after_exit"])
         self.assertTrue(shape["exact_weather_image_required"])
         self.assertEqual(
+            shape["credential_mount"]["source"],
+            "/var/lib/rpi5-deploy/weathernext-google.json",
+        )
+        self.assertEqual(
             shape["credential_mount"]["target"],
             "/run/secrets/weathernext-google.json",
         )
         self.assertTrue(shape["credential_mount"]["read_only"])
+        self.assertFalse(shape["credential_mount"]["caller_selectable_source"])
         self.assertFalse(shape["credential_mount"]["caller_selectable_target"])
+
+        host_file = value["credential_host_file"]
+        self.assertEqual(
+            host_file["path"],
+            "/var/lib/rpi5-deploy/weathernext-google.json",
+        )
+        self.assertEqual(host_file["uid"], 0)
+        self.assertEqual(host_file["gid"], 0)
+        self.assertEqual(host_file["mode"], "0600")
+        self.assertEqual(host_file["max_bytes"], 65536)
+        self.assertTrue(host_file["regular_file_required"])
+        self.assertTrue(host_file["single_link_required"])
+        self.assertFalse(host_file["symlink_allowed"])
         self.assertFalse(shape["database_mount"])
         self.assertFalse(shape["application_stage"])
         self.assertFalse(shape["gcs_host_install"])
@@ -68,6 +86,7 @@ class GCSSimpleCanaryBoundaryTests(unittest.TestCase):
 
     def test_doc_has_only_one_secret_mount_and_no_old_live_chain(self) -> None:
         text = DOC.read_text(encoding="utf-8")
+        self.assertIn("/var/lib/rpi5-deploy/weathernext-google.json", text)
         self.assertIn("/run/secrets/weathernext-google.json", text)
         self.assertIn("one ephemeral docker run --rm", text)
         self.assertIn("no database mount", text.lower())
