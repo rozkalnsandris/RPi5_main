@@ -366,10 +366,14 @@ def catalog_entries() -> list[dict[str, Any]]:
     return raw
 
 
-def expected_catalog_entry(metadata: dict[str, Any]) -> dict[str, Any]:
+def expected_catalog_entry(
+    metadata: dict[str, Any],
+    *,
+    legacy_public_source: bool,
+) -> dict[str, Any]:
     page_id = metadata["id"]
     root = f"/media/{page_id}"
-    return {
+    entry = {
         "id": page_id,
         "title": metadata["title"],
         "character": metadata["character"],
@@ -379,20 +383,30 @@ def expected_catalog_entry(metadata: dict[str, Any]) -> dict[str, Any]:
         "language": metadata["language"],
         "thumb": f"{root}/thumb.webp",
         "preview": f"{root}/preview.webp",
-        "print": f"{root}/source.png",
+        "print": (
+            f"{root}/source.png"
+            if legacy_public_source
+            else f"{root}/print.png"
+        ),
         "pdf": f"{root}/print.pdf",
     }
+    return entry
 
 
-def public_urls(page_id: str) -> list[str]:
+def public_urls(page_id: str, *, legacy_public_source: bool) -> list[str]:
     base = f"{PUBLIC_ORIGIN}/media/{page_id}"
-    return [
+    urls = [
         f"{PUBLIC_ORIGIN}/catalog.json",
         f"{base}/thumb.webp",
         f"{base}/preview.webp",
-        f"{base}/source.png",
-        f"{base}/print.pdf",
     ]
+    urls.append(
+        f"{base}/source.png"
+        if legacy_public_source
+        else f"{base}/print.png"
+    )
+    urls.append(f"{base}/print.pdf")
+    return urls
 
 
 def verify_http_200(url: str) -> None:
@@ -422,12 +436,19 @@ def verify_post_import(
 ) -> list[str]:
     page_id = metadata["id"]
     original = ORIGINALS_ROOT / page_id / "source.png"
+    st = lstat_regular(original)
+    if st.st_size != expected_size:
+        fail("published source size mismatch")
+    if sha256_file(original) != expected_sha256:
+        fail("published source sha256 mismatch")
+
     public_source = MEDIA_ROOT / page_id / "source.png"
-    for path in (original, public_source):
-        st = lstat_regular(path)
+    legacy_public_source = os.path.lexists(public_source)
+    if legacy_public_source:
+        st = lstat_regular(public_source)
         if st.st_size != expected_size:
             fail("published source size mismatch")
-        if sha256_file(path) != expected_sha256:
+        if sha256_file(public_source) != expected_sha256:
             fail("published source sha256 mismatch")
 
     for filename in ("thumb.webp", "preview.webp", "print.pdf"):
@@ -436,11 +457,24 @@ def verify_post_import(
         if st.st_size <= 0:
             fail("published derivative is empty")
 
+    if not legacy_public_source:
+        print_png = MEDIA_ROOT / page_id / "print.png"
+        st = lstat_regular(print_png)
+        if st.st_size <= 0:
+            fail("published print PNG is empty")
+
     matches = [entry for entry in catalog_entries() if entry.get("id") == page_id]
-    if len(matches) != 1 or matches[0] != expected_catalog_entry(metadata):
+    expected_entry = expected_catalog_entry(
+        metadata,
+        legacy_public_source=legacy_public_source,
+    )
+    if len(matches) != 1 or matches[0] != expected_entry:
         fail("catalog metadata mismatch")
 
-    urls = public_urls(page_id)
+    urls = public_urls(
+        page_id,
+        legacy_public_source=legacy_public_source,
+    )
     for url in urls:
         verify_http_200(url)
     return urls

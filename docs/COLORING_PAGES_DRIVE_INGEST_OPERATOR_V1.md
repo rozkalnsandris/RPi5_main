@@ -112,11 +112,14 @@ The host does **not** require a separate `/usr/local/bin/coloring-pages-import` 
 
 Before writing a PASS receipt, the operator verifies:
 
-- canonical original source size and SHA-256;
-- public source size and SHA-256;
+- canonical private original source size and SHA-256;
 - exactly one matching catalog entry with exact metadata;
 - non-empty `thumb.webp`, `preview.webp` and `print.pdf`;
-- HTTP 200 for catalog, thumbnail, preview, source PNG and PDF.
+- HTTP 200 for catalog, thumbnail, preview and PDF.
+
+For the current private-master media contract, `public/media/<id>/source.png` is absent, a non-empty `print.png` must exist, the catalog `print` field must point to that PNG, and its public URL must return HTTP 200.
+
+During the bounded transition, the operator also accepts the legacy layout. If `public/media/<id>/source.png` exists, it must still match the approved source size/SHA-256, the catalog `print` field must point to that legacy source, and its public URL must return HTTP 200. This allows the verifier to be installed before the importer image is repinned without breaking existing content publication.
 
 Public origin is fixed to:
 
