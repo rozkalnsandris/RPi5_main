@@ -89,7 +89,7 @@ Leftover partial state is preserved and causes STOP. There is no automatic retry
 The same publish operator directly runs the reviewed immutable image:
 
 ```text
-ghcr.io/rozkalnsandris/coloring-pages@sha256:09822c1ceed359e0365c0e647763c6f1d8b31fb4f4ab564d7959c383709034b2
+ghcr.io/rozkalnsandris/coloring-pages@sha256:53801684e0ce5a30d195d3436220a71b350112fc6e6fdc6fe107779d13c857ba
 ```
 
 Entrypoint:
