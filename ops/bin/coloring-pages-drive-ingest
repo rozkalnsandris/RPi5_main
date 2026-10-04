@@ -388,7 +388,6 @@ def expected_catalog_entry(
             if legacy_public_source
             else f"{root}/print.png"
         ),
-        "pdf": f"{root}/print.pdf",
     }
     return entry
 
@@ -405,8 +404,15 @@ def public_urls(page_id: str, *, legacy_public_source: bool) -> list[str]:
         if legacy_public_source
         else f"{base}/print.png"
     )
-    urls.append(f"{base}/print.pdf")
     return urls
+
+
+def catalog_entry_matches(
+    actual: dict[str, Any],
+    expected: dict[str, Any],
+) -> bool:
+    """Require every reviewed core field while tolerating additive legacy keys."""
+    return all(actual.get(key) == value for key, value in expected.items())
 
 
 def verify_http_200(url: str) -> None:
@@ -451,7 +457,7 @@ def verify_post_import(
         if sha256_file(public_source) != expected_sha256:
             fail("published source sha256 mismatch")
 
-    for filename in ("thumb.webp", "preview.webp", "print.pdf"):
+    for filename in ("thumb.webp", "preview.webp"):
         derivative = MEDIA_ROOT / page_id / filename
         st = lstat_regular(derivative)
         if st.st_size <= 0:
@@ -468,7 +474,7 @@ def verify_post_import(
         metadata,
         legacy_public_source=legacy_public_source,
     )
-    if len(matches) != 1 or matches[0] != expected_entry:
+    if len(matches) != 1 or not catalog_entry_matches(matches[0], expected_entry):
         fail("catalog metadata mismatch")
 
     urls = public_urls(

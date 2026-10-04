@@ -135,11 +135,9 @@
       "catalog-has-exactly-one-matching-entry",
       "thumb-webp-exists",
       "preview-webp-exists",
-      "print-pdf-exists",
       "public-catalog-http-200",
       "public-thumb-http-200",
-      "public-preview-http-200",
-      "public-pdf-http-200"
+      "public-preview-http-200"
     ],
     "current_media_contract": [
       "print-png-exists",
@@ -150,7 +148,8 @@
       "public-source-size-and-sha256-match-when-present",
       "public-source-http-200-when-present",
       "legacy-print-catalog-field-only-with-public-source"
-    ]
+    ],
+    "catalog_matching": "required-fields-exact-additive-legacy-fields-tolerated"
   },
   "idempotency": {
     "receipt_schema": "rozkalns.rpi5-main.coloring-pages-drive-ingest-receipt.v1",

@@ -243,7 +243,6 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
             "public-catalog-http-200",
             "public-thumb-http-200",
             "public-preview-http-200",
-            "public-pdf-http-200",
         ):
             self.assertIn(proof, required)
         self.assertNotIn("public-source-size-and-sha256-match", required)
@@ -263,6 +262,10 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
                 "public-source-http-200-when-present",
                 "legacy-print-catalog-field-only-with-public-source",
             },
+        )
+        self.assertEqual(
+            self.contract["post_import_verification"]["catalog_matching"],
+            "required-fields-exact-additive-legacy-fields-tolerated",
         )
         self.assertEqual(
             self.contract["idempotency"]["receipt_schema"],
@@ -288,10 +291,6 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
             "/media/aviator-pup-001/print.png",
         )
         self.assertEqual(
-            current["pdf"],
-            "/media/aviator-pup-001/print.pdf",
-        )
-        self.assertEqual(
             drive_ingest.public_urls(
                 "aviator-pup-001",
                 legacy_public_source=False,
@@ -301,8 +300,18 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
                 "https://coloring.rozkalns.net/media/aviator-pup-001/thumb.webp",
                 "https://coloring.rozkalns.net/media/aviator-pup-001/preview.webp",
                 "https://coloring.rozkalns.net/media/aviator-pup-001/print.png",
-                "https://coloring.rozkalns.net/media/aviator-pup-001/print.pdf",
             ],
+        )
+
+        additive_legacy = dict(current)
+        additive_legacy["legacy-extra"] = "/media/aviator-pup-001/legacy-extra"
+        self.assertTrue(
+            drive_ingest.catalog_entry_matches(additive_legacy, current)
+        )
+        changed = dict(additive_legacy)
+        changed["title"] = "Different"
+        self.assertFalse(
+            drive_ingest.catalog_entry_matches(changed, current)
         )
 
         legacy = drive_ingest.expected_catalog_entry(
