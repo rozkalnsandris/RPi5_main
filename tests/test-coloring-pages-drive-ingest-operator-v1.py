@@ -19,7 +19,7 @@ CONTRACT = ROOT / "ops/contracts/coloring-pages-drive-ingest-operator-v1.json"
 INSTALLER = ROOT / "scripts/install-coloring-pages-drive-ingest-operator-v1.sh"
 HOST_CONTRACT = ROOT / "ops/contracts/simple-deploy-host-v1.json"
 
-IMAGE_DIGEST = "sha256:61f99aa6a81ced5ce1d6b18c9c5ee832fc9d948b17c7b732636ee33a2f490abd"
+IMAGE_DIGEST = "sha256:09822c1ceed359e0365c0e647763c6f1d8b31fb4f4ab564d7959c383709034b2"
 IMAGE_REF = f"ghcr.io/rozkalnsandris/coloring-pages@{IMAGE_DIGEST}"
 
 LOADER = importlib.machinery.SourceFileLoader(
@@ -51,6 +51,34 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
             "difficulty": "easy",
             "language": "de",
             "source_kind": "chatgpt-generated-png",
+            "approval_class": "explicit-owner-chat-approval",
+        }
+
+    def valid_manifest_v2(self) -> dict:
+        return {
+            "schema": "rozkalns.coloring-pages.drive-staging-manifest.v2",
+            "id": "kuerbis-gesicht-001",
+            "pages": [
+                {
+                    "index": 1,
+                    "file": "kuerbis-gesicht-001-1.png",
+                    "sha256": "a" * 64,
+                    "size_bytes": 1000000,
+                },
+                {
+                    "index": 2,
+                    "file": "kuerbis-gesicht-001-2.png",
+                    "sha256": "b" * 64,
+                    "size_bytes": 1100000,
+                },
+            ],
+            "title": "Kürbis-Gesicht",
+            "character": "",
+            "category": "lernen",
+            "age": "3-6",
+            "difficulty": "easy",
+            "language": "de",
+            "source_kind": "chatgpt-generated-png-set",
             "approval_class": "explicit-owner-chat-approval",
         }
 
@@ -103,10 +131,10 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
             run.return_value = subprocess.CompletedProcess(
                 args=[],
                 returncode=0,
-                stdout="IMPORTED=aviator-pup-001\n",
+                stdout="IMPORTED=aviator-pup-001 PAGES=1\n",
             )
             drive_ingest.run_importer(
-                Path("/srv/coloring-pages-content/inbox/aviator-pup-001.png"),
+                [Path("/srv/coloring-pages-content/inbox/aviator-pup-001.png")],
                 metadata,
                 owner_uid=1000,
                 owner_gid=1000,
@@ -204,6 +232,157 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
             set(self.contract["manifest"]["allowed_category"]),
             {"tiere", "fahrzeuge", "alphabet", "lernen", "figuren", "jahreszeiten"},
         )
+
+    def test_v2_cli_and_manifest_bind_every_ordered_page(self) -> None:
+        args = drive_ingest.parse_args(
+            [
+                "--id",
+                "kuerbis-gesicht-001",
+                "--expected-page",
+                f"1:{'a' * 64}:1000000",
+                "--expected-page",
+                f"2:{'b' * 64}:1100000",
+            ]
+        )
+        drive_ingest.validate_cli(args)
+        pages = drive_ingest.expected_pages_from_args(args)
+        self.assertEqual(
+            [page["index"] for page in pages],
+            [1, 2],
+        )
+        self.assertEqual(
+            [page["file"] for page in pages],
+            ["kuerbis-gesicht-001-1.png", "kuerbis-gesicht-001-2.png"],
+        )
+
+        metadata = drive_ingest.validate_manifest_v2(
+            self.valid_manifest_v2(),
+            expected_id="kuerbis-gesicht-001",
+            expected_pages=pages,
+        )
+        self.assertEqual(metadata["category"], "lernen")
+        self.assertEqual(metadata["pages"], pages)
+
+        changed = self.valid_manifest_v2()
+        changed["pages"][1]["sha256"] = "c" * 64
+        with self.assertRaises(drive_ingest.OperatorError):
+            drive_ingest.validate_manifest_v2(
+                changed,
+                expected_id="kuerbis-gesicht-001",
+                expected_pages=pages,
+            )
+
+        bad_order = drive_ingest.parse_args(
+            [
+                "--id",
+                "kuerbis-gesicht-001",
+                "--expected-page",
+                f"1:{'a' * 64}:1000000",
+                "--expected-page",
+                f"3:{'b' * 64}:1100000",
+            ]
+        )
+        with self.assertRaises(drive_ingest.OperatorError):
+            drive_ingest.validate_cli(bad_order)
+
+    def test_v2_importer_receives_ordered_pages_once(self) -> None:
+        metadata = {
+            "id": "kuerbis-gesicht-001",
+            "title": "Kürbis-Gesicht",
+            "character": "",
+            "category": "lernen",
+            "age": "3-6",
+            "difficulty": "easy",
+            "language": "de",
+        }
+        paths = [
+            Path("/srv/coloring-pages-content/inbox/kuerbis-gesicht-001-1.png"),
+            Path("/srv/coloring-pages-content/inbox/kuerbis-gesicht-001-2.png"),
+        ]
+        with mock.patch.object(drive_ingest.subprocess, "run") as run:
+            run.return_value = subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout="IMPORTED=kuerbis-gesicht-001 PAGES=2\n",
+            )
+            drive_ingest.run_importer(
+                paths,
+                metadata,
+                owner_uid=1000,
+                owner_gid=1000,
+            )
+
+        argv = run.call_args.args[0]
+        image_index = argv.index(IMAGE_REF)
+        self.assertEqual(
+            argv[image_index + 1 : image_index + 3],
+            [str(paths[0]), str(paths[1])],
+        )
+        self.assertEqual(argv[image_index + 3 : image_index + 5], ["--id", "kuerbis-gesicht-001"])
+
+    def test_v2_catalog_and_public_urls_preserve_page_order(self) -> None:
+        metadata = {
+            "id": "kuerbis-gesicht-001",
+            "title": "Kürbis-Gesicht",
+            "character": "",
+            "category": "lernen",
+            "age": "3-6",
+            "difficulty": "easy",
+            "language": "de",
+        }
+        entry = drive_ingest.expected_catalog_entry_v2(metadata, 2)
+        self.assertEqual(entry["preview"], entry["pages"][0]["preview"])
+        self.assertEqual(entry["print"], entry["pages"][0]["print"])
+        self.assertEqual(
+            entry["pages"],
+            [
+                {
+                    "preview": "/media/kuerbis-gesicht-001/preview-1.webp",
+                    "print": "/media/kuerbis-gesicht-001/print-1.png",
+                },
+                {
+                    "preview": "/media/kuerbis-gesicht-001/preview-2.webp",
+                    "print": "/media/kuerbis-gesicht-001/print-2.png",
+                },
+            ],
+        )
+        self.assertEqual(
+            drive_ingest.public_urls_v2("kuerbis-gesicht-001", 2),
+            [
+                "https://coloring.rozkalns.net/catalog.json",
+                "https://coloring.rozkalns.net/media/kuerbis-gesicht-001/thumb.webp",
+                "https://coloring.rozkalns.net/media/kuerbis-gesicht-001/preview-1.webp",
+                "https://coloring.rozkalns.net/media/kuerbis-gesicht-001/print-1.png",
+                "https://coloring.rozkalns.net/media/kuerbis-gesicht-001/preview-2.webp",
+                "https://coloring.rozkalns.net/media/kuerbis-gesicht-001/print-2.png",
+            ],
+        )
+
+    def test_v2_contract_keeps_one_operator_and_verifies_all_pages_first(self) -> None:
+        self.assertEqual(
+            self.contract["consumer"]["source_revision"],
+            "49d94aa646e17bbca7527a3c33fa90b0bcc3a326",
+        )
+        self.assertIn("--expected-page", self.contract["operator"]["allowed_arguments"])
+        self.assertEqual(
+            self.contract["manifest"]["multi_page_schema"],
+            "rozkalns.coloring-pages.drive-staging-manifest.v2",
+        )
+        self.assertEqual(self.contract["manifest"]["multi_page"]["minimum_pages"], 2)
+        self.assertEqual(self.contract["manifest"]["multi_page"]["maximum_pages"], 12)
+        self.assertTrue(self.contract["import"]["ordered_multi_page_sources"])
+        self.assertEqual(self.contract["import"]["maximum_pages"], 12)
+        self.assertEqual(
+            self.contract["idempotency"]["receipt_schema_v2"],
+            "rozkalns.rpi5-main.coloring-pages-drive-ingest-receipt.v2",
+        )
+        download_loop = self.operator.index(
+            "for position, (page_name, partial) in enumerate"
+        )
+        first_inbox_publish = self.operator.index(
+            "atomic_move_no_replace(manifest_partial, manifest_final)"
+        )
+        self.assertLess(download_loop, first_inbox_publish)
 
     def test_staging_and_publish_remain_no_overwrite(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
