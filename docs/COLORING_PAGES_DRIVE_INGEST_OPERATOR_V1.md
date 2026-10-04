@@ -84,7 +84,7 @@ Leftover partial state is preserved and causes STOP. There is no automatic retry
 The same publish operator directly runs the reviewed immutable image:
 
 ```text
-ghcr.io/rozkalnsandris/coloring-pages@sha256:243f46860d89f77bfc6e1b47f112522e5a7fa58b0ec665aa795c1a3ae835a576
+ghcr.io/rozkalnsandris/coloring-pages@sha256:bee3a24a3b0b022d54967831d42fb96e21fbd3edf73b47c7bb8ca6f1c60c3d90
 ```
 
 Entrypoint:
@@ -104,7 +104,7 @@ The container is run with:
 - one RW bind of `/srv/coloring-pages-content`;
 - a bounded tmpfs for `/tmp`.
 
-The importer image remains responsible for PNG/media validation, preserving exact source bytes, generating browse derivatives and A4 PDF, and updating `catalog.json`.
+The importer image remains responsible for PNG/media validation, preserving exact source bytes, generating browse derivatives and the cleaned print PNG, and updating `catalog.json`.
 
 The host does **not** require a separate `/usr/local/bin/coloring-pages-import` wrapper.
 
@@ -112,11 +112,14 @@ The host does **not** require a separate `/usr/local/bin/coloring-pages-import` 
 
 Before writing a PASS receipt, the operator verifies:
 
-- canonical original source size and SHA-256;
-- public source size and SHA-256;
-- exactly one matching catalog entry with exact metadata;
-- non-empty `thumb.webp`, `preview.webp` and `print.pdf`;
-- HTTP 200 for catalog, thumbnail, preview, source PNG and PDF.
+- canonical private original source size and SHA-256;
+- exactly one catalog entry whose reviewed core fields match exactly;
+- non-empty `thumb.webp` and `preview.webp`;
+- HTTP 200 for catalog, thumbnail and preview.
+
+For the current private-master media contract, `public/media/<id>/source.png` is absent, a non-empty `print.png` must exist, the catalog `print` field must point to that PNG, and its public URL must return HTTP 200. Additive legacy-only catalog fields are tolerated so already-published records remain verifiable, but every reviewed core field must still match exactly.
+
+During the bounded transition, the operator also accepts the legacy layout. If `public/media/<id>/source.png` exists, it must still match the approved source size/SHA-256, the catalog `print` field must point to that legacy source, and its public URL must return HTTP 200. This allows the verifier to be installed before the importer image is repinned without breaking existing content publication.
 
 Public origin is fixed to:
 

@@ -19,7 +19,7 @@ CONTRACT = ROOT / "ops/contracts/coloring-pages-drive-ingest-operator-v1.json"
 INSTALLER = ROOT / "scripts/install-coloring-pages-drive-ingest-operator-v1.sh"
 HOST_CONTRACT = ROOT / "ops/contracts/simple-deploy-host-v1.json"
 
-IMAGE_DIGEST = "sha256:243f46860d89f77bfc6e1b47f112522e5a7fa58b0ec665aa795c1a3ae835a576"
+IMAGE_DIGEST = "sha256:bee3a24a3b0b022d54967831d42fb96e21fbd3edf73b47c7bb8ca6f1c60c3d90"
 IMAGE_REF = f"ghcr.io/rozkalnsandris/coloring-pages@{IMAGE_DIGEST}"
 
 LOADER = importlib.machinery.SourceFileLoader(
@@ -239,16 +239,95 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
         required = set(self.contract["post_import_verification"]["required"])
         for proof in (
             "original-source-size-and-sha256-match",
-            "public-source-size-and-sha256-match",
             "catalog-has-exactly-one-matching-entry",
             "public-catalog-http-200",
-            "public-source-http-200",
-            "public-pdf-http-200",
+            "public-thumb-http-200",
+            "public-preview-http-200",
         ):
             self.assertIn(proof, required)
+        self.assertNotIn("public-source-size-and-sha256-match", required)
+        self.assertNotIn("public-source-http-200", required)
+        self.assertEqual(
+            set(self.contract["post_import_verification"]["current_media_contract"]),
+            {
+                "print-png-exists",
+                "catalog-print-field-points-to-print-png",
+                "public-print-png-http-200",
+            },
+        )
+        self.assertEqual(
+            set(self.contract["post_import_verification"]["legacy_compatibility"]),
+            {
+                "public-source-size-and-sha256-match-when-present",
+                "public-source-http-200-when-present",
+                "legacy-print-catalog-field-only-with-public-source",
+            },
+        )
+        self.assertEqual(
+            self.contract["post_import_verification"]["catalog_matching"],
+            "required-fields-exact-additive-legacy-fields-tolerated",
+        )
         self.assertEqual(
             self.contract["idempotency"]["receipt_schema"],
             "rozkalns.rpi5-main.coloring-pages-drive-ingest-receipt.v1",
+        )
+
+    def test_catalog_and_public_urls_support_old_and_new_media_contracts(self) -> None:
+        metadata = {
+            "id": "aviator-pup-001",
+            "title": "Aviator Pup",
+            "character": "",
+            "category": "tiere",
+            "age": "3-6",
+            "difficulty": "easy",
+            "language": "de",
+        }
+        current = drive_ingest.expected_catalog_entry(
+            metadata,
+            legacy_public_source=False,
+        )
+        self.assertEqual(
+            current["print"],
+            "/media/aviator-pup-001/print.png",
+        )
+        self.assertEqual(
+            drive_ingest.public_urls(
+                "aviator-pup-001",
+                legacy_public_source=False,
+            ),
+            [
+                "https://coloring.rozkalns.net/catalog.json",
+                "https://coloring.rozkalns.net/media/aviator-pup-001/thumb.webp",
+                "https://coloring.rozkalns.net/media/aviator-pup-001/preview.webp",
+                "https://coloring.rozkalns.net/media/aviator-pup-001/print.png",
+            ],
+        )
+
+        additive_legacy = dict(current)
+        additive_legacy["legacy-extra"] = "/media/aviator-pup-001/legacy-extra"
+        self.assertTrue(
+            drive_ingest.catalog_entry_matches(additive_legacy, current)
+        )
+        changed = dict(additive_legacy)
+        changed["title"] = "Different"
+        self.assertFalse(
+            drive_ingest.catalog_entry_matches(changed, current)
+        )
+
+        legacy = drive_ingest.expected_catalog_entry(
+            metadata,
+            legacy_public_source=True,
+        )
+        self.assertEqual(
+            legacy["print"],
+            "/media/aviator-pup-001/source.png",
+        )
+        self.assertIn(
+            "https://coloring.rozkalns.net/media/aviator-pup-001/source.png",
+            drive_ingest.public_urls(
+                "aviator-pup-001",
+                legacy_public_source=True,
+            ),
         )
 
     def test_single_installer_does_not_run_publish_work(self) -> None:
