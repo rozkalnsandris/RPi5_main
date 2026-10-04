@@ -132,7 +132,6 @@
     "public_origin": "https://coloring.rozkalns.net",
     "required": [
       "original-source-size-and-sha256-match",
-      "public-source-size-and-sha256-match",
       "catalog-has-exactly-one-matching-entry",
       "thumb-webp-exists",
       "preview-webp-exists",
@@ -140,8 +139,12 @@
       "public-catalog-http-200",
       "public-thumb-http-200",
       "public-preview-http-200",
-      "public-source-http-200",
       "public-pdf-http-200"
+    ],
+    "legacy_compatibility": [
+      "public-source-size-and-sha256-match-when-present",
+      "public-source-http-200-when-present",
+      "legacy-print-catalog-field-only-with-public-source"
     ]
   },
   "idempotency": {
