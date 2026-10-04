@@ -8,7 +8,7 @@ Installed-target alignment issue: `#860`
 
 - repository: `rozkalnsandris/coloring-pages`
 - media-store source: `eaeed0c8f3d973dc938892abdd69d12437ac049e`
-- publish/import image: `ghcr.io/rozkalnsandris/coloring-pages@sha256:1e6ceaeb9cc84164aef8f4680cee6ee9b4b9a3094e59c6026f590e58a3c043e8`
+- publish/import image: `ghcr.io/rozkalnsandris/coloring-pages@sha256:09822c1ceed359e0365c0e647763c6f1d8b31fb4f4ab564d7959c383709034b2`
 - target alias: `coloring-pages-public-rpi5`
 - architecture: `linux/arm64`
 - shared SIMPLE-DEPLOY revision: `94187cc447fc80757db10ac25d49717d00dc8430`
@@ -41,6 +41,7 @@ Coloring Pages uses one host command for Drive ingestion and import:
 - installer: `scripts/install-coloring-pages-drive-ingest-operator-v1.sh`
 - execution owner: `andris`, never root
 - Drive access: read-only
+- manifest support: v1 single-page + v2 ordered 2–12 page activities through the same installed command
 - importer: exact immutable image digest above
 - automatic image pull: forbidden
 - importer network: none
