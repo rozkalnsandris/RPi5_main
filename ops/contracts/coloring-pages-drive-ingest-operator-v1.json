@@ -4,8 +4,8 @@
   "status": "source-defined-not-installed",
   "consumer": {
     "repository": "rozkalnsandris/coloring-pages",
-    "image_digest": "sha256:7cd9ab20f229eb318ce8ef7a2d3130e19af23fce829fd4c7fbd7ac25eca845e0",
-    "image_ref": "ghcr.io/rozkalnsandris/coloring-pages@sha256:7cd9ab20f229eb318ce8ef7a2d3130e19af23fce829fd4c7fbd7ac25eca845e0",
+    "image_digest": "sha256:243f46860d89f77bfc6e1b47f112522e5a7fa58b0ec665aa795c1a3ae835a576",
+    "image_ref": "ghcr.io/rozkalnsandris/coloring-pages@sha256:243f46860d89f77bfc6e1b47f112522e5a7fa58b0ec665aa795c1a3ae835a576",
     "importer_entrypoint": "/usr/local/bin/coloring-pages-import"
   },
   "operator": {
@@ -82,6 +82,14 @@
     ],
     "allowed_language": [
       "de"
+    ],
+    "allowed_category": [
+      "tiere",
+      "fahrzeuge",
+      "alphabet",
+      "lernen",
+      "figuren",
+      "jahreszeiten"
     ]
   },
   "content": {
@@ -110,7 +118,7 @@
   "import": {
     "method": "direct-immutable-container",
     "runtime": "/usr/bin/docker",
-    "image_ref": "ghcr.io/rozkalnsandris/coloring-pages@sha256:7cd9ab20f229eb318ce8ef7a2d3130e19af23fce829fd4c7fbd7ac25eca845e0",
+    "image_ref": "ghcr.io/rozkalnsandris/coloring-pages@sha256:243f46860d89f77bfc6e1b47f112522e5a7fa58b0ec665aa795c1a3ae835a576",
     "entrypoint": "/usr/local/bin/coloring-pages-import",
     "pull_policy": "never",
     "network": "none",

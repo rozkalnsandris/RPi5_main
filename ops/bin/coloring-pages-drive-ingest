@@ -39,7 +39,7 @@ RCLONE_REMOTE = "gdrive"
 DRIVE_ROOT_FOLDER_ID = "1F0pxqoRgtZl7JQVcyvYVZxKvx6eOnytn"
 PENDING_DIR = "pending"
 
-IMPORTER_IMAGE = "ghcr.io/rozkalnsandris/coloring-pages@sha256:7cd9ab20f229eb318ce8ef7a2d3130e19af23fce829fd4c7fbd7ac25eca845e0"
+IMPORTER_IMAGE = "ghcr.io/rozkalnsandris/coloring-pages@sha256:243f46860d89f77bfc6e1b47f112522e5a7fa58b0ec665aa795c1a3ae835a576"
 IMPORTER_ENTRYPOINT = "/usr/local/bin/coloring-pages-import"
 PUBLIC_ORIGIN = "https://coloring.rozkalns.net"
 
@@ -50,6 +50,7 @@ MAX_MANIFEST_BYTES = 64 * 1024
 ALLOWED_AGES = {"3-6", "4-8"}
 ALLOWED_DIFFICULTIES = {"easy", "normal", "detailed"}
 ALLOWED_LANGUAGES = {"de"}
+ALLOWED_CATEGORIES = {"tiere", "fahrzeuge", "alphabet", "lernen", "figuren", "jahreszeiten"}
 
 MANIFEST_SCHEMA = "rozkalns.coloring-pages.drive-staging-manifest.v1"
 MANIFEST_KEYS = {
@@ -197,6 +198,8 @@ def validate_manifest(
     age = validate_text(raw.get("age"), name="age")
     difficulty = validate_text(raw.get("difficulty"), name="difficulty")
     language = validate_text(raw.get("language"), name="language")
+    if category not in ALLOWED_CATEGORIES:
+        fail("manifest category is unsupported")
     if age not in ALLOWED_AGES:
         fail("manifest age is unsupported")
     if difficulty not in ALLOWED_DIFFICULTIES:
