@@ -111,30 +111,36 @@ The first-access scope is fixed to `station_10416`, 6 forecast hours, mandatory 
 Each remaining subsystem is imported separately with redaction, tests, rollback instructions and a pull request. Docker Compose, Home Assistant, monitoring, update scripts and application repositories remain outside the V12 target set until their own contracts are reviewed. Cloudflare runtime ownership is defined by V13, while application-origin/runtime hardening is imported one reviewed subsystem at a time beginning with V14.
 
 
-## WeatherNext private GCS — source trust boundary
+## WeatherNext private GCS — simple canary boundary
 
-Issue #825 defines a separate execution-disabled RPi5 trust boundary for the
-bounded WeatherNext 3 GCS statistics path from `rozkalns_weather#122`. It does
-not widen or replace the historical BigQuery bridge. The GCS authority class is
-`read_only_private_gcs` and its fixed sequence contains only exact Weather
-application staging, a GCS-specific reviewed private runtime, the fixed Google
-auth binding and the bounded GCS read.
+The simple Weather app now owns the complete bounded GCS client path in
+`rozkalns_weather`. Weather PR #342 adds the ordinary-image command
+`python -m rozkalns_weather weathernext-gcs-canary --init <exact-UTC-init>`
+with its GCS runtime dependencies included in the normal Weather image.
 
-Project/dataset binding, Analytics Hub, BigQuery, billing-project headers,
-Requester Pays full-ensemble fallback, home scope and production SQLite/corpus
-writes are excluded.
+RPi5_main no longer needs the former GCS-specific prerequisite deployment
+chain. Issue #843 retires the host installer, separate Weather application
+staging step, separate GCS runtime materialization and GCS auth-binding copy
+from the canonical privileged dispatcher path.
 
-Issue #828 introduced the separate deterministic GCS runtime source closure.
-After Weather #325/#326 added the explicit credential-provider runtime,
-issue #833 regenerates it as 25 exact aarch64/cp313 wheels rooted in
-`google-auth 2.59.1`, `obstore 0.11.1`, `requests 2.34.2`,
-`xarray 2026.9.0` and `zarr 3.4.0`, verified by exact filename/SHA-256
-and materialized only from an offline normalized wheelhouse artifact. The GCS
-materializer remains unwired and execution-disabled; the next prerequisite is
-GCS-specific host/runtime wiring plus sanitized readiness before any LIVE
-preflight. Issue #835 adds that source-only boundary with separate GCS operator,
-activation/binding roots and read-only preflight as the next gate; execution and
-installation remain disabled.
+The future first-access shape is one separately authorized ephemeral container:
 
+```text
+exact current Weather image
+-> one docker run --rm
+-> one existing root-owned Google credential mounted read-only at
+   /run/secrets/weathernext-google.json
+-> Weather one-shot canary
+-> sanitized PASS/FAIL evidence
+```
 
-WeatherNext private GCS prerequisite rollout: issue #843 wires the missing GCS host installer, deterministic runtime transport/materialization and protected auth-binding operations while reusing the existing exact Weather application-stage operation. Source merge keeps execution disabled. The next gate is one bounded COMPOSITE STRICT LIVE prerequisite rollout; real GCS first access remains separate.
+The container receives no production database mount. The Weather command fixes
+the scope to `station_05480`, six forecast hours and the precomputed
+WeatherNext 3 statistics GCS/Zarr surface, with no automatic retry, alternate
+dataset fallback or production write.
+
+Source merge performs no Docker, credential, Google/GCS or host mutation. The
+next gate is a fresh exact owner LIVE authorization for this single ephemeral
+canary after current Weather main/image and sanitized credential-mount
+availability are revalidated. Real snapshot persistence remains a later
+separate data-write authorization.
