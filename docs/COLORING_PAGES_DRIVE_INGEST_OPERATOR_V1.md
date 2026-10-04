@@ -1,16 +1,17 @@
-# Coloring Pages publish operator v1
+# Coloring Pages publish operator v1 — single-page + multi-page
 
 ## Purpose
 
 Provide one bounded RPi5 command for the approved content path:
 
 ```text
-Drive pending PNG + manifest
-  -> verify ID / SHA-256 / size / metadata
-  -> publish PNG to the content inbox
-  -> run the immutable Coloring Pages importer image
+Drive pending PNG page(s) + manifest
+  -> verify owner-bound ID / per-page SHA-256 / size / metadata
+  -> verify every page before the first inbox publication
+  -> publish ordered PNG page(s) to the content inbox
+  -> run the immutable Coloring Pages importer image once
   -> verify catalog/media/public URLs
-  -> write a success receipt
+  -> write one success receipt
 ```
 
 There is no second installed importer wrapper in this design.
@@ -27,7 +28,7 @@ Installed command:
 /usr/local/bin/coloring-pages-drive-ingest
 ```
 
-Source merge does not install or execute the operator.
+Source merge does not install or execute the operator. The same installed command remains backward-compatible with the production v1 single-page manifest and adds the reviewed v2 multi-page manifest; there is no second publish operator.
 
 ## Fixed Drive boundary
 
@@ -47,7 +48,7 @@ The operator is read-only toward Drive. It uses normal non-`--fast-list` discove
 
 ## Invocation
 
-The only content-selection arguments are:
+Single-page v1 remains unchanged:
 
 ```bash
 coloring-pages-drive-ingest \
@@ -56,14 +57,18 @@ coloring-pages-drive-ingest \
   --expected-size <bytes>
 ```
 
-Drive filenames are derived from the ID:
+Multi-page v2 binds every page explicitly:
 
-```text
-pending/<id>.png
-pending/<id>.json
+```bash
+coloring-pages-drive-ingest \
+  --id <activity-id> \
+  --expected-page 1:<sha256>:<bytes> \
+  --expected-page 2:<sha256>:<bytes>
 ```
 
-The manifest must match the reviewed schema and the owner-bound ID, SHA-256 and byte size. Unknown manifest fields are rejected. Category is also checked against the current reviewed Coloring Pages category set before the PNG is published into the inbox.
+v2 accepts 2–12 pages. Page indexes must be contiguous and ordered from 1. Drive filenames are fixed as `pending/<id>-<index>.png`; the single `pending/<id>.json` manifest is still the readiness signal. The operator lists the exact expected filenames, validates the complete v2 manifest against the owner-bound page identities, downloads and verifies every page, and only then begins inbox publication.
+
+Unknown manifest/page fields are rejected. Category is checked against the current reviewed Coloring Pages category set before any PNG is published into the inbox.
 
 ## Local staging and no-overwrite
 
@@ -84,7 +89,7 @@ Leftover partial state is preserved and causes STOP. There is no automatic retry
 The same publish operator directly runs the reviewed immutable image:
 
 ```text
-ghcr.io/rozkalnsandris/coloring-pages@sha256:61f99aa6a81ced5ce1d6b18c9c5ee832fc9d948b17c7b732636ee33a2f490abd
+ghcr.io/rozkalnsandris/coloring-pages@sha256:09822c1ceed359e0365c0e647763c6f1d8b31fb4f4ab564d7959c383709034b2
 ```
 
 Entrypoint:
@@ -156,3 +161,10 @@ References:
 - https://rclone.org/commands/rclone_cat/
 - https://rclone.org/drive/
 - https://www.gnu.org/software/coreutils/manual/html_node/mv-invocation.html
+
+
+## Multi-page v2 post-import proof
+
+For a v2 activity the operator requires private originals `source-1.png` through `source-N.png` to match every owner-bound size/SHA-256. It verifies one catalogue item whose top-level `preview`/`print` point to page 1 and whose ordered `pages[]` exactly matches `preview-N.webp` + `print-N.png`. `thumb.webp`, every page derivative and every public URL must pass before the v2 PASS receipt is written.
+
+The operator invokes the importer once with all ordered direct-child inbox paths and an explicit activity ID. It expects the immutable importer result `IMPORTED=<id> PAGES=<N>`. A failure after persistent mutation starts is a STOP; no automatic retry, rollback or cleanup is added.

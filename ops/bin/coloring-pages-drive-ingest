@@ -39,7 +39,7 @@ RCLONE_REMOTE = "gdrive"
 DRIVE_ROOT_FOLDER_ID = "1F0pxqoRgtZl7JQVcyvYVZxKvx6eOnytn"
 PENDING_DIR = "pending"
 
-IMPORTER_IMAGE = "ghcr.io/rozkalnsandris/coloring-pages@sha256:61f99aa6a81ced5ce1d6b18c9c5ee832fc9d948b17c7b732636ee33a2f490abd"
+IMPORTER_IMAGE = "ghcr.io/rozkalnsandris/coloring-pages@sha256:09822c1ceed359e0365c0e647763c6f1d8b31fb4f4ab564d7959c383709034b2"
 IMPORTER_ENTRYPOINT = "/usr/local/bin/coloring-pages-import"
 PUBLIC_ORIGIN = "https://coloring.rozkalns.net"
 
@@ -47,13 +47,15 @@ ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 MAX_SOURCE_BYTES = 20 * 1024 * 1024
 MAX_MANIFEST_BYTES = 64 * 1024
+MAX_ACTIVITY_PAGES = 12
 ALLOWED_AGES = {"3-6", "4-8"}
 ALLOWED_DIFFICULTIES = {"easy", "normal", "detailed"}
 ALLOWED_LANGUAGES = {"de"}
 ALLOWED_CATEGORIES = {"tiere", "fahrzeuge", "alphabet", "lernen", "figuren", "jahreszeiten"}
 
-MANIFEST_SCHEMA = "rozkalns.coloring-pages.drive-staging-manifest.v1"
-MANIFEST_KEYS = {
+MANIFEST_SCHEMA_V1 = "rozkalns.coloring-pages.drive-staging-manifest.v1"
+MANIFEST_SCHEMA_V2 = "rozkalns.coloring-pages.drive-staging-manifest.v2"
+MANIFEST_KEYS_V1 = {
     "schema",
     "id",
     "sha256",
@@ -67,7 +69,22 @@ MANIFEST_KEYS = {
     "source_kind",
     "approval_class",
 }
-RECEIPT_SCHEMA = "rozkalns.rpi5-main.coloring-pages-drive-ingest-receipt.v1"
+MANIFEST_KEYS_V2 = {
+    "schema",
+    "id",
+    "pages",
+    "title",
+    "character",
+    "category",
+    "age",
+    "difficulty",
+    "language",
+    "source_kind",
+    "approval_class",
+}
+PAGE_KEYS_V2 = {"index", "file", "sha256", "size_bytes"}
+RECEIPT_SCHEMA_V1 = "rozkalns.rpi5-main.coloring-pages-drive-ingest-receipt.v1"
+RECEIPT_SCHEMA_V2 = "rozkalns.rpi5-main.coloring-pages-drive-ingest-receipt.v2"
 
 
 class OperatorError(RuntimeError):
@@ -81,8 +98,15 @@ def fail(message: str) -> None:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--id", required=True, dest="page_id")
-    parser.add_argument("--expected-sha256", required=True)
-    parser.add_argument("--expected-size", required=True, type=int)
+    parser.add_argument("--expected-sha256")
+    parser.add_argument("--expected-size", type=int)
+    parser.add_argument(
+        "--expected-page",
+        action="append",
+        default=[],
+        metavar="INDEX:SHA256:BYTES",
+        help="repeat for each ordered v2 page",
+    )
     return parser.parse_args(argv)
 
 
@@ -170,28 +194,7 @@ def validate_text(value: Any, *, name: str, allow_empty: bool = False) -> str:
     return value
 
 
-def validate_manifest(
-    raw: Any,
-    *,
-    expected_id: str,
-    expected_sha256: str,
-    expected_size: int,
-) -> dict[str, Any]:
-    if not isinstance(raw, dict) or set(raw) != MANIFEST_KEYS:
-        fail("manifest keys do not match the reviewed schema")
-    if raw.get("schema") != MANIFEST_SCHEMA:
-        fail("manifest schema mismatch")
-    if raw.get("id") != expected_id:
-        fail("manifest id mismatch")
-    if raw.get("sha256") != expected_sha256:
-        fail("manifest sha256 mismatch")
-    if raw.get("size_bytes") != expected_size:
-        fail("manifest size mismatch")
-    if raw.get("source_kind") != "chatgpt-generated-png":
-        fail("manifest source kind mismatch")
-    if raw.get("approval_class") != "explicit-owner-chat-approval":
-        fail("manifest approval class mismatch")
-
+def validate_metadata_fields(raw: dict[str, Any]) -> dict[str, Any]:
     title = validate_text(raw.get("title"), name="title")
     character = validate_text(raw.get("character"), name="character", allow_empty=True)
     category = validate_text(raw.get("category"), name="category")
@@ -206,9 +209,8 @@ def validate_manifest(
         fail("manifest difficulty is unsupported")
     if language not in ALLOWED_LANGUAGES:
         fail("manifest language is unsupported")
-
     return {
-        "id": expected_id,
+        "id": raw["id"],
         "title": title,
         "character": character,
         "category": category,
@@ -218,9 +220,111 @@ def validate_manifest(
     }
 
 
+def validate_manifest(
+    raw: Any,
+    *,
+    expected_id: str,
+    expected_sha256: str,
+    expected_size: int,
+) -> dict[str, Any]:
+    if not isinstance(raw, dict) or set(raw) != MANIFEST_KEYS_V1:
+        fail("manifest keys do not match the reviewed v1 schema")
+    if raw.get("schema") != MANIFEST_SCHEMA_V1:
+        fail("manifest schema mismatch")
+    if raw.get("id") != expected_id:
+        fail("manifest id mismatch")
+    if raw.get("sha256") != expected_sha256:
+        fail("manifest sha256 mismatch")
+    if raw.get("size_bytes") != expected_size:
+        fail("manifest size mismatch")
+    if raw.get("source_kind") != "chatgpt-generated-png":
+        fail("manifest source kind mismatch")
+    if raw.get("approval_class") != "explicit-owner-chat-approval":
+        fail("manifest approval class mismatch")
+    return validate_metadata_fields(raw)
+
+
+def expected_pages_from_args(args: argparse.Namespace) -> list[dict[str, Any]]:
+    if not args.expected_page:
+        return []
+    if args.expected_sha256 is not None or args.expected_size is not None:
+        fail("v2 expected pages cannot be combined with v1 sha256/size arguments")
+
+    pages: list[dict[str, Any]] = []
+    for raw_spec in args.expected_page:
+        parts = raw_spec.split(":")
+        if len(parts) != 3:
+            fail("expected page must use INDEX:SHA256:BYTES")
+        index_text, sha256_value, size_text = parts
+        if not index_text.isdigit() or not size_text.isdigit():
+            fail("expected page index/size is invalid")
+        index = int(index_text)
+        size_bytes = int(size_text)
+        if not SHA256_PATTERN.fullmatch(sha256_value):
+            fail("expected page sha256 is invalid")
+        if size_bytes <= 0 or size_bytes > MAX_SOURCE_BYTES:
+            fail("expected page size is outside the allowed bound")
+        pages.append(
+            {
+                "index": index,
+                "file": f"{args.page_id}-{index}.png",
+                "sha256": sha256_value,
+                "size_bytes": size_bytes,
+            }
+        )
+
+    if len(pages) < 2 or len(pages) > MAX_ACTIVITY_PAGES:
+        fail("v2 page count is outside the allowed bound")
+    expected_indexes = list(range(1, len(pages) + 1))
+    if [page["index"] for page in pages] != expected_indexes:
+        fail("v2 page indexes must be contiguous and ordered from 1")
+    return pages
+
+
+def validate_manifest_v2(
+    raw: Any,
+    *,
+    expected_id: str,
+    expected_pages: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if not isinstance(raw, dict) or set(raw) != MANIFEST_KEYS_V2:
+        fail("manifest keys do not match the reviewed v2 schema")
+    if raw.get("schema") != MANIFEST_SCHEMA_V2:
+        fail("manifest schema mismatch")
+    if raw.get("id") != expected_id:
+        fail("manifest id mismatch")
+    if raw.get("source_kind") != "chatgpt-generated-png-set":
+        fail("manifest source kind mismatch")
+    if raw.get("approval_class") != "explicit-owner-chat-approval":
+        fail("manifest approval class mismatch")
+
+    pages = raw.get("pages")
+    if not isinstance(pages, list) or len(pages) != len(expected_pages):
+        fail("manifest page count mismatch")
+    normalized: list[dict[str, Any]] = []
+    for position, page in enumerate(pages, start=1):
+        if not isinstance(page, dict) or set(page) != PAGE_KEYS_V2:
+            fail("manifest page keys do not match the reviewed v2 schema")
+        if page.get("index") != position:
+            fail("manifest page indexes must be contiguous and ordered from 1")
+        expected = expected_pages[position - 1]
+        if page != expected:
+            fail("manifest page identity mismatch")
+        normalized.append(dict(page))
+
+    metadata = validate_metadata_fields(raw)
+    metadata["pages"] = normalized
+    return metadata
+
+
 def validate_cli(args: argparse.Namespace) -> None:
     if not ID_PATTERN.fullmatch(args.page_id):
         fail("id is invalid")
+    if args.expected_page:
+        expected_pages_from_args(args)
+        return
+    if args.expected_sha256 is None or args.expected_size is None:
+        fail("v1 expected sha256 and size are required")
     if not SHA256_PATTERN.fullmatch(args.expected_sha256):
         fail("expected sha256 is invalid")
     if args.expected_size <= 0 or args.expected_size > MAX_SOURCE_BYTES:
@@ -266,7 +370,7 @@ def rclone_command(*args: str) -> list[str]:
     ]
 
 
-def list_pending_once(image_name: str, manifest_name: str) -> None:
+def list_pending_once(required_names: list[str]) -> None:
     completed = subprocess.run(
         rclone_command(
             "lsf",
@@ -285,7 +389,7 @@ def list_pending_once(image_name: str, manifest_name: str) -> None:
     if completed.returncode != 0:
         fail("Drive pending listing failed")
     names = [line.rstrip("\r") for line in completed.stdout.splitlines()]
-    if names.count(image_name) != 1 or names.count(manifest_name) != 1:
+    if any(names.count(name) != 1 for name in required_names):
         fail("Drive pending objects are missing or ambiguous")
 
 
@@ -373,7 +477,7 @@ def expected_catalog_entry(
 ) -> dict[str, Any]:
     page_id = metadata["id"]
     root = f"/media/{page_id}"
-    entry = {
+    return {
         "id": page_id,
         "title": metadata["title"],
         "character": metadata["character"],
@@ -389,7 +493,34 @@ def expected_catalog_entry(
             else f"{root}/print.png"
         ),
     }
-    return entry
+
+
+def expected_catalog_entry_v2(
+    metadata: dict[str, Any],
+    page_count: int,
+) -> dict[str, Any]:
+    page_id = metadata["id"]
+    root = f"/media/{page_id}"
+    pages = [
+        {
+            "preview": f"{root}/preview-{index}.webp",
+            "print": f"{root}/print-{index}.png",
+        }
+        for index in range(1, page_count + 1)
+    ]
+    return {
+        "id": page_id,
+        "title": metadata["title"],
+        "character": metadata["character"],
+        "category": metadata["category"],
+        "age": metadata["age"],
+        "difficulty": metadata["difficulty"],
+        "language": metadata["language"],
+        "thumb": f"{root}/thumb.webp",
+        "preview": pages[0]["preview"],
+        "print": pages[0]["print"],
+        "pages": pages,
+    }
 
 
 def public_urls(page_id: str, *, legacy_public_source: bool) -> list[str]:
@@ -404,6 +535,22 @@ def public_urls(page_id: str, *, legacy_public_source: bool) -> list[str]:
         if legacy_public_source
         else f"{base}/print.png"
     )
+    return urls
+
+
+def public_urls_v2(page_id: str, page_count: int) -> list[str]:
+    base = f"{PUBLIC_ORIGIN}/media/{page_id}"
+    urls = [
+        f"{PUBLIC_ORIGIN}/catalog.json",
+        f"{base}/thumb.webp",
+    ]
+    for index in range(1, page_count + 1):
+        urls.extend(
+            [
+                f"{base}/preview-{index}.webp",
+                f"{base}/print-{index}.png",
+            ]
+        )
     return urls
 
 
@@ -486,6 +633,48 @@ def verify_post_import(
     return urls
 
 
+def verify_post_import_v2(
+    metadata: dict[str, Any],
+    *,
+    expected_pages: list[dict[str, Any]],
+) -> list[str]:
+    page_id = metadata["id"]
+    originals = ORIGINALS_ROOT / page_id
+    media = MEDIA_ROOT / page_id
+
+    if os.path.lexists(originals / "source.png"):
+        fail("multi-page activity unexpectedly published a single-page original")
+
+    for page in expected_pages:
+        index = page["index"]
+        original = originals / f"source-{index}.png"
+        st = lstat_regular(original)
+        if st.st_size != page["size_bytes"]:
+            fail("published source page size mismatch")
+        if sha256_file(original) != page["sha256"]:
+            fail("published source page sha256 mismatch")
+
+        for filename in (f"preview-{index}.webp", f"print-{index}.png"):
+            derivative = media / filename
+            st = lstat_regular(derivative)
+            if st.st_size <= 0:
+                fail("published multi-page derivative is empty")
+
+    thumb = media / "thumb.webp"
+    if lstat_regular(thumb).st_size <= 0:
+        fail("published thumbnail is empty")
+
+    matches = [entry for entry in catalog_entries() if entry.get("id") == page_id]
+    expected_entry = expected_catalog_entry_v2(metadata, len(expected_pages))
+    if len(matches) != 1 or not catalog_entry_matches(matches[0], expected_entry):
+        fail("catalog multi-page metadata mismatch")
+
+    urls = public_urls_v2(page_id, len(expected_pages))
+    for url in urls:
+        verify_http_200(url)
+    return urls
+
+
 def write_json_exclusive(path: Path, payload: dict[str, Any], *, owner_uid: int, owner_gid: int) -> None:
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
     if hasattr(os, "O_NOFOLLOW"):
@@ -515,7 +704,7 @@ def load_success_receipt(
     if not isinstance(raw, dict):
         fail("receipt is invalid")
     if (
-        raw.get("schema") != RECEIPT_SCHEMA
+        raw.get("schema") != RECEIPT_SCHEMA_V1
         or raw.get("result") != "PASS"
         or raw.get("id") != page_id
         or raw.get("sha256") != expected_sha256
@@ -529,13 +718,38 @@ def load_success_receipt(
     return metadata
 
 
+def load_success_receipt_v2(
+    path: Path,
+    *,
+    page_id: str,
+    expected_pages: list[dict[str, Any]],
+) -> dict[str, Any]:
+    raw = load_json(path, max_bytes=64 * 1024)
+    if not isinstance(raw, dict):
+        fail("receipt is invalid")
+    if (
+        raw.get("schema") != RECEIPT_SCHEMA_V2
+        or raw.get("result") != "PASS"
+        or raw.get("id") != page_id
+        or raw.get("pages") != expected_pages
+        or not isinstance(raw.get("metadata"), dict)
+    ):
+        fail("receipt does not match requested multi-page content")
+    metadata = raw["metadata"]
+    if metadata.get("id") != page_id:
+        fail("receipt metadata mismatch")
+    return metadata
+
+
 def run_importer(
-    inbox_path: Path,
+    inbox_paths: list[Path],
     metadata: dict[str, Any],
     *,
     owner_uid: int,
     owner_gid: int,
 ) -> None:
+    if not inbox_paths:
+        fail("immutable importer requires at least one source page")
     argv = [
         DOCKER,
         "run",
@@ -559,7 +773,7 @@ def run_importer(
         "--entrypoint",
         IMPORTER_ENTRYPOINT,
         IMPORTER_IMAGE,
-        str(inbox_path),
+        *[str(path) for path in inbox_paths],
         "--id",
         metadata["id"],
         "--title",
@@ -584,7 +798,8 @@ def run_importer(
     )
     if completed.returncode != 0:
         fail("immutable importer failed")
-    if f"IMPORTED={metadata['id']}" not in completed.stdout.splitlines():
+    expected_result = f"IMPORTED={metadata['id']} PAGES={len(inbox_paths)}"
+    if expected_result not in completed.stdout.splitlines():
         fail("immutable importer result is ambiguous")
 
 
@@ -638,46 +853,66 @@ def main(argv: list[str] | None = None) -> int:
         preflight_host(owner_uid, owner_gid)
 
         page_id = args.page_id
-        image_name = f"{page_id}.png"
+        expected_pages = expected_pages_from_args(args)
+        is_v2 = bool(expected_pages)
         manifest_name = f"{page_id}.json"
-        image_remote = f"{PENDING_DIR}/{image_name}"
         manifest_remote = f"{PENDING_DIR}/{manifest_name}"
-
         manifest_partial = INGEST_STATE / f"{page_id}.manifest.partial"
         manifest_final = INGEST_STATE / f"{page_id}.manifest.json"
-        image_partial = INGEST_STATE / f"{page_id}.png.partial"
         receipt_partial = INGEST_STATE / f"{page_id}.receipt.partial"
         receipt_final = INGEST_STATE / f"{page_id}.receipt.json"
-        inbox_path = INBOX_ROOT / image_name
+
+        if is_v2:
+            page_names = [page["file"] for page in expected_pages]
+            page_partials = [
+                INGEST_STATE / f"{page_id}-{page['index']}.png.partial"
+                for page in expected_pages
+            ]
+            inbox_paths = [INBOX_ROOT / name for name in page_names]
+        else:
+            page_names = [f"{page_id}.png"]
+            page_partials = [INGEST_STATE / f"{page_id}.png.partial"]
+            inbox_paths = [INBOX_ROOT / page_names[0]]
 
         with acquire_lock():
-            partials = (manifest_partial, image_partial, receipt_partial)
+            partials = (manifest_partial, *page_partials, receipt_partial)
             if any(os.path.lexists(path) for path in partials):
                 fail("previous partial state exists; explicit recovery is required")
 
             if os.path.lexists(receipt_final):
                 if not os.path.lexists(manifest_final):
                     fail("receipt exists without preserved manifest")
-                metadata = load_success_receipt(
-                    receipt_final,
-                    page_id=page_id,
-                    expected_sha256=args.expected_sha256,
-                    expected_size=args.expected_size,
-                )
-                verify_post_import(
-                    metadata,
-                    expected_sha256=args.expected_sha256,
-                    expected_size=args.expected_size,
-                )
+                if is_v2:
+                    metadata = load_success_receipt_v2(
+                        receipt_final,
+                        page_id=page_id,
+                        expected_pages=expected_pages,
+                    )
+                    verify_post_import_v2(
+                        metadata,
+                        expected_pages=expected_pages,
+                    )
+                else:
+                    metadata = load_success_receipt(
+                        receipt_final,
+                        page_id=page_id,
+                        expected_sha256=args.expected_sha256,
+                        expected_size=args.expected_size,
+                    )
+                    verify_post_import(
+                        metadata,
+                        expected_sha256=args.expected_sha256,
+                        expected_size=args.expected_size,
+                    )
                 print("COLORING_PAGES_DRIVE_INGEST=ALREADY_PROCESSED")
                 print(f"ID={page_id}")
-                print(f"SHA256={args.expected_sha256}")
+                print(f"PAGES={len(inbox_paths)}")
                 return 0
 
             if os.path.lexists(manifest_final):
                 fail("preserved manifest exists without a success receipt")
-            if os.path.lexists(inbox_path):
-                fail("inbox id already exists")
+            if any(os.path.lexists(path) for path in inbox_paths):
+                fail("inbox page already exists")
             if os.path.lexists(ORIGINALS_ROOT / page_id):
                 fail("original id already exists")
             if os.path.lexists(MEDIA_ROOT / page_id):
@@ -685,7 +920,7 @@ def main(argv: list[str] | None = None) -> int:
             if any(entry.get("id") == page_id for entry in catalog_entries()):
                 fail("catalog id already exists")
 
-            list_pending_once(image_name, manifest_name)
+            list_pending_once([*page_names, manifest_name])
 
             secure_stream(
                 manifest_remote,
@@ -697,64 +932,111 @@ def main(argv: list[str] | None = None) -> int:
             if manifest_st.st_size > MAX_MANIFEST_BYTES:
                 fail("manifest exceeds the allowed size")
             raw_manifest = load_json(manifest_partial, max_bytes=MAX_MANIFEST_BYTES)
-            metadata = validate_manifest(
-                raw_manifest,
-                expected_id=page_id,
-                expected_sha256=args.expected_sha256,
-                expected_size=args.expected_size,
-            )
+            if is_v2:
+                metadata = validate_manifest_v2(
+                    raw_manifest,
+                    expected_id=page_id,
+                    expected_pages=expected_pages,
+                )
+            else:
+                metadata = validate_manifest(
+                    raw_manifest,
+                    expected_id=page_id,
+                    expected_sha256=args.expected_sha256,
+                    expected_size=args.expected_size,
+                )
 
-            secure_stream(
-                image_remote,
-                image_partial,
-                owner_uid=owner_uid,
-                owner_gid=owner_gid,
-            )
-            image_st = image_partial.lstat()
-            if image_st.st_size != args.expected_size:
-                fail("downloaded source size mismatch")
-            if sha256_file(image_partial) != args.expected_sha256:
-                fail("downloaded source sha256 mismatch")
+            for position, (page_name, partial) in enumerate(
+                zip(page_names, page_partials, strict=True),
+                start=1,
+            ):
+                secure_stream(
+                    f"{PENDING_DIR}/{page_name}",
+                    partial,
+                    owner_uid=owner_uid,
+                    owner_gid=owner_gid,
+                )
+                st = partial.lstat()
+                if is_v2:
+                    expected = expected_pages[position - 1]
+                    expected_size = expected["size_bytes"]
+                    expected_sha256 = expected["sha256"]
+                else:
+                    expected_size = args.expected_size
+                    expected_sha256 = args.expected_sha256
+                if st.st_size != expected_size:
+                    fail("downloaded source size mismatch")
+                if sha256_file(partial) != expected_sha256:
+                    fail("downloaded source sha256 mismatch")
 
             atomic_move_no_replace(manifest_partial, manifest_final)
-            atomic_move_no_replace(image_partial, inbox_path)
-            require_identity(
-                inbox_path,
-                uid=owner_uid,
-                gid=owner_gid,
-                mode=0o600,
-                directory=False,
-            )
+            for partial, inbox_path in zip(page_partials, inbox_paths, strict=True):
+                atomic_move_no_replace(partial, inbox_path)
+                require_identity(
+                    inbox_path,
+                    uid=owner_uid,
+                    gid=owner_gid,
+                    mode=0o600,
+                    directory=False,
+                )
 
             run_importer(
-                inbox_path,
+                inbox_paths,
                 metadata,
                 owner_uid=owner_uid,
                 owner_gid=owner_gid,
             )
-            urls = verify_post_import(
-                metadata,
-                expected_sha256=args.expected_sha256,
-                expected_size=args.expected_size,
-            )
+            if is_v2:
+                urls = verify_post_import_v2(
+                    metadata,
+                    expected_pages=expected_pages,
+                )
+                receipt = {
+                    "schema": RECEIPT_SCHEMA_V2,
+                    "result": "PASS",
+                    "id": page_id,
+                    "pages": expected_pages,
+                    "metadata": {
+                        key: value
+                        for key, value in metadata.items()
+                        if key != "pages"
+                    },
+                    "drive": {
+                        "remote": RCLONE_REMOTE,
+                        "root_folder_id": DRIVE_ROOT_FOLDER_ID,
+                        "page_paths": [
+                            f"{PENDING_DIR}/{name}" for name in page_names
+                        ],
+                        "manifest_path": manifest_remote,
+                    },
+                    "importer_image": IMPORTER_IMAGE,
+                    "verified_urls": urls,
+                    "verified_at": datetime.now(timezone.utc).isoformat(),
+                }
+            else:
+                urls = verify_post_import(
+                    metadata,
+                    expected_sha256=args.expected_sha256,
+                    expected_size=args.expected_size,
+                )
+                receipt = {
+                    "schema": RECEIPT_SCHEMA_V1,
+                    "result": "PASS",
+                    "id": page_id,
+                    "sha256": args.expected_sha256,
+                    "size_bytes": args.expected_size,
+                    "metadata": metadata,
+                    "drive": {
+                        "remote": RCLONE_REMOTE,
+                        "root_folder_id": DRIVE_ROOT_FOLDER_ID,
+                        "image_path": f"{PENDING_DIR}/{page_names[0]}",
+                        "manifest_path": manifest_remote,
+                    },
+                    "importer_image": IMPORTER_IMAGE,
+                    "verified_urls": urls,
+                    "verified_at": datetime.now(timezone.utc).isoformat(),
+                }
 
-            receipt = {
-                "schema": RECEIPT_SCHEMA,
-                "result": "PASS",
-                "id": page_id,
-                "sha256": args.expected_sha256,
-                "size_bytes": args.expected_size,
-                "metadata": metadata,
-                "drive": {
-                    "remote": RCLONE_REMOTE,
-                    "root_folder_id": DRIVE_ROOT_FOLDER_ID,
-                    "image_path": image_remote,
-                    "manifest_path": manifest_remote,
-                },
-                "importer_image": IMPORTER_IMAGE,
-                "verified_urls": urls,
-                "verified_at": datetime.now(timezone.utc).isoformat(),
-            }
             write_json_exclusive(
                 receipt_partial,
                 receipt,
@@ -765,8 +1047,10 @@ def main(argv: list[str] | None = None) -> int:
 
         print("COLORING_PAGES_DRIVE_INGEST=PASS")
         print(f"ID={page_id}")
-        print(f"SHA256={args.expected_sha256}")
-        print(f"SIZE_BYTES={args.expected_size}")
+        print(f"PAGES={len(inbox_paths)}")
+        if not is_v2:
+            print(f"SHA256={args.expected_sha256}")
+            print(f"SIZE_BYTES={args.expected_size}")
         return 0
     except OperatorError as exc:
         print(f"COLORING_PAGES_DRIVE_INGEST=FAIL error={exc}", file=sys.stderr)

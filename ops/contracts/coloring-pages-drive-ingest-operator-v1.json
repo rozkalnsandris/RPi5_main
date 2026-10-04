@@ -4,9 +4,10 @@
   "status": "source-defined-not-installed",
   "consumer": {
     "repository": "rozkalnsandris/coloring-pages",
-    "image_digest": "sha256:61f99aa6a81ced5ce1d6b18c9c5ee832fc9d948b17c7b732636ee33a2f490abd",
-    "image_ref": "ghcr.io/rozkalnsandris/coloring-pages@sha256:61f99aa6a81ced5ce1d6b18c9c5ee832fc9d948b17c7b732636ee33a2f490abd",
-    "importer_entrypoint": "/usr/local/bin/coloring-pages-import"
+    "image_digest": "sha256:09822c1ceed359e0365c0e647763c6f1d8b31fb4f4ab564d7959c383709034b2",
+    "image_ref": "ghcr.io/rozkalnsandris/coloring-pages@sha256:09822c1ceed359e0365c0e647763c6f1d8b31fb4f4ab564d7959c383709034b2",
+    "importer_entrypoint": "/usr/local/bin/coloring-pages-import",
+    "source_revision": "49d94aa646e17bbca7527a3c33fa90b0bcc3a326"
   },
   "operator": {
     "source": "ops/bin/coloring-pages-drive-ingest",
@@ -19,7 +20,8 @@
     "allowed_arguments": [
       "--id",
       "--expected-sha256",
-      "--expected-size"
+      "--expected-size",
+      "--expected-page"
     ]
   },
   "drive": {
@@ -56,7 +58,8 @@
       "O_NOFOLLOW"
     ],
     "streaming_model": "operator-opens-0600-file-as-andris-and-root-rclone-writes-inherited-stdout-fd",
-    "automatic_partial_cleanup_after_failure": false
+    "automatic_partial_cleanup_after_failure": false,
+    "page_partial": "/srv/coloring-pages-content/state/drive-ingest/<id>-<index>.png.partial"
   },
   "manifest": {
     "schema": "rozkalns.coloring-pages.drive-staging-manifest.v1",
@@ -90,7 +93,22 @@
       "lernen",
       "figuren",
       "jahreszeiten"
-    ]
+    ],
+    "multi_page_schema": "rozkalns.coloring-pages.drive-staging-manifest.v2",
+    "multi_page": {
+      "minimum_pages": 2,
+      "maximum_pages": 12,
+      "remote_page_name": "pending/<id>-<index>.png",
+      "exact_owner_bound_page_fields": [
+        "index",
+        "file",
+        "sha256",
+        "size_bytes"
+      ],
+      "page_indexes": "ascending-contiguous-from-1",
+      "source_kind": "chatgpt-generated-png-set",
+      "upload_readiness": "manifest-last"
+    }
   },
   "content": {
     "root": "/srv/coloring-pages-content",
@@ -102,7 +120,8 @@
     "expected_directory_identity": "andris:andris:0755",
     "expected_catalog_identity": "andris:andris:0644",
     "inbox_target": "/srv/coloring-pages-content/inbox/<id>.png",
-    "inbox_file_identity": "andris:andris:0600"
+    "inbox_file_identity": "andris:andris:0600",
+    "multi_page_inbox_target": "/srv/coloring-pages-content/inbox/<id>-<index>.png"
   },
   "atomic_publish": {
     "same_filesystem_required": true,
@@ -118,7 +137,7 @@
   "import": {
     "method": "direct-immutable-container",
     "runtime": "/usr/bin/docker",
-    "image_ref": "ghcr.io/rozkalnsandris/coloring-pages@sha256:61f99aa6a81ced5ce1d6b18c9c5ee832fc9d948b17c7b732636ee33a2f490abd",
+    "image_ref": "ghcr.io/rozkalnsandris/coloring-pages@sha256:09822c1ceed359e0365c0e647763c6f1d8b31fb4f4ab564d7959c383709034b2",
     "entrypoint": "/usr/local/bin/coloring-pages-import",
     "pull_policy": "never",
     "network": "none",
@@ -126,7 +145,9 @@
     "cap_drop_all": true,
     "no_new_privileges": true,
     "content_root_bind": "/srv/coloring-pages-content",
-    "application_redeploy_required": false
+    "application_redeploy_required": false,
+    "ordered_multi_page_sources": true,
+    "maximum_pages": 12
   },
   "post_import_verification": {
     "public_origin": "https://coloring.rozkalns.net",
@@ -149,14 +170,26 @@
       "public-source-http-200-when-present",
       "legacy-print-catalog-field-only-with-public-source"
     ],
-    "catalog_matching": "required-fields-exact-additive-legacy-fields-tolerated"
+    "catalog_matching": "required-fields-exact-additive-legacy-fields-tolerated",
+    "multi_page": [
+      "all-original-source-pages-size-and-sha256-match",
+      "catalog-has-exactly-one-matching-entry-with-ordered-pages",
+      "thumb-webp-exists",
+      "all-preview-webp-exist",
+      "all-print-png-exist",
+      "public-catalog-http-200",
+      "public-thumb-http-200",
+      "all-public-preview-http-200",
+      "all-public-print-png-http-200"
+    ]
   },
   "idempotency": {
     "receipt_schema": "rozkalns.rpi5-main.coloring-pages-drive-ingest-receipt.v1",
     "matching_success_receipt": "verify-read-only-and-return-already-processed",
     "existing_id_without_matching_success_receipt": "stop",
     "automatic_overwrite": false,
-    "automatic_retry_after_failure": false
+    "automatic_retry_after_failure": false,
+    "receipt_schema_v2": "rozkalns.rpi5-main.coloring-pages-drive-ingest-receipt.v2"
   },
   "oauth_client": {
     "operator_uses_existing_host_config_only": true,
@@ -190,7 +223,10 @@
       "catalog-mismatch",
       "public-verification-failure",
       "receipt-write-failure",
-      "authorization-ambiguity"
+      "authorization-ambiguity",
+      "multi-page-count-or-order-mismatch",
+      "multi-page-identity-mismatch",
+      "partial-multi-page-inbox-publication"
     ],
     "after_first_mutation": "stop-without-retry-rollback-cleanup-or-alternate-mutation"
   },
