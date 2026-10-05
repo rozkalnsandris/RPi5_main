@@ -144,6 +144,7 @@
       "route_origin_class",
       "listener_bind_class",
       "lan_path_class",
+      "bypass_policy_scope_class",
       "alternate_public_bypass_present",
       "admin_or_public_scope_overlap_present",
       "runtime_owner_matches",
@@ -207,6 +208,12 @@
       "application-logs",
       "application-data",
       "database-content"
+    ],
+    "allowed_bypass_policy_scope_classes": [
+      "absent",
+      "scoped",
+      "public",
+      "unknown"
     ]
   },
   "pass_criteria": {
@@ -223,6 +230,7 @@
     "admin_or_public_scope_overlap_present": false,
     "runtime_owner_matches": true,
     "recovery_ref_present": true,
-    "overall_result": "PASS"
+    "overall_result": "PASS",
+    "bypass_policy_scope_class": "absent"
   }
 }

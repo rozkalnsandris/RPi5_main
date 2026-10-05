@@ -30,9 +30,10 @@ class Phase5PrivateTests(unittest.TestCase):
         cls.registry_json=json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
         cls.registry=external.load_registry(POLICY_PATH)
 
-    def fake_state(self,domain="deals.rozkalns.net",decision="allow"):
+    def fake_state(self,domain="deals.rozkalns.net",decision="allow",include=None):
         app_id="00000000-1111-4111-8111-000000000001"
-        return {"organization":{},"apps":[{"id":app_id,"type":"self_hosted","domain":domain,"aud":"secret-aud"}],"policies":{app_id:[{"decision":decision,"include":[{"email":{"email":"private_identity_redacted"}}]}]}}
+        rules=include if include is not None else [{"email":{"email":"private_identity_redacted"}}]
+        return {"organization":{},"apps":[{"id":app_id,"type":"self_hosted","domain":domain,"aud":"secret-aud"}],"policies":{app_id:[{"decision":decision,"include":rules}]}}
 
     def test_contract_derives_exact_private_set_and_distinguishes_zones(self):
         private=[x for x in self.registry_json["services"] if x["zone"]=="PRIVATE"]
@@ -48,6 +49,7 @@ class Phase5PrivateTests(unittest.TestCase):
         self.assertEqual(report["result"],"PASS")
         item=report["services"][0]
         self.assertEqual(item["access_scope_class"],"exact-or-narrow-family")
+        self.assertEqual(item["bypass_policy_scope_class"],"absent")
         self.assertFalse(item["alternate_public_bypass_present"])
         self.assertFalse(item["admin_or_public_scope_overlap_present"])
         rendered=json.dumps(report,sort_keys=True)
@@ -62,9 +64,28 @@ class Phase5PrivateTests(unittest.TestCase):
     def test_public_or_bypass_fails(self):
         public=external.build_report(self.contract,self.registry,self.registry_json,self.fake_state(),"public")
         self.assertEqual(public["services"][0]["result"],"FAIL")
-        bypass=external.build_report(self.contract,self.registry,self.registry_json,self.fake_state(decision="bypass"),"access-challenge")
-        self.assertTrue(bypass["services"][0]["alternate_public_bypass_present"])
-        self.assertEqual(bypass["services"][0]["result"],"FAIL")
+
+        public_bypass=external.build_report(
+            self.contract,
+            self.registry,
+            self.registry_json,
+            self.fake_state(decision="bypass",include=[{"everyone":{}}]),
+            "access-challenge",
+        )
+        self.assertEqual(public_bypass["services"][0]["bypass_policy_scope_class"],"public")
+        self.assertTrue(public_bypass["services"][0]["alternate_public_bypass_present"])
+        self.assertEqual(public_bypass["services"][0]["result"],"FAIL")
+
+        scoped_bypass=external.build_report(
+            self.contract,
+            self.registry,
+            self.registry_json,
+            self.fake_state(decision="bypass"),
+            "access-challenge",
+        )
+        self.assertEqual(scoped_bypass["services"][0]["bypass_policy_scope_class"],"scoped")
+        self.assertFalse(scoped_bypass["services"][0]["alternate_public_bypass_present"])
+        self.assertEqual(scoped_bypass["services"][0]["result"],"UNKNOWN")
 
     def test_owner_command_is_exact_sha_bound_and_app_authored_rejected(self):
         body=f"/rpi5-p5-private-external check HEAD={SHA} CANARY=phase5-private-external-v1"
