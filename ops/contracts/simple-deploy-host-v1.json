@@ -130,7 +130,7 @@
         "drive_ingest_root_folder_id": "1F0pxqoRgtZl7JQVcyvYVZxKvx6eOnytn",
         "drive_ingest_mutates_drive": false,
         "drive_ingest_requires_separate_live_authority": true,
-        "drive_ingest_image_digest": "sha256:53801684e0ce5a30d195d3436220a71b350112fc6e6fdc6fe107779d13c857ba"
+        "drive_ingest_image_digest": "sha256:ebb52f87849d02b2ba467b5525c37b09864921530d1af11a80424208659bf868"
       }
     ]
   },
