@@ -58,7 +58,9 @@ observe_endpoint() {
     local result code seconds latency_ms state observed_at
     result="$(curl --silent --show-error --output /dev/null \
         --write-out '%{http_code}\t%{time_total}' \
-        --connect-timeout 3 --max-time 8 "$url" 2>/dev/null || true)"
+        --connect-timeout 3 --max-time 8 \
+        --retry 1 --retry-delay 1 --retry-all-errors \
+        "$url" 2>/dev/null || true)"
     IFS=$'\t' read -r code seconds <<<"$result"
     [[ "$code" =~ ^[0-9]{3}$ ]] || code="000"
     if [[ "$seconds" =~ ^[0-9]+([.][0-9]+)?$ ]]; then

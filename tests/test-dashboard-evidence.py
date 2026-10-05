@@ -206,6 +206,12 @@ assert len(entries) == 8, entries
 assert len({entry[0] for entry in entries}) == 8
 assert not any("prometheus" in entry[0].lower() or "prometheus" in entry[2].lower() for entry in entries)
 assert "401" in collector and "403" in collector
+assert "--retry 1" in collector
+assert "--retry-delay 1" in collector
+assert "--retry-all-errors" in collector
+assert collector.count("--retry 1") == 1
+assert collector.count("--retry-delay 1") == 1
+assert collector.count("--retry-all-errors") == 1
 assert "systemctl show \"$UPDATE_UNIT\"" in collector
 assert "ExecMainExitTimestamp" in collector
 assert "ExecMainCode" in collector

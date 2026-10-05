@@ -47,7 +47,7 @@ Assistant, AdGuard, Uptime Kuma and Hermes.
 Prometheus is intentionally not duplicated in `endpoints.json`; the dashboard
 already owns a dedicated Prometheus history/readiness path. The collector uses
 the existing RPi5 reachability semantics: HTTP 2xx/3xx/401/403 is `UP`, another
-valid HTTP response is `DEGRADED`, and no valid HTTP response is `DOWN`.
+valid HTTP response is `DEGRADED`, and no valid HTTP response is `DOWN`. The fixed curl probe retries one transient failure once after one second before its final classification; the existing connect and per-transfer timeouts remain unchanged.
 
 Only transitions are retained, newest first, up to 64 events.
 
