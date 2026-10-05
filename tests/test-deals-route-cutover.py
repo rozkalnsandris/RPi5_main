@@ -199,7 +199,7 @@ def test_verify_loopback_validator_ignores_unrelated_inventory_but_stays_fail_cl
     try:
         operator.validate_target_configuration(duplicate, operator.NEW_SERVICE)
     except operator.RouteError as exc:
-        assert str(exc) == "duplicate_hostname_entry"
+        assert str(exc) == "deals_route_count_mismatch"
     else:
         raise AssertionError("duplicate Deals route accepted")
 

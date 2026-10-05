@@ -186,7 +186,6 @@ def validate_target_configuration(config: dict[str, Any], expected_service: str)
 
     hostname_entries: list[tuple[int, dict[str, Any]]] = []
     catchalls: list[tuple[int, dict[str, Any]]] = []
-    seen_hostnames: set[str] = set()
     for index, item in enumerate(ingress):
         if not isinstance(item, dict):
             raise RouteError("invalid_ingress_entry")
@@ -194,9 +193,6 @@ def validate_target_configuration(config: dict[str, Any], expected_service: str)
         if hostname is None:
             catchalls.append((index, item))
         elif isinstance(hostname, str):
-            if hostname in seen_hostnames:
-                raise RouteError("duplicate_hostname_entry")
-            seen_hostnames.add(hostname)
             hostname_entries.append((index, item))
         else:
             raise RouteError("invalid_ingress_hostname")
