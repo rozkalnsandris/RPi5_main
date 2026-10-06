@@ -30,6 +30,21 @@ The Deals PRIVATE service must retain:
 
 No identity value is required to prove the source shape.
 
+## SIMPLE remediation policy
+
+Phase 5 verification is persistent; one-off remediation automation is not.
+
+If a PRIVATE Access policy is found in a state that violates this contract, the default remediation path is:
+
+1. owner reviews the exact application and policy in the Cloudflare Zero Trust dashboard;
+2. owner performs the smallest manual target-only policy change under separate explicit LIVE authority;
+3. the repository does not retain a purpose-built mutation workflow, credential bridge, protected snapshot engine or diagnostic control-plane for that one-time change;
+4. after the manual change, the existing Phase 5 GET-only verifier, route verify, host isolation check and protected browser acceptance provide fresh evidence.
+
+If the Cloudflare dashboard does not make the target/scope unambiguous, STOP instead of creating a generic privileged API writer.
+
+A manual operator report is not runtime proof by itself. Phase 5 remains incomplete until the existing verifiers produce fresh PASS evidence.
+
 ## Runtime verifier surfaces
 
 ### External Access / anonymous edge
