@@ -199,6 +199,64 @@ class Phase5DealsAccessMutatorTests(unittest.TestCase):
         with self.assertRaisesRegex(remove.AuditError, "policy_shared_with_other_app"):
             remove.build_delete_plan(state, expected_main=SHA, observed_main=SHA)
 
+    def test_optional_reusable_identity_shapes_are_fail_closed_end_to_end(self):
+        state = fixture()
+        state["account_reusable_policies"] = [
+            {"app_count": 0, "decision": "allow", "precedence": 9}
+        ]
+        plan = remove.build_delete_plan(
+            state, expected_main=SHA, observed_main=SHA
+        )
+        self.assertEqual(plan.app_id, APP)
+        self.assertEqual(plan.policy_id, BYPASS)
+
+        state = fixture()
+        state["account_reusable_policies"] = [
+            {"app_count": 2, "decision": "allow", "precedence": 9}
+        ]
+        with self.assertRaisesRegex(
+            remove.AuditError,
+            "source_preflight_blocked:reusable_policy_identity_unproven",
+        ):
+            remove.build_delete_plan(
+                state, expected_main=SHA, observed_main=SHA
+            )
+
+        state = fixture()
+        state["account_reusable_policies"] = [
+            {"decision": "allow", "precedence": 9}
+        ]
+        with self.assertRaisesRegex(
+            remove.AuditError,
+            "source_preflight_blocked:reusable_policy_identity_unproven",
+        ):
+            remove.build_delete_plan(
+                state, expected_main=SHA, observed_main=SHA
+            )
+
+        state = fixture()
+        state["policies_by_app"][OTHER] = [
+            {"decision": "allow", "precedence": 1, "include": [{"email": {}}]}
+        ]
+        with self.assertRaisesRegex(
+            remove.AuditError,
+            "source_preflight_blocked:application_policy_identity_unproven",
+        ):
+            remove.build_delete_plan(
+                state, expected_main=SHA, observed_main=SHA
+            )
+
+    def test_reusable_app_count_is_bound_into_private_prestate(self):
+        state = fixture()
+        state["account_reusable_policies"] = [
+            {"app_count": 0, "decision": "allow", "precedence": 9}
+        ]
+        before = remove._private_digest(state)
+        changed = copy.deepcopy(state)
+        changed["account_reusable_policies"][0]["app_count"] = 1
+        after = remove._private_digest(changed)
+        self.assertNotEqual(before, after)
+
     def test_ambiguous_bypass_family_allow_and_service_auth_block(self):
         state = fixture()
         state["policies_by_app"][APP].append(
