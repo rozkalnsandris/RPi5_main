@@ -104,6 +104,8 @@ class IngressDriftAuditTests(unittest.TestCase):
         self.assertTrue(cloud["api_client_reuse_required"])
         self.assertTrue(cloud["new_write_capable_client_forbidden"])
         self.assertEqual(cloud["allowed_http_methods"], ["GET"])
+        self.assertEqual(cloud["token_transport"], "stdin-only")
+        self.assertFalse(cloud["token_environment_allowed"])
 
     def test_target_set_is_exact_registry_set_and_reuses_zone_contracts(self) -> None:
         service_ids = {item["service_id"] for item in self.registry["services"]}
@@ -290,6 +292,9 @@ class IngressDriftAuditTests(unittest.TestCase):
         self.assertIn("cfd_tunnel/{tunnel_id}", source)
         self.assertNotIn("/access/apps", source)
         self.assertNotIn("/access/organizations", source)
+        self.assertIn("sys.stdin.readline", source)
+        self.assertIn("cloudflare_token_env_forbidden", source)
+        self.assertNotIn("cloudflare.require_bindings()", source)
         self.assertNotIn("urllib.request", source)
         for method in ("POST", "PUT", "PATCH", "DELETE"):
             self.assertNotIn(f'method="{method}"', source)
