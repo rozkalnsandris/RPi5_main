@@ -44,7 +44,8 @@
       "FAIL",
       "UNKNOWN"
     ],
-    "protected_identity_material_in_evidence_allowed": false
+    "protected_identity_material_in_evidence_allowed": false,
+    "bypass_selector_values_in_evidence_allowed": false
   },
   "service_projections": [
     {
@@ -145,6 +146,7 @@
       "listener_bind_class",
       "lan_path_class",
       "bypass_policy_scope_class",
+      "bypass_policy_selector_classes",
       "alternate_public_bypass_present",
       "admin_or_public_scope_overlap_present",
       "runtime_owner_matches",
@@ -207,14 +209,16 @@
       "application-config",
       "application-logs",
       "application-data",
-      "database-content"
+      "database-content",
+      "access-selector-values"
     ],
     "allowed_bypass_policy_scope_classes": [
       "absent",
       "scoped",
       "public",
       "unknown"
-    ]
+    ],
+    "bypass_policy_selector_classes_are_type_names_only": true
   },
   "pass_criteria": {
     "access_scope_class": "exact-or-narrow-family",
