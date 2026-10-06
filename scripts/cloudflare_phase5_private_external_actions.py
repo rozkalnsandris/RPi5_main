@@ -16,6 +16,7 @@ HOST_POLICY_PATH=Path("ops/contracts/cloudflare-hostname-policy.yaml")
 REGISTRY_PATH=Path("ops/contracts/ingress-registry-v1.json")
 SHA_RE=re.compile(r"^[0-9a-f]{40}$")
 ACCESS_SUFFIX=".cloudflareaccess.com"
+SELECTOR_CLASS_RE=re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl): return None
@@ -24,20 +25,39 @@ def _policy_action(policy:dict[str,Any])->str:
     value=policy.get("decision",policy.get("action"))
     return value.casefold() if isinstance(value,str) else "unknown"
 
-def _bypass_policy_scope_class(policies:list[dict[str,Any]])->str:
+def _bypass_policy_diagnostics(policies:list[dict[str,Any]])->tuple[str,list[str]]:
     bypass=[policy for policy in policies if isinstance(policy,dict) and _policy_action(policy)=="bypass"]
     if not bypass:
-        return "absent"
+        return "absent",[]
+    selector_classes:set[str]=set()
+    unknown=False
     for policy in bypass:
         include=policy.get("include")
         if not isinstance(include,list) or not include:
-            return "unknown"
+            unknown=True
+            continue
         for rule in include:
-            if not isinstance(rule,dict):
-                return "unknown"
-            if "everyone" in rule:
-                return "public"
-    return "scoped"
+            if not isinstance(rule,dict) or not rule:
+                unknown=True
+                continue
+            for raw_key in rule:
+                key=raw_key.casefold() if isinstance(raw_key,str) else ""
+                if SELECTOR_CLASS_RE.fullmatch(key):
+                    selector_classes.add(key)
+                else:
+                    unknown=True
+    if "everyone" in selector_classes:
+        scope="public"
+    elif unknown or not selector_classes:
+        scope="unknown"
+    else:
+        scope="scoped"
+    if unknown:
+        selector_classes.add("unknown")
+    return scope,sorted(selector_classes)
+
+def _bypass_policy_scope_class(policies:list[dict[str,Any]])->str:
+    return _bypass_policy_diagnostics(policies)[0]
 
 def _application_domains(app:dict[str,Any])->list[str]:
     values=[]
@@ -113,7 +133,7 @@ def build_report(contract:dict[str,Any], registry:dict[str,Any], registry_json:d
     apps=state.get("apps"); policies_by_app=state.get("policies")
     if not isinstance(apps,list) or not isinstance(policies_by_app,dict): raise AuditError("cloudflare_state_shape_invalid")
     resolved=resolve_application(apps,hostname); selected=resolved.get("selected")
-    bypass=False; overlap=False; scope="unknown"
+    bypass=False; overlap=False; scope="unknown"; bypass_scope="unknown"; bypass_selector_classes=["unknown"]
     if resolved.get("status")=="none":
         scope="missing"
     elif resolved.get("status")=="ambiguous" or not isinstance(selected,dict):
@@ -121,7 +141,7 @@ def build_report(contract:dict[str,Any], registry:dict[str,Any], registry_json:d
     else:
         app_id=selected.get("id")
         policies=policies_by_app.get(app_id,[]) if isinstance(app_id,str) else []
-        bypass_scope=_bypass_policy_scope_class(policies)
+        bypass_scope,bypass_selector_classes=_bypass_policy_diagnostics(policies)
         bypass=bypass_scope=="public"
         overlap=_broader_than_private(selected,registry)
         if overlap:
@@ -129,7 +149,7 @@ def build_report(contract:dict[str,Any], registry:dict[str,Any], registry_json:d
         elif resolved.get("status") in {"exact","wildcard"}:
             scope="exact-or-narrow-family"
     if resolved.get("status")=="none" or resolved.get("status")=="ambiguous" or not isinstance(selected,dict):
-        bypass_scope="unknown"
+        bypass_scope="unknown"; bypass_selector_classes=["unknown"]
 
     registry_services=registry_json.get("services")
     current=next((x for x in registry_services if isinstance(x,dict) and x.get("service_id")==projected["service_id"]),None) if isinstance(registry_services,list) else None
@@ -142,8 +162,8 @@ def build_report(contract:dict[str,Any], registry:dict[str,Any], registry_json:d
         result="UNKNOWN"
     else:
         result="FAIL"
-    service={"service_id":projected["service_id"],"hostname":hostname,"access_scope_class":scope,"unauthenticated_external_class":http_class,"bypass_policy_scope_class":bypass_scope,"alternate_public_bypass_present":bypass,"admin_or_public_scope_overlap_present":overlap,"runtime_owner_matches":owner_matches,"recovery_ref_present":recovery_present,"result":result}
-    return {"schema_version":1,"audit":AUDIT_NAME,"canonical_issue":ISSUE_NUMBER,"verification_class":"unauthenticated-external","result":"PASS" if result=="PASS" else "BLOCKED","mutation_performed":False,"services":[service],"privacy":{"response_body_read":False,"redirect_location_emitted":False,"account_id_emitted":False,"api_token_emitted":False,"app_or_policy_id_emitted":False,"identity_value_emitted":False,"aud_cookie_or_session_emitted":False,"raw_api_payload_emitted":False}}
+    service={"service_id":projected["service_id"],"hostname":hostname,"access_scope_class":scope,"unauthenticated_external_class":http_class,"bypass_policy_scope_class":bypass_scope,"bypass_policy_selector_classes":bypass_selector_classes,"alternate_public_bypass_present":bypass,"admin_or_public_scope_overlap_present":overlap,"runtime_owner_matches":owner_matches,"recovery_ref_present":recovery_present,"result":result}
+    return {"schema_version":1,"audit":AUDIT_NAME,"canonical_issue":ISSUE_NUMBER,"verification_class":"unauthenticated-external","result":"PASS" if result=="PASS" else "BLOCKED","mutation_performed":False,"services":[service],"privacy":{"response_body_read":False,"redirect_location_emitted":False,"account_id_emitted":False,"api_token_emitted":False,"app_or_policy_id_emitted":False,"identity_value_emitted":False,"bypass_selector_values_emitted":False,"aud_cookie_or_session_emitted":False,"raw_api_payload_emitted":False}}
 
 def emit_blocked(reason:str)->None:
     print(json.dumps({"schema_version":1,"audit":AUDIT_NAME,"canonical_issue":ISSUE_NUMBER,"result":"BLOCKED","mutation_performed":False,"reason":reason,"privacy":{"response_body_read":False,"account_id_emitted":False,"api_token_emitted":False,"identity_value_emitted":False}},indent=2,sort_keys=True))
