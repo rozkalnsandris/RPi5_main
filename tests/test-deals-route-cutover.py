@@ -182,6 +182,37 @@ def test_config_validator_is_exact_and_fail_closed() -> None:
             raise AssertionError(f"invalid config accepted: {expected_reason}")
 
 
+def test_verify_loopback_validator_ignores_unrelated_inventory_but_stays_fail_closed() -> None:
+    extra = sample_config(operator.NEW_SERVICE)
+    extra["ingress"].insert(
+        -1,
+        {"hostname": "new-public-service.rozkalns.net", "service": "http://127.0.0.1:9999"},
+    )
+    index = operator.validate_target_configuration(extra, operator.NEW_SERVICE)
+    assert extra["ingress"][index]["hostname"] == operator.HOSTNAME
+
+    duplicate = copy.deepcopy(extra)
+    duplicate["ingress"].insert(
+        -1,
+        {"hostname": operator.HOSTNAME, "service": operator.NEW_SERVICE},
+    )
+    try:
+        operator.validate_target_configuration(duplicate, operator.NEW_SERVICE)
+    except operator.RouteError as exc:
+        assert str(exc) == "deals_route_count_mismatch"
+    else:
+        raise AssertionError("duplicate Deals route accepted")
+
+    bad_catchall = copy.deepcopy(extra)
+    bad_catchall["ingress"][-1]["service"] = "http_status:200"
+    try:
+        operator.validate_target_configuration(bad_catchall, operator.NEW_SERVICE)
+    except operator.RouteError as exc:
+        assert str(exc) == "catchall_contract_mismatch"
+    else:
+        raise AssertionError("invalid catch-all accepted")
+
+
 def test_cutover_changes_only_deals_service() -> None:
     original = sample_config()
     puts: list[dict] = []
@@ -288,6 +319,7 @@ def main() -> None:
         test_syntax_and_static_security_boundaries,
         test_authorizer_accepts_only_exact_owner_commands,
         test_config_validator_is_exact_and_fail_closed,
+        test_verify_loopback_validator_ignores_unrelated_inventory_but_stays_fail_closed,
         test_cutover_changes_only_deals_service,
         test_post_write_failure_requests_bounded_rollback,
     ):

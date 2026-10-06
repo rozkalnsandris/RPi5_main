@@ -24,6 +24,21 @@ def _policy_action(policy:dict[str,Any])->str:
     value=policy.get("decision",policy.get("action"))
     return value.casefold() if isinstance(value,str) else "unknown"
 
+def _bypass_policy_scope_class(policies:list[dict[str,Any]])->str:
+    bypass=[policy for policy in policies if isinstance(policy,dict) and _policy_action(policy)=="bypass"]
+    if not bypass:
+        return "absent"
+    for policy in bypass:
+        include=policy.get("include")
+        if not isinstance(include,list) or not include:
+            return "unknown"
+        for rule in include:
+            if not isinstance(rule,dict):
+                return "unknown"
+            if "everyone" in rule:
+                return "public"
+    return "scoped"
+
 def _application_domains(app:dict[str,Any])->list[str]:
     values=[]
     domain=app.get("domain")
@@ -106,21 +121,28 @@ def build_report(contract:dict[str,Any], registry:dict[str,Any], registry_json:d
     else:
         app_id=selected.get("id")
         policies=policies_by_app.get(app_id,[]) if isinstance(app_id,str) else []
-        bypass=any(_policy_action(p)=="bypass" for p in policies if isinstance(p,dict))
+        bypass_scope=_bypass_policy_scope_class(policies)
+        bypass=bypass_scope=="public"
         overlap=_broader_than_private(selected,registry)
         if overlap:
             scope="broader-than-private"
         elif resolved.get("status") in {"exact","wildcard"}:
             scope="exact-or-narrow-family"
+    if resolved.get("status")=="none" or resolved.get("status")=="ambiguous" or not isinstance(selected,dict):
+        bypass_scope="unknown"
+
     registry_services=registry_json.get("services")
     current=next((x for x in registry_services if isinstance(x,dict) and x.get("service_id")==projected["service_id"]),None) if isinstance(registry_services,list) else None
     owner_matches=isinstance(current,dict) and current.get("runtime_owner")==REPOSITORY and projected.get("runtime_owner")==REPOSITORY
     recovery_present=_recovery_ref_present(projected.get("recovery_ref"))
-    passed=(scope==projected["expected_access_application_scope"] and http_class in {"access-challenge","denied"} and bypass is False and overlap is False and owner_matches and recovery_present)
-    if passed: result="PASS"
-    elif scope=="unknown" or http_class in {"unknown","network-error"}: result="UNKNOWN"
-    else: result="FAIL"
-    service={"service_id":projected["service_id"],"hostname":hostname,"access_scope_class":scope,"unauthenticated_external_class":http_class,"alternate_public_bypass_present":bypass,"admin_or_public_scope_overlap_present":overlap,"runtime_owner_matches":owner_matches,"recovery_ref_present":recovery_present,"result":result}
+    passed=(scope==projected["expected_access_application_scope"] and http_class in {"access-challenge","denied"} and bypass_scope=="absent" and overlap is False and owner_matches and recovery_present)
+    if passed:
+        result="PASS"
+    elif scope=="unknown" or http_class in {"unknown","network-error"} or bypass_scope in {"scoped","unknown"}:
+        result="UNKNOWN"
+    else:
+        result="FAIL"
+    service={"service_id":projected["service_id"],"hostname":hostname,"access_scope_class":scope,"unauthenticated_external_class":http_class,"bypass_policy_scope_class":bypass_scope,"alternate_public_bypass_present":bypass,"admin_or_public_scope_overlap_present":overlap,"runtime_owner_matches":owner_matches,"recovery_ref_present":recovery_present,"result":result}
     return {"schema_version":1,"audit":AUDIT_NAME,"canonical_issue":ISSUE_NUMBER,"verification_class":"unauthenticated-external","result":"PASS" if result=="PASS" else "BLOCKED","mutation_performed":False,"services":[service],"privacy":{"response_body_read":False,"redirect_location_emitted":False,"account_id_emitted":False,"api_token_emitted":False,"app_or_policy_id_emitted":False,"identity_value_emitted":False,"aud_cookie_or_session_emitted":False,"raw_api_payload_emitted":False}}
 
 def emit_blocked(reason:str)->None:

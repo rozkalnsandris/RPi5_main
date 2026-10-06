@@ -38,13 +38,13 @@ The source-defined workflow `.github/workflows/cloudflare-phase5-private-externa
 
 `/rpi5-p5-private-external check HEAD=<exact-main-sha> CANARY=phase5-private-external-v1`
 
-It reuses only the existing P1D03 GET-only Access credential lane. It performs Cloudflare API GETs plus one unauthenticated HTTPS GET to the public hostname, does not follow redirects, never reads the response body, and emits only sanitized classes/booleans.
+It reuses only the existing P1D03 GET-only Access credential lane. It performs Cloudflare API GETs plus one unauthenticated HTTPS GET to the public hostname, does not follow redirects, never reads the response body, and emits only sanitized classes/booleans. Bypass policy scope is reduced to `absent`, `scoped`, `public` or `unknown`; only `absent` can PASS, a proven public/Everyone bypass FAILs, and scoped/unknown bypass remains UNKNOWN rather than being mislabeled public.
 
 ### Route origin
 
 Phase 5 does **not** create a new Tunnel credential consumer. The reviewed Deals V19 operator already exists at `.github/workflows/deals-9128-route-cutover.yml` / `scripts/cloudflare_deals_route.py`.
 
-For Phase 5 only its existing read-only `/rpi5-61 verify` -> `verify-loopback` operation is admissible. A fresh runtime gate must require `ROUTE_STATE=loopback`, Access edge protection still present, and `CONFIG_MUTATED=false`. The `check` and `cutover` operations are not authorized by Phase 5 verification authority.
+For Phase 5 only its existing read-only `/rpi5-61 verify` -> `verify-loopback` operation is admissible. That verify path checks the Deals route plus terminal catch-all without freezing unrelated tunnel inventory; the legacy `check` and `cutover` validators remain fleet-exact. A fresh runtime gate must require `ROUTE_STATE=loopback`, Access edge protection still present, and `CONFIG_MUTATED=false`. The `check` and `cutover` operations are not authorized by Phase 5 verification authority.
 
 ### RPi5 host isolation
 

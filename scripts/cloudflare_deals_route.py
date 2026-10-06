@@ -174,6 +174,44 @@ def validate_configuration(config: dict[str, Any], expected_service: str) -> int
     return target_index
 
 
+def validate_target_configuration(config: dict[str, Any], expected_service: str) -> int:
+    """Validate only the Deals route plus the terminal catch-all.
+
+    Phase 5 verification must not freeze unrelated tunnel inventory. The legacy
+    cutover/check validator remains strict and fleet-exact.
+    """
+    ingress = config.get("ingress")
+    if not isinstance(ingress, list) or len(ingress) < 2:
+        raise RouteError("ingress_shape_invalid")
+
+    hostname_entries: list[tuple[int, dict[str, Any]]] = []
+    catchalls: list[tuple[int, dict[str, Any]]] = []
+    for index, item in enumerate(ingress):
+        if not isinstance(item, dict):
+            raise RouteError("invalid_ingress_entry")
+        hostname = item.get("hostname")
+        if hostname is None:
+            catchalls.append((index, item))
+        elif isinstance(hostname, str):
+            hostname_entries.append((index, item))
+        else:
+            raise RouteError("invalid_ingress_hostname")
+
+    if len(catchalls) != 1:
+        raise RouteError("catchall_count_mismatch")
+    catchall_index, catchall = catchalls[0]
+    if catchall_index != len(ingress) - 1 or catchall.get("service") != "http_status:404":
+        raise RouteError("catchall_contract_mismatch")
+
+    target = [(index, item) for index, item in hostname_entries if item["hostname"] == HOSTNAME]
+    if len(target) != 1:
+        raise RouteError("deals_route_count_mismatch")
+    target_index, target_item = target[0]
+    if target_item.get("service") != expected_service:
+        raise RouteError("deals_origin_mismatch")
+    return target_index
+
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
         return None
@@ -224,10 +262,19 @@ def rollback(
         return False
 
 
-def check_mode(account_id: str, tunnel_id: str, api_token: str, expected_service: str, state: str) -> None:
+def check_mode(
+    account_id: str,
+    tunnel_id: str,
+    api_token: str,
+    expected_service: str,
+    state: str,
+    *,
+    target_only: bool = False,
+) -> None:
     get_tunnel(account_id, tunnel_id, api_token)
     config, _ = get_configuration(account_id, tunnel_id, api_token)
-    validate_configuration(config, expected_service)
+    validator = validate_target_configuration if target_only else validate_configuration
+    validator(config, expected_service)
     verify_access_edge()
     emit("RESULT", "PASS")
     emit("MODE", "check" if state == "LAN" else "verify-loopback")
@@ -290,7 +337,14 @@ def main() -> None:
         if mode == "check":
             check_mode(account_id, tunnel_id, api_token, OLD_SERVICE, "LAN")
         elif mode == "verify-loopback":
-            check_mode(account_id, tunnel_id, api_token, NEW_SERVICE, "LOOPBACK")
+            check_mode(
+                account_id,
+                tunnel_id,
+                api_token,
+                NEW_SERVICE,
+                "LOOPBACK",
+                target_only=True,
+            )
         else:
             cutover_mode(account_id, tunnel_id, api_token)
     except RouteError as exc:
