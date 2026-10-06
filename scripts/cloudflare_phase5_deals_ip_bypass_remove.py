@@ -201,6 +201,7 @@ def _service_auth_proven(policies: list[dict[str, Any]]) -> bool:
 def _policy_projection(policy: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": policy.get("id"),
+        "app_count": policy.get("app_count"),
         "action": _action(policy),
         "precedence": policy.get("precedence"),
         "include": policy.get("include"),

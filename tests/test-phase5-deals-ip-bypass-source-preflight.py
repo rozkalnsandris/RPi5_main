@@ -95,6 +95,53 @@ class Phase5DealsBypassSourcePreflightTests(unittest.TestCase):
         state["policies_by_app"][OTHER] = [{"id": BYPASS, "decision":"bypass", "precedence":1}]
         self.assertEqual(assess(state)["reason"], "policy_shared_with_other_app")
 
+    def test_documented_optional_reusable_id_is_safe_only_when_app_count_zero(self):
+        state = fixture()
+        state["account_reusable_policies"] = [
+            {"app_count": 0, "decision": "allow", "precedence": 9}
+        ]
+        self.assertEqual(assess(state)["result"], "SOURCE_ONLY_CANDIDATE")
+
+        state = fixture()
+        state["account_reusable_policies"] = [
+            {"app_count": 1, "decision": "allow", "precedence": 9}
+        ]
+        self.assertEqual(
+            assess(state)["reason"], "reusable_policy_identity_unproven"
+        )
+
+        state = fixture()
+        state["account_reusable_policies"] = [
+            {"decision": "allow", "precedence": 9}
+        ]
+        self.assertEqual(
+            assess(state)["reason"], "reusable_policy_identity_unproven"
+        )
+
+        state = fixture()
+        state["account_reusable_policies"] = [
+            {"id": "not-a-valid-policy-id", "app_count": 0}
+        ]
+        self.assertEqual(
+            assess(state)["reason"], "reusable_policy_identity_unproven"
+        )
+
+    def test_application_policy_without_stable_id_blocks_cross_app_proof(self):
+        state = fixture()
+        del state["policies_by_app"][OTHER]
+        state["policies_by_app"][OTHER] = [
+            {"decision": "allow", "precedence": 1, "include": [{"email": {}}]}
+        ]
+        self.assertEqual(
+            assess(state)["reason"], "application_policy_identity_unproven"
+        )
+
+        state = fixture()
+        del state["policies_by_app"][APP][1]["id"]
+        self.assertEqual(
+            assess(state)["reason"], "application_policy_identity_unproven"
+        )
+
     def test_multiple_bypass_or_non_ip_scope_blocks(self):
         state = fixture()
         state["policies_by_app"][APP].append({
