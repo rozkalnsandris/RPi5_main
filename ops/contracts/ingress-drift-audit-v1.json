@@ -42,7 +42,9 @@
       "/accounts/{account_id}/cfd_tunnel/{tunnel_id}",
       "/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations"
     ],
-    "access_application_or_policy_reads_allowed": false
+    "access_application_or_policy_reads_allowed": false,
+    "token_transport": "stdin-only",
+    "token_environment_allowed": false
   },
   "host_component": {
     "execution_surface": "owner-authorized-rpi5-read-only",
