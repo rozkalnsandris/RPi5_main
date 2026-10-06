@@ -18,7 +18,7 @@
     "remediation_requires_separate_service_issue_and_owner_authorization": true
   },
   "cloudflare_component": {
-    "existing_audit": "cloudflare-p0-readonly-reconciliation",
+    "existing_audit": "phase7-cloudflare-route-reconciliation",
     "api_client_reuse_required": true,
     "new_write_capable_client_forbidden": true,
     "allowed_http_methods": [
@@ -36,7 +36,13 @@
     "relevant_blocker_exact": [
       "tunnel_catchall_count_mismatch",
       "tunnel_catchall_contract_mismatch"
-    ]
+    ],
+    "allowed_get_surfaces": [
+      "/user/tokens/verify",
+      "/accounts/{account_id}/cfd_tunnel/{tunnel_id}",
+      "/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations"
+    ],
+    "access_application_or_policy_reads_allowed": false
   },
   "host_component": {
     "execution_surface": "owner-authorized-rpi5-read-only",
