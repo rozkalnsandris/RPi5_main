@@ -50,6 +50,7 @@ class Phase5PrivateTests(unittest.TestCase):
         item=report["services"][0]
         self.assertEqual(item["access_scope_class"],"exact-or-narrow-family")
         self.assertEqual(item["bypass_policy_scope_class"],"absent")
+        self.assertEqual(item["bypass_policy_selector_classes"],[])
         self.assertFalse(item["alternate_public_bypass_present"])
         self.assertFalse(item["admin_or_public_scope_overlap_present"])
         rendered=json.dumps(report,sort_keys=True)
@@ -73,6 +74,7 @@ class Phase5PrivateTests(unittest.TestCase):
             "access-challenge",
         )
         self.assertEqual(public_bypass["services"][0]["bypass_policy_scope_class"],"public")
+        self.assertEqual(public_bypass["services"][0]["bypass_policy_selector_classes"],["everyone"])
         self.assertTrue(public_bypass["services"][0]["alternate_public_bypass_present"])
         self.assertEqual(public_bypass["services"][0]["result"],"FAIL")
 
@@ -84,8 +86,32 @@ class Phase5PrivateTests(unittest.TestCase):
             "access-challenge",
         )
         self.assertEqual(scoped_bypass["services"][0]["bypass_policy_scope_class"],"scoped")
+        self.assertEqual(scoped_bypass["services"][0]["bypass_policy_selector_classes"],["email"])
         self.assertFalse(scoped_bypass["services"][0]["alternate_public_bypass_present"])
         self.assertEqual(scoped_bypass["services"][0]["result"],"UNKNOWN")
+
+    def test_scoped_bypass_selector_classes_are_value_free(self):
+        report=external.build_report(
+            self.contract,
+            self.registry,
+            self.registry_json,
+            self.fake_state(
+                decision="bypass",
+                include=[
+                    {"ip":{"ip":"198.51.100.77/32"}},
+                    {"service_token":{"token_id":"sensitive-token-id"}},
+                ],
+            ),
+            "access-challenge",
+        )
+        item=report["services"][0]
+        self.assertEqual(item["bypass_policy_scope_class"],"scoped")
+        self.assertEqual(item["bypass_policy_selector_classes"],["ip","service_token"])
+        self.assertEqual(item["result"],"UNKNOWN")
+        self.assertFalse(report["privacy"]["bypass_selector_values_emitted"])
+        rendered=json.dumps(report,sort_keys=True)
+        self.assertNotIn("198.51.100.77",rendered)
+        self.assertNotIn("sensitive-token-id",rendered)
 
     def test_owner_command_is_exact_sha_bound_and_app_authored_rejected(self):
         body=f"/rpi5-p5-private-external check HEAD={SHA} CANARY=phase5-private-external-v1"
@@ -143,6 +169,9 @@ class Phase5PrivateTests(unittest.TestCase):
         a=self.contract["authority"]
         for k in ("source_merge_proves_runtime_state","source_merge_authorizes_runtime_verification","source_merge_authorizes_protected_private_verification","source_merge_authorizes_cloudflare_write","source_merge_authorizes_live_mutation"):
             self.assertFalse(a[k])
+        self.assertIn("bypass_policy_selector_classes",self.contract["evidence_schema"]["allowed_service_fields"])
+        self.assertIn("access-selector-values",self.contract["evidence_schema"]["forbidden_evidence"])
+        self.assertTrue(self.contract["evidence_schema"]["bypass_policy_selector_classes_are_type_names_only"])
         source=(ROOT/"scripts/phase5_private_host_isolation.py").read_text(encoding="utf-8")
         for forbidden in ("docker inspect","docker logs","systemctl","journalctl","ufw ","nft ","iptables",".env"):
             self.assertNotIn(forbidden,source)
