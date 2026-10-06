@@ -38,7 +38,7 @@ The source-defined workflow `.github/workflows/cloudflare-phase5-private-externa
 
 `/rpi5-p5-private-external check HEAD=<exact-main-sha> CANARY=phase5-private-external-v1`
 
-It reuses only the existing P1D03 GET-only Access credential lane. It performs Cloudflare API GETs plus one unauthenticated HTTPS GET to the public hostname, does not follow redirects, never reads the response body, and emits only sanitized classes/booleans. Bypass policy scope is reduced to `absent`, `scoped`, `public` or `unknown`; only `absent` can PASS, a proven public/Everyone bypass FAILs, and scoped/unknown bypass remains UNKNOWN rather than being mislabeled public.
+It reuses only the existing P1D03 GET-only Access credential lane. It performs Cloudflare API GETs plus one unauthenticated HTTPS GET to the public hostname, does not follow redirects, never reads the response body, and emits only sanitized classes/booleans. Bypass policy scope is reduced to `absent`, `scoped`, `public` or `unknown`; only `absent` can PASS, a proven public/Everyone bypass FAILs, and scoped/unknown bypass remains UNKNOWN rather than being mislabeled public. The verifier also emits only sorted Bypass include-selector type names (for example `ip`, `service_token` or `everyone`) as `bypass_policy_selector_classes`; selector values are never emitted, and malformed/unsupported selector shapes add only the `unknown` class.
 
 ### Route origin
 
