@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -236,8 +238,14 @@ def build_report(
     }
 
 
-def _collect_cloudflare_report() -> dict[str, Any]:
-    account_id, tunnel_id, api_token = cloudflare.require_bindings()
+def _collect_cloudflare_report(api_token: str) -> dict[str, Any]:
+    account_id = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
+    tunnel_id = os.environ.get("CLOUDFLARE_TUNNEL_ID", "")
+    if not cloudflare.ACCOUNT_ID_RE.fullmatch(account_id):
+        raise cloudflare.AuditError("missing_or_invalid_account_id")
+    if not cloudflare.TUNNEL_ID_RE.fullmatch(tunnel_id):
+        raise cloudflare.AuditError("missing_or_invalid_tunnel_id")
+
     registry = cloudflare.load_registry(HOSTNAME_POLICY_PATH)
     client = cloudflare.CloudflareGetClient(api_token)
 
@@ -333,7 +341,19 @@ def main() -> int:
 
     try:
         host_report = host.collect_report(expected_main)
-        cloudflare_report = _collect_cloudflare_report()
+        if os.environ.get("CLOUDFLARE_API_TOKEN"):
+            raise AuditError("cloudflare_token_env_forbidden")
+        token_line = sys.stdin.readline(4097)
+        api_token = token_line.rstrip("\r\n")
+        token_line = ""
+        if (
+            len(api_token) < 20
+            or len(api_token) > 4096
+            or any(ch.isspace() for ch in api_token)
+        ):
+            raise AuditError("missing_or_invalid_api_token")
+        cloudflare_report = _collect_cloudflare_report(api_token)
+        api_token = ""
         report = build_report(
             expected_main=expected_main,
             registry=_load_json(REGISTRY_PATH),
