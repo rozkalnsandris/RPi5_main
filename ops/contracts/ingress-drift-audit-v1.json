@@ -200,6 +200,19 @@
       "account-identifiers",
       "tunnel-identifiers",
       "access-audience-values"
-    ]
+    ],
+    "allowed_cloudflare_fields": [
+      "drift_codes",
+      "reason_codes",
+      "result"
+    ],
+    "allowed_route_origin_classes": [
+      "loopback",
+      "lan",
+      "other",
+      "none",
+      "unknown"
+    ],
+    "evidence_schema": "rozkalns.rpi5-main.ingress-drift-audit-evidence.v1"
   }
 }
