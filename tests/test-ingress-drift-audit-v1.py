@@ -87,7 +87,7 @@ class IngressDriftAuditTests(unittest.TestCase):
                 }
             )
         return {
-            "audit": "cloudflare-p0-readonly-reconciliation",
+            "audit": "phase7-cloudflare-route-reconciliation",
             "mutation_performed": False,
             "blockers": [],
             "hostnames": rows,
@@ -285,7 +285,11 @@ class IngressDriftAuditTests(unittest.TestCase):
         source = (ROOT / "scripts" / "ingress_drift_audit.py").read_text(encoding="utf-8")
         self.assertIn("import cloudflare_zero_trust_reconcile as cloudflare", source)
         self.assertIn("cloudflare.CloudflareGetClient", source)
-        self.assertIn("cloudflare.collect_state", source)
+        self.assertNotIn("cloudflare.collect_state", source)
+        self.assertIn('client.get("/user/tokens/verify")', source)
+        self.assertIn("cfd_tunnel/{tunnel_id}", source)
+        self.assertNotIn("/access/apps", source)
+        self.assertNotIn("/access/organizations", source)
         self.assertNotIn("urllib.request", source)
         for method in ("POST", "PUT", "PATCH", "DELETE"):
             self.assertNotIn(f'method="{method}"', source)
