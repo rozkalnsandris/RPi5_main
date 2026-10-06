@@ -218,6 +218,11 @@ class Phase5DealsAccessMutatorTests(unittest.TestCase):
             remove.build_delete_plan(state, expected_main=SHA, observed_main=SHA)
 
         state = fixture()
+        state["policies_by_app"][APP][1]["exclude"] = "malformed"
+        with self.assertRaisesRegex(remove.AuditError, "family_allow_not_strictly_proven"):
+            remove.build_delete_plan(state, expected_main=SHA, observed_main=SHA)
+
+        state = fixture()
         state["policies_by_app"][APP][2]["include"] = [{"ip": {"ip": "203.0.113.1/32"}}]
         with self.assertRaisesRegex(remove.AuditError, "service_auth_not_strictly_proven"):
             remove.build_delete_plan(state, expected_main=SHA, observed_main=SHA)
