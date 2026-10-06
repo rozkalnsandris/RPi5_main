@@ -11,7 +11,7 @@ Phase 7 turns the one-off Phase 6 exposure review into a bounded repeatable drif
 
 The audit compares two existing trust surfaces against the canonical ingress registry:
 
-1. Cloudflare/Tunnel state through the existing GET-only P0 reconciler;
+1. Cloudflare Tunnel state through the existing reviewed GET-only client and route classifier;
 2. RPi5 listener, Docker publish, firewall and connector-health metadata through a bounded host collector.
 
 The combined result is either:
@@ -26,16 +26,9 @@ The audit never remediates drift.
 
 Phase 7 deliberately does **not** add another Cloudflare API client, mutation workflow or credential bridge.
 
-`scripts/ingress_drift_audit.py` imports and reuses:
+`scripts/ingress_drift_audit.py` imports and reuses `CloudflareGetClient`, registry parsing and Tunnel route-classification helpers from `scripts/cloudflare_zero_trust_reconcile.py`.
 
-- `CloudflareGetClient`;
-- registry loading;
-- GET-only state collection;
-- route inventory / reconciliation logic
-
-from `scripts/cloudflare_zero_trust_reconcile.py`.
-
-This keeps the Cloudflare request surface on the already-reviewed GET-only implementation. The Phase 7 layer filters that evidence down to route/inventory drift only; unrelated Access-policy findings from the broader P0 audit do not become Phase 7 LAN-exposure failures.
+Phase 7 deliberately narrows that existing client to only three GET surfaces: token verification, Tunnel metadata and Tunnel configuration. It does **not** enumerate Access applications, policies, organizations or selector values. This keeps the audit inside the route/exposure scope while avoiding a second API implementation.
 
 The host side is implemented by `scripts/ingress_drift_host.py`.
 
@@ -146,7 +139,7 @@ Canonical combined entrypoint:
 python3 scripts/ingress_drift_audit.py --expected-main=<exact-main-sha>
 ```
 
-The entrypoint first verifies the local checkout is exact and clean, then collects host metadata, then reuses the existing GET-only Cloudflare reconciler. Required Cloudflare bindings remain the existing protected P0 bindings; Phase 7 introduces no second credential store or API implementation.
+The entrypoint first verifies the local checkout is exact and clean, then collects host metadata, then reuses the existing GET-only Cloudflare client for Tunnel-only reads. Required Cloudflare bindings remain the existing protected P0 bindings; Phase 7 introduces no second credential store or API implementation.
 
 Runtime invocation details must be frozen by the later owner authorization. Do not infer runtime permission from this document or from source merge.
 
