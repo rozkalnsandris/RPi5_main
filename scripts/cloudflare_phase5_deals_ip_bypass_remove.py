@@ -172,13 +172,17 @@ def _rules(policy: dict[str, Any], phase: str) -> list[dict[str, Any]]:
     return value if isinstance(value, list) and all(isinstance(x, dict) for x in value) else []
 
 
+def _phase_empty(policy: dict[str, Any], phase: str) -> bool:
+    return policy.get(phase) in (None, [])
+
+
 def _family_allow_proven(policies: list[dict[str, Any]]) -> bool:
     candidates = [p for p in policies if _action(p) == "allow"]
     return any(
         bool(include := _rules(policy, "include"))
         and all(set(rule) == {"email"} for rule in include)
-        and not _rules(policy, "require")
-        and not _rules(policy, "exclude")
+        and _phase_empty(policy, "require")
+        and _phase_empty(policy, "exclude")
         for policy in candidates
     )
 
@@ -188,8 +192,8 @@ def _service_auth_proven(policies: list[dict[str, Any]]) -> bool:
     return any(
         bool(include := _rules(policy, "include"))
         and all(set(rule) == {"service_token"} for rule in include)
-        and not _rules(policy, "require")
-        and not _rules(policy, "exclude")
+        and _phase_empty(policy, "require")
+        and _phase_empty(policy, "exclude")
         for policy in candidates
     )
 
