@@ -71,6 +71,20 @@ class Phase5DealsBypassSourcePreflightTests(unittest.TestCase):
         )["reason"], "service_token_dependency_unknown")
         self.assertEqual(assess(state, current="b"*40)["reason"], "exact_main_unproven")
 
+    def test_empty_inventory_and_missing_deals_have_specific_reasons(self):
+        state = fixture()
+        state["apps"] = []
+        state["policies_by_app"] = {}
+        self.assertEqual(
+            assess(state)["reason"], "access_application_inventory_empty"
+        )
+
+        state = fixture()
+        state["apps"][0]["domain"] = "other-private.example.invalid"
+        self.assertEqual(
+            assess(state)["reason"], "exact_deals_application_not_found"
+        )
+
     def test_incomplete_inventory_and_app_scope_block(self):
         state = fixture()
         state["inventory_complete"] = False

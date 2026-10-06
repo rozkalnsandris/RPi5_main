@@ -107,13 +107,15 @@ def assess(
     organization = state.get("organization")
     if (
         not isinstance(apps, list)
-        or not apps
         or any(not isinstance(app, dict) for app in apps)
         or not isinstance(policies_by_app, dict)
         or not isinstance(reusable, list)
         or not isinstance(organization, dict)
     ):
         return _result("snapshot_shape_invalid")
+
+    if not apps:
+        return _result("access_application_inventory_empty")
 
     app_identity_reason = _validate_application_policy_identities(apps, policies_by_app)
     if app_identity_reason is not None:
@@ -124,6 +126,8 @@ def assess(
         return _result(reusable_reason)
 
     selected = [app for app in apps if app.get("domain") == TARGET]
+    if not selected:
+        return _result("exact_deals_application_not_found")
     if len(selected) != 1:
         return _result("exact_application_not_unique")
     app = selected[0]

@@ -149,6 +149,7 @@ test:
 	python3 ./tests/test-ingress-private-zone-verification-v1.py
 	python3 ./tests/test-phase5-deals-ip-bypass-source-preflight.py
 	python3 ./tests/test-phase5-deals-ip-bypass-remove.py
+	python3 ./tests/test-phase5-deals-access-inventory-diagnostic.py
 	python3 ./tests/test-phase4-admin-authorized-path-verifier-v1.py
 	python3 ./tests/test-cloudflare-zero-trust-reconcile.py
 	python3 ./tests/test-cloudflare-p1-write-plan.py

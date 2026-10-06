@@ -45,6 +45,18 @@ References:
 
 No new Cloudflare credential, secret name, permission, service, RPi5 helper, Wrangler command, generic dispatcher or runtime daemon is introduced.
 
+## Read-only inventory diagnostic
+
+After a preflight result such as `access_application_inventory_empty`, use the separate owner-gated diagnostic workflow before another removal attempt. It loads only the existing P1D03/P1D04 account IDs and **read** tokens and performs GET-only token verification plus `/access/apps` listing for both lanes.
+
+Public output is restricted to booleans/classes:
+- whether P1D03/P1D04 account bindings match;
+- whether each lane sees any Access applications;
+- whether each lane resolves exactly one `deals.rozkalns.net` application;
+- whether the two lanes see the same application inventory and Deals application identity.
+
+It never loads a write token, never emits account/app IDs or raw responses, and has no mutation method.
+
 ## Future LIVE command contract
 
 A later LIVE operation may be triggered only by a new direct owner comment on issue `#897` matching exactly:
