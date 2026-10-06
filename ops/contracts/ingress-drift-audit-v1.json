@@ -1,0 +1,205 @@
+{
+  "schema": "rozkalns.rpi5-main.ingress-drift-audit.v1",
+  "schema_version": 1,
+  "status": "source-defined",
+  "roadmap_issue": 60,
+  "implementation_issue": 903,
+  "registry_ref": "ops/contracts/ingress-registry-v1.json",
+  "hostname_policy_ref": "ops/contracts/cloudflare-hostname-policy.yaml",
+  "cloudflare_reconciler_ref": "scripts/cloudflare_zero_trust_reconcile.py",
+  "admin_host_targets_ref": "ops/contracts/admin-zone-remaining-infra-verifier-v1.json",
+  "private_host_targets_ref": "ops/contracts/private-zone-verification-v1.json",
+  "authority": {
+    "source_merge_proves_runtime_state": false,
+    "source_merge_authorizes_runtime_execution": false,
+    "source_merge_authorizes_cloudflare_write": false,
+    "source_merge_authorizes_host_mutation": false,
+    "runtime_execution_requires_fresh_owner_authorization": true,
+    "remediation_requires_separate_service_issue_and_owner_authorization": true
+  },
+  "cloudflare_component": {
+    "existing_audit": "cloudflare-p0-readonly-reconciliation",
+    "api_client_reuse_required": true,
+    "new_write_capable_client_forbidden": true,
+    "allowed_http_methods": [
+      "GET"
+    ],
+    "relevant_blocker_prefixes": [
+      "duplicate_tunnel_route:",
+      "unclassified_tunnel_hostname:",
+      "expected_tunnel_route_missing:",
+      "unexpected_tunnel_route_present:",
+      "non_tunnel_delivery_has_tunnel_route:",
+      "origin_not_loopback:",
+      "break_glass_origin_not_private_lan:"
+    ],
+    "relevant_blocker_exact": [
+      "tunnel_catchall_count_mismatch",
+      "tunnel_catchall_contract_mismatch"
+    ]
+  },
+  "host_component": {
+    "execution_surface": "owner-authorized-rpi5-read-only",
+    "public_probe_targets": [
+      {
+        "service_id": "apex-web",
+        "probe_port": 8088,
+        "port_source_ref": "docs/V13_CLOUDFLARE_TUNNEL_OWNERSHIP_CONTRACT.md"
+      },
+      {
+        "service_id": "hermes-tech",
+        "probe_port": 8089,
+        "port_source_ref": "docs/V13_CLOUDFLARE_TUNNEL_OWNERSHIP_CONTRACT.md"
+      },
+      {
+        "service_id": "coloring-pages",
+        "probe_port": 9191,
+        "port_source_ref": "RPi5_main#841"
+      }
+    ],
+    "target_derivation": {
+      "public": "public_probe_targets",
+      "admin": "admin_host_targets_ref.host_probe_targets",
+      "private": "private_host_targets_ref.service_projections plus private_host_targets_ref.host_verifier.probe_port",
+      "exact_service_set_must_match_registry": true
+    },
+    "allowed_observations": [
+      "git rev-parse HEAD",
+      "git diff --quiet",
+      "git diff --cached --quiet",
+      "ip -j -4 route get 1.1.1.1",
+      "ip -j -4 addr show",
+      "ss -H -lnt",
+      "docker ps --format {{.Ports}}",
+      "sudo -n ufw status numbered",
+      "systemctl is-active cloudflared.service",
+      "systemctl is-enabled cloudflared.service",
+      "HTTP GET http://127.0.0.1:20241/metrics"
+    ],
+    "forbidden_commands_or_reads": [
+      "docker inspect",
+      "docker logs",
+      "docker exec",
+      "docker lifecycle mutation",
+      "systemctl start/stop/restart/reload/enable/disable",
+      "ufw mutation",
+      "nft",
+      "iptables",
+      "process-environment",
+      "container-environment",
+      "application-config",
+      "application-logs",
+      "application-data",
+      "browser-profile",
+      "cookie-or-session-material",
+      "credential-or-token-value"
+    ],
+    "listener_bind_classes": [
+      "loopback",
+      "lan",
+      "wildcard",
+      "mixed",
+      "other",
+      "none"
+    ],
+    "docker_publish_classes": [
+      "loopback",
+      "lan",
+      "wildcard",
+      "mixed",
+      "other",
+      "none"
+    ],
+    "firewall_allow_classes": [
+      "lan-only",
+      "broad",
+      "mixed",
+      "other",
+      "none"
+    ],
+    "expected_connector_edge_connections": 4
+  },
+  "pass_policy": {
+    "loopback_origin": {
+      "listener_bind_class": "loopback",
+      "docker_publish_classes": [
+        "none",
+        "loopback"
+      ],
+      "firewall_allow_class": "none"
+    },
+    "lan_origin": {
+      "listener_bind_classes": [
+        "lan",
+        "wildcard"
+      ],
+      "docker_publish_classes": [
+        "none",
+        "lan"
+      ],
+      "firewall_allow_class": "lan-only"
+    },
+    "wildcard_docker_publish_allowed": false,
+    "cloudflared_service_active": true,
+    "cloudflared_service_enabled": true,
+    "connector_edge_connections": 4
+  },
+  "drift_codes": [
+    "cloudflare_route_inventory_drift",
+    "route_origin_class_drift",
+    "listener_bind_drift",
+    "docker_publish_drift",
+    "unexpected_wildcard_publish",
+    "expected_loopback_missing",
+    "admin_break_glass_missing",
+    "admin_break_glass_broadened",
+    "firewall_exposure_drift",
+    "cloudflared_service_drift",
+    "connector_health_drift"
+  ],
+  "sanitized_output": {
+    "allowed_service_fields": [
+      "service_id",
+      "hostname",
+      "zone",
+      "route_origin_class",
+      "listener_bind_class",
+      "docker_publish_class",
+      "firewall_allow_class",
+      "drift_codes",
+      "result"
+    ],
+    "allowed_connector_fields": [
+      "service_active",
+      "service_enabled",
+      "edge_connection_count",
+      "drift_codes",
+      "result"
+    ],
+    "allowed_results": [
+      "PASS",
+      "DRIFT",
+      "BLOCKED"
+    ],
+    "forbidden_output": [
+      "private-ip-addresses",
+      "private-subnets",
+      "ports",
+      "raw-firewall-rules",
+      "raw-socket-output",
+      "process-identities",
+      "container-identities",
+      "container-environments",
+      "application-config",
+      "application-logs",
+      "application-data",
+      "credentials",
+      "tokens",
+      "cookies",
+      "session-material",
+      "account-identifiers",
+      "tunnel-identifiers",
+      "access-audience-values"
+    ]
+  }
+}
