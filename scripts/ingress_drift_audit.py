@@ -114,7 +114,7 @@ def build_report(
 ) -> dict[str, Any]:
     if audit.get("schema") != "rozkalns.rpi5-main.ingress-drift-audit.v1":
         raise AuditError("audit_contract_invalid")
-    if cloudflare_report.get("audit") != "cloudflare-p0-readonly-reconciliation":
+    if cloudflare_report.get("audit") != "phase7-cloudflare-route-reconciliation":
         raise AuditError("cloudflare_report_invalid")
     if cloudflare_report.get("mutation_performed") is not False:
         raise AuditError("cloudflare_report_mutation_invalid")
@@ -240,9 +240,73 @@ def _collect_cloudflare_report() -> dict[str, Any]:
     account_id, tunnel_id, api_token = cloudflare.require_bindings()
     registry = cloudflare.load_registry(HOSTNAME_POLICY_PATH)
     client = cloudflare.CloudflareGetClient(api_token)
-    state = cloudflare.collect_state(client, account_id, tunnel_id)
+
+    token = cloudflare._unwrap_dict(
+        client.get("/user/tokens/verify"),
+        "token_verify_shape_invalid",
+    )
+    if token.get("status") != "active":
+        raise cloudflare.AuditError("api_token_not_active")
+
+    tunnel = cloudflare._unwrap_dict(
+        client.get(f"/accounts/{account_id}/cfd_tunnel/{tunnel_id}"),
+        "tunnel_shape_invalid",
+    )
+    if tunnel.get("name") != cloudflare.EXPECTED_TUNNEL_NAME:
+        raise cloudflare.AuditError("tunnel_name_mismatch")
+    if tunnel.get("config_src") != "cloudflare":
+        raise cloudflare.AuditError("tunnel_not_remotely_managed")
+
+    configuration = cloudflare._unwrap_dict(
+        client.get(f"/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations"),
+        "tunnel_configuration_shape_invalid",
+    )
+    config = configuration.get("config")
+    if not isinstance(config, dict):
+        raise cloudflare.AuditError("tunnel_config_missing")
+
     api_token = ""
-    return cloudflare.build_report(registry, state)
+    routes, blockers = cloudflare._build_route_inventory(config, registry, {})
+    rows: list[dict[str, Any]] = []
+
+    for hostname, desired in sorted(registry.items()):
+        route = routes.get(hostname)
+        if desired.delivery == "shared_rpi5_tunnel":
+            if desired.audit_route_presence == "present" and route is None:
+                blockers.append(f"expected_tunnel_route_missing:{hostname}")
+            elif desired.audit_route_presence == "absent" and route is not None:
+                blockers.append(f"unexpected_tunnel_route_present:{hostname}")
+        elif route is not None:
+            blockers.append(f"non_tunnel_delivery_has_tunnel_route:{hostname}")
+
+        if route is not None:
+            origin_class = route.get("origin_class")
+            if desired.desired_origin_scope == "loopback" and origin_class != "loopback":
+                blockers.append(f"origin_not_loopback:{hostname}")
+            if (
+                desired.desired_origin_scope == "explicit-lan-break-glass"
+                and origin_class != "private-lan"
+            ):
+                blockers.append(f"break_glass_origin_not_private_lan:{hostname}")
+
+        rows.append(
+            {
+                "hostname": hostname,
+                "route": (
+                    {"origin_class": route.get("origin_class")}
+                    if isinstance(route, dict)
+                    else None
+                ),
+            }
+        )
+
+    return {
+        "schema_version": 1,
+        "audit": "phase7-cloudflare-route-reconciliation",
+        "mutation_performed": False,
+        "hostnames": rows,
+        "blockers": sorted(set(blockers)),
+    }
 
 
 def blocked(expected_main: str, reason: str) -> dict[str, Any]:
