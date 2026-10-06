@@ -30,6 +30,8 @@ Phase 7 deliberately does **not** add another Cloudflare API client, mutation wo
 
 Phase 7 deliberately narrows that existing client to only three GET surfaces: token verification, Tunnel metadata and Tunnel configuration. It does **not** enumerate Access applications, policies, organizations or selector values. This keeps the audit inside the route/exposure scope while avoiding a second API implementation.
 
+The API token is accepted only through stdin and is never accepted from `CLOUDFLARE_API_TOKEN` in the child environment. Account/tunnel bindings remain external runtime bindings and are never emitted.
+
 The host side is implemented by `scripts/ingress_drift_host.py`.
 
 ## Canonical target derivation
@@ -133,13 +135,15 @@ Any `DRIFT` requiring a change becomes a separate service-specific issue. Phase 
 
 ## Runtime entrypoint after merge
 
-Canonical combined entrypoint:
+Canonical combined entrypoint accepts the Cloudflare API token on stdin only:
 
 ```text
-python3 scripts/ingress_drift_audit.py --expected-main=<exact-main-sha>
+printf '%s\\n' '<protected-token-from-authorized-input>' | python3 scripts/ingress_drift_audit.py --expected-main=<exact-main-sha>
 ```
 
-The entrypoint first verifies the local checkout is exact and clean, then collects host metadata, then reuses the existing GET-only Cloudflare client for Tunnel-only reads. Required Cloudflare bindings remain the existing protected P0 bindings; Phase 7 introduces no second credential store or API implementation.
+The placeholder above is documentation only; do not put a real token in shell history or chat. A later authorized executor must supply it through a protected stdin path.
+
+The entrypoint first verifies the local checkout is exact and clean, then collects host metadata, then reuses the existing GET-only Cloudflare client for Tunnel-only reads. `CLOUDFLARE_API_TOKEN` in the child environment is rejected fail-closed. Account/tunnel bindings remain existing protected runtime bindings; Phase 7 introduces no second credential store or API implementation.
 
 Runtime invocation details must be frozen by the later owner authorization. Do not infer runtime permission from this document or from source merge.
 
