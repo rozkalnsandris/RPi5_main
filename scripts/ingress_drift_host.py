@@ -472,6 +472,35 @@ def blocked(expected_main: str, reason: str) -> dict[str, Any]:
     }
 
 
+def collect_report(expected_main: str) -> dict[str, Any]:
+    _verify_exact_source(expected_main)
+    registry = _load_json(REGISTRY_PATH)
+    audit = _load_json(AUDIT_PATH)
+    admin = _load_json(ADMIN_TARGETS_PATH)
+    private = _load_json(PRIVATE_TARGETS_PATH)
+    targets = _derive_targets(registry, audit, admin, private)
+    lan_address, lan_network = _primary_lan_context()
+    listeners = _listeners_by_port(_run(["ss", "-H", "-lnt"]), lan_address)
+    docker_publishes = _docker_publishes_by_port(
+        _run(["docker", "ps", "--format", "{{.Ports}}"]),
+        lan_address,
+    )
+    ufw_text = _run(["sudo", "-n", "ufw", "status", "numbered"])
+    if "Status: active" not in ufw_text:
+        raise AuditError("ufw_not_active")
+    connector = _connector_report(audit)
+    return build_report(
+        expected_main=expected_main,
+        targets=targets,
+        listeners=listeners,
+        docker_publishes=docker_publishes,
+        ufw_text=ufw_text,
+        lan_address=lan_address,
+        lan_network=lan_network,
+        connector=connector,
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--expected-main", required=True)
@@ -482,32 +511,7 @@ def main() -> int:
         return 2
 
     try:
-        _verify_exact_source(expected_main)
-        registry = _load_json(REGISTRY_PATH)
-        audit = _load_json(AUDIT_PATH)
-        admin = _load_json(ADMIN_TARGETS_PATH)
-        private = _load_json(PRIVATE_TARGETS_PATH)
-        targets = _derive_targets(registry, audit, admin, private)
-        lan_address, lan_network = _primary_lan_context()
-        listeners = _listeners_by_port(_run(["ss", "-H", "-lnt"]), lan_address)
-        docker_publishes = _docker_publishes_by_port(
-            _run(["docker", "ps", "--format", "{{.Ports}}"]),
-            lan_address,
-        )
-        ufw_text = _run(["sudo", "-n", "ufw", "status", "numbered"])
-        if "Status: active" not in ufw_text:
-            raise AuditError("ufw_not_active")
-        connector = _connector_report(audit)
-        report = build_report(
-            expected_main=expected_main,
-            targets=targets,
-            listeners=listeners,
-            docker_publishes=docker_publishes,
-            ufw_text=ufw_text,
-            lan_address=lan_address,
-            lan_network=lan_network,
-            connector=connector,
-        )
+        report = collect_report(expected_main)
         print(json.dumps(report, indent=2, sort_keys=True))
         return 0 if report["result"] == "PASS" else 3
     except (AuditError, json.JSONDecodeError, OSError, subprocess.SubprocessError):
