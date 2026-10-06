@@ -22,6 +22,14 @@ Cloudflare documents that:
 
 Therefore this capability **never** calls the reusable-policy DELETE endpoint and blocks any candidate whose policy ID appears in the reusable-policy inventory or another application's policy inventory.
 
+Cloudflare's current response schemas mark policy `id` as optional for both application-policy and reusable-policy list responses, and `app_count` as optional for reusable policies. The destructive proof normalizes those documented shapes without treating missing identity as success:
+
+- every application-policy entry must still expose a valid stable policy ID; otherwise the result is `application_policy_identity_unproven` because cross-application sharing cannot be excluded;
+- a reusable-policy entry with a valid ID is compared normally;
+- a reusable-policy entry with no ID is accepted only when Cloudflare explicitly reports integer `app_count == 0`, proving it is attached to no application;
+- missing/invalid reusable ID with absent, unknown, malformed or positive `app_count` returns `reusable_policy_identity_unproven`;
+- the reusable `app_count` is included in the protected prestate digest/post-write comparison and is never emitted publicly.
+
 References:
 - https://developers.cloudflare.com/api/resources/zero_trust/subresources/access/subresources/applications/subresources/policies/methods/delete/
 - https://developers.cloudflare.com/cloudflare-one/access-controls/policies/policy-management/
