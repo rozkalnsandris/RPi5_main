@@ -1,7 +1,7 @@
 schema_version: 1
 status: desired-state
 canonical_issue: 177
-last_reviewed: 2026-10-07
+last_reviewed: 2026-09-13
 
 # Public-safe desired-state registry.
 # Never place account IDs, tunnel IDs, Access AUD tags, owner emails,
