@@ -383,6 +383,12 @@ class CloudflareRdcOperatorTests(unittest.TestCase):
             )
             self.assertEqual(kwargs["input"], (token + "\n").encode("utf-8"))
             self.assertEqual(kwargs["env"]["CLOUDFLARE_ACCOUNT_ID"], account_id)
+            self.assertEqual(kwargs["env"]["GIT_CONFIG_COUNT"], "1")
+            self.assertEqual(kwargs["env"]["GIT_CONFIG_KEY_0"], "safe.directory")
+            self.assertEqual(
+                kwargs["env"]["GIT_CONFIG_VALUE_0"],
+                str(op.CHECKOUT_PATH),
+            )
             self.assertNotIn("CLOUDFLARE_API_TOKEN", kwargs["env"])
             self.assertNotIn("CLOUDFLARE_TUNNEL_ID", kwargs["env"])
             self.assertNotIn(token, argv)

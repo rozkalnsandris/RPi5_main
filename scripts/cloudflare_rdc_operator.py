@@ -714,7 +714,14 @@ def _checkout_git(
     runner: Any = subprocess.run,
 ) -> subprocess.CompletedProcess[Any]:
     return runner(
-        ["/usr/bin/git", "-C", str(CHECKOUT_PATH), *args],
+        [
+            "/usr/bin/git",
+            "-c",
+            f"safe.directory={CHECKOUT_PATH}",
+            "-C",
+            str(CHECKOUT_PATH),
+            *args,
+        ],
         check=False,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
@@ -771,6 +778,9 @@ def run_phase7_audit(
         "LANG": "C.UTF-8",
         "LC_ALL": "C.UTF-8",
         "CLOUDFLARE_ACCOUNT_ID": account_id,
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "safe.directory",
+        "GIT_CONFIG_VALUE_0": str(CHECKOUT_PATH),
     }
     completed = runner(
         [PYTHON, str(audit_path), "--expected-main", expected_main],
@@ -806,6 +816,25 @@ def run_phase7_audit(
     if completed.returncode != expected_rc:
         raise OperatorError("phase7_audit_failed")
     return completed.returncode, report
+
+
+def _emit_phase7_blocked(expected_main: str) -> None:
+    print(
+        json.dumps(
+            {
+                "schema": "rozkalns.rpi5-main.ingress-drift-audit-evidence.v1",
+                "schema_version": 1,
+                "audit": "phase7-automated-ingress-drift",
+                "canonical_issue": 903,
+                "source_main_sha": expected_main,
+                "mutation_performed": False,
+                "result": "BLOCKED",
+                "reason": "read_only_ingress_drift_audit_failed",
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -921,6 +950,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 6
     except OperatorError as exc:
+        if args.action == "phase7-ingress-drift-audit":
+            _emit_phase7_blocked(args.expected_main)
+            return 2
         _emit(
             "BLOCKED",
             reason=str(exc),
