@@ -110,13 +110,16 @@ class IngressDriftAuditTests(unittest.TestCase):
     def test_target_set_is_exact_registry_set_and_reuses_zone_contracts(self) -> None:
         service_ids = {item["service_id"] for item in self.registry["services"]}
         self.assertEqual(set(self.targets), service_ids)
-        self.assertEqual(len(self.targets), 12)
+        self.assertEqual(len(self.targets), 13)
 
         public_ids = {
             item["service_id"]
             for item in self.contract["host_component"]["public_probe_targets"]
         }
-        self.assertEqual(public_ids, {"apex-web", "hermes-tech", "coloring-pages"})
+        self.assertEqual(
+            public_ids,
+            {"apex-web", "hermes-tech", "coloring-pages", "weather-public"},
+        )
 
         admin_ids = {
             item["service_id"]
@@ -142,7 +145,7 @@ class IngressDriftAuditTests(unittest.TestCase):
         self.assertEqual(report["result"], "PASS")
         self.assertEqual(report["cloudflare"]["result"], "PASS")
         self.assertEqual(report["connector"]["result"], "PASS")
-        self.assertEqual(len(report["services"]), 12)
+        self.assertEqual(len(report["services"]), 13)
         self.assertTrue(all(item["result"] == "PASS" for item in report["services"]))
 
         rendered = json.dumps(report, sort_keys=True)
@@ -390,6 +393,35 @@ class IngressDriftAuditTests(unittest.TestCase):
         surfaces = self.contract["cloudflare_component"]["allowed_get_surfaces"]
         self.assertIn("/accounts/{account_id}/tokens/verify", surfaces)
         self.assertNotIn("/user/tokens/verify", surfaces)
+
+    def test_weather_wildcard_publish_remains_drift_against_loopback_policy(self) -> None:
+        target = copy.deepcopy(self.targets["weather-public"])
+        self.assertEqual(target["hostname"], "weather.rozkalns.net")
+        self.assertEqual(target["desired_origin_class"], "loopback")
+        report = host._service_report(
+            target,
+            listener_classes={"wildcard"},
+            docker_classes={"wildcard"},
+            firewall_class="none",
+        )
+        self.assertEqual(report["result"], "DRIFT")
+        self.assertIn("expected_loopback_missing", report["drift_codes"])
+        self.assertIn("listener_bind_drift", report["drift_codes"])
+        self.assertIn("docker_publish_drift", report["drift_codes"])
+        self.assertIn("unexpected_wildcard_publish", report["drift_codes"])
+
+    def test_weather_probe_target_is_bound_to_reviewed_public_runtime_source(self) -> None:
+        target = next(
+            item
+            for item in self.contract["host_component"]["public_probe_targets"]
+            if item["service_id"] == "weather-public"
+        )
+        self.assertEqual(target["probe_port"], 9180)
+        self.assertIn(
+            "rozkalnsandris/rozkalns_weather@",
+            target["port_source_ref"],
+        )
+        self.assertTrue(target["port_source_ref"].endswith("deploy/docker-compose.public.yml"))
 
 if __name__ == "__main__":
     unittest.main()
