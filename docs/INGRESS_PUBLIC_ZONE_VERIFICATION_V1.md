@@ -9,12 +9,12 @@ Machine contract: `ops/contracts/public-zone-verification-v1.json`
 
 Phase 3 verifies that the services classified as `PUBLIC` by the canonical ingress registry still behave as intentionally public services without widening their origin exposure.
 
-The exact PUBLIC set is not duplicated as free-form policy. It is selected from `ops/contracts/ingress-registry-v1.json` by `zone=PUBLIC` and is expected to contain exactly:
+The v1 Phase 3 verification snapshot is intentionally fixed to the two services it actually verified:
 
 - `apex-web` / `rozkalns.net`;
 - `hermes-tech` / `tech.rozkalns.net`.
 
-Any new or missing PUBLIC service is therefore a source drift that must be reviewed rather than silently accepted.
+The canonical registry may gain later reviewed PUBLIC services without rewriting that historical receipt. Coloring Pages and, under #911, `weather-public` / `weather.rozkalns.net` are later registrations. They inherit the same PUBLIC source-policy invariants but do **not** retroactively claim Phase 3 runtime PASS. Their runtime verification/remediation remains separately gated.
 
 ## Source policy expectations
 
@@ -44,10 +44,12 @@ The contract deliberately validates behavior classes instead of page content so 
 
 ## Origin and firewall expectation
 
-For both PUBLIC services:
+For the two historical Phase 3 services, and as source policy for later PUBLIC registrations:
 
 - route/origin class must verify as `loopback`;
 - no obsolete LAN-origin firewall exception may be present.
+
+For Weather specifically, #911 records the current route-origin class as `unknown` until a fresh bounded audit proves it; this avoids turning source registration into a false runtime PASS.
 
 The evidence records only these classes/booleans. It must not record private addresses, internal origin ports, firewall source ranges or protected host configuration.
 

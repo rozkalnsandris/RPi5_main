@@ -53,6 +53,13 @@ Each service records two different owners:
 
 The shared Cloudflare Tunnel lifecycle remains owned by `RPi5_main`.
 
+`weather.rozkalns.net` is registered by #911 as the existing Weather PUBLIC runtime owned at the application layer by `rozkalnsandris/rozkalns_weather`. Its `desired_origin_class` is `loopback`, while `current_origin_class` remains `unknown`: the first Phase 7 audit proved the Tunnel hostname exists but did not emit or establish its exact route coordinate. Cloudflare documents same-host published applications as public-hostname mappings to local services such as `localhost`, so loopback is the reviewed target for this host-local connector model. The Weather Compose source at `15d4ce929b442c322a859161501e1db7ae857ed2` publishes its web port without an explicit host IP; Docker Compose documents that an omitted `host_ip` binds to all interfaces. That broad source publish is therefore evidence for a remediation gap, not permission to weaken the desired loopback policy.
+
+Official references:
+- https://developers.cloudflare.com/tunnel/get-started/
+- https://developers.cloudflare.com/tunnel/concepts/routing/
+- https://docs.docker.com/reference/compose-file/services/#ports
+
 `coloring.rozkalns.net` is registered as a PUBLIC, loopback-only Coloring Pages target owned at the application layer by `rozkalnsandris/coloring-pages`. The Tunnel route now exists, but fresh read-only Access evidence shows that the account's `*.rozkalns.net` self-hosted application captures the hostname. Anonymous PUBLIC acceptance therefore remains incomplete until a separately authorized LIVE change installs a more-specific exact-hostname public exception and external anonymous verification passes.
 
 ## Access and LAN break-glass
@@ -73,7 +80,7 @@ For `coloring.rozkalns.net`, source policy uses `access_application_scope=exact-
 
 ## #60 coverage and supersession
 
-The registry covers every service named by #60 plus later reviewed RPi5-hosted services such as the RPi5 Dashboard and Coloring Pages.
+The registry covers every service named by #60 plus later reviewed RPi5-hosted services such as the RPi5 Dashboard, Coloring Pages and the Weather public runtime.
 
 One historical naming conflict is resolved explicitly: #60 called the Hermes application a PRIVATE service, while the newer desired-state contract `ops/contracts/cloudflare-hostname-policy.yaml` classifies `hermes.rozkalns.net` as ADMIN. Registry v1 follows the newer source policy and keeps the #60 name as a `roadmap_alias` so coverage is explicit rather than silently dropping the old roadmap item.
 

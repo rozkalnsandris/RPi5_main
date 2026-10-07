@@ -68,6 +68,11 @@
         "service_id": "coloring-pages",
         "probe_port": 9191,
         "port_source_ref": "RPi5_main#841"
+      },
+      {
+        "service_id": "weather-public",
+        "probe_port": 9180,
+        "port_source_ref": "rozkalnsandris/rozkalns_weather@15d4ce929b442c322a859161501e1db7ae857ed2:deploy/docker-compose.public.yml"
       }
     ],
     "target_derivation": {

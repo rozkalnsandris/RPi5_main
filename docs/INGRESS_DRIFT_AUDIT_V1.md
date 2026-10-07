@@ -46,6 +46,19 @@ Runtime probe coordinates are not emitted in evidence. They are derived from alr
 
 The collector fails closed unless the resulting target set exactly equals the RPi5-hosted ingress registry service set.
 
+### Weather PUBLIC follow-up (#911)
+
+The first successful owner-authorized Phase 7 run on `RPi5_main@cef629f7ee36432771ef489e7085a62b83629064` returned one Cloudflare inventory drift reason: `unclassified_tunnel_hostname:weather.rozkalns.net`. The other 12 registered services and shared connector health passed, and the audit performed no mutation.
+
+#911 adds Weather to the source policy as a PUBLIC service with desired loopback origin and no LAN break-glass. It deliberately does **not** claim a current route-origin value: the registry keeps `current_origin_class=unknown` until bounded runtime evidence establishes it. The Phase 7 public probe target is derived from the reviewed Weather public Compose source at `15d4ce929b442c322a859161501e1db7ae857ed2`.
+
+This classification does not normalize the current Weather publish shape. Docker Compose documents that a published port without `host_ip` binds to all interfaces, while Cloudflare Tunnel documents same-host published applications using local service addresses such as `localhost`. Therefore a wildcard Weather listener or Docker publish remains `DRIFT` against the loopback target and requires a separate remediation issue / LIVE authorization.
+
+References:
+- https://developers.cloudflare.com/tunnel/get-started/
+- https://developers.cloudflare.com/tunnel/concepts/routing/
+- https://docs.docker.com/reference/compose-file/services/#ports
+
 ## Drift classes
 
 The combined audit covers the Phase 7 checklist from #60:
@@ -155,7 +168,7 @@ The runtime sequence remains four separate gates: source merge; exact-source/ope
 - clean PASS;
 - unknown Cloudflare route drift;
 - route-origin drift;
-- wildcard Docker publish drift;
+- wildcard Docker publish drift, including Weather's reviewed loopback target;
 - missing loopback drift;
 - ADMIN break-glass missing/broadened drift;
 - connector/service-health drift;

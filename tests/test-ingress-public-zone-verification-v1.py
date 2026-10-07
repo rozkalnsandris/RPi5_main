@@ -70,10 +70,12 @@ class PublicZoneVerificationV1Tests(unittest.TestCase):
         for hostname in expected["expected_hostnames"]:
             self.assertIn(hostname, current_hostnames)
 
-        # Coloring Pages is a new reviewed PUBLIC registration under #841 and
-        # requires its own LIVE verification before it can claim public PASS.
+        # Later reviewed PUBLIC registrations do not rewrite this historical
+        # Phase 3 snapshot or claim its runtime PASS.
         self.assertIn("coloring-pages", current_ids)
         self.assertIn("coloring.rozkalns.net", current_hostnames)
+        self.assertIn("weather-public", current_ids)
+        self.assertIn("weather.rozkalns.net", current_hostnames)
 
     def test_public_registry_entries_match_phase3_policy(self) -> None:
         expected = self.contract["expected_policy"]

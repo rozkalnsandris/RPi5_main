@@ -124,6 +124,31 @@
       }
     },
     {
+      "service_id": "weather-public",
+      "roadmap_aliases": [
+        "Weather public runtime"
+      ],
+      "hostname": "weather.rozkalns.net",
+      "zone": "PUBLIC",
+      "current_origin_class": "unknown",
+      "desired_origin_class": "loopback",
+      "runtime_owner": "rozkalnsandris/RPi5_main",
+      "repository_owner": "rozkalnsandris/rozkalns_weather",
+      "access_required": false,
+      "access_class": "NONE",
+      "lan_break_glass": "forbidden",
+      "firewall_expectation": "no-lan-origin-required",
+      "health_check_method": "anonymous-http-contract",
+      "health_contract_ref": "rozkalnsandris/rozkalns_weather@15d4ce929b442c322a859161501e1db7ae857ed2:.simple-deploy.json",
+      "recovery_ref": "docs/WEATHER_PUBLIC_RUNTIME_EXECUTOR_SOURCE.md",
+      "last_verified_evidence": {
+        "as_of": "2026-10-07",
+        "ref": "RPi5_main#911",
+        "kind": "phase7-drift-plus-public-runtime-source",
+        "runtime_current": false
+      }
+    },
+    {
       "service_id": "hermes-deals",
       "roadmap_aliases": [
         "Hermes Deals"

@@ -208,5 +208,34 @@ class IngressRegistryV1Tests(unittest.TestCase):
         self.assertIn("Phase 2 becomes **COMPLETE only after**", self.doc)
 
 
+    def test_weather_public_runtime_is_registered_without_fabricating_current_origin(self) -> None:
+        weather = next(
+            service
+            for service in self.services
+            if service["hostname"] == "weather.rozkalns.net"
+        )
+        self.assertEqual(weather["service_id"], "weather-public")
+        self.assertEqual(weather["zone"], "PUBLIC")
+        self.assertEqual(weather["current_origin_class"], "unknown")
+        self.assertEqual(weather["desired_origin_class"], "loopback")
+        self.assertEqual(weather["runtime_owner"], "rozkalnsandris/RPi5_main")
+        self.assertEqual(
+            weather["repository_owner"],
+            "rozkalnsandris/rozkalns_weather",
+        )
+        self.assertFalse(weather["access_required"])
+        self.assertEqual(weather["access_class"], "NONE")
+        self.assertEqual(weather["lan_break_glass"], "forbidden")
+        self.assertEqual(
+            weather["firewall_expectation"],
+            "no-lan-origin-required",
+        )
+        self.assertFalse(weather["last_verified_evidence"]["runtime_current"])
+        self.assertIn("hostname: weather.rozkalns.net", self.hostname_policy)
+        self.assertIn(
+            "phase7-unclassified-route-public-runtime-loopback-target",
+            self.hostname_policy,
+        )
+
 if __name__ == "__main__":
     unittest.main()
