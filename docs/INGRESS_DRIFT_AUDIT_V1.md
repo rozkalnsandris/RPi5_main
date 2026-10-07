@@ -28,7 +28,7 @@ Phase 7 deliberately does **not** add another Cloudflare API client, mutation wo
 
 `scripts/ingress_drift_audit.py` imports and reuses `CloudflareGetClient`, registry parsing and Tunnel route-classification helpers from `scripts/cloudflare_zero_trust_reconcile.py`.
 
-Phase 7 deliberately narrows that existing client to four GET surfaces: token verification, exact-name Tunnel discovery, Tunnel metadata and Tunnel configuration. It does **not** enumerate Access applications, policies, organizations or selector values. This keeps the audit inside the route/exposure scope while avoiding a second API implementation.
+Phase 7 deliberately narrows that existing client to four GET surfaces: account-owned token verification at `GET /accounts/{account_id}/tokens/verify`, exact-name Tunnel discovery, Tunnel metadata and Tunnel configuration. It does **not** enumerate Access applications, policies, organizations or selector values. This keeps the audit inside the route/exposure scope while avoiding a second API implementation.
 
 The API token is accepted only through stdin and is never accepted from `CLOUDFLARE_API_TOKEN` in the child environment. The account binding comes from the fixed root-owned Tunnel capability boundary. The Tunnel ID is not separately configured: the audit discovers exactly one remotely-managed `rpi5-tunnel` by name and never emits the account or Tunnel identifier.
 

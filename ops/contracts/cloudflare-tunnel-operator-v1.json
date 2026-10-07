@@ -23,7 +23,10 @@
       "access": "Edit"
     },
     "exact_permission_required": true,
-    "broader_or_legacy_alternates_allowed": false
+    "broader_or_legacy_alternates_allowed": false,
+    "token_ownership": "account-owned",
+    "account_token_verify_endpoint": "/accounts/{account_id}/tokens/verify",
+    "user_token_verify_endpoint_allowed_for_tunnel_consumers": false
   },
   "execution_model": {
     "possession_of_token_grants_operation_authority": false,
@@ -85,7 +88,7 @@
         "GET"
       ],
       "allowed_paths": [
-        "/user/tokens/verify",
+        "/accounts/{account_id}/tokens/verify",
         "/accounts/{account_id}/cfd_tunnel",
         "/accounts/{account_id}/cfd_tunnel/{tunnel_id}",
         "/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations"
@@ -111,7 +114,8 @@
     "token_creation": "https://developers.cloudflare.com/fundamentals/api/get-started/create-token/",
     "list_tunnels": "https://developers.cloudflare.com/api/resources/zero_trust/subresources/tunnels/subresources/cloudflared/methods/list/",
     "get_configuration": "https://developers.cloudflare.com/api/resources/zero_trust/subresources/tunnels/subresources/cloudflared/subresources/configurations/methods/get/",
-    "update_configuration": "https://developers.cloudflare.com/tunnel/get-started/"
+    "update_configuration": "https://developers.cloudflare.com/tunnel/get-started/",
+    "account_token_verification": "https://developers.cloudflare.com/api/resources/accounts/subresources/tokens/methods/verify/"
   },
   "host_capability": {
     "secret_path": "/etc/rpi5-secrets/cloudflare/tunnel-writer.json",
@@ -119,6 +123,8 @@
     "hidden_tty_only": true,
     "access_credential_reuse_allowed": false,
     "source_merge_provisions_secret": false,
-    "runtime_execution_requires_fresh_owner_authorization": true
+    "runtime_execution_requires_fresh_owner_authorization": true,
+    "token_ownership": "account-owned",
+    "token_verify_endpoint": "/accounts/{account_id}/tokens/verify"
   }
 }

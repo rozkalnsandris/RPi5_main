@@ -426,5 +426,62 @@ class CloudflareRdcOperatorTests(unittest.TestCase):
         self.assertFalse(operation["remediation_allowed"])
 
 
+    def test_user_and_account_token_verification_use_distinct_fixed_endpoints(self) -> None:
+        client = op.CloudflareClient("t" * 32)
+        active = {"result": {"status": "active"}}
+
+        with mock.patch.object(client, "_request", return_value=active) as request:
+            client.verify_active_token()
+        request.assert_called_once_with("GET", "/user/tokens/verify")
+
+        with mock.patch.object(client, "_request", return_value=active) as request:
+            client.verify_active_account_token("a" * 32)
+        request.assert_called_once_with(
+            "GET",
+            "/accounts/" + "a" * 32 + "/tokens/verify",
+        )
+
+    def test_account_token_verification_rejects_invalid_account_before_request(self) -> None:
+        client = op.CloudflareClient("t" * 32)
+        with mock.patch.object(client, "_request") as request:
+            with self.assertRaisesRegex(op.OperatorError, "secret_payload_invalid"):
+                client.verify_active_account_token("not-an-account")
+        request.assert_not_called()
+
+    def test_tunnel_provisioning_uses_account_token_verification_before_write(self) -> None:
+        events = []
+
+        class TunnelProvisionClient:
+            def verify_active_account_token(self, account_id: str) -> None:
+                events.append(("account-token", account_id))
+
+            def verify_tunnel_permission(self, account_id: str) -> None:
+                events.append(("tunnel-permission", account_id))
+
+        secret_path = mock.Mock()
+        secret_path.exists.return_value = False
+        with mock.patch.object(op, "TUNNEL_SECRET_PATH", secret_path), \
+             mock.patch.object(
+                 op,
+                 "_write_tunnel_secret",
+                 side_effect=lambda account_id, token: events.append(
+                     ("write", account_id, token)
+                 ),
+             ):
+            op.provision_tunnel_secret(
+                TunnelProvisionClient(),
+                "a" * 32,
+                "t" * 32,
+            )
+
+        self.assertEqual(
+            events,
+            [
+                ("account-token", "a" * 32),
+                ("tunnel-permission", "a" * 32),
+                ("write", "a" * 32, "t" * 32),
+            ],
+        )
+
 if __name__ == "__main__":
     unittest.main()

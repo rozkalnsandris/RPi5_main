@@ -29,7 +29,8 @@
       "owner": "root:root",
       "mode": "0600",
       "cloudflare_permission": "Access: Apps and Policies Write",
-      "scope": "account-only"
+      "scope": "account-only",
+      "token_ownership": "user-owned"
     },
     "tunnel": {
       "implemented": true,
@@ -40,7 +41,8 @@
       "scope": "account-only",
       "shared_capability_contract": "ops/contracts/cloudflare-tunnel-operator-v1.json",
       "credential_reuse": "same Tunnel-only credential may back reviewed GitHub and host Tunnel consumers; no Access/DNS reuse",
-      "dashboard_ui_mapping": "Cloudflare One / Zero Trust > Cloudflare One Connector: cloudflared > Edit"
+      "dashboard_ui_mapping": "Cloudflare One / Zero Trust > Cloudflare One Connector: cloudflared > Edit",
+      "token_ownership": "account-owned"
     },
     "dns": {
       "implemented": false,
@@ -186,7 +188,12 @@
       "automatic_rollback_or_cleanup_after_mutation_error": false,
       "tty_precheck": "/dev/tty opened with os.open and verified by os.isatty before prompting",
       "getpass_stream": "default native getpass controlling terminal; no custom stream",
-      "getpass_warning_policy": "GetPassWarning is fatal; no stdin echo fallback accepted"
+      "getpass_warning_policy": "GetPassWarning is fatal; no stdin echo fallback accepted",
+      "token_verification": {
+        "ownership": "user-owned",
+        "method": "GET",
+        "endpoint": "/user/tokens/verify"
+      }
     },
     "upgrade": {
       "source": "scripts/install-cloudflare-rdc-operator.py",
@@ -228,7 +235,7 @@
       "required_token_scope": "Cloudflare One Connector: cloudflared Write only",
       "scope_absence_proof": "owner creation contract; helper verifies active token and exact rpi5-tunnel/config GET reachability but does not claim absence of undisclosed additional permissions",
       "read_only_cloudflare_preflight": [
-        "GET /user/tokens/verify reports active",
+        "GET /accounts/{account_id}/tokens/verify reports active",
         "GET /accounts/{account_id}/cfd_tunnel resolves exactly one remotely-managed rpi5-tunnel",
         "GET /accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations succeeds"
       ],
@@ -258,7 +265,13 @@
       "source_merge_provisions_secret": false,
       "tty_precheck": "/dev/tty opened with os.open and verified by os.isatty before prompting",
       "getpass_stream": "default native getpass controlling terminal; no custom stream",
-      "getpass_warning_policy": "GetPassWarning is fatal; no stdin echo fallback accepted"
+      "getpass_warning_policy": "GetPassWarning is fatal; no stdin echo fallback accepted",
+      "token_verification": {
+        "ownership": "account-owned",
+        "method": "GET",
+        "endpoint": "/accounts/{account_id}/tokens/verify",
+        "account_id_validated_before_interpolation": true
+      }
     }
   },
   "read_only_operations": [

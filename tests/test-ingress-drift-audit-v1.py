@@ -288,7 +288,10 @@ class IngressDriftAuditTests(unittest.TestCase):
         self.assertIn("import cloudflare_zero_trust_reconcile as cloudflare", source)
         self.assertIn("cloudflare.CloudflareGetClient", source)
         self.assertNotIn("cloudflare.collect_state", source)
-        self.assertIn('client.get("/user/tokens/verify")', source)
+        self.assertIn(
+            'client.get(f"/accounts/{account_id}/tokens/verify")',
+            source,
+        )
         self.assertIn("cfd_tunnel/{tunnel_id}", source)
         self.assertIn("_discover_tunnel_id", source)
         self.assertIn("tunnel_id_env_forbidden", source)
@@ -374,6 +377,19 @@ class IngressDriftAuditTests(unittest.TestCase):
             "discover-single-remotely-managed-rpi5-tunnel-by-name",
         )
 
+
+    def test_phase7_account_owned_token_uses_account_verify_endpoint(self) -> None:
+        source = (ROOT / "scripts" / "ingress_drift_audit.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            'client.get(f"/accounts/{account_id}/tokens/verify")',
+            source,
+        )
+        self.assertNotIn('client.get("/user/tokens/verify")', source)
+        surfaces = self.contract["cloudflare_component"]["allowed_get_surfaces"]
+        self.assertIn("/accounts/{account_id}/tokens/verify", surfaces)
+        self.assertNotIn("/user/tokens/verify", surfaces)
 
 if __name__ == "__main__":
     unittest.main()

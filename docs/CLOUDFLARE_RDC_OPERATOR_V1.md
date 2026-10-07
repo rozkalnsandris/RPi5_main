@@ -76,13 +76,13 @@ Credentials are split by capability. There is intentionally no master token.
 
 | Lane | Secret path | Cloudflare capability | v1 implementation |
 |---|---|---|---|
-| Access | `/etc/rpi5-secrets/cloudflare/access-writer.json` | `Access: Apps and Policies Write` | implemented |
-| Tunnel | `/etc/rpi5-secrets/cloudflare/tunnel-writer.json` | `Cloudflare One Connector: cloudflared Write` | reserved host consumer of the shared Tunnel operator, not implemented |
+| Access | `/etc/rpi5-secrets/cloudflare/access-writer.json` | `Access: Apps and Policies Write` | implemented; user-owned token verification |
+| Tunnel | `/etc/rpi5-secrets/cloudflare/tunnel-writer.json` | `Cloudflare One Connector: cloudflared Write` | implemented; account-owned token verification |
 | DNS | `/etc/rpi5-secrets/cloudflare/dns-writer.json` | `DNS Edit`, restricted to `rozkalns.net` | reserved, not implemented |
 
 The Tunnel lane is intentionally **one reusable capability credential for Tunnel operations**, not one credential per project or per action. In the current Cloudflare dashboard the canonical permission is `Cloudflare One / Zero Trust` → `Cloudflare One Connector: cloudflared` → `Edit`. Its canonical source contract is `ops/contracts/cloudflare-tunnel-operator-v1.json`. Reviewed read-only consumers may use the same Tunnel credential but remain GET-only in their own source contracts; any write consumer must define an operation-specific request model, exact target, mutation budget and fresh explicit owner authorization. The Tunnel credential is never reused for Access or DNS.
 
-The operator must never receive `API Tokens Edit`/`API Tokens Write`. Token creation/rotation remains a separate owner action. The provisioning action can verify that the supplied token is active and can read the Access application surface, but it cannot prove the absence of additional undisclosed token permissions without granting broader token-introspection authority. The owner must therefore create the token with only `Access: Apps and Policies Write`.
+The operator must never receive `API Tokens Edit`/`API Tokens Write`. Token creation/rotation remains a separate owner action. Access provisioning preserves the user-owned token check at `GET /user/tokens/verify`. The Tunnel lane uses an account-owned service token and verifies it only through `GET /accounts/{account_id}/tokens/verify` before the fixed Tunnel GET checks. Neither verification path proves the absence of additional undisclosed permissions, so the owner must still create each credential with only its documented capability.
 
 ## Reviewed host installer
 
@@ -284,7 +284,7 @@ The fixed secret path is `/etc/rpi5-secrets/cloudflare/tunnel-writer.json`, root
 
 `sudo -n /usr/local/sbin/rpi5-cloudflare provision-tunnel-secret --expected-main <exact-main> --confirm PROVISION-CLOUDFLARE-TUNNEL-SECRET`
 
-Input is hidden through the controlling TTY. Before the first filesystem mutation, the operator performs only GET verification: token active, exactly one remotely-managed `rpi5-tunnel`, and readable Tunnel configuration. Existing secret files are never overwritten. A post-mutation error is STOP with no retry, deletion, rollback or cleanup.
+Input is hidden through the controlling TTY. The Tunnel credential is an account-owned API token. Before the first filesystem mutation, the operator performs only GET verification: `GET /accounts/{account_id}/tokens/verify` must report the account token active, then exactly one remotely-managed `rpi5-tunnel` and its configuration must be readable. Existing secret files are never overwritten. A post-mutation error is STOP with no retry, deletion, rollback or cleanup.
 
 The fixed Phase 7 runtime action is:
 
