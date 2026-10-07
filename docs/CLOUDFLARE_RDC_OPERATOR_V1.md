@@ -290,4 +290,4 @@ The fixed Phase 7 runtime action is:
 
 `sudo -n /usr/local/sbin/rpi5-cloudflare phase7-ingress-drift-audit --expected-main <exact-main>`
 
-The operator verifies its installed release and the fixed `/home/andris/RPi5_main` checkout before reading the Tunnel secret. It sends the token to the existing audit only via stdin, with no token or Tunnel ID in the child environment. Source merge performs none of these host actions.
+The operator verifies its installed release and the fixed `the installer-bound checkout recorded in root-owned release metadata` checkout before reading the Tunnel secret. It sends the token to the existing audit only via stdin, with no token or Tunnel ID in the child environment. Source merge performs none of these host actions.

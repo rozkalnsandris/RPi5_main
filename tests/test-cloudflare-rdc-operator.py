@@ -387,7 +387,7 @@ class CloudflareRdcOperatorTests(unittest.TestCase):
             self.assertEqual(kwargs["env"]["GIT_CONFIG_KEY_0"], "safe.directory")
             self.assertEqual(
                 kwargs["env"]["GIT_CONFIG_VALUE_0"],
-                str(op.CHECKOUT_PATH),
+                "/fixed/checkout",
             )
             self.assertNotIn("CLOUDFLARE_API_TOKEN", kwargs["env"])
             self.assertNotIn("CLOUDFLARE_TUNNEL_ID", kwargs["env"])
@@ -402,6 +402,7 @@ class CloudflareRdcOperatorTests(unittest.TestCase):
 
         rc, observed = op.run_phase7_audit(
             Path("/fixed/ingress_drift_audit.py"),
+            Path("/fixed/checkout"),
             expected,
             account_id,
             token,

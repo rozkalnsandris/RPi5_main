@@ -36,7 +36,13 @@ import sys
 path = "/usr/local/libexec/rpi5-cloudflare/release.json"
 raw = sys.stdin.buffer.read(8192)
 decoded = json.loads(raw.decode("utf-8"))
-if set(decoded) != {"schema_version", "repository", "source_sha", "operator_sha256"}:
+if set(decoded) != {
+    "schema_version",
+    "repository",
+    "source_sha",
+    "operator_sha256",
+    "checkout_path",
+}:
     raise SystemExit(31)
 if decoded["schema_version"] != 1 or decoded["repository"] != "rozkalnsandris/RPi5_main":
     raise SystemExit(32)
@@ -44,6 +50,14 @@ if not re.fullmatch(r"[0-9a-f]{40}", decoded["source_sha"]):
     raise SystemExit(33)
 if not re.fullmatch(r"[0-9a-f]{64}", decoded["operator_sha256"]):
     raise SystemExit(34)
+checkout_path = decoded["checkout_path"]
+if (
+    not isinstance(checkout_path, str)
+    or not os.path.isabs(checkout_path)
+    or len(checkout_path) > 4096
+    or any(ch in checkout_path for ch in ("\x00", "\n", "\r"))
+):
+    raise SystemExit(35)
 flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
 if hasattr(os, "O_NOFOLLOW"):
     flags |= os.O_NOFOLLOW
@@ -90,7 +104,9 @@ check(metadata, "file", 0o400)
 
 raw = open(metadata, "rb").read(8192)
 decoded = json.loads(raw.decode("utf-8"))
-if set(decoded) != {"schema_version", "repository", "source_sha", "operator_sha256"}:
+legacy_keys = {"schema_version", "repository", "source_sha", "operator_sha256"}
+new_keys = legacy_keys | {"checkout_path"}
+if set(decoded) not in (legacy_keys, new_keys):
     raise SystemExit(45)
 if decoded["schema_version"] != 1 or decoded["repository"] != repository:
     raise SystemExit(46)
@@ -98,6 +114,14 @@ if not re.fullmatch(r"[0-9a-f]{40}", decoded["source_sha"]):
     raise SystemExit(47)
 if not re.fullmatch(r"[0-9a-f]{64}", decoded["operator_sha256"]):
     raise SystemExit(48)
+checkout_path = decoded.get("checkout_path")
+if checkout_path is not None and (
+    not isinstance(checkout_path, str)
+    or not os.path.isabs(checkout_path)
+    or len(checkout_path) > 4096
+    or any(ch in checkout_path for ch in ("\x00", "\n", "\r"))
+):
+    raise SystemExit(50)
 
 digest = hashlib.sha256()
 with open(operator, "rb") as handle:
@@ -196,7 +220,9 @@ check(release_dir, "dir", 0o700)
 check(metadata, "file", 0o400)
 current_raw = open(metadata, "rb").read(8192)
 current = json.loads(current_raw.decode("utf-8"))
-if set(current) != {"schema_version", "repository", "source_sha", "operator_sha256"}:
+legacy_keys = {"schema_version", "repository", "source_sha", "operator_sha256"}
+new_keys = legacy_keys | {"checkout_path"}
+if set(current) not in (legacy_keys, new_keys):
     raise SystemExit(59)
 if current["schema_version"] != 1 or current["repository"] != repository:
     raise SystemExit(60)
@@ -222,7 +248,13 @@ if not new_metadata or len(new_metadata) > 8192:
     raise SystemExit(66)
 
 new_decoded = json.loads(new_metadata.decode("utf-8"))
-if set(new_decoded) != {"schema_version", "repository", "source_sha", "operator_sha256"}:
+if set(new_decoded) != {
+    "schema_version",
+    "repository",
+    "source_sha",
+    "operator_sha256",
+    "checkout_path",
+}:
     raise SystemExit(67)
 if new_decoded["schema_version"] != 1 or new_decoded["repository"] != repository:
     raise SystemExit(68)
@@ -230,6 +262,14 @@ if new_decoded["source_sha"] != expected_new:
     raise SystemExit(69)
 if hashlib.sha256(new_operator).hexdigest() != new_decoded["operator_sha256"]:
     raise SystemExit(70)
+checkout_path = new_decoded["checkout_path"]
+if (
+    not isinstance(checkout_path, str)
+    or not os.path.isabs(checkout_path)
+    or len(checkout_path) > 4096
+    or any(ch in checkout_path for ch in ("\x00", "\n", "\r"))
+):
+    raise SystemExit(73)
 
 write_exclusive(operator_stage, new_operator, 0o500)
 write_exclusive(metadata_stage, new_metadata, 0o400)
@@ -350,6 +390,7 @@ def build_release_metadata(expected_main: str, source: bytes) -> bytes:
         "repository": REPOSITORY,
         "source_sha": expected_main,
         "operator_sha256": hashlib.sha256(source).hexdigest(),
+        "checkout_path": str(ROOT),
     }
     return (
         json.dumps(payload, separators=(",", ":"), sort_keys=True) + "\n"

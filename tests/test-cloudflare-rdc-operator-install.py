@@ -271,6 +271,7 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(
             decoded["operator_sha256"], hashlib.sha256(source).hexdigest()
         )
+        self.assertEqual(decoded["checkout_path"], str(installer.ROOT))
 
 
 if __name__ == "__main__":

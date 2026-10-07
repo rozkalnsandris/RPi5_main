@@ -10,12 +10,11 @@ from pathlib import Path
 from typing import Any, Callable
 
 REPOSITORY = "rozkalnsandris/RPi5_main"
-CHECKOUT_PATH = Path("/home/andris/RPi5_main")
+CHECKOUT_PATH = Path(__file__).resolve().parents[1]
 GIT = "/usr/bin/git"
 CONFIRM_TEXT = "PREPARE-RPI5-MAIN-EXACT-SOURCE"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 CANONICAL_ORIGINS = {
-    "git@github.com:rozkalnsandris/RPi5_main.git",
     "https://github.com/rozkalnsandris/RPi5_main.git",
 }
 Runner = Callable[..., subprocess.CompletedProcess[Any]]

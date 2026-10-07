@@ -4,10 +4,8 @@
   "implementation_issue": 905,
   "status": "source-defined-runtime-disabled",
   "repository": "rozkalnsandris/RPi5_main",
-  "checkout_path": "/home/andris/RPi5_main",
   "branch": "main",
   "canonical_origins": [
-    "git@github.com:rozkalnsandris/RPi5_main.git",
     "https://github.com/rozkalnsandris/RPi5_main.git"
   ],
   "target_authority": {
@@ -40,7 +38,7 @@
       [
         "/usr/bin/git",
         "-C",
-        "/home/andris/RPi5_main",
+        "<script-repository-root>",
         "fetch",
         "--no-tags",
         "origin",
@@ -49,7 +47,7 @@
       [
         "/usr/bin/git",
         "-C",
-        "/home/andris/RPi5_main",
+        "<script-repository-root>",
         "merge",
         "--ff-only",
         "<expected-main>"
@@ -84,5 +82,6 @@
     "host mutation outside fixed checkout"
   ],
   "source_merge_authorizes_host_mutation": false,
-  "source_merge_authorizes_runtime_execution": false
+  "source_merge_authorizes_runtime_execution": false,
+  "checkout_binding": "script-repository-root"
 }

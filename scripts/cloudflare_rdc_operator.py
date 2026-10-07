@@ -30,13 +30,10 @@ SECRET_DIR_PATH = SECRET_ROOT_PATH / "cloudflare"
 ACCESS_SECRET_PATH = SECRET_DIR_PATH / "access-writer.json"
 TUNNEL_SECRET_PATH = SECRET_DIR_PATH / "tunnel-writer.json"
 RELEASE_METADATA_PATH = Path("/usr/local/libexec/rpi5-cloudflare/release.json")
-CHECKOUT_PATH = Path("/home/andris/RPi5_main")
-PHASE7_AUDIT_PATH = CHECKOUT_PATH / "scripts" / "ingress_drift_audit.py"
 PYTHON = "/usr/bin/python3"
 FIXED_RUNTIME_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 EXPECTED_TUNNEL_NAME = "rpi5-tunnel"
 CANONICAL_ORIGINS = {
-    "git@github.com:rozkalnsandris/RPi5_main.git",
     "https://github.com/rozkalnsandris/RPi5_main.git",
 }
 ACCOUNT_ID_RE = re.compile(r"^[0-9a-fA-F]{32}$")
@@ -178,7 +175,9 @@ def load_release_metadata(expected_main: str, operator_path: Path) -> dict[str, 
     if not SHA_RE.fullmatch(expected_main):
         raise OperatorError("expected_main_invalid")
     metadata = _read_bounded_json(RELEASE_METADATA_PATH, expected_mode=0o400)
-    if set(metadata) != {"schema_version", "repository", "source_sha", "operator_sha256"}:
+    legacy_keys = {"schema_version", "repository", "source_sha", "operator_sha256"}
+    new_keys = legacy_keys | {"checkout_path"}
+    if set(metadata) not in (legacy_keys, new_keys):
         raise OperatorError("release_metadata_invalid")
     if metadata.get("schema_version") != 1 or metadata.get("repository") != REPOSITORY:
         raise OperatorError("release_metadata_invalid")
@@ -194,6 +193,14 @@ def load_release_metadata(expected_main: str, operator_path: Path) -> dict[str, 
         raise OperatorError("release_metadata_invalid") from exc
     if actual != operator_sha:
         raise OperatorError("release_operator_hash_mismatch")
+    checkout_path = metadata.get("checkout_path")
+    if checkout_path is not None and (
+        not isinstance(checkout_path, str)
+        or not os.path.isabs(checkout_path)
+        or len(checkout_path) > 4096
+        or any(ch in checkout_path for ch in ("\x00", "\n", "\r"))
+    ):
+        raise OperatorError("release_metadata_invalid")
     return metadata
 
 
@@ -709,6 +716,7 @@ def run_operator(
 
 
 def _checkout_git(
+    checkout_path: Path,
     args: list[str],
     *,
     runner: Any = subprocess.run,
@@ -717,9 +725,9 @@ def _checkout_git(
         [
             "/usr/bin/git",
             "-c",
-            f"safe.directory={CHECKOUT_PATH}",
+            f"safe.directory={checkout_path}",
             "-C",
-            str(CHECKOUT_PATH),
+            str(checkout_path),
             *args,
         ],
         check=False,
@@ -732,19 +740,20 @@ def _checkout_git(
 
 def verify_phase7_checkout(
     expected_main: str,
+    checkout_path: Path,
     *,
     runner: Any = subprocess.run,
 ) -> Path:
-    if not SHA_RE.fullmatch(expected_main) or not CHECKOUT_PATH.is_dir():
+    if not SHA_RE.fullmatch(expected_main) or not checkout_path.is_dir():
         raise OperatorError("phase7_checkout_invalid")
 
     def read(args: list[str]) -> str:
-        completed = _checkout_git(args, runner=runner)
+        completed = _checkout_git(checkout_path, args, runner=runner)
         if completed.returncode != 0:
             raise OperatorError("phase7_checkout_invalid")
         return completed.stdout.strip()
 
-    if Path(read(["rev-parse", "--show-toplevel"])).resolve() != CHECKOUT_PATH.resolve():
+    if Path(read(["rev-parse", "--show-toplevel"])).resolve() != checkout_path.resolve():
         raise OperatorError("phase7_checkout_invalid")
     if read(["branch", "--show-current"]) != "main":
         raise OperatorError("phase7_checkout_invalid")
@@ -756,17 +765,19 @@ def verify_phase7_checkout(
         raise OperatorError("phase7_checkout_invalid")
     if read(["ls-files", "--error-unmatch", "scripts/ingress_drift_audit.py"]) != "scripts/ingress_drift_audit.py":
         raise OperatorError("phase7_checkout_invalid")
+    audit_path = checkout_path / "scripts" / "ingress_drift_audit.py"
     try:
-        st = os.lstat(PHASE7_AUDIT_PATH)
+        st = os.lstat(audit_path)
     except OSError as exc:
         raise OperatorError("phase7_checkout_invalid") from exc
     if not stat.S_ISREG(st.st_mode) or stat.S_ISLNK(st.st_mode):
         raise OperatorError("phase7_checkout_invalid")
-    return PHASE7_AUDIT_PATH
+    return audit_path
 
 
 def run_phase7_audit(
     audit_path: Path,
+    checkout_path: Path,
     expected_main: str,
     account_id: str,
     token: str,
@@ -780,11 +791,11 @@ def run_phase7_audit(
         "CLOUDFLARE_ACCOUNT_ID": account_id,
         "GIT_CONFIG_COUNT": "1",
         "GIT_CONFIG_KEY_0": "safe.directory",
-        "GIT_CONFIG_VALUE_0": str(CHECKOUT_PATH),
+        "GIT_CONFIG_VALUE_0": str(checkout_path),
     }
     completed = runner(
         [PYTHON, str(audit_path), "--expected-main", expected_main],
-        cwd=str(CHECKOUT_PATH),
+        cwd=str(checkout_path),
         check=False,
         input=(token + "\n").encode("utf-8"),
         stdout=subprocess.PIPE,
@@ -868,7 +879,7 @@ def main(argv: list[str] | None = None) -> int:
 
     operator_path = Path(sys.argv[0]).resolve()
     try:
-        load_release_metadata(args.expected_main, operator_path)
+        release = load_release_metadata(args.expected_main, operator_path)
 
         if args.action == "provision-access-secret":
             if args.confirm != PROVISION_CONFIRM_TEXT:
@@ -901,10 +912,18 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.action == "phase7-ingress-drift-audit":
-            audit_path = verify_phase7_checkout(args.expected_main)
+            checkout_value = release.get("checkout_path")
+            if not isinstance(checkout_value, str):
+                raise OperatorError("phase7_checkout_invalid")
+            checkout_path = Path(checkout_value)
+            audit_path = verify_phase7_checkout(
+                args.expected_main,
+                checkout_path,
+            )
             account_id, token = load_tunnel_credentials()
             rc, report = run_phase7_audit(
                 audit_path,
+                checkout_path,
                 args.expected_main,
                 account_id,
                 token,

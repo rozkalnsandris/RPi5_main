@@ -18,8 +18,9 @@
     "sudoers_mutation": false,
     "tty_input_strategy": "native getpass controlling-terminal flow with explicit /dev/tty isatty precheck; GetPassWarning is fatal",
     "phase7_runtime_action": "phase7-ingress-drift-audit",
-    "phase7_checkout_path": "/home/andris/RPi5_main",
-    "phase7_exact_source_preparation_contract": "ops/contracts/rpi5-main-exact-source-preparation-v1.json"
+    "phase7_exact_source_preparation_contract": "ops/contracts/rpi5-main-exact-source-preparation-v1.json",
+    "phase7_checkout_binding": "root-owned-release-metadata.checkout_path",
+    "release_metadata_checkout_path_bound_by_installer": true
   },
   "secret_lanes": {
     "access": {
@@ -266,7 +267,7 @@
       "issue": 905,
       "action": "phase7-ingress-drift-audit",
       "exact_main_required": true,
-      "fixed_checkout": "/home/andris/RPi5_main",
+      "fixed_checkout": "root-owned-release-metadata.checkout_path",
       "credential_path": "/etc/rpi5-secrets/cloudflare/tunnel-writer.json",
       "access_credential_reuse_allowed": false,
       "token_transport_to_child": "stdin-only",
