@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -251,7 +252,7 @@ class CloudflareRdcOperatorTests(unittest.TestCase):
         self.assertEqual(set(lanes), {"access", "tunnel", "dns"})
         self.assertEqual(len({item["path"] for item in lanes.values()}), 3)
         self.assertTrue(lanes["access"]["implemented"])
-        self.assertFalse(lanes["tunnel"]["implemented"])
+        self.assertTrue(lanes["tunnel"]["implemented"])
         self.assertFalse(lanes["dns"]["implemented"])
         self.assertEqual(
             lanes["access"]["cloudflare_permission"],
@@ -327,6 +328,102 @@ class CloudflareRdcOperatorTests(unittest.TestCase):
             forbidden,
         )
         self.assertIn("API Tokens Edit permission", forbidden)
+
+
+    def test_tunnel_hidden_credentials_use_separate_prompt(self) -> None:
+        with mock.patch.object(op, "_ensure_controlling_tty"), \
+             mock.patch.object(
+                 op.getpass,
+                 "getpass",
+                 side_effect=["a" * 32, "t" * 32],
+             ) as prompt:
+            account_id, token = op._read_hidden_tunnel_provisioning_credentials()
+        self.assertEqual(account_id, "a" * 32)
+        self.assertEqual(token, "t" * 32)
+        self.assertEqual(
+            prompt.call_args_list,
+            [
+                mock.call("Cloudflare account ID: "),
+                mock.call("Cloudflare Tunnel API token: "),
+            ],
+        )
+
+    def test_tunnel_provision_action_has_no_secret_cli_fields(self) -> None:
+        args = op.parse_args([
+            "provision-tunnel-secret",
+            "--expected-main",
+            "a" * 40,
+            "--confirm",
+            "PROVISION-CLOUDFLARE-TUNNEL-SECRET",
+        ])
+        self.assertEqual(args.action, "provision-tunnel-secret")
+        for name in ("api_token", "account_id", "secret_path"):
+            self.assertFalse(hasattr(args, name))
+
+    def test_phase7_runtime_action_passes_token_only_on_stdin(self) -> None:
+        token = "t" * 32
+        account_id = "a" * 32
+        expected = "b" * 40
+        report = {
+            "schema": "rozkalns.rpi5-main.ingress-drift-audit-evidence.v1",
+            "source_main_sha": expected,
+            "mutation_performed": False,
+            "result": "PASS",
+        }
+
+        def runner(argv, **kwargs):
+            self.assertEqual(
+                argv,
+                [
+                    "/usr/bin/python3",
+                    "/fixed/ingress_drift_audit.py",
+                    "--expected-main",
+                    expected,
+                ],
+            )
+            self.assertEqual(kwargs["input"], (token + "\n").encode("utf-8"))
+            self.assertEqual(kwargs["env"]["CLOUDFLARE_ACCOUNT_ID"], account_id)
+            self.assertEqual(kwargs["env"]["GIT_CONFIG_COUNT"], "1")
+            self.assertEqual(kwargs["env"]["GIT_CONFIG_KEY_0"], "safe.directory")
+            self.assertEqual(
+                kwargs["env"]["GIT_CONFIG_VALUE_0"],
+                "/fixed/checkout",
+            )
+            self.assertNotIn("CLOUDFLARE_API_TOKEN", kwargs["env"])
+            self.assertNotIn("CLOUDFLARE_TUNNEL_ID", kwargs["env"])
+            self.assertNotIn(token, argv)
+            self.assertNotIn(token, kwargs["env"].values())
+            return subprocess.CompletedProcess(
+                argv,
+                0,
+                stdout=json.dumps(report).encode("utf-8"),
+                stderr=b"",
+            )
+
+        rc, observed = op.run_phase7_audit(
+            Path("/fixed/ingress_drift_audit.py"),
+            Path("/fixed/checkout"),
+            expected,
+            account_id,
+            token,
+            runner=runner,
+        )
+        self.assertEqual(rc, 0)
+        self.assertEqual(observed, report)
+
+    def test_phase7_contract_is_fixed_get_only_and_non_authorizing(self) -> None:
+        contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
+        provision = contract["host_bootstrap"]["tunnel_secret_provisioning"]
+        self.assertFalse(provision["overwrite_existing_secret"])
+        self.assertFalse(provision["automatic_retry"])
+        self.assertFalse(provision["automatic_rollback_or_cleanup_after_mutation_error"])
+        operation = contract["read_only_operations"][0]
+        self.assertEqual(operation["cloudflare_methods"], ["GET"])
+        self.assertFalse(operation["access_credential_reuse_allowed"])
+        self.assertFalse(operation["token_in_argv_allowed"])
+        self.assertFalse(operation["token_in_environment_allowed"])
+        self.assertFalse(operation["mutation_allowed"])
+        self.assertFalse(operation["remediation_allowed"])
 
 
 if __name__ == "__main__":

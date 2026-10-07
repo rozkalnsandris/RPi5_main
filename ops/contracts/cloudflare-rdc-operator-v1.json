@@ -16,7 +16,11 @@
     "installed_mode": "0500",
     "release_metadata_mode": "0400",
     "sudoers_mutation": false,
-    "tty_input_strategy": "native getpass controlling-terminal flow with explicit /dev/tty isatty precheck; GetPassWarning is fatal"
+    "tty_input_strategy": "native getpass controlling-terminal flow with explicit /dev/tty isatty precheck; GetPassWarning is fatal",
+    "phase7_runtime_action": "phase7-ingress-drift-audit",
+    "phase7_exact_source_preparation_contract": "ops/contracts/rpi5-main-exact-source-preparation-v1.json",
+    "phase7_checkout_binding": "root-owned-release-metadata.checkout_path",
+    "release_metadata_checkout_path_bound_by_installer": true
   },
   "secret_lanes": {
     "access": {
@@ -28,7 +32,7 @@
       "scope": "account-only"
     },
     "tunnel": {
-      "implemented": false,
+      "implemented": true,
       "path": "/etc/rpi5-secrets/cloudflare/tunnel-writer.json",
       "owner": "root:root",
       "mode": "0600",
@@ -109,7 +113,11 @@
     "token value via RDC",
     "redundant sudoers rule for rpi5-cloudflare",
     "echoed stdin fallback for secret provisioning",
-    "operator upgrade without exact installed release binding"
+    "operator upgrade without exact installed release binding",
+    "Access credential reuse for Tunnel consumers",
+    "Tunnel credential value in argv or environment",
+    "caller-selected Phase 7 checkout, secret path, API method or endpoint",
+    "Phase 7 remediation"
   ],
   "host_bootstrap": {
     "install": {
@@ -208,6 +216,71 @@
       "automatic_retry": false,
       "automatic_rollback": false,
       "automatic_cleanup_after_mutation_error": false
+    },
+    "tunnel_secret_provisioning": {
+      "action": "provision-tunnel-secret",
+      "installed_entrypoint": "/usr/local/sbin/rpi5-cloudflare",
+      "input_channel": "hidden controlling TTY only",
+      "argv_secret_forbidden": true,
+      "environment_secret_forbidden": true,
+      "rdc_secret_input_forbidden": true,
+      "cloudflare_token_creation": false,
+      "required_token_scope": "Cloudflare One Connector: cloudflared Write only",
+      "scope_absence_proof": "owner creation contract; helper verifies active token and exact rpi5-tunnel/config GET reachability but does not claim absence of undisclosed additional permissions",
+      "read_only_cloudflare_preflight": [
+        "GET /user/tokens/verify reports active",
+        "GET /accounts/{account_id}/cfd_tunnel resolves exactly one remotely-managed rpi5-tunnel",
+        "GET /accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations succeeds"
+      ],
+      "filesystem": [
+        {
+          "path": "/etc/rpi5-secrets",
+          "owner": "root:root",
+          "mode": "0700",
+          "kind": "directory-if-absent"
+        },
+        {
+          "path": "/etc/rpi5-secrets/cloudflare",
+          "owner": "root:root",
+          "mode": "0700",
+          "kind": "directory-if-absent"
+        },
+        {
+          "path": "/etc/rpi5-secrets/cloudflare/tunnel-writer.json",
+          "owner": "root:root",
+          "mode": "0600",
+          "kind": "exclusive-create"
+        }
+      ],
+      "overwrite_existing_secret": false,
+      "automatic_retry": false,
+      "automatic_rollback_or_cleanup_after_mutation_error": false,
+      "source_merge_provisions_secret": false,
+      "tty_precheck": "/dev/tty opened with os.open and verified by os.isatty before prompting",
+      "getpass_stream": "default native getpass controlling terminal; no custom stream",
+      "getpass_warning_policy": "GetPassWarning is fatal; no stdin echo fallback accepted"
     }
-  }
+  },
+  "read_only_operations": [
+    {
+      "id": "phase7-ingress-drift-audit-v1",
+      "issue": 905,
+      "action": "phase7-ingress-drift-audit",
+      "exact_main_required": true,
+      "fixed_checkout": "root-owned-release-metadata.checkout_path",
+      "credential_path": "/etc/rpi5-secrets/cloudflare/tunnel-writer.json",
+      "access_credential_reuse_allowed": false,
+      "token_transport_to_child": "stdin-only",
+      "token_in_argv_allowed": false,
+      "token_in_environment_allowed": false,
+      "tunnel_id_binding": "discover exactly one remotely-managed rpi5-tunnel through GET-only audit client",
+      "child_entrypoint": "scripts/ingress_drift_audit.py",
+      "cloudflare_methods": [
+        "GET"
+      ],
+      "mutation_allowed": false,
+      "remediation_allowed": false,
+      "output_schema": "rozkalns.rpi5-main.ingress-drift-audit-evidence.v1"
+    }
+  ]
 }

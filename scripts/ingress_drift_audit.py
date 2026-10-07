@@ -238,13 +238,42 @@ def build_report(
     }
 
 
+def _discover_tunnel_id(
+    client: cloudflare.CloudflareGetClient,
+    account_id: str,
+) -> str:
+    payload = client.get(
+        f"/accounts/{account_id}/cfd_tunnel",
+        {
+            "name": cloudflare.EXPECTED_TUNNEL_NAME,
+            "is_deleted": "false",
+            "per_page": 100,
+        },
+    )
+    result = payload.get("result")
+    if not isinstance(result, list):
+        raise cloudflare.AuditError("tunnel_list_shape_invalid")
+    matches = [
+        item
+        for item in result
+        if isinstance(item, dict)
+        and item.get("name") == cloudflare.EXPECTED_TUNNEL_NAME
+        and item.get("config_src") == "cloudflare"
+    ]
+    if len(matches) != 1:
+        raise cloudflare.AuditError("tunnel_lookup_ambiguous")
+    tunnel_id = matches[0].get("id")
+    if not isinstance(tunnel_id, str) or not cloudflare.TUNNEL_ID_RE.fullmatch(tunnel_id):
+        raise cloudflare.AuditError("tunnel_id_invalid")
+    return tunnel_id
+
+
 def _collect_cloudflare_report(api_token: str) -> dict[str, Any]:
     account_id = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
-    tunnel_id = os.environ.get("CLOUDFLARE_TUNNEL_ID", "")
     if not cloudflare.ACCOUNT_ID_RE.fullmatch(account_id):
         raise cloudflare.AuditError("missing_or_invalid_account_id")
-    if not cloudflare.TUNNEL_ID_RE.fullmatch(tunnel_id):
-        raise cloudflare.AuditError("missing_or_invalid_tunnel_id")
+    if os.environ.get("CLOUDFLARE_TUNNEL_ID"):
+        raise cloudflare.AuditError("tunnel_id_env_forbidden")
 
     registry = cloudflare.load_registry(HOSTNAME_POLICY_PATH)
     client = cloudflare.CloudflareGetClient(api_token)
@@ -256,6 +285,7 @@ def _collect_cloudflare_report(api_token: str) -> dict[str, Any]:
     if token.get("status") != "active":
         raise cloudflare.AuditError("api_token_not_active")
 
+    tunnel_id = _discover_tunnel_id(client, account_id)
     tunnel = cloudflare._unwrap_dict(
         client.get(f"/accounts/{account_id}/cfd_tunnel/{tunnel_id}"),
         "tunnel_shape_invalid",

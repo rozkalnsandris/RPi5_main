@@ -39,12 +39,15 @@
     ],
     "allowed_get_surfaces": [
       "/user/tokens/verify",
+      "/accounts/{account_id}/cfd_tunnel",
       "/accounts/{account_id}/cfd_tunnel/{tunnel_id}",
       "/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations"
     ],
     "access_application_or_policy_reads_allowed": false,
     "token_transport": "stdin-only",
-    "token_environment_allowed": false
+    "token_environment_allowed": false,
+    "tunnel_id_binding": "discover-single-remotely-managed-rpi5-tunnel-by-name",
+    "tunnel_id_environment_allowed": false
   },
   "host_component": {
     "execution_surface": "owner-authorized-rpi5-read-only",
@@ -222,5 +225,19 @@
       "unknown"
     ],
     "evidence_schema": "rozkalns.rpi5-main.ingress-drift-audit-evidence.v1"
+  },
+  "execution_boundary_issue": 905,
+  "runtime_boundary": {
+    "installed_entrypoint": "/usr/local/sbin/rpi5-cloudflare phase7-ingress-drift-audit",
+    "exact_checkout": "root-owned-release-metadata.checkout_path",
+    "exact_source_preparation_contract": "ops/contracts/rpi5-main-exact-source-preparation-v1.json",
+    "credential_path": "/etc/rpi5-secrets/cloudflare/tunnel-writer.json",
+    "access_credential_reuse_allowed": false,
+    "token_transport_to_audit": "stdin-only",
+    "account_binding_transport_to_audit": "minimal-child-environment-from-fixed-root-secret",
+    "tunnel_id_transport_to_audit": "none-discovered-by-get",
+    "source_merge_provisions_credential": false,
+    "runtime_execution_requires_fresh_owner_authorization": true,
+    "remediation_allowed": false
   }
 }

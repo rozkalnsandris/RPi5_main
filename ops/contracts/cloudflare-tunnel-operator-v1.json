@@ -74,6 +74,24 @@
         "/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations"
       ],
       "cloudflare_mutation_allowed": false
+    },
+    {
+      "id": "phase7-ingress-drift-read-v1",
+      "issue": 905,
+      "class": "read_only",
+      "source": "scripts/ingress_drift_audit.py",
+      "runtime_wrapper": "/usr/local/sbin/rpi5-cloudflare phase7-ingress-drift-audit",
+      "allowed_methods": [
+        "GET"
+      ],
+      "allowed_paths": [
+        "/user/tokens/verify",
+        "/accounts/{account_id}/cfd_tunnel",
+        "/accounts/{account_id}/cfd_tunnel/{tunnel_id}",
+        "/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations"
+      ],
+      "tunnel_id_binding": "discover-exact-rpi5-tunnel-by-name",
+      "cloudflare_mutation_allowed": false
     }
   ],
   "evidence_boundary": {
@@ -94,5 +112,13 @@
     "list_tunnels": "https://developers.cloudflare.com/api/resources/zero_trust/subresources/tunnels/subresources/cloudflared/methods/list/",
     "get_configuration": "https://developers.cloudflare.com/api/resources/zero_trust/subresources/tunnels/subresources/cloudflared/subresources/configurations/methods/get/",
     "update_configuration": "https://developers.cloudflare.com/tunnel/get-started/"
+  },
+  "host_capability": {
+    "secret_path": "/etc/rpi5-secrets/cloudflare/tunnel-writer.json",
+    "provisioning_action": "/usr/local/sbin/rpi5-cloudflare provision-tunnel-secret",
+    "hidden_tty_only": true,
+    "access_credential_reuse_allowed": false,
+    "source_merge_provisions_secret": false,
+    "runtime_execution_requires_fresh_owner_authorization": true
   }
 }

@@ -1,0 +1,87 @@
+{
+  "schema": "rozkalns.rpi5-main.exact-source-preparation.v1",
+  "schema_version": 1,
+  "implementation_issue": 905,
+  "status": "source-defined-runtime-disabled",
+  "repository": "rozkalnsandris/RPi5_main",
+  "branch": "main",
+  "canonical_origins": [
+    "https://github.com/rozkalnsandris/RPi5_main.git"
+  ],
+  "target_authority": {
+    "expected_main": "explicit-owner-authorized-40-char-sha",
+    "caller_selected_checkout_path": false,
+    "caller_selected_remote": false,
+    "caller_selected_ref": false,
+    "caller_selected_git_subcommand": false,
+    "caller_selected_command": false,
+    "caller_selected_argv": false,
+    "caller_selected_environment": false
+  },
+  "preflight": {
+    "mutation": false,
+    "requires": [
+      "fixed checkout exists",
+      "exact top-level identity",
+      "branch main",
+      "canonical origin",
+      "clean worktree/index",
+      "40-char current HEAD"
+    ],
+    "target_object_absent": "PASS_WITH_FETCH_REQUIRED",
+    "target_object_present_requires_fast_forward_ancestry": true
+  },
+  "future_apply": {
+    "runtime_execution_requires_fresh_owner_authorization": true,
+    "confirmation": "PREPARE-RPI5-MAIN-EXACT-SOURCE",
+    "exact_commands": [
+      [
+        "/usr/bin/git",
+        "-C",
+        "<script-repository-root>",
+        "fetch",
+        "--no-tags",
+        "origin",
+        "main"
+      ],
+      [
+        "/usr/bin/git",
+        "-C",
+        "<script-repository-root>",
+        "merge",
+        "--ff-only",
+        "<expected-main>"
+      ]
+    ],
+    "first_mutation": "git fetch --no-tags origin main",
+    "require_origin_main_equals_expected_sha_after_fetch": true,
+    "require_pre_fetch_head_unchanged_before_merge": true,
+    "require_fast_forward_ancestry_after_fetch": true,
+    "postconditions": [
+      "HEAD equals expected main",
+      "branch remains main",
+      "origin remains canonical",
+      "checkout remains clean"
+    ],
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false
+  },
+  "forbidden": [
+    "reset",
+    "rebase",
+    "clean",
+    "force",
+    "force-with-lease",
+    "checkout branch switching",
+    "caller-selected path",
+    "caller-selected remote",
+    "caller-selected ref",
+    "caller-selected git subcommand",
+    "shell command execution",
+    "host mutation outside fixed checkout"
+  ],
+  "source_merge_authorizes_host_mutation": false,
+  "source_merge_authorizes_runtime_execution": false,
+  "checkout_binding": "script-repository-root"
+}

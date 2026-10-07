@@ -275,3 +275,19 @@ Only minimum sanitized read-only evidence may be collected after a write failure
 ## Future expansion
 
 Tunnel and DNS actions must be added by reviewed source changes with their own fixed request models, capability secrets, tests, mutation budgets and owner gates. The Access token is never reused as a general Cloudflare token, and future lanes must not widen the v1 Access action.
+
+## Phase 7 Tunnel capability and read-only drift audit
+
+Issue #905 activates the already-reserved Tunnel capability as a distinct host secret; it does not reuse `access-writer.json`.
+
+The fixed secret path is `/etc/rpi5-secrets/cloudflare/tunnel-writer.json`, root-owned mode `0600`, containing exactly `account_id` and `api_token`. A later owner-operated local terminal may provision it through the installed exact-release operator:
+
+`sudo -n /usr/local/sbin/rpi5-cloudflare provision-tunnel-secret --expected-main <exact-main> --confirm PROVISION-CLOUDFLARE-TUNNEL-SECRET`
+
+Input is hidden through the controlling TTY. Before the first filesystem mutation, the operator performs only GET verification: token active, exactly one remotely-managed `rpi5-tunnel`, and readable Tunnel configuration. Existing secret files are never overwritten. A post-mutation error is STOP with no retry, deletion, rollback or cleanup.
+
+The fixed Phase 7 runtime action is:
+
+`sudo -n /usr/local/sbin/rpi5-cloudflare phase7-ingress-drift-audit --expected-main <exact-main>`
+
+The operator verifies its installed release and the fixed `the installer-bound checkout recorded in root-owned release metadata` checkout before reading the Tunnel secret. It sends the token to the existing audit only via stdin, with no token or Tunnel ID in the child environment. Source merge performs none of these host actions.

@@ -28,9 +28,9 @@ Phase 7 deliberately does **not** add another Cloudflare API client, mutation wo
 
 `scripts/ingress_drift_audit.py` imports and reuses `CloudflareGetClient`, registry parsing and Tunnel route-classification helpers from `scripts/cloudflare_zero_trust_reconcile.py`.
 
-Phase 7 deliberately narrows that existing client to only three GET surfaces: token verification, Tunnel metadata and Tunnel configuration. It does **not** enumerate Access applications, policies, organizations or selector values. This keeps the audit inside the route/exposure scope while avoiding a second API implementation.
+Phase 7 deliberately narrows that existing client to four GET surfaces: token verification, exact-name Tunnel discovery, Tunnel metadata and Tunnel configuration. It does **not** enumerate Access applications, policies, organizations or selector values. This keeps the audit inside the route/exposure scope while avoiding a second API implementation.
 
-The API token is accepted only through stdin and is never accepted from `CLOUDFLARE_API_TOKEN` in the child environment. Account/tunnel bindings remain external runtime bindings and are never emitted.
+The API token is accepted only through stdin and is never accepted from `CLOUDFLARE_API_TOKEN` in the child environment. The account binding comes from the fixed root-owned Tunnel capability boundary. The Tunnel ID is not separately configured: the audit discovers exactly one remotely-managed `rpi5-tunnel` by name and never emits the account or Tunnel identifier.
 
 The host side is implemented by `scripts/ingress_drift_host.py`.
 
@@ -133,19 +133,17 @@ A later runtime execution requires fresh owner authorization binding the exact m
 
 Any `DRIFT` requiring a change becomes a separate service-specific issue. Phase 7 itself never repairs, restarts, narrows, broadens or cleans up anything.
 
-## Runtime entrypoint after merge
+## Runtime execution boundary after #905
 
-Canonical combined entrypoint accepts the Cloudflare API token on stdin only:
+The merged audit core is not a secret loader. Runtime access goes through the exact-release installed Cloudflare operator:
 
-```text
-printf '%s\\n' '<protected-token-from-authorized-input>' | python3 scripts/ingress_drift_audit.py --expected-main=<exact-main-sha>
-```
+`sudo -n /usr/local/sbin/rpi5-cloudflare phase7-ingress-drift-audit --expected-main <exact-main-sha>`
 
-The placeholder above is documentation only; do not put a real token in shell history or chat. A later authorized executor must supply it through a protected stdin path.
+That wrapper verifies the fixed canonical checkout before reading the fixed Tunnel capability secret. It passes the API token only on stdin to `scripts/ingress_drift_audit.py`; the token is never placed in argv or environment. The child receives the account binding through a minimal environment and discovers the single expected remotely-managed `rpi5-tunnel` through GET-only Cloudflare calls.
 
-The entrypoint first verifies the local checkout is exact and clean, then collects host metadata, then reuses the existing GET-only Cloudflare client for Tunnel-only reads. `CLOUDFLARE_API_TOKEN` in the child environment is rejected fail-closed. Account/tunnel bindings remain existing protected runtime bindings; Phase 7 introduces no second credential store or API implementation.
+If the canonical checkout is stale, use the separately reviewed `scripts/rpi5_main_exact_source_prepare.py` boundary. Its read-only mode performs no fetch. A later exact owner authorization may permit only fixed `git fetch --no-tags origin main` plus `git merge --ff-only <exact-main>`; no reset, rebase, clean or force path exists.
 
-Runtime invocation details must be frozen by the later owner authorization. Do not infer runtime permission from this document or from source merge.
+The runtime sequence remains four separate gates: source merge; exact-source/operator preparation; owner-operated hidden-TTY Tunnel secret provisioning; and fresh owner authorization for the read-only Phase 7 audit. None implies the next.
 
 ## Validation
 
