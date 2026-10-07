@@ -288,7 +288,10 @@ class IngressDriftAuditTests(unittest.TestCase):
         self.assertIn("import cloudflare_zero_trust_reconcile as cloudflare", source)
         self.assertIn("cloudflare.CloudflareGetClient", source)
         self.assertNotIn("cloudflare.collect_state", source)
-        self.assertIn('client.get("/user/tokens/verify")', source)
+        self.assertIn(
+            'client.get(f"/accounts/{account_id}/tokens/verify")',
+            source,
+        )
         self.assertIn("cfd_tunnel/{tunnel_id}", source)
         self.assertIn("_discover_tunnel_id", source)
         self.assertIn("tunnel_id_env_forbidden", source)
