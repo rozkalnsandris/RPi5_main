@@ -8,6 +8,7 @@ import json
 import os
 import re
 import stat
+import subprocess
 import sys
 import urllib.error
 import urllib.parse
@@ -27,7 +28,17 @@ EXPECTED_PARENT_PATTERN = "*.rozkalns.net"
 SECRET_ROOT_PATH = Path("/etc/rpi5-secrets")
 SECRET_DIR_PATH = SECRET_ROOT_PATH / "cloudflare"
 ACCESS_SECRET_PATH = SECRET_DIR_PATH / "access-writer.json"
+TUNNEL_SECRET_PATH = SECRET_DIR_PATH / "tunnel-writer.json"
 RELEASE_METADATA_PATH = Path("/usr/local/libexec/rpi5-cloudflare/release.json")
+CHECKOUT_PATH = Path("/home/andris/RPi5_main")
+PHASE7_AUDIT_PATH = CHECKOUT_PATH / "scripts" / "ingress_drift_audit.py"
+PYTHON = "/usr/bin/python3"
+FIXED_RUNTIME_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+EXPECTED_TUNNEL_NAME = "rpi5-tunnel"
+CANONICAL_ORIGINS = {
+    "git@github.com:rozkalnsandris/RPi5_main.git",
+    "https://github.com/rozkalnsandris/RPi5_main.git",
+}
 ACCOUNT_ID_RE = re.compile(r"^[0-9a-fA-F]{32}$")
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 UUID_RE = re.compile(
@@ -36,6 +47,7 @@ UUID_RE = re.compile(
 )
 CONFIRM_TEXT = "CREATE-COLORING-PUBLIC-BYPASS"
 PROVISION_CONFIRM_TEXT = "PROVISION-CLOUDFLARE-ACCESS-SECRET"
+TUNNEL_PROVISION_CONFIRM_TEXT = "PROVISION-CLOUDFLARE-TUNNEL-SECRET"
 DYNAMIC_APP_FIELDS = {"created_at", "updated_at", "aud"}
 
 
@@ -92,6 +104,9 @@ def _sanitize_reason(value: str) -> str:
         "local_tty_required",
         "token_inactive",
         "access_permission_check_failed",
+        "tunnel_permission_check_failed",
+        "phase7_checkout_invalid",
+        "phase7_audit_failed",
         "secret_already_exists",
         "secret_parent_invalid",
         "secret_write_failed",
@@ -182,8 +197,8 @@ def load_release_metadata(expected_main: str, operator_path: Path) -> dict[str, 
     return metadata
 
 
-def load_access_credentials() -> tuple[str, str]:
-    decoded = _read_bounded_json(ACCESS_SECRET_PATH, expected_mode=0o600)
+def _load_capability_credentials(path: Path) -> tuple[str, str]:
+    decoded = _read_bounded_json(path, expected_mode=0o600)
     if set(decoded) != {"account_id", "api_token"}:
         raise OperatorError("secret_payload_invalid")
     account_id = decoded.get("account_id")
@@ -198,6 +213,14 @@ def load_access_credentials() -> tuple[str, str]:
     ):
         raise OperatorError("secret_payload_invalid")
     return account_id, api_token
+
+
+def load_access_credentials() -> tuple[str, str]:
+    return _load_capability_credentials(ACCESS_SECRET_PATH)
+
+
+def load_tunnel_credentials() -> tuple[str, str]:
+    return _load_capability_credentials(TUNNEL_SECRET_PATH)
 
 
 class CloudflareClient:
@@ -262,6 +285,43 @@ class CloudflareClient:
             )
         except OperatorError as exc:
             raise OperatorError("access_permission_check_failed") from exc
+
+    def verify_tunnel_permission(self, account_id: str) -> None:
+        try:
+            payload = self._request(
+                "GET",
+                f"/accounts/{account_id}/cfd_tunnel"
+                f"?name={urllib.parse.quote(EXPECTED_TUNNEL_NAME)}"
+                "&is_deleted=false&per_page=100",
+            )
+            result = payload.get("result")
+            if not isinstance(result, list):
+                raise OperatorError("tunnel_permission_check_failed")
+            matches = [
+                item
+                for item in result
+                if isinstance(item, dict)
+                and item.get("name") == EXPECTED_TUNNEL_NAME
+                and item.get("config_src") == "cloudflare"
+            ]
+            if len(matches) != 1:
+                raise OperatorError("tunnel_permission_check_failed")
+            tunnel_id = matches[0].get("id")
+            if not isinstance(tunnel_id, str) or not UUID_RE.fullmatch(tunnel_id):
+                raise OperatorError("tunnel_permission_check_failed")
+            configuration = self._request(
+                "GET",
+                f"/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations",
+            )
+            config_result = configuration.get("result")
+            if not isinstance(config_result, dict) or not isinstance(
+                config_result.get("config"), dict
+            ):
+                raise OperatorError("tunnel_permission_check_failed")
+        except OperatorError as exc:
+            if str(exc) == "tunnel_permission_check_failed":
+                raise
+            raise OperatorError("tunnel_permission_check_failed") from exc
 
     def list_applications(self, account_id: str) -> list[dict[str, Any]]:
         payload = self._request(
@@ -345,10 +405,10 @@ def _hidden_getpass(prompt: str) -> str:
         raise OperatorError("local_tty_required") from exc
 
 
-def _read_hidden_provisioning_credentials() -> tuple[str, str]:
+def _read_hidden_capability_credentials(token_prompt: str) -> tuple[str, str]:
     _ensure_controlling_tty()
     account_id = _hidden_getpass("Cloudflare account ID: ")
-    token = _hidden_getpass("Cloudflare Access API token: ")
+    token = _hidden_getpass(token_prompt)
     if not ACCOUNT_ID_RE.fullmatch(account_id):
         raise OperatorError("secret_payload_invalid")
     if (
@@ -358,6 +418,14 @@ def _read_hidden_provisioning_credentials() -> tuple[str, str]:
     ):
         raise OperatorError("secret_payload_invalid")
     return account_id, token
+
+
+def _read_hidden_provisioning_credentials() -> tuple[str, str]:
+    return _read_hidden_capability_credentials("Cloudflare Access API token: ")
+
+
+def _read_hidden_tunnel_provisioning_credentials() -> tuple[str, str]:
+    return _read_hidden_capability_credentials("Cloudflare Tunnel API token: ")
 
 
 def _validate_secret_parent(path: Path) -> None:
@@ -377,8 +445,8 @@ def _validate_secret_parent(path: Path) -> None:
         raise OperatorError("secret_parent_invalid")
 
 
-def _write_access_secret(account_id: str, token: str) -> None:
-    if ACCESS_SECRET_PATH.exists():
+def _write_capability_secret(path: Path, account_id: str, token: str) -> None:
+    if path.exists():
         raise OperatorError("secret_already_exists")
     _validate_secret_parent(SECRET_ROOT_PATH)
     _validate_secret_parent(SECRET_DIR_PATH)
@@ -394,16 +462,16 @@ def _write_access_secret(account_id: str, token: str) -> None:
     mutation_started = False
     fd: int | None = None
     try:
-        for path in (SECRET_ROOT_PATH, SECRET_DIR_PATH):
-            if not path.exists():
-                os.mkdir(path, 0o700)
+        for parent in (SECRET_ROOT_PATH, SECRET_DIR_PATH):
+            if not parent.exists():
+                os.mkdir(parent, 0o700)
                 mutation_started = True
-                _validate_secret_parent(path)
+                _validate_secret_parent(parent)
 
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
         if hasattr(os, "O_NOFOLLOW"):
             flags |= os.O_NOFOLLOW
-        fd = os.open(ACCESS_SECRET_PATH, flags, 0o600)
+        fd = os.open(path, flags, 0o600)
         mutation_started = True
         view = memoryview(payload)
         while view:
@@ -415,9 +483,9 @@ def _write_access_secret(account_id: str, token: str) -> None:
         os.close(fd)
         fd = None
 
-        _validate_regular_root_file(ACCESS_SECRET_PATH, 0o600)
+        _validate_regular_root_file(path, 0o600)
         try:
-            observed = ACCESS_SECRET_PATH.read_bytes()
+            observed = path.read_bytes()
         except OSError as exc:
             raise SecretProvisionError(
                 "secret_post_write_verification_failed", True
@@ -438,6 +506,14 @@ def _write_access_secret(account_id: str, token: str) -> None:
                 pass
 
 
+def _write_access_secret(account_id: str, token: str) -> None:
+    _write_capability_secret(ACCESS_SECRET_PATH, account_id, token)
+
+
+def _write_tunnel_secret(account_id: str, token: str) -> None:
+    _write_capability_secret(TUNNEL_SECRET_PATH, account_id, token)
+
+
 def provision_access_secret(
     client: CloudflareClient, account_id: str, token: str
 ) -> None:
@@ -446,6 +522,16 @@ def provision_access_secret(
     client.verify_active_token()
     client.verify_access_permission(account_id)
     _write_access_secret(account_id, token)
+
+
+def provision_tunnel_secret(
+    client: CloudflareClient, account_id: str, token: str
+) -> None:
+    if TUNNEL_SECRET_PATH.exists():
+        raise OperatorError("secret_already_exists")
+    client.verify_active_token()
+    client.verify_tunnel_permission(account_id)
+    _write_tunnel_secret(account_id, token)
 
 
 def _split_destination(value: str) -> tuple[str, str]:
@@ -622,6 +708,106 @@ def run_operator(
     }
 
 
+def _checkout_git(
+    args: list[str],
+    *,
+    runner: Any = subprocess.run,
+) -> subprocess.CompletedProcess[Any]:
+    return runner(
+        ["/usr/bin/git", "-C", str(CHECKOUT_PATH), *args],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        timeout=15,
+    )
+
+
+def verify_phase7_checkout(
+    expected_main: str,
+    *,
+    runner: Any = subprocess.run,
+) -> Path:
+    if not SHA_RE.fullmatch(expected_main) or not CHECKOUT_PATH.is_dir():
+        raise OperatorError("phase7_checkout_invalid")
+
+    def read(args: list[str]) -> str:
+        completed = _checkout_git(args, runner=runner)
+        if completed.returncode != 0:
+            raise OperatorError("phase7_checkout_invalid")
+        return completed.stdout.strip()
+
+    if Path(read(["rev-parse", "--show-toplevel"])).resolve() != CHECKOUT_PATH.resolve():
+        raise OperatorError("phase7_checkout_invalid")
+    if read(["branch", "--show-current"]) != "main":
+        raise OperatorError("phase7_checkout_invalid")
+    if read(["remote", "get-url", "origin"]) not in CANONICAL_ORIGINS:
+        raise OperatorError("phase7_checkout_invalid")
+    if read(["status", "--porcelain=v1", "--untracked-files=all"]):
+        raise OperatorError("phase7_checkout_invalid")
+    if read(["rev-parse", "HEAD"]) != expected_main:
+        raise OperatorError("phase7_checkout_invalid")
+    if read(["ls-files", "--error-unmatch", "scripts/ingress_drift_audit.py"]) != "scripts/ingress_drift_audit.py":
+        raise OperatorError("phase7_checkout_invalid")
+    try:
+        st = os.lstat(PHASE7_AUDIT_PATH)
+    except OSError as exc:
+        raise OperatorError("phase7_checkout_invalid") from exc
+    if not stat.S_ISREG(st.st_mode) or stat.S_ISLNK(st.st_mode):
+        raise OperatorError("phase7_checkout_invalid")
+    return PHASE7_AUDIT_PATH
+
+
+def run_phase7_audit(
+    audit_path: Path,
+    expected_main: str,
+    account_id: str,
+    token: str,
+    *,
+    runner: Any = subprocess.run,
+) -> tuple[int, dict[str, Any]]:
+    env = {
+        "PATH": FIXED_RUNTIME_PATH,
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "CLOUDFLARE_ACCOUNT_ID": account_id,
+    }
+    completed = runner(
+        [PYTHON, str(audit_path), "--expected-main", expected_main],
+        cwd=str(CHECKOUT_PATH),
+        check=False,
+        input=(token + "\n").encode("utf-8"),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        env=env,
+        timeout=120,
+    )
+    if completed.returncode not in {0, 2, 3}:
+        raise OperatorError("phase7_audit_failed")
+    raw = completed.stdout
+    if isinstance(raw, bytes):
+        try:
+            raw = raw.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise OperatorError("phase7_audit_failed") from exc
+    try:
+        report = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise OperatorError("phase7_audit_failed") from exc
+    if (
+        not isinstance(report, dict)
+        or report.get("schema") != "rozkalns.rpi5-main.ingress-drift-audit-evidence.v1"
+        or report.get("source_main_sha") != expected_main
+        or report.get("mutation_performed") is not False
+        or report.get("result") not in {"PASS", "DRIFT", "BLOCKED"}
+    ):
+        raise OperatorError("phase7_audit_failed")
+    expected_rc = {"PASS": 0, "BLOCKED": 2, "DRIFT": 3}[report["result"]]
+    if completed.returncode != expected_rc:
+        raise OperatorError("phase7_audit_failed")
+    return completed.returncode, report
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(add_help=True)
     subparsers = parser.add_subparsers(dest="action", required=True)
@@ -635,6 +821,13 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     provision = subparsers.add_parser("provision-access-secret")
     provision.add_argument("--expected-main", required=True)
     provision.add_argument("--confirm", default="")
+
+    tunnel = subparsers.add_parser("provision-tunnel-secret")
+    tunnel.add_argument("--expected-main", required=True)
+    tunnel.add_argument("--confirm", default="")
+
+    phase7 = subparsers.add_parser("phase7-ingress-drift-audit")
+    phase7.add_argument("--expected-main", required=True)
     return parser.parse_args(argv)
 
 
@@ -662,6 +855,34 @@ def main(argv: list[str] | None = None) -> int:
                 apply_ready=False,
             )
             return 0
+
+        if args.action == "provision-tunnel-secret":
+            if args.confirm != TUNNEL_PROVISION_CONFIRM_TEXT:
+                raise OperatorError("provision_confirmation_missing")
+            account_id, token = _read_hidden_tunnel_provisioning_credentials()
+            client = CloudflareClient(token)
+            provision_tunnel_secret(client, account_id, token)
+            token = ""
+            _emit(
+                "PASS",
+                mutation_performed=True,
+                write_attempted=False,
+                apply_ready=False,
+            )
+            return 0
+
+        if args.action == "phase7-ingress-drift-audit":
+            audit_path = verify_phase7_checkout(args.expected_main)
+            account_id, token = load_tunnel_credentials()
+            rc, report = run_phase7_audit(
+                audit_path,
+                args.expected_main,
+                account_id,
+                token,
+            )
+            token = ""
+            print(json.dumps(report, indent=2, sort_keys=True))
+            return rc
 
         if args.hostname != TARGET_HOSTNAME:
             raise OperatorError("hostname_not_allowlisted")

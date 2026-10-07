@@ -290,6 +290,8 @@ class IngressDriftAuditTests(unittest.TestCase):
         self.assertNotIn("cloudflare.collect_state", source)
         self.assertIn('client.get("/user/tokens/verify")', source)
         self.assertIn("cfd_tunnel/{tunnel_id}", source)
+        self.assertIn("_discover_tunnel_id", source)
+        self.assertIn("tunnel_id_env_forbidden", source)
         self.assertNotIn("/access/apps", source)
         self.assertNotIn("/access/organizations", source)
         self.assertIn("sys.stdin.readline", source)
@@ -322,6 +324,55 @@ class IngressDriftAuditTests(unittest.TestCase):
             "access-audience-values",
         ):
             self.assertIn(item, forbidden)
+
+
+    def test_phase7_discovers_single_tunnel_without_tunnel_id_binding(self) -> None:
+        tunnel_id = "11111111-1111-4111-8111-111111111111"
+
+        class Client:
+            def __init__(self):
+                self.calls = []
+
+            def get(self, path, query=None):
+                self.calls.append((path, query))
+                return {
+                    "result": [{
+                        "id": tunnel_id,
+                        "name": "rpi5-tunnel",
+                        "config_src": "cloudflare",
+                    }]
+                }
+
+        client = Client()
+        observed = audit._discover_tunnel_id(client, "a" * 32)
+        self.assertEqual(observed, tunnel_id)
+        self.assertEqual(
+            client.calls,
+            [(
+                "/accounts/" + "a" * 32 + "/cfd_tunnel",
+                {
+                    "name": "rpi5-tunnel",
+                    "is_deleted": "false",
+                    "per_page": 100,
+                },
+            )],
+        )
+
+    def test_runtime_boundary_uses_tunnel_secret_and_no_external_tunnel_id(self) -> None:
+        boundary = self.contract["runtime_boundary"]
+        self.assertEqual(
+            boundary["credential_path"],
+            "/etc/rpi5-secrets/cloudflare/tunnel-writer.json",
+        )
+        self.assertFalse(boundary["access_credential_reuse_allowed"])
+        self.assertEqual(boundary["token_transport_to_audit"], "stdin-only")
+        cloud = self.contract["cloudflare_component"]
+        self.assertFalse(cloud["tunnel_id_environment_allowed"])
+        self.assertIn("/accounts/{account_id}/cfd_tunnel", cloud["allowed_get_surfaces"])
+        self.assertEqual(
+            cloud["tunnel_id_binding"],
+            "discover-single-remotely-managed-rpi5-tunnel-by-name",
+        )
 
 
 if __name__ == "__main__":
