@@ -375,5 +375,18 @@ class IngressDriftAuditTests(unittest.TestCase):
         )
 
 
+    def test_phase7_account_owned_token_uses_account_verify_endpoint(self) -> None:
+        source = (ROOT / "scripts" / "ingress_drift_audit.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            'client.get(f"/accounts/{account_id}/tokens/verify")',
+            source,
+        )
+        self.assertNotIn('client.get("/user/tokens/verify")', source)
+        surfaces = self.contract["cloudflare_component"]["allowed_get_surfaces"]
+        self.assertIn("/accounts/{account_id}/tokens/verify", surfaces)
+        self.assertNotIn("/user/tokens/verify", surfaces)
+
 if __name__ == "__main__":
     unittest.main()

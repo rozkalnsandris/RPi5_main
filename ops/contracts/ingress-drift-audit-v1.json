@@ -38,7 +38,7 @@
       "tunnel_catchall_contract_mismatch"
     ],
     "allowed_get_surfaces": [
-      "/user/tokens/verify",
+      "/accounts/{account_id}/tokens/verify",
       "/accounts/{account_id}/cfd_tunnel",
       "/accounts/{account_id}/cfd_tunnel/{tunnel_id}",
       "/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations"
@@ -47,7 +47,9 @@
     "token_transport": "stdin-only",
     "token_environment_allowed": false,
     "tunnel_id_binding": "discover-single-remotely-managed-rpi5-tunnel-by-name",
-    "tunnel_id_environment_allowed": false
+    "tunnel_id_environment_allowed": false,
+    "token_ownership": "account-owned",
+    "token_verify_endpoint": "/accounts/{account_id}/tokens/verify"
   },
   "host_component": {
     "execution_surface": "owner-authorized-rpi5-read-only",

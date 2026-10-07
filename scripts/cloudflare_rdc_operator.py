@@ -285,6 +285,17 @@ class CloudflareClient:
         if not isinstance(result, dict) or result.get("status") != "active":
             raise OperatorError("token_inactive")
 
+    def verify_active_account_token(self, account_id: str) -> None:
+        if not isinstance(account_id, str) or not ACCOUNT_ID_RE.fullmatch(account_id):
+            raise OperatorError("secret_payload_invalid")
+        payload = self._request(
+            "GET",
+            f"/accounts/{account_id}/tokens/verify",
+        )
+        result = payload.get("result")
+        if not isinstance(result, dict) or result.get("status") != "active":
+            raise OperatorError("token_inactive")
+
     def verify_access_permission(self, account_id: str) -> None:
         try:
             self._request(
@@ -536,7 +547,7 @@ def provision_tunnel_secret(
 ) -> None:
     if TUNNEL_SECRET_PATH.exists():
         raise OperatorError("secret_already_exists")
-    client.verify_active_token()
+    client.verify_active_account_token(account_id)
     client.verify_tunnel_permission(account_id)
     _write_tunnel_secret(account_id, token)
 

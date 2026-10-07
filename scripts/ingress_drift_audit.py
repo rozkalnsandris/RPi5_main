@@ -279,7 +279,7 @@ def _collect_cloudflare_report(api_token: str) -> dict[str, Any]:
     client = cloudflare.CloudflareGetClient(api_token)
 
     token = cloudflare._unwrap_dict(
-        client.get("/user/tokens/verify"),
+        client.get(f"/accounts/{account_id}/tokens/verify"),
         "token_verify_shape_invalid",
     )
     if token.get("status") != "active":
