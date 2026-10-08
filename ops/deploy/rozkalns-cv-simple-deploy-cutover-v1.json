@@ -210,5 +210,12 @@
     "source_secret_modified": false,
     "separate_owner_gate_required": false,
     "exact_live_authority_required": true
+  },
+  "lifecycle": {
+    "status": "HISTORICAL_SUPERSEDED_BY_OBSERVED_SIMPLE_DEPLOY_RUNTIME",
+    "superseded_by_issue": 913,
+    "superseded_by_contract": "ops/deploy/rozkalns-cv-post-cutover-reconciliation-v1.json",
+    "reexecution_as_current_cutover_forbidden": true,
+    "historical_candidate_preserved": true
   }
 }

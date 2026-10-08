@@ -179,7 +179,7 @@
     "hermes_private_runtime_config_provisioning_requires_separate_exact_authority": true,
     "hermes_tech_target_installation_requires_separate_exact_live_cutover": true,
     "hermes_tech_existing_v14_runtime_retirement_requires_separate_exact_live_authority": true,
-    "rozkalns_cv_target_installation_requires_separate_exact_live_cutover": true,
+    "rozkalns_cv_target_installation_requires_separate_exact_live_cutover": false,
     "rozkalns_cv_existing_runtime_retirement_requires_separate_exact_live_authority": true,
     "weather_private_home_runtime_config_requires_separate_exact_authority": true,
     "weather_private_home_cutover_requires_separate_exact_live_authority": true,

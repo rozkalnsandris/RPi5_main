@@ -1,0 +1,167 @@
+{
+  "schema": "rozkalns.rpi5-main.rozkalns-cv-post-cutover-reconciliation.v1",
+  "schema_version": 1,
+  "issue": 913,
+  "operation_id": "rpi5-main.rozkalns-cv-post-cutover-reconcile.v1",
+  "execution_enabled": false,
+  "authorization_class": "STRICT",
+  "ordinary_live_all_eligible": false,
+  "one_time": true,
+  "observed_live_runtime": {
+    "as_of": "2026-10-08",
+    "consumer_repository": "rozkalnsandris/rozkalns-cv",
+    "source_sha": "6c226ac797602007b960da8dad114f794f450717",
+    "image": "ghcr.io/rozkalnsandris/rozkalns-cv@sha256:dd33f110db46f92953241680bf86b475cdbb10fd76ec7f5e5ec6299ea2a97480",
+    "image_digest": "sha256:dd33f110db46f92953241680bf86b475cdbb10fd76ec7f5e5ec6299ea2a97480",
+    "compose_project": "rozkalns-cv",
+    "compose_service": "cv",
+    "container_name": "rozkalns-cv-cv-1",
+    "required_port_bind": "127.0.0.1:8088",
+    "liveness_url": "http://127.0.0.1:8088/api/health",
+    "readiness_url": "http://127.0.0.1:8088/api/health/ready",
+    "required_http_status": 200,
+    "evidence_kind": "owner-authorized-read-only-sync",
+    "runtime_current_at_observation": true
+  },
+  "legacy_residual": {
+    "cvbot": {
+      "container_name": "cvbot",
+      "image": "rozkalns-cv-cvbot:8661337c1020c4d70e1da129209c5ffd7ad9bf7e",
+      "compose_project": "cv",
+      "compose_service": "cvbot",
+      "restart_policy": "unless-stopped",
+      "required_restart_count_minimum": 1,
+      "allowed_pre_reconciliation_states": [
+        "running",
+        "restarting"
+      ]
+    },
+    "legacy_cv_container_required_absent": true,
+    "production_state": {
+      "path": "/var/lib/rozkalns-cv-deploy/current-sha",
+      "expected_sha": "4986a6d80460bd6d7681c70e09e61a15e31007f4"
+    },
+    "controller": {
+      "timer": "rozkalns-cv-pull-deploy.timer",
+      "required_timer_enabled_state": "disabled",
+      "required_timer_active_state": "inactive",
+      "service": "rozkalns-cv-pull-deploy.service",
+      "required_service_active_state": "inactive"
+    },
+    "retirement_artifacts": [
+      {
+        "path": "/var/lib/rozkalns-cv-deploy/current-sha",
+        "owner": "root",
+        "group": "root",
+        "mode": "644"
+      },
+      {
+        "path": "/usr/local/sbin/rozkalns-cv-pull-deploy",
+        "owner": "root",
+        "group": "root",
+        "mode": "755"
+      },
+      {
+        "path": "/usr/local/libexec/rozkalns-cv/deploy-readiness",
+        "owner": "root",
+        "group": "root",
+        "mode": "755"
+      },
+      {
+        "path": "/etc/systemd/system/rozkalns-cv-pull-deploy.service",
+        "owner": "root",
+        "group": "root",
+        "mode": "644"
+      },
+      {
+        "path": "/etc/systemd/system/rozkalns-cv-pull-deploy.timer",
+        "owner": "root",
+        "group": "root",
+        "mode": "644"
+      },
+      {
+        "path": "/usr/local/sbin/rozkalns-cv-manual-rollout-operator",
+        "owner": "root",
+        "group": "root",
+        "mode": "755"
+      },
+      {
+        "path": "/usr/local/sbin/rozkalns-cv-pull-deploy-canary",
+        "owner": "root",
+        "group": "root",
+        "mode": "755"
+      },
+      {
+        "path": "/usr/local/sbin/rozkalns-cv-pull-deploy-main",
+        "owner": "root",
+        "group": "root",
+        "mode": "755"
+      },
+      {
+        "path": "/etc/sudoers.d/rozkalns-cv-pull-deploy",
+        "owner": "root",
+        "group": "root",
+        "mode": "440"
+      },
+      {
+        "path": "/usr/local/sbin/rozkalns-cv-pull-deploy-preflight",
+        "owner": "root",
+        "group": "root",
+        "mode": "755"
+      },
+      {
+        "path": "/usr/local/libexec/rozkalns-cv/classify-deploy-impact",
+        "owner": "root",
+        "group": "root",
+        "mode": "755"
+      },
+      {
+        "path": "/usr/local/libexec/rozkalns-cv/rozkalns-cv-deploy-library",
+        "owner": "root",
+        "group": "root",
+        "mode": "755"
+      }
+    ]
+  },
+  "allowed_future_mutations": [
+    "docker-stop-exact-legacy-cvbot",
+    "docker-rm-exact-stopped-legacy-cvbot",
+    "remove-exact-allowlisted-legacy-state-and-controller-files",
+    "systemctl-daemon-reload-after-unit-file-retirement"
+  ],
+  "verification": {
+    "live_container_id_must_remain_unchanged": true,
+    "live_source_sha_must_remain_exact": true,
+    "live_image_digest_must_remain_exact": true,
+    "live_port_owner_must_remain_exact": true,
+    "liveness_and_readiness_must_remain_http_200": true,
+    "legacy_cvbot_must_be_absent": true,
+    "retirement_artifacts_must_be_absent": true
+  },
+  "protected_boundaries": {
+    "legacy_private_env_source": "passwd-home+docker/cv/bot/.env",
+    "simple_deploy_private_env": "/etc/rozkalns-simple-deployer/private/rozkalns-cv.env",
+    "persistent_data": "passwd-home+docker/cv/bot/data",
+    "simple_deploy_compose": "/etc/rozkalns-simple-deployer/compose/rozkalns-cv.yml",
+    "simple_deploy_receipt": "/var/lib/rozkalns-simple-deployer/receipts/rozkalns-cv-rpi5.json",
+    "deploy_evidence_and_backups": "preserve",
+    "private_env_content_access": false,
+    "persistent_data_content_access": false,
+    "database_or_application_data_mutation": false,
+    "cloudflare_or_network_mutation": false
+  },
+  "failure_semantics": {
+    "fail_closed": true,
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "alternate_mutation_path": false,
+    "stop_after_first_post_mutation_error_or_ambiguity": true
+  },
+  "source_only_state": {
+    "live_authorized": false,
+    "runtime_mutation_permitted_by_this_file": false,
+    "protected_runtime_content_access_authorized": false,
+    "merge_authorized": false
+  }
+}
