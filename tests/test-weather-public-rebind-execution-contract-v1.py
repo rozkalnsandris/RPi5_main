@@ -21,7 +21,7 @@ def valid_evidence():
         "exact_final_main": "f" * 40,
         "checkout_exact_clean_main_origin": True,
         "installed_identity_sha": b["identity_source_sha"],
-        "installed_registry_sha256": b["registry_sha256_from_historical_source_unverified_on_host"],
+        "installed_registry_sha256": b["registry_sha256_from_readonly_host"],
         "installed_compose_sha256": b["compose_sha256_from_readonly_host"],
         "root_owned_files_mode_0444": True,
         "candidate_source_hashes_match": True,
@@ -46,6 +46,19 @@ class WeatherRebindTests(unittest.TestCase):
         self.assertEqual(mod.source_errors(CONTRACT), [])
         self.assertEqual(CONTRACT["target_alias"], "rozkalns-weather-public-rpi5")
         self.assertTrue(CONTRACT["desired"]["non_weather_targets_must_be_unchanged"])
+        baseline = CONTRACT["baseline"]
+        self.assertEqual(baseline["registry_source_revision"],
+                         "fe69b6e325fa9edec04e8963b5010f946ac4d83c")
+        self.assertTrue(baseline["registry_and_identity_sources_differ"])
+        self.assertNotEqual(baseline["registry_source_revision"], baseline["identity_source_sha"])
+        self.assertEqual(baseline["registry_sha256_from_readonly_host"],
+                         "88c3acbf304ab9676a6a767e5f3055351f20fd88ca9bf1bf4a2cb1210ef3617f")
+        self.assertEqual(CONTRACT["desired"]["registry_delta_from_installed"],
+                         ["weather.compose.file_sha256"])
+        self.assertEqual(baseline["protected_env_file"], {
+            "owner": "root", "group": "rozkalns-simple-deployer",
+            "mode": "0640", "metadata_only": True,
+        })
 
     def test_preflight_is_pure_and_safe_only_with_full_evidence(self):
         self.assertEqual(mod.preflight(CONTRACT, valid_evidence()),

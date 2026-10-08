@@ -137,6 +137,59 @@ def container_state() -> dict:
     return {"image": image, "bind": bind, "healthy": healthy, "volume": correct_volume}
 
 
+def protected_env_metadata_valid(st, runtime_gid: int, spec: dict) -> bool:
+    """Inspect stat metadata only; never open the protected private-home file."""
+    return (
+        spec["baseline"]["protected_env_file"] == {
+            "owner": "root", "group": "rozkalns-simple-deployer",
+            "mode": "0640", "metadata_only": True,
+        }
+        and stat.S_ISREG(st.st_mode)
+        and st.st_uid == 0 and st.st_gid == runtime_gid
+        and stat.S_IMODE(st.st_mode) == 0o640
+    )
+
+
+def require_registry_delta(installed: dict, desired: dict, spec: dict) -> None:
+    """Only the Weather Compose digest may change; no other target/field."""
+    require(type(installed) is dict and type(desired) is dict, "REGISTRY_TYPE")
+    require(set(installed) == set(desired), "REGISTRY_TOP_LEVEL_KEYS")
+    require({k: v for k, v in installed.items() if k != "targets"}
+            == {k: v for k, v in desired.items() if k != "targets"},
+            "REGISTRY_TOP_LEVEL_DRIFT")
+    old = installed.get("targets")
+    new = desired.get("targets")
+    require(type(old) is list and type(new) is list
+            and len(old) == len(new) == 5, "REGISTRY_TARGET_COUNT")
+    aliases = []
+    weather_count = 0
+    for before, after in zip(old, new):
+        require(type(before) is dict and type(after) is dict
+                and before.get("target_alias") == after.get("target_alias"),
+                "REGISTRY_TARGET_IDENTITY")
+        alias = after["target_alias"]
+        require(type(alias) is str and alias not in aliases, "REGISTRY_DUPLICATE_ALIAS")
+        aliases.append(alias)
+        if alias != spec["target_alias"]:
+            require(before == after, "NON_WEATHER_TARGET_DRIFT")
+        else:
+            weather_count += 1
+            require(set(before) == set(after), "WEATHER_FIELD_KEYS")
+            require({k: v for k, v in before.items() if k != "compose"}
+                    == {k: v for k, v in after.items() if k != "compose"},
+                    "WEATHER_NON_COMPOSE_DRIFT")
+            a, b = before.get("compose"), after.get("compose")
+            require(type(a) is dict and type(b) is dict and set(a) == set(b),
+                    "WEATHER_COMPOSE_FIELDS")
+            require({k: v for k, v in a.items() if k != "file_sha256"}
+                    == {k: v for k, v in b.items() if k != "file_sha256"},
+                    "WEATHER_COMPOSE_IDENTITY_DRIFT")
+            require(a["file_sha256"] == spec["baseline"]["compose_sha256_from_readonly_host"]
+                    and b["file_sha256"] == spec["desired"]["compose_sha256"],
+                    "WEATHER_COMPOSE_DIGEST_DRIFT")
+    require(weather_count == 1, "WEATHER_TARGET_COUNT")
+
+
 def installed_and_desired(spec: dict, expected: str) -> tuple[dict, dict, dict]:
     paths = {key: Path(spec["installed"][key]) for key in ("compose", "registry", "identity")}
     for path in paths.values():
@@ -144,7 +197,7 @@ def installed_and_desired(spec: dict, expected: str) -> tuple[dict, dict, dict]:
     old = {key: fixed_file(path, 0, 0o444) for key, path in paths.items()}
     base = spec["baseline"]
     require(sha256(old["compose"]) == base["compose_sha256_from_readonly_host"], "COMPOSE_BASE_DRIFT")
-    require(sha256(old["registry"]) == base["registry_sha256_from_historical_source_unverified_on_host"], "REGISTRY_BASE_DRIFT")
+    require(sha256(old["registry"]) == base["registry_sha256_from_readonly_host"], "REGISTRY_BASE_DRIFT")
     identity = json.loads(old["identity"])
     require(type(identity) is dict and set(identity) == {"schema", "repository", "source_sha"}
             and identity["schema"] == "rozkalns.rpi5-main.simple-deploy.identity.v1"
@@ -161,22 +214,12 @@ def installed_and_desired(spec: dict, expected: str) -> tuple[dict, dict, dict]:
     }, sort_keys=True, separators=(",", ":")) + "\n").encode()
     require(sha256(new["compose"]) == spec["desired"]["compose_sha256"]
             and sha256(new["registry"]) == spec["desired"]["registry_sha256"], "SOURCE_HASH_DRIFT")
-    a = json.loads(old["registry"])["targets"]
-    b = json.loads(new["registry"])["targets"]
-    require(len(a) == len(b) == 5, "TARGET_COUNT")
-    for before, after in zip(a, b):
-        require(before["target_alias"] == after["target_alias"], "TARGET_ORDER_DRIFT")
-        if after["target_alias"] != spec["target_alias"]:
-            require(before == after, "OTHER_TARGET_DRIFT")
-        else:
-            require({k:v for k,v in before.items() if k not in ("compose","shared_workflow_sha")}
-                    == {k:v for k,v in after.items() if k not in ("compose","shared_workflow_sha")}
-                    and {k:v for k,v in before["compose"].items() if k != "file_sha256"}
-                    == {k:v for k,v in after["compose"].items() if k != "file_sha256"},
-                    "WEATHER_TARGET_DRIFT")
+    require_registry_delta(json.loads(old["registry"]),
+                           json.loads(new["registry"]), spec)
     st = ENV_PATH.lstat()
-    require(stat.S_ISREG(st.st_mode) and st.st_uid == 0 and st.st_gid == 0
-            and stat.S_IMODE(st.st_mode) == 0o600, "PROTECTED_ENV_METADATA")
+    runtime_gid = pwd.getpwnam("rozkalns-simple-deployer").pw_gid
+    require(protected_env_metadata_valid(st, runtime_gid, spec),
+            "PROTECTED_ENV_METADATA")
     return paths, old, new
 
 
