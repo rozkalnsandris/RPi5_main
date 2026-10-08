@@ -24,12 +24,21 @@
   "baseline": {
     "host_checkout_sha": "fe69b6e325fa9edec04e8963b5010f946ac4d83c",
     "identity_source_sha": "a74058dd735013e1b3dd450f9261b3f607c05e62",
-    "registry_sha256_from_historical_source_unverified_on_host": "e68fb9d674dbc044454563c8c8ba74c757c958ea78ff980dd0003b64d7e7bd7d",
+    "registry_sha256_from_readonly_host": "88c3acbf304ab9676a6a767e5f3055351f20fd88ca9bf1bf4a2cb1210ef3617f",
     "compose_sha256_from_readonly_host": "321fe0aa400d1a01e419f313a6c99ada311058496f36fed032daf1ac036fa16d",
     "docker_publish": "wildcard",
     "container_count": 1,
     "container_health": "healthy",
-    "volume_identity_matches": true
+    "volume_identity_matches": true,
+    "registry_source_revision": "fe69b6e325fa9edec04e8963b5010f946ac4d83c",
+    "registry_and_identity_sources_differ": true,
+    "registry_historical_candidate_rejected": "e68fb9d674dbc044454563c8c8ba74c757c958ea78ff980dd0003b64d7e7bd7d",
+    "protected_env_file": {
+      "owner": "root",
+      "group": "rozkalns-simple-deployer",
+      "mode": "0640",
+      "metadata_only": true
+    }
   },
   "desired": {
     "compose_sha256": "eddbe28efd5270c350adcf18413839ed80d27d95387473cf7f4e2bf68584a04c",
@@ -38,7 +47,10 @@
     "shared_workflow_sha": "297f554519849ab8dcaadc5517e60b8269a6efaa",
     "volume": "rozkalns-weather-public_weather_data",
     "immutable_image_digest": "reuse-exact-existing-sha256-digest",
-    "non_weather_targets_must_be_unchanged": true
+    "non_weather_targets_must_be_unchanged": true,
+    "registry_delta_from_installed": [
+      "weather.compose.file_sha256"
+    ]
   },
   "authority": {
     "this_contract_authorizes_host": false,

@@ -48,6 +48,18 @@ def source_errors(spec: dict[str, Any]) -> list[str]:
         errors.append("LOOPBACK")
     if spec["authority"]["this_contract_authorizes_host"] is not False:
         errors.append("LIVE_AUTHORITY")
+    baseline = spec["baseline"]
+    if baseline.get("registry_source_revision") != "fe69b6e325fa9edec04e8963b5010f946ac4d83c":
+        errors.append("INSTALLED_REGISTRY_PROVENANCE")
+    if baseline.get("registry_sha256_from_readonly_host") != "88c3acbf304ab9676a6a767e5f3055351f20fd88ca9bf1bf4a2cb1210ef3617f":
+        errors.append("INSTALLED_REGISTRY_PIN")
+    if baseline.get("registry_and_identity_sources_differ") is not True:
+        errors.append("MIXED_SOURCE_PROVENANCE")
+    if baseline.get("protected_env_file") != {
+        "owner": "root", "group": "rozkalns-simple-deployer",
+        "mode": "0640", "metadata_only": True,
+    }:
+        errors.append("PROTECTED_ENV_METADATA_CONTRACT")
     return errors
 
 
@@ -59,7 +71,7 @@ def preflight(spec: dict[str, Any], evidence: dict[str, Any]) -> dict[str, Any]:
     tests: dict[str, bool] = {
         "MAIN_SHA": type(evidence["exact_final_main"]) is str and FULL_SHA.fullmatch(evidence["exact_final_main"]) is not None,
         "INSTALLED_IDENTITY": evidence["installed_identity_sha"] == base["identity_source_sha"],
-        "INSTALLED_REGISTRY": evidence["installed_registry_sha256"] == base["registry_sha256_from_historical_source_unverified_on_host"],
+        "INSTALLED_REGISTRY": evidence["installed_registry_sha256"] == base["registry_sha256_from_readonly_host"],
         "INSTALLED_COMPOSE": evidence["installed_compose_sha256"] == base["compose_sha256_from_readonly_host"],
         "CONTAINER_COUNT": evidence["weather_container_count"] == 1,
         "PUBLISH_CLASS": evidence["weather_publish_class"] == "wildcard",

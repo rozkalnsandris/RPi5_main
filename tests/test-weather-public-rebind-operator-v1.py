@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Hermetic source checks for Weather-only operator. Never touch live host."""
 from __future__ import annotations
+import copy
+import json
 import importlib.util
 from pathlib import Path
 import sys
@@ -130,6 +132,53 @@ class WeatherRebindOperatorTests(unittest.TestCase):
         with patch.object(op, "HTTPConnection") as create:
             self.assertFalse(op.health("redirect"))
             create.assert_not_called()
+
+    def test_only_weather_compose_digest_delta_is_allowed(self):
+        spec = op.contract()
+        desired = json.loads((ROOT / spec["source_files"]["registry"]).read_text())
+        old = copy.deepcopy(desired)
+        item = next(t for t in old["targets"] if t["target_alias"] == spec["target_alias"])
+        item["compose"]["file_sha256"] = spec["baseline"]["compose_sha256_from_readonly_host"]
+        op.require_registry_delta(old, desired, spec)
+        cases = []
+        bad = copy.deepcopy(old)
+        next(t for t in bad["targets"] if t["target_alias"] != spec["target_alias"])["persistent_volumes"] = ["unauthorized"]
+        cases.append(bad)
+        bad = copy.deepcopy(old)
+        next(t for t in bad["targets"] if t["target_alias"] == spec["target_alias"])["shared_workflow_sha"] = "0" * 40
+        cases.append(bad)
+        bad = copy.deepcopy(old)
+        bad["targets"].reverse()
+        cases.append(bad)
+        bad = copy.deepcopy(old)
+        bad["targets"][0]["compose"]["project"] = "different"
+        cases.append(bad)
+        bad = copy.deepcopy(old)
+        bad["targets"][0]["compose"]["file_sha256"] = "1" * 64
+        cases.append(bad)
+        bad = copy.deepcopy(old)
+        bad["unexpected"] = True
+        cases.append(bad)
+        for bad in cases:
+            with self.subTest(case=cases.index(bad)):
+                with self.assertRaises(op.Blocked):
+                    op.require_registry_delta(bad, desired, spec)
+
+    def test_protected_env_metadata_root_runtime_group_0640_only(self):
+        import stat
+        from types import SimpleNamespace
+        spec = op.contract()
+        runtime_gid = 725
+        good = SimpleNamespace(st_mode=stat.S_IFREG | 0o640, st_uid=0, st_gid=runtime_gid)
+        self.assertTrue(op.protected_env_metadata_valid(good, runtime_gid, spec))
+        for mode, uid, gid in ((0o600, 0, runtime_gid), (0o644, 0, runtime_gid),
+                               (0o640, 1000, runtime_gid), (0o640, 0, 0)):
+            with self.subTest(mode=mode, uid=uid, gid=gid):
+                bad = SimpleNamespace(st_mode=stat.S_IFREG | mode, st_uid=uid, st_gid=gid)
+                self.assertFalse(op.protected_env_metadata_valid(bad, runtime_gid, spec))
+        link = SimpleNamespace(st_mode=stat.S_IFLNK | 0o640, st_uid=0, st_gid=runtime_gid)
+        self.assertFalse(op.protected_env_metadata_valid(link, runtime_gid, spec))
+        self.assertNotIn("read_bytes()", op.protected_env_metadata_valid.__doc__ or "")
 
     def test_no_implicit_live_capabilities(self):
         source=(ROOT/"scripts/weather_public_rebind_operator_v1.py").read_text()
