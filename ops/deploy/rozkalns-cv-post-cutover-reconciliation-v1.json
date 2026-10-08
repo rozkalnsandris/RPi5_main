@@ -136,7 +136,8 @@
     "live_port_owner_must_remain_exact": true,
     "liveness_and_readiness_must_remain_http_200": true,
     "legacy_cvbot_must_be_absent": true,
-    "retirement_artifacts_must_be_absent": true
+    "retirement_artifacts_must_be_absent": true,
+    "legacy_cvbot_container_id_must_be_stable_until_stop": true
   },
   "protected_boundaries": {
     "legacy_private_env_source": "passwd-home+docker/cv/bot/.env",
@@ -163,5 +164,15 @@
     "runtime_mutation_permitted_by_this_file": false,
     "protected_runtime_content_access_authorized": false,
     "merge_authorized": false
+  },
+  "operator_installation": {
+    "reviewed_source": "ops/bin/rozkalns-cv-post-cutover-reconcile",
+    "exact_installed_path": "/usr/local/sbin/rozkalns-cv-post-cutover-reconcile",
+    "owner": "root",
+    "group": "root",
+    "mode": "0500",
+    "installed_git_blob_must_match_exact_main": true,
+    "checkout_root_execution_forbidden": true,
+    "separate_live_installation_authorization_required": true
   }
 }

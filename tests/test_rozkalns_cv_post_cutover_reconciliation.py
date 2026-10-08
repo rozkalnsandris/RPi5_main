@@ -107,11 +107,13 @@ class RozkalnsCvPostCutoverReconciliationTests(unittest.TestCase):
             self.assertIn(marker, self.operator)
 
     def test_only_exact_legacy_cvbot_has_docker_lifecycle_mutation(self) -> None:
-        self.assertIn('docker stop --time 20 "$LEGACY_CVBOT"', self.operator)
-        self.assertIn('docker rm "$LEGACY_CVBOT"', self.operator)
+        self.assertIn('docker stop --time 20 "$LEGACY_ID"', self.operator)
+        self.assertIn('docker rm "$LEGACY_ID"', self.operator)
+        self.assertIn('LEGACY_ID="$id"', self.operator)
+        self.assertIn('[[ "$(docker inspect "$LEGACY_CVBOT" --format \'{{.Id}}\')" == "$LEGACY_ID" ]]', self.operator)
         self.assertNotRegex(self.operator, r"docker\s+rm\s+(?:-[^\s]*f|--force)")
-        filtered = self.operator.replace('docker stop --time 20 "$LEGACY_CVBOT"', "")
-        filtered = filtered.replace('docker rm "$LEGACY_CVBOT"', "")
+        filtered = self.operator.replace('docker stop --time 20 "$LEGACY_ID"', "")
+        filtered = filtered.replace('docker rm "$LEGACY_ID"', "")
         self.assertIsNone(
             re.search(
                 r"(^|\s)docker\s+(run|create|start|stop|restart|rm|rename|pull|rmi)(\s|$)",
@@ -119,11 +121,27 @@ class RozkalnsCvPostCutoverReconciliationTests(unittest.TestCase):
             )
         )
 
+    def test_root_exec_requires_reviewed_installed_operator(self) -> None:
+        for marker in (
+            "INSTALLED_OPERATOR='/usr/local/sbin/rozkalns-cv-post-cutover-reconcile'",
+            "RPI_REPO='/home/andris/RPi5_main'",
+            '[[ "${BASH_SOURCE[0]}" == "$INSTALLED_OPERATOR" ]]',
+            '[[ -f "$INSTALLED_OPERATOR" && ! -L "$INSTALLED_OPERATOR" ]]',
+            "'root:root:500'",
+            'git hash-object "$INSTALLED_OPERATOR"',
+            'owner_git rev-parse "$EXPECTED_MAIN:$SOURCE_REL"',
+            "never a checkout script as root",
+        ):
+            self.assertIn(marker, self.operator)
+        self.assertNotIn('repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")', self.operator)
+
     def test_retirement_file_allowlist_is_exact(self) -> None:
         for path, stat in EXPECTED_ARTIFACTS.items():
             self.assertIn(f"'{path}|{stat}'", self.operator)
         self.assertEqual(self.operator.count("|root:root:"), len(EXPECTED_ARTIFACTS))
         self.assertIn('rm -f -- "$path"', self.operator)
+        self.assertIn('retirement artifact changed before removal', self.operator)
+        self.assertIn('retirement artifact metadata changed before removal', self.operator)
         self.assertNotIn("rm -rf", self.operator)
 
     def test_systemd_mutation_is_only_daemon_reload(self) -> None:
@@ -201,6 +219,16 @@ class RozkalnsCvPostCutoverReconciliationTests(unittest.TestCase):
             "ops/bin/rozkalns-cv-post-cutover-reconcile",
         )
         self.assertIn("global-execution:disabled", op["dependencies"])
+
+    def test_installation_gate_and_exact_id_are_source_only(self) -> None:
+        policy = self.contract["operator_installation"]
+        self.assertEqual(policy["reviewed_source"], "ops/bin/rozkalns-cv-post-cutover-reconcile")
+        self.assertEqual(policy["exact_installed_path"], "/usr/local/sbin/rozkalns-cv-post-cutover-reconcile")
+        self.assertEqual((policy["owner"], policy["group"], policy["mode"]), ("root", "root", "0500"))
+        self.assertTrue(policy["installed_git_blob_must_match_exact_main"])
+        self.assertTrue(policy["checkout_root_execution_forbidden"])
+        self.assertTrue(policy["separate_live_installation_authorization_required"])
+        self.assertTrue(self.contract["verification"]["legacy_cvbot_container_id_must_be_stable_until_stop"])
 
     def test_source_merge_never_grants_live_authority(self) -> None:
         state = self.contract["source_only_state"]

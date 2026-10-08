@@ -94,13 +94,13 @@ Reviewed source entrypoint:
 
 `ops/bin/rozkalns-cv-post-cutover-reconcile`
 
-Default `check` mode is read-only. A later `apply` requires separate exact LIVE authority and the explicit confirmation token.
+Default `check` mode is read-only. Both modes must execute only from the separately installed, root-owned `/usr/local/sbin/rozkalns-cv-post-cutover-reconcile` (mode `0500`), whose bytes must match the exact reviewed source blob in the clean RPi5 `main` checkout. Direct root execution of a user-writable Git checkout script is forbidden. Installing this operator requires separate exact LIVE authorization; repository merge does not install it. A later `apply` additionally requires separate exact LIVE authority and the explicit confirmation token.
 
 The future mutation envelope is smaller than the original cutover:
 
 1. prove exact RPi5 source binding and exact healthy SIMPLE-DEPLOY CV source/digest/port ownership;
 2. prove exact residual legacy `cvbot`, stale production state, disabled/inactive legacy controller and the 12 allowlisted retirement-file metadata invariants;
-3. stop and non-force remove only legacy `cvbot`;
+3. capture the exact legacy `cvbot` immutable Docker container ID, revalidate name-to-ID binding immediately before mutation, then stop and non-force remove only that same ID;
 4. remove only those 12 stale legacy state/controller files;
 5. run only `systemctl daemon-reload` for systemd reconciliation;
 6. prove the live SIMPLE-DEPLOY container ID/source/digest/port and HTTP health did not change.

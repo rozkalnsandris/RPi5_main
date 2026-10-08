@@ -45,6 +45,9 @@ if [[ "$MODE" == apply ]]; then
 fi
 
 readonly OWNER='andris'
+readonly INSTALLED_OPERATOR='/usr/local/sbin/rozkalns-cv-post-cutover-reconcile'
+readonly RPI_REPO='/home/andris/RPi5_main'
+readonly SOURCE_REL='ops/bin/rozkalns-cv-post-cutover-reconcile'
 readonly LIVE_CONTAINER='rozkalns-cv-cv-1'
 readonly LIVE_PROJECT='rozkalns-cv'
 readonly LIVE_SERVICE='cv'
@@ -87,11 +90,15 @@ for command_name in curl docker git rm runuser stat systemctl tr; do
     command -v "$command_name" >/dev/null 2>&1 || fail "missing command: $command_name"
 done
 
-repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+[[ "${BASH_SOURCE[0]}" == "$INSTALLED_OPERATOR" ]] || fail 'run only the fixed installed operator, never a checkout script as root'
+[[ -f "$INSTALLED_OPERATOR" && ! -L "$INSTALLED_OPERATOR" ]] || fail 'installed reconciliation operator is missing or unsafe'
+[[ "$(stat -c '%U:%G:%a' "$INSTALLED_OPERATOR")" == 'root:root:500' ]] || fail 'installed reconciliation operator ownership/mode drift'
+repo="$RPI_REPO"
 owner_git() {
     runuser -u "$OWNER" -- env HOME="/home/$OWNER" PATH='/usr/local/bin:/usr/bin:/bin' git -C "$repo" "$@"
 }
-[[ -d "$repo/.git" ]] || fail 'operator must run from RPi5_main checkout'
+[[ -d "$repo/.git" ]] || fail 'RPi5_main checkout is missing'
+[[ "$(git hash-object "$INSTALLED_OPERATOR")" == "$(owner_git rev-parse "$EXPECTED_MAIN:$SOURCE_REL")" ]] || fail 'installed operator bytes differ from exact reviewed source'
 [[ "$(owner_git rev-parse HEAD)" == "$EXPECTED_MAIN" ]] || fail 'RPi5_main HEAD does not match expected main'
 [[ "$(owner_git branch --show-current)" == main ]] || fail 'RPi5_main checkout is not on main'
 [[ -z "$(owner_git status --porcelain=v1 --untracked-files=all)" ]] || fail 'RPi5_main checkout is not clean'
@@ -129,6 +136,7 @@ assert_legacy_cvbot_present() {
     [[ "$restart" == unless-stopped ]] || fail 'legacy cvbot restart policy drift'
     [[ "$status" == running || "$status" == restarting ]] || fail 'legacy cvbot is not in reviewed residual state'
     [[ "$restarts" =~ ^[0-9]+$ && "$restarts" -ge 1 ]] || fail 'legacy cvbot restart evidence missing'
+    LEGACY_ID="$id"
 }
 
 assert_artifact_metadata() {
@@ -151,6 +159,10 @@ assert_controller_inactive() {
 all_retirement_targets_absent() {
     local row path
     docker inspect "$LEGACY_CVBOT" >/dev/null 2>&1 && return 1
+    docker inspect "$LEGACY_CV" >/dev/null 2>&1 && return 1
+    if [[ -n "${LEGACY_ID:-}" ]]; then
+        docker inspect "$LEGACY_ID" >/dev/null 2>&1 && return 1
+    fi
     for row in "${RETIREMENT_ARTIFACTS[@]}"; do
         path="${row%%|*}"
         [[ ! -e "$path" ]] || return 1
@@ -176,13 +188,17 @@ if [[ "$MODE" == check ]]; then
     exit 0
 fi
 
-docker stop --time 20 "$LEGACY_CVBOT"
-[[ "$(docker inspect "$LEGACY_CVBOT" --format '{{.State.Status}}')" == exited ]] || fail 'legacy cvbot did not stop cleanly'
-docker rm "$LEGACY_CVBOT"
-docker inspect "$LEGACY_CVBOT" >/dev/null 2>&1 && fail 'legacy cvbot still exists after removal'
+[[ "$(docker inspect "$LEGACY_CVBOT" --format '{{.Id}}')" == "$LEGACY_ID" ]] || fail 'legacy cvbot identity changed before mutation'
+docker stop --time 20 "$LEGACY_ID"
+[[ "$(docker inspect "$LEGACY_ID" --format '{{.State.Status}}')" == exited ]] || fail 'legacy cvbot did not stop cleanly'
+docker rm "$LEGACY_ID"
+docker inspect "$LEGACY_ID" >/dev/null 2>&1 && fail 'legacy cvbot ID still exists after removal'
+docker inspect "$LEGACY_CVBOT" >/dev/null 2>&1 && fail 'legacy cvbot name still exists after removal'
 
 for row in "${RETIREMENT_ARTIFACTS[@]}"; do
     path="${row%%|*}"
+    [[ -f "$path" && ! -L "$path" ]] || fail "retirement artifact changed before removal: $path"
+    [[ "$(stat -c '%U:%G:%a' "$path")" == "${row#*|}" ]] || fail "retirement artifact metadata changed before removal: $path"
     rm -f -- "$path"
 done
 systemctl daemon-reload
