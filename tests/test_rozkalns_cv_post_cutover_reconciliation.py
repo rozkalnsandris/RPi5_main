@@ -124,7 +124,9 @@ class RozkalnsCvPostCutoverReconciliationTests(unittest.TestCase):
     def test_root_exec_requires_reviewed_installed_operator(self) -> None:
         for marker in (
             "INSTALLED_OPERATOR='/usr/local/sbin/rozkalns-cv-post-cutover-reconcile'",
-            "RPI_REPO='/home/andris/RPi5_main'",
+            "REPO_REL='RPi5_main'",
+            'getent passwd "$OWNER"',
+            'repo="$owner_home/$REPO_REL"',
             '[[ "${BASH_SOURCE[0]}" == "$INSTALLED_OPERATOR" ]]',
             '[[ -f "$INSTALLED_OPERATOR" && ! -L "$INSTALLED_OPERATOR" ]]',
             "'root:root:500'",

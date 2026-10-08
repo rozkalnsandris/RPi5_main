@@ -46,7 +46,7 @@ fi
 
 readonly OWNER='andris'
 readonly INSTALLED_OPERATOR='/usr/local/sbin/rozkalns-cv-post-cutover-reconcile'
-readonly RPI_REPO='/home/andris/RPi5_main'
+readonly REPO_REL='RPi5_main'
 readonly SOURCE_REL='ops/bin/rozkalns-cv-post-cutover-reconcile'
 readonly LIVE_CONTAINER='rozkalns-cv-cv-1'
 readonly LIVE_PROJECT='rozkalns-cv'
@@ -86,16 +86,18 @@ fail() {
 }
 
 [[ ${EUID:-$(id -u)} -eq 0 ]] || fail 'run as root'
-for command_name in curl docker git rm runuser stat systemctl tr; do
+for command_name in awk curl docker getent git rm runuser stat systemctl tr; do
     command -v "$command_name" >/dev/null 2>&1 || fail "missing command: $command_name"
 done
 
 [[ "${BASH_SOURCE[0]}" == "$INSTALLED_OPERATOR" ]] || fail 'run only the fixed installed operator, never a checkout script as root'
 [[ -f "$INSTALLED_OPERATOR" && ! -L "$INSTALLED_OPERATOR" ]] || fail 'installed reconciliation operator is missing or unsafe'
 [[ "$(stat -c '%U:%G:%a' "$INSTALLED_OPERATOR")" == 'root:root:500' ]] || fail 'installed reconciliation operator ownership/mode drift'
-repo="$RPI_REPO"
+owner_home="$(getent passwd "$OWNER" | awk -F: 'NR == 1 {print $6}')"
+[[ "$owner_home" == /* && -d "$owner_home" && ! -L "$owner_home" ]] || fail 'maintenance owner home is missing or unsafe'
+repo="$owner_home/$REPO_REL"
 owner_git() {
-    runuser -u "$OWNER" -- env HOME="/home/$OWNER" PATH='/usr/local/bin:/usr/bin:/bin' git -C "$repo" "$@"
+    runuser -u "$OWNER" -- env HOME="$owner_home" PATH='/usr/local/bin:/usr/bin:/bin' git -C "$repo" "$@"
 }
 [[ -d "$repo/.git" ]] || fail 'RPi5_main checkout is missing'
 [[ "$(git hash-object "$INSTALLED_OPERATOR")" == "$(owner_git rev-parse "$EXPECTED_MAIN:$SOURCE_REL")" ]] || fail 'installed operator bytes differ from exact reviewed source'
