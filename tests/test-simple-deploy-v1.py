@@ -198,7 +198,7 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(sha256(weather_compose), weather.compose.file_sha256)
         self.assertEqual(
             weather.compose.file_sha256,
-            "321fe0aa400d1a01e419f313a6c99ada311058496f36fed032daf1ac036fa16d",
+            "eddbe28efd5270c350adcf18413839ed80d27d95387473cf7f4e2bf68584a04c",
         )
 
         private_home_baseline = sd.load_registry(
