@@ -106,6 +106,19 @@ class WeatherRebindOperatorTests(unittest.TestCase):
         self.assertEqual(result["result"],"BLOCKED")
         self.assertFalse(result["mutation_performed"])
 
+
+    def test_listener_classification_is_loopback_only(self):
+        for observation, accepted in [
+            ("LISTEN 0 4096 127.0.0.1:9180 0.0.0.0:*", True),
+            ("LISTEN 0 4096 0.0.0.0:9180 0.0.0.0:*", False),
+            ("LISTEN 0 4096 [::]:9180 [::]:*", False),
+            ("LISTEN 0 4096 127.0.0.1:9180 0.0.0.0:*\\nLISTEN 0 4096 [::]:9180 [::]:*", False),
+            ("", False),
+        ]:
+            with self.subTest(observation=observation):
+                with patch.object(op, "command", return_value=observation):
+                    self.assertIs(op.listener_loopback(), accepted)
+
     def test_no_implicit_live_capabilities(self):
         source=(ROOT/"scripts/weather_public_rebind_operator_v1.py").read_text()
         self.assertNotIn("shell=True",source)

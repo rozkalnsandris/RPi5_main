@@ -46,6 +46,7 @@ def fixed_file(path: Path, uid: int, mode: int, limit: int = 65536) -> bytes:
     try:
         st = os.fstat(fd)
         require(stat.S_ISREG(st.st_mode) and st.st_uid == uid
+                and (uid != 0 or st.st_gid == 0)
                 and stat.S_IMODE(st.st_mode) == mode and st.st_size <= limit,
                 "FIXED_FILE_METADATA")
         data = os.read(fd, limit + 1)
@@ -94,7 +95,9 @@ def weather_lock(path: Path):
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
     try:
         st = os.fstat(fd)
-        require(stat.S_ISREG(st.st_mode) and st.st_mode & 0o022 == 0, "LOCK_DRIFT")
+        require(stat.S_ISREG(st.st_mode)
+                and st.st_uid == pwd.getpwnam("rozkalns-simple-deployer").pw_uid
+                and stat.S_IMODE(st.st_mode) == 0o600, "LOCK_DRIFT")
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
@@ -245,6 +248,17 @@ def replace_three(paths: dict, old: dict, new: dict, progress) -> None:
         require(fixed_file(paths[k], 0, 0o444) == new[k], "POST_REPLACE_DRIFT")
 
 
+def listener_loopback() -> bool:
+    # Fixed-class, read-only listener observation. Never publish ss output.
+    rows = command(["/usr/bin/ss", "-H", "-ltn"], timeout=10).splitlines()
+    bound = []
+    for row in rows:
+        fields = row.split()
+        if len(fields) >= 5 and fields[3].endswith(":9180"):
+            bound.append(fields[3].rsplit(":", 1)[0])
+    return bound == ["127.0.0.1"]
+
+
 def health(path: str) -> bool:
     try:
         with urllib.request.urlopen("http://127.0.0.1:9180/" + path, timeout=5) as res:
@@ -291,7 +305,8 @@ def execute(expected: str, apply: bool = False) -> dict:
             phase = "POSTVERIFY_LOCAL"
             result = container_state()
             require(result["image"] == frozen and result["healthy"] and result["volume"]
-                    and result["bind"] == "loopback", "POST_CONTAINMENT_DRIFT")
+                    and result["bind"] == "loopback" and listener_loopback(),
+                    "POST_CONTAINMENT_DRIFT")
             require(health("health") and health("ready"), "HEALTH_DRIFT")
             return {"result": "LOCAL_PASS_PHASE7_PENDING", "phase": phase,
                     "mutation_performed": True}
