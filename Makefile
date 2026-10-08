@@ -148,6 +148,7 @@ test:
 	python3 ./tests/test-ingress-admin-zone-verification-v1.py
 	python3 ./tests/test-ingress-private-zone-verification-v1.py
 	python3 ./tests/test-ingress-drift-audit-v1.py
+	python3 ./tests/test-weather-public-loopback-bind-v1.py
 	python3 ./tests/test-rpi5-main-exact-source-preparation-v1.py
 	python3 ./tests/test-phase4-admin-authorized-path-verifier-v1.py
 	python3 ./tests/test-cloudflare-zero-trust-reconcile.py

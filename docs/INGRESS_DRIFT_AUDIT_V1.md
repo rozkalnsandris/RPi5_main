@@ -214,3 +214,19 @@ Cloudflare anonymous public path and shared connector health, and repeat
 the sanitized Phase 7 drift audit. A source merge must not be called
 production remediation; `DRIFT` stays open until fresh runtime PASS.
 No automatic retry, rollback, cleanup or unrelated host/network mutation.
+
+### Historical Coloring Pages alignment guard (#915)
+
+The source-only Weather target registry update changes the **whole**
+`simple-deploy-targets-v1.json` SHA-256. The distinct, previously reviewed
+Coloring Pages three-file alignment helper
+(`scripts/align-simple-deploy-coloring-pages-v1.py`, #860) pins its
+historical `DESIRED_REGISTRY` to
+`88c3acbf304ab9676a6a767e5f3055351f20fd88ca9bf1bf4a2cb1210ef3617f`.
+That pin and its root-owned three-file replacement authority are
+**not** modified by #915. Against the new Weather-updated registry, the
+historical helper must reject with `desired registry source hash drifted`;
+its test therefore verifies fail-closed rejection, rather than pretending
+that a new cross-service registry was the original #860 reviewed release.
+Any future Coloring Pages operator upgrade or host alignment requires an
+independent exact-source review and separate LIVE authorization.

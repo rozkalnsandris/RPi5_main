@@ -22,7 +22,7 @@ EXPECTED_PUBLISH = "127.0.0.1:${WEATHER_PORT:-9180}:8000"
 
 def _weather_block(compose: str) -> str:
     match = re.search(
-        r"(?ms)^  weather:\n(?P<body>.*?)(?=^  [a-z][a-z0-9-]*:\n|^volumes:\n|\\Z)",
+        r"(?ms)^  weather:\n(?P<body>.*?)(?=^  [a-z][a-z0-9-]*:\n|^volumes:\n|\Z)",
         compose,
     )
     if match is None:

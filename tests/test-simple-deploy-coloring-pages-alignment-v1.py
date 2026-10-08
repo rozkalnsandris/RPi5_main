@@ -41,12 +41,23 @@ class ColoringPagesAlignmentTests(unittest.TestCase):
         }
         self.assertEqual(options, {"-h", "--help", "--expected-source-sha", "--apply"})
 
-    def test_reviewed_source_hashes_are_exact(self) -> None:
+    def test_historical_alignment_pin_rejects_new_weather_registry(self) -> None:
         registry = REGISTRY_SOURCE.read_bytes()
         compose = COMPOSE_SOURCE.read_bytes()
-        self.assertEqual(digest(registry), align.DESIRED_REGISTRY)
+
+        # #860's fixed desired registry belongs to the historical
+        # Coloring Pages alignment operation. #915 changes the global
+        # registry for Weather, not that operator's authorized target.
+        self.assertEqual(
+            align.DESIRED_REGISTRY,
+            "88c3acbf304ab9676a6a767e5f3055351f20fd88ca9bf1bf4a2cb1210ef3617f",
+        )
+        self.assertNotEqual(digest(registry), align.DESIRED_REGISTRY)
         self.assertEqual(digest(compose), align.DESIRED_COMPOSE)
-        align.validate_registry(registry)
+        with self.assertRaisesRegex(
+            align.AlignError, "desired registry source hash drifted"
+        ):
+            align.validate_registry(registry)
 
     def test_contract_has_exact_three_file_boundary(self) -> None:
         contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
