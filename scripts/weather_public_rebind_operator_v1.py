@@ -252,6 +252,59 @@ def immutable_state(spec: dict, bind: str) -> str:
     return frozen
 
 
+def read_quiescence(spec: dict) -> dict:
+    """Only four allowlisted systemd status properties, never journal or env."""
+    q = spec["quiescence"]
+    units = q["units"]
+    require(set(units) == {
+        "weather_ingest_service_quiesced", "weather_ingest_timer_quiesced",
+        "simple_deployer_service_quiesced", "simple_deployer_timer_quiesced",
+    }, "QUIESCENCE_UNIT_SET")
+    properties = q["metadata_only_properties"]
+    require(properties == ["ActiveState", "SubState", "Result", "UnitFileState"],
+            "QUIESCENCE_PROPERTIES")
+    observations = {}
+    for key, required in units.items():
+        unit = required["unit"]
+        require(unit in (
+            "rozkalns-weather-public-ingest.service",
+            "rozkalns-weather-public-ingest.timer",
+            "rozkalns-simple-deployer.service",
+            "rozkalns-simple-deployer.timer",
+        ), "QUIESCENCE_UNIT_DRIFT")
+        raw = command([
+            "/usr/bin/systemctl", "show", "--no-pager",
+            "--property=ActiveState,SubState,Result,UnitFileState", unit,
+        ], timeout=10)
+        lines = raw.splitlines()
+        require(len(lines) == len(properties) and
+                all(line.count("=") == 1 for line in lines),
+                "QUIESCENCE_METADATA_FORMAT")
+        observed = dict(line.split("=", 1) for line in lines)
+        require(set(observed) == set(properties), "QUIESCENCE_METADATA_KEYS")
+        observations[key] = observed
+    return observations
+
+
+def classify_quiescence(spec: dict, observations: dict) -> dict[str, bool]:
+    """No permissive fallback for failed, active, missing or unknown units."""
+    q = spec["quiescence"]
+    expected = q["units"]
+    require(type(observations) is dict and set(observations) == set(expected),
+            "QUIESCENCE_EVIDENCE_KEYS")
+    return {
+        key: type(observations[key]) is dict
+        and observations[key] == requirement["expected"]
+        for key, requirement in expected.items()
+    }
+
+
+def require_quiescence(spec: dict) -> dict[str, bool]:
+    observed = classify_quiescence(spec, read_quiescence(spec))
+    require(all(observed.values()), "QUIESCENCE_NOT_ESTABLISHED")
+    return observed
+
+
 def stage(path: Path, data: bytes) -> None:
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     try:
@@ -273,17 +326,20 @@ def fsync_dir(path: Path) -> None:
         os.close(fd)
 
 
-def replace_three(paths: dict, old: dict, new: dict, progress) -> None:
+def replace_three(paths: dict, old: dict, new: dict, progress, *, quiescence_check) -> None:
     names = ("compose", "registry", "identity")
     stages = {k: paths[k].with_name("." + paths[k].name + ".weather-rebind-915.staged")
               for k in names}
     require(not any(os.path.lexists(p) for p in stages.values()), "STAGE_EXISTS")
+    quiescence_check()
     for k in names:
         progress("STAGING", True)
         stage(stages[k], new[k])
+    quiescence_check()
     for k in names:
         require(fixed_file(paths[k], 0, 0o444) == old[k], "PRE_REPLACE_DRIFT")
     for k in names:
+        quiescence_check()
         progress("REPLACE_" + k.upper(), True)
         require(fixed_file(paths[k], 0, 0o444) == old[k], "PRE_REPLACE_DRIFT")
         os.replace(stages[k], paths[k])
@@ -322,6 +378,7 @@ def execute(expected: str, apply: bool = False) -> dict:
         source_gate(expected)
         spec = contract()
         with weather_lock(Path(spec["installed"]["lock"])):
+            quiescence_evidence = require_quiescence(spec)
             paths, old, new = installed_and_desired(spec, expected)
             frozen = immutable_state(spec, "wildcard")
             evidence = {
@@ -337,6 +394,7 @@ def execute(expected: str, apply: bool = False) -> dict:
                 "receipt_digest": frozen.split("@")[-1], "override_digest": frozen.split("@")[-1],
                 "running_image_digest": frozen.split("@")[-1],
                 "image_labels_pass": True, "protected_env_metadata_only": True,
+                **quiescence_evidence,
             }
             require(preflight(spec, evidence)["result"] == "PASS", "CLASSIFIER_BLOCKED")
             if not apply:
@@ -344,8 +402,10 @@ def execute(expected: str, apply: bool = False) -> dict:
             def progress(name, started):
                 nonlocal phase, mutation
                 phase, mutation = name, started
-            replace_three(paths, old, new, progress)
+            replace_three(paths, old, new, progress,
+                          quiescence_check=lambda: require_quiescence(spec))
             phase = "FORCE_RECREATE"
+            require_quiescence(spec)
             require(immutable_state(spec, "wildcard") == frozen, "PRE_RECREATE_DRIFT")
             argv = spec["phases"][4]["argv"]
             require(argv == FROZEN_ARGV, "RECREATE_ARGV_DRIFT")
@@ -357,6 +417,7 @@ def execute(expected: str, apply: bool = False) -> dict:
                     and result["bind"] == "loopback" and listener_loopback(),
                     "POST_CONTAINMENT_DRIFT")
             require(health("health") and health("ready"), "HEALTH_DRIFT")
+            require_quiescence(spec)
             return {"result": "LOCAL_PASS_PHASE7_PENDING", "phase": phase,
                     "mutation_performed": True}
     except (Blocked, OSError, ValueError, KeyError, TypeError, KeyboardInterrupt):

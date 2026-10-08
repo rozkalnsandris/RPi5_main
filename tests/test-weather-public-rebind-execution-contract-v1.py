@@ -38,6 +38,10 @@ def valid_evidence():
         "running_image_digest": "sha256:" + "1" * 64,
         "image_labels_pass": True,
         "protected_env_metadata_only": True,
+        "weather_ingest_service_quiesced": True,
+        "weather_ingest_timer_quiesced": True,
+        "simple_deployer_service_quiesced": True,
+        "simple_deployer_timer_quiesced": True,
     }
 
 
@@ -59,6 +63,25 @@ class WeatherRebindTests(unittest.TestCase):
             "owner": "root", "group": "rozkalns-simple-deployer",
             "mode": "0640", "metadata_only": True,
         })
+
+    def test_quiescence_requires_four_exclusive_inactive_unit_states(self):
+        q = CONTRACT["quiescence"]
+        self.assertEqual(q["schema"],
+                         "rozkalns.rpi5-main.weather-rebind-quiescence.v1")
+        self.assertEqual(len(q["units"]), 4)
+        self.assertEqual(q["metadata_only_properties"],
+                         ["ActiveState", "SubState", "Result", "UnitFileState"])
+        for key, entry in q["units"].items():
+            with self.subTest(key=key):
+                self.assertEqual(entry["expected"]["ActiveState"], "inactive")
+                self.assertEqual(entry["expected"]["SubState"], "dead")
+                self.assertEqual(entry["expected"]["Result"], "success")
+                self.assertIn(key, CONTRACT["preflight"]["required_fields"])
+        self.assertTrue(q["no_unit_mutation"])
+        self.assertTrue(q["no_automatic_reset_failed"])
+        self.assertTrue(q["no_automatic_timer_stop_start"])
+        self.assertEqual(CONTRACT["failure"]["quiescence_drift_after_staging"],
+                         "STOP_PRESERVE_PARTIAL_STATE")
 
     def test_preflight_is_pure_and_safe_only_with_full_evidence(self):
         self.assertEqual(mod.preflight(CONTRACT, valid_evidence()),
