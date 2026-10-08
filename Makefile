@@ -111,6 +111,7 @@ test:
 	bash ./tests/test-balkons-log-legacy-set-contract.sh
 	python3 ./tests/test-balkons-bot-source.py
 	python3 ./tests/test-balkons-bot-telegram-queue.py
+	python3 ./tests/test-balkons-bot-latency-rollout.py
 	bash ./tests/test-balkons-bot-systemd.sh
 	python3 ./tests/test-balkons-bot-preflight.py
 	python3 ./tests/test-balkons-bot-send-sigkill-verifier.py
