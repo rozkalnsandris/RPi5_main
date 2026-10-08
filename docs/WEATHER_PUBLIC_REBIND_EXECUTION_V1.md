@@ -86,3 +86,12 @@ This is a source-level specification and testable classifier; it is
 **not yet a deployable live executor**. A later implementation must
 prove the complete trusted execution state machine before the owner
 is asked to authorize a Weather LIVE rebind.
+
+
+## Reviewed Weather-only operator implementation
+
+The new source script scripts/weather_public_rebind_operator_v1.py is a narrowly bound future host executor. It is NOT installed or invoked by this source change. Its default preflight does not create a lock; it requires the existing fixed Weather target lock. An apply run also requires the exact --expected-main SHA and the fixed --confirm REBIND-WEATHER-PUBLIC-915 token; these arguments are procedural safeguards, NOT owner LIVE authority.
+
+Under a separately granted LIVE gate, the operator checks a clean canonical main checkout, exactly three installed root-owned 0444 files, the historical registry baseline, unchanged other targets, immutable image digest receipt/override/running identity, image metadata, and only metadata for the protected env file. It stages and replaces exactly the three fixed files with identity last, under the same held target lock. It then executes one reviewed Weather-only Compose force-recreate with --no-deps, --pull never and --wait, preserving the named data volume and image identity. Errors after any staging begin STOP without automated cleanup/rollback/retry. A local success returns LOCAL_PASS_PHASE7_PENDING, not Phase 7 PASS. Separate owner-authorized public HTTP and GET-only Phase 7 auditing is still necessary.
+
+Tests: tests/test-weather-public-rebind-operator-v1.py. No LIVE, merge, host checkout sync, installation, service lifecycle or production mutation is performed by the source PR.
