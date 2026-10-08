@@ -104,13 +104,23 @@ class P4RegistryAndNormalizationTests(unittest.TestCase):
             "rozkalns-weather.public-runtime-baseline.v1",
         )
         self.assertEqual(weather.rollback_policy, "NONE")
-        cv_cutover = operations["rpi5-main.rozkalns-cv-simple-deploy-cutover.v1"]
-        self.assertEqual(cv_cutover.adapter_id, "rpi5-main.rozkalns-cv-simple-deploy-cutover.v1")
-        self.assertEqual(cv_cutover.authorization_class, "STRICT")
-        self.assertFalse(cv_cutover.ordinary_live_all_eligible)
-        self.assertEqual(cv_cutover.queue_match.target_alias, "rozkalns-cv-rpi5")
-        self.assertEqual(cv_cutover.baseline.resolver_id, "rpi5-main.rozkalns-cv-simple-deploy-cutover-baseline.v1")
-        self.assertEqual(cv_cutover.rollback_policy, "NONE")
+        self.assertNotIn("rpi5-main.rozkalns-cv-simple-deploy-cutover.v1", operations)
+        cv_reconcile = operations["rpi5-main.rozkalns-cv-post-cutover-reconcile.v1"]
+        self.assertEqual(
+            cv_reconcile.adapter_id,
+            "rpi5-main.rozkalns-cv-post-cutover-reconcile.v1",
+        )
+        self.assertEqual(cv_reconcile.authorization_class, "STRICT")
+        self.assertFalse(cv_reconcile.ordinary_live_all_eligible)
+        self.assertEqual(
+            cv_reconcile.queue_match.target_alias,
+            "rozkalns-cv-post-cutover-reconcile",
+        )
+        self.assertEqual(
+            cv_reconcile.baseline.resolver_id,
+            "rpi5-main.rozkalns-cv-post-cutover-reconcile-baseline.v1",
+        )
+        self.assertEqual(cv_reconcile.rollback_policy, "NONE")
 
     def test_inert_fixture_registry_loads(self):
         registry = load_registry(FIXTURES / "operations_inert.json")

@@ -37,7 +37,7 @@ class RozkalnsCvCompatibilityTests(unittest.TestCase):
         )
         self.assertEqual(
             self.contract["status"],
-            "SOURCE_COMPATIBILITY_COMPLETE_TARGET_REGISTERED_LIVE_CUTOVER_REQUIRED",
+            "LIVE_SIMPLE_DEPLOY_OBSERVED_LEGACY_RECONCILIATION_REQUIRED",
         )
         consumer = self.contract["consumer"]
         self.assertEqual(consumer["repository"], "rozkalnsandris/rozkalns-cv")
@@ -129,7 +129,7 @@ class RozkalnsCvCompatibilityTests(unittest.TestCase):
         self.assertFalse(
             boundaries["target_registration_requires_follow_up_tracked_source_change"]
         )
-        self.assertTrue(
+        self.assertFalse(
             boundaries["target_installation_requires_separate_exact_live_cutover"]
         )
         self.assertFalse(
@@ -220,7 +220,7 @@ class RozkalnsCvCompatibilityTests(unittest.TestCase):
         self.assertTrue(cv["reuses_existing_persistent_data"])
 
         activation = host["activation"]
-        self.assertTrue(
+        self.assertFalse(
             activation["rozkalns_cv_target_installation_requires_separate_exact_live_cutover"]
         )
         self.assertTrue(
@@ -235,6 +235,21 @@ class RozkalnsCvCompatibilityTests(unittest.TestCase):
             ]
         )
 
+
+    def test_observed_runtime_is_exact_and_cleanup_remains_live_gated(self) -> None:
+        observed = self.contract["observed_runtime"]
+        self.assertEqual(observed["source_sha"], "6c226ac797602007b960da8dad114f794f450717")
+        self.assertEqual(observed["image_digest"], "sha256:dd33f110db46f92953241680bf86b475cdbb10fd76ec7f5e5ec6299ea2a97480")
+        self.assertEqual(observed["project"], "rozkalns-cv")
+        self.assertEqual(observed["service"], "cv")
+        self.assertEqual(observed["port_bind"], "127.0.0.1:8088")
+        self.assertEqual(observed["liveness_http_status"], 200)
+        self.assertEqual(observed["readiness_http_status"], 200)
+        self.assertTrue(observed["residual_legacy_cvbot"])
+        self.assertTrue(observed["residual_legacy_controller_artifacts"])
+        self.assertTrue(
+            self.contract["boundaries"]["existing_runtime_retirement_requires_separate_exact_live_authority"]
+        )
 
 if __name__ == "__main__":
     unittest.main()

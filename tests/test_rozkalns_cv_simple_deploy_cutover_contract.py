@@ -230,35 +230,34 @@ class RozkalnsCvSimpleDeployCutoverTests(unittest.TestCase):
             "assets/app.e29b029635cc.mjs",
         )
 
-    def test_executor_registry_matches_simplified_contract(self) -> None:
+    def test_historical_cutover_is_not_current_executor_continuity(self) -> None:
         registry = load(EXECUTOR_REGISTRY_PATH)
-        operation = by(
-            registry["operations"],
-            "operation_id",
-            "rpi5-main.rozkalns-cv-simple-deploy-cutover.v1",
-        )
         self.assertFalse(registry["execution_enabled"])
+        operations = {row["operation_id"]: row for row in registry["operations"]}
+        self.assertNotIn("rpi5-main.rozkalns-cv-simple-deploy-cutover.v1", operations)
+        operation = operations["rpi5-main.rozkalns-cv-post-cutover-reconcile.v1"]
         self.assertEqual(operation["authorization_class"], "STRICT")
         self.assertFalse(operation["ordinary_live_all_eligible"])
-        deps = operation["dependencies"]
-        self.assertIn("issue:RPi5_main#821", deps)
-        self.assertIn(f"consumer-source-sha:{CANDIDATE_SOURCE_SHA}", deps)
-        self.assertIn(f"candidate-image-digest:{CANDIDATE_DIGEST}", deps)
-        self.assertIn("private-env-source:passwd-home+docker/cv/bot/.env", deps)
+        self.assertEqual(operation["rollback_policy"], "NONE")
+        self.assertIn("issue:RPi5_main#913", operation["dependencies"])
         self.assertIn(
-            "private-env-boundary:/etc/rozkalns-simple-deployer/private/rozkalns-cv.env",
-            deps,
+            "contract:ops/deploy/rozkalns-cv-post-cutover-reconciliation-v1.json",
+            operation["dependencies"],
         )
-        self.assertIn(
-            "private-env-materializer:scripts/materialize-simple-deploy-rozkalns-cv-private-env-v1.py",
-            deps,
+
+    def test_cutover_contract_is_historical_provenance_only(self) -> None:
+        lifecycle = self.contract["lifecycle"]
+        self.assertEqual(
+            lifecycle["status"],
+            "HISTORICAL_SUPERSEDED_BY_OBSERVED_SIMPLE_DEPLOY_RUNTIME",
         )
-        self.assertIn("existing-persistent-data:passwd-home+docker/cv/bot/data", deps)
-        self.assertIn("compose-path-interpolation:/etc/rozkalns-simple-deployer/compose/.env", deps)
-        text = json.dumps(operation)
-        self.assertNotIn("data-adoption", text)
-        self.assertIn("/etc/rozkalns-simple-deployer/private/rozkalns-cv.env", text)
-        self.assertNotIn("/var/lib/rozkalns-simple-deployer/rozkalns-cv/data", text)
+        self.assertEqual(lifecycle["superseded_by_issue"], 913)
+        self.assertEqual(
+            lifecycle["superseded_by_contract"],
+            "ops/deploy/rozkalns-cv-post-cutover-reconciliation-v1.json",
+        )
+        self.assertTrue(lifecycle["reexecution_as_current_cutover_forbidden"])
+        self.assertTrue(lifecycle["historical_candidate_preserved"])
 
 
 if __name__ == "__main__":
