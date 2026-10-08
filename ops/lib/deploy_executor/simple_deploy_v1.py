@@ -77,12 +77,37 @@ HEALTH_KEYS = frozenset({"liveness_url", "readiness_state", "readiness_url"})
 IDENTITY_KEYS = frozenset({"schema", "repository", "source_sha"})
 
 
+POINTER_FAILURE_CLASSES = frozenset({
+    "BUILDX_PLUGIN_UNAVAILABLE",
+    "TLS_FAILURE",
+    "DNS_FAILURE",
+    "REGISTRY_AUTH_FAILURE",
+    "MANIFEST_UNAVAILABLE",
+    "NETWORK_FAILURE",
+    "COMMAND_TIMEOUT",
+    "COMMAND_UNAVAILABLE",
+    "OUTPUT_DECODE_FAILURE",
+    "UNCLASSIFIED",
+})
+
+
 class SimpleDeployError(RuntimeError):
-    def __init__(self, code: str, message: str, *, mutation_started: bool = False):
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        mutation_started: bool = False,
+        failure_class: str | None = None,
+    ):
         super().__init__(f"{code}: {message}")
         self.code = code
         self.message = message
         self.mutation_started = mutation_started
+        # Diagnostics contain a fixed class only; never retain command stderr.
+        self.failure_class = (
+            failure_class if failure_class in POINTER_FAILURE_CLASSES else None
+        )
 
 
 class LockBusy(SimpleDeployError):
@@ -90,8 +115,13 @@ class LockBusy(SimpleDeployError):
         super().__init__("TARGET_BUSY", "another reconciliation already owns this target")
 
 
-def _fail(code: str, message: str, *, mutation_started: bool = False) -> None:
-    raise SimpleDeployError(code, message, mutation_started=mutation_started)
+def _fail(
+    code: str, message: str, *, mutation_started: bool = False,
+    failure_class: str | None = None,
+) -> None:
+    raise SimpleDeployError(
+        code, message, mutation_started=mutation_started, failure_class=failure_class
+    )
 
 
 def _exact_keys(value: Mapping[str, Any], expected: frozenset[str], where: str) -> None:
@@ -384,8 +414,18 @@ class SubprocessCommandRunner:
                 shell=False,
                 check=False,
             )
-        except (OSError, subprocess.TimeoutExpired, UnicodeError) as exc:
-            raise SimpleDeployError("COMMAND_FAILED", f"command transport failed: {argv[0]}") from exc
+        except subprocess.TimeoutExpired:
+            raise SimpleDeployError(
+                "COMMAND_FAILED", "command timed out", failure_class="COMMAND_TIMEOUT"
+            ) from None
+        except OSError:
+            raise SimpleDeployError(
+                "COMMAND_FAILED", "command unavailable", failure_class="COMMAND_UNAVAILABLE"
+            ) from None
+        except UnicodeError:
+            raise SimpleDeployError(
+                "COMMAND_FAILED", "command output invalid", failure_class="OUTPUT_DECODE_FAILURE"
+            ) from None
         return CommandResult(completed.returncode, completed.stdout, completed.stderr)
 
 
@@ -568,6 +608,48 @@ class ReconcileResult:
     pointer_changed_during_attempt: bool | None
 
 
+def _classify_pointer_stderr(stderr: str) -> str:
+    """Classify a failed Buildx pointer lookup; do not preserve or print stderr."""
+    if type(stderr) is not str:
+        return "UNCLASSIFIED"
+    # Bounded scan and conservative precedence; tokens, paths and URLs are
+    # never emitted. An unrecognised diagnostic must not become an authority.
+    lowered = stderr[:8192].lower()
+    markers = (
+        ("BUILDX_PLUGIN_UNAVAILABLE", (
+            "'buildx' is not a docker command",
+            'unknown command "buildx"',
+            "docker-buildx: no such file or directory",
+            "failed to fetch metadata for docker-buildx",
+        )),
+        ("TLS_FAILURE", (
+            "x509:", "tls handshake", "certificate verify failed",
+            "certificate signed by unknown authority",
+        )),
+        ("DNS_FAILURE", (
+            "no such host", "temporary failure in name resolution",
+            "server misbehaving", "name resolution failed",
+        )),
+        ("REGISTRY_AUTH_FAILURE", (
+            "401 unauthorized", "403 forbidden", "authentication required",
+            "insufficient_scope", "denied: requested access",
+            "unauthorized: authentication",
+        )),
+        ("MANIFEST_UNAVAILABLE", (
+            "manifest unknown", "manifest not found", "name unknown",
+        )),
+        ("NETWORK_FAILURE", (
+            "i/o timeout", "context deadline exceeded",
+            "connection refused", "no route to host",
+            "network is unreachable", "connection reset by peer",
+        )),
+    )
+    for failure_class, signals in markers:
+        if any(signal in lowered for signal in signals):
+            return failure_class
+    return "UNCLASSIFIED"
+
+
 def _run_required(
     runner: CommandRunner,
     argv: Sequence[str],
@@ -583,9 +665,21 @@ def _run_required(
             code,
             f"command transport failed: {argv[0]}",
             mutation_started=mutation_started,
-        ) from exc
+            failure_class=(
+                exc.failure_class or "UNCLASSIFIED"
+                if code == "POINTER_RESOLUTION_FAILED" else None
+            ),
+        ) from None
     if result.returncode != 0:
-        _fail(code, f"command failed: {argv[0]}", mutation_started=mutation_started)
+        _fail(
+            code,
+            f"command failed: {argv[0]}",
+            mutation_started=mutation_started,
+            failure_class=(
+                _classify_pointer_stderr(result.stderr)
+                if code == "POINTER_RESOLUTION_FAILED" else None
+            ),
+        )
     return result.stdout
 
 
@@ -978,14 +1072,26 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(_safe_result_line(result))
             except SimpleDeployError as exc:
                 failed = True
+                failure_suffix = (
+                    f" failure_class={exc.failure_class or 'UNCLASSIFIED'}"
+                    if exc.code == "POINTER_RESOLUTION_FAILED" else ""
+                )
                 print(
                     "SIMPLE_DEPLOY "
                     f"result=FAIL target={alias} error_code={exc.code} "
                     f"mutation_started={'true' if exc.mutation_started else 'false'}"
+                    f"{failure_suffix}"
                 )
         return 1 if failed else 0
     except SimpleDeployError as exc:
-        print(f"SIMPLE_DEPLOY result=FAIL error_code={exc.code} mutation_started=false")
+        failure_suffix = (
+            f" failure_class={exc.failure_class or 'UNCLASSIFIED'}"
+            if exc.code == "POINTER_RESOLUTION_FAILED" else ""
+        )
+        print(
+            f"SIMPLE_DEPLOY result=FAIL error_code={exc.code} "
+            f"mutation_started=false{failure_suffix}"
+        )
         return 1
 
 
