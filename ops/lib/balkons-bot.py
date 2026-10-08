@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import sys
 import threading
 import time
@@ -22,6 +23,8 @@ import requests
 MQTT_PORT = 1883
 MQTT_KEEPALIVE = 60
 MQTT_LOOP_TIMEOUT_S = 0.05
+TELEGRAM_SEND_QUEUE_SIZE = 16
+TELEGRAM_SLOW_SEND_S = 1.0
 T_CMD = "balkons/cmd"
 T_OUT = "balkons/telegram_out"
 
@@ -31,6 +34,9 @@ _mqtt_host = ""
 _mqtt_username = ""
 _mqtt_secret = ""
 _mqttc: mqtt.Client | None = None
+_outbound_messages: queue.Queue[tuple[str, float]] = queue.Queue(
+    maxsize=TELEGRAM_SEND_QUEUE_SIZE
+)
 
 
 def read_credential(directory: Path, name: str) -> str:
@@ -61,7 +67,8 @@ def _telegram_response(response: requests.Response) -> dict[str, Any]:
     return data
 
 
-def tg_send(text: str) -> None:
+def _send_telegram_now(text: str) -> bool:
+    """HTTP is owned by the sender thread, never an MQTT callback."""
     try:
         response = requests.post(
             _telegram_url("sendMessage"),
@@ -69,9 +76,45 @@ def tg_send(text: str) -> None:
             timeout=10,
         )
         _telegram_response(response)
-    except Exception as exc:  # bounded loop must survive transient API failures
+        return True
+    except Exception as exc:  # no raw URL/token, no automatic duplicate send
         _safe_error("TG send error", exc)
+        return False
 
+
+def tg_send(text: str) -> None:
+    """Stage one bounded best-effort message without blocking on HTTP."""
+    try:
+        _outbound_messages.put_nowait((text, time.monotonic()))
+    except queue.Full:
+        # Never journal Telegram text or MQTT payload contents.
+        print("TG outbound queue full; newest message dropped", file=sys.stderr)
+
+
+def _telegram_sender_loop() -> None:
+    while True:
+        text, queued_at = _outbound_messages.get()
+        try:
+            send_started = time.monotonic()
+            delivered = _send_telegram_now(text)
+            send_ended = time.monotonic()
+            queue_delay = max(0.0, send_started - queued_at)
+            http_delay = max(0.0, send_ended - send_started)
+            if queue_delay >= TELEGRAM_SLOW_SEND_S or http_delay >= TELEGRAM_SLOW_SEND_S:
+                print(
+                    f"TG delivery timing queue_ms={int(queue_delay * 1000)} "
+                    f"http_ms={int(http_delay * 1000)} ok={int(delivered)}"
+                )
+        finally:
+            _outbound_messages.task_done()
+
+
+def _start_telegram_sender() -> None:
+    threading.Thread(
+        target=_telegram_sender_loop,
+        name="balkons-telegram",
+        daemon=True,
+    ).start()
 
 def _connected(client, reason_code) -> None:
     if reason_code != 0:
@@ -240,6 +283,7 @@ def main() -> int:
     try:
         _load_runtime_credentials()
         _start_mqtt()
+        _start_telegram_sender()
     except Exception as exc:
         _safe_error("Startup error", exc)
         return 1
