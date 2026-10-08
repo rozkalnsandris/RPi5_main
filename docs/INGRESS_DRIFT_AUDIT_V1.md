@@ -176,3 +176,57 @@ The runtime sequence remains four separate gates: source merge; exact-source/ope
 - forbidden-output boundary.
 
 The focused test is part of `make test` / `make validate`.
+
+## Weather PUBLIC loopback binding remediation — #915
+
+The owner-authorized Phase 7 audit on 2026-10-08 at
+`RPi5_main@fe69b6e325fa9edec04e8963b5010f946ac4d83c` returned
+`DRIFT` for the single Weather PUBLIC service while the other 12 registered
+services, the Cloudflare route classification and connector health passed.
+The Weather Docker publish and listener were both classified `wildcard`,
+not the reviewed `loopback` target. Audit execution was read-only.
+
+The active RPi5 SIMPLE-DEPLOY target `rozkalns-weather-public-rpi5` selects
+`ops/deploy/simple-deploy-compose/rozkalns-weather-public.yml` via the
+registered `compose.file` and validates its exact `compose.file_sha256`.
+The host-owned Compose for `weather` must publish exactly
+`127.0.0.1:${WEATHER_PORT:-9180}:8000`: preserve the host port override
+and container port, but never bind to `0.0.0.0`, `::`, or all interfaces.
+Other service profiles, the protected private-home `env_file` reference,
+persistent `weather_data`, readiness/health, and the immutable image-digest
+override remain unchanged. The legacy `rozkalns-weather-public-v1.yml`
+is not the active registered target and remains historical.
+
+The Weather consumer's separate `rozkalns_weather/deploy/docker-compose.public.yml`
+also uses a wildcard short port mapping. Its separate repository source
+must be aligned to the same loopback-only mapping under its own explicit
+source/merge authorization; changing `RPi5_main` does not change that
+consumer checkout or grant cross-repository permissions.
+
+**Source and LIVE gates remain distinct.** Neither the RPi5 source PR nor
+any consumer PR changes the running container. A later, separately
+authorized Weather-only rollout must first verify the current deployed
+target, image digest/consumer release, clean exact host source, registry
+install state, persistence protection and rollback/recovery decision.
+Only an expressly scoped Weather Compose replacement may then be
+considered. Its post-verification must check liveness and readiness,
+Cloudflare anonymous public path and shared connector health, and repeat
+the sanitized Phase 7 drift audit. A source merge must not be called
+production remediation; `DRIFT` stays open until fresh runtime PASS.
+No automatic retry, rollback, cleanup or unrelated host/network mutation.
+
+### Historical Coloring Pages alignment guard (#915)
+
+The source-only Weather target registry update changes the **whole**
+`simple-deploy-targets-v1.json` SHA-256. The distinct, previously reviewed
+Coloring Pages three-file alignment helper
+(`scripts/align-simple-deploy-coloring-pages-v1.py`, #860) pins its
+historical `DESIRED_REGISTRY` to
+`88c3acbf304ab9676a6a767e5f3055351f20fd88ca9bf1bf4a2cb1210ef3617f`.
+That pin and its root-owned three-file replacement authority are
+**not** modified by #915. Against the new Weather-updated registry, the
+historical helper must reject with `desired registry source hash drifted`;
+its test therefore verifies fail-closed rejection, rather than pretending
+that a new cross-service registry was the original #860 reviewed release.
+Any future Coloring Pages operator upgrade or host alignment requires an
+independent exact-source review and separate LIVE authorization.

@@ -12,7 +12,7 @@
       "compose": {
         "project": "rozkalns-weather-public",
         "file": "rozkalns-weather-public.yml",
-        "file_sha256": "321fe0aa400d1a01e419f313a6c99ada311058496f36fed032daf1ac036fa16d",
+        "file_sha256": "eddbe28efd5270c350adcf18413839ed80d27d95387473cf7f4e2bf68584a04c",
         "service": "weather"
       },
       "health": {

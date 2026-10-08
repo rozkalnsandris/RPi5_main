@@ -37,7 +37,7 @@ services:
       DATABASE_URL: sqlite:///data/weather.db
       HOME_TIMEZONE: Europe/Berlin
     ports:
-      - "${WEATHER_PORT:-9180}:8000"
+      - "127.0.0.1:${WEATHER_PORT:-9180}:8000"
     volumes:
       - weather_data:/app/data
     read_only: true
