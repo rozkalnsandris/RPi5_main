@@ -1,0 +1,191 @@
+{
+  "schema": "rozkalns.rpi5-main.weather-public-rebind-execution.v1",
+  "issue": 915,
+  "roadmap_issue": 60,
+  "status": "SOURCE_ONLY_UNEXECUTABLE",
+  "base_source_sha": "9f28ba941b9c4055f531d172cbf87f7a6d089b13",
+  "consumer_merged_sha": "0eba9d70bd5ee3e6f990a7e34a3b47fd3da93ebe",
+  "target_alias": "rozkalns-weather-public-rpi5",
+  "project": "rozkalns-weather-public",
+  "service": "weather",
+  "source_files": {
+    "registry": "ops/deploy/simple-deploy-targets-v1.json",
+    "compose": "ops/deploy/simple-deploy-compose/rozkalns-weather-public.yml",
+    "legacy_reconciler": "ops/lib/deploy_executor/simple_deploy_v1.py"
+  },
+  "installed": {
+    "identity": "/etc/rozkalns-simple-deployer/identity.json",
+    "registry": "/etc/rozkalns-simple-deployer/targets.json",
+    "compose": "/etc/rozkalns-simple-deployer/compose/rozkalns-weather-public.yml",
+    "override": "/var/lib/rozkalns-simple-deployer/overrides/rozkalns-weather-public-rpi5.yaml",
+    "receipt": "/var/lib/rozkalns-simple-deployer/receipts/rozkalns-weather-public-rpi5.json",
+    "lock": "/var/lib/rozkalns-simple-deployer/locks/rozkalns-weather-public-rpi5.lock"
+  },
+  "baseline": {
+    "host_checkout_sha": "fe69b6e325fa9edec04e8963b5010f946ac4d83c",
+    "identity_source_sha": "a74058dd735013e1b3dd450f9261b3f607c05e62",
+    "registry_sha256_from_historical_source_unverified_on_host": "e68fb9d674dbc044454563c8c8ba74c757c958ea78ff980dd0003b64d7e7bd7d",
+    "compose_sha256_from_readonly_host": "321fe0aa400d1a01e419f313a6c99ada311058496f36fed032daf1ac036fa16d",
+    "docker_publish": "wildcard",
+    "container_count": 1,
+    "container_health": "healthy",
+    "volume_identity_matches": true
+  },
+  "desired": {
+    "compose_sha256": "eddbe28efd5270c350adcf18413839ed80d27d95387473cf7f4e2bf68584a04c",
+    "registry_sha256": "91a2fe2d86d9da9ac4ee7a5031eea7a405d3d42faec24ed089b08534c7ac0f23",
+    "published_port": "127.0.0.1:${WEATHER_PORT:-9180}:8000",
+    "shared_workflow_sha": "297f554519849ab8dcaadc5517e60b8269a6efaa",
+    "volume": "rozkalns-weather-public_weather_data",
+    "immutable_image_digest": "reuse-exact-existing-sha256-digest",
+    "non_weather_targets_must_be_unchanged": true
+  },
+  "authority": {
+    "this_contract_authorizes_host": false,
+    "this_contract_authorizes_merge": false,
+    "live_requires_separate_exact_merged_main_sha_and_host_target": true,
+    "force_recreate_requires_explicit_docker_live_authorization": true,
+    "root_file_replacement_requires_explicit_host_filesystem_live_authorization": true,
+    "protected_runtime_metadata_requires_separate_allowlist": true,
+    "phase7_requires_separately_authorized_readonly_audit": true,
+    "cloudflare_operator_upgrade_not_in_scope": true
+  },
+  "preflight": {
+    "required_fields": [
+      "exact_final_main",
+      "checkout_exact_clean_main_origin",
+      "installed_identity_sha",
+      "installed_registry_sha256",
+      "installed_compose_sha256",
+      "root_owned_files_mode_0444",
+      "candidate_source_hashes_match",
+      "non_weather_registry_targets_identical",
+      "weather_target_exact",
+      "target_lock_available",
+      "no_blocking_stop_error",
+      "weather_container_count",
+      "weather_running_healthy",
+      "weather_publish_class",
+      "weather_volume_preserved",
+      "receipt_digest",
+      "override_digest",
+      "running_image_digest",
+      "image_labels_pass",
+      "protected_env_metadata_only"
+    ],
+    "unknown_or_drift_blocks": true,
+    "target_lock_must_remain_held_through_apply": true,
+    "exact_source_prepare_if_needed": "scripts/rpi5_main_exact_source_prepare.py --expected-main <owner-authorized-merged-sha> --apply --confirm PREPARE-RPI5-MAIN-EXACT-SOURCE (requires separate owner LIVE authority)",
+    "compare_actual_installed_registry_hash_before_mutation": true,
+    "require_readonly_evidence_not_full_runtime_configuration": true
+  },
+  "phases": [
+    {
+      "name": "SOURCE_PREPARE",
+      "mutating": true,
+      "requires_live": true,
+      "action": "fixed clean main checkout, canonical origin, fetch --no-tags origin main and merge --ff-only only when separately authorized; no reset/rebase/clean/force"
+    },
+    {
+      "name": "PREFLIGHT",
+      "mutating": false,
+      "requires_live": false,
+      "action": "sanitized exact source, installed 3-file baseline, only target lock, image/receipt/override digest, one healthy Weather and named-volume identities"
+    },
+    {
+      "name": "STAGE_THREE_FILES",
+      "mutating": true,
+      "requires_live": true,
+      "action": "only root-owned 0444 Weather Compose, all-target registry with other targets identical, and generated exact merged source identity; fixed exclusive no-follow staging and fsync"
+    },
+    {
+      "name": "REPLACE_THREE_FILES",
+      "mutating": true,
+      "requires_live": true,
+      "order": [
+        "/etc/rozkalns-simple-deployer/compose/rozkalns-weather-public.yml",
+        "/etc/rozkalns-simple-deployer/targets.json",
+        "/etc/rozkalns-simple-deployer/identity.json"
+      ],
+      "action": "verify old hash immediately before atomic os.replace of each fixed staged file, fsync parents, hold target lock"
+    },
+    {
+      "name": "WEATHER_FORCE_RECREATE",
+      "mutating": true,
+      "requires_live": true,
+      "argv": [
+        "/usr/bin/docker",
+        "compose",
+        "--project-name",
+        "rozkalns-weather-public",
+        "--file",
+        "/etc/rozkalns-simple-deployer/compose/rozkalns-weather-public.yml",
+        "--file",
+        "/var/lib/rozkalns-simple-deployer/overrides/rozkalns-weather-public-rpi5.yaml",
+        "up",
+        "--detach",
+        "--no-deps",
+        "--force-recreate",
+        "--pull",
+        "never",
+        "--wait",
+        "--wait-timeout",
+        "180",
+        "weather"
+      ],
+      "action": "same verified immutable digest; no image pull; do not rely on ordinary reconciler NO_OP_CURRENT"
+    },
+    {
+      "name": "LOCAL_VERIFY",
+      "mutating": false,
+      "requires_live": true,
+      "action": "sanitized same image/volume, one healthy Weather, loopback listener+Docker publish, /health and /ready PASS, other services unchanged"
+    },
+    {
+      "name": "PHASE7_VERIFY",
+      "mutating": false,
+      "requires_live": true,
+      "action": "separate owner GET-only Phase 7 and anonymous public HTTP/connector check; installed operator release must match exact main before audit"
+    }
+  ],
+  "postverify_required": [
+    "installed_source_exact",
+    "installed_registry_hash_exact",
+    "installed_compose_hash_exact",
+    "publish_loopback",
+    "listener_loopback",
+    "container_healthy",
+    "volume_unchanged",
+    "digest_unchanged",
+    "liveness_pass",
+    "readiness_pass",
+    "public_http_pass",
+    "cloudflare_connector_pass",
+    "phase7_pass",
+    "other_services_unchanged"
+  ],
+  "failure": {
+    "pre_mutation": "BLOCKED_NO_WRITE",
+    "post_first_mutation": "STOP_PRESERVE_PARTIAL_STATE",
+    "auto_retry": false,
+    "auto_rollback": false,
+    "auto_cleanup": false,
+    "no_compose_down": true,
+    "no_volume_removal": true,
+    "manual_recovery_requires_new_owner_authorization": true
+  },
+  "excluded": [
+    "host-access-this-source-session",
+    "merge-this-source-session",
+    "credential-or-env-content",
+    "home-coordinates",
+    "db-schema-or-data",
+    "cloudflare-dns-tunnel-firewall",
+    "systemd-lifecycle",
+    "other-target-mutation",
+    "image-pull",
+    "volume-mutation",
+    "reset-rebase-force",
+    "automatic-retry-rollback-cleanup"
+  ]
+}
