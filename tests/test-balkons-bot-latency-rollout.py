@@ -62,9 +62,10 @@ class RolloutTests(unittest.TestCase):
         for field in plan.REASONS:
             with self.subTest(field=field):
                 evidence = self.clean_evidence()
-                evidence[field] = True
+                evidence[field] = (True if field == "credential_content_read" else "DRIFT")
                 result = plan.classify(self.bundle, evidence)
                 self.assertEqual(result["result"], "BLOCKED")
+                self.assertEqual(result["blockers"], [plan.REASONS[field]])
                 self.assertFalse(result["live_authority"])
 
     def test_sha_drift_and_modified_source_rejected(self):

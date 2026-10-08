@@ -34,7 +34,9 @@ Neither this result nor the CLI grants MERGE/LIVE or performs any host action.
 2. With separately authorized metadata-only preflight, check the historic
    source provenance and the service `ActiveState=active`, `SubState=running`,
    `Restart=always`, `RestartUSec=10s`, `TimeoutStopUSec=1min 30s` and
-   `SendSIGKILL=no`. Never read private unit, process environment or bot source.
+   `SendSIGKILL=no`. Never inspect private unit or process environments;
+   only separately authorized preflight may hash the historic live source
+   without printing, copying, or returning its contents.
 3. Check all five encrypted credential objects for root owner, type, one link,
    mode 0400 and size bounds only. Any unknown/missing state means BLOCKED.
 4. Require the existing `balkons-bot-deploy-verifier --check` to pass. It
