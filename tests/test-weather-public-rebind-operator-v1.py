@@ -112,12 +112,24 @@ class WeatherRebindOperatorTests(unittest.TestCase):
             ("LISTEN 0 4096 127.0.0.1:9180 0.0.0.0:*", True),
             ("LISTEN 0 4096 0.0.0.0:9180 0.0.0.0:*", False),
             ("LISTEN 0 4096 [::]:9180 [::]:*", False),
-            ("LISTEN 0 4096 127.0.0.1:9180 0.0.0.0:*\\nLISTEN 0 4096 [::]:9180 [::]:*", False),
+            ("LISTEN 0 4096 127.0.0.1:9180 0.0.0.0:*\nLISTEN 0 4096 [::]:9180 [::]:*", False),
             ("", False),
         ]:
             with self.subTest(observation=observation):
                 with patch.object(op, "command", return_value=observation):
                     self.assertIs(op.listener_loopback(), accepted)
+
+    def test_health_request_is_fixed_local_tcp_without_redirects(self):
+        with patch.object(op, "HTTPConnection") as create:
+            client = create.return_value
+            client.getresponse.return_value.status = 200
+            self.assertTrue(op.health("health"))
+            create.assert_called_once_with("127.0.0.1", 9180, timeout=5)
+            client.request.assert_called_once_with("GET", "/health")
+            client.close.assert_called_once()
+        with patch.object(op, "HTTPConnection") as create:
+            self.assertFalse(op.health("redirect"))
+            create.assert_not_called()
 
     def test_no_implicit_live_capabilities(self):
         source=(ROOT/"scripts/weather_public_rebind_operator_v1.py").read_text()

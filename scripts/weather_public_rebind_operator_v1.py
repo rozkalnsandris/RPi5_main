@@ -14,7 +14,7 @@ import re
 import stat
 import subprocess
 import sys
-import urllib.request
+from http.client import HTTPConnection, HTTPException
 
 from weather_public_rebind_contract_v1 import contract, source_errors, preflight
 
@@ -260,11 +260,17 @@ def listener_loopback() -> bool:
 
 
 def health(path: str) -> bool:
-    try:
-        with urllib.request.urlopen("http://127.0.0.1:9180/" + path, timeout=5) as res:
-            return res.status == 200
-    except (OSError, ValueError):
+    # Direct TCP to the fixed local endpoint; never use proxy or redirects.
+    if path not in ("health", "ready"):
         return False
+    client = HTTPConnection("127.0.0.1", 9180, timeout=5)
+    try:
+        client.request("GET", "/" + path)
+        return client.getresponse().status == 200
+    except (OSError, HTTPException):
+        return False
+    finally:
+        client.close()
 
 
 def execute(expected: str, apply: bool = False) -> dict:
