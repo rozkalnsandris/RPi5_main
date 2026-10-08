@@ -108,3 +108,52 @@ The new source script scripts/weather_public_rebind_operator_v1.py is a narrowly
 Under a separately granted LIVE gate, the operator checks a clean canonical main checkout, exactly three installed root-owned 0444 files, the historical registry baseline, unchanged other targets, immutable image digest receipt/override/running identity, image metadata, and only metadata for the protected env file. It stages and replaces exactly the three fixed files with identity last, under the same held target lock. It then executes one reviewed Weather-only Compose force-recreate with --no-deps, --pull never and --wait, preserving the named data volume and image identity. Errors after any staging begin STOP without automated cleanup/rollback/retry. A local success returns LOCAL_PASS_PHASE7_PENDING, not Phase 7 PASS. Separate owner-authorized public HTTP and GET-only Phase 7 auditing is still necessary.
 
 Tests: tests/test-weather-public-rebind-operator-v1.py. No LIVE, merge, host checkout sync, installation, service lifecycle or production mutation is performed by the source PR.
+
+
+## Weather ingest and reconciler quiescence gate (#915)
+
+The 2026-10-08 separately authorized, metadata-only observation found
+`rozkalns-weather-public-ingest.service` in **failed/exit-code** state,
+while `rozkalns-weather-public-ingest.timer` and
+`rozkalns-simple-deployer.timer` were active/enabled. The generic
+`rozkalns-simple-deployer.service` state was not established in that
+observation. These are point-in-time findings and are **not** permission
+to intervene in systemd.
+
+The source operator now uses fixed, **read-only** `systemctl show`
+queries returning only `ActiveState`, `SubState`, `Result` and
+`UnitFileState` for exactly four allowlisted units:
+
+- Weather ingest oneshot: `inactive/dead`, `Result=success`,
+  `UnitFileState=static`.
+- Weather ingest timer: `inactive/dead`, `Result=success`,
+  `UnitFileState=enabled`.
+- SIMPLE-DEPLOY oneshot: `inactive/dead`, `Result=success`,
+  `UnitFileState=static`.
+- SIMPLE-DEPLOY timer: `inactive/dead`, `Result=success`,
+  `UnitFileState=enabled`.
+
+Missing, failed, active, unknown, disabled, changed unit identities or
+extra metadata **fail closed before any mutation**. The operator holds the
+existing Weather target lock and rechecks quiescence immediately before
+staging, after staging but before replacement, before **each** fixed-file
+replacement, immediately before Docker forced recreate and after local
+verification. A quiescence change after staging begins produces **STOP**,
+without cleanup, retry or rollback.
+
+**Recovery boundary:** a failed ingest service must be diagnosed and
+resolved separately under explicit owner authorization. In particular
+`systemctl reset-failed`, stopping/restarting the failed ingest service,
+or stopping/starting/enabling/disabling either timer is **not** in this
+source or future Weather rebind operator's authority. The earlier
+private-home cutover performed narrowly authorized timer operations;
+that historical authorization does not apply here. Likewise, a
+running/persistent timer may trigger new work between observations,
+so a fresh quiescence reading must accompany any later exact-head LIVE
+decision. Simply marking a timer `disabled` or ignoring a retained
+failure result is not an acceptable shortcut.
+
+The host checkout still requires a separately authorized exact-source
+fast-forward before the operator can pass its source gate. Merge of
+this change does not deploy or execute the operator, restart services,
+close Phase 7 DRIFT, or grant any LIVE/systemd/data permission.

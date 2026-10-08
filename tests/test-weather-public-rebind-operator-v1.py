@@ -78,7 +78,8 @@ class WeatherRebindOperatorTests(unittest.TestCase):
             with patch.object(op, "stage", side_effect=fake_stage), patch.object(
                 op, "fixed_file", side_effect=lambda p, uid, mode:p.read_bytes()
             ):
-                op.replace_three(paths, old, new, lambda n,m:stages.append((n,m)))
+                op.replace_three(paths, old, new, lambda n,m:stages.append((n,m)),
+                                 quiescence_check=lambda: None)
             self.assertEqual([x[0] for x in stages[-3:]],
                              ["REPLACE_COMPOSE","REPLACE_REGISTRY","REPLACE_IDENTITY"])
             self.assertTrue(all(stages[i][1] for i in range(len(stages))))
@@ -95,7 +96,8 @@ class WeatherRebindOperatorTests(unittest.TestCase):
                 with self.assertRaises(OSError):
                     op.replace_three(paths, {k:k.encode() for k in paths},
                                      {k:b"new" for k in paths},
-                                     lambda n,m:stages.append((n,m)))
+                                     lambda n,m:stages.append((n,m)),
+                                     quiescence_check=lambda: None)
             self.assertEqual(stages,[("STAGING",True)])
             self.assertEqual([p.read_bytes() for p in paths.values()],
                              [k.encode() for k in paths])
@@ -179,6 +181,90 @@ class WeatherRebindOperatorTests(unittest.TestCase):
         link = SimpleNamespace(st_mode=stat.S_IFLNK | 0o640, st_uid=0, st_gid=runtime_gid)
         self.assertFalse(op.protected_env_metadata_valid(link, runtime_gid, spec))
         self.assertNotIn("read_bytes()", op.protected_env_metadata_valid.__doc__ or "")
+
+    def test_quiescence_exact_statuses_block_active_failed_and_unknown(self):
+        spec = op.contract()
+        good = {k:dict(v["expected"]) for k,v in spec["quiescence"]["units"].items()}
+        self.assertTrue(all(op.classify_quiescence(spec, good).values()))
+        for key, state, value in (
+            ("weather_ingest_service_quiesced", "ActiveState", "failed"),
+            ("weather_ingest_service_quiesced", "Result", "exit-code"),
+            ("weather_ingest_service_quiesced", "ActiveState", "active"),
+            ("weather_ingest_timer_quiesced", "ActiveState", "active"),
+            ("simple_deployer_service_quiesced", "ActiveState", "active"),
+            ("simple_deployer_timer_quiesced", "ActiveState", "active"),
+            ("weather_ingest_timer_quiesced", "UnitFileState", "disabled"),
+            ("simple_deployer_timer_quiesced", "SubState", "waiting"),
+            ("weather_ingest_service_quiesced", "Result", "unknown"),
+        ):
+            with self.subTest(key=key, state=state, value=value):
+                bad = copy.deepcopy(good)
+                bad[key][state] = value
+                self.assertFalse(op.classify_quiescence(spec, bad)[key])
+        for k in good:
+            case = copy.deepcopy(good)
+            del case[k]
+            with self.assertRaises(op.Blocked):
+                op.classify_quiescence(spec, case)
+        case = copy.deepcopy(good)
+        case["raw_journal"] = "forbidden"
+        with self.assertRaises(op.Blocked):
+            op.classify_quiescence(spec, case)
+
+    def test_quiescence_uses_fixed_read_only_systemctl_argv(self):
+        spec = op.contract()
+        fixtures = {v["unit"]:v["expected"] for v in spec["quiescence"]["units"].values()}
+        seen = []
+        def fake_cmd(argv, timeout=20):
+            seen.append(tuple(argv))
+            unit = argv[-1]
+            values = fixtures[unit]
+            return "\n".join(k + "=" + values[k] for k in
+                             spec["quiescence"]["metadata_only_properties"])
+        with patch.object(op, "command", side_effect=fake_cmd):
+            self.assertTrue(all(op.require_quiescence(spec).values()))
+        self.assertEqual(len(seen), 4)
+        for argv in seen:
+            self.assertEqual(argv[:4], (
+                "/usr/bin/systemctl", "show", "--no-pager",
+                "--property=ActiveState,SubState,Result,UnitFileState",
+            ))
+        fixtures["rozkalns-weather-public-ingest.service"] = {
+            **fixtures["rozkalns-weather-public-ingest.service"],
+            "ActiveState": "failed", "SubState": "failed", "Result": "exit-code",
+        }
+        with patch.object(op, "command", side_effect=fake_cmd):
+            with self.assertRaises(op.Blocked):
+                op.require_quiescence(spec)
+
+    def test_replace_requires_quiescence_before_staging_and_each_replace(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = {k:Path(tmp)/k for k in ("compose","registry","identity")}
+            old = {k:k.encode() for k in paths}
+            new = {k:b"new" for k in paths}
+            for k,p in paths.items():
+                p.write_bytes(old[k])
+                p.chmod(0o444)
+            progress, checks = [], []
+            def gate():
+                checks.append(True)
+                if len(checks) == 3:
+                    raise op.Blocked("TIMER_REACTIVATED")
+            with patch.object(op, "stage", side_effect=lambda path,data:path.write_bytes(data)), \
+                 patch.object(op, "fixed_file", side_effect=lambda p,uid,mode:p.read_bytes()):
+                with self.assertRaises(op.Blocked):
+                    op.replace_three(paths,old,new,lambda name,m:progress.append((name,m)),
+                                     quiescence_check=gate)
+            self.assertEqual(len(checks),3)
+            self.assertEqual([x[0] for x in progress],["STAGING","STAGING","STAGING"])
+            self.assertTrue(all(paths[k].read_bytes()==old[k] for k in paths))
+
+    def test_no_implicit_systemd_or_recovery_mutations(self):
+        src=(ROOT/"scripts/weather_public_rebind_operator_v1.py").read_text()
+        for forbidden in ("reset-failed", "restart", "systemctl stop",
+                          "systemctl start", "enable --now", "disable --now",
+                          "journalctl", "daemon-reload"):
+            self.assertNotIn(forbidden, src)
 
     def test_no_implicit_live_capabilities(self):
         source=(ROOT/"scripts/weather_public_rebind_operator_v1.py").read_text()

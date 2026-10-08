@@ -46,6 +46,32 @@ def source_errors(spec: dict[str, Any]) -> list[str]:
     compose = (ROOT / spec["source_files"]["compose"]).read_text()
     if '      - "127.0.0.1:${WEATHER_PORT:-9180}:8000"' not in compose:
         errors.append("LOOPBACK")
+    expected_units = {
+        "weather_ingest_service_quiesced": (
+            "rozkalns-weather-public-ingest.service", "static"),
+        "weather_ingest_timer_quiesced": (
+            "rozkalns-weather-public-ingest.timer", "enabled"),
+        "simple_deployer_service_quiesced": (
+            "rozkalns-simple-deployer.service", "static"),
+        "simple_deployer_timer_quiesced": (
+            "rozkalns-simple-deployer.timer", "enabled"),
+    }
+    q = spec.get("quiescence", {})
+    expected = {
+        key: {"unit": unit, "expected": {
+            "ActiveState": "inactive", "SubState": "dead",
+            "Result": "success", "UnitFileState": state,
+        }} for key, (unit, state) in expected_units.items()
+    }
+    if (q.get("schema") != "rozkalns.rpi5-main.weather-rebind-quiescence.v1"
+            or q.get("units") != expected
+            or q.get("metadata_only_properties") != [
+                "ActiveState", "SubState", "Result", "UnitFileState"]
+            or q.get("no_unit_mutation") is not True
+            or q.get("no_automatic_reset_failed") is not True
+            or q.get("no_automatic_timer_stop_start") is not True
+            or set(expected) - set(spec["preflight"]["required_fields"])):
+        errors.append("QUIESCENCE_CONTRACT_DRIFT")
     if spec["authority"]["this_contract_authorizes_host"] is not False:
         errors.append("LIVE_AUTHORITY")
     baseline = spec["baseline"]
@@ -80,7 +106,9 @@ def preflight(spec: dict[str, Any], evidence: dict[str, Any]) -> dict[str, Any]:
                 "candidate_source_hashes_match", "non_weather_registry_targets_identical",
                 "weather_target_exact", "target_lock_available", "no_blocking_stop_error",
                 "weather_running_healthy", "weather_volume_preserved",
-                "image_labels_pass", "protected_env_metadata_only"):
+                "image_labels_pass", "protected_env_metadata_only",
+                "weather_ingest_service_quiesced", "weather_ingest_timer_quiesced",
+                "simple_deployer_service_quiesced", "simple_deployer_timer_quiesced"):
         tests[key.upper()] = evidence[key] is True
     for key in ("receipt_digest", "override_digest", "running_image_digest"):
         tests[key.upper()] = type(evidence[key]) is str and IMAGE_DIGEST.fullmatch(evidence[key]) is not None

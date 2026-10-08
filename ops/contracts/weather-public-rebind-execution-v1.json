@@ -83,13 +83,19 @@
       "override_digest",
       "running_image_digest",
       "image_labels_pass",
-      "protected_env_metadata_only"
+      "protected_env_metadata_only",
+      "weather_ingest_service_quiesced",
+      "weather_ingest_timer_quiesced",
+      "simple_deployer_service_quiesced",
+      "simple_deployer_timer_quiesced"
     ],
     "unknown_or_drift_blocks": true,
     "target_lock_must_remain_held_through_apply": true,
     "exact_source_prepare_if_needed": "scripts/rpi5_main_exact_source_prepare.py --expected-main <owner-authorized-merged-sha> --apply --confirm PREPARE-RPI5-MAIN-EXACT-SOURCE (requires separate owner LIVE authority)",
     "compare_actual_installed_registry_hash_before_mutation": true,
-    "require_readonly_evidence_not_full_runtime_configuration": true
+    "require_readonly_evidence_not_full_runtime_configuration": true,
+    "quiescence_fail_closed": true,
+    "quiescence_must_be_rechecked_within_target_lock": true
   },
   "phases": [
     {
@@ -184,7 +190,9 @@
     "auto_cleanup": false,
     "no_compose_down": true,
     "no_volume_removal": true,
-    "manual_recovery_requires_new_owner_authorization": true
+    "manual_recovery_requires_new_owner_authorization": true,
+    "failed_ingest_before_mutation": "BLOCKED_REQUIRES_SEPARATE_DIAGNOSIS_AND_OWNER_APPROVED_RECOVERY",
+    "quiescence_drift_after_staging": "STOP_PRESERVE_PARTIAL_STATE"
   },
   "excluded": [
     "host-access-this-source-session",
@@ -199,5 +207,73 @@
     "volume-mutation",
     "reset-rebase-force",
     "automatic-retry-rollback-cleanup"
-  ]
+  ],
+  "quiescence": {
+    "schema": "rozkalns.rpi5-main.weather-rebind-quiescence.v1",
+    "systemctl": "/usr/bin/systemctl",
+    "metadata_only_properties": [
+      "ActiveState",
+      "SubState",
+      "Result",
+      "UnitFileState"
+    ],
+    "units": {
+      "weather_ingest_service_quiesced": {
+        "unit": "rozkalns-weather-public-ingest.service",
+        "expected": {
+          "ActiveState": "inactive",
+          "SubState": "dead",
+          "Result": "success",
+          "UnitFileState": "static"
+        }
+      },
+      "weather_ingest_timer_quiesced": {
+        "unit": "rozkalns-weather-public-ingest.timer",
+        "expected": {
+          "ActiveState": "inactive",
+          "SubState": "dead",
+          "Result": "success",
+          "UnitFileState": "enabled"
+        }
+      },
+      "simple_deployer_service_quiesced": {
+        "unit": "rozkalns-simple-deployer.service",
+        "expected": {
+          "ActiveState": "inactive",
+          "SubState": "dead",
+          "Result": "success",
+          "UnitFileState": "static"
+        }
+      },
+      "simple_deployer_timer_quiesced": {
+        "unit": "rozkalns-simple-deployer.timer",
+        "expected": {
+          "ActiveState": "inactive",
+          "SubState": "dead",
+          "Result": "success",
+          "UnitFileState": "enabled"
+        }
+      }
+    },
+    "checks_required": [
+      "under_weather_lock_before_other_runtime_preflight",
+      "immediately_before_first_stage",
+      "after_stage_before_first_replace",
+      "before_every_replace",
+      "before_weather_force_recreate",
+      "after_local_postverify"
+    ],
+    "no_unit_mutation": true,
+    "failed_ingest_recovery_is_separate_owner_gate": true,
+    "no_automatic_reset_failed": true,
+    "no_automatic_timer_stop_start": true,
+    "last_sanitized_observation": {
+      "date": "2026-10-08",
+      "weather_ingest_service": "failed/exit-code",
+      "weather_ingest_timer": "active/enabled",
+      "simple_deployer_timer": "active/enabled",
+      "simple_deployer_service": "not_yet_proven",
+      "historical_only": true
+    }
+  }
 }
