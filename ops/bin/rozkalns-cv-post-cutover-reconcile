@@ -1,0 +1,216 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+IFS=$'\n\t'
+umask 077
+PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+export PATH
+
+MODE="${1:-check}"
+shift || true
+EXPECTED_MAIN=''
+CONFIRM=''
+
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+        --expected-main)
+            [[ "$#" -ge 2 ]] || { echo 'missing --expected-main value' >&2; exit 64; }
+            EXPECTED_MAIN="$2"
+            shift 2
+            ;;
+        --confirm)
+            [[ "$#" -ge 2 ]] || { echo 'missing --confirm value' >&2; exit 64; }
+            CONFIRM="$2"
+            shift 2
+            ;;
+        *)
+            echo "unknown argument: $1" >&2
+            exit 64
+            ;;
+    esac
+done
+
+[[ "$MODE" == check || "$MODE" == apply ]] || {
+    echo "usage: $0 [check|apply] --expected-main <sha> [--confirm RECONCILE-ROZKALNS-CV-POST-CUTOVER]" >&2
+    exit 64
+}
+[[ "$EXPECTED_MAIN" =~ ^[0-9a-f]{40}$ ]] || {
+    echo 'expected main SHA must be exact lowercase 40-character SHA' >&2
+    exit 64
+}
+if [[ "$MODE" == apply ]]; then
+    [[ "$CONFIRM" == RECONCILE-ROZKALNS-CV-POST-CUTOVER ]] || {
+        echo 'apply confirmation mismatch' >&2
+        exit 64
+    }
+fi
+
+readonly OWNER='andris'
+readonly INSTALLED_OPERATOR='/usr/local/sbin/rozkalns-cv-post-cutover-reconcile'
+readonly REPO_REL='RPi5_main'
+readonly SOURCE_REL='ops/bin/rozkalns-cv-post-cutover-reconcile'
+readonly LIVE_CONTAINER='rozkalns-cv-cv-1'
+readonly LIVE_PROJECT='rozkalns-cv'
+readonly LIVE_SERVICE='cv'
+readonly LIVE_SOURCE='6c226ac797602007b960da8dad114f794f450717'
+readonly LIVE_IMAGE='ghcr.io/rozkalnsandris/rozkalns-cv@sha256:dd33f110db46f92953241680bf86b475cdbb10fd76ec7f5e5ec6299ea2a97480'
+readonly LIVE_PORT='127.0.0.1:8088'
+readonly LEGACY_CV='cv'
+readonly LEGACY_CVBOT='cvbot'
+readonly LEGACY_CVBOT_IMAGE='rozkalns-cv-cvbot:8661337c1020c4d70e1da129209c5ffd7ad9bf7e'
+readonly LEGACY_PROJECT='cv'
+readonly LEGACY_SERVICE='cvbot'
+readonly LEGACY_STATE='4986a6d80460bd6d7681c70e09e61a15e31007f4'
+readonly STATE_FILE='/var/lib/rozkalns-cv-deploy/current-sha'
+readonly TIMER_UNIT='rozkalns-cv-pull-deploy.timer'
+readonly SERVICE_UNIT='rozkalns-cv-pull-deploy.service'
+readonly LOCAL_HEALTH='http://127.0.0.1:8088/api/health'
+readonly LOCAL_READY='http://127.0.0.1:8088/api/health/ready'
+readonly -a RETIREMENT_ARTIFACTS=(
+    '/var/lib/rozkalns-cv-deploy/current-sha|root:root:644'
+    '/usr/local/sbin/rozkalns-cv-pull-deploy|root:root:755'
+    '/usr/local/libexec/rozkalns-cv/deploy-readiness|root:root:755'
+    '/etc/systemd/system/rozkalns-cv-pull-deploy.service|root:root:644'
+    '/etc/systemd/system/rozkalns-cv-pull-deploy.timer|root:root:644'
+    '/usr/local/sbin/rozkalns-cv-manual-rollout-operator|root:root:755'
+    '/usr/local/sbin/rozkalns-cv-pull-deploy-canary|root:root:755'
+    '/usr/local/sbin/rozkalns-cv-pull-deploy-main|root:root:755'
+    '/etc/sudoers.d/rozkalns-cv-pull-deploy|root:root:440'
+    '/usr/local/sbin/rozkalns-cv-pull-deploy-preflight|root:root:755'
+    '/usr/local/libexec/rozkalns-cv/classify-deploy-impact|root:root:755'
+    '/usr/local/libexec/rozkalns-cv/rozkalns-cv-deploy-library|root:root:755'
+)
+
+fail() {
+    printf 'ERROR: %s\n' "$*" >&2
+    exit 1
+}
+
+[[ ${EUID:-$(id -u)} -eq 0 ]] || fail 'run as root'
+for command_name in awk curl docker getent git rm runuser stat systemctl tr; do
+    command -v "$command_name" >/dev/null 2>&1 || fail "missing command: $command_name"
+done
+
+[[ "${BASH_SOURCE[0]}" == "$INSTALLED_OPERATOR" ]] || fail 'run only the fixed installed operator, never a checkout script as root'
+[[ -f "$INSTALLED_OPERATOR" && ! -L "$INSTALLED_OPERATOR" ]] || fail 'installed reconciliation operator is missing or unsafe'
+[[ "$(stat -c '%U:%G:%a' "$INSTALLED_OPERATOR")" == 'root:root:500' ]] || fail 'installed reconciliation operator ownership/mode drift'
+owner_home="$(getent passwd "$OWNER" | awk -F: 'NR == 1 {print $6}')"
+[[ "$owner_home" == /* && -d "$owner_home" && ! -L "$owner_home" ]] || fail 'maintenance owner home is missing or unsafe'
+repo="$owner_home/$REPO_REL"
+owner_git() {
+    runuser -u "$OWNER" -- env HOME="$owner_home" PATH='/usr/local/bin:/usr/bin:/bin' git -C "$repo" "$@"
+}
+[[ -d "$repo/.git" ]] || fail 'RPi5_main checkout is missing'
+[[ "$(git hash-object "$INSTALLED_OPERATOR")" == "$(owner_git rev-parse "$EXPECTED_MAIN:$SOURCE_REL")" ]] || fail 'installed operator bytes differ from exact reviewed source'
+[[ "$(owner_git rev-parse HEAD)" == "$EXPECTED_MAIN" ]] || fail 'RPi5_main HEAD does not match expected main'
+[[ "$(owner_git branch --show-current)" == main ]] || fail 'RPi5_main checkout is not on main'
+[[ -z "$(owner_git status --porcelain=v1 --untracked-files=all)" ]] || fail 'RPi5_main checkout is not clean'
+[[ "$(owner_git remote get-url origin)" == 'https://github.com/rozkalnsandris/RPi5_main.git' ]] || fail 'RPi5_main origin is not canonical'
+
+unit_enabled() { systemctl is-enabled "$1" 2>/dev/null || true; }
+unit_active() { systemctl is-active "$1" 2>/dev/null || true; }
+
+assert_live_runtime() {
+    local meta id image revision project service status health port
+    meta="$(docker inspect "$LIVE_CONTAINER" --format '{{.Id}}|{{.Config.Image}}|{{index .Config.Labels "org.opencontainers.image.revision"}}|{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "com.docker.compose.service"}}|{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}')" || fail 'SIMPLE-DEPLOY CV container is missing'
+    IFS='|' read -r id image revision project service status health <<<"$meta"
+    [[ "$id" =~ ^[0-9a-f]{64}$ ]] || fail 'SIMPLE-DEPLOY CV container ID is invalid'
+    [[ "$image" == "$LIVE_IMAGE" ]] || fail 'SIMPLE-DEPLOY CV image digest drift'
+    [[ "$revision" == "$LIVE_SOURCE" ]] || fail 'SIMPLE-DEPLOY CV source revision drift'
+    [[ "$project" == "$LIVE_PROJECT" && "$service" == "$LIVE_SERVICE" ]] || fail 'SIMPLE-DEPLOY CV compose identity drift'
+    [[ "$status" == running && "$health" == healthy ]] || fail 'SIMPLE-DEPLOY CV runtime is not healthy'
+    port="$(docker port "$LIVE_CONTAINER" 8080/tcp)"
+    [[ "$port" == "$LIVE_PORT" ]] || fail 'SIMPLE-DEPLOY CV loopback port ownership drift'
+    [[ "$(curl -fsS -o /dev/null -w '%{http_code}' --max-time 8 "$LOCAL_HEALTH")" == 200 ]] || fail 'CV liveness is not HTTP 200'
+    [[ "$(curl -fsS -o /dev/null -w '%{http_code}' --max-time 8 "$LOCAL_READY")" == 200 ]] || fail 'CV readiness is not HTTP 200'
+    LIVE_ID="$id"
+}
+
+assert_legacy_cvbot_present() {
+    local meta id image project service restart status restarts
+    if docker inspect "$LEGACY_CV" >/dev/null 2>&1; then
+        fail 'unexpected legacy cv container is present'
+    fi
+    meta="$(docker inspect "$LEGACY_CVBOT" --format '{{.Id}}|{{.Config.Image}}|{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "com.docker.compose.service"}}|{{.HostConfig.RestartPolicy.Name}}|{{.State.Status}}|{{.RestartCount}}')" || fail 'legacy cvbot container is missing'
+    IFS='|' read -r id image project service restart status restarts <<<"$meta"
+    [[ "$id" =~ ^[0-9a-f]{64}$ ]] || fail 'legacy cvbot container ID is invalid'
+    [[ "$image" == "$LEGACY_CVBOT_IMAGE" ]] || fail 'legacy cvbot image drift'
+    [[ "$project" == "$LEGACY_PROJECT" && "$service" == "$LEGACY_SERVICE" ]] || fail 'legacy cvbot compose identity drift'
+    [[ "$restart" == unless-stopped ]] || fail 'legacy cvbot restart policy drift'
+    [[ "$status" == running || "$status" == restarting ]] || fail 'legacy cvbot is not in reviewed residual state'
+    [[ "$restarts" =~ ^[0-9]+$ && "$restarts" -ge 1 ]] || fail 'legacy cvbot restart evidence missing'
+    LEGACY_ID="$id"
+}
+
+assert_artifact_metadata() {
+    local row path expected_stat
+    for row in "${RETIREMENT_ARTIFACTS[@]}"; do
+        path="${row%%|*}"
+        expected_stat="${row#*|}"
+        [[ -f "$path" && ! -L "$path" ]] || fail "legacy retirement artifact missing or unsafe: $path"
+        [[ "$(stat -c '%U:%G:%a' "$path")" == "$expected_stat" ]] || fail "legacy retirement artifact metadata drift: $path"
+    done
+    [[ "$(tr -d '[:space:]' <"$STATE_FILE")" == "$LEGACY_STATE" ]] || fail 'legacy production-state SHA drift'
+}
+
+assert_controller_inactive() {
+    [[ "$(unit_enabled "$TIMER_UNIT")" == disabled ]] || fail 'legacy pull timer is not disabled'
+    [[ "$(unit_active "$TIMER_UNIT")" == inactive ]] || fail 'legacy pull timer is not inactive'
+    [[ "$(unit_active "$SERVICE_UNIT")" == inactive ]] || fail 'legacy pull service is not inactive'
+}
+
+all_retirement_targets_absent() {
+    local row path
+    docker inspect "$LEGACY_CVBOT" >/dev/null 2>&1 && return 1
+    docker inspect "$LEGACY_CV" >/dev/null 2>&1 && return 1
+    if [[ -n "${LEGACY_ID:-}" ]]; then
+        docker inspect "$LEGACY_ID" >/dev/null 2>&1 && return 1
+    fi
+    for row in "${RETIREMENT_ARTIFACTS[@]}"; do
+        path="${row%%|*}"
+        [[ ! -e "$path" ]] || return 1
+    done
+    return 0
+}
+
+assert_live_runtime
+PRE_LIVE_ID="$LIVE_ID"
+
+if all_retirement_targets_absent; then
+    printf 'ROZKALNS_CV_POST_CUTOVER_RECONCILIATION=NO_OP_ALREADY_RECONCILED\n'
+    exit 0
+fi
+
+assert_legacy_cvbot_present
+assert_controller_inactive
+assert_artifact_metadata
+
+if [[ "$MODE" == check ]]; then
+    printf 'ROZKALNS_CV_POST_CUTOVER_RECONCILIATION_CHECK=PASS\n'
+    printf 'MUTATION_PERFORMED=false\n'
+    exit 0
+fi
+
+[[ "$(docker inspect "$LEGACY_CVBOT" --format '{{.Id}}')" == "$LEGACY_ID" ]] || fail 'legacy cvbot identity changed before mutation'
+docker stop --time 20 "$LEGACY_ID"
+[[ "$(docker inspect "$LEGACY_ID" --format '{{.State.Status}}')" == exited ]] || fail 'legacy cvbot did not stop cleanly'
+docker rm "$LEGACY_ID"
+docker inspect "$LEGACY_ID" >/dev/null 2>&1 && fail 'legacy cvbot ID still exists after removal'
+docker inspect "$LEGACY_CVBOT" >/dev/null 2>&1 && fail 'legacy cvbot name still exists after removal'
+
+for row in "${RETIREMENT_ARTIFACTS[@]}"; do
+    path="${row%%|*}"
+    [[ -f "$path" && ! -L "$path" ]] || fail "retirement artifact changed before removal: $path"
+    [[ "$(stat -c '%U:%G:%a' "$path")" == "${row#*|}" ]] || fail "retirement artifact metadata changed before removal: $path"
+    rm -f -- "$path"
+done
+systemctl daemon-reload
+
+all_retirement_targets_absent || fail 'legacy retirement targets remain after apply'
+assert_live_runtime
+[[ "$LIVE_ID" == "$PRE_LIVE_ID" ]] || fail 'SIMPLE-DEPLOY CV container identity changed during reconciliation'
+[[ "$(unit_enabled "$TIMER_UNIT")" != enabled ]] || fail 'legacy pull timer became enabled'
+[[ "$(unit_active "$TIMER_UNIT")" != active ]] || fail 'legacy pull timer became active'
+[[ "$(unit_active "$SERVICE_UNIT")" != active ]] || fail 'legacy pull service became active'
+
+printf 'ROZKALNS_CV_POST_CUTOVER_RECONCILIATION_APPLY=PASS\n'
+printf 'MUTATION_PERFORMED=true\n'

@@ -1,6 +1,6 @@
 {
   "schema": "rozkalns.rpi5-main.simple-deploy-rozkalns-cv-compat.v1",
-  "status": "SOURCE_COMPATIBILITY_COMPLETE_TARGET_REGISTERED_LIVE_CUTOVER_REQUIRED",
+  "status": "LIVE_SIMPLE_DEPLOY_OBSERVED_LEGACY_RECONCILIATION_REQUIRED",
   "consumer": {
     "repository": "rozkalnsandris/rozkalns-cv",
     "consumer_contract_revision": "139fb7046c77e1e58ec4a0876db3dddb96c85cb5",
@@ -46,7 +46,7 @@
     "source_merge_registers_target": true,
     "source_merge_installs_or_enables_runtime": false,
     "target_registration_requires_follow_up_tracked_source_change": false,
-    "target_installation_requires_separate_exact_live_cutover": true,
+    "target_installation_requires_separate_exact_live_cutover": false,
     "private_runtime_config_provisioning_requires_separate_exact_authority": false,
     "persistent_data_adoption_requires_separate_exact_data_authority": false,
     "ordinary_reconciler_initializes_migrates_or_recovers_database": false,
@@ -67,5 +67,18 @@
     "cloudflare-dns-network",
     "private-provider-activation",
     "unrelated-host-control"
-  ]
+  ],
+  "observed_runtime": {
+    "as_of": "2026-10-08",
+    "source_sha": "6c226ac797602007b960da8dad114f794f450717",
+    "image_digest": "sha256:dd33f110db46f92953241680bf86b475cdbb10fd76ec7f5e5ec6299ea2a97480",
+    "project": "rozkalns-cv",
+    "service": "cv",
+    "port_bind": "127.0.0.1:8088",
+    "liveness_http_status": 200,
+    "readiness_http_status": 200,
+    "evidence_kind": "owner-authorized-read-only-sync",
+    "residual_legacy_cvbot": true,
+    "residual_legacy_controller_artifacts": true
+  }
 }

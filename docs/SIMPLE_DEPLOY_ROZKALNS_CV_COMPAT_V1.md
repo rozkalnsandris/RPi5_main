@@ -1,7 +1,7 @@
 # rozkalns-cv SIMPLE-DEPLOY compatibility and first adoption v1
 
-Status: **source-ready only; LIVE remains separately owner-gated**  
-Follow-up: private-env accessibility correction after the read-only #821 cutover preflight.
+Status: **SIMPLE-DEPLOY observed live; legacy reconciliation remains separately owner-gated**  
+Follow-up: #913 retires only the stale legacy cvbot/state/controller residue after fresh runtime evidence proved SIMPLE-DEPLOY ownership.
 
 ## Operator model
 
@@ -72,22 +72,42 @@ The legacy and candidate `bot/storage.py` Git blob remains identical:
 
 Both runtimes use application UID/GID `10001:10001`. No database query or schema migration is part of the cutover.
 
-## Current exact release
+## Current observed live release
+
+Fresh read-only evidence on 2026-10-08 established:
 
 - consumer: `rozkalnsandris/rozkalns-cv`;
-- source: `d75863d0ce4cfdac0015150137523abbaccf5914`;
-- immutable image digest: `sha256:ba9e24c82eccd833cfe42d6a4aa61ef76c584bcfd4c27efbced13c3a408d2a1a`;
-- shared SIMPLE-DEPLOY workflow: `rozkalnsandris/ops-workflows@e05ed760791a127c7c9628696806ef39c9fe329c`;
-- target: `rozkalns-cv-rpi5`;
-- RPi5 Compose SHA-256: `d4c7e9ed5c36245d92ce7da199194ec032c74de6ea03f2b522e31a43ffaf3277`;
-- liveness: `http://127.0.0.1:8088/api/health`;
-- readiness: `http://127.0.0.1:8088/api/health/ready`.
+- live source revision: `6c226ac797602007b960da8dad114f794f450717`;
+- immutable live image digest: `sha256:dd33f110db46f92953241680bf86b475cdbb10fd76ec7f5e5ec6299ea2a97480`;
+- Compose project/service: `rozkalns-cv/cv`;
+- loopback ownership: `127.0.0.1:8088`;
+- liveness and readiness: HTTP 200;
+- stale legacy `cvbot`: restart-looping from `rozkalns-cv-cvbot:8661337c1020c4d70e1da129209c5ffd7ad9bf7e`;
+- stale legacy production state: `4986a6d80460bd6d7681c70e09e61a15e31007f4`;
+- legacy pull timer/service: disabled/inactive.
 
-The required legacy production baseline remains:
+The former one-time cutover candidate is historical provenance only. It is superseded by the observed live SIMPLE-DEPLOY runtime and is no longer registered as an executor operation.
 
-`4986a6d80460bd6d7681c70e09e61a15e31007f4`
+## Post-cutover reconciliation (#913)
 
-## One-time legacy adoption
+Reviewed source entrypoint:
+
+`ops/bin/rozkalns-cv-post-cutover-reconcile`
+
+Default `check` mode is read-only. Both modes must execute only from the separately installed, root-owned `/usr/local/sbin/rozkalns-cv-post-cutover-reconcile` (mode `0500`), whose bytes must match the exact reviewed source blob in the clean RPi5 `main` checkout. Direct root execution of a user-writable Git checkout script is forbidden. Installing this operator requires separate exact LIVE authorization; repository merge does not install it. A later `apply` additionally requires separate exact LIVE authority and the explicit confirmation token.
+
+The future mutation envelope is smaller than the original cutover:
+
+1. prove exact RPi5 source binding and exact healthy SIMPLE-DEPLOY CV source/digest/port ownership;
+2. prove exact residual legacy `cvbot`, stale production state, disabled/inactive legacy controller and the 12 allowlisted retirement-file metadata invariants;
+3. capture the exact legacy `cvbot` immutable Docker container ID, revalidate name-to-ID binding immediately before mutation, then stop and non-force remove only that same ID;
+4. remove only those 12 stale legacy state/controller files;
+5. run only `systemctl daemon-reload` for systemd reconciliation;
+6. prove the live SIMPLE-DEPLOY container ID/source/digest/port and HTTP health did not change.
+
+The operator does not target private env files, persistent CV data, database/application data, SIMPLE-DEPLOY receipt/Compose/registry runtime state, deploy evidence/backups, Cloudflare or network state.
+
+## Historical one-time legacy adoption
 
 The STRICT cutover remains one owner-authorized operation:
 
@@ -115,4 +135,4 @@ This source change does **not** authorize:
 - Cloudflare/network mutation;
 - repository settings/permissions/secrets mutation.
 
-A later LIVE cutover still requires separate exact owner authorization bound to the final merged RPi5 source and exact CV release.
+The cutover itself is historical. A later post-cutover reconciliation requires separate exact owner LIVE authorization bound to the final merged RPi5 source and the exact observed live CV source/digest.
