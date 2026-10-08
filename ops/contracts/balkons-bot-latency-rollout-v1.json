@@ -1,0 +1,34 @@
+{
+  "schema": "rpi5.balkons_bot_latency_rollout.v1",
+  "target_alias": "rpi5",
+  "service": "balkons-bot.service",
+  "source_paths": [
+    "ops/lib/balkons-bot.py",
+    "ops/systemd/balkons-bot-runtime-override.conf",
+    "ops/bin/balkons-bot-preflight",
+    "ops/bin/balkons-bot-deploy-verifier",
+    "ops/bin/balkons-bot-latency-rollout-plan"
+  ],
+  "install_targets": [
+    "/usr/local/lib/rpi5-balkons-bot.py",
+    "/etc/systemd/system/balkons-bot.service.d/95-rpi5-source-credentials.conf"
+  ],
+  "credential_policy": "encrypted-metadata-only",
+  "restart": "always",
+  "restart_usec": "10s",
+  "timeout_stop_usec": "1min 30s",
+  "send_sigkill": "no",
+  "steps": [
+    "exact-source",
+    "read-only-preflight",
+    "credential-metadata",
+    "existing-target-absence",
+    "root-only-backup-verification",
+    "independent-live-authorization",
+    "two-file-install",
+    "daemon-reload",
+    "single-restart",
+    "post-install-verification"
+  ],
+  "can_apply": false
+}

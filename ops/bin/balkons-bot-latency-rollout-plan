@@ -1,0 +1,175 @@
+#!/usr/bin/env python3
+"""Offline source-only guard for balkons-bot Telegram latency rollout (#920).
+
+No host commands, network calls, credential reads, source install, or service action.
+The optional evidence is only a projection of independently reviewed preflight.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+import stat
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+SOURCE = "ops/lib/balkons-bot.py"
+CONTRACT = "ops/contracts/balkons-bot-latency-rollout-v1.json"
+PATHS = (
+    SOURCE,
+    "ops/systemd/balkons-bot-runtime-override.conf",
+    "ops/bin/balkons-bot-preflight",
+    "ops/bin/balkons-bot-deploy-verifier",
+    "ops/bin/balkons-bot-latency-rollout-plan",
+    CONTRACT,
+)
+SHA = re.compile(r"[0-9a-f]{40}\Z")
+SCHEMA = "rpi5.balkons_bot_latency_evidence.v1"
+EXPECTED = {
+    "schema": SCHEMA,
+    "target_alias": "rpi5",
+    "checkout": "EXACT_CLEAN_MAIN",
+    "verifier": "READY",
+    "preflight": "PASS",
+    "credential_metadata": "PASS",
+    "credential_content_read": False,
+    "historic_source": "MATCH",
+    "service": "ACTIVE_RUNNING",
+    "lifecycle": "BASELINE_SEND_SIGKILL_NO",
+    "forward_targets": "ABSENT",
+    "root_backup": "VERIFIED",
+    "rollback_plan": "REVIEWED",
+}
+EVIDENCE_KEYS = frozenset((*EXPECTED, "repo_sha", "source_sha256", "bundle_sha256"))
+REASONS = {
+    "checkout": "checkout_not_exact_clean_main",
+    "verifier": "deploy_verifier_not_ready",
+    "preflight": "preflight_not_pass",
+    "credential_metadata": "encrypted_credentials_not_verified",
+    "credential_content_read": "credential_boundary_violation",
+    "historic_source": "historic_source_provenance_not_proven",
+    "service": "service_not_active_running",
+    "lifecycle": "lifecycle_not_baseline",
+    "forward_targets": "deployment_targets_not_absent",
+    "root_backup": "root_only_backup_not_verified",
+    "rollback_plan": "rollback_plan_not_reviewed",
+}
+
+
+def sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def source_bundle(root: Path, repo_sha: str) -> dict[str, str]:
+    if not isinstance(repo_sha, str) or not SHA.fullmatch(repo_sha):
+        raise ValueError("repo_sha_invalid")
+    files = {}
+    for relative in PATHS:
+        path = root / relative
+        try:
+            record = path.lstat()
+            if not stat.S_ISREG(record.st_mode) or record.st_size > 262144:
+                raise ValueError("public_file_unsafe")
+            files[relative] = sha256(path.read_bytes())
+        except OSError:
+            raise ValueError("public_file_missing") from None
+    try:
+        contract = json.loads((root / CONTRACT).read_text(encoding="utf-8"))
+    except (ValueError, UnicodeError):
+        raise ValueError("contract_invalid") from None
+    if not isinstance(contract, dict) or contract != {
+        "schema": "rpi5.balkons_bot_latency_rollout.v1",
+        "target_alias": "rpi5",
+        "service": "balkons-bot.service",
+        "source_paths": list(PATHS[:-1]),
+        "install_targets": [
+            "/usr/local/lib/rpi5-balkons-bot.py",
+            "/etc/systemd/system/balkons-bot.service.d/95-rpi5-source-credentials.conf",
+        ],
+        "credential_policy": "encrypted-metadata-only",
+        "restart": "always",
+        "restart_usec": "10s",
+        "timeout_stop_usec": "1min 30s",
+        "send_sigkill": "no",
+        "steps": [
+            "exact-source", "read-only-preflight", "credential-metadata",
+            "existing-target-absence", "root-only-backup-verification",
+            "independent-live-authorization", "two-file-install",
+            "daemon-reload", "single-restart", "post-install-verification",
+        ],
+        "can_apply": False,
+    }:
+        raise ValueError("contract_drift")
+    digest_input = json.dumps(
+        {"repo_sha": repo_sha, "files": files},
+        separators=(",", ":"), sort_keys=True,
+    ).encode("utf-8")
+    return {
+        "repo_sha": repo_sha, "source_sha256": files[SOURCE],
+        "bundle_sha256": sha256(digest_input),
+    }
+
+
+def classify(bundle: dict[str, str], evidence: object = None) -> dict[str, object]:
+    """SOURCE_CANDIDATE is deliberately NOT approval to install or restart."""
+    blockers = []
+    if evidence is None:
+        blockers = ["evidence_not_supplied"]
+    elif not isinstance(evidence, dict) or set(evidence) != EVIDENCE_KEYS:
+        blockers = ["evidence_shape_invalid"]
+    elif any(type(evidence[field]) is not type(value) for field, value in EXPECTED.items()):
+        blockers = ["evidence_types_invalid"]
+    else:
+        for field, expected in EXPECTED.items():
+            if evidence[field] != expected:
+                blockers.append(REASONS.get(field, "evidence_contract_invalid"))
+        for field in ("repo_sha", "source_sha256", "bundle_sha256"):
+            if not isinstance(evidence[field], str) or evidence[field] != bundle[field]:
+                blockers.append(field + "_mismatch")
+    return {
+        "schema": "rpi5.balkons_bot_latency_plan.v1",
+        "scope": "OFFLINE_SOURCE_ONLY", "target_alias": "rpi5",
+        **bundle,
+        "result": "SOURCE_CANDIDATE" if not blockers else "BLOCKED",
+        "blockers": sorted(set(blockers)),
+        "merge_authority": False, "live_authority": False,
+        "mutation_started": False, "writes_performed": False,
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Source-only balkons-bot rollout guard")
+    parser.add_argument("--expected-repo-sha", required=True)
+    parser.add_argument("--sanitized-evidence-stdin", action="store_true")
+    args = parser.parse_args()
+    try:
+        bundle = source_bundle(ROOT, args.expected_repo_sha)
+        evidence = None
+        if args.sanitized_evidence_stdin:
+            raw = sys.stdin.buffer.read(16385)
+            if len(raw) > 16384:
+                raise ValueError("evidence_oversize")
+            evidence = json.loads(raw)
+        output = classify(bundle, evidence)
+    except (ValueError, UnicodeError, TypeError) as exc:
+        reason = str(exc)
+        if reason not in {
+            "repo_sha_invalid", "public_file_unsafe", "public_file_missing",
+            "contract_invalid", "contract_drift", "evidence_oversize",
+        }:
+            reason = "input_invalid"
+        output = {
+            "schema": "rpi5.balkons_bot_latency_plan.v1",
+            "scope": "OFFLINE_SOURCE_ONLY", "result": "BLOCKED",
+            "blockers": [reason], "merge_authority": False,
+            "live_authority": False, "mutation_started": False,
+            "writes_performed": False,
+        }
+    print(json.dumps(output, sort_keys=True, separators=(",", ":")))
+    return 0 if output["result"] == "SOURCE_CANDIDATE" else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
