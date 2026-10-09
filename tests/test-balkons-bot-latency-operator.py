@@ -111,7 +111,7 @@ class OperatorTests(unittest.TestCase):
             "credential_content_read": False, "credential_content_hashed": False,
             "mutation_started": False, "writes_performed": False,
         } if report is None else report
-        source = lambda: dict(self.files)
+        source = lambda *_args: dict(self.files)
         require = lambda path, **_kwargs: (
             b"K10" if path == operator.K10
             else self.files["ops/bin/balkons-bot-latency-operator"]
