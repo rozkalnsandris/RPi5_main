@@ -21,7 +21,7 @@ spec.loader.exec_module(reconciler)
 
 class Tests(unittest.TestCase):
     def test_predecessor_is_frozen_exact_main(self):
-        self.assertEqual(reconciler.PREDECESSOR_SOURCE_SHA, "7be2772ca8c0dddefd00181c805bd693bc06a9ed")
+        self.assertEqual(reconciler.PREDECESSOR_SOURCE_SHA, "edc5003fba34523e4b400fc18e2a5446c3928a93")
 
     def test_unknown_preimage_fails_before_mutation(self):
         with tempfile.TemporaryDirectory() as temp:
