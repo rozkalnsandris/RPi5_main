@@ -38,13 +38,14 @@
   },
   "integrity": {
     "bootstrap_coverage_required_state": "PASS",
-    "recurring_window_start": "2026-08-13",
-    "recurring_window_end": "2026-08-26",
-    "recurring_coverage_accepted_states": ["PASS", "WARN_WITH_EMPTY_BLOCK_REASONS"],
     "blocking_state": "BLOCKED",
-    "database_command": "rozkalns-weather corpus-check",
+    "database_command": "python -m rozkalns_weather corpus-check",
     "database_required_ok": true,
-    "required_before_recurring_enable": true
+    "database_required_error_count": 0,
+    "database_required_errors": [],
+    "required_before_recurring_enable": true,
+    "bootstrap_coverage_command": "rozkalns-weather corpus-report",
+    "recurring_coverage_command": "not_supported_in_current_weather_cli"
   },
   "actions": [
     "--preflight",
@@ -66,13 +67,14 @@
     "service_exec_start": "/usr/local/libexec/rozkalns-simple-deployer/rozkalns-simple-deploy-weather-data --ingest-once",
     "installed_disabled_by_default": true,
     "enable_requires_fresh_enable_preflight": true,
-    "ingest_action_self_gates_on_integrity": true
+    "ingest_action_self_gates_on_integrity": true,
+    "ingest_command": "python -m rozkalns_weather ingest-public"
   },
   "installer": {
     "entrypoint": "scripts/install-simple-deploy-weather-data-v1.py",
     "initial_install_remains_create_only": true,
     "reconciliation_entrypoint": "scripts/reconcile-simple-deploy-weather-data-v1.py",
-    "reconciliation_predecessor_source_sha": "7be2772ca8c0dddefd00181c805bd693bc06a9ed",
+    "reconciliation_predecessor_source_sha": "edc5003fba34523e4b400fc18e2a5446c3928a93",
     "reconciliation_requires_exact_preimage_and_metadata": true,
     "reconciliation_replaces_only_changed_tracked_files": true,
     "source_merge_executes_installer": false,
