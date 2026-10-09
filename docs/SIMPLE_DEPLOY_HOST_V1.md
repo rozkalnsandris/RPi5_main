@@ -226,3 +226,82 @@ This source change does not execute Docker/Buildx, restart timers, modify
 installed runtime code or resolve the CV production pointer failure. Host
 installation, execution and any actual deploy require fresh exact-source
 evidence and separate owner LIVE authorization.
+
+## One-shot SIMPLE-DEPLOY installed executor upgrade (#933; source-only)
+
+`scripts/upgrade-simple-deploy-executor-v1.py` is a new **fixed-target**
+single-file upgrade candidate. The source PR does not install it, activate
+the generic deployer, update CV or change any runtime state. This is not
+the first-install `scripts/install-simple-deploy-v1.py` procedure.
+
+### Provenance / immutable source
+
+Source is read from exactly `ops/lib/deploy_executor/simple_deploy_v1.py`
+in an explicit full SHA Git commit via `git cat-file blob`; the operator
+independently verifies the complete source SHA-256 and installed baseline
+SHA-256 before any write. It never `git fetch`es, checks out, resets,
+rebases, edits refs or modifies the host checkout. If the immutable source
+object is missing on RPi5, check/apply fails closed. The missing-object
+preparation is a separate exact owner-gated action, not an implicit retry.
+
+Point-in-time read-only preflight (not LIVE authority):
+
+- RPi5 source baseline: `c0861f8fb4c8ea1df73fcffc340323d7d846641a`;
+- reviewed source SHA-256: `ed906786fd85169c6c555a3ac466b157edaf24a65fe12f60ee2ec6940ade20d0`;
+- installed executor SHA-256: `bec054249e6729f6a5a87516758fda77d5382d5b18c37318ec7b953d36422af2`;
+- CV receipt still reflected previous source `6c226ac797602007b960da8dad114f794f450717`.
+
+### Trusted operator and read-only check
+
+The operator has no caller-defined target path, Docker reference or
+shell command input. Default mode is read-only **check**. `--apply`
+requires root execution from an independently installed exact path
+`/usr/local/sbin/rozkalns-simple-deployer-code-upgrade`, whose file must
+be root-owned, regular/non-symlink, mode `0500`, and match a separately
+reviewed `--expected-operator-sha256`. Never execute Python from a
+user-writable Git checkout as root. Operator installation is a different
+owner LIVE gate from the executor replacement.
+
+Example read-only check with independently verified full identifiers:
+
+    python3 -B scripts/upgrade-simple-deploy-executor-v1.py \
+      --expected-source-commit <reviewed-full-SHA> \
+      --expected-source-sha256 <reviewed-source-SHA256> \
+      --expected-installed-sha256 <reviewed-installed-SHA256>
+
+### Strict quiescence and atomic replacement
+
+Check and apply require the generic timer to be both `inactive` and
+`disabled` or `masked`, and the generic service `inactive` or `failed`.
+This is intentional: disabling a systemd unit is distinct from stopping
+an active unit. Timer/service lifecycle changes require their own exact
+LIVE authority, and this script never issues `stop`, `disable`, `start`,
+`restart`, `daemon-reload` or `reset-failed` commands. A separate
+one-shot LIVE execution envelope must exclude independent concurrent
+service starts; repeated metadata checks reduce, but cannot eliminate,
+an unrelated actor's start race.
+
+Before replacing, the operator verifies root ownership, exact modes
+(`0755` directory, `0444` installed file), non-symlink identity and
+exact old SHA-256. It stages only the desired bytes using a same-directory
+`O_EXCL|O_NOFOLLOW` file, sets `root:root` and `0444`, fsyncs, rechecks
+the original inode and timer/service, and makes one `os.replace` using
+directory file descriptors. `os.replace` is atomic on the same
+filesystem; source staging plus a directory fsync cover file durability.
+Finally it validates destination bytes/mode and unit quiescence.
+
+The candidate is fail-closed: an error after staging starts does not
+trigger retry, rollback, cleanup, a second rename or an alternative
+mutation path. A leftover staged file remains for separately approved
+investigation. Do not infer that a failed post-swap verification
+restored the old executable.
+
+Out of scope: CV receipt and persistent data, registry, Compose,
+environment files, systemd unit files, the user Git checkout, Docker,
+Buildx, application deployment and all credentials/secrets.
+Source merge never authorizes installed-operator materialization, timer
+quiescence, installed executor change or deployment.
+
+Documentation: [Python `os.replace`](https://docs.python.org/3/library/os.html#os.replace),
+[Python `os.fsync`](https://docs.python.org/3/library/os.html#os.fsync),
+and [systemd `systemctl`](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html).
