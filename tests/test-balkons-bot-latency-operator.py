@@ -294,6 +294,10 @@ class OperatorTests(unittest.TestCase):
                     with self.assertRaisesRegex(operator.Blocked, "service_generation_invalid"):
                         operator.service_generation()
 
+    def test_privileged_operator_must_execute_from_installed_path(self):
+        with self.assertRaisesRegex(operator.Blocked, "operator_not_running_at_installed_path"):
+            operator.check_source(MAIN)
+
     def test_tracked_source_drift_is_denied_before_runtime_actions(self):
         for relative, data in self.files.items():
             p = self.root / "trusted-repo" / relative
@@ -319,6 +323,7 @@ class OperatorTests(unittest.TestCase):
                 return "a" * 40 + "\n"
             self.fail("unexpected Git command: " + repr(argv))
         with patch.object(operator, "REPO", checkout), \
+             patch.object(operator, "OPERATOR", SOURCE), \
              patch.object(operator.pwd, "getpwnam", return_value=owner), \
              patch.object(operator, "safe_git", side_effect=fake_git):
             self.assertEqual(operator.check_source(MAIN), self.files)
@@ -327,6 +332,7 @@ class OperatorTests(unittest.TestCase):
                 return " M ops/lib/balkons-bot.py\n"
             return fake_git(*argv)
         with patch.object(operator, "REPO", checkout), \
+             patch.object(operator, "OPERATOR", SOURCE), \
              patch.object(operator.pwd, "getpwnam", return_value=owner), \
              patch.object(operator, "safe_git", side_effect=dirty_git):
             with self.assertRaisesRegex(operator.Blocked, "checkout_not_clean"):
@@ -336,6 +342,7 @@ class OperatorTests(unittest.TestCase):
                 return "b" * 40 + "\n"
             return fake_git(*argv)
         with patch.object(operator, "REPO", checkout), \
+             patch.object(operator, "OPERATOR", SOURCE), \
              patch.object(operator.pwd, "getpwnam", return_value=owner), \
              patch.object(operator, "safe_git", side_effect=origin_drift):
             with self.assertRaisesRegex(operator.Blocked, "origin_main_mismatch"):
@@ -345,6 +352,7 @@ class OperatorTests(unittest.TestCase):
                 return "c" * 40 + "\n"
             return fake_git(*argv)
         with patch.object(operator, "REPO", checkout), \
+             patch.object(operator, "OPERATOR", SOURCE), \
              patch.object(operator.pwd, "getpwnam", return_value=owner), \
              patch.object(operator, "safe_git", side_effect=blob_drift):
             with self.assertRaisesRegex(operator.Blocked, "source_blob_mismatch"):
