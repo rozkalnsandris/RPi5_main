@@ -24,6 +24,7 @@ test:
 	python3 ./tests/test-simple-deploy-executor-upgrade-933.py
 	python3 ./tests/test-coloring-pages-drive-ingest-operator-v1.py
 	python3 ./tests/test-coloring-pages-sitemap-publisher-v1.py
+	python3 ./tests/test-coloring-pages-sitemap-installer-v1.py
 	python3 ./tests/test-simple-deploy-coloring-pages-alignment-v1.py
 	python3 ./tests/test-simple-deploy-rozkalns-cv-compat-v1.py
 	python3 ./tests/test_rozkalns_cv_private_env_materializer.py

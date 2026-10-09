@@ -66,3 +66,54 @@ Official references:
 - https://man7.org/linux/man-pages/man2/flock.2.html
 - https://docs.python.org/3/library/os.html#os.replace
 - https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap
+
+## First-install-only source path (issue #940)
+
+The separate GitHub-only implementation supplies
+\`scripts/install-coloring-pages-sitemap-publisher-v1.py\` and isolated tests.
+Installation requires a **separate exact owner LIVE authorization**, not this
+source merge. The installer runs as root only after independent verification of
+its reviewed source blob and exact \`RPi5_main\` revision. It exposes two
+non-interchangeable modes:
+
+- \`--check --expected-rpi5-main-sha <full-sha>\`: read-only preflight;
+  validates local checkout on \`main\`, clean worktree, both reviewed Git blobs,
+  fixed source/destination identities and **absent** installation targets.
+  No directory or file creation occurs.
+- \`--apply --expected-rpi5-main-sha <full-sha>\`: after fresh identical
+  preflight, creates only the missing root-owned directory
+  \`/usr/local/share/coloring-pages\` (0755), then the vendored generator
+  \`/usr/local/share/coloring-pages/coloring-pages-sitemap\`
+  (\`root:root\`, 0444), and finally the operator
+  \`/usr/local/bin/coloring-pages-sitemap-publish\`
+  (\`root:root\`, 0755). All new files use no-follow exclusive creation and
+  exact byte/owner/mode verification. Directory and files are fsynced.
+
+Both target files **and** the vendor directory must be absent. Any preexisting
+file, directory or symlink is an error: **no overwrite, repin, upgrade,
+permission repair, cleanup, rollback, service restart or fallback install
+path** is allowed. Directory creation is the first authorized LIVE mutation.
+An error afterwards leaves any partial installation as-is and stops.
+The CLI does not accept arbitrary source roots, destination paths, or commands.
+
+The reviewed source blobs must remain exactly:
+- operator: Git blob SHA-1 \`0da51ef361f9ce815ebde3e4cc6cae19a2c2ffe8\`;
+- generator: Git blob SHA-1 \`5644c8fd366c0c57f6339fddd163c5091ea134c5\`.
+
+The local \`/home/andris/RPi5_main\` checkout is a technical prerequisite,
+not source of truth. A read-only checkpoint on 2026-10-09 showed its HEAD was
+still \`079bdcb8cfddf2261323d7a2074fa0a58629d94e\`, behind the merged
+operator source. The installer deliberately **does not** fetch, merge, or
+update that checkout. Any source alignment must be separately trusted and
+owner-authorized. A source checkout mismatch is a STOP before installation.
+
+**First sitemap publication is a different owner gate**. The installer does
+not call the publisher, inspect/write production catalogue data, change Drive,
+Docker/systemd, service state, Cloudflare or Search Console, and does not
+schedule future catalog refreshes.
+
+Installer design reference: GNU Coreutils \`install\` identity/mode semantics
+https://www.gnu.org/software/coreutils/manual/html_node/install-invocation.html
+and Python \`os.open\` exclusive/no-follow flags
+https://docs.python.org/3/library/os.html#os.open.
+
