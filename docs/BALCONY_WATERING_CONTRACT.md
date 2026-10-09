@@ -18,12 +18,14 @@ The live production files were reconciled read-only before this source was creat
 
 ## Required sensor contract
 
-The primary controller checks exactly 14 required Home Assistant entities before any pump-ON request:
+The primary controller checks exactly **12 active** Home Assistant entities before any pump-ON request:
 
-- flowers 1-4;
-- flowers 6-15.
+- flower **1**;
+- flowers **3-13** (including flower **5**).
 
-Flower 5 is intentionally disconnected and excluded from this gate until a later hardware/source change explicitly re-adds it.
+ESP32 firmware retired flowers **2, 14 and 15**. Those retired entities are no longer required; only the 12 active sensors form the fail-closed gate.
+
+This **supersedes** the historical 14-sensor source gate in #174 (flowers 1-4 and 6-15, which excluded flower 5). The firmware source change was shipped to the ESP32 independently; updating this RPi5 source does not prove that the private production controller has been replaced.
 
 The controller fails closed before pump ON when any required entity is missing, `unavailable`, or `unknown`. It also skips when Home Assistant cannot be reached or the returned states cannot be parsed.
 
@@ -59,17 +61,17 @@ The heat-gate source reads the Home Assistant weather entity and uses a default 
 - at or above the threshold: `exec` the same primary two-cycle controller;
 - Home Assistant or temperature parse failure: fail closed without delegation.
 
-The primary controller always re-runs its own 14-sensor gate after temperature delegation.
+The primary controller always re-runs its own 12-sensor gate after temperature delegation.
 
 ## Current schedule evidence
 
-The read-only reconciliation found three enabled production schedules with successful latest status:
+A historical read-only reconciliation found three enabled production schedules with successful latest status at that time:
 
 - 07:00 — primary two-cycle watering;
 - 14:00 — temperature gate;
 - 23:00 — primary two-cycle watering.
 
-Those schedules remain owned by the existing private Hermes runtime. Raw Hermes job state is not tracked in this public repository, and this source PR does not alter or re-create those schedules.
+Those schedules were owned by the private Hermes runtime at reconciliation time. **Current activation, the live controller's exact bytes and the schedule must be revalidated before any separately authorized LIVE deployment.** Raw Hermes job state is not tracked here, and this source PR does not alter or re-create those schedules.
 
 ## Private runtime boundary
 
@@ -97,19 +99,19 @@ A later production mapping may provide these inputs through a protected host-onl
 
 `tests/test-balcony-watering.sh` replaces `curl` and `sleep` with local mocks, uses a reserved `.invalid` URL, and never performs a real network request or pump action. It verifies:
 
-1. all 14 required sensors valid => watering path is reachable;
-2. flower 5 absent => still valid;
+1. all 12 active sensors valid with retired 2/14/15 absent => watering path is reachable;
+2. retired 2/14/15 unavailable => still valid; active flower 5 missing/unavailable/unknown => skip;
 3. one required sensor missing => skip;
 4. one required sensor unavailable => skip;
 5. one required sensor unknown => skip;
 6. empty Home Assistant response => skip;
-7. malformed sensor-state JSON => skip;
+7. malformed sensor-state JSON => skip; retired-only states => skip;
 8. no runtime `last_updated` dependency;
 9. failed OFF HTTP requests preserve the trap-OFF safety path;
 10. HTTP 200 for ON without a switch transition does not start the timed watering window and does not trigger a duplicate ON retry;
 11. HTTP 200 for OFF without an `off` state keeps the cleanup obligation active;
 12. malformed switch-state feedback fails closed and never triggers a second ON;
-13. below 27 C => no delegation, at 27 C => delegation;
+13. below 27 C => no delegation, at 27 C => delegation, with the same 12-sensor gate;
 14. all `curl` traffic remains inside the local mock.
 
 The repository-wide `make validate` gate includes this regression together with shell syntax, secret scanning, and public-repository safety checks.
