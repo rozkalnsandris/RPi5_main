@@ -480,6 +480,31 @@ class WeatherDataBridge:
             raise WeatherDataError("CORPUS_CHECK_NOT_PASS", "corpus-check is not PASS", mutation_started=True)
         return report, corpus_check
 
+    def _recurring_integrity(self, preflight: Preflight) -> dict[str, object]:
+        # Current Weather images expose the module CLI, not the historical
+        # bootstrap-only corpus-report command or a console-script binary.
+        check = _json_object(
+            self._exec(
+                preflight,
+                ("python", "-m", "rozkalns_weather", "corpus-check"),
+                timeout_seconds=120,
+                code="CORPUS_CHECK_FAILED",
+            ),
+            "CORPUS_CHECK_FAILED",
+            mutation_started=True,
+        )
+        if (
+            check.get("ok") is not True
+            or check.get("error_count") != 0
+            or check.get("errors") != []
+        ):
+            raise WeatherDataError(
+                "CORPUS_CHECK_NOT_PASS",
+                "recurring corpus-check is not PASS",
+                mutation_started=True,
+            )
+        return check
+
     def _recheck_pointer(self, preflight: Preflight, *, mutation_started: bool) -> None:
         registry = sd.load_registry(self.registry_path)
         identity = sd.load_identity(self.identity_path)
@@ -521,40 +546,25 @@ class WeatherDataBridge:
     def integrity(self) -> dict[str, object]:
         with self._target_lock():
             preflight = self.preflight(require_bootstrap_source=False, require_recurring_disabled=False)
-            self._strict_integrity(
-                preflight,
-                start_date=RECURRING_INTEGRITY_START_DATE,
-                end_date=RECURRING_INTEGRITY_END_DATE,
-                allow_nonblocking_warn=True,
-            )
+            self._recurring_integrity(preflight)
             self._recheck_pointer(preflight, mutation_started=True)
             return self._receipt("INTEGRITY_PASS", preflight, runtime_process_started=True, production_data_mutation=False)
 
     def enable_preflight(self) -> dict[str, object]:
         with self._target_lock():
             preflight = self.preflight(require_bootstrap_source=False, require_recurring_disabled=True)
-            self._strict_integrity(
-                preflight,
-                start_date=RECURRING_INTEGRITY_START_DATE,
-                end_date=RECURRING_INTEGRITY_END_DATE,
-                allow_nonblocking_warn=True,
-            )
+            self._recurring_integrity(preflight)
             self._recheck_pointer(preflight, mutation_started=True)
             return self._receipt("RECURRING_ENABLE_READY", preflight, runtime_process_started=True, production_data_mutation=False)
 
     def ingest_once(self) -> dict[str, object]:
         with self._target_lock():
             preflight = self.preflight(require_bootstrap_source=False, require_recurring_disabled=False)
-            self._strict_integrity(
-                preflight,
-                start_date=RECURRING_INTEGRITY_START_DATE,
-                end_date=RECURRING_INTEGRITY_END_DATE,
-                allow_nonblocking_warn=True,
-            )
+            self._recurring_integrity(preflight)
             result = _json_object(
                 self._exec(
                     preflight,
-                    ("rozkalns-weather", "ingest-public"),
+                    ("python", "-m", "rozkalns_weather", "ingest-public"),
                     timeout_seconds=2400,
                     code="PUBLIC_INGEST_FAILED",
                 ),
