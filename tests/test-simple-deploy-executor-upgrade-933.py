@@ -197,6 +197,14 @@ class UpgradeTests(unittest.TestCase):
         with self.assertRaisesRegex(op.Block, "owner_approval_mismatch"):
             op.approved()
 
+    def test_uninstalled_root_apply_never_mutates(self):
+        buf = io.StringIO()
+        with patch.object(op.os, "geteuid", return_value=0), redirect_stdout(buf):
+            self.assertEqual(op.main(["--apply"]), 2)
+        self.assertEqual(json.loads(buf.getvalue())["reason"], "operator_not_installed")
+        self.assertEqual(self.target.read_bytes(), OLD)
+        self.assertFalse((self.root / op.STAGE_NAME).exists())
+
     def test_non_root_apply_never_mutates(self):
         buf = io.StringIO()
         with patch.object(op.os, "geteuid", return_value=1001), redirect_stdout(buf):
