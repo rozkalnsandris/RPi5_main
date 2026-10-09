@@ -22,9 +22,18 @@
     "end_date": "2026-09-10",
     "truth_station_id": "10416",
     "truth_chunk_days": 14,
-    "models": ["icon_d2", "ecmwf_ifs", "ecmwf_aifs"],
-    "run_hours_utc": [0, 6, 12, 18],
-    "rate_limit_seconds": 1.0,
+    "models": [
+      "icon_d2",
+      "ecmwf_ifs",
+      "ecmwf_aifs"
+    ],
+    "run_hours_utc": [
+      0,
+      6,
+      12,
+      18
+    ],
+    "rate_limit_seconds": 1,
     "recovery_decisions": [
       "verified_backup_available",
       "owner_accepts_proceeding_without_prewrite_backup"
@@ -38,13 +47,14 @@
   },
   "integrity": {
     "bootstrap_coverage_required_state": "PASS",
-    "recurring_window_start": "2026-08-13",
-    "recurring_window_end": "2026-08-26",
-    "recurring_coverage_accepted_states": ["PASS", "WARN_WITH_EMPTY_BLOCK_REASONS"],
     "blocking_state": "BLOCKED",
-    "database_command": "rozkalns-weather corpus-check",
+    "database_command": "python -m rozkalns_weather corpus-check",
     "database_required_ok": true,
-    "required_before_recurring_enable": true
+    "required_before_recurring_enable": true,
+    "bootstrap_coverage_command": "rozkalns-weather corpus-report",
+    "recurring_coverage_command": "not_supported_in_current_weather_cli",
+    "database_required_error_count": 0,
+    "database_required_errors": []
   },
   "actions": [
     "--preflight",
@@ -66,7 +76,8 @@
     "service_exec_start": "/usr/local/libexec/rozkalns-simple-deployer/rozkalns-simple-deploy-weather-data --ingest-once",
     "installed_disabled_by_default": true,
     "enable_requires_fresh_enable_preflight": true,
-    "ingest_action_self_gates_on_integrity": true
+    "ingest_action_self_gates_on_integrity": true,
+    "ingest_command": "python -m rozkalns_weather ingest-public"
   },
   "installer": {
     "entrypoint": "scripts/install-simple-deploy-weather-data-v1.py",
