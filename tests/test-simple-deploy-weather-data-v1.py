@@ -128,15 +128,10 @@ class Tests(unittest.TestCase):
             subject.bootstrap(bridge.RECOVERY_ACCEPT_NO_BACKUP)
         preflight_call.assert_called_once_with(require_bootstrap_source=True, require_recurring_disabled=True)
 
-    def test_nonblocking_warn_allows_enable_for_later_reviewed_consumer(self):
-        runner = FakeRunner([
-            bridge.CommandResult(0, json.dumps({
-                "state": "WARN",
-                "block_reasons": [],
-                "warn_reasons": ["ECMWF_IFS_MODEL_VERSION_MISSING"],
-            }), ""),
-            bridge.CommandResult(0, json.dumps({"ok": True}), ""),
-        ])
+    def test_current_cli_integrity_allows_enable_for_later_reviewed_consumer(self):
+        runner = FakeRunner([bridge.CommandResult(
+            0, json.dumps({"ok": True, "error_count": 0, "errors": []}), ""
+        )])
         subject = self._subject(runner)
         preflight = _preflight("d" * 40)
         with self._lock_patch(subject), \
@@ -147,34 +142,109 @@ class Tests(unittest.TestCase):
         self.assertEqual(receipt["consumer_source_sha"], "d" * 40)
         self.assertFalse(receipt["timer_enabled_or_started"])
         preflight_call.assert_called_once_with(require_bootstrap_source=False, require_recurring_disabled=True)
-        report_call = runner.calls[0][0]
-        self.assertIn(bridge.RECURRING_INTEGRITY_START_DATE, report_call)
-        self.assertIn(bridge.RECURRING_INTEGRITY_END_DATE, report_call)
+        self.assertEqual(len(runner.calls), 1)
+        self.assertEqual(runner.calls[0][0][-4:], ("python", "-m", "rozkalns_weather", "corpus-check"))
+        self.assertNotIn("corpus-report", " ".join(runner.calls[0][0]))
 
-    def test_blocked_or_malformed_warn_still_blocks_enable(self):
-        for report in (
-            {"state": "BLOCKED", "block_reasons": ["X"], "warn_reasons": []},
-            {"state": "WARN", "block_reasons": ["X"], "warn_reasons": ["Y"]},
-            {"state": "WARN", "block_reasons": [], "warn_reasons": []},
-        ):
+    def test_recurring_invalid_integrity_fails_closed(self):
+        reports = (
+            {"ok": False, "error_count": 1, "errors": ["invalid"]},
+            {"ok": True, "error_count": 1, "errors": ["invalid"]},
+            {"ok": True, "error_count": 0, "errors": ["contradiction"]},
+            {"ok": True, "error_count": 0},
+            {"ok": "true", "error_count": 0, "errors": []},
+        )
+        for report in reports:
             with self.subTest(report=report):
                 runner = FakeRunner([bridge.CommandResult(0, json.dumps(report), "")])
                 subject = self._subject(runner)
                 with self._lock_patch(subject), mock.patch.object(subject, "preflight", return_value=_preflight()):
                     with self.assertRaises(bridge.WeatherDataError) as cm:
                         subject.enable_preflight()
-                self.assertEqual(cm.exception.code, "CORPUS_REPORT_NOT_PASS")
+                self.assertEqual(cm.exception.code, "CORPUS_CHECK_NOT_PASS")
+                self.assertTrue(cm.exception.mutation_started)
 
-    def test_corpus_check_failure_still_blocks_enable(self):
-        runner = FakeRunner([
-            bridge.CommandResult(0, json.dumps({"state": "PASS"}), ""),
-            bridge.CommandResult(0, json.dumps({"ok": False}), ""),
-        ])
+    def test_corpus_check_command_failure_still_blocks_enable(self):
+        runner = FakeRunner([bridge.CommandResult(2, "", "invalid command")])
         subject = self._subject(runner)
         with self._lock_patch(subject), mock.patch.object(subject, "preflight", return_value=_preflight()):
             with self.assertRaises(bridge.WeatherDataError) as cm:
                 subject.enable_preflight()
-        self.assertEqual(cm.exception.code, "CORPUS_CHECK_NOT_PASS")
+        self.assertEqual(cm.exception.code, "CORPUS_CHECK_FAILED")
+        self.assertTrue(cm.exception.mutation_started)
+
+    def test_bootstrap_strict_coverage_command_is_unchanged(self):
+        runner = FakeRunner([
+            bridge.CommandResult(0, json.dumps({"state": "PASS"}), ""),
+            bridge.CommandResult(0, json.dumps({"ok": True}), ""),
+        ])
+        subject = self._subject(runner)
+        subject._strict_integrity(
+            _preflight(), start_date=bridge.BOOTSTRAP_START_DATE,
+            end_date=bridge.BOOTSTRAP_END_DATE, allow_nonblocking_warn=False,
+        )
+        self.assertEqual(runner.calls[0][0][-6:], (
+            "rozkalns-weather", "corpus-report", "--start", bridge.BOOTSTRAP_START_DATE,
+            "--end", bridge.BOOTSTRAP_END_DATE,
+        ))
+        self.assertEqual(runner.calls[1][0][-2:], ("rozkalns-weather", "corpus-check"))
+
+    def test_recurring_integrity_action_uses_module_cli(self):
+        runner = FakeRunner([bridge.CommandResult(
+            0, json.dumps({"ok": True, "error_count": 0, "errors": []}), ""
+        )])
+        subject = self._subject(runner)
+        with self._lock_patch(subject), mock.patch.object(subject, "preflight", return_value=_preflight()), mock.patch.object(subject, "_recheck_pointer"):
+            receipt = subject.integrity()
+        self.assertEqual(receipt["result"], "INTEGRITY_PASS")
+        self.assertFalse(receipt["production_data_mutation"])
+        self.assertEqual(len(runner.calls), 1)
+        self.assertEqual(runner.calls[0][0][-4:], ("python", "-m", "rozkalns_weather", "corpus-check"))
+
+    def test_recurring_ingest_uses_only_fixed_supported_module_commands(self):
+        runner = FakeRunner([
+            bridge.CommandResult(0, json.dumps({"ok": True, "error_count": 0, "errors": []}), ""),
+            bridge.CommandResult(0, json.dumps({"icon_d2": {"state": "ok"}}), ""),
+        ])
+        subject = self._subject(runner)
+        with self._lock_patch(subject), mock.patch.object(subject, "preflight", return_value=_preflight()) as p, mock.patch.object(subject, "_recheck_pointer") as pointer:
+            receipt = subject.ingest_once()
+        p.assert_called_once_with(require_bootstrap_source=False, require_recurring_disabled=False)
+        pointer.assert_called_once()
+        self.assertEqual(receipt["result"], "INGEST_PASS")
+        self.assertTrue(receipt["production_data_mutation"])
+        self.assertEqual(len(runner.calls), 2)
+        self.assertEqual(runner.calls[0][0][-4:], ("python", "-m", "rozkalns_weather", "corpus-check"))
+        self.assertEqual(runner.calls[1][0][-4:], ("python", "-m", "rozkalns_weather", "ingest-public"))
+        for argv, _ in runner.calls:
+            self.assertEqual(argv[0:2], ("docker", "compose"))
+            self.assertNotIn("corpus-report", " ".join(argv))
+            self.assertNotIn("systemctl", " ".join(argv))
+
+    def test_recurring_ingest_nonzero_exit_is_fail_closed(self):
+        runner = FakeRunner([
+            bridge.CommandResult(0, json.dumps({"ok": True, "error_count": 0, "errors": []}), ""),
+            bridge.CommandResult(2, "", "not collected"),
+        ])
+        subject = self._subject(runner)
+        with self._lock_patch(subject), mock.patch.object(subject, "preflight", return_value=_preflight()), mock.patch.object(subject, "_recheck_pointer") as pointer:
+            with self.assertRaises(bridge.WeatherDataError) as cm:
+                subject.ingest_once()
+        self.assertEqual(cm.exception.code, "PUBLIC_INGEST_FAILED")
+        self.assertTrue(cm.exception.mutation_started)
+        pointer.assert_not_called()
+
+    def test_recurring_ingest_overlap_still_rejected(self):
+        runner = FakeRunner([
+            bridge.CommandResult(0, json.dumps({"ok": True, "error_count": 0, "errors": []}), ""),
+            bridge.CommandResult(0, json.dumps({"state": "already_running"}), ""),
+        ])
+        subject = self._subject(runner)
+        with self._lock_patch(subject), mock.patch.object(subject, "preflight", return_value=_preflight()), mock.patch.object(subject, "_recheck_pointer") as pointer:
+            with self.assertRaises(bridge.WeatherDataError) as cm:
+                subject.ingest_once()
+        self.assertEqual(cm.exception.code, "INGEST_OVERLAP")
+        pointer.assert_not_called()
 
     def test_timer_must_be_disabled_and_inactive_before_enable(self):
         runner = FakeRunner([
@@ -189,10 +259,9 @@ class Tests(unittest.TestCase):
         self.assertFalse(cm.exception.mutation_started)
 
     def test_integrity_pass_allows_enable_preflight_but_never_enables_systemd(self):
-        runner = FakeRunner([
-            bridge.CommandResult(0, json.dumps({"state": "PASS"}), ""),
-            bridge.CommandResult(0, json.dumps({"ok": True}), ""),
-        ])
+        runner = FakeRunner([bridge.CommandResult(
+            0, json.dumps({"ok": True, "error_count": 0, "errors": []}), ""
+        )])
         subject = self._subject(runner)
         with self._lock_patch(subject), mock.patch.object(subject, "preflight", return_value=_preflight()), mock.patch.object(subject, "_recheck_pointer"):
             receipt = subject.enable_preflight()
@@ -218,8 +287,11 @@ class Tests(unittest.TestCase):
         self.assertEqual(contract["issue"], 682)
         self.assertEqual(contract["reconciliation_issue"], 684)
         self.assertEqual(contract["reviewed_bootstrap_consumer_source_sha"], bridge.EXPECTED_BOOTSTRAP_SOURCE_SHA)
-        self.assertEqual(contract["integrity"]["recurring_window_start"], bridge.RECURRING_INTEGRITY_START_DATE)
-        self.assertEqual(contract["integrity"]["recurring_window_end"], bridge.RECURRING_INTEGRITY_END_DATE)
+        self.assertEqual(contract["integrity"]["bootstrap_coverage_command"], "rozkalns-weather corpus-report")
+        self.assertEqual(contract["integrity"]["database_command"], "python -m rozkalns_weather corpus-check")
+        self.assertEqual(contract["integrity"]["database_required_error_count"], 0)
+        self.assertEqual(contract["integrity"]["database_required_errors"], [])
+        self.assertEqual(contract["recurring"]["ingest_command"], "python -m rozkalns_weather ingest-public")
         self.assertEqual(contract["actions"], [
             "--preflight",
             "--bootstrap-verified-backup",
