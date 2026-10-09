@@ -211,6 +211,7 @@ class OperatorTests(unittest.TestCase):
     def test_missing_authorization_blocks_before_writes(self):
         with patch.object(operator, "check_baseline", return_value=self.files), \
              patch.object(operator, "verify_owner_live_comment", side_effect=operator.Blocked("denied")), \
+             patch.object(operator, "service_generation", return_value=(1234, 5678)), \
              patch.object(operator.os, "mkdir") as mkdir:
             with self.assertRaisesRegex(operator.Blocked, "denied"):
                 operator.apply_one_shot(self.args)
@@ -235,6 +236,7 @@ class OperatorTests(unittest.TestCase):
              patch.object(operator, "verify_owner_live_comment", return_value=None), \
              patch.object(operator, "require_directory", return_value=None), \
              patch.object(operator, "write_exclusive", side_effect=writing), \
+             patch.object(operator, "service_generation", return_value=(1234, 5678)), \
              patch.object(operator, "safe_run", side_effect=runner):
             self.assertEqual(operator.apply_one_shot(self.args), "PASS")
         self.assertEqual([x[0] for x in calls], ["write", "write", "write", "run", "run", "run"])
@@ -249,6 +251,7 @@ class OperatorTests(unittest.TestCase):
              patch.object(operator, "check_baseline", return_value=self.files), \
              patch.object(operator, "verify_owner_live_comment", return_value=None), \
              patch.object(operator, "require_directory", return_value=None), \
+             patch.object(operator, "service_generation", return_value=(1234, 5678)), \
              patch.object(operator, "safe_run", side_effect=failing):
             # This test uses temp paths, but production-only owner/mode validation
             # is injected because the fake root has no root-owned metadata.
@@ -268,6 +271,84 @@ class OperatorTests(unittest.TestCase):
         with self.assertRaisesRegex(operator.Blocked, "write_failed_no_automatic_cleanup"):
             operator.write_exclusive(dest, b"replacement")
         self.assertEqual(dest.read_bytes(), b"existing")
+
+    def test_competing_service_change_blocks_before_first_write(self):
+        with patch.object(operator, "check_baseline", return_value=self.files), \
+             patch.object(operator, "verify_owner_live_comment", return_value=None), \
+             patch.object(operator, "service_generation", side_effect=[(1234, 5678), (1235, 5678)]), \
+             patch.object(operator.os, "mkdir") as mkdir:
+            with self.assertRaisesRegex(operator.Blocked, "service_changed_before_mutation"):
+                operator.apply_one_shot(self.args)
+            mkdir.assert_not_called()
+
+    def test_service_generation_shape_is_bounded(self):
+        good = "MainPID=1234\nActiveEnterTimestampMonotonic=5678\n"
+        with patch.object(operator, "safe_run", return_value=good):
+            self.assertEqual(operator.service_generation(), (1234, 5678))
+        for bad in ("MainPID=0\nActiveEnterTimestampMonotonic=5678\n",
+                    "MainPID=1234\n",
+                    "MainPID=1234\nActiveEnterTimestampMonotonic=5678\nExtra=1\n",
+                    "MainPID=1234\nActiveEnterTimestampMonotonic=abc\n"):
+            with self.subTest(output=bad):
+                with patch.object(operator, "safe_run", return_value=bad):
+                    with self.assertRaisesRegex(operator.Blocked, "service_generation_invalid"):
+                        operator.service_generation()
+
+    def test_tracked_source_drift_is_denied_before_runtime_actions(self):
+        for relative, data in self.files.items():
+            p = self.root / "trusted-repo" / relative
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_bytes(data)
+        checkout = self.root / "trusted-repo"
+        paths = tuple(self.files)
+        owner = SimpleNamespace(pw_uid=os.getuid())
+        def fake_git(*argv):
+            if argv == ("rev-parse", "HEAD"):
+                return MAIN + "\n"
+            if argv == ("branch", "--show-current"):
+                return "main\n"
+            if argv == ("status", "--porcelain=v1", "--untracked-files=all"):
+                return ""
+            if argv == ("rev-parse", "refs/remotes/origin/main"):
+                return MAIN + "\n"
+            if argv[:2] == ("ls-files", "--"):
+                return "\n".join(paths) + "\n"
+            if argv[:2] == ("hash-object", "--"):
+                return "a" * 40 + "\n"
+            if argv[0] == "rev-parse" and argv[1].startswith(MAIN + ":"):
+                return "a" * 40 + "\n"
+            self.fail("unexpected Git command: " + repr(argv))
+        with patch.object(operator, "REPO", checkout), \
+             patch.object(operator.pwd, "getpwnam", return_value=owner), \
+             patch.object(operator, "safe_git", side_effect=fake_git):
+            self.assertEqual(operator.check_source(MAIN), self.files)
+        def dirty_git(*argv):
+            if argv[0] == "status":
+                return " M ops/lib/balkons-bot.py\n"
+            return fake_git(*argv)
+        with patch.object(operator, "REPO", checkout), \
+             patch.object(operator.pwd, "getpwnam", return_value=owner), \
+             patch.object(operator, "safe_git", side_effect=dirty_git):
+            with self.assertRaisesRegex(operator.Blocked, "checkout_not_clean"):
+                operator.check_source(MAIN)
+        def origin_drift(*argv):
+            if argv == ("rev-parse", "refs/remotes/origin/main"):
+                return "b" * 40 + "\n"
+            return fake_git(*argv)
+        with patch.object(operator, "REPO", checkout), \
+             patch.object(operator.pwd, "getpwnam", return_value=owner), \
+             patch.object(operator, "safe_git", side_effect=origin_drift):
+            with self.assertRaisesRegex(operator.Blocked, "origin_main_mismatch"):
+                operator.check_source(MAIN)
+        def blob_drift(*argv):
+            if argv[:2] == ("hash-object", "--") and argv[2] == operator.SOURCE:
+                return "c" * 40 + "\n"
+            return fake_git(*argv)
+        with patch.object(operator, "REPO", checkout), \
+             patch.object(operator.pwd, "getpwnam", return_value=owner), \
+             patch.object(operator, "safe_git", side_effect=blob_drift):
+            with self.assertRaisesRegex(operator.Blocked, "source_blob_mismatch"):
+                operator.check_source(MAIN)
 
     def test_source_does_not_add_legacy_secret_copy_or_automatic_recovery(self):
         data = SOURCE.read_text()
