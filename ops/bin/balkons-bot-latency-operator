@@ -12,6 +12,7 @@ import datetime as dt
 import hashlib
 import json
 import os
+import pwd
 import re
 import stat
 import subprocess
@@ -97,7 +98,8 @@ def require_directory(path: Path, *, owner: int = 0):
 def check_source(main: str) -> dict[str, bytes]:
     if not SHA.fullmatch(main):
         deny("main_sha_invalid")
-    require_directory(REPO, owner=os.stat(REPO).st_uid)
+    owner = pwd.getpwnam("andris").pw_uid
+    require_directory(REPO, owner=owner)
     if REPO.is_symlink():
         deny("repo_symlink")
     if safe_run(("/usr/bin/git", "-C", str(REPO), "rev-parse", "HEAD")).strip() != main:
@@ -140,6 +142,10 @@ def check_baseline(args, *, cmd=safe_run) -> dict[str, bytes]:
         if not SHA256.fullmatch(getattr(args, attr)):
             deny("baseline_sha_invalid")
     files = check_source(args.expected_main)
+    # Root executes only its installed reviewed entrypoint, not a modifiable
+    # script directly from the unprivileged source checkout.
+    if digest(require_file(OPERATOR, owner=0, mode=0o755)) != digest(files["ops/bin/balkons-bot-latency-operator"]):
+        deny("installed_operator_identity_mismatch")
     for _, target in TARGETS:
         require_directory(target.parent)
         if target.exists() or target.is_symlink():
@@ -189,7 +195,7 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         deny("authorization_redirect_forbidden")
 
 
-def verify_owner_live_comment(comment_id: int, main: str, source_sha: str):
+def verify_owner_live_comment(comment_id: int, args, source_sha: str):
     if type(comment_id) is not int or comment_id < 1:
         deny("owner_authorization_missing")
     url = AUTH_BASE + str(comment_id)
@@ -205,6 +211,8 @@ def verify_owner_live_comment(comment_id: int, main: str, source_sha: str):
         if len(raw) > 8192:
             deny("owner_authorization_invalid")
         outer = json.loads(raw)
+        if outer.get("issue_url") != "https://api.github.com/repos/rozkalnsandris/RPi5_main/issues/925":
+            deny("owner_issue_mismatch")
         if outer.get("user", {}).get("id") != OWNER_ID:
             deny("owner_identity_mismatch")
         if outer.get("user", {}).get("type") != "User":
@@ -215,8 +223,12 @@ def verify_owner_live_comment(comment_id: int, main: str, source_sha: str):
         payload = json.loads(body)
         expected = {
             "schema": "rozkalns.balkons-bot-latency-live-approval.v1",
-            "issue": 925, "target": SERVICE, "repo_sha": main,
+            "issue": 925, "target": SERVICE, "repo_sha": args.expected_main,
             "source_sha256": source_sha,
+            "baseline_live_path_sha256": args.expected_baseline_live_path_sha256,
+            "fragment_path_sha256": args.expected_fragment_path_sha256,
+            "service_user_sha256": args.expected_service_user_sha256,
+            "k10_sha256": args.expected_k10_sha256,
             "allow": ["install_two_public_files", "daemon_reload_once", "restart_once"],
             "no_rollback": True,
         }
@@ -249,7 +261,7 @@ def write_exclusive(path: Path, content: bytes, *, mode=0o644):
 
 def apply_one_shot(args):
     files = check_baseline(args)
-    verify_owner_live_comment(args.owner_comment_id, args.expected_main, digest(files[SOURCE]))
+    verify_owner_live_comment(args.owner_comment_id, args, digest(files[SOURCE]))
     # Revalidate immediately before the first mutation; no automatic retry,
     # reset, cleanup or rollback after this point.
     check_baseline(args)
@@ -292,7 +304,10 @@ def apply_one_shot(args):
             "--expected-user-sha256", args.expected_service_user_sha256,
         )
         checked = json.loads(safe_run(verify))
-        if checked.get("result") != "PASS" or checked.get("mode") != "verify":
+        if (checked.get("result") != "PASS" or checked.get("mode") != "verify"
+            or checked.get("credential_content_read") is not False
+            or checked.get("credential_content_hashed") is not False
+            or checked.get("mutation_started") is not False):
             deny("postcondition_failed")
     except Blocked:
         raise
@@ -332,12 +347,14 @@ def main():
     except Blocked as err:
         print(json.dumps({"schema": "rpi5.balkons_bot_latency_operator.v1",
                           "mode": mode, "result": "BLOCKED", "reason": str(err),
+                          "mutation_started": "UNKNOWN" if args.apply else False,
                           "credentials_read": False, "automatic_rollback": False},
                          sort_keys=True))
         return 2
     except Exception:
         print(json.dumps({"schema": "rpi5.balkons_bot_latency_operator.v1",
                           "mode": mode, "result": "BLOCKED", "reason": "unexpected_error",
+                          "mutation_started": "UNKNOWN" if args.apply else False,
                           "credentials_read": False, "automatic_rollback": False},
                          sort_keys=True))
         return 2
