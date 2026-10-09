@@ -74,7 +74,7 @@
     "entrypoint": "scripts/install-simple-deploy-weather-data-v1.py",
     "initial_install_remains_create_only": true,
     "reconciliation_entrypoint": "scripts/reconcile-simple-deploy-weather-data-v1.py",
-    "reconciliation_predecessor_source_sha": "7be2772ca8c0dddefd00181c805bd693bc06a9ed",
+    "reconciliation_predecessor_source_sha": "edc5003fba34523e4b400fc18e2a5446c3928a93",
     "reconciliation_requires_exact_preimage_and_metadata": true,
     "reconciliation_replaces_only_changed_tracked_files": true,
     "source_merge_executes_installer": false,
