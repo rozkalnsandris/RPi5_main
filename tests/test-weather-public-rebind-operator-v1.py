@@ -37,6 +37,41 @@ class WeatherRebindOperatorTests(unittest.TestCase):
             with self.assertRaises(op.Blocked):
                 op.source_gate("a" * 40)
 
+
+    def test_root_git_status_does_not_refresh_shared_index(self):
+        """The root source gate must never take optional Git index locks."""
+        expected_sha = "a" * 40
+        status_args = ("status", "--porcelain=v1", "--untracked-files=all")
+        answers = {
+            ("rev-parse", "--show-toplevel"): str(op.ROOT),
+            ("branch", "--show-current"): "main",
+            ("rev-parse", "HEAD"): expected_sha,
+            ("remote", "get-url", "origin"): op.ORIGIN,
+            status_args: "",
+        }
+        calls = []
+
+        def fake_command(argv, timeout=20):
+            self.assertEqual(
+                argv[:6],
+                ["/usr/bin/git", "--no-optional-locks", "-c",
+                 f"safe.directory={op.ROOT}", "-C", str(op.ROOT)],
+            )
+            args = tuple(argv[6:])
+            calls.append(args)
+            return answers[args]
+
+        with patch.object(op, "command", side_effect=fake_command), \
+             patch.object(op.os, "geteuid", return_value=0), \
+             patch.object(op, "source_errors", return_value=[]):
+            op.source_gate(expected_sha)
+            self.assertIn(status_args, calls)
+            self.assertEqual(calls.count(status_args), 1)
+            answers[status_args] = "?? unexpected-untracked"
+            with self.assertRaises(op.Blocked):
+                op.source_gate(expected_sha)
+            self.assertEqual(calls.count(status_args), 2)
+
     def test_fixed_file_mode_symlink_and_length_checks(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "file"
