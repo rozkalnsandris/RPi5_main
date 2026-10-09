@@ -21,6 +21,7 @@ loader = importlib.machinery.SourceFileLoader("upgrade_933", str(FILE))
 spec = importlib.util.spec_from_loader(loader.name, loader)
 op = importlib.util.module_from_spec(spec)
 loader.exec_module(op)
+REAL_UNIT_PROPERTIES = op.unit_properties
 
 TIMER_OK = {
     "LoadState": "loaded", "UnitFileState": "disabled",
@@ -252,10 +253,10 @@ class UpgradeTests(unittest.TestCase):
         with patch.object(op, "fixed_command", return_value=(
             "LoadState=loaded\nUnitFileState=disabled\nActiveState=inactive\n"
             "SubState=dead\nJob=0\nNeedDaemonReload=no\n")):
-            self.assertEqual(op.unit_properties(op.TIMER, tuple(TIMER_OK)), TIMER_OK)
+            self.assertEqual(REAL_UNIT_PROPERTIES(op.TIMER, tuple(TIMER_OK)), TIMER_OK)
         with patch.object(op, "fixed_command", return_value="ActiveState=active\nActiveState=inactive\n"):
             with self.assertRaisesRegex(op.Block, "systemd_status_invalid"):
-                op.unit_properties(op.TIMER, tuple(TIMER_OK))
+                REAL_UNIT_PROPERTIES(op.TIMER, tuple(TIMER_OK))
 
     def test_no_implicit_runtime_mutations(self):
         source = FILE.read_text()
