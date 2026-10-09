@@ -100,7 +100,7 @@ The reviewed source blobs must remain exactly:
 - operator: Git blob SHA-1 `0da51ef361f9ce815ebde3e4cc6cae19a2c2ffe8`;
 - generator: Git blob SHA-1 `5644c8fd366c0c57f6339fddd163c5091ea134c5`.
 
-The local `/home/andris/RPi5_main` checkout is a technical prerequisite,
+The local fixed owner-home `RPi5_main` checkout is a technical prerequisite,
 not source of truth. A read-only checkpoint on 2026-10-09 showed its HEAD was
 still `079bdcb8cfddf2261323d7a2074fa0a58629d94e`, behind the merged
 operator source. The installer deliberately **does not** fetch, merge, or

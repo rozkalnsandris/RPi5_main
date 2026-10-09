@@ -20,8 +20,9 @@ import subprocess
 import sys
 from dataclasses import dataclass
 
-SOURCE_ROOT = Path("/home/andris/RPi5_main")
 OWNER = "andris"
+OWNER_HOME = Path("/home") / OWNER
+SOURCE_ROOT = OWNER_HOME / "RPi5_main"
 OPERATOR_REL = "ops/bin/coloring-pages-sitemap-publish"
 GENERATOR_REL = "ops/vendor/coloring-pages-sitemap"
 EXPECTED_BLOBS = {
@@ -84,7 +85,7 @@ def fetch_owner_git(*arguments: str) -> bytes:
     # Git is executed without root privileges or inherited environment.
     cmd = [
         RUNUSER, "-u", OWNER, "--", ENV, "-i",
-        "HOME=/home/andris", "PATH=/usr/bin:/bin",
+        "HOME=" + str(OWNER_HOME), "PATH=/usr/bin:/bin",
         "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null",
         GIT, "-c", "core.hooksPath=/dev/null",
         "-C", str(SOURCE_ROOT), *arguments,
@@ -104,6 +105,7 @@ def fetch_owner_git(*arguments: str) -> bytes:
 def source_snapshot(expected_sha: str, *, owner_uid: int, owner_gid: int):
     if not SHA.fullmatch(expected_sha):
         raise InstallerError("source SHA must be exact lowercase 40-hex")
+    require_directory(OWNER_HOME, owner_uid, owner_gid, 0o700)
     require_directory(SOURCE_ROOT, owner_uid, owner_gid, 0o755)
     require_directory(SOURCE_ROOT / ".git", owner_uid, owner_gid, 0o755)
 
@@ -220,7 +222,7 @@ def main(argv=None):
         root = pwd.getpwnam("root")
         owner = pwd.getpwnam(OWNER)
         owner_group = grp.getgrnam(OWNER)
-        if owner.pw_gid != owner_group.gr_gid:
+        if owner.pw_gid != owner_group.gr_gid or owner.pw_dir != str(OWNER_HOME):
             raise InstallerError("source owner identity mismatch")
         if not Path(GIT).is_file() or not Path(RUNUSER).is_file():
             raise InstallerError("required trusted execution tool unavailable")
