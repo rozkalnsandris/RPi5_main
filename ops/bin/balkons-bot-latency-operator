@@ -21,7 +21,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-REPO = Path("/home/andris/RPi5-maintenance")
+REPO = Path("RPi5-maintenance")  # Resolved once from the fixed owner in main().
 OPERATOR = Path("/usr/local/sbin/rpi5-balkons-bot-latency-operator")
 SOURCE = "ops/lib/balkons-bot.py"
 OVERLAY = "ops/systemd/balkons-bot-runtime-override.conf"
@@ -351,6 +351,16 @@ def apply_one_shot(args):
 
 
 def main():
+    global REPO
+    # Do not embed the owner's home directory in public repository source.
+    # The fixed account and repository basename remain narrowly scoped.
+    try:
+        REPO = Path(pwd.getpwnam("andris").pw_dir) / "RPi5-maintenance"
+    except (KeyError, ValueError):
+        print(json.dumps({"schema": "rpi5.balkons_bot_latency_operator.v1",
+                          "result": "BLOCKED", "reason": "source_checkout_owner_missing"},
+                         sort_keys=True))
+        return 2
     parser = argparse.ArgumentParser(description="Fixed-target source-only reviewed initial-install")
     modes = parser.add_mutually_exclusive_group(required=True)
     modes.add_argument("--check", action="store_true")
