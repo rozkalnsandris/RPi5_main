@@ -1,0 +1,347 @@
+#!/usr/bin/python3 -I
+"""Fixed-target, fail-closed balcony bot latency initial-install operator.
+
+Source-only implementation for RPi5_main #925. No host action is authorized by
+the presence of this file. No legacy source, configuration, or credential
+contents are opened or copied.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import hashlib
+import json
+import os
+import re
+import stat
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+REPO = Path("/home/andris/RPi5-maintenance")
+OPERATOR = Path("/usr/local/sbin/rpi5-balkons-bot-latency-operator")
+SOURCE = "ops/lib/balkons-bot.py"
+OVERLAY = "ops/systemd/balkons-bot-runtime-override.conf"
+PREFLIGHT = "ops/bin/balkons-bot-preflight"
+VERIFIER = "ops/bin/balkons-bot-deploy-verifier"
+TARGETS = (
+    (SOURCE, Path("/usr/local/lib/rpi5-balkons-bot.py")),
+    (OVERLAY, Path("/etc/systemd/system/balkons-bot.service.d/95-rpi5-source-credentials.conf")),
+)
+K10 = Path("/etc/systemd/system/balkons-bot.service.d/90-rpi5-no-sigkill.conf")
+RECOVERY = Path("/var/lib/rozkalns-balkons-bot-latency")
+AUTH_BASE = "https://api.github.com/repos/rozkalnsandris/RPi5_main/issues/comments/"
+OWNER_ID = 277435981
+SHA = re.compile(r"[0-9a-f]{40}\Z")
+SHA256 = re.compile(r"[0-9a-f]{64}\Z")
+SAFE_ENV = {"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C", "GIT_OPTIONAL_LOCKS": "0"}
+GATES = ("expected-main", "expected-baseline-live-path-sha256",
+         "expected-fragment-path-sha256", "expected-service-user-sha256",
+         "expected-k10-sha256")
+SERVICE = "balkons-bot.service"
+
+
+class Blocked(Exception):
+    pass
+
+
+def deny(code: str):
+    raise Blocked(code)
+
+
+def digest(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def safe_run(argv: tuple[str, ...], *, timeout=25) -> str:
+    try:
+        p = subprocess.run(argv, shell=False, check=False, text=True, encoding="utf-8",
+                           stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                           timeout=timeout, env=SAFE_ENV)
+    except (OSError, subprocess.SubprocessError, UnicodeError):
+        deny("fixed_command_failed")
+    if p.returncode != 0 or len(p.stdout) > 65536:
+        deny("fixed_command_failed")
+    return p.stdout
+
+
+def require_file(path: Path, *, owner: int | None = None, mode: int | None = None) -> bytes:
+    try:
+        info = path.lstat()
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            deny("file_type_unsafe")
+        if owner is not None and info.st_uid != owner:
+            deny("file_owner_mismatch")
+        if mode is not None and stat.S_IMODE(info.st_mode) != mode:
+            deny("file_mode_mismatch")
+        if info.st_size > 262144:
+            deny("file_oversize")
+        return path.read_bytes()
+    except OSError:
+        deny("file_unavailable")
+
+
+def require_directory(path: Path, *, owner: int = 0):
+    try:
+        info = path.lstat()
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != owner:
+            deny("directory_unsafe")
+        if info.st_mode & 0o022:
+            deny("directory_writable_by_others")
+    except OSError:
+        deny("directory_unavailable")
+
+
+def check_source(main: str) -> dict[str, bytes]:
+    if not SHA.fullmatch(main):
+        deny("main_sha_invalid")
+    require_directory(REPO, owner=os.stat(REPO).st_uid)
+    if REPO.is_symlink():
+        deny("repo_symlink")
+    if safe_run(("/usr/bin/git", "-C", str(REPO), "rev-parse", "HEAD")).strip() != main:
+        deny("checkout_head_drift")
+    if safe_run(("/usr/bin/git", "-C", str(REPO), "branch", "--show-current")).strip() != "main":
+        deny("checkout_branch_invalid")
+    if safe_run(("/usr/bin/git", "-C", str(REPO), "status", "--porcelain=v1", "--untracked-files=all")).strip():
+        deny("checkout_not_clean")
+    if safe_run(("/usr/bin/git", "-C", str(REPO), "rev-parse", "refs/remotes/origin/main")).strip() != main:
+        deny("origin_main_mismatch")
+    paths = (SOURCE, OVERLAY, PREFLIGHT, VERIFIER,
+             "ops/bin/balkons-bot-latency-operator")
+    expected = set(paths)
+    tracked = safe_run(("/usr/bin/git", "-C", str(REPO), "ls-files", "--", *paths))
+    if set(tracked.splitlines()) != expected:
+        deny("source_not_tracked")
+    output = {}
+    for path in paths:
+        p = REPO / path
+        if p.is_symlink():
+            deny("source_symlink")
+        content = require_file(p)
+        # Compare with the immutable Git object at the approved exact commit,
+        # without trusting the (possibly mutable) worktree alone.
+        hash_object = safe_run(("/usr/bin/git", "-C", str(REPO), "hash-object", "--", path)).strip()
+        tree_hash = safe_run(("/usr/bin/git", "-C", str(REPO), "rev-parse", main + ":" + path)).strip()
+        if hash_object != tree_hash:
+            deny("source_blob_mismatch")
+        output[path] = content
+    return output
+
+
+def check_baseline(args, *, cmd=safe_run) -> dict[str, bytes]:
+    if os.geteuid() != 0:
+        deny("root_required")
+    if not SHA256.fullmatch(args.expected_k10_sha256):
+        deny("k10_sha_invalid")
+    for attr in ("expected_baseline_live_path_sha256", "expected_fragment_path_sha256",
+                 "expected_service_user_sha256"):
+        if not SHA256.fullmatch(getattr(args, attr)):
+            deny("baseline_sha_invalid")
+    files = check_source(args.expected_main)
+    for _, target in TARGETS:
+        require_directory(target.parent)
+        if target.exists() or target.is_symlink():
+            deny("initial_install_target_exists")
+    if digest(require_file(K10, owner=0, mode=0o644)) != args.expected_k10_sha256:
+        deny("k10_drift")
+    # A pre-existing root-only recovery evidence location would make the
+    # one-shot initial install ambiguous; never overwrite its contents.
+    if RECOVERY.exists() or RECOVERY.is_symlink():
+        deny("recovery_state_already_exists")
+    require_directory(RECOVERY.parent)
+    # The accepted legacy source and systemd base remain IN PLACE; this is the
+    # recovery path. Nothing secret-bearing is copied as a backup.
+    verifier = (
+        "/usr/sbin/runuser", "-u", "andris", "--", "/usr/bin/python3", "-I",
+        str(REPO / VERIFIER), "--check",
+        "--expected-repo-sha", args.expected_main,
+        "--expected-checkout-fingerprint", digest(str(REPO).encode()),
+        "--expected-verifier-sha256", digest(files[VERIFIER]),
+        "--expected-source-sha256", digest(files[SOURCE]),
+        "--expected-dropin-sha256", digest(files[OVERLAY]),
+        "--expected-preflight-sha256", digest(files[PREFLIGHT]),
+        "--expected-k10-dropin-sha256", args.expected_k10_sha256,
+        "--expected-baseline-live-path-sha256", args.expected_baseline_live_path_sha256,
+        "--expected-fragment-path-sha256", args.expected_fragment_path_sha256,
+        "--expected-user-sha256", args.expected_service_user_sha256,
+    )
+    report_text = cmd(verifier)
+    try:
+        report = json.loads(report_text)
+    except (ValueError, UnicodeError):
+        deny("verifier_response_invalid")
+    if (not isinstance(report, dict)
+        or report.get("schema") != "rpi5.balkons_bot_deploy_verifier.v1"
+        or report.get("mode") != "check" or report.get("result") != "READY"
+        or report.get("credential_content_read") is not False
+        or report.get("credential_content_hashed") is not False
+        or report.get("mutation_started") is not False
+        or report.get("writes_performed") is not False):
+        deny("verifier_not_ready")
+    # Do not forward nested/preflight detail into public output.
+    return files
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, msg, headers, newurl):
+        deny("authorization_redirect_forbidden")
+
+
+def verify_owner_live_comment(comment_id: int, main: str, source_sha: str):
+    if type(comment_id) is not int or comment_id < 1:
+        deny("owner_authorization_missing")
+    url = AUTH_BASE + str(comment_id)
+    req = urllib.request.Request(url, headers={
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "rpi5-balkons-bot-latency-v1"})
+    try:
+        opener = urllib.request.build_opener(NoRedirect())
+        with opener.open(req, timeout=8) as reply:
+            if reply.status != 200:
+                deny("owner_authorization_unavailable")
+            raw = reply.read(8193)
+        if len(raw) > 8192:
+            deny("owner_authorization_invalid")
+        outer = json.loads(raw)
+        if outer.get("user", {}).get("id") != OWNER_ID:
+            deny("owner_identity_mismatch")
+        if outer.get("user", {}).get("type") != "User":
+            deny("owner_identity_invalid")
+        body = outer.get("body")
+        if type(body) is not str or len(body) > 2500:
+            deny("owner_authorization_invalid")
+        payload = json.loads(body)
+        expected = {
+            "schema": "rozkalns.balkons-bot-latency-live-approval.v1",
+            "issue": 925, "target": SERVICE, "repo_sha": main,
+            "source_sha256": source_sha,
+            "allow": ["install_two_public_files", "daemon_reload_once", "restart_once"],
+            "no_rollback": True,
+        }
+        if payload != expected:
+            deny("owner_authorization_mismatch")
+        created = dt.datetime.fromisoformat(outer["created_at"].replace("Z", "+00:00"))
+        now = dt.datetime.now(dt.timezone.utc)
+        if not dt.timedelta(seconds=0) <= now - created <= dt.timedelta(minutes=15):
+            deny("owner_authorization_expired")
+    except Blocked:
+        raise
+    except (OSError, ValueError, TypeError, KeyError, urllib.error.URLError):
+        deny("owner_authorization_unavailable")
+
+
+def write_exclusive(path: Path, content: bytes, *, mode=0o644):
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(path, flags, 0o600)
+        with os.fdopen(fd, "wb") as writer:
+            writer.write(content)
+            writer.flush()
+            os.fsync(writer.fileno())
+            os.fchmod(writer.fileno(), mode)
+    except OSError:
+        deny("write_failed_no_automatic_cleanup")
+    if digest(require_file(path, owner=0, mode=mode)) != digest(content):
+        deny("written_public_file_mismatch")
+
+
+def apply_one_shot(args):
+    files = check_baseline(args)
+    verify_owner_live_comment(args.owner_comment_id, args.expected_main, digest(files[SOURCE]))
+    # Revalidate immediately before the first mutation; no automatic retry,
+    # reset, cleanup or rollback after this point.
+    check_baseline(args)
+    try:
+        os.mkdir(RECOVERY, 0o700)
+        require_directory(RECOVERY)
+        if stat.S_IMODE(RECOVERY.stat().st_mode) != 0o700:
+            deny("recovery_mode_invalid")
+        record = {
+            "schema": "rpi5.balkons_bot_recovery_marker.v1",
+            "repo_sha": args.expected_main, "original_source_preserved": True,
+            "original_service_unit_preserved": True, "k10_preserved": True,
+            "legacy_source_sha256": "54e7c58bae49a4a78fc033bd86eaa752cf21583bb86a0ba10d7ba9a617b1afd9",
+            "installed_source_sha256": digest(files[SOURCE]),
+            "installed_overlay_sha256": digest(files[OVERLAY]),
+            "automatic_rollback_authorized": False,
+        }
+        write_exclusive(RECOVERY / "recovery-plan.json",
+                        (json.dumps(record, sort_keys=True) + "\n").encode(),
+                        mode=0o600)
+        for source_path, target_path in TARGETS:
+            write_exclusive(target_path, files[source_path])
+        safe_run(("/usr/bin/systemctl", "daemon-reload"))
+        # One restart only; failed restart is STOP with no automatic repeat.
+        safe_run(("/usr/bin/systemctl", "restart", SERVICE), timeout=90)
+        # Exact read-only postcondition via the existing trusted non-root
+        # verifier is required under a separately approved LIVE execution.
+        verify = (
+            "/usr/sbin/runuser", "-u", "andris", "--", "/usr/bin/python3", "-I",
+            str(REPO / VERIFIER), "--verify",
+            "--expected-repo-sha", args.expected_main,
+            "--expected-checkout-fingerprint", digest(str(REPO).encode()),
+            "--expected-verifier-sha256", digest(files[VERIFIER]),
+            "--expected-source-sha256", digest(files[SOURCE]),
+            "--expected-dropin-sha256", digest(files[OVERLAY]),
+            "--expected-preflight-sha256", digest(files[PREFLIGHT]),
+            "--expected-k10-dropin-sha256", args.expected_k10_sha256,
+            "--expected-baseline-live-path-sha256", args.expected_baseline_live_path_sha256,
+            "--expected-fragment-path-sha256", args.expected_fragment_path_sha256,
+            "--expected-user-sha256", args.expected_service_user_sha256,
+        )
+        checked = json.loads(safe_run(verify))
+        if checked.get("result") != "PASS" or checked.get("mode") != "verify":
+            deny("postcondition_failed")
+    except Blocked:
+        raise
+    except (OSError, ValueError):
+        deny("mutation_error_no_retry_rollback_cleanup")
+    return "PASS"
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Fixed-target source-only reviewed initial-install")
+    modes = parser.add_mutually_exclusive_group(required=True)
+    modes.add_argument("--check", action="store_true")
+    modes.add_argument("--apply", action="store_true")
+    parser.add_argument("--expected-main", required=True)
+    parser.add_argument("--expected-baseline-live-path-sha256", required=True)
+    parser.add_argument("--expected-fragment-path-sha256", required=True)
+    parser.add_argument("--expected-service-user-sha256", required=True)
+    parser.add_argument("--expected-k10-sha256", required=True)
+    parser.add_argument("--owner-comment-id", type=int)
+    args = parser.parse_args()
+    mode = "apply" if args.apply else "check"
+    try:
+        if args.apply:
+            if args.owner_comment_id is None:
+                deny("owner_authorization_missing")
+            result = apply_one_shot(args)
+        else:
+            if args.owner_comment_id is not None:
+                deny("check_must_not_consume_authorization")
+            check_baseline(args)
+            result = "READY"
+        report = {"schema": "rpi5.balkons_bot_latency_operator.v1", "mode": mode,
+                  "result": result, "mutation_started": args.apply,
+                  "credentials_read": False, "automatic_rollback": False}
+        print(json.dumps(report, sort_keys=True))
+        return 0
+    except Blocked as err:
+        print(json.dumps({"schema": "rpi5.balkons_bot_latency_operator.v1",
+                          "mode": mode, "result": "BLOCKED", "reason": str(err),
+                          "credentials_read": False, "automatic_rollback": False},
+                         sort_keys=True))
+        return 2
+    except Exception:
+        print(json.dumps({"schema": "rpi5.balkons_bot_latency_operator.v1",
+                          "mode": mode, "result": "BLOCKED", "reason": "unexpected_error",
+                          "credentials_read": False, "automatic_rollback": False},
+                         sort_keys=True))
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
