@@ -74,7 +74,7 @@ def command(argv: list[str], timeout: int = 20) -> str:
 
 
 def git(*argv: str) -> str:
-    return command(["/usr/bin/git", "-c", f"safe.directory={ROOT}", "-C",
+    return command(["/usr/bin/git", "--no-optional-locks", "-c", f"safe.directory={ROOT}", "-C",
                     str(ROOT), *argv])
 
 
