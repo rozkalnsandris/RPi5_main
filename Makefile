@@ -20,6 +20,7 @@ test:
 	python3 ./tests/test-control-phase5-signer-handoff.py
 	python3 ./tests/test-control-phase5-observation-delivery.py
 	python3 ./tests/test-simple-deploy-v1.py
+	python3 ./tests/test-simple-deploy-pointer-failure-926.py
 	python3 ./tests/test-coloring-pages-drive-ingest-operator-v1.py
 	python3 ./tests/test-simple-deploy-coloring-pages-alignment-v1.py
 	python3 ./tests/test-simple-deploy-rozkalns-cv-compat-v1.py

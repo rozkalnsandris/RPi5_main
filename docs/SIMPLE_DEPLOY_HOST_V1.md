@@ -189,3 +189,40 @@ Compatibility marker retained: **Phase B is stopped pre-mutation** described an 
 The later **Phase-B post-install execution/state correction** reconciled only the reviewed helper/source identity/runtime-owned state paths under its separate exact LIVE authorization. It did not create standing permission for future repairs.
 
 These historical sections preserve why the split gates existed; they do not reopen consumed authority or replace fresh current-state checks.
+
+## Sanitized Buildx production pointer diagnostics (#926)
+
+The current generic reconciler looks up a reviewed target image via its fixed
+`docker buildx imagetools inspect <image>:production` command, with the
+existing isolated anonymous Docker profile. A failed pointer command retains
+`error_code=POINTER_RESOLUTION_FAILED mutation_started=false`; it now also
+emits exactly one `failure_class=<ENUM>` field. The class is advisory
+diagnostic evidence, **not** retry, remediation, permission, or release
+authorization. The same behavior applies to every reviewed target, including
+`rozkalns-cv-rpi5`.
+
+| Public-safe class | Meaning |
+| --- | --- |
+| `BUILDX_PLUGIN_UNAVAILABLE` | Buildx command or plugin is not recognized |
+| `TLS_FAILURE` | Reported TLS or certificate negotiation failure |
+| `DNS_FAILURE` | Reported DNS resolution failure |
+| `REGISTRY_AUTH_FAILURE` | Reported registry authorization denial |
+| `MANIFEST_UNAVAILABLE` | Reported registry manifest/name absence |
+| `NETWORK_FAILURE` | Reported connectivity error or network timeout |
+| `COMMAND_TIMEOUT` | Bounded subprocess invocation timed out |
+| `COMMAND_UNAVAILABLE` | OS could not execute the subprocess |
+| `OUTPUT_DECODE_FAILURE` | Subprocess output could not be decoded |
+| `UNCLASSIFIED` | Unknown or ambiguous failed command or transport |
+
+Only the predefined enum is printed: no raw stderr, stdout, URLs, tokens,
+headers, paths or exception details are surfaced. Matching is conservative,
+bounded to the first 8192 characters of failed-command stderr, and has
+deterministic specificity ordering. A reported class may be a *symptom*, not
+the root cause. If no signal matches, the result must remain `UNCLASSIFIED`.
+Malformed success output is still a separate `POINTER_INVALID` contract
+failure, and other deploy failure codes are unchanged.
+
+This source change does not execute Docker/Buildx, restart timers, modify
+installed runtime code or resolve the CV production pointer failure. Host
+installation, execution and any actual deploy require fresh exact-source
+evidence and separate owner LIVE authorization.
