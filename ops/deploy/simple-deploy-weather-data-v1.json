@@ -22,18 +22,9 @@
     "end_date": "2026-09-10",
     "truth_station_id": "10416",
     "truth_chunk_days": 14,
-    "models": [
-      "icon_d2",
-      "ecmwf_ifs",
-      "ecmwf_aifs"
-    ],
-    "run_hours_utc": [
-      0,
-      6,
-      12,
-      18
-    ],
-    "rate_limit_seconds": 1,
+    "models": ["icon_d2", "ecmwf_ifs", "ecmwf_aifs"],
+    "run_hours_utc": [0, 6, 12, 18],
+    "rate_limit_seconds": 1.0,
     "recovery_decisions": [
       "verified_backup_available",
       "owner_accepts_proceeding_without_prewrite_backup"
@@ -50,11 +41,11 @@
     "blocking_state": "BLOCKED",
     "database_command": "python -m rozkalns_weather corpus-check",
     "database_required_ok": true,
+    "database_required_error_count": 0,
+    "database_required_errors": [],
     "required_before_recurring_enable": true,
     "bootstrap_coverage_command": "rozkalns-weather corpus-report",
-    "recurring_coverage_command": "not_supported_in_current_weather_cli",
-    "database_required_error_count": 0,
-    "database_required_errors": []
+    "recurring_coverage_command": "not_supported_in_current_weather_cli"
   },
   "actions": [
     "--preflight",
