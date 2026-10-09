@@ -105,6 +105,10 @@ def require_directory(path: Path, *, owner: int = 0):
 def check_source(main: str) -> dict[str, bytes]:
     if not SHA.fullmatch(main):
         deny("main_sha_invalid")
+    # Do not execute privileged source from the writable checkout. Both the
+    # pathname and the installed bytes must match the reviewed entrypoint.
+    if Path(__file__).absolute() != OPERATOR or Path(__file__).is_symlink():
+        deny("operator_not_running_at_installed_path")
     owner = pwd.getpwnam("andris").pw_uid
     require_directory(REPO, owner=owner)
     if REPO.is_symlink():
