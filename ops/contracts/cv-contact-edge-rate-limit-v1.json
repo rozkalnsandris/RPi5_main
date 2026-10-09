@@ -24,7 +24,9 @@
       "period": 60,
       "requests_per_period": 6,
       "mitigation_timeout": 60
-    }
+    },
+    "free_plan_eligible": false,
+    "disposition": "historical-disabled-not-compatible-with-free-plan-or-occupied-rule-slot"
   },
   "origin_backstop": {
     "repository": "rozkalnsandris/rozkalns-cv",
@@ -61,6 +63,90 @@
     "https://developers.cloudflare.com/waf/rate-limiting-rules/",
     "https://developers.cloudflare.com/waf/rate-limiting-rules/parameters/",
     "https://developers.cloudflare.com/waf/rate-limiting-rules/request-rate/",
-    "https://nginx.org/en/docs/http/ngx_http_realip_module.html"
-  ]
+    "https://nginx.org/en/docs/http/ngx_http_realip_module.html",
+    "https://developers.cloudflare.com/waf/custom-rules/",
+    "https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/",
+    "https://developers.cloudflare.com/workers/platform/limits/",
+    "https://developers.cloudflare.com/workers/configuration/routing/routes/",
+    "https://developers.cloudflare.com/fundamentals/reference/http-headers/"
+  ],
+  "free_plan_decision": {
+    "decision_issue": 948,
+    "state": "source-only-selected-not-deployed",
+    "selected_baseline": {
+      "protection": [
+        "turnstile-siteverify-fail-closed",
+        "nginx-exact-path-global-rate-backstop"
+      ],
+      "source_contract_only": true,
+      "production_deployment_verified": false,
+      "numerical_per_visitor_ip_quota": false,
+      "endpoint": "/api/contact-reveal",
+      "nginx_global_rate": "60r/m",
+      "nginx_global_burst": 15
+    },
+    "existing_waf_rate_limit": {
+      "disposition": "preserve-unchanged",
+      "no_change_authorized": true,
+      "additional_rule_slot_assumed_available": false,
+      "account_rule_state_publicly_asserted": false
+    },
+    "legacy_rule": {
+      "free_eligible": false,
+      "activate": false,
+      "incompatible_reasons": [
+        "free-plan-only-one-rate-limiting-rule-preserve-existing-slot",
+        "free-plan-expression-does-not-support-http.host",
+        "free-plan-period-10-seconds-not-60"
+      ],
+      "no_path_only_downgrade": true
+    },
+    "alternatives": {
+      "custom_waf_managed_challenge": {
+        "state": "deferred-not-active",
+        "enabled": false,
+        "numeric_per_ip_quota": false,
+        "free_plan_feature_available_in_general": true,
+        "api_fetch_json_and_turnstile_compatibility_proven": false,
+        "modifies_existing_waf_rule": false
+      },
+      "worker_rate_limiting": {
+        "state": "candidate-not-active",
+        "enabled": false,
+        "endpoint_host": "rozkalns.net",
+        "endpoint_path": "/api/contact-reveal",
+        "binding_type": "ratelimit-simple",
+        "requests_per_period": 6,
+        "period_seconds": 60,
+        "key_authority": "verified-cloudflare-inbound-edge-client-ip-only",
+        "forwarded_client_ip_headers_trusted_at_origin": false,
+        "on_missing_verified_ip": "reject-not-bypass",
+        "counters_global_and_exact": false,
+        "counters_per_cloudflare_location": true,
+        "shared_ip_false_positives_possible": true,
+        "runtime_and_binding_proven_for_account": false,
+        "route_and_same_zone_origin_fetch_proven": false,
+        "request_response_turnstile_integrity_proven": false,
+        "daily_free_account_request_budget": 100000,
+        "on_workers_daily_limit": "fail-closed-1027-not-fail-open",
+        "logs_private_ip_contact_or_tokens": false,
+        "synthetic_429_verified": false,
+        "installed": false
+      }
+    },
+    "gates": {
+      "source_ready_only": true,
+      "free_account_worker_binding_verified": false,
+      "existing_worker_routes_and_precedence_verified": false,
+      "tunnel_to_loopback_and_no_bypass_verified": false,
+      "trusted_edge_ip_and_header_spoofing_verified": false,
+      "worker_origin_fetch_topology_verified": false,
+      "method_body_token_response_and_turnstile_verified": false,
+      "worker_daily_budget_and_fail_closed_verified": false,
+      "worker_429_and_distinct_client_behavior_verified": false,
+      "nginx_and_siteverify_live_verified": false,
+      "explicit_separate_owner_live_authorization_required": true,
+      "production_eligible": false
+    }
+  }
 }
