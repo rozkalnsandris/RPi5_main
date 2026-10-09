@@ -157,3 +157,22 @@ The host checkout still requires a separately authorized exact-source
 fast-forward before the operator can pass its source gate. Merge of
 this change does not deploy or execute the operator, restart services,
 close Phase 7 DRIFT, or grant any LIVE/systemd/data permission.
+
+## Git index ownership safety for root-run preflight (#936)
+
+The reviewed Weather rebind operator's fixed `git()` source-gate helper
+uses Git's global `--no-optional-locks` flag before `-c safe.directory`
+and `-C`, including its `git status --porcelain=v1 --untracked-files=all`
+clean-checkout check. Git documents that `status` may otherwise refresh and
+rewrite the shared `.git/index` as an optimization even during inspection.
+Disabling optional locks avoids that incidental root-owned index rewrite;
+it does **not** skip the dirty-tree, exact-main, origin or root identity gates,
+and is not a blanket filesystem read-only guarantee.
+
+The October 9 preflight uncovered a root-owned Git index after an operator
+check; the single-file owner was separately restored to `andris` with explicit
+LIVE authority. This GitHub source change **does not** fix or rerun host
+operators, recreate containers, restart systemd timers or authorize LIVE.
+The last observed Weather timers remained enabled/inactive pending a new
+owner-gated continuation. Source merge still needs a separately authorized
+exact-source host update before it can affect installed operations.
