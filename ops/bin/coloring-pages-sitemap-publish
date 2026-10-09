@@ -1,0 +1,310 @@
+#!/usr/bin/env python3
+"""Fixed-path, one-shot Coloring Pages sitemap publisher. No automatic activation."""
+
+from __future__ import annotations
+
+import argparse
+import contextlib
+from dataclasses import dataclass
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import pwd
+import grp
+import re
+import stat
+import subprocess
+import sys
+from urllib.request import urlopen
+import xml.etree.ElementTree as ET
+
+OWNER = "andris"
+CONTENT_ROOT = Path("/srv/coloring-pages-content")
+TRUSTED_GENERATOR = Path("/usr/local/share/coloring-pages/coloring-pages-sitemap")
+INSTALLED_ENTRYPOINT = Path("/usr/local/bin/coloring-pages-sitemap-publish")
+GENERATOR_GIT_BLOB = "5644c8fd366c0c57f6339fddd163c5091ea134c5"
+ORIGIN = "https://coloring.rozkalns.net"
+LOCAL_SITEMAP = "http://127.0.0.1:9191/sitemap.xml"
+SHA256 = re.compile(r"^[0-9a-f]{64}$")
+ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+MAX_CATALOGUE = 50_000_000
+MAX_SITEMAP = 50_000_000
+NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
+
+
+class Block(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class Paths:
+    public: Path
+    lock: Path
+    generator: Path
+
+    @property
+    def catalog(self) -> Path:
+        return self.public / "catalog.json"
+
+    @property
+    def sitemap(self) -> Path:
+        return self.public / "sitemap.xml"
+
+    @property
+    def stage(self) -> Path:
+        return self.public / ".sitemap.xml.publish.partial"
+
+
+def require_identity(path: Path, uid: int, gid: int, mode: int, *, directory=False):
+    try:
+        info = path.lstat()
+    except OSError as exc:
+        raise Block("required path missing") from exc
+    required = stat.S_ISDIR if directory else stat.S_ISREG
+    if (not required(info.st_mode) or path.is_symlink()
+        or info.st_uid != uid or info.st_gid != gid
+        or stat.S_IMODE(info.st_mode) != mode):
+        raise Block("path metadata or type invalid")
+    return info
+
+
+def secure_bytes(path: Path, uid: int, gid: int, mode: int, limit: int):
+    identity = require_identity(path, uid, gid, mode)
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        actual = os.fstat(fd)
+        if (actual.st_dev, actual.st_ino) != (identity.st_dev, identity.st_ino):
+            raise Block("file identity changed")
+        if actual.st_size > limit:
+            raise Block("file exceeds maximum bytes")
+        with os.fdopen(fd, "rb", closefd=False) as handle:
+            data = handle.read(limit + 1)
+        if len(data) > limit:
+            raise Block("file exceeds maximum bytes")
+        return actual, data
+    finally:
+        os.close(fd)
+
+
+def sha(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def generator_blob(raw: bytes) -> str:
+    return hashlib.sha1(b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw).hexdigest()
+
+
+@contextlib.contextmanager
+def locked(path: Path, uid: int, gid: int):
+    info = require_identity(path, uid, gid, 0o600)
+    fd = os.open(path, os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        handle = os.fstat(fd)
+        if (handle.st_dev, handle.st_ino) != (info.st_dev, info.st_ino):
+            raise Block("lock inode changed")
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise Block("Drive ingest lock is busy") from exc
+        again = require_identity(path, uid, gid, 0o600)
+        if (again.st_dev, again.st_ino) != (info.st_dev, info.st_ino):
+            raise Block("lock path changed")
+        yield
+    finally:
+        os.close(fd)
+
+
+def catalogue_snapshot(paths: Paths, uid: int, gid: int):
+    info, data = secure_bytes(paths.catalog, uid, gid, 0o644, MAX_CATALOGUE)
+    try:
+        records = json.loads(data.decode("utf-8"))
+    except (UnicodeError, ValueError) as exc:
+        raise Block("catalogue JSON invalid") from exc
+    if not isinstance(records, list) or not records:
+        raise Block("catalogue is missing activities")
+    ids = []
+    for item in records:
+        if not isinstance(item, dict) or not isinstance(item.get("id"), str) or not ID.fullmatch(item["id"]):
+            raise Block("catalogue contains invalid ID")
+        ids.append(item["id"])
+    if len(set(ids)) != len(ids):
+        raise Block("catalogue contains duplicate ID")
+    return info, data, ids
+
+
+def prior_target(paths: Paths, uid: int, gid: int):
+    if not os.path.lexists(paths.sitemap):
+        return "absent"
+    _, content = secure_bytes(paths.sitemap, uid, gid, 0o644, MAX_SITEMAP)
+    return sha(content)
+
+
+def validate_xml(data: bytes, ids: list[str]):
+    if not data or len(data) > MAX_SITEMAP:
+        raise Block("candidate XML size invalid")
+    try:
+        root = ET.fromstring(data)
+    except ET.ParseError as exc:
+        raise Block("candidate XML invalid") from exc
+    if root.tag != NS + "urlset":
+        raise Block("candidate XML root invalid")
+    locs = []
+    for url in root:
+        if url.tag != NS + "url" or len(url) != 1 or url[0].tag != NS + "loc":
+            raise Block("candidate XML shape invalid")
+        locs.append(url[0].text)
+    expected = [ORIGIN + "/", ORIGIN + "/kita"]
+    expected.extend(ORIGIN + "/detail.html?id=" + name for name in sorted(ids))
+    if locs != expected or len(set(locs)) != len(locs):
+        raise Block("candidate XML URL set invalid")
+    return len(locs)
+
+
+def invoke_generator(generator: Path, catalog: Path, expected: str, candidate=None):
+    argv = [sys.executable, "-I", str(generator), "--catalog", str(catalog),
+            "--expected-catalog-sha256", expected]
+    if candidate is not None:
+        argv += ["--verify-sitemap", str(candidate)]
+    try:
+        done = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE, timeout=30, check=False)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise Block("trusted generator invocation failed") from exc
+    if done.returncode != 0 or done.stderr or len(done.stdout) > MAX_SITEMAP:
+        raise Block("trusted generator rejected catalogue/candidate")
+    return done.stdout
+
+
+def verify_endpoint(expected: bytes):
+    from urllib.request import Request
+    try:
+        with urlopen(Request(LOCAL_SITEMAP, headers={"Cache-Control": "no-cache"}), timeout=6) as resp:
+            if resp.status != 200 or resp.read(len(expected) + 1) != expected:
+                raise Block("local sitemap HTTP content mismatch")
+    except (OSError, ValueError) as exc:
+        raise Block("local sitemap HTTP unavailable") from exc
+
+
+def process(paths: Paths, *, apply: bool, expected_catalog: str | None = None,
+            expected_prior: str | None = None, uid: int, gid: int,
+            generator_uid: int, generator_gid: int, generator_mode: int = 0o444,
+            verify_http=verify_endpoint):
+    if expected_catalog is not None and not SHA256.fullmatch(expected_catalog):
+        raise Block("expected catalogue SHA-256 invalid")
+    if expected_prior is not None and expected_prior != "absent" and not SHA256.fullmatch(expected_prior):
+        raise Block("expected prior sitemap SHA-256 invalid")
+    if apply and (expected_catalog is None or expected_prior is None):
+        raise Block("apply requires both exact expected hashes")
+    require_identity(paths.public, uid, gid, 0o755, directory=True)
+    require_identity(paths.lock.parent, uid, gid, 0o755, directory=True)
+    _, genbytes = secure_bytes(paths.generator, generator_uid, generator_gid,
+                               generator_mode, 100_000)
+    if generator_blob(genbytes) != GENERATOR_GIT_BLOB:
+        raise Block("generator pinned Git blob mismatch")
+    with locked(paths.lock, uid, gid):
+        old_info, catalog_data, ids = catalogue_snapshot(paths, uid, gid)
+        catalog_hash = sha(catalog_data)
+        if expected_catalog is not None and catalog_hash != expected_catalog:
+            raise Block("catalogue snapshot drift")
+        current = prior_target(paths, uid, gid)
+        if expected_prior is not None and current != expected_prior:
+            raise Block("prior sitemap state drift")
+        xml = invoke_generator(paths.generator, paths.catalog, catalog_hash)
+        count = validate_xml(xml, ids)
+        desired = sha(xml)
+        if not apply:
+            return {"result": "CHECK_PASS", "catalog_sha256": catalog_hash,
+                    "sitemap_sha256": desired, "previous_sha256": current,
+                    "urls": count, "mutation_started": False}
+        if current == desired:
+            return {"result": "NO_OP_CURRENT", "catalog_sha256": catalog_hash,
+                    "sitemap_sha256": desired, "urls": count,
+                    "mutation_started": False}
+        if os.path.lexists(paths.stage):
+            raise Block("staged sitemap already exists; manual review required")
+        if paths.public.stat().st_dev != paths.lock.parent.stat().st_dev:
+            raise Block("public and ingest state are on different filesystems")
+        # First authorized LIVE mutation. Never automatically retry, clean or roll back.
+        fd = os.open(paths.stage, os.O_WRONLY | os.O_CREAT | os.O_EXCL
+                     | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+        try:
+            stage_info = os.fstat(fd)
+            if stage_info.st_dev != paths.public.stat().st_dev:
+                raise Block("staged sitemap on a different filesystem")
+            written = 0
+            while written < len(xml):
+                size = os.write(fd, xml[written:])
+                if size <= 0:
+                    raise Block("staging write failed")
+                written += size
+            os.fchmod(fd, 0o644)
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        _, staged = secure_bytes(paths.stage, uid, gid, 0o644, MAX_SITEMAP)
+        if staged != xml or sha(staged) != desired:
+            raise Block("staged sitemap byte identity drift")
+        verified = invoke_generator(paths.generator, paths.catalog, catalog_hash, paths.stage)
+        if verified:
+            raise Block("generator candidate verifier unexpectedly emitted XML")
+        newer, current_catalog, _ = catalogue_snapshot(paths, uid, gid)
+        if ((newer.st_dev, newer.st_ino, newer.st_mtime_ns, newer.st_size)
+                != (old_info.st_dev, old_info.st_ino, old_info.st_mtime_ns, old_info.st_size)
+                or sha(current_catalog) != catalog_hash):
+            raise Block("catalogue changed before replacement")
+        if prior_target(paths, uid, gid) != current:
+            raise Block("existing sitemap changed before replacement")
+        os.replace(paths.stage, paths.sitemap)
+        directory = os.open(paths.public, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+        _, result = secure_bytes(paths.sitemap, uid, gid, 0o644, MAX_SITEMAP)
+        if result != xml:
+            raise Block("published sitemap bytes changed")
+        verify_http(xml)
+        return {"result": "PUBLISH_PASS", "catalog_sha256": catalog_hash,
+                "sitemap_sha256": desired, "urls": count, "mutation_started": True}
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--check", action="store_true")
+    group.add_argument("--apply", action="store_true")
+    parser.add_argument("--expected-catalog-sha256")
+    parser.add_argument("--expected-current-sitemap-sha256")
+    args = parser.parse_args(argv)
+    try:
+        if os.geteuid() == 0 or pwd.getpwuid(os.geteuid()).pw_name != OWNER:
+            raise Block("operator must run as andris, never root")
+        if args.apply:
+            installed = INSTALLED_ENTRYPOINT.lstat()
+            if (Path(__file__).absolute() != INSTALLED_ENTRYPOINT
+                or installed.st_uid != 0 or installed.st_gid != 0
+                or stat.S_IMODE(installed.st_mode) != 0o755
+                or not stat.S_ISREG(installed.st_mode)):
+                raise Block("apply requires reviewed root-owned installed entrypoint")
+        owner = pwd.getpwnam(OWNER)
+        group_id = grp.getgrnam(OWNER).gr_gid
+        paths = Paths(CONTENT_ROOT / "public",
+                      CONTENT_ROOT / "state/drive-ingest/.lock", TRUSTED_GENERATOR)
+        result = process(paths, apply=args.apply,
+                         expected_catalog=args.expected_catalog_sha256,
+                         expected_prior=args.expected_current_sitemap_sha256,
+                         uid=owner.pw_uid, gid=group_id,
+                         generator_uid=0, generator_gid=0)
+        print("COLORING_SITEMAP " + json.dumps(result, sort_keys=True))
+        return 0
+    except (Block, OSError, ValueError, KeyError) as exc:
+        # No automatic recovery even when the failure is after stage creation.
+        print("COLORING_SITEMAP result=STOP error_class=" + type(exc).__name__,
+              file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

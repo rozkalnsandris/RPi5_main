@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+"""Read-only XML sitemap builder for an already published coloring-page catalogue.
+
+This helper is deliberately not wired into the LIVE importer or nginx. It writes
+XML to stdout only; publication requires a separately reviewed runtime contract.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+import sys
+from pathlib import Path
+from urllib.parse import quote
+from xml.sax.saxutils import escape
+
+ORIGIN = "https://coloring.rozkalns.net"
+STATIC_URLS = (f"{ORIGIN}/", f"{ORIGIN}/kita")
+MAX_URLS = 50_000
+MAX_BYTES = 50_000_000
+ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+
+
+def nonempty(value: object) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def is_renderable(entry: dict[str, object]) -> bool:
+    """Match the fields required by the current detail-page catalogue contract."""
+    if not nonempty(entry.get("title")) or not nonempty(entry.get("thumb")):
+        return False
+    if "pages" in entry:
+        pages = entry["pages"]
+        return (
+            isinstance(pages, list)
+            and bool(pages)
+            and all(
+                isinstance(page, dict)
+                and nonempty(page.get("preview"))
+                and nonempty(page.get("print"))
+                for page in pages
+            )
+        )
+    return nonempty(entry.get("preview")) and nonempty(entry.get("print"))
+
+
+def generate_sitemap(catalog: object) -> str:
+    """Emit only catalogue-backed canonical activity URLs; reject bad input."""
+    if not isinstance(catalog, list):
+        raise ValueError("catalogue must be an array")
+    if len(catalog) > MAX_URLS - len(STATIC_URLS):
+        raise ValueError("catalogue exceeds single-sitemap URL limit")
+
+    ids: set[str] = set()
+    for entry in catalog:
+        if not isinstance(entry, dict):
+            raise ValueError("catalogue contains a non-object entry")
+        activity_id = entry.get("id")
+        if not isinstance(activity_id, str) or not ID_PATTERN.fullmatch(activity_id):
+            raise ValueError("catalogue contains an invalid activity ID")
+        if activity_id in ids:
+            raise ValueError(f"catalogue contains duplicate ID: {activity_id}")
+        if not is_renderable(entry):
+            raise ValueError(f"catalogue entry is not renderable: {activity_id}")
+        ids.add(activity_id)
+
+    urls = [
+        *STATIC_URLS,
+        *(
+            f"{ORIGIN}/detail.html?id={quote(activity_id, safe='')}"
+            for activity_id in sorted(ids)
+        ),
+    ]
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+        *(f"  <url><loc>{escape(url)}</loc></url>" for url in urls),
+        "</urlset>",
+        "",
+    ]
+    result = "\n".join(lines)
+    if len(result.encode("utf-8")) > MAX_BYTES:
+        raise ValueError("sitemap exceeds uncompressed size limit")
+    return result
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--catalog", type=Path, required=True)
+    parser.add_argument(
+        "--expected-catalog-sha256",
+        help="Require the exact SHA-256 of the published catalogue's raw bytes",
+    )
+    parser.add_argument(
+        "--verify-sitemap",
+        type=Path,
+        help="Verify a candidate XML file byte-for-byte without writing or emitting XML",
+    )
+    args = parser.parse_args()
+    try:
+        if args.verify_sitemap is not None and args.expected_catalog_sha256 is None:
+            raise ValueError("sitemap verification requires --expected-catalog-sha256")
+        catalog_bytes = args.catalog.read_bytes()
+        expected = args.expected_catalog_sha256
+        if expected is not None:
+            if not SHA256_PATTERN.fullmatch(expected):
+                raise ValueError("expected catalogue SHA-256 must be 64 lowercase hex characters")
+            if hashlib.sha256(catalog_bytes).hexdigest() != expected:
+                raise ValueError("catalogue SHA-256 does not match the expected snapshot")
+        catalog = json.loads(catalog_bytes.decode("utf-8"))
+        sitemap = generate_sitemap(catalog)
+        if args.verify_sitemap is not None:
+            expected_xml = sitemap.encode("utf-8")
+            # Read at most one excess byte: oversized or modified candidates fail.
+            with args.verify_sitemap.open("rb") as candidate:
+                actual_xml = candidate.read(len(expected_xml) + 1)
+            if actual_xml != expected_xml:
+                raise ValueError("candidate sitemap differs from exact catalogue XML")
+            return 0
+    except (OSError, UnicodeError, ValueError) as exc:
+        print(f"SITEMAP_ERROR: {exc}", file=sys.stderr)
+        return 1
+    sys.stdout.write(sitemap)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
