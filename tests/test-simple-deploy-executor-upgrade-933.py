@@ -180,8 +180,8 @@ class UpgradeTests(unittest.TestCase):
             if counter[0] == 2:
                 self.target.chmod(0o644)
                 self.target.write_bytes(OLD + b"changed")
-                self.target.chmod(0o444)
                 self.target.write_bytes(OLD)
+                self.target.chmod(0o444)
             return orig()
         with patch.object(op, "public_sources", side_effect=drift):
             with self.assertRaisesRegex(op.Block, "concurrent_source_or_target_change"):
@@ -245,7 +245,7 @@ class UpgradeTests(unittest.TestCase):
             "LoadState=loaded\nUnitFileState=disabled\nActiveState=inactive\n"
             "SubState=dead\nJob=0\nNeedDaemonReload=no\n")):
             self.assertEqual(op.unit_properties(op.TIMER, tuple(TIMER_OK)), TIMER_OK)
-        with patch.object(op, "fixed_command", return_value="ActiveState=active\n"):
+        with patch.object(op, "fixed_command", return_value="ActiveState=active\nActiveState=inactive\n"):
             with self.assertRaisesRegex(op.Block, "systemd_status_invalid"):
                 op.unit_properties(op.TIMER, tuple(TIMER_OK))
 
