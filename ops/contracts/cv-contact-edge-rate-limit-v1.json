@@ -1,0 +1,66 @@
+{
+  "schema": "rozkalns.rpi5-main.cv-contact-edge-rate-limit.v1",
+  "schema_version": 1,
+  "status": "source-proposal-not-activated",
+  "consumer_repository": "rozkalnsandris/rozkalns-cv",
+  "consumer_issue": 522,
+  "implementation_issue": 946,
+  "public_hostname": "rozkalns.net",
+  "source_authority": {
+    "edge_ip_characteristic": "ip.src",
+    "untrusted_client_header_authority": false,
+    "docker_bridge_gateway_authenticates_http_headers": false
+  },
+  "proposed_cloudflare_rule": {
+    "phase": "http_ratelimit",
+    "enabled": false,
+    "expression": "(http.host eq \"rozkalns.net\" and http.request.uri.path eq \"/api/contact-reveal\")",
+    "action": "block",
+    "ratelimit": {
+      "characteristics": [
+        "cf.colo.id",
+        "ip.src"
+      ],
+      "period": 60,
+      "requests_per_period": 6,
+      "mitigation_timeout": 60
+    }
+  },
+  "origin_backstop": {
+    "repository": "rozkalnsandris/rozkalns-cv",
+    "file": "deploy/simple-deploy/nginx.conf",
+    "exact_location": "/api/contact-reveal",
+    "global_rate": "60r/m",
+    "global_burst": 15,
+    "quota_identity": "$server_name",
+    "forwards_untrusted_cloudflare_client_ip": false,
+    "allows_loopback_gunicorn_only": true
+  },
+  "gate": {
+    "separate_explicit_owner_live_authorization": true,
+    "zone_capability_proven": false,
+    "exact_rule_active": false,
+    "origin_route_and_loopback_proven": false,
+    "ip_spoof_resistance_proven": false,
+    "conflict_free_ruleset_proven": false,
+    "production_ready": false,
+    "exact_consumer_sha_resolved": false
+  },
+  "boundary": {
+    "mutations_this_source_delivery": [],
+    "forbidden": [
+      "Cloudflare API writes",
+      "host/container/systemd writes",
+      "secrets/credentials/permissions",
+      "application-data writes",
+      "merge",
+      "production deploy"
+    ]
+  },
+  "official_sources": [
+    "https://developers.cloudflare.com/waf/rate-limiting-rules/",
+    "https://developers.cloudflare.com/waf/rate-limiting-rules/parameters/",
+    "https://developers.cloudflare.com/waf/rate-limiting-rules/request-rate/",
+    "https://nginx.org/en/docs/http/ngx_http_realip_module.html"
+  ]
+}
