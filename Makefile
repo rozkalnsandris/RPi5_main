@@ -21,6 +21,7 @@ test:
 	python3 ./tests/test-control-phase5-observation-delivery.py
 	python3 ./tests/test-simple-deploy-v1.py
 	python3 ./tests/test-simple-deploy-pointer-failure-926.py
+	python3 ./tests/test-simple-deploy-executor-upgrade-933.py
 	python3 ./tests/test-coloring-pages-drive-ingest-operator-v1.py
 	python3 ./tests/test-simple-deploy-coloring-pages-alignment-v1.py
 	python3 ./tests/test-simple-deploy-rozkalns-cv-compat-v1.py
@@ -187,7 +188,7 @@ test:
 	python3 ./tests/test-cv-controller-activation.py
 	python3 ./tests/test-cv-classifier-host-alignment.py
 	python3 ./tests/test-cv-pull-deploy-canary.py
-	python3 -m py_compile scripts/*.py ops/lib/dashboard-evidence.py ops/bin/hermes-tech-restore-drill ops/lib/balkons-bot.py ops/bin/balkons-bot-preflight ops/bin/balkons-bot-deploy-verifier ops/bin/balkons-bot-latency-operator ops/lib/deploy_executor/*.py
+	python3 -m py_compile scripts/*.py ops/lib/dashboard-evidence.py ops/bin/hermes-tech-restore-drill ops/lib/balkons-bot.py ops/bin/balkons-bot-preflight ops/bin/balkons-bot-deploy-verifier ops/bin/balkons-bot-latency-operator ops/bin/simple-deploy-executor-upgrade-933 ops/lib/deploy_executor/*.py
 
 secret-scan:
 	./scripts/check-no-secrets.sh
