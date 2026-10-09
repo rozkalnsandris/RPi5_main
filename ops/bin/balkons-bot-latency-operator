@@ -251,6 +251,26 @@ def verify_owner_live_comment(comment_id: int, args, source_sha: str):
         deny("owner_authorization_unavailable")
 
 
+def service_generation() -> tuple[int, int]:
+    # Metadata only: reject an in-flight competing service lifecycle change.
+    raw = safe_run(("/usr/bin/systemctl", "show", SERVICE, "--no-pager",
+                    "--property=MainPID", "--property=ActiveEnterTimestampMonotonic"))
+    values = {}
+    for line in raw.splitlines():
+        if line.count("=") != 1:
+            deny("service_generation_invalid")
+        key, value = line.split("=", 1)
+        if key not in ("MainPID", "ActiveEnterTimestampMonotonic") or key in values:
+            deny("service_generation_invalid")
+        if not value.isascii() or not value.isdigit():
+            deny("service_generation_invalid")
+        values[key] = int(value)
+    if (set(values) != {"MainPID", "ActiveEnterTimestampMonotonic"}
+        or values["MainPID"] <= 1 or values["ActiveEnterTimestampMonotonic"] <= 0):
+        deny("service_generation_invalid")
+    return values["MainPID"], values["ActiveEnterTimestampMonotonic"]
+
+
 def write_exclusive(path: Path, content: bytes, *, mode=0o644):
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     try:
@@ -267,11 +287,14 @@ def write_exclusive(path: Path, content: bytes, *, mode=0o644):
 
 
 def apply_one_shot(args):
+    initial_generation = service_generation()
     files = check_baseline(args)
     verify_owner_live_comment(args.owner_comment_id, args, digest(files[SOURCE]))
     # Revalidate immediately before the first mutation; no automatic retry,
     # reset, cleanup or rollback after this point.
     check_baseline(args)
+    if service_generation() != initial_generation:
+        deny("service_changed_before_mutation")
     try:
         os.mkdir(RECOVERY, 0o700)
         require_directory(RECOVERY)
