@@ -40,6 +40,10 @@ image is changed in the source phase or by the future operator.
 
 When the operator is separately owner-approved for installation as a
 root-owned reviewed executable, its default invocation is read-only.
+APPLY also rejects execution from the untrusted checkout or any path except
+the fixed root-owned, regular one-link mode 0755 operator at
+`/usr/local/sbin/simple-deploy-executor-upgrade-933`. A separate installer
+must prove that executable's reviewed source identity before LIVE execution.
 \`--check\` is an explicit alias for the same dry run; it never writes a stage,
 touches the installed file, requests GitHub credentials, or mutates systemd.
 
