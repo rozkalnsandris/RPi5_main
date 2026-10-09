@@ -1,0 +1,271 @@
+#!/usr/bin/python3 -I
+"""Source-only #933: single-file, fail-closed SIMPLE-DEPLOY executor upgrade.
+
+Neither this source nor --apply grants LIVE authority. No target, command,
+credential, checkout, Docker/Buildx, timer or receipt mutation is supported.
+"""
+from __future__ import annotations
+
+import argparse
+import fcntl
+import hashlib
+import json
+import os
+import stat
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path("/usr/local/libexec/rozkalns-simple-deployer")
+TARGET = ROOT / "simple_deploy_v1.py"
+SOURCE = Path("/usr/local/share/rozkalns-simple-deployer-issue933.py")
+APPROVAL = Path("/run/rozkalns-simple-deployer-issue933-approval.json")
+STAGE_NAME = ".simple_deploy_v1.py.issue933.stage"
+COMMIT = "c0861f8fb4c8ea1df73fcffc340323d7d846641a"
+GIT_BLOB = "8ef118030c8c83b8b713d93a80d5710fa6f79f3c"
+EXPECTED_SOURCE = "ed906786fd85169c6c555a3ac466b157edaf24a65fe12f60ee2ec6940ade20d0"
+EXPECTED_INSTALLED = "bec054249e6729f6a5a87516758fda77d5382d5b18c37318ec7b953d36422af2"
+TIMER = "rozkalns-simple-deployer.timer"
+SERVICE = "rozkalns-simple-deployer.service"
+ENV = {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C"}
+FLAGS = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+MUTATION_STARTED = False
+
+
+class Block(Exception):
+    pass
+
+
+def fail(reason):
+    raise Block(reason)
+
+
+def sha(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def blob_id(data):
+    payload = b"blob " + str(len(data)).encode("ascii") + b"\x00" + data
+    return hashlib.sha1(payload).hexdigest()
+
+
+def fixed_command(argv):
+    try:
+        done = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                              stdin=subprocess.DEVNULL, check=False, text=True,
+                              timeout=8, env=ENV)
+    except (OSError, subprocess.SubprocessError, UnicodeError):
+        fail("systemd_status_unavailable")
+    if done.returncode != 0 or len(done.stdout) > 4096:
+        fail("systemd_status_unavailable")
+    return done.stdout
+
+
+def unit_properties(unit, keys):
+    raw = fixed_command(("/usr/bin/systemctl", "show", unit, "--no-pager",
+                         *(("--property=" + key) for key in keys)))
+    result = {}
+    for line in raw.splitlines():
+        if line.count("=") != 1:
+            fail("systemd_status_invalid")
+        key, val = line.split("=", 1)
+        if key not in keys or key in result or len(val) > 100:
+            fail("systemd_status_invalid")
+        result[key] = val
+    if set(result) != set(keys):
+        fail("systemd_status_invalid")
+    return result
+
+
+def quiescent():
+    timer = unit_properties(TIMER, ("LoadState", "UnitFileState", "ActiveState",
+                                    "SubState", "Job", "NeedDaemonReload"))
+    service = unit_properties(SERVICE, ("LoadState", "ActiveState", "SubState",
+                                        "MainPID", "Job", "NeedDaemonReload"))
+    if timer != {
+        "LoadState": "loaded", "UnitFileState": "disabled",
+        "ActiveState": "inactive", "SubState": "dead",
+        "Job": "0", "NeedDaemonReload": "no",
+    }:
+        fail("timer_not_disabled_inactive")
+    if service != {
+        "LoadState": "loaded", "ActiveState": "inactive",
+        "SubState": "dead", "MainPID": "0", "Job": "0",
+        "NeedDaemonReload": "no",
+    }:
+        fail("service_not_inactive")
+    return timer, service
+
+
+def safe_directory(path):
+    try:
+        st = path.lstat()
+    except OSError:
+        fail("directory_missing")
+    if not stat.S_ISDIR(st.st_mode) or st.st_uid != 0 or st.st_mode & 0o022:
+        fail("directory_unsafe")
+
+
+def open_public(path, *, mode):
+    try:
+        fd = os.open(path, FLAGS)
+    except OSError:
+        fail("public_file_missing_or_symlink")
+    try:
+        st = os.fstat(fd)
+        actual = os.stat(path, follow_symlinks=False)
+        if (not stat.S_ISREG(st.st_mode) or st.st_nlink != 1 or st.st_uid != 0
+            or stat.S_IMODE(st.st_mode) != mode or st.st_size > 100000
+            or (st.st_dev, st.st_ino) != (actual.st_dev, actual.st_ino)):
+            fail("public_file_metadata_drift")
+        data = b""
+        while True:
+            chunk = os.read(fd, 65536)
+            if not chunk:
+                break
+            data += chunk
+            if len(data) > 100000:
+                fail("public_file_oversize")
+        return (st.st_dev, st.st_ino, st.st_mtime_ns, st.st_size), data
+    except OSError:
+        fail("public_file_read_failed")
+    finally:
+        os.close(fd)
+
+
+def public_sources():
+    safe_directory(ROOT)
+    safe_directory(SOURCE.parent)
+    identity, installed = open_public(TARGET, mode=0o444)
+    _, desired = open_public(SOURCE, mode=0o444)
+    if sha(installed) != EXPECTED_INSTALLED:
+        fail("installed_baseline_sha_mismatch")
+    if sha(desired) != EXPECTED_SOURCE or blob_id(desired) != GIT_BLOB:
+        fail("approved_source_identity_mismatch")
+    if (ROOT / STAGE_NAME).exists() or (ROOT / STAGE_NAME).is_symlink():
+        fail("previous_staging_artifact_present")
+    return identity, desired
+
+
+def approved():
+    # Approval must be materialized separately by the owner-authorized LIVE
+    # workflow. The operator never creates an approval or takes an ID as authority.
+    safe_directory(APPROVAL.parent)
+    _, data = open_public(APPROVAL, mode=0o400)
+    try:
+        doc = json.loads(data)
+    except (UnicodeError, ValueError):
+        fail("owner_approval_invalid")
+    if type(doc) is not dict or doc != {
+        "schema": "rpi5.simple_deploy_executor_upgrade_owner_authorization.v1",
+        "issue": 933, "commit": COMMIT,
+        "git_blob_sha1": GIT_BLOB, "source_sha256": EXPECTED_SOURCE,
+        "baseline_sha256": EXPECTED_INSTALLED,
+        "target": "simple_deploy_v1.py", "operation": "single_atomic_replace",
+        "no_automatic_retry_rollback_cleanup": True,
+    }:
+        fail("owner_approval_mismatch")
+
+
+def check():
+    quiescent()
+    ident, desired = public_sources()
+    quiescent()
+    ident2, desired2 = public_sources()
+    if ident != ident2 or desired != desired2:
+        fail("concurrent_source_or_target_change")
+    return ident, desired
+
+
+def atomic_once(identity, data):
+    global MUTATION_STARTED
+    # The directory is root-owned/non-writable to untrusted users; a single
+    # predictable O_EXCL stage makes a repeated/parallel attempt fail closed.
+    dfd = None
+    sfd = None
+    try:
+        dfd = os.open(ROOT, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        st = os.fstat(dfd)
+        if not stat.S_ISDIR(st.st_mode) or st.st_uid != 0 or st.st_mode & 0o022:
+            fail("directory_changed")
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+        # Any success creating this stage is the first authorized mutation.
+        sfd = os.open(STAGE_NAME, flags, 0o600, dir_fd=dfd)
+        MUTATION_STARTED = True
+        written = 0
+        while written < len(data):
+            n = os.write(sfd, data[written:])
+            if n <= 0:
+                fail("staging_write_failed")
+            written += n
+        os.fchown(sfd, 0, 0)
+        os.fchmod(sfd, 0o444)
+        os.fsync(sfd)
+        os.close(sfd)
+        sfd = None
+        stage, staged = open_public(ROOT / STAGE_NAME, mode=0o444)
+        if sha(staged) != EXPECTED_SOURCE or blob_id(staged) != GIT_BLOB:
+            fail("staging_identity_mismatch")
+        # Revalidate status and exact target inode immediately before rename.
+        quiescent()
+        current_id, original = open_public(TARGET, mode=0o444)
+        if current_id != identity or sha(original) != EXPECTED_INSTALLED:
+            fail("race_before_replace")
+        os.replace(STAGE_NAME, TARGET.name, src_dir_fd=dfd, dst_dir_fd=dfd)
+        os.fsync(dfd)
+        _, installed = open_public(TARGET, mode=0o444)
+        if sha(installed) != EXPECTED_SOURCE or blob_id(installed) != GIT_BLOB:
+            fail("postreplace_identity_mismatch")
+        quiescent()
+    except OSError:
+        fail("mutation_io_error_no_retry")
+    finally:
+        if sfd is not None:
+            os.close(sfd)
+        if dfd is not None:
+            os.close(dfd)
+    return "PASS"
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Fixed single-file executor upgrade; LIVE authority required")
+    parser.add_argument("--check", action="store_true", help="Read-only; default")
+    parser.add_argument("--apply", action="store_true", help="Requires separate STRICT LIVE approval")
+    args = parser.parse_args(argv)
+    if args.apply and args.check:
+        parser.error("choose exactly one mode")
+    mode = "apply" if args.apply else "check"
+    try:
+        if args.apply and os.geteuid() != 0:
+            fail("root_required")
+        identity, desired = check()
+        if args.apply:
+            approved()
+            # Re-read preconditions after approval, before creating stage.
+            latest, after = check()
+            if latest != identity or after != desired:
+                fail("pre_mutation_drift")
+            result = atomic_once(identity, desired)
+        else:
+            result = "READY"
+        out = {"schema": "rpi5.simple_deploy_executor_upgrade.v1",
+               "mode": mode, "result": result, "mutation_started": MUTATION_STARTED,
+               "target": "simple_deploy_v1.py", "installed_sha256": (
+                   EXPECTED_SOURCE if args.apply else EXPECTED_INSTALLED)}
+        print(json.dumps(out, sort_keys=True))
+        return 0
+    except Block as exc:
+        print(json.dumps({"schema": "rpi5.simple_deploy_executor_upgrade.v1",
+                          "mode": mode, "result": "BLOCKED", "reason": str(exc),
+                          "mutation_started": MUTATION_STARTED}, sort_keys=True))
+        return 2
+    except Exception:
+        print(json.dumps({"schema": "rpi5.simple_deploy_executor_upgrade.v1",
+                          "mode": mode, "result": "BLOCKED",
+                          "reason": "unexpected_error", "mutation_started": MUTATION_STARTED},
+                         sort_keys=True))
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())
