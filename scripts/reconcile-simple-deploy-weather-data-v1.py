@@ -14,7 +14,7 @@ from typing import Sequence
 
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLER_PATH = ROOT / "scripts/install-simple-deploy-weather-data-v1.py"
-PREDECESSOR_SOURCE_SHA = "7be2772ca8c0dddefd00181c805bd693bc06a9ed"
+PREDECESSOR_SOURCE_SHA = "edc5003fba34523e4b400fc18e2a5446c3928a93"
 ROOT_UID = 0
 ROOT_GID = 0
 RECONCILER_RELATIVE = "scripts/reconcile-simple-deploy-weather-data-v1.py"
