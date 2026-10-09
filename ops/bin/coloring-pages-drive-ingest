@@ -845,6 +845,125 @@ def acquire_lock():
     return handle
 
 
+
+# Post-ingest sitemap freshness is disabled until a separate, exact LIVE grant
+# installs this reviewed source and creates the root-owned enable marker.
+# Ordinary image PUBLISH approval cannot create that marker.
+SITEMAP_ENABLE_MARKER = Path("/usr/local/share/coloring-pages/post-publish-v1.enabled")
+SITEMAP_GATE_BYTES = b"coloring-pages-sitemap-post-publish-v1\n"
+SITEMAP_PUBLISHER = Path("/usr/local/bin/coloring-pages-sitemap-publish")
+SITEMAP_GENERATOR = Path("/usr/local/share/coloring-pages/coloring-pages-sitemap")
+SITEMAP_OPERATOR_BLOB = "0da51ef361f9ce815ebde3e4cc6cae19a2c2ffe8"
+SITEMAP_GENERATOR_BLOB = "5644c8fd366c0c57f6339fddd163c5091ea134c5"
+SITEMAP_ROOT_DIRS = (
+    Path("/usr/local"),
+    Path("/usr/local/bin"),
+    Path("/usr/local/share"),
+    Path("/usr/local/share/coloring-pages"),
+)
+
+
+def _root_ids() -> tuple[int, int]:
+    return pwd.getpwnam("root").pw_uid, grp.getgrnam("root").gr_gid
+
+
+def _trusted_root_bytes(path: Path, mode: int) -> bytes:
+    uid, gid = _root_ids()
+    before = require_identity(path, uid=uid, gid=gid, mode=mode, directory=False)
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    with os.fdopen(fd, "rb") as handle:
+        after = os.fstat(handle.fileno())
+        if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
+            raise OperatorError("trusted identity changed")
+        if not stat.S_ISREG(after.st_mode) or (after.st_uid, after.st_gid, stat.S_IMODE(after.st_mode)) != (uid, gid, mode):
+            raise OperatorError("trusted metadata changed")
+        raw = handle.read(1024 * 1024 + 1)
+    if len(raw) > 1024 * 1024:
+        raise OperatorError("trusted file exceeds fixed limit")
+    return raw
+
+
+def _trusted_git_blob(path: Path, mode: int, expected: str) -> None:
+    raw = _trusted_root_bytes(path, mode)
+    actual = hashlib.sha1(b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw).hexdigest()
+    if actual != expected:
+        raise OperatorError("trusted Git blob changed")
+
+
+def _sitemap_result(argv: list[str], expected: str) -> dict[str, Any]:
+    run = subprocess.run(
+        [str(SITEMAP_PUBLISHER), *argv],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    if run.returncode != 0:
+        raise OperatorError("sitemap operation stopped")
+    lines = run.stdout.strip().splitlines()
+    if len(lines) != 1 or not lines[0].startswith("COLORING_SITEMAP "):
+        raise OperatorError("sitemap result is ambiguous")
+    result = json.loads(lines[0][len("COLORING_SITEMAP "):])
+    if not isinstance(result, dict) or result.get("result") != expected:
+        raise OperatorError("sitemap result mismatched")
+    if (not isinstance(result.get("catalog_sha256"), str)
+        or not SHA256_PATTERN.fullmatch(result["catalog_sha256"])
+        or not isinstance(result.get("sitemap_sha256"), str)
+        or not SHA256_PATTERN.fullmatch(result["sitemap_sha256"])
+        or type(result.get("urls")) is not int
+        or not 2 <= result["urls"] <= 1000000):
+        raise OperatorError("sitemap result metadata invalid")
+    return result
+
+
+def refresh_sitemap_after_new_ingest() -> tuple[str, str | None]:
+    """Called only after a new verified ingest receipt AND lock release.
+
+    This is intentionally best-effort relative to content ingestion: a stale
+    sitemap never invalidates the already committed ingest success receipt.
+    """
+    if not os.path.lexists(SITEMAP_ENABLE_MARKER):
+        return "DISABLED", None
+    phase = "GATE"
+    try:
+        uid, gid = _root_ids()
+        for parent in SITEMAP_ROOT_DIRS:
+            require_identity(parent, uid=uid, gid=gid, mode=0o755, directory=True)
+        if _trusted_root_bytes(SITEMAP_ENABLE_MARKER, 0o444) != SITEMAP_GATE_BYTES:
+            raise OperatorError("enable marker invalid")
+
+        phase = "TRUST"
+        _trusted_git_blob(SITEMAP_PUBLISHER, 0o755, SITEMAP_OPERATOR_BLOB)
+        _trusted_git_blob(SITEMAP_GENERATOR, 0o444, SITEMAP_GENERATOR_BLOB)
+
+        phase = "CHECK"
+        checked = _sitemap_result(["--check"], "CHECK_PASS")
+        previous = checked.get("previous_sha256")
+        if previous != "absent" and (not isinstance(previous, str) or not SHA256_PATTERN.fullmatch(previous)):
+            raise OperatorError("prior sitemap fingerprint invalid")
+        if checked.get("mutation_started") is not False:
+            raise OperatorError("check was not read-only")
+        if checked["sitemap_sha256"] == previous:
+            return "CURRENT", None
+
+        phase = "APPLY"
+        applied = _sitemap_result([
+            "--apply",
+            "--expected-catalog-sha256=" + checked["catalog_sha256"],
+            "--expected-current-sitemap-sha256=" + previous,
+        ], "PUBLISH_PASS")
+        if (applied["catalog_sha256"] != checked["catalog_sha256"]
+            or applied["sitemap_sha256"] != checked["sitemap_sha256"]
+            or applied["urls"] != checked["urls"]
+            or applied.get("mutation_started") is not True):
+            raise OperatorError("apply result metadata drifted")
+        return "REFRESHED", None
+    except (OSError, ValueError, OperatorError, subprocess.TimeoutExpired):
+        # Do not retry, clean staging, roll back, or call the importer again.
+        return "STALE", phase
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         args = parse_args(argv)
@@ -1051,6 +1170,11 @@ def main(argv: list[str] | None = None) -> int:
         if not is_v2:
             print(f"SHA256={args.expected_sha256}")
             print(f"SIZE_BYTES={args.expected_size}")
+        sitemap_status, sitemap_phase = refresh_sitemap_after_new_ingest()
+        print("COLORING_PAGES_SITEMAP=" + sitemap_status + (
+            " phase=" + sitemap_phase + " recovery=EXPLICIT_OWNER_LIVE_GATE"
+            if sitemap_phase else ""
+        ))
         return 0
     except OperatorError as exc:
         print(f"COLORING_PAGES_DRIVE_INGEST=FAIL error={exc}", file=sys.stderr)

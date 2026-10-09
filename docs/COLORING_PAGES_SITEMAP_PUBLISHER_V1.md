@@ -117,3 +117,76 @@ https://www.gnu.org/software/coreutils/manual/html_node/install-invocation.html
 and Python `os.open` exclusive/no-follow flags
 https://docs.python.org/3/library/os.html#os.open.
 
+
+
+## Post-PUBLISH freshness — source-only issue #942
+
+**One trigger, no timer:** in \`ops/bin/coloring-pages-drive-ingest\`, immediately after
+a **new** full content import, independent HTTP verification and durable PASS receipt,
+the shared \`state/drive-ingest/.lock\` context ends. Only then can the bounded
+\`refresh_sitemap_after_new_ingest()\` hook run. \`ALREADY_PROCESSED\` returns
+inside the lock and never refreshes a sitemap. The existing Drive/importer lock
+is unchanged. No new scheduler, cron, systemd timer, Docker deployment, upstream
+generator repin or Search Console call exists.
+
+**Disabled by default, even after source merge:** hook executes only when an
+independently owner-authorized, root-owned \`0444\` regular activation marker
+\`/usr/local/share/coloring-pages/post-publish-v1.enabled\` exists with exact bytes
+\`coloring-pages-sitemap-post-publish-v1\n\`. The marker and its parents must
+have reviewed root ownership, with directories \`0755\`; symlinks and drift
+STOP before any invocation. Ordinary image \`PUBLISH\` does not create the
+marker and does not grant persistent sitemap writes. The merged source does not
+install a new Drive ingester or create any marker. Before activation the default
+behaviour of the installed operator stays unchanged.
+
+With a valid marker, the hook verifies the **installed fixed-path** operator
+\`/usr/local/bin/coloring-pages-sitemap-publish\` root:root \`0755\`, exact blob
+\`0da51ef361f9ce815ebde3e4cc6cae19a2c2ffe8\`, and its pinned generator
+root:root \`0444\`, blob
+\`5644c8fd366c0c57f6339fddd163c5091ea134c5\`. Only its fixed CLI
+\`--check\` is called first. If desired and existing sitemap SHA-256 agree,
+the hook exits \`CURRENT\` without mutation; otherwise it calls one \`--apply\`
+using only raw-byte catalog and previous sitemap fingerprints from the
+validated check response. The underlying publisher reacquires the same advisory
+lock, checks the exact current catalog and old sitemap, verifies the XML,
+uses an exclusive stage and one atomic replacement, and verifies HTTP.
+Race, advisory lock contention, unsafe metadata, stale hash or failure blocks
+the refresh; **no retry, cleanup, rollback, repeat importer or alternative path.**
+
+**Separate outcomes:** the already committed ingest receipt remains \`PASS\`,
+and the operator retains its successful ingest exit status; it then prints exactly
+one sanitized \`COLORING_PAGES_SITEMAP=DISABLED|CURRENT|REFRESHED|STALE\` line.
+A \`STALE\` line also includes \`phase=GATE|TRUST|CHECK|APPLY\` and
+\`recovery=EXPLICIT_OWNER_LIVE_GATE\`. Do not classify a stale sitemap as an
+ingest failure, retry publication, remove a partial stage or rerun content ingest.
+This line is an operational signal, **not** a separate persisted sitemap receipt.
+A downstream PUBLISH UI must distinguish this line from the content receipt.
+
+**Strict future activation (NOT authorized by issue #942 or its merge):**
+1. Independently prove the only enabled catalogue writers cooperate with the
+   existing ingest lock, or obtain a different reviewed quiescence gate.
+   \`flock\` is advisory and cannot exclude an out-of-band writer.
+2. Read-only preflight: refresh exact \`RPi5_main/main\`, image/ingester source
+   and installed identities, parent modes, active lock/writers, current catalogue
+   raw hash, existing sitemap hash, \`--check\` result and local HTTP equality.
+   Verify marker **absent**, unless a separately authorized activation
+   explicitly covers known previous state. Never silently repair permissions.
+3. Seek one exact owner **LIVE** authorization for the fixed new installed
+   Drive-ingest operator update AND first creation of this exact marker
+   (or separately authorized bounded gates). Include exact source blobs,
+   host target, immutable expected baseline, writer exclusion, allowed
+   mutation sequence and error semantics. Merging the source and content
+   \`PUBLISH\` permission are not that authorization.
+4. After authorized activation, verify the installed binary and root gate,
+   run one *genuine* owner-approved new ingest through the reviewed path,
+   verify the distinct ingest and sitemap statuses, identical HTTP XML and
+   URL set, and preserve sanitized proof. Do not create test content in LIVE.
+5. On failure after the first authorized mutation, STOP and preserve evidence;
+   no automatic retry, removal of marker, rollback or cleanup. **Disabling**
+   the marker is a new host filesystem mutation needing another exact owner
+   authorization; fail-closed source-only diagnostics cannot disable it.
+
+This is not a permanent owner blanket approval for all future sitemap
+mutations until a separately reviewed LIVE standing authorization explicitly
+defines that scope. Until then the hook must remain disabled. Source-only
+tests: \`tests/test-coloring-pages-sitemap-post-publish-v1.py\`.
