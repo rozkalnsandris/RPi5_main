@@ -1,0 +1,630 @@
+#!/usr/bin/env bash
+#
+# Balcony watering — autumn/winter single-cycle controller (source only).
+#
+# Source contract: docs/BALCONY_WATERING_CONTRACT.md, section "Autumn/winter mode".
+# This file installs nothing, edits no Hermes cron entry, touches no live host
+# path and never energizes the pump in tests. Merging the source is not a deploy.
+#
+# Design intent: one daily moisture + frost decision, at most one short pump
+# cycle per day, and a hard fail-closed posture whenever Home Assistant, the
+# temperature source or the active sensor set is not trustworthy.
+set -Eeuo pipefail
+IFS=$'\n\t'
+
+: "${HASS_URL:?HASS_URL must be provided at runtime}"
+: "${HASS_TOKEN:?HASS_TOKEN must be provided at runtime}"
+
+ENTITY="${BALCONY_WATERING_ENTITY:-switch.balkona_laistisana_suknis}"
+TEMP_ENTITY="${BALCONY_WATERING_TEMP_ENTITY:-weather.forecast_home}"
+
+# Candidate cycle length for heather in autumn/winter. Calibrate against real
+# flow before trusting it; see the contract's calibration procedure.
+DURATION="${BALCONY_AUTUMN_DURATION_SECONDS:-45}"
+SOAK="${BALCONY_AUTUMN_SOAK_SECONDS:-300}"
+FROST_THRESHOLD="${BALCONY_FROST_THRESHOLD_C:-2.0}"
+MIN_DRY="${BALCONY_MIN_DRY_SENSORS:-2}"
+MAX_MOIST="${BALCONY_MAX_MOIST_SENSORS:-10}"
+REQUIRE_FORECAST="${BALCONY_FROST_REQUIRE_FORECAST:-1}"
+CALIBRATION="${BALCONY_AUTUMN_CALIBRATION:-0}"
+DRY_RUN="${BALCONY_AUTUMN_DRY_RUN:-0}"
+
+STATE_DIR="${BALCONY_AUTUMN_STATE_DIR:-${HOME}/.local/state/balcony-watering-autumn}"
+LOCKFILE="${BALCONY_AUTUMN_LOCKFILE:-/tmp/balcony-watering-autumn.lock}"
+LOGFILE="${BALCONY_AUTUMN_LOGFILE:-${STATE_DIR}/watering.log}"
+LAST_WATERED_FILE="${STATE_DIR}/last-watered"
+
+AUTH_HEADER_NAME="Authorization"
+STATE_CONFIRM_ATTEMPTS=5
+STATE_CONFIRM_INTERVAL_SECONDS=1
+
+# The ESP32 keeps its independent 180 s pump fail-safe. This controller must
+# never request a longer window than the device allows anyway.
+ESP32_MAX_SECONDS=180
+CANDIDATE_MIN_SECONDS=30
+CANDIDATE_MAX_SECONDS=60
+
+# Active ESP32 flowers: 1 and 3-13 (12 total, including flower 5).
+# Retired flowers 2, 14 and 15 are never read, never counted and never block.
+ACTIVE_SENSORS=(1 3 4 5 6 7 8 9 10 11 12 13)
+ACTIVE_SENSOR_COUNT=12
+RETIRED_SENSORS=(2 14 15)
+
+require_integer() {
+    local name="$1" value="$2" min="$3" max="$4"
+    [[ "$value" =~ ^[0-9]+$ ]] || { echo "Invalid ${name}" >&2; exit 2; }
+    (( value >= min && value <= max )) || {
+        echo "Invalid ${name}: must be ${min}-${max}" >&2
+        exit 2
+    }
+}
+
+require_integer BALCONY_AUTUMN_DURATION_SECONDS "$DURATION" 1 "$ESP32_MAX_SECONDS"
+require_integer BALCONY_AUTUMN_SOAK_SECONDS "$SOAK" 0 3600
+require_integer BALCONY_MIN_DRY_SENSORS "$MIN_DRY" 1 "$ACTIVE_SENSOR_COUNT"
+require_integer BALCONY_MAX_MOIST_SENSORS "$MAX_MOIST" 1 "$ACTIVE_SENSOR_COUNT"
+[[ "$FROST_THRESHOLD" =~ ^-?[0-9]+(\.[0-9]+)?$ ]] || {
+    echo "Invalid BALCONY_FROST_THRESHOLD_C" >&2
+    exit 2
+}
+(( MIN_DRY < MAX_MOIST )) || {
+    echo "BALCONY_MIN_DRY_SENSORS must be lower than BALCONY_MAX_MOIST_SENSORS" >&2
+    exit 2
+}
+(( ${#ACTIVE_SENSORS[@]} == ACTIVE_SENSOR_COUNT )) || {
+    echo "Invalid active sensor set" >&2
+    exit 2
+}
+
+mkdir -p -- "$STATE_DIR"
+mkdir -p -- "$(dirname -- "$LOGFILE")"
+
+log() {
+    printf '%s %s\n' "$(TZ="Europe/Berlin" date '+%Y-%m-%d %H:%M:%S')" "$*" | tee -a "$LOGFILE"
+}
+
+# Message policy: real watering, error, frost block. A normal skip is logged
+# only and never produces a Telegram message.
+send_tg() {
+    if [[ "$DRY_RUN" == "1" ]]; then
+        log "DRY-RUN telegram (suppressed): $1"
+        return 0
+    fi
+
+    if [[ -z "${TELEGRAM_TOKEN:-}" || -z "${CHAT_ID:-}" ]]; then
+        return 0
+    fi
+
+    curl -s --max-time 15 -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+        -d "chat_id=${CHAT_ID}" \
+        --data-urlencode "text=$1" >/dev/null 2>&1 || true
+}
+
+# Prevent overlapping runs.
+exec 200>"$LOCKFILE"
+if ! flock -n 200; then
+    log "SKIP: autumn watering controller already holds the lock"
+    exit 1
+fi
+
+today() {
+    TZ="Europe/Berlin" date '+%Y-%m-%d'
+}
+
+last_watered_date() {
+    [[ -f "$LAST_WATERED_FILE" ]] || return 1
+    head -n 1 "$LAST_WATERED_FILE" 2>/dev/null || return 1
+}
+
+mark_watered() {
+    if [[ "$DRY_RUN" == "1" ]]; then
+        log "DRY-RUN: would record watering date $(today)"
+        return 0
+    fi
+    printf '%s\n' "$(today)" >"$LAST_WATERED_FILE"
+}
+
+# At most one pump cycle per calendar day, independent of the schedule that
+# invokes this controller.
+if [[ "$(last_watered_date || true)" == "$(today)" ]]; then
+    log "SKIP: already watered today ($(today)) — at most one cycle per day"
+    exit 0
+fi
+
+fetch_states() {
+    local dest="$1"
+    curl -s --max-time 10 \
+        -H "${AUTH_HEADER_NAME}: Bearer ${HASS_TOKEN}" \
+        "${HASS_URL}/api/states" >"$dest" 2>/dev/null || true
+    [[ -s "$dest" ]]
+}
+
+# Reads the Home Assistant state snapshot once and reports: the 12 active
+# sensor states, the dry/moist split and every temperature value that could be
+# read. Anything unusable is explicit here so the shell can fail closed.
+analyze_states() {
+    local snapshot="$1"
+    python3 - "$snapshot" "$TEMP_ENTITY" "${ACTIVE_SENSORS[@]}" <<'PY'
+import json
+import sys
+from datetime import datetime, timedelta, timezone
+
+snapshot = sys.argv[1]
+temp_entity = sys.argv[2]
+active = [int(a) for a in sys.argv[3:]]
+required = ["sensor.balkona_laistisana_puke_%d" % i for i in active]
+
+with open(snapshot, encoding="utf-8") as handle:
+    raw = handle.read()
+
+def number(value):
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.strip())
+        except ValueError:
+            return None
+    return None
+
+def forecast_low(entries):
+    """Lowest usable low temperature in the next 24 h (first entry if undated)."""
+    best = None
+    horizon = datetime.now(timezone.utc) + timedelta(hours=24)
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            continue
+        value = number(entry.get("templow"))
+        if value is None:
+            value = number(entry.get("temperature"))
+        if value is None:
+            continue
+        stamp = entry.get("datetime")
+        if isinstance(stamp, str):
+            try:
+                parsed = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=timezone.utc)
+            except ValueError:
+                continue
+            if parsed > horizon:
+                continue
+        elif index != 0:
+            continue
+        best = value if best is None else min(best, value)
+    return best
+
+try:
+    states = json.loads(raw)
+    if not isinstance(states, list):
+        raise ValueError("state payload is not a list")
+    states = {s["entity_id"]: s for s in states if isinstance(s, dict) and "entity_id" in s}
+except Exception:
+    print("RESULT=PARSE_FAIL")
+    raise SystemExit(0)
+
+missing = [eid for eid in required if states.get(eid, {}).get("state") in (None, "", "unavailable", "unknown")]
+if missing:
+    print("RESULT=MISSING")
+    print("MISSING=%s" % ",".join(missing))
+    raise SystemExit(0)
+
+counts = {"sauss": 0, "videjs": 0, "mitrs": 0}
+dry = []
+moist = 0
+for eid in required:
+    state = states[eid].get("state")
+    index = int(eid.rsplit("_", 1)[1])
+    if state == "sauss":
+        counts["sauss"] += 1
+        dry.append(index)
+    elif state == "mitrs":
+        counts["mitrs"] += 1
+        moist += 1
+    else:
+        # Any unexpected categorical value (for example an ESP32 wording change
+        # that still parses as JSON) is uncertainty, not moisture.
+        print("RESULT=UNKNOWN_STATE")
+        print("UNKNOWN=%s:%s" % (eid, state))
+        raise SystemExit(0)
+
+weather = states.get(temp_entity)
+current = None
+forecast_min = None
+if isinstance(weather, dict):
+    attributes = weather.get("attributes")
+    if isinstance(attributes, dict):
+        current = number(attributes.get("temperature"))
+        entries = attributes.get("forecast")
+        if isinstance(entries, list) and entries:
+            forecast_min = forecast_low(entries)
+
+print("RESULT=OK")
+print("DRY_COUNT=%d" % counts["sauss"])
+print("MOIST_COUNT=%d" % counts["mitrs"])
+print("VIDEJS_COUNT=%d" % counts["videjs"])
+print("DRY_LIST=%s" % ",".join(str(i) for i in dry))
+print("TEMP_CURRENT=%s" % ("NA" if current is None else repr(current)))
+print("TEMP_FORECAST_MIN=%s" % ("NA" if forecast_min is None else repr(forecast_min)))
+PY
+}
+
+# Reads the forecast through the Home Assistant weather service when the
+# entity has no forecast attribute. Read-only: it changes no entity state.
+service_forecast_min() {
+    local resp
+    resp=$(curl -s --max-time 10 \
+        -X POST "${HASS_URL}/api/services/weather/get_forecasts?return_response" \
+        -H "${AUTH_HEADER_NAME}: Bearer ${HASS_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "{\"entity_id\": \"${TEMP_ENTITY}\", \"type\": \"daily\"}") || resp=""
+
+    if [[ -z "$resp" ]]; then
+        printf 'NA\n'
+        return 0
+    fi
+
+    printf '%s' "$resp" | python3 -c '
+import json
+import sys
+from datetime import datetime, timedelta, timezone
+
+def number(value):
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.strip())
+        except ValueError:
+            return None
+    return None
+
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    print("NA")
+    raise SystemExit(0)
+
+section = data.get("service_response", data)
+entries = []
+if isinstance(section, dict):
+    for value in section.values():
+        if isinstance(value, dict) and isinstance(value.get("forecast"), list):
+            entries = value["forecast"]
+            break
+
+best = None
+horizon = datetime.now(timezone.utc) + timedelta(hours=24)
+for index, entry in enumerate(entries):
+    if not isinstance(entry, dict):
+        continue
+    value = number(entry.get("templow"))
+    if value is None:
+        value = number(entry.get("temperature"))
+    if value is None:
+        continue
+    stamp = entry.get("datetime")
+    if isinstance(stamp, str):
+        try:
+            parsed = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+        if parsed > horizon:
+            continue
+    elif index != 0:
+        continue
+    best = value if best is None else min(best, value)
+
+print("NA" if best is None else repr(best))
+'
+}
+
+read_switch_state() {
+    local resp state
+
+    resp=$(curl -s --max-time 10 \
+        -H "${AUTH_HEADER_NAME}: Bearer ${HASS_TOKEN}" \
+        "${HASS_URL}/api/states/${ENTITY}") || resp=""
+
+    if [[ -z "$resp" ]]; then
+        printf 'UNAVAILABLE\n'
+        return 1
+    fi
+
+    state=$(printf '%s' "$resp" | python3 -c '
+import json
+import sys
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    print("PARSE_FAIL")
+    raise SystemExit(0)
+state = data.get("state") if isinstance(data, dict) else None
+print(state if isinstance(state, str) and state else "PARSE_FAIL")
+') || state="PARSE_FAIL"
+
+    printf '%s\n' "$state"
+    [[ "$state" != "PARSE_FAIL" ]]
+}
+
+call_ha() {
+    local action="$1"
+    local http=""
+
+    http=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+        -X POST "${HASS_URL}/api/services/switch/turn_${action}" \
+        -H "${AUTH_HEADER_NAME}: Bearer ${HASS_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "{\"entity_id\": \"${ENTITY}\"}") || http="000"
+
+    printf '%s\n' "${http:-000}"
+}
+
+wait_for_switch_state() {
+    local expected="$1"
+    local observed="UNAVAILABLE"
+    local i
+
+    for ((i = 1; i <= STATE_CONFIRM_ATTEMPTS; i++)); do
+        observed=$(read_switch_state) || true
+        if [[ "$observed" == "$expected" ]]; then
+            return 0
+        fi
+        if (( i < STATE_CONFIRM_ATTEMPTS )); then
+            sleep "$STATE_CONFIRM_INTERVAL_SECONDS"
+        fi
+    done
+
+    log "STATE-CHECK FAIL: expected ${expected}, observed ${observed}"
+    return 1
+}
+
+request_ha_confirmed() {
+    local action="$1"
+    local label="${2:-$action}"
+    local max_attempts=3
+    local http=""
+    local i
+
+    # ON is duplicate-sensitive: a repeated ON can extend an already-running
+    # firmware session. One ambiguous ON fails closed into the OFF cleanup path.
+    if [[ "$action" == "on" ]]; then
+        max_attempts=1
+    fi
+
+    for ((i = 1; i <= max_attempts; i++)); do
+        http=$(call_ha "$action")
+        if [[ "$http" == "200" ]]; then
+            if wait_for_switch_state "$action"; then
+                log "${label} confirmed ${action} (attempt ${i})"
+                return 0
+            fi
+
+            log "${label} HTTP 200 but ${action} state was not confirmed"
+            if [[ "$action" == "on" ]]; then
+                return 1
+            fi
+        else
+            log "${label} attempt ${i} failed (${http})"
+            if [[ "$action" == "on" ]]; then
+                log "${label} not retried because ON delivery is duplicate-sensitive"
+                return 1
+            fi
+        fi
+
+        if (( i < max_attempts )); then
+            log "${label} waiting 3s before retry"
+            sleep 3
+        fi
+    done
+
+    log "${label} failed after ${max_attempts} attempt(s)"
+    return 1
+}
+
+fail_run() {
+    log "FAIL: $*"
+    send_tg "🚨 Balcony autumn watering failed: $*"
+    exit 1
+}
+
+skip_quiet() {
+    log "SKIP: $*"
+    exit 0
+}
+
+skip_error() {
+    log "ERROR-SKIP: $*"
+    send_tg "🚨 Balcony autumn watering skipped: $*"
+    exit 0
+}
+
+# Safety meaning: 1 means the pump may be energized or an ON request is
+# ambiguous. It is cleared only after Home Assistant positively reports OFF.
+PUMP_IS_ON=0
+STATES_FILE=""
+cleanup() {
+    if [[ -n "$STATES_FILE" && -f "$STATES_FILE" ]]; then
+        rm -f -- "$STATES_FILE"
+    fi
+    if [[ "$PUMP_IS_ON" == "1" ]]; then
+        log "CLEANUP: requesting pump OFF (trap)"
+        if request_ha_confirmed "off" "CLEANUP pump OFF" >/dev/null 2>&1; then
+            PUMP_IS_ON=0
+            log "CLEANUP OK: pump OFF confirmed"
+        else
+            log "CLEANUP FAIL: pump state remains uncertain"
+        fi
+    fi
+}
+trap cleanup EXIT INT TERM
+
+log "===== autumn/winter watering check (dry-run=${DRY_RUN}) ====="
+
+# An unexpected ON before we ask for anything means another actor (or a stuck
+# device) owns the relay. Never water on top of it: request a confirmed OFF and
+# stop.
+pre_state="$(read_switch_state)" || pre_state="UNAVAILABLE"
+if [[ "$pre_state" == "on" ]]; then
+    log "PRE-CHECK: pump already reports ON before this run"
+    if [[ "$DRY_RUN" == "1" ]]; then
+        fail_run "pump already reported ON before the run (dry-run, no OFF requested)"
+    fi
+    PUMP_IS_ON=1
+    if request_ha_confirmed "off" "PRE-CHECK pump OFF" >/dev/null; then
+        PUMP_IS_ON=0
+        fail_run "pump already reported ON before the run; OFF requested and confirmed, watering aborted"
+    fi
+    fail_run "pump already reported ON before the run and OFF was not confirmed"
+fi
+
+STATES_FILE="$(mktemp "${TMPDIR:-/tmp}/balcony-autumn-states.XXXXXX")"
+if ! fetch_states "$STATES_FILE"; then
+    skip_error "Home Assistant did not answer the state check (fail closed)"
+fi
+
+ANALYSIS="$(analyze_states "$STATES_FILE")" || ANALYSIS="RESULT=PARSE_FAIL"
+
+declare -A A=()
+while IFS='=' read -r key value; do
+    [[ -n "$key" ]] && A["$key"]="$value"
+done <<<"$ANALYSIS"
+
+case "${A[RESULT]:-}" in
+    PARSE_FAIL)
+        skip_error "Home Assistant state JSON could not be parsed (fail closed)"
+        ;;
+    MISSING)
+        skip_error "active sensors not usable: ${A[MISSING]:-unknown}"
+        ;;
+    UNKNOWN_STATE)
+        skip_error "unexpected sensor state ${A[UNKNOWN]:-unknown} (fail closed)"
+        ;;
+    OK) ;;
+    *)
+        skip_error "state analysis returned no decision (fail closed)"
+        ;;
+esac
+
+DRY_COUNT="${A[DRY_COUNT]:-NA}"
+MOIST_COUNT="${A[MOIST_COUNT]:-NA}"
+DRY_LIST="${A[DRY_LIST]:-}"
+TEMP_CURRENT="${A[TEMP_CURRENT]:-NA}"
+TEMP_FORECAST_MIN="${A[TEMP_FORECAST_MIN]:-NA}"
+
+log "SENSOR-CHECK OK: ${ACTIVE_SENSOR_COUNT} active sensors (1, 3-13) usable; dry=${DRY_COUNT} moist=${MOIST_COUNT} videjs=${A[VIDEJS_COUNT]:-NA}"
+
+if [[ "$TEMP_FORECAST_MIN" == "NA" ]]; then
+    TEMP_FORECAST_MIN="$(service_forecast_min)"
+    if [[ "$TEMP_FORECAST_MIN" != "NA" ]]; then
+        log "FROST-CHECK: forecast attribute absent, weather service forecast used"
+    fi
+fi
+
+FROST_MIN="NA"
+if [[ "$TEMP_FORECAST_MIN" != "NA" ]]; then
+    FROST_MIN="$TEMP_FORECAST_MIN"
+elif [[ "$TEMP_CURRENT" != "NA" && "$REQUIRE_FORECAST" != "1" ]]; then
+    FROST_MIN="$TEMP_CURRENT"
+    log "FROST-CHECK WARN: no forecast available, reduced to current temperature (BALCONY_FROST_REQUIRE_FORECAST=0)"
+fi
+
+if [[ "$FROST_MIN" == "NA" ]]; then
+    skip_error "no usable temperature forecast (fail closed)"
+fi
+
+FROST_DECISION="$(python3 - "$FROST_MIN" "$TEMP_CURRENT" "$FROST_THRESHOLD" <<'PY'
+import sys
+
+low = float(sys.argv[1])
+current = None if sys.argv[2] == "NA" else float(sys.argv[2])
+threshold = float(sys.argv[3])
+
+worst = low if current is None else min(low, current)
+print("BLOCK" if worst <= threshold else "OK")
+PY
+)"
+
+if [[ "$FROST_DECISION" == "BLOCK" ]]; then
+    log "FROST-CHECK BLOCK: low ${FROST_MIN}C (current ${TEMP_CURRENT}C) <= ${FROST_THRESHOLD}C"
+    send_tg "❄️ Balcony watering blocked: frost risk (low ${FROST_MIN}C, current ${TEMP_CURRENT}C, threshold ${FROST_THRESHOLD}C)"
+    exit 0
+fi
+
+log "FROST-CHECK OK: low ${FROST_MIN}C (current ${TEMP_CURRENT}C) > ${FROST_THRESHOLD}C"
+
+# One dry sensor never waters everything. A minimum number of dry pots is
+# required, and an already-wet tray is left alone.
+if (( DRY_COUNT < MIN_DRY )); then
+    skip_quiet "only ${DRY_COUNT}/${ACTIVE_SENSOR_COUNT} dry sensors (need >= ${MIN_DRY}); no single-sensor watering"
+fi
+
+if (( MOIST_COUNT >= MAX_MOIST )); then
+    skip_quiet "${MOIST_COUNT}/${ACTIVE_SENSOR_COUNT} sensors already moist (>= ${MAX_MOIST}); soil is wet enough"
+fi
+
+if (( DURATION < CANDIDATE_MIN_SECONDS || DURATION > CANDIDATE_MAX_SECONDS )); then
+    log "WARN: ${DURATION}s is outside the reviewed ${CANDIDATE_MIN_SECONDS}-${CANDIDATE_MAX_SECONDS}s candidate window"
+fi
+
+log "DECISION: water ${DURATION}s (dry ${DRY_COUNT}/${ACTIVE_SENSOR_COUNT}: ${DRY_LIST:-none})"
+
+if [[ "$DRY_RUN" == "1" ]]; then
+    log "DRY-RUN: gates passed, pump command suppressed"
+    exit 0
+fi
+
+log "--- requesting pump ON ---"
+PUMP_IS_ON=1
+if ! request_ha_confirmed "on" "pump ON" >/dev/null; then
+    fail_run "pump ON was not state-confirmed"
+fi
+
+# The pump is confirmed running, so water is delivered from here on. Record the
+# day now: a later failure must never allow a second cycle on the same day.
+mark_watered
+
+log "watering for ${DURATION}s"
+sleep "$DURATION"
+
+if ! request_ha_confirmed "off" "pump OFF" >/dev/null; then
+    fail_run "pump OFF was not state-confirmed"
+fi
+PUMP_IS_ON=0
+
+send_tg "💧 Balcony autumn watering done: ${DURATION}s, dry before ${DRY_COUNT}/${ACTIVE_SENSOR_COUNT} (${DRY_LIST:-none}), low ${FROST_MIN}C"
+log "===== watering cycle complete (max one cycle per day) ====="
+
+# Calibration feedback: how the soil answered this cycle. Logged always, added
+# to Telegram only when BALCONY_AUTUMN_CALIBRATION=1.
+if (( SOAK > 0 )); then
+    log "calibration: waiting ${SOAK}s before post-cycle sensor readback"
+    sleep "$SOAK"
+
+    AFTER_FILE="$(mktemp "${TMPDIR:-/tmp}/balcony-autumn-states.XXXXXX")"
+    if fetch_states "$AFTER_FILE"; then
+        AFTER="$(analyze_states "$AFTER_FILE")" || AFTER="RESULT=PARSE_FAIL"
+        rm -f -- "$AFTER_FILE"
+        after_dry="NA"
+        after_moist="NA"
+        while IFS='=' read -r key value; do
+            case "$key" in
+                DRY_COUNT) after_dry="$value" ;;
+                MOIST_COUNT) after_moist="$value" ;;
+            esac
+        done <<<"$AFTER"
+        log "calibration: dry ${DRY_COUNT} -> ${after_dry}, moist ${MOIST_COUNT} -> ${after_moist} after ${DURATION}s"
+        if [[ "$CALIBRATION" == "1" ]]; then
+            send_tg "📏 Calibration: dry ${DRY_COUNT}->${after_dry}, moist ${MOIST_COUNT}->${after_moist} after ${DURATION}s"
+        fi
+    else
+        rm -f -- "$AFTER_FILE"
+        log "calibration: post-cycle readback unavailable (Home Assistant did not answer)"
+    fi
+fi
