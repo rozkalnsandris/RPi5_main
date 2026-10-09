@@ -104,6 +104,8 @@ Before the first write:
    directory /var/lib/rozkalns-balkons-bot-latency to be absent.
 5. Verify fresh owner issue-comment authority bound to all expected digests.
    Repeat the read-only preflight immediately before starting any mutation.
+   Require the same MainPID and ActiveEnterTimestampMonotonic metadata before
+   and after; any competing service lifecycle change blocks APPLY.
 
 The legacy private source, original service unit and K10 drop-in remain
 **in place, unmodified** and are the recovery baseline; no second copy is
