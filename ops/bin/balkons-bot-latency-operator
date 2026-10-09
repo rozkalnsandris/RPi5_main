@@ -68,6 +68,13 @@ def safe_run(argv: tuple[str, ...], *, timeout=25) -> str:
     return p.stdout
 
 
+def safe_git(*args: str) -> str:
+    # Run repository reads as the checkout owner; git as root would reject a
+    # non-root-owned worktree (safe.directory) or depend on ambient overrides.
+    return safe_run(("/usr/sbin/runuser", "-u", "andris", "--",
+                     "/usr/bin/git", "-C", str(REPO), *args))
+
+
 def require_file(path: Path, *, owner: int | None = None, mode: int | None = None) -> bytes:
     try:
         info = path.lstat()
@@ -102,18 +109,18 @@ def check_source(main: str) -> dict[str, bytes]:
     require_directory(REPO, owner=owner)
     if REPO.is_symlink():
         deny("repo_symlink")
-    if safe_run(("/usr/bin/git", "-C", str(REPO), "rev-parse", "HEAD")).strip() != main:
+    if safe_git("rev-parse", "HEAD").strip() != main:
         deny("checkout_head_drift")
-    if safe_run(("/usr/bin/git", "-C", str(REPO), "branch", "--show-current")).strip() != "main":
+    if safe_git("branch", "--show-current").strip() != "main":
         deny("checkout_branch_invalid")
-    if safe_run(("/usr/bin/git", "-C", str(REPO), "status", "--porcelain=v1", "--untracked-files=all")).strip():
+    if safe_git("status", "--porcelain=v1", "--untracked-files=all").strip():
         deny("checkout_not_clean")
-    if safe_run(("/usr/bin/git", "-C", str(REPO), "rev-parse", "refs/remotes/origin/main")).strip() != main:
+    if safe_git("rev-parse", "refs/remotes/origin/main").strip() != main:
         deny("origin_main_mismatch")
     paths = (SOURCE, OVERLAY, PREFLIGHT, VERIFIER,
              "ops/bin/balkons-bot-latency-operator")
     expected = set(paths)
-    tracked = safe_run(("/usr/bin/git", "-C", str(REPO), "ls-files", "--", *paths))
+    tracked = safe_git("ls-files", "--", *paths)
     if set(tracked.splitlines()) != expected:
         deny("source_not_tracked")
     output = {}
@@ -124,8 +131,8 @@ def check_source(main: str) -> dict[str, bytes]:
         content = require_file(p)
         # Compare with the immutable Git object at the approved exact commit,
         # without trusting the (possibly mutable) worktree alone.
-        hash_object = safe_run(("/usr/bin/git", "-C", str(REPO), "hash-object", "--", path)).strip()
-        tree_hash = safe_run(("/usr/bin/git", "-C", str(REPO), "rev-parse", main + ":" + path)).strip()
+        hash_object = safe_git("hash-object", "--", path).strip()
+        tree_hash = safe_git("rev-parse", main + ":" + path).strip()
         if hash_object != tree_hash:
             deny("source_blob_mismatch")
         output[path] = content
