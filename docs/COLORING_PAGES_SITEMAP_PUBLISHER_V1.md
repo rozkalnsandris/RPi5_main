@@ -1,24 +1,24 @@
 # Coloring Pages trusted sitemap publisher — source-only v1
 
-Issue: #938. Source owner: \`RPi5_main\`. Consumer handoff:
-\`coloring-pages@0aa691efaec880e7125b10ba3fb7b4e0996ca1c4\`,
-\`docs/SITEMAP_PUBLISHER_HANDOFF_V1.md\`.
+Issue: #938. Source owner: `RPi5_main`. Consumer handoff:
+`coloring-pages@0aa691efaec880e7125b10ba3fb7b4e0996ca1c4`,
+`docs/SITEMAP_PUBLISHER_HANDOFF_V1.md`.
 
 ## What this delivers
 A **host-owned, fixed-path** one-shot Python publisher
-\`ops/bin/coloring-pages-sitemap-publish\` and a vendored byte-identical,
-read-only \`ops/vendor/coloring-pages-sitemap\`. Vendor identity is the exact
-upstream Git blob SHA-1 \`5644c8fd366c0c57f6339fddd163c5091ea134c5\`.
+`ops/bin/coloring-pages-sitemap-publish` and a vendored byte-identical,
+read-only `ops/vendor/coloring-pages-sitemap`. Vendor identity is the exact
+upstream Git blob SHA-1 `5644c8fd366c0c57f6339fddd163c5091ea134c5`.
 The operator verifies this pin before generating content.
 
 Intended (not automatically installed) identities:
-- operator: \`/usr/local/bin/coloring-pages-sitemap-publish\`, \`root:root\`, mode \`0755\`;
-- generator: \`/usr/local/share/coloring-pages/coloring-pages-sitemap\`,
-  \`root:root\`, mode \`0444\`;
-- execution: \`andris\`, **never root**;
-- content catalogue: \`/srv/coloring-pages-content/public/catalog.json\`;
-- sitemap: \`/srv/coloring-pages-content/public/sitemap.xml\`;
-- exactly the existing \`state/drive-ingest/.lock\` advisory lock.
+- operator: `/usr/local/bin/coloring-pages-sitemap-publish`, `root:root`, mode `0755`;
+- generator: `/usr/local/share/coloring-pages/coloring-pages-sitemap`,
+  `root:root`, mode `0444`;
+- execution: `andris`, **never root**;
+- content catalogue: `/srv/coloring-pages-content/public/catalog.json`;
+- sitemap: `/srv/coloring-pages-content/public/sitemap.xml`;
+- exactly the existing `state/drive-ingest/.lock` advisory lock.
 
 No installation, content write, cron/timer, Docker restart or external
 configuration mutation follows this source merge. The operator is not
@@ -28,34 +28,34 @@ publication are **distinct** LIVE decisions. Do not execute source checkout
 code on the production host as a substitute for the fixed installed identity.
 
 ## CLI contract
-- \`--check\` is read-only, returns a current catalogue digest, candidate
+- `--check` is read-only, returns a current catalogue digest, candidate
   sitemap digest, existing sitemap state, and URL count.
-- \`--apply --expected-catalog-sha256=<exact> --expected-current-sitemap-sha256=<absent|exact>\`
+- `--apply --expected-catalog-sha256=<exact> --expected-current-sitemap-sha256=<absent|exact>`
   is a **single owner-gated operation**. The expected catalogue hash must
-  match current raw bytes; the prior sitemap must match either \`absent\`
+  match current raw bytes; the prior sitemap must match either `absent`
   or its full exact hash. Only host-owned fixed filesystem paths are allowed.
   No arbitrary path, shell, URL, network or other target is a CLI parameter.
 
 The publisher requires fixed parent/lock/file metadata, locks the same
-ingest inode with nonblocking exclusive \`flock\`, runs the pinned generator,
-validates the full expected ordered URL set, stages exact XML via \`O_EXCL\`
+ingest inode with nonblocking exclusive `flock`, runs the pinned generator,
+validates the full expected ordered URL set, stages exact XML via `O_EXCL`
 inside the destination directory, verifies it byte-for-byte using the
-upstream \`--verify-sitemap\` mode, checks catalogue and prior sitemap identity
-again under the lock, then applies \`os.replace\`, \`fsync\` and checks local
-origin \`127.0.0.1:9191/sitemap.xml\` returns identical XML with HTTP 200.
+upstream `--verify-sitemap` mode, checks catalogue and prior sitemap identity
+again under the lock, then applies `os.replace`, `fsync` and checks local
+origin `127.0.0.1:9191/sitemap.xml` returns identical XML with HTTP 200.
 It does **not** submit to Search Console.
 
 ## Fail-closed and next gate
-- \`flock\` is **advisory**. The operator can exclude the reviewed Drive
+- `flock` is **advisory**. The operator can exclude the reviewed Drive
   ingester (which holds the same lock), but it cannot exclude an unreviewed
   direct Docker importer or other catalogue writer which ignores the lock.
   Before LIVE publication, independently verify no such writer is active or
   authorized; otherwise STOP. The code also detects catalogue identity
   drift immediately before replacement.
-- Creating \`.sitemap.xml.publish.partial\` is the **first production mutation**.
+- Creating `.sitemap.xml.publish.partial` is the **first production mutation**.
   Any failure thereafter leaves state as-is; never retry, roll back,
   unlink/clean up the stage or restart outside a new exact owner gate.
-- Caller must bind one frozen \`main\` SHA, installed binary fingerprints,
+- Caller must bind one frozen `main` SHA, installed binary fingerprints,
   current catalogue SHA, expected prior sitemap state, target, and
   one-time publication boundary before performing LIVE writes.
 - After a successful one-shot publish, future content ingests do **not**
@@ -118,34 +118,33 @@ and Python `os.open` exclusive/no-follow flags
 https://docs.python.org/3/library/os.html#os.open.
 
 
-
 ## Post-PUBLISH freshness — source-only issue #942
 
-**One trigger, no timer:** in \`ops/bin/coloring-pages-drive-ingest\`, immediately after
+**One trigger, no timer:** in `ops/bin/coloring-pages-drive-ingest`, immediately after
 a **new** full content import, independent HTTP verification and durable PASS receipt,
-the shared \`state/drive-ingest/.lock\` context ends. Only then can the bounded
-\`refresh_sitemap_after_new_ingest()\` hook run. \`ALREADY_PROCESSED\` returns
+the shared `state/drive-ingest/.lock` context ends. Only then can the bounded
+`refresh_sitemap_after_new_ingest()` hook run. `ALREADY_PROCESSED` returns
 inside the lock and never refreshes a sitemap. The existing Drive/importer lock
 is unchanged. No new scheduler, cron, systemd timer, Docker deployment, upstream
 generator repin or Search Console call exists.
 
 **Disabled by default, even after source merge:** hook executes only when an
-independently owner-authorized, root-owned \`0444\` regular activation marker
-\`/usr/local/share/coloring-pages/post-publish-v1.enabled\` exists with exact bytes
-\`coloring-pages-sitemap-post-publish-v1\n\`. The marker and its parents must
-have reviewed root ownership, with directories \`0755\`; symlinks and drift
-STOP before any invocation. Ordinary image \`PUBLISH\` does not create the
+independently owner-authorized, root-owned `0444` regular activation marker
+`/usr/local/share/coloring-pages/post-publish-v1.enabled` exists with exact bytes
+`coloring-pages-sitemap-post-publish-v1\n`. The marker and its parents must
+have reviewed root ownership, with directories `0755`; symlinks and drift
+STOP before any invocation. Ordinary image `PUBLISH` does not create the
 marker and does not grant persistent sitemap writes. The merged source does not
 install a new Drive ingester or create any marker. Before activation the default
 behaviour of the installed operator stays unchanged.
 
 With a valid marker, the hook verifies the **installed fixed-path** operator
-\`/usr/local/bin/coloring-pages-sitemap-publish\` root:root \`0755\`, exact blob
-\`0da51ef361f9ce815ebde3e4cc6cae19a2c2ffe8\`, and its pinned generator
-root:root \`0444\`, blob
-\`5644c8fd366c0c57f6339fddd163c5091ea134c5\`. Only its fixed CLI
-\`--check\` is called first. If desired and existing sitemap SHA-256 agree,
-the hook exits \`CURRENT\` without mutation; otherwise it calls one \`--apply\`
+`/usr/local/bin/coloring-pages-sitemap-publish` root:root `0755`, exact blob
+`0da51ef361f9ce815ebde3e4cc6cae19a2c2ffe8`, and its pinned generator
+root:root `0444`, blob
+`5644c8fd366c0c57f6339fddd163c5091ea134c5`. Only its fixed CLI
+`--check` is called first. If desired and existing sitemap SHA-256 agree,
+the hook exits `CURRENT` without mutation; otherwise it calls one `--apply`
 using only raw-byte catalog and previous sitemap fingerprints from the
 validated check response. The underlying publisher reacquires the same advisory
 lock, checks the exact current catalog and old sitemap, verifies the XML,
@@ -153,11 +152,11 @@ uses an exclusive stage and one atomic replacement, and verifies HTTP.
 Race, advisory lock contention, unsafe metadata, stale hash or failure blocks
 the refresh; **no retry, cleanup, rollback, repeat importer or alternative path.**
 
-**Separate outcomes:** the already committed ingest receipt remains \`PASS\`,
+**Separate outcomes:** the already committed ingest receipt remains `PASS`,
 and the operator retains its successful ingest exit status; it then prints exactly
-one sanitized \`COLORING_PAGES_SITEMAP=DISABLED|CURRENT|REFRESHED|STALE\` line.
-A \`STALE\` line also includes \`phase=GATE|TRUST|CHECK|APPLY\` and
-\`recovery=EXPLICIT_OWNER_LIVE_GATE\`. Do not classify a stale sitemap as an
+one sanitized `COLORING_PAGES_SITEMAP=DISABLED|CURRENT|REFRESHED|STALE` line.
+A `STALE` line also includes `phase=GATE|TRUST|CHECK|APPLY` and
+`recovery=EXPLICIT_OWNER_LIVE_GATE`. Do not classify a stale sitemap as an
 ingest failure, retry publication, remove a partial stage or rerun content ingest.
 This line is an operational signal, **not** a separate persisted sitemap receipt.
 A downstream PUBLISH UI must distinguish this line from the content receipt.
@@ -165,10 +164,10 @@ A downstream PUBLISH UI must distinguish this line from the content receipt.
 **Strict future activation (NOT authorized by issue #942 or its merge):**
 1. Independently prove the only enabled catalogue writers cooperate with the
    existing ingest lock, or obtain a different reviewed quiescence gate.
-   \`flock\` is advisory and cannot exclude an out-of-band writer.
-2. Read-only preflight: refresh exact \`RPi5_main/main\`, image/ingester source
+   `flock` is advisory and cannot exclude an out-of-band writer.
+2. Read-only preflight: refresh exact `RPi5_main/main`, image/ingester source
    and installed identities, parent modes, active lock/writers, current catalogue
-   raw hash, existing sitemap hash, \`--check\` result and local HTTP equality.
+   raw hash, existing sitemap hash, `--check` result and local HTTP equality.
    Verify marker **absent**, unless a separately authorized activation
    explicitly covers known previous state. Never silently repair permissions.
 3. Seek one exact owner **LIVE** authorization for the fixed new installed
@@ -176,7 +175,7 @@ A downstream PUBLISH UI must distinguish this line from the content receipt.
    (or separately authorized bounded gates). Include exact source blobs,
    host target, immutable expected baseline, writer exclusion, allowed
    mutation sequence and error semantics. Merging the source and content
-   \`PUBLISH\` permission are not that authorization.
+   `PUBLISH` permission are not that authorization.
 4. After authorized activation, verify the installed binary and root gate,
    run one *genuine* owner-approved new ingest through the reviewed path,
    verify the distinct ingest and sitemap statuses, identical HTTP XML and
@@ -189,4 +188,4 @@ A downstream PUBLISH UI must distinguish this line from the content receipt.
 This is not a permanent owner blanket approval for all future sitemap
 mutations until a separately reviewed LIVE standing authorization explicitly
 defines that scope. Until then the hook must remain disabled. Source-only
-tests: \`tests/test-coloring-pages-sitemap-post-publish-v1.py\`.
+tests: `tests/test-coloring-pages-sitemap-post-publish-v1.py`.

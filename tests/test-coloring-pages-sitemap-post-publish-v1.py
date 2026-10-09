@@ -134,7 +134,9 @@ class PostPublishTests(unittest.TestCase):
             run.assert_not_called()
 
     def test_invalid_marker_bytes_cannot_enable(self):
+        self.gate.chmod(0o644)
         self.gate.write_bytes(b"yes\n")
+        self.gate.chmod(0o444)
         with mock.patch.object(mod.subprocess, "run") as run:
             self.assertEqual(mod.refresh_sitemap_after_new_ingest(), ("STALE", "GATE"))
             run.assert_not_called()
