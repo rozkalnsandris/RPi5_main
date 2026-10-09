@@ -77,6 +77,16 @@ class SitemapInstallerTests(unittest.TestCase):
             self.assertEqual(p.stat().st_uid, self.uid)
             self.assertEqual(p.stat().st_gid, self.gid)
 
+    def test_strict_umask_still_produces_exact_directory_mode(self):
+        old = os.umask(0o077)
+        try:
+            self.install()
+        finally:
+            os.umask(old)
+        self.assertEqual(stat.S_IMODE(self.paths.vendor_dir.stat().st_mode), 0o755)
+        self.assertEqual(stat.S_IMODE(self.paths.generator.stat().st_mode), 0o444)
+        self.assertEqual(stat.S_IMODE(self.paths.operator.stat().st_mode), 0o755)
+
     def test_second_install_is_rejected_with_exact_bytes_untouched(self):
         self.install()
         original = self.paths.operator.read_bytes()

@@ -183,7 +183,18 @@ def install(paths: Destinations, *, root_uid: int, root_gid: int,
             sources: dict[str, bytes]):
     preflight(paths, root_uid=root_uid, root_gid=root_gid, sources=sources)
     # First LIVE mutation. No cleanup, retry or rollback is permitted on error.
-    os.mkdir(paths.vendor_dir, 0o755)
+    os.mkdir(paths.vendor_dir, 0o700)
+    # mkdir mode is reduced by the caller's umask. Set the mode on the
+    # newly-created inode (never on an existing directory).
+    directory_fd = os.open(
+        paths.vendor_dir, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    )
+    try:
+        os.fchown(directory_fd, root_uid, root_gid)
+        os.fchmod(directory_fd, 0o755)
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
     require_directory(paths.vendor_dir, root_uid, root_gid, 0o755)
     fsync_directory(paths.share_parent)
     secure_create(paths.generator, sources[GENERATOR_REL], 0o444,
