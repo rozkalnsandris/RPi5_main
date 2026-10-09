@@ -40,8 +40,9 @@ if ! flock -n 200; then
     exit 1
 fi
 
-# Flower 5 is intentionally disconnected and excluded from the required set.
-# Required: flowers 1-4 and 6-15. Missing/unavailable/unknown => SKIP.
+# Required active ESP32 flowers: 1 and 3-13 (12 total, including flower 5).
+# Retired flowers 2, 14 and 15 never block the gate. Active sensor
+# missing/unavailable/unknown => SKIP.
 # Home Assistant transport or JSON uncertainty also => SKIP. No timestamp-age
 # freshness gate is used because unchanged categorical MQTT states can remain valid.
 check_required_sensors() {
@@ -63,7 +64,7 @@ import sys
 
 required = [
     "sensor.balkona_laistisana_puke_%d" % i
-    for i in list(range(1, 5)) + list(range(6, 16))
+    for i in [1] + list(range(3, 14))
 ]
 try:
     states = {s["entity_id"]: s["state"] for s in json.load(sys.stdin)}
@@ -87,7 +88,7 @@ print(",".join(bad) if bad else "OK")
         exit 0
     fi
 
-    log "SENSOR-CHECK OK: all 14 required sensors (1-4, 6-15) are available"
+    log "SENSOR-CHECK OK: all 12 required sensors (1, 3-13) are available"
 }
 
 JSON_DATA='{"entity_id": "'"$ENTITY"'"}'

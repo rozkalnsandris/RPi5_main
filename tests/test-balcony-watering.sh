@@ -63,21 +63,26 @@ case "$url" in
         case "${MOCK_SENSOR_MODE:-valid}" in
             empty) exit 0 ;;
             malformed) printf '{bad-json' ;;
-            valid|missing|unavailable|unknown)
+            valid|missing|unavailable|unknown|flower5_missing|flower5_unavailable|flower5_unknown|retired_unavailable|retired_only)
                 python3 - "${MOCK_SENSOR_MODE:-valid}" <<'PY'
 import json
 import sys
 mode = sys.argv[1]
 states = []
-for i in list(range(1, 5)) + list(range(6, 16)):
-    if mode == "missing" and i == 10:
+for i in [1] + list(range(3, 14)):
+    if mode == "retired_only":
+        continue
+    if (mode == "missing" and i == 10) or (mode == "flower5_missing" and i == 5):
         continue
     state = "mitrs"
-    if i == 10 and mode == "unavailable":
+    if (mode == "unavailable" and i == 10) or (mode == "flower5_unavailable" and i == 5):
         state = "unavailable"
-    elif i == 10 and mode == "unknown":
+    elif (mode == "unknown" and i == 10) or (mode == "flower5_unknown" and i == 5):
         state = "unknown"
     states.append({"entity_id": f"sensor.balkona_laistisana_puke_{i}", "state": state})
+if mode in ("retired_unavailable", "retired_only"):
+    for i in (2, 14, 15):
+        states.append({"entity_id": f"sensor.balkona_laistisana_puke_{i}", "state": "unavailable"})
 print(json.dumps(states))
 PY
                 ;;
@@ -142,14 +147,18 @@ bash -n "$heat_gate"
 [[ -x "$heat_gate" ]] || fail "heat-gate source must be executable"
 ! grep -q 'FRESH_LIMIT' "$primary" || fail "timestamp freshness limit must not return"
 
-# 1-2: all 14 required sensors valid; flower 5 is absent and does not block.
+# 1-2: all 12 active sensors valid; retired flowers absent or unavailable do not block.
 export MOCK_SENSOR_MODE=valid MOCK_ON_CODE=200 MOCK_OFF_CODE=200
 export MOCK_ON_APPLY=1 MOCK_OFF_APPLY=1 MOCK_SWITCH_STATE_MODE=valid
 run_primary
 assert_actions 'on,off,on,off'
+export MOCK_SENSOR_MODE=retired_unavailable
+run_primary
+assert_actions 'on,off,on,off'
 
-# 3-7: every sensor uncertainty case skips before pump ON.
-for mode in missing unavailable unknown empty malformed; do
+# 3-7: each active-sensor uncertainty (including flower 5) skips before pump ON.
+# Only retired sensors being present must not pass the active gate.
+for mode in missing unavailable unknown flower5_missing flower5_unavailable flower5_unknown retired_only empty malformed; do
     export MOCK_SENSOR_MODE="$mode" MOCK_ON_CODE=200 MOCK_OFF_CODE=200
     export MOCK_ON_APPLY=1 MOCK_OFF_APPLY=1 MOCK_SWITCH_STATE_MODE=valid
     run_primary
@@ -210,7 +219,7 @@ set -e
 assert_actions 'on,off,off,off'
 
 # 13: heat gate below threshold never delegates; at threshold it delegates to
-# the primary controller, which still performs its own 14-sensor/state gates.
+# the primary controller, which still performs its own 12-sensor/state gates.
 export MOCK_SENSOR_MODE=valid MOCK_ON_CODE=200 MOCK_OFF_CODE=200 MOCK_WEATHER_MODE=valid
 export MOCK_ON_APPLY=1 MOCK_OFF_APPLY=1 MOCK_SWITCH_STATE_MODE=valid
 export BALCONY_WATERING_PRIMARY="$primary"
@@ -225,4 +234,4 @@ bash "$heat_gate" >"$tmp/stdout" 2>"$tmp/stderr"
 assert_actions 'on,off,on,off'
 
 # 14: all network-capable curl calls were forced through the local mock above.
-printf 'Balcony watering regression: PASS (offline guard, state confirmation, cleanup, heat gate)\n'
+printf 'Balcony watering regression: PASS (12-sensor gate, flower 5, retired sensors, pump state, cleanup, heat gate)\n'
