@@ -360,6 +360,43 @@ class CloudflareRdcOperatorTests(unittest.TestCase):
         for name in ("api_token", "account_id", "secret_path"):
             self.assertFalse(hasattr(args, name))
 
+    def test_phase7_root_git_checkout_disables_optional_index_writes(self) -> None:
+        expected_main = "b" * 40
+        seen = []
+
+        def runner(argv, **kwargs):
+            self.assertEqual(argv[:2], ["/usr/bin/git", "--no-optional-locks"])
+            self.assertEqual(
+                argv[2:6],
+                ["-c", f"safe.directory={ROOT}", "-C", str(ROOT)],
+            )
+            operation = argv[6:]
+            seen.append(operation)
+            outputs = {
+                ("rev-parse", "--show-toplevel"): str(ROOT),
+                ("branch", "--show-current"): "main",
+                ("remote", "get-url", "origin"):
+                    "https://github.com/rozkalnsandris/RPi5_main.git",
+                ("status", "--porcelain=v1", "--untracked-files=all"): "",
+                ("rev-parse", "HEAD"): expected_main,
+                ("ls-files", "--error-unmatch", "scripts/ingress_drift_audit.py"):
+                    "scripts/ingress_drift_audit.py",
+            }
+            result = outputs.get(tuple(operation))
+            self.assertIsNotNone(result)
+            return subprocess.CompletedProcess(
+                argv, 0, stdout=result + "\n", stderr="",
+            )
+
+        audit_path = op.verify_phase7_checkout(
+            expected_main, ROOT, runner=runner,
+        )
+        self.assertEqual(audit_path, ROOT / "scripts" / "ingress_drift_audit.py")
+        self.assertIn(
+            ["status", "--porcelain=v1", "--untracked-files=all"], seen,
+        )
+        self.assertEqual(len(seen), 6)
+
     def test_phase7_runtime_action_passes_token_only_on_stdin(self) -> None:
         token = "t" * 32
         account_id = "a" * 32
@@ -385,6 +422,7 @@ class CloudflareRdcOperatorTests(unittest.TestCase):
             self.assertEqual(kwargs["env"]["CLOUDFLARE_ACCOUNT_ID"], account_id)
             self.assertEqual(kwargs["env"]["GIT_CONFIG_COUNT"], "1")
             self.assertEqual(kwargs["env"]["GIT_CONFIG_KEY_0"], "safe.directory")
+            self.assertEqual(kwargs["env"]["GIT_OPTIONAL_LOCKS"], "0")
             self.assertEqual(
                 kwargs["env"]["GIT_CONFIG_VALUE_0"],
                 "/fixed/checkout",
