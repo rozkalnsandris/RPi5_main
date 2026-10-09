@@ -89,6 +89,80 @@ class CVContactEdgeRateLimitV1Tests(unittest.TestCase):
         for sensitive in ("CLOUDFLARE_API_TOKEN", "cf_account_id", "private_key"):
             self.assertNotIn(sensitive, json.dumps(p))
 
+    def test_free_plan_selected_baseline_and_waf_preservation(self):
+        p = self.policy
+        decision = p["free_plan_decision"]
+        self.assertEqual(decision["decision_issue"], 948)
+        self.assertEqual(decision["state"], "source-only-selected-not-deployed")
+        baseline = decision["selected_baseline"]
+        self.assertEqual(baseline["protection"], [
+            "turnstile-siteverify-fail-closed",
+            "nginx-exact-path-global-rate-backstop",
+        ])
+        self.assertEqual(baseline["endpoint"], "/api/contact-reveal")
+        self.assertEqual(baseline["nginx_global_rate"], "60r/m")
+        self.assertEqual(baseline["nginx_global_burst"], 15)
+        self.assertFalse(baseline["numerical_per_visitor_ip_quota"])
+        self.assertFalse(baseline["production_deployment_verified"])
+        preserved = decision["existing_waf_rate_limit"]
+        self.assertEqual(preserved["disposition"], "preserve-unchanged")
+        self.assertTrue(preserved["no_change_authorized"])
+        self.assertFalse(preserved["additional_rule_slot_assumed_available"])
+        self.assertFalse(preserved["account_rule_state_publicly_asserted"])
+        legacy = decision["legacy_rule"]
+        self.assertFalse(legacy["free_eligible"])
+        self.assertFalse(legacy["activate"])
+        self.assertTrue(legacy["no_path_only_downgrade"])
+        self.assertFalse(p["proposed_cloudflare_rule"]["enabled"])
+        self.assertFalse(p["proposed_cloudflare_rule"]["free_plan_eligible"])
+        self.assertIn("free-plan-period-10-seconds-not-60", legacy["incompatible_reasons"])
+
+    def test_optional_enhancements_remain_disabled_and_gated(self):
+        p = self.policy
+        alt = p["free_plan_decision"]["alternatives"]
+        waf = alt["custom_waf_managed_challenge"]
+        self.assertEqual(waf["state"], "deferred-not-active")
+        self.assertFalse(waf["enabled"])
+        self.assertFalse(waf["numeric_per_ip_quota"])
+        self.assertFalse(waf["api_fetch_json_and_turnstile_compatibility_proven"])
+        self.assertFalse(waf["modifies_existing_waf_rule"])
+        worker = alt["worker_rate_limiting"]
+        self.assertEqual(worker["state"], "candidate-not-active")
+        self.assertFalse(worker["enabled"])
+        self.assertFalse(worker["installed"])
+        self.assertEqual(worker["endpoint_host"], "rozkalns.net")
+        self.assertEqual(worker["endpoint_path"], "/api/contact-reveal")
+        self.assertEqual(worker["period_seconds"], 60)
+        self.assertEqual(worker["requests_per_period"], 6)
+        self.assertEqual(worker["key_authority"], "verified-cloudflare-inbound-edge-client-ip-only")
+        self.assertEqual(worker["on_missing_verified_ip"], "reject-not-bypass")
+        self.assertEqual(worker["on_workers_daily_limit"], "fail-closed-1027-not-fail-open")
+        self.assertEqual(worker["daily_free_account_request_budget"], 100000)
+        self.assertFalse(worker["counters_global_and_exact"])
+        self.assertTrue(worker["counters_per_cloudflare_location"])
+        self.assertFalse(worker["logs_private_ip_contact_or_tokens"])
+        for key in ("runtime_and_binding_proven_for_account", "route_and_same_zone_origin_fetch_proven",
+                    "request_response_turnstile_integrity_proven", "synthetic_429_verified"):
+            self.assertIs(worker[key], False)
+        gate = p["free_plan_decision"]["gates"]
+        self.assertTrue(gate["source_ready_only"])
+        self.assertTrue(gate["explicit_separate_owner_live_authorization_required"])
+        for key, value in gate.items():
+            if key.endswith("_verified") or key == "production_eligible":
+                self.assertIs(value, False)
+        self.assertFalse(p["gate"]["production_ready"])
+
+    def test_free_decision_documentation_and_privacy(self):
+        for term in ("Free", "Turnstile", "Siteverify", "60r/m", "burst=15",
+                     "one", "10-second", "Managed Challenge", "Worker",
+                     "100,000", "1027", "429", "same-zone", "fail-closed",
+                     "source-only", "not production-verified", "no LIVE"):
+            self.assertIn(term.lower(), self.doc.lower())
+        p = self.policy
+        for sensitive in ("cf_account_id", "zone_id", "account_id",
+                          "CLOUDFLARE_API_TOKEN", "private_key", "authorization_bearer"):
+            self.assertNotIn(sensitive, json.dumps(p))
+
 
 if __name__ == "__main__":
     unittest.main()
