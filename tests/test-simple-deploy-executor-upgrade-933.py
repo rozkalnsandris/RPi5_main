@@ -118,6 +118,48 @@ class UpgradeTests(unittest.TestCase):
         self.assertFalse((self.root / op.STAGE_NAME).exists())
         self.assertEqual(self.target.read_bytes(), OLD)
 
+    def test_explicit_empty_job_equivalent_to_zero_for_idle_units(self):
+        for timer_job, service_job in (("", ""), ("", "0"), ("0", "")):
+            with self.subTest(timer_job=timer_job, service_job=service_job):
+                self.timer = {**TIMER_OK, "Job": timer_job}
+                self.service = {**SERVICE_OK, "Job": service_job}
+                _identity, candidate = op.check()
+                self.assertEqual(candidate, NEW)
+                self.assertFalse(op.MUTATION_STARTED)
+                self.assertEqual(self.target.read_bytes(), OLD)
+                self.assertFalse((self.root / op.STAGE_NAME).exists())
+
+    def test_missing_and_invalid_job_fail_closed_for_both_units(self):
+        for unit, baseline, reason in (
+            ("timer", TIMER_OK, "timer_not_disabled_inactive"),
+            ("service", SERVICE_OK, "service_not_inactive"),
+        ):
+            for job in (None, "219", "0 queued", "unknown"):
+                with self.subTest(unit=unit, job=job):
+                    self.timer = TIMER_OK.copy()
+                    self.service = SERVICE_OK.copy()
+                    properties = baseline.copy()
+                    if job is None:
+                        del properties["Job"]
+                    else:
+                        properties["Job"] = job
+                    setattr(self, unit, properties)
+                    with self.assertRaisesRegex(op.Block, reason):
+                        op.check()
+                    self.assertFalse(op.MUTATION_STARTED)
+                    self.assertEqual(self.target.read_bytes(), OLD)
+
+    def test_systemctl_empty_job_property_parsed_missing_job_rejected(self):
+        raw = ("LoadState=loaded\nUnitFileState=disabled\nActiveState=inactive\n"
+               "SubState=dead\nJob=\nNeedDaemonReload=no\n")
+        with patch.object(op, "fixed_command", return_value=raw):
+            parsed = REAL_UNIT_PROPERTIES(op.TIMER, tuple(TIMER_OK))
+            self.assertIn("Job", parsed)
+            self.assertEqual(parsed["Job"], "")
+        with patch.object(op, "fixed_command", return_value=raw.replace("Job=\n", "")):
+            with self.assertRaisesRegex(op.Block, "systemd_status_invalid"):
+                REAL_UNIT_PROPERTIES(op.TIMER, tuple(TIMER_OK))
+
     def test_missing_or_corrupt_source_blocks(self):
         self.source.unlink()
         with self.assertRaisesRegex(op.Block, "public_file_missing"):
