@@ -20,8 +20,8 @@ RELEASE = Path("/usr/local/libexec/rpi5-cloudflare-zone-bot-waf/release.json")
 SECRET = Path("/etc/rpi5-secrets/cloudflare/zone-waf-writer.json")
 BASE = "https://api.cloudflare.com/client/v4"
 UA_MARKERS = (
-    "gptbot", "chatgpt-user", "oai-searchbot", "claudebot", "claude-user",
-    "claude-searchbot", "bytespider", "ccbot", "perplexitybot",
+    "gptbot", "chatgpt-user", "claudebot", "claude-user",
+    "bytespider", "ccbot",
     "perplexity-user", "amazonbot", "cohere-ai", "meta-externalagent",
 )
 HOST_SCOPE = '(lower(http.host) eq "rozkalns.net" or ends_with(lower(http.host), ".rozkalns.net"))'
@@ -154,7 +154,7 @@ def api_call(token: str, method: str, path: str, payload: dict | None = None) ->
         "Authorization": "Bearer " + token, "Content-Type": "application/json",
         "Accept": "application/json",
     })
-    opener = request.build_opener(NoRedirect())
+    opener = request.build_opener(request.ProxyHandler({}), NoRedirect())
     try:
         with opener.open(req, timeout=15) as response:
             code = response.status

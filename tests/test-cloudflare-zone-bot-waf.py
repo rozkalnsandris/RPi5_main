@@ -41,12 +41,13 @@ class ZoneBotWafTests(unittest.TestCase):
         expression = mod.EXPRESSION
         self.assertIn('lower(http.host) eq "rozkalns.net"', expression)
         self.assertIn('ends_with(lower(http.host), ".rozkalns.net")', expression)
-        for marker in ("gptbot", "claudebot", "chatgpt-user", "ccbot", "bytespider", "perplexitybot"):
+        for marker in ("gptbot", "claudebot", "chatgpt-user", "ccbot", "bytespider", "perplexity-user"):
             self.assertIn('lower(http.user_agent) contains "' + marker + '"', expression)
-        for good in ("googlebot", "bingbot", "google-inspectiontool", "duckduckbot"):
+        for good in ("googlebot", "bingbot", "google-inspectiontool", "duckduckbot", "oai-searchbot", "claude-searchbot", "perplexitybot"):
             self.assertNotIn(good, expression)
         self.assertNotIn("cf.bot_management.score", expression)
         self.assertNotIn("cf.bot_management.verified_bot", expression)
+        self.assertIn("request.ProxyHandler({})", SOURCE.read_text("utf-8"))
 
     def test_create_entrypoint_only_when_absent(self):
         mode, path, payload, before = mod.plan(None, "1" * 32)
