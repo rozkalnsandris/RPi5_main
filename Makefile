@@ -188,6 +188,7 @@ test:
 	python3 ./tests/test-github-app-readonly.py
 	python3 ./tests/test-github-app-read-token.py
 	python3 ./tests/test-cv-github-app-auth-boundary.py
+	python3 ./tests/test-cv-contact-edge-rate-limit-v1.py
 	python3 ./tests/test-cv-deploy-readiness.py
 	python3 ./tests/test-cv-pull-deploy-controller.py
 	python3 ./tests/test-cv-controller-activation.py
