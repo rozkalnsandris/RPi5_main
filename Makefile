@@ -23,6 +23,7 @@ test:
 	python3 ./tests/test-simple-deploy-pointer-failure-926.py
 	python3 ./tests/test-simple-deploy-executor-upgrade-933.py
 	python3 ./tests/test-simple-deploy-timer-restoration-v1.py
+	python3 ./tests/test-simple-deploy-per-target-timer-v1.py
 	python3 ./tests/test-simple-deploy-blocker-remediation-v1.py
 	python3 ./tests/test-simple-deploy-hermes-prerequisite-materialization-v1.py
 	python3 ./tests/test-simple-deploy-hermes-prerequisite-phase-b-parent-v2.py
