@@ -735,6 +735,7 @@ def _checkout_git(
     return runner(
         [
             "/usr/bin/git",
+            "--no-optional-locks",
             "-c",
             f"safe.directory={checkout_path}",
             "-C",
@@ -803,6 +804,7 @@ def run_phase7_audit(
         "GIT_CONFIG_COUNT": "1",
         "GIT_CONFIG_KEY_0": "safe.directory",
         "GIT_CONFIG_VALUE_0": str(checkout_path),
+        "GIT_OPTIONAL_LOCKS": "0",
     }
     completed = runner(
         [PYTHON, str(audit_path), "--expected-main", expected_main],
