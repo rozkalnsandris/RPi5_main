@@ -24,6 +24,10 @@ test:
 	python3 ./tests/test-simple-deploy-executor-upgrade-933.py
 	python3 ./tests/test-simple-deploy-timer-restoration-v1.py
 	python3 ./tests/test-simple-deploy-blocker-remediation-v1.py
+	python3 ./tests/test-simple-deploy-hermes-prerequisite-materialization-v1.py
+	python3 ./tests/test-simple-deploy-hermes-prerequisite-phase-b-parent-v2.py
+	python3 ./tests/test-simple-deploy-hermes-prerequisite-recovery-v3.py
+	python3 ./tests/test-simple-deploy-hermes-prerequisite-v4.py
 	python3 ./tests/test-coloring-pages-drive-ingest-operator-v1.py
 	python3 ./tests/test-coloring-pages-sitemap-publisher-v1.py
 	python3 ./tests/test-coloring-pages-sitemap-installer-v1.py
