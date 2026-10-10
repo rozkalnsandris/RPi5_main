@@ -124,8 +124,8 @@ class InstallerTests(unittest.TestCase):
         with mock.patch.object(mod.os, "geteuid", return_value=1000):
             mod.install(SHA, runner=runner)
         writes = [(argv, payload) for argv, payload in runner.calls
-                  if argv[:3] in ((mod.SUDO, "-n", mod.MKDIR),
-                                   (mod.SUDO, "-n", mod.INSTALL))]
+                  if tuple(argv[:3]) in ((mod.SUDO, "-n", mod.MKDIR),
+                                          (mod.SUDO, "-n", mod.INSTALL))]
         self.assertEqual(len(writes), 3)
         self.assertEqual(writes[0], ([mod.SUDO, "-n", mod.MKDIR, "-m", "0700",
                                      "--", mod.RELEASE_DIR], None))
