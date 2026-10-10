@@ -137,7 +137,10 @@ class InstallerTests(unittest.TestCase):
                                          "root", "-g", "root", "-m", "0400",
                                          "--", "/dev/stdin", mod.RELEASE])
         self.assertEqual(writes[2][1], mod.metadata_for(SHA, OPERATOR.read_bytes()))
-        self.assertNotIn(b"api_token", writes[1][1] + writes[2][1])
+        # The operator necessarily contains the JSON field name "api_token";
+        # the release metadata must contain no credential fields or secret values.
+        self.assertNotIn(b"api_token", writes[2][1])
+        self.assertEqual(set(json.loads(writes[2][1])), {"source_sha", "operator_sha256"})
         self.assertEqual(runner.writes, 3)
         for argv, _ in runner.calls:
             self.assertNotIn("python3", " ".join(argv))
