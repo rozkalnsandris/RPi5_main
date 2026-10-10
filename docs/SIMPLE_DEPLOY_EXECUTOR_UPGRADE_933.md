@@ -64,6 +64,18 @@ A successful CHECK requires, in two matching observations:
 - Expected fixed root-owned public-file metadata, inode/source stability and
   SHA-256/Git-blob identities, with no existing fixed stage.
 
+On an idle host, `systemctl show` can emit `Job=` (an explicitly present
+empty value) instead of `Job=0`. The operator accepts **only** those two
+forms as no pending job. A missing `Job` property, nonzero job or unexpected
+value still blocks; `unit_properties` continues to require every requested
+field. This does not relax the timer's **disabled/inactive** requirement,
+authorize service lifecycle changes or permit the one-file APPLY.
+
+The already-staged root-owned #933 operator remains pinned to its original
+Git blob until a **separate owner-authorized LIVE file replacement** installs
+this corrected source. Merging a source-only fix does not modify the staged
+operator, candidate, installed executor, systemd state or production runtime.
+
 At issue discovery the timer was enabled/active, and the service was failed.
 Those states **block CHECK and APPLY**, as designed. Disabling the timer,
 quiescing/resetting the service or providing the source candidate are **not

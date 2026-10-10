@@ -82,6 +82,13 @@ def quiescent():
                                     "SubState", "Job", "NeedDaemonReload"))
     service = unit_properties(SERVICE, ("LoadState", "ActiveState", "SubState",
                                         "MainPID", "Job", "NeedDaemonReload"))
+    # systemctl show may render an idle unit's Job property as Job=.
+    # Only an explicitly present empty value is equivalent to Job=0.
+    # Missing or nonzero jobs still fail the exact comparisons below.
+    if timer.get("Job") == "":
+        timer["Job"] = "0"
+    if service.get("Job") == "":
+        service["Job"] = "0"
     if timer != {
         "LoadState": "loaded", "UnitFileState": "disabled",
         "ActiveState": "inactive", "SubState": "dead",
