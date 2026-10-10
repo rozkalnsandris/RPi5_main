@@ -21,6 +21,8 @@ INSTALLED = Path("/usr/local/sbin/rpi5-cloudflare-zone-bot-waf")
 RELEASE = Path("/usr/local/libexec/rpi5-cloudflare-zone-bot-waf/release.json")
 SECRET = Path("/etc/rpi5-secrets/cloudflare/zone-waf-writer.json")
 BASE = "https://api.cloudflare.com/client/v4"
+MAX_PROTECTED_DATA_BYTES = 8192
+MAX_INSTALLED_OPERATOR_BYTES = 131072  # Same bound as the one-time source installer.
 UA_MARKERS = (
     "gptbot", "chatgpt-user", "claudebot", "claude-user",
     "bytespider", "ccbot",
@@ -98,6 +100,10 @@ def verify(after: dict, before: list[tuple]) -> None:
 
 
 def owned_file(path: Path, mode: int) -> bytes:
+    # Only the exact installed 0500 operator can use the larger source-size cap.
+    # Release metadata and the dedicated secret stay bounded to 8 KiB.
+    limit = (MAX_INSTALLED_OPERATOR_BYTES if path == INSTALLED and mode == 0o500
+             else MAX_PROTECTED_DATA_BYTES)
     try:
         s = path.lstat()
         if not stat.S_ISREG(s.st_mode) or s.st_uid != 0 or s.st_gid != 0 or stat.S_IMODE(s.st_mode) != mode:
@@ -109,8 +115,8 @@ def owned_file(path: Path, mode: int) -> bytes:
             if not stat.S_ISREG(s2.st_mode) or s2.st_uid != 0 or s2.st_gid != 0 or stat.S_IMODE(s2.st_mode) != mode:
                 raise GateError("protected_file_changed")
             with os.fdopen(fd, "rb", closefd=False) as f:
-                data = f.read(8193)
-            if len(data) > 8192:
+                data = f.read(limit + 1)
+            if len(data) > limit:
                 raise GateError("protected_file_too_large")
             return data
         finally:
