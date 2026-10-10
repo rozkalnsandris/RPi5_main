@@ -157,6 +157,7 @@ test:
 	python3 ./tests/test-ingress-admin-zone-verification-v1.py
 	python3 ./tests/test-ingress-private-zone-verification-v1.py
 	python3 ./tests/test-ingress-drift-audit-v1.py
+	python3 ./tests/test-ingress-phase8-operations-v1.py
 	python3 ./tests/test-weather-public-loopback-bind-v1.py
 	python3 ./tests/test-weather-public-rebind-execution-contract-v1.py
 	python3 ./tests/test-weather-public-rebind-operator-v1.py
