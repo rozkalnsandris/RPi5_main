@@ -1,0 +1,48 @@
+{
+  "schema": "rozkalns.rpi5-main.cloudflare-zone-bot-waf.v1",
+  "status": "source-only-not-deployed",
+  "zone": "rozkalns.net",
+  "scope": "apex-and-all-subdomains",
+  "operator": "scripts/cloudflare_zone_bot_waf.py",
+  "phase": "http_request_firewall_custom",
+  "rule_ref": "rozkalns-zone-ai-crawlers-v1",
+  "rule_action": "block",
+  "detection": "bounded-case-insensitive-named-user-agent-markers",
+  "human_search_engines": "not-targeted-by-this-rule",
+  "production_assurances": {
+    "generic_bot_elimination": false,
+    "user_agent_spoof_resistant": false,
+    "private_data_access_control": false,
+    "cloudflare_plan_rule_quota_verified": false,
+    "live_existing_rules_read": false
+  },
+  "credentials": {
+    "separate_zone_waf_token_required": true,
+    "reuse_access_or_tunnel_tokens": false,
+    "fixed_root_only_path": "/etc/rpi5-secrets/cloudflare/zone-waf-writer.json",
+    "zone_waf_write_only_scope": true
+  },
+  "api": {
+    "fixed_zone_entrypoint_phase": "http_request_firewall_custom",
+    "preflight": ["GET /zones/{zone_id}", "GET /zones/{zone_id}/rulesets/phases/http_request_firewall_custom/entrypoint"],
+    "existing_entrypoint_mutation": "POST /zones/{zone_id}/rulesets/{ruleset_id}/rules",
+    "absent_entrypoint_mutation": "POST /zones/{zone_id}/rulesets",
+    "maximum_writes": 1,
+    "post_write": "GET-only-preserve-old-rules-and-verify-target",
+    "forbidden": ["PUT", "PATCH", "DELETE", "retry", "rollback", "existing-rule-replacement"]
+  },
+  "gates": {
+    "operator_install_separate_authorization": true,
+    "token_provision_separate_authorization": true,
+    "cloudflare_mutation_separate_authorization": true,
+    "no_install_in_this_pr": true,
+    "no_live_in_this_pr": true,
+    "no_merge_in_this_pr": true
+  },
+  "documentation": [
+    "https://developers.cloudflare.com/waf/custom-rules/create-api/",
+    "https://developers.cloudflare.com/ruleset-engine/rulesets-api/add-rule/",
+    "https://developers.cloudflare.com/bots/additional-configurations/block-ai-bots/",
+    "https://developers.cloudflare.com/ruleset-engine/rules-language/functions/"
+  ]
+}
