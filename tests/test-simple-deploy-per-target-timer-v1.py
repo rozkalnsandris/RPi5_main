@@ -72,7 +72,7 @@ class PerTargetTimerTests(unittest.TestCase):
         self.assertIn("rozkalns-cv-rpi5", aliases)
         self.assertIn("hermes-deals", aliases)
         self.assertIn("hermes-tech-public-rpi5", aliases)
-        self.assertIn("rozkalns-simple-deployer@rozkalns-cv-rpi5.timer", self.doc)
+        self.assertIn("`rozkalns-simple-deployer@` + `rozkalns-cv-rpi5` + `.timer`", self.doc)
         self.assertIn("not a future release or timer authorization", self.doc)
 
     def test_fail_closed_activation_boundary_is_documented(self) -> None:

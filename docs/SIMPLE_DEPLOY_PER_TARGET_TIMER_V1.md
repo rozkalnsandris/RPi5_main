@@ -19,9 +19,9 @@ This is not a new deployment framework, installer, controller, webhook, or GitHu
 
 Only the following first instance is proposed for **a later, separately authorized** installer/activation step:
 
-`rozkalns-simple-deployer@rozkalns-cv-rpi5.timer`
+`rozkalns-simple-deployer@` + `rozkalns-cv-rpi5` + `.timer`
 
-Its service is `rozkalns-simple-deployer@rozkalns-cv-rpi5.service`, and its executor target is `rozkalns-cv-rpi5`. This target already has a successfully verified one-shot SIMPLE-DEPLOY receipt; that historical evidence is not a future release or timer authorization. **No Weather, Coloring Pages, Hermes Deals or Hermes Tech instance is approved for installation or activation by this source PR.** Their adoption and GitHub-side publication triggers remain distinct future decisions. The legacy CV pull-deploy timer also stays disabled.
+Its service is `rozkalns-simple-deployer@` + `rozkalns-cv-rpi5` + `.service`, and its executor target is `rozkalns-cv-rpi5`. This target already has a successfully verified one-shot SIMPLE-DEPLOY receipt; that historical evidence is not a future release or timer authorization. **No Weather, Coloring Pages, Hermes Deals or Hermes Tech instance is approved for installation or activation by this source PR.** Their adoption and GitHub-side publication triggers remain distinct future decisions. The legacy CV pull-deploy timer also stays disabled.
 
 ## Required separate CV activation gate — later, not executed here
 
@@ -31,7 +31,7 @@ Before even installing units, review a fresh exact-main and installed-host snaps
 2. Prove CV `main`, successful exact-source GitHub publication, anonymous GHCR arm64 source/shared-workflow labels and immutable index digest; compare it with the running image and accepted last-success receipt. Unknown/stale/pending candidate or overlapping publication means STOP. Any necessary one-shot CV reconcile needs separate authorization before activation.
 3. Prove CV liveness/readiness HTTP 200, valid non-blocked target status/receipt, no unresolved `STOP_ERROR` or in-flight mutation, generic `--all` timer disabled/inactive and no queued `--all` service job; no legacy CV pull-deploy timer; no competing CV instance job. The generic `--all` service must never run concurrently with the per-target schedule.
 4. Review the standing authorization risk: activating the CV timer permits **future** ordinary CV application image pulls and Compose updates without per-release owner commands. Explicitly bind that risk, timing and failure semantics in the new LIVE decision; preflight must precede `enable/start` because the first tick may occur immediately.
-5. Install only exact fixed reviewed service/timer templates, reload systemd and enable/start **only** `rozkalns-simple-deployer@rozkalns-cv-rpi5.timer` once under that authorization. Verify timer enabled/active, expected target service, health/readiness and immutable digest receipt. Any error/drift after the first write means evidence + STOP, with no retry/rollback/cleanup by default.
+5. Install only exact fixed reviewed service/timer templates, reload systemd and enable/start **only** `rozkalns-simple-deployer@` + `rozkalns-cv-rpi5` + `.timer` once under that authorization. Verify timer enabled/active, expected target service, health/readiness and immutable digest receipt. Any error/drift after the first write means evidence + STOP, with no retry/rollback/cleanup by default.
 
 The existing five-target timer restoration contract and all nine gates in `docs/SIMPLE_DEPLOY_TIMER_RESTORATION_V1.md` are unchanged. This **per-target source design does not declare `--all` safe to activate**, shrink the static registry, activate Hermes, or establish Weather/Coloring publication cadence. No production secrets/config, protected data, systemd/Docker state or Cloudflare changes belong in this PR.
 
