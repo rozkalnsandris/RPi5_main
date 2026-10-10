@@ -27,7 +27,8 @@ class Runner:
         self.mutations = 0
         self.fail_at = fail_at
         self.missing_staging = missing_staging
-        self.old_digest = old_digest
+        self.live_operator_digest = op.OLD_OPERATOR_SHA if old_digest else "0" * 64
+        self.live_release_digest = op.OLD_RELEASE_SHA
         self.candidate_digest = hashlib.sha256(SOURCE).hexdigest()
         self.release_digest = hashlib.sha256(op.metadata(CANDIDATE, SOURCE)).hexdigest()
 
@@ -63,8 +64,8 @@ class Runner:
         elif command == op.SHA256SUM:
             path = args[-1]
             digest = {
-                op.TARGET: op.OLD_OPERATOR_SHA if self.old_digest else "0" * 64,
-                op.RELEASE: op.OLD_RELEASE_SHA,
+                op.TARGET: self.live_operator_digest,
+                op.RELEASE: self.live_release_digest,
                 op.STAGE_OPERATOR: self.candidate_digest,
                 op.STAGE_RELEASE: self.release_digest,
             }[path]
@@ -75,6 +76,10 @@ class Runner:
             self.mutations += 1
             if self.mutations == self.fail_at:
                 rc = 2
+            elif command == op.MV and args[-2:] == [op.STAGE_OPERATOR, op.TARGET]:
+                self.live_operator_digest = self.candidate_digest
+            elif command == op.MV and args[-2:] == [op.STAGE_RELEASE, op.RELEASE]:
+                self.live_release_digest = self.release_digest
         return subprocess.CompletedProcess(args, rc, stdout=text.encode(), stderr=b"")
 
 
@@ -108,6 +113,8 @@ class ReplaceTests(unittest.TestCase):
                                          op.STAGE_OPERATOR, op.TARGET])
         self.assertEqual(writes[3][0], [op.SUDO, "-n", op.MV, "-T", "--",
                                          op.STAGE_RELEASE, op.RELEASE])
+        self.assertEqual(r.live_operator_digest, r.candidate_digest)
+        self.assertEqual(r.live_release_digest, r.release_digest)
         # Both incumbents and both staged digests must be read before the first rename.
         first_mv = next(i for i, (a, _) in enumerate(r.calls) if a[:3] == [op.SUDO, "-n", op.MV])
         checked = [a[-1] for a, _ in r.calls[:first_mv] if a[:3] == [op.SUDO, "-n", op.SHA256SUM]]
