@@ -1,6 +1,6 @@
 {
   "schema": "rozkalns.rpi5-main.cloudflare-zone-bot-waf.v1",
-  "status": "source-only-install-and-provision-reviewed-not-activated",
+  "status": "source-only-not-deployed",
   "zone": "rozkalns.net",
   "scope": "apex-and-all-subdomains",
   "operator": "scripts/cloudflare_zone_bot_waf.py",
