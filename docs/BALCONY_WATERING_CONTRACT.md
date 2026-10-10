@@ -110,7 +110,7 @@ The ESP32 keeps its independent 180 s pump fail-safe. This controller neither we
 
 ### Message policy
 
-Telegram receives exactly three kinds of message: a real watering cycle (duration and the dry count before it), an error (unreachable Home Assistant, unusable state JSON, unusable active sensor, unusable temperature, unconfirmed ON or OFF), and a frost block. A normal skip — too few dry sensors, tray already wet, already watered today, lock busy — is logged only.
+Telegram notifications use the existing RPi5 notifications bot (the script's `TELEGRAM_TOKEN` and `CHAT_ID`), not the Hermes Agent bot. Each scheduled outcome is logged locally and reported there: a real watering cycle (duration and dry sensor count), a normal **Nav laistīts** skip (too few dry sensors, tray already wet, or already watered today), an error (unreachable Home Assistant, unusable state JSON/sensors/temperature, unconfirmed ON or OFF), a frost block, or a lock-contention warning. Dry-run suppresses all Telegram notifications. Hermes cron delivery should remain `local` to prevent duplicate raw execution logs in the Hermes Agent chat. Changing that production cron delivery remains a separately authorized LIVE step.
 
 ### Manual commands and frost (evaluation)
 
@@ -184,8 +184,8 @@ The repository-wide `make validate` gate includes this regression together with 
 2. retired 2/14/15 `unavailable` => still waters and never counts as dry;
 3. active sensor missing, `unavailable`, `unknown` or unexpected categorical value => skip with an error message, no pump request, no day marker;
 4. empty or malformed Home Assistant state payload => skip with an error message;
-5. one dry sensor => quiet skip, no Telegram message at all;
-6. tray already moist => quiet skip;
+5. one dry sensor => skip, exactly one no-watering Telegram message;
+6. tray already moist => skip, exactly one no-watering Telegram message;
 7. forecast low at or below the frost threshold => blocked with a frost message and no pump request;
 8. low current temperature blocks even when only the weather-service forecast is available;
 9. unusable temperature data => skip with an error message;
