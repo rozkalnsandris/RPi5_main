@@ -182,6 +182,7 @@ test:
 	python3 ./tests/test-cloudflare-rdc-operator.py
 	python3 ./tests/test-cloudflare-zone-bot-waf.py
 	python3 ./tests/test-cloudflare-zone-bot-waf-install.py
+	python3 ./tests/test-cloudflare-zone-bot-waf-replace.py
 	python3 ./tests/test-cloudflare-rdc-operator-install.py
 	python3 ./tests/test-cloudflare-p1d-client-session-compat.py
 	python3 ./tests/test-cloudflare-owner-phone-preflight.py
