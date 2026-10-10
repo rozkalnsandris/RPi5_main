@@ -88,3 +88,12 @@ Installer redesign official references:
 - https://www.gnu.org/software/coreutils/manual/html_node/mkdir-invocation.html
 - https://www.gnu.org/software/coreutils/manual/html_node/Target-directory.html
 - https://docs.python.org/3/library/subprocess.html#security-considerations
+
+## Exact-incumbent replacement executor — source proposal (#969)
+
+Source-only script: `scripts/replace-cloudflare-zone-bot-waf.py`. It does **not** run automatically. This proposal uses the prior RPi5 read-only incumbent fingerprints: operator SHA-256 `95adf48824f24a381b7691b078afbbe9948578e338dab69099848e42e4a61e42`, release SHA-256 `dd71c7ce33430c465af7ada9e15981c8e38c4c0e2d4d94b26e20786059782ccc`, incumbent source `861c1da26caba215ef05a1681a6bcd190641c43f`. They are **expected baselines, not a current LIVE claim**. Reconfirm read-only immediately before separately approved replacement.
+
+The unprivileged script requires clean exact `main`, canonical GitHub origin, fixed tracked operator source ≤128 KiB, sudo checks of the existing root:root 0500/0400 files and strict parent directories. The two dedicated staging paths must not exist, even as dangling symlinks. Candidate operator and new `release.json` bytes are pinned before writing. Only fixed `sudo -n /usr/bin/install -T` stages the files; SHA-256/owner/mode of staging and incumbents are verified; two fixed `sudo -n /usr/bin/mv -T` commands atomically rename each staged file **individually**; final metadata and digests are checked. No credential path is opened, no Cloudflare API is used, no sudoers modification and no dynamic privileged Python execution. For full security, a new LIVE decision must additionally validate exclusive maintenance (no concurrent WAF operator invocation), approved fixed staging names, root parent trust, and the two-file non-atomic cutover risk.
+
+The **two-file release update is not transactionally atomic**. After *any* privileged stage command is dispatched, failure/timeout/digest drift => STOP with possibly partial state. Never retry, rollback, clean up staged files or switch to an alternate executor without a new explicit owner decision. Earlier `--provision-secret` authorization does not authorize this replacement. Source merge never authorizes host execution. A subsequent local-TTY credentials operation remains separately gated.
+
