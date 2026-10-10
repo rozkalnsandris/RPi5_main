@@ -2,10 +2,16 @@
 """Offline, no-network guards for the source-only zone bot WAF operator."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
+import stat
+import tempfile
+from types import SimpleNamespace
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "scripts/cloudflare_zone_bot_waf.py"
@@ -85,6 +91,59 @@ class ZoneBotWafTests(unittest.TestCase):
             with self.subTest(rules=rules):
                 with self.assertRaises(mod.GateError):
                     mod.verify(current(rules), before)
+
+    def test_protected_file_limits_keep_secrets_small_but_allow_installed_operator(self):
+        self.assertEqual(mod.MAX_PROTECTED_DATA_BYTES, 8192)
+        self.assertEqual(mod.MAX_INSTALLED_OPERATOR_BYTES, 131072)
+        self.assertGreater(len(SOURCE.read_bytes()), mod.MAX_PROTECTED_DATA_BYTES)
+
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "fixture"
+            def root_regular(mode):
+                return SimpleNamespace(st_mode=stat.S_IFREG | mode,
+                                       st_uid=0, st_gid=0)
+
+            # Exercise the real bounded file reader with real fixture bytes;
+            # only file ownership metadata is simulated (no root, network, or secrets).
+            with mock.patch.object(mod, "INSTALLED", target):
+                owner = root_regular(0o500)
+                with mock.patch.object(Path, "lstat", return_value=owner), \
+                     mock.patch.object(mod.os, "fstat", return_value=owner):
+                    for size in (8193, 14162, 131072):
+                        with self.subTest(kind="operator", size=size):
+                            data = b"A" * size
+                            target.write_bytes(data)
+                            self.assertEqual(mod.owned_file(target, 0o500), data)
+                    target.write_bytes(b"A" * 131073)
+                    with self.assertRaisesRegex(mod.GateError, "protected_file_too_large"):
+                        mod.owned_file(target, 0o500)
+
+            for mode in (0o400, 0o600):
+                owner = root_regular(mode)
+                with mock.patch.object(Path, "lstat", return_value=owner), \
+                     mock.patch.object(mod.os, "fstat", return_value=owner):
+                    for size in (8192, 8193):
+                        with self.subTest(kind="metadata_or_secret", mode=mode, size=size):
+                            data = b"B" * size
+                            target.write_bytes(data)
+                            if size == 8192:
+                                self.assertEqual(mod.owned_file(target, mode), data)
+                            else:
+                                with self.assertRaisesRegex(mod.GateError, "protected_file_too_large"):
+                                    mod.owned_file(target, mode)
+
+    def test_installed_release_integrity_verifies_complete_operator_digest(self):
+        operator = SOURCE.read_bytes()
+        self.assertGreater(len(operator), 8192)
+        sha = "a" * 40
+        manifest = json.dumps({"source_sha": sha,
+                               "operator_sha256": hashlib.sha256(operator).hexdigest()}).encode()
+        with mock.patch.object(mod, "INSTALLED", SOURCE), \
+             mock.patch.object(mod.os, "geteuid", return_value=0), \
+             mock.patch.object(mod, "owned_file", side_effect=[manifest, operator]) as read:
+            mod.verified_installed_release(sha)
+        self.assertEqual(read.call_args_list,
+                         [mock.call(mod.RELEASE, 0o400), mock.call(SOURCE, 0o500)])
 
     def test_api_path_and_root_operator_gate(self):
         for bad in ("", "not-a-zone-id", "1" * 33):
