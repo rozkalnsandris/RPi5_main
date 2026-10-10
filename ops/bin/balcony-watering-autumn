@@ -83,8 +83,8 @@ log() {
     printf '%s %s\n' "$(TZ="Europe/Berlin" date '+%Y-%m-%d %H:%M:%S')" "$*" | tee -a "$LOGFILE"
 }
 
-# Message policy: real watering, error, frost block. A normal skip is logged
-# only and never produces a Telegram message.
+# Message policy: real watering, normal skip, error, frost block and lock
+# contention. Deliver via the existing RPi5 notifications bot, not Hermes.
 send_tg() {
     if [[ "$DRY_RUN" == "1" ]]; then
         log "DRY-RUN telegram (suppressed): $1"
@@ -104,6 +104,7 @@ send_tg() {
 exec 200>"$LOCKFILE"
 if ! flock -n 200; then
     log "SKIP: autumn watering controller already holds the lock"
+    send_tg "⚠️ Balkona laistīšana: pārbaude netika sākta — cita izpilde jau darbojas"
     exit 1
 fi
 
@@ -128,6 +129,7 @@ mark_watered() {
 # invokes this controller.
 if [[ "$(last_watered_date || true)" == "$(today)" ]]; then
     log "SKIP: already watered today ($(today)) — at most one cycle per day"
+    send_tg "🌿 Balkona laistīšana: Nav laistīts — šodien jau laistīts"
     exit 0
 fi
 
@@ -436,6 +438,7 @@ fail_run() {
 
 skip_quiet() {
     log "SKIP: $*"
+    send_tg "🌿 Balkona laistīšana: Nav laistīts — $*"
     exit 0
 }
 

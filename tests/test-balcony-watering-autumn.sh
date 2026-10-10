@@ -3,7 +3,7 @@
 #
 # No network, no pump, no live Home Assistant: every curl URL is answered by a
 # local mock and every sleep is a no-op. The Telegram endpoint is intercepted
-# locally so message policy (real watering / error / frost block only) can be
+# locally so message policy (watering / normal skip / error / frost block) can be
 # asserted without any outbound request.
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -270,21 +270,23 @@ run_autumn
 assert_actions ''
 assert_tg_contains 'could not be parsed'
 
-# 5: a single dry sensor must never water the whole tray.
+# 5: a single dry sensor must never water the whole tray; notify no watering.
 export MOCK_SENSOR_MODE=one_dry
 reset_run
 run_autumn
 [[ "$rc" -eq 0 ]] || fail "case 5 expected exit 0, got ${rc}"
 assert_actions ''
-assert_tg_count 0
+assert_tg_count 1
+assert_tg_contains 'Nav laistīts'
 [[ -f "$tmp/state/last-watered" ]] && fail "case 5 must not record a watering"
 
-# 6: an already wet tray is left alone and stays quiet.
+# 6: an already wet tray is left alone and reports no watering.
 export MOCK_SENSOR_MODE=all_wet
 reset_run
 run_autumn
 assert_actions ''
-assert_tg_count 0
+assert_tg_count 1
+assert_tg_contains 'Nav laistīts'
 
 # 7: frost risk blocks watering and reports itself.
 export MOCK_SENSOR_MODE=valid
@@ -360,7 +362,8 @@ printf '%s\n' "$(TZ=Europe/Berlin date '+%Y-%m-%d')" >"$tmp/state/last-watered"
 run_autumn
 [[ "$rc" -eq 0 ]] || fail "case 13 expected exit 0, got ${rc}"
 assert_actions ''
-assert_tg_count 0
+assert_tg_count 1
+assert_tg_contains 'šodien jau laistīts'
 
 # 14: duration is bounded by the device hard limit and reported accurately.
 reset_run
@@ -386,6 +389,15 @@ assert_tg_count 0
 grep -q 'DRY-RUN: gates passed' "$logfile" || fail "case 15 must log the dry-run decision"
 unset BALCONY_AUTUMN_DRY_RUN
 
+# 15b: normal skip in dry-run still never sends a message.
+reset_run
+export MOCK_SENSOR_MODE=one_dry BALCONY_AUTUMN_DRY_RUN=1
+run_autumn
+assert_actions ''
+assert_tg_count 0
+unset BALCONY_AUTUMN_DRY_RUN
+export MOCK_SENSOR_MODE=valid
+
 # 16: calibration readback compares before/after and stays out of Telegram by
 # default, while BALCONY_AUTUMN_CALIBRATION=1 adds one explicit message.
 reset_run
@@ -402,14 +414,15 @@ assert_tg_contains 'Calibration:'
 unset BALCONY_AUTUMN_CALIBRATION
 export BALCONY_AUTUMN_SOAK_SECONDS=0
 
-# 17: overlapping runs are refused by the lock.
+# 17: overlapping runs are refused by the lock and report contention.
 reset_run
 exec 201>"$tmp/autumn.lock"
 flock -n 201 || fail "case 17 could not take the test lock"
 run_autumn
 [[ "$rc" -ne 0 ]] || fail "case 17 expected a refusal, got ${rc}"
 assert_actions ''
-assert_tg_count 0
+assert_tg_count 1
+assert_tg_contains 'cita izpilde jau darbojas'
 exec 201>&-
 
 printf 'Balcony autumn watering regression: PASS (quorum gate, frost gate, once-per-day, fail-closed sensors, message policy)\n'
