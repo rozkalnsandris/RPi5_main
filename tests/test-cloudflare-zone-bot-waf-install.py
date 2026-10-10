@@ -144,7 +144,8 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(runner.writes, 3)
         for argv, _ in runner.calls:
             self.assertNotIn("python3", " ".join(argv))
-            self.assertNotIn("-c", argv)
+            if "-c" in argv:
+                self.assertEqual(argv[2], mod.STAT)  # GNU stat --format, not Python -c
         self.assertNotIn("shell=True", INSTALLER.read_text())
 
     def test_each_root_write_failure_is_final_no_retry_or_cleanup(self):
