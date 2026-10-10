@@ -77,6 +77,22 @@
     "existing_targets_must_be_absent": true,
     "no_upgrade": true,
     "no_sudoers_change": true,
-    "separate_live_authorization_required": true
+    "separate_live_authorization_required": true,
+    "privileged_execution": "fixed-gnu-coreutils-only",
+    "root_python_code_evaluation": false,
+    "root_shell_execution": false,
+    "root_write_commands": [
+      "/usr/bin/mkdir -m 0700 -- <fixed-release-dir>",
+      "/usr/bin/install -T -o root -g root -m 0500 -- /dev/stdin <fixed-operator>",
+      "/usr/bin/install -T -o root -g root -m 0400 -- /dev/stdin <fixed-release-metadata>"
+    ],
+    "metadata_and_source_bytes_pinned_before_first_write": true,
+    "require_root_owned_unwritable_parent_directories": true,
+    "post_mutation_verification": [
+      "root owner:group and modes 0700/0500/0400",
+      "SHA-256 of operator and metadata"
+    ],
+    "mutation_failure": "STOP after first write dispatch; no retry/rollback/cleanup",
+    "outcome": "source-only-platform-tool-acceptance-unconfirmed"
   }
 }
