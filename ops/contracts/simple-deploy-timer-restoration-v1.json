@@ -1,0 +1,76 @@
+{
+  "schema": "rpi5.simple-deploy.timer-restoration-design.v1",
+  "status": "SOURCE_ONLY_NOT_INSTALLED_NO_RUNTIME_GUARD",
+  "issue": 60,
+  "source": {
+    "registry": "ops/deploy/simple-deploy-targets-v1.json",
+    "service": "ops/systemd/rozkalns-simple-deployer.service",
+    "timer": "ops/systemd/rozkalns-simple-deployer.timer",
+    "invocation": "--all",
+    "registry_enabled": true,
+    "reviewed_targets": [
+      "rozkalns-weather-public-rpi5",
+      "hermes-deals",
+      "hermes-tech-public-rpi5",
+      "rozkalns-cv-rpi5",
+      "coloring-pages-public-rpi5"
+    ]
+  },
+  "decision": {
+    "default": "BLOCKED_NO_START",
+    "required_gates": [
+      "EXACT_SOURCE_AND_HOST_PROVENANCE",
+      "ELAPSED_ONBOOT_MAY_TRIGGER_IMMEDIATELY",
+      "ALL_INSTALLED_TARGETS_REVIEWED_AND_ADOPTED",
+      "ALL_CURRENT_STATUSES_RECEIPTS_AND_HEALTH_VALID",
+      "OCI_POINTER_VERIFIED_AFTER_ANONYMOUS_CHALLENGE",
+      "NO_PENDING_MUTATION_AT_HANDOFF",
+      "QUIESCENT_TIMER_SERVICE_AND_NO_JOBS",
+      "EXACT_SEPARATE_OWNER_LIVE_AUTHORIZATION",
+      "POST_ACTIVATION_SANITIZED_ACCEPTANCE"
+    ],
+    "failure_disposition": "BLOCKED_NO_START",
+    "no_implicit_merge_or_live": true,
+    "no_automatic_retry_rollback_cleanup": true,
+    "standing_reconciliation_scope": "ALL_INSTALLED_TARGETS"
+  },
+  "target_acceptance": {
+    "compose_source_and_installed_hash_must_match": true,
+    "first_adoption_requires_separate_owner_live": true,
+    "permitted_current_status": [
+      "SUCCESS",
+      "NO_OP_CURRENT"
+    ],
+    "blocked_must_equal_false": true,
+    "no_prior_stop_error": true,
+    "no_unresolved_pre_mutation_failure": true,
+    "valid_last_success_receipt_required": true,
+    "pointer_digest_must_equal_receipt": true,
+    "current_health_readiness_evidence_required": true,
+    "unknown_is_blocked": true
+  },
+  "pointer": {
+    "initial_http_401": "AUTH_CHALLENGE_NOT_DIGEST_EVIDENCE",
+    "required_resolution": "ANONYMOUS_SCOPED_BEARER_IN_MEMORY_READ_ONLY_OR_BLOCK",
+    "credential_read_forbidden": true,
+    "raw_auth_headers_or_tokens_publication_forbidden": true,
+    "unknown_or_failed_resolution": "BLOCKED_NO_START",
+    "concurrent_publisher_race": "BLOCK_UNLESS_EXPLICIT_STANDING_DEPLOY_RISK",
+    "no_docker_execution_in_this_design": true
+  },
+  "timer": {
+    "onboot_elapsed_can_trigger_immediate": true,
+    "safe_delay_after_start_assumed": false,
+    "pre_live_state": "DISABLED_INACTIVE_DEAD",
+    "service_quiescence": "INACTIVE_DEAD_NO_JOBS",
+    "no_pending_reload": true,
+    "separate_enable_start_live_required": true,
+    "no_runtime_registry_override": true,
+    "no_timer_or_service_source_modification": true
+  },
+  "publication_boundary": {
+    "no_raw_config_logs_secrets": true,
+    "only_sanitized_status_and_digest_comparison": true,
+    "no_runtime_or_docker_or_systemd_mutation": true
+  }
+}

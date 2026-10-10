@@ -124,6 +124,11 @@ fresh state and any blockers through an independently scoped read-only
 gate; starting/restarting/resetting a timer or service requires separate
 owner LIVE authority and verification.
 
+The source-only default-deny timer restoration gates are defined in
+`docs/SIMPLE_DEPLOY_TIMER_RESTORATION_V1.md` and
+`ops/contracts/simple-deploy-timer-restoration-v1.json`.
+They do not authorize or install a systemd/runtime change.
+
 ## Source safety and references
 
 - Production deploy/change required for this source-only guide: **NO**.
