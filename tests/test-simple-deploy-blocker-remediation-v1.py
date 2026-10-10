@@ -110,7 +110,7 @@ class BlockerRemediationDesignTests(unittest.TestCase):
             if marker == "POST":
                 continue
             self.assertIn(marker, self.doc)
-        for forbidden in ("192.168.", "HOME_LAT", "HOME_LON", "token=", "POSTGRES_PASSWORD="):
+        for forbidden in ("192.168.", "HOME_LAT", "HOME_LON", "token=", "POSTGRES_PASSWORD"):
             self.assertNotIn(forbidden, self.doc)
         recipe = "\tpython3 ./tests/test-simple-deploy-blocker-remediation-v1.py"
         self.assertEqual(MAKEFILE.read_text(encoding="utf-8").count(recipe), 1)
