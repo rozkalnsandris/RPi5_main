@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import getpass
+import warnings
 import hashlib
 import json
 import os
@@ -117,7 +119,7 @@ def owned_file(path: Path, mode: int) -> bytes:
         raise GateError("protected_file_unavailable") from None
 
 
-def installed_credentials(expected_main: str) -> tuple[str, str]:
+def verified_installed_release(expected_main: str) -> None:
     if os.geteuid() != 0 or Path(__file__).resolve() != INSTALLED:
         raise GateError("installed_root_operator_required")
     if not re.fullmatch(r"[0-9a-f]{40}", expected_main):
@@ -129,6 +131,10 @@ def installed_credentials(expected_main: str) -> tuple[str, str]:
         raise GateError("invalid_release_hash")
     if hashlib.sha256(owned_file(INSTALLED, 0o500)).hexdigest() != release["operator_sha256"]:
         raise GateError("operator_hash_mismatch")
+
+
+def installed_credentials(expected_main: str) -> tuple[str, str]:
+    verified_installed_release(expected_main)
     secret = json.loads(owned_file(SECRET, 0o600))
     if set(secret) != {"zone_id", "zone_name", "api_token"}:
         raise GateError("secret_schema_mismatch")
@@ -176,17 +182,91 @@ def api_call(token: str, method: str, path: str, payload: dict | None = None) ->
     return code, doc["result"]
 
 
+
+def provision_secret(expected_main: str) -> None:
+    """Future owner-gated provisioning, only on the installed root operator.
+
+    Credentials are taken exclusively from the local controlling terminal.
+    File creation is exclusive; after that first mutation, errors require STOP.
+    """
+    verified_installed_release(expected_main)
+    try:
+        parent = SECRET.parent.lstat()
+        if (not stat.S_ISDIR(parent.st_mode) or parent.st_uid != 0
+                or parent.st_gid != 0 or stat.S_IMODE(parent.st_mode) & 0o077):
+            raise GateError("secret_directory_not_private")
+        # No symlink, file, or dangling symlink may preexist.
+        try:
+            SECRET.lstat()
+        except FileNotFoundError:
+            pass
+        else:
+            raise GateError("dedicated_secret_already_exists")
+        tty = os.open("/dev/tty", os.O_RDWR | os.O_NOCTTY | os.O_NOFOLLOW)
+        try:
+            if not os.isatty(tty):
+                raise GateError("controlling_tty_required")
+        finally:
+            os.close(tty)
+    except OSError:
+        raise GateError("controlling_tty_or_private_directory_unavailable") from None
+
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", getpass.GetPassWarning)
+            zone = getpass.getpass("Dedicated rozkalns.net Zone ID (hidden): ")
+            token = getpass.getpass("Dedicated Zone Read + Zone WAF Edit token (hidden): ")
+    except (EOFError, KeyboardInterrupt, getpass.GetPassWarning, OSError):
+        raise GateError("secure_local_tty_input_failed") from None
+    if not hex_id(zone) or not isinstance(token, str) or not (16 <= len(token) <= 512):
+        raise GateError("credential_shape_invalid")
+
+    # A successful GET proves zone identity and read capability, NOT permission
+    # to mutate. Cloudflare token scope is owner-verified separately before apply.
+    _, target = api_call(token, "GET", f"/zones/{zone}")
+    if target.get("id") != zone or target.get("name") != ZONE_NAME:
+        raise GateError("provider_zone_identity_mismatch")
+    entrypoint = f"/zones/{zone}/rulesets/phases/{PHASE}/entrypoint"
+    code, snapshot = api_call(token, "GET", entrypoint)
+    plan(None if code == 404 else snapshot, zone)
+
+    payload = (json.dumps({"zone_id": zone, "zone_name": ZONE_NAME, "api_token": token},
+                          separators=(",", ":")) + "\n").encode()
+    # FIRST MUTATION; never delete, retry or auto-repair after open succeeds.
+    try:
+        fd = os.open(SECRET, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    except OSError:
+        raise GateError("dedicated_secret_create_blocked") from None
+    try:
+        try:
+            os.fchmod(fd, 0o600)
+            view = memoryview(payload)
+            while view:
+                n = os.write(fd, view)
+                if n < 1:
+                    raise OSError("short write")
+                view = view[n:]
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        if hashlib.sha256(owned_file(SECRET, 0o600)).digest() != hashlib.sha256(payload).digest():
+            raise GateError("secret_post_write_mismatch")
+    except (OSError, GateError):
+        raise GateError("secret_post_mutation_unknown_state") from None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Rozkalns zone-wide named AI crawler WAF rule")
     parser.add_argument("--plan", action="store_true", help="offline rule preview (default)")
     parser.add_argument("--preflight", action="store_true", help="read-only installed operator API check")
+    parser.add_argument("--provision-secret", action="store_true", help="separately owner-gated local TTY provisioning")
     parser.add_argument("--apply", action="store_true", help="one owner-gated Cloudflare write")
     parser.add_argument("--expected-main", default="")
     parser.add_argument("--confirm", default="")
     args = parser.parse_args()
-    if sum((args.plan, args.preflight, args.apply)) > 1:
+    if sum((args.plan, args.preflight, args.apply, args.provision_secret)) > 1:
         raise GateError("conflicting_modes")
-    if not args.apply and not args.preflight:
+    if not args.apply and not args.preflight and not args.provision_secret:
         if args.confirm or args.expected_main:
             raise GateError("offline_preview_has_no_authorization")
         print(json.dumps({"status": "source_only", "phase": PHASE, "rule": RULE}, indent=2))
@@ -195,6 +275,12 @@ def main() -> int:
         raise GateError("exact_apply_confirmation_required")
     if args.preflight and args.confirm:
         raise GateError("preflight_must_be_read_only")
+    if args.provision_secret:
+        if args.confirm != "PROVISION-ROZKALNS-ZONE-WAF-SECRET":
+            raise GateError("provision_confirmation_required")
+        provision_secret(args.expected_main)
+        print(json.dumps({"status": "provisioned", "zone": ZONE_NAME, "files_created": 1}))
+        return 0
     zone, token = installed_credentials(args.expected_main)
     _, zone_data = api_call(token, "GET", f"/zones/{zone}")
     if zone_data.get("name") != ZONE_NAME or zone_data.get("id") != zone:

@@ -20,16 +20,30 @@
     "separate_zone_waf_token_required": true,
     "reuse_access_or_tunnel_tokens": false,
     "fixed_root_only_path": "/etc/rpi5-secrets/cloudflare/zone-waf-writer.json",
-    "zone_waf_write_only_scope": true
+    "zone_waf_write_only_scope": true,
+    "zone_read_required": true,
+    "zone_waf_edit_required": true,
+    "provisioning_requires_local_controlling_tty": true,
+    "provisioning_command_is_source_only": true
   },
   "api": {
     "fixed_zone_entrypoint_phase": "http_request_firewall_custom",
-    "preflight": ["GET /zones/{zone_id}", "GET /zones/{zone_id}/rulesets/phases/http_request_firewall_custom/entrypoint"],
+    "preflight": [
+      "GET /zones/{zone_id}",
+      "GET /zones/{zone_id}/rulesets/phases/http_request_firewall_custom/entrypoint"
+    ],
     "existing_entrypoint_mutation": "POST /zones/{zone_id}/rulesets/{ruleset_id}/rules",
     "absent_entrypoint_mutation": "POST /zones/{zone_id}/rulesets",
     "maximum_writes": 1,
     "post_write": "GET-only-preserve-old-rules-and-verify-target",
-    "forbidden": ["PUT", "PATCH", "DELETE", "retry", "rollback", "existing-rule-replacement"]
+    "forbidden": [
+      "PUT",
+      "PATCH",
+      "DELETE",
+      "retry",
+      "rollback",
+      "existing-rule-replacement"
+    ]
   },
   "gates": {
     "operator_install_separate_authorization": true,
@@ -37,12 +51,32 @@
     "cloudflare_mutation_separate_authorization": true,
     "no_install_in_this_pr": true,
     "no_live_in_this_pr": true,
-    "no_merge_in_this_pr": true
+    "no_merge_in_this_pr": true,
+    "install_and_provision_source_implemented": true,
+    "install_not_executed": true,
+    "provisioning_not_executed": true
   },
   "documentation": [
     "https://developers.cloudflare.com/waf/custom-rules/create-api/",
     "https://developers.cloudflare.com/ruleset-engine/rulesets-api/add-rule/",
     "https://developers.cloudflare.com/bots/additional-configurations/block-ai-bots/",
-    "https://developers.cloudflare.com/ruleset-engine/rules-language/functions/"
-  ]
+    "https://developers.cloudflare.com/ruleset-engine/rules-language/functions/",
+    "https://developers.cloudflare.com/api/resources/zones/methods/get/",
+    "https://developers.cloudflare.com/waf/custom-rules/"
+  ],
+  "operator_install": {
+    "source": "scripts/install-cloudflare-zone-bot-waf.py",
+    "requires_clean_exact_main_checkout": true,
+    "requires_canonical_origin": true,
+    "root_executes_repository_python": false,
+    "installed_path": "/usr/local/sbin/rpi5-cloudflare-zone-bot-waf",
+    "installed_mode": "0500",
+    "release_path": "/usr/local/libexec/rpi5-cloudflare-zone-bot-waf/release.json",
+    "release_mode": "0400",
+    "release_directory_mode": "0700",
+    "existing_targets_must_be_absent": true,
+    "no_upgrade": true,
+    "no_sudoers_change": true,
+    "separate_live_authorization_required": true
+  }
 }

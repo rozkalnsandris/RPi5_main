@@ -20,11 +20,31 @@ Historical `RPi5_main#206` records an actual GitHub-runner outage caused by Clou
 - Offline preview (no network/secret): `python3 scripts/cloudflare_zone_bot_waf.py --plan`.
 - Proposed future installed path: `/usr/local/sbin/rpi5-cloudflare-zone-bot-waf`, `root:root 0500`.
 - Proposed future exact-release metadata: `/usr/local/libexec/rpi5-cloudflare-zone-bot-waf/release.json`, `root:root 0400`, fields `source_sha` and `operator_sha256`.
-- **Separate dedicated** root-owned `0600` credential source: `/etc/rpi5-secrets/cloudflare/zone-waf-writer.json`, containing only `zone_id`, `zone_name=rozkalns.net`, and `api_token`. Credential must have zone-scoped `Zone WAF: Edit`; never reuse Access/Tunnel credentials. No secret value is committed, displayed or read in this source-only work.
+- **Separate dedicated** root-owned `0600` credential source: `/etc/rpi5-secrets/cloudflare/zone-waf-writer.json`, containing only `zone_id`, `zone_name=rozkalns.net`, and `api_token`. Credential requires zone-scoped **Zone Read + Zone WAF Edit** because `GET /zones/{zone_id}` checks the exact zone and the Rulesets API needs WAF edit permission. Never reuse Access/Tunnel credentials. No secret value is committed, displayed or read in this source-only work.
 - Future read-only preflight (requires installed exact-release, root and dedicated credential): `rpi5-cloudflare-zone-bot-waf --preflight --expected-main <exact-40-char-sha>`.
 - Future **separately** authorized, root-installed one-time apply: `rpi5-cloudflare-zone-bot-waf --apply --expected-main <exact-40-char-sha> --confirm CREATE-ROZKALNS-BOT-WAF-RULE`.
 
-No installation/provisioning helper is included in this PR; therefore merging it cannot enable the executable privileged path. The operator rejects executing a LIVE preflight/apply from a checkout. A later exact owner-gated install/provisioning path requires its own reviewed source contract and authorization.
+## Reviewed source-only installer and local provisioning preparation (#962)
+
+The unprivileged installer `scripts/install-cloudflare-zone-bot-waf.py` has no auto-install behavior. It requires the current exact `main` SHA, a clean `main` checkout, canonical GitHub origin, tracked operator source, non-root caller, non-interactive sudo availability and absent fixed destinations (including dangling symlinks). Its root helper receives only the reviewed operator bytes and exact-release SHA-256 metadata, then exclusively creates the dedicated 0700 release directory, 0500 installed operator and 0400 release metadata. The helper never overwrites existing files, edits sudoers, provisions credentials or calls Cloudflare.
+
+Read-only install preflight (on the approved RPi5 checkout, when separately authorized):
+
+```bash
+python3 scripts/install-cloudflare-zone-bot-waf.py --expected-main <exact-40-char-current-main>
+```
+
+The **future separately owner-gated** one-time installation adds `--apply --confirm INSTALL-ROZKALNS-ZONE-BOT-WAF`. Its first root-helper operation is the first host mutation. After dispatch, any error means STOP, unknown partial state, no retry/cleanup/rollback. A previous install blocks; upgrading is deliberately unsupported.
+
+The installed operator now supports **future separately owner-gated** interactive provisioning:
+
+```bash
+sudo -n /usr/local/sbin/rpi5-cloudflare-zone-bot-waf --provision-secret --expected-main <exact-installed-release-sha> --confirm PROVISION-ROZKALNS-ZONE-WAF-SECRET
+```
+
+This **must** run from an owner-controlled local/SSH terminal with controlling TTY. It does not accept token or zone ID in arguments, environment, stdin, GitHub, chat or logs. Both values are entered with hidden `getpass` prompts; an echoed fallback is rejected. It requires an already existing root-only dedicated Cloudflare secret directory, checks the installed operator/release and secret absence before prompting, validates the actual `rozkalns.net` zone with `GET /zones/{id}`, and accepts only exact-zone credentials. It uses `O_EXCL|O_NOFOLLOW` to create the sole 0600 credential file without replacing anything. A successful read does *not* prove Zone WAF Write capability; the owner must verify token rights separately, and no write is attempted during provisioning.
+
+All commands above document capabilities for future decisions; no LIVE action, credential provisioning, permission change, installation or WAF API mutation is authorized by merging source. `--plan` remains available without a secret or network. The operator refuses privileged operations from the repository checkout.
 
 ## Fail-closed Cloudflare preflight and one-write boundary
 
@@ -32,7 +52,7 @@ No installation/provisioning helper is included in this PR; therefore merging it
 2. `GET /zones/{zone_id}/rulesets/phases/http_request_firewall_custom/entrypoint`: only `200` (validate kind/phase/rules) or `404` (absent entrypoint) is an allowed branch. Reject existing matching `ref`/expression or invalid metadata. Preserve existing rule count and order.
 3. If entrypoint exists, exactly one `POST /zones/{zone_id}/rulesets/{entrypoint_id}/rules`; if absent, exactly one `POST /zones/{zone_id}/rulesets` creates a zone-phase entrypoint with the single target rule. **No PUT, PATCH, DELETE, retry or fallback.** If no Free custom rule capacity, reject the provider error; do not replace an unrelated rule.
 4. `GET` the entrypoint after the POST. Verify exactly one new target rule (`ref`, expression, block/enabled) was added and all prior rules are semantically unchanged and in order. Any drift or API ambiguity after mutation => STOP, minimum sanitized evidence only, new owner decision.
-5. Prior to owner authorization for LIVE: verify real existing rule inventory/quota, provider expression acceptance, other services' webhooks/Access flows, and public Googlebot/Bingbot/Coloring Pages/CV behavior. Define separate rollback authority if needed; it is **not** contained in the create authorization.
+5. Prior to owner authorization for LIVE: verify real existing rule inventory/quota (Cloudflare Free offers 5 zone custom rules), provider expression acceptance, other services' webhooks/Access flows, and public Googlebot/Bingbot/Coloring Pages/CV behavior. Define separate rollback authority if needed; it is **not** contained in the create authorization.
 
 The operator is no substitute for server-side access control; its goal is only to block *identifiable* non-beneficial crawlers at the edge.
 
@@ -42,3 +62,6 @@ Official documentation:
 - https://developers.cloudflare.com/ruleset-engine/rules-language/functions/
 - https://developers.cloudflare.com/bots/additional-configurations/block-ai-bots/
 - https://developers.cloudflare.com/ruleset-engine/rules-language/fields/reference/
+
+- https://developers.cloudflare.com/api/resources/zones/methods/get/
+- https://developers.cloudflare.com/waf/custom-rules/
