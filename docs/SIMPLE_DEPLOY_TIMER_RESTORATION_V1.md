@@ -51,3 +51,7 @@ Official references:
 - https://github.com/distribution/distribution/blob/main/docs/content/spec/auth/token.md
 
 Production deploy/change REQUIRED: NO for this source-only design. No LIVE mutation, Docker execution, timer lifecycle, credentials, raw logs or private configuration is authorized.
+
+## Subsequent all-target blocker-remediation design (2026-10-10)
+
+See `docs/SIMPLE_DEPLOY_BLOCKER_REMEDIATION_V1.md` and its machine contract for the separately documented shared Weather/Hermes private-parent ownership conflict, the conditional Hermes Tech post-cutover health gate and CV pointer diagnostic classification. The nine restoration gates and **BLOCKED_NO_START** state remain in force; this addition neither installs a runtime guard nor authorizes timer activation.

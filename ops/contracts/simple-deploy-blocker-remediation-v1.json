@@ -1,0 +1,139 @@
+{
+  "schema": "rpi5.simple-deploy.blocker-remediation-design.v1",
+  "schema_version": 1,
+  "issue": 60,
+  "status": "SOURCE_ONLY_DEFAULT_DENY_NO_EXECUTOR_NO_LIVE",
+  "parent_source": "ops/contracts/simple-deploy-timer-restoration-v1.json",
+  "decision": {
+    "default": "BLOCKED_NO_TIMER_START",
+    "all_five_required": true,
+    "do_not_skip_failed_targets": true,
+    "do_not_change_installed_registry": true,
+    "source_merge_is_not_live": true,
+    "requires_separate_owner_approval_for_each_runtime_operation": true
+  },
+  "evidence": {
+    "date": "2026-10-10",
+    "source_sha": "5850fd707464a9f2c9dfcd472903d867276d4f86",
+    "snapshot_only": true,
+    "does_not_prove_running_docker_image": true,
+    "does_not_prove_publisher_quiescence": true
+  },
+  "hermes_deals": {
+    "target": "hermes-deals",
+    "current_materializer": "scripts/materialize-simple-deploy-hermes-prerequisites-v3.py",
+    "inherited_parent_contract": "ops/contracts/simple-deploy-hermes-prerequisite-materialization-v2.json",
+    "shared_parent": {
+      "path": "/etc/rozkalns-simple-deployer/private",
+      "observed_owner": "root",
+      "observed_group": "rozkalns-simple-deployer",
+      "observed_mode": "0750",
+      "weather_requires_preservation": true,
+      "no_chown_chmod_or_replace": true,
+      "no_alternate_private_parent_without_review": true
+    },
+    "legacy_conflict": {
+      "legacy_owner": "root",
+      "legacy_group": "root",
+      "legacy_mode": "0700",
+      "incompatible_with_installed_weather_parent": true
+    },
+    "future_contract_requirements": {
+      "revise_metadata_only_parent_check_before_live": true,
+      "do_not_edit_v1_v2_v3_historical_artifacts_in_this_design": true,
+      "no_data_or_env_content_read_before_separate_live_authority": true,
+      "preserve_root_owned_private_child_and_non_world_readability": true,
+      "prove_fixed_child_file_consumption_under_exact_runtime_ownership": true,
+      "protect_other_apps_private_config": true,
+      "no_broad_directory_permission_change": true,
+      "no_reuse_or_repair_of_preserved_failed_trusted_checkout": true,
+      "fail_closed_on_unknown_or_partial_prerequisites": true,
+      "distinct_live_prerequisite_materialization_then_first_target_adoption": true
+    },
+    "snapshot": {
+      "fixed_compose": "ABSENT",
+      "fixed_data_config_private_env": "ABSENT",
+      "receipt": "ABSENT",
+      "prerequisites": "NOT_READY"
+    }
+  },
+  "hermes_tech": {
+    "target": "hermes-tech-public-rpi5",
+    "cutover_contract": "ops/deploy/hermes-tech-simple-deploy-cutover-v1.json",
+    "baseline": {
+      "legacy_web_active": true,
+      "legacy_pull_timer_active": true,
+      "reviewed_compose_absent": true,
+      "liveness_http": 404,
+      "readiness_http": 404
+    },
+    "before_cutover": {
+      "legacy_404_is_not_post_cutover_failure": true,
+      "do_not_claim_new_service_ready": true,
+      "no_parallel_port_ownership": true,
+      "do_not_disable_legacy_units_in_source_lanes": true
+    },
+    "after_separate_authorized_cutover": {
+      "retire_exact_legacy_units_in_reviewed_order": true,
+      "install_exact_reviewed_compose_and_digest": true,
+      "require_new_owner_at_fixed_loopback": true,
+      "required_liveness_status": 200,
+      "required_readiness_status": 200,
+      "require_new_success_receipt": true,
+      "no_automatic_recovery": true
+    },
+    "no_route_or_port_or_live_mutation": true
+  },
+  "cv": {
+    "target": "rozkalns-cv-rpi5",
+    "pointer_failure": "POINTER_RESOLUTION_FAILED",
+    "last_mutation_started": false,
+    "persisted_failure_subclass": "NOT_PRESENT_IN_LAST_STATUS",
+    "buildx": {
+      "dpkg_plugin_installed": true,
+      "system_plugin_executable_present": true,
+      "presence_does_not_prove_cli_runtime": true,
+      "no_docker_execution_in_this_design": true
+    },
+    "anonymous_oci": {
+      "initial_401": "BEARER_CHALLENGE_NOT_ROOT_CAUSE",
+      "scoped_pull_head": "SUCCESS",
+      "production_digest_compared_to_last_success_receipt": "DIFF",
+      "not_proof_of_running_image": true
+    },
+    "future_diagnostics": {
+      "propose_sanitized_fixed_enum_failure_class_persistence_only_after_separate_source_review": true,
+      "allowlisted_classes": [
+        "BUILDX_PLUGIN_UNAVAILABLE",
+        "TLS_FAILURE",
+        "DNS_FAILURE",
+        "REGISTRY_AUTH_FAILURE",
+        "MANIFEST_UNAVAILABLE",
+        "NETWORK_FAILURE",
+        "COMMAND_TIMEOUT",
+        "COMMAND_UNAVAILABLE",
+        "OUTPUT_DECODE_FAILURE",
+        "UNCLASSIFIED"
+      ],
+      "forbid_raw_stderr_or_auth_headers": true,
+      "no_reconcile_as_diagnostic": true,
+      "do_not_promote_pointer_diff_to_deploy_approval": true,
+      "require_new_exact_digest_and_health_receipt_before_timer": true
+    }
+  },
+  "privacy": {
+    "no_raw_logs_configs_credentials_or_tokens": true,
+    "no_private_coordinates_or_application_data": true,
+    "read_only_snapshots_not_continuous_proof": true
+  },
+  "authority": {
+    "merge": false,
+    "timer_enable_start": false,
+    "docker_or_compose": false,
+    "protected_env_read": false,
+    "filesystem_mutation": false,
+    "service_lifecycle": false,
+    "cloudflare_or_dns": false,
+    "recovery_or_rollback": false
+  }
+}
