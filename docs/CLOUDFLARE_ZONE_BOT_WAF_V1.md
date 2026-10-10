@@ -26,7 +26,9 @@ Historical `RPi5_main#206` records an actual GitHub-runner outage caused by Clou
 
 ## Reviewed source-only installer and local provisioning preparation (#962)
 
-The unprivileged installer `scripts/install-cloudflare-zone-bot-waf.py` has no auto-install behavior. It requires the current exact `main` SHA, a clean `main` checkout, canonical GitHub origin, tracked operator source, non-root caller, non-interactive sudo availability and absent fixed destinations (including dangling symlinks). Its root helper receives only the reviewed operator bytes and exact-release SHA-256 metadata, then exclusively creates the dedicated 0700 release directory, 0500 installed operator and 0400 release metadata. The helper never overwrites existing files, edits sudoers, provisions credentials or calls Cloudflare.
+The unprivileged installer `scripts/install-cloudflare-zone-bot-waf.py` has no auto-install behavior. It requires the current exact `main` SHA, a clean `main` checkout, canonical GitHub origin, tracked operator source, non-root caller, non-interactive sudo availability, fixed root-owned non-group/world-writable parent directories, and absent fixed destinations (including dangling symlinks). It reads and pins the exact operator bytes and SHA-256 release metadata **before** the first mutation. The previous installer used `sudo python3 -c ROOT_INSTALL_WRITER`, which was blocked by the platform's safety review. The reason for that safety decision is not available; this change does not claim to resolve or bypass that independent policy.
+
+The redesigned installer uses only three fixed `sudo -n` GNU coreutils commands (no privileged Python, shell interpreter, dynamic `-c` code, or sudoers edit): `/usr/bin/mkdir -m 0700 -- <fixed-release-dir>` for an initially absent directory; then `/usr/bin/install -T -o root -g root -m 0500 -- /dev/stdin <fixed-operator>` to copy the **captured source bytes**; and finally the same `install -T` with mode `0400` to copy the exact-release metadata bytes to `release.json`. `-T` disallows interpreting a destination as a directory; the initial absent-path and root-owned-parent checks limit overwrite/race risk. Since generic GNU `install` can replace existing files, this remains dependent on the fixed root-owned non-writable parent trust boundary. Do **not** treat this as an atomic three-file transaction, and do **not** grant generic sudo rights to arbitrary arguments. Post-install read-only `stat` and `sha256sum` verify every target's owner, mode and SHA-256. The code neither provisions credentials nor makes Cloudflare requests. <https://www.gnu.org/software/coreutils/manual/html_node/install-invocation.html>
 
 Read-only install preflight (on the approved RPi5 checkout, when separately authorized):
 
@@ -34,7 +36,7 @@ Read-only install preflight (on the approved RPi5 checkout, when separately auth
 python3 scripts/install-cloudflare-zone-bot-waf.py --expected-main <exact-40-char-current-main>
 ```
 
-The **future separately owner-gated** one-time installation adds `--apply --confirm INSTALL-ROZKALNS-ZONE-BOT-WAF`. Its first root-helper operation is the first host mutation. After dispatch, any error means STOP, unknown partial state, no retry/cleanup/rollback. A previous install blocks; upgrading is deliberately unsupported.
+The **future separately owner-gated** one-time installation adds `--apply --confirm INSTALL-ROZKALNS-ZONE-BOT-WAF`. The first privileged `mkdir` dispatch is the first host mutation; each subsequent fixed `install` dispatch is bounded to one named file. A failure or ambiguous result after the first dispatch means **STOP** with potentially partial installed state; there is no retry, cleanup, rollback, overwrite repair or fallback executor. A previous install blocks; upgrading is deliberately unsupported. Source review or CI passing does not grant execution permission or guarantee the platform tool will accept a later, independently authorized LIVE operation.
 
 The installed operator now supports **future separately owner-gated** interactive provisioning:
 
@@ -65,3 +67,8 @@ Official documentation:
 
 - https://developers.cloudflare.com/api/resources/zones/methods/get/
 - https://developers.cloudflare.com/waf/custom-rules/
+
+Installer redesign official references:
+- https://www.gnu.org/software/coreutils/manual/html_node/mkdir-invocation.html
+- https://www.gnu.org/software/coreutils/manual/html_node/Target-directory.html
+- https://docs.python.org/3/library/subprocess.html#security-considerations
