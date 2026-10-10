@@ -44,23 +44,23 @@ APPLY also rejects execution from the untrusted checkout or any path except
 the fixed root-owned, regular one-link mode 0755 operator at
 `/usr/local/sbin/simple-deploy-executor-upgrade-933`. A separate installer
 must prove that executable's reviewed source identity before LIVE execution.
-`--check` is an explicit alias for the same dry run; it never writes a stage,
+\`--check\` is an explicit alias for the same dry run; it never writes a stage,
 touches the installed file, requests GitHub credentials, or mutates systemd.
 
 It reads only the fixed candidate and destination **public Python source**
 plus sanitized properties of exactly two fixed systemd units. These fixed
-read-only `systemctl show` requests use a bounded output limit and timeout.
+read-only \`systemctl show\` requests use a bounded output limit and timeout.
 No journald, credential environment, Docker inspect, registry, Compose,
 runtime process data, protected application config or remote HTTP is read.
 
 A successful CHECK requires, in two matching observations:
 
-- SIMPLE-DEPLOY timer: `LoadState=loaded`, `UnitFileState=disabled`,
-  `ActiveState=inactive`, `SubState=dead`, `Job=0`,
-  `NeedDaemonReload=no`.
-- SIMPLE-DEPLOY service: `LoadState=loaded`, `ActiveState=inactive`,
-  `SubState=dead`, `MainPID=0`, `Job=0`,
-  `NeedDaemonReload=no`.
+- SIMPLE-DEPLOY timer: \`LoadState=loaded\`, \`UnitFileState=disabled\`,
+  \`ActiveState=inactive\`, \`SubState=dead\`, \`Job=0\`,
+  \`NeedDaemonReload=no\`.
+- SIMPLE-DEPLOY service: \`LoadState=loaded\`, \`ActiveState=inactive\`,
+  \`SubState=dead\`, \`MainPID=0\`, \`Job=0\`,
+  \`NeedDaemonReload=no\`.
 - Expected fixed root-owned public-file metadata, inode/source stability and
   SHA-256/Git-blob identities, with no existing fixed stage.
 
@@ -80,15 +80,15 @@ At issue discovery the timer was enabled/active, and the service was failed.
 Those states **block CHECK and APPLY**, as designed. Disabling the timer,
 quiescing/resetting the service or providing the source candidate are **not
 actions of this operator** and need independent authorization. This operator
-does not implicitly invoke `systemctl stop`, `disable`, `reset-failed`,
-`daemon-reload`, `restart` or enable the timer.
+does not implicitly invoke \`systemctl stop\`, \`disable\`, \`reset-failed\`,
+\`daemon-reload\`, \`restart\` or enable the timer.
 
-A command-line `--apply` switch is **not owner authorization**. APPLY also
+A command-line \`--apply\` switch is **not owner authorization**. APPLY also
 requires root, the same successful preflight and a separately owner-approved
-root-owned, one-link **0400** proof file at the fixed `/run` path. Its exact
+root-owned, one-link **0400** proof file at the fixed \`/run\` path. Its exact
 JSON is:
 
-```json
+\`\`\`json
 {
   "schema": "rpi5.simple_deploy_executor_upgrade_owner_authorization.v1",
   "issue": 933,
@@ -100,7 +100,7 @@ JSON is:
   "operation": "single_atomic_replace",
   "no_automatic_retry_rollback_cleanup": true
 }
-```
+\`\`\`
 
 The proof is **only a local guard**. It is not cryptographic proof of the
 owner's identity and it is never created by the operator. The independently
@@ -116,15 +116,15 @@ proof, then runs another two-observation preflight to reject drift. APPLY
 performs only these bounded effects:
 
 1. Exclusive same-directory creation of a single fixed-named stage file with
-   `O_EXCL|O_NOFOLLOW` and 0600 initial permissions. This is the **first
+   \`O_EXCL|O_NOFOLLOW\` and 0600 initial permissions. This is the **first
    mutation** and consumes the separately frozen LIVE authorization.
-2. Write exactly the reviewed source bytes, set root:root/0444, `fsync`,
+2. Write exactly the reviewed source bytes, set root:root/0444, \`fsync\`,
    reopen and verify source SHA-256 and Git blob identity.
 3. Re-check both fixed systemd units for disabled/inactive quiescence; reopen
    and compare the exact original installed inode, mtime, length and hash.
    If a service lifecycle event or file race is observable, **STOP**.
-4. One atomic same-directory `os.replace` of the stage over precisely
-   `simple_deploy_v1.py`, followed by directory `fsync`, root/0444
+4. One atomic same-directory \`os.replace\` of the stage over precisely
+   \`simple_deploy_v1.py\`, followed by directory \`fsync\`, root/0444
    verification and another sanitized quiescence check.
 
 No CV receipt, state, image, registry, Compose file, checkout or unrelated
@@ -140,13 +140,13 @@ exclusive quiescence for the entire mutation window; otherwise APPLY is
 
 ## Fault-injection and future LIVE gate
 
-`python3 tests/test-simple-deploy-executor-upgrade-933.py` covers read-only
+\`python3 tests/test-simple-deploy-executor-upgrade-933.py\` covers read-only
 CHECK, missing/stale/changed source, Git-blob mismatch, symlinks, permissions,
 stale installed baseline, existing stage, timer enabled/active, service
 active/failed, systemd job contention, changed observations, owner-proof
 mismatch, non-root apply, successful same-directory replacement, race-before-
 replace, simulated rename error after staging, and no implicit mutation
-primitives. `make validate` includes the test.
+primitives. \`make validate\` includes the test.
 
 **Separate future decision:** after source PR is reviewed and the current
 installed baseline is revalidated, request a new bounded STRICT owner
