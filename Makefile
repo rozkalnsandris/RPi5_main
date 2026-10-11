@@ -36,6 +36,7 @@ test:
 	python3 ./tests/test-simple-deploy-coloring-pages-alignment-v1.py
 	python3 ./tests/test-simple-deploy-rozkalns-cv-compat-v1.py
 	python3 ./tests/test_rozkalns_cv_private_env_materializer.py
+	python3 ./tests/test-simple-deploy-hermes-household-ui-v1.py
 	python3 ./tests/test-simple-deploy-hermes-compat-v1.py
 	python3 ./tests/test_hermes_tech_simple_deploy_cutover_contract.py
 	python3 ./tests/test_rozkalns_cv_simple_deploy_cutover_contract.py

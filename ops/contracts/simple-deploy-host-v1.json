@@ -52,15 +52,16 @@
       {
         "target_alias": "hermes-deals",
         "consumer_repository": "rozkalnsandris/hermes-deals",
-        "consumer_contract_revision": "13f9fb69b9576d8e97ab3a85334927f3c576ca1c",
+        "consumer_contract_revision": "4467939c8c26378ee6d8dc3029fba2e562c5e48c",
         "compatibility_prerequisite_issue": 690,
         "source_registration_issue": 692,
-        "compose_source": "ops/deploy/simple-deploy-compose/hermes-deals-api.yml",
-        "compose_sha256": "644dc72da5dc13ee532dd29693db31358451669bb44de4df4b62c41736903f1c",
+        "compose_source": "ops/deploy/simple-deploy-compose/hermes-deals-household-api.yml",
+        "compose_sha256": "bc78b165b479b1dfcd7bcd12df28d09b649ca68f56d6bfdfa61be280f6e1dad3",
         "liveness_url": "http://127.0.0.1:9128/api/health",
         "readiness_state": "not-applicable",
         "wait_timeout_seconds": 180,
-        "registry_pull_profile": "public-anonymous-pull"
+        "registry_pull_profile": "public-anonymous-pull",
+        "household_configuration_issue": 973
       },
       {
         "target_alias": "hermes-tech-public-rpi5",
