@@ -214,7 +214,7 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(hermes.image, "ghcr.io/rozkalnsandris/hermes-deals")
         self.assertEqual(hermes.shared_workflow_sha, SHARED_SHA)
         self.assertEqual(hermes.compose.project, "hermes-deals")
-        self.assertEqual(hermes.compose.file, "hermes-deals-api.yml")
+        self.assertEqual(hermes.compose.file, "hermes-deals-household-api.yml")
         self.assertEqual(hermes.compose.service, "api")
         self.assertEqual(hermes.health.liveness_url, "http://127.0.0.1:9128/api/health")
         self.assertEqual(hermes.health.readiness_state, "not-applicable")
@@ -229,7 +229,7 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(sha256(hermes_compose), hermes.compose.file_sha256)
         self.assertEqual(
             hermes.compose.file_sha256,
-            "644dc72da5dc13ee532dd29693db31358451669bb44de4df4b62c41736903f1c",
+            "bc78b165b479b1dfcd7bcd12df28d09b649ca68f56d6bfdfa61be280f6e1dad3",
         )
 
     def test_valid_static_target_parses(self):
@@ -490,13 +490,13 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(reviewed[1]["target_alias"], "hermes-deals")
         self.assertEqual(
             reviewed[1]["consumer_contract_revision"],
-            "13f9fb69b9576d8e97ab3a85334927f3c576ca1c",
+            "4467939c8c26378ee6d8dc3029fba2e562c5e48c",
         )
         self.assertEqual(reviewed[1]["compatibility_prerequisite_issue"], 690)
         self.assertEqual(reviewed[1]["source_registration_issue"], 692)
         self.assertEqual(
             reviewed[1]["compose_sha256"],
-            "644dc72da5dc13ee532dd29693db31358451669bb44de4df4b62c41736903f1c",
+            "bc78b165b479b1dfcd7bcd12df28d09b649ca68f56d6bfdfa61be280f6e1dad3",
         )
         self.assertEqual(reviewed[1]["liveness_url"], "http://127.0.0.1:9128/api/health")
         self.assertEqual(reviewed[1]["readiness_state"], "not-applicable")
