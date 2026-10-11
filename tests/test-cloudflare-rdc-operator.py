@@ -538,7 +538,7 @@ class AusmalwieseDnsTests(unittest.TestCase):
         self.assertEqual(len(before["ingress"]), 2)
 
     def test_route_rejects_existing_host_and_non_loopback(self):
-        for service in ("http://192.168.0.180:8080", "https://example.com", "http://127.0.0.1"):
+        for service in ("http://example.invalid:8080", "https://example.com", "http://127.0.0.1"):
             with self.assertRaises(op.OperatorError):
                 op._prepared_tunnel_config({"ingress": [
                     {"hostname": "coloring.rozkalns.net", "service": service},
