@@ -89,9 +89,9 @@ Creating, disabling or editing Hermes schedules, installing the controller at a 
 ### Gates, in order
 
 1. **State fetch** — one `GET /api/states` snapshot. An empty answer is a skip with an error notification.
-2. **Active sensor set** — exactly 12 entities: flowers 1 and 3–13. Retired flowers 2, 14 and 15 are never required, never counted and never treated as dry. An active sensor that is missing, `unavailable`, `unknown` or carries an unexpected categorical value is uncertainty: the run skips and no pump request is made.
-3. **Quorum** — watering is considered only when at least `BALCONY_MIN_DRY_SENSORS` (default `2`) of the 12 active sensors report `sauss`. A single dry sensor never waters the whole tray.
-4. **Wet-enough guard** — when at least `BALCONY_MAX_MOIST_SENSORS` (default `10`) of the 12 report `mitrs`, the run skips quietly.
+2. **Active sensor set** — exactly 12 entities: flowers 1 and 3–13. Retired flowers 2, 14 and 15 are never required, never counted and never treated as dry. At the owner's request, an active moisture sensor missing from the snapshot, or reporting `unavailable`/`unknown`/empty, is **assumed moist, not measured moist**. These assumptions are separately logged and included in the Telegram outcome. An unexpected categorical value still blocks watering; empty/invalid HA responses block the whole run. This fallback is confined to the autumn/winter controller, not the stricter primary/summer controller above.
+3. **Quorum** — watering is considered only when at least `BALCONY_MIN_DRY_SENSORS` (default `2`) of the 12 active sensors **actually report** `sauss`. A single dry sensor never waters the whole tray; unavailable sensors can never count as dry.
+4. **Wet-enough guard** — when at least `BALCONY_MAX_MOIST_SENSORS` (default `10`) of the 12 are reported or **assumed** `mitrs`, the run skips with a no-watering notification. Sensor absence therefore cannot force a watering cycle.
 5. **Frost gate** — the low temperature for the next 24 h is read from the weather entity `forecast` attribute. When that attribute is absent, the read-only `weather.get_forecasts` service is used. The lower of that low and the current temperature is compared with `BALCONY_FROST_THRESHOLD_C` (default `2.0`); at or below the threshold the run is blocked and reported as a frost block. When no usable temperature can be obtained, the run skips with an error. `BALCONY_FROST_REQUIRE_FORECAST=0` downgrades a missing forecast to the current temperature with a logged warning; the default `1` keeps it fail-closed.
 
 `BALCONY_AUTUMN_DRY_RUN=1` executes every gate, logs the decision and suppresses the pump request, all Telegram messages and the day marker. It exists so a preflight can prove what the controller would do before anything is live.
@@ -182,8 +182,8 @@ The repository-wide `make validate` gate includes this regression together with 
 
 1. three dry pots of twelve with a mild night => exactly one confirmed `on,off` cycle, one watering message and a recorded day marker;
 2. retired 2/14/15 `unavailable` => still waters and never counts as dry;
-3. active sensor missing, `unavailable`, `unknown` or unexpected categorical value => skip with an error message, no pump request, no day marker;
-4. empty or malformed Home Assistant state payload => skip with an error message;
+3. active sensor missing/`unavailable`/`unknown` with three confirmed dry => one safe watering cycle and assumption reported; unexpected categorical value => skip with an error message;
+4. active dry sensor unavailable or all 12 unavailable => never trigger watering; empty/malformed Home Assistant snapshot => skip with error;
 5. one dry sensor => skip, exactly one no-watering Telegram message;
 6. tray already moist => skip, exactly one no-watering Telegram message;
 7. forecast low at or below the frost threshold => blocked with a frost message and no pump request;
