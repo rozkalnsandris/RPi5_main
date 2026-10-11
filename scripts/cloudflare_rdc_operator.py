@@ -29,6 +29,9 @@ SECRET_ROOT_PATH = Path("/etc/rpi5-secrets")
 SECRET_DIR_PATH = SECRET_ROOT_PATH / "cloudflare"
 ACCESS_SECRET_PATH = SECRET_DIR_PATH / "access-writer.json"
 TUNNEL_SECRET_PATH = SECRET_DIR_PATH / "tunnel-writer.json"
+DNS_SECRET_PATH = SECRET_DIR_PATH / "dns-writer.json"
+AUSMALWIESE_ZONE = "ausmalwiese.de"
+AUSMALWIESE_NAMES = ("ausmalwiese.de", "www.ausmalwiese.de")
 RELEASE_METADATA_PATH = Path("/usr/local/libexec/rpi5-cloudflare/release.json")
 PYTHON = "/usr/bin/python3"
 FIXED_RUNTIME_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -45,6 +48,9 @@ UUID_RE = re.compile(
 CONFIRM_TEXT = "CREATE-COLORING-PUBLIC-BYPASS"
 PROVISION_CONFIRM_TEXT = "PROVISION-CLOUDFLARE-ACCESS-SECRET"
 TUNNEL_PROVISION_CONFIRM_TEXT = "PROVISION-CLOUDFLARE-TUNNEL-SECRET"
+DNS_PROVISION_CONFIRM_TEXT = "PROVISION-AUSMALWIESE-DNS-SECRET"
+DNS_APPLY_CONFIRM_TEXT = "CREATE-AUSMALWIESE-CNAME"
+TUNNEL_APPLY_CONFIRM_TEXT = "ADD-AUSMALWIESE-TUNNEL-ROUTES"
 DYNAMIC_APP_FIELDS = {"created_at", "updated_at", "aud"}
 
 
@@ -102,6 +108,13 @@ def _sanitize_reason(value: str) -> str:
         "token_inactive",
         "access_permission_check_failed",
         "tunnel_permission_check_failed",
+        "dns_zone_invalid",
+        "dns_records_incomplete",
+        "dns_record_conflict",
+        "tunnel_configuration_invalid",
+        "tunnel_route_conflict",
+        "baseline_mismatch",
+        "dns_permission_check_failed",
         "phase7_checkout_invalid",
         "phase7_audit_failed",
         "secret_already_exists",
@@ -230,6 +243,19 @@ def load_tunnel_credentials() -> tuple[str, str]:
     return _load_capability_credentials(TUNNEL_SECRET_PATH)
 
 
+def load_dns_credentials() -> tuple[str, str]:
+    raw = _read_bounded_json(DNS_SECRET_PATH, expected_mode=0o600)
+    if set(raw) != {"zone_id", "zone_name", "api_token"}:
+        raise OperatorError("secret_payload_invalid")
+    zone_id, token = raw["zone_id"], raw["api_token"]
+    if (raw["zone_name"] != AUSMALWIESE_ZONE
+        or not isinstance(zone_id, str) or not ACCOUNT_ID_RE.fullmatch(zone_id)
+        or not isinstance(token, str) or not 20 <= len(token) <= 4096
+        or any(ch.isspace() for ch in token)):
+        raise OperatorError("secret_payload_invalid")
+    return zone_id, token
+
+
 class CloudflareClient:
     def __init__(self, api_token: str, timeout: int = 20, opener: Any | None = None) -> None:
         if len(api_token) < 20 or any(ch.isspace() for ch in api_token):
@@ -264,17 +290,17 @@ class CloudflareClient:
             TimeoutError,
             UnicodeDecodeError,
         ) as exc:
-            if method == "POST":
+            if method in ("POST", "PUT"):
                 raise WriteAttemptError("cloudflare_write_failed") from exc
             raise OperatorError("cloudflare_get_failed") from exc
         try:
             payload = json.loads(raw)
         except json.JSONDecodeError as exc:
-            if method == "POST":
+            if method in ("POST", "PUT"):
                 raise WriteAttemptError("cloudflare_write_shape_invalid") from exc
             raise OperatorError("cloudflare_get_shape_invalid") from exc
         if not isinstance(payload, dict) or payload.get("success") is not True:
-            if method == "POST":
+            if method in ("POST", "PUT"):
                 raise WriteAttemptError("cloudflare_write_unsuccessful")
             raise OperatorError("cloudflare_get_unsuccessful")
         return payload
@@ -446,6 +472,16 @@ def _read_hidden_tunnel_provisioning_credentials() -> tuple[str, str]:
     return _read_hidden_capability_credentials("Cloudflare Tunnel API token: ")
 
 
+def _read_hidden_dns_credentials() -> tuple[str, str]:
+    _ensure_controlling_tty()
+    zone_id = _hidden_getpass("Cloudflare ausmalwiese.de zone ID: ")
+    token = _hidden_getpass("Cloudflare ausmalwiese.de DNS API token: ")
+    if (not ACCOUNT_ID_RE.fullmatch(zone_id) or not 20 <= len(token) <= 4096
+        or any(ch.isspace() for ch in token)):
+        raise OperatorError("secret_payload_invalid")
+    return zone_id, token
+
+
 def _validate_secret_parent(path: Path) -> None:
     if not path.exists():
         return
@@ -550,6 +586,153 @@ def provision_tunnel_secret(
     client.verify_active_account_token(account_id)
     client.verify_tunnel_permission(account_id)
     _write_tunnel_secret(account_id, token)
+
+
+
+def _ausmalwiese_zone(client: CloudflareClient, zone_id: str) -> dict[str, Any]:
+    data = client._request("GET", f"/zones/{zone_id}").get("result")
+    if (not isinstance(data, dict) or data.get("id") != zone_id
+        or data.get("name") != AUSMALWIESE_ZONE or data.get("status") != "active"
+        or not isinstance(data.get("account"), dict)
+        or not isinstance(data.get("plan"), dict)
+        or str(data["plan"].get("legacy_id", "")).lower() != "free"):
+        raise OperatorError("dns_zone_invalid")
+    return data
+
+
+def _ausmalwiese_records(client: CloudflareClient, zone_id: str) -> list[dict[str, Any]]:
+    data = client._request("GET", f"/zones/{zone_id}/dns_records?page=1&per_page=100")
+    rows, info = data.get("result"), data.get("result_info")
+    if (not isinstance(rows, list) or any(not isinstance(r, dict) for r in rows)
+        or not isinstance(info, dict) or info.get("total_pages") != 1):
+        raise OperatorError("dns_records_incomplete")
+    return rows
+
+
+def _rpi5_tunnel(client: CloudflareClient, account_id: str) -> tuple[str, dict[str, Any]]:
+    data = client._request("GET", f"/accounts/{account_id}/cfd_tunnel?name=rpi5-tunnel&is_deleted=false&per_page=100").get("result")
+    matches = [r for r in data if isinstance(r, dict)
+               and r.get("name") == EXPECTED_TUNNEL_NAME and r.get("config_src") == "cloudflare"] if isinstance(data, list) else []
+    if len(matches) != 1 or not isinstance(matches[0].get("id"), str) or not UUID_RE.fullmatch(matches[0]["id"]):
+        raise OperatorError("tunnel_configuration_invalid")
+    tunnel_id = matches[0]["id"]
+    response = client._request("GET", f"/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations").get("result")
+    if not isinstance(response, dict) or not isinstance(response.get("config"), dict):
+        raise OperatorError("tunnel_configuration_invalid")
+    return tunnel_id, response["config"]
+
+
+def _prepared_tunnel_config(config: dict[str, Any]) -> dict[str, Any]:
+    rules = config.get("ingress")
+    if not isinstance(rules, list) or len(rules) < 2 or any(not isinstance(r, dict) for r in rules):
+        raise OperatorError("tunnel_configuration_invalid")
+    sources = [r for r in rules if r.get("hostname") == TARGET_HOSTNAME]
+    if len(sources) != 1 or not isinstance(sources[0].get("service"), str):
+        raise OperatorError("tunnel_configuration_invalid")
+    source = sources[0]
+    if (set(source) - {"hostname", "service", "originRequest"}
+        or not re.fullmatch(r"http://(?:127\.0\.0\.1|localhost):[0-9]{2,5}", source["service"])
+        or not isinstance(rules[-1].get("service"), str)
+        or rules[-1].get("hostname") not in (None, "")):
+        raise OperatorError("tunnel_configuration_invalid")
+    if any(r.get("hostname") in AUSMALWIESE_NAMES for r in rules):
+        raise OperatorError("tunnel_route_conflict")
+    desired = deepcopy(config)
+    additions = []
+    for hostname in AUSMALWIESE_NAMES:
+        entry = deepcopy(source)
+        entry["hostname"] = hostname
+        additions.append(entry)
+    desired["ingress"] = rules[:-1] + additions + rules[-1:]
+    return desired
+
+
+def _baseline(value: Any) -> str:
+    return hashlib.sha256(json.dumps(value, separators=(",", ":"), sort_keys=True).encode()).hexdigest()
+
+
+def provision_dns_secret(client: CloudflareClient, zone_id: str, token: str) -> None:
+    if DNS_SECRET_PATH.exists():
+        raise OperatorError("secret_already_exists")
+    try:
+        _ausmalwiese_zone(client, zone_id)
+        _ausmalwiese_records(client, zone_id)
+    except OperatorError as exc:
+        raise OperatorError("dns_permission_check_failed") from exc
+    payload = (json.dumps({"zone_id": zone_id, "zone_name": AUSMALWIESE_ZONE, "api_token": token},
+                           separators=(",", ":"), sort_keys=True) + "\n").encode()
+    _validate_secret_parent(SECRET_ROOT_PATH)
+    _validate_secret_parent(SECRET_DIR_PATH)
+    started = False
+    fd = None
+    try:
+        for parent in (SECRET_ROOT_PATH, SECRET_DIR_PATH):
+            if not parent.exists():
+                os.mkdir(parent, 0o700)
+                started = True
+                _validate_secret_parent(parent)
+        fd = os.open(DNS_SECRET_PATH, os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        started = True
+        view = memoryview(payload)
+        while view:
+            n = os.write(fd, view)
+            if n <= 0:
+                raise OSError("short_write")
+            view = view[n:]
+        os.fsync(fd)
+        os.close(fd)
+        fd = None
+        _validate_regular_root_file(DNS_SECRET_PATH, 0o600)
+        if DNS_SECRET_PATH.read_bytes() != payload:
+            raise SecretProvisionError("secret_post_write_verification_failed", True)
+    except SecretProvisionError:
+        raise
+    except (OSError, OperatorError) as exc:
+        raise SecretProvisionError("secret_write_failed", started) from exc
+    finally:
+        if fd is not None:
+            os.close(fd)
+
+
+def run_ausmalwiese(
+    dns: CloudflareClient, tunnel: CloudflareClient, zone_id: str,
+    account_id: str, action: str, apply: bool, expected_baseline: str,
+) -> dict[str, Any]:
+    zone = _ausmalwiese_zone(dns, zone_id)
+    if zone["account"].get("id") != account_id:
+        raise OperatorError("dns_zone_invalid")
+    tunnel_id, config = _rpi5_tunnel(tunnel, account_id)
+    if action == "tunnel-ausmalwiese":
+        desired = _prepared_tunnel_config(config)
+        baseline = _baseline(config)
+        if apply:
+            if expected_baseline != baseline:
+                raise OperatorError("baseline_mismatch")
+            tunnel._request("PUT", f"/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations",
+                            {"config": desired})
+            _, observed = _rpi5_tunnel(tunnel, account_id)
+            if observed != desired:
+                raise PostWriteError("tunnel_configuration_invalid")
+        return {"baseline": baseline, "applied": apply}
+
+    if action not in ("dns-ausmalwiese-apex", "dns-ausmalwiese-www"):
+        raise OperatorError("hostname_not_allowlisted")
+    hostname = AUSMALWIESE_NAMES[0 if action == "dns-ausmalwiese-apex" else 1]
+    rows = _ausmalwiese_records(dns, zone_id)
+    if any(str(r.get("name", "")).lower().rstrip(".") == hostname for r in rows):
+        raise OperatorError("dns_record_conflict")
+    baseline = _baseline(rows)
+    target = tunnel_id + ".cfargotunnel.com"
+    if apply:
+        if expected_baseline != baseline:
+            raise OperatorError("baseline_mismatch")
+        body = {"type": "CNAME", "name": hostname, "content": target, "ttl": 1, "proxied": True}
+        dns._request("POST", f"/zones/{zone_id}/dns_records", body)
+        observed = [r for r in _ausmalwiese_records(dns, zone_id) if r.get("name") == hostname]
+        if (len(observed) != 1 or observed[0].get("type") != "CNAME"
+            or observed[0].get("content") != target or observed[0].get("proxied") is not True):
+            raise PostWriteError("cloudflare_write_shape_invalid")
+    return {"baseline": baseline, "applied": apply}
 
 
 def _split_destination(value: str) -> tuple[str, str]:
@@ -879,6 +1062,17 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     tunnel.add_argument("--expected-main", required=True)
     tunnel.add_argument("--confirm", default="")
 
+    dns_secret = subparsers.add_parser("provision-ausmalwiese-dns-secret")
+    dns_secret.add_argument("--expected-main", required=True)
+    dns_secret.add_argument("--confirm", default="")
+
+    for name in ("dns-ausmalwiese-apex", "dns-ausmalwiese-www", "tunnel-ausmalwiese"):
+        command = subparsers.add_parser(name)
+        command.add_argument("--expected-main", required=True)
+        command.add_argument("--apply", action="store_true")
+        command.add_argument("--expected-baseline", default="")
+        command.add_argument("--confirm", default="")
+
     phase7 = subparsers.add_parser("phase7-ingress-drift-audit")
     phase7.add_argument("--expected-main", required=True)
     return parser.parse_args(argv)
@@ -922,6 +1116,29 @@ def main(argv: list[str] | None = None) -> int:
                 write_attempted=False,
                 apply_ready=False,
             )
+            return 0
+
+        if args.action == "provision-ausmalwiese-dns-secret":
+            if args.confirm != DNS_PROVISION_CONFIRM_TEXT:
+                raise OperatorError("provision_confirmation_missing")
+            zone_id, token = _read_hidden_dns_credentials()
+            provision_dns_secret(CloudflareClient(token), zone_id, token)
+            token = ""
+            _emit("PASS", mutation_performed=True)
+            return 0
+
+        if args.action in ("dns-ausmalwiese-apex", "dns-ausmalwiese-www", "tunnel-ausmalwiese"):
+            confirm = TUNNEL_APPLY_CONFIRM_TEXT if args.action == "tunnel-ausmalwiese" else DNS_APPLY_CONFIRM_TEXT
+            if args.apply and (args.confirm != confirm or not re.fullmatch(r"[0-9a-f]{64}", args.expected_baseline)):
+                raise OperatorError("apply_confirmation_missing")
+            zone_id, dns_token = load_dns_credentials()
+            account_id, tunnel_token = load_tunnel_credentials()
+            report = run_ausmalwiese(
+                CloudflareClient(dns_token), CloudflareClient(tunnel_token),
+                zone_id, account_id, args.action, args.apply, args.expected_baseline)
+            print(json.dumps({"operation": args.action, "result": "PASS",
+                              "baseline_sha256": report["baseline"],
+                              "mutation_performed": report["applied"]}, sort_keys=True))
             return 0
 
         if args.action == "phase7-ingress-drift-audit":
