@@ -521,5 +521,122 @@ class CloudflareRdcOperatorTests(unittest.TestCase):
             ],
         )
 
+
+
+class AusmalwieseDnsTests(unittest.TestCase):
+    def test_route_uses_existing_loopback_and_retains_catchall(self):
+        before = {"ingress": [
+            {"hostname": "coloring.rozkalns.net", "service": "http://127.0.0.1:9191"},
+            {"service": "http_status:404"}],
+            "originRequest": {"connectTimeout": "10s"}}
+        after = op._prepared_tunnel_config(before)
+        self.assertEqual([r.get("hostname") for r in after["ingress"]],
+                         ["coloring.rozkalns.net", "ausmalwiese.de", "www.ausmalwiese.de", None])
+        self.assertEqual(after["ingress"][1]["service"], before["ingress"][0]["service"])
+        self.assertEqual(before["ingress"][-1], after["ingress"][-1])
+        self.assertEqual(before["originRequest"], after["originRequest"])
+        self.assertEqual(len(before["ingress"]), 2)
+
+    def test_route_rejects_existing_host_and_non_loopback(self):
+        for service in ("http://192.168.0.180:8080", "https://example.com", "http://127.0.0.1"):
+            with self.assertRaises(op.OperatorError):
+                op._prepared_tunnel_config({"ingress": [
+                    {"hostname": "coloring.rozkalns.net", "service": service},
+                    {"service": "http_status:404"}]})
+        with self.assertRaisesRegex(op.OperatorError, "tunnel_route_conflict"):
+            op._prepared_tunnel_config({"ingress": [
+                {"hostname": "coloring.rozkalns.net", "service": "http://127.0.0.1:8080"},
+                {"hostname": "www.ausmalwiese.de", "service": "http://127.0.0.1:8080"},
+                {"service": "http_status:404"}]})
+
+    def test_baseline_stable_and_sensitive_data_not_printed(self):
+        self.assertEqual(op._baseline({"a": 1, "b": 2}), op._baseline({"b": 2, "a": 1}))
+        self.assertEqual(len(op._baseline({"sample": "a"})), 64)
+
+    def test_cli_requires_baseline_and_confirmation_before_write(self):
+        args = op.parse_args(["dns-ausmalwiese-apex", "--expected-main", "a" * 40])
+        self.assertFalse(args.apply)
+        self.assertEqual(args.expected_baseline, "")
+        self.assertEqual(args.confirm, "")
+        self.assertEqual(op.parse_args(["tunnel-ausmalwiese", "--expected-main", "a" * 40]).action,
+                         "tunnel-ausmalwiese")
+
+    def test_existing_access_and_tunnel_modes_remain(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        for value in ("access-public-bypass", "provision-access-secret",
+                      "provision-tunnel-secret", "phase7-ingress-drift-audit"):
+            self.assertIn(value, source)
+
+    def test_dns_get_only_and_one_exact_write(self):
+        account_id, zone_id = "a" * 32, "b" * 32
+        tunnel_id = "11111111-1111-4111-8111-111111111111"
+
+        class FakeDns:
+            def __init__(self):
+                self.records = []
+                self.writes = []
+
+            def _request(self, method, path, body=None):
+                if method == "GET" and path == f"/zones/{zone_id}":
+                    return {"result": {"id": zone_id, "name": "ausmalwiese.de",
+                        "status": "active", "account": {"id": account_id},
+                        "plan": {"legacy_id": "free"}}}
+                if method == "GET" and "/dns_records?" in path:
+                    return {"result": list(self.records), "result_info": {"total_pages": 1}}
+                if method == "POST" and path == f"/zones/{zone_id}/dns_records":
+                    self.writes.append(body)
+                    self.records.append(body)
+                    return {"result": body}
+                raise AssertionError((method, path))
+
+        class FakeTunnel:
+            def __init__(self):
+                self.put = []
+
+            def _request(self, method, path, body=None):
+                if method == "GET" and "/cfd_tunnel?" in path:
+                    return {"result": [{"id": tunnel_id, "name": "rpi5-tunnel", "config_src": "cloudflare"}]}
+                if method == "GET" and path.endswith("/configurations"):
+                    return {"result": {"config": {"ingress": [
+                        {"hostname": "coloring.rozkalns.net", "service": "http://127.0.0.1:8080"},
+                        {"service": "http_status:404"}]}}}
+                if method == "PUT":
+                    self.put.append(body)
+                    return {"result": body}
+                raise AssertionError((method, path))
+
+        dns, tunnel = FakeDns(), FakeTunnel()
+        before = op.run_ausmalwiese(dns, tunnel, zone_id, account_id,
+                                   "dns-ausmalwiese-apex", False, "")
+        self.assertFalse(before["applied"])
+        self.assertEqual(dns.writes, [])
+        with self.assertRaisesRegex(op.OperatorError, "baseline_mismatch"):
+            op.run_ausmalwiese(dns, tunnel, zone_id, account_id,
+                              "dns-ausmalwiese-apex", True, "f" * 64)
+        self.assertEqual(dns.writes, [])
+        op.run_ausmalwiese(dns, tunnel, zone_id, account_id,
+                          "dns-ausmalwiese-apex", True, before["baseline"])
+        self.assertEqual(len(dns.writes), 1)
+        self.assertEqual(dns.writes[0], {"type": "CNAME", "name": "ausmalwiese.de",
+                           "content": tunnel_id + ".cfargotunnel.com",
+                           "ttl": 1, "proxied": True})
+        with self.assertRaisesRegex(op.OperatorError, "dns_record_conflict"):
+            op.run_ausmalwiese(dns, tunnel, zone_id, account_id,
+                              "dns-ausmalwiese-apex", False, "")
+        self.assertEqual(tunnel.put, [])
+
+    def test_dns_rejects_wrong_zone_and_partial_inventory(self):
+        class Fake:
+            def _request(self, method, path, body=None):
+                return {"result": {"id": "b" * 32, "name": "another.de", "status": "active",
+                                   "account": {"id": "a" * 32}, "plan": {"legacy_id": "free"}}}
+        with self.assertRaisesRegex(op.OperatorError, "dns_zone_invalid"):
+            op._ausmalwiese_zone(Fake(), "b" * 32)
+        class Paginated:
+            def _request(self, method, path, body=None):
+                return {"result": [], "result_info": {"total_pages": 2}}
+        with self.assertRaisesRegex(op.OperatorError, "dns_records_incomplete"):
+            op._ausmalwiese_records(Paginated(), "b" * 32)
+
 if __name__ == "__main__":
     unittest.main()
