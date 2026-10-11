@@ -19,7 +19,7 @@ CONTRACT = ROOT / "ops/contracts/coloring-pages-drive-ingest-operator-v1.json"
 INSTALLER = ROOT / "scripts/install-coloring-pages-drive-ingest-operator-v1.sh"
 HOST_CONTRACT = ROOT / "ops/contracts/simple-deploy-host-v1.json"
 
-IMAGE_DIGEST = "sha256:fe1cbd2fccaecfc536b78c048d3c0baaf3c4b809b8c28c9fb760373525a16b5b"
+IMAGE_DIGEST = "sha256:ac54a42b7339fe939831bd9cc17426140b02202340f3c2fd6d7e5530b4265007"
 IMAGE_REF = f"ghcr.io/rozkalnsandris/coloring-pages@{IMAGE_DIGEST}"
 
 LOADER = importlib.machinery.SourceFileLoader(
@@ -361,7 +361,7 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
     def test_v2_contract_keeps_one_operator_and_verifies_all_pages_first(self) -> None:
         self.assertEqual(
             self.contract["consumer"]["source_revision"],
-            "6d55dd16c3eb2a303bf963cb5ec2a036f709ba02",
+            "ab86a6eca6ae6dc8d32bf15ed43698fb0cf5537b",
         )
         self.assertIn("--expected-page", self.contract["operator"]["allowed_arguments"])
         self.assertEqual(
