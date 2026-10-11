@@ -9,7 +9,7 @@
   "project": "rozkalns-weather-public",
   "service": "weather",
   "source_files": {
-    "registry": "ops/deploy/simple-deploy-targets-v1.json",
+    "registry": "ops/deploy/baselines/simple-deploy-targets-weather-rebind-v1.json",
     "compose": "ops/deploy/simple-deploy-compose/rozkalns-weather-public.yml",
     "legacy_reconciler": "ops/lib/deploy_executor/simple_deploy_v1.py"
   },

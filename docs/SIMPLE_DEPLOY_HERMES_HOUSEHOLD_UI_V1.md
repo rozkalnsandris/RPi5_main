@@ -43,6 +43,12 @@ is not an installation path for this successor. The generic first-install script
 also does not install this new adapter and must not be used as an upgrade shortcut.
 No adoption/apply entrypoint is added here.
 
+Weather rebind also pins the shared registry as a whole. Its source contract now
+reads the frozen pre-household registry from
+`ops/deploy/baselines/simple-deploy-targets-weather-rebind-v1.json`; its approved
+digest and Weather-only delta are unchanged. Advancing the current Hermes registry
+must not silently broaden the separate Weather operation.
+
 ## Remaining prerequisites
 
 1. Revalidate exact consumer release/digest, source target and runtime baseline.

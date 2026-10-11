@@ -90,6 +90,16 @@ class HouseholdConfigurationTests(unittest.TestCase):
         self.assertEqual(legacy_target["compose"]["file"], "hermes-deals-api.yml")
         self.assertEqual(legacy_target["compose"]["file_sha256"], adoption["hermes_compose_sha256"])
 
+    def test_weather_rebind_keeps_its_frozen_registry_identity(self):
+        weather = read_json("ops/contracts/weather-public-rebind-execution-v1.json")
+        registry = ROOT / weather["source_files"]["registry"]
+        self.assertEqual(hashlib.sha256(registry.read_bytes()).hexdigest(),
+                         "91a2fe2d86d9da9ac4ee7a5031eea7a405d3d42faec24ed089b08534c7ac0f23")
+        self.assertEqual(weather["desired"]["registry_sha256"],
+                         hashlib.sha256(registry.read_bytes()).hexdigest())
+        self.assertEqual(weather["desired"]["registry_delta_from_installed"],
+                         ["weather.compose.file_sha256"])
+
     def test_source_registration_does_not_enable_materialization_or_activation(self):
         self.assertFalse(self.contract["activation_eligible"])
         self.assertFalse(self.contract["runtime_installation_performed"])
