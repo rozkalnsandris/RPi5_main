@@ -337,7 +337,7 @@ run_autumn
 assert_actions ''
 assert_tg_count 1
 assert_tg_contains 'Nav laistīts'
-assert_tg_contains 'augsne jau pietiekami mitra'
+assert_tg_contains 'sausi tikai 0/12 sensori (vajag vismaz 2)'
 
 # 7: frost risk blocks watering and reports itself.
 export MOCK_SENSOR_MODE=valid
