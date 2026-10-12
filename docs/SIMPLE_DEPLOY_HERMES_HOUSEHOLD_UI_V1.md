@@ -55,6 +55,9 @@ must not silently broaden the separate Weather operation.
 2. Resolve [v4 consumer access](SIMPLE_DEPLOY_HERMES_PREREQUISITE_MATERIALIZATION_V4.md):
    its metadata-only result cannot prove Compose can read the protected child.
    V4 has no apply path; v2/v3 are not fallback installers for its parent layout.
+   [The create-only env child proposal](HERMES_PRIVATE_ENV_CHILD_V1.md) addresses
+   the missing child under a separate future protected-read/creation decision.
+   It does not materialize state trees or prove full consumer readiness.
 3. Review an existing-install adoption outcome for this adapter/registry together
    with a valid protected prerequisite path. Preserve unrelated targets and validate
    any existing household identity/origin without printing protected values.

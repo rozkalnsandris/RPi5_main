@@ -1,0 +1,36 @@
+{
+  "schema": "hermes.private-env-child.v1",
+  "issue": 984,
+  "entrypoint": "scripts/create-hermes-private-env.py",
+  "parent": "/etc/rozkalns-simple-deployer/private",
+  "child": "hermes-deals-api.env",
+  "stage": ".hermes-deals-api.env.child-v1.staged",
+  "legacy_stage_must_be_absent": ".hermes-deals-api.env.prerequisites-v1.staged",
+  "source": "passwd(andris).home/hermes-deals/.env",
+  "source_max_bytes": 65536,
+  "source_keys": [
+    "POSTGRES_USER",
+    "POSTGRES_PASSWORD",
+    "POSTGRES_DB",
+    "HTTP_USER_AGENT"
+  ],
+  "destination_keys": [
+    "DATABASE_URL",
+    "HTTP_USER_AGENT"
+  ],
+  "parent_mode": "0750",
+  "child_mode": "0640",
+  "parent_owner": "root",
+  "child_owner": "root",
+  "group": "rozkalns-simple-deployer",
+  "parent_mutation_allowed": false,
+  "overwrite_allowed": false,
+  "default_protected_read": false,
+  "default_mutation": false,
+  "apply_requires_separate_live_authorization": true,
+  "activation_eligible": false,
+  "compose_runtime_access": "NOT_PROVEN",
+  "retry": false,
+  "rollback": false,
+  "error_cleanup": false
+}
