@@ -84,21 +84,38 @@ log() {
     printf '%s %s\n' "$(TZ="Europe/Berlin" date '+%Y-%m-%d %H:%M:%S')" "$*" | tee -a "$LOGFILE"
 }
 
-# Message policy: real watering, normal skip, error, frost block and lock
-# contention. Deliver via the existing RPi5 notifications bot, not Hermes.
+# Notifications go through existing HA MQTT -> Balkona bot bridge only.
+# Fixed notification-only topic; never duplicate Telegram credentials.
 send_tg() {
     if [[ "$DRY_RUN" == "1" ]]; then
-        log "DRY-RUN telegram (suppressed): $1"
+        log "DRY-RUN notification (suppressed): $1"
         return 0
     fi
 
-    if [[ -z "${TELEGRAM_TOKEN:-}" || -z "${CHAT_ID:-}" ]]; then
-        return 0
-    fi
+    local http_code
+    http_code="$(
+        printf '%s' "$1" |
+            python3 -c '
+import json
+import sys
+json.dump(
+    {"topic": "balkons/telegram_out", "payload": sys.stdin.read(), "qos": 0, "retain": False},
+    sys.stdout,
+    ensure_ascii=False,
+)
+' |
+            curl -s -o /dev/null -w '%{http_code}' --max-time 15 -X POST \
+                "${HASS_URL}/api/services/mqtt/publish" \
+                -H "${AUTH_HEADER_NAME}: Bearer ${HASS_TOKEN}" \
+                -H "Content-Type: application/json" \
+                --data-binary @- 2>/dev/null
+    )" || http_code="000"
 
-    curl -s --max-time 15 -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
-        -d "chat_id=${CHAT_ID}" \
-        --data-urlencode "text=$1" >/dev/null 2>&1 || true
+    if [[ "$http_code" == "200" ]]; then
+        log "NOTIFY-MQTT: submitted to balcony bot bridge (Telegram receipt unconfirmed)"
+    else
+        log "NOTIFY-WARN: balcony bot MQTT publish failed (HTTP ${http_code})"
+    fi
 }
 
 # Prevent overlapping runs.
@@ -440,13 +457,13 @@ fail_run() {
 
 skip_quiet() {
     log "SKIP: $*"
-    send_tg "🌿 Balkona laistīšana: Nav laistīts — $*${SENSOR_NOTE:-}"
+    send_tg "🌿 Nav laistīts — $*${SENSOR_NOTE:-}"
     exit 0
 }
 
 skip_error() {
     log "ERROR-SKIP: $*"
-    send_tg "🚨 Balcony autumn watering skipped: $*${SENSOR_NOTE:-}"
+    send_tg "⚠️ Nav laistīts — pārbaudes kļūda: $*${SENSOR_NOTE:-}"
     exit 0
 }
 
@@ -567,7 +584,7 @@ PY
 
 if [[ "$FROST_DECISION" == "BLOCK" ]]; then
     log "FROST-CHECK BLOCK: low ${FROST_MIN}C (current ${TEMP_CURRENT}C) <= ${FROST_THRESHOLD}C"
-    send_tg "❄️ Balcony watering blocked: frost risk (low ${FROST_MIN}C, current ${TEMP_CURRENT}C, threshold ${FROST_THRESHOLD}C)${SENSOR_NOTE:-}"
+    send_tg "❄️ Nav laistīts — sala risks: min. ${FROST_MIN}°C, pašlaik ${TEMP_CURRENT}°C, slieksnis ${FROST_THRESHOLD}°C${SENSOR_NOTE:-}"
     exit 0
 fi
 
@@ -576,11 +593,11 @@ log "FROST-CHECK OK: low ${FROST_MIN}C (current ${TEMP_CURRENT}C) > ${FROST_THRE
 # One dry sensor never waters everything. A minimum number of dry pots is
 # required, and an already-wet tray is left alone.
 if (( DRY_COUNT < MIN_DRY )); then
-    skip_quiet "only ${DRY_COUNT}/${ACTIVE_SENSOR_COUNT} dry sensors (need >= ${MIN_DRY}); no single-sensor watering"
+    skip_quiet "sausi tikai ${DRY_COUNT}/${ACTIVE_SENSOR_COUNT} sensori (vajag vismaz ${MIN_DRY})"
 fi
 
 if (( MOIST_COUNT >= MAX_MOIST )); then
-    skip_quiet "${MOIST_COUNT}/${ACTIVE_SENSOR_COUNT} sensors already moist (>= ${MAX_MOIST}); soil is wet enough"
+    skip_quiet "augsne jau pietiekami mitra (${MOIST_COUNT}/${ACTIVE_SENSOR_COUNT} mitri sensori, slieksnis ${MAX_MOIST})"
 fi
 
 if (( DURATION < CANDIDATE_MIN_SECONDS || DURATION > CANDIDATE_MAX_SECONDS )); then
@@ -612,7 +629,7 @@ if ! request_ha_confirmed "off" "pump OFF" >/dev/null; then
 fi
 PUMP_IS_ON=0
 
-send_tg "💧 Balcony autumn watering done: ${DURATION}s, dry before ${DRY_COUNT}/${ACTIVE_SENSOR_COUNT} (${DRY_LIST:-none}), low ${FROST_MIN}C${SENSOR_NOTE:-}"
+send_tg "💧 Laistīts: ${DURATION} s; pirms tam sausi ${DRY_COUNT}/${ACTIVE_SENSOR_COUNT} sensori (${DRY_LIST:-nav}); min. temperatūra ${FROST_MIN}°C${SENSOR_NOTE:-}"
 log "===== watering cycle complete (max one cycle per day) ====="
 
 # Calibration feedback: how the soil answered this cycle. Logged always, added
