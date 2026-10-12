@@ -1,0 +1,66 @@
+{
+  "schema": "rozkalns.rpi5-main.ausmalwiese-crawler-policy.v1",
+  "status": "SOURCE_ONLY_NOT_APPLIED",
+  "issue": 988,
+  "zone": "ausmalwiese.de",
+  "hosts": [
+    "ausmalwiese.de",
+    "www.ausmalwiese.de"
+  ],
+  "plan": "CLOUDFLARE_FREE",
+  "execution": "OWNER_AUTHORIZED_CLOUDFLARE_DASHBOARD_ONLY",
+  "baseline_2026_10_12": {
+    "custom_waf_rules_used": 0,
+    "custom_waf_rule_limit": 5,
+    "rate_limits_used": 0,
+    "rate_limit_max": 1,
+    "bot_fight_mode": "OFF",
+    "ai_crawl_control": "AVAILABLE",
+    "ai_crawler_actions": "BLOCK_OFF",
+    "googlebot_image": "NOT_LISTED_UNVERIFIED",
+    "ai_policy_configurations": "4_DISPLAYED_NOT_AUDITED"
+  },
+  "preserve_search": [
+    "Googlebot",
+    "Googlebot-Image"
+  ],
+  "preserve_search_console_diagnostic": [
+    "Google-InspectionTool"
+  ],
+  "required_known_blocks": [
+    "Claude-SearchBot",
+    "ClaudeBot",
+    "Bingbot",
+    "OAI-SearchBot",
+    "GPTBot",
+    "ChatGPT-User",
+    "PerplexityBot",
+    "Applebot",
+    "Amazonbot",
+    "archive.org_bot",
+    "Baidu",
+    "FacebookBot"
+  ],
+  "additional_visible_non_google_crawlers": "INVENTORY_AND_FREEZE_BEFORE_LIVE",
+  "crawler_not_in_ui": "UNSUPPORTED_NOT_AUTOMATICALLY_BLOCKED",
+  "detection": "FREE_PLAN_SELF_IDENTIFIED_USER_AGENT_ONLY",
+  "enforcement": "AI_CRAWL_CONTROL_MANAGED_ONE_SHARED_WAF_CUSTOM_RULE",
+  "extra_custom_waf_rule": "NOT_PROPOSED",
+  "verified_google_allowlist_from_user_agent": "FORBIDDEN",
+  "global_verified_bot_skip": "FORBIDDEN",
+  "bot_fight_mode": "KEEP_OFF",
+  "global_search_category_block": "FORBIDDEN",
+  "robots_txt_origin_change": "FORBIDDEN",
+  "separate_zone_access_credentials": "NOT_PROVISIONED_OR_USED",
+  "source_mutation_budget": 0,
+  "live_approval": "SEPARATE_EXACT_ZONE_AND_FINAL_MUTATION_LIST",
+  "live_failure": "STOP_NO_RETRY_ROLLBACK_CLEANUP",
+  "tests_required": [
+    "GOOGLE_SEARCH_AND_IMAGE",
+    "HUMAN_BROWSER_MOBILE_DESKTOP",
+    "A4_PRINT_AND_PNG",
+    "STATS_API_AND_QR",
+    "SITEMAP_AND_ROBOTS",
+    "SECURITY_EVENTS"
+  ]
+}
