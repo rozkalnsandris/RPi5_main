@@ -110,7 +110,9 @@ The ESP32 keeps its independent 180 s pump fail-safe. This controller neither we
 
 ### Message policy
 
-Telegram notifications use the existing RPi5 notifications bot (the script's `TELEGRAM_TOKEN` and `CHAT_ID`), not the Hermes Agent bot. Each scheduled outcome is logged locally and reported there: a real watering cycle (duration and dry sensor count), a normal **Nav laistīts** skip (too few dry sensors, tray already wet, or already watered today), an error (unreachable Home Assistant, unusable state JSON/sensors/temperature, unconfirmed ON or OFF), a frost block, or a lock-contention warning. Dry-run suppresses all Telegram notifications. Hermes cron delivery should remain `local` to prevent duplicate raw execution logs in the Hermes Agent chat. Changing that production cron delivery remains a separately authorized LIVE step.
+The autumn/winter controller delivers its notifications via **Home Assistant MQTT publish → `balkons/telegram_out` → existing balcony Telegram bot** (user-facing `@balkona_laistisana_bot`). The bot bridge source `ops/lib/balkons-bot.py` subscribes to this notification-only topic and sends to its configured chat. The controller posts an exact `{"topic":"balkons/telegram_out","payload":"…","qos":0,"retain":false}` object to HA `POST /api/services/mqtt/publish` using its **existing** HA API access; no direct Telegram request, bot token duplication, new MQTT credential, or publication to pump topic `balkons/cmd`. This requires the HA MQTT integration and the balcony bot to be online. A successful HA API reply proves only MQTT submission, **not Telegram receipt**.
+
+Each run records `watering.log` and sends **Laistīts** with duration/dry count, **Nav laistīts** with a specific reason (insufficient measured dry sensors, soil already moist, already watered that day, frost, or sensor/temperature checks), **Kļūda** for unsafe pump outcomes, or a lock-contention warning. An unavailable active moisture sensor is explicitly listed as **assumed moist**, never described as measured. `NOTIFY-MQTT` logs successful handoff; `NOTIFY-WARN` records a failed handoff without retry or changing the watering decision. Dry-run suppresses all MQTT/Telegram notifications. Hermes cron delivery stays `local` to prevent duplicate raw logs in the Hermes Agent chat. A separate exact LIVE approval is needed to install source and later verify one ordinary scheduled delivery without triggering watering.
 
 ### Manual commands and frost (evaluation)
 
@@ -134,7 +136,7 @@ Required runtime inputs:
 
 Optional runtime inputs:
 
-- `TELEGRAM_TOKEN` and `CHAT_ID` — enable skip notifications when both are supplied;
+- The autumn/winter notification route uses the same existing `HASS_URL` and `HASS_TOKEN` as its other HA operations; it does **not** use `TELEGRAM_TOKEN` or `CHAT_ID`. Other primary/summer scripts retain their separately documented legacy delivery environment.
 - `BALCONY_WATERING_ENTITY` — pump entity override;
 - `BALCONY_WATERING_DURATION_SECONDS` — default `60`;
 - `BALCONY_WATERING_PAUSE_SECONDS` — default `300`;
@@ -178,7 +180,7 @@ A later production mapping may provide these inputs through a protected host-onl
 
 The repository-wide `make validate` gate includes this regression together with shell syntax, secret scanning, and public-repository safety checks.
 
-`tests/test-balcony-watering-autumn.sh` covers the cold-season controller with the same offline technique — local `curl` and `sleep` mocks, a reserved `.invalid` origin and a locally intercepted Telegram endpoint, so no request leaves the machine and no pump action is possible. It verifies:
+`tests/test-balcony-watering-autumn.sh` covers the cold-season controller with the same offline technique — local `curl` and `sleep` mocks, a reserved `.invalid` origin and a locally intercepted Home Assistant MQTT publish endpoint, so no request leaves the machine and no pump action is possible. It verifies:
 
 1. three dry pots of twelve with a mild night => exactly one confirmed `on,off` cycle, one watering message and a recorded day marker;
 2. retired 2/14/15 `unavailable` => still waters and never counts as dry;
