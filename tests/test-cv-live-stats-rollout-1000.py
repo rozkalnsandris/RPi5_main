@@ -106,6 +106,57 @@ class CvStatsRolloutTests(unittest.TestCase):
             with self.assertRaises(op.Block):
                 op.stats_path()
 
+    def test_cv_data_path_is_derived_from_guarded_stats_home(self):
+        account, snapshot = self.stats_home("first")
+        data = snapshot.parent.parent / op.CV_DATA_RELATIVE
+        data.mkdir(parents=True)
+        with patch.object(op.pwd, "getpwall", return_value=[account]):
+            self.assertEqual(op.cv_data_path(), data)
+            data.rmdir()
+            with self.assertRaises(OSError):
+                op.cv_data_path()
+            data.symlink_to(self.base, target_is_directory=True)
+            with self.assertRaisesRegex(op.Block, "CV_DATA_PATH_UNSAFE"):
+                op.cv_data_path()
+
+    def test_command_env_isolated_to_one_compose_variable(self):
+        data = self.base / "fixed-data"
+        calls = []
+        def fake_run(argv, **kw):
+            calls.append(kw["env"])
+            return SimpleNamespace(returncode=0, stdout="")
+        with patch.object(op.subprocess, "run", side_effect=fake_run):
+            op.command(["/usr/bin/systemctl", "show", "fixed.service"])
+            op.command(["docker", "compose", "version"], compose_data_path=data)
+            self.assertEqual(calls[0], op.ENV)
+            self.assertEqual(calls[1], {**op.ENV, "ROZKALNS_CV_DATA_PATH": str(data)})
+            for wrong in ("relative", Path("relative"), 42, True):
+                with self.subTest(value=wrong):
+                    with self.assertRaises(op.Block):
+                        op.command(["docker", "compose", "version"], compose_data_path=wrong)
+        self.assertEqual(len(calls), 2)
+
+    def test_runtime_rejects_data_mount_drift(self):
+        account, snapshot = self.stats_home("first")
+        data = snapshot.parent.parent / op.CV_DATA_RELATIVE
+        data.mkdir(parents=True)
+        def inspect(argv, **kw):
+            if "{{.Config.Image}}" in argv:
+                return op.IMAGE_REF
+            if argv[1:3] == ["image", "inspect"]:
+                return op.CV_SOURCE
+            if "{{json .Mounts}}" in argv:
+                return json.dumps([{"Destination": "/app/data", "Type": "bind",
+                                    "RW": True, "Source": str(data)}])
+            raise AssertionError("unexpected command")
+        with patch.object(op.pwd, "getpwall", return_value=[account]), \
+             patch.object(op, "command", side_effect=inspect), \
+             patch.object(op, "http_ok"):
+            op.runtime()
+            with patch.object(op, "cv_data_path", return_value=self.base):
+                with self.assertRaisesRegex(op.Block, "CV_DATA_MOUNT_DRIFT"):
+                    op.runtime()
+
     def test_override_requires_exact_deployer_owner_parent_and_permissions(self):
         """Simulated deployer-owned directory: other UID/mode fails before bytes."""
         override_dir = self.base / "override-owned-by-service"
@@ -229,10 +280,16 @@ class CvStatsRolloutTests(unittest.TestCase):
         self.assertTrue((self.registry_dir / op.STAGE).exists())
 
     def test_recreate_is_cv_only_without_pull_or_build(self):
-        argv = []
-        with patch.object(op, "command", side_effect=lambda args, **kw: argv.append(args)):
+        argv, kwargs = [], []
+        data = self.base / "fixed-data"
+        def collect(args, **kw):
+            argv.append(args)
+            kwargs.append(kw)
+        with patch.object(op, "cv_data_path", return_value=data), \
+             patch.object(op, "command", side_effect=collect):
             op.recreate()
         self.assertEqual(len(argv), 1)
+        self.assertEqual(kwargs, [{"timeout": 220, "compose_data_path": data}])
         self.assertEqual(argv[0][-1], "cv")
         self.assertIn("--no-deps", argv[0])
         self.assertIn("--force-recreate", argv[0])

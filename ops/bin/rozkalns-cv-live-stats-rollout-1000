@@ -27,6 +27,7 @@ COMPOSE = Path("/etc/rozkalns-simple-deployer/compose/rozkalns-cv.yml")
 REGISTRY = Path("/etc/rozkalns-simple-deployer/targets.json")
 OVERRIDE = Path("/var/lib/rozkalns-simple-deployer/overrides/rozkalns-cv-rpi5.yaml")
 STATS_RELATIVE = Path("docker/cv/html/stats.json")
+CV_DATA_RELATIVE = Path("bot/data")
 CONTAINER = "rozkalns-cv-cv-1"
 STAGE = ".cv-live-stats-1000.stage"
 ROOT_UID = 0
@@ -111,12 +112,18 @@ def target_only_registry(raw):
     return changed
 
 
-def command(argv, timeout=10):
+def command(argv, timeout=10, *, compose_data_path=None):
+    # No ambient environment and no arbitrary caller-controlled environment.
+    child_env = dict(ENV)
+    if compose_data_path is not None:
+        require(isinstance(compose_data_path, Path) and compose_data_path.is_absolute(),
+                "CV_DATA_PATH_INVALID")
+        child_env["ROZKALNS_CV_DATA_PATH"] = str(compose_data_path)
     try:
         p = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                            stdin=subprocess.DEVNULL, check=False, timeout=timeout,
                            text=True, encoding="utf-8", errors="strict",
-                           env=ENV, shell=False)
+                           env=child_env, shell=False)
     except (OSError, UnicodeError, subprocess.TimeoutExpired):
         raise Block("COMMAND_UNAVAILABLE") from None
     require(p.returncode == 0 and len(p.stdout) <= 8192, "COMMAND_FAILED")
@@ -190,6 +197,14 @@ def stats_path(entries=None):
     return candidates[0]
 
 
+def cv_data_path():
+    """Derive fixed data path from verified producer location, never env."""
+    data = stats_path().parent.parent / CV_DATA_RELATIVE
+    for directory in (data.parent, data):
+        require(stat.S_ISDIR(directory.lstat().st_mode), "CV_DATA_PATH_UNSAFE")
+    return data
+
+
 def producer():
     meta = stats_path().lstat()
     require(stat.S_ISREG(meta.st_mode) and not meta.st_mode & 0o022
@@ -208,6 +223,11 @@ def runtime(mount_expected=False):
     require(revision == CV_SOURCE, "CONTAINER_REVISION_DRIFT")
     mounts = json.loads(command(["docker", "container", "inspect", "--format",
                                  "{{json .Mounts}}", CONTAINER]))
+    data_mount = [m for m in mounts if m.get("Destination") == "/app/data"]
+    require(len(data_mount) == 1 and data_mount[0].get("Type") == "bind"
+            and data_mount[0].get("RW") is True
+            and data_mount[0].get("Source") == str(cv_data_path()),
+            "CV_DATA_MOUNT_DRIFT")
     matched = [m for m in mounts if m.get("Destination") == "/srv/cv/host-stats"]
     if mount_expected:
         require(len(matched) == 1 and matched[0].get("RW") is False
@@ -289,7 +309,8 @@ def recreate():
     command(["docker", "compose", "--project-name", "rozkalns-cv",
              "--file", str(COMPOSE), "--file", str(OVERRIDE),
              "up", "--detach", "--no-deps", "--force-recreate", "--pull", "never",
-             "--no-build", "--wait", "--wait-timeout", "180", "cv"], timeout=220)
+             "--no-build", "--wait", "--wait-timeout", "180", "cv"],
+            timeout=220, compose_data_path=cv_data_path())
 
 
 def apply():
