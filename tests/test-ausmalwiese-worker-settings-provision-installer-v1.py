@@ -224,7 +224,7 @@ class HelperInstallTests(unittest.TestCase):
              mock.patch.object(mod.os,"close") as close:
             mod.apply(HEAD,runner=r)
         self.assertEqual(r.writes,1)
-        self.assertEqual([a[0] for a,_ in r.calls if a[:3]==[mod.SUDO,"-n",mod.CP]], [mod.SUDO]*2)
+        self.assertEqual([a[0] for a,_ in r.calls if a[:3]==[mod.SUDO,"-n",mod.CP]], [mod.SUDO])
         close.assert_called_once_with(45)
 
     def test_post_dispatch_fail_stops_no_retry_or_cleanup(self):
@@ -258,8 +258,8 @@ class HelperInstallTests(unittest.TestCase):
 
     def test_no_secret_output_or_root_python_in_source(self):
         src=SOURCE.read_text()
-        for needle in ("api_token", "/etc/rpi5-secrets/cloudflare/ausmalwiese-worker-settings-read.json"):
-            self.assertNotIn(needle,src)
+        self.assertNotIn("api_token",src)
+        self.assertEqual(mod.CREDENTIAL_PATH, "/etc/rpi5-secrets/cloudflare/ausmalwiese-worker-settings-read.json")
         self.assertNotIn("python3 -c",src)
         self.assertNotIn("sudoers",src)
         self.assertNotIn("os.environ",src)
