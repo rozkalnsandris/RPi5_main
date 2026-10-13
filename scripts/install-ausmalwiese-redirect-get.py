@@ -82,13 +82,16 @@ def checkout(expected_main, *, runner=subprocess.run):
     if checked_git(["status", "--porcelain=v1", "-z", "--untracked-files=all"], runner=runner):
         raise Stop("dirty_checkout")
     origin = ascii_text(checked_git(["remote", "get-url", "origin"], runner=runner)).rstrip("/")
-    valid = origin in (
+    https_ok = origin in (
         "https://github.com/rozkalnsandris/RPi5_main",
         "https://github.com/rozkalnsandris/RPi5_main.git",
-        "git@github.com:rozkalnsandris/RPi5_main",
-        "git@github.com:rozkalnsandris/RPi5_main.git",
     )
-    if not valid:
+    user, sep, remote_path = origin.partition("@")
+    hostname, colon, project = remote_path.partition(":") if sep else ("", "", "")
+    ssh_ok = (user == "git" and sep == "@" and hostname == "github.com"
+              and colon == ":" and project in (
+                  "rozkalnsandris/RPi5_main", "rozkalnsandris/RPi5_main.git"))
+    if not (https_ok or ssh_ok):
         raise Stop("origin_mismatch")
 
 
