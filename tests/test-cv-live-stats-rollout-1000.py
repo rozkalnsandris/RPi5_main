@@ -6,6 +6,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+from types import SimpleNamespace
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -56,6 +57,54 @@ class CvStatsRolloutTests(unittest.TestCase):
                         self.baseline.replace(op.OLD_COMPOSE.encode(), b"0" * 64)):
             with self.assertRaises(op.Block):
                 op.target_only_registry(changed)
+
+    def stats_home(self, name):
+        home = self.base / name
+        snapshot = home / op.STATS_RELATIVE
+        snapshot.parent.mkdir(parents=True)
+        snapshot.write_text('{"synthetic":true}', encoding="utf-8")
+        return SimpleNamespace(pw_dir=str(home), pw_uid=os.getuid()), snapshot
+
+    def test_passwd_home_snapshot_is_unique_and_fresh(self):
+        account, snapshot = self.stats_home("first")
+        with patch.object(op.pwd, "getpwall", return_value=[account]):
+            self.assertEqual(op.stats_path(), snapshot)
+            op.producer()  # Metadata only: no contents are read by production.
+
+    def test_missing_or_ambiguous_passwd_homes_are_rejected(self):
+        a, _ = self.stats_home("first")
+        b, _ = self.stats_home("second")
+        with patch.object(op.pwd, "getpwall", return_value=[]):
+            with self.assertRaises(op.Block):
+                op.stats_path()
+        with patch.object(op.pwd, "getpwall", return_value=[a, b]):
+            with self.assertRaises(op.Block):
+                op.stats_path()
+
+    def test_unsafe_stats_ancestor_and_symlink_are_rejected(self):
+        account, snapshot = self.stats_home("first")
+        with patch.object(op.pwd, "getpwall", return_value=[account]):
+            snapshot.parent.chmod(0o777)
+            with self.assertRaises(op.Block):
+                op.stats_path()
+            snapshot.parent.chmod(0o755)
+            moved = snapshot.parent.with_name("archived-html")
+            snapshot.parent.rename(moved)
+            snapshot.parent.symlink_to(moved, target_is_directory=True)
+            with self.assertRaises(op.Block):
+                op.stats_path()
+
+    def test_stats_path_bad_owner_and_nonregular_file_are_rejected(self):
+        account, snapshot = self.stats_home("first")
+        with patch.object(op.pwd, "getpwall", return_value=[account]):
+            changed = SimpleNamespace(pw_dir=account.pw_dir, pw_uid=os.getuid() + 1)
+            with patch.object(op.pwd, "getpwall", return_value=[changed]):
+                with self.assertRaises(op.Block):
+                    op.stats_path()
+            snapshot.unlink()
+            snapshot.mkdir()
+            with self.assertRaises(op.Block):
+                op.stats_path()
 
     def test_source_file_mode_and_symlink_fail_closed(self):
         with patch.object(op, "OLD_COMPOSE", op.sha(b"old")):

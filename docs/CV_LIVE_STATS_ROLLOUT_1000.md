@@ -33,7 +33,10 @@ at `/run/rozkalns-cv-stats-1000-approval.json`. The approval JSON must match
 exactly the schema, pins and operator hash in `owner_approval()`. None of
 those host writes is authorized by merge.
 
-CHECK uses strictly allowlisted metadata/hash reads of root-owned registry,
+CHECK resolves a unique producer snapshot under a passwd-discovered home using
+only fixed relative directory/file metadata; it rejects unsafe, symlinked or
+ambiguous paths and does not publish usernames or literal user-home paths.
+It then uses strictly allowlisted metadata/hash reads of root-owned registry,
 Compose candidate and current image override, systemd timer/service idle
 status, restricted Docker digest/revision/mount metadata, and stats producer
 file *metadata* (not its contents). It verifies healthy CV loopback readiness.

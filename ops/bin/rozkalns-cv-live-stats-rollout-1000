@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import pwd
 import re
 import stat
 import subprocess
@@ -25,7 +26,7 @@ APPROVAL = Path("/run/rozkalns-cv-stats-1000-approval.json")
 COMPOSE = Path("/etc/rozkalns-simple-deployer/compose/rozkalns-cv.yml")
 REGISTRY = Path("/etc/rozkalns-simple-deployer/targets.json")
 OVERRIDE = Path("/var/lib/rozkalns-simple-deployer/overrides/rozkalns-cv-rpi5.yaml")
-STATS = Path("/home/andris/docker/cv/html/stats.json")
+STATS_RELATIVE = Path("docker/cv/html/stats.json")
 CONTAINER = "rozkalns-cv-cv-1"
 STAGE = ".cv-live-stats-1000.stage"
 ROOT_UID = 0
@@ -137,8 +138,42 @@ def http_ok(path, json_required=False):
         raise Block("HTTP_FAILED") from None
 
 
+def stats_path(entries=None):
+    """Find one owned producer snapshot using passwd homes, never a public home path.
+
+    Only fixed relative metadata is inspected. No account names or paths are
+    emitted, and no source file contents are read.
+    """
+    candidates = []
+    for entry in pwd.getpwall() if entries is None else entries:
+        home_name = getattr(entry, "pw_dir", None)
+        owner_uid = getattr(entry, "pw_uid", None)
+        if not isinstance(home_name, str) or not home_name.startswith("/"):
+            continue
+        if type(owner_uid) is not int or owner_uid < 0:
+            continue
+        home = Path(home_name)
+        if home == Path("/") or ".." in home.parts:
+            continue
+        snapshot = home / STATS_RELATIVE
+        try:
+            source = snapshot.lstat()
+        except OSError:
+            continue
+        require(stat.S_ISREG(source.st_mode) and source.st_uid == owner_uid,
+                "STATS_PATH_UNSAFE")
+        for directory in (home, home / "docker", home / "docker/cv", snapshot.parent):
+            metadata = directory.lstat()
+            require(stat.S_ISDIR(metadata.st_mode)
+                    and metadata.st_uid in (0, owner_uid)
+                    and not metadata.st_mode & 0o022, "STATS_PATH_UNSAFE")
+        candidates.append(snapshot)
+    require(len(candidates) == 1, "STATS_PATH_NOT_UNIQUE")
+    return candidates[0]
+
+
 def producer():
-    meta = STATS.lstat()
+    meta = stats_path().lstat()
     require(stat.S_ISREG(meta.st_mode) and not meta.st_mode & 0o022
             and 1 <= meta.st_size <= 100000, "STATS_SOURCE_INVALID")
     from time import time
@@ -159,7 +194,7 @@ def runtime(mount_expected=False):
     if mount_expected:
         require(len(matched) == 1 and matched[0].get("RW") is False
                 and matched[0].get("Type") == "bind"
-                and matched[0].get("Source") == str(STATS.parent),
+                and matched[0].get("Source") == str(stats_path().parent),
                 "MOUNT_INVALID")
     else:
         require(not matched, "MOUNT_ALREADY_EXISTS")
