@@ -9,6 +9,16 @@
 - On RPi5, under a **separate consumed LIVE authorization**, the existing fixed GET executor, sanitizer and release metadata were installed. Owner `root:root`, modes `0500`, `0400`, `0400`, release directory `0700` were confirmed by a later read-only `sudo stat` check on 2026-10-13. This is evidence of installation only, **not** of credential availability or GET success.
 - The **new** `scripts/ausmalwiese_worker_settings_provisioner.py` in issue #1009 is **not installed**. Its repository copy must **never** be run as root. Even after source merge, token creation, helper installation, credential provisioning and Cloudflare GET remain separate authorization steps.
 
+## New source-only installer planning — Issue #1011
+
+The reviewed source-only helper installer is proposed in
+`scripts/install-ausmalwiese-worker-settings-provisioner-v1.py`.
+Its bounded GNU `cp` exclusive-create mechanism, exact preflight
+requirements and remaining host capability checks are documented in
+`docs/AUSMALWIESE_WORKER_SETTINGS_PROVISION_INSTALLER_V1.md`.
+It is **not installed or authorized for LIVE execution**. Merging
+this source changes neither helper installation nor token/GET permissions.
+
 ## Future private credential contract (not authorized now)
 
 1. A future *separately authorized* action in the authenticated Cloudflare Dashboard must explicitly create or select a dedicated **account-scoped Workers Scripts Read** API token for the verified account, with no Write, D1, other account, or zone permissions. The owner must never paste the token into ChatGPT, GitHub, a command argument, browser logs or RDC output.
