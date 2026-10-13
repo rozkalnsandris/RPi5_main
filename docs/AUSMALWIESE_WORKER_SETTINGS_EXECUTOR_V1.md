@@ -1,6 +1,6 @@
 # Ausmalwiese Worker script-settings — fixed trusted GET executor source
 
-**SOURCE ONLY — NOT INSTALLED — NO CREDENTIAL PROVISIONING — NO LIVE GET.**
+**GET EXECUTOR SOURCE + INSTALLED RPi5 RELEASE VERIFIED 2026-10-13 — NO CREDENTIAL PROVISIONING — NO LIVE GET.**
 
 Cloudflare official endpoint: https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/settings/methods/get/
 Least privilege is a future dedicated account-scoped **Workers Scripts Read** API token. The existing Wrangler OAuth cache is NOT used.
@@ -14,9 +14,9 @@ Least privilege is a future dedicated account-scoped **Workers Scripts Read** AP
 
 The executor rejects execution outside `/usr/local/sbin/rpi5-ausmalwiese-worker-settings-get` and without root privileges. It accepts only `--expected-main <exact-40-hex-SHA>` and `--confirm OWNER-AUTHORIZED-ONE-SETTINGS-GET`; command confirmation is *not* independent proof of owner authorization. A future protected operator boundary must separately enforce the single-use owner decision.
 
-## Fixed protected installation contract — preflight only
+## Fixed protected installation contract — historical source and LIVE status
 
-The future, separately authorized installer must verify the exact GitHub merged main SHA, reviewed source bytes, clean checkout, root-owned nonwritable parent directories, absence of every installation target (including symlinks), no conflicting maintenance operation, trusted `sudo`/root execution and no existing credential replacement. It must not run repository Python as root or alter sudoers. No install script or privileged mutation is included.
+The reviewed installer (separately authorized and executed on RPi5 on 2026-10-13) verified the exact GitHub merged main SHA, reviewed source bytes, clean checkout, root-owned nonwritable parent directories, absence of every installation target (including symlinks), no conflicting maintenance operation, trusted `sudo`/root execution and no existing credential replacement. It must not run repository Python as root or alter sudoers. The original executor source issue included no LIVE mutation; later, separate one-shot LIVE authority installed the fixed artifacts. No such authority is included in issue #1009.
 
 The proposed root-owned files are:
 
@@ -31,7 +31,7 @@ Release metadata must contain exactly `schema_version=1`, repository, exact `sou
 
 Use Python standard library `http.client.HTTPSConnection` with certificate/hostname validation, timeout 10 seconds, GET-only, one request, no redirect, no retry, `Accept-Encoding: identity`, JSON content-type validation, bounded 32 KiB raw reply and fail-closed JSON parsing. Do not print upstream status bodies, HTTP exception details, account ID or token. Only the **pinned sanitizer's allowlisted** booleans, finite sampling rates and destination counts may reach stdout; errors are static STOP codes.
 
-Run a future approved installed executor with Python isolated mode (`/usr/bin/python3 -I -B`) to avoid untrusted `PYTHONPATH` and bytecode writes. An installed runtime path and release hash are only necessary checks; they do not by themselves grant permission to call Cloudflare. A future installer and dedicated credential provisioning must be independently security-reviewed and owner-authorized. Any failure/ambiguity after a runtime dispatch means STOP, never retry or alternate transport.
+Run a future approved installed executor with Python isolated mode (`/usr/bin/python3 -I -B`) to avoid untrusted `PYTHONPATH` and bytecode writes. An installed runtime path and release hash are only necessary checks; they do not by themselves grant permission to call Cloudflare. The installer was independently authorized and ran once; dedicated credential provisioning and the GET still require separate security review and explicit owner authority. Any failure/ambiguity after a runtime dispatch means STOP, never retry or alternate transport.
 
 ## Offline verification
 
@@ -42,9 +42,11 @@ Explicit exclusions: no credential reads in this work cycle, no OAuth refresh, n
 ## Issue #1002 installation source-preflight
 
 The bounded source installer has been added as `scripts/install-ausmalwiese-worker-settings-get.py`.
-A separate, independently verified account fingerprint is **not** available:
-`ops/contracts/ausmalwiese-worker-settings-account-binding-v1.json` remains PENDING,
-so current preflight blocks before any privileged write. The installer itself,
-any later root installation, credential provisioning and Cloudflare GET require
-separate review and explicit owner approval; refer to
-`docs/AUSMALWIESE_WORKER_SETTINGS_INSTALLER_V1.md`.
+The separate account fingerprint was independently verified and source-bound
+by merged PR #1008 on 2026-10-13. Under later explicit authority, the
+root-owned GET executable, sanitizer and release metadata were installed
+on RPi5 at GitHub main `6c55e46d43889fed2a17770d0f466c79b1db736a`.
+Read-only checks confirmed the expected ownership and file modes.
+**The dedicated credential is not verified or provisioned here, and the GET
+is not authorized.** Source-only next step: issue #1009 and
+`docs/AUSMALWIESE_WORKER_SETTINGS_CREDENTIAL_PROVISION_V1.md`.
