@@ -1,0 +1,116 @@
+{
+  "schema": "rozkalns.rpi5-main.ausmalwiese-legacy-redirect.v1",
+  "state": "SOURCE_REVIEW_ONLY_NO_LIVE_OR_CREDENTIAL_AUTHORITY",
+  "issue": {
+    "repository": "rozkalnsandris/RPi5_main",
+    "number": 996
+  },
+  "zone": "rozkalns.net",
+  "source_hostname": "coloring.rozkalns.net",
+  "destination_origin": "https://ausmalwiese.de",
+  "product": "Cloudflare Single Redirect",
+  "phase": "http_request_dynamic_redirect",
+  "rule_candidate": {
+    "matcher": "wildcard",
+    "request_url": "http*://coloring.rozkalns.net/*",
+    "target_url": "https://ausmalwiese.de/${2}",
+    "action": "redirect",
+    "status_code": 301,
+    "preserve_query_string": true
+  },
+  "exclusions": [
+    "other.rozkalns.net and unrelated zone hostnames",
+    "DNS, Tunnel, Access, WAF, bot, credentials and Cloudflare settings",
+    "automatic rule apply, retry, rollback, cleanup or overwrite"
+  ],
+  "preflight_gates": [
+    "owner_reviewed_existing_rozkalns_net_redirect_inventory_and_order",
+    "cloudflare_proxied_legacy_hostname_and_valid_tls",
+    "separate_exact_owner_live_authorization_for_redirect_write",
+    "coloring_pages_pr_214_reviewed_merged_and_new_host_deployed",
+    "new_host_self_canonical_home_kita_and_verified_details",
+    "new_host_robots_and_runtime_sitemap_urls_catalog_consistent",
+    "revised_sitemap_generator_pinned_and_runtime_sitemap_published",
+    "new_host_stats_get_post_and_q_worker_compatibility_verified",
+    "legacy_health_ready_monitors_retargeted_or_approved_exception",
+    "google_search_console_ownership_not_assumed_from_dns_txt"
+  ],
+  "impact_paths": [
+    "/",
+    "/kita",
+    "/detail.html?id=1234567",
+    "/print.html?id=1234567",
+    "/media/1234567/print.png",
+    "/api/stats/rankings",
+    "/api/stats/print",
+    "/q",
+    "/health",
+    "/ready"
+  ],
+  "live_authority": {
+    "cloudflare_rule_create": false,
+    "cloudflare_rule_update": false,
+    "rulesets_credentials": false,
+    "token_or_permission_change": false,
+    "host_or_application_mutation": false,
+    "rollback_or_retry": false
+  },
+  "runtime_evidence": {
+    "cloudflare_ruleset_inventory_verified": false,
+    "legacy_edge_redirect_active": false,
+    "application_pr_214_merged": false,
+    "new_dynamic_sitemap_verified": false,
+    "worker_q_direct_redirect_verified": false,
+    "note": "Point-in-time source plan, not a current-state declaration. Revalidate all before any LIVE approval."
+  },
+  "read_only_inventory_source": {
+    "path": "scripts/ausmalwiese_redirect_inventory.py",
+    "type": "credential-free-injected-get-only-core",
+    "zone": "rozkalns.net",
+    "phase": "http_request_dynamic_redirect",
+    "endpoints": [
+      "GET /zones/{verified_zone_id}",
+      "GET /zones/{verified_zone_id}/rulesets",
+      "GET /zones/{verified_zone_id}/rulesets/phases/http_request_dynamic_redirect/entrypoint"
+    ],
+    "sanitized_schema": "rozkalns.rpi5-main.redirect-inventory-sanitized.v1",
+    "sanitized_fields": [
+      "schema",
+      "zone_name",
+      "phase",
+      "entrypoint",
+      "rule_count",
+      "enabled_count",
+      "disabled_count",
+      "active_exact_legacy_positions",
+      "active_ambiguous_positions",
+      "other_exact_host_count",
+      "disabled_scope_unknown_count",
+      "baseline_sha256",
+      "account_level_checked",
+      "safe_to_apply"
+    ],
+    "only_accept_404_when_phase_absent_from_list": true,
+    "unknown_expressions_assumed_possible_overlap": true,
+    "trusted_adapter_bundled": false,
+    "credential_or_network_access_bundled": false,
+    "operator_installed": false,
+    "can_apply_cloudflare_rules": false,
+    "other_phases_or_account_level_audited": false,
+    "source_only_no_live": true,
+    "cursor_pagination_rejected_before_phase_get": true
+  },
+  "get_only_trusted_adapter_source": {
+    "source_path": "scripts/ausmalwiese_redirect_get_adapter.py",
+    "test_path": "tests/test-ausmalwiese-redirect-adapter-source.py",
+    "install_preflight_contract": "ops/contracts/ausmalwiese-redirect-get-adapter-preflight-v1.json",
+    "runbook": "docs/AUSMALWIESE_REDIRECT_GET_ADAPTER_V1.md",
+    "credential_access_performed": false,
+    "trusted_installer_included": false,
+    "installed_operator_available": false,
+    "real_cloudflare_inventory_read": false,
+    "future_separate_owner_review_required": true,
+    "future_separate_owner_install_required": true,
+    "separate_live_rule_write_required": true
+  }
+}
