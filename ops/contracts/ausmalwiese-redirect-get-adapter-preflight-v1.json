@@ -35,14 +35,18 @@
     "runtime_get_execution_requires_fresh_distinct_owner_review_authorization"
   ],
   "proposed_artifact_policy": {
-    "target_binary": "unassigned_requires_independent_review",
-    "release_metadata_path": "unassigned_requires_independent_review",
+    "target_binary": "/usr/local/sbin/rpi5-ausmalwiese-redirect-get",
+    "release_metadata_path": "/usr/local/libexec/rpi5-ausmalwiese-redirect-get/release.json",
     "expected_source_sha": "bind_exact_merged_commit_at_future_gate",
     "expected_adapter_blob_sha": "bind_reviewed_blob_at_future_gate",
     "expected_inventory_core_blob_sha": "bind_reviewed_blob_at_future_gate",
     "installation_operation_authorized": false,
     "privileged_fs_write_authorized": false,
-    "existing_runtime_identity_verified": false
+    "existing_runtime_identity_verified": false,
+    "new_installer_source": "scripts/install-ausmalwiese-redirect-get.py",
+    "new_trusted_launcher_source": "scripts/ausmalwiese_redirect_trusted_launcher.py",
+    "install_contract": "ops/contracts/ausmalwiese-redirect-get-install-v1.json",
+    "target_status": "proposed_by_source_not_installed"
   },
   "network_policy": {
     "origin": "https://api.cloudflare.com/client/v4",

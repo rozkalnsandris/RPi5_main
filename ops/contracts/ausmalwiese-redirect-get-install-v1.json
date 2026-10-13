@@ -1,0 +1,71 @@
+{
+  "schema": "rozkalns.rpi5-main.redirect-get-trusted-install.v1",
+  "issue": 996,
+  "repository": "rozkalnsandris/RPi5_main",
+  "status": "SOURCE_ONLY_NOT_INSTALLED",
+  "merged_dependency": "PR #999 main 6746dace26a9a0130f5ded8558bed5ae47ce6a32",
+  "source": {
+    "installer": "scripts/install-ausmalwiese-redirect-get.py",
+    "launcher": "scripts/ausmalwiese_redirect_trusted_launcher.py",
+    "inventory": "scripts/ausmalwiese_redirect_inventory.py",
+    "adapter": "scripts/ausmalwiese_redirect_get_adapter.py",
+    "tests": "tests/test-ausmalwiese-redirect-trusted-install-source.py"
+  },
+  "installation": {
+    "target": "rpi5",
+    "expected_main": "FUTURE_EXACT_MERGED_SHA_REQUIRED",
+    "source_checkout": "verified_clean_canonical_main_at_expected_sha",
+    "targets": [
+      "/usr/local/sbin/rpi5-ausmalwiese-redirect-get",
+      "/usr/local/libexec/rpi5-ausmalwiese-redirect-get",
+      "/usr/local/libexec/rpi5-ausmalwiese-redirect-get/inventory.py",
+      "/usr/local/libexec/rpi5-ausmalwiese-redirect-get/adapter.py",
+      "/usr/local/libexec/rpi5-ausmalwiese-redirect-get/release.json"
+    ],
+    "rights": [
+      "root:root 0500 launcher",
+      "root:root 0700 private directory",
+      "root:root 0400 inventory",
+      "root:root 0400 adapter",
+      "root:root 0400 release"
+    ],
+    "preflight": "expected exact main; clean trusted checkout; Git source equality; root-owned safe fixed parents; all targets absent; sudo -n fixed commands authorized separately",
+    "operation": "future standalone explicit owner LIVE only; one mkdir plus four install writes; fail closed on first dispatch ambiguity",
+    "rollback": false,
+    "retry": false,
+    "cleanup": false,
+    "overwrite": false,
+    "secret_read": false,
+    "permission_changes": false
+  },
+  "cloudflare": {
+    "zone": "rozkalns.net",
+    "phase": "http_request_dynamic_redirect",
+    "allowed_methods": [
+      "GET"
+    ],
+    "endpoints": [
+      "/zones/{zone_id}",
+      "/zones/{zone_id}/rulesets",
+      "/zones/{zone_id}/rulesets/phases/http_request_dynamic_redirect/entrypoint"
+    ],
+    "max_requests": 3,
+    "request_token_source": "future_separately_reviewed_in_memory_caller_only",
+    "allowed_output": "rozkalns.rpi5-main.redirect-inventory-sanitized.v1",
+    "safe_to_apply": false,
+    "redirect_write_implemented": false
+  },
+  "authorized": {
+    "source_code": true,
+    "tests": true,
+    "pr": true,
+    "ci_review": true,
+    "merge": false,
+    "install": false,
+    "credential_access": false,
+    "cloudflare_get": false,
+    "cloudflare_write": false,
+    "permissions": false,
+    "live": false
+  }
+}
