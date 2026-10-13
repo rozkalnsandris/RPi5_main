@@ -511,7 +511,7 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(reviewed[3]["compatibility_prerequisite_pr"], 741)
         self.assertEqual(
             reviewed[3]["compose_sha256"],
-            "d4c7e9ed5c36245d92ce7da199194ec032c74de6ea03f2b522e31a43ffaf3277",
+            "6f14d9cbe07b2c03c4e9e14172de4318c1e8d591b97dd595dd82aacb38b7f19c",
         )
         self.assertEqual(reviewed[3]["persistent_data_home_resolution"], "passwd_database")
         self.assertEqual(reviewed[3]["persistent_data_relative_path"], "docker/cv/bot/data")
