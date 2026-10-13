@@ -38,6 +38,8 @@ PARENTS = ("/usr", "/usr/local", "/usr/local/sbin", "/usr/local/libexec")
 TARGETS = (EXECUTOR, RELEASE_DIR, SANITIZER, RELEASE)
 SHA40 = re.compile(r"[0-9a-f]{40}\Z")
 SHA64 = re.compile(r"[0-9a-f]{64}\Z")
+APPROVED_ACCOUNT_SHA256 = "3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34"
+APPROVED_EVIDENCE_URL = "https://github.com/rozkalnsandris/RPi5_main/issues/1004#issuecomment-6153841286"
 CONFIRM = "INSTALL-AUSMALWIESE-WORKER-SETTINGS-GET"
 
 
@@ -134,7 +136,8 @@ def approved_account_fingerprint(binding_raw: bytes) -> str:
         or obj.get("status") != "INDEPENDENTLY_VERIFIED"
         or not isinstance(digest, str) or not SHA64.fullmatch(digest)
         or not isinstance(evidence, str)
-        or not re.fullmatch(r"https://github\.com/rozkalnsandris/RPi5_main/issues/[0-9]+#issuecomment-[0-9]+", evidence)):
+        or not re.fullmatch(r"https://github\.com/rozkalnsandris/RPi5_main/issues/[0-9]+#issuecomment-[0-9]+", evidence)
+        or digest != APPROVED_ACCOUNT_SHA256 or evidence != APPROVED_EVIDENCE_URL):
         raise Stop("account_binding_unverified")
     return digest
 
