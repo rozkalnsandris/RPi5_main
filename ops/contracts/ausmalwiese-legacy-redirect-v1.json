@@ -97,6 +97,7 @@
     "operator_installed": false,
     "can_apply_cloudflare_rules": false,
     "other_phases_or_account_level_audited": false,
-    "source_only_no_live": true
+    "source_only_no_live": true,
+    "cursor_pagination_rejected_before_phase_get": true
   }
 }

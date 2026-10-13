@@ -167,3 +167,8 @@ Cloudflare sources:
 - https://developers.cloudflare.com/ruleset-engine/rulesets-api/view/
 - https://developers.cloudflare.com/ruleset-engine/basic-operations/view-rulesets/
 - https://developers.cloudflare.com/rules/url-forwarding/single-redirects/create-api/
+
+The Cloudflare ruleset list may be cursor-paginated. This fixed three-GET
+core **rejects any continuation cursor** rather than accepting an incomplete
+page as proof of an empty phase. A paginated trust adapter requires separate
+source review and authorization.

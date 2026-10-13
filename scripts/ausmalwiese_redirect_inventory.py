@@ -97,6 +97,17 @@ def inspect_redirect_inventory(
 
     status, payload = get(paths[1])
     listed = _extract(status, payload, "ruleset_list")
+    # This fixed three-GET reader must never accept a cursor-truncated list.
+    info = payload.get("result_info")
+    if info is not None:
+        if not isinstance(info, dict):
+            raise InventoryBlocked("invalid_ruleset_pagination")
+        cursors = info.get("cursors")
+        if cursors is not None:
+            if not isinstance(cursors, dict):
+                raise InventoryBlocked("invalid_ruleset_pagination")
+            if cursors.get("after") is not None:
+                raise InventoryBlocked("incomplete_ruleset_list")
     if not isinstance(listed, list) or len(listed) > MAX_RULES:
         raise InventoryBlocked("ruleset_list_invalid")
     entrypoint_ids: list[str] = []

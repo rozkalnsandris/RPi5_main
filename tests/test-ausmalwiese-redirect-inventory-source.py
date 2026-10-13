@@ -154,6 +154,25 @@ class GetOnlyRedirectInventoryTests(unittest.TestCase):
         with self.assertRaisesRegex(inv.InventoryBlocked, "read_only_transport_failed"):
             inv.inspect_redirect_inventory(lambda m, p: 1 / 0, ZONE)
 
+    def test_cursor_paginated_list_never_claims_completeness(self):
+        path = f"/zones/{ZONE}/rulesets"
+        reader = FakeReader()
+        reader.paths[path] = (200, {
+            "success": True, "result": [],
+            "result_info": {"cursors": {"after": "opaque-cursor"}},
+        })
+        with self.assertRaisesRegex(inv.InventoryBlocked, "incomplete_ruleset_list"):
+            inv.inspect_redirect_inventory(reader, ZONE)
+        self.assertEqual(len(reader.calls), 2)
+        for broken in ("invalid", {"cursors": "invalid"}):
+            with self.subTest(info=broken):
+                reader = FakeReader()
+                reader.paths[path] = (200, {
+                    "success": True, "result": [], "result_info": broken,
+                })
+                with self.assertRaisesRegex(inv.InventoryBlocked, "invalid_ruleset_pagination"):
+                    inv.inspect_redirect_inventory(reader, ZONE)
+
     def test_inventory_hash_binds_order_parameters_and_state(self):
         specs = [
             [{"expression": 'http.host eq "other.net"'},
