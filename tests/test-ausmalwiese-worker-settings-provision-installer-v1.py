@@ -28,7 +28,7 @@ class Runner:
                  parent_mode="755", parent_kind="directory", present=False,
                  symlink=False, cp_version="9.7", fail_write=False,
                  wrong_metadata=False, wrong_sha=False, sudo_disabled=False,
-                 corrupted_source=False):
+                 corrupted_source=False, deny_exact_copy=False, race_at_dispatch=False):
         self.head = head
         self.branch = branch
         self.dirty = dirty
@@ -43,6 +43,8 @@ class Runner:
         self.wrong_sha = wrong_sha
         self.sudo_disabled = sudo_disabled
         self.corrupted_source = corrupted_source
+        self.deny_exact_copy = deny_exact_copy
+        self.race_at_dispatch = race_at_dispatch
         self.calls = []
         self.writes = 0
 
@@ -85,7 +87,7 @@ class Runner:
             else:
                 rc = 3
         elif a[:4] == [mod.SUDO,"-n","-l","--"]:
-            if self.sudo_disabled:
+            if self.sudo_disabled or self.deny_exact_copy:
                 rc = 1
             elif a[4:] != [mod.CP,"--update=none-fail","--preserve=mode",
                            "-T","--","/dev/stdin",mod.TARGET]:
@@ -107,7 +109,7 @@ class Runner:
                 raise AssertionError("unsafe cp write argv")
             if stdin != 45:
                 raise AssertionError("must pass sealed memfd as stdin")
-            rc = 1 if self.fail_write or self.present or self.symlink else 0
+            rc = 1 if self.fail_write or self.present or self.symlink or self.race_at_dispatch else 0
         else:
             raise AssertionError("unanticipated subprocess")
         return subprocess.CompletedProcess(a,rc,stdout=out,stderr=b"secret-synthetic-message")
@@ -172,6 +174,25 @@ class HelperInstallTests(unittest.TestCase):
                 with self.assertRaises(mod.Stop):
                     preflight(r)
                 self.assertEqual(r.writes,0)
+
+    def test_exact_sudo_permission_refused_without_write(self):
+        r = Runner(deny_exact_copy=True)
+        with self.assertRaisesRegex(mod.Stop, "sudo_exact_copy_not_allowed"):
+            preflight(r)
+        self.assertEqual(r.writes, 0)
+
+    def test_atomic_race_at_dispatch_fails_closed_once(self):
+        # Preflight observes absence, then a competitor owns the target
+        # before GNU cp's O_EXCL create. No overwrite and no second dispatch.
+        r = Runner(race_at_dispatch=True)
+        with mock.patch.object(mod,"preflight",return_value=PAYLOAD), \
+             mock.patch.object(mod,"sealed_memfd",return_value=45), \
+             mock.patch.object(mod,"exact_checkout"), \
+             mock.patch.object(mod.os,"close"):
+            with self.assertRaisesRegex(mod.Stop,"post_dispatch_unknown_state"):
+                mod.apply(HEAD,runner=r)
+        self.assertEqual(r.writes,1)
+        self.assertFalse(any("/usr/bin/rm" in " ".join(a) for a,_ in r.calls))
 
     def test_root_parent_symlink_or_writable_parent_refused(self):
         for r in (Runner(parent_mode="777"),Runner(parent_kind="symbolic link"),
