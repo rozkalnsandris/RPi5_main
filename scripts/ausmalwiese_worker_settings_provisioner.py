@@ -208,6 +208,9 @@ def owner_tty_values() -> tuple[str, str]:
         if not os.isatty(tty) or os.tcgetpgrp(tty) != os.getpgrp():
             raise Stop("controlling_tty_required")
         account = read_private(tty, b"Cloudflare account ID (hidden): ", 32)
+        if (not ACCOUNT_RE.fullmatch(account)
+                or hashlib.sha256(account.encode("ascii")).hexdigest() != ACCOUNT_SHA256):
+            raise Stop("account_binding_mismatch")
         token = read_private(tty, b"Workers Scripts Read token (hidden): ", 4096)
         return account, token
     finally:
