@@ -1,10 +1,12 @@
 # Ausmalwiese Worker settings GET — bounded source installer (#1002)
 
-Status: **SOURCE ONLY / ACCOUNT BINDING PROPOSED IN #1004 / NOT INSTALLED**.
+Status: **SOURCE CONTRACT MERGED; GET EXECUTOR INSTALLED/VERIFIED ON RPi5 2026-10-13; NO CREDENTIAL / NO GET**.
 
-This outcome adds `scripts/install-ausmalwiese-worker-settings-get.py`, the
-fixed account-binding contract, and offline regressions. No installed release,
-privileged runtime change, Cloudflare token or GET is authorized by #1002.
+Issue #1002 added `scripts/install-ausmalwiese-worker-settings-get.py`, the
+fixed account-binding contract, and offline regressions. Issue #1002 alone
+authorized source only. Later, distinct owner approvals merged PR #1008,
+fast-forwarded the trusted RPi5 checkout and installed/verified the fixed
+GET release. No Cloudflare token or GET has been authorized.
 
 ## Read-only preflight / immutable scope
 
@@ -15,7 +17,8 @@ The account SHA-256 **must be independently verified and recorded in a
 separately reviewed GitHub source change**. The account binding was initially `PENDING_INDEPENDENT_VERIFICATION` and
 blocked all privileged writes. In source PR for #1004, the proposed binding
 is pinned to the independently observed Worker account and exact evidence
-URL. No host preflight or privileged install has been performed. Do not compute
+URL. A later separately authorized host preflight and installation completed on
+2026-10-13; this source issue did not authorize them. Do not compute
 the SHA from a token, Wrangler cache, protected configuration or guessed
 account ID. Neither an offline synthetic fixture nor a prior D1 lookup
 constitutes independent account verification.
@@ -33,7 +36,7 @@ The release metadata pins the exact GitHub source SHA, both executable-source
 digests and the independently verified fixed account SHA-256. No account ID,
 token or protected runtime configuration is read during source work.
 
-## Account binding source proposal — Issue #1004
+## Independently verified account binding — Issue #1004 (merged PR #1008)
 
 The verified Worker was observed in authenticated Cloudflare Dashboard on
 2026-10-13. The **only** retained account identifier is SHA-256
@@ -45,14 +48,15 @@ comments fail closed. The raw Account ID, API token, OAuth cache and browser
 profile are not part of the source. A changed `main` requires a fresh exact
 checkout preflight.
 
-## Future install operation — separately authorized
+## Installed release — independently authorized, completed 2026-10-13
 
-The installer offers a future one-shot `--apply --confirm` path. It is *not*
-authorized by this source issue, code merge or README. After the exact
-operator/source/capability and account-fingerprint gates have been explicitly
-owner-approved, an independently authorized operator may consider the
-bounded command. Do not execute it from this chat without the separate exact
-LIVE approval.
+The installer has an owner-gated one-shot `--apply --confirm` path, separately
+authorized and executed once on RPi5 on 2026-10-13. Preflight PASS; apply
+PASS; read-only follow-up confirmed root ownership, exact `0500`/`0700`/
+`0400`/`0400` modes and source hashes. The installed release remains pinned
+to main `6c55e46d43889fed2a17770d0f466c79b1db736a`.
+**Do not repeat the installer**; all four targets exist. This installation
+authority was consumed and does not authorize private credentials or GET.
 
 The four fixed root mutations, only after preflight, are one mkdir of the
 release directory, one install of the executable, one install of the pinned
@@ -64,9 +68,10 @@ overwrite, rollback, cleanup or alternate executor is permitted after first
 mutation. Multiple files are not an atomic transaction; failure can leave
 partial installed state and requires STOP with a new owner decision.
 
-The deployment is not authenticated until a dedicated, independently
+The executor is not authenticated until a dedicated, independently
 authorized Workers Scripts Read credential is privately provisioned in the
-reviewed root-owned secret path. No OAuth cache, environment dumping,
+reviewed root-owned secret path. The separate source-only design is issue
+#1009 and `docs/AUSMALWIESE_WORKER_SETTINGS_CREDENTIAL_PROVISION_V1.md`. No OAuth cache, environment dumping,
 sudoers modification, Cloudflare API GET, DNS, settings or D1 mutation occurs
 in this issue.
 
