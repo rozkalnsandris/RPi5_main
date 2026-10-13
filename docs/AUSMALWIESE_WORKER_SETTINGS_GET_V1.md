@@ -27,6 +27,12 @@ raw API payloads, exception details, credentials and account IDs are omitted.
 Any API failure or unexpected field type yields one stable fail-closed code.
 Never retry automatically and never print the upstream response.
 
+## Transport-integration design
+
+The no-credential transport contract and threat model are reviewed separately
+in `docs/AUSMALWIESE_WORKER_SETTINGS_TRANSPORT_V1.md`; the runtime executor
+is **not** implemented or authorized in this source PR.
+
 ## Critical trust boundary
 
 This source does NOT implement an authenticated HTTP transport, install
