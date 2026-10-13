@@ -83,12 +83,17 @@ def exact_checkout(expected_main, *, runner=subprocess.run):
     if git(["status", "--porcelain=v1", "-z", "--untracked-files=all"], runner=runner):
         raise Stop("dirty_checkout")
     origin = git_text(["remote", "get-url", "origin"], runner=runner).rstrip("/")
-    if origin not in {
+    https_ok = origin in {
         "https://github.com/rozkalnsandris/RPi5_main",
         "https://github.com/rozkalnsandris/RPi5_main.git",
-        "git@github.com:rozkalnsandris/RPi5_main",
-        "git@github.com:rozkalnsandris/RPi5_main.git",
-    }:
+    }
+    user, sep, remainder = origin.partition("@")
+    host, colon, project = remainder.partition(":") if sep else ("", "", "")
+    ssh_ok = (user == "git" and sep == "@" and host == "github.com"
+              and colon == ":" and project in {
+                  "rozkalnsandris/RPi5_main", "rozkalnsandris/RPi5_main.git",
+              })
+    if not (https_ok or ssh_ok):
         raise Stop("untrusted_origin")
 
 
