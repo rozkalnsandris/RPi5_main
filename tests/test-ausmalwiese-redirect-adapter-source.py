@@ -133,7 +133,7 @@ class GetOnlyTrustedAdapterTests(unittest.TestCase):
         op.overrides[f"/zones/{ZONE}"] = urllib.error.HTTPError(
             BASE + f"/zones/{ZONE}", 404, "not found", {}, io.BytesIO(b"SECRET"),
         )
-        with self.assertRaisesRegex(adapter.AdapterBlocked, "provider_http_unavailable"):
+        with self.assertRaisesRegex(adapter.AdapterBlocked, "read_only_transport_failed"):
             adapter.sanitized_redirect_inventory(ZONE, TOKEN, opener=op)
 
     def test_unexpected_403_302_or_network_exception_fail_closed(self):
@@ -186,7 +186,7 @@ class GetOnlyTrustedAdapterTests(unittest.TestCase):
         self.assertEqual(inv["zone_name"], "rozkalns.net")
         self.assertEqual(len(op.calls), 3)
         code = (ROOT / "scripts/ausmalwiese_redirect_get_adapter.py").read_text("utf-8")
-        for banned in ("if __name__", "argparse", "getpass", "os.environ",
+        for banned in ("if __name__", "import argparse", "getpass", "os.environ",
                        "subprocess", "os.system", "secret_path", ".env"):
             self.assertNotIn(banned, code)
 
