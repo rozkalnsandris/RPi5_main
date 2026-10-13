@@ -38,3 +38,13 @@ Run a future approved installed executor with Python isolated mode (`/usr/bin/py
 `python3 tests/test-ausmalwiese-worker-settings-executor-v1.py` performs mocked unit tests; `make test` includes it. The source's only authorization in this PR is to create/review GitHub source/tests/docs. Neither the source code nor the offline fixtures are LIVE evidence.
 
 Explicit exclusions: no credential reads in this work cycle, no OAuth refresh, no host install, no Cloudflare API request, no D1 read/write, no deploy, no settings changes, no merge, and no LIVE.
+
+## Issue #1002 installation source-preflight
+
+The bounded source installer has been added as `scripts/install-ausmalwiese-worker-settings-get.py`.
+A separate, independently verified account fingerprint is **not** available:
+`ops/contracts/ausmalwiese-worker-settings-account-binding-v1.json` remains PENDING,
+so current preflight blocks before any privileged write. The installer itself,
+any later root installation, credential provisioning and Cloudflare GET require
+separate review and explicit owner approval; refer to
+`docs/AUSMALWIESE_WORKER_SETTINGS_INSTALLER_V1.md`.

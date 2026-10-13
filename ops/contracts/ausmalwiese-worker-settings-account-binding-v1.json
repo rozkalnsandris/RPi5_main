@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "worker": "coloring-pages-stats-v1",
+  "status": "PENDING_INDEPENDENT_VERIFICATION",
+  "account_sha256": null,
+  "verification_evidence": null
+}
