@@ -23,13 +23,16 @@ class SettingsTransportDesignTests(unittest.TestCase):
         self.original = json.loads(ORIGINAL.read_text(encoding="utf-8"))
 
     def test_not_deployed_or_authenticated(self):
-        self.assertEqual(self.design["status"], "DESIGN_ONLY_NO_AUTHENTICATED_EXECUTOR")
-        self.assertEqual(self.design["credential_boundary"]["selected_runtime_authenticator"], "NOT_SELECTED")
+        self.assertEqual(self.design["status"], "SOURCE_IMPLEMENTED_NOT_INSTALLED")
+        self.assertEqual(self.design["credential_boundary"]["selected_runtime_authenticator"], "DEDICATED_WORKERS_SCRIPTS_READ_TOKEN_NOT_PROVISIONED")
         self.assertTrue(self.design["deployment"]["future_exact_owner_authorization_required"])
-        for field in ("runnable_backend_in_this_pr", "credential_reader_in_this_pr",
+        for field in ("runnable_backend_in_this_pr",
                       "installer_in_this_pr", "host_change_in_this_pr",
                       "cloudflare_get_in_this_pr", "source_merge_authorizes_live"):
             self.assertIs(self.design["deployment"][field], False)
+        self.assertIs(self.design["deployment"]["credential_reader_in_this_pr"], True)
+        self.assertIs(self.design["credential_boundary"]["executor_source_present"], True)
+        self.assertIs(self.design["credential_boundary"]["credential_provisioned"], False)
 
     def test_fixed_cloudflare_target_matches_existing_adapter(self):
         t = self.design["target"]

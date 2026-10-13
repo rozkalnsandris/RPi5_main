@@ -33,6 +33,13 @@ The no-credential transport contract and threat model are reviewed separately
 in `docs/AUSMALWIESE_WORKER_SETTINGS_TRANSPORT_V1.md`; the runtime executor
 is **not** implemented or authorized in this source PR.
 
+## Trusted executor source
+
+The source-only fixed GET runtime is implemented in
+`scripts/ausmalwiese_worker_settings_executor.py`, with a separate install
+preflight contract in `docs/AUSMALWIESE_WORKER_SETTINGS_EXECUTOR_V1.md`.
+It has **not** been installed or used for any authenticated Cloudflare GET.
+
 ## Critical trust boundary
 
 This source does NOT implement an authenticated HTTP transport, install

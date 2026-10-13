@@ -1,6 +1,6 @@
 # Ausmalwiese — trusted Worker-settings GET transport design (source only)
 
-Status: **DESIGN ONLY / NO AUTHENTICATED EXECUTOR / NO LIVE GET**.
+Status: **TRUSTED EXECUTOR SOURCE IMPLEMENTED / NOT INSTALLED / NO LIVE GET**.
 Companion: \`docs/AUSMALWIESE_WORKER_SETTINGS_GET_V1.md\` and
 \`ops/contracts/ausmalwiese-worker-settings-get-v1.json\`.
 
@@ -18,7 +18,13 @@ It accepts \`Workers Scripts Read\`, \`Workers Tail Read\`, or \`Workers Scripts
 a future dedicated credential. The permission capability does **not**
 establish which rights the currently logged-in Wrangler OAuth session has.
 
-## Proposed integration boundary — NOT IMPLEMENTED
+## Source integration — not installed
+
+The future trusted GET executor now exists in source at
+`scripts/ausmalwiese_worker_settings_executor.py` with pinned release
+metadata checks, dedicated credential guard and one bounded HTTPS GET.
+The operator remains **not installed, not credentialed, and not executed**;
+see `docs/AUSMALWIESE_WORKER_SETTINGS_EXECUTOR_V1.md`.
 
 The existing source-only sanitizer
 \`scripts/ausmalwiese_worker_settings_get.py\` accepts exactly one injected
@@ -47,9 +53,10 @@ trusted runtime (separately reviewed and installed) must bind:
    alternate API route, cleanup or credential rotation is implicit.
 
 The \`ops/contracts/ausmalwiese-worker-settings-transport-design-v1.json\`
-is the reviewable machine contract. It describes limits and gates; **no
-HTTP client, credential bridge, root installer or authenticated transport
-is delivered by this PR**.
+is the reviewable machine contract. It describes limits and gates; the
+executor HTTP client and protected credential reader now exist **in source
+only**. No root installer, installed trusted transport or credential has
+been created or authorized.
 
 ## Authentication decision still open
 
@@ -68,7 +75,8 @@ authorize one suitable **trusted** authentication lane:
   handling inside an approved protected executor. No such surface is
   established by this design.
 
-Neither option is approved, created or used here. No additional Cloudflare
+The dedicated read-only token lane is now the selected **source design**, but no
+credential has been created, provisioned, read or used. No additional Cloudflare
 permissions, LIVE setup, credential reads or host changes are implied.
 
 ## Offline acceptance and future LIVE gate

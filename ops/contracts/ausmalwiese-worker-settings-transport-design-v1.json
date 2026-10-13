@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "repository": "rozkalnsandris/RPi5_main",
-  "status": "DESIGN_ONLY_NO_AUTHENTICATED_EXECUTOR",
+  "status": "SOURCE_IMPLEMENTED_NOT_INSTALLED",
   "companion_contract": "ops/contracts/ausmalwiese-worker-settings-get-v1.json",
   "target": {
     "host": "rpi5",
@@ -27,7 +27,7 @@
     "accepted_content_type": "application/json"
   },
   "credential_boundary": {
-    "selected_runtime_authenticator": "NOT_SELECTED",
+    "selected_runtime_authenticator": "DEDICATED_WORKERS_SCRIPTS_READ_TOKEN_NOT_PROVISIONED",
     "existing_wrangler_oauth_material_access_approved": false,
     "wrangler_config_or_browser_file_access_allowed": false,
     "environment_token_dump_allowed": false,
@@ -35,7 +35,9 @@
     "dedicated_workers_scripts_read_credential": "FUTURE_SEPARATE_APPROVAL_ONLY",
     "allowed_least_privilege_permission": "Workers Scripts Read",
     "credential_source_must_be_owned_by_trusted_executor": true,
-    "no_authentication_fallback": true
+    "no_authentication_fallback": true,
+    "executor_source_present": true,
+    "credential_provisioned": false
   },
   "output_boundary": {
     "sanitizer_module": "scripts/ausmalwiese_worker_settings_get.py",
@@ -50,7 +52,7 @@
   },
   "deployment": {
     "runnable_backend_in_this_pr": false,
-    "credential_reader_in_this_pr": false,
+    "credential_reader_in_this_pr": true,
     "installer_in_this_pr": false,
     "host_change_in_this_pr": false,
     "cloudflare_get_in_this_pr": false,
