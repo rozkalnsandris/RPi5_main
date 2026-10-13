@@ -117,9 +117,14 @@ class GscTxtTests(unittest.TestCase):
         self.assertEqual(len(client.writes), 1)
 
     def test_wrong_zone_and_incomplete_inventory_block(self):
-        client = FakeDNS()
-        with self.assertRaises(op.OperatorError):
-            op.run_ausmalwiese_gsc_txt(client, "f" * 32, False, "")
+        class WrongZone(FakeDNS):
+            def _request(self, method, path, body=None):
+                result = super()._request(method, path, body)
+                if method == "GET" and path == f"/zones/{ZONE_ID}":
+                    result["result"]["name"] = "other.invalid"
+                return result
+        with self.assertRaisesRegex(op.OperatorError, "dns_zone_invalid"):
+            op.run_ausmalwiese_gsc_txt(WrongZone(), ZONE_ID, False, "")
         class Partial(FakeDNS):
             def _request(self, method, path, body=None):
                 res = super()._request(method, path, body)
