@@ -55,6 +55,15 @@ account identity, and requires those precise owners and modes. Every other
 change or protected environment read is needed. This is only a source contract,
 not a claim that LIVE deployment succeeded.
 
+The reviewed CV adapter requires ROZKALNS_CV_DATA_PATH for both /app/data
+and the stats bind. The operator derives the fixed bot/data directory from
+the uniquely guarded stats producer home, requires non-symlink directories,
+and checks its identity against the existing writable /app/data mount
+during read-only CHECK, before the first host mutation. Only the scoped CV
+Docker Compose subprocess receives this single interpolation variable
+in an otherwise isolated environment. No caller path, ambient env or
+private application data is read. Missing/mismatched paths block safely.
+
 The separately authorized APPLY stages and replaces just two fixed public
 configuration files, then calls Docker Compose `up` for **only** the CV
 service, with `--no-deps --force-recreate --pull never --no-build`, using
