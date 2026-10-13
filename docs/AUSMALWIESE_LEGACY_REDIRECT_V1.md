@@ -117,3 +117,53 @@ https://developers.cloudflare.com/rules/url-forwarding/examples/redirect-all-dif
 https://developers.cloudflare.com/rules/url-forwarding/single-redirects/create-api/
 Google migration:
 https://developers.google.com/search/docs/crawling-indexing/site-move-with-url-changes
+
+## GET-only Redirect Rules inventory source (#996)
+
+The new source module at scripts/ausmalwiese_redirect_inventory.py is
+**uninstalled and credential-free**. It contains exactly one importable
+inventory function, inspect_redirect_inventory(read, zone_id). The module has
+no CLI, direct Cloudflare HTTP client, token source, filesystem access,
+logging or mutation method. An authenticated trusted read adapter is
+deliberately NOT supplied in this PR. A real adapter, installed operator,
+secret access or Cloudflare GET invocation needs separate owner permission
+and review; this source-only change grants none of them.
+
+The function requests exactly three URLs, through an injected GET-only
+transport, scoped to the independently validated active rozkalns.net zone:
+
+1. GET /zones/{zone_id} — check matching zone ID/name and active status.
+2. GET /zones/{zone_id}/rulesets — check the zone-phase ruleset listing.
+3. GET /zones/{zone_id}/rulesets/phases/http_request_dynamic_redirect/entrypoint
+   — check zone redirect rule order and classify possible legacy-host overlaps.
+
+A 404 for the phase entrypoint counts as *absent* only if the list independently
+contains no zone entrypoint for that phase. A 401/403, mismatched entrypoint,
+wrong zone, inconsistent 404, invalid or overlarge response, unexpected
+transport error or ambiguous provider response is a STOP. Never convert
+403/unknown into empty inventory.
+
+The only returned data follows
+rozkalns.rpi5-main.redirect-inventory-sanitized.v1: fixed zone/phase labels,
+entrypoint present/absent, rule counts and enabled counts, 1-based positions
+of exact legacy-host matches and potentially overlapping unknown expressions,
+other-exact-host counts, disabled counts, a SHA-256 fingerprint of the
+internal zone inventory, and explicit account_level_checked=false and
+safe_to_apply=false. **No raw rules, rule names, IDs, descriptions,
+expressions, targets, tokens or provider responses leave the module.**
+A rule expression is recognized only when it is a complete, anchored
+http.host eq "hostname" equality; compound, wildcard, function, path or
+otherwise unknown expressions remain conservatively ambiguous. Disabled
+rules are counted but do not claim active conflicts.
+
+The zone-phase GET does **not** inventory account-level rules, rule effects in
+other phases, Cloudflare quota, legacy DNS proxy mode, zone token permissions,
+or production monitoring. Even zero active conflicts does not prove rollout
+safety. The snapshot hash is only sanitized evidence for review and not an
+authority to write. A later exact LIVE operation needs new owner authorization,
+an independently reviewed adapter and provider-side conflict preflight.
+
+Cloudflare sources:
+- https://developers.cloudflare.com/ruleset-engine/rulesets-api/view/
+- https://developers.cloudflare.com/ruleset-engine/basic-operations/view-rulesets/
+- https://developers.cloudflare.com/rules/url-forwarding/single-redirects/create-api/
