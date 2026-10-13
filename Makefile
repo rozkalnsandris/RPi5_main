@@ -186,6 +186,7 @@ test:
 	python3 ./tests/test-ausmalwiese-worker-settings-get-v1.py
 	python3 ./tests/test-ausmalwiese-worker-settings-transport-design-v1.py
 	python3 ./tests/test-ausmalwiese-worker-settings-executor-v1.py
+	python3 ./tests/test-ausmalwiese-worker-settings-installer-v1.py
 	python3 ./tests/test-ausmalwiese-gsc-txt.py
 	python3 ./tests/test-cloudflare-zone-bot-waf.py
 	python3 ./tests/test-ausmalwiese-crawler-policy-v1.py
