@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "worker": "coloring-pages-stats-v1",
-  "status": "PENDING_INDEPENDENT_VERIFICATION",
-  "account_sha256": null,
-  "verification_evidence": null
+  "status": "INDEPENDENTLY_VERIFIED",
+  "account_sha256": "3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34",
+  "verification_evidence": "https://github.com/rozkalnsandris/RPi5_main/issues/1004#issuecomment-6153841286"
 }
