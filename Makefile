@@ -184,6 +184,7 @@ test:
 	python3 ./tests/test-cloudflare-phase4-admin-remaining-infra.py
 	python3 ./tests/test-cloudflare-rdc-operator.py
 	python3 ./tests/test-ausmalwiese-gsc-txt.py
+	python3 ./tests/test-ausmalwiese-legacy-redirect-source.py
 	python3 ./tests/test-cloudflare-zone-bot-waf.py
 	python3 ./tests/test-ausmalwiese-crawler-policy-v1.py
 	python3 ./tests/test-cloudflare-zone-bot-waf-install.py
