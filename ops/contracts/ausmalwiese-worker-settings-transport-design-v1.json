@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "repository": "rozkalnsandris/RPi5_main",
+  "status": "SOURCE_IMPLEMENTED_NOT_INSTALLED",
+  "companion_contract": "ops/contracts/ausmalwiese-worker-settings-get-v1.json",
+  "target": {
+    "host": "rpi5",
+    "worker": "coloring-pages-stats-v1",
+    "account_id_binding": "trusted-executor-internal-verified-account",
+    "api_origin": "https://api.cloudflare.com",
+    "method": "GET",
+    "path_template": "/client/v4/accounts/{trusted_pinned_account_id}/workers/scripts/coloring-pages-stats-v1/script-settings"
+  },
+  "request_envelope": {
+    "fixed_operation_only": true,
+    "caller_supplied_host": false,
+    "caller_supplied_account_id": false,
+    "caller_supplied_path": false,
+    "caller_supplied_http_method": false,
+    "caller_supplied_headers": false,
+    "request_limit": 1,
+    "retry_limit": 0,
+    "redirects_followed": 0,
+    "timeout_seconds": 10,
+    "max_response_bytes": 32768,
+    "tls_verification_required": true,
+    "accepted_content_type": "application/json"
+  },
+  "credential_boundary": {
+    "selected_runtime_authenticator": "DEDICATED_WORKERS_SCRIPTS_READ_TOKEN_NOT_PROVISIONED",
+    "existing_wrangler_oauth_material_access_approved": false,
+    "wrangler_config_or_browser_file_access_allowed": false,
+    "environment_token_dump_allowed": false,
+    "token_in_argv_or_logs_allowed": false,
+    "dedicated_workers_scripts_read_credential": "FUTURE_SEPARATE_APPROVAL_ONLY",
+    "allowed_least_privilege_permission": "Workers Scripts Read",
+    "credential_source_must_be_owned_by_trusted_executor": true,
+    "no_authentication_fallback": true,
+    "executor_source_present": true,
+    "credential_provisioned": false
+  },
+  "output_boundary": {
+    "sanitizer_module": "scripts/ausmalwiese_worker_settings_get.py",
+    "sanitizer_function": "sanitize_settings",
+    "upstream_http_body_logged": false,
+    "exception_details_logged": false,
+    "destinations_names_logged": false,
+    "account_id_emitted": false,
+    "allowlist": "booleans, bounded sampling rates and destination counts only",
+    "missing_values": "null",
+    "rejection_format": "stable_code_only"
+  },
+  "deployment": {
+    "runnable_backend_in_this_pr": false,
+    "credential_reader_in_this_pr": true,
+    "installer_in_this_pr": false,
+    "host_change_in_this_pr": false,
+    "cloudflare_get_in_this_pr": false,
+    "source_merge_authorizes_live": false,
+    "future_exact_owner_authorization_required": true
+  },
+  "future_gates": [
+    "independent-review-of-authenticator-and-root-owned-executor-implementation",
+    "pin-exact-installed-source-and-runtime-identity",
+    "privately-verify-account-worker-binding-and-read-only-permissions",
+    "owner-authorize-credential-access-within-protected-executor-only",
+    "owner-authorize-one-script-settings-get-and-sanitized-output",
+    "fail-closed-on-ambiguous-response-without-retry"
+  ]
+}

@@ -22,6 +22,7 @@ test:
 	python3 ./tests/test-simple-deploy-v1.py
 	python3 ./tests/test-simple-deploy-pointer-failure-926.py
 	python3 ./tests/test-simple-deploy-executor-upgrade-933.py
+	python3 ./tests/test-cv-live-stats-rollout-1000.py
 	python3 ./tests/test-simple-deploy-timer-restoration-v1.py
 	python3 ./tests/test-simple-deploy-per-target-timer-v1.py
 	python3 ./tests/test-simple-deploy-blocker-remediation-v1.py
@@ -183,6 +184,10 @@ test:
 	python3 ./tests/test-cloudflare-phase4-admin-route-origin.py
 	python3 ./tests/test-cloudflare-phase4-admin-remaining-infra.py
 	python3 ./tests/test-cloudflare-rdc-operator.py
+	python3 ./tests/test-ausmalwiese-worker-settings-get-v1.py
+	python3 ./tests/test-ausmalwiese-worker-settings-transport-design-v1.py
+	python3 ./tests/test-ausmalwiese-worker-settings-executor-v1.py
+	python3 ./tests/test-ausmalwiese-worker-settings-installer-v1.py
 	python3 ./tests/test-ausmalwiese-gsc-txt.py
 	python3 ./tests/test-ausmalwiese-legacy-redirect-source.py
 	python3 ./tests/test-ausmalwiese-redirect-inventory-source.py
@@ -211,7 +216,7 @@ test:
 	python3 ./tests/test-cv-controller-activation.py
 	python3 ./tests/test-cv-classifier-host-alignment.py
 	python3 ./tests/test-cv-pull-deploy-canary.py
-	python3 -m py_compile scripts/*.py ops/lib/dashboard-evidence.py ops/bin/hermes-tech-restore-drill ops/lib/balkons-bot.py ops/bin/balkons-bot-preflight ops/bin/balkons-bot-deploy-verifier ops/bin/balkons-bot-latency-operator ops/bin/simple-deploy-executor-upgrade-933 ops/lib/deploy_executor/*.py
+	python3 -m py_compile scripts/*.py ops/lib/dashboard-evidence.py ops/bin/hermes-tech-restore-drill ops/lib/balkons-bot.py ops/bin/balkons-bot-preflight ops/bin/balkons-bot-deploy-verifier ops/bin/balkons-bot-latency-operator ops/bin/simple-deploy-executor-upgrade-933 ops/bin/rozkalns-cv-live-stats-rollout-1000 ops/lib/deploy_executor/*.py
 
 secret-scan:
 	./scripts/check-no-secrets.sh
