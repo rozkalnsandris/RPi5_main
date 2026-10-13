@@ -186,6 +186,12 @@ def root_preflight(*, runner=subprocess.run):
         if mode & 0o022 or mode & 0o700 != 0o700:
             raise Stop("unsafe_parent")
     absent(runner=runner)
+    # Check permission for the exact future sudo cp argv without executing it.
+    command = [CP, "--update=none-fail", "--preserve=mode", "-T",
+               "--", "/dev/stdin", TARGET]
+    result = invoke([SUDO, "-n", "-l", "--", *command], runner=runner)
+    if result.returncode:
+        raise Stop("sudo_exact_copy_not_allowed")
 
 
 def preflight(expected_main, *, runner=subprocess.run):
