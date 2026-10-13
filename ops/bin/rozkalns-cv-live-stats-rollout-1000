@@ -1,0 +1,312 @@
+#!/usr/bin/python3 -I
+"""#1000: fixed CV-only stats alignment. Source is not LIVE authorization."""
+from __future__ import annotations
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import pwd
+import re
+import stat
+import subprocess
+from urllib.request import urlopen
+
+ISSUE = 1000
+TARGET = "rozkalns-cv-rpi5"
+CV_SOURCE = "5055f596e219eee5ff893b4a08af51e871e99e6f"
+CV_DIGEST = "sha256:44904ef38cdbcaa5a0634a8d3d08ba70ce047d97ee84c947c068eab75d1f5944"
+IMAGE_REF = "ghcr.io/rozkalnsandris/rozkalns-cv@" + CV_DIGEST
+OLD_COMPOSE = "d4c7e9ed5c36245d92ce7da199194ec032c74de6ea03f2b522e31a43ffaf3277"
+NEW_COMPOSE = "6f14d9cbe07b2c03c4e9e14172de4318c1e8d591b97dd595dd82aacb38b7f19c"
+OLD_REGISTRY = "91a2fe2d86d9da9ac4ee7a5031eea7a405d3d42faec24ed089b08534c7ac0f23"
+INSTALLED = Path("/usr/local/sbin/rozkalns-cv-live-stats-rollout-1000")
+CANDIDATE = Path("/usr/local/share/rozkalns-cv-stats-1000.yml")
+APPROVAL = Path("/run/rozkalns-cv-stats-1000-approval.json")
+COMPOSE = Path("/etc/rozkalns-simple-deployer/compose/rozkalns-cv.yml")
+REGISTRY = Path("/etc/rozkalns-simple-deployer/targets.json")
+OVERRIDE = Path("/var/lib/rozkalns-simple-deployer/overrides/rozkalns-cv-rpi5.yaml")
+STATS_RELATIVE = Path("docker/cv/html/stats.json")
+CONTAINER = "rozkalns-cv-cv-1"
+STAGE = ".cv-live-stats-1000.stage"
+ROOT_UID = 0
+ENV = {"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/bin",
+       "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"}
+MUTATION_STARTED = False
+
+
+class Block(Exception):
+    pass
+
+
+def require(value, code):
+    if not value:
+        raise Block(code)
+
+
+def sha(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def fixed_file(path, expected, mode, limit=100000):
+    parent = path.parent.lstat()
+    require(stat.S_ISDIR(parent.st_mode) and parent.st_uid == ROOT_UID
+            and not parent.st_mode & 0o022, "PARENT_UNSAFE")
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        s = os.fstat(fd)
+        named = path.lstat()
+        require(stat.S_ISREG(s.st_mode) and s.st_nlink == 1
+                and s.st_uid == ROOT_UID and stat.S_IMODE(s.st_mode) == mode
+                and (s.st_dev, s.st_ino) == (named.st_dev, named.st_ino)
+                and s.st_size <= limit, "FILE_UNSAFE")
+        data = b""
+        while len(data) <= limit:
+            chunk = os.read(fd, 65536)
+            if not chunk:
+                break
+            data += chunk
+        require(len(data) <= limit and (expected is None or sha(data) == expected),
+                "FILE_HASH_DRIFT")
+        require(os.fstat(fd).st_mtime_ns == s.st_mtime_ns, "FILE_RACE")
+        return (s.st_dev, s.st_ino, s.st_mtime_ns, s.st_size), data
+    finally:
+        os.close(fd)
+
+
+def target_only_registry(raw):
+    require(sha(raw) == OLD_REGISTRY, "REGISTRY_BASELINE_DRIFT")
+    before = json.loads(raw)
+    require(type(before) is dict and before.get("execution_enabled") is True,
+            "REGISTRY_INVALID")
+    cv = [row for row in before.get("targets", []) if row.get("target_alias") == TARGET]
+    require(len(cv) == 1 and cv[0]["compose"]["file"] == "rozkalns-cv.yml"
+            and cv[0]["compose"]["file_sha256"] == OLD_COMPOSE, "CV_BASELINE_DRIFT")
+    old = OLD_COMPOSE.encode("ascii")
+    require(raw.count(old) == 1, "AMBIGUOUS_REGISTRY_PIN")
+    changed = raw.replace(old, NEW_COMPOSE.encode("ascii"))
+    expected = json.loads(raw)
+    only = next(x for x in expected["targets"] if x["target_alias"] == TARGET)
+    only["compose"]["file_sha256"] = NEW_COMPOSE
+    require(json.loads(changed) == expected and len(changed) == len(raw),
+            "TARGET_ONLY_VIOLATION")
+    return changed
+
+
+def command(argv, timeout=10):
+    try:
+        p = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                           stdin=subprocess.DEVNULL, check=False, timeout=timeout,
+                           text=True, encoding="utf-8", errors="strict",
+                           env=ENV, shell=False)
+    except (OSError, UnicodeError, subprocess.TimeoutExpired):
+        raise Block("COMMAND_UNAVAILABLE") from None
+    require(p.returncode == 0 and len(p.stdout) <= 8192, "COMMAND_FAILED")
+    return p.stdout.strip()
+
+
+def quiescent():
+    for unit, expected in (
+        ("rozkalns-simple-deployer.timer",
+         ("loaded", "disabled", "inactive", "dead", "0", "no")),
+        ("rozkalns-simple-deployer.service",
+         ("loaded", "inactive", "dead", "0", "0", "no")),
+    ):
+        keys = (("LoadState", "UnitFileState", "ActiveState", "SubState", "Job", "NeedDaemonReload")
+                if unit.endswith(".timer") else
+                ("LoadState", "ActiveState", "SubState", "MainPID", "Job", "NeedDaemonReload"))
+        output = command(["/usr/bin/systemctl", "show", unit, "--no-pager", "--all",
+                          *["--property=" + k for k in keys]])
+        rows = [s.split("=", 1) for s in output.splitlines()]
+        require(all(len(row) == 2 for row in rows), "SYSTEMD_INVALID")
+        values = dict(rows)
+        require(len(values) == len(keys) and set(values) == set(keys), "SYSTEMD_INVALID")
+        observed = tuple("0" if k == "Job" and values[k] == "" else values[k] for k in keys)
+        require(observed == expected, "SYSTEMD_NOT_IDLE")
+
+
+def http_ok(path, json_required=False):
+    try:
+        with urlopen("http://127.0.0.1:8088" + path, timeout=5) as response:
+            require(response.status == 200, "HTTP_STATUS")
+            if json_required:
+                require("application/json" in response.headers.get("Content-Type", ""),
+                        "STATS_CONTENT_TYPE")
+                require("no-store" in response.headers.get("Cache-Control", ""),
+                        "STATS_CACHE_CONTROL")
+    except (OSError, ValueError):
+        raise Block("HTTP_FAILED") from None
+
+
+def stats_path(entries=None):
+    """Find one owned producer snapshot using passwd homes, never a public home path.
+
+    Only fixed relative metadata is inspected. No account names or paths are
+    emitted, and no source file contents are read.
+    """
+    candidates = []
+    for entry in pwd.getpwall() if entries is None else entries:
+        home_name = getattr(entry, "pw_dir", None)
+        owner_uid = getattr(entry, "pw_uid", None)
+        if not isinstance(home_name, str) or not home_name.startswith("/"):
+            continue
+        if type(owner_uid) is not int or owner_uid < 0:
+            continue
+        home = Path(home_name)
+        if home == Path("/") or ".." in home.parts:
+            continue
+        snapshot = home / STATS_RELATIVE
+        try:
+            source = snapshot.lstat()
+        except OSError:
+            continue
+        require(stat.S_ISREG(source.st_mode) and source.st_uid == owner_uid,
+                "STATS_PATH_UNSAFE")
+        for directory in (home, home / "docker", home / "docker/cv", snapshot.parent):
+            metadata = directory.lstat()
+            require(stat.S_ISDIR(metadata.st_mode)
+                    and metadata.st_uid in (0, owner_uid)
+                    and not metadata.st_mode & 0o022, "STATS_PATH_UNSAFE")
+        candidates.append(snapshot)
+    require(len(candidates) == 1, "STATS_PATH_NOT_UNIQUE")
+    return candidates[0]
+
+
+def producer():
+    meta = stats_path().lstat()
+    require(stat.S_ISREG(meta.st_mode) and not meta.st_mode & 0o022
+            and 1 <= meta.st_size <= 100000, "STATS_SOURCE_INVALID")
+    from time import time
+    require(0 <= time() - meta.st_mtime <= 900, "STATS_SOURCE_STALE")
+
+
+def runtime(mount_expected=False):
+    image = command(["docker", "container", "inspect", "--format",
+                     "{{.Config.Image}}", CONTAINER])
+    require(image == IMAGE_REF, "CONTAINER_IMAGE_DRIFT")
+    revision = command(["docker", "image", "inspect", "--format",
+                        '{{index .Config.Labels "org.opencontainers.image.revision"}}',
+                        IMAGE_REF])
+    require(revision == CV_SOURCE, "CONTAINER_REVISION_DRIFT")
+    mounts = json.loads(command(["docker", "container", "inspect", "--format",
+                                 "{{json .Mounts}}", CONTAINER]))
+    matched = [m for m in mounts if m.get("Destination") == "/srv/cv/host-stats"]
+    if mount_expected:
+        require(len(matched) == 1 and matched[0].get("RW") is False
+                and matched[0].get("Type") == "bind"
+                and matched[0].get("Source") == str(stats_path().parent),
+                "MOUNT_INVALID")
+    else:
+        require(not matched, "MOUNT_ALREADY_EXISTS")
+    http_ok("/api/health/ready")
+
+
+def check():
+    quiescent()
+    cid, _ = fixed_file(COMPOSE, OLD_COMPOSE, 0o444)
+    rid, baseline = fixed_file(REGISTRY, OLD_REGISTRY, 0o444)
+    _, candidate = fixed_file(CANDIDATE, NEW_COMPOSE, 0o444)
+    _, override = fixed_file(OVERRIDE, None, 0o600, limit=8192)
+    require(json.loads(override) == {"services": {"cv": {"image": IMAGE_REF}}},
+            "IMAGE_OVERRIDE_DRIFT")
+    for location in (COMPOSE.parent / STAGE, REGISTRY.parent / STAGE):
+        require(not location.exists() and not location.is_symlink(), "STAGE_EXISTS")
+    next_registry = target_only_registry(baseline)
+    producer()
+    runtime()
+    quiescent()
+    return (cid, rid), candidate, next_registry
+
+
+def owner_approval():
+    require(os.geteuid() == 0, "ROOT_REQUIRED")
+    require(Path(__file__).absolute() == INSTALLED and not INSTALLED.is_symlink(),
+            "INSTALLED_ENTRYPOINT_REQUIRED")
+    _, script = fixed_file(INSTALLED, None, 0o500)
+    _, raw = fixed_file(APPROVAL, None, 0o400, limit=4096)
+    require(json.loads(raw) == {
+        "schema": "rpi5.cv-live-stats-rollout-1000.approval.v1",
+        "issue": 1000, "target": TARGET, "operator_sha256": sha(script),
+        "baseline_registry_sha256": OLD_REGISTRY,
+        "baseline_compose_sha256": OLD_COMPOSE,
+        "candidate_compose_sha256": NEW_COMPOSE,
+        "consumer_source_sha": CV_SOURCE, "consumer_digest": CV_DIGEST,
+        "single_attempt_only": True,
+    }, "APPROVAL_INVALID")
+
+
+def stage(path, raw):
+    location = path.parent / STAGE
+    fd = os.open(location, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o444)
+    try:
+        os.fchmod(fd, 0o444)
+        require(os.write(fd, raw) == len(raw), "STAGE_SHORT_WRITE")
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    require(sha(location.read_bytes()) == sha(raw), "STAGE_DRIFT")
+    return location
+
+
+def replace_once(ids, candidate, new_registry):
+    require(fixed_file(COMPOSE, OLD_COMPOSE, 0o444)[0] == ids[0], "COMPOSE_RACE")
+    require(fixed_file(REGISTRY, OLD_REGISTRY, 0o444)[0] == ids[1], "REGISTRY_RACE")
+    first = stage(COMPOSE, candidate)
+    second = stage(REGISTRY, new_registry)
+    os.replace(first, COMPOSE)
+    os.replace(second, REGISTRY)
+    for directory in (COMPOSE.parent, REGISTRY.parent):
+        fd = os.open(directory, os.O_RDONLY | os.O_NOFOLLOW | os.O_DIRECTORY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+
+
+def recreate():
+    command(["docker", "compose", "--project-name", "rozkalns-cv",
+             "--file", str(COMPOSE), "--file", str(OVERRIDE),
+             "up", "--detach", "--no-deps", "--force-recreate", "--pull", "never",
+             "--no-build", "--wait", "--wait-timeout", "180", "cv"], timeout=220)
+
+
+def apply():
+    global MUTATION_STARTED
+    owner_approval()
+    ids, compose, registry = check()
+    ids2, compose2, registry2 = check()
+    require(ids == ids2 and compose == compose2 and registry == registry2,
+            "PREFLIGHT_RACE")
+    MUTATION_STARTED = True
+    replace_once(ids, compose, registry)
+    require(sha(COMPOSE.read_bytes()) == NEW_COMPOSE
+            and REGISTRY.read_bytes() == registry, "POST_WRITE_DRIFT")
+    recreate()
+    runtime(mount_expected=True)
+    http_ok("/stats.json", json_required=True)
+    producer()
+
+
+def main(argv=None):
+    global MUTATION_STARTED
+    MUTATION_STARTED = False
+    parser = argparse.ArgumentParser()
+    parser.add_argument("mode", choices=("check", "apply"))
+    mode = parser.parse_args(argv).mode
+    try:
+        if mode == "check":
+            check()
+        else:
+            apply()
+    except (Block, OSError, UnicodeError, ValueError, TypeError, KeyError) as error:
+        code = str(error) if type(error) is Block and re.fullmatch("[A-Z_]+", str(error)) else "CHECK_FAILED"
+        print("CV_STATS_1000 result=STOP code=" + code
+              + " mutation_started=" + str(MUTATION_STARTED).lower())
+        return 2
+    print("CV_STATS_1000 result=PASS mode=" + mode
+          + " mutation_started=" + str(MUTATION_STARTED).lower())
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
