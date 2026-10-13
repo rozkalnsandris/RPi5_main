@@ -99,13 +99,46 @@
         "all pre-existing Access applications retain their semantic projection"
       ],
       "recovery": "After the write begins, any error or ambiguity is STOP_ERROR. No retry, rollback, delete, cleanup, alternate write or second mutation is authorized."
+    },
+    {
+      "id": "ausmalwiese-gsc-domain-txt-once-v1",
+      "action": "dns-ausmalwiese-gsc-txt",
+      "zone": "ausmalwiese.de",
+      "hostname": "ausmalwiese.de",
+      "type": "TXT",
+      "value": "google-site-verification=CZx413pYLeISdNsik5g5cUSkztdsYyHCOUg2dASib7M",
+      "ttl": 1,
+      "cloudflare_method": "POST",
+      "cloudflare_endpoint": "/zones/{zone_id}/dns_records",
+      "max_write_requests": 1,
+      "credentials": "existing root-owned ausmalwiese.de DNS-only credential; no Tunnel/Access secret",
+      "preflight": [
+        "installed exact-reviewed-main release guard and root-only DNS credential",
+        "Cloudflare zone id and name match ausmalwiese.de; zone is active on Free plan",
+        "all DNS records returned in one complete bounded page",
+        "no existing apex google-site-verification TXT (identical or different)",
+        "complete initial DNS inventory matches explicitly supplied SHA-256 immediately before the one write"
+      ],
+      "post_write": [
+        "one read-only GET retrieves the newly created TXT by returned record id",
+        "exact apex TXT value present; preexisting DNS inventory unmodified",
+        "any write uncertainty or post-write failure is STOP with no retry, rollback, cleanup, or alternate write"
+      ],
+      "forbids": [
+        "caller-selected hostname, TXT content, zone, endpoint, method or credentials",
+        "second write, retry, delete, overwrite, other DNS types or DNS records",
+        "Cloudflare Tunnel and Access calls",
+        "Google verification button or sitemap submission",
+        "host operator upgrade/install without separate LIVE authorization"
+      ],
+      "authorization": "source-only work does not authorize running this operation LIVE; separately approve exact installed release and DNS baseline"
     }
   ],
   "forbidden": [
     "API token creation or rotation",
     "API Tokens Edit permission",
     "Cloudflare Tunnel mutation",
-    "DNS mutation",
+    "DNS mutation outside separately reviewed fixed ausmalwiese CNAME and GSC verification TXT operations",
     "wildcard Access application mutation",
     "unrelated Access application or policy mutation",
     "caller-provided API endpoint, command, path, hostname or request body",

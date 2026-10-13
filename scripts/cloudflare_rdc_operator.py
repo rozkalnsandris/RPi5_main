@@ -50,6 +50,8 @@ PROVISION_CONFIRM_TEXT = "PROVISION-CLOUDFLARE-ACCESS-SECRET"
 TUNNEL_PROVISION_CONFIRM_TEXT = "PROVISION-CLOUDFLARE-TUNNEL-SECRET"
 DNS_PROVISION_CONFIRM_TEXT = "PROVISION-AUSMALWIESE-DNS-SECRET"
 DNS_APPLY_CONFIRM_TEXT = "CREATE-AUSMALWIESE-CNAME"
+GSC_TXT_APPLY_CONFIRM_TEXT = "CREATE-AUSMALWIESE-GSC-TXT"
+GSC_TXT_CONTENT = "google-site-verification=CZx413pYLeISdNsik5g5cUSkztdsYyHCOUg2dASib7M"
 TUNNEL_APPLY_CONFIRM_TEXT = "ADD-AUSMALWIESE-TUNNEL-ROUTES"
 DYNAMIC_APP_FIELDS = {"created_at", "updated_at", "aud"}
 
@@ -735,6 +737,48 @@ def run_ausmalwiese(
     return {"baseline": baseline, "applied": apply}
 
 
+
+def run_ausmalwiese_gsc_txt(
+    dns: CloudflareClient, zone_id: str, apply: bool, expected_baseline: str,
+) -> dict[str, Any]:
+    """One fixed apex Google verification TXT. No Tunnel/Access credential or API."""
+    _ausmalwiese_zone(dns, zone_id)
+    before = _ausmalwiese_records(dns, zone_id)
+    for row in before:
+        name = str(row.get("name", "")).lower().rstrip(".")
+        content = row.get("content")
+        if (name == AUSMALWIESE_ZONE and row.get("type") == "TXT"
+            and isinstance(content, str)
+            and content.strip('"').startswith("google-site-verification=")):
+            raise OperatorError("dns_record_conflict")
+
+    baseline = _baseline(before)
+    if not apply:
+        return {"baseline": baseline, "applied": False}
+    if expected_baseline != baseline:
+        raise OperatorError("baseline_mismatch")
+
+    body = {"type": "TXT", "name": AUSMALWIESE_ZONE,
+            "content": GSC_TXT_CONTENT, "ttl": 1}
+    response = dns._request("POST", f"/zones/{zone_id}/dns_records", body)
+    created = response.get("result")
+    created_id = created.get("id") if isinstance(created, dict) else None
+    if not isinstance(created_id, str) or not ACCOUNT_ID_RE.fullmatch(created_id):
+        raise PostWriteError("cloudflare_write_shape_invalid")
+    try:
+        after = _ausmalwiese_records(dns, zone_id)
+    except OperatorError as exc:
+        raise PostWriteError("cloudflare_write_shape_invalid") from exc
+    matching = [row for row in after if row.get("id") == created_id]
+    if (len(matching) != 1 or matching[0].get("type") != "TXT"
+        or str(matching[0].get("name", "")).lower().rstrip(".") != AUSMALWIESE_ZONE
+        or not isinstance(matching[0].get("content"), str)
+        or matching[0]["content"].strip('"') != GSC_TXT_CONTENT
+        or _baseline([row for row in after if row.get("id") != created_id]) != baseline):
+        raise PostWriteError("cloudflare_write_shape_invalid")
+    return {"baseline": baseline, "applied": True}
+
+
 def _split_destination(value: str) -> tuple[str, str]:
     candidate = value.strip()
     if "://" not in candidate:
@@ -1073,6 +1117,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         command.add_argument("--expected-baseline", default="")
         command.add_argument("--confirm", default="")
 
+    gsc_txt = subparsers.add_parser("dns-ausmalwiese-gsc-txt")
+    gsc_txt.add_argument("--expected-main", required=True)
+    gsc_txt.add_argument("--apply", action="store_true")
+    gsc_txt.add_argument("--expected-baseline", default="")
+    gsc_txt.add_argument("--confirm", default="")
+
     phase7 = subparsers.add_parser("phase7-ingress-drift-audit")
     phase7.add_argument("--expected-main", required=True)
     return parser.parse_args(argv)
@@ -1125,6 +1175,21 @@ def main(argv: list[str] | None = None) -> int:
             provision_dns_secret(CloudflareClient(token), zone_id, token)
             token = ""
             _emit("PASS", mutation_performed=True)
+            return 0
+
+        if args.action == "dns-ausmalwiese-gsc-txt":
+            if args.apply and (
+                args.confirm != GSC_TXT_APPLY_CONFIRM_TEXT
+                or not re.fullmatch(r"[0-9a-f]{64}", args.expected_baseline)
+            ):
+                raise OperatorError("apply_confirmation_missing")
+            zone_id, dns_token = load_dns_credentials()
+            report = run_ausmalwiese_gsc_txt(
+                CloudflareClient(dns_token), zone_id, args.apply, args.expected_baseline
+            )
+            print(json.dumps({"operation": args.action, "result": "PASS",
+                              "baseline_sha256": report["baseline"],
+                              "mutation_performed": report["applied"]}, sort_keys=True))
             return 0
 
         if args.action in ("dns-ausmalwiese-apex", "dns-ausmalwiese-www", "tunnel-ausmalwiese"):
