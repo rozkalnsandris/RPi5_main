@@ -114,7 +114,7 @@ class ProvisionerOfflineTests(unittest.TestCase):
         for st in (SimpleNamespace(st_mode=stat.S_IFLNK|0o500,st_uid=0,st_gid=0,st_nlink=1),
                    fake_stat(0o400),fake_stat(0o500,uid=1000),
                    fake_stat(0o500,links=2)):
-            with mock.patch.object(mod.ENTRY, "lstat", return_value=st):
+            with mock.patch("pathlib.Path.lstat", return_value=st):
                 with self.assertRaisesRegex(mod.Stop, "protected_path_invalid"):
                     mod.safe_metadata(mod.ENTRY,0o500)
 
