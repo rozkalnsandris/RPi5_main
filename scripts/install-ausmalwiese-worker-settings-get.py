@@ -82,12 +82,19 @@ def checked_checkout(expected_main: str, *, runner=subprocess.run) -> None:
         raise Stop("main_drift")
     if git(["status", "--porcelain=v1", "-z", "--untracked-files=all"], runner=runner):
         raise Stop("dirty_checkout")
-    if text(git(["remote", "get-url", "origin"], runner=runner)).rstrip("/") not in (
+    origin = text(git(["remote", "get-url", "origin"], runner=runner)).rstrip("/")
+    https_ok = origin in (
         "https://github.com/rozkalnsandris/RPi5_main",
         "https://github.com/rozkalnsandris/RPi5_main.git",
-        "git@github.com:rozkalnsandris/RPi5_main",
-        "git@github.com:rozkalnsandris/RPi5_main.git",
-    ):
+    )
+    # Parse SSH remote structurally: never confuse an account@host with email.
+    username, sep, remaining = origin.partition("@")
+    hostname, colon, project = remaining.partition(":") if sep else ("", "", "")
+    ssh_ok = (username == "git" and sep == "@" and hostname == "github.com"
+              and colon == ":" and project in (
+                  "rozkalnsandris/RPi5_main",
+                  "rozkalnsandris/RPi5_main.git"))
+    if not (https_ok or ssh_ok):
         raise Stop("origin_mismatch")
 
 
