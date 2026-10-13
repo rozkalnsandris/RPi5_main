@@ -88,7 +88,7 @@ class GetOnlyRedirectInventoryTests(unittest.TestCase):
         self.assertFalse(data["safe_to_apply"])
 
     def test_unknown_rules_fail_conservative_and_do_not_expose_raw(self):
-        marker = "sample.user@example.invalid Bearer fake-private-value"
+        marker = "TEST_ONLY_SENSITIVE_VALUE_MARKER_987"
         data = inv.inspect_redirect_inventory(FakeReader([
             {"expression": 'http.host eq "other.rozkalns.net" or http.host eq "coloring.rozkalns.net"'},
             {"expression": "true", "description": marker},
