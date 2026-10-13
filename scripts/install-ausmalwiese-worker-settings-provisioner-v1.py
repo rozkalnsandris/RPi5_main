@@ -151,7 +151,7 @@ def tracked_helper(*, runner=subprocess.run):
 
 def sudo_metadata(args, *, runner=subprocess.run):
     try:
-        raw = command_output([SUDO, "-n", *args], runner=runner, max_bytes=256)
+        raw = command_output([SUDO, "-n", *args], runner=runner, max_bytes=1024)
         return raw.decode("ascii").strip()
     except UnicodeError:
         raise Stop("sudo_metadata_invalid") from None
