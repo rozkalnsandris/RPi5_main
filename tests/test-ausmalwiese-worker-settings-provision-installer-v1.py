@@ -84,6 +84,12 @@ class Runner:
                 out = b"0:0:400:regular file:1\n" if self.wrong_metadata else b"0:0:500:regular file:1\n"
             else:
                 rc = 3
+        elif a[:4] == [mod.SUDO,"-n","-l","--"]:
+            if self.sudo_disabled:
+                rc = 1
+            elif a[4:] != [mod.CP,"--update=none-fail","--preserve=mode",
+                           "-T","--","/dev/stdin",mod.TARGET]:
+                raise AssertionError("unapproved sudo capability query")
         elif a[:3] == [mod.SUDO,"-n",mod.TEST]:
             if self.sudo_disabled:
                 rc = 7
