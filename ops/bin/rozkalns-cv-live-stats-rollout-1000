@@ -116,7 +116,7 @@ def command(argv, timeout=10, *, compose_data_path=None):
     # No ambient environment and no arbitrary caller-controlled environment.
     child_env = dict(ENV)
     if compose_data_path is not None:
-        require(type(compose_data_path) is Path and compose_data_path.is_absolute(),
+        require(isinstance(compose_data_path, Path) and compose_data_path.is_absolute(),
                 "CV_DATA_PATH_INVALID")
         child_env["ROZKALNS_CV_DATA_PATH"] = str(compose_data_path)
     try:
