@@ -67,7 +67,7 @@ class ProvisionerOfflineTests(unittest.TestCase):
                            ("sanitizer_sha256","f"*64),("repository","other")):
             with self.subTest(key=key):
                 changed = dict(base, **{key: wrong})
-                source = dict(files, **{mod.RELEASE: json.dumps(changed).encode()})
+                source = {**files, mod.RELEASE: json.dumps(changed).encode()}
                 with mock.patch.object(mod, "read_root_file", side_effect=lambda path,*_: source[path]):
                     with self.assertRaisesRegex(mod.Stop, "release_invalid"):
                         mod.validated_release(mod.INSTALLED_RELEASE_SHA)
