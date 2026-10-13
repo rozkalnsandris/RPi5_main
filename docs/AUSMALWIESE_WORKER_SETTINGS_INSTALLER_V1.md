@@ -1,6 +1,6 @@
 # Ausmalwiese Worker settings GET — bounded source installer (#1002)
 
-Status: **SOURCE ONLY / ACCOUNT BINDING PENDING / NOT INSTALLED**.
+Status: **SOURCE ONLY / ACCOUNT BINDING PROPOSED IN #1004 / NOT INSTALLED**.
 
 This outcome adds `scripts/install-ausmalwiese-worker-settings-get.py`, the
 fixed account-binding contract, and offline regressions. No installed release,
@@ -12,9 +12,10 @@ The unprivileged installer validates an exact reviewed `main` SHA, clean
 checkout, canonical GitHub origin, the captured and Git-tracked executor and
 sanitizer source bytes, and the dedicated account-binding source contract.
 The account SHA-256 **must be independently verified and recorded in a
-separately reviewed GitHub source change**. Current account-binding status is
-`PENDING_INDEPENDENT_VERIFICATION`; it deliberately causes
-`account_binding_unverified` before any privileged mutation. Do not compute
+separately reviewed GitHub source change**. The account binding was initially `PENDING_INDEPENDENT_VERIFICATION` and
+blocked all privileged writes. In source PR for #1004, the proposed binding
+is pinned to the independently observed Worker account and exact evidence
+URL. No host preflight or privileged install has been performed. Do not compute
 the SHA from a token, Wrangler cache, protected configuration or guessed
 account ID. Neither an offline synthetic fixture nor a prior D1 lookup
 constitutes independent account verification.
@@ -31,6 +32,18 @@ are absent, including dangling symlinks. Fixed targets:
 The release metadata pins the exact GitHub source SHA, both executable-source
 digests and the independently verified fixed account SHA-256. No account ID,
 token or protected runtime configuration is read during source work.
+
+## Account binding source proposal — Issue #1004
+
+The verified Worker was observed in authenticated Cloudflare Dashboard on
+2026-10-13. The **only** retained account identifier is SHA-256
+`3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34`. Reviewable evidence:
+https://github.com/rozkalnsandris/RPi5_main/issues/1004#issuecomment-6153841286.
+The installer pins both the exact digest and this immutable comment URL;
+different account fingerprints, Workers, missing evidence and unrelated
+comments fail closed. The raw Account ID, API token, OAuth cache and browser
+profile are not part of the source. A changed `main` requires a fresh exact
+checkout preflight.
 
 ## Future install operation — separately authorized
 
