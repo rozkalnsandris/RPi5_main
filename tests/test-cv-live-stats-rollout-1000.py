@@ -106,6 +106,86 @@ class CvStatsRolloutTests(unittest.TestCase):
             with self.assertRaises(op.Block):
                 op.stats_path()
 
+    def test_override_requires_exact_deployer_owner_parent_and_permissions(self):
+        """Simulated deployer-owned directory: other UID/mode fails before bytes."""
+        override_dir = self.base / "override-owned-by-service"
+        override_dir.mkdir(mode=0o700)
+        override_dir.chmod(0o700)
+        override = override_dir / "cv.yaml"
+        override.write_text('{"services":{"cv":{"image":"synthetic"}}}', encoding="utf-8")
+        override.chmod(0o600)
+        service_uid = os.getuid()
+        with patch.object(op, "ROOT_UID", service_uid + 1):
+            _, payload = op.fixed_file(
+                override, None, 0o600, owner_uid=service_uid,
+                parent_uid=service_uid, parent_mode=0o700,
+            )
+            self.assertIn(b"synthetic", payload)
+            # Root-only policy still rejects the exact same service-owned file.
+            with self.assertRaises(op.Block):
+                op.fixed_file(override, None, 0o600)
+            with self.assertRaises(op.Block):
+                op.fixed_file(override, None, 0o600, owner_uid=service_uid + 1,
+                              parent_uid=service_uid, parent_mode=0o700)
+            with self.assertRaises(op.Block):
+                op.fixed_file(override, None, 0o600, owner_uid=service_uid,
+                              parent_uid=service_uid + 1, parent_mode=0o700)
+            override_dir.chmod(0o750)
+            with self.assertRaises(op.Block):
+                op.fixed_file(override, None, 0o600, owner_uid=service_uid,
+                              parent_uid=service_uid, parent_mode=0o700)
+            override_dir.chmod(0o700)
+            override.chmod(0o640)
+            with self.assertRaises(op.Block):
+                op.fixed_file(override, None, 0o600, owner_uid=service_uid,
+                              parent_uid=service_uid, parent_mode=0o700)
+            override.chmod(0o600)
+            override_symlink = override_dir / "cv-link.yaml"
+            override_symlink.symlink_to(override)
+            with self.assertRaises(OSError):
+                op.fixed_file(override_symlink, None, 0o600, owner_uid=service_uid,
+                              parent_uid=service_uid, parent_mode=0o700)
+
+    def test_service_account_lookup_is_exact_and_fail_closed(self):
+        with patch.object(op.pwd, "getpwnam", return_value=SimpleNamespace(pw_uid=4321)) as lookup:
+            self.assertEqual(op.deployer_uid(), 4321)
+            lookup.assert_called_once_with("rozkalns-simple-deployer")
+        for value in (0, -1, "4321", None):
+            with self.subTest(invalid_uid=value), patch.object(
+                op.pwd, "getpwnam", return_value=SimpleNamespace(pw_uid=value)
+            ):
+                with self.assertRaises(op.Block):
+                    op.deployer_uid()
+        with patch.object(op.pwd, "getpwnam", side_effect=KeyError):
+            with self.assertRaises(op.Block):
+                op.deployer_uid()
+
+    def test_check_narrows_service_owner_exception_to_override(self):
+        captured = []
+        def fake_file(path, expected, mode, *args, **kwargs):
+            captured.append((path, mode, kwargs))
+            if path == op.OVERRIDE:
+                return (("fixture",), json.dumps(
+                    {"services": {"cv": {"image": op.IMAGE_REF}}}
+                ).encode("utf-8"))
+            return (("fixture",), b"fixture")
+        with patch.object(op, "fixed_file", side_effect=fake_file), \
+             patch.object(op, "deployer_uid", return_value=4321), \
+             patch.object(op, "quiescent"), \
+             patch.object(op, "target_only_registry", return_value=b"new-registry"), \
+             patch.object(op, "producer"), \
+             patch.object(op, "runtime"):
+            self.assertEqual(op.check()[2], b"new-registry")
+        self.assertEqual(len(captured), 4)
+        for path, mode, kwargs in captured:
+            if path == op.OVERRIDE:
+                self.assertEqual(mode, 0o600)
+                self.assertEqual(kwargs, {"limit": 8192, "owner_uid": 4321,
+                                          "parent_uid": 4321, "parent_mode": 0o700})
+            else:
+                self.assertEqual(kwargs, {})
+                self.assertEqual(mode, 0o444)
+
     def test_source_file_mode_and_symlink_fail_closed(self):
         with patch.object(op, "OLD_COMPOSE", op.sha(b"old")):
             self.assertEqual(op.fixed_file(self.compose, op.OLD_COMPOSE, 0o444)[1], b"old")

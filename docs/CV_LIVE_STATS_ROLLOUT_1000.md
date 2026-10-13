@@ -36,14 +36,24 @@ those host writes is authorized by merge.
 CHECK resolves a unique producer snapshot under a passwd-discovered home using
 only fixed relative directory/file metadata; it rejects unsafe, symlinked or
 ambiguous paths and does not publish usernames or literal user-home paths.
-It then uses strictly allowlisted metadata/hash reads of root-owned registry,
-Compose candidate and current image override, systemd timer/service idle
+It then uses strictly allowlisted metadata/hash reads of the root-owned registry
+and Compose candidate, plus the existing service-owned CV image override,
+systemd timer/service idle
 status, restricted Docker digest/revision/mount metadata, and stats producer
 file *metadata* (not its contents). It verifies healthy CV loopback readiness.
 No .env, credentials, DB, application data, whole Docker environment, or logs
 are read or printed. A stale producer, changed baseline, unsupported owner
 state, wrong image digest, staging collision, symlink or concurrent drift
 blocks before mutation.
+
+The CV image override is the one deliberately non-root-owned input: the
+dedicated `rozkalns-simple-deployer` service account owns both its parent
+directory (mode `0700`) and the override file (mode `0600`). The operator
+resolves the exact service UID from passwd, rejects missing/root/invalid
+account identity, and requires those precise owners and modes. Every other
+`fixed_file` invocation remains root-owned by default; no chown, permission
+change or protected environment read is needed. This is only a source contract,
+not a claim that LIVE deployment succeeded.
 
 The separately authorized APPLY stages and replaces just two fixed public
 configuration files, then calls Docker Compose `up` for **only** the CV
