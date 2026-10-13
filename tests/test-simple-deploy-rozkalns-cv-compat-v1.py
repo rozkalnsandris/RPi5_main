@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TARGET_ALIAS = "rozkalns-cv-rpi5"
 CONSUMER_SHA = "139fb7046c77e1e58ec4a0876db3dddb96c85cb5"
 SHARED_SHA = "e05ed760791a127c7c9628696806ef39c9fe329c"
-COMPOSE_SHA = "d4c7e9ed5c36245d92ce7da199194ec032c74de6ea03f2b522e31a43ffaf3277"
+COMPOSE_SHA = "6f14d9cbe07b2c03c4e9e14172de4318c1e8d591b97dd595dd82aacb38b7f19c"
 COMPOSE_PATH = ROOT / "ops/deploy/simple-deploy-compose/rozkalns-cv.yml"
 CONTRACT_PATH = ROOT / "ops/contracts/simple-deploy-rozkalns-cv-compat-v1.json"
 HOST_CONTRACT_PATH = ROOT / "ops/contracts/simple-deploy-host-v1.json"
@@ -115,12 +115,36 @@ class RozkalnsCvCompatibilityTests(unittest.TestCase):
         self.assertNotIn("/home/", text)
         self.assertIn("create_host_path: false", text)
         self.assertIn("http://127.0.0.1:8080/api/health/ready", text)
-        self.assertEqual(text.count("${"), 1)
+        self.assertEqual(text.count("${"), 2)
+        self.assertEqual(text.count("source: ${ROZKALNS_CV_DATA_PATH:?"), 2)
+        self.assertEqual(text.count("create_host_path: false"), 2)
         self.assertIn("${ROZKALNS_CV_DATA_PATH:?", text)
         self.assertNotIn("build:", text)
         self.assertNotIn("privileged:", text)
         self.assertNotIn("network_mode:", text)
         self.assertNotIn("/var/run/docker.sock", text)
+
+    def test_live_stats_is_directory_bound_read_only_outside_image_web_root(self) -> None:
+        import posixpath
+
+        compose = COMPOSE_PATH.read_text(encoding="utf-8")
+        self.assertEqual(compose.count("      - type: bind"), 2)
+        self.assertIn(
+            "source: ${ROZKALNS_CV_DATA_PATH:?ROZKALNS_CV_DATA_PATH must be set}/../../html",
+            compose,
+        )
+        self.assertIn("target: /srv/cv/host-stats", compose)
+        self.assertEqual(compose.count("read_only: true"), 2)
+        self.assertEqual(compose.count("create_host_path: false"), 2)
+        self.assertNotIn("target: /srv/cv/html", compose)
+        self.assertNotIn("target: /srv/cv/host-stats/stats.json", compose)
+        self.assertNotIn("ROZKALNS_CV_STATS_DIR", compose)
+        self.assertNotIn("source: /home/", compose)
+        example = "/example-home/docker/cv/bot/data"
+        self.assertEqual(
+            posixpath.normpath(example + "/../../html"),
+            "/example-home/docker/cv/html",
+        )
 
     def test_registration_is_source_only_and_preserves_live_gates(self) -> None:
         boundaries = self.contract["boundaries"]
