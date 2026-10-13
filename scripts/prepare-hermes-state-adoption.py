@@ -244,7 +244,7 @@ def quiescent():
         for kind in ('service', 'timer'):
             unit = PRINCIPAL + instance + '.' + kind
             result = subprocess.run(
-                ['/usr/bin/systemctl', 'show', unit, '--no-pager',
+                ['/usr/bin/systemctl', 'show', unit, '--no-pager', '--all',
                  *['--property=' + p for p in properties]],
                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=10,
                 check=False, env={'PATH': '/usr/bin:/bin', 'LC_ALL': 'C'})
@@ -514,6 +514,8 @@ def execute(sha, apply, receipt):
                      for key in ('raw', 'config')}
         source_fps = {key: fingerprint(os.fstat(fds[key])) for key in snapshots}
         data = {'data': {'raw': contents(snapshots['raw'])}, 'config': contents(snapshots['config'])}
+        require(isinstance(data['config'].get('sources.json'), bytes)
+                and len(data['config']['sources.json']) > 0)
 
         def final_check():
             revalidate()

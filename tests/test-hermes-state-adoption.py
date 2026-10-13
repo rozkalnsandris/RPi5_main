@@ -261,6 +261,7 @@ class AdoptionTests(unittest.TestCase):
 
     def test_quiescence_checks_only_fixed_units_and_properties(self):
         def show(argv, **kwargs):
+            self.assertIn('--all', argv)
             unit = argv[2]
             values = {'LoadState': 'loaded', 'ActiveState': 'inactive', 'SubState': 'dead',
                       'UnitFileState': 'disabled' if unit.endswith('.timer') else 'static',
@@ -270,7 +271,7 @@ class AdoptionTests(unittest.TestCase):
             m.quiescent()
             self.assertEqual(run.call_count, 4)
             self.assertTrue(all(c.args[0][:2] == ['/usr/bin/systemctl', 'show'] for c in run.call_args_list))
-        bad = show(['', '', 'x.timer'])
+        bad = show(['', '', 'x.timer', '--all'])
         bad.stdout = bad.stdout.replace(b'UnitFileState=disabled', b'UnitFileState=enabled')
         with patch.object(m.subprocess, 'run', return_value=bad), self.assertRaises(m.Stop):
             m.quiescent()
@@ -318,7 +319,6 @@ class AdoptionTests(unittest.TestCase):
         account = SimpleNamespace(pw_uid=self.uid, pw_gid=self.gid, pw_dir=str(self.base))
         original_file_meta, original_directory_meta = m.file_meta, m.directory_meta
         original_publish, original_open = m.publish, m.os.open
-        original_read_file = m.read_file
         @contextlib.contextmanager
         def fixture_directory(path, owners):
             # Tests substitute only ancestor location/UID; leaf checks remain real.
@@ -400,6 +400,35 @@ class AdoptionTests(unittest.TestCase):
             self.assertTrue(self.receipt['data_content_read'])
             self.assertFalse(self.receipt['mutation_attempted'])
             self.assertEqual(list((self.base / 'state').iterdir()), [])
+
+    def test_missing_sources_config_stops_before_first_write(self):
+        with self.execution_fixture() as (_, _, checkout):
+            (checkout / 'config/sources.json').unlink()
+            with self.assertRaises(m.Stop):
+                m.execute(m.BASE, True, self.receipt)
+            self.assertFalse(self.receipt['mutation_attempted'])
+
+    def test_quiescence_rejects_pending_job_or_missing_properties(self):
+        good = b'LoadState=loaded\nActiveState=inactive\nSubState=dead\nUnitFileState=static\nJob=\nNeedDaemonReload=no\n'
+        for raw in (good.replace(b'Job=\n', b'Job=123\n'), good.replace(b'Job=\n', b''),
+                    good.replace(b'NeedDaemonReload=no', b'NeedDaemonReload=yes')):
+            with patch.object(m.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout=raw)):
+                with self.assertRaises(m.Stop):
+                    m.quiescent()
+
+    def test_quiescence_accepts_only_absent_instance_units(self):
+        def show(argv, **kwargs):
+            instance = '@' in argv[2]
+            values = {'LoadState': 'not-found' if instance else 'loaded',
+                      'ActiveState': 'inactive', 'SubState': 'dead',
+                      'UnitFileState': '' if instance else ('disabled' if argv[2].endswith('.timer') else 'static'),
+                      'Job': '', 'NeedDaemonReload': 'no'}
+            return SimpleNamespace(returncode=0, stdout=''.join(f'{k}={v}\n' for k,v in values.items()).encode())
+        with patch.object(m.subprocess, 'run', side_effect=show):
+            m.quiescent()
+        absent = show(['', '', 'x' + '@' + 'hermes-deals.timer'])
+        with patch.object(m.subprocess, 'run', return_value=absent), self.assertRaises(m.Stop):
+            m.quiescent()
 
     def test_git_is_readonly_and_does_not_accept_environment_overrides(self):
         with patch.object(m.subprocess, 'run', return_value=SimpleNamespace(returncode=0)) as run:

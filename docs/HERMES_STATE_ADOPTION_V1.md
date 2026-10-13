@@ -63,7 +63,8 @@ structure: 4,096 entries, 256 MiB total, 32 MiB per file, 12 levels of depth.
 Only regular single-link non-executable files and real directories are accepted;
 symlinks, special files, group/other write access, unexpected ownership, ACLs,
 cross-device traversal, hidden entries and key/database/backup suffixes are rejected.
-These are hard fail-closed ceilings, not observations of production size.
+The config snapshot must contain a nonempty regular `sources.json`. These are
+hard fail-closed ceilings, not observations of production size.
 
 The complete bounded snapshot is held in memory. Core dumps are disabled; no
 content, filename listing, content hash or exception text is printed. Source
@@ -94,7 +95,10 @@ artifact fingerprints are rechecked throughout. No legacy adapter is installed.
 ## Quiescence, partial failure and later activation
 
 Generic SIMPLE-DEPLOY service/timer must be loaded, inactive/dead, with no job or
-pending daemon reload; service static, timer disabled. The Hermes instance units
+pending daemon reload; service static, timer disabled. The fixed `show --all`
+property filter retains empty job fields, as required by the
+[systemctl manual](https://www.man7.org/linux/man-pages/man1/systemctl.1.html).
+The Hermes instance units
 must either be absent or meet the same inactive/disabled contract. These checks run
 before first staging, between publications and after verification. There are no
 systemd lifecycle commands. Directory locks serialize this operator only; they do
