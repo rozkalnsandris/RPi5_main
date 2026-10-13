@@ -20,9 +20,11 @@ assert spec and spec.loader
 spec.loader.exec_module(mod)
 SHA = "b" * 40
 PIN = hashlib.sha256(b"synthetic-non-real-account").hexdigest()
+VERIFIED_DIGEST = mod.APPROVED_ACCOUNT_SHA256
+VERIFIED_EVIDENCE = mod.APPROVED_EVIDENCE_URL
 VERIFIED = json.dumps({"schema_version":1,"worker":"coloring-pages-stats-v1",
-    "status":"INDEPENDENTLY_VERIFIED", "account_sha256":PIN,
-    "verification_evidence":"https://github.com/rozkalnsandris/RPi5_main/issues/1002#issuecomment-12345"}).encode()
+    "status":"INDEPENDENTLY_VERIFIED", "account_sha256":VERIFIED_DIGEST,
+    "verification_evidence":VERIFIED_EVIDENCE}).encode()
 
 class Runner:
     def __init__(self, *, branch="main", dirty=False, present=False, parent_mode="755",
@@ -73,18 +75,56 @@ class InstallerTest(unittest.TestCase):
              mock.patch.object(mod,"approved_account_fingerprint",return_value=PIN):
             return mod.preflight(SHA,runner=runner)
 
-    def test_account_binding_not_yet_approved(self):
+    def test_account_binding_is_exactly_evidence_bound(self):
         obj=json.loads(BIND.read_text())
-        self.assertEqual(obj["status"],"PENDING_INDEPENDENT_VERIFICATION")
-        self.assertIsNone(obj["account_sha256"])
-        with self.assertRaisesRegex(mod.Stop,"account_binding_unverified"):
-            mod.approved_account_fingerprint(BIND.read_bytes())
+        self.assertEqual(obj, json.loads(VERIFIED))
+        self.assertEqual(obj["account_sha256"],VERIFIED_DIGEST)
+        self.assertEqual(obj["verification_evidence"],VERIFIED_EVIDENCE)
+        self.assertEqual(mod.approved_account_fingerprint(BIND.read_bytes()),VERIFIED_DIGEST)
 
     def test_independently_verified_fixture_accepted(self):
-        self.assertEqual(mod.approved_account_fingerprint(VERIFIED),PIN)
+        self.assertEqual(mod.approved_account_fingerprint(VERIFIED),VERIFIED_DIGEST)
         for raw in (b"{}",b'{"account_sha256":"dead"}', VERIFIED.replace(b"INDEPENDENTLY_VERIFIED",b"UNVERIFIED")):
             with self.assertRaises(mod.Stop):
                 mod.approved_account_fingerprint(raw)
+
+    def test_wrong_digest_worker_or_evidence_fail_closed(self):
+        approved=json.loads(VERIFIED)
+        invalid=[
+            ("account_sha256",PIN),
+            ("account_sha256","0"*64),
+            ("account_sha256",None),
+            ("worker","unrelated-worker"),
+            ("verification_evidence",None),
+            ("verification_evidence","https://github.com/rozkalnsandris/RPi5_main/issues/1004#issuecomment-99999"),
+            ("verification_evidence","https://github.com/rozkalnsandris/RPi5_main/issues/1002#issuecomment-6153841286"),
+            ("status","PENDING_INDEPENDENT_VERIFICATION"),
+            ("schema_version",2),
+        ]
+        self.assertNotEqual(PIN,VERIFIED_DIGEST)
+        for key,value in invalid:
+            with self.subTest(key=key,value=value):
+                modified={**approved,key:value}
+                with self.assertRaisesRegex(mod.Stop,"account_binding_unverified"):
+                    mod.approved_account_fingerprint(json.dumps(modified).encode())
+
+    def test_missing_attestation_and_malformed_json_fail_closed(self):
+        base=json.loads(VERIFIED)
+        cases=[
+            b"not json",b"{}",json.dumps({k:v for k,v in base.items() if k!="verification_evidence"}).encode(),
+            json.dumps({**base,"extra":"untrusted"}).encode()
+        ]
+        for raw in cases:
+            with self.subTest(raw=raw[:18]):
+                with self.assertRaisesRegex(mod.Stop,"account_binding_unverified"):
+                    mod.approved_account_fingerprint(raw)
+
+    def test_stale_main_fails_before_sudo(self):
+        runner=Runner(head="0"*40)
+        with self.assertRaisesRegex(mod.Stop,"main_drift"):
+            self.pass_preflight(runner)
+        self.assertFalse(any(argv[0]==mod.SUDO for argv,_ in runner.calls))
+        self.assertEqual(runner.writes,0)
 
     def test_preflight_synthetic_clean_snapshot(self):
         r=Runner()
