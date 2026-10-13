@@ -188,6 +188,7 @@ test:
 	python3 ./tests/test-ausmalwiese-worker-settings-transport-design-v1.py
 	python3 ./tests/test-ausmalwiese-worker-settings-executor-v1.py
 	python3 ./tests/test-ausmalwiese-worker-settings-installer-v1.py
+	python3 ./tests/test-ausmalwiese-worker-settings-provisioner-v1.py
 	python3 ./tests/test-ausmalwiese-gsc-txt.py
 	python3 ./tests/test-ausmalwiese-legacy-redirect-source.py
 	python3 ./tests/test-ausmalwiese-redirect-inventory-source.py
