@@ -1,0 +1,3 @@
+# Public household API adapter SHA-256, verified against tracked Compose bytes.
+# Only this immutable historical finding is excluded; no rule/path/hash-wide exemption.
+9cf9459cbdf159f6f71e8e02285d5a441396ddbd:ops/contracts/hermes-state-adoption-v1.json:generic-api-key:9

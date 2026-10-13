@@ -1,0 +1,45 @@
+{
+  "schema": "hermes.state-adoption.v1",
+  "issue": 990,
+  "entrypoint": "scripts/prepare-hermes-state-adoption.py",
+  "baseline_source": "bcaa7c6db2d2404acb587d78a2dca7a0f7a1bb17",
+  "source_hashes": {
+    "ops/deploy/baselines/simple-deploy-targets-weather-rebind-v1.json": "91a2fe2d86d9da9ac4ee7a5031eea7a405d3d42faec24ed089b08534c7ac0f23",
+    "ops/deploy/simple-deploy-targets-v1.json": "0009e071bfd5b471ab78442637582fe71521bb6f085758c1ab8b3a4c3bb62cc4",
+    "ops/deploy/simple-deploy-compose/hermes-deals-household-api.yml": "bc78b165b479b1dfcd7bcd12df28d09b649ca68f56d6bfdfa61be280f6e1dad3",
+    "ops/deploy/simple-deploy-compose/rozkalns-weather-public.yml": "eddbe28efd5270c350adcf18413839ed80d27d95387473cf7f4e2bf68584a04c",
+    "ops/lib/deploy_executor/simple_deploy_v1.py": "ed906786fd85169c6c555a3ac466b157edaf24a65fe12f60ee2ec6940ade20d0"
+  },
+  "source_trees": [
+    "passwd(andris).home/hermes-deals/data/raw",
+    "passwd(andris).home/hermes-deals/config"
+  ],
+  "destination": "/var/lib/rozkalns-simple-deployer/hermes-deals",
+  "staging": [
+    "/var/lib/rozkalns-simple-deployer/.hermes-deals-prerequisites-v1.staged",
+    "/etc/rozkalns-simple-deployer/compose/.hermes-deals-household-api.yml.adoption-v1.staged",
+    "/etc/rozkalns-simple-deployer/.targets.json.hermes-adoption-v1.staged"
+  ],
+  "publish_order": [
+    "state",
+    "adapter",
+    "registry"
+  ],
+  "limits": {
+    "entries": 4096,
+    "file_bytes": 33554432,
+    "total_bytes": 268435456,
+    "depth": 12,
+    "static_file_bytes": 131072
+  },
+  "identity_policy": "strict schema and public ancestor of baseline; preserve bytes and inode",
+  "existing_env": "metadata only; preserve bytes, inode, owner, group, mode",
+  "quiescence": "generic and Hermes instance service/timer inactive, timers disabled or absent",
+  "default_data_content_read": false,
+  "default_mutation": false,
+  "apply_requires_separate_live_authorization": true,
+  "activation_eligible": false,
+  "retry": false,
+  "rollback": false,
+  "error_cleanup": false
+}

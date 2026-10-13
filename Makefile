@@ -30,6 +30,7 @@ test:
 	python3 ./tests/test-simple-deploy-hermes-prerequisite-recovery-v3.py
 	python3 ./tests/test-simple-deploy-hermes-prerequisite-v4.py
 	python3 ./tests/test-hermes-private-env-child.py
+	python3 ./tests/test-hermes-state-adoption.py
 	python3 ./tests/test-coloring-pages-drive-ingest-operator-v1.py
 	python3 ./tests/test-coloring-pages-sitemap-publisher-v1.py
 	python3 ./tests/test-coloring-pages-sitemap-installer-v1.py
