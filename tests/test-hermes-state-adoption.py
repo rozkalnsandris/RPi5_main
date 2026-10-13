@@ -19,6 +19,17 @@ m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
 
 
+def historical_registry_fixture():
+    """Reconstruct the archived, pinned Hermes activation registry from its baseline."""
+    registry = json.loads((ROOT / m.BASE_REGISTRY).read_bytes())
+    matches = [t for t in registry["targets"] if t["target_alias"] == "hermes-deals"]
+    if len(matches) != 1:
+        raise AssertionError("historical Hermes target is not unique")
+    matches[0]["compose"]["file"] = m.ADAPTER
+    matches[0]["compose"]["file_sha256"] = m.HASHES[m.ADAPTER_SOURCE]
+    return (json.dumps(registry, indent=2) + "\n").encode("utf-8")
+
+
 class AdoptionTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(dir=ROOT)
@@ -33,6 +44,8 @@ class AdoptionTests(unittest.TestCase):
             self.fds[name] = fd
             self.addCleanup(os.close, fd)
         self.candidate = {p: (ROOT / p).read_bytes() for p in m.HASHES}
+        # Preserve the historical candidate even as the live registry evolves.
+        self.candidate[m.NEW_REGISTRY] = historical_registry_fixture()
         self.original = self.base / 'etc/targets.json'
         self.original.write_bytes(self.candidate[m.BASE_REGISTRY])
         self.original.chmod(0o444)
@@ -56,7 +69,10 @@ class AdoptionTests(unittest.TestCase):
     def test_contract_hashes_and_exact_registry_delta(self):
         self.assertEqual(json.loads((ROOT / m.CONTRACT).read_bytes()), m.contract())
         for p, expected in m.HASHES.items():
-            self.assertEqual(m.digest((ROOT / p).read_bytes()), expected)
+            self.assertEqual(m.digest(self.candidate[p]), expected)
+        self.assertNotEqual(
+            (ROOT / m.NEW_REGISTRY).read_bytes(), self.candidate[m.NEW_REGISTRY]
+        )
         m.registry_delta(self.candidate[m.BASE_REGISTRY], self.candidate[m.NEW_REGISTRY])
         changed = json.loads(self.candidate[m.NEW_REGISTRY])
         changed['targets'][0]['architecture'] = 'wrong'

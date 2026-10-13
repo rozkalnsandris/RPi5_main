@@ -20,7 +20,9 @@ TARGET_ALIAS = "rozkalns-cv-rpi5"
 CANDIDATE_SOURCE_SHA = "d75863d0ce4cfdac0015150137523abbaccf5914"
 CANDIDATE_DIGEST = "sha256:ba9e24c82eccd833cfe42d6a4aa61ef76c584bcfd4c27efbced13c3a408d2a1a"
 LEGACY_SOURCE_SHA = "4986a6d80460bd6d7681c70e09e61a15e31007f4"
-COMPOSE_SHA = "d4c7e9ed5c36245d92ce7da199194ec032c74de6ea03f2b522e31a43ffaf3277"
+# Preserve the one-time cutover identity separately from today's adapter.
+HISTORICAL_COMPOSE_SHA = "d4c7e9ed5c36245d92ce7da199194ec032c74de6ea03f2b522e31a43ffaf3277"
+ACTIVE_COMPOSE_SHA = "6f14d9cbe07b2c03c4e9e14172de4318c1e8d591b97dd595dd82aacb38b7f19c"
 PRIVATE_ENV_RELATIVE = "docker/cv/bot/.env"
 DATA_PATH_RELATIVE = "docker/cv/bot/data"
 
@@ -75,7 +77,11 @@ class RozkalnsCvSimpleDeployCutoverTests(unittest.TestCase):
 
     def test_compose_reuses_existing_env_and_data_in_place(self) -> None:
         body = COMPOSE_PATH.read_bytes()
-        self.assertEqual(hashlib.sha256(body).hexdigest(), COMPOSE_SHA)
+        self.assertEqual(hashlib.sha256(body).hexdigest(), ACTIVE_COMPOSE_SHA)
+        self.assertEqual(
+            self.contract["source_contract"]["compose_source_sha256"],
+            HISTORICAL_COMPOSE_SHA,
+        )
         text = body.decode("utf-8")
         self.assertIn("env_file:", text)
         self.assertIn("../private/rozkalns-cv.env", text)
@@ -109,14 +115,18 @@ class RozkalnsCvSimpleDeployCutoverTests(unittest.TestCase):
         self.assertEqual((data["application_uid"], data["application_gid"]), (10001, 10001))
 
     def test_all_registered_cv_compose_identities_match(self) -> None:
-        for path in (TARGET_REGISTRY_PATH, ACTIVATION_REGISTRY_PATH):
+        # Historical activation registry is immutable; live registry is current.
+        for path, expected in (
+            (TARGET_REGISTRY_PATH, ACTIVE_COMPOSE_SHA),
+            (ACTIVATION_REGISTRY_PATH, HISTORICAL_COMPOSE_SHA),
+        ):
             registry = load(path)
             target = by(registry["targets"], "target_alias", TARGET_ALIAS)
-            self.assertEqual(target["compose"]["file_sha256"], COMPOSE_SHA)
+            self.assertEqual(target["compose"]["file_sha256"], expected)
 
         host = load(HOST_CONTRACT_PATH)
         host_target = by(host["registry"]["reviewed_targets"], "target_alias", TARGET_ALIAS)
-        self.assertEqual(host_target["compose_sha256"], COMPOSE_SHA)
+        self.assertEqual(host_target["compose_sha256"], ACTIVE_COMPOSE_SHA)
         self.assertEqual(host_target["persistent_data_home_resolution"], "passwd_database")
         self.assertEqual(host_target["persistent_data_relative_path"], DATA_PATH_RELATIVE)
         self.assertEqual(host_target["compose_interpolation_env_path"], "/etc/rozkalns-simple-deployer/compose/.env")
@@ -137,7 +147,7 @@ class RozkalnsCvSimpleDeployCutoverTests(unittest.TestCase):
 
         compat = load(COMPAT_PATH)
         adapter = compat["host_adapter"]
-        self.assertEqual(adapter["compose_sha256"], COMPOSE_SHA)
+        self.assertEqual(adapter["compose_sha256"], ACTIVE_COMPOSE_SHA)
         self.assertEqual(adapter["persistent_data_home_resolution"], "passwd_database")
         self.assertEqual(adapter["persistent_data_relative_path"], DATA_PATH_RELATIVE)
         self.assertEqual(adapter["compose_interpolation_env_path"], "/etc/rozkalns-simple-deployer/compose/.env")
