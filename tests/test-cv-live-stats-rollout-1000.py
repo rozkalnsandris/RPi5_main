@@ -289,7 +289,7 @@ class CvStatsRolloutTests(unittest.TestCase):
              patch.object(op, "command", side_effect=collect):
             op.recreate()
         self.assertEqual(len(argv), 1)
-        self.assertEqual(kwargs, [{"timeout": 220, "compose_data_path": data}]
+        self.assertEqual(kwargs, [{"timeout": 220, "compose_data_path": data}])
         self.assertEqual(argv[0][-1], "cv")
         self.assertIn("--no-deps", argv[0])
         self.assertIn("--force-recreate", argv[0])
