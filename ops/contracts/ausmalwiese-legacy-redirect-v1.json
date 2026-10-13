@@ -99,5 +99,18 @@
     "other_phases_or_account_level_audited": false,
     "source_only_no_live": true,
     "cursor_pagination_rejected_before_phase_get": true
+  },
+  "get_only_trusted_adapter_source": {
+    "source_path": "scripts/ausmalwiese_redirect_get_adapter.py",
+    "test_path": "tests/test-ausmalwiese-redirect-adapter-source.py",
+    "install_preflight_contract": "ops/contracts/ausmalwiese-redirect-get-adapter-preflight-v1.json",
+    "runbook": "docs/AUSMALWIESE_REDIRECT_GET_ADAPTER_V1.md",
+    "credential_access_performed": false,
+    "trusted_installer_included": false,
+    "installed_operator_available": false,
+    "real_cloudflare_inventory_read": false,
+    "future_separate_owner_review_required": true,
+    "future_separate_owner_install_required": true,
+    "separate_live_rule_write_required": true
   }
 }

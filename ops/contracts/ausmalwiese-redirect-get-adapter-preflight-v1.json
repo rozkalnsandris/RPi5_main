@@ -1,0 +1,83 @@
+{
+  "schema": "rozkalns.rpi5-main.ausmalwiese-redirect-get-adapter-preflight.v1",
+  "status": "source-only-not-installed",
+  "issue": 996,
+  "canonical_repository": "rozkalnsandris/RPi5_main",
+  "pull_request": 999,
+  "inventory_core": "scripts/ausmalwiese_redirect_inventory.py",
+  "adapter_source": "scripts/ausmalwiese_redirect_get_adapter.py",
+  "phase": "http_request_dynamic_redirect",
+  "zone": "rozkalns.net",
+  "legacy_hostname": "coloring.rozkalns.net",
+  "cloudflare_api_origin": "https://api.cloudflare.com/client/v4",
+  "permitted_methods": [
+    "GET"
+  ],
+  "permitted_paths": [
+    "/zones/{exact_verified_zone_id}",
+    "/zones/{exact_verified_zone_id}/rulesets",
+    "/zones/{exact_verified_zone_id}/rulesets/phases/http_request_dynamic_redirect/entrypoint"
+  ],
+  "planned_runtime_prerequisites": [
+    "separate_explicit_owner_install_authorization",
+    "reviewed_and_merged_exact_source_sha_before_any_install",
+    "installed_source_not_repository_checkout",
+    "root_owned_non_symlink_installed_binary_and_release_metadata",
+    "binary_hash_matching_release_metadata_and_exact_merged_blob_hashes",
+    "clean_canonical_checkout_at_exact_expected_main_or_approved_packaging",
+    "no_overwrite_unreviewed_existing_binary_or_metadata",
+    "absence_of_unreviewed_stage_files_and_unsafe_parent_permissions",
+    "independently_authorized_exact_zone_scoped_Dynamic_URL_Redirects_Read_token",
+    "token_must_be_passed_in_memory_by_separately_reviewed_root_owned_launcher",
+    "no_token_in_argv_env_stdin_repo_logs_or_chat",
+    "no_new_sudoers_permissions_or_credential_provisioning_from_this_pr",
+    "offline_preflight_must_not_call_cloudflare_or_read_secrets",
+    "runtime_get_execution_requires_fresh_distinct_owner_review_authorization"
+  ],
+  "proposed_artifact_policy": {
+    "target_binary": "unassigned_requires_independent_review",
+    "release_metadata_path": "unassigned_requires_independent_review",
+    "expected_source_sha": "bind_exact_merged_commit_at_future_gate",
+    "expected_adapter_blob_sha": "bind_reviewed_blob_at_future_gate",
+    "expected_inventory_core_blob_sha": "bind_reviewed_blob_at_future_gate",
+    "installation_operation_authorized": false,
+    "privileged_fs_write_authorized": false,
+    "existing_runtime_identity_verified": false
+  },
+  "network_policy": {
+    "origin": "https://api.cloudflare.com/client/v4",
+    "redirect_following": false,
+    "proxy_inheritance": false,
+    "timeout_seconds": 8,
+    "max_response_bytes": 1000000,
+    "max_http_requests_per_invocation": 3,
+    "retries": 0,
+    "credential_source": "future_trusted_in_memory_injection_only",
+    "content_type_expected": "json",
+    "accept_404_only_for_phase_entrypoint_and_zone_list_consistency": true,
+    "reject_pagination_continuation": true
+  },
+  "output_policy": {
+    "schema": "rozkalns.rpi5-main.redirect-inventory-sanitized.v1",
+    "raw_rules_or_zone_ids": false,
+    "token_or_credential_material": false,
+    "original_http_error_or_exception_strings": false,
+    "safe_to_apply_always": false,
+    "account_level_rules_verified": false
+  },
+  "capabilities_not_granted": [
+    "Cloudflare_GET_execution",
+    "credential_read",
+    "token_provisioning",
+    "permission_change",
+    "sudoers_change",
+    "host_operator_install",
+    "cloudflare_ruleset_write",
+    "DNS_change",
+    "Cloudflare_Tunnel_or_WAF_change",
+    "merge",
+    "LIVE",
+    "retry",
+    "rollback"
+  ]
+}
