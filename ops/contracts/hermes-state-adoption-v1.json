@@ -38,7 +38,7 @@
   "existing_env": "metadata only; preserve bytes, inode, owner, group, mode",
   "collector_identity": {"uid": 1000, "gid": 1000},
   "raw_destination": "root:collector-group directories 03775; root:root files 0644",
-  "quiescence": "generic and Hermes instance service/timer inactive, timers disabled or absent",
+  "quiescence": "generic and Hermes instance inactive; apply also requires collector/monitor services inactive and timers disabled",
   "default_data_content_read": false,
   "default_mutation": false,
   "apply_requires_separate_live_authorization": true,

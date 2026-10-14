@@ -6,6 +6,9 @@ Revision #1018 corrects the destination raw-directory permissions required by
 the existing UID:GID `1000:1000` scheduled collectors. It does not execute the
 prepared operation or authorize the later API/collector cutover. Any older
 launcher/source authorization must be replaced with an exact new one-shot.
+The follow-up quiescence guard also requires the installed Netto, ALDI, EDEKA
+and EDEKA-monitor units to be inactive with their timers disabled before a
+one-time copy. No timer is changed by this operator.
 
 Revision #1014 supersedes #990's registry baseline after the CV-only stats
 registry update. This revision accepts only the exact CV-updated fixture;
@@ -98,7 +101,9 @@ The complete bounded snapshot is held in memory. Core dumps are disabled; no
 content, filename listing, content hash or exception text is printed. Source
 metadata and bytes are compared again before each publication. This is a point-in-time
 copy, not ongoing synchronization with legacy collectors; quiescing or cutting over
-collectors is outside this operation and must be addressed before runtime activation.
+collectors is outside this operation. The fixed collector timers must already be
+disabled before data content is read, and a later API cutover still needs its
+own collector-write/API-read proof.
 Concurrent source writes cause STOP when detected, never silent merging.
 
 The only allowed publication paths are:
@@ -138,8 +143,15 @@ property filter retains empty job fields, as required by the
 [systemctl manual](https://www.man7.org/linux/man-pages/man1/systemctl.1.html).
 The Hermes instance units
 must either be absent or meet the same inactive/disabled contract. These checks run
-before first staging, between publications and after verification. There are no
-systemd lifecycle commands. Directory locks serialize this operator only; they do
+before first staging, between publications and after verification. In `--apply`,
+the four installed Hermes Netto, ALDI, EDEKA and EDEKA-monitor services must also be
+loaded, static and inactive/dead; their timers must be loaded, disabled and
+inactive/dead, with no jobs or pending daemon reload. This stricter check runs
+before source data/config content is read and again at each apply revalidation.
+The default read-only static check does not require collector timer quiescence. The
+2026-10-14 read-only diagnostic found the Netto, ALDI and EDEKA collector
+timers enabled and active, so the operator would stop on that observed state.
+There are no systemd lifecycle commands. Directory locks serialize this operator only; they do
 not claim to lock the generic executor. The exact LIVE window must exclude other
 manual deployment/adoption writers; unexpected path/inode/content changes stop.
 

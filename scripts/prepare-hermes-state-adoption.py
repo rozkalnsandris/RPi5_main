@@ -188,7 +188,7 @@ def contract():
         'existing_env': 'metadata only; preserve bytes, inode, owner, group, mode',
         'collector_identity': {'uid': COLLECTOR_UID, 'gid': COLLECTOR_GID},
         'raw_destination': 'root:collector-group directories 03775; root:root files 0644',
-        'quiescence': 'generic and Hermes instance service/timer inactive, timers disabled or absent',
+        'quiescence': 'generic and Hermes instance inactive; apply also requires collector/monitor services inactive and timers disabled',
         'default_data_content_read': False, 'default_mutation': False,
         'apply_requires_separate_live_authorization': True,
         'activation_eligible': False, 'retry': False, 'rollback': False, 'error_cleanup': False,
@@ -247,26 +247,31 @@ def runtime_ids():
     return user.pw_uid, group.gr_gid
 
 
-def quiescent():
+def quiescent(apply=False):
     properties = ('LoadState', 'ActiveState', 'SubState', 'UnitFileState', 'Job', 'NeedDaemonReload')
-    for instance in ('', '@hermes-deals'):
-        for kind in ('service', 'timer'):
-            unit = PRINCIPAL + instance + '.' + kind
-            result = subprocess.run(
-                ['/usr/bin/systemctl', 'show', unit, '--no-pager', '--all',
-                 *['--property=' + p for p in properties]],
-                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=10,
-                check=False, env={'PATH': '/usr/bin:/bin', 'LC_ALL': 'C'})
-            require(result.returncode == 0)
-            values = dict(line.split('=', 1) for line in result.stdout.decode().splitlines())
-            require(set(values) == set(properties))
-            require(values['ActiveState'] == 'inactive' and values['SubState'] == 'dead'
-                    and values['Job'] == '' and values['NeedDaemonReload'] == 'no')
-            if instance and values['LoadState'] == 'not-found':
-                require(values['UnitFileState'] == '')
-            else:
-                require(values['LoadState'] == 'loaded')
-                require(values['UnitFileState'] == ('disabled' if kind == 'timer' else 'static'))
+    units = [(PRINCIPAL + instance + '.' + kind, kind, bool(instance))
+             for instance in ('', '@hermes-deals') for kind in ('service', 'timer')]
+    if apply:
+        units.extend((f'hermes-deals-{name}.{kind}', kind, False)
+                     for name in ('netto-collector', 'aldi-collector',
+                                  'edeka-collector', 'edeka-monitor')
+                     for kind in ('service', 'timer'))
+    for unit, kind, allow_absent in units:
+        result = subprocess.run(
+            ['/usr/bin/systemctl', 'show', unit, '--no-pager', '--all',
+             *['--property=' + p for p in properties]],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=10,
+            check=False, env={'PATH': '/usr/bin:/bin', 'LC_ALL': 'C'})
+        require(result.returncode == 0)
+        values = dict(line.split('=', 1) for line in result.stdout.decode().splitlines())
+        require(set(values) == set(properties))
+        require(values['ActiveState'] == 'inactive' and values['SubState'] == 'dead'
+                and values['Job'] == '' and values['NeedDaemonReload'] == 'no')
+        if allow_absent and values['LoadState'] == 'not-found':
+            require(values['UnitFileState'] == '')
+        else:
+            require(values['LoadState'] == 'loaded')
+            require(values['UnitFileState'] == ('disabled' if kind == 'timer' else 'static'))
 
 
 def allowed_name(name):
@@ -542,7 +547,7 @@ def execute(sha, apply, receipt):
             source_check(sha)
             require(runtime_ids() == runtime)
             require(pwd.getpwnam('andris') == source)
-            quiescent()
+            quiescent(apply)
             for key, (path, owners, uid, gid, mode) in paths.items():
                 with directory(path, owners) as fresh:
                     require(directory_meta(fresh, uid, gid, mode) == initial[key])

@@ -363,10 +363,44 @@ class AdoptionTests(unittest.TestCase):
             m.quiescent()
             self.assertEqual(run.call_count, 4)
             self.assertTrue(all(c.args[0][:2] == ['/usr/bin/systemctl', 'show'] for c in run.call_args_list))
+        with patch.object(m.subprocess, 'run', side_effect=show) as run:
+            m.quiescent(True)
+            self.assertEqual(run.call_count, 12)
+            self.assertTrue(all(c.args[0][:2] == ['/usr/bin/systemctl', 'show'] for c in run.call_args_list))
+            self.assertEqual({c.args[0][2] for c in run.call_args_list}, {
+                'rozkalns-simple-deployer.service', 'rozkalns-simple-deployer.timer',
+                'rozkalns-simple-deployer@hermes-deals.service',
+                'rozkalns-simple-deployer@hermes-deals.timer',
+                *(f'hermes-deals-{name}.{kind}'
+                  for name in ('netto-collector', 'aldi-collector',
+                               'edeka-collector', 'edeka-monitor')
+                  for kind in ('service', 'timer')),
+            })
         bad = show(['', '', 'x.timer', '--all'])
         bad.stdout = bad.stdout.replace(b'UnitFileState=disabled', b'UnitFileState=enabled')
         with patch.object(m.subprocess, 'run', return_value=bad), self.assertRaises(m.Stop):
             m.quiescent()
+
+    def test_collector_timer_or_service_activity_stops_adoption(self):
+        def show(argv, **kwargs):
+            unit = argv[2]
+            values = {'LoadState': 'loaded', 'ActiveState': 'inactive', 'SubState': 'dead',
+                      'UnitFileState': 'disabled' if unit.endswith('.timer') else 'static',
+                      'Job': '', 'NeedDaemonReload': 'no'}
+            if unit == target:
+                values.update(change)
+            return SimpleNamespace(returncode=0, stdout=''.join(
+                f'{key}={value}\n' for key, value in values.items()).encode())
+        cases = (
+            ('hermes-deals-netto-collector.timer', {'ActiveState': 'active', 'SubState': 'waiting'}),
+            ('hermes-deals-aldi-collector.timer', {'UnitFileState': 'enabled'}),
+            ('hermes-deals-edeka-collector.service', {'ActiveState': 'active', 'SubState': 'running'}),
+            ('hermes-deals-edeka-monitor.timer', {'Job': '123'}),
+        )
+        for target, change in cases:
+            with self.subTest(unit=target), patch.object(m.subprocess, 'run', side_effect=show):
+                with self.assertRaises(m.Stop):
+                    m.quiescent(True)
 
     def test_sanitized_error_receipt_and_no_retry(self):
         output = io.StringIO()
@@ -435,7 +469,7 @@ class AdoptionTests(unittest.TestCase):
         with contextlib.ExitStack() as stack:
             for name, value in (('ETC', etc), ('STATE', state), ('EXECUTOR', executor),
                                 ('source_check', lambda sha: None), ('runtime_ids', lambda: (self.uid, self.gid)),
-                                ('quiescent', lambda: None), ('directory', fixture_directory),
+                                ('quiescent', lambda *_: None), ('directory', fixture_directory),
                                 ('file_meta', file_meta), ('directory_meta', dir_meta), ('publish', publish)):
                 stack.enter_context(patch.object(m, name, value))
             stack.enter_context(patch.object(m, 'COLLECTOR_UID', self.uid))
@@ -456,6 +490,16 @@ class AdoptionTests(unittest.TestCase):
             self.assertFalse(self.receipt['data_content_read'])
             self.assertEqual(list((self.base / 'state').iterdir()), [])
             self.assertEqual(before, (m.fingerprint(env.stat()), m.fingerprint(identity.stat())))
+
+    def test_apply_collector_quiescence_stops_before_data_read_or_staging(self):
+        with self.execution_fixture():
+            with patch.object(m, 'quiescent', side_effect=m.Stop) as check:
+                with self.assertRaises(m.Stop):
+                    m.execute(m.BASE, True, self.receipt)
+            check.assert_called_once_with(True)
+            self.assertFalse(self.receipt['data_content_read'])
+            self.assertFalse(self.receipt['mutation_attempted'])
+            self.assertEqual(list((self.base / 'state').iterdir()), [])
 
     def test_full_apply_preserves_env_identity_and_source(self):
         with self.execution_fixture() as (env, identity, checkout):
