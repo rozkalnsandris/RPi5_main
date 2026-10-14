@@ -1,6 +1,13 @@
-# Hermes state and household adapter preparation — #990
+# Hermes state and household adapter preparation — #1014
 
 Status: **SOURCE ONLY / SEPARATE LIVE AUTHORIZATION REQUIRED**.
+
+Revision #1014 supersedes #990's registry baseline after the CV-only stats
+registry update. This revision accepts only the exact CV-updated fixture;
+it retains the original identity-provenance anchor and all publication limits.
+The old Weather-rebind baseline and historical Hermes-only output are rejected.
+Receipt schema and CLI flags are unchanged; exact-source authorization must bind
+the revised operator and contract.
 
 `scripts/prepare-hermes-state-adoption.py` handles the state left after the
 create-only env operation: the private child already exists, while the Hermes
@@ -13,11 +20,16 @@ env/state installer against the already-created env child.
 
 ## Baseline and provenance
 
-The frozen source baseline is `bcaa7c6db2d2404acb587d78a2dca7a0f7a1bb17`.
+The frozen **identity ancestry** baseline remains
+`bcaa7c6db2d2404acb587d78a2dca7a0f7a1bb17`. It is not the registry source revision.
+Registry provenance is independently anchored at
+`c53d5642a9b700c5c2a24df9382c45252bd443ab`; both anchors must be ancestors of
+the exact authorized operator source.
 The operator checks the exact public artifact hashes in
 `ops/contracts/hermes-state-adoption-v1.json`:
 
-- installed registry equals the frozen pre-household Weather-rebind fixture;
+- installed registry equals `ops/deploy/baselines/simple-deploy-targets-cv-stats-1000-v1.json`,
+  SHA-256 `24e284a03f68c3843b629254ed1a944648e7b902ce36161a6ee7412cfe7c42d0`;
 - installed Weather adapter and generic executor equal the reviewed source bytes;
 - both Hermes API adapters, all old/new env stages and all adoption stages are absent;
 - existing private parent is root:runtime-group `0750`, env child is root:runtime-group
@@ -25,6 +37,17 @@ The operator checks the exact public artifact hashes in
 - existing state parent remains runtime-principal-owned `0700`; no parent creation,
   chmod or chown is allowed;
 - fixed legacy `data/raw` and `config` roots are source-user-owned real `0755` dirs.
+
+The new fixture is derived entirely from public source: apply
+`ops/bin/rozkalns-cv-live-stats-rollout-1000::target_only_registry` to the frozen
+`simple-deploy-targets-weather-rebind-v1.json`. This changes only the CV Compose
+digest to `6f14d9cbe07b2c03c4e9e14172de4318c1e8d591b97dd595dd82aacb38b7f19c`.
+The output is the tracked `ops/deploy/simple-deploy-targets-v1.json`, SHA-256
+`fd804753594532ad2b6731428b4640c8f8b15758649e98c62259619cf4f90eca`.
+Its only semantic difference from the CV-updated baseline is the Hermes Compose
+filename/digest. CV, Weather, other targets and global settings are preserved.
+The old fixture remains unchanged for historical/CV consumers. This public fixture
+is not a production dump or permission to accept arbitrary registry variants.
 
 The preceding hash-only probe did not recognize `identity.json`. That is not proof
 of corruption. This operator parses only the bounded static identity file, rejects
@@ -133,3 +156,27 @@ bounded source data/config reads and the three publications above. Include trust
 checkout preparation explicitly if required. Revalidate current source and baseline
 before dispatch. Neither this document, its tests nor a successful source merge
 is authorization to execute that operation.
+
+## Existing checkout and later one-shot decision
+
+A failed earlier attempt may have left a root-owned source checkout while no
+Hermes state/adapter/registry publication occurred. Keep that checkout and any
+other evidence intact. Do not reuse its consumed authorization, rerun its
+create-only launcher, update it in place, or clean it up.
+
+After this revision is merged and exact-source CI passes, prepare one new
+bounded owner decision for that merged SHA. If source placement is needed, use
+one new required-absent root-owned `/opt/hermes-state-adoption-<exact-new-SHA>`
+directory with full public history. Explicitly authorize its creation/fetch and
+all protected reads/writes in that decision; root-owned metadata, canonical
+origin, clean HEAD/tree, pinned artifact hashes and Git object equality must be
+verified before executing checkout code with isolated `python3 -I -B`.
+The existing historical checkout is neither changed nor used as a fallback.
+A new path does not reset publication state: reject existing destinations/stages
+and freshly revalidate the exact CV-updated installed baseline and every other
+prerequisite. Unknown drift requires STOP, not baseline substitution.
+
+Source merge alone does not authorize placement, protected inspection, state
+copy, adapter/registry publication or UI activation. The first authorized
+mutation consumes the new one-shot; preserve evidence on error without retry,
+rollback, cleanup or an alternate checkout/installer.
