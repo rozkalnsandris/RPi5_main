@@ -19,16 +19,6 @@ m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
 
 
-def historical_registry_fixture():
-    """Reconstruct the archived, pinned Hermes activation registry from its baseline."""
-    registry = json.loads((ROOT / m.BASE_REGISTRY).read_bytes())
-    matches = [t for t in registry["targets"] if t["target_alias"] == "hermes-deals"]
-    if len(matches) != 1:
-        raise AssertionError("historical Hermes target is not unique")
-    matches[0]["compose"]["file"] = m.ADAPTER
-    matches[0]["compose"]["file_sha256"] = m.HASHES[m.ADAPTER_SOURCE]
-    return (json.dumps(registry, indent=2) + "\n").encode("utf-8")
-
 
 class AdoptionTests(unittest.TestCase):
     def setUp(self):
@@ -44,8 +34,6 @@ class AdoptionTests(unittest.TestCase):
             self.fds[name] = fd
             self.addCleanup(os.close, fd)
         self.candidate = {p: (ROOT / p).read_bytes() for p in m.HASHES}
-        # Preserve the historical candidate even as the live registry evolves.
-        self.candidate[m.NEW_REGISTRY] = historical_registry_fixture()
         self.original = self.base / 'etc/targets.json'
         self.original.write_bytes(self.candidate[m.BASE_REGISTRY])
         self.original.chmod(0o444)
@@ -69,8 +57,8 @@ class AdoptionTests(unittest.TestCase):
     def test_contract_hashes_and_exact_registry_delta(self):
         self.assertEqual(json.loads((ROOT / m.CONTRACT).read_bytes()), m.contract())
         for p, expected in m.HASHES.items():
-            self.assertEqual(m.digest(self.candidate[p]), expected)
-        self.assertNotEqual(
+            self.assertEqual(m.digest((ROOT / p).read_bytes()), expected)
+        self.assertEqual(
             (ROOT / m.NEW_REGISTRY).read_bytes(), self.candidate[m.NEW_REGISTRY]
         )
         m.registry_delta(self.candidate[m.BASE_REGISTRY], self.candidate[m.NEW_REGISTRY])
@@ -99,6 +87,69 @@ class AdoptionTests(unittest.TestCase):
         self.assertEqual(stat.S_IMODE((self.base / 'state/hermes-deals').stat().st_mode), 0o755)
         self.assertEqual(stat.S_IMODE((self.base / 'state/hermes-deals/config/sources.json').stat().st_mode), 0o644)
         self.assertEqual(stat.S_IMODE(self.original.stat().st_mode), 0o444)
+
+    def test_baseline_is_exact_public_cv_transformation(self):
+        # The extensionless operator needs an explicit source loader.
+        from importlib.machinery import SourceFileLoader
+        spec = importlib.util.spec_from_loader('cv_stats', SourceFileLoader(
+            'cv_stats', str(ROOT / 'ops/bin/rozkalns-cv-live-stats-rollout-1000')))
+        cv = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cv)
+        old = (ROOT / 'ops/deploy/baselines/simple-deploy-targets-weather-rebind-v1.json').read_bytes()
+        self.assertEqual(cv.target_only_registry(old), self.candidate[m.BASE_REGISTRY])
+        self.assertEqual(m.BASE, 'bcaa7c6db2d2404acb587d78a2dca7a0f7a1bb17')
+
+    def test_full_apply_changes_only_hermes_registry_pair(self):
+        before = json.loads(self.candidate[m.BASE_REGISTRY])
+        expected = json.loads(self.candidate[m.BASE_REGISTRY])
+        hermes = next(t for t in expected['targets'] if t['target_alias'] == 'hermes-deals')
+        hermes['compose']['file'] = m.ADAPTER
+        hermes['compose']['file_sha256'] = m.HASHES[m.ADAPTER_SOURCE]
+        with self.execution_fixture():
+            m.execute(m.BASE, True, self.receipt)
+            after = json.loads(self.original.read_bytes())
+        self.assertEqual(after, expected)
+        for target in before['targets']:
+            if target['target_alias'] != 'hermes-deals':
+                self.assertIn(target, after['targets'])
+        self.assertEqual(next(t for t in after['targets'] if t['target_alias'] == 'rozkalns-cv-rpi5')
+                         ['compose']['file_sha256'],
+                         '6f14d9cbe07b2c03c4e9e14172de4318c1e8d591b97dd595dd82aacb38b7f19c')
+
+    def test_old_and_unrelated_registry_changes_stop_before_data_or_staging(self):
+        old = (ROOT / 'ops/deploy/baselines/simple-deploy-targets-weather-rebind-v1.json').read_bytes()
+        variants = [old, self.candidate[m.NEW_REGISTRY]]
+        for field in ('execution_enabled', 'schema_version'):
+            changed = json.loads(self.candidate[m.BASE_REGISTRY])
+            changed[field] = False if field == 'execution_enabled' else 2
+            variants.append(json.dumps(changed).encode())
+        for target_index in range(5):
+            changed = json.loads(self.candidate[m.BASE_REGISTRY])
+            changed['targets'][target_index]['compose']['file_sha256'] = '0' * 64
+            variants.append(json.dumps(changed).encode())
+        # One synthetic execution fixture; each rejection must remain pre-mutation.
+        with self.execution_fixture(), patch.object(m, 'tree') as tree, patch.object(m, 'publish') as publish:
+            for raw in variants:
+                with self.subTest(digest=m.digest(raw)):
+                    self.original.chmod(0o644)
+                    self.original.write_bytes(raw)
+                    self.original.chmod(0o444)
+                    receipt = m.new_receipt()
+                    with self.assertRaises(m.Stop):
+                        m.execute(m.BASE, True, receipt)
+                    self.assertFalse(receipt['data_content_read'])
+                    self.assertFalse(receipt['mutation_attempted'])
+            tree.assert_not_called()
+            publish.assert_not_called()
+            self.assertEqual(list((self.base / 'state').iterdir()), [])
+
+    def test_semantic_guard_preserves_cv_even_if_candidate_pin_is_updated(self):
+        changed = json.loads(self.candidate[m.NEW_REGISTRY])
+        cv = next(t for t in changed['targets'] if t['target_alias'] == 'rozkalns-cv-rpi5')
+        cv['compose']['file_sha256'] = '0' * 64
+        raw = (json.dumps(changed, indent=2) + '\n').encode()
+        with patch.dict(m.HASHES, {m.NEW_REGISTRY: m.digest(raw)}), self.assertRaises(m.Stop):
+            m.registry_delta(self.candidate[m.BASE_REGISTRY], raw)
 
     def test_existing_targets_or_stages_rejected_without_mutation(self):
         for parent, name in (('state', 'hermes-deals'), ('state', m.STATE_STAGE),

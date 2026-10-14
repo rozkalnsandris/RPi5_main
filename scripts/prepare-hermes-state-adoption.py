@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = 'scripts/prepare-hermes-state-adoption.py'
 CONTRACT = 'ops/contracts/hermes-state-adoption-v1.json'
 BASE = 'bcaa7c6db2d2404acb587d78a2dca7a0f7a1bb17'
+REGISTRY_SOURCE = 'c53d5642a9b700c5c2a24df9382c45252bd443ab'
 ORIGIN = 'https://github.com/rozkalnsandris/RPi5_main.git'
 PRINCIPAL = 'rozkalns-simple-deployer'
 ETC = Path('/etc/rozkalns-simple-deployer')
@@ -32,14 +33,14 @@ ENV = 'hermes-deals-api.env'
 STATE_STAGE = '.hermes-deals-prerequisites-v1.staged'
 ADAPTER_STAGE = '.hermes-deals-household-api.yml.adoption-v1.staged'
 REGISTRY_STAGE = '.targets.json.hermes-adoption-v1.staged'
-BASE_REGISTRY = 'ops/deploy/baselines/simple-deploy-targets-weather-rebind-v1.json'
+BASE_REGISTRY = 'ops/deploy/baselines/simple-deploy-targets-cv-stats-1000-v1.json'
 NEW_REGISTRY = 'ops/deploy/simple-deploy-targets-v1.json'
 ADAPTER_SOURCE = 'ops/deploy/simple-deploy-compose/' + ADAPTER
 WEATHER_SOURCE = 'ops/deploy/simple-deploy-compose/rozkalns-weather-public.yml'
 EXECUTOR_SOURCE = 'ops/lib/deploy_executor/simple_deploy_v1.py'
 HASHES = {
-    BASE_REGISTRY: '91a2fe2d86d9da9ac4ee7a5031eea7a405d3d42faec24ed089b08534c7ac0f23',
-    NEW_REGISTRY: '0009e071bfd5b471ab78442637582fe71521bb6f085758c1ab8b3a4c3bb62cc4',
+    BASE_REGISTRY: '24e284a03f68c3843b629254ed1a944648e7b902ce36161a6ee7412cfe7c42d0',
+    NEW_REGISTRY: 'fd804753594532ad2b6731428b4640c8f8b15758649e98c62259619cf4f90eca',
     ADAPTER_SOURCE: 'bc78b165b479b1dfcd7bcd12df28d09b649ca68f56d6bfdfa61be280f6e1dad3',
     WEATHER_SOURCE: 'eddbe28efd5270c350adcf18413839ed80d27d95387473cf7f4e2bf68584a04c',
     EXECUTOR_SOURCE: 'ed906786fd85169c6c555a3ac466b157edaf24a65fe12f60ee2ec6940ade20d0',
@@ -167,8 +168,9 @@ def git_bytes(*args):
 
 def contract():
     return {
-        'schema': 'hermes.state-adoption.v1', 'issue': 990, 'entrypoint': SCRIPT,
-        'baseline_source': BASE, 'source_hashes': HASHES,
+        'schema': 'hermes.state-adoption.v1', 'issue': 1014, 'entrypoint': SCRIPT,
+        'baseline_source': BASE, 'registry_baseline_source': REGISTRY_SOURCE,
+        'source_hashes': HASHES,
         'source_trees': ['passwd(andris).home/hermes-deals/data/raw',
                          'passwd(andris).home/hermes-deals/config'],
         'destination': str(STATE / 'hermes-deals'),
@@ -198,6 +200,7 @@ def source_check(sha):
         require(git(*args).returncode == 0)
     require(not git_bytes('ls-files', '--others', '--exclude-standard'))
     require(git('merge-base', '--is-ancestor', BASE, sha).returncode == 0)
+    require(git('merge-base', '--is-ancestor', REGISTRY_SOURCE, sha).returncode == 0)
     for relative in (SCRIPT, CONTRACT, *HASHES):
         raw = (ROOT / relative).read_bytes()
         require(git_bytes('show', f'{sha}:{relative}') == raw)
