@@ -2,6 +2,11 @@
 
 Status: **SOURCE ONLY / SEPARATE LIVE AUTHORIZATION REQUIRED**.
 
+Revision #1018 corrects the destination raw-directory permissions required by
+the existing UID:GID `1000:1000` scheduled collectors. It does not execute the
+prepared operation or authorize the later API/collector cutover. Any older
+launcher/source authorization must be replaced with an exact new one-shot.
+
 Revision #1014 supersedes #990's registry baseline after the CV-only stats
 registry update. This revision accepts only the exact CV-updated fixture;
 it retains the original identity-provenance anchor and all publication limits.
@@ -105,9 +110,19 @@ The only allowed publication paths are:
 3. Existing `/etc/rozkalns-simple-deployer/targets.json`, replaced only after its
    exact baseline is revalidated, via fixed `.targets.json.hermes-adoption-v1.staged`.
 
-Only new inodes receive ownership/mode changes: state directories root:root `0755`,
-state files root:root `0644`, static files root:root `0444`. No source metadata is
-copied as privilege bits. Stages use exclusive creation, descriptor-relative
+Only new inodes receive ownership/mode changes. State directories outside
+`data/raw` remain root:root `0755`; copied state files remain root:root `0644`;
+static files remain root:root `0444`. The `data/raw` directory and all copied
+subdirectories are root:collector-group `03775` (setgid, sticky, group-write),
+while their copied files stay root:root `0644`. The operator requires the
+passwd-resolved legacy collector account to have exact UID:GID `1000:1000`
+before any data read or staging; this matches the reviewed scheduled collector
+units' numeric `docker compose exec --user 1000:1000`. A collector can add new
+snapshot files but cannot edit or remove root-owned copied snapshots. Config
+stays read-only to collectors. This source correction does not change the
+legacy collector units or prove their post-cutover container selection; those
+remain separate activation gates. No source metadata is copied as privilege
+bits. Stages use exclusive creation, descriptor-relative
 no-follow operations and fsync. State and adapter publication use Linux
 `renameat2(RENAME_NOREPLACE)`; registry replacement is atomic per file, **not** a
 multi-file transaction. The registry's only semantic change is the Hermes compose

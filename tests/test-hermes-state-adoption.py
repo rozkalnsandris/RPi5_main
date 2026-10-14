@@ -43,7 +43,8 @@ class AdoptionTests(unittest.TestCase):
 
     def publish(self, revalidate=lambda: None):
         m.publish(self.fds['state'], self.fds['compose'], self.fds['etc'], self.data,
-                  self.candidate, revalidate, self.receipt, uid=self.uid, gid=self.gid)
+                  self.candidate, revalidate, self.receipt, uid=self.uid, gid=self.gid,
+                  collector_gid=self.gid)
 
     def source_file(self, name='snapshot.json', value=b'{"synthetic":true}'):
         p = self.base / 'source' / name
@@ -85,6 +86,12 @@ class AdoptionTests(unittest.TestCase):
         for parent, name in (('state', m.STATE_STAGE), ('compose', m.ADAPTER_STAGE), ('etc', m.REGISTRY_STAGE)):
             self.assertFalse((self.base / parent / name).exists())
         self.assertEqual(stat.S_IMODE((self.base / 'state/hermes-deals').stat().st_mode), 0o755)
+        self.assertEqual(stat.S_IMODE((self.base / 'state/hermes-deals/data/raw').stat().st_mode),
+                         m.RAW_DEST_MODE)
+        self.assertEqual(stat.S_IMODE((self.base / 'state/hermes-deals/data/raw/synthetic.json').stat().st_mode),
+                         0o644)
+        self.assertEqual(stat.S_IMODE((self.base / 'state/hermes-deals/config').stat().st_mode),
+                         0o755)
         self.assertEqual(stat.S_IMODE((self.base / 'state/hermes-deals/config/sources.json').stat().st_mode), 0o644)
         self.assertEqual(stat.S_IMODE(self.original.stat().st_mode), 0o444)
 
@@ -212,6 +219,24 @@ class AdoptionTests(unittest.TestCase):
             self.publish(validate)
         self.assertFalse(self.receipt['adapter_published'])
         self.assertFalse(self.receipt['registry_published'])
+
+    def test_raw_mode_tamper_after_publish_blocks_adapter(self):
+        def validate():
+            if self.receipt['state_published']:
+                (self.base / 'state/hermes-deals/data/raw').chmod(0o775)
+        with self.assertRaises(m.Stop):
+            self.publish(validate)
+        self.assertFalse(self.receipt['adapter_published'])
+        self.assertFalse(self.receipt['registry_published'])
+
+    def test_nested_raw_directories_keep_collector_mode_and_copied_file_mode(self):
+        self.data['data']['raw']['nested'] = {'snapshot.json': b'new synthetic snapshot'}
+        self.publish()
+        raw = self.base / 'state/hermes-deals/data/raw'
+        self.assertEqual(stat.S_IMODE((raw / 'nested').stat().st_mode), m.RAW_DEST_MODE)
+        self.assertEqual(stat.S_IMODE((raw / 'nested/snapshot.json').stat().st_mode), 0o644)
+        (raw / 'nested/new.json').write_bytes(b'new collector snapshot')
+        self.assertEqual((raw / 'nested/snapshot.json').read_bytes(), b'new synthetic snapshot')
 
     def test_noreplace_destination_race_preserves_existing_target(self):
         fd = self.fds['compose']
@@ -401,6 +426,7 @@ class AdoptionTests(unittest.TestCase):
             return original_directory_meta(fd, self.uid if uid == 0 else uid,
                                            self.gid if gid == 0 else gid, mode)
         def publish(*args, **kwargs):
+            kwargs['collector_gid'] = self.gid
             return original_publish(*args, **kwargs, uid=self.uid, gid=self.gid)
         def open_guard(name, flags, *args, **kwargs):
             if os.fspath(name) == m.ENV:
@@ -412,6 +438,8 @@ class AdoptionTests(unittest.TestCase):
                                 ('quiescent', lambda: None), ('directory', fixture_directory),
                                 ('file_meta', file_meta), ('directory_meta', dir_meta), ('publish', publish)):
                 stack.enter_context(patch.object(m, name, value))
+            stack.enter_context(patch.object(m, 'COLLECTOR_UID', self.uid))
+            stack.enter_context(patch.object(m, 'COLLECTOR_GID', self.gid))
             stack.enter_context(patch.object(m.os, 'geteuid', return_value=0))
             stack.enter_context(patch.object(m.os, 'open', side_effect=open_guard))
             stack.enter_context(patch.object(m.pwd, 'getpwnam', return_value=account))
@@ -440,6 +468,15 @@ class AdoptionTests(unittest.TestCase):
             self.assertEqual(before, (m.fingerprint(env.stat()), m.fingerprint(identity.stat())))
             self.assertEqual(m.fingerprint(source.stat()), source_fp)
             self.assertEqual((self.base / 'state/hermes-deals/data/raw/snapshot.json').read_bytes(), source.read_bytes())
+
+    def test_collector_identity_mismatch_stops_before_static_or_data_read(self):
+        with self.execution_fixture(), patch.object(m, 'COLLECTOR_UID', self.uid + 1):
+            with self.assertRaises(m.Stop):
+                m.execute(m.BASE, True, self.receipt)
+            self.assertFalse(self.receipt['static_content_read'])
+            self.assertFalse(self.receipt['data_content_read'])
+            self.assertFalse(self.receipt['mutation_attempted'])
+            self.assertEqual(list((self.base / 'state').iterdir()), [])
 
     def test_execute_rejects_static_baseline_drift_before_data_read(self):
         with self.execution_fixture():
