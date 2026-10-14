@@ -322,7 +322,7 @@ class HelperInstallTests(unittest.TestCase):
              mock.patch.object(mod.os,"close") as close:
             mod.apply(HEAD,runner=r)
         self.assertEqual(r.writes,1)
-        self.assertEqual([a[0] for a,_ in r.calls if a[:3]==[mod.SUDO,"-n",mod.CP]], [mod.SUDO])
+        self.assertEqual([a[0] for a,_ in r.calls if a[:3]==[mod.SUDO,"-n",mod.CP] and a[-1]==mod.TARGET], [mod.SUDO])
         close.assert_called_once_with(45)
 
     def test_post_dispatch_fail_stops_no_retry_or_cleanup(self):
