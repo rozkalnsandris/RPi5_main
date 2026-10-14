@@ -28,7 +28,8 @@ class Runner:
                  parent_mode="755", parent_kind="directory", present=False,
                  symlink=False, cp_version="9.7", fail_write=False,
                  wrong_metadata=False, wrong_sha=False, sudo_disabled=False,
-                 corrupted_source=False, deny_exact_copy=False, race_at_dispatch=False):
+                 corrupted_source=False, deny_exact_copy=False, race_at_dispatch=False,
+                 skip_copy=False, unexpected_copy_output=False, wrong_existing_bytes=False):
         self.head = head
         self.branch = branch
         self.dirty = dirty
@@ -45,6 +46,9 @@ class Runner:
         self.corrupted_source = corrupted_source
         self.deny_exact_copy = deny_exact_copy
         self.race_at_dispatch = race_at_dispatch
+        self.skip_copy = skip_copy
+        self.unexpected_copy_output = unexpected_copy_output
+        self.wrong_existing_bytes = wrong_existing_bytes
         self.calls = []
         self.writes = 0
 
@@ -89,8 +93,7 @@ class Runner:
         elif a[:4] == [mod.SUDO,"-n","-l","--"]:
             if self.sudo_disabled or self.deny_exact_copy:
                 rc = 1
-            elif a[4:] != [mod.CP,"--update=none-fail","--preserve=mode",
-                           "-T","--","/dev/stdin",mod.TARGET]:
+            elif a[4:] != mod.cp_command(f"cp (GNU coreutils) {self.cp_version}"):
                 raise AssertionError("unapproved sudo capability query")
         elif a[:3] == [mod.SUDO,"-n",mod.TEST]:
             if self.sudo_disabled:
@@ -100,16 +103,24 @@ class Runner:
             else:
                 rc = 0 if self.present else 1
         elif a[:3] == [mod.SUDO,"-n",mod.SHA256SUM]:
-            value = ("0"*64 if self.wrong_sha else hashlib.sha256(PAYLOAD).hexdigest())
+            value = ("0"*64 if self.wrong_sha or self.wrong_existing_bytes
+                     else hashlib.sha256(PAYLOAD).hexdigest())
             out = (value+"  "+mod.TARGET+"\n").encode()
         elif a[:3] == [mod.SUDO,"-n",mod.CP]:
             self.writes += 1
-            if a != [mod.SUDO,"-n",mod.CP,"--update=none-fail",
-                     "--preserve=mode","-T","--","/dev/stdin",mod.TARGET]:
+            if a != [mod.SUDO,"-n",*mod.cp_command(f"cp (GNU coreutils) {self.cp_version}")]:
                 raise AssertionError("unsafe cp write argv")
             if stdin != 45:
                 raise AssertionError("must pass sealed memfd as stdin")
-            rc = 1 if self.fail_write or self.present or self.symlink or self.race_at_dispatch else 0
+            rc = (1 if self.fail_write or self.present or self.symlink
+                  or self.race_at_dispatch else 0)
+            if self.skip_copy:  # GNU 9.1 -n returns 0 without copying.
+                rc = 0
+                out = b""
+            elif self.cp_version == "9.1":
+                out = ("'/dev/stdin' -> '" + mod.TARGET + "'\n").encode("ascii")
+            if self.unexpected_copy_output:
+                out = b"unexpected"
         else:
             raise AssertionError("unanticipated subprocess")
         return subprocess.CompletedProcess(a,rc,stdout=out,stderr=b"secret-synthetic-message")
@@ -126,6 +137,8 @@ class HelperInstallTests(unittest.TestCase):
         self.assertEqual(mod.SOURCE_REL,"scripts/ausmalwiese_worker_settings_provisioner.py")
         self.assertEqual(mod.GET_RELEASE,"6c55e46d43889fed2a17770d0f466c79b1db736a")
         self.assertIn("--update=none-fail",SOURCE.read_text())
+        self.assertIn("--no-clobber",SOURCE.read_text())
+        self.assertIn("cp_copy_proven",SOURCE.read_text())
         self.assertNotIn("shell=True",SOURCE.read_text())
         self.assertNotIn("/usr/bin/install",SOURCE.read_text())
         mod.fixed_source_constants(PAYLOAD)
@@ -168,12 +181,70 @@ class HelperInstallTests(unittest.TestCase):
             mod.fixed_source_constants(other)
 
     def test_sudo_capability_and_version_below_min_refused(self):
-        for r in (Runner(sudo_disabled=True),Runner(cp_version="9.1"),
+        for r in (Runner(sudo_disabled=True),Runner(cp_version="9.0"),
+                  Runner(cp_version="9.2"),Runner(cp_version="9.3"),
                   Runner(cp_version="invalid")):
             with self.subTest(version=r.cp_version,disabled=r.sudo_disabled):
                 with self.assertRaises(mod.Stop):
                     preflight(r)
                 self.assertEqual(r.writes,0)
+
+    def test_gnu_91_version_and_exact_sudo_options_accepted(self):
+        r = Runner(cp_version="9.1")
+        self.assertEqual(preflight(r), PAYLOAD)
+        expected = mod.cp_command("cp (GNU coreutils) 9.1")
+        self.assertEqual(expected, [
+            mod.CP, "--no-clobber", "--verbose", "--preserve=mode",
+            "-T", "--", "/dev/stdin", mod.TARGET
+        ])
+        self.assertIn(([mod.SUDO, "-n", "-l", "--", *expected], None), r.calls)
+        self.assertEqual(r.writes, 0)
+
+    def test_gnu_91_atomic_copy_success_with_exact_verbose_proof(self):
+        r = Runner(cp_version="9.1")
+        with mock.patch.object(mod,"preflight",return_value=PAYLOAD), \
+             mock.patch.object(mod,"sealed_memfd",return_value=45), \
+             mock.patch.object(mod,"exact_checkout"), \
+             mock.patch.object(mod.os,"close"):
+            mod.apply(HEAD,runner=r)
+        self.assertEqual(r.writes, 1)
+
+    def test_gnu_91_silent_existing_destination_success_is_STOP(self):
+        # 9.1 -n returns 0 even if no file was copied. Never report PASS.
+        for r in (Runner(cp_version="9.1",skip_copy=True),
+                  Runner(cp_version="9.1",unexpected_copy_output=True),
+                  Runner(cp_version="9.1",skip_copy=True,wrong_existing_bytes=True)):
+            with self.subTest(skip=r.skip_copy,output=r.unexpected_copy_output):
+                with mock.patch.object(mod,"preflight",return_value=PAYLOAD), \
+                     mock.patch.object(mod,"sealed_memfd",return_value=45), \
+                     mock.patch.object(mod,"exact_checkout"), \
+                     mock.patch.object(mod.os,"close"):
+                    with self.assertRaisesRegex(mod.Stop, "post_dispatch_unknown_state"):
+                        mod.apply(HEAD,runner=r)
+                self.assertEqual(r.writes, 1)
+
+    def test_gnu_91_race_precheck_then_exclusive_open_blocks_write(self):
+        r = Runner(cp_version="9.1",race_at_dispatch=True)
+        with mock.patch.object(mod,"preflight",return_value=PAYLOAD), \
+             mock.patch.object(mod,"sealed_memfd",return_value=45), \
+             mock.patch.object(mod,"exact_checkout"), \
+             mock.patch.object(mod.os,"close"):
+            with self.assertRaisesRegex(mod.Stop, "post_dispatch_unknown_state"):
+                mod.apply(HEAD,runner=r)
+        self.assertEqual(r.writes, 1)
+
+    def test_cp_output_fail_closed_on_unknown_option_or_format(self):
+        p = lambda result,opts: mod.cp_copy_proven(result,opts)
+        Success = lambda output: subprocess.CompletedProcess([],0,output,b"")
+        p(Success(b""), ("--update=none-fail",))
+        with self.assertRaises(mod.Stop):
+            p(Success(b""), ("--no-clobber","--verbose"))
+        with self.assertRaises(mod.Stop):
+            p(Success(b"unexpected"), ("--no-clobber","--verbose"))
+        with self.assertRaises(mod.Stop):
+            p(Success(b""), ("--some-future-option",))
+        with self.assertRaises(mod.Stop):
+            p(subprocess.CompletedProcess([],1,b"",b""), ("--update=none-fail",))
 
     def test_exact_sudo_permission_refused_without_write(self):
         r = Runner(deny_exact_copy=True)
