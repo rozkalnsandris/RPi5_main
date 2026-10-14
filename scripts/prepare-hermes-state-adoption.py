@@ -50,6 +50,9 @@ MAX_FILE = 32 * 1024 * 1024
 MAX_TOTAL = 256 * 1024 * 1024
 MAX_DEPTH = 12
 STATIC_LIMIT = 128 * 1024
+COLLECTOR_UID = 1000
+COLLECTOR_GID = 1000
+RAW_DEST_MODE = 0o3775
 DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
 READ_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC | os.O_NOATIME
 
@@ -168,7 +171,8 @@ def git_bytes(*args):
 
 def contract():
     return {
-        'schema': 'hermes.state-adoption.v1', 'issue': 1014, 'entrypoint': SCRIPT,
+        'schema': 'hermes.state-adoption.v1', 'issue': 1014,
+        'revision_issue': 1018, 'entrypoint': SCRIPT,
         'baseline_source': BASE, 'registry_baseline_source': REGISTRY_SOURCE,
         'source_hashes': HASHES,
         'source_trees': ['passwd(andris).home/hermes-deals/data/raw',
@@ -182,6 +186,8 @@ def contract():
                    'static_file_bytes': STATIC_LIMIT},
         'identity_policy': 'strict schema and public ancestor of baseline; preserve bytes and inode',
         'existing_env': 'metadata only; preserve bytes, inode, owner, group, mode',
+        'collector_identity': {'uid': COLLECTOR_UID, 'gid': COLLECTOR_GID},
+        'raw_destination': 'root:collector-group directories 03775; root:root files 0644',
         'quiescence': 'generic and Hermes instance service/timer inactive, timers disabled or absent',
         'default_data_content_read': False, 'default_mutation': False,
         'apply_requires_separate_live_authorization': True,
@@ -335,28 +341,70 @@ def new_file(fd, name, value, mode, *, uid=0, gid=0):
 
 
 @contextmanager
-def new_directory(fd, name, *, uid=0, gid=0):
+def new_directory(fd, name, *, uid=0, gid=0, mode=0o755):
     os.mkdir(name, 0o700, dir_fd=fd)
     child = os.open(name, DIR_FLAGS, dir_fd=fd)
     try:
-        directory_meta(child, uid, gid, 0o700)
         require(ident(os.stat(name, dir_fd=fd, follow_symlinks=False)) == ident(os.fstat(child)))
         os.fchown(child, uid, gid)
+        os.fchmod(child, 0o700)
+        directory_meta(child, uid, gid, 0o700)
         no_acl(child)
         yield child
-        os.fchmod(child, 0o755)
+        os.fchmod(child, mode)
         os.fsync(child)
     finally:
         os.close(child)
 
 
-def write_tree(fd, data, *, uid=0, gid=0):
+def raw_destination(path):
+    return path[:2] == ('data', 'raw')
+
+
+def write_tree(fd, data, *, uid=0, gid=0, collector_gid=COLLECTOR_GID, path=()):
     for name, value in data.items():
         if isinstance(value, dict):
-            with new_directory(fd, name, uid=uid, gid=gid) as child:
-                write_tree(child, value, uid=uid, gid=gid)
+            child_path = (*path, name)
+            is_raw = raw_destination(child_path)
+            with new_directory(fd, name, uid=uid,
+                               gid=collector_gid if is_raw else gid,
+                               mode=RAW_DEST_MODE if is_raw else 0o755) as child:
+                write_tree(child, value, uid=uid, gid=gid,
+                           collector_gid=collector_gid, path=child_path)
         else:
             new_file(fd, name, value, 0o644, uid=uid, gid=gid)
+
+
+def verify_published_tree(fd, data, *, uid=0, gid=0,
+                          collector_gid=COLLECTOR_GID, path=(), root_dev=None):
+    """Verify the exact copied tree, including the collector-only raw directory mode."""
+    before = os.fstat(fd)
+    is_raw = raw_destination(path)
+    directory_meta(fd, uid, collector_gid if is_raw else gid,
+                   RAW_DEST_MODE if is_raw else 0o755)
+    root_dev = before.st_dev if root_dev is None else root_dev
+    require(before.st_dev == root_dev)
+    with os.scandir(fd) as entries:
+        names = [entry.name for entry in entries]
+    require(len(names) == len(data) and set(names) == set(data))
+    for name in sorted(names):
+        allowed_name(name)
+        expected = data[name]
+        st = os.stat(name, dir_fd=fd, follow_symlinks=False)
+        require(st.st_dev == root_dev)
+        if isinstance(expected, dict):
+            require(stat.S_ISDIR(st.st_mode))
+            with os_fd(name, fd, DIR_FLAGS | os.O_NOATIME) as child:
+                require(fingerprint(os.fstat(child)) == fingerprint(st))
+                verify_published_tree(child, expected, uid=uid, gid=gid,
+                                      collector_gid=collector_gid, path=(*path, name),
+                                      root_dev=root_dev)
+                require(fingerprint(os.stat(name, dir_fd=fd,
+                                            follow_symlinks=False)) == fingerprint(st))
+        else:
+            actual, _ = read_file(fd, name, uid, gid, 0o644, MAX_FILE)
+            require(actual == expected)
+    require(fingerprint(os.fstat(fd)) == fingerprint(before))
 
 
 def rename_new(fd, stage, target):
@@ -367,16 +415,17 @@ def rename_new(fd, stage, target):
     os.fsync(fd)
 
 
-def publish(state, compose, etc, data, candidate, revalidate, receipt, *, uid=0, gid=0):
+def publish(state, compose, etc, data, candidate, revalidate, receipt, *,
+            uid=0, gid=0, collector_gid=COLLECTOR_GID):
     require(absent(state, STATE_STAGE) and absent(state, 'hermes-deals')
             and absent(compose, ADAPTER_STAGE) and absent(compose, ADAPTER)
             and absent(etc, REGISTRY_STAGE))
     revalidate()
     receipt['mutation_attempted'] = True
     with new_directory(state, STATE_STAGE, uid=uid, gid=gid) as stage:
-        write_tree(stage, data, uid=uid, gid=gid)
+        write_tree(stage, data, uid=uid, gid=gid, collector_gid=collector_gid)
     with os_fd(STATE_STAGE, state, DIR_FLAGS | os.O_NOATIME) as staged:
-        require(contents(tree(staged, uid, gid, [0, 0])) == data)
+        verify_published_tree(staged, data, uid=uid, gid=gid, collector_gid=collector_gid)
         stage_fp = fingerprint(os.fstat(staged))
     adapter_fp = new_file(compose, ADAPTER_STAGE, candidate[ADAPTER_SOURCE], 0o444, uid=uid, gid=gid)
     registry_fp = new_file(etc, REGISTRY_STAGE, candidate[NEW_REGISTRY], 0o444, uid=uid, gid=gid)
@@ -391,7 +440,8 @@ def publish(state, compose, etc, data, candidate, revalidate, receipt, *, uid=0,
     def verify_state():
         with os_fd('hermes-deals', state, DIR_FLAGS | os.O_NOATIME) as target:
             require(ident(os.fstat(target)) == stage_fp[:5])
-            require(contents(tree(target, uid, gid, [0, 0])) == data)
+            verify_published_tree(target, data, uid=uid, gid=gid,
+                                  collector_gid=collector_gid)
 
     revalidate()
     verify_state()
@@ -414,7 +464,8 @@ def publish(state, compose, etc, data, candidate, revalidate, receipt, *, uid=0,
         require(raw == candidate[relative] and final[:5] == fp[:5])
     with os_fd('hermes-deals', state, DIR_FLAGS | os.O_NOATIME) as target:
         require(ident(os.fstat(target)) == stage_fp[:5])
-        require(contents(tree(target, uid, gid, [0, 0])) == data)
+        verify_published_tree(target, data, uid=uid, gid=gid,
+                              collector_gid=collector_gid)
 
 
 @contextmanager
@@ -431,7 +482,7 @@ def execute(sha, apply, receipt):
     source_check(sha)
     runtime = runtime_ids()
     source = pwd.getpwnam('andris')
-    require(source.pw_uid != 0 and source.pw_gid != 0)
+    require(source.pw_uid == COLLECTOR_UID and source.pw_gid == COLLECTOR_GID)
     source_root = Path(source.pw_dir) / 'hermes-deals'
     paths = {'etc': (ETC, {0}, 0, 0, 0o755),
              'compose': (ETC / 'compose', {0}, 0, 0, 0o755),
@@ -528,7 +579,8 @@ def execute(sha, apply, receipt):
                 require(tree(fds[key], source.pw_uid, source.pw_gid, budget,
                              depth=2 if key == 'raw' else 1) == snapshots[key])
 
-        publish(fds['state'], fds['compose'], fds['etc'], data, candidate, final_check, receipt)
+        publish(fds['state'], fds['compose'], fds['etc'], data, candidate, final_check,
+                receipt, collector_gid=COLLECTOR_GID)
         final_check()
         require(absent(fds['state'], STATE_STAGE) and absent(fds['compose'], ADAPTER_STAGE)
                 and absent(fds['etc'], REGISTRY_STAGE))
