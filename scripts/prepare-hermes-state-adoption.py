@@ -376,8 +376,11 @@ def write_tree(fd, data, *, uid=0, gid=0, collector_gid=COLLECTOR_GID, path=()):
 
 
 def verify_published_tree(fd, data, *, uid=0, gid=0,
-                          collector_gid=COLLECTOR_GID, path=(), root_dev=None):
+                          collector_gid=COLLECTOR_GID, path=(), root_dev=None,
+                          budget=None):
     """Verify the exact copied tree, including the collector-only raw directory mode."""
+    require(len(path) <= MAX_DEPTH)
+    budget = [0, 0] if budget is None else budget
     before = os.fstat(fd)
     is_raw = raw_destination(path)
     directory_meta(fd, uid, collector_gid if is_raw else gid,
@@ -386,6 +389,8 @@ def verify_published_tree(fd, data, *, uid=0, gid=0,
     require(before.st_dev == root_dev)
     with os.scandir(fd) as entries:
         names = [entry.name for entry in entries]
+    budget[0] += len(names)
+    require(budget[0] <= MAX_ENTRIES)
     require(len(names) == len(data) and set(names) == set(data))
     for name in sorted(names):
         allowed_name(name)
@@ -398,10 +403,12 @@ def verify_published_tree(fd, data, *, uid=0, gid=0,
                 require(fingerprint(os.fstat(child)) == fingerprint(st))
                 verify_published_tree(child, expected, uid=uid, gid=gid,
                                       collector_gid=collector_gid, path=(*path, name),
-                                      root_dev=root_dev)
+                                      root_dev=root_dev, budget=budget)
                 require(fingerprint(os.stat(name, dir_fd=fd,
                                             follow_symlinks=False)) == fingerprint(st))
         else:
+            budget[1] += st.st_size
+            require(budget[1] <= MAX_TOTAL)
             actual, _ = read_file(fd, name, uid, gid, 0o644, MAX_FILE)
             require(actual == expected)
     require(fingerprint(os.fstat(fd)) == fingerprint(before))
