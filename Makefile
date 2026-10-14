@@ -193,6 +193,7 @@ test:
 	python3 ./tests/test-ausmalwiese-legacy-redirect-source.py
 	python3 ./tests/test-ausmalwiese-redirect-inventory-source.py
 	python3 ./tests/test-ausmalwiese-redirect-adapter-source.py
+	python3 ./tests/test-ausmalwiese-redirect-trusted-install-source.py
 	python3 ./tests/test-cloudflare-zone-bot-waf.py
 	python3 ./tests/test-ausmalwiese-crawler-policy-v1.py
 	python3 ./tests/test-cloudflare-zone-bot-waf-install.py
