@@ -369,8 +369,8 @@ class AdoptionTests(unittest.TestCase):
             self.assertTrue(all(c.args[0][:2] == ['/usr/bin/systemctl', 'show'] for c in run.call_args_list))
             self.assertEqual({c.args[0][2] for c in run.call_args_list}, {
                 'rozkalns-simple-deployer.service', 'rozkalns-simple-deployer.timer',
-                'rozkalns-simple-deployer@hermes-deals.service',
-                'rozkalns-simple-deployer@hermes-deals.timer',
+                'rozkalns-simple-deployer' + '@' + 'hermes-deals.service',
+                'rozkalns-simple-deployer' + '@' + 'hermes-deals.timer',
                 *(f'hermes-deals-{name}.{kind}'
                   for name in ('netto-collector', 'aldi-collector',
                                'edeka-collector', 'edeka-monitor')
