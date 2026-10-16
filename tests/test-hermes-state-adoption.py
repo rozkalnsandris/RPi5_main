@@ -311,6 +311,77 @@ class AdoptionTests(unittest.TestCase):
         with patch.object(m.os, 'read', side_effect=read), self.assertRaises(m.Stop):
             self.tree()
 
+    def test_nested_raw_above_32_mib_preserved_but_config_rejected(self):
+        nested = self.base / 'source/nested'
+        nested.mkdir(mode=0o755)
+        snapshot = nested / 'snapshot.json'
+        size = 32 * 1024 * 1024 + 1
+        with snapshot.open('wb') as stream:
+            stream.truncate(size)
+        snapshot.chmod(0o644)
+        result = self.tree(file_limit=m.MAX_RAW_FILE)
+        copied = m.contents(result)['nested']['snapshot.json']
+        self.assertEqual(len(copied), size)
+        self.assertFalse(any(copied))
+        with patch.object(m, 'read_file', side_effect=AssertionError('oversize config opened')):
+            with self.assertRaises(m.Stop):
+                self.tree()
+
+    def test_raw_above_total_budget_rejected_before_open(self):
+        snapshot = self.source_file(value=b'')
+        with snapshot.open('wb') as stream:
+            stream.truncate(m.MAX_TOTAL + 1)
+        with patch.object(m, 'read_file', side_effect=AssertionError('oversize raw opened')):
+            with self.assertRaises(m.Stop):
+                self.tree(file_limit=m.MAX_RAW_FILE)
+
+    def test_tree_read_stops_at_checked_size_when_file_grows(self):
+        snapshot = self.source_file(value=b'abc')
+        original_read = os.read
+        returned = []
+        def read(fd, size):
+            if not returned:
+                with snapshot.open('ab') as stream:
+                    stream.write(b'x' * 100)
+            value = original_read(fd, size)
+            returned.append(len(value))
+            return value
+        with patch.object(m.os, 'read', side_effect=read), self.assertRaises(m.Stop):
+            self.tree(file_limit=m.MAX_RAW_FILE)
+        self.assertEqual(sum(returned), 4)
+
+    def test_full_apply_raw_limit_and_shared_budget_at_boundary(self):
+        # Scaled boundary exercises initial copy and every pre-publication reread.
+        with self.execution_fixture() as (_, _, checkout):
+            raw = checkout / 'data/raw/snapshot.json'
+            raw.write_bytes(b'12345678')
+            # sources.json is two bytes; the combined total is exactly ten.
+            with patch.object(m, 'MAX_FILE', 2), patch.object(m, 'MAX_RAW_FILE', 10), \
+                    patch.object(m, 'MAX_TOTAL', 10):
+                m.execute(m.BASE, True, self.receipt)
+            self.assertEqual(self.receipt['status'], 'PREPARED_NO_ACTIVATION')
+            self.assertEqual((self.base / 'state/hermes-deals/data/raw/snapshot.json').read_bytes(),
+                             b'12345678')
+
+    def test_full_apply_combined_raw_config_overflow_stops_before_staging(self):
+        with self.execution_fixture() as (_, _, checkout):
+            (checkout / 'data/raw/snapshot.json').write_bytes(b'123456789')
+            with patch.object(m, 'MAX_FILE', 2), patch.object(m, 'MAX_RAW_FILE', 10), \
+                    patch.object(m, 'MAX_TOTAL', 10), self.assertRaises(m.Stop):
+                m.execute(m.BASE, True, self.receipt)
+            self.assertFalse(self.receipt['mutation_attempted'])
+            self.assertEqual(list((self.base / 'state').iterdir()), [])
+
+    def test_full_apply_config_keeps_smaller_ceiling(self):
+        with self.execution_fixture() as (_, _, checkout):
+            (checkout / 'data/raw/snapshot.json').write_bytes(b'123')
+            (checkout / 'config/sources.json').write_bytes(b'123')
+            with patch.object(m, 'MAX_FILE', 2), patch.object(m, 'MAX_RAW_FILE', 10), \
+                    patch.object(m, 'MAX_TOTAL', 10), self.assertRaises(m.Stop):
+                m.execute(m.BASE, True, self.receipt)
+            self.assertFalse(self.receipt['mutation_attempted'])
+            self.assertEqual(list((self.base / 'state').iterdir()), [])
+
     def test_directory_replaced_during_walk_rejected(self):
         p = self.base / 'source/nested'
         p.mkdir(mode=0o755)
