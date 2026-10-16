@@ -97,11 +97,13 @@ class ExactUpgradeTests(unittest.TestCase):
     def test_tampered_installed_bytes_or_mode(self):
         for file in (self.paths.operator, self.paths.generator):
             old, mode = file.read_bytes(), stat.S_IMODE(file.stat().st_mode)
+            file.chmod(0o600)  # Fixture: 0444 generator cannot be written directly.
             file.write_bytes(b"foreign bytes")
+            file.chmod(mode)
             with self.assertRaises(mod.UpgradeError):
                 self.run_op(apply=True)
-            file.write_bytes(old)
             file.chmod(0o600)
+            file.write_bytes(old)
             with self.assertRaises(mod.UpgradeError):
                 self.run_op(apply=True)
             file.chmod(mode)
