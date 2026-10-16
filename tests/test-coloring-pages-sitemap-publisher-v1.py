@@ -86,7 +86,7 @@ class PublisherTests(unittest.TestCase):
         data = VENDOR_PATH.read_bytes()
         self.assertEqual(mod.generator_blob(data), mod.GENERATOR_GIT_BLOB)
         self.assertEqual(mod.GENERATOR_GIT_BLOB,
-                         "5644c8fd366c0c57f6339fddd163c5091ea134c5")
+                         "49c8ba34cf0a4c4ab100463df9adacc4c6e90c2c")
 
     def test_read_only_preflight_creates_nothing(self):
         result = self.run_check()
@@ -108,6 +108,8 @@ class PublisherTests(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(self.paths.sitemap.stat().st_mode), 0o644)
         self.assertFalse(self.paths.stage.exists())
         self.assertIn(b"<urlset", self.paths.sitemap.read_bytes())
+        self.assertIn(b"https://ausmalwiese.de/detail.html?id=1234567", self.paths.sitemap.read_bytes())
+        self.assertNotIn(b"coloring.rozkalns.net", self.paths.sitemap.read_bytes())
 
     def test_exact_current_is_noop_without_staging(self):
         first = self.run_apply(expected_catalog=self.catalog_sha, expected_prior="absent")
