@@ -48,6 +48,14 @@ credential interface, secret printout or runtime mutation.
    - ausmalwiese.de/api/report/config
    - www.ausmalwiese.de/api/report
    - www.ausmalwiese.de/api/report/config
+   Cloudflare matches the entire URL including any query string: exact
+   routes WITHOUT a terminal wildcard do **not** match URLs containing query
+   parameters. This is deliberate for the frontend's clean report API URLs;
+   reject/verify query-bearing requests as an explicit acceptance case rather
+   than silently broadening the route to /api/report* (which also captures
+   unrelated longer paths). A future need for query support is a separate
+   reviewed routing design change, not an inferred wildcard permission.
+   Official rules: https://developers.cloudflare.com/workers/configuration/routing/routes/
    Verify Cloudflare permits these patterns as written. Check apex/www
    redirect policy, order, overlap and route baseline independently. Worker
    source enforces POST on /api/report and GET on /api/report/config and
@@ -64,7 +72,9 @@ credential interface, secret printout or runtime mutation.
    a secret under a separately authorized protected provisioning flow.
 5. Require REPORT_RATE (12 requests/60 s) and REPORT_DUP (1 request/60 s)
    as distinct Cloudflare Workers Rate Limiting bindings with distinct
-   namespace IDs (positive 32-bit integers), plus current Free-plan support.
+   namespace IDs encoded as **decimal strings representing positive integers**
+   (e.g. "1001" and "1002"; distinct account-wide), plus current Free-plan support.
+   Official syntax: https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/
    The limiter is distributed/approximate and can affect shared Kita networks.
    Enforce exact binding names and kinds, never secret values.
 6. Review German Datenschutz purpose, notice, processor arrangements,
