@@ -7,6 +7,7 @@ A valid candidate is NOT evidence of live readiness or operator permission.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -81,7 +82,10 @@ def validate_synthetic_candidate(candidate: Any, contract: dict[str, Any]) -> No
     require(candidate["rate_limits"] == contract["rate_limits"])
     check_keys(candidate["namespace_ids"], {"REPORT_RATE", "REPORT_DUP"})
     first, second = candidate["namespace_ids"]["REPORT_RATE"], candidate["namespace_ids"]["REPORT_DUP"]
-    require(type(first) is int and type(second) is int and 1 <= first <= 4294967295 and 1 <= second <= 4294967295 and first != second)
+    require(type(first) is str and type(second) is str and
+            re.fullmatch(r"[1-9][0-9]{0,9}", first) is not None and
+            re.fullmatch(r"[1-9][0-9]{0,9}", second) is not None and
+            int(first) <= 4294967295 and int(second) <= 4294967295 and first != second)
     require(candidate["turnstile"] == contract["turnstile"])
     require(candidate["brevo"] == contract["brevo"])
 
