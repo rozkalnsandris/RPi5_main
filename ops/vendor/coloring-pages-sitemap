@@ -16,7 +16,7 @@ from pathlib import Path
 from urllib.parse import quote
 from xml.sax.saxutils import escape
 
-ORIGIN = "https://coloring.rozkalns.net"
+ORIGIN = "https://ausmalwiese.de"
 STATIC_URLS = (f"{ORIGIN}/", f"{ORIGIN}/kita")
 MAX_URLS = 50_000
 MAX_BYTES = 50_000_000

@@ -189,3 +189,13 @@ This is not a permanent owner blanket approval for all future sitemap
 mutations until a separately reviewed LIVE standing authorization explicitly
 defines that scope. Until then the hook must remain disabled. Source-only
 tests: `tests/test-coloring-pages-sitemap-post-publish-v1.py`.
+
+## Ausmalwiese hostname cutover candidate (2026-10-16)
+
+The historical v1 pins above are retained as historical release identities. The
+new source-only `ausmalwiese.de` candidate and its separate upgrade/activation
+gates are specified in `docs/AUSMALWIESE_SITEMAP_CUTOVER_V1.md` and
+`ops/contracts/ausmalwiese-sitemap-cutover-v1.json`. The first-install-only v1
+script's current source pin may advance for absent targets, but it still cannot
+upgrade already installed files. **No LIVE installation or sitemap publication
+is authorized by merging source.**
