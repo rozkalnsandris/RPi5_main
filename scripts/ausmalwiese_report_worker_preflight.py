@@ -60,7 +60,7 @@ def validate_contract(value: Any) -> None:
     require(value["rate_limits"] == {"REPORT_RATE": {"limit": 12, "period": 60}, "REPORT_DUP": {"limit": 1, "period": 60}})
     require(value["turnstile"] == {"action": "report", "hostnames": ["ausmalwiese.de", "www.ausmalwiese.de"]})
     require(value["brevo"] == {
-        "sender": "info@ausmalwiese.de", "api": "https://api.brevo.com/v3/smtp/email",
+        "sender": "FROM_PINNED_APP_WORKER_SOURCE", "api": "https://api.brevo.com/v3/smtp/email",
         "accepted_response": "HTTP_201_WITH_NONEMPTY_MESSAGE_ID_NOT_DELIVERED",
     })
     require(value["scope"] == {
