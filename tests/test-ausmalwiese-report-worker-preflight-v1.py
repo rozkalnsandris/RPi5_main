@@ -72,8 +72,8 @@ class ReportWorkerPreflightTests(unittest.TestCase):
 
     def test_rejects_secret_values_or_extra_fields(self):
         self.deny(lambda v: v.update(api_token="not-a-real-token"))
-        self.deny(lambda v: v["binding_kinds"].update(REPORT_TO="operator@example.test"))
-        self.deny(lambda v: v.update(recipient="operator@example.test"))
+        self.deny(lambda v: v["binding_kinds"].update(REPORT_TO="operator@example.com"))
+        self.deny(lambda v: v.update(recipient="operator@example.com"))
         self.deny(lambda v: v["binding_kinds"].update(SECRET_EXTRA="secret_text"))
 
     def test_requires_distinct_namespace_ids(self):
@@ -90,7 +90,7 @@ class ReportWorkerPreflightTests(unittest.TestCase):
         self.deny(lambda v: v["turnstile"].update(hostnames=["other.example"]))
 
     def test_rejects_brevo_transport_drift(self):
-        self.deny(lambda v: v["brevo"].update(sender="noreply@example.test"))
+        self.deny(lambda v: v["brevo"].update(sender="UNVERIFIED_SENDER"))
         self.deny(lambda v: v["brevo"].update(accepted_response="HTTP_200"))
 
     def test_rejects_contract_authority_widening(self):
