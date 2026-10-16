@@ -349,12 +349,12 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
         self.assertEqual(
             drive_ingest.public_urls_v2("kuerbis-gesicht-001", 2),
             [
-                "https://coloring.rozkalns.net/catalog.json",
-                "https://coloring.rozkalns.net/media/kuerbis-gesicht-001/thumb.webp",
-                "https://coloring.rozkalns.net/media/kuerbis-gesicht-001/preview-1.webp",
-                "https://coloring.rozkalns.net/media/kuerbis-gesicht-001/print-1.png",
-                "https://coloring.rozkalns.net/media/kuerbis-gesicht-001/preview-2.webp",
-                "https://coloring.rozkalns.net/media/kuerbis-gesicht-001/print-2.png",
+                "https://ausmalwiese.de/catalog.json",
+                "https://ausmalwiese.de/media/kuerbis-gesicht-001/thumb.webp",
+                "https://ausmalwiese.de/media/kuerbis-gesicht-001/preview-1.webp",
+                "https://ausmalwiese.de/media/kuerbis-gesicht-001/print-1.png",
+                "https://ausmalwiese.de/media/kuerbis-gesicht-001/preview-2.webp",
+                "https://ausmalwiese.de/media/kuerbis-gesicht-001/print-2.png",
             ],
         )
 
@@ -475,10 +475,10 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
                 legacy_public_source=False,
             ),
             [
-                "https://coloring.rozkalns.net/catalog.json",
-                "https://coloring.rozkalns.net/media/aviator-pup-001/thumb.webp",
-                "https://coloring.rozkalns.net/media/aviator-pup-001/preview.webp",
-                "https://coloring.rozkalns.net/media/aviator-pup-001/print.png",
+                "https://ausmalwiese.de/catalog.json",
+                "https://ausmalwiese.de/media/aviator-pup-001/thumb.webp",
+                "https://ausmalwiese.de/media/aviator-pup-001/preview.webp",
+                "https://ausmalwiese.de/media/aviator-pup-001/print.png",
             ],
         )
 
@@ -502,7 +502,7 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
             "/media/aviator-pup-001/source.png",
         )
         self.assertIn(
-            "https://coloring.rozkalns.net/media/aviator-pup-001/source.png",
+            "https://ausmalwiese.de/media/aviator-pup-001/source.png",
             drive_ingest.public_urls(
                 "aviator-pup-001",
                 legacy_public_source=True,

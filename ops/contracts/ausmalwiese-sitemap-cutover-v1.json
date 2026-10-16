@@ -13,7 +13,7 @@
   "candidate_release": {
     "generator_git_blob": "49c8ba34cf0a4c4ab100463df9adacc4c6e90c2c",
     "publisher_git_blob": "7b0330f30e27d6fe9c5f3e4fbf81fc6473ade660",
-    "drive_ingest_git_blob": "92af1d8bea517695b1d44c5416104af4778b3809"
+    "drive_ingest_git_blob": "6aba3414af9cc484bde40171f6dd815485c18e22"
   },
   "installed_targets": {
     "publisher": "/usr/local/bin/coloring-pages-sitemap-publish",
