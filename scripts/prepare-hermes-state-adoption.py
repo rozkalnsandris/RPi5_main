@@ -48,6 +48,8 @@ HASHES = {
 MAX_ENTRIES = 4096
 MAX_FILE = 32 * 1024 * 1024
 MAX_TOTAL = 256 * 1024 * 1024
+# Raw snapshots share the combined budget; config retains its smaller ceiling.
+MAX_RAW_FILE = MAX_TOTAL
 MAX_DEPTH = 12
 STATIC_LIMIT = 128 * 1024
 COLLECTOR_UID = 1000
@@ -172,7 +174,7 @@ def git_bytes(*args):
 def contract():
     return {
         'schema': 'hermes.state-adoption.v1', 'issue': 1014,
-        'revision_issue': 1018, 'entrypoint': SCRIPT,
+        'revision_issue': 1025, 'entrypoint': SCRIPT,
         'baseline_source': BASE, 'registry_baseline_source': REGISTRY_SOURCE,
         'source_hashes': HASHES,
         'source_trees': ['passwd(andris).home/hermes-deals/data/raw',
@@ -182,6 +184,7 @@ def contract():
                     str(ETC / REGISTRY_STAGE)],
         'publish_order': ['state', 'adapter', 'registry'],
         'limits': {'entries': MAX_ENTRIES, 'file_bytes': MAX_FILE,
+                   'raw_file_bytes': MAX_RAW_FILE,
                    'total_bytes': MAX_TOTAL, 'depth': MAX_DEPTH,
                    'static_file_bytes': STATIC_LIMIT},
         'identity_policy': 'strict schema and public ancestor of baseline; preserve bytes and inode',
@@ -280,9 +283,10 @@ def allowed_name(name):
     require(not name.lower().endswith(('.pem', '.key', '.db', '.sqlite', '.sqlite3', '.sql', '.bak')))
 
 
-def tree(fd, uid, gid, budget, *, depth=0, root_dev=None):
+def tree(fd, uid, gid, budget, *, depth=0, root_dev=None, file_limit=None):
     """Bounded descriptor walk; data and metadata remain in memory, never in output."""
     require(depth <= MAX_DEPTH)
+    file_limit = MAX_FILE if file_limit is None else file_limit
     before = os.fstat(fd)
     require(before.st_uid == uid and before.st_gid == gid and not before.st_mode & 0o7022)
     require(stat.S_ISDIR(before.st_mode))
@@ -304,16 +308,19 @@ def tree(fd, uid, gid, budget, *, depth=0, root_dev=None):
             child = os.open(name, DIR_FLAGS | os.O_NOATIME, dir_fd=fd)
             try:
                 require(fingerprint(os.fstat(child)) == fingerprint(st))
-                nested = tree(child, uid, gid, budget, depth=depth + 1, root_dev=root_dev)
+                nested = tree(child, uid, gid, budget, depth=depth + 1,
+                              root_dev=root_dev, file_limit=file_limit)
                 require(fingerprint(os.stat(name, dir_fd=fd, follow_symlinks=False)) == fingerprint(st))
                 result[name] = (fingerprint(st), nested)
             finally:
                 os.close(child)
         else:
             require(stat.S_ISREG(st.st_mode) and not st.st_mode & 0o7133)
+            require(0 <= st.st_size <= file_limit)
             budget[1] += st.st_size
             require(budget[1] <= MAX_TOTAL)
-            data, fp = read_file(fd, name, uid, gid, stat.S_IMODE(st.st_mode), MAX_FILE)
+            # Reject growth after stat without allocating another file-sized budget.
+            data, fp = read_file(fd, name, uid, gid, stat.S_IMODE(st.st_mode), st.st_size)
             result[name] = (fp, data)
     require(fingerprint(os.fstat(fd)) == fingerprint(before))
     return result
@@ -412,9 +419,10 @@ def verify_published_tree(fd, data, *, uid=0, gid=0,
                 require(fingerprint(os.stat(name, dir_fd=fd,
                                             follow_symlinks=False)) == fingerprint(st))
         else:
+            require(0 <= st.st_size == len(expected) <= (MAX_RAW_FILE if is_raw else MAX_FILE))
             budget[1] += st.st_size
             require(budget[1] <= MAX_TOTAL)
-            actual, _ = read_file(fd, name, uid, gid, 0o644, MAX_FILE)
+            actual, _ = read_file(fd, name, uid, gid, 0o644, len(expected))
             require(actual == expected)
     require(fingerprint(os.fstat(fd)) == fingerprint(before))
 
@@ -576,7 +584,8 @@ def execute(sha, apply, receipt):
         receipt['data_content_read'] = True
         budget = [3, 0]  # destination's fixed data/raw/config directories count too
         snapshots = {key: tree(fds[key], source.pw_uid, source.pw_gid, budget,
-                               depth=2 if key == 'raw' else 1)
+                               depth=2 if key == 'raw' else 1,
+                               file_limit=MAX_RAW_FILE if key == 'raw' else MAX_FILE)
                      for key in ('raw', 'config')}
         source_fps = {key: fingerprint(os.fstat(fds[key])) for key in snapshots}
         data = {'data': {'raw': contents(snapshots['raw'])}, 'config': contents(snapshots['config'])}
@@ -589,7 +598,8 @@ def execute(sha, apply, receipt):
             for key in snapshots:
                 require(fingerprint(os.fstat(fds[key])) == source_fps[key])
                 require(tree(fds[key], source.pw_uid, source.pw_gid, budget,
-                             depth=2 if key == 'raw' else 1) == snapshots[key])
+                             depth=2 if key == 'raw' else 1,
+                             file_limit=MAX_RAW_FILE if key == 'raw' else MAX_FILE) == snapshots[key])
 
         publish(fds['state'], fds['compose'], fds['etc'], data, candidate, final_check,
                 receipt, collector_gid=COLLECTOR_GID)

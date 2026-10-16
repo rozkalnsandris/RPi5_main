@@ -83,6 +83,57 @@ ordinary public SIMPLE-DEPLOY command and its normal receipt semantics.
 
 ## Acceptance and remaining work
 
+### Existing household ingress — #1025
+
+The legacy host source file can match the known W4 Nginx configuration without
+the household routes. A source-file hash alone does not prove which file is bound
+into the running `web` container or which configuration its workers loaded.
+The API-only SIMPLE-DEPLOY adapter does not update that independent ingress.
+
+Reuse the existing [Hermes household Nginx configuration](https://github.com/rozkalnsandris/hermes-deals/blob/a30d7f1b866f70da9f047cd117f2cf584ffcf4a7/infra/nginx.conf),
+SHA-256 `0aa93632d9c5af8effe5f3b37ef581f62906a2508e1b17252956979f71e342c5`.
+Relative to the known W4 baseline
+`c3c27c91037895002f15e82f049fcc24b274ac93857e573ff62f6236c797a5ae`,
+its only change is the existing `/ui/home` and `/ui/home/` proxy blocks.
+The `/` redirect remains `/ui`. Do not add another proxy or change DNS, Tunnel,
+ports, authentication or the generic deployer.
+
+The replacement LIVE packet must include this ingress operation explicitly:
+
+1. Before any mutation, identify exactly one running Hermes `web` container by
+   project/service labels. With explicitly authorized, filtered inspection,
+   prove its single-file read-only bind maps the fixed host
+   `passwd(andris).home/hermes-deals/infra/nginx.conf` to
+   `/etc/nginx/conf.d/default.conf`. Compare only bounded known-source hashes
+   inside and outside the container; never print raw config or full inspect.
+   Require the exact known baseline, unchanged regular single-link source inode,
+   trusted ancestors, expected metadata and a successful existing `nginx -t`.
+   Unknown mounts/configuration stop before mutation.
+2. For this confirmed single-file bind, preserve the mounted inode when replacing
+   its contents with the exact reviewed candidate; validate metadata and original
+   bytes again immediately before the bounded write, fsync, then verify the
+   candidate hash through both host and container paths. Atomic path replacement
+   alone leaves a file bind mounted to the old inode and is not sufficient.
+   This is an explicitly authorized in-place configuration write, not a generic
+   installer; interruption can leave partial disk content even while old workers
+   keep serving. Preserve evidence and stop on error; no implicit retry/rollback.
+3. After the API transition is healthy and the candidate is visible inside that
+   same container, run standard `nginx -t`, then one `nginx -s reload`, using
+   `docker exec` against the identity-verified container. Capture sanitized
+   outcomes only. Reload also resolves the `api` upstream after API recreation.
+   No web/container restart or recreation is required for this inode-preserving
+   path. Freeze the exact invocation and validation in the new LIVE packet.
+4. Verify actual HTTP routing through `web`, household assets/forms and the
+   external access boundary. A successful signal or matching file hash alone is
+   not evidence of a successful worker reload. Any failed postcheck stops the
+   remainder of the session under its declared recovery terms.
+
+The earlier packet excluded Nginx writes/reloads and used the former raw-file
+limit. It remains stopped. Do not append mutations to that authorization or
+silently replace its pinned launcher. After source merge, prepare one replacement
+packet with the new adoption source/limits and this ingress step alongside the
+already planned backup, migration, API activation and collector acceptance.
+
 Verify the private access boundary, `/ui`, `/ui/home/`, assets, forms and mobile
 layout. In an explicitly permitted test household, verify persistence across two
 sessions, stale-version rejection, origin/CSRF, store/price selection and meal
