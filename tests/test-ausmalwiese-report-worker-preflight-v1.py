@@ -25,7 +25,7 @@ def proposal():
         "routes": copy.deepcopy(cfg["routes"]),
         "binding_kinds": copy.deepcopy(cfg["binding_kinds"]),
         "rate_limits": copy.deepcopy(cfg["rate_limits"]),
-        "namespace_ids": {"REPORT_RATE": 1001, "REPORT_DUP": 1002},
+        "namespace_ids": {"REPORT_RATE": "1001", "REPORT_DUP": "1002"},
         "turnstile": copy.deepcopy(cfg["turnstile"]),
         "brevo": copy.deepcopy(cfg["brevo"]),
     }
@@ -77,7 +77,7 @@ class ReportWorkerPreflightTests(unittest.TestCase):
         self.deny(lambda v: v["binding_kinds"].update(SECRET_EXTRA="secret_text"))
 
     def test_requires_distinct_namespace_ids(self):
-        for first, second in ((1,1), (0,2), (-1,2), (4294967296,2), (True,2), ("1",2)):
+        for first, second in (("1","1"), ("0","2"), ("-1","2"), ("4294967296","2"), (True,"2"), (1,"2"), ("001","2"), ("12345678901","2")):
             self.deny(lambda v, first=first, second=second: v.update(namespace_ids={"REPORT_RATE": first, "REPORT_DUP": second}))
 
     def test_rejects_rate_limit_drift(self):
