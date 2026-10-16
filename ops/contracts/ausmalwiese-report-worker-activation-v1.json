@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "state": "SOURCE_ONLY_NOT_LIVE_AUTHORIZED",
+  "target": {
+    "worker": "coloring-pages-report-v1",
+    "zone": "ausmalwiese.de",
+    "account_sha256": "3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34",
+    "source_repo": "rozkalnsandris/coloring-pages",
+    "source_path": "cloudflare/report-worker.mjs",
+    "source_commit": "a90c6a6a7ccca2941d99e9edddd5cfa31ac9ed18",
+    "source_git_blob": "6d2359752d12f4a40847008fc7fdcc457124e893",
+    "source_sha256": "26d4e597d8c2c961c3a637957ea566654c97c5657a4b2595129c410e9fae22a1"
+  },
+  "routes": [
+    "ausmalwiese.de/api/report",
+    "ausmalwiese.de/api/report/config",
+    "www.ausmalwiese.de/api/report",
+    "www.ausmalwiese.de/api/report/config"
+  ],
+  "binding_kinds": {
+    "TURNSTILE_SITE_KEY": "plain_text",
+    "TURNSTILE_SECRET": "secret_text",
+    "BREVO_API_KEY": "secret_text",
+    "REPORT_TO": "secret_text",
+    "REPORT_RATE": "ratelimit",
+    "REPORT_DUP": "ratelimit"
+  },
+  "rate_limits": {
+    "REPORT_RATE": {"limit": 12, "period": 60},
+    "REPORT_DUP": {"limit": 1, "period": 60}
+  },
+  "turnstile": {"action": "report", "hostnames": ["ausmalwiese.de", "www.ausmalwiese.de"]},
+  "brevo": {
+    "sender": "info@ausmalwiese.de",
+    "api": "https://api.brevo.com/v3/smtp/email",
+    "accepted_response": "HTTP_201_WITH_NONEMPTY_MESSAGE_ID_NOT_DELIVERED"
+  },
+  "scope": {
+    "status": "READ_ONLY_SOURCE_PLAN",
+    "max_attempts_after_first_live_mutation": 0,
+    "merge_authorized": false,
+    "live_authorized": false,
+    "stats_worker_changes": false,
+    "credential_access": false
+  }
+}
