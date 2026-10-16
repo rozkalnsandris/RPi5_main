@@ -31,7 +31,7 @@
   },
   "turnstile": {"action": "report", "hostnames": ["ausmalwiese.de", "www.ausmalwiese.de"]},
   "brevo": {
-    "sender": "info@ausmalwiese.de",
+    "sender": "FROM_PINNED_APP_WORKER_SOURCE",
     "api": "https://api.brevo.com/v3/smtp/email",
     "accepted_response": "HTTP_201_WITH_NONEMPTY_MESSAGE_ID_NOT_DELIVERED"
   },
