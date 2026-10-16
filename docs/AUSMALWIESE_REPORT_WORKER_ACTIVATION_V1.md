@@ -60,7 +60,7 @@ credential interface, secret printout or runtime mutation.
    Do not silently reuse an unrelated widget.
 4. Require private BREVO_API_KEY and REPORT_TO, never a personal recipient
    in source, GitHub, chat, args or logs. Verify provider transactional API
-   eligibility and sender info@ausmalwiese.de. The email recipient remains
+   eligibility and sender fixed in the canonical coloring-pages report Worker source. The email recipient remains
    a secret under a separately authorized protected provisioning flow.
 5. Require REPORT_RATE (12 requests/60 s) and REPORT_DUP (1 request/60 s)
    as distinct Cloudflare Workers Rate Limiting bindings with distinct
