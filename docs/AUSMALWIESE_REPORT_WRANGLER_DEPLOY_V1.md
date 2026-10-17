@@ -166,6 +166,40 @@ The source deliberately does **not** implement a generic Cloudflare REST client.
 Any future collector that supplies this snapshot remains separately reviewed and
 read-only.
 
+### Script/Version Settings provenance correction (#1079)
+
+The first production closeout after the reviewed report deployment exposed one
+false STOP in the verification evidence source. Wrangler 4.135.0 accepted the
+pinned `--tag` and `--message`, and the deployed Worker was latest and active
+at 100%, but `wrangler versions list --json` and
+`wrangler versions view <version> --json` did not include those optional
+fields. Requiring those Wrangler JSON shapes alone to prove provenance is
+therefore not sound.
+
+Issue #1079 adds a separate source-only verifier:
+`scripts/ausmalwiese_report_wrangler_verify_v2.py`. It does **not** modify
+`scripts/ausmalwiese_report_wrangler_deploy_v1.py`, whose reviewed Git blob
+remains `c92da027aea2d2b41f1e901bd14ae91a2a4bc834`. The installed root runtime,
+sealed-memfd secret transport, one-shot deploy behavior, source/config pins,
+routes, bindings, ratelimits and Stats no-effect guard are unchanged.
+
+For post-deploy provenance, the v2 verifier treats the read-only Cloudflare
+Script/Version Settings response as the canonical annotation source:
+
+`GET /accounts/{account_id}/workers/scripts/coloring-pages-report-v1/settings`
+
+Only the sanitized `annotations` object is relevant to provenance. It must
+contain exactly `workers/tag`, `workers/message` and
+`workers/triggered_by`. The tag and message must exactly match the frozen
+source commit/blob/config provenance; `workers/triggered_by` must be a
+non-empty bounded server annotation. The adapter then supplies the validated
+tag/message to the existing legacy report snapshot shape.
+
+This new verifier is source-only data validation and command planning. It has
+no credential reader, no HTTP client and no Cloudflare execution path. A future
+LIVE collector still needs a separate explicit authorization for any
+authenticated read.
+
 ## Stats no-effect guard
 
 `coloring-pages-stats-v1` is a protected neighbor. A future LIVE preflight must
