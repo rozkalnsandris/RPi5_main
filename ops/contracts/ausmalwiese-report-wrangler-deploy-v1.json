@@ -80,5 +80,11 @@
     "retry": false,
     "rollback": false,
     "cleanup": false
+  },
+  "launcher": {
+    "future_fixed_deploy_capability": true,
+    "verifies_exact_checkout_before_dispatch": true,
+    "verifies_protected_secrets_metadata_without_reading_contents": true,
+    "current_issue_authorizes_execution": false
   }
 }

@@ -10,8 +10,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path, PurePosixPath
 import re
+import stat
+import subprocess
 import sys
 from typing import Any
 
@@ -192,6 +195,101 @@ def validate_deploy_approval(approval: Any) -> dict[str, Any]:
     return approval
 
 
+def application_evidence_from_checkout(
+    source_root: Any,
+    *,
+    runner: Any = subprocess.run,
+) -> dict[str, Any]:
+    """Bind a future deploy to one exact clean application checkout."""
+    need(type(source_root) is str and 1 <= len(source_root) <= 1024,
+         "SOURCE_ROOT_INVALID")
+    root = Path(source_root)
+    need(root.is_absolute() and root.is_dir() and not root.is_symlink(),
+         "SOURCE_ROOT_UNTRUSTED")
+
+    worker = root / WORKER_PATH
+    config_path = root / CONFIG_PATH
+    need(worker.is_file() and not worker.is_symlink(), "WORKER_FILE_UNTRUSTED")
+    need(config_path.is_file() and not config_path.is_symlink(),
+         "CONFIG_FILE_UNTRUSTED")
+
+    def git(args: list[str]) -> Any:
+        try:
+            return runner(
+                ["git", "-C", str(root)] + args,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            raise Blocked("GIT_CHECK_FAILED") from None
+
+    head = git(["rev-parse", "HEAD"])
+    need(head.returncode == 0 and head.stdout.strip() == SOURCE_COMMIT,
+         "SOURCE_COMMIT_DRIFT")
+
+    tree = git(["ls-tree", "HEAD", "--", WORKER_PATH, CONFIG_PATH])
+    need(tree.returncode == 0, "SOURCE_TREE_FAILED")
+    entries: dict[str, str] = {}
+    for line in tree.stdout.splitlines():
+        match = re.fullmatch(r"100644 blob ([0-9a-f]{40})\\t(.+)", line)
+        need(match is not None, "SOURCE_TREE_SHAPE")
+        entries[match.group(2)] = match.group(1)
+    need(
+        entries == {WORKER_PATH: WORKER_BLOB, CONFIG_PATH: CONFIG_BLOB},
+        "SOURCE_BLOB_DRIFT",
+    )
+
+    clean = git(["diff", "--quiet", "HEAD", "--", WORKER_PATH, CONFIG_PATH])
+    need(clean.returncode == 0, "SOURCE_WORKTREE_DRIFT")
+
+    try:
+        config = json.loads(config_path.read_text("utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        raise Blocked("CONFIG_READ_FAILED") from None
+
+    evidence = {
+        "schema": "ausmalwiese.report-wrangler-source.v1",
+        "repository": SOURCE_REPO,
+        "commit": SOURCE_COMMIT,
+        "worker_path": WORKER_PATH,
+        "worker_blob": WORKER_BLOB,
+        "config_path": CONFIG_PATH,
+        "config_blob": CONFIG_BLOB,
+        "config": config,
+    }
+    return validate_application_evidence(evidence)
+
+
+def validate_protected_secrets_file(
+    approval: dict[str, Any],
+    *,
+    lstat: Any = os.lstat,
+    current_uid: int | None = None,
+) -> str:
+    """Validate metadata only. Secret file contents are never read here."""
+    validate_deploy_approval(approval)
+    path = approval["secrets_file"]
+    try:
+        item = lstat(path)
+    except OSError:
+        raise Blocked("SECRETS_FILE_METADATA") from None
+    uid = os.geteuid() if current_uid is None else current_uid
+    mode = stat.S_IMODE(item.st_mode)
+    need(
+        stat.S_ISREG(item.st_mode)
+        and item.st_uid == uid
+        and item.st_nlink == 1
+        and 1 <= item.st_size <= 65536
+        and mode in {0o400, 0o600},
+        "SECRETS_FILE_UNPROTECTED",
+    )
+    return "PROTECTED_SECRETS_METADATA_OK_CONTENT_NOT_READ"
+
+
 def deploy_command(
     application: dict[str, Any],
     approval: dict[str, Any],
@@ -235,6 +333,53 @@ def deploy_command(
     ):
         need(forbidden not in command, "DEPLOY_COMMAND_SCOPE")
     return command
+
+
+def execute_deploy_once(
+    source_root: str,
+    approval: dict[str, Any],
+    *,
+    runner: Any = subprocess.run,
+    lstat: Any = os.lstat,
+    current_uid: int | None = None,
+) -> str:
+    """Future fixed-purpose launcher. Current issue does not authorize calling it."""
+    application = application_evidence_from_checkout(source_root, runner=runner)
+    validate_protected_secrets_file(
+        approval, lstat=lstat, current_uid=current_uid
+    )
+    command = deploy_command(application, approval)
+
+    def invoke(args: list[str], *, timeout: int) -> Any:
+        try:
+            return runner(
+                args,
+                cwd=source_root,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=timeout,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            raise Blocked("DEPLOY_DISPATCH_UNKNOWN") from None
+
+    version = invoke(
+        ["npx", "--yes", f"wrangler@{WRANGLER_VERSION}", "--version"],
+        timeout=60,
+    )
+    observed = (version.stdout + "\n" + version.stderr).strip()
+    need(
+        version.returncode == 0
+        and re.search(r"(?<![0-9.])4\\.135\\.0(?![0-9.])", observed)
+        is not None,
+        "WRANGLER_VERSION_DRIFT",
+    )
+
+    result = invoke(command, timeout=120)
+    need(result.returncode == 0, "DEPLOY_DISPATCH_UNKNOWN")
+    return "DEPLOY_DISPATCH_SUCCEEDED_READ_ONLY_VERIFICATION_REQUIRED"
 
 
 def read_only_verification_commands(version_id: Any) -> list[list[str]]:
@@ -393,6 +538,12 @@ def check_contract(contract: Any) -> None:
             "--tag",
             "--message",
         ],
+        "launcher": {
+            "future_fixed_deploy_capability": True,
+            "verifies_exact_checkout_before_dispatch": True,
+            "verifies_protected_secrets_metadata_without_reading_contents": True,
+            "current_issue_authorizes_execution": False,
+        },
         "post_deploy_requires": [
             "exact-source-and-config-provenance",
             "latest-equals-single-active-100-percent",
@@ -419,16 +570,32 @@ def check_contract(contract: Any) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    if args != ["--check-contract"]:
-        print(STOP)
-        return 2
     try:
         check_contract(json.loads(CONTRACT.read_text("utf-8")))
+        if args == ["--check-contract"]:
+            print("REPORT_WRANGLER_DEPLOY_PLAN_OK_SOURCE_ONLY_NO_LIVE")
+            return 0
+        if (
+            len(args) == 5
+            and args[0] == "--deploy"
+            and args[1] == "--source-root"
+            and args[3] == "--secrets-file"
+        ):
+            approval = {
+                "worker": WORKER,
+                "wrangler_version": WRANGLER_VERSION,
+                "source_commit": SOURCE_COMMIT,
+                "worker_blob": WORKER_BLOB,
+                "config_blob": CONFIG_BLOB,
+                "secrets_file": args[4],
+                "allow_deploy_once": True,
+            }
+            print(execute_deploy_once(args[2], approval))
+            return 0
     except (Blocked, OSError, ValueError, TypeError):
-        print(STOP)
-        return 2
-    print("REPORT_WRANGLER_DEPLOY_PLAN_OK_SOURCE_ONLY_NO_LIVE")
-    return 0
+        pass
+    print(STOP)
+    return 2
 
 
 if __name__ == "__main__":

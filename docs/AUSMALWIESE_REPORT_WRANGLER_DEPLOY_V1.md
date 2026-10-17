@@ -51,9 +51,7 @@ namespace drift, rate drift, or a non-10/60-second rate period.
 
 ## Future one-shot deploy shape
 
-`scripts/ausmalwiese_report_wrangler_deploy_v1.py` returns the command as data
-only after exact application evidence and a future owner gate bind the exact
-protected secrets-file path. It never executes it.
+`scripts/ausmalwiese_report_wrangler_deploy_v1.py` contains the reviewed fixed-purpose future launcher plus the command/verification validators. The current #1048 activation does **not** authorize calling its `--deploy` mode. A later separately authorized runtime invocation must supply an exact `coloring-pages` checkout root and the owner-bound protected secrets-file path.
 
 The fixed shape is equivalent to:
 
@@ -66,9 +64,11 @@ alongside `wrangler deploy`; required names declared through `secrets.required`
 are validated during deploy. `--strict` is kept so non-interactive deployment
 fails rather than silently overriding conflicting remote state.
 
-A future LIVE authorization must bind the exact source commit/blobs, Wrangler
-version, target Worker, protected secrets-file path and one deployment. This
-source issue does not authorize that operation.
+Before a future dispatch, the launcher checks the checkout HEAD equals the pinned application commit, the two Git tree blobs equal the pinned Worker/config blobs, the two working-tree paths are unchanged, the parsed config equals the closed reviewed shape, and the secrets file is an absolute single-link regular file owned by the executing UID with mode `0400` or `0600`. It reads only secrets-file metadata; Wrangler itself is the future consumer of secret contents.
+
+The launcher then verifies the exact `wrangler@4.135.0` selector reports version `4.135.0` and permits exactly one deploy dispatch. A non-zero or ambiguous deploy result becomes terminal `DEPLOY_DISPATCH_UNKNOWN`; the source contains no automatic retry, rollback or cleanup.
+
+A future LIVE authorization must bind the exact source commit/blobs, launcher release, Wrangler version, target Worker, protected secrets-file path and one deployment. This source issue does not authorize that operation.
 
 ## Read-only post-deploy verification contract
 
@@ -128,7 +128,7 @@ python3 scripts/ausmalwiese_report_wrangler_deploy_v1.py --check-contract
 python3 tests/test-ausmalwiese-report-wrangler-deploy-v1.py
 ```
 
-Passing these checks proves only source consistency. It does not prove current
+Passing these checks proves only source consistency. The `--deploy` entrypoint is deliberately present for later reviewed installation/use but was not invoked by #1048. Passing source checks does not prove current
 RPi5 installation state, Cloudflare account state, namespace uniqueness, secret
 availability, Turnstile/Brevo readiness, route activation, mail delivery, or LIVE
 authorization.

@@ -6,6 +6,8 @@ import copy
 import importlib.util
 import json
 from pathlib import Path
+from types import SimpleNamespace
+import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -218,16 +220,150 @@ class ReportWranglerDeployTests(unittest.TestCase):
             self.assertNotIn(" secret delete ", " " + item + " ")
             self.assertNotIn(" d1 execute ", " " + item + " ")
 
-    def test_source_has_no_executor_or_network_client(self):
+    def test_fixed_launcher_checks_checkout_secrets_and_dispatches_once(self):
+        calls = []
+
+        def runner(args, **kwargs):
+            calls.append(list(args))
+            if args[:4] == ["git", "-C", args[2], "rev-parse"]:
+                return SimpleNamespace(
+                    returncode=0, stdout=plan.SOURCE_COMMIT + "\n", stderr=""
+                )
+            if args[:4] == ["git", "-C", args[2], "ls-tree"]:
+                return SimpleNamespace(
+                    returncode=0,
+                    stdout=(
+                        "100644 blob " + plan.WORKER_BLOB + "\t"
+                        + plan.WORKER_PATH + "\n"
+                        + "100644 blob " + plan.CONFIG_BLOB + "\t"
+                        + plan.CONFIG_PATH + "\n"
+                    ),
+                    stderr="",
+                )
+            if args[:4] == ["git", "-C", args[2], "diff"]:
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+            if args == ["npx", "--yes", "wrangler@4.135.0", "--version"]:
+                return SimpleNamespace(
+                    returncode=0, stdout="4.135.0\n", stderr=""
+                )
+            self.assertEqual(args[:4], [
+                "npx", "--yes", "wrangler@4.135.0", "deploy"
+            ])
+            return SimpleNamespace(returncode=0, stdout="deployed", stderr="")
+
+        metadata = SimpleNamespace(
+            st_mode=plan.stat.S_IFREG | 0o600,
+            st_uid=1000,
+            st_nlink=1,
+            st_size=256,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cloudflare = root / "cloudflare"
+            cloudflare.mkdir()
+            (root / plan.WORKER_PATH).write_text("// exact git path\n", "utf-8")
+            (root / plan.CONFIG_PATH).write_text(
+                json.dumps(plan.expected_config()), "utf-8"
+            )
+            result = plan.execute_deploy_once(
+                str(root),
+                approval(),
+                runner=runner,
+                lstat=lambda _: metadata,
+                current_uid=1000,
+            )
+
+        self.assertEqual(
+            result,
+            "DEPLOY_DISPATCH_SUCCEEDED_READ_ONLY_VERIFICATION_REQUIRED",
+        )
+        deploys = [item for item in calls if item[:4] == [
+            "npx", "--yes", "wrangler@4.135.0", "deploy"
+        ]]
+        self.assertEqual(len(deploys), 1)
+        self.assertIn("--strict", deploys[0])
+        self.assertIn("--secrets-file", deploys[0])
+
+    def test_launcher_rejects_unprotected_secrets_before_dispatch(self):
+        metadata = SimpleNamespace(
+            st_mode=plan.stat.S_IFREG | 0o644,
+            st_uid=1000,
+            st_nlink=1,
+            st_size=256,
+        )
+        with self.assertRaisesRegex(plan.Blocked, "SECRETS_FILE_UNPROTECTED"):
+            plan.validate_protected_secrets_file(
+                approval(),
+                lstat=lambda _: metadata,
+                current_uid=1000,
+            )
+
+    def test_launcher_maps_post_dispatch_failure_to_terminal_unknown(self):
+        calls = []
+
+        def runner(args, **kwargs):
+            calls.append(list(args))
+            if args[0] == "git" and "rev-parse" in args:
+                return SimpleNamespace(
+                    returncode=0, stdout=plan.SOURCE_COMMIT + "\n", stderr=""
+                )
+            if args[0] == "git" and "ls-tree" in args:
+                return SimpleNamespace(
+                    returncode=0,
+                    stdout=(
+                        "100644 blob " + plan.WORKER_BLOB + "\t"
+                        + plan.WORKER_PATH + "\n"
+                        + "100644 blob " + plan.CONFIG_BLOB + "\t"
+                        + plan.CONFIG_PATH + "\n"
+                    ),
+                    stderr="",
+                )
+            if args[0] == "git" and "diff" in args:
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+            if args[-1] == "--version":
+                return SimpleNamespace(
+                    returncode=0, stdout="wrangler 4.135.0\n", stderr=""
+                )
+            return SimpleNamespace(returncode=1, stdout="", stderr="redacted")
+
+        metadata = SimpleNamespace(
+            st_mode=plan.stat.S_IFREG | 0o600,
+            st_uid=1000,
+            st_nlink=1,
+            st_size=256,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "cloudflare").mkdir()
+            (root / plan.WORKER_PATH).write_text("// path present\n", "utf-8")
+            (root / plan.CONFIG_PATH).write_text(
+                json.dumps(plan.expected_config()), "utf-8"
+            )
+            with self.assertRaisesRegex(
+                plan.Blocked, "DEPLOY_DISPATCH_UNKNOWN"
+            ):
+                plan.execute_deploy_once(
+                    str(root),
+                    approval(),
+                    runner=runner,
+                    lstat=lambda _: metadata,
+                    current_uid=1000,
+                )
+        deploys = [item for item in calls if item[:4] == [
+            "npx", "--yes", "wrangler@4.135.0", "deploy"
+        ]]
+        self.assertEqual(len(deploys), 1)
+
+    def test_source_has_no_generic_network_client_or_secret_reader(self):
         text = SOURCE.read_text("utf-8")
         for forbidden in (
-            "subprocess",
-            "os.system",
-            "os.environ",
             "requests",
             "http.client",
             "urllib.request",
             "Authorization: Bearer",
+            "read_text(approval",
+            "open(approval",
         ):
             self.assertNotIn(forbidden, text)
 
