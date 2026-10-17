@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""Offline, version-specific Stats Worker byte proof design (#1045).
+"""Simplified Wrangler version/deploy plan for Ausmalwiese Stats Worker (#1045).
 
-No Cloudflare request, token, installed operator, deployment or LIVE proof.
-The input envelope and independent inventory are NOT authenticated by this code.
+SOURCE ONLY. This module does not run Wrangler, access credentials, contact
+Cloudflare, upload a version, deploy traffic, or change routes/settings.
 """
 from __future__ import annotations
 
-import base64
-import binascii
 import hashlib
 import json
 from pathlib import Path
@@ -17,159 +15,162 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "ops/contracts/ausmalwiese-stats-version-module-proof-v1.json"
-ACCOUNT_SHA256 = "3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34"
+
 WORKER = "coloring-pages-stats-v1"
 SOURCE_REPO = "rozkalnsandris/coloring-pages"
 SOURCE_COMMIT = "9590be4276ac1781eafe38cf662b8d224653c9aa"
+SOURCE_PATH = "cloudflare/stats-worker.js"
 SOURCE_BLOB = "dd5a2859d55b9ef2d9fb9a9d8bf0a535d25a5ba4"
-MODULE = "stats-worker.js"
-MIME = "application/javascript+module"
-HOST = "api.cloudflare.com"
-UUID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
-IDENTIFIER = re.compile(r"[0-9a-f]{32}\Z")
-B64 = re.compile(r"(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?\Z")
-MAX_REPLY = 2_097_152
-MAX_MODULE = 120_000
-STOP = "STOP_STATS_VERSION_MODULE_SOURCE_ONLY"
-# Only documented response fields; unneeded fields are not copied into proof.
-VERSION_FIELDS = {
-    "id", "created_on", "number", "urls", "annotations", "assets", "bindings",
-    "cache_options", "compatibility_date", "compatibility_flags", "containers",
-    "exports", "exports_reconciliation", "limits", "main_module",
-    "migration_tag", "migrations", "modules", "package_dependencies",
-    "placement", "source", "startup_time_ms", "usage_model",
-}
+CONFIG_PATH = "cloudflare/wrangler.stats-worker.jsonc"
+VERSION_ID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
+RESOURCE_ID = re.compile(r"[0-9a-f-]{32,36}\Z")
+DATE = re.compile(r"20[0-9]{2}-[01][0-9]-[0-3][0-9]\Z")
+STOP = "STOP_STATS_WRANGLER_SOURCE_ONLY"
 
 class Blocked(Exception):
-    """One fixed error code; never echo provider data or code bytes."""
-
+    """Fixed source-only stop reason."""
 
 def need(ok: bool, reason: str) -> None:
     if not ok:
         raise Blocked(reason)
 
+def git_blob(data: bytes) -> str:
+    return hashlib.sha1(
+        b"blob " + str(len(data)).encode("ascii") + b"\0" + data
+    ).hexdigest()
 
-def fixed_get(account_id: Any, version_id: Any) -> dict[str, Any]:
-    """Non-executable HTTPS GET blueprint, never a network client."""
-    need(type(account_id) is str and IDENTIFIER.fullmatch(account_id) is not None,
-         "ACCOUNT_FORMAT")
-    need(hashlib.sha256(account_id.encode("ascii")).hexdigest() == ACCOUNT_SHA256,
-         "ACCOUNT_IDENTITY")
-    need(type(version_id) is str and UUID.fullmatch(version_id) is not None,
-         "VERSION_FORMAT")
-    return {
-        "method": "GET", "scheme": "https", "host": HOST, "port": 443,
-        "path": (f"/client/v4/accounts/{account_id}/workers/workers/{WORKER}"
-                 f"/versions/{version_id}?include=modules"),
-        "tls_verify": True, "redirects": 0, "retries": 0,
-        "credential_access": False, "dispatch_enabled": False,
+def verify_source(worker_bytes: Any) -> None:
+    need(type(worker_bytes) is bytes and 0 < len(worker_bytes) <= 120000,
+         "SOURCE_SIZE")
+    need(git_blob(worker_bytes) == SOURCE_BLOB, "SOURCE_BLOB_DRIFT")
+
+def validate_wrangler_config(cfg: Any) -> dict[str, Any]:
+    """Validate the reviewed config shape expected for future Wrangler use."""
+    need(type(cfg) is dict, "CONFIG_TYPE")
+    allowed = {
+        "$schema", "name", "main", "compatibility_date", "compatibility_flags",
+        "workers_dev", "keep_vars", "d1_databases", "ratelimits", "secrets",
     }
+    need(set(cfg) <= allowed, "CONFIG_FIELDS")
+    need(cfg.get("name") == WORKER and cfg.get("main") == SOURCE_PATH,
+         "CONFIG_TARGET")
+    need(cfg.get("workers_dev") is False and cfg.get("keep_vars") is True,
+         "CONFIG_REMOTE_STATE")
+    need(type(cfg.get("compatibility_date")) is str
+         and DATE.fullmatch(cfg["compatibility_date"]) is not None,
+         "CONFIG_COMPAT_DATE")
+    flags = cfg.get("compatibility_flags", [])
+    need(type(flags) is list and len(flags) <= 30
+         and all(type(x) is str and re.fullmatch(r"[a-z0-9_]{1,80}", x)
+                 for x in flags)
+         and len(set(flags)) == len(flags), "CONFIG_COMPAT_FLAGS")
 
+    d1 = cfg.get("d1_databases")
+    need(type(d1) is list and len(d1) == 1 and type(d1[0]) is dict
+         and set(d1[0]) == {"binding", "database_name", "database_id"}
+         and d1[0]["binding"] == "DB"
+         and type(d1[0]["database_name"]) is str
+         and 1 <= len(d1[0]["database_name"]) <= 128
+         and type(d1[0]["database_id"]) is str
+         and RESOURCE_ID.fullmatch(d1[0]["database_id"]) is not None,
+         "CONFIG_D1")
 
-def strict_json(raw: Any) -> Any:
-    need(type(raw) is bytes and 0 < len(raw) <= MAX_REPLY, "RESPONSE_BOUNDS")
+    rates = cfg.get("ratelimits")
+    need(type(rates) is list and len(rates) == 1 and type(rates[0]) is dict
+         and set(rates[0]) == {"name", "namespace_id", "simple"}
+         and rates[0]["name"] == "RATE_LIMITER"
+         and type(rates[0]["namespace_id"]) is str
+         and rates[0]["namespace_id"].isdecimal()
+         and int(rates[0]["namespace_id"]) > 0
+         and type(rates[0]["simple"]) is dict
+         and set(rates[0]["simple"]) == {"limit", "period"}
+         and type(rates[0]["simple"]["limit"]) is int
+         and type(rates[0]["simple"]["limit"]) is not bool
+         and rates[0]["simple"]["limit"] > 0
+         and rates[0]["simple"]["period"] in (10, 60),
+         "CONFIG_RATE_LIMIT")
 
-    def unique(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-        out: dict[str, Any] = {}
-        for key, value in pairs:
-            if key in out:
-                raise ValueError("duplicate")
-            out[key] = value
-        return out
+    secrets = cfg.get("secrets")
+    need(type(secrets) is dict and set(secrets) == {"required"}
+         and secrets["required"] == [
+             "CF_ANALYTICS_API_TOKEN", "VISITOR_HMAC_KEY"
+         ], "CONFIG_SECRETS")
+    return cfg
 
-    try:
-        return json.loads(raw.decode("utf-8"), object_pairs_hook=unique,
-                          parse_constant=lambda _: (_ for _ in ()).throw(ValueError()))
-    except (ValueError, UnicodeError, TypeError):
-        raise Blocked("JSON_INVALID") from None
+def upload_command(cfg: Any, worker_bytes: Any) -> list[str]:
+    """Return the exact future upload command as data; never execute it."""
+    validate_wrangler_config(cfg)
+    verify_source(worker_bytes)
+    return [
+        "npx", "wrangler", "versions", "upload", SOURCE_PATH,
+        "--config", CONFIG_PATH,
+        "--name", WORKER,
+        "--no-bundle",
+        "--keep-vars",
+        "--strict",
+        "--tag", "git:" + SOURCE_COMMIT,
+        "--message", "source-blob:" + SOURCE_BLOB,
+    ]
 
+def deploy_command(version_id: Any) -> list[str]:
+    """Return an exact-ID 100% deployment command; never execute it."""
+    need(type(version_id) is str and VERSION_ID.fullmatch(version_id) is not None,
+         "VERSION_ID")
+    return [
+        "npx", "wrangler", "versions", "deploy",
+        version_id + "@100%",
+        "--config", CONFIG_PATH,
+        "--name", WORKER,
+        "-y",
+    ]
 
-def read_module(raw: Any, expected_version: Any) -> bytes:
-    """Parse a bounded provider-shaped response; return only exact module bytes."""
-    version = strict_json(raw)
-    need(type(version) is dict
-         and set(version) <= {"success", "errors", "messages", "result"}
-         and version.get("success") is True
-         and version.get("errors") == [] and type(version.get("errors")) is list
-         and type(version.get("messages", [])) is list
-         and type(version.get("result")) is dict, "RESPONSE_STATUS")
-    item = version["result"]
-    need(set(item) <= VERSION_FIELDS
-         and item.get("id") == expected_version
-         and type(item.get("id")) is str
-         and UUID.fullmatch(item["id"]) is not None
-         and item.get("main_module") == MODULE
-         and type(item.get("modules")) is list
-         and len(item["modules"]) == 1, "VERSION_MODULE_IDENTITY")
-    entry = item["modules"][0]
-    need(type(entry) is dict
-         and set(entry) == {"name", "content_type", "content_base64"}
-         and entry["name"] == MODULE and entry["content_type"] == MIME,
-         "MODULE_SHAPE")
-    data = entry["content_base64"]
-    need(type(data) is str and 0 < len(data) <= ((MAX_MODULE + 2) // 3) * 4
-         and B64.fullmatch(data) is not None, "MODULE_BASE64")
-    try:
-        blob = base64.b64decode(data, validate=True)
-    except (binascii.Error, ValueError):
-        raise Blocked("MODULE_BASE64") from None
-    need(0 < len(blob) <= MAX_MODULE
-         and base64.b64encode(blob).decode("ascii") == data, "MODULE_BYTES")
-    return blob
+def verify_command() -> list[str]:
+    """Read-only post-deploy check for the /q behavior."""
+    return [
+        "curl", "--fail-with-body", "--silent", "--show-error",
+        "--head", "https://ausmalwiese.de/q",
+    ]
 
-
-def verify_source(source_bytes: Any) -> str:
-    """Git blob SHA-1 *binds* original bytes; their SHA-256 is the comparison."""
-    need(type(source_bytes) is bytes and 0 < len(source_bytes) <= MAX_MODULE,
-         "SOURCE_BOUNDS")
-    blob = hashlib.sha1(b"blob " + str(len(source_bytes)).encode("ascii")
-                        + b"\0" + source_bytes).hexdigest()
-    need(blob == SOURCE_BLOB, "SOURCE_BLOB_MISMATCH")
-    return hashlib.sha256(source_bytes).hexdigest()
-
-
-def verify_offline(account_id: Any, version_id: Any, raw: Any,
-                   source_bytes: Any, inventory: Any) -> dict[str, str]:
-    """Synthetic/unauthenticated comparison, NEVER deploy readiness.
-
-    A future protected collector must independently authenticate this inventory,
-    account->Worker mapping, active/latest version, full Cloudflare response and
-    source origin. A caller-supplied dict cannot serve as that proof.
-    """
-    fixed_get(account_id, version_id)
+def check_contract(c: Any) -> None:
     expected = {
-        "account_sha256": ACCOUNT_SHA256, "worker": WORKER,
-        "environment": "production", "active_version": version_id,
-        "latest_uploaded_version": version_id, "source_repo": SOURCE_REPO,
-        "source_commit": SOURCE_COMMIT, "source_blob": SOURCE_BLOB,
+        "schema_version": 2,
+        "status": "SOURCE_ONLY_SIMPLIFIED_WRANGLER_PLAN_NO_LIVE",
+        "issue": 1045,
+        "repository": "rozkalnsandris/RPi5_main",
+        "worker": WORKER,
+        "source_repo": SOURCE_REPO,
+        "source_commit": SOURCE_COMMIT,
+        "source_path": SOURCE_PATH,
+        "source_blob": SOURCE_BLOB,
+        "config_path": CONFIG_PATH,
+        "workflow": [
+            "review-and-commit-wrangler-config-in-coloring-pages",
+            "wrangler-versions-upload-no-bundle-strict",
+            "capture-exact-version-id",
+            "wrangler-versions-deploy-exact-id-at-100-percent",
+            "head-q-verify",
+        ],
+        "config_rules": {
+            "routes_or_triggers_in_config": False,
+            "plain_text_vars_in_config": False,
+            "keep_vars": True,
+            "workers_dev": False,
+            "required_d1_binding": "DB",
+            "required_rate_limit_binding": "RATE_LIMITER",
+            "required_secrets": [
+                "CF_ANALYTICS_API_TOKEN", "VISITOR_HMAC_KEY"
+            ],
+        },
+        "actions": {
+            "run_wrangler": False,
+            "credential_access": False,
+            "merge": False,
+            "live": False,
+            "retry": False,
+            "rollback": False,
+        },
     }
-    need(type(inventory) is dict and inventory == expected,
-         "INDEPENDENT_INVENTORY_REQUIRED")
-    expected_hash = verify_source(source_bytes)
-    decoded = read_module(raw, version_id)
-    need(hashlib.sha256(decoded).hexdigest() == expected_hash
-         and decoded == source_bytes, "VERSION_CODE_DRIFT")
-    return {"worker": WORKER, "version_id": version_id,
-            "module_sha256": expected_hash,
-            "state": "OFFLINE_BYTES_MATCH_NOT_AUTHENTICATED_NO_LIVE"}
-
-
-def check_contract(contract: Any) -> None:
-    fixed = {
-        "schema_version": 1, "status": "SOURCE_ONLY_OFFLINE_PROOF_NO_LIVE",
-        "issue": 1045, "repository": "rozkalnsandris/RPi5_main",
-        "account_sha256": ACCOUNT_SHA256, "worker": WORKER,
-        "source_repo": SOURCE_REPO, "source_commit": SOURCE_COMMIT,
-        "source_path": "cloudflare/stats-worker.js", "source_blob": SOURCE_BLOB,
-        "module": MODULE, "mime": MIME, "max_reply_bytes": MAX_REPLY,
-        "max_module_bytes": MAX_MODULE,
-        "get_path": "/client/v4/accounts/{account_id}/workers/workers/coloring-pages-stats-v1/versions/{version_id}?include=modules",
-        "trusted_collector_installed": False, "authenticated_evidence_available": False,
-        "merge_authorized": False, "live_authorized": False,
-        "worker_writes_enabled": False,
-    }
-    need(type(contract) is dict and contract == fixed, "CONTRACT_DRIFT")
-
+    need(type(c) is dict and c == expected, "CONTRACT_DRIFT")
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
@@ -177,13 +178,12 @@ def main(argv: list[str] | None = None) -> int:
         print(STOP)
         return 2
     try:
-        check_contract(strict_json(CONTRACT.read_bytes()))
-    except (Blocked, OSError):
+        check_contract(json.loads(CONTRACT.read_text("utf-8")))
+    except (Blocked, OSError, ValueError, TypeError):
         print(STOP)
         return 2
-    print("SOURCE_CONTRACT_OK_OFFLINE_ONLY_NO_LIVE")
+    print("STATS_WRANGLER_PLAN_OK_SOURCE_ONLY_NO_LIVE")
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())
