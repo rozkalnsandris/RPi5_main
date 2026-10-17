@@ -319,6 +319,33 @@ class AdoptionTests(unittest.TestCase):
         with self.assertRaises(m.Stop):
             self.tree(depth=2, legacy_raw=True)
 
+    def test_raw_root_gitkeep_publishes_and_verifies(self):
+        self.data['data']['raw'][m.RAW_PLACEHOLDER] = b''
+        self.publish()
+        placeholder = self.base / 'state/hermes-deals/data/raw' / m.RAW_PLACEHOLDER
+        self.assertEqual(placeholder.read_bytes(), b'')
+        self.assertEqual(stat.S_IMODE(placeholder.stat().st_mode), 0o644)
+
+    def test_published_tree_rejects_nonzero_or_nested_gitkeep(self):
+        variants = (
+            {'data': {'raw': {m.RAW_PLACEHOLDER: b'x'}}},
+            {'data': {'raw': {'nested': {m.RAW_PLACEHOLDER: b''}}}},
+        )
+        for index, data in enumerate(variants):
+            with self.subTest(data=data):
+                root = self.base / f'verify-{index}'
+                root.mkdir(mode=0o755)
+                fd = os.open(root, m.DIR_FLAGS)
+                try:
+                    m.write_tree(fd, data, uid=self.uid, gid=self.gid,
+                                 collector_gid=self.gid)
+                    with self.assertRaises(m.Stop):
+                        m.verify_published_tree(fd, data, uid=self.uid,
+                                                gid=self.gid,
+                                                collector_gid=self.gid)
+                finally:
+                    os.close(fd)
+
     def test_tree_rejects_wrong_owner_group_writable_and_acl(self):
         p = self.source_file()
         with self.assertRaises(m.Stop):
