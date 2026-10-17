@@ -79,6 +79,66 @@ class StatsTransportTests(unittest.TestCase):
                      "/client/v4/accounts/" + ACCOUNT + "/tokens"):
             self.assertFalse(tr.allowlisted_get(ACCOUNT, path, ZONE_IDS))
 
+    def test_protected_get_rechecked_even_on_constructor_bypass(self):
+        obj=object.__new__(tr.FixedHTTPS)
+        obj._account,obj._zones,obj._token,obj._calls=ACCOUNT,ZONE_IDS,"fixture-token-only",0
+        base="/client/v4/accounts/"+ACCOUNT+"/workers/scripts/"+tr.WORKER+"/deployments"
+        with self.assertRaisesRegex(tr.Blocked,"PROTECTED_INSTALL_REQUIRED"):
+            obj.get(base)
+        self.assertEqual(obj._calls,0)
+
+    def test_synthetic_http_get_success_failure_and_no_retry(self):
+        class Reply:
+            def __init__(self,status=200,body=b'{"success":true,"errors":[],"result":{"items":[]}}',
+                         typ="application/json",length=None,encoding="identity"):
+                self.status,self.body=status,body
+                self.headers={"Content-Type":typ,"Content-Encoding":encoding}
+                if length is not None:self.headers["Content-Length"]=length
+            def getheader(self,key,default=None):
+                return self.headers.get(key,default)
+            def read(self,max_bytes):
+                return self.body[:max_bytes]
+        class FakeConn:
+            def __init__(self,reply,fail=False):
+                self.reply,self.fail=reply,fail
+                self.calls=[];self.closed=False
+            def request(self,method,path,headers):
+                self.calls.append((method,path,headers))
+                if self.fail:raise RuntimeError("simulated sensitive transport error")
+            def getresponse(self):return self.reply
+            def close(self):self.closed=True
+        path="/client/v4/accounts/"+ACCOUNT+"/workers/scripts/"+tr.WORKER+"/deployments"
+        for case in (Reply(),Reply(status=302),Reply(status=401),
+                     Reply(typ="text/html"),Reply(length="65537"),
+                     Reply(encoding="gzip"),Reply(body=b'{"x":NaN}')):
+            conn=FakeConn(case)
+            obj=object.__new__(tr.FixedHTTPS)
+            obj._account,obj._zones,obj._token,obj._calls=ACCOUNT,ZONE_IDS,"synthetic-not-real",0
+            with mock.patch.object(tr,"verified_installed_release",return_value=None):
+                with mock.patch.object(tr.http.client,"HTTPSConnection",return_value=conn) as make:
+                    if case.status==200 and case.headers["Content-Type"]=="application/json" and case.headers["Content-Encoding"]=="identity" and case.getheader("Content-Length") is None and b'NaN' not in case.body:
+                        result=obj.get(path)
+                        self.assertEqual(result,{"items":[]})
+                    else:
+                        with self.assertRaises(tr.Blocked):
+                            obj.get(path)
+            make.assert_called_once()
+            self.assertEqual(len(conn.calls),1)
+            self.assertTrue(conn.closed)
+            self.assertEqual(obj._calls,1)
+            self.assertEqual(conn.calls[0][0],"GET")
+            self.assertTrue(conn.calls[0][1].endswith("/deployments"))
+        conn=FakeConn(Reply(),fail=True)
+        obj=object.__new__(tr.FixedHTTPS)
+        obj._account,obj._zones,obj._token,obj._calls=ACCOUNT,ZONE_IDS,"synthetic-not-real",0
+        with mock.patch.object(tr,"verified_installed_release",return_value=None):
+            with mock.patch.object(tr.http.client,"HTTPSConnection",return_value=conn) as make:
+                with self.assertRaisesRegex(tr.Blocked,"READ_TRANSPORT_UNCERTAIN"):
+                    obj.get(path)
+        make.assert_called_once()
+        self.assertEqual(len(conn.calls),1)
+        self.assertEqual(obj._calls,1)
+
     def test_duplicate_json_and_nonfinite_fail(self):
         for body in (b'{"x":1,"x":2}', b'{"x":NaN}', b'\xff', b''):
             with self.subTest(body=body):
