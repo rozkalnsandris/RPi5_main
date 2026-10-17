@@ -332,12 +332,58 @@ def _safe_output(snapshot: Any, digest: Any) -> dict[str, Any]:
     return {"inventory": snapshot, "inventory_sha256": digest}
 
 
+def _stage_args(stage: str, new_version_id: str | None) -> dict[str, Any]:
+    if stage == "after_upload":
+        if not isinstance(new_version_id, str) or not UUID_RE.fullmatch(
+            new_version_id
+        ):
+            raise Stop("new_version_required")
+        return {"stage": stage, "new_version_id": new_version_id}
+    if stage == "before":
+        if new_version_id is not None:
+            raise Stop("new_version_not_allowed")
+        return {"stage": stage}
+    raise Stop("stage_invalid")
+
+
+def _validate_stage_snapshot(
+    snapshot: dict[str, Any],
+    *,
+    stage: str,
+    new_version_id: str | None,
+) -> None:
+    active = snapshot.get("active_versions")
+    if (
+        not isinstance(active, list)
+        or len(active) != 1
+        or not isinstance(active[0], dict)
+        or active[0].get("version_id") != BASELINE_VERSION
+        or active[0].get("percentage") != 100
+    ):
+        raise Stop("normalized_stage_invalid")
+    if stage == "before":
+        if (
+            snapshot.get("source_class") != "script_api"
+            or snapshot.get("latest_uploaded_version") != BASELINE_VERSION
+        ):
+            raise Stop("normalized_stage_invalid")
+    elif stage == "after_upload":
+        if (
+            snapshot.get("source_class") != "wrangler_versions_upload"
+            or snapshot.get("latest_uploaded_version") != new_version_id
+        ):
+            raise Stop("normalized_stage_invalid")
+    else:
+        raise Stop("stage_invalid")
+
+
 def run_once(
     expected_main: str,
     *,
     stage: str,
     new_version_id: str | None = None,
 ) -> dict[str, Any]:
+    kwargs = _stage_args(stage, new_version_id)
     trusted_entry()
     normalizer_bytes, account_digest = verified_install(expected_main)
     account, token = checked_credential(account_digest)
@@ -371,19 +417,6 @@ def run_once(
         account, token, detail_spec, normalizer["decode_reply"]
     )
 
-    kwargs: dict[str, Any] = {"stage": stage}
-    if stage == "after_upload":
-        if not isinstance(new_version_id, str) or not UUID_RE.fullmatch(
-            new_version_id
-        ):
-            raise Stop("new_version_required")
-        kwargs["new_version_id"] = new_version_id
-    elif stage == "before":
-        if new_version_id is not None:
-            raise Stop("new_version_not_allowed")
-    else:
-        raise Stop("stage_invalid")
-
     try:
         snapshot = normalizer["build_inventory"](
             versions_payload,
@@ -394,6 +427,11 @@ def run_once(
         digest = normalizer["canonical_sha256"](snapshot)
     except Exception:
         raise Stop("normalization_failed") from None
+    _validate_stage_snapshot(
+        snapshot,
+        stage=stage,
+        new_version_id=new_version_id,
+    )
     return _safe_output(snapshot, digest)
 
 
