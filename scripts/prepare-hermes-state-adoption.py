@@ -31,9 +31,12 @@ EXECUTOR = Path('/usr/local/libexec/rozkalns-simple-deployer/simple_deploy_v1.py
 ADAPTER = 'hermes-deals-household-api.yml'
 LEGACY = 'hermes-deals-api.yml'
 ENV = 'hermes-deals-api.env'
-STATE_STAGE = '.hermes-deals-prerequisites-v1.staged'
-ADAPTER_STAGE = '.hermes-deals-household-api.yml.adoption-v1.staged'
-REGISTRY_STAGE = '.targets.json.hermes-adoption-v1.staged'
+STATE_STAGE = '.hermes-deals-prerequisites-v2.staged'
+ADAPTER_STAGE = '.hermes-deals-household-api.yml.adoption-v2.staged'
+REGISTRY_STAGE = '.targets.json.hermes-adoption-v2.staged'
+HISTORICAL_STATE_STAGE = '.hermes-deals-prerequisites-v1.staged'
+HISTORICAL_ADAPTER_STAGE = '.hermes-deals-household-api.yml.adoption-v1.staged'
+HISTORICAL_REGISTRY_STAGE = '.targets.json.hermes-adoption-v1.staged'
 BASE_REGISTRY = 'ops/deploy/baselines/simple-deploy-targets-cv-stats-1000-v1.json'
 NEW_REGISTRY = 'ops/deploy/simple-deploy-targets-v1.json'
 ADAPTER_SOURCE = 'ops/deploy/simple-deploy-compose/' + ADAPTER
@@ -250,6 +253,11 @@ def contract():
         'destination': str(STATE / 'hermes-deals'),
         'staging': [str(STATE / STATE_STAGE), str(ETC / 'compose' / ADAPTER_STAGE),
                     str(ETC / REGISTRY_STAGE)],
+        'historical_staging_evidence': [
+            str(STATE / HISTORICAL_STATE_STAGE),
+            str(ETC / 'compose' / HISTORICAL_ADAPTER_STAGE),
+            str(ETC / HISTORICAL_REGISTRY_STAGE),
+        ],
         'publish_order': ['state', 'adapter', 'registry'],
         'limits': {'entries': MAX_ENTRIES, 'file_bytes': MAX_FILE,
                    'raw_file_bytes': MAX_RAW_FILE,
