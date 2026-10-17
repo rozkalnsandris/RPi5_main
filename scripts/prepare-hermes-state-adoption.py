@@ -16,6 +16,7 @@ import re
 import resource
 import stat
 import subprocess
+from typing import NamedTuple
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = 'scripts/prepare-hermes-state-adoption.py'
@@ -47,9 +48,9 @@ HASHES = {
 }
 MAX_ENTRIES = 4096
 MAX_FILE = 32 * 1024 * 1024
-MAX_TOTAL = 256 * 1024 * 1024
-# Raw snapshots share the combined budget; config retains its smaller ceiling.
-MAX_RAW_FILE = MAX_TOTAL
+MAX_TOTAL = 4 * 1024 * 1024 * 1024
+MAX_RAW_FILE = 128 * 1024 * 1024
+STREAM_CHUNK = 64 * 1024
 MAX_DEPTH = 12
 STATIC_LIMIT = 128 * 1024
 COLLECTOR_UID = 1000
@@ -157,6 +158,72 @@ def unique_json(raw):
     return json.loads(raw, object_pairs_hook=pairs)
 
 
+class FileSnapshot(NamedTuple):
+    """Bounded metadata only; root descriptors stay open for the entire apply."""
+    root_fd: int
+    root_fp: tuple
+    parents: tuple
+    name: str
+    fp: tuple
+    sha256: str
+
+    @property
+    def size(self):
+        return self.fp[5]
+
+
+def stream_file(fd, name, uid, gid, mode, limit, *, expected_fp=None, sink=None):
+    before = os.stat(name, dir_fd=fd, follow_symlinks=False)
+    file_meta(before, uid, gid, mode)
+    require(0 <= before.st_size <= limit)
+    if expected_fp is not None:
+        require(fingerprint(before) == expected_fp)
+    child = os.open(name, READ_FLAGS, dir_fd=fd)
+    try:
+        require(fingerprint(os.fstat(child)) == fingerprint(before))
+        no_acl(child)
+        checksum = hashlib.sha256()
+        length = 0
+        while True:
+            part = os.read(child, min(STREAM_CHUNK, before.st_size + 1 - length))
+            if not part:
+                break
+            length += len(part)
+            require(length <= before.st_size)
+            checksum.update(part)
+            if sink is not None:
+                write_all(sink, part)
+        require(length == before.st_size)
+        require(fingerprint(os.fstat(child)) == fingerprint(before))
+        require(fingerprint(os.stat(name, dir_fd=fd, follow_symlinks=False)) == fingerprint(before))
+        return checksum.hexdigest(), fingerprint(before)
+    finally:
+        os.close(child)
+
+
+@contextmanager
+def source_parent(snapshot):
+    """Reopen the recorded ancestry without following replaced directories."""
+    with ExitStack() as stack:
+        fd = snapshot.root_fd
+        require(fingerprint(os.fstat(fd)) == snapshot.root_fp)
+        no_acl(fd)
+        opened = []
+        for name, expected in snapshot.parents:
+            require(fingerprint(os.stat(name, dir_fd=fd, follow_symlinks=False)) == expected)
+            child = os.open(name, DIR_FLAGS | os.O_NOATIME, dir_fd=fd)
+            stack.callback(os.close, child)
+            require(fingerprint(os.fstat(child)) == expected)
+            no_acl(child)
+            opened.append((fd, name, child, expected))
+            fd = child
+        yield fd
+        for parent, name, child, expected in reversed(opened):
+            require(fingerprint(os.fstat(child)) == expected)
+            require(fingerprint(os.stat(name, dir_fd=parent, follow_symlinks=False)) == expected)
+        require(fingerprint(os.fstat(snapshot.root_fd)) == snapshot.root_fp)
+
+
 def git(*args):
     return subprocess.run(
         ['/usr/bin/git', '--no-optional-locks', '-c', f'safe.directory={ROOT}',
@@ -174,7 +241,7 @@ def git_bytes(*args):
 def contract():
     return {
         'schema': 'hermes.state-adoption.v1', 'issue': 1014,
-        'revision_issue': 1025, 'entrypoint': SCRIPT,
+        'revision_issue': 1034, 'entrypoint': SCRIPT,
         'baseline_source': BASE, 'registry_baseline_source': REGISTRY_SOURCE,
         'source_hashes': HASHES,
         'source_trees': ['passwd(andris).home/hermes-deals/data/raw',
@@ -185,6 +252,7 @@ def contract():
         'publish_order': ['state', 'adapter', 'registry'],
         'limits': {'entries': MAX_ENTRIES, 'file_bytes': MAX_FILE,
                    'raw_file_bytes': MAX_RAW_FILE,
+                   'stream_chunk_bytes': STREAM_CHUNK,
                    'total_bytes': MAX_TOTAL, 'depth': MAX_DEPTH,
                    'static_file_bytes': STATIC_LIMIT},
         'identity_policy': 'strict schema and public ancestor of baseline; preserve bytes and inode',
@@ -193,6 +261,7 @@ def contract():
         'raw_destination': 'root:collector-group directories 03775; root:root files 0644',
         'quiescence': 'generic and Hermes instance inactive; apply also requires collector/monitor services inactive and timers disabled',
         'default_data_content_read': False, 'default_mutation': False,
+        'data_snapshot': 'metadata and SHA-256 only; bounded streaming copy and verification',
         'apply_requires_separate_live_authorization': True,
         'activation_eligible': False, 'retry': False, 'rollback': False, 'error_cleanup': False,
     }
@@ -283,11 +352,14 @@ def allowed_name(name):
     require(not name.lower().endswith(('.pem', '.key', '.db', '.sqlite', '.sqlite3', '.sql', '.bak')))
 
 
-def tree(fd, uid, gid, budget, *, depth=0, root_dev=None, file_limit=None):
-    """Bounded descriptor walk; data and metadata remain in memory, never in output."""
+def tree(fd, uid, gid, budget, *, depth=0, root_dev=None, file_limit=None,
+         root_fd=None, root_fp=None, parents=()):
+    """Bounded descriptor walk; retain metadata/digests, never file contents."""
     require(depth <= MAX_DEPTH)
     file_limit = MAX_FILE if file_limit is None else file_limit
     before = os.fstat(fd)
+    if root_fd is None:
+        root_fd, root_fp = fd, fingerprint(before)
     require(before.st_uid == uid and before.st_gid == gid and not before.st_mode & 0o7022)
     require(stat.S_ISDIR(before.st_mode))
     no_acl(fd)
@@ -309,7 +381,9 @@ def tree(fd, uid, gid, budget, *, depth=0, root_dev=None, file_limit=None):
             try:
                 require(fingerprint(os.fstat(child)) == fingerprint(st))
                 nested = tree(child, uid, gid, budget, depth=depth + 1,
-                              root_dev=root_dev, file_limit=file_limit)
+                              root_dev=root_dev, file_limit=file_limit,
+                              root_fd=root_fd, root_fp=root_fp,
+                              parents=(*parents, (name, fingerprint(st))))
                 require(fingerprint(os.stat(name, dir_fd=fd, follow_symlinks=False)) == fingerprint(st))
                 result[name] = (fingerprint(st), nested)
             finally:
@@ -320,8 +394,9 @@ def tree(fd, uid, gid, budget, *, depth=0, root_dev=None, file_limit=None):
             budget[1] += st.st_size
             require(budget[1] <= MAX_TOTAL)
             # Reject growth after stat without allocating another file-sized budget.
-            data, fp = read_file(fd, name, uid, gid, stat.S_IMODE(st.st_mode), st.st_size)
-            result[name] = (fp, data)
+            checksum, fp = stream_file(fd, name, uid, gid, stat.S_IMODE(st.st_mode),
+                                       st.st_size, expected_fp=fingerprint(st))
+            result[name] = (fp, FileSnapshot(root_fd, root_fp, parents, name, fp, checksum))
     require(fingerprint(os.fstat(fd)) == fingerprint(before))
     return result
 
@@ -344,7 +419,15 @@ def new_file(fd, name, value, mode, *, uid=0, gid=0):
     try:
         os.fchown(child, uid, gid)
         no_acl(child)
-        write_all(child, value)
+        if isinstance(value, FileSnapshot):
+            with source_parent(value) as source:
+                checksum, _ = stream_file(source, value.name, value.fp[2], value.fp[3],
+                                          stat.S_IMODE(value.fp[4]), value.size,
+                                          expected_fp=value.fp, sink=child)
+                require(checksum == value.sha256)
+        else:
+            # Small public static artifacts; production data uses FileSnapshot.
+            write_all(child, value)
         os.fchmod(child, mode)
         os.fsync(child)
         return fingerprint(os.fstat(child))
@@ -419,11 +502,14 @@ def verify_published_tree(fd, data, *, uid=0, gid=0,
                 require(fingerprint(os.stat(name, dir_fd=fd,
                                             follow_symlinks=False)) == fingerprint(st))
         else:
-            require(0 <= st.st_size == len(expected) <= (MAX_RAW_FILE if is_raw else MAX_FILE))
+            size = expected.size if isinstance(expected, FileSnapshot) else len(expected)
+            checksum = expected.sha256 if isinstance(expected, FileSnapshot) else digest(expected)
+            require(0 <= st.st_size == size <= (MAX_RAW_FILE if is_raw else MAX_FILE))
             budget[1] += st.st_size
             require(budget[1] <= MAX_TOTAL)
-            actual, _ = read_file(fd, name, uid, gid, 0o644, len(expected))
-            require(actual == expected)
+            actual, _ = stream_file(fd, name, uid, gid, 0o644, size,
+                                    expected_fp=fingerprint(st))
+            require(actual == checksum)
     require(fingerprint(os.fstat(fd)) == fingerprint(before))
 
 
@@ -589,8 +675,8 @@ def execute(sha, apply, receipt):
                      for key in ('raw', 'config')}
         source_fps = {key: fingerprint(os.fstat(fds[key])) for key in snapshots}
         data = {'data': {'raw': contents(snapshots['raw'])}, 'config': contents(snapshots['config'])}
-        require(isinstance(data['config'].get('sources.json'), bytes)
-                and len(data['config']['sources.json']) > 0)
+        require(isinstance(data['config'].get('sources.json'), FileSnapshot)
+                and data['config']['sources.json'].size > 0)
 
         def final_check():
             revalidate()
