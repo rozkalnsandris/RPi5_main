@@ -74,7 +74,8 @@ STOP = "STOP_REPORT_WRANGLER_DEPLOY_SOURCE_ONLY"
 
 RUNTIME_BOUNDARY_ISSUE = 1075
 RUNTIME_ENTRY = Path("/usr/local/sbin/rpi5-ausmalwiese-report-wrangler-deploy")
-RUNTIME_SOURCE_ROOT = "/home/andris/coloring-pages"
+RUNTIME_HOME_ROOT = Path("/home")
+RUNTIME_CONTRACT_SOURCE_ROOT = "<fixed-operator-home>/coloring-pages"
 RUNTIME_SECRETS_FILE = (
     "/etc/rpi5-secrets/cloudflare/ausmalwiese-report-wrangler-secrets.json"
 )
@@ -82,7 +83,8 @@ RUNTIME_SECRETS_STDIN = "/dev/stdin"
 RUNTIME_OPERATOR = "andris"
 RUNTIME_OPERATOR_UID = 1000
 RUNTIME_OPERATOR_GID = 1000
-RUNTIME_OPERATOR_HOME = "/home/andris"
+RUNTIME_OPERATOR_HOME = str(RUNTIME_HOME_ROOT / RUNTIME_OPERATOR)
+RUNTIME_SOURCE_ROOT = str(Path(RUNTIME_OPERATOR_HOME) / "coloring-pages")
 RUNTIME_CONFIRM = "OWNER-AUTHORIZED-REPORT-WRANGLER-DEPLOY"
 NPX = "/usr/bin/npx"
 RUNTIME_ENTRY_PARENTS = ("/", "/usr", "/usr/local", "/usr/local/sbin")
@@ -838,7 +840,7 @@ def check_contract(contract: Any) -> None:
             "current_issue_authorizes_execution": False,
             "root_owned_runtime_boundary_issue": RUNTIME_BOUNDARY_ISSUE,
             "runtime_entry": str(RUNTIME_ENTRY),
-            "runtime_source_root": RUNTIME_SOURCE_ROOT,
+            "runtime_source_root": RUNTIME_CONTRACT_SOURCE_ROOT,
             "runtime_secrets_file": RUNTIME_SECRETS_FILE,
             "runtime_secrets_transport": "sealed-memfd-via-dev-stdin",
             "runtime_operator": RUNTIME_OPERATOR,
