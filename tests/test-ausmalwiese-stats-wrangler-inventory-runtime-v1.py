@@ -636,7 +636,7 @@ class InstallerTests(unittest.TestCase):
     def test_upgrade_requires_exact_old_release_and_checkout_gate(self):
         self.assertEqual(
             installer.OLD_RELEASE_SHA,
-            "ce4f6594418d4ec9d91ee96ec37ba34e14bdb6a5",
+            "a48744ae941c5e5cfcbe4a01da0bd4a1618e266d",
         )
         with mock.patch.object(installer, "checked_checkout") as checkout, \
              mock.patch.object(
