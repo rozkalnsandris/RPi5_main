@@ -2,13 +2,18 @@
 
 Status: **SOURCE ONLY / SEPARATE LIVE AUTHORIZATION REQUIRED**.
 
-Revision #1025 allows a raw snapshot to use the existing combined 256 MiB
-raw/config budget. Config retains the 32 MiB per-file ceiling. This removes an
-unnecessary raw-file partition of the same bounded snapshot; it does not raise
-the total copied bytes or prove that production fits. The contract's `file_bytes`
-is the default/config ceiling and `raw_file_bytes` overrides it only for raw.
-Old launchers and authorizations remain bound to their old limits and must not
-be edited or reused. Prepare a new exact-source execution packet after review.
+Revision #1034 replaces whole-file byte snapshots with metadata and SHA-256
+records. Data reads, staging copies and destination verification use chunks of
+at most 64 KiB. The combined raw/config ceiling is 4 GiB, raw files are capped
+at 128 MiB and config files retain 32 MiB. These ceilings provide headroom for
+the measured approximately 1.87 GiB data set and approximately 82.8 MiB largest
+raw file; they are not a claim that future production state fits. The contract's
+`file_bytes` is the default/config ceiling; `raw_file_bytes` overrides it only
+for raw. Entry/depth limits and publication/identity policy are unchanged.
+
+This supersedes #1025's 256 MiB combined in-memory design. Old launchers and
+authorizations remain bound to their old limits and must not be edited or
+reused. Prepare a new exact-source execution packet after review.
 
 Revision #1018 corrects the destination raw-directory permissions required by
 the existing UID:GID `1000:1000` scheduled collectors. It does not execute the
@@ -20,7 +25,8 @@ one-time copy. No timer is changed by this operator.
 
 Revision #1014 supersedes #990's registry baseline after the CV-only stats
 registry update. This revision accepts only the exact CV-updated fixture;
-it retains the original identity-provenance anchor and all publication limits.
+it retained the original identity-provenance anchor and publication limits of
+that revision; #1034 revises only the data byte ceilings and streaming mechanics.
 The old Weather-rebind baseline and historical Hermes-only output are rejected.
 Receipt schema and CLI flags are unchanged; exact-source authorization must bind
 the revised operator and contract.
@@ -98,24 +104,43 @@ owner authorization. Source merge or START is not that authorization.
 `--apply` additionally reads only the passwd-resolved `andris` source checkout's
 `data/raw` and `config` trees. It never opens the sibling `.env`, Docker storage,
 database or backup trees. Bounds apply across both trees and fixed destination
-structure: 4,096 entries, 256 MiB total across raw and config, 256 MiB per raw
-file, 32 MiB per config file, 12 levels of depth. A raw file exactly 256 MiB
-cannot fit alongside the required nonempty config. Each read is additionally
-bounded by its checked file size (plus one byte to detect growth).
+structure: 4,096 entries, 4 GiB total across raw and config, 128 MiB per raw
+file, 32 MiB per config file, 12 levels of depth. Each streaming read requests
+at most 64 KiB and is bounded by the checked file size (plus one byte to detect
+growth); the extra byte is never written to the destination.
 Only regular single-link non-executable files and real directories are accepted;
 symlinks, special files, group/other write access, unexpected ownership, ACLs,
 cross-device traversal, hidden entries and key/database/backup suffixes are rejected.
 The config snapshot must contain a nonempty regular `sources.json`. These are
 hard fail-closed ceilings, not observations of production size.
 
-The complete bounded snapshot is held in memory. Core dumps are disabled; no
-content, filename listing, content hash or exception text is printed. Source
-metadata and bytes are compared again before each publication. This is a point-in-time
-copy, not ongoing synchronization with legacy collectors; quiescing or cutting over
+Only bounded metadata/digest records are retained in memory, never the complete
+file contents. Each record binds the still-open source-root descriptor, recorded
+directory ancestry, file metadata, size and SHA-256. Before a staging copy,
+ancestors are reopened descriptor-relatively without following symlinks and
+compared with the original fingerprints. Each file is copied incrementally and
+must match its recorded metadata and digest before the staged file is completed.
+Root/ancestor fingerprints are rechecked after the copy. Static public artifacts
+continue to use the existing at-most-128-KiB byte reader.
+
+Core dumps are disabled; no content, filename listing, content hash or exception
+text is printed. Source metadata and streamed content hashes are compared again
+before each publication; staged/published content is independently streamed and
+hashed against the same records. This is a point-in-time copy, not ongoing
+synchronization with legacy collectors; quiescing or cutting over
 collectors is outside this operation. The fixed collector timers must already be
 disabled before data content is read, and a later API cutover still needs its
 own collector-write/API-read proof.
 Concurrent source writes cause STOP when detected, never silent merging.
+
+Streaming bounds memory, not total I/O or duration: existing full revalidation
+passes are retained. The replacement execution packet must allow a bounded
+longer operator runtime (up to 3600 seconds), replacing the old launcher's
+180-second budget in a newly pinned launcher, never by editing a frozen one.
+It must check available disk against the actual copy plus DB dump/restore needs
+and a margin before first mutation. An old 12 GiB free-space observation is not
+automatically sufficient for the expanded worst-case copy budget. These are
+preflight/packet requirements, not authorization to read or modify the host.
 
 The only allowed publication paths are:
 
