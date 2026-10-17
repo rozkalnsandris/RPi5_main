@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "status": "SOURCE_ONLY_OFFLINE_PROOF_NO_LIVE",
+  "issue": 1045,
+  "repository": "rozkalnsandris/RPi5_main",
+  "account_sha256": "3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34",
+  "worker": "coloring-pages-stats-v1",
+  "source_repo": "rozkalnsandris/coloring-pages",
+  "source_commit": "9590be4276ac1781eafe38cf662b8d224653c9aa",
+  "source_path": "cloudflare/stats-worker.js",
+  "source_blob": "dd5a2859d55b9ef2d9fb9a9d8bf0a535d25a5ba4",
+  "module": "stats-worker.js",
+  "mime": "application/javascript+module",
+  "max_reply_bytes": 2097152,
+  "max_module_bytes": 120000,
+  "get_path": "/client/v4/accounts/{account_id}/workers/workers/coloring-pages-stats-v1/versions/{version_id}?include=modules",
+  "trusted_collector_installed": false,
+  "authenticated_evidence_available": false,
+  "merge_authorized": false,
+  "live_authorized": false,
+  "worker_writes_enabled": false
+}
