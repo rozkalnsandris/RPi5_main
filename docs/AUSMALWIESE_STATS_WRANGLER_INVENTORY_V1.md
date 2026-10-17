@@ -127,3 +127,27 @@ protected runtime must:
 Credential provisioning, authenticated GET execution, host installation, merge
 and the one-time takeover remain separate owner decisions. No route, D1, secret,
 Worker, deployment or setting mutation is authorized by this issue.
+
+
+## Cloudflare V4 list-envelope correction — Issue #1058
+
+A protected read-only collection on 2026-10-17 stopped fail-closed before a
+usable inventory was produced. No retry was performed. Source review against
+the current official Cloudflare API reference found that this parser's original
+synthetic fixture did not match the documented V4 list envelopes.
+
+The corrected source contract is:
+
+- versions: `result` is exactly an object containing `items`; the first item
+  is the latest version. `result_info` is not required or accepted because it
+  is not part of the documented response shape for this endpoint;
+- deployments: `result` is exactly an object containing `deployments`; the
+  first deployment is the latest one actively serving traffic.
+  `result_info` is optional; if supplied it is validated strictly;
+- exact-version detail remains non-paginated.
+
+The parser still requests at most two list entries, verifies sequential version
+ordering when two are returned, requires one 100% active version, and preserves
+all existing identity/binding/settings/leakage checks. This correction changes
+provider-envelope parsing only; it grants no credential, Cloudflare or LIVE
+authority.

@@ -127,3 +127,18 @@ This merged source, when later approved, still does not itself grant:
 - the one-time non-strict Wrangler takeover.
 
 Those remain separate explicit owner gates. Merge never authorizes LIVE.
+
+
+## Provider-envelope failure mapping — Issue #1058
+
+The first separately authorized protected collection on 2026-10-17 stopped
+fail-closed with `STOP: trusted_runtime_failed`. Source review found the
+installed normalizer expected a legacy synthetic versions list shape while the
+current Cloudflare V4 reference documents `result.items`.
+
+The corrected runtime keeps the same fixed three-GET plan and secret boundary.
+It additionally catches the pre-detail versions parser boundary and returns the
+static `versions_normalization_failed` STOP code without printing normalizer
+exception text or provider payload. A future collection requires a new reviewed
+release/install and a separate owner LIVE authorization; this source correction
+does not authorize a retry.

@@ -399,7 +399,10 @@ def run_once(
     versions_payload = single_get(
         account, token, versions_spec, normalizer["decode_reply"]
     )
-    latest_id, _ = normalizer["parse_versions"](versions_payload)
+    try:
+        latest_id, _ = normalizer["parse_versions"](versions_payload)
+    except Exception:
+        raise Stop("versions_normalization_failed") from None
     if not isinstance(latest_id, str) or not UUID_RE.fullmatch(latest_id):
         raise Stop("latest_version_invalid")
 
