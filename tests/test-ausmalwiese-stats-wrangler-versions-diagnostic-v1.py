@@ -36,6 +36,10 @@ EXPECTED_MAPPING = {
     "API_ENVELOPE_FIELDS": "envelope",
     "API_FAILURE": "api_failure",
     "PAGINATION_MODE": "pagination",
+    "PAGINATION": "pagination",
+    "PAGINATION_FIELDS": "pagination",
+    "PAGINATION_DRIFT": "pagination",
+    "PAGINATION_PAGES": "pagination",
     "PAGINATION_UNEXPECTED": "pagination",
     "VERSIONS_RESULT": "result_shape",
     "VERSIONS_COUNT": "item_count",
@@ -122,6 +126,20 @@ class VersionsDiagnosticTests(unittest.TestCase):
         version_id, source = plan.parse_versions(payload)
         self.assertEqual(version_id, plan.BASELINE_VERSION)
         self.assertEqual(source, "api")
+
+    def test_versions_pagination_failure_is_sanitized(self):
+        bad = versions()
+        bad["result_info"] = {
+            "page": 2,
+            "per_page": 2,
+            "count": 2,
+            "total_count": 2,
+            "total_pages": 1,
+        }
+        self.assertEqual(
+            plan.classify_versions_failure(bad),
+            "pagination",
+        )
 
     def test_runtime_surfaces_static_class_and_stops_before_second_get(self):
         bad = versions()

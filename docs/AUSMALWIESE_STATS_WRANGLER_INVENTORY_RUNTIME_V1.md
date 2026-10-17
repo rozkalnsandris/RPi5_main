@@ -146,10 +146,11 @@ does not authorize a retry.
 
 ## Bounded installed-runtime upgrade — Issue #1060
 
-The currently installed protected inventory release is the reviewed #1056
-release at `660deee749ca684e979a720fe69c66aee2b62e3d`. The original installer is
-intentionally no-overwrite, so it remains the only valid path for a first
-installation.
+At the time of issue #1060, the installed protected inventory release was the
+reviewed #1056 release at `660deee749ca684e979a720fe69c66aee2b62e3d`.
+That one-hop upgrade was later applied successfully to
+`ce4f6594418d4ec9d91ee96ec37ba34e14bdb6a5`. The original installer remains
+intentionally no-overwrite for a first installation.
 
 Issue #1060 adds a separate, exact-old-release upgrade mode. It accepts only
 that one installed source SHA and only after proving all of the following before
@@ -184,18 +185,44 @@ request or retry. Once the first replacement dispatch starts, any failure or
 ambiguity is terminal STOP with no automatic retry, rollback or cleanup.
 
 
+## Next bounded runtime hop — issue #1067
+
+The current installed protected runtime is now exactly
+`ce4f6594418d4ec9d91ee96ec37ba34e14bdb6a5`. Issue #1067 repins the bounded
+upgrade source to that exact old release so a future reviewed parser correction
+can be installed without creating a generic upgrade mechanism.
+
+The same fail-closed contract remains:
+
+- exact clean reviewed `main` for the new source;
+- exact old executor/normalizer/release bytes reconstructed from Git at
+  `ce4f6594418d4ec9d91ee96ec37ba34e14bdb6a5`;
+- exact root ownership/modes and no symlink targets;
+- exactly three replacement files: executor, normalizer and `release.json`;
+- release directory is not recreated or chmodded;
+- no credential read, Cloudflare request, service/timer/sudoers/package/Docker
+  or network mutation;
+- post-write SHA-256 and metadata verification;
+- any ambiguity after first replacement dispatch is terminal STOP with no
+  retry, rollback or cleanup.
+
+This source repin does not authorize that future host replacement or a later
+authenticated inventory collection.
+
+
 ## Sanitized Versions diagnostic boundary — Issue #1069
 
 The second authorized protected collection on 2026-10-17 stopped after only the
 fixed Versions GET with `versions_normalization_failed`. No retry was made.
-Issue #1069 keeps the request plan, credential boundary and accepted provider
-contract unchanged, but lets the installed executor surface one bounded static
-suffix such as `versions_normalization_failed_result_shape`. The executor
-accepts only its own fixed diagnostic allowlist; an unknown classifier result or
-classifier exception collapses to
-`versions_normalization_failed_unclassified`.
+Issue #1069 preserves the #1068 pagination contract and request plan, but lets
+the installed executor surface one bounded static suffix such as
+`versions_normalization_failed_result_shape` or
+`versions_normalization_failed_pagination`.
 
-The diagnostic path does not issue an extra request, retain provider payloads,
-print raw version metadata, expose account/token data or authorize a future
-collection. Any future installed-runtime replacement and any authenticated
-Cloudflare read still require separate owner gates.
+The executor accepts only its own fixed diagnostic allowlist; any unknown
+classifier result or classifier exception collapses to
+`versions_normalization_failed_unclassified`. The diagnostic path does not
+issue an extra request, retain provider payloads, print raw version metadata,
+expose account/token data or authorize a future collection. Any future
+installed-runtime replacement and any authenticated Cloudflare read still
+require separate owner gates.

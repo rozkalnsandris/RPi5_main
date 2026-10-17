@@ -376,7 +376,7 @@ class RuntimeTests(unittest.TestCase):
     def test_versions_parse_failure_is_static_stop_before_second_get(self):
         calls = []
         bad = versions()
-        bad["result"] = bad["result"]["items"]
+        bad["result"] = {"provider_secret_marker": "must-not-leak"}
 
         def fake_get(account, token, spec, decoder):
             calls.append(spec["stage"])
@@ -395,11 +395,10 @@ class RuntimeTests(unittest.TestCase):
                  return_value=(ACCOUNT, TOKEN),
              ), \
              mock.patch.object(runtime, "single_get", side_effect=fake_get):
-            with self.assertRaisesRegex(
-                runtime.Stop,
-                "versions_normalization_failed",
-            ):
+            with self.assertRaises(runtime.Stop) as caught:
                 runtime.run_once(SHA, stage="before")
+        self.assertEqual(str(caught.exception), "versions_normalization_failed")
+        self.assertNotIn("must-not-leak", str(caught.exception))
         self.assertEqual(calls, ["versions"])
 
     def test_run_once_requires_stage_version_contract_before_access(self):
@@ -632,6 +631,10 @@ class InstallerTests(unittest.TestCase):
                 installer.apply(SHA)
 
     def test_upgrade_requires_exact_old_release_and_checkout_gate(self):
+        self.assertEqual(
+            installer.OLD_RELEASE_SHA,
+            "ce4f6594418d4ec9d91ee96ec37ba34e14bdb6a5",
+        )
         with mock.patch.object(installer, "checked_checkout") as checkout, \
              mock.patch.object(
                  installer,

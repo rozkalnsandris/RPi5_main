@@ -139,8 +139,9 @@ synthetic fixture did not match the documented V4 list envelopes.
 The corrected source contract is:
 
 - versions: `result` is exactly an object containing `items`; the first item
-  is the latest version. `result_info` is not required or accepted because it
-  is not part of the documented response shape for this endpoint;
+  is the latest version. `result_info` is optional: the HTTP example omits it,
+  while official SDKs model the endpoint as V4 page pagination. When present,
+  page/per_page/count/total_count and optional total_pages are validated strictly;
 - deployments: `result` is exactly an object containing `deployments`; the
   first deployment is the latest one actively serving traffic.
   `result_info` is optional; if supplied it is validated strictly;
@@ -165,20 +166,49 @@ bounded root-owned runtime replacement required before a future authenticated in
 collection can use these new source bytes.
 
 
+## Versions pagination compatibility — issue #1067
+
+A second separately authorized protected collection stopped fail-closed after
+only the first versions GET with `versions_normalization_failed`. No retry was
+performed and no provider payload was emitted.
+
+The provider contracts are reconciled without widening the request or output
+surface:
+
+- request remains page 1 / per_page 2, GET-only, zero redirects/retries;
+- `result` must remain exactly `{"items": ...}`; legacy list-only shapes are
+  still rejected;
+- top-level `result_info` is optional, but when present it must match page 1,
+  per_page 2, the returned item count and bounded total pagination fields;
+- the first item remains authoritative as latest;
+- version `number` is optional per the provider schema. If both returned items
+  include a number, they must be descending; missing numbers do not override the
+  provider-documented first-is-latest ordering;
+- UUID uniqueness, metadata/source bounds, deployment/detail checks,
+  source classification, binding/settings preservation and sanitized output
+  remain unchanged.
+
+This is source-only correction. It authorizes no credential read, Cloudflare
+request, host replacement, D1 write or retry.
+
+
 ## Sanitized Versions failure classification — Issue #1069
 
 A second separately authorized read-only collection on 2026-10-17 reached the
-documented Versions endpoint successfully but stopped before the second GET with
+Versions endpoint successfully but stopped before the second GET with
 `versions_normalization_failed`. The credential was consumed once; no retry,
 deployments request, version-detail request, Cloudflare write or D1 write
 followed.
 
-The official Versions contract remains unchanged: `result.items`, first item
-latest, with version `id`, `number` and `metadata.source`. Issue #1069 does
-not widen that accepted shape. Instead, parser failures are mapped to a small
-static diagnostic taxonomy: envelope, api_failure, pagination, result_shape,
-item_count, item_shape, version_id, duplicate_id, number, metadata, source,
-order, or unclassified. The classifier never emits raw payload values, UUIDs,
-numbers, source values, field names from provider data, account identity,
-credential material or exception text. Successful inventory output is
-unchanged.
+Issue #1069 preserves the #1068 Versions contract exactly: `result.items`,
+the first item is latest, bounded optional `result_info`, required version
+`id` and `metadata.source`, and bounded optional `number`. Parser failures
+are mapped only to a small static diagnostic taxonomy: envelope, api_failure,
+pagination, result_shape, item_count, item_shape, version_id, duplicate_id,
+number, metadata, source, order, or unclassified. All #1068 pagination failures
+(`PAGINATION`, `PAGINATION_FIELDS`, `PAGINATION_DRIFT`,
+`PAGINATION_PAGES`) collapse to the single `pagination` class.
+
+The classifier never emits raw payload values, UUIDs, version numbers, source
+values, provider field names, account identity, credential material or exception
+text. Successful inventory output and the fixed three-GET plan are unchanged.
