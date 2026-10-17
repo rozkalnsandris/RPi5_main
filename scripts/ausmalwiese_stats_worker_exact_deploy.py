@@ -110,7 +110,7 @@ def validate_snapshot(x: Any, *, allow_latest_difference: bool = False) -> dict[
         "schema", "account_sha256", "worker", "environment", "active_version",
         "latest_uploaded_version", "deployment_id", "traffic_percent", "routes",
         "active_bindings", "latest_bindings", "active_configuration",
-        "latest_configuration",
+        "latest_configuration", "active_code_sha256", "latest_code_sha256",
     }
     need(type(x) is dict and set(x) == keys, "SNAPSHOT_FIELDS")
     need(x["schema"] == "ausmalwiese.stats-worker-protected-inventory.v1"
@@ -124,6 +124,10 @@ def validate_snapshot(x: Any, *, allow_latest_difference: bool = False) -> dict[
          "SPLIT_TRAFFIC")
     if not allow_latest_difference:
         need(latest == active, "LATEST_NOT_ACTIVE")
+    _fingerprint(x["active_code_sha256"], "ACTIVE_CODE_PROOF")
+    _fingerprint(x["latest_code_sha256"], "LATEST_CODE_PROOF")
+    if not allow_latest_difference:
+        need(x["active_code_sha256"] == x["latest_code_sha256"], "LATEST_CODE_NOT_ACTIVE")
     routes = x["routes"]
     need(type(routes) is dict and routes == ROUTES, "ROUTE_DRIFT")
     for k in ("active_bindings", "latest_bindings"):
@@ -184,7 +188,8 @@ def _confirm_post_upload(old: dict[str, Any], state: dict[str, Any], new_id: str
     validate_snapshot(state, allow_latest_difference=True)
     need(state["active_version"] == old["active_version"]
          and state["latest_uploaded_version"] == new_id
-         and state["deployment_id"] == old["deployment_id"],
+         and state["deployment_id"] == old["deployment_id"]
+         and state["active_code_sha256"] == old["active_code_sha256"],
          "POST_UPLOAD_VERSION_DRIFT")
     _same_preserved(old, state)
 
@@ -233,6 +238,8 @@ def future_run_once(trusted: Any, approved: Any, worker_bytes: bytes) -> dict[st
     try:
         intermediate = trusted.read_snapshot()
         _confirm_post_upload(before, intermediate, new_id)
+        need(intermediate["latest_code_sha256"] == canonical_sha256(worker_bytes),
+             "UPLOADED_CODE_NOT_PROVEN")
     except Exception:
         raise Blocked("POST_UPLOAD_UNVERIFIED_STOP") from None
     # SECOND separately authorized stage of the same frozen future envelope.
@@ -247,6 +254,9 @@ def future_run_once(trusted: Any, approved: Any, worker_bytes: bytes) -> dict[st
     try:
         after = trusted.read_snapshot()
         _confirm_post_deploy(before, after, new_id)
+        need(after["active_code_sha256"] == canonical_sha256(worker_bytes)
+             and after["latest_code_sha256"] == canonical_sha256(worker_bytes),
+             "DEPLOYED_CODE_NOT_PROVEN")
         need(after["deployment_id"] == deployment["deployment_id"],
              "DEPLOYMENT_ID_UNVERIFIED")
     except Exception:
