@@ -28,6 +28,7 @@ assert ispec and ispec.loader
 ispec.loader.exec_module(installer)
 
 ACCOUNT = "a" * 32
+ACCOUNT_SHA256 = hashlib.sha256(ACCOUNT.encode()).hexdigest()
 TOKEN = "fixed-dummy-token-not-real-0123456789"
 SHA = "b" * 40
 BASELINE = "e47f145f-1851-4917-be5c-387f96549539"
@@ -273,6 +274,10 @@ class RuntimeTests(unittest.TestCase):
         }
         normalized = runtime.load_normalizer(NORMALIZER.read_bytes())
         with mock.patch.object(
+            runtime,
+            "ACCOUNT_SHA256",
+            ACCOUNT_SHA256,
+        ), mock.patch.object(
             runtime.http.client,
             "HTTPSConnection",
             return_value=conn,
@@ -325,6 +330,10 @@ class RuntimeTests(unittest.TestCase):
             with self.subTest(status=reply.status):
                 conn = FakeConnection(reply)
                 with mock.patch.object(
+                    runtime,
+                    "ACCOUNT_SHA256",
+                    ACCOUNT_SHA256,
+                ), mock.patch.object(
                     runtime.http.client,
                     "HTTPSConnection",
                     return_value=conn,
@@ -431,6 +440,10 @@ class RuntimeTests(unittest.TestCase):
 
     def test_static_errors_do_not_echo_secret(self):
         with mock.patch.object(
+            runtime,
+            "ACCOUNT_SHA256",
+            ACCOUNT_SHA256,
+        ), mock.patch.object(
             runtime.http.client,
             "HTTPSConnection",
             side_effect=RuntimeError("TOKEN=" + TOKEN),
