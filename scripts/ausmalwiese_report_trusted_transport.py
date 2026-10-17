@@ -270,7 +270,7 @@ class OfflineDurableGate:
 
     def __init__(self, root: Path, *, synthetic_test_only: bool = False) -> None:
         need(synthetic_test_only is True, "INSTALLED_GATE_NOT_PROVIDED")
-        need(type(root) is Path and not root.is_symlink(), "JOURNAL_ROOT")
+        need(isinstance(root, Path) and not root.is_symlink(), "JOURNAL_ROOT")
         try:
             metadata = root.lstat()
             need(stat.S_ISDIR(metadata.st_mode)
