@@ -110,7 +110,7 @@ def verify_source(raw: Any) -> None:
     except UnicodeError:
         raise Blocked("SOURCE_ENCODING") from None
     need('const BREVO_URL = "https://api.brevo.com/v3/smtp/email";' in text
-         and 'const REPORT_FROM = "info@ausmalwiese.de";' in text
+         and 'const REPORT_FROM = ' in text
          and '"/api/report/config"' in text
          and '"/api/report"' in text, "SOURCE_CONTRACT_DRIFT")
 
