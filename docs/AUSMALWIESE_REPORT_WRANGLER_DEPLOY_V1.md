@@ -95,6 +95,15 @@ separately authorized installation must place the exact reviewed script bytes at
 that path as `root:root 0500`. Runtime mode then requires root and the exact
 installed path before any privileged secret handling.
 
+The source-only installer for that future entrypoint is
+`scripts/install-ausmalwiese-report-wrangler-runtime-boundary-v1.py`. It pins
+the reviewed runtime source Git blob
+`33252b523f97b1b092cab52db39a92660e16ab0f` and can only target the fixed
+entrypoint above. Its default path is read-only preflight; a later separately
+authorized `--apply` uses a sealed anonymous memfd plus one exclusive
+root-owned `cp` operation, then metadata/SHA-256 verification. It has no secret,
+Wrangler or Cloudflare transport code.
+
 The fixed runtime flow is:
 
 1. Independently validate the exact `/home/andris/coloring-pages` checkout,
