@@ -188,8 +188,7 @@ def _result_info(payload: dict[str, Any], count: int) -> None:
     info = payload.get("result_info")
     need(type(info) is dict, "PAGINATION")
     required = {"page", "per_page", "count", "total_count"}
-    allowed = required | {"total_pages"}
-    need(required.issubset(info) and set(info).issubset(allowed), "PAGINATION_FIELDS")
+    need(required.issubset(info), "PAGINATION_FIELDS")
     need(
         type(info["page"]) is int
         and info["page"] == 1
@@ -197,16 +196,31 @@ def _result_info(payload: dict[str, Any], count: int) -> None:
         and info["per_page"] == 2
         and type(info["count"]) is int
         and info["count"] == count
-        and 1 <= info["count"] <= 2
         and type(info["total_count"]) is int
-        and count <= info["total_count"] <= 1000000,
+        and info["total_count"] >= count >= 1,
         "PAGINATION_DRIFT",
     )
     if "total_pages" in info:
-        expected_pages = max(1, (info["total_count"] + info["per_page"] - 1) // info["per_page"])
         need(
-            type(info["total_pages"]) is int
-            and 1 <= info["total_pages"] <= 500000
+            type(info["total_pages"]) is int and info["total_pages"] >= 1,
+            "PAGINATION_PAGES",
+        )
+
+
+def _versions_result_info(payload: dict[str, Any], count: int) -> None:
+    _result_info(payload, count)
+    info = payload["result_info"]
+    required = {"page", "per_page", "count", "total_count"}
+    allowed = required | {"total_pages"}
+    need(set(info).issubset(allowed), "PAGINATION_FIELDS")
+    need(info["total_count"] <= 1000000, "PAGINATION_DRIFT")
+    if "total_pages" in info:
+        expected_pages = max(
+            1,
+            (info["total_count"] + info["per_page"] - 1) // info["per_page"],
+        )
+        need(
+            info["total_pages"] <= 500000
             and info["total_pages"] == expected_pages,
             "PAGINATION_PAGES",
         )
@@ -231,7 +245,7 @@ def parse_versions(payload: dict[str, Any]) -> tuple[str, str]:
     items = result["items"]
     need(type(items) is list and 1 <= len(items) <= 2, "VERSIONS_COUNT")
     if "result_info" in payload:
-        _result_info(payload, len(items))
+        _versions_result_info(payload, len(items))
     parsed: list[tuple[str, int | None, str]] = []
     seen: set[str] = set()
     for item in items:
