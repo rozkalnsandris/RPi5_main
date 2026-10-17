@@ -36,8 +36,8 @@ References:
 
 - Worker: `coloring-pages-stats-v1`
 - Wrangler: `4.135.0`
-- `coloring-pages`: `180368f3b81abddde3df94637512436ca50c358f`
-- Worker blob: `dd5a2859d55b9ef2d9fb9a9d8bf0a535d25a5ba4`
+- `coloring-pages`: `699c036b7f952aa98be06e166a9705069b7e9eb2`
+- Worker blob: `94e802ce145dd75f5701c4c9274a4ac7959c7f5e`
 - config blob: `3733263a391274f2b6b0f2023c8656565bde8e1a`
 - conflict baseline version:
   `e47f145f-1851-4917-be5c-387f96549539`
@@ -82,8 +82,8 @@ return a command array equivalent to:
       --config cloudflare/wrangler.stats-worker.jsonc \
       --name coloring-pages-stats-v1 \
       --no-bundle --keep-vars \
-      --tag git:180368f3b81abddde3df94637512436ca50c358f \
-      --message source-blob:dd5a2859d55b9ef2d9fb9a9d8bf0a535d25a5ba4,config-blob:3733263a391274f2b6b0f2023c8656565bde8e1a,takeover-from:e47f145f-1851-4917-be5c-387f96549539
+      --tag git:699c036b7f952aa98be06e166a9705069b7e9eb2 \
+      --message source-blob:94e802ce145dd75f5701c4c9274a4ac7959c7f5e,config-blob:3733263a391274f2b6b0f2023c8656565bde8e1a,takeover-from:e47f145f-1851-4917-be5c-387f96549539
 
 `--strict` is deliberately absent **only from this one-time takeover command**.
 All other guards remain. There is no routes/triggers command, no
@@ -137,3 +137,19 @@ A later LIVE authorization must bind at minimum:
 
 Any mutation ambiguity or error after dispatch remains STOP without retry,
 rollback or cleanup unless separately authorized.
+
+
+## Privacy source repin — issue #1061
+
+The one-time takeover protocol is now pinned to the merged privacy backend source:
+
+- `coloring-pages/main` `699c036b7f952aa98be06e166a9705069b7e9eb2`;
+- Worker Git blob `94e802ce145dd75f5701c4c9274a4ac7959c7f5e`;
+- unchanged Wrangler config blob `3733263a391274f2b6b0f2023c8656565bde8e1a`;
+- unchanged observed pre-takeover baseline version `e47f145f-1851-4917-be5c-387f96549539`.
+
+This repin does not weaken the trusted-inventory, one-active-version/100%-traffic,
+settings/binding preservation or owner-digest gates. The additive D1 migration in
+`docs/AUSMALWIESE_STATS_PRIVACY_D1_MIGRATION_V1.md` must be separately verified
+before a future privacy Worker takeover. The protected inventory runtime upgrade is
+tracked separately in #1060.

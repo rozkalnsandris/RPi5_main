@@ -206,6 +206,7 @@ test:
 	python3 ./tests/test-ausmalwiese-stats-wrangler-conflict-v1.py
 	python3 ./tests/test-ausmalwiese-stats-wrangler-inventory-v1.py
 	python3 ./tests/test-ausmalwiese-stats-wrangler-inventory-runtime-v1.py
+	python3 ./tests/test-ausmalwiese-stats-privacy-d1-migration-v1.py
 	python3 ./tests/test-ausmalwiese-gsc-txt.py
 	python3 ./tests/test-ausmalwiese-legacy-redirect-source.py
 	python3 ./tests/test-ausmalwiese-redirect-inventory-source.py

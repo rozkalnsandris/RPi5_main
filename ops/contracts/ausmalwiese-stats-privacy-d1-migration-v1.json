@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "status": "SOURCE_ONLY_PRIVACY_D1_MIGRATION_NO_LIVE",
+  "issue": 1061,
+  "repository": "rozkalnsandris/RPi5_main",
+  "worker": "coloring-pages-stats-v1",
+  "wrangler_version": "4.135.0",
+  "source_repo": "rozkalnsandris/coloring-pages",
+  "source_commit": "699c036b7f952aa98be06e166a9705069b7e9eb2",
+  "config_path": "cloudflare/wrangler.stats-worker.jsonc",
+  "config_blob": "3733263a391274f2b6b0f2023c8656565bde8e1a",
+  "database_binding": "DB",
+  "database_name": "coloring-pages-stats-v1",
+  "database_id": "f8ac8f1d-a230-4bc4-af13-557c1b91b273",
+  "migration_path": "cloudflare/stats-cookie-like-migration.sql",
+  "migration_blob": "b5346c05cb27de1010dab2027b0b923e999af775",
+  "cleanup_path": "cloudflare/stats-remove-daily-visitor-hmac.sql",
+  "cleanup_blob": "a7cffb110adfceb5c1ff4dcd17a7009c549976a5",
+  "cleanup_is_later_separate_gate": true,
+  "preconditions": [
+    "trusted-wrangler-inventory-before-stage",
+    "exact-d1-binding-identity",
+    "target-schema-objects-absent",
+    "owner-gate-binds-inventory-and-schema-digests",
+    "exact-migration-git-blob"
+  ],
+  "postconditions": [
+    "like-cookie-session-table-present",
+    "archived-like-totals-table-present",
+    "expiry-index-present",
+    "exact-target-column-shapes"
+  ],
+  "actions": {
+    "run_wrangler": false,
+    "cloudflare_request": false,
+    "credential_access": false,
+    "d1_write": false,
+    "worker_upload": false,
+    "worker_deploy": false,
+    "cron_change": false,
+    "cleanup": false,
+    "merge": false,
+    "live": false,
+    "retry": false,
+    "rollback": false
+  }
+}
