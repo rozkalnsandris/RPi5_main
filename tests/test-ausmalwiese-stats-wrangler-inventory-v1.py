@@ -251,42 +251,96 @@ class InventoryTests(unittest.TestCase):
             plan.BASELINE_VERSION,
         )
 
+    def test_versions_accept_documented_pagination_and_optional_number(self):
+        parsed_id, source = plan.parse_versions(versions())
+        self.assertEqual(parsed_id, plan.BASELINE_VERSION)
+        self.assertEqual(source, "api")
+
+        paged = versions()
+        paged["result_info"] = {
+            "page": 1,
+            "per_page": 2,
+            "count": 2,
+            "total_count": 4,
+            "total_pages": 2,
+        }
+        self.assertEqual(
+            plan.parse_versions(paged),
+            (plan.BASELINE_VERSION, "api"),
+        )
+
+        missing_numbers = versions()
+        for item in missing_numbers["result"]["items"]:
+            del item["number"]
+        self.assertEqual(
+            plan.parse_versions(missing_numbers),
+            (plan.BASELINE_VERSION, "api"),
+        )
+
+        one_missing = versions()
+        del one_missing["result"]["items"][1]["number"]
+        self.assertEqual(
+            plan.parse_versions(one_missing),
+            (plan.BASELINE_VERSION, "api"),
+        )
+
     def test_versions_reject_legacy_shape_pagination_order_duplicate_and_unknown_source(self):
+        bad = versions()
+        bad["result_info"] = {
+            "page": 2,
+            "per_page": 2,
+            "count": 2,
+            "total_count": 4,
+            "total_pages": 2,
+        }
+        with self.assertRaisesRegex(plan.Blocked, "PAGINATION_DRIFT"):
+            plan.parse_versions(bad)
+
+        bad = versions()
+        bad["result_info"] = {
+            "page": 1,
+            "per_page": 2,
+            "count": 2,
+            "total_count": 4,
+            "total_pages": 1,
+        }
+        with self.assertRaisesRegex(plan.Blocked, "PAGINATION_PAGES"):
+            plan.parse_versions(bad)
+
         bad = versions()
         bad["result_info"] = {
             "page": 1,
             "per_page": 2,
             "count": 2,
             "total_count": 2,
+            "unexpected": 1,
         }
-        with self.assertRaisesRegex(
-            plan.Blocked,
-            "PAGINATION_UNEXPECTED",
-        ):
+        with self.assertRaisesRegex(plan.Blocked, "PAGINATION_FIELDS"):
             plan.parse_versions(bad)
 
         bad = versions()
         bad["result"] = bad["result"]["items"]
-        with self.assertRaisesRegex(
-            plan.Blocked,
-            "VERSIONS_RESULT",
-        ):
+        with self.assertRaisesRegex(plan.Blocked, "VERSIONS_RESULT"):
+            plan.parse_versions(bad)
+
+        bad = versions()
+        bad["unexpected"] = True
+        with self.assertRaisesRegex(plan.Blocked, "API_ENVELOPE_FIELDS"):
+            plan.parse_versions(bad)
+
+        bad = versions()
+        bad["result"]["items"][0]["number"] = True
+        with self.assertRaisesRegex(plan.Blocked, "VERSION_NUMBER"):
             plan.parse_versions(bad)
 
         bad = versions()
         bad["result"]["items"][1]["number"] = 10
-        with self.assertRaisesRegex(
-            plan.Blocked,
-            "VERSION_ORDER",
-        ):
+        with self.assertRaisesRegex(plan.Blocked, "VERSION_ORDER"):
             plan.parse_versions(bad)
 
         bad = versions()
         bad["result"]["items"][1]["id"] = plan.BASELINE_VERSION
-        with self.assertRaisesRegex(
-            plan.Blocked,
-            "VERSION_DUPLICATE",
-        ):
+        with self.assertRaisesRegex(plan.Blocked, "VERSION_DUPLICATE"):
             plan.parse_versions(bad)
 
         bad = versions(source="dash")
