@@ -9,6 +9,7 @@ from pathlib import Path
 import stat
 import subprocess
 import tempfile
+import tracemalloc
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -251,7 +252,10 @@ class AdoptionTests(unittest.TestCase):
         self.source_file()
         (self.base / 'source/empty').mkdir(mode=0o755)
         value = self.tree()
-        self.assertEqual(m.contents(value), {'empty': {}, 'snapshot.json': b'{"synthetic":true}'})
+        data = m.contents(value)
+        self.assertEqual(data['empty'], {})
+        self.assertIsInstance(data['snapshot.json'], m.FileSnapshot)
+        self.assertEqual(data['snapshot.json'].sha256, m.digest(b'{"synthetic":true}'))
         self.assertEqual(value, self.tree())
 
     def test_source_symlink_hardlink_fifo_and_executable_rejected(self):
@@ -315,23 +319,42 @@ class AdoptionTests(unittest.TestCase):
         nested = self.base / 'source/nested'
         nested.mkdir(mode=0o755)
         snapshot = nested / 'snapshot.json'
-        size = 32 * 1024 * 1024 + 1
+        size = 96 * 1024 * 1024 + 1
         with snapshot.open('wb') as stream:
             stream.truncate(size)
         snapshot.chmod(0o644)
-        result = self.tree(file_limit=m.MAX_RAW_FILE)
-        copied = m.contents(result)['nested']['snapshot.json']
-        self.assertEqual(len(copied), size)
-        self.assertFalse(any(copied))
-        with patch.object(m, 'read_file', side_effect=AssertionError('oversize config opened')):
+        real_read = os.read
+        largest_read = 0
+        def bounded_read(fd, count):
+            nonlocal largest_read
+            largest_read = max(largest_read, count)
+            return real_read(fd, count)
+        tracemalloc.start()
+        try:
+            with patch.object(m.os, 'read', new=bounded_read):
+                result = self.tree(file_limit=m.MAX_RAW_FILE)
+                copied = m.contents(result)['nested']['snapshot.json']
+                self.assertEqual(copied.size, size)
+                data = {'data': {'raw': m.contents(result)}}
+                m.write_tree(self.fds['state'], data, uid=self.uid, gid=self.gid,
+                             collector_gid=self.gid)
+                m.verify_published_tree(self.fds['state'], data, uid=self.uid,
+                                        gid=self.gid, collector_gid=self.gid)
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+        self.assertLessEqual(largest_read, m.STREAM_CHUNK)
+        self.assertLess(peak, 4 * 1024 * 1024, 'snapshot/copy/verify must not retain file bytes')
+        self.assertEqual((self.base / 'state/data/raw/nested/snapshot.json').stat().st_size, size)
+        with patch.object(m, 'stream_file', side_effect=AssertionError('oversize config opened')):
             with self.assertRaises(m.Stop):
                 self.tree()
 
-    def test_raw_above_total_budget_rejected_before_open(self):
+    def test_raw_above_file_budget_rejected_before_open(self):
         snapshot = self.source_file(value=b'')
         with snapshot.open('wb') as stream:
-            stream.truncate(m.MAX_TOTAL + 1)
-        with patch.object(m, 'read_file', side_effect=AssertionError('oversize raw opened')):
+            stream.truncate(m.MAX_RAW_FILE + 1)
+        with patch.object(m, 'stream_file', side_effect=AssertionError('oversize raw opened')):
             with self.assertRaises(m.Stop):
                 self.tree(file_limit=m.MAX_RAW_FILE)
 
@@ -381,6 +404,66 @@ class AdoptionTests(unittest.TestCase):
                 m.execute(m.BASE, True, self.receipt)
             self.assertFalse(self.receipt['mutation_attempted'])
             self.assertEqual(list((self.base / 'state').iterdir()), [])
+
+    def test_multichunk_full_apply_preserves_exact_bytes(self):
+        value = bytes(range(256)) * 600 + b'last chunk'
+        with self.execution_fixture() as (_, _, checkout):
+            nested = checkout / 'data/raw/nested'; nested.mkdir(mode=0o755)
+            (nested / 'snapshot.json').write_bytes(value)
+            (nested / 'snapshot.json').chmod(0o644)
+            m.execute(m.BASE, True, self.receipt)
+            self.assertEqual((self.base / 'state/hermes-deals/data/raw/nested/snapshot.json').read_bytes(), value)
+            self.assertEqual(self.receipt['status'], 'PREPARED_NO_ACTIVATION')
+
+    def test_source_change_during_staging_keeps_evidence_without_publication(self):
+        with self.execution_fixture() as (_, _, checkout):
+            source = checkout / 'data/raw/snapshot.json'
+            source.write_bytes(b'x' * (m.STREAM_CHUNK + 7))
+            original_write = m.write_all
+            changed = False
+            def write(fd, value):
+                nonlocal changed
+                original_write(fd, value)
+                if not changed:
+                    changed = True
+                    with source.open('r+b') as stream:
+                        stream.write(b'y')
+            with patch.object(m, 'write_all', side_effect=write), self.assertRaises(m.Stop):
+                m.execute(m.BASE, True, self.receipt)
+            self.assertTrue(self.receipt['mutation_attempted'])
+            self.assertFalse(self.receipt['state_published'])
+            self.assertTrue((self.base / 'state' / m.STATE_STAGE).exists())
+            self.assertFalse((self.base / 'state/hermes-deals').exists())
+            self.assertEqual(self.original.read_bytes(), self.candidate[m.BASE_REGISTRY])
+
+    def test_recorded_source_directory_replacement_is_rejected(self):
+        nested = self.base / 'source/nested'; nested.mkdir(mode=0o755)
+        (nested / 'snapshot.json').write_bytes(b'original')
+        (nested / 'snapshot.json').chmod(0o644)
+        snapshot = m.contents(self.tree())['nested']['snapshot.json']
+        nested.rename(self.base / 'detached')
+        nested.mkdir(mode=0o755)
+        (nested / 'snapshot.json').write_bytes(b'original')
+        with self.assertRaises(m.Stop):
+            m.new_file(self.fds['state'], 'copy', snapshot, 0o644, uid=self.uid, gid=self.gid)
+        self.assertTrue((self.base / 'state/copy').exists())
+
+    def test_stream_hash_rejects_same_size_destination_tamper(self):
+        self.source_file(value=b'original')
+        data = {'data': {'raw': m.contents(self.tree())}}
+        m.write_tree(self.fds['state'], data, uid=self.uid, gid=self.gid, collector_gid=self.gid)
+        (self.base / 'state/data/raw/snapshot.json').write_bytes(b'modified')
+        with self.assertRaises(m.Stop):
+            m.verify_published_tree(self.fds['state'], data, uid=self.uid, gid=self.gid,
+                                    collector_gid=self.gid)
+
+    def test_stream_copy_handles_partial_writes(self):
+        source = self.source_file(value=b'abcdef' * 100)
+        snapshot = m.contents(self.tree())['snapshot.json']
+        original_write = os.write
+        with patch.object(m.os, 'write', side_effect=lambda fd, value: original_write(fd, value[:7])):
+            m.new_file(self.fds['state'], 'copy', snapshot, 0o644, uid=self.uid, gid=self.gid)
+        self.assertEqual((self.base / 'state/copy').read_bytes(), source.read_bytes())
 
     def test_directory_replaced_during_walk_rejected(self):
         p = self.base / 'source/nested'
