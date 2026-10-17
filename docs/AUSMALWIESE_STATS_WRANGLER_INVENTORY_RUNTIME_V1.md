@@ -142,3 +142,43 @@ static `versions_normalization_failed` STOP code without printing normalizer
 exception text or provider payload. A future collection requires a new reviewed
 release/install and a separate owner LIVE authorization; this source correction
 does not authorize a retry.
+
+
+## Bounded installed-runtime upgrade — Issue #1060
+
+The currently installed protected inventory release is the reviewed #1056
+release at `660deee749ca684e979a720fe69c66aee2b62e3d`. The original installer is
+intentionally no-overwrite, so it remains the only valid path for a first
+installation.
+
+Issue #1060 adds a separate, exact-old-release upgrade mode. It accepts only
+that one installed source SHA and only after proving all of the following before
+any future mutation:
+
+- current checkout is clean `main` at the exact expected new source SHA;
+- current executor, normalizer and account-binding bytes equal that new HEAD;
+- release directory remains root:root 0700 and is not a symlink;
+- executor is root:root 0500, normalizer/release metadata are root:root 0400,
+  and none of the three files is a symlink;
+- installed executor and normalizer SHA-256 values equal the canonical bytes
+  from Git commit `660deee749ca684e979a720fe69c66aee2b62e3d`;
+- installed `release.json` SHA-256 equals the deterministic release metadata
+  reconstructed from that same old Git commit and the already-reviewed account
+  fingerprint.
+
+The upgrade path then has exactly three fixed replacement targets: executor,
+normalizer and `release.json`. It does not recreate or chmod the release
+directory, touch the credential file, alter services/timers/sudoers/packages,
+or call Cloudflare. GNU `install -T` is used only against the three fixed
+paths after the no-symlink metadata gate; post-verification repeats exact
+ownership/mode checks and SHA-256 checks for the new reviewed bytes.
+
+A future dry preflight is selected only by the exact old release identity:
+
+`--upgrade-from 660deee749ca684e979a720fe69c66aee2b62e3d`
+
+A future mutation additionally requires the distinct confirmation string
+`UPGRADE-AUSMALWIESE-STATS-WRANGLER-INVENTORY`. This documentation is source
+contract only: #1060 grants no host replacement, credential access, Cloudflare
+request or retry. Once the first replacement dispatch starts, any failure or
+ambiguity is terminal STOP with no automatic retry, rollback or cleanup.

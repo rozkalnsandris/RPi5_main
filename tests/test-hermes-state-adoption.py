@@ -282,6 +282,42 @@ class AdoptionTests(unittest.TestCase):
         for name in ('.env', '.git', 'database.db', 'backup.sql', 'credential.pem'):
             with self.subTest(name=name), self.assertRaises(m.Stop):
                 m.allowed_name(name)
+        m.allowed_name(m.RAW_PLACEHOLDER, raw_root=True)
+        with self.assertRaises(m.Stop):
+            m.allowed_name('.other-hidden', raw_root=True)
+
+    def test_raw_legacy_root_owner_policy_is_exact(self):
+        source_uid, source_gid = 1234, 1234
+        regular = SimpleNamespace(st_uid=0, st_gid=0, st_mode=stat.S_IFREG | 0o644, st_nlink=1)
+        directory = SimpleNamespace(st_uid=0, st_gid=0, st_mode=stat.S_IFDIR | 0o755, st_nlink=2)
+        m.source_owner(regular, source_uid, source_gid, legacy_raw=True, nested=True)
+        m.source_owner(directory, source_uid, source_gid, legacy_raw=True, nested=True)
+        for value, kwargs in (
+            (SimpleNamespace(st_uid=0, st_gid=0, st_mode=stat.S_IFREG | 0o664, st_nlink=1),
+             {'legacy_raw': True, 'nested': True}),
+            (SimpleNamespace(st_uid=0, st_gid=0, st_mode=stat.S_IFDIR | 0o775, st_nlink=2),
+             {'legacy_raw': True, 'nested': True}),
+            (SimpleNamespace(st_uid=0, st_gid=source_gid, st_mode=stat.S_IFREG | 0o644, st_nlink=1),
+             {'legacy_raw': True, 'nested': True}),
+            (regular, {'legacy_raw': False, 'nested': True}),
+            (regular, {'legacy_raw': True, 'nested': False}),
+        ):
+            with self.subTest(value=value, kwargs=kwargs), self.assertRaises(m.Stop):
+                m.source_owner(value, source_uid, source_gid, **kwargs)
+
+    def test_raw_root_gitkeep_is_zero_byte_only_and_not_allowed_nested(self):
+        placeholder = self.source_file(name=m.RAW_PLACEHOLDER, value=b'')
+        self.assertIn(m.RAW_PLACEHOLDER, m.contents(self.tree(depth=2, legacy_raw=True)))
+        placeholder.write_bytes(b'x')
+        with self.assertRaises(m.Stop):
+            self.tree(depth=2, legacy_raw=True)
+        placeholder.unlink()
+        nested = self.base / 'source/nested'
+        nested.mkdir(mode=0o755)
+        (nested / m.RAW_PLACEHOLDER).write_bytes(b'')
+        (nested / m.RAW_PLACEHOLDER).chmod(0o644)
+        with self.assertRaises(m.Stop):
+            self.tree(depth=2, legacy_raw=True)
 
     def test_tree_rejects_wrong_owner_group_writable_and_acl(self):
         p = self.source_file()
