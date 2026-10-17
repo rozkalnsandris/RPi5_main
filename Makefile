@@ -201,6 +201,7 @@ test:
 	python3 ./tests/test-ausmalwiese-report-trusted-transport-v1.py
 	python3 ./tests/test-ausmalwiese-report-protected-operator-v1.py
 	python3 ./tests/test-ausmalwiese-report-secrets-provisioner-v1.py
+	python3 ./tests/test-ausmalwiese-report-secrets-provision-installer-v1.py
 	python3 ./tests/test-ausmalwiese-report-wrangler-deploy-v1.py
 	python3 ./tests/test-ausmalwiese-stats-worker-exact-deploy-v1.py
 	python3 ./tests/test-ausmalwiese-stats-worker-transport-v1.py
