@@ -86,11 +86,12 @@ def unwrap(payload: Any) -> Any:
             "UPSTREAM_UNVERIFIED")
     info = payload.get("result_info")
     if info is not None:
+        cursors = info.get("cursors") if type(info) is dict else None
         require(type(info) is dict
-                and info.get("page") == 1
-                and info.get("total_pages") == 1
-                and (info.get("cursors") is None or
-                     info["cursors"].get("after") is None),
+                and type(info.get("page")) is int and info["page"] == 1
+                and type(info.get("total_pages")) is int and info["total_pages"] == 1
+                and (cursors is None or (type(cursors) is dict and
+                     cursors.get("after") is None)),
                 "PAGINATION_UNVERIFIED")
     return payload["result"]
 
@@ -143,6 +144,9 @@ class FixedHTTPS:
         self._calls = 0
 
     def get(self, path: str) -> Any:
+        # Recheck on every invocation: bypassing __init__ must not bypass
+        # the protected runtime requirement.
+        verified_installed_release()
         require(allowlisted_get(self._account, path, self._zones), "ENDPOINT_NOT_ALLOWED")
         require(self._calls < 12, "REQUEST_BUDGET_EXHAUSTED")
         self._calls += 1  # dispatch budget consumed before connecting
