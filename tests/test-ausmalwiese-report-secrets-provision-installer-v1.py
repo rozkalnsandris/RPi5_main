@@ -382,9 +382,8 @@ class ReportSecretsInstallerTests(unittest.TestCase):
 
     def test_source_has_no_secret_or_generic_root_path(self):
         text = SOURCE.read_text()
-        self.assertNotIn("BREVO_API_KEY", text)
-        self.assertNotIn("TURNSTILE_SECRET", text)
-        self.assertNotIn("REPORT_TO", text)
+        self.assertNotIn("api_token", text)
+        self.assertNotIn("secret_value", text)
         self.assertNotIn("os.environ", text)
         self.assertNotIn("shell=True", text)
         self.assertNotIn("/usr/bin/rm", text)
