@@ -67,3 +67,47 @@ No install, LIVE catalogue edit, sitemap publication, service restart, deploy,
 merge, media/original deletion, CDN purge, Cloudflare setting, robots rule or
 HTTP 410. Later an optional corrected replacement artwork may be published as
 **a new separately approved ID**, not overwrite `9444491`.
+
+## Trusted one-file installer (source-only follow-up, issue #1077)
+
+The installer source is `scripts/install-ausmalwiese-catalog-hide-v1.py`, with offline
+regressions in `tests/test-ausmalwiese-catalog-hide-installer-v1.py`.
+It is **not installed or executable as a trusted LIVE tool** merely because it
+exists in GitHub, and its source merge never triggers installation/unlisting.
+
+The only allowed installed target is
+`/usr/local/bin/ausmalwiese-catalog-hide` (root:root, mode `0755`).
+The installed operator must match exact pinned Git blob
+`a07d95fe78f34b5fc90eaf2eb202eb3a4815259c`, Git source
+`ops/bin/ausmalwiese-catalog-hide`, tree mode `100755`.
+The installer reads the trusted owner checkout from
+`/home/andris/RPi5_main`, using unprivileged `andris` and a
+clean Git environment with hooks and optional locks disabled. It checks exact
+`main` HEAD given by the caller, clean tracked/untracked state, pinned Git
+tree mode and object bytes, including a second source read before installation.
+Source checkout code is never executed as root.
+
+Modes (must be invoked via a **separately reviewed trusted execution bridge**
+after fresh exact owner approval; examples below are **CLI contract only**, not
+instructions to run them from the checkout):
+
+- `--check --expected-rpi5-main-sha <full-main-sha>`: read-only preflight;
+  validates root caller identity, `andris` home/checkout identity, pinned
+  Git source, fixed root-owned installation path parents, and absence of target.
+  No directory or file is created.
+- `--apply --expected-rpi5-main-sha <full-main-sha>`: after a fresh equivalent
+  preflight, creates only the absent root-owned operator via
+  `O_CREAT|O_EXCL|O_NOFOLLOW`, writes pinned bytes, `fsync`, sets mode
+  `0755`, verifies inode/owner/mode/bytes, and `fsync`s parent.
+  The **first LIVE mutation** is creation of the destination inode.
+  A pre-existing file, directory, or symlink is a hard STOP; there is no
+  overwrite, repin, upgrade, mode repair, rollback, cleanup or automatic retry.
+
+**Separate owner LIVE decisions required**: (1) authorize trusted installer
+bootstrap and this exact one-file installation, bound to current source and
+host state; (2) after fresh independent catalogue/sitemap and writer
+preflight, authorize the installed hide operator's one-ID `--apply` action.
+The installation grant never authorizes unpublishing, and merge never grants
+either LIVE action. The shared `flock` alone is not proof of writer quiescence.
+No Drive, media, originals, app deployment, services, DNS, Cloudflare, secrets,
+or permissions other than the one future new installed file are in scope.
