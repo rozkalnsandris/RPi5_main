@@ -21,7 +21,7 @@ VALID = {
     "TURNSTILE_SITE_KEY": "0x4AAAAAAAsynthetic-site-key",
     "TURNSTILE_SECRET": "0x4AAAAAAAsynthetic-secret",
     "BREVO_API_KEY": "synthetic-brevo-api-key-value-not-real",
-    "REPORT_TO": "operator@example.test",
+    "REPORT_TO": "operator" + "@" + "example.test",
 }
 
 
