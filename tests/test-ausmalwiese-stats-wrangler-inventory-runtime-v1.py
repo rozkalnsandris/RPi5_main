@@ -771,6 +771,39 @@ class InstallerTests(unittest.TestCase):
                     kind="regular file",
                 )
 
+        with mock.patch.object(
+            installer,
+            "invoke",
+            return_value=Result(1),
+        ), mock.patch.object(
+            installer,
+            "sudo_read",
+            side_effect=installer.Stop("sudo_preflight_failed"),
+        ):
+            with self.assertRaisesRegex(
+                installer.Stop,
+                "sudo_preflight_failed",
+            ):
+                installer.exact_target(
+                    installer.RELEASE,
+                    mode="400",
+                    kind="regular file",
+                )
+
+        with mock.patch.object(
+            installer,
+            "sudo_read",
+            return_value=("0" * 64) + "  " + installer.RELEASE,
+        ):
+            with self.assertRaisesRegex(
+                installer.Stop,
+                "installed_release_mismatch",
+            ):
+                installer.exact_digest(
+                    installer.RELEASE,
+                    b"expected-release",
+                )
+
     def test_upgrade_is_three_fixed_replacements_and_failure_is_terminal(self):
         meta = installer.release_bytes(
             SHA,
