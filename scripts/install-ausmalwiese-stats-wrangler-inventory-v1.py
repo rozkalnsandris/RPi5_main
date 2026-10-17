@@ -46,6 +46,8 @@ ACCOUNT_EVIDENCE = (
 )
 WORKER = "coloring-pages-stats-v1"
 CONFIRM = "INSTALL-AUSMALWIESE-STATS-WRANGLER-INVENTORY"
+UPGRADE_CONFIRM = "UPGRADE-AUSMALWIESE-STATS-WRANGLER-INVENTORY"
+OLD_RELEASE_SHA = "660deee749ca684e979a720fe69c66aee2b62e3d"
 SHA40 = re.compile(r"[0-9a-f]{40}\Z")
 SHA64 = re.compile(r"[0-9a-f]{64}\Z")
 
@@ -158,6 +160,23 @@ def tracked_snapshot(
     return actual
 
 
+def historical_snapshot(
+    rel: str,
+    ref: str,
+    *,
+    runner=subprocess.run,
+    max_size: int = 196608,
+) -> bytes:
+    if rel not in {EXECUTOR_REL, NORMALIZER_REL}:
+        raise Stop("historical_scope_invalid")
+    if not isinstance(ref, str) or not SHA40.fullmatch(ref):
+        raise Stop("historical_ref_invalid")
+    raw = git(["show", f"{ref}:{rel}"], runner=runner)
+    if not 0 < len(raw) <= max_size:
+        raise Stop("historical_source_invalid")
+    return raw
+
+
 def approved_account_fingerprint(binding_raw: bytes) -> str:
     try:
         obj = json.loads(binding_raw.decode("utf-8"))
@@ -237,7 +256,7 @@ def absent(path: str, *, runner=subprocess.run) -> None:
             raise Stop("target_preflight_failed")
 
 
-def roots_preflight(*, runner=subprocess.run) -> None:
+def parents_preflight(*, runner=subprocess.run) -> None:
     sudo_read([TRUE], runner=runner)
     for path in PARENTS:
         value = sudo_read(
@@ -257,8 +276,99 @@ def roots_preflight(*, runner=subprocess.run) -> None:
             raise Stop("unsafe_parent") from None
         if mode & 0o022 or mode & 0o700 != 0o700:
             raise Stop("unsafe_parent")
+
+
+def exact_target(
+    path: str,
+    *,
+    mode: str,
+    kind: str,
+    runner=subprocess.run,
+) -> None:
+    symlink = invoke(
+        [SUDO, "-n", TEST, "-L", path],
+        runner=runner,
+    )
+    if symlink.returncode == 0:
+        raise Stop("upgrade_target_symlink")
+    if symlink.returncode != 1:
+        raise Stop("upgrade_target_preflight_failed")
+    value = sudo_read(
+        [STAT, "-c", "%u:%g:%a:%F", "--", path],
+        runner=runner,
+    )
+    if value != f"0:0:{mode}:{kind}":
+        raise Stop("upgrade_target_metadata_mismatch")
+
+
+def exact_digest(path: str, payload: bytes, *, runner=subprocess.run) -> None:
+    digest = hashlib.sha256(payload).hexdigest()
+    checksum = sudo_read(
+        [SHA256SUM, "--", path],
+        runner=runner,
+    )
+    if checksum != f"{digest}  {path}":
+        raise Stop("installed_release_mismatch")
+
+
+def roots_preflight(*, runner=subprocess.run) -> None:
+    parents_preflight(runner=runner)
     for path in TARGETS:
         absent(path, runner=runner)
+
+
+def upgrade_roots_preflight(
+    old_release_sha: str,
+    account_digest: str,
+    *,
+    runner=subprocess.run,
+) -> None:
+    if old_release_sha != OLD_RELEASE_SHA:
+        raise Stop("invalid_upgrade_source")
+    parents_preflight(runner=runner)
+    exact_target(
+        RELEASE_DIR,
+        mode="700",
+        kind="directory",
+        runner=runner,
+    )
+    exact_target(
+        EXECUTOR,
+        mode="500",
+        kind="regular file",
+        runner=runner,
+    )
+    exact_target(
+        NORMALIZER,
+        mode="400",
+        kind="regular file",
+        runner=runner,
+    )
+    exact_target(
+        RELEASE,
+        mode="400",
+        kind="regular file",
+        runner=runner,
+    )
+    old_executor = historical_snapshot(
+        EXECUTOR_REL,
+        old_release_sha,
+        runner=runner,
+    )
+    old_normalizer = historical_snapshot(
+        NORMALIZER_REL,
+        old_release_sha,
+        runner=runner,
+    )
+    old_release = release_bytes(
+        old_release_sha,
+        old_executor,
+        old_normalizer,
+        account_digest,
+    )
+    exact_digest(EXECUTOR, old_executor, runner=runner)
+    exact_digest(NORMALIZER, old_normalizer, runner=runner)
+    exact_digest(RELEASE, old_release, runner=runner)
 
 
 def preflight(expected_main: str, *, runner=subprocess.run):
@@ -285,6 +395,41 @@ def preflight(expected_main: str, *, runner=subprocess.run):
     return executor, normalizer, metadata
 
 
+def upgrade_preflight(
+    expected_main: str,
+    old_release_sha: str,
+    *,
+    runner=subprocess.run,
+):
+    if old_release_sha != OLD_RELEASE_SHA:
+        raise Stop("invalid_upgrade_source")
+    checked_checkout(expected_main, runner=runner)
+    executor = tracked_snapshot(EXECUTOR_REL, runner=runner)
+    normalizer = tracked_snapshot(
+        NORMALIZER_REL,
+        runner=runner,
+        max_size=196608,
+    )
+    binding = tracked_snapshot(
+        BINDING_REL,
+        runner=runner,
+        max_size=8192,
+    )
+    account_digest = approved_account_fingerprint(binding)
+    metadata = release_bytes(
+        expected_main,
+        executor,
+        normalizer,
+        account_digest,
+    )
+    upgrade_roots_preflight(
+        old_release_sha,
+        account_digest,
+        runner=runner,
+    )
+    return executor, normalizer, metadata
+
+
 def write_once(args, data=None, *, runner=subprocess.run) -> None:
     try:
         result = invoke(
@@ -300,13 +445,16 @@ def write_once(args, data=None, *, runner=subprocess.run) -> None:
 
 def post_verify(files, *, runner=subprocess.run) -> None:
     for path, mode, payload in files:
-        value = sudo_read(
-            [STAT, "-c", "%u:%g:%a:%F", "--", path],
-            runner=runner,
-        )
         kind = "directory" if payload is None else "regular file"
-        if value != f"0:0:{mode}:{kind}":
-            raise Stop("post_verify_metadata_mismatch")
+        try:
+            exact_target(
+                path,
+                mode=mode,
+                kind=kind,
+                runner=runner,
+            )
+        except Stop:
+            raise Stop("post_verify_metadata_mismatch") from None
         if payload is not None:
             digest = hashlib.sha256(payload).hexdigest()
             checksum = sudo_read(
@@ -391,6 +539,53 @@ def apply(expected_main: str, *, runner=subprocess.run) -> None:
         raise Stop("post_dispatch_unknown_state") from None
 
 
+def upgrade(
+    expected_main: str,
+    old_release_sha: str,
+    *,
+    runner=subprocess.run,
+) -> None:
+    executor, normalizer, metadata = upgrade_preflight(
+        expected_main,
+        old_release_sha,
+        runner=runner,
+    )
+    try:
+        for path, mode, payload in (
+            (EXECUTOR, "0500", executor),
+            (NORMALIZER, "0400", normalizer),
+            (RELEASE, "0400", metadata),
+        ):
+            write_once(
+                [
+                    INSTALL,
+                    "-T",
+                    "-o",
+                    "root",
+                    "-g",
+                    "root",
+                    "-m",
+                    mode,
+                    "--",
+                    "/dev/stdin",
+                    path,
+                ],
+                payload,
+                runner=runner,
+            )
+        post_verify(
+            (
+                (RELEASE_DIR, "700", None),
+                (EXECUTOR, "500", executor),
+                (NORMALIZER, "400", normalizer),
+                (RELEASE, "400", metadata),
+            ),
+            runner=runner,
+        )
+    except Exception:
+        raise Stop("post_dispatch_unknown_state") from None
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         description="Source-only protected inventory runtime installer"
@@ -398,9 +593,50 @@ def main(argv=None) -> int:
     parser.add_argument("--expected-main", required=True)
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--confirm", default="")
+    parser.add_argument("--upgrade-from", default="")
     args = parser.parse_args(argv)
     try:
-        if args.apply:
+        if args.upgrade_from:
+            if args.upgrade_from != OLD_RELEASE_SHA:
+                raise Stop("invalid_upgrade_source")
+            if args.apply:
+                if args.confirm != UPGRADE_CONFIRM:
+                    raise Stop("confirmation_missing")
+                upgrade(args.expected_main, args.upgrade_from)
+                print(
+                    json.dumps(
+                        {
+                            "status": "PASS",
+                            "operation": "upgrade",
+                            "mutation_started": True,
+                        },
+                        sort_keys=True,
+                    )
+                )
+            else:
+                if args.confirm:
+                    raise Stop("confirmation_requires_apply")
+                executor, normalizer, _ = upgrade_preflight(
+                    args.expected_main,
+                    args.upgrade_from,
+                )
+                print(
+                    json.dumps(
+                        {
+                            "status": "UPGRADE_PREFLIGHT_PASS",
+                            "mutation_started": False,
+                            "old_release_sha": OLD_RELEASE_SHA,
+                            "executor_sha256": hashlib.sha256(
+                                executor
+                            ).hexdigest(),
+                            "normalizer_sha256": hashlib.sha256(
+                                normalizer
+                            ).hexdigest(),
+                        },
+                        sort_keys=True,
+                    )
+                )
+        elif args.apply:
             if args.confirm != CONFIRM:
                 raise Stop("confirmation_missing")
             apply(args.expected_main)
@@ -408,6 +644,7 @@ def main(argv=None) -> int:
                 json.dumps(
                     {
                         "status": "PASS",
+                        "operation": "install",
                         "mutation_started": True,
                     },
                     sort_keys=True,
