@@ -20,9 +20,9 @@ inventory_sha256.
   3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34
 - Wrangler: 4.135.0
 - coloring-pages commit:
-  180368f3b81abddde3df94637512436ca50c358f
+  699c036b7f952aa98be06e166a9705069b7e9eb2
 - Worker blob:
-  dd5a2859d55b9ef2d9fb9a9d8bf0a535d25a5ba4
+  94e802ce145dd75f5701c4c9274a4ac7959c7f5e
 - config blob:
   3733263a391274f2b6b0f2023c8656565bde8e1a
 - pre-takeover baseline version:
@@ -151,3 +151,15 @@ ordering when two are returned, requires one 100% active version, and preserves
 all existing identity/binding/settings/leakage checks. This correction changes
 provider-envelope parsing only; it grants no credential, Cloudflare or LIVE
 authority.
+
+
+## Privacy source repin — issue #1061
+
+The normalized inventory now emits the privacy source provenance required by the
+repinned takeover planner: `coloring-pages/main=699c036b7f952aa98be06e166a9705069b7e9eb2` and Worker blob
+`94e802ce145dd75f5701c4c9274a4ac7959c7f5e`. Provider parsing, account fingerprint, baseline active version,
+route/binding/settings checks and sanitized output schema are unchanged.
+
+The installed protected runtime is not upgraded by this source change. #1060 owns the
+bounded root-owned runtime replacement required before a future authenticated inventory
+collection can use these new source bytes.

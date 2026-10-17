@@ -7,8 +7,8 @@
   "worker": "coloring-pages-stats-v1",
   "environment": "production",
   "wrangler_version": "4.135.0",
-  "source_commit": "180368f3b81abddde3df94637512436ca50c358f",
-  "source_blob": "dd5a2859d55b9ef2d9fb9a9d8bf0a535d25a5ba4",
+  "source_commit": "699c036b7f952aa98be06e166a9705069b7e9eb2",
+  "source_blob": "94e802ce145dd75f5701c4c9274a4ac7959c7f5e",
   "config_blob": "3733263a391274f2b6b0f2023c8656565bde8e1a",
   "baseline_version": "e47f145f-1851-4917-be5c-387f96549539",
   "read_plan": {
