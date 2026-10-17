@@ -183,11 +183,24 @@ class HelperInstallTests(unittest.TestCase):
     def test_sudo_capability_and_version_below_min_refused(self):
         for r in (Runner(sudo_disabled=True),Runner(cp_version="9.0"),
                   Runner(cp_version="9.2"),Runner(cp_version="9.3"),
+                  Runner(cp_version="9.4"),Runner(cp_version="9.5"),
                   Runner(cp_version="invalid")):
             with self.subTest(version=r.cp_version,disabled=r.sudo_disabled):
                 with self.assertRaises(mod.Stop):
                     preflight(r)
                 self.assertEqual(r.writes,0)
+
+    def test_update_none_fail_only_from_gnu_96(self):
+        self.assertEqual(
+            mod.cp_command("cp (GNU coreutils) 9.6"),
+            [mod.CP, "--update=none-fail", "--preserve=mode",
+             "-T", "--", "/dev/stdin", mod.TARGET],
+        )
+        self.assertEqual(
+            mod.cp_command("cp (GNU coreutils) 10.0"),
+            [mod.CP, "--update=none-fail", "--preserve=mode",
+             "-T", "--", "/dev/stdin", mod.TARGET],
+        )
 
     def test_gnu_91_version_and_exact_sudo_options_accepted(self):
         r = Runner(cp_version="9.1")

@@ -173,7 +173,7 @@ def absent(*, runner=subprocess.run):
 
 
 def cp_copy_options(version: str) -> tuple[str, ...]:
-    """Fail closed except for source-reviewed 9.1 and the prior >=9.4 gate.
+    """Fail closed except for source-reviewed 9.1 and verified >=9.6.
 
     GNU 9.1 -n exits 0 on an existing target, so -v MUST be validated after
     dispatch. The 9.1 copy.c O_CREAT|O_EXCL path refuses a creation race;
@@ -187,7 +187,7 @@ def cp_copy_options(version: str) -> tuple[str, ...]:
     major, minor = map(int, m.groups())
     if (major, minor) == (9, 1):
         return ("--no-clobber", "--verbose")
-    if (major, minor) >= (9, 4):
+    if (major, minor) >= (9, 6):
         return ("--update=none-fail",)
     raise Stop("cp_atomic_capability_unverified")
 
