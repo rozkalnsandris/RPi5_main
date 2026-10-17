@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "status": "SOURCE_ONLY_PROTECTED_RUNTIME_NOT_INSTALLED",
+  "issue": 1056,
+  "repository": "rozkalnsandris/RPi5_main",
+  "worker": "coloring-pages-stats-v1",
+  "account_sha256": "3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34",
+  "source": {
+    "executor": "scripts/ausmalwiese_stats_wrangler_inventory_executor_v1.py",
+    "normalizer": "scripts/ausmalwiese_stats_wrangler_inventory_v1.py",
+    "installer": "scripts/install-ausmalwiese-stats-wrangler-inventory-v1.py"
+  },
+  "installed": {
+    "executor": "/usr/local/sbin/rpi5-ausmalwiese-stats-wrangler-inventory",
+    "release_dir": "/usr/local/libexec/rpi5-ausmalwiese-stats-wrangler-inventory",
+    "normalizer": "/usr/local/libexec/rpi5-ausmalwiese-stats-wrangler-inventory/normalizer.py",
+    "release": "/usr/local/libexec/rpi5-ausmalwiese-stats-wrangler-inventory/release.json",
+    "credential": "/etc/rpi5-secrets/cloudflare/ausmalwiese-worker-settings-read.json"
+  },
+  "api": {
+    "host": "api.cloudflare.com",
+    "method": "GET",
+    "max_requests": 3,
+    "timeout_seconds": 10,
+    "max_response_bytes": 65536,
+    "max_retries": 0,
+    "max_redirects": 0,
+    "stages": [
+      "versions",
+      "deployments",
+      "version_detail"
+    ]
+  },
+  "credential": {
+    "reuse_existing_format_only": true,
+    "exact_keys": [
+      "worker",
+      "account_id",
+      "api_token"
+    ],
+    "account_fingerprint_required": true,
+    "create_or_replace": false,
+    "output_values": false
+  },
+  "install": {
+    "no_overwrite": true,
+    "release_dir_mode": "0700",
+    "executor_mode": "0500",
+    "normalizer_mode": "0400",
+    "release_mode": "0400",
+    "sudoers_change": false,
+    "service_or_timer_change": false,
+    "credential_change": false
+  },
+  "output": {
+    "keys": [
+      "inventory",
+      "inventory_sha256"
+    ],
+    "raw_provider_output": false,
+    "raw_plain_text_values": false,
+    "secret_values": false
+  },
+  "actions": {
+    "merge": false,
+    "live": false,
+    "host_install": false,
+    "cloudflare_request": false,
+    "credential_access": false,
+    "credential_write": false,
+    "permission_change": false,
+    "retry": false,
+    "rollback": false,
+    "cleanup": false
+  }
+}
