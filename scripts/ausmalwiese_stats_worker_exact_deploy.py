@@ -38,9 +38,9 @@ KINDS = {
     "VISITOR_HMAC_KEY": "secret_text",
     "CF_ANALYTICS_API_TOKEN": "secret_text",
 }
-VERSION_ID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\\Z")
-DIGEST = re.compile(r"[0-9a-f]{64}\\Z")
-DATE = re.compile(r"20[0-9]{2}-[01][0-9]-[0-3][0-9]\\Z")
+VERSION_ID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
+DIGEST = re.compile(r"[0-9a-f]{64}\Z")
+DATE = re.compile(r"20[0-9]{2}-[01][0-9]-[0-3][0-9]\Z")
 STOP = "STOP_STATS_WORKER_SOURCE_ONLY"
 
 class Blocked(Exception):
@@ -54,7 +54,7 @@ def canonical_sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 def git_blob(data: bytes) -> str:
-    return hashlib.sha1(b"blob " + str(len(data)).encode("ascii") + b"\\0" + data).hexdigest()
+    return hashlib.sha1(b"blob " + str(len(data)).encode("ascii") + b"\0" + data).hexdigest()
 
 def check_contract(c: Any) -> None:
     fixed = {
