@@ -1,0 +1,48 @@
+{
+  "schema": "rozkalns.rpi5-main.ausmalwiese-sitemap-exact-upgrade.v1",
+  "authority": "SOURCE_ONLY_NO_MERGE_NO_LIVE",
+  "dependency": {
+    "repo": "rozkalnsandris/RPi5_main",
+    "pr": 1027,
+    "head": "71640856c328fa68636041f9ec023a2cc20fe4da"
+  },
+  "source": "scripts/upgrade-coloring-pages-sitemap-publisher-v1.py",
+  "old": {
+    "publisher": "0da51ef361f9ce815ebde3e4cc6cae19a2c2ffe8",
+    "generator": "5644c8fd366c0c57f6339fddd163c5091ea134c5"
+  },
+  "replacement": {
+    "publisher": "7b0330f30e27d6fe9c5f3e4fbf81fc6473ade660",
+    "generator": "49c8ba34cf0a4c4ab100463df9adacc4c6e90c2c"
+  },
+  "paths": {
+    "publisher": "/usr/local/bin/coloring-pages-sitemap-publish",
+    "generator": "/usr/local/share/coloring-pages/coloring-pages-sitemap",
+    "lock": "/srv/coloring-pages-content/state/drive-ingest/.lock",
+    "marker": "/usr/local/share/coloring-pages/post-publish-v1.enabled"
+  },
+  "stages": [
+    "/usr/local/share/coloring-pages/.coloring-pages-sitemap.upgrade.partial",
+    "/usr/local/bin/.coloring-pages-sitemap-publish.upgrade.partial"
+  ],
+  "require": [
+    "exact-main-clean-checkout",
+    "old-exact-installed-root-metadata",
+    "trusted-exact-new-blobs",
+    "no-stage-or-hook-marker",
+    "independent-catalog-writer-quiescence",
+    "same-ingest-lock",
+    "separate-exact-owner-live-authorization"
+  ],
+  "order": [
+    "stage-generator",
+    "stage-publisher",
+    "replace-generator",
+    "replace-publisher",
+    "verify"
+  ],
+  "first_mutation": "create-generator-stage",
+  "multi_file_atomic": false,
+  "failure": "STOP_NO_RETRY_NO_ROLLBACK_NO_CLEANUP",
+  "live_authority": false
+}

@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "state": "SOURCE_ONLY_NOT_INSTALLED",
+  "repository": "rozkalnsandris/RPi5_main",
+  "issue": 1042,
+  "base_main": "ca027eb96287a996b3b28ff292860b4f933296e6",
+  "worker": "coloring-pages-report-v1",
+  "zone": "ausmalwiese.de",
+  "account_sha256": "3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34",
+  "source": {
+    "repo": "rozkalnsandris/coloring-pages",
+    "commit": "a90c6a6a7ccca2941d99e9edddd5cfa31ac9ed18",
+    "path": "cloudflare/report-worker.mjs",
+    "blob": "6d2359752d12f4a40847008fc7fdcc457124e893",
+    "sha256": "26d4e597d8c2c961c3a637957ea566654c97c5657a4b2595129c410e9fae22a1"
+  },
+  "host": "api.cloudflare.com",
+  "port": 443,
+  "protocol": "HTTPS_TLS_VERIFIED_REQUIRED_NO_AMBIENT_PROXY",
+  "methods": {
+    "upload": "POST",
+    "deploy": "POST",
+    "route": "POST"
+  },
+  "paths": {
+    "upload": "/client/v4/accounts/{account_id}/workers/scripts/coloring-pages-report-v1/versions",
+    "deploy": "/client/v4/accounts/{account_id}/workers/scripts/coloring-pages-report-v1/deployments",
+    "route": "/client/v4/zones/{zone_id}/workers/routes"
+  },
+  "routes": [
+    "ausmalwiese.de/api/report",
+    "ausmalwiese.de/api/report/config",
+    "www.ausmalwiese.de/api/report",
+    "www.ausmalwiese.de/api/report/config"
+  ],
+  "bindings": {
+    "TURNSTILE_SITE_KEY": "plain_text",
+    "TURNSTILE_SECRET": "secret_text",
+    "BREVO_API_KEY": "secret_text",
+    "REPORT_TO": "secret_text",
+    "REPORT_RATE": "ratelimit",
+    "REPORT_DUP": "ratelimit"
+  },
+  "rates": {
+    "REPORT_RATE": {
+      "limit": 12,
+      "period": 60
+    },
+    "REPORT_DUP": {
+      "limit": 1,
+      "period": 60
+    }
+  },
+  "private_secret_names": [
+    "BREVO_API_KEY",
+    "REPORT_TO",
+    "TURNSTILE_SECRET"
+  ],
+  "intent_sequence": [
+    "upload",
+    "deploy",
+    "route:ausmalwiese.de/api/report",
+    "route:ausmalwiese.de/api/report/config",
+    "route:www.ausmalwiese.de/api/report",
+    "route:www.ausmalwiese.de/api/report/config"
+  ],
+  "constraints": {
+    "allow_cli_send": false,
+    "allow_in_checkout_network": false,
+    "allow_credential_access": false,
+    "allow_secret_values_in_source": false,
+    "allow_live": false,
+    "allow_merge": false,
+    "allow_retry": false,
+    "allow_rollback": false,
+    "allow_cleanup": false,
+    "allow_legacy_put": false,
+    "require_durable_reservation_before_send": true,
+    "require_independent_verified_proof_between_steps": true,
+    "require_private_provisioner_future_gate": true
+  }
+}

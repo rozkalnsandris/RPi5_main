@@ -2,6 +2,14 @@
 
 Status: **SOURCE ONLY / SEPARATE LIVE AUTHORIZATION REQUIRED**.
 
+Revision #1025 allows a raw snapshot to use the existing combined 256 MiB
+raw/config budget. Config retains the 32 MiB per-file ceiling. This removes an
+unnecessary raw-file partition of the same bounded snapshot; it does not raise
+the total copied bytes or prove that production fits. The contract's `file_bytes`
+is the default/config ceiling and `raw_file_bytes` overrides it only for raw.
+Old launchers and authorizations remain bound to their old limits and must not
+be edited or reused. Prepare a new exact-source execution packet after review.
+
 Revision #1018 corrects the destination raw-directory permissions required by
 the existing UID:GID `1000:1000` scheduled collectors. It does not execute the
 prepared operation or authorize the later API/collector cutover. Any older
@@ -90,7 +98,10 @@ owner authorization. Source merge or START is not that authorization.
 `--apply` additionally reads only the passwd-resolved `andris` source checkout's
 `data/raw` and `config` trees. It never opens the sibling `.env`, Docker storage,
 database or backup trees. Bounds apply across both trees and fixed destination
-structure: 4,096 entries, 256 MiB total, 32 MiB per file, 12 levels of depth.
+structure: 4,096 entries, 256 MiB total across raw and config, 256 MiB per raw
+file, 32 MiB per config file, 12 levels of depth. A raw file exactly 256 MiB
+cannot fit alongside the required nonempty config. Each read is additionally
+bounded by its checked file size (plus one byte to detect growth).
 Only regular single-link non-executable files and real directories are accepted;
 symlinks, special files, group/other write access, unexpected ownership, ACLs,
 cross-device traversal, hidden entries and key/database/backup suffixes are rejected.

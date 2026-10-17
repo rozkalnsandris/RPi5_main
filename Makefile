@@ -37,10 +37,14 @@ test:
 	python3 ./tests/test-coloring-pages-sitemap-installer-v1.py
 	python3 ./tests/test-coloring-pages-sitemap-post-publish-v1.py
 	python3 ./tests/test-ausmalwiese-catalog-hide-v1.py
+	python3 ./tests/test-ausmalwiese-sitemap-cutover-v1.py
+	python3 ./tests/test-coloring-pages-sitemap-upgrade-v1.py
+	python3 ./tests/test-ausmalwiese-coordinated-upgrade-v1.py
 	python3 ./tests/test-simple-deploy-coloring-pages-alignment-v1.py
 	python3 ./tests/test-simple-deploy-rozkalns-cv-compat-v1.py
 	python3 ./tests/test_rozkalns_cv_private_env_materializer.py
 	python3 ./tests/test-simple-deploy-hermes-household-ui-v1.py
+	python3 ./tests/test-hermes-ui-activation-candidate.py
 	python3 ./tests/test-simple-deploy-hermes-compat-v1.py
 	python3 ./tests/test_hermes_tech_simple_deploy_cutover_contract.py
 	python3 ./tests/test_rozkalns_cv_simple_deploy_cutover_contract.py
@@ -191,6 +195,12 @@ test:
 	python3 ./tests/test-ausmalwiese-worker-settings-installer-v1.py
 	python3 ./tests/test-ausmalwiese-worker-settings-provisioner-v1.py
 	python3 ./tests/test-ausmalwiese-worker-settings-provision-installer-v1.py
+	python3 ./tests/test-ausmalwiese-report-worker-preflight-v1.py
+	python3 ./tests/test-ausmalwiese-report-trusted-operator-v1.py
+	python3 ./tests/test-ausmalwiese-report-protected-adapter-v1.py
+	python3 ./tests/test-ausmalwiese-report-trusted-transport-v1.py
+	python3 ./tests/test-ausmalwiese-stats-worker-exact-deploy-v1.py
+	python3 ./tests/test-ausmalwiese-stats-worker-transport-v1.py
 	python3 ./tests/test-ausmalwiese-gsc-txt.py
 	python3 ./tests/test-ausmalwiese-legacy-redirect-source.py
 	python3 ./tests/test-ausmalwiese-redirect-inventory-source.py

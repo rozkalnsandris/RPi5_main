@@ -1,7 +1,7 @@
 {
   "schema": "hermes.state-adoption.v1",
   "issue": 1014,
-  "revision_issue": 1018,
+  "revision_issue": 1025,
   "entrypoint": "scripts/prepare-hermes-state-adoption.py",
   "baseline_source": "bcaa7c6db2d2404acb587d78a2dca7a0f7a1bb17",
   "registry_baseline_source": "c53d5642a9b700c5c2a24df9382c45252bd443ab",
@@ -30,6 +30,7 @@
   "limits": {
     "entries": 4096,
     "file_bytes": 33554432,
+    "raw_file_bytes": 268435456,
     "total_bytes": 268435456,
     "depth": 12,
     "static_file_bytes": 131072
