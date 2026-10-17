@@ -9,6 +9,7 @@ source bytes; upload and deployment deliberately fail closed before dispatch.
 from __future__ import annotations
 
 import hashlib
+from datetime import datetime, timezone
 import http.client
 import json
 import os
@@ -200,14 +201,19 @@ def deployment_summary(deployments: Any) -> dict[str, str | int]:
     """One fully active Production version; reject ambiguous deployment ordering."""
     require(type(deployments) is list and 1 <= len(deployments) < 100,
             "DEPLOYMENTS_INCOMPLETE")
-    by_stamp: dict[str, dict[str, Any]] = {}
+    by_stamp: dict[datetime, dict[str, Any]] = {}
     for d in deployments:
         require(type(d) is dict and type(d.get("created_on")) is str
-                and len(d["created_on"]) >= 20 and type(d.get("versions")) is list
+                and d["created_on"].endswith("Z") and type(d.get("versions")) is list
                 and "id" in d, "DEPLOYMENT_SHAPE")
         uuid(d["id"])
-        require(d["created_on"] not in by_stamp, "DEPLOYMENT_ORDER_AMBIGUOUS")
-        by_stamp[d["created_on"]] = d
+        try:
+            stamp = datetime.fromisoformat(d["created_on"].replace("Z", "+00:00"))
+        except ValueError:
+            raise Blocked("DEPLOYMENT_TIMESTAMP_INVALID") from None
+        require(stamp.tzinfo is not None and stamp.utcoffset() == timezone.utc.utcoffset(stamp)
+                and stamp not in by_stamp, "DEPLOYMENT_ORDER_AMBIGUOUS")
+        by_stamp[stamp] = d
     latest = by_stamp[max(by_stamp)]
     versions = latest["versions"]
     require(len(versions) == 1 and type(versions[0]) is dict
