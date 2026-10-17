@@ -133,7 +133,8 @@ class AdapterTests(unittest.TestCase):
             adapter.request_spec("upload", ACCOUNT, ZONE)
         for bad_id in ("BAD", "z" * 32, "../" + "a" * 29, "a" * 31):
             with self.assertRaises(adapter.Stop):
-                bound_request("add_route", route=adapter.ROUTES[0], zone_id=bad_id)
+                with patch.object(adapter, "ACCOUNT_SHA256", hashlib.sha256(ACCOUNT.encode()).hexdigest()):
+                    adapter.request_spec("add_route", ACCOUNT, bad_id, route=adapter.ROUTES[0])
         for operation in ("put_script", "delete_route", "delete_worker", "retry", "get_secrets"):
             with self.assertRaises(adapter.Stop):
                 bound_request(operation)
