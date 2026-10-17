@@ -1,0 +1,85 @@
+{
+  "schema": "rozkalns.rpi5-main.ausmalwiese-sitemap-ingester-coordinated-upgrade.v1",
+  "authority": "SOURCE_ONLY_NOT_HOST_AUTHORITY",
+  "dependencies": [
+    {
+      "repo": "rozkalnsandris/RPi5_main",
+      "pr": 1027,
+      "merged": true
+    },
+    {
+      "repo": "rozkalnsandris/RPi5_main",
+      "pr": 1028,
+      "merged": true
+    },
+    {
+      "repo": "rozkalnsandris/coloring-pages",
+      "pr": 214,
+      "state": "separate-owner-merge-and-deploy"
+    }
+  ],
+  "script": "scripts/upgrade-ausmalwiese-coordinated-v1.py",
+  "installed": {
+    "generator": {
+      "path": "/usr/local/share/coloring-pages/coloring-pages-sitemap",
+      "old": "5644c8fd366c0c57f6339fddd163c5091ea134c5",
+      "new": "49c8ba34cf0a4c4ab100463df9adacc4c6e90c2c",
+      "mode": "root:root:0444"
+    },
+    "publisher": {
+      "path": "/usr/local/bin/coloring-pages-sitemap-publish",
+      "old": "0da51ef361f9ce815ebde3e4cc6cae19a2c2ffe8",
+      "new": "7b0330f30e27d6fe9c5f3e4fbf81fc6473ade660",
+      "mode": "root:root:0755"
+    },
+    "ingester": {
+      "path": "/usr/local/bin/coloring-pages-drive-ingest",
+      "old": "b1e796696307dcdbc9f92c1caf190c38032ccd71",
+      "new": "6aba3414af9cc484bde40171f6dd815485c18e22",
+      "mode": "root:root:0755"
+    }
+  },
+  "marker": {
+    "path": "/usr/local/share/coloring-pages/post-publish-v1.enabled",
+    "mode": "root:root:0444",
+    "content": "coloring-pages-sitemap-post-publish-v1\n",
+    "policy": "must-exist-and-remain-unchanged"
+  },
+  "quiescence": {
+    "path": "/usr/local/share/coloring-pages/sitemap-ingest-quiesced-v1.confirmed",
+    "mode": "root:root:0444",
+    "content": "ausmalwiese-sitemap-ingest-quiesced-v1\n",
+    "policy": "separately-authorized-external-writer-stop-and-proof-not-equivalent-to-process-quiescence"
+  },
+  "lock": {
+    "path": "/srv/coloring-pages-content/state/drive-ingest/.lock",
+    "mode": "andris:andris:0600",
+    "policy": "same-inode-nonblocking"
+  },
+  "order": {
+    "stage": [
+      "generator",
+      "publisher",
+      "ingester"
+    ],
+    "replace": [
+      "generator",
+      "publisher",
+      "ingester"
+    ],
+    "multi_file_atomic": false
+  },
+  "first_mutation": "generator-stage-O_EXCL-create",
+  "failure": "STOP_NO_RETRY_NO_ROLLBACK_NO_CLEANUP",
+  "automatic_maintenance": false,
+  "live_authorized": false,
+  "gates": [
+    "fresh-main-and-LIVE-preflight",
+    "independently-authorized-writer-quiescence",
+    "separately-authorized-quiescence-file-create",
+    "separately-authorized-exact-LIVE-upgrade",
+    "PR214-deploy-and-QR-Worker",
+    "new-origin-sitemap-publish",
+    "legacy-301-only-last"
+  ]
+}

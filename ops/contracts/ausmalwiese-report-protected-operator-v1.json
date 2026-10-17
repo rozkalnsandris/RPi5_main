@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "state": "SOURCE_ONLY_NOT_INSTALLED",
+  "repository": "rozkalnsandris/RPi5_main",
+  "issue": 1044,
+  "base_main": "aefd6bd7614cf5a0538c14093224cac22ea78bc1",
+  "worker": "coloring-pages-report-v1",
+  "zone": "ausmalwiese.de",
+  "account_sha256": "3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34",
+  "worker_source_sha256": "26d4e597d8c2c961c3a637957ea566654c97c5657a4b2595129c410e9fae22a1",
+  "worker_git_blob": "6d2359752d12f4a40847008fc7fdcc457124e893",
+  "routes": [
+    "ausmalwiese.de/api/report",
+    "ausmalwiese.de/api/report/config",
+    "www.ausmalwiese.de/api/report",
+    "www.ausmalwiese.de/api/report/config"
+  ],
+  "binding_kinds": {
+    "TURNSTILE_SITE_KEY": "plain_text",
+    "TURNSTILE_SECRET": "secret_text",
+    "BREVO_API_KEY": "secret_text",
+    "REPORT_TO": "secret_text",
+    "REPORT_RATE": "ratelimit",
+    "REPORT_DUP": "ratelimit"
+  },
+  "rates": {
+    "REPORT_RATE": {
+      "limit": 12,
+      "period": 60
+    },
+    "REPORT_DUP": {
+      "limit": 1,
+      "period": 60
+    }
+  },
+  "steps": [
+    "upload",
+    "deploy",
+    "route:ausmalwiese.de/api/report",
+    "route:ausmalwiese.de/api/report/config",
+    "route:www.ausmalwiese.de/api/report",
+    "route:www.ausmalwiese.de/api/report/config"
+  ],
+  "installation_root": "/usr/local/libexec/rpi5-ausmalwiese-report-protected",
+  "launcher": "/usr/local/sbin/rpi5-ausmalwiese-report-protected",
+  "files": {
+    "adapter.py": "0644",
+    "transport.py": "0644",
+    "operator.py": "0644",
+    "contract.json": "0644",
+    "release.json": "0644"
+  },
+  "rules": {
+    "may_install": false,
+    "may_send": false,
+    "may_read_credentials": false,
+    "may_contact_cloudflare": false,
+    "may_merge": false,
+    "may_live": false,
+    "may_retry": false,
+    "may_rollback": false,
+    "may_cleanup": false,
+    "require_separate_root_installer": true,
+    "require_separate_private_binding_provider": true,
+    "require_authenticated_independent_collector": true,
+    "require_owner_authenticated_single_use_gate": true
+  }
+}

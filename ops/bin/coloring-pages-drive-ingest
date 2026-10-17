@@ -41,7 +41,7 @@ PENDING_DIR = "pending"
 
 IMPORTER_IMAGE = "ghcr.io/rozkalnsandris/coloring-pages@sha256:2a80b56c20c37f4a530059c3e438c6627fd962786e6590dd914e59e86a837ba8"
 IMPORTER_ENTRYPOINT = "/usr/local/bin/coloring-pages-import"
-PUBLIC_ORIGIN = "https://coloring.rozkalns.net"
+PUBLIC_ORIGIN = "https://ausmalwiese.de"
 
 ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -853,8 +853,8 @@ SITEMAP_ENABLE_MARKER = Path("/usr/local/share/coloring-pages/post-publish-v1.en
 SITEMAP_GATE_BYTES = b"coloring-pages-sitemap-post-publish-v1\n"
 SITEMAP_PUBLISHER = Path("/usr/local/bin/coloring-pages-sitemap-publish")
 SITEMAP_GENERATOR = Path("/usr/local/share/coloring-pages/coloring-pages-sitemap")
-SITEMAP_OPERATOR_BLOB = "0da51ef361f9ce815ebde3e4cc6cae19a2c2ffe8"
-SITEMAP_GENERATOR_BLOB = "5644c8fd366c0c57f6339fddd163c5091ea134c5"
+SITEMAP_OPERATOR_BLOB = "7b0330f30e27d6fe9c5f3e4fbf81fc6473ade660"
+SITEMAP_GENERATOR_BLOB = "49c8ba34cf0a4c4ab100463df9adacc4c6e90c2c"
 SITEMAP_ROOT_DIRS = (
     Path("/usr/local"),
     Path("/usr/local/bin"),

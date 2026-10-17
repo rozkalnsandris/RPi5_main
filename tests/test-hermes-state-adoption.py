@@ -9,6 +9,7 @@ from pathlib import Path
 import stat
 import subprocess
 import tempfile
+import tracemalloc
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -43,7 +44,8 @@ class AdoptionTests(unittest.TestCase):
 
     def publish(self, revalidate=lambda: None):
         m.publish(self.fds['state'], self.fds['compose'], self.fds['etc'], self.data,
-                  self.candidate, revalidate, self.receipt, uid=self.uid, gid=self.gid)
+                  self.candidate, revalidate, self.receipt, uid=self.uid, gid=self.gid,
+                  collector_gid=self.gid)
 
     def source_file(self, name='snapshot.json', value=b'{"synthetic":true}'):
         p = self.base / 'source' / name
@@ -85,6 +87,12 @@ class AdoptionTests(unittest.TestCase):
         for parent, name in (('state', m.STATE_STAGE), ('compose', m.ADAPTER_STAGE), ('etc', m.REGISTRY_STAGE)):
             self.assertFalse((self.base / parent / name).exists())
         self.assertEqual(stat.S_IMODE((self.base / 'state/hermes-deals').stat().st_mode), 0o755)
+        self.assertEqual(stat.S_IMODE((self.base / 'state/hermes-deals/data/raw').stat().st_mode),
+                         m.RAW_DEST_MODE)
+        self.assertEqual(stat.S_IMODE((self.base / 'state/hermes-deals/data/raw/synthetic.json').stat().st_mode),
+                         0o644)
+        self.assertEqual(stat.S_IMODE((self.base / 'state/hermes-deals/config').stat().st_mode),
+                         0o755)
         self.assertEqual(stat.S_IMODE((self.base / 'state/hermes-deals/config/sources.json').stat().st_mode), 0o644)
         self.assertEqual(stat.S_IMODE(self.original.stat().st_mode), 0o444)
 
@@ -213,6 +221,24 @@ class AdoptionTests(unittest.TestCase):
         self.assertFalse(self.receipt['adapter_published'])
         self.assertFalse(self.receipt['registry_published'])
 
+    def test_raw_mode_tamper_after_publish_blocks_adapter(self):
+        def validate():
+            if self.receipt['state_published']:
+                (self.base / 'state/hermes-deals/data/raw').chmod(0o775)
+        with self.assertRaises(m.Stop):
+            self.publish(validate)
+        self.assertFalse(self.receipt['adapter_published'])
+        self.assertFalse(self.receipt['registry_published'])
+
+    def test_nested_raw_directories_keep_collector_mode_and_copied_file_mode(self):
+        self.data['data']['raw']['nested'] = {'snapshot.json': b'new synthetic snapshot'}
+        self.publish()
+        raw = self.base / 'state/hermes-deals/data/raw'
+        self.assertEqual(stat.S_IMODE((raw / 'nested').stat().st_mode), m.RAW_DEST_MODE)
+        self.assertEqual(stat.S_IMODE((raw / 'nested/snapshot.json').stat().st_mode), 0o644)
+        (raw / 'nested/new.json').write_bytes(b'new collector snapshot')
+        self.assertEqual((raw / 'nested/snapshot.json').read_bytes(), b'new synthetic snapshot')
+
     def test_noreplace_destination_race_preserves_existing_target(self):
         fd = self.fds['compose']
         (self.base / 'compose/stage').write_bytes(b'candidate')
@@ -226,7 +252,10 @@ class AdoptionTests(unittest.TestCase):
         self.source_file()
         (self.base / 'source/empty').mkdir(mode=0o755)
         value = self.tree()
-        self.assertEqual(m.contents(value), {'empty': {}, 'snapshot.json': b'{"synthetic":true}'})
+        data = m.contents(value)
+        self.assertEqual(data['empty'], {})
+        self.assertIsInstance(data['snapshot.json'], m.FileSnapshot)
+        self.assertEqual(data['snapshot.json'].sha256, m.digest(b'{"synthetic":true}'))
         self.assertEqual(value, self.tree())
 
     def test_source_symlink_hardlink_fifo_and_executable_rejected(self):
@@ -286,6 +315,156 @@ class AdoptionTests(unittest.TestCase):
         with patch.object(m.os, 'read', side_effect=read), self.assertRaises(m.Stop):
             self.tree()
 
+    def test_nested_raw_above_32_mib_preserved_but_config_rejected(self):
+        nested = self.base / 'source/nested'
+        nested.mkdir(mode=0o755)
+        snapshot = nested / 'snapshot.json'
+        size = 96 * 1024 * 1024 + 1
+        with snapshot.open('wb') as stream:
+            stream.truncate(size)
+        snapshot.chmod(0o644)
+        real_read = os.read
+        largest_read = 0
+        def bounded_read(fd, count):
+            nonlocal largest_read
+            largest_read = max(largest_read, count)
+            return real_read(fd, count)
+        tracemalloc.start()
+        try:
+            with patch.object(m.os, 'read', new=bounded_read):
+                result = self.tree(file_limit=m.MAX_RAW_FILE)
+                copied = m.contents(result)['nested']['snapshot.json']
+                self.assertEqual(copied.size, size)
+                data = {'data': {'raw': m.contents(result)}}
+                m.write_tree(self.fds['state'], data, uid=self.uid, gid=self.gid,
+                             collector_gid=self.gid)
+                m.verify_published_tree(self.fds['state'], data, uid=self.uid,
+                                        gid=self.gid, collector_gid=self.gid)
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+        self.assertLessEqual(largest_read, m.STREAM_CHUNK)
+        self.assertLess(peak, 4 * 1024 * 1024, 'snapshot/copy/verify must not retain file bytes')
+        self.assertEqual((self.base / 'state/data/raw/nested/snapshot.json').stat().st_size, size)
+        with patch.object(m, 'stream_file', side_effect=AssertionError('oversize config opened')):
+            with self.assertRaises(m.Stop):
+                self.tree()
+
+    def test_raw_above_file_budget_rejected_before_open(self):
+        snapshot = self.source_file(value=b'')
+        with snapshot.open('wb') as stream:
+            stream.truncate(m.MAX_RAW_FILE + 1)
+        with patch.object(m, 'stream_file', side_effect=AssertionError('oversize raw opened')):
+            with self.assertRaises(m.Stop):
+                self.tree(file_limit=m.MAX_RAW_FILE)
+
+    def test_tree_read_stops_at_checked_size_when_file_grows(self):
+        snapshot = self.source_file(value=b'abc')
+        original_read = os.read
+        returned = []
+        def read(fd, size):
+            if not returned:
+                with snapshot.open('ab') as stream:
+                    stream.write(b'x' * 100)
+            value = original_read(fd, size)
+            returned.append(len(value))
+            return value
+        with patch.object(m.os, 'read', side_effect=read), self.assertRaises(m.Stop):
+            self.tree(file_limit=m.MAX_RAW_FILE)
+        self.assertEqual(sum(returned), 4)
+
+    def test_full_apply_raw_limit_and_shared_budget_at_boundary(self):
+        # Scaled boundary exercises initial copy and every pre-publication reread.
+        with self.execution_fixture() as (_, _, checkout):
+            raw = checkout / 'data/raw/snapshot.json'
+            raw.write_bytes(b'12345678')
+            # sources.json is two bytes; the combined total is exactly ten.
+            with patch.object(m, 'MAX_FILE', 2), patch.object(m, 'MAX_RAW_FILE', 10), \
+                    patch.object(m, 'MAX_TOTAL', 10):
+                m.execute(m.BASE, True, self.receipt)
+            self.assertEqual(self.receipt['status'], 'PREPARED_NO_ACTIVATION')
+            self.assertEqual((self.base / 'state/hermes-deals/data/raw/snapshot.json').read_bytes(),
+                             b'12345678')
+
+    def test_full_apply_combined_raw_config_overflow_stops_before_staging(self):
+        with self.execution_fixture() as (_, _, checkout):
+            (checkout / 'data/raw/snapshot.json').write_bytes(b'123456789')
+            with patch.object(m, 'MAX_FILE', 2), patch.object(m, 'MAX_RAW_FILE', 10), \
+                    patch.object(m, 'MAX_TOTAL', 10), self.assertRaises(m.Stop):
+                m.execute(m.BASE, True, self.receipt)
+            self.assertFalse(self.receipt['mutation_attempted'])
+            self.assertEqual(list((self.base / 'state').iterdir()), [])
+
+    def test_full_apply_config_keeps_smaller_ceiling(self):
+        with self.execution_fixture() as (_, _, checkout):
+            (checkout / 'data/raw/snapshot.json').write_bytes(b'123')
+            (checkout / 'config/sources.json').write_bytes(b'123')
+            with patch.object(m, 'MAX_FILE', 2), patch.object(m, 'MAX_RAW_FILE', 10), \
+                    patch.object(m, 'MAX_TOTAL', 10), self.assertRaises(m.Stop):
+                m.execute(m.BASE, True, self.receipt)
+            self.assertFalse(self.receipt['mutation_attempted'])
+            self.assertEqual(list((self.base / 'state').iterdir()), [])
+
+    def test_multichunk_full_apply_preserves_exact_bytes(self):
+        value = bytes(range(256)) * 600 + b'last chunk'
+        with self.execution_fixture() as (_, _, checkout):
+            nested = checkout / 'data/raw/nested'; nested.mkdir(mode=0o755)
+            (nested / 'snapshot.json').write_bytes(value)
+            (nested / 'snapshot.json').chmod(0o644)
+            m.execute(m.BASE, True, self.receipt)
+            self.assertEqual((self.base / 'state/hermes-deals/data/raw/nested/snapshot.json').read_bytes(), value)
+            self.assertEqual(self.receipt['status'], 'PREPARED_NO_ACTIVATION')
+
+    def test_source_change_during_staging_keeps_evidence_without_publication(self):
+        with self.execution_fixture() as (_, _, checkout):
+            source = checkout / 'data/raw/snapshot.json'
+            source.write_bytes(b'x' * (m.STREAM_CHUNK + 7))
+            original_write = m.write_all
+            changed = False
+            def write(fd, value):
+                nonlocal changed
+                original_write(fd, value)
+                if not changed:
+                    changed = True
+                    with source.open('r+b') as stream:
+                        stream.write(b'y')
+            with patch.object(m, 'write_all', side_effect=write), self.assertRaises(m.Stop):
+                m.execute(m.BASE, True, self.receipt)
+            self.assertTrue(self.receipt['mutation_attempted'])
+            self.assertFalse(self.receipt['state_published'])
+            self.assertTrue((self.base / 'state' / m.STATE_STAGE).exists())
+            self.assertFalse((self.base / 'state/hermes-deals').exists())
+            self.assertEqual(self.original.read_bytes(), self.candidate[m.BASE_REGISTRY])
+
+    def test_recorded_source_directory_replacement_is_rejected(self):
+        nested = self.base / 'source/nested'; nested.mkdir(mode=0o755)
+        (nested / 'snapshot.json').write_bytes(b'original')
+        (nested / 'snapshot.json').chmod(0o644)
+        snapshot = m.contents(self.tree())['nested']['snapshot.json']
+        nested.rename(self.base / 'detached')
+        nested.mkdir(mode=0o755)
+        (nested / 'snapshot.json').write_bytes(b'original')
+        with self.assertRaises(m.Stop):
+            m.new_file(self.fds['state'], 'copy', snapshot, 0o644, uid=self.uid, gid=self.gid)
+        self.assertTrue((self.base / 'state/copy').exists())
+
+    def test_stream_hash_rejects_same_size_destination_tamper(self):
+        self.source_file(value=b'original')
+        data = {'data': {'raw': m.contents(self.tree())}}
+        m.write_tree(self.fds['state'], data, uid=self.uid, gid=self.gid, collector_gid=self.gid)
+        (self.base / 'state/data/raw/snapshot.json').write_bytes(b'modified')
+        with self.assertRaises(m.Stop):
+            m.verify_published_tree(self.fds['state'], data, uid=self.uid, gid=self.gid,
+                                    collector_gid=self.gid)
+
+    def test_stream_copy_handles_partial_writes(self):
+        source = self.source_file(value=b'abcdef' * 100)
+        snapshot = m.contents(self.tree())['snapshot.json']
+        original_write = os.write
+        with patch.object(m.os, 'write', side_effect=lambda fd, value: original_write(fd, value[:7])):
+            m.new_file(self.fds['state'], 'copy', snapshot, 0o644, uid=self.uid, gid=self.gid)
+        self.assertEqual((self.base / 'state/copy').read_bytes(), source.read_bytes())
+
     def test_directory_replaced_during_walk_rejected(self):
         p = self.base / 'source/nested'
         p.mkdir(mode=0o755)
@@ -338,10 +517,44 @@ class AdoptionTests(unittest.TestCase):
             m.quiescent()
             self.assertEqual(run.call_count, 4)
             self.assertTrue(all(c.args[0][:2] == ['/usr/bin/systemctl', 'show'] for c in run.call_args_list))
+        with patch.object(m.subprocess, 'run', side_effect=show) as run:
+            m.quiescent(True)
+            self.assertEqual(run.call_count, 12)
+            self.assertTrue(all(c.args[0][:2] == ['/usr/bin/systemctl', 'show'] for c in run.call_args_list))
+            self.assertEqual({c.args[0][2] for c in run.call_args_list}, {
+                'rozkalns-simple-deployer.service', 'rozkalns-simple-deployer.timer',
+                'rozkalns-simple-deployer' + '@' + 'hermes-deals.service',
+                'rozkalns-simple-deployer' + '@' + 'hermes-deals.timer',
+                *(f'hermes-deals-{name}.{kind}'
+                  for name in ('netto-collector', 'aldi-collector',
+                               'edeka-collector', 'edeka-monitor')
+                  for kind in ('service', 'timer')),
+            })
         bad = show(['', '', 'x.timer', '--all'])
         bad.stdout = bad.stdout.replace(b'UnitFileState=disabled', b'UnitFileState=enabled')
         with patch.object(m.subprocess, 'run', return_value=bad), self.assertRaises(m.Stop):
             m.quiescent()
+
+    def test_collector_timer_or_service_activity_stops_adoption(self):
+        def show(argv, **kwargs):
+            unit = argv[2]
+            values = {'LoadState': 'loaded', 'ActiveState': 'inactive', 'SubState': 'dead',
+                      'UnitFileState': 'disabled' if unit.endswith('.timer') else 'static',
+                      'Job': '', 'NeedDaemonReload': 'no'}
+            if unit == target:
+                values.update(change)
+            return SimpleNamespace(returncode=0, stdout=''.join(
+                f'{key}={value}\n' for key, value in values.items()).encode())
+        cases = (
+            ('hermes-deals-netto-collector.timer', {'ActiveState': 'active', 'SubState': 'waiting'}),
+            ('hermes-deals-aldi-collector.timer', {'UnitFileState': 'enabled'}),
+            ('hermes-deals-edeka-collector.service', {'ActiveState': 'active', 'SubState': 'running'}),
+            ('hermes-deals-edeka-monitor.timer', {'Job': '123'}),
+        )
+        for target, change in cases:
+            with self.subTest(unit=target), patch.object(m.subprocess, 'run', side_effect=show):
+                with self.assertRaises(m.Stop):
+                    m.quiescent(True)
 
     def test_sanitized_error_receipt_and_no_retry(self):
         output = io.StringIO()
@@ -401,6 +614,7 @@ class AdoptionTests(unittest.TestCase):
             return original_directory_meta(fd, self.uid if uid == 0 else uid,
                                            self.gid if gid == 0 else gid, mode)
         def publish(*args, **kwargs):
+            kwargs['collector_gid'] = self.gid
             return original_publish(*args, **kwargs, uid=self.uid, gid=self.gid)
         def open_guard(name, flags, *args, **kwargs):
             if os.fspath(name) == m.ENV:
@@ -409,9 +623,11 @@ class AdoptionTests(unittest.TestCase):
         with contextlib.ExitStack() as stack:
             for name, value in (('ETC', etc), ('STATE', state), ('EXECUTOR', executor),
                                 ('source_check', lambda sha: None), ('runtime_ids', lambda: (self.uid, self.gid)),
-                                ('quiescent', lambda: None), ('directory', fixture_directory),
+                                ('quiescent', lambda *_: None), ('directory', fixture_directory),
                                 ('file_meta', file_meta), ('directory_meta', dir_meta), ('publish', publish)):
                 stack.enter_context(patch.object(m, name, value))
+            stack.enter_context(patch.object(m, 'COLLECTOR_UID', self.uid))
+            stack.enter_context(patch.object(m, 'COLLECTOR_GID', self.gid))
             stack.enter_context(patch.object(m.os, 'geteuid', return_value=0))
             stack.enter_context(patch.object(m.os, 'open', side_effect=open_guard))
             stack.enter_context(patch.object(m.pwd, 'getpwnam', return_value=account))
@@ -429,6 +645,16 @@ class AdoptionTests(unittest.TestCase):
             self.assertEqual(list((self.base / 'state').iterdir()), [])
             self.assertEqual(before, (m.fingerprint(env.stat()), m.fingerprint(identity.stat())))
 
+    def test_apply_collector_quiescence_stops_before_data_read_or_staging(self):
+        with self.execution_fixture():
+            with patch.object(m, 'quiescent', side_effect=m.Stop) as check:
+                with self.assertRaises(m.Stop):
+                    m.execute(m.BASE, True, self.receipt)
+            check.assert_called_once_with(True)
+            self.assertFalse(self.receipt['data_content_read'])
+            self.assertFalse(self.receipt['mutation_attempted'])
+            self.assertEqual(list((self.base / 'state').iterdir()), [])
+
     def test_full_apply_preserves_env_identity_and_source(self):
         with self.execution_fixture() as (env, identity, checkout):
             before = m.fingerprint(env.stat()), m.fingerprint(identity.stat())
@@ -440,6 +666,15 @@ class AdoptionTests(unittest.TestCase):
             self.assertEqual(before, (m.fingerprint(env.stat()), m.fingerprint(identity.stat())))
             self.assertEqual(m.fingerprint(source.stat()), source_fp)
             self.assertEqual((self.base / 'state/hermes-deals/data/raw/snapshot.json').read_bytes(), source.read_bytes())
+
+    def test_collector_identity_mismatch_stops_before_static_or_data_read(self):
+        with self.execution_fixture(), patch.object(m, 'COLLECTOR_UID', self.uid + 1):
+            with self.assertRaises(m.Stop):
+                m.execute(m.BASE, True, self.receipt)
+            self.assertFalse(self.receipt['static_content_read'])
+            self.assertFalse(self.receipt['data_content_read'])
+            self.assertFalse(self.receipt['mutation_attempted'])
+            self.assertEqual(list((self.base / 'state').iterdir()), [])
 
     def test_execute_rejects_static_baseline_drift_before_data_read(self):
         with self.execution_fixture():

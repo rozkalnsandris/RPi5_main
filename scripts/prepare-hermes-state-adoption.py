@@ -16,6 +16,7 @@ import re
 import resource
 import stat
 import subprocess
+from typing import NamedTuple
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = 'scripts/prepare-hermes-state-adoption.py'
@@ -47,9 +48,14 @@ HASHES = {
 }
 MAX_ENTRIES = 4096
 MAX_FILE = 32 * 1024 * 1024
-MAX_TOTAL = 256 * 1024 * 1024
+MAX_TOTAL = 4 * 1024 * 1024 * 1024
+MAX_RAW_FILE = 128 * 1024 * 1024
+STREAM_CHUNK = 64 * 1024
 MAX_DEPTH = 12
 STATIC_LIMIT = 128 * 1024
+COLLECTOR_UID = 1000
+COLLECTOR_GID = 1000
+RAW_DEST_MODE = 0o3775
 DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
 READ_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC | os.O_NOATIME
 
@@ -152,6 +158,72 @@ def unique_json(raw):
     return json.loads(raw, object_pairs_hook=pairs)
 
 
+class FileSnapshot(NamedTuple):
+    """Bounded metadata only; root descriptors stay open for the entire apply."""
+    root_fd: int
+    root_fp: tuple
+    parents: tuple
+    name: str
+    fp: tuple
+    sha256: str
+
+    @property
+    def size(self):
+        return self.fp[5]
+
+
+def stream_file(fd, name, uid, gid, mode, limit, *, expected_fp=None, sink=None):
+    before = os.stat(name, dir_fd=fd, follow_symlinks=False)
+    file_meta(before, uid, gid, mode)
+    require(0 <= before.st_size <= limit)
+    if expected_fp is not None:
+        require(fingerprint(before) == expected_fp)
+    child = os.open(name, READ_FLAGS, dir_fd=fd)
+    try:
+        require(fingerprint(os.fstat(child)) == fingerprint(before))
+        no_acl(child)
+        checksum = hashlib.sha256()
+        length = 0
+        while True:
+            part = os.read(child, min(STREAM_CHUNK, before.st_size + 1 - length))
+            if not part:
+                break
+            length += len(part)
+            require(length <= before.st_size)
+            checksum.update(part)
+            if sink is not None:
+                write_all(sink, part)
+        require(length == before.st_size)
+        require(fingerprint(os.fstat(child)) == fingerprint(before))
+        require(fingerprint(os.stat(name, dir_fd=fd, follow_symlinks=False)) == fingerprint(before))
+        return checksum.hexdigest(), fingerprint(before)
+    finally:
+        os.close(child)
+
+
+@contextmanager
+def source_parent(snapshot):
+    """Reopen the recorded ancestry without following replaced directories."""
+    with ExitStack() as stack:
+        fd = snapshot.root_fd
+        require(fingerprint(os.fstat(fd)) == snapshot.root_fp)
+        no_acl(fd)
+        opened = []
+        for name, expected in snapshot.parents:
+            require(fingerprint(os.stat(name, dir_fd=fd, follow_symlinks=False)) == expected)
+            child = os.open(name, DIR_FLAGS | os.O_NOATIME, dir_fd=fd)
+            stack.callback(os.close, child)
+            require(fingerprint(os.fstat(child)) == expected)
+            no_acl(child)
+            opened.append((fd, name, child, expected))
+            fd = child
+        yield fd
+        for parent, name, child, expected in reversed(opened):
+            require(fingerprint(os.fstat(child)) == expected)
+            require(fingerprint(os.stat(name, dir_fd=parent, follow_symlinks=False)) == expected)
+        require(fingerprint(os.fstat(snapshot.root_fd)) == snapshot.root_fp)
+
+
 def git(*args):
     return subprocess.run(
         ['/usr/bin/git', '--no-optional-locks', '-c', f'safe.directory={ROOT}',
@@ -168,7 +240,8 @@ def git_bytes(*args):
 
 def contract():
     return {
-        'schema': 'hermes.state-adoption.v1', 'issue': 1014, 'entrypoint': SCRIPT,
+        'schema': 'hermes.state-adoption.v1', 'issue': 1014,
+        'revision_issue': 1034, 'entrypoint': SCRIPT,
         'baseline_source': BASE, 'registry_baseline_source': REGISTRY_SOURCE,
         'source_hashes': HASHES,
         'source_trees': ['passwd(andris).home/hermes-deals/data/raw',
@@ -178,12 +251,17 @@ def contract():
                     str(ETC / REGISTRY_STAGE)],
         'publish_order': ['state', 'adapter', 'registry'],
         'limits': {'entries': MAX_ENTRIES, 'file_bytes': MAX_FILE,
+                   'raw_file_bytes': MAX_RAW_FILE,
+                   'stream_chunk_bytes': STREAM_CHUNK,
                    'total_bytes': MAX_TOTAL, 'depth': MAX_DEPTH,
                    'static_file_bytes': STATIC_LIMIT},
         'identity_policy': 'strict schema and public ancestor of baseline; preserve bytes and inode',
         'existing_env': 'metadata only; preserve bytes, inode, owner, group, mode',
-        'quiescence': 'generic and Hermes instance service/timer inactive, timers disabled or absent',
+        'collector_identity': {'uid': COLLECTOR_UID, 'gid': COLLECTOR_GID},
+        'raw_destination': 'root:collector-group directories 03775; root:root files 0644',
+        'quiescence': 'generic and Hermes instance inactive; apply also requires collector/monitor services inactive and timers disabled',
         'default_data_content_read': False, 'default_mutation': False,
+        'data_snapshot': 'metadata and SHA-256 only; bounded streaming copy and verification',
         'apply_requires_separate_live_authorization': True,
         'activation_eligible': False, 'retry': False, 'rollback': False, 'error_cleanup': False,
     }
@@ -241,26 +319,31 @@ def runtime_ids():
     return user.pw_uid, group.gr_gid
 
 
-def quiescent():
+def quiescent(apply=False):
     properties = ('LoadState', 'ActiveState', 'SubState', 'UnitFileState', 'Job', 'NeedDaemonReload')
-    for instance in ('', '@hermes-deals'):
-        for kind in ('service', 'timer'):
-            unit = PRINCIPAL + instance + '.' + kind
-            result = subprocess.run(
-                ['/usr/bin/systemctl', 'show', unit, '--no-pager', '--all',
-                 *['--property=' + p for p in properties]],
-                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=10,
-                check=False, env={'PATH': '/usr/bin:/bin', 'LC_ALL': 'C'})
-            require(result.returncode == 0)
-            values = dict(line.split('=', 1) for line in result.stdout.decode().splitlines())
-            require(set(values) == set(properties))
-            require(values['ActiveState'] == 'inactive' and values['SubState'] == 'dead'
-                    and values['Job'] == '' and values['NeedDaemonReload'] == 'no')
-            if instance and values['LoadState'] == 'not-found':
-                require(values['UnitFileState'] == '')
-            else:
-                require(values['LoadState'] == 'loaded')
-                require(values['UnitFileState'] == ('disabled' if kind == 'timer' else 'static'))
+    units = [(PRINCIPAL + instance + '.' + kind, kind, bool(instance))
+             for instance in ('', '@hermes-deals') for kind in ('service', 'timer')]
+    if apply:
+        units.extend((f'hermes-deals-{name}.{kind}', kind, False)
+                     for name in ('netto-collector', 'aldi-collector',
+                                  'edeka-collector', 'edeka-monitor')
+                     for kind in ('service', 'timer'))
+    for unit, kind, allow_absent in units:
+        result = subprocess.run(
+            ['/usr/bin/systemctl', 'show', unit, '--no-pager', '--all',
+             *['--property=' + p for p in properties]],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=10,
+            check=False, env={'PATH': '/usr/bin:/bin', 'LC_ALL': 'C'})
+        require(result.returncode == 0)
+        values = dict(line.split('=', 1) for line in result.stdout.decode().splitlines())
+        require(set(values) == set(properties))
+        require(values['ActiveState'] == 'inactive' and values['SubState'] == 'dead'
+                and values['Job'] == '' and values['NeedDaemonReload'] == 'no')
+        if allow_absent and values['LoadState'] == 'not-found':
+            require(values['UnitFileState'] == '')
+        else:
+            require(values['LoadState'] == 'loaded')
+            require(values['UnitFileState'] == ('disabled' if kind == 'timer' else 'static'))
 
 
 def allowed_name(name):
@@ -269,10 +352,14 @@ def allowed_name(name):
     require(not name.lower().endswith(('.pem', '.key', '.db', '.sqlite', '.sqlite3', '.sql', '.bak')))
 
 
-def tree(fd, uid, gid, budget, *, depth=0, root_dev=None):
-    """Bounded descriptor walk; data and metadata remain in memory, never in output."""
+def tree(fd, uid, gid, budget, *, depth=0, root_dev=None, file_limit=None,
+         root_fd=None, root_fp=None, parents=()):
+    """Bounded descriptor walk; retain metadata/digests, never file contents."""
     require(depth <= MAX_DEPTH)
+    file_limit = MAX_FILE if file_limit is None else file_limit
     before = os.fstat(fd)
+    if root_fd is None:
+        root_fd, root_fp = fd, fingerprint(before)
     require(before.st_uid == uid and before.st_gid == gid and not before.st_mode & 0o7022)
     require(stat.S_ISDIR(before.st_mode))
     no_acl(fd)
@@ -293,17 +380,23 @@ def tree(fd, uid, gid, budget, *, depth=0, root_dev=None):
             child = os.open(name, DIR_FLAGS | os.O_NOATIME, dir_fd=fd)
             try:
                 require(fingerprint(os.fstat(child)) == fingerprint(st))
-                nested = tree(child, uid, gid, budget, depth=depth + 1, root_dev=root_dev)
+                nested = tree(child, uid, gid, budget, depth=depth + 1,
+                              root_dev=root_dev, file_limit=file_limit,
+                              root_fd=root_fd, root_fp=root_fp,
+                              parents=(*parents, (name, fingerprint(st))))
                 require(fingerprint(os.stat(name, dir_fd=fd, follow_symlinks=False)) == fingerprint(st))
                 result[name] = (fingerprint(st), nested)
             finally:
                 os.close(child)
         else:
             require(stat.S_ISREG(st.st_mode) and not st.st_mode & 0o7133)
+            require(0 <= st.st_size <= file_limit)
             budget[1] += st.st_size
             require(budget[1] <= MAX_TOTAL)
-            data, fp = read_file(fd, name, uid, gid, stat.S_IMODE(st.st_mode), MAX_FILE)
-            result[name] = (fp, data)
+            # Reject growth after stat without allocating another file-sized budget.
+            checksum, fp = stream_file(fd, name, uid, gid, stat.S_IMODE(st.st_mode),
+                                       st.st_size, expected_fp=fingerprint(st))
+            result[name] = (fp, FileSnapshot(root_fd, root_fp, parents, name, fp, checksum))
     require(fingerprint(os.fstat(fd)) == fingerprint(before))
     return result
 
@@ -326,7 +419,15 @@ def new_file(fd, name, value, mode, *, uid=0, gid=0):
     try:
         os.fchown(child, uid, gid)
         no_acl(child)
-        write_all(child, value)
+        if isinstance(value, FileSnapshot):
+            with source_parent(value) as source:
+                checksum, _ = stream_file(source, value.name, value.fp[2], value.fp[3],
+                                          stat.S_IMODE(value.fp[4]), value.size,
+                                          expected_fp=value.fp, sink=child)
+                require(checksum == value.sha256)
+        else:
+            # Small public static artifacts; production data uses FileSnapshot.
+            write_all(child, value)
         os.fchmod(child, mode)
         os.fsync(child)
         return fingerprint(os.fstat(child))
@@ -335,28 +436,81 @@ def new_file(fd, name, value, mode, *, uid=0, gid=0):
 
 
 @contextmanager
-def new_directory(fd, name, *, uid=0, gid=0):
+def new_directory(fd, name, *, uid=0, gid=0, mode=0o755):
     os.mkdir(name, 0o700, dir_fd=fd)
     child = os.open(name, DIR_FLAGS, dir_fd=fd)
     try:
-        directory_meta(child, uid, gid, 0o700)
         require(ident(os.stat(name, dir_fd=fd, follow_symlinks=False)) == ident(os.fstat(child)))
         os.fchown(child, uid, gid)
+        os.fchmod(child, 0o700)
+        directory_meta(child, uid, gid, 0o700)
         no_acl(child)
         yield child
-        os.fchmod(child, 0o755)
+        os.fchmod(child, mode)
         os.fsync(child)
     finally:
         os.close(child)
 
 
-def write_tree(fd, data, *, uid=0, gid=0):
+def raw_destination(path):
+    return path[:2] == ('data', 'raw')
+
+
+def write_tree(fd, data, *, uid=0, gid=0, collector_gid=COLLECTOR_GID, path=()):
     for name, value in data.items():
         if isinstance(value, dict):
-            with new_directory(fd, name, uid=uid, gid=gid) as child:
-                write_tree(child, value, uid=uid, gid=gid)
+            child_path = (*path, name)
+            is_raw = raw_destination(child_path)
+            with new_directory(fd, name, uid=uid,
+                               gid=collector_gid if is_raw else gid,
+                               mode=RAW_DEST_MODE if is_raw else 0o755) as child:
+                write_tree(child, value, uid=uid, gid=gid,
+                           collector_gid=collector_gid, path=child_path)
         else:
             new_file(fd, name, value, 0o644, uid=uid, gid=gid)
+
+
+def verify_published_tree(fd, data, *, uid=0, gid=0,
+                          collector_gid=COLLECTOR_GID, path=(), root_dev=None,
+                          budget=None):
+    """Verify the exact copied tree, including the collector-only raw directory mode."""
+    require(len(path) <= MAX_DEPTH)
+    budget = [0, 0] if budget is None else budget
+    before = os.fstat(fd)
+    is_raw = raw_destination(path)
+    directory_meta(fd, uid, collector_gid if is_raw else gid,
+                   RAW_DEST_MODE if is_raw else 0o755)
+    root_dev = before.st_dev if root_dev is None else root_dev
+    require(before.st_dev == root_dev)
+    with os.scandir(fd) as entries:
+        names = [entry.name for entry in entries]
+    budget[0] += len(names)
+    require(budget[0] <= MAX_ENTRIES)
+    require(len(names) == len(data) and set(names) == set(data))
+    for name in sorted(names):
+        allowed_name(name)
+        expected = data[name]
+        st = os.stat(name, dir_fd=fd, follow_symlinks=False)
+        require(st.st_dev == root_dev)
+        if isinstance(expected, dict):
+            require(stat.S_ISDIR(st.st_mode))
+            with os_fd(name, fd, DIR_FLAGS | os.O_NOATIME) as child:
+                require(fingerprint(os.fstat(child)) == fingerprint(st))
+                verify_published_tree(child, expected, uid=uid, gid=gid,
+                                      collector_gid=collector_gid, path=(*path, name),
+                                      root_dev=root_dev, budget=budget)
+                require(fingerprint(os.stat(name, dir_fd=fd,
+                                            follow_symlinks=False)) == fingerprint(st))
+        else:
+            size = expected.size if isinstance(expected, FileSnapshot) else len(expected)
+            checksum = expected.sha256 if isinstance(expected, FileSnapshot) else digest(expected)
+            require(0 <= st.st_size == size <= (MAX_RAW_FILE if is_raw else MAX_FILE))
+            budget[1] += st.st_size
+            require(budget[1] <= MAX_TOTAL)
+            actual, _ = stream_file(fd, name, uid, gid, 0o644, size,
+                                    expected_fp=fingerprint(st))
+            require(actual == checksum)
+    require(fingerprint(os.fstat(fd)) == fingerprint(before))
 
 
 def rename_new(fd, stage, target):
@@ -367,16 +521,17 @@ def rename_new(fd, stage, target):
     os.fsync(fd)
 
 
-def publish(state, compose, etc, data, candidate, revalidate, receipt, *, uid=0, gid=0):
+def publish(state, compose, etc, data, candidate, revalidate, receipt, *,
+            uid=0, gid=0, collector_gid=COLLECTOR_GID):
     require(absent(state, STATE_STAGE) and absent(state, 'hermes-deals')
             and absent(compose, ADAPTER_STAGE) and absent(compose, ADAPTER)
             and absent(etc, REGISTRY_STAGE))
     revalidate()
     receipt['mutation_attempted'] = True
     with new_directory(state, STATE_STAGE, uid=uid, gid=gid) as stage:
-        write_tree(stage, data, uid=uid, gid=gid)
+        write_tree(stage, data, uid=uid, gid=gid, collector_gid=collector_gid)
     with os_fd(STATE_STAGE, state, DIR_FLAGS | os.O_NOATIME) as staged:
-        require(contents(tree(staged, uid, gid, [0, 0])) == data)
+        verify_published_tree(staged, data, uid=uid, gid=gid, collector_gid=collector_gid)
         stage_fp = fingerprint(os.fstat(staged))
     adapter_fp = new_file(compose, ADAPTER_STAGE, candidate[ADAPTER_SOURCE], 0o444, uid=uid, gid=gid)
     registry_fp = new_file(etc, REGISTRY_STAGE, candidate[NEW_REGISTRY], 0o444, uid=uid, gid=gid)
@@ -391,7 +546,8 @@ def publish(state, compose, etc, data, candidate, revalidate, receipt, *, uid=0,
     def verify_state():
         with os_fd('hermes-deals', state, DIR_FLAGS | os.O_NOATIME) as target:
             require(ident(os.fstat(target)) == stage_fp[:5])
-            require(contents(tree(target, uid, gid, [0, 0])) == data)
+            verify_published_tree(target, data, uid=uid, gid=gid,
+                                  collector_gid=collector_gid)
 
     revalidate()
     verify_state()
@@ -414,7 +570,8 @@ def publish(state, compose, etc, data, candidate, revalidate, receipt, *, uid=0,
         require(raw == candidate[relative] and final[:5] == fp[:5])
     with os_fd('hermes-deals', state, DIR_FLAGS | os.O_NOATIME) as target:
         require(ident(os.fstat(target)) == stage_fp[:5])
-        require(contents(tree(target, uid, gid, [0, 0])) == data)
+        verify_published_tree(target, data, uid=uid, gid=gid,
+                              collector_gid=collector_gid)
 
 
 @contextmanager
@@ -431,7 +588,7 @@ def execute(sha, apply, receipt):
     source_check(sha)
     runtime = runtime_ids()
     source = pwd.getpwnam('andris')
-    require(source.pw_uid != 0 and source.pw_gid != 0)
+    require(source.pw_uid == COLLECTOR_UID and source.pw_gid == COLLECTOR_GID)
     source_root = Path(source.pw_dir) / 'hermes-deals'
     paths = {'etc': (ETC, {0}, 0, 0, 0o755),
              'compose': (ETC / 'compose', {0}, 0, 0, 0o755),
@@ -484,7 +641,7 @@ def execute(sha, apply, receipt):
             source_check(sha)
             require(runtime_ids() == runtime)
             require(pwd.getpwnam('andris') == source)
-            quiescent()
+            quiescent(apply)
             for key, (path, owners, uid, gid, mode) in paths.items():
                 with directory(path, owners) as fresh:
                     require(directory_meta(fresh, uid, gid, mode) == initial[key])
@@ -513,12 +670,13 @@ def execute(sha, apply, receipt):
         receipt['data_content_read'] = True
         budget = [3, 0]  # destination's fixed data/raw/config directories count too
         snapshots = {key: tree(fds[key], source.pw_uid, source.pw_gid, budget,
-                               depth=2 if key == 'raw' else 1)
+                               depth=2 if key == 'raw' else 1,
+                               file_limit=MAX_RAW_FILE if key == 'raw' else MAX_FILE)
                      for key in ('raw', 'config')}
         source_fps = {key: fingerprint(os.fstat(fds[key])) for key in snapshots}
         data = {'data': {'raw': contents(snapshots['raw'])}, 'config': contents(snapshots['config'])}
-        require(isinstance(data['config'].get('sources.json'), bytes)
-                and len(data['config']['sources.json']) > 0)
+        require(isinstance(data['config'].get('sources.json'), FileSnapshot)
+                and data['config']['sources.json'].size > 0)
 
         def final_check():
             revalidate()
@@ -526,9 +684,11 @@ def execute(sha, apply, receipt):
             for key in snapshots:
                 require(fingerprint(os.fstat(fds[key])) == source_fps[key])
                 require(tree(fds[key], source.pw_uid, source.pw_gid, budget,
-                             depth=2 if key == 'raw' else 1) == snapshots[key])
+                             depth=2 if key == 'raw' else 1,
+                             file_limit=MAX_RAW_FILE if key == 'raw' else MAX_FILE) == snapshots[key])
 
-        publish(fds['state'], fds['compose'], fds['etc'], data, candidate, final_check, receipt)
+        publish(fds['state'], fds['compose'], fds['etc'], data, candidate, final_check,
+                receipt, collector_gid=COLLECTOR_GID)
         final_check()
         require(absent(fds['state'], STATE_STAGE) and absent(fds['compose'], ADAPTER_STAGE)
                 and absent(fds['etc'], REGISTRY_STAGE))

@@ -150,7 +150,7 @@
     "maximum_pages": 12
   },
   "post_import_verification": {
-    "public_origin": "https://coloring.rozkalns.net",
+    "public_origin": "https://ausmalwiese.de",
     "required": [
       "original-source-size-and-sha256-match",
       "catalog-has-exactly-one-matching-entry",
