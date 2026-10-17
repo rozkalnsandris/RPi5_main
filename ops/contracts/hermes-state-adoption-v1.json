@@ -18,6 +18,11 @@
   ],
   "destination": "/var/lib/rozkalns-simple-deployer/hermes-deals",
   "staging": [
+    "/var/lib/rozkalns-simple-deployer/.hermes-deals-prerequisites-v2.staged",
+    "/etc/rozkalns-simple-deployer/compose/.hermes-deals-household-api.yml.adoption-v2.staged",
+    "/etc/rozkalns-simple-deployer/.targets.json.hermes-adoption-v2.staged"
+  ],
+  "historical_staging_evidence": [
     "/var/lib/rozkalns-simple-deployer/.hermes-deals-prerequisites-v1.staged",
     "/etc/rozkalns-simple-deployer/compose/.hermes-deals-household-api.yml.adoption-v1.staged",
     "/etc/rozkalns-simple-deployer/.targets.json.hermes-adoption-v1.staged"
