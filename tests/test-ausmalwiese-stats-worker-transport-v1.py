@@ -169,6 +169,13 @@ class StatsTransportTests(unittest.TestCase):
 
     def test_deploy_splits_ambiguity_and_order(self):
         self.assertEqual(tr.deployment_summary(deployments())["active_version"], V1)
+        newer={"id":"52345678-1234-4234-a234-123456789abc",
+               "created_on":"2026-10-17T08:00:00.100Z",
+               "versions":[{"version_id":V2,"percentage":100}]}
+        self.assertEqual(
+            tr.deployment_summary([newer]+deployments())["active_version"],V2)
+        with self.assertRaisesRegex(tr.Blocked,"DEPLOYMENT_SHAPE"):
+            tr.deployment_summary([dict(deployments()[0],created_on="2026-10-17T08:00:00+02:00")])
         for data in (
             deployments(percent=99),
             [{"id":DEPLOY,"created_on":"2026-10-17T08:00:00Z",
