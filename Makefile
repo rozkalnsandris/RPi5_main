@@ -196,6 +196,7 @@ test:
 	python3 ./tests/test-ausmalwiese-worker-settings-provision-installer-v1.py
 	python3 ./tests/test-ausmalwiese-report-worker-preflight-v1.py
 	python3 ./tests/test-ausmalwiese-report-trusted-operator-v1.py
+	python3 ./tests/test-ausmalwiese-report-protected-adapter-v1.py
 	python3 ./tests/test-ausmalwiese-stats-worker-exact-deploy-v1.py
 	python3 ./tests/test-ausmalwiese-stats-worker-transport-v1.py
 	python3 ./tests/test-ausmalwiese-gsc-txt.py

@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "state": "SOURCE_ONLY_NOT_INSTALLED",
+  "repository": "rozkalnsandris/RPi5_main",
+  "issue": 1039,
+  "target": {
+    "worker": "coloring-pages-report-v1",
+    "zone": "ausmalwiese.de",
+    "account_sha256": "3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34"
+  },
+  "source": {
+    "path": "cloudflare/report-worker.mjs",
+    "blob": "6d2359752d12f4a40847008fc7fdcc457124e893",
+    "sha256": "26d4e597d8c2c961c3a637957ea566654c97c5657a4b2595129c410e9fae22a1"
+  },
+  "routes": [
+    "ausmalwiese.de/api/report",
+    "ausmalwiese.de/api/report/config",
+    "www.ausmalwiese.de/api/report",
+    "www.ausmalwiese.de/api/report/config"
+  ],
+  "bindings": {
+    "TURNSTILE_SITE_KEY": "plain_text",
+    "TURNSTILE_SECRET": "secret_text",
+    "BREVO_API_KEY": "secret_text",
+    "REPORT_TO": "secret_text",
+    "REPORT_RATE": "ratelimit",
+    "REPORT_DUP": "ratelimit"
+  },
+  "rates": {
+    "REPORT_RATE": {
+      "limit": 12,
+      "period": 60
+    },
+    "REPORT_DUP": {
+      "limit": 1,
+      "period": 60
+    }
+  },
+  "api_paths": {
+    "upload": "/client/v4/accounts/{account_id}/workers/scripts/coloring-pages-report-v1/versions",
+    "deploy": "/client/v4/accounts/{account_id}/workers/scripts/coloring-pages-report-v1/deployments",
+    "add_route": "/client/v4/zones/{zone_id}/workers/routes"
+  },
+  "methods": {
+    "upload": "POST",
+    "deploy": "POST",
+    "add_route": "POST"
+  },
+  "boundaries": {
+    "max_uploads": 1,
+    "max_deployments": 1,
+    "max_route_creates": 4,
+    "report_only": true,
+    "allow_legacy_script_put": false,
+    "allow_extra_routes": false,
+    "allow_secrets_in_source": false,
+    "allow_credential_access": false,
+    "allow_network_from_checkout": false,
+    "allow_live": false,
+    "allow_merge": false,
+    "allow_install": false,
+    "allow_retry": false,
+    "allow_rollback": false,
+    "allow_cleanup": false
+  },
+  "installer": {
+    "installed_program": "/usr/local/libexec/rpi5-ausmalwiese-report-protected/adapter.py",
+    "installed_contract": "/usr/local/libexec/rpi5-ausmalwiese-report-protected/contract.json",
+    "release_manifest": "/usr/local/libexec/rpi5-ausmalwiese-report-protected/release.json",
+    "entrypoint": "/usr/local/sbin/rpi5-ausmalwiese-report-protected",
+    "owner": "root:root",
+    "directory_mode": "0755",
+    "file_mode": "0644",
+    "entrypoint_mode": "0755",
+    "only_dry_run_source": true
+  }
+}
