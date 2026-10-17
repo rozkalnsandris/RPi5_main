@@ -26,7 +26,7 @@ TEST = "/usr/bin/test"
 SHA256SUM = "/usr/bin/sha256sum"
 
 SOURCE_REL = "scripts/ausmalwiese_report_wrangler_deploy_v1.py"
-SOURCE_BLOB = "33252b523f97b1b092cab52db39a92660e16ab0f"
+SOURCE_BLOB = "c92da027aea2d2b41f1e901bd14ae91a2a4bc834"
 TARGET = "/usr/local/sbin/rpi5-ausmalwiese-report-wrangler-deploy"
 CONFIRM = "INSTALL-AUSMALWIESE-REPORT-WRANGLER-RUNTIME"
 PARENTS = ("/usr", "/usr/local", "/usr/local/sbin")
