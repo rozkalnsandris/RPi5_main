@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "state": "SOURCE_CORE_NOT_INSTALLED_NO_AUTH_TRANSPORT",
+  "repository": "rozkalnsandris/RPi5_main",
+  "issue": 1036,
+  "target": {
+    "account_sha256": "3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34",
+    "zone": "ausmalwiese.de",
+    "worker": "coloring-pages-report-v1",
+    "environment": "production"
+  },
+  "source": {
+    "repository": "rozkalnsandris/coloring-pages",
+    "commit": "a90c6a6a7ccca2941d99e9edddd5cfa31ac9ed18",
+    "path": "cloudflare/report-worker.mjs",
+    "blob": "6d2359752d12f4a40847008fc7fdcc457124e893",
+    "sha256": "26d4e597d8c2c961c3a637957ea566654c97c5657a4b2595129c410e9fae22a1"
+  },
+  "report_routes": [
+    "ausmalwiese.de/api/report",
+    "ausmalwiese.de/api/report/config",
+    "www.ausmalwiese.de/api/report",
+    "www.ausmalwiese.de/api/report/config"
+  ],
+  "binding_kinds": {
+    "TURNSTILE_SITE_KEY": "plain_text",
+    "TURNSTILE_SECRET": "secret_text",
+    "BREVO_API_KEY": "secret_text",
+    "REPORT_TO": "secret_text",
+    "REPORT_RATE": "ratelimit",
+    "REPORT_DUP": "ratelimit"
+  },
+  "rate_limits": {
+    "REPORT_RATE": {
+      "limit": 12,
+      "period": 60
+    },
+    "REPORT_DUP": {
+      "limit": 1,
+      "period": 60
+    }
+  },
+  "protected_routes": [
+    "ausmalwiese.de/api/stats/*",
+    "www.ausmalwiese.de/api/stats/*",
+    "ausmalwiese.de/q"
+  ],
+  "mode": "PURE_PROTOCOL_FUTURE_PROTECTED_ADAPTER_ONLY",
+  "owner_live_approval": false,
+  "merge_approval": false,
+  "credential_access": false,
+  "settings_access": false,
+  "host_mutation": false,
+  "allow_retry": false,
+  "allow_rollback": false,
+  "allow_cleanup": false
+}

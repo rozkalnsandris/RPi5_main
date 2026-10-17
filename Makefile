@@ -36,6 +36,7 @@ test:
 	python3 ./tests/test-coloring-pages-sitemap-publisher-v1.py
 	python3 ./tests/test-coloring-pages-sitemap-installer-v1.py
 	python3 ./tests/test-coloring-pages-sitemap-post-publish-v1.py
+	python3 ./tests/test-ausmalwiese-catalog-hide-v1.py
 	python3 ./tests/test-ausmalwiese-sitemap-cutover-v1.py
 	python3 ./tests/test-coloring-pages-sitemap-upgrade-v1.py
 	python3 ./tests/test-ausmalwiese-coordinated-upgrade-v1.py
@@ -195,6 +196,13 @@ test:
 	python3 ./tests/test-ausmalwiese-worker-settings-provisioner-v1.py
 	python3 ./tests/test-ausmalwiese-worker-settings-provision-installer-v1.py
 	python3 ./tests/test-ausmalwiese-report-worker-preflight-v1.py
+	python3 ./tests/test-ausmalwiese-report-trusted-operator-v1.py
+	python3 ./tests/test-ausmalwiese-report-protected-adapter-v1.py
+	python3 ./tests/test-ausmalwiese-report-trusted-transport-v1.py
+	python3 ./tests/test-ausmalwiese-report-protected-operator-v1.py
+	python3 ./tests/test-ausmalwiese-stats-worker-exact-deploy-v1.py
+	python3 ./tests/test-ausmalwiese-stats-worker-transport-v1.py
+	python3 ./tests/test-ausmalwiese-stats-version-module-proof-v1.py
 	python3 ./tests/test-ausmalwiese-gsc-txt.py
 	python3 ./tests/test-ausmalwiese-legacy-redirect-source.py
 	python3 ./tests/test-ausmalwiese-redirect-inventory-source.py
