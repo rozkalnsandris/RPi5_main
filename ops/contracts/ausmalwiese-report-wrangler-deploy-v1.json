@@ -85,6 +85,13 @@
     "future_fixed_deploy_capability": true,
     "verifies_exact_checkout_before_dispatch": true,
     "verifies_protected_secrets_metadata_without_reading_contents": true,
-    "current_issue_authorizes_execution": false
+    "current_issue_authorizes_execution": false,
+    "root_owned_runtime_boundary_issue": 1075,
+    "runtime_entry": "/usr/local/sbin/rpi5-ausmalwiese-report-wrangler-deploy",
+    "runtime_source_root": "<fixed-operator-home>/coloring-pages",
+    "runtime_secrets_file": "/etc/rpi5-secrets/cloudflare/ausmalwiese-report-wrangler-secrets.json",
+    "runtime_secrets_transport": "sealed-memfd-via-dev-stdin",
+    "runtime_operator": "andris",
+    "runtime_persistent_permission_widening": false
   }
 }
