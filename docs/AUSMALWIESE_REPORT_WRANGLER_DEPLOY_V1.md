@@ -2,6 +2,8 @@
 
 **SOURCE ONLY. NO MERGE. NO LIVE. NO CLOUDFLARE REQUEST. NO CREDENTIAL OR SECRET ACCESS.**
 
+Issue #1075 adds source for a future separately installed root-owned runtime boundary. The repository copy still cannot enter runtime mode.
+
 This outcome replaces the older custom REST/multipart deployment direction with one
 small, reviewed Wrangler deployment contract for `coloring-pages-report-v1`. It
 does not install or run Wrangler, read a secrets file, contact Cloudflare, deploy
@@ -69,6 +71,67 @@ Before a future dispatch, the launcher checks the checkout HEAD equals the pinne
 The launcher then verifies the exact `wrangler@4.135.0` selector reports version `4.135.0` and permits exactly one deploy dispatch. A non-zero or ambiguous deploy result becomes terminal `DEPLOY_DISPATCH_UNKNOWN`; the source contains no automatic retry, rollback or cleanup.
 
 A future LIVE authorization must bind the exact source commit/blobs, launcher release, Wrangler version, target Worker, protected secrets-file path and one deployment. This source issue does not authorize that operation.
+
+## Root-owned secrets runtime boundary (#1075)
+
+The protected deploy file is intentionally persistent as:
+
+- `/etc/rpi5-secrets/cloudflare/ausmalwiese-report-wrangler-secrets.json`
+- `root:root`
+- mode `0600`
+- regular file, single link
+
+The earlier same-UID launcher check is still valid for same-owner secret files, but
+it cannot be used for this production file: simply accepting `root:root 0600`
+while continuing to run Wrangler as `andris` would fail at the filesystem
+boundary.
+
+The #1075 source adds a separate future installed entrypoint:
+
+`/usr/local/sbin/rpi5-ausmalwiese-report-wrangler-deploy`
+
+It is deliberately unreachable from the repository checkout. A future
+separately authorized installation must place the exact reviewed script bytes at
+that path as `root:root 0500`. Runtime mode then requires root and the exact
+installed path before any privileged secret handling.
+
+The fixed runtime flow is:
+
+1. Independently validate the exact `/home/andris/coloring-pages` checkout,
+   commit `699c036b7f952aa98be06e166a9705069b7e9eb2`, report Worker/config
+   blobs and parsed Wrangler config.
+2. Run only `/usr/bin/npx --yes wrangler@4.135.0 --version` as fixed operator
+   `andris` (UID/GID 1000) with a bounded environment rooted at
+   `/home/andris`. This future operation uses the operator's existing Wrangler
+   authentication context; #1075 does not read or expose those credentials.
+3. Validate the persistent secret file and trusted parent metadata, then open it
+   as root with `O_NOFOLLOW` and recheck the opened inode.
+4. Kernel-copy the bytes with `sendfile` into an anonymous Linux `memfd`.
+   No JSON parsing, Python string, log output, persistent temporary file, chmod,
+   chown or ACL change is applied to the real protected file.
+5. Change only the anonymous memfd to fixed operator ownership and mode `0400`,
+   seal it against writes/growth/shrink, rewind it, and pass it as the child's
+   stdin.
+6. Run exactly one pinned Wrangler deploy as `andris`, with
+   `--secrets-file /dev/stdin`. The persistent root-only path is never passed
+   to Wrangler.
+7. Capture and suppress raw Wrangler stdout/stderr at this boundary. Only a
+   static success/STOP classification may leave the wrapper. Any non-zero exit,
+   timeout or ambiguity after dispatch is terminal `DEPLOY_DISPATCH_UNKNOWN`.
+   There is no retry, rollback, alternate deploy or persistent cleanup path.
+
+This preserves the normal Wrangler OAuth/home behavior in the unprivileged
+operator process while keeping the at-rest secrets file root-only. A future LIVE
+authorization must explicitly cover installation of the exact runtime boundary,
+use of the existing Wrangler authentication context, the single deploy mutation
+and read-only verification. Source merge alone grants none of those actions.
+
+Cloudflare documents `wrangler deploy --secrets-file <path>` as the supported
+way to upload JSON or `.env` secrets alongside code, including required
+secrets on a first deployment. The runtime boundary uses `/dev/stdin` as the
+ephemeral file path presented to Wrangler; a future host preflight must verify
+this exact pinned Wrangler version accepts the anonymous JSON stream before any
+Cloudflare mutation.
 
 ## Read-only post-deploy verification contract
 
