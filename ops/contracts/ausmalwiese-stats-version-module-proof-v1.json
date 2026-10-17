@@ -1,16 +1,18 @@
 {
-  "schema_version": 2,
-  "status": "SOURCE_ONLY_SIMPLIFIED_WRANGLER_PLAN_NO_LIVE",
-  "issue": 1045,
+  "schema_version": 3,
+  "status": "SOURCE_ONLY_PINNED_WRANGLER_CONFIG_PROVENANCE_NO_LIVE",
+  "issue": 1050,
   "repository": "rozkalnsandris/RPi5_main",
   "worker": "coloring-pages-stats-v1",
+  "wrangler_version": "4.135.0",
   "source_repo": "rozkalnsandris/coloring-pages",
-  "source_commit": "9590be4276ac1781eafe38cf662b8d224653c9aa",
+  "source_commit": "180368f3b81abddde3df94637512436ca50c358f",
   "source_path": "cloudflare/stats-worker.js",
   "source_blob": "dd5a2859d55b9ef2d9fb9a9d8bf0a535d25a5ba4",
   "config_path": "cloudflare/wrangler.stats-worker.jsonc",
+  "config_blob": "3733263a391274f2b6b0f2023c8656565bde8e1a",
   "workflow": [
-    "review-and-commit-wrangler-config-in-coloring-pages",
+    "verify-exact-coloring-pages-commit-worker-config-blobs",
     "wrangler-versions-upload-no-bundle-strict",
     "capture-exact-version-id",
     "wrangler-versions-deploy-exact-id-at-100-percent",
@@ -21,8 +23,18 @@
     "plain_text_vars_in_config": false,
     "keep_vars": true,
     "workers_dev": false,
-    "required_d1_binding": "DB",
-    "required_rate_limit_binding": "RATE_LIMITER",
+    "compatibility_date": "2026-10-06",
+    "d1": {
+      "binding": "DB",
+      "database_name": "coloring-pages-stats-v1",
+      "database_id": "f8ac8f1d-a230-4bc4-af13-557c1b91b273"
+    },
+    "rate_limit": {
+      "binding": "RATE_LIMITER",
+      "namespace_id": "1152026106",
+      "limit": 100,
+      "period": 60
+    },
     "required_secrets": [
       "CF_ANALYTICS_API_TOKEN",
       "VISITOR_HMAC_KEY"
@@ -30,6 +42,7 @@
   },
   "actions": {
     "run_wrangler": false,
+    "package_install": false,
     "credential_access": false,
     "merge": false,
     "live": false,
