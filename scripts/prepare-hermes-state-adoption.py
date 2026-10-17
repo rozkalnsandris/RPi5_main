@@ -56,6 +56,7 @@ STATIC_LIMIT = 128 * 1024
 COLLECTOR_UID = 1000
 COLLECTOR_GID = 1000
 RAW_DEST_MODE = 0o3775
+RAW_PLACEHOLDER = '.gitkeep'
 DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
 READ_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC | os.O_NOATIME
 
@@ -259,6 +260,12 @@ def contract():
         'existing_env': 'metadata only; preserve bytes, inode, owner, group, mode',
         'collector_identity': {'uid': COLLECTOR_UID, 'gid': COLLECTOR_GID},
         'raw_destination': 'root:collector-group directories 03775; root:root files 0644',
+        'source_metadata': {
+            'config': 'source-user-owned only',
+            'raw_root': 'source-user-owned only',
+            'raw_entries': 'source-user-owned or legacy root:root; legacy root directories 0755 and files 0644 only',
+            'raw_placeholder': '.gitkeep only at raw root; regular zero-byte 0644',
+        },
         'quiescence': 'generic and Hermes instance inactive; apply also requires collector/monitor services inactive and timers disabled',
         'default_data_content_read': False, 'default_mutation': False,
         'data_snapshot': 'metadata and SHA-256 only; bounded streaming copy and verification',
@@ -346,22 +353,34 @@ def quiescent(apply=False):
             require(values['UnitFileState'] == ('disabled' if kind == 'timer' else 'static'))
 
 
-def allowed_name(name):
+def allowed_name(name, *, raw_root=False):
     # Fixed tree scope never reaches sibling .env/.git, keys, or database/backup artifacts.
-    require(not name.startswith('.') and len(os.fsencode(name)) <= 255)
+    require((not name.startswith('.') or (raw_root and name == RAW_PLACEHOLDER))
+            and len(os.fsencode(name)) <= 255)
     require(not name.lower().endswith(('.pem', '.key', '.db', '.sqlite', '.sqlite3', '.sql', '.bak')))
 
 
+def source_owner(st, uid, gid, *, legacy_raw=False, nested=False):
+    if (st.st_uid, st.st_gid) == (uid, gid):
+        return
+    require(legacy_raw and nested and (st.st_uid, st.st_gid) == (0, 0))
+    if stat.S_ISDIR(st.st_mode):
+        require(stat.S_IMODE(st.st_mode) == 0o755)
+    else:
+        require(stat.S_ISREG(st.st_mode) and st.st_nlink == 1
+                and stat.S_IMODE(st.st_mode) == 0o644)
+
+
 def tree(fd, uid, gid, budget, *, depth=0, root_dev=None, file_limit=None,
-         root_fd=None, root_fp=None, parents=()):
+         root_fd=None, root_fp=None, parents=(), legacy_raw=False):
     """Bounded descriptor walk; retain metadata/digests, never file contents."""
     require(depth <= MAX_DEPTH)
     file_limit = MAX_FILE if file_limit is None else file_limit
     before = os.fstat(fd)
     if root_fd is None:
         root_fd, root_fp = fd, fingerprint(before)
-    require(before.st_uid == uid and before.st_gid == gid and not before.st_mode & 0o7022)
-    require(stat.S_ISDIR(before.st_mode))
+    source_owner(before, uid, gid, legacy_raw=legacy_raw, nested=bool(parents))
+    require(stat.S_ISDIR(before.st_mode) and not before.st_mode & 0o7022)
     no_acl(fd)
     root_dev = before.st_dev if root_dev is None else root_dev
     require(before.st_dev == root_dev)
@@ -370,12 +389,17 @@ def tree(fd, uid, gid, budget, *, depth=0, root_dev=None, file_limit=None,
         for item in items:
             budget[0] += 1
             require(budget[0] <= MAX_ENTRIES)
-            allowed_name(item.name)
+            allowed_name(item.name, raw_root=legacy_raw and not parents)
             entries.append(item.name)
     result = {}
     for name in sorted(entries):
         st = os.stat(name, dir_fd=fd, follow_symlinks=False)
-        require(st.st_dev == root_dev and st.st_uid == uid and st.st_gid == gid)
+        require(st.st_dev == root_dev)
+        source_owner(st, uid, gid, legacy_raw=legacy_raw, nested=True)
+        if name == RAW_PLACEHOLDER:
+            require(legacy_raw and not parents and stat.S_ISREG(st.st_mode)
+                    and st.st_nlink == 1 and st.st_size == 0
+                    and stat.S_IMODE(st.st_mode) == 0o644)
         if stat.S_ISDIR(st.st_mode):
             child = os.open(name, DIR_FLAGS | os.O_NOATIME, dir_fd=fd)
             try:
@@ -383,7 +407,8 @@ def tree(fd, uid, gid, budget, *, depth=0, root_dev=None, file_limit=None,
                 nested = tree(child, uid, gid, budget, depth=depth + 1,
                               root_dev=root_dev, file_limit=file_limit,
                               root_fd=root_fd, root_fp=root_fp,
-                              parents=(*parents, (name, fingerprint(st))))
+                              parents=(*parents, (name, fingerprint(st))),
+                              legacy_raw=legacy_raw)
                 require(fingerprint(os.stat(name, dir_fd=fd, follow_symlinks=False)) == fingerprint(st))
                 result[name] = (fingerprint(st), nested)
             finally:
@@ -394,8 +419,9 @@ def tree(fd, uid, gid, budget, *, depth=0, root_dev=None, file_limit=None,
             budget[1] += st.st_size
             require(budget[1] <= MAX_TOTAL)
             # Reject growth after stat without allocating another file-sized budget.
-            checksum, fp = stream_file(fd, name, uid, gid, stat.S_IMODE(st.st_mode),
-                                       st.st_size, expected_fp=fingerprint(st))
+            checksum, fp = stream_file(fd, name, st.st_uid, st.st_gid,
+                                       stat.S_IMODE(st.st_mode), st.st_size,
+                                       expected_fp=fingerprint(st))
             result[name] = (fp, FileSnapshot(root_fd, root_fp, parents, name, fp, checksum))
     require(fingerprint(os.fstat(fd)) == fingerprint(before))
     return result
@@ -671,7 +697,8 @@ def execute(sha, apply, receipt):
         budget = [3, 0]  # destination's fixed data/raw/config directories count too
         snapshots = {key: tree(fds[key], source.pw_uid, source.pw_gid, budget,
                                depth=2 if key == 'raw' else 1,
-                               file_limit=MAX_RAW_FILE if key == 'raw' else MAX_FILE)
+                               file_limit=MAX_RAW_FILE if key == 'raw' else MAX_FILE,
+                               legacy_raw=key == 'raw')
                      for key in ('raw', 'config')}
         source_fps = {key: fingerprint(os.fstat(fds[key])) for key in snapshots}
         data = {'data': {'raw': contents(snapshots['raw'])}, 'config': contents(snapshots['config'])}
@@ -685,7 +712,8 @@ def execute(sha, apply, receipt):
                 require(fingerprint(os.fstat(fds[key])) == source_fps[key])
                 require(tree(fds[key], source.pw_uid, source.pw_gid, budget,
                              depth=2 if key == 'raw' else 1,
-                             file_limit=MAX_RAW_FILE if key == 'raw' else MAX_FILE) == snapshots[key])
+                             file_limit=MAX_RAW_FILE if key == 'raw' else MAX_FILE,
+                             legacy_raw=key == 'raw') == snapshots[key])
 
         publish(fds['state'], fds['compose'], fds['etc'], data, candidate, final_check,
                 receipt, collector_gid=COLLECTOR_GID)

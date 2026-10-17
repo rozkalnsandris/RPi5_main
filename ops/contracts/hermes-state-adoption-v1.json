@@ -38,7 +38,10 @@
   },
   "identity_policy": "strict schema and public ancestor of baseline; preserve bytes and inode",
   "existing_env": "metadata only; preserve bytes, inode, owner, group, mode",
-  "collector_identity": {"uid": 1000, "gid": 1000},
+  "collector_identity": {
+    "uid": 1000,
+    "gid": 1000
+  },
   "raw_destination": "root:collector-group directories 03775; root:root files 0644",
   "quiescence": "generic and Hermes instance inactive; apply also requires collector/monitor services inactive and timers disabled",
   "default_data_content_read": false,
@@ -48,5 +51,11 @@
   "activation_eligible": false,
   "retry": false,
   "rollback": false,
-  "error_cleanup": false
+  "error_cleanup": false,
+  "source_metadata": {
+    "config": "source-user-owned only",
+    "raw_root": "source-user-owned only",
+    "raw_entries": "source-user-owned or legacy root:root; legacy root directories 0755 and files 0644 only",
+    "raw_placeholder": ".gitkeep only at raw root; regular zero-byte 0644"
+  }
 }
