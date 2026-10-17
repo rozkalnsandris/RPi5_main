@@ -15,6 +15,17 @@ This supersedes #1025's 256 MiB combined in-memory design. Old launchers and
 authorizations remain bound to their old limits and must not be edited or
 reused. Prepare a new exact-source execution packet after review.
 
+A later metadata-reconciliation review narrows one production mismatch observed
+during the V4 apply preflight. Beneath the already source-user-owned `data/raw`
+root, historical entries may be either source-user-owned or legacy `root:root`.
+Legacy root-owned directories are accepted only as `0755`; legacy root-owned
+regular single-link files are accepted only as `0644`. `.gitkeep` is the only
+hidden raw entry allowed, only directly under the raw root, and only as a
+zero-byte `0644` regular file. `config` remains source-user-owned only. The
+observed owner/mode remains part of each source fingerprint and is revalidated
+before and during copy, while destination ownership/mode policy is unchanged.
+This source reconciliation does not authorize a LIVE rerun.
+
 Revision #1018 corrects the destination raw-directory permissions required by
 the existing UID:GID `1000:1000` scheduled collectors. It does not execute the
 prepared operation or authorize the later API/collector cutover. Any older
@@ -58,7 +69,9 @@ The operator checks the exact public artifact hashes in
   `0640`, regular, single-link, no POSIX ACL; env content is never read;
 - existing state parent remains runtime-principal-owned `0700`; no parent creation,
   chmod or chown is allowed;
-- fixed legacy `data/raw` and `config` roots are source-user-owned real `0755` dirs.
+- fixed legacy `data/raw` and `config` roots are source-user-owned real `0755` dirs;
+  only descendants of `data/raw` may use the narrowly bounded legacy root-owned
+  metadata policy described below.
 
 The new fixture is derived entirely from public source: apply
 `ops/bin/rozkalns-cv-live-stats-rollout-1000::target_only_registry` to the frozen
@@ -108,11 +121,17 @@ structure: 4,096 entries, 4 GiB total across raw and config, 128 MiB per raw
 file, 32 MiB per config file, 12 levels of depth. Each streaming read requests
 at most 64 KiB and is bounded by the checked file size (plus one byte to detect
 growth); the extra byte is never written to the destination.
-Only regular single-link non-executable files and real directories are accepted;
-symlinks, special files, group/other write access, unexpected ownership, ACLs,
-cross-device traversal, hidden entries and key/database/backup suffixes are rejected.
-The config snapshot must contain a nonempty regular `sources.json`. These are
-hard fail-closed ceilings, not observations of production size.
+Only regular single-link non-executable files and real directories are accepted.
+`config` entries must remain source-user-owned. Under `data/raw`, source-user
+ownership remains valid; historical `root:root` descendants are accepted only
+when directories are exactly `0755` and regular single-link files exactly
+`0644`. The raw root itself may not be root-owned. Hidden entries remain
+rejected except a direct raw-root `.gitkeep`, which must be a zero-byte `0644`
+regular single-link file. Symlinks, special files, group/other write access,
+all other unexpected ownership/modes, ACLs, cross-device traversal and
+key/database/backup suffixes are rejected. The config snapshot must contain a
+nonempty regular `sources.json`. These are hard fail-closed ceilings, not
+observations of production size.
 
 Only bounded metadata/digest records are retained in memory, never the complete
 file contents. Each record binds the still-open source-root descriptor, recorded
