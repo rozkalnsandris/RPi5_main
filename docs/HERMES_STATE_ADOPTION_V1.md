@@ -26,6 +26,14 @@ observed owner/mode remains part of each source fingerprint and is revalidated
 before and during copy, while destination ownership/mode policy is unchanged.
 This source reconciliation does not authorize a LIVE rerun.
 
+A later recovery-staging revision preserves failed-run evidence without reusing it.
+The current operator publishes only through a new `v2.staged` namespace. Historical
+`v1.staged` state/adapter/registry artifacts may remain from a failed one-shot and
+are neither read, overwritten, renamed nor deleted by the recovery operator. The
+final destination, adapter and registry paths remain unchanged. A recovery run
+still requires all current `v2.staged` paths and all final publication targets to
+meet their normal absence/baseline requirements.
+
 Revision #1018 corrects the destination raw-directory permissions required by
 the existing UID:GID `1000:1000` scheduled collectors. It does not execute the
 prepared operation or authorize the later API/collector cutover. Any older
@@ -64,7 +72,9 @@ The operator checks the exact public artifact hashes in
 - installed registry equals `ops/deploy/baselines/simple-deploy-targets-cv-stats-1000-v1.json`,
   SHA-256 `24e284a03f68c3843b629254ed1a944648e7b902ce36161a6ee7412cfe7c42d0`;
 - installed Weather adapter and generic executor equal the reviewed source bytes;
-- both Hermes API adapters, all old/new env stages and all adoption stages are absent;
+- both Hermes API adapters and all old/new env stages are absent; current `v2.staged`
+  adoption stages are absent, while historical `v1.staged` adoption artifacts may
+  remain untouched as failed-run evidence and are not inputs to recovery;
 - existing private parent is root:runtime-group `0750`, env child is root:runtime-group
   `0640`, regular, single-link, no POSIX ACL; env content is never read;
 - existing state parent remains runtime-principal-owned `0700`; no parent creation,
@@ -164,11 +174,15 @@ preflight/packet requirements, not authorization to read or modify the host.
 The only allowed publication paths are:
 
 1. Absent `/var/lib/rozkalns-simple-deployer/hermes-deals`, containing `data/raw`
-   and `config`, via fixed `.hermes-deals-prerequisites-v1.staged` sibling.
+   and `config`, via fixed `.hermes-deals-prerequisites-v2.staged` sibling.
 2. Absent `/etc/rozkalns-simple-deployer/compose/hermes-deals-household-api.yml`,
-   via fixed `.hermes-deals-household-api.yml.adoption-v1.staged` sibling.
+   via fixed `.hermes-deals-household-api.yml.adoption-v2.staged` sibling.
 3. Existing `/etc/rozkalns-simple-deployer/targets.json`, replaced only after its
-   exact baseline is revalidated, via fixed `.targets.json.hermes-adoption-v1.staged`.
+   exact baseline is revalidated, via fixed `.targets.json.hermes-adoption-v2.staged`.
+
+The corresponding three `v1.staged` names are historical evidence only. Their
+presence does not satisfy, replace or alias a current stage and the operator never
+opens them. They must not be cleaned up as part of the recovery run.
 
 Only new inodes receive ownership/mode changes. State directories outside
 `data/raw` remain root:root `0755`; copied state files remain root:root `0644`;
@@ -254,7 +268,8 @@ all protected reads/writes in that decision; root-owned metadata, canonical
 origin, clean HEAD/tree, pinned artifact hashes and Git object equality must be
 verified before executing checkout code with isolated `python3 -I -B`.
 The existing historical checkout is neither changed nor used as a fallback.
-A new path does not reset publication state: reject existing destinations/stages
+A new path does not reset publication state: reject existing final destinations
+and current `v2.staged` paths, preserve and ignore historical `v1.staged` evidence,
 and freshly revalidate the exact CV-updated installed baseline and every other
 prerequisite. Unknown drift requires STOP, not baseline substitution.
 

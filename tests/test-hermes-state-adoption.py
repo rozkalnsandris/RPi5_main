@@ -172,6 +172,32 @@ class AdoptionTests(unittest.TestCase):
                 finally:
                     p.unlink()
 
+    def test_full_apply_preserves_historical_v1_staging_evidence(self):
+        with self.execution_fixture():
+            old_state = self.base / 'state' / m.HISTORICAL_STATE_STAGE
+            old_state.mkdir(mode=0o755)
+            old_state_sentinel = old_state / 'sentinel'
+            old_state_sentinel.write_bytes(b'failed-state-evidence')
+            old_adapter = self.base / 'etc/compose' / m.HISTORICAL_ADAPTER_STAGE
+            old_adapter.write_bytes(b'failed-adapter-evidence')
+            old_registry = self.base / 'etc' / m.HISTORICAL_REGISTRY_STAGE
+            old_registry.write_bytes(b'failed-registry-evidence')
+            before = (old_state_sentinel.read_bytes(), old_adapter.read_bytes(),
+                      old_registry.read_bytes())
+            m.execute(m.BASE, True, self.receipt)
+            self.assertEqual(self.receipt['status'], 'PREPARED_NO_ACTIVATION')
+            self.assertEqual(
+                before,
+                (old_state_sentinel.read_bytes(), old_adapter.read_bytes(),
+                 old_registry.read_bytes()),
+            )
+            self.assertTrue(old_state.is_dir())
+            self.assertTrue(old_adapter.is_file())
+            self.assertTrue(old_registry.is_file())
+            self.assertFalse((self.base / 'state' / m.STATE_STAGE).exists())
+            self.assertFalse((self.base / 'compose' / m.ADAPTER_STAGE).exists())
+            self.assertFalse((self.base / 'etc' / m.REGISTRY_STAGE).exists())
+
     def test_preflight_failure_creates_nothing(self):
         with self.assertRaises(m.Stop):
             self.publish(lambda: m.require(False))
