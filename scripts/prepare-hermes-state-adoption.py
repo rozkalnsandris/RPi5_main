@@ -513,8 +513,9 @@ def verify_published_tree(fd, data, *, uid=0, gid=0,
     budget[0] += len(names)
     require(budget[0] <= MAX_ENTRIES)
     require(len(names) == len(data) and set(names) == set(data))
+    raw_root = path == ('data', 'raw')
     for name in sorted(names):
-        allowed_name(name)
+        allowed_name(name, raw_root=raw_root)
         expected = data[name]
         st = os.stat(name, dir_fd=fd, follow_symlinks=False)
         require(st.st_dev == root_dev)
@@ -530,6 +531,8 @@ def verify_published_tree(fd, data, *, uid=0, gid=0,
         else:
             size = expected.size if isinstance(expected, FileSnapshot) else len(expected)
             checksum = expected.sha256 if isinstance(expected, FileSnapshot) else digest(expected)
+            if name == RAW_PLACEHOLDER:
+                require(raw_root and size == 0)
             require(0 <= st.st_size == size <= (MAX_RAW_FILE if is_raw else MAX_FILE))
             budget[1] += st.st_size
             require(budget[1] <= MAX_TOTAL)
