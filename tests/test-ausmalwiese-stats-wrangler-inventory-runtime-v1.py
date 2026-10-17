@@ -374,7 +374,36 @@ class RuntimeTests(unittest.TestCase):
         self.assertNotIn(TOKEN, encoded)
         self.assertNotIn(ACCOUNT, encoded)
 
-    def test_run_once_requires_stage_version_contract(self):
+    def test_run_once_requires_stage_version_contract_before_access(self):
+        with mock.patch.object(runtime, "trusted_entry") as entry, \
+             mock.patch.object(runtime, "checked_credential") as credential, \
+             mock.patch.object(runtime, "single_get") as get:
+            with self.assertRaisesRegex(
+                runtime.Stop,
+                "new_version_not_allowed",
+            ):
+                runtime.run_once(
+                    SHA,
+                    stage="before",
+                    new_version_id=SECOND,
+                )
+        entry.assert_not_called()
+        credential.assert_not_called()
+        get.assert_not_called()
+
+    def test_before_rejects_consistent_wrangler_source_snapshot(self):
+        v = versions()
+        v["result"][0]["metadata"]["source"] = "wrangler"
+        d = detail()
+        d["result"]["metadata"]["source"] = "wrangler"
+        d["result"]["resources"]["script"]["last_deployed_from"] = "wrangler"
+        calls = []
+        payloads = [v, deployments(), d]
+
+        def fake_get(account, token, spec, decoder):
+            calls.append(spec["stage"])
+            return payloads[len(calls) - 1]
+
         account_digest = hashlib.sha256(ACCOUNT.encode()).hexdigest()
         with mock.patch.object(runtime, "trusted_entry"), \
              mock.patch.object(
@@ -387,15 +416,16 @@ class RuntimeTests(unittest.TestCase):
                  "checked_credential",
                  return_value=(ACCOUNT, TOKEN),
              ), \
-             mock.patch.object(runtime, "single_get", side_effect=[
-                 versions(), deployments(), detail()
-             ]):
-            with self.assertRaises(runtime.Stop):
-                runtime.run_once(
-                    SHA,
-                    stage="before",
-                    new_version_id=SECOND,
-                )
+             mock.patch.object(runtime, "single_get", side_effect=fake_get):
+            with self.assertRaisesRegex(
+                runtime.Stop,
+                "normalized_stage_invalid",
+            ):
+                runtime.run_once(SHA, stage="before")
+        self.assertEqual(
+            calls,
+            ["versions", "deployments", "version_detail"],
+        )
 
     def test_static_errors_do_not_echo_secret(self):
         with mock.patch.object(
