@@ -36,6 +36,7 @@ test:
 	python3 ./tests/test-coloring-pages-sitemap-publisher-v1.py
 	python3 ./tests/test-coloring-pages-sitemap-installer-v1.py
 	python3 ./tests/test-coloring-pages-sitemap-post-publish-v1.py
+	python3 ./tests/test-ausmalwiese-catalog-hide-v1.py
 	python3 ./tests/test-ausmalwiese-sitemap-cutover-v1.py
 	python3 ./tests/test-coloring-pages-sitemap-upgrade-v1.py
 	python3 ./tests/test-ausmalwiese-coordinated-upgrade-v1.py
