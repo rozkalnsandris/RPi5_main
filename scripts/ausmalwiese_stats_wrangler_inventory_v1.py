@@ -166,7 +166,7 @@ def decode_reply(
     return parsed
 
 
-def _api_result(payload: Any, *, list_result: bool) -> Any:
+def _api_result(payload: Any, *, pagination: str) -> Any:
     need(type(payload) is dict, "API_ENVELOPE")
     allowed = {"success", "errors", "messages", "result", "result_info"}
     need(set(payload).issubset(allowed), "API_ENVELOPE_FIELDS")
@@ -176,12 +176,12 @@ def _api_result(payload: Any, *, list_result: bool) -> Any:
         and type(payload.get("messages", [])) is list,
         "API_FAILURE",
     )
-    result = payload.get("result")
-    if list_result:
-        need("result_info" in payload, "PAGINATION_MISSING")
-    else:
-        need("result_info" not in payload, "DETAIL_PAGINATION")
-    return result
+    need(pagination in {"forbidden", "optional"}, "PAGINATION_MODE")
+    if pagination == "forbidden":
+        need("result_info" not in payload, "PAGINATION_UNEXPECTED")
+    elif "result_info" in payload:
+        need(type(payload["result_info"]) is dict, "PAGINATION")
+    return payload.get("result")
 
 
 def _result_info(payload: dict[str, Any], count: int) -> None:
@@ -218,12 +218,16 @@ def _source_class(source: Any, last_deployed_from: Any) -> str:
 
 
 def parse_versions(payload: dict[str, Any]) -> tuple[str, str]:
-    result = _api_result(payload, list_result=True)
-    need(type(result) is list and 1 <= len(result) <= 2, "VERSIONS_COUNT")
-    _result_info(payload, len(result))
+    result = _api_result(payload, pagination="forbidden")
+    need(
+        type(result) is dict and set(result) == {"items"},
+        "VERSIONS_RESULT",
+    )
+    items = result["items"]
+    need(type(items) is list and 1 <= len(items) <= 2, "VERSIONS_COUNT")
     parsed: list[tuple[str, int, str]] = []
     seen: set[str] = set()
-    for item in result:
+    for item in items:
         need(type(item) is dict, "VERSION_ENTRY")
         version_id = _uuid(item.get("id"), "VERSION_ID")
         need(version_id not in seen, "VERSION_DUPLICATE")
@@ -241,14 +245,15 @@ def parse_versions(payload: dict[str, Any]) -> tuple[str, str]:
 
 
 def parse_deployments(payload: dict[str, Any]) -> dict[str, Any]:
-    result = _api_result(payload, list_result=True)
+    result = _api_result(payload, pagination="optional")
     need(type(result) is dict and set(result) == {"deployments"}, "DEPLOY_RESULT")
     deployments = result["deployments"]
     need(
         type(deployments) is list and 1 <= len(deployments) <= 2,
         "DEPLOYMENTS_COUNT",
     )
-    _result_info(payload, len(deployments))
+    if "result_info" in payload:
+        _result_info(payload, len(deployments))
     current = deployments[0]
     need(type(current) is dict, "DEPLOYMENT_ENTRY")
     _uuid(current.get("id"), "DEPLOYMENT_ID")
@@ -392,7 +397,7 @@ def parse_version_detail(
     list_source: str,
 ) -> dict[str, Any]:
     expected_version = _uuid(expected_version, "EXPECTED_VERSION")
-    result = _api_result(payload, list_result=False)
+    result = _api_result(payload, pagination="forbidden")
     need(type(result) is dict, "DETAIL_RESULT")
     need(result.get("id") == expected_version, "DETAIL_VERSION")
     metadata = result.get("metadata")

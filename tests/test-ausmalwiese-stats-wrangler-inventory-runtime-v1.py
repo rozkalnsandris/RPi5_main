@@ -41,24 +41,19 @@ def versions():
         "success": True,
         "errors": [],
         "messages": [],
-        "result": [
-            {
-                "id": BASELINE,
-                "number": 10,
-                "metadata": {"source": "api"},
-            },
-            {
-                "id": SECOND,
-                "number": 9,
-                "metadata": {"source": "api"},
-            },
-        ],
-        "result_info": {
-            "page": 1,
-            "per_page": 2,
-            "count": 2,
-            "total_count": 10,
-            "total_pages": 5,
+        "result": {
+            "items": [
+                {
+                    "id": BASELINE,
+                    "number": 10,
+                    "metadata": {"source": "api"},
+                },
+                {
+                    "id": SECOND,
+                    "number": 9,
+                    "metadata": {"source": "api"},
+                },
+            ]
         },
     }
 
@@ -81,13 +76,6 @@ def deployments():
                     ],
                 }
             ]
-        },
-        "result_info": {
-            "page": 1,
-            "per_page": 2,
-            "count": 1,
-            "total_count": 8,
-            "total_pages": 4,
         },
     }
 
@@ -385,6 +373,35 @@ class RuntimeTests(unittest.TestCase):
         self.assertNotIn(TOKEN, encoded)
         self.assertNotIn(ACCOUNT, encoded)
 
+    def test_versions_parse_failure_is_static_stop_before_second_get(self):
+        calls = []
+        bad = versions()
+        bad["result"] = bad["result"]["items"]
+
+        def fake_get(account, token, spec, decoder):
+            calls.append(spec["stage"])
+            return bad
+
+        account_digest = hashlib.sha256(ACCOUNT.encode()).hexdigest()
+        with mock.patch.object(runtime, "trusted_entry"), \
+             mock.patch.object(
+                 runtime,
+                 "verified_install",
+                 return_value=(NORMALIZER.read_bytes(), account_digest),
+             ), \
+             mock.patch.object(
+                 runtime,
+                 "checked_credential",
+                 return_value=(ACCOUNT, TOKEN),
+             ), \
+             mock.patch.object(runtime, "single_get", side_effect=fake_get):
+            with self.assertRaisesRegex(
+                runtime.Stop,
+                "versions_normalization_failed",
+            ):
+                runtime.run_once(SHA, stage="before")
+        self.assertEqual(calls, ["versions"])
+
     def test_run_once_requires_stage_version_contract_before_access(self):
         with mock.patch.object(runtime, "trusted_entry") as entry, \
              mock.patch.object(runtime, "checked_credential") as credential, \
@@ -404,7 +421,7 @@ class RuntimeTests(unittest.TestCase):
 
     def test_before_rejects_consistent_wrangler_source_snapshot(self):
         v = versions()
-        v["result"][0]["metadata"]["source"] = "wrangler"
+        v["result"]["items"][0]["metadata"]["source"] = "wrangler"
         d = detail()
         d["result"]["metadata"]["source"] = "wrangler"
         d["result"]["resources"]["script"]["last_deployed_from"] = "wrangler"

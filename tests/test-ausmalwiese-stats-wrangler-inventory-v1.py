@@ -31,24 +31,19 @@ def versions(
         "success": True,
         "errors": [],
         "messages": [],
-        "result": [
-            {
-                "id": version,
-                "number": number,
-                "metadata": {"source": source},
-            },
-            {
-                "id": SECOND_VERSION,
-                "number": number - 1,
-                "metadata": {"source": "api"},
-            },
-        ],
-        "result_info": {
-            "page": 1,
-            "per_page": 2,
-            "count": 2,
-            "total_count": 10,
-            "total_pages": 5,
+        "result": {
+            "items": [
+                {
+                    "id": version,
+                    "number": number,
+                    "metadata": {"source": source},
+                },
+                {
+                    "id": SECOND_VERSION,
+                    "number": number - 1,
+                    "metadata": {"source": "api"},
+                },
+            ]
         },
     }
 
@@ -74,13 +69,6 @@ def deployments(
                     ],
                 }
             ]
-        },
-        "result_info": {
-            "page": 1,
-            "per_page": 2,
-            "count": 1,
-            "total_count": 8,
-            "total_pages": 4,
         },
     }
 
@@ -227,7 +215,7 @@ class InventoryTests(unittest.TestCase):
 
     def test_after_upload_inventory_matches_1052(self):
         v = versions(NEW_VERSION, "wrangler", 11)
-        v["result"][1] = {
+        v["result"]["items"][1] = {
             "id": plan.BASELINE_VERSION,
             "number": 10,
             "metadata": {"source": "api"},
@@ -261,14 +249,30 @@ class InventoryTests(unittest.TestCase):
             plan.BASELINE_VERSION,
         )
 
-    def test_versions_reject_pagination_order_duplicate_and_unknown_source(self):
+    def test_versions_reject_legacy_shape_pagination_order_duplicate_and_unknown_source(self):
         bad = versions()
-        bad["result_info"]["page"] = 2
-        with self.assertRaises(plan.Blocked):
+        bad["result_info"] = {
+            "page": 1,
+            "per_page": 2,
+            "count": 2,
+            "total_count": 2,
+        }
+        with self.assertRaisesRegex(
+            plan.Blocked,
+            "PAGINATION_UNEXPECTED",
+        ):
             plan.parse_versions(bad)
 
         bad = versions()
-        bad["result"][1]["number"] = 10
+        bad["result"] = bad["result"]["items"]
+        with self.assertRaisesRegex(
+            plan.Blocked,
+            "VERSIONS_RESULT",
+        ):
+            plan.parse_versions(bad)
+
+        bad = versions()
+        bad["result"]["items"][1]["number"] = 10
         with self.assertRaisesRegex(
             plan.Blocked,
             "VERSION_ORDER",
@@ -276,7 +280,7 @@ class InventoryTests(unittest.TestCase):
             plan.parse_versions(bad)
 
         bad = versions()
-        bad["result"][1]["id"] = plan.BASELINE_VERSION
+        bad["result"]["items"][1]["id"] = plan.BASELINE_VERSION
         with self.assertRaisesRegex(
             plan.Blocked,
             "VERSION_DUPLICATE",
@@ -313,6 +317,34 @@ class InventoryTests(unittest.TestCase):
         with self.assertRaisesRegex(
             plan.Blocked,
             "ACTIVE_VERSION_COUNT",
+        ):
+            plan.parse_deployments(bad)
+
+    def test_deployments_accept_optional_pagination_and_reject_drift(self):
+        good = deployments()
+        good["result_info"] = {
+            "page": 1,
+            "per_page": 2,
+            "count": 1,
+            "total_count": 8,
+            "total_pages": 8,
+        }
+        self.assertEqual(
+            plan.parse_deployments(good)["version_id"],
+            plan.BASELINE_VERSION,
+        )
+
+        bad = deployments()
+        bad["result_info"] = {
+            "page": 2,
+            "per_page": 2,
+            "count": 1,
+            "total_count": 8,
+            "total_pages": 8,
+        }
+        with self.assertRaisesRegex(
+            plan.Blocked,
+            "PAGINATION_DRIFT",
         ):
             plan.parse_deployments(bad)
 
