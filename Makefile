@@ -202,6 +202,7 @@ test:
 	python3 ./tests/test-ausmalwiese-report-protected-operator-v1.py
 	python3 ./tests/test-ausmalwiese-stats-worker-exact-deploy-v1.py
 	python3 ./tests/test-ausmalwiese-stats-worker-transport-v1.py
+	python3 ./tests/test-ausmalwiese-stats-version-module-proof-v1.py
 	python3 ./tests/test-ausmalwiese-gsc-txt.py
 	python3 ./tests/test-ausmalwiese-legacy-redirect-source.py
 	python3 ./tests/test-ausmalwiese-redirect-inventory-source.py
