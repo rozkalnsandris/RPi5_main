@@ -159,7 +159,7 @@ def upload_command(
         "--strict",
         "--tag", "git:" + SOURCE_COMMIT,
         "--message", "source-blob:" + SOURCE_BLOB
-        + ";config-blob:" + CONFIG_BLOB,
+        + ",config-blob:" + CONFIG_BLOB,
     ]
 
 

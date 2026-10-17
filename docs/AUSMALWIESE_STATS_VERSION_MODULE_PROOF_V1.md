@@ -50,7 +50,7 @@ The planner emits an exact Wrangler package version instead of an unpinned
       --name coloring-pages-stats-v1 \
       --no-bundle --keep-vars --strict \
       --tag git:180368f3b81abddde3df94637512436ca50c358f \
-      --message source-blob:dd5a2859d55b9ef2d9fb9a9d8bf0a535d25a5ba4;config-blob:3733263a391274f2b6b0f2023c8656565bde8e1a
+      --message source-blob:dd5a2859d55b9ef2d9fb9a9d8bf0a535d25a5ba4,config-blob:3733263a391274f2b6b0f2023c8656565bde8e1a
 
 Then, only after capturing the exact returned full UUID:
 
