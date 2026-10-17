@@ -397,7 +397,10 @@ class RuntimeTests(unittest.TestCase):
              mock.patch.object(runtime, "single_get", side_effect=fake_get):
             with self.assertRaises(runtime.Stop) as caught:
                 runtime.run_once(SHA, stage="before")
-        self.assertEqual(str(caught.exception), "versions_normalization_failed")
+        self.assertEqual(
+            str(caught.exception),
+            "versions_normalization_failed_result_shape",
+        )
         self.assertNotIn("must-not-leak", str(caught.exception))
         self.assertEqual(calls, ["versions"])
 
@@ -633,7 +636,7 @@ class InstallerTests(unittest.TestCase):
     def test_upgrade_requires_exact_old_release_and_checkout_gate(self):
         self.assertEqual(
             installer.OLD_RELEASE_SHA,
-            "ce4f6594418d4ec9d91ee96ec37ba34e14bdb6a5",
+            "a48744ae941c5e5cfcbe4a01da0bd4a1618e266d",
         )
         with mock.patch.object(installer, "checked_checkout") as checkout, \
              mock.patch.object(

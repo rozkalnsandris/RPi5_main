@@ -40,6 +40,21 @@ ACCOUNT_RE = re.compile(r"[0-9a-f]{32}\Z")
 SHA40 = re.compile(r"[0-9a-f]{40}\Z")
 SHA64 = re.compile(r"[0-9a-f]{64}\Z")
 UUID_RE = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
+VERSIONS_DIAGNOSTIC_CLASSES = frozenset({
+    "envelope",
+    "api_failure",
+    "pagination",
+    "result_shape",
+    "item_count",
+    "item_shape",
+    "version_id",
+    "duplicate_id",
+    "number",
+    "metadata",
+    "source",
+    "order",
+    "unclassified",
+})
 
 
 class Stop(Exception):
@@ -192,6 +207,7 @@ def load_normalizer(source: bytes) -> dict[str, Any]:
         "request_specs",
         "decode_reply",
         "parse_versions",
+        "classify_versions_failure",
         "build_inventory",
         "canonical_sha256",
     }
@@ -402,7 +418,17 @@ def run_once(
     try:
         latest_id, _ = normalizer["parse_versions"](versions_payload)
     except Exception:
-        raise Stop("versions_normalization_failed") from None
+        try:
+            classification = normalizer["classify_versions_failure"](
+                versions_payload
+            )
+        except Exception:
+            classification = "unclassified"
+        if classification not in VERSIONS_DIAGNOSTIC_CLASSES:
+            classification = "unclassified"
+        raise Stop(
+            "versions_normalization_failed_" + classification
+        ) from None
     if not isinstance(latest_id, str) or not UUID_RE.fullmatch(latest_id):
         raise Stop("latest_version_invalid")
 

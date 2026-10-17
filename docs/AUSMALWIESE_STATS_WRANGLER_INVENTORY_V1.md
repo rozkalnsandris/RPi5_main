@@ -190,3 +190,25 @@ surface:
 
 This is source-only correction. It authorizes no credential read, Cloudflare
 request, host replacement, D1 write or retry.
+
+
+## Sanitized Versions failure classification — Issue #1069
+
+A second separately authorized read-only collection on 2026-10-17 reached the
+Versions endpoint successfully but stopped before the second GET with
+`versions_normalization_failed`. The credential was consumed once; no retry,
+deployments request, version-detail request, Cloudflare write or D1 write
+followed.
+
+Issue #1069 preserves the #1068 Versions contract exactly: `result.items`,
+the first item is latest, bounded optional `result_info`, required version
+`id` and `metadata.source`, and bounded optional `number`. Parser failures
+are mapped only to a small static diagnostic taxonomy: envelope, api_failure,
+pagination, result_shape, item_count, item_shape, version_id, duplicate_id,
+number, metadata, source, order, or unclassified. All #1068 pagination failures
+(`PAGINATION`, `PAGINATION_FIELDS`, `PAGINATION_DRIFT`,
+`PAGINATION_PAGES`) collapse to the single `pagination` class.
+
+The classifier never emits raw payload values, UUIDs, version numbers, source
+values, provider field names, account identity, credential material or exception
+text. Successful inventory output and the fixed three-GET plan are unchanged.

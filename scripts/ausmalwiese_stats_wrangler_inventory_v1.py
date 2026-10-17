@@ -51,6 +51,30 @@ DATE = re.compile(r"20[0-9]{2}-[01][0-9]-[0-3][0-9]\Z")
 SAFE_KEY = re.compile(r"[A-Za-z0-9_./:-]{1,120}\Z")
 STOP = "STOP_STATS_WRANGLER_INVENTORY_SOURCE_ONLY"
 
+VERSIONS_FAILURE_CLASS_BY_REASON = {
+    "API_ENVELOPE": "envelope",
+    "API_ENVELOPE_FIELDS": "envelope",
+    "API_FAILURE": "api_failure",
+    "PAGINATION_MODE": "pagination",
+    "PAGINATION": "pagination",
+    "PAGINATION_FIELDS": "pagination",
+    "PAGINATION_DRIFT": "pagination",
+    "PAGINATION_PAGES": "pagination",
+    "PAGINATION_UNEXPECTED": "pagination",
+    "VERSIONS_RESULT": "result_shape",
+    "VERSIONS_COUNT": "item_count",
+    "VERSION_ENTRY": "item_shape",
+    "VERSION_ID": "version_id",
+    "VERSION_DUPLICATE": "duplicate_id",
+    "VERSION_NUMBER": "number",
+    "VERSION_METADATA": "metadata",
+    "VERSION_SOURCE": "source",
+    "VERSION_ORDER": "order",
+}
+VERSIONS_DIAGNOSTIC_CLASSES = frozenset(
+    set(VERSIONS_FAILURE_CLASS_BY_REASON.values()) | {"unclassified"}
+)
+
 
 class Blocked(Exception):
     """Stable source-only failure reason."""
@@ -276,6 +300,19 @@ def parse_versions(payload: dict[str, Any]) -> tuple[str, str]:
     ):
         need(parsed[0][1] > parsed[1][1], "VERSION_ORDER")
     return parsed[0][0], parsed[0][2]
+
+
+def classify_versions_failure(payload: Any) -> str:
+    """Return one static diagnostic class without exposing provider data."""
+    try:
+        parse_versions(payload)
+    except Blocked as exc:
+        return VERSIONS_FAILURE_CLASS_BY_REASON.get(
+            str(exc), "unclassified"
+        )
+    except Exception:
+        return "unclassified"
+    return "valid"
 
 
 def parse_deployments(payload: dict[str, Any]) -> dict[str, Any]:

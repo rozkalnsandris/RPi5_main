@@ -187,10 +187,11 @@ ambiguity is terminal STOP with no automatic retry, rollback or cleanup.
 
 ## Next bounded runtime hop — issue #1067
 
-The current installed protected runtime is now exactly
-`ce4f6594418d4ec9d91ee96ec37ba34e14bdb6a5`. Issue #1067 repins the bounded
-upgrade source to that exact old release so a future reviewed parser correction
-can be installed without creating a generic upgrade mechanism.
+At the start of issue #1067, the installed protected runtime was exactly
+`ce4f6594418d4ec9d91ee96ec37ba34e14bdb6a5`. That reviewed bounded hop was later applied successfully,
+so the installed protected runtime advanced to
+`a48744ae941c5e5cfcbe4a01da0bd4a1618e266d`. Issue #1067 therefore remains historical evidence for the
+`ce4f6594418d4ec9d91ee96ec37ba34e14bdb6a5` → `a48744ae941c5e5cfcbe4a01da0bd4a1618e266d` transition rather than the next upgrade baseline.
 
 The same fail-closed contract remains:
 
@@ -208,3 +209,29 @@ The same fail-closed contract remains:
 
 This source repin does not authorize that future host replacement or a later
 authenticated inventory collection.
+
+
+## Sanitized Versions diagnostic boundary — Issue #1069
+
+The second authorized protected collection on 2026-10-17 stopped after only the
+fixed Versions GET with `versions_normalization_failed`. No retry was made.
+Issue #1069 preserves the #1068 pagination contract and request plan, but lets
+the installed executor surface one bounded static suffix such as
+`versions_normalization_failed_result_shape` or
+`versions_normalization_failed_pagination`.
+
+The executor accepts only its own fixed diagnostic allowlist; any unknown
+classifier result or classifier exception collapses to
+`versions_normalization_failed_unclassified`. The diagnostic path does not
+issue an extra request, retain provider payloads, print raw version metadata,
+expose account/token data or authorize a future collection.
+
+The audited installed runtime baseline for this diagnostic hop is now exactly
+`a48744ae941c5e5cfcbe4a01da0bd4a1618e266d`. The bounded upgrader is therefore repinned to reconstruct and
+verify executor, normalizer and release metadata from that exact old Git
+revision before replacing only the same three fixed runtime files with a future
+merged #1069 release. This does not create a generic upgrade path and does not
+authorize the replacement itself.
+
+Any future installed-runtime replacement and any authenticated Cloudflare read
+still require separate owner gates.
