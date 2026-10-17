@@ -207,6 +207,25 @@ def _result_info(payload: dict[str, Any], count: int) -> None:
         )
 
 
+def _versions_result_info(payload: dict[str, Any], count: int) -> None:
+    _result_info(payload, count)
+    info = payload["result_info"]
+    required = {"page", "per_page", "count", "total_count"}
+    allowed = required | {"total_pages"}
+    need(set(info).issubset(allowed), "PAGINATION_FIELDS")
+    need(info["total_count"] <= 1000000, "PAGINATION_DRIFT")
+    if "total_pages" in info:
+        expected_pages = max(
+            1,
+            (info["total_count"] + info["per_page"] - 1) // info["per_page"],
+        )
+        need(
+            info["total_pages"] <= 500000
+            and info["total_pages"] == expected_pages,
+            "PAGINATION_PAGES",
+        )
+
+
 def _source_class(source: Any, last_deployed_from: Any) -> str:
     need(type(source) is str and type(last_deployed_from) is str, "SOURCE_METADATA")
     need(source == last_deployed_from, "SOURCE_AMBIGUOUS")
@@ -218,28 +237,43 @@ def _source_class(source: Any, last_deployed_from: Any) -> str:
 
 
 def parse_versions(payload: dict[str, Any]) -> tuple[str, str]:
-    result = _api_result(payload, pagination="forbidden")
+    result = _api_result(payload, pagination="optional")
     need(
         type(result) is dict and set(result) == {"items"},
         "VERSIONS_RESULT",
     )
     items = result["items"]
     need(type(items) is list and 1 <= len(items) <= 2, "VERSIONS_COUNT")
-    parsed: list[tuple[str, int, str]] = []
+    if "result_info" in payload:
+        _versions_result_info(payload, len(items))
+    parsed: list[tuple[str, int | None, str]] = []
     seen: set[str] = set()
     for item in items:
-        need(type(item) is dict, "VERSION_ENTRY")
+        need(type(item) is dict and len(item) <= 20, "VERSION_ENTRY")
         version_id = _uuid(item.get("id"), "VERSION_ID")
         need(version_id not in seen, "VERSION_DUPLICATE")
         seen.add(version_id)
         number = item.get("number")
+        if "number" in item:
+            need(
+                type(number) is int and 0 <= number <= 2147483647,
+                "VERSION_NUMBER",
+            )
+        else:
+            number = None
         meta = item.get("metadata")
-        need(type(number) is int and number >= 1, "VERSION_NUMBER")
-        need(type(meta) is dict, "VERSION_METADATA")
+        need(type(meta) is dict and len(meta) <= 20, "VERSION_METADATA")
         source = meta.get("source")
-        need(type(source) is str, "VERSION_SOURCE")
+        need(
+            type(source) is str and 1 <= len(source) <= 64,
+            "VERSION_SOURCE",
+        )
         parsed.append((version_id, number, source))
-    if len(parsed) == 2:
+    if (
+        len(parsed) == 2
+        and parsed[0][1] is not None
+        and parsed[1][1] is not None
+    ):
         need(parsed[0][1] > parsed[1][1], "VERSION_ORDER")
     return parsed[0][0], parsed[0][2]
 
