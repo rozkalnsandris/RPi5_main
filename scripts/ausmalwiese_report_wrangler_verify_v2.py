@@ -91,7 +91,6 @@ def provenance_adapter(annotations: Any) -> dict[str, str]:
     return {
         "version_tag": validated["workers/tag"],
         "version_message": validated["workers/message"],
-        "version_triggered_by": validated["workers/triggered_by"],
     }
 
 
@@ -145,7 +144,6 @@ def expected_contract() -> dict[str, Any]:
             "adapter_output_keys": [
                 "version_tag",
                 "version_message",
-                "version_triggered_by",
             ],
         },
         "actions": {

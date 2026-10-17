@@ -21,8 +21,7 @@
     ],
     "adapter_output_keys": [
       "version_tag",
-      "version_message",
-      "version_triggered_by"
+      "version_message"
     ]
   },
   "actions": {

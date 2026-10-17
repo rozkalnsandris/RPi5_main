@@ -46,7 +46,6 @@ class ReportWranglerVerifyV2Tests(unittest.TestCase):
             {
                 "version_tag": plan.expected_tag(),
                 "version_message": plan.expected_message(),
-                "version_triggered_by": "upload",
             },
         )
 
