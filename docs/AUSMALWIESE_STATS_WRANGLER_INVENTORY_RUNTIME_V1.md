@@ -146,10 +146,11 @@ does not authorize a retry.
 
 ## Bounded installed-runtime upgrade — Issue #1060
 
-The currently installed protected inventory release is the reviewed #1056
-release at `660deee749ca684e979a720fe69c66aee2b62e3d`. The original installer is
-intentionally no-overwrite, so it remains the only valid path for a first
-installation.
+At the time of issue #1060, the installed protected inventory release was the
+reviewed #1056 release at `660deee749ca684e979a720fe69c66aee2b62e3d`.
+That one-hop upgrade was later applied successfully to
+`ce4f6594418d4ec9d91ee96ec37ba34e14bdb6a5`. The original installer remains
+intentionally no-overwrite for a first installation.
 
 Issue #1060 adds a separate, exact-old-release upgrade mode. It accepts only
 that one installed source SHA and only after proving all of the following before
@@ -182,3 +183,28 @@ A future mutation additionally requires the distinct confirmation string
 contract only: #1060 grants no host replacement, credential access, Cloudflare
 request or retry. Once the first replacement dispatch starts, any failure or
 ambiguity is terminal STOP with no automatic retry, rollback or cleanup.
+
+
+## Next bounded runtime hop — issue #1067
+
+The current installed protected runtime is now exactly
+`ce4f6594418d4ec9d91ee96ec37ba34e14bdb6a5`. Issue #1067 repins the bounded
+upgrade source to that exact old release so a future reviewed parser correction
+can be installed without creating a generic upgrade mechanism.
+
+The same fail-closed contract remains:
+
+- exact clean reviewed `main` for the new source;
+- exact old executor/normalizer/release bytes reconstructed from Git at
+  `ce4f6594418d4ec9d91ee96ec37ba34e14bdb6a5`;
+- exact root ownership/modes and no symlink targets;
+- exactly three replacement files: executor, normalizer and `release.json`;
+- release directory is not recreated or chmodded;
+- no credential read, Cloudflare request, service/timer/sudoers/package/Docker
+  or network mutation;
+- post-write SHA-256 and metadata verification;
+- any ambiguity after first replacement dispatch is terminal STOP with no
+  retry, rollback or cleanup.
+
+This source repin does not authorize that future host replacement or a later
+authenticated inventory collection.
