@@ -397,7 +397,10 @@ class RuntimeTests(unittest.TestCase):
              mock.patch.object(runtime, "single_get", side_effect=fake_get):
             with self.assertRaises(runtime.Stop) as caught:
                 runtime.run_once(SHA, stage="before")
-        self.assertEqual(\n            str(caught.exception),\n            "versions_normalization_failed_result_shape",\n        )
+        self.assertEqual(
+            str(caught.exception),
+            "versions_normalization_failed_result_shape",
+        )
         self.assertNotIn("must-not-leak", str(caught.exception))
         self.assertEqual(calls, ["versions"])
 
