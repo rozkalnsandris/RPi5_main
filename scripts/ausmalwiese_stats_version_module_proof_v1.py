@@ -22,9 +22,9 @@ SOURCE_COMMIT = "9590be4276ac1781eafe38cf662b8d224653c9aa"
 SOURCE_PATH = "cloudflare/stats-worker.js"
 SOURCE_BLOB = "dd5a2859d55b9ef2d9fb9a9d8bf0a535d25a5ba4"
 CONFIG_PATH = "cloudflare/wrangler.stats-worker.jsonc"
-VERSION_ID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\\Z")
-RESOURCE_ID = re.compile(r"[0-9a-f-]{32,36}\\Z")
-DATE = re.compile(r"20[0-9]{2}-[01][0-9]-[0-3][0-9]\\Z")
+VERSION_ID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
+RESOURCE_ID = re.compile(r"[0-9a-f-]{32,36}\Z")
+DATE = re.compile(r"20[0-9]{2}-[01][0-9]-[0-3][0-9]\Z")
 STOP = "STOP_STATS_WRANGLER_SOURCE_ONLY"
 
 class Blocked(Exception):
@@ -36,7 +36,7 @@ def need(ok: bool, reason: str) -> None:
 
 def git_blob(data: bytes) -> str:
     return hashlib.sha1(
-        b"blob " + str(len(data)).encode("ascii") + b"\\0" + data
+        b"blob " + str(len(data)).encode("ascii") + b"\0" + data
     ).hexdigest()
 
 def verify_source(worker_bytes: Any) -> None:
