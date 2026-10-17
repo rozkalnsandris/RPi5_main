@@ -631,6 +631,237 @@ class InstallerTests(unittest.TestCase):
             ):
                 installer.apply(SHA)
 
+    def test_upgrade_requires_exact_old_release_and_checkout_gate(self):
+        with mock.patch.object(installer, "checked_checkout") as checkout, \
+             mock.patch.object(
+                 installer,
+                 "tracked_snapshot",
+                 side_effect=[b"new-executor", b"new-normalizer", b"binding"],
+             ), \
+             mock.patch.object(
+                 installer,
+                 "approved_account_fingerprint",
+                 return_value=installer.ACCOUNT_SHA256,
+             ), \
+             mock.patch.object(installer, "upgrade_roots_preflight") as roots:
+            executor, normalizer, metadata = installer.upgrade_preflight(
+                SHA,
+                installer.OLD_RELEASE_SHA,
+            )
+        checkout.assert_called_once_with(SHA, runner=subprocess.run)
+        roots.assert_called_once_with(
+            installer.OLD_RELEASE_SHA,
+            installer.ACCOUNT_SHA256,
+            runner=subprocess.run,
+        )
+        self.assertEqual(executor, b"new-executor")
+        self.assertEqual(normalizer, b"new-normalizer")
+        self.assertEqual(json.loads(metadata)["source_sha"], SHA)
+
+        with mock.patch.object(installer, "checked_checkout") as checkout:
+            with self.assertRaisesRegex(
+                installer.Stop,
+                "invalid_upgrade_source",
+            ):
+                installer.upgrade_preflight(SHA, "c" * 40)
+        checkout.assert_not_called()
+
+    def test_upgrade_preflight_binds_old_git_release_and_target_modes(self):
+        old_executor = b"old-executor"
+        old_normalizer = b"old-normalizer"
+        expected_release = installer.release_bytes(
+            installer.OLD_RELEASE_SHA,
+            old_executor,
+            old_normalizer,
+            installer.ACCOUNT_SHA256,
+        )
+        with mock.patch.object(installer, "parents_preflight"), \
+             mock.patch.object(installer, "exact_target") as target, \
+             mock.patch.object(
+                 installer,
+                 "historical_snapshot",
+                 side_effect=[old_executor, old_normalizer],
+             ) as history, \
+             mock.patch.object(installer, "exact_digest") as digest:
+            installer.upgrade_roots_preflight(
+                installer.OLD_RELEASE_SHA,
+                installer.ACCOUNT_SHA256,
+            )
+
+        self.assertEqual(target.call_count, 4)
+        target.assert_any_call(
+            installer.RELEASE_DIR,
+            mode="700",
+            kind="directory",
+            runner=subprocess.run,
+        )
+        target.assert_any_call(
+            installer.EXECUTOR,
+            mode="500",
+            kind="regular file",
+            runner=subprocess.run,
+        )
+        target.assert_any_call(
+            installer.NORMALIZER,
+            mode="400",
+            kind="regular file",
+            runner=subprocess.run,
+        )
+        target.assert_any_call(
+            installer.RELEASE,
+            mode="400",
+            kind="regular file",
+            runner=subprocess.run,
+        )
+        self.assertEqual(history.call_count, 2)
+        digest.assert_any_call(
+            installer.EXECUTOR,
+            old_executor,
+            runner=subprocess.run,
+        )
+        digest.assert_any_call(
+            installer.NORMALIZER,
+            old_normalizer,
+            runner=subprocess.run,
+        )
+        digest.assert_any_call(
+            installer.RELEASE,
+            expected_release,
+            runner=subprocess.run,
+        )
+
+    def test_upgrade_target_rejects_symlink_and_metadata_drift(self):
+        class Result:
+            def __init__(self, returncode):
+                self.returncode = returncode
+                self.stdout = b""
+                self.stderr = b""
+
+        with mock.patch.object(
+            installer,
+            "invoke",
+            return_value=Result(0),
+        ):
+            with self.assertRaisesRegex(
+                installer.Stop,
+                "upgrade_target_symlink",
+            ):
+                installer.exact_target(
+                    installer.EXECUTOR,
+                    mode="500",
+                    kind="regular file",
+                )
+
+        with mock.patch.object(
+            installer,
+            "invoke",
+            return_value=Result(1),
+        ), mock.patch.object(
+            installer,
+            "sudo_read",
+            return_value="0:0:777:regular file",
+        ):
+            with self.assertRaisesRegex(
+                installer.Stop,
+                "upgrade_target_metadata_mismatch",
+            ):
+                installer.exact_target(
+                    installer.EXECUTOR,
+                    mode="500",
+                    kind="regular file",
+                )
+
+        with mock.patch.object(
+            installer,
+            "invoke",
+            return_value=Result(1),
+        ), mock.patch.object(
+            installer,
+            "sudo_read",
+            side_effect=installer.Stop("sudo_preflight_failed"),
+        ):
+            with self.assertRaisesRegex(
+                installer.Stop,
+                "sudo_preflight_failed",
+            ):
+                installer.exact_target(
+                    installer.RELEASE,
+                    mode="400",
+                    kind="regular file",
+                )
+
+        with mock.patch.object(
+            installer,
+            "sudo_read",
+            return_value=("0" * 64) + "  " + installer.RELEASE,
+        ):
+            with self.assertRaisesRegex(
+                installer.Stop,
+                "installed_release_mismatch",
+            ):
+                installer.exact_digest(
+                    installer.RELEASE,
+                    b"expected-release",
+                )
+
+    def test_upgrade_is_three_fixed_replacements_and_failure_is_terminal(self):
+        meta = installer.release_bytes(
+            SHA,
+            b"new-executor",
+            b"new-normalizer",
+            installer.ACCOUNT_SHA256,
+        )
+        with mock.patch.object(
+            installer,
+            "upgrade_preflight",
+            return_value=(b"new-executor", b"new-normalizer", meta),
+        ), mock.patch.object(installer, "write_once") as write, \
+             mock.patch.object(installer, "post_verify") as verify:
+            installer.upgrade(SHA, installer.OLD_RELEASE_SHA)
+
+        self.assertEqual(write.call_count, 3)
+        self.assertEqual(
+            [c.args[0][-1] for c in write.call_args_list],
+            [installer.EXECUTOR, installer.NORMALIZER, installer.RELEASE],
+        )
+        verify.assert_called_once()
+
+        writes = [None, installer.Stop("post_dispatch_unknown_state")]
+        with mock.patch.object(
+            installer,
+            "upgrade_preflight",
+            return_value=(b"new-executor", b"new-normalizer", meta),
+        ), mock.patch.object(
+            installer,
+            "write_once",
+            side_effect=writes,
+        ) as write, mock.patch.object(installer, "post_verify"):
+            with self.assertRaisesRegex(
+                installer.Stop,
+                "post_dispatch_unknown_state",
+            ):
+                installer.upgrade(SHA, installer.OLD_RELEASE_SHA)
+        self.assertEqual(write.call_count, 2)
+
+    def test_post_verify_checks_exact_target_and_digest(self):
+        payload = b"new-executor"
+        checksum = hashlib.sha256(payload).hexdigest()
+        with mock.patch.object(installer, "exact_target") as target, \
+             mock.patch.object(
+                 installer,
+                 "sudo_read",
+                 return_value=f"{checksum}  {installer.EXECUTOR}",
+             ):
+            installer.post_verify(
+                ((installer.EXECUTOR, "500", payload),)
+            )
+        target.assert_called_once_with(
+            installer.EXECUTOR,
+            mode="500",
+            kind="regular file",
+            runner=subprocess.run,
+        )
+
     def test_source_scope_has_no_cleanup_or_credential_write(self):
         source = INSTALLER.read_text("utf-8")
         for forbidden in (
