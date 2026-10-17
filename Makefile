@@ -204,6 +204,8 @@ test:
 	python3 ./tests/test-ausmalwiese-report-secrets-provisioner-v1.py
 	python3 ./tests/test-ausmalwiese-report-secrets-provision-installer-v1.py
 	python3 ./tests/test-ausmalwiese-report-wrangler-deploy-v1.py
+	python3 ./tests/test-ausmalwiese-report-wrangler-runtime-boundary-v1.py
+	python3 ./tests/test-ausmalwiese-report-wrangler-runtime-installer-v1.py
 	python3 ./tests/test-ausmalwiese-stats-worker-exact-deploy-v1.py
 	python3 ./tests/test-ausmalwiese-stats-worker-transport-v1.py
 	python3 ./tests/test-ausmalwiese-stats-version-module-proof-v1.py

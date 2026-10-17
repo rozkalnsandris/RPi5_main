@@ -8,6 +8,7 @@ mutate the host, deploy a Worker, retry, roll back, or clean up.
 """
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
@@ -70,6 +71,38 @@ CONFIG_ENDPOINT = "https://ausmalwiese.de/api/report/config"
 VERSION_ID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 STOP = "STOP_REPORT_WRANGLER_DEPLOY_SOURCE_ONLY"
+
+RUNTIME_BOUNDARY_ISSUE = 1075
+RUNTIME_ENTRY = Path("/usr/local/sbin/rpi5-ausmalwiese-report-wrangler-deploy")
+RUNTIME_HOME_ROOT = Path("/home")
+RUNTIME_CONTRACT_SOURCE_ROOT = "<fixed-operator-home>/coloring-pages"
+RUNTIME_SECRETS_FILE = (
+    "/etc/rpi5-secrets/cloudflare/ausmalwiese-report-wrangler-secrets.json"
+)
+RUNTIME_SECRETS_STDIN = "/dev/stdin"
+RUNTIME_OPERATOR = "andris"
+RUNTIME_OPERATOR_UID = 1000
+RUNTIME_OPERATOR_GID = 1000
+RUNTIME_OPERATOR_HOME = str(RUNTIME_HOME_ROOT / RUNTIME_OPERATOR)
+RUNTIME_SOURCE_ROOT = str(Path(RUNTIME_OPERATOR_HOME) / "coloring-pages")
+RUNTIME_CONFIRM = "OWNER-AUTHORIZED-REPORT-WRANGLER-DEPLOY"
+NPX = "/usr/bin/npx"
+RUNTIME_ENTRY_PARENTS = ("/", "/usr", "/usr/local", "/usr/local/sbin")
+RUNTIME_SECRET_PARENTS = (
+    "/",
+    "/etc",
+    "/etc/rpi5-secrets",
+    "/etc/rpi5-secrets/cloudflare",
+)
+RUNTIME_ENV = {
+    "HOME": RUNTIME_OPERATOR_HOME,
+    "USER": RUNTIME_OPERATOR,
+    "LOGNAME": RUNTIME_OPERATOR,
+    "XDG_CONFIG_HOME": RUNTIME_OPERATOR_HOME + "/.config",
+    "PATH": "/usr/local/bin:/usr/bin:/bin",
+    "LC_ALL": "C",
+    "WRANGLER_SEND_METRICS": "false",
+}
 
 
 class Blocked(Exception):
@@ -382,6 +415,268 @@ def execute_deploy_once(
     return "DEPLOY_DISPATCH_SUCCEEDED_READ_ONLY_VERIFICATION_REQUIRED"
 
 
+def _trusted_root_path(
+    path: str,
+    *,
+    expected_mode: int | None,
+    directory: bool,
+    lstat: Any = os.lstat,
+) -> Any:
+    try:
+        item = lstat(path)
+    except OSError:
+        raise Blocked("RUNTIME_PATH_METADATA") from None
+    kind_ok = (
+        stat.S_ISDIR(item.st_mode)
+        if directory
+        else stat.S_ISREG(item.st_mode)
+    )
+    need(
+        kind_ok
+        and item.st_uid == 0
+        and item.st_gid == 0
+        and (directory or item.st_nlink == 1),
+        "RUNTIME_PATH_UNTRUSTED",
+    )
+    mode = stat.S_IMODE(item.st_mode)
+    if expected_mode is None:
+        need(
+            mode & 0o022 == 0 and mode & 0o700 == 0o700,
+            "RUNTIME_PATH_UNTRUSTED",
+        )
+    else:
+        need(mode == expected_mode, "RUNTIME_PATH_UNTRUSTED")
+    return item
+
+
+def trusted_runtime_entry(*, lstat: Any = os.lstat) -> None:
+    """Require future root-installed exact entry, never repository execution."""
+    need(os.geteuid() == 0, "RUNTIME_ROOT_REQUIRED")
+    need(
+        str(Path(__file__).absolute()) == str(RUNTIME_ENTRY),
+        "RUNTIME_INSTALLED_ENTRY_REQUIRED",
+    )
+    for parent in RUNTIME_ENTRY_PARENTS:
+        _trusted_root_path(
+            parent, expected_mode=None, directory=True, lstat=lstat
+        )
+    _trusted_root_path(
+        str(RUNTIME_ENTRY), expected_mode=0o500, directory=False, lstat=lstat
+    )
+
+
+def validate_root_owned_runtime_secret(
+    *,
+    lstat: Any = os.lstat,
+) -> Any:
+    """Validate only metadata for the fixed persistent root-owned secret file."""
+    for parent in RUNTIME_SECRET_PARENTS:
+        expected = 0o700 if parent.endswith("/cloudflare") else None
+        _trusted_root_path(
+            parent, expected_mode=expected, directory=True, lstat=lstat
+        )
+    try:
+        item = lstat(RUNTIME_SECRETS_FILE)
+    except OSError:
+        raise Blocked("RUNTIME_SECRETS_METADATA") from None
+    need(
+        stat.S_ISREG(item.st_mode)
+        and item.st_uid == 0
+        and item.st_gid == 0
+        and item.st_nlink == 1
+        and stat.S_IMODE(item.st_mode) == 0o600
+        and 1 <= item.st_size <= 65536,
+        "RUNTIME_SECRETS_UNPROTECTED",
+    )
+    return item
+
+
+def open_root_owned_runtime_secret(
+    *,
+    lstat: Any = os.lstat,
+    opener: Any = os.open,
+    fstat: Any = os.fstat,
+) -> tuple[int, int]:
+    """Open the fixed file without following symlinks; never parse its bytes."""
+    before = validate_root_owned_runtime_secret(lstat=lstat)
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
+    try:
+        fd = opener(RUNTIME_SECRETS_FILE, flags)
+    except OSError:
+        raise Blocked("RUNTIME_SECRETS_OPEN") from None
+    try:
+        after = fstat(fd)
+        need(
+            stat.S_ISREG(after.st_mode)
+            and after.st_uid == 0
+            and after.st_gid == 0
+            and after.st_nlink == 1
+            and stat.S_IMODE(after.st_mode) == 0o600
+            and after.st_size == before.st_size
+            and after.st_dev == before.st_dev
+            and after.st_ino == before.st_ino,
+            "RUNTIME_SECRETS_OPEN_DRIFT",
+        )
+        return fd, after.st_size
+    except Exception:
+        os.close(fd)
+        raise
+
+
+def sealed_operator_secret_memfd(secret_fd: int, size: int) -> int:
+    """Kernel-copy secret bytes into anonymous memory; never materialize a value."""
+    need(
+        type(secret_fd) is int
+        and secret_fd >= 0
+        and type(size) is int
+        and 1 <= size <= 65536,
+        "RUNTIME_SECRETS_SIZE",
+    )
+    fd = -1
+    try:
+        fd = os.memfd_create(
+            "ausmalwiese-report-wrangler-secrets",
+            os.MFD_CLOEXEC | os.MFD_ALLOW_SEALING,
+        )
+        offset = 0
+        while offset < size:
+            sent = os.sendfile(fd, secret_fd, offset, size - offset)
+            if not isinstance(sent, int) or sent <= 0:
+                raise Blocked("RUNTIME_SECRET_COPY")
+            offset += sent
+        os.fchown(fd, RUNTIME_OPERATOR_UID, RUNTIME_OPERATOR_GID)
+        os.fchmod(fd, 0o400)
+        os.lseek(fd, 0, os.SEEK_SET)
+        fcntl.fcntl(
+            fd,
+            fcntl.F_ADD_SEALS,
+            fcntl.F_SEAL_WRITE
+            | fcntl.F_SEAL_GROW
+            | fcntl.F_SEAL_SHRINK
+            | fcntl.F_SEAL_SEAL,
+        )
+        item = os.fstat(fd)
+        need(
+            stat.S_ISREG(item.st_mode)
+            and item.st_uid == RUNTIME_OPERATOR_UID
+            and item.st_gid == RUNTIME_OPERATOR_GID
+            and stat.S_IMODE(item.st_mode) == 0o400
+            and item.st_size == size,
+            "RUNTIME_SECRET_MEMFD_METADATA",
+        )
+        return fd
+    except Exception:
+        if fd >= 0:
+            os.close(fd)
+        raise Blocked("RUNTIME_SECRET_MEMFD") from None
+
+
+def runtime_deploy_command(application: dict[str, Any]) -> list[str]:
+    """Use anonymous stdin as Wrangler's JSON secrets-file path."""
+    approval = {
+        "worker": WORKER,
+        "wrangler_version": WRANGLER_VERSION,
+        "source_commit": SOURCE_COMMIT,
+        "worker_blob": WORKER_BLOB,
+        "config_blob": CONFIG_BLOB,
+        "secrets_file": RUNTIME_SECRETS_STDIN,
+        "allow_deploy_once": True,
+    }
+    command = deploy_command(application, approval)
+    command[0] = NPX
+    return command
+
+
+def _operator_runner(runner: Any) -> Any:
+    """Bind child processes to the fixed non-root Wrangler operator."""
+
+    def invoke(args: list[str], **kwargs: Any) -> Any:
+        try:
+            return runner(
+                args,
+                user=RUNTIME_OPERATOR_UID,
+                group=RUNTIME_OPERATOR_GID,
+                extra_groups=(),
+                env=RUNTIME_ENV,
+                **kwargs,
+            )
+        except (OSError, subprocess.SubprocessError):
+            raise Blocked("RUNTIME_OPERATOR_EXEC") from None
+
+    return invoke
+
+
+def execute_root_owned_runtime_once(
+    *,
+    runner: Any = subprocess.run,
+    lstat: Any = os.lstat,
+    opener: Any = os.open,
+    fstat: Any = os.fstat,
+) -> str:
+    """Future installed root boundary; source issue #1075 does not authorize use."""
+    trusted_runtime_entry(lstat=lstat)
+    operator_runner = _operator_runner(runner)
+    application = application_evidence_from_checkout(
+        RUNTIME_SOURCE_ROOT,
+        runner=operator_runner,
+    )
+
+    try:
+        version = operator_runner(
+            [NPX, "--yes", f"wrangler@{WRANGLER_VERSION}", "--version"],
+            cwd=RUNTIME_SOURCE_ROOT,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+    except Blocked:
+        raise
+    observed = (version.stdout + "\n" + version.stderr).strip()
+    need(
+        version.returncode == 0
+        and re.search(r"(?<![0-9.])4\.135\.0(?![0-9.])", observed)
+        is not None,
+        "WRANGLER_VERSION_DRIFT",
+    )
+
+    secret_fd = -1
+    memfd = -1
+    try:
+        secret_fd, size = open_root_owned_runtime_secret(
+            lstat=lstat, opener=opener, fstat=fstat
+        )
+        memfd = sealed_operator_secret_memfd(secret_fd, size)
+    finally:
+        if secret_fd >= 0:
+            os.close(secret_fd)
+
+    try:
+        command = runtime_deploy_command(application)
+        result = operator_runner(
+            command,
+            cwd=RUNTIME_SOURCE_ROOT,
+            stdin=memfd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        need(result.returncode == 0, "DEPLOY_DISPATCH_UNKNOWN")
+    except Blocked:
+        raise
+    except Exception:
+        raise Blocked("DEPLOY_DISPATCH_UNKNOWN") from None
+    finally:
+        if memfd >= 0:
+            os.close(memfd)
+
+    return "DEPLOY_DISPATCH_SUCCEEDED_READ_ONLY_VERIFICATION_REQUIRED"
+
+
 def read_only_verification_commands(version_id: Any) -> list[list[str]]:
     """Return only documented read-only Wrangler checks for the report Worker."""
     version = _version(version_id, "VERSION_ID")
@@ -543,6 +838,13 @@ def check_contract(contract: Any) -> None:
             "verifies_exact_checkout_before_dispatch": True,
             "verifies_protected_secrets_metadata_without_reading_contents": True,
             "current_issue_authorizes_execution": False,
+            "root_owned_runtime_boundary_issue": RUNTIME_BOUNDARY_ISSUE,
+            "runtime_entry": str(RUNTIME_ENTRY),
+            "runtime_source_root": RUNTIME_CONTRACT_SOURCE_ROOT,
+            "runtime_secrets_file": RUNTIME_SECRETS_FILE,
+            "runtime_secrets_transport": "sealed-memfd-via-dev-stdin",
+            "runtime_operator": RUNTIME_OPERATOR,
+            "runtime_persistent_permission_widening": False,
         },
         "post_deploy_requires": [
             "exact-source-and-config-provenance",
@@ -570,6 +872,17 @@ def check_contract(contract: Any) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
+
+    # The future runtime branch deliberately does not depend on a repository
+    # contract file: only separately installed exact script bytes may reach it.
+    if args == ["--runtime-deploy", "--confirm", RUNTIME_CONFIRM]:
+        try:
+            print(execute_root_owned_runtime_once())
+            return 0
+        except (Blocked, OSError, ValueError, TypeError):
+            print(STOP)
+            return 2
+
     try:
         check_contract(json.loads(CONTRACT.read_text("utf-8")))
         if args == ["--check-contract"]:

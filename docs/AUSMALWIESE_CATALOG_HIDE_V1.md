@@ -81,7 +81,7 @@ The installed operator must match exact pinned Git blob
 `a07d95fe78f34b5fc90eaf2eb202eb3a4815259c`, Git source
 `ops/bin/ausmalwiese-catalog-hide`, tree mode `100755`.
 The installer reads the trusted owner checkout from
-`/home/andris/RPi5_main`, using unprivileged `andris` and a
+`<fixed-owner-checkout>`, using unprivileged `andris` and a
 clean Git environment with hooks and optional locks disabled. It checks exact
 `main` HEAD given by the caller, clean tracked/untracked state, pinned Git
 tree mode and object bytes, including a second source read before installation.
