@@ -214,11 +214,14 @@ class ReportProtocolTests(unittest.TestCase):
 
     def test_no_owner_authority_never_dispatches(self):
         fake = FakeProtectedAdapter()
-        for approval in (None, {}, dict(envelope(), worker="coloring-pages-stats-v1"),
+        for approval in ({}, dict(envelope(), worker="coloring-pages-stats-v1"),
                          dict(envelope(), deploy_once=False)):
             with self.assertRaises(op.Blocked):
                 simulated(fake, approval=approval)
             self.assertEqual(fake.calls, [])
+        with self.assertRaises(op.Blocked):
+            op.future_protocol(fake, None, b"synthetic")
+        self.assertEqual(fake.calls, [])
 
     def test_synthetic_protocol_orders_six_dispatches_once(self):
         fake = FakeProtectedAdapter()
