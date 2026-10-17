@@ -182,3 +182,20 @@ A future mutation additionally requires the distinct confirmation string
 contract only: #1060 grants no host replacement, credential access, Cloudflare
 request or retry. Once the first replacement dispatch starts, any failure or
 ambiguity is terminal STOP with no automatic retry, rollback or cleanup.
+
+
+## Sanitized Versions diagnostic boundary — Issue #1069
+
+The second authorized protected collection on 2026-10-17 stopped after only the
+fixed Versions GET with `versions_normalization_failed`. No retry was made.
+Issue #1069 keeps the request plan, credential boundary and accepted provider
+contract unchanged, but lets the installed executor surface one bounded static
+suffix such as `versions_normalization_failed_result_shape`. The executor
+accepts only its own fixed diagnostic allowlist; an unknown classifier result or
+classifier exception collapses to
+`versions_normalization_failed_unclassified`.
+
+The diagnostic path does not issue an extra request, retain provider payloads,
+print raw version metadata, expose account/token data or authorize a future
+collection. Any future installed-runtime replacement and any authenticated
+Cloudflare read still require separate owner gates.

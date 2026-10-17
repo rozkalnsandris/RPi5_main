@@ -163,3 +163,22 @@ route/binding/settings checks and sanitized output schema are unchanged.
 The installed protected runtime is not upgraded by this source change. #1060 owns the
 bounded root-owned runtime replacement required before a future authenticated inventory
 collection can use these new source bytes.
+
+
+## Sanitized Versions failure classification — Issue #1069
+
+A second separately authorized read-only collection on 2026-10-17 reached the
+documented Versions endpoint successfully but stopped before the second GET with
+`versions_normalization_failed`. The credential was consumed once; no retry,
+deployments request, version-detail request, Cloudflare write or D1 write
+followed.
+
+The official Versions contract remains unchanged: `result.items`, first item
+latest, with version `id`, `number` and `metadata.source`. Issue #1069 does
+not widen that accepted shape. Instead, parser failures are mapped to a small
+static diagnostic taxonomy: envelope, api_failure, pagination, result_shape,
+item_count, item_shape, version_id, duplicate_id, number, metadata, source,
+order, or unclassified. The classifier never emits raw payload values, UUIDs,
+numbers, source values, field names from provider data, account identity,
+credential material or exception text. Successful inventory output is
+unchanged.
