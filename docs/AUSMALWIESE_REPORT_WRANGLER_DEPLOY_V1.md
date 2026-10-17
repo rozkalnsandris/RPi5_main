@@ -98,7 +98,7 @@ installed path before any privileged secret handling.
 The source-only installer for that future entrypoint is
 `scripts/install-ausmalwiese-report-wrangler-runtime-boundary-v1.py`. It pins
 the reviewed runtime source Git blob
-`33252b523f97b1b092cab52db39a92660e16ab0f` and can only target the fixed
+`c92da027aea2d2b41f1e901bd14ae91a2a4bc834` and can only target the fixed
 entrypoint above. Its default path is read-only preflight; a later separately
 authorized `--apply` uses a sealed anonymous memfd plus one exclusive
 root-owned `cp` operation, then metadata/SHA-256 verification. It has no secret,
@@ -106,12 +106,12 @@ Wrangler or Cloudflare transport code.
 
 The fixed runtime flow is:
 
-1. Independently validate the exact `/home/andris/coloring-pages` checkout,
+1. Independently validate the exact `<fixed-operator-home>/coloring-pages` checkout,
    commit `699c036b7f952aa98be06e166a9705069b7e9eb2`, report Worker/config
    blobs and parsed Wrangler config.
 2. Run only `/usr/bin/npx --yes wrangler@4.135.0 --version` as fixed operator
    `andris` (UID/GID 1000) with a bounded environment rooted at
-   `/home/andris`. This future operation uses the operator's existing Wrangler
+   `<fixed-operator-home>`. This future operation uses the operator's existing Wrangler
    authentication context; #1075 does not read or expose those credentials.
 3. Validate the persistent secret file and trusted parent metadata, then open it
    as root with `O_NOFOLLOW` and recheck the opened inode.
