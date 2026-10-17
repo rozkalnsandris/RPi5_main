@@ -44,6 +44,8 @@ def snapshot(*, active=OLD, latest=OLD, deployment=OLD_DEPLOYMENT):
         "environment": "production",
         "active_version": active,
         "latest_uploaded_version": latest,
+        "active_code_sha256": op.canonical_sha256(SOURCE_FIXTURE) if active == NEW else "c" * 64,
+        "latest_code_sha256": op.canonical_sha256(SOURCE_FIXTURE) if latest == NEW else "c" * 64,
         "deployment_id": deployment,
         "traffic_percent": 100,
         "routes": dict(op.ROUTES),
@@ -262,6 +264,23 @@ class ExactWorkerGateTests(unittest.TestCase):
         with self.assertRaisesRegex(op.Blocked, "POST_UPLOAD_UNVERIFIED_STOP"):
             self.run_protocol(boundary)
         self.assertFalse(any(isinstance(x, tuple) and x[0] == "deploy" for x in boundary.calls))
+
+    def test_uploaded_code_mismatch_stops_before_promotion(self):
+        middle = snapshot(active=OLD, latest=NEW)
+        middle["latest_code_sha256"] = "d" * 64
+        boundary = FakeProtectedBoundary([snapshot(), snapshot(), middle])
+        with self.assertRaisesRegex(op.Blocked, "POST_UPLOAD_UNVERIFIED_STOP"):
+            self.run_protocol(boundary)
+        self.assertFalse(any(isinstance(x, tuple) and x[0] == "deploy" for x in boundary.calls))
+
+    def test_deployed_code_mismatch_is_terminal(self):
+        last = snapshot(active=NEW, latest=NEW, deployment=NEW_DEPLOYMENT)
+        last["active_code_sha256"] = "d" * 64
+        boundary = FakeProtectedBoundary([snapshot(), snapshot(),
+                                          snapshot(active=OLD, latest=NEW), last])
+        with self.assertRaisesRegex(op.Blocked, "POST_DEPLOY_UNVERIFIED_STOP"):
+            self.run_protocol(boundary)
+        self.assertEqual(len([x for x in boundary.calls if isinstance(x, tuple)]), 2)
 
     def test_post_upload_active_changed_stops_without_deploy(self):
         middle = snapshot(active=NEW, latest=NEW)
