@@ -42,8 +42,8 @@ RATE_LIMIT = {
 SECRET_NAMES = ["CF_ANALYTICS_API_TOKEN", "VISITOR_HMAC_KEY"]
 PLAIN_TEXT_VAR_NAMES = ["CF_ANALYTICS_HOST", "CF_ZONE_TAG", "PUBLIC_ORIGIN"]
 
-VERSION_ID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\\Z")
-DIGEST = re.compile(r"[0-9a-f]{64}\\Z")
+VERSION_ID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
+DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 STOP = "STOP_STATS_WRANGLER_CONFLICT_SOURCE_ONLY"
 
 
