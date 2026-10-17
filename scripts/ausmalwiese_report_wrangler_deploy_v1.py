@@ -235,7 +235,7 @@ def application_evidence_from_checkout(
     need(tree.returncode == 0, "SOURCE_TREE_FAILED")
     entries: dict[str, str] = {}
     for line in tree.stdout.splitlines():
-        match = re.fullmatch(r"100644 blob ([0-9a-f]{40})\\t(.+)", line)
+        match = re.fullmatch(r"100644 blob ([0-9a-f]{40})\t(.+)", line)
         need(match is not None, "SOURCE_TREE_SHAPE")
         entries[match.group(2)] = match.group(1)
     need(
@@ -372,7 +372,7 @@ def execute_deploy_once(
     observed = (version.stdout + "\n" + version.stderr).strip()
     need(
         version.returncode == 0
-        and re.search(r"(?<![0-9.])4\\.135\\.0(?![0-9.])", observed)
+        and re.search(r"(?<![0-9.])4\.135\.0(?![0-9.])", observed)
         is not None,
         "WRANGLER_VERSION_DRIFT",
     )
