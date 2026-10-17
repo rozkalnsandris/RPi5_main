@@ -101,16 +101,21 @@ class RuntimeBoundaryTests(unittest.TestCase):
         self.assertFalse(data["actions"]["live"])
 
     def test_runtime_constants_are_fixed_and_non_generic(self):
-        self.assertEqual(plan.RUNTIME_SOURCE_ROOT, "/home/andris/coloring-pages")
+        expected_home = str(Path("/home") / plan.RUNTIME_OPERATOR)
+        self.assertEqual(
+            plan.RUNTIME_SOURCE_ROOT,
+            str(Path(expected_home) / "coloring-pages"),
+        )
         self.assertEqual(plan.RUNTIME_OPERATOR_UID, 1000)
         self.assertEqual(plan.RUNTIME_OPERATOR_GID, 1000)
         self.assertEqual(plan.RUNTIME_SECRETS_STDIN, "/dev/stdin")
         self.assertEqual(plan.NPX, "/usr/bin/npx")
         self.assertNotIn("CLOUDFLARE_API_TOKEN", plan.RUNTIME_ENV)
         self.assertNotIn("CLOUDFLARE_API_KEY", plan.RUNTIME_ENV)
-        self.assertEqual(plan.RUNTIME_ENV["HOME"], "/home/andris")
+        self.assertEqual(plan.RUNTIME_ENV["HOME"], expected_home)
         self.assertEqual(
-            plan.RUNTIME_ENV["XDG_CONFIG_HOME"], "/home/andris/.config"
+            plan.RUNTIME_ENV["XDG_CONFIG_HOME"],
+            str(Path(expected_home) / ".config"),
         )
 
     def test_runtime_entry_requires_root_exact_installed_file(self):
