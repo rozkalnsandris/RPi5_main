@@ -19,6 +19,22 @@ requirements and remaining host capability checks are documented in
 It is **not installed or authorized for LIVE execution**. Merging
 this source changes neither helper installation nor token/GET permissions.
 
+## GNU coreutils 9.1 compatibility — Issue #1016 (SOURCE ONLY)
+
+RPi5 read-only observation on 2026-10-14 confirmed GNU `cp 9.1`,
+whereas the originally merged #1011 installer required `>=9.4`.
+The #1016 source correction uses the version-specific, source-reviewed
+GNU 9.1 `--no-clobber --verbose` branch plus an exact stdout-and-exit
+check to disambiguate silent "destination already exists" success.
+See `docs/AUSMALWIESE_WORKER_SETTINGS_PROVISION_INSTALLER_V1.md`.
+
+**This is neither permission nor proof of runtime installation readiness.**
+The actual GNU 9.1 binary, exact restricted `sudo` command capability,
+trusted parents and absent target require a separately authorized
+read-only host preflight before any possible LIVE installation. Source merge,
+checkout synchronization, helper installation, Cloudflare token creation,
+owner-local TTY credential provisioning and GET remain separate steps.
+
 ## Future private credential contract (not authorized now)
 
 1. A future *separately authorized* action in the authenticated Cloudflare Dashboard must explicitly create or select a dedicated **account-scoped Workers Scripts Read** API token for the verified account, with no Write, D1, other account, or zone permissions. The owner must never paste the token into ChatGPT, GitHub, a command argument, browser logs or RDC output.

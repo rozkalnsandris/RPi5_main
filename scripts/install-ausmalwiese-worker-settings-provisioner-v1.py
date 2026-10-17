@@ -172,13 +172,50 @@ def absent(*, runner=subprocess.run):
             raise Stop("target_absence_unknown")
 
 
+def cp_copy_options(version: str) -> tuple[str, ...]:
+    """Fail closed except for source-reviewed 9.1 and verified >=9.6.
+
+    GNU 9.1 -n exits 0 on an existing target, so -v MUST be validated after
+    dispatch. The 9.1 copy.c O_CREAT|O_EXCL path refuses a creation race;
+    an existing destination is skipped before emit_verbose. LC_ALL=C is fixed.
+    Neither option is permission to weaken absence or metadata preflight.
+    """
+    header = version.split("\n", 1)[0]
+    m = re.fullmatch(r"cp \(GNU coreutils\) ([0-9]+)\.([0-9]+)(?:\.[0-9]+)?", header)
+    if not m:
+        raise Stop("cp_atomic_capability_unverified")
+    major, minor = map(int, m.groups())
+    if (major, minor) == (9, 1):
+        return ("--no-clobber", "--verbose")
+    if (major, minor) >= (9, 6):
+        return ("--update=none-fail",)
+    raise Stop("cp_atomic_capability_unverified")
+
+
+def cp_command(version: str) -> list[str]:
+    return [CP, *cp_copy_options(version), "--preserve=mode", "-T",
+            "--", "/dev/stdin", TARGET]
+
+
+def cp_copy_proven(result, options: tuple[str, ...]) -> None:
+    """Require unambiguous GNU 9.1 creation evidence, not just exit status."""
+    if result.returncode or type(result.stdout) is not bytes or len(result.stdout) > 512:
+        raise Stop("post_dispatch_unknown_state")
+    if options == ("--no-clobber", "--verbose"):
+        # In GNU 9.1 an already-existing target skips before emit_verbose
+        # yet returns status 0. A race after emit_verbose fails O_EXCL and
+        # returns nonzero. Thus both signals are required.
+        expected = ("'/dev/stdin' -> '" + TARGET + "'\n").encode("ascii")
+        if result.stdout != expected:
+            raise Stop("post_dispatch_unknown_state")
+    elif options != ("--update=none-fail",):
+        raise Stop("post_dispatch_unknown_state")
+
+
 def root_preflight(*, runner=subprocess.run):
     # Probe the exact bounded future root executable non-mutatively.
     version = sudo_metadata([CP, "--version"], runner=runner)
-    header = version.split("\n", 1)[0]
-    m = re.fullmatch(r"cp \(GNU coreutils\) ([0-9]+)\.([0-9]+)(?:\.[0-9]+)?", header)
-    if not m or tuple(map(int, m.groups())) < (9, 4):
-        raise Stop("cp_atomic_capability_unverified")
+    command = cp_command(version)
     for path in PARENTS:
         value = sudo_metadata([STAT, "-c", "%u:%g:%a:%F", "--", path], runner=runner)
         parts = value.split(":")
@@ -192,11 +229,10 @@ def root_preflight(*, runner=subprocess.run):
             raise Stop("unsafe_parent")
     absent(runner=runner)
     # Check permission for the exact future sudo cp argv without executing it.
-    command = [CP, "--update=none-fail", "--preserve=mode", "-T",
-               "--", "/dev/stdin", TARGET]
     result = invoke([SUDO, "-n", "-l", "--", *command], runner=runner)
     if result.returncode:
         raise Stop("sudo_exact_copy_not_allowed")
+    return command
 
 
 def preflight(expected_main, *, runner=subprocess.run):
@@ -245,17 +281,19 @@ def apply(expected_main, *, runner=subprocess.run):
     try:
         # Recheck git and destination before the single root mutation.
         exact_checkout(expected_main, runner=runner)
-        absent(runner=runner)
-        # GNU cp >=9.4: update=none-fail and O_CREAT|O_EXCL for a new
-        # destination; source /dev/stdin is the sealed 0500 memfd, inherited
-        # as fd 0. Clean env excludes POSIXLY_CORRECT's symlink fallback.
-        # One fixed sudo cp. No repo Python, cleanup, retries or chmod.
-        command = [SUDO, "-n", CP, "--update=none-fail",
-                   "--preserve=mode", "-T", "--", "/dev/stdin", TARGET]
+        # Recheck trusted parents, absence (incl. dangling symlinks), exact
+        # sudo capability and version immediately before the one dispatch.
+        command = root_preflight(runner=runner)
+        options = tuple(command[1:-5])
+        # One fixed sudo cp. GNU 9.1 -n silently skips existing targets with
+        # success (status 0): -v's exact C-locale creation line is also
+        # mandatory. GNU 9.1 copy_reg uses O_CREAT|O_EXCL on new targets;
+        # POSIXLY_CORRECT is absent from the fixed CLEAN_ENV. No separate
+        # chmod, cleanup, retries, shell, or privileged repository Python.
         try:
-            result = invoke(command, runner=runner, stdin=memfd, timeout=35)
-            if result.returncode:
-                raise Stop("post_dispatch_unknown_state")
+            result = invoke([SUDO, "-n", *command], runner=runner, stdin=memfd,
+                            timeout=35)
+            cp_copy_proven(result, options)
             post_verify(payload, runner=runner)
         except Exception:
             raise Stop("post_dispatch_unknown_state") from None
