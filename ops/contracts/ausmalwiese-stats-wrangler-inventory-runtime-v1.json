@@ -5,6 +5,7 @@
   "repository": "rozkalnsandris/RPi5_main",
   "worker": "coloring-pages-stats-v1",
   "account_sha256": "3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34",
+  "baseline_version": "e47f145f-1851-4917-be5c-387f96549539",
   "source": {
     "executor": "scripts/ausmalwiese_stats_wrangler_inventory_executor_v1.py",
     "normalizer": "scripts/ausmalwiese_stats_wrangler_inventory_v1.py",

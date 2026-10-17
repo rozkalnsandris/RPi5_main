@@ -219,6 +219,8 @@ class RuntimeTests(unittest.TestCase):
             "cleanup",
         ):
             self.assertFalse(c["actions"][key])
+        self.assertEqual(c["baseline_version"], BASELINE)
+        self.assertEqual(runtime.BASELINE_VERSION, BASELINE)
         self.assertEqual(c["api"]["max_requests"], 3)
         self.assertEqual(c["api"]["max_retries"], 0)
         self.assertEqual(c["api"]["max_redirects"], 0)
