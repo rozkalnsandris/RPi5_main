@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline tests for exact privacy D1 migration planner (#1061)."""
+"""Offline tests for exact privacy D1 migration planner (#1061 / #996)."""
 from __future__ import annotations
 
 import copy
@@ -16,41 +16,40 @@ assert spec and spec.loader
 spec.loader.exec_module(plan)
 
 
-def inventory():
+def remote_evidence():
     return {
-        "schema": "ausmalwiese.stats-wrangler-conflict-inventory.v1",
+        "schema": plan.REMOTE_SCHEMA,
         "worker": plan.WORKER,
         "environment": "production",
         "wrangler_version": plan.WRANGLER_VERSION,
-        "source_commit": plan.SOURCE_COMMIT,
-        "source_blob": "c2ac9da6e0701103e0041b30db7dfbea4298f96c",
-        "config_blob": plan.CONFIG_BLOB,
-        "source_class": "script_api",
-        "latest_uploaded_version": "e47f145f-1851-4917-be5c-387f96549539",
+        "reviewed_source": {
+            "repository": plan.SOURCE_REPO,
+            "commit": plan.SOURCE_COMMIT,
+            "worker_blob": plan.SOURCE_BLOB,
+            "config_blob": plan.CONFIG_BLOB,
+            "migration_blob": plan.MIGRATION_BLOB,
+        },
+        "latest_uploaded_version": "6477f23a-f3da-40c1-bb57-ad672561d243",
         "active_versions": [{
-            "version_id": "e47f145f-1851-4917-be5c-387f96549539",
+            "version_id": "e014e7c7-4c08-40c6-a9dd-6593b3afcf3c",
             "percentage": 100,
         }],
-        "compatibility_date": "2026-10-06",
-        "compatibility_flags": [],
+        "active_provenance": {
+            "source": "dash",
+            "last_deployed_from": "dash",
+            "annotation_class": "secret_change",
+        },
+        "active_bindings": [
+            {"name": "CF_ANALYTICS_API_TOKEN", "type": "secret_text"},
+            {"name": "DB", "type": "d1"},
+            {"name": "PUBLIC_ORIGIN", "type": "plain_text"},
+            {"name": "RATE_LIMITER", "type": "ratelimit"},
+        ],
         "d1": {
             "binding": "DB",
             "database_name": plan.DATABASE_NAME,
             "database_id": plan.DATABASE_ID,
         },
-        "rate_limit": {
-            "binding": "RATE_LIMITER",
-            "namespace_id": "1152026106",
-            "limit": 100,
-            "period": 60,
-        },
-        "secret_names": ["CF_ANALYTICS_API_TOKEN", "VISITOR_HMAC_KEY"],
-        "plain_text_vars": {
-            "CF_ANALYTICS_HOST": {"kind": "plain_text", "fingerprint": "1" * 64},
-            "CF_ZONE_TAG": {"kind": "plain_text", "fingerprint": "2" * 64},
-            "PUBLIC_ORIGIN": {"kind": "plain_text", "fingerprint": "3" * 64},
-        },
-        "settings_sha256": "4" * 64,
     }
 
 
@@ -72,23 +71,28 @@ def schema_after():
     }
 
 
-def approval(inv, before):
+def approval(remote, before):
     return {
         "worker": plan.WORKER,
         "database_id": plan.DATABASE_ID,
         "source_commit": plan.SOURCE_COMMIT,
+        "source_blob": plan.SOURCE_BLOB,
+        "config_blob": plan.CONFIG_BLOB,
         "migration_blob": plan.MIGRATION_BLOB,
-        "inventory_sha256": plan.canonical_sha256(inv),
+        "remote_evidence_sha256": plan.canonical_sha256(remote),
         "pre_schema_sha256": plan.canonical_sha256(before),
         "allow_additive_d1_migration_once": True,
     }
 
 
 class PrivacyD1MigrationTests(unittest.TestCase):
-    def test_contract_is_source_only_and_cleanup_is_separate(self):
+    def test_contract_is_source_only_and_gate_b_stays_separate(self):
         data = json.loads(plan.CONTRACT.read_text("utf-8"))
         plan.check_contract(data)
         self.assertTrue(data["cleanup_is_later_separate_gate"])
+        self.assertTrue(data["worker_takeover_gate_unchanged"])
+        self.assertFalse(data["visitor_hmac_required_for_gate_a"])
+        self.assertFalse(data["latest_must_equal_active_for_gate_a"])
         for key in (
             "run_wrangler", "cloudflare_request", "credential_access",
             "d1_write", "worker_upload", "worker_deploy", "cron_change",
@@ -98,20 +102,66 @@ class PrivacyD1MigrationTests(unittest.TestCase):
         self.assertEqual(plan.main(["--check-contract"]), 0)
         self.assertEqual(plan.main(["--apply"]), 2)
 
-    def test_inventory_binds_exact_privacy_source_and_d1(self):
-        self.assertEqual(plan.validate_inventory(inventory()), inventory())
-        bad = inventory()
-        bad["source_commit"] = "0" * 40
-        with self.assertRaises(Exception):
-            plan.validate_inventory(bad)
-        bad = inventory()
-        bad["source_blob"] = "94e802ce145dd75f5701c4c9274a4ac7959c7f5e"
-        with self.assertRaises(Exception):
-            plan.validate_inventory(bad)
-        bad = inventory()
-        bad["d1"]["database_id"] = "other"
-        with self.assertRaises(Exception):
-            plan.validate_inventory(bad)
+    def test_remote_evidence_accepts_observed_divergence_and_absent_unused_secret(self):
+        evidence = remote_evidence()
+        self.assertNotEqual(
+            evidence["latest_uploaded_version"],
+            evidence["active_versions"][0]["version_id"],
+        )
+        self.assertNotIn(
+            "VISITOR_HMAC_KEY",
+            {item["name"] for item in evidence["active_bindings"]},
+        )
+        self.assertEqual(plan.validate_remote_evidence(evidence), evidence)
+
+    def test_latest_active_equality_is_also_allowed_for_future_convergence(self):
+        evidence = remote_evidence()
+        evidence["latest_uploaded_version"] = evidence["active_versions"][0]["version_id"]
+        self.assertEqual(plan.validate_remote_evidence(evidence), evidence)
+
+    def test_remote_evidence_requires_single_active_100_percent(self):
+        evidence = remote_evidence()
+        evidence["active_versions"][0]["percentage"] = 99
+        with self.assertRaisesRegex(plan.Blocked, "ACTIVE_TRAFFIC"):
+            plan.validate_remote_evidence(evidence)
+        evidence = remote_evidence()
+        evidence["active_versions"].append({
+            "version_id": "6477f23a-f3da-40c1-bb57-ad672561d243",
+            "percentage": 0,
+        })
+        with self.assertRaisesRegex(plan.Blocked, "ACTIVE_VERSION_COUNT"):
+            plan.validate_remote_evidence(evidence)
+
+    def test_remote_evidence_requires_exact_reviewed_source_and_d1(self):
+        evidence = remote_evidence()
+        evidence["reviewed_source"]["commit"] = "0" * 40
+        with self.assertRaisesRegex(plan.Blocked, "REVIEWED_SOURCE_DRIFT"):
+            plan.validate_remote_evidence(evidence)
+        evidence = remote_evidence()
+        evidence["d1"]["database_id"] = "other"
+        with self.assertRaisesRegex(plan.Blocked, "D1_IDENTITY_DRIFT"):
+            plan.validate_remote_evidence(evidence)
+
+    def test_gate_a_binding_set_is_bounded_but_visitor_hmac_is_optional(self):
+        evidence = remote_evidence()
+        evidence["active_bindings"].append(
+            {"name": "VISITOR_HMAC_KEY", "type": "secret_text"}
+        )
+        self.assertEqual(plan.validate_remote_evidence(evidence), evidence)
+
+        bad = remote_evidence()
+        bad["active_bindings"].append(
+            {"name": "UNEXPECTED", "type": "secret_text"}
+        )
+        with self.assertRaisesRegex(plan.Blocked, "BINDING_DRIFT"):
+            plan.validate_remote_evidence(bad)
+
+        bad = remote_evidence()
+        bad["active_bindings"] = [
+            item for item in bad["active_bindings"] if item["name"] != "DB"
+        ]
+        with self.assertRaisesRegex(plan.Blocked, "REQUIRED_GATE_A_BINDING"):
+            plan.validate_remote_evidence(bad)
 
     def test_pre_schema_requires_all_targets_absent(self):
         self.assertEqual(
@@ -150,19 +200,19 @@ class PrivacyD1MigrationTests(unittest.TestCase):
             self.assertNotIn("--file", cmd)
             self.assertNotIn(plan.CLEANUP_PATH, joined)
 
-    def test_owner_gate_binds_inventory_and_pre_schema(self):
-        inv = inventory()
+    def test_owner_gate_binds_remote_and_pre_schema(self):
+        remote = remote_evidence()
         before = schema_before()
-        plan.validate_approval(inv, before, approval(inv, before))
-        bad = approval(inv, before)
-        bad["pre_schema_sha256"] = "0" * 64
+        plan.validate_approval(remote, before, approval(remote, before))
+        bad = approval(remote, before)
+        bad["remote_evidence_sha256"] = "0" * 64
         with self.assertRaisesRegex(plan.Blocked, "OWNER_GATE_UNBOUND"):
-            plan.validate_approval(inv, before, bad)
+            plan.validate_approval(remote, before, bad)
 
     def test_migration_command_is_one_exact_additive_file_only(self):
-        inv = inventory()
+        remote = remote_evidence()
         before = schema_before()
-        cmd = plan.migration_command(inv, before, approval(inv, before))
+        cmd = plan.migration_command(remote, before, approval(remote, before))
         joined = " ".join(cmd)
         self.assertIn("wrangler@4.135.0 d1 execute DB", joined)
         self.assertIn("--remote", cmd)
@@ -173,9 +223,9 @@ class PrivacyD1MigrationTests(unittest.TestCase):
         self.assertNotIn("--command", cmd)
         self.assertNotIn(plan.CLEANUP_PATH, joined)
 
-    def test_post_requires_same_inventory_and_exact_new_schema(self):
+    def test_post_requires_same_remote_evidence_and_exact_new_schema(self):
         self.assertEqual(
-            plan.validate_post(inventory(), schema_before(), schema_after()),
+            plan.validate_post(remote_evidence(), schema_before(), schema_after()),
             schema_after(),
         )
         bad = schema_after()
@@ -183,7 +233,7 @@ class PrivacyD1MigrationTests(unittest.TestCase):
             "cookie_hash"
         ]
         with self.assertRaises(plan.Blocked):
-            plan.validate_post(inventory(), schema_before(), bad)
+            plan.validate_post(remote_evidence(), schema_before(), bad)
 
     def test_source_has_no_executor_transport_or_secret_access(self):
         text = SOURCE.read_text("utf-8")
