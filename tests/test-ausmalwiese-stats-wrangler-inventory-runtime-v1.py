@@ -636,7 +636,7 @@ class InstallerTests(unittest.TestCase):
     def test_upgrade_requires_exact_old_release_and_checkout_gate(self):
         self.assertEqual(
             installer.OLD_RELEASE_SHA,
-            "a48744ae941c5e5cfcbe4a01da0bd4a1618e266d",
+            "5185a270e6245802028391ead5bd54155d74a87d",
         )
         with mock.patch.object(installer, "checked_checkout") as checkout, \
              mock.patch.object(
@@ -663,6 +663,14 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(executor, b"new-executor")
         self.assertEqual(normalizer, b"new-normalizer")
         self.assertEqual(json.loads(metadata)["source_sha"], SHA)
+
+        with mock.patch.object(installer, "checked_checkout") as checkout:
+            with self.assertRaisesRegex(
+                installer.Stop,
+                "invalid_upgrade_source",
+            ):
+                installer.upgrade_preflight(SHA, "a48744ae941c5e5cfcbe4a01da0bd4a1618e266d")
+        checkout.assert_not_called()
 
         with mock.patch.object(installer, "checked_checkout") as checkout:
             with self.assertRaisesRegex(

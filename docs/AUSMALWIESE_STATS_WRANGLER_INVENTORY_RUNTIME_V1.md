@@ -235,3 +235,32 @@ authorize the replacement itself.
 
 Any future installed-runtime replacement and any authenticated Cloudflare read
 still require separate owner gates.
+
+
+## Installed 5185a270 baseline repin — issue #1090
+
+A fresh owner-authorized read-only protected-runtime preflight on 2026-10-18
+showed that the previous bounded upgrader baseline
+`a48744ae941c5e5cfcbe4a01da0bd4a1618e266d` was stale. No runtime mutation started.
+
+The installed protected inventory release is exactly
+`5185a270e6245802028391ead5bd54155d74a87d`. Its target ownership/modes are still the reviewed root-owned
+release layout, and the installed executor, normalizer and deterministic
+`release.json` digests matched the bytes reconstructed from that exact Git
+revision.
+
+The bounded upgrader is therefore repinned to accept only
+`--upgrade-from 5185a270e6245802028391ead5bd54155d74a87d`. The prior
+`a48744ae941c5e5cfcbe4a01da0bd4a1618e266d` value is now rejected as an invalid upgrade source.
+
+All other fail-closed properties are unchanged: the checkout must be clean
+`main` at the exact expected new source SHA; the old executor, normalizer and
+release metadata are reconstructed from Git and compared before mutation; only
+the executor, normalizer and `release.json` may be replaced; the release
+directory is not recreated or chmodded; credentials, Cloudflare requests,
+services, packages and Docker remain outside this source contract; and any
+ambiguity after the first replacement dispatch is terminal STOP with no
+automatic retry, rollback or cleanup.
+
+This source repin does not authorize the host upgrade or any authenticated
+Cloudflare inventory collection.
