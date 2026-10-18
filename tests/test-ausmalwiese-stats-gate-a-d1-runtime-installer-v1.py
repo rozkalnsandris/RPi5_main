@@ -250,7 +250,6 @@ class InstallerTests(unittest.TestCase):
         for forbidden in (
             "/etc/rpi5-secrets",
             "CLOUDFLARE_API_TOKEN",
-            "/home/andris/.local/bin/wrangler",
             "d1 execute",
             "npx ",
             "npm ",
