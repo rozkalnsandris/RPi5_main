@@ -1,74 +1,41 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "status": "SOURCE_ONLY_REPORT_WRANGLER_DEPLOY_NO_LIVE",
-  "issue": 1048,
+  "issue": 1092,
   "repository": "rozkalnsandris/RPi5_main",
   "worker": "coloring-pages-report-v1",
-  "stats_worker": "coloring-pages-stats-v1",
   "wrangler_version": "4.135.0",
   "source_repo": "rozkalnsandris/coloring-pages",
-  "source_commit": "7940c8bef702399f526d82920e848ba4357e5790",
+  "source_commit": "16c1ed5cccd43d28212b6a7aefbc04cae5195698",
   "worker_path": "cloudflare/report-worker.mjs",
-  "worker_blob": "6560268044bac25e1d63e12edbb2572ca2b9784b",
+  "worker_blob": "4ef00f9963c68ab9a4ab5aeb4a44b8c99c76eda0",
   "config_path": "cloudflare/wrangler.report.json",
-  "config_blob": "a49576aa391015e7b0e867bb7eef03c7f90d0987",
+  "config_blob": "2765e88f4c5ee7a01a5380ef52e4ff8c0688c9e6",
   "routes": [
     {
       "pattern": "ausmalwiese.de/api/report",
       "zone_name": "ausmalwiese.de"
     },
     {
-      "pattern": "ausmalwiese.de/api/report/config",
-      "zone_name": "ausmalwiese.de"
-    },
-    {
       "pattern": "www.ausmalwiese.de/api/report",
       "zone_name": "ausmalwiese.de"
-    },
-    {
-      "pattern": "www.ausmalwiese.de/api/report/config",
-      "zone_name": "ausmalwiese.de"
     }
   ],
-  "required_secret_names": [
-    "TURNSTILE_SITE_KEY",
-    "TURNSTILE_SECRET",
-    "BREVO_API_KEY",
-    "REPORT_TO"
-  ],
-  "ratelimits": [
-    {
-      "name": "REPORT_RATE",
-      "namespace_id": "2067894450",
-      "simple": {
-        "limit": 12,
-        "period": 60
-      }
-    },
-    {
-      "name": "REPORT_DUP",
-      "namespace_id": "2051617019",
-      "simple": {
-        "limit": 1,
-        "period": 60
-      }
-    }
-  ],
+  "email_binding": {
+    "name": "EMAIL",
+    "destination": "pinned-config-blob-only"
+  },
   "deploy_flags": [
     "--no-bundle",
     "--strict",
-    "--secrets-file",
     "--tag",
     "--message"
   ],
   "post_deploy_requires": [
     "exact-source-and-config-provenance",
     "latest-equals-single-active-100-percent",
-    "exact-four-report-routes",
-    "exact-six-binding-kinds",
-    "exact-two-ratelimits",
-    "config-endpoint-200-site-key-present",
-    "stats-worker-pre-post-snapshot-byte-equivalent"
+    "exact-two-report-routes",
+    "exact-one-send-email-binding"
   ],
   "actions": {
     "run_wrangler": false,
@@ -84,13 +51,11 @@
   "launcher": {
     "future_fixed_deploy_capability": true,
     "verifies_exact_checkout_before_dispatch": true,
-    "verifies_protected_secrets_metadata_without_reading_contents": true,
+    "requires_report_secrets": false,
+    "stats_dependency": false,
     "current_issue_authorizes_execution": false,
-    "root_owned_runtime_boundary_issue": 1075,
     "runtime_entry": "/usr/local/sbin/rpi5-ausmalwiese-report-wrangler-deploy",
     "runtime_source_root": "<fixed-operator-home>/coloring-pages",
-    "runtime_secrets_file": "/etc/rpi5-secrets/cloudflare/ausmalwiese-report-wrangler-secrets.json",
-    "runtime_secrets_transport": "sealed-memfd-via-dev-stdin",
     "runtime_operator": "andris",
     "runtime_persistent_permission_widening": false
   }

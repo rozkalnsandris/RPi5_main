@@ -1,15 +1,15 @@
 {
   "schema_version": 2,
   "status": "SOURCE_ONLY_REPORT_WRANGLER_VERIFY_NO_NETWORK",
-  "issue": 1079,
+  "issue": 1092,
   "repository": "rozkalnsandris/RPi5_main",
   "worker": "coloring-pages-report-v1",
   "wrangler_version": "4.135.0",
-  "source_commit": "7940c8bef702399f526d82920e848ba4357e5790",
-  "worker_blob": "6560268044bac25e1d63e12edbb2572ca2b9784b",
-  "config_blob": "a49576aa391015e7b0e867bb7eef03c7f90d0987",
-  "legacy_deploy_source": "scripts/ausmalwiese_report_wrangler_deploy_v1.py",
-  "legacy_deploy_blob": "55b13636ba36cdc574fedbeb469c73af91bb8594",
+  "source_commit": "16c1ed5cccd43d28212b6a7aefbc04cae5195698",
+  "worker_blob": "4ef00f9963c68ab9a4ab5aeb4a44b8c99c76eda0",
+  "config_blob": "2765e88f4c5ee7a01a5380ef52e4ff8c0688c9e6",
+  "deploy_source": "scripts/ausmalwiese_report_wrangler_deploy_v1.py",
+  "deploy_blob": "7a8ae854752c5f89a693638c6732b58342cdd813",
   "provenance": {
     "method": "GET",
     "path_template": "/accounts/{account_id}/workers/scripts/coloring-pages-report-v1/settings",
@@ -23,6 +23,16 @@
       "version_tag",
       "version_message"
     ]
+  },
+  "verification": {
+    "wrangler_reads": [
+      "versions-list",
+      "deployments-list",
+      "versions-view"
+    ],
+    "secret_inventory_required": false,
+    "public_config_endpoint_required": false,
+    "stats_snapshot_required": false
   },
   "actions": {
     "run_wrangler": false,

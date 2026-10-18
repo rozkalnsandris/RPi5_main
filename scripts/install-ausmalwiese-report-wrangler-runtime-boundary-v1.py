@@ -27,12 +27,12 @@ TEST = "/usr/bin/test"
 SHA256SUM = "/usr/bin/sha256sum"
 
 SOURCE_REL = "scripts/ausmalwiese_report_wrangler_deploy_v1.py"
-SOURCE_BLOB = "55b13636ba36cdc574fedbeb469c73af91bb8594"
+SOURCE_BLOB = "7a8ae854752c5f89a693638c6732b58342cdd813"
 TARGET = "/usr/local/sbin/rpi5-ausmalwiese-report-wrangler-deploy"
 CONFIRM = "INSTALL-AUSMALWIESE-REPORT-WRANGLER-RUNTIME"
 UPGRADE_CONFIRM = "UPGRADE-AUSMALWIESE-REPORT-WRANGLER-RUNTIME"
-OLD_SOURCE_REF = "a5806c6ebd6ea786a2cb43fead2b9129e46d8653"
-OLD_SOURCE_BLOB = "087cf8a14ac4c8a7dc203d80c35c544677ecbe35"
+OLD_SOURCE_REF = "7fb4e62e4de89df94ffee385cc2bb9bd6143b743"
+OLD_SOURCE_BLOB = "55b13636ba36cdc574fedbeb469c73af91bb8594"
 PARENTS = ("/usr", "/usr/local", "/usr/local/sbin")
 SHA40 = re.compile(r"[0-9a-f]{40}\Z")
 CLEAN_ENV = {"PATH": "/usr/bin:/bin", "LC_ALL": "C"}
