@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "status": "SOURCE_ONLY_GATE_A_D1_RUNTIME_NO_LIVE",
+  "issue": 996,
+  "repository": "rozkalnsandris/RPi5_main",
+  "worker": "coloring-pages-stats-v1",
+  "wrangler_version": "4.135.0",
+  "source_repo": "rozkalnsandris/coloring-pages",
+  "source_commit": "7f07c226105e26c0ca9cf91eb150a3e8f585c5ea",
+  "worker_path": "cloudflare/stats-worker.js",
+  "worker_blob": "c2ac9da6e0701103e0041b30db7dfbea4298f96c",
+  "config_path": "cloudflare/wrangler.stats-worker.jsonc",
+  "config_blob": "3733263a391274f2b6b0f2023c8656565bde8e1a",
+  "migration_path": "cloudflare/stats-cookie-like-migration.sql",
+  "migration_blob": "b5346c05cb27de1010dab2027b0b923e999af775",
+  "database_binding": "DB",
+  "database_name": "coloring-pages-stats-v1",
+  "database_id": "f8ac8f1d-a230-4bc4-af13-557c1b91b273",
+  "remote_evidence_sha256": "3397daf651bbe60512167817bcef9f02421c71f877bef0a92afc44821fb08af6",
+  "pre_schema_sha256": "470f40bab9b7e2bfcf68b73cfa3aad7bf171bcb764fdfc391c09d1b4fa85e9f6",
+  "runtime_entry": "/usr/local/sbin/rpi5-ausmalwiese-stats-gate-a-d1-migrate",
+  "runtime_operator": "andris",
+  "runtime_source_root": "<fixed-operator-home>/coloring-pages",
+  "wrangler_binary": "<fixed-operator-home>/.local/bin/wrangler",
+  "no_log_env": {
+    "WRANGLER_WRITE_LOGS": "false"
+  },
+  "preflight_reads": [
+    "versions-list",
+    "deployments-list",
+    "active-version-view",
+    "three-fixed-d1-schema-queries"
+  ],
+  "one_mutation": {
+    "kind": "d1-execute-file",
+    "binding": "DB",
+    "file": "cloudflare/stats-cookie-like-migration.sql",
+    "remote": true
+  },
+  "post_verify": [
+    "three-fixed-d1-schema-queries",
+    "exact-post-schema"
+  ],
+  "forbidden": [
+    "worker-upload",
+    "worker-deploy",
+    "secret-provision",
+    "credential-content-read",
+    "arbitrary-sql",
+    "alternate-migration-file",
+    "retry",
+    "rollback",
+    "cleanup"
+  ],
+  "actions": {
+    "run_wrangler": false,
+    "d1_write": false,
+    "cloudflare_write": false,
+    "credential_content_access": false,
+    "host_install": false,
+    "merge": false,
+    "live": false,
+    "retry": false,
+    "rollback": false,
+    "cleanup": false
+  }
+}
