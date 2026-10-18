@@ -30,13 +30,13 @@ Source:
 `scripts/ausmalwiese_stats_gate_a_d1_runtime_v1.py`
 
 Git blob:
-`8413d26adc08c8f58d8d0f88a3ad653edc6b579c`
+`6cc25f1793a478b8217d60ef9dda367c035ea45f`
 
 Future installed entrypoint:
 `/usr/local/sbin/rpi5-ausmalwiese-stats-gate-a-d1-migrate`
 
 The installed file must be root-owned mode `0500`. Wrangler is the already
-installed `/home/andris/.local/bin/wrangler` and executes only as fixed user
+installed `<fixed-operator-home>/.local/bin/wrangler` and executes only as fixed user
 `andris`; the runtime itself does not open credential files or print credential
 content.
 
@@ -77,7 +77,7 @@ The Gate A contract deliberately permits latest-uploaded to differ from the one
 The only D1 mutation capability is equivalent to:
 
 ```text
-/home/andris/.local/bin/wrangler d1 execute DB --remote --file cloudflare/stats-cookie-like-migration.sql --yes --config cloudflare/wrangler.stats-worker.jsonc
+<fixed-operator-home>/.local/bin/wrangler d1 execute DB --remote --file cloudflare/stats-cookie-like-migration.sql --yes --config cloudflare/wrangler.stats-worker.jsonc
 ```
 
 There is no arbitrary SQL mutation path, alternate database/file, cleanup
@@ -108,7 +108,7 @@ Source:
 `scripts/install-ausmalwiese-stats-gate-a-d1-runtime-v1.py`
 
 The installer may only copy the exact runtime blob
-`8413d26adc08c8f58d8d0f88a3ad653edc6b579c` into the fixed target. It requires
+`6cc25f1793a478b8217d60ef9dda367c035ea45f` into the fixed target. It requires
 a clean exact `RPi5_main/main` checkout, trusted origin, target absence,
 bounded GNU `cp` no-clobber semantics, exact sudo capability check, sealed
 memfd input, and post-copy root metadata/SHA-256 verification.
