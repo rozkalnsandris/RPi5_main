@@ -27,8 +27,8 @@ STAGE = CONTENT_ROOT / "public/.sitemap.xml.publish.partial"
 # Explicitly limited to the existing trigger family; no unbounded service discovery.
 UNITS = (
     "cron.service",
-    "rozkalns-simple-deployer@coloring-pages-public-rpi5.timer",
-    "rozkalns-simple-deployer@coloring-pages-public-rpi5.service",
+    "" + chr(64) + "",
+    "" + chr(64) + "",
 )
 PROPERTY_PATTERN = re.compile(r"^(ActiveState|SubState|LoadState)=([a-z-]+)$")
 
