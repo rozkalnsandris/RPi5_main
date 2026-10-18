@@ -59,7 +59,7 @@ RUNTIME_ENV = {
     "WRANGLER_WRITE_LOGS": "false",
 }
 
-UUID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\\Z")
+UUID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
 KNOWN_BINDINGS = {
     "DB": "d1",
     "RATE_LIMITER": "ratelimit",
@@ -128,7 +128,7 @@ def canonical_sha256(value: Any) -> str:
 
 def git_blob(raw: bytes) -> str:
     return hashlib.sha1(
-        b"blob " + str(len(raw)).encode("ascii") + b"\\0" + raw
+        b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw
     ).hexdigest()
 
 
