@@ -303,6 +303,125 @@ class RuntimeInstallerTests(unittest.TestCase):
                     )
                 )
 
+    def test_upgrade_is_bound_to_exact_old_runtime_blob_and_ref(self):
+        self.assertEqual(
+            mod.OLD_SOURCE_REF,
+            "bf7541a6166a1fb4d6fdca79bd95a67a8aa819ba",
+        )
+        self.assertEqual(
+            mod.OLD_SOURCE_BLOB,
+            "c92da027aea2d2b41f1e901bd14ae91a2a4bc834",
+        )
+        with mock.patch.object(mod, "exact_checkout") as checkout, \
+             mock.patch.object(mod, "tracked_runtime", return_value=PAYLOAD), \
+             mock.patch.object(mod, "historical_runtime", return_value=b"old-runtime"), \
+             mock.patch.object(mod, "upgrade_root_preflight") as roots:
+            self.assertEqual(
+                mod.upgrade_preflight(
+                    HEAD,
+                    mod.OLD_SOURCE_BLOB,
+                ),
+                PAYLOAD,
+            )
+        checkout.assert_called_once_with(HEAD, runner=subprocess.run)
+        roots.assert_called_once_with(b"old-runtime", runner=subprocess.run)
+
+        with mock.patch.object(mod, "exact_checkout") as checkout:
+            with self.assertRaisesRegex(mod.Stop, "invalid_upgrade_source"):
+                mod.upgrade_preflight(HEAD, "0" * 40)
+        checkout.assert_not_called()
+
+    def test_upgrade_root_preflight_checks_old_metadata_digest_and_capability(self):
+        old_payload = b"old-runtime"
+        digest = hashlib.sha256(old_payload).hexdigest()
+
+        def metadata(args, **kwargs):
+            if args[:3] == [mod.STAT, "-c", "%u:%g:%a:%F"]:
+                return "0:0:755:directory"
+            if args[:3] == [mod.STAT, "-c", "%u:%g:%a:%F:%h"]:
+                return "0:0:500:regular file:1"
+            if args[:2] == [mod.SHA256SUM, "--"]:
+                return digest + "  " + mod.TARGET
+            raise AssertionError(args)
+
+        def invoke(args, **kwargs):
+            if args == [mod.SUDO, "-n", mod.TEST, "-L", mod.TARGET]:
+                return subprocess.CompletedProcess(args, 1, stdout=b"", stderr=b"")
+            if args == [mod.SUDO, "-n", "-l", "--", *mod.upgrade_command()]:
+                return subprocess.CompletedProcess(args, 0, stdout=b"", stderr=b"")
+            raise AssertionError(args)
+
+        with mock.patch.object(mod, "sudo_metadata", side_effect=metadata), \
+             mock.patch.object(mod, "invoke", side_effect=invoke):
+            self.assertEqual(
+                mod.upgrade_root_preflight(old_payload),
+                mod.upgrade_command(),
+            )
+
+        def wrong_digest(args, **kwargs):
+            if args[:3] == [mod.STAT, "-c", "%u:%g:%a:%F"]:
+                return "0:0:755:directory"
+            if args[:3] == [mod.STAT, "-c", "%u:%g:%a:%F:%h"]:
+                return "0:0:500:regular file:1"
+            if args[:2] == [mod.SHA256SUM, "--"]:
+                return ("0" * 64) + "  " + mod.TARGET
+            raise AssertionError(args)
+
+        with mock.patch.object(mod, "sudo_metadata", side_effect=wrong_digest), \
+             mock.patch.object(mod, "invoke", side_effect=invoke):
+            with self.assertRaisesRegex(
+                mod.Stop,
+                "upgrade_target_digest_mismatch",
+            ):
+                mod.upgrade_root_preflight(old_payload)
+
+    def test_upgrade_dispatches_once_and_failure_is_terminal(self):
+        def runner(args, **kwargs):
+            self.assertEqual(
+                list(args),
+                [mod.SUDO, "-n", *mod.upgrade_command()],
+            )
+            self.assertEqual(kwargs["stdin"], 45)
+            self.assertEqual(kwargs["env"], mod.CLEAN_ENV)
+            return subprocess.CompletedProcess(args, 0, stdout=b"", stderr=b"")
+
+        with mock.patch.object(mod, "upgrade_preflight", return_value=PAYLOAD), \
+             mock.patch.object(mod, "sealed_memfd", return_value=45), \
+             mock.patch.object(mod, "exact_checkout"), \
+             mock.patch.object(mod, "historical_runtime", return_value=b"old"), \
+             mock.patch.object(
+                 mod,
+                 "upgrade_root_preflight",
+                 return_value=mod.upgrade_command(),
+             ), \
+             mock.patch.object(mod, "post_verify") as verify, \
+             mock.patch.object(mod.os, "close"):
+            mod.upgrade(HEAD, mod.OLD_SOURCE_BLOB, runner=runner)
+        verify.assert_called_once_with(PAYLOAD, runner=runner)
+
+        calls = []
+        def failed(args, **kwargs):
+            calls.append(list(args))
+            return subprocess.CompletedProcess(args, 1, stdout=b"", stderr=b"safe")
+
+        with mock.patch.object(mod, "upgrade_preflight", return_value=PAYLOAD), \
+             mock.patch.object(mod, "sealed_memfd", return_value=45), \
+             mock.patch.object(mod, "exact_checkout"), \
+             mock.patch.object(mod, "historical_runtime", return_value=b"old"), \
+             mock.patch.object(
+                 mod,
+                 "upgrade_root_preflight",
+                 return_value=mod.upgrade_command(),
+             ), \
+             mock.patch.object(mod, "post_verify"), \
+             mock.patch.object(mod.os, "close"):
+            with self.assertRaisesRegex(
+                mod.Stop,
+                "post_dispatch_unknown_state",
+            ):
+                mod.upgrade(HEAD, mod.OLD_SOURCE_BLOB, runner=failed)
+        self.assertEqual(len(calls), 1)
+
     def test_confirmation_alone_never_installs(self):
         with mock.patch.object(mod, "apply") as apply, \
              mock.patch("builtins.print"):
