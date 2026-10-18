@@ -32,7 +32,7 @@ Source:
 `scripts/ausmalwiese_stats_gate_a_d1_runtime_v1.py`
 
 Git blob:
-`d1191e913e565965dc1c4d153179f702bf2a79d4`
+`90fa7c7c829a778bcea14e815daf27fcb795f2f2`
 
 Future installed entrypoint:
 `/usr/local/sbin/rpi5-ausmalwiese-stats-gate-a-d1-migrate`
@@ -40,7 +40,12 @@ Future installed entrypoint:
 The installed file must be root-owned mode `0500`. Wrangler is the already
 installed `<fixed-operator-home>/.local/bin/wrangler` and executes only as fixed user
 `andris`; the runtime itself does not open credential files or print credential
-content.
+content. The runtime accepts only the exact installed Wrangler link chain:
+`~/.local/bin/wrangler` → `../share/wrangler-cli/.bin/wrangler`, the `.bin`
+directory link → `node_modules/.bin`, and the package bin link →
+`../wrangler/bin/wrangler.js`. The final `wrangler.js` must be a regular,
+operator-owned executable with no group/world write bits and resolve to the fixed
+package path.
 
 No package install is used. Wrangler version `4.135.0` is checked from the
 local package metadata rather than by invoking `wrangler --version`.
@@ -114,13 +119,13 @@ Source:
 `scripts/install-ausmalwiese-stats-gate-a-d1-runtime-v1.py`
 
 The installer may install only the exact runtime blob
-`d1191e913e565965dc1c4d153179f702bf2a79d4` into the fixed target. A first
+`90fa7c7c829a778bcea14e815daf27fcb795f2f2` into the fixed target. A first
 install still requires target absence and bounded GNU `cp` no-clobber
 semantics.
 
 For an already installed Gate A runtime, the only upgrade predecessor is
-RPi5_main `a17f83668acdcdfde26ef6f586b1c2f8aa765ada` with runtime blob
-`addccfa3fc54da494102d0b472f785575e9d4f55`. Upgrade preflight reconstructs
+RPi5_main `936760d99b2fbb492a0a0fabee0fcc7e27377ae8` with runtime blob
+`d1191e913e565965dc1c4d153179f702bf2a79d4`. Upgrade preflight reconstructs
 those historical bytes, requires the installed target to be a non-symlink
 `root:root 0500` single-link file with the exact SHA-256, and checks sudo
 capability for one fixed `/usr/bin/install` replacement. The upgrade has no
