@@ -14,11 +14,22 @@
     "method": "GET",
     "path_template": "/accounts/{account_id}/workers/scripts/coloring-pages-report-v1/settings",
     "source": "script-and-version-settings.annotations",
-    "required_annotation_keys": ["workers/message", "workers/tag", "workers/triggered_by"],
-    "adapter_output_keys": ["version_tag", "version_message"]
+    "required_annotation_keys": [
+      "workers/message",
+      "workers/tag",
+      "workers/triggered_by"
+    ],
+    "adapter_output_keys": [
+      "version_tag",
+      "version_message"
+    ]
   },
   "verification": {
-    "wrangler_reads": ["versions-list", "deployments-list", "versions-view"],
+    "wrangler_reads": [
+      "versions-list",
+      "deployments-list",
+      "versions-view"
+    ],
     "secret_inventory_required": false,
     "public_config_endpoint_required": false,
     "stats_snapshot_required": false

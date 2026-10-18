@@ -45,7 +45,7 @@ EMAIL_BINDING = [
 ]
 BINDING_KINDS = {"EMAIL": "send_email"}
 
-VERSION_ID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\\Z")
+VERSION_ID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
 STOP = "STOP_REPORT_WRANGLER_DEPLOY_SOURCE_ONLY"
 
 RUNTIME_ENTRY = Path("/usr/local/sbin/rpi5-ausmalwiese-report-wrangler-deploy")
@@ -174,7 +174,7 @@ def application_evidence_from_checkout(
     need(tree.returncode == 0, "SOURCE_TREE_FAILED")
     entries: dict[str, str] = {}
     for line in tree.stdout.splitlines():
-        match = re.fullmatch(r"100644 blob ([0-9a-f]{40})\\t(.+)", line)
+        match = re.fullmatch(r"100644 blob ([0-9a-f]{40})\t(.+)", line)
         need(match is not None, "SOURCE_TREE_SHAPE")
         entries[match.group(2)] = match.group(1)
     need(
@@ -259,10 +259,10 @@ def execute_deploy_once(
         ["npx", "--yes", f"wrangler@{WRANGLER_VERSION}", "--version"],
         timeout=60,
     )
-    observed = (version.stdout + "\\n" + version.stderr).strip()
+    observed = (version.stdout + "\n" + version.stderr).strip()
     need(
         version.returncode == 0
-        and re.search(r"(?<![0-9.])4\\.135\\.0(?![0-9.])", observed),
+        and re.search(r"(?<![0-9.])4\.135\.0(?![0-9.])", observed),
         "WRANGLER_VERSION_DRIFT",
     )
 
@@ -359,10 +359,10 @@ def execute_root_owned_runtime_once(
         timeout=60,
         check=False,
     )
-    observed = (version.stdout + "\\n" + version.stderr).strip()
+    observed = (version.stdout + "\n" + version.stderr).strip()
     need(
         version.returncode == 0
-        and re.search(r"(?<![0-9.])4\\.135\\.0(?![0-9.])", observed),
+        and re.search(r"(?<![0-9.])4\.135\.0(?![0-9.])", observed),
         "WRANGLER_VERSION_DRIFT",
     )
 
