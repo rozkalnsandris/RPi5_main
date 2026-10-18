@@ -36,8 +36,8 @@ References:
 
 - Worker: `coloring-pages-stats-v1`
 - Wrangler: `4.135.0`
-- `coloring-pages`: `699c036b7f952aa98be06e166a9705069b7e9eb2`
-- Worker blob: `94e802ce145dd75f5701c4c9274a4ac7959c7f5e`
+- `coloring-pages`: `fd4c434b78445fb3438116b62565fe524ca47ac1`
+- Worker blob: `c2ac9da6e0701103e0041b30db7dfbea4298f96c`
 - config blob: `3733263a391274f2b6b0f2023c8656565bde8e1a`
 - conflict baseline version:
   `e47f145f-1851-4917-be5c-387f96549539`
@@ -82,8 +82,8 @@ return a command array equivalent to:
       --config cloudflare/wrangler.stats-worker.jsonc \
       --name coloring-pages-stats-v1 \
       --no-bundle --keep-vars \
-      --tag git:699c036b7f952aa98be06e166a9705069b7e9eb2 \
-      --message source-blob:94e802ce145dd75f5701c4c9274a4ac7959c7f5e,config-blob:3733263a391274f2b6b0f2023c8656565bde8e1a,takeover-from:e47f145f-1851-4917-be5c-387f96549539
+      --tag git:fd4c434b78445fb3438116b62565fe524ca47ac1 \
+      --message source-blob:c2ac9da6e0701103e0041b30db7dfbea4298f96c,config-blob:3733263a391274f2b6b0f2023c8656565bde8e1a,takeover-from:e47f145f-1851-4917-be5c-387f96549539
 
 `--strict` is deliberately absent **only from this one-time takeover command**.
 All other guards remain. There is no routes/triggers command, no
@@ -153,3 +153,15 @@ settings/binding preservation or owner-digest gates. The additive D1 migration i
 `docs/AUSMALWIESE_STATS_PRIVACY_D1_MIGRATION_V1.md` must be separately verified
 before a future privacy Worker takeover. The protected inventory runtime upgrade is
 tracked separately in #1060.
+
+
+## Aggregate-Like source repin — issue #1088
+
+The current takeover target is superseded to the merged aggregate-Like backend source from coloring-pages PR #262:
+
+- `coloring-pages/main` `fd4c434b78445fb3438116b62565fe524ca47ac1`;
+- Worker Git blob `c2ac9da6e0701103e0041b30db7dfbea4298f96c`;
+- Wrangler config blob remains `3733263a391274f2b6b0f2023c8656565bde8e1a`;
+- additive and cleanup migration blobs, routes, bindings, settings gates and the observed pre-takeover baseline version are unchanged.
+
+The #1061 privacy repin section above remains historical provenance for the prior source. The executable takeover command and current frozen inputs now use #1088 provenance so a future deployment cannot silently drop the aggregate Like endpoint. This source repin grants no LIVE, credential, D1 or Worker mutation authority.

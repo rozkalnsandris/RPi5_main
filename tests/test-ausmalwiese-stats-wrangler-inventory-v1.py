@@ -152,8 +152,8 @@ class InventoryTests(unittest.TestCase):
     def test_contract_is_source_only(self):
         c = json.loads(plan.CONTRACT.read_text("utf-8"))
         plan.check_contract(c)
-        self.assertEqual(plan.SOURCE_COMMIT, "699c036b7f952aa98be06e166a9705069b7e9eb2")
-        self.assertEqual(plan.SOURCE_BLOB, "94e802ce145dd75f5701c4c9274a4ac7959c7f5e")
+        self.assertEqual(plan.SOURCE_COMMIT, "fd4c434b78445fb3438116b62565fe524ca47ac1")
+        self.assertEqual(plan.SOURCE_BLOB, "c2ac9da6e0701103e0041b30db7dfbea4298f96c")
         self.assertEqual(
             c["account_sha256"],
             "3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34",

@@ -78,8 +78,8 @@ class StrictConflictPlanTests(unittest.TestCase):
     def test_contract_is_source_only(self):
         data = json.loads(plan.CONTRACT.read_text("utf-8"))
         plan.check_contract(data)
-        self.assertEqual(plan.SOURCE_COMMIT, "699c036b7f952aa98be06e166a9705069b7e9eb2")
-        self.assertEqual(plan.SOURCE_BLOB, "94e802ce145dd75f5701c4c9274a4ac7959c7f5e")
+        self.assertEqual(plan.SOURCE_COMMIT, "fd4c434b78445fb3438116b62565fe524ca47ac1")
+        self.assertEqual(plan.SOURCE_BLOB, "c2ac9da6e0701103e0041b30db7dfbea4298f96c")
         self.assertFalse(data["actions"]["run_wrangler"])
         self.assertFalse(data["actions"]["cloudflare_request"])
         self.assertFalse(data["actions"]["credential_access"])
@@ -88,6 +88,13 @@ class StrictConflictPlanTests(unittest.TestCase):
         self.assertFalse(data["actions"]["retry"])
         self.assertEqual(plan.main(["--check-contract"]), 0)
         self.assertEqual(plan.main(["--run"]), 2)
+
+    def test_prior_privacy_worker_provenance_is_rejected(self):
+        bad = before()
+        bad["source_commit"] = "699c036b7f952aa98be06e166a9705069b7e9eb2"
+        bad["source_blob"] = "94e802ce145dd75f5701c4c9274a4ac7959c7f5e"
+        with self.assertRaises(plan.Blocked):
+            plan.validate_snapshot(bad, stage="before")
 
     def test_takeover_command_is_non_strict_but_bounded(self):
         state = before()
