@@ -59,7 +59,9 @@ RUNTIME_ENV = {
     "WRANGLER_WRITE_LOGS": "false",
 }
 
-        match = TREE_LINE.fullmatch(line)
+UUID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
+TREE_LINE = re.compile(r"(100644|100755) blob ([0-9a-f]{40})\t(.+)")
+KNOWN_BINDINGS = {
     "DB": "d1",
     "RATE_LIMITER": "ratelimit",
     "PUBLIC_ORIGIN": "plain_text",
@@ -193,9 +195,7 @@ def exact_application_bytes(*, runner: Any = subprocess.run) -> dict[str, bytes]
     ).decode("ascii")
     entries: dict[str, tuple[str, str]] = {}
     for line in tree.splitlines():
-        match = re.fullmatch(
-            r"(100644|100755) blob ([0-9a-f]{40})\\t(.+)", line
-        )
+        match = TREE_LINE.fullmatch(line)
         need(match is not None, "SOURCE_TREE_SHAPE")
         entries[match.group(3)] = (match.group(1), match.group(2))
     need(set(entries) == set(expected), "SOURCE_TREE_SET")
