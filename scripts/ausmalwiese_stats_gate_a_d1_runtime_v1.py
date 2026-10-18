@@ -746,6 +746,7 @@ def check_contract(contract: Any) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check-contract", action="store_true")
+    parser.add_argument("--runtime-preflight", action="store_true")
     parser.add_argument("--runtime-migrate", action="store_true")
     parser.add_argument("--confirm", default="")
     parser.add_argument("--remote-evidence-sha256", default="")
@@ -755,6 +756,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.check_contract:
         if any(
             (
+                args.runtime_preflight,
                 args.runtime_migrate,
                 args.confirm,
                 args.remote_evidence_sha256,
@@ -776,6 +778,45 @@ def main(argv: list[str] | None = None) -> int:
             print(STOP)
             return 2
         print("STATS_GATE_A_D1_RUNTIME_OK_SOURCE_ONLY_NO_LIVE")
+        return 0
+    if args.runtime_preflight:
+        if any(
+            (
+                args.runtime_migrate,
+                args.confirm,
+                args.remote_evidence_sha256,
+                args.pre_schema_sha256,
+                args.migration_blob,
+            )
+        ):
+            print(STOP)
+            return 2
+        try:
+            result = preflight()
+        except Blocked as exc:
+            print(
+                json.dumps(
+                    {
+                        "status": "BLOCKED",
+                        "reason": str(exc),
+                        "mutation_started": False,
+                    },
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+            )
+            return 3
+        print(
+            json.dumps(
+                {
+                    "status": "PREFLIGHT_PASS",
+                    "mutation_started": False,
+                    **result,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        )
         return 0
     if args.runtime_migrate:
         try:
