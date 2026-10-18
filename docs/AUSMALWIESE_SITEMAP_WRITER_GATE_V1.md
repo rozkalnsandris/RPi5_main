@@ -18,8 +18,8 @@ static cron/script audits were insufficient to close this race.
 1. Independently confirm and authorize a brief maintenance window. Under a
    **separate exact LIVE authorization**, stop only the fixed triggers:
    `cron.service` and
-   `rozkalns-simple-deployer@coloring-pages-public-rpi5.timer`, first verify
-   `rozkalns-simple-deployer@coloring-pages-public-rpi5.service` is idle.
+   the `rozkalns-simple-deployer` timer instance for `coloring-pages-public-rpi5`, first verify
+   the `rozkalns-simple-deployer` service instance for `coloring-pages-public-rpi5` is idle.
    Stopping cron affects **other projects** and is never implicit. Never
    stop an active deployment or ingest job in this gate.
 2. With those triggers stopped, verify the enabled post-publish marker and
