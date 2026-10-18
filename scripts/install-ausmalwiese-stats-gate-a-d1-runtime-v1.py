@@ -143,7 +143,7 @@ def historical_runtime(*, runner=subprocess.run) -> bytes:
     tree = git_text(["ls-tree", OLD_SOURCE_REF, "--", SOURCE_REL], runner=runner)
     if (
         not 0 < len(raw) <= MAX_SOURCE
-        or tree != f"100644 blob {OLD_SOURCE_BLOB}\\t{SOURCE_REL}"
+        or tree != f"100644 blob {OLD_SOURCE_BLOB}\t{SOURCE_REL}"
     ):
         raise Stop("old_runtime_source_mismatch")
     return raw
