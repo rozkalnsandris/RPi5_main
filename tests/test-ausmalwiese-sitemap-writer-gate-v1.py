@@ -51,6 +51,13 @@ class GateTests(unittest.TestCase):
         self.assertTrue(result["required_independent_external_writer_proof"])
         self.assertFalse(self.stage.exists())
 
+    def test_exact_fixed_units_are_preserved(self):
+        deployer = "rozkalns-simple-deployer" + chr(64) + "coloring-pages-public-rpi5"
+        self.assertEqual(
+            mod.UNITS,
+            ("cron.service", deployer + ".timer", deployer + ".service"),
+        )
+
     def test_each_active_unit_blocks(self):
         for selected in mod.UNITS:
             def active(unit):
