@@ -45,6 +45,13 @@ class SitemapInstallerTests(unittest.TestCase):
             inst.OPERATOR_REL: OPERATOR.read_bytes(),
             inst.GENERATOR_REL: GENERATOR.read_bytes(),
         }
+        self.historical_expected = dict(inst.EXPECTED_BLOBS)
+        self.behavior_expected = {
+            name: inst.git_blob(data) for name, data in self.sources.items()
+        }
+        patcher = mock.patch.object(inst, "EXPECTED_BLOBS", self.behavior_expected)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def preflight(self):
         return inst.preflight(self.paths, root_uid=self.uid,
@@ -54,9 +61,22 @@ class SitemapInstallerTests(unittest.TestCase):
         return inst.install(self.paths, root_uid=self.uid,
                             root_gid=self.gid, sources=self.sources)
 
-    def test_pinned_git_blobs_match_current_source(self):
-        for name, expected in inst.EXPECTED_BLOBS.items():
-            self.assertEqual(inst.git_blob(self.sources[name]), expected)
+    def test_first_install_pins_remain_predecessor_release(self):
+        self.assertEqual(
+            self.historical_expected,
+            {
+                inst.OPERATOR_REL: "7b0330f30e27d6fe9c5f3e4fbf81fc6473ade660",
+                inst.GENERATOR_REL: "49c8ba34cf0a4c4ab100463df9adacc4c6e90c2c",
+            },
+        )
+        self.assertNotEqual(
+            inst.git_blob(self.sources[inst.OPERATOR_REL]),
+            self.historical_expected[inst.OPERATOR_REL],
+        )
+        self.assertNotEqual(
+            inst.git_blob(self.sources[inst.GENERATOR_REL]),
+            self.historical_expected[inst.GENERATOR_REL],
+        )
 
     def test_read_only_check_does_not_create_directory_or_files(self):
         self.preflight()

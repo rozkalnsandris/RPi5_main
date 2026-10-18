@@ -1,50 +1,65 @@
-# Ausmalwiese sitemap: exact old-to-new upgrade source
+# Ausmalwiese sitemap: category landing generator upgrade
 
-Source-only candidate. Depends on RPi5_main PR #1027 at 71640856c328fa68636041f9ec023a2cc20fe4da,
-and coloring-pages PR #214. There is **no standing LIVE permission**.
+Issue: #1094. Source-only candidate; no standing LIVE permission.
 
-The reviewed candidate in scripts/upgrade-coloring-pages-sitemap-publisher-v1.py
-pins the installed old publisher Git blob 0da51ef361f9ce815ebde3e4cc6cae19a2c2ffe8
-and old generator blob 5644c8fd366c0c57f6339fddd163c5091ea134c5.
-Only exact new publisher 7b0330f30e27d6fe9c5f3e4fbf81fc6473ade660
-and generator 49c8ba34cf0a4c4ab100463df9adacc4c6e90c2c are accepted.
+Consumer source is `coloring-pages@43691b7267d2a8185f3466667f0cdf2b380fbe04`.
+The required byte-identical generator is Git blob
+`5d1d37c32573aa8ac0d91f45b73938638fd183e9`.
 
-## Before any future LIVE authorization
-- Merge the dependency and this PR only with separate explicit owner MERGE
-  approvals. Independently check exact new merged main SHA, clean main checkout,
-  exact tracked candidate blobs and installed old root-owned bytes/modes.
-- Establish host-local evidence that **all** catalogue writers are quiescent,
-  none bypass the shared advisory lock, and the post-publish marker is absent.
-  The tool's read-only --check alone cannot establish complete quiescence.
-- Old installed operator must be root:root 0755, generator root:root 0444.
-  A missing, mixed, already updated, symlinked, or tampered installation is a STOP.
-- A fixed trusted source lookup uses unprivileged owner-run Git; do not use the
-  first-install-only installer to replace any existing installation.
-- Bind one new exact host LIVE decision to the frozen RPi5_main revision, exact
-  installed baselines, current lock and marker states, target paths and no-retry
-  semantics. Source merge does not authorize this.
+The exact installed predecessor observed before this source change is:
+- publisher `7b0330f30e27d6fe9c5f3e4fbf81fc6473ade660`;
+- generator `49c8ba34cf0a4c4ab100463df9adacc4c6e90c2c`.
 
-## Operation contract (not execution authorization)
-The only accepted source CLI modes are --check and --apply, both with
---expected-rpi5-main-sha. Root-only apply first holds the shared nonblocking
-Drive ingester flock, rejects an enabled marker or pre-existing stages,
-re-verifies trusted candidates under the lock, stages both exact replacement
-files and fsyncs them, then atomically replaces **generator first** and
-**publisher second**, verifying each replacement with mode/owner/blob checks.
+The reviewed successor is:
+- publisher `4ade38f1225f4c1bc102fda8d5538f9262695d43`;
+- generator `5d1d37c32573aa8ac0d91f45b73938638fd183e9`.
 
-**This is not a transactional two-file swap.** In the intermediate state the old
-publisher rejects the new generator. All competing writers and new publication
-operations must remain stopped until both replacements are verified.
+The publisher validates exactly eight static canonical URLs before sorted
+catalogue detail URLs: home, `/kita`, and the six existing category routes
+`/tiere`, `/fahrzeuge`, `/alphabet`, `/lernen`, `/figuren`,
+`/jahreszeiten`.
 
-The **first stage-file creation** is the first LIVE mutation. Any subsequent
-error means STOP preserving state: no retry, rollback, cleanup, unlink,
-permission repair, alternate mutation, or service restart. Partial state
-requires a fresh owner risk decision. An already enabled post-ingest marker
-is not silently disabled or ignored.
+## Exact upgrade contract
 
-The installed Drive ingester's separate trust pins and PUBLIC_ORIGIN still
-require separately scoped source and LIVE review; this upgrade does not alter
-them. Further gates: PR #214 deployment, Cloudflare QR Worker deployment,
-one owner-authorized LIVE sitemap publication with exact catalogue/prior
-sitemap fingerprints, verified new-host sitemap/SEO, then narrowly scoped
-legacy 301. Google Search Console Change of Address is a separate step.
+`scripts/upgrade-coloring-pages-sitemap-publisher-v1.py` accepts only the
+predecessor pair above and only the reviewed successor pair. It uses fixed
+installed targets, the existing Drive-ingest advisory lock, root-owned
+publisher/generator modes, exact tracked Git blobs and a clean exact-main
+checkout.
+
+Both successor files are staged and fsynced before replacement. The generator
+is replaced first and the publisher second. This is intentionally **not** a
+transactional two-file swap. Python documents `os.replace()` as atomic on
+success when source and destination are on the same filesystem, but there is
+still an observable mixed-version interval between the two replacements.
+Linux `flock` is advisory, so a future LIVE gate must independently quiesce
+all catalogue/sitemap writers for the full operation.
+
+References:
+- https://docs.python.org/3/library/os.html#os.replace
+- https://man7.org/linux/man-pages/man2/flock.2.html
+
+The existing post-publish activation marker may be either absent or present.
+If present, the executor requires the exact root-owned `0444` regular file
+with bytes `coloring-pages-sitemap-post-publish-v1\n`, preserves it without
+modification, and fails closed if its state changes during the upgrade.
+
+The first stage-file creation is the first LIVE mutation. Any later error is
+STOP with evidence preserved: no retry, rollback, cleanup, unlink, permission
+repair, service restart or alternate path.
+
+## Deliberate predecessor boundaries
+
+The historical first-install-only installer and the Drive-ingest post-publish
+trust pins remain on the predecessor publisher/generator release in issue
+#1094. They are **not** upgraded by this source scope. Therefore a later LIVE
+publisher/generator upgrade does not itself authorize or silently update the
+Drive-ingest operator. A separate source/LIVE decision is required before
+post-ingest automatic sitemap refresh can trust the successor pair.
+
+## Next gates
+
+After merge, any host replacement requires a fresh exact LIVE authorization
+bound to the merged RPi5_main SHA, installed predecessor blobs, marker/lock
+state and no-retry semantics. Sitemap publication is a later separate LIVE
+gate with fresh catalogue and prior-sitemap SHA-256 values.
