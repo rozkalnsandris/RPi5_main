@@ -690,8 +690,8 @@ def expected_contract() -> dict[str, Any]:
         "pre_schema_sha256": PRE_SCHEMA_SHA256,
         "runtime_entry": str(RUNTIME_ENTRY),
         "runtime_operator": RUNTIME_OPERATOR,
-        "runtime_source_root": str(RUNTIME_SOURCE_ROOT),
-        "wrangler_binary": str(WRANGLER),
+        "runtime_source_root": "<fixed-operator-home>/coloring-pages",
+        "wrangler_binary": "<fixed-operator-home>/.local/bin/wrangler",
         "no_log_env": {"WRANGLER_WRITE_LOGS": "false"},
         "preflight_reads": [
             "versions-list",
