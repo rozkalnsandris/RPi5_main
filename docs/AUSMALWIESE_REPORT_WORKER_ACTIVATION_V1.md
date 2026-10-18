@@ -16,7 +16,7 @@ Canonical application provenance:
 - Worker blob 50bbcd868aa9f91b7fb6d78a2925e867380ef421
 - config blob 6ef838ec056c3815416e3a8521c5322bd33b4fed
 
-Current config has two exact report routes and one send_email binding named EMAIL with the fixed destination `INFO@ausmalwiese.de`. The uppercase local-part is the narrow reviewed Cloudflare workaround; Worker sender and all other behavior remain unchanged.
+Current config has two exact report routes and one send_email binding named EMAIL. The runtime contract pins local-part `INFO` on domain `ausmalwiese.de`; the uppercase local-part is the narrow reviewed Cloudflare workaround. The full destination remains only in the pinned coloring-pages config; Worker sender and all other behavior remain unchanged.
 
 The exact Worker blob is also the source-of-truth for the sanitized Email Service failure diagnostic: fixed event `report_email_send_failed`, bounded machine code only, and `UNKNOWN` fallback. It must not log provider messages/stacks, report payload values, addresses, headers, IP or URL. This diagnostic is proven by exact source provenance; normal post-deploy verification does not generate an error or send an email.
 
@@ -41,7 +41,7 @@ Before a future separately authorized deployment, verify only what the minimal p
 2. exact target Worker and the two report routes;
 3. Cloudflare Email Service is available for the account/domain;
 4. sender domain/address used by the Worker is accepted by Email Service;
-5. the exact fixed destination `INFO@ausmalwiese.de` from the pinned coloring-pages config is accepted by Email Service;
+5. the fixed destination from the pinned coloring-pages config, with local-part `INFO` on domain `ausmalwiese.de`, is accepted by Email Service;
 6. the existing receiving/forwarding path reaches the intended verified mailbox;
 7. no route collision with unrelated Workers.
 

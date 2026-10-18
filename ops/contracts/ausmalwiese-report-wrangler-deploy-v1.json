@@ -23,7 +23,9 @@
   ],
   "email_binding": {
     "name": "EMAIL",
-    "destination": "INFO@ausmalwiese.de"
+    "destination_local_part": "INFO",
+    "destination_domain": "ausmalwiese.de",
+    "destination_source": "assembled-fixed-config"
   },
   "deploy_flags": [
     "--no-bundle",

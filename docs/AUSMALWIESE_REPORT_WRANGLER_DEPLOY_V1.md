@@ -22,7 +22,10 @@ The reviewed config contains only two exact routes:
 and one Cloudflare Email Service send_email binding:
 
 - name: EMAIL
-- destination_address: `INFO@ausmalwiese.de` (exact case is fail-closed by the runtime contract)
+- destination local-part: `INFO`
+- destination domain: `ausmalwiese.de`
+
+The runtime contract assembles those fixed components with `@` and rejects lowercase local-part drift.
 
 There are no Report secrets, Turnstile bindings, rate-limit bindings, Report config endpoint or Stats dependency.
 
@@ -38,7 +41,7 @@ The root-owned installed entrypoint remains:
 
 The installed file is only a trust boundary. Runtime execution drops the Wrangler child to the fixed operator andris and uses that operator's existing Wrangler authentication context. It reads no protected Report secret file and creates no secret memfd.
 
-The runtime installer is repinned so a future separately authorized upgrade may replace the currently reviewed deploy source from RPi5_main 4baa94b39264c8a89c175f3fdefdfe78faa5b339 / blob 6a5b15e121bbca41b6b33582bcc62964df723927 with the #1098 deploy source blob 8bd1a76248cd3087fd1f877973cbb5a384f32884. Source merge does not install it.
+The runtime installer is repinned so a future separately authorized upgrade may replace the currently reviewed deploy source from RPi5_main 4baa94b39264c8a89c175f3fdefdfe78faa5b339 / blob 6a5b15e121bbca41b6b33582bcc62964df723927 with the #1098 deploy source blob b960b752ab5b91594b174f06fb66da4e62806be8. Source merge does not install it.
 
 ## Read-only post-deploy proof
 
@@ -56,7 +59,7 @@ Mailbox delivery is a separate end-to-end check after LIVE activation.
 
 ## Provider model
 
-Cloudflare Email Service documentation reviewed 2026-10-18 documents a send_email Wrangler binding and env.EMAIL.send(). destination_address restricts the binding to one configured destination. This repin additionally enforces the exact reviewed workaround destination `INFO@ausmalwiese.de`; lowercase `info@ausmalwiese.de` is rejected by the runtime contract. The Worker sender remains unchanged.
+Cloudflare Email Service documentation reviewed 2026-10-18 documents a send_email Wrangler binding and env.EMAIL.send(). destination_address restricts the binding to one configured destination. This repin additionally enforces local-part `INFO` on domain `ausmalwiese.de`; lowercase local-part `info` is rejected by the runtime contract. The full destination value remains only in the pinned coloring-pages config. The Worker sender remains unchanged.
 
 References:
 

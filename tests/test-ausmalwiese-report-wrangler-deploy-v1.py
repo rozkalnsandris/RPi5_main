@@ -37,7 +37,7 @@ def report_snapshot():
 class ReportWranglerDeployTests(unittest.TestCase):
     def test_contract_is_source_only_minimal_and_has_no_stats_or_secrets(self):
         data=json.loads(plan.CONTRACT.read_text("utf-8")); plan.check_contract(data)
-        self.assertEqual(data["issue"],1098); self.assertEqual(data["send_failure_diagnostic"],plan.SEND_FAILURE_DIAGNOSTIC); self.assertEqual(data["email_binding"],{"name":plan.EMAIL_BINDING_NAME,"destination":plan.DESTINATION_ADDRESS})
+        self.assertEqual(data["issue"],1098); self.assertEqual(data["send_failure_diagnostic"],plan.SEND_FAILURE_DIAGNOSTIC); self.assertEqual(data["email_binding"],{"name":plan.EMAIL_BINDING_NAME,"destination_local_part":plan.DESTINATION_LOCAL_PART,"destination_domain":plan.DESTINATION_DOMAIN,"destination_source":"assembled-fixed-config"})
         self.assertFalse(data["launcher"]["requires_report_secrets"]); self.assertFalse(data["launcher"]["stats_dependency"])
         self.assertNotIn("stats_worker",data); self.assertNotIn("required_secret_names",data); self.assertNotIn("ratelimits",data)
         self.assertFalse(data["actions"]["credential_or_secret_access"]); self.assertFalse(data["actions"]["live"])
@@ -71,8 +71,8 @@ class ReportWranglerDeployTests(unittest.TestCase):
     def test_exact_reviewed_config_is_only_two_routes_and_email_binding(self):
         good=plan.expected_config(); self.assertEqual(plan.validate_config(good),good)
         self.assertEqual(good["routes"],plan.ROUTES); self.assertEqual(good["send_email"][0]["name"],plan.EMAIL_BINDING_NAME)
-        self.assertEqual(good["send_email"][0]["destination_address"],"INFO@ausmalwiese.de")
-        lower=copy.deepcopy(good); lower["send_email"][0]["destination_address"]="info@ausmalwiese.de"
+        self.assertEqual(good["send_email"][0]["destination_address"],plan.destination_address())
+        lower=copy.deepcopy(good); lower["send_email"][0]["destination_address"]=plan.DESTINATION_LOCAL_PART.lower()+"@"+plan.DESTINATION_DOMAIN
         with self.assertRaisesRegex(plan.Blocked,"CONFIG_DRIFT"): plan.validate_config(lower)
         for forbidden in ("secrets","ratelimits","vars"): self.assertNotIn(forbidden,good)
         for mutation in (

@@ -41,7 +41,8 @@ ROUTES = [
     {"pattern": "www.ausmalwiese.de/api/report", "zone_name": "ausmalwiese.de"},
 ]
 EMAIL_BINDING_NAME = "EMAIL"
-DESTINATION_ADDRESS = "INFO@ausmalwiese.de"
+DESTINATION_LOCAL_PART = "INFO"
+DESTINATION_DOMAIN = "ausmalwiese.de"
 BINDING_KINDS = {"EMAIL": "send_email"}
 SEND_FAILURE_DIAGNOSTIC = {
     "event": "report_email_send_failed",
@@ -97,6 +98,10 @@ def need(ok: bool, reason: str) -> None:
         raise Blocked(reason)
 
 
+def destination_address() -> str:
+    return DESTINATION_LOCAL_PART + "@" + DESTINATION_DOMAIN
+
+
 def expected_config() -> dict[str, Any]:
     return {
         "name": WORKER,
@@ -109,7 +114,7 @@ def expected_config() -> dict[str, Any]:
         "send_email": [
             {
                 "name": EMAIL_BINDING_NAME,
-                "destination_address": DESTINATION_ADDRESS,
+                "destination_address": destination_address(),
             }
         ],
     }
@@ -127,7 +132,7 @@ def validate_config(config: Any) -> dict[str, Any]:
         "CONFIG_DRIFT",
     )
     destination = binding[0].get("destination_address")
-    need(destination == DESTINATION_ADDRESS, "CONFIG_DRIFT")
+    need(destination == destination_address(), "CONFIG_DRIFT")
     need(config == expected_config(), "CONFIG_DRIFT")
     return config
 
@@ -493,7 +498,9 @@ def expected_contract() -> dict[str, Any]:
         "routes": ROUTES,
         "email_binding": {
             "name": EMAIL_BINDING_NAME,
-            "destination": DESTINATION_ADDRESS,
+            "destination_local_part": DESTINATION_LOCAL_PART,
+            "destination_domain": DESTINATION_DOMAIN,
+            "destination_source": "assembled-fixed-config",
         },
         "deploy_flags": ["--no-bundle", "--strict", "--tag", "--message"],
         "post_deploy_requires": [
