@@ -28,9 +28,9 @@ STATS_WORKER = "coloring-pages-stats-v1"
 WRANGLER_VERSION = "4.135.0"
 
 SOURCE_REPO = "rozkalnsandris/coloring-pages"
-SOURCE_COMMIT = "699c036b7f952aa98be06e166a9705069b7e9eb2"
+SOURCE_COMMIT = "7940c8bef702399f526d82920e848ba4357e5790"
 WORKER_PATH = "cloudflare/report-worker.mjs"
-WORKER_BLOB = "6d2359752d12f4a40847008fc7fdcc457124e893"
+WORKER_BLOB = "6560268044bac25e1d63e12edbb2572ca2b9784b"
 CONFIG_PATH = "cloudflare/wrangler.report.json"
 CONFIG_BLOB = "a49576aa391015e7b0e867bb7eef03c7f90d0987"
 
