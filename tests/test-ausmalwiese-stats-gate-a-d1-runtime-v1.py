@@ -1,0 +1,284 @@
+#!/usr/bin/env python3
+"""Offline tests for Ausmalwiese Stats Gate A D1 runtime (#996)."""
+from __future__ import annotations
+
+import copy
+import hashlib
+import importlib.util
+import json
+from pathlib import Path
+from types import SimpleNamespace
+import unittest
+from unittest import mock
+
+ROOT = Path(__file__).resolve().parents[1]
+SOURCE = ROOT / "scripts/ausmalwiese_stats_gate_a_d1_runtime_v1.py"
+spec = importlib.util.spec_from_file_location("stats_gate_a_runtime_996", SOURCE)
+op = importlib.util.module_from_spec(spec)
+assert spec and spec.loader
+spec.loader.exec_module(op)
+
+
+def remote():
+    return {
+        "schema": op.REMOTE_SCHEMA,
+        "worker": op.WORKER,
+        "environment": "production",
+        "wrangler_version": op.WRANGLER_VERSION,
+        "reviewed_source": {
+            "repository": op.SOURCE_REPO,
+            "commit": op.SOURCE_COMMIT,
+            "worker_blob": op.WORKER_BLOB,
+            "config_blob": op.CONFIG_BLOB,
+            "migration_blob": op.MIGRATION_BLOB,
+        },
+        "latest_uploaded_version": "6477f23a-f3da-40c1-bb57-ad672561d243",
+        "active_versions": [{
+            "version_id": "e014e7c7-4c08-40c6-a9dd-6593b3afcf3c",
+            "percentage": 100,
+        }],
+        "active_provenance": {
+            "source": "dash",
+            "last_deployed_from": "dash",
+            "annotation_class": "secret_change",
+        },
+        "active_bindings": [
+            {"name": "CF_ANALYTICS_API_TOKEN", "type": "secret_text"},
+            {"name": "DB", "type": "d1"},
+            {"name": "PUBLIC_ORIGIN", "type": "plain_text"},
+            {"name": "RATE_LIMITER", "type": "ratelimit"},
+        ],
+        "d1": {
+            "binding": op.DATABASE_BINDING,
+            "database_name": op.DATABASE_NAME,
+            "database_id": op.DATABASE_ID,
+        },
+    }
+
+
+def before():
+    return {
+        "schema": op.SCHEMA,
+        "database_name": op.DATABASE_NAME,
+        "database_id": op.DATABASE_ID,
+        "objects": {name: None for name in op.TARGETS},
+    }
+
+
+def after():
+    return {
+        "schema": op.SCHEMA,
+        "database_name": op.DATABASE_NAME,
+        "database_id": op.DATABASE_ID,
+        "objects": copy.deepcopy(op.EXPECTED_POST),
+    }
+
+
+class GateARuntimeTests(unittest.TestCase):
+    def test_contract_is_source_only_and_exact(self):
+        data = json.loads(op.CONTRACT.read_text("utf-8"))
+        op.check_contract(data)
+        self.assertEqual(
+            data["remote_evidence_sha256"], op.REMOTE_EVIDENCE_SHA256
+        )
+        self.assertEqual(data["pre_schema_sha256"], op.PRE_SCHEMA_SHA256)
+        self.assertEqual(data["migration_blob"], op.MIGRATION_BLOB)
+        self.assertFalse(data["actions"]["run_wrangler"])
+        self.assertFalse(data["actions"]["d1_write"])
+        self.assertFalse(data["actions"]["live"])
+        for item in ("retry", "rollback", "cleanup", "worker-deploy"):
+            self.assertIn(item, data["forbidden"])
+
+    def test_frozen_observed_digests_match_fixtures(self):
+        self.assertEqual(
+            op.canonical_sha256(remote()), op.REMOTE_EVIDENCE_SHA256
+        )
+        self.assertEqual(
+            op.canonical_sha256(before()), op.PRE_SCHEMA_SHA256
+        )
+
+    def test_git_blob_uses_nul_separator(self):
+        raw = b"x"
+        expected = hashlib.sha1(b"blob 1\x00x").hexdigest()
+        self.assertEqual(op.git_blob(raw), expected)
+
+    def test_git_ls_tree_parser_accepts_real_tab(self):
+        line = "100644 blob " + "a" * 40 + "\tcloudflare/stats-worker.js"
+        match = op.TREE_LINE.fullmatch(line)
+        self.assertIsNotNone(match)
+        self.assertEqual(match.group(1), "100644")
+        self.assertEqual(match.group(2), "a" * 40)
+        self.assertEqual(match.group(3), "cloudflare/stats-worker.js")
+        self.assertIsNone(
+            op.TREE_LINE.fullmatch(
+                "100644 blob " + "a" * 40 + r"\tcloudflare/stats-worker.js"
+            )
+        )
+
+    def test_owner_binding_is_exact(self):
+        op.validate_owner_binding(
+            op.REMOTE_EVIDENCE_SHA256,
+            op.PRE_SCHEMA_SHA256,
+            op.MIGRATION_BLOB,
+        )
+        with self.assertRaisesRegex(op.Blocked, "OWNER_GATE_UNBOUND"):
+            op.validate_owner_binding(
+                "0" * 64, op.PRE_SCHEMA_SHA256, op.MIGRATION_BLOB
+            )
+
+    def test_schema_validators_are_fail_closed(self):
+        self.assertEqual(op.validate_before_schema(before()), before())
+        self.assertEqual(op.validate_after_schema(after()), after())
+        bad = before()
+        bad["objects"]["like_cookie_sessions"] = copy.deepcopy(
+            op.EXPECTED_POST["like_cookie_sessions"]
+        )
+        with self.assertRaisesRegex(op.Blocked, "PRE_SCHEMA_NOT_ABSENT"):
+            op.validate_before_schema(bad)
+
+    def test_schema_reader_requires_provider_success(self):
+        with mock.patch.object(
+            op,
+            "run_wrangler_json",
+            return_value=[{"success": False, "results": []}],
+        ):
+            with self.assertRaisesRegex(op.Blocked, "SCHEMA_READ_1_API"):
+                op.collect_schema()
+
+    def test_mutation_command_is_one_exact_file_only_action(self):
+        self.assertEqual(
+            op.mutation_command(),
+            [
+                str(op.WRANGLER),
+                "d1", "execute", "DB",
+                "--remote", "--file", op.MIGRATION_PATH,
+                "--yes", "--config", op.CONFIG_PATH,
+            ],
+        )
+        joined = " ".join(op.mutation_command())
+        self.assertNotIn("--command", op.mutation_command())
+        self.assertNotIn("versions upload", joined)
+        self.assertNotIn("versions deploy", joined)
+        self.assertNotIn("stats-remove-daily-visitor-hmac", joined)
+
+    def test_subprocess_is_fixed_user_and_nolog(self):
+        calls = []
+        def runner(args, **kwargs):
+            calls.append((list(args), kwargs))
+            return SimpleNamespace(returncode=0, stdout=b"{}", stderr=b"")
+        op.runtime_subprocess([str(op.WRANGLER), "noop"], runner=runner)
+        argv, kwargs = calls[0]
+        self.assertEqual(kwargs["user"], 1000)
+        self.assertEqual(kwargs["group"], 1000)
+        self.assertEqual(kwargs["extra_groups"], ())
+        self.assertEqual(kwargs["env"]["WRANGLER_WRITE_LOGS"], "false")
+        self.assertEqual(kwargs["env"]["WRANGLER_SEND_METRICS"], "false")
+        self.assertNotIn("WRANGLER_LOG", kwargs["env"])
+        self.assertNotIn("--version", argv)
+
+    def test_runtime_entry_requires_root(self):
+        with mock.patch.object(op.os, "geteuid", return_value=1000):
+            with self.assertRaisesRegex(op.Blocked, "RUNTIME_ROOT_REQUIRED"):
+                op.trusted_runtime_entry()
+
+    def test_preflight_digest_drift_blocks_before_schema_read(self):
+        with mock.patch.object(op, "trusted_runtime_entry"), \
+             mock.patch.object(op, "wrangler_package_version"), \
+             mock.patch.object(op, "exact_application_bytes", return_value={}), \
+             mock.patch.object(op, "log_snapshot", return_value=()), \
+             mock.patch.object(op, "collect_remote_evidence", return_value={"bad": 1}), \
+             mock.patch.object(op, "collect_schema") as schema:
+            with self.assertRaisesRegex(op.Blocked, "REMOTE_EVIDENCE_DRIFT"):
+                op.preflight()
+        schema.assert_not_called()
+
+    def test_preflight_log_write_blocks_before_mutation(self):
+        with mock.patch.object(op, "trusted_runtime_entry"), \
+             mock.patch.object(op, "wrangler_package_version"), \
+             mock.patch.object(op, "exact_application_bytes", return_value={}), \
+             mock.patch.object(op, "log_snapshot", side_effect=[(), (("x", 1, 1),)]), \
+             mock.patch.object(op, "collect_remote_evidence", return_value=remote()), \
+             mock.patch.object(op, "collect_schema", return_value=before()):
+            with self.assertRaisesRegex(op.Blocked, "PREFLIGHT_LOG_WRITE"):
+                op.preflight()
+
+    def test_execute_dispatches_exactly_one_mutation(self):
+        calls = []
+        def runner(args, **kwargs):
+            calls.append(list(args))
+            return SimpleNamespace(returncode=0, stdout=b"ok", stderr=b"")
+        with mock.patch.object(op, "preflight", return_value={}), \
+             mock.patch.object(op, "exact_application_bytes", return_value={}), \
+             mock.patch.object(op, "log_snapshot", return_value=()), \
+             mock.patch.object(op, "collect_schema", return_value=after()):
+            result = op.execute_once(runner=runner)
+        self.assertTrue(result["mutation_started"])
+        self.assertEqual(calls, [op.mutation_command()])
+
+    def test_mutation_failure_is_terminal_no_retry(self):
+        calls = []
+        def runner(args, **kwargs):
+            calls.append(list(args))
+            return SimpleNamespace(returncode=1, stdout=b"", stderr=b"redacted")
+        with mock.patch.object(op, "preflight", return_value={}), \
+             mock.patch.object(op, "exact_application_bytes", return_value={}), \
+             mock.patch.object(op, "log_snapshot", return_value=()):
+            with self.assertRaisesRegex(
+                op.MutationUnknown, "MIGRATION_OUTCOME_UNKNOWN"
+            ):
+                op.execute_once(runner=runner)
+        self.assertEqual(calls, [op.mutation_command()])
+
+    def test_post_verify_failure_is_terminal_no_retry(self):
+        calls = []
+        def runner(args, **kwargs):
+            calls.append(list(args))
+            return SimpleNamespace(returncode=0, stdout=b"ok", stderr=b"")
+        with mock.patch.object(op, "preflight", return_value={}), \
+             mock.patch.object(op, "exact_application_bytes", return_value={}), \
+             mock.patch.object(op, "log_snapshot", return_value=()), \
+             mock.patch.object(
+                 op, "collect_schema", side_effect=op.Blocked("read")
+             ):
+            with self.assertRaisesRegex(
+                op.MutationUnknown, "POST_SCHEMA_UNVERIFIED"
+            ):
+                op.execute_once(runner=runner)
+        self.assertEqual(calls, [op.mutation_command()])
+
+    def test_log_write_after_mutation_is_terminal(self):
+        with mock.patch.object(op, "preflight", return_value={}), \
+             mock.patch.object(op, "exact_application_bytes", return_value={}), \
+             mock.patch.object(
+                 op, "log_snapshot",
+                 side_effect=[(), (("unexpected.log", 1, 2),)]
+             ), \
+             mock.patch.object(
+                 op,
+                 "runtime_subprocess",
+                 return_value=SimpleNamespace(
+                     returncode=0, stdout=b"", stderr=b""
+                 ),
+             ):
+            with self.assertRaisesRegex(
+                op.MutationUnknown, "MIGRATION_LOG_WRITE_UNKNOWN"
+            ):
+                op.execute_once()
+
+    def test_source_has_no_secret_package_or_cleanup_surface(self):
+        text = SOURCE.read_text("utf-8")
+        for forbidden in (
+            "/etc/rpi5-secrets",
+            "CLOUDFLARE_API_TOKEN",
+            "npx --yes",
+            "npm install",
+            "stats-remove-daily-visitor-hmac.sql",
+            "versions upload",
+            "versions deploy",
+            "shell=True",
+        ):
+            self.assertNotIn(forbidden, text)
+
+
+if __name__ == "__main__":
+    unittest.main()

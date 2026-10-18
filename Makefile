@@ -217,6 +217,8 @@ test:
 	python3 ./tests/test-ausmalwiese-stats-wrangler-inventory-runtime-v1.py
 	python3 ./tests/test-ausmalwiese-stats-wrangler-versions-diagnostic-v1.py
 	python3 ./tests/test-ausmalwiese-stats-privacy-d1-migration-v1.py
+	python3 ./tests/test-ausmalwiese-stats-gate-a-d1-runtime-v1.py
+	python3 ./tests/test-ausmalwiese-stats-gate-a-d1-runtime-installer-v1.py
 	python3 ./tests/test-ausmalwiese-gsc-txt.py
 	python3 ./tests/test-ausmalwiese-legacy-redirect-source.py
 	python3 ./tests/test-ausmalwiese-redirect-inventory-source.py
