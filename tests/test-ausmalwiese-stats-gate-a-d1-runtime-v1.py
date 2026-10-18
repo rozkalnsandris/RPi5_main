@@ -107,7 +107,7 @@ class GateARuntimeTests(unittest.TestCase):
         )
         self.assertEqual(
             op.RUNTIME_SOURCE_COMMIT,
-            "34287444c32b3d04a89141748b0e645be6b4e5f2",
+            "9a8111f19f9d82395f331ed49409af22f4765db7",
         )
         self.assertEqual(
             op.canonical_sha256(remote()), op.REMOTE_EVIDENCE_SHA256
