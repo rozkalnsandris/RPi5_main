@@ -35,6 +35,7 @@ test:
 	python3 ./tests/test-coloring-pages-drive-ingest-operator-v1.py
 	python3 ./tests/test-coloring-pages-sitemap-publisher-v1.py
 	python3 ./tests/test-ausmalwiese-sitemap-writer-gate-v1.py
+	python3 ./tests/test-ausmalwiese-sitemap-writer-gate-installer-v1.py
 	python3 ./tests/test-coloring-pages-sitemap-installer-v1.py
 	python3 ./tests/test-coloring-pages-sitemap-post-publish-v1.py
 	python3 ./tests/test-ausmalwiese-catalog-hide-v1.py

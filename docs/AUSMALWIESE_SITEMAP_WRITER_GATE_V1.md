@@ -43,6 +43,23 @@ static cron/script audits were insufficient to close this race.
    This gate grants no restore, restart, deploy, Cloudflare or DNS authority.
    The `/q` Worker and final legacy-host 301 remain separate cutover gates.
 
+## First-install-only installer source
+
+The reviewed gate source is delivered together with a source-only installer at
+`scripts/install-ausmalwiese-sitemap-writer-gate-v1.py`. It pins the gate's
+executable Git blob `f189665fa7fbbe18f0b2ef748a7d6f588956fe91`, requires an
+exact clean `RPi5_main/main` checkout, and targets only
+`/usr/local/bin/ausmalwiese-sitemap-writer-gate` as root:root `0755`.
+`--check` is read-only; `--apply` is first-install-only, uses O_EXCL/O_NOFOLLOW,
+and never overwrites or repairs an existing path. After its first file creation,
+any error is STOP with partial state preserved: no retry, rollback or cleanup.
+
+The installer being merged is **not installation authority**. Executing either
+root preflight or installation on RPi5 requires a separately explicit owner
+LIVE/review authorization bound to the then-current exact `main` SHA. Installing
+the gate also does not authorize stopping/restoring cron or deploy timers,
+running the gate against LIVE state, or publishing the sitemap.
+
 ## Source contract / trust boundaries
 
 Source file: `ops/bin/ausmalwiese-sitemap-writer-gate`.
