@@ -10,7 +10,7 @@ PR #1100. It does not replace or weaken the later Worker takeover gate.
 - reviewed `coloring-pages` evidence commit:
   `7f07c226105e26c0ca9cf91eb150a3e8f585c5ea`
 - exact local runtime checkout commit:
-  `34287444c32b3d04a89141748b0e645be6b4e5f2`
+  `9a8111f19f9d82395f331ed49409af22f4765db7`
 - Worker blob:
   `c2ac9da6e0701103e0041b30db7dfbea4298f96c`
 - Wrangler config blob:
@@ -32,7 +32,7 @@ Source:
 `scripts/ausmalwiese_stats_gate_a_d1_runtime_v1.py`
 
 Git blob:
-`90fa7c7c829a778bcea14e815daf27fcb795f2f2`
+`866d40e896a900f00ead6087c98fa350ce977487`
 
 Future installed entrypoint:
 `/usr/local/sbin/rpi5-ausmalwiese-stats-gate-a-d1-migrate`
@@ -67,7 +67,7 @@ The installed runtime must, in this order:
 
 1. verify its root-owned installed entrypoint;
 2. verify the exact local `coloring-pages` checkout commit
-   `34287444c32b3d04a89141748b0e645be6b4e5f2`;
+   `9a8111f19f9d82395f331ed49409af22f4765db7`;
 3. verify Worker/config/migration working bytes against their exact Git blobs;
    those three blobs are unchanged from the reviewed evidence commit;
 4. verify local Wrangler package version;
@@ -119,7 +119,7 @@ Source:
 `scripts/install-ausmalwiese-stats-gate-a-d1-runtime-v1.py`
 
 The installer may install only the exact runtime blob
-`90fa7c7c829a778bcea14e815daf27fcb795f2f2` into the fixed target. A first
+`866d40e896a900f00ead6087c98fa350ce977487` into the fixed target. A first
 install still requires target absence and bounded GNU `cp` no-clobber
 semantics.
 
