@@ -1,16 +1,16 @@
 {
   "schema_version": 2,
   "status": "SOURCE_ONLY_REPORT_WRANGLER_DEPLOY_NO_LIVE",
-  "issue": 1095,
+  "issue": 1098,
   "repository": "rozkalnsandris/RPi5_main",
   "worker": "coloring-pages-report-v1",
   "wrangler_version": "4.135.0",
   "source_repo": "rozkalnsandris/coloring-pages",
-  "source_commit": "15059f7178afcb6c14ad88a22d46f5a04c9e07cf",
+  "source_commit": "7f07c226105e26c0ca9cf91eb150a3e8f585c5ea",
   "worker_path": "cloudflare/report-worker.mjs",
   "worker_blob": "50bbcd868aa9f91b7fb6d78a2925e867380ef421",
   "config_path": "cloudflare/wrangler.report.json",
-  "config_blob": "2765e88f4c5ee7a01a5380ef52e4ff8c0688c9e6",
+  "config_blob": "6ef838ec056c3815416e3a8521c5322bd33b4fed",
   "routes": [
     {
       "pattern": "ausmalwiese.de/api/report",
@@ -23,7 +23,9 @@
   ],
   "email_binding": {
     "name": "EMAIL",
-    "destination": "pinned-config-blob-only"
+    "destination_local_part": "INFO",
+    "destination_domain": "ausmalwiese.de",
+    "destination_source": "assembled-fixed-config"
   },
   "deploy_flags": [
     "--no-bundle",
@@ -36,6 +38,7 @@
     "latest-equals-single-active-100-percent",
     "exact-two-report-routes",
     "exact-one-send-email-binding",
+    "exact-info-destination-case",
     "sanitized-email-send-failure-diagnostic-by-exact-worker-blob"
   ],
   "send_failure_diagnostic": {

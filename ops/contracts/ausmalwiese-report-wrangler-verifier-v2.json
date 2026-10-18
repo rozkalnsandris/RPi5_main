@@ -1,15 +1,21 @@
 {
   "schema_version": 2,
   "status": "SOURCE_ONLY_REPORT_WRANGLER_VERIFY_NO_NETWORK",
-  "issue": 1095,
+  "issue": 1098,
   "repository": "rozkalnsandris/RPi5_main",
   "worker": "coloring-pages-report-v1",
   "wrangler_version": "4.135.0",
-  "source_commit": "15059f7178afcb6c14ad88a22d46f5a04c9e07cf",
+  "source_commit": "7f07c226105e26c0ca9cf91eb150a3e8f585c5ea",
   "worker_blob": "50bbcd868aa9f91b7fb6d78a2925e867380ef421",
-  "config_blob": "2765e88f4c5ee7a01a5380ef52e4ff8c0688c9e6",
+  "config_blob": "6ef838ec056c3815416e3a8521c5322bd33b4fed",
   "deploy_source": "scripts/ausmalwiese_report_wrangler_deploy_v1.py",
-  "deploy_blob": "6a5b15e121bbca41b6b33582bcc62964df723927",
+  "deploy_blob": "b960b752ab5b91594b174f06fb66da4e62806be8",
+  "email_binding": {
+    "name": "EMAIL",
+    "destination_local_part": "INFO",
+    "destination_domain": "ausmalwiese.de",
+    "destination_source": "assembled-fixed-config"
+  },
   "send_failure_diagnostic": {
     "event": "report_email_send_failed",
     "fields": [

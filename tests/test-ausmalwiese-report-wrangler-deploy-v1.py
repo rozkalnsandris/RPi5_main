@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline tests for the minimal Ausmalwiese report Wrangler deploy contract (#1095)."""
+"""Offline tests for the minimal Ausmalwiese report Wrangler deploy contract (#1098)."""
 from __future__ import annotations
 import copy
 import importlib.util
@@ -11,7 +11,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "scripts/ausmalwiese_report_wrangler_deploy_v1.py"
-spec = importlib.util.spec_from_file_location("report_wrangler_deploy_1095", SOURCE)
+spec = importlib.util.spec_from_file_location("report_wrangler_deploy_1098", SOURCE)
 plan = importlib.util.module_from_spec(spec)
 assert spec and spec.loader
 spec.loader.exec_module(plan)
@@ -37,16 +37,16 @@ def report_snapshot():
 class ReportWranglerDeployTests(unittest.TestCase):
     def test_contract_is_source_only_minimal_and_has_no_stats_or_secrets(self):
         data=json.loads(plan.CONTRACT.read_text("utf-8")); plan.check_contract(data)
-        self.assertEqual(data["issue"],1095); self.assertEqual(data["send_failure_diagnostic"],plan.SEND_FAILURE_DIAGNOSTIC); self.assertEqual(data["email_binding"],{"name":plan.EMAIL_BINDING_NAME,"destination":"pinned-config-blob-only"})
+        self.assertEqual(data["issue"],1098); self.assertEqual(data["send_failure_diagnostic"],plan.SEND_FAILURE_DIAGNOSTIC); self.assertEqual(data["email_binding"],{"name":plan.EMAIL_BINDING_NAME,"destination_local_part":plan.DESTINATION_LOCAL_PART,"destination_domain":plan.DESTINATION_DOMAIN,"destination_source":"assembled-fixed-config"})
         self.assertFalse(data["launcher"]["requires_report_secrets"]); self.assertFalse(data["launcher"]["stats_dependency"])
         self.assertNotIn("stats_worker",data); self.assertNotIn("required_secret_names",data); self.assertNotIn("ratelimits",data)
         self.assertFalse(data["actions"]["credential_or_secret_access"]); self.assertFalse(data["actions"]["live"])
         self.assertEqual(plan.main(["--check-contract"]),0)
 
     def test_exact_minimal_application_repin(self):
-        self.assertEqual(plan.SOURCE_COMMIT,"15059f7178afcb6c14ad88a22d46f5a04c9e07cf")
+        self.assertEqual(plan.SOURCE_COMMIT,"7f07c226105e26c0ca9cf91eb150a3e8f585c5ea")
         self.assertEqual(plan.WORKER_BLOB,"50bbcd868aa9f91b7fb6d78a2925e867380ef421")
-        self.assertEqual(plan.CONFIG_BLOB,"2765e88f4c5ee7a01a5380ef52e4ff8c0688c9e6")
+        self.assertEqual(plan.CONFIG_BLOB,"6ef838ec056c3815416e3a8521c5322bd33b4fed")
 
     def test_sanitized_send_failure_diagnostic_is_source_provenance_only(self):
         self.assertEqual(
@@ -71,8 +71,9 @@ class ReportWranglerDeployTests(unittest.TestCase):
     def test_exact_reviewed_config_is_only_two_routes_and_email_binding(self):
         good=plan.expected_config(); self.assertEqual(plan.validate_config(good),good)
         self.assertEqual(good["routes"],plan.ROUTES); self.assertEqual(good["send_email"][0]["name"],plan.EMAIL_BINDING_NAME)
-        alternate=plan.expected_config("different-destination")
-        self.assertEqual(plan.validate_config(alternate),alternate)
+        self.assertEqual(good["send_email"][0]["destination_address"],plan.destination_address())
+        lower=copy.deepcopy(good); lower["send_email"][0]["destination_address"]=plan.DESTINATION_LOCAL_PART.lower()+"@"+plan.DESTINATION_DOMAIN
+        with self.assertRaisesRegex(plan.Blocked,"CONFIG_DRIFT"): plan.validate_config(lower)
         for forbidden in ("secrets","ratelimits","vars"): self.assertNotIn(forbidden,good)
         for mutation in (
             lambda x:x.update(name="other-worker"),
