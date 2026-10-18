@@ -216,6 +216,37 @@ class GateARuntimeTests(unittest.TestCase):
             with self.assertRaisesRegex(op.Blocked, "PREFLIGHT_LOG_WRITE"):
                 op.preflight()
 
+    def test_runtime_preflight_cli_is_read_only(self):
+        expected = {
+            "remote_evidence_sha256": op.REMOTE_EVIDENCE_SHA256,
+            "pre_schema_sha256": op.PRE_SCHEMA_SHA256,
+            "migration_blob": op.MIGRATION_BLOB,
+        }
+        with mock.patch.object(op, "preflight", return_value=expected) as preflight, \
+             mock.patch.object(op, "execute_once") as execute, \
+             mock.patch("builtins.print") as emit:
+            self.assertEqual(op.main(["--runtime-preflight"]), 0)
+        preflight.assert_called_once_with()
+        execute.assert_not_called()
+        payload = emit.call_args.args[0]
+        data = json.loads(payload)
+        self.assertEqual(data["status"], "PREFLIGHT_PASS")
+        self.assertFalse(data["mutation_started"])
+        self.assertEqual(data["remote_evidence_sha256"], op.REMOTE_EVIDENCE_SHA256)
+        self.assertEqual(data["pre_schema_sha256"], op.PRE_SCHEMA_SHA256)
+        self.assertEqual(data["migration_blob"], op.MIGRATION_BLOB)
+
+    def test_runtime_preflight_rejects_mutation_arguments(self):
+        with mock.patch.object(op, "preflight") as preflight, \
+             mock.patch.object(op, "execute_once") as execute, \
+             mock.patch("builtins.print"):
+            self.assertEqual(
+                op.main(["--runtime-preflight", "--confirm", "unexpected"]),
+                2,
+            )
+        preflight.assert_not_called()
+        execute.assert_not_called()
+
     def test_execute_dispatches_exactly_one_mutation(self):
         calls = []
         def runner(args, **kwargs):
