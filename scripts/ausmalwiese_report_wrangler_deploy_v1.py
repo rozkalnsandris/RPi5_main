@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Source-only minimal Wrangler deploy contract for Ausmalwiese reports (#1102).
+"""Source-only minimal Wrangler deploy contract for Ausmalwiese reports (#1104).
 
 The active report path is deliberately small: one Worker, two exact routes and
 one Cloudflare Email Service send_email binding. There are no Report secrets,
@@ -24,16 +24,16 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "ops/contracts/ausmalwiese-report-wrangler-deploy-v1.json"
 
-ISSUE = 1102
+ISSUE = 1104
 WORKER = "coloring-pages-report-v1"
 WRANGLER_VERSION = "4.135.0"
 
 SOURCE_REPO = "rozkalnsandris/coloring-pages"
-SOURCE_COMMIT = "9457bab3c0c6b76fd42011b1bf19965cb39b52db"
+SOURCE_COMMIT = "34287444c32b3d04a89141748b0e645be6b4e5f2"
 WORKER_PATH = "cloudflare/report-worker.mjs"
 WORKER_BLOB = "6418a4bebad9f89a2e1045d0ad6476e66549993c"
 CONFIG_PATH = "cloudflare/wrangler.report.json"
-CONFIG_BLOB = "6ef838ec056c3815416e3a8521c5322bd33b4fed"
+CONFIG_BLOB = "78f60e119092dca969a35b8bbac1b82ba68a0084"
 
 COMPATIBILITY_DATE = "2026-10-18"
 ROUTES = [
@@ -44,6 +44,7 @@ EMAIL_BINDING_NAME = "EMAIL"
 DESTINATION_LOCAL_PART = "INFO"
 DESTINATION_DOMAIN = "ausmalwiese.de"
 BINDING_KINDS = {"EMAIL": "send_email"}
+OBSERVABILITY = {"logs": {"enabled": True}, "traces": {"enabled": False}}
 SEND_FAILURE_DIAGNOSTIC = {
     "event": "report_email_send_failed",
     "fields": ["event", "code"],
@@ -110,6 +111,7 @@ def expected_config() -> dict[str, Any]:
         "workers_dev": False,
         "preview_urls": False,
         "no_bundle": True,
+        "observability": OBSERVABILITY,
         "routes": ROUTES,
         "send_email": [
             {
@@ -444,7 +446,7 @@ def validate_report_snapshot(snapshot: Any) -> dict[str, Any]:
     keys = {
         "schema", "worker", "wrangler_version", "source_commit", "source_blob",
         "config_blob", "latest_version", "active_versions", "version_tag",
-        "version_message", "routes", "binding_kinds",
+        "version_message", "routes", "binding_kinds", "observability",
     }
     need(type(snapshot) is dict and set(snapshot) == keys,
          "REPORT_SNAPSHOT_FIELDS")
@@ -475,7 +477,8 @@ def validate_report_snapshot(snapshot: Any) -> dict[str, Any]:
         and snapshot["version_tag"] == "git:" + SOURCE_COMMIT
         and snapshot["version_message"] == expected_message
         and snapshot["routes"] == ROUTES
-        and snapshot["binding_kinds"] == BINDING_KINDS,
+        and snapshot["binding_kinds"] == BINDING_KINDS
+        and snapshot["observability"] == OBSERVABILITY,
         "REPORT_SNAPSHOT_DRIFT",
     )
     return snapshot
@@ -496,6 +499,7 @@ def expected_contract() -> dict[str, Any]:
         "config_path": CONFIG_PATH,
         "config_blob": CONFIG_BLOB,
         "routes": ROUTES,
+        "observability": OBSERVABILITY,
         "email_binding": {
             "name": EMAIL_BINDING_NAME,
             "destination_local_part": DESTINATION_LOCAL_PART,
@@ -509,6 +513,7 @@ def expected_contract() -> dict[str, Any]:
             "exact-two-report-routes",
             "exact-one-send-email-binding",
             "exact-info-destination-case",
+            "exact-observability-logs-enabled-traces-disabled",
             "sanitized-email-send-failure-diagnostic-by-exact-worker-blob",
         ],
         "send_failure_diagnostic": SEND_FAILURE_DIAGNOSTIC,
