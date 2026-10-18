@@ -6,7 +6,9 @@ import copy
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
+import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest import mock
@@ -174,6 +176,76 @@ class GateARuntimeTests(unittest.TestCase):
         self.assertNotIn("versions upload", joined)
         self.assertNotIn("versions deploy", joined)
         self.assertNotIn("stats-remove-daily-visitor-hmac", joined)
+
+    def _wrangler_symlink_fixture(self, root: Path):
+        outer = root / ".local/bin/wrangler"
+        bin_dir = root / ".local/share/wrangler-cli/.bin"
+        node_bin = root / ".local/share/wrangler-cli/node_modules/.bin/wrangler"
+        real = (
+            root
+            / ".local/share/wrangler-cli/node_modules/wrangler/bin/wrangler.js"
+        )
+        outer.parent.mkdir(parents=True)
+        node_bin.parent.mkdir(parents=True)
+        real.parent.mkdir(parents=True)
+        real.write_text("#!/usr/bin/env node\n", encoding="utf-8")
+        real.chmod(0o700)
+        bin_dir.symlink_to("node_modules/.bin")
+        node_bin.symlink_to("../wrangler/bin/wrangler.js")
+        outer.symlink_to("../share/wrangler-cli/.bin/wrangler")
+        return outer, bin_dir, node_bin, real
+
+    def test_wrangler_binary_accepts_only_exact_installed_symlink_chain(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            outer, bin_dir, node_bin, real = self._wrangler_symlink_fixture(
+                Path(tmp)
+            )
+            patches = (
+                mock.patch.object(op, "WRANGLER", outer),
+                mock.patch.object(op, "WRANGLER_BIN_DIR", bin_dir),
+                mock.patch.object(op, "WRANGLER_NODE_BIN", node_bin),
+                mock.patch.object(op, "WRANGLER_REAL", real),
+                mock.patch.object(op, "RUNTIME_OPERATOR_UID", os.getuid()),
+                mock.patch.object(op, "RUNTIME_OPERATOR_GID", os.getgid()),
+            )
+            with patches[0], patches[1], patches[2], patches[3], \
+                 patches[4], patches[5]:
+                op.wrangler_binary_trusted()
+
+    def test_wrangler_binary_rejects_link_target_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            outer, bin_dir, node_bin, real = self._wrangler_symlink_fixture(
+                Path(tmp)
+            )
+            outer.unlink()
+            outer.symlink_to("../share/other/.bin/wrangler")
+            with mock.patch.object(op, "WRANGLER", outer), \
+                 mock.patch.object(op, "WRANGLER_BIN_DIR", bin_dir), \
+                 mock.patch.object(op, "WRANGLER_NODE_BIN", node_bin), \
+                 mock.patch.object(op, "WRANGLER_REAL", real), \
+                 mock.patch.object(op, "RUNTIME_OPERATOR_UID", os.getuid()), \
+                 mock.patch.object(op, "RUNTIME_OPERATOR_GID", os.getgid()):
+                with self.assertRaisesRegex(
+                    op.Blocked, "WRANGLER_BINARY_UNTRUSTED"
+                ):
+                    op.wrangler_binary_trusted()
+
+    def test_wrangler_binary_rejects_group_writable_real_target(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            outer, bin_dir, node_bin, real = self._wrangler_symlink_fixture(
+                Path(tmp)
+            )
+            real.chmod(0o720)
+            with mock.patch.object(op, "WRANGLER", outer), \
+                 mock.patch.object(op, "WRANGLER_BIN_DIR", bin_dir), \
+                 mock.patch.object(op, "WRANGLER_NODE_BIN", node_bin), \
+                 mock.patch.object(op, "WRANGLER_REAL", real), \
+                 mock.patch.object(op, "RUNTIME_OPERATOR_UID", os.getuid()), \
+                 mock.patch.object(op, "RUNTIME_OPERATOR_GID", os.getgid()):
+                with self.assertRaisesRegex(
+                    op.Blocked, "WRANGLER_BINARY_UNTRUSTED"
+                ):
+                    op.wrangler_binary_trusted()
 
     def test_subprocess_is_fixed_user_and_nolog(self):
         calls = []
