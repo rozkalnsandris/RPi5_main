@@ -102,6 +102,19 @@ class GateARuntimeTests(unittest.TestCase):
         expected = hashlib.sha1(b"blob 1\x00x").hexdigest()
         self.assertEqual(op.git_blob(raw), expected)
 
+    def test_git_ls_tree_parser_accepts_real_tab(self):
+        line = "100644 blob " + "a" * 40 + "\tcloudflare/stats-worker.js"
+        match = op.TREE_LINE.fullmatch(line)
+        self.assertIsNotNone(match)
+        self.assertEqual(match.group(1), "100644")
+        self.assertEqual(match.group(2), "a" * 40)
+        self.assertEqual(match.group(3), "cloudflare/stats-worker.js")
+        self.assertIsNone(
+            op.TREE_LINE.fullmatch(
+                "100644 blob " + "a" * 40 + r"\tcloudflare/stats-worker.js"
+            )
+        )
+
     def test_owner_binding_is_exact(self):
         op.validate_owner_binding(
             op.REMOTE_EVIDENCE_SHA256,

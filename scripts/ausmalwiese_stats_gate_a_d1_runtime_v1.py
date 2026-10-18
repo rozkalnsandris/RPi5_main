@@ -59,8 +59,7 @@ RUNTIME_ENV = {
     "WRANGLER_WRITE_LOGS": "false",
 }
 
-UUID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
-KNOWN_BINDINGS = {
+        match = TREE_LINE.fullmatch(line)
     "DB": "d1",
     "RATE_LIMITER": "ratelimit",
     "PUBLIC_ORIGIN": "plain_text",
