@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Source-only post-deploy provenance verifier for minimal Ausmalwiese reports (#1098)."""
+"""Source-only post-deploy provenance verifier for minimal Ausmalwiese reports (#1102)."""
 from __future__ import annotations
 import json
 from pathlib import Path
@@ -7,14 +7,14 @@ from typing import Any
 
 ROOT=Path(__file__).resolve().parents[1]
 CONTRACT=ROOT/"ops/contracts/ausmalwiese-report-wrangler-verifier-v2.json"
-ISSUE=1098
+ISSUE=1102
 WORKER="coloring-pages-report-v1"
 WRANGLER_VERSION="4.135.0"
-SOURCE_COMMIT="7f07c226105e26c0ca9cf91eb150a3e8f585c5ea"
-WORKER_BLOB="50bbcd868aa9f91b7fb6d78a2925e867380ef421"
+SOURCE_COMMIT="9457bab3c0c6b76fd42011b1bf19965cb39b52db"
+WORKER_BLOB="6418a4bebad9f89a2e1045d0ad6476e66549993c"
 CONFIG_BLOB="6ef838ec056c3815416e3a8521c5322bd33b4fed"
 DEPLOY_SOURCE="scripts/ausmalwiese_report_wrangler_deploy_v1.py"
-DEPLOY_BLOB="b960b752ab5b91594b174f06fb66da4e62806be8"
+DEPLOY_BLOB="4cd4bd8e435761b7be177114d80cd946ae333aa9"
 DESTINATION_LOCAL_PART="INFO"
 DESTINATION_DOMAIN="ausmalwiese.de"
 SETTINGS_METHOD="GET"

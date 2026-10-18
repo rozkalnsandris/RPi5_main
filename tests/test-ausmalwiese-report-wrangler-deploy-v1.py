@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline tests for the minimal Ausmalwiese report Wrangler deploy contract (#1098)."""
+"""Offline tests for the minimal Ausmalwiese report Wrangler deploy contract (#1102)."""
 from __future__ import annotations
 import copy
 import importlib.util
@@ -11,7 +11,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "scripts/ausmalwiese_report_wrangler_deploy_v1.py"
-spec = importlib.util.spec_from_file_location("report_wrangler_deploy_1098", SOURCE)
+spec = importlib.util.spec_from_file_location("report_wrangler_deploy_1102", SOURCE)
 plan = importlib.util.module_from_spec(spec)
 assert spec and spec.loader
 spec.loader.exec_module(plan)
@@ -37,15 +37,15 @@ def report_snapshot():
 class ReportWranglerDeployTests(unittest.TestCase):
     def test_contract_is_source_only_minimal_and_has_no_stats_or_secrets(self):
         data=json.loads(plan.CONTRACT.read_text("utf-8")); plan.check_contract(data)
-        self.assertEqual(data["issue"],1098); self.assertEqual(data["send_failure_diagnostic"],plan.SEND_FAILURE_DIAGNOSTIC); self.assertEqual(data["email_binding"],{"name":plan.EMAIL_BINDING_NAME,"destination_local_part":plan.DESTINATION_LOCAL_PART,"destination_domain":plan.DESTINATION_DOMAIN,"destination_source":"assembled-fixed-config"})
+        self.assertEqual(data["issue"],1102); self.assertEqual(data["send_failure_diagnostic"],plan.SEND_FAILURE_DIAGNOSTIC); self.assertEqual(data["email_binding"],{"name":plan.EMAIL_BINDING_NAME,"destination_local_part":plan.DESTINATION_LOCAL_PART,"destination_domain":plan.DESTINATION_DOMAIN,"destination_source":"assembled-fixed-config"})
         self.assertFalse(data["launcher"]["requires_report_secrets"]); self.assertFalse(data["launcher"]["stats_dependency"])
         self.assertNotIn("stats_worker",data); self.assertNotIn("required_secret_names",data); self.assertNotIn("ratelimits",data)
         self.assertFalse(data["actions"]["credential_or_secret_access"]); self.assertFalse(data["actions"]["live"])
         self.assertEqual(plan.main(["--check-contract"]),0)
 
     def test_exact_minimal_application_repin(self):
-        self.assertEqual(plan.SOURCE_COMMIT,"7f07c226105e26c0ca9cf91eb150a3e8f585c5ea")
-        self.assertEqual(plan.WORKER_BLOB,"50bbcd868aa9f91b7fb6d78a2925e867380ef421")
+        self.assertEqual(plan.SOURCE_COMMIT,"9457bab3c0c6b76fd42011b1bf19965cb39b52db")
+        self.assertEqual(plan.WORKER_BLOB,"6418a4bebad9f89a2e1045d0ad6476e66549993c")
         self.assertEqual(plan.CONFIG_BLOB,"6ef838ec056c3815416e3a8521c5322bd33b4fed")
 
     def test_sanitized_send_failure_diagnostic_is_source_provenance_only(self):

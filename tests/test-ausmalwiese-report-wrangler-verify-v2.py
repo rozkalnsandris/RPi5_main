@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
-"""Offline tests for the minimal report provenance verifier (#1098)."""
+"""Offline tests for the minimal report provenance verifier (#1102)."""
 from __future__ import annotations
 import copy, importlib.util, json
 from pathlib import Path
 import unittest
 ROOT=Path(__file__).resolve().parents[1]
 SOURCE=ROOT/"scripts/ausmalwiese_report_wrangler_verify_v2.py"
-spec=importlib.util.spec_from_file_location("report_wrangler_verify_1098",SOURCE); plan=importlib.util.module_from_spec(spec); assert spec and spec.loader; spec.loader.exec_module(plan)
+spec=importlib.util.spec_from_file_location("report_wrangler_verify_1102",SOURCE); plan=importlib.util.module_from_spec(spec); assert spec and spec.loader; spec.loader.exec_module(plan)
 VERSION="12345678-1234-4234-a234-123456789abc"
 def annotations(): return {"workers/message":plan.expected_message(),"workers/tag":plan.expected_tag(),"workers/triggered_by":"upload"}
 class ReportWranglerVerifyV2Tests(unittest.TestCase):
     def test_contract_pins_minimal_deploy_source_and_has_no_old_dependencies(self):
         data=json.loads(plan.CONTRACT.read_text("utf-8")); plan.check_contract(data)
-        self.assertEqual(data["deploy_blob"],"b960b752ab5b91594b174f06fb66da4e62806be8"); self.assertEqual(data["email_binding"],{"name":"EMAIL","destination_local_part":"INFO","destination_domain":"ausmalwiese.de","destination_source":"assembled-fixed-config"}); self.assertEqual(data["send_failure_diagnostic"],plan.SEND_FAILURE_DIAGNOSTIC)
+        self.assertEqual(data["deploy_blob"],"4cd4bd8e435761b7be177114d80cd946ae333aa9"); self.assertEqual(data["email_binding"],{"name":"EMAIL","destination_local_part":"INFO","destination_domain":"ausmalwiese.de","destination_source":"assembled-fixed-config"}); self.assertEqual(data["send_failure_diagnostic"],plan.SEND_FAILURE_DIAGNOSTIC)
         self.assertFalse(data["verification"]["secret_inventory_required"]); self.assertFalse(data["verification"]["public_config_endpoint_required"]); self.assertFalse(data["verification"]["stats_snapshot_required"]); self.assertEqual(plan.main(["--check-contract"]),0)
     def test_exact_application_and_diagnostic_provenance(self):
-        self.assertEqual(plan.SOURCE_COMMIT,"7f07c226105e26c0ca9cf91eb150a3e8f585c5ea")
-        self.assertEqual(plan.WORKER_BLOB,"50bbcd868aa9f91b7fb6d78a2925e867380ef421")
-        self.assertEqual(plan.DEPLOY_BLOB,"b960b752ab5b91594b174f06fb66da4e62806be8")
+        self.assertEqual(plan.SOURCE_COMMIT,"9457bab3c0c6b76fd42011b1bf19965cb39b52db")
+        self.assertEqual(plan.WORKER_BLOB,"6418a4bebad9f89a2e1045d0ad6476e66549993c")
+        self.assertEqual(plan.DEPLOY_BLOB,"4cd4bd8e435761b7be177114d80cd946ae333aa9")
         self.assertEqual(plan.CONFIG_BLOB,"6ef838ec056c3815416e3a8521c5322bd33b4fed")
         self.assertEqual(plan.DESTINATION_LOCAL_PART,"INFO")
         self.assertEqual(plan.DESTINATION_DOMAIN,"ausmalwiese.de")

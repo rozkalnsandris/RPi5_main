@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Source-only minimal Wrangler deploy contract for Ausmalwiese reports (#1098).
+"""Source-only minimal Wrangler deploy contract for Ausmalwiese reports (#1102).
 
 The active report path is deliberately small: one Worker, two exact routes and
 one Cloudflare Email Service send_email binding. There are no Report secrets,
@@ -24,14 +24,14 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "ops/contracts/ausmalwiese-report-wrangler-deploy-v1.json"
 
-ISSUE = 1098
+ISSUE = 1102
 WORKER = "coloring-pages-report-v1"
 WRANGLER_VERSION = "4.135.0"
 
 SOURCE_REPO = "rozkalnsandris/coloring-pages"
-SOURCE_COMMIT = "7f07c226105e26c0ca9cf91eb150a3e8f585c5ea"
+SOURCE_COMMIT = "9457bab3c0c6b76fd42011b1bf19965cb39b52db"
 WORKER_PATH = "cloudflare/report-worker.mjs"
-WORKER_BLOB = "50bbcd868aa9f91b7fb6d78a2925e867380ef421"
+WORKER_BLOB = "6418a4bebad9f89a2e1045d0ad6476e66549993c"
 CONFIG_PATH = "cloudflare/wrangler.report.json"
 CONFIG_BLOB = "6ef838ec056c3815416e3a8521c5322bd33b4fed"
 
