@@ -1,4 +1,4 @@
-# Ausmalwiese Report Worker — minimal Wrangler deploy contract (#1095)
+# Ausmalwiese Report Worker — minimal Wrangler deploy contract (#1098)
 
 SOURCE ONLY. No merge, LIVE deploy, Cloudflare mutation, credential access or email send is authorized by this document.
 
@@ -6,11 +6,11 @@ SOURCE ONLY. No merge, LIVE deploy, Cloudflare mutation, credential access or em
 
 The canonical Report Worker application is owned by rozkalnsandris/coloring-pages:
 
-- commit: 15059f7178afcb6c14ad88a22d46f5a04c9e07cf
+- commit: 7f07c226105e26c0ca9cf91eb150a3e8f585c5ea
 - Worker: cloudflare/report-worker.mjs
 - Worker Git blob: 50bbcd868aa9f91b7fb6d78a2925e867380ef421
 - config: cloudflare/wrangler.report.json
-- config Git blob: 2765e88f4c5ee7a01a5380ef52e4ff8c0688c9e6
+- config Git blob: 6ef838ec056c3815416e3a8521c5322bd33b4fed
 - target Worker: coloring-pages-report-v1
 - Wrangler: 4.135.0
 
@@ -22,7 +22,7 @@ The reviewed config contains only two exact routes:
 and one Cloudflare Email Service send_email binding:
 
 - name: EMAIL
-- destination_address: fixed by the pinned coloring-pages config blob (not duplicated in RPi5_main)
+- destination_address: `INFO@ausmalwiese.de` (exact case is fail-closed by the runtime contract)
 
 There are no Report secrets, Turnstile bindings, rate-limit bindings, Report config endpoint or Stats dependency.
 
@@ -38,7 +38,7 @@ The root-owned installed entrypoint remains:
 
 The installed file is only a trust boundary. Runtime execution drops the Wrangler child to the fixed operator andris and uses that operator's existing Wrangler authentication context. It reads no protected Report secret file and creates no secret memfd.
 
-The runtime installer is repinned so a future separately authorized upgrade may replace the currently reviewed deploy source from RPi5_main b844c8447a04e7cf6b18adf1bcc5e85a1f893fc3 / blob 7a8ae854752c5f89a693638c6732b58342cdd813 with the #1095 deploy source blob 6a5b15e121bbca41b6b33582bcc62964df723927. Source merge does not install it.
+The runtime installer is repinned so a future separately authorized upgrade may replace the currently reviewed deploy source from RPi5_main 4baa94b39264c8a89c175f3fdefdfe78faa5b339 / blob 6a5b15e121bbca41b6b33582bcc62964df723927 with the #1098 deploy source blob 8bd1a76248cd3087fd1f877973cbb5a384f32884. Source merge does not install it.
 
 ## Read-only post-deploy proof
 
@@ -56,7 +56,7 @@ Mailbox delivery is a separate end-to-end check after LIVE activation.
 
 ## Provider model
 
-Cloudflare Email Service documentation reviewed 2026-10-18 documents a send_email Wrangler binding and env.EMAIL.send(). destination_address restricts the binding to one configured destination. RPi5_main pins the exact external config blob instead of duplicating the address in this public repository.
+Cloudflare Email Service documentation reviewed 2026-10-18 documents a send_email Wrangler binding and env.EMAIL.send(). destination_address restricts the binding to one configured destination. This repin additionally enforces the exact reviewed workaround destination `INFO@ausmalwiese.de`; lowercase `info@ausmalwiese.de` is rejected by the runtime contract. The Worker sender remains unchanged.
 
 References:
 

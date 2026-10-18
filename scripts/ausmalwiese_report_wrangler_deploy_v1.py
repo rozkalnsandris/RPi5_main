@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Source-only minimal Wrangler deploy contract for Ausmalwiese reports (#1095).
+"""Source-only minimal Wrangler deploy contract for Ausmalwiese reports (#1098).
 
 The active report path is deliberately small: one Worker, two exact routes and
 one Cloudflare Email Service send_email binding. There are no Report secrets,
@@ -24,16 +24,16 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "ops/contracts/ausmalwiese-report-wrangler-deploy-v1.json"
 
-ISSUE = 1095
+ISSUE = 1098
 WORKER = "coloring-pages-report-v1"
 WRANGLER_VERSION = "4.135.0"
 
 SOURCE_REPO = "rozkalnsandris/coloring-pages"
-SOURCE_COMMIT = "15059f7178afcb6c14ad88a22d46f5a04c9e07cf"
+SOURCE_COMMIT = "7f07c226105e26c0ca9cf91eb150a3e8f585c5ea"
 WORKER_PATH = "cloudflare/report-worker.mjs"
 WORKER_BLOB = "50bbcd868aa9f91b7fb6d78a2925e867380ef421"
 CONFIG_PATH = "cloudflare/wrangler.report.json"
-CONFIG_BLOB = "2765e88f4c5ee7a01a5380ef52e4ff8c0688c9e6"
+CONFIG_BLOB = "6ef838ec056c3815416e3a8521c5322bd33b4fed"
 
 COMPATIBILITY_DATE = "2026-10-18"
 ROUTES = [
@@ -41,6 +41,7 @@ ROUTES = [
     {"pattern": "www.ausmalwiese.de/api/report", "zone_name": "ausmalwiese.de"},
 ]
 EMAIL_BINDING_NAME = "EMAIL"
+DESTINATION_ADDRESS = "INFO@ausmalwiese.de"
 BINDING_KINDS = {"EMAIL": "send_email"}
 SEND_FAILURE_DIAGNOSTIC = {
     "event": "report_email_send_failed",
@@ -96,7 +97,7 @@ def need(ok: bool, reason: str) -> None:
         raise Blocked(reason)
 
 
-def expected_config(destination_address: str = "fixed-destination") -> dict[str, Any]:
+def expected_config() -> dict[str, Any]:
     return {
         "name": WORKER,
         "main": "./report-worker.mjs",
@@ -108,7 +109,7 @@ def expected_config(destination_address: str = "fixed-destination") -> dict[str,
         "send_email": [
             {
                 "name": EMAIL_BINDING_NAME,
-                "destination_address": destination_address,
+                "destination_address": DESTINATION_ADDRESS,
             }
         ],
     }
@@ -126,13 +127,8 @@ def validate_config(config: Any) -> dict[str, Any]:
         "CONFIG_DRIFT",
     )
     destination = binding[0].get("destination_address")
-    need(
-        type(destination) is str
-        and 1 <= len(destination) <= 254
-        and all(32 <= ord(ch) < 127 for ch in destination),
-        "CONFIG_DRIFT",
-    )
-    need(config == expected_config(destination), "CONFIG_DRIFT")
+    need(destination == DESTINATION_ADDRESS, "CONFIG_DRIFT")
+    need(config == expected_config(), "CONFIG_DRIFT")
     return config
 
 
@@ -497,7 +493,7 @@ def expected_contract() -> dict[str, Any]:
         "routes": ROUTES,
         "email_binding": {
             "name": EMAIL_BINDING_NAME,
-            "destination": "pinned-config-blob-only",
+            "destination": DESTINATION_ADDRESS,
         },
         "deploy_flags": ["--no-bundle", "--strict", "--tag", "--message"],
         "post_deploy_requires": [
@@ -505,6 +501,7 @@ def expected_contract() -> dict[str, Any]:
             "latest-equals-single-active-100-percent",
             "exact-two-report-routes",
             "exact-one-send-email-binding",
+            "exact-info-destination-case",
             "sanitized-email-send-failure-diagnostic-by-exact-worker-blob",
         ],
         "send_failure_diagnostic": SEND_FAILURE_DIAGNOSTIC,
