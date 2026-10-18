@@ -1,4 +1,4 @@
-# Ausmalwiese Report Worker — minimal Wrangler deploy contract (#1098)
+# Ausmalwiese Report Worker — minimal Wrangler deploy contract (#1102)
 
 SOURCE ONLY. No merge, LIVE deploy, Cloudflare mutation, credential access or email send is authorized by this document.
 
@@ -6,9 +6,9 @@ SOURCE ONLY. No merge, LIVE deploy, Cloudflare mutation, credential access or em
 
 The canonical Report Worker application is owned by rozkalnsandris/coloring-pages:
 
-- commit: 7f07c226105e26c0ca9cf91eb150a3e8f585c5ea
+- commit: 9457bab3c0c6b76fd42011b1bf19965cb39b52db
 - Worker: cloudflare/report-worker.mjs
-- Worker Git blob: 50bbcd868aa9f91b7fb6d78a2925e867380ef421
+- Worker Git blob: 6418a4bebad9f89a2e1045d0ad6476e66549993c
 - config: cloudflare/wrangler.report.json
 - config Git blob: 6ef838ec056c3815416e3a8521c5322bd33b4fed
 - target Worker: coloring-pages-report-v1
@@ -41,7 +41,7 @@ The root-owned installed entrypoint remains:
 
 The installed file is only a trust boundary. Runtime execution drops the Wrangler child to the fixed operator andris and uses that operator's existing Wrangler authentication context. It reads no protected Report secret file and creates no secret memfd.
 
-The runtime installer is repinned so a future separately authorized upgrade may replace the currently reviewed deploy source from RPi5_main 4baa94b39264c8a89c175f3fdefdfe78faa5b339 / blob 6a5b15e121bbca41b6b33582bcc62964df723927 with the #1098 deploy source blob b960b752ab5b91594b174f06fb66da4e62806be8. Source merge does not install it.
+The runtime installer is repinned so a future separately authorized upgrade may replace the currently installed deploy source from RPi5_main 908c1a4767fc3bed44c37de85a50b282cdd23a04 / blob b960b752ab5b91594b174f06fb66da4e62806be8 with the #1102 deploy source blob 4cd4bd8e435761b7be177114d80cd946ae333aa9. Source merge does not install it.
 
 ## Read-only post-deploy proof
 
@@ -59,7 +59,7 @@ Mailbox delivery is a separate end-to-end check after LIVE activation.
 
 ## Provider model
 
-Cloudflare Email Service documentation reviewed 2026-10-18 documents a send_email Wrangler binding and env.EMAIL.send(). destination_address restricts the binding to one configured destination. This repin additionally enforces local-part `INFO` on domain `ausmalwiese.de`; lowercase local-part `info` is rejected by the runtime contract. The full destination value remains only in the pinned coloring-pages config. The Worker sender remains unchanged.
+Cloudflare Email Service documentation reviewed 2026-10-18 documents a send_email Wrangler binding and env.EMAIL.send(). The pinned Worker now uses Cloudflare `EmailMessage` with one fixed RFC 5322 message. destination_address restricts the binding to one configured destination. This repin additionally enforces local-part `INFO` on domain `ausmalwiese.de`; lowercase local-part `info` is rejected by the runtime contract. The full destination value remains only in the pinned coloring-pages config. The Worker sender remains unchanged.
 
 References:
 
