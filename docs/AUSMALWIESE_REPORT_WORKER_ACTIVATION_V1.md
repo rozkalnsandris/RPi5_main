@@ -16,7 +16,7 @@ Canonical application provenance:
 - Worker blob 4ef00f9963c68ab9a4ab5aeb4a44b8c99c76eda0
 - config blob 2765e88f4c5ee7a01a5380ef52e4ff8c0688c9e6
 
-Current config has two exact report routes and one send_email binding named EMAIL with destination_address info@ausmalwiese.de.
+Current config has two exact report routes and one send_email binding named EMAIL with one fixed destination_address stored only in the pinned coloring-pages config.
 
 ## Explicitly removed from the current activation path
 
@@ -39,7 +39,7 @@ Before a future separately authorized deployment, verify only what the minimal p
 2. exact target Worker and the two report routes;
 3. Cloudflare Email Service is available for the account/domain;
 4. sender domain/address used by the Worker is accepted by Email Service;
-5. info@ausmalwiese.de is accepted as the binding destination;
+5. the fixed destination from the pinned coloring-pages config is accepted by Email Service;
 6. the existing receiving/forwarding path reaches the intended verified mailbox;
 7. no route collision with unrelated Workers.
 

@@ -12,13 +12,25 @@
   "config_path": "cloudflare/wrangler.report.json",
   "config_blob": "2765e88f4c5ee7a01a5380ef52e4ff8c0688c9e6",
   "routes": [
-    {"pattern": "ausmalwiese.de/api/report", "zone_name": "ausmalwiese.de"},
-    {"pattern": "www.ausmalwiese.de/api/report", "zone_name": "ausmalwiese.de"}
+    {
+      "pattern": "ausmalwiese.de/api/report",
+      "zone_name": "ausmalwiese.de"
+    },
+    {
+      "pattern": "www.ausmalwiese.de/api/report",
+      "zone_name": "ausmalwiese.de"
+    }
   ],
-  "email_binding": [
-    {"name": "EMAIL", "destination_address": "info@ausmalwiese.de"}
+  "email_binding": {
+    "name": "EMAIL",
+    "destination": "pinned-config-blob-only"
+  },
+  "deploy_flags": [
+    "--no-bundle",
+    "--strict",
+    "--tag",
+    "--message"
   ],
-  "deploy_flags": ["--no-bundle", "--strict", "--tag", "--message"],
   "post_deploy_requires": [
     "exact-source-and-config-provenance",
     "latest-equals-single-active-100-percent",
@@ -43,7 +55,7 @@
     "stats_dependency": false,
     "current_issue_authorizes_execution": false,
     "runtime_entry": "/usr/local/sbin/rpi5-ausmalwiese-report-wrangler-deploy",
-    "runtime_source_root": "/home/andris/coloring-pages",
+    "runtime_source_root": "<fixed-operator-home>/coloring-pages",
     "runtime_operator": "andris",
     "runtime_persistent_permission_widening": false
   }

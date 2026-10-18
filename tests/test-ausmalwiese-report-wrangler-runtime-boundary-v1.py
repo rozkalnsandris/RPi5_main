@@ -28,7 +28,7 @@ class RuntimeBoundaryTests(unittest.TestCase):
         data=__import__("json").loads(plan.CONTRACT.read_text("utf-8")); plan.check_contract(data)
         self.assertFalse(data["launcher"]["requires_report_secrets"]); self.assertFalse(data["launcher"]["stats_dependency"]); self.assertEqual(data["launcher"]["runtime_operator"],"andris"); self.assertFalse(data["actions"]["credential_or_secret_access"])
     def test_runtime_constants_are_fixed(self):
-        self.assertEqual(plan.RUNTIME_SOURCE_ROOT,"/home/andris/coloring-pages"); self.assertEqual(plan.RUNTIME_OPERATOR_UID,1000); self.assertEqual(plan.RUNTIME_OPERATOR_GID,1000); self.assertEqual(plan.NPX,"/usr/bin/npx")
+        expected_home=str(Path("/home")/plan.RUNTIME_OPERATOR); self.assertEqual(plan.RUNTIME_SOURCE_ROOT,str(Path(expected_home)/"coloring-pages")); self.assertEqual(plan.RUNTIME_OPERATOR_UID,1000); self.assertEqual(plan.RUNTIME_OPERATOR_GID,1000); self.assertEqual(plan.NPX,"/usr/bin/npx")
     def test_runtime_entry_requires_root_exact_installed_file(self):
         with mock.patch.object(plan.os,"geteuid",return_value=0), mock.patch.object(plan.Path,"absolute",return_value=plan.RUNTIME_ENTRY): plan.trusted_runtime_entry(lstat=runtime_lstat)
         with mock.patch.object(plan.os,"geteuid",return_value=1000):

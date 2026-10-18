@@ -40,9 +40,7 @@ ROUTES = [
     {"pattern": "ausmalwiese.de/api/report", "zone_name": "ausmalwiese.de"},
     {"pattern": "www.ausmalwiese.de/api/report", "zone_name": "ausmalwiese.de"},
 ]
-EMAIL_BINDING = [
-    {"name": "EMAIL", "destination_address": "info@ausmalwiese.de"},
-]
+EMAIL_BINDING_NAME = "EMAIL"
 BINDING_KINDS = {"EMAIL": "send_email"}
 
 VERSION_ID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
@@ -52,8 +50,9 @@ RUNTIME_ENTRY = Path("/usr/local/sbin/rpi5-ausmalwiese-report-wrangler-deploy")
 RUNTIME_OPERATOR = "andris"
 RUNTIME_OPERATOR_UID = 1000
 RUNTIME_OPERATOR_GID = 1000
-RUNTIME_OPERATOR_HOME = "/home/andris"
-RUNTIME_SOURCE_ROOT = "/home/andris/coloring-pages"
+RUNTIME_HOME_ROOT = Path("/home")
+RUNTIME_OPERATOR_HOME = str(RUNTIME_HOME_ROOT / RUNTIME_OPERATOR)
+RUNTIME_SOURCE_ROOT = str(Path(RUNTIME_OPERATOR_HOME) / "coloring-pages")
 RUNTIME_CONFIRM = "OWNER-AUTHORIZED-REPORT-WRANGLER-DEPLOY"
 NPX = "/usr/bin/npx"
 RUNTIME_ENTRY_PARENTS = ("/", "/usr", "/usr/local", "/usr/local/sbin")
@@ -77,7 +76,7 @@ def need(ok: bool, reason: str) -> None:
         raise Blocked(reason)
 
 
-def expected_config() -> dict[str, Any]:
+def expected_config(destination_address: str = "fixed-destination") -> dict[str, Any]:
     return {
         "name": WORKER,
         "main": "./report-worker.mjs",
@@ -86,12 +85,34 @@ def expected_config() -> dict[str, Any]:
         "preview_urls": False,
         "no_bundle": True,
         "routes": ROUTES,
-        "send_email": EMAIL_BINDING,
+        "send_email": [
+            {
+                "name": EMAIL_BINDING_NAME,
+                "destination_address": destination_address,
+            }
+        ],
     }
 
 
 def validate_config(config: Any) -> dict[str, Any]:
-    need(type(config) is dict and config == expected_config(), "CONFIG_DRIFT")
+    need(type(config) is dict, "CONFIG_DRIFT")
+    binding = config.get("send_email")
+    need(
+        type(binding) is list
+        and len(binding) == 1
+        and type(binding[0]) is dict
+        and set(binding[0]) == {"name", "destination_address"}
+        and binding[0].get("name") == EMAIL_BINDING_NAME,
+        "CONFIG_DRIFT",
+    )
+    destination = binding[0].get("destination_address")
+    need(
+        type(destination) is str
+        and 1 <= len(destination) <= 254
+        and all(32 <= ord(ch) < 127 for ch in destination),
+        "CONFIG_DRIFT",
+    )
+    need(config == expected_config(destination), "CONFIG_DRIFT")
     return config
 
 
@@ -454,7 +475,10 @@ def expected_contract() -> dict[str, Any]:
         "config_path": CONFIG_PATH,
         "config_blob": CONFIG_BLOB,
         "routes": ROUTES,
-        "email_binding": EMAIL_BINDING,
+        "email_binding": {
+            "name": EMAIL_BINDING_NAME,
+            "destination": "pinned-config-blob-only",
+        },
         "deploy_flags": ["--no-bundle", "--strict", "--tag", "--message"],
         "post_deploy_requires": [
             "exact-source-and-config-provenance",
@@ -480,7 +504,7 @@ def expected_contract() -> dict[str, Any]:
             "stats_dependency": False,
             "current_issue_authorizes_execution": False,
             "runtime_entry": str(RUNTIME_ENTRY),
-            "runtime_source_root": RUNTIME_SOURCE_ROOT,
+            "runtime_source_root": "<fixed-operator-home>/coloring-pages",
             "runtime_operator": RUNTIME_OPERATOR,
             "runtime_persistent_permission_widening": False,
         },

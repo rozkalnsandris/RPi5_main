@@ -12,7 +12,7 @@ def annotations(): return {"workers/message":plan.expected_message(),"workers/ta
 class ReportWranglerVerifyV2Tests(unittest.TestCase):
     def test_contract_pins_minimal_deploy_source_and_has_no_old_dependencies(self):
         data=json.loads(plan.CONTRACT.read_text("utf-8")); plan.check_contract(data)
-        self.assertEqual(data["deploy_blob"],"06c1a2344657a4fdb14d87cadb5f0560b203daf0")
+        self.assertEqual(data["deploy_blob"],"7a8ae854752c5f89a693638c6732b58342cdd813")
         self.assertFalse(data["verification"]["secret_inventory_required"]); self.assertFalse(data["verification"]["public_config_endpoint_required"]); self.assertFalse(data["verification"]["stats_snapshot_required"]); self.assertEqual(plan.main(["--check-contract"]),0)
     def test_exact_annotations_map_to_snapshot_provenance(self):
         self.assertEqual(plan.provenance_adapter(annotations()),{"version_tag":plan.expected_tag(),"version_message":plan.expected_message()})

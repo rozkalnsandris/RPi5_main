@@ -22,7 +22,7 @@ The reviewed config contains only two exact routes:
 and one Cloudflare Email Service send_email binding:
 
 - name: EMAIL
-- destination_address: info@ausmalwiese.de
+- destination_address: fixed by the pinned coloring-pages config blob (not duplicated in RPi5_main)
 
 There are no Report secrets, Turnstile bindings, rate-limit bindings, Report config endpoint or Stats dependency.
 
@@ -53,7 +53,7 @@ Mailbox delivery is a separate end-to-end check after LIVE activation.
 
 ## Provider model
 
-Cloudflare Email Service documentation reviewed 2026-10-18 documents a send_email Wrangler binding and env.EMAIL.send(). destination_address restricts the binding to one configured destination; a send call may use null/undefined recipient to select that configured destination.
+Cloudflare Email Service documentation reviewed 2026-10-18 documents a send_email Wrangler binding and env.EMAIL.send(). destination_address restricts the binding to one configured destination. RPi5_main pins the exact external config blob instead of duplicating the address in this public repository.
 
 References:
 
