@@ -20,8 +20,8 @@
   "pre_schema_sha256": "470f40bab9b7e2bfcf68b73cfa3aad7bf171bcb764fdfc391c09d1b4fa85e9f6",
   "runtime_entry": "/usr/local/sbin/rpi5-ausmalwiese-stats-gate-a-d1-migrate",
   "runtime_operator": "andris",
-  "runtime_source_root": "/home/andris/coloring-pages",
-  "wrangler_binary": "/home/andris/.local/bin/wrangler",
+  "runtime_source_root": "<fixed-operator-home>/coloring-pages",
+  "wrangler_binary": "<fixed-operator-home>/.local/bin/wrangler",
   "no_log_env": {
     "WRANGLER_WRITE_LOGS": "false"
   },
