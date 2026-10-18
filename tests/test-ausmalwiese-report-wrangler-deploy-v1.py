@@ -18,7 +18,8 @@ assert spec and spec.loader
 spec.loader.exec_module(plan)
 
 VERSION = "12345678-1234-4234-a234-123456789abc"
-STATS_VERSION = "87654321-4321-4321-a321-cba987654321"
+STATS_ACTIVE_VERSION = "87654321-4321-4321-a321-cba987654321"
+STATS_LATEST_VERSION = "23456789-2345-4234-a234-23456789abcd"
 
 
 def application():
@@ -78,8 +79,10 @@ def stats_snapshot():
     return {
         "schema": "ausmalwiese.stats-unchanged-proof.v1",
         "worker": plan.STATS_WORKER,
-        "latest_version": STATS_VERSION,
-        "active_versions": [{"version_id": STATS_VERSION, "percentage": 100}],
+        "latest_version": STATS_LATEST_VERSION,
+        "active_versions": [
+            {"version_id": STATS_ACTIVE_VERSION, "percentage": 100}
+        ],
         "routes_sha256": "1" * 64,
         "bindings_sha256": "2" * 64,
         "settings_sha256": "3" * 64,
@@ -203,6 +206,26 @@ class ReportWranglerDeployTests(unittest.TestCase):
             with self.assertRaises(plan.Blocked):
                 plan.validate_report_snapshot(bad)
 
+    def test_stats_latest_uploaded_may_differ_from_active_100_percent(self):
+        good = stats_snapshot()
+        self.assertNotEqual(
+            good["latest_version"],
+            good["active_versions"][0]["version_id"],
+        )
+        self.assertEqual(plan.validate_stats_snapshot(good), good)
+
+        for mutation in (
+            lambda x: x["active_versions"].append(
+                {"version_id": STATS_LATEST_VERSION, "percentage": 0}
+            ),
+            lambda x: x["active_versions"][0].update(percentage=90),
+            lambda x: x["active_versions"][0].update(version_id="invalid"),
+        ):
+            bad = stats_snapshot()
+            mutation(bad)
+            with self.assertRaises(plan.Blocked):
+                plan.validate_stats_snapshot(bad)
+
     def test_stats_pre_post_must_be_byte_equivalent(self):
         before = stats_snapshot()
         after = copy.deepcopy(before)
@@ -211,6 +234,7 @@ class ReportWranglerDeployTests(unittest.TestCase):
 
         for mutation in (
             lambda x: x.update(latest_version=VERSION),
+            lambda x: x["active_versions"][0].update(version_id=VERSION),
             lambda x: x["active_versions"][0].update(percentage=90),
             lambda x: x.update(routes_sha256="4" * 64),
             lambda x: x.update(bindings_sha256="5" * 64),

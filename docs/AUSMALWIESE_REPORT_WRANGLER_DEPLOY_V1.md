@@ -215,13 +215,18 @@ authenticated read.
 capture a sanitized Stats snapshot immediately before the report deploy and
 again afterwards. The source accepts only exact pre/post equality for:
 
-- latest and single 100% active version;
+- a valid latest uploaded version identifier;
+- exactly one active version at 100% traffic; it may differ from the latest
+  uploaded version because Cloudflare Versions and Deployments are separate
+  state;
 - route fingerprint;
 - binding fingerprint;
 - settings fingerprint.
 
-Any difference is `STATS_DRIFT` and the verification fails closed. This issue
-does not authorize fixing or redeploying Stats.
+The full sanitized snapshot, including both latest-uploaded and active version
+IDs, must still be byte-equivalent before and after the report deployment. Any
+difference is `STATS_DRIFT` and the verification fails closed. This issue does
+not authorize fixing or redeploying Stats.
 
 ## Official provider references reviewed 2026-10-17
 
