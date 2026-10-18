@@ -784,13 +784,13 @@ def validate_stats_snapshot(snapshot: Any) -> dict[str, Any]:
         and snapshot["worker"] == STATS_WORKER,
         "STATS_SNAPSHOT_TARGET",
     )
-    latest = _version(snapshot["latest_version"], "STATS_LATEST_VERSION")
+    _version(snapshot["latest_version"], "STATS_LATEST_VERSION")
     active = snapshot["active_versions"]
     need(type(active) is list and len(active) == 1, "STATS_ACTIVE_COUNT")
     need(
         type(active[0]) is dict
         and set(active[0]) == {"version_id", "percentage"}
-        and _version(active[0]["version_id"], "STATS_ACTIVE_VERSION") == latest
+        and bool(_version(active[0]["version_id"], "STATS_ACTIVE_VERSION"))
         and type(active[0]["percentage"]) is int
         and active[0]["percentage"] == 100,
         "STATS_ACTIVE_TRAFFIC",

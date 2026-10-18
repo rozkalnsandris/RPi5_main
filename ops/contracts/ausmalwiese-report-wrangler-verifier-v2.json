@@ -9,7 +9,7 @@
   "worker_blob": "6560268044bac25e1d63e12edbb2572ca2b9784b",
   "config_blob": "a49576aa391015e7b0e867bb7eef03c7f90d0987",
   "legacy_deploy_source": "scripts/ausmalwiese_report_wrangler_deploy_v1.py",
-  "legacy_deploy_blob": "087cf8a14ac4c8a7dc203d80c35c544677ecbe35",
+  "legacy_deploy_blob": "55b13636ba36cdc574fedbeb469c73af91bb8594",
   "provenance": {
     "method": "GET",
     "path_template": "/accounts/{account_id}/workers/scripts/coloring-pages-report-v1/settings",

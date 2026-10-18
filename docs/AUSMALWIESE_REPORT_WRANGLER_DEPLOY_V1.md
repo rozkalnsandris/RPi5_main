@@ -98,11 +98,11 @@ installed path before any privileged secret handling.
 The source-only installer for that future entrypoint is
 `scripts/install-ausmalwiese-report-wrangler-runtime-boundary-v1.py`. It pins
 the reviewed runtime source Git blob
-`087cf8a14ac4c8a7dc203d80c35c544677ecbe35` and can only target the fixed
-entrypoint above. Its first-install path remains no-overwrite. For the #1081
-repin it also exposes one bounded upgrade path from historical RPi5_main
-`bf7541a6166a1fb4d6fdca79bd95a67a8aa819ba` / runtime blob
-`c92da027aea2d2b41f1e901bd14ae91a2a4bc834`: before any future replacement it
+`55b13636ba36cdc574fedbeb469c73af91bb8594` and can only target the fixed
+entrypoint above. Its first-install path remains no-overwrite. For the #1084
+Stats guard simplification it exposes one bounded upgrade path from the reviewed
+predecessor RPi5_main `a5806c6ebd6ea786a2cb43fead2b9129e46d8653` / runtime blob
+`087cf8a14ac4c8a7dc203d80c35c544677ecbe35`: before any future replacement it
 requires the existing target to be a non-symlink `root:root 0500` single-link
 regular file whose SHA-256 matches those historical bytes, and requires one
 exact `sudo install` capability. No matching capability means STOP before
@@ -183,14 +183,14 @@ fields. Requiring those Wrangler JSON shapes alone to prove provenance is
 therefore not sound.
 
 Issue #1079 adds the separate source-only verifier
-`scripts/ausmalwiese_report_wrangler_verify_v2.py`. The #1081 stale-activity
-repin binds that verifier to the updated deploy source Git blob
-`087cf8a14ac4c8a7dc203d80c35c544677ecbe35` and the new application
-provenance above. The historical runtime blob
-`c92da027aea2d2b41f1e901bd14ae91a2a4bc834` is retained only as the exact
-allowed upgrade baseline; source changes do not prove that host upgrade has
-occurred. Sealed-memfd secret transport, one-shot deploy behavior, config,
-routes, bindings, ratelimits and the Stats no-effect guard remain unchanged.
+`scripts/ausmalwiese_report_wrangler_verify_v2.py`. The #1084 Stats guard
+simplification binds that verifier to the updated deploy source Git blob
+`55b13636ba36cdc574fedbeb469c73af91bb8594` while preserving the application provenance above. The
+reviewed upgrade predecessor is RPi5_main `a5806c6ebd6ea786a2cb43fead2b9129e46d8653` /
+runtime blob `087cf8a14ac4c8a7dc203d80c35c544677ecbe35`; source changes do not prove that host
+upgrade has occurred. Sealed-memfd secret transport, one-shot deploy behavior,
+config, routes, bindings, ratelimits and the exact Stats before/after no-effect
+comparison remain unchanged.
 
 For post-deploy provenance, the v2 verifier treats the read-only Cloudflare
 Script/Version Settings response as the canonical annotation source:
@@ -215,13 +215,18 @@ authenticated read.
 capture a sanitized Stats snapshot immediately before the report deploy and
 again afterwards. The source accepts only exact pre/post equality for:
 
-- latest and single 100% active version;
+- a valid latest uploaded version identifier;
+- exactly one active version at 100% traffic; it may differ from the latest
+  uploaded version because Cloudflare Versions and Deployments are separate
+  state;
 - route fingerprint;
 - binding fingerprint;
 - settings fingerprint.
 
-Any difference is `STATS_DRIFT` and the verification fails closed. This issue
-does not authorize fixing or redeploying Stats.
+The full sanitized snapshot, including both latest-uploaded and active version
+IDs, must still be byte-equivalent before and after the report deployment. Any
+difference is `STATS_DRIFT` and the verification fails closed. This issue does
+not authorize fixing or redeploying Stats.
 
 ## Official provider references reviewed 2026-10-17
 
