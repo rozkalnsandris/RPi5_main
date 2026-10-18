@@ -7,6 +7,7 @@
   "wrangler_version": "4.135.0",
   "source_repo": "rozkalnsandris/coloring-pages",
   "source_commit": "7f07c226105e26c0ca9cf91eb150a3e8f585c5ea",
+  "runtime_source_commit": "34287444c32b3d04a89141748b0e645be6b4e5f2",
   "worker_path": "cloudflare/stats-worker.js",
   "worker_blob": "c2ac9da6e0701103e0041b30db7dfbea4298f96c",
   "config_path": "cloudflare/wrangler.stats-worker.jsonc",
