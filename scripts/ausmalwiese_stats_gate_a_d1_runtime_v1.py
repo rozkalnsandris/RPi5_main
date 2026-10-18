@@ -45,6 +45,17 @@ RUNTIME_OPERATOR_GID = 1000
 RUNTIME_HOME = Path("/home/andris")
 RUNTIME_SOURCE_ROOT = RUNTIME_HOME / "coloring-pages"
 WRANGLER = RUNTIME_HOME / ".local/bin/wrangler"
+WRANGLER_LINK_TARGET = "../share/wrangler-cli/.bin/wrangler"
+WRANGLER_BIN_DIR = RUNTIME_HOME / ".local/share/wrangler-cli/.bin"
+WRANGLER_BIN_DIR_TARGET = "node_modules/.bin"
+WRANGLER_NODE_BIN = (
+    RUNTIME_HOME / ".local/share/wrangler-cli/node_modules/.bin/wrangler"
+)
+WRANGLER_NODE_BIN_TARGET = "../wrangler/bin/wrangler.js"
+WRANGLER_REAL = (
+    RUNTIME_HOME
+    / ".local/share/wrangler-cli/node_modules/wrangler/bin/wrangler.js"
+)
 WRANGLER_PACKAGE = (
     RUNTIME_HOME / ".local/share/wrangler-cli/node_modules/wrangler/package.json"
 )
@@ -257,28 +268,58 @@ def trusted_runtime_entry(*, lstat: Any = os.lstat) -> None:
     )
 
 
+def wrangler_binary_trusted() -> None:
+    try:
+        outer = WRANGLER.lstat()
+        bin_dir = WRANGLER_BIN_DIR.lstat()
+        node_bin = WRANGLER_NODE_BIN.lstat()
+        real = WRANGLER_REAL.lstat()
+        outer_target = os.readlink(WRANGLER)
+        bin_dir_target = os.readlink(WRANGLER_BIN_DIR)
+        node_bin_target = os.readlink(WRANGLER_NODE_BIN)
+        resolved = WRANGLER.resolve(strict=True)
+    except OSError:
+        raise Blocked("WRANGLER_BINARY_UNTRUSTED") from None
+    need(
+        stat.S_ISLNK(outer.st_mode)
+        and outer.st_uid == RUNTIME_OPERATOR_UID
+        and outer.st_gid == RUNTIME_OPERATOR_GID
+        and outer_target == WRANGLER_LINK_TARGET
+        and stat.S_ISLNK(bin_dir.st_mode)
+        and bin_dir.st_uid == RUNTIME_OPERATOR_UID
+        and bin_dir.st_gid == RUNTIME_OPERATOR_GID
+        and bin_dir_target == WRANGLER_BIN_DIR_TARGET
+        and stat.S_ISLNK(node_bin.st_mode)
+        and node_bin.st_uid == RUNTIME_OPERATOR_UID
+        and node_bin.st_gid == RUNTIME_OPERATOR_GID
+        and node_bin_target == WRANGLER_NODE_BIN_TARGET
+        and stat.S_ISREG(real.st_mode)
+        and not WRANGLER_REAL.is_symlink()
+        and real.st_uid == RUNTIME_OPERATOR_UID
+        and real.st_gid == RUNTIME_OPERATOR_GID
+        and bool(stat.S_IMODE(real.st_mode) & 0o100)
+        and not bool(stat.S_IMODE(real.st_mode) & 0o022)
+        and resolved == WRANGLER_REAL,
+        "WRANGLER_BINARY_UNTRUSTED",
+    )
+
+
 def wrangler_package_version() -> str:
     try:
         info = WRANGLER_PACKAGE.lstat()
         package = json.loads(WRANGLER_PACKAGE.read_text("utf-8"))
-        binary = WRANGLER.lstat()
     except (OSError, UnicodeError, json.JSONDecodeError):
         raise Blocked("WRANGLER_PACKAGE_UNAVAILABLE") from None
     need(
         stat.S_ISREG(info.st_mode)
         and not WRANGLER_PACKAGE.is_symlink()
         and info.st_uid == RUNTIME_OPERATOR_UID
+        and info.st_gid == RUNTIME_OPERATOR_GID
         and info.st_size <= 131072
         and package.get("version") == WRANGLER_VERSION,
         "WRANGLER_VERSION_DRIFT",
     )
-    need(
-        stat.S_ISREG(binary.st_mode)
-        and not WRANGLER.is_symlink()
-        and binary.st_uid == RUNTIME_OPERATOR_UID
-        and bool(stat.S_IMODE(binary.st_mode) & 0o100),
-        "WRANGLER_BINARY_UNTRUSTED",
-    )
+    wrangler_binary_trusted()
     return WRANGLER_VERSION
 
 
