@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Source-only minimal Wrangler deploy contract for Ausmalwiese reports (#1092).
+"""Source-only minimal Wrangler deploy contract for Ausmalwiese reports (#1095).
 
 The active report path is deliberately small: one Worker, two exact routes and
 one Cloudflare Email Service send_email binding. There are no Report secrets,
@@ -24,14 +24,14 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "ops/contracts/ausmalwiese-report-wrangler-deploy-v1.json"
 
-ISSUE = 1092
+ISSUE = 1095
 WORKER = "coloring-pages-report-v1"
 WRANGLER_VERSION = "4.135.0"
 
 SOURCE_REPO = "rozkalnsandris/coloring-pages"
-SOURCE_COMMIT = "16c1ed5cccd43d28212b6a7aefbc04cae5195698"
+SOURCE_COMMIT = "15059f7178afcb6c14ad88a22d46f5a04c9e07cf"
 WORKER_PATH = "cloudflare/report-worker.mjs"
-WORKER_BLOB = "4ef00f9963c68ab9a4ab5aeb4a44b8c99c76eda0"
+WORKER_BLOB = "50bbcd868aa9f91b7fb6d78a2925e867380ef421"
 CONFIG_PATH = "cloudflare/wrangler.report.json"
 CONFIG_BLOB = "2765e88f4c5ee7a01a5380ef52e4ff8c0688c9e6"
 
@@ -42,6 +42,26 @@ ROUTES = [
 ]
 EMAIL_BINDING_NAME = "EMAIL"
 BINDING_KINDS = {"EMAIL": "send_email"}
+SEND_FAILURE_DIAGNOSTIC = {
+    "event": "report_email_send_failed",
+    "fields": ["event", "code"],
+    "code_pattern": "^E_[A-Z0-9_]{1,62}$",
+    "fallback": "UNKNOWN",
+    "source_provenance_only": True,
+    "forbidden": [
+        "provider-message",
+        "stack",
+        "request-payload",
+        "activity-id",
+        "page",
+        "reason",
+        "sender",
+        "destination",
+        "headers",
+        "ip",
+        "url",
+    ],
+}
 
 VERSION_ID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
 STOP = "STOP_REPORT_WRANGLER_DEPLOY_SOURCE_ONLY"
@@ -485,7 +505,9 @@ def expected_contract() -> dict[str, Any]:
             "latest-equals-single-active-100-percent",
             "exact-two-report-routes",
             "exact-one-send-email-binding",
+            "sanitized-email-send-failure-diagnostic-by-exact-worker-blob",
         ],
+        "send_failure_diagnostic": SEND_FAILURE_DIAGNOSTIC,
         "actions": {
             "run_wrangler": False,
             "cloudflare_request": False,

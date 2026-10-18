@@ -1,15 +1,38 @@
 {
   "schema_version": 2,
   "status": "SOURCE_ONLY_REPORT_WRANGLER_VERIFY_NO_NETWORK",
-  "issue": 1092,
+  "issue": 1095,
   "repository": "rozkalnsandris/RPi5_main",
   "worker": "coloring-pages-report-v1",
   "wrangler_version": "4.135.0",
-  "source_commit": "16c1ed5cccd43d28212b6a7aefbc04cae5195698",
-  "worker_blob": "4ef00f9963c68ab9a4ab5aeb4a44b8c99c76eda0",
+  "source_commit": "15059f7178afcb6c14ad88a22d46f5a04c9e07cf",
+  "worker_blob": "50bbcd868aa9f91b7fb6d78a2925e867380ef421",
   "config_blob": "2765e88f4c5ee7a01a5380ef52e4ff8c0688c9e6",
   "deploy_source": "scripts/ausmalwiese_report_wrangler_deploy_v1.py",
-  "deploy_blob": "7a8ae854752c5f89a693638c6732b58342cdd813",
+  "deploy_blob": "6a5b15e121bbca41b6b33582bcc62964df723927",
+  "send_failure_diagnostic": {
+    "event": "report_email_send_failed",
+    "fields": [
+      "event",
+      "code"
+    ],
+    "code_pattern": "^E_[A-Z0-9_]{1,62}$",
+    "fallback": "UNKNOWN",
+    "source_provenance_only": true,
+    "forbidden": [
+      "provider-message",
+      "stack",
+      "request-payload",
+      "activity-id",
+      "page",
+      "reason",
+      "sender",
+      "destination",
+      "headers",
+      "ip",
+      "url"
+    ]
+  },
   "provenance": {
     "method": "GET",
     "path_template": "/accounts/{account_id}/workers/scripts/coloring-pages-report-v1/settings",
