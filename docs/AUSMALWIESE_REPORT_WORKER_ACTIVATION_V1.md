@@ -16,7 +16,7 @@ Canonical application provenance:
 - Worker blob 6418a4bebad9f89a2e1045d0ad6476e66549993c
 - config blob 6ef838ec056c3815416e3a8521c5322bd33b4fed
 
-Current config has two exact report routes and one send_email binding named EMAIL. The runtime contract pins local-part `INFO` on domain `ausmalwiese.de`; the uppercase local-part is the narrow reviewed Cloudflare workaround. The full destination remains only in the pinned coloring-pages config. The Worker sender remains `info@ausmalwiese.de`, while the notification transport is the reviewed `cloudflare:email` `EmailMessage` raw RFC 5322 path from coloring-pages #278/#279.
+Current config has two exact report routes and one send_email binding named EMAIL. The runtime contract pins local-part `INFO` on domain `ausmalwiese.de`; the uppercase local-part is the narrow reviewed Cloudflare workaround. The full destination remains only in the pinned coloring-pages config. The Worker sender remains fixed by the pinned coloring-pages Worker and is not visitor-controlled; the notification transport is the reviewed `cloudflare:email` `EmailMessage` raw RFC 5322 path from coloring-pages #278/#279.
 
 The exact Worker blob is also the source-of-truth for the sanitized Email Service failure diagnostic: fixed event `report_email_send_failed`, bounded machine code only, and `UNKNOWN` fallback. It must not log provider messages/stacks, report payload values, addresses, headers, IP or URL. This diagnostic is proven by exact source provenance; normal post-deploy verification does not generate an error or send an email.
 
