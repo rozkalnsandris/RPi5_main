@@ -23,7 +23,7 @@ def inventory():
         "environment": "production",
         "wrangler_version": plan.WRANGLER_VERSION,
         "source_commit": plan.SOURCE_COMMIT,
-        "source_blob": "94e802ce145dd75f5701c4c9274a4ac7959c7f5e",
+        "source_blob": "c2ac9da6e0701103e0041b30db7dfbea4298f96c",
         "config_blob": plan.CONFIG_BLOB,
         "source_class": "script_api",
         "latest_uploaded_version": "e47f145f-1851-4917-be5c-387f96549539",
@@ -102,6 +102,10 @@ class PrivacyD1MigrationTests(unittest.TestCase):
         self.assertEqual(plan.validate_inventory(inventory()), inventory())
         bad = inventory()
         bad["source_commit"] = "0" * 40
+        with self.assertRaises(Exception):
+            plan.validate_inventory(bad)
+        bad = inventory()
+        bad["source_blob"] = "94e802ce145dd75f5701c4c9274a4ac7959c7f5e"
         with self.assertRaises(Exception):
             plan.validate_inventory(bad)
         bad = inventory()

@@ -11,9 +11,9 @@ Cloudflare.
 Frozen application source:
 
 - `coloring-pages/main`:
-  `699c036b7f952aa98be06e166a9705069b7e9eb2`
+  `fd4c434b78445fb3438116b62565fe524ca47ac1`
 - Worker blob:
-  `94e802ce145dd75f5701c4c9274a4ac7959c7f5e`
+  `c2ac9da6e0701103e0041b30db7dfbea4298f96c`
 - Wrangler config blob:
   `3733263a391274f2b6b0f2023c8656565bde8e1a`
 - additive migration blob:
@@ -49,8 +49,8 @@ The inventory must still prove:
 - exact Rate Limiter, secret-name set, compatibility settings and plain-variable
   fingerprints;
 - privacy source provenance:
-  `699c036b7f952aa98be06e166a9705069b7e9eb2` and Worker blob
-  `94e802ce145dd75f5701c4c9274a4ac7959c7f5e`.
+  `fd4c434b78445fb3438116b62565fe524ca47ac1` and Worker blob
+  `c2ac9da6e0701103e0041b30db7dfbea4298f96c`.
 
 The protected inventory runtime must itself be upgraded through issue #1060
 before that future evidence can be used. #1061 does not install or upgrade it.
@@ -103,3 +103,8 @@ Cron activation and
 owner gates.
 
 Passing this source test/contract is **not LIVE evidence**.
+
+
+## Aggregate-Like provenance repin — issue #1088
+
+The current application provenance is repinned to `coloring-pages@fd4c434b78445fb3438116b62565fe524ca47ac1` and Worker blob `c2ac9da6e0701103e0041b30db7dfbea4298f96c`, matching PR #262. The Wrangler config, additive migration, cleanup migration, target D1 identity and schema semantics are unchanged. The migration remains a separate future owner-gated action and must consume a fresh normalized inventory with this current provenance.

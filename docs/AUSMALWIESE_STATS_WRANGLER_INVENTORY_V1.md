@@ -20,9 +20,9 @@ inventory_sha256.
   3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34
 - Wrangler: 4.135.0
 - coloring-pages commit:
-  699c036b7f952aa98be06e166a9705069b7e9eb2
+  fd4c434b78445fb3438116b62565fe524ca47ac1
 - Worker blob:
-  94e802ce145dd75f5701c4c9274a4ac7959c7f5e
+  c2ac9da6e0701103e0041b30db7dfbea4298f96c
 - config blob:
   3733263a391274f2b6b0f2023c8656565bde8e1a
 - pre-takeover baseline version:
@@ -212,3 +212,10 @@ number, metadata, source, order, or unclassified. All #1068 pagination failures
 The classifier never emits raw payload values, UUIDs, version numbers, source
 values, provider field names, account identity, credential material or exception
 text. Successful inventory output and the fixed three-GET plan are unchanged.
+
+
+## Aggregate-Like provenance repin — issue #1088
+
+Current normalized inventory provenance is now pinned to `coloring-pages/main=fd4c434b78445fb3438116b62565fe524ca47ac1` and Worker blob `c2ac9da6e0701103e0041b30db7dfbea4298f96c`, matching the merged aggregate-Like backend in PR #262. The Wrangler config, provider parsing, account fingerprint, pre-takeover baseline version, binding/settings checks and sanitized output schema are unchanged.
+
+The earlier #1061 privacy source values remain historical evidence only. A future authenticated inventory must emit the #1088 current provenance before any D1 migration or one-time takeover decision. This repin performs no runtime upgrade or Cloudflare request.
