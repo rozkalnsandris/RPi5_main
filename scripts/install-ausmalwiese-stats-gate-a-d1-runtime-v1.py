@@ -22,7 +22,7 @@ TEST = "/usr/bin/test"
 SHA256SUM = "/usr/bin/sha256sum"
 
 SOURCE_REL = "scripts/ausmalwiese_stats_gate_a_d1_runtime_v1.py"
-SOURCE_BLOB = "8413d26adc08c8f58d8d0f88a3ad653edc6b579c"
+SOURCE_BLOB = "6cc25f1793a478b8217d60ef9dda367c035ea45f"
 TARGET = "/usr/local/sbin/rpi5-ausmalwiese-stats-gate-a-d1-migrate"
 CONFIRM = "INSTALL-AUSMALWIESE-STATS-GATE-A-D1-RUNTIME"
 PARENTS = ("/usr", "/usr/local", "/usr/local/sbin")
