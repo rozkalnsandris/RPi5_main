@@ -1,4 +1,4 @@
-# Ausmalwiese Report Worker — minimal Wrangler deploy contract (#1092)
+# Ausmalwiese Report Worker — minimal Wrangler deploy contract (#1095)
 
 SOURCE ONLY. No merge, LIVE deploy, Cloudflare mutation, credential access or email send is authorized by this document.
 
@@ -6,9 +6,9 @@ SOURCE ONLY. No merge, LIVE deploy, Cloudflare mutation, credential access or em
 
 The canonical Report Worker application is owned by rozkalnsandris/coloring-pages:
 
-- commit: 16c1ed5cccd43d28212b6a7aefbc04cae5195698
+- commit: 15059f7178afcb6c14ad88a22d46f5a04c9e07cf
 - Worker: cloudflare/report-worker.mjs
-- Worker Git blob: 4ef00f9963c68ab9a4ab5aeb4a44b8c99c76eda0
+- Worker Git blob: 50bbcd868aa9f91b7fb6d78a2925e867380ef421
 - config: cloudflare/wrangler.report.json
 - config Git blob: 2765e88f4c5ee7a01a5380ef52e4ff8c0688c9e6
 - target Worker: coloring-pages-report-v1
@@ -26,6 +26,8 @@ and one Cloudflare Email Service send_email binding:
 
 There are no Report secrets, Turnstile bindings, rate-limit bindings, Report config endpoint or Stats dependency.
 
+The exact reviewed Worker blob also carries the privacy-bounded send-failure diagnostic contract: one structured event `report_email_send_failed`, a bounded machine `code` matching `E_[A-Z0-9_]+`, and `UNKNOWN` fallback. Provider messages/stacks and visitor/request-derived fields are outside that log contract.
+
 ## One-shot deploy shape
 
 The future deploy command is limited to the exact reviewed application/config plus provenance tag/message. It does not use --secrets-file, vars, D1, generic routes or secret commands.
@@ -36,7 +38,7 @@ The root-owned installed entrypoint remains:
 
 The installed file is only a trust boundary. Runtime execution drops the Wrangler child to the fixed operator andris and uses that operator's existing Wrangler authentication context. It reads no protected Report secret file and creates no secret memfd.
 
-The runtime installer is repinned so a future separately authorized upgrade may replace the currently reviewed installed runtime blob 55b13636ba36cdc574fedbeb469c73af91bb8594 with the #1092 minimal runtime bytes. Source merge does not install it.
+The runtime installer is repinned so a future separately authorized upgrade may replace the currently reviewed deploy source from RPi5_main b844c8447a04e7cf6b18adf1bcc5e85a1f893fc3 / blob 7a8ae854752c5f89a693638c6732b58342cdd813 with the #1095 deploy source blob 6a5b15e121bbca41b6b33582bcc62964df723927. Source merge does not install it.
 
 ## Read-only post-deploy proof
 
@@ -45,7 +47,8 @@ Minimum evidence after a separately authorized deploy:
 - latest Report version and exactly one active version at 100%;
 - exact source/config provenance from Script/Version Settings annotations;
 - exactly the two report routes;
-- exactly one binding kind: EMAIL = send_email.
+- exactly one binding kind: EMAIL = send_email;
+- exact Worker-blob provenance for the sanitized send-failure diagnostic; no log generation or test email is required by post-deploy verification.
 
 The bounded read plan uses versions list, deployments list, versions view and one Script/Version Settings annotations read. It does not require secret list, /api/report/config or any Stats snapshot.
 

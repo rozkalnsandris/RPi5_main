@@ -1,4 +1,4 @@
-# Ausmalwiese Fehler melden — current minimal activation path (#1092)
+# Ausmalwiese Fehler melden — current minimal activation path (#1095)
 
 The older #1030 Brevo/Turnstile/rate-limit activation plan is historical and superseded for the current Report Worker. Its old source files may remain as historical evidence, but they are not current activation instructions.
 
@@ -12,11 +12,13 @@ POST /api/report -> coloring-pages-report-v1 -> Cloudflare Email Service EMAIL b
 
 Canonical application provenance:
 
-- coloring-pages commit 16c1ed5cccd43d28212b6a7aefbc04cae5195698
-- Worker blob 4ef00f9963c68ab9a4ab5aeb4a44b8c99c76eda0
+- coloring-pages commit 15059f7178afcb6c14ad88a22d46f5a04c9e07cf
+- Worker blob 50bbcd868aa9f91b7fb6d78a2925e867380ef421
 - config blob 2765e88f4c5ee7a01a5380ef52e4ff8c0688c9e6
 
 Current config has two exact report routes and one send_email binding named EMAIL with one fixed destination_address stored only in the pinned coloring-pages config.
+
+The exact Worker blob is also the source-of-truth for the sanitized Email Service failure diagnostic: fixed event `report_email_send_failed`, bounded machine code only, and `UNKNOWN` fallback. It must not log provider messages/stacks, report payload values, addresses, headers, IP or URL. This diagnostic is proven by exact source provenance; normal post-deploy verification does not generate an error or send an email.
 
 ## Explicitly removed from the current activation path
 
