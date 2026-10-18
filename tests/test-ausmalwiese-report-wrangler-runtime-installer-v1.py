@@ -306,7 +306,7 @@ class RuntimeInstallerTests(unittest.TestCase):
     def test_upgrade_is_bound_to_exact_old_runtime_blob_and_ref(self):
         self.assertEqual(
             mod.OLD_SOURCE_REF,
-            "a5806c6ebd6ea786a2cb43fead2b9129e46d8653",
+            "7fb4e62e4de89df94ffee385cc2bb9bd6143b743",
         )
         self.assertEqual(
             mod.OLD_SOURCE_BLOB,
