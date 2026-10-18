@@ -12,14 +12,14 @@ def annotations(): return {"workers/message":plan.expected_message(),"workers/ta
 class ReportWranglerVerifyV2Tests(unittest.TestCase):
     def test_contract_pins_minimal_deploy_source_and_has_no_old_dependencies(self):
         data=json.loads(plan.CONTRACT.read_text("utf-8")); plan.check_contract(data)
-        self.assertEqual(data["deploy_blob"],"600f9f15ac706d581d4d58ca5bdf4f78b2053801"); self.assertEqual(data["observability"],plan.OBSERVABILITY); self.assertEqual(data["email_binding"],{"name":"EMAIL","destination_local_part":"INFO","destination_domain":"ausmalwiese.de","destination_source":"assembled-fixed-config"}); self.assertEqual(data["send_failure_diagnostic"],plan.SEND_FAILURE_DIAGNOSTIC)
+        self.assertEqual(data["deploy_blob"],"d4263343fca3adedccdc622f5787f15cbcd1246b"); self.assertEqual(data["observability"],plan.OBSERVABILITY); self.assertEqual(data["email_binding"],{"name":"EMAIL","destination_local_part":"info","destination_domain":"ausmalwiese.de","destination_source":"assembled-fixed-config"}); self.assertEqual(data["send_failure_diagnostic"],plan.SEND_FAILURE_DIAGNOSTIC)
         self.assertFalse(data["verification"]["secret_inventory_required"]); self.assertFalse(data["verification"]["public_config_endpoint_required"]); self.assertFalse(data["verification"]["stats_snapshot_required"]); self.assertEqual(plan.main(["--check-contract"]),0)
     def test_exact_application_and_diagnostic_provenance(self):
-        self.assertEqual(plan.SOURCE_COMMIT,"34287444c32b3d04a89141748b0e645be6b4e5f2")
-        self.assertEqual(plan.WORKER_BLOB,"6418a4bebad9f89a2e1045d0ad6476e66549993c")
-        self.assertEqual(plan.DEPLOY_BLOB,"600f9f15ac706d581d4d58ca5bdf4f78b2053801")
-        self.assertEqual(plan.CONFIG_BLOB,"78f60e119092dca969a35b8bbac1b82ba68a0084")
-        self.assertEqual(plan.DESTINATION_LOCAL_PART,"INFO")
+        self.assertEqual(plan.SOURCE_COMMIT,"9a8111f19f9d82395f331ed49409af22f4765db7")
+        self.assertEqual(plan.WORKER_BLOB,"384c93ae6f7348efc2dcbddbcc5a23743d8311d2")
+        self.assertEqual(plan.DEPLOY_BLOB,"d4263343fca3adedccdc622f5787f15cbcd1246b")
+        self.assertEqual(plan.CONFIG_BLOB,"0ddb5e8c23e0503a957d0de69e11a7d98d6651cd")
+        self.assertEqual(plan.DESTINATION_LOCAL_PART,"info")
         self.assertEqual(plan.DESTINATION_DOMAIN,"ausmalwiese.de")
         self.assertEqual(plan.SEND_FAILURE_DIAGNOSTIC["event"],"report_email_send_failed")
         self.assertTrue(plan.SEND_FAILURE_DIAGNOSTIC["source_provenance_only"])

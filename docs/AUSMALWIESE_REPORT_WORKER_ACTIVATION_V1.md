@@ -1,4 +1,4 @@
-# Ausmalwiese Fehler melden — current minimal activation path (#1104)
+# Ausmalwiese Fehler melden — current minimal activation path (#1108)
 
 The older #1030 Brevo/Turnstile/rate-limit activation plan is historical and superseded for the current Report Worker. Its old source files may remain as historical evidence, but they are not current activation instructions.
 
@@ -12,11 +12,11 @@ POST /api/report -> coloring-pages-report-v1 -> Cloudflare Email Service EMAIL b
 
 Canonical application provenance:
 
-- coloring-pages commit 34287444c32b3d04a89141748b0e645be6b4e5f2
-- Worker blob 6418a4bebad9f89a2e1045d0ad6476e66549993c
-- config blob 78f60e119092dca969a35b8bbac1b82ba68a0084
+- coloring-pages commit 9a8111f19f9d82395f331ed49409af22f4765db7
+- Worker blob 384c93ae6f7348efc2dcbddbcc5a23743d8311d2
+- config blob 0ddb5e8c23e0503a957d0de69e11a7d98d6651cd
 
-Current config pins Workers Logs enabled and Workers Traces disabled, has two exact report routes and one send_email binding named EMAIL. The runtime contract pins local-part `INFO` on domain `ausmalwiese.de`; the uppercase local-part is the narrow reviewed Cloudflare workaround. The full destination remains only in the pinned coloring-pages config. The Worker sender remains fixed by the pinned coloring-pages Worker and is not visitor-controlled; the notification transport is the reviewed `cloudflare:email` `EmailMessage` raw RFC 5322 path from coloring-pages #278/#279.
+Current config pins Workers Logs enabled and Workers Traces disabled, has two exact report routes and one send_email binding named EMAIL. The runtime contract pins the exact verified lowercase local-part `info` on domain `ausmalwiese.de`; legacy uppercase `INFO` is rejected. The full destination remains only in the pinned coloring-pages config. The Worker sender remains fixed by the pinned coloring-pages Worker and is not visitor-controlled; the notification transport is the reviewed structured `env.EMAIL.send({...})` path from coloring-pages #284/#285.
 
 The exact Worker blob is also the source-of-truth for the sanitized Email Service failure diagnostic: fixed event `report_email_send_failed`, bounded machine code only, and `UNKNOWN` fallback. It must not log provider messages/stacks, report payload values, addresses, headers, IP or URL. This diagnostic is proven by exact source provenance; normal post-deploy verification does not generate an error or send an email.
 
@@ -42,7 +42,7 @@ Before a future separately authorized deployment, verify only what the minimal p
 3. exact observability state: Workers Logs enabled and Workers Traces disabled;
 4. Cloudflare Email Service is available for the account/domain;
 5. sender domain/address used by the Worker is accepted by Email Service;
-6. the fixed destination from the pinned coloring-pages config, with local-part `INFO` on domain `ausmalwiese.de`, is accepted by Email Service;
+6. the fixed destination from the pinned coloring-pages config, with exact verified lowercase local-part `info` on domain `ausmalwiese.de`, is accepted by Email Service;
 7. the existing receiving/forwarding path reaches the intended verified mailbox;
 8. no route collision with unrelated Workers.
 

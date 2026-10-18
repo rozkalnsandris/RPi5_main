@@ -306,11 +306,11 @@ class RuntimeInstallerTests(unittest.TestCase):
     def test_upgrade_is_bound_to_exact_old_runtime_blob_and_ref(self):
         self.assertEqual(
             mod.OLD_SOURCE_REF,
-            "6761b8b15557204d1a16d810df6a348f0d58dfb1",
+            "a17f83668acdcdfde26ef6f586b1c2f8aa765ada",
         )
         self.assertEqual(
             mod.OLD_SOURCE_BLOB,
-            "4cd4bd8e435761b7be177114d80cd946ae333aa9",
+            "600f9f15ac706d581d4d58ca5bdf4f78b2053801",
         )
         with mock.patch.object(mod, "exact_checkout") as checkout, \
              mock.patch.object(mod, "tracked_runtime", return_value=PAYLOAD), \

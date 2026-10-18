@@ -38,16 +38,16 @@ def report_snapshot():
 class ReportWranglerDeployTests(unittest.TestCase):
     def test_contract_is_source_only_minimal_and_has_no_stats_or_secrets(self):
         data=json.loads(plan.CONTRACT.read_text("utf-8")); plan.check_contract(data)
-        self.assertEqual(data["issue"],1104); self.assertEqual(data["send_failure_diagnostic"],plan.SEND_FAILURE_DIAGNOSTIC); self.assertEqual(data["email_binding"],{"name":plan.EMAIL_BINDING_NAME,"destination_local_part":plan.DESTINATION_LOCAL_PART,"destination_domain":plan.DESTINATION_DOMAIN,"destination_source":"assembled-fixed-config"}); self.assertEqual(data["observability"],plan.OBSERVABILITY)
+        self.assertEqual(data["issue"],1108); self.assertEqual(data["send_failure_diagnostic"],plan.SEND_FAILURE_DIAGNOSTIC); self.assertEqual(data["email_binding"],{"name":plan.EMAIL_BINDING_NAME,"destination_local_part":plan.DESTINATION_LOCAL_PART,"destination_domain":plan.DESTINATION_DOMAIN,"destination_source":"assembled-fixed-config"}); self.assertEqual(data["observability"],plan.OBSERVABILITY)
         self.assertFalse(data["launcher"]["requires_report_secrets"]); self.assertFalse(data["launcher"]["stats_dependency"])
         self.assertNotIn("stats_worker",data); self.assertNotIn("required_secret_names",data); self.assertNotIn("ratelimits",data)
         self.assertFalse(data["actions"]["credential_or_secret_access"]); self.assertFalse(data["actions"]["live"])
         self.assertEqual(plan.main(["--check-contract"]),0)
 
     def test_exact_minimal_application_repin(self):
-        self.assertEqual(plan.SOURCE_COMMIT,"34287444c32b3d04a89141748b0e645be6b4e5f2")
-        self.assertEqual(plan.WORKER_BLOB,"6418a4bebad9f89a2e1045d0ad6476e66549993c")
-        self.assertEqual(plan.CONFIG_BLOB,"78f60e119092dca969a35b8bbac1b82ba68a0084")
+        self.assertEqual(plan.SOURCE_COMMIT,"9a8111f19f9d82395f331ed49409af22f4765db7")
+        self.assertEqual(plan.WORKER_BLOB,"384c93ae6f7348efc2dcbddbcc5a23743d8311d2")
+        self.assertEqual(plan.CONFIG_BLOB,"0ddb5e8c23e0503a957d0de69e11a7d98d6651cd")
 
     def test_sanitized_send_failure_diagnostic_is_source_provenance_only(self):
         self.assertEqual(
@@ -73,8 +73,8 @@ class ReportWranglerDeployTests(unittest.TestCase):
         good=plan.expected_config(); self.assertEqual(plan.validate_config(good),good)
         self.assertEqual(good["routes"],plan.ROUTES); self.assertEqual(good["observability"],plan.OBSERVABILITY); self.assertEqual(good["send_email"][0]["name"],plan.EMAIL_BINDING_NAME)
         self.assertEqual(good["send_email"][0]["destination_address"],plan.destination_address())
-        lower=copy.deepcopy(good); lower["send_email"][0]["destination_address"]=plan.DESTINATION_LOCAL_PART.lower()+"@"+plan.DESTINATION_DOMAIN
-        with self.assertRaisesRegex(plan.Blocked,"CONFIG_DRIFT"): plan.validate_config(lower)
+        upper=copy.deepcopy(good); upper["send_email"][0]["destination_address"]=plan.DESTINATION_LOCAL_PART.upper()+"@"+plan.DESTINATION_DOMAIN
+        with self.assertRaisesRegex(plan.Blocked,"CONFIG_DRIFT"): plan.validate_config(upper)
         for forbidden in ("secrets","ratelimits","vars"): self.assertNotIn(forbidden,good)
         for mutation in (
             lambda x:x.update(name="other-worker"),

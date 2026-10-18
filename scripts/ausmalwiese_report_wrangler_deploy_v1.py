@@ -24,16 +24,16 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "ops/contracts/ausmalwiese-report-wrangler-deploy-v1.json"
 
-ISSUE = 1104
+ISSUE = 1108
 WORKER = "coloring-pages-report-v1"
 WRANGLER_VERSION = "4.135.0"
 
 SOURCE_REPO = "rozkalnsandris/coloring-pages"
-SOURCE_COMMIT = "34287444c32b3d04a89141748b0e645be6b4e5f2"
+SOURCE_COMMIT = "9a8111f19f9d82395f331ed49409af22f4765db7"
 WORKER_PATH = "cloudflare/report-worker.mjs"
-WORKER_BLOB = "6418a4bebad9f89a2e1045d0ad6476e66549993c"
+WORKER_BLOB = "384c93ae6f7348efc2dcbddbcc5a23743d8311d2"
 CONFIG_PATH = "cloudflare/wrangler.report.json"
-CONFIG_BLOB = "78f60e119092dca969a35b8bbac1b82ba68a0084"
+CONFIG_BLOB = "0ddb5e8c23e0503a957d0de69e11a7d98d6651cd"
 
 COMPATIBILITY_DATE = "2026-10-18"
 ROUTES = [
@@ -41,7 +41,7 @@ ROUTES = [
     {"pattern": "www.ausmalwiese.de/api/report", "zone_name": "ausmalwiese.de"},
 ]
 EMAIL_BINDING_NAME = "EMAIL"
-DESTINATION_LOCAL_PART = "INFO"
+DESTINATION_LOCAL_PART = "info"
 DESTINATION_DOMAIN = "ausmalwiese.de"
 BINDING_KINDS = {"EMAIL": "send_email"}
 OBSERVABILITY = {"logs": {"enabled": True}, "traces": {"enabled": False}}
@@ -512,7 +512,7 @@ def expected_contract() -> dict[str, Any]:
             "latest-equals-single-active-100-percent",
             "exact-two-report-routes",
             "exact-one-send-email-binding",
-            "exact-info-destination-case",
+            "exact-verified-lowercase-info-destination",
             "exact-observability-logs-enabled-traces-disabled",
             "sanitized-email-send-failure-diagnostic-by-exact-worker-blob",
         ],
