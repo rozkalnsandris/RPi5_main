@@ -83,8 +83,8 @@ class GateTests(unittest.TestCase):
         self.attestation.chmod(0o444)
         with self.assertRaisesRegex(mod.Hold, "TRUST_MARKER"):
             self.run_gate()
-        self.attestation.write_bytes(mod.ATTESTATION_BYTES)
         self.attestation.chmod(0o644)
+        self.attestation.write_bytes(mod.ATTESTATION_BYTES)
         with self.assertRaisesRegex(mod.Hold, "TRUST_MARKER"):
             self.run_gate()
         self.attestation.unlink()
