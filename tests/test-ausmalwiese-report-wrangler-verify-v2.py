@@ -32,7 +32,7 @@ class ReportWranglerVerifyV2Tests(unittest.TestCase):
         plan.check_contract(data)
         self.assertEqual(
             data["legacy_deploy_blob"],
-            "c92da027aea2d2b41f1e901bd14ae91a2a4bc834",
+            "087cf8a14ac4c8a7dc203d80c35c544677ecbe35",
         )
         self.assertFalse(data["actions"]["run_wrangler"])
         self.assertFalse(data["actions"]["cloudflare_request"])

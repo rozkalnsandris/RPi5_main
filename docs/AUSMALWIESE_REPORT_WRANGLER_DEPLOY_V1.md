@@ -13,9 +13,9 @@ the Worker, send mail, or mutate the RPi5 host.
 
 The deployment source is owned by `rozkalnsandris/coloring-pages`:
 
-- commit: `699c036b7f952aa98be06e166a9705069b7e9eb2`
+- commit: `7940c8bef702399f526d82920e848ba4357e5790`
 - Worker: `cloudflare/report-worker.mjs`
-- Worker Git blob: `6d2359752d12f4a40847008fc7fdcc457124e893`
+- Worker Git blob: `6560268044bac25e1d63e12edbb2572ca2b9784b`
 - Wrangler config: `cloudflare/wrangler.report.json`
 - config Git blob: `a49576aa391015e7b0e867bb7eef03c7f90d0987`
 - target Worker: `coloring-pages-report-v1`
@@ -58,7 +58,7 @@ namespace drift, rate drift, or a non-10/60-second rate period.
 The fixed shape is equivalent to:
 
 ```text
-npx --yes wrangler@4.135.0 deploy --config cloudflare/wrangler.report.json --name coloring-pages-report-v1 --no-bundle --strict --secrets-file <owner-bound-absolute-protected-path> --tag git:699c036b7f952aa98be06e166a9705069b7e9eb2 --message <exact-source/config-provenance>
+npx --yes wrangler@4.135.0 deploy --config cloudflare/wrangler.report.json --name coloring-pages-report-v1 --no-bundle --strict --secrets-file <owner-bound-absolute-protected-path> --tag git:7940c8bef702399f526d82920e848ba4357e5790 --message <exact-source/config-provenance>
 ```
 
 Cloudflare documents `--secrets-file` for uploading JSON or `.env` secrets
@@ -98,16 +98,22 @@ installed path before any privileged secret handling.
 The source-only installer for that future entrypoint is
 `scripts/install-ausmalwiese-report-wrangler-runtime-boundary-v1.py`. It pins
 the reviewed runtime source Git blob
-`c92da027aea2d2b41f1e901bd14ae91a2a4bc834` and can only target the fixed
-entrypoint above. Its default path is read-only preflight; a later separately
-authorized `--apply` uses a sealed anonymous memfd plus one exclusive
-root-owned `cp` operation, then metadata/SHA-256 verification. It has no secret,
-Wrangler or Cloudflare transport code.
+`087cf8a14ac4c8a7dc203d80c35c544677ecbe35` and can only target the fixed
+entrypoint above. Its first-install path remains no-overwrite. For the #1081
+repin it also exposes one bounded upgrade path from historical RPi5_main
+`bf7541a6166a1fb4d6fdca79bd95a67a8aa819ba` / runtime blob
+`c92da027aea2d2b41f1e901bd14ae91a2a4bc834`: before any future replacement it
+requires the existing target to be a non-symlink `root:root 0500` single-link
+regular file whose SHA-256 matches those historical bytes, and requires one
+exact `sudo install` capability. No matching capability means STOP before
+mutation; this source does not change sudo permissions. Both install paths use
+sealed anonymous memfd input and post-write metadata/SHA-256 verification. The
+installer has no secret, Wrangler or Cloudflare transport code.
 
 The fixed runtime flow is:
 
 1. Independently validate the exact `<fixed-operator-home>/coloring-pages` checkout,
-   commit `699c036b7f952aa98be06e166a9705069b7e9eb2`, report Worker/config
+   commit `7940c8bef702399f526d82920e848ba4357e5790`, report Worker/config
    blobs and parsed Wrangler config.
 2. Run only `/usr/bin/npx --yes wrangler@4.135.0 --version` as fixed operator
    `andris` (UID/GID 1000) with a bounded environment rooted at
@@ -176,12 +182,15 @@ at 100%, but `wrangler versions list --json` and
 fields. Requiring those Wrangler JSON shapes alone to prove provenance is
 therefore not sound.
 
-Issue #1079 adds a separate source-only verifier:
-`scripts/ausmalwiese_report_wrangler_verify_v2.py`. It does **not** modify
-`scripts/ausmalwiese_report_wrangler_deploy_v1.py`, whose reviewed Git blob
-remains `c92da027aea2d2b41f1e901bd14ae91a2a4bc834`. The installed root runtime,
-sealed-memfd secret transport, one-shot deploy behavior, source/config pins,
-routes, bindings, ratelimits and Stats no-effect guard are unchanged.
+Issue #1079 adds the separate source-only verifier
+`scripts/ausmalwiese_report_wrangler_verify_v2.py`. The #1081 stale-activity
+repin binds that verifier to the updated deploy source Git blob
+`087cf8a14ac4c8a7dc203d80c35c544677ecbe35` and the new application
+provenance above. The historical runtime blob
+`c92da027aea2d2b41f1e901bd14ae91a2a4bc834` is retained only as the exact
+allowed upgrade baseline; source changes do not prove that host upgrade has
+occurred. Sealed-memfd secret transport, one-shot deploy behavior, config,
+routes, bindings, ratelimits and the Stats no-effect guard remain unchanged.
 
 For post-deploy provenance, the v2 verifier treats the read-only Cloudflare
 Script/Version Settings response as the canonical annotation source:

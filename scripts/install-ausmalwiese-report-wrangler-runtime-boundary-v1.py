@@ -21,14 +21,18 @@ ROOT = Path(__file__).resolve().parents[1]
 GIT = "/usr/bin/git"
 SUDO = "/usr/bin/sudo"
 CP = "/usr/bin/cp"
+INSTALL = "/usr/bin/install"
 STAT = "/usr/bin/stat"
 TEST = "/usr/bin/test"
 SHA256SUM = "/usr/bin/sha256sum"
 
 SOURCE_REL = "scripts/ausmalwiese_report_wrangler_deploy_v1.py"
-SOURCE_BLOB = "c92da027aea2d2b41f1e901bd14ae91a2a4bc834"
+SOURCE_BLOB = "087cf8a14ac4c8a7dc203d80c35c544677ecbe35"
 TARGET = "/usr/local/sbin/rpi5-ausmalwiese-report-wrangler-deploy"
 CONFIRM = "INSTALL-AUSMALWIESE-REPORT-WRANGLER-RUNTIME"
+UPGRADE_CONFIRM = "UPGRADE-AUSMALWIESE-REPORT-WRANGLER-RUNTIME"
+OLD_SOURCE_REF = "bf7541a6166a1fb4d6fdca79bd95a67a8aa819ba"
+OLD_SOURCE_BLOB = "c92da027aea2d2b41f1e901bd14ae91a2a4bc834"
 PARENTS = ("/usr", "/usr/local", "/usr/local/sbin")
 SHA40 = re.compile(r"[0-9a-f]{40}\Z")
 CLEAN_ENV = {"PATH": "/usr/bin:/bin", "LC_ALL": "C"}
@@ -141,6 +145,20 @@ def tracked_runtime(*, runner=subprocess.run) -> bytes:
     return raw
 
 
+def historical_runtime(*, runner=subprocess.run) -> bytes:
+    raw = git(["show", OLD_SOURCE_REF + ":" + SOURCE_REL], runner=runner)
+    tree = git_text(
+        ["ls-tree", OLD_SOURCE_REF, "--", SOURCE_REL],
+        runner=runner,
+    )
+    if (
+        not 0 < len(raw) <= MAX_SOURCE
+        or tree != f"100644 blob {OLD_SOURCE_BLOB}\t{SOURCE_REL}"
+    ):
+        raise Stop("old_runtime_source_mismatch")
+    return raw
+
+
 def sudo_metadata(args, *, runner=subprocess.run):
     try:
         raw = command_output(
@@ -230,6 +248,81 @@ def root_preflight(*, runner=subprocess.run):
     return command
 
 
+def upgrade_command() -> list[str]:
+    return [
+        INSTALL,
+        "-T",
+        "-o",
+        "root",
+        "-g",
+        "root",
+        "-m",
+        "0500",
+        "--",
+        "/dev/stdin",
+        TARGET,
+    ]
+
+
+def upgrade_root_preflight(old_payload: bytes, *, runner=subprocess.run):
+    for path in PARENTS:
+        value = sudo_metadata(
+            [STAT, "-c", "%u:%g:%a:%F", "--", path], runner=runner
+        )
+        parts = value.split(":")
+        if (
+            len(parts) != 4
+            or parts[:2] != ["0", "0"]
+            or parts[3] != "directory"
+        ):
+            raise Stop("unsafe_parent")
+        try:
+            mode = int(parts[2], 8)
+        except ValueError:
+            raise Stop("unsafe_parent") from None
+        if mode & 0o022 or mode & 0o700 != 0o700:
+            raise Stop("unsafe_parent")
+
+    symlink = invoke([SUDO, "-n", TEST, "-L", TARGET], runner=runner)
+    if symlink.returncode == 0:
+        raise Stop("upgrade_target_symlink")
+    if symlink.returncode != 1:
+        raise Stop("upgrade_target_unknown")
+
+    metadata = sudo_metadata(
+        [STAT, "-c", "%u:%g:%a:%F:%h", "--", TARGET],
+        runner=runner,
+    )
+    if metadata != "0:0:500:regular file:1":
+        raise Stop("upgrade_target_metadata_mismatch")
+
+    checksum = sudo_metadata([SHA256SUM, "--", TARGET], runner=runner)
+    digest = hashlib.sha256(old_payload).hexdigest()
+    if checksum != digest + "  " + TARGET:
+        raise Stop("upgrade_target_digest_mismatch")
+
+    command = upgrade_command()
+    allowed = invoke([SUDO, "-n", "-l", "--", *command], runner=runner)
+    if allowed.returncode:
+        raise Stop("sudo_exact_upgrade_not_allowed")
+    return command
+
+
+def upgrade_preflight(
+    expected_main,
+    old_source_blob,
+    *,
+    runner=subprocess.run,
+):
+    if old_source_blob != OLD_SOURCE_BLOB:
+        raise Stop("invalid_upgrade_source")
+    exact_checkout(expected_main, runner=runner)
+    payload = tracked_runtime(runner=runner)
+    old_payload = historical_runtime(runner=runner)
+    upgrade_root_preflight(old_payload, runner=runner)
+    return payload
+
+
 def preflight(expected_main, *, runner=subprocess.run):
     exact_checkout(expected_main, runner=runner)
     payload = tracked_runtime(runner=runner)
@@ -305,6 +398,38 @@ def apply(expected_main, *, runner=subprocess.run):
         os.close(memfd)
 
 
+def upgrade(
+    expected_main,
+    old_source_blob,
+    *,
+    runner=subprocess.run,
+):
+    payload = upgrade_preflight(
+        expected_main,
+        old_source_blob,
+        runner=runner,
+    )
+    memfd = sealed_memfd(payload)
+    try:
+        exact_checkout(expected_main, runner=runner)
+        old_payload = historical_runtime(runner=runner)
+        command = upgrade_root_preflight(old_payload, runner=runner)
+        try:
+            result = invoke(
+                [SUDO, "-n", *command],
+                runner=runner,
+                stdin=memfd,
+                timeout=35,
+            )
+            if result.returncode:
+                raise Stop("post_dispatch_unknown_state")
+            post_verify(payload, runner=runner)
+        except Exception:
+            raise Stop("post_dispatch_unknown_state") from None
+    finally:
+        os.close(memfd)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Source-only report Wrangler runtime installer"
@@ -312,10 +437,48 @@ def main(argv=None):
     parser.add_argument("--expected-main", required=True)
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--confirm", default="")
+    parser.add_argument("--upgrade-from", default="")
     args = parser.parse_args(argv)
 
     try:
-        if args.apply:
+        if args.upgrade_from:
+            if args.upgrade_from != OLD_SOURCE_BLOB:
+                raise Stop("invalid_upgrade_source")
+            if args.apply:
+                if args.confirm != UPGRADE_CONFIRM:
+                    raise Stop("confirmation_missing")
+                upgrade(args.expected_main, args.upgrade_from)
+                print(
+                    json.dumps(
+                        {
+                            "status": "PASS",
+                            "operation": "upgrade",
+                            "mutation_started": True,
+                        },
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    )
+                )
+            else:
+                if args.confirm:
+                    raise Stop("confirm_requires_apply")
+                raw = upgrade_preflight(
+                    args.expected_main,
+                    args.upgrade_from,
+                )
+                print(
+                    json.dumps(
+                        {
+                            "status": "UPGRADE_PREFLIGHT_PASS",
+                            "mutation_started": False,
+                            "old_runtime_blob": OLD_SOURCE_BLOB,
+                            "runtime_sha256": hashlib.sha256(raw).hexdigest(),
+                        },
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    )
+                )
+        elif args.apply:
             if args.confirm != CONFIRM:
                 raise Stop("confirmation_missing")
             apply(args.expected_main)

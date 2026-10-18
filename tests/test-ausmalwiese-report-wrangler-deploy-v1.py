@@ -99,6 +99,21 @@ class ReportWranglerDeployTests(unittest.TestCase):
         self.assertEqual(plan.main(["--check-contract"]), 0)
         self.assertEqual(plan.main(["--deploy"]), 2)
 
+    def test_stale_activity_repin_is_exact(self):
+        self.assertEqual(
+            plan.SOURCE_COMMIT,
+            "7940c8bef702399f526d82920e848ba4357e5790",
+        )
+        self.assertEqual(
+            plan.WORKER_BLOB,
+            "6560268044bac25e1d63e12edbb2572ca2b9784b",
+        )
+        self.assertEqual(
+            plan.CONFIG_BLOB,
+            "a49576aa391015e7b0e867bb7eef03c7f90d0987",
+        )
+        self.assertEqual(plan.WRANGLER_VERSION, "4.135.0")
+
     def test_exact_reviewed_config_is_accepted(self):
         self.assertEqual(plan.validate_config(plan.expected_config()),
                          plan.expected_config())
