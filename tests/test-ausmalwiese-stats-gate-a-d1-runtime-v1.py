@@ -97,6 +97,20 @@ class GateARuntimeTests(unittest.TestCase):
             op.canonical_sha256(before()), op.PRE_SCHEMA_SHA256
         )
 
+
+    def test_runtime_checkout_repin_preserves_reviewed_evidence_digest(self):
+        self.assertEqual(
+            op.SOURCE_COMMIT,
+            "7f07c226105e26c0ca9cf91eb150a3e8f585c5ea",
+        )
+        self.assertEqual(
+            op.RUNTIME_SOURCE_COMMIT,
+            "34287444c32b3d04a89141748b0e645be6b4e5f2",
+        )
+        self.assertEqual(
+            op.canonical_sha256(remote()), op.REMOTE_EVIDENCE_SHA256
+        )
+
     def test_git_blob_uses_nul_separator(self):
         raw = b"x"
         expected = hashlib.sha1(b"blob 1\x00x").hexdigest()
