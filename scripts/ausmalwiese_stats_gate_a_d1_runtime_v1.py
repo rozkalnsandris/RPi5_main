@@ -21,6 +21,7 @@ WORKER = "coloring-pages-stats-v1"
 WRANGLER_VERSION = "4.135.0"
 SOURCE_REPO = "rozkalnsandris/coloring-pages"
 SOURCE_COMMIT = "7f07c226105e26c0ca9cf91eb150a3e8f585c5ea"
+RUNTIME_SOURCE_COMMIT = "34287444c32b3d04a89141748b0e645be6b4e5f2"
 WORKER_PATH = "cloudflare/stats-worker.js"
 WORKER_BLOB = "c2ac9da6e0701103e0041b30db7dfbea4298f96c"
 CONFIG_PATH = "cloudflare/wrangler.stats-worker.jsonc"
@@ -184,7 +185,7 @@ def exact_application_bytes(*, runner: Any = subprocess.run) -> dict[str, bytes]
         "SOURCE_ROOT_UNTRUSTED",
     )
     head = git_runtime(["rev-parse", "HEAD"], runner=runner)
-    need(head.decode("ascii").strip() == SOURCE_COMMIT, "SOURCE_COMMIT_DRIFT")
+    need(head.decode("ascii").strip() == RUNTIME_SOURCE_COMMIT, "SOURCE_COMMIT_DRIFT")
     expected = {
         WORKER_PATH: WORKER_BLOB,
         CONFIG_PATH: CONFIG_BLOB,
@@ -676,6 +677,7 @@ def expected_contract() -> dict[str, Any]:
         "wrangler_version": WRANGLER_VERSION,
         "source_repo": SOURCE_REPO,
         "source_commit": SOURCE_COMMIT,
+        "runtime_source_commit": RUNTIME_SOURCE_COMMIT,
         "worker_path": WORKER_PATH,
         "worker_blob": WORKER_BLOB,
         "config_path": CONFIG_PATH,
