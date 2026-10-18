@@ -7,15 +7,15 @@ from typing import Any
 
 ROOT=Path(__file__).resolve().parents[1]
 CONTRACT=ROOT/"ops/contracts/ausmalwiese-report-wrangler-verifier-v2.json"
-ISSUE=1104
+ISSUE=1108
 WORKER="coloring-pages-report-v1"
 WRANGLER_VERSION="4.135.0"
-SOURCE_COMMIT="34287444c32b3d04a89141748b0e645be6b4e5f2"
-WORKER_BLOB="6418a4bebad9f89a2e1045d0ad6476e66549993c"
-CONFIG_BLOB="78f60e119092dca969a35b8bbac1b82ba68a0084"
+SOURCE_COMMIT="9a8111f19f9d82395f331ed49409af22f4765db7"
+WORKER_BLOB="384c93ae6f7348efc2dcbddbcc5a23743d8311d2"
+CONFIG_BLOB="0ddb5e8c23e0503a957d0de69e11a7d98d6651cd"
 DEPLOY_SOURCE="scripts/ausmalwiese_report_wrangler_deploy_v1.py"
-DEPLOY_BLOB="600f9f15ac706d581d4d58ca5bdf4f78b2053801"
-DESTINATION_LOCAL_PART="INFO"
+DEPLOY_BLOB="d4263343fca3adedccdc622f5787f15cbcd1246b"
+DESTINATION_LOCAL_PART="info"
 DESTINATION_DOMAIN="ausmalwiese.de"
 SETTINGS_METHOD="GET"
 SETTINGS_PATH_TEMPLATE="/accounts/{account_id}/workers/scripts/"+WORKER+"/settings"
