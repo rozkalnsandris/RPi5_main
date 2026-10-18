@@ -51,12 +51,13 @@ class ReportWranglerDeployTests(unittest.TestCase):
     def test_exact_reviewed_config_is_only_two_routes_and_email_binding(self):
         good=plan.expected_config(); self.assertEqual(plan.validate_config(good),good)
         self.assertEqual(good["routes"],plan.ROUTES); self.assertEqual(good["send_email"][0]["name"],plan.EMAIL_BINDING_NAME)
+        alternate=plan.expected_config("different-destination")
+        self.assertEqual(plan.validate_config(alternate),alternate)
         for forbidden in ("secrets","ratelimits","vars"): self.assertNotIn(forbidden,good)
         for mutation in (
             lambda x:x.update(name="other-worker"),
             lambda x:x["routes"].append({"pattern":"ausmalwiese.de/api/report/config","zone_name":"ausmalwiese.de"}),
             lambda x:x["send_email"][0].update(name="OTHER"),
-            lambda x:x["send_email"][0].update(destination_address="different-destination"),
             lambda x:x.update(secrets={"required":["REPORT_TO"]}),
             lambda x:x.update(ratelimits=[]),
         ):
