@@ -32,7 +32,7 @@ Source:
 `scripts/ausmalwiese_stats_gate_a_d1_runtime_v1.py`
 
 Git blob:
-`addccfa3fc54da494102d0b472f785575e9d4f55`
+`d1191e913e565965dc1c4d153179f702bf2a79d4`
 
 Future installed entrypoint:
 `/usr/local/sbin/rpi5-ausmalwiese-stats-gate-a-d1-migrate`
@@ -55,6 +55,8 @@ post-mutation log delta is terminal unknown state: no retry, rollback, cleanup,
 or alternate path.
 
 ## Preflight
+
+The installed entrypoint exposes `--runtime-preflight` as a read-only mode. It accepts no mutation confirmation or owner-binding arguments and returns only the fixed evidence digests plus `mutation_started:false` on success.
 
 The installed runtime must, in this order:
 
@@ -112,13 +114,13 @@ Source:
 `scripts/install-ausmalwiese-stats-gate-a-d1-runtime-v1.py`
 
 The installer may install only the exact runtime blob
-`addccfa3fc54da494102d0b472f785575e9d4f55` into the fixed target. A first
+`d1191e913e565965dc1c4d153179f702bf2a79d4` into the fixed target. A first
 install still requires target absence and bounded GNU `cp` no-clobber
 semantics.
 
 For an already installed Gate A runtime, the only upgrade predecessor is
-RPi5_main `6761b8b15557204d1a16d810df6a348f0d58dfb1` with runtime blob
-`eb6dfa99deb1467c102ea12b572128fef3041ccf`. Upgrade preflight reconstructs
+RPi5_main `a17f83668acdcdfde26ef6f586b1c2f8aa765ada` with runtime blob
+`addccfa3fc54da494102d0b472f785575e9d4f55`. Upgrade preflight reconstructs
 those historical bytes, requires the installed target to be a non-symlink
 `root:root 0500` single-link file with the exact SHA-256, and checks sudo
 capability for one fixed `/usr/bin/install` replacement. The upgrade has no
