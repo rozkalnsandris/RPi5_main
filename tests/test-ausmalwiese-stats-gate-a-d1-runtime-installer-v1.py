@@ -19,6 +19,7 @@ spec.loader.exec_module(mod)
 
 HEAD = "a" * 40
 PAYLOAD = RUNTIME.read_bytes()
+OLD_PAYLOAD = b"old-gate-a-runtime"
 
 
 class Runner:
@@ -91,6 +92,10 @@ class Runner:
             elif command == ["ls-tree", "HEAD", "--", mod.SOURCE_REL]:
                 blob = "0" * 40 if self.wrong_blob else mod.SOURCE_BLOB
                 out = f"100644 blob {blob}\t{mod.SOURCE_REL}\n".encode()
+            elif command == ["show", mod.OLD_SOURCE_REF + ":" + mod.SOURCE_REL]:
+                out = OLD_PAYLOAD
+            elif command == ["ls-tree", mod.OLD_SOURCE_REF, "--", mod.SOURCE_REL]:
+                out = f"100644 blob {mod.OLD_SOURCE_BLOB}\t{mod.SOURCE_REL}\n".encode()
             else:
                 rc = 9
 
@@ -136,6 +141,12 @@ class Runner:
                 out = b""
             elif self.cp_version == "9.1":
                 out = ("'/dev/stdin' -> '" + mod.TARGET + "'\n").encode()
+        elif args[:3] == [mod.SUDO, "-n", mod.INSTALL]:
+            self.writes += 1
+            if stdin != 45:
+                raise AssertionError("sealed memfd required")
+            if self.fail:
+                rc = 1
         else:
             raise AssertionError(args)
 
@@ -236,6 +247,80 @@ class InstallerTests(unittest.TestCase):
                 mod.apply(HEAD, runner=runner)
         self.assertEqual(runner.writes, 1)
 
+
+    def test_upgrade_is_bound_to_exact_old_runtime_blob_and_ref(self):
+        self.assertEqual(
+            mod.OLD_SOURCE_REF,
+            "6761b8b15557204d1a16d810df6a348f0d58dfb1",
+        )
+        self.assertEqual(
+            mod.OLD_SOURCE_BLOB,
+            "eb6dfa99deb1467c102ea12b572128fef3041ccf",
+        )
+        self.assertEqual(
+            mod.UPGRADE_CONFIRM,
+            "UPGRADE-AUSMALWIESE-STATS-GATE-A-D1-RUNTIME",
+        )
+
+    def test_upgrade_preflight_rejects_wrong_old_blob(self):
+        with self.assertRaisesRegex(mod.Stop, "invalid_upgrade_source"):
+            mod.upgrade_preflight(HEAD, "0" * 40, runner=Runner())
+
+    def test_upgrade_root_preflight_checks_old_metadata_digest_and_capability(self):
+        digest = hashlib.sha256(OLD_PAYLOAD).hexdigest()
+
+        def runner(argv, **kwargs):
+            args = list(argv)
+            if kwargs.get("env") != mod.CLEAN_ENV:
+                raise AssertionError("unbounded environment")
+            rc, out = 0, b""
+            if args[:3] == [mod.SUDO, "-n", mod.STAT]:
+                if args[-1] in mod.PARENTS:
+                    out = b"0:0:755:directory\n"
+                elif args[-1] == mod.TARGET:
+                    out = b"0:0:500:regular file:1\n"
+                else:
+                    rc = 8
+            elif args == [mod.SUDO, "-n", mod.TEST, "-L", mod.TARGET]:
+                rc = 1
+            elif args[:3] == [mod.SUDO, "-n", mod.SHA256SUM]:
+                out = (digest + "  " + mod.TARGET + "\n").encode()
+            elif args[:4] == [mod.SUDO, "-n", "-l", "--"]:
+                self.assertEqual(args[4:], mod.upgrade_command())
+            else:
+                raise AssertionError(args)
+            return subprocess.CompletedProcess(args, rc, stdout=out, stderr=b"safe")
+
+        self.assertEqual(
+            mod.upgrade_root_preflight(OLD_PAYLOAD, runner=runner),
+            mod.upgrade_command(),
+        )
+
+    def test_upgrade_dispatches_one_fixed_install(self):
+        runner = Runner()
+        with mock.patch.object(mod, "upgrade_preflight", return_value=PAYLOAD), \
+             mock.patch.object(mod, "sealed_memfd", return_value=45), \
+             mock.patch.object(mod, "exact_checkout"), \
+             mock.patch.object(mod, "historical_runtime", return_value=OLD_PAYLOAD), \
+             mock.patch.object(mod, "upgrade_root_preflight", return_value=mod.upgrade_command()), \
+             mock.patch.object(mod, "post_verify"), \
+             mock.patch.object(mod.os, "close"):
+            mod.upgrade(HEAD, mod.OLD_SOURCE_BLOB, runner=runner)
+        self.assertEqual(runner.writes, 1)
+
+    def test_upgrade_failure_is_terminal_no_retry(self):
+        runner = Runner(fail=True)
+        with mock.patch.object(mod, "upgrade_preflight", return_value=PAYLOAD), \
+             mock.patch.object(mod, "sealed_memfd", return_value=45), \
+             mock.patch.object(mod, "exact_checkout"), \
+             mock.patch.object(mod, "historical_runtime", return_value=OLD_PAYLOAD), \
+             mock.patch.object(mod, "upgrade_root_preflight", return_value=mod.upgrade_command()), \
+             mock.patch.object(mod, "post_verify"), \
+             mock.patch.object(mod.os, "close"):
+            with self.assertRaisesRegex(mod.Stop, "post_dispatch_unknown_state"):
+                mod.upgrade(HEAD, mod.OLD_SOURCE_BLOB, runner=runner)
+        self.assertEqual(runner.writes, 1)
+
     def test_confirmation_alone_never_installs(self):
         with mock.patch.object(mod, "apply") as apply, \
              mock.patch("builtins.print"):
@@ -255,6 +340,8 @@ class InstallerTests(unittest.TestCase):
             "npm ",
             "/usr/bin/curl",
             "/usr/bin/rm",
+            "CLOUDFLARE_API_TOKEN",
+            "d1 execute",
             "shell=True",
         ):
             self.assertNotIn(forbidden.lower(), text.lower())
