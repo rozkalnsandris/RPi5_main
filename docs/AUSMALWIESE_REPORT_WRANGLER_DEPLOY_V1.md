@@ -1,254 +1,71 @@
-# Ausmalwiese Report Worker — Wrangler deploy source contract (#1048)
+# Ausmalwiese Report Worker — minimal Wrangler deploy contract (#1092)
 
-**SOURCE ONLY. NO MERGE. NO LIVE. NO CLOUDFLARE REQUEST. NO CREDENTIAL OR SECRET ACCESS.**
+SOURCE ONLY. No merge, LIVE deploy, Cloudflare mutation, credential access or email send is authorized by this document.
 
-Issue #1075 adds source for a future separately installed root-owned runtime boundary. The repository copy still cannot enter runtime mode.
+## Current application provenance
 
-This outcome replaces the older custom REST/multipart deployment direction with one
-small, reviewed Wrangler deployment contract for `coloring-pages-report-v1`. It
-does not install or run Wrangler, read a secrets file, contact Cloudflare, deploy
-the Worker, send mail, or mutate the RPi5 host.
+The canonical Report Worker application is owned by rozkalnsandris/coloring-pages:
 
-## Frozen application provenance
+- commit: 16c1ed5cccd43d28212b6a7aefbc04cae5195698
+- Worker: cloudflare/report-worker.mjs
+- Worker Git blob: 4ef00f9963c68ab9a4ab5aeb4a44b8c99c76eda0
+- config: cloudflare/wrangler.report.json
+- config Git blob: 2765e88f4c5ee7a01a5380ef52e4ff8c0688c9e6
+- target Worker: coloring-pages-report-v1
+- Wrangler: 4.135.0
 
-The deployment source is owned by `rozkalnsandris/coloring-pages`:
+The reviewed config contains only two exact routes:
 
-- commit: `7940c8bef702399f526d82920e848ba4357e5790`
-- Worker: `cloudflare/report-worker.mjs`
-- Worker Git blob: `6560268044bac25e1d63e12edbb2572ca2b9784b`
-- Wrangler config: `cloudflare/wrangler.report.json`
-- config Git blob: `a49576aa391015e7b0e867bb7eef03c7f90d0987`
-- target Worker: `coloring-pages-report-v1`
-- Wrangler: `4.135.0`
+- ausmalwiese.de/api/report
+- www.ausmalwiese.de/api/report
 
-The reviewed config keeps `workers_dev=false`, `preview_urls=false`,
-`no_bundle=true`, exactly four report routes, exactly four required secrets, and
-two distinct rate-limit namespaces. Account-wide namespace uniqueness is a
-future read-only LIVE preflight; source equality alone does not prove it.
+and one Cloudflare Email Service send_email binding:
 
-## Exact reviewed config
+- name: EMAIL
+- destination_address: info@ausmalwiese.de
 
-Routes:
+There are no Report secrets, Turnstile bindings, rate-limit bindings, Report config endpoint or Stats dependency.
 
-- `ausmalwiese.de/api/report`
-- `ausmalwiese.de/api/report/config`
-- `www.ausmalwiese.de/api/report`
-- `www.ausmalwiese.de/api/report/config`
+## One-shot deploy shape
 
-Required secret names:
+The future deploy command is limited to the exact reviewed application/config plus provenance tag/message. It does not use --secrets-file, vars, D1, generic routes or secret commands.
 
-- `TURNSTILE_SITE_KEY`
-- `TURNSTILE_SECRET`
-- `BREVO_API_KEY`
-- `REPORT_TO`
+The root-owned installed entrypoint remains:
 
-Rate limiting:
+/usr/local/sbin/rpi5-ausmalwiese-report-wrangler-deploy
 
-- `REPORT_RATE`: namespace `2067894450`, 12 / 60 s
-- `REPORT_DUP`: namespace `2051617019`, 1 / 60 s
+The installed file is only a trust boundary. Runtime execution drops the Wrangler child to the fixed operator andris and uses that operator's existing Wrangler authentication context. It reads no protected Report secret file and creates no secret memfd.
 
-The source validator rejects any extra/wildcard route, missing or extra secret
-name, wrong Worker/main, workers.dev or preview exposure, unexpected config key,
-namespace drift, rate drift, or a non-10/60-second rate period.
+The runtime installer is repinned so a future separately authorized upgrade may replace the currently reviewed installed runtime blob 55b13636ba36cdc574fedbeb469c73af91bb8594 with the #1092 minimal runtime bytes. Source merge does not install it.
 
-## Future one-shot deploy shape
+## Read-only post-deploy proof
 
-`scripts/ausmalwiese_report_wrangler_deploy_v1.py` contains the reviewed fixed-purpose future launcher plus the command/verification validators. The current #1048 activation does **not** authorize calling its `--deploy` mode. A later separately authorized runtime invocation must supply an exact `coloring-pages` checkout root and the owner-bound protected secrets-file path.
+Minimum evidence after a separately authorized deploy:
 
-The fixed shape is equivalent to:
+- latest Report version and exactly one active version at 100%;
+- exact source/config provenance from Script/Version Settings annotations;
+- exactly the two report routes;
+- exactly one binding kind: EMAIL = send_email.
 
-```text
-npx --yes wrangler@4.135.0 deploy --config cloudflare/wrangler.report.json --name coloring-pages-report-v1 --no-bundle --strict --secrets-file <owner-bound-absolute-protected-path> --tag git:7940c8bef702399f526d82920e848ba4357e5790 --message <exact-source/config-provenance>
-```
+The bounded read plan uses versions list, deployments list, versions view and one Script/Version Settings annotations read. It does not require secret list, /api/report/config or any Stats snapshot.
 
-Cloudflare documents `--secrets-file` for uploading JSON or `.env` secrets
-alongside `wrangler deploy`; required names declared through `secrets.required`
-are validated during deploy. `--strict` is kept so non-interactive deployment
-fails rather than silently overriding conflicting remote state.
+Mailbox delivery is a separate end-to-end check after LIVE activation.
 
-Before a future dispatch, the launcher checks the checkout HEAD equals the pinned application commit, the two Git tree blobs equal the pinned Worker/config blobs, the two working-tree paths are unchanged, the parsed config equals the closed reviewed shape, and the secrets file is an absolute single-link regular file owned by the executing UID with mode `0400` or `0600`. It reads only secrets-file metadata; Wrangler itself is the future consumer of secret contents.
+## Provider model
 
-The launcher then verifies the exact `wrangler@4.135.0` selector reports version `4.135.0` and permits exactly one deploy dispatch. A non-zero or ambiguous deploy result becomes terminal `DEPLOY_DISPATCH_UNKNOWN`; the source contains no automatic retry, rollback or cleanup.
+Cloudflare Email Service documentation reviewed 2026-10-18 documents a send_email Wrangler binding and env.EMAIL.send(). destination_address restricts the binding to one configured destination; a send call may use null/undefined recipient to select that configured destination.
 
-A future LIVE authorization must bind the exact source commit/blobs, launcher release, Wrangler version, target Worker, protected secrets-file path and one deployment. This source issue does not authorize that operation.
+References:
 
-## Root-owned secrets runtime boundary (#1075)
-
-The protected deploy file is intentionally persistent as:
-
-- `/etc/rpi5-secrets/cloudflare/ausmalwiese-report-wrangler-secrets.json`
-- `root:root`
-- mode `0600`
-- regular file, single link
-
-The earlier same-UID launcher check is still valid for same-owner secret files, but
-it cannot be used for this production file: simply accepting `root:root 0600`
-while continuing to run Wrangler as `andris` would fail at the filesystem
-boundary.
-
-The #1075 source adds a separate future installed entrypoint:
-
-`/usr/local/sbin/rpi5-ausmalwiese-report-wrangler-deploy`
-
-It is deliberately unreachable from the repository checkout. A future
-separately authorized installation must place the exact reviewed script bytes at
-that path as `root:root 0500`. Runtime mode then requires root and the exact
-installed path before any privileged secret handling.
-
-The source-only installer for that future entrypoint is
-`scripts/install-ausmalwiese-report-wrangler-runtime-boundary-v1.py`. It pins
-the reviewed runtime source Git blob
-`55b13636ba36cdc574fedbeb469c73af91bb8594` and can only target the fixed
-entrypoint above. Its first-install path remains no-overwrite. For the #1084
-Stats guard simplification it exposes one bounded upgrade path from the reviewed
-predecessor RPi5_main `a5806c6ebd6ea786a2cb43fead2b9129e46d8653` / runtime blob
-`087cf8a14ac4c8a7dc203d80c35c544677ecbe35`: before any future replacement it
-requires the existing target to be a non-symlink `root:root 0500` single-link
-regular file whose SHA-256 matches those historical bytes, and requires one
-exact `sudo install` capability. No matching capability means STOP before
-mutation; this source does not change sudo permissions. Both install paths use
-sealed anonymous memfd input and post-write metadata/SHA-256 verification. The
-installer has no secret, Wrangler or Cloudflare transport code.
-
-The fixed runtime flow is:
-
-1. Independently validate the exact `<fixed-operator-home>/coloring-pages` checkout,
-   commit `7940c8bef702399f526d82920e848ba4357e5790`, report Worker/config
-   blobs and parsed Wrangler config.
-2. Run only `/usr/bin/npx --yes wrangler@4.135.0 --version` as fixed operator
-   `andris` (UID/GID 1000) with a bounded environment rooted at
-   `<fixed-operator-home>`. This future operation uses the operator's existing Wrangler
-   authentication context; #1075 does not read or expose those credentials.
-3. Validate the persistent secret file and trusted parent metadata, then open it
-   as root with `O_NOFOLLOW` and recheck the opened inode.
-4. Kernel-copy the bytes with `sendfile` into an anonymous Linux `memfd`.
-   No JSON parsing, Python string, log output, persistent temporary file, chmod,
-   chown or ACL change is applied to the real protected file.
-5. Change only the anonymous memfd to fixed operator ownership and mode `0400`,
-   seal it against writes/growth/shrink, rewind it, and pass it as the child's
-   stdin.
-6. Run exactly one pinned Wrangler deploy as `andris`, with
-   `--secrets-file /dev/stdin`. The persistent root-only path is never passed
-   to Wrangler.
-7. Capture and suppress raw Wrangler stdout/stderr at this boundary. Only a
-   static success/STOP classification may leave the wrapper. Any non-zero exit,
-   timeout or ambiguity after dispatch is terminal `DEPLOY_DISPATCH_UNKNOWN`.
-   There is no retry, rollback, alternate deploy or persistent cleanup path.
-
-This preserves the normal Wrangler OAuth/home behavior in the unprivileged
-operator process while keeping the at-rest secrets file root-only. A future LIVE
-authorization must explicitly cover installation of the exact runtime boundary,
-use of the existing Wrangler authentication context, the single deploy mutation
-and read-only verification. Source merge alone grants none of those actions.
-
-Cloudflare documents `wrangler deploy --secrets-file <path>` as the supported
-way to upload JSON or `.env` secrets alongside code, including required
-secrets on a first deployment. The runtime boundary uses `/dev/stdin` as the
-ephemeral file path presented to Wrangler; a future host preflight must verify
-this exact pinned Wrangler version accepts the anonymous JSON stream before any
-Cloudflare mutation.
-
-## Read-only post-deploy verification contract
-
-After a separately authorized deployment, verification is read-only. The source
-can produce only these fixed inspection shapes:
-
-- `wrangler versions list --json`
-- `wrangler deployments list --json`
-- `wrangler versions view <exact-version-id> --json`
-- `wrangler secret list --format json`
-- GET `https://ausmalwiese.de/api/report/config`
-
-The sanitized report snapshot must prove:
-
-- the latest version is the only active version at exactly 100%;
-- version tag/message bind the exact application commit, Worker blob and config blob;
-- exactly the four report routes are present;
-- exactly four `secret_text` names and the two `ratelimit` bindings are present;
-- rate-limit namespaces and policies equal the reviewed config;
-- `/api/report/config` returns HTTP 200 and exposes a site key.
-
-The source deliberately does **not** implement a generic Cloudflare REST client.
-Any future collector that supplies this snapshot remains separately reviewed and
-read-only.
-
-### Script/Version Settings provenance correction (#1079)
-
-The first production closeout after the reviewed report deployment exposed one
-false STOP in the verification evidence source. Wrangler 4.135.0 accepted the
-pinned `--tag` and `--message`, and the deployed Worker was latest and active
-at 100%, but `wrangler versions list --json` and
-`wrangler versions view <version> --json` did not include those optional
-fields. Requiring those Wrangler JSON shapes alone to prove provenance is
-therefore not sound.
-
-Issue #1079 adds the separate source-only verifier
-`scripts/ausmalwiese_report_wrangler_verify_v2.py`. The #1084 Stats guard
-simplification binds that verifier to the updated deploy source Git blob
-`55b13636ba36cdc574fedbeb469c73af91bb8594` while preserving the application provenance above. The
-reviewed upgrade predecessor is RPi5_main `a5806c6ebd6ea786a2cb43fead2b9129e46d8653` /
-runtime blob `087cf8a14ac4c8a7dc203d80c35c544677ecbe35`; source changes do not prove that host
-upgrade has occurred. Sealed-memfd secret transport, one-shot deploy behavior,
-config, routes, bindings, ratelimits and the exact Stats before/after no-effect
-comparison remain unchanged.
-
-For post-deploy provenance, the v2 verifier treats the read-only Cloudflare
-Script/Version Settings response as the canonical annotation source:
-
-`GET /accounts/{account_id}/workers/scripts/coloring-pages-report-v1/settings`
-
-Only the sanitized `annotations` object is relevant to provenance. It must
-contain exactly `workers/tag`, `workers/message` and
-`workers/triggered_by`. The tag and message must exactly match the frozen
-source commit/blob/config provenance; `workers/triggered_by` must be a
-non-empty bounded server annotation. The adapter then supplies the validated
-tag/message to the existing legacy report snapshot shape.
-
-This new verifier is source-only data validation and command planning. It has
-no credential reader, no HTTP client and no Cloudflare execution path. A future
-LIVE collector still needs a separate explicit authorization for any
-authenticated read.
-
-## Stats no-effect guard
-
-`coloring-pages-stats-v1` is a protected neighbor. A future LIVE preflight must
-capture a sanitized Stats snapshot immediately before the report deploy and
-again afterwards. The source accepts only exact pre/post equality for:
-
-- a valid latest uploaded version identifier;
-- exactly one active version at 100% traffic; it may differ from the latest
-  uploaded version because Cloudflare Versions and Deployments are separate
-  state;
-- route fingerprint;
-- binding fingerprint;
-- settings fingerprint.
-
-The full sanitized snapshot, including both latest-uploaded and active version
-IDs, must still be byte-equivalent before and after the report deployment. Any
-difference is `STATS_DRIFT` and the verification fails closed. This issue does
-not authorize fixing or redeploying Stats.
-
-## Official provider references reviewed 2026-10-17
-
-- https://developers.cloudflare.com/workers/wrangler/commands/workers/
+- https://developers.cloudflare.com/email-service/api/send-emails/workers-api/
+- https://developers.cloudflare.com/email-service/configuration/send-bindings/
 - https://developers.cloudflare.com/workers/wrangler/configuration/
-- https://developers.cloudflare.com/workers/configuration/secrets/
-- https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/
-- https://developers.cloudflare.com/workers/configuration/routing/routes/
-- https://developers.cloudflare.com/workers/wrangler/install-and-update/
-
-Cloudflare currently documents `namespace_id` as a positive integer encoded as a
-string, with rate-limit periods restricted to 10 or 60 seconds. Distinct
-namespace IDs avoid shared counters across bindings.
 
 ## Offline checks
 
-```text
 python3 scripts/ausmalwiese_report_wrangler_deploy_v1.py --check-contract
 python3 tests/test-ausmalwiese-report-wrangler-deploy-v1.py
-```
+python3 tests/test-ausmalwiese-report-wrangler-runtime-boundary-v1.py
+python3 tests/test-ausmalwiese-report-wrangler-verify-v2.py
 
-Passing these checks proves only source consistency. The `--deploy` entrypoint is deliberately present for later reviewed installation/use but was not invoked by #1048. Passing source checks does not prove current
-RPi5 installation state, Cloudflare account state, namespace uniqueness, secret
-availability, Turnstile/Brevo readiness, route activation, mail delivery, or LIVE
-authorization.
+Passing source checks is not LIVE evidence.

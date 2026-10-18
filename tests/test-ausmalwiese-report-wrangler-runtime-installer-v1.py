@@ -310,7 +310,7 @@ class RuntimeInstallerTests(unittest.TestCase):
         )
         self.assertEqual(
             mod.OLD_SOURCE_BLOB,
-            "087cf8a14ac4c8a7dc203d80c35c544677ecbe35",
+            "55b13636ba36cdc574fedbeb469c73af91bb8594",
         )
         with mock.patch.object(mod, "exact_checkout") as checkout, \
              mock.patch.object(mod, "tracked_runtime", return_value=PAYLOAD), \
