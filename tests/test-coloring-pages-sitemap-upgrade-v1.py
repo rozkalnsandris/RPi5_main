@@ -60,10 +60,10 @@ class ExactUpgradeTests(unittest.TestCase):
     def test_fixed_source_pins_and_blob_hash(self):
         content = SCRIPT.read_text()
         for expected in (
-            "0da51ef361f9ce815ebde3e4cc6cae19a2c2ffe8",
-            "5644c8fd366c0c57f6339fddd163c5091ea134c5",
             "7b0330f30e27d6fe9c5f3e4fbf81fc6473ade660",
             "49c8ba34cf0a4c4ab100463df9adacc4c6e90c2c",
+            "4ade38f1225f4c1bc102fda8d5538f9262695d43",
+            "5d1d37c32573aa8ac0d91f45b73938638fd183e9",
         ):
             self.assertIn(expected, content)
         self.assertEqual(blob(b"abc"), "f2ba8f84ab5c1bce84a7b441cb1959cfc7093b7f")
@@ -88,9 +88,18 @@ class ExactUpgradeTests(unittest.TestCase):
         with self.assertRaisesRegex(mod.UpgradeError, "not the exact old"):
             self.run_op(apply=True)
 
-    def test_enabled_marker_blocks_before_mutation(self):
-        self.paths.marker.write_bytes(b"enabled")
-        with self.assertRaisesRegex(mod.UpgradeError, "post-publish hook"):
+    def test_exact_enabled_marker_is_preserved(self):
+        self.paths.marker.write_bytes(mod.MARKER_BYTES)
+        self.paths.marker.chmod(0o444)
+        result = self.run_op(apply=True)
+        self.assertEqual(result["marker"], "enabled")
+        self.assertEqual(self.paths.marker.read_bytes(), mod.MARKER_BYTES)
+        self.assertEqual(stat.S_IMODE(self.paths.marker.stat().st_mode), 0o444)
+
+    def test_tampered_enabled_marker_blocks_before_mutation(self):
+        self.paths.marker.write_bytes(b"wrong marker\n")
+        self.paths.marker.chmod(0o444)
+        with self.assertRaisesRegex(mod.UpgradeError, "post-publish marker"):
             self.run_op(apply=True)
         self.assertFalse(self.paths.generator_stage.exists())
 

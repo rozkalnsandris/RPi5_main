@@ -23,13 +23,14 @@ SCRIPT_REL = "scripts/upgrade-coloring-pages-sitemap-publisher-v1.py"
 OPERATOR = "ops/bin/coloring-pages-sitemap-publish"
 GENERATOR = "ops/vendor/coloring-pages-sitemap"
 OLD = {
-    OPERATOR: "0da51ef361f9ce815ebde3e4cc6cae19a2c2ffe8",
-    GENERATOR: "5644c8fd366c0c57f6339fddd163c5091ea134c5",
-}
-NEW = {
     OPERATOR: "7b0330f30e27d6fe9c5f3e4fbf81fc6473ade660",
     GENERATOR: "49c8ba34cf0a4c4ab100463df9adacc4c6e90c2c",
 }
+NEW = {
+    OPERATOR: "4ade38f1225f4c1bc102fda8d5538f9262695d43",
+    GENERATOR: "5d1d37c32573aa8ac0d91f45b73938638fd183e9",
+}
+MARKER_BYTES = b"coloring-pages-sitemap-post-publish-v1\n"
 MAX_BYTES = 100_000
 SHA = re.compile(r"^[0-9a-f]{40}$")
 
@@ -101,11 +102,20 @@ def trusted_file(path: Path, uid: int, gid: int, mode: int) -> bytes:
         os.close(fd)
 
 
-def no_existing_stage_or_marker(paths: Paths):
+def no_existing_stage(paths: Paths):
     if any(os.path.lexists(p) for p in (
-        paths.marker, paths.generator_stage, paths.operator_stage
+        paths.generator_stage, paths.operator_stage
     )):
-        raise UpgradeError("preexisting stage or enabled post-publish hook")
+        raise UpgradeError("preexisting stage")
+
+
+def marker_state(paths: Paths, root_uid: int, root_gid: int) -> str:
+    if not os.path.lexists(paths.marker):
+        return "absent"
+    content = trusted_file(paths.marker, root_uid, root_gid, 0o444)
+    if content != MARKER_BYTES:
+        raise UpgradeError("unsafe post-publish marker")
+    return "enabled"
 
 
 @contextmanager
@@ -134,7 +144,8 @@ def preflight(paths: Paths, sources: dict[str, bytes], *,
     directory(paths.bin_dir, root_uid, root_gid)
     directory(paths.vendor_dir, root_uid, root_gid)
     directory(paths.lock.parent, owner_uid, owner_gid)
-    no_existing_stage_or_marker(paths)
+    no_existing_stage(paths)
+    marker = marker_state(paths, root_uid, root_gid)
     for rel, installed, mode in (
         (GENERATOR, paths.generator, 0o444),
         (OPERATOR, paths.operator, 0o755),
@@ -147,7 +158,8 @@ def preflight(paths: Paths, sources: dict[str, bytes], *,
             raise UpgradeError("candidate source SHA mismatch")
     return {"result": "CHECK_PASS", "mutation_started": False,
             "old_operator": OLD[OPERATOR], "old_generator": OLD[GENERATOR],
-            "new_operator": NEW[OPERATOR], "new_generator": NEW[GENERATOR]}
+            "new_operator": NEW[OPERATOR], "new_generator": NEW[GENERATOR],
+            "marker": marker}
 
 
 def sync_directory(path: Path):
@@ -191,8 +203,11 @@ def execute(paths: Paths, sources: dict[str, bytes], *,
             return check
         if reconfirm is None or reconfirm() != sources:
             raise UpgradeError("source confirmation missing or drifted")
-        preflight(paths, sources, root_uid=root_uid, root_gid=root_gid,
-                  owner_uid=owner_uid, owner_gid=owner_gid)
+        marker = check["marker"]
+        recheck = preflight(paths, sources, root_uid=root_uid, root_gid=root_gid,
+                            owner_uid=owner_uid, owner_gid=owner_gid)
+        if recheck["marker"] != marker:
+            raise UpgradeError("post-publish marker state drift")
         # Both source files are staged and verified first; replacing two files is
         # not an atomic pair. Every catalogue writer must be independently paused.
         stage(paths.generator_stage, sources[GENERATOR], 0o444,
@@ -203,8 +218,8 @@ def execute(paths: Paths, sources: dict[str, bytes], *,
             (GENERATOR, paths.generator, paths.generator_stage, 0o444),
             (OPERATOR, paths.operator, paths.operator_stage, 0o755),
         ):
-            if os.path.lexists(paths.marker):
-                raise UpgradeError("post-publish marker changed")
+            if marker_state(paths, root_uid, root_gid) != marker:
+                raise UpgradeError("post-publish marker state drift")
             if blob(trusted_file(old_path, root_uid, root_gid, mode)) != OLD[rel]:
                 raise UpgradeError("old installed file changed before replacement")
             if blob(trusted_file(temporary, root_uid, root_gid, mode)) != NEW[rel]:
@@ -213,9 +228,12 @@ def execute(paths: Paths, sources: dict[str, bytes], *,
             sync_directory(old_path.parent)
             if blob(trusted_file(old_path, root_uid, root_gid, mode)) != NEW[rel]:
                 raise UpgradeError("installed new file verification failed")
-        no_existing_stage_or_marker(paths)
+        no_existing_stage(paths)
+        if marker_state(paths, root_uid, root_gid) != marker:
+            raise UpgradeError("post-publish marker state drift")
         return {"result": "UPGRADE_PASS", "mutation_started": True,
-                "new_operator": NEW[OPERATOR], "new_generator": NEW[GENERATOR]}
+                "new_operator": NEW[OPERATOR], "new_generator": NEW[GENERATOR],
+                "marker": marker}
 
 
 def owner_git(*args: str) -> bytes:
