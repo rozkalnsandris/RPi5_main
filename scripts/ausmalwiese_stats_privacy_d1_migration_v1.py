@@ -40,7 +40,7 @@ CLEANUP_BLOB = "a7cffb110adfceb5c1ff4dcd17a7009c549976a5"
 
 SCHEMA = "ausmalwiese.stats-privacy-d1-schema.v1"
 REMOTE_SCHEMA = "ausmalwiese.stats-gate-a-remote.v1"
-VERSION_ID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\\Z")
+VERSION_ID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
 STOP = "STOP_STATS_PRIVACY_D1_MIGRATION_SOURCE_ONLY"
 
 KNOWN_BINDINGS = {
