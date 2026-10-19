@@ -211,6 +211,7 @@ test:
 	python3 ./tests/test-ausmalwiese-report-wrangler-runtime-installer-v1.py
 	python3 ./tests/test-ausmalwiese-stats-worker-exact-deploy-v1.py
 	python3 ./tests/test-ausmalwiese-stats-worker-transport-v1.py
+	python3 ./tests/test-ausmalwiese-stats-worker-runtime-v1.py
 	python3 ./tests/test-ausmalwiese-stats-version-module-proof-v1.py
 	python3 ./tests/test-ausmalwiese-stats-wrangler-conflict-v1.py
 	python3 ./tests/test-ausmalwiese-stats-wrangler-inventory-v1.py
