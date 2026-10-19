@@ -17,7 +17,7 @@ import stat
 import subprocess
 
 SOURCE_ROOT = Path(__file__).resolve().parents[1]
-APP_ROOT = Path("/home/andris/coloring-pages")
+APP_ROOT = SOURCE_ROOT.parent / "coloring-pages"
 REPO = "rozkalnsandris/RPi5_main"
 APP_REPO = "rozkalnsandris/coloring-pages"
 APP_SHA = "e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63"
