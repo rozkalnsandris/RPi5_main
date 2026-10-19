@@ -389,20 +389,63 @@ class FixedZoneRedirectWriteTransport:
         self._token = in_memory_write_token
         self._opener = self._get._opener
         self._writes = 0
+        self._phase_seen = False
+        self._phase_absent = False
+        self._entrypoint_id: str | None = None
+        self._legacy_rule_ids: list[str] = []
 
     def read(
         self, method: str, path: str
     ) -> tuple[int, dict[str, Any]]:
         try:
-            return self._get(method, path)
+            status, payload = self._get(method, path)
         except Exception:
             raise WriteBlocked("READ_FAILED") from None
+        phase_path = (
+            f"/zones/{self._zone_id}/rulesets/phases/{PHASE}/entrypoint"
+        )
+        if path == phase_path:
+            self._phase_seen = True
+            if status == 404:
+                self._phase_absent = True
+                self._entrypoint_id = None
+                self._legacy_rule_ids = []
+            elif status == 200:
+                result = payload.get("result")
+                need(type(result) is dict, "READ_PHASE_SHAPE")
+                ruleset_id = result.get("id")
+                rules = result.get("rules")
+                need(
+                    type(ruleset_id) is str
+                    and ID_RE.fullmatch(ruleset_id) is not None
+                    and type(rules) is list,
+                    "READ_PHASE_SHAPE",
+                )
+                legacy_ids: list[str] = []
+                for rule in rules:
+                    need(type(rule) is dict, "READ_RULE_SHAPE")
+                    if inventory._scope(rule) == "legacy_host":
+                        rule_id = rule.get("id")
+                        need(
+                            type(rule_id) is str
+                            and ID_RE.fullmatch(rule_id) is not None,
+                            "READ_RULE_ID",
+                        )
+                        legacy_ids.append(rule_id)
+                self._phase_absent = False
+                self._entrypoint_id = ruleset_id
+                self._legacy_rule_ids = legacy_ids
+            else:
+                raise WriteBlocked("READ_PHASE_STATUS")
+        return status, payload
 
     def _validate_write(
         self, method: str, path: str, payload: Any
     ) -> None:
         prefix = f"/zones/{self._zone_id}"
+        need(self._phase_seen, "WRITE_BASELINE_NOT_SEEN")
         if method == "POST" and path == prefix + "/rulesets":
+            need(self._phase_absent, "WRITE_ENTRYPOINT_STATE_DRIFT")
             need(
                 payload == create_ruleset_body(),
                 "WRITE_BODY_DRIFT",
@@ -413,6 +456,12 @@ class FixedZoneRedirectWriteTransport:
             path,
         )
         if method == "POST" and add is not None:
+            need(
+                not self._phase_absent
+                and self._entrypoint_id is not None
+                and add.group(1) == self._entrypoint_id,
+                "WRITE_RULESET_ID_DRIFT",
+            )
             need(payload == desired_rule(), "WRITE_BODY_DRIFT")
             return
         update = re.fullmatch(
@@ -421,6 +470,14 @@ class FixedZoneRedirectWriteTransport:
             path,
         )
         if method == "PATCH" and update is not None:
+            need(
+                not self._phase_absent
+                and self._entrypoint_id is not None
+                and update.group(1) == self._entrypoint_id
+                and len(self._legacy_rule_ids) == 1
+                and update.group(2) == self._legacy_rule_ids[0],
+                "WRITE_RULE_IDENTITY_DRIFT",
+            )
             need(payload == desired_rule(), "WRITE_BODY_DRIFT")
             return
         raise WriteBlocked("WRITE_PATH_NOT_ALLOWED")
