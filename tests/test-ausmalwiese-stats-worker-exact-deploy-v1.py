@@ -56,9 +56,19 @@ def snapshot(*, active=OLD, latest=OLD, deployment=OLD_DEPLOYMENT):
     }
 
 
-def approval():
-    return {"source_blob": op.SOURCE_BLOB, "worker": op.WORKER,
-            "allow_upload_once": True, "allow_deploy_once": True}
+def approval(before=None):
+    value = snapshot() if before is None else before
+    raw = json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    ).encode("ascii")
+    return {
+        "source_blob": op.SOURCE_BLOB,
+        "config_blob": op.CONFIG_BLOB,
+        "worker": op.WORKER,
+        "preflight_sha256": op.canonical_sha256(raw),
+        "allow_upload_once": True,
+        "allow_deploy_once": True,
+    }
 
 
 class FakeProtectedBoundary:
@@ -97,8 +107,17 @@ class ExactWorkerGateTests(unittest.TestCase):
         op.check_contract(c)
         self.assertFalse(c["credential_access"])
         self.assertFalse(c["owner_live_approval"])
-        self.assertFalse(c["merge_approval"])
-        self.assertEqual(c["source_blob"], "dd5a2859d55b9ef2d9fb9a9d8bf0a535d25a5ba4")
+        self.assertTrue(c["merge_approval"])
+        self.assertEqual(c["issue"], 1118)
+        self.assertEqual(
+            c["source_commit"], "e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63"
+        )
+        self.assertEqual(
+            c["source_blob"], "c2ac9da6e0701103e0041b30db7dfbea4298f96c"
+        )
+        self.assertEqual(
+            c["config_blob"], "3733263a391274f2b6b0f2023c8656565bde8e1a"
+        )
         self.assertEqual(len(c["routes"]), 4)
         self.assertEqual(len(c["bindings"]), 7)
         self.assertEqual(c["account_sha256"], op.ACCOUNT_SHA256)
@@ -203,8 +222,8 @@ class ExactWorkerGateTests(unittest.TestCase):
 
     def run_protocol(self, boundary, permit=None):
         with mock.patch.object(op, "verify_source") as source:
-            result = op.future_run_once(boundary, approval() if permit is None else permit,
-                                        SOURCE_FIXTURE)
+            permit_value = approval(snapshot()) if permit is None else permit
+            result = op.future_run_once(boundary, permit_value, SOURCE_FIXTURE)
         source.assert_called_once_with(SOURCE_FIXTURE)
         return result
 
