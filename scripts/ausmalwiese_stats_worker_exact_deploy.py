@@ -20,8 +20,8 @@ CONTRACT_PATH = ROOT / "ops/contracts/ausmalwiese-stats-worker-exact-deploy-v1.j
 ACCOUNT_SHA256 = "3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34"
 WORKER = "coloring-pages-stats-v1"
 SOURCE_REPO = "rozkalnsandris/coloring-pages"
-SOURCE_COMMIT = "9590be4276ac1781eafe38cf662b8d224653c9aa"
-SOURCE_BLOB = "dd5a2859d55b9ef2d9fb9a9d8bf0a535d25a5ba4"
+SOURCE_COMMIT = "e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63"
+SOURCE_BLOB = "c2ac9da6e0701103e0041b30db7dfbea4298f96c"
 ROUTES = {
     "coloring.rozkalns.net/api/stats/*": "rozkalns.net",
     "ausmalwiese.de/api/stats/*": "ausmalwiese.de",
@@ -41,6 +41,7 @@ KINDS = {
 VERSION_ID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 DATE = re.compile(r"20[0-9]{2}-[01][0-9]-[0-3][0-9]\Z")
+CONFIG_BLOB = "3733263a391274f2b6b0f2023c8656565bde8e1a"
 STOP = "STOP_STATS_WORKER_SOURCE_ONLY"
 
 class Blocked(Exception):
@@ -58,10 +59,10 @@ def git_blob(data: bytes) -> str:
 
 def check_contract(c: Any) -> None:
     fixed = {
-        "schema_version": 1,
-        "state": "SOURCE_ONLY_NOT_INSTALLED",
+        "schema_version": 2,
+        "state": "SOURCE_CORE_REPINNED_FOR_INSTALLED_RUNTIME_NO_LIVE",
         "repo": "rozkalnsandris/RPi5_main",
-        "issue": 1032,
+        "issue": 1118,
         "account_sha256": ACCOUNT_SHA256,
         "worker": WORKER,
         "environment": "production",
@@ -69,14 +70,17 @@ def check_contract(c: Any) -> None:
         "source_commit": SOURCE_COMMIT,
         "source_path": "cloudflare/stats-worker.js",
         "source_blob": SOURCE_BLOB,
+        "config_path": "cloudflare/wrangler.stats-worker.jsonc",
+        "config_blob": CONFIG_BLOB,
         "routes": ROUTES,
         "bindings": KINDS,
-        "mode": "SOURCE_CORE_NO_AUTH_TRANSPORT",
+        "mode": "SOURCE_CORE_INSTALLED_RUNTIME_REQUIRED",
         "owner_live_approval": False,
-        "merge_approval": False,
+        "merge_approval": True,
         "credential_access": False,
         "allow_retry": False,
         "allow_rollback": False,
+        "allow_cleanup": False,
     }
     need(type(c) is dict and c == fixed, "CONTRACT_DRIFT")
 
@@ -211,11 +215,19 @@ def future_run_once(trusted: Any, approved: Any, worker_bytes: bytes) -> dict[st
     with no retry, redirect, fallback, token exposure or hidden mutation.
     """
     need(type(approved) is dict and set(approved) == {
-        "source_blob", "worker", "allow_upload_once", "allow_deploy_once",
-    } and approved == {
-        "source_blob": SOURCE_BLOB, "worker": WORKER,
-        "allow_upload_once": True, "allow_deploy_once": True,
+        "source_blob", "config_blob", "worker", "preflight_sha256",
+        "allow_upload_once", "allow_deploy_once",
     }, "OWNER_GATE_UNBOUND")
+    need(
+        approved.get("source_blob") == SOURCE_BLOB
+        and approved.get("config_blob") == CONFIG_BLOB
+        and approved.get("worker") == WORKER
+        and type(approved.get("preflight_sha256")) is str
+        and DIGEST.fullmatch(approved["preflight_sha256"]) is not None
+        and approved.get("allow_upload_once") is True
+        and approved.get("allow_deploy_once") is True,
+        "OWNER_GATE_UNBOUND",
+    )
     verify_source(worker_bytes)
     try:
         before = validate_snapshot(trusted.read_snapshot())
@@ -223,6 +235,14 @@ def future_run_once(trusted: Any, approved: Any, worker_bytes: bytes) -> dict[st
     except Exception:
         raise Blocked("PREFLIGHT_READ_FAILED") from None
     need(before == confirm, "PREFLIGHT_STATE_DRIFT")
+    need(
+        canonical_sha256(
+            json.dumps(
+                before, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+            ).encode("ascii")
+        ) == approved["preflight_sha256"],
+        "PREFLIGHT_BINDING_DRIFT",
+    )
     meta = upload_metadata(before)
     # FIRST mutation. Once dispatched, any error is terminal: no retry.
     try:

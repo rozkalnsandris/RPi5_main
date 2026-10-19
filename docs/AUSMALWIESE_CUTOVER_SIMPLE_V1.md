@@ -30,9 +30,18 @@ executor and a fresh exact baseline:
    - exact post-schema verification.
 
 2. **Stats Worker**
-   - internal read-only identity/config/version preflight;
-   - activate only the exact reviewed Worker version through the reviewed
-     bounded deployment path;
+   - if the exact reviewed #1118 runtime/credential boundary is not yet present,
+     install and provision it only as predeclared steps inside this same
+     COMPOSITE LIVE envelope; source merge alone grants neither action;
+   - verify exact installed release identity and protected credential metadata
+     without emitting credential content;
+   - run the sanitized double-read preflight from
+     `docs/AUSMALWIESE_STATS_WORKER_RUNTIME_V1.md` and bind its exact
+     snapshot SHA-256 plus reviewed Worker/config blobs;
+   - activate only the exact reviewed Worker through the fixed one-upload +
+     one-100%-deployment budget;
+   - prove uploaded/deployed `stats-worker.js` bytes against the reviewed
+     source and preserve routes, bindings and compatibility configuration;
    - verify Stats health, `/q` destination and Instagram attribution marker.
 
 3. **Sitemap**

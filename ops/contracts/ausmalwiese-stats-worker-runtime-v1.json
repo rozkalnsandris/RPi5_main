@@ -1,0 +1,161 @@
+{
+  "schema": "rozkalns.rpi5-main.ausmalwiese-stats-worker-runtime.v1",
+  "status": "source-only-not-installed",
+  "issue": 1118,
+  "parent_issue": 996,
+  "repository": "rozkalnsandris/RPi5_main",
+  "application_repository": "rozkalnsandris/coloring-pages",
+  "application_commit": "e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63",
+  "worker": "coloring-pages-stats-v1",
+  "worker_blob": "c2ac9da6e0701103e0041b30db7dfbea4298f96c",
+  "config_blob": "3733263a391274f2b6b0f2023c8656565bde8e1a",
+  "account_sha256": "3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34",
+  "routes": {
+    "coloring.rozkalns.net/api/stats/*": "rozkalns.net",
+    "ausmalwiese.de/api/stats/*": "ausmalwiese.de",
+    "www.ausmalwiese.de/api/stats/*": "ausmalwiese.de",
+    "ausmalwiese.de/q": "ausmalwiese.de"
+  },
+  "installed_runtime": {
+    "launcher": "/usr/local/sbin/rpi5-ausmalwiese-stats-worker-deploy",
+    "provisioner": "/usr/local/sbin/rpi5-ausmalwiese-stats-worker-deploy-provision",
+    "root": "/usr/local/libexec/rpi5-ausmalwiese-stats-worker-deploy",
+    "core": "core.py",
+    "worker_source": "stats-worker.js",
+    "config_source": "wrangler.stats-worker.jsonc",
+    "release": "release.json",
+    "modes": {
+      "launcher": "0500",
+      "provisioner": "0500",
+      "root": "0700",
+      "core": "0400",
+      "worker_source": "0400",
+      "config_source": "0400",
+      "release": "0400"
+    },
+    "exact_release_manifest": true,
+    "no_overwrite": true
+  },
+  "protected_credential": {
+    "path": "/etc/rpi5-secrets/cloudflare/ausmalwiese-stats-worker-write.json",
+    "directory_mode": "0700",
+    "file_mode": "0600",
+    "fields": [
+      "worker",
+      "account_id",
+      "api_token",
+      "zones"
+    ],
+    "fixed_worker": "coloring-pages-stats-v1",
+    "account_identity": "sha256-bound",
+    "zone_names": [
+      "ausmalwiese.de",
+      "rozkalns.net"
+    ],
+    "provision_input": "controlling-/dev/tty-hidden-only",
+    "token_in_argv": false,
+    "token_in_environment": false,
+    "token_in_stdin": false,
+    "token_output": false,
+    "exclusive_create_no_overwrite": true,
+    "token_creation": false,
+    "permission_change": false
+  },
+  "read_protocol": {
+    "host": "api.cloudflare.com",
+    "timeout_seconds": 10,
+    "redirects": 0,
+    "retries": 0,
+    "max_response_bytes": 1500000,
+    "max_reads_per_invocation": 48,
+    "versions": "GET /accounts/{account}/workers/scripts/coloring-pages-stats-v1/versions",
+    "deployments": "GET /accounts/{account}/workers/scripts/coloring-pages-stats-v1/deployments",
+    "script_version": "GET /accounts/{account}/workers/scripts/coloring-pages-stats-v1/versions/{version}",
+    "version_modules": "GET /accounts/{account}/workers/workers/coloring-pages-stats-v1/versions/{version}?include=modules",
+    "zone_identity": "GET /zones/{zone_id}",
+    "zone_routes": "GET /zones/{zone_id}/workers/routes",
+    "version_code_proof": "base64 stats-worker.js module SHA-256"
+  },
+  "runtime_modes": {
+    "preflight": {
+      "confirmation": "OWNER-AUTHORIZED-STATS-WORKER-PREFLIGHT",
+      "expected_source_blob_required": true,
+      "expected_config_blob_required": true,
+      "double_read_required": true,
+      "provider_writes": 0,
+      "output": [
+        "fixed target labels",
+        "active_version",
+        "latest_uploaded_version",
+        "snapshot_sha256",
+        "candidate_code_sha256",
+        "mutation_required"
+      ]
+    },
+    "apply": {
+      "confirmation": "OWNER-AUTHORIZED-STATS-WORKER-APPLY",
+      "expected_source_blob_required": true,
+      "expected_config_blob_required": true,
+      "expected_preflight_sha256_required": true,
+      "upload_writes_max": 1,
+      "deploy_writes_max": 1,
+      "upload_endpoint": "POST /accounts/{account}/workers/scripts/coloring-pages-stats-v1/versions?bindings_inherit=strict",
+      "deploy_endpoint": "POST /accounts/{account}/workers/scripts/coloring-pages-stats-v1/deployments",
+      "post_upload_code_proof_required": true,
+      "post_deploy_code_proof_required": true,
+      "routes_bindings_configuration_preserved": true,
+      "retries": 0,
+      "rollback": false,
+      "cleanup": false,
+      "fallback": false
+    }
+  },
+  "install": {
+    "confirmation": "INSTALL-AUSMALWIESE-STATS-WORKER-RUNTIME",
+    "exact_rpi5_main_clean_checkout_required": true,
+    "exact_application_main_required": "e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63",
+    "exact_application_worker_config_bytes_required": true,
+    "application_unrelated_dirty_paths_ignored": true,
+    "root_owned_targets": true,
+    "no_secret_access": true,
+    "no_cloudflare_request": true,
+    "no_permission_or_sudoers_change": true
+  },
+  "future_composite_live_sequence": [
+    "fresh source host and application identity preflight",
+    "trusted git fetch plus ff-only sync only if explicitly bound and needed",
+    "install exact reviewed Stats Worker runtime if absent",
+    "provision exact protected write credential if absent under explicit credential authority",
+    "run sanitized double-read preflight and freeze snapshot_sha256",
+    "only after Stats Gate A acceptance invoke one bound upload then one 100-percent deploy",
+    "prove uploaded and deployed stats-worker.js SHA-256 equals reviewed source",
+    "verify routes bindings configuration and public HEAD /q behavior"
+  ],
+  "source_authorized_capabilities": {
+    "host_install": false,
+    "credential_read": false,
+    "credential_provision": false,
+    "cloudflare_read": false,
+    "cloudflare_upload": false,
+    "cloudflare_deploy": false,
+    "token_create": false,
+    "permission_change": false,
+    "d1_write": false,
+    "sitemap_publish": false,
+    "legacy_redirect_write": false,
+    "live": false
+  },
+  "output_policy": {
+    "account_id": false,
+    "zone_ids": false,
+    "token": false,
+    "provider_body": false,
+    "raw_routes": false,
+    "raw_bindings": false,
+    "plain_text_values": false,
+    "active_version": true,
+    "latest_uploaded_version": true,
+    "snapshot_sha256": true,
+    "candidate_code_sha256": true
+  }
+}
