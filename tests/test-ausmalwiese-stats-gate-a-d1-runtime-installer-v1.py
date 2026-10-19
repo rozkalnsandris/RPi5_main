@@ -96,6 +96,10 @@ class Runner:
                 out = OLD_PAYLOAD
             elif command == ["ls-tree", mod.OLD_SOURCE_REF, "--", mod.SOURCE_REL]:
                 out = f"100644 blob {mod.OLD_SOURCE_BLOB}\t{mod.SOURCE_REL}\n".encode()
+            elif command == ["show", mod.CURRENT_SOURCE_REF + ":" + mod.SOURCE_REL]:
+                out = OLD_PAYLOAD
+            elif command == ["ls-tree", mod.CURRENT_SOURCE_REF, "--", mod.SOURCE_REL]:
+                out = f"100644 blob {mod.CURRENT_OLD_BLOB}\t{mod.SOURCE_REL}\n".encode()
             else:
                 rc = 9
 
@@ -261,6 +265,34 @@ class InstallerTests(unittest.TestCase):
             mod.UPGRADE_CONFIRM,
             "UPGRADE-AUSMALWIESE-STATS-GATE-A-D1-RUNTIME",
         )
+
+    def test_current_installed_runtime_is_exact_upgrade_predecessor(self):
+        self.assertEqual(
+            mod.CURRENT_SOURCE_REF,
+            "178eb2ac16704cf8f8f81f6275dfb53c471d05ec",
+        )
+        self.assertEqual(
+            mod.CURRENT_OLD_BLOB,
+            "866d40e896a900f00ead6087c98fa350ce977487",
+        )
+        runner = Runner()
+        with mock.patch.object(mod.os, "geteuid", return_value=1000), \
+             mock.patch.object(
+                 mod, "upgrade_root_preflight", return_value=mod.upgrade_command()
+             ) as guarded:
+            self.assertEqual(
+                mod.upgrade_preflight(
+                    HEAD, mod.CURRENT_OLD_BLOB, runner=runner
+                ),
+                PAYLOAD,
+            )
+        guarded.assert_called_once_with(OLD_PAYLOAD, runner=runner)
+        self.assertFalse(runner.writes)
+        self.assertTrue(any(
+            call[0][-4:] == [
+                "ls-tree", mod.CURRENT_SOURCE_REF, "--", mod.SOURCE_REL
+            ] for call in runner.calls
+        ))
 
     def test_upgrade_preflight_rejects_wrong_old_blob(self):
         with self.assertRaisesRegex(mod.Stop, "invalid_upgrade_source"):

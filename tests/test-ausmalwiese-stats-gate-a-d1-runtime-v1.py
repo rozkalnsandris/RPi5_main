@@ -259,6 +259,12 @@ class GateARuntimeTests(unittest.TestCase):
         self.assertEqual(kwargs["extra_groups"], ())
         self.assertEqual(kwargs["env"]["WRANGLER_WRITE_LOGS"], "false")
         self.assertEqual(kwargs["env"]["WRANGLER_SEND_METRICS"], "false")
+        self.assertEqual(
+            kwargs["env"]["WRANGLER_LOG_PATH"], str(op.WRANGLER_LOG_PATH)
+        )
+        self.assertEqual(op.WRANGLER_VERSION, "4.135.0")
+        self.assertEqual(op.WRANGLER_LOG_PATH.suffix, ".log")
+        self.assertTrue(op.WRANGLER_LOG_PATH.name.startswith("gate-a-"))
         self.assertNotIn("WRANGLER_LOG", kwargs["env"])
         self.assertNotIn("--version", argv)
 
@@ -381,6 +387,90 @@ class GateARuntimeTests(unittest.TestCase):
                 op.MutationUnknown, "MIGRATION_LOG_WRITE_UNKNOWN"
             ):
                 op.execute_once()
+
+    def test_shared_wrangler_logs_are_not_attributed_to_this_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scoped = root / "gate-a-private.log"
+            other = root / "other-process.log"
+            other.write_text("not our log")
+            with mock.patch.object(op, "WRANGLER_LOG_DIR", root), \
+                 mock.patch.object(op, "WRANGLER_LOG_PATH", scoped), \
+                 mock.patch.object(op, "RUNTIME_OPERATOR_UID", os.getuid()), \
+                 mock.patch.object(op, "RUNTIME_OPERATOR_GID", os.getgid()):
+                baseline = op.log_snapshot()
+                other.write_text("independent change")
+                self.assertEqual(op.log_snapshot(), baseline)
+                self.assertEqual(baseline, ())
+
+    def test_scoped_log_any_entry_blocks_without_content_read(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scoped = root / "gate-a-private.log"
+            with mock.patch.object(op, "WRANGLER_LOG_DIR", root), \
+                 mock.patch.object(op, "WRANGLER_LOG_PATH", scoped), \
+                 mock.patch.object(op, "RUNTIME_OPERATOR_UID", os.getuid()), \
+                 mock.patch.object(op, "RUNTIME_OPERATOR_GID", os.getgid()):
+                self.assertEqual(op.log_snapshot(), ())
+                scoped.touch()
+                with self.assertRaisesRegex(op.Blocked, "SCOPED_LOG_WRITE"):
+                    op.log_snapshot()
+                scoped.unlink()
+                scoped.symlink_to(root / "missing-target")
+                with self.assertRaisesRegex(op.Blocked, "SCOPED_LOG_WRITE"):
+                    op.log_snapshot()
+
+    def test_scoped_log_missing_or_untrusted_dir_blocks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            missing = root / "absent"
+            with mock.patch.object(op, "WRANGLER_LOG_DIR", missing), \
+                 mock.patch.object(op, "WRANGLER_LOG_PATH", missing / "gate-a-x.log"):
+                with self.assertRaisesRegex(op.Blocked, "LOG_METADATA_UNAVAILABLE"):
+                    op.log_snapshot()
+            symlink = root / "link"
+            symlink.symlink_to(root, target_is_directory=True)
+            with mock.patch.object(op, "WRANGLER_LOG_DIR", symlink), \
+                 mock.patch.object(op, "WRANGLER_LOG_PATH", symlink / "gate-a-x.log"):
+                with self.assertRaisesRegex(op.Blocked, "LOG_DIR_UNTRUSTED"):
+                    op.log_snapshot()
+
+    def test_preflight_ignores_unrelated_log_activity_without_retry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scoped = root / "gate-a-private.log"
+            with mock.patch.object(op, "WRANGLER_LOG_DIR", root), \
+                 mock.patch.object(op, "WRANGLER_LOG_PATH", scoped), \
+                 mock.patch.object(op, "RUNTIME_OPERATOR_UID", os.getuid()), \
+                 mock.patch.object(op, "RUNTIME_OPERATOR_GID", os.getgid()), \
+                 mock.patch.object(op, "trusted_runtime_entry"), \
+                 mock.patch.object(op, "wrangler_package_version"), \
+                 mock.patch.object(op, "exact_application_bytes", return_value={}), \
+                 mock.patch.object(op, "collect_remote_evidence", return_value=remote()), \
+                 mock.patch.object(op, "collect_schema", return_value=before()):
+                state = op.preflight()
+                self.assertEqual(state["migration_blob"], op.MIGRATION_BLOB)
+
+    def test_scoped_log_after_dispatch_is_terminal_unknown(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scoped = root / "gate-a-private.log"
+            count = []
+            def writes_log(args, **_):
+                count.append(list(args))
+                scoped.touch()
+                return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+            with mock.patch.object(op, "WRANGLER_LOG_DIR", root), \
+                 mock.patch.object(op, "WRANGLER_LOG_PATH", scoped), \
+                 mock.patch.object(op, "RUNTIME_OPERATOR_UID", os.getuid()), \
+                 mock.patch.object(op, "RUNTIME_OPERATOR_GID", os.getgid()), \
+                 mock.patch.object(op, "preflight", return_value={}), \
+                 mock.patch.object(op, "exact_application_bytes", return_value={}):
+                with self.assertRaisesRegex(
+                    op.MutationUnknown, "MIGRATION_LOG_WRITE_UNKNOWN"
+                ):
+                    op.execute_once(runner=writes_log)
+                self.assertEqual(count, [op.mutation_command()])
 
     def test_source_has_no_secret_package_or_cleanup_surface(self):
         text = SOURCE.read_text("utf-8")

@@ -50,14 +50,31 @@ package path.
 No package install is used. Wrangler version `4.135.0` is checked from the
 local package metadata rather than by invoking `wrangler --version`.
 
-Every Wrangler subprocess gets:
+Every Wrangler subprocess gets `WRANGLER_WRITE_LOGS=false` and
+`WRANGLER_SEND_METRICS=false`. The runtime also supplies a **unique,
+unpredictable** `WRANGLER_LOG_PATH` ending in `.log`, under the existing
+operator-owned `~/.wrangler/logs/` directory. Wrangler 4.135.0 supports
+this single-file environment-variable mode. The Python process generates one
+fresh random target at startup; the operator **does not create the file**.
 
-`WRANGLER_WRITE_LOGS=false`
+Previous Gate A versions compared all files in the **shared** log directory.
+That yielded `PREFLIGHT_LOG_WRITE` when other Wrangler processes wrote logs.
+The replacement checks only the operator's exact scoped path (metadata,
+never contents), validates the containing directory's ownership/mode and
+no-symlink status, and requires that **no file or symlink exists** there.
+It never removes or reads log data. Unrelated log activity cannot affect this
+predicate. Any scoped entry before or during preflight blocks; an entry
+detected after migration dispatch becomes **terminal unknown state**. Missing
+or untrusted directory metadata is fail-closed. Pre-dispatch, post-dispatch,
+and post-verification checks retain the same one-shot prohibition on retry,
+rollback, cleanup or alternate paths. No custom log level, secret env variable,
+log-file content inspection or broad change to Wrangler is authorized.
 
-The runtime compares `.wrangler/logs` file metadata before/after preflight,
-mutation, and post-verification. A pre-mutation log delta blocks execution. Any
-post-mutation log delta is terminal unknown state: no retry, rollback, cleanup,
-or alternate path.
+Version-bound reference:
+https://developers.cloudflare.com/workers/wrangler/system-environment-variables/
+(`WRANGLER_LOG_PATH` ending in `.log` identifies one file).
+The old shared-directory diagnostic is historical; it does not prove the
+specific writer. This source change alone does not prove LIVE.
 
 ## Preflight
 
@@ -118,18 +135,24 @@ not authorize D1 mutation.
 Source:
 `scripts/install-ausmalwiese-stats-gate-a-d1-runtime-v1.py`
 
-The installer may install only the exact runtime blob
-`866d40e896a900f00ead6087c98fa350ce977487` into the fixed target. A first
+The source-only installer pins the new runtime blob
+`be8f6604b432e08d2877fc126a91fa88adbe749e` into the fixed target.
+It must be re-reviewed if those exact bytes change. A first
 install still requires target absence and bounded GNU `cp` no-clobber
 semantics.
 
-For an already installed Gate A runtime, the only upgrade predecessor is
-RPi5_main `936760d99b2fbb492a0a0fabee0fcc7e27377ae8` with runtime blob
-`d1191e913e565965dc1c4d153179f702bf2a79d4`. Upgrade preflight reconstructs
-those historical bytes, requires the installed target to be a non-symlink
-`root:root 0500` single-link file with the exact SHA-256, and checks sudo
-capability for one fixed `/usr/bin/install` replacement. The upgrade has no
-alternate predecessor or arbitrary target.
+For an already installed Gate A runtime, the installer has exactly **two**
+eligible immutable predecessors: historical RPi5_main
+`936760d99b2fbb492a0a0fabee0fcc7e27377ae8` / blob
+`d1191e913e565965dc1c4d153179f702bf2a79d4`, or the verified
+currently installed source at RPi5_main
+`178eb2ac16704cf8f8f81f6275dfb53c471d05ec` / blob
+`866d40e896a900f00ead6087c98fa350ce977487`.
+`--upgrade-from` must bind the specific exact old blob; upgrade preflight
+reconstructs it using the corresponding frozen Git ref, requires the
+installed target to be a non-symlink `root:root 0500` single-link file with
+the exact SHA-256, and checks sudo capability for one fixed
+`/usr/bin/install` replacement. No other predecessor or arbitrary target.
 
 Both install paths require a clean exact `RPi5_main/main` checkout, trusted
 origin, sealed memfd input and post-write root metadata/SHA-256 verification.
