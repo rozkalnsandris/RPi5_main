@@ -95,12 +95,12 @@ class FakeStat:
 
 class MiniTransport:
     def __init__(self):
-        self.rule = {
+        self.rules = [{
             "id": "d" * 32,
             "expression": 'http.host eq "other.rozkalns.net"',
             "action": "redirect",
             "enabled": True,
-        }
+        }]
         self.writes = []
 
     def read(self, method, path):
@@ -118,7 +118,7 @@ class MiniTransport:
                 "id": RULESET,
                 "kind": "zone",
                 "phase": write.PHASE,
-                "rules": [copy.deepcopy(self.rule)],
+                "rules": copy.deepcopy(self.rules),
             }}
         raise AssertionError(path)
 
@@ -128,7 +128,7 @@ class MiniTransport:
             raise AssertionError("second write")
         value = copy.deepcopy(payload)
         value["id"] = "e" * 32
-        self.rule = value
+        self.rules.append(value)
 
 
 class RuntimeBoundaryTests(unittest.TestCase):
@@ -222,7 +222,7 @@ class RuntimeBoundaryTests(unittest.TestCase):
             self.assertEqual(path, runtime.SECRET)
             self.assertEqual(mode, 0o600)
             return secret
-        with mock.patch.object(runtime, "safe_parents"),              mock.patch.object(runtime.SECRET_DIR, "lstat", return_value=FakeStat()),              mock.patch.object(runtime, "guarded_bytes", side_effect=read):
+        with mock.patch.object(runtime, "safe_parents"),              mock.patch.object(runtime.Path, "lstat", return_value=FakeStat()),              mock.patch.object(runtime, "guarded_bytes", side_effect=read):
             self.assertEqual(runtime.credential(), (ZONE, TOKEN))
         self.assertEqual(calls, [str(runtime.SECRET)])
 
@@ -260,7 +260,7 @@ class RuntimeBoundaryTests(unittest.TestCase):
     def test_existing_core_blocks_baseline_drift_and_keeps_one_write_budget(self):
         fake = MiniTransport()
         before = write.preflight(fake, ZONE)
-        fake.rule["description"] = "drift"
+        fake.rules[0]["description"] = "drift"
         with self.assertRaisesRegex(write.WriteBlocked, "BASELINE_DRIFT"):
             write.run_once(fake, ZONE, before["baseline_sha256"])
         self.assertEqual(fake.writes, [])
