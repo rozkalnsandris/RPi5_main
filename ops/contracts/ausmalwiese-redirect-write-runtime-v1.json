@@ -1,0 +1,114 @@
+{
+  "schema": "rozkalns.rpi5-main.ausmalwiese-redirect-write-runtime.v1",
+  "status": "source-only-not-installed",
+  "issue": 1116,
+  "parent_issue": 996,
+  "repository": "rozkalnsandris/RPi5_main",
+  "zone": "rozkalns.net",
+  "legacy_hostname": "coloring.rozkalns.net",
+  "phase": "http_request_dynamic_redirect",
+  "source_files": [
+    "scripts/ausmalwiese_redirect_write_runtime_v1.py",
+    "scripts/ausmalwiese_redirect_write_provisioner_v1.py",
+    "scripts/install-ausmalwiese-redirect-write-runtime-v1.py",
+    "scripts/ausmalwiese_redirect_inventory.py",
+    "scripts/ausmalwiese_redirect_get_adapter.py",
+    "scripts/ausmalwiese_redirect_write_v1.py"
+  ],
+  "installed_runtime": {
+    "launcher": "/usr/local/sbin/rpi5-ausmalwiese-redirect-write",
+    "provisioner": "/usr/local/sbin/rpi5-ausmalwiese-redirect-write-provision",
+    "root": "/usr/local/libexec/rpi5-ausmalwiese-redirect-write",
+    "modes": {
+      "launcher": "0500",
+      "provisioner": "0500",
+      "root": "0700",
+      "inventory": "0400",
+      "adapter": "0400",
+      "write": "0400",
+      "release": "0400"
+    },
+    "exact_release_manifest": true,
+    "no_overwrite": true
+  },
+  "protected_credential": {
+    "path": "/etc/rpi5-secrets/cloudflare/ausmalwiese-redirect-write.json",
+    "directory_mode": "0700",
+    "file_mode": "0600",
+    "fields": [
+      "zone_name",
+      "zone_id",
+      "api_token"
+    ],
+    "fixed_zone_name": "rozkalns.net",
+    "provision_input": "controlling-/dev/tty-hidden-only",
+    "token_in_argv": false,
+    "token_in_environment": false,
+    "token_in_stdin": false,
+    "token_output": false,
+    "exclusive_create_no_overwrite": true,
+    "cloudflare_token_creation": false,
+    "permission_change": false
+  },
+  "runtime_modes": {
+    "preflight": {
+      "confirmation": "OWNER-AUTHORIZED-REDIRECT-WRITE-PREFLIGHT",
+      "provider_methods": [
+        "GET"
+      ],
+      "output": [
+        "baseline_sha256",
+        "operation",
+        "mutation_required",
+        "sanitized fixed labels"
+      ],
+      "provider_writes": 0
+    },
+    "apply": {
+      "confirmation": "OWNER-AUTHORIZED-REDIRECT-WRITE-APPLY",
+      "expected_baseline_sha256_required": true,
+      "provider_writes_max": 1,
+      "write_core": "scripts/ausmalwiese_redirect_write_v1.py",
+      "postverify_required": true,
+      "retries": 0,
+      "rollback": false,
+      "cleanup": false
+    }
+  },
+  "install": {
+    "confirmation": "INSTALL-AUSMALWIESE-REDIRECT-WRITE-RUNTIME",
+    "exact_main_clean_checkout_required": true,
+    "root_owned_targets": true,
+    "no_secret_access": true,
+    "no_cloudflare_request": true,
+    "no_permission_or_sudoers_change": true
+  },
+  "future_composite_live_sequence": [
+    "fresh source/host/runtime preflight",
+    "install exact reviewed runtime if absent",
+    "provision exact protected credential if absent under explicit credential authority",
+    "run sanitized redirect preflight and freeze baseline",
+    "only after parent #996 earlier stages pass, invoke one expected-baseline apply",
+    "read-only postverify and public one-hop redirect acceptance"
+  ],
+  "source_authorized_capabilities": {
+    "host_install": false,
+    "credential_read": false,
+    "credential_provision": false,
+    "cloudflare_get": false,
+    "cloudflare_write": false,
+    "token_create": false,
+    "permission_change": false,
+    "live": false
+  },
+  "output_policy": {
+    "zone_id": false,
+    "ruleset_id": false,
+    "rule_id": false,
+    "raw_rules": false,
+    "token": false,
+    "provider_body": false,
+    "baseline_sha256": true,
+    "operation_class": true
+  }
+}
