@@ -129,12 +129,12 @@ class FakeTransport:
 
 
 class FakeResponse:
-    def __init__(self, url):
+    def __init__(self, url, result):
         self.status = 200
         self.url = url
         self.body = json.dumps({
             "success": True,
-            "result": {"id": RULESET},
+            "result": result,
         }).encode("utf-8")
 
     def __enter__(self):
@@ -156,7 +156,25 @@ class FakeOpener:
 
     def open(self, request, timeout):
         self.calls.append((request, timeout))
-        return FakeResponse(request.full_url)
+        suffix = request.full_url[len(write.API_ORIGIN):]
+        prefix = f"/zones/{ZONE}"
+        if request.method == "GET" and suffix == prefix:
+            result = {"id": ZONE, "name": write.ZONE_NAME, "status": "active"}
+        elif request.method == "GET" and suffix == prefix + "/rulesets":
+            result = [{"id": RULESET, "kind": "zone", "phase": write.PHASE}]
+        elif (
+            request.method == "GET"
+            and suffix == prefix + f"/rulesets/phases/{write.PHASE}/entrypoint"
+        ):
+            result = {
+                "id": RULESET,
+                "kind": "zone",
+                "phase": write.PHASE,
+                "rules": [],
+            }
+        else:
+            result = {"id": RULESET}
+        return FakeResponse(request.full_url, result)
 
 
 class RedirectWriteTests(unittest.TestCase):
@@ -274,42 +292,57 @@ class RedirectWriteTests(unittest.TestCase):
             write.run_once(fake, ZONE, before["baseline_sha256"])
         self.assertEqual(len(fake.writes), 1)
 
-    def test_transport_enforces_exact_one_write_shape(self):
+    def test_transport_enforces_observed_identity_and_one_write_shape(self):
         opener = FakeOpener()
         transport = write.FixedZoneRedirectWriteTransport(
             ZONE, TOKEN, opener=opener
         )
-        with self.assertRaisesRegex(write.WriteBlocked, "WRITE_BODY_DRIFT"):
+        with self.assertRaisesRegex(
+            write.WriteBlocked, "WRITE_BASELINE_NOT_SEEN"
+        ):
             transport.write_once(
                 "POST",
-                f"/zones/{ZONE}/rulesets",
-                {"name": "wrong"},
+                f"/zones/{ZONE}/rulesets/{RULESET}/rules",
+                write.desired_rule(),
             )
         self.assertEqual(opener.calls, [])
 
+        before = write.preflight(transport, ZONE)
+        self.assertEqual(before["operation"], "ADD_RULE")
+        self.assertEqual(len(opener.calls), 3)
+
+        with self.assertRaisesRegex(write.WriteBlocked, "WRITE_BODY_DRIFT"):
+            transport.write_once(
+                "POST",
+                f"/zones/{ZONE}/rulesets/{RULESET}/rules",
+                {"name": "wrong"},
+            )
+        self.assertEqual(len(opener.calls), 3)
+
         transport.write_once(
             "POST",
-            f"/zones/{ZONE}/rulesets",
-            write.create_ruleset_body(),
+            f"/zones/{ZONE}/rulesets/{RULESET}/rules",
+            write.desired_rule(),
         )
-        self.assertEqual(len(opener.calls), 1)
-        request, timeout = opener.calls[0]
+        self.assertEqual(len(opener.calls), 4)
+        request, timeout = opener.calls[-1]
         self.assertEqual(request.method, "POST")
         self.assertEqual(
             request.full_url,
-            write.API_ORIGIN + f"/zones/{ZONE}/rulesets",
+            write.API_ORIGIN
+            + f"/zones/{ZONE}/rulesets/{RULESET}/rules",
         )
         sent = json.loads(request.data.decode("ascii"))
-        self.assertEqual(sent, write.create_ruleset_body())
+        self.assertEqual(sent, write.desired_rule())
         self.assertEqual(timeout, 8)
 
         with self.assertRaisesRegex(write.WriteBlocked, "SECOND_WRITE_FORBIDDEN"):
             transport.write_once(
                 "POST",
-                f"/zones/{ZONE}/rulesets",
-                write.create_ruleset_body(),
+                f"/zones/{ZONE}/rulesets/{RULESET}/rules",
+                write.desired_rule(),
             )
-        self.assertEqual(len(opener.calls), 1)
+        self.assertEqual(len(opener.calls), 4)
 
     def test_contract_and_source_keep_live_boundary_closed(self):
         contract = json.loads(
