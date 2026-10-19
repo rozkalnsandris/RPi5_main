@@ -32,6 +32,7 @@
   },
   "write_budget": {
     "max_provider_writes_per_invocation": 1,
+    "write_path_ids_must_match_immediately_observed_phase_state": true,
     "retries": 0,
     "rollback": false,
     "cleanup": false,
