@@ -532,8 +532,18 @@ class CloudflareTransport:
 
         descriptor = {}
         db = by_name["DB"]
-        need(db.get("type") == "d1", "d1_type")
-        need(db.get("database_id", db.get("id")) == D1_DATABASE_ID, "d1_identity")
+        need(
+            set(db).issubset({"name", "type", "database_id", "id"})
+            and db.get("type") == "d1",
+            "d1_fields",
+        )
+        database_id = db.get("database_id")
+        deprecated_id = db.get("id")
+        if database_id is None:
+            database_id = deprecated_id
+        elif deprecated_id is not None:
+            need(deprecated_id == database_id, "d1_identity_ambiguous")
+        need(database_id == D1_DATABASE_ID, "d1_identity")
         descriptor["DB"] = {
             "kind": "d1",
             "fingerprint": digest({"database_id": D1_DATABASE_ID}),
@@ -542,11 +552,14 @@ class CloudflareTransport:
         rate = by_name["RATE_LIMITER"]
         simple = rate.get("simple")
         need(
-            rate.get("type") == "ratelimit"
+            set(rate).issubset({"name", "type", "namespace_id", "simple"})
+            and rate.get("type") == "ratelimit"
             and rate.get("namespace_id") == RATE_NAMESPACE_ID
             and isinstance(simple, dict)
+            and set(simple).issubset({"limit", "period", "mitigation_timeout"})
             and simple.get("limit") == RATE_LIMIT
-            and simple.get("period") == RATE_PERIOD,
+            and simple.get("period") == RATE_PERIOD
+            and simple.get("mitigation_timeout", 0) in (0, None),
             "rate_identity",
         )
         descriptor["RATE_LIMITER"] = {
