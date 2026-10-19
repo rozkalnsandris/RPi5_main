@@ -42,6 +42,10 @@ executor and a fresh exact baseline:
 
 4. **Legacy 301**
    - internal read-only Redirect Rules inventory/order/hostname preflight;
+   - use the reviewed bounded write path from
+     `docs/AUSMALWIESE_REDIRECT_WRITE_V1.md` only after its exact source is
+     merged, installed/repackaged through a separately reviewed trust boundary,
+     and bound to the current COMPOSITE LIVE baseline;
    - apply only the exact hostname-scoped permanent redirect for
      `coloring.rozkalns.net`, preserving path and query;
    - verify one-hop 301 behavior and that the new site, health endpoints and
