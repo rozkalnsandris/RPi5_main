@@ -267,6 +267,15 @@ class RedirectWriteTests(unittest.TestCase):
             write.preflight(fake, ZONE)
         self.assertEqual(fake.writes, [])
 
+        disabled_ambiguous = copy.deepcopy(ambiguous)
+        disabled_ambiguous["enabled"] = False
+        fake = FakeTransport([disabled_ambiguous])
+        with self.assertRaisesRegex(
+            write.WriteBlocked, "AMBIGUOUS_DISABLED_RULE"
+        ):
+            write.preflight(fake, ZONE)
+        self.assertEqual(fake.writes, [])
+
         exact = provider_rule(write.desired_rule(), LEGACY_RULE)
         disabled = provider_rule(write.desired_rule(), "f" * 32)
         disabled["enabled"] = False
