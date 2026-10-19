@@ -1,13 +1,15 @@
 # Ausmalwiese Stats Worker: exact-version operator source (#1032)
 
-**SOURCE ONLY · not installed · no authenticated transport · no LIVE mutation · no MERGE permission.**
+**SOURCE CORE ONLY · repinned by #1118 · no standalone LIVE authority.**
 
 This is the RPi5_main protocol core for one future owner-gated update of Cloudflare Production Worker `coloring-pages-stats-v1`, to use the already-merged `https://ausmalwiese.de/` QR redirect destination. Its trust boundary ends at the pure fixed-protocol Python module. **It is not an executable Cloudflare deployment tool in its current state** and does not claim to prove the live deployment. A separately security-reviewed, installed and explicitly owner-authorized protected adapter, credential provision and exact LIVE permission remain prerequisites.
 
 ## Frozen source & account
 
+Current #1118 installed-runtime boundary: `docs/AUSMALWIESE_STATS_WORKER_RUNTIME_V1.md`. The pure core remains non-runnable by itself; its current source/config provenance is frozen for that reviewed runtime package.
+
 - GitHub issue: `RPi5_main#1032`, single outcome; no changes to redirect issue `RPi5_main#996`.
-- Source: `rozkalnsandris/coloring-pages@9590be4276ac1781eafe38cf662b8d224653c9aa`, `cloudflare/stats-worker.js`, exact Git blob `dd5a2859d55b9ef2d9fb9a9d8bf0a535d25a5ba4`.
+- Source: `rozkalnsandris/coloring-pages@e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63`, `cloudflare/stats-worker.js`, exact Git blob `c2ac9da6e0701103e0041b30db7dfbea4298f96c`.
 - Existing app-side contract merged in `coloring-pages#248`: `deploy/stats-worker-exact-source-v1.json`. This RPi5 contract deliberately repeats and pins the exact Worker, routes and seven bindings.
 - Independently reviewed Cloudflare account SHA-256 fingerprint: `3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34` from `ops/contracts/ausmalwiese-worker-settings-account-binding-v1.json`; fingerprint is not an account ID or authority to use credentials.
 - RPi5 contract: `ops/contracts/ausmalwiese-stats-worker-exact-deploy-v1.json`.
