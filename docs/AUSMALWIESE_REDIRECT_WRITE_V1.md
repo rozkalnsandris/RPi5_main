@@ -63,7 +63,9 @@ Only one provider write is possible:
 
 An active ambiguous expression or more than one exact legacy-host rule is a
 pre-write STOP. Unknown write methods, paths or bodies are rejected by the
-transport itself.
+transport itself. Dynamic ruleset and rule IDs are accepted only when they
+match the immediately observed phase entrypoint and exact legacy-host rule
+identity from the same transport's pre-write read.
 
 The one-write budget is consumed immediately before network dispatch. Any
 timeout, transport exception, unexpected response, or ambiguous provider
