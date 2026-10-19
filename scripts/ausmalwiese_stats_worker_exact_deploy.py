@@ -41,7 +41,8 @@ KINDS = {
 VERSION_ID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 DATE = re.compile(r"20[0-9]{2}-[01][0-9]-[0-3][0-9]\Z")
-CONFIG_BLOB = "3733263a391274f2b6b0f2023c8656565bde8e1a"\nSTOP = "STOP_STATS_WORKER_SOURCE_ONLY"
+CONFIG_BLOB = "3733263a391274f2b6b0f2023c8656565bde8e1a"
+STOP = "STOP_STATS_WORKER_SOURCE_ONLY"
 
 class Blocked(Exception):
     """Only a fixed, non-sensitive failure class may reach the operator."""
