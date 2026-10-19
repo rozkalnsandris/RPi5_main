@@ -24,6 +24,7 @@
     "fresh_sanitized_inventory_required": true,
     "expected_baseline_sha256_required": true,
     "active_ambiguous_rules_allowed": 0,
+    "disabled_ambiguous_rules_allowed": 0,
     "exact_legacy_rules_allowed_max": 1,
     "wrong_zone_or_phase": "STOP",
     "pagination_uncertainty": "STOP",
