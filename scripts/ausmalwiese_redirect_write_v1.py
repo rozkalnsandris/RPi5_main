@@ -539,4 +539,4 @@ class FixedZoneRedirectWriteTransport:
         )
 
 
-# No __main__, argparse, env/stdin credential source, install path, or auth issuer.
+# No script entrypoint, CLI parser, env/stdin credential source, install path, or auth issuer.
