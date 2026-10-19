@@ -1,15 +1,17 @@
 {
-  "schema_version": 1,
-  "state": "SOURCE_ONLY_NOT_INSTALLED",
+  "schema_version": 2,
+  "state": "SOURCE_CORE_REPINNED_FOR_INSTALLED_RUNTIME_NO_LIVE",
   "repo": "rozkalnsandris/RPi5_main",
-  "issue": 1032,
+  "issue": 1118,
   "account_sha256": "3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34",
   "worker": "coloring-pages-stats-v1",
   "environment": "production",
   "source_repo": "rozkalnsandris/coloring-pages",
-  "source_commit": "9590be4276ac1781eafe38cf662b8d224653c9aa",
+  "source_commit": "e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63",
   "source_path": "cloudflare/stats-worker.js",
-  "source_blob": "dd5a2859d55b9ef2d9fb9a9d8bf0a535d25a5ba4",
+  "source_blob": "c2ac9da6e0701103e0041b30db7dfbea4298f96c",
+  "config_path": "cloudflare/wrangler.stats-worker.jsonc",
+  "config_blob": "3733263a391274f2b6b0f2023c8656565bde8e1a",
   "routes": {
     "coloring.rozkalns.net/api/stats/*": "rozkalns.net",
     "ausmalwiese.de/api/stats/*": "ausmalwiese.de",
@@ -25,10 +27,11 @@
     "VISITOR_HMAC_KEY": "secret_text",
     "CF_ANALYTICS_API_TOKEN": "secret_text"
   },
-  "mode": "SOURCE_CORE_NO_AUTH_TRANSPORT",
+  "mode": "SOURCE_CORE_INSTALLED_RUNTIME_REQUIRED",
   "owner_live_approval": false,
-  "merge_approval": false,
+  "merge_approval": true,
   "credential_access": false,
   "allow_retry": false,
-  "allow_rollback": false
+  "allow_rollback": false,
+  "allow_cleanup": false
 }
