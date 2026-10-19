@@ -26,6 +26,7 @@
   "no_log_env": {
     "WRANGLER_WRITE_LOGS": "false"
   },
+  "log_scope": "unguessable-per-process-single-file-no-content",
   "preflight_reads": [
     "versions-list",
     "deployments-list",

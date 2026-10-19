@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import re
+import secrets
 import stat
 import subprocess
 import sys
@@ -60,6 +61,13 @@ WRANGLER_PACKAGE = (
     RUNTIME_HOME / ".local/share/wrangler-cli/node_modules/wrangler/package.json"
 )
 WRANGLER_LOG_DIR = RUNTIME_HOME / ".wrangler/logs"
+# An unguessable single-file logging target for this root operator process.
+# No file is created by the operator. Wrangler should not write with
+# WRANGLER_WRITE_LOGS=false; file existence is a fail-closed signal.
+# Other Wrangler invocations continue using their own shared log files.
+WRANGLER_LOG_PATH = WRANGLER_LOG_DIR / (
+    "gate-a-" + secrets.token_hex(24) + ".log"
+)
 RUNTIME_ENV = {
     "HOME": str(RUNTIME_HOME),
     "USER": RUNTIME_OPERATOR,
@@ -69,6 +77,7 @@ RUNTIME_ENV = {
     "LC_ALL": "C",
     "WRANGLER_SEND_METRICS": "false",
     "WRANGLER_WRITE_LOGS": "false",
+    "WRANGLER_LOG_PATH": str(WRANGLER_LOG_PATH),
 }
 
 UUID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
@@ -324,24 +333,33 @@ def wrangler_package_version() -> str:
 
 
 def log_snapshot() -> tuple[tuple[str, int, int], ...]:
-    if not WRANGLER_LOG_DIR.exists():
-        return ()
+    """Inspect only this invocation's Wrangler log target; never log content."""
     try:
         root = WRANGLER_LOG_DIR.lstat()
         need(
-            stat.S_ISDIR(root.st_mode) and not WRANGLER_LOG_DIR.is_symlink(),
+            stat.S_ISDIR(root.st_mode)
+            and not stat.S_ISLNK(root.st_mode)
+            and root.st_uid == RUNTIME_OPERATOR_UID
+            and root.st_gid == RUNTIME_OPERATOR_GID
+            and not (stat.S_IMODE(root.st_mode) & 0o022),
             "LOG_DIR_UNTRUSTED",
         )
-        rows = []
-        for path in sorted(WRANGLER_LOG_DIR.iterdir(), key=lambda p: p.name):
-            info = path.lstat()
-            need(
-                stat.S_ISREG(info.st_mode) and not path.is_symlink(),
-                "LOG_ENTRY_UNTRUSTED",
-            )
-            rows.append((path.name, info.st_size, info.st_mtime_ns))
-        return tuple(rows)
-    except (OSError, Blocked):
+        need(
+            WRANGLER_LOG_PATH.parent == WRANGLER_LOG_DIR
+            and WRANGLER_LOG_PATH.name.startswith("gate-a-")
+            and WRANGLER_LOG_PATH.suffix == ".log",
+            "LOG_PATH_UNTRUSTED",
+        )
+        try:
+            entry = WRANGLER_LOG_PATH.lstat()
+        except FileNotFoundError:
+            return ()
+        # No log is permitted; any object, including an empty file or symlink,
+        # is evidence of a scoped logging attempt and must stop the operation.
+        raise Blocked("SCOPED_LOG_WRITE")
+    except Blocked:
+        raise
+    except OSError:
         raise Blocked("LOG_METADATA_UNAVAILABLE") from None
 
 
@@ -691,8 +709,10 @@ def execute_once(*, runner: Any = subprocess.run) -> dict[str, Any]:
     )
     if result.returncode != 0:
         raise MutationUnknown("MIGRATION_OUTCOME_UNKNOWN")
-    if log_snapshot() != log_baseline:
-        raise MutationUnknown("MIGRATION_LOG_WRITE_UNKNOWN")
+    try:
+        need(log_snapshot() == log_baseline, "SCOPED_LOG_WRITE")
+    except Blocked:
+        raise MutationUnknown("MIGRATION_LOG_WRITE_UNKNOWN") from None
     try:
         after = validate_after_schema(collect_schema(runner=runner))
         if log_snapshot() != log_baseline:
@@ -735,6 +755,7 @@ def expected_contract() -> dict[str, Any]:
         "runtime_source_root": "<fixed-operator-home>/coloring-pages",
         "wrangler_binary": "<fixed-operator-home>/.local/bin/wrangler",
         "no_log_env": {"WRANGLER_WRITE_LOGS": "false"},
+        "log_scope": "unguessable-per-process-single-file-no-content",
         "preflight_reads": [
             "versions-list",
             "deployments-list",

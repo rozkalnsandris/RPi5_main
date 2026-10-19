@@ -23,12 +23,19 @@ TEST = "/usr/bin/test"
 SHA256SUM = "/usr/bin/sha256sum"
 
 SOURCE_REL = "scripts/ausmalwiese_stats_gate_a_d1_runtime_v1.py"
-SOURCE_BLOB = "866d40e896a900f00ead6087c98fa350ce977487"
+SOURCE_BLOB = "be8f6604b432e08d2877fc126a91fa88adbe749e"
 TARGET = "/usr/local/sbin/rpi5-ausmalwiese-stats-gate-a-d1-migrate"
 CONFIRM = "INSTALL-AUSMALWIESE-STATS-GATE-A-D1-RUNTIME"
 UPGRADE_CONFIRM = "UPGRADE-AUSMALWIESE-STATS-GATE-A-D1-RUNTIME"
 OLD_SOURCE_REF = "936760d99b2fbb492a0a0fabee0fcc7e27377ae8"
 OLD_SOURCE_BLOB = "d1191e913e565965dc1c4d153179f702bf2a79d4"
+# The exact installed runtime on #1120 discovery. No arbitrary predecessor.
+CURRENT_SOURCE_REF = "178eb2ac16704cf8f8f81f6275dfb53c471d05ec"
+CURRENT_OLD_BLOB = "866d40e896a900f00ead6087c98fa350ce977487"
+UPGRADE_SOURCES = {
+    OLD_SOURCE_BLOB: OLD_SOURCE_REF,
+    CURRENT_OLD_BLOB: CURRENT_SOURCE_REF,
+}
 PARENTS = ("/usr", "/usr/local", "/usr/local/sbin")
 SHA40 = re.compile(r"[0-9a-f]{40}\Z")
 CLEAN_ENV = {"PATH": "/usr/bin:/bin", "LC_ALL": "C"}
@@ -138,12 +145,15 @@ def tracked_runtime(*, runner=subprocess.run) -> bytes:
     return raw
 
 
-def historical_runtime(*, runner=subprocess.run) -> bytes:
-    raw = git(["show", OLD_SOURCE_REF + ":" + SOURCE_REL], runner=runner)
-    tree = git_text(["ls-tree", OLD_SOURCE_REF, "--", SOURCE_REL], runner=runner)
+def historical_runtime(old_source_blob=OLD_SOURCE_BLOB, *, runner=subprocess.run) -> bytes:
+    ref = UPGRADE_SOURCES.get(old_source_blob)
+    if ref is None:
+        raise Stop("invalid_upgrade_source")
+    raw = git(["show", ref + ":" + SOURCE_REL], runner=runner)
+    tree = git_text(["ls-tree", ref, "--", SOURCE_REL], runner=runner)
     if (
         not 0 < len(raw) <= MAX_SOURCE
-        or tree != f"100644 blob {OLD_SOURCE_BLOB}\t{SOURCE_REL}"
+        or tree != f"100644 blob {old_source_blob}\t{SOURCE_REL}"
     ):
         raise Stop("old_runtime_source_mismatch")
     return raw
@@ -281,11 +291,11 @@ def upgrade_root_preflight(old_payload: bytes, *, runner=subprocess.run) -> list
 
 
 def upgrade_preflight(expected_main, old_source_blob, *, runner=subprocess.run) -> bytes:
-    if old_source_blob != OLD_SOURCE_BLOB:
+    if old_source_blob not in UPGRADE_SOURCES:
         raise Stop("invalid_upgrade_source")
     exact_checkout(expected_main, runner=runner)
     payload = tracked_runtime(runner=runner)
-    old_payload = historical_runtime(runner=runner)
+    old_payload = historical_runtime(old_source_blob, runner=runner)
     upgrade_root_preflight(old_payload, runner=runner)
     return payload
 
@@ -385,7 +395,7 @@ def upgrade(expected_main, old_source_blob, *, runner=subprocess.run) -> None:
     fd = sealed_memfd(payload)
     try:
         exact_checkout(expected_main, runner=runner)
-        old_payload = historical_runtime(runner=runner)
+        old_payload = historical_runtime(old_source_blob, runner=runner)
         command = upgrade_root_preflight(old_payload, runner=runner)
         try:
             result = invoke(
@@ -412,7 +422,7 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.upgrade_from:
-            if args.upgrade_from != OLD_SOURCE_BLOB:
+            if args.upgrade_from not in UPGRADE_SOURCES:
                 raise Stop("invalid_upgrade_source")
             if args.apply:
                 if args.confirm != UPGRADE_CONFIRM:
@@ -430,7 +440,7 @@ def main(argv=None) -> int:
                 result = {
                     "status": "UPGRADE_PREFLIGHT_PASS",
                     "mutation_started": False,
-                    "old_runtime_blob": OLD_SOURCE_BLOB,
+                    "old_runtime_blob": args.upgrade_from,
                     "runtime_sha256": hashlib.sha256(raw).hexdigest(),
                 }
         elif args.apply:
