@@ -62,11 +62,11 @@ KINDS = {
 PRE_CONFIRM = "OWNER-AUTHORIZED-STATS-WORKER-PREFLIGHT"
 APPLY_CONFIRM = "OWNER-AUTHORIZED-STATS-WORKER-APPLY"
 
-SHA40 = re.compile(r"[0-9a-f]{40}\\Z")
-SHA64 = re.compile(r"[0-9a-f]{64}\\Z")
-ID32 = re.compile(r"[0-9a-f]{32}\\Z")
-UUID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\\Z")
-SAFE_KEY = re.compile(r"[A-Za-z0-9_.:/-]{1,160}\\Z")
+SHA40 = re.compile(r"[0-9a-f]{40}\Z")
+SHA64 = re.compile(r"[0-9a-f]{64}\Z")
+ID32 = re.compile(r"[0-9a-f]{32}\Z")
+UUID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
+SAFE_KEY = re.compile(r"[A-Za-z0-9_.:/-]{1,160}\Z")
 
 MAX_SECRET = 16384
 MAX_JSON = 1500000
@@ -163,7 +163,7 @@ def canonical(value: Any) -> bytes:
 
 def git_blob(data: bytes) -> str:
     return hashlib.sha1(
-        b"blob " + str(len(data)).encode("ascii") + b"\\0" + data
+        b"blob " + str(len(data)).encode("ascii") + b"\0" + data
     ).hexdigest()
 
 
@@ -736,15 +736,15 @@ class CloudflareTransport:
         metadata_raw = canonical(meta)
         boundary = BOUNDARY.encode("ascii")
         body = b"".join([
-            b"--" + boundary + b"\\r\\n",
-            b'Content-Disposition: form-data; name="metadata"\\r\\n',
-            b"Content-Type: application/json\\r\\n\\r\\n",
+            b"--" + boundary + b"\r\n",
+            b'Content-Disposition: form-data; name="metadata"\r\n',
+            b"Content-Type: application/json\r\n\r\n",
             metadata_raw,
-            b"\\r\\n--" + boundary + b"\\r\\n",
-            b'Content-Disposition: form-data; name="stats-worker.js"; filename="stats-worker.js"\\r\\n',
-            b"Content-Type: application/javascript+module\\r\\n\\r\\n",
+            b"\r\n--" + boundary + b"\r\n",
+            b'Content-Disposition: form-data; name="stats-worker.js"; filename="stats-worker.js"\r\n',
+            b"Content-Type: application/javascript+module\r\n\r\n",
             module_bytes,
-            b"\\r\\n--" + boundary + b"--\\r\\n",
+            b"\r\n--" + boundary + b"--\r\n",
         ])
         need(len(body) <= MAX_UPLOAD, "upload_body_oversize")
         payload = self._request(
