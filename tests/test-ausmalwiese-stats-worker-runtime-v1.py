@@ -227,6 +227,59 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
         self.assertEqual(deploy.uploads, 1)
         self.assertEqual(deploy.deploys, 1)
 
+    def test_binding_metadata_unknown_fields_fail_closed(self):
+        transport = runtime.CloudflareTransport(
+            "a" * 32,
+            "T" * 32,
+            {"ausmalwiese.de": "b" * 32, "rozkalns.net": "c" * 32},
+        )
+        resources = {
+            "bindings": [
+                {
+                    "name": "DB",
+                    "type": "d1",
+                    "database_id": runtime.D1_DATABASE_ID,
+                },
+                {
+                    "name": "RATE_LIMITER",
+                    "type": "ratelimit",
+                    "namespace_id": runtime.RATE_NAMESPACE_ID,
+                    "simple": {
+                        "limit": runtime.RATE_LIMIT,
+                        "period": runtime.RATE_PERIOD,
+                    },
+                },
+                {"name": "PUBLIC_ORIGIN", "type": "plain_text", "text": "x"},
+                {"name": "CF_ANALYTICS_HOST", "type": "plain_text", "text": "y"},
+                {"name": "CF_ZONE_TAG", "type": "plain_text", "text": "z"},
+                {"name": "VISITOR_HMAC_KEY", "type": "secret_text"},
+                {"name": "CF_ANALYTICS_API_TOKEN", "type": "secret_text"},
+            ],
+            "script": {"handlers": [], "named_handlers": []},
+            "script_runtime": {
+                "compatibility_date": runtime.COMPATIBILITY_DATE,
+                "compatibility_flags": [],
+            },
+        }
+        result = {"id": OLD, "resources": resources}
+        with mock.patch.object(transport, "_get", return_value=result):
+            descriptor, cfg = transport._version_metadata(OLD)
+        self.assertEqual(descriptor["DB"]["kind"], "d1")
+        self.assertEqual(descriptor["RATE_LIMITER"]["kind"], "ratelimit")
+        self.assertEqual(cfg["compatibility_flags"], [])
+
+        bad_db = copy.deepcopy(result)
+        bad_db["resources"]["bindings"][0]["unexpected"] = True
+        with mock.patch.object(transport, "_get", return_value=bad_db):
+            with self.assertRaisesRegex(runtime.Stop, "d1_fields"):
+                transport._version_metadata(OLD)
+
+        bad_rate = copy.deepcopy(result)
+        bad_rate["resources"]["bindings"][1]["simple"]["unexpected"] = True
+        with mock.patch.object(transport, "_get", return_value=bad_rate):
+            with self.assertRaisesRegex(runtime.Stop, "rate_identity"):
+                transport._version_metadata(OLD)
+
     def test_beta_version_module_proof_hashes_exact_main_module(self):
         transport = runtime.CloudflareTransport(
             "a" * 32,
