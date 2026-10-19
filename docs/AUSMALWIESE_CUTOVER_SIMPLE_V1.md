@@ -41,13 +41,19 @@ executor and a fresh exact baseline:
    - verify new-domain sitemap URLs and public HTTP acceptance.
 
 4. **Legacy 301**
-   - internal read-only Redirect Rules inventory/order/hostname preflight;
-   - use the reviewed bounded write path from
-     `docs/AUSMALWIESE_REDIRECT_WRITE_V1.md` only after its exact source is
-     merged, installed/repackaged through a separately reviewed trust boundary,
-     and bound to the current COMPOSITE LIVE baseline;
+   - if the exact reviewed #1116 runtime/credential boundary is not yet present,
+     install and provision it only as predeclared steps inside this same
+     COMPOSITE LIVE envelope; source merge alone grants neither action;
+   - verify the root-owned installed release identity and protected credential
+     metadata without emitting credential content;
+   - run the sanitized read-only Redirect Rules inventory/order/hostname
+     preflight through the reviewed runtime and bind its exact baseline SHA-256;
+   - use only the reviewed bounded write path from
+     `docs/AUSMALWIESE_REDIRECT_WRITE_V1.md` via
+     `docs/AUSMALWIESE_REDIRECT_WRITE_RUNTIME_V1.md`;
    - apply only the exact hostname-scoped permanent redirect for
-     `coloring.rozkalns.net`, preserving path and query;
+     `coloring.rozkalns.net`, preserving path and query, with the frozen
+     expected baseline and the existing one-provider-write budget;
    - verify one-hop 301 behavior and that the new site, health endpoints and
      unrelated hosts remain healthy.
 
