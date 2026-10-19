@@ -161,6 +161,10 @@ def _analyze(
         snapshot.get("active_ambiguous_positions") == [],
         "AMBIGUOUS_ACTIVE_RULE",
     )
+    need(
+        snapshot.get("disabled_scope_unknown_count") == 0,
+        "AMBIGUOUS_DISABLED_RULE",
+    )
     if entry is None:
         need(
             snapshot.get("active_exact_legacy_positions") == [],
