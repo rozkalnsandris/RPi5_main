@@ -40,7 +40,7 @@ while (( $# > 0 )); do
 done
 
 [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'expected RPi5_main SHA is invalid'
-[[ \${EUID:-$(id -u)} -eq 0 ]] || fail 'installer must run as root via sudo'
+[[ ${EUID:-$(id -u)} -eq 0 ]] || fail 'installer must run as root via sudo'
 
 OWNER='andris'
 SENDER_REL='ops/bin/coloring-pages-drive-stage-sender'
@@ -141,8 +141,8 @@ visudo -cf "$SUDOERS_DEST" >/dev/null || fail 'installed sudoers validation fail
 for pair in \
     "$SENDER_REL:$SENDER_DEST" \
     "$WRAPPER_REL:$WRAPPER_DEST"; do
-    rel="\${pair%%:*}"
-    dest="\${pair#*:}"
+    rel="${pair%%:*}"
+    dest="${pair#*:}"
     expected_blob="$(owner_git rev-parse "HEAD:$rel")"
     [[ "$(git hash-object "$dest")" == "$expected_blob" ]] \
         || fail "installed source identity mismatch: $rel"
