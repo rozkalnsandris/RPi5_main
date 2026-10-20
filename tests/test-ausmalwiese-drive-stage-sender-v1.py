@@ -281,7 +281,7 @@ class DriveStageSenderTests(unittest.TestCase):
             finally:
                 wrapper.sys.stdin = old_stdin
 
-        absent.assert_called_once_with(["1234567.png"])
+        absent.assert_called_once_with(["1234567.png"], namespace=wrapper.PENDING)
         self.assertIn("rcat", seen["argv"])
         self.assertIn("gdrive:pending/1234567.png", seen["argv"])
         size_pos = seen["argv"].index("--size")
