@@ -47,11 +47,11 @@ The release manifest binds:
 
 No credential or provider request is used by the installer.
 
-Issue #1130 repins the bounded upgrade path to the exact currently installed
+Issue #1138 repins the bounded upgrade path to the exact currently installed
 predecessor release: RPi5_main
-`299c5e583516b95dab739ff04ec178e733547adb`, launcher blob
-`818b10ff15edeb30bfb0901023d789eafa3d04dc`, and release SHA-256
-`c9de347026977ddd9248bd547ff3702a3f79045126dd8c1dd26ca29958e20a70`.
+`b7dce379d48c7214ccabe14f28ce5dbdc998d781`, launcher blob
+`017780bcc262c37343457ecad6130e41411853e7`, and release SHA-256
+`dfcf582f9cd575b540911bc6ac0d3a1a30312a65f5d4442de9ec25dc4fe1fbc0`.
 Upgrade preflight reconstructs that historical package from immutable Git
 objects, verifies every installed package file as a non-symlink root-owned
 single-link file with exact mode and SHA-256, and permits replacement of only
@@ -189,6 +189,39 @@ Upload and deployment budgets are consumed before dispatch. Any transport
 error, timeout, unexpected response or ambiguous provider state after either
 dispatch is terminal. There is no retry, rollback, cleanup, fallback transport
 or second write.
+
+## Deploy-existing recovery (#1138)
+
+The recovery lane exists only for the fail-closed state where the reviewed
+candidate version is already the latest uploaded version but the prior active
+version still serves 100% traffic. It never repeats Version Upload.
+
+Read-only recovery preflight requires:
+
+`OWNER-AUTHORIZED-STATS-WORKER-RECOVERY-PREFLIGHT`
+
+It double-reads a snapshot that may have `latest != active`, verifies the
+latest code SHA-256 equals the exact reviewed candidate while the active code
+does not, and requires routes, bindings and runtime configuration to be
+preserved across the active/latest versions. Output is limited to the recovery
+snapshot SHA-256, candidate code SHA-256, fixed provenance labels,
+`recovery_required` and status. Provider version/deployment IDs and raw
+provider data are not emitted.
+
+Deploy-existing requires:
+
+`OWNER-AUTHORIZED-STATS-WORKER-DEPLOY-EXISTING`
+
+plus the exact recovery snapshot SHA-256. The runtime re-runs the same
+double-read recovery proof before mutation. Any drift stops before a write.
+The transport then permits exactly one deployment write with zero upload
+writes, assigning the already-uploaded proven latest candidate to 100% traffic.
+
+After dispatch, the runtime requires active and latest to converge on that
+candidate, both code proofs to equal the reviewed candidate SHA-256, the
+deployment identity to change, and routes/bindings/configuration to remain
+preserved. Any dispatch ambiguity or failed post-verification is terminal.
+There is no retry, rollback, cleanup or fallback path.
 
 ## Parent #996 flow
 
