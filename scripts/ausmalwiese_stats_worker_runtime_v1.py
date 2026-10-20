@@ -18,7 +18,6 @@ import re
 import ssl
 import stat
 import sys
-from datetime import datetime, timezone
 from typing import Any
 
 ENTRY = Path("/usr/local/sbin/rpi5-ausmalwiese-stats-worker-deploy")
@@ -427,69 +426,167 @@ class CloudflareTransport:
         return payload["result"]
 
     @staticmethod
-    def _latest_version_from_payload(payload):
+    def _list_collection(
+        payload, *, prefix, result_key, expected_per_page=None
+    ):
+        allowed_top = {"success", "errors", "messages", "result", "result_info"}
+        pagination_fields = {
+            "page", "per_page", "count", "total_count", "total_pages"
+        }
+        need(isinstance(payload, dict), prefix + "_envelope")
         need(
-            isinstance(payload, dict)
-            and set(payload).issubset(
-                {"success", "errors", "messages", "result", "result_info"}
-            )
-            and payload.get("success") is True
-            and payload.get("errors") == []
-            and isinstance(payload.get("messages", []), list)
-            and isinstance(payload.get("result"), dict)
-            and set(payload["result"]) == {"items"},
-            "versions_envelope_invalid",
+            set(payload).issubset(allowed_top),
+            prefix + "_envelope_fields",
         )
-        items = payload["result"]["items"]
+        need(payload.get("success") is True, prefix + "_api_failure")
+        errors = payload.get("errors", [])
         need(
-            isinstance(items, list) and 1 <= len(items) < 100,
-            "versions_incomplete",
+            isinstance(errors, list) and not errors,
+            prefix + "_api_failure",
         )
+        need(
+            isinstance(payload.get("messages", []), list),
+            prefix + "_messages_shape",
+        )
+        result = payload.get("result")
+        need(isinstance(result, dict), prefix + "_result_shape")
+        need(set(result) == {result_key}, prefix + "_result_fields")
+        items = result[result_key]
+        need(
+            isinstance(items, list) and 1 <= len(items) <= 100,
+            prefix + "_collection_shape",
+        )
+
         info = payload.get("result_info")
         if info is not None:
-            need(isinstance(info, dict), "versions_pagination_invalid")
-            required = {"page", "per_page", "count", "total_count"}
-            allowed = required | {"total_pages"}
+            need(isinstance(info, dict), prefix + "_pagination")
             need(
-                required.issubset(info) and set(info).issubset(allowed),
-                "versions_pagination_invalid",
+                set(info).issubset(pagination_fields),
+                prefix + "_pagination_fields",
             )
-            need(
-                type(info["page"]) is int
-                and info["page"] == 1
-                and type(info["per_page"]) is int
-                and info["per_page"] == 100
-                and type(info["count"]) is int
-                and info["count"] == len(items)
-                and type(info["total_count"]) is int
-                and len(items) <= info["total_count"] <= 1_000_000,
-                "versions_pagination_invalid",
-            )
-            expected_pages = max(
-                1,
-                (info["total_count"] + info["per_page"] - 1)
-                // info["per_page"],
-            )
-            need(expected_pages == 1, "versions_incomplete")
-            if "total_pages" in info:
+            for key in pagination_fields:
+                if key in info:
+                    need(
+                        type(info[key]) is int and info[key] >= 0,
+                        prefix + "_pagination",
+                    )
+            if "page" in info:
+                need(info["page"] == 1, prefix + "_pagination")
+            if "per_page" in info:
                 need(
-                    type(info["total_pages"]) is int
-                    and info["total_pages"] == expected_pages,
-                    "versions_pagination_invalid",
+                    1 <= info["per_page"] <= 100,
+                    prefix + "_pagination",
                 )
+                if expected_per_page is not None:
+                    need(
+                        info["per_page"] == expected_per_page,
+                        prefix + "_pagination",
+                    )
+            if "count" in info:
+                need(
+                    info["count"] == len(items),
+                    prefix + "_pagination",
+                )
+            if "total_count" in info:
+                need(
+                    info["total_count"] >= len(items),
+                    prefix + "_pagination",
+                )
+            if "total_pages" in info:
+                need(info["total_pages"] >= 1, prefix + "_pagination")
+            if "count" in info and "per_page" in info:
+                need(
+                    info["count"] <= info["per_page"],
+                    prefix + "_pagination",
+                )
+            if (
+                "total_count" in info
+                and "per_page" in info
+                and "total_pages" in info
+            ):
+                pages = max(
+                    1,
+                    (
+                        info["total_count"] + info["per_page"] - 1
+                    )
+                    // info["per_page"],
+                )
+                need(
+                    info["total_pages"] == pages,
+                    prefix + "_pagination",
+                )
+        elif expected_per_page is not None:
+            need(
+                len(items) < expected_per_page,
+                prefix + "_pagination_ambiguous",
+            )
+        return items
+
+    @staticmethod
+    def _latest_version_from_payload(payload):
+        items = CloudflareTransport._list_collection(
+            payload,
+            prefix="versions",
+            result_key="items",
+            expected_per_page=100,
+        )
+        allowed_item = {"id", "metadata", "number"}
+        allowed_metadata = {
+            "author_email", "author_id", "created_on", "hasPreview",
+            "modified_on", "source",
+        }
+        allowed_sources = {
+            "unknown", "api", "wrangler", "terraform", "dash", "cf_cli",
+            "dash_template", "integration", "quick_editor", "playground",
+            "workersci",
+        }
         seen = set()
         previous_number = None
         for item in items:
+            need(isinstance(item, dict), "version_entry_shape")
             need(
-                isinstance(item, dict)
-                and len(item) <= 20
-                and isinstance(item.get("id"), str)
-                and UUID.fullmatch(item["id"]) is not None,
-                "version_shape",
+                set(item).issubset(allowed_item),
+                "version_entry_fields",
             )
-            version_id = item["id"]
+            version_id = item.get("id")
+            need(
+                isinstance(version_id, str)
+                and UUID.fullmatch(version_id) is not None,
+                "version_id_invalid",
+            )
             need(version_id not in seen, "version_id_duplicate")
             seen.add(version_id)
+
+            if "metadata" in item:
+                metadata = item["metadata"]
+                need(
+                    isinstance(metadata, dict),
+                    "version_metadata_shape",
+                )
+                need(
+                    set(metadata).issubset(allowed_metadata),
+                    "version_metadata_fields",
+                )
+                for key in (
+                    "author_email", "author_id", "created_on", "modified_on"
+                ):
+                    if key in metadata:
+                        need(
+                            isinstance(metadata[key], str)
+                            and len(metadata[key]) <= 512,
+                            "version_metadata_shape",
+                        )
+                if "hasPreview" in metadata:
+                    need(
+                        type(metadata["hasPreview"]) is bool,
+                        "version_metadata_shape",
+                    )
+                if "source" in metadata:
+                    need(
+                        metadata["source"] in allowed_sources,
+                        "version_metadata_source",
+                    )
+
             if "number" in item:
                 number = item["number"]
                 need(
@@ -497,11 +594,98 @@ class CloudflareTransport:
                     "version_number_invalid",
                 )
                 if previous_number is not None:
-                    need(previous_number > number, "version_order_invalid")
+                    need(
+                        previous_number > number,
+                        "version_order_invalid",
+                    )
                 previous_number = number
             else:
                 previous_number = None
         return items[0]["id"]
+
+    @staticmethod
+    def _latest_deployment_from_payload(payload):
+        items = CloudflareTransport._list_collection(
+            payload,
+            prefix="deployments",
+            result_key="deployments",
+        )
+        allowed_item = {
+            "id", "created_on", "source", "strategy", "versions",
+            "annotations", "author_email",
+        }
+        seen = set()
+        for item in items:
+            need(isinstance(item, dict), "deployment_entry_shape")
+            need(
+                set(item).issubset(allowed_item),
+                "deployment_entry_fields",
+            )
+            need(
+                {"id", "created_on", "source", "strategy", "versions"}
+                .issubset(item),
+                "deployment_entry_shape",
+            )
+            deployment_id = item.get("id")
+            need(
+                isinstance(deployment_id, str)
+                and UUID.fullmatch(deployment_id) is not None,
+                "deployment_id_invalid",
+            )
+            need(
+                deployment_id not in seen,
+                "deployment_id_duplicate",
+            )
+            seen.add(deployment_id)
+            for key in ("created_on", "source"):
+                need(
+                    isinstance(item[key], str)
+                    and len(item[key]) <= 1024,
+                    "deployment_entry_shape",
+                )
+            if "author_email" in item:
+                need(
+                    isinstance(item["author_email"], str)
+                    and len(item["author_email"]) <= 1024,
+                    "deployment_entry_shape",
+                )
+            need(
+                item["strategy"] == "percentage",
+                "deployment_strategy",
+            )
+            if "annotations" in item:
+                annotations = item["annotations"]
+                need(
+                    isinstance(annotations, dict)
+                    and set(annotations).issubset(
+                        {"workers/message", "workers/triggered_by"}
+                    )
+                    and all(
+                        isinstance(value, str) and len(value) <= 1000
+                        for value in annotations.values()
+                    ),
+                    "deployment_annotations",
+                )
+            need(
+                isinstance(item["versions"], list)
+                and len(item["versions"]) <= 100,
+                "deployment_versions_shape",
+            )
+
+        latest = items[0]
+        versions = latest["versions"]
+        need(
+            len(versions) == 1
+            and isinstance(versions[0], dict)
+            and set(versions[0]) == {"version_id", "percentage"}
+            and isinstance(versions[0]["version_id"], str)
+            and UUID.fullmatch(versions[0]["version_id"]) is not None
+            and type(versions[0]["percentage"]) in (int, float)
+            and type(versions[0]["percentage"]) is not bool
+            and versions[0]["percentage"] == 100,
+            "traffic_split",
+        )
+        return latest["id"], versions[0]["version_id"]
 
     def _get(self, path):
         return self._unwrap(self._request("GET", path, phase="read"))
@@ -516,46 +700,13 @@ class CloudflareTransport:
         return self._latest_version_from_payload(payload)
 
     def _deployment(self):
-        items = self._get(
-            f"/client/v4/accounts/{self.account}/workers/scripts/{WORKER}/deployments"
+        payload = self._request(
+            "GET",
+            f"/client/v4/accounts/{self.account}/workers/scripts/{WORKER}"
+            "/deployments",
+            phase="read",
         )
-        need(isinstance(items, list) and 1 <= len(items) < 100, "deployments_incomplete")
-        by_stamp = {}
-        for item in items:
-            need(
-                isinstance(item, dict)
-                and isinstance(item.get("id"), str)
-                and UUID.fullmatch(item["id"]) is not None
-                and isinstance(item.get("created_on"), str)
-                and item["created_on"].endswith("Z")
-                and isinstance(item.get("versions"), list),
-                "deployment_shape",
-            )
-            try:
-                stamp = datetime.fromisoformat(item["created_on"].replace("Z", "+00:00"))
-            except ValueError:
-                raise Stop("deployment_timestamp_invalid") from None
-            need(
-                stamp.tzinfo is not None
-                and stamp.utcoffset() == timezone.utc.utcoffset(stamp)
-                and stamp not in by_stamp,
-                "deployment_order_ambiguous",
-            )
-            by_stamp[stamp] = item
-        latest = by_stamp[max(by_stamp)]
-        versions = latest["versions"]
-        need(
-            len(versions) == 1
-            and isinstance(versions[0], dict)
-            and set(versions[0]) == {"version_id", "percentage"}
-            and isinstance(versions[0]["version_id"], str)
-            and UUID.fullmatch(versions[0]["version_id"]) is not None
-            and type(versions[0]["percentage"]) in (int, float)
-            and type(versions[0]["percentage"]) is not bool
-            and versions[0]["percentage"] == 100,
-            "traffic_split",
-        )
-        return latest["id"], versions[0]["version_id"]
+        return self._latest_deployment_from_payload(payload)
 
     def _version_metadata(self, version_id):
         need(UUID.fullmatch(version_id) is not None, "version_id_invalid")
