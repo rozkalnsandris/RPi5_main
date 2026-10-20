@@ -281,7 +281,7 @@ class DriveStageSenderTests(unittest.TestCase):
             finally:
                 wrapper.sys.stdin = old_stdin
 
-        absent.assert_called_once_with(["1234567.png"])
+        absent.assert_called_once_with(["1234567.png"], namespace=wrapper.PENDING)
         self.assertIn("rcat", seen["argv"])
         self.assertIn("gdrive:pending/1234567.png", seen["argv"])
         size_pos = seen["argv"].index("--size")
@@ -304,6 +304,128 @@ class DriveStageSenderTests(unittest.TestCase):
         self.assertIn("DRIVE_WRITE=false", installer)
         self.assertNotIn(" rclone ", installer.lower())
 
+
+
+class DriveStageCanaryNamespaceTests(unittest.TestCase):
+    def test_sender_mode_is_default_pending_or_exact_canary_only(self):
+        self.assertFalse(sender.parse_canary_mode([]))
+        self.assertTrue(sender.parse_canary_mode(["--canary"]))
+        for argv in (["--namespace", "canary"], ["--canary", "extra"], ["canary"]):
+            with self.assertRaises(sender.SenderError):
+                sender.parse_canary_mode(list(argv))
+
+    def test_sender_production_backend_operations_remain_unchanged(self):
+        item = sender.Artifact(
+            name="1234567.png",
+            mime="image/png",
+            sha256="0" * 64,
+            size_bytes=3,
+            handle=io.BytesIO(b"abc"),
+        )
+        backend = sender.PrivilegedBackend(canary=False)
+        with mock.patch.object(backend, "_run") as run:
+            backend.assert_absent(["1234567.png"])
+            backend.upload(item)
+            backend.assert_exact(item)
+        self.assertEqual(
+            [call.args[0] for call in run.call_args_list],
+            [
+                ["--assert-absent", "1234567.png"],
+                ["--upload", "1234567.png", "3"],
+                ["--assert-exact", "1234567.png", "3"],
+            ],
+        )
+
+    def test_sender_canary_backend_uses_only_fixed_canary_operations(self):
+        item = sender.Artifact(
+            name="1234567.png",
+            mime="image/png",
+            sha256="0" * 64,
+            size_bytes=3,
+            handle=io.BytesIO(b"abc"),
+        )
+        backend = sender.PrivilegedBackend(canary=True)
+        with mock.patch.object(backend, "_run") as run:
+            backend.assert_absent(["1234567.png"])
+            backend.upload(item)
+            backend.assert_exact(item)
+        self.assertEqual(
+            [call.args[0] for call in run.call_args_list],
+            [
+                ["--canary-assert-absent", "1234567.png"],
+                ["--canary-upload", "1234567.png", "3"],
+                ["--canary-assert-exact", "1234567.png", "3"],
+            ],
+        )
+
+    def test_wrapper_rejects_arbitrary_namespace(self):
+        with self.assertRaisesRegex(wrapper.WrapperError, "namespace"):
+            wrapper.namespace_listing("other")
+
+    def test_wrapper_canary_upload_targets_exact_canary_subdirectory(self):
+        seen = {}
+
+        def fake_run(argv, **kwargs):
+            seen["argv"] = argv
+            seen["stdin"] = kwargs.get("stdin")
+            return types.SimpleNamespace(returncode=0, stdout="")
+
+        source = io.BytesIO(b"abc")
+        with mock.patch.object(wrapper, "assert_absent") as absent, \
+             mock.patch.object(wrapper, "check_runtime_metadata", return_value=None), \
+             mock.patch.object(wrapper.subprocess, "run", side_effect=fake_run):
+            old_stdin = wrapper.sys.stdin
+            try:
+                wrapper.sys.stdin = types.SimpleNamespace(buffer=source)
+                wrapper.upload("1234567.png", 3, namespace=wrapper.CANARY)
+            finally:
+                wrapper.sys.stdin = old_stdin
+
+        absent.assert_called_once_with(["1234567.png"], namespace=wrapper.CANARY)
+        self.assertIn("rcat", seen["argv"])
+        self.assertIn("gdrive:canary/1234567.png", seen["argv"])
+        self.assertNotIn("gdrive:pending/1234567.png", seen["argv"])
+
+    def test_wrapper_canary_cli_maps_only_to_fixed_namespace(self):
+        with mock.patch.object(wrapper.os, "geteuid", return_value=0), \
+             mock.patch.object(wrapper, "upload") as upload:
+            result = wrapper.main(
+                [
+                    "coloring-pages-drive-stage-rcat",
+                    "--canary-upload",
+                    "1234567.png",
+                    "3",
+                ]
+            )
+        self.assertEqual(result, 0)
+        upload.assert_called_once_with("1234567.png", 3, namespace=wrapper.CANARY)
+
+    def test_canary_contract_is_nonproduction_and_not_ingested(self):
+        contract = json.loads(
+            (
+                ROOT / "ops/contracts/coloring-pages-drive-stage-sender-v1.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(contract["canary"]["issue"], 1132)
+        self.assertEqual(contract["canary"]["subdirectory"], "canary")
+        self.assertFalse(contract["canary"]["production_ingest_reads_canary"])
+        self.assertFalse(contract["canary"]["publication_success_signal"])
+        self.assertFalse(contract["canary"]["delete_archive_cleanup_authorized"])
+        self.assertEqual(contract["drive"]["pending_subdirectory"], "pending")
+        self.assertEqual(contract["drive"]["canary_subdirectory"], "canary")
+        self.assertTrue(
+            contract["publication_boundary"]["production_ingest_reads_only_pending"]
+        )
+        self.assertFalse(contract["activation"]["source_merge_authorizes_live"])
+
+    def test_canary_uses_same_manifest_last_validation(self):
+        raw = v2_activity("7654321")
+        raw["artifacts"][-2], raw["artifacts"][-1] = (
+            raw["artifacts"][-1],
+            raw["artifacts"][-2],
+        )
+        with self.assertRaisesRegex(sender.SenderError, "manifest must be last"):
+            sender.load_and_validate_envelope(envelope(raw))
 
 if __name__ == "__main__":
     unittest.main()

@@ -107,3 +107,30 @@ The existing `coloring-pages-drive-ingest` remains unchanged and pull-only.
 - https://rclone.org/commands/rclone_lsf/
 - https://rclone.org/docs/#retries-int
 - https://developers.google.com/workspace/drive/api/guides/manage-uploads
+
+
+## Fixed non-production canary namespace
+
+Issue #1132 adds one explicit sender mode, `--canary`. Normal sender
+invocations remain unchanged and continue to target `pending/`.
+
+Canary mode does not accept a namespace parameter. It maps only to the fixed
+privileged operations `--canary-assert-absent`, `--canary-upload`, and
+`--canary-assert-exact`. The privileged wrapper maps those operations only to:
+
+```text
+gdrive:canary/<validated-staging-filename>
+```
+
+The Drive root, rclone config, retry settings, filename rules, exact byte-size
+checks, SHA-256 checks, manifest binding, manifest-last ordering and
+stop-on-first-failure semantics are identical to production staging.
+
+The production `coloring-pages-drive-ingest` contract reads only
+`gdrive:pending/`. It never reads `gdrive:canary/`. A canary object therefore
+cannot become a production publication readiness signal.
+
+Canary success proves only the sender→rclone→Drive transport path. It is not
+publication proof and does not authorize ingest, import, delete, archive,
+cleanup, retry or rollback. Canary objects are intentionally left untouched
+unless a separate owner authorization explicitly permits later cleanup.
