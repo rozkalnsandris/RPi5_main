@@ -47,11 +47,11 @@ The release manifest binds:
 
 No credential or provider request is used by the installer.
 
-Issue #1124 repins the bounded upgrade path to the exact currently installed
+Issue #1126 repins the bounded upgrade path to the exact currently installed
 predecessor release: RPi5_main
-`1b7cf1581cc67f5973e56b1f26e3b17e3e37a56f`, launcher blob
-`1cc20830bf21410b82f41a7f8ce4d85745b9c3ea`, and release SHA-256
-`b79e5f13e7b5d16804a5b944c2b2a5f95c8695d788981f239dbf2e38e5d9a839`.
+`e29a5442f199770d834e0fa0b48f8eb4b6d2c45b`, launcher blob
+`1e7592e319002d6db8ab3776b06cc74314d2aa22`, and release SHA-256
+`4935347c4434535f3e75262dd91ad3a85b6a4aa3649dfa48813a48a706aa1daf`.
 Upgrade preflight reconstructs that historical package from immutable Git
 objects, verifies every installed package file as a non-symlink root-owned
 single-link file with exact mode and SHA-256, and permits replacement of only
@@ -115,33 +115,34 @@ the deployed code differs from the reviewed candidate. It never emits account
 ID, zone IDs, token, raw provider responses, raw routes, secret values or
 plaintext variable values.
 
-### Worker list response contracts (#1124)
+### Worker list consumed-invariant contract (#1126)
 
-The two list endpoints now use endpoint-specific, fail-closed normalizers rather
-than the generic response unwrap.
+The provider list parsers deliberately validate only fields used by the trusted
+deploy protocol. HTTP transport already requires status 200, bounded parseable
+JSON, fixed endpoints, HTTPS and the existing request budget. Unused provider
+schema decoration is not a runtime safety boundary.
 
-For List Versions, accepted top-level fields are only `success`, `errors`,
-`messages`, `result`, and optional `result_info`. `result` must contain
-only `items`. Version entries accept only `id`, optional `metadata`, and
-optional `number`; documented metadata fields are bounded and never emitted.
-The first item is latest by provider order. `number` is optional and cannot
-select latest. A full 100-item page without pagination metadata is ambiguous
-and rejected.
+For List Versions, `result.items` must be a non-empty list. Cloudflare
+documents the first item as latest, so only `result.items[0].id` is consumed
+and it must be a full UUID. `errors`, `messages`, `metadata`, `number`,
+author/source data, later history entries and unknown unused fields are ignored.
+If `result_info.page` is present it must be integer page 1; unrelated
+pagination counters are not cross-validated because selecting the first latest
+item does not require complete history.
 
-For List Worker Deployments, the same bounded top-level envelope is accepted,
-but `result` must contain only `deployments`. Deployment entries accept only
-the provider-documented `id`, `created_on`, `source`, `strategy`,
-`versions`, `annotations`, and `author_email` fields. The first deployment
-is the latest deployment serving traffic by provider order. Only that latest
-deployment must contain exactly one version at 100 percent traffic.
+For List Worker Deployments, `result.deployments` must be a non-empty list.
+Cloudflare documents the first deployment as the latest deployment actively
+serving traffic. Only its deployment UUID plus exactly one version UUID at
+numeric 100 percent traffic are consumed. Timestamps, source, strategy,
+annotations, author data, later historical deployments and unknown unused
+fields are ignored. Optional `result_info.page`, when present, must be integer
+page 1.
 
-When `result_info` is present, only `page`, `per_page`, `count`,
-`total_count`, and `total_pages` are accepted and cross-validated. Valid
-multi-page deployment history is allowed because provider order makes the first
-deployment authoritative; contradictory pagination is rejected. Unknown
-top-level/result/pagination or security-relevant nested fields fail closed with
-static reason classes only. Provider values, author email, account/zone IDs,
-token, raw response bodies, routes and binding values are never emitted.
+The deploy-critical gates remain unchanged: latest must equal active before
+upload, four routes across two zones, seven binding kinds, D1/rate-limit
+identity, secret-name-only proof, plaintext fingerprints, compatibility/runtime
+settings, version-detail/module SHA-256 proof, double-read snapshot equality,
+one upload and one deploy maximum, and no retry/rollback/cleanup.
 
 ## Exact apply
 
