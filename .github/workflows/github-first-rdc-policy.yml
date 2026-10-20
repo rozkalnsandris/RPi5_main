@@ -1,0 +1,41 @@
+name: GitHub-first RDC fallback policy
+
+on:
+  pull_request:
+    paths:
+      - 'AGENTS.md'
+      - '.github/start-mode-routing.json'
+      - '.github/github-first-rdc-v1.json'
+      - 'docs/GITHUB_FIRST_RDC_ADOPTION_V1.md'
+      - 'tests/test_github_first_rdc_v1.py'
+      - '.github/workflows/github-first-rdc-policy.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'AGENTS.md'
+      - '.github/start-mode-routing.json'
+      - '.github/github-first-rdc-v1.json'
+      - 'docs/GITHUB_FIRST_RDC_ADOPTION_V1.md'
+      - 'tests/test_github_first_rdc_v1.py'
+      - '.github/workflows/github-first-rdc-policy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact RPi5_main revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate local machine policy and decision matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m json.tool .github/github-first-rdc-v1.json >/dev/null
+          python3 -m unittest discover -v -s tests -p 'test_github_first_rdc_v1.py'
