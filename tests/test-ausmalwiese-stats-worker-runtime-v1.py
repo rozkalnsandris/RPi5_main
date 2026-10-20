@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline regressions for #1118/#1122/#1124/#1126 Stats Worker deploy boundary."""
+"""Offline regressions for #1118/#1122/#1124/#1126/#1130 Stats Worker deploy boundary."""
 from __future__ import annotations
 
 import base64
@@ -280,7 +280,7 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
             with self.assertRaisesRegex(runtime.Stop, "rate_identity"):
                 transport._version_metadata(OLD)
 
-    def test_beta_version_module_proof_hashes_exact_main_module(self):
+    def test_beta_version_module_proof_uses_provider_declared_main_module(self):
         transport = runtime.CloudflareTransport(
             "a" * 32,
             "T" * 32,
@@ -288,15 +288,81 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
         )
         payload = {
             "id": OLD,
-            "main_module": "stats-worker.js",
+            "main_module": "index.js",
+            "modules": [
+                {
+                    "name": "unrelated.js",
+                    "content_type": "application/javascript+module",
+                    "content_base64": base64.b64encode(b"other").decode("ascii"),
+                },
+                {
+                    "name": "index.js",
+                    "content_type": "application/javascript+module",
+                    "content_base64": base64.b64encode(SOURCE).decode("ascii"),
+                },
+            ],
+        }
+        with mock.patch.object(transport, "_get", return_value=payload):
+            self.assertEqual(transport._code_sha(OLD), SOURCE_SHA)
+
+    def test_beta_version_module_proof_rejects_ambiguous_or_invalid_main_module(self):
+        transport = runtime.CloudflareTransport(
+            "a" * 32,
+            "T" * 32,
+            {"ausmalwiese.de": "b" * 32, "rozkalns.net": "c" * 32},
+        )
+        valid = {
+            "id": OLD,
+            "main_module": "index.js",
             "modules": [{
-                "name": "stats-worker.js",
+                "name": "index.js",
                 "content_type": "application/javascript+module",
                 "content_base64": base64.b64encode(SOURCE).decode("ascii"),
             }],
         }
-        with mock.patch.object(transport, "_get", return_value=payload):
-            self.assertEqual(transport._code_sha(OLD), SOURCE_SHA)
+
+        for value in (None, "", 7):
+            bad = copy.deepcopy(valid)
+            bad["main_module"] = value
+            with mock.patch.object(transport, "_get", return_value=bad):
+                with self.assertRaisesRegex(
+                    runtime.Stop, "version_modules_invalid"
+                ):
+                    transport._code_sha(OLD)
+
+        missing = copy.deepcopy(valid)
+        missing["modules"][0]["name"] = "other.js"
+        with mock.patch.object(transport, "_get", return_value=missing):
+            with self.assertRaisesRegex(runtime.Stop, "main_module_ambiguous"):
+                transport._code_sha(OLD)
+
+        duplicate = copy.deepcopy(valid)
+        duplicate["modules"].append(copy.deepcopy(duplicate["modules"][0]))
+        with mock.patch.object(transport, "_get", return_value=duplicate):
+            with self.assertRaisesRegex(runtime.Stop, "main_module_ambiguous"):
+                transport._code_sha(OLD)
+
+        bad_type = copy.deepcopy(valid)
+        bad_type["modules"][0]["content_type"] = "text/plain"
+        with mock.patch.object(transport, "_get", return_value=bad_type):
+            with self.assertRaisesRegex(runtime.Stop, "main_module_invalid"):
+                transport._code_sha(OLD)
+
+        bad_base64 = copy.deepcopy(valid)
+        bad_base64["modules"][0]["content_base64"] = "!!!"
+        with mock.patch.object(transport, "_get", return_value=bad_base64):
+            with self.assertRaisesRegex(
+                runtime.Stop, "main_module_base64_invalid"
+            ):
+                transport._code_sha(OLD)
+
+        oversized = copy.deepcopy(valid)
+        oversized["modules"][0]["content_base64"] = base64.b64encode(
+            b"x" * 196609
+        ).decode("ascii")
+        with mock.patch.object(transport, "_get", return_value=oversized):
+            with self.assertRaisesRegex(runtime.Stop, "main_module_size"):
+                transport._code_sha(OLD)
 
     def test_list_versions_uses_only_consumed_latest_fields(self):
         transport = runtime.CloudflareTransport(
@@ -565,15 +631,15 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
     def test_installer_upgrade_is_exact_predecessor_and_two_targets(self):
         self.assertEqual(
             installer.OLD_MAIN,
-            "e29a5442f199770d834e0fa0b48f8eb4b6d2c45b",
+            "299c5e583516b95dab739ff04ec178e733547adb",
         )
         self.assertEqual(
             installer.OLD_LAUNCHER_BLOB,
-            "1e7592e319002d6db8ab3776b06cc74314d2aa22",
+            "818b10ff15edeb30bfb0901023d789eafa3d04dc",
         )
         self.assertEqual(
             installer.OLD_RELEASE_SHA256,
-            "4935347c4434535f3e75262dd91ad3a85b6a4aa3649dfa48813a48a706aa1daf",
+            "c9de347026977ddd9248bd547ff3702a3f79045126dd8c1dd26ca29958e20a70",
         )
         self.assertEqual(
             installer.UPGRADE_TARGETS,
@@ -600,7 +666,7 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
         self.assertFalse(contract["runtime_modes"]["apply"]["rollback"])
         self.assertFalse(contract["runtime_modes"]["apply"]["cleanup"])
         self.assertFalse(contract["source_authorized_capabilities"]["live"])
-        self.assertEqual(contract["upgrade_issue"], 1126)
+        self.assertEqual(contract["upgrade_issue"], 1130)
         self.assertEqual(
             contract["read_protocol"]["versions_result_contract"]["latest_rule"],
             "first-item-consumed-fields-only",

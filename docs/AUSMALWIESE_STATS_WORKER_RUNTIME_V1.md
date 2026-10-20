@@ -47,11 +47,11 @@ The release manifest binds:
 
 No credential or provider request is used by the installer.
 
-Issue #1126 repins the bounded upgrade path to the exact currently installed
+Issue #1130 repins the bounded upgrade path to the exact currently installed
 predecessor release: RPi5_main
-`e29a5442f199770d834e0fa0b48f8eb4b6d2c45b`, launcher blob
-`1e7592e319002d6db8ab3776b06cc74314d2aa22`, and release SHA-256
-`4935347c4434535f3e75262dd91ad3a85b6a4aa3649dfa48813a48a706aa1daf`.
+`299c5e583516b95dab739ff04ec178e733547adb`, launcher blob
+`818b10ff15edeb30bfb0901023d789eafa3d04dc`, and release SHA-256
+`c9de347026977ddd9248bd547ff3702a3f79045126dd8c1dd26ca29958e20a70`.
 Upgrade preflight reconstructs that historical package from immutable Git
 objects, verifies every installed package file as a non-symlink root-owned
 single-link file with exact mode and SHA-256, and permits replacement of only
@@ -106,8 +106,9 @@ proves:
 - secret names without secret values;
 - fingerprints only for three existing plaintext bindings;
 - compatibility date/flags and bounded runtime settings fingerprint;
-- version-specific `stats-worker.js` bytes from Cloudflare's Worker Versions
-  API with `include=modules`.
+- version-specific provider-declared `main_module` bytes from Cloudflare's
+  Worker Versions API with `include=modules`; the selected main-module
+  SHA-256 must match the reviewed local Worker source bytes.
 
 The preflight output is sanitized: fixed target/provenance labels, active/latest
 version IDs, candidate code SHA-256, a canonical snapshot SHA-256, and whether
@@ -144,6 +145,16 @@ identity, secret-name-only proof, plaintext fingerprints, compatibility/runtime
 settings, version-detail/module SHA-256 proof, double-read snapshot equality,
 one upload and one deploy maximum, and no retry/rollback/cleanup.
 
+### Provider-declared main-module proof (#1130)
+
+Cloudflare defines `main_module` as the name of the main module in the
+`modules` array. Code proof therefore follows that provider-declared name
+instead of assuming a literal filename. The runtime requires one bounded,
+non-empty `main_module` string, selects exactly one module whose `name`
+matches it, accepts only the existing JavaScript content types, base64-decodes
+that module, and SHA-256 hashes the exact bytes. Missing or duplicate matches
+fail closed. No fallback to `stats-worker.js` or any other module is allowed.
+
 ## Exact apply
 
 Apply requires exact confirmation:
@@ -167,8 +178,8 @@ Only two ordered provider writes are possible:
 
 After upload, the old deployment must remain active while the new version is
 latest, routes/bindings/config must remain unchanged, and the beta Worker
-Versions `include=modules` response must prove the new
-`stats-worker.js` SHA-256 equals the reviewed local source.
+Versions `include=modules` response must prove the provider-declared main
+module SHA-256 equals the reviewed local `stats-worker.js` source bytes.
 
 After deployment, the new UUID must be both latest and 100%-active, the
 deployment ID must change, all preserved configuration must still match, and
