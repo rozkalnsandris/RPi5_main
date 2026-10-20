@@ -47,10 +47,11 @@ The release manifest binds:
 
 No credential or provider request is used by the installer.
 
-Issue #1122 adds one bounded upgrade path from the exact predecessor release:
-RPi5_main `65acff4a644fe685db880c46aedca93ead56f241`, launcher blob
-`a6b8b124e9e4919496e72e85a213b3fa739bacd6`, and release SHA-256
-`c25456704634d6b6230bcbbfac40400c1a897cfde360b88c557179f682128ec3`.
+Issue #1124 repins the bounded upgrade path to the exact currently installed
+predecessor release: RPi5_main
+`1b7cf1581cc67f5973e56b1f26e3b17e3e37a56f`, launcher blob
+`1cc20830bf21410b82f41a7f8ce4d85745b9c3ea`, and release SHA-256
+`b79e5f13e7b5d16804a5b944c2b2a5f95c8695d788981f239dbf2e38e5d9a839`.
 Upgrade preflight reconstructs that historical package from immutable Git
 objects, verifies every installed package file as a non-symlink root-owned
 single-link file with exact mode and SHA-256, and permits replacement of only
@@ -114,15 +115,33 @@ the deployed code differs from the reviewed candidate. It never emits account
 ID, zone IDs, token, raw provider responses, raw routes, secret values or
 plaintext variable values.
 
-### List Versions envelope correction (#1122)
+### Worker list response contracts (#1124)
 
-The runtime now accepts only Cloudflare's documented List Versions result shape
-`{"items":[...]}`. Top-level `result_info` is optional; when present it is
-strictly validated against page 1 / per-page 100 and must prove that the first
-page is complete. The first returned item is treated as latest per the provider
-contract. Version `number` is optional and bounded when present; it is never
-required to identify the latest version. Legacy list-only results, duplicate or
-invalid UUIDs, malformed pagination and truncation ambiguity fail closed.
+The two list endpoints now use endpoint-specific, fail-closed normalizers rather
+than the generic response unwrap.
+
+For List Versions, accepted top-level fields are only `success`, `errors`,
+`messages`, `result`, and optional `result_info`. `result` must contain
+only `items`. Version entries accept only `id`, optional `metadata`, and
+optional `number`; documented metadata fields are bounded and never emitted.
+The first item is latest by provider order. `number` is optional and cannot
+select latest. A full 100-item page without pagination metadata is ambiguous
+and rejected.
+
+For List Worker Deployments, the same bounded top-level envelope is accepted,
+but `result` must contain only `deployments`. Deployment entries accept only
+the provider-documented `id`, `created_on`, `source`, `strategy`,
+`versions`, `annotations`, and `author_email` fields. The first deployment
+is the latest deployment serving traffic by provider order. Only that latest
+deployment must contain exactly one version at 100 percent traffic.
+
+When `result_info` is present, only `page`, `per_page`, `count`,
+`total_count`, and `total_pages` are accepted and cross-validated. Valid
+multi-page deployment history is allowed because provider order makes the first
+deployment authoritative; contradictory pagination is rejected. Unknown
+top-level/result/pagination or security-relevant nested fields fail closed with
+static reason classes only. Provider values, author email, account/zone IDs,
+token, raw response bodies, routes and binding values are never emitted.
 
 ## Exact apply
 
@@ -182,6 +201,10 @@ rather than replay them.
 
 - Worker Script Version Upload:
   https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/versions/methods/create/
+- Worker Versions list:
+  https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/versions/methods/list/
+- Worker Deployments list:
+  https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/deployments/methods/list/
 - Worker Deployments:
   https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/deployments/methods/create/
 - Worker Versions with module content (`include=modules`):

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline regressions for #1118/#1122 Stats Worker installed deploy boundary."""
+"""Offline regressions for #1118/#1122/#1124 Stats Worker deploy boundary."""
 from __future__ import annotations
 
 import base64
@@ -308,7 +308,18 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
             "success": True,
             "errors": [],
             "messages": [],
-            "result": {"items": [{"id": NEW}, {"id": OLD}]},
+            "result": {
+                "items": [
+                    {
+                        "id": NEW,
+                        "metadata": {
+                            "source": "api",
+                            "hasPreview": False,
+                        },
+                    },
+                    {"id": OLD},
+                ]
+            },
         }
         self.assertEqual(
             transport._latest_version_from_payload(payload), NEW
@@ -334,7 +345,7 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
                 self.assertEqual(transport._versions(), NEW)
                 legacy_get.assert_not_called()
 
-    def test_list_versions_rejects_legacy_or_ambiguous_shapes(self):
+    def test_list_versions_rejects_unknown_or_ambiguous_shapes(self):
         transport = runtime.CloudflareTransport(
             "a" * 32,
             "T" * 32,
@@ -345,8 +356,35 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
             "errors": [],
             "result": [{"id": NEW, "number": 2}],
         }
-        with self.assertRaisesRegex(runtime.Stop, "versions_envelope_invalid"):
+        with self.assertRaisesRegex(runtime.Stop, "versions_result_shape"):
             transport._latest_version_from_payload(legacy)
+
+        unknown_envelope = {
+            "success": True,
+            "errors": [],
+            "result": {"items": [{"id": NEW}]},
+            "unexpected": True,
+        }
+        with self.assertRaisesRegex(
+            runtime.Stop, "versions_envelope_fields"
+        ):
+            transport._latest_version_from_payload(unknown_envelope)
+
+        unknown_result = {
+            "success": True,
+            "errors": [],
+            "result": {"items": [{"id": NEW}], "next": None},
+        }
+        with self.assertRaisesRegex(runtime.Stop, "versions_result_fields"):
+            transport._latest_version_from_payload(unknown_result)
+
+        unknown_entry = {
+            "success": True,
+            "errors": [],
+            "result": {"items": [{"id": NEW, "unexpected": True}]},
+        }
+        with self.assertRaisesRegex(runtime.Stop, "version_entry_fields"):
+            transport._latest_version_from_payload(unknown_entry)
 
         duplicate = {
             "success": True,
@@ -361,7 +399,7 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
             "errors": [],
             "result": {"items": [{"id": "not-a-version"}]},
         }
-        with self.assertRaisesRegex(runtime.Stop, "version_shape"):
+        with self.assertRaisesRegex(runtime.Stop, "version_id_invalid"):
             transport._latest_version_from_payload(invalid_id)
 
         bad_number = {
@@ -372,29 +410,168 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
         with self.assertRaisesRegex(runtime.Stop, "version_number_invalid"):
             transport._latest_version_from_payload(bad_number)
 
-        truncated = {
+        full_page_without_info = {
             "success": True,
             "errors": [],
-            "result": {"items": [{"id": NEW, "number": 2}]},
+            "result": {
+                "items": [
+                    {"id": f"00000000-0000-0000-0000-{index:012d}"}
+                    for index in range(100)
+                ]
+            },
+        }
+        with self.assertRaisesRegex(
+            runtime.Stop, "versions_pagination_ambiguous"
+        ):
+            transport._latest_version_from_payload(full_page_without_info)
+
+        bad_pagination = {
+            "success": True,
+            "errors": [],
+            "result": {"items": [{"id": NEW}]},
             "result_info": {
                 "page": 1,
                 "per_page": 100,
                 "count": 1,
-                "total_count": 101,
+                "total_count": 1,
+                "total_pages": 1,
+                "unexpected": 1,
+            },
+        }
+        with self.assertRaisesRegex(
+            runtime.Stop, "versions_pagination_fields"
+        ):
+            transport._latest_version_from_payload(bad_pagination)
+
+    def test_list_deployments_uses_documented_provider_order(self):
+        transport = runtime.CloudflareTransport(
+            "a" * 32,
+            "T" * 32,
+            {"ausmalwiese.de": "b" * 32, "rozkalns.net": "c" * 32},
+        )
+        older = "cccccccc-cccc-cccc-cccc-cccccccccccc"
+        payload = {
+            "success": True,
+            "errors": [],
+            "messages": [],
+            "result": {
+                "deployments": [
+                    {
+                        "id": DEPLOY_NEW,
+                        "created_on": "2026-10-20T10:00:00Z",
+                        "source": "api",
+                        "strategy": "percentage",
+                        "versions": [
+                            {"percentage": 100, "version_id": NEW}
+                        ],
+                        "annotations": {
+                            "workers/triggered_by": "deployment"
+                        },
+                    },
+                    {
+                        "id": DEPLOY_OLD,
+                        "created_on": "2026-10-21T10:00:00Z",
+                        "source": "api",
+                        "strategy": "percentage",
+                        "versions": [
+                            {"percentage": 100, "version_id": older}
+                        ],
+                    },
+                ]
+            },
+            "result_info": {
+                "count": 2,
+                "page": 1,
+                "per_page": 20,
+                "total_count": 40,
                 "total_pages": 2,
             },
         }
-        with self.assertRaisesRegex(runtime.Stop, "versions_incomplete"):
-            transport._latest_version_from_payload(truncated)
+        self.assertEqual(
+            transport._latest_deployment_from_payload(payload),
+            (DEPLOY_NEW, NEW),
+        )
+        with mock.patch.object(transport, "_request", return_value=payload):
+            with mock.patch.object(transport, "_get") as legacy_get:
+                self.assertEqual(
+                    transport._deployment(), (DEPLOY_NEW, NEW)
+                )
+                legacy_get.assert_not_called()
 
-        bad_pagination = copy.deepcopy(truncated)
-        bad_pagination["result_info"]["total_count"] = 1
-        bad_pagination["result_info"]["total_pages"] = 1
-        bad_pagination["result_info"]["unexpected"] = 1
+    def test_list_deployments_rejects_unknown_duplicate_or_split(self):
+        transport = runtime.CloudflareTransport(
+            "a" * 32,
+            "T" * 32,
+            {"ausmalwiese.de": "b" * 32, "rozkalns.net": "c" * 32},
+        )
+        base = {
+            "success": True,
+            "errors": [],
+            "result": {
+                "deployments": [
+                    {
+                        "id": DEPLOY_NEW,
+                        "created_on": "2026-10-20T10:00:00Z",
+                        "source": "api",
+                        "strategy": "percentage",
+                        "versions": [
+                            {"percentage": 100, "version_id": NEW}
+                        ],
+                    }
+                ]
+            },
+        }
+
+        legacy = copy.deepcopy(base)
+        legacy["result"] = legacy["result"]["deployments"]
         with self.assertRaisesRegex(
-            runtime.Stop, "versions_pagination_invalid"
+            runtime.Stop, "deployments_result_shape"
         ):
-            transport._latest_version_from_payload(bad_pagination)
+            transport._latest_deployment_from_payload(legacy)
+
+        unknown = copy.deepcopy(base)
+        unknown["result"]["unexpected"] = True
+        with self.assertRaisesRegex(
+            runtime.Stop, "deployments_result_fields"
+        ):
+            transport._latest_deployment_from_payload(unknown)
+
+        duplicate = copy.deepcopy(base)
+        duplicate["result"]["deployments"].append(
+            copy.deepcopy(duplicate["result"]["deployments"][0])
+        )
+        with self.assertRaisesRegex(
+            runtime.Stop, "deployment_id_duplicate"
+        ):
+            transport._latest_deployment_from_payload(duplicate)
+
+        invalid = copy.deepcopy(base)
+        invalid["result"]["deployments"][0]["id"] = "invalid"
+        with self.assertRaisesRegex(
+            runtime.Stop, "deployment_id_invalid"
+        ):
+            transport._latest_deployment_from_payload(invalid)
+
+        split = copy.deepcopy(base)
+        split["result"]["deployments"][0]["versions"] = [
+            {"percentage": 50, "version_id": NEW},
+            {"percentage": 50, "version_id": OLD},
+        ]
+        with self.assertRaisesRegex(runtime.Stop, "traffic_split"):
+            transport._latest_deployment_from_payload(split)
+
+        bad_page = copy.deepcopy(base)
+        bad_page["result_info"] = {
+            "page": 2,
+            "count": 1,
+            "per_page": 20,
+            "total_count": 2,
+            "total_pages": 1,
+        }
+        with self.assertRaisesRegex(
+            runtime.Stop, "deployments_pagination"
+        ):
+            transport._latest_deployment_from_payload(bad_page)
 
     def test_preflight_is_double_read_and_sanitized(self):
         before = snapshot(active_code=SOURCE_SHA, latest_code=SOURCE_SHA)
@@ -474,15 +651,15 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
     def test_installer_upgrade_is_exact_predecessor_and_two_targets(self):
         self.assertEqual(
             installer.OLD_MAIN,
-            "65acff4a644fe685db880c46aedca93ead56f241",
+            "1b7cf1581cc67f5973e56b1f26e3b17e3e37a56f",
         )
         self.assertEqual(
             installer.OLD_LAUNCHER_BLOB,
-            "a6b8b124e9e4919496e72e85a213b3fa739bacd6",
+            "1cc20830bf21410b82f41a7f8ce4d85745b9c3ea",
         )
         self.assertEqual(
             installer.OLD_RELEASE_SHA256,
-            "c25456704634d6b6230bcbbfac40400c1a897cfde360b88c557179f682128ec3",
+            "b79e5f13e7b5d16804a5b944c2b2a5f95c8695d788981f239dbf2e38e5d9a839",
         )
         self.assertEqual(
             installer.UPGRADE_TARGETS,
@@ -509,6 +686,15 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
         self.assertFalse(contract["runtime_modes"]["apply"]["rollback"])
         self.assertFalse(contract["runtime_modes"]["apply"]["cleanup"])
         self.assertFalse(contract["source_authorized_capabilities"]["live"])
+        self.assertEqual(contract["upgrade_issue"], 1124)
+        self.assertEqual(
+            contract["read_protocol"]["versions_result_contract"]["latest_rule"],
+            "first-item-provider-order",
+        )
+        self.assertEqual(
+            contract["read_protocol"]["deployments_result_contract"]["latest_rule"],
+            "first-deployment-provider-order",
+        )
         self.assertFalse(
             contract["source_authorized_capabilities"]["cloudflare_upload"]
         )
