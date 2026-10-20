@@ -1,0 +1,46 @@
+name: Ausmalwiese Drive stage sender source
+
+on:
+  pull_request:
+    paths:
+      - "ops/bin/coloring-pages-drive-stage-sender"
+      - "ops/libexec/coloring-pages-drive-stage-rcat"
+      - "ops/contracts/coloring-pages-drive-stage-sender-v1.json"
+      - "ops/sudoers/coloring-pages-drive-stage-sender"
+      - "scripts/install-coloring-pages-drive-stage-sender-v1.sh"
+      - "tests/test-ausmalwiese-drive-stage-sender-v1.py"
+      - "docs/AUSMALWIESE_DRIVE_STAGE_SENDER_V1.md"
+      - ".github/workflows/ausmalwiese-drive-stage-sender-source.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "ops/bin/coloring-pages-drive-stage-sender"
+      - "ops/libexec/coloring-pages-drive-stage-rcat"
+      - "ops/contracts/coloring-pages-drive-stage-sender-v1.json"
+      - "ops/sudoers/coloring-pages-drive-stage-sender"
+      - "scripts/install-coloring-pages-drive-stage-sender-v1.sh"
+      - "tests/test-ausmalwiese-drive-stage-sender-v1.py"
+      - "docs/AUSMALWIESE_DRIVE_STAGE_SENDER_V1.md"
+      - ".github/workflows/ausmalwiese-drive-stage-sender-source.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  source-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate Drive stage sender source
+        run: |
+          python3 ./tests/test-ausmalwiese-drive-stage-sender-v1.py
+          python3 -m py_compile             ops/bin/coloring-pages-drive-stage-sender             ops/libexec/coloring-pages-drive-stage-rcat
+          python3 -m json.tool             ops/contracts/coloring-pages-drive-stage-sender-v1.json >/dev/null
+          bash -n scripts/install-coloring-pages-drive-stage-sender-v1.sh
