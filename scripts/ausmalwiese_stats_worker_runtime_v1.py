@@ -244,7 +244,7 @@ def load_core(raw: bytes):
         raise Stop("core_load_failed") from None
     for name in (
         "validate_snapshot", "future_run_once", "verify_source",
-        "SOURCE_BLOB", "CONFIG_BLOB",
+        "deployment_payload", "SOURCE_BLOB", "CONFIG_BLOB",
     ):
         if not hasattr(module, name):
             raise Stop("core_interface_invalid")
