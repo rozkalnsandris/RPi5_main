@@ -59,7 +59,7 @@ sudo rule exposes that one wrapper only. The wrapper fixes:
 - remote: `gdrive`
 - root folder ID: `1F0pxqoRgtZl7JQVcyvYVZxKvx6eOnytn`
 - subdirectory: `pending`
-- config path: `/home/andris/.config/rclone/rclone.conf`
+- config path: `$OWNER_HOME/.config/rclone/rclone.conf`
 
 The wrapper verifies only config file metadata. It never reads or prints
 credential contents.
