@@ -10,7 +10,7 @@
     "installed_group": "root",
     "installed_mode": "0755",
     "execution_owner": "andris",
-    "input": "stdin-json-envelope-with-base64-artifacts",
+    "input": "stdin-one-compact-json-line-with-base64-artifacts",
     "envelope_schema": "rozkalns.rpi5-main.coloring-pages-drive-stage-envelope.v1",
     "maximum_activities": 20,
     "maximum_pages_per_activity": 12,
@@ -18,7 +18,13 @@
     "maximum_manifest_bytes": 65536,
     "maximum_total_raw_bytes": 268435456,
     "all_artifacts_verified_before_first_drive_write": true,
-    "manifest_last_per_activity": true
+    "manifest_last_per_activity": true,
+    "stdin_framing": {
+      "format": "single-compact-json-line-lf-terminated",
+      "eof_required": false,
+      "maximum_line_bytes": 387973120,
+      "additional_lines_processed": false
+    }
   },
   "privileged_wrapper": {
     "source": "ops/libexec/coloring-pages-drive-stage-rcat",

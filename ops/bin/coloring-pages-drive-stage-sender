@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Bounded Coloring Pages Drive staging sender.
 
-Reads one complete JSON envelope from stdin, validates every artifact locally,
-then invokes a fixed privileged rclone wrapper. No Drive mutation occurs before
-all local bytes and manifest bindings have passed validation.
+Reads one complete LF-terminated compact JSON envelope line from stdin,
+validates every artifact locally, then invokes a fixed privileged rclone
+wrapper. EOF is not required. No Drive mutation occurs before all local bytes
+and manifest bindings have passed validation.
 """
 
 from __future__ import annotations
@@ -86,6 +87,20 @@ def parse_json_bytes(data: bytes, *, label: str) -> Any:
         fail(f"{label} is not UTF-8 JSON")
     except json.JSONDecodeError:
         fail(f"{label} is invalid JSON")
+
+
+def read_envelope_line(stream: BinaryIO) -> bytes:
+    raw = stream.readline(MAX_ENVELOPE_BYTES + 1)
+    if not raw:
+        fail("envelope is empty")
+    if len(raw) > MAX_ENVELOPE_BYTES:
+        fail("envelope size is outside the allowed bound")
+    if not raw.endswith(b"\n"):
+        fail("envelope line terminator is missing")
+    payload = raw[:-1]
+    if not payload:
+        fail("envelope is empty")
+    return payload
 
 
 def validate_text(value: Any, *, field: str, allow_empty: bool = False) -> str:
@@ -418,7 +433,7 @@ def parse_canary_mode(argv: list[str]) -> bool:
 def run_cli() -> int:
     try:
         canary = parse_canary_mode(sys.argv[1:])
-        raw = sys.stdin.buffer.read(MAX_ENVELOPE_BYTES + 1)
+        raw = read_envelope_line(sys.stdin.buffer)
         activities = load_and_validate_envelope(raw)
         fd = open_sender_lock()
         try:

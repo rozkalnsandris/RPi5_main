@@ -141,6 +141,21 @@ class DriveStageSenderTests(unittest.TestCase):
     def tearDown(self):
         pass
 
+    def test_envelope_line_framing_does_not_require_eof(self):
+        payload = envelope(v1_activity())
+        source = io.BytesIO(payload + b"\nsecond-line-must-not-be-read")
+        self.assertEqual(sender.read_envelope_line(source), payload)
+        self.assertEqual(source.readline(), b"second-line-must-not-be-read")
+
+    def test_envelope_line_framing_requires_lf_terminator(self):
+        with self.assertRaisesRegex(sender.SenderError, "terminator"):
+            sender.read_envelope_line(io.BytesIO(envelope(v1_activity())))
+
+    def test_envelope_line_framing_rejects_over_bound_input(self):
+        with mock.patch.object(sender, "MAX_ENVELOPE_BYTES", 8):
+            with self.assertRaisesRegex(sender.SenderError, "size"):
+                sender.read_envelope_line(io.BytesIO(b"123456789\n"))
+
     def test_valid_independent_v1_batch_is_png_then_manifest(self):
         activities = sender.load_and_validate_envelope(
             envelope(v1_activity("1234567"), v1_activity("2345678"))
@@ -293,6 +308,12 @@ class DriveStageSenderTests(unittest.TestCase):
         contract = json.loads(contract_path.read_text(encoding="utf-8"))
         self.assertEqual(contract["issue"], 1128)
         self.assertEqual(contract["status"], "source-defined-not-installed")
+        self.assertEqual(
+            contract["sender"]["stdin_framing"]["format"],
+            "single-compact-json-line-lf-terminated",
+        )
+        self.assertFalse(contract["sender"]["stdin_framing"]["eof_required"])
+        self.assertFalse(contract["sender"]["stdin_framing"]["additional_lines_processed"])
         self.assertFalse(contract["installer"]["runs_rclone"])
         self.assertFalse(contract["installer"]["writes_drive"])
         self.assertFalse(contract["activation"]["source_merge_authorizes_live"])
