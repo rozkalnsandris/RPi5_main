@@ -935,10 +935,9 @@ def deploy_existing(core, trusted, worker_bytes, expected_recovery_sha256):
     )
     target = before["latest_uploaded_version"]
     previous_deployment = before["deployment_id"]
+    payload = core.deployment_payload(target)
     try:
-        deployment = trusted.deploy_version_once(
-            payload=core.deployment_payload(target)
-        )
+        deployment = trusted.deploy_version_once(payload=payload)
     except Exception:
         raise Stop("recovery_deploy_outcome_unknown_stop") from None
     need(
