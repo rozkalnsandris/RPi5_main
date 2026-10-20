@@ -1,0 +1,3 @@
+# Managed by RPi5_main issue #1128.
+# The wrapper validates all arguments and fixes the Drive remote/root/pending path.
+andris ALL=(root) NOPASSWD: /usr/local/libexec/coloring-pages-drive-stage-rcat *

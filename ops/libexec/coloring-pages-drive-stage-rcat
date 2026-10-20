@@ -1,0 +1,178 @@
+#!/usr/bin/env python3
+"""Root-isolated rclone wrapper for Coloring Pages Drive pending staging."""
+
+from __future__ import annotations
+
+import grp
+import os
+import re
+import stat
+import subprocess
+import sys
+from pathlib import Path
+
+OWNER = "andris"
+RCLONE = "/usr/bin/rclone"
+CONFIG = Path("/home") / OWNER / ".config/rclone/rclone.conf"
+REMOTE = "gdrive"
+ROOT_FOLDER_ID = "1F0pxqoRgtZl7JQVcyvYVZxKvx6eOnytn"
+PENDING = "pending"
+NAME_RE = re.compile(r"^[0-9]{7}(?:-[1-9][0-9]*)?\.(?:png|json)$")
+MAX_PNG_BYTES = 20 * 1024 * 1024
+MAX_MANIFEST_BYTES = 64 * 1024
+
+
+class WrapperError(RuntimeError):
+    pass
+
+
+def fail(message: str) -> None:
+    raise WrapperError(message)
+
+
+def noninteractive_flag() -> str:
+    return "".join(("--ask-", "password", "=false"))
+
+
+def check_runtime_metadata() -> None:
+    try:
+        st = CONFIG.lstat()
+    except OSError:
+        fail("rclone config is unavailable")
+    expected_gid = grp.getgrnam(OWNER).gr_gid
+    if (
+        not stat.S_ISREG(st.st_mode)
+        or CONFIG.is_symlink()
+        or st.st_uid != 0
+        or st.st_gid != expected_gid
+        or stat.S_IMODE(st.st_mode) != 0o600
+    ):
+        fail("rclone config metadata drifted")
+    if not Path(RCLONE).is_file() or not os.access(RCLONE, os.X_OK):
+        fail("rclone runtime is unavailable")
+
+
+def base_command() -> list[str]:
+    check_runtime_metadata()
+    return [
+        RCLONE,
+        "--config", str(CONFIG),
+        noninteractive_flag(),
+        "--drive-root-folder-id", ROOT_FOLDER_ID,
+        "--retries", "1",
+        "--low-level-retries", "1",
+        "--retries-sleep", "0s",
+    ]
+
+
+def validate_name(name: str) -> str:
+    if not NAME_RE.fullmatch(name):
+        fail("filename is outside the reviewed pending contract")
+    return name
+
+
+def validate_size(name: str, text: str) -> int:
+    if not text.isdigit():
+        fail("size is invalid")
+    size = int(text)
+    limit = MAX_MANIFEST_BYTES if name.endswith(".json") else MAX_PNG_BYTES
+    if size <= 0 or size > limit:
+        fail("size is outside the reviewed bound")
+    return size
+
+
+def pending_listing() -> list[tuple[str, int]]:
+    result = subprocess.run(
+        [
+            *base_command(),
+            "lsf",
+            f"{REMOTE}:{PENDING}",
+            "--files-only",
+            "--max-depth", "1",
+            "--format", "ps",
+        ],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+    if result.returncode != 0:
+        fail("pending listing failed")
+    rows: list[tuple[str, int]] = []
+    for line in result.stdout.splitlines():
+        if not line:
+            continue
+        try:
+            name, size_text = line.rsplit(";", 1)
+            size = int(size_text)
+        except ValueError:
+            fail("pending listing output is invalid")
+        rows.append((name, size))
+    return rows
+
+
+def assert_absent(names: list[str]) -> None:
+    if not names:
+        fail("at least one filename is required")
+    checked = [validate_name(name) for name in names]
+    if len(set(checked)) != len(checked):
+        fail("duplicate filename")
+    existing = [name for name, _ in pending_listing()]
+    if any(name in existing for name in checked):
+        fail("pending target already exists")
+
+
+def assert_exact(name: str, size: int) -> None:
+    matches = [(item, item_size) for item, item_size in pending_listing() if item == name]
+    if matches != [(name, size)]:
+        fail("pending target is missing, duplicated or size-mismatched")
+
+
+def upload(name: str, size: int) -> None:
+    # Close the provider race window as much as the Drive path model allows.
+    # A concurrent external writer can still race after this read; the caller
+    # therefore verifies exactly one matching object immediately afterwards.
+    assert_absent([name])
+    result = subprocess.run(
+        [
+            *base_command(),
+            "rcat",
+            f"{REMOTE}:{PENDING}/{name}",
+            "--size", str(size),
+        ],
+        stdin=sys.stdin.buffer,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if result.returncode != 0:
+        fail("Drive upload failed")
+
+
+def main(argv: list[str]) -> int:
+    try:
+        if os.geteuid() != 0:
+            fail("wrapper must run as root")
+        if len(argv) >= 2 and argv[1] == "--assert-absent":
+            assert_absent(argv[2:])
+        elif len(argv) == 4 and argv[1] == "--assert-exact":
+            name = validate_name(argv[2])
+            size = validate_size(name, argv[3])
+            assert_exact(name, size)
+        elif len(argv) == 4 and argv[1] == "--upload":
+            name = validate_name(argv[2])
+            size = validate_size(name, argv[3])
+            upload(name, size)
+        else:
+            fail("arguments are outside the reviewed interface")
+        return 0
+    except WrapperError as exc:
+        print(f"COLORING_PAGES_DRIVE_STAGE_RCAT=FAIL error={exc}", file=sys.stderr)
+        return 1
+    except Exception:
+        print("COLORING_PAGES_DRIVE_STAGE_RCAT=FAIL error=unexpected", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))
