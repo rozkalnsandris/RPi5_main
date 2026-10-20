@@ -1,0 +1,108 @@
+{
+  "schema": "rozkalns.rpi5-main.coloring-pages-drive-stage-sender.v1",
+  "repository": "rozkalnsandris/RPi5_main",
+  "issue": 1128,
+  "status": "source-defined-not-installed",
+  "sender": {
+    "source": "ops/bin/coloring-pages-drive-stage-sender",
+    "installed_path": "/usr/local/bin/coloring-pages-drive-stage-sender",
+    "installed_owner": "root",
+    "installed_group": "root",
+    "installed_mode": "0755",
+    "execution_owner": "andris",
+    "input": "stdin-json-envelope-with-base64-artifacts",
+    "envelope_schema": "rozkalns.rpi5-main.coloring-pages-drive-stage-envelope.v1",
+    "maximum_activities": 20,
+    "maximum_pages_per_activity": 12,
+    "maximum_png_bytes": 20971520,
+    "maximum_manifest_bytes": 65536,
+    "maximum_total_raw_bytes": 268435456,
+    "all_artifacts_verified_before_first_drive_write": true,
+    "manifest_last_per_activity": true
+  },
+  "privileged_wrapper": {
+    "source": "ops/libexec/coloring-pages-drive-stage-rcat",
+    "installed_path": "/usr/local/libexec/coloring-pages-drive-stage-rcat",
+    "installed_owner": "root",
+    "installed_group": "root",
+    "installed_mode": "0755",
+    "allowed_modes": [
+      "--assert-absent",
+      "--upload",
+      "--assert-exact"
+    ],
+    "arbitrary_remote_allowed": false,
+    "arbitrary_config_allowed": false,
+    "arbitrary_path_allowed": false
+  },
+  "sudoers": {
+    "source": "ops/sudoers/coloring-pages-drive-stage-sender",
+    "installed_path": "/etc/sudoers.d/coloring-pages-drive-stage-sender",
+    "installed_owner": "root",
+    "installed_group": "root",
+    "installed_mode": "0440",
+    "execution_owner": "andris",
+    "privileged_command": "/usr/local/libexec/coloring-pages-drive-stage-rcat"
+  },
+  "drive": {
+    "provider": "google-drive",
+    "transport_client": "/usr/bin/rclone",
+    "remote": "gdrive",
+    "root_folder_id": "1F0pxqoRgtZl7JQVcyvYVZxKvx6eOnytn",
+    "pending_subdirectory": "pending",
+    "config_path": "/home/andris/.config/rclone/rclone.conf",
+    "config_expected_identity": "root:andris:0600",
+    "config_content_read_or_emit_allowed": false,
+    "list_command": "lsf",
+    "upload_command": "rcat",
+    "upload_size_required": true,
+    "high_level_retries": 1,
+    "low_level_retries": 1,
+    "retry_sleep": "0s",
+    "fast_list_allowed": false,
+    "overwrite_authorized": false,
+    "archive_delete_authorized": false
+  },
+  "state": {
+    "directory": "/srv/coloring-pages-content/state/drive-stage",
+    "expected_directory_identity": "andris:andris:0755",
+    "lock_file": "/srv/coloring-pages-content/state/drive-stage/.lock",
+    "lock_expected_identity": "andris:andris:0600",
+    "persistent_artifact_spool": false
+  },
+  "publication_boundary": {
+    "existing_drive_ingest_unchanged": true,
+    "sender_invokes_ingest": false,
+    "sender_invokes_importer": false,
+    "sender_performs_public_verification": false,
+    "sender_performs_cleanup": false,
+    "after_first_upload_error": "stop-without-retry-rollback-cleanup-or-alternate-path"
+  },
+  "installer": {
+    "source": "scripts/install-coloring-pages-drive-stage-sender-v1.sh",
+    "exact_rpi5_main_sha_required": true,
+    "clean_main_checkout_required": true,
+    "installs_sender_wrapper_sudoers_and_state_lock": true,
+    "runs_rclone": false,
+    "reads_credential_content": false,
+    "changes_rclone_config": false,
+    "writes_drive": false,
+    "runs_ingest": false,
+    "changes_systemd": false
+  },
+  "activation": {
+    "source_merge_authorizes_live": false,
+    "explicit_owner_live_authority_required": true,
+    "installed_identity_verify_required": true,
+    "sudoers_identity_verify_required": true,
+    "runtime_capability_preflight_required": true,
+    "non_production_canary_required": true,
+    "coloring_pages_publish_contract_change_required_after_activation": true
+  },
+  "references": [
+    "https://rclone.org/commands/rclone_rcat/",
+    "https://rclone.org/commands/rclone_lsf/",
+    "https://rclone.org/docs/#retries-int",
+    "https://developers.google.com/workspace/drive/api/guides/manage-uploads"
+  ]
+}
