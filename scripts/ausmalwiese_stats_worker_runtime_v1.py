@@ -360,7 +360,12 @@ class CloudflareTransport:
             need(self.reads < READ_BUDGET, "read_budget_exhausted")
             self.reads += 1
         elif phase == "upload":
-            need(self.uploads == 0 and self.deploys == 0, "upload_budget_exhausted")
+            need(
+                not self.allow_deploy_existing
+                and self.uploads == 0
+                and self.deploys == 0,
+                "upload_budget_exhausted",
+            )
             self.uploads = 1
         elif phase == "deploy":
             if self.allow_deploy_existing:
@@ -926,7 +931,7 @@ def deploy_existing(core, trusted, worker_bytes, expected_recovery_sha256):
     before, candidate = _recovery_state(core, trusted, worker_bytes)
     need(
         snapshot_digest(before) == expected_recovery_sha256,
-        "recovery_binding_drift",
+        "recovery_snapshot_binding_drift",
     )
     target = before["latest_uploaded_version"]
     previous_deployment = before["deployment_id"]
@@ -941,7 +946,7 @@ def deploy_existing(core, trusted, worker_bytes, expected_recovery_sha256):
         and set(deployment) == {"deployment_id"}
         and isinstance(deployment["deployment_id"], str)
         and UUID.fullmatch(deployment["deployment_id"]) is not None,
-        "recovery_deploy_reply_ambiguous_stop",
+        "recovery_deploy_reply_outcome_unknown_stop",
     )
     try:
         after = core.validate_snapshot(trusted.read_snapshot())
