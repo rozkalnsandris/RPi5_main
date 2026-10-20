@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline regressions for #1118/#1122/#1124/#1126/#1130 Stats Worker deploy boundary."""
+"""Offline regressions for #1118/#1122/#1124/#1126/#1130/#1138 Stats Worker deploy boundary."""
 from __future__ import annotations
 
 import base64
@@ -660,6 +660,7 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
             active_code=OLD_SHA,
             latest_code=SOURCE_SHA,
         )
+        before["latest_bindings"]["PUBLIC_ORIGIN"]["fingerprint"] = "7" * 64
         trusted = FakeTrusted([before, before])
         with mock.patch.object(core, "verify_source"):
             with self.assertRaisesRegex(runtime.Stop, "recovery_binding_drift"):
@@ -667,7 +668,7 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
                     core,
                     trusted,
                     SOURCE,
-                    "f" * 64,
+                    preflight_digest(before),
                 )
         self.assertEqual(trusted.uploads, 0)
         self.assertEqual(trusted.deploys, 0)
@@ -680,7 +681,9 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
         )
         trusted = FakeTrusted([before, before])
         with mock.patch.object(core, "verify_source"):
-            with self.assertRaisesRegex(runtime.Stop, "recovery_binding_drift"):
+            with self.assertRaisesRegex(
+                runtime.Stop, "recovery_snapshot_binding_drift"
+            ):
                 runtime.deploy_existing(
                     core,
                     trusted,
@@ -754,6 +757,13 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
         with self.assertRaisesRegex(runtime.Stop, "deploy_budget_exhausted"):
             recovery.deploy_version_once(
                 payload=core.deployment_payload(NEW)
+            )
+        with self.assertRaisesRegex(runtime.Stop, "upload_budget_exhausted"):
+            recovery.upload_version_once(
+                module_name="stats-worker.js",
+                module_bytes=SOURCE,
+                metadata={},
+                bindings_inherit="strict",
             )
 
         normal = runtime.CloudflareTransport(
