@@ -426,29 +426,94 @@ class CloudflareTransport:
                 )
         return payload["result"]
 
-    def _get(self, path):
-        return self._unwrap(self._request("GET", path, phase="read"))
-
-    def _versions(self):
-        items = self._get(
-            f"/client/v4/accounts/{self.account}/workers/scripts/{WORKER}"
-            "/versions?page=1&per_page=100"
+    @staticmethod
+    def _latest_version_from_payload(payload):
+        need(
+            isinstance(payload, dict)
+            and set(payload).issubset(
+                {"success", "errors", "messages", "result", "result_info"}
+            )
+            and payload.get("success") is True
+            and payload.get("errors") == []
+            and isinstance(payload.get("messages", []), list)
+            and isinstance(payload.get("result"), dict)
+            and set(payload["result"]) == {"items"},
+            "versions_envelope_invalid",
         )
-        need(isinstance(items, list) and 1 <= len(items) < 100, "versions_incomplete")
-        by_number = {}
+        items = payload["result"]["items"]
+        need(
+            isinstance(items, list) and 1 <= len(items) < 100,
+            "versions_incomplete",
+        )
+        info = payload.get("result_info")
+        if info is not None:
+            need(isinstance(info, dict), "versions_pagination_invalid")
+            required = {"page", "per_page", "count", "total_count"}
+            allowed = required | {"total_pages"}
+            need(
+                required.issubset(info) and set(info).issubset(allowed),
+                "versions_pagination_invalid",
+            )
+            need(
+                type(info["page"]) is int
+                and info["page"] == 1
+                and type(info["per_page"]) is int
+                and info["per_page"] == 100
+                and type(info["count"]) is int
+                and info["count"] == len(items)
+                and type(info["total_count"]) is int
+                and len(items) <= info["total_count"] <= 1_000_000,
+                "versions_pagination_invalid",
+            )
+            expected_pages = max(
+                1,
+                (info["total_count"] + info["per_page"] - 1)
+                // info["per_page"],
+            )
+            need(expected_pages == 1, "versions_incomplete")
+            if "total_pages" in info:
+                need(
+                    type(info["total_pages"]) is int
+                    and info["total_pages"] == expected_pages,
+                    "versions_pagination_invalid",
+                )
+        seen = set()
+        previous_number = None
         for item in items:
             need(
                 isinstance(item, dict)
-                and type(item.get("number")) is int
-                and item["number"] > 0
+                and len(item) <= 20
                 and isinstance(item.get("id"), str)
                 and UUID.fullmatch(item["id"]) is not None,
                 "version_shape",
             )
-            need(item["number"] not in by_number, "version_number_duplicate")
-            by_number[item["number"]] = item["id"]
-        need(len(set(by_number.values())) == len(by_number), "version_id_duplicate")
-        return by_number[max(by_number)]
+            version_id = item["id"]
+            need(version_id not in seen, "version_id_duplicate")
+            seen.add(version_id)
+            if "number" in item:
+                number = item["number"]
+                need(
+                    type(number) is int and 0 <= number <= 2147483647,
+                    "version_number_invalid",
+                )
+                if previous_number is not None:
+                    need(previous_number > number, "version_order_invalid")
+                previous_number = number
+            else:
+                previous_number = None
+        return items[0]["id"]
+
+    def _get(self, path):
+        return self._unwrap(self._request("GET", path, phase="read"))
+
+    def _versions(self):
+        payload = self._request(
+            "GET",
+            f"/client/v4/accounts/{self.account}/workers/scripts/{WORKER}"
+            "/versions?page=1&per_page=100",
+            phase="read",
+        )
+        return self._latest_version_from_payload(payload)
 
     def _deployment(self):
         items = self._get(

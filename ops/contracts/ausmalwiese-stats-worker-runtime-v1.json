@@ -1,6 +1,6 @@
 {
   "schema": "rozkalns.rpi5-main.ausmalwiese-stats-worker-runtime.v1",
-  "status": "source-only-not-installed",
+  "status": "source-only-upgrade-ready-no-live",
   "issue": 1118,
   "parent_issue": 996,
   "repository": "rozkalnsandris/RPi5_main",
@@ -68,13 +68,20 @@
     "retries": 0,
     "max_response_bytes": 1500000,
     "max_reads_per_invocation": 48,
-    "versions": "GET /accounts/{account}/workers/scripts/coloring-pages-stats-v1/versions",
+    "versions": "GET /accounts/{account}/workers/scripts/coloring-pages-stats-v1/versions?page=1&per_page=100",
     "deployments": "GET /accounts/{account}/workers/scripts/coloring-pages-stats-v1/deployments",
     "script_version": "GET /accounts/{account}/workers/scripts/coloring-pages-stats-v1/versions/{version}",
     "version_modules": "GET /accounts/{account}/workers/workers/coloring-pages-stats-v1/versions/{version}?include=modules",
     "zone_identity": "GET /zones/{zone_id}",
     "zone_routes": "GET /zones/{zone_id}/workers/routes",
-    "version_code_proof": "base64 stats-worker.js module SHA-256"
+    "version_code_proof": "base64 stats-worker.js module SHA-256",
+    "versions_result_contract": {
+      "result_shape": "{\"items\":[...]}",
+      "result_info": "optional-strict",
+      "latest_rule": "first-item",
+      "number": "optional-bounded-integer",
+      "page_truncation": "reject"
+    }
   },
   "runtime_modes": {
     "preflight": {
@@ -119,7 +126,23 @@
     "root_owned_targets": true,
     "no_secret_access": true,
     "no_cloudflare_request": true,
-    "no_permission_or_sudoers_change": true
+    "no_permission_or_sudoers_change": true,
+    "upgrade": {
+      "confirmation": "UPGRADE-AUSMALWIESE-STATS-WORKER-RUNTIME",
+      "predecessor_main": "65acff4a644fe685db880c46aedca93ead56f241",
+      "predecessor_launcher_blob": "a6b8b124e9e4919496e72e85a213b3fa739bacd6",
+      "predecessor_release_sha256": "c25456704634d6b6230bcbbfac40400c1a897cfde360b88c557179f682128ec3",
+      "replacement_targets": [
+        "/usr/local/sbin/rpi5-ausmalwiese-stats-worker-deploy",
+        "/usr/local/libexec/rpi5-ausmalwiese-stats-worker-deploy/release.json"
+      ],
+      "exact_installed_package_identity_required": true,
+      "credential_access": false,
+      "cloudflare_request": false,
+      "retries": 0,
+      "rollback": false,
+      "cleanup": false
+    }
   },
   "future_composite_live_sequence": [
     "fresh source host and application identity preflight",
@@ -157,5 +180,6 @@
     "latest_uploaded_version": true,
     "snapshot_sha256": true,
     "candidate_code_sha256": true
-  }
+  },
+  "upgrade_issue": 1122
 }

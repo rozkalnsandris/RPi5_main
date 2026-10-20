@@ -53,6 +53,11 @@ PARENTS = ("/usr", "/usr/local", "/usr/local/sbin", "/usr/local/libexec")
 TARGETS = (EXE, PROVISION, LIB, CORE, WORKER, CONFIG, RELEASE)
 SHA40 = re.compile(r"[0-9a-f]{40}\Z")
 CONFIRM = "INSTALL-AUSMALWIESE-STATS-WORKER-RUNTIME"
+UPGRADE_CONFIRM = "UPGRADE-AUSMALWIESE-STATS-WORKER-RUNTIME"
+OLD_MAIN = "65acff4a644fe685db880c46aedca93ead56f241"
+OLD_LAUNCHER_BLOB = "a6b8b124e9e4919496e72e85a213b3fa739bacd6"
+OLD_RELEASE_SHA256 = "c25456704634d6b6230bcbbfac40400c1a897cfde360b88c557179f682128ec3"
+UPGRADE_TARGETS = (EXE, RELEASE)
 CLEAN_ENV = {"PATH": "/usr/bin:/bin", "LC_ALL": "C"}
 
 
@@ -214,7 +219,7 @@ def sudo_read(args, *, runner=subprocess.run) -> str:
         raise Stop("sudo_read_failed") from None
 
 
-def host_preflight(*, runner=subprocess.run) -> None:
+def parents_preflight(*, runner=subprocess.run) -> None:
     sudo_read([TRUE], runner=runner)
     for path in PARENTS:
         value = sudo_read([STAT, "-c", "%u:%g:%a:%F", "--", path], runner=runner)
@@ -227,6 +232,10 @@ def host_preflight(*, runner=subprocess.run) -> None:
             raise Stop("unsafe_parent") from None
         if mode & 0o022:
             raise Stop("unsafe_parent")
+
+
+def host_preflight(*, runner=subprocess.run) -> None:
+    parents_preflight(runner=runner)
     for path in TARGETS:
         for flag in ("-e", "-L"):
             result = invoke([SUDO, "-n", TEST, flag, path], runner=runner)
@@ -234,6 +243,140 @@ def host_preflight(*, runner=subprocess.run) -> None:
                 raise Stop("target_already_exists")
             if result.returncode != 1:
                 raise Stop("target_state_unknown")
+
+
+def historical(
+    root: Path,
+    ref: str,
+    rel: str,
+    *,
+    expected_blob: str | None = None,
+    runner=subprocess.run,
+) -> bytes:
+    raw = git(root, ["show", ref + ":" + rel], runner=runner)
+    if not 0 < len(raw) <= 196608:
+        raise Stop("historical_source_invalid")
+    if expected_blob is not None and git_blob(raw) != expected_blob:
+        raise Stop("historical_source_mismatch")
+    return raw
+
+
+def predecessor_payloads(*, runner=subprocess.run):
+    launcher = historical(
+        SOURCE_ROOT,
+        OLD_MAIN,
+        LAUNCHER_REL,
+        expected_blob=OLD_LAUNCHER_BLOB,
+        runner=runner,
+    )
+    provisioner = historical(
+        SOURCE_ROOT, OLD_MAIN, PROVISIONER_REL, runner=runner
+    )
+    core = historical(SOURCE_ROOT, OLD_MAIN, CORE_REL, runner=runner)
+    worker = historical(
+        APP_ROOT,
+        APP_SHA,
+        WORKER_REL,
+        expected_blob=WORKER_BLOB,
+        runner=runner,
+    )
+    config = historical(
+        APP_ROOT,
+        APP_SHA,
+        CONFIG_REL,
+        expected_blob=CONFIG_BLOB,
+        runner=runner,
+    )
+    release = release_bytes(
+        OLD_MAIN, launcher, provisioner, core, worker, config
+    )
+    if hashlib.sha256(release).hexdigest() != OLD_RELEASE_SHA256:
+        raise Stop("old_release_identity_mismatch")
+    return {
+        EXE: ("500", launcher),
+        PROVISION: ("500", provisioner),
+        CORE: ("400", core),
+        WORKER: ("400", worker),
+        CONFIG: ("400", config),
+        RELEASE: ("400", release),
+    }
+
+
+def installed_exact(path: str, mode: str, payload: bytes, *, runner=subprocess.run):
+    symlink = invoke([SUDO, "-n", TEST, "-L", path], runner=runner)
+    if symlink.returncode == 0:
+        raise Stop("upgrade_target_symlink")
+    if symlink.returncode != 1:
+        raise Stop("upgrade_target_state_unknown")
+    metadata = sudo_read(
+        [STAT, "-c", "%u:%g:%a:%F:%h", "--", path], runner=runner
+    )
+    if metadata != f"0:0:{mode}:regular file:1":
+        raise Stop("upgrade_target_metadata_mismatch")
+    digest = hashlib.sha256(payload).hexdigest()
+    checksum = sudo_read([SHA256SUM, "--", path], runner=runner)
+    if checksum != f"{digest}  {path}":
+        raise Stop("upgrade_target_digest_mismatch")
+
+
+def upgrade_command(path: str, mode: str) -> list[str]:
+    return [
+        INSTALL, "-T", "-o", "root", "-g", "root",
+        "-m", "0" + mode, "--", "/dev/stdin", path,
+    ]
+
+
+def upgrade_preflight(
+    expected_main: str,
+    old_launcher_blob: str,
+    *,
+    runner=subprocess.run,
+):
+    if old_launcher_blob != OLD_LAUNCHER_BLOB:
+        raise Stop("invalid_upgrade_source")
+    checkout(expected_main, runner=runner)
+    application_checkout(runner=runner)
+    launcher = tracked(SOURCE_ROOT, LAUNCHER_REL, SOURCE_PATHS, runner=runner)
+    provisioner = tracked(
+        SOURCE_ROOT, PROVISIONER_REL, SOURCE_PATHS, runner=runner
+    )
+    core = tracked(SOURCE_ROOT, CORE_REL, SOURCE_PATHS, runner=runner)
+    worker = tracked(
+        APP_ROOT, WORKER_REL, (WORKER_REL, CONFIG_REL), runner=runner
+    )
+    config = tracked(
+        APP_ROOT, CONFIG_REL, (WORKER_REL, CONFIG_REL), runner=runner
+    )
+    release = release_bytes(
+        expected_main, launcher, provisioner, core, worker, config
+    )
+    old = predecessor_payloads(runner=runner)
+    if (
+        provisioner != old[PROVISION][1]
+        or core != old[CORE][1]
+        or worker != old[WORKER][1]
+        or config != old[CONFIG][1]
+    ):
+        raise Stop("upgrade_scope_drift")
+
+    parents_preflight(runner=runner)
+    symlink = invoke([SUDO, "-n", TEST, "-L", LIB], runner=runner)
+    if symlink.returncode == 0:
+        raise Stop("upgrade_root_symlink")
+    if symlink.returncode != 1:
+        raise Stop("upgrade_root_state_unknown")
+    root_meta = sudo_read(
+        [STAT, "-c", "%u:%g:%a:%F", "--", LIB], runner=runner
+    )
+    if root_meta != "0:0:700:directory":
+        raise Stop("upgrade_root_metadata_mismatch")
+    for path, (mode, payload) in old.items():
+        installed_exact(path, mode, payload, runner=runner)
+    for path, mode in ((EXE, "500"), (RELEASE, "400")):
+        command = upgrade_command(path, mode)
+        if invoke([SUDO, "-n", "-l", "--", *command], runner=runner).returncode:
+            raise Stop("sudo_exact_upgrade_not_allowed")
+    return launcher, release
 
 
 def preflight(expected_main: str, *, runner=subprocess.run):
@@ -305,6 +448,26 @@ def apply(expected_main: str, *, runner=subprocess.run) -> None:
         raise Stop("post_dispatch_unknown_state") from None
 
 
+def upgrade(
+    expected_main: str,
+    old_launcher_blob: str,
+    *,
+    runner=subprocess.run,
+) -> None:
+    launcher, release = upgrade_preflight(
+        expected_main, old_launcher_blob, runner=runner
+    )
+    files = ((EXE, "500", launcher), (RELEASE, "400", release))
+    try:
+        for path, mode, payload in files:
+            write_once(
+                upgrade_command(path, mode), payload, runner=runner
+            )
+        post_verify(files, runner=runner)
+    except Exception:
+        raise Stop("post_dispatch_unknown_state") from None
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         description="Source-only Stats Worker deploy runtime installer"
@@ -312,9 +475,37 @@ def main(argv=None) -> int:
     parser.add_argument("--expected-main", required=True)
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--confirm", default="")
+    parser.add_argument("--upgrade-from", default="")
     args = parser.parse_args(argv)
     try:
-        if args.apply:
+        if args.upgrade_from:
+            if args.upgrade_from != OLD_LAUNCHER_BLOB:
+                raise Stop("invalid_upgrade_source")
+            if args.apply:
+                if args.confirm != UPGRADE_CONFIRM:
+                    raise Stop("confirmation_missing")
+                upgrade(args.expected_main, args.upgrade_from)
+                result = {
+                    "status": "PASS",
+                    "operation": "upgrade",
+                    "mutation_started": True,
+                    "old_launcher_blob": args.upgrade_from,
+                }
+            else:
+                if args.confirm:
+                    raise Stop("confirm_requires_apply")
+                launcher, release = upgrade_preflight(
+                    args.expected_main, args.upgrade_from
+                )
+                result = {
+                    "status": "UPGRADE_PREFLIGHT_PASS",
+                    "mutation_started": False,
+                    "old_launcher_blob": args.upgrade_from,
+                    "old_release_sha256": OLD_RELEASE_SHA256,
+                    "new_launcher_sha256": hashlib.sha256(launcher).hexdigest(),
+                    "new_release_sha256": hashlib.sha256(release).hexdigest(),
+                }
+        elif args.apply:
             if args.confirm != CONFIRM:
                 raise Stop("confirmation_missing")
             apply(args.expected_main)

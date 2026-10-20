@@ -1,6 +1,6 @@
 # Ausmalwiese Stats Worker installed deploy boundary (#1118)
 
-**Status: SOURCE ONLY · not installed · no credential access · no Cloudflare request · no LIVE authority.**
+**Status: SOURCE UPDATE ONLY · predecessor runtime evidence exists, but this revision is not installed and grants no LIVE authority.**
 
 This outcome closes the remaining trusted-execution gap for parent #996's
 Stats Worker stage. The public Worker source is already correct; the stale LIVE
@@ -46,6 +46,18 @@ The release manifest binds:
 - SHA-256 of the launcher, provisioner, core, Worker and config bytes.
 
 No credential or provider request is used by the installer.
+
+Issue #1122 adds one bounded upgrade path from the exact predecessor release:
+RPi5_main `65acff4a644fe685db880c46aedca93ead56f241`, launcher blob
+`a6b8b124e9e4919496e72e85a213b3fa739bacd6`, and release SHA-256
+`c25456704634d6b6230bcbbfac40400c1a897cfde360b88c557179f682128ec3`.
+Upgrade preflight reconstructs that historical package from immutable Git
+objects, verifies every installed package file as a non-symlink root-owned
+single-link file with exact mode and SHA-256, and permits replacement of only
+the launcher plus `release.json`. The provisioner, core, Worker and config must
+remain byte-identical or the upgrade stops before mutation. A future upgrade
+still requires separate owner LIVE authority and has no retry, rollback or
+cleanup path.
 
 ## Protected credential
 
@@ -101,6 +113,16 @@ version IDs, candidate code SHA-256, a canonical snapshot SHA-256, and whether
 the deployed code differs from the reviewed candidate. It never emits account
 ID, zone IDs, token, raw provider responses, raw routes, secret values or
 plaintext variable values.
+
+### List Versions envelope correction (#1122)
+
+The runtime now accepts only Cloudflare's documented List Versions result shape
+`{"items":[...]}`. Top-level `result_info` is optional; when present it is
+strictly validated against page 1 / per-page 100 and must prove that the first
+page is complete. The first returned item is treated as latest per the provider
+contract. Version `number` is optional and bounded when present; it is never
+required to identify the latest version. Legacy list-only results, duplicate or
+invalid UUIDs, malformed pagination and truncation ambiguity fail closed.
 
 ## Exact apply
 

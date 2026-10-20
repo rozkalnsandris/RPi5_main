@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline regressions for #1118 Stats Worker installed deploy boundary."""
+"""Offline regressions for #1118/#1122 Stats Worker installed deploy boundary."""
 from __future__ import annotations
 
 import base64
@@ -298,6 +298,104 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
         with mock.patch.object(transport, "_get", return_value=payload):
             self.assertEqual(transport._code_sha(OLD), SOURCE_SHA)
 
+    def test_list_versions_accepts_documented_result_items_contract(self):
+        transport = runtime.CloudflareTransport(
+            "a" * 32,
+            "T" * 32,
+            {"ausmalwiese.de": "b" * 32, "rozkalns.net": "c" * 32},
+        )
+        payload = {
+            "success": True,
+            "errors": [],
+            "messages": [],
+            "result": {"items": [{"id": NEW}, {"id": OLD}]},
+        }
+        self.assertEqual(
+            transport._latest_version_from_payload(payload), NEW
+        )
+
+        paged = copy.deepcopy(payload)
+        paged["result"]["items"] = [
+            {"id": NEW, "number": 2},
+            {"id": OLD, "number": 1},
+        ]
+        paged["result_info"] = {
+            "page": 1,
+            "per_page": 100,
+            "count": 2,
+            "total_count": 2,
+            "total_pages": 1,
+        }
+        self.assertEqual(
+            transport._latest_version_from_payload(paged), NEW
+        )
+        with mock.patch.object(transport, "_request", return_value=paged):
+            with mock.patch.object(transport, "_get") as legacy_get:
+                self.assertEqual(transport._versions(), NEW)
+                legacy_get.assert_not_called()
+
+    def test_list_versions_rejects_legacy_or_ambiguous_shapes(self):
+        transport = runtime.CloudflareTransport(
+            "a" * 32,
+            "T" * 32,
+            {"ausmalwiese.de": "b" * 32, "rozkalns.net": "c" * 32},
+        )
+        legacy = {
+            "success": True,
+            "errors": [],
+            "result": [{"id": NEW, "number": 2}],
+        }
+        with self.assertRaisesRegex(runtime.Stop, "versions_envelope_invalid"):
+            transport._latest_version_from_payload(legacy)
+
+        duplicate = {
+            "success": True,
+            "errors": [],
+            "result": {"items": [{"id": NEW}, {"id": NEW}]},
+        }
+        with self.assertRaisesRegex(runtime.Stop, "version_id_duplicate"):
+            transport._latest_version_from_payload(duplicate)
+
+        invalid_id = {
+            "success": True,
+            "errors": [],
+            "result": {"items": [{"id": "not-a-version"}]},
+        }
+        with self.assertRaisesRegex(runtime.Stop, "version_shape"):
+            transport._latest_version_from_payload(invalid_id)
+
+        bad_number = {
+            "success": True,
+            "errors": [],
+            "result": {"items": [{"id": NEW, "number": -1}]},
+        }
+        with self.assertRaisesRegex(runtime.Stop, "version_number_invalid"):
+            transport._latest_version_from_payload(bad_number)
+
+        truncated = {
+            "success": True,
+            "errors": [],
+            "result": {"items": [{"id": NEW, "number": 2}]},
+            "result_info": {
+                "page": 1,
+                "per_page": 100,
+                "count": 1,
+                "total_count": 101,
+                "total_pages": 2,
+            },
+        }
+        with self.assertRaisesRegex(runtime.Stop, "versions_incomplete"):
+            transport._latest_version_from_payload(truncated)
+
+        bad_pagination = copy.deepcopy(truncated)
+        bad_pagination["result_info"]["total_count"] = 1
+        bad_pagination["result_info"]["total_pages"] = 1
+        bad_pagination["result_info"]["unexpected"] = 1
+        with self.assertRaisesRegex(
+            runtime.Stop, "versions_pagination_invalid"
+        ):
+            transport._latest_version_from_payload(bad_pagination)
+
     def test_preflight_is_double_read_and_sanitized(self):
         before = snapshot(active_code=SOURCE_SHA, latest_code=SOURCE_SHA)
         trusted = FakeTrusted([before, before])
@@ -372,6 +470,28 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
         self.assertEqual(
             value["config_sha256"], hashlib.sha256(config_bytes).hexdigest()
         )
+
+    def test_installer_upgrade_is_exact_predecessor_and_two_targets(self):
+        self.assertEqual(
+            installer.OLD_MAIN,
+            "65acff4a644fe685db880c46aedca93ead56f241",
+        )
+        self.assertEqual(
+            installer.OLD_LAUNCHER_BLOB,
+            "a6b8b124e9e4919496e72e85a213b3fa739bacd6",
+        )
+        self.assertEqual(
+            installer.OLD_RELEASE_SHA256,
+            "c25456704634d6b6230bcbbfac40400c1a897cfde360b88c557179f682128ec3",
+        )
+        self.assertEqual(
+            installer.UPGRADE_TARGETS,
+            (installer.EXE, installer.RELEASE),
+        )
+        source = _INSTALL.read_text("utf-8")
+        self.assertIn('parser.add_argument("--upgrade-from", default="")', source)
+        self.assertIn("upgrade_scope_drift", source)
+        self.assertIn("sudo_exact_upgrade_not_allowed", source)
 
     def test_source_contract_keeps_live_authority_closed(self):
         contract = json.loads(
