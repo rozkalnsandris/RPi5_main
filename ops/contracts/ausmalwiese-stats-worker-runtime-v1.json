@@ -1,6 +1,6 @@
 {
   "schema": "rozkalns.rpi5-main.ausmalwiese-stats-worker-runtime.v1",
-  "status": "source-only-list-contract-v2-upgrade-ready-no-live",
+  "status": "source-only-consumed-invariants-upgrade-ready-no-live",
   "issue": 1118,
   "parent_issue": 996,
   "repository": "rozkalnsandris/RPi5_main",
@@ -76,68 +76,29 @@
     "zone_routes": "GET /zones/{zone_id}/workers/routes",
     "version_code_proof": "base64 stats-worker.js module SHA-256",
     "versions_result_contract": {
-      "top_level_fields": [
-        "success",
-        "errors",
-        "messages",
-        "result",
-        "result_info"
-      ],
+      "transport_boundary": "http-200-plus-parseable-json",
       "result_shape": "{\"items\":[...]}",
-      "item_fields": [
-        "id",
-        "metadata",
-        "number"
+      "latest_rule": "first-item-consumed-fields-only",
+      "consumed_fields": [
+        "result.items[0].id"
       ],
-      "metadata_fields": [
-        "author_email",
-        "author_id",
-        "created_on",
-        "hasPreview",
-        "modified_on",
-        "source"
-      ],
-      "result_info_fields": [
-        "page",
-        "per_page",
-        "count",
-        "total_count",
-        "total_pages"
-      ],
-      "result_info": "optional-strict",
-      "latest_rule": "first-item-provider-order",
-      "number": "optional-bounded-integer",
-      "full_page_without_result_info": "reject-ambiguous"
+      "consumed_id": "full-uuid-required",
+      "ignored_fields": "all-unconsumed-provider-fields",
+      "result_info_page": "optional-if-present-must-equal-1"
     },
     "deployments_result_contract": {
-      "top_level_fields": [
-        "success",
-        "errors",
-        "messages",
-        "result",
-        "result_info"
-      ],
+      "transport_boundary": "http-200-plus-parseable-json",
       "result_shape": "{\"deployments\":[...]}",
-      "deployment_fields": [
-        "id",
-        "created_on",
-        "source",
-        "strategy",
-        "versions",
-        "annotations",
-        "author_email"
+      "latest_rule": "first-deployment-consumed-fields-only",
+      "consumed_fields": [
+        "result.deployments[0].id",
+        "result.deployments[0].versions[0].version_id",
+        "result.deployments[0].versions[0].percentage"
       ],
-      "result_info_fields": [
-        "page",
-        "per_page",
-        "count",
-        "total_count",
-        "total_pages"
-      ],
-      "result_info": "optional-strict",
-      "latest_rule": "first-deployment-provider-order",
+      "deployment_id": "full-uuid-required",
       "latest_traffic": "exactly-one-version-at-100-percent",
-      "multi_page": "allowed-when-pagination-is-consistent"
+      "ignored_fields": "all-unconsumed-provider-fields",
+      "result_info_page": "optional-if-present-must-equal-1"
     }
   },
   "runtime_modes": {
@@ -186,9 +147,9 @@
     "no_permission_or_sudoers_change": true,
     "upgrade": {
       "confirmation": "UPGRADE-AUSMALWIESE-STATS-WORKER-RUNTIME",
-      "predecessor_main": "1b7cf1581cc67f5973e56b1f26e3b17e3e37a56f",
-      "predecessor_launcher_blob": "1cc20830bf21410b82f41a7f8ce4d85745b9c3ea",
-      "predecessor_release_sha256": "b79e5f13e7b5d16804a5b944c2b2a5f95c8695d788981f239dbf2e38e5d9a839",
+      "predecessor_main": "e29a5442f199770d834e0fa0b48f8eb4b6d2c45b",
+      "predecessor_launcher_blob": "1e7592e319002d6db8ab3776b06cc74314d2aa22",
+      "predecessor_release_sha256": "4935347c4434535f3e75262dd91ad3a85b6a4aa3649dfa48813a48a706aa1daf",
       "replacement_targets": [
         "/usr/local/sbin/rpi5-ausmalwiese-stats-worker-deploy",
         "/usr/local/libexec/rpi5-ausmalwiese-stats-worker-deploy/release.json"
@@ -238,5 +199,5 @@
     "snapshot_sha256": true,
     "candidate_code_sha256": true
   },
-  "upgrade_issue": 1124
+  "upgrade_issue": 1126
 }
