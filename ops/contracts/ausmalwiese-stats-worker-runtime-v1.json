@@ -1,6 +1,6 @@
 {
   "schema": "rozkalns.rpi5-main.ausmalwiese-stats-worker-runtime.v1",
-  "status": "source-only-consumed-invariants-upgrade-ready-no-live",
+  "status": "source-only-provider-main-module-proof-upgrade-ready-no-live",
   "issue": 1118,
   "parent_issue": 996,
   "repository": "rozkalnsandris/RPi5_main",
@@ -74,7 +74,7 @@
     "version_modules": "GET /accounts/{account}/workers/workers/coloring-pages-stats-v1/versions/{version}?include=modules",
     "zone_identity": "GET /zones/{zone_id}",
     "zone_routes": "GET /zones/{zone_id}/workers/routes",
-    "version_code_proof": "base64 stats-worker.js module SHA-256",
+    "version_code_proof": "base64 provider-declared main_module SHA-256",
     "versions_result_contract": {
       "transport_boundary": "http-200-plus-parseable-json",
       "result_shape": "{\"items\":[...]}",
@@ -99,6 +99,19 @@
       "latest_traffic": "exactly-one-version-at-100-percent",
       "ignored_fields": "all-unconsumed-provider-fields",
       "result_info_page": "optional-if-present-must-equal-1"
+    },
+    "version_module_contract": {
+      "version_id": "exact-requested-uuid",
+      "main_module": "provider-declared-non-empty-bounded-string",
+      "selection": "exactly-one-modules-entry-with-name-equal-main_module",
+      "content_types": [
+        "application/javascript+module",
+        "text/javascript+module",
+        "application/javascript",
+        "text/javascript"
+      ],
+      "decoded_main_module_max_bytes": 196608,
+      "candidate_comparison": "selected-main-module-sha256-equals-reviewed-local-worker-sha256"
     }
   },
   "runtime_modes": {
@@ -147,9 +160,9 @@
     "no_permission_or_sudoers_change": true,
     "upgrade": {
       "confirmation": "UPGRADE-AUSMALWIESE-STATS-WORKER-RUNTIME",
-      "predecessor_main": "e29a5442f199770d834e0fa0b48f8eb4b6d2c45b",
-      "predecessor_launcher_blob": "1e7592e319002d6db8ab3776b06cc74314d2aa22",
-      "predecessor_release_sha256": "4935347c4434535f3e75262dd91ad3a85b6a4aa3649dfa48813a48a706aa1daf",
+      "predecessor_main": "299c5e583516b95dab739ff04ec178e733547adb",
+      "predecessor_launcher_blob": "818b10ff15edeb30bfb0901023d789eafa3d04dc",
+      "predecessor_release_sha256": "c9de347026977ddd9248bd547ff3702a3f79045126dd8c1dd26ca29958e20a70",
       "replacement_targets": [
         "/usr/local/sbin/rpi5-ausmalwiese-stats-worker-deploy",
         "/usr/local/libexec/rpi5-ausmalwiese-stats-worker-deploy/release.json"
@@ -169,7 +182,7 @@
     "provision exact protected write credential if absent under explicit credential authority",
     "run sanitized double-read preflight and freeze snapshot_sha256",
     "only after Stats Gate A acceptance invoke one bound upload then one 100-percent deploy",
-    "prove uploaded and deployed stats-worker.js SHA-256 equals reviewed source",
+    "prove uploaded and deployed provider-declared main-module SHA-256 equals reviewed local Worker source",
     "verify routes bindings configuration and public HEAD /q behavior"
   ],
   "source_authorized_capabilities": {
@@ -199,5 +212,5 @@
     "snapshot_sha256": true,
     "candidate_code_sha256": true
   },
-  "upgrade_issue": 1126
+  "upgrade_issue": 1130
 }

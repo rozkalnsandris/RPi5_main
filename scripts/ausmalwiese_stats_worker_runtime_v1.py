@@ -665,13 +665,18 @@ class CloudflareTransport:
         need(
             isinstance(result, dict)
             and result.get("id") == version_id
-            and result.get("main_module") == "stats-worker.js"
             and isinstance(result.get("modules"), list),
+            "version_modules_invalid",
+        )
+        main_module = result.get("main_module")
+        need(
+            isinstance(main_module, str)
+            and 1 <= len(main_module) <= 4096,
             "version_modules_invalid",
         )
         matches = [
             item for item in result["modules"]
-            if isinstance(item, dict) and item.get("name") == "stats-worker.js"
+            if isinstance(item, dict) and item.get("name") == main_module
         ]
         need(len(matches) == 1, "main_module_ambiguous")
         item = matches[0]
