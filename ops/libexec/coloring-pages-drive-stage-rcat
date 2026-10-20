@@ -17,6 +17,7 @@ CONFIG = Path("/home") / OWNER / ".config/rclone/rclone.conf"
 REMOTE = "gdrive"
 ROOT_FOLDER_ID = "1F0pxqoRgtZl7JQVcyvYVZxKvx6eOnytn"
 PENDING = "pending"
+CANARY = "canary"
 NAME_RE = re.compile(r"^[0-9]{7}(?:-[1-9][0-9]*)?\.(?:png|json)$")
 MAX_PNG_BYTES = 20 * 1024 * 1024
 MAX_MANIFEST_BYTES = 64 * 1024
@@ -81,12 +82,14 @@ def validate_size(name: str, text: str) -> int:
     return size
 
 
-def pending_listing() -> list[tuple[str, int]]:
+def namespace_listing(namespace: str) -> list[tuple[str, int]]:
+    if namespace not in {PENDING, CANARY}:
+        fail("namespace is outside the reviewed contract")
     result = subprocess.run(
         [
             *base_command(),
             "lsf",
-            f"{REMOTE}:{PENDING}",
+            f"{REMOTE}:{namespace}",
             "--files-only",
             "--max-depth", "1",
             "--format", "ps",
@@ -111,33 +114,37 @@ def pending_listing() -> list[tuple[str, int]]:
     return rows
 
 
-def assert_absent(names: list[str]) -> None:
+def assert_absent(names: list[str], *, namespace: str = PENDING) -> None:
     if not names:
         fail("at least one filename is required")
     checked = [validate_name(name) for name in names]
     if len(set(checked)) != len(checked):
         fail("duplicate filename")
-    existing = [name for name, _ in pending_listing()]
+    existing = [name for name, _ in namespace_listing(namespace)]
     if any(name in existing for name in checked):
         fail("pending target already exists")
 
 
-def assert_exact(name: str, size: int) -> None:
-    matches = [(item, item_size) for item, item_size in pending_listing() if item == name]
+def assert_exact(name: str, size: int, *, namespace: str = PENDING) -> None:
+    matches = [
+        (item, item_size)
+        for item, item_size in namespace_listing(namespace)
+        if item == name
+    ]
     if matches != [(name, size)]:
         fail("pending target is missing, duplicated or size-mismatched")
 
 
-def upload(name: str, size: int) -> None:
+def upload(name: str, size: int, *, namespace: str = PENDING) -> None:
     # Close the provider race window as much as the Drive path model allows.
     # A concurrent external writer can still race after this read; the caller
     # therefore verifies exactly one matching object immediately afterwards.
-    assert_absent([name])
+    assert_absent([name], namespace=namespace)
     result = subprocess.run(
         [
             *base_command(),
             "rcat",
-            f"{REMOTE}:{PENDING}/{name}",
+            f"{REMOTE}:{namespace}/{name}",
             "--size", str(size),
         ],
         stdin=sys.stdin.buffer,
@@ -154,15 +161,25 @@ def main(argv: list[str]) -> int:
         if os.geteuid() != 0:
             fail("wrapper must run as root")
         if len(argv) >= 2 and argv[1] == "--assert-absent":
-            assert_absent(argv[2:])
+            assert_absent(argv[2:], namespace=PENDING)
+        elif len(argv) >= 2 and argv[1] == "--canary-assert-absent":
+            assert_absent(argv[2:], namespace=CANARY)
         elif len(argv) == 4 and argv[1] == "--assert-exact":
             name = validate_name(argv[2])
             size = validate_size(name, argv[3])
-            assert_exact(name, size)
+            assert_exact(name, size, namespace=PENDING)
+        elif len(argv) == 4 and argv[1] == "--canary-assert-exact":
+            name = validate_name(argv[2])
+            size = validate_size(name, argv[3])
+            assert_exact(name, size, namespace=CANARY)
         elif len(argv) == 4 and argv[1] == "--upload":
             name = validate_name(argv[2])
             size = validate_size(name, argv[3])
-            upload(name, size)
+            upload(name, size, namespace=PENDING)
+        elif len(argv) == 4 and argv[1] == "--canary-upload":
+            name = validate_name(argv[2])
+            size = validate_size(name, argv[3])
+            upload(name, size, namespace=CANARY)
         else:
             fail("arguments are outside the reviewed interface")
         return 0
