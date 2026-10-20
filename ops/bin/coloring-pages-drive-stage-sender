@@ -139,6 +139,12 @@ class Privileged(Protocol):
 
 
 class PrivilegedBackend:
+    def __init__(self, *, canary: bool = False) -> None:
+        self.canary = canary
+
+    def _operation(self, production: str, canary: str) -> str:
+        return canary if self.canary else production
+
     def _run(self, argv: list[str], *, stdin: BinaryIO | None = None) -> None:
         result = subprocess.run(
             [SUDO, "-n", "--", PRIVILEGED_WRAPPER, *argv],
@@ -151,17 +157,28 @@ class PrivilegedBackend:
             fail("privileged Drive staging operation failed")
 
     def assert_absent(self, names: list[str]) -> None:
-        self._run(["--assert-absent", *names])
+        self._run([
+            self._operation("--assert-absent", "--canary-assert-absent"),
+            *names,
+        ])
 
     def upload(self, artifact: Artifact) -> None:
         artifact.handle.seek(0)
         self._run(
-            ["--upload", artifact.name, str(artifact.size_bytes)],
+            [
+                self._operation("--upload", "--canary-upload"),
+                artifact.name,
+                str(artifact.size_bytes),
+            ],
             stdin=artifact.handle,
         )
 
     def assert_exact(self, artifact: Artifact) -> None:
-        self._run(["--assert-exact", artifact.name, str(artifact.size_bytes)])
+        self._run([
+            self._operation("--assert-exact", "--canary-assert-exact"),
+            artifact.name,
+            str(artifact.size_bytes),
+        ])
 
 
 def decode_artifact(raw: Any, *, activity_id: str) -> Artifact:
@@ -390,18 +407,31 @@ def open_sender_lock() -> int:
         fail("sender lock is unavailable")
 
 
+def parse_canary_mode(argv: list[str]) -> bool:
+    if not argv:
+        return False
+    if argv == ["--canary"]:
+        return True
+    fail("arguments are outside the reviewed sender interface")
+
+
 def run_cli() -> int:
     try:
+        canary = parse_canary_mode(sys.argv[1:])
         raw = sys.stdin.buffer.read(MAX_ENVELOPE_BYTES + 1)
         activities = load_and_validate_envelope(raw)
         fd = open_sender_lock()
         try:
             with os.fdopen(fd, "r+b", buffering=0) as lock_handle:
                 fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                result = execute_activities(activities, PrivilegedBackend())
+                result = execute_activities(
+                    activities,
+                    PrivilegedBackend(canary=canary),
+                )
         finally:
             close_activities(activities)
         print("COLORING_PAGES_DRIVE_STAGE=PASS")
+        print(f"NAMESPACE={'canary' if canary else 'pending'}")
         print(f"ACTIVITIES={len(result['activities'])}")
         print(f"ARTIFACTS_STAGED={result['artifacts_staged']}")
         for activity_id in result["activities"]:
