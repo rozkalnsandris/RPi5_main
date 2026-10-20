@@ -29,7 +29,10 @@
     "allowed_modes": [
       "--assert-absent",
       "--upload",
-      "--assert-exact"
+      "--assert-exact",
+      "--canary-assert-absent",
+      "--canary-upload",
+      "--canary-assert-exact"
     ],
     "arbitrary_remote_allowed": false,
     "arbitrary_config_allowed": false,
@@ -61,7 +64,8 @@
     "retry_sleep": "0s",
     "fast_list_allowed": false,
     "overwrite_authorized": false,
-    "archive_delete_authorized": false
+    "archive_delete_authorized": false,
+    "canary_subdirectory": "canary"
   },
   "state": {
     "directory": "/srv/coloring-pages-content/state/drive-stage",
@@ -76,7 +80,9 @@
     "sender_invokes_importer": false,
     "sender_performs_public_verification": false,
     "sender_performs_cleanup": false,
-    "after_first_upload_error": "stop-without-retry-rollback-cleanup-or-alternate-path"
+    "after_first_upload_error": "stop-without-retry-rollback-cleanup-or-alternate-path",
+    "canary_is_nonproduction_transport_proof_only": true,
+    "production_ingest_reads_only_pending": true
   },
   "installer": {
     "source": "scripts/install-coloring-pages-drive-stage-sender-v1.sh",
@@ -104,5 +110,20 @@
     "https://rclone.org/commands/rclone_lsf/",
     "https://rclone.org/docs/#retries-int",
     "https://developers.google.com/workspace/drive/api/guides/manage-uploads"
-  ]
+  ],
+  "canary": {
+    "issue": 1132,
+    "subdirectory": "canary",
+    "purpose": "non-production-transport-validation-only",
+    "sender_flag": "--canary",
+    "wrapper_modes": [
+      "--canary-assert-absent",
+      "--canary-upload",
+      "--canary-assert-exact"
+    ],
+    "production_ingest_reads_canary": false,
+    "publication_success_signal": false,
+    "overwrite_authorized": false,
+    "delete_archive_cleanup_authorized": false
+  }
 }
