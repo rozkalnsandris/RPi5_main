@@ -713,6 +713,34 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
         self.assertEqual(trusted.uploads, 0)
         self.assertEqual(trusted.deploys, 1)
 
+    def test_deploy_existing_post_verify_failure_is_terminal(self):
+        before = snapshot(
+            latest=NEW,
+            active_code=OLD_SHA,
+            latest_code=SOURCE_SHA,
+        )
+        after = snapshot(
+            active=NEW,
+            latest=NEW,
+            deployment=DEPLOY_NEW,
+            active_code=SOURCE_SHA,
+            latest_code=SOURCE_SHA,
+        )
+        after["routes"]["ausmalwiese.de/q"] = "rozkalns.net"
+        trusted = FakeTrusted([before, before, after])
+        with mock.patch.object(core, "verify_source"):
+            with self.assertRaisesRegex(
+                runtime.Stop, "recovery_post_deploy_outcome_unknown_stop"
+            ):
+                runtime.deploy_existing(
+                    core,
+                    trusted,
+                    SOURCE,
+                    preflight_digest(before),
+                )
+        self.assertEqual(trusted.uploads, 0)
+        self.assertEqual(trusted.deploys, 1)
+
     def test_transport_deploy_existing_budget_is_explicit_and_one_shot(self):
         body = json.dumps({
             "success": True,
@@ -759,11 +787,11 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
                 payload=core.deployment_payload(NEW)
             )
         with self.assertRaisesRegex(runtime.Stop, "upload_budget_exhausted"):
-            recovery.upload_version_once(
-                module_name="stats-worker.js",
-                module_bytes=SOURCE,
-                metadata={},
-                bindings_inherit="strict",
+            recovery._request(
+                "POST",
+                "/not-dispatched",
+                body=b"",
+                phase="upload",
             )
 
         normal = runtime.CloudflareTransport(
