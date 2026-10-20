@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline regressions for #1118/#1122/#1124/#1126/#1130 Stats Worker deploy boundary."""
+"""Offline regressions for #1118/#1122/#1124/#1126/#1130/#1138 Stats Worker deploy boundary."""
 from __future__ import annotations
 
 import base64
@@ -98,8 +98,10 @@ class FakeTrusted:
         self.reads = 0
         self.uploads = 0
         self.deploys = 0
+        self.read_kwargs = []
 
-    def read_snapshot(self):
+    def read_snapshot(self, **kwargs):
+        self.read_kwargs.append(dict(kwargs))
         value = self.states[self.reads]
         self.reads += 1
         return copy.deepcopy(value)
@@ -567,6 +569,240 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
         for forbidden in ("api_token", "account_id", "zones", "provider_body"):
             self.assertNotIn(forbidden, result)
 
+    def test_recovery_preflight_proves_uploaded_candidate_without_ids(self):
+        before = snapshot(
+            latest=NEW,
+            active_code=OLD_SHA,
+            latest_code=SOURCE_SHA,
+        )
+        trusted = FakeTrusted([before, before])
+        with mock.patch.object(core, "verify_source"):
+            result = runtime.recovery_preflight(core, trusted, SOURCE)
+        self.assertEqual(result["status"], "PASS")
+        self.assertTrue(result["recovery_required"])
+        self.assertEqual(result["provider_writes"], 0)
+        self.assertEqual(result["snapshot_sha256"], preflight_digest(before))
+        self.assertEqual(result["candidate_code_sha256"], SOURCE_SHA)
+        self.assertEqual(trusted.uploads, 0)
+        self.assertEqual(trusted.deploys, 0)
+        self.assertEqual(
+            trusted.read_kwargs,
+            [
+                {"allow_latest_difference": True},
+                {"allow_latest_difference": True},
+            ],
+        )
+        for forbidden in (
+            "active_version",
+            "latest_uploaded_version",
+            "deployment_id",
+        ):
+            self.assertNotIn(forbidden, result)
+
+    def test_recovery_preflight_rejects_wrong_or_preservation_drift(self):
+        wrong = snapshot(
+            latest=NEW,
+            active_code=OLD_SHA,
+            latest_code="d" * 64,
+        )
+        trusted = FakeTrusted([wrong, wrong])
+        with mock.patch.object(core, "verify_source"):
+            with self.assertRaisesRegex(
+                runtime.Stop, "recovery_candidate_state_invalid"
+            ):
+                runtime.recovery_preflight(core, trusted, SOURCE)
+
+        drift = snapshot(
+            latest=NEW,
+            active_code=OLD_SHA,
+            latest_code=SOURCE_SHA,
+        )
+        drift["latest_bindings"]["PUBLIC_ORIGIN"]["fingerprint"] = "7" * 64
+        trusted = FakeTrusted([drift, drift])
+        with mock.patch.object(core, "verify_source"):
+            with self.assertRaisesRegex(runtime.Stop, "recovery_binding_drift"):
+                runtime.recovery_preflight(core, trusted, SOURCE)
+
+    def test_deploy_existing_reuses_candidate_without_upload(self):
+        before = snapshot(
+            latest=NEW,
+            active_code=OLD_SHA,
+            latest_code=SOURCE_SHA,
+        )
+        after = snapshot(
+            active=NEW,
+            latest=NEW,
+            deployment=DEPLOY_NEW,
+            active_code=SOURCE_SHA,
+            latest_code=SOURCE_SHA,
+        )
+        trusted = FakeTrusted([before, before, after])
+        with mock.patch.object(core, "verify_source"):
+            result = runtime.deploy_existing(
+                core,
+                trusted,
+                SOURCE,
+                preflight_digest(before),
+            )
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(result["provider_writes"], 1)
+        self.assertEqual(result["candidate_code_sha256"], SOURCE_SHA)
+        self.assertEqual(trusted.uploads, 0)
+        self.assertEqual(trusted.deploys, 1)
+        self.assertEqual(
+            trusted.deploy_kwargs["payload"]["versions"],
+            [{"version_id": NEW, "percentage": 100}],
+        )
+
+    def test_deploy_existing_binding_drift_blocks_before_write(self):
+        before = snapshot(
+            latest=NEW,
+            active_code=OLD_SHA,
+            latest_code=SOURCE_SHA,
+        )
+        before["latest_bindings"]["PUBLIC_ORIGIN"]["fingerprint"] = "7" * 64
+        trusted = FakeTrusted([before, before])
+        with mock.patch.object(core, "verify_source"):
+            with self.assertRaisesRegex(runtime.Stop, "recovery_binding_drift"):
+                runtime.deploy_existing(
+                    core,
+                    trusted,
+                    SOURCE,
+                    preflight_digest(before),
+                )
+        self.assertEqual(trusted.uploads, 0)
+        self.assertEqual(trusted.deploys, 0)
+
+    def test_deploy_existing_snapshot_mismatch_blocks_before_write(self):
+        before = snapshot(
+            latest=NEW,
+            active_code=OLD_SHA,
+            latest_code=SOURCE_SHA,
+        )
+        trusted = FakeTrusted([before, before])
+        with mock.patch.object(core, "verify_source"):
+            with self.assertRaisesRegex(
+                runtime.Stop, "recovery_snapshot_binding_drift"
+            ):
+                runtime.deploy_existing(
+                    core,
+                    trusted,
+                    SOURCE,
+                    "f" * 64,
+                )
+        self.assertEqual(trusted.uploads, 0)
+        self.assertEqual(trusted.deploys, 0)
+
+    def test_deploy_existing_dispatch_failure_never_retries(self):
+        before = snapshot(
+            latest=NEW,
+            active_code=OLD_SHA,
+            latest_code=SOURCE_SHA,
+        )
+        trusted = FakeTrusted([before, before], deploy_error=True)
+        with mock.patch.object(core, "verify_source"):
+            with self.assertRaisesRegex(
+                runtime.Stop, "recovery_deploy_outcome_unknown_stop"
+            ):
+                runtime.deploy_existing(
+                    core,
+                    trusted,
+                    SOURCE,
+                    preflight_digest(before),
+                )
+        self.assertEqual(trusted.uploads, 0)
+        self.assertEqual(trusted.deploys, 1)
+
+    def test_deploy_existing_post_verify_failure_is_terminal(self):
+        before = snapshot(
+            latest=NEW,
+            active_code=OLD_SHA,
+            latest_code=SOURCE_SHA,
+        )
+        after = snapshot(
+            active=NEW,
+            latest=NEW,
+            deployment=DEPLOY_NEW,
+            active_code=SOURCE_SHA,
+            latest_code=SOURCE_SHA,
+        )
+        after["routes"]["ausmalwiese.de/q"] = "rozkalns.net"
+        trusted = FakeTrusted([before, before, after])
+        with mock.patch.object(core, "verify_source"):
+            with self.assertRaisesRegex(
+                runtime.Stop, "recovery_post_deploy_outcome_unknown_stop"
+            ):
+                runtime.deploy_existing(
+                    core,
+                    trusted,
+                    SOURCE,
+                    preflight_digest(before),
+                )
+        self.assertEqual(trusted.uploads, 0)
+        self.assertEqual(trusted.deploys, 1)
+
+    def test_transport_deploy_existing_budget_is_explicit_and_one_shot(self):
+        body = json.dumps({
+            "success": True,
+            "errors": [],
+            "result": {"id": DEPLOY_NEW},
+        }).encode("ascii")
+
+        class Response:
+            status = 200
+
+            def getheader(self, name, default=None):
+                if name == "Content-Encoding":
+                    return "identity"
+                return None
+
+            def read(self, maximum):
+                return body
+
+        class Connection:
+            def request(self, method, path, body=None, headers=None):
+                return None
+
+            def getresponse(self):
+                return Response()
+
+            def close(self):
+                return None
+
+        recovery = runtime.CloudflareTransport(
+            "a" * 32,
+            "T" * 32,
+            {"ausmalwiese.de": "b" * 32, "rozkalns.net": "c" * 32},
+            connection_factory=lambda: Connection(),
+            allow_deploy_existing=True,
+        )
+        result = recovery.deploy_version_once(
+            payload=core.deployment_payload(NEW)
+        )
+        self.assertEqual(result, {"deployment_id": DEPLOY_NEW})
+        self.assertEqual(recovery.uploads, 0)
+        self.assertEqual(recovery.deploys, 1)
+        with self.assertRaisesRegex(runtime.Stop, "deploy_budget_exhausted"):
+            recovery.deploy_version_once(
+                payload=core.deployment_payload(NEW)
+            )
+        with self.assertRaisesRegex(runtime.Stop, "upload_budget_exhausted"):
+            recovery._request(
+                "POST",
+                "/not-dispatched",
+                body=b"",
+                phase="upload",
+            )
+
+        normal = runtime.CloudflareTransport(
+            "a" * 32,
+            "T" * 32,
+            {"ausmalwiese.de": "b" * 32, "rozkalns.net": "c" * 32},
+            connection_factory=lambda: Connection(),
+        )
+        with self.assertRaisesRegex(runtime.Stop, "deploy_budget_exhausted"):
+            normal.deploy_version_once(payload=core.deployment_payload(NEW))
+
     def test_provisioner_schema_and_hidden_tty_only_source(self):
         account = "a" * 32
         new_zone = "b" * 32
@@ -631,15 +867,15 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
     def test_installer_upgrade_is_exact_predecessor_and_two_targets(self):
         self.assertEqual(
             installer.OLD_MAIN,
-            "299c5e583516b95dab739ff04ec178e733547adb",
+            "b7dce379d48c7214ccabe14f28ce5dbdc998d781",
         )
         self.assertEqual(
             installer.OLD_LAUNCHER_BLOB,
-            "818b10ff15edeb30bfb0901023d789eafa3d04dc",
+            "017780bcc262c37343457ecad6130e41411853e7",
         )
         self.assertEqual(
             installer.OLD_RELEASE_SHA256,
-            "c9de347026977ddd9248bd547ff3702a3f79045126dd8c1dd26ca29958e20a70",
+            "dfcf582f9cd575b540911bc6ac0d3a1a30312a65f5d4442de9ec25dc4fe1fbc0",
         )
         self.assertEqual(
             installer.UPGRADE_TARGETS,
@@ -666,7 +902,24 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
         self.assertFalse(contract["runtime_modes"]["apply"]["rollback"])
         self.assertFalse(contract["runtime_modes"]["apply"]["cleanup"])
         self.assertFalse(contract["source_authorized_capabilities"]["live"])
-        self.assertEqual(contract["upgrade_issue"], 1130)
+        self.assertEqual(contract["upgrade_issue"], 1138)
+        self.assertEqual(
+            contract["runtime_modes"]["recovery_preflight"]["provider_writes"],
+            0,
+        )
+        self.assertEqual(
+            contract["runtime_modes"]["deploy_existing"]["upload_writes_max"],
+            0,
+        )
+        self.assertEqual(
+            contract["runtime_modes"]["deploy_existing"]["deploy_writes_max"],
+            1,
+        )
+        self.assertFalse(
+            contract["runtime_modes"]["deploy_existing"][
+                "provider_version_ids_output"
+            ]
+        )
         self.assertEqual(
             contract["read_protocol"]["versions_result_contract"]["latest_rule"],
             "first-item-consumed-fields-only",

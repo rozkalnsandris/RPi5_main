@@ -60,6 +60,8 @@ KINDS = {
 }
 PRE_CONFIRM = "OWNER-AUTHORIZED-STATS-WORKER-PREFLIGHT"
 APPLY_CONFIRM = "OWNER-AUTHORIZED-STATS-WORKER-APPLY"
+RECOVERY_PRE_CONFIRM = "OWNER-AUTHORIZED-STATS-WORKER-RECOVERY-PREFLIGHT"
+RECOVERY_DEPLOY_CONFIRM = "OWNER-AUTHORIZED-STATS-WORKER-DEPLOY-EXISTING"
 
 SHA40 = re.compile(r"[0-9a-f]{40}\Z")
 SHA64 = re.compile(r"[0-9a-f]{64}\Z")
@@ -242,7 +244,7 @@ def load_core(raw: bytes):
         raise Stop("core_load_failed") from None
     for name in (
         "validate_snapshot", "future_run_once", "verify_source",
-        "SOURCE_BLOB", "CONFIG_BLOB",
+        "deployment_payload", "SOURCE_BLOB", "CONFIG_BLOB",
     ):
         if not hasattr(module, name):
             raise Stop("core_interface_invalid")
@@ -334,10 +336,14 @@ def _safe_settings(value: Any, depth: int = 0) -> Any:
 
 
 class CloudflareTransport:
-    def __init__(self, account, token, zones, *, connection_factory=None):
+    def __init__(
+        self, account, token, zones, *, connection_factory=None,
+        allow_deploy_existing=False,
+    ):
         self.account = account
         self.token = token
         self.zones = dict(zones)
+        self.allow_deploy_existing = allow_deploy_existing
         self.connection_factory = connection_factory or (
             lambda: http.client.HTTPSConnection(
                 HOST, timeout=10, context=ssl.create_default_context()
@@ -354,10 +360,24 @@ class CloudflareTransport:
             need(self.reads < READ_BUDGET, "read_budget_exhausted")
             self.reads += 1
         elif phase == "upload":
-            need(self.uploads == 0 and self.deploys == 0, "upload_budget_exhausted")
+            need(
+                not self.allow_deploy_existing
+                and self.uploads == 0
+                and self.deploys == 0,
+                "upload_budget_exhausted",
+            )
             self.uploads = 1
         elif phase == "deploy":
-            need(self.uploads == 1 and self.deploys == 0, "deploy_budget_exhausted")
+            if self.allow_deploy_existing:
+                need(
+                    self.uploads == 0 and self.deploys == 0,
+                    "deploy_budget_exhausted",
+                )
+            else:
+                need(
+                    self.uploads == 1 and self.deploys == 0,
+                    "deploy_budget_exhausted",
+                )
             self.deploys = 1
         else:
             raise Stop("request_phase_invalid")
@@ -726,10 +746,13 @@ class CloudflareTransport:
         need(found == ROUTES, "route_set_drift")
         return found
 
-    def read_snapshot(self):
+    def read_snapshot(self, *, allow_latest_difference=False):
         latest = self._versions()
         deployment_id, active = self._deployment()
-        need(latest == active or self.uploads == 1, "latest_active_unexpected")
+        need(
+            latest == active or self.uploads == 1 or allow_latest_difference,
+            "latest_active_unexpected",
+        )
         routes = self._routes()
         metadata_cache = {}
         code_cache = {}
@@ -854,6 +877,111 @@ def preflight(core, trusted, worker_bytes):
     }
 
 
+def _recovery_state(core, trusted, worker_bytes):
+    core.verify_source(worker_bytes)
+    try:
+        before = core.validate_snapshot(
+            trusted.read_snapshot(allow_latest_difference=True),
+            allow_latest_difference=True,
+        )
+        confirm = core.validate_snapshot(
+            trusted.read_snapshot(allow_latest_difference=True),
+            allow_latest_difference=True,
+        )
+    except Exception:
+        raise Stop("recovery_read_failed") from None
+    need(before == confirm, "recovery_state_drift")
+    candidate = hashlib.sha256(worker_bytes).hexdigest()
+    need(
+        before["latest_uploaded_version"] != before["active_version"],
+        "recovery_not_required",
+    )
+    need(
+        before["latest_code_sha256"] == candidate
+        and before["active_code_sha256"] != candidate,
+        "recovery_candidate_state_invalid",
+    )
+    need(
+        before["active_bindings"] == before["latest_bindings"],
+        "recovery_binding_drift",
+    )
+    need(
+        before["active_configuration"] == before["latest_configuration"],
+        "recovery_configuration_drift",
+    )
+    return before, candidate
+
+
+def recovery_preflight(core, trusted, worker_bytes):
+    before, candidate = _recovery_state(core, trusted, worker_bytes)
+    return {
+        "schema": "rozkalns.rpi5-main.stats-worker-recovery-preflight.v1",
+        "worker": WORKER,
+        "source_blob": WORKER_BLOB,
+        "config_blob": CONFIG_BLOB,
+        "snapshot_sha256": snapshot_digest(before),
+        "candidate_code_sha256": candidate,
+        "recovery_required": True,
+        "provider_writes": 0,
+        "status": "PASS",
+    }
+
+
+def deploy_existing(core, trusted, worker_bytes, expected_recovery_sha256):
+    before, candidate = _recovery_state(core, trusted, worker_bytes)
+    need(
+        snapshot_digest(before) == expected_recovery_sha256,
+        "recovery_snapshot_binding_drift",
+    )
+    target = before["latest_uploaded_version"]
+    previous_deployment = before["deployment_id"]
+    payload = core.deployment_payload(target)
+    try:
+        deployment = trusted.deploy_version_once(payload=payload)
+    except Exception:
+        raise Stop("recovery_deploy_outcome_unknown_stop") from None
+    need(
+        isinstance(deployment, dict)
+        and set(deployment) == {"deployment_id"}
+        and isinstance(deployment["deployment_id"], str)
+        and UUID.fullmatch(deployment["deployment_id"]) is not None,
+        "recovery_deploy_reply_outcome_unknown_stop",
+    )
+    try:
+        after = core.validate_snapshot(trusted.read_snapshot())
+        need(
+            after["active_version"] == target
+            and after["latest_uploaded_version"] == target
+            and after["deployment_id"] != previous_deployment
+            and after["deployment_id"] == deployment["deployment_id"],
+            "recovery_post_deploy_version_drift",
+        )
+        need(
+            after["active_code_sha256"] == candidate
+            and after["latest_code_sha256"] == candidate,
+            "recovery_post_deploy_code_drift",
+        )
+        need(
+            after["routes"] == before["routes"]
+            and after["active_bindings"] == before["latest_bindings"]
+            and after["latest_bindings"] == before["latest_bindings"]
+            and after["active_configuration"] == before["latest_configuration"]
+            and after["latest_configuration"] == before["latest_configuration"],
+            "recovery_post_deploy_preservation_drift",
+        )
+    except Exception:
+        raise Stop("recovery_post_deploy_outcome_unknown_stop") from None
+    return {
+        "schema": "rozkalns.rpi5-main.stats-worker-recovery-apply.v1",
+        "worker": WORKER,
+        "source_blob": WORKER_BLOB,
+        "config_blob": CONFIG_BLOB,
+        "candidate_code_sha256": candidate,
+        "provider_writes": 1,
+        "status": "PASS",
+    }
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         description="Fixed installed Ausmalwiese Stats Worker deploy runtime"
@@ -864,7 +992,10 @@ def main(argv=None) -> int:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--preflight", action="store_true")
     mode.add_argument("--apply", action="store_true")
+    mode.add_argument("--recovery-preflight", action="store_true")
+    mode.add_argument("--deploy-existing", action="store_true")
     parser.add_argument("--expected-preflight-sha256", default="")
+    parser.add_argument("--expected-recovery-sha256", default="")
     parser.add_argument("--confirm", required=True)
     args = parser.parse_args(argv)
 
@@ -875,23 +1006,56 @@ def main(argv=None) -> int:
         ):
             raise Stop("owner_provenance_binding_invalid")
         if args.preflight:
-            if args.confirm != PRE_CONFIRM or args.expected_preflight_sha256:
+            if (
+                args.confirm != PRE_CONFIRM
+                or args.expected_preflight_sha256
+                or args.expected_recovery_sha256
+            ):
                 raise Stop("preflight_confirmation_invalid")
+        elif args.apply:
+            if (
+                args.confirm != APPLY_CONFIRM
+                or SHA64.fullmatch(args.expected_preflight_sha256) is None
+                or args.expected_recovery_sha256
+            ):
+                raise Stop("apply_confirmation_invalid")
+        elif args.recovery_preflight:
+            if (
+                args.confirm != RECOVERY_PRE_CONFIRM
+                or args.expected_preflight_sha256
+                or args.expected_recovery_sha256
+            ):
+                raise Stop("recovery_preflight_confirmation_invalid")
         elif (
-            args.confirm != APPLY_CONFIRM
-            or SHA64.fullmatch(args.expected_preflight_sha256) is None
+            args.confirm != RECOVERY_DEPLOY_CONFIRM
+            or args.expected_preflight_sha256
+            or SHA64.fullmatch(args.expected_recovery_sha256) is None
         ):
-            raise Stop("apply_confirmation_invalid")
+            raise Stop("recovery_deploy_confirmation_invalid")
 
         core_raw, worker_bytes, config_bytes = verified_install(args.expected_main)
         core = load_core(core_raw)
         if git_blob(config_bytes) != CONFIG_BLOB:
             raise Stop("config_identity_invalid")
         account, token, zones = credential()
-        trusted = CloudflareTransport(account, token, zones)
+        trusted = CloudflareTransport(
+            account,
+            token,
+            zones,
+            allow_deploy_existing=args.deploy_existing,
+        )
 
         if args.preflight:
             result = preflight(core, trusted, worker_bytes)
+        elif args.recovery_preflight:
+            result = recovery_preflight(core, trusted, worker_bytes)
+        elif args.deploy_existing:
+            result = deploy_existing(
+                core,
+                trusted,
+                worker_bytes,
+                args.expected_recovery_sha256,
+            )
         else:
             approval = {
                 "source_blob": WORKER_BLOB,
