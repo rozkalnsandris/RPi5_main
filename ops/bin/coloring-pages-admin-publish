@@ -7,6 +7,8 @@ import argparse
 import fcntl
 import hashlib
 import json
+import logging
+from logging.handlers import TimedRotatingFileHandler
 import os
 from pathlib import Path
 import pwd
@@ -35,6 +37,10 @@ CATALOG = PUBLIC / "catalog.json"
 STATE = CONTENT / "state" / "admin-publish"
 UPLOADS = STATE / "uploads"
 JOBS = STATE / "jobs"
+LOGS = STATE / "logs"
+LOG_FILE = LOGS / "admin-publish.log"
+LOG_RETENTION_SECONDS = 7 * 24 * 60 * 60
+LOG_NAME = re.compile(r"^admin-publish\.log(?:\.\d{4}-\d{2}-\d{2})?$")
 PUBLISH_LOCK = CONTENT / "state" / "drive-ingest" / ".lock"
 WEB_ROOT = Path("/usr/local/share/coloring-pages-admin")
 SOURCE_WEB_ROOT = Path(__file__).resolve().parents[1] / "admin" / "coloring-pages"
@@ -80,6 +86,15 @@ STEPS = [
     "Veröffentlichung prüfen (Web)",
 ]
 CREATE_LOCK = threading.Lock()
+LOGGER = logging.getLogger("ausmalwiese.admin.publish")
+LOGGER.setLevel(logging.INFO)
+LOGGER.propagate = False
+LOG_ALLOWED_FIELDS = {
+    "pid", "job_id", "upload_id", "page_index", "page_count",
+    "step_index", "step_name", "step_status", "duration_ms",
+    "tool", "exit_status", "page_id", "sitemap_status", "sitemap_phase",
+    "job_status", "prior_status", "partial_result_count", "error_code",
+}
 
 
 class Stop(RuntimeError):
@@ -92,6 +107,96 @@ def stop(message: str) -> None:
 
 def owner_ids() -> tuple[int, int]:
     return pwd.getpwnam(OWNER).pw_uid, grp.getgrnam(OWNER).gr_gid
+
+
+class StrictTimedRotatingFileHandler(TimedRotatingFileHandler):
+    def handleError(self, record) -> None:
+        raise RuntimeError("admin diagnostic logging failed")
+
+
+def prune_logs(now: float | None = None, include_current: bool = True) -> int:
+    now = time.time() if now is None else now
+    cutoff = now - LOG_RETENTION_SECONDS
+    removed = 0
+    if not LOGS.is_dir():
+        return 0
+    for path in LOGS.iterdir():
+        if not LOG_NAME.fullmatch(path.name):
+            continue
+        if not include_current and path.name == LOG_FILE.name:
+            continue
+        st = path.lstat()
+        if path.is_symlink() or not stat.S_ISREG(st.st_mode):
+            stop("admin diagnostic log path is unsafe")
+        if st.st_mtime < cutoff:
+            path.unlink()
+            removed += 1
+    return removed
+
+
+def init_logging() -> None:
+    try:
+        prune_logs(include_current=True)
+        for handler in list(LOGGER.handlers):
+            handler.close()
+            LOGGER.removeHandler(handler)
+        handler = StrictTimedRotatingFileHandler(
+            LOG_FILE,
+            when="midnight",
+            interval=1,
+            backupCount=7,
+            utc=True,
+            encoding="utf-8",
+            delay=False,
+        )
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        LOGGER.addHandler(handler)
+        os.chmod(LOG_FILE, 0o600)
+        st = LOG_FILE.lstat()
+        uid, gid = owner_ids()
+        if LOG_FILE.is_symlink() or not stat.S_ISREG(st.st_mode) or st.st_uid != uid or st.st_gid != gid or stat.S_IMODE(st.st_mode) != 0o600:
+            stop("admin diagnostic log metadata is unsafe")
+        audit("service_start", pid=os.getpid())
+    except Stop:
+        raise
+    except Exception:
+        stop("admin diagnostic logging initialization failed")
+
+
+def audit(event: str, level: str = "INFO", **fields) -> None:
+    if not LOGGER.handlers:
+        stop("admin diagnostic logging is unavailable")
+    if not re.fullmatch(r"[a-z0-9_.-]{1,64}", event) or level not in {"INFO", "WARNING", "ERROR"}:
+        stop("admin diagnostic log event is invalid")
+    unknown = set(fields) - LOG_ALLOWED_FIELDS
+    if unknown:
+        stop("admin diagnostic log field is not allowed")
+    payload = {
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "level": level,
+        "event": event,
+    }
+    for key, value in fields.items():
+        if value is None:
+            continue
+        if isinstance(value, bool):
+            payload[key] = value
+        elif isinstance(value, int):
+            payload[key] = value
+        elif isinstance(value, str):
+            payload[key] = value.replace("\r", " ").replace("\n", " ")[:160]
+        else:
+            stop("admin diagnostic log value is invalid")
+    try:
+        prune_logs(include_current=False)
+        LOGGER.log(getattr(logging, level), json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+        for handler in LOGGER.handlers:
+            handler.flush()
+        prune_logs(include_current=False)
+    except Stop:
+        raise
+    except Exception:
+        stop("admin diagnostic logging failed")
 
 
 def write_json(path: Path, payload: dict) -> None:
@@ -264,11 +369,20 @@ def docker_prefix(uid: int, gid: int) -> list[str]:
     ]
 
 
-def run_tool(entrypoint: str, args: list[str], uid: int, gid: int) -> str:
-    run = subprocess.run(
-        [*docker_prefix(uid, gid), "--entrypoint", entrypoint, IMAGE, *args],
-        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=180, check=False,
-    )
+def run_tool(entrypoint: str, args: list[str], uid: int, gid: int, job_id: str | None = None, page_index: int | None = None) -> str:
+    tool = Path(entrypoint).name
+    audit("tool_start", job_id=job_id, page_index=page_index, tool=tool)
+    started = time.monotonic()
+    try:
+        run = subprocess.run(
+            [*docker_prefix(uid, gid), "--entrypoint", entrypoint, IMAGE, *args],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=180, check=False,
+        )
+    except subprocess.TimeoutExpired:
+        audit("tool_timeout", level="ERROR", job_id=job_id, page_index=page_index, tool=tool, duration_ms=int((time.monotonic() - started) * 1000))
+        stop("immutable Coloring Pages tool timed out")
+    duration_ms = int((time.monotonic() - started) * 1000)
+    audit("tool_exit", level="INFO" if run.returncode == 0 else "ERROR", job_id=job_id, page_index=page_index, tool=tool, exit_status=run.returncode, duration_ms=duration_ms)
     if run.returncode != 0:
         stop("immutable Coloring Pages tool failed")
     return run.stdout
@@ -373,20 +487,70 @@ def set_step(job_id: str, index: int, status: str, detail: str | None = None) ->
             step["finished_at"] = now
         if detail:
             step["detail"] = detail
-    update_job(job_id, mutate)
+    payload = update_job(job_id, mutate)
+    step = payload["steps"][index]
+    duration_ms = None
+    if step.get("started_at") and step.get("finished_at"):
+        duration_ms = max(0, (step["finished_at"] - step["started_at"]) * 1000)
+    audit("step_status", job_id=job_id, step_index=index, step_name=step["label"], step_status=status, duration_ms=duration_ms)
 
 
-def unfinished_job_exists() -> bool:
+def active_jobs() -> list[dict]:
+    found = []
     if not JOBS.is_dir():
-        return False
-    for path in JOBS.glob("*/job.json"):
+        return found
+    for path in sorted(JOBS.glob("*/job.json")):
         try:
-            status = read_json(path).get("status")
+            payload = read_json(path)
         except Exception:
             continue
-        if status in ("queued", "running"):
-            return True
-    return False
+        if payload.get("status") in ("queued", "running"):
+            found.append(payload)
+    return found
+
+
+def active_job() -> dict | None:
+    found = active_jobs()
+    if len(found) > 1:
+        stop("multiple publication jobs are active")
+    return found[0] if found else None
+
+
+def reconcile_interrupted_jobs() -> int:
+    reconciled = 0
+    if not JOBS.is_dir():
+        return 0
+    for path in sorted(JOBS.glob("*/job.json")):
+        try:
+            payload = read_json(path)
+        except Exception:
+            continue
+        prior = payload.get("status")
+        if prior not in ("queued", "running"):
+            continue
+        now = int(time.time())
+        payload["status"] = "failed"
+        payload["interrupted"] = True
+        payload["error"] = "publication interrupted by service restart"
+        payload["finished_at"] = now
+        payload["updated_at"] = now
+        for step in payload.get("steps", []):
+            if step.get("status") == "running":
+                step["status"] = "failed"
+                step["finished_at"] = now
+                break
+        write_json(path, payload)
+        audit(
+            "stale_job_reconciled",
+            level="WARNING",
+            job_id=payload.get("job_id"),
+            upload_id=payload.get("upload_id"),
+            prior_status=prior,
+            job_status="failed",
+            partial_result_count=len(payload.get("results") or []),
+        )
+        reconciled += 1
+    return reconciled
 
 
 def run_job(job_id: str) -> None:
@@ -403,6 +567,7 @@ def run_job(job_id: str) -> None:
                 fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
                 stop("another publication job is active")
+            audit("job_started", job_id=job_id, upload_id=job["upload_id"], page_count=len(pages))
             update_job(job_id, lambda p: p.update(status="running", started_at=int(time.time())))
             set_step(job_id, 0, "done")
             set_step(job_id, 1, "done")
@@ -411,17 +576,17 @@ def run_job(job_id: str) -> None:
             prepared_dir.mkdir(mode=0o700)
             set_step(job_id, 2, "running")
             prepared = []
-            for item in pages:
+            for page_index, item in enumerate(pages, 1):
                 source = upload_dir / "pages" / item["staged_name"]
                 target = prepared_dir / item["staged_name"]
-                run_tool(PRINT_MASTER, ["prepare", str(source), str(target)], uid, gid)
+                run_tool(PRINT_MASTER, ["prepare", str(source), str(target)], uid, gid, job_id=job_id, page_index=page_index)
                 prepared.append(target)
             set_step(job_id, 2, "done")
 
             set_step(job_id, 3, "running")
             prepared_meta = []
-            for target in prepared:
-                output = run_tool(PRINT_MASTER, ["validate", str(target)], uid, gid)
+            for page_index, target in enumerate(prepared, 1):
+                output = run_tool(PRINT_MASTER, ["validate", str(target)], uid, gid, job_id=job_id, page_index=page_index)
                 if "VALIDATE_PRINT=PASS" not in output.splitlines():
                     stop("print-master validation result is ambiguous")
                 prepared_meta.append({
@@ -433,11 +598,13 @@ def run_job(job_id: str) -> None:
 
             set_step(job_id, 4, "running")
             ids = allocate_ids(len(pages))
+            for page_index, page_id in enumerate(ids, 1):
+                audit("page_id_allocated", job_id=job_id, page_index=page_index, page_id=page_id)
             set_step(job_id, 4, "done")
 
             results = []
             set_step(job_id, 5, "running")
-            for item, title, page_id, meta in zip(pages, titles, ids, prepared_meta, strict=True):
+            for page_index, (item, title, page_id, meta) in enumerate(zip(pages, titles, ids, prepared_meta, strict=True), 1):
                 if page_id in catalog_ids() or os.path.lexists(ORIGINALS / page_id) or os.path.lexists(MEDIA / page_id):
                     stop("allocated ID collided before import")
                 inbox = INBOX / f"{page_id}.png"
@@ -445,7 +612,7 @@ def run_job(job_id: str) -> None:
                 output = run_tool(IMPORTER, [
                     str(inbox), "--id", page_id, "--title", title, "--character", "",
                     "--category", job["category"], "--age", "3-6", "--difficulty", "easy", "--language", "de",
-                ], uid, gid)
+                ], uid, gid, job_id=job_id, page_index=page_index)
                 if f"IMPORTED={page_id} PAGES=1" not in output.splitlines():
                     stop("immutable importer result is ambiguous")
                 results.append({
@@ -453,24 +620,28 @@ def run_job(job_id: str) -> None:
                     "sha256": meta["sha256"], "size_bytes": meta["size_bytes"], "status": "imported",
                 })
                 update_job(job_id, lambda p, r=list(results): p.update(results=r))
+                audit("page_imported", job_id=job_id, page_index=page_index, page_id=page_id, partial_result_count=len(results))
             set_step(job_id, 5, "done")
             set_step(job_id, 6, "done")
             set_step(job_id, 7, "done")
 
         set_step(job_id, 8, "running")
         sitemap_status, sitemap_phase = sitemap_best_effort()
+        audit("sitemap_phase", job_id=job_id, sitemap_status=sitemap_status, sitemap_phase=sitemap_phase)
         set_step(job_id, 8, "done", sitemap_status if sitemap_phase is None else sitemap_status + ": " + sitemap_phase)
 
         set_step(job_id, 9, "running")
-        for result in results:
+        for page_index, result in enumerate(results, 1):
             result["url"] = verify_public(result["id"])
             result["status"] = "published"
             update_job(job_id, lambda p, r=list(results): p.update(results=r))
+            audit("public_verified", job_id=job_id, page_index=page_index, page_id=result["id"])
         set_step(job_id, 9, "done")
         update_job(job_id, lambda p: p.update(
             status="published", finished_at=int(time.time()), results=results,
             sitemap_status=sitemap_status, sitemap_phase=sitemap_phase,
         ))
+        audit("job_terminal", job_id=job_id, job_status="published", partial_result_count=len(results))
     except Exception as exc:
         message = str(exc) if isinstance(exc, Stop) else "unexpected admin publisher error"
         def failed(payload):
@@ -483,7 +654,18 @@ def run_job(job_id: str) -> None:
                     step["finished_at"] = int(time.time())
                     break
         try:
-            update_job(job_id, failed)
+            payload = update_job(job_id, failed)
+            try:
+                audit(
+                    "job_terminal",
+                    level="ERROR",
+                    job_id=job_id,
+                    job_status="failed",
+                    error_code=message,
+                    partial_result_count=len(payload.get("results") or []),
+                )
+            except Exception:
+                pass
         except Exception:
             pass
 
@@ -493,7 +675,8 @@ def state_scaffold() -> None:
     STATE.mkdir(parents=True, exist_ok=True, mode=0o700)
     UPLOADS.mkdir(exist_ok=True, mode=0o700)
     JOBS.mkdir(exist_ok=True, mode=0o700)
-    for path in (STATE, UPLOADS, JOBS):
+    LOGS.mkdir(exist_ok=True, mode=0o700)
+    for path in (STATE, UPLOADS, JOBS, LOGS):
         st = path.lstat()
         if path.is_symlink() or not stat.S_ISDIR(st.st_mode) or st.st_uid != uid or st.st_gid != gid or stat.S_IMODE(st.st_mode) != 0o700:
             stop("admin state directory metadata is unsafe")
@@ -565,6 +748,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.static("fonts/nunito-latin-vf-ba344451eab25b21.woff2", "font/woff2")
             if path == "/api/categories":
                 return self.send_json(200, {"categories": [{"id": k, "label": v} for k, v in CATEGORIES.items()]})
+            if path == "/api/jobs/active":
+                current = active_job()
+                return self.send_json(200, {"active": current is not None, "job": current})
             match = re.fullmatch(r"/api/uploads/([0-9a-f]{32})", path)
             if match:
                 return self.send_json(200, {"upload_id": match.group(1), **read_json(UPLOADS / match.group(1) / "upload.json")})
@@ -668,8 +854,11 @@ class Handler(BaseHTTPRequestHandler):
             stop("titles must match uploaded PNG count")
         titles = [validate_title(value) for value in titles_raw]
         with CREATE_LOCK:
-            if unfinished_job_exists():
-                self.send_error_json(409, "another publication job is active")
+            existing = active_job()
+            if existing is not None:
+                restored = dict(existing)
+                restored["restored"] = True
+                self.send_json(200, restored)
                 return
             job_id = secrets.token_hex(16)
             job_dir = JOBS / job_id
@@ -681,6 +870,7 @@ class Handler(BaseHTTPRequestHandler):
                 "titles": titles, "status": "queued", "created_at": int(time.time()),
                 "updated_at": int(time.time()), "steps": initial_steps(), "results": [],
             }
+            audit("job_queued", job_id=job_id, upload_id=upload_id, page_count=len(upload["files"]))
             write_json(job_dir / "job.json", payload)
             threading.Thread(target=run_job, args=(job_id,), name="publish-" + job_id[:8], daemon=True).start()
         self.send_json(202, payload)
@@ -689,6 +879,8 @@ class Handler(BaseHTTPRequestHandler):
 def serve() -> int:
     state_scaffold()
     runtime_preflight()
+    init_logging()
+    reconcile_interrupted_jobs()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     server.daemon_threads = True
     server.serve_forever(poll_interval=0.5)
