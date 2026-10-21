@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 import importlib.util, json, tempfile, unittest, zipfile
+from importlib.machinery import SourceFileLoader
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
 MODULE=ROOT/"ops/bin/coloring-pages-admin-publish"
-spec=importlib.util.spec_from_file_location("admin_publish",MODULE)
-admin=importlib.util.module_from_spec(spec);spec.loader.exec_module(admin)
+loader=SourceFileLoader("admin_publish",str(MODULE))
+spec=importlib.util.spec_from_loader(loader.name,loader)
+admin=importlib.util.module_from_spec(spec);loader.exec_module(admin)
 
 def png_stub(w=1024,h=1536):
     import struct

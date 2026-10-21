@@ -2,7 +2,8 @@
 set -euo pipefail
 EXPECTED_MAIN="${1:-}"
 CONFIRM="${2:-}"
-REPO="/home/andris/RPi5_main"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+REPO="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
 if [[ ! "$EXPECTED_MAIN" =~ ^[0-9a-f]{40}$ ]]; then echo "EXPECTED_MAIN_REQUIRED" >&2; exit 2; fi
 if [[ "$CONFIRM" != "OWNER-AUTHORIZED-AUSMALWIESE-ADMIN-ZIP-PUBLISHER-INSTALL" ]]; then echo "CONFIRMATION_REQUIRED" >&2; exit 2; fi
 [[ "$(id -u)" -eq 0 ]] || { echo "ROOT_REQUIRED" >&2; exit 2; }
