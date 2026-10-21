@@ -12,6 +12,9 @@ NUNITO_NAME="nunito-latin-vf-ba344451eab25b21.woff2"
 BALOO_SHA256="26fb4610d4bc976d2584ca15e66c11465dbc1f267a10dca668fcb3080dfe59c1"
 NUNITO_SHA256="ba344451eab25b217a165363b1982048a5e5830a0daf36577973955a04cac793"
 FONT_ORIGIN="https://ausmalwiese.de/assets/fonts"
+READINESS_ATTEMPTS=10
+READINESS_CURL_SECONDS=0.25
+READINESS_INTERVAL_SECONDS=0.25
 
 if [[ ! "$EXPECTED_MAIN" =~ ^[0-9a-f]{40}$ ]]; then echo "EXPECTED_MAIN_REQUIRED" >&2; exit 2; fi
 case "$MODE" in
@@ -93,7 +96,19 @@ else
   systemctl enable --now "$SERVICE"
 fi
 systemctl is-active --quiet "$SERVICE"
-curl --fail --silent --show-error --max-time 3 http://127.0.0.1:8765/ >/dev/null
+
+READY=0
+for ((attempt=1; attempt<=READINESS_ATTEMPTS; attempt++)); do
+  if curl --fail --silent --show-error --connect-timeout "$READINESS_CURL_SECONDS" --max-time "$READINESS_CURL_SECONDS" http://127.0.0.1:8765/ >/dev/null 2>&1; then
+    READY=1
+    break
+  fi
+  if [[ "$attempt" -lt "$READINESS_ATTEMPTS" ]]; then
+    sleep "$READINESS_INTERVAL_SECONDS"
+  fi
+done
+[[ "$READY" -eq 1 ]] || { echo "ADMIN_SERVICE_HTTP_NOT_READY" >&2; exit 7; }
+
 curl --fail --silent --show-error --max-time 3 "http://127.0.0.1:8765/assets/fonts/$BALOO_NAME" | sha256sum | grep -F "$BALOO_SHA256  -" >/dev/null
 curl --fail --silent --show-error --max-time 3 "http://127.0.0.1:8765/assets/fonts/$NUNITO_NAME" | sha256sum | grep -F "$NUNITO_SHA256  -" >/dev/null
 echo "AUSMALWIESE_ADMIN_ZIP_PUBLISHER_INSTALL=PASS"
