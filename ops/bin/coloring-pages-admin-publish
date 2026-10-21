@@ -559,6 +559,10 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path in ("/", "/index.html"):
                 return self.static("index.html", "text/html; charset=utf-8")
+            if path == "/assets/fonts/baloo2-latin-vf-26fb4610d4bc976d.woff2":
+                return self.static("fonts/baloo2-latin-vf-26fb4610d4bc976d.woff2", "font/woff2")
+            if path == "/assets/fonts/nunito-latin-vf-ba344451eab25b21.woff2":
+                return self.static("fonts/nunito-latin-vf-ba344451eab25b21.woff2", "font/woff2")
             if path == "/api/categories":
                 return self.send_json(200, {"categories": [{"id": k, "label": v} for k, v in CATEGORIES.items()]})
             match = re.fullmatch(r"/api/uploads/([0-9a-f]{32})", path)
