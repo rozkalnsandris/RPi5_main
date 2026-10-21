@@ -2,103 +2,143 @@
 <html lang="lv">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Ausmalwiese administrēšana – Jaunas krāsojamās lapas</title>
+<meta name="robots" content="noindex,nofollow,noarchive">
+<title>Administrēšana – Ausmalwiese</title>
 <style>
 :root{
-  --bg:#f7faff;--panel:#fff;--section:#f5f9ff;--text:#10284d;--muted:#596b89;--line:#e5ecf5;
+  --bg:#f7faff;--section:#f5f9ff;--text:#10284d;--muted:#596b89;--line:#e5ecf5;
   --blue:#1474d4;--blue-deep:#095eaf;--coral:#ff776d;--orange:#ffb53d;--green:#62c889;
-  --shadow:0 10px 28px rgb(23 58 102 / 9%);--radius:18px;--radius-panel:28px;
-  font-family:"Nunito",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text);background:var(--bg)
+  --container:1340px;--shadow:0 10px 28px rgb(23 58 102 / 9%);
+  --radius-card:18px;--radius-panel:28px;
+  --font-display:"Baloo 2",system-ui,sans-serif;--font-body:"Nunito",system-ui,sans-serif;
 }
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text)}button,input,select{font:inherit}
-.layout{display:grid;grid-template-columns:250px minmax(0,1fr);min-height:100vh}
-aside{background:#fff;border-right:1px solid var(--line);padding:24px 16px;position:sticky;top:0;height:100vh}
-.brand{display:flex;align-items:center;gap:10px;margin:0 8px 28px;font-size:29px;font-weight:900;line-height:1;text-decoration:none;color:var(--text)}
-.brand-paw{position:relative;flex:0 0 34px;width:34px;height:34px}.brand-paw i{position:absolute;display:block;border-radius:50%;background:var(--coral)}
-.brand-paw i:nth-child(1){width:14px;height:17px;left:11px;top:14px;transform:rotate(10deg)}
-.brand-paw i:nth-child(2){width:7px;height:10px;left:3px;top:9px;transform:rotate(-25deg)}
-.brand-paw i:nth-child(3){width:7px;height:10px;left:12px;top:2px}
-.brand-paw i:nth-child(4){width:7px;height:10px;left:22px;top:4px;background:#ff8a65}
-.brand-paw i:nth-child(5){width:7px;height:10px;left:28px;top:12px;background:var(--orange);transform:rotate(24deg)}
-.brand-wiese b:nth-child(1){color:#ff825c}.brand-wiese b:nth-child(2){color:#ff8a65}.brand-wiese b:nth-child(3){color:var(--orange)}
-.brand-wiese b:nth-child(4){color:var(--green)}.brand-wiese b:nth-child(5){color:#8bcfb1}
-nav{display:grid;gap:6px}nav a{display:flex;align-items:center;gap:11px;min-height:46px;padding:10px 12px;border-radius:12px;color:#435672;text-decoration:none;font-weight:800}
-nav a:hover{background:#f4f8fd;color:var(--blue-deep)}nav .active{background:#eaf3ff;color:var(--blue-deep)}
-.nav-icon{display:grid;place-items:center;width:25px;height:25px;border-radius:8px;background:#f1f6fc;font-size:14px}
-.active .nav-icon{background:#d9ebff}.future{margin-top:20px;border-top:1px solid var(--line);padding-top:18px!important;color:#9b4b5f!important}
-main{width:100%;max-width:1420px;padding:34px 34px 52px}
-.hero{display:flex;align-items:end;justify-content:space-between;gap:24px;margin-bottom:24px}
-.eyebrow{display:inline-block;margin-bottom:5px;color:var(--blue-deep);font-size:12px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
-h1{margin:0;font-size:clamp(34px,4vw,52px);line-height:1.04;font-weight:900;letter-spacing:-.025em}
-.sub{max-width:760px;margin:10px 0 0;color:var(--muted);font-size:17px;font-weight:650}
-.grid{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.25fr);gap:18px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-panel);padding:22px;box-shadow:var(--shadow);margin-bottom:18px}
-.stephead{display:flex;gap:12px;align-items:center;font-size:20px;font-weight:900}.badge{display:grid;place-items:center;flex:0 0 38px;width:38px;height:38px;border-radius:50%;background:#e4f3ff;color:var(--blue-deep);font-weight:900}
-.drop{display:grid;place-items:center;min-height:190px;border:2px dashed #bdd3ea;border-radius:18px;padding:28px;text-align:center;margin-top:18px;background:#f9fcff;cursor:pointer;transition:.15s ease}
-.drop:hover,.drop.drag{border-color:var(--blue);background:#eef6ff}.drop-icon{display:grid;place-items:center;width:52px;height:52px;margin:0 auto 12px;border-radius:16px;background:#e4f3ff;color:var(--blue-deep);font-size:24px;font-weight:900}
-.drop strong{display:block;font-size:18px}.drop small{display:block;margin-top:5px;color:var(--muted);font-size:14px}
-.filebar{margin-top:12px;padding:12px 14px;border-radius:12px;background:#eefaf2;color:#1a753b;font-weight:800;display:none}
-.previews{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:12px;margin-top:18px}.empty{color:var(--muted);font-weight:700}
-.preview{border:1px solid var(--line);border-radius:16px;padding:9px;background:#fff}.preview img{display:block;width:100%;aspect-ratio:2/3;object-fit:contain;border:1px solid #edf1f6;border-radius:11px;background:white}
-.preview input{width:100%;margin-top:8px;padding:9px 10px;border:1px solid #cfdaea;border-radius:10px;color:var(--text);font-weight:700;outline:none}.preview input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgb(20 116 212 / 12%)}
-select{width:100%;min-height:50px;padding:11px 13px;border:1px solid #cfdaea;border-radius:12px;background:white;color:var(--text);font-size:16px;font-weight:700;outline:none}
-select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgb(20 116 212 / 12%)}
-button{border:0;border-radius:999px;padding:13px 21px;font-weight:900;cursor:pointer}.primary{background:var(--blue);color:#fff;box-shadow:0 7px 16px rgb(46 143 240 / 22%)}.primary:not(:disabled):hover{background:var(--blue-deep)}.primary:disabled{background:#dfe6ef;color:#65748b;box-shadow:none;cursor:not-allowed}
-.notice{margin-top:14px;padding:14px 16px;border-radius:16px;background:#eef6ff;color:#275a91;font-weight:700}
-.process{display:none;margin-top:18px}.process h3{margin:0 0 10px;font-size:19px}.row{display:grid;grid-template-columns:30px minmax(0,1fr) 130px 60px;gap:10px;align-items:center;border-top:1px solid var(--line);padding:10px 0}
-.dot{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:#e7edf4;color:#536174;font-size:12px;font-weight:900}.done .dot{background:#e4f8e9;color:#1a753b}.failed .dot{background:#fff0f0;color:#9c2424}.running .dot{background:#e4f3ff;color:var(--blue-deep)}
-.status{font-size:13px;color:var(--muted);font-weight:800}.success{display:none;border:1px solid #cbe8d4;background:#f3fbf5;border-radius:18px;padding:18px;margin-top:14px}.success h2{margin:0;color:#1a753b}
-.results{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:12px}.result{background:white;border:1px solid #dce7df;border-radius:14px;padding:12px}.result a{color:var(--blue-deep);word-break:break-all}
-.error{display:none;background:#fff0f0;color:#9c2424;border:1px solid #f0c7c7;border-radius:14px;padding:13px 15px;margin-top:12px;font-weight:700}
+*{box-sizing:border-box}
+html{scroll-padding-top:90px}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body);line-height:1.45}
+button,input,select{font:inherit}button,a{-webkit-tap-highlight-color:transparent}
+a{color:inherit}.container{width:min(calc(100% - 40px),var(--container));margin-inline:auto}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.skip-link{position:fixed;top:8px;left:8px;z-index:1000;transform:translateY(-160%);padding:9px 14px;border-radius:10px;background:var(--text);color:#fff}
+.skip-link:focus{transform:translateY(0)}
+.site-header{position:sticky;top:0;z-index:30;background:rgb(255 255 255 / 96%);border-bottom:1px solid var(--line);backdrop-filter:blur(14px)}
+.header-inner{min-height:70px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:24px}
+.brand{display:inline-flex;align-items:center;gap:10px;justify-self:start;color:var(--text);text-decoration:none;font-family:var(--font-display);font-size:32px;font-weight:800;line-height:1;white-space:nowrap}
+.brand-word{display:inline-flex;align-items:baseline}.brand-paw{position:relative;flex:0 0 38px;width:38px;height:38px;display:inline-block}
+.brand-paw i{position:absolute;display:block;background:var(--coral);border-radius:50%}
+.brand-paw i:nth-child(1){width:15px;height:18px;left:12px;top:16px;transform:rotate(10deg)}
+.brand-paw i:nth-child(2){width:8px;height:11px;left:4px;top:10px;transform:rotate(-25deg)}
+.brand-paw i:nth-child(3){width:8px;height:11px;left:13px;top:3px}
+.brand-paw i:nth-child(4){width:8px;height:11px;left:23px;top:5px;background:#ff8a65}
+.brand-paw i:nth-child(5){width:8px;height:11px;left:30px;top:13px;background:var(--orange);transform:rotate(24deg)}
+.brand-wiese b{font-weight:800}.brand-wiese b:nth-child(1){color:#ff825c}.brand-wiese b:nth-child(2){color:#ff8a65}
+.brand-wiese b:nth-child(3){color:var(--orange)}.brand-wiese b:nth-child(4){color:var(--green)}.brand-wiese b:nth-child(5){color:#8bcfb1}
+.admin-header-title{justify-self:center;color:var(--blue-deep);font-family:var(--font-display);font-size:20px;font-weight:800}
+.outline-link{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:42px;padding:8px 15px;border:1px solid #cfe3fb;border-radius:999px;background:#fff;color:var(--blue-deep);text-decoration:none;font-size:13px;font-weight:800;white-space:nowrap}
+.outline-link:hover{border-color:var(--blue);background:#f2f8ff}.admin-home-link{justify-self:end}
+.admin-hero{padding:32px 0 22px;background:linear-gradient(180deg,#eef6ff 0%,#f7faff 100%)}
+.admin-eyebrow,.panel-kicker{display:inline-block;color:var(--blue-deep);font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.admin-hero h1{margin:5px 0 2px;font-family:var(--font-display);font-size:clamp(34px,4vw,48px);line-height:1}
+.admin-hero p{margin:8px 0 0;color:var(--muted);font-weight:600;max-width:760px}
+.workflow{padding:0 0 16px;background:var(--bg)}
+.workflow-grid{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:18px}
+.admin-panel{min-width:0;padding:20px;border:1px solid var(--line);border-radius:var(--radius-panel);background:#fff;box-shadow:var(--shadow)}
+.panel-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px}
+.panel-title{display:flex;align-items:center;gap:10px;min-width:0}
+.panel-title h2{margin:0;font-family:var(--font-display);font-size:22px;line-height:1.15}
+.step-number{display:grid;place-items:center;flex:0 0 34px;width:34px;height:34px;border-radius:11px;background:#eef5ff;color:var(--blue-deep);font-size:14px;font-weight:900}
+.drop{display:grid;place-items:center;min-height:145px;border:2px dashed #bdd3ea;border-radius:16px;padding:20px;text-align:center;background:#f9fcff;cursor:pointer;transition:.15s ease}
+.drop:hover,.drop.drag{border-color:var(--blue);background:#eef6ff}.drop-icon{display:grid;place-items:center;width:42px;height:42px;margin:0 auto 9px;border-radius:13px;background:#e4f3ff;color:var(--blue-deep);font-size:20px;font-weight:900}
+.drop strong{display:block;font-size:16px}.drop small{display:block;margin-top:4px;color:var(--muted);font-size:13px}
+.filebar{display:none;margin-top:10px;padding:10px 12px;border-radius:10px;background:#eefaf2;color:#1a753b;font-size:14px;font-weight:800}
+.previews{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;min-height:145px}
+.empty{align-self:start;margin:2px 0;color:var(--muted);font-size:14px;font-weight:700}
+.preview{border:1px solid var(--line);border-radius:14px;padding:8px;background:#fff}.preview img{display:block;width:100%;aspect-ratio:2/3;object-fit:contain;border:1px solid #edf1f6;border-radius:10px;background:#fff}
+.preview input{width:100%;margin-top:7px;padding:8px 9px;border:1px solid #cfdaea;border-radius:9px;color:var(--text);font-size:13px;font-weight:700;outline:none}
+.preview input:focus,select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgb(20 116 212 / 12%)}
+.action-section{padding:2px 0 48px;background:var(--bg)}
+.action-grid{display:grid;grid-template-columns:minmax(0,.7fr) minmax(0,1.3fr);gap:18px}
+select{width:100%;min-height:44px;padding:9px 12px;border:1px solid #cfdaea;border-radius:12px;background:#fff;color:var(--text);font-size:14px;font-weight:700;outline:none}
+.primary{border:0;border-radius:999px;padding:11px 18px;background:var(--blue);color:#fff;font-size:14px;font-weight:900;cursor:pointer;box-shadow:0 7px 16px rgb(46 143 240 / 22%)}
+.primary:not(:disabled):hover{background:var(--blue-deep)}.primary:disabled{background:#dfe6ef;color:#65748b;box-shadow:none;cursor:not-allowed}
+.publish-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.notice{margin-top:12px;padding:11px 13px;border-radius:12px;background:#eef6ff;color:#275a91;font-size:13px;font-weight:700}
+.process{display:none;margin-top:14px}.process h3{margin:0 0 8px;font-family:var(--font-display);font-size:18px}
+.row{display:grid;grid-template-columns:28px minmax(0,1fr) 105px 54px;gap:8px;align-items:center;border-top:1px solid var(--line);padding:8px 0;font-size:13px}
+.dot{display:grid;place-items:center;width:25px;height:25px;border-radius:9px;background:#eef5ff;color:#536174;font-size:12px;font-weight:900}
+.done .dot{background:#e4f8e9;color:#1a753b}.failed .dot{background:#fff0f0;color:#9c2424}.running .dot{background:#e4f3ff;color:var(--blue-deep)}
+.status{color:var(--muted);font-size:12px;font-weight:800}
+.success{display:none;border:1px solid #cbe8d4;background:#f3fbf5;border-radius:14px;padding:14px;margin-top:12px}.success h3{margin:0;color:#1a753b;font-family:var(--font-display);font-size:20px}
+.results{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-top:10px}.result{background:#fff;border:1px solid #dce7df;border-radius:12px;padding:10px}.result a{color:var(--blue-deep);word-break:break-word}
+.error{display:none;background:#fff0f0;color:#9c2424;border:1px solid #f0c7c7;border-radius:12px;padding:11px 13px;margin-top:12px;font-size:13px;font-weight:700}
 :focus-visible{outline:3px solid var(--blue-deep);outline-offset:3px}
-@media(max-width:940px){.layout{display:block}aside{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line);padding:16px}.brand{margin-bottom:14px}nav{grid-template-columns:repeat(3,minmax(0,1fr))}.future{display:none}main{padding:22px}.grid{grid-template-columns:1fr}}
-@media(max-width:640px){aside nav{display:none}.brand{margin:0}.hero{margin-bottom:18px}.eyebrow{font-size:11px}h1{font-size:34px}.sub{font-size:15px}.card{padding:16px;border-radius:20px}.stephead{font-size:18px}.drop{min-height:160px;padding:22px 16px}.row{grid-template-columns:28px 1fr}.row .status,.row .duration{grid-column:2}.previews{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:900px){.workflow-grid,.action-grid{grid-template-columns:1fr}.header-inner{gap:16px}.admin-hero{padding-top:26px}}
+@media(max-width:620px){.container{width:min(calc(100% - 28px),var(--container))}.header-inner{grid-template-columns:1fr auto;gap:12px}.admin-header-title{display:none}.admin-home-link{min-height:40px;padding:8px 11px;font-size:12px}.brand{font-size:24px}.brand-paw{flex-basis:30px;width:30px;transform:scale(.8);transform-origin:left center;margin-right:-5px}.admin-hero{padding:24px 0 18px}.admin-hero h1{font-size:34px}.admin-panel{padding:16px;border-radius:20px}.panel-title h2{font-size:19px}.previews{grid-template-columns:repeat(2,minmax(0,1fr));min-height:0}.row{grid-template-columns:28px minmax(0,1fr)}.row .status,.row .duration{grid-column:2}.publish-row{align-items:stretch;flex-direction:column}.primary{width:100%}}
 </style>
 </head>
-<body><div class="layout">
-<aside>
-  <a class="brand" href="/" aria-label="Ausmalwiese administrēšana">
-    <span class="brand-paw" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
-    <span class="brand-word"><span>Ausmal</span><span class="brand-wiese"><b>w</b><b>i</b><b>e</b><b>s</b><b>e</b></span></span>
-  </a>
-  <nav aria-label="Administrēšanas navigācija">
-    <a><span class="nav-icon">⌂</span>Panelis</a>
-    <a class="active"><span class="nav-icon">↑</span>Jaunas lapas</a>
-    <a><span class="nav-icon">▤</span>Visas lapas</a>
-    <a><span class="nav-icon">□</span>Kategorijas</a>
-    <a><span class="nav-icon">▥</span>Statistika</a>
-    <a><span class="nav-icon">⚙</span>Iestatījumi</a>
-    <a class="future"><span class="nav-icon">×</span>Dzēst lapas <small>(vēlāk)</small></a>
-  </nav>
-</aside>
-<main>
-  <div class="hero">
-    <div><span class="eyebrow">Ausmalwiese administrēšana</span><h1>Publicēt jaunas krāsojamās lapas</h1><p class="sub">Augšupielādē ZIP failu ar krāsojamajām lapām, pārbaudi priekšskatījumus, izvēlies kategoriju un publicē.</p></div>
+<body>
+<a class="skip-link" href="#main">Pāriet uz saturu</a>
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="brand" href="/" aria-label="Ausmalwiese administrēšana">
+      <span class="brand-paw" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+      <span class="brand-word"><span>Ausmal</span><span class="brand-wiese"><b>w</b><b>i</b><b>e</b><b>s</b><b>e</b></span></span>
+    </a>
+    <strong class="admin-header-title">Administrēšana</strong>
+    <a class="outline-link admin-home-link" href="https://ausmalwiese.de/"><span aria-hidden="true">←</span> Atvērt vietni</a>
   </div>
-  <div class="grid">
-    <section class="card">
-      <div class="stephead"><span class="badge">1</span>Augšupielādēt ZIP failu</div>
-      <div id="drop" class="drop"><div><span class="drop-icon" aria-hidden="true">↑</span><strong>Ievelc ZIP failu šeit</strong><small>vai noklikšķini, lai izvēlētos failu</small></div><input id="file" type="file" accept=".zip,application/zip" hidden></div>
-      <div id="filebar" class="filebar"></div>
-    </section>
-    <section class="card">
-      <div class="stephead"><span class="badge">2</span>Attēlu priekšskatījums</div>
-      <div id="previews" class="previews"><span class="empty">Attēli vēl nav augšupielādēti.</span></div>
-    </section>
-  </div>
-  <section class="card">
-    <div class="stephead"><span class="badge">3</span>Izvēlēties kategoriju</div>
-    <div style="margin-top:16px"><select id="category"><option value="">Izvēlies kategoriju …</option></select></div>
+</header>
+
+<main id="main" tabindex="-1">
+  <section class="admin-hero" aria-labelledby="admin-title">
+    <div class="container">
+      <span class="admin-eyebrow">Iekšējais panelis</span>
+      <h1 id="admin-title">Publicēt krāsojamās lapas</h1>
+      <p>Augšupielādē ZIP failu, pārbaudi priekšskatījumus, izvēlies kategoriju un publicē. Pārējos soļus serveris izpilda automātiski.</p>
+    </div>
   </section>
-  <section class="card">
-    <div class="stephead"><span class="badge">4</span>Publicēt</div>
-    <p><button id="publish" class="primary" disabled>↑ Sākt publicēšanu</button></p>
-    <div class="notice">Pēc publicēšanas sākšanas serveris automātiski izpildīs pārējās darbības. Progresu vari redzēt šeit.</div>
-    <div id="error" class="error"></div>
-    <div id="process" class="process"><h3>Notiek apstrāde …</h3><div id="steps"></div></div>
-    <div id="success" class="success"><h2>✓ Veiksmīgi publicēts!</h2><div id="results" class="results"></div></div>
+
+  <section class="workflow" aria-label="Sagatavošana">
+    <div class="container workflow-grid">
+      <article class="admin-panel">
+        <div class="panel-heading">
+          <div class="panel-title"><span class="step-number">1</span><div><span class="panel-kicker">Fails</span><h2>Augšupielādēt ZIP</h2></div></div>
+        </div>
+        <div id="drop" class="drop"><div><span class="drop-icon" aria-hidden="true">↑</span><strong>Ievelc ZIP failu šeit</strong><small>vai noklikšķini, lai izvēlētos failu</small></div><input id="file" type="file" accept=".zip,application/zip" hidden></div>
+        <div id="filebar" class="filebar"></div>
+      </article>
+
+      <article class="admin-panel">
+        <div class="panel-heading">
+          <div class="panel-title"><span class="step-number">2</span><div><span class="panel-kicker">Pārbaude</span><h2>Attēlu priekšskatījums</h2></div></div>
+        </div>
+        <div id="previews" class="previews"><p class="empty">Attēli vēl nav augšupielādēti.</p></div>
+      </article>
+    </div>
   </section>
-</main></div>
+
+  <section class="action-section" aria-label="Publicēšana">
+    <div class="container action-grid">
+      <article class="admin-panel">
+        <div class="panel-heading">
+          <div class="panel-title"><span class="step-number">3</span><div><span class="panel-kicker">Katalogs</span><h2>Izvēlēties kategoriju</h2></div></div>
+        </div>
+        <select id="category"><option value="">Izvēlies kategoriju …</option></select>
+      </article>
+
+      <article class="admin-panel">
+        <div class="panel-heading">
+          <div class="panel-title"><span class="step-number">4</span><div><span class="panel-kicker">Publicēšana</span><h2>Publicēt lapas</h2></div></div>
+        </div>
+        <div class="publish-row"><button id="publish" class="primary" disabled>↑ Sākt publicēšanu</button></div>
+        <div class="notice">Pēc sākšanas progresu vari redzēt šeit. Publicēšanas logu neaizver, kamēr process nav pabeigts.</div>
+        <div id="error" class="error"></div>
+        <div id="process" class="process"><h3>Notiek apstrāde …</h3><div id="steps"></div></div>
+        <div id="success" class="success"><h3>✓ Veiksmīgi publicēts!</h3><div id="results" class="results"></div></div>
+      </article>
+    </div>
+  </section>
+</main>
+
 <script>
 "use strict";
 var upload=null,job=null,poll=null;
@@ -133,4 +173,6 @@ async function refresh(){try{job=await adminFetch("/api/jobs/"+job.job_id);rende
 function renderJob(j){steps.innerHTML="";j.steps.forEach(function(s,i){var row=document.createElement("div");row.className="row "+s.status;var dur="";if(s.started_at){var end=s.finished_at||Math.floor(Date.now()/1000);dur=(end-s.started_at)+" s"}var label=(stepLabels[s.label]||s.label)+(s.detail?" — "+s.detail:"");row.innerHTML="<span class=dot>"+(s.status==="done"?"✓":(i+1))+"</span><span>"+escapeHtml(label)+"</span><span class=status>"+escapeHtml(statusLabels[s.status]||s.status)+"</span><span class=duration>"+dur+"</span>";steps.appendChild(row)})}
 function renderResults(items){success.style.display="block";results.innerHTML="";items.forEach(function(x){var d=document.createElement("div");d.className="result";d.innerHTML="<strong>"+escapeHtml(x.title)+"</strong><br><small>ID: "+x.id+"</small><br><a target=_blank rel=noopener href='"+x.url+"'>Atvērt publicēto lapu ↗</a>";results.appendChild(d)})}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
-</script></body></html>
+</script>
+</body>
+</html>
