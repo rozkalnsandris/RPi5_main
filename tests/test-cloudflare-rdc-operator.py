@@ -253,7 +253,7 @@ class CloudflareRdcOperatorTests(unittest.TestCase):
         self.assertEqual(len({item["path"] for item in lanes.values()}), 3)
         self.assertTrue(lanes["access"]["implemented"])
         self.assertTrue(lanes["tunnel"]["implemented"])
-        self.assertFalse(lanes["dns"]["implemented"])
+        self.assertTrue(lanes["dns"]["implemented"])
         self.assertEqual(
             lanes["access"]["cloudflare_permission"],
             "Access: Apps and Policies Write",
@@ -267,7 +267,7 @@ class CloudflareRdcOperatorTests(unittest.TestCase):
             "ops/contracts/cloudflare-tunnel-operator-v1.json",
         )
         self.assertIn("same Tunnel-only credential", lanes["tunnel"]["credential_reuse"])
-        self.assertEqual(lanes["dns"]["scope"], "zone:rozkalns.net")
+        self.assertEqual(lanes["dns"]["scope"], "zone:ausmalwiese.de")
 
     def test_contract_freezes_unprivileged_installer_and_local_tty_secret_flow(self) -> None:
         contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
@@ -637,6 +637,312 @@ class AusmalwieseDnsTests(unittest.TestCase):
                 return {"result": [], "result_info": {"total_pages": 2}}
         with self.assertRaisesRegex(op.OperatorError, "dns_records_incomplete"):
             op._ausmalwiese_records(Paginated(), "b" * 32)
+
+
+class AusmalwieseAdminCutoverTests(unittest.TestCase):
+    ACCOUNT = "a" * 32
+    ZONE = "b" * 32
+    TUNNEL_ID = "11111111-1111-4111-8111-111111111111"
+    DASH_ID = "55555555-5555-4555-8555-555555555555"
+    ADMIN_ID = "66666666-6666-4666-8666-666666666666"
+    DNS_ID = "c" * 32
+
+    @staticmethod
+    def dash_app() -> dict:
+        return {
+            "id": AusmalwieseAdminCutoverTests.DASH_ID,
+            "name": "Dashboard",
+            "type": "self_hosted",
+            "destinations": [{"type": "public", "uri": "dash.rozkalns.net"}],
+            "aud": "dash-aud-private",
+        }
+
+    @staticmethod
+    def admin_app() -> dict:
+        return {
+            "id": AusmalwieseAdminCutoverTests.ADMIN_ID,
+            "name": "Ausmalwiese Admin",
+            "type": "self_hosted",
+            "destinations": [{"type": "public", "uri": "admin.ausmalwiese.de"}],
+            "aud": "admin-aud-private",
+        }
+
+    @staticmethod
+    def owner_policy(name: str = "owner-only") -> dict:
+        return {
+            "id": "77777777-7777-4777-8777-777777777777",
+            "name": name,
+            "decision": "allow",
+            "include": [{"email": {"email": "owner@example.invalid"}}],
+            "require": [],
+            "exclude": [],
+        }
+
+    def test_access_action_privately_reuses_dashboard_exact_owner_selector(self):
+        class FakeAccess:
+            def __init__(inner):
+                inner.created = []
+                inner.created_now = False
+
+            def list_applications(inner, account_id):
+                apps = [self.dash_app()]
+                if inner.created_now:
+                    apps.append(self.admin_app())
+                return apps
+
+            def list_application_policies(inner, account_id, app_id):
+                if app_id == self.DASH_ID:
+                    return [self.owner_policy("dashboard-owner")]
+                if app_id == self.ADMIN_ID:
+                    return [self.owner_policy("owner-only")]
+                raise AssertionError(app_id)
+
+            def create_application(inner, account_id, body):
+                inner.created.append(body)
+                inner.created_now = True
+                return self.admin_app()
+
+        client = FakeAccess()
+        dry = op.run_ausmalwiese_admin_access(
+            client, self.ACCOUNT, apply=False, expected_baseline=""
+        )
+        self.assertFalse(dry["applied"])
+        self.assertEqual(len(dry["baseline"]), 64)
+        self.assertEqual(client.created, [])
+
+        applied = op.run_ausmalwiese_admin_access(
+            client, self.ACCOUNT, apply=True, expected_baseline=dry["baseline"]
+        )
+        self.assertTrue(applied["applied"])
+        self.assertEqual(len(client.created), 1)
+        body = client.created[0]
+        self.assertEqual(body["name"], "Ausmalwiese Admin")
+        self.assertEqual(
+            body["destinations"],
+            [{"type": "public", "uri": "admin.ausmalwiese.de"}],
+        )
+        self.assertEqual(body["policies"][0]["decision"], "allow")
+        self.assertEqual(
+            body["policies"][0]["include"],
+            [{"email": {"email": "owner@example.invalid"}}],
+        )
+        self.assertEqual(body["policies"][0]["require"], [])
+        self.assertEqual(body["policies"][0]["exclude"], [])
+
+    def test_access_action_rejects_broad_dashboard_policy_and_existing_target(self):
+        class Broad:
+            def list_applications(inner, account_id):
+                return [self.dash_app()]
+
+            def list_application_policies(inner, account_id, app_id):
+                return [{
+                    "name": "dashboard-owner",
+                    "decision": "allow",
+                    "include": [{"everyone": {}}],
+                    "require": [],
+                    "exclude": [],
+                }]
+
+        with self.assertRaisesRegex(op.OperatorError, "admin_template_policy_invalid"):
+            op.run_ausmalwiese_admin_access(
+                Broad(), self.ACCOUNT, apply=False, expected_baseline=""
+            )
+
+        class Existing(Broad):
+            def list_applications(inner, account_id):
+                return [self.dash_app(), self.admin_app()]
+
+        with self.assertRaisesRegex(
+            op.OperatorError, "admin_target_application_already_exists"
+        ):
+            op.run_ausmalwiese_admin_access(
+                Existing(), self.ACCOUNT, apply=False, expected_baseline=""
+            )
+
+    def test_tunnel_action_adds_one_protected_loopback_route_before_catchall(self):
+        class Access:
+            def list_applications(inner, account_id):
+                return [self.admin_app()]
+
+            def list_application_policies(inner, account_id, app_id):
+                return [self.owner_policy()]
+
+            def _request(inner, method, path, body=None):
+                self.assertEqual(method, "GET")
+                self.assertTrue(path.endswith("/access/organizations"))
+                return {"result": {"name": "private-team"}}
+
+        class Tunnel:
+            def __init__(inner):
+                inner.config = {
+                    "ingress": [
+                        {
+                            "hostname": "ausmalwiese.de",
+                            "service": "http://127.0.0.1:9191",
+                        },
+                        {"service": "http_status:404"},
+                    ],
+                    "originRequest": {"connectTimeout": "10s"},
+                }
+                inner.put = []
+
+            def _request(inner, method, path, body=None):
+                if method == "GET" and "/cfd_tunnel?" in path:
+                    return {"result": [{
+                        "id": self.TUNNEL_ID,
+                        "name": "rpi5-tunnel",
+                        "config_src": "cloudflare",
+                    }]}
+                if method == "GET" and path.endswith("/configurations"):
+                    return {"result": {"config": inner.config}}
+                if method == "PUT":
+                    inner.put.append(body)
+                    inner.config = body["config"]
+                    return {"result": body}
+                raise AssertionError((method, path))
+
+        access, tunnel = Access(), Tunnel()
+        dry = op.run_ausmalwiese_admin_tunnel(
+            access, tunnel, self.ACCOUNT, apply=False, expected_baseline=""
+        )
+        self.assertFalse(dry["applied"])
+        self.assertEqual(tunnel.put, [])
+        applied = op.run_ausmalwiese_admin_tunnel(
+            access, tunnel, self.ACCOUNT, apply=True, expected_baseline=dry["baseline"]
+        )
+        self.assertTrue(applied["applied"])
+        self.assertEqual(len(tunnel.put), 1)
+        rules = tunnel.config["ingress"]
+        self.assertEqual(rules[-1], {"service": "http_status:404"})
+        admin = next(r for r in rules if r.get("hostname") == "admin.ausmalwiese.de")
+        self.assertEqual(admin["service"], "http://127.0.0.1:8765")
+        self.assertEqual(
+            admin["originRequest"]["access"],
+            {
+                "required": True,
+                "teamName": "private-team",
+                "audTag": ["admin-aud-private"],
+            },
+        )
+        self.assertEqual(tunnel.config["originRequest"], {"connectTimeout": "10s"})
+
+    def test_dns_action_requires_protected_route_and_creates_one_exact_cname(self):
+        class Tunnel:
+            def __init__(inner, protected=True):
+                access = {
+                    "required": True,
+                    "teamName": "private-team",
+                    "audTag": ["admin-aud-private"],
+                }
+                inner.config = {
+                    "ingress": [
+                        {
+                            "hostname": "admin.ausmalwiese.de",
+                            "service": "http://127.0.0.1:8765",
+                            "originRequest": {"access": access if protected else {}},
+                        },
+                        {"service": "http_status:404"},
+                    ]
+                }
+
+            def _request(inner, method, path, body=None):
+                if method == "GET" and "/cfd_tunnel?" in path:
+                    return {"result": [{
+                        "id": self.TUNNEL_ID,
+                        "name": "rpi5-tunnel",
+                        "config_src": "cloudflare",
+                    }]}
+                if method == "GET" and path.endswith("/configurations"):
+                    return {"result": {"config": inner.config}}
+                raise AssertionError((method, path))
+
+        class Dns:
+            def __init__(inner):
+                inner.records = []
+                inner.writes = []
+
+            def _request(inner, method, path, body=None):
+                if method == "GET" and path == f"/zones/{self.ZONE}":
+                    return {"result": {
+                        "id": self.ZONE,
+                        "name": "ausmalwiese.de",
+                        "status": "active",
+                        "account": {"id": self.ACCOUNT},
+                        "plan": {"legacy_id": "free"},
+                    }}
+                if method == "GET" and "/dns_records?" in path:
+                    return {
+                        "result": list(inner.records),
+                        "result_info": {"total_pages": 1},
+                    }
+                if method == "POST" and path == f"/zones/{self.ZONE}/dns_records":
+                    inner.writes.append(body)
+                    row = dict(body)
+                    row["id"] = self.DNS_ID
+                    inner.records.append(row)
+                    return {"result": row}
+                raise AssertionError((method, path))
+
+        with self.assertRaisesRegex(op.OperatorError, "admin_tunnel_route_invalid"):
+            op.run_ausmalwiese_admin_dns(
+                Dns(), Tunnel(False), self.ZONE, self.ACCOUNT,
+                apply=False, expected_baseline=""
+            )
+
+        dns, tunnel = Dns(), Tunnel(True)
+        dry = op.run_ausmalwiese_admin_dns(
+            dns, tunnel, self.ZONE, self.ACCOUNT,
+            apply=False, expected_baseline=""
+        )
+        self.assertFalse(dry["applied"])
+        self.assertEqual(dns.writes, [])
+        applied = op.run_ausmalwiese_admin_dns(
+            dns, tunnel, self.ZONE, self.ACCOUNT,
+            apply=True, expected_baseline=dry["baseline"]
+        )
+        self.assertTrue(applied["applied"])
+        self.assertEqual(len(dns.writes), 1)
+        self.assertEqual(dns.writes[0], {
+            "type": "CNAME",
+            "name": "admin.ausmalwiese.de",
+            "content": self.TUNNEL_ID + ".cfargotunnel.com",
+            "ttl": 1,
+            "proxied": True,
+        })
+
+    def test_cli_and_contract_freeze_three_one_write_actions(self):
+        for action in (
+            "ausmalwiese-admin-access",
+            "ausmalwiese-admin-tunnel",
+            "ausmalwiese-admin-dns",
+        ):
+            args = op.parse_args([action, "--expected-main", "a" * 40])
+            self.assertEqual(args.action, action)
+            self.assertFalse(args.apply)
+            self.assertEqual(args.expected_baseline, "")
+
+        contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
+        by_id = {item["id"]: item for item in contract["operations"]}
+        for op_id, method in (
+            ("ausmalwiese-admin-access-v1", "POST"),
+            ("ausmalwiese-admin-tunnel-v1", "PUT"),
+            ("ausmalwiese-admin-dns-v1", "POST"),
+        ):
+            self.assertEqual(by_id[op_id]["max_write_requests"], 1)
+            self.assertEqual(by_id[op_id]["cloudflare_method"], method)
+        self.assertFalse(
+            by_id["ausmalwiese-admin-access-v1"]["identity_source"]["emit_identity"]
+        )
+        self.assertEqual(
+            by_id["ausmalwiese-admin-tunnel-v1"]["origin"],
+            "http://127.0.0.1:8765",
+        )
+
+    def test_source_has_no_caller_selected_admin_hostname_or_origin(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        self.assertIn('ADMIN_HOSTNAME = "admin.ausmalwiese.de"', source)
+        self.assertIn('ADMIN_ORIGIN = "http://127.0.0.1:8765"', source)
+        self.assertNotIn('add_argument("hostname")', source[source.index("ausmalwiese-admin-access"):])
 
 if __name__ == "__main__":
     unittest.main()
