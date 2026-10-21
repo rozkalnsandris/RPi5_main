@@ -303,3 +303,31 @@ Fixed DNS actions `dns-ausmalwiese-apex` and `dns-ausmalwiese-www` each create *
 
 This is deliberately three individually owner-gated API writes, with no implicit all-at-once action. Source merge does not install source or mutate the public edge. No SEO canonical, Worker, QR, Access, WAF, DNSSEC or registrar changes are included. Reference: [DNS create API](https://developers.cloudflare.com/api/resources/dns/subresources/records/methods/create/), [Tunnel config PUT API](https://developers.cloudflare.com/api/resources/zero_trust/subresources/tunnels/subresources/cloudflared/subresources/configurations/methods/update/).
 
+## Ausmalwiese ADMIN cutover (#1153)
+
+This source-only extension prepares exactly `admin.ausmalwiese.de` for the already installed Ausmalwiese ADMIN publisher on `http://127.0.0.1:8765`. It does not perform the cutover and does not authorize Cloudflare writes.
+
+The cutover is deliberately split into three fixed one-write actions, in this order:
+
+1. `ausmalwiese-admin-access` — create one exact self-hosted Access application named `Ausmalwiese Admin` with one `owner-only` allow policy.
+2. `ausmalwiese-admin-tunnel` — insert one exact Tunnel ingress rule for `admin.ausmalwiese.de` to `http://127.0.0.1:8765`, with `originRequest.access.required=true`.
+3. `ausmalwiese-admin-dns` — create one proxied CNAME for `admin.ausmalwiese.de` to the existing same-account `rpi5-tunnel`.
+
+The Access action does not accept an owner email from argv, environment, chat, GitHub or RDC. It performs GET-only discovery of the existing exact `dash.rozkalns.net` application, requires exactly one allow policy with exactly one email selector and no broad/bypass selector, and privately reuses that exact selector for the new application. The identity value is never emitted or persisted by the operator.
+
+The Tunnel action uses the Access credential only for GET-only derivation of the exact new app AUD and Access organization team name. The Tunnel credential performs the single PUT. The private AUD/team values are not emitted. Access and Tunnel credentials must bind the same account.
+
+The DNS action is last. It refuses to create DNS until the exact Tunnel route exists with the fixed loopback origin and required Access protection. It then creates at most one proxied CNAME. This ordering avoids resolving the ADMIN hostname before the protected route exists.
+
+All three actions are dry-run by default and emit a sanitized deterministic baseline SHA-256. Apply requires the exact baseline and fixed confirmation token:
+
+```text
+CREATE-AUSMALWIESE-ADMIN-ACCESS
+ADD-AUSMALWIESE-ADMIN-TUNNEL
+CREATE-AUSMALWIESE-ADMIN-CNAME
+```
+
+No caller-selected hostname, origin, selector, endpoint, policy shape or request body exists. Each action permits at most one Cloudflare write. After a dispatched mutation, any transport ambiguity or post-write verification failure is STOP; there is no automatic retry, rollback, delete, cleanup or alternate write.
+
+Merging this source does not upgrade the installed operator. A later exact LIVE authorization must separately cover the reviewed operator upgrade and the bounded Cloudflare mutations. Secret provisioning, token creation/rotation, DNS/Tunnel/Access permissions, service lifecycle, application content and unrelated Cloudflare objects remain outside this source outcome.
+
