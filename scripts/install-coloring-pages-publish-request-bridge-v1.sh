@@ -53,6 +53,8 @@ DISPATCHER_DEST='/usr/local/bin/coloring-pages-publish-request-dispatcher'
 PATH_DEST='/etc/systemd/system/coloring-pages-publish-request-bridge.path'
 SERVICE_DEST='/etc/systemd/system/coloring-pages-publish-request-bridge.service'
 INGEST_DEST='/usr/local/bin/coloring-pages-drive-ingest'
+PREVIOUS_INGEST_BLOB='6aba3414af9cc484bde40171f6dd815485c18e22'
+PREVIOUS_DISPATCHER_BLOB='dd3c09f80b838f99def4228852627ce6d2ebab16'
 
 CONTENT_STATE='/srv/coloring-pages-content/state'
 BRIDGE_STATE="$CONTENT_STATE/publish-request-bridge"
@@ -96,14 +98,16 @@ for rel in "$DISPATCHER_REL" "$CONTRACT_REL" "$PATH_REL" "$SERVICE_REL" "$INGEST
         || fail "required source is missing or unsafe: $rel"
 done
 
-python3 - "$SOURCE_ROOT/$DISPATCHER_REL" "$SOURCE_ROOT/$CONTRACT_REL" <<'PY'
+python3 - "$SOURCE_ROOT/$DISPATCHER_REL" "$SOURCE_ROOT/$INGEST_REL" "$SOURCE_ROOT/$CONTRACT_REL" <<'PY'
 from pathlib import Path
 import json
 import sys
 
 dispatcher = Path(sys.argv[1])
-contract = Path(sys.argv[2])
+ingest = Path(sys.argv[2])
+contract = Path(sys.argv[3])
 compile(dispatcher.read_text(encoding="utf-8"), str(dispatcher), "exec")
+compile(ingest.read_text(encoding="utf-8"), str(ingest), "exec")
 data = json.loads(contract.read_text(encoding="utf-8"))
 if data.get("schema") != "rozkalns.rpi5-main.coloring-pages-publish-request-bridge.v1":
     raise SystemExit("bridge contract schema mismatch")
@@ -114,8 +118,24 @@ PY
 [[ "$(stat -c '%U:%G:%a' "$INGEST_DEST")" == 'root:root:755' ]] \
     || fail 'installed Drive ingest operator metadata mismatch'
 EXPECTED_INGEST_BLOB="$(owner_git rev-parse "HEAD:$INGEST_REL")"
-[[ "$(git hash-object "$INGEST_DEST")" == "$EXPECTED_INGEST_BLOB" ]] \
-    || fail 'installed Drive ingest operator identity mismatch'
+CURRENT_INGEST_BLOB="$(git hash-object "$INGEST_DEST")"
+case "$CURRENT_INGEST_BLOB" in
+    "$EXPECTED_INGEST_BLOB"|"$PREVIOUS_INGEST_BLOB") ;;
+    *) fail 'installed Drive ingest operator identity mismatch' ;;
+esac
+
+EXPECTED_DISPATCHER_BLOB="$(owner_git rev-parse "HEAD:$DISPATCHER_REL")"
+if [[ -e "$DISPATCHER_DEST" || -L "$DISPATCHER_DEST" ]]; then
+    [[ -f "$DISPATCHER_DEST" && ! -L "$DISPATCHER_DEST" ]] \
+        || fail 'installed dispatcher is unsafe'
+    [[ "$(stat -c '%U:%G:%a' "$DISPATCHER_DEST")" == 'root:root:755' ]] \
+        || fail 'installed dispatcher metadata mismatch'
+    CURRENT_DISPATCHER_BLOB="$(git hash-object "$DISPATCHER_DEST")"
+    case "$CURRENT_DISPATCHER_BLOB" in
+        "$EXPECTED_DISPATCHER_BLOB"|"$PREVIOUS_DISPATCHER_BLOB") ;;
+        *) fail 'installed dispatcher identity mismatch' ;;
+    esac
+fi
 
 [[ -d "$CONTENT_STATE" && ! -L "$CONTENT_STATE" ]] \
     || fail 'content state directory is missing or unsafe'
@@ -149,11 +169,17 @@ fi
 if [[ -n "$(find "$INCOMING" -maxdepth 1 -type f -name 'batch-*.ready' -print -quit)" ]]; then
     fail 'ready marker exists before bridge activation'
 fi
+if [[ -n "$(find "$INCOMING" -maxdepth 1 -type f -name 'batch-*.json' -print -quit)" ]]; then
+    fail 'request file exists before bridge activation'
+fi
 
-EXPECTED_DISPATCHER_BLOB="$(owner_git rev-parse "HEAD:$DISPATCHER_REL")"
+install -o root -g root -m 0755 "$SOURCE_ROOT/$INGEST_REL" "$INGEST_DEST"
+[[ "$(git hash-object "$INGEST_DEST")" == "$EXPECTED_INGEST_BLOB" ]] \
+    || fail 'installed Drive ingest operator identity mismatch after install'
+
 install -o root -g root -m 0755 "$SOURCE_ROOT/$DISPATCHER_REL" "$DISPATCHER_DEST"
 [[ "$(git hash-object "$DISPATCHER_DEST")" == "$EXPECTED_DISPATCHER_BLOB" ]] \
-    || fail 'installed dispatcher identity mismatch'
+    || fail 'installed dispatcher identity mismatch after install'
 
 install -o root -g root -m 0644 "$SOURCE_ROOT/$PATH_REL" "$PATH_DEST"
 install -o root -g root -m 0644 "$SOURCE_ROOT/$SERVICE_REL" "$SERVICE_DEST"
