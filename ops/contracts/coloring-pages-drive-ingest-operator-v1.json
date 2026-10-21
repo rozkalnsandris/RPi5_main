@@ -21,7 +21,8 @@
       "--id",
       "--expected-sha256",
       "--expected-size",
-      "--expected-page"
+      "--expected-page",
+      "--manifest-json"
     ]
   },
   "drive": {
@@ -39,7 +40,9 @@
     "copyto_allowed": false,
     "fast_list_allowed": false,
     "drive_mutation_allowed": false,
-    "workspace_conversion_allowed": false
+    "workspace_conversion_allowed": false,
+    "normal_publish_manifest_upload_required": false,
+    "inline_manifest_mode_drive_objects": "png-pages-only"
   },
   "staging": {
     "directory": "/srv/coloring-pages-content/state/drive-ingest",
@@ -59,7 +62,8 @@
     ],
     "streaming_model": "operator-opens-0600-file-as-andris-and-root-rclone-writes-inherited-stdout-fd",
     "automatic_partial_cleanup_after_failure": false,
-    "page_partial": "/srv/coloring-pages-content/state/drive-ingest/<id>-<index>.png.partial"
+    "page_partial": "/srv/coloring-pages-content/state/drive-ingest/<id>-<index>.png.partial",
+    "inline_manifest_persisted_path": "/srv/coloring-pages-content/state/drive-ingest/<id>.manifest.json"
   },
   "manifest": {
     "schema": "rozkalns.coloring-pages.drive-staging-manifest.v1",
@@ -108,7 +112,11 @@
       "page_indexes": "ascending-contiguous-from-1",
       "source_kind": "chatgpt-generated-png-set",
       "upload_readiness": "manifest-last"
-    }
+    },
+    "inline_manifest_json_allowed": true,
+    "inline_manifest_source": "publish-request-bridge",
+    "inline_manifest_requires_drive_manifest": false,
+    "inline_manifest_persisted_locally": true
   },
   "content": {
     "root": "/srv/coloring-pages-content",
@@ -207,7 +215,9 @@
     "changes_sudoers": false,
     "runs_rclone": false,
     "imports_content": false,
-    "changes_systemd": false
+    "changes_systemd": false,
+    "bridge_upgrade_source": "scripts/install-coloring-pages-publish-request-bridge-v1.sh",
+    "bridge_upgrade_installs_operator_and_dispatcher": true
   },
   "fail_closed": {
     "conditions": [

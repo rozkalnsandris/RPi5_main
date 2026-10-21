@@ -3,7 +3,7 @@
   "repository": "rozkalnsandris/RPi5_main",
   "issue": 1140,
   "status": "source-defined-not-installed",
-  "purpose": "Provide a fast bounded non-shell handoff from an owner-authorized Chat PUBLISH request to the existing Drive ingest operator after direct Google Drive staging.",
+  "purpose": "Provide a fast bounded non-shell handoff from owner-authorized Chat PUBLISH to the existing Drive ingest operator while carrying the validated manifest inline so normal publication needs only Drive PNG upload(s).",
   "authority": {
     "source_merge_authorizes_live": false,
     "source_merge_authorizes_install": false,
@@ -20,7 +20,9 @@
     "operator_argv_only": true,
     "operator_timeout_seconds": 180,
     "automatic_retry": false,
-    "automatic_cleanup": false
+    "automatic_cleanup": false,
+    "operator_supports_inline_manifest_json": true,
+    "normal_publish_drive_manifest_required": false
   },
   "handoff": {
     "state_root": "/srv/coloring-pages-content/state/publish-request-bridge",
@@ -36,7 +38,9 @@
     "claim_before_operator_execution": true,
     "claimed_requests_never_requeued_automatically": true,
     "maximum_request_bytes": 65536,
-    "maximum_activities": 20
+    "maximum_activities": 20,
+    "request_contains_manifest_metadata": true,
+    "request_contains_media_bytes": false
   },
   "request": {
     "schema": "rozkalns.rpi5-main.coloring-pages-publish-request.v1",
@@ -50,18 +54,24 @@
       "kind",
       "id",
       "expected_sha256",
-      "expected_size"
+      "expected_size",
+      "manifest"
     ],
     "v2_required": [
       "kind",
       "id",
-      "expected_pages"
+      "expected_pages",
+      "manifest"
     ],
     "maximum_v2_pages": 12,
     "maximum_source_bytes": 20971520,
     "sha256_pattern": "^[0-9a-f]{64}$",
     "unknown_fields": "reject",
-    "duplicate_activity_ids": "reject"
+    "duplicate_activity_ids": "reject",
+    "manifest_transport": "inline-json-object",
+    "manifest_maximum_bytes": 65536,
+    "manifest_must_match_activity_identity": true,
+    "normal_publish_drive_manifest_upload": false
   },
   "result": {
     "schema": "rozkalns.rpi5-main.coloring-pages-publish-request-result.v1",
@@ -106,7 +116,11 @@
     "runs_ingest_operator": false,
     "runs_rclone": false,
     "runs_docker": false,
-    "enables_path_unit": true
+    "enables_path_unit": true,
+    "installs_ingest_operator": true,
+    "installs_dispatcher": true,
+    "accepted_predecessor_ingest_blob": "6aba3414af9cc484bde40171f6dd815485c18e22",
+    "accepted_predecessor_dispatcher_blob": "dd3c09f80b838f99def4228852627ce6d2ebab16"
   },
   "forbidden": [
     "base64-media-transfer",
@@ -120,6 +134,7 @@
     "application-deploy",
     "automatic-retry",
     "automatic-request-requeue",
-    "automatic-cleanup"
+    "automatic-cleanup",
+    "normal-publish-drive-manifest-upload"
   ]
 }

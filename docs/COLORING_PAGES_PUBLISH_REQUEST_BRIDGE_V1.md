@@ -8,8 +8,8 @@ Normal path:
 
     PUBLISH
     -> prepare + validate A4 master(s)
-    -> upload PNG(s) + manifest(s) to Drive pending/
-    -> write one small request JSON
+    -> upload PNG page(s) only to Drive pending/
+    -> write one small request JSON containing the validated manifest(s)
     -> write one small ready marker
     -> existing coloring-pages-drive-ingest runs on RPi5
     -> read one small result JSON
@@ -51,12 +51,15 @@ SHA/size verification, immutable importer execution and public proof.
         batch-<32hex>.result.json
 
 All bridge state is non-secret and owned by andris. Requests contain only page
-IDs, hashes, sizes and ordered page identities.
+IDs, hashes, sizes, ordered page identities and the already-validated publication
+manifest metadata. They never contain PNG bytes or credentials.
 
 ## Chat handoff
 
-After every Drive PNG/manifest pair passes connector response/readback
-verification, PUBLISH creates one random 32-lowercase-hex batch_id.
+After every required Drive PNG page upload passes connector response/readback
+verification, PUBLISH creates one random 32-lowercase-hex batch_id. Normal
+PUBLISH does not upload a JSON manifest to Drive; that small manifest is carried
+inside the bridge request.
 
 The request file is written completely first. It uses schema
 rozkalns.rpi5-main.coloring-pages-publish-request.v1 and contains 1-20
@@ -67,11 +70,13 @@ A v1 activity contains:
 - id = exact seven-digit publication ID
 - expected_sha256 = exact 64-lowercase-hex print-master digest
 - expected_size = exact byte size
+- manifest = complete validated v1 manifest object matching the same ID/SHA/size
 
 A v2 activity contains:
 - kind = v2
 - id = exact seven-digit activity ID
 - expected_pages = 2-12 ordered entries with index, sha256 and size_bytes
+- manifest = complete validated v2 manifest object matching the same ordered pages
 
 Only after the complete request file exists, write the matching ready marker
 whose content is exactly the batch_id.
@@ -90,8 +95,9 @@ Before any ingest operator call, the dispatcher:
 2. verifies the ready marker matches the filename batch_id;
 3. moves the ready marker into claimed;
 4. moves the request into claimed;
-5. validates the complete strict JSON request;
-6. invokes /usr/local/bin/coloring-pages-drive-ingest using an argv array.
+5. validates the complete strict JSON request and each inline manifest;
+6. invokes /usr/local/bin/coloring-pages-drive-ingest using an argv array with
+   the manifest passed only as bounded `--manifest-json` data.
 
 Moving the ready marker first removes the automatic trigger. A claimed request
 is never moved back into incoming.
@@ -137,9 +143,10 @@ Source:
     scripts/install-coloring-pages-publish-request-bridge-v1.sh
 
 The installer is a separately owner-authorized LIVE operation. It requires an
-exact clean RPi5_main/main SHA, verifies the already-installed Drive ingest
-operator matches that exact source, creates only bounded bridge state, installs
-the dispatcher and two systemd units, and enables the path unit.
+exact clean RPi5_main/main SHA, accepts only the reviewed predecessor/current
+operator and dispatcher identities, creates only bounded bridge state, installs
+the exact current ingest operator plus dispatcher and two systemd units, and
+enables the path unit.
 
 It does not read/change credentials, change sudoers, upload to Drive, run
 rclone, run Docker, import content, deploy the application, or change network

@@ -4,26 +4,34 @@ on:
   pull_request:
     paths:
       - "ops/bin/coloring-pages-publish-request-dispatcher"
+      - "ops/bin/coloring-pages-drive-ingest"
+      - "ops/contracts/coloring-pages-drive-ingest-operator-v1.json"
       - "ops/contracts/coloring-pages-publish-request-bridge-v1.json"
       - "ops/contracts/simple-deploy-host-v1.json"
       - "ops/systemd/coloring-pages-publish-request-bridge.path"
       - "ops/systemd/coloring-pages-publish-request-bridge.service"
       - "scripts/install-coloring-pages-publish-request-bridge-v1.sh"
       - "tests/test-coloring-pages-publish-request-bridge-v1.py"
+      - "tests/test-coloring-pages-drive-ingest-operator-v1.py"
       - "docs/COLORING_PAGES_PUBLISH_REQUEST_BRIDGE_V1.md"
+      - "docs/COLORING_PAGES_DRIVE_INGEST_OPERATOR_V1.md"
       - ".github/workflows/ausmalwiese-publish-request-bridge-source.yml"
   push:
     branches:
       - main
     paths:
       - "ops/bin/coloring-pages-publish-request-dispatcher"
+      - "ops/bin/coloring-pages-drive-ingest"
+      - "ops/contracts/coloring-pages-drive-ingest-operator-v1.json"
       - "ops/contracts/coloring-pages-publish-request-bridge-v1.json"
       - "ops/contracts/simple-deploy-host-v1.json"
       - "ops/systemd/coloring-pages-publish-request-bridge.path"
       - "ops/systemd/coloring-pages-publish-request-bridge.service"
       - "scripts/install-coloring-pages-publish-request-bridge-v1.sh"
       - "tests/test-coloring-pages-publish-request-bridge-v1.py"
+      - "tests/test-coloring-pages-drive-ingest-operator-v1.py"
       - "docs/COLORING_PAGES_PUBLISH_REQUEST_BRIDGE_V1.md"
+      - "docs/COLORING_PAGES_DRIVE_INGEST_OPERATOR_V1.md"
       - ".github/workflows/ausmalwiese-publish-request-bridge-source.yml"
 
 permissions:
@@ -43,6 +51,9 @@ jobs:
       - name: Validate bounded publish request bridge
         run: |
           python3 ./tests/test-coloring-pages-publish-request-bridge-v1.py
+          python3 ./tests/test-coloring-pages-drive-ingest-operator-v1.py
           python3 -m py_compile ops/bin/coloring-pages-publish-request-dispatcher
+          python3 -m py_compile ops/bin/coloring-pages-drive-ingest
           python3 -m json.tool ops/contracts/coloring-pages-publish-request-bridge-v1.json >/dev/null
+          python3 -m json.tool ops/contracts/coloring-pages-drive-ingest-operator-v1.json >/dev/null
           bash -n scripts/install-coloring-pages-publish-request-bridge-v1.sh
