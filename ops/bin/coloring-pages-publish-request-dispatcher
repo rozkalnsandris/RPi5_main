@@ -420,7 +420,9 @@ def main(argv: list[str] | None = None) -> int:
                     f"batch_id={batch_id} error={exc}",
                     file=sys.stderr,
                 )
-                return 1
+                # The request was handled and a terminal FAIL result exists.
+                # Keep the oneshot service healthy for future independent batches.
+                return 0
             write_json_exclusive(result_path, result)
             print(
                 "COLORING_PAGES_PUBLISH_REQUEST=PASS "
