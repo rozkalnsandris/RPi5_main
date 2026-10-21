@@ -202,8 +202,8 @@ hostnames:
     protect_with_access: true
     app_jwt_validation: false
     lan_break_glass: false
-    audit_route_presence: absent
-    evidence: admin-publisher-loopback-ready-route-and-access-pending
+    audit_route_presence: present
+    evidence: admin-access-tunnel-dns-anonymous-browser-verified-owner-login-pending
 
   - hostname: control.rozkalns.net
     owner_repo: rozkalnsandris/rozkalns-control-center

@@ -19,31 +19,24 @@ The installed publisher remains bound to loopback. The public Ausmalwiese web ap
 
 ## Current source/runtime boundary
 
-The publisher was installed and its loopback HTTP endpoint was verified on 2026-10-21. That dated evidence is sufficient to register the desired loopback ADMIN origin, but it is not proof that an external route or Access application exists now.
+The ADMIN Cloudflare infrastructure cutover was completed and bounded verification was collected on 2026-10-21. Sanitized evidence established:
 
-Until the separate LIVE cutover succeeds, the hostname policy records `audit_route_presence: absent`.
+1. the publisher remained healthy on the reviewed loopback origin;
+2. one exact-host self-hosted Access application exists with exact-owner allow semantics and no bypass;
+3. the shared `rpi5-tunnel` carries the exact ADMIN hostname to the reviewed loopback publisher with Access protection required;
+4. one proxied DNS record exists for the exact ADMIN hostname and public DNS resolution succeeds;
+5. an anonymous browser is redirected to `Sign in · Cloudflare Access` instead of receiving ADMIN content;
+6. the public `ausmalwiese.de` site remains anonymously reachable.
 
-## Future LIVE cutover gate
+The hostname policy therefore records `audit_route_presence: present`.
 
-A future exact owner authorization must bind the then-current `RPi5_main` SHA and the exact target `admin.ausmalwiese.de`. Before the first Cloudflare mutation, collect a fresh read-only preflight proving:
+The owner-authenticated browser path to the ADMIN page was intentionally not exercised because the verification authorization explicitly forbade login. This remains an evidence gap only; it is not authority to change Access, Tunnel, DNS, service or credential state.
 
-1. the publisher service is still healthy on the reviewed loopback origin;
-2. the shared Tunnel is the intended delivery path;
-3. no conflicting exact hostname route exists;
-4. no conflicting or broader Access application would make the ADMIN hostname public or weaken unrelated hostnames;
-5. the public `ausmalwiese.de` site remains outside this ADMIN policy;
-6. the intended Access rule is exact-owner only, with no `Bypass` policy.
+## Current verification gate
 
-The bounded forward cutover is:
+Before making any future claim that the LIVE state is still current, collect fresh read-only evidence appropriate to that claim. If an owner-authenticated end-to-end browser verification is requested, it requires a separate explicit owner decision and must not expose owner identity, cookies or session material.
 
-1. create the exact Tunnel/DNS route for `admin.ausmalwiese.de` to the loopback publisher;
-2. create or reconcile one exact-host self-hosted Cloudflare Access application;
-3. attach one exact-owner allow policy and no bypass;
-4. verify unauthenticated external access is challenged or denied;
-5. verify the authorized owner browser reaches the ADMIN page;
-6. verify unrelated public Ausmalwiese endpoints remain anonymously reachable.
-
-Any failure or ambiguity after mutation starts is STOP unless rollback/retry was explicitly included in that future authorization.
+Any future Cloudflare, DNS, Tunnel, Access, service, credential or permission mutation remains separately exact owner-gated. Source merge does not authorize such changes.
 
 ## Evidence and privacy
 

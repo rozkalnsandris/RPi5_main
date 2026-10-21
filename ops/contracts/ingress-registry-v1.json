@@ -393,8 +393,8 @@
       "recovery_ref": "docs/AUSMALWIESE_ADMIN_INGRESS_V1.md",
       "last_verified_evidence": {
         "as_of": "2026-10-21",
-        "ref": "RPi5_main#1149",
-        "kind": "fresh-loopback-install-post-verify",
+        "ref": "RPi5_main#1157",
+        "kind": "fresh-admin-cutover-anonymous-and-origin-post-verify",
         "runtime_current": false
       }
     }

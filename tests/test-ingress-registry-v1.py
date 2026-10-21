@@ -172,10 +172,19 @@ class IngressRegistryV1Tests(unittest.TestCase):
         self.assertEqual(admin["access_class"], "ADMIN")
         self.assertEqual(admin["lan_break_glass"], "forbidden")
         self.assertEqual(admin["firewall_expectation"], "no-lan-origin-required")
-        self.assertFalse(admin["last_verified_evidence"]["runtime_current"])
+        evidence = admin["last_verified_evidence"]
+        self.assertFalse(evidence["runtime_current"])
+        self.assertEqual(evidence["as_of"], "2026-10-21")
+        self.assertEqual(evidence["ref"], "RPi5_main#1157")
+        self.assertEqual(
+            evidence["kind"], "fresh-admin-cutover-anonymous-and-origin-post-verify"
+        )
         self.assertIn("hostname: admin.ausmalwiese.de", self.hostname_policy)
         self.assertIn("access_application_scope: exact-owner", self.hostname_policy)
-        self.assertIn("audit_route_presence: absent", self.hostname_policy)
+        self.assertIn("audit_route_presence: present", self.hostname_policy)
+        self.assertIn(
+            "Owner-authenticated browser login remains unverified", self.doc
+        )
 
     def test_newer_hostname_policy_explicitly_resolves_hermes_zone(self) -> None:
         hermes = next(
