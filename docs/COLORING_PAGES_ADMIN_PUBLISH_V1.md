@@ -64,9 +64,29 @@ After committed imports the installed sitemap publisher is invoked only when its
 
 Final PASS requires local derivative checks plus HTTP 200 for catalog, thumb, preview, print and the detail page.
 
-## Failure model
+## Failure and recovery model
 
-No automatic retry, rollback, cleanup, overwrite or alternate publication path occurs after production mutation starts. If a later page in a ZIP fails, the job records the exact already-succeeded subset and stops.
+No automatic retry, requeue, rollback, cleanup, overwrite or alternate publication path occurs after production mutation starts. If a later page in a ZIP fails, the job records the exact already-succeeded subset and stops.
+
+The ADMIN browser persists only the active `job_id` in same-tab `sessionStorage`. Reloading the tab restores that server-side job and resumes status polling; the ZIP bytes and publication state remain server-side. If browser status polling hits a transient fetch/Access/network error, the UI keeps the current job visible and retries with bounded exponential backoff up to 10 seconds instead of permanently stopping after the first failed poll.
+
+The backend exposes `GET /api/jobs/active` for recovery when the same-tab key is unavailable. A POST that encounters one genuinely active job restores/returns that job instead of creating a second publication. The shared `fcntl.flock(... LOCK_EX|LOCK_NB)` remains the authoritative publication serialization boundary and is not weakened.
+
+At service startup, any persisted job still marked `queued` or `running` belongs to a previous process lifetime and is fail-closed to terminal `failed` with `interrupted=true` and source-controlled error `publication interrupted by service restart`. Existing `results` are preserved byte-for-byte in job state and rendered in the UI as the partial succeeded subset so the owner can see already imported/published IDs and avoid accidental duplicates. Startup reconciliation never retries, requeues, deletes, rolls back or cleans up content.
+
+## Diagnostic logs
+
+The ADMIN service writes privacy-bounded structured diagnostics to:
+
+```text
+/srv/coloring-pages-content/state/admin-publish/logs/admin-publish.log
+```
+
+The log directory is owned by `andris:andris` with mode `0700`; log files are mode `0600`. Python stdlib `logging.handlers.TimedRotatingFileHandler` rotates at UTC midnight. Rotation uses daily files, while explicit age pruning removes only files matching `admin-publish.log` or `admin-publish.log.YYYY-MM-DD` once they are older than seven days. Pruning runs at startup and around normal log emission so an idle service cannot retain stale ADMIN diagnostics indefinitely. No global `journald` retention setting is changed.
+
+Allowed log metadata is bounded to diagnostic identifiers and timings: UTC timestamp, severity, event, process id, job/upload id, page index/count, step name/status/duration, tool name, timeout/exit status, allocated public page id, sitemap/public-verification phase, terminal job status, stale-job reconciliation and partial result count.
+
+The logger never records request/response bodies, HTTP headers, cookies, Cloudflare Access identity/tokens, credentials/secrets, environment variables, ZIP/PNG bytes, raw file contents, wholesale subprocess stdout/stderr or unsanitized tracebacks. Logging initialization is fail-closed before the service accepts publication jobs; a safely initialized diagnostic log is therefore part of the ADMIN runtime preflight, not an optional debug side channel.
 
 ## LIVE gates
 

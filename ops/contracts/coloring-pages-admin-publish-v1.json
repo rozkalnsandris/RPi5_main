@@ -86,5 +86,62 @@
     "user": "andris",
     "image_ref": "ghcr.io/rozkalnsandris/coloring-pages@sha256:2a80b56c20c37f4a530059c3e438c6627fd962786e6590dd914e59e86a837ba8"
   },
-  "live_activation": "separate-owner-authorization"
+  "live_activation": "separate-owner-authorization",
+  "recovery": {
+    "active_job_discovery": "GET /api/jobs/active plus same-tab sessionStorage job id",
+    "reload": "restore-existing-job-and-resume-polling",
+    "transient_polling": "bounded-exponential-backoff-max-10s-no-permanent-stop",
+    "post_restart": "queued-or-running-persisted-jobs-become-failed-interrupted",
+    "preserve_partial_results": true,
+    "automatic_retry": false,
+    "automatic_requeue": false,
+    "automatic_rollback": false,
+    "automatic_cleanup": false
+  },
+  "diagnostics": {
+    "log_path": "/srv/coloring-pages-content/state/admin-publish/logs/admin-publish.log",
+    "directory_mode": "0700",
+    "file_mode": "0600",
+    "owner": "andris",
+    "rotation": {
+      "handler": "logging.handlers.TimedRotatingFileHandler",
+      "when": "midnight",
+      "interval_days": 1,
+      "backup_count": 7,
+      "utc": true,
+      "explicit_age_prune_days": 7,
+      "prune_scope": "admin-publish.log and admin-publish.log.YYYY-MM-DD only"
+    },
+    "allowed_metadata": [
+      "UTC timestamp",
+      "severity",
+      "event",
+      "pid",
+      "job id",
+      "upload id",
+      "page index/count",
+      "step name/status/duration",
+      "tool name",
+      "timeout/exit status",
+      "allocated page id",
+      "sitemap/public verification phase",
+      "terminal job status",
+      "stale-job reconciliation",
+      "partial succeeded-result count"
+    ],
+    "forbidden": [
+      "request or response bodies",
+      "HTTP headers",
+      "cookies",
+      "Cloudflare Access identity or tokens",
+      "credentials or secrets",
+      "environment variables",
+      "ZIP or PNG bytes",
+      "raw file contents",
+      "wholesale subprocess stdout or stderr",
+      "unsanitized traceback"
+    ],
+    "initialization": "fail-closed-before-publication-job-can-start",
+    "global_journald_retention_change": false
+  }
 }
