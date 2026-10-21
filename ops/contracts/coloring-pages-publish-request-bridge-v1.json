@@ -1,0 +1,125 @@
+{
+  "schema": "rozkalns.rpi5-main.coloring-pages-publish-request-bridge.v1",
+  "repository": "rozkalnsandris/RPi5_main",
+  "issue": 1140,
+  "status": "source-defined-not-installed",
+  "purpose": "Provide a fast bounded non-shell handoff from an owner-authorized Chat PUBLISH request to the existing Drive ingest operator after direct Google Drive staging.",
+  "authority": {
+    "source_merge_authorizes_live": false,
+    "source_merge_authorizes_install": false,
+    "source_merge_authorizes_publish": false,
+    "fresh_owner_publish_required_per_request": true,
+    "live_install_requires_separate_owner_authorization": true
+  },
+  "runtime": {
+    "execution_owner": "andris",
+    "dispatcher_source": "ops/bin/coloring-pages-publish-request-dispatcher",
+    "dispatcher_installed_path": "/usr/local/bin/coloring-pages-publish-request-dispatcher",
+    "operator_installed_path": "/usr/local/bin/coloring-pages-drive-ingest",
+    "shell_execution": false,
+    "operator_argv_only": true,
+    "operator_timeout_seconds": 180,
+    "automatic_retry": false,
+    "automatic_cleanup": false
+  },
+  "handoff": {
+    "state_root": "/srv/coloring-pages-content/state/publish-request-bridge",
+    "incoming": "incoming",
+    "claimed": "claimed",
+    "results": "results",
+    "lock": ".lock",
+    "request_name": "batch-<32-lowercase-hex>.json",
+    "ready_name": "batch-<same-32-lowercase-hex>.ready",
+    "result_name": "batch-<same-32-lowercase-hex>.result.json",
+    "request_must_be_written_before_ready_marker": true,
+    "ready_marker_is_trigger": true,
+    "claim_before_operator_execution": true,
+    "claimed_requests_never_requeued_automatically": true,
+    "maximum_request_bytes": 65536,
+    "maximum_activities": 20
+  },
+  "request": {
+    "schema": "rozkalns.rpi5-main.coloring-pages-publish-request.v1",
+    "batch_id_pattern": "^[0-9a-f]{32}$",
+    "activity_id_pattern": "^[0-9]{7}$",
+    "activity_kinds": [
+      "v1",
+      "v2"
+    ],
+    "v1_required": [
+      "kind",
+      "id",
+      "expected_sha256",
+      "expected_size"
+    ],
+    "v2_required": [
+      "kind",
+      "id",
+      "expected_pages"
+    ],
+    "maximum_v2_pages": 12,
+    "maximum_source_bytes": 20971520,
+    "sha256_pattern": "^[0-9a-f]{64}$",
+    "unknown_fields": "reject",
+    "duplicate_activity_ids": "reject"
+  },
+  "result": {
+    "schema": "rozkalns.rpi5-main.coloring-pages-publish-request-result.v1",
+    "fields": [
+      "schema",
+      "batch_id",
+      "result",
+      "succeeded",
+      "failed_id",
+      "error"
+    ],
+    "result_values": [
+      "PASS",
+      "FAIL"
+    ],
+    "operator_success_values": [
+      "PASS",
+      "ALREADY_PROCESSED"
+    ],
+    "sanitized_only": true
+  },
+  "systemd": {
+    "path_source": "ops/systemd/coloring-pages-publish-request-bridge.path",
+    "service_source": "ops/systemd/coloring-pages-publish-request-bridge.service",
+    "path_unit": "coloring-pages-publish-request-bridge.path",
+    "service_unit": "coloring-pages-publish-request-bridge.service",
+    "path_watches": "/srv/coloring-pages-content/state/publish-request-bridge/incoming/batch-*.ready",
+    "service_user": "andris",
+    "service_group": "andris",
+    "service_exec": "/usr/local/bin/coloring-pages-publish-request-dispatcher --once",
+    "service_timeout_seconds": 1800
+  },
+  "installer": {
+    "source": "scripts/install-coloring-pages-publish-request-bridge-v1.sh",
+    "exact_rpi5_main_sha_required": true,
+    "clean_main_checkout_required": true,
+    "requires_existing_ingest_operator": true,
+    "refuses_preexisting_ready_markers": true,
+    "changes_credentials": false,
+    "changes_sudoers": false,
+    "changes_network": false,
+    "runs_ingest_operator": false,
+    "runs_rclone": false,
+    "runs_docker": false,
+    "enables_path_unit": true
+  },
+  "forbidden": [
+    "base64-media-transfer",
+    "generic-shell-command-in-publish-happy-path",
+    "drive-upload",
+    "drive-delete-or-archive",
+    "credential-read-or-write",
+    "sudoers-change",
+    "network-or-cloudflare-change",
+    "docker-pull",
+    "application-deploy",
+    "automatic-retry",
+    "automatic-request-requeue",
+    "automatic-cleanup"
+  ]
+}
