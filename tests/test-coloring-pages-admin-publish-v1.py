@@ -52,6 +52,13 @@ class Tests(unittest.TestCase):
         self.assertNotIn("extractall(",source);self.assertNotIn('"0.0.0.0"',source);self.assertNotIn("rclone",source.lower())
         self.assertIn('HOST = "127.0.0.1"',source);self.assertIn("PUBLISH_LOCK",source)
         self.assertIn("VALIDATE_PRINT=PASS",source);self.assertIn("detail.html?id=",source)
+        prepare=source.index('run_tool(PRINT_MASTER, ["prepare"')
+        validate=source.index('run_tool(PRINT_MASTER, ["validate"')
+        allocate=source.index("ids = allocate_ids")
+        importer=source.index("output = run_tool(IMPORTER")
+        self.assertLess(prepare,validate)
+        self.assertLess(validate,allocate)
+        self.assertLess(allocate,importer)
 
 class StaticTests(unittest.TestCase):
     def test_assets_and_contract(self):
@@ -64,5 +71,21 @@ class StaticTests(unittest.TestCase):
         self.assertEqual(contract["publication"]["category_selection"],"explicit-owner-ui-selection")
         self.assertFalse(contract["publication"]["automatic_retry"])
         self.assertEqual(contract["publication"]["shared_lock"],"/srv/coloring-pages-content/state/drive-ingest/.lock")
+        self.assertEqual(contract["upload"]["archive_role"],"draft-png-handoff-only")
+        self.assertEqual(contract["upload"]["allowed_members"],"top-level-png-only-no-manifest-or-metadata-files")
+        gate=contract["publication"]["print_quality_gate"]
+        self.assertEqual(gate["execution_order"],["prepare-all","validate-all","allocate-ids","import"])
+        self.assertTrue(gate["fail_before_id_allocation_on_any_prepare_or_validate_failure"])
+        master=gate["prepared_master"]
+        self.assertEqual(master["portrait_px"],[2480,3508])
+        self.assertEqual(master["landscape_px"],[3508,2480])
+        self.assertEqual(master["mode"],"RGB-no-alpha")
+        self.assertEqual(master["dpi"],"approximately-300x300")
+        self.assertEqual(master["outer_border"],"#FFFFFF")
+        self.assertEqual(master["safe_margin_mm"],15)
+        self.assertEqual(master["safe_margin_px_at_300_dpi"],177)
+        self.assertEqual(master["safe_margin_color"],"#FFFFFF")
+        self.assertEqual(master["fit"],"aspect-ratio-preserving-centered")
+        self.assertEqual(contract["publication"]["zip_member_semantics"],"each-png-is-one-independent-single-page-activity")
 
 if __name__=="__main__":unittest.main()
