@@ -53,6 +53,14 @@ DNS_APPLY_CONFIRM_TEXT = "CREATE-AUSMALWIESE-CNAME"
 GSC_TXT_APPLY_CONFIRM_TEXT = "CREATE-AUSMALWIESE-GSC-TXT"
 GSC_TXT_CONTENT = "google-site-verification=CZx413pYLeISdNsik5g5cUSkztdsYyHCOUg2dASib7M"
 TUNNEL_APPLY_CONFIRM_TEXT = "ADD-AUSMALWIESE-TUNNEL-ROUTES"
+ADMIN_HOSTNAME = "admin.ausmalwiese.de"
+ADMIN_APP_NAME = "Ausmalwiese Admin"
+ADMIN_POLICY_NAME = "owner-only"
+ADMIN_TEMPLATE_HOSTNAME = "dash.rozkalns.net"
+ADMIN_ORIGIN = "http://127.0.0.1:8765"
+ADMIN_ACCESS_CONFIRM_TEXT = "CREATE-AUSMALWIESE-ADMIN-ACCESS"
+ADMIN_TUNNEL_CONFIRM_TEXT = "ADD-AUSMALWIESE-ADMIN-TUNNEL"
+ADMIN_DNS_CONFIRM_TEXT = "CREATE-AUSMALWIESE-ADMIN-CNAME"
 DYNAMIC_APP_FIELDS = {"created_at", "updated_at", "aud"}
 
 
@@ -123,6 +131,14 @@ def _sanitize_reason(value: str) -> str:
         "secret_parent_invalid",
         "secret_write_failed",
         "secret_post_write_verification_failed",
+        "account_binding_mismatch",
+        "admin_template_missing_or_ambiguous",
+        "admin_template_policy_invalid",
+        "admin_target_application_already_exists",
+        "admin_target_application_missing_or_ambiguous",
+        "admin_access_binding_invalid",
+        "admin_tunnel_route_conflict",
+        "admin_tunnel_route_invalid",
     }
     return value if value in allowed else "operator_error"
 
@@ -134,12 +150,13 @@ def _emit(
     mutation_performed: bool | None = False,
     write_attempted: bool = False,
     apply_ready: bool | None = None,
+    target_hostname: str = TARGET_HOSTNAME,
 ) -> None:
     payload: dict[str, Any] = {
         "schema_version": 1,
         "operator": "rpi5-cloudflare-access-operator-v1",
         "repository": REPOSITORY,
-        "target_hostname": TARGET_HOSTNAME,
+        "target_hostname": target_hostname,
         "result": result,
         "write_attempted": write_attempted,
         "mutation_performed": mutation_performed,
@@ -953,6 +970,356 @@ def run_operator(
     }
 
 
+
+def _exact_owner_selector(policy: dict[str, Any]) -> dict[str, Any]:
+    action = policy.get("decision", policy.get("action"))
+    include = policy.get("include")
+    require = policy.get("require", [])
+    exclude = policy.get("exclude", [])
+    if (
+        action != "allow"
+        or not isinstance(include, list)
+        or len(include) != 1
+        or not isinstance(include[0], dict)
+        or set(include[0]) != {"email"}
+        or require != []
+        or exclude != []
+    ):
+        raise OperatorError("admin_template_policy_invalid")
+    email_rule = include[0]["email"]
+    if isinstance(email_rule, str):
+        valid = bool(email_rule.strip())
+    elif isinstance(email_rule, dict):
+        value = email_rule.get("email")
+        valid = isinstance(value, str) and bool(value.strip()) and set(email_rule) == {"email"}
+    else:
+        valid = False
+    if not valid:
+        raise OperatorError("admin_template_policy_invalid")
+    return deepcopy(include[0])
+
+
+def _admin_access_preflight(
+    client: CloudflareClient,
+    account_id: str,
+) -> dict[str, Any]:
+    apps = client.list_applications(account_id)
+    if any(_matches_hostname(app, ADMIN_HOSTNAME) for app in apps):
+        raise OperatorError("admin_target_application_already_exists")
+    templates = [app for app in apps if _matches_root(app, ADMIN_TEMPLATE_HOSTNAME)]
+    if len(templates) != 1:
+        raise OperatorError("admin_template_missing_or_ambiguous")
+    template = templates[0]
+    template_id = template.get("id")
+    if (
+        template.get("type") != "self_hosted"
+        or not isinstance(template_id, str)
+        or not UUID_RE.fullmatch(template_id)
+    ):
+        raise OperatorError("admin_template_missing_or_ambiguous")
+    policies = client.list_application_policies(account_id, template_id)
+    if len(policies) != 1:
+        raise OperatorError("admin_template_policy_invalid")
+    owner_selector = _exact_owner_selector(policies[0])
+    preexisting = {
+        app["id"]: _stable_app_projection(app)
+        for app in apps
+        if isinstance(app.get("id"), str) and UUID_RE.fullmatch(app["id"])
+    }
+    baseline = _baseline({
+        "apps": preexisting,
+        "template_policy": policies[0],
+    })
+    return {
+        "baseline": baseline,
+        "owner_selector": owner_selector,
+        "preexisting_apps": preexisting,
+    }
+
+
+def _admin_access_create_body(owner_selector: dict[str, Any]) -> dict[str, Any]:
+    _exact_owner_selector({
+        "decision": "allow",
+        "include": [owner_selector],
+        "require": [],
+        "exclude": [],
+    })
+    return {
+        "name": ADMIN_APP_NAME,
+        "type": "self_hosted",
+        "destinations": [{"type": "public", "uri": ADMIN_HOSTNAME}],
+        "policies": [{
+            "name": ADMIN_POLICY_NAME,
+            "decision": "allow",
+            "include": [deepcopy(owner_selector)],
+            "require": [],
+            "exclude": [],
+        }],
+    }
+
+
+def _verify_admin_access_post_write(
+    before: dict[str, Any],
+    apps_after: list[dict[str, Any]],
+    policies: list[dict[str, Any]],
+    created_app_id: str,
+) -> None:
+    after_by_id = {
+        app.get("id"): app
+        for app in apps_after
+        if isinstance(app.get("id"), str) and UUID_RE.fullmatch(app["id"])
+    }
+    for app_id, projection in before["preexisting_apps"].items():
+        if app_id not in after_by_id:
+            raise OperatorError("preexisting_application_missing_after_write")
+        if _stable_app_projection(after_by_id[app_id]) != projection:
+            raise OperatorError("preexisting_application_changed_after_write")
+    exact = [app for app in apps_after if _matches_root(app, ADMIN_HOSTNAME)]
+    if len(exact) != 1:
+        raise OperatorError("admin_target_application_missing_or_ambiguous")
+    app = exact[0]
+    if (
+        app.get("id") != created_app_id
+        or app.get("name") != ADMIN_APP_NAME
+        or app.get("type") != "self_hosted"
+    ):
+        raise OperatorError("created_application_identity_mismatch")
+    if len(policies) != 1 or policies[0].get("name") != ADMIN_POLICY_NAME:
+        raise OperatorError("created_application_policy_shape_invalid")
+    observed_selector = _exact_owner_selector(policies[0])
+    if observed_selector != before["owner_selector"]:
+        raise OperatorError("created_application_policy_shape_invalid")
+
+
+def run_ausmalwiese_admin_access(
+    client: CloudflareClient,
+    account_id: str,
+    *,
+    apply: bool,
+    expected_baseline: str,
+) -> dict[str, Any]:
+    before = _admin_access_preflight(client, account_id)
+    if not apply:
+        return {"baseline": before["baseline"], "applied": False}
+    if expected_baseline != before["baseline"]:
+        raise OperatorError("baseline_mismatch")
+    created = client.create_application(
+        account_id,
+        _admin_access_create_body(before["owner_selector"]),
+    )
+    created_id = created.get("id")
+    if not isinstance(created_id, str) or not UUID_RE.fullmatch(created_id):
+        raise PostWriteError("cloudflare_write_shape_invalid")
+    try:
+        apps_after = client.list_applications(account_id)
+        policies = client.list_application_policies(account_id, created_id)
+        _verify_admin_access_post_write(before, apps_after, policies, created_id)
+    except OperatorError as exc:
+        raise PostWriteError(str(exc)) from exc
+    return {"baseline": before["baseline"], "applied": True}
+
+
+def _admin_access_binding(
+    client: CloudflareClient,
+    account_id: str,
+) -> dict[str, Any]:
+    apps = client.list_applications(account_id)
+    exact = [app for app in apps if _matches_root(app, ADMIN_HOSTNAME)]
+    if len(exact) != 1:
+        raise OperatorError("admin_target_application_missing_or_ambiguous")
+    app = exact[0]
+    app_id = app.get("id")
+    aud = app.get("aud")
+    if (
+        app.get("name") != ADMIN_APP_NAME
+        or app.get("type") != "self_hosted"
+        or not isinstance(app_id, str)
+        or not UUID_RE.fullmatch(app_id)
+        or not isinstance(aud, str)
+        or not aud
+        or len(aud) > 4096
+        or any(ch.isspace() for ch in aud)
+    ):
+        raise OperatorError("admin_access_binding_invalid")
+    policies = client.list_application_policies(account_id, app_id)
+    if len(policies) != 1 or policies[0].get("name") != ADMIN_POLICY_NAME:
+        raise OperatorError("admin_access_binding_invalid")
+    _exact_owner_selector(policies[0])
+    organization = client._request(
+        "GET",
+        f"/accounts/{account_id}/access/organizations",
+    ).get("result")
+    if not isinstance(organization, dict):
+        raise OperatorError("admin_access_binding_invalid")
+    team_name = organization.get("name")
+    if (
+        not isinstance(team_name, str)
+        or not team_name.strip()
+        or len(team_name) > 255
+        or any(ch.isspace() for ch in team_name)
+    ):
+        raise OperatorError("admin_access_binding_invalid")
+    return {
+        "team_name": team_name,
+        "aud": aud,
+        "private_baseline": _baseline({
+            "application": _stable_app_projection(app),
+            "policy": policies[0],
+            "organization_name": team_name,
+        }),
+    }
+
+
+def _prepared_admin_tunnel_config(
+    config: dict[str, Any],
+    *,
+    team_name: str,
+    aud: str,
+) -> dict[str, Any]:
+    rules = config.get("ingress")
+    if (
+        not isinstance(rules, list)
+        or not rules
+        or any(not isinstance(rule, dict) for rule in rules)
+        or rules[-1].get("hostname") not in (None, "")
+        or not isinstance(rules[-1].get("service"), str)
+    ):
+        raise OperatorError("tunnel_configuration_invalid")
+    if any(rule.get("hostname") == ADMIN_HOSTNAME for rule in rules):
+        raise OperatorError("admin_tunnel_route_conflict")
+    entry = {
+        "hostname": ADMIN_HOSTNAME,
+        "service": ADMIN_ORIGIN,
+        "originRequest": {
+            "access": {
+                "required": True,
+                "teamName": team_name,
+                "audTag": [aud],
+            }
+        },
+    }
+    desired = deepcopy(config)
+    desired["ingress"] = rules[:-1] + [entry] + [rules[-1]]
+    return desired
+
+
+def _admin_tunnel_entry_valid(config: dict[str, Any]) -> bool:
+    rules = config.get("ingress")
+    if not isinstance(rules, list):
+        return False
+    matches = [rule for rule in rules if isinstance(rule, dict) and rule.get("hostname") == ADMIN_HOSTNAME]
+    if len(matches) != 1:
+        return False
+    rule = matches[0]
+    origin = rule.get("originRequest")
+    access = origin.get("access") if isinstance(origin, dict) else None
+    aud = access.get("audTag") if isinstance(access, dict) else None
+    return (
+        rule.get("service") == ADMIN_ORIGIN
+        and isinstance(access, dict)
+        and access.get("required") is True
+        and isinstance(access.get("teamName"), str)
+        and bool(access["teamName"])
+        and isinstance(aud, list)
+        and len(aud) == 1
+        and isinstance(aud[0], str)
+        and bool(aud[0])
+    )
+
+
+def run_ausmalwiese_admin_tunnel(
+    access: CloudflareClient,
+    tunnel: CloudflareClient,
+    account_id: str,
+    *,
+    apply: bool,
+    expected_baseline: str,
+) -> dict[str, Any]:
+    binding = _admin_access_binding(access, account_id)
+    tunnel_id, config = _rpi5_tunnel(tunnel, account_id)
+    desired = _prepared_admin_tunnel_config(
+        config,
+        team_name=binding["team_name"],
+        aud=binding["aud"],
+    )
+    baseline = _baseline({
+        "tunnel_config": config,
+        "access_binding": binding["private_baseline"],
+    })
+    if not apply:
+        return {"baseline": baseline, "applied": False}
+    if expected_baseline != baseline:
+        raise OperatorError("baseline_mismatch")
+    tunnel._request(
+        "PUT",
+        f"/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations",
+        {"config": desired},
+    )
+    try:
+        _, observed = _rpi5_tunnel(tunnel, account_id)
+    except OperatorError as exc:
+        raise PostWriteError("admin_tunnel_route_invalid") from exc
+    if observed != desired or not _admin_tunnel_entry_valid(observed):
+        raise PostWriteError("admin_tunnel_route_invalid")
+    return {"baseline": baseline, "applied": True}
+
+
+def run_ausmalwiese_admin_dns(
+    dns: CloudflareClient,
+    tunnel: CloudflareClient,
+    zone_id: str,
+    account_id: str,
+    *,
+    apply: bool,
+    expected_baseline: str,
+) -> dict[str, Any]:
+    zone = _ausmalwiese_zone(dns, zone_id)
+    if zone["account"].get("id") != account_id:
+        raise OperatorError("account_binding_mismatch")
+    tunnel_id, config = _rpi5_tunnel(tunnel, account_id)
+    if not _admin_tunnel_entry_valid(config):
+        raise OperatorError("admin_tunnel_route_invalid")
+    records = _ausmalwiese_records(dns, zone_id)
+    if any(str(row.get("name", "")).lower().rstrip(".") == ADMIN_HOSTNAME for row in records):
+        raise OperatorError("dns_record_conflict")
+    baseline = _baseline({"dns_records": records, "tunnel_config": config})
+    if not apply:
+        return {"baseline": baseline, "applied": False}
+    if expected_baseline != baseline:
+        raise OperatorError("baseline_mismatch")
+    body = {
+        "type": "CNAME",
+        "name": ADMIN_HOSTNAME,
+        "content": tunnel_id + ".cfargotunnel.com",
+        "ttl": 1,
+        "proxied": True,
+    }
+    response = dns._request("POST", f"/zones/{zone_id}/dns_records", body)
+    created = response.get("result")
+    created_id = created.get("id") if isinstance(created, dict) else None
+    if not isinstance(created_id, str) or not ACCOUNT_ID_RE.fullmatch(created_id):
+        raise PostWriteError("cloudflare_write_shape_invalid")
+    try:
+        after = _ausmalwiese_records(dns, zone_id)
+    except OperatorError as exc:
+        raise PostWriteError("cloudflare_write_shape_invalid") from exc
+    matching = [
+        row for row in after
+        if row.get("id") == created_id
+        and str(row.get("name", "")).lower().rstrip(".") == ADMIN_HOSTNAME
+    ]
+    if (
+        len(matching) != 1
+        or matching[0].get("type") != "CNAME"
+        or matching[0].get("content") != body["content"]
+        or matching[0].get("proxied") is not True
+        or _baseline([row for row in after if row.get("id") != created_id])
+        != _baseline(records)
+    ):
+        raise PostWriteError("cloudflare_write_shape_invalid")
+    return {"baseline": baseline, "applied": True}
+
+
 def _checkout_git(
     checkout_path: Path,
     args: list[str],
@@ -1117,6 +1484,17 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         command.add_argument("--expected-baseline", default="")
         command.add_argument("--confirm", default="")
 
+    for name in (
+        "ausmalwiese-admin-access",
+        "ausmalwiese-admin-tunnel",
+        "ausmalwiese-admin-dns",
+    ):
+        command = subparsers.add_parser(name)
+        command.add_argument("--expected-main", required=True)
+        command.add_argument("--apply", action="store_true")
+        command.add_argument("--expected-baseline", default="")
+        command.add_argument("--confirm", default="")
+
     gsc_txt = subparsers.add_parser("dns-ausmalwiese-gsc-txt")
     gsc_txt.add_argument("--expected-main", required=True)
     gsc_txt.add_argument("--apply", action="store_true")
@@ -1130,8 +1508,18 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
+    output_target = (
+        ADMIN_HOSTNAME
+        if args.action.startswith("ausmalwiese-admin-")
+        else TARGET_HOSTNAME
+    )
     if os.geteuid() != 0:
-        _emit("BLOCKED", reason="root_required", apply_ready=False)
+        _emit(
+            "BLOCKED",
+            reason="root_required",
+            apply_ready=False,
+            target_hostname=output_target,
+        )
         return 2
 
     operator_path = Path(sys.argv[0]).resolve()
@@ -1206,6 +1594,86 @@ def main(argv: list[str] | None = None) -> int:
                               "mutation_performed": report["applied"]}, sort_keys=True))
             return 0
 
+        if args.action == "ausmalwiese-admin-access":
+            if args.apply and (
+                args.confirm != ADMIN_ACCESS_CONFIRM_TEXT
+                or not re.fullmatch(r"[0-9a-f]{64}", args.expected_baseline)
+            ):
+                raise OperatorError("apply_confirmation_missing")
+            account_id, access_token = load_access_credentials()
+            report = run_ausmalwiese_admin_access(
+                CloudflareClient(access_token),
+                account_id,
+                apply=args.apply,
+                expected_baseline=args.expected_baseline,
+            )
+            access_token = ""
+            print(json.dumps({
+                "operation": args.action,
+                "target_hostname": ADMIN_HOSTNAME,
+                "result": "PASS",
+                "baseline_sha256": report["baseline"],
+                "mutation_performed": report["applied"],
+                "privacy": {"owner_identity_emitted": False, "aud_emitted": False},
+            }, sort_keys=True))
+            return 0
+
+        if args.action == "ausmalwiese-admin-tunnel":
+            if args.apply and (
+                args.confirm != ADMIN_TUNNEL_CONFIRM_TEXT
+                or not re.fullmatch(r"[0-9a-f]{64}", args.expected_baseline)
+            ):
+                raise OperatorError("apply_confirmation_missing")
+            access_account_id, access_token = load_access_credentials()
+            tunnel_account_id, tunnel_token = load_tunnel_credentials()
+            if access_account_id != tunnel_account_id:
+                raise OperatorError("account_binding_mismatch")
+            report = run_ausmalwiese_admin_tunnel(
+                CloudflareClient(access_token),
+                CloudflareClient(tunnel_token),
+                access_account_id,
+                apply=args.apply,
+                expected_baseline=args.expected_baseline,
+            )
+            access_token = ""
+            tunnel_token = ""
+            print(json.dumps({
+                "operation": args.action,
+                "target_hostname": ADMIN_HOSTNAME,
+                "result": "PASS",
+                "baseline_sha256": report["baseline"],
+                "mutation_performed": report["applied"],
+                "privacy": {"owner_identity_emitted": False, "aud_emitted": False, "team_name_emitted": False},
+            }, sort_keys=True))
+            return 0
+
+        if args.action == "ausmalwiese-admin-dns":
+            if args.apply and (
+                args.confirm != ADMIN_DNS_CONFIRM_TEXT
+                or not re.fullmatch(r"[0-9a-f]{64}", args.expected_baseline)
+            ):
+                raise OperatorError("apply_confirmation_missing")
+            zone_id, dns_token = load_dns_credentials()
+            account_id, tunnel_token = load_tunnel_credentials()
+            report = run_ausmalwiese_admin_dns(
+                CloudflareClient(dns_token),
+                CloudflareClient(tunnel_token),
+                zone_id,
+                account_id,
+                apply=args.apply,
+                expected_baseline=args.expected_baseline,
+            )
+            dns_token = ""
+            tunnel_token = ""
+            print(json.dumps({
+                "operation": args.action,
+                "target_hostname": ADMIN_HOSTNAME,
+                "result": "PASS",
+                "baseline_sha256": report["baseline"],
+                "mutation_performed": report["applied"],
+            }, sort_keys=True))
+            return 0
+
         if args.action == "phase7-ingress-drift-audit":
             checkout_value = release.get("checkout_path")
             if not isinstance(checkout_value, str):
@@ -1243,6 +1711,7 @@ def main(argv: list[str] | None = None) -> int:
             mutation_performed=None,
             write_attempted=True,
             apply_ready=False,
+            target_hostname=output_target,
         )
         return 4
     except PostWriteError as exc:
@@ -1252,6 +1721,7 @@ def main(argv: list[str] | None = None) -> int:
             mutation_performed=True,
             write_attempted=True,
             apply_ready=False,
+            target_hostname=output_target,
         )
         return 5
     except SecretProvisionError as exc:
@@ -1273,6 +1743,7 @@ def main(argv: list[str] | None = None) -> int:
             mutation_performed=False,
             write_attempted=False,
             apply_ready=False,
+            target_hostname=output_target,
         )
         return 3
 
@@ -1281,6 +1752,7 @@ def main(argv: list[str] | None = None) -> int:
         mutation_performed=bool(result["mutation_performed"]),
         write_attempted=bool(args.apply),
         apply_ready=bool(result["apply_ready"]),
+        target_hostname=output_target,
     )
     return 0
 
