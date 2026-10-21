@@ -205,7 +205,7 @@ class InstallerSourceTests(unittest.TestCase):
             src,
         )
         self.assertIn(
-            'SOURCE_BLOB = "c8efbf2a1a71771c689319071a1bcd9317d52569"',
+            'SOURCE_BLOB = "568a9a0bd244c0adf44f3957bb76eb68a3e61007"',
             src,
         )
         self.assertIn(
