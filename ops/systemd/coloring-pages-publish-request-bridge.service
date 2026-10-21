@@ -1,0 +1,15 @@
+# SOURCE-ONLY. Install/enable only with separate explicit owner LIVE authorization.
+[Unit]
+Description=Process one Ausmalwiese bounded publish request
+Documentation=https://github.com/rozkalnsandris/RPi5_main/issues/1140
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=andris
+Group=andris
+UMask=0077
+Environment=HOME=/home/andris
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/local/bin/coloring-pages-publish-request-dispatcher --once
+TimeoutStartSec=1800
