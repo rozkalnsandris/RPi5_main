@@ -40,7 +40,27 @@ MAX_REQUEST_BYTES = 64 * 1024
 MAX_ACTIVITIES = 20
 MAX_PAGES = 12
 MAX_SOURCE_BYTES = 20 * 1024 * 1024
+MAX_MANIFEST_BYTES = 64 * 1024
 OPERATOR_TIMEOUT_SECONDS = 180
+
+MANIFEST_SCHEMA_V1 = "rozkalns.coloring-pages.drive-staging-manifest.v1"
+MANIFEST_SCHEMA_V2 = "rozkalns.coloring-pages.drive-staging-manifest.v2"
+MANIFEST_KEYS_V1 = {
+    "schema", "id", "sha256", "size_bytes", "title", "character",
+    "category", "age", "difficulty", "language", "source_kind",
+    "approval_class",
+}
+MANIFEST_KEYS_V2 = {
+    "schema", "id", "pages", "title", "character", "category", "age",
+    "difficulty", "language", "source_kind", "approval_class",
+}
+PAGE_KEYS_V2 = {"index", "file", "sha256", "size_bytes"}
+ALLOWED_AGES = {"3-6", "4-8"}
+ALLOWED_DIFFICULTIES = {"easy", "normal", "detailed"}
+ALLOWED_LANGUAGES = {"de"}
+ALLOWED_CATEGORIES = {
+    "tiere", "fahrzeuge", "alphabet", "lernen", "figuren", "jahreszeiten"
+}
 
 
 class BridgeError(RuntimeError):
@@ -115,6 +135,109 @@ def load_request(path: Path) -> dict[str, Any]:
     return value
 
 
+def validate_manifest_text(
+    value: Any,
+    *,
+    name: str,
+    allow_empty: bool = False,
+) -> str:
+    if not isinstance(value, str) or len(value) > 128:
+        fail(f"invalid-manifest-{name}")
+    if any(ord(char) < 32 or ord(char) == 127 for char in value):
+        fail(f"invalid-manifest-{name}")
+    if not allow_empty and not value.strip():
+        fail(f"invalid-manifest-{name}")
+    return value
+
+
+def validate_manifest_payload(
+    manifest: Any,
+    *,
+    kind: str,
+    page_id: str,
+    expected_sha256: str | None = None,
+    expected_size: int | None = None,
+    expected_pages: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    if not isinstance(manifest, dict):
+        fail("manifest-not-object")
+
+    if kind == "v1":
+        if set(manifest) != MANIFEST_KEYS_V1:
+            fail("invalid-v1-manifest-fields")
+        if (
+            manifest.get("schema") != MANIFEST_SCHEMA_V1
+            or manifest.get("id") != page_id
+            or manifest.get("sha256") != expected_sha256
+            or manifest.get("size_bytes") != expected_size
+            or manifest.get("source_kind") != "chatgpt-generated-png"
+            or manifest.get("approval_class") != "explicit-owner-chat-approval"
+        ):
+            fail("v1-manifest-identity-mismatch")
+    elif kind == "v2":
+        if set(manifest) != MANIFEST_KEYS_V2:
+            fail("invalid-v2-manifest-fields")
+        if (
+            manifest.get("schema") != MANIFEST_SCHEMA_V2
+            or manifest.get("id") != page_id
+            or manifest.get("source_kind") != "chatgpt-generated-png-set"
+            or manifest.get("approval_class") != "explicit-owner-chat-approval"
+        ):
+            fail("v2-manifest-identity-mismatch")
+        manifest_pages = manifest.get("pages")
+        if not isinstance(manifest_pages, list) or expected_pages is None:
+            fail("invalid-v2-manifest-pages")
+        expected_manifest_pages = [
+            {
+                "index": page["index"],
+                "file": f"{page_id}-{page['index']}.png",
+                "sha256": page["sha256"],
+                "size_bytes": page["size_bytes"],
+            }
+            for page in expected_pages
+        ]
+        if manifest_pages != expected_manifest_pages:
+            fail("v2-manifest-pages-mismatch")
+        if any(not isinstance(page, dict) or set(page) != PAGE_KEYS_V2 for page in manifest_pages):
+            fail("invalid-v2-manifest-page-fields")
+    else:
+        fail("unsupported-manifest-kind")
+
+    title = validate_manifest_text(manifest.get("title"), name="title")
+    validate_manifest_text(
+        manifest.get("character"),
+        name="character",
+        allow_empty=True,
+    )
+    category = validate_manifest_text(manifest.get("category"), name="category")
+    age = validate_manifest_text(manifest.get("age"), name="age")
+    difficulty = validate_manifest_text(
+        manifest.get("difficulty"),
+        name="difficulty",
+    )
+    language = validate_manifest_text(manifest.get("language"), name="language")
+    if not title:
+        fail("invalid-manifest-title")
+    if category not in ALLOWED_CATEGORIES:
+        fail("unsupported-manifest-category")
+    if age not in ALLOWED_AGES:
+        fail("unsupported-manifest-age")
+    if difficulty not in ALLOWED_DIFFICULTIES:
+        fail("unsupported-manifest-difficulty")
+    if language not in ALLOWED_LANGUAGES:
+        fail("unsupported-manifest-language")
+
+    encoded = json.dumps(
+        manifest,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    if not encoded or len(encoded) > MAX_MANIFEST_BYTES:
+        fail("manifest-size-out-of-range")
+    return manifest
+
+
 def validate_request(value: dict[str, Any], batch_id: str) -> list[dict[str, Any]]:
     if set(value) != {"schema", "batch_id", "activities"}:
         fail("invalid-request-fields")
@@ -138,7 +261,9 @@ def validate_request(value: dict[str, Any], batch_id: str) -> list[dict[str, Any
         seen_ids.add(page_id)
 
         if kind == "v1":
-            if set(activity) != {"kind", "id", "expected_sha256", "expected_size"}:
+            if set(activity) != {
+                "kind", "id", "expected_sha256", "expected_size", "manifest"
+            }:
                 fail("invalid-v1-fields")
             sha = activity["expected_sha256"]
             size = activity["expected_size"]
@@ -146,18 +271,26 @@ def validate_request(value: dict[str, Any], batch_id: str) -> list[dict[str, Any
                 fail("invalid-v1-sha256")
             if type(size) is not int or not 1 <= size <= MAX_SOURCE_BYTES:
                 fail("invalid-v1-size")
+            manifest = validate_manifest_payload(
+                activity["manifest"],
+                kind="v1",
+                page_id=page_id,
+                expected_sha256=sha,
+                expected_size=size,
+            )
             checked.append(
                 {
                     "kind": "v1",
                     "id": page_id,
                     "expected_sha256": sha,
                     "expected_size": size,
+                    "manifest": manifest,
                 }
             )
             continue
 
         if kind == "v2":
-            if set(activity) != {"kind", "id", "expected_pages"}:
+            if set(activity) != {"kind", "id", "expected_pages", "manifest"}:
                 fail("invalid-v2-fields")
             pages = activity["expected_pages"]
             if not isinstance(pages, list) or not 2 <= len(pages) <= MAX_PAGES:
@@ -179,8 +312,19 @@ def validate_request(value: dict[str, Any], batch_id: str) -> list[dict[str, Any
                 checked_pages.append(
                     {"index": expected_index, "sha256": sha, "size_bytes": size}
                 )
+            manifest = validate_manifest_payload(
+                activity["manifest"],
+                kind="v2",
+                page_id=page_id,
+                expected_pages=checked_pages,
+            )
             checked.append(
-                {"kind": "v2", "id": page_id, "expected_pages": checked_pages}
+                {
+                    "kind": "v2",
+                    "id": page_id,
+                    "expected_pages": checked_pages,
+                    "manifest": manifest,
+                }
             )
             continue
 
@@ -192,17 +336,27 @@ def validate_request(value: dict[str, Any], batch_id: str) -> list[dict[str, Any
 def operator_argv(activity: dict[str, Any]) -> list[str]:
     argv = [OPERATOR, "--id", activity["id"]]
     if activity["kind"] == "v1":
-        return argv + [
+        argv += [
             "--expected-sha256",
             activity["expected_sha256"],
             "--expected-size",
             str(activity["expected_size"]),
         ]
-    for page in activity["expected_pages"]:
-        argv += [
-            "--expected-page",
-            f"{page['index']}:{page['sha256']}:{page['size_bytes']}",
-        ]
+    else:
+        for page in activity["expected_pages"]:
+            argv += [
+                "--expected-page",
+                f"{page['index']}:{page['sha256']}:{page['size_bytes']}",
+            ]
+    argv += [
+        "--manifest-json",
+        json.dumps(
+            activity["manifest"],
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ),
+    ]
     return argv
 
 
