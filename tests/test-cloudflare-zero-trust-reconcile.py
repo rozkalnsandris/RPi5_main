@@ -405,7 +405,7 @@ class CloudflareP0Tests(unittest.TestCase):
             registry["control.rozkalns.net"].audit_route_presence, "not-applicable"
         )
         self.assertEqual(
-            registry["admin.ausmalwiese.de"].audit_route_presence, "absent"
+            registry["admin.ausmalwiese.de"].audit_route_presence, "present"
         )
         for hostname, item in registry.items():
             if item.delivery != "shared_rpi5_tunnel":
