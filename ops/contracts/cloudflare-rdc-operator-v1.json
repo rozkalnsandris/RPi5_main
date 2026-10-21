@@ -182,13 +182,16 @@
       "cloudflare_endpoint": "/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations",
       "max_write_requests": 1,
       "credentials": [
-        "existing root-owned Access-only credential for GET-only app/policy/organization binding",
+        "existing root-owned Access-only credential for GET-only exact admin app/policy binding",
         "existing root-owned Tunnel-only credential for GET/PUT of exactly rpi5-tunnel"
       ],
       "preflight": [
         "Access and Tunnel credentials bind the same account",
         "exact Ausmalwiese Admin application and exact-owner policy exist",
-        "Access application AUD and organization team name are privately derived and never emitted",
+        "Access application AUD is privately derived and never emitted",
+        "exactly one dash.rozkalns.net Tunnel route exists and is already protect-with-access enabled",
+        "dashboard Tunnel route carries required=true, one non-empty private teamName and at least one non-empty AUD tag",
+        "the dashboard teamName is reused privately without Access organization API access",
         "exact admin Tunnel route is absent",
         "catchall remains last",
         "private Access binding plus full Tunnel config are bound to a deterministic SHA-256 baseline"
@@ -197,15 +200,17 @@
         "insert exactly one admin.ausmalwiese.de ingress before catchall",
         "service exactly http://127.0.0.1:8765",
         "originRequest.access.required=true",
-        "originRequest.access.teamName=private-current-team-name",
+        "originRequest.access.teamName=private-teamName-from-exact-dashboard-tunnel-route",
         "originRequest.access.audTag=[private-exact-admin-app-aud]"
       ],
       "post_write": [
         "fresh Tunnel GET equals the exact prepared config",
         "admin route is loopback and protect-with-access is present",
-        "all unrelated ingress entries and catchall are unchanged"
+        "all unrelated ingress entries including the dashboard team anchor and catchall are unchanged"
       ],
-      "recovery": "After PUT dispatch, any error or ambiguity is STOP_ERROR; no retry, rollback, cleanup or alternate config write."
+      "recovery": "After PUT dispatch, any error or ambiguity is STOP_ERROR; no retry, rollback, cleanup or alternate config write.",
+      "organization_api_dependency": false,
+      "team_name_source": "exact dash.rozkalns.net originRequest.access.teamName from the same rpi5-tunnel configuration"
     },
     {
       "id": "ausmalwiese-admin-dns-v1",
