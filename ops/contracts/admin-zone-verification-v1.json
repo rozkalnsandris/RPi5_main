@@ -26,7 +26,8 @@
       "adguard-ui",
       "uptime-kuma",
       "prometheus",
-      "dashboard-rpi5"
+      "dashboard-rpi5",
+      "ausmalwiese-admin-publisher"
     ],
     "expected_hostnames": [
       "hermes.rozkalns.net",
@@ -36,7 +37,8 @@
       "adguard.rozkalns.net",
       "kuma.rozkalns.net",
       "prometheus.rozkalns.net",
-      "dash.rozkalns.net"
+      "dash.rozkalns.net",
+      "admin.ausmalwiese.de"
     ]
   },
   "policy_semantics": {
@@ -143,6 +145,15 @@
       "lan_break_glass": "forbidden",
       "runtime_owner": "rozkalnsandris/RPi5_main",
       "recovery_ref": "docs/V13_CLOUDFLARE_TUNNEL_OWNERSHIP_CONTRACT.md"
+    },
+    {
+      "service_id": "ausmalwiese-admin-publisher",
+      "hostname": "admin.ausmalwiese.de",
+      "expected_access_application_scope": "exact-owner",
+      "expected_origin_class": "loopback",
+      "lan_break_glass": "forbidden",
+      "runtime_owner": "rozkalnsandris/RPi5_main",
+      "recovery_ref": "docs/AUSMALWIESE_ADMIN_INGRESS_V1.md"
     }
   ],
   "evidence_schema": {

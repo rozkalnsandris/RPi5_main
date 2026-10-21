@@ -72,6 +72,10 @@ class Phase4AdminAuthorizedPathVerifierTests(unittest.TestCase):
             "ops/contracts/cloudflare-p1d-browser-sso.json",
         )
         self.assertTrue(gate["all_admin_services_pass_required"])
+        self.assertEqual(
+            self.contract["manual_canary"]["expected_service_count"],
+            len(self.projections),
+        )
         self.assertFalse(gate["operator_reads_browser_profile_or_session_material"])
         self.assertFalse(gate["source_merge_authorizes_execution"])
 
@@ -79,7 +83,7 @@ class Phase4AdminAuthorizedPathVerifierTests(unittest.TestCase):
         services = receipt.validate_submission(self.submission(), self.projections, "a" * 40)
         report = receipt.build_report("a" * 40, services)
         self.assertEqual(report["result"], "PASS")
-        self.assertEqual(len(report["services"]), 8)
+        self.assertEqual(len(report["services"]), len(self.projections))
         self.assertEqual(
             set(report["services"][0]),
             {"service_id", "hostname", "authorized_admin_result", "result"},

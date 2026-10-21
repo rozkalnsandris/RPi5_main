@@ -100,14 +100,15 @@ class Phase4AdminRouteOriginTests(unittest.TestCase):
         config = good_config(self.contract)
         report = route.build_report(self.contract, config)
         self.assertEqual(report["result"], "PASS")
-        self.assertEqual(len(report["services"]), 8)
+        self.assertEqual(len(report["services"]), 9)
         by_host = {item["hostname"]: item for item in report["services"]}
         self.assertEqual(by_host["dash.rozkalns.net"]["route_origin_class"], "loopback")
+        self.assertEqual(by_host["admin.ausmalwiese.de"]["route_origin_class"], "loopback")
         self.assertTrue(
             all(
                 item["route_origin_class"] == "lan"
                 for item in report["services"]
-                if item["hostname"] != "dash.rozkalns.net"
+                if item["hostname"] not in {"dash.rozkalns.net", "admin.ausmalwiese.de"}
             )
         )
 

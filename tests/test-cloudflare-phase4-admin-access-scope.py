@@ -98,9 +98,10 @@ class Phase4AdminAccessScopeTests(unittest.TestCase):
         state = fake_state(self.contract)
         report = phase4.build_report(self.contract, self.registry, state)
         self.assertEqual(report["result"], "PASS")
-        self.assertEqual(len(report["services"]), 8)
+        self.assertEqual(len(report["services"]), 9)
         by_host = {item["hostname"]: item for item in report["services"]}
         self.assertEqual(by_host["dash.rozkalns.net"]["access_scope_class"], "exact-owner")
+        self.assertEqual(by_host["admin.ausmalwiese.de"]["access_scope_class"], "exact-owner")
         self.assertTrue(all(item["bypass_present"] is False for item in report["services"]))
 
         rendered = json.dumps(report, sort_keys=True)

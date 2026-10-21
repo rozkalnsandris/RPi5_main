@@ -61,7 +61,18 @@ def load_projections() -> list[dict[str, Any]]:
     if contract.get("schema") != "rozkalns.rpi5-main.phase4-admin-protected-authorized-verifier.v1":
         raise ReceiptError("protected_contract_invalid")
     projections = admin.get("service_projections")
-    if not isinstance(projections, list) or len(projections) != 8:
+    manual_canary = contract.get("manual_canary")
+    expected_count = (
+        manual_canary.get("expected_service_count")
+        if isinstance(manual_canary, dict)
+        else None
+    )
+    if (
+        not isinstance(projections, list)
+        or not isinstance(expected_count, int)
+        or expected_count < 1
+        or len(projections) != expected_count
+    ):
         raise ReceiptError("admin_projection_set_invalid")
     return projections
 

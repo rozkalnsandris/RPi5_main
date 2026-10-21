@@ -89,7 +89,7 @@ class Phase4RemainingInfraTests(unittest.TestCase):
             for item in self.verifier["host_probe_targets"]
         }
         self.assertEqual(set(targets), set(projections))
-        self.assertEqual(len(targets), 8)
+        self.assertEqual(len(targets), 9)
         for service_id, target in targets.items():
             self.assertEqual(target["hostname"], projections[service_id]["hostname"])
             self.assertIsInstance(target["probe_port"], int)
@@ -177,12 +177,16 @@ class Phase4RemainingInfraTests(unittest.TestCase):
             )
 
         def lan_path(_address: str, port: int) -> str:
-            dash_port = next(
-                item["probe_port"]
-                for item in self.verifier["host_probe_targets"]
-                if item["service_id"] == "dashboard-rpi5"
-            )
-            return "absent" if port == dash_port else "present"
+            forbidden_ports = {
+                target["probe_port"]
+                for target in self.verifier["host_probe_targets"]
+                if next(
+                    item
+                    for item in self.admin["service_projections"]
+                    if item["service_id"] == target["service_id"]
+                )["lan_break_glass"] == "forbidden"
+            }
+            return "absent" if port in forbidden_ports else "present"
 
         with mock.patch.object(host, "_lan_path_class", side_effect=lan_path):
             report = host.build_report(
