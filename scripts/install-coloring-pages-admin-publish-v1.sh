@@ -33,6 +33,7 @@ install -o root -g root -m 0644 "$REPO/ops/systemd/coloring-pages-admin-publish.
 install -d -o andris -g andris -m 0700 /srv/coloring-pages-content/state/admin-publish
 install -d -o andris -g andris -m 0700 /srv/coloring-pages-content/state/admin-publish/uploads
 install -d -o andris -g andris -m 0700 /srv/coloring-pages-content/state/admin-publish/jobs
+install -d -o andris -g andris -m 0700 /srv/coloring-pages-content/state/admin-publish/logs
 test -f /srv/coloring-pages-content/state/drive-ingest/.lock
 [[ "$(stat -c '%U:%G:%a' /srv/coloring-pages-content/state/drive-ingest/.lock)" == "andris:andris:600" ]] || { echo "SHARED_LOCK_INVALID" >&2; exit 2; }
 systemctl daemon-reload
