@@ -31,7 +31,9 @@
       "encrypted-entries",
       "duplicate-names",
       "non-png"
-    ]
+    ],
+    "archive_role": "draft-png-handoff-only",
+    "allowed_members": "top-level-png-only-no-manifest-or-metadata-files"
   },
   "publication": {
     "category_selection": "explicit-owner-ui-selection",
@@ -44,7 +46,41 @@
     "automatic_cleanup": false,
     "automatic_overwrite": false,
     "public_verification": true,
-    "final_detail_links": true
+    "final_detail_links": true,
+    "print_quality_gate": {
+      "source_role": "uploaded-png-is-authoring-draft",
+      "execution_order": [
+        "prepare-all",
+        "validate-all",
+        "allocate-ids",
+        "import"
+      ],
+      "prepare_tool": "pinned-immutable-coloring-pages-image:coloring-pages-print-master prepare",
+      "validate_tool": "pinned-immutable-coloring-pages-image:coloring-pages-print-master validate",
+      "fail_before_id_allocation_on_any_prepare_or_validate_failure": true,
+      "prepared_master": {
+        "portrait_px": [
+          2480,
+          3508
+        ],
+        "landscape_px": [
+          3508,
+          2480
+        ],
+        "mode": "RGB-no-alpha",
+        "dpi": "approximately-300x300",
+        "outer_border": "#FFFFFF",
+        "safe_margin_mm": 15,
+        "safe_margin_px_at_300_dpi": 177,
+        "safe_margin_color": "#FFFFFF",
+        "fit": "aspect-ratio-preserving-centered",
+        "white_normalization": "canonical-near-white-to-exact-white",
+        "resampling": "LANCZOS",
+        "sharpening": "reviewed-conservative-unsharp-mask"
+      }
+    },
+    "editorial_quality_gate": "owner-review-before-zip-upload",
+    "zip_member_semantics": "each-png-is-one-independent-single-page-activity"
   },
   "runtime": {
     "user": "andris",
