@@ -84,7 +84,8 @@
   },
   "runtime": {
     "user": "andris",
-    "image_ref": "ghcr.io/rozkalnsandris/coloring-pages@sha256:2a80b56c20c37f4a530059c3e438c6627fd962786e6590dd914e59e86a837ba8"
+    "image_ref": "ghcr.io/rozkalnsandris/coloring-pages@sha256:5e63d5c37807cd25ef3ff384ea6e0681fa5b6995b0d8eb2a5846e038327e4cb4",
+    "source_sha": "798b263671c81b4e034b163b263dce7dc18306eb"
   },
   "live_activation": "separate-owner-authorization",
   "recovery": {
@@ -143,5 +144,13 @@
     ],
     "initialization": "fail-closed-before-publication-job-can-start",
     "global_journald_retention_change": false
+  },
+  "maintenance": {
+    "full_install_guard": "when service is active, acquire shared publication lock and require GET /api/jobs/active to report idle before first installed-file mutation",
+    "active_or_unknown": "fail-closed-no-install-no-restart",
+    "ui_only_mode": "replace static ADMIN index only; requires active service and verified installed fonts; no daemon-reload or service restart",
+    "automatic_retry": false,
+    "automatic_rollback": false,
+    "automatic_cleanup": false
   }
 }
