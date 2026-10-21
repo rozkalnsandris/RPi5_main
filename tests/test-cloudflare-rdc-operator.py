@@ -768,9 +768,7 @@ class AusmalwieseAdminCutoverTests(unittest.TestCase):
                 return [self.owner_policy()]
 
             def _request(inner, method, path, body=None):
-                self.assertEqual(method, "GET")
-                self.assertTrue(path.endswith("/access/organizations"))
-                return {"result": {"name": "private-team"}}
+                raise AssertionError("Access organization GET must not be used")
 
         class Tunnel:
             def __init__(inner):
@@ -779,6 +777,17 @@ class AusmalwieseAdminCutoverTests(unittest.TestCase):
                         {
                             "hostname": "ausmalwiese.de",
                             "service": "http://127.0.0.1:9191",
+                        },
+                        {
+                            "hostname": "dash.rozkalns.net",
+                            "service": "http://127.0.0.1:8088",
+                            "originRequest": {
+                                "access": {
+                                    "required": True,
+                                    "teamName": "private-team",
+                                    "audTag": ["dashboard-aud-private"],
+                                }
+                            },
                         },
                         {"service": "http_status:404"},
                     ],
@@ -825,6 +834,94 @@ class AusmalwieseAdminCutoverTests(unittest.TestCase):
             },
         )
         self.assertEqual(tunnel.config["originRequest"], {"connectTimeout": "10s"})
+
+    def test_tunnel_action_rejects_missing_or_invalid_dashboard_team_anchor(self):
+        class Access:
+            def list_applications(inner, account_id):
+                return [self.admin_app()]
+
+            def list_application_policies(inner, account_id, app_id):
+                return [self.owner_policy()]
+
+            def _request(inner, method, path, body=None):
+                raise AssertionError("Access organization GET must not be used")
+
+        class Tunnel:
+            def __init__(inner, dash_rule=None):
+                rules = [
+                    {
+                        "hostname": "ausmalwiese.de",
+                        "service": "http://127.0.0.1:9191",
+                    }
+                ]
+                if dash_rule is not None:
+                    rules.append(dash_rule)
+                rules.append({"service": "http_status:404"})
+                inner.config = {"ingress": rules}
+
+            def _request(inner, method, path, body=None):
+                if method == "GET" and "/cfd_tunnel?" in path:
+                    return {"result": [{
+                        "id": self.TUNNEL_ID,
+                        "name": "rpi5-tunnel",
+                        "config_src": "cloudflare",
+                    }]}
+                if method == "GET" and path.endswith("/configurations"):
+                    return {"result": {"config": inner.config}}
+                raise AssertionError((method, path))
+
+        invalid_rules = [
+            None,
+            {
+                "hostname": "dash.rozkalns.net",
+                "service": "http://127.0.0.1:8088",
+            },
+            {
+                "hostname": "dash.rozkalns.net",
+                "service": "http://127.0.0.1:8088",
+                "originRequest": {
+                    "access": {
+                        "required": False,
+                        "teamName": "private-team",
+                        "audTag": ["dashboard-aud-private"],
+                    }
+                },
+            },
+            {
+                "hostname": "dash.rozkalns.net",
+                "service": "http://127.0.0.1:8088",
+                "originRequest": {
+                    "access": {
+                        "required": True,
+                        "teamName": "",
+                        "audTag": ["dashboard-aud-private"],
+                    }
+                },
+            },
+            {
+                "hostname": "dash.rozkalns.net",
+                "service": "http://127.0.0.1:8088",
+                "originRequest": {
+                    "access": {
+                        "required": True,
+                        "teamName": "private-team",
+                        "audTag": [],
+                    }
+                },
+            },
+        ]
+        for rule in invalid_rules:
+            with self.subTest(rule=rule):
+                with self.assertRaisesRegex(
+                    op.OperatorError, "admin_tunnel_team_anchor_invalid"
+                ):
+                    op.run_ausmalwiese_admin_tunnel(
+                        Access(),
+                        Tunnel(rule),
+                        self.ACCOUNT,
+                        apply=False,
+                        expected_baseline="",
+                    )
 
     def test_dns_action_requires_protected_route_and_creates_one_exact_cname(self):
         class Tunnel:
