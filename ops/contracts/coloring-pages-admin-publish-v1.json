@@ -151,6 +151,14 @@
     "ui_only_mode": "replace static ADMIN index only; requires active service and verified installed fonts; no daemon-reload or service restart",
     "automatic_retry": false,
     "automatic_rollback": false,
-    "automatic_cleanup": false
+    "automatic_cleanup": false,
+    "post_restart_readiness": {
+      "endpoint": "http://127.0.0.1:8765/",
+      "attempts": 10,
+      "per_attempt_timeout_seconds": 0.25,
+      "interval_seconds": 0.25,
+      "max_window_seconds": 4.75,
+      "failure": "terminal-no-second-restart-or-installer-retry"
+    }
   }
 }
