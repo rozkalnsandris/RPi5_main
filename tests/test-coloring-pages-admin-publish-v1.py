@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import importlib.util, io, json, stat, tempfile, unittest, zipfile
+import importlib.util, json, tempfile, unittest, zipfile
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -36,10 +36,15 @@ class Tests(unittest.TestCase):
         self.assertEqual(admin.title_from_name("01-mein_fuchs.png"),"Mein Fuchs")
         self.assertEqual(admin.validate_title("  Mein   Bild  "),"Mein Bild")
     def test_ids_avoid_collision(self):
-        vals=iter([1234567,7654321])
-        old=admin.secrets.randbelow;admin.secrets.randbelow=lambda n:next(vals)
-        try:self.assertEqual(admin.allocate_ids(1, existing={"1234567"}) if False else None,None)
-        finally:admin.secrets.randbelow=old
+        values=iter([1234567,7654321])
+        old_random=admin.secrets.randbelow
+        old_catalog=admin.catalog_ids
+        admin.secrets.randbelow=lambda n:next(values)
+        admin.catalog_ids=lambda:{"1234567"}
+        try:self.assertEqual(admin.allocate_ids(1),["7654321"])
+        finally:
+            admin.secrets.randbelow=old_random
+            admin.catalog_ids=old_catalog
     def test_source_contract(self):
         source=MODULE.read_text()
         self.assertNotIn("extractall(",source);self.assertNotIn('"0.0.0.0"',source);self.assertNotIn("rclone",source.lower())
