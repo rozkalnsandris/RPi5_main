@@ -32,6 +32,8 @@ The current immutable Coloring Pages image is used for:
 - `coloring-pages-print-master validate`
 - `coloring-pages-import`
 
+The ADMIN pin is bound to reviewed application source `798b263671c81b4e034b163b263dce7dc18306eb` and immutable image `ghcr.io/rozkalnsandris/coloring-pages@sha256:5e63d5c37807cd25ef3ff384ea6e0681fa5b6995b0d8eb2a5846e038327e4cb4`. That release includes the balanced lossless WebP encoder setting used by the importer.
+
 ### Mandatory print-quality gate
 
 Every uploaded PNG is an authoring draft. Before any publication ID allocation or import, the ADMIN job must complete this exact fail-closed order for the whole ZIP:
@@ -88,6 +90,15 @@ Allowed log metadata is bounded to diagnostic identifiers and timings: UTC times
 
 The logger never records request/response bodies, HTTP headers, cookies, Cloudflare Access identity/tokens, credentials/secrets, environment variables, ZIP/PNG bytes, raw file contents, wholesale subprocess stdout/stderr or unsanitized tracebacks. Logging initialization is fail-closed before the service accepts publication jobs; a safely initialized diagnostic log is therefore part of the ADMIN runtime preflight, not an optional debug side channel.
 
+## Safe ADMIN updates
+
+The reviewed installer has two explicit modes.
+
+- `full` is the runtime install/update path. If the ADMIN service is already active, the installer must acquire the shared publication lock and require `GET /api/jobs/active` to report idle before the first installed-file mutation. A busy publication lock, an active queued/running job, an unreadable/invalid status response, or any uncertainty is a STOP before install or restart. A successful full update restarts the service only after that preflight.
+- `ui-only` replaces only the static ADMIN `index.html`. It requires the service to be active and the installed font files to match their pinned hashes. It performs no `daemon-reload` and no service restart, so routine HTML/navigation changes do not interrupt publication jobs.
+
+Neither mode retries, requeues, rolls back or cleans up publication state. The `ui-only` confirmation token is deliberately distinct from the full publisher-install confirmation so a static update cannot silently widen into a runtime restart.
+
 ## LIVE gates
 
-Source merge does not install, start, route or expose this service. Installation requires a separate exact owner authorization for the reviewed installer. The canonical external ADMIN hostname is `admin.ausmalwiese.de`. Creating its Tunnel/DNS route and exact-owner Cloudflare Access application/policy remains a separate owner gate.
+Source merge does not install, start, route or expose this service. Installation or a UI-only update requires a separate exact owner authorization for the reviewed installer mode. The canonical external ADMIN hostname is `admin.ausmalwiese.de`. Creating its Tunnel/DNS route and exact-owner Cloudflare Access application/policy remains a separate owner gate.
