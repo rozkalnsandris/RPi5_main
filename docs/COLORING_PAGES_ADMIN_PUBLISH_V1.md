@@ -5,7 +5,7 @@ Issue: RPi5_main #1149.
 ## Owner workflow
 
 1. ChatGPT creates approved coloring-page PNG drafts and packages them into one ZIP.
-2. The owner opens the protected Ausmalwiese ADMIN page. The admin interface is Latvian and visually follows the public Ausmalwiese design language.
+2. The owner opens the protected Ausmalwiese ADMIN page. The admin interface is Latvian, uses the same Baloo 2/Nunito typography as the public Statistics/Traffic dashboards, and provides top navigation between Admin, Statistics and Traffic.
 3. Upload the ZIP and inspect the private previews/titles.
 4. The owner explicitly chooses one canonical category.
 5. Press **Sākt publicēšanu**.
