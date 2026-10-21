@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import importlib.util, json, tempfile, unittest, zipfile
+import importlib.util, json, os, stat, tempfile, unittest, zipfile
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 
@@ -47,6 +47,74 @@ class Tests(unittest.TestCase):
         finally:
             admin.secrets.randbelow=old_random
             admin.catalog_ids=old_catalog
+
+    def test_reconcile_interrupted_job_preserves_results(self):
+        old_jobs,old_audit=admin.JOBS,admin.audit
+        jobs=Path(self.tmp.name)/"jobs";jobs.mkdir()
+        admin.JOBS=jobs;events=[]
+        admin.audit=lambda event,**fields:events.append((event,fields))
+        payload={
+            "job_id":"a"*32,"upload_id":"b"*32,"status":"running",
+            "steps":[{"label":"Import","status":"running","started_at":1}],
+            "results":[{"id":"1234567","title":"P","status":"imported"}],
+        }
+        jobdir=jobs/("a"*32);jobdir.mkdir();admin.write_json(jobdir/"job.json",payload)
+        try:
+            self.assertEqual(admin.reconcile_interrupted_jobs(),1)
+            saved=admin.read_json(jobdir/"job.json")
+            self.assertEqual(saved["status"],"failed")
+            self.assertTrue(saved["interrupted"])
+            self.assertEqual(saved["error"],"publication interrupted by service restart")
+            self.assertEqual(saved["results"],payload["results"])
+            self.assertEqual(saved["steps"][0]["status"],"failed")
+            self.assertEqual(events[0][0],"stale_job_reconciled")
+            self.assertEqual(events[0][1]["partial_result_count"],1)
+        finally:
+            admin.JOBS,admin.audit=old_jobs,old_audit
+
+    def test_active_job_returns_single_persisted_job(self):
+        old_jobs=admin.JOBS
+        jobs=Path(self.tmp.name)/"active";jobs.mkdir()
+        admin.JOBS=jobs
+        payload={"job_id":"c"*32,"status":"queued"}
+        jobdir=jobs/("c"*32);jobdir.mkdir();admin.write_json(jobdir/"job.json",payload)
+        try:self.assertEqual(admin.active_job()["job_id"],"c"*32)
+        finally:admin.JOBS=old_jobs
+
+    def test_log_prune_is_age_bounded_and_allowlisted(self):
+        old_logs,old_file=admin.LOGS,admin.LOG_FILE
+        logs=Path(self.tmp.name)/"logs";logs.mkdir()
+        admin.LOGS=logs;admin.LOG_FILE=logs/"admin-publish.log"
+        old=logs/"admin-publish.log.2026-10-01";old.write_text("x")
+        unrelated=logs/"keep-me.txt";unrelated.write_text("x")
+        now=10_000_000
+        os.utime(old,(now-admin.LOG_RETENTION_SECONDS-1,now-admin.LOG_RETENTION_SECONDS-1))
+        os.utime(unrelated,(1,1))
+        try:
+            self.assertEqual(admin.prune_logs(now=now),1)
+            self.assertFalse(old.exists())
+            self.assertTrue(unrelated.exists())
+        finally:
+            admin.LOGS,admin.LOG_FILE=old_logs,old_file
+
+    def test_logging_initialization_is_private_and_daily(self):
+        old_logs,old_file,old_owner=admin.LOGS,admin.LOG_FILE,admin.owner_ids
+        logs=Path(self.tmp.name)/"private-logs";logs.mkdir()
+        admin.LOGS=logs;admin.LOG_FILE=logs/"admin-publish.log"
+        admin.owner_ids=lambda:(os.getuid(),os.getgid())
+        try:
+            admin.init_logging()
+            self.assertEqual(stat.S_IMODE(admin.LOG_FILE.stat().st_mode),0o600)
+            self.assertEqual(len(admin.LOGGER.handlers),1)
+            handler=admin.LOGGER.handlers[0]
+            self.assertIsInstance(handler,admin.StrictTimedRotatingFileHandler)
+            self.assertEqual(handler.backupCount,7)
+            self.assertTrue(handler.utc)
+            self.assertTrue({"headers","cookies","token","credentials","environment","stdout","stderr"}.isdisjoint(admin.LOG_ALLOWED_FIELDS))
+        finally:
+            for handler in list(admin.LOGGER.handlers):
+                handler.close();admin.LOGGER.removeHandler(handler)
+            admin.LOGS,admin.LOG_FILE,admin.owner_ids=old_logs,old_file,old_owner
     def test_source_contract(self):
         source=MODULE.read_text()
         self.assertNotIn("extractall(",source);self.assertNotIn('"0.0.0.0"',source);self.assertNotIn("rclone",source.lower())
@@ -87,6 +155,13 @@ class StaticTests(unittest.TestCase):
         self.assertIn("26fb4610d4bc976d2584ca15e66c11465dbc1f267a10dca668fcb3080dfe59c1",installer)
         self.assertIn("ba344451eab25b217a165363b1982048a5e5830a0daf36577973955a04cac793",installer)
         self.assertIn("/api/uploads",html);self.assertIn("/api/jobs",html)
+        self.assertIn("sessionStorage.setItem",html)
+        self.assertIn('"/api/jobs/active"',html)
+        self.assertIn("restoreActiveJob()",html)
+        self.assertIn("scheduleRefresh(Math.min(10000",html)
+        self.assertNotIn("clearInterval(poll)",html)
+        self.assertIn("Daļēji pabeigts — jau apstrādātās lapas",html)
+        self.assertIn("state/admin-publish/logs",installer)
         contract=json.loads((ROOT/"ops/contracts/coloring-pages-admin-publish-v1.json").read_text())
         self.assertEqual(contract["listener"],{"host":"127.0.0.1","port":8765})
         self.assertEqual(contract["publication"]["category_selection"],"explicit-owner-ui-selection")
@@ -108,5 +183,23 @@ class StaticTests(unittest.TestCase):
         self.assertEqual(master["safe_margin_color"],"#FFFFFF")
         self.assertEqual(master["fit"],"aspect-ratio-preserving-centered")
         self.assertEqual(contract["publication"]["zip_member_semantics"],"each-png-is-one-independent-single-page-activity")
+        recovery=contract["recovery"]
+        self.assertEqual(recovery["reload"],"restore-existing-job-and-resume-polling")
+        self.assertEqual(recovery["transient_polling"],"bounded-exponential-backoff-max-10s-no-permanent-stop")
+        self.assertEqual(recovery["post_restart"],"queued-or-running-persisted-jobs-become-failed-interrupted")
+        self.assertTrue(recovery["preserve_partial_results"])
+        self.assertFalse(recovery["automatic_retry"])
+        self.assertFalse(recovery["automatic_requeue"])
+        diagnostics=contract["diagnostics"]
+        self.assertEqual(diagnostics["log_path"],"/srv/coloring-pages-content/state/admin-publish/logs/admin-publish.log")
+        self.assertEqual(diagnostics["directory_mode"],"0700")
+        self.assertEqual(diagnostics["file_mode"],"0600")
+        self.assertEqual(diagnostics["rotation"]["handler"],"logging.handlers.TimedRotatingFileHandler")
+        self.assertEqual(diagnostics["rotation"]["when"],"midnight")
+        self.assertEqual(diagnostics["rotation"]["explicit_age_prune_days"],7)
+        self.assertFalse(diagnostics["global_journald_retention_change"])
+        forbidden=" ".join(diagnostics["forbidden"]).lower()
+        for word in ("headers","cookies","tokens","credentials","environment","stdout","stderr","traceback"):
+            self.assertIn(word,forbidden)
 
 if __name__=="__main__":unittest.main()
