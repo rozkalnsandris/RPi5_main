@@ -5,10 +5,10 @@ Issue: RPi5_main #1149.
 ## Owner workflow
 
 1. ChatGPT creates approved coloring-page PNG drafts and packages them into one ZIP.
-2. The owner opens the protected Ausmalwiese ADMIN page.
+2. The owner opens the protected Ausmalwiese ADMIN page. The admin interface is Latvian and visually follows the public Ausmalwiese design language.
 3. Upload the ZIP and inspect the private previews/titles.
 4. The owner explicitly chooses one canonical category.
-5. Press **Veröffentlichung starten**.
+5. Press **Sākt publicēšanu**.
 6. The browser polls the job status while RPi5 performs print preparation, validation, ID allocation, import, derivatives/catalog update, sitemap refresh when enabled, and public verification.
 7. PASS shows each published activity ID and direct `https://ausmalwiese.de/detail.html?id=<id>` link.
 
