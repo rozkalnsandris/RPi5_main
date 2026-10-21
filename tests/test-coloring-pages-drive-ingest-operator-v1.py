@@ -233,6 +233,69 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
             {"tiere", "fahrzeuge", "alphabet", "lernen", "figuren", "jahreszeiten"},
         )
 
+    def test_inline_manifest_mode_is_bounded_and_png_only(self) -> None:
+        manifest = self.valid_manifest()
+        raw = json.dumps(manifest, ensure_ascii=False, separators=(",", ":"))
+        args = drive_ingest.parse_args(
+            [
+                "--id",
+                "aviator-pup-001",
+                "--expected-sha256",
+                "a" * 64,
+                "--expected-size",
+                "1162127",
+                "--manifest-json",
+                raw,
+            ]
+        )
+        drive_ingest.validate_cli(args)
+        parsed = drive_ingest.parse_inline_manifest(args.manifest_json)
+        self.assertEqual(parsed, manifest)
+        metadata = drive_ingest.validate_manifest(
+            parsed,
+            expected_id="aviator-pup-001",
+            expected_sha256="a" * 64,
+            expected_size=1162127,
+        )
+        self.assertEqual(metadata["id"], "aviator-pup-001")
+
+        with self.assertRaises(drive_ingest.OperatorError):
+            drive_ingest.parse_inline_manifest('{"id":"a","id":"b"}')
+
+        self.assertIn(
+            "[*page_names] if inline_manifest else [*page_names, manifest_name]",
+            self.operator,
+        )
+        self.assertIn('"manifest_source": "request-bridge"', self.operator)
+        self.assertIn("--manifest-json", self.contract["operator"]["allowed_arguments"])
+        self.assertTrue(self.contract["manifest"]["inline_manifest_json_allowed"])
+        self.assertFalse(
+            self.contract["manifest"]["inline_manifest_requires_drive_manifest"]
+        )
+        self.assertEqual(
+            self.contract["drive"]["inline_manifest_mode_drive_objects"],
+            "png-pages-only",
+        )
+        self.assertFalse(
+            self.contract["drive"]["normal_publish_manifest_upload_required"]
+        )
+
+    def test_inline_manifest_size_is_fail_closed(self) -> None:
+        args = drive_ingest.parse_args(
+            [
+                "--id",
+                "aviator-pup-001",
+                "--expected-sha256",
+                "a" * 64,
+                "--expected-size",
+                "1162127",
+                "--manifest-json",
+                "x" * (drive_ingest.MAX_MANIFEST_BYTES + 1),
+            ]
+        )
+        with self.assertRaises(drive_ingest.OperatorError):
+            drive_ingest.validate_cli(args)
+
     def test_v2_cli_and_manifest_bind_every_ordered_page(self) -> None:
         args = drive_ingest.parse_args(
             [
