@@ -56,8 +56,13 @@ class Tests(unittest.TestCase):
 class StaticTests(unittest.TestCase):
     def test_assets_and_contract(self):
         html=(ROOT/"ops/admin/coloring-pages/index.html").read_text()
-        self.assertIn("Publicēt jaunas krāsojamās lapas",html);self.assertIn("Izvēlēties kategoriju",html)
+        self.assertIn("Publicēt krāsojamās lapas",html);self.assertIn("Izvēlēties kategoriju",html)
         self.assertIn('<html lang="lv">',html);self.assertIn("--blue:#1474d4",html)
+        self.assertIn('class="site-header"',html)
+        self.assertIn('class="admin-hero"',html)
+        self.assertIn('class="container workflow-grid"',html)
+        self.assertIn("--container:1340px",html)
+        self.assertNotIn("<aside",html)
         self.assertIn("/api/uploads",html);self.assertIn("/api/jobs",html)
         contract=json.loads((ROOT/"ops/contracts/coloring-pages-admin-publish-v1.json").read_text())
         self.assertEqual(contract["listener"],{"host":"127.0.0.1","port":8765})
