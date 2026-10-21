@@ -1,0 +1,357 @@
+#!/usr/bin/env python3
+"""Exact five-ID Ausmalwiese catalog-only hide operator for stale sitemap state."""
+
+from __future__ import annotations
+
+import argparse
+from contextlib import contextmanager
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import pwd
+import re
+import stat
+import sys
+import xml.etree.ElementTree as ET
+from urllib.request import Request, urlopen
+
+TARGETS = {
+    "5008429": ("N - Nashorn und Nuss", "alphabet"),
+    "3559941": ("O - Orange und Ofen", "alphabet"),
+    "3255194": ("P - Pinguin und Pilz", "alphabet"),
+    "0363214": ("Q - Qualle und Quadrat", "alphabet"),
+    "7403304": ("R - Raupe und Regenbogen", "alphabet"),
+}
+PUBLIC = Path("/srv/coloring-pages-content/public")
+LOCK = Path("/srv/coloring-pages-content/state/drive-ingest/.lock")
+CATALOG = "catalog.json"
+SITEMAP = "sitemap.xml"
+CATALOG_STAGE = ".catalog.json.hide-alphabet-nr-20261021.partial"
+NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
+ORIGINS = ("https://ausmalwiese.de", "https://coloring.rozkalns.net")
+CATEGORY_ROUTES = ("tiere", "fahrzeuge", "alphabet", "lernen", "figuren", "jahreszeiten")
+HEX = re.compile(r"[a-f0-9]{64}\Z")
+VALID_ID = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
+LIMIT = 50_000_000
+
+
+class Block(RuntimeError):
+    """Fail closed. Never retry or clean up partial staging automatically."""
+
+
+def digest(raw: bytes) -> str:
+    return hashlib.sha256(raw).hexdigest()
+
+
+def parse_catalog(raw: bytes) -> list[dict]:
+    try:
+        entries = json.loads(raw.decode("utf-8"))
+    except (ValueError, UnicodeError) as exc:
+        raise Block("catalog invalid") from exc
+    if not isinstance(entries, list) or len(entries) < len(TARGETS) + 1:
+        raise Block("catalog invalid shape")
+    ids = []
+    for entry in entries:
+        if (
+            not isinstance(entry, dict)
+            or not isinstance(entry.get("id"), str)
+            or not VALID_ID.fullmatch(entry["id"])
+        ):
+            raise Block("catalog invalid entry ID")
+        ids.append(entry["id"])
+    if len(ids) != len(set(ids)):
+        raise Block("catalog duplicate IDs")
+    return entries
+
+
+def sitemap_locs(raw: bytes) -> list[str]:
+    try:
+        root = ET.fromstring(raw)
+    except ET.ParseError as exc:
+        raise Block("sitemap invalid XML") from exc
+    if root.tag != NS + "urlset":
+        raise Block("sitemap invalid root")
+    locs = []
+    for element in root:
+        if (
+            element.tag != NS + "url"
+            or len(element) != 1
+            or element[0].tag != NS + "loc"
+            or not element[0].text
+        ):
+            raise Block("sitemap invalid URL node")
+        locs.append(element[0].text)
+    if len(locs) != len(set(locs)):
+        raise Block("sitemap duplicate URLs")
+    return locs
+
+
+def verify_stale_sitemap(raw: bytes, catalog_ids: list[str]) -> tuple[str, list[str]]:
+    locs = sitemap_locs(raw)
+    origin = next((value for value in ORIGINS if locs and locs[0] == value + "/"), None)
+    if origin is None:
+        raise Block("sitemap origin unsupported")
+
+    static = [
+        origin + "/",
+        origin + "/kita",
+        *(origin + "/" + route for route in CATEGORY_ROUTES),
+    ]
+    if locs[: len(static)] != static:
+        raise Block("sitemap static routes mismatch")
+
+    detail_ids: list[str] = []
+    prefix = origin + "/detail.html?id="
+    for loc in locs[len(static):]:
+        if not loc.startswith(prefix):
+            raise Block("sitemap contains unsupported URL")
+        page_id = loc[len(prefix):]
+        if not VALID_ID.fullmatch(page_id):
+            raise Block("sitemap detail ID invalid")
+        detail_ids.append(page_id)
+
+    if detail_ids != sorted(detail_ids):
+        raise Block("sitemap detail IDs are not sorted")
+    if len(detail_ids) != len(set(detail_ids)):
+        raise Block("sitemap duplicate detail IDs")
+    catalog_set = set(catalog_ids)
+    if not set(detail_ids).issubset(catalog_set):
+        raise Block("sitemap contains detail ID absent from catalog")
+    if set(TARGETS).intersection(detail_ids):
+        raise Block("target unexpectedly present in sitemap")
+    return origin, detail_ids
+
+
+def plan(catalog_bytes: bytes, sitemap_bytes: bytes) -> tuple[bytes, bytes, dict]:
+    if len(catalog_bytes) > LIMIT or len(sitemap_bytes) > LIMIT:
+        raise Block("file too large")
+    records = parse_catalog(catalog_bytes)
+    by_id = {entry["id"]: entry for entry in records}
+    for target_id, (title, category) in TARGETS.items():
+        entry = by_id.get(target_id)
+        if entry is None or entry.get("title") != title or entry.get("category") != category:
+            raise Block("exact target ID/title/category absent or changed")
+
+    ids = [entry["id"] for entry in records]
+    origin, sitemap_ids = verify_stale_sitemap(sitemap_bytes, ids)
+
+    target_ids = set(TARGETS)
+    new_records = [entry for entry in records if entry["id"] not in target_ids]
+    if len(records) - len(new_records) != len(TARGETS):
+        raise Block("target count mismatch")
+    catalog_next = (
+        json.dumps(new_records, ensure_ascii=False, indent=2) + "\n"
+    ).encode("utf-8")
+
+    # The sitemap is intentionally not regenerated here. It is already stale,
+    # all target IDs are proven absent from it, and every existing detail ID
+    # must remain a subset of the post-hide catalog.
+    verify_stale_sitemap(
+        sitemap_bytes,
+        [entry["id"] for entry in new_records],
+    )
+    if len(catalog_next) > LIMIT:
+        raise Block("candidate too large")
+
+    return catalog_next, sitemap_bytes, {
+        "target_ids": list(TARGETS),
+        "entry_count_before": len(records),
+        "entry_count_after": len(new_records),
+        "sitemap_detail_count": len(sitemap_ids),
+        "sitemap_origin": origin,
+        "catalog_sha256": digest(catalog_bytes),
+        "sitemap_sha256": digest(sitemap_bytes),
+        "next_catalog_sha256": digest(catalog_next),
+        "next_sitemap_sha256": digest(sitemap_bytes),
+        "sitemap_changed": False,
+    }
+
+
+def identity(path: Path, uid: int, gid: int, mode: int, directory: bool = False) -> os.stat_result:
+    try:
+        st = path.lstat()
+    except OSError as exc:
+        raise Block("required file or directory missing") from exc
+    check = stat.S_ISDIR if directory else stat.S_ISREG
+    if (
+        not check(st.st_mode)
+        or path.is_symlink()
+        or (st.st_uid, st.st_gid) != (uid, gid)
+        or stat.S_IMODE(st.st_mode) != mode
+    ):
+        raise Block("path type, owner, or mode mismatch")
+    return st
+
+
+def read_regular(path: Path, uid: int, gid: int, mode: int) -> bytes:
+    before = identity(path, uid, gid, mode)
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        after = os.fstat(fd)
+        if (
+            (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino)
+            or after.st_size > LIMIT
+        ):
+            raise Block("file identity or size drift")
+        with os.fdopen(fd, "rb", closefd=False) as f:
+            raw = f.read(LIMIT + 1)
+        if len(raw) > LIMIT:
+            raise Block("file exceeds limit")
+        return raw
+    finally:
+        os.close(fd)
+
+
+@contextmanager
+def guard(lock: Path, uid: int, gid: int):
+    identity(lock.parent, uid, gid, 0o755, directory=True)
+    before = identity(lock, uid, gid, 0o600)
+    fd = os.open(lock, os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        after = os.fstat(fd)
+        if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
+            raise Block("lock identity drift")
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise Block("Drive ingest lock busy") from exc
+        again = identity(lock, uid, gid, 0o600)
+        if (after.st_dev, after.st_ino) != (again.st_dev, again.st_ino):
+            raise Block("lock replaced")
+        yield
+    finally:
+        os.close(fd)
+
+
+def stage(path: Path, data: bytes) -> None:
+    fd = os.open(
+        path,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+        0o644,
+    )
+    os.fchmod(fd, 0o644)
+    with os.fdopen(fd, "wb") as file:
+        file.write(data)
+        file.flush()
+        os.fsync(file.fileno())
+
+
+def sync_dir(path: Path) -> None:
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def local_http_proof(catalog: bytes, sitemap: bytes) -> None:
+    for file, expected in ((CATALOG, catalog), (SITEMAP, sitemap)):
+        try:
+            with urlopen(
+                Request(
+                    "http://127.0.0.1:9191/" + file,
+                    headers={"Cache-Control": "no-cache"},
+                ),
+                timeout=6,
+            ) as response:
+                if response.status != 200 or response.read(len(expected) + 1) != expected:
+                    raise Block("local HTTP bytes differ from expected published bytes")
+        except OSError as exc:
+            raise Block("local HTTP proof unavailable") from exc
+
+
+def process(
+    public: Path,
+    lock: Path,
+    *,
+    apply: bool,
+    expected_catalog: str | None = None,
+    expected_sitemap: str | None = None,
+    uid: int,
+    gid: int,
+    verify_http=local_http_proof,
+) -> dict:
+    if apply and (
+        not isinstance(expected_catalog, str)
+        or not HEX.fullmatch(expected_catalog)
+        or not isinstance(expected_sitemap, str)
+        or not HEX.fullmatch(expected_sitemap)
+    ):
+        raise Block("apply needs exact catalog and sitemap SHA-256")
+
+    identity(public, uid, gid, 0o755, directory=True)
+    with guard(lock, uid, gid):
+        path_c, path_s = public / CATALOG, public / SITEMAP
+        old_c = read_regular(path_c, uid, gid, 0o644)
+        old_s = read_regular(path_s, uid, gid, 0o644)
+        next_c, unchanged_s, report = plan(old_c, old_s)
+
+        if not apply:
+            return {**report, "status": "CHECK_PASS", "mutation_started": False}
+
+        if (
+            expected_catalog != report["catalog_sha256"]
+            or expected_sitemap != report["sitemap_sha256"]
+        ):
+            raise Block("expected baseline SHA-256 mismatch")
+
+        stage_c = public / CATALOG_STAGE
+        if os.path.lexists(stage_c):
+            raise Block("leftover stage requires independent review")
+
+        # First production mutation: one exclusive catalog candidate only.
+        stage(stage_c, next_c)
+        sync_dir(public)
+
+        if (
+            read_regular(stage_c, uid, gid, 0o644) != next_c
+            or read_regular(path_c, uid, gid, 0o644) != old_c
+            or read_regular(path_s, uid, gid, 0o644) != old_s
+        ):
+            raise Block("stage or published baseline drift")
+
+        os.replace(stage_c, path_c)
+        sync_dir(public)
+
+        if (
+            read_regular(path_c, uid, gid, 0o644) != next_c
+            or read_regular(path_s, uid, gid, 0o644) != unchanged_s
+        ):
+            raise Block("published bytes mismatch")
+
+        verify_http(next_c, unchanged_s)
+        return {**report, "status": "HIDE_PASS", "mutation_started": True}
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--check", action="store_true")
+    group.add_argument("--apply", action="store_true")
+    parser.add_argument("--expected-catalog-sha256")
+    parser.add_argument("--expected-sitemap-sha256")
+    args = parser.parse_args()
+    try:
+        owner = pwd.getpwnam("andris")
+        if os.geteuid() != owner.pw_uid or os.getuid() != owner.pw_uid or owner.pw_uid == 0:
+            raise Block("run only as unprivileged andris")
+        report = process(
+            PUBLIC,
+            LOCK,
+            apply=args.apply,
+            expected_catalog=args.expected_catalog_sha256,
+            expected_sitemap=args.expected_sitemap_sha256,
+            uid=owner.pw_uid,
+            gid=owner.pw_gid,
+        )
+    except (Block, OSError, ValueError) as exc:
+        print("AUSMALWIESE_HIDE_NR_V2=STOP " + str(exc), file=sys.stderr)
+        return 2
+    print("AUSMALWIESE_HIDE_NR_V2=" + json.dumps(report, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
