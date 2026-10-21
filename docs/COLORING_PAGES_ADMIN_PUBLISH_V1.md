@@ -18,7 +18,9 @@ The public Ausmalwiese container stays read-only. This service binds only to `12
 
 The upload is raw `application/zip`. ZIPs contain 1–20 top-level PNG files only. The service rejects nested paths/traversal, directories, hidden names, duplicate names, encrypted entries, symlinks/special files, non-PNG files, oversized archives/members/uncompressed totals, and excessive compression ratios. It never calls `extractall`; validated members are streamed into generated private staging names.
 
-PNG geometry follows the existing Coloring Pages authoring contract (portrait/landscape, short side >=800 px, long side >=1100 px, accepted A4-like/2:3 ratio).
+The ZIP is a **draft handoff**, not a print-master package. It contains no JSON manifest, category metadata, publication ID, preview, thumbnail, checksum file, PDF or other member. Filenames provide only the editable initial title shown in ADMIN. The owner chooses the canonical category in the protected UI.
+
+PNG geometry follows the existing Coloring Pages authoring contract (portrait/landscape, short side >=800 px, long side >=1100 px, accepted A4-like/2:3 ratio). Each PNG in ADMIN v1 is one independent single-page activity; the ZIP does not encode ordered multi-page activity identity.
 
 ## Publication boundary
 
@@ -29,6 +31,32 @@ The current immutable Coloring Pages image is used for:
 - `coloring-pages-print-master prepare`
 - `coloring-pages-print-master validate`
 - `coloring-pages-import`
+
+### Mandatory print-quality gate
+
+Every uploaded PNG is an authoring draft. Before any publication ID allocation or import, the ADMIN job must complete this exact fail-closed order for the whole ZIP:
+
+1. run `coloring-pages-print-master prepare` for every uploaded PNG;
+2. run `coloring-pages-print-master validate` for every prepared PNG;
+3. require `VALIDATE_PRINT=PASS` for every prepared page;
+4. only then allocate IDs and begin import.
+
+The prepared publication master must satisfy the canonical Coloring Pages media contract:
+
+- exact `2480×3508` portrait or `3508×2480` landscape A4 raster;
+- RGB with no alpha;
+- approximately 300×300 DPI metadata;
+- exact `#FFFFFF` complete outer page border;
+- complete 15 mm / 177 px exact-white artwork-safe bands on every edge;
+- source aspect ratio preserved and artwork centered in the safe area;
+- transparency composited onto white;
+- near-neutral AI whites normalized to exact white;
+- Pillow LANCZOS resampling;
+- only the reviewed conservative UnsharpMask sharpening.
+
+Any prepare or validate failure is a STOP **before ID allocation/import**. The prepared master SHA-256 and exact byte size are recorded only after validation PASS.
+
+This technical gate does not determine editorial quality. Wrong anatomy, wrong wording, unwanted decoration, non-coloring artwork or other visual defects remain the Chat/owner review responsibility before ZIP upload.
 
 New IDs are random seven-digit values and are checked against fresh live catalogue state before import. A prepared master is handed to the existing inbox without overwrite. Each successful import produces the normal private original and public thumb/preview/print derivatives.
 
