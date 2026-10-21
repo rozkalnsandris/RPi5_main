@@ -1,0 +1,708 @@
+#!/usr/bin/env python3
+"""Loopback-only Ausmalwiese ADMIN ZIP publisher."""
+
+from __future__ import annotations
+
+import argparse
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import pwd
+import grp
+import re
+import secrets
+import shutil
+import stat
+import struct
+import subprocess
+import threading
+import time
+import zipfile
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import unquote, urlparse
+from urllib.request import Request, urlopen
+
+OWNER = "andris"
+CONTENT = Path("/srv/coloring-pages-content")
+INBOX = CONTENT / "inbox"
+ORIGINALS = CONTENT / "originals"
+PUBLIC = CONTENT / "public"
+MEDIA = PUBLIC / "media"
+CATALOG = PUBLIC / "catalog.json"
+STATE = CONTENT / "state" / "admin-publish"
+UPLOADS = STATE / "uploads"
+JOBS = STATE / "jobs"
+PUBLISH_LOCK = CONTENT / "state" / "drive-ingest" / ".lock"
+WEB_ROOT = Path("/usr/local/share/coloring-pages-admin")
+SOURCE_WEB_ROOT = Path(__file__).resolve().parents[1] / "admin" / "coloring-pages"
+
+DOCKER = "/usr/bin/docker"
+IMAGE = "ghcr.io/rozkalnsandris/coloring-pages@sha256:2a80b56c20c37f4a530059c3e438c6627fd962786e6590dd914e59e86a837ba8"
+PRINT_MASTER = "/usr/local/bin/coloring-pages-print-master"
+IMPORTER = "/usr/local/bin/coloring-pages-import"
+ORIGIN = "https://ausmalwiese.de"
+SITEMAP_MARKER = Path("/usr/local/share/coloring-pages/post-publish-v1.enabled")
+SITEMAP_MARKER_BYTES = b"coloring-pages-sitemap-post-publish-v1\n"
+SITEMAP_PUBLISHER = Path("/usr/local/bin/coloring-pages-sitemap-publish")
+
+HOST = "127.0.0.1"
+PORT = 8765
+MAX_UPLOAD = 50 * 1024 * 1024
+MAX_FILES = 20
+MAX_MEMBER = 25 * 1024 * 1024
+MAX_TOTAL = 160 * 1024 * 1024
+MAX_RATIO = 50
+MAX_PIXELS = 50_000_000
+MAX_JSON = 256 * 1024
+PNG_SIG = b"\x89PNG\r\n\x1a\n"
+TOKEN = re.compile(r"^[0-9a-f]{32}$")
+CATEGORIES = {
+    "tiere": "Tiere",
+    "fahrzeuge": "Fahrzeuge",
+    "alphabet": "Alphabet",
+    "lernen": "Lernen",
+    "figuren": "Figuren & Helden",
+    "jahreszeiten": "Jahreszeiten & Feste",
+}
+STEPS = [
+    "ZIP-Datei empfangen und entpacken",
+    "PNG-Dateien prüfen",
+    "A4 Print Master erstellen",
+    "Bilder validieren (Größe, Qualität, SHA-256)",
+    "IDs vergeben und auf Kollision prüfen",
+    "Seiten importieren",
+    "Vorschau, Thumbnails und Druckversionen erstellen",
+    "Katalog aktualisieren",
+    "Sitemap aktualisieren",
+    "Veröffentlichung prüfen (Web)",
+]
+CREATE_LOCK = threading.Lock()
+
+
+class Stop(RuntimeError):
+    pass
+
+
+def stop(message: str) -> None:
+    raise Stop(message)
+
+
+def owner_ids() -> tuple[int, int]:
+    return pwd.getpwnam(OWNER).pw_uid, grp.getgrnam(OWNER).gr_gid
+
+
+def write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    temp = path.with_name("." + path.name + "." + secrets.token_hex(8) + ".tmp")
+    data = (json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode()
+    fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    try:
+        with os.fdopen(fd, "wb", buffering=0) as handle:
+            handle.write(data)
+            os.fsync(handle.fileno())
+        os.replace(temp, path)
+    finally:
+        if os.path.lexists(temp):
+            os.unlink(temp)
+
+
+def read_json(path: Path, limit: int = MAX_JSON):
+    st = path.lstat()
+    if not stat.S_ISREG(st.st_mode) or path.is_symlink() or st.st_size <= 0 or st.st_size > limit:
+        stop("state file is invalid")
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        stop("state JSON is invalid")
+
+
+def title_from_name(name: str) -> str:
+    stem = Path(name).stem
+    stem = re.sub(r"^\s*\d+\s*[-_. ]*", "", stem)
+    stem = re.sub(r"[-_]+", " ", stem)
+    stem = re.sub(r"\s+", " ", stem).strip() or "Ausmalbild"
+    return stem.title()[:128]
+
+
+def validate_title(value) -> str:
+    if not isinstance(value, str):
+        stop("title must be text")
+    value = re.sub(r"\s+", " ", value).strip()
+    if not value or len(value) > 128 or any(ord(c) < 32 or ord(c) == 127 for c in value):
+        stop("title is invalid")
+    return value
+
+
+def png_dimensions(path: Path) -> tuple[int, int]:
+    with path.open("rb") as handle:
+        head = handle.read(24)
+    if len(head) != 24 or head[:8] != PNG_SIG or head[12:16] != b"IHDR":
+        stop("ZIP contains a file that is not a valid PNG")
+    width, height = struct.unpack(">II", head[16:24])
+    if width <= 0 or height <= 0 or width * height > MAX_PIXELS or width == height:
+        stop("PNG dimensions are invalid")
+    short, long = sorted((width, height))
+    ratio = short / long
+    if short < 800 or long < 1100 or not (2 / 3 <= ratio <= 210 / 297 + 0.04):
+        stop("PNG dimensions do not match the authoring contract")
+    return width, height
+
+
+def zip_mode(info: zipfile.ZipInfo) -> int:
+    return (info.external_attr >> 16) & 0o170000
+
+
+def inspect_zip(zf: zipfile.ZipFile) -> list[zipfile.ZipInfo]:
+    infos = zf.infolist()
+    if not infos or len(infos) > MAX_FILES:
+        stop("ZIP must contain 1-20 PNG files")
+    seen: set[str] = set()
+    total = 0
+    accepted = []
+    for info in infos:
+        name = info.filename
+        if info.is_dir() or "/" in name or "\\" in name or name.startswith(".") or Path(name).name != name:
+            stop("ZIP must contain top-level PNG files only")
+        if ".." in Path(name).parts or not name.lower().endswith(".png"):
+            stop("ZIP may contain PNG files only")
+        key = name.casefold()
+        if key in seen:
+            stop("ZIP contains duplicate file names")
+        seen.add(key)
+        if info.flag_bits & 0x1:
+            stop("encrypted ZIP entries are not allowed")
+        mode = zip_mode(info)
+        if mode not in (0, stat.S_IFREG):
+            stop("ZIP symlinks or special files are not allowed")
+        if info.file_size <= 0 or info.file_size > MAX_MEMBER:
+            stop("ZIP member size is outside the allowed bound")
+        total += info.file_size
+        if total > MAX_TOTAL:
+            stop("ZIP uncompressed size exceeds the allowed bound")
+        if info.file_size / max(info.compress_size, 1) > MAX_RATIO:
+            stop("ZIP compression ratio exceeds the allowed bound")
+        accepted.append(info)
+    return accepted
+
+
+def stage_zip(archive: Path, upload_dir: Path) -> dict:
+    pages_dir = upload_dir / "pages"
+    pages_dir.mkdir(mode=0o700)
+    items = []
+    try:
+        with zipfile.ZipFile(archive, "r") as zf:
+            for index, info in enumerate(inspect_zip(zf), 1):
+                target = pages_dir / f"page-{index:03d}.png"
+                fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+                digest = hashlib.sha256()
+                written = 0
+                with os.fdopen(fd, "wb", buffering=0) as out, zf.open(info, "r") as source:
+                    while True:
+                        block = source.read(1024 * 1024)
+                        if not block:
+                            break
+                        written += len(block)
+                        if written > info.file_size or written > MAX_MEMBER:
+                            stop("ZIP member expanded beyond declared bounds")
+                        digest.update(block)
+                        out.write(block)
+                    os.fsync(out.fileno())
+                if written != info.file_size:
+                    stop("ZIP member size changed during extraction")
+                width, height = png_dimensions(target)
+                items.append({
+                    "index": index,
+                    "source_name": info.filename,
+                    "staged_name": target.name,
+                    "title": title_from_name(info.filename),
+                    "width": width,
+                    "height": height,
+                    "size_bytes": written,
+                    "sha256": digest.hexdigest(),
+                })
+    except zipfile.BadZipFile:
+        stop("uploaded file is not a valid ZIP")
+    return {"count": len(items), "files": items}
+
+
+def catalog_ids() -> set[str]:
+    try:
+        data = json.loads(CATALOG.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        stop("live catalog is unavailable")
+    if not isinstance(data, list):
+        stop("live catalog is invalid")
+    return {x["id"] for x in data if isinstance(x, dict) and isinstance(x.get("id"), str)}
+
+
+def allocate_ids(count: int) -> list[str]:
+    used = catalog_ids()
+    result = []
+    for _ in range(count):
+        for _attempt in range(1000):
+            candidate = f"{secrets.randbelow(10_000_000):07d}"
+            if candidate not in used:
+                used.add(candidate)
+                result.append(candidate)
+                break
+        else:
+            stop("unable to allocate publication ID")
+    return result
+
+
+def docker_prefix(uid: int, gid: int) -> list[str]:
+    return [
+        DOCKER, "run", "--rm", "--pull=never", "--network", "none", "--read-only",
+        "--tmpfs", "/tmp:rw,noexec,nosuid,nodev,size=64m",
+        "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
+        "--user", f"{uid}:{gid}",
+        "--mount", f"type=bind,src={CONTENT},dst={CONTENT}",
+        "--env", "PYTHONDONTWRITEBYTECODE=1",
+    ]
+
+
+def run_tool(entrypoint: str, args: list[str], uid: int, gid: int) -> str:
+    run = subprocess.run(
+        [*docker_prefix(uid, gid), "--entrypoint", entrypoint, IMAGE, *args],
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=180, check=False,
+    )
+    if run.returncode != 0:
+        stop("immutable Coloring Pages tool failed")
+    return run.stdout
+
+
+def hardlink_to_inbox(source: Path, destination: Path) -> None:
+    if os.path.lexists(destination):
+        stop("inbox destination already exists")
+    if source.stat().st_dev != destination.parent.stat().st_dev:
+        stop("admin staging and inbox must share one filesystem")
+    try:
+        os.link(source, destination, follow_symlinks=False)
+    except OSError:
+        stop("cannot hand prepared master to inbox")
+    os.chmod(destination, 0o600)
+
+
+def verify_public(page_id: str) -> str:
+    media = MEDIA / page_id
+    for name in ("thumb.webp", "preview.webp", "print.png"):
+        path = media / name
+        try:
+            st = path.lstat()
+        except FileNotFoundError:
+            stop("published derivative is missing")
+        if not stat.S_ISREG(st.st_mode) or path.is_symlink() or st.st_size <= 0:
+            stop("published derivative is invalid")
+    detail = f"{ORIGIN}/detail.html?id={page_id}"
+    for url in (
+        f"{ORIGIN}/catalog.json",
+        f"{ORIGIN}/media/{page_id}/thumb.webp",
+        f"{ORIGIN}/media/{page_id}/preview.webp",
+        f"{ORIGIN}/media/{page_id}/print.png",
+        detail,
+    ):
+        try:
+            request = Request(url, headers={"User-Agent": "ausmalwiese-admin-publish/1", "Cache-Control": "no-cache"})
+            with urlopen(request, timeout=15) as response:
+                code = response.getcode()
+                response.read(1)
+        except Exception:
+            stop("public web verification failed")
+        if code != 200:
+            stop("public web verification returned non-200")
+    return detail
+
+
+def sitemap_best_effort() -> tuple[str, str | None]:
+    try:
+        if not os.path.lexists(SITEMAP_MARKER):
+            return "disabled", None
+        st = SITEMAP_MARKER.lstat()
+        if not stat.S_ISREG(st.st_mode) or SITEMAP_MARKER.is_symlink() or stat.S_IMODE(st.st_mode) != 0o444:
+            return "stale", "activation-marker"
+        if SITEMAP_MARKER.read_bytes() != SITEMAP_MARKER_BYTES or not SITEMAP_PUBLISHER.is_file():
+            return "stale", "publisher"
+        check = subprocess.run([str(SITEMAP_PUBLISHER), "--check"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=60)
+        if check.returncode != 0 or not check.stdout.startswith("COLORING_SITEMAP "):
+            return "stale", "check"
+        payload = json.loads(check.stdout[len("COLORING_SITEMAP "):])
+        if payload.get("result") != "CHECK_PASS":
+            return "stale", "check-result"
+        if payload.get("sitemap_sha256") == payload.get("previous_sha256"):
+            return "current", None
+        previous = payload.get("previous_sha256")
+        catalog = payload.get("catalog_sha256")
+        if not isinstance(previous, str) or not isinstance(catalog, str):
+            return "stale", "check-result"
+        apply = subprocess.run([
+            str(SITEMAP_PUBLISHER), "--apply",
+            "--expected-catalog-sha256=" + catalog,
+            "--expected-current-sitemap-sha256=" + previous,
+        ], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=60)
+        if apply.returncode != 0:
+            return "stale", "apply"
+        return "refreshed", None
+    except Exception:
+        return "stale", "unexpected"
+
+
+def initial_steps() -> list[dict]:
+    return [{"label": label, "status": "pending"} for label in STEPS]
+
+
+def update_job(job_id: str, mutate) -> dict:
+    path = JOBS / job_id / "job.json"
+    payload = read_json(path)
+    mutate(payload)
+    payload["updated_at"] = int(time.time())
+    write_json(path, payload)
+    return payload
+
+
+def set_step(job_id: str, index: int, status: str, detail: str | None = None) -> None:
+    def mutate(payload):
+        step = payload["steps"][index]
+        now = int(time.time())
+        if status == "running" and "started_at" not in step:
+            step["started_at"] = now
+        step["status"] = status
+        if status in ("done", "failed"):
+            step["finished_at"] = now
+        if detail:
+            step["detail"] = detail
+    update_job(job_id, mutate)
+
+
+def unfinished_job_exists() -> bool:
+    if not JOBS.is_dir():
+        return False
+    for path in JOBS.glob("*/job.json"):
+        try:
+            status = read_json(path).get("status")
+        except Exception:
+            continue
+        if status in ("queued", "running"):
+            return True
+    return False
+
+
+def run_job(job_id: str) -> None:
+    job_path = JOBS / job_id / "job.json"
+    try:
+        job = read_json(job_path)
+        upload_dir = UPLOADS / job["upload_id"]
+        upload = read_json(upload_dir / "upload.json")
+        pages = upload["files"]
+        titles = job["titles"]
+        uid, gid = owner_ids()
+        with PUBLISH_LOCK.open("r+b", buffering=0) as lock:
+            try:
+                fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                stop("another publication job is active")
+            update_job(job_id, lambda p: p.update(status="running", started_at=int(time.time())))
+            set_step(job_id, 0, "done")
+            set_step(job_id, 1, "done")
+
+            prepared_dir = JOBS / job_id / "prepared"
+            prepared_dir.mkdir(mode=0o700)
+            set_step(job_id, 2, "running")
+            prepared = []
+            for item in pages:
+                source = upload_dir / "pages" / item["staged_name"]
+                target = prepared_dir / item["staged_name"]
+                run_tool(PRINT_MASTER, ["prepare", str(source), str(target)], uid, gid)
+                prepared.append(target)
+            set_step(job_id, 2, "done")
+
+            set_step(job_id, 3, "running")
+            prepared_meta = []
+            for target in prepared:
+                output = run_tool(PRINT_MASTER, ["validate", str(target)], uid, gid)
+                if "VALIDATE_PRINT=PASS" not in output.splitlines():
+                    stop("print-master validation result is ambiguous")
+                prepared_meta.append({
+                    "path": target,
+                    "sha256": hashlib.sha256(target.read_bytes()).hexdigest(),
+                    "size_bytes": target.stat().st_size,
+                })
+            set_step(job_id, 3, "done")
+
+            set_step(job_id, 4, "running")
+            ids = allocate_ids(len(pages))
+            set_step(job_id, 4, "done")
+
+            results = []
+            set_step(job_id, 5, "running")
+            for item, title, page_id, meta in zip(pages, titles, ids, prepared_meta, strict=True):
+                if page_id in catalog_ids() or os.path.lexists(ORIGINALS / page_id) or os.path.lexists(MEDIA / page_id):
+                    stop("allocated ID collided before import")
+                inbox = INBOX / f"{page_id}.png"
+                hardlink_to_inbox(meta["path"], inbox)
+                output = run_tool(IMPORTER, [
+                    str(inbox), "--id", page_id, "--title", title, "--character", "",
+                    "--category", job["category"], "--age", "3-6", "--difficulty", "easy", "--language", "de",
+                ], uid, gid)
+                if f"IMPORTED={page_id} PAGES=1" not in output.splitlines():
+                    stop("immutable importer result is ambiguous")
+                results.append({
+                    "id": page_id, "title": title, "source_name": item["source_name"],
+                    "sha256": meta["sha256"], "size_bytes": meta["size_bytes"], "status": "imported",
+                })
+                update_job(job_id, lambda p, r=list(results): p.update(results=r))
+            set_step(job_id, 5, "done")
+            set_step(job_id, 6, "done")
+            set_step(job_id, 7, "done")
+
+        set_step(job_id, 8, "running")
+        sitemap_status, sitemap_phase = sitemap_best_effort()
+        set_step(job_id, 8, "done", sitemap_status if sitemap_phase is None else sitemap_status + ": " + sitemap_phase)
+
+        set_step(job_id, 9, "running")
+        for result in results:
+            result["url"] = verify_public(result["id"])
+            result["status"] = "published"
+            update_job(job_id, lambda p, r=list(results): p.update(results=r))
+        set_step(job_id, 9, "done")
+        update_job(job_id, lambda p: p.update(
+            status="published", finished_at=int(time.time()), results=results,
+            sitemap_status=sitemap_status, sitemap_phase=sitemap_phase,
+        ))
+    except Exception as exc:
+        message = str(exc) if isinstance(exc, Stop) else "unexpected admin publisher error"
+        def failed(payload):
+            payload["status"] = "failed"
+            payload["error"] = message
+            payload["finished_at"] = int(time.time())
+            for step in payload.get("steps", []):
+                if step.get("status") == "running":
+                    step["status"] = "failed"
+                    step["finished_at"] = int(time.time())
+                    break
+        try:
+            update_job(job_id, failed)
+        except Exception:
+            pass
+
+
+def state_scaffold() -> None:
+    uid, gid = owner_ids()
+    STATE.mkdir(parents=True, exist_ok=True, mode=0o700)
+    UPLOADS.mkdir(exist_ok=True, mode=0o700)
+    JOBS.mkdir(exist_ok=True, mode=0o700)
+    for path in (STATE, UPLOADS, JOBS):
+        st = path.lstat()
+        if path.is_symlink() or not stat.S_ISDIR(st.st_mode) or st.st_uid != uid or st.st_gid != gid or stat.S_IMODE(st.st_mode) != 0o700:
+            stop("admin state directory metadata is unsafe")
+
+
+def runtime_preflight() -> None:
+    if os.geteuid() == 0:
+        stop("admin publisher must not run as root")
+    uid, gid = owner_ids()
+    if (os.geteuid(), os.getegid()) != (uid, gid):
+        stop("admin publisher must run as andris")
+    for path in (CONTENT, INBOX, ORIGINALS, PUBLIC, MEDIA, CATALOG.parent):
+        if not path.exists() or path.is_symlink():
+            stop("content store is not ready")
+    if not CATALOG.is_file() or CATALOG.is_symlink() or not Path(DOCKER).is_file():
+        stop("runtime dependency is unavailable")
+    st = PUBLISH_LOCK.lstat()
+    if PUBLISH_LOCK.is_symlink() or not stat.S_ISREG(st.st_mode) or st.st_uid != uid or st.st_gid != gid or stat.S_IMODE(st.st_mode) != 0o600:
+        stop("shared publication lock is unsafe")
+    if STATE.stat().st_dev != INBOX.stat().st_dev:
+        stop("admin state and inbox must share one filesystem")
+
+
+def web_root() -> Path:
+    return WEB_ROOT if WEB_ROOT.is_dir() else SOURCE_WEB_ROOT
+
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "AusmalwieseAdmin/1"
+
+    def log_message(self, _format, *_args):
+        return
+
+    def send_json(self, status: int, payload) -> None:
+        body = (json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n").encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def send_error_json(self, status: int, message: str) -> None:
+        self.send_json(status, {"error": message})
+
+    def static(self, name: str, content_type: str) -> None:
+        try:
+            data = (web_root() / name).read_bytes()
+        except OSError:
+            self.send_error_json(404, "asset unavailable")
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def do_GET(self):
+        path = unquote(urlparse(self.path).path)
+        try:
+            if path in ("/", "/index.html"):
+                return self.static("index.html", "text/html; charset=utf-8")
+            if path == "/api/categories":
+                return self.send_json(200, {"categories": [{"id": k, "label": v} for k, v in CATEGORIES.items()]})
+            match = re.fullmatch(r"/api/uploads/([0-9a-f]{32})", path)
+            if match:
+                return self.send_json(200, {"upload_id": match.group(1), **read_json(UPLOADS / match.group(1) / "upload.json")})
+            match = re.fullmatch(r"/api/uploads/([0-9a-f]{32})/preview/(\d+)", path)
+            if match:
+                payload = read_json(UPLOADS / match.group(1) / "upload.json")
+                index = int(match.group(2))
+                if index < 1 or index > len(payload["files"]):
+                    return self.send_error_json(404, "preview not found")
+                item = payload["files"][index - 1]
+                data = (UPLOADS / match.group(1) / "pages" / item["staged_name"]).read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "image/png")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
+            match = re.fullmatch(r"/api/jobs/([0-9a-f]{32})", path)
+            if match:
+                return self.send_json(200, read_json(JOBS / match.group(1) / "job.json"))
+            self.send_error_json(404, "not found")
+        except Stop as exc:
+            self.send_error_json(400, str(exc))
+        except Exception:
+            self.send_error_json(500, "unexpected admin service error")
+
+    def admin_marker(self) -> bool:
+        if self.headers.get("X-Ausmalwiese-Admin") != "1":
+            self.send_error_json(403, "missing admin request marker")
+            return False
+        return True
+
+    def read_request_json(self):
+        length = self.headers.get("Content-Length")
+        if not length or not length.isdigit() or int(length) <= 0 or int(length) > 64 * 1024:
+            stop("request body size is invalid")
+        try:
+            return json.loads(self.rfile.read(int(length)))
+        except (UnicodeError, json.JSONDecodeError):
+            stop("request JSON is invalid")
+
+    def do_POST(self):
+        if not self.admin_marker():
+            return
+        try:
+            path = urlparse(self.path).path
+            if path == "/api/uploads":
+                return self.handle_upload()
+            if path == "/api/jobs":
+                return self.handle_job()
+            self.send_error_json(404, "not found")
+        except Stop as exc:
+            self.send_error_json(400, str(exc))
+        except Exception:
+            self.send_error_json(500, "unexpected admin service error")
+
+    def handle_upload(self):
+        if self.headers.get_content_type() not in ("application/zip", "application/x-zip-compressed"):
+            stop("content type must be application/zip")
+        length = self.headers.get("Content-Length")
+        if not length or not length.isdigit() or int(length) <= 0 or int(length) > MAX_UPLOAD:
+            stop("ZIP upload size is outside the allowed bound")
+        upload_id = secrets.token_hex(16)
+        upload_dir = UPLOADS / upload_id
+        upload_dir.mkdir(mode=0o700)
+        archive = upload_dir / "upload.zip"
+        fd = os.open(archive, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        remaining = int(length)
+        try:
+            with os.fdopen(fd, "wb", buffering=0) as out:
+                while remaining:
+                    block = self.rfile.read(min(1024 * 1024, remaining))
+                    if not block:
+                        stop("ZIP upload ended early")
+                    out.write(block)
+                    remaining -= len(block)
+                os.fsync(out.fileno())
+            staged = stage_zip(archive, upload_dir)
+            payload = {"schema": "rozkalns.rpi5-main.coloring-pages-admin-upload.v1", "created_at": int(time.time()), **staged}
+            write_json(upload_dir / "upload.json", payload)
+        except Exception:
+            shutil.rmtree(upload_dir, ignore_errors=True)
+            raise
+        self.send_json(201, {"upload_id": upload_id, **payload})
+
+    def handle_job(self):
+        raw = self.read_request_json()
+        if not isinstance(raw, dict) or set(raw) != {"upload_id", "category", "titles"}:
+            stop("job request keys are invalid")
+        upload_id = raw["upload_id"]
+        if not isinstance(upload_id, str) or not TOKEN.fullmatch(upload_id):
+            stop("upload id is invalid")
+        upload = read_json(UPLOADS / upload_id / "upload.json")
+        category = raw["category"]
+        if category not in CATEGORIES:
+            stop("category is invalid")
+        titles_raw = raw["titles"]
+        if not isinstance(titles_raw, list) or len(titles_raw) != len(upload["files"]):
+            stop("titles must match uploaded PNG count")
+        titles = [validate_title(value) for value in titles_raw]
+        with CREATE_LOCK:
+            if unfinished_job_exists():
+                self.send_error_json(409, "another publication job is active")
+                return
+            job_id = secrets.token_hex(16)
+            job_dir = JOBS / job_id
+            job_dir.mkdir(mode=0o700)
+            payload = {
+                "schema": "rozkalns.rpi5-main.coloring-pages-admin-job.v1",
+                "job_id": job_id, "upload_id": upload_id,
+                "category": category, "category_label": CATEGORIES[category],
+                "titles": titles, "status": "queued", "created_at": int(time.time()),
+                "updated_at": int(time.time()), "steps": initial_steps(), "results": [],
+            }
+            write_json(job_dir / "job.json", payload)
+            threading.Thread(target=run_job, args=(job_id,), name="publish-" + job_id[:8], daemon=True).start()
+        self.send_json(202, payload)
+
+
+def serve() -> int:
+    state_scaffold()
+    runtime_preflight()
+    server = ThreadingHTTPServer((HOST, PORT), Handler)
+    server.daemon_threads = True
+    server.serve_forever(poll_interval=0.5)
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--serve", action="store_true")
+    args = parser.parse_args()
+    if not args.serve:
+        parser.error("--serve is required")
+    try:
+        return serve()
+    except Stop as exc:
+        print("COLORING_PAGES_ADMIN_PUBLISH=FAIL error=" + str(exc), file=os.sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

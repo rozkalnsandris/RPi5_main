@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ausmalwiese Admin – Neue Ausmalbilder</title>
+<style>
+:root{font-family:Inter,system-ui,sans-serif;color:#172033;background:#f6f8fb}
+*{box-sizing:border-box}body{margin:0}.layout{display:grid;grid-template-columns:230px 1fr;min-height:100vh}
+aside{background:#f3fbf4;border-right:1px solid #e3e9e5;padding:24px 16px}.brand{font-size:24px;font-weight:800;color:#16873d;margin:0 0 30px}
+nav a{display:block;padding:12px 14px;border-radius:9px;color:#445064;text-decoration:none;margin:4px 0}.active{background:#dff6e4!important;color:#126d31!important;font-weight:700}
+.future{margin-top:28px;border-top:1px solid #dce4df;padding-top:18px;color:#d33!important}
+main{padding:28px;max-width:1400px;width:100%}h1{margin:0;font-size:30px}.sub{color:#667085;margin:5px 0 20px}
+.grid{display:grid;grid-template-columns:1fr 1.35fr;gap:14px}.card{background:white;border:1px solid #e2e8f0;border-radius:12px;padding:16px;box-shadow:0 2px 10px #1111;margin-bottom:14px}
+.stephead{display:flex;gap:10px;align-items:center;font-size:19px;font-weight:800}.badge{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:#22a447;color:white}
+.drop{border:2px dashed #b8c4d5;border-radius:10px;padding:38px;text-align:center;margin-top:14px;background:#fbfcfe}.drop.drag{border-color:#22a447;background:#effbf2}
+button{border:0;border-radius:8px;padding:12px 17px;font-weight:700;cursor:pointer}.primary{background:#20a344;color:#fff}.primary:disabled{opacity:.45;cursor:not-allowed}
+.filebar{margin-top:10px;padding:11px;border-radius:8px;background:#e9f8ed;display:none}.previews{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-top:14px}
+.preview{border:1px solid #e2e8f0;border-radius:9px;padding:8px}.preview img{display:block;width:100%;aspect-ratio:2/3;object-fit:contain;background:white}.preview input{width:100%;margin-top:6px;padding:7px;border:1px solid #cdd5df;border-radius:6px}
+select{width:100%;padding:12px;border:1px solid #cdd5df;border-radius:8px;background:white;font-size:16px}
+.notice{margin-top:12px;padding:12px;border-radius:8px;background:#eef6ff;color:#245d9c}.process{display:none}.row{display:grid;grid-template-columns:30px 1fr 150px 60px;gap:8px;align-items:center;border-top:1px solid #edf0f3;padding:8px 0}.dot{display:grid;place-items:center;width:23px;height:23px;border-radius:50%;background:#d9e0e8;color:#536174;font-size:12px}.done .dot{background:#28a84f;color:white}.failed .dot{background:#d64545;color:white}.running .dot{background:#2d7cf5;color:white}.status{font-size:13px}.success{display:none;border:1px solid #bce7c7;background:#f1fbf4;border-radius:10px;padding:14px;margin-top:12px}.results{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:10px}.result{background:white;border:1px solid #dce7df;border-radius:8px;padding:10px}.result a{color:#1769d2;word-break:break-all}
+.error{display:none;background:#fff0f0;color:#9c2424;border:1px solid #f0c7c7;border-radius:8px;padding:12px;margin-top:10px}
+@media(max-width:850px){.layout{display:block}aside{display:none}main{padding:16px}.grid{grid-template-columns:1fr}.row{grid-template-columns:28px 1fr}.row .status,.row .duration{grid-column:2}}
+</style>
+</head>
+<body><div class="layout">
+<aside><div class="brand">🌱 Ausmalwiese</div><nav>
+<a>⌂ Dashboard</a><a class="active">⇧ Neue Ausmalbilder</a><a>▤ Alle Seiten</a><a>▢ Kategorien</a><a>▥ Statistiken</a><a>⚙ Einstellungen</a>
+<a class="future">🗑 Seiten löschen<br><small>(später)</small></a></nav></aside>
+<main><h1>Neue Ausmalbilder veröffentlichen</h1><p class="sub">Lade einen ZIP-Ordner mit Ausmalbildern hoch. Wähle die Kategorie und veröffentliche sie.</p>
+<div class="grid">
+<section class="card"><div class="stephead"><span class="badge">1</span>ZIP-Datei hochladen</div>
+<div id="drop" class="drop"><strong>ZIP-Datei hier ablegen</strong><br><small>oder klicken zum Auswählen</small><input id="file" type="file" accept=".zip,application/zip" hidden></div>
+<div id="filebar" class="filebar"></div></section>
+<section class="card"><div class="stephead"><span class="badge">2</span>Vorschau der Bilder</div><div id="previews" class="previews"><span style="color:#778">Noch keine Bilder.</span></div></section>
+</div>
+<section class="card"><div class="stephead"><span class="badge">3</span>Kategorie wählen</div><div style="margin-top:14px"><select id="category"><option value="">Bitte Kategorie wählen …</option></select></div></section>
+<section class="card"><div class="stephead"><span class="badge">4</span>Veröffentlichen</div>
+<p><button id="publish" class="primary" disabled>⇧ Veröffentlichung starten</button></p>
+<div class="notice">Nach dem Start übernimmt der Server alle weiteren Schritte automatisch. Du kannst den Fortschritt hier live verfolgen.</div>
+<div id="error" class="error"></div>
+<div id="process" class="process"><h3>Verarbeitung läuft …</h3><div id="steps"></div></div>
+<div id="success" class="success"><h2 style="margin:0;color:#147634">✓ Erfolgreich veröffentlicht!</h2><div id="results" class="results"></div></div>
+</section></main></div>
+<script>
+"use strict";
+var upload=null,job=null,poll=null;
+var file=document.getElementById("file"),drop=document.getElementById("drop"),filebar=document.getElementById("filebar"),
+previews=document.getElementById("previews"),category=document.getElementById("category"),publish=document.getElementById("publish"),
+process=document.getElementById("process"),steps=document.getElementById("steps"),success=document.getElementById("success"),
+results=document.getElementById("results"),errorBox=document.getElementById("error");
+function err(m){errorBox.textContent=m;errorBox.style.display="block"}function clearErr(){errorBox.style.display="none"}
+function adminFetch(url,opt){opt=opt||{};opt.headers=Object.assign({"X-Ausmalwiese-Admin":"1"},opt.headers||{});return fetch(url,opt).then(async function(r){var data=await r.json().catch(function(){return{error:"Ungültige Serverantwort"}});if(!r.ok)throw new Error(data.error||("HTTP "+r.status));return data})}
+fetch("/api/categories").then(function(r){return r.json()}).then(function(d){d.categories.forEach(function(c){var o=document.createElement("option");o.value=c.id;o.textContent=c.label;category.appendChild(o)})});
+drop.onclick=function(){file.click()};drop.ondragover=function(e){e.preventDefault();drop.classList.add("drag")};drop.ondragleave=function(){drop.classList.remove("drag")};drop.ondrop=function(e){e.preventDefault();drop.classList.remove("drag");if(e.dataTransfer.files[0])sendZip(e.dataTransfer.files[0])};file.onchange=function(){if(file.files[0])sendZip(file.files[0])};
+async function sendZip(f){clearErr();publish.disabled=true;success.style.display="none";process.style.display="none";try{upload=await adminFetch("/api/uploads",{method:"POST",headers:{"Content-Type":"application/zip"},body:f});filebar.style.display="block";filebar.textContent="✓ "+f.name+" — "+upload.count+" PNG gefunden";renderPreviews();updateButton()}catch(e){err(e.message)}}
+function renderPreviews(){previews.innerHTML="";upload.files.forEach(function(item,i){var c=document.createElement("div");c.className="preview";var img=document.createElement("img");img.src="/api/uploads/"+upload.upload_id+"/preview/"+(i+1);img.alt="Vorschau "+(i+1);var input=document.createElement("input");input.value=item.title;input.maxLength=128;input.setAttribute("aria-label","Titel Bild "+(i+1));input.oninput=updateButton;c.append(img,input);previews.appendChild(c)})}
+category.onchange=updateButton;function titles(){return Array.from(previews.querySelectorAll("input")).map(function(x){return x.value.trim()})}
+function updateButton(){publish.disabled=!(upload&&category.value&&titles().length===upload.count&&titles().every(Boolean))}
+publish.onclick=async function(){clearErr();publish.disabled=true;success.style.display="none";try{job=await adminFetch("/api/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({upload_id:upload.upload_id,category:category.value,titles:titles()})});process.style.display="block";renderJob(job);poll=setInterval(refresh,1500)}catch(e){err(e.message);updateButton()}}
+async function refresh(){try{job=await adminFetch("/api/jobs/"+job.job_id);renderJob(job);if(job.status==="published"||job.status==="failed"){clearInterval(poll);poll=null;if(job.status==="failed"){err(job.error||"Veröffentlichung fehlgeschlagen")}else{renderResults(job.results)}}}catch(e){clearInterval(poll);poll=null;err(e.message)}}
+function renderJob(j){steps.innerHTML="";j.steps.forEach(function(s,i){var row=document.createElement("div");row.className="row "+s.status;var dur="";if(s.started_at){var end=s.finished_at||Math.floor(Date.now()/1000);dur=(end-s.started_at)+" s"}var label=s.label+(s.detail?" — "+s.detail:"");row.innerHTML="<span class=dot>"+(s.status==="done"?"✓":(i+1))+"</span><span>"+escapeHtml(label)+"</span><span class=status>"+escapeHtml(s.status)+"</span><span class=duration>"+dur+"</span>";steps.appendChild(row)})}
+function renderResults(items){success.style.display="block";results.innerHTML="";items.forEach(function(x){var d=document.createElement("div");d.className="result";d.innerHTML="<strong>"+escapeHtml(x.title)+"</strong><br><small>ID: "+x.id+"</small><br><a target=_blank rel=noopener href='"+x.url+"'>"+escapeHtml(x.url)+" ↗</a>";results.appendChild(d)})}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+</script></body></html>
