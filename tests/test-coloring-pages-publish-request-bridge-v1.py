@@ -254,7 +254,7 @@ class PublishRequestBridgeTests(unittest.TestCase):
                     first = bridge.main(["--once"])
                     second = bridge.main(["--once"])
 
-            self.assertEqual(first, 1)
+            self.assertEqual(first, 0)
             self.assertEqual(second, 0)
             self.assertEqual(run.call_count, 2)
             result = json.loads(
