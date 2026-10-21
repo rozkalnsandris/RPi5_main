@@ -372,6 +372,31 @@
         "kind": "source-accepted",
         "runtime_current": false
       }
+    },
+    {
+      "service_id": "ausmalwiese-admin-publisher",
+      "roadmap_aliases": [
+        "Ausmalwiese ADMIN publisher"
+      ],
+      "hostname": "admin.ausmalwiese.de",
+      "zone": "ADMIN",
+      "current_origin_class": "loopback",
+      "desired_origin_class": "loopback",
+      "runtime_owner": "rozkalnsandris/RPi5_main",
+      "repository_owner": "rozkalnsandris/RPi5_main",
+      "access_required": true,
+      "access_class": "ADMIN",
+      "lan_break_glass": "forbidden",
+      "firewall_expectation": "no-lan-origin-required",
+      "health_check_method": "access-authenticated-admin-http",
+      "health_contract_ref": "docs/COLORING_PAGES_ADMIN_PUBLISH_V1.md",
+      "recovery_ref": "docs/AUSMALWIESE_ADMIN_INGRESS_V1.md",
+      "last_verified_evidence": {
+        "as_of": "2026-10-21",
+        "ref": "RPi5_main#1149",
+        "kind": "fresh-loopback-install-post-verify",
+        "runtime_current": false
+      }
     }
   ]
 }

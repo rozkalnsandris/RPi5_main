@@ -1,7 +1,7 @@
 schema_version: 1
 status: desired-state
 canonical_issue: 177
-last_reviewed: 2026-09-13
+last_reviewed: 2026-10-21
 
 # Public-safe desired-state registry.
 # Never place account IDs, tunnel IDs, Access AUD tags, owner emails,
@@ -192,6 +192,18 @@ hostnames:
     lan_break_glass: false
     audit_route_presence: present
     evidence: dashboard-phase11-live-route-and-protect-with-access-verified
+
+  - hostname: admin.ausmalwiese.de
+    owner_repo: rozkalnsandris/RPi5_main
+    delivery: shared_rpi5_tunnel
+    trust_class: ADMIN
+    desired_origin_scope: loopback
+    access_application_scope: exact-owner
+    protect_with_access: true
+    app_jwt_validation: false
+    lan_break_glass: false
+    audit_route_presence: absent
+    evidence: admin-publisher-loopback-ready-route-and-access-pending
 
   - hostname: control.rozkalns.net
     owner_repo: rozkalnsandris/rozkalns-control-center

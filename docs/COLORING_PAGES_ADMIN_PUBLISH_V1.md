@@ -12,7 +12,7 @@ Issue: RPi5_main #1149.
 6. The browser polls the job status while RPi5 performs print preparation, validation, ID allocation, import, derivatives/catalog update, sitemap refresh when enabled, and public verification.
 7. PASS shows each published activity ID and direct `https://ausmalwiese.de/detail.html?id=<id>` link.
 
-The public Ausmalwiese container stays read-only. This service binds only to `127.0.0.1:8765`; external ADMIN routing and Cloudflare Access are separate owner-gated LIVE work.
+The public Ausmalwiese container stays read-only. This service binds only to `127.0.0.1:8765`. The owner-approved canonical external hostname is `admin.ausmalwiese.de`; its Tunnel/DNS route and exact-owner Cloudflare Access protection are separate owner-gated LIVE work.
 
 ## ZIP contract
 
@@ -42,4 +42,4 @@ No automatic retry, rollback, cleanup, overwrite or alternate publication path o
 
 ## LIVE gates
 
-Source merge does not install, start, route or expose this service. Installation requires a separate exact owner authorization for the reviewed installer. External ADMIN hostname/route and Cloudflare Access remain another separate owner gate.
+Source merge does not install, start, route or expose this service. Installation requires a separate exact owner authorization for the reviewed installer. The canonical external ADMIN hostname is `admin.ausmalwiese.de`. Creating its Tunnel/DNS route and exact-owner Cloudflare Access application/policy remains a separate owner gate.
