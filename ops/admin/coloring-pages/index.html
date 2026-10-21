@@ -143,7 +143,7 @@ select{width:100%;min-height:44px;padding:9px 12px;border:1px solid #cfdaea;bord
         <div class="notice">Pēc sākšanas progresu vari redzēt šeit. Publicēšanas logu neaizver, kamēr process nav pabeigts.</div>
         <div id="error" class="error"></div>
         <div id="process" class="process"><h3>Notiek apstrāde …</h3><div id="steps"></div></div>
-        <div id="success" class="success"><h3>✓ Veiksmīgi publicēts!</h3><div id="results" class="results"></div></div>
+        <div id="success" class="success"><h3 id="resultTitle">✓ Veiksmīgi publicēts!</h3><div id="results" class="results"></div></div>
       </article>
     </div>
   </section>
@@ -151,11 +151,12 @@ select{width:100%;min-height:44px;padding:9px 12px;border:1px solid #cfdaea;bord
 
 <script>
 "use strict";
-var upload=null,job=null,poll=null;
+var upload=null,job=null,poll=null,uiTick=null,pollFailures=0,pollBusy=false;
+var SESSION_JOB_KEY="ausmalwiese.admin.activeJob.v1";
 var file=document.getElementById("file"),drop=document.getElementById("drop"),filebar=document.getElementById("filebar"),
 previews=document.getElementById("previews"),category=document.getElementById("category"),publish=document.getElementById("publish"),
 process=document.getElementById("process"),steps=document.getElementById("steps"),success=document.getElementById("success"),
-results=document.getElementById("results"),errorBox=document.getElementById("error");
+results=document.getElementById("results"),resultTitle=document.getElementById("resultTitle"),errorBox=document.getElementById("error");
 var categoryLabels={tiere:"Dzīvnieki",fahrzeuge:"Transportlīdzekļi",alphabet:"Alfabēts",lernen:"Mācības",figuren:"Tēli un varoņi",jahreszeiten:"Gadalaiki un svētki"};
 var stepLabels={
 "ZIP-Datei empfangen und entpacken":"Saņemt un atpakot ZIP failu",
@@ -172,17 +173,27 @@ var stepLabels={
 var statusLabels={pending:"Gaida",running:"Notiek",done:"Pabeigts",failed:"Kļūda"};
 function err(m){errorBox.textContent=m;errorBox.style.display="block"}function clearErr(){errorBox.style.display="none"}
 function adminFetch(url,opt){opt=opt||{};opt.headers=Object.assign({"X-Ausmalwiese-Admin":"1"},opt.headers||{});return fetch(url,opt).then(async function(r){var data=await r.json().catch(function(){return{error:"Nederīga servera atbilde"}});if(!r.ok)throw new Error(data.error||("HTTP "+r.status));return data})}
+function isTerminal(j){return !!(j&&(j.status==="published"||j.status==="failed"))}
+function storeJobId(id){try{sessionStorage.setItem(SESSION_JOB_KEY,id)}catch(_e){}}
+function storedJobId(){try{return sessionStorage.getItem(SESSION_JOB_KEY)||""}catch(_e){return""}}
+function clearStoredJob(){try{sessionStorage.removeItem(SESSION_JOB_KEY)}catch(_e){}}
+function stopTracking(){if(poll){clearTimeout(poll);poll=null}if(uiTick){clearInterval(uiTick);uiTick=null}pollBusy=false}
+function scheduleRefresh(delay){if(poll)clearTimeout(poll);poll=setTimeout(refresh,delay)}
+function startTracking(j,restored){stopTracking();job=j;storeJobId(job.job_id);process.style.display="block";renderJob(job);if(job.results&&job.results.length&&isTerminal(job))renderResults(job.results,job.status!=="published");if(isTerminal(job)){finishJob(job);return}uiTick=setInterval(function(){if(job&&!isTerminal(job))renderJob(job)},1000);scheduleRefresh(100);if(restored)err("Atjaunots iepriekšējais aktīvais publicēšanas darbs.")}
+function finishJob(j){stopTracking();clearStoredJob();renderJob(j);if(j.results&&j.results.length)renderResults(j.results,j.status!=="published");if(j.status==="failed")err(j.error||"Publicēšana neizdevās");else clearErr();updateButton()}
+async function restoreActiveJob(){var id=storedJobId();if(id){try{var saved=await adminFetch("/api/jobs/"+id);startTracking(saved,true);return}catch(_e){clearStoredJob()}}try{var active=await adminFetch("/api/jobs/active");if(active.active&&active.job)startTracking(active.job,true)}catch(_e){}}
 fetch("/api/categories").then(function(r){return r.json()}).then(function(d){d.categories.forEach(function(c){var o=document.createElement("option");o.value=c.id;o.textContent=categoryLabels[c.id]||c.label;category.appendChild(o)})}).catch(function(){err("Neizdevās ielādēt kategorijas.")});
 drop.onclick=function(){file.click()};drop.ondragover=function(e){e.preventDefault();drop.classList.add("drag")};drop.ondragleave=function(){drop.classList.remove("drag")};drop.ondrop=function(e){e.preventDefault();drop.classList.remove("drag");if(e.dataTransfer.files[0])sendZip(e.dataTransfer.files[0])};file.onchange=function(){if(file.files[0])sendZip(file.files[0])};
-async function sendZip(f){clearErr();publish.disabled=true;success.style.display="none";process.style.display="none";try{upload=await adminFetch("/api/uploads",{method:"POST",headers:{"Content-Type":"application/zip"},body:f});filebar.style.display="block";filebar.textContent="✓ "+f.name+" — atrasti "+upload.count+" PNG";renderPreviews();updateButton()}catch(e){err(e.message)}}
+async function sendZip(f){if(job&&!isTerminal(job)){err("Vispirms pabeidz aktīvo publicēšanas darbu.");return}clearErr();publish.disabled=true;success.style.display="none";process.style.display="none";try{upload=await adminFetch("/api/uploads",{method:"POST",headers:{"Content-Type":"application/zip"},body:f});filebar.style.display="block";filebar.textContent="✓ "+f.name+" — atrasti "+upload.count+" PNG";renderPreviews();updateButton()}catch(e){err(e.message)}}
 function renderPreviews(){previews.innerHTML="";upload.files.forEach(function(item,i){var c=document.createElement("div");c.className="preview";var img=document.createElement("img");img.src="/api/uploads/"+upload.upload_id+"/preview/"+(i+1);img.alt="Priekšskatījums "+(i+1);var input=document.createElement("input");input.value=item.title;input.maxLength=128;input.setAttribute("aria-label","Attēla "+(i+1)+" nosaukums");input.oninput=updateButton;c.append(img,input);previews.appendChild(c)})}
 category.onchange=updateButton;function titles(){return Array.from(previews.querySelectorAll("input")).map(function(x){return x.value.trim()})}
-function updateButton(){publish.disabled=!(upload&&category.value&&titles().length===upload.count&&titles().every(Boolean))}
-publish.onclick=async function(){clearErr();publish.disabled=true;success.style.display="none";try{job=await adminFetch("/api/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({upload_id:upload.upload_id,category:category.value,titles:titles()})});process.style.display="block";renderJob(job);poll=setInterval(refresh,1500)}catch(e){err(e.message);updateButton()}}
-async function refresh(){try{job=await adminFetch("/api/jobs/"+job.job_id);renderJob(job);if(job.status==="published"||job.status==="failed"){clearInterval(poll);poll=null;if(job.status==="failed"){err(job.error||"Publicēšana neizdevās")}else{renderResults(job.results)}}}catch(e){clearInterval(poll);poll=null;err(e.message)}}
+function updateButton(){publish.disabled=!!(job&&!isTerminal(job))||!(upload&&category.value&&titles().length===upload.count&&titles().every(Boolean))}
+publish.onclick=async function(){clearErr();publish.disabled=true;success.style.display="none";try{var created=await adminFetch("/api/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({upload_id:upload.upload_id,category:category.value,titles:titles()})});startTracking(created,created.restored===true)}catch(e){err(e.message);updateButton()}}
+async function refresh(){if(!job||pollBusy||isTerminal(job))return;pollBusy=true;try{var latest=await adminFetch("/api/jobs/"+job.job_id);job=latest;pollFailures=0;clearErr();renderJob(job);if(isTerminal(job)){finishJob(job)}else{scheduleRefresh(1500)}}catch(e){pollFailures=Math.min(pollFailures+1,4);err("Savienojums ar publicēšanas statusu īslaicīgi pārtrūka. Mēģinām vēlreiz…");scheduleRefresh(Math.min(10000,1500*Math.pow(2,pollFailures)))}finally{pollBusy=false}}
 function renderJob(j){steps.innerHTML="";j.steps.forEach(function(s,i){var row=document.createElement("div");row.className="row "+s.status;var dur="";if(s.started_at){var end=s.finished_at||Math.floor(Date.now()/1000);dur=(end-s.started_at)+" s"}var label=(stepLabels[s.label]||s.label)+(s.detail?" — "+s.detail:"");row.innerHTML="<span class=dot>"+(s.status==="done"?"✓":(i+1))+"</span><span>"+escapeHtml(label)+"</span><span class=status>"+escapeHtml(statusLabels[s.status]||s.status)+"</span><span class=duration>"+dur+"</span>";steps.appendChild(row)})}
-function renderResults(items){success.style.display="block";results.innerHTML="";items.forEach(function(x){var d=document.createElement("div");d.className="result";d.innerHTML="<strong>"+escapeHtml(x.title)+"</strong><br><small>ID: "+x.id+"</small><br><a target=_blank rel=noopener href='"+x.url+"'>Atvērt publicēto lapu ↗</a>";results.appendChild(d)})}
+function renderResults(items,partial){if(!items||!items.length)return;success.style.display="block";resultTitle.textContent=partial?"Daļēji pabeigts — jau apstrādātās lapas":"✓ Veiksmīgi publicēts!";results.innerHTML="";items.forEach(function(x){var d=document.createElement("div");d.className="result";var status=x.status==="published"?"Publicēts":"Importēts";var link=x.url?"<br><a target=_blank rel=noopener href='"+x.url+"'>Atvērt publicēto lapu ↗</a>":"";d.innerHTML="<strong>"+escapeHtml(x.title)+"</strong><br><small>ID: "+escapeHtml(x.id)+" · "+status+"</small>"+link;results.appendChild(d)})}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+restoreActiveJob();
 </script>
 </body>
 </html>
