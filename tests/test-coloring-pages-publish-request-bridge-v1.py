@@ -47,22 +47,66 @@ class PublishRequestBridgeTests(unittest.TestCase):
             "activities": activities,
         }
 
+    def v1_manifest(
+        self,
+        page_id: str = "1234567",
+        sha: str = "a" * 64,
+        size: int = 1000,
+    ):
+        return {
+            "schema": "rozkalns.coloring-pages.drive-staging-manifest.v1",
+            "id": page_id,
+            "sha256": sha,
+            "size_bytes": size,
+            "title": "Test page",
+            "character": "",
+            "category": "alphabet",
+            "age": "3-6",
+            "difficulty": "easy",
+            "language": "de",
+            "source_kind": "chatgpt-generated-png",
+            "approval_class": "explicit-owner-chat-approval",
+        }
+
     def v1(self, page_id: str = "1234567", sha: str = "a" * 64, size: int = 1000):
         return {
             "kind": "v1",
             "id": page_id,
             "expected_sha256": sha,
             "expected_size": size,
+            "manifest": self.v1_manifest(page_id, sha, size),
         }
 
     def v2(self, page_id: str = "7654321"):
+        pages = [
+            {"index": 1, "sha256": "a" * 64, "size_bytes": 1000},
+            {"index": 2, "sha256": "b" * 64, "size_bytes": 1100},
+        ]
         return {
             "kind": "v2",
             "id": page_id,
-            "expected_pages": [
-                {"index": 1, "sha256": "a" * 64, "size_bytes": 1000},
-                {"index": 2, "sha256": "b" * 64, "size_bytes": 1100},
-            ],
+            "expected_pages": pages,
+            "manifest": {
+                "schema": "rozkalns.coloring-pages.drive-staging-manifest.v2",
+                "id": page_id,
+                "pages": [
+                    {
+                        "index": page["index"],
+                        "file": f"{page_id}-{page['index']}.png",
+                        "sha256": page["sha256"],
+                        "size_bytes": page["size_bytes"],
+                    }
+                    for page in pages
+                ],
+                "title": "Test set",
+                "character": "",
+                "category": "lernen",
+                "age": "3-6",
+                "difficulty": "easy",
+                "language": "de",
+                "source_kind": "chatgpt-generated-png-set",
+                "approval_class": "explicit-owner-chat-approval",
+            },
         }
 
     def runtime_tree(self, tempdir: str):
@@ -162,8 +206,9 @@ class PublishRequestBridgeTests(unittest.TestCase):
             self.request(batch, [self.v1(), self.v2()]),
             batch,
         )
+        v1_argv = bridge.operator_argv(checked[0])
         self.assertEqual(
-            bridge.operator_argv(checked[0]),
+            v1_argv[:-2],
             [
                 "/usr/local/bin/coloring-pages-drive-ingest",
                 "--id",
@@ -174,8 +219,12 @@ class PublishRequestBridgeTests(unittest.TestCase):
                 "1000",
             ],
         )
+        self.assertEqual(v1_argv[-2], "--manifest-json")
+        self.assertEqual(json.loads(v1_argv[-1]), self.v1_manifest())
+
+        v2_argv = bridge.operator_argv(checked[1])
         self.assertEqual(
-            bridge.operator_argv(checked[1]),
+            v2_argv[:-2],
             [
                 "/usr/local/bin/coloring-pages-drive-ingest",
                 "--id",
@@ -186,6 +235,8 @@ class PublishRequestBridgeTests(unittest.TestCase):
                 f"2:{'b' * 64}:1100",
             ],
         )
+        self.assertEqual(v2_argv[-2], "--manifest-json")
+        self.assertEqual(json.loads(v2_argv[-1]), self.v2()["manifest"])
         self.assertNotIn("shell=True", self.source)
         self.assertNotIn("shell = True", self.source)
         self.assertNotIn("os.system", self.source)
@@ -207,6 +258,16 @@ class PublishRequestBridgeTests(unittest.TestCase):
         bad_v2["expected_pages"][1]["index"] = 3
         with self.assertRaises(bridge.BridgeError):
             bridge.validate_request(self.request(batch, [bad_v2]), batch)
+
+        bad_manifest = self.v1()
+        bad_manifest["manifest"]["sha256"] = "b" * 64
+        with self.assertRaises(bridge.BridgeError):
+            bridge.validate_request(self.request(batch, [bad_manifest]), batch)
+
+        missing_manifest = self.v1()
+        del missing_manifest["manifest"]
+        with self.assertRaises(bridge.BridgeError):
+            bridge.validate_request(self.request(batch, [missing_manifest]), batch)
 
     def test_claim_removes_ready_trigger_before_execution(self):
         batch = "3" * 32
