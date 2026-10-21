@@ -137,6 +137,7 @@ def _sanitize_reason(value: str) -> str:
         "admin_target_application_already_exists",
         "admin_target_application_missing_or_ambiguous",
         "admin_access_binding_invalid",
+        "admin_tunnel_team_anchor_invalid",
         "admin_tunnel_route_conflict",
         "admin_tunnel_route_invalid",
     }
@@ -1145,29 +1146,50 @@ def _admin_access_binding(
     if len(policies) != 1 or policies[0].get("name") != ADMIN_POLICY_NAME:
         raise OperatorError("admin_access_binding_invalid")
     _exact_owner_selector(policies[0])
-    organization = client._request(
-        "GET",
-        f"/accounts/{account_id}/access/organizations",
-    ).get("result")
-    if not isinstance(organization, dict):
-        raise OperatorError("admin_access_binding_invalid")
-    team_name = organization.get("name")
-    if (
-        not isinstance(team_name, str)
-        or not team_name.strip()
-        or len(team_name) > 255
-        or any(ch.isspace() for ch in team_name)
-    ):
-        raise OperatorError("admin_access_binding_invalid")
     return {
-        "team_name": team_name,
         "aud": aud,
         "private_baseline": _baseline({
             "application": _stable_app_projection(app),
             "policy": policies[0],
-            "organization_name": team_name,
         }),
     }
+
+
+def _dashboard_tunnel_team_name(config: dict[str, Any]) -> str:
+    rules = config.get("ingress")
+    if not isinstance(rules, list):
+        raise OperatorError("admin_tunnel_team_anchor_invalid")
+    matches = [
+        rule
+        for rule in rules
+        if isinstance(rule, dict)
+        and rule.get("hostname") == ADMIN_TEMPLATE_HOSTNAME
+    ]
+    if len(matches) != 1:
+        raise OperatorError("admin_tunnel_team_anchor_invalid")
+    origin = matches[0].get("originRequest")
+    access = origin.get("access") if isinstance(origin, dict) else None
+    team_name = access.get("teamName") if isinstance(access, dict) else None
+    aud = access.get("audTag") if isinstance(access, dict) else None
+    if (
+        not isinstance(access, dict)
+        or access.get("required") is not True
+        or not isinstance(team_name, str)
+        or not team_name.strip()
+        or len(team_name) > 255
+        or any(ch.isspace() for ch in team_name)
+        or not isinstance(aud, list)
+        or not aud
+        or any(
+            not isinstance(item, str)
+            or not item
+            or len(item) > 4096
+            or any(ch.isspace() for ch in item)
+            for item in aud
+        )
+    ):
+        raise OperatorError("admin_tunnel_team_anchor_invalid")
+    return team_name
 
 
 def _prepared_admin_tunnel_config(
@@ -1237,9 +1259,10 @@ def run_ausmalwiese_admin_tunnel(
 ) -> dict[str, Any]:
     binding = _admin_access_binding(access, account_id)
     tunnel_id, config = _rpi5_tunnel(tunnel, account_id)
+    team_name = _dashboard_tunnel_team_name(config)
     desired = _prepared_admin_tunnel_config(
         config,
-        team_name=binding["team_name"],
+        team_name=team_name,
         aud=binding["aud"],
     )
     baseline = _baseline({
