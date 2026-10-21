@@ -52,6 +52,8 @@ class Tests(unittest.TestCase):
         self.assertNotIn("extractall(",source);self.assertNotIn('"0.0.0.0"',source);self.assertNotIn("rclone",source.lower())
         self.assertIn('HOST = "127.0.0.1"',source);self.assertIn("PUBLISH_LOCK",source)
         self.assertIn("VALIDATE_PRINT=PASS",source);self.assertIn("detail.html?id=",source)
+        self.assertIn('/assets/fonts/baloo2-latin-vf-26fb4610d4bc976d.woff2',source)
+        self.assertIn('/assets/fonts/nunito-latin-vf-ba344451eab25b21.woff2',source)
 
 class StaticTests(unittest.TestCase):
     def test_assets_and_contract(self):
@@ -63,6 +65,15 @@ class StaticTests(unittest.TestCase):
         self.assertIn('class="container workflow-grid"',html)
         self.assertIn("--container:1340px",html)
         self.assertNotIn("<aside",html)
+        self.assertIn('font-family:"Baloo 2"',html);self.assertIn('font-family:"Nunito"',html)
+        self.assertIn('class="dashboard-nav"',html)
+        self.assertIn('href="https://ausmalwiese.de/stats.html"',html)
+        self.assertIn('href="https://ausmalwiese.de/traffic.html"',html)
+        self.assertIn("/assets/fonts/baloo2-latin-vf-26fb4610d4bc976d.woff2",html)
+        self.assertIn("/assets/fonts/nunito-latin-vf-ba344451eab25b21.woff2",html)
+        installer=(ROOT/"scripts/install-coloring-pages-admin-publish-v1.sh").read_text()
+        self.assertIn("26fb4610d4bc976d2584ca15e66c11465dbc1f267a10dca668fcb3080dfe59c1",installer)
+        self.assertIn("ba344451eab25b217a165363b1982048a5e5830a0daf36577973955a04cac793",installer)
         self.assertIn("/api/uploads",html);self.assertIn("/api/jobs",html)
         contract=json.loads((ROOT/"ops/contracts/coloring-pages-admin-publish-v1.json").read_text())
         self.assertEqual(contract["listener"],{"host":"127.0.0.1","port":8765})
