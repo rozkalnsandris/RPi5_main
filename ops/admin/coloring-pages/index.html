@@ -1,46 +1,104 @@
 <!doctype html>
-<html lang="de">
+<html lang="lv">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Ausmalwiese Admin – Neue Ausmalbilder</title>
+<title>Ausmalwiese administrēšana – Jaunas krāsojamās lapas</title>
 <style>
-:root{font-family:Inter,system-ui,sans-serif;color:#172033;background:#f6f8fb}
-*{box-sizing:border-box}body{margin:0}.layout{display:grid;grid-template-columns:230px 1fr;min-height:100vh}
-aside{background:#f3fbf4;border-right:1px solid #e3e9e5;padding:24px 16px}.brand{font-size:24px;font-weight:800;color:#16873d;margin:0 0 30px}
-nav a{display:block;padding:12px 14px;border-radius:9px;color:#445064;text-decoration:none;margin:4px 0}.active{background:#dff6e4!important;color:#126d31!important;font-weight:700}
-.future{margin-top:28px;border-top:1px solid #dce4df;padding-top:18px;color:#d33!important}
-main{padding:28px;max-width:1400px;width:100%}h1{margin:0;font-size:30px}.sub{color:#667085;margin:5px 0 20px}
-.grid{display:grid;grid-template-columns:1fr 1.35fr;gap:14px}.card{background:white;border:1px solid #e2e8f0;border-radius:12px;padding:16px;box-shadow:0 2px 10px #1111;margin-bottom:14px}
-.stephead{display:flex;gap:10px;align-items:center;font-size:19px;font-weight:800}.badge{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:#22a447;color:white}
-.drop{border:2px dashed #b8c4d5;border-radius:10px;padding:38px;text-align:center;margin-top:14px;background:#fbfcfe}.drop.drag{border-color:#22a447;background:#effbf2}
-button{border:0;border-radius:8px;padding:12px 17px;font-weight:700;cursor:pointer}.primary{background:#20a344;color:#fff}.primary:disabled{opacity:.45;cursor:not-allowed}
-.filebar{margin-top:10px;padding:11px;border-radius:8px;background:#e9f8ed;display:none}.previews{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-top:14px}
-.preview{border:1px solid #e2e8f0;border-radius:9px;padding:8px}.preview img{display:block;width:100%;aspect-ratio:2/3;object-fit:contain;background:white}.preview input{width:100%;margin-top:6px;padding:7px;border:1px solid #cdd5df;border-radius:6px}
-select{width:100%;padding:12px;border:1px solid #cdd5df;border-radius:8px;background:white;font-size:16px}
-.notice{margin-top:12px;padding:12px;border-radius:8px;background:#eef6ff;color:#245d9c}.process{display:none}.row{display:grid;grid-template-columns:30px 1fr 150px 60px;gap:8px;align-items:center;border-top:1px solid #edf0f3;padding:8px 0}.dot{display:grid;place-items:center;width:23px;height:23px;border-radius:50%;background:#d9e0e8;color:#536174;font-size:12px}.done .dot{background:#28a84f;color:white}.failed .dot{background:#d64545;color:white}.running .dot{background:#2d7cf5;color:white}.status{font-size:13px}.success{display:none;border:1px solid #bce7c7;background:#f1fbf4;border-radius:10px;padding:14px;margin-top:12px}.results{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:10px}.result{background:white;border:1px solid #dce7df;border-radius:8px;padding:10px}.result a{color:#1769d2;word-break:break-all}
-.error{display:none;background:#fff0f0;color:#9c2424;border:1px solid #f0c7c7;border-radius:8px;padding:12px;margin-top:10px}
-@media(max-width:850px){.layout{display:block}aside{display:none}main{padding:16px}.grid{grid-template-columns:1fr}.row{grid-template-columns:28px 1fr}.row .status,.row .duration{grid-column:2}}
+:root{
+  --bg:#f7faff;--panel:#fff;--section:#f5f9ff;--text:#10284d;--muted:#596b89;--line:#e5ecf5;
+  --blue:#1474d4;--blue-deep:#095eaf;--coral:#ff776d;--orange:#ffb53d;--green:#62c889;
+  --shadow:0 10px 28px rgb(23 58 102 / 9%);--radius:18px;--radius-panel:28px;
+  font-family:"Nunito",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text);background:var(--bg)
+}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text)}button,input,select{font:inherit}
+.layout{display:grid;grid-template-columns:250px minmax(0,1fr);min-height:100vh}
+aside{background:#fff;border-right:1px solid var(--line);padding:24px 16px;position:sticky;top:0;height:100vh}
+.brand{display:flex;align-items:center;gap:10px;margin:0 8px 28px;font-size:29px;font-weight:900;line-height:1;text-decoration:none;color:var(--text)}
+.brand-paw{position:relative;flex:0 0 34px;width:34px;height:34px}.brand-paw i{position:absolute;display:block;border-radius:50%;background:var(--coral)}
+.brand-paw i:nth-child(1){width:14px;height:17px;left:11px;top:14px;transform:rotate(10deg)}
+.brand-paw i:nth-child(2){width:7px;height:10px;left:3px;top:9px;transform:rotate(-25deg)}
+.brand-paw i:nth-child(3){width:7px;height:10px;left:12px;top:2px}
+.brand-paw i:nth-child(4){width:7px;height:10px;left:22px;top:4px;background:#ff8a65}
+.brand-paw i:nth-child(5){width:7px;height:10px;left:28px;top:12px;background:var(--orange);transform:rotate(24deg)}
+.brand-wiese b:nth-child(1){color:#ff825c}.brand-wiese b:nth-child(2){color:#ff8a65}.brand-wiese b:nth-child(3){color:var(--orange)}
+.brand-wiese b:nth-child(4){color:var(--green)}.brand-wiese b:nth-child(5){color:#8bcfb1}
+nav{display:grid;gap:6px}nav a{display:flex;align-items:center;gap:11px;min-height:46px;padding:10px 12px;border-radius:12px;color:#435672;text-decoration:none;font-weight:800}
+nav a:hover{background:#f4f8fd;color:var(--blue-deep)}nav .active{background:#eaf3ff;color:var(--blue-deep)}
+.nav-icon{display:grid;place-items:center;width:25px;height:25px;border-radius:8px;background:#f1f6fc;font-size:14px}
+.active .nav-icon{background:#d9ebff}.future{margin-top:20px;border-top:1px solid var(--line);padding-top:18px!important;color:#9b4b5f!important}
+main{width:100%;max-width:1420px;padding:34px 34px 52px}
+.hero{display:flex;align-items:end;justify-content:space-between;gap:24px;margin-bottom:24px}
+.eyebrow{display:inline-block;margin-bottom:5px;color:var(--blue-deep);font-size:12px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
+h1{margin:0;font-size:clamp(34px,4vw,52px);line-height:1.04;font-weight:900;letter-spacing:-.025em}
+.sub{max-width:760px;margin:10px 0 0;color:var(--muted);font-size:17px;font-weight:650}
+.grid{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.25fr);gap:18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-panel);padding:22px;box-shadow:var(--shadow);margin-bottom:18px}
+.stephead{display:flex;gap:12px;align-items:center;font-size:20px;font-weight:900}.badge{display:grid;place-items:center;flex:0 0 38px;width:38px;height:38px;border-radius:50%;background:#e4f3ff;color:var(--blue-deep);font-weight:900}
+.drop{display:grid;place-items:center;min-height:190px;border:2px dashed #bdd3ea;border-radius:18px;padding:28px;text-align:center;margin-top:18px;background:#f9fcff;cursor:pointer;transition:.15s ease}
+.drop:hover,.drop.drag{border-color:var(--blue);background:#eef6ff}.drop-icon{display:grid;place-items:center;width:52px;height:52px;margin:0 auto 12px;border-radius:16px;background:#e4f3ff;color:var(--blue-deep);font-size:24px;font-weight:900}
+.drop strong{display:block;font-size:18px}.drop small{display:block;margin-top:5px;color:var(--muted);font-size:14px}
+.filebar{margin-top:12px;padding:12px 14px;border-radius:12px;background:#eefaf2;color:#1a753b;font-weight:800;display:none}
+.previews{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:12px;margin-top:18px}.empty{color:var(--muted);font-weight:700}
+.preview{border:1px solid var(--line);border-radius:16px;padding:9px;background:#fff}.preview img{display:block;width:100%;aspect-ratio:2/3;object-fit:contain;border:1px solid #edf1f6;border-radius:11px;background:white}
+.preview input{width:100%;margin-top:8px;padding:9px 10px;border:1px solid #cfdaea;border-radius:10px;color:var(--text);font-weight:700;outline:none}.preview input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgb(20 116 212 / 12%)}
+select{width:100%;min-height:50px;padding:11px 13px;border:1px solid #cfdaea;border-radius:12px;background:white;color:var(--text);font-size:16px;font-weight:700;outline:none}
+select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgb(20 116 212 / 12%)}
+button{border:0;border-radius:999px;padding:13px 21px;font-weight:900;cursor:pointer}.primary{background:var(--blue);color:#fff;box-shadow:0 7px 16px rgb(46 143 240 / 22%)}.primary:not(:disabled):hover{background:var(--blue-deep)}.primary:disabled{background:#dfe6ef;color:#65748b;box-shadow:none;cursor:not-allowed}
+.notice{margin-top:14px;padding:14px 16px;border-radius:16px;background:#eef6ff;color:#275a91;font-weight:700}
+.process{display:none;margin-top:18px}.process h3{margin:0 0 10px;font-size:19px}.row{display:grid;grid-template-columns:30px minmax(0,1fr) 130px 60px;gap:10px;align-items:center;border-top:1px solid var(--line);padding:10px 0}
+.dot{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:#e7edf4;color:#536174;font-size:12px;font-weight:900}.done .dot{background:#e4f8e9;color:#1a753b}.failed .dot{background:#fff0f0;color:#9c2424}.running .dot{background:#e4f3ff;color:var(--blue-deep)}
+.status{font-size:13px;color:var(--muted);font-weight:800}.success{display:none;border:1px solid #cbe8d4;background:#f3fbf5;border-radius:18px;padding:18px;margin-top:14px}.success h2{margin:0;color:#1a753b}
+.results{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:12px}.result{background:white;border:1px solid #dce7df;border-radius:14px;padding:12px}.result a{color:var(--blue-deep);word-break:break-all}
+.error{display:none;background:#fff0f0;color:#9c2424;border:1px solid #f0c7c7;border-radius:14px;padding:13px 15px;margin-top:12px;font-weight:700}
+:focus-visible{outline:3px solid var(--blue-deep);outline-offset:3px}
+@media(max-width:940px){.layout{display:block}aside{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line);padding:16px}.brand{margin-bottom:14px}nav{grid-template-columns:repeat(3,minmax(0,1fr))}.future{display:none}main{padding:22px}.grid{grid-template-columns:1fr}}
+@media(max-width:640px){aside nav{display:none}.brand{margin:0}.hero{margin-bottom:18px}.eyebrow{font-size:11px}h1{font-size:34px}.sub{font-size:15px}.card{padding:16px;border-radius:20px}.stephead{font-size:18px}.drop{min-height:160px;padding:22px 16px}.row{grid-template-columns:28px 1fr}.row .status,.row .duration{grid-column:2}.previews{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
 <body><div class="layout">
-<aside><div class="brand">🌱 Ausmalwiese</div><nav>
-<a>⌂ Dashboard</a><a class="active">⇧ Neue Ausmalbilder</a><a>▤ Alle Seiten</a><a>▢ Kategorien</a><a>▥ Statistiken</a><a>⚙ Einstellungen</a>
-<a class="future">🗑 Seiten löschen<br><small>(später)</small></a></nav></aside>
-<main><h1>Neue Ausmalbilder veröffentlichen</h1><p class="sub">Lade einen ZIP-Ordner mit Ausmalbildern hoch. Wähle die Kategorie und veröffentliche sie.</p>
-<div class="grid">
-<section class="card"><div class="stephead"><span class="badge">1</span>ZIP-Datei hochladen</div>
-<div id="drop" class="drop"><strong>ZIP-Datei hier ablegen</strong><br><small>oder klicken zum Auswählen</small><input id="file" type="file" accept=".zip,application/zip" hidden></div>
-<div id="filebar" class="filebar"></div></section>
-<section class="card"><div class="stephead"><span class="badge">2</span>Vorschau der Bilder</div><div id="previews" class="previews"><span style="color:#778">Noch keine Bilder.</span></div></section>
-</div>
-<section class="card"><div class="stephead"><span class="badge">3</span>Kategorie wählen</div><div style="margin-top:14px"><select id="category"><option value="">Bitte Kategorie wählen …</option></select></div></section>
-<section class="card"><div class="stephead"><span class="badge">4</span>Veröffentlichen</div>
-<p><button id="publish" class="primary" disabled>⇧ Veröffentlichung starten</button></p>
-<div class="notice">Nach dem Start übernimmt der Server alle weiteren Schritte automatisch. Du kannst den Fortschritt hier live verfolgen.</div>
-<div id="error" class="error"></div>
-<div id="process" class="process"><h3>Verarbeitung läuft …</h3><div id="steps"></div></div>
-<div id="success" class="success"><h2 style="margin:0;color:#147634">✓ Erfolgreich veröffentlicht!</h2><div id="results" class="results"></div></div>
-</section></main></div>
+<aside>
+  <a class="brand" href="/" aria-label="Ausmalwiese administrēšana">
+    <span class="brand-paw" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+    <span class="brand-word"><span>Ausmal</span><span class="brand-wiese"><b>w</b><b>i</b><b>e</b><b>s</b><b>e</b></span></span>
+  </a>
+  <nav aria-label="Administrēšanas navigācija">
+    <a><span class="nav-icon">⌂</span>Panelis</a>
+    <a class="active"><span class="nav-icon">↑</span>Jaunas lapas</a>
+    <a><span class="nav-icon">▤</span>Visas lapas</a>
+    <a><span class="nav-icon">□</span>Kategorijas</a>
+    <a><span class="nav-icon">▥</span>Statistika</a>
+    <a><span class="nav-icon">⚙</span>Iestatījumi</a>
+    <a class="future"><span class="nav-icon">×</span>Dzēst lapas <small>(vēlāk)</small></a>
+  </nav>
+</aside>
+<main>
+  <div class="hero">
+    <div><span class="eyebrow">Ausmalwiese administrēšana</span><h1>Publicēt jaunas krāsojamās lapas</h1><p class="sub">Augšupielādē ZIP failu ar krāsojamajām lapām, pārbaudi priekšskatījumus, izvēlies kategoriju un publicē.</p></div>
+  </div>
+  <div class="grid">
+    <section class="card">
+      <div class="stephead"><span class="badge">1</span>Augšupielādēt ZIP failu</div>
+      <div id="drop" class="drop"><div><span class="drop-icon" aria-hidden="true">↑</span><strong>Ievelc ZIP failu šeit</strong><small>vai noklikšķini, lai izvēlētos failu</small></div><input id="file" type="file" accept=".zip,application/zip" hidden></div>
+      <div id="filebar" class="filebar"></div>
+    </section>
+    <section class="card">
+      <div class="stephead"><span class="badge">2</span>Attēlu priekšskatījums</div>
+      <div id="previews" class="previews"><span class="empty">Attēli vēl nav augšupielādēti.</span></div>
+    </section>
+  </div>
+  <section class="card">
+    <div class="stephead"><span class="badge">3</span>Izvēlēties kategoriju</div>
+    <div style="margin-top:16px"><select id="category"><option value="">Izvēlies kategoriju …</option></select></div>
+  </section>
+  <section class="card">
+    <div class="stephead"><span class="badge">4</span>Publicēt</div>
+    <p><button id="publish" class="primary" disabled>↑ Sākt publicēšanu</button></p>
+    <div class="notice">Pēc publicēšanas sākšanas serveris automātiski izpildīs pārējās darbības. Progresu vari redzēt šeit.</div>
+    <div id="error" class="error"></div>
+    <div id="process" class="process"><h3>Notiek apstrāde …</h3><div id="steps"></div></div>
+    <div id="success" class="success"><h2>✓ Veiksmīgi publicēts!</h2><div id="results" class="results"></div></div>
+  </section>
+</main></div>
 <script>
 "use strict";
 var upload=null,job=null,poll=null;
@@ -48,17 +106,31 @@ var file=document.getElementById("file"),drop=document.getElementById("drop"),fi
 previews=document.getElementById("previews"),category=document.getElementById("category"),publish=document.getElementById("publish"),
 process=document.getElementById("process"),steps=document.getElementById("steps"),success=document.getElementById("success"),
 results=document.getElementById("results"),errorBox=document.getElementById("error");
+var categoryLabels={tiere:"Dzīvnieki",fahrzeuge:"Transportlīdzekļi",alphabet:"Alfabēts",lernen:"Mācības",figuren:"Tēli un varoņi",jahreszeiten:"Gadalaiki un svētki"};
+var stepLabels={
+"ZIP-Datei empfangen und entpacken":"Saņemt un atpakot ZIP failu",
+"PNG-Dateien prüfen":"Pārbaudīt PNG failus",
+"A4 Print Master erstellen":"Izveidot A4 drukas oriģinālu",
+"Bilder validieren (Größe, Qualität, SHA-256)":"Validēt attēlus (izmērs, kvalitāte, SHA-256)",
+"IDs vergeben und auf Kollision prüfen":"Piešķirt ID un pārbaudīt sadursmes",
+"Seiten importieren":"Importēt lapas",
+"Vorschau, Thumbnails und Druckversionen erstellen":"Izveidot priekšskatījumus, sīktēlus un drukas versijas",
+"Katalog aktualisieren":"Atjaunināt katalogu",
+"Sitemap aktualisieren":"Atjaunināt sitemap",
+"Veröffentlichung prüfen (Web)":"Pārbaudīt publikāciju tīmeklī"
+};
+var statusLabels={pending:"Gaida",running:"Notiek",done:"Pabeigts",failed:"Kļūda"};
 function err(m){errorBox.textContent=m;errorBox.style.display="block"}function clearErr(){errorBox.style.display="none"}
-function adminFetch(url,opt){opt=opt||{};opt.headers=Object.assign({"X-Ausmalwiese-Admin":"1"},opt.headers||{});return fetch(url,opt).then(async function(r){var data=await r.json().catch(function(){return{error:"Ungültige Serverantwort"}});if(!r.ok)throw new Error(data.error||("HTTP "+r.status));return data})}
-fetch("/api/categories").then(function(r){return r.json()}).then(function(d){d.categories.forEach(function(c){var o=document.createElement("option");o.value=c.id;o.textContent=c.label;category.appendChild(o)})});
+function adminFetch(url,opt){opt=opt||{};opt.headers=Object.assign({"X-Ausmalwiese-Admin":"1"},opt.headers||{});return fetch(url,opt).then(async function(r){var data=await r.json().catch(function(){return{error:"Nederīga servera atbilde"}});if(!r.ok)throw new Error(data.error||("HTTP "+r.status));return data})}
+fetch("/api/categories").then(function(r){return r.json()}).then(function(d){d.categories.forEach(function(c){var o=document.createElement("option");o.value=c.id;o.textContent=categoryLabels[c.id]||c.label;category.appendChild(o)})}).catch(function(){err("Neizdevās ielādēt kategorijas.")});
 drop.onclick=function(){file.click()};drop.ondragover=function(e){e.preventDefault();drop.classList.add("drag")};drop.ondragleave=function(){drop.classList.remove("drag")};drop.ondrop=function(e){e.preventDefault();drop.classList.remove("drag");if(e.dataTransfer.files[0])sendZip(e.dataTransfer.files[0])};file.onchange=function(){if(file.files[0])sendZip(file.files[0])};
-async function sendZip(f){clearErr();publish.disabled=true;success.style.display="none";process.style.display="none";try{upload=await adminFetch("/api/uploads",{method:"POST",headers:{"Content-Type":"application/zip"},body:f});filebar.style.display="block";filebar.textContent="✓ "+f.name+" — "+upload.count+" PNG gefunden";renderPreviews();updateButton()}catch(e){err(e.message)}}
-function renderPreviews(){previews.innerHTML="";upload.files.forEach(function(item,i){var c=document.createElement("div");c.className="preview";var img=document.createElement("img");img.src="/api/uploads/"+upload.upload_id+"/preview/"+(i+1);img.alt="Vorschau "+(i+1);var input=document.createElement("input");input.value=item.title;input.maxLength=128;input.setAttribute("aria-label","Titel Bild "+(i+1));input.oninput=updateButton;c.append(img,input);previews.appendChild(c)})}
+async function sendZip(f){clearErr();publish.disabled=true;success.style.display="none";process.style.display="none";try{upload=await adminFetch("/api/uploads",{method:"POST",headers:{"Content-Type":"application/zip"},body:f});filebar.style.display="block";filebar.textContent="✓ "+f.name+" — atrasti "+upload.count+" PNG";renderPreviews();updateButton()}catch(e){err(e.message)}}
+function renderPreviews(){previews.innerHTML="";upload.files.forEach(function(item,i){var c=document.createElement("div");c.className="preview";var img=document.createElement("img");img.src="/api/uploads/"+upload.upload_id+"/preview/"+(i+1);img.alt="Priekšskatījums "+(i+1);var input=document.createElement("input");input.value=item.title;input.maxLength=128;input.setAttribute("aria-label","Attēla "+(i+1)+" nosaukums");input.oninput=updateButton;c.append(img,input);previews.appendChild(c)})}
 category.onchange=updateButton;function titles(){return Array.from(previews.querySelectorAll("input")).map(function(x){return x.value.trim()})}
 function updateButton(){publish.disabled=!(upload&&category.value&&titles().length===upload.count&&titles().every(Boolean))}
 publish.onclick=async function(){clearErr();publish.disabled=true;success.style.display="none";try{job=await adminFetch("/api/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({upload_id:upload.upload_id,category:category.value,titles:titles()})});process.style.display="block";renderJob(job);poll=setInterval(refresh,1500)}catch(e){err(e.message);updateButton()}}
-async function refresh(){try{job=await adminFetch("/api/jobs/"+job.job_id);renderJob(job);if(job.status==="published"||job.status==="failed"){clearInterval(poll);poll=null;if(job.status==="failed"){err(job.error||"Veröffentlichung fehlgeschlagen")}else{renderResults(job.results)}}}catch(e){clearInterval(poll);poll=null;err(e.message)}}
-function renderJob(j){steps.innerHTML="";j.steps.forEach(function(s,i){var row=document.createElement("div");row.className="row "+s.status;var dur="";if(s.started_at){var end=s.finished_at||Math.floor(Date.now()/1000);dur=(end-s.started_at)+" s"}var label=s.label+(s.detail?" — "+s.detail:"");row.innerHTML="<span class=dot>"+(s.status==="done"?"✓":(i+1))+"</span><span>"+escapeHtml(label)+"</span><span class=status>"+escapeHtml(s.status)+"</span><span class=duration>"+dur+"</span>";steps.appendChild(row)})}
-function renderResults(items){success.style.display="block";results.innerHTML="";items.forEach(function(x){var d=document.createElement("div");d.className="result";d.innerHTML="<strong>"+escapeHtml(x.title)+"</strong><br><small>ID: "+x.id+"</small><br><a target=_blank rel=noopener href='"+x.url+"'>"+escapeHtml(x.url)+" ↗</a>";results.appendChild(d)})}
+async function refresh(){try{job=await adminFetch("/api/jobs/"+job.job_id);renderJob(job);if(job.status==="published"||job.status==="failed"){clearInterval(poll);poll=null;if(job.status==="failed"){err(job.error||"Publicēšana neizdevās")}else{renderResults(job.results)}}}catch(e){clearInterval(poll);poll=null;err(e.message)}}
+function renderJob(j){steps.innerHTML="";j.steps.forEach(function(s,i){var row=document.createElement("div");row.className="row "+s.status;var dur="";if(s.started_at){var end=s.finished_at||Math.floor(Date.now()/1000);dur=(end-s.started_at)+" s"}var label=(stepLabels[s.label]||s.label)+(s.detail?" — "+s.detail:"");row.innerHTML="<span class=dot>"+(s.status==="done"?"✓":(i+1))+"</span><span>"+escapeHtml(label)+"</span><span class=status>"+escapeHtml(statusLabels[s.status]||s.status)+"</span><span class=duration>"+dur+"</span>";steps.appendChild(row)})}
+function renderResults(items){success.style.display="block";results.innerHTML="";items.forEach(function(x){var d=document.createElement("div");d.className="result";d.innerHTML="<strong>"+escapeHtml(x.title)+"</strong><br><small>ID: "+x.id+"</small><br><a target=_blank rel=noopener href='"+x.url+"'>Atvērt publicēto lapu ↗</a>";results.appendChild(d)})}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 </script></body></html>
