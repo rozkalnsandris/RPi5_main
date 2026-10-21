@@ -5,6 +5,8 @@
 <meta name="robots" content="noindex,nofollow,noarchive">
 <title>Administrēšana – Ausmalwiese</title>
 <style>
+@font-face{font-family:"Baloo 2";font-style:normal;font-weight:400 800;font-display:optional;src:url("/assets/fonts/baloo2-latin-vf-26fb4610d4bc976d.woff2") format("woff2")}
+@font-face{font-family:"Nunito";font-style:normal;font-weight:200 1000;font-display:optional;src:url("/assets/fonts/nunito-latin-vf-ba344451eab25b21.woff2") format("woff2")}
 :root{
   --bg:#f7faff;--section:#f5f9ff;--text:#10284d;--muted:#596b89;--line:#e5ecf5;
   --blue:#1474d4;--blue-deep:#095eaf;--coral:#ff776d;--orange:#ffb53d;--green:#62c889;
@@ -32,7 +34,11 @@ a{color:inherit}.container{width:min(calc(100% - 40px),var(--container));margin-
 .brand-paw i:nth-child(5){width:8px;height:11px;left:30px;top:13px;background:var(--orange);transform:rotate(24deg)}
 .brand-wiese b{font-weight:800}.brand-wiese b:nth-child(1){color:#ff825c}.brand-wiese b:nth-child(2){color:#ff8a65}
 .brand-wiese b:nth-child(3){color:var(--orange)}.brand-wiese b:nth-child(4){color:var(--green)}.brand-wiese b:nth-child(5){color:#8bcfb1}
-.admin-header-title{justify-self:center;color:var(--blue-deep);font-family:var(--font-display);font-size:20px;font-weight:800}
+.dashboard-nav{display:flex;align-items:stretch;justify-self:center;height:70px;gap:28px}
+.dashboard-nav a{position:relative;display:grid;place-items:center;color:#1d2f4d;text-decoration:none;font-size:14px;font-weight:800}
+.dashboard-nav a:hover{color:var(--blue-deep)}
+.dashboard-nav a.is-active{color:var(--blue-deep)}
+.dashboard-nav a.is-active::after{content:"";position:absolute;left:0;right:0;bottom:10px;height:2px;border-radius:999px;background:var(--blue)}
 .outline-link{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:42px;padding:8px 15px;border:1px solid #cfe3fb;border-radius:999px;background:#fff;color:var(--blue-deep);text-decoration:none;font-size:13px;font-weight:800;white-space:nowrap}
 .outline-link:hover{border-color:var(--blue);background:#f2f8ff}.admin-home-link{justify-self:end}
 .admin-hero{padding:32px 0 22px;background:linear-gradient(180deg,#eef6ff 0%,#f7faff 100%)}
@@ -72,7 +78,7 @@ select{width:100%;min-height:44px;padding:9px 12px;border:1px solid #cfdaea;bord
 .error{display:none;background:#fff0f0;color:#9c2424;border:1px solid #f0c7c7;border-radius:12px;padding:11px 13px;margin-top:12px;font-size:13px;font-weight:700}
 :focus-visible{outline:3px solid var(--blue-deep);outline-offset:3px}
 @media(max-width:900px){.workflow-grid,.action-grid{grid-template-columns:1fr}.header-inner{gap:16px}.admin-hero{padding-top:26px}}
-@media(max-width:620px){.container{width:min(calc(100% - 28px),var(--container))}.header-inner{grid-template-columns:1fr auto;gap:12px}.admin-header-title{display:none}.admin-home-link{min-height:40px;padding:8px 11px;font-size:12px}.brand{font-size:24px}.brand-paw{flex-basis:30px;width:30px;transform:scale(.8);transform-origin:left center;margin-right:-5px}.admin-hero{padding:24px 0 18px}.admin-hero h1{font-size:34px}.admin-panel{padding:16px;border-radius:20px}.panel-title h2{font-size:19px}.previews{grid-template-columns:repeat(2,minmax(0,1fr));min-height:0}.row{grid-template-columns:28px minmax(0,1fr)}.row .status,.row .duration{grid-column:2}.publish-row{align-items:stretch;flex-direction:column}.primary{width:100%}}
+@media(max-width:620px){.container{width:min(calc(100% - 28px),var(--container))}.header-inner{grid-template-columns:1fr auto;gap:10px;padding-top:8px}.dashboard-nav{grid-column:1/-1;grid-row:2;height:42px;width:100%;justify-content:center;gap:22px;border-top:1px solid var(--line)}.dashboard-nav a{font-size:13px}.dashboard-nav a.is-active::after{bottom:3px}.admin-home-link{min-height:38px;padding:7px 10px;font-size:12px}.brand{font-size:24px}.brand-paw{flex-basis:30px;width:30px;transform:scale(.8);transform-origin:left center;margin-right:-5px}.admin-hero{padding:24px 0 18px}.admin-hero h1{font-size:34px}.admin-panel{padding:16px;border-radius:20px}.panel-title h2{font-size:19px}.previews{grid-template-columns:repeat(2,minmax(0,1fr));min-height:0}.row{grid-template-columns:28px minmax(0,1fr)}.row .status,.row .duration{grid-column:2}.publish-row{align-items:stretch;flex-direction:column}.primary{width:100%}}
 </style>
 </head>
 <body>
@@ -83,7 +89,11 @@ select{width:100%;min-height:44px;padding:9px 12px;border:1px solid #cfdaea;bord
       <span class="brand-paw" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
       <span class="brand-word"><span>Ausmal</span><span class="brand-wiese"><b>w</b><b>i</b><b>e</b><b>s</b><b>e</b></span></span>
     </a>
-    <strong class="admin-header-title">Administrēšana</strong>
+    <nav class="dashboard-nav" aria-label="Iekšējie paneļi">
+      <a class="is-active" href="/" aria-current="page">Admin</a>
+      <a href="https://ausmalwiese.de/stats.html">Statistics</a>
+      <a href="https://ausmalwiese.de/traffic.html">Traffic</a>
+    </nav>
     <a class="outline-link admin-home-link" href="https://ausmalwiese.de/"><span aria-hidden="true">←</span> Atvērt vietni</a>
   </div>
 </header>
