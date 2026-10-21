@@ -1,0 +1,447 @@
+#!/usr/bin/env python3
+"""Bounded request-file bridge for Ausmalwiese Drive ingestion.
+
+The bridge never uploads media and never accepts shell commands. A caller writes
+one complete request JSON and then a separate ready marker. The systemd path unit
+invokes this dispatcher, which atomically claims one request before invoking the
+already-installed coloring-pages-drive-ingest operator.
+"""
+
+from __future__ import annotations
+
+import argparse
+import fcntl
+import json
+import os
+from pathlib import Path
+import re
+import stat
+import subprocess
+import sys
+from typing import Any
+
+STATE_ROOT = Path("/srv/coloring-pages-content/state/publish-request-bridge")
+INCOMING = STATE_ROOT / "incoming"
+CLAIMED = STATE_ROOT / "claimed"
+RESULTS = STATE_ROOT / "results"
+LOCK = STATE_ROOT / ".lock"
+OPERATOR = "/usr/local/bin/coloring-pages-drive-ingest"
+
+REQUEST_SCHEMA = "rozkalns.rpi5-main.coloring-pages-publish-request.v1"
+RESULT_SCHEMA = "rozkalns.rpi5-main.coloring-pages-publish-request-result.v1"
+
+BATCH_RE = re.compile(r"^[0-9a-f]{32}$")
+ID_RE = re.compile(r"^[0-9]{7}$")
+SHA_RE = re.compile(r"^[0-9a-f]{64}$")
+REQUEST_NAME_RE = re.compile(r"^batch-([0-9a-f]{32})\.json$")
+READY_NAME_RE = re.compile(r"^batch-([0-9a-f]{32})\.ready$")
+
+MAX_REQUEST_BYTES = 64 * 1024
+MAX_ACTIVITIES = 20
+MAX_PAGES = 12
+MAX_SOURCE_BYTES = 20 * 1024 * 1024
+OPERATOR_TIMEOUT_SECONDS = 180
+
+
+class BridgeError(RuntimeError):
+    """Fail-closed bridge error."""
+
+
+class BatchFailure(BridgeError):
+    """Terminal failure after a request was claimed."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        succeeded: list[dict[str, Any]] | None = None,
+        failed_id: str | None = None,
+    ):
+        super().__init__(message)
+        self.succeeded = list(succeeded or [])
+        self.failed_id = failed_id
+
+
+def fail(message: str) -> None:
+    raise BridgeError(message)
+
+
+def strict_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            fail("duplicate-json-key")
+        result[key] = value
+    return result
+
+
+def safe_regular(path: Path, *, max_bytes: int | None = None) -> os.stat_result:
+    try:
+        st = path.lstat()
+    except FileNotFoundError:
+        fail("required-file-missing")
+    if not stat.S_ISREG(st.st_mode) or path.is_symlink():
+        fail("unsafe-file-type")
+    if st.st_uid != os.getuid() or st.st_gid != os.getgid():
+        fail("unexpected-file-owner")
+    if stat.S_IMODE(st.st_mode) & 0o022:
+        fail("file-is-group-or-world-writable")
+    if max_bytes is not None and not 0 < st.st_size <= max_bytes:
+        fail("file-size-out-of-range")
+    return st
+
+
+def identity(st: os.stat_result) -> tuple[int, int, int, int]:
+    return (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns)
+
+
+def load_request(path: Path) -> dict[str, Any]:
+    st = safe_regular(path, max_bytes=MAX_REQUEST_BYTES)
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        raise BridgeError("request-read-failed") from exc
+    if len(raw) != st.st_size:
+        fail("request-size-drift")
+    try:
+        value = json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=strict_object,
+        )
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise BridgeError("invalid-request-json") from exc
+    if not isinstance(value, dict):
+        fail("request-not-object")
+    return value
+
+
+def validate_request(value: dict[str, Any], batch_id: str) -> list[dict[str, Any]]:
+    if set(value) != {"schema", "batch_id", "activities"}:
+        fail("invalid-request-fields")
+    if value["schema"] != REQUEST_SCHEMA or value["batch_id"] != batch_id:
+        fail("request-identity-mismatch")
+    activities = value["activities"]
+    if not isinstance(activities, list) or not 1 <= len(activities) <= MAX_ACTIVITIES:
+        fail("activity-count-out-of-range")
+
+    seen_ids: set[str] = set()
+    checked: list[dict[str, Any]] = []
+    for activity in activities:
+        if not isinstance(activity, dict):
+            fail("activity-not-object")
+        kind = activity.get("kind")
+        page_id = activity.get("id")
+        if not isinstance(page_id, str) or not ID_RE.fullmatch(page_id):
+            fail("invalid-activity-id")
+        if page_id in seen_ids:
+            fail("duplicate-activity-id")
+        seen_ids.add(page_id)
+
+        if kind == "v1":
+            if set(activity) != {"kind", "id", "expected_sha256", "expected_size"}:
+                fail("invalid-v1-fields")
+            sha = activity["expected_sha256"]
+            size = activity["expected_size"]
+            if not isinstance(sha, str) or not SHA_RE.fullmatch(sha):
+                fail("invalid-v1-sha256")
+            if type(size) is not int or not 1 <= size <= MAX_SOURCE_BYTES:
+                fail("invalid-v1-size")
+            checked.append(
+                {
+                    "kind": "v1",
+                    "id": page_id,
+                    "expected_sha256": sha,
+                    "expected_size": size,
+                }
+            )
+            continue
+
+        if kind == "v2":
+            if set(activity) != {"kind", "id", "expected_pages"}:
+                fail("invalid-v2-fields")
+            pages = activity["expected_pages"]
+            if not isinstance(pages, list) or not 2 <= len(pages) <= MAX_PAGES:
+                fail("v2-page-count-out-of-range")
+            checked_pages: list[dict[str, Any]] = []
+            for expected_index, page in enumerate(pages, start=1):
+                if not isinstance(page, dict) or set(page) != {
+                    "index", "sha256", "size_bytes"
+                }:
+                    fail("invalid-v2-page-fields")
+                if page["index"] != expected_index:
+                    fail("invalid-v2-page-order")
+                sha = page["sha256"]
+                size = page["size_bytes"]
+                if not isinstance(sha, str) or not SHA_RE.fullmatch(sha):
+                    fail("invalid-v2-sha256")
+                if type(size) is not int or not 1 <= size <= MAX_SOURCE_BYTES:
+                    fail("invalid-v2-size")
+                checked_pages.append(
+                    {"index": expected_index, "sha256": sha, "size_bytes": size}
+                )
+            checked.append(
+                {"kind": "v2", "id": page_id, "expected_pages": checked_pages}
+            )
+            continue
+
+        fail("unsupported-activity-kind")
+
+    return checked
+
+
+def operator_argv(activity: dict[str, Any]) -> list[str]:
+    argv = [OPERATOR, "--id", activity["id"]]
+    if activity["kind"] == "v1":
+        return argv + [
+            "--expected-sha256",
+            activity["expected_sha256"],
+            "--expected-size",
+            str(activity["expected_size"]),
+        ]
+    for page in activity["expected_pages"]:
+        argv += [
+            "--expected-page",
+            f"{page['index']}:{page['sha256']}:{page['size_bytes']}",
+        ]
+    return argv
+
+
+def parse_operator_result(
+    completed: subprocess.CompletedProcess[str],
+    expected_id: str,
+) -> dict[str, Any]:
+    output = "\n".join((completed.stdout or "", completed.stderr or ""))
+    if completed.returncode != 0:
+        reason = "operator-failed"
+        match = re.search(
+            r"^COLORING_PAGES_DRIVE_INGEST=FAIL error=([A-Za-z0-9 _./:=+-]{1,160})$",
+            output,
+            flags=re.MULTILINE,
+        )
+        if match:
+            reason = match.group(1)
+        raise BridgeError(reason)
+
+    status = None
+    if re.search(r"^COLORING_PAGES_DRIVE_INGEST=PASS$", output, re.MULTILINE):
+        status = "PASS"
+    elif re.search(
+        r"^COLORING_PAGES_DRIVE_INGEST=ALREADY_PROCESSED$",
+        output,
+        re.MULTILINE,
+    ):
+        status = "ALREADY_PROCESSED"
+    if status is None:
+        fail("operator-success-marker-missing")
+
+    id_match = re.search(r"^ID=([0-9]{7})$", output, re.MULTILINE)
+    pages_match = re.search(r"^PAGES=([0-9]{1,2})$", output, re.MULTILINE)
+    if not id_match or id_match.group(1) != expected_id or not pages_match:
+        fail("operator-success-identity-mismatch")
+    pages = int(pages_match.group(1))
+    if not 1 <= pages <= MAX_PAGES:
+        fail("operator-success-page-count-invalid")
+
+    sitemap_match = re.search(
+        r"^COLORING_PAGES_SITEMAP=([A-Z]+)(?:\s+.*)?$",
+        output,
+        re.MULTILINE,
+    )
+    result: dict[str, Any] = {
+        "id": expected_id,
+        "status": status,
+        "pages": pages,
+    }
+    if sitemap_match:
+        result["sitemap"] = sitemap_match.group(1)
+    return result
+
+
+def write_json_exclusive(path: Path, value: dict[str, Any]) -> None:
+    data = (json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n").encode(
+        "utf-8"
+    )
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    fd = os.open(path, flags, 0o600)
+    try:
+        with os.fdopen(fd, "wb", buffering=0) as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+    except BaseException:
+        try:
+            path.unlink()
+        except OSError:
+            pass
+        raise
+
+
+def batch_id_from_ready(path: Path) -> str:
+    match = READY_NAME_RE.fullmatch(path.name)
+    if not match:
+        fail("invalid-ready-name")
+    return match.group(1)
+
+
+def claim_one() -> tuple[str, Path, Path] | None:
+    ready_paths = sorted(INCOMING.glob("batch-*.ready"))
+    if not ready_paths:
+        return None
+    ready = ready_paths[0]
+    batch_id = batch_id_from_ready(ready)
+    request = INCOMING / f"batch-{batch_id}.json"
+
+    ready_st = safe_regular(ready, max_bytes=128)
+    request_st = safe_regular(request, max_bytes=MAX_REQUEST_BYTES)
+    try:
+        marker = ready.read_text(encoding="ascii").strip()
+    except (OSError, UnicodeError) as exc:
+        raise BridgeError("ready-marker-read-failed") from exc
+    if marker != batch_id:
+        fail("ready-marker-identity-mismatch")
+
+    claimed_ready = CLAIMED / ready.name
+    claimed_request = CLAIMED / request.name
+    if os.path.lexists(claimed_ready) or os.path.lexists(claimed_request):
+        fail("claimed-destination-exists")
+
+    # Claim the marker first. If the second rename fails, the request cannot
+    # retrigger automatically because its ready marker is already gone.
+    os.rename(ready, claimed_ready)
+    try:
+        os.rename(request, claimed_request)
+    except BaseException as exc:
+        raise BridgeError("request-claim-failed") from exc
+
+    if identity(claimed_ready.lstat()) != identity(ready_st):
+        fail("ready-marker-changed-during-claim")
+    if identity(claimed_request.lstat()) != identity(request_st):
+        fail("request-changed-during-claim")
+    return batch_id, claimed_request, claimed_ready
+
+
+def acquire_lock():
+    class Lock:
+        def __enter__(self):
+            self.handle = LOCK.open("r+b", buffering=0)
+            fcntl.flock(self.handle.fileno(), fcntl.LOCK_EX)
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            fcntl.flock(self.handle.fileno(), fcntl.LOCK_UN)
+            self.handle.close()
+
+    return Lock()
+
+
+def process_claimed(batch_id: str, request_path: Path) -> dict[str, Any]:
+    request = load_request(request_path)
+    activities = validate_request(request, batch_id)
+    succeeded: list[dict[str, Any]] = []
+
+    for activity in activities:
+        try:
+            completed = subprocess.run(
+                operator_argv(activity),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+                timeout=OPERATOR_TIMEOUT_SECONDS,
+            )
+            succeeded.append(parse_operator_result(completed, activity["id"]))
+        except subprocess.TimeoutExpired as exc:
+            raise BatchFailure(
+                "operator-timeout",
+                succeeded=succeeded,
+                failed_id=activity["id"],
+            ) from exc
+        except OSError as exc:
+            raise BatchFailure(
+                "operator-exec-failed",
+                succeeded=succeeded,
+                failed_id=activity["id"],
+            ) from exc
+        except BridgeError as exc:
+            raise BatchFailure(
+                str(exc),
+                succeeded=succeeded,
+                failed_id=activity["id"],
+            ) from exc
+
+    return {
+        "schema": RESULT_SCHEMA,
+        "batch_id": batch_id,
+        "result": "PASS",
+        "succeeded": succeeded,
+        "failed_id": None,
+        "error": None,
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--once", action="store_true", help="process at most one ready batch")
+    args = parser.parse_args(argv)
+    if not args.once:
+        parser.error("--once is required")
+
+    try:
+        with acquire_lock():
+            claimed = claim_one()
+            if claimed is None:
+                print("COLORING_PAGES_PUBLISH_REQUEST=IDLE")
+                return 0
+            batch_id, request_path, _ready_path = claimed
+            result_path = RESULTS / f"batch-{batch_id}.result.json"
+            if os.path.lexists(result_path):
+                fail("result-already-exists")
+            try:
+                result = process_claimed(batch_id, request_path)
+            except BridgeError as exc:
+                # A claimed request is terminal for this batch. Never move it
+                # back to incoming and never invoke the operator again.
+                succeeded = exc.succeeded if isinstance(exc, BatchFailure) else []
+                failed_id = exc.failed_id if isinstance(exc, BatchFailure) else None
+                result = {
+                    "schema": RESULT_SCHEMA,
+                    "batch_id": batch_id,
+                    "result": "FAIL",
+                    "succeeded": succeeded,
+                    "failed_id": failed_id,
+                    "error": str(exc),
+                }
+                write_json_exclusive(result_path, result)
+                print(
+                    "COLORING_PAGES_PUBLISH_REQUEST=FAIL "
+                    f"batch_id={batch_id} error={exc}",
+                    file=sys.stderr,
+                )
+                # The request was handled and a terminal FAIL result exists.
+                # Keep the oneshot service healthy for future independent batches.
+                return 0
+            write_json_exclusive(result_path, result)
+            print(
+                "COLORING_PAGES_PUBLISH_REQUEST=PASS "
+                f"batch_id={batch_id} succeeded={len(result['succeeded'])}"
+            )
+            return 0
+    except BridgeError as exc:
+        print(
+            f"COLORING_PAGES_PUBLISH_REQUEST=FAIL error={exc}",
+            file=sys.stderr,
+        )
+        return 1
+    except Exception:
+        print(
+            "COLORING_PAGES_PUBLISH_REQUEST=FAIL error=unexpected-bridge-error",
+            file=sys.stderr,
+        )
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
