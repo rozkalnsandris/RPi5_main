@@ -1,0 +1,54 @@
+{
+  "schema": "rozkalns.rpi5-main.coloring-pages-admin-publish.v1",
+  "status": "source-only",
+  "issue": 1149,
+  "listener": {
+    "host": "127.0.0.1",
+    "port": 8765
+  },
+  "trust": {
+    "zone": "ADMIN",
+    "public_route": false,
+    "access_required": true
+  },
+  "upload": {
+    "content_type": "application/zip",
+    "allowed_extensions": [
+      ".png"
+    ],
+    "max_archive_bytes": 52428800,
+    "max_files": 20,
+    "max_member_bytes": 26214400,
+    "max_total_uncompressed_bytes": 167772160,
+    "max_compression_ratio": 50,
+    "extraction": "validated-stream-copy-no-extractall",
+    "reject": [
+      "directories",
+      "nested-paths",
+      "traversal",
+      "symlinks",
+      "special-files",
+      "encrypted-entries",
+      "duplicate-names",
+      "non-png"
+    ]
+  },
+  "publication": {
+    "category_selection": "explicit-owner-ui-selection",
+    "id_policy": "random-seven-digit-live-catalog-collision-check",
+    "print_master": "pinned-immutable-coloring-pages-image",
+    "importer": "pinned-immutable-coloring-pages-image",
+    "shared_lock": "/srv/coloring-pages-content/state/drive-ingest/.lock",
+    "automatic_retry": false,
+    "automatic_rollback": false,
+    "automatic_cleanup": false,
+    "automatic_overwrite": false,
+    "public_verification": true,
+    "final_detail_links": true
+  },
+  "runtime": {
+    "user": "andris",
+    "image_ref": "ghcr.io/rozkalnsandris/coloring-pages@sha256:2a80b56c20c37f4a530059c3e438c6627fd962786e6590dd914e59e86a837ba8"
+  },
+  "live_activation": "separate-owner-authorization"
+}
