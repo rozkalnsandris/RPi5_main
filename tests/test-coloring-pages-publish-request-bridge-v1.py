@@ -183,6 +183,17 @@ class PublishRequestBridgeTests(unittest.TestCase):
         self.assertTrue(self.contract["handoff"]["request_must_be_written_before_ready_marker"])
         self.assertTrue(self.contract["handoff"]["claim_before_operator_execution"])
         self.assertTrue(self.contract["handoff"]["claimed_requests_never_requeued_automatically"])
+        self.assertTrue(self.contract["handoff"]["request_contains_manifest_metadata"])
+        self.assertFalse(self.contract["handoff"]["request_contains_media_bytes"])
+        self.assertEqual(
+            self.contract["request"]["manifest_transport"],
+            "inline-json-object",
+        )
+        self.assertFalse(
+            self.contract["request"]["normal_publish_drive_manifest_upload"]
+        )
+        self.assertTrue(self.contract["installer"]["installs_ingest_operator"])
+        self.assertTrue(self.contract["installer"]["installs_dispatcher"])
 
     def test_systemd_bridge_is_non_root_and_ready_marker_driven(self):
         self.assertIn(
@@ -374,6 +385,8 @@ class PublishRequestBridgeTests(unittest.TestCase):
         for marker in (
             "--expected-rpi5-main-sha",
             "/usr/local/bin/coloring-pages-publish-request-dispatcher",
+            'INGEST_DEST=\'/usr/local/bin/coloring-pages-drive-ingest\'',
+            'install -o root -g root -m 0755 "$SOURCE_ROOT/$INGEST_REL" "$INGEST_DEST"',
             "systemctl enable --now coloring-pages-publish-request-bridge.path",
             "ready marker exists before bridge activation",
             "CREDENTIALS_CHANGED=false",
