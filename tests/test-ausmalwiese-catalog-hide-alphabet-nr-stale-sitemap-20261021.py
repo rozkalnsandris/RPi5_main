@@ -37,7 +37,7 @@ def sitemap(detail_ids: list[str], origin: str = "https://ausmalwiese.de") -> by
     ]
     urls = [*static, *(origin + "/detail.html?id=" + x for x in sorted(detail_ids))]
     return (
-        '<?xml version="1.0" encoding="UTF-8">\n'
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
         + "".join("  <url><loc>" + url + "</loc></url>\n" for url in urls)
         + "</urlset>\n"
