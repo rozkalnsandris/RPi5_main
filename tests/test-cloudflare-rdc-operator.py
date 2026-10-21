@@ -673,7 +673,7 @@ class AusmalwieseAdminCutoverTests(unittest.TestCase):
             "id": "77777777-7777-4777-8777-777777777777",
             "name": name,
             "decision": "allow",
-            "include": [{"email": {"email": "owner@example.invalid"}}],
+            "include": [{"email": {"email": "owner_identity_redacted"}}],
             "require": [],
             "exclude": [],
         }
@@ -724,7 +724,7 @@ class AusmalwieseAdminCutoverTests(unittest.TestCase):
         self.assertEqual(body["policies"][0]["decision"], "allow")
         self.assertEqual(
             body["policies"][0]["include"],
-            [{"email": {"email": "owner@example.invalid"}}],
+            [{"email": {"email": "owner_identity_redacted"}}],
         )
         self.assertEqual(body["policies"][0]["require"], [])
         self.assertEqual(body["policies"][0]["exclude"], [])
