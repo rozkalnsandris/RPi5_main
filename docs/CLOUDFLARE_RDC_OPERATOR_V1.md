@@ -315,7 +315,9 @@ The cutover is deliberately split into three fixed one-write actions, in this or
 
 The Access action does not accept an owner email from argv, environment, chat, GitHub or RDC. It performs GET-only discovery of the existing exact `dash.rozkalns.net` application, requires exactly one allow policy with exactly one email selector and no broad/bypass selector, and privately reuses that exact selector for the new application. The identity value is never emitted or persisted by the operator.
 
-The Tunnel action uses the Access credential only for GET-only derivation of the exact new app AUD and Access organization team name. The Tunnel credential performs the single PUT. The private AUD/team values are not emitted. Access and Tunnel credentials must bind the same account.
+The Tunnel action uses the Access credential only for GET-only derivation of the exact new app AUD and exact-owner policy. It does not call the Access Organizations API. The private team name is derived from the already-reviewed exact `dash.rozkalns.net` ingress in the same `rpi5-tunnel`: that anchor must exist exactly once and already have `originRequest.access.required=true`, one non-empty `teamName`, and at least one non-empty AUD tag. The dashboard AUD is not reused for the new app and neither the team name nor any AUD is emitted. The Tunnel credential performs the single PUT. Access and Tunnel credentials must bind the same account.
+
+This design keeps the existing Access credential at the documented `Access: Apps and Policies Write` boundary and avoids adding Access Organizations read permission solely to obtain `teamName`. The full Tunnel configuration, including the dashboard team anchor, remains part of the deterministic pre-write baseline.
 
 The DNS action is last. It refuses to create DNS until the exact Tunnel route exists with the fixed loopback origin and required Access protection. It then creates at most one proxied CNAME. This ordering avoids resolving the ADMIN hostname before the protected route exists.
 
