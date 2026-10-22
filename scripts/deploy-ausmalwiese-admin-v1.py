@@ -14,6 +14,24 @@ ROOT = Path(__file__).resolve().parents[1]
 ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 HASH_RE = re.compile(r"^[0-9a-f]{64}$")
+INSTALLER_FAILURE_REASONS = (
+    "EXPECTED_MAIN_REQUIRED",
+    "CONFIRMATION_REQUIRED",
+    "MODE_INVALID",
+    "ROOT_REQUIRED",
+    "CHECKOUT_NOT_CLEAN",
+    "MAIN_MISMATCH",
+    "MAIN_BRANCH_REQUIRED",
+    "ADMIN_SERVICE_MUST_BE_ACTIVE_FOR_UI_ONLY",
+    "BALOO_FONT_MISSING",
+    "NUNITO_FONT_MISSING",
+    "BALOO_FONT_HASH_MISMATCH",
+    "NUNITO_FONT_HASH_MISMATCH",
+    "SHARED_LOCK_INVALID",
+    "ACTIVE_PUBLICATION_REFUSES_ADMIN_UPDATE",
+    "ADMIN_ACTIVE_JOB_CHECK_FAILED",
+    "ADMIN_SERVICE_HTTP_NOT_READY",
+)
 INSTALLER = ROOT / "scripts/install-coloring-pages-admin-publish-v1.sh"
 INSTALL_CONFIRM = "OWNER-AUTHORIZED-AUSMALWIESE-ADMIN-ZIP-PUBLISHER-INSTALL"
 SERVICE = "coloring-pages-admin-publish.service"
@@ -139,10 +157,18 @@ def post_verify(command_runner=run_command, http_get=http_json, homepage_get=htt
     validate_activity(http_get("/api/activity"))
 
 
+def installer_failure_reason(result: subprocess.CompletedProcess[bytes]) -> str:
+    lines = set(result.stderr[:4096].splitlines())
+    for reason in INSTALLER_FAILURE_REASONS:
+        if reason.encode("ascii") in lines:
+            return reason
+    return "UNKNOWN_INSTALLER_FAILURE"
+
+
 def deploy(expected_sha: str, command_runner=run_command, verifier=post_verify) -> None:
     result = command_runner(installer_argv(expected_sha), 60)
     if result.returncode != 0:
-        fail("reviewed ADMIN installer failed")
+        fail(f"reviewed ADMIN installer failed: {installer_failure_reason(result)}")
     verifier(command_runner=command_runner)
 
 
