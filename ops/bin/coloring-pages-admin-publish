@@ -38,6 +38,7 @@ STATE = CONTENT / "state" / "admin-publish"
 UPLOADS = STATE / "uploads"
 JOBS = STATE / "jobs"
 LOGS = STATE / "logs"
+ARCHIVE = STATE / "archive"
 LOG_FILE = LOGS / "admin-publish.log"
 LOG_RETENTION_SECONDS = 7 * 24 * 60 * 60
 LOG_NAME = re.compile(r"^admin-publish\.log(?:\.\d{4}-\d{2}-\d{2})?$")
@@ -64,6 +65,9 @@ MAX_RATIO = 50
 MAX_PIXELS = 50_000_000
 MAX_JSON = 256 * 1024
 MAX_CATALOG = 4 * 1024 * 1024
+MAX_ACTIVITY_FILE = 2 * 1024 * 1024
+MAX_ACTIVITY_TOTAL = 4 * 1024 * 1024
+MAX_ACTIVITY_EVENTS = 200
 PNG_SIG = b"\x89PNG\r\n\x1a\n"
 TOKEN = re.compile(r"^[0-9a-f]{32}$")
 CATALOG_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -101,6 +105,11 @@ LOG_ALLOWED_FIELDS = {
     "tool", "exit_status", "page_id", "sitemap_status", "sitemap_phase",
     "job_status", "prior_status", "partial_result_count", "error_code",
     "action", "changed_fields", "catalog_sha256", "previous_catalog_sha256",
+    "archive_state",
+}
+ACTIVITY_FIELDS = {
+    "ts", "level", "event", "page_id", "action", "changed_fields",
+    "job_status", "step_status", "sitemap_status", "error_code", "archive_state",
 }
 
 
@@ -290,9 +299,121 @@ def load_catalog() -> tuple[list[dict], str]:
     return data, hashlib.sha256(raw).hexdigest()
 
 
+def validate_catalog_entry(entry: dict) -> dict:
+    if not isinstance(entry, dict):
+        stop("catalog entry is invalid")
+    required = {"id", "title", "category", "age", "difficulty"}
+    if not required.issubset(entry):
+        stop("catalog entry is missing required metadata")
+    validate_catalog_id(entry["id"])
+    validate_title(entry["title"])
+    if entry["category"] not in CATEGORIES:
+        stop("catalog entry category is invalid")
+    validate_age(entry["age"])
+    validate_difficulty(entry["difficulty"])
+    for key in ("language", "thumb", "preview", "print"):
+        if key in entry and entry[key] is not None and not isinstance(entry[key], str):
+            stop("catalog entry metadata is invalid")
+    return dict(entry)
+
+
 def catalog_view_entry(entry: dict) -> dict:
     keys = ("id", "title", "category", "age", "difficulty", "language", "thumb", "preview", "print")
     return {key: entry.get(key) for key in keys}
+
+
+def archive_path(page_id: str) -> Path:
+    validate_catalog_id(page_id)
+    return ARCHIVE / f"{page_id}.json"
+
+
+def load_archive_record(page_id: str) -> dict:
+    payload = read_json(archive_path(page_id))
+    if not isinstance(payload, dict) or payload.get("schema") != "rozkalns.rpi5-main.coloring-pages-admin-archive.v1":
+        stop("archive record is invalid")
+    if payload.get("id") != page_id or payload.get("state") not in {"prepared", "archived", "restored"}:
+        stop("archive record state is invalid")
+    entry = validate_catalog_entry(payload.get("entry"))
+    if entry["id"] != page_id:
+        stop("archive entry id mismatch")
+    if not isinstance(payload.get("archived_at"), int):
+        stop("archive timestamp is invalid")
+    return payload
+
+
+def list_archive_records() -> list[dict]:
+    records = []
+    live, _ = load_catalog()
+    live_ids = {entry["id"] for entry in live}
+    if not ARCHIVE.is_dir():
+        return records
+    for path in sorted(ARCHIVE.glob("*.json")):
+        if path.name.startswith(".") or path.is_symlink() or not stat.S_ISREG(path.lstat().st_mode):
+            stop("archive path is unsafe")
+        page_id = path.stem
+        payload = load_archive_record(page_id)
+        if payload["state"] == "restored":
+            continue
+        if page_id in live_ids:
+            continue
+        entry = payload["entry"]
+        records.append({
+            "id": page_id,
+            "state": payload["state"],
+            "archived_at": payload["archived_at"],
+            "entry": catalog_view_entry(entry),
+        })
+    records.sort(key=lambda item: (item["archived_at"], item["id"]), reverse=True)
+    return records
+
+
+def activity_events() -> list[dict]:
+    prune_logs(include_current=False)
+    if not LOGS.is_dir():
+        return []
+    paths = []
+    total = 0
+    for path in sorted(LOGS.iterdir()):
+        if not LOG_NAME.fullmatch(path.name):
+            continue
+        st = path.lstat()
+        if path.is_symlink() or not stat.S_ISREG(st.st_mode):
+            stop("admin diagnostic log path is unsafe")
+        if st.st_size > MAX_ACTIVITY_FILE:
+            stop("admin activity log exceeds safe read bound")
+        total += st.st_size
+        if total > MAX_ACTIVITY_TOTAL:
+            stop("admin activity logs exceed safe read bound")
+        paths.append(path)
+    events = []
+    allowed_keys = {"ts", "level", "event"} | LOG_ALLOWED_FIELDS
+    for path in paths:
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeError):
+            stop("admin activity log is unreadable")
+        for line in lines:
+            if not line:
+                continue
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                stop("admin activity log contains invalid JSON")
+            if not isinstance(payload, dict) or not set(payload).issubset(allowed_keys):
+                stop("admin activity log contains unexpected fields")
+            if payload.get("level") not in {"INFO", "WARNING", "ERROR"}:
+                stop("admin activity log severity is invalid")
+            if not isinstance(payload.get("ts"), str) or not isinstance(payload.get("event"), str):
+                stop("admin activity log metadata is invalid")
+            item = {key: payload[key] for key in ACTIVITY_FIELDS if key in payload}
+            for value in item.values():
+                if isinstance(value, str) and len(value) > 160:
+                    stop("admin activity log value exceeds safe bound")
+                if not isinstance(value, (str, int, bool)):
+                    stop("admin activity log value type is invalid")
+            events.append(item)
+    events.sort(key=lambda item: item.get("ts", ""), reverse=True)
+    return events[:MAX_ACTIVITY_EVENTS]
 
 
 def catalog_etag(sha256: str) -> str:
@@ -785,7 +906,8 @@ def state_scaffold() -> None:
     UPLOADS.mkdir(exist_ok=True, mode=0o700)
     JOBS.mkdir(exist_ok=True, mode=0o700)
     LOGS.mkdir(exist_ok=True, mode=0o700)
-    for path in (STATE, UPLOADS, JOBS, LOGS):
+    ARCHIVE.mkdir(exist_ok=True, mode=0o700)
+    for path in (STATE, UPLOADS, JOBS, LOGS, ARCHIVE):
         st = path.lstat()
         if path.is_symlink() or not stat.S_ISDIR(st.st_mode) or st.st_uid != uid or st.st_gid != gid or stat.S_IMODE(st.st_mode) != 0o700:
             stop("admin state directory metadata is unsafe")
@@ -886,6 +1008,17 @@ class Handler(BaseHTTPRequestHandler):
                     },
                     {"ETag": catalog_etag(catalog_sha256)},
                 )
+            if path == "/api/archive":
+                _, catalog_sha256 = load_catalog()
+                records = list_archive_records()
+                return self.send_json(
+                    200,
+                    {"catalog_sha256": catalog_sha256, "count": len(records), "entries": records},
+                    {"ETag": catalog_etag(catalog_sha256)},
+                )
+            if path == "/api/activity":
+                events = activity_events()
+                return self.send_json(200, {"count": len(events), "events": events})
             if path == "/api/jobs/active":
                 current = active_job()
                 return self.send_json(200, {"active": current is not None, "job": current})
@@ -965,8 +1098,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.handle_job()
             if path == "/api/catalog/edit":
                 return self.handle_catalog_edit()
-            if path == "/api/catalog/unpublish":
-                return self.handle_catalog_unpublish()
+            if path == "/api/catalog/archive":
+                return self.handle_catalog_archive()
+            if path == "/api/catalog/restore":
+                return self.handle_catalog_restore()
             self.send_error_json(404, "not found")
         except Stop as exc:
             self.send_error_json(400, str(exc))
@@ -1033,29 +1168,46 @@ class Handler(BaseHTTPRequestHandler):
             {"ETag": catalog_etag(new_sha256)},
         )
 
-    def handle_catalog_unpublish(self):
+    def handle_catalog_archive(self):
         expected_sha256 = self.expected_catalog_sha256()
         raw = self.read_request_json()
         if not isinstance(raw, dict) or set(raw) != {"id", "confirm_id"}:
-            stop("catalog unpublish request keys are invalid")
+            stop("catalog archive request keys are invalid")
         page_id = validate_catalog_id(raw["id"])
         if raw["confirm_id"] != page_id:
-            stop("catalog unpublish confirmation does not match id")
+            stop("catalog archive confirmation does not match id")
+        record_path = archive_path(page_id)
         with acquire_catalog_lock():
             catalog, current_sha256 = load_catalog()
             if current_sha256 != expected_sha256:
-                self.send_error_json(412, "catalog changed; reload before unpublishing")
+                self.send_error_json(412, "catalog changed; reload before archiving")
                 return
             indexes = [index for index, entry in enumerate(catalog) if entry["id"] == page_id]
             if len(indexes) != 1:
                 stop("catalog target does not exist exactly once")
+            if os.path.lexists(record_path):
+                stop("archive record already exists for id")
+            entry = validate_catalog_entry(catalog[indexes[0]])
+            archived_at = int(time.time())
+            prepared = {
+                "schema": "rozkalns.rpi5-main.coloring-pages-admin-archive.v1",
+                "id": page_id,
+                "state": "prepared",
+                "archived_at": archived_at,
+                "catalog_before_sha256": current_sha256,
+                "entry": entry,
+            }
+            write_json(record_path, prepared)
             del catalog[indexes[0]]
             new_sha256 = write_catalog(catalog, current_sha256)
+            prepared.update(state="archived", catalog_after_sha256=new_sha256)
+            write_json(record_path, prepared)
             audit(
-                "catalog_unpublish",
+                "catalog_archive",
                 level="WARNING",
                 page_id=page_id,
-                action="unpublish",
+                action="archive",
+                archive_state="archived",
                 previous_catalog_sha256=current_sha256,
                 catalog_sha256=new_sha256,
             )
@@ -1063,7 +1215,58 @@ class Handler(BaseHTTPRequestHandler):
         return self.send_json(
             200,
             {
-                "status": "unpublished",
+                "status": "archived",
+                "id": page_id,
+                "catalog_sha256": new_sha256,
+                "sitemap_status": sitemap_status,
+                "sitemap_phase": sitemap_phase,
+                "media_deleted": False,
+                "original_deleted": False,
+            },
+            {"ETag": catalog_etag(new_sha256)},
+        )
+
+    def handle_catalog_restore(self):
+        expected_sha256 = self.expected_catalog_sha256()
+        raw = self.read_request_json()
+        if not isinstance(raw, dict) or set(raw) != {"id", "confirm_id"}:
+            stop("catalog restore request keys are invalid")
+        page_id = validate_catalog_id(raw["id"])
+        if raw["confirm_id"] != page_id:
+            stop("catalog restore confirmation does not match id")
+        with acquire_catalog_lock():
+            catalog, current_sha256 = load_catalog()
+            if current_sha256 != expected_sha256:
+                self.send_error_json(412, "catalog changed; reload before restoring")
+                return
+            if any(entry["id"] == page_id for entry in catalog):
+                stop("catalog already contains archive id")
+            record = load_archive_record(page_id)
+            if record["state"] not in {"prepared", "archived"}:
+                stop("archive record is not restorable")
+            entry = validate_catalog_entry(record["entry"])
+            catalog.append(entry)
+            new_sha256 = write_catalog(catalog, current_sha256)
+            record.update(
+                state="restored",
+                restored_at=int(time.time()),
+                restore_catalog_before_sha256=current_sha256,
+                restore_catalog_after_sha256=new_sha256,
+            )
+            write_json(archive_path(page_id), record)
+            audit(
+                "catalog_restore",
+                page_id=page_id,
+                action="restore",
+                archive_state="restored",
+                previous_catalog_sha256=current_sha256,
+                catalog_sha256=new_sha256,
+            )
+        sitemap_status, sitemap_phase = sitemap_best_effort()
+        return self.send_json(
+            200,
+            {
+                "status": "restored",
                 "id": page_id,
                 "catalog_sha256": new_sha256,
                 "sitemap_status": sitemap_status,
