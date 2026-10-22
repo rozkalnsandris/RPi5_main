@@ -1,0 +1,26 @@
+name: Ausmalwiese ADMIN simple deploy source
+
+on:
+  pull_request:
+    paths:
+      - "scripts/deploy-ausmalwiese-admin-v1.py"
+      - "ops/contracts/ausmalwiese-admin-simple-deploy-v1.json"
+      - "tests/test-ausmalwiese-admin-simple-deploy-v1.py"
+      - "docs/COLORING_PAGES_ADMIN_PUBLISH_V1.md"
+      - ".github/workflows/ausmalwiese-admin-simple-deploy-source.yml"
+      - "Makefile"
+
+permissions:
+  contents: read
+
+jobs:
+  source-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Validate ADMIN simple deploy source
+        run: |
+          python3 ./tests/test-ausmalwiese-admin-simple-deploy-v1.py
+          python3 -m py_compile ./scripts/deploy-ausmalwiese-admin-v1.py
+          python3 -m json.tool ./ops/contracts/ausmalwiese-admin-simple-deploy-v1.json >/dev/null
