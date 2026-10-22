@@ -9,7 +9,16 @@
   "trust": {
     "zone": "ADMIN",
     "public_route": false,
-    "access_required": true
+    "access_required": true,
+    "csrf": {
+      "token": "in-memory-per-process-256-bit",
+      "header": "X-Ausmalwiese-CSRF",
+      "fetch_metadata": "reject-cross-site",
+      "origin_allowlist": [
+        "https://admin.ausmalwiese.de",
+        "http://127.0.0.1:8765"
+      ]
+    }
   },
   "upload": {
     "content_type": "application/zip",
@@ -128,7 +137,10 @@
       "sitemap/public verification phase",
       "terminal job status",
       "stale-job reconciliation",
-      "partial succeeded-result count"
+      "partial succeeded-result count",
+      "catalog action",
+      "changed field names",
+      "catalog SHA-256 before/after"
     ],
     "forbidden": [
       "request or response bodies",
@@ -160,5 +172,34 @@
       "max_window_seconds": 4.75,
       "failure": "terminal-no-second-restart-or-installer-retry"
     }
+  },
+  "catalog_management": {
+    "issue": 1172,
+    "read_endpoint": "GET /api/catalog",
+    "validator": "strong-sha256-etag",
+    "write_precondition": "If-Match-required",
+    "edit_endpoint": "POST /api/catalog/edit",
+    "editable_fields": [
+      "title",
+      "category",
+      "age",
+      "difficulty"
+    ],
+    "unpublish_endpoint": "POST /api/catalog/unpublish",
+    "unpublish_confirmation": "exact-id",
+    "shared_lock": "/srv/coloring-pages-content/state/drive-ingest/.lock",
+    "atomic_write": "same-directory-temp-fsync-os.replace-post-hash-verify",
+    "stale_precondition": "412-no-mutation",
+    "server_side_validation": true,
+    "unpublish": {
+      "catalog_entry_removed": true,
+      "sitemap_refresh": "existing-best-effort-publisher",
+      "media_deleted": false,
+      "originals_deleted": false,
+      "inbox_deleted": false,
+      "drive_deleted": false
+    },
+    "bulk_destructive_operations": false,
+    "physical_delete": false
   }
 }

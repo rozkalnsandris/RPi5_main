@@ -90,6 +90,72 @@ Allowed log metadata is bounded to diagnostic identifiers and timings: UTC times
 
 The logger never records request/response bodies, HTTP headers, cookies, Cloudflare Access identity/tokens, credentials/secrets, environment variables, ZIP/PNG bytes, raw file contents, wholesale subprocess stdout/stderr or unsanitized tracebacks. Logging initialization is fail-closed before the service accepts publication jobs; a safely initialized diagnostic log is therefore part of the ADMIN runtime preflight, not an optional debug side channel.
 
+## Catalogue management extension (issue #1172)
+
+The same protected ADMIN service also provides a minimal catalogue manager. This deliberately reuses the existing loopback listener, Access boundary, publication lock, diagnostics and installer instead of introducing a database, framework, second service or second port.
+
+### Catalogue read model
+
+`GET /api/catalog` reads the current LIVE `catalog.json` and returns only fields needed by the ADMIN UI. The response includes a strong SHA-256 validator as both `catalog_sha256` and an HTTP `ETag`. The browser must reload before a mutation whenever that validator changes.
+
+### Metadata edit
+
+`POST /api/catalog/edit` may change only:
+
+- `title`;
+- `category`;
+- `age`;
+- `difficulty`.
+
+The request must include the exact current catalogue validator through `If-Match`. Server-side validation enforces exact request keys, valid catalogue ID syntax, the canonical category allowlist, allowed age/difficulty values and the existing bounded Unicode title rule. A stale validator fails with HTTP 412 before mutation.
+
+The service acquires the same shared publication lock used by publication before any catalogue write. This prevents an ADMIN metadata edit from racing a publication/import operation. The candidate catalogue is written to a same-directory exclusive temporary file, fsynced, atomically replaced with `os.replace`, then hash-verified.
+
+### Safe unpublish
+
+`POST /api/catalog/unpublish` is intentionally **not physical deletion**. The owner must type the exact activity ID as confirmation. A successful action removes only that exact catalogue entry, then invokes the already-reviewed sitemap publisher on the same best-effort basis used after publication.
+
+The operation does **not** delete or overwrite:
+
+- public media files;
+- private originals;
+- inbox or receipts;
+- Drive files;
+- analytics/engagement data.
+
+Physical media/original deletion remains a separate future risk class and is not exposed by this ADMIN version.
+
+### Browser mutation security
+
+All state-changing ADMIN requests are POST-only and require:
+
+1. the existing `X-Ausmalwiese-Admin: 1` marker;
+2. a per-process 256-bit in-memory CSRF token obtained through same-origin `GET /api/session` and sent in `X-Ausmalwiese-CSRF`;
+3. Fetch Metadata that is not cross-site when the browser supplies it;
+4. an allowed `Origin` when the browser supplies one.
+
+The public ADMIN route must remain protected by exact-owner Cloudflare Access. SameSite cookies are defense-in-depth; they do not replace the application mutation checks above. The service does not emit CORS allow headers.
+
+The ADMIN HTML also emits deny-framing, no-referrer, no-sniff, restrictive permissions policy and a same-origin Content Security Policy compatible with the current single-file UI.
+
+### Audit trail
+
+Successful catalogue edits and unpublishes are recorded in the existing private seven-day ADMIN diagnostic log using bounded metadata only: activity ID, action, changed field names and catalogue SHA-256 before/after. Request bodies, titles, HTTP headers, cookies, Access identity/tokens, credentials and raw catalogue contents are not logged.
+
+### Simple deployment boundary
+
+Issue #1172 adds no deployment mechanism. Backend changes reuse the existing guarded `full` installer and therefore require a later separately authorized SSH/runtime install and service restart. The `ui-only` mode is insufficient for this extension because the backend API changes too. Source merge itself never installs or restarts the ADMIN service.
+
+Security references used for this design:
+
+- OWASP CSRF Prevention Cheat Sheet;
+- OWASP REST Security Cheat Sheet;
+- OWASP Input Validation Cheat Sheet;
+- OWASP Logging Cheat Sheet;
+- RFC 9110 conditional requests / `If-Match`;
+- Cloudflare Access authorization-cookie documentation;
+- Python `http.server` security warning. The stdlib server remains acceptable here only inside the existing loopback + exact-owner Access boundary; it must not be exposed directly.
+
 ## Safe ADMIN updates
 
 The reviewed installer has two explicit modes.

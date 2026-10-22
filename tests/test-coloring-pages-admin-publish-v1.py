@@ -48,6 +48,42 @@ class Tests(unittest.TestCase):
             admin.secrets.randbelow=old_random
             admin.catalog_ids=old_catalog
 
+    def test_catalog_atomic_write_and_stale_precondition(self):
+        old_catalog=admin.CATALOG
+        catalog=Path(self.tmp.name)/"catalog.json"
+        initial=[{
+            "id":"1234567","title":"Alt","character":"","category":"tiere",
+            "age":"3-6","difficulty":"easy","language":"de",
+            "thumb":"/media/1234567/thumb.webp","preview":"/media/1234567/preview.webp",
+            "print":"/media/1234567/print.png","keep":"yes",
+        }]
+        catalog.write_text(json.dumps(initial,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+        admin.CATALOG=catalog
+        try:
+            entries,sha=admin.load_catalog()
+            entries[0]["title"]="Neu"
+            new_sha=admin.write_catalog(entries,sha)
+            saved,check_sha=admin.load_catalog()
+            self.assertEqual(check_sha,new_sha)
+            self.assertEqual(saved[0]["title"],"Neu")
+            self.assertEqual(saved[0]["keep"],"yes")
+            before=catalog.read_bytes()
+            with self.assertRaises(admin.Stop):
+                admin.write_catalog(saved,"0"*64)
+            self.assertEqual(catalog.read_bytes(),before)
+        finally:
+            admin.CATALOG=old_catalog
+
+    def test_catalog_validators(self):
+        self.assertEqual(admin.validate_catalog_id("cp-000001"),"cp-000001")
+        self.assertEqual(admin.validate_catalog_id("1234567"),"1234567")
+        self.assertEqual(admin.validate_age("3-6"),"3-6")
+        self.assertEqual(admin.validate_difficulty("detailed"),"detailed")
+        for bad in ("../x","ABC",""):
+            with self.assertRaises(admin.Stop):admin.validate_catalog_id(bad)
+        with self.assertRaises(admin.Stop):admin.validate_age("9-12")
+        with self.assertRaises(admin.Stop):admin.validate_difficulty("hard")
+
     def test_reconcile_interrupted_job_preserves_results(self):
         old_jobs,old_audit=admin.JOBS,admin.audit
         jobs=Path(self.tmp.name)/"jobs";jobs.mkdir()
@@ -130,11 +166,21 @@ class Tests(unittest.TestCase):
         self.assertLess(allocate,importer)
         self.assertIn('/assets/fonts/baloo2-latin-vf-26fb4610d4bc976d.woff2',source)
         self.assertIn('/assets/fonts/nunito-latin-vf-ba344451eab25b21.woff2',source)
+        self.assertIn('path == "/api/catalog"',source)
+        self.assertIn('path == "/api/catalog/edit"',source)
+        self.assertIn('path == "/api/catalog/unpublish"',source)
+        self.assertIn('"X-Ausmalwiese-CSRF"',source)
+        self.assertIn('self.headers.get("If-Match")',source)
+        self.assertIn('self.send_error_json(412',source)
+        self.assertIn('os.replace(temp, CATALOG)',source)
+        self.assertIn('with acquire_catalog_lock():',source)
+        self.assertNotIn('shutil.rmtree(MEDIA',source)
+        self.assertNotIn('shutil.rmtree(ORIGINALS',source)
 
 class StaticTests(unittest.TestCase):
     def test_assets_and_contract(self):
         html=(ROOT/"ops/admin/coloring-pages/index.html").read_text()
-        self.assertIn("Publicēt krāsojamās lapas",html);self.assertIn("Izvēlēties kategoriju",html)
+        self.assertIn("Publicēšana un katalogs",html);self.assertIn("Izvēlēties kategoriju",html)
         self.assertIn('<html lang="lv">',html);self.assertIn("--blue:#1474d4",html)
         self.assertIn('class="site-header"',html)
         self.assertIn('class="admin-hero"',html)
@@ -198,6 +244,14 @@ class StaticTests(unittest.TestCase):
         self.assertIn("scheduleRefresh(Math.min(10000",html)
         self.assertNotIn("clearInterval(poll)",html)
         self.assertIn("Daļēji pabeigts — jau apstrādātās lapas",html)
+        self.assertIn('id="catalog-manager"',html)
+        self.assertIn('id="catalogSearch"',html)
+        self.assertIn('id="editDialog"',html)
+        self.assertIn('"/api/catalog/edit"',html)
+        self.assertIn('"/api/catalog/unpublish"',html)
+        self.assertIn('"X-Ausmalwiese-CSRF"',html)
+        self.assertIn('"If-Match":catalogEtag',html)
+        self.assertIn('media/original faili paliks',html)
         self.assertIn("state/admin-publish/logs",installer)
         contract=json.loads((ROOT/"ops/contracts/coloring-pages-admin-publish-v1.json").read_text())
         self.assertEqual(contract["listener"],{"host":"127.0.0.1","port":8765})
@@ -222,6 +276,17 @@ class StaticTests(unittest.TestCase):
         self.assertEqual(contract["publication"]["zip_member_semantics"],"each-png-is-one-independent-single-page-activity")
         self.assertEqual(contract["runtime"]["source_sha"],"798b263671c81b4e034b163b263dce7dc18306eb")
         self.assertEqual(contract["runtime"]["image_ref"],"ghcr.io/rozkalnsandris/coloring-pages@sha256:5e63d5c37807cd25ef3ff384ea6e0681fa5b6995b0d8eb2a5846e038327e4cb4")
+        manager=contract["catalog_management"]
+        self.assertEqual(manager["issue"],1172)
+        self.assertEqual(manager["validator"],"strong-sha256-etag")
+        self.assertEqual(manager["write_precondition"],"If-Match-required")
+        self.assertEqual(manager["editable_fields"],["title","category","age","difficulty"])
+        self.assertFalse(manager["physical_delete"])
+        self.assertFalse(manager["unpublish"]["media_deleted"])
+        self.assertFalse(manager["unpublish"]["originals_deleted"])
+        csrf=contract["trust"]["csrf"]
+        self.assertEqual(csrf["header"],"X-Ausmalwiese-CSRF")
+        self.assertEqual(csrf["fetch_metadata"],"reject-cross-site")
         maintenance=contract["maintenance"]
         self.assertIn("GET /api/jobs/active",maintenance["full_install_guard"])
         self.assertEqual(maintenance["active_or_unknown"],"fail-closed-no-install-no-restart")
