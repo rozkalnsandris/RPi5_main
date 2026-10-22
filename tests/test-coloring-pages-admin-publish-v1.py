@@ -167,6 +167,23 @@ class Tests(unittest.TestCase):
         finally:
             admin.ORIGINALS,admin.MEDIA,admin.INBOX=old_originals,old_media,old_inbox
 
+    def test_permanent_delete_rejects_same_size_inode_replacement(self):
+        old_media=admin.MEDIA
+        root=Path(self.tmp.name)/"media";root.mkdir()
+        page_id="1234567";target=root/page_id;target.mkdir()
+        victim=target/"thumb.webp";victim.write_bytes(b"same-size")
+        admin.MEDIA=root
+        try:
+            inventory=admin.inspect_delete_directory(root,page_id)
+            victim.unlink()
+            victim.write_bytes(b"new-value")
+            self.assertEqual(victim.stat().st_size,inventory["files"][0]["size"])
+            with self.assertRaises(admin.Stop):
+                admin.delete_validated_directory(root,page_id,inventory)
+            self.assertTrue(victim.is_file())
+        finally:
+            admin.MEDIA=old_media
+
     def test_permanent_delete_preflight_rejects_symlink_or_nested_target(self):
         old_media=admin.MEDIA
         root=Path(self.tmp.name)/"media";root.mkdir()
