@@ -123,6 +123,7 @@ class Tests(unittest.TestCase):
             "catalog_sha256":"a"*64,
         }
         admin.LOG_FILE.write_text(json.dumps(valid)+"\n",encoding="utf-8")
+        os.chmod(admin.LOG_FILE,0o600)
         try:
             events=admin.activity_events()
             self.assertEqual(len(events),1)
@@ -131,6 +132,7 @@ class Tests(unittest.TestCase):
             self.assertNotIn("catalog_sha256",events[0])
             invalid=dict(valid,title="secret title")
             admin.LOG_FILE.write_text(json.dumps(invalid)+"\n",encoding="utf-8")
+            os.chmod(admin.LOG_FILE,0o600)
             with self.assertRaises(admin.Stop):admin.activity_events()
         finally:
             admin.LOGS,admin.LOG_FILE=old_logs,old_file
