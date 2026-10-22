@@ -27,6 +27,10 @@ INSTALLER_FAILURE_REASONS = (
     "NUNITO_FONT_MISSING",
     "BALOO_FONT_HASH_MISMATCH",
     "NUNITO_FONT_HASH_MISMATCH",
+    "BALOO_EXT_FONT_MISSING",
+    "NUNITO_EXT_FONT_MISSING",
+    "BALOO_EXT_FONT_HASH_MISMATCH",
+    "NUNITO_EXT_FONT_HASH_MISMATCH",
     "SHARED_LOCK_INVALID",
     "ACTIVE_PUBLICATION_REFUSES_ADMIN_UPDATE",
     "ADMIN_ACTIVE_JOB_CHECK_FAILED",
@@ -166,7 +170,7 @@ def installer_failure_reason(result: subprocess.CompletedProcess[bytes]) -> str:
 
 
 def deploy(expected_sha: str, command_runner=run_command, verifier=post_verify) -> None:
-    result = command_runner(installer_argv(expected_sha), 60)
+    result = command_runner(installer_argv(expected_sha), 90)
     if result.returncode != 0:
         fail(f"reviewed ADMIN installer failed: {installer_failure_reason(result)}")
     verifier(command_runner=command_runner)

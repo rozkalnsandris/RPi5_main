@@ -82,6 +82,17 @@ class Tests(unittest.TestCase):
             mod.deploy(SHA,command_runner=r,verifier=lambda **_kw:None)
         self.assertNotIn("curl:",str(ctx.exception))
 
+    def test_extended_font_failure_is_sanitized_and_terminal(self):
+        for family in ("BALOO_EXT", "NUNITO_EXT"):
+            reason=family+"_FONT_HASH_MISMATCH"
+            r=Runner(installer_code=2,installer_err=(reason+"\nprivate detail\n").encode())
+            seen=[]
+            with self.assertRaisesRegex(mod.DeployError,reason) as ctx:
+                mod.deploy(SHA,command_runner=r,verifier=lambda **_kw:seen.append("verify"))
+            self.assertNotIn("private detail",str(ctx.exception))
+            self.assertEqual(seen,[])
+            self.assertEqual(len(r.calls),1)
+
     def test_wrapper_environment_remains_bounded(self):
         self.assertEqual(mod.ENV,{"PATH":"/usr/bin:/bin","LANG":"C.UTF-8","LC_ALL":"C.UTF-8"})
         self.assertNotIn("SUDO_UID",mod.ENV)

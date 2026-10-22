@@ -283,3 +283,31 @@ Source merge never runs this wrapper. A later SSH apply still requires separate 
 ## LIVE gates
 
 Source merge does not install, start, route or expose this service. Installation or a UI-only update requires a separate exact owner authorization for the reviewed installer mode. The canonical external ADMIN hostname is `admin.ausmalwiese.de`. Creating its Tunnel/DNS route and exact-owner Cloudflare Access application/policy remains a separate owner gate.
+
+## Latvian font coverage
+
+The admin keeps the public site's Baloo 2 and Nunito variable families. Latin
+Extended faces supplement the original Latin subsets, with explicit Unicode
+ranges so Latvian accented letters use the same family and weight.
+
+Both additional WOFF2 files come from the same Fontsource revision as the public
+site's Latin files:
+`fontsource/font-files@c3f4e3e5a664d2c3002e800050ce809a790d7281`.
+
+| Family | Upstream path under `fonts/variable/` | SHA-256 |
+| --- | --- | --- |
+| Baloo 2 | `baloo-2/files/baloo-2-latin-ext-wght-normal.woff2` | `dfd52ee2e67ff597c9a47238d59adcee2b27d8adf9245e2d53a46dd73db99dde` |
+| Nunito | `nunito/files/nunito-latin-ext-wght-normal.woff2` | `2c8d792869818ecb253a46bc3c63c7013df7aac2f69291c3c85e5cdc94160960` |
+
+Upstream licenses are the SIL Open Font License 1.1 in each family's
+`LICENSE` file at that revision. Assets are not bundled in this repository;
+the installer downloads exact pinned bytes and verifies both hashes before
+installing any source. Browsers load all fonts from the admin origin; CSP is
+unchanged.
+
+The first rollout needs the existing separately authorized **full** installer,
+because it adds two files and two allowlisted backend routes. `ui-only` fails
+before replacing HTML unless the extended files and served hashes already
+match. Full mode verifies all four font responses after readiness. The deploy
+wrapper budget is 90 seconds to accommodate the two additional bounded downloads.
+Source merge alone does not deploy this change.

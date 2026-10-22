@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-import importlib.util, json, os, stat, subprocess, tempfile, unittest, zipfile
+import importlib.util, json, os, re, stat, subprocess, tempfile, unittest, zipfile
+from types import SimpleNamespace
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 
@@ -335,6 +336,36 @@ class Tests(unittest.TestCase):
         self.assertNotIn('shutil.rmtree(INBOX',source)
 
 class StaticTests(unittest.TestCase):
+    def test_latvian_font_faces_and_routes(self):
+        html=(ROOT/"ops/admin/coloring-pages/index.html").read_text()
+        faces=re.findall(r"@font-face\{([^}]+)\}",html)
+        for family in ("Baloo 2","Nunito"):
+            extended=[f for f in faces if f'font-family:"{family}"' in f and "latin-ext" in f]
+            self.assertEqual(len(extended),1)
+            face=extended[0]
+            ranges=re.search(r"unicode-range:([^;]+)",face).group(1)
+            covered=set()
+            for value in ranges.split(","):
+                bounds=value.removeprefix("U+").split("-")
+                covered.update(range(int(bounds[0],16),int(bounds[-1],16)+1))
+            self.assertTrue(set(map(ord,"ĀāČčĒēĢģĪīĶķĻļŅņŠšŪūŽž")) <= covered)
+            url=re.search(r'url\("([^"]+)"\)',face).group(1)
+            self.assertTrue(url.startswith("/assets/fonts/"))
+            served=[]
+            handler=SimpleNamespace(path=url,static=lambda *args:served.append(args))
+            admin.Handler.do_GET(handler)
+            self.assertEqual(served,[(url.removeprefix("/assets/"),"font/woff2")])
+
+    def test_extended_fonts_verified_before_ui_write_and_full_install(self):
+        installer=(ROOT/"scripts/install-coloring-pages-admin-publish-v1.sh").read_text()
+        ui=installer.split('if [[ "$MODE" == "ui-only" ]]; then')[1].split('exit 0')[0]
+        full=installer.split('BALOO_TMP="$(mktemp)"')[1]
+        for key in ("BALOO_EXT","NUNITO_EXT"):
+            self.assertLess(ui.index(f'/assets/fonts/${key}_NAME'),ui.index("  install "))
+            self.assertLess(full.index(f'{key}_FONT_HASH_MISMATCH'),full.index("\ninstall "))
+            self.assertIn(f'"${key}_TMP" "/usr/local/share/coloring-pages-admin/fonts/${key}_NAME"',full)
+            self.assertGreater(full.rindex(f'/assets/fonts/${key}_NAME'),full.index('systemctl restart'))
+
     def test_navigation_behavior(self):
         subprocess.run(["node", str(ROOT/"tests/test-coloring-pages-admin-navigation.cjs")], check=True, timeout=30)
 
