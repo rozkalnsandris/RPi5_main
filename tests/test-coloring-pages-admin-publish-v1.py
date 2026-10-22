@@ -180,7 +180,7 @@ class Tests(unittest.TestCase):
 class StaticTests(unittest.TestCase):
     def test_assets_and_contract(self):
         html=(ROOT/"ops/admin/coloring-pages/index.html").read_text()
-        self.assertIn("Publicēt krāsojamās lapas",html);self.assertIn("Izvēlēties kategoriju",html)
+        self.assertIn("Publicēšana un katalogs",html);self.assertIn("Izvēlēties kategoriju",html)
         self.assertIn('<html lang="lv">',html);self.assertIn("--blue:#1474d4",html)
         self.assertIn('class="site-header"',html)
         self.assertIn('class="admin-hero"',html)
