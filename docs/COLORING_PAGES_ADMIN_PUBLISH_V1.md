@@ -185,6 +185,35 @@ The reviewed installer has two explicit modes.
 
 Neither mode retries, requeues, rolls back or cleans up publication state. The `ui-only` confirmation token is deliberately distinct from the full publisher-install confirmation so a static update cannot silently widen into a runtime restart.
 
+## One-command guarded SSH deploy (issue #1176)
+
+The ADMIN service deliberately does **not** become a generic SIMPLE-DEPLOY Compose target. SIMPLE-DEPLOY v1 is image/Compose based and explicitly forbids arbitrary shell/argv and unrelated systemd mutation. Widening that shared executor to run a host installer would weaken its trust boundary.
+
+Instead, issue #1176 adds one target-bound wrapper:
+
+`scripts/deploy-ausmalwiese-admin-v1.py`
+
+It accepts only:
+
+- `--expected-source-sha <40-lowercase-hex>`;
+- `--apply`.
+
+The wrapper requires root, exact clean `main`, the exact GitHub origin, and HEAD equal to the supplied SHA. It then invokes the reviewed full installer exactly once with its fixed confirmation token and `full` mode. It does not accept arbitrary command, path, environment, installer mode or extra argv input.
+
+All mutation safety remains owned by the existing installer: shared publication lock, active-job idle check, exact clean checkout, one restart/start path and bounded readiness window.
+
+After a successful installer exit, the wrapper performs read-only local verification only:
+
+- `coloring-pages-admin-publish.service` is active;
+- `GET http://127.0.0.1:8765/` succeeds;
+- `GET /api/catalog` has a valid count/list/SHA-256 model;
+- `GET /api/archive` has a valid count/list/catalog-hash model;
+- `GET /api/activity` has a valid bounded count/list model.
+
+Any failure after the installer starts is terminal for that attempt: no automatic retry, rollback, cleanup, second restart or alternate execution path.
+
+Source merge never runs this wrapper. A later SSH apply still requires separate exact owner LIVE authorization for the ADMIN install/restart target.
+
 ## LIVE gates
 
 Source merge does not install, start, route or expose this service. Installation or a UI-only update requires a separate exact owner authorization for the reviewed installer mode. The canonical external ADMIN hostname is `admin.ausmalwiese.de`. Creating its Tunnel/DNS route and exact-owner Cloudflare Access application/policy remains a separate owner gate.
