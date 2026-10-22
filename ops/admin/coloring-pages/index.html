@@ -76,9 +76,10 @@ select{width:100%;min-height:44px;padding:9px 12px;border:1px solid #cfdaea;bord
 .success{display:none;border:1px solid #cbe8d4;background:#f3fbf5;border-radius:14px;padding:14px;margin-top:12px}.success h3{margin:0;color:#1a753b;font-family:var(--font-body);font-size:20px}
 .results{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-top:10px}.result{background:#fff;border:1px solid #dce7df;border-radius:12px;padding:10px}.result a{color:var(--blue-deep);word-break:break-word}
 .error{display:none;background:#fff0f0;color:#9c2424;border:1px solid #f0c7c7;border-radius:12px;padding:11px 13px;margin-top:12px;font-size:13px;font-weight:700}
+.catalog-section{padding:0 0 48px}.catalog-panel{padding:22px}.catalog-toolbar{display:grid;grid-template-columns:minmax(220px,1fr) 240px auto;gap:10px;margin-bottom:14px}.catalog-toolbar input{width:100%;min-height:44px;padding:9px 12px;border:1px solid #cfdaea;border-radius:12px;color:var(--text);font-weight:700;outline:none}.catalog-toolbar input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgb(20 116 212 / 12%)}.secondary,.danger{border:1px solid #cfe0f1;border-radius:999px;padding:9px 14px;background:#fff;color:var(--blue-deep);font-weight:900;cursor:pointer}.secondary:hover{background:#f2f8ff;border-color:var(--blue)}.danger{border-color:#efc7c7;color:#a22d2d}.danger:hover{background:#fff2f2}.catalog-meta{display:flex;justify-content:space-between;gap:10px;align-items:center;margin:0 0 12px;color:var(--muted);font-size:13px;font-weight:800}.catalog-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.catalog-card{min-width:0;border:1px solid var(--line);border-radius:15px;padding:10px;background:#fff}.catalog-card img{display:block;width:100%;aspect-ratio:2/3;object-fit:contain;border:1px solid #edf1f6;border-radius:11px;background:#fff}.catalog-card h3{margin:9px 0 2px;font-size:15px;line-height:1.2}.catalog-card small{display:block;color:var(--muted);font-size:12px;word-break:break-word}.catalog-tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}.catalog-tag{padding:3px 7px;border-radius:999px;background:#eef6ff;color:#275a91;font-size:11px;font-weight:800}.catalog-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.catalog-actions .secondary,.catalog-actions .danger{padding:7px 10px;font-size:12px}.catalog-empty{grid-column:1/-1;padding:30px;text-align:center;color:var(--muted);font-weight:800}.catalog-dialog{width:min(560px,calc(100% - 28px));border:0;border-radius:22px;padding:0;box-shadow:0 24px 70px rgb(16 40 77 / 28%)}.catalog-dialog::backdrop{background:rgb(16 40 77 / 50%)}.dialog-body{padding:20px}.dialog-head{display:flex;justify-content:space-between;gap:12px;align-items:start;margin-bottom:15px}.dialog-head h2{margin:0;font-size:22px}.dialog-close{border:0;background:#eef5ff;color:var(--text);width:36px;height:36px;border-radius:11px;font-size:20px;cursor:pointer}.field-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field{display:grid;gap:5px}.field.wide{grid-column:1/-1}.field label{font-size:12px;font-weight:900;color:var(--muted)}.field input{width:100%;min-height:44px;padding:9px 12px;border:1px solid #cfdaea;border-radius:12px;color:var(--text);font-weight:700;outline:none}.dialog-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:16px}.catalog-feedback{display:none;margin:0 0 12px;padding:10px 12px;border-radius:11px;background:#eefaf2;color:#1a753b;font-size:13px;font-weight:800}
 :focus-visible{outline:3px solid var(--blue-deep);outline-offset:3px}
-@media(max-width:900px){.workflow-grid,.action-grid{grid-template-columns:1fr}.header-inner{gap:16px}.admin-hero{padding-top:26px}}
-@media(max-width:620px){.container{width:min(calc(100% - 28px),var(--container))}.header-inner{grid-template-columns:1fr auto;gap:10px;padding-top:8px}.dashboard-nav{grid-column:1/-1;grid-row:2;height:42px;width:100%;justify-content:center;gap:22px;border-top:1px solid var(--line)}.dashboard-nav a{font-size:13px}.dashboard-nav a.is-active::after{bottom:3px}.admin-home-link{min-height:38px;padding:7px 10px;font-size:12px}.brand{font-size:24px}.brand-paw{flex-basis:30px;width:30px;transform:scale(.8);transform-origin:left center;margin-right:-5px}.admin-hero{padding:24px 0 18px}.admin-hero h1{font-size:34px}.admin-panel{padding:16px;border-radius:20px}.panel-title h2{font-size:19px}.previews{grid-template-columns:repeat(2,minmax(0,1fr));min-height:0}.row{grid-template-columns:28px minmax(0,1fr)}.row .status,.row .duration{grid-column:2}.publish-row{align-items:stretch;flex-direction:column}.primary{width:100%}}
+@media(max-width:1100px){.catalog-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:900px){.workflow-grid,.action-grid{grid-template-columns:1fr}.header-inner{gap:16px}.admin-hero{padding-top:26px}.catalog-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.catalog-toolbar{grid-template-columns:1fr 1fr}.catalog-toolbar .secondary{grid-column:1/-1}}
+@media(max-width:620px){.container{width:min(calc(100% - 28px),var(--container))}.header-inner{grid-template-columns:1fr auto;gap:10px;padding-top:8px}.dashboard-nav{grid-column:1/-1;grid-row:2;height:42px;width:100%;justify-content:center;gap:22px;border-top:1px solid var(--line)}.dashboard-nav a{font-size:13px}.dashboard-nav a.is-active::after{bottom:3px}.admin-home-link{min-height:38px;padding:7px 10px;font-size:12px}.brand{font-size:24px}.brand-paw{flex-basis:30px;width:30px;transform:scale(.8);transform-origin:left center;margin-right:-5px}.admin-hero{padding:24px 0 18px}.admin-hero h1{font-size:34px}.admin-panel{padding:16px;border-radius:20px}.panel-title h2{font-size:19px}.previews{grid-template-columns:repeat(2,minmax(0,1fr));min-height:0}.row{grid-template-columns:28px minmax(0,1fr)}.row .status,.row .duration{grid-column:2}.publish-row{align-items:stretch;flex-direction:column}.primary{width:100%}.catalog-grid{grid-template-columns:1fr}.catalog-toolbar{grid-template-columns:1fr}.catalog-toolbar .secondary{grid-column:auto}.field-grid{grid-template-columns:1fr}.field.wide{grid-column:auto}.dialog-actions{flex-direction:column-reverse}.dialog-actions button{width:100%}}}
 </style>
 </head>
 <body>
@@ -102,8 +103,8 @@ select{width:100%;min-height:44px;padding:9px 12px;border:1px solid #cfdaea;bord
   <section class="admin-hero" aria-labelledby="admin-title">
     <div class="container">
       <span class="admin-eyebrow">Iekšējais panelis</span>
-      <h1 id="admin-title">Publicēt krāsojamās lapas</h1>
-      <p>Augšupielādē ZIP failu, pārbaudi priekšskatījumus, izvēlies kategoriju un publicē. Pārējos soļus serveris izpilda automātiski.</p>
+      <h1 id="admin-title">Publicēšana un katalogs</h1>
+      <p>Publicē jaunas krāsojamās lapas vai pārvaldi jau publicēto katalogu vienā aizsargātā panelī.</p>
     </div>
   </section>
 
@@ -147,16 +148,52 @@ select{width:100%;min-height:44px;padding:9px 12px;border:1px solid #cfdaea;bord
       </article>
     </div>
   </section>
+
+  <section id="catalog-manager" class="catalog-section" aria-labelledby="catalog-title">
+    <div class="container">
+      <article class="admin-panel catalog-panel">
+        <div class="panel-heading">
+          <div class="panel-title"><span class="step-number">5</span><div><span class="panel-kicker">Saturs</span><h2 id="catalog-title">Pārvaldīt katalogu</h2></div></div>
+        </div>
+        <div class="catalog-toolbar">
+          <label class="sr-only" for="catalogSearch">Meklēt katalogā</label>
+          <input id="catalogSearch" type="search" placeholder="Meklēt pēc nosaukuma vai ID…" autocomplete="off">
+          <label class="sr-only" for="catalogFilter">Filtrēt pēc kategorijas</label>
+          <select id="catalogFilter"><option value="">Visas kategorijas</option></select>
+          <button id="catalogRefresh" class="secondary" type="button">↻ Atjaunot</button>
+        </div>
+        <div id="catalogFeedback" class="catalog-feedback"></div>
+        <div class="catalog-meta"><span id="catalogCount">Ielādē katalogu…</span><span>Dzēšana = noņemšana no publiskā kataloga; media/original faili netiek dzēsti.</span></div>
+        <div id="catalogGrid" class="catalog-grid" aria-live="polite"></div>
+      </article>
+    </div>
+  </section>
 </main>
+
+<dialog id="editDialog" class="catalog-dialog" aria-labelledby="editDialogTitle">
+  <form id="editForm" method="dialog" class="dialog-body">
+    <div class="dialog-head"><div><span class="panel-kicker">Kataloga ieraksts</span><h2 id="editDialogTitle">Rediģēt</h2></div><button id="editClose" class="dialog-close" value="cancel" aria-label="Aizvērt">×</button></div>
+    <input id="editId" type="hidden">
+    <div class="field-grid">
+      <div class="field wide"><label for="editTitle">Nosaukums</label><input id="editTitle" maxlength="128" required></div>
+      <div class="field"><label for="editCategory">Kategorija</label><select id="editCategory" required></select></div>
+      <div class="field"><label for="editAge">Vecums</label><select id="editAge"><option value="3-6">3–6 gadi</option><option value="4-8">4–8 gadi</option></select></div>
+      <div class="field"><label for="editDifficulty">Sarežģītība</label><select id="editDifficulty"><option value="easy">Viegli</option><option value="normal">Vidēji</option><option value="detailed">Detalizēti</option></select></div>
+    </div>
+    <div class="dialog-actions"><button class="secondary" value="cancel">Atcelt</button><button id="editSave" class="primary" type="button">Saglabāt</button></div>
+  </form>
+</dialog>
 
 <script>
 "use strict";
-var upload=null,job=null,poll=null,uiTick=null,pollFailures=0,pollBusy=false;
+var upload=null,job=null,poll=null,uiTick=null,pollFailures=0,pollBusy=false,csrfToken="",catalogData=null,catalogEtag="";
 var SESSION_JOB_KEY="ausmalwiese.admin.activeJob.v1";
 var file=document.getElementById("file"),drop=document.getElementById("drop"),filebar=document.getElementById("filebar"),
 previews=document.getElementById("previews"),category=document.getElementById("category"),publish=document.getElementById("publish"),
 process=document.getElementById("process"),steps=document.getElementById("steps"),success=document.getElementById("success"),
-results=document.getElementById("results"),resultTitle=document.getElementById("resultTitle"),errorBox=document.getElementById("error");
+results=document.getElementById("results"),resultTitle=document.getElementById("resultTitle"),errorBox=document.getElementById("error"),
+catalogGrid=document.getElementById("catalogGrid"),catalogSearch=document.getElementById("catalogSearch"),catalogFilter=document.getElementById("catalogFilter"),catalogRefresh=document.getElementById("catalogRefresh"),catalogCount=document.getElementById("catalogCount"),catalogFeedback=document.getElementById("catalogFeedback"),
+editDialog=document.getElementById("editDialog"),editForm=document.getElementById("editForm"),editId=document.getElementById("editId"),editTitle=document.getElementById("editTitle"),editCategory=document.getElementById("editCategory"),editAge=document.getElementById("editAge"),editDifficulty=document.getElementById("editDifficulty"),editSave=document.getElementById("editSave");
 var categoryLabels={tiere:"Dzīvnieki",fahrzeuge:"Transportlīdzekļi",alphabet:"Alfabēts",lernen:"Mācības",figuren:"Tēli un varoņi",jahreszeiten:"Gadalaiki un svētki"};
 var stepLabels={
 "ZIP-Datei empfangen und entpacken":"Saņemt un atpakot ZIP failu",
@@ -172,7 +209,8 @@ var stepLabels={
 };
 var statusLabels={pending:"Gaida",running:"Notiek",done:"Pabeigts",failed:"Kļūda"};
 function err(m){errorBox.textContent=m;errorBox.style.display="block"}function clearErr(){errorBox.style.display="none"}
-function adminFetch(url,opt){opt=opt||{};opt.headers=Object.assign({"X-Ausmalwiese-Admin":"1"},opt.headers||{});return fetch(url,opt).then(async function(r){var data=await r.json().catch(function(){return{error:"Nederīga servera atbilde"}});if(!r.ok)throw new Error(data.error||("HTTP "+r.status));return data})}
+async function ensureSession(){if(csrfToken)return;var r=await fetch("/api/session",{headers:{"X-Ausmalwiese-Admin":"1"},cache:"no-store"});var d=await r.json();if(!r.ok||!d.csrf_token)throw new Error(d.error||"Neizdevās izveidot drošu admin sesiju.");csrfToken=d.csrf_token}
+async function adminFetch(url,opt){opt=opt||{};var method=(opt.method||"GET").toUpperCase();if(method!=="GET"&&method!=="HEAD")await ensureSession();opt.headers=Object.assign({"X-Ausmalwiese-Admin":"1"},opt.headers||{});if(method!=="GET"&&method!=="HEAD")opt.headers["X-Ausmalwiese-CSRF"]=csrfToken;var r=await fetch(url,opt);var data=await r.json().catch(function(){return{error:"Nederīga servera atbilde"}});if(!r.ok){var e=new Error(data.error||("HTTP "+r.status));e.httpStatus=r.status;throw e}return data}
 function isTerminal(j){return !!(j&&(j.status==="published"||j.status==="failed"))}
 function storeJobId(id){try{sessionStorage.setItem(SESSION_JOB_KEY,id)}catch(_e){}}
 function storedJobId(){try{return sessionStorage.getItem(SESSION_JOB_KEY)||""}catch(_e){return""}}
@@ -182,7 +220,7 @@ function scheduleRefresh(delay){if(poll)clearTimeout(poll);poll=setTimeout(refre
 function startTracking(j,restored){stopTracking();job=j;storeJobId(job.job_id);process.style.display="block";renderJob(job);if(job.results&&job.results.length&&isTerminal(job))renderResults(job.results,job.status!=="published");if(isTerminal(job)){finishJob(job);return}uiTick=setInterval(function(){if(job&&!isTerminal(job))renderJob(job)},1000);scheduleRefresh(100);if(restored)err("Atjaunots iepriekšējais aktīvais publicēšanas darbs.")}
 function finishJob(j){stopTracking();clearStoredJob();renderJob(j);if(j.results&&j.results.length)renderResults(j.results,j.status!=="published");if(j.status==="failed")err(j.error||"Publicēšana neizdevās");else clearErr();updateButton()}
 async function restoreActiveJob(){var id=storedJobId();if(id){try{var saved=await adminFetch("/api/jobs/"+id);startTracking(saved,true);return}catch(_e){clearStoredJob()}}try{var active=await adminFetch("/api/jobs/active");if(active.active&&active.job)startTracking(active.job,true)}catch(_e){}}
-fetch("/api/categories").then(function(r){return r.json()}).then(function(d){d.categories.forEach(function(c){var o=document.createElement("option");o.value=c.id;o.textContent=categoryLabels[c.id]||c.label;category.appendChild(o)})}).catch(function(){err("Neizdevās ielādēt kategorijas.")});
+async function loadCategories(){try{var d=await adminFetch("/api/categories");d.categories.forEach(function(c){var label=categoryLabels[c.id]||c.label;[category,catalogFilter,editCategory].forEach(function(sel){var o=document.createElement("option");o.value=c.id;o.textContent=label;sel.appendChild(o)})})}catch(_e){err("Neizdevās ielādēt kategorijas.")}}
 drop.onclick=function(){file.click()};drop.ondragover=function(e){e.preventDefault();drop.classList.add("drag")};drop.ondragleave=function(){drop.classList.remove("drag")};drop.ondrop=function(e){e.preventDefault();drop.classList.remove("drag");if(e.dataTransfer.files[0])sendZip(e.dataTransfer.files[0])};file.onchange=function(){if(file.files[0])sendZip(file.files[0])};
 async function sendZip(f){if(job&&!isTerminal(job)){err("Vispirms pabeidz aktīvo publicēšanas darbu.");return}clearErr();publish.disabled=true;success.style.display="none";process.style.display="none";try{upload=await adminFetch("/api/uploads",{method:"POST",headers:{"Content-Type":"application/zip"},body:f});filebar.style.display="block";filebar.textContent="✓ "+f.name+" — atrasti "+upload.count+" PNG";renderPreviews();updateButton()}catch(e){err(e.message)}}
 function renderPreviews(){previews.innerHTML="";upload.files.forEach(function(item,i){var c=document.createElement("div");c.className="preview";var img=document.createElement("img");img.src="/api/uploads/"+upload.upload_id+"/preview/"+(i+1);img.alt="Priekšskatījums "+(i+1);var input=document.createElement("input");input.value=item.title;input.maxLength=128;input.setAttribute("aria-label","Attēla "+(i+1)+" nosaukums");input.oninput=updateButton;c.append(img,input);previews.appendChild(c)})}
@@ -193,7 +231,15 @@ async function refresh(){if(!job||pollBusy||isTerminal(job))return;pollBusy=true
 function renderJob(j){steps.innerHTML="";j.steps.forEach(function(s,i){var row=document.createElement("div");row.className="row "+s.status;var dur="";if(s.started_at){var end=s.finished_at||Math.floor(Date.now()/1000);dur=(end-s.started_at)+" s"}var label=(stepLabels[s.label]||s.label)+(s.detail?" — "+s.detail:"");row.innerHTML="<span class=dot>"+(s.status==="done"?"✓":(i+1))+"</span><span>"+escapeHtml(label)+"</span><span class=status>"+escapeHtml(statusLabels[s.status]||s.status)+"</span><span class=duration>"+dur+"</span>";steps.appendChild(row)})}
 function renderResults(items,partial){if(!items||!items.length)return;success.style.display="block";resultTitle.textContent=partial?"Daļēji pabeigts — jau apstrādātās lapas":"✓ Veiksmīgi publicēts!";results.innerHTML="";items.forEach(function(x){var d=document.createElement("div");d.className="result";var status=x.status==="published"?"Publicēts":"Importēts";var link=x.url?"<br><a target=_blank rel=noopener href='"+x.url+"'>Atvērt publicēto lapu ↗</a>":"";d.innerHTML="<strong>"+escapeHtml(x.title)+"</strong><br><small>ID: "+escapeHtml(x.id)+" · "+status+"</small>"+link;results.appendChild(d)})}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
-restoreActiveJob();
+function showCatalogFeedback(m){catalogFeedback.textContent=m;catalogFeedback.style.display="block";setTimeout(function(){catalogFeedback.style.display="none"},3500)}
+async function loadCatalog(){catalogCount.textContent="Ielādē katalogu…";try{var r=await fetch("/api/catalog",{headers:{"X-Ausmalwiese-Admin":"1"},cache:"no-store"});var d=await r.json();if(!r.ok)throw new Error(d.error||("HTTP "+r.status));catalogData=d;catalogEtag=r.headers.get("ETag")||('"' + d.catalog_sha256 + '"');renderCatalog()}catch(e){catalogCount.textContent="Katalogu neizdevās ielādēt.";catalogGrid.innerHTML='<p class="catalog-empty">'+escapeHtml(e.message)+'</p>'}}
+function filteredCatalog(){if(!catalogData)return[];var q=catalogSearch.value.trim().toLocaleLowerCase("de-DE"),cat=catalogFilter.value;return catalogData.entries.filter(function(x){return(!cat||x.category===cat)&&(!q||String(x.id).toLowerCase().includes(q)||String(x.title||"").toLocaleLowerCase("de-DE").includes(q))})}
+function renderCatalog(){var items=filteredCatalog();catalogCount.textContent="Rādīti "+items.length+" no "+catalogData.count+" ierakstiem";catalogGrid.innerHTML="";if(!items.length){catalogGrid.innerHTML='<p class="catalog-empty">Nekas netika atrasts.</p>';return}items.forEach(function(x){var card=document.createElement("article");card.className="catalog-card";var img=document.createElement("img");img.loading="lazy";img.alt="";img.src="https://ausmalwiese.de"+x.thumb;var h=document.createElement("h3");h.textContent=x.title||x.id;var meta=document.createElement("small");meta.textContent="ID: "+x.id;var tags=document.createElement("div");tags.className="catalog-tags";[categoryLabels[x.category]||x.category,x.age+" gadi",({easy:"Viegli",normal:"Vidēji",detailed:"Detalizēti"}[x.difficulty]||x.difficulty)].forEach(function(t){var s=document.createElement("span");s.className="catalog-tag";s.textContent=t;tags.appendChild(s)});var actions=document.createElement("div");actions.className="catalog-actions";var edit=document.createElement("button");edit.className="secondary";edit.type="button";edit.textContent="Rediģēt";edit.onclick=function(){openEdit(x)};var open=document.createElement("a");open.className="secondary";open.target="_blank";open.rel="noopener";open.href="https://ausmalwiese.de/detail.html?id="+encodeURIComponent(x.id);open.textContent="Atvērt ↗";var remove=document.createElement("button");remove.className="danger";remove.type="button";remove.textContent="Noņemt";remove.onclick=function(){unpublishCatalogEntry(x)};actions.append(edit,open,remove);card.append(img,h,meta,tags,actions);catalogGrid.appendChild(card)})}
+function openEdit(x){editId.value=x.id;editTitle.value=x.title||"";editCategory.value=x.category;editAge.value=x.age;editDifficulty.value=x.difficulty;editDialogTitle.textContent="Rediģēt · "+x.id;editDialog.showModal()}
+editSave.onclick=async function(){var payload={id:editId.value,title:editTitle.value.trim(),category:editCategory.value,age:editAge.value,difficulty:editDifficulty.value};if(!payload.title){return}editSave.disabled=true;try{await adminFetch("/api/catalog/edit",{method:"POST",headers:{"Content-Type":"application/json","If-Match":catalogEtag},body:JSON.stringify(payload)});editDialog.close();showCatalogFeedback("✓ Ieraksts saglabāts.");await loadCatalog()}catch(e){if(e.httpStatus===412)await loadCatalog();err(e.message)}finally{editSave.disabled=false}}
+async function unpublishCatalogEntry(x){var typed=window.prompt("Noņemšana paslēps ierakstu no publiskā kataloga, bet media/original faili paliks. Lai apstiprinātu, ieraksti ID: "+x.id);if(typed===null)return;if(typed.trim()!==x.id){err("ID apstiprinājums nesakrīt.");return}try{await adminFetch("/api/catalog/unpublish",{method:"POST",headers:{"Content-Type":"application/json","If-Match":catalogEtag},body:JSON.stringify({id:x.id,confirm_id:typed.trim()})});showCatalogFeedback("✓ Ieraksts noņemts no publiskā kataloga. Faili nav dzēsti.");await loadCatalog()}catch(e){if(e.httpStatus===412)await loadCatalog();err(e.message)}}
+catalogSearch.oninput=renderCatalog;catalogFilter.onchange=renderCatalog;catalogRefresh.onclick=loadCatalog;
+Promise.all([loadCategories(),ensureSession()]).then(function(){loadCatalog();restoreActiveJob()}).catch(function(e){err(e.message)});
 </script>
 </body>
 </html>
