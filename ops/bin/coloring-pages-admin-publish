@@ -437,7 +437,12 @@ def inspect_delete_directory(root: Path, page_id: str) -> dict:
                 total += item_st.st_size
                 if total > MAX_DELETE_BYTES:
                     stop("delete target bytes exceed safe bound")
-                files.append({"name": name, "size": item_st.st_size})
+                files.append({
+                    "name": name,
+                    "size": item_st.st_size,
+                    "dev": item_st.st_dev,
+                    "ino": item_st.st_ino,
+                })
             return {
                 "dev": target_st.st_dev,
                 "ino": target_st.st_ino,
@@ -487,6 +492,7 @@ def delete_validated_directory(root: Path, page_id: str, inventory: dict) -> Non
                 item_st = os.stat(item["name"], dir_fd=target_fd, follow_symlinks=False)
                 if (
                     not stat.S_ISREG(item_st.st_mode)
+                    or (item_st.st_dev, item_st.st_ino) != (item["dev"], item["ino"])
                     or item_st.st_size != item["size"]
                     or item_st.st_uid != os.geteuid()
                     or item_st.st_gid != os.getegid()
