@@ -25,6 +25,28 @@ class Runner:
         raise AssertionError(argv)
 
 class Tests(unittest.TestCase):
+    def test_require_source_enforces_exact_main_origin_and_clean_checkout(self):
+        original=mod.git
+        values={
+            ("rev-parse","HEAD"):SHA,
+            ("branch","--show-current"):"main",
+            ("remote","get-url","origin"):mod.ORIGIN,
+            ("status","--porcelain=v1","--untracked-files=all"):"",
+        }
+        try:
+            mod.git=lambda *args:values[args]
+            mod.require_source(SHA)
+            values[("branch","--show-current")]="feature"
+            with self.assertRaises(mod.DeployError):mod.require_source(SHA)
+            values[("branch","--show-current")]="main"
+            values[("remote","get-url","origin")]="git@example.invalid/repo"
+            with self.assertRaises(mod.DeployError):mod.require_source(SHA)
+            values[("remote","get-url","origin")]=mod.ORIGIN
+            values[("status","--porcelain=v1","--untracked-files=all")]="?? dirty"
+            with self.assertRaises(mod.DeployError):mod.require_source(SHA)
+        finally:
+            mod.git=original
+
     def test_installer_argv_is_exact_and_target_bound(self):
         self.assertEqual(mod.installer_argv(SHA),[
             "/usr/bin/bash",str(mod.INSTALLER),SHA,
@@ -85,6 +107,7 @@ class Tests(unittest.TestCase):
         s=MODULE.read_text()
         self.assertNotIn("shell=True",s)
         self.assertNotIn("os.system",s)
+        self.assertNotIn("urlopen",s)
         self.assertNotIn("Popen(",s)
         self.assertNotIn("add_argument(\"--command",s)
         self.assertNotIn("add_argument(\"--path",s)
