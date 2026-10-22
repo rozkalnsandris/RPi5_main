@@ -331,7 +331,7 @@ def archive_path(page_id: str) -> Path:
     return ARCHIVE / f"{page_id}.json"
 
 
-def load_archive_record(page_id: str) -> dict:
+def load_archive_identity(page_id: str) -> dict:
     path = archive_path(page_id)
     try:
         st = path.lstat()
@@ -344,11 +344,16 @@ def load_archive_record(page_id: str) -> dict:
         stop("archive record is invalid")
     if payload.get("id") != page_id or payload.get("state") not in {"prepared", "archived", "restored", "delete-prepared", "deleted"}:
         stop("archive record state is invalid")
+    if not isinstance(payload.get("archived_at"), int):
+        stop("archive timestamp is invalid")
+    return payload
+
+
+def load_archive_record(page_id: str) -> dict:
+    payload = load_archive_identity(page_id)
     entry = validate_catalog_entry(payload.get("entry"))
     if entry["id"] != page_id:
         stop("archive entry id mismatch")
-    if not isinstance(payload.get("archived_at"), int):
-        stop("archive timestamp is invalid")
     return payload
 
 
@@ -386,7 +391,7 @@ def archive_reserved_ids() -> set[str]:
         if path.name.startswith(".") or path.is_symlink() or not stat.S_ISREG(path.lstat().st_mode):
             stop("archive path is unsafe")
         page_id = validate_catalog_id(path.stem)
-        load_archive_record(page_id)
+        load_archive_identity(page_id)
         ids.add(page_id)
     return ids
 
