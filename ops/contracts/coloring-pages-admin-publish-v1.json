@@ -46,7 +46,7 @@
   },
   "publication": {
     "category_selection": "explicit-owner-ui-selection",
-    "id_policy": "random-seven-digit-live-catalog-collision-check",
+    "id_policy": "random-seven-digit-live-catalog-plus-archive-tombstone-collision-check",
     "print_master": "pinned-immutable-coloring-pages-image",
     "importer": "pinned-immutable-coloring-pages-image",
     "shared_lock": "/srv/coloring-pages-content/state/drive-ingest/.lock",
@@ -140,7 +140,8 @@
       "partial succeeded-result count",
       "catalog action",
       "changed field names",
-      "catalog SHA-256 before/after"
+      "catalog SHA-256 before/after",
+      "permanent-delete file count/byte count"
     ],
     "forbidden": [
       "request or response bodies",
@@ -201,7 +202,7 @@
     "stale_precondition": "412-no-mutation",
     "server_side_validation": true,
     "bulk_destructive_operations": false,
-    "physical_delete": false,
+    "physical_delete": true,
     "lifecycle_issue": 1174,
     "archive": {
       "endpoint": "POST /api/catalog/archive",
@@ -213,7 +214,9 @@
       "transition": [
         "prepared",
         "archived",
-        "restored"
+        "restored",
+        "delete-prepared",
+        "deleted"
       ],
       "persist_before_catalog_removal": true,
       "prepared_plus_live_absent_is_restorable": true,
@@ -221,7 +224,10 @@
       "media_deleted": false,
       "originals_deleted": false,
       "inbox_deleted": false,
-      "drive_deleted": false
+      "drive_deleted": false,
+      "deleted_tombstone_retained": true,
+      "deleted_tombstone_hidden_from_normal_archive_list": true,
+      "delete_prepared_manual_review_only": true
     },
     "restore": {
       "endpoint": "POST /api/catalog/restore",
@@ -230,8 +236,56 @@
       "revalidates_archived_metadata": true,
       "terminal_archive_state": "restored",
       "duplicate_restore": "fail-closed",
-      "sitemap_refresh": "existing-best-effort-publisher"
+      "sitemap_refresh": "existing-best-effort-publisher",
+      "restorable_states": [
+        "prepared",
+        "archived"
+      ]
     },
-    "archive_read_endpoint": "GET /api/archive"
+    "archive_read_endpoint": "GET /api/archive",
+    "delete_issue": 1178,
+    "permanent_delete": {
+      "endpoint": "POST /api/archive/delete",
+      "source_state": "archived-only",
+      "confirmation": [
+        "exact-id",
+        "literal-DELETE"
+      ],
+      "requires_live_id_absent": true,
+      "requires_current_catalog_if_match": true,
+      "shared_lock": "/srv/coloring-pages-content/state/drive-ingest/.lock",
+      "transition": [
+        "archived",
+        "delete-prepared",
+        "deleted"
+      ],
+      "persist_delete_prepared_before_file_mutation": true,
+      "exact_targets": [
+        "/srv/coloring-pages-content/originals/<id>/",
+        "/srv/coloring-pages-content/public/media/<id>/",
+        "/srv/coloring-pages-content/inbox/<id>.png-if-exact-regular-file-exists"
+      ],
+      "directory_shape": "direct-child-real-directory-containing-direct-regular-files-only",
+      "max_files": 128,
+      "max_total_bytes": 1073741824,
+      "catalog_deleted": false,
+      "archive_tombstone_deleted": false,
+      "upload_history_deleted": false,
+      "job_history_deleted": false,
+      "logs_deleted": false,
+      "analytics_deleted": false,
+      "drive_deleted": false,
+      "bulk_delete": false,
+      "automatic_retry": false,
+      "automatic_rollback": false,
+      "automatic_cleanup": false,
+      "interrupted_state": "delete-prepared-visible-manual-review-only"
+    },
+    "id_reservation": {
+      "live_catalog_ids": true,
+      "all_valid_archive_record_ids": true,
+      "deleted_tombstones": true,
+      "reuse_deleted_id": false
+    }
   }
 }
