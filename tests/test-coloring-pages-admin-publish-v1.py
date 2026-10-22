@@ -84,6 +84,57 @@ class Tests(unittest.TestCase):
         with self.assertRaises(admin.Stop):admin.validate_age("9-12")
         with self.assertRaises(admin.Stop):admin.validate_difficulty("hard")
 
+    def test_archive_records_are_private_state_and_restorable_only_when_not_live(self):
+        old_catalog,old_archive=admin.CATALOG,admin.ARCHIVE
+        root=Path(self.tmp.name)
+        catalog=root/"catalog.json";archive=root/"archive";archive.mkdir()
+        catalog.write_text("[]\n",encoding="utf-8")
+        admin.CATALOG,admin.ARCHIVE=catalog,archive
+        entry={
+            "id":"1234567","title":"Birne","category":"lernen","age":"3-6","difficulty":"easy",
+            "language":"de","thumb":"/media/1234567/thumb.webp",
+            "preview":"/media/1234567/preview.webp","print":"/media/1234567/print.png",
+        }
+        payload={
+            "schema":"rozkalns.rpi5-main.coloring-pages-admin-archive.v1",
+            "id":"1234567","state":"prepared","archived_at":123,"entry":entry,
+        }
+        try:
+            admin.write_json(archive/"1234567.json",payload)
+            records=admin.list_archive_records()
+            self.assertEqual(len(records),1)
+            self.assertEqual(records[0]["id"],"1234567")
+            self.assertEqual(records[0]["entry"]["title"],"Birne")
+            catalog.write_text(json.dumps([entry])+"\n",encoding="utf-8")
+            self.assertEqual(admin.list_archive_records(),[])
+            catalog.write_text("[]\n",encoding="utf-8")
+            payload["state"]="restored";admin.write_json(archive/"1234567.json",payload)
+            self.assertEqual(admin.list_archive_records(),[])
+        finally:
+            admin.CATALOG,admin.ARCHIVE=old_catalog,old_archive
+
+    def test_activity_events_are_bounded_and_sanitized(self):
+        old_logs,old_file=admin.LOGS,admin.LOG_FILE
+        logs=Path(self.tmp.name)/"activity";logs.mkdir()
+        admin.LOGS=logs;admin.LOG_FILE=logs/"admin-publish.log"
+        valid={
+            "ts":"2026-10-22T04:00:00Z","level":"WARNING","event":"catalog_archive",
+            "page_id":"1234567","action":"archive","archive_state":"archived",
+            "catalog_sha256":"a"*64,
+        }
+        admin.LOG_FILE.write_text(json.dumps(valid)+"\n",encoding="utf-8")
+        try:
+            events=admin.activity_events()
+            self.assertEqual(len(events),1)
+            self.assertEqual(events[0]["page_id"],"1234567")
+            self.assertEqual(events[0]["action"],"archive")
+            self.assertNotIn("catalog_sha256",events[0])
+            invalid=dict(valid,title="secret title")
+            admin.LOG_FILE.write_text(json.dumps(invalid)+"\n",encoding="utf-8")
+            with self.assertRaises(admin.Stop):admin.activity_events()
+        finally:
+            admin.LOGS,admin.LOG_FILE=old_logs,old_file
+
     def test_reconcile_interrupted_job_preserves_results(self):
         old_jobs,old_audit=admin.JOBS,admin.audit
         jobs=Path(self.tmp.name)/"jobs";jobs.mkdir()
@@ -168,7 +219,14 @@ class Tests(unittest.TestCase):
         self.assertIn('/assets/fonts/nunito-latin-vf-ba344451eab25b21.woff2',source)
         self.assertIn('path == "/api/catalog"',source)
         self.assertIn('path == "/api/catalog/edit"',source)
-        self.assertIn('path == "/api/catalog/unpublish"',source)
+        self.assertIn('path == "/api/catalog/archive"',source)
+        self.assertIn('path == "/api/catalog/restore"',source)
+        self.assertIn('path == "/api/archive"',source)
+        self.assertIn('path == "/api/activity"',source)
+        self.assertNotIn('path == "/api/catalog/unpublish"',source)
+        self.assertIn('"state": "prepared"',source)
+        self.assertIn('state="restored"',source)
+        self.assertIn('MAX_ACTIVITY_EVENTS = 200',source)
         self.assertIn('"X-Ausmalwiese-CSRF"',source)
         self.assertIn('self.headers.get("If-Match")',source)
         self.assertIn('self.send_error_json(412',source)
@@ -248,10 +306,16 @@ class StaticTests(unittest.TestCase):
         self.assertIn('id="catalogSearch"',html)
         self.assertIn('id="editDialog"',html)
         self.assertIn('"/api/catalog/edit"',html)
-        self.assertIn('"/api/catalog/unpublish"',html)
+        self.assertIn('"/api/catalog/archive"',html)
+        self.assertIn('"/api/catalog/restore"',html)
+        self.assertIn('"/api/archive"',html)
+        self.assertIn('"/api/activity"',html)
+        self.assertNotIn('"/api/catalog/unpublish"',html)
+        self.assertIn('id="archiveGrid"',html)
+        self.assertIn('id="activityList"',html)
         self.assertIn('"X-Ausmalwiese-CSRF"',html)
         self.assertIn('"If-Match":catalogEtag',html)
-        self.assertIn('media/original faili paliks',html)
+        self.assertIn('Media/original faili paliks',html)
         self.assertIn("state/admin-publish/logs",installer)
         contract=json.loads((ROOT/"ops/contracts/coloring-pages-admin-publish-v1.json").read_text())
         self.assertEqual(contract["listener"],{"host":"127.0.0.1","port":8765})
@@ -282,8 +346,15 @@ class StaticTests(unittest.TestCase):
         self.assertEqual(manager["write_precondition"],"If-Match-required")
         self.assertEqual(manager["editable_fields"],["title","category","age","difficulty"])
         self.assertFalse(manager["physical_delete"])
-        self.assertFalse(manager["unpublish"]["media_deleted"])
-        self.assertFalse(manager["unpublish"]["originals_deleted"])
+        self.assertEqual(manager["lifecycle_issue"],1174)
+        self.assertEqual(manager["archive"]["endpoint"],"POST /api/catalog/archive")
+        self.assertEqual(manager["archive"]["transition"],["prepared","archived","restored"])
+        self.assertTrue(manager["archive"]["persist_before_catalog_removal"])
+        self.assertFalse(manager["archive"]["media_deleted"])
+        self.assertFalse(manager["archive"]["originals_deleted"])
+        self.assertEqual(manager["restore"]["endpoint"],"POST /api/catalog/restore")
+        self.assertTrue(manager["restore"]["requires_live_id_absent"])
+        self.assertEqual(manager["restore"]["terminal_archive_state"],"restored")
         csrf=contract["trust"]["csrf"]
         self.assertEqual(csrf["header"],"X-Ausmalwiese-CSRF")
         self.assertEqual(csrf["fetch_metadata"],"reject-cross-site")
@@ -316,6 +387,13 @@ class StaticTests(unittest.TestCase):
         self.assertEqual(diagnostics["rotation"]["when"],"midnight")
         self.assertEqual(diagnostics["rotation"]["explicit_age_prune_days"],7)
         self.assertFalse(diagnostics["global_journald_retention_change"])
+        activity=diagnostics["activity_api"]
+        self.assertEqual(activity["endpoint"],"GET /api/activity")
+        self.assertEqual(activity["max_events"],200)
+        self.assertEqual(activity["max_single_log_bytes"],2097152)
+        self.assertEqual(activity["max_total_log_bytes"],4194304)
+        self.assertFalse(activity["raw_log_lines"])
+        self.assertFalse(activity["log_mutation"])
         forbidden=" ".join(diagnostics["forbidden"]).lower()
         for word in ("headers","cookies","tokens","credentials","environment","stdout","stderr","traceback"):
             self.assertIn(word,forbidden)
