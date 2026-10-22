@@ -366,12 +366,13 @@ def list_archive_records() -> list[dict]:
     for path in sorted(ARCHIVE.glob("*.json")):
         if path.name.startswith(".") or path.is_symlink() or not stat.S_ISREG(path.lstat().st_mode):
             stop("archive path is unsafe")
-        page_id = path.stem
-        payload = load_archive_record(page_id)
-        if payload["state"] in {"restored", "deleted"}:
+        page_id = validate_catalog_id(path.stem)
+        identity = load_archive_identity(page_id)
+        if identity["state"] in {"restored", "deleted"}:
             continue
         if page_id in live_ids:
             continue
+        payload = load_archive_record(page_id)
         entry = payload["entry"]
         records.append({
             "id": page_id,
