@@ -328,7 +328,11 @@ def archive_path(page_id: str) -> Path:
 
 
 def load_archive_record(page_id: str) -> dict:
-    payload = read_json(archive_path(page_id))
+    path = archive_path(page_id)
+    st = path.lstat()
+    if path.is_symlink() or not stat.S_ISREG(st.st_mode) or stat.S_IMODE(st.st_mode) != 0o600:
+        stop("archive record metadata is unsafe")
+    payload = read_json(path)
     if not isinstance(payload, dict) or payload.get("schema") != "rozkalns.rpi5-main.coloring-pages-admin-archive.v1":
         stop("archive record is invalid")
     if payload.get("id") != page_id or payload.get("state") not in {"prepared", "archived", "restored"}:
@@ -377,7 +381,7 @@ def activity_events() -> list[dict]:
         if not LOG_NAME.fullmatch(path.name):
             continue
         st = path.lstat()
-        if path.is_symlink() or not stat.S_ISREG(st.st_mode):
+        if path.is_symlink() or not stat.S_ISREG(st.st_mode) or stat.S_IMODE(st.st_mode) != 0o600:
             stop("admin diagnostic log path is unsafe")
         if st.st_size > MAX_ACTIVITY_FILE:
             stop("admin activity log exceeds safe read bound")
