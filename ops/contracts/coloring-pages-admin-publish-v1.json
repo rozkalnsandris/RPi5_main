@@ -155,7 +155,18 @@
       "unsanitized traceback"
     ],
     "initialization": "fail-closed-before-publication-job-can-start",
-    "global_journald_retention_change": false
+    "global_journald_retention_change": false,
+    "activity_api": {
+      "endpoint": "GET /api/activity",
+      "max_events": 200,
+      "max_single_log_bytes": 2097152,
+      "max_total_log_bytes": 4194304,
+      "retention_source": "existing-seven-day-admin-diagnostic-logs",
+      "response": "sanitized-allowlisted-fields-only",
+      "unexpected_record": "fail-closed",
+      "raw_log_lines": false,
+      "log_mutation": false
+    }
   },
   "maintenance": {
     "full_install_guard": "when service is active, acquire shared publication lock and require GET /api/jobs/active to report idle before first installed-file mutation",
@@ -185,21 +196,42 @@
       "age",
       "difficulty"
     ],
-    "unpublish_endpoint": "POST /api/catalog/unpublish",
-    "unpublish_confirmation": "exact-id",
     "shared_lock": "/srv/coloring-pages-content/state/drive-ingest/.lock",
     "atomic_write": "same-directory-temp-fsync-os.replace-post-hash-verify",
     "stale_precondition": "412-no-mutation",
     "server_side_validation": true,
-    "unpublish": {
-      "catalog_entry_removed": true,
-      "sitemap_refresh": "existing-best-effort-publisher",
+    "bulk_destructive_operations": false,
+    "physical_delete": false,
+    "lifecycle_issue": 1174,
+    "archive": {
+      "endpoint": "POST /api/catalog/archive",
+      "confirmation": "exact-id",
+      "state_directory": "/srv/coloring-pages-content/state/admin-publish/archive",
+      "directory_mode": "0700",
+      "record_mode": "0600",
+      "schema": "rozkalns.rpi5-main.coloring-pages-admin-archive.v1",
+      "transition": [
+        "prepared",
+        "archived",
+        "restored"
+      ],
+      "persist_before_catalog_removal": true,
+      "prepared_plus_live_absent_is_restorable": true,
+      "duplicate_record": "fail-closed",
       "media_deleted": false,
       "originals_deleted": false,
       "inbox_deleted": false,
       "drive_deleted": false
     },
-    "bulk_destructive_operations": false,
-    "physical_delete": false
+    "restore": {
+      "endpoint": "POST /api/catalog/restore",
+      "confirmation": "exact-id",
+      "requires_live_id_absent": true,
+      "revalidates_archived_metadata": true,
+      "terminal_archive_state": "restored",
+      "duplicate_restore": "fail-closed",
+      "sitemap_refresh": "existing-best-effort-publisher"
+    },
+    "archive_read_endpoint": "GET /api/archive"
   }
 }
