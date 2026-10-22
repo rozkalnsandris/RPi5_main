@@ -442,6 +442,8 @@ def inspect_delete_directory(root: Path, page_id: str) -> dict:
                     "size": item_st.st_size,
                     "dev": item_st.st_dev,
                     "ino": item_st.st_ino,
+                    "ctime_ns": item_st.st_ctime_ns,
+                    "mtime_ns": item_st.st_mtime_ns,
                 })
             return {
                 "dev": target_st.st_dev,
@@ -493,6 +495,8 @@ def delete_validated_directory(root: Path, page_id: str, inventory: dict) -> Non
                 if (
                     not stat.S_ISREG(item_st.st_mode)
                     or (item_st.st_dev, item_st.st_ino) != (item["dev"], item["ino"])
+                    or item_st.st_ctime_ns != item["ctime_ns"]
+                    or item_st.st_mtime_ns != item["mtime_ns"]
                     or item_st.st_size != item["size"]
                     or item_st.st_uid != os.geteuid()
                     or item_st.st_gid != os.getegid()
