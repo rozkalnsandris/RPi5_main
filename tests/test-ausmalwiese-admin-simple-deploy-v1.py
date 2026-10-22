@@ -39,7 +39,7 @@ class Tests(unittest.TestCase):
             values[("branch","--show-current")]="feature"
             with self.assertRaises(mod.DeployError):mod.require_source(SHA)
             values[("branch","--show-current")]="main"
-            values[("remote","get-url","origin")]="git@example.invalid/repo"
+            values[("remote","get-url","origin")]="https://example.invalid/repo.git"
             with self.assertRaises(mod.DeployError):mod.require_source(SHA)
             values[("remote","get-url","origin")]=mod.ORIGIN
             values[("status","--porcelain=v1","--untracked-files=all")]="?? dirty"
