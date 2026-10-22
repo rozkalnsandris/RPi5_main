@@ -40,13 +40,13 @@ class Tests(unittest.TestCase):
     def test_ids_avoid_collision(self):
         values=iter([1234567,7654321])
         old_random=admin.secrets.randbelow
-        old_catalog=admin.catalog_ids
+        old_reserved=admin.reserved_ids
         admin.secrets.randbelow=lambda n:next(values)
-        admin.catalog_ids=lambda:{"1234567"}
+        admin.reserved_ids=lambda:{"1234567"}
         try:self.assertEqual(admin.allocate_ids(1),["7654321"])
         finally:
             admin.secrets.randbelow=old_random
-            admin.catalog_ids=old_catalog
+            admin.reserved_ids=old_reserved
 
     def test_catalog_atomic_write_and_stale_precondition(self):
         old_catalog=admin.CATALOG
@@ -112,6 +112,77 @@ class Tests(unittest.TestCase):
             self.assertEqual(admin.list_archive_records(),[])
         finally:
             admin.CATALOG,admin.ARCHIVE=old_catalog,old_archive
+
+    def test_deleted_tombstone_reserves_id_and_is_hidden_from_archive_list(self):
+        old_catalog,old_archive=admin.CATALOG,admin.ARCHIVE
+        root=Path(self.tmp.name)
+        catalog=root/"catalog.json";archive=root/"archive";archive.mkdir()
+        catalog.write_text("[]\n",encoding="utf-8")
+        admin.CATALOG,admin.ARCHIVE=catalog,archive
+        entry={
+            "id":"1234567","title":"Birne","category":"lernen","age":"3-6","difficulty":"easy",
+            "language":"de","thumb":"/media/1234567/thumb.webp",
+            "preview":"/media/1234567/preview.webp","print":"/media/1234567/print.png",
+        }
+        payload={
+            "schema":"rozkalns.rpi5-main.coloring-pages-admin-archive.v1",
+            "id":"1234567","state":"deleted","archived_at":123,"deleted_at":124,"entry":entry,
+        }
+        try:
+            admin.write_json(archive/"1234567.json",payload)
+            self.assertEqual(admin.list_archive_records(),[])
+            self.assertEqual(admin.archive_reserved_ids(),{"1234567"})
+            self.assertIn("1234567",admin.reserved_ids())
+        finally:
+            admin.CATALOG,admin.ARCHIVE=old_catalog,old_archive
+
+    def test_permanent_delete_helpers_remove_only_exact_validated_id_paths(self):
+        old_originals,old_media,old_inbox=admin.ORIGINALS,admin.MEDIA,admin.INBOX
+        root=Path(self.tmp.name)
+        originals=root/"originals";media=root/"media";inbox=root/"inbox"
+        originals.mkdir();media.mkdir();inbox.mkdir()
+        page_id="1234567"
+        (originals/page_id).mkdir();(media/page_id).mkdir()
+        (originals/page_id/"source.png").write_bytes(b"source")
+        (media/page_id/"thumb.webp").write_bytes(b"thumb")
+        (media/page_id/"preview.webp").write_bytes(b"preview")
+        (media/page_id/"print.png").write_bytes(b"print")
+        (inbox/(page_id+".png")).write_bytes(b"inbox")
+        (media/"7654321").mkdir();(media/"7654321"/"keep.webp").write_bytes(b"keep")
+        admin.ORIGINALS,admin.MEDIA,admin.INBOX=originals,media,inbox
+        try:
+            oi=admin.inspect_delete_directory(originals,page_id)
+            mi=admin.inspect_delete_directory(media,page_id)
+            ii=admin.inspect_delete_inbox(page_id)
+            self.assertEqual(oi["file_count"],1)
+            self.assertEqual(mi["file_count"],3)
+            self.assertEqual(ii["file_count"],1)
+            admin.delete_validated_directory(media,page_id,mi)
+            admin.delete_validated_directory(originals,page_id,oi)
+            admin.delete_validated_inbox(page_id,ii)
+            self.assertFalse((media/page_id).exists())
+            self.assertFalse((originals/page_id).exists())
+            self.assertFalse((inbox/(page_id+".png")).exists())
+            self.assertTrue((media/"7654321"/"keep.webp").is_file())
+        finally:
+            admin.ORIGINALS,admin.MEDIA,admin.INBOX=old_originals,old_media,old_inbox
+
+    def test_permanent_delete_preflight_rejects_symlink_or_nested_target(self):
+        old_media=admin.MEDIA
+        root=Path(self.tmp.name)/"media";root.mkdir()
+        page_id="1234567";target=root/page_id;target.mkdir()
+        outside=Path(self.tmp.name)/"outside";outside.write_bytes(b"x")
+        (target/"link.webp").symlink_to(outside)
+        admin.MEDIA=root
+        try:
+            with self.assertRaises(admin.Stop):
+                admin.inspect_delete_directory(root,page_id)
+            (target/"link.webp").unlink()
+            (target/"nested").mkdir()
+            with self.assertRaises(admin.Stop):
+                admin.inspect_delete_directory(root,page_id)
+        finally:
+            admin.MEDIA=old_media
 
     def test_activity_events_are_bounded_and_sanitized(self):
         old_logs,old_file=admin.LOGS,admin.LOG_FILE
@@ -223,11 +294,19 @@ class Tests(unittest.TestCase):
         self.assertIn('path == "/api/catalog/edit"',source)
         self.assertIn('path == "/api/catalog/archive"',source)
         self.assertIn('path == "/api/catalog/restore"',source)
+        self.assertIn('path == "/api/archive/delete"',source)
         self.assertIn('path == "/api/archive"',source)
         self.assertIn('path == "/api/activity"',source)
         self.assertNotIn('path == "/api/catalog/unpublish"',source)
         self.assertIn('"state": "prepared"',source)
         self.assertIn('state="restored"',source)
+        self.assertIn('state="delete-prepared"',source)
+        self.assertIn('state="deleted"',source)
+        self.assertIn('DELETE_CONFIRM = "DELETE"',source)
+        self.assertIn('delete_validated_directory(MEDIA, page_id, media_inventory)',source)
+        self.assertIn('delete_validated_directory(ORIGINALS, page_id, original_inventory)',source)
+        self.assertIn('delete_validated_inbox(page_id, inbox_inventory)',source)
+        self.assertIn('used = reserved_ids()',source)
         self.assertIn('MAX_ACTIVITY_EVENTS = 200',source)
         self.assertIn('"X-Ausmalwiese-CSRF"',source)
         self.assertIn('self.headers.get("If-Match")',source)
@@ -236,6 +315,7 @@ class Tests(unittest.TestCase):
         self.assertIn('with acquire_catalog_lock():',source)
         self.assertNotIn('shutil.rmtree(MEDIA',source)
         self.assertNotIn('shutil.rmtree(ORIGINALS',source)
+        self.assertNotIn('shutil.rmtree(INBOX',source)
 
 class StaticTests(unittest.TestCase):
     def test_assets_and_contract(self):
@@ -310,11 +390,15 @@ class StaticTests(unittest.TestCase):
         self.assertIn('"/api/catalog/edit"',html)
         self.assertIn('"/api/catalog/archive"',html)
         self.assertIn('"/api/catalog/restore"',html)
+        self.assertIn('"/api/archive/delete"',html)
         self.assertIn('"/api/archive"',html)
         self.assertIn('"/api/activity"',html)
         self.assertNotIn('"/api/catalog/unpublish"',html)
         self.assertIn('id="archiveGrid"',html)
         self.assertIn('id="activityList"',html)
+        self.assertIn("Dzēst neatgriezeniski",html)
+        self.assertIn("ieraksti precīzi DELETE",html)
+        self.assertIn("delete-prepared",html)
         self.assertIn('"X-Ausmalwiese-CSRF"',html)
         self.assertIn('"If-Match":catalogEtag',html)
         self.assertIn('Media/original faili paliks',html)
@@ -347,16 +431,34 @@ class StaticTests(unittest.TestCase):
         self.assertEqual(manager["validator"],"strong-sha256-etag")
         self.assertEqual(manager["write_precondition"],"If-Match-required")
         self.assertEqual(manager["editable_fields"],["title","category","age","difficulty"])
-        self.assertFalse(manager["physical_delete"])
+        self.assertTrue(manager["physical_delete"])
         self.assertEqual(manager["lifecycle_issue"],1174)
+        self.assertEqual(manager["delete_issue"],1178)
         self.assertEqual(manager["archive"]["endpoint"],"POST /api/catalog/archive")
-        self.assertEqual(manager["archive"]["transition"],["prepared","archived","restored"])
+        self.assertEqual(manager["archive"]["transition"],["prepared","archived","restored","delete-prepared","deleted"])
         self.assertTrue(manager["archive"]["persist_before_catalog_removal"])
         self.assertFalse(manager["archive"]["media_deleted"])
         self.assertFalse(manager["archive"]["originals_deleted"])
         self.assertEqual(manager["restore"]["endpoint"],"POST /api/catalog/restore")
         self.assertTrue(manager["restore"]["requires_live_id_absent"])
         self.assertEqual(manager["restore"]["terminal_archive_state"],"restored")
+        deletion=manager["permanent_delete"]
+        self.assertEqual(deletion["endpoint"],"POST /api/archive/delete")
+        self.assertEqual(deletion["source_state"],"archived-only")
+        self.assertEqual(deletion["confirmation"],["exact-id","literal-DELETE"])
+        self.assertTrue(deletion["requires_live_id_absent"])
+        self.assertTrue(deletion["persist_delete_prepared_before_file_mutation"])
+        self.assertEqual(deletion["max_files"],128)
+        self.assertEqual(deletion["max_total_bytes"],1073741824)
+        self.assertFalse(deletion["catalog_deleted"])
+        self.assertFalse(deletion["archive_tombstone_deleted"])
+        self.assertFalse(deletion["drive_deleted"])
+        self.assertFalse(deletion["automatic_retry"])
+        self.assertFalse(deletion["automatic_rollback"])
+        self.assertFalse(deletion["automatic_cleanup"])
+        reservation=manager["id_reservation"]
+        self.assertTrue(reservation["deleted_tombstones"])
+        self.assertFalse(reservation["reuse_deleted_id"])
         csrf=contract["trust"]["csrf"]
         self.assertEqual(csrf["header"],"X-Ausmalwiese-CSRF")
         self.assertEqual(csrf["fetch_metadata"],"reject-cross-site")
