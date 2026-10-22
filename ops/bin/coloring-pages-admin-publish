@@ -68,6 +68,9 @@ MAX_CATALOG = 4 * 1024 * 1024
 MAX_ACTIVITY_FILE = 2 * 1024 * 1024
 MAX_ACTIVITY_TOTAL = 4 * 1024 * 1024
 MAX_ACTIVITY_EVENTS = 200
+MAX_DELETE_FILES = 128
+MAX_DELETE_BYTES = 1024 * 1024 * 1024
+DELETE_CONFIRM = "DELETE"
 PNG_SIG = b"\x89PNG\r\n\x1a\n"
 TOKEN = re.compile(r"^[0-9a-f]{32}$")
 CATALOG_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -105,11 +108,12 @@ LOG_ALLOWED_FIELDS = {
     "tool", "exit_status", "page_id", "sitemap_status", "sitemap_phase",
     "job_status", "prior_status", "partial_result_count", "error_code",
     "action", "changed_fields", "catalog_sha256", "previous_catalog_sha256",
-    "archive_state",
+    "archive_state", "deleted_file_count", "deleted_byte_count",
 }
 ACTIVITY_FIELDS = {
     "ts", "level", "event", "page_id", "action", "changed_fields",
     "job_status", "step_status", "sitemap_status", "error_code", "archive_state",
+    "deleted_file_count", "deleted_byte_count",
 }
 
 
@@ -329,13 +333,16 @@ def archive_path(page_id: str) -> Path:
 
 def load_archive_record(page_id: str) -> dict:
     path = archive_path(page_id)
-    st = path.lstat()
+    try:
+        st = path.lstat()
+    except OSError:
+        stop("archive record is unavailable")
     if path.is_symlink() or not stat.S_ISREG(st.st_mode) or stat.S_IMODE(st.st_mode) != 0o600:
         stop("archive record metadata is unsafe")
     payload = read_json(path)
     if not isinstance(payload, dict) or payload.get("schema") != "rozkalns.rpi5-main.coloring-pages-admin-archive.v1":
         stop("archive record is invalid")
-    if payload.get("id") != page_id or payload.get("state") not in {"prepared", "archived", "restored"}:
+    if payload.get("id") != page_id or payload.get("state") not in {"prepared", "archived", "restored", "delete-prepared", "deleted"}:
         stop("archive record state is invalid")
     entry = validate_catalog_entry(payload.get("entry"))
     if entry["id"] != page_id:
@@ -356,7 +363,7 @@ def list_archive_records() -> list[dict]:
             stop("archive path is unsafe")
         page_id = path.stem
         payload = load_archive_record(page_id)
-        if payload["state"] == "restored":
+        if payload["state"] in {"restored", "deleted"}:
             continue
         if page_id in live_ids:
             continue
@@ -369,6 +376,146 @@ def list_archive_records() -> list[dict]:
         })
     records.sort(key=lambda item: (item["archived_at"], item["id"]), reverse=True)
     return records
+
+
+def archive_reserved_ids() -> set[str]:
+    ids = set()
+    if not ARCHIVE.is_dir():
+        return ids
+    for path in sorted(ARCHIVE.glob("*.json")):
+        if path.name.startswith(".") or path.is_symlink() or not stat.S_ISREG(path.lstat().st_mode):
+            stop("archive path is unsafe")
+        page_id = validate_catalog_id(path.stem)
+        load_archive_record(page_id)
+        ids.add(page_id)
+    return ids
+
+
+def reserved_ids() -> set[str]:
+    live, _ = load_catalog()
+    return {entry["id"] for entry in live} | archive_reserved_ids()
+
+
+def inspect_delete_directory(root: Path, page_id: str) -> dict:
+    validate_catalog_id(page_id)
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        root_fd = os.open(root, flags)
+    except OSError:
+        stop("delete root is unavailable")
+    try:
+        try:
+            target_fd = os.open(page_id, flags, dir_fd=root_fd)
+        except OSError:
+            stop("delete target directory is unavailable")
+        try:
+            target_st = os.fstat(target_fd)
+            if not stat.S_ISDIR(target_st.st_mode) or target_st.st_uid != os.geteuid() or target_st.st_gid != os.getegid():
+                stop("delete target directory metadata is unsafe")
+            names = sorted(os.listdir(target_fd))
+            if not names or len(names) > MAX_DELETE_FILES:
+                stop("delete target file count is invalid")
+            total = 0
+            files = []
+            for name in names:
+                if not name or "/" in name or "\\" in name or name in {".", ".."}:
+                    stop("delete target filename is unsafe")
+                item_st = os.stat(name, dir_fd=target_fd, follow_symlinks=False)
+                if (
+                    not stat.S_ISREG(item_st.st_mode)
+                    or item_st.st_uid != os.geteuid()
+                    or item_st.st_gid != os.getegid()
+                    or item_st.st_size <= 0
+                ):
+                    stop("delete target contains unsafe file metadata")
+                total += item_st.st_size
+                if total > MAX_DELETE_BYTES:
+                    stop("delete target bytes exceed safe bound")
+                files.append({"name": name, "size": item_st.st_size})
+            return {
+                "dev": target_st.st_dev,
+                "ino": target_st.st_ino,
+                "files": files,
+                "file_count": len(files),
+                "bytes": total,
+            }
+        finally:
+            os.close(target_fd)
+    finally:
+        os.close(root_fd)
+
+
+def inspect_delete_inbox(page_id: str) -> dict:
+    validate_catalog_id(page_id)
+    name = page_id + ".png"
+    path = INBOX / name
+    if not os.path.lexists(path):
+        return {"exists": False, "name": name, "file_count": 0, "bytes": 0}
+    st = path.lstat()
+    if (
+        path.is_symlink()
+        or not stat.S_ISREG(st.st_mode)
+        or st.st_uid != os.geteuid()
+        or st.st_gid != os.getegid()
+        or st.st_size <= 0
+        or st.st_size > MAX_DELETE_BYTES
+    ):
+        stop("delete inbox file metadata is unsafe")
+    return {"exists": True, "name": name, "file_count": 1, "bytes": st.st_size, "dev": st.st_dev, "ino": st.st_ino}
+
+
+def delete_validated_directory(root: Path, page_id: str, inventory: dict) -> None:
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    root_fd = os.open(root, flags)
+    try:
+        target_fd = os.open(page_id, flags, dir_fd=root_fd)
+        try:
+            target_st = os.fstat(target_fd)
+            if (target_st.st_dev, target_st.st_ino) != (inventory["dev"], inventory["ino"]):
+                stop("delete target changed after preflight")
+            current_names = sorted(os.listdir(target_fd))
+            expected_names = [item["name"] for item in inventory["files"]]
+            if current_names != expected_names:
+                stop("delete target contents changed after preflight")
+            for item in inventory["files"]:
+                item_st = os.stat(item["name"], dir_fd=target_fd, follow_symlinks=False)
+                if (
+                    not stat.S_ISREG(item_st.st_mode)
+                    or item_st.st_size != item["size"]
+                    or item_st.st_uid != os.geteuid()
+                    or item_st.st_gid != os.getegid()
+                ):
+                    stop("delete target file changed after preflight")
+            for item in inventory["files"]:
+                os.unlink(item["name"], dir_fd=target_fd)
+            current = os.stat(page_id, dir_fd=root_fd, follow_symlinks=False)
+            if (current.st_dev, current.st_ino) != (inventory["dev"], inventory["ino"]):
+                stop("delete target directory changed before removal")
+            os.rmdir(page_id, dir_fd=root_fd)
+        finally:
+            os.close(target_fd)
+    finally:
+        os.close(root_fd)
+
+
+def delete_validated_inbox(page_id: str, inventory: dict) -> None:
+    if not inventory["exists"]:
+        return
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    root_fd = os.open(INBOX, flags)
+    try:
+        st = os.stat(inventory["name"], dir_fd=root_fd, follow_symlinks=False)
+        if (
+            not stat.S_ISREG(st.st_mode)
+            or (st.st_dev, st.st_ino) != (inventory["dev"], inventory["ino"])
+            or st.st_size != inventory["bytes"]
+            or st.st_uid != os.geteuid()
+            or st.st_gid != os.getegid()
+        ):
+            stop("delete inbox file changed after preflight")
+        os.unlink(inventory["name"], dir_fd=root_fd)
+    finally:
+        os.close(root_fd)
 
 
 def activity_events() -> list[dict]:
@@ -578,7 +725,7 @@ def catalog_ids() -> set[str]:
 
 
 def allocate_ids(count: int) -> list[str]:
-    used = catalog_ids()
+    used = reserved_ids()
     result = []
     for _ in range(count):
         for _attempt in range(1000):
@@ -839,7 +986,7 @@ def run_job(job_id: str) -> None:
             results = []
             set_step(job_id, 5, "running")
             for page_index, (item, title, page_id, meta) in enumerate(zip(pages, titles, ids, prepared_meta, strict=True), 1):
-                if page_id in catalog_ids() or os.path.lexists(ORIGINALS / page_id) or os.path.lexists(MEDIA / page_id):
+                if page_id in reserved_ids() or os.path.lexists(ORIGINALS / page_id) or os.path.lexists(MEDIA / page_id):
                     stop("allocated ID collided before import")
                 inbox = INBOX / f"{page_id}.png"
                 hardlink_to_inbox(meta["path"], inbox)
@@ -1106,6 +1253,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.handle_catalog_archive()
             if path == "/api/catalog/restore":
                 return self.handle_catalog_restore()
+            if path == "/api/archive/delete":
+                return self.handle_archive_delete()
             self.send_error_json(404, "not found")
         except Stop as exc:
             self.send_error_json(400, str(exc))
@@ -1279,6 +1428,105 @@ class Handler(BaseHTTPRequestHandler):
                 "original_deleted": False,
             },
             {"ETag": catalog_etag(new_sha256)},
+        )
+
+    def handle_archive_delete(self):
+        expected_sha256 = self.expected_catalog_sha256()
+        raw = self.read_request_json()
+        if not isinstance(raw, dict) or set(raw) != {"id", "confirm_id", "confirm_phrase"}:
+            stop("archive delete request keys are invalid")
+        page_id = validate_catalog_id(raw["id"])
+        if raw["confirm_id"] != page_id or raw["confirm_phrase"] != DELETE_CONFIRM:
+            stop("archive delete confirmation is invalid")
+        with acquire_catalog_lock():
+            catalog, current_sha256 = load_catalog()
+            if current_sha256 != expected_sha256:
+                self.send_error_json(412, "catalog changed; reload before deleting")
+                return
+            if any(entry["id"] == page_id for entry in catalog):
+                stop("live catalog item cannot be permanently deleted")
+            record = load_archive_record(page_id)
+            if record["state"] != "archived":
+                stop("only a fully archived item can be permanently deleted")
+
+            original_inventory = inspect_delete_directory(ORIGINALS, page_id)
+            media_inventory = inspect_delete_directory(MEDIA, page_id)
+            inbox_inventory = inspect_delete_inbox(page_id)
+            deleted_file_count = (
+                original_inventory["file_count"]
+                + media_inventory["file_count"]
+                + inbox_inventory["file_count"]
+            )
+            deleted_byte_count = (
+                original_inventory["bytes"]
+                + media_inventory["bytes"]
+                + inbox_inventory["bytes"]
+            )
+            if deleted_file_count <= 0 or deleted_file_count > MAX_DELETE_FILES or deleted_byte_count > MAX_DELETE_BYTES:
+                stop("delete inventory exceeds safe bound")
+
+            record.update(
+                state="delete-prepared",
+                delete_started_at=int(time.time()),
+                delete_inventory={
+                    "originals": {
+                        "file_count": original_inventory["file_count"],
+                        "bytes": original_inventory["bytes"],
+                    },
+                    "media": {
+                        "file_count": media_inventory["file_count"],
+                        "bytes": media_inventory["bytes"],
+                    },
+                    "inbox": {
+                        "file_count": inbox_inventory["file_count"],
+                        "bytes": inbox_inventory["bytes"],
+                    },
+                    "total_file_count": deleted_file_count,
+                    "total_bytes": deleted_byte_count,
+                },
+            )
+            write_json(archive_path(page_id), record)
+            audit(
+                "catalog_delete_started",
+                level="WARNING",
+                page_id=page_id,
+                action="delete",
+                archive_state="delete-prepared",
+                deleted_file_count=deleted_file_count,
+                deleted_byte_count=deleted_byte_count,
+            )
+
+            delete_validated_directory(MEDIA, page_id, media_inventory)
+            delete_validated_directory(ORIGINALS, page_id, original_inventory)
+            delete_validated_inbox(page_id, inbox_inventory)
+
+            record.update(
+                state="deleted",
+                deleted_at=int(time.time()),
+                deleted_file_count=deleted_file_count,
+                deleted_byte_count=deleted_byte_count,
+            )
+            write_json(archive_path(page_id), record)
+            audit(
+                "catalog_delete",
+                level="WARNING",
+                page_id=page_id,
+                action="delete",
+                archive_state="deleted",
+                deleted_file_count=deleted_file_count,
+                deleted_byte_count=deleted_byte_count,
+            )
+        return self.send_json(
+            200,
+            {
+                "status": "deleted",
+                "id": page_id,
+                "catalog_sha256": current_sha256,
+                "deleted_file_count": deleted_file_count,
+                "deleted_byte_count": deleted_byte_count,
+                "tombstone_retained": True,
+            },
+            {"ETag": catalog_etag(current_sha256)},
         )
 
     def handle_upload(self):
