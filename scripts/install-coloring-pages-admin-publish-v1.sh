@@ -31,9 +31,10 @@ case "$MODE" in
 esac
 
 [[ "$(id -u)" -eq 0 ]] || { echo "ROOT_REQUIRED" >&2; exit 2; }
-git -C "$REPO" diff --quiet && git -C "$REPO" diff --cached --quiet || { echo "CHECKOUT_NOT_CLEAN" >&2; exit 2; }
-[[ "$(git -C "$REPO" rev-parse HEAD)" == "$EXPECTED_MAIN" ]] || { echo "MAIN_MISMATCH" >&2; exit 2; }
-[[ "$(git -C "$REPO" rev-parse --abbrev-ref HEAD)" == "main" ]] || { echo "MAIN_BRANCH_REQUIRED" >&2; exit 2; }
+GIT=(git -c "safe.directory=$REPO" -C "$REPO")
+"${GIT[@]}" diff --quiet && "${GIT[@]}" diff --cached --quiet || { echo "CHECKOUT_NOT_CLEAN" >&2; exit 2; }
+[[ "$("${GIT[@]}" rev-parse HEAD)" == "$EXPECTED_MAIN" ]] || { echo "MAIN_MISMATCH" >&2; exit 2; }
+[[ "$("${GIT[@]}" rev-parse --abbrev-ref HEAD)" == "main" ]] || { echo "MAIN_BRANCH_REQUIRED" >&2; exit 2; }
 
 SERVICE_ACTIVE=0
 if systemctl is-active --quiet "$SERVICE"; then
