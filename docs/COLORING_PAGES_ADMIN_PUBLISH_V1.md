@@ -6,13 +6,36 @@ Issue: RPi5_main #1149.
 
 1. ChatGPT creates approved coloring-page PNG drafts and packages them into one ZIP.
 2. The owner opens the protected Ausmalwiese ADMIN page. The admin interface is Latvian, uses the same Baloo 2/Nunito typography as the public Statistics/Traffic dashboards, and provides top navigation between Admin, Statistics and Traffic.
-3. Upload the ZIP and inspect the private previews/titles.
+3. Open **Pievienot**, upload the ZIP and inspect the private previews/titles.
 4. The owner explicitly chooses one canonical category.
 5. Press **Sākt publicēšanu**.
 6. The browser polls the job status while RPi5 performs print preparation, validation, ID allocation, import, derivatives/catalog update, sitemap refresh when enabled, and public verification.
 7. PASS shows each published activity ID and direct `https://ausmalwiese.de/detail.html?id=<id>` link.
 
 The public Ausmalwiese container stays read-only. This service binds only to `127.0.0.1:8765`. The owner-approved canonical external hostname is `admin.ausmalwiese.de`; its Tunnel/DNS route and exact-owner Cloudflare Access protection are separate owner-gated LIVE work.
+
+## Admin navigation
+
+The protected single HTML document provides separate addressable screens. Hash routes work on the existing root handler without new service routes, ingress changes or a framework:
+
+| Address | Screen |
+| --- | --- |
+| `/#overview` (default) | Overview with catalogue/archive counts and shortcuts |
+| `/#upload` | ZIP upload, previews, category selection and publication progress |
+| `/#catalog` | Search, category filter and 24-entry catalogue pages |
+| `/#edit/<encoded-id>` | Dedicated editor with thumbnail, metadata form and public-page link |
+| `/#archive` | Restore and existing guarded permanent-delete actions |
+| `/#activity` | Seven-day activity log |
+
+All screens retain the same Admin / Statistics / Traffic header, public-site link, Nunito body text and Baloo 2 display typography. The internal section navigation remains separate from the cross-dashboard header. The layout takes inspiration from [Tabler](https://tabler.io/) task navigation and compact content lists; no template code, Bootstrap dependency or new runtime asset is added.
+
+Search/category/page state and staged upload titles survive section changes within the document. Browser back/forward and direct editor links select the correct screen. Leaving a dirty editor requires confirmation; leaving/reloading the document also warns about an unsubmitted upload or active publication. An active job is linked from every screen and retains the existing reload recovery/polling flow.
+
+The editor freezes its catalogue ETag when the fields are populated. A 412 preserves the draft, displays a focused error and disables resubmission until the owner opens a fresh editor from the catalogue. Background catalogue reads cannot silently rebase an edit. Publication status messages are separate from catalogue errors.
+
+Validation: `python3 tests/test-coloring-pages-admin-publish-v1.py` includes offline Node.js behavioral checks in `tests/test-coloring-pages-admin-navigation.cjs`; Node uses only built-in modules. Browser validation should use local synthetic API fixtures for navigation, save, stale-write and responsive checks. No production mutations are needed to review the interface.
+
+UI source changes do not deploy themselves. Use the existing separately authorized UI-only installation path after review/merge; no service/API/authentication change is part of this navigation update.
 
 ## ZIP contract
 

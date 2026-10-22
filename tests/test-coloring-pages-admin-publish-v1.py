@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import importlib.util, json, os, stat, tempfile, unittest, zipfile
+import importlib.util, json, os, stat, subprocess, tempfile, unittest, zipfile
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 
@@ -335,6 +335,9 @@ class Tests(unittest.TestCase):
         self.assertNotIn('shutil.rmtree(INBOX',source)
 
 class StaticTests(unittest.TestCase):
+    def test_navigation_behavior(self):
+        subprocess.run(["node", str(ROOT/"tests/test-coloring-pages-admin-navigation.cjs")], check=True, timeout=30)
+
     def test_assets_and_contract(self):
         html=(ROOT/"ops/admin/coloring-pages/index.html").read_text()
         self.assertIn("Publicēšana un katalogs",html);self.assertIn("Izvēlēties kategoriju",html)
@@ -345,8 +348,8 @@ class StaticTests(unittest.TestCase):
         self.assertIn("--container:1340px",html)
         self.assertNotIn("<aside",html)
         self.assertIn('font-family:"Baloo 2"',html);self.assertIn('font-family:"Nunito"',html)
-        self.assertIn(".admin-hero h1{margin:5px 0 2px;font-family:var(--font-body)",html)
-        self.assertIn(".panel-title h2{margin:0;font-family:var(--font-body)",html)
+        self.assertIn(".admin-hero h1{margin:5px 0 2px;font-family:var(--font-display)",html)
+        self.assertIn(".panel-title h2{margin:0;font-family:var(--font-display)",html)
         self.assertIn(".process h3{margin:0 0 8px;font-family:var(--font-body)",html)
         self.assertIn(".success h3{margin:0;color:#1a753b;font-family:var(--font-body)",html)
         self.assertIn(".brand{display:inline-flex;align-items:center;gap:10px;justify-self:start;color:var(--text);text-decoration:none;font-family:var(--font-display)",html)
