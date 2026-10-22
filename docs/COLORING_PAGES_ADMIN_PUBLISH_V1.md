@@ -111,11 +111,29 @@ The request must include the exact current catalogue validator through `If-Match
 
 The service acquires the same shared publication lock used by publication before any catalogue write. This prevents an ADMIN metadata edit from racing a publication/import operation. The candidate catalogue is written to a same-directory exclusive temporary file, fsynced, atomically replaced with `os.replace`, then hash-verified.
 
-### Safe unpublish
+### Reversible archive / restore (issue #1174)
 
-`POST /api/catalog/unpublish` is intentionally **not physical deletion**. The owner must type the exact activity ID as confirmation. A successful action removes only that exact catalogue entry, then invokes the already-reviewed sitemap publisher on the same best-effort basis used after publication.
+`POST /api/catalog/archive` replaces the former one-way unpublish action. The owner must type the exact activity ID as confirmation and provide the current catalogue `If-Match` validator.
 
-The operation does **not** delete or overwrite:
+Before the catalogue entry is removed, the service writes a private owner-only archive record under:
+
+`/srv/coloring-pages-content/state/admin-publish/archive/<id>.json`
+
+The archive directory is mode `0700`; records are mode `0600`. A record contains the complete catalogue entry needed for restoration, timestamps and catalogue hash provenance, but never copies media/original bytes.
+
+Archive state is fail-safe and explicit:
+
+1. `prepared` — the restorable record is persisted before catalogue removal;
+2. `archived` — catalogue removal completed and the new catalogue hash is recorded;
+3. `restored` — restoration completed; the same archive record cannot be restored again.
+
+A `prepared` record whose ID is absent from the live catalogue remains restorable if the final state-marker write was interrupted. A duplicate archive record for an ID is rejected instead of overwritten.
+
+`GET /api/archive` returns only active restorable records and safe catalogue-display fields.
+
+`POST /api/catalog/restore` requires the same exact-ID confirmation and current `If-Match`. Restore is rejected if the ID already exists live, the archive state is not restorable, or the archived title/category/age/difficulty no longer passes current validation. Successful restore atomically writes the catalogue, marks the private archive record `restored`, and runs the existing best-effort sitemap refresh.
+
+Archive/restore never deletes or rewrites:
 
 - public media files;
 - private originals;
@@ -123,7 +141,7 @@ The operation does **not** delete or overwrite:
 - Drive files;
 - analytics/engagement data.
 
-Physical media/original deletion remains a separate future risk class and is not exposed by this ADMIN version.
+Physical media/original deletion remains a separate future risk class.
 
 ### Browser mutation security
 
@@ -138,13 +156,15 @@ The public ADMIN route must remain protected by exact-owner Cloudflare Access. S
 
 The ADMIN HTML also emits deny-framing, no-referrer, no-sniff, restrictive permissions policy and a same-origin Content Security Policy compatible with the current single-file UI.
 
-### Audit trail
+### Audit trail and activity view
 
-Successful catalogue edits and unpublishes are recorded in the existing private seven-day ADMIN diagnostic log using bounded metadata only: activity ID, action, changed field names and catalogue SHA-256 before/after. Request bodies, titles, HTTP headers, cookies, Access identity/tokens, credentials and raw catalogue contents are not logged.
+Successful catalogue edits, archive and restore actions are recorded in the existing private seven-day ADMIN diagnostic log using bounded metadata only: activity ID, action, archive state, changed field names and catalogue SHA-256 before/after. Request bodies, titles, HTTP headers, cookies, Access identity/tokens, credentials and raw catalogue contents are not logged.
+
+Issue #1174 adds `GET /api/activity`, a read-only sanitized view over those existing seven-day log files. It never returns raw log lines. The service accepts only the logger's known field set, then exposes a smaller presentation allowlist. Any malformed JSON, unexpected field, unsafe type or overlong value fails closed. Reading is bounded to 2 MiB per log file, 4 MiB total and at most 200 newest events. The endpoint does not delete logs or change retention/journald settings.
 
 ### Simple deployment boundary
 
-Issue #1172 adds no deployment mechanism. Backend changes reuse the existing guarded `full` installer and therefore require a later separately authorized SSH/runtime install and service restart. The `ui-only` mode is insufficient for this extension because the backend API changes too. Source merge itself never installs or restarts the ADMIN service.
+Issues #1172 and #1174 add no deployment mechanism. Backend changes reuse the existing guarded `full` installer and therefore require a later separately authorized SSH/runtime install and service restart. The `ui-only` mode is insufficient for this extension because the backend API changes too. Source merge itself never installs or restarts the ADMIN service.
 
 Security references used for this design:
 
