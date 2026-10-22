@@ -8,7 +8,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from urllib.request import Request, urlopen
+import http.client
 
 ROOT = Path(__file__).resolve().parents[1]
 ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
@@ -75,15 +75,17 @@ def installer_argv(expected_sha: str) -> list[str]:
 
 
 def http_bytes(path: str) -> bytes:
-    request = Request(
-        BASE_URL + path,
-        headers={"X-Ausmalwiese-Admin": "1"},
-        method="GET",
-    )
-    with urlopen(request, timeout=3) as response:
+    if not path.startswith("/") or "://" in path:
+        fail("local endpoint path is invalid")
+    connection = http.client.HTTPConnection("127.0.0.1", 8765, timeout=3)
+    try:
+        connection.request("GET", path, headers={"X-Ausmalwiese-Admin": "1"})
+        response = connection.getresponse()
         if response.status != 200:
             fail(f"local endpoint failed: {path}")
         data = response.read(4 * 1024 * 1024 + 1)
+    finally:
+        connection.close()
     if len(data) > 4 * 1024 * 1024:
         fail(f"local endpoint response too large: {path}")
     return data
