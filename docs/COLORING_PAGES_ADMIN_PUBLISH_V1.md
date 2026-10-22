@@ -60,7 +60,7 @@ Any prepare or validate failure is a STOP **before ID allocation/import**. The p
 
 This technical gate does not determine editorial quality. Wrong anatomy, wrong wording, unwanted decoration, non-coloring artwork or other visual defects remain the Chat/owner review responsibility before ZIP upload.
 
-New IDs are random seven-digit values and are checked against fresh live catalogue state before import. A prepared master is handed to the existing inbox without overwrite. Each successful import produces the normal private original and public thumb/preview/print derivatives.
+New IDs are random seven-digit values and are checked against fresh live catalogue state **and every valid ADMIN archive/tombstone ID** before import. This prevents reuse of permanently deleted IDs. A prepared master is handed to the existing inbox without overwrite. Each successful import produces the normal private original and public thumb/preview/print derivatives.
 
 After committed imports the installed sitemap publisher is invoked only when its existing reviewed enable marker is present. Sitemap freshness is best-effort, matching the current Drive-ingest behavior; it does not roll back a successful content import.
 
@@ -141,7 +141,50 @@ Archive/restore never deletes or rewrites:
 - Drive files;
 - analytics/engagement data.
 
-Physical media/original deletion remains a separate future risk class.
+Physical media/original deletion is available only through the separate guarded archive-delete contract below.
+
+### Guarded permanent delete (issue #1178)
+
+Permanent Delete is intentionally available **only after a completed archive**. It is not a live-catalog action and it is not a bulk action.
+
+The browser sends `POST /api/archive/delete` with:
+
+- the exact activity ID;
+- a second exact-ID confirmation;
+- the literal confirmation phrase `DELETE`;
+- the current strong catalogue validator through `If-Match`.
+
+The backend acquires the same shared publication/catalogue lock, re-reads the current catalogue, requires the ID to be absent, and requires the private archive record to be exactly in `archived` state.
+
+Before the first file deletion it validates the complete physical target set. Only these paths are eligible:
+
+- `/srv/coloring-pages-content/originals/<id>/`;
+- `/srv/coloring-pages-content/public/media/<id>/`;
+- `/srv/coloring-pages-content/inbox/<id>.png`, only when that exact regular file exists.
+
+The originals/media targets must be exact direct-child directories under their canonical roots, not symlinks, owned by the ADMIN runtime user, and contain direct regular files only. The delete inventory is bounded to at most 128 files and 1 GiB total. Nested directories, symlinks, special files, owner drift, inode/path drift or target-content drift fail closed.
+
+The archive lifecycle extends with:
+
+1. `archived`;
+2. `delete-prepared` — persisted **before** any physical file mutation, with bounded counts/bytes only;
+3. `deleted` — terminal tombstone after all exact-ID production files are gone.
+
+Once `delete-prepared` exists, automatic restore and another delete attempt are forbidden. The ADMIN UI keeps that item visible as interrupted/manual-review state. There is no automatic retry, rollback, cleanup, second delete pass or alternate mutation path.
+
+A successful delete keeps the private `deleted` tombstone permanently. It is hidden from the normal archive list, but its ID stays reserved. ADMIN ID allocation now excludes every valid archive/tombstone ID as well as every current catalogue ID, so a permanently deleted ID cannot later be randomly reused.
+
+Permanent Delete does **not** remove or rewrite:
+
+- `catalog.json` (the item was already archived and absent);
+- archive/tombstone metadata;
+- upload/job history;
+- diagnostic logs;
+- analytics/engagement data;
+- Drive files or receipts;
+- unrelated inbox/media/original paths.
+
+The sitemap does not need another mutation here because the catalogue item was already removed during Archive.
 
 ### Browser mutation security
 
