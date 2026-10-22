@@ -6,6 +6,7 @@ import sys
 
 ROOT=Path(__file__).resolve().parents[1]
 MODULE=ROOT/"scripts/deploy-ausmalwiese-admin-v1.py"
+INSTALLER=ROOT/"scripts/install-coloring-pages-admin-publish-v1.sh"
 spec=importlib.util.spec_from_file_location("admin_simple_deploy",MODULE)
 assert spec and spec.loader
 mod=importlib.util.module_from_spec(spec);sys.modules[spec.name]=mod;spec.loader.exec_module(mod)
@@ -16,12 +17,12 @@ class Result:
     def __init__(self,code=0,out=b"",err=b""):self.returncode=code;self.stdout=out;self.stderr=err
 
 class Runner:
-    def __init__(self,installer_code=0,service_code=0):
-        self.calls=[];self.installer_code=installer_code;self.service_code=service_code
+    def __init__(self,installer_code=0,service_code=0,installer_err=b""):
+        self.calls=[];self.installer_code=installer_code;self.service_code=service_code;self.installer_err=installer_err
     def __call__(self,argv,timeout_seconds=30):
         self.calls.append((tuple(argv),timeout_seconds))
         if argv[:2]==["/usr/bin/systemctl","is-active"]:return Result(self.service_code)
-        if argv and argv[0]=="/usr/bin/bash":return Result(self.installer_code)
+        if argv and argv[0]=="/usr/bin/bash":return Result(self.installer_code,err=self.installer_err)
         raise AssertionError(argv)
 
 class Tests(unittest.TestCase):
@@ -68,11 +69,30 @@ class Tests(unittest.TestCase):
         self.assertEqual(seen,["verify"])
 
     def test_installer_failure_stops_before_verify_and_no_retry(self):
-        r=Runner(installer_code=1);seen=[]
-        with self.assertRaises(mod.DeployError):
+        r=Runner(installer_code=1,installer_err=b"MAIN_MISMATCH\nprivate detail must not surface\n");seen=[]
+        with self.assertRaisesRegex(mod.DeployError,r"reviewed ADMIN installer failed: MAIN_MISMATCH") as ctx:
             mod.deploy(SHA,command_runner=r,verifier=lambda **_kw:seen.append("verify"))
+        self.assertNotIn("private detail",str(ctx.exception))
         self.assertEqual(seen,[])
         self.assertEqual(len(r.calls),1)
+
+    def test_unknown_installer_failure_does_not_surface_raw_stderr(self):
+        r=Runner(installer_code=2,installer_err=b"curl: internal diagnostic\n")
+        with self.assertRaisesRegex(mod.DeployError,r"UNKNOWN_INSTALLER_FAILURE") as ctx:
+            mod.deploy(SHA,command_runner=r,verifier=lambda **_kw:None)
+        self.assertNotIn("curl:",str(ctx.exception))
+
+    def test_wrapper_environment_remains_bounded(self):
+        self.assertEqual(mod.ENV,{"PATH":"/usr/bin:/bin","LANG":"C.UTF-8","LC_ALL":"C.UTF-8"})
+        self.assertNotIn("SUDO_UID",mod.ENV)
+
+    def test_installer_git_validation_uses_exact_repo_safe_directory(self):
+        source=INSTALLER.read_text()
+        self.assertIn('GIT=(git -c "safe.directory=$REPO" -C "$REPO")',source)
+        self.assertGreaterEqual(source.count('"${GIT[@]}"'),4)
+        self.assertNotIn("safe.directory=*",source)
+        self.assertNotIn("git config --global",source)
+        self.assertNotIn("git config --system",source)
 
     def test_post_verify_validates_fixed_models(self):
         r=Runner()
@@ -109,8 +129,8 @@ class Tests(unittest.TestCase):
         self.assertNotIn("os.system",s)
         self.assertNotIn("urlopen",s)
         self.assertNotIn("Popen(",s)
-        self.assertNotIn("add_argument(\"--command",s)
-        self.assertNotIn("add_argument(\"--path",s)
-        self.assertNotIn("add_argument(\"--env",s)
+        self.assertNotIn('add_argument("--command',s)
+        self.assertNotIn('add_argument("--path',s)
+        self.assertNotIn('add_argument("--env',s)
 
 if __name__=="__main__":unittest.main()
