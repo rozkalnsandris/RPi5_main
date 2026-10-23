@@ -26,7 +26,7 @@ function harness() {
   const layout=new Element(),skip=new Element(),listeners={},calls=[];
   const location={hash:""};
   const entries=Array.from({length:53},(_,i)=>({id:String(i).padStart(7,"0"),title:"Page "+i,category:i%2?"tiere":"lernen",age:"3-6",difficulty:"easy",thumb:"/media/test/thumb.webp"}));
-  const state={entries,etag:'"old"',status:200,confirm:false,prompts:[],answers:[]};
+  const state={entries,etag:'W/"edge-weakened"',catalogSha:"a".repeat(64),status:200,confirm:false,prompts:[],answers:[]};
   const sandbox={
     document:{
       title:"",
@@ -42,8 +42,8 @@ function harness() {
     console,
     fetch:async(url,options={})=>{
       calls.push({url,options});
-      if(url==="/api/catalog/edit")return {ok:state.status===200,status:state.status,json:async()=>({error:"stale"})};
-      if(url==="/api/catalog")return {ok:true,headers:{get:()=>state.etag},json:async()=>({entries:state.entries,count:state.entries.length})};
+      if(["/api/catalog/edit","/api/catalog/archive","/api/catalog/restore","/api/archive/delete"].includes(url))return {ok:state.status===200,status:state.status,json:async()=>state.status===200?({status:"ok",deleted_file_count:1}):({error:"stale"})};
+      if(url==="/api/catalog")return {ok:true,headers:{get:()=>state.etag},json:async()=>({entries:state.entries,count:state.entries.length,catalog_sha256:state.catalogSha})};
       if(url==="/api/archive")return {ok:true,json:async()=>({entries:[],count:0})};
       if(url==="/api/activity")return {ok:true,json:async()=>({events:[],count:0})};
       if(url==="/api/categories")return {ok:true,json:async()=>({categories:[]})};
@@ -97,11 +97,15 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
   h.go("edit/0000001");h.ids.editTitle.value="Changed";h.s.catalogEtag='"new-background-snapshot"';
   await h.ids.editForm.onsubmit({preventDefault(){}});
   const saved=h.calls.find(x=>x.url==="/api/catalog/edit");
-  assert.equal(saved.options.headers["If-Match"],'"old"');
+  assert.equal(saved.options.headers["If-Match"],'"'+h.state.catalogSha+'"');
+  assert.notEqual(saved.options.headers["If-Match"],h.state.etag,"weak edge ETag must not be reused for If-Match");
   assert.equal(saved.options.headers["X-Ausmalwiese-CSRF"],"fixture");
   assert.equal(JSON.parse(saved.options.body).title,"Changed");
   assert.equal(h.s.location.hash,"catalog");assert.match(h.ids.catalogFeedback.textContent,/saved/);
 
+  h.go("catalog");h.s.err("old catalog error");assert.equal(h.ids.error.style.display,"block");h.state.answers=[h.state.entries[0].id];await h.s.archiveCatalogEntry(h.state.entries[0]);
+  const archived=h.calls.findLast(x=>x.url==="/api/catalog/archive");assert.equal(archived.options.headers["If-Match"],'"'+h.state.catalogSha+'"');assert.equal(h.ids.error.style.display,"none");
+  h.s.err("route-local error");h.go("archive");assert.equal(h.ids.error.style.display,"none");
   h.go("catalog");h.go("edit/0000002");h.ids.editTitle.value="Keep my draft";h.state.status=412;
   await h.ids.editForm.onsubmit({preventDefault(){}});
   assert.equal(h.ids.editTitle.value,"Keep my draft");
