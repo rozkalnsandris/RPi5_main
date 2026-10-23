@@ -152,8 +152,9 @@ eligible immutable predecessors: historical RPi5_main
 `936760d99b2fbb492a0a0fabee0fcc7e27377ae8` / blob
 `d1191e913e565965dc1c4d153179f702bf2a79d4`, or the verified
 currently installed source at RPi5_main
-`178eb2ac16704cf8f8f81f6275dfb53c471d05ec` / blob
-`866d40e896a900f00ead6087c98fa350ce977487`.
+`65acff4a644fe685db880c46aedca93ead56f241` / blob
+`be8f6604b432e08d2877fc126a91fa88adbe749e`. The installed target for this predecessor was read-only classified with SHA-256
+`254ada0716a258ef7e529cc43f5ba6949743ce49c468f410df55552b94581b25`.
 `--upgrade-from` must bind the specific exact old blob; upgrade preflight
 reconstructs it using the corresponding frozen Git ref, requires the
 installed target to be a non-symlink `root:root 0500` single-link file with

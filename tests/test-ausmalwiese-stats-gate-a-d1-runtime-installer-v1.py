@@ -269,11 +269,11 @@ class InstallerTests(unittest.TestCase):
     def test_current_installed_runtime_is_exact_upgrade_predecessor(self):
         self.assertEqual(
             mod.CURRENT_SOURCE_REF,
-            "178eb2ac16704cf8f8f81f6275dfb53c471d05ec",
+            "65acff4a644fe685db880c46aedca93ead56f241",
         )
         self.assertEqual(
             mod.CURRENT_OLD_BLOB,
-            "866d40e896a900f00ead6087c98fa350ce977487",
+            "be8f6604b432e08d2877fc126a91fa88adbe749e",
         )
         runner = Runner()
         with mock.patch.object(mod.os, "geteuid", return_value=1000), \
