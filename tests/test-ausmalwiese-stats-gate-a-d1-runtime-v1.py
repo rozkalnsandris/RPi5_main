@@ -83,6 +83,11 @@ class GateARuntimeTests(unittest.TestCase):
         self.assertEqual(
             data["remote_evidence_sha256"], op.REMOTE_EVIDENCE_SHA256
         )
+        self.assertEqual(data["remote_evidence_digest_mode"], "semantic-v1")
+        self.assertEqual(
+            data["remote_evidence_latest_uploaded_version_normalization"],
+            op.LATEST_VERSION_SENTINEL,
+        )
         self.assertEqual(data["pre_schema_sha256"], op.PRE_SCHEMA_SHA256)
         self.assertEqual(data["migration_blob"], op.MIGRATION_BLOB)
         self.assertFalse(data["actions"]["run_wrangler"])
@@ -93,12 +98,12 @@ class GateARuntimeTests(unittest.TestCase):
 
     def test_frozen_observed_digests_match_fixtures(self):
         self.assertEqual(
-            op.canonical_sha256(op.semantic_remote_evidence(remote())), op.REMOTE_EVIDENCE_SHA256
+            op.canonical_sha256(op.semantic_remote_evidence(remote())),
+            op.REMOTE_EVIDENCE_SHA256,
         )
         self.assertEqual(
             op.canonical_sha256(before()), op.PRE_SCHEMA_SHA256
         )
-
 
     def test_semantic_remote_evidence_normalizes_only_latest_uuid(self):
         baseline = remote()
@@ -393,11 +398,8 @@ class GateARuntimeTests(unittest.TestCase):
         data = json.loads(payload)
         self.assertEqual(data["status"], "PREFLIGHT_PASS")
         self.assertFalse(data["mutation_started"])
-        self.assertEqual(data["remote_evidence_sha256"], op.REMOTE_EVIDENCE_SHA256)
-        self.assertEqual(data["remote_evidence_digest_mode"], "semantic-v1")
         self.assertEqual(
-            data["remote_evidence_latest_uploaded_version_normalization"],
-            op.LATEST_VERSION_SENTINEL,
+            data["remote_evidence_sha256"], op.REMOTE_EVIDENCE_SHA256
         )
         self.assertEqual(data["pre_schema_sha256"], op.PRE_SCHEMA_SHA256)
         self.assertEqual(data["migration_blob"], op.MIGRATION_BLOB)
