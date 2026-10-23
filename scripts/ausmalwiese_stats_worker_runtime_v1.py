@@ -36,6 +36,7 @@ APP_SHA = "e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63"
 WORKER = "coloring-pages-stats-v1"
 WORKER_BLOB = "c2ac9da6e0701103e0041b30db7dfbea4298f96c"
 CONFIG_BLOB = "3733263a391274f2b6b0f2023c8656565bde8e1a"
+CANDIDATE_HANDLERS = ("fetch", "scheduled")
 ACCOUNT_SHA256 = "3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34"
 HOST = "api.cloudflare.com"
 COMPATIBILITY_DATE = "2026-10-06"
@@ -338,12 +339,19 @@ def _safe_settings(value: Any, depth: int = 0) -> Any:
 class CloudflareTransport:
     def __init__(
         self, account, token, zones, *, connection_factory=None,
-        allow_deploy_existing=False,
+        allow_deploy_existing=False, candidate_code_sha256=None,
     ):
         self.account = account
         self.token = token
         self.zones = dict(zones)
         self.allow_deploy_existing = allow_deploy_existing
+        if candidate_code_sha256 is not None:
+            need(
+                isinstance(candidate_code_sha256, str)
+                and SHA64.fullmatch(candidate_code_sha256) is not None,
+                "candidate_code_sha256_invalid",
+            )
+        self.candidate_code_sha256 = candidate_code_sha256
         self.connection_factory = connection_factory or (
             lambda: http.client.HTTPSConnection(
                 HOST, timeout=10, context=ssl.create_default_context()
@@ -659,9 +667,23 @@ class CloudflareTransport:
             and flags == [],
             "compatibility_flags_drift",
         )
+        handlers = _safe_settings(script.get("handlers", []))
+        need(
+            isinstance(handlers, list)
+            and len(handlers) <= 30
+            and all(
+                isinstance(name, str) and SAFE_KEY.fullmatch(name) is not None
+                for name in handlers
+            )
+            and len(handlers) == len(set(handlers)),
+            "handlers_invalid",
+        )
+        handler_names = tuple(sorted(handlers))
         settings = {
             "script": {
-                "handlers": _safe_settings(script.get("handlers", [])),
+                # Cloudflare derives default-export handler names from the
+                # Worker source. They are proved separately when the provider
+                # version code equals the exact reviewed candidate.
                 "named_handlers": _safe_settings(script.get("named_handlers", [])),
             },
             "script_runtime": {
@@ -674,7 +696,7 @@ class CloudflareTransport:
             "compatibility_date": raw_date,
             "compatibility_flags": flags,
             "settings_sha256": digest(settings),
-        }
+        }, handler_names
 
     def _code_sha(self, version_id):
         need(UUID.fullmatch(version_id) is not None, "version_id_invalid")
@@ -759,8 +781,18 @@ class CloudflareTransport:
         for version_id in {active, latest}:
             metadata_cache[version_id] = self._version_metadata(version_id)
             code_cache[version_id] = self._code_sha(version_id)
-        active_bindings, active_config = metadata_cache[active]
-        latest_bindings, latest_config = metadata_cache[latest]
+        active_bindings, active_config, active_handlers = metadata_cache[active]
+        latest_bindings, latest_config, latest_handlers = metadata_cache[latest]
+        if self.candidate_code_sha256 is not None:
+            for version_id, handlers in (
+                (active, active_handlers),
+                (latest, latest_handlers),
+            ):
+                if code_cache[version_id] == self.candidate_code_sha256:
+                    need(
+                        handlers == CANDIDATE_HANDLERS,
+                        "candidate_handlers_drift",
+                    )
         return {
             "schema": "ausmalwiese.stats-worker-protected-inventory.v1",
             "account_sha256": ACCOUNT_SHA256,
@@ -1043,6 +1075,7 @@ def main(argv=None) -> int:
             token,
             zones,
             allow_deploy_existing=args.deploy_existing,
+            candidate_code_sha256=hashlib.sha256(worker_bytes).hexdigest(),
         )
 
         if args.preflight:
