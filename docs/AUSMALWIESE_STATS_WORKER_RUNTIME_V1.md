@@ -9,7 +9,8 @@ deployment is what still sends `/q` to the legacy host.
 ## Frozen application provenance
 
 - repository: `rozkalnsandris/coloring-pages`
-- commit: `e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63`
+- immutable Worker/config provenance commit: `e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63`
+- operational installer checkout commit: `fd31294eef9fe0a83b133d3ec9bd2036e0a29940`
 - Worker: `cloudflare/stats-worker.js`
 - Worker Git blob: `c2ac9da6e0701103e0041b30db7dfbea4298f96c`
 - Wrangler config Git blob:
@@ -34,9 +35,11 @@ A future separately authorized installation may create only:
   `release.json` — root:root 0400.
 
 The source-only installer requires exact clean `RPi5_main/main`. It also
-requires the application checkout at the exact frozen commit and exact clean
-bytes for only the Worker/config paths; unrelated application working-tree
-changes do not widen the install scope.
+requires the application checkout to be branch `main` at the exact operational
+checkout commit `fd31294eef9fe0a83b133d3ec9bd2036e0a29940`, while the Worker/config bytes must still
+match the immutable provenance blobs from `e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63`. The newer checkout
+does not change Worker/config content or widen deploy semantics; unrelated
+application working-tree changes do not widen the install scope.
 
 The release manifest binds:
 

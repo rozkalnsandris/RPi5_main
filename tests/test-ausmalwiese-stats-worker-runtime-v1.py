@@ -866,6 +866,17 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
 
     def test_installer_upgrade_is_exact_predecessor_and_two_targets(self):
         self.assertEqual(
+            installer.APP_SHA,
+            "e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63",
+        )
+        self.assertEqual(
+            installer.APP_CHECKOUT_SHA,
+            "fd31294eef9fe0a83b133d3ec9bd2036e0a29940",
+        )
+        self.assertEqual(runtime.APP_SHA, installer.APP_SHA)
+        self.assertEqual(provisioner.APP_SHA, installer.APP_SHA)
+        self.assertEqual(core.SOURCE_COMMIT, installer.APP_SHA)
+        self.assertEqual(
             installer.OLD_MAIN,
             "b7dce379d48c7214ccabe14f28ce5dbdc998d781",
         )
@@ -885,6 +896,7 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
         self.assertIn('parser.add_argument("--upgrade-from", default="")', source)
         self.assertIn("upgrade_scope_drift", source)
         self.assertIn("sudo_exact_upgrade_not_allowed", source)
+        self.assertIn("!= APP_CHECKOUT_SHA", source)
 
     def test_source_contract_keeps_live_authority_closed(self):
         contract = json.loads(
@@ -892,6 +904,18 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
         )
         self.assertEqual(contract["issue"], 1118)
         self.assertEqual(contract["parent_issue"], 996)
+        self.assertEqual(
+            contract["application_commit"],
+            "e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63",
+        )
+        self.assertEqual(
+            contract["application_checkout_commit"],
+            "fd31294eef9fe0a83b133d3ec9bd2036e0a29940",
+        )
+        self.assertEqual(
+            contract["install"]["exact_application_main_required"],
+            "fd31294eef9fe0a83b133d3ec9bd2036e0a29940",
+        )
         self.assertEqual(
             contract["runtime_modes"]["apply"]["upload_writes_max"], 1
         )
