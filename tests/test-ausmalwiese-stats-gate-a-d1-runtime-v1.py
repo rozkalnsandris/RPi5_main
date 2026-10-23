@@ -366,7 +366,7 @@ class GateARuntimeTests(unittest.TestCase):
                  op, "collect_schema", return_value=before()
              ) as schema:
             state = op.preflight()
-        schema.assert_called_once_with()
+        schema.assert_called_once_with(runner=mock.ANY)
         self.assertEqual(
             state["remote_evidence_sha256"],
             op.REMOTE_EVIDENCE_SHA256,
