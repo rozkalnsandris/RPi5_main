@@ -289,6 +289,7 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
         self.assertEqual(handlers, ())
 
         candidate_result = copy.deepcopy(result)
+        candidate_result["id"] = NEW
         candidate_result["resources"]["script"]["handlers"] = [
             "scheduled", "fetch"
         ]
