@@ -83,6 +83,11 @@ class GateARuntimeTests(unittest.TestCase):
         self.assertEqual(
             data["remote_evidence_sha256"], op.REMOTE_EVIDENCE_SHA256
         )
+        self.assertEqual(data["remote_evidence_digest_mode"], "semantic-v1")
+        self.assertEqual(
+            data["remote_evidence_latest_uploaded_version_normalization"],
+            op.LATEST_VERSION_SENTINEL,
+        )
         self.assertEqual(data["pre_schema_sha256"], op.PRE_SCHEMA_SHA256)
         self.assertEqual(data["migration_blob"], op.MIGRATION_BLOB)
         self.assertFalse(data["actions"]["run_wrangler"])
@@ -93,12 +98,69 @@ class GateARuntimeTests(unittest.TestCase):
 
     def test_frozen_observed_digests_match_fixtures(self):
         self.assertEqual(
-            op.canonical_sha256(remote()), op.REMOTE_EVIDENCE_SHA256
+            op.canonical_sha256(op.semantic_remote_evidence(remote())),
+            op.REMOTE_EVIDENCE_SHA256,
         )
         self.assertEqual(
             op.canonical_sha256(before()), op.PRE_SCHEMA_SHA256
         )
 
+    def test_semantic_remote_evidence_normalizes_only_latest_uuid(self):
+        baseline = remote()
+        changed = copy.deepcopy(baseline)
+        changed["latest_uploaded_version"] = (
+            "44f3627a-4e44-4fea-bb21-d47acd917122"
+        )
+        normalized = op.semantic_remote_evidence(changed)
+        self.assertEqual(
+            normalized["latest_uploaded_version"],
+            op.LATEST_VERSION_SENTINEL,
+        )
+        self.assertEqual(
+            op.canonical_sha256(normalized),
+            op.REMOTE_EVIDENCE_SHA256,
+        )
+        self.assertEqual(
+            {
+                key: value
+                for key, value in normalized.items()
+                if key != "latest_uploaded_version"
+            },
+            {
+                key: value
+                for key, value in baseline.items()
+                if key != "latest_uploaded_version"
+            },
+        )
+
+    def test_semantic_remote_evidence_rejects_invalid_latest_uuid(self):
+        bad = remote()
+        bad["latest_uploaded_version"] = "not-a-uuid"
+        with self.assertRaisesRegex(op.Blocked, "LATEST_VERSION"):
+            op.semantic_remote_evidence(bad)
+
+    def test_semantic_remote_evidence_keeps_all_other_drift_bound(self):
+        active = copy.deepcopy(remote())
+        active["active_versions"][0]["version_id"] = (
+            "22345678-1234-4234-a234-123456789abc"
+        )
+        provenance = copy.deepcopy(remote())
+        provenance["active_provenance"]["source"] = "api"
+        bindings = copy.deepcopy(remote())
+        bindings["active_bindings"] = bindings["active_bindings"][:-1]
+        d1 = copy.deepcopy(remote())
+        d1["d1"]["database_id"] = (
+            "12345678-1234-4234-a234-123456789abc"
+        )
+
+        for value in (active, provenance, bindings, d1):
+            with self.subTest(value=value):
+                self.assertNotEqual(
+                    op.canonical_sha256(
+                        op.semantic_remote_evidence(value)
+                    ),
+                    op.REMOTE_EVIDENCE_SHA256,
+                )
 
     def test_runtime_checkout_repin_preserves_reviewed_evidence_digest(self):
         self.assertEqual(
@@ -110,7 +172,7 @@ class GateARuntimeTests(unittest.TestCase):
             "9a8111f19f9d82395f331ed49409af22f4765db7",
         )
         self.assertEqual(
-            op.canonical_sha256(remote()), op.REMOTE_EVIDENCE_SHA256
+            op.canonical_sha256(op.semantic_remote_evidence(remote())), op.REMOTE_EVIDENCE_SHA256
         )
 
     def test_git_blob_uses_nul_separator(self):
@@ -274,15 +336,41 @@ class GateARuntimeTests(unittest.TestCase):
                 op.trusted_runtime_entry()
 
     def test_preflight_digest_drift_blocks_before_schema_read(self):
+        drift = copy.deepcopy(remote())
+        drift["active_provenance"]["source"] = "api"
         with mock.patch.object(op, "trusted_runtime_entry"), \
              mock.patch.object(op, "wrangler_package_version"), \
              mock.patch.object(op, "exact_application_bytes", return_value={}), \
              mock.patch.object(op, "log_snapshot", return_value=()), \
-             mock.patch.object(op, "collect_remote_evidence", return_value={"bad": 1}), \
+             mock.patch.object(
+                 op, "collect_remote_evidence", return_value=drift
+             ), \
              mock.patch.object(op, "collect_schema") as schema:
             with self.assertRaisesRegex(op.Blocked, "REMOTE_EVIDENCE_DRIFT"):
                 op.preflight()
         schema.assert_not_called()
+
+    def test_preflight_accepts_latest_uuid_change_and_reaches_schema(self):
+        changed = copy.deepcopy(remote())
+        changed["latest_uploaded_version"] = (
+            "44f3627a-4e44-4fea-bb21-d47acd917122"
+        )
+        with mock.patch.object(op, "trusted_runtime_entry"), \
+             mock.patch.object(op, "wrangler_package_version"), \
+             mock.patch.object(op, "exact_application_bytes", return_value={}), \
+             mock.patch.object(op, "log_snapshot", return_value=()), \
+             mock.patch.object(
+                 op, "collect_remote_evidence", return_value=changed
+             ), \
+             mock.patch.object(
+                 op, "collect_schema", return_value=before()
+             ) as schema:
+            state = op.preflight()
+        schema.assert_called_once_with(runner=mock.ANY)
+        self.assertEqual(
+            state["remote_evidence_sha256"],
+            op.REMOTE_EVIDENCE_SHA256,
+        )
 
     def test_preflight_log_write_blocks_before_mutation(self):
         with mock.patch.object(op, "trusted_runtime_entry"), \
@@ -310,7 +398,9 @@ class GateARuntimeTests(unittest.TestCase):
         data = json.loads(payload)
         self.assertEqual(data["status"], "PREFLIGHT_PASS")
         self.assertFalse(data["mutation_started"])
-        self.assertEqual(data["remote_evidence_sha256"], op.REMOTE_EVIDENCE_SHA256)
+        self.assertEqual(
+            data["remote_evidence_sha256"], op.REMOTE_EVIDENCE_SHA256
+        )
         self.assertEqual(data["pre_schema_sha256"], op.PRE_SCHEMA_SHA256)
         self.assertEqual(data["migration_blob"], op.MIGRATION_BLOB)
 

@@ -18,7 +18,7 @@ PR #1100. It does not replace or weaken the later Worker takeover gate.
 - additive migration blob:
   `b5346c05cb27de1010dab2027b0b923e999af775`
 - Gate A remote evidence SHA-256:
-  `3397daf651bbe60512167817bcef9f02421c71f877bef0a92afc44821fb08af6`
+  `a95dc014c9142ca9792c74ddf3595a5a7202d885c3e914f4132db83d2340dcf2`
 - pre-schema SHA-256:
   `470f40bab9b7e2bfcf68b73cfa3aad7bf171bcb764fdfc391c09d1b4fa85e9f6`
 
@@ -91,14 +91,20 @@ The installed runtime must, in this order:
 5. read versions list, deployments list, and active version detail;
 6. run only the three fixed read-only D1 schema queries;
 7. require remote evidence SHA-256
-   `3397daf651bbe60512167817bcef9f02421c71f877bef0a92afc44821fb08af6`;
+   `a95dc014c9142ca9792c74ddf3595a5a7202d885c3e914f4132db83d2340dcf2`;
 8. require pre-schema SHA-256
    `470f40bab9b7e2bfcf68b73cfa3aad7bf171bcb764fdfc391c09d1b4fa85e9f6`;
 9. require all three target schema objects to remain absent;
 10. re-check exact application bytes immediately before mutation dispatch.
 
 The Gate A contract deliberately permits latest-uploaded to differ from the one
-100% active version. That exception is not inherited by Worker upload/deploy.
+100% active version. The remote owner-binding digest is therefore semantic:
+`latest_uploaded_version` must still be a valid full UUID, but that one field
+is normalized to the fixed sentinel `<valid-uuid>` before SHA-256. Every
+other remote-evidence field remains owner-bound, including the active version,
+provenance, active binding set, D1 identity, Worker/runtime identity, and
+reviewed source provenance. That exception is not inherited by Worker
+upload/deploy.
 
 ## Single mutation
 
@@ -136,7 +142,7 @@ Source:
 `scripts/install-ausmalwiese-stats-gate-a-d1-runtime-v1.py`
 
 The source-only installer pins the new runtime blob
-`be8f6604b432e08d2877fc126a91fa88adbe749e` into the fixed target.
+`dde75bb1566ecdceaf146c80aa21fc60e0c70d7a` into the fixed target.
 It must be re-reviewed if those exact bytes change. A first
 install still requires target absence and bounded GNU `cp` no-clobber
 semantics.
