@@ -32,7 +32,7 @@ Source:
 `scripts/ausmalwiese_stats_gate_a_d1_runtime_v1.py`
 
 Git blob:
-`866d40e896a900f00ead6087c98fa350ce977487`
+`dde75bb1566ecdceaf146c80aa21fc60e0c70d7a`
 
 Future installed entrypoint:
 `/usr/local/sbin/rpi5-ausmalwiese-stats-gate-a-d1-migrate`
