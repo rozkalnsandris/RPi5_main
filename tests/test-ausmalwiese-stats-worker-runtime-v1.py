@@ -208,6 +208,23 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
         self.assertEqual(trusted.uploads, 1)
         self.assertEqual(trusted.deploys, 0)
 
+        config_drift = snapshot(
+            latest=NEW,
+            active_code=OLD_SHA,
+            latest_code=SOURCE_SHA,
+        )
+        config_drift["latest_configuration"]["settings_sha256"] = "7" * 64
+        trusted = FakeTrusted([before, before, config_drift])
+        with mock.patch.object(core, "verify_source"):
+            with self.assertRaisesRegex(
+                core.Blocked, "POST_UPLOAD_UNVERIFIED_STOP"
+            ):
+                core.future_run_once(
+                    trusted, self.approval(before), SOURCE
+                )
+        self.assertEqual(trusted.uploads, 1)
+        self.assertEqual(trusted.deploys, 0)
+
     def test_post_dispatch_failures_do_not_retry(self):
         before = snapshot()
         upload = FakeTrusted([before, before], upload_error=True)
@@ -265,10 +282,24 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
         }
         result = {"id": OLD, "resources": resources}
         with mock.patch.object(transport, "_get", return_value=result):
-            descriptor, cfg = transport._version_metadata(OLD)
+            descriptor, cfg, handlers = transport._version_metadata(OLD)
         self.assertEqual(descriptor["DB"]["kind"], "d1")
         self.assertEqual(descriptor["RATE_LIMITER"]["kind"], "ratelimit")
         self.assertEqual(cfg["compatibility_flags"], [])
+        self.assertEqual(handlers, ())
+
+        candidate_result = copy.deepcopy(result)
+        candidate_result["id"] = NEW
+        candidate_result["resources"]["script"]["handlers"] = [
+            "scheduled", "fetch"
+        ]
+        with mock.patch.object(transport, "_get", return_value=candidate_result):
+            _, candidate_cfg, candidate_handlers = transport._version_metadata(NEW)
+        self.assertEqual(candidate_handlers, runtime.CANDIDATE_HANDLERS)
+        self.assertEqual(
+            candidate_cfg["settings_sha256"],
+            cfg["settings_sha256"],
+        )
 
         bad_db = copy.deepcopy(result)
         bad_db["resources"]["bindings"][0]["unexpected"] = True
@@ -281,6 +312,60 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
         with mock.patch.object(transport, "_get", return_value=bad_rate):
             with self.assertRaisesRegex(runtime.Stop, "rate_identity"):
                 transport._version_metadata(OLD)
+
+    def test_candidate_handlers_are_exact_when_code_matches_reviewed_source(self):
+        transport = runtime.CloudflareTransport(
+            "a" * 32,
+            "T" * 32,
+            {"ausmalwiese.de": "b" * 32, "rozkalns.net": "c" * 32},
+            candidate_code_sha256=SOURCE_SHA,
+        )
+
+        metadata = {
+            OLD: (bindings(), config(), ("fetch",)),
+            NEW: (bindings(), config(), runtime.CANDIDATE_HANDLERS),
+        }
+
+        def metadata_for(version_id):
+            return copy.deepcopy(metadata[version_id])
+
+        def code_for(version_id):
+            return OLD_SHA if version_id == OLD else SOURCE_SHA
+
+        with (
+            mock.patch.object(transport, "_versions", return_value=NEW),
+            mock.patch.object(
+                transport, "_deployment", return_value=(DEPLOY_OLD, OLD)
+            ),
+            mock.patch.object(
+                transport, "_routes", return_value=copy.deepcopy(core.ROUTES)
+            ),
+            mock.patch.object(
+                transport, "_version_metadata", side_effect=metadata_for
+            ),
+            mock.patch.object(transport, "_code_sha", side_effect=code_for),
+        ):
+            state = transport.read_snapshot(allow_latest_difference=True)
+        self.assertEqual(state["latest_code_sha256"], SOURCE_SHA)
+
+        metadata[NEW] = (bindings(), config(), ("fetch",))
+        with (
+            mock.patch.object(transport, "_versions", return_value=NEW),
+            mock.patch.object(
+                transport, "_deployment", return_value=(DEPLOY_OLD, OLD)
+            ),
+            mock.patch.object(
+                transport, "_routes", return_value=copy.deepcopy(core.ROUTES)
+            ),
+            mock.patch.object(
+                transport, "_version_metadata", side_effect=metadata_for
+            ),
+            mock.patch.object(transport, "_code_sha", side_effect=code_for),
+        ):
+            with self.assertRaisesRegex(
+                runtime.Stop, "candidate_handlers_drift"
+            ):
+                transport.read_snapshot(allow_latest_difference=True)
 
     def test_beta_version_module_proof_uses_provider_declared_main_module(self):
         transport = runtime.CloudflareTransport(
@@ -623,6 +708,19 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
             with self.assertRaisesRegex(runtime.Stop, "recovery_binding_drift"):
                 runtime.recovery_preflight(core, trusted, SOURCE)
 
+        config_drift = snapshot(
+            latest=NEW,
+            active_code=OLD_SHA,
+            latest_code=SOURCE_SHA,
+        )
+        config_drift["latest_configuration"]["settings_sha256"] = "7" * 64
+        trusted = FakeTrusted([config_drift, config_drift])
+        with mock.patch.object(core, "verify_source"):
+            with self.assertRaisesRegex(
+                runtime.Stop, "recovery_configuration_drift"
+            ):
+                runtime.recovery_preflight(core, trusted, SOURCE)
+
     def test_deploy_existing_reuses_candidate_without_upload(self):
         before = snapshot(
             latest=NEW,
@@ -878,15 +976,15 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
         self.assertEqual(core.SOURCE_COMMIT, installer.APP_SHA)
         self.assertEqual(
             installer.OLD_MAIN,
-            "b7dce379d48c7214ccabe14f28ce5dbdc998d781",
+            "78e3e3aee5ef32386acc8031a955b7ddee803304",
         )
         self.assertEqual(
             installer.OLD_LAUNCHER_BLOB,
-            "017780bcc262c37343457ecad6130e41411853e7",
+            "d64b2f330da67d9f95927d06bd1984f4aac4a343",
         )
         self.assertEqual(
             installer.OLD_RELEASE_SHA256,
-            "dfcf582f9cd575b540911bc6ac0d3a1a30312a65f5d4442de9ec25dc4fe1fbc0",
+            "e65d7b909482fe67629e1da0b42bc5a1b78f255397c01a789941240035b9b066",
         )
         self.assertEqual(
             installer.UPGRADE_TARGETS,
@@ -930,6 +1028,34 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
         self.assertEqual(
             contract["runtime_modes"]["recovery_preflight"]["provider_writes"],
             0,
+        )
+        self.assertEqual(
+            contract["read_protocol"]["source_derived_handler_contract"][
+                "candidate_handlers_sorted"
+            ],
+            ["fetch", "scheduled"],
+        )
+        self.assertTrue(
+            contract["runtime_modes"]["recovery_preflight"][
+                "candidate_handlers_exact_required"
+            ]
+        )
+        self.assertTrue(
+            contract["runtime_modes"]["recovery_preflight"][
+                "nonhandler_configuration_preserved"
+            ]
+        )
+        self.assertEqual(
+            contract["install"]["upgrade"]["predecessor_main"],
+            "78e3e3aee5ef32386acc8031a955b7ddee803304",
+        )
+        self.assertEqual(
+            contract["install"]["upgrade"]["predecessor_launcher_blob"],
+            "d64b2f330da67d9f95927d06bd1984f4aac4a343",
+        )
+        self.assertEqual(
+            contract["install"]["upgrade"]["predecessor_release_sha256"],
+            "e65d7b909482fe67629e1da0b42bc5a1b78f255397c01a789941240035b9b066",
         )
         self.assertEqual(
             contract["runtime_modes"]["deploy_existing"]["upload_writes_max"],

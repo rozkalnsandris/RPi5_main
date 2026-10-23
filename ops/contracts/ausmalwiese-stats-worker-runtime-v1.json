@@ -113,6 +113,24 @@
       ],
       "decoded_main_module_max_bytes": 196608,
       "candidate_comparison": "selected-main-module-sha256-equals-reviewed-local-worker-sha256"
+    },
+    "source_derived_handler_contract": {
+      "provider_field": "resources.script.handlers",
+      "candidate_handlers_sorted": [
+        "fetch",
+        "scheduled"
+      ],
+      "candidate_handler_rule": "exact-sorted-set-required-when-version-code-sha256-equals-reviewed-candidate",
+      "settings_sha256_excludes": [
+        "script.handlers"
+      ],
+      "settings_sha256_preserves": [
+        "script.named_handlers",
+        "script_runtime.exports",
+        "script_runtime.limits",
+        "script_runtime.migration_tag",
+        "script_runtime.usage_model"
+      ]
     }
   },
   "runtime_modes": {
@@ -146,7 +164,9 @@
       "retries": 0,
       "rollback": false,
       "cleanup": false,
-      "fallback": false
+      "fallback": false,
+      "candidate_handlers_exact_required": true,
+      "nonhandler_configuration_preserved": true
     },
     "recovery_preflight": {
       "confirmation": "OWNER-AUTHORIZED-STATS-WORKER-RECOVERY-PREFLIGHT",
@@ -166,7 +186,9 @@
         "status"
       ],
       "provider_version_ids_output": false,
-      "provider_deployment_ids_output": false
+      "provider_deployment_ids_output": false,
+      "candidate_handlers_exact_required": true,
+      "nonhandler_configuration_preserved": true
     },
     "deploy_existing": {
       "confirmation": "OWNER-AUTHORIZED-STATS-WORKER-DEPLOY-EXISTING",
@@ -184,7 +206,9 @@
       "retries": 0,
       "rollback": false,
       "cleanup": false,
-      "fallback": false
+      "fallback": false,
+      "candidate_handlers_exact_required": true,
+      "nonhandler_configuration_preserved": true
     }
   },
   "install": {
@@ -199,9 +223,9 @@
     "no_permission_or_sudoers_change": true,
     "upgrade": {
       "confirmation": "UPGRADE-AUSMALWIESE-STATS-WORKER-RUNTIME",
-      "predecessor_main": "b7dce379d48c7214ccabe14f28ce5dbdc998d781",
-      "predecessor_launcher_blob": "017780bcc262c37343457ecad6130e41411853e7",
-      "predecessor_release_sha256": "dfcf582f9cd575b540911bc6ac0d3a1a30312a65f5d4442de9ec25dc4fe1fbc0",
+      "predecessor_main": "78e3e3aee5ef32386acc8031a955b7ddee803304",
+      "predecessor_launcher_blob": "d64b2f330da67d9f95927d06bd1984f4aac4a343",
+      "predecessor_release_sha256": "e65d7b909482fe67629e1da0b42bc5a1b78f255397c01a789941240035b9b066",
       "replacement_targets": [
         "/usr/local/sbin/rpi5-ausmalwiese-stats-worker-deploy",
         "/usr/local/libexec/rpi5-ausmalwiese-stats-worker-deploy/release.json"

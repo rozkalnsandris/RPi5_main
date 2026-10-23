@@ -50,11 +50,11 @@ The release manifest binds:
 
 No credential or provider request is used by the installer.
 
-Issue #1138 repins the bounded upgrade path to the exact currently installed
-predecessor release: RPi5_main
-`b7dce379d48c7214ccabe14f28ce5dbdc998d781`, launcher blob
-`017780bcc262c37343457ecad6130e41411853e7`, and release SHA-256
-`dfcf582f9cd575b540911bc6ac0d3a1a30312a65f5d4442de9ec25dc4fe1fbc0`.
+The bounded upgrade path is repinned to the exact currently installed
+predecessor package after the application-main reconcile: RPi5_main
+`78e3e3aee5ef32386acc8031a955b7ddee803304`, launcher blob
+`d64b2f330da67d9f95927d06bd1984f4aac4a343`, and release SHA-256
+`e65d7b909482fe67629e1da0b42bc5a1b78f255397c01a789941240035b9b066`.
 Upgrade preflight reconstructs that historical package from immutable Git
 objects, verifies every installed package file as a non-symlink root-owned
 single-link file with exact mode and SHA-256, and permits replacement of only
@@ -108,7 +108,10 @@ proves:
 - exact D1 and Rate Limiter identities/policy;
 - secret names without secret values;
 - fingerprints only for three existing plaintext bindings;
-- compatibility date/flags and bounded runtime settings fingerprint;
+- compatibility date/flags and bounded non-handler runtime settings fingerprint;
+- exact source-derived handler proof for every provider version whose code
+  SHA-256 equals the reviewed candidate: sorted handlers must be exactly
+  `fetch` and `scheduled`;
 - version-specific provider-declared `main_module` bytes from Cloudflare's
   Worker Versions API with `include=modules`; the selected main-module
   SHA-256 must match the reviewed local Worker source bytes.
@@ -158,6 +161,29 @@ matches it, accepts only the existing JavaScript content types, base64-decodes
 that module, and SHA-256 hashes the exact bytes. Missing or duplicate matches
 fail closed. No fallback to `stats-worker.js` or any other module is allowed.
 
+### Source-derived handler proof
+
+Cloudflare's version metadata reports default-export handler names in
+`resources.script.handlers`. Those names are derived from the Worker source,
+so they are not part of the preserved runtime-settings fingerprint. For the
+exact reviewed Worker blob
+`c2ac9da6e0701103e0041b30db7dfbea4298f96c`, every provider version whose
+main-module SHA-256 equals the reviewed candidate must report exactly the
+sorted handler set `fetch`, `scheduled`.
+
+The bounded non-handler settings fingerprint still includes
+`script.named_handlers` plus runtime `exports`, `limits`,
+`migration_tag` and `usage_model`. Bindings, compatibility date/flags and
+those non-handler settings remain preservation gates.
+
+The 2026-10-23 sanitized recovery differential observed the exact reviewed
+candidate code with stable routes/bindings/date/flags. Only the source-derived
+`handlers` component differed; active settings SHA-256 was
+`d7e1df0e65ea784513f332e42409f3e80e1f6421aa1a15484c82b922b4282fd8` and
+latest settings SHA-256 was
+`16863f353cb7348990baf3c1cd6a448abba008304a95fb891ff61df3f22ebe77`.
+No provider write occurred.
+
 ## Exact apply
 
 Apply requires exact confirmation:
@@ -180,7 +206,8 @@ Only two ordered provider writes are possible:
    version UUID to 100% traffic.
 
 After upload, the old deployment must remain active while the new version is
-latest, routes/bindings/config must remain unchanged, and the beta Worker
+latest, routes/bindings/non-handler configuration must remain unchanged, the
+reviewed candidate's source-derived handler set must be exact, and the beta Worker
 Versions `include=modules` response must prove the provider-declared main
 module SHA-256 equals the reviewed local `stats-worker.js` source bytes.
 
@@ -205,7 +232,8 @@ Read-only recovery preflight requires:
 
 It double-reads a snapshot that may have `latest != active`, verifies the
 latest code SHA-256 equals the exact reviewed candidate while the active code
-does not, and requires routes, bindings and runtime configuration to be
+does not, requires the latest candidate's source-derived handlers to be exact,
+and requires routes, bindings and all non-handler runtime configuration to be
 preserved across the active/latest versions. Output is limited to the recovery
 snapshot SHA-256, candidate code SHA-256, fixed provenance labels,
 `recovery_required` and status. Provider version/deployment IDs and raw
@@ -221,8 +249,9 @@ The transport then permits exactly one deployment write with zero upload
 writes, assigning the already-uploaded proven latest candidate to 100% traffic.
 
 After dispatch, the runtime requires active and latest to converge on that
-candidate, both code proofs to equal the reviewed candidate SHA-256, the
-deployment identity to change, and routes/bindings/configuration to remain
+candidate, both code proofs to equal the reviewed candidate SHA-256, both
+candidate versions to expose exactly `fetch` and `scheduled`, the deployment
+identity to change, and routes/bindings/non-handler configuration to remain
 preserved. Any dispatch ambiguity or failed post-verification is terminal.
 There is no retry, rollback, cleanup or fallback path.
 
