@@ -35,8 +35,9 @@ DATABASE_ID = "f8ac8f1d-a230-4bc4-af13-557c1b91b273"
 
 REMOTE_SCHEMA = "ausmalwiese.stats-gate-a-remote.v1"
 SCHEMA = "ausmalwiese.stats-privacy-d1-schema.v1"
-REMOTE_EVIDENCE_SHA256 = "3397daf651bbe60512167817bcef9f02421c71f877bef0a92afc44821fb08af6"
+REMOTE_EVIDENCE_SHA256 = "a95dc014c9142ca9792c74ddf3595a5a7202d885c3e914f4132db83d2340dcf2"
 PRE_SCHEMA_SHA256 = "470f40bab9b7e2bfcf68b73cfa3aad7bf171bcb764fdfc391c09d1b4fa85e9f6"
+LATEST_VERSION_SENTINEL = "<valid-uuid>"
 
 RUNTIME_ENTRY = Path("/usr/local/sbin/rpi5-ausmalwiese-stats-gate-a-d1-migrate")
 RUNTIME_CONFIRM = "OWNER-AUTHORIZED-STATS-GATE-A-D1-MIGRATION"
@@ -146,6 +147,30 @@ def canonical_sha256(value: Any) -> str:
         value, sort_keys=True, separators=(",", ":"), ensure_ascii=True
     ).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
+
+
+def semantic_remote_evidence(remote: Any) -> dict[str, Any]:
+    need(
+        type(remote) is dict
+        and set(remote)
+        == {
+            "schema",
+            "worker",
+            "environment",
+            "wrangler_version",
+            "reviewed_source",
+            "latest_uploaded_version",
+            "active_versions",
+            "active_provenance",
+            "active_bindings",
+            "d1",
+        },
+        "REMOTE_EVIDENCE_SHAPE",
+    )
+    normalized = dict(remote)
+    _uuid(normalized.get("latest_uploaded_version"), "LATEST_VERSION")
+    normalized["latest_uploaded_version"] = LATEST_VERSION_SENTINEL
+    return normalized
 
 
 def git_blob(raw: bytes) -> str:
@@ -675,7 +700,8 @@ def preflight(*, runner: Any = subprocess.run) -> dict[str, str]:
     before_logs = log_snapshot()
     remote = collect_remote_evidence(runner=runner)
     need(
-        canonical_sha256(remote) == REMOTE_EVIDENCE_SHA256,
+        canonical_sha256(semantic_remote_evidence(remote))
+        == REMOTE_EVIDENCE_SHA256,
         "REMOTE_EVIDENCE_DRIFT",
     )
     schema = validate_before_schema(collect_schema(runner=runner))
@@ -749,6 +775,10 @@ def expected_contract() -> dict[str, Any]:
         "database_name": DATABASE_NAME,
         "database_id": DATABASE_ID,
         "remote_evidence_sha256": REMOTE_EVIDENCE_SHA256,
+        "remote_evidence_digest_mode": "semantic-v1",
+        "remote_evidence_latest_uploaded_version_normalization": (
+            LATEST_VERSION_SENTINEL
+        ),
         "pre_schema_sha256": PRE_SCHEMA_SHA256,
         "runtime_entry": str(RUNTIME_ENTRY),
         "runtime_operator": RUNTIME_OPERATOR,
