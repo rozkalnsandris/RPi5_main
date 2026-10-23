@@ -28,7 +28,7 @@ function harness(route="overview"){
  const h=harness();await h.flush();assert.equal(h.calls.length,0,"lazy dashboards");
  await h.open("stats");assert.equal(h.calls.length,3);assert.equal(h.get("stats-total-prints").textContent,"76");
  assert.equal(h.get("stats-qr-total").textContent,"–","missing QR capability is not zero");
- assert.equal(h.get("stats-table").children.length,20);assert.match(h.get("stats-status").textContent,/1 statistikas ID/);
+ assert.equal(h.get("stats-table").children.length,20);assert.match(h.get("stats-status").textContent,/1 stats ID/);
  h.get("stats-load-more").listeners.click();assert.equal(h.get("stats-table").children.length,25);
  h.get("stats-search").value="0000000";h.get("stats-search").listeners.input();
  const row=h.get("stats-table").children[0],link=row.children[0].children[0].children[1];
@@ -40,9 +40,9 @@ function harness(route="overview"){
  await h.open("traffic");assert.equal(h.get("stats-visits").textContent,"473");assert.equal(h.get("instagram-30").textContent,"7");
  assert.equal(h.get("stats-crawlers").children[0].children[0].textContent,"<svg onload=evil>");
  h.responses['/api/analytics/campaigns?days=30']={campaigns:[]};h.responses['/api/analytics/traffic?days=7']=null;
- await h.refresh("traffic");assert.equal(h.get("instagram-30").textContent,"–");assert.equal(h.get("stats-visits").textContent,"–");assert.equal(h.get("stats-total-views").textContent,"283");assert.match(h.get("traffic-page-status").textContent,/daļa datu/);
+ await h.refresh("traffic");assert.equal(h.get("instagram-30").textContent,"–");assert.equal(h.get("stats-visits").textContent,"–");assert.equal(h.get("stats-total-views").textContent,"283");assert.match(h.get("traffic-page-status").textContent,/some data/);
  h.responses['/api/analytics/campaigns?days=30']=null;await h.refresh("stats");assert.equal(h.get("stats-kita-landing").textContent,"–");
- h.responses['/api/analytics/overview']=null;await h.refresh("stats");assert.equal(h.nodes['[data-analytics-content="stats"]'].hidden,true);assert.match(h.get("stats-status").textContent,/neizdevās/);assert.equal(h.get("stats-refresh").disabled,false);
+ h.responses['/api/analytics/overview']=null;await h.refresh("stats");assert.equal(h.nodes['[data-analytics-content="stats"]'].hidden,true);assert.match(h.get("stats-status").textContent,/Could not load/);assert.equal(h.get("stats-refresh").disabled,false);
  assert.ok(h.calls.every(call=>!call.options.method || call.options.method==="GET"));assert.ok(h.calls.every(call=>call.url.startsWith("/api/")));
  const deep=harness("traffic");await deep.flush();assert.equal(deep.get("stats-visits").textContent,"473");
  console.log("Admin analytics: lazy/deep routes, counters, paging/search, safe DOM, partial failures and stale-data hiding PASS");

@@ -5,7 +5,7 @@ Issue: RPi5_main #1149.
 ## Owner workflow
 
 1. ChatGPT creates approved coloring-page PNG drafts and packages them into one ZIP.
-2. The owner opens the protected Ausmalwiese ADMIN page. The admin interface is Latvian, uses the same Baloo 2/Nunito typography as the public Statistics/Traffic dashboards, and provides one header navigation containing Pārskats, Pievienot, Katalogs, Arhīvs, Aktivitāte, Statistika and Apmeklējums. Below 1200px, the same navigation opens with the Izvēlne button; Escape or choosing a link closes it. The active admin section remains highlighted, including Katalogs while editing.
+2. The owner opens the protected Ausmalwiese ADMIN page. The admin interface is English, uses the same Baloo 2/Nunito typography as the public Statistics/Traffic dashboards, and provides one header navigation containing Overview, Add pages, Catalog, Archive, Activity, Statistics and Traffic. Below 1200px, the same navigation opens with the Menu button; Escape or choosing a link closes it. The active admin section remains highlighted, including Catalog while editing.
 3. Open **Pievienot**, upload the ZIP and inspect the private previews/titles.
 4. The owner explicitly chooses one canonical category.
 5. Press **Sākt publicēšanu**.
@@ -318,9 +318,9 @@ Source merge alone does not deploy this change.
 
 ## Native analytics in the admin shell (#1190)
 
-The protected admin UI now includes `#stats` (Statistika) and `#traffic`
-(Apmeklējums) alongside the existing routes. Every screen uses the same header,
-Latvian text and self-hosted Latin/Latin Extended fonts. The root reserves a
+The protected admin UI now includes `#stats` (Statistics) and `#traffic`
+(Traffic) alongside the existing routes. Every screen uses the same header,
+English text and self-hosted Latin/Latin Extended fonts. The root reserves a
 stable scrollbar gutter, with an always-visible scrollbar fallback, so the empty
 archive does not shift navigation relative to the longer catalog.
 
@@ -379,3 +379,15 @@ Offline validation: `python3 tests/test-coloring-pages-admin-publish-v1.py`
 query rejection, redirect refusal, size/schema/error bounds, lazy/deep navigation,
 dirty-edit guards, search/pagination, missing capabilities, text-only rendering
 of untrusted labels, and stale-data hiding after a failed refresh.
+
+
+### English admin interface
+
+The owner requested English for the entire combined admin panel, including
+Statistics and Traffic. All navigation, headings, controls, help text, empty and
+error states, progress labels, confirmation dialogs, accessibility labels and
+browser titles use English. Dates and aggregate numbers use `en-GB`; the page
+language is `en`. Catalog titles and other owner-entered content retain their
+original language. Existing Latin Extended font support remains available for
+those titles. Restore and Refresh remain distinct actions; the exact `DELETE`
+confirmation and all existing mutation guards remain unchanged.

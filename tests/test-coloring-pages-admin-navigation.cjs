@@ -26,7 +26,7 @@ function harness() {
   const layout=new Element(),skip=new Element(),listeners={},calls=[];
   const location={hash:""};
   const entries=Array.from({length:53},(_,i)=>({id:String(i).padStart(7,"0"),title:"Page "+i,category:i%2?"tiere":"lernen",age:"3-6",difficulty:"easy",thumb:"/media/test/thumb.webp"}));
-  const state={entries,etag:'"old"',status:200,confirm:false};
+  const state={entries,etag:'"old"',status:200,confirm:false,prompts:[],answers:[]};
   const sandbox={
     document:{
       title:"",
@@ -36,7 +36,7 @@ function harness() {
       createElement:()=>new Element()
     }, location,
     history:{replaceState(_a,_b,url){location.hash=url}},
-    window:{addEventListener(name,callback){listeners[name]=callback},scrollTo(){},confirm(){return state.confirm}},
+    window:{addEventListener(name,callback){listeners[name]=callback},scrollTo(){},confirm(message){state.confirmText=message;return state.confirm},prompt(message){state.prompts.push(message);return state.answers.length?state.answers.shift():null}},
     sessionStorage:{getItem(){return null},setItem(){},removeItem(){}},
     setTimeout(){return 1},clearTimeout(){},setInterval(){return 1},clearInterval(){},
     console,
@@ -75,15 +75,21 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
   h.ids.catalogNext.onclick();assert.equal(h.ids.catalogGrid.children.length,5);assert.equal(h.ids.catalogNext.disabled,true);
   h.ids.catalogSearch.value="Page 52";h.ids.catalogSearch.oninput();
   assert.equal(h.ids.catalogGrid.children.length,1);assert.equal(h.ids.catalogPageStatus.textContent,"1 / 1");
-  h.ids.catalogSearch.value="missing";h.ids.catalogSearch.oninput();assert.match(h.ids.catalogGrid.innerHTML,/Nekas/);
+  h.ids.catalogSearch.value="missing";h.ids.catalogSearch.oninput();assert.match(h.ids.catalogGrid.innerHTML,/No matching/);
   h.ids.catalogSearch.value="";h.ids.catalogSearch.oninput();
   h.go("edit/0000001");assert.equal(h.ids.editTitle.value,"Page 1");assert.equal(h.layout.hidden,false);
   assert.equal(h.navs.find(x=>x.dataset.nav==="catalog").attrs["aria-current"],"page");
   h.ids.editTitle.value="Unsaved";
   const analyticsOpens=opened.length;
   h.go("stats");assert.equal(h.s.location.hash,"#edit/0000001");assert.equal(opened.length,analyticsOpens);
+  assert.equal(h.state.confirmText,"You have unsaved changes. Leave this page?");
   h.go("archive");assert.equal(h.s.location.hash,"#edit/0000001");assert.equal(h.ids.editTitle.value,"Unsaved");
   h.state.confirm=true;h.go("archive");assert.equal(h.s.currentRoute,"archive");
+  await h.s.archiveCatalogEntry(h.state.entries[0]);assert.match(h.state.prompts.at(-1),/^Archiving hides this entry/);
+  await h.s.restoreArchiveEntry(h.state.entries[0]);assert.match(h.state.prompts.at(-1),/^Restoring returns this entry/);
+  h.state.answers=[h.state.entries[0].id,null];
+  await h.s.permanentDeleteArchiveEntry(h.state.entries[0]);assert.match(h.state.prompts.at(-2),/^PERMANENT DELETION/);assert.equal(h.state.prompts.at(-1),"Second confirmation: type DELETE exactly");
+  assert.equal(h.calls.filter(x=>["/api/catalog/archive","/api/catalog/restore","/api/archive/delete"].includes(x.url)).length,0,"cancelled confirmations do not write");
   h.go("edit/does-not-exist");assert.equal(h.layout.hidden,true);assert.equal(h.ids.editMissing.hidden,false);
   h.go("unknown");assert.equal(h.s.currentRoute,"overview");
   h.go("catalog");h.skip.onclick({preventDefault(){}});assert.equal(h.s.currentRoute,"catalog");assert.equal(h.ids.main.focused,true);
@@ -94,12 +100,12 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
   assert.equal(saved.options.headers["If-Match"],'"old"');
   assert.equal(saved.options.headers["X-Ausmalwiese-CSRF"],"fixture");
   assert.equal(JSON.parse(saved.options.body).title,"Changed");
-  assert.equal(h.s.location.hash,"catalog");assert.match(h.ids.catalogFeedback.textContent,/saglabāts/);
+  assert.equal(h.s.location.hash,"catalog");assert.match(h.ids.catalogFeedback.textContent,/saved/);
 
   h.go("catalog");h.go("edit/0000002");h.ids.editTitle.value="Keep my draft";h.state.status=412;
   await h.ids.editForm.onsubmit({preventDefault(){}});
   assert.equal(h.ids.editTitle.value,"Keep my draft");
-  assert.equal(h.ids.editSave.disabled,true);assert.match(h.ids.error.textContent,/Katalogs pa šo laiku/);
+  assert.equal(h.ids.editSave.disabled,true);assert.match(h.ids.error.textContent,/The catalog has changed/);
   assert.equal(h.ids.error.focused,true);
   const writes=h.calls.filter(x=>x.url==="/api/catalog/edit").length;
   await h.ids.editForm.onsubmit({preventDefault(){}});
