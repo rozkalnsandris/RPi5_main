@@ -52,15 +52,16 @@
       {
         "target_alias": "hermes-deals",
         "consumer_repository": "rozkalnsandris/hermes-deals",
-        "consumer_contract_revision": "13f9fb69b9576d8e97ab3a85334927f3c576ca1c",
+        "consumer_contract_revision": "4467939c8c26378ee6d8dc3029fba2e562c5e48c",
         "compatibility_prerequisite_issue": 690,
         "source_registration_issue": 692,
-        "compose_source": "ops/deploy/simple-deploy-compose/hermes-deals-api.yml",
-        "compose_sha256": "644dc72da5dc13ee532dd29693db31358451669bb44de4df4b62c41736903f1c",
+        "compose_source": "ops/deploy/simple-deploy-compose/hermes-deals-household-api.yml",
+        "compose_sha256": "bc78b165b479b1dfcd7bcd12df28d09b649ca68f56d6bfdfa61be280f6e1dad3",
         "liveness_url": "http://127.0.0.1:9128/api/health",
         "readiness_state": "not-applicable",
         "wait_timeout_seconds": 180,
-        "registry_pull_profile": "public-anonymous-pull"
+        "registry_pull_profile": "public-anonymous-pull",
+        "household_configuration_issue": 973
       },
       {
         "target_alias": "hermes-tech-public-rpi5",
@@ -80,7 +81,7 @@
         "consumer_contract_revision": "139fb7046c77e1e58ec4a0876db3dddb96c85cb5",
         "compatibility_prerequisite_pr": 741,
         "compose_source": "ops/deploy/simple-deploy-compose/rozkalns-cv.yml",
-        "compose_sha256": "d4c7e9ed5c36245d92ce7da199194ec032c74de6ea03f2b522e31a43ffaf3277",
+        "compose_sha256": "6f14d9cbe07b2c03c4e9e14172de4318c1e8d591b97dd595dd82aacb38b7f19c",
         "persistent_data_create_host_path": false,
         "liveness_url": "http://127.0.0.1:8088/api/health",
         "readiness_state": "required",
@@ -130,7 +131,17 @@
         "drive_ingest_root_folder_id": "1F0pxqoRgtZl7JQVcyvYVZxKvx6eOnytn",
         "drive_ingest_mutates_drive": false,
         "drive_ingest_requires_separate_live_authority": true,
-        "drive_ingest_image_digest": "sha256:2a80b56c20c37f4a530059c3e438c6627fd962786e6590dd914e59e86a837ba8"
+        "drive_ingest_image_digest": "sha256:2a80b56c20c37f4a530059c3e438c6627fd962786e6590dd914e59e86a837ba8",
+        "publish_request_bridge_contract": "ops/contracts/coloring-pages-publish-request-bridge-v1.json",
+        "publish_request_dispatcher_installed_path": "/usr/local/bin/coloring-pages-publish-request-dispatcher",
+        "publish_request_path_unit": "coloring-pages-publish-request-bridge.path",
+        "publish_request_service_unit": "coloring-pages-publish-request-bridge.service",
+        "publish_request_state_root": "/srv/coloring-pages-content/state/publish-request-bridge",
+        "publish_request_bridge_requires_separate_live_authority": true,
+        "drive_ingest_normal_publish_manifest_source": "publish-request-bridge-inline",
+        "drive_ingest_drive_manifest_legacy_compat": true,
+        "publish_request_inline_manifest": true,
+        "publish_request_media_bytes": false
       }
     ]
   },

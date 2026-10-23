@@ -26,8 +26,8 @@ SOURCE_ROOT = OWNER_HOME / "RPi5_main"
 OPERATOR_REL = "ops/bin/coloring-pages-sitemap-publish"
 GENERATOR_REL = "ops/vendor/coloring-pages-sitemap"
 EXPECTED_BLOBS = {
-    OPERATOR_REL: "0da51ef361f9ce815ebde3e4cc6cae19a2c2ffe8",
-    GENERATOR_REL: "5644c8fd366c0c57f6339fddd163c5091ea134c5",
+    OPERATOR_REL: "7b0330f30e27d6fe9c5f3e4fbf81fc6473ade660",
+    GENERATOR_REL: "49c8ba34cf0a4c4ab100463df9adacc4c6e90c2c",
 }
 SHA = re.compile(r"^[0-9a-f]{40}$")
 MAX_SOURCE_BYTES = 100_000

@@ -1,0 +1,69 @@
+{
+  "schema": "rozkalns.rpi5-main.ausmalwiese-sitemap-source-cutover.v1",
+  "status": "SOURCE_ONLY_NO_LIVE_AUTHORITY",
+  "target_repo": "rozkalnsandris/RPi5_main",
+  "consumer_repo": "rozkalnsandris/coloring-pages",
+  "consumer_pr": 214,
+  "consumer_source_head": "af7ffbdcfb2ddad1247ee4b8ae681562fc1ede38",
+  "origin": "https://ausmalwiese.de",
+  "old_release": {
+    "generator_git_blob": "5644c8fd366c0c57f6339fddd163c5091ea134c5",
+    "publisher_git_blob": "0da51ef361f9ce815ebde3e4cc6cae19a2c2ffe8"
+  },
+  "candidate_release": {
+    "generator_git_blob": "49c8ba34cf0a4c4ab100463df9adacc4c6e90c2c",
+    "publisher_git_blob": "7b0330f30e27d6fe9c5f3e4fbf81fc6473ade660",
+    "drive_ingest_git_blob": "5e12654d4710a822b1259929e8f956d95ce0c576"
+  },
+  "installed_targets": {
+    "publisher": "/usr/local/bin/coloring-pages-sitemap-publish",
+    "generator": "/usr/local/share/coloring-pages/coloring-pages-sitemap",
+    "drive_ingest": "/usr/local/bin/coloring-pages-drive-ingest",
+    "sitemap": "/srv/coloring-pages-content/public/sitemap.xml"
+  },
+  "installation_policy": {
+    "first_install_script": "scripts/install-coloring-pages-sitemap-publisher-v1.py",
+    "first_install_existing_targets": "REJECT_ALWAYS_NO_OVERWRITE",
+    "upgrade_executor_available": false,
+    "upgrade_existing_targets": "SEPARATE_REVIEWED_EXACT_OWNER_LIVE_GATE_REQUIRED",
+    "exact_old_release_preflight": true,
+    "require_clean_exact_main_and_tracked_blobs": true,
+    "require_trusted_installed_file_identity_and_modes": true,
+    "require_quiescent_catalogue_writers_and_shared_lock": true,
+    "require_post_publish_marker_state_verified": true,
+    "require_no_unapproved_staging_or_partial_files": true,
+    "two_file_atomicity": "NOT_AVAILABLE_REQUIRE_ORDERED_FAIL_CLOSED_ROLLOUT",
+    "first_mutation": "CONSUMES_FRESH_OWNER_AUTHORIZATION",
+    "failure": "STOP_NO_RETRY_NO_ROLLBACK_NO_CLEANUP",
+    "auto_install": false,
+    "no_generic_permissions_changes": true
+  },
+  "rollout_gates": [
+    "review_source_PR_214_and_this_PR_without_merging_automatically",
+    "separate_owner_merge_RPi5_main",
+    "separate_owner_LIVE_upgrade_of_pinned_installed_components_with_exact_baselines",
+    "independently_review_current_catalogue_writer_quiescence_and_post_publish_marker",
+    "separate_owner_application_merge_and_deploy_for_coloring_pages_214",
+    "separate_owner_Worker_q_deploy",
+    "separate_owner_LIVE_sitemap_republication_with_catalogue_SHA_and_existing_sitemap_SHA",
+    "public_verify_new_host_self_canonical_and_all_catalogue_sitemap_urls",
+    "only_then_separate_owner_legacy_hostname_scoped_301",
+    "Search_Console_change_of_address_separate_owner_action"
+  ],
+  "exclusions": [
+    "LIVE",
+    "MERGE",
+    "secrets",
+    "permissions",
+    "DNS",
+    "Cloudflare",
+    "host filesystem writes",
+    "content mutation",
+    "retry",
+    "rollback",
+    "cleanup",
+    "automatic installed-binary upgrade",
+    "ingest activation",
+    "sitemap publish"
+  ]
+}

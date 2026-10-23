@@ -90,7 +90,7 @@ def _load_contracts() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
         raise AuditError("contract_shape_invalid")
 
     expected_hosts = selection.get("expected_hostnames")
-    if not isinstance(expected_hosts, list) or len(expected_hosts) != 8:
+    if not isinstance(expected_hosts, list) or not expected_hosts:
         raise AuditError("admin_host_set_invalid")
 
     projection_hosts = [item.get("hostname") for item in projections if isinstance(item, dict)]

@@ -86,12 +86,12 @@ class PublisherTests(unittest.TestCase):
         data = VENDOR_PATH.read_bytes()
         self.assertEqual(mod.generator_blob(data), mod.GENERATOR_GIT_BLOB)
         self.assertEqual(mod.GENERATOR_GIT_BLOB,
-                         "5644c8fd366c0c57f6339fddd163c5091ea134c5")
+                         "5d1d37c32573aa8ac0d91f45b73938638fd183e9")
 
     def test_read_only_preflight_creates_nothing(self):
         result = self.run_check()
         self.assertEqual(result["result"], "CHECK_PASS")
-        self.assertEqual(result["urls"], 4)
+        self.assertEqual(result["urls"], 10)
         self.assertEqual(result["previous_sha256"], "absent")
         self.assertFalse(result["mutation_started"])
         self.assertFalse(self.paths.sitemap.exists())
@@ -102,12 +102,16 @@ class PublisherTests(unittest.TestCase):
         result = self.run_apply(expected_catalog=self.catalog_sha,
                                 expected_prior="absent", verify_http=called.append)
         self.assertEqual(result["result"], "PUBLISH_PASS")
-        self.assertEqual(result["urls"], 4)
+        self.assertEqual(result["urls"], 10)
         self.assertTrue(result["mutation_started"])
         self.assertEqual(called, [self.paths.sitemap.read_bytes()])
         self.assertEqual(stat.S_IMODE(self.paths.sitemap.stat().st_mode), 0o644)
         self.assertFalse(self.paths.stage.exists())
         self.assertIn(b"<urlset", self.paths.sitemap.read_bytes())
+        self.assertIn(b"https://ausmalwiese.de/detail.html?id=1234567", self.paths.sitemap.read_bytes())
+        for route in (b"tiere", b"fahrzeuge", b"alphabet", b"lernen", b"figuren", b"jahreszeiten"):
+            self.assertIn(b"https://ausmalwiese.de/" + route, self.paths.sitemap.read_bytes())
+        self.assertNotIn(b"coloring.rozkalns.net", self.paths.sitemap.read_bytes())
 
     def test_exact_current_is_noop_without_staging(self):
         first = self.run_apply(expected_catalog=self.catalog_sha, expected_prior="absent")
@@ -122,7 +126,7 @@ class PublisherTests(unittest.TestCase):
         self.write_catalogue([record("7777777")])
         second = self.run_apply(expected_catalog=self.catalog_sha,
                                 expected_prior=first["sitemap_sha256"])
-        self.assertEqual(second["urls"], 3)
+        self.assertEqual(second["urls"], 9)
         self.assertNotEqual(second["sitemap_sha256"], first["sitemap_sha256"])
         self.assertIn(b"7777777", self.paths.sitemap.read_bytes())
 

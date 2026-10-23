@@ -64,7 +64,7 @@ class CloudflareP1DOwnerPhoneTests(unittest.TestCase):
             self.registry,
             r"(?m)^\s*owner_phone_posture_required:\s*false\s*$",
         )
-        self.assertRegex(self.registry, r"(?m)^last_reviewed:\s*2026-09-13\s*$")
+        self.assertRegex(self.registry, r"(?m)^last_reviewed:\s*2026-10-21\s*$")
         self.assertFalse(self.contract["selected_for_current_owner_phone_access"])
         self.assertEqual(
             self.contract["superseded_by"],

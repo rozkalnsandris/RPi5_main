@@ -19,6 +19,12 @@ These rules are durable instructions for Codex and every other agent.
 - Never use RDC as a substitute for GitHub to edit repository source, create branches/commits/PRs, inspect GitHub CI/reviews/issues, or perform other GitHub-native work when the connected GitHub tooling supports the required operation.
 - RDC is execution/transport only, never source or authorization authority. Choosing RDC never widens the owner-authorized mutation class, target, protected-data access, retry/rollback/cleanup authority, merge authority, repository-settings authority, or secrets/permissions authority.
 
+
+- **Mandatory per-step rule:** GitHub connected operations and, where equivalent, GitHub Actions must handle source/files/branches/commits/issues/PRs/reviews/CI/continuity. Choosing RDC for convenience, speed or habit is forbidden.
+- **RDC exception preflight:** prove the exact missing GitHub operation and why GitHub-hosted CI cannot perform that step; identify the actual necessary RPi5-local action, freeze the minimal target/operation and verify existing owner authority before any host mutation. Record only public-safe exception evidence and return to GitHub.
+- GitHub permission denial, missing authorization, rate limit, tool failure, timeout or uncertain GitHub write result is **STOP**, not permission for an RDC alternate write, retry, rollback or cleanup.
+- Adopted shared contract: `rozkalnsandris/ops-workflows@4e89b75d7f496dfb43fd9c1eb10a995fad53fdd8`, `docs/GITHUB_FIRST_RDC_FALLBACK_V1.md` and `policy/github-first-rdc-fallback-v1.json`; RPi5 adapter: `docs/GITHUB_FIRST_RDC_ADOPTION_V1.md` and `.github/github-first-rdc-v1.json`. This is normal tool priority, not the distinct `GITHUB-ONLY` deferred-LIVE mode.
+
 ## Forbidden paths and data
 
 Never read, print, copy, or commit `.env` files, secrets, credentials, tokens, cookies, password stores, SSH keys or authorized-key contents, database data/dumps, backups, browser/session data, shell history, Docker volume/runtime data, or raw application configuration. In particular, do not read:

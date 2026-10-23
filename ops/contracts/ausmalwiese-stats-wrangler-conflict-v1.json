@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "status": "SOURCE_ONLY_ONE_TIME_WRANGLER_TAKEOVER_NO_LIVE",
+  "issue": 1052,
+  "repository": "rozkalnsandris/RPi5_main",
+  "worker": "coloring-pages-stats-v1",
+  "wrangler_version": "4.135.0",
+  "source_repo": "rozkalnsandris/coloring-pages",
+  "source_commit": "fd4c434b78445fb3438116b62565fe524ca47ac1",
+  "source_path": "cloudflare/stats-worker.js",
+  "source_blob": "c2ac9da6e0701103e0041b30db7dfbea4298f96c",
+  "config_path": "cloudflare/wrangler.stats-worker.jsonc",
+  "config_blob": "3733263a391274f2b6b0f2023c8656565bde8e1a",
+  "baseline_version": "e47f145f-1851-4917-be5c-387f96549539",
+  "steady_state_strict": true,
+  "takeover_strict": false,
+  "preconditions": [
+    "trusted-normalized-snapshot-only",
+    "latest-equals-single-active-100-percent",
+    "script-api-conflict-source",
+    "exact-compatibility-settings",
+    "exact-d1-and-rate-limit",
+    "required-secret-names-only",
+    "exact-plain-var-set-with-fingerprints",
+    "owner-gate-binds-inventory-sha256"
+  ],
+  "post_upload_gate": [
+    "new-full-version-id",
+    "new-version-is-latest",
+    "old-baseline-remains-active-100-percent",
+    "bindings-and-settings-preserved"
+  ],
+  "actions": {
+    "run_wrangler": false,
+    "cloudflare_request": false,
+    "credential_access": false,
+    "merge": false,
+    "live": false,
+    "retry": false,
+    "rollback": false,
+    "cleanup": false
+  }
+}

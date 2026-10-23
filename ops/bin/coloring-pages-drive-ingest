@@ -41,7 +41,7 @@ PENDING_DIR = "pending"
 
 IMPORTER_IMAGE = "ghcr.io/rozkalnsandris/coloring-pages@sha256:2a80b56c20c37f4a530059c3e438c6627fd962786e6590dd914e59e86a837ba8"
 IMPORTER_ENTRYPOINT = "/usr/local/bin/coloring-pages-import"
-PUBLIC_ORIGIN = "https://coloring.rozkalns.net"
+PUBLIC_ORIGIN = "https://ausmalwiese.de"
 
 ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -100,6 +100,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--id", required=True, dest="page_id")
     parser.add_argument("--expected-sha256")
     parser.add_argument("--expected-size", type=int)
+    parser.add_argument(
+        "--manifest-json",
+        help="validated v1/v2 manifest JSON supplied by the bounded request bridge",
+    )
     parser.add_argument(
         "--expected-page",
         action="append",
@@ -180,6 +184,13 @@ def load_json(path: Path, *, max_bytes: int) -> Any:
             return json.load(handle, object_pairs_hook=strict_object)
     except (UnicodeDecodeError, json.JSONDecodeError):
         fail("JSON is invalid")
+
+
+def parse_inline_manifest(raw: str) -> Any:
+    try:
+        return json.loads(raw, object_pairs_hook=strict_object)
+    except (UnicodeError, json.JSONDecodeError):
+        fail("inline manifest JSON is invalid")
 
 
 def validate_text(value: Any, *, name: str, allow_empty: bool = False) -> str:
@@ -320,6 +331,13 @@ def validate_manifest_v2(
 def validate_cli(args: argparse.Namespace) -> None:
     if not ID_PATTERN.fullmatch(args.page_id):
         fail("id is invalid")
+    if args.manifest_json is not None:
+        try:
+            manifest_bytes = args.manifest_json.encode("utf-8")
+        except UnicodeError:
+            fail("inline manifest encoding is invalid")
+        if not manifest_bytes or len(manifest_bytes) > MAX_MANIFEST_BYTES:
+            fail("inline manifest size is outside the allowed bound")
     if args.expected_page:
         expected_pages_from_args(args)
         return
@@ -853,8 +871,8 @@ SITEMAP_ENABLE_MARKER = Path("/usr/local/share/coloring-pages/post-publish-v1.en
 SITEMAP_GATE_BYTES = b"coloring-pages-sitemap-post-publish-v1\n"
 SITEMAP_PUBLISHER = Path("/usr/local/bin/coloring-pages-sitemap-publish")
 SITEMAP_GENERATOR = Path("/usr/local/share/coloring-pages/coloring-pages-sitemap")
-SITEMAP_OPERATOR_BLOB = "0da51ef361f9ce815ebde3e4cc6cae19a2c2ffe8"
-SITEMAP_GENERATOR_BLOB = "5644c8fd366c0c57f6339fddd163c5091ea134c5"
+SITEMAP_OPERATOR_BLOB = "7b0330f30e27d6fe9c5f3e4fbf81fc6473ade660"
+SITEMAP_GENERATOR_BLOB = "49c8ba34cf0a4c4ab100463df9adacc4c6e90c2c"
 SITEMAP_ROOT_DIRS = (
     Path("/usr/local"),
     Path("/usr/local/bin"),
@@ -975,6 +993,7 @@ def main(argv: list[str] | None = None) -> int:
         expected_pages = expected_pages_from_args(args)
         is_v2 = bool(expected_pages)
         manifest_name = f"{page_id}.json"
+        inline_manifest = args.manifest_json is not None
         manifest_remote = f"{PENDING_DIR}/{manifest_name}"
         manifest_partial = INGEST_STATE / f"{page_id}.manifest.partial"
         manifest_final = INGEST_STATE / f"{page_id}.manifest.json"
@@ -1039,18 +1058,23 @@ def main(argv: list[str] | None = None) -> int:
             if any(entry.get("id") == page_id for entry in catalog_entries()):
                 fail("catalog id already exists")
 
-            list_pending_once([*page_names, manifest_name])
-
-            secure_stream(
-                manifest_remote,
-                manifest_partial,
-                owner_uid=owner_uid,
-                owner_gid=owner_gid,
+            list_pending_once(
+                [*page_names] if inline_manifest else [*page_names, manifest_name]
             )
-            manifest_st = manifest_partial.lstat()
-            if manifest_st.st_size > MAX_MANIFEST_BYTES:
-                fail("manifest exceeds the allowed size")
-            raw_manifest = load_json(manifest_partial, max_bytes=MAX_MANIFEST_BYTES)
+
+            if inline_manifest:
+                raw_manifest = parse_inline_manifest(args.manifest_json)
+            else:
+                secure_stream(
+                    manifest_remote,
+                    manifest_partial,
+                    owner_uid=owner_uid,
+                    owner_gid=owner_gid,
+                )
+                manifest_st = manifest_partial.lstat()
+                if manifest_st.st_size > MAX_MANIFEST_BYTES:
+                    fail("manifest exceeds the allowed size")
+                raw_manifest = load_json(manifest_partial, max_bytes=MAX_MANIFEST_BYTES)
             if is_v2:
                 metadata = validate_manifest_v2(
                     raw_manifest,
@@ -1063,6 +1087,14 @@ def main(argv: list[str] | None = None) -> int:
                     expected_id=page_id,
                     expected_sha256=args.expected_sha256,
                     expected_size=args.expected_size,
+                )
+
+            if inline_manifest:
+                write_json_exclusive(
+                    manifest_partial,
+                    raw_manifest,
+                    owner_uid=owner_uid,
+                    owner_gid=owner_gid,
                 )
 
             for position, (page_name, partial) in enumerate(
@@ -1120,14 +1152,25 @@ def main(argv: list[str] | None = None) -> int:
                         for key, value in metadata.items()
                         if key != "pages"
                     },
-                    "drive": {
-                        "remote": RCLONE_REMOTE,
-                        "root_folder_id": DRIVE_ROOT_FOLDER_ID,
-                        "page_paths": [
-                            f"{PENDING_DIR}/{name}" for name in page_names
-                        ],
-                        "manifest_path": manifest_remote,
-                    },
+                    "drive": (
+                        {
+                            "remote": RCLONE_REMOTE,
+                            "root_folder_id": DRIVE_ROOT_FOLDER_ID,
+                            "page_paths": [
+                                f"{PENDING_DIR}/{name}" for name in page_names
+                            ],
+                            "manifest_source": "request-bridge",
+                        }
+                        if inline_manifest
+                        else {
+                            "remote": RCLONE_REMOTE,
+                            "root_folder_id": DRIVE_ROOT_FOLDER_ID,
+                            "page_paths": [
+                                f"{PENDING_DIR}/{name}" for name in page_names
+                            ],
+                            "manifest_path": manifest_remote,
+                        }
+                    ),
                     "importer_image": IMPORTER_IMAGE,
                     "verified_urls": urls,
                     "verified_at": datetime.now(timezone.utc).isoformat(),
@@ -1145,12 +1188,21 @@ def main(argv: list[str] | None = None) -> int:
                     "sha256": args.expected_sha256,
                     "size_bytes": args.expected_size,
                     "metadata": metadata,
-                    "drive": {
-                        "remote": RCLONE_REMOTE,
-                        "root_folder_id": DRIVE_ROOT_FOLDER_ID,
-                        "image_path": f"{PENDING_DIR}/{page_names[0]}",
-                        "manifest_path": manifest_remote,
-                    },
+                    "drive": (
+                        {
+                            "remote": RCLONE_REMOTE,
+                            "root_folder_id": DRIVE_ROOT_FOLDER_ID,
+                            "image_path": f"{PENDING_DIR}/{page_names[0]}",
+                            "manifest_source": "request-bridge",
+                        }
+                        if inline_manifest
+                        else {
+                            "remote": RCLONE_REMOTE,
+                            "root_folder_id": DRIVE_ROOT_FOLDER_ID,
+                            "image_path": f"{PENDING_DIR}/{page_names[0]}",
+                            "manifest_path": manifest_remote,
+                        }
+                    ),
                     "importer_image": IMPORTER_IMAGE,
                     "verified_urls": urls,
                     "verified_at": datetime.now(timezone.utc).isoformat(),

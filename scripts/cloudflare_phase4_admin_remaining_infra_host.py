@@ -158,7 +158,7 @@ def _validate_contracts(
         for item in targets
         if isinstance(item, dict)
     }
-    if set(projected) != set(target_map) or len(projected) != 8:
+    if not projected or set(projected) != set(target_map):
         raise VerifyError("host_target_set_mismatch")
 
     for service_id, target in target_map.items():
