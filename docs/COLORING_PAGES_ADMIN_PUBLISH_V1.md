@@ -5,7 +5,7 @@ Issue: RPi5_main #1149.
 ## Owner workflow
 
 1. ChatGPT creates approved coloring-page PNG drafts and packages them into one ZIP.
-2. The owner opens the protected Ausmalwiese ADMIN page. The admin interface is Latvian, uses the same Baloo 2/Nunito typography as the public Statistics/Traffic dashboards, and provides one header navigation containing Pārskats, Pievienot, Katalogs, Arhīvs, Aktivitāte, Statistics and Traffic. Below 1200px, the same navigation opens with the Izvēlne button; Escape or choosing a link closes it. The active admin section remains highlighted, including Katalogs while editing.
+2. The owner opens the protected Ausmalwiese ADMIN page. The admin interface is Latvian, uses the same Baloo 2/Nunito typography as the public Statistics/Traffic dashboards, and provides one header navigation containing Pārskats, Pievienot, Katalogs, Arhīvs, Aktivitāte, Statistika and Apmeklējums. Below 1200px, the same navigation opens with the Izvēlne button; Escape or choosing a link closes it. The active admin section remains highlighted, including Katalogs while editing.
 3. Open **Pievienot**, upload the ZIP and inspect the private previews/titles.
 4. The owner explicitly chooses one canonical category.
 5. Press **Sākt publicēšanu**.
@@ -26,8 +26,10 @@ The protected single HTML document provides separate addressable screens. Hash r
 | `/#edit/<encoded-id>` | Dedicated editor with thumbnail, metadata form and public-page link |
 | `/#archive` | Restore and existing guarded permanent-delete actions |
 | `/#activity` | Seven-day activity log |
+| `/#stats` | Engagement, QR, campaign counters and page rankings |
+| `/#traffic` | Traffic, Instagram attribution, views and crawler summaries |
 
-All screens retain the same Admin / Statistics / Traffic header, public-site link, Nunito body text and Baloo 2 display typography. The internal section navigation remains separate from the cross-dashboard header. The layout takes inspiration from [Tabler](https://tabler.io/) task navigation and compact content lists; no template code, Bootstrap dependency or new runtime asset is added.
+All screens use one admin navigation, public-site link, Nunito body text and Baloo 2 display typography. Statistics and traffic are native hash routes in this same shell. The layout takes inspiration from [Tabler](https://tabler.io/) task navigation and compact content lists; no template code, Bootstrap dependency or new runtime asset is added.
 
 Search/category/page state and staged upload titles survive section changes within the document. Browser back/forward and direct editor links select the correct screen. Leaving a dirty editor requires confirmation; leaving/reloading the document also warns about an unsubmitted upload or active publication. An active job is linked from every screen and retains the existing reload recovery/polling flow.
 
@@ -311,3 +313,69 @@ before replacing HTML unless the extended files and served hashes already
 match. Full mode verifies all four font responses after readiness. The deploy
 wrapper budget is 90 seconds to accommodate the two additional bounded downloads.
 Source merge alone does not deploy this change.
+
+
+
+## Native analytics in the admin shell (#1190)
+
+The protected admin UI now includes `#stats` (Statistika) and `#traffic`
+(Apmeklējums) alongside the existing routes. Every screen uses the same header,
+Latvian text and self-hosted Latin/Latin Extended fonts. The root reserves a
+stable scrollbar gutter, with an always-visible scrollbar fallback, so the empty
+archive does not shift navigation relative to the longer catalog.
+
+The native dashboards preserve engagement/QR counters, Dortmund campaign funnel,
+Popular/Trending, traffic/views, Instagram 7/30-day attribution, crawler summaries,
+and searchable/sortable page tables with 20-row pagination. Data is loaded only
+when opening an analytics route; Refresh obtains a new snapshot. Public page
+links open separately, keeping the admin route available. Missing capabilities
+show a dash. Failed core reads hide the old snapshot; optional campaign/traffic
+failures keep available counters and explicitly mark unavailable data.
+
+### Fixed read-only adapter
+
+The existing admin service reads only these exact upstream aggregate endpoints
+on `https://ausmalwiese.de`, using the descriptive `Ausmalwiese-Admin/1.0` agent:
+
+| Admin endpoint | Upstream |
+| --- | --- |
+| `/api/analytics/overview` | `/api/stats/overview` |
+| `/api/analytics/traffic?days=7` | `/api/stats/traffic?days=7` |
+| `/api/analytics/campaigns?days=7` | `/api/stats/campaigns?days=7` |
+| `/api/analytics/campaigns?days=30` | `/api/stats/campaigns?days=30` |
+
+No arbitrary query, URL, method, incoming credential or cookie is forwarded.
+Redirects are refused; each upstream read has a 10-second socket timeout and a
+4 MiB response ceiling. Only successful JSON with the expected top-level shape
+is returned. Errors are sanitized to a 502 response, and admin responses remain
+`no-store`. Browser reads time out after 15 seconds. The CSP remains same-origin
+for scripts and API connections. There is no analytics database or tracking
+write in the admin application, and no Worker/D1, Access, DNS or Tunnel change.
+Existing Access protection for the admin host remains the deployment boundary.
+Existing public dashboard URLs remain compatible.
+
+UI and metric semantics were adapted from `rozkalnsandris/coloring-pages` at
+`a910b39a7a8617c1589069a12b0c7c2243b26543` (`stats.html`, `traffic.html`,
+`js/stats-admin.js`, `js/traffic-admin.js`, `css/app.css`). The visitor-tracking
+client `js/stats.js` is deliberately not included.
+
+### Rollout and verification
+
+The first release of this integration requires the existing **full admin
+installer**, including the backend update and its single service restart, under
+separate exact owner LIVE authorization. `ui-only` refuses an old backend before
+writing HTML by checking `/api/analytics/capabilities` version 1/read-only true.
+A source merge does not perform this rollout.
+
+After an authorized deployment, verify the exact installed HTML/backend source,
+service health, capabilities and all four read-only endpoints, then open both
+analytics hash routes in the authenticated browser. Compare catalog/archive
+header coordinates and desktop/mobile navigation. Do not change Access policy or
+copy credentials if an upstream read is unavailable; surface the bounded error
+and preserve the existing protection.
+
+Offline validation: `python3 tests/test-coloring-pages-admin-publish-v1.py`
+(includes both Node behavioral suites). Tests cover fixed request destinations,
+query rejection, redirect refusal, size/schema/error bounds, lazy/deep navigation,
+dirty-edit guards, search/pagination, missing capabilities, text-only rendering
+of untrusted labels, and stale-data hiding after a failed refresh.

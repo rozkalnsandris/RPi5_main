@@ -64,9 +64,11 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
   h.ids.navToggle.onclick();h.ids.primaryNav.onclick({target:{closest:()=>({})}});
   assert.equal(h.ids.navToggle.attrs["aria-expanded"],"false");
   h.ids.navToggle.onclick();h.go("catalog");assert.equal(h.ids.primaryNav.dataset.open,"false");
-  for(const page of ["overview","upload","catalog","archive","activity"]){
+  const opened=[];h.s.window.AdminAnalytics={open:page=>opened.push(page)};
+  for(const page of ["overview","upload","catalog","archive","activity","stats","traffic"]){
     h.go(page);assert.deepEqual(h.pages.filter(x=>!x.hidden).map(x=>x.dataset.page),[page]);
     assert.equal(h.navs.find(x=>x.dataset.nav===page).attrs["aria-current"],"page");
+    assert.equal(opened.at(-1),page);
   }
   h.go("catalog");assert.equal(h.ids.catalogGrid.children.length,24);
   h.ids.catalogNext.onclick();assert.equal(h.ids.catalogPageStatus.textContent,"2 / 3");assert.equal(h.ids.catalogGrid.children.length,24);
@@ -78,6 +80,8 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
   h.go("edit/0000001");assert.equal(h.ids.editTitle.value,"Page 1");assert.equal(h.layout.hidden,false);
   assert.equal(h.navs.find(x=>x.dataset.nav==="catalog").attrs["aria-current"],"page");
   h.ids.editTitle.value="Unsaved";
+  const analyticsOpens=opened.length;
+  h.go("stats");assert.equal(h.s.location.hash,"#edit/0000001");assert.equal(opened.length,analyticsOpens);
   h.go("archive");assert.equal(h.s.location.hash,"#edit/0000001");assert.equal(h.ids.editTitle.value,"Unsaved");
   h.state.confirm=true;h.go("archive");assert.equal(h.s.currentRoute,"archive");
   h.go("edit/does-not-exist");assert.equal(h.layout.hidden,true);assert.equal(h.ids.editMissing.hidden,false);

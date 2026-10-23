@@ -140,6 +140,103 @@ button:disabled{opacity:.55;cursor:not-allowed}
 }
 @media(max-width:360px){.brand{font-size:21px;gap:6px}.nav-toggle{padding-inline:10px}.header-inner{gap:0 8px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+.stats-status { min-height: 22px; font-size: 13px; }
+.stats-summary { padding: 0 0 28px; background: transparent; }
+.stats-kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.traffic-kpi-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.stats-kpi {
+  display: flex; align-items: center; gap: 14px; min-width: 0; padding: 20px;
+  border: 1px solid var(--line); border-radius: 20px; background: #fff; box-shadow: var(--shadow);
+}
+.stats-kpi-icon {
+  display: grid; place-items: center; flex: 0 0 48px; width: 48px; height: 48px;
+  border-radius: 15px; background: #edf6ff; font-size: 24px;
+}
+.stats-kpi:nth-child(2) .stats-kpi-icon { background: #fff0f4; color: #c44161; }
+.stats-kpi:nth-child(3) .stats-kpi-icon { background: #fff7e7; }
+.stats-kpi:nth-child(4) .stats-kpi-icon { background: #eefaf2; }
+.stats-kpi div { min-width: 0; }
+.stats-kpi-label { display: block; color: var(--muted); font-size: 12px; font-weight: 800; }
+.stats-kpi strong { display: block; margin-top: 2px; font-family: var(--font-display); font-size: 31px; line-height: 1.1; }
+.stats-rankings { padding: 4px 0 32px; background: transparent; }
+.stats-rankings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.stats-panel, .stats-all .container {
+  border: 1px solid var(--line); border-radius: 20px; background: #fff; box-shadow: var(--shadow);
+}
+.stats-panel { padding: 24px; }
+.stats-panel-heading, .stats-table-heading {
+  display: flex; align-items: end; justify-content: space-between; gap: 18px; margin-bottom: 18px;
+}
+.stats-panel h2, .stats-table-heading h2 {
+  margin: 3px 0 0; font-family: var(--font-display); font-size: 27px; line-height: 1.15;
+}
+.stats-panel-caption { color: var(--muted); font-size: 12px; font-weight: 800; white-space: normal; }
+.stats-top-list { list-style: none; margin: 0; padding: 0; }
+.stats-top-item {
+  display: grid; grid-template-columns: 30px 88px minmax(0, 1fr) auto; align-items: center;
+  gap: 12px; min-height: 104px; padding: 9px 0; border-top: 1px solid var(--line);
+}
+.stats-top-item:first-child { border-top: 0; }
+.stats-top-rank {
+  display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px;
+  background: #eef5ff; color: var(--blue-deep); font-size: 12px; font-weight: 900;
+}
+.stats-top-thumb {
+  box-sizing: border-box; width: 88px; height: 88px; padding: 4px;
+  border: 1px solid var(--line); border-radius: 14px;
+  object-fit: contain; object-position: center; background: #fff;
+}
+.stats-top-copy { min-width: 0; }
+.stats-top-copy a { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 800; text-decoration: none; }
+.stats-top-copy a:hover { color: var(--blue-deep); text-decoration: underline; text-underline-offset: 3px; }
+.stats-top-copy span { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.stats-top-metric { color: var(--text); font-size: 14px; white-space: nowrap; }
+.stats-all { padding: 0 0 48px; background: transparent; }
+.stats-all .container { padding: 24px; }
+.stats-controls { display: flex; align-items: center; gap: 10px; }
+.stats-search input, .stats-sort-label select {
+  min-height: 42px; border: 1px solid #cfdaea; border-radius: 12px; background: #fff; color: var(--text);
+  font: inherit; font-size: 14px; font-weight: 700; outline: none;
+}
+.stats-search input { width: min(260px, 46vw); padding: 9px 13px; }
+.stats-sort-label select { padding: 9px 34px 9px 12px; }
+.stats-search input:focus, .stats-sort-label select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgb(20 116 212 / 12%); }
+.stats-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 16px; }
+.stats-table { width: 100%; border-collapse: collapse; background: #fff; }
+.stats-table th, .stats-table td { padding: 13px 15px; border-bottom: 1px solid var(--line); text-align: left; }
+.stats-table th {
+  background: transparent; color: #60718d; font-size: 11px; font-weight: 900; letter-spacing: .05em; text-transform: uppercase;
+}
+.stats-table tbody tr:last-child td { border-bottom: 0; }
+.stats-table tbody tr:hover { background: #fbfdff; }
+.stats-number { text-align: right !important; font-variant-numeric: tabular-nums; font-weight: 800; }
+.stats-page-cell { display: flex; align-items: center; gap: 12px; min-width: 240px; }
+.stats-page-cell img {
+  box-sizing: border-box; flex: 0 0 56px; width: 56px; height: 56px; padding: 3px;
+  border: 1px solid var(--line); border-radius: 10px;
+  object-fit: contain; object-position: center; background: #fff;
+}
+.stats-page-cell a { font-weight: 800; text-decoration: none; }
+.stats-page-cell a:hover { color: var(--blue-deep); text-decoration: underline; text-underline-offset: 3px; }
+.stats-empty { margin: 16px 0 0; color: var(--muted); font-weight: 700; }
+.stats-note { margin: 16px 2px 0; color: var(--muted); font-size: 12px; font-weight: 700; }
+
+
+/* Reserve the same scrollbar space on empty and long routes. */
+html{overflow-y:scroll}
+@supports(scrollbar-gutter:stable){html{overflow-y:auto;scrollbar-gutter:stable}}
+.analytics-toolbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:22px}
+.stats-status{color:var(--muted);margin:0}
+.stats-panel{min-width:0}
+.stats-panel-kicker{font-size:12px;font-weight:800;color:var(--blue-deep);letter-spacing:.08em;text-transform:uppercase}
+.stats-panel-heading{flex-wrap:wrap}
+.stats-panel-caption{white-space:normal}
+.stats-table td{overflow-wrap:anywhere}
+.gallery-actions{display:flex;justify-content:center;margin-top:18px}
+@media(max-width:1100px){.traffic-kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:900px){.stats-kpi-grid,.traffic-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.stats-rankings-grid{grid-template-columns:1fr}.stats-table-heading{align-items:stretch;flex-direction:column}.stats-controls{width:100%}.stats-search{flex:1}.stats-search input{width:100%}}
+@media(max-width:620px){.stats-kpi-grid{grid-template-columns:1fr;gap:12px}.stats-kpi,.stats-panel,.stats-all .container{padding:16px}.stats-panel-heading{align-items:start;flex-direction:column;gap:5px}.stats-top-item{grid-template-columns:24px 56px minmax(0,1fr) auto;gap:8px;min-height:72px}.stats-top-thumb{width:56px;height:56px}.stats-top-metric{font-size:12px}.stats-controls{align-items:stretch;flex-direction:column}.stats-search input,.stats-sort-label select{width:100%}.stats-sort-label select{display:block}.stats-table-wrap{max-width:100%}.analytics-toolbar{align-items:start}.analytics-toolbar .secondary{flex-shrink:0}}
+
 </style>
 </head>
 <body>
@@ -157,8 +254,8 @@ button:disabled{opacity:.55;cursor:not-allowed}
       <a href="#catalog" data-nav="catalog">Katalogs</a>
       <a href="#archive" data-nav="archive">Arhīvs</a>
       <a href="#activity" data-nav="activity">Aktivitāte</a>
-      <a href="https://ausmalwiese.de/stats.html">Statistics</a>
-      <a href="https://ausmalwiese.de/traffic.html">Traffic</a>
+      <a href="#stats" data-nav="stats">Statistika</a>
+      <a href="#traffic" data-nav="traffic">Apmeklējums</a>
       <a class="outline-link admin-home-link" href="https://ausmalwiese.de/"><span aria-hidden="true">↗</span> Atvērt vietni</a>
     </nav>
   </div>
@@ -188,7 +285,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
       <a class="overview-card" href="#archive"><span class="overview-icon mint" aria-hidden="true">↶</span><span class="panel-kicker">Sakārtošana</span><h2>Arhīvs</h2><strong id="overviewArchive">—</strong><p>arhīva ieraksti</p><span class="card-link">Pārvaldīt arhīvu →</span></a>
       <a class="overview-card" href="#activity"><span class="overview-icon peach" aria-hidden="true">≡</span><span class="panel-kicker">Vēsture</span><h2>Aktivitāte</h2><p>Publicēšanas un kataloga izmaiņu žurnāls par pēdējām 7 dienām.</p><span class="card-link">Skatīt notikumus →</span></a>
     </div>
-    <div class="overview-footer"><div><h2>Vietnes rezultāti</h2><p>Apskati drukāšanu, reakcijas un apmeklējumu.</p></div><div class="catalog-actions"><a class="secondary" href="https://ausmalwiese.de/stats.html">Statistics ↗</a><a class="secondary" href="https://ausmalwiese.de/traffic.html">Traffic ↗</a></div></div>
+    <div class="overview-footer"><div><h2>Vietnes rezultāti</h2><p>Apskati drukāšanu, reakcijas un apmeklējumu.</p></div><div class="catalog-actions"><a class="secondary" href="#stats">Statistika →</a><a class="secondary" href="#traffic">Apmeklējums →</a></div></div>
   </section>
   <div data-page="upload" hidden>
   <section class="workflow" aria-label="Sagatavošana">
@@ -298,6 +395,255 @@ button:disabled{opacity:.55;cursor:not-allowed}
   </form>
   </div>
 </section>
+<section class="analytics-page" data-page="stats" aria-labelledby="admin-title" hidden>
+<div class="container analytics-toolbar"><p class="stats-status" data-stats-status role="status">Dati vēl nav ielādēti.</p><button class="secondary" data-stats-refresh type="button">↻ Atjaunot</button></div>
+<div data-analytics-content="stats" hidden>
+<section class="stats-summary" aria-label="Kopsavilkums">
+      <div class="container stats-kpi-grid">
+        <article class="stats-kpi">
+          <span class="stats-kpi-icon" aria-hidden="true">🖨️</span>
+          <div><span class="stats-kpi-label">Drukāšanas darbības kopā</span><strong data-stats-total-prints>–</strong></div>
+        </article>
+        <article class="stats-kpi">
+          <span class="stats-kpi-icon" aria-hidden="true">♥</span>
+          <div><span class="stats-kpi-label">Reakcijas kopā</span><strong data-stats-total-likes>–</strong></div>
+        </article>
+        <article class="stats-kpi">
+          <span class="stats-kpi-icon" aria-hidden="true">🔥</span>
+          <div><span class="stats-kpi-label">Drukāšana pēdējās 7 dienās</span><strong data-stats-recent-prints>–</strong></div>
+        </article>
+        <article class="stats-kpi">
+          <span class="stats-kpi-icon" aria-hidden="true">🖍️</span>
+          <div><span class="stats-kpi-label">Publicētās lapas</span><strong data-stats-published-pages>–</strong></div>
+        </article>
+        <article class="stats-kpi">
+          <span class="stats-kpi-icon" aria-hidden="true">▦</span>
+          <div><span class="stats-kpi-label">Drukātā QR apmeklējumi · kopā</span><strong data-stats-qr-total>–</strong></div>
+        </article>
+        <article class="stats-kpi">
+          <span class="stats-kpi-icon" aria-hidden="true">↪</span>
+          <div><span class="stats-kpi-label">Drukātā QR apmeklējumi · 7 dienas</span><strong data-stats-qr-recent>–</strong></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="stats-summary" aria-labelledby="kita-pilot-title">
+      <div class="container">
+        <div class="stats-table-heading">
+          <div>
+            <span class="stats-panel-kicker">30 dienas</span>
+            <h2 id="kita-pilot-title">Bērnudārzu pilots · Dortmund 01</h2>
+          </div>
+        </div>
+        <div class="stats-kpi-grid">
+          <article class="stats-kpi"><span class="stats-kpi-icon" aria-hidden="true">✉️</span><div><span class="stats-kpi-label">Ierašanās vietnē</span><strong data-stats-kita-landing>–</strong></div></article>
+          <article class="stats-kpi"><span class="stats-kpi-icon" aria-hidden="true">↪</span><div><span class="stats-kpi-label">Kataloga atvēršanas</span><strong data-stats-kita-catalog>–</strong></div></article>
+          <article class="stats-kpi"><span class="stats-kpi-icon" aria-hidden="true">👁️</span><div><span class="stats-kpi-label">Lapu skatījumi</span><strong data-stats-kita-detail>–</strong></div></article>
+          <article class="stats-kpi"><span class="stats-kpi-icon" aria-hidden="true">🖨️</span><div><span class="stats-kpi-label">Drukāšanas darbības</span><strong data-stats-kita-prints>–</strong></div></article>
+        </div>
+        <p class="stats-note" data-stats-kita-note>Kampaņas <code>dortmund-01</code> darbību skaits, nevis unikāli bērnudārzi. Drukāšana apzīmē pogas nospiešanu.</p>
+      </div>
+    </section>
+
+    <section class="stats-rankings" aria-label="Populārākās lapas">
+      <div class="container stats-rankings-grid">
+        <article class="stats-panel">
+          <div class="stats-panel-heading">
+            <div><span class="stats-panel-kicker">Viss periods</span><h2>⭐ Populārākās · TOP 10</h2></div>
+            <span class="stats-panel-caption">Pēc drukāšanas darbībām</span>
+          </div>
+          <ol class="stats-top-list" data-stats-popular></ol>
+          <p class="stats-empty" data-stats-popular-empty hidden>Vēl nav drukāšanas darbību.</p>
+        </article>
+
+        <article class="stats-panel">
+          <div class="stats-panel-heading">
+            <div><span class="stats-panel-kicker">7 dienas</span><h2>🔥 Aktuālās · TOP 10</h2></div>
+            <span class="stats-panel-caption">Drukāšana pēdējās 7 dienās</span>
+          </div>
+          <ol class="stats-top-list" data-stats-trending></ol>
+          <p class="stats-empty" data-stats-trending-empty hidden>Šajā periodā vēl nav drukāšanas darbību.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="stats-all" aria-labelledby="stats-all-title">
+      <div class="container">
+        <div class="stats-table-heading">
+          <div>
+            <span class="stats-panel-kicker">Katalogs</span>
+            <h2 id="stats-all-title">Visas krāsojamās lapas</h2>
+          </div>
+          <div class="stats-controls">
+            <label class="stats-search">
+              <span class="sr-only">Meklēt krāsojamās lapas</span>
+              <input type="search" placeholder="Meklēt krāsojamās lapas …" data-stats-search>
+            </label>
+            <label class="stats-sort-label">
+              <span class="sr-only">Kārtot</span>
+              <select data-stats-sort>
+                <option value="prints">Drukāšana kopā</option>
+                <option value="recent">Drukāšana pēdējās 7 dienās</option>
+                <option value="likes">Reakcijas</option>
+                <option value="title">Nosaukums A–Z</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div class="stats-table-wrap">
+          <table id="stats-catalog-table" class="stats-table">
+            <thead>
+              <tr>
+                <th scope="col">Krāsojamā lapa</th>
+                <th scope="col">Kategorija</th>
+                <th scope="col" class="stats-number">Drukāšana</th>
+                <th scope="col" class="stats-number">Drukāšana · 7 dienas</th>
+                <th scope="col" class="stats-number">Reakcijas</th>
+              </tr>
+            </thead>
+            <tbody data-stats-table></tbody>
+          </table>
+        </div>
+        <div class="gallery-actions">
+          <button class="secondary" type="button" data-stats-load-more aria-controls="stats-catalog-table" hidden>
+            Rādīt vairāk <span aria-hidden="true">↓</span>
+          </button>
+        </div>
+        <p class="stats-empty" data-stats-table-empty hidden>Neviena lapa neatbilst meklētajam.</p>
+        <p class="stats-note">Drukāšanas skaits apzīmē klikšķus uz pogas “A4 drucken”, nevis fiziski izdrukātas lapas.</p>
+      </div>
+    </section>
+  
+</div></section>
+<section class="analytics-page" data-page="traffic" aria-labelledby="admin-title" hidden>
+<div class="container analytics-toolbar"><p class="stats-status" data-traffic-page-status role="status">Dati vēl nav ielādēti.</p><button class="secondary" data-traffic-refresh type="button">↻ Atjaunot</button></div>
+<div data-analytics-content="traffic" hidden>
+<section class="stats-summary" aria-label="Apmeklējumu kopsavilkums">
+      <div class="container stats-kpi-grid traffic-kpi-grid">
+        <article class="stats-kpi">
+          <span class="stats-kpi-icon" aria-hidden="true">👤</span>
+          <div><span class="stats-kpi-label" data-stats-unique-visitors-label>Aptuvenie unikālie apmeklētāji · pēdējā diena</span><strong data-stats-unique-visitors>–</strong></div>
+        </article>
+        <article class="stats-kpi">
+          <span class="stats-kpi-icon" aria-hidden="true">↪</span>
+          <div><span class="stats-kpi-label">Vietnes apmeklējumi · 7 dienas <span aria-hidden="true">·</span> nav unikālu cilvēku skaits</span><strong data-stats-visits>–</strong></div>
+        </article>
+        <article class="stats-kpi">
+          <span class="stats-kpi-icon" aria-hidden="true">👁️</span>
+          <div><span class="stats-kpi-label">Lapu skatījumi kopā</span><strong data-stats-total-views>–</strong></div>
+        </article>
+        <article class="stats-kpi">
+          <span class="stats-kpi-icon" aria-hidden="true">📅</span>
+          <div><span class="stats-kpi-label">Lapu skatījumi · 7 dienas</span><strong data-stats-recent-views>–</strong></div>
+        </article>
+        <article class="stats-kpi">
+          <span class="stats-kpi-icon" aria-hidden="true">🤖</span>
+          <div><span class="stats-kpi-label">Robotu pieprasījumi · 7 dienas</span><strong data-stats-crawler-requests>–</strong></div>
+        </article>
+      </div>
+      <div class="container">
+        <p class="stats-note" data-traffic-visits-note>Unikālie apmeklētāji ir aptuvens dienas unikālo IP adrešu skaits. Apmeklējumi nav unikāli cilvēki. Robotu pieprasījumi ir atsevišķs rādītājs; tos nedrīkst atņemt no apmeklējumiem.</p>
+      </div>
+    </section>
+
+    <section class="stats-summary" aria-labelledby="instagram-title">
+      <div class="container">
+        <div class="stats-table-heading">
+          <div><span class="stats-panel-kicker">Ierašanās avots · UTM</span><h2 id="instagram-title">Ierašanās no Instagram</h2></div>
+        </div>
+        <div class="stats-kpi-grid">
+          <article class="stats-kpi"><div><span class="stats-kpi-label">Instagram · 7 dienas</span><strong data-instagram-7>–</strong></div></article>
+          <article class="stats-kpi"><div><span class="stats-kpi-label">Instagram · 30 dienas</span><strong data-instagram-30>–</strong></div></article>
+          <article class="stats-kpi"><div><span class="stats-kpi-label">Profils · 30 dienas</span><strong data-instagram-profile>–</strong></div></article>
+          <article class="stats-kpi"><div><span class="stats-kpi-label">Stāsti · 30 dienas</span><strong data-instagram-story>–</strong></div></article>
+          <article class="stats-kpi"><div><span class="stats-kpi-label">Rullīši · 30 dienas</span><strong data-instagram-reel>–</strong></div></article>
+        </div>
+        <p class="stats-note" data-instagram-note aria-live="polite">Ielādē Instagram datus. Tās ir ierašanās darbības, nevis unikāli cilvēki.</p>
+      </div>
+    </section>
+
+    <section class="stats-rankings" aria-label="Apmeklējumi un roboti">
+      <div class="container stats-rankings-grid">
+        <article class="stats-panel">
+          <div class="stats-panel-heading">
+            <div><span class="stats-panel-kicker">7 dienas</span><h2>👁 Skatītākās · TOP 10</h2></div>
+            <span class="stats-panel-caption">Krāsojamo lapu skatījumi</span>
+          </div>
+          <ol class="stats-top-list" data-stats-viewed></ol>
+          <p class="stats-empty" data-stats-viewed-empty hidden>Vēl nav lapu skatījumu.</p>
+        </article>
+
+        <article class="stats-panel">
+          <div class="stats-panel-heading">
+            <div><span class="stats-panel-kicker">7 dienas</span><h2>🤖 Roboti</h2></div>
+            <span class="stats-panel-caption" data-traffic-status>Pēc User-Agent nosaukuma</span>
+          </div>
+          <div class="stats-table-wrap">
+            <table class="stats-table">
+              <thead>
+                <tr>
+                  <th scope="col">Robots</th>
+                  <th scope="col" class="stats-number">Pieprasījumi</th>
+                  <th scope="col">Biežākie ceļi</th>
+                </tr>
+              </thead>
+              <tbody data-stats-crawlers></tbody>
+            </table>
+          </div>
+          <p class="stats-empty" data-stats-crawlers-empty hidden>Šajā periodā nav robotu pieprasījumu.</p>
+          <p class="stats-note">Robotu nosaukumi noteikti pēc User-Agent; tas neapliecina robota identitāti. Ceļos nav URL vaicājuma parametru.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="stats-all" aria-labelledby="traffic-all-title">
+      <div class="container">
+        <div class="stats-table-heading">
+          <div>
+            <span class="stats-panel-kicker">Lapu skatījumi</span>
+            <h2 id="traffic-all-title">Skatījumi pa lapām</h2>
+          </div>
+          <div class="stats-controls">
+            <label class="stats-search">
+              <span class="sr-only">Meklēt krāsojamās lapas</span>
+              <input type="search" placeholder="Meklēt krāsojamās lapas …" data-traffic-search>
+            </label>
+            <label class="stats-sort-label">
+              <span class="sr-only">Kārtot</span>
+              <select data-traffic-sort>
+                <option value="recentViews">Skatījumi · 7 dienas</option>
+                <option value="views">Skatījumi kopā</option>
+                <option value="title">Nosaukums A–Z</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div class="stats-table-wrap">
+          <table id="traffic-catalog-table" class="stats-table">
+            <thead>
+              <tr>
+                <th scope="col">Krāsojamā lapa</th>
+                <th scope="col">Kategorija</th>
+                <th scope="col" class="stats-number">Skatījumi kopā</th>
+                <th scope="col" class="stats-number">Skatījumi · 7 dienas</th>
+              </tr>
+            </thead>
+            <tbody data-traffic-table></tbody>
+          </table>
+        </div>
+        <div class="gallery-actions">
+          <button class="secondary" type="button" data-traffic-load-more aria-controls="traffic-catalog-table" hidden>
+            Rādīt vairāk <span aria-hidden="true">↓</span>
+          </button>
+        </div>
+        <p class="stats-empty" data-traffic-table-empty hidden>Neviena lapa neatbilst meklētajam.</p>
+        <p class="stats-note">Šis panelis nenosaka precīzu cilvēku skaitu. Unikālo apmeklētāju novērtējums balstās dienas unikālajās IP adresēs; vietnes apmeklējumi ir atsevišķs Cloudflare rādītājs, kas var balstīties izlasē.</p>
+      </div>
+    </section>
+  
+</div></section>
 </main>
 <noscript><p class="container notice">Administrācijas panelim nepieciešams JavaScript.</p></noscript>
 
@@ -403,6 +749,8 @@ var pageInfo={
   catalog:["Katalogs","Atrodi lapu, izlabo tās informāciju vai pārvieto uz arhīvu."],
   edit:["Rediģēt lapu","Pielāgo nosaukumu, kategoriju, vecumu un sarežģītību."],
   archive:["Arhīvs","Atjauno paslēptās lapas vai pārvaldi arhivētos ierakstus."],
+  stats:["Statistika","Drukāšanas darbības, reakcijas un kataloga rezultāti."],
+  traffic:["Apmeklējums","Vietnes apmeklējumi, lapu skatījumi un robotu aktivitāte."],
   activity:["Aktivitāte","Publicēšanas un kataloga izmaiņas pēdējās 7 dienās."]
 };
 function routePage(){
@@ -424,6 +772,7 @@ function routePage(){
   document.getElementById("pageDescription").textContent=pageInfo[page][1];
   document.title=pageInfo[page][0]+" – Ausmalwiese";
   if(page==="edit"&&changed){editBaseline="";document.querySelector(".edit-layout").hidden=true;document.getElementById("editMissing").hidden=false;document.getElementById("editMissing").textContent="Ielādē ierakstu…";populateEdit()}
+  if(window.AdminAnalytics)window.AdminAnalytics.open(page);
   if(changed){document.getElementById("admin-title").focus({preventScroll:true});window.scrollTo(0,0)}
 }
 document.querySelector(".skip-link").onclick=function(event){event.preventDefault();document.getElementById("main").focus();document.getElementById("main").scrollIntoView()};
@@ -435,6 +784,176 @@ document.getElementById("catalogNext").onclick=function(){catalogPage++;renderCa
 catalogRefresh.onclick=refreshContentViews;archiveRefresh.onclick=loadArchive;activityRefresh.onclick=loadActivity;
 routePage();
 Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=true;refreshContentViews();restoreActiveJob()}).catch(function(e){err(e.message)});
+</script>
+<script>
+// Aggregate-only dashboards adapted from coloring-pages@a910b39a7a8617c1589069a12b0c7c2243b26543.
+// No visitor tracking, browser identifiers, cookies or engagement writes.
+(() => {
+  const labels = {tiere:"Dzīvnieki",fahrzeuge:"Transportlīdzekļi",alphabet:"Alfabēts",lernen:"Mācīšanās",figuren:"Tēli",jahreszeiten:"Gadalaiki un svētki",seasonal:"Gadalaiki un svētki"};
+  const formatter = new Intl.NumberFormat("lv-LV");
+  const count = value => typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+  const format = value => count(value) === null ? "–" : formatter.format(value);
+  const text = (selector, value) => { document.querySelector(selector).textContent = value; };
+  const metric = (name, value) => text(`[data-${name}]`, format(value));
+  const category = value => labels[value] || value || "–";
+  const publicLink = id => "https://ausmalwiese.de/detail.html?id=" + encodeURIComponent(id);
+  const states = {};
+  for (const page of ["stats", "traffic"]) {
+    const query = name => document.querySelector(`[data-${page}-${name}]`);
+    states[page] = {rows:[], limit:20, loaded:false, busy:false, search:query("search"), sort:query("sort"), table:query("table"), more:query("load-more"), empty:query("table-empty"), refresh:query("refresh"), status:query(page === "stats" ? "status" : "page-status"), content:document.querySelector(`[data-analytics-content="${page}"]`)};
+  }
+  async function request(path) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    try {
+      const response = await fetch(path, {cache:"no-store", credentials:"same-origin", signal:controller.signal, headers:{Accept:"application/json"}});
+      if (!response.ok) throw new Error("analytics unavailable");
+      return await response.json();
+    } finally { clearTimeout(timer); }
+  }
+  function element(tag, className, value) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (value !== undefined) node.textContent = value;
+    return node;
+  }
+  function link(row) {
+    const node = element("a", "", row.title);
+    node.href = publicLink(row.id);
+    node.target = "_blank";
+    node.rel = "noopener noreferrer";
+    node.setAttribute("aria-label", row.title + " — atvērt vietnē jaunā cilnē");
+    return node;
+  }
+  function thumbnail(row, className) {
+    const node = element("img", className);
+    node.src = row.thumb; node.alt = ""; node.loading = "lazy";
+    return node;
+  }
+  function rowsFor(catalog, overview) {
+    if (!Array.isArray(catalog.entries) || !Array.isArray(overview.pages) || !overview.totals) throw new Error("analytics schema");
+    const byId = new Map(overview.pages.map(item => [String(item.page_id), item]));
+    return catalog.entries.filter(entry => entry && /^\d{7}$/.test(String(entry.id)) && typeof entry.title === "string").map(entry => {
+      const thumb = typeof entry.thumb === "string" && /^\/media\/\d{7}\/thumb\.webp$/.test(entry.thumb) ? entry.thumb : "/media/" + encodeURIComponent(entry.id) + "/thumb.webp";
+      const row = {id:String(entry.id),title:entry.title,category:entry.category,thumb:"https://ausmalwiese.de" + thumb};
+      const stats = byId.get(row.id);
+      for (const key of ["print_count","like_count","recent_prints","view_count","recent_views"]) row[key] = stats ? count(stats[key]) : 0;
+      return row;
+    });
+  }
+  function ranking(selector, emptySelector, rows, key, icon) {
+    const sorted = rows.filter(row => count(row[key]) > 0).sort((a,b) => b[key]-a[key] || a.title.localeCompare(b.title,"lv")).slice(0,10);
+    document.querySelector(selector).replaceChildren(...sorted.map((row,index) => {
+      const item = element("li","stats-top-item");
+      const copy = element("div","stats-top-copy");
+      copy.append(link(row),element("span","",category(row.category)));
+      item.append(element("span","stats-top-rank",String(index+1)),thumbnail(row,"stats-top-thumb"),copy,element("strong","stats-top-metric",icon + " " + format(row[key])));
+      return item;
+    }));
+    document.querySelector(emptySelector).hidden = sorted.length !== 0;
+  }
+  function renderTable(page) {
+    const state = states[page];
+    const search = state.search.value.trim().toLocaleLowerCase("lv");
+    const keys = {prints:"print_count",recent:"recent_prints",likes:"like_count",views:"view_count",recentViews:"recent_views"};
+    const key = keys[state.sort.value];
+    const rows = state.rows.filter(row => [row.id,row.title,category(row.category)].some(value => String(value).toLocaleLowerCase("lv").includes(search))).sort((a,b) => (key ? (b[key] ?? -1)-(a[key] ?? -1) : 0) || a.title.localeCompare(b.title,"lv"));
+    state.table.replaceChildren(...rows.slice(0,state.limit).map(row => {
+      const tr = element("tr");
+      const td = element("td");
+      const wrap = element("div","stats-page-cell");
+      wrap.append(thumbnail(row,""),link(row)); td.append(wrap);
+      tr.append(td,element("td","",category(row.category)));
+      for (const key of page === "stats" ? ["print_count","recent_prints","like_count"] : ["view_count","recent_views"]) tr.append(element("td","stats-number",format(row[key])));
+      return tr;
+    }));
+    state.empty.hidden = rows.length !== 0;
+    state.more.hidden = rows.length <= state.limit;
+  }
+  function renderStats(rows, overview, campaigns) {
+    const totals = overview.totals;
+    for (const [name,key] of [["total-prints","print_count"],["total-likes","like_count"],["recent-prints","recent_prints"],["qr-total","qr_scan_count"],["qr-recent","recent_qr_scans"]]) metric("stats-"+name,totals[key]);
+    metric("stats-published-pages",rows.length);
+    const available = Array.isArray(campaigns?.campaigns);
+    const kita = available ? campaigns.campaigns.find(item => item.campaign === "dortmund-01") : null;
+    for (const [name,key] of [["landing","landing_count"],["catalog","catalog_count"],["detail","detail_count"],["prints","print_count"]]) metric("stats-kita-"+name,kita ? kita[key] : available ? 0 : null);
+    text("[data-stats-kita-note]",available ? "Kampaņas dortmund-01 darbību skaits, nevis unikāli bērnudārzi. Drukāšana apzīmē pogas nospiešanu." : "Kampaņas dati pašlaik nav pieejami. Pārējā statistika ir pieejama.");
+    ranking("[data-stats-popular]","[data-stats-popular-empty]",rows,"print_count","🖨");
+    ranking("[data-stats-trending]","[data-stats-trending-empty]",rows,"recent_prints","🔥");
+  }
+  function instagram(data) {
+    if (data?.instagram_attribution_version !== 1 || !Array.isArray(data.campaigns)) return null;
+    const result = {profile:0,story:0,reel:0};
+    for (const item of data.campaigns) {
+      const match = /^instagram-(profile|story|reel)$/.exec(item.campaign);
+      if (match) {
+        if (count(item.landing_count) === null) return null;
+        result[match[1]] += item.landing_count;
+      }
+    }
+    result.total = result.profile+result.story+result.reel;
+    return result;
+  }
+  function renderTraffic(rows, overview, traffic, week, month) {
+    metric("stats-total-views",overview.totals.view_count);
+    metric("stats-recent-views",overview.totals.recent_views);
+    metric("stats-unique-visitors",traffic?.unique_visitors_status === "available" ? traffic.unique_visitors : null);
+    text("[data-stats-unique-visitors-label]","Aptuvenie unikālie apmeklētāji · " + (traffic?.unique_visitors_date || "pēdējā diena"));
+    metric("stats-visits",traffic?.visits);
+    metric("stats-crawler-requests",traffic?.crawler_requests);
+    text("[data-traffic-status]",!traffic ? "Robotu dati nav pieejami" : (traffic.sampled ? "Izlases dati · " : "") + "pēc User-Agent nosaukuma");
+    text("[data-traffic-visits-note]","Unikālie apmeklētāji ir aptuvens dienas unikālo IP adrešu skaits. Apmeklējumi nav unikāli cilvēki. Robotu pieprasījumi ir atsevišķs rādītājs." + (traffic?.sampled ? " Cloudflare apmeklējumu dati balstīti izlasē." : "") + (!traffic ? " Apmeklējumu un robotu dati pašlaik nav pieejami." : ""));
+    const ig7 = instagram(week), ig30 = instagram(month);
+    metric("instagram-7",ig7?.total); metric("instagram-30",ig30?.total);
+    for (const key of ["profile","story","reel"]) metric("instagram-"+key,ig30?.[key]);
+    text("[data-instagram-note]",!ig7 || !ig30 ? "Instagram dati pašlaik nav pieejami." : "Ar UTM atzīmētas ierašanās darbības, nevis unikāli cilvēki vai pārbaudīti Instagram klikšķi. Atpazīstamās pārlādes un iekšējā navigācija netiek ieskaitītas.");
+    ranking("[data-stats-viewed]","[data-stats-viewed-empty]",rows,"recent_views","👁");
+    const crawlers = Array.isArray(traffic?.crawlers) ? traffic.crawlers : [];
+    document.querySelector("[data-stats-crawlers]").replaceChildren(...crawlers.map(crawler => {
+      const tr = element("tr");
+      const paths = (Array.isArray(crawler.paths) ? crawler.paths : []).map(item => String(item.path || "/") + " (" + format(item.requests) + ")").join(" · ");
+      tr.append(element("td","",crawler.name || "Cits robots"),element("td","stats-number",format(crawler.requests)),element("td","",paths));
+      return tr;
+    }));
+    const empty = document.querySelector("[data-stats-crawlers-empty]");
+    empty.hidden = crawlers.length !== 0;
+    empty.textContent = !traffic ? "Robotu datus neizdevās ielādēt." : "Šajā periodā nav robotu pieprasījumu.";
+  }
+  async function load(page) {
+    const state = states[page];
+    if (state.busy) return;
+    state.busy = true; state.refresh.disabled = true;
+    state.status.textContent = "Ielādē datus…";
+    // Clear the visible snapshot on every refresh so an error cannot look like fresh data.
+    state.content.hidden = true;
+    try {
+      const [catalog,overview,month,traffic,week] = await Promise.all([
+        request("/api/catalog"),request("/api/analytics/overview"),
+        request("/api/analytics/campaigns?days=30").catch(() => null),
+        page === "traffic" ? request("/api/analytics/traffic?days=7").catch(() => null) : null,
+        page === "traffic" ? request("/api/analytics/campaigns?days=7").catch(() => null) : null,
+      ]);
+      state.rows = rowsFor(catalog,overview);
+      if (page === "stats") renderStats(state.rows,overview,month);
+      else renderTraffic(state.rows,overview,traffic,week,month);
+      state.limit = 20; renderTable(page);
+      const ids = new Set(state.rows.map(row => row.id));
+      const unknown = overview.pages.filter(item => !ids.has(String(item.page_id))).length;
+      state.status.textContent = "Atjaunots plkst. " + new Intl.DateTimeFormat("lv-LV",{hour:"2-digit",minute:"2-digit"}).format(new Date()) + (unknown ? " · " + unknown + " statistikas ID nav pašreizējā katalogā" : "") + (page === "traffic" && !traffic ? " · daļa datu nav pieejama" : "");
+      state.loaded = true; state.content.hidden = false;
+    } catch (_) {
+      state.loaded = false;
+      state.status.textContent = "Datus neizdevās ielādēt. Mēģini vēlreiz ar pogu Atjaunot.";
+    } finally { state.busy = false; state.refresh.disabled = false; }
+  }
+  for (const [page,state] of Object.entries(states)) {
+    for (const [control,event] of [[state.search,"input"],[state.sort,"change"]]) control.addEventListener(event,() => {state.limit=20;renderTable(page);});
+    state.more.addEventListener("click",() => {state.limit+=20;renderTable(page);});
+    state.refresh.addEventListener("click",() => load(page));
+  }
+  window.AdminAnalytics = {open(page) {if (states[page] && !states[page].loaded) return load(page);}};
+  window.AdminAnalytics.open(currentRoute);
+})();
 </script>
 </body>
 </html>

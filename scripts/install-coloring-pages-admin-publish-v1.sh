@@ -49,6 +49,8 @@ fi
 
 if [[ "$MODE" == "ui-only" ]]; then
   [[ "$SERVICE_ACTIVE" -eq 1 ]] || { echo "ADMIN_SERVICE_MUST_BE_ACTIVE_FOR_UI_ONLY" >&2; exit 2; }
+  # Integrated dashboards require the read-only adapter. Reject an older backend before writing HTML.
+  curl --fail --silent --show-error --max-time 3 http://127.0.0.1:8765/api/analytics/capabilities | python3 -c 'import json,sys; p=json.load(sys.stdin); assert p.get("version") == 1 and p.get("read_only") is True'
   [[ -f "/usr/local/share/coloring-pages-admin/fonts/$BALOO_NAME" ]] || { echo "BALOO_FONT_MISSING" >&2; exit 2; }
   [[ -f "/usr/local/share/coloring-pages-admin/fonts/$NUNITO_NAME" ]] || { echo "NUNITO_FONT_MISSING" >&2; exit 2; }
   [[ "$(sha256sum "/usr/local/share/coloring-pages-admin/fonts/$BALOO_NAME" | awk '{print $1}')" == "$BALOO_SHA256" ]] || { echo "BALOO_FONT_HASH_MISMATCH" >&2; exit 2; }

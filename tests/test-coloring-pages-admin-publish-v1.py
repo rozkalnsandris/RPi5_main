@@ -3,6 +3,9 @@ import importlib.util, json, os, re, stat, subprocess, tempfile, unittest, zipfi
 from types import SimpleNamespace
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
+from unittest.mock import patch
+from email.message import Message
+from io import BytesIO
 
 ROOT=Path(__file__).resolve().parents[1]
 MODULE=ROOT/"ops/bin/coloring-pages-admin-publish"
@@ -336,6 +339,54 @@ class Tests(unittest.TestCase):
         self.assertNotIn('shutil.rmtree(INBOX',source)
 
 class StaticTests(unittest.TestCase):
+    def test_analytics_renderer(self):
+        subprocess.run(["node", str(ROOT/"tests/test-coloring-pages-admin-analytics.cjs")], check=True, timeout=30)
+
+    def test_analytics_adapter_bounds_and_schema(self):
+        class Response(BytesIO):
+            status=200
+            headers=Message()
+        Response.headers["Content-Type"]="application/json"
+        payload={"pages":[],"totals":{"print_count":0}}
+        with patch.object(admin,"build_opener") as opener:
+            opener.return_value.open.return_value=Response(json.dumps(payload).encode())
+            self.assertEqual(admin.analytics_snapshot("/api/analytics/overview"),payload)
+            request=opener.return_value.open.call_args.args[0]
+            self.assertEqual(request.full_url,"https://ausmalwiese.de/api/stats/overview")
+            self.assertEqual(request.get_method(),"GET")
+            self.assertEqual(dict(request.header_items()),{"Accept":"application/json","User-agent":"Ausmalwiese-Admin/1.0"})
+            self.assertEqual(opener.return_value.open.call_args.kwargs,{"timeout":10})
+            for body in [b"[]",b"not json",b'{"error":"unavailable"}',b" "*(admin.MAX_ANALYTICS_BYTES+1)]:
+                opener.return_value.open.return_value=Response(body)
+                with self.assertRaisesRegex(admin.AnalyticsUnavailable,"^analytics temporarily unavailable$"):
+                    admin.analytics_snapshot("/api/analytics/overview")
+            opener.return_value.open.side_effect=TimeoutError("private upstream detail")
+            with self.assertRaisesRegex(admin.AnalyticsUnavailable,"^analytics temporarily unavailable$"):
+                admin.analytics_snapshot("/api/analytics/overview")
+        self.assertIsNone(admin.NoAnalyticsRedirect().redirect_request(None,None,302,"",{},"https://other.example/"))
+
+    def test_analytics_routes_reject_unbounded_inputs(self):
+        handler=object.__new__(admin.Handler)
+        replies=[]
+        handler.send_json=lambda status,payload:replies.append((status,payload))
+        handler.send_error_json=handler.send_json
+        with patch.object(admin,"analytics_snapshot",return_value={"pages":[],"totals":{}}) as upstream:
+            for path in ["/api/analytics/traffic?days=365","/api/analytics/overview?url=https://other.example","/api/analytics/visit","/api/analytics/campaigns?days=7&days=30","/api/analytics/%6fverview"]:
+                handler.path=path;handler.do_GET();self.assertEqual(replies[-1][0],404)
+            upstream.assert_not_called()
+            for path in admin.ANALYTICS_PATHS:
+                handler.path=path;handler.do_GET();self.assertEqual(replies[-1][0],200)
+                upstream.assert_called_with(path)
+            upstream.side_effect=admin.AnalyticsUnavailable()
+            handler.path="/api/analytics/overview";handler.do_GET()
+            self.assertEqual(replies[-1],(502,"analytics temporarily unavailable"))
+        with patch.object(admin,"build_opener") as opener:
+            for path in ["https://evil.example", "/api/analytics/traffic?days=999"]:
+                with self.assertRaises(ValueError):admin.analytics_snapshot(path)
+            opener.assert_not_called()
+        installer=(ROOT/"scripts/install-coloring-pages-admin-publish-v1.sh").read_text()
+        self.assertLess(installer.index("/api/analytics/capabilities"),installer.index('install -o root -g root -m 0644'))
+
     def test_latvian_font_faces_and_routes(self):
         html=(ROOT/"ops/admin/coloring-pages/index.html").read_text()
         faces=re.findall(r"@font-face\{([^}]+)\}",html)
@@ -391,8 +442,10 @@ class StaticTests(unittest.TestCase):
         self.assertNotIn('>Admin</a>',html)
         self.assertIn(".skip-link:focus-visible{transform:translateY(0)}",html)
         self.assertNotIn(".skip-link:focus{transform:translateY(0)}",html)
-        self.assertIn('href="https://ausmalwiese.de/stats.html"',html)
-        self.assertIn('href="https://ausmalwiese.de/traffic.html"',html)
+        self.assertIn('href="#stats" data-nav="stats"',html)
+        self.assertIn('href="#traffic" data-nav="traffic"',html)
+        self.assertNotIn('href="https://ausmalwiese.de/stats.html"',html)
+        self.assertNotIn('href="https://ausmalwiese.de/traffic.html"',html)
         self.assertIn("/assets/fonts/baloo2-latin-vf-26fb4610d4bc976d.woff2",html)
         self.assertIn("/assets/fonts/nunito-latin-vf-ba344451eab25b21.woff2",html)
         installer=(ROOT/"scripts/install-coloring-pages-admin-publish-v1.sh").read_text()
