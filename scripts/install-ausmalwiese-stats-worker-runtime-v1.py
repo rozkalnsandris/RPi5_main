@@ -21,6 +21,9 @@ APP_ROOT = SOURCE_ROOT.parent / "coloring-pages"
 REPO = "rozkalnsandris/RPi5_main"
 APP_REPO = "rozkalnsandris/coloring-pages"
 APP_SHA = "e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63"
+# Operational source checkout pin. Worker/config provenance remains APP_SHA because
+# their exact Git blobs are unchanged at this newer canonical application main.
+APP_CHECKOUT_SHA = "fd31294eef9fe0a83b133d3ec9bd2036e0a29940"
 
 LAUNCHER_REL = "scripts/ausmalwiese_stats_worker_runtime_v1.py"
 PROVISIONER_REL = "scripts/ausmalwiese_stats_worker_provisioner_v1.py"
@@ -138,7 +141,7 @@ def application_checkout(*, runner=subprocess.run) -> None:
         raise Stop("application_checkout_mismatch")
     if text(git(APP_ROOT, ["symbolic-ref", "--quiet", "--short", "HEAD"], runner=runner)) != "main":
         raise Stop("application_not_main")
-    if text(git(APP_ROOT, ["rev-parse", "HEAD"], runner=runner)) != APP_SHA:
+    if text(git(APP_ROOT, ["rev-parse", "HEAD"], runner=runner)) != APP_CHECKOUT_SHA:
         raise Stop("application_main_drift")
     if git(
         APP_ROOT,
