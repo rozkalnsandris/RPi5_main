@@ -59,6 +59,11 @@ function harness() {
 async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categoriesReady=true;}
 (async()=>{
   const h=harness();await ready(h);
+  h.ids.navToggle.onclick();assert.equal(h.ids.primaryNav.dataset.open,"true");assert.equal(h.ids.navToggle.attrs["aria-expanded"],"true");
+  h.listeners.keydown({key:"Escape"});assert.equal(h.ids.primaryNav.dataset.open,"false");assert.equal(h.ids.navToggle.focused,true);
+  h.ids.navToggle.onclick();h.ids.primaryNav.onclick({target:{closest:()=>({})}});
+  assert.equal(h.ids.navToggle.attrs["aria-expanded"],"false");
+  h.ids.navToggle.onclick();h.go("catalog");assert.equal(h.ids.primaryNav.dataset.open,"false");
   for(const page of ["overview","upload","catalog","archive","activity"]){
     h.go(page);assert.deepEqual(h.pages.filter(x=>!x.hidden).map(x=>x.dataset.page),[page]);
     assert.equal(h.navs.find(x=>x.dataset.nav===page).attrs["aria-current"],"page");
