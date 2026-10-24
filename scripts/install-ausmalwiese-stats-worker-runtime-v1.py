@@ -63,6 +63,12 @@ OLD_WORKER_BLOB = "c2ac9da6e0701103e0041b30db7dfbea4298f96c"
 OLD_LAUNCHER_BLOB = "d64b2f330da67d9f95927d06bd1984f4aac4a343"
 OLD_RELEASE_SHA256 = "e65d7b909482fe67629e1da0b42bc5a1b78f255397c01a789941240035b9b066"
 UPGRADE_TARGETS = (EXE, RELEASE)
+# Six exact existing files, deliberately distinct from launcher-only UPGRADE.
+REPLACE_FROM_RELEASE = OLD_RELEASE_SHA256
+REPLACE_CONFIRM = "REPLACE-AUSMALWIESE-STATS-WORKER-FULL-RELEASE"
+REPLACE_TARGETS = (PROVISION, CORE, WORKER, CONFIG, EXE, RELEASE)
+FIND = "/usr/bin/find"
+EXPECTED_ROOT_MEMBERS = ("core.py", "stats-worker.js", "wrangler.stats-worker.jsonc", "release.json")
 CLEAN_ENV = {"PATH": "/usr/bin:/bin", "LC_ALL": "C"}
 
 
@@ -481,6 +487,74 @@ def upgrade(
         raise Stop("post_dispatch_unknown_state") from None
 
 
+def replace_preflight(
+    expected_main: str, predecessor_release_sha256: str, *, runner=subprocess.run
+):
+    """Pure plan + bounded authenticated checks. No file or provider mutation."""
+    if predecessor_release_sha256 != REPLACE_FROM_RELEASE:
+        raise Stop("invalid_full_replace_predecessor")
+    checkout(expected_main, runner=runner)
+    application_checkout(runner=runner)
+    launcher = tracked(SOURCE_ROOT, LAUNCHER_REL, SOURCE_PATHS, runner=runner)
+    provisioner = tracked(SOURCE_ROOT, PROVISIONER_REL, SOURCE_PATHS, runner=runner)
+    core = tracked(SOURCE_ROOT, CORE_REL, SOURCE_PATHS, runner=runner)
+    worker = tracked(APP_ROOT, WORKER_REL, (WORKER_REL, CONFIG_REL), runner=runner)
+    config = tracked(APP_ROOT, CONFIG_REL, (WORKER_REL, CONFIG_REL), runner=runner)
+    release = release_bytes(
+        expected_main, launcher, provisioner, core, worker, config
+    )
+    candidate = {
+        PROVISION: ("500", provisioner),
+        CORE: ("400", core),
+        WORKER: ("400", worker),
+        CONFIG: ("400", config),
+        EXE: ("500", launcher),
+        RELEASE: ("400", release),
+    }
+    old = predecessor_payloads(runner=runner)
+    if set(old) != set(REPLACE_TARGETS):
+        raise Stop("full_replace_predecessor_scope")
+    parents_preflight(runner=runner)
+    symlink = invoke([SUDO, "-n", TEST, "-L", LIB], runner=runner)
+    if symlink.returncode != 1:
+        raise Stop("full_replace_root_untrusted")
+    if sudo_read([STAT, "-c", "%u:%g:%a:%F", "--", LIB], runner=runner) != "0:0:700:directory":
+        raise Stop("full_replace_root_untrusted")
+    # Directory inventory is names only; an unknown file is a terminal STOP.
+    inventory_cmd = [FIND, LIB, "-mindepth", "1", "-maxdepth", "1", "-printf", "%f\\n"]
+    if invoke([SUDO, "-n", "-l", "--", *inventory_cmd], runner=runner).returncode:
+        raise Stop("full_replace_inventory_not_allowed")
+    inventory = sudo_read(inventory_cmd, runner=runner).splitlines()
+    if len(inventory) != len(EXPECTED_ROOT_MEMBERS) or sorted(inventory) != sorted(EXPECTED_ROOT_MEMBERS):
+        raise Stop("full_replace_inventory_drift")
+    for path in REPLACE_TARGETS:
+        mode, before = old[path]
+        installed_exact(path, mode, before, runner=runner)
+    for path in REPLACE_TARGETS:
+        mode, _ = candidate[path]
+        if invoke([SUDO, "-n", "-l", "--", *upgrade_command(path, mode)], runner=runner).returncode:
+            raise Stop("sudo_exact_full_replace_not_allowed")
+    return candidate
+
+
+def replace_full(
+    expected_main: str, predecessor_release_sha256: str, *, runner=subprocess.run
+) -> None:
+    """Six bounded writes; NOT atomic. Any uncertainty is terminal without retry."""
+    candidate = replace_preflight(
+        expected_main, predecessor_release_sha256, runner=runner
+    )
+    try:
+        for path in REPLACE_TARGETS:
+            mode, payload = candidate[path]
+            write_once(upgrade_command(path, mode), payload, runner=runner)
+        post_verify(
+            ((LIB, "700", None), *((path, *candidate[path]) for path in REPLACE_TARGETS)),
+            runner=runner,
+        )
+    except Exception:
+        raise Stop("post_dispatch_unknown_state") from None
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         description="Source-only Stats Worker deploy runtime installer"
@@ -489,9 +563,30 @@ def main(argv=None) -> int:
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--confirm", default="")
     parser.add_argument("--upgrade-from", default="")
+    parser.add_argument("--replace-from", default="")
     args = parser.parse_args(argv)
     try:
-        if args.upgrade_from:
+        if args.upgrade_from and args.replace_from:
+            raise Stop("operation_conflict")
+        if args.replace_from:
+            if args.replace_from != REPLACE_FROM_RELEASE:
+                raise Stop("invalid_full_replace_predecessor")
+            if args.apply:
+                if args.confirm != REPLACE_CONFIRM:
+                    raise Stop("confirmation_missing")
+                replace_full(args.expected_main, args.replace_from)
+                result = {"status": "PASS", "operation": "full_replace",
+                          "mutation_started": True, "writes_max": len(REPLACE_TARGETS)}
+            else:
+                if args.confirm:
+                    raise Stop("confirm_requires_apply")
+                candidate = replace_preflight(args.expected_main, args.replace_from)
+                result = {"status": "FULL_REPLACE_PREFLIGHT_PASS",
+                          "mutation_started": False, "writes_max": len(REPLACE_TARGETS),
+                          "replacement_targets": list(REPLACE_TARGETS),
+                          "old_release_sha256": REPLACE_FROM_RELEASE,
+                          "new_release_sha256": hashlib.sha256(candidate[RELEASE][1]).hexdigest()}
+        elif args.upgrade_from:
             if args.upgrade_from != OLD_LAUNCHER_BLOB:
                 raise Stop("invalid_upgrade_source")
             if args.apply:

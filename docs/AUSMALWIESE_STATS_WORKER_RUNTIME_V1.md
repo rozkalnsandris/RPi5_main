@@ -70,6 +70,37 @@ remain byte-identical or the upgrade stops before mutation. A future upgrade
 still requires separate owner LIVE authority and has no retry, rollback or
 cleanup path.
 
+## #1202 distinct full-release replacement (SOURCE ONLY — NOT INSTALLED)
+
+`--replace-from=<exact previous release SHA-256>` is separate from `--upgrade-from`.
+The only accepted predecessor is `e65d7b909482fe67629e1da0b42bc5a1b78f255397c01a789941240035b9b066`.
+A future preflight requires exact clean source checkout `main`, reviewed app checkout, verified
+historical previous release, fixed root-owned directory metadata, a *names-only* inventory
+of exactly `core.py`, `stats-worker.js`, `wrangler.stats-worker.jsonc` and `release.json`,
+and for each of six installed package files: no symlink, single link, exact root:root
+mode and SHA-256 equal to the proven historical predecessor. It also requires
+the exact sudo allowlist for each read and all six fixed `install -T` commands.
+Missing rights, missing predecessor files, partial previous upgrades, unknown extra files,
+unreviewed Worker source or configuration drift cause **STOP BEFORE FIRST WRITE**.
+
+The full replacement is **six sequential, non-atomic privileged writes**:
+provisioner, core, Worker source, Wrangler config, launcher, then release.json last.
+It never creates a new directory and cannot change the credentials, Cloudflare settings,
+permissions outside these six fixed package files or any provider state.
+After the first write, ANY error or ambiguous result terminates in
+`post_dispatch_unknown_state` with NO retry, rollback, cleanup or alternative executor.
+A partial installation can leave the installed runtime unusable; no automatic recovery
+or resumable apply is provided. A future owner must explicitly decide whether this
+non-atomic write risk and already-authorized sudo allowlist are acceptable, and inspect
+the exact protected host baseline under a separate read/installation authorization.
+**Do not execute `--apply` from this GitHub-only source approval.**
+The legacy launcher/release-only `--upgrade-from` remains unchanged.
+
+Source CI demonstrates only offline synthetic behavior, not actual root permissions,
+host readiness, active Worker version, Cloudflare bindings, or authorization.
+Upstream `coloring-pages` PR #369 still conflicts with #368's Worker code;
+the pinned source is only the current merged `coloring-pages/main` and must be
+reconciled before a future LIVE candidate is approved.
 ## Protected credential
 
 The only write credential path is:
