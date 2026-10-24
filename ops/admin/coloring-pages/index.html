@@ -519,23 +519,19 @@ html{overflow-y:scroll}
 <section class="analytics-page" data-page="traffic" aria-labelledby="admin-title" hidden>
 <div class="container analytics-toolbar"><p class="stats-status" data-traffic-page-status role="status">Data has not been loaded yet.</p><button class="secondary" data-traffic-refresh type="button">↻ Refresh</button></div>
 <div data-analytics-content="traffic" hidden>
-<section class="stats-summary" aria-label="Traffic summary">
+<section class="stats-summary" aria-label="Cloudflare traffic summary">
       <div class="container stats-kpi-grid traffic-kpi-grid">
         <article class="stats-kpi">
           <span class="stats-kpi-icon" aria-hidden="true">👤</span>
-          <div><span class="stats-kpi-label" data-stats-unique-visitors-label>Approx. unique visitors · latest day</span><strong data-stats-unique-visitors>–</strong></div>
+          <div><span class="stats-kpi-label" data-stats-unique-visitors-label>Unique visitors · unavailable</span><strong data-stats-unique-visitors>–</strong></div>
         </article>
         <article class="stats-kpi">
           <span class="stats-kpi-icon" aria-hidden="true">↪</span>
           <div><span class="stats-kpi-label">Website visits in the last 7 days <span aria-hidden="true">·</span> not unique people</span><strong data-stats-visits>–</strong></div>
         </article>
         <article class="stats-kpi">
-          <span class="stats-kpi-icon" aria-hidden="true">👁️</span>
-          <div><span class="stats-kpi-label">Total coloring page views</span><strong data-stats-total-views>–</strong></div>
-        </article>
-        <article class="stats-kpi">
-          <span class="stats-kpi-icon" aria-hidden="true">📅</span>
-          <div><span class="stats-kpi-label">Coloring page views in the last 7 days</span><strong data-stats-recent-views>–</strong></div>
+          <span class="stats-kpi-icon" aria-hidden="true">↔</span>
+          <div><span class="stats-kpi-label">HTTP requests in the last 7 days <span aria-hidden="true">·</span> Cloudflare edge</span><strong data-traffic-requests>–</strong></div>
         </article>
         <article class="stats-kpi">
           <span class="stats-kpi-icon" aria-hidden="true">🤖</span>
@@ -543,37 +539,12 @@ html{overflow-y:scroll}
         </article>
       </div>
       <div class="container">
-        <p class="stats-note" data-traffic-visits-note>Unique visitors are an approximate daily unique-IP count. Visits are not unique people. Crawler requests are a separate metric and must not be subtracted from visits.</p>
+        <p class="stats-note" data-traffic-visits-note>Unique visitors are unavailable because a hostname-scoped unique count has not been verified. Website visits are not unique people. HTTP requests and crawler requests are separate Cloudflare metrics and may be sampled.</p>
       </div>
     </section>
 
-    <section class="stats-summary" aria-labelledby="instagram-title">
+    <section class="stats-rankings" aria-label="Cloudflare crawler analytics">
       <div class="container">
-        <div class="stats-table-heading">
-          <div><span class="stats-panel-kicker">Attribution · UTM</span><h2 id="instagram-title">Instagram arrivals</h2></div>
-        </div>
-        <div class="stats-kpi-grid">
-          <article class="stats-kpi"><div><span class="stats-kpi-label">Instagram · 7 days</span><strong data-instagram-7>–</strong></div></article>
-          <article class="stats-kpi"><div><span class="stats-kpi-label">Instagram · 30 days</span><strong data-instagram-30>–</strong></div></article>
-          <article class="stats-kpi"><div><span class="stats-kpi-label">Profile · 30 days</span><strong data-instagram-profile>–</strong></div></article>
-          <article class="stats-kpi"><div><span class="stats-kpi-label">Stories · 30 days</span><strong data-instagram-story>–</strong></div></article>
-          <article class="stats-kpi"><div><span class="stats-kpi-label">Reels · 30 days</span><strong data-instagram-reel>–</strong></div></article>
-        </div>
-        <p class="stats-note" data-instagram-note aria-live="polite">Instagram attribution is loading. Counts are landing events, not unique people.</p>
-      </div>
-    </section>
-
-    <section class="stats-rankings" aria-label="Traffic and crawler analytics">
-      <div class="container stats-rankings-grid">
-        <article class="stats-panel">
-          <div class="stats-panel-heading">
-            <div><span class="stats-panel-kicker">7 days</span><h2>👁 Most viewed TOP 10</h2></div>
-            <span class="stats-panel-caption">Coloring page detail views</span>
-          </div>
-          <ol class="stats-top-list" data-stats-viewed></ol>
-          <p class="stats-empty" data-stats-viewed-empty hidden>No coloring page views yet.</p>
-        </article>
-
         <article class="stats-panel">
           <div class="stats-panel-heading">
             <div><span class="stats-panel-kicker">7 days</span><h2>🤖 Crawlers</h2></div>
@@ -592,57 +563,11 @@ html{overflow-y:scroll}
             </table>
           </div>
           <p class="stats-empty" data-stats-crawlers-empty hidden>No crawler requests in this period.</p>
-          <p class="stats-note">Crawler names are inferred from User-Agent strings. Paths do not include URL query strings.</p>
+          <p class="stats-note">Crawler names are inferred from User-Agent strings. Paths do not include URL query strings. Do not subtract crawler requests from visits.</p>
         </article>
       </div>
     </section>
 
-    <section class="stats-all" aria-labelledby="traffic-all-title">
-      <div class="container">
-        <div class="stats-table-heading">
-          <div>
-            <span class="stats-panel-kicker">Page views</span>
-            <h2 id="traffic-all-title">Views by coloring page</h2>
-          </div>
-          <div class="stats-controls">
-            <label class="stats-search">
-              <span class="sr-only">Search coloring pages</span>
-              <input type="search" placeholder="Search coloring pages …" data-traffic-search>
-            </label>
-            <label class="stats-sort-label">
-              <span class="sr-only">Sort</span>
-              <select data-traffic-sort>
-                <option value="recentViews">7 day views</option>
-                <option value="views">Total views</option>
-                <option value="title">Title A–Z</option>
-              </select>
-            </label>
-          </div>
-        </div>
-
-        <div class="stats-table-wrap">
-          <table id="traffic-catalog-table" class="stats-table">
-            <thead>
-              <tr>
-                <th scope="col">Coloring page</th>
-                <th scope="col">Category</th>
-                <th scope="col" class="stats-number">Total views</th>
-                <th scope="col" class="stats-number">7 day views</th>
-              </tr>
-            </thead>
-            <tbody data-traffic-table></tbody>
-          </table>
-        </div>
-        <div class="gallery-actions">
-          <button class="secondary" type="button" data-traffic-load-more aria-controls="traffic-catalog-table" hidden>
-            More <span aria-hidden="true">↓</span>
-          </button>
-        </div>
-        <p class="stats-empty" data-traffic-table-empty hidden>No matching coloring page found.</p>
-        <p class="stats-note">Exact unique people are not available from this dashboard. Approx. unique visitors is a privacy-preserving daily unique-IP count from the Stats Worker; Website visits is a separate Cloudflare metric and may be sampled.</p>
-      </div>
-    </section>
-  
 </div></section>
 </main>
 <noscript><p class="container notice">The admin panel requires JavaScript.</p></noscript>
@@ -802,7 +727,7 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
   const states = {};
   for (const page of ["stats", "traffic"]) {
     const query = name => document.querySelector(`[data-${page}-${name}]`);
-    states[page] = {rows:[], limit:20, loaded:false, busy:false, search:query("search"), sort:query("sort"), table:query("table"), more:query("load-more"), empty:query("table-empty"), refresh:query("refresh"), status:query(page === "stats" ? "status" : "page-status"), content:document.querySelector(`[data-analytics-content="${page}"]`)};
+    states[page] = {rows:[], limit:20, loaded:false, busy:false, search:page === "stats" ? query("search") : null, sort:page === "stats" ? query("sort") : null, table:page === "stats" ? query("table") : null, more:page === "stats" ? query("load-more") : null, empty:page === "stats" ? query("table-empty") : null, refresh:query("refresh"), status:query(page === "stats" ? "status" : "page-status"), content:document.querySelector(`[data-analytics-content="${page}"]`)};
   }
   async function request(path) {
     const controller = new AbortController();
@@ -883,34 +808,18 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
     ranking("[data-stats-popular]","[data-stats-popular-empty]",rows,"print_count","🖨");
     ranking("[data-stats-trending]","[data-stats-trending-empty]",rows,"recent_prints","🔥");
   }
-  function instagram(data) {
-    if (data?.instagram_attribution_version !== 1 || !Array.isArray(data.campaigns)) return null;
-    const result = {profile:0,story:0,reel:0};
-    for (const item of data.campaigns) {
-      const match = /^instagram-(profile|story|reel)$/.exec(item.campaign);
-      if (match) {
-        if (count(item.landing_count) === null) return null;
-        result[match[1]] += item.landing_count;
-      }
-    }
-    result.total = result.profile+result.story+result.reel;
-    return result;
-  }
-  function renderTraffic(rows, overview, traffic, week, month) {
-    metric("stats-total-views",overview.totals.view_count);
-    metric("stats-recent-views",overview.totals.recent_views);
-    metric("stats-unique-visitors",traffic?.unique_visitors_status === "available" ? traffic.unique_visitors : null);
-    text("[data-stats-unique-visitors-label]","Approx. unique visitors · " + (traffic?.unique_visitors_date || "latest day"));
-    metric("stats-visits",traffic?.visits);
-    metric("stats-crawler-requests",traffic?.crawler_requests);
-    text("[data-traffic-status]",!traffic ? "Crawler data unavailable" : (traffic.sampled ? "Sampled data · " : "") + "User-Agent heuristic");
-    text("[data-traffic-visits-note]","Unique visitors are an approximate daily unique-IP count. Visits are not unique people. Crawler requests are a separate metric." + (traffic?.sampled ? " Cloudflare visit data is sampled." : "") + (!traffic ? " Visit and crawler data is currently unavailable." : ""));
-    const ig7 = instagram(week), ig30 = instagram(month);
-    metric("instagram-7",ig7?.total); metric("instagram-30",ig30?.total);
-    for (const key of ["profile","story","reel"]) metric("instagram-"+key,ig30?.[key]);
-    text("[data-instagram-note]",!ig7 || !ig30 ? "Instagram attribution is currently unavailable." : "UTM-tagged arrivals, not unique people or verified Instagram clicks. Detectable reloads and internal navigation are excluded.");
-    ranking("[data-stats-viewed]","[data-stats-viewed-empty]",rows,"recent_views","👁");
-    const crawlers = Array.isArray(traffic?.crawlers) ? traffic.crawlers : [];
+  function renderTraffic(traffic) {
+    const valid = traffic && traffic.range_days === 7
+      && traffic.analytics_host === "ausmalwiese.de"
+      && traffic.cloudflare_traffic_version === 1;
+    metric("stats-unique-visitors",null);
+    text("[data-stats-unique-visitors-label]","Unique visitors · unavailable");
+    metric("stats-visits",valid ? traffic.visits : null);
+    metric("traffic-requests",valid ? traffic.http_requests : null);
+    metric("stats-crawler-requests",valid ? traffic.crawler_requests : null);
+    text("[data-traffic-status]",!valid ? "Crawler data unavailable" : (traffic.sampled ? "Cloudflare · sampled · " : "Cloudflare · ") + "User-Agent heuristic");
+    text("[data-traffic-visits-note]","Unique visitors are unavailable because a hostname-scoped unique count has not been verified. Website visits are not unique people. HTTP requests and crawler requests are separate Cloudflare metrics." + (valid && traffic.sampled ? " Cloudflare analytics is sampled." : valid ? " Cloudflare analytics may be sampled." : " Traffic data is currently unavailable."));
+    const crawlers = valid && Array.isArray(traffic.crawlers) ? traffic.crawlers : [];
     document.querySelector("[data-stats-crawlers]").replaceChildren(...crawlers.map(crawler => {
       const tr = element("tr");
       const paths = (Array.isArray(crawler.paths) ? crawler.paths : []).map(item => String(item.path || "/") + " (" + format(item.requests) + ")").join(" · ");
@@ -919,29 +828,32 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
     }));
     const empty = document.querySelector("[data-stats-crawlers-empty]");
     empty.hidden = crawlers.length !== 0;
-    empty.textContent = !traffic ? "Could not load crawler data." : "No crawler requests in this period.";
+    empty.textContent = !valid ? "Could not load crawler data." : "No crawler requests in this period.";
   }
   async function load(page) {
     const state = states[page];
     if (state.busy) return;
     state.busy = true; state.refresh.disabled = true;
     state.status.textContent = "Loading data…";
-    // Clear the visible snapshot on every refresh so an error cannot look like fresh data.
     state.content.hidden = true;
     try {
-      const [catalog,overview,month,traffic,week] = await Promise.all([
-        request("/api/catalog"),request("/api/analytics/overview"),
-        request("/api/analytics/campaigns?days=30").catch(() => null),
-        page === "traffic" ? request("/api/analytics/traffic?days=7").catch(() => null) : null,
-        page === "traffic" ? request("/api/analytics/campaigns?days=7").catch(() => null) : null,
-      ]);
-      state.rows = rowsFor(catalog,overview);
-      if (page === "stats") renderStats(state.rows,overview,month);
-      else renderTraffic(state.rows,overview,traffic,week,month);
-      state.limit = 20; renderTable(page);
-      const ids = new Set(state.rows.map(row => row.id));
-      const unknown = overview.pages.filter(item => !ids.has(String(item.page_id))).length;
-      state.status.textContent = "Updated at " + new Intl.DateTimeFormat("en-GB",{hour:"2-digit",minute:"2-digit"}).format(new Date()) + (unknown ? " · " + unknown + " stats IDs are not in the current catalog" : "") + (page === "traffic" && !traffic ? " · some data is unavailable" : "");
+      const clock = () => new Intl.DateTimeFormat("en-GB",{hour:"2-digit",minute:"2-digit"}).format(new Date());
+      if (page === "stats") {
+        const [catalog,overview,month] = await Promise.all([
+          request("/api/catalog"),request("/api/analytics/overview"),
+          request("/api/analytics/campaigns?days=30").catch(() => null),
+        ]);
+        state.rows = rowsFor(catalog,overview);
+        renderStats(state.rows,overview,month);
+        state.limit = 20; renderTable(page);
+        const ids = new Set(state.rows.map(row => row.id));
+        const unknown = overview.pages.filter(item => !ids.has(String(item.page_id))).length;
+        state.status.textContent = "Updated at " + clock() + (unknown ? " · " + unknown + " stats IDs are not in the current catalog" : "");
+      } else {
+        const traffic = await request("/api/analytics/traffic?days=7");
+        renderTraffic(traffic);
+        state.status.textContent = "Updated at " + clock() + (traffic.sampled ? " · sampled analytics" : "");
+      }
       state.loaded = true; state.content.hidden = false;
     } catch (_) {
       state.loaded = false;
@@ -949,8 +861,8 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
     } finally { state.busy = false; state.refresh.disabled = false; }
   }
   for (const [page,state] of Object.entries(states)) {
-    for (const [control,event] of [[state.search,"input"],[state.sort,"change"]]) control.addEventListener(event,() => {state.limit=20;renderTable(page);});
-    state.more.addEventListener("click",() => {state.limit+=20;renderTable(page);});
+    for (const [control,event] of [[state.search,"input"],[state.sort,"change"]]) if (control) control.addEventListener(event,() => {state.limit=20;renderTable(page);});
+    if (state.more) state.more.addEventListener("click",() => {state.limit+=20;renderTable(page);});
     state.refresh.addEventListener("click",() => load(page));
   }
   window.AdminAnalytics = {open(page) {if (states[page] && !states[page].loaded) return load(page);}};
