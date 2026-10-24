@@ -73,11 +73,20 @@ cleanup path.
 ## #1202 distinct full-release replacement (SOURCE ONLY — NOT INSTALLED)
 
 `--replace-from=<exact previous release SHA-256>` is separate from `--upgrade-from`.
-The only accepted predecessor is `e65d7b909482fe67629e1da0b42bc5a1b78f255397c01a789941240035b9b066`.
+The only accepted predecessor is the verified installed **two-file-upgraded** release
+`b91a67fb34014bf0425ab6d0e488c8239a3083738084beaa8323cd10b002f22d` from reviewed `RPi5_main@dc1eb44f4f8bb24a4dba20418a91c4756d3875be`
+(launcher Git blob `e1e7bf859669dfc5bd1a949e78d78c76a18f42bb`). The prior original
+release `e65d7b909482fe67629e1da0b42bc5a1b78f255397c01a789941240035b9b066` remains immutable historical provenance for the
+unchanged provisioner, core, Worker and Wrangler config; it is **not** accepted
+as the six-file replacement's installed predecessor. The old `--upgrade-from`
+launcher/release-only operation and its original predecessor check remain unchanged.
 A future preflight requires exact clean source checkout `main`, reviewed app checkout, verified
 historical previous release, fixed root-owned directory metadata, a *names-only* inventory
 of exactly `core.py`, `stats-worker.js`, `wrangler.stats-worker.jsonc` and `release.json`,
-and for each of six installed package files: no symlink, single link, exact root:root
+and independent historical proof that the intermediate commit changed exactly
+launcher and release metadata, with the other four predecessor source files byte-identical,
+plus SHA-256 reconstruction of that intermediate release; and for each of six
+installed package files: no symlink, single link, exact root:root
 mode and SHA-256 equal to the proven historical predecessor. It also requires
 the exact sudo allowlist for each read and all six fixed `install -T` commands.
 Missing rights, missing predecessor files, partial previous upgrades, unknown extra files,
