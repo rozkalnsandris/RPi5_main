@@ -117,3 +117,51 @@ If any mutation fails or outcome becomes uncertain, STOP with only narrowly
 allowed read-only evidence; no automated cleanup or second attempt. An
 OnFailure hook can send on a *future* new failure; no production failure
 is induced as a test. No public notification delivery is proven by this PR.
+
+
+## Purpose-specific Telegram credential source and independent gates
+
+As observed on RPi5 (2026-10-24), both fixed Weather v7 Telegram
+credential paths are **absent**, even when their metadata was checked
+with sudo. This is not a permission error and is not remedied by
+installing the notifier. No token or chat ID was disclosed or read.
+
+The separate source files are:
+
+- `scripts/weather-v7-telegram-credentials-helper.py` — one-time,
+  fixed-purpose provisioner. It **refuses root execution from a Git checkout**;
+  only the root-owned executable at
+  `/usr/local/sbin/rpi5-weather-v7-telegram-credentials` with mode
+  `0500` may run.
+- `scripts/install-weather-v7-telegram-credentials-helper.py` —
+  default offline Git/source SHA and contract check; opt-in bounded read-only
+  target metadata preflight, then separately LIVE-authorized first-install
+  of **only** the fixed helper executable. Never installs/reads credentials.
+- `ops/contracts/weather-v7-telegram-credentials-v1.json` —
+  exact paths, modes, sequencing and owner gates.
+
+After the operator independently obtains a **dedicated Telegram BotFather
+bot token** and the intended chat ID, a **separate exact LIVE credential
+provisioning authorization** is required. The installed helper accepts both
+values solely from a foreground controlling TTY with echo disabled,
+validates both before writing, rejects preexisting/symlink targets, and
+creates exactly the two named files under the already-existing,
+root-controlled `/etc/credstore` directory via
+`O_CREAT|O_EXCL|O_NOFOLLOW`, mode `0600`, root ownership,
+and `fsync`. No token/chat ID goes through the shell command line,
+environment, GitHub, logs, systemd journal or this chat.
+
+**Owner gates remain separate**: (1) reviewed helper file installation,
+(2) private credential provisioning, then (3) the already-merged Weather
+v7 notifier installer. Each requires fresh main/source and host baseline
+evidence. Installing the helper does not authorize creating any credential,
+and creating both credentials does not authorize changing systemd.
+The existing accepted historical caller \`failed/exit=78\` state must
+remain untouched.
+
+If either protected file creation fails after the first write,
+**STOP with no automatic retry, cleanup, replacement or rollback**.
+Partial credential state requires a new explicit owner recovery decision.
+No test should intentionally generate a Weather failure or send a
+production Telegram message. A bot token is never to be pasted into chat,
+GitHub issues or Actions variables.
