@@ -1118,6 +1118,96 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
             exact.assert_not_called()
             dispatched.assert_not_called()
 
+    def test_full_replace_installed_identity_rejects_symlink_and_missing_file(self):
+        path = installer.CORE
+        with mock.patch.object(installer, "invoke", return_value=mock.Mock(returncode=0)):
+            with self.assertRaisesRegex(installer.Stop, "upgrade_target_symlink"):
+                installer.installed_exact(path, "400", b"previous")
+        with (
+            mock.patch.object(installer, "invoke", return_value=mock.Mock(returncode=1)),
+            mock.patch.object(installer, "sudo_read", side_effect=installer.Stop("sudo_read_failed")),
+        ):
+            with self.assertRaisesRegex(installer.Stop, "sudo_read_failed"):
+                installer.installed_exact(path, "400", b"previous")
+
+    def test_full_replace_installed_identity_rejects_owner_mode_hardlink_and_hash(self):
+        path = installer.WORKER
+        payload = b"historical-worker"
+        for metadata in (
+            "1000:0:400:regular file:1",
+            "0:0:440:regular file:1",
+            "0:0:400:regular file:2",
+            "0:0:400:directory:1",
+        ):
+            with self.subTest(metadata=metadata), (
+                mock.patch.object(installer, "invoke", return_value=mock.Mock(returncode=1)),
+                mock.patch.object(installer, "sudo_read", return_value=metadata),
+            ):
+                with self.assertRaisesRegex(installer.Stop, "upgrade_target_metadata_mismatch"):
+                    installer.installed_exact(path, "400", payload)
+        with (
+            mock.patch.object(installer, "invoke", return_value=mock.Mock(returncode=1)),
+            mock.patch.object(installer, "sudo_read", side_effect=[
+                "0:0:400:regular file:1", "0" * 64 + "  " + path,
+            ]),
+        ):
+            with self.assertRaisesRegex(installer.Stop, "upgrade_target_digest_mismatch"):
+                installer.installed_exact(path, "400", payload)
+
+    def test_full_replace_historical_manifest_tamper_rejected(self):
+        with (
+            mock.patch.object(installer, "historical", return_value=b"synthetic"),
+            mock.patch.object(installer, "git_blob", return_value=installer.OLD_WORKER_BLOB),
+            mock.patch.object(installer, "release_bytes", return_value=b"tampered"),
+        ):
+            with self.assertRaisesRegex(installer.Stop, "old_release_identity_mismatch"):
+                installer.predecessor_payloads()
+
+    def test_full_replace_missing_exact_sudo_rights_blocks_first_write(self):
+        old = {p: ("500" if p in (installer.EXE, installer.PROVISION) else "400", b"old")
+               for p in installer.REPLACE_TARGETS}
+        def invoke(args, **_):
+            missing = args[:4] == [installer.SUDO, "-n", "-l", "--"]
+            return mock.Mock(returncode=1 if missing and args[-1] == installer.PROVISION
+                             else 1 if args == [installer.SUDO, "-n", installer.TEST, "-L", installer.LIB]
+                             else 0)
+        with (
+            mock.patch.object(installer, "checkout"),
+            mock.patch.object(installer, "application_checkout"),
+            mock.patch.object(installer, "tracked", return_value=b"synthetic"),
+            mock.patch.object(installer, "release_bytes", return_value=b"manifest"),
+            mock.patch.object(installer, "predecessor_payloads", return_value=old),
+            mock.patch.object(installer, "parents_preflight"),
+            mock.patch.object(installer, "sudo_read", side_effect=lambda args, **kw:
+                "0:0:700:directory" if args[0] == installer.STAT
+                else "\n".join(installer.EXPECTED_ROOT_MEMBERS)),
+            mock.patch.object(installer, "installed_exact") as checked,
+            mock.patch.object(installer, "invoke", side_effect=invoke),
+            mock.patch.object(installer, "write_once") as written,
+        ):
+            with self.assertRaisesRegex(installer.Stop, "sudo_exact_full_replace_not_allowed"):
+                installer.replace_full("d" * 40, installer.OLD_RELEASE_SHA256)
+            self.assertEqual(checked.call_count, 6)
+            written.assert_not_called()
+
+    def test_full_replace_requires_explicit_apply_confirmation(self):
+        with mock.patch.object(installer, "replace_full") as apply:
+            status = installer.main([
+                "--expected-main", "d" * 40,
+                "--replace-from", installer.OLD_RELEASE_SHA256, "--apply",
+            ])
+            self.assertEqual(status, 3)
+            apply.assert_not_called()
+        with mock.patch.object(installer, "replace_full") as apply:
+            status = installer.main([
+                "--expected-main", "d" * 40,
+                "--replace-from", installer.OLD_RELEASE_SHA256, "--apply",
+                "--confirm", installer.REPLACE_CONFIRM,
+                "--upgrade-from", installer.OLD_LAUNCHER_BLOB,
+            ])
+            self.assertEqual(status, 3)
+            apply.assert_not_called()
+
     def test_source_contract_keeps_live_authority_closed(self):
         contract = json.loads(
             (ROOT / "ops/contracts/ausmalwiese-stats-worker-runtime-v1.json").read_text()
