@@ -20,8 +20,8 @@ CONTRACT_PATH = ROOT / "ops/contracts/ausmalwiese-stats-worker-exact-deploy-v1.j
 ACCOUNT_SHA256 = "3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34"
 WORKER = "coloring-pages-stats-v1"
 SOURCE_REPO = "rozkalnsandris/coloring-pages"
-SOURCE_COMMIT = "e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63"
-SOURCE_BLOB = "c2ac9da6e0701103e0041b30db7dfbea4298f96c"
+SOURCE_COMMIT = "97741638b4cb52a3241533f30485c0e7529fdd82"
+SOURCE_BLOB = "ccb68d7bbf12474f32e0f94d574ead1b02cd9c7e"
 ROUTES = {
     "coloring.rozkalns.net/api/stats/*": "rozkalns.net",
     "ausmalwiese.de/api/stats/*": "ausmalwiese.de",
@@ -94,6 +94,15 @@ def verify_source(worker_bytes: Any) -> None:
     need('const PRINT_QR_HOST = "ausmalwiese.de";' in source
          and 'const PRINT_QR_DESTINATION = "https://ausmalwiese.de/";' in source,
          "SOURCE_QR_DRIFT")
+    need(
+        'const host = "ausmalwiese.de";' in source
+        and "clientRequestHTTPHost: host," in source
+        and "ANALYTICS_RANGE_DAYS.has(requestedDays)" in source
+        and "cloudflare_traffic_version:1" in source
+        and "http_requests:httpRequests" in source
+        and 'http_requests_basis:"cloudflare-http-eyeball-requests"' in source,
+        "SOURCE_TRAFFIC_DRIFT",
+    )
 
 def _fingerprint(x: Any, code: str) -> str:
     need(type(x) is str and DIGEST.fullmatch(x) is not None, code)
