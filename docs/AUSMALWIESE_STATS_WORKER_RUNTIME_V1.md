@@ -9,10 +9,10 @@ deployment is what still sends `/q` to the legacy host.
 ## Frozen application provenance
 
 - repository: `rozkalnsandris/coloring-pages`
-- immutable Worker/config provenance commit: `97741638b4cb52a3241533f30485c0e7529fdd82`
-- operational installer checkout commit: `97741638b4cb52a3241533f30485c0e7529fdd82`
+- immutable Worker/config provenance commit: `d0b00304bb18af1a5a4dfd0b4d0f838c47cea9b1`
+- operational installer checkout commit: `d0b00304bb18af1a5a4dfd0b4d0f838c47cea9b1`
 - Worker: `cloudflare/stats-worker.js`
-- Worker Git blob: `ccb68d7bbf12474f32e0f94d574ead1b02cd9c7e`
+- Worker Git blob: `8790a8ddc3b83771088c4cceb16a3b57ce5d1c8b`
 - Wrangler config Git blob:
   `3733263a391274f2b6b0f2023c8656565bde8e1a`
 - target Worker: `coloring-pages-stats-v1`
@@ -24,13 +24,13 @@ The exact deploy core in
 provenance. It remains a pure protocol core; only the separately installed
 runtime below may provide authenticated transport.
 
-## #1200 Cloudflare-only Traffic source repin (not installed)
+## #1204 Cloudflare-only Traffic + privacy source repin (not installed)
 
-- Application commit: `97741638b4cb52a3241533f30485c0e7529fdd82`, Worker Git blob `ccb68d7bbf12474f32e0f94d574ead1b02cd9c7e`; unchanged Wrangler config `3733263a391274f2b6b0f2023c8656565bde8e1a`.
+- Application commit: `d0b00304bb18af1a5a4dfd0b4d0f838c47cea9b1`, Worker Git blob `8790a8ddc3b83771088c4cceb16a3b57ce5d1c8b`; unchanged Wrangler config `3733263a391274f2b6b0f2023c8656565bde8e1a`.
 - New source verifier requires exact `ausmalwiese.de` host, HTTP-host filter, guarded 7/30-day ranges, `cloudflare_traffic_version:1`, HTTP Requests and its Cloudflare HTTP basis. Requests are not unique visitors or browser page views.
 - Historical predecessor remains app `e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63`, Worker blob `c2ac9da6e0701103e0041b30db7dfbea4298f96c`, and original old-release SHA-256. These are immutable predecessor evidence.
 - Existing `--upgrade-from` is launcher/release-only and rejects changed Worker or core via `upgrade_scope_drift`. Existing `--apply` rejects occupied root-owned targets. This repin cannot replace an installed package. A separately reviewed full-release replacement plus explicit LIVE authorization is required; neither is granted here.
-- Open upstream PR #369 lacks merged #368 Traffic fields. A subsequent Worker change invalidates this repin, requiring new source review. Production zone and code-byte verification remain separate protected preflight gates.
+- PR #369 is merged at `d0b00304bb18af1a5a4dfd0b4d0f838c47cea9b1`. The frozen source now keeps #368 Traffic host fields and #256 retired personalized-route HTTP 410 behavior together. Any future Worker change invalidates this repin; provider/module bytes and LIVE zone verification remain distinct owner gates.
 ## Fixed installed layout
 
 A future separately authorized installation may create only:
@@ -43,8 +43,8 @@ A future separately authorized installation may create only:
 
 The source-only installer requires exact clean `RPi5_main/main`. It also
 requires the application checkout to be branch `main` at the exact operational
-checkout commit `97741638b4cb52a3241533f30485c0e7529fdd82`, while the Worker/config bytes must still
-match the immutable provenance blobs from `97741638b4cb52a3241533f30485c0e7529fdd82`. The pinned checkout
+checkout commit `d0b00304bb18af1a5a4dfd0b4d0f838c47cea9b1`, while the Worker/config bytes must still
+match the immutable provenance blobs from `d0b00304bb18af1a5a4dfd0b4d0f838c47cea9b1`. The pinned checkout
 does not change Worker/config content or widen deploy semantics; unrelated
 application working-tree changes do not widen the install scope.
 
@@ -98,9 +98,10 @@ The legacy launcher/release-only `--upgrade-from` remains unchanged.
 
 Source CI demonstrates only offline synthetic behavior, not actual root permissions,
 host readiness, active Worker version, Cloudflare bindings, or authorization.
-Upstream `coloring-pages` PR #369 still conflicts with #368's Worker code;
-the pinned source is only the current merged `coloring-pages/main` and must be
-reconciled before a future LIVE candidate is approved.
+`coloring-pages` PR #369 is merged into `main` at `d0b00304bb18af1a5a4dfd0b4d0f838c47cea9b1`;
+this candidate binds its reconciled Traffic+privacy Worker blob `8790a8ddc3b83771088c4cceb16a3b57ce5d1c8b`.
+Any later upstream Worker update needs a new reviewed provenance pin. This source-only
+step does not authorize or prove a host installation or provider deployment.
 ## Protected credential
 
 The only write credential path is:
@@ -205,7 +206,7 @@ Cloudflare's version metadata reports default-export handler names in
 `resources.script.handlers`. Those names are derived from the Worker source,
 so they are not part of the preserved runtime-settings fingerprint. For the
 exact reviewed Worker blob
-`ccb68d7bbf12474f32e0f94d574ead1b02cd9c7e`, every provider version whose
+`8790a8ddc3b83771088c4cceb16a3b57ce5d1c8b`, every provider version whose
 main-module SHA-256 equals the reviewed candidate must report exactly the
 sorted handler set `fetch`, `scheduled`.
 
@@ -337,3 +338,10 @@ This source grants no host install, credential read/provisioning, Cloudflare
 request/upload/deploy, token/permission change, D1 write, sitemap publication,
 legacy redirect write, DNS/WAF/Access/Tunnel/settings mutation, LIVE, retry,
 rollback or cleanup authority.
+
+## #1204 final source-only Traffic + privacy provenance (2026-10-24)
+
+- Current reviewed `coloring-pages/main`: `d0b00304bb18af1a5a4dfd0b4d0f838c47cea9b1`, Worker Git blob `8790a8ddc3b83771088c4cceb16a3b57ce5d1c8b`, Wrangler config `3733263a391274f2b6b0f2023c8656565bde8e1a` unchanged.
+- The exact deployment source verifier requires both #368 Cloudflare host-scoped HTTP Requests/range semantics and #256 HTTP 410 retirement for legacy personal writes/cookie endpoints, with aggregate Like/Print and erasure paths present.
+- Old installed predecessor evidence remains immutable: app `e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63`, Worker `c2ac9da6e0701103e0041b30db7dfbea4298f96c`, prior-release SHA-256 `e65d7b909482fe67629e1da0b42bc5a1b78f255397c01a789941240035b9b066`. GitHub cannot verify today's installed predecessor.
+- The six-file full replacement is sequential and non-atomic; host installation, permissions, protected installed package inspection and Cloudflare Worker upload/deployment remain separately owner-gated. No LIVE state change or host eligibility is evidenced by source CI.

@@ -135,11 +135,11 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
     def test_core_repin_is_exact_current_source(self):
         self.assertEqual(
             core.SOURCE_COMMIT,
-            "97741638b4cb52a3241533f30485c0e7529fdd82",
+            "d0b00304bb18af1a5a4dfd0b4d0f838c47cea9b1",
         )
         self.assertEqual(
             core.SOURCE_BLOB,
-            "ccb68d7bbf12474f32e0f94d574ead1b02cd9c7e",
+            "8790a8ddc3b83771088c4cceb16a3b57ce5d1c8b",
         )
         self.assertEqual(
             core.CONFIG_BLOB,
@@ -965,12 +965,15 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
     def test_installer_upgrade_is_exact_predecessor_and_two_targets(self):
         self.assertEqual(
             installer.APP_SHA,
-            "97741638b4cb52a3241533f30485c0e7529fdd82",
+            "d0b00304bb18af1a5a4dfd0b4d0f838c47cea9b1",
         )
         self.assertEqual(
             installer.APP_CHECKOUT_SHA,
-            "97741638b4cb52a3241533f30485c0e7529fdd82",
+            "d0b00304bb18af1a5a4dfd0b4d0f838c47cea9b1",
         )
+        self.assertEqual(installer.WORKER_BLOB, "8790a8ddc3b83771088c4cceb16a3b57ce5d1c8b")
+        self.assertEqual(runtime.WORKER_BLOB, installer.WORKER_BLOB)
+        self.assertEqual(provisioner.WORKER_BLOB, installer.WORKER_BLOB)
         self.assertEqual(installer.OLD_APP_SHA, "e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63")
         self.assertEqual(installer.OLD_WORKER_BLOB, "c2ac9da6e0701103e0041b30db7dfbea4298f96c")
         self.assertEqual(runtime.APP_SHA, installer.APP_SHA)
@@ -1217,15 +1220,15 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
         self.assertEqual(contract["parent_issue"], 996)
         self.assertEqual(
             contract["application_commit"],
-            "97741638b4cb52a3241533f30485c0e7529fdd82",
+            "d0b00304bb18af1a5a4dfd0b4d0f838c47cea9b1",
         )
         self.assertEqual(
             contract["application_checkout_commit"],
-            "97741638b4cb52a3241533f30485c0e7529fdd82",
+            "d0b00304bb18af1a5a4dfd0b4d0f838c47cea9b1",
         )
         self.assertEqual(
             contract["install"]["exact_application_main_required"],
-            "97741638b4cb52a3241533f30485c0e7529fdd82",
+            "d0b00304bb18af1a5a4dfd0b4d0f838c47cea9b1",
         )
         self.assertEqual(
             contract["runtime_modes"]["apply"]["upload_writes_max"], 1

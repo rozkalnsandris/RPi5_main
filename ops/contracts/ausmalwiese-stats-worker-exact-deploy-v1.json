@@ -7,9 +7,9 @@
   "worker": "coloring-pages-stats-v1",
   "environment": "production",
   "source_repo": "rozkalnsandris/coloring-pages",
-  "source_commit": "97741638b4cb52a3241533f30485c0e7529fdd82",
+  "source_commit": "d0b00304bb18af1a5a4dfd0b4d0f838c47cea9b1",
   "source_path": "cloudflare/stats-worker.js",
-  "source_blob": "ccb68d7bbf12474f32e0f94d574ead1b02cd9c7e",
+  "source_blob": "8790a8ddc3b83771088c4cceb16a3b57ce5d1c8b",
   "config_path": "cloudflare/wrangler.stats-worker.jsonc",
   "config_blob": "3733263a391274f2b6b0f2023c8656565bde8e1a",
   "routes": {

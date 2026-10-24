@@ -20,8 +20,8 @@ CONTRACT_PATH = ROOT / "ops/contracts/ausmalwiese-stats-worker-exact-deploy-v1.j
 ACCOUNT_SHA256 = "3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34"
 WORKER = "coloring-pages-stats-v1"
 SOURCE_REPO = "rozkalnsandris/coloring-pages"
-SOURCE_COMMIT = "97741638b4cb52a3241533f30485c0e7529fdd82"
-SOURCE_BLOB = "ccb68d7bbf12474f32e0f94d574ead1b02cd9c7e"
+SOURCE_COMMIT = "d0b00304bb18af1a5a4dfd0b4d0f838c47cea9b1"
+SOURCE_BLOB = "8790a8ddc3b83771088c4cceb16a3b57ce5d1c8b"
 ROUTES = {
     "coloring.rozkalns.net/api/stats/*": "rozkalns.net",
     "ausmalwiese.de/api/stats/*": "ausmalwiese.de",
@@ -102,6 +102,28 @@ def verify_source(worker_bytes: Any) -> None:
         and "http_requests:httpRequests" in source
         and 'http_requests_basis:"cloudflare-http-eyeball-requests"' in source,
         "SOURCE_TRAFFIC_DRIFT",
+    )
+    # The #256 privacy cutover must coexist with #368 Cloudflare-only Traffic.
+    need(
+        'const LEGACY_PERSONALIZED_RETIRED_ERROR = "legacy_personalized_api_retired";' in source
+        and "return json({error:LEGACY_PERSONALIZED_RETIRED_ERROR},410);" in source
+        and 'url.searchParams.has("visitor_id")' in source
+        and 'if (RETIRED_COOKIE_PATHS.has(path)) return legacyPersonalizedRetired();' in source
+        and '"/api/stats/like/session"' in source
+        and '"/api/stats/like/state"' in source
+        and '"/api/stats/like/consent"' in source
+        and '"/api/stats/like/choice"' in source
+        and 'path === "/api/stats/like/forget"' not in source
+        and 'path !== "/api/stats/like/forget"' in source
+        and 'path==="/api/stats/erase-likes"' in source
+        and 'path==="/api/stats/like-aggregate"' in source
+        and 'path==="/api/stats/print-aggregate"' in source
+        and 'path==="/api/stats/print") return legacyPersonalizedRetired()' in source
+        and 'path==="/api/stats/like") return legacyPersonalizedRetired()' in source
+        and "async function toggleLike(" not in source
+        and "async function recordPrint(" not in source
+        and "LIKE_COOKIE_TTL_SECONDS" not in source,
+        "SOURCE_PRIVACY_DRIFT",
     )
 
 def _fingerprint(x: Any, code: str) -> str:

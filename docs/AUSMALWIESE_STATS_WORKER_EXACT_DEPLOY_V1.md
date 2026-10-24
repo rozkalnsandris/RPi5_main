@@ -1,6 +1,6 @@
 # Ausmalwiese Stats Worker: exact-version operator source (#1032)
 
-**SOURCE CORE ONLY · repinned for Traffic by #1200 · no standalone LIVE authority.**
+**SOURCE CORE ONLY · repinned for Traffic + privacy by #1204 · no standalone LIVE authority.**
 
 This is the RPi5_main protocol core for one future owner-gated update of Cloudflare Production Worker `coloring-pages-stats-v1`, to use the already-merged `https://ausmalwiese.de/` QR redirect destination. Its trust boundary ends at the pure fixed-protocol Python module. **It is not an executable Cloudflare deployment tool in its current state** and does not claim to prove the live deployment. A separately security-reviewed, installed and explicitly owner-authorized protected adapter, credential provision and exact LIVE permission remain prerequisites.
 
@@ -9,7 +9,7 @@ This is the RPi5_main protocol core for one future owner-gated update of Cloudfl
 Current #1118 installed-runtime boundary: `docs/AUSMALWIESE_STATS_WORKER_RUNTIME_V1.md`. The pure core remains non-runnable by itself; its current source/config provenance is frozen for that reviewed runtime package.
 
 - GitHub issue: `RPi5_main#1032`, single outcome; no changes to redirect issue `RPi5_main#996`.
-- Source: `rozkalnsandris/coloring-pages@97741638b4cb52a3241533f30485c0e7529fdd82`, `cloudflare/stats-worker.js`, exact Git blob `ccb68d7bbf12474f32e0f94d574ead1b02cd9c7e`.
+- Source: `rozkalnsandris/coloring-pages@d0b00304bb18af1a5a4dfd0b4d0f838c47cea9b1`, `cloudflare/stats-worker.js`, exact Git blob `8790a8ddc3b83771088c4cceb16a3b57ce5d1c8b`.
 - Existing app-side contract merged in `coloring-pages#248`: `deploy/stats-worker-exact-source-v1.json`. This RPi5 contract deliberately repeats and pins the exact Worker, routes and seven bindings.
 - Independently reviewed Cloudflare account SHA-256 fingerprint: `3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34` from `ops/contracts/ausmalwiese-worker-settings-account-binding-v1.json`; fingerprint is not an account ID or authority to use credentials.
 - RPi5 contract: `ops/contracts/ausmalwiese-stats-worker-exact-deploy-v1.json`.
@@ -73,6 +73,6 @@ The source core defines `future_run_once(trusted, approved, worker_bytes)` for *
 
 `#1032` ends at GitHub branch/PR, offline tests, CI and Ready review. **No MERGE, credentials, Cloudflare LIVE, RPi5 host operations or settings changes** occur in this issue. Any operator install, credential provision, API read/write, secret preservation proof, or LIVE deployment requires a fresh exact owner decision and actual access rights. If that trust boundary cannot be completed, status is `SOURCE READY / LIVE STOP`.
 
-## #1200 Traffic source-only gate
+## #1204 Traffic + privacy source-only gate
 
-This candidate requires the exact `ausmalwiese.de` HTTP-host filter and HTTP request API fields. The old LIVE/installed Worker remains historically pinned to `c2ac9da6e0701103e0041b30db7dfbea4298f96c`; launcher-only upgrades cannot repin Worker/core. No Cloudflare or host mutation is authorized. PR #369 must be reconciled so older Stats Worker code cannot discard #368 Traffic additions.
+This candidate requires the exact `ausmalwiese.de` HTTP-host filter and HTTP request API fields. The old LIVE/installed Worker remains historically pinned to `c2ac9da6e0701103e0041b30db7dfbea4298f96c`; launcher-only upgrades cannot repin Worker/core. No Cloudflare or host mutation is authorized. PR #369 has been merged at `d0b00304bb18af1a5a4dfd0b4d0f838c47cea9b1`; this candidate preserves #368 Traffic fields and retires #256 personalized routes. It is not installed, and any subsequent Worker change requires a fresh source review.
