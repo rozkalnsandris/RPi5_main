@@ -17,10 +17,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "ops/deploy/weather-v7-failure-telegram-install-v1.json"
-ORIGINS = frozenset({
-    "https://github.com/rozkalnsandris/RPi5_main.git",
-    "git@github.com:rozkalnsandris/RPi5_main.git",
-})
+ORIGINS = frozenset({"https://github.com/rozkalnsandris/RPi5_main.git"})
 CALLER_UNIT = "rozkalns-weather-operator-v7-dispatch-caller.service"
 TIMER_UNIT = "rozkalns-weather-operator-v7-dispatch-caller.timer"
 NOTIFIER_SOURCE = "ops/bin/rozkalns-weather-v7-failure-telegram"

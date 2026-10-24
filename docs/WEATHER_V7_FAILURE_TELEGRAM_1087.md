@@ -63,7 +63,8 @@ install paths/ownership, proof that the historical failed state is retained,
 dry-run-free synthetic validation, and a new-event acceptance plan that does
 not induce a production failure. Both unit files and the helper need an
 independently reviewed controlled install route; this PR does **not** provide
-a privileged installer or authorization to use an ad hoc copy.
+an authorization to use an ad hoc copy. The separately gated installer
+source is defined in the continuation below.
 Changing systemd state, `daemon-reload`, an actual Telegram send, service
 restart, timer trigger, `reset-failed`, reboot or any protected runtime
 inspection remains outside the source authorization.
@@ -80,9 +81,8 @@ exact prospective operation. **Source delivery does not authorize runtime
 preflight, credential inspection, or LIVE mutation.** Do not execute this
 installer against RPi5 until fresh owner permission covers the exact action.
 
-The command modes are intentionally distinct (the SHA below is an example
-binding to be replaced with a **fresh merged main SHA**, not a standing
-authorization):
+The command modes are intentionally distinct. The required SHA must bind a
+**fresh verified merged main SHA**; it is never a standing authorization:
 
 - Default `--expected-main-sha SHA`: offline source-only check of a
   clean canonical `main` checkout, expected Git origin, tracked
