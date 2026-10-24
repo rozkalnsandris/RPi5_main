@@ -3,8 +3,8 @@
 #
 # No network, no pump, no live Home Assistant: every curl URL is answered by a
 # local mock and every sleep is a no-op. The Telegram endpoint is intercepted
-# locally so message policy (watering / normal skip / error / frost block) can be
-# asserted without any outbound request.
+# locally through a fake HA mqtt.publish -> Balkona bot bridge, so watering,
+# no-watering reasons, errors and frost can be asserted without network.
 set -Eeuo pipefail
 IFS=$'\n\t'
 
@@ -69,7 +69,7 @@ case "$url" in
         case "${MOCK_SENSOR_MODE:-valid}" in
             empty) exit 0 ;;
             malformed) printf '{bad-json' ;;
-            valid|retired|active_missing|active_unavailable|active_unknown|active_odd_state|one_dry|all_wet|retired_only)
+            valid|retired|active_missing|active_unavailable|active_unknown|active_dry_unavailable|all_active_unavailable|active_odd_state|one_dry|all_wet|retired_only)
                 python3 - "${MOCK_SENSOR_MODE:-valid}" <<'PY'
 import json
 import os
@@ -80,7 +80,7 @@ mode = sys.argv[1]
 active = [1] + list(range(3, 14))
 retired = [2, 14, 15]
 soon = (datetime.now(timezone.utc) + timedelta(hours=6)).replace(microsecond=0).isoformat()
-target = 5
+target = 1 if mode == "active_dry_unavailable" else 5
 dry = [1, 3, 7]
 
 states = []
@@ -94,10 +94,13 @@ for i in active:
         state = "mitrs"
     elif i in dry:
         state = "sauss"
-    if mode in ("active_unavailable", "active_unknown", "active_odd_state") and i == target:
+    if mode == "all_active_unavailable":
+        state = "unavailable"
+    elif mode in ("active_unavailable", "active_unknown", "active_dry_unavailable", "active_odd_state") and i == target:
         state = {
             "active_unavailable": "unavailable",
             "active_unknown": "unknown",
+            "active_dry_unavailable": "unavailable",
             "active_odd_state": "kalibracija",
         }[mode]
     states.append({"entity_id": "sensor.balkona_laistisana_puke_%d" % i, "state": state})
@@ -132,13 +135,27 @@ PY
             *) echo "unknown MOCK_SENSOR_MODE" >&2; exit 97 ;;
         esac
         ;;
+    */api/services/mqtt/publish)
+        # Real curl reads the notification body on stdin via --data-binary @-.
+        # Assert the notification-only topic can NEVER command the pump.
+        python3 -c '
+import json
+import os
+import sys
+data = json.load(sys.stdin)
+assert set(data) == {"topic", "payload", "qos", "retain"}
+assert data["topic"] == "balkons/telegram_out"
+assert data["qos"] == 0 and data["retain"] is False
+assert isinstance(data["payload"], str) and data["payload"]
+if os.environ.get("MOCK_MQTT_CODE", "200") == "200":
+    with open(os.environ["MOCK_TG_FILE"], "a", encoding="utf-8") as out:
+        out.write(data["payload"] + "\n")
+'
+        printf '%s' "${MOCK_MQTT_CODE:-200}"
+        ;;
     https://api.telegram.org/*)
-        for arg in "$@"; do
-            case "$arg" in
-                text=*) printf '%s\n' "${arg#text=}" >>"${MOCK_TG_FILE:?}" ;;
-            esac
-        done
-        printf '{"ok":true}'
+        echo "unexpected direct Telegram route" >&2
+        exit 99
         ;;
     *)
         echo "unexpected curl URL in offline test: ${url:-<none>}" >&2
@@ -157,8 +174,6 @@ chmod +x "$tmp/bin/sleep"
 export PATH="$tmp/bin:$PATH"
 export HASS_URL="http://home-assistant.invalid"
 export HASS_TOKEN="offline-test-token"
-export TELEGRAM_TOKEN="offline-test-token"
-export CHAT_ID="12345"
 export MOCK_ACTIONS="$actions"
 export MOCK_TG_FILE="$tg"
 export MOCK_SWITCH_STATE_FILE="$switch_state"
@@ -229,10 +244,11 @@ export MOCK_SENSOR_MODE=valid
 reset_run
 run_autumn
 [[ "$rc" -eq 0 ]] || fail "case 1 expected exit 0, got ${rc}"
+grep -qF 'NOTIFY-MQTT: submitted to balcony bot bridge' "$logfile" || fail "case 1 must record MQTT handoff"
 assert_actions 'on,off'
 assert_tg_count 1
-assert_tg_contains 'Balcony autumn watering done: 45s'
-assert_tg_contains 'dry before 3/12 (1,3,7)'
+assert_tg_contains 'Laistīts: 45 s'
+assert_tg_contains 'sausi 3/12 sensori (1,3,7)'
 [[ -f "$tmp/state/last-watered" ]] || fail "case 1 must record the watering date"
 [[ "$(cat "$tmp/state/last-watered")" == "$(TZ=Europe/Berlin date '+%Y-%m-%d')" ]] || fail "case 1 recorded an unexpected date"
 
@@ -242,20 +258,53 @@ reset_run
 run_autumn
 [[ "$rc" -eq 0 ]] || fail "case 2 expected exit 0, got ${rc}"
 assert_actions 'on,off'
-assert_tg_contains 'dry before 3/12'
+assert_tg_contains 'sausi 3/12 sensori'
 
-# 3: an active sensor that is missing, unavailable, unknown or reports an
-# unexpected categorical value is uncertainty, not dryness, and blocks the run.
-for mode in active_missing active_unavailable active_unknown active_odd_state; do
+# 3: one missing/unavailable/unknown active sensor is counted as moist,
+# explicitly marked as assumed, and does not suppress watering with three dry.
+for mode in active_missing active_unavailable active_unknown; do
     export MOCK_SENSOR_MODE="$mode"
     reset_run
     run_autumn
     [[ "$rc" -eq 0 ]] || fail "case 3 (${mode}) expected exit 0, got ${rc}"
-    assert_actions ''
+    assert_actions 'on,off'
     assert_tg_count 1
-    assert_tg_contains 'skipped'
-    [[ -f "$tmp/state/last-watered" ]] && fail "case 3 (${mode}) must not record a watering"
+    assert_tg_contains 'Laistīts:'
+    assert_tg_contains 'nav pieejami sensori: 5 (pieņemti mitri)'
+    grep -qF 'SENSOR-FALLBACK: unavailable/missing/unknown sensors 5' "$logfile" || fail "case 3 (${mode}) must log assumed sensor"
+    [[ -f "$tmp/state/last-watered" ]] || fail "case 3 (${mode}) must record the watering day"
 done
+
+# 3a: unexpected valid-looking categorical text still blocks watering.
+export MOCK_SENSOR_MODE=active_odd_state
+reset_run
+run_autumn
+[[ "$rc" -eq 0 ]] || fail 'case 3a expected exit 0'
+assert_actions ''
+assert_tg_count 1
+assert_tg_contains 'unexpected sensor state'
+
+# 3b: missing reading is NEVER treated as dry. With one of the three dry
+# sensors unavailable, the wet-enough guard may still prevent watering.
+export MOCK_SENSOR_MODE=active_dry_unavailable
+reset_run
+run_autumn
+[[ "$rc" -eq 0 ]] || fail 'case 3b expected exit 0'
+assert_actions ''
+assert_tg_count 1
+assert_tg_contains 'Nav laistīts'
+assert_tg_contains 'nav pieejami sensori: 1 (pieņemti mitri)'
+
+# 3c: all active readings unavailable must NEVER trigger pump ON.
+export MOCK_SENSOR_MODE=all_active_unavailable
+reset_run
+run_autumn
+[[ "$rc" -eq 0 ]] || fail 'case 3c expected exit 0'
+assert_actions ''
+assert_tg_count 1
+assert_tg_contains 'Nav laistīts'
+assert_tg_contains 'nav pieejami sensori: 1,3,4,5,6,7,8,9,10,11,12,13 (pieņemti mitri)'
+[[ -f "$tmp/state/last-watered" ]] && fail 'case 3c must not mark watering'
 
 # 4: Home Assistant transport and JSON failures fail closed with a message.
 export MOCK_SENSOR_MODE=empty
@@ -278,6 +327,7 @@ run_autumn
 assert_actions ''
 assert_tg_count 1
 assert_tg_contains 'Nav laistīts'
+assert_tg_contains 'sausi tikai 1/12 sensori (vajag vismaz 2)'
 [[ -f "$tmp/state/last-watered" ]] && fail "case 5 must not record a watering"
 
 # 6: an already wet tray is left alone and reports no watering.
@@ -287,6 +337,7 @@ run_autumn
 assert_actions ''
 assert_tg_count 1
 assert_tg_contains 'Nav laistīts'
+assert_tg_contains 'sausi tikai 0/12 sensori (vajag vismaz 2)'
 
 # 7: frost risk blocks watering and reports itself.
 export MOCK_SENSOR_MODE=valid
@@ -296,7 +347,7 @@ run_autumn
 [[ "$rc" -eq 0 ]] || fail "case 7 expected exit 0, got ${rc}"
 assert_actions ''
 assert_tg_count 1
-assert_tg_contains 'frost risk'
+assert_tg_contains 'sala risks'
 [[ -f "$tmp/state/last-watered" ]] && fail "case 7 must not record a watering"
 
 # 8: a low current temperature blocks even when the forecast attribute is the
@@ -306,7 +357,7 @@ export MOCK_FORECAST_SERVICE_MODE=ok MOCK_FORECAST_MIN=1.0
 reset_run
 run_autumn
 assert_actions ''
-assert_tg_contains 'frost risk'
+assert_tg_contains 'sala risks'
 
 # 9: unusable temperature data fails closed.
 export MOCK_SENSOR_MODE=weather_badjson
@@ -370,7 +421,7 @@ reset_run
 export BALCONY_AUTUMN_DURATION_SECONDS=60
 run_autumn
 assert_actions 'on,off'
-assert_tg_contains 'done: 60s'
+assert_tg_contains 'Laistīts: 60 s'
 export BALCONY_AUTUMN_DURATION_SECONDS=181
 reset_run
 run_autumn
@@ -424,5 +475,15 @@ assert_actions ''
 assert_tg_count 1
 assert_tg_contains 'cita izpilde jau darbojas'
 exec 201>&-
+
+# 18: Failed MQTT notification is logged with no duplicate send or pump.
+reset_run
+export MOCK_SENSOR_MODE=one_dry MOCK_MQTT_CODE=503
+run_autumn
+[[ "$rc" -eq 0 ]] || fail 'case 18 expected unchanged skip exit'
+assert_actions ''
+assert_tg_count 0
+grep -qF 'NOTIFY-WARN: balcony bot MQTT publish failed (HTTP 503)' "$logfile" || fail 'case 18 must log failed handoff'
+unset MOCK_MQTT_CODE
 
 printf 'Balcony autumn watering regression: PASS (quorum gate, frost gate, once-per-day, fail-closed sensors, message policy)\n'

@@ -89,9 +89,9 @@ Creating, disabling or editing Hermes schedules, installing the controller at a 
 ### Gates, in order
 
 1. **State fetch** — one `GET /api/states` snapshot. An empty answer is a skip with an error notification.
-2. **Active sensor set** — exactly 12 entities: flowers 1 and 3–13. Retired flowers 2, 14 and 15 are never required, never counted and never treated as dry. An active sensor that is missing, `unavailable`, `unknown` or carries an unexpected categorical value is uncertainty: the run skips and no pump request is made.
-3. **Quorum** — watering is considered only when at least `BALCONY_MIN_DRY_SENSORS` (default `2`) of the 12 active sensors report `sauss`. A single dry sensor never waters the whole tray.
-4. **Wet-enough guard** — when at least `BALCONY_MAX_MOIST_SENSORS` (default `10`) of the 12 report `mitrs`, the run skips quietly.
+2. **Active sensor set** — exactly 12 entities: flowers 1 and 3–13. Retired flowers 2, 14 and 15 are never required, never counted and never treated as dry. At the owner's request, an active moisture sensor missing from the snapshot, or reporting `unavailable`/`unknown`/empty, is **assumed moist, not measured moist**. These assumptions are separately logged and included in the Telegram outcome. An unexpected categorical value still blocks watering; empty/invalid HA responses block the whole run. This fallback is confined to the autumn/winter controller, not the stricter primary/summer controller above.
+3. **Quorum** — watering is considered only when at least `BALCONY_MIN_DRY_SENSORS` (default `2`) of the 12 active sensors **actually report** `sauss`. A single dry sensor never waters the whole tray; unavailable sensors can never count as dry.
+4. **Wet-enough guard** — when at least `BALCONY_MAX_MOIST_SENSORS` (default `10`) of the 12 are reported or **assumed** `mitrs`, the run skips with a no-watering notification. Sensor absence therefore cannot force a watering cycle.
 5. **Frost gate** — the low temperature for the next 24 h is read from the weather entity `forecast` attribute. When that attribute is absent, the read-only `weather.get_forecasts` service is used. The lower of that low and the current temperature is compared with `BALCONY_FROST_THRESHOLD_C` (default `2.0`); at or below the threshold the run is blocked and reported as a frost block. When no usable temperature can be obtained, the run skips with an error. `BALCONY_FROST_REQUIRE_FORECAST=0` downgrades a missing forecast to the current temperature with a logged warning; the default `1` keeps it fail-closed.
 
 `BALCONY_AUTUMN_DRY_RUN=1` executes every gate, logs the decision and suppresses the pump request, all Telegram messages and the day marker. It exists so a preflight can prove what the controller would do before anything is live.
@@ -110,7 +110,9 @@ The ESP32 keeps its independent 180 s pump fail-safe. This controller neither we
 
 ### Message policy
 
-Telegram notifications use the existing RPi5 notifications bot (the script's `TELEGRAM_TOKEN` and `CHAT_ID`), not the Hermes Agent bot. Each scheduled outcome is logged locally and reported there: a real watering cycle (duration and dry sensor count), a normal **Nav laistīts** skip (too few dry sensors, tray already wet, or already watered today), an error (unreachable Home Assistant, unusable state JSON/sensors/temperature, unconfirmed ON or OFF), a frost block, or a lock-contention warning. Dry-run suppresses all Telegram notifications. Hermes cron delivery should remain `local` to prevent duplicate raw execution logs in the Hermes Agent chat. Changing that production cron delivery remains a separately authorized LIVE step.
+The autumn/winter controller delivers its notifications via **Home Assistant MQTT publish → `balkons/telegram_out` → existing balcony Telegram bot** (user-facing `@balkona_laistisana_bot`). The bot bridge source `ops/lib/balkons-bot.py` subscribes to this notification-only topic and sends to its configured chat. The controller posts an exact `{"topic":"balkons/telegram_out","payload":"…","qos":0,"retain":false}` object to HA `POST /api/services/mqtt/publish` using its **existing** HA API access; no direct Telegram request, bot token duplication, new MQTT credential, or publication to pump topic `balkons/cmd`. This requires the HA MQTT integration and the balcony bot to be online. A successful HA API reply proves only MQTT submission, **not Telegram receipt**.
+
+Each run records `watering.log` and sends **Laistīts** with duration/dry count, **Nav laistīts** with a specific reason (insufficient measured dry sensors, soil already moist, already watered that day, frost, or sensor/temperature checks), **Kļūda** for unsafe pump outcomes, or a lock-contention warning. An unavailable active moisture sensor is explicitly listed as **assumed moist**, never described as measured. `NOTIFY-MQTT` logs successful handoff; `NOTIFY-WARN` records a failed handoff without retry or changing the watering decision. Dry-run suppresses all MQTT/Telegram notifications. Hermes cron delivery stays `local` to prevent duplicate raw logs in the Hermes Agent chat. A separate exact LIVE approval is needed to install source and later verify one ordinary scheduled delivery without triggering watering.
 
 ### Manual commands and frost (evaluation)
 
@@ -134,7 +136,7 @@ Required runtime inputs:
 
 Optional runtime inputs:
 
-- `TELEGRAM_TOKEN` and `CHAT_ID` — enable skip notifications when both are supplied;
+- The autumn/winter notification route uses the same existing `HASS_URL` and `HASS_TOKEN` as its other HA operations; it does **not** use `TELEGRAM_TOKEN` or `CHAT_ID`. Other primary/summer scripts retain their separately documented legacy delivery environment.
 - `BALCONY_WATERING_ENTITY` — pump entity override;
 - `BALCONY_WATERING_DURATION_SECONDS` — default `60`;
 - `BALCONY_WATERING_PAUSE_SECONDS` — default `300`;
@@ -178,12 +180,12 @@ A later production mapping may provide these inputs through a protected host-onl
 
 The repository-wide `make validate` gate includes this regression together with shell syntax, secret scanning, and public-repository safety checks.
 
-`tests/test-balcony-watering-autumn.sh` covers the cold-season controller with the same offline technique — local `curl` and `sleep` mocks, a reserved `.invalid` origin and a locally intercepted Telegram endpoint, so no request leaves the machine and no pump action is possible. It verifies:
+`tests/test-balcony-watering-autumn.sh` covers the cold-season controller with the same offline technique — local `curl` and `sleep` mocks, a reserved `.invalid` origin and a locally intercepted Home Assistant MQTT publish endpoint, so no request leaves the machine and no pump action is possible. It verifies:
 
 1. three dry pots of twelve with a mild night => exactly one confirmed `on,off` cycle, one watering message and a recorded day marker;
 2. retired 2/14/15 `unavailable` => still waters and never counts as dry;
-3. active sensor missing, `unavailable`, `unknown` or unexpected categorical value => skip with an error message, no pump request, no day marker;
-4. empty or malformed Home Assistant state payload => skip with an error message;
+3. active sensor missing/`unavailable`/`unknown` with three confirmed dry => one safe watering cycle and assumption reported; unexpected categorical value => skip with an error message;
+4. active dry sensor unavailable or all 12 unavailable => never trigger watering; empty/malformed Home Assistant snapshot => skip with error;
 5. one dry sensor => skip, exactly one no-watering Telegram message;
 6. tray already moist => skip, exactly one no-watering Telegram message;
 7. forecast low at or below the frost threshold => blocked with a frost message and no pump request;
