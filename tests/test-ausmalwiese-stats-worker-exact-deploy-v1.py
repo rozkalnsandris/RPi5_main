@@ -110,10 +110,10 @@ class ExactWorkerGateTests(unittest.TestCase):
         self.assertTrue(c["merge_approval"])
         self.assertEqual(c["issue"], 1118)
         self.assertEqual(
-            c["source_commit"], "97741638b4cb52a3241533f30485c0e7529fdd82"
+            c["source_commit"], "d0b00304bb18af1a5a4dfd0b4d0f838c47cea9b1"
         )
         self.assertEqual(
-            c["source_blob"], "ccb68d7bbf12474f32e0f94d574ead1b02cd9c7e"
+            c["source_blob"], "8790a8ddc3b83771088c4cceb16a3b57ce5d1c8b"
         )
         self.assertEqual(
             c["config_blob"], "3733263a391274f2b6b0f2023c8656565bde8e1a"
@@ -155,6 +155,20 @@ class ExactWorkerGateTests(unittest.TestCase):
             "cloudflare_traffic_version:1\n"
             "http_requests:httpRequests\n"
             'http_requests_basis:"cloudflare-http-eyeball-requests"\n'
+            'const LEGACY_PERSONALIZED_RETIRED_ERROR = "legacy_personalized_api_retired";\n'
+            'return json({error:LEGACY_PERSONALIZED_RETIRED_ERROR},410);\n'
+            'url.searchParams.has("visitor_id")\n'
+            'if (RETIRED_COOKIE_PATHS.has(path)) return legacyPersonalizedRetired();\n'
+            '"/api/stats/like/session"\n'
+            '"/api/stats/like/state"\n'
+            '"/api/stats/like/consent"\n'
+            '"/api/stats/like/choice"\n'
+            'path !== "/api/stats/like/forget"\n'
+            'path==="/api/stats/erase-likes"\n'
+            'path==="/api/stats/like-aggregate"\n'
+            'path==="/api/stats/print-aggregate"\n'
+            'path==="/api/stats/print") return legacyPersonalizedRetired()\n'
+            'path==="/api/stats/like") return legacyPersonalizedRetired()\n'
         ).encode("utf-8")
         with mock.patch.object(op, "git_blob", return_value=op.SOURCE_BLOB):
             op.verify_source(raw)
@@ -169,6 +183,34 @@ class ExactWorkerGateTests(unittest.TestCase):
                 with self.subTest(lost=lost):
                     with self.assertRaisesRegex(op.Blocked, "SOURCE_TRAFFIC_DRIFT"):
                         op.verify_source(raw.replace(lost, b""))
+
+            for lost in (
+                b'const LEGACY_PERSONALIZED_RETIRED_ERROR = "legacy_personalized_api_retired";',
+                b"return json({error:LEGACY_PERSONALIZED_RETIRED_ERROR},410);",
+                b'url.searchParams.has("visitor_id")',
+                b'if (RETIRED_COOKIE_PATHS.has(path)) return legacyPersonalizedRetired();',
+                b'"/api/stats/like/session"',
+                b'"/api/stats/like/state"',
+                b'"/api/stats/like/consent"',
+                b'"/api/stats/like/choice"',
+                b'path !== "/api/stats/like/forget"',
+                b'path==="/api/stats/erase-likes"',
+                b'path==="/api/stats/like-aggregate"',
+                b'path==="/api/stats/print-aggregate"',
+                b'path==="/api/stats/print") return legacyPersonalizedRetired()',
+                b'path==="/api/stats/like") return legacyPersonalizedRetired()',
+            ):
+                with self.subTest(lost=lost):
+                    with self.assertRaisesRegex(op.Blocked, "SOURCE_PRIVACY_DRIFT"):
+                        op.verify_source(raw.replace(lost, b""))
+            for new_personalized_write in (
+                b"async function toggleLike(",
+                b"async function recordPrint(",
+                b"LIKE_COOKIE_TTL_SECONDS",
+            ):
+                with self.subTest(forbidden=new_personalized_write):
+                    with self.assertRaisesRegex(op.Blocked, "SOURCE_PRIVACY_DRIFT"):
+                        op.verify_source(raw + new_personalized_write)
     def test_snapshot_positive_and_upload_metadata(self):
         x = snapshot()
         self.assertEqual(op.validate_snapshot(x), x)

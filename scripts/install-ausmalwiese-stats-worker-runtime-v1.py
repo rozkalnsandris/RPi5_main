@@ -20,10 +20,10 @@ SOURCE_ROOT = Path(__file__).resolve().parents[1]
 APP_ROOT = SOURCE_ROOT.parent / "coloring-pages"
 REPO = "rozkalnsandris/RPi5_main"
 APP_REPO = "rozkalnsandris/coloring-pages"
-APP_SHA = "97741638b4cb52a3241533f30485c0e7529fdd82"
+APP_SHA = "d0b00304bb18af1a5a4dfd0b4d0f838c47cea9b1"
 # Operational source checkout pin. Worker/config provenance remains APP_SHA because
 # their exact Git blobs are unchanged at this newer canonical application main.
-APP_CHECKOUT_SHA = "97741638b4cb52a3241533f30485c0e7529fdd82"
+APP_CHECKOUT_SHA = "d0b00304bb18af1a5a4dfd0b4d0f838c47cea9b1"
 
 LAUNCHER_REL = "scripts/ausmalwiese_stats_worker_runtime_v1.py"
 PROVISIONER_REL = "scripts/ausmalwiese_stats_worker_provisioner_v1.py"
@@ -32,7 +32,7 @@ SOURCE_PATHS = (LAUNCHER_REL, PROVISIONER_REL, CORE_REL)
 
 WORKER_REL = "cloudflare/stats-worker.js"
 CONFIG_REL = "cloudflare/wrangler.stats-worker.jsonc"
-WORKER_BLOB = "ccb68d7bbf12474f32e0f94d574ead1b02cd9c7e"
+WORKER_BLOB = "8790a8ddc3b83771088c4cceb16a3b57ce5d1c8b"
 CONFIG_BLOB = "3733263a391274f2b6b0f2023c8656565bde8e1a"
 
 GIT = "/usr/bin/git"

@@ -32,9 +32,9 @@ SECRET = SECRET_DIR / "ausmalwiese-stats-worker-write.json"
 
 REPOSITORY = "rozkalnsandris/RPi5_main"
 APP_REPOSITORY = "rozkalnsandris/coloring-pages"
-APP_SHA = "97741638b4cb52a3241533f30485c0e7529fdd82"
+APP_SHA = "d0b00304bb18af1a5a4dfd0b4d0f838c47cea9b1"
 WORKER = "coloring-pages-stats-v1"
-WORKER_BLOB = "ccb68d7bbf12474f32e0f94d574ead1b02cd9c7e"
+WORKER_BLOB = "8790a8ddc3b83771088c4cceb16a3b57ce5d1c8b"
 CONFIG_BLOB = "3733263a391274f2b6b0f2023c8656565bde8e1a"
 CANDIDATE_HANDLERS = ("fetch", "scheduled")
 ACCOUNT_SHA256 = "3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34"
