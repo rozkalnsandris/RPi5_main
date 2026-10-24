@@ -1,0 +1,64 @@
+{
+  "schema": "rozkalns.rpi5-main.stats-zone-binding.v1",
+  "repository": "rozkalnsandris/RPi5_main",
+  "issue": 1211,
+  "status": "SOURCE_ONLY_NO_LIVE",
+  "worker": "coloring-pages-stats-v1",
+  "environment": "production",
+  "target_zone": "ausmalwiese.de",
+  "only_changed_binding": "CF_ZONE_TAG",
+  "source_protocol": "scripts/ausmalwiese_stats_zone_binding_v1.py",
+  "candidate_code_sha256": "47f7490918d25e8f1dcc683cebe3c4d3d9a75230f33ae5a1d26cbd6bd3ec1173",
+  "source_blob": "8790a8ddc3b83771088c4cceb16a3b57ce5d1c8b",
+  "config_blob": "3733263a391274f2b6b0f2023c8656565bde8e1a",
+  "expected_bindings": [
+    "DB",
+    "RATE_LIMITER",
+    "PUBLIC_ORIGIN",
+    "CF_ANALYTICS_HOST",
+    "CF_ZONE_TAG",
+    "VISITOR_HMAC_KEY",
+    "CF_ANALYTICS_API_TOKEN"
+  ],
+  "preserve": [
+    "Worker code and handler set",
+    "all four routes and zone ownership",
+    "PUBLIC_ORIGIN and CF_ANALYTICS_HOST unchanged",
+    "D1 and RATE_LIMITER identities",
+    "both inherited secret_text bindings without accessing values",
+    "compatibility date and flags and settings",
+    "worker deployment code digest",
+    "permissions, settings, DNS, Cloudflare Access/WAF/Tunnel"
+  ],
+  "approved_future_provider_protocol": {
+    "first_write": "one script Version Upload with bindings_inherit=strict, six inherit and one plain_text CF_ZONE_TAG",
+    "second_write": "one newly uploaded exact UUID deployment at 100 percent, only after upload code/binding/route/config proof",
+    "max_uploads": 1,
+    "max_deploys": 1,
+    "retries": 0,
+    "rollback": false,
+    "cleanup": false,
+    "alternate_transport": false
+  },
+  "future_adapter_requirements": [
+    "separate source review and runtime installation LIVE owner gate",
+    "protected root-owned runtime must verify full source/config installation and credential allowlist",
+    "verified_zone_id must authenticate official Cloudflare zone name/status, no raw IDs logged",
+    "double-read sanitized snapshot before any mutation",
+    "owner-authorized active UUID and snapshot SHA256 and candidate bytes",
+    "one-shot provider write budgets consumed before dispatch",
+    "provider version module digest and handlers verified before/after",
+    "old and new version metadata bindings and settings independently compared"
+  ],
+  "evidence": "Issue #1211 sanitized Cloudflare provider read-only comparison; mismatch proven; current Stats Worker live version was ef2bbcd5-3b2b-4673-aa8f-c2945801ff25 at discovery, must refresh",
+  "source_merge_authorizes_live": false,
+  "source_merge_authorizes_install": false,
+  "code_has_provider_transport": false,
+  "code_has_protected_credential_reader": false,
+  "tests": "tests/test-ausmalwiese-stats-zone-binding-v1.py",
+  "owner_gates": [
+    "separate exact-head MERGE expressly required by #1211 frozen scope",
+    "independent future trusted adapter/host installer review and LIVE authority",
+    "independent exact Cloudflare version upload+deploy owner authorization"
+  ]
+}
