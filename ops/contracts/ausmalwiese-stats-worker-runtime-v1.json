@@ -236,6 +236,37 @@
       "retries": 0,
       "rollback": false,
       "cleanup": false
+    },
+    "full_replace": {
+      "issue": 1202,
+      "confirmation": "REPLACE-AUSMALWIESE-STATS-WORKER-FULL-RELEASE",
+      "predecessor_release_sha256": "e65d7b909482fe67629e1da0b42bc5a1b78f255397c01a789941240035b9b066",
+      "predecessor_application_sha": "e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63",
+      "predecessor_worker_blob": "c2ac9da6e0701103e0041b30db7dfbea4298f96c",
+      "replacement_targets": [
+        "/usr/local/sbin/rpi5-ausmalwiese-stats-worker-deploy-provision",
+        "/usr/local/libexec/rpi5-ausmalwiese-stats-worker-deploy/core.py",
+        "/usr/local/libexec/rpi5-ausmalwiese-stats-worker-deploy/stats-worker.js",
+        "/usr/local/libexec/rpi5-ausmalwiese-stats-worker-deploy/wrangler.stats-worker.jsonc",
+        "/usr/local/sbin/rpi5-ausmalwiese-stats-worker-deploy",
+        "/usr/local/libexec/rpi5-ausmalwiese-stats-worker-deploy/release.json"
+      ],
+      "write_dispatches_max": 6,
+      "target_root_unchanged": true,
+      "identity_preflight_required": true,
+      "exact_source_commit_required": true,
+      "full_directory_member_inventory_required": true,
+      "installed_modes_digests_and_link_counts_required": true,
+      "exact_preapproved_sudo_commands_required": true,
+      "atomic": false,
+      "partial_failure": "STOP_UNKNOWN_STATE",
+      "retries": 0,
+      "rollback": false,
+      "cleanup": false,
+      "owner_live_approval": false,
+      "source_only": true,
+      "cloudflare_writes": 0,
+      "permission_change": false
     }
   },
   "future_composite_live_sequence": [

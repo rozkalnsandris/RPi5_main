@@ -998,6 +998,126 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
         self.assertIn("sudo_exact_upgrade_not_allowed", source)
         self.assertIn("!= APP_CHECKOUT_SHA", source)
 
+    def test_full_replace_protocol_fixed_scope_and_identity(self):
+        self.assertEqual(installer.REPLACE_FROM_RELEASE, installer.OLD_RELEASE_SHA256)
+        self.assertEqual(len(installer.REPLACE_TARGETS), 6)
+        self.assertEqual(set(installer.REPLACE_TARGETS), {
+            installer.EXE, installer.PROVISION, installer.CORE,
+            installer.WORKER, installer.CONFIG, installer.RELEASE,
+        })
+        self.assertEqual(installer.UPGRADE_TARGETS, (installer.EXE, installer.RELEASE))
+        with self.assertRaisesRegex(installer.Stop, "invalid_full_replace_predecessor"):
+            installer.replace_preflight("d" * 40, "f" * 64)
+        source = _INSTALL.read_text(encoding="utf-8")
+        self.assertNotIn("os.environ", source)
+        self.assertNotIn("cloudflare.com/api", source)
+        self.assertIn('parser.add_argument("--replace-from", default="")', source)
+
+    def test_full_replace_preflight_existing_exact_files_and_inventory(self):
+        old = {path: ("500" if path in (installer.EXE, installer.PROVISION) else "400",
+                      b"predecessor-" + path.encode("ascii"))
+               for path in installer.REPLACE_TARGETS}
+        def tracked(_root, rel, _allowed, **_kwargs):
+            return rel.encode("utf-8")
+        def sudo_read(args, **_kwargs):
+            if args[0] == installer.FIND:
+                return "\n".join(installer.EXPECTED_ROOT_MEMBERS)
+            return "0:0:700:directory"
+        def invoke(args, *_, **_kwargs):
+            return mock.Mock(returncode=1 if args == [installer.SUDO, "-n", installer.TEST, "-L", installer.LIB] else 0)
+        with (
+            mock.patch.object(installer, "checkout"),
+            mock.patch.object(installer, "application_checkout"),
+            mock.patch.object(installer, "tracked", side_effect=tracked),
+            mock.patch.object(installer, "release_bytes", return_value=b"future-release"),
+            mock.patch.object(installer, "predecessor_payloads", return_value=old),
+            mock.patch.object(installer, "parents_preflight"),
+            mock.patch.object(installer, "installed_exact") as exact,
+            mock.patch.object(installer, "sudo_read", side_effect=sudo_read) as read,
+            mock.patch.object(installer, "invoke", side_effect=invoke) as calls,
+        ):
+            result = installer.replace_preflight("d" * 40, installer.OLD_RELEASE_SHA256)
+            self.assertEqual(len(result), 6)
+            self.assertEqual(exact.call_count, 6)
+            self.assertEqual(calls.call_count, 8)  # root symlink + inventory sudo-l + six sudo-l
+            read.assert_any_call([installer.FIND, installer.LIB, "-mindepth", "1",
+                                  "-maxdepth", "1", "-printf", "%f\\n"], runner=mock.ANY)
+
+    def test_full_replace_preflight_rejects_untrusted_host_before_writes(self):
+        old = {path: ("500", b"old") for path in installer.REPLACE_TARGETS}
+        def sudo_read(args, **_kwargs):
+            return "0:0:700:directory" if args[0] != installer.FIND else "unknown.py"
+        with (
+            mock.patch.object(installer, "checkout"),
+            mock.patch.object(installer, "application_checkout"),
+            mock.patch.object(installer, "tracked", return_value=b"candidate"),
+            mock.patch.object(installer, "release_bytes", return_value=b"manifest"),
+            mock.patch.object(installer, "predecessor_payloads", return_value=old),
+            mock.patch.object(installer, "parents_preflight"),
+            mock.patch.object(installer, "sudo_read", side_effect=sudo_read),
+            mock.patch.object(installer, "invoke", return_value=mock.Mock(returncode=0)) as invoked,
+            mock.patch.object(installer, "write_once") as dispatched,
+        ):
+            with self.assertRaisesRegex(installer.Stop, "full_replace_root_untrusted"):
+                installer.replace_full("d" * 40, installer.OLD_RELEASE_SHA256)
+            dispatched.assert_not_called()
+            self.assertEqual(invoked.call_count, 1)
+
+    def test_full_replace_stops_at_first_ambiguous_mutation(self):
+        candidate = {p: ("500" if p in (installer.EXE, installer.PROVISION) else "400", p.encode())
+                     for p in installer.REPLACE_TARGETS}
+        calls = []
+        def broken_write(args, payload, **_kwargs):
+            calls.append(args[-1])
+            if len(calls) == 3:
+                raise RuntimeError("synthetic dispatch uncertainty")
+        with (
+            mock.patch.object(installer, "replace_preflight", return_value=candidate),
+            mock.patch.object(installer, "write_once", side_effect=broken_write),
+            mock.patch.object(installer, "post_verify") as verified,
+        ):
+            with self.assertRaisesRegex(installer.Stop, "post_dispatch_unknown_state"):
+                installer.replace_full("d" * 40, installer.OLD_RELEASE_SHA256)
+            self.assertEqual(calls, list(installer.REPLACE_TARGETS[:3]))
+            verified.assert_not_called()
+
+    def test_full_replace_success_sends_only_six_writes_then_verifies(self):
+        candidate = {p: ("500" if p in (installer.EXE, installer.PROVISION) else "400", p.encode())
+                     for p in installer.REPLACE_TARGETS}
+        with (
+            mock.patch.object(installer, "replace_preflight", return_value=candidate),
+            mock.patch.object(installer, "write_once") as dispatched,
+            mock.patch.object(installer, "post_verify") as verified,
+        ):
+            installer.replace_full("d" * 40, installer.OLD_RELEASE_SHA256)
+            self.assertEqual(dispatched.call_count, 6)
+            self.assertEqual([a.args[0][-1] for a in dispatched.call_args_list],
+                             list(installer.REPLACE_TARGETS))
+            self.assertEqual(verified.call_count, 1)
+            self.assertEqual(verified.call_args.args[0][0], (installer.LIB, "700", None))
+
+    def test_full_replace_inventory_and_files_fail_closed(self):
+        candidate = {p: ("400", b"data") for p in installer.REPLACE_TARGETS}
+        with (
+            mock.patch.object(installer, "checkout"),
+            mock.patch.object(installer, "application_checkout"),
+            mock.patch.object(installer, "tracked", return_value=b"data"),
+            mock.patch.object(installer, "release_bytes", return_value=b"release"),
+            mock.patch.object(installer, "predecessor_payloads", return_value=candidate),
+            mock.patch.object(installer, "parents_preflight"),
+            mock.patch.object(installer, "sudo_read", side_effect=lambda args, **k:
+                "0:0:700:directory" if args[0] == installer.STAT else
+                "\n".join(installer.EXPECTED_ROOT_MEMBERS + ("extra",))),
+            mock.patch.object(installer, "invoke", side_effect=lambda args, **k:
+                mock.Mock(returncode=1 if args == [installer.SUDO, "-n", installer.TEST, "-L", installer.LIB] else 0)),
+            mock.patch.object(installer, "installed_exact") as exact,
+            mock.patch.object(installer, "write_once") as dispatched,
+        ):
+            with self.assertRaisesRegex(installer.Stop, "full_replace_inventory_drift"):
+                installer.replace_full("d" * 40, installer.OLD_RELEASE_SHA256)
+            exact.assert_not_called()
+            dispatched.assert_not_called()
+
     def test_source_contract_keeps_live_authority_closed(self):
         contract = json.loads(
             (ROOT / "ops/contracts/ausmalwiese-stats-worker-runtime-v1.json").read_text()
