@@ -142,7 +142,7 @@ def values_from_owner_tty() -> tuple[str, str]:
 
 
 def validate_values(token: str, chat: str) -> None:
-    if (not isinstance(token, str) or len(token) > MAX_BYTES
+    if (not isinstance(token, str) or len(token) >= MAX_BYTES
             or BOT_TOKEN.fullmatch(token) is None):
         raise Stop("bot_token_format_invalid")
     if not isinstance(chat, str) or CHAT_ID.fullmatch(chat) is None:

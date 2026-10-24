@@ -79,7 +79,12 @@ class CredentialsSourceTests(unittest.TestCase):
             directory_fd = helper.os.open(tmp, helper.os.O_DIRECTORY | helper.os.O_RDONLY)
             try:
                 # No root host access: private temporary test directory only.
-                helper.exclusive_credential(directory_fd, "test-credential", token)
+                fake_root = SimpleNamespace(
+                    st_mode=0o100600, st_uid=0, st_gid=0, st_nlink=1,
+                    st_size=len(token.encode()) + 1,
+                )
+                with mock.patch.object(helper.os, "fstat", return_value=fake_root):
+                    helper.exclusive_credential(directory_fd, "test-credential", token)
                 path = Path(tmp) / "test-credential"
                 self.assertEqual(path.stat().st_mode & 0o777, 0o600)
                 self.assertEqual(path.read_bytes(), token.encode() + b"\n")
