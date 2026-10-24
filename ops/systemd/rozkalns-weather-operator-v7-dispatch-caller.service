@@ -3,6 +3,7 @@ Description=Weather v7 identity-only privileged dispatch caller
 After=network-online.target rozkalns-weather-operator-v7-privileged-broker.socket
 Wants=network-online.target
 Requires=rozkalns-weather-operator-v7-privileged-broker.socket
+OnFailure=rozkalns-weather-v7-failure-telegram.service
 
 [Service]
 Type=oneshot

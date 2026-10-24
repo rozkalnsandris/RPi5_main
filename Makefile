@@ -2,6 +2,7 @@
 
 test:
 	./tests/test-shell-syntax.sh
+	python3 ./tests/test-weather-v7-failure-telegram.py
 	bash ./tests/test-run-gitleaks-ci-arch.sh
 	bash ./tests/test-run-gitleaks-ci-history-scope.sh
 	python3 ./tests/test-start-mode-routing.py

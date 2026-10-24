@@ -1,0 +1,34 @@
+[Unit]
+Description=Weather v7 fixed-unit Telegram failure notification
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+DynamicUser=yes
+ExecStart=/usr/local/libexec/rozkalns-weather-v7-failure-telegram
+LoadCredential=telegram-token:/etc/credstore/weather-v7-failure-telegram-token
+LoadCredential=telegram-chat-id:/etc/credstore/weather-v7-failure-telegram-chat-id
+StateDirectory=rozkalns-weather-v7-failure-telegram
+StateDirectoryMode=0700
+Environment=PYTHONDONTWRITEBYTECODE=1
+TimeoutStartSec=20s
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
