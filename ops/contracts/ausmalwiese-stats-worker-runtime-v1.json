@@ -240,7 +240,7 @@
     "full_replace": {
       "issue": 1202,
       "confirmation": "REPLACE-AUSMALWIESE-STATS-WORKER-FULL-RELEASE",
-      "predecessor_release_sha256": "e65d7b909482fe67629e1da0b42bc5a1b78f255397c01a789941240035b9b066",
+      "predecessor_release_sha256": "b91a67fb34014bf0425ab6d0e488c8239a3083738084beaa8323cd10b002f22d",
       "predecessor_application_sha": "e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63",
       "predecessor_worker_blob": "c2ac9da6e0701103e0041b30db7dfbea4298f96c",
       "replacement_targets": [
@@ -266,7 +266,12 @@
       "owner_live_approval": false,
       "source_only": true,
       "cloudflare_writes": 0,
-      "permission_change": false
+      "permission_change": false,
+      "predecessor_source_main": "dc1eb44f4f8bb24a4dba20418a91c4756d3875be",
+      "predecessor_launcher_blob": "e1e7bf859669dfc5bd1a949e78d78c76a18f42bb",
+      "original_release_sha256": "e65d7b909482fe67629e1da0b42bc5a1b78f255397c01a789941240035b9b066",
+      "proof": "old-six-file-reconstruction-plus-intermediate-commit-launcher-and-identical-provisioner-core-and-full-release-sha256",
+      "predecessor_two_file_upgrade_only": true
     }
   },
   "future_composite_live_sequence": [

@@ -64,7 +64,9 @@ OLD_LAUNCHER_BLOB = "d64b2f330da67d9f95927d06bd1984f4aac4a343"
 OLD_RELEASE_SHA256 = "e65d7b909482fe67629e1da0b42bc5a1b78f255397c01a789941240035b9b066"
 UPGRADE_TARGETS = (EXE, RELEASE)
 # Six exact existing files, deliberately distinct from launcher-only UPGRADE.
-REPLACE_FROM_RELEASE = OLD_RELEASE_SHA256
+REPLACE_INSTALLED_MAIN = "dc1eb44f4f8bb24a4dba20418a91c4756d3875be"
+REPLACE_INSTALLED_LAUNCHER_BLOB = "e1e7bf859669dfc5bd1a949e78d78c76a18f42bb"
+REPLACE_FROM_RELEASE = "b91a67fb34014bf0425ab6d0e488c8239a3083738084beaa8323cd10b002f22d"
 REPLACE_CONFIRM = "REPLACE-AUSMALWIESE-STATS-WORKER-FULL-RELEASE"
 REPLACE_TARGETS = (PROVISION, CORE, WORKER, CONFIG, EXE, RELEASE)
 FIND = "/usr/bin/find"
@@ -321,6 +323,39 @@ def predecessor_payloads(*, runner=subprocess.run):
     }
 
 
+
+def replace_predecessor_payloads(*, runner=subprocess.run):
+    """Reconstruct only the reviewed two-file-upgraded installed predecessor."""
+    original = predecessor_payloads(runner=runner)
+    launcher = historical(
+        SOURCE_ROOT, REPLACE_INSTALLED_MAIN, LAUNCHER_REL,
+        expected_blob=REPLACE_INSTALLED_LAUNCHER_BLOB, runner=runner,
+    )
+    # The intermediate upgrade changed exactly the launcher and release.json.
+    if (
+        historical(
+            SOURCE_ROOT, REPLACE_INSTALLED_MAIN, PROVISIONER_REL, runner=runner
+        ) != original[PROVISION][1]
+        or historical(
+            SOURCE_ROOT, REPLACE_INSTALLED_MAIN, CORE_REL, runner=runner
+        ) != original[CORE][1]
+    ):
+        raise Stop("full_replace_installed_source_drift")
+    manifest = release_bytes(
+        REPLACE_INSTALLED_MAIN, launcher,
+        original[PROVISION][1], original[CORE][1],
+        original[WORKER][1], original[CONFIG][1],
+        app_sha=OLD_APP_SHA, worker_blob=OLD_WORKER_BLOB,
+    )
+    if hashlib.sha256(manifest).hexdigest() != REPLACE_FROM_RELEASE:
+        raise Stop("full_replace_installed_release_mismatch")
+    return {
+        **original,
+        EXE: ("500", launcher),
+        RELEASE: ("400", manifest),
+    }
+
+
 def installed_exact(path: str, mode: str, payload: bytes, *, runner=subprocess.run):
     symlink = invoke([SUDO, "-n", TEST, "-L", path], runner=runner)
     if symlink.returncode == 0:
@@ -511,7 +546,7 @@ def replace_preflight(
         EXE: ("500", launcher),
         RELEASE: ("400", release),
     }
-    old = predecessor_payloads(runner=runner)
+    old = replace_predecessor_payloads(runner=runner)
     if set(old) != set(REPLACE_TARGETS):
         raise Stop("full_replace_predecessor_scope")
     parents_preflight(runner=runner)
