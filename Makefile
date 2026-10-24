@@ -22,6 +22,7 @@ test:
 	python3 ./tests/test-simple-deploy-v1.py
 	python3 ./tests/test-simple-deploy-pointer-failure-926.py
 	python3 ./tests/test-simple-deploy-executor-upgrade-933.py
+	python3 ./tests/test-cv-live-stats-rollout-1000.py
 	python3 ./tests/test-simple-deploy-timer-restoration-v1.py
 	python3 ./tests/test-simple-deploy-per-target-timer-v1.py
 	python3 ./tests/test-simple-deploy-blocker-remediation-v1.py
@@ -30,14 +31,23 @@ test:
 	python3 ./tests/test-simple-deploy-hermes-prerequisite-recovery-v3.py
 	python3 ./tests/test-simple-deploy-hermes-prerequisite-v4.py
 	python3 ./tests/test-hermes-private-env-child.py
+	python3 ./tests/test-hermes-state-adoption.py
 	python3 ./tests/test-coloring-pages-drive-ingest-operator-v1.py
 	python3 ./tests/test-coloring-pages-sitemap-publisher-v1.py
+	python3 ./tests/test-ausmalwiese-sitemap-writer-gate-v1.py
+	python3 ./tests/test-ausmalwiese-sitemap-writer-gate-installer-v1.py
 	python3 ./tests/test-coloring-pages-sitemap-installer-v1.py
 	python3 ./tests/test-coloring-pages-sitemap-post-publish-v1.py
+	python3 ./tests/test-ausmalwiese-catalog-hide-v1.py
+	python3 ./tests/test-ausmalwiese-catalog-hide-installer-v1.py
+	python3 ./tests/test-ausmalwiese-sitemap-cutover-v1.py
+	python3 ./tests/test-coloring-pages-sitemap-upgrade-v1.py
+	python3 ./tests/test-ausmalwiese-coordinated-upgrade-v1.py
 	python3 ./tests/test-simple-deploy-coloring-pages-alignment-v1.py
 	python3 ./tests/test-simple-deploy-rozkalns-cv-compat-v1.py
 	python3 ./tests/test_rozkalns_cv_private_env_materializer.py
 	python3 ./tests/test-simple-deploy-hermes-household-ui-v1.py
+	python3 ./tests/test-hermes-ui-activation-candidate.py
 	python3 ./tests/test-simple-deploy-hermes-compat-v1.py
 	python3 ./tests/test_hermes_tech_simple_deploy_cutover_contract.py
 	python3 ./tests/test_rozkalns_cv_simple_deploy_cutover_contract.py
@@ -182,7 +192,43 @@ test:
 	python3 ./tests/test-cloudflare-phase4-admin-route-origin.py
 	python3 ./tests/test-cloudflare-phase4-admin-remaining-infra.py
 	python3 ./tests/test-cloudflare-rdc-operator.py
+	python3 ./tests/test-ausmalwiese-worker-settings-get-v1.py
+	python3 ./tests/test-ausmalwiese-worker-settings-transport-design-v1.py
+	python3 ./tests/test-ausmalwiese-worker-settings-executor-v1.py
+	python3 ./tests/test-ausmalwiese-worker-settings-installer-v1.py
+	python3 ./tests/test-ausmalwiese-worker-settings-provisioner-v1.py
+	python3 ./tests/test-ausmalwiese-worker-settings-provision-installer-v1.py
+	python3 ./tests/test-ausmalwiese-report-worker-preflight-v1.py
+	python3 ./tests/test-ausmalwiese-report-trusted-operator-v1.py
+	python3 ./tests/test-ausmalwiese-report-protected-adapter-v1.py
+	python3 ./tests/test-ausmalwiese-report-trusted-transport-v1.py
+	python3 ./tests/test-ausmalwiese-report-protected-operator-v1.py
+	python3 ./tests/test-ausmalwiese-report-secrets-provisioner-v1.py
+	python3 ./tests/test-ausmalwiese-report-secrets-provision-installer-v1.py
+	python3 ./tests/test-ausmalwiese-report-wrangler-deploy-v1.py
+	python3 ./tests/test-ausmalwiese-report-wrangler-verify-v2.py
+	python3 ./tests/test-ausmalwiese-report-wrangler-runtime-boundary-v1.py
+	python3 ./tests/test-ausmalwiese-report-wrangler-runtime-installer-v1.py
+	python3 ./tests/test-ausmalwiese-stats-worker-exact-deploy-v1.py
+	python3 ./tests/test-ausmalwiese-stats-worker-transport-v1.py
+	python3 ./tests/test-ausmalwiese-stats-worker-runtime-v1.py
+	python3 ./tests/test-ausmalwiese-stats-version-module-proof-v1.py
+	python3 ./tests/test-ausmalwiese-stats-wrangler-conflict-v1.py
+	python3 ./tests/test-ausmalwiese-stats-wrangler-inventory-v1.py
+	python3 ./tests/test-ausmalwiese-stats-wrangler-inventory-runtime-v1.py
+	python3 ./tests/test-ausmalwiese-stats-wrangler-versions-diagnostic-v1.py
+	python3 ./tests/test-ausmalwiese-stats-privacy-d1-migration-v1.py
+	python3 ./tests/test-ausmalwiese-stats-gate-a-d1-runtime-v1.py
+	python3 ./tests/test-ausmalwiese-stats-gate-a-d1-runtime-installer-v1.py
+	python3 ./tests/test-ausmalwiese-gsc-txt.py
+	python3 ./tests/test-ausmalwiese-legacy-redirect-source.py
+	python3 ./tests/test-ausmalwiese-redirect-inventory-source.py
+	python3 ./tests/test-ausmalwiese-redirect-adapter-source.py
+	python3 ./tests/test-ausmalwiese-redirect-trusted-install-source.py
+	python3 ./tests/test-ausmalwiese-redirect-write-v1.py
+	python3 ./tests/test-ausmalwiese-redirect-write-runtime-v1.py
 	python3 ./tests/test-cloudflare-zone-bot-waf.py
+	python3 ./tests/test-ausmalwiese-crawler-policy-v1.py
 	python3 ./tests/test-cloudflare-zone-bot-waf-install.py
 	python3 ./tests/test-cloudflare-zone-bot-waf-replace.py
 	python3 ./tests/test-cloudflare-rdc-operator-install.py
@@ -203,9 +249,10 @@ test:
 	python3 ./tests/test-cv-deploy-readiness.py
 	python3 ./tests/test-cv-pull-deploy-controller.py
 	python3 ./tests/test-cv-controller-activation.py
+	python3 ./tests/test-ausmalwiese-admin-simple-deploy-v1.py
 	python3 ./tests/test-cv-classifier-host-alignment.py
 	python3 ./tests/test-cv-pull-deploy-canary.py
-	python3 -m py_compile scripts/*.py ops/lib/dashboard-evidence.py ops/bin/hermes-tech-restore-drill ops/lib/balkons-bot.py ops/bin/balkons-bot-preflight ops/bin/balkons-bot-deploy-verifier ops/bin/balkons-bot-latency-operator ops/bin/simple-deploy-executor-upgrade-933 ops/lib/deploy_executor/*.py
+	python3 -m py_compile scripts/*.py ops/lib/dashboard-evidence.py ops/bin/hermes-tech-restore-drill ops/lib/balkons-bot.py ops/bin/balkons-bot-preflight ops/bin/balkons-bot-deploy-verifier ops/bin/balkons-bot-latency-operator ops/bin/simple-deploy-executor-upgrade-933 ops/bin/rozkalns-cv-live-stats-rollout-1000 ops/lib/deploy_executor/*.py
 
 secret-scan:
 	./scripts/check-no-secrets.sh

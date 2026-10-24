@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "status": "SOURCE_ONLY_ACCOUNT_BINDING_PENDING",
+  "issue": 1002,
+  "install_source": "scripts/install-ausmalwiese-worker-settings-get.py",
+  "account_binding_file": "ops/contracts/ausmalwiese-worker-settings-account-binding-v1.json",
+  "privileged_write_limit": 4,
+  "release_files": [
+    {
+      "path": "/usr/local/sbin/rpi5-ausmalwiese-worker-settings-get",
+      "mode": "0500"
+    },
+    {
+      "path": "/usr/local/libexec/rpi5-ausmalwiese-worker-settings-get/sanitizer.py",
+      "mode": "0400"
+    },
+    {
+      "path": "/usr/local/libexec/rpi5-ausmalwiese-worker-settings-get/release.json",
+      "mode": "0400"
+    }
+  ],
+  "reviewed_account_binding": false,
+  "live_install_authority": false,
+  "credential_access_authority": false,
+  "cloudflare_api_authority": false,
+  "merge_requires_owner_exact_head": true
+}

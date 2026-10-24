@@ -139,7 +139,7 @@ def _load_contract(path: Path = CONTRACT_PATH) -> dict[str, Any]:
     if not isinstance(selection, dict) or not isinstance(projections, list):
         raise AuditError("admin_contract_shape_invalid")
     hostnames = selection.get("expected_hostnames")
-    if not isinstance(hostnames, list) or len(hostnames) != 8:
+    if not isinstance(hostnames, list) or not hostnames:
         raise AuditError("admin_contract_host_set_invalid")
     projection_hosts = {
         item.get("hostname")

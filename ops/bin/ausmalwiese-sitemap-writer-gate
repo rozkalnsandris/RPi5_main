@@ -1,0 +1,163 @@
+#!/usr/bin/env python3
+"""Read-only fail-closed preflight for a separately owner-gated sitemap publish.
+
+This gate does NOT stop writers, publish content, or authorize LIVE work.
+"""
+from __future__ import annotations
+
+import argparse
+import fcntl
+import json
+import os
+from pathlib import Path
+import pwd
+import grp
+import re
+import stat
+import subprocess
+
+OWNER = "andris"
+CONTENT_ROOT = Path("/srv/coloring-pages-content")
+ATTESTATION = Path("/usr/local/share/coloring-pages/sitemap-ingest-quiesced-v1.confirmed")
+ATTESTATION_BYTES = b"ausmalwiese-sitemap-ingest-quiesced-v1\n"
+POST_PUBLISH_MARKER = Path("/usr/local/share/coloring-pages/post-publish-v1.enabled")
+POST_PUBLISH_BYTES = b"coloring-pages-sitemap-post-publish-v1\n"
+LOCK = CONTENT_ROOT / "state/drive-ingest/.lock"
+STAGE = CONTENT_ROOT / "public/.sitemap.xml.publish.partial"
+# Explicitly limited to the existing trigger family; no unbounded service discovery.
+DEPLOYER_INSTANCE = "rozkalns-simple-deployer" + chr(64) + "coloring-pages-public-rpi5"
+UNITS = (
+    "cron.service",
+    DEPLOYER_INSTANCE + ".timer",
+    DEPLOYER_INSTANCE + ".service",
+)
+PROPERTY_PATTERN = re.compile(r"^(ActiveState|SubState|LoadState)=([a-z-]+)$")
+
+
+class Hold(RuntimeError):
+    """Sanitized fail-closed, no-retry gate result."""
+
+
+def trusted_bytes(path: Path, expected: bytes, *, root_uid: int, root_gid: int) -> None:
+    try:
+        meta = path.lstat()
+        if (not stat.S_ISREG(meta.st_mode) or path.is_symlink()
+                or meta.st_uid != root_uid or meta.st_gid != root_gid
+                or stat.S_IMODE(meta.st_mode) != 0o444
+                or meta.st_size != len(expected)):
+            raise Hold("TRUST_MARKER")
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            current = os.fstat(fd)
+            if (current.st_dev, current.st_ino) != (meta.st_dev, meta.st_ino):
+                raise Hold("TRUST_MARKER")
+            if os.read(fd, len(expected) + 1) != expected:
+                raise Hold("TRUST_MARKER")
+        finally:
+            os.close(fd)
+    except OSError as exc:
+        raise Hold("TRUST_MARKER") from exc
+
+
+def read_unit(unit: str) -> dict[str, str]:
+    if unit not in UNITS:
+        raise Hold("UNEXPECTED_UNIT")
+    try:
+        done = subprocess.run(
+            ["/usr/bin/systemctl", "show", unit,
+             "--property=ActiveState,SubState,LoadState", "--no-pager"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            check=False, timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise Hold("UNIT_UNAVAILABLE") from exc
+    if done.returncode != 0 or len(done.stdout) > 256:
+        raise Hold("UNIT_UNAVAILABLE")
+    props: dict[str, str] = {}
+    for line in done.stdout.decode("ascii", errors="replace").splitlines():
+        match = PROPERTY_PATTERN.fullmatch(line)
+        if match is None or match[1] in props:
+            raise Hold("UNIT_METADATA")
+        props[match[1]] = match[2]
+    if set(props) != {"LoadState", "ActiveState", "SubState"}:
+        raise Hold("UNIT_METADATA")
+    return props
+
+
+def validate_units(unit_reader=read_unit) -> None:
+    for unit in UNITS:
+        props = unit_reader(unit)
+        if (props.get("LoadState") != "loaded"
+                or props.get("ActiveState") != "inactive"
+                or props.get("SubState") != "dead"):
+            raise Hold("WRITER_TRIGGER_NOT_QUIESCED")
+
+
+def validate_lock(path: Path, *, uid: int, gid: int) -> None:
+    """Probe and release the SAME inode. Publisher must reacquire its own lock."""
+    try:
+        info = path.lstat()
+        if (not stat.S_ISREG(info.st_mode) or path.is_symlink()
+                or info.st_uid != uid or info.st_gid != gid
+                or stat.S_IMODE(info.st_mode) != 0o600):
+            raise Hold("LOCK_IDENTITY")
+        fd = os.open(path, os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            handle = os.fstat(fd)
+            if (handle.st_dev, handle.st_ino) != (info.st_dev, info.st_ino):
+                raise Hold("LOCK_IDENTITY")
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as exc:
+                raise Hold("LOCK_BUSY") from exc
+            followup = path.lstat()
+            if ((followup.st_dev, followup.st_ino) != (handle.st_dev, handle.st_ino)
+                    or followup.st_uid != uid or followup.st_gid != gid):
+                raise Hold("LOCK_IDENTITY")
+        finally:
+            os.close(fd)
+    except OSError as exc:
+        raise Hold("LOCK_UNAVAILABLE") from exc
+
+
+def check(*, attestation=ATTESTATION, marker=POST_PUBLISH_MARKER,
+          stage=STAGE, lock=LOCK, unit_reader=read_unit,
+          root_uid: int | None = None, root_gid: int | None = None,
+          owner_uid: int | None = None, owner_gid: int | None = None) -> dict[str, object]:
+    if root_uid is None:
+        root_uid = pwd.getpwnam("root").pw_uid
+    if root_gid is None:
+        root_gid = grp.getgrnam("root").gr_gid
+    if owner_uid is None:
+        owner_uid = pwd.getpwnam(OWNER).pw_uid
+    if owner_gid is None:
+        owner_gid = grp.getgrnam(OWNER).gr_gid
+    trusted_bytes(attestation, ATTESTATION_BYTES, root_uid=root_uid, root_gid=root_gid)
+    trusted_bytes(marker, POST_PUBLISH_BYTES, root_uid=root_uid, root_gid=root_gid)
+    # A leftover partial stage must not be ignored or silently deleted.
+    if os.path.lexists(stage):
+        raise Hold("STAGE_PRESENT")
+    validate_units(unit_reader)
+    validate_lock(lock, uid=owner_uid, gid=owner_gid)
+    return {"result": "BOUNDED_GATE_PASS", "mutation_started": False,
+            "external_writers_proven_quiesced": False,
+            "required_independent_external_writer_proof": True}
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true", required=True)
+    args = parser.parse_args(argv)
+    try:
+        print("AUSMALWIESE_WRITER_GATE " + json.dumps(check(), sort_keys=True))
+        return 0
+    except (Hold, OSError, KeyError) as exc:
+        code = str(exc) if isinstance(exc, Hold) else "UNAVAILABLE"
+        print("AUSMALWIESE_WRITER_GATE " + json.dumps(
+            {"result": "STOP", "reason": code, "mutation_started": False},
+            sort_keys=True))
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

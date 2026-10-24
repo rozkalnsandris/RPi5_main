@@ -110,7 +110,7 @@ class IngressDriftAuditTests(unittest.TestCase):
     def test_target_set_is_exact_registry_set_and_reuses_zone_contracts(self) -> None:
         service_ids = {item["service_id"] for item in self.registry["services"]}
         self.assertEqual(set(self.targets), service_ids)
-        self.assertEqual(len(self.targets), 13)
+        self.assertEqual(len(self.targets), len(self.registry["services"]))
 
         public_ids = {
             item["service_id"]
@@ -145,7 +145,7 @@ class IngressDriftAuditTests(unittest.TestCase):
         self.assertEqual(report["result"], "PASS")
         self.assertEqual(report["cloudflare"]["result"], "PASS")
         self.assertEqual(report["connector"]["result"], "PASS")
-        self.assertEqual(len(report["services"]), 13)
+        self.assertEqual(len(report["services"]), len(self.registry["services"]))
         self.assertTrue(all(item["result"] == "PASS" for item in report["services"]))
 
         rendered = json.dumps(report, sort_keys=True)

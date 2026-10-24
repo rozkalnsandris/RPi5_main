@@ -1,0 +1,291 @@
+{
+  "schema": "rozkalns.rpi5-main.coloring-pages-admin-publish.v1",
+  "status": "source-only",
+  "issue": 1149,
+  "listener": {
+    "host": "127.0.0.1",
+    "port": 8765
+  },
+  "trust": {
+    "zone": "ADMIN",
+    "public_route": false,
+    "access_required": true,
+    "csrf": {
+      "token": "in-memory-per-process-256-bit",
+      "header": "X-Ausmalwiese-CSRF",
+      "fetch_metadata": "reject-cross-site",
+      "origin_allowlist": [
+        "https://admin.ausmalwiese.de",
+        "http://127.0.0.1:8765"
+      ]
+    }
+  },
+  "upload": {
+    "content_type": "application/zip",
+    "allowed_extensions": [
+      ".png"
+    ],
+    "max_archive_bytes": 52428800,
+    "max_files": 20,
+    "max_member_bytes": 26214400,
+    "max_total_uncompressed_bytes": 167772160,
+    "max_compression_ratio": 50,
+    "extraction": "validated-stream-copy-no-extractall",
+    "reject": [
+      "directories",
+      "nested-paths",
+      "traversal",
+      "symlinks",
+      "special-files",
+      "encrypted-entries",
+      "duplicate-names",
+      "non-png"
+    ],
+    "archive_role": "draft-png-handoff-only",
+    "allowed_members": "top-level-png-only-no-manifest-or-metadata-files"
+  },
+  "publication": {
+    "category_selection": "explicit-owner-ui-selection",
+    "id_policy": "random-seven-digit-live-catalog-plus-archive-tombstone-collision-check",
+    "print_master": "pinned-immutable-coloring-pages-image",
+    "importer": "pinned-immutable-coloring-pages-image",
+    "shared_lock": "/srv/coloring-pages-content/state/drive-ingest/.lock",
+    "automatic_retry": false,
+    "automatic_rollback": false,
+    "automatic_cleanup": false,
+    "automatic_overwrite": false,
+    "public_verification": true,
+    "final_detail_links": true,
+    "print_quality_gate": {
+      "source_role": "uploaded-png-is-authoring-draft",
+      "execution_order": [
+        "prepare-all",
+        "validate-all",
+        "allocate-ids",
+        "import"
+      ],
+      "prepare_tool": "pinned-immutable-coloring-pages-image:coloring-pages-print-master prepare",
+      "validate_tool": "pinned-immutable-coloring-pages-image:coloring-pages-print-master validate",
+      "fail_before_id_allocation_on_any_prepare_or_validate_failure": true,
+      "prepared_master": {
+        "portrait_px": [
+          2480,
+          3508
+        ],
+        "landscape_px": [
+          3508,
+          2480
+        ],
+        "mode": "RGB-no-alpha",
+        "dpi": "approximately-300x300",
+        "outer_border": "#FFFFFF",
+        "safe_margin_mm": 15,
+        "safe_margin_px_at_300_dpi": 177,
+        "safe_margin_color": "#FFFFFF",
+        "fit": "aspect-ratio-preserving-centered",
+        "white_normalization": "canonical-near-white-to-exact-white",
+        "resampling": "LANCZOS",
+        "sharpening": "reviewed-conservative-unsharp-mask"
+      }
+    },
+    "editorial_quality_gate": "owner-review-before-zip-upload",
+    "zip_member_semantics": "each-png-is-one-independent-single-page-activity"
+  },
+  "runtime": {
+    "user": "andris",
+    "image_ref": "ghcr.io/rozkalnsandris/coloring-pages@sha256:1a6038e6c6c43d5565b0cda745db90f3fbaa370d3296d16af3571adcb0ae259c",
+    "source_sha": "edfcfbd0c0584a8deb485b885f5c687788fb271f"
+  },
+  "live_activation": "separate-owner-authorization",
+  "recovery": {
+    "active_job_discovery": "GET /api/jobs/active plus same-tab sessionStorage job id",
+    "reload": "restore-existing-job-and-resume-polling",
+    "transient_polling": "bounded-exponential-backoff-max-10s-no-permanent-stop",
+    "post_restart": "queued-or-running-persisted-jobs-become-failed-interrupted",
+    "preserve_partial_results": true,
+    "automatic_retry": false,
+    "automatic_requeue": false,
+    "automatic_rollback": false,
+    "automatic_cleanup": false
+  },
+  "diagnostics": {
+    "log_path": "/srv/coloring-pages-content/state/admin-publish/logs/admin-publish.log",
+    "directory_mode": "0700",
+    "file_mode": "0600",
+    "owner": "andris",
+    "rotation": {
+      "handler": "logging.handlers.TimedRotatingFileHandler",
+      "when": "midnight",
+      "interval_days": 1,
+      "backup_count": 7,
+      "utc": true,
+      "explicit_age_prune_days": 7,
+      "prune_scope": "admin-publish.log and admin-publish.log.YYYY-MM-DD only"
+    },
+    "allowed_metadata": [
+      "UTC timestamp",
+      "severity",
+      "event",
+      "pid",
+      "job id",
+      "upload id",
+      "page index/count",
+      "step name/status/duration",
+      "tool name",
+      "timeout/exit status",
+      "allocated page id",
+      "sitemap/public verification phase",
+      "terminal job status",
+      "stale-job reconciliation",
+      "partial succeeded-result count",
+      "catalog action",
+      "changed field names",
+      "catalog SHA-256 before/after",
+      "permanent-delete file count/byte count"
+    ],
+    "forbidden": [
+      "request or response bodies",
+      "HTTP headers",
+      "cookies",
+      "Cloudflare Access identity or tokens",
+      "credentials or secrets",
+      "environment variables",
+      "ZIP or PNG bytes",
+      "raw file contents",
+      "wholesale subprocess stdout or stderr",
+      "unsanitized traceback"
+    ],
+    "initialization": "fail-closed-before-publication-job-can-start",
+    "global_journald_retention_change": false,
+    "activity_api": {
+      "endpoint": "GET /api/activity",
+      "max_events": 200,
+      "max_single_log_bytes": 2097152,
+      "max_total_log_bytes": 4194304,
+      "retention_source": "existing-seven-day-admin-diagnostic-logs",
+      "response": "sanitized-allowlisted-fields-only",
+      "unexpected_record": "fail-closed",
+      "raw_log_lines": false,
+      "log_mutation": false
+    }
+  },
+  "maintenance": {
+    "full_install_guard": "when service is active, acquire shared publication lock and require GET /api/jobs/active to report idle before first installed-file mutation",
+    "active_or_unknown": "fail-closed-no-install-no-restart",
+    "ui_only_mode": "replace static ADMIN index only; requires active service and verified installed fonts; no daemon-reload or service restart",
+    "automatic_retry": false,
+    "automatic_rollback": false,
+    "automatic_cleanup": false,
+    "post_restart_readiness": {
+      "endpoint": "http://127.0.0.1:8765/",
+      "attempts": 10,
+      "per_attempt_timeout_seconds": 0.25,
+      "interval_seconds": 0.25,
+      "max_window_seconds": 4.75,
+      "failure": "terminal-no-second-restart-or-installer-retry"
+    }
+  },
+  "catalog_management": {
+    "issue": 1172,
+    "read_endpoint": "GET /api/catalog",
+    "validator": "strong-sha256-etag",
+    "write_precondition": "If-Match-required",
+    "edit_endpoint": "POST /api/catalog/edit",
+    "editable_fields": [
+      "title",
+      "category",
+      "age",
+      "difficulty"
+    ],
+    "shared_lock": "/srv/coloring-pages-content/state/drive-ingest/.lock",
+    "atomic_write": "same-directory-temp-fsync-os.replace-post-hash-verify",
+    "stale_precondition": "412-no-mutation",
+    "server_side_validation": true,
+    "bulk_destructive_operations": false,
+    "physical_delete": true,
+    "lifecycle_issue": 1174,
+    "archive": {
+      "endpoint": "POST /api/catalog/archive",
+      "confirmation": "exact-id",
+      "state_directory": "/srv/coloring-pages-content/state/admin-publish/archive",
+      "directory_mode": "0700",
+      "record_mode": "0600",
+      "schema": "rozkalns.rpi5-main.coloring-pages-admin-archive.v1",
+      "transition": [
+        "prepared",
+        "archived",
+        "restored",
+        "delete-prepared",
+        "deleted"
+      ],
+      "persist_before_catalog_removal": true,
+      "prepared_plus_live_absent_is_restorable": true,
+      "duplicate_record": "fail-closed",
+      "media_deleted": false,
+      "originals_deleted": false,
+      "inbox_deleted": false,
+      "drive_deleted": false,
+      "deleted_tombstone_retained": true,
+      "deleted_tombstone_hidden_from_normal_archive_list": true,
+      "delete_prepared_manual_review_only": true
+    },
+    "restore": {
+      "endpoint": "POST /api/catalog/restore",
+      "confirmation": "exact-id",
+      "requires_live_id_absent": true,
+      "revalidates_archived_metadata": true,
+      "terminal_archive_state": "restored",
+      "duplicate_restore": "fail-closed",
+      "sitemap_refresh": "existing-best-effort-publisher",
+      "restorable_states": [
+        "prepared",
+        "archived"
+      ]
+    },
+    "archive_read_endpoint": "GET /api/archive",
+    "delete_issue": 1178,
+    "permanent_delete": {
+      "endpoint": "POST /api/archive/delete",
+      "source_state": "archived-only",
+      "confirmation": [
+        "exact-id",
+        "literal-DELETE"
+      ],
+      "requires_live_id_absent": true,
+      "requires_current_catalog_if_match": true,
+      "shared_lock": "/srv/coloring-pages-content/state/drive-ingest/.lock",
+      "transition": [
+        "archived",
+        "delete-prepared",
+        "deleted"
+      ],
+      "persist_delete_prepared_before_file_mutation": true,
+      "exact_targets": [
+        "/srv/coloring-pages-content/originals/<id>/",
+        "/srv/coloring-pages-content/public/media/<id>/",
+        "/srv/coloring-pages-content/inbox/<id>.png-if-exact-regular-file-exists"
+      ],
+      "directory_shape": "direct-child-real-directory-containing-direct-regular-files-only",
+      "max_files": 128,
+      "max_total_bytes": 1073741824,
+      "catalog_deleted": false,
+      "archive_tombstone_deleted": false,
+      "upload_history_deleted": false,
+      "job_history_deleted": false,
+      "logs_deleted": false,
+      "analytics_deleted": false,
+      "drive_deleted": false,
+      "bulk_delete": false,
+      "automatic_retry": false,
+      "automatic_rollback": false,
+      "automatic_cleanup": false,
+      "interrupted_state": "delete-prepared-visible-manual-review-only"
+    },
+    "id_reservation": {
+      "live_catalog_ids": true,
+      "all_valid_archive_record_ids": true,
+      "deleted_tombstones": true,
+      "reuse_deleted_id": false
+    }
+  }
+}

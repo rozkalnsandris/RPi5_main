@@ -1,0 +1,467 @@
+#!/usr/bin/env python3
+"""Bounded Coloring Pages Drive staging sender.
+
+Reads one complete LF-terminated compact JSON envelope line from stdin,
+validates every artifact locally, then invokes a fixed privileged rclone
+wrapper. EOF is not required. No Drive mutation occurs before all local bytes
+and manifest bindings have passed validation.
+"""
+
+from __future__ import annotations
+
+import base64
+import binascii
+import fcntl
+import hashlib
+import json
+import os
+import re
+import stat
+import subprocess
+import sys
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, BinaryIO, Protocol
+
+ENVELOPE_SCHEMA = "rozkalns.rpi5-main.coloring-pages-drive-stage-envelope.v1"
+MANIFEST_SCHEMA_V1 = "rozkalns.coloring-pages.drive-staging-manifest.v1"
+MANIFEST_SCHEMA_V2 = "rozkalns.coloring-pages.drive-staging-manifest.v2"
+ID_RE = re.compile(r"^[0-9]{7}$")
+SHA_RE = re.compile(r"^[0-9a-f]{64}$")
+PAGE_NAME_RE = re.compile(r"^(?P<id>[0-9]{7})(?:-(?P<index>[1-9][0-9]*))?\.png$")
+MANIFEST_NAME_RE = re.compile(r"^(?P<id>[0-9]{7})\.json$")
+
+MAX_ACTIVITIES = 20
+MAX_PAGES_PER_ACTIVITY = 12
+MAX_PNG_BYTES = 20 * 1024 * 1024
+MAX_MANIFEST_BYTES = 64 * 1024
+MAX_TOTAL_RAW_BYTES = 256 * 1024 * 1024
+MAX_ENVELOPE_BYTES = 370 * 1024 * 1024
+
+STATE_ROOT = Path("/srv/coloring-pages-content/state/drive-stage")
+LOCK_PATH = STATE_ROOT / ".lock"
+SUDO = "/usr/bin/sudo"
+PRIVILEGED_WRAPPER = "/usr/local/libexec/coloring-pages-drive-stage-rcat"
+
+ALLOWED_CATEGORIES = {"tiere", "fahrzeuge", "alphabet", "lernen", "figuren", "jahreszeiten"}
+ALLOWED_AGES = {"3-6", "4-8"}
+ALLOWED_DIFFICULTIES = {"easy", "normal", "detailed"}
+ALLOWED_LANGUAGES = {"de"}
+
+ENVELOPE_KEYS = {"schema", "activities"}
+ACTIVITY_KEYS = {"id", "artifacts"}
+ARTIFACT_KEYS = {"name", "mime", "sha256", "size_bytes", "data_b64"}
+MANIFEST_KEYS_V1 = {
+    "schema", "id", "sha256", "size_bytes", "title", "character", "category",
+    "age", "difficulty", "language", "source_kind", "approval_class",
+}
+MANIFEST_KEYS_V2 = {
+    "schema", "id", "pages", "title", "character", "category", "age",
+    "difficulty", "language", "source_kind", "approval_class",
+}
+PAGE_KEYS_V2 = {"index", "file", "sha256", "size_bytes"}
+
+
+class SenderError(RuntimeError):
+    """Fail-closed sender error with sanitized text."""
+
+
+def fail(message: str) -> None:
+    raise SenderError(message)
+
+
+def strict_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    obj: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in obj:
+            fail("JSON contains duplicate keys")
+        obj[key] = value
+    return obj
+
+
+def parse_json_bytes(data: bytes, *, label: str) -> Any:
+    try:
+        return json.loads(data.decode("utf-8"), object_pairs_hook=strict_object)
+    except UnicodeDecodeError:
+        fail(f"{label} is not UTF-8 JSON")
+    except json.JSONDecodeError:
+        fail(f"{label} is invalid JSON")
+
+
+def read_envelope_line(stream: BinaryIO) -> bytes:
+    raw = stream.readline(MAX_ENVELOPE_BYTES + 1)
+    if not raw:
+        fail("envelope is empty")
+    if len(raw) > MAX_ENVELOPE_BYTES:
+        fail("envelope size is outside the allowed bound")
+    if not raw.endswith(b"\n"):
+        fail("envelope line terminator is missing")
+    payload = raw[:-1]
+    if not payload:
+        fail("envelope is empty")
+    return payload
+
+
+def validate_text(value: Any, *, field: str, allow_empty: bool = False) -> str:
+    if not isinstance(value, str) or len(value) > 128:
+        fail(f"manifest {field} is invalid")
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in value):
+        fail(f"manifest {field} contains control characters")
+    if not allow_empty and not value.strip():
+        fail(f"manifest {field} is empty")
+    return value
+
+
+def validate_common_manifest_fields(raw: dict[str, Any]) -> None:
+    validate_text(raw.get("title"), field="title")
+    validate_text(raw.get("character"), field="character", allow_empty=True)
+    category = validate_text(raw.get("category"), field="category")
+    age = validate_text(raw.get("age"), field="age")
+    difficulty = validate_text(raw.get("difficulty"), field="difficulty")
+    language = validate_text(raw.get("language"), field="language")
+    if category not in ALLOWED_CATEGORIES:
+        fail("manifest category is unsupported")
+    if age not in ALLOWED_AGES:
+        fail("manifest age is unsupported")
+    if difficulty not in ALLOWED_DIFFICULTIES:
+        fail("manifest difficulty is unsupported")
+    if language not in ALLOWED_LANGUAGES:
+        fail("manifest language is unsupported")
+    if raw.get("approval_class") != "explicit-owner-chat-approval":
+        fail("manifest approval class mismatch")
+
+
+@dataclass
+class Artifact:
+    name: str
+    mime: str
+    sha256: str
+    size_bytes: int
+    handle: BinaryIO
+
+
+@dataclass
+class Activity:
+    activity_id: str
+    artifacts: list[Artifact]
+
+
+class Privileged(Protocol):
+    def assert_absent(self, names: list[str]) -> None: ...
+    def upload(self, artifact: Artifact) -> None: ...
+    def assert_exact(self, artifact: Artifact) -> None: ...
+
+
+class PrivilegedBackend:
+    def __init__(self, *, canary: bool = False) -> None:
+        self.canary = canary
+
+    def _operation(self, production: str, canary: str) -> str:
+        return canary if self.canary else production
+
+    def _run(self, argv: list[str], *, stdin: BinaryIO | None = None) -> None:
+        result = subprocess.run(
+            [SUDO, "-n", "--", PRIVILEGED_WRAPPER, *argv],
+            stdin=stdin,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        if result.returncode != 0:
+            fail("privileged Drive staging operation failed")
+
+    def assert_absent(self, names: list[str]) -> None:
+        self._run([
+            self._operation("--assert-absent", "--canary-assert-absent"),
+            *names,
+        ])
+
+    def upload(self, artifact: Artifact) -> None:
+        artifact.handle.seek(0)
+        self._run(
+            [
+                self._operation("--upload", "--canary-upload"),
+                artifact.name,
+                str(artifact.size_bytes),
+            ],
+            stdin=artifact.handle,
+        )
+
+    def assert_exact(self, artifact: Artifact) -> None:
+        self._run([
+            self._operation("--assert-exact", "--canary-assert-exact"),
+            artifact.name,
+            str(artifact.size_bytes),
+        ])
+
+
+def decode_artifact(raw: Any, *, activity_id: str) -> Artifact:
+    if not isinstance(raw, dict) or set(raw) != ARTIFACT_KEYS:
+        fail("artifact fields do not match the reviewed schema")
+    name = raw.get("name")
+    mime = raw.get("mime")
+    sha = raw.get("sha256")
+    size = raw.get("size_bytes")
+    data_b64 = raw.get("data_b64")
+    if not isinstance(name, str) or "/" in name or "\\" in name or name.startswith("."):
+        fail("artifact name is invalid")
+    if not isinstance(mime, str):
+        fail("artifact MIME is invalid")
+    if not isinstance(sha, str) or not SHA_RE.fullmatch(sha):
+        fail("artifact SHA-256 is invalid")
+    if not isinstance(size, int) or isinstance(size, bool) or size <= 0:
+        fail("artifact size is invalid")
+    if not isinstance(data_b64, str):
+        fail("artifact payload is invalid")
+
+    page_match = PAGE_NAME_RE.fullmatch(name)
+    manifest_match = MANIFEST_NAME_RE.fullmatch(name)
+    if page_match:
+        if page_match.group("id") != activity_id or mime != "image/png":
+            fail("PNG artifact identity mismatch")
+        if size > MAX_PNG_BYTES:
+            fail("PNG artifact exceeds the size bound")
+    elif manifest_match:
+        if manifest_match.group("id") != activity_id or mime != "application/json":
+            fail("manifest artifact identity mismatch")
+        if size > MAX_MANIFEST_BYTES:
+            fail("manifest artifact exceeds the size bound")
+    else:
+        fail("artifact filename is outside the staging contract")
+
+    try:
+        decoded = base64.b64decode(data_b64.encode("ascii"), validate=True)
+    except (UnicodeEncodeError, binascii.Error):
+        fail("artifact base64 is invalid")
+    if len(decoded) != size:
+        fail("artifact size does not match payload")
+    digest = hashlib.sha256(decoded).hexdigest()
+    if digest != sha:
+        fail("artifact SHA-256 does not match payload")
+
+    handle = tempfile.TemporaryFile(mode="w+b")
+    handle.write(decoded)
+    handle.flush()
+    handle.seek(0)
+    raw["data_b64"] = ""
+    return Artifact(name=name, mime=mime, sha256=sha, size_bytes=size, handle=handle)
+
+
+def artifact_bytes(artifact: Artifact) -> bytes:
+    artifact.handle.seek(0)
+    data = artifact.handle.read()
+    artifact.handle.seek(0)
+    return data
+
+
+def validate_v1(activity: Activity, manifest: dict[str, Any]) -> None:
+    if len(activity.artifacts) != 2:
+        fail("v1 activity must contain exactly one PNG and one manifest")
+    page, manifest_artifact = activity.artifacts
+    if [page.name, manifest_artifact.name] != [
+        f"{activity.activity_id}.png",
+        f"{activity.activity_id}.json",
+    ]:
+        fail("v1 artifact order mismatch")
+    if set(manifest) != MANIFEST_KEYS_V1 or manifest.get("schema") != MANIFEST_SCHEMA_V1:
+        fail("v1 manifest schema mismatch")
+    if manifest.get("id") != activity.activity_id:
+        fail("v1 manifest id mismatch")
+    if manifest.get("sha256") != page.sha256 or manifest.get("size_bytes") != page.size_bytes:
+        fail("v1 manifest page binding mismatch")
+    if manifest.get("source_kind") != "chatgpt-generated-png":
+        fail("v1 manifest source kind mismatch")
+    validate_common_manifest_fields(manifest)
+
+
+def validate_v2(activity: Activity, manifest: dict[str, Any]) -> None:
+    pages = activity.artifacts[:-1]
+    manifest_artifact = activity.artifacts[-1]
+    if not 2 <= len(pages) <= MAX_PAGES_PER_ACTIVITY:
+        fail("v2 page count is outside the allowed bound")
+    expected_names = [
+        f"{activity.activity_id}-{index}.png"
+        for index in range(1, len(pages) + 1)
+    ] + [f"{activity.activity_id}.json"]
+    if [a.name for a in activity.artifacts] != expected_names:
+        fail("v2 artifact order mismatch")
+    if set(manifest) != MANIFEST_KEYS_V2 or manifest.get("schema") != MANIFEST_SCHEMA_V2:
+        fail("v2 manifest schema mismatch")
+    if manifest.get("id") != activity.activity_id:
+        fail("v2 manifest id mismatch")
+    if manifest.get("source_kind") != "chatgpt-generated-png-set":
+        fail("v2 manifest source kind mismatch")
+    raw_pages = manifest.get("pages")
+    if not isinstance(raw_pages, list) or len(raw_pages) != len(pages):
+        fail("v2 manifest page count mismatch")
+    for index, (raw_page, artifact) in enumerate(zip(raw_pages, pages), start=1):
+        expected = {
+            "index": index,
+            "file": artifact.name,
+            "sha256": artifact.sha256,
+            "size_bytes": artifact.size_bytes,
+        }
+        if not isinstance(raw_page, dict) or set(raw_page) != PAGE_KEYS_V2 or raw_page != expected:
+            fail("v2 manifest page binding mismatch")
+    validate_common_manifest_fields(manifest)
+
+
+def validate_activity(raw: Any) -> Activity:
+    if not isinstance(raw, dict) or set(raw) != ACTIVITY_KEYS:
+        fail("activity fields do not match the reviewed schema")
+    activity_id = raw.get("id")
+    if not isinstance(activity_id, str) or not ID_RE.fullmatch(activity_id):
+        fail("activity id must be exactly seven digits")
+    artifacts_raw = raw.get("artifacts")
+    if not isinstance(artifacts_raw, list) or not 2 <= len(artifacts_raw) <= MAX_PAGES_PER_ACTIVITY + 1:
+        fail("activity artifact count is outside the allowed bound")
+
+    artifacts: list[Artifact] = []
+    try:
+        for item in artifacts_raw:
+            artifacts.append(decode_artifact(item, activity_id=activity_id))
+        if artifacts[-1].name != f"{activity_id}.json" or artifacts[-1].mime != "application/json":
+            fail("activity manifest must be last")
+        manifest = parse_json_bytes(
+            artifact_bytes(artifacts[-1]),
+            label="manifest",
+        )
+        if not isinstance(manifest, dict):
+            fail("manifest must be a JSON object")
+        if manifest.get("schema") == MANIFEST_SCHEMA_V1:
+            validate_v1(Activity(activity_id, artifacts), manifest)
+        elif manifest.get("schema") == MANIFEST_SCHEMA_V2:
+            validate_v2(Activity(activity_id, artifacts), manifest)
+        else:
+            fail("manifest schema is unsupported")
+        return Activity(activity_id, artifacts)
+    except Exception:
+        for artifact in artifacts:
+            artifact.handle.close()
+        raise
+
+
+def load_and_validate_envelope(data: bytes) -> list[Activity]:
+    if len(data) <= 0 or len(data) > MAX_ENVELOPE_BYTES:
+        fail("envelope size is outside the allowed bound")
+    raw = parse_json_bytes(data, label="envelope")
+    if not isinstance(raw, dict) or set(raw) != ENVELOPE_KEYS:
+        fail("envelope fields do not match the reviewed schema")
+    if raw.get("schema") != ENVELOPE_SCHEMA:
+        fail("envelope schema mismatch")
+    activities_raw = raw.get("activities")
+    if not isinstance(activities_raw, list) or not 1 <= len(activities_raw) <= MAX_ACTIVITIES:
+        fail("activity count is outside the allowed bound")
+
+    activities: list[Activity] = []
+    try:
+        seen_ids: set[str] = set()
+        seen_names: set[str] = set()
+        total_raw = 0
+        for item in activities_raw:
+            activity = validate_activity(item)
+            activities.append(activity)
+            if activity.activity_id in seen_ids:
+                fail("duplicate activity id")
+            seen_ids.add(activity.activity_id)
+            for artifact in activity.artifacts:
+                if artifact.name in seen_names:
+                    fail("duplicate staging filename")
+                seen_names.add(artifact.name)
+                total_raw += artifact.size_bytes
+                if total_raw > MAX_TOTAL_RAW_BYTES:
+                    fail("batch raw byte total exceeds the sender bound")
+        return activities
+    except Exception:
+        close_activities(activities)
+        raise
+
+
+def close_activities(activities: list[Activity]) -> None:
+    for activity in activities:
+        for artifact in activity.artifacts:
+            try:
+                artifact.handle.close()
+            except Exception:
+                pass
+
+
+def execute_activities(activities: list[Activity], privileged: Privileged) -> dict[str, Any]:
+    names = [artifact.name for activity in activities for artifact in activity.artifacts]
+    privileged.assert_absent(names)
+    attempted = 0
+    for activity in activities:
+        for artifact in activity.artifacts:
+            attempted += 1
+            privileged.upload(artifact)
+            privileged.assert_exact(artifact)
+    return {
+        "status": "PASS",
+        "activities": [activity.activity_id for activity in activities],
+        "artifacts_staged": attempted,
+    }
+
+
+def open_sender_lock() -> int:
+    try:
+        st = LOCK_PATH.lstat()
+    except OSError:
+        fail("sender lock is unavailable")
+    if (
+        not stat.S_ISREG(st.st_mode)
+        or LOCK_PATH.is_symlink()
+        or stat.S_IMODE(st.st_mode) != 0o600
+        or st.st_uid != os.geteuid()
+    ):
+        fail("sender lock metadata drifted")
+    flags = os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        return os.open(LOCK_PATH, flags)
+    except OSError:
+        fail("sender lock is unavailable")
+
+
+def parse_canary_mode(argv: list[str]) -> bool:
+    if not argv:
+        return False
+    if argv == ["--canary"]:
+        return True
+    fail("arguments are outside the reviewed sender interface")
+
+
+def run_cli() -> int:
+    try:
+        canary = parse_canary_mode(sys.argv[1:])
+        raw = read_envelope_line(sys.stdin.buffer)
+        activities = load_and_validate_envelope(raw)
+        fd = open_sender_lock()
+        try:
+            with os.fdopen(fd, "r+b", buffering=0) as lock_handle:
+                fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                result = execute_activities(
+                    activities,
+                    PrivilegedBackend(canary=canary),
+                )
+        finally:
+            close_activities(activities)
+        print("COLORING_PAGES_DRIVE_STAGE=PASS")
+        print(f"NAMESPACE={'canary' if canary else 'pending'}")
+        print(f"ACTIVITIES={len(result['activities'])}")
+        print(f"ARTIFACTS_STAGED={result['artifacts_staged']}")
+        for activity_id in result["activities"]:
+            print(f"ID={activity_id}")
+        return 0
+    except BlockingIOError:
+        print("COLORING_PAGES_DRIVE_STAGE=FAIL error=sender-lock-busy", file=sys.stderr)
+        return 1
+    except SenderError as exc:
+        print(f"COLORING_PAGES_DRIVE_STAGE=FAIL error={exc}", file=sys.stderr)
+        return 1
+    except Exception:
+        print("COLORING_PAGES_DRIVE_STAGE=FAIL error=unexpected", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(run_cli())

@@ -32,6 +32,14 @@ services:
         target: /app/data
         bind:
           create_host_path: false
+      # Mount the directory: the host generator atomically replaces stats.json.
+      # Reuse the already authorized CV data-path interpolation; avoid hardcoded homes.
+      - type: bind
+        source: ${ROZKALNS_CV_DATA_PATH:?ROZKALNS_CV_DATA_PATH must be set}/../../html
+        target: /srv/cv/host-stats
+        read_only: true
+        bind:
+          create_host_path: false
     ports:
       - "127.0.0.1:8088:8080"
     healthcheck:

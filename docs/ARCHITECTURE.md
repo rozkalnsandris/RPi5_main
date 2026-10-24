@@ -1,10 +1,15 @@
 # Architecture
 
-`RPi5_main` is the private, reviewed source of truth for infrastructure-as-code and operational documentation for the Raspberry Pi 5.
+`RPi5_main` is the reviewed GitHub source of truth for Raspberry Pi 5 host-control tooling, infrastructure contracts, tests and operational documentation. GitHub source does not by itself prove the currently deployed RPi5 state.
 
-V01 has two layers:
+The repository separates:
 
-- tracked source: collector, verifier, tests, documentation, and CI;
-- local ignored evidence: bounded, sanitized inventory results under `evidence/` or `exports/`.
+- `ops/` — reviewed host operator, deployment, Compose and service source;
+- `scripts/` — controlled command entrypoints, installers and offline diagnostics;
+- `tests/` and `.github/workflows/` — source, policy and safety verification;
+- `docs/` — architecture, trust boundaries, deployment contracts and operational guidance;
+- `baselines/runtime/` — approved, sanitized historical runtime baseline lineage.
 
-The repository deliberately has no deployment job, self-hosted runner, or production apply mechanism. A future phase may add those only with exact commit binding, preflight, backup, verification, and rollback controls.
+Locally generated, sanitized diagnostic evidence is ignored by default under `evidence/` and `exports/`. These directories retain their tracked `.gitkeep` placeholders; sensitive runtime data, credentials, backups and raw private configuration must not be committed.
+
+Source changes follow GitHub review and CI. A merge does not authorize host or LIVE mutations. Production operations need the applicable explicit owner authorization and exact target, scope and verification boundaries defined in `AGENTS.md` and `docs/SECURITY_MODEL.md`. Runtime state must be verified separately through the authorized host-control boundary.

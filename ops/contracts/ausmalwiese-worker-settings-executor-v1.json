@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "status": "SOURCE_ONLY_NOT_INSTALLED",
+  "source": {
+    "executor": "scripts/ausmalwiese_worker_settings_executor.py",
+    "sanitizer": "scripts/ausmalwiese_worker_settings_get.py",
+    "install_entrypoint": "/usr/local/sbin/rpi5-ausmalwiese-worker-settings-get",
+    "install_sanitizer": "/usr/local/libexec/rpi5-ausmalwiese-worker-settings-get/sanitizer.py",
+    "install_release": "/usr/local/libexec/rpi5-ausmalwiese-worker-settings-get/release.json",
+    "credential_path": "/etc/rpi5-secrets/cloudflare/ausmalwiese-worker-settings-read.json"
+  },
+  "api": {
+    "host": "api.cloudflare.com",
+    "method": "GET",
+    "endpoint": "/client/v4/accounts/{pinned_account_id}/workers/scripts/coloring-pages-stats-v1/script-settings",
+    "max_requests_per_invocation": 1,
+    "max_retries": 0,
+    "max_redirects": 0,
+    "timeout_seconds": 10,
+    "max_response_bytes": 32768
+  },
+  "credential": {
+    "dedicated_future_permission": "Workers Scripts Read",
+    "no_oauth_cache_access": true,
+    "fixed_worker": "coloring-pages-stats-v1",
+    "release_account_sha256_pin": true,
+    "root_owned_mode": "0600",
+    "future_provisioning_requires_owner_authorization": true
+  },
+  "install_preflight": {
+    "required_exact_merged_main_sha": true,
+    "root_owned_executable_mode": "0500",
+    "root_owned_sanitizer_mode": "0400",
+    "root_owned_release_mode": "0400",
+    "sha256_bound_release": true,
+    "no_overwrite_installer_delivered": true,
+    "no_sudoers_mutation": true,
+    "no_runtime_install_in_this_scope": true
+  },
+  "actions": {
+    "install_authorized": false,
+    "credential_access_authorized": false,
+    "cloudflare_get_authorized": false,
+    "merge_authorized": false,
+    "live_authorized": false
+  }
+}

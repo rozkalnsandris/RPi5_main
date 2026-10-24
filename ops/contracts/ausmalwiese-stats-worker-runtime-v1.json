@@ -1,0 +1,311 @@
+{
+  "schema": "rozkalns.rpi5-main.ausmalwiese-stats-worker-runtime.v1",
+  "status": "source-only-traffic-privacy-repin-full-replace-owner-gated-not-installed-no-live",
+  "issue": 1118,
+  "parent_issue": 996,
+  "repository": "rozkalnsandris/RPi5_main",
+  "application_repository": "rozkalnsandris/coloring-pages",
+  "application_commit": "d0b00304bb18af1a5a4dfd0b4d0f838c47cea9b1",
+  "application_checkout_commit": "d0b00304bb18af1a5a4dfd0b4d0f838c47cea9b1",
+  "worker": "coloring-pages-stats-v1",
+  "worker_blob": "8790a8ddc3b83771088c4cceb16a3b57ce5d1c8b",
+  "config_blob": "3733263a391274f2b6b0f2023c8656565bde8e1a",
+  "account_sha256": "3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34",
+  "routes": {
+    "coloring.rozkalns.net/api/stats/*": "rozkalns.net",
+    "ausmalwiese.de/api/stats/*": "ausmalwiese.de",
+    "www.ausmalwiese.de/api/stats/*": "ausmalwiese.de",
+    "ausmalwiese.de/q": "ausmalwiese.de"
+  },
+  "installed_runtime": {
+    "launcher": "/usr/local/sbin/rpi5-ausmalwiese-stats-worker-deploy",
+    "provisioner": "/usr/local/sbin/rpi5-ausmalwiese-stats-worker-deploy-provision",
+    "root": "/usr/local/libexec/rpi5-ausmalwiese-stats-worker-deploy",
+    "core": "core.py",
+    "worker_source": "stats-worker.js",
+    "config_source": "wrangler.stats-worker.jsonc",
+    "release": "release.json",
+    "modes": {
+      "launcher": "0500",
+      "provisioner": "0500",
+      "root": "0700",
+      "core": "0400",
+      "worker_source": "0400",
+      "config_source": "0400",
+      "release": "0400"
+    },
+    "exact_release_manifest": true,
+    "no_overwrite": true
+  },
+  "protected_credential": {
+    "path": "/etc/rpi5-secrets/cloudflare/ausmalwiese-stats-worker-write.json",
+    "directory_mode": "0700",
+    "file_mode": "0600",
+    "fields": [
+      "worker",
+      "account_id",
+      "api_token",
+      "zones"
+    ],
+    "fixed_worker": "coloring-pages-stats-v1",
+    "account_identity": "sha256-bound",
+    "zone_names": [
+      "ausmalwiese.de",
+      "rozkalns.net"
+    ],
+    "provision_input": "controlling-/dev/tty-hidden-only",
+    "token_in_argv": false,
+    "token_in_environment": false,
+    "token_in_stdin": false,
+    "token_output": false,
+    "exclusive_create_no_overwrite": true,
+    "token_creation": false,
+    "permission_change": false
+  },
+  "read_protocol": {
+    "host": "api.cloudflare.com",
+    "timeout_seconds": 10,
+    "redirects": 0,
+    "retries": 0,
+    "max_response_bytes": 1500000,
+    "max_reads_per_invocation": 48,
+    "versions": "GET /accounts/{account}/workers/scripts/coloring-pages-stats-v1/versions?page=1&per_page=100",
+    "deployments": "GET /accounts/{account}/workers/scripts/coloring-pages-stats-v1/deployments",
+    "script_version": "GET /accounts/{account}/workers/scripts/coloring-pages-stats-v1/versions/{version}",
+    "version_modules": "GET /accounts/{account}/workers/workers/coloring-pages-stats-v1/versions/{version}?include=modules",
+    "zone_identity": "GET /zones/{zone_id}",
+    "zone_routes": "GET /zones/{zone_id}/workers/routes",
+    "version_code_proof": "base64 provider-declared main_module SHA-256",
+    "versions_result_contract": {
+      "transport_boundary": "http-200-plus-parseable-json",
+      "result_shape": "{\"items\":[...]}",
+      "latest_rule": "first-item-consumed-fields-only",
+      "consumed_fields": [
+        "result.items[0].id"
+      ],
+      "consumed_id": "full-uuid-required",
+      "ignored_fields": "all-unconsumed-provider-fields",
+      "result_info_page": "optional-if-present-must-equal-1"
+    },
+    "deployments_result_contract": {
+      "transport_boundary": "http-200-plus-parseable-json",
+      "result_shape": "{\"deployments\":[...]}",
+      "latest_rule": "first-deployment-consumed-fields-only",
+      "consumed_fields": [
+        "result.deployments[0].id",
+        "result.deployments[0].versions[0].version_id",
+        "result.deployments[0].versions[0].percentage"
+      ],
+      "deployment_id": "full-uuid-required",
+      "latest_traffic": "exactly-one-version-at-100-percent",
+      "ignored_fields": "all-unconsumed-provider-fields",
+      "result_info_page": "optional-if-present-must-equal-1"
+    },
+    "version_module_contract": {
+      "version_id": "exact-requested-uuid",
+      "main_module": "provider-declared-non-empty-bounded-string",
+      "selection": "exactly-one-modules-entry-with-name-equal-main_module",
+      "content_types": [
+        "application/javascript+module",
+        "text/javascript+module",
+        "application/javascript",
+        "text/javascript"
+      ],
+      "decoded_main_module_max_bytes": 196608,
+      "candidate_comparison": "selected-main-module-sha256-equals-reviewed-local-worker-sha256"
+    },
+    "source_derived_handler_contract": {
+      "provider_field": "resources.script.handlers",
+      "candidate_handlers_sorted": [
+        "fetch",
+        "scheduled"
+      ],
+      "candidate_handler_rule": "exact-sorted-set-required-when-version-code-sha256-equals-reviewed-candidate",
+      "settings_sha256_excludes": [
+        "script.handlers"
+      ],
+      "settings_sha256_preserves": [
+        "script.named_handlers",
+        "script_runtime.exports",
+        "script_runtime.limits",
+        "script_runtime.migration_tag",
+        "script_runtime.usage_model"
+      ]
+    }
+  },
+  "runtime_modes": {
+    "preflight": {
+      "confirmation": "OWNER-AUTHORIZED-STATS-WORKER-PREFLIGHT",
+      "expected_source_blob_required": true,
+      "expected_config_blob_required": true,
+      "double_read_required": true,
+      "provider_writes": 0,
+      "output": [
+        "fixed target labels",
+        "active_version",
+        "latest_uploaded_version",
+        "snapshot_sha256",
+        "candidate_code_sha256",
+        "mutation_required"
+      ]
+    },
+    "apply": {
+      "confirmation": "OWNER-AUTHORIZED-STATS-WORKER-APPLY",
+      "expected_source_blob_required": true,
+      "expected_config_blob_required": true,
+      "expected_preflight_sha256_required": true,
+      "upload_writes_max": 1,
+      "deploy_writes_max": 1,
+      "upload_endpoint": "POST /accounts/{account}/workers/scripts/coloring-pages-stats-v1/versions?bindings_inherit=strict",
+      "deploy_endpoint": "POST /accounts/{account}/workers/scripts/coloring-pages-stats-v1/deployments",
+      "post_upload_code_proof_required": true,
+      "post_deploy_code_proof_required": true,
+      "routes_bindings_configuration_preserved": true,
+      "retries": 0,
+      "rollback": false,
+      "cleanup": false,
+      "fallback": false,
+      "candidate_handlers_exact_required": true,
+      "nonhandler_configuration_preserved": true
+    },
+    "recovery_preflight": {
+      "confirmation": "OWNER-AUTHORIZED-STATS-WORKER-RECOVERY-PREFLIGHT",
+      "expected_source_blob_required": true,
+      "expected_config_blob_required": true,
+      "double_read_required": true,
+      "allow_latest_not_active": true,
+      "candidate_must_equal_latest_code": true,
+      "active_must_not_equal_candidate": true,
+      "routes_bindings_configuration_preserved": true,
+      "provider_writes": 0,
+      "output": [
+        "fixed target labels",
+        "snapshot_sha256",
+        "candidate_code_sha256",
+        "recovery_required",
+        "status"
+      ],
+      "provider_version_ids_output": false,
+      "provider_deployment_ids_output": false,
+      "candidate_handlers_exact_required": true,
+      "nonhandler_configuration_preserved": true
+    },
+    "deploy_existing": {
+      "confirmation": "OWNER-AUTHORIZED-STATS-WORKER-DEPLOY-EXISTING",
+      "expected_source_blob_required": true,
+      "expected_config_blob_required": true,
+      "expected_recovery_sha256_required": true,
+      "upload_writes_max": 0,
+      "deploy_writes_max": 1,
+      "deploy_endpoint": "POST /accounts/{account}/workers/scripts/coloring-pages-stats-v1/deployments",
+      "deploy_target": "latest-uploaded-version-proven-by-recovery-preflight",
+      "post_deploy_code_proof_required": true,
+      "routes_bindings_configuration_preserved": true,
+      "provider_version_ids_output": false,
+      "provider_deployment_ids_output": false,
+      "retries": 0,
+      "rollback": false,
+      "cleanup": false,
+      "fallback": false,
+      "candidate_handlers_exact_required": true,
+      "nonhandler_configuration_preserved": true
+    }
+  },
+  "install": {
+    "confirmation": "INSTALL-AUSMALWIESE-STATS-WORKER-RUNTIME",
+    "exact_rpi5_main_clean_checkout_required": true,
+    "exact_application_main_required": "d0b00304bb18af1a5a4dfd0b4d0f838c47cea9b1",
+    "exact_application_worker_config_bytes_required": true,
+    "application_unrelated_dirty_paths_ignored": true,
+    "root_owned_targets": true,
+    "no_secret_access": true,
+    "no_cloudflare_request": true,
+    "no_permission_or_sudoers_change": true,
+    "upgrade": {
+      "confirmation": "UPGRADE-AUSMALWIESE-STATS-WORKER-RUNTIME",
+      "predecessor_main": "78e3e3aee5ef32386acc8031a955b7ddee803304",
+      "predecessor_launcher_blob": "d64b2f330da67d9f95927d06bd1984f4aac4a343",
+      "predecessor_release_sha256": "e65d7b909482fe67629e1da0b42bc5a1b78f255397c01a789941240035b9b066",
+      "replacement_targets": [
+        "/usr/local/sbin/rpi5-ausmalwiese-stats-worker-deploy",
+        "/usr/local/libexec/rpi5-ausmalwiese-stats-worker-deploy/release.json"
+      ],
+      "exact_installed_package_identity_required": true,
+      "credential_access": false,
+      "cloudflare_request": false,
+      "retries": 0,
+      "rollback": false,
+      "cleanup": false
+    },
+    "full_replace": {
+      "issue": 1202,
+      "confirmation": "REPLACE-AUSMALWIESE-STATS-WORKER-FULL-RELEASE",
+      "predecessor_release_sha256": "e65d7b909482fe67629e1da0b42bc5a1b78f255397c01a789941240035b9b066",
+      "predecessor_application_sha": "e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63",
+      "predecessor_worker_blob": "c2ac9da6e0701103e0041b30db7dfbea4298f96c",
+      "replacement_targets": [
+        "/usr/local/sbin/rpi5-ausmalwiese-stats-worker-deploy-provision",
+        "/usr/local/libexec/rpi5-ausmalwiese-stats-worker-deploy/core.py",
+        "/usr/local/libexec/rpi5-ausmalwiese-stats-worker-deploy/stats-worker.js",
+        "/usr/local/libexec/rpi5-ausmalwiese-stats-worker-deploy/wrangler.stats-worker.jsonc",
+        "/usr/local/sbin/rpi5-ausmalwiese-stats-worker-deploy",
+        "/usr/local/libexec/rpi5-ausmalwiese-stats-worker-deploy/release.json"
+      ],
+      "write_dispatches_max": 6,
+      "target_root_unchanged": true,
+      "identity_preflight_required": true,
+      "exact_source_commit_required": true,
+      "full_directory_member_inventory_required": true,
+      "installed_modes_digests_and_link_counts_required": true,
+      "exact_preapproved_sudo_commands_required": true,
+      "atomic": false,
+      "partial_failure": "STOP_UNKNOWN_STATE",
+      "retries": 0,
+      "rollback": false,
+      "cleanup": false,
+      "owner_live_approval": false,
+      "source_only": true,
+      "cloudflare_writes": 0,
+      "permission_change": false
+    }
+  },
+  "future_composite_live_sequence": [
+    "fresh source host and application identity preflight",
+    "trusted git fetch plus ff-only sync only if explicitly bound and needed",
+    "install exact reviewed Stats Worker runtime if required",
+    "run sanitized recovery preflight when latest reviewed candidate is uploaded but not active and freeze recovery snapshot_sha256",
+    "under separate exact LIVE authority deploy that already-uploaded candidate once at 100 percent with zero uploads",
+    "prove deployed provider-declared main-module SHA-256 equals reviewed local Worker source",
+    "verify routes bindings configuration and public HEAD /q behavior"
+  ],
+  "source_authorized_capabilities": {
+    "host_install": false,
+    "credential_read": false,
+    "credential_provision": false,
+    "cloudflare_read": false,
+    "cloudflare_upload": false,
+    "cloudflare_deploy": false,
+    "token_create": false,
+    "permission_change": false,
+    "d1_write": false,
+    "sitemap_publish": false,
+    "legacy_redirect_write": false,
+    "live": false
+  },
+  "output_policy": {
+    "account_id": false,
+    "zone_ids": false,
+    "token": false,
+    "provider_body": false,
+    "raw_routes": false,
+    "raw_bindings": false,
+    "plain_text_values": false,
+    "active_version": true,
+    "latest_uploaded_version": true,
+    "snapshot_sha256": true,
+    "candidate_code_sha256": true,
+    "recovery_provider_version_ids": false,
+    "recovery_provider_deployment_ids": false
+  },
+  "upgrade_issue": 1138
+}

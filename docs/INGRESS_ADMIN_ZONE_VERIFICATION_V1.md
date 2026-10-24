@@ -215,3 +215,9 @@ Phase 4 may be marked COMPLETE only after separately authorized runtime gates pr
 8. sanitized evidence is recorded.
 
 Any drift requiring a write becomes a separate issue and separate owner-gated remediation. Phase 5 must not begin merely because this source contract is merged.
+
+## Ausmalwiese ADMIN extension (#1151)
+
+The ADMIN projection also includes `admin.ausmalwiese.de` as an exact-owner, loopback-only service with forbidden LAN break-glass. Verifier source must derive the service set from the contract rather than assuming a fixed count. The host-side read-only probe target is port 8765, matching the reviewed Ausmalwiese ADMIN publisher source.
+
+This extension is source readiness only. It does not create the hostname route or Access application, and any Cloudflare/DNS/Tunnel mutation remains separately owner-authorized.

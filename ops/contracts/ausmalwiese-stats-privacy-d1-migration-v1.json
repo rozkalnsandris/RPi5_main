@@ -1,0 +1,69 @@
+{
+  "schema_version": 2,
+  "status": "SOURCE_ONLY_PRIVACY_D1_MIGRATION_NO_LIVE",
+  "issue": 1061,
+  "reconciliation_issue": 996,
+  "repository": "rozkalnsandris/RPi5_main",
+  "worker": "coloring-pages-stats-v1",
+  "wrangler_version": "4.135.0",
+  "source_repo": "rozkalnsandris/coloring-pages",
+  "source_commit": "7f07c226105e26c0ca9cf91eb150a3e8f585c5ea",
+  "source_blob": "c2ac9da6e0701103e0041b30db7dfbea4298f96c",
+  "config_path": "cloudflare/wrangler.stats-worker.jsonc",
+  "config_blob": "3733263a391274f2b6b0f2023c8656565bde8e1a",
+  "database_binding": "DB",
+  "database_name": "coloring-pages-stats-v1",
+  "database_id": "f8ac8f1d-a230-4bc4-af13-557c1b91b273",
+  "migration_path": "cloudflare/stats-cookie-like-migration.sql",
+  "migration_blob": "b5346c05cb27de1010dab2027b0b923e999af775",
+  "cleanup_path": "cloudflare/stats-remove-daily-visitor-hmac.sql",
+  "cleanup_blob": "a7cffb110adfceb5c1ff4dcd17a7009c549976a5",
+  "cleanup_is_later_separate_gate": true,
+  "gate_a_remote_schema": "ausmalwiese.stats-gate-a-remote.v1",
+  "gate_a_required_bindings": {
+    "DB": "d1"
+  },
+  "gate_a_known_bindings": {
+    "DB": "d1",
+    "RATE_LIMITER": "ratelimit",
+    "PUBLIC_ORIGIN": "plain_text",
+    "CF_ANALYTICS_HOST": "plain_text",
+    "CF_ZONE_TAG": "plain_text",
+    "VISITOR_HMAC_KEY": "secret_text",
+    "CF_ANALYTICS_API_TOKEN": "secret_text"
+  },
+  "visitor_hmac_required_for_gate_a": false,
+  "latest_must_equal_active_for_gate_a": false,
+  "worker_takeover_gate_unchanged": true,
+  "preconditions": [
+    "sanitized-gate-a-remote-evidence",
+    "single-active-version-100-percent",
+    "latest-may-differ-from-active",
+    "known-binding-kinds-with-db-required",
+    "visitor-hmac-not-required-for-additive-d1-gate",
+    "exact-reviewed-source-config-and-migration-blobs",
+    "exact-d1-binding-identity",
+    "target-schema-objects-absent",
+    "owner-gate-binds-remote-and-schema-digests"
+  ],
+  "postconditions": [
+    "like-cookie-session-table-present",
+    "archived-like-totals-table-present",
+    "expiry-index-present",
+    "exact-target-column-shapes"
+  ],
+  "actions": {
+    "run_wrangler": false,
+    "cloudflare_request": false,
+    "credential_access": false,
+    "d1_write": false,
+    "worker_upload": false,
+    "worker_deploy": false,
+    "cron_change": false,
+    "cleanup": false,
+    "merge": false,
+    "live": false,
+    "retry": false,
+    "rollback": false
+  }
+}

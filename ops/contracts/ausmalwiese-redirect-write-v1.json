@@ -1,0 +1,120 @@
+{
+  "schema": "rozkalns.rpi5-main.ausmalwiese-redirect-write.v1",
+  "status": "source-only-not-installed",
+  "issue": 1114,
+  "parent_issue": 996,
+  "canonical_repository": "rozkalnsandris/RPi5_main",
+  "source": "scripts/ausmalwiese_redirect_write_v1.py",
+  "reuses_inventory": "scripts/ausmalwiese_redirect_inventory.py",
+  "reuses_get_transport": "scripts/ausmalwiese_redirect_get_adapter.py",
+  "zone": "rozkalns.net",
+  "phase": "http_request_dynamic_redirect",
+  "legacy_hostname": "coloring.rozkalns.net",
+  "match_expression": "http.host eq \"coloring.rozkalns.net\"",
+  "rule": {
+    "ref": "ausmalwiese_legacy_301",
+    "description": "Ausmalwiese legacy hostname permanent redirect",
+    "action": "redirect",
+    "target_expression": "concat(\"https://ausmalwiese.de\", http.request.uri.path)",
+    "status_code": 301,
+    "preserve_query_string": true,
+    "enabled": true
+  },
+  "preflight": {
+    "fresh_sanitized_inventory_required": true,
+    "expected_baseline_sha256_required": true,
+    "active_ambiguous_rules_allowed": 0,
+    "disabled_ambiguous_rules_allowed": 0,
+    "exact_legacy_rules_allowed_max": 1,
+    "wrong_zone_or_phase": "STOP",
+    "pagination_uncertainty": "STOP",
+    "duplicate_exact_legacy_rule": "STOP",
+    "unexpected_rule_shape_or_identity": "STOP"
+  },
+  "write_budget": {
+    "max_provider_writes_per_invocation": 1,
+    "write_path_ids_must_match_immediately_observed_phase_state": true,
+    "retries": 0,
+    "rollback": false,
+    "cleanup": false,
+    "fallback_transport": false,
+    "allowed_operations": [
+      {
+        "when": "phase_entrypoint_absent",
+        "method": "POST",
+        "path": "/zones/{exact_zone_id}/rulesets",
+        "body": "exact_create_ruleset_body_only"
+      },
+      {
+        "when": "entrypoint_present_and_no_exact_legacy_rule",
+        "method": "POST",
+        "path": "/zones/{exact_zone_id}/rulesets/{exact_entrypoint_id}/rules",
+        "body": "exact_desired_rule_only"
+      },
+      {
+        "when": "exactly_one_exact_legacy_rule_present_but_not_desired",
+        "method": "PATCH",
+        "path": "/zones/{exact_zone_id}/rulesets/{exact_entrypoint_id}/rules/{exact_rule_id}",
+        "body": "exact_desired_rule_only"
+      }
+    ]
+  },
+  "postverify": {
+    "fresh_sanitized_inventory_required": true,
+    "desired_exact_legacy_rule_required": true,
+    "unrelated_rule_semantics_must_match_prestate": true,
+    "active_ambiguous_rules_allowed": 0,
+    "mutation_requires_baseline_change": true,
+    "noop_requires_baseline_stability": true,
+    "update_requires_same_rule_id": true,
+    "existing_entrypoint_requires_same_ruleset_id": true
+  },
+  "network_policy": {
+    "origin": "https://api.cloudflare.com/client/v4",
+    "redirect_following": false,
+    "proxy_inheritance": false,
+    "timeout_seconds": 8,
+    "max_response_bytes": 1000000,
+    "max_write_body_bytes": 16384,
+    "credential_source": "future_trusted_in_memory_injection_only",
+    "credential_content_output": false,
+    "provider_error_body_output": false
+  },
+  "future_live_prerequisites": [
+    "reviewed_and_merged_exact_source_sha",
+    "separately_reviewed_installed_entrypoint_or_equivalent_trusted_packaging",
+    "exact_zone_id_bound_outside_chat",
+    "independently_authorized_Dynamic_URL_Redirects_Write_credential",
+    "credential_not_in_argv_env_stdin_repo_logs_or_chat",
+    "fresh_expected_baseline_sha256_bound_to_owner_live_authorization",
+    "parent_996_prior_stages_accepted_before_legacy_301",
+    "explicit_composite_live_authority_for_cloudflare_redirect_write"
+  ],
+  "output_policy": {
+    "raw_zone_id": false,
+    "raw_rule_id": false,
+    "raw_ruleset_id": false,
+    "raw_provider_rules": false,
+    "token_or_credential_material": false,
+    "sanitized_preflight_schema": "rozkalns.rpi5-main.redirect-write-preflight.v1",
+    "sanitized_result_schema": "rozkalns.rpi5-main.redirect-write-result.v1"
+  },
+  "capabilities_not_granted_by_this_source": [
+    "Cloudflare_GET_execution",
+    "Cloudflare_write_execution",
+    "credential_read_or_provisioning",
+    "permission_change",
+    "host_install",
+    "DNS_change",
+    "Tunnel_change",
+    "WAF_change",
+    "Access_change",
+    "Stats_or_D1_mutation",
+    "sitemap_publication",
+    "production_cutover",
+    "LIVE",
+    "retry",
+    "rollback",
+    "cleanup"
+  ]
+}

@@ -1,0 +1,22 @@
+[Unit]
+Description=Ausmalwiese protected admin ZIP publisher
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=andris
+Group=andris
+ExecStart=/usr/local/bin/coloring-pages-admin-publish --serve
+Restart=no
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/coloring-pages-content
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

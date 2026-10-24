@@ -24,8 +24,14 @@ OWNER = "andris"
 CONTENT_ROOT = Path("/srv/coloring-pages-content")
 TRUSTED_GENERATOR = Path("/usr/local/share/coloring-pages/coloring-pages-sitemap")
 INSTALLED_ENTRYPOINT = Path("/usr/local/bin/coloring-pages-sitemap-publish")
-GENERATOR_GIT_BLOB = "5644c8fd366c0c57f6339fddd163c5091ea134c5"
-ORIGIN = "https://coloring.rozkalns.net"
+GENERATOR_GIT_BLOB = "5d1d37c32573aa8ac0d91f45b73938638fd183e9"
+ORIGIN = "https://ausmalwiese.de"
+CATEGORY_ROUTES = ("tiere", "fahrzeuge", "alphabet", "lernen", "figuren", "jahreszeiten")
+STATIC_URLS = (
+    ORIGIN + "/",
+    ORIGIN + "/kita",
+    *(ORIGIN + "/" + route for route in CATEGORY_ROUTES),
+)
 LOCAL_SITEMAP = "http://127.0.0.1:9191/sitemap.xml"
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -155,7 +161,7 @@ def validate_xml(data: bytes, ids: list[str]):
         if url.tag != NS + "url" or len(url) != 1 or url[0].tag != NS + "loc":
             raise Block("candidate XML shape invalid")
         locs.append(url[0].text)
-    expected = [ORIGIN + "/", ORIGIN + "/kita"]
+    expected = list(STATIC_URLS)
     expected.extend(ORIGIN + "/detail.html?id=" + name for name in sorted(ids))
     if locs != expected or len(set(locs)) != len(locs):
         raise Block("candidate XML URL set invalid")

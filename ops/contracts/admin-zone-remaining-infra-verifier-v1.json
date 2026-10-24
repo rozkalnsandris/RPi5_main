@@ -115,6 +115,12 @@
       "hostname": "dash.rozkalns.net",
       "probe_port": 8787,
       "port_source_ref": "rozkalnsandris/dashboard_RPi5:docs/PHASE11C_CLOUDFLARE_LAUNCH.md"
+    },
+    {
+      "service_id": "ausmalwiese-admin-publisher",
+      "hostname": "admin.ausmalwiese.de",
+      "probe_port": 8765,
+      "port_source_ref": "docs/COLORING_PAGES_ADMIN_PUBLISH_V1.md"
     }
   ],
   "listener_policy": {
