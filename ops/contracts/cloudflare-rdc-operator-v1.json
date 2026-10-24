@@ -45,12 +45,12 @@
       "token_ownership": "account-owned"
     },
     "dns": {
-      "implemented": false,
+      "implemented": true,
       "path": "/etc/rpi5-secrets/cloudflare/dns-writer.json",
       "owner": "root:root",
       "mode": "0600",
       "cloudflare_permission": "DNS Edit",
-      "scope": "zone:rozkalns.net"
+      "scope": "zone:ausmalwiese.de"
     }
   },
   "operations": [
@@ -99,15 +99,156 @@
         "all pre-existing Access applications retain their semantic projection"
       ],
       "recovery": "After the write begins, any error or ambiguity is STOP_ERROR. No retry, rollback, delete, cleanup, alternate write or second mutation is authorized."
+    },
+    {
+      "id": "ausmalwiese-gsc-domain-txt-once-v1",
+      "action": "dns-ausmalwiese-gsc-txt",
+      "zone": "ausmalwiese.de",
+      "hostname": "ausmalwiese.de",
+      "type": "TXT",
+      "value": "google-site-verification=CZx413pYLeISdNsik5g5cUSkztdsYyHCOUg2dASib7M",
+      "ttl": 1,
+      "cloudflare_method": "POST",
+      "cloudflare_endpoint": "/zones/{zone_id}/dns_records",
+      "max_write_requests": 1,
+      "credentials": "existing root-owned ausmalwiese.de DNS-only credential; no Tunnel/Access secret",
+      "preflight": [
+        "installed exact-reviewed-main release guard and root-only DNS credential",
+        "Cloudflare zone id and name match ausmalwiese.de; zone is active on Free plan",
+        "all DNS records returned in one complete bounded page",
+        "no existing apex google-site-verification TXT (identical or different)",
+        "complete initial DNS inventory matches explicitly supplied SHA-256 immediately before the one write"
+      ],
+      "post_write": [
+        "one read-only GET retrieves the newly created TXT by returned record id",
+        "exact apex TXT value present; preexisting DNS inventory unmodified",
+        "any write uncertainty or post-write failure is STOP with no retry, rollback, cleanup, or alternate write"
+      ],
+      "forbids": [
+        "caller-selected hostname, TXT content, zone, endpoint, method or credentials",
+        "second write, retry, delete, overwrite, other DNS types or DNS records",
+        "Cloudflare Tunnel and Access calls",
+        "Google verification button or sitemap submission",
+        "host operator upgrade/install without separate LIVE authorization"
+      ],
+      "authorization": "source-only work does not authorize running this operation LIVE; separately approve exact installed release and DNS baseline"
+    },
+    {
+      "id": "ausmalwiese-admin-access-v1",
+      "issue": 1153,
+      "action": "ausmalwiese-admin-access",
+      "hostname": "admin.ausmalwiese.de",
+      "cloudflare_method": "POST",
+      "cloudflare_endpoint": "/accounts/{account_id}/access/apps",
+      "max_write_requests": 1,
+      "credentials": "existing root-owned Access-only credential",
+      "identity_source": {
+        "hostname": "dash.rozkalns.net",
+        "rule": "derive exactly one private email selector from the existing exact-owner allow policy",
+        "emit_identity": false,
+        "persist_identity": false
+      },
+      "application": {
+        "name": "Ausmalwiese Admin",
+        "type": "self_hosted",
+        "destination": "admin.ausmalwiese.de",
+        "policy_name": "owner-only",
+        "decision": "allow",
+        "require": [],
+        "exclude": []
+      },
+      "preflight": [
+        "exact admin.ausmalwiese.de Access application absent",
+        "exactly one dash.rozkalns.net self-hosted application exists",
+        "dashboard application has exactly one allow policy with exactly one email selector and no Require/Exclude",
+        "complete application inventory is bounded",
+        "private preimage is bound to a deterministic SHA-256 baseline"
+      ],
+      "post_write": [
+        "exact Ausmalwiese Admin application exists once",
+        "created application identity matches the POST result",
+        "created policy preserves the exact privately derived owner selector",
+        "all pre-existing Access applications retain their semantic projection"
+      ],
+      "recovery": "After POST dispatch, any error or ambiguity is STOP_ERROR; no retry, DELETE, rollback or cleanup."
+    },
+    {
+      "id": "ausmalwiese-admin-tunnel-v1",
+      "issue": 1153,
+      "action": "ausmalwiese-admin-tunnel",
+      "hostname": "admin.ausmalwiese.de",
+      "origin": "http://127.0.0.1:8765",
+      "cloudflare_method": "PUT",
+      "cloudflare_endpoint": "/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations",
+      "max_write_requests": 1,
+      "credentials": [
+        "existing root-owned Access-only credential for GET-only exact admin app/policy binding",
+        "existing root-owned Tunnel-only credential for GET/PUT of exactly rpi5-tunnel"
+      ],
+      "preflight": [
+        "Access and Tunnel credentials bind the same account",
+        "exact Ausmalwiese Admin application and exact-owner policy exist",
+        "Access application AUD is privately derived and never emitted",
+        "exactly one dash.rozkalns.net Tunnel route exists and is already protect-with-access enabled",
+        "dashboard Tunnel route carries required=true, one non-empty private teamName and at least one non-empty AUD tag",
+        "the dashboard teamName is reused privately without Access organization API access",
+        "exact admin Tunnel route is absent",
+        "catchall remains last",
+        "private Access binding plus full Tunnel config are bound to a deterministic SHA-256 baseline"
+      ],
+      "allowed_diff": [
+        "insert exactly one admin.ausmalwiese.de ingress before catchall",
+        "service exactly http://127.0.0.1:8765",
+        "originRequest.access.required=true",
+        "originRequest.access.teamName=private-teamName-from-exact-dashboard-tunnel-route",
+        "originRequest.access.audTag=[private-exact-admin-app-aud]"
+      ],
+      "post_write": [
+        "fresh Tunnel GET equals the exact prepared config",
+        "admin route is loopback and protect-with-access is present",
+        "all unrelated ingress entries including the dashboard team anchor and catchall are unchanged"
+      ],
+      "recovery": "After PUT dispatch, any error or ambiguity is STOP_ERROR; no retry, rollback, cleanup or alternate config write.",
+      "organization_api_dependency": false,
+      "team_name_source": "exact dash.rozkalns.net originRequest.access.teamName from the same rpi5-tunnel configuration"
+    },
+    {
+      "id": "ausmalwiese-admin-dns-v1",
+      "issue": 1153,
+      "action": "ausmalwiese-admin-dns",
+      "zone": "ausmalwiese.de",
+      "hostname": "admin.ausmalwiese.de",
+      "type": "CNAME",
+      "proxied": true,
+      "ttl": 1,
+      "cloudflare_method": "POST",
+      "cloudflare_endpoint": "/zones/{zone_id}/dns_records",
+      "max_write_requests": 1,
+      "credentials": [
+        "existing root-owned ausmalwiese.de DNS-only credential",
+        "existing root-owned Tunnel-only credential for GET-only rpi5-tunnel binding"
+      ],
+      "preflight": [
+        "active ausmalwiese.de Free zone belongs to the Tunnel account",
+        "exact protected admin Tunnel route already exists",
+        "admin.ausmalwiese.de DNS record is absent",
+        "complete DNS inventory plus Tunnel config are bound to a deterministic SHA-256 baseline"
+      ],
+      "post_write": [
+        "one proxied CNAME exists for admin.ausmalwiese.de",
+        "CNAME points to the exact same-account rpi5-tunnel UUID target",
+        "pre-existing DNS inventory is unchanged"
+      ],
+      "recovery": "After POST dispatch, any error or ambiguity is STOP_ERROR; no retry, delete, rollback or cleanup."
     }
   ],
   "forbidden": [
     "API token creation or rotation",
     "API Tokens Edit permission",
-    "Cloudflare Tunnel mutation",
-    "DNS mutation",
+    "Cloudflare Tunnel mutation outside separately reviewed fixed operations",
+    "DNS mutation outside separately reviewed fixed ausmalwiese CNAME and GSC verification TXT operations",
     "wildcard Access application mutation",
-    "unrelated Access application or policy mutation",
+    "Access application or policy mutation outside separately reviewed fixed operations",
     "caller-provided API endpoint, command, path, hostname or request body",
     "secret values in argv, environment, logs, GitHub, chat or RDC output",
     "automatic retry",

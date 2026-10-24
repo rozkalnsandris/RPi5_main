@@ -189,3 +189,35 @@ This is not a permanent owner blanket approval for all future sitemap
 mutations until a separately reviewed LIVE standing authorization explicitly
 defines that scope. Until then the hook must remain disabled. Source-only
 tests: `tests/test-coloring-pages-sitemap-post-publish-v1.py`.
+
+## Ausmalwiese hostname cutover candidate (2026-10-16)
+
+The historical v1 pins above are retained as historical release identities. The
+new source-only `ausmalwiese.de` candidate and its separate upgrade/activation
+gates are specified in `docs/AUSMALWIESE_SITEMAP_CUTOVER_V1.md` and
+`ops/contracts/ausmalwiese-sitemap-cutover-v1.json`. The first-install-only v1
+script's current source pin may advance for absent targets, but it still cannot
+upgrade already installed files. **No LIVE installation or sitemap publication
+is authorized by merging source.**
+
+
+## Category landing sitemap successor — issue #1094
+
+The historical v1 and hostname-cutover identities above remain provenance.
+Current category-landing source adds a separately reviewed successor for the
+fixed installed publisher/generator:
+
+- consumer: `coloring-pages@43691b7267d2a8185f3466667f0cdf2b380fbe04`;
+- generator Git blob: `5d1d37c32573aa8ac0d91f45b73938638fd183e9`;
+- publisher Git blob: `4ade38f1225f4c1bc102fda8d5538f9262695d43`;
+- static canonical set: home, `/kita`, and the six existing category routes.
+
+The publisher still uses the same fixed paths, exact catalogue snapshot
+binding, nonblocking shared Drive-ingest `flock`, exclusive staging,
+byte-for-byte generator verification, `os.replace`, directory fsync and local
+HTTP proof. No merge installs it and no source change publishes a sitemap.
+
+Issue #1094 deliberately does not repin the historical first-install-only
+installer or the Drive-ingest post-publish trust constants. Those remain the
+predecessor release and need a separate source/LIVE decision if they are to
+trust the successor.

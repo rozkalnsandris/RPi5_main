@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "repository": "rozkalnsandris/RPi5_main",
+  "status": "SOURCE_ONLY_NO_TRUSTED_RUNTIME_BACKEND",
+  "worker": "coloring-pages-stats-v1",
+  "api": {
+    "method": "GET",
+    "path": "/accounts/{trusted_pinned_account_id}/workers/scripts/coloring-pages-stats-v1/script-settings",
+    "origin": "https://api.cloudflare.com/client/v4",
+    "maximum_requests": 1,
+    "maximum_writes": 0,
+    "redirects_allowed": false,
+    "automatic_retry": false
+  },
+  "authorization": {
+    "credential_access_in_source_work": false,
+    "oauth_refresh_in_source_work": false,
+    "runtime_requires_separate_owner_gate": true,
+    "trusted_executor_and_pinned_account_required": true,
+    "no_secret_in_argv_environment_or_output": true
+  },
+  "output": {
+    "only": "explicitly allowlisted booleans, finite sampling rates, destination counts",
+    "absent_fields": null,
+    "raw_payload_and_error_strings_forbidden": true,
+    "destinations_names_and_tail_consumers_forbidden": true
+  },
+  "deployment": {
+    "installer_present": false,
+    "production_execution_allowed": false,
+    "merge_does_not_install_or_execute": true,
+    "cloudflare_settings_mutation_allowed": false
+  }
+}

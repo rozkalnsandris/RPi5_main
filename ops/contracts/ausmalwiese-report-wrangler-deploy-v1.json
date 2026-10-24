@@ -1,0 +1,98 @@
+{
+  "schema_version": 2,
+  "status": "SOURCE_ONLY_REPORT_WRANGLER_DEPLOY_NO_LIVE",
+  "issue": 1108,
+  "repository": "rozkalnsandris/RPi5_main",
+  "worker": "coloring-pages-report-v1",
+  "wrangler_version": "4.135.0",
+  "source_repo": "rozkalnsandris/coloring-pages",
+  "source_commit": "9a8111f19f9d82395f331ed49409af22f4765db7",
+  "worker_path": "cloudflare/report-worker.mjs",
+  "worker_blob": "384c93ae6f7348efc2dcbddbcc5a23743d8311d2",
+  "config_path": "cloudflare/wrangler.report.json",
+  "config_blob": "0ddb5e8c23e0503a957d0de69e11a7d98d6651cd",
+  "routes": [
+    {
+      "pattern": "ausmalwiese.de/api/report",
+      "zone_name": "ausmalwiese.de"
+    },
+    {
+      "pattern": "www.ausmalwiese.de/api/report",
+      "zone_name": "ausmalwiese.de"
+    }
+  ],
+  "email_binding": {
+    "name": "EMAIL",
+    "destination_local_part": "info",
+    "destination_domain": "ausmalwiese.de",
+    "destination_source": "assembled-fixed-config"
+  },
+  "deploy_flags": [
+    "--no-bundle",
+    "--strict",
+    "--tag",
+    "--message"
+  ],
+  "post_deploy_requires": [
+    "exact-source-and-config-provenance",
+    "latest-equals-single-active-100-percent",
+    "exact-two-report-routes",
+    "exact-one-send-email-binding",
+    "exact-verified-lowercase-info-destination",
+    "exact-observability-logs-enabled-traces-disabled",
+    "sanitized-email-send-failure-diagnostic-by-exact-worker-blob"
+  ],
+  "send_failure_diagnostic": {
+    "event": "report_email_send_failed",
+    "fields": [
+      "event",
+      "code"
+    ],
+    "code_pattern": "^E_[A-Z0-9_]{1,62}$",
+    "fallback": "UNKNOWN",
+    "source_provenance_only": true,
+    "forbidden": [
+      "provider-message",
+      "stack",
+      "request-payload",
+      "activity-id",
+      "page",
+      "reason",
+      "sender",
+      "destination",
+      "headers",
+      "ip",
+      "url"
+    ]
+  },
+  "actions": {
+    "run_wrangler": false,
+    "cloudflare_request": false,
+    "credential_or_secret_access": false,
+    "host_install": false,
+    "merge": false,
+    "live": false,
+    "retry": false,
+    "rollback": false,
+    "cleanup": false
+  },
+  "launcher": {
+    "future_fixed_deploy_capability": true,
+    "verifies_exact_checkout_before_dispatch": true,
+    "requires_report_secrets": false,
+    "stats_dependency": false,
+    "current_issue_authorizes_execution": false,
+    "runtime_entry": "/usr/local/sbin/rpi5-ausmalwiese-report-wrangler-deploy",
+    "runtime_source_root": "<fixed-operator-home>/coloring-pages",
+    "runtime_operator": "andris",
+    "runtime_persistent_permission_widening": false
+  },
+  "observability": {
+    "logs": {
+      "enabled": true
+    },
+    "traces": {
+      "enabled": false
+    }
+  }
+}

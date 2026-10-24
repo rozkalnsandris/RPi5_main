@@ -156,6 +156,36 @@ class IngressRegistryV1Tests(unittest.TestCase):
         self.assertIn("audit_route_presence: present", self.hostname_policy)
         self.assertIn("Removing or widening the existing wildcard is explicitly not part", self.doc)
 
+    def test_ausmalwiese_admin_publisher_is_registered_as_exact_owner_loopback(self) -> None:
+        admin = next(
+            service
+            for service in self.services
+            if service["hostname"] == "admin.ausmalwiese.de"
+        )
+        self.assertEqual(admin["service_id"], "ausmalwiese-admin-publisher")
+        self.assertEqual(admin["zone"], "ADMIN")
+        self.assertEqual(admin["current_origin_class"], "loopback")
+        self.assertEqual(admin["desired_origin_class"], "loopback")
+        self.assertEqual(admin["runtime_owner"], "rozkalnsandris/RPi5_main")
+        self.assertEqual(admin["repository_owner"], "rozkalnsandris/RPi5_main")
+        self.assertTrue(admin["access_required"])
+        self.assertEqual(admin["access_class"], "ADMIN")
+        self.assertEqual(admin["lan_break_glass"], "forbidden")
+        self.assertEqual(admin["firewall_expectation"], "no-lan-origin-required")
+        evidence = admin["last_verified_evidence"]
+        self.assertFalse(evidence["runtime_current"])
+        self.assertEqual(evidence["as_of"], "2026-10-21")
+        self.assertEqual(evidence["ref"], "RPi5_main#1157")
+        self.assertEqual(
+            evidence["kind"], "fresh-admin-cutover-anonymous-and-origin-post-verify"
+        )
+        self.assertIn("hostname: admin.ausmalwiese.de", self.hostname_policy)
+        self.assertIn("access_application_scope: exact-owner", self.hostname_policy)
+        self.assertIn("audit_route_presence: present", self.hostname_policy)
+        self.assertIn(
+            "Owner-authenticated browser login remains unverified", self.doc
+        )
+
     def test_newer_hostname_policy_explicitly_resolves_hermes_zone(self) -> None:
         hermes = next(
             service for service in self.services if service["hostname"] == "hermes.rozkalns.net"

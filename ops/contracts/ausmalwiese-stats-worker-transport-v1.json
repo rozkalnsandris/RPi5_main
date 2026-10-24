@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "status": "SOURCE_ONLY_CODE_PROOF_BLOCKED",
+  "repository": "rozkalnsandris/RPi5_main",
+  "issue": 1038,
+  "core_source": "scripts/ausmalwiese_stats_worker_exact_deploy.py",
+  "core_contract": "ops/contracts/ausmalwiese-stats-worker-exact-deploy-v1.json",
+  "target": {
+    "account_sha256": "3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34",
+    "worker": "coloring-pages-stats-v1",
+    "environment": "production",
+    "source_repo": "rozkalnsandris/coloring-pages",
+    "source_commit": "9590be4276ac1781eafe38cf662b8d224653c9aa",
+    "source_path": "cloudflare/stats-worker.js",
+    "git_blob_sha1": "dd5a2859d55b9ef2d9fb9a9d8bf0a535d25a5ba4"
+  },
+  "read_procedure": {
+    "api_host": "api.cloudflare.com",
+    "max_requests": 12,
+    "request_timeout_s": 10,
+    "max_response_bytes": 65536,
+    "retries": 0,
+    "redirects": 0,
+    "raw_output": false,
+    "installed_only": true,
+    "read_only": true
+  },
+  "routes": {
+    "coloring.rozkalns.net/api/stats/*": "rozkalns.net",
+    "ausmalwiese.de/api/stats/*": "ausmalwiese.de",
+    "www.ausmalwiese.de/api/stats/*": "ausmalwiese.de",
+    "ausmalwiese.de/q": "ausmalwiese.de"
+  },
+  "bindings": {
+    "DB": "d1",
+    "RATE_LIMITER": "ratelimit",
+    "PUBLIC_ORIGIN": "plain_text",
+    "CF_ANALYTICS_HOST": "plain_text",
+    "CF_ZONE_TAG": "plain_text",
+    "VISITOR_HMAC_KEY": "secret_text",
+    "CF_ANALYTICS_API_TOKEN": "secret_text"
+  },
+  "code_proof": {
+    "version_api_returns_content_bytes": false,
+    "etag_is_not_verified_source_sha256": true,
+    "requires_version_specific_byte_proof": true,
+    "stop_until_proven": true
+  },
+  "future_write_protocol": {
+    "upload": "POST /accounts/{account_id}/workers/scripts/coloring-pages-stats-v1/versions?bindings_inherit=strict",
+    "deploy": "POST /accounts/{account_id}/workers/scripts/coloring-pages-stats-v1/deployments",
+    "inherit_bindings": 7,
+    "routes_modified": 0,
+    "max_upload_calls": 1,
+    "max_deploy_calls": 1,
+    "authorized": false
+  },
+  "actions": {
+    "merge": false,
+    "live": false,
+    "install": false,
+    "credential_access": false,
+    "settings": false,
+    "permissions": false,
+    "retry": false,
+    "rollback": false,
+    "cleanup": false
+  }
+}

@@ -62,7 +62,7 @@ class AdminZoneVerificationV1Tests(unittest.TestCase):
             [item["hostname"] for item in self.admin],
             selection["expected_hostnames"],
         )
-        self.assertEqual(len(self.admin), 8)
+        self.assertEqual(len(self.admin), 9)
 
     def test_service_projections_match_registry(self) -> None:
         projections = {item["service_id"]: item for item in self.contract["service_projections"]}

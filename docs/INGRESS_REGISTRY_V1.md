@@ -86,6 +86,14 @@ One historical naming conflict is resolved explicitly: #60 called the Hermes app
 
 `control.rozkalns.net` is intentionally excluded from this RPi5 ingress registry because its runtime is a Cloudflare Worker, not an RPi5-hosted origin. Its source policy remains in `ops/contracts/cloudflare-hostname-policy.yaml`.
 
+## Ausmalwiese ADMIN publisher
+
+`admin.ausmalwiese.de` is the owner-approved canonical hostname for the Ausmalwiese ADMIN ZIP publisher introduced by #1149 and registered by #1151. It is an `ADMIN` service with a loopback-only origin, `access_class=ADMIN`, exact-owner Access scope, and forbidden LAN break-glass.
+
+Bounded LIVE evidence collected on 2026-10-21 after the separately authorized cutover established the exact-host Access application, protected shared-Tunnel route, proxied DNS record, anonymous Cloudflare Access challenge, continued anonymous public-site availability, and healthy local ADMIN loopback origin. The hostname policy therefore records `audit_route_presence: present`.
+
+Ingress-registry v1 still keeps `last_verified_evidence.runtime_current=false`: the registry is source policy plus dated evidence, not a continuously refreshed live inventory. The latest evidence reference identifies the cutover/post-verify event without embedding private Cloudflare identifiers. Owner-authenticated browser login remains unverified because the accepted post-verify scope explicitly forbade login. Source merge does not create or modify DNS, Tunnel routes, Access applications or policies.
+
 ## Validation
 
 `tests/test-ingress-registry-v1.py` enforces:

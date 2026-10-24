@@ -19,7 +19,7 @@ CONTRACT = ROOT / "ops/contracts/coloring-pages-drive-ingest-operator-v1.json"
 INSTALLER = ROOT / "scripts/install-coloring-pages-drive-ingest-operator-v1.sh"
 HOST_CONTRACT = ROOT / "ops/contracts/simple-deploy-host-v1.json"
 
-IMAGE_DIGEST = "sha256:ac54a42b7339fe939831bd9cc17426140b02202340f3c2fd6d7e5530b4265007"
+IMAGE_DIGEST = "sha256:2a80b56c20c37f4a530059c3e438c6627fd962786e6590dd914e59e86a837ba8"
 IMAGE_REF = f"ghcr.io/rozkalnsandris/coloring-pages@{IMAGE_DIGEST}"
 
 LOADER = importlib.machinery.SourceFileLoader(
@@ -233,6 +233,69 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
             {"tiere", "fahrzeuge", "alphabet", "lernen", "figuren", "jahreszeiten"},
         )
 
+    def test_inline_manifest_mode_is_bounded_and_png_only(self) -> None:
+        manifest = self.valid_manifest()
+        raw = json.dumps(manifest, ensure_ascii=False, separators=(",", ":"))
+        args = drive_ingest.parse_args(
+            [
+                "--id",
+                "aviator-pup-001",
+                "--expected-sha256",
+                "a" * 64,
+                "--expected-size",
+                "1162127",
+                "--manifest-json",
+                raw,
+            ]
+        )
+        drive_ingest.validate_cli(args)
+        parsed = drive_ingest.parse_inline_manifest(args.manifest_json)
+        self.assertEqual(parsed, manifest)
+        metadata = drive_ingest.validate_manifest(
+            parsed,
+            expected_id="aviator-pup-001",
+            expected_sha256="a" * 64,
+            expected_size=1162127,
+        )
+        self.assertEqual(metadata["id"], "aviator-pup-001")
+
+        with self.assertRaises(drive_ingest.OperatorError):
+            drive_ingest.parse_inline_manifest('{"id":"a","id":"b"}')
+
+        self.assertIn(
+            "[*page_names] if inline_manifest else [*page_names, manifest_name]",
+            self.operator,
+        )
+        self.assertIn('"manifest_source": "request-bridge"', self.operator)
+        self.assertIn("--manifest-json", self.contract["operator"]["allowed_arguments"])
+        self.assertTrue(self.contract["manifest"]["inline_manifest_json_allowed"])
+        self.assertFalse(
+            self.contract["manifest"]["inline_manifest_requires_drive_manifest"]
+        )
+        self.assertEqual(
+            self.contract["drive"]["inline_manifest_mode_drive_objects"],
+            "png-pages-only",
+        )
+        self.assertFalse(
+            self.contract["drive"]["normal_publish_manifest_upload_required"]
+        )
+
+    def test_inline_manifest_size_is_fail_closed(self) -> None:
+        args = drive_ingest.parse_args(
+            [
+                "--id",
+                "aviator-pup-001",
+                "--expected-sha256",
+                "a" * 64,
+                "--expected-size",
+                "1162127",
+                "--manifest-json",
+                "x" * (drive_ingest.MAX_MANIFEST_BYTES + 1),
+            ]
+        )
+        with self.assertRaises(drive_ingest.OperatorError):
+            drive_ingest.validate_cli(args)
+
     def test_v2_cli_and_manifest_bind_every_ordered_page(self) -> None:
         args = drive_ingest.parse_args(
             [
@@ -349,19 +412,19 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
         self.assertEqual(
             drive_ingest.public_urls_v2("kuerbis-gesicht-001", 2),
             [
-                "https://coloring.rozkalns.net/catalog.json",
-                "https://coloring.rozkalns.net/media/kuerbis-gesicht-001/thumb.webp",
-                "https://coloring.rozkalns.net/media/kuerbis-gesicht-001/preview-1.webp",
-                "https://coloring.rozkalns.net/media/kuerbis-gesicht-001/print-1.png",
-                "https://coloring.rozkalns.net/media/kuerbis-gesicht-001/preview-2.webp",
-                "https://coloring.rozkalns.net/media/kuerbis-gesicht-001/print-2.png",
+                "https://ausmalwiese.de/catalog.json",
+                "https://ausmalwiese.de/media/kuerbis-gesicht-001/thumb.webp",
+                "https://ausmalwiese.de/media/kuerbis-gesicht-001/preview-1.webp",
+                "https://ausmalwiese.de/media/kuerbis-gesicht-001/print-1.png",
+                "https://ausmalwiese.de/media/kuerbis-gesicht-001/preview-2.webp",
+                "https://ausmalwiese.de/media/kuerbis-gesicht-001/print-2.png",
             ],
         )
 
     def test_v2_contract_keeps_one_operator_and_verifies_all_pages_first(self) -> None:
         self.assertEqual(
             self.contract["consumer"]["source_revision"],
-            "ab86a6eca6ae6dc8d32bf15ed43698fb0cf5537b",
+            "337f78988064536250a6094a01563233d81891ff",
         )
         self.assertIn("--expected-page", self.contract["operator"]["allowed_arguments"])
         self.assertEqual(
@@ -475,10 +538,10 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
                 legacy_public_source=False,
             ),
             [
-                "https://coloring.rozkalns.net/catalog.json",
-                "https://coloring.rozkalns.net/media/aviator-pup-001/thumb.webp",
-                "https://coloring.rozkalns.net/media/aviator-pup-001/preview.webp",
-                "https://coloring.rozkalns.net/media/aviator-pup-001/print.png",
+                "https://ausmalwiese.de/catalog.json",
+                "https://ausmalwiese.de/media/aviator-pup-001/thumb.webp",
+                "https://ausmalwiese.de/media/aviator-pup-001/preview.webp",
+                "https://ausmalwiese.de/media/aviator-pup-001/print.png",
             ],
         )
 
@@ -502,7 +565,7 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
             "/media/aviator-pup-001/source.png",
         )
         self.assertIn(
-            "https://coloring.rozkalns.net/media/aviator-pup-001/source.png",
+            "https://ausmalwiese.de/media/aviator-pup-001/source.png",
             drive_ingest.public_urls(
                 "aviator-pup-001",
                 legacy_public_source=True,

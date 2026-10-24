@@ -1,0 +1,85 @@
+{
+  "schema_version": 2,
+  "status": "SOURCE_ONLY_REPORT_WRANGLER_VERIFY_NO_NETWORK",
+  "issue": 1108,
+  "repository": "rozkalnsandris/RPi5_main",
+  "worker": "coloring-pages-report-v1",
+  "wrangler_version": "4.135.0",
+  "source_commit": "9a8111f19f9d82395f331ed49409af22f4765db7",
+  "worker_blob": "384c93ae6f7348efc2dcbddbcc5a23743d8311d2",
+  "config_blob": "0ddb5e8c23e0503a957d0de69e11a7d98d6651cd",
+  "deploy_source": "scripts/ausmalwiese_report_wrangler_deploy_v1.py",
+  "deploy_blob": "d4263343fca3adedccdc622f5787f15cbcd1246b",
+  "email_binding": {
+    "name": "EMAIL",
+    "destination_local_part": "info",
+    "destination_domain": "ausmalwiese.de",
+    "destination_source": "assembled-fixed-config"
+  },
+  "send_failure_diagnostic": {
+    "event": "report_email_send_failed",
+    "fields": [
+      "event",
+      "code"
+    ],
+    "code_pattern": "^E_[A-Z0-9_]{1,62}$",
+    "fallback": "UNKNOWN",
+    "source_provenance_only": true,
+    "forbidden": [
+      "provider-message",
+      "stack",
+      "request-payload",
+      "activity-id",
+      "page",
+      "reason",
+      "sender",
+      "destination",
+      "headers",
+      "ip",
+      "url"
+    ]
+  },
+  "provenance": {
+    "method": "GET",
+    "path_template": "/accounts/{account_id}/workers/scripts/coloring-pages-report-v1/settings",
+    "source": "script-and-version-settings.annotations",
+    "required_annotation_keys": [
+      "workers/message",
+      "workers/tag",
+      "workers/triggered_by"
+    ],
+    "adapter_output_keys": [
+      "version_tag",
+      "version_message"
+    ]
+  },
+  "verification": {
+    "wrangler_reads": [
+      "versions-list",
+      "deployments-list",
+      "versions-view"
+    ],
+    "secret_inventory_required": false,
+    "public_config_endpoint_required": false,
+    "stats_snapshot_required": false
+  },
+  "actions": {
+    "run_wrangler": false,
+    "cloudflare_request": false,
+    "credential_or_secret_access": false,
+    "host_install": false,
+    "merge": false,
+    "live": false,
+    "retry": false,
+    "rollback": false,
+    "cleanup": false
+  },
+  "observability": {
+    "logs": {
+      "enabled": true
+    },
+    "traces": {
+      "enabled": false
+    }
+  }
+}

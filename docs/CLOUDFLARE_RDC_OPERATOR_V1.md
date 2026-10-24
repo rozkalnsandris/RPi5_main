@@ -291,3 +291,45 @@ The fixed Phase 7 runtime action is:
 `sudo -n /usr/local/sbin/rpi5-cloudflare phase7-ingress-drift-audit --expected-main <exact-main>`
 
 The operator verifies its installed release and the fixed `the installer-bound checkout recorded in root-owned release metadata` checkout before reading the Tunnel secret. It sends the token to the existing audit only via stdin, with no token or Tunnel ID in the child environment. Source merge performs none of these host actions.
+## Ausmalwiese Free DNS and Tunnel route lanes (#982)
+
+This is a **source-only** extension to the existing exact-release `rpi5-cloudflare` operator. It does not authorize token provisioning, operator upgrade, Cloudflare API writes, INWX changes, or RPi5 host mutations by merging.
+
+A new dedicated root-only `/etc/rpi5-secrets/cloudflare/dns-writer.json` (`root:root 0600`) uses exactly `{"zone_id","zone_name","api_token"}`, where zone_name must be `ausmalwiese.de`. The owner must create a Cloudflare token limited to **Include: Specific zone: ausmalwiese.de** with **Zone DNS Edit + Zone Read**. Token contents must never be placed in chat, GitHub, command arguments, environment or tool output. Existing Tunnel token stays separate.
+
+A separately owner-authorized root-installed operator upgrade is required first. Then a separately owner-authorized owner-local controlling TTY provisioning can use `provision-ausmalwiese-dns-secret --expected-main <installed-release> --confirm PROVISION-AUSMALWIESE-DNS-SECRET`. It rejects existing credentials, checks the active Free zone through GET, and creates only a previously absent 0600 secret. Post-mutation failure is STOP, no automatic retry/delete.
+
+Fixed DNS actions `dns-ausmalwiese-apex` and `dns-ausmalwiese-www` each create **at most one** proxied CNAME (apex or www) to the same-account `rpi5-tunnel` UUID target. `tunnel-ausmalwiese` performs **at most one** PUT of the remote tunnel config, adding both routes before the existing catchall using the exact loopback origin from the existing `coloring.rozkalns.net` route. Preflight GETs validate active Free zone, same account, exactly one remotely managed tunnel, target absence, bounded DNS records and no caller-chosen hostname/service. Each command defaults to **GET-only** and returns a sanitized baseline SHA-256. Apply needs separate exact owner LIVE authority, `--apply --expected-baseline <preflight-hash> --confirm CREATE-AUSMALWIESE-CNAME` (DNS) or `--confirm ADD-AUSMALWIESE-TUNNEL-ROUTES` (Tunnel). Exact baseline drift, conflicting records and routes fail closed. A dispatched POST/PUT failure or post-verification mismatch requires STOP; no automatic retry/rollback/cleanup.
+
+This is deliberately three individually owner-gated API writes, with no implicit all-at-once action. Source merge does not install source or mutate the public edge. No SEO canonical, Worker, QR, Access, WAF, DNSSEC or registrar changes are included. Reference: [DNS create API](https://developers.cloudflare.com/api/resources/dns/subresources/records/methods/create/), [Tunnel config PUT API](https://developers.cloudflare.com/api/resources/zero_trust/subresources/tunnels/subresources/cloudflared/subresources/configurations/methods/update/).
+
+## Ausmalwiese ADMIN cutover (#1153)
+
+This source-only extension prepares exactly `admin.ausmalwiese.de` for the already installed Ausmalwiese ADMIN publisher on `http://127.0.0.1:8765`. It does not perform the cutover and does not authorize Cloudflare writes.
+
+The cutover is deliberately split into three fixed one-write actions, in this order:
+
+1. `ausmalwiese-admin-access` — create one exact self-hosted Access application named `Ausmalwiese Admin` with one `owner-only` allow policy.
+2. `ausmalwiese-admin-tunnel` — insert one exact Tunnel ingress rule for `admin.ausmalwiese.de` to `http://127.0.0.1:8765`, with `originRequest.access.required=true`.
+3. `ausmalwiese-admin-dns` — create one proxied CNAME for `admin.ausmalwiese.de` to the existing same-account `rpi5-tunnel`.
+
+The Access action does not accept an owner email from argv, environment, chat, GitHub or RDC. It performs GET-only discovery of the existing exact `dash.rozkalns.net` application, requires exactly one allow policy with exactly one email selector and no broad/bypass selector, and privately reuses that exact selector for the new application. The identity value is never emitted or persisted by the operator.
+
+The Tunnel action uses the Access credential only for GET-only derivation of the exact new app AUD and exact-owner policy. It does not call the Access Organizations API. The private team name is derived from the already-reviewed exact `dash.rozkalns.net` ingress in the same `rpi5-tunnel`: that anchor must exist exactly once and already have `originRequest.access.required=true`, one non-empty `teamName`, and at least one non-empty AUD tag. The dashboard AUD is not reused for the new app and neither the team name nor any AUD is emitted. The Tunnel credential performs the single PUT. Access and Tunnel credentials must bind the same account.
+
+This design keeps the existing Access credential at the documented `Access: Apps and Policies Write` boundary and avoids adding Access Organizations read permission solely to obtain `teamName`. The full Tunnel configuration, including the dashboard team anchor, remains part of the deterministic pre-write baseline.
+
+The DNS action is last. It refuses to create DNS until the exact Tunnel route exists with the fixed loopback origin and required Access protection. It then creates at most one proxied CNAME. This ordering avoids resolving the ADMIN hostname before the protected route exists.
+
+All three actions are dry-run by default and emit a sanitized deterministic baseline SHA-256. Apply requires the exact baseline and fixed confirmation token:
+
+```text
+CREATE-AUSMALWIESE-ADMIN-ACCESS
+ADD-AUSMALWIESE-ADMIN-TUNNEL
+CREATE-AUSMALWIESE-ADMIN-CNAME
+```
+
+No caller-selected hostname, origin, selector, endpoint, policy shape or request body exists. Each action permits at most one Cloudflare write. After a dispatched mutation, any transport ambiguity or post-write verification failure is STOP; there is no automatic retry, rollback, delete, cleanup or alternate write.
+
+Merging this source does not upgrade the installed operator. A later exact LIVE authorization must separately cover the reviewed operator upgrade and the bounded Cloudflare mutations. Secret provisioning, token creation/rotation, DNS/Tunnel/Access permissions, service lifecycle, application content and unrelated Cloudflare objects remain outside this source outcome.
+

@@ -25,7 +25,7 @@
   },
   "manual_canary": {
     "target_source": "admin-zone-verification-v1.service_projections",
-    "expected_service_count": 8,
+    "expected_service_count": 9,
     "entrypoint": "scripts/phase4_admin_authorized_path_receipt.py",
     "submission_transport": "stdin-json",
     "required_top_level_fields": [

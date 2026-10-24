@@ -1,0 +1,11 @@
+# SOURCE-ONLY. Install/enable only with separate explicit owner LIVE authorization.
+[Unit]
+Description=Ausmalwiese bounded publish request bridge
+Documentation=https://github.com/rozkalnsandris/RPi5_main/issues/1140
+
+[Path]
+PathExistsGlob=/srv/coloring-pages-content/state/publish-request-bridge/incoming/batch-*.ready
+Unit=coloring-pages-publish-request-bridge.service
+
+[Install]
+WantedBy=multi-user.target

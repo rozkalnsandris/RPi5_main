@@ -1,0 +1,64 @@
+{
+  "schema": "rozkalns.rpi5-main.ausmalwiese-admin-simple-deploy.v1",
+  "issue": 1176,
+  "target": "coloring-pages-admin-publish.service",
+  "source_repository": "rozkalnsandris/RPi5_main",
+  "source_origin": "https://github.com/rozkalnsandris/RPi5_main.git",
+  "wrapper": "scripts/deploy-ausmalwiese-admin-v1.py",
+  "invocation": {
+    "required_arguments": [
+      "--expected-source-sha <40-lowercase-hex>",
+      "--apply"
+    ],
+    "root_required": true,
+    "clean_main_required": true,
+    "exact_origin_required": true,
+    "arbitrary_path": false,
+    "arbitrary_command": false,
+    "arbitrary_argv": false,
+    "environment_input": false
+  },
+  "installer": {
+    "path": "scripts/install-coloring-pages-admin-publish-v1.sh",
+    "mode": "full",
+    "confirmation": "OWNER-AUTHORIZED-AUSMALWIESE-ADMIN-ZIP-PUBLISHER-INSTALL",
+    "invocations_per_attempt": 1,
+    "inherited_guards": [
+      "shared-publication-lock",
+      "active-job-idle-check",
+      "exact-main-clean-checkout",
+      "bounded-readiness-window"
+    ],
+    "service_restart": true
+  },
+  "post_verify": {
+    "service": "systemctl is-active --quiet coloring-pages-admin-publish.service",
+    "endpoints": [
+      "/",
+      "/api/catalog",
+      "/api/archive",
+      "/api/activity"
+    ],
+    "loopback_origin": "http://127.0.0.1:8765",
+    "response_limit_bytes": 4194304,
+    "activity_max_events": 200,
+    "mutation": false
+  },
+  "failure": {
+    "automatic_retry": false,
+    "automatic_rollback": false,
+    "automatic_cleanup": false,
+    "second_restart": false,
+    "alternate_path": false
+  },
+  "generic_simple_deploy": {
+    "integrated": false,
+    "reason": "compose-image deployer intentionally forbids arbitrary shell/argv and unrelated systemd mutation"
+  },
+  "live": {
+    "source_merge_executes": false,
+    "separate_exact_owner_authority_required": true,
+    "rdc_required": false,
+    "ssh_supported": true
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "schema": "rozkalns.rpi5-main.simple-deploy-hermes-household-ui.v1",
+  "issue": 973,
+  "status": "SOURCE_CONFIGURATION_ONLY_NOT_LIVE_READY",
+  "consumer": {
+    "repository": "rozkalnsandris/hermes-deals",
+    "revision": "4467939c8c26378ee6d8dc3029fba2e562c5e48c"
+  },
+  "target_alias": "hermes-deals",
+  "compose": {
+    "source": "ops/deploy/simple-deploy-compose/hermes-deals-household-api.yml",
+    "sha256": "bc78b165b479b1dfcd7bcd12df28d09b649ca68f56d6bfdfa61be280f6e1dad3",
+    "project": "hermes-deals",
+    "service": "api"
+  },
+  "public_environment": {
+    "HERMES_HOUSEHOLD_ID": "home",
+    "HERMES_PUBLIC_ORIGIN": "https://deals.rozkalns.net"
+  },
+  "private_environment": {
+    "path": "/etc/rozkalns-simple-deployer/private/hermes-deals-api.env",
+    "keys": [
+      "DATABASE_URL",
+      "HTTP_USER_AGENT"
+    ],
+    "projection_changed": false
+  },
+  "legacy_adapter": {
+    "source": "ops/deploy/simple-deploy-compose/hermes-deals-api.yml",
+    "sha256": "644dc72da5dc13ee532dd29693db31358451669bb44de4df4b62c41736903f1c",
+    "adoption_v1_unchanged": true
+  },
+  "runtime_installation_performed": false,
+  "activation_eligible": false,
+  "remaining_prerequisites": [
+    "exact-source-and-runtime-revalidation",
+    "v4-consumer-access-proof-and-reviewed-materialization",
+    "reviewed-existing-install-registry-and-adapter-adoption",
+    "database-backup-restore-and-bounded-migration",
+    "nginx-household-route-installation",
+    "exact-release-access-and-household-canaries"
+  ],
+  "merge_authorizes_live": false
+}

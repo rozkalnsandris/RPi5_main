@@ -1,0 +1,1706 @@
+#!/usr/bin/env python3
+"""Loopback-only Ausmalwiese ADMIN ZIP publisher."""
+
+from __future__ import annotations
+
+import argparse
+import fcntl
+import hashlib
+import json
+import logging
+from logging.handlers import TimedRotatingFileHandler
+import os
+from pathlib import Path
+import pwd
+import grp
+import re
+import secrets
+import shutil
+import stat
+import struct
+import subprocess
+import threading
+import time
+import zipfile
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import unquote, urlparse
+from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
+
+OWNER = "andris"
+CONTENT = Path("/srv/coloring-pages-content")
+INBOX = CONTENT / "inbox"
+ORIGINALS = CONTENT / "originals"
+PUBLIC = CONTENT / "public"
+MEDIA = PUBLIC / "media"
+CATALOG = PUBLIC / "catalog.json"
+STATE = CONTENT / "state" / "admin-publish"
+UPLOADS = STATE / "uploads"
+JOBS = STATE / "jobs"
+LOGS = STATE / "logs"
+ARCHIVE = STATE / "archive"
+LOG_FILE = LOGS / "admin-publish.log"
+LOG_RETENTION_SECONDS = 7 * 24 * 60 * 60
+LOG_NAME = re.compile(r"^admin-publish\.log(?:\.\d{4}-\d{2}-\d{2})?$")
+PUBLISH_LOCK = CONTENT / "state" / "drive-ingest" / ".lock"
+WEB_ROOT = Path("/usr/local/share/coloring-pages-admin")
+SOURCE_WEB_ROOT = Path(__file__).resolve().parents[1] / "admin" / "coloring-pages"
+
+DOCKER = "/usr/bin/docker"
+IMAGE = "ghcr.io/rozkalnsandris/coloring-pages@sha256:1a6038e6c6c43d5565b0cda745db90f3fbaa370d3296d16af3571adcb0ae259c"
+PRINT_MASTER = "/usr/local/bin/coloring-pages-print-master"
+IMPORTER = "/usr/local/bin/coloring-pages-import"
+ORIGIN = "https://ausmalwiese.de"
+SITEMAP_MARKER = Path("/usr/local/share/coloring-pages/post-publish-v1.enabled")
+SITEMAP_MARKER_BYTES = b"coloring-pages-sitemap-post-publish-v1\n"
+SITEMAP_PUBLISHER = Path("/usr/local/bin/coloring-pages-sitemap-publish")
+
+HOST = "127.0.0.1"
+PORT = 8765
+MAX_UPLOAD = 50 * 1024 * 1024
+MAX_FILES = 20
+MAX_MEMBER = 25 * 1024 * 1024
+MAX_TOTAL = 160 * 1024 * 1024
+MAX_RATIO = 50
+MAX_PIXELS = 50_000_000
+MAX_JSON = 256 * 1024
+MAX_CATALOG = 4 * 1024 * 1024
+MAX_ACTIVITY_FILE = 2 * 1024 * 1024
+MAX_ACTIVITY_TOTAL = 4 * 1024 * 1024
+MAX_ACTIVITY_EVENTS = 200
+MAX_DELETE_FILES = 128
+MAX_DELETE_BYTES = 1024 * 1024 * 1024
+DELETE_CONFIRM = "DELETE"
+PNG_SIG = b"\x89PNG\r\n\x1a\n"
+TOKEN = re.compile(r"^[0-9a-f]{32}$")
+CATALOG_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+ALLOWED_AGES = {"3-6", "4-8"}
+ALLOWED_DIFFICULTIES = {"easy", "normal", "detailed"}
+ADMIN_ORIGIN = "https://admin.ausmalwiese.de"
+CSRF_TOKEN = secrets.token_hex(32)
+CATEGORIES = {
+    "tiere": "Tiere",
+    "fahrzeuge": "Fahrzeuge",
+    "alphabet": "Alphabet",
+    "lernen": "Lernen",
+    "figuren": "Figuren & Helden",
+    "jahreszeiten": "Jahreszeiten & Feste",
+}
+STEPS = [
+    "ZIP-Datei empfangen und entpacken",
+    "PNG-Dateien prüfen",
+    "A4 Print Master erstellen",
+    "Bilder validieren (Größe, Qualität, SHA-256)",
+    "IDs vergeben und auf Kollision prüfen",
+    "Seiten importieren",
+    "Vorschau, Thumbnails und Druckversionen erstellen",
+    "Katalog aktualisieren",
+    "Sitemap aktualisieren",
+    "Veröffentlichung prüfen (Web)",
+]
+CREATE_LOCK = threading.Lock()
+LOGGER = logging.getLogger("ausmalwiese.admin.publish")
+LOGGER.setLevel(logging.INFO)
+LOGGER.propagate = False
+LOG_ALLOWED_FIELDS = {
+    "pid", "job_id", "upload_id", "page_index", "page_count",
+    "step_index", "step_name", "step_status", "duration_ms",
+    "tool", "exit_status", "page_id", "sitemap_status", "sitemap_phase",
+    "job_status", "prior_status", "partial_result_count", "error_code",
+    "action", "changed_fields", "catalog_sha256", "previous_catalog_sha256",
+    "archive_state", "deleted_file_count", "deleted_byte_count",
+}
+ACTIVITY_FIELDS = {
+    "ts", "level", "event", "page_id", "action", "changed_fields",
+    "job_status", "step_status", "sitemap_status", "error_code", "archive_state",
+    "deleted_file_count", "deleted_byte_count",
+}
+
+
+class Stop(RuntimeError):
+    pass
+
+
+def stop(message: str) -> None:
+    raise Stop(message)
+
+
+def owner_ids() -> tuple[int, int]:
+    return pwd.getpwnam(OWNER).pw_uid, grp.getgrnam(OWNER).gr_gid
+
+
+class StrictTimedRotatingFileHandler(TimedRotatingFileHandler):
+    def handleError(self, record) -> None:
+        raise RuntimeError("admin diagnostic logging failed")
+
+
+def prune_logs(now: float | None = None, include_current: bool = True) -> int:
+    now = time.time() if now is None else now
+    cutoff = now - LOG_RETENTION_SECONDS
+    removed = 0
+    if not LOGS.is_dir():
+        return 0
+    for path in LOGS.iterdir():
+        if not LOG_NAME.fullmatch(path.name):
+            continue
+        if not include_current and path.name == LOG_FILE.name:
+            continue
+        st = path.lstat()
+        if path.is_symlink() or not stat.S_ISREG(st.st_mode):
+            stop("admin diagnostic log path is unsafe")
+        if st.st_mtime < cutoff:
+            path.unlink()
+            removed += 1
+    return removed
+
+
+def init_logging() -> None:
+    try:
+        prune_logs(include_current=True)
+        for handler in list(LOGGER.handlers):
+            handler.close()
+            LOGGER.removeHandler(handler)
+        handler = StrictTimedRotatingFileHandler(
+            LOG_FILE,
+            when="midnight",
+            interval=1,
+            backupCount=7,
+            utc=True,
+            encoding="utf-8",
+            delay=False,
+        )
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        LOGGER.addHandler(handler)
+        os.chmod(LOG_FILE, 0o600)
+        st = LOG_FILE.lstat()
+        uid, gid = owner_ids()
+        if LOG_FILE.is_symlink() or not stat.S_ISREG(st.st_mode) or st.st_uid != uid or st.st_gid != gid or stat.S_IMODE(st.st_mode) != 0o600:
+            stop("admin diagnostic log metadata is unsafe")
+        audit("service_start", pid=os.getpid())
+    except Stop:
+        raise
+    except Exception:
+        stop("admin diagnostic logging initialization failed")
+
+
+def audit(event: str, level: str = "INFO", **fields) -> None:
+    if not LOGGER.handlers:
+        stop("admin diagnostic logging is unavailable")
+    if not re.fullmatch(r"[a-z0-9_.-]{1,64}", event) or level not in {"INFO", "WARNING", "ERROR"}:
+        stop("admin diagnostic log event is invalid")
+    unknown = set(fields) - LOG_ALLOWED_FIELDS
+    if unknown:
+        stop("admin diagnostic log field is not allowed")
+    payload = {
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "level": level,
+        "event": event,
+    }
+    for key, value in fields.items():
+        if value is None:
+            continue
+        if isinstance(value, bool):
+            payload[key] = value
+        elif isinstance(value, int):
+            payload[key] = value
+        elif isinstance(value, str):
+            payload[key] = value.replace("\r", " ").replace("\n", " ")[:160]
+        else:
+            stop("admin diagnostic log value is invalid")
+    try:
+        prune_logs(include_current=False)
+        LOGGER.log(getattr(logging, level), json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+        for handler in LOGGER.handlers:
+            handler.flush()
+        prune_logs(include_current=False)
+    except Stop:
+        raise
+    except Exception:
+        stop("admin diagnostic logging failed")
+
+
+def write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    temp = path.with_name("." + path.name + "." + secrets.token_hex(8) + ".tmp")
+    data = (json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode()
+    fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    try:
+        with os.fdopen(fd, "wb", buffering=0) as handle:
+            handle.write(data)
+            os.fsync(handle.fileno())
+        os.replace(temp, path)
+    finally:
+        if os.path.lexists(temp):
+            os.unlink(temp)
+
+
+def read_json(path: Path, limit: int = MAX_JSON):
+    st = path.lstat()
+    if not stat.S_ISREG(st.st_mode) or path.is_symlink() or st.st_size <= 0 or st.st_size > limit:
+        stop("state file is invalid")
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        stop("state JSON is invalid")
+
+
+def title_from_name(name: str) -> str:
+    stem = Path(name).stem
+    stem = re.sub(r"^\s*\d+\s*[-_. ]*", "", stem)
+    stem = re.sub(r"[-_]+", " ", stem)
+    stem = re.sub(r"\s+", " ", stem).strip() or "Ausmalbild"
+    return stem.title()[:128]
+
+
+def validate_title(value) -> str:
+    if not isinstance(value, str):
+        stop("title must be text")
+    value = re.sub(r"\s+", " ", value).strip()
+    if not value or len(value) > 128 or any(ord(c) < 32 or ord(c) == 127 for c in value):
+        stop("title is invalid")
+    return value
+
+
+def validate_catalog_id(value) -> str:
+    if not isinstance(value, str) or not CATALOG_ID.fullmatch(value):
+        stop("catalog id is invalid")
+    return value
+
+
+def validate_age(value) -> str:
+    if value not in ALLOWED_AGES:
+        stop("age is invalid")
+    return value
+
+
+def validate_difficulty(value) -> str:
+    if value not in ALLOWED_DIFFICULTIES:
+        stop("difficulty is invalid")
+    return value
+
+
+def load_catalog() -> tuple[list[dict], str]:
+    try:
+        raw = CATALOG.read_bytes()
+    except OSError:
+        stop("live catalog is unavailable")
+    if not raw or len(raw) > MAX_CATALOG:
+        stop("live catalog size is invalid")
+    try:
+        data = json.loads(raw)
+    except (UnicodeError, json.JSONDecodeError):
+        stop("live catalog is invalid")
+    if not isinstance(data, list):
+        stop("live catalog is invalid")
+    seen = set()
+    for entry in data:
+        if not isinstance(entry, dict):
+            stop("live catalog contains an invalid entry")
+        page_id = entry.get("id")
+        if not isinstance(page_id, str) or not CATALOG_ID.fullmatch(page_id) or page_id in seen:
+            stop("live catalog contains an invalid or duplicate id")
+        seen.add(page_id)
+    return data, hashlib.sha256(raw).hexdigest()
+
+
+def validate_catalog_entry(entry: dict) -> dict:
+    if not isinstance(entry, dict):
+        stop("catalog entry is invalid")
+    required = {"id", "title", "category", "age", "difficulty"}
+    if not required.issubset(entry):
+        stop("catalog entry is missing required metadata")
+    validate_catalog_id(entry["id"])
+    validate_title(entry["title"])
+    if entry["category"] not in CATEGORIES:
+        stop("catalog entry category is invalid")
+    validate_age(entry["age"])
+    validate_difficulty(entry["difficulty"])
+    for key in ("language", "thumb", "preview", "print"):
+        if key in entry and entry[key] is not None and not isinstance(entry[key], str):
+            stop("catalog entry metadata is invalid")
+    return dict(entry)
+
+
+def catalog_view_entry(entry: dict) -> dict:
+    keys = ("id", "title", "category", "age", "difficulty", "language", "thumb", "preview", "print")
+    return {key: entry.get(key) for key in keys}
+
+
+def archive_path(page_id: str) -> Path:
+    validate_catalog_id(page_id)
+    return ARCHIVE / f"{page_id}.json"
+
+
+def load_archive_identity(page_id: str) -> dict:
+    path = archive_path(page_id)
+    try:
+        st = path.lstat()
+    except OSError:
+        stop("archive record is unavailable")
+    if path.is_symlink() or not stat.S_ISREG(st.st_mode) or stat.S_IMODE(st.st_mode) != 0o600:
+        stop("archive record metadata is unsafe")
+    payload = read_json(path)
+    if not isinstance(payload, dict) or payload.get("schema") != "rozkalns.rpi5-main.coloring-pages-admin-archive.v1":
+        stop("archive record is invalid")
+    if payload.get("id") != page_id or payload.get("state") not in {"prepared", "archived", "restored", "delete-prepared", "deleted"}:
+        stop("archive record state is invalid")
+    if not isinstance(payload.get("archived_at"), int):
+        stop("archive timestamp is invalid")
+    return payload
+
+
+def load_archive_record(page_id: str) -> dict:
+    payload = load_archive_identity(page_id)
+    entry = validate_catalog_entry(payload.get("entry"))
+    if entry["id"] != page_id:
+        stop("archive entry id mismatch")
+    return payload
+
+
+def list_archive_records() -> list[dict]:
+    records = []
+    live, _ = load_catalog()
+    live_ids = {entry["id"] for entry in live}
+    if not ARCHIVE.is_dir():
+        return records
+    for path in sorted(ARCHIVE.glob("*.json")):
+        if path.name.startswith(".") or path.is_symlink() or not stat.S_ISREG(path.lstat().st_mode):
+            stop("archive path is unsafe")
+        page_id = validate_catalog_id(path.stem)
+        identity = load_archive_identity(page_id)
+        if identity["state"] in {"restored", "deleted"}:
+            continue
+        if page_id in live_ids:
+            continue
+        payload = load_archive_record(page_id)
+        entry = payload["entry"]
+        records.append({
+            "id": page_id,
+            "state": payload["state"],
+            "archived_at": payload["archived_at"],
+            "entry": catalog_view_entry(entry),
+        })
+    records.sort(key=lambda item: (item["archived_at"], item["id"]), reverse=True)
+    return records
+
+
+def archive_reserved_ids() -> set[str]:
+    ids = set()
+    if not ARCHIVE.is_dir():
+        return ids
+    for path in sorted(ARCHIVE.glob("*.json")):
+        if path.name.startswith(".") or path.is_symlink() or not stat.S_ISREG(path.lstat().st_mode):
+            stop("archive path is unsafe")
+        page_id = validate_catalog_id(path.stem)
+        load_archive_identity(page_id)
+        ids.add(page_id)
+    return ids
+
+
+def reserved_ids() -> set[str]:
+    live, _ = load_catalog()
+    return {entry["id"] for entry in live} | archive_reserved_ids()
+
+
+def inspect_delete_directory(root: Path, page_id: str) -> dict:
+    validate_catalog_id(page_id)
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        root_fd = os.open(root, flags)
+    except OSError:
+        stop("delete root is unavailable")
+    try:
+        try:
+            target_fd = os.open(page_id, flags, dir_fd=root_fd)
+        except OSError:
+            stop("delete target directory is unavailable")
+        try:
+            target_st = os.fstat(target_fd)
+            if not stat.S_ISDIR(target_st.st_mode) or target_st.st_uid != os.geteuid() or target_st.st_gid != os.getegid():
+                stop("delete target directory metadata is unsafe")
+            names = sorted(os.listdir(target_fd))
+            if not names or len(names) > MAX_DELETE_FILES:
+                stop("delete target file count is invalid")
+            total = 0
+            files = []
+            for name in names:
+                if not name or "/" in name or "\\" in name or name in {".", ".."}:
+                    stop("delete target filename is unsafe")
+                item_st = os.stat(name, dir_fd=target_fd, follow_symlinks=False)
+                if (
+                    not stat.S_ISREG(item_st.st_mode)
+                    or item_st.st_uid != os.geteuid()
+                    or item_st.st_gid != os.getegid()
+                    or item_st.st_size <= 0
+                ):
+                    stop("delete target contains unsafe file metadata")
+                total += item_st.st_size
+                if total > MAX_DELETE_BYTES:
+                    stop("delete target bytes exceed safe bound")
+                files.append({
+                    "name": name,
+                    "size": item_st.st_size,
+                    "dev": item_st.st_dev,
+                    "ino": item_st.st_ino,
+                    "ctime_ns": item_st.st_ctime_ns,
+                    "mtime_ns": item_st.st_mtime_ns,
+                })
+            return {
+                "dev": target_st.st_dev,
+                "ino": target_st.st_ino,
+                "files": files,
+                "file_count": len(files),
+                "bytes": total,
+            }
+        finally:
+            os.close(target_fd)
+    finally:
+        os.close(root_fd)
+
+
+def inspect_delete_inbox(page_id: str) -> dict:
+    validate_catalog_id(page_id)
+    name = page_id + ".png"
+    path = INBOX / name
+    if not os.path.lexists(path):
+        return {"exists": False, "name": name, "file_count": 0, "bytes": 0}
+    st = path.lstat()
+    if (
+        path.is_symlink()
+        or not stat.S_ISREG(st.st_mode)
+        or st.st_uid != os.geteuid()
+        or st.st_gid != os.getegid()
+        or st.st_size <= 0
+        or st.st_size > MAX_DELETE_BYTES
+    ):
+        stop("delete inbox file metadata is unsafe")
+    return {"exists": True, "name": name, "file_count": 1, "bytes": st.st_size, "dev": st.st_dev, "ino": st.st_ino}
+
+
+def delete_validated_directory(root: Path, page_id: str, inventory: dict) -> None:
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    root_fd = os.open(root, flags)
+    try:
+        target_fd = os.open(page_id, flags, dir_fd=root_fd)
+        try:
+            target_st = os.fstat(target_fd)
+            if (target_st.st_dev, target_st.st_ino) != (inventory["dev"], inventory["ino"]):
+                stop("delete target changed after preflight")
+            current_names = sorted(os.listdir(target_fd))
+            expected_names = [item["name"] for item in inventory["files"]]
+            if current_names != expected_names:
+                stop("delete target contents changed after preflight")
+            for item in inventory["files"]:
+                item_st = os.stat(item["name"], dir_fd=target_fd, follow_symlinks=False)
+                if (
+                    not stat.S_ISREG(item_st.st_mode)
+                    or (item_st.st_dev, item_st.st_ino) != (item["dev"], item["ino"])
+                    or item_st.st_ctime_ns != item["ctime_ns"]
+                    or item_st.st_mtime_ns != item["mtime_ns"]
+                    or item_st.st_size != item["size"]
+                    or item_st.st_uid != os.geteuid()
+                    or item_st.st_gid != os.getegid()
+                ):
+                    stop("delete target file changed after preflight")
+            for item in inventory["files"]:
+                os.unlink(item["name"], dir_fd=target_fd)
+            current = os.stat(page_id, dir_fd=root_fd, follow_symlinks=False)
+            if (current.st_dev, current.st_ino) != (inventory["dev"], inventory["ino"]):
+                stop("delete target directory changed before removal")
+            os.rmdir(page_id, dir_fd=root_fd)
+        finally:
+            os.close(target_fd)
+    finally:
+        os.close(root_fd)
+
+
+def delete_validated_inbox(page_id: str, inventory: dict) -> None:
+    if not inventory["exists"]:
+        return
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    root_fd = os.open(INBOX, flags)
+    try:
+        st = os.stat(inventory["name"], dir_fd=root_fd, follow_symlinks=False)
+        if (
+            not stat.S_ISREG(st.st_mode)
+            or (st.st_dev, st.st_ino) != (inventory["dev"], inventory["ino"])
+            or st.st_size != inventory["bytes"]
+            or st.st_uid != os.geteuid()
+            or st.st_gid != os.getegid()
+        ):
+            stop("delete inbox file changed after preflight")
+        os.unlink(inventory["name"], dir_fd=root_fd)
+    finally:
+        os.close(root_fd)
+
+
+def activity_events() -> list[dict]:
+    prune_logs(include_current=False)
+    if not LOGS.is_dir():
+        return []
+    paths = []
+    total = 0
+    for path in sorted(LOGS.iterdir()):
+        if not LOG_NAME.fullmatch(path.name):
+            continue
+        st = path.lstat()
+        if path.is_symlink() or not stat.S_ISREG(st.st_mode) or stat.S_IMODE(st.st_mode) != 0o600:
+            stop("admin diagnostic log path is unsafe")
+        if st.st_size > MAX_ACTIVITY_FILE:
+            stop("admin activity log exceeds safe read bound")
+        total += st.st_size
+        if total > MAX_ACTIVITY_TOTAL:
+            stop("admin activity logs exceed safe read bound")
+        paths.append(path)
+    events = []
+    allowed_keys = {"ts", "level", "event"} | LOG_ALLOWED_FIELDS
+    for path in paths:
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeError):
+            stop("admin activity log is unreadable")
+        for line in lines:
+            if not line:
+                continue
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                stop("admin activity log contains invalid JSON")
+            if not isinstance(payload, dict) or not set(payload).issubset(allowed_keys):
+                stop("admin activity log contains unexpected fields")
+            if payload.get("level") not in {"INFO", "WARNING", "ERROR"}:
+                stop("admin activity log severity is invalid")
+            if not isinstance(payload.get("ts"), str) or not isinstance(payload.get("event"), str):
+                stop("admin activity log metadata is invalid")
+            item = {key: payload[key] for key in ACTIVITY_FIELDS if key in payload}
+            for value in item.values():
+                if isinstance(value, str) and len(value) > 160:
+                    stop("admin activity log value exceeds safe bound")
+                if not isinstance(value, (str, int, bool)):
+                    stop("admin activity log value type is invalid")
+            events.append(item)
+    events.sort(key=lambda item: item.get("ts", ""), reverse=True)
+    return events[:MAX_ACTIVITY_EVENTS]
+
+
+def catalog_etag(sha256: str) -> str:
+    return '"' + sha256 + '"'
+
+
+def acquire_catalog_lock():
+    handle = PUBLISH_LOCK.open("r+b", buffering=0)
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        handle.close()
+        stop("another publication or catalog mutation is active")
+    return handle
+
+
+def write_catalog(entries: list[dict], expected_sha256: str) -> str:
+    current, current_sha256 = load_catalog()
+    if current_sha256 != expected_sha256:
+        stop("catalog changed; reload before saving")
+    if not isinstance(entries, list):
+        stop("catalog candidate is invalid")
+    current_ids = [entry["id"] for entry in current]
+    candidate_ids = [entry.get("id") for entry in entries if isinstance(entry, dict)]
+    if len(candidate_ids) != len(entries) or len(set(candidate_ids)) != len(candidate_ids):
+        stop("catalog candidate ids are invalid")
+    st = CATALOG.lstat()
+    if CATALOG.is_symlink() or not stat.S_ISREG(st.st_mode):
+        stop("catalog path is unsafe")
+    if st.st_uid != os.geteuid() or st.st_gid != os.getegid():
+        stop("catalog ownership is unsafe")
+    data = (json.dumps(entries, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    temp = CATALOG.with_name(".catalog.admin." + secrets.token_hex(8) + ".tmp")
+    fd = os.open(
+        temp,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+        stat.S_IMODE(st.st_mode),
+    )
+    try:
+        os.fchmod(fd, stat.S_IMODE(st.st_mode))
+        with os.fdopen(fd, "wb", buffering=0) as handle:
+            handle.write(data)
+            os.fsync(handle.fileno())
+        os.replace(temp, CATALOG)
+        try:
+            dirfd = os.open(CATALOG.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+            try:
+                os.fsync(dirfd)
+            finally:
+                os.close(dirfd)
+        except OSError:
+            pass
+    finally:
+        if os.path.lexists(temp):
+            os.unlink(temp)
+    _, new_sha256 = load_catalog()
+    expected_new_sha256 = hashlib.sha256(data).hexdigest()
+    if new_sha256 != expected_new_sha256:
+        stop("catalog post-write verification failed")
+    return new_sha256
+
+
+def png_dimensions(path: Path) -> tuple[int, int]:
+    with path.open("rb") as handle:
+        head = handle.read(24)
+    if len(head) != 24 or head[:8] != PNG_SIG or head[12:16] != b"IHDR":
+        stop("ZIP contains a file that is not a valid PNG")
+    width, height = struct.unpack(">II", head[16:24])
+    if width <= 0 or height <= 0 or width * height > MAX_PIXELS or width == height:
+        stop("PNG dimensions are invalid")
+    short, long = sorted((width, height))
+    ratio = short / long
+    if short < 800 or long < 1100 or not (2 / 3 <= ratio <= 210 / 297 + 0.04):
+        stop("PNG dimensions do not match the authoring contract")
+    return width, height
+
+
+def zip_mode(info: zipfile.ZipInfo) -> int:
+    return (info.external_attr >> 16) & 0o170000
+
+
+def inspect_zip(zf: zipfile.ZipFile) -> list[zipfile.ZipInfo]:
+    infos = zf.infolist()
+    if not infos or len(infos) > MAX_FILES:
+        stop("ZIP must contain 1-20 PNG files")
+    seen: set[str] = set()
+    total = 0
+    accepted = []
+    for info in infos:
+        name = info.filename
+        if info.is_dir() or "/" in name or "\\" in name or name.startswith(".") or Path(name).name != name:
+            stop("ZIP must contain top-level PNG files only")
+        if ".." in Path(name).parts or not name.lower().endswith(".png"):
+            stop("ZIP may contain PNG files only")
+        key = name.casefold()
+        if key in seen:
+            stop("ZIP contains duplicate file names")
+        seen.add(key)
+        if info.flag_bits & 0x1:
+            stop("encrypted ZIP entries are not allowed")
+        mode = zip_mode(info)
+        if mode not in (0, stat.S_IFREG):
+            stop("ZIP symlinks or special files are not allowed")
+        if info.file_size <= 0 or info.file_size > MAX_MEMBER:
+            stop("ZIP member size is outside the allowed bound")
+        total += info.file_size
+        if total > MAX_TOTAL:
+            stop("ZIP uncompressed size exceeds the allowed bound")
+        if info.file_size / max(info.compress_size, 1) > MAX_RATIO:
+            stop("ZIP compression ratio exceeds the allowed bound")
+        accepted.append(info)
+    return accepted
+
+
+def stage_zip(archive: Path, upload_dir: Path) -> dict:
+    pages_dir = upload_dir / "pages"
+    pages_dir.mkdir(mode=0o700)
+    items = []
+    try:
+        with zipfile.ZipFile(archive, "r") as zf:
+            for index, info in enumerate(inspect_zip(zf), 1):
+                target = pages_dir / f"page-{index:03d}.png"
+                fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+                digest = hashlib.sha256()
+                written = 0
+                with os.fdopen(fd, "wb", buffering=0) as out, zf.open(info, "r") as source:
+                    while True:
+                        block = source.read(1024 * 1024)
+                        if not block:
+                            break
+                        written += len(block)
+                        if written > info.file_size or written > MAX_MEMBER:
+                            stop("ZIP member expanded beyond declared bounds")
+                        digest.update(block)
+                        out.write(block)
+                    os.fsync(out.fileno())
+                if written != info.file_size:
+                    stop("ZIP member size changed during extraction")
+                width, height = png_dimensions(target)
+                items.append({
+                    "index": index,
+                    "source_name": info.filename,
+                    "staged_name": target.name,
+                    "title": title_from_name(info.filename),
+                    "width": width,
+                    "height": height,
+                    "size_bytes": written,
+                    "sha256": digest.hexdigest(),
+                })
+    except zipfile.BadZipFile:
+        stop("uploaded file is not a valid ZIP")
+    return {"count": len(items), "files": items}
+
+
+def catalog_ids() -> set[str]:
+    data, _ = load_catalog()
+    return {entry["id"] for entry in data}
+
+
+def allocate_ids(count: int) -> list[str]:
+    used = reserved_ids()
+    result = []
+    for _ in range(count):
+        for _attempt in range(1000):
+            candidate = f"{secrets.randbelow(10_000_000):07d}"
+            if candidate not in used:
+                used.add(candidate)
+                result.append(candidate)
+                break
+        else:
+            stop("unable to allocate publication ID")
+    return result
+
+
+def docker_prefix(uid: int, gid: int) -> list[str]:
+    return [
+        DOCKER, "run", "--rm", "--pull=never", "--network", "none", "--read-only",
+        "--tmpfs", "/tmp:rw,noexec,nosuid,nodev,size=64m",
+        "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
+        "--user", f"{uid}:{gid}",
+        "--mount", f"type=bind,src={CONTENT},dst={CONTENT}",
+        "--env", "PYTHONDONTWRITEBYTECODE=1",
+    ]
+
+
+def run_tool(entrypoint: str, args: list[str], uid: int, gid: int, job_id: str | None = None, page_index: int | None = None) -> str:
+    tool = Path(entrypoint).name
+    audit("tool_start", job_id=job_id, page_index=page_index, tool=tool)
+    started = time.monotonic()
+    try:
+        run = subprocess.run(
+            [*docker_prefix(uid, gid), "--entrypoint", entrypoint, IMAGE, *args],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=180, check=False,
+        )
+    except subprocess.TimeoutExpired:
+        audit("tool_timeout", level="ERROR", job_id=job_id, page_index=page_index, tool=tool, duration_ms=int((time.monotonic() - started) * 1000))
+        stop("immutable Coloring Pages tool timed out")
+    duration_ms = int((time.monotonic() - started) * 1000)
+    audit("tool_exit", level="INFO" if run.returncode == 0 else "ERROR", job_id=job_id, page_index=page_index, tool=tool, exit_status=run.returncode, duration_ms=duration_ms)
+    if run.returncode != 0:
+        stop("immutable Coloring Pages tool failed")
+    return run.stdout
+
+
+def hardlink_to_inbox(source: Path, destination: Path) -> None:
+    if os.path.lexists(destination):
+        stop("inbox destination already exists")
+    if source.stat().st_dev != destination.parent.stat().st_dev:
+        stop("admin staging and inbox must share one filesystem")
+    try:
+        os.link(source, destination, follow_symlinks=False)
+    except OSError:
+        stop("cannot hand prepared master to inbox")
+    os.chmod(destination, 0o600)
+
+
+def verify_public(page_id: str) -> str:
+    media = MEDIA / page_id
+    for name in ("thumb.webp", "preview.webp", "print.png"):
+        path = media / name
+        try:
+            st = path.lstat()
+        except FileNotFoundError:
+            stop("published derivative is missing")
+        if not stat.S_ISREG(st.st_mode) or path.is_symlink() or st.st_size <= 0:
+            stop("published derivative is invalid")
+    detail = f"{ORIGIN}/detail.html?id={page_id}"
+    for url in (
+        f"{ORIGIN}/catalog.json",
+        f"{ORIGIN}/media/{page_id}/thumb.webp",
+        f"{ORIGIN}/media/{page_id}/preview.webp",
+        f"{ORIGIN}/media/{page_id}/print.png",
+        detail,
+    ):
+        try:
+            request = Request(url, headers={"User-Agent": "ausmalwiese-admin-publish/1", "Cache-Control": "no-cache"})
+            with urlopen(request, timeout=15) as response:
+                code = response.getcode()
+                response.read(1)
+        except Exception:
+            stop("public web verification failed")
+        if code != 200:
+            stop("public web verification returned non-200")
+    return detail
+
+
+def sitemap_best_effort() -> tuple[str, str | None]:
+    try:
+        if not os.path.lexists(SITEMAP_MARKER):
+            return "disabled", None
+        st = SITEMAP_MARKER.lstat()
+        if not stat.S_ISREG(st.st_mode) or SITEMAP_MARKER.is_symlink() or stat.S_IMODE(st.st_mode) != 0o444:
+            return "stale", "activation-marker"
+        if SITEMAP_MARKER.read_bytes() != SITEMAP_MARKER_BYTES or not SITEMAP_PUBLISHER.is_file():
+            return "stale", "publisher"
+        check = subprocess.run([str(SITEMAP_PUBLISHER), "--check"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=60)
+        if check.returncode != 0 or not check.stdout.startswith("COLORING_SITEMAP "):
+            return "stale", "check"
+        payload = json.loads(check.stdout[len("COLORING_SITEMAP "):])
+        if payload.get("result") != "CHECK_PASS":
+            return "stale", "check-result"
+        if payload.get("sitemap_sha256") == payload.get("previous_sha256"):
+            return "current", None
+        previous = payload.get("previous_sha256")
+        catalog = payload.get("catalog_sha256")
+        if not isinstance(previous, str) or not isinstance(catalog, str):
+            return "stale", "check-result"
+        apply = subprocess.run([
+            str(SITEMAP_PUBLISHER), "--apply",
+            "--expected-catalog-sha256=" + catalog,
+            "--expected-current-sitemap-sha256=" + previous,
+        ], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=60)
+        if apply.returncode != 0:
+            return "stale", "apply"
+        return "refreshed", None
+    except Exception:
+        return "stale", "unexpected"
+
+
+def initial_steps() -> list[dict]:
+    return [{"label": label, "status": "pending"} for label in STEPS]
+
+
+def update_job(job_id: str, mutate) -> dict:
+    path = JOBS / job_id / "job.json"
+    payload = read_json(path)
+    mutate(payload)
+    payload["updated_at"] = int(time.time())
+    write_json(path, payload)
+    return payload
+
+
+def set_step(job_id: str, index: int, status: str, detail: str | None = None) -> None:
+    def mutate(payload):
+        step = payload["steps"][index]
+        now = int(time.time())
+        if status == "running" and "started_at" not in step:
+            step["started_at"] = now
+        step["status"] = status
+        if status in ("done", "failed"):
+            step["finished_at"] = now
+        if detail:
+            step["detail"] = detail
+    payload = update_job(job_id, mutate)
+    step = payload["steps"][index]
+    duration_ms = None
+    if step.get("started_at") and step.get("finished_at"):
+        duration_ms = max(0, (step["finished_at"] - step["started_at"]) * 1000)
+    audit("step_status", job_id=job_id, step_index=index, step_name=step["label"], step_status=status, duration_ms=duration_ms)
+
+
+def active_jobs() -> list[dict]:
+    found = []
+    if not JOBS.is_dir():
+        return found
+    for path in sorted(JOBS.glob("*/job.json")):
+        try:
+            payload = read_json(path)
+        except Exception:
+            continue
+        if payload.get("status") in ("queued", "running"):
+            found.append(payload)
+    return found
+
+
+def active_job() -> dict | None:
+    found = active_jobs()
+    if len(found) > 1:
+        stop("multiple publication jobs are active")
+    return found[0] if found else None
+
+
+def reconcile_interrupted_jobs() -> int:
+    reconciled = 0
+    if not JOBS.is_dir():
+        return 0
+    for path in sorted(JOBS.glob("*/job.json")):
+        try:
+            payload = read_json(path)
+        except Exception:
+            continue
+        prior = payload.get("status")
+        if prior not in ("queued", "running"):
+            continue
+        now = int(time.time())
+        payload["status"] = "failed"
+        payload["interrupted"] = True
+        payload["error"] = "publication interrupted by service restart"
+        payload["finished_at"] = now
+        payload["updated_at"] = now
+        for step in payload.get("steps", []):
+            if step.get("status") == "running":
+                step["status"] = "failed"
+                step["finished_at"] = now
+                break
+        write_json(path, payload)
+        audit(
+            "stale_job_reconciled",
+            level="WARNING",
+            job_id=payload.get("job_id"),
+            upload_id=payload.get("upload_id"),
+            prior_status=prior,
+            job_status="failed",
+            partial_result_count=len(payload.get("results") or []),
+        )
+        reconciled += 1
+    return reconciled
+
+
+def run_job(job_id: str) -> None:
+    job_path = JOBS / job_id / "job.json"
+    try:
+        job = read_json(job_path)
+        upload_dir = UPLOADS / job["upload_id"]
+        upload = read_json(upload_dir / "upload.json")
+        pages = upload["files"]
+        titles = job["titles"]
+        uid, gid = owner_ids()
+        with PUBLISH_LOCK.open("r+b", buffering=0) as lock:
+            try:
+                fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                stop("another publication job is active")
+            audit("job_started", job_id=job_id, upload_id=job["upload_id"], page_count=len(pages))
+            update_job(job_id, lambda p: p.update(status="running", started_at=int(time.time())))
+            set_step(job_id, 0, "done")
+            set_step(job_id, 1, "done")
+
+            prepared_dir = JOBS / job_id / "prepared"
+            prepared_dir.mkdir(mode=0o700)
+            set_step(job_id, 2, "running")
+            prepared = []
+            for page_index, item in enumerate(pages, 1):
+                source = upload_dir / "pages" / item["staged_name"]
+                target = prepared_dir / item["staged_name"]
+                run_tool(PRINT_MASTER, ["prepare", str(source), str(target)], uid, gid, job_id=job_id, page_index=page_index)
+                prepared.append(target)
+            set_step(job_id, 2, "done")
+
+            set_step(job_id, 3, "running")
+            prepared_meta = []
+            for page_index, target in enumerate(prepared, 1):
+                output = run_tool(PRINT_MASTER, ["validate", str(target)], uid, gid, job_id=job_id, page_index=page_index)
+                if "VALIDATE_PRINT=PASS" not in output.splitlines():
+                    stop("print-master validation result is ambiguous")
+                prepared_meta.append({
+                    "path": target,
+                    "sha256": hashlib.sha256(target.read_bytes()).hexdigest(),
+                    "size_bytes": target.stat().st_size,
+                })
+            set_step(job_id, 3, "done")
+
+            set_step(job_id, 4, "running")
+            ids = allocate_ids(len(pages))
+            for page_index, page_id in enumerate(ids, 1):
+                audit("page_id_allocated", job_id=job_id, page_index=page_index, page_id=page_id)
+            set_step(job_id, 4, "done")
+
+            results = []
+            set_step(job_id, 5, "running")
+            for page_index, (item, title, page_id, meta) in enumerate(zip(pages, titles, ids, prepared_meta, strict=True), 1):
+                if page_id in reserved_ids() or os.path.lexists(ORIGINALS / page_id) or os.path.lexists(MEDIA / page_id):
+                    stop("allocated ID collided before import")
+                inbox = INBOX / f"{page_id}.png"
+                hardlink_to_inbox(meta["path"], inbox)
+                output = run_tool(IMPORTER, [
+                    str(inbox), "--id", page_id, "--title", title, "--character", "",
+                    "--category", job["category"], "--age", "3-6", "--difficulty", "easy", "--language", "de",
+                ], uid, gid, job_id=job_id, page_index=page_index)
+                if f"IMPORTED={page_id} PAGES=1" not in output.splitlines():
+                    stop("immutable importer result is ambiguous")
+                results.append({
+                    "id": page_id, "title": title, "source_name": item["source_name"],
+                    "sha256": meta["sha256"], "size_bytes": meta["size_bytes"], "status": "imported",
+                })
+                update_job(job_id, lambda p, r=list(results): p.update(results=r))
+                audit("page_imported", job_id=job_id, page_index=page_index, page_id=page_id, partial_result_count=len(results))
+            set_step(job_id, 5, "done")
+            set_step(job_id, 6, "done")
+            set_step(job_id, 7, "done")
+
+        set_step(job_id, 8, "running")
+        sitemap_status, sitemap_phase = sitemap_best_effort()
+        audit("sitemap_phase", job_id=job_id, sitemap_status=sitemap_status, sitemap_phase=sitemap_phase)
+        set_step(job_id, 8, "done", sitemap_status if sitemap_phase is None else sitemap_status + ": " + sitemap_phase)
+
+        set_step(job_id, 9, "running")
+        for page_index, result in enumerate(results, 1):
+            result["url"] = verify_public(result["id"])
+            result["status"] = "published"
+            update_job(job_id, lambda p, r=list(results): p.update(results=r))
+            audit("public_verified", job_id=job_id, page_index=page_index, page_id=result["id"])
+        set_step(job_id, 9, "done")
+        update_job(job_id, lambda p: p.update(
+            status="published", finished_at=int(time.time()), results=results,
+            sitemap_status=sitemap_status, sitemap_phase=sitemap_phase,
+        ))
+        audit("job_terminal", job_id=job_id, job_status="published", partial_result_count=len(results))
+    except Exception as exc:
+        message = str(exc) if isinstance(exc, Stop) else "unexpected admin publisher error"
+        def failed(payload):
+            payload["status"] = "failed"
+            payload["error"] = message
+            payload["finished_at"] = int(time.time())
+            for step in payload.get("steps", []):
+                if step.get("status") == "running":
+                    step["status"] = "failed"
+                    step["finished_at"] = int(time.time())
+                    break
+        try:
+            payload = update_job(job_id, failed)
+            try:
+                audit(
+                    "job_terminal",
+                    level="ERROR",
+                    job_id=job_id,
+                    job_status="failed",
+                    error_code=message,
+                    partial_result_count=len(payload.get("results") or []),
+                )
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+
+def state_scaffold() -> None:
+    uid, gid = owner_ids()
+    STATE.mkdir(parents=True, exist_ok=True, mode=0o700)
+    UPLOADS.mkdir(exist_ok=True, mode=0o700)
+    JOBS.mkdir(exist_ok=True, mode=0o700)
+    LOGS.mkdir(exist_ok=True, mode=0o700)
+    ARCHIVE.mkdir(exist_ok=True, mode=0o700)
+    for path in (STATE, UPLOADS, JOBS, LOGS, ARCHIVE):
+        st = path.lstat()
+        if path.is_symlink() or not stat.S_ISDIR(st.st_mode) or st.st_uid != uid or st.st_gid != gid or stat.S_IMODE(st.st_mode) != 0o700:
+            stop("admin state directory metadata is unsafe")
+
+
+def runtime_preflight() -> None:
+    if os.geteuid() == 0:
+        stop("admin publisher must not run as root")
+    uid, gid = owner_ids()
+    if (os.geteuid(), os.getegid()) != (uid, gid):
+        stop("admin publisher must run as andris")
+    for path in (CONTENT, INBOX, ORIGINALS, PUBLIC, MEDIA, CATALOG.parent):
+        if not path.exists() or path.is_symlink():
+            stop("content store is not ready")
+    if not CATALOG.is_file() or CATALOG.is_symlink() or not Path(DOCKER).is_file():
+        stop("runtime dependency is unavailable")
+    st = PUBLISH_LOCK.lstat()
+    if PUBLISH_LOCK.is_symlink() or not stat.S_ISREG(st.st_mode) or st.st_uid != uid or st.st_gid != gid or stat.S_IMODE(st.st_mode) != 0o600:
+        stop("shared publication lock is unsafe")
+    if STATE.stat().st_dev != INBOX.stat().st_dev:
+        stop("admin state and inbox must share one filesystem")
+
+
+def web_root() -> Path:
+    return WEB_ROOT if WEB_ROOT.is_dir() else SOURCE_WEB_ROOT
+
+
+ANALYTICS_PATHS = {
+    "/api/analytics/overview": "/api/stats/overview",
+    "/api/analytics/traffic?days=7": "/api/stats/traffic?days=7",
+    "/api/analytics/campaigns?days=7": "/api/stats/campaigns?days=7",
+    "/api/analytics/campaigns?days=30": "/api/stats/campaigns?days=30",
+}
+MAX_ANALYTICS_BYTES = 4 * 1024 * 1024
+
+
+class AnalyticsUnavailable(Exception):
+    pass
+
+
+class NoAnalyticsRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # Never follow login redirects or forward a request to another origin.
+        return None
+
+
+def analytics_snapshot(path: str) -> dict:
+    upstream = ANALYTICS_PATHS.get(path)
+    if upstream is None:
+        raise ValueError("unknown analytics endpoint")
+    request = Request(
+        ORIGIN + upstream,
+        headers={"Accept": "application/json", "User-Agent": "Ausmalwiese-Admin/1.0"},
+        method="GET",
+    )
+    try:
+        # No client headers, cookies, credentials, arbitrary URL or write methods.
+        with build_opener(NoAnalyticsRedirect()).open(request, timeout=10) as response:
+            if response.status != 200 or response.headers.get_content_type() != "application/json":
+                raise ValueError("invalid analytics response")
+            raw = response.read(MAX_ANALYTICS_BYTES + 1)
+            if len(raw) > MAX_ANALYTICS_BYTES:
+                raise ValueError("analytics response too large")
+            payload = json.loads(raw)
+        if not isinstance(payload, dict):
+            raise ValueError("invalid analytics object")
+        if upstream.endswith("/overview"):
+            if not isinstance(payload.get("pages"), list) or not isinstance(payload.get("totals"), dict):
+                raise ValueError("invalid overview")
+        elif "/campaigns?" in upstream:
+            if not isinstance(payload.get("campaigns"), list):
+                raise ValueError("invalid campaigns")
+        elif not isinstance(payload.get("crawlers"), list):
+            raise ValueError("invalid traffic")
+        return payload
+    except Exception:
+        # Do not expose upstream content, headers, login URLs or exception details.
+        raise AnalyticsUnavailable("analytics temporarily unavailable") from None
+
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "AusmalwieseAdmin/1"
+
+    def log_message(self, _format, *_args):
+        return
+
+    def security_headers(self) -> None:
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+
+    def send_json(self, status: int, payload, extra_headers: dict[str, str] | None = None) -> None:
+        body = (json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n").encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.security_headers()
+        if extra_headers:
+            for key, value in extra_headers.items():
+                self.send_header(key, value)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def send_error_json(self, status: int, message: str) -> None:
+        self.send_json(status, {"error": message})
+
+    def static(self, name: str, content_type: str) -> None:
+        try:
+            data = (web_root() / name).read_bytes()
+        except OSError:
+            self.send_error_json(404, "asset unavailable")
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Cache-Control", "no-store")
+        self.security_headers()
+        if name == "index.html":
+            self.send_header(
+                "Content-Security-Policy",
+                "default-src 'self'; img-src 'self' https://ausmalwiese.de data:; "
+                "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "
+                "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+            )
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def do_GET(self):
+        path = unquote(urlparse(self.path).path)
+        try:
+            if path in ("/", "/index.html"):
+                return self.static("index.html", "text/html; charset=utf-8")
+            if self.path == "/api/analytics/capabilities":
+                return self.send_json(200, {"version": 1, "read_only": True})
+            if path.startswith("/api/analytics/"):
+                if self.path not in ANALYTICS_PATHS:
+                    return self.send_error_json(404, "not found")
+                try:
+                    return self.send_json(200, analytics_snapshot(self.path))
+                except AnalyticsUnavailable:
+                    return self.send_error_json(502, "analytics temporarily unavailable")
+            if path == "/assets/fonts/baloo2-latin-ext-vf-dfd52ee2e67ff597.woff2":
+                return self.static("fonts/baloo2-latin-ext-vf-dfd52ee2e67ff597.woff2", "font/woff2")
+            if path == "/assets/fonts/nunito-latin-ext-vf-2c8d792869818ecb.woff2":
+                return self.static("fonts/nunito-latin-ext-vf-2c8d792869818ecb.woff2", "font/woff2")
+            if path == "/assets/fonts/baloo2-latin-vf-26fb4610d4bc976d.woff2":
+                return self.static("fonts/baloo2-latin-vf-26fb4610d4bc976d.woff2", "font/woff2")
+            if path == "/assets/fonts/nunito-latin-vf-ba344451eab25b21.woff2":
+                return self.static("fonts/nunito-latin-vf-ba344451eab25b21.woff2", "font/woff2")
+            if path == "/api/session":
+                return self.send_json(200, {"csrf_token": CSRF_TOKEN})
+            if path == "/api/categories":
+                return self.send_json(200, {"categories": [{"id": k, "label": v} for k, v in CATEGORIES.items()]})
+            if path == "/api/catalog":
+                catalog, catalog_sha256 = load_catalog()
+                return self.send_json(
+                    200,
+                    {
+                        "catalog_sha256": catalog_sha256,
+                        "count": len(catalog),
+                        "entries": [catalog_view_entry(entry) for entry in catalog],
+                    },
+                    {"ETag": catalog_etag(catalog_sha256)},
+                )
+            if path == "/api/archive":
+                _, catalog_sha256 = load_catalog()
+                records = list_archive_records()
+                return self.send_json(
+                    200,
+                    {"catalog_sha256": catalog_sha256, "count": len(records), "entries": records},
+                    {"ETag": catalog_etag(catalog_sha256)},
+                )
+            if path == "/api/activity":
+                events = activity_events()
+                return self.send_json(200, {"count": len(events), "events": events})
+            if path == "/api/jobs/active":
+                current = active_job()
+                return self.send_json(200, {"active": current is not None, "job": current})
+            match = re.fullmatch(r"/api/uploads/([0-9a-f]{32})", path)
+            if match:
+                return self.send_json(200, {"upload_id": match.group(1), **read_json(UPLOADS / match.group(1) / "upload.json")})
+            match = re.fullmatch(r"/api/uploads/([0-9a-f]{32})/preview/(\d+)", path)
+            if match:
+                payload = read_json(UPLOADS / match.group(1) / "upload.json")
+                index = int(match.group(2))
+                if index < 1 or index > len(payload["files"]):
+                    return self.send_error_json(404, "preview not found")
+                item = payload["files"][index - 1]
+                data = (UPLOADS / match.group(1) / "pages" / item["staged_name"]).read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "image/png")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
+            match = re.fullmatch(r"/api/jobs/([0-9a-f]{32})", path)
+            if match:
+                return self.send_json(200, read_json(JOBS / match.group(1) / "job.json"))
+            self.send_error_json(404, "not found")
+        except Stop as exc:
+            self.send_error_json(400, str(exc))
+        except Exception:
+            self.send_error_json(500, "unexpected admin service error")
+
+    def admin_marker(self) -> bool:
+        if self.headers.get("X-Ausmalwiese-Admin") != "1":
+            self.send_error_json(403, "missing admin request marker")
+            return False
+        return True
+
+    def mutation_guard(self) -> bool:
+        if not self.admin_marker():
+            return False
+        fetch_site = self.headers.get("Sec-Fetch-Site")
+        if fetch_site and fetch_site not in {"same-origin", "none"}:
+            self.send_error_json(403, "cross-site admin request rejected")
+            return False
+        origin = self.headers.get("Origin")
+        if origin and origin not in {ADMIN_ORIGIN, f"http://{HOST}:{PORT}"}:
+            self.send_error_json(403, "admin request origin rejected")
+            return False
+        if not secrets.compare_digest(self.headers.get("X-Ausmalwiese-CSRF", ""), CSRF_TOKEN):
+            self.send_error_json(403, "invalid admin csrf token")
+            return False
+        return True
+
+    def expected_catalog_sha256(self) -> str:
+        value = self.headers.get("If-Match")
+        if not value or not re.fullmatch(r'"[0-9a-f]{64}"', value):
+            stop("If-Match catalog validator is required")
+        return value[1:-1]
+
+    def read_request_json(self):
+        length = self.headers.get("Content-Length")
+        if not length or not length.isdigit() or int(length) <= 0 or int(length) > 64 * 1024:
+            stop("request body size is invalid")
+        try:
+            return json.loads(self.rfile.read(int(length)))
+        except (UnicodeError, json.JSONDecodeError):
+            stop("request JSON is invalid")
+
+    def do_POST(self):
+        if not self.mutation_guard():
+            return
+        try:
+            path = urlparse(self.path).path
+            if path == "/api/uploads":
+                return self.handle_upload()
+            if path == "/api/jobs":
+                return self.handle_job()
+            if path == "/api/catalog/edit":
+                return self.handle_catalog_edit()
+            if path == "/api/catalog/archive":
+                return self.handle_catalog_archive()
+            if path == "/api/catalog/restore":
+                return self.handle_catalog_restore()
+            if path == "/api/archive/delete":
+                return self.handle_archive_delete()
+            self.send_error_json(404, "not found")
+        except Stop as exc:
+            self.send_error_json(400, str(exc))
+        except Exception:
+            self.send_error_json(500, "unexpected admin service error")
+
+    def do_PUT(self):
+        self.send_error_json(405, "method not allowed")
+
+    def do_PATCH(self):
+        self.send_error_json(405, "method not allowed")
+
+    def do_DELETE(self):
+        self.send_error_json(405, "method not allowed")
+
+    def handle_catalog_edit(self):
+        expected_sha256 = self.expected_catalog_sha256()
+        raw = self.read_request_json()
+        if not isinstance(raw, dict) or set(raw) != {"id", "title", "category", "age", "difficulty"}:
+            stop("catalog edit request keys are invalid")
+        page_id = validate_catalog_id(raw["id"])
+        title = validate_title(raw["title"])
+        category = raw["category"]
+        if category not in CATEGORIES:
+            stop("category is invalid")
+        age = validate_age(raw["age"])
+        difficulty = validate_difficulty(raw["difficulty"])
+        with acquire_catalog_lock():
+            catalog, current_sha256 = load_catalog()
+            if current_sha256 != expected_sha256:
+                self.send_error_json(412, "catalog changed; reload before saving")
+                return
+            matches = [entry for entry in catalog if entry["id"] == page_id]
+            if len(matches) != 1:
+                stop("catalog target does not exist exactly once")
+            entry = matches[0]
+            changes = {
+                "title": title,
+                "category": category,
+                "age": age,
+                "difficulty": difficulty,
+            }
+            changed_fields = [key for key, value in changes.items() if entry.get(key) != value]
+            if not changed_fields:
+                return self.send_json(
+                    200,
+                    {"status": "unchanged", "catalog_sha256": current_sha256, "entry": catalog_view_entry(entry)},
+                    {"ETag": catalog_etag(current_sha256)},
+                )
+            for key in changed_fields:
+                entry[key] = changes[key]
+            new_sha256 = write_catalog(catalog, current_sha256)
+            audit(
+                "catalog_edit",
+                page_id=page_id,
+                action="edit",
+                changed_fields=",".join(changed_fields),
+                previous_catalog_sha256=current_sha256,
+                catalog_sha256=new_sha256,
+            )
+        return self.send_json(
+            200,
+            {"status": "updated", "catalog_sha256": new_sha256, "entry": catalog_view_entry(entry)},
+            {"ETag": catalog_etag(new_sha256)},
+        )
+
+    def handle_catalog_archive(self):
+        expected_sha256 = self.expected_catalog_sha256()
+        raw = self.read_request_json()
+        if not isinstance(raw, dict) or set(raw) != {"id", "confirm_id"}:
+            stop("catalog archive request keys are invalid")
+        page_id = validate_catalog_id(raw["id"])
+        if raw["confirm_id"] != page_id:
+            stop("catalog archive confirmation does not match id")
+        record_path = archive_path(page_id)
+        with acquire_catalog_lock():
+            catalog, current_sha256 = load_catalog()
+            if current_sha256 != expected_sha256:
+                self.send_error_json(412, "catalog changed; reload before archiving")
+                return
+            indexes = [index for index, entry in enumerate(catalog) if entry["id"] == page_id]
+            if len(indexes) != 1:
+                stop("catalog target does not exist exactly once")
+            if os.path.lexists(record_path):
+                stop("archive record already exists for id")
+            entry = validate_catalog_entry(catalog[indexes[0]])
+            archived_at = int(time.time())
+            prepared = {
+                "schema": "rozkalns.rpi5-main.coloring-pages-admin-archive.v1",
+                "id": page_id,
+                "state": "prepared",
+                "archived_at": archived_at,
+                "catalog_before_sha256": current_sha256,
+                "entry": entry,
+            }
+            write_json(record_path, prepared)
+            del catalog[indexes[0]]
+            new_sha256 = write_catalog(catalog, current_sha256)
+            prepared.update(state="archived", catalog_after_sha256=new_sha256)
+            write_json(record_path, prepared)
+            audit(
+                "catalog_archive",
+                level="WARNING",
+                page_id=page_id,
+                action="archive",
+                archive_state="archived",
+                previous_catalog_sha256=current_sha256,
+                catalog_sha256=new_sha256,
+            )
+        sitemap_status, sitemap_phase = sitemap_best_effort()
+        return self.send_json(
+            200,
+            {
+                "status": "archived",
+                "id": page_id,
+                "catalog_sha256": new_sha256,
+                "sitemap_status": sitemap_status,
+                "sitemap_phase": sitemap_phase,
+                "media_deleted": False,
+                "original_deleted": False,
+            },
+            {"ETag": catalog_etag(new_sha256)},
+        )
+
+    def handle_catalog_restore(self):
+        expected_sha256 = self.expected_catalog_sha256()
+        raw = self.read_request_json()
+        if not isinstance(raw, dict) or set(raw) != {"id", "confirm_id"}:
+            stop("catalog restore request keys are invalid")
+        page_id = validate_catalog_id(raw["id"])
+        if raw["confirm_id"] != page_id:
+            stop("catalog restore confirmation does not match id")
+        with acquire_catalog_lock():
+            catalog, current_sha256 = load_catalog()
+            if current_sha256 != expected_sha256:
+                self.send_error_json(412, "catalog changed; reload before restoring")
+                return
+            if any(entry["id"] == page_id for entry in catalog):
+                stop("catalog already contains archive id")
+            record = load_archive_record(page_id)
+            if record["state"] not in {"prepared", "archived"}:
+                stop("archive record is not restorable")
+            entry = validate_catalog_entry(record["entry"])
+            catalog.append(entry)
+            new_sha256 = write_catalog(catalog, current_sha256)
+            record.update(
+                state="restored",
+                restored_at=int(time.time()),
+                restore_catalog_before_sha256=current_sha256,
+                restore_catalog_after_sha256=new_sha256,
+            )
+            write_json(archive_path(page_id), record)
+            audit(
+                "catalog_restore",
+                page_id=page_id,
+                action="restore",
+                archive_state="restored",
+                previous_catalog_sha256=current_sha256,
+                catalog_sha256=new_sha256,
+            )
+        sitemap_status, sitemap_phase = sitemap_best_effort()
+        return self.send_json(
+            200,
+            {
+                "status": "restored",
+                "id": page_id,
+                "catalog_sha256": new_sha256,
+                "sitemap_status": sitemap_status,
+                "sitemap_phase": sitemap_phase,
+                "media_deleted": False,
+                "original_deleted": False,
+            },
+            {"ETag": catalog_etag(new_sha256)},
+        )
+
+    def handle_archive_delete(self):
+        expected_sha256 = self.expected_catalog_sha256()
+        raw = self.read_request_json()
+        if not isinstance(raw, dict) or set(raw) != {"id", "confirm_id", "confirm_phrase"}:
+            stop("archive delete request keys are invalid")
+        page_id = validate_catalog_id(raw["id"])
+        if raw["confirm_id"] != page_id or raw["confirm_phrase"] != DELETE_CONFIRM:
+            stop("archive delete confirmation is invalid")
+        with acquire_catalog_lock():
+            catalog, current_sha256 = load_catalog()
+            if current_sha256 != expected_sha256:
+                self.send_error_json(412, "catalog changed; reload before deleting")
+                return
+            if any(entry["id"] == page_id for entry in catalog):
+                stop("live catalog item cannot be permanently deleted")
+            record = load_archive_record(page_id)
+            if record["state"] != "archived":
+                stop("only a fully archived item can be permanently deleted")
+
+            original_inventory = inspect_delete_directory(ORIGINALS, page_id)
+            media_inventory = inspect_delete_directory(MEDIA, page_id)
+            inbox_inventory = inspect_delete_inbox(page_id)
+            deleted_file_count = (
+                original_inventory["file_count"]
+                + media_inventory["file_count"]
+                + inbox_inventory["file_count"]
+            )
+            deleted_byte_count = (
+                original_inventory["bytes"]
+                + media_inventory["bytes"]
+                + inbox_inventory["bytes"]
+            )
+            if deleted_file_count <= 0 or deleted_file_count > MAX_DELETE_FILES or deleted_byte_count > MAX_DELETE_BYTES:
+                stop("delete inventory exceeds safe bound")
+
+            record.update(
+                state="delete-prepared",
+                delete_started_at=int(time.time()),
+                delete_inventory={
+                    "originals": {
+                        "file_count": original_inventory["file_count"],
+                        "bytes": original_inventory["bytes"],
+                    },
+                    "media": {
+                        "file_count": media_inventory["file_count"],
+                        "bytes": media_inventory["bytes"],
+                    },
+                    "inbox": {
+                        "file_count": inbox_inventory["file_count"],
+                        "bytes": inbox_inventory["bytes"],
+                    },
+                    "total_file_count": deleted_file_count,
+                    "total_bytes": deleted_byte_count,
+                },
+            )
+            write_json(archive_path(page_id), record)
+            audit(
+                "catalog_delete_started",
+                level="WARNING",
+                page_id=page_id,
+                action="delete",
+                archive_state="delete-prepared",
+                deleted_file_count=deleted_file_count,
+                deleted_byte_count=deleted_byte_count,
+            )
+
+            delete_validated_directory(MEDIA, page_id, media_inventory)
+            delete_validated_directory(ORIGINALS, page_id, original_inventory)
+            delete_validated_inbox(page_id, inbox_inventory)
+
+            record.update(
+                state="deleted",
+                deleted_at=int(time.time()),
+                deleted_file_count=deleted_file_count,
+                deleted_byte_count=deleted_byte_count,
+            )
+            write_json(archive_path(page_id), record)
+            audit(
+                "catalog_delete",
+                level="WARNING",
+                page_id=page_id,
+                action="delete",
+                archive_state="deleted",
+                deleted_file_count=deleted_file_count,
+                deleted_byte_count=deleted_byte_count,
+            )
+        return self.send_json(
+            200,
+            {
+                "status": "deleted",
+                "id": page_id,
+                "catalog_sha256": current_sha256,
+                "deleted_file_count": deleted_file_count,
+                "deleted_byte_count": deleted_byte_count,
+                "tombstone_retained": True,
+            },
+            {"ETag": catalog_etag(current_sha256)},
+        )
+
+    def handle_upload(self):
+        if self.headers.get_content_type() not in ("application/zip", "application/x-zip-compressed"):
+            stop("content type must be application/zip")
+        length = self.headers.get("Content-Length")
+        if not length or not length.isdigit() or int(length) <= 0 or int(length) > MAX_UPLOAD:
+            stop("ZIP upload size is outside the allowed bound")
+        upload_id = secrets.token_hex(16)
+        upload_dir = UPLOADS / upload_id
+        upload_dir.mkdir(mode=0o700)
+        archive = upload_dir / "upload.zip"
+        fd = os.open(archive, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        remaining = int(length)
+        try:
+            with os.fdopen(fd, "wb", buffering=0) as out:
+                while remaining:
+                    block = self.rfile.read(min(1024 * 1024, remaining))
+                    if not block:
+                        stop("ZIP upload ended early")
+                    out.write(block)
+                    remaining -= len(block)
+                os.fsync(out.fileno())
+            staged = stage_zip(archive, upload_dir)
+            payload = {"schema": "rozkalns.rpi5-main.coloring-pages-admin-upload.v1", "created_at": int(time.time()), **staged}
+            write_json(upload_dir / "upload.json", payload)
+        except Exception:
+            shutil.rmtree(upload_dir, ignore_errors=True)
+            raise
+        self.send_json(201, {"upload_id": upload_id, **payload})
+
+    def handle_job(self):
+        raw = self.read_request_json()
+        if not isinstance(raw, dict) or set(raw) != {"upload_id", "category", "titles"}:
+            stop("job request keys are invalid")
+        upload_id = raw["upload_id"]
+        if not isinstance(upload_id, str) or not TOKEN.fullmatch(upload_id):
+            stop("upload id is invalid")
+        upload = read_json(UPLOADS / upload_id / "upload.json")
+        category = raw["category"]
+        if category not in CATEGORIES:
+            stop("category is invalid")
+        titles_raw = raw["titles"]
+        if not isinstance(titles_raw, list) or len(titles_raw) != len(upload["files"]):
+            stop("titles must match uploaded PNG count")
+        titles = [validate_title(value) for value in titles_raw]
+        with CREATE_LOCK:
+            existing = active_job()
+            if existing is not None:
+                restored = dict(existing)
+                restored["restored"] = True
+                self.send_json(200, restored)
+                return
+            job_id = secrets.token_hex(16)
+            job_dir = JOBS / job_id
+            job_dir.mkdir(mode=0o700)
+            payload = {
+                "schema": "rozkalns.rpi5-main.coloring-pages-admin-job.v1",
+                "job_id": job_id, "upload_id": upload_id,
+                "category": category, "category_label": CATEGORIES[category],
+                "titles": titles, "status": "queued", "created_at": int(time.time()),
+                "updated_at": int(time.time()), "steps": initial_steps(), "results": [],
+            }
+            audit("job_queued", job_id=job_id, upload_id=upload_id, page_count=len(upload["files"]))
+            write_json(job_dir / "job.json", payload)
+            threading.Thread(target=run_job, args=(job_id,), name="publish-" + job_id[:8], daemon=True).start()
+        self.send_json(202, payload)
+
+
+def serve() -> int:
+    state_scaffold()
+    runtime_preflight()
+    init_logging()
+    reconcile_interrupted_jobs()
+    server = ThreadingHTTPServer((HOST, PORT), Handler)
+    server.daemon_threads = True
+    server.serve_forever(poll_interval=0.5)
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--serve", action="store_true")
+    args = parser.parse_args()
+    if not args.serve:
+        parser.error("--serve is required")
+    try:
+        return serve()
+    except Stop as exc:
+        print("COLORING_PAGES_ADMIN_PUBLISH=FAIL error=" + str(exc), file=os.sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

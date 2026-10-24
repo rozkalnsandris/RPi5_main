@@ -5,7 +5,7 @@
 Provide one bounded RPi5 command for the approved content path:
 
 ```text
-Drive pending PNG page(s) + manifest
+Drive pending PNG page(s) + validated manifest from request bridge
   -> verify owner-bound ID / per-page SHA-256 / size / metadata
   -> verify every page before the first inbox publication
   -> publish ordered PNG page(s) to the content inbox
@@ -48,7 +48,7 @@ The operator is read-only toward Drive. It uses normal non-`--fast-list` discove
 
 ## Invocation
 
-Single-page v1 remains unchanged:
+Legacy single-page v1 Drive-manifest invocation remains supported for compatibility:
 
 ```bash
 coloring-pages-drive-ingest \
@@ -57,7 +57,7 @@ coloring-pages-drive-ingest \
   --expected-size <bytes>
 ```
 
-Multi-page v2 binds every page explicitly:
+Legacy multi-page v2 Drive-manifest invocation also remains supported:
 
 ```bash
 coloring-pages-drive-ingest \
@@ -66,7 +66,7 @@ coloring-pages-drive-ingest \
   --expected-page 2:<sha256>:<bytes>
 ```
 
-v2 accepts 2–12 pages. Page indexes must be contiguous and ordered from 1. Drive filenames are fixed as `pending/<id>-<index>.png`; the single `pending/<id>.json` manifest is still the readiness signal. The operator lists the exact expected filenames, validates the complete v2 manifest against the owner-bound page identities, downloads and verifies every page, and only then begins inbox publication.
+v2 accepts 2–12 pages. Page indexes must be contiguous and ordered from 1. Drive filenames are fixed as `pending/<id>-<index>.png`. In normal PUBLISH, the bounded request bridge supplies the complete validated manifest through `--manifest-json`; the operator lists only the exact PNG names, validates the inline manifest against the owner-bound page identities, downloads and verifies every page, persists the manifest locally, and only then begins inbox publication. If `--manifest-json` is absent, the historical `pending/<id>.json` Drive-manifest path remains available for compatibility.
 
 Unknown manifest/page fields are rejected. Category is checked against the current reviewed Coloring Pages category set before any PNG is published into the inbox.
 
@@ -89,7 +89,7 @@ Leftover partial state is preserved and causes STOP. There is no automatic retry
 The same publish operator directly runs the reviewed immutable image:
 
 ```text
-ghcr.io/rozkalnsandris/coloring-pages@sha256:ac54a42b7339fe939831bd9cc17426140b02202340f3c2fd6d7e5530b4265007
+ghcr.io/rozkalnsandris/coloring-pages@sha256:2a80b56c20c37f4a530059c3e438c6627fd962786e6590dd914e59e86a837ba8
 ```
 
 Entrypoint:
@@ -129,7 +129,7 @@ During the bounded transition, the operator also accepts the legacy layout. If `
 Public origin is fixed to:
 
 ```text
-https://coloring.rozkalns.net
+https://ausmalwiese.de
 ```
 
 Successful state is recorded at:
@@ -142,13 +142,19 @@ A matching success receipt allows read-only re-verification and returns `ALREADY
 
 ## Installer
 
-The single installer remains:
+The standalone operator installer remains available for operator-only maintenance:
 
 ```text
 scripts/install-coloring-pages-drive-ingest-operator-v1.sh
 ```
 
-It may install only the publish operator plus its bounded state directory and lock. It does not run rclone, Docker, import content, change credentials, change sudoers, or alter systemd/network state.
+For the request-bridge inline-manifest rollout, the reviewed bridge installer installs the exact current operator and dispatcher together after predecessor/current identity checks:
+
+```text
+scripts/install-coloring-pages-publish-request-bridge-v1.sh
+```
+
+Neither installer runs rclone, Docker, imports content, changes credentials or sudoers, or changes network/Cloudflare state.
 
 ## Authority boundary
 
