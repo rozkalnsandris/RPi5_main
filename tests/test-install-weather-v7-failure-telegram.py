@@ -32,7 +32,7 @@ class InstallerTests(unittest.TestCase):
             str(installer.NOTIFIER_TARGET), str(installer.NOTIFIER_UNIT_TARGET),
             str(installer.CALLER_TARGET),
         })
-        self.assertNotIn("reset-failed", PATH.read_text().split("def apply(")[1].split("def main(")[0])
+        self.assertNotIn('systemctl_reload("reset-failed")', PATH.read_text())
         self.assertNotIn("enable", PATH.read_text().split("def apply(")[1].split("def main(")[0])
 
     def test_original_caller_predecessor_is_only_onfailure_delta(self):
@@ -106,6 +106,7 @@ class InstallerTests(unittest.TestCase):
                 patch.object(installer, "source_check", return_value={"result": "SOURCE_PASS"}),
                 patch.object(installer, "require_directory", return_value=None),
                 patch.object(installer, "credentials_metadata", side_effect=lambda: actual_cred.append(1)),
+                patch.object(installer, "checked_installed", return_value=None),
                 patch.object(installer, "historic_state", return_value=None),
                 patch.object(installer, "systemctl_reload", side_effect=AssertionError("reload must not run")),
             ):

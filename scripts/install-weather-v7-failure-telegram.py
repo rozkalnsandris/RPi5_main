@@ -83,7 +83,7 @@ def source_file(path: str) -> bytes:
         if git("ls-files", "--error-unmatch", "--", path) != path:
             fail("source artifact is not tracked")
         data = candidate.read_bytes()
-        if not data or sha256(data) != sha256(bytes.fromhex(git("show", "HEAD:" + path).encode().hex())):
+        if not data or git("hash-object", "--", str(candidate)) != git("rev-parse", "HEAD:" + path):
             fail("source artifact does not match Git")
     except OSError:
         fail("source artifact is missing")
