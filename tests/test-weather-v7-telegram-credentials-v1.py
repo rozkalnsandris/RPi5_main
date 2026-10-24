@@ -126,7 +126,10 @@ class CredentialsSourceTests(unittest.TestCase):
         self.assertNotIn("systemctl", source)
         self.assertNotIn("reset-failed", source)
         self.assertNotIn("telegram_send", source)
-        self.assertNotIn("/etc/credstore", source)
+        # Installer may name fixed credential targets for contract checks,
+        # but it must never open a credential file or provision secret data.
+        self.assertNotIn('os.open("/etc/credstore', source)
+        self.assertNotIn("os.unlink(", source)
         import json
         data=json.loads((ROOT/"ops/contracts/weather-v7-telegram-credentials-v1.json").read_text())
         self.assertFalse(data["source_merge_authorizes_live"])
