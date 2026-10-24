@@ -1139,7 +1139,8 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
             "0:0:400:regular file:2",
             "0:0:400:directory:1",
         ):
-            with self.subTest(metadata=metadata), (
+            with (
+                self.subTest(metadata=metadata),
                 mock.patch.object(installer, "invoke", return_value=mock.Mock(returncode=1)),
                 mock.patch.object(installer, "sudo_read", return_value=metadata),
             ):
