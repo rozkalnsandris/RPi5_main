@@ -191,9 +191,13 @@ def release_bytes(
     worker: bytes,
     config: bytes,
     *,
-    app_sha: str = APP_SHA,
-    worker_blob: str = WORKER_BLOB,
+    app_sha: str | None = None,
+    worker_blob: str | None = None,
 ) -> bytes:
+    if app_sha is None:
+        app_sha = APP_SHA
+    if worker_blob is None:
+        worker_blob = WORKER_BLOB
     if git_blob(worker) != worker_blob or git_blob(config) != CONFIG_BLOB:
         raise Stop("application_blob_mismatch")
     record = {
