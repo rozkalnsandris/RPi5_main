@@ -835,15 +835,6 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
     if (state.busy) return;
     state.busy = true; state.refresh.disabled = true;
     state.status.textContent = "Loading data…";
-    // Clear the visible snapshot on every refresh so an error cannot look like fresh data.
-    state.content.hidden = true;
-    try {
-      const [catalog,overview,month,traffic,week] = await Promise.all([
-        request("/api/catalog"),request(  async function load(page) {
-    const state = states[page];
-    if (state.busy) return;
-    state.busy = true; state.refresh.disabled = true;
-    state.status.textContent = "Loading data…";
     state.content.hidden = true;
     try {
       const clock = () => new Intl.DateTimeFormat("en-GB",{hour:"2-digit",minute:"2-digit"}).format(new Date());
