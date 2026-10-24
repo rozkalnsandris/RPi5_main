@@ -354,3 +354,80 @@ rollback or cleanup authority.
 - The exact deployment source verifier requires both #368 Cloudflare host-scoped HTTP Requests/range semantics and #256 HTTP 410 retirement for legacy personal writes/cookie endpoints, with aggregate Like/Print and erasure paths present.
 - Old installed predecessor evidence remains immutable: app `e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63`, Worker `c2ac9da6e0701103e0041b30db7dfbea4298f96c`, prior-release SHA-256 `e65d7b909482fe67629e1da0b42bc5a1b78f255397c01a789941240035b9b066`. GitHub cannot verify today's installed predecessor.
 - The six-file full replacement is sequential and non-atomic; host installation, permissions, protected installed package inspection and Cloudflare Worker upload/deployment remain separately owner-gated. No LIVE state change or host eligibility is evidenced by source CI.
+
+## #1211 Traffic zone binding correction — SOURCE ONLY (2026-10-24)
+
+The deployed Worker passed a one-shot version upload/deployment and public
+`HEAD https://ausmalwiese.de/q` returned 302 to the canonical homepage. The
+public Traffic API passed schema checks but returned 0 HTTP requests, visits
+and crawler requests for both 7 and 30 days. The actual Cloudflare zone
+dashboard independently showed approximately 2.96k HTTP requests and 317
+visits in a different (24-hour) period. Do **not** interpret these differing
+windows/metric definitions as directly comparable counts.
+
+A separately authorized, sanitized Cloudflare Dashboard comparison proved:
+the Worker `CF_ZONE_TAG` plaintext binding does **not** identify the current
+`ausmalwiese.de` zone; `CF_ANALYTICS_HOST` still names the old site but is
+not used by the current Traffic query. The current Worker source deliberately
+uses `clientRequestHTTPHost: "ausmalwiese.de"` and
+`requestSource: "eyeball"`. The exact provider binding is the identified
+misconfiguration. No raw zone IDs, account IDs, binding values or tokens
+belong in source, GitHub, chat or printed diagnostics.
+
+Source-only protocol `scripts/ausmalwiese_stats_zone_binding_v1.py` is a
+**pure function**, not an installed executable: it has no credentials,
+network transport, CLI, shell or standalone owner authorization. It needs
+the existing reviewed exact-source protocol core and a separately installed,
+reviewed trusted adapter. It cannot be used directly to change LIVE.
+
+The future trusted adapter must authenticate the official
+`ausmalwiese.de` zone identity and active status with the Cloudflare API,
+allowlist the identity, and privately pass its Zone ID through
+`verified_zone_id`. It must preserve existing root-owned installed
+provenance checks, own the current read-only Cloudflare transport, enforce
+the owner's distinct exact LIVE authorization **outside** the pure core,
+and spend at most one upload and one deploy budget *before* dispatch.
+No generic API/editor/browser mutation, new credential provisioning, secret
+printing, retry, rollback, cleanup or fallback executor is allowed.
+The existing protected installed runtime **does not** expose that new
+`verified_zone_id` interface and cannot execute this proposal yet; a new
+reviewed, separately owner-gated adapter installation is required.
+
+The pure protocol checks exact Worker module bytes, candidate hash and
+handlers via the already trusted collector; double-reads active=latest at
+100% traffic and the official zone identity; requires the owner-bound
+preflight snapshot digest and active UUID; rejects an already-correct zone.
+It copies the proven Version Upload metadata from the existing core,
+replacing **only** the `CF_ZONE_TAG` inheritance entry with one
+`{name: CF_ZONE_TAG, type: plain_text, text: <trusted zone ID>}`. The
+other six bindings use `inherit` from `latest` with
+`bindings_inherit=strict` (provider refuses missing inherited bindings).
+The identical Worker source module is reuploaded. After upload, the old
+version must still be active; the newly uploaded version must differ
+**only** in `CF_ZONE_TAG` fingerprint. Provider module code hash,
+the exact four routes, both secrets' kinds (never values), the other
+five binding fingerprints, compatibility flags/date and settings
+fingerprint must match. Only then may it deploy the new UUID to 100%.
+Independent post-deploy read verifies both active/latest identities and
+the sole binding change. Every uncertain post-dispatch state is terminal.
+
+This is a provider **binding** fix, not a Worker code, route, secret,
+Cloudflare permission or DNS modification. Source CI cannot prove LIVE.
+Required distinct owner gates:
+1. exact-head owner `MERGE` for this source-only PR (the stricter #1211
+   issue gate applies even under AUTO-RUN FULL);
+2. separately reviewed trusted adapter/runtime and exact host installation
+   authorization;
+3. separate, fresh exact Cloudflare Version Upload+Deploy owner LIVE gate
+   following sanitized zone/version/binding preflight.
+Finally compare Traffic 7/30-day HTTP Requests with the actual Cloudflare
+Dashboard for the *same host, window, filters and definition*; validate
+that errors/missing provider data do not masquerade as true zero traffic.
+Do not reintroduce IP tracking, D1 traffic records or persistent visitor IDs.
+
+Official provider contract:
+https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/versions/methods/create/
+Machine scope:
+`ops/contracts/ausmalwiese-stats-zone-binding-v1.json`
+Offline regressions:
+`python3 tests/test-ausmalwiese-stats-zone-binding-v1.py`
