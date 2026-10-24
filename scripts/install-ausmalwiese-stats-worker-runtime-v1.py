@@ -20,10 +20,10 @@ SOURCE_ROOT = Path(__file__).resolve().parents[1]
 APP_ROOT = SOURCE_ROOT.parent / "coloring-pages"
 REPO = "rozkalnsandris/RPi5_main"
 APP_REPO = "rozkalnsandris/coloring-pages"
-APP_SHA = "e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63"
+APP_SHA = "97741638b4cb52a3241533f30485c0e7529fdd82"
 # Operational source checkout pin. Worker/config provenance remains APP_SHA because
 # their exact Git blobs are unchanged at this newer canonical application main.
-APP_CHECKOUT_SHA = "fd31294eef9fe0a83b133d3ec9bd2036e0a29940"
+APP_CHECKOUT_SHA = "97741638b4cb52a3241533f30485c0e7529fdd82"
 
 LAUNCHER_REL = "scripts/ausmalwiese_stats_worker_runtime_v1.py"
 PROVISIONER_REL = "scripts/ausmalwiese_stats_worker_provisioner_v1.py"
@@ -32,7 +32,7 @@ SOURCE_PATHS = (LAUNCHER_REL, PROVISIONER_REL, CORE_REL)
 
 WORKER_REL = "cloudflare/stats-worker.js"
 CONFIG_REL = "cloudflare/wrangler.stats-worker.jsonc"
-WORKER_BLOB = "c2ac9da6e0701103e0041b30db7dfbea4298f96c"
+WORKER_BLOB = "ccb68d7bbf12474f32e0f94d574ead1b02cd9c7e"
 CONFIG_BLOB = "3733263a391274f2b6b0f2023c8656565bde8e1a"
 
 GIT = "/usr/bin/git"
@@ -58,6 +58,8 @@ SHA40 = re.compile(r"[0-9a-f]{40}\Z")
 CONFIRM = "INSTALL-AUSMALWIESE-STATS-WORKER-RUNTIME"
 UPGRADE_CONFIRM = "UPGRADE-AUSMALWIESE-STATS-WORKER-RUNTIME"
 OLD_MAIN = "78e3e3aee5ef32386acc8031a955b7ddee803304"
+OLD_APP_SHA = "e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63"
+OLD_WORKER_BLOB = "c2ac9da6e0701103e0041b30db7dfbea4298f96c"
 OLD_LAUNCHER_BLOB = "d64b2f330da67d9f95927d06bd1984f4aac4a343"
 OLD_RELEASE_SHA256 = "e65d7b909482fe67629e1da0b42bc5a1b78f255397c01a789941240035b9b066"
 UPGRADE_TARGETS = (EXE, RELEASE)
@@ -188,17 +190,24 @@ def release_bytes(
     core: bytes,
     worker: bytes,
     config: bytes,
+    *,
+    app_sha: str | None = None,
+    worker_blob: str | None = None,
 ) -> bytes:
-    if git_blob(worker) != WORKER_BLOB or git_blob(config) != CONFIG_BLOB:
+    if app_sha is None:
+        app_sha = APP_SHA
+    if worker_blob is None:
+        worker_blob = WORKER_BLOB
+    if git_blob(worker) != worker_blob or git_blob(config) != CONFIG_BLOB:
         raise Stop("application_blob_mismatch")
     record = {
         "schema_version": 1,
         "repository": REPO,
         "source_sha": expected_main,
         "app_repository": APP_REPO,
-        "app_sha": APP_SHA,
+        "app_sha": app_sha,
         "worker": "coloring-pages-stats-v1",
-        "worker_blob": WORKER_BLOB,
+        "worker_blob": worker_blob,
         "config_blob": CONFIG_BLOB,
         "launcher_sha256": hashlib.sha256(launcher).hexdigest(),
         "provisioner_sha256": hashlib.sha256(provisioner).hexdigest(),
@@ -278,20 +287,21 @@ def predecessor_payloads(*, runner=subprocess.run):
     core = historical(SOURCE_ROOT, OLD_MAIN, CORE_REL, runner=runner)
     worker = historical(
         APP_ROOT,
-        APP_SHA,
+        OLD_APP_SHA,
         WORKER_REL,
-        expected_blob=WORKER_BLOB,
+        expected_blob=OLD_WORKER_BLOB,
         runner=runner,
     )
     config = historical(
         APP_ROOT,
-        APP_SHA,
+        OLD_APP_SHA,
         CONFIG_REL,
         expected_blob=CONFIG_BLOB,
         runner=runner,
     )
     release = release_bytes(
-        OLD_MAIN, launcher, provisioner, core, worker, config
+        OLD_MAIN, launcher, provisioner, core, worker, config,
+        app_sha=OLD_APP_SHA, worker_blob=OLD_WORKER_BLOB,
     )
     if hashlib.sha256(release).hexdigest() != OLD_RELEASE_SHA256:
         raise Stop("old_release_identity_mismatch")

@@ -110,10 +110,10 @@ class ExactWorkerGateTests(unittest.TestCase):
         self.assertTrue(c["merge_approval"])
         self.assertEqual(c["issue"], 1118)
         self.assertEqual(
-            c["source_commit"], "e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63"
+            c["source_commit"], "97741638b4cb52a3241533f30485c0e7529fdd82"
         )
         self.assertEqual(
-            c["source_blob"], "c2ac9da6e0701103e0041b30db7dfbea4298f96c"
+            c["source_blob"], "ccb68d7bbf12474f32e0f94d574ead1b02cd9c7e"
         )
         self.assertEqual(
             c["config_blob"], "3733263a391274f2b6b0f2023c8656565bde8e1a"
@@ -145,6 +145,30 @@ class ExactWorkerGateTests(unittest.TestCase):
         with self.assertRaisesRegex(op.Blocked, "SOURCE_SIZE"):
             op.verify_source(b"")
 
+    def test_source_traffic_contract_rejects_missing_fields(self):
+        raw = (
+            'const PRINT_QR_HOST = "ausmalwiese.de";\n'
+            'const PRINT_QR_DESTINATION = "https://ausmalwiese.de/";\n'
+            'const host = "ausmalwiese.de";\n'
+            "clientRequestHTTPHost: host,\n"
+            "ANALYTICS_RANGE_DAYS.has(requestedDays)\n"
+            "cloudflare_traffic_version:1\n"
+            "http_requests:httpRequests\n"
+            'http_requests_basis:"cloudflare-http-eyeball-requests"\n'
+        ).encode("utf-8")
+        with mock.patch.object(op, "git_blob", return_value=op.SOURCE_BLOB):
+            op.verify_source(raw)
+            for lost in (
+                b'const host = "ausmalwiese.de";',
+                b"clientRequestHTTPHost: host,",
+                b"ANALYTICS_RANGE_DAYS.has(requestedDays)",
+                b"cloudflare_traffic_version:1",
+                b"http_requests:httpRequests",
+                b'http_requests_basis:"cloudflare-http-eyeball-requests"',
+            ):
+                with self.subTest(lost=lost):
+                    with self.assertRaisesRegex(op.Blocked, "SOURCE_TRAFFIC_DRIFT"):
+                        op.verify_source(raw.replace(lost, b""))
     def test_snapshot_positive_and_upload_metadata(self):
         x = snapshot()
         self.assertEqual(op.validate_snapshot(x), x)

@@ -1,14 +1,14 @@
 {
   "schema": "rozkalns.rpi5-main.ausmalwiese-stats-worker-runtime.v1",
-  "status": "source-only-deploy-existing-recovery-ready-no-live",
+  "status": "source-only-cloudflare-traffic-repin-existing-install-replacement-blocked-no-live",
   "issue": 1118,
   "parent_issue": 996,
   "repository": "rozkalnsandris/RPi5_main",
   "application_repository": "rozkalnsandris/coloring-pages",
-  "application_commit": "e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63",
-  "application_checkout_commit": "fd31294eef9fe0a83b133d3ec9bd2036e0a29940",
+  "application_commit": "97741638b4cb52a3241533f30485c0e7529fdd82",
+  "application_checkout_commit": "97741638b4cb52a3241533f30485c0e7529fdd82",
   "worker": "coloring-pages-stats-v1",
-  "worker_blob": "c2ac9da6e0701103e0041b30db7dfbea4298f96c",
+  "worker_blob": "ccb68d7bbf12474f32e0f94d574ead1b02cd9c7e",
   "config_blob": "3733263a391274f2b6b0f2023c8656565bde8e1a",
   "account_sha256": "3239859bf3aeb05fe2ca1d41545615bf689801fa347de533cc2ece45ead98b34",
   "routes": {
@@ -214,7 +214,7 @@
   "install": {
     "confirmation": "INSTALL-AUSMALWIESE-STATS-WORKER-RUNTIME",
     "exact_rpi5_main_clean_checkout_required": true,
-    "exact_application_main_required": "fd31294eef9fe0a83b133d3ec9bd2036e0a29940",
+    "exact_application_main_required": "97741638b4cb52a3241533f30485c0e7529fdd82",
     "exact_application_worker_config_bytes_required": true,
     "application_unrelated_dirty_paths_ignored": true,
     "root_owned_targets": true,

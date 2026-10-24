@@ -9,10 +9,10 @@ deployment is what still sends `/q` to the legacy host.
 ## Frozen application provenance
 
 - repository: `rozkalnsandris/coloring-pages`
-- immutable Worker/config provenance commit: `e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63`
-- operational installer checkout commit: `fd31294eef9fe0a83b133d3ec9bd2036e0a29940`
+- immutable Worker/config provenance commit: `97741638b4cb52a3241533f30485c0e7529fdd82`
+- operational installer checkout commit: `97741638b4cb52a3241533f30485c0e7529fdd82`
 - Worker: `cloudflare/stats-worker.js`
-- Worker Git blob: `c2ac9da6e0701103e0041b30db7dfbea4298f96c`
+- Worker Git blob: `ccb68d7bbf12474f32e0f94d574ead1b02cd9c7e`
 - Wrangler config Git blob:
   `3733263a391274f2b6b0f2023c8656565bde8e1a`
 - target Worker: `coloring-pages-stats-v1`
@@ -24,6 +24,13 @@ The exact deploy core in
 provenance. It remains a pure protocol core; only the separately installed
 runtime below may provide authenticated transport.
 
+## #1200 Cloudflare-only Traffic source repin (not installed)
+
+- Application commit: `97741638b4cb52a3241533f30485c0e7529fdd82`, Worker Git blob `ccb68d7bbf12474f32e0f94d574ead1b02cd9c7e`; unchanged Wrangler config `3733263a391274f2b6b0f2023c8656565bde8e1a`.
+- New source verifier requires exact `ausmalwiese.de` host, HTTP-host filter, guarded 7/30-day ranges, `cloudflare_traffic_version:1`, HTTP Requests and its Cloudflare HTTP basis. Requests are not unique visitors or browser page views.
+- Historical predecessor remains app `e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63`, Worker blob `c2ac9da6e0701103e0041b30db7dfbea4298f96c`, and original old-release SHA-256. These are immutable predecessor evidence.
+- Existing `--upgrade-from` is launcher/release-only and rejects changed Worker or core via `upgrade_scope_drift`. Existing `--apply` rejects occupied root-owned targets. This repin cannot replace an installed package. A separately reviewed full-release replacement plus explicit LIVE authorization is required; neither is granted here.
+- Open upstream PR #369 lacks merged #368 Traffic fields. A subsequent Worker change invalidates this repin, requiring new source review. Production zone and code-byte verification remain separate protected preflight gates.
 ## Fixed installed layout
 
 A future separately authorized installation may create only:
@@ -36,8 +43,8 @@ A future separately authorized installation may create only:
 
 The source-only installer requires exact clean `RPi5_main/main`. It also
 requires the application checkout to be branch `main` at the exact operational
-checkout commit `fd31294eef9fe0a83b133d3ec9bd2036e0a29940`, while the Worker/config bytes must still
-match the immutable provenance blobs from `e6c1a4a4fa9f8a9c82dc73babd6b4a2a1bdd4d63`. The newer checkout
+checkout commit `97741638b4cb52a3241533f30485c0e7529fdd82`, while the Worker/config bytes must still
+match the immutable provenance blobs from `97741638b4cb52a3241533f30485c0e7529fdd82`. The pinned checkout
 does not change Worker/config content or widen deploy semantics; unrelated
 application working-tree changes do not widen the install scope.
 
@@ -167,7 +174,7 @@ Cloudflare's version metadata reports default-export handler names in
 `resources.script.handlers`. Those names are derived from the Worker source,
 so they are not part of the preserved runtime-settings fingerprint. For the
 exact reviewed Worker blob
-`c2ac9da6e0701103e0041b30db7dfbea4298f96c`, every provider version whose
+`ccb68d7bbf12474f32e0f94d574ead1b02cd9c7e`, every provider version whose
 main-module SHA-256 equals the reviewed candidate must report exactly the
 sorted handler set `fetch`, `scheduled`.
 
