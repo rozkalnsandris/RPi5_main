@@ -1002,7 +1002,10 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
         self.assertIn("!= APP_CHECKOUT_SHA", source)
 
     def test_full_replace_protocol_fixed_scope_and_identity(self):
-        self.assertEqual(installer.REPLACE_FROM_RELEASE, installer.OLD_RELEASE_SHA256)
+        self.assertEqual(installer.REPLACE_INSTALLED_MAIN, "dc1eb44f4f8bb24a4dba20418a91c4756d3875be")
+        self.assertEqual(installer.REPLACE_INSTALLED_LAUNCHER_BLOB, "e1e7bf859669dfc5bd1a949e78d78c76a18f42bb")
+        self.assertEqual(installer.REPLACE_FROM_RELEASE, "b91a67fb34014bf0425ab6d0e488c8239a3083738084beaa8323cd10b002f22d")
+        self.assertNotEqual(installer.REPLACE_FROM_RELEASE, installer.OLD_RELEASE_SHA256)
         self.assertEqual(len(installer.REPLACE_TARGETS), 6)
         self.assertEqual(set(installer.REPLACE_TARGETS), {
             installer.EXE, installer.PROVISION, installer.CORE,
@@ -1015,6 +1018,97 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
         self.assertNotIn("os.environ", source)
         self.assertNotIn("cloudflare.com/api", source)
         self.assertIn('parser.add_argument("--replace-from", default="")', source)
+
+
+    def test_full_replace_reconstructs_only_two_file_upgraded_predecessor(self):
+        old = {
+            path: ("500" if path in (installer.EXE, installer.PROVISION)
+                   else "400", path.encode("ascii"))
+            for path in installer.REPLACE_TARGETS
+        }
+        launcher = b"reviewed-intermediate-launcher"
+        manifest = b"reviewed-intermediate-release"
+        expected_sha = hashlib.sha256(manifest).hexdigest()
+        source = {
+            installer.LAUNCHER_REL: launcher,
+            installer.PROVISIONER_REL: old[installer.PROVISION][1],
+            installer.CORE_REL: old[installer.CORE][1],
+        }
+
+        def historical(_root, ref, rel, **kw):
+            self.assertEqual(ref, installer.REPLACE_INSTALLED_MAIN)
+            if rel == installer.LAUNCHER_REL:
+                self.assertEqual(
+                    kw["expected_blob"],
+                    installer.REPLACE_INSTALLED_LAUNCHER_BLOB,
+                )
+            return source[rel]
+
+        with (
+            mock.patch.object(installer, "predecessor_payloads", return_value=old),
+            mock.patch.object(installer, "historical", side_effect=historical),
+            mock.patch.object(installer, "release_bytes", return_value=manifest) as built,
+            mock.patch.object(installer, "REPLACE_FROM_RELEASE", expected_sha),
+        ):
+            result = installer.replace_predecessor_payloads()
+        for path in (installer.PROVISION, installer.CORE, installer.WORKER, installer.CONFIG):
+            self.assertEqual(result[path], old[path])
+        self.assertEqual(result[installer.EXE], ("500", launcher))
+        self.assertEqual(result[installer.RELEASE], ("400", manifest))
+        built.assert_called_once_with(
+            installer.REPLACE_INSTALLED_MAIN, launcher,
+            old[installer.PROVISION][1], old[installer.CORE][1],
+            old[installer.WORKER][1], old[installer.CONFIG][1],
+            app_sha=installer.OLD_APP_SHA,
+            worker_blob=installer.OLD_WORKER_BLOB,
+        )
+
+    def test_full_replace_rejects_intermediate_manifest_tamper(self):
+        old = {
+            p: ("500" if p in (installer.EXE, installer.PROVISION)
+                else "400", p.encode("ascii"))
+            for p in installer.REPLACE_TARGETS
+        }
+        def historical(_root, _ref, rel, **_kw):
+            return {
+                installer.LAUNCHER_REL: b"launcher",
+                installer.PROVISIONER_REL: old[installer.PROVISION][1],
+                installer.CORE_REL: old[installer.CORE][1],
+            }[rel]
+        with (
+            mock.patch.object(installer, "predecessor_payloads", return_value=old),
+            mock.patch.object(installer, "historical", side_effect=historical),
+            mock.patch.object(installer, "release_bytes", return_value=b"tampered"),
+        ):
+            with self.assertRaisesRegex(
+                installer.Stop, "full_replace_installed_release_mismatch"
+            ):
+                installer.replace_predecessor_payloads()
+
+    def test_full_replace_rejects_intermediate_provisioner_core_drift(self):
+        old = {
+            p: ("500" if p in (installer.EXE, installer.PROVISION)
+                else "400", p.encode("ascii"))
+            for p in installer.REPLACE_TARGETS
+        }
+        with (
+            mock.patch.object(installer, "predecessor_payloads", return_value=old),
+            mock.patch.object(installer, "historical", side_effect=[
+                b"launcher", b"changed-provisioner",
+            ]),
+            mock.patch.object(installer, "release_bytes") as built,
+        ):
+            with self.assertRaisesRegex(
+                installer.Stop, "full_replace_installed_source_drift"
+            ):
+                installer.replace_predecessor_payloads()
+            built.assert_not_called()
+
+    def test_full_replace_rejects_original_release_digest(self):
+        with self.assertRaisesRegex(
+            installer.Stop, "invalid_full_replace_predecessor"
+        ):
+            installer.replace_preflight("d" * 40, installer.OLD_RELEASE_SHA256)
 
     def test_full_replace_preflight_existing_exact_files_and_inventory(self):
         old = {path: ("500" if path in (installer.EXE, installer.PROVISION) else "400",
@@ -1033,13 +1127,13 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
             mock.patch.object(installer, "application_checkout"),
             mock.patch.object(installer, "tracked", side_effect=tracked),
             mock.patch.object(installer, "release_bytes", return_value=b"future-release"),
-            mock.patch.object(installer, "predecessor_payloads", return_value=old),
+            mock.patch.object(installer, "replace_predecessor_payloads", return_value=old),
             mock.patch.object(installer, "parents_preflight"),
             mock.patch.object(installer, "installed_exact") as exact,
             mock.patch.object(installer, "sudo_read", side_effect=sudo_read) as read,
             mock.patch.object(installer, "invoke", side_effect=invoke) as calls,
         ):
-            result = installer.replace_preflight("d" * 40, installer.OLD_RELEASE_SHA256)
+            result = installer.replace_preflight("d" * 40, installer.REPLACE_FROM_RELEASE)
             self.assertEqual(len(result), 6)
             self.assertEqual(exact.call_count, 6)
             self.assertEqual(calls.call_count, 8)  # root symlink + inventory sudo-l + six sudo-l
@@ -1055,14 +1149,14 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
             mock.patch.object(installer, "application_checkout"),
             mock.patch.object(installer, "tracked", return_value=b"candidate"),
             mock.patch.object(installer, "release_bytes", return_value=b"manifest"),
-            mock.patch.object(installer, "predecessor_payloads", return_value=old),
+            mock.patch.object(installer, "replace_predecessor_payloads", return_value=old),
             mock.patch.object(installer, "parents_preflight"),
             mock.patch.object(installer, "sudo_read", side_effect=sudo_read),
             mock.patch.object(installer, "invoke", return_value=mock.Mock(returncode=0)) as invoked,
             mock.patch.object(installer, "write_once") as dispatched,
         ):
             with self.assertRaisesRegex(installer.Stop, "full_replace_root_untrusted"):
-                installer.replace_full("d" * 40, installer.OLD_RELEASE_SHA256)
+                installer.replace_full("d" * 40, installer.REPLACE_FROM_RELEASE)
             dispatched.assert_not_called()
             self.assertEqual(invoked.call_count, 1)
 
@@ -1080,7 +1174,7 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
             mock.patch.object(installer, "post_verify") as verified,
         ):
             with self.assertRaisesRegex(installer.Stop, "post_dispatch_unknown_state"):
-                installer.replace_full("d" * 40, installer.OLD_RELEASE_SHA256)
+                installer.replace_full("d" * 40, installer.REPLACE_FROM_RELEASE)
             self.assertEqual(calls, list(installer.REPLACE_TARGETS[:3]))
             verified.assert_not_called()
 
@@ -1092,7 +1186,7 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
             mock.patch.object(installer, "write_once") as dispatched,
             mock.patch.object(installer, "post_verify") as verified,
         ):
-            installer.replace_full("d" * 40, installer.OLD_RELEASE_SHA256)
+            installer.replace_full("d" * 40, installer.REPLACE_FROM_RELEASE)
             self.assertEqual(dispatched.call_count, 6)
             self.assertEqual([a.args[0][-1] for a in dispatched.call_args_list],
                              list(installer.REPLACE_TARGETS))
@@ -1106,7 +1200,7 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
             mock.patch.object(installer, "application_checkout"),
             mock.patch.object(installer, "tracked", return_value=b"data"),
             mock.patch.object(installer, "release_bytes", return_value=b"release"),
-            mock.patch.object(installer, "predecessor_payloads", return_value=candidate),
+            mock.patch.object(installer, "replace_predecessor_payloads", return_value=candidate),
             mock.patch.object(installer, "parents_preflight"),
             mock.patch.object(installer, "sudo_read", side_effect=lambda args, **k:
                 "0:0:700:directory" if args[0] == installer.STAT else
@@ -1117,7 +1211,7 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
             mock.patch.object(installer, "write_once") as dispatched,
         ):
             with self.assertRaisesRegex(installer.Stop, "full_replace_inventory_drift"):
-                installer.replace_full("d" * 40, installer.OLD_RELEASE_SHA256)
+                installer.replace_full("d" * 40, installer.REPLACE_FROM_RELEASE)
             exact.assert_not_called()
             dispatched.assert_not_called()
 
@@ -1180,7 +1274,7 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
             mock.patch.object(installer, "application_checkout"),
             mock.patch.object(installer, "tracked", return_value=b"synthetic"),
             mock.patch.object(installer, "release_bytes", return_value=b"manifest"),
-            mock.patch.object(installer, "predecessor_payloads", return_value=old),
+            mock.patch.object(installer, "replace_predecessor_payloads", return_value=old),
             mock.patch.object(installer, "parents_preflight"),
             mock.patch.object(installer, "sudo_read", side_effect=lambda args, **kw:
                 "0:0:700:directory" if args[0] == installer.STAT
@@ -1190,7 +1284,7 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
             mock.patch.object(installer, "write_once") as written,
         ):
             with self.assertRaisesRegex(installer.Stop, "sudo_exact_full_replace_not_allowed"):
-                installer.replace_full("d" * 40, installer.OLD_RELEASE_SHA256)
+                installer.replace_full("d" * 40, installer.REPLACE_FROM_RELEASE)
             self.assertEqual(checked.call_count, 6)
             written.assert_not_called()
 
@@ -1198,14 +1292,14 @@ class StatsWorkerRuntimeTests(unittest.TestCase):
         with mock.patch.object(installer, "replace_full") as apply:
             status = installer.main([
                 "--expected-main", "d" * 40,
-                "--replace-from", installer.OLD_RELEASE_SHA256, "--apply",
+                "--replace-from", installer.REPLACE_FROM_RELEASE, "--apply",
             ])
             self.assertEqual(status, 3)
             apply.assert_not_called()
         with mock.patch.object(installer, "replace_full") as apply:
             status = installer.main([
                 "--expected-main", "d" * 40,
-                "--replace-from", installer.OLD_RELEASE_SHA256, "--apply",
+                "--replace-from", installer.REPLACE_FROM_RELEASE, "--apply",
                 "--confirm", installer.REPLACE_CONFIRM,
                 "--upgrade-from", installer.OLD_LAUNCHER_BLOB,
             ])
