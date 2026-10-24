@@ -63,10 +63,57 @@ install paths/ownership, proof that the historical failed state is retained,
 dry-run-free synthetic validation, and a new-event acceptance plan that does
 not induce a production failure. Both unit files and the helper need an
 independently reviewed controlled install route; this PR does **not** provide
-a privileged installer or authorization to use an ad hoc copy.
+an authorization to use an ad hoc copy. The separately gated installer
+source is defined in the continuation below.
 Changing systemd state, `daemon-reload`, an actual Telegram send, service
 restart, timer trigger, `reset-failed`, reboot or any protected runtime
 inspection remains outside the source authorization.
 
 Issue #1087 must stay open until its separate operational acceptance is
 recorded. The accepted historical failed state must not be hidden.
+
+
+## Bounded installer source (#1087 continuation)
+
+`scripts/install-weather-v7-failure-telegram.py` and
+`ops/deploy/weather-v7-failure-telegram-install-v1.json` define the
+exact prospective operation. **Source delivery does not authorize runtime
+preflight, credential inspection, or LIVE mutation.** Do not execute this
+installer against RPi5 until fresh owner permission covers the exact action.
+
+The command modes are intentionally distinct. The required SHA must bind a
+**fresh verified merged main SHA**; it is never a standing authorization:
+
+- Default `--expected-main-sha SHA`: offline source-only check of a
+  clean canonical `main` checkout, expected Git origin, tracked
+  source contents, boot-only timer, and exact target contract. No host read.
+- `--host-preflight --expected-main-sha SHA`: separately authorized
+  host read-only proof; exact old caller service contents, caller binary and
+  timer identities; fixed root-owned target paths; two separately provisioned
+  credential **file metadata only** (root:root 0600, never contents); and
+  preserved accepted Sep-30 failed/78 state.
+- `--apply --expected-main-sha SHA`: only under separate explicit
+  owner LIVE authorization and root access. The first write consumes that
+  authorization. Creates exactly the fixed notifier executable and unit,
+  creates a fixed temporary caller-unit candidate then atomically replaces
+  exactly that legacy caller service unit, and executes one
+  `systemctl daemon-reload`. Afterwards, verify only exact artifact
+  hashes and preserved failed/78 status. **No start, timer change, reboot,
+  reset-failed, notification send, secret creation, cleanup, retry or rollback.**
+
+The operator must first independently provide **purpose-specific notifier
+credentials** to the two reviewed fixed `/etc/credstore/` paths
+under a *different* explicit owner permission for secrets/credentials;
+this installer neither derives nor reuses the balcony bot's tokens.
+The installer intentionally fails closed if those files are absent. It does
+not silently add credentials or promote source readiness to LIVE readiness.
+
+**LIVE sequencing caution:** the future authorization must cover installing
+two new files, one fixed staging file and atomic replacement of the caller
+unit, plus one daemon reload and bounded metadata verification. Check
+current main, required exact-main CI, installed previous unit hash,
+caller/timer state and local source provenance **before** any write.
+If any mutation fails or outcome becomes uncertain, STOP with only narrowly
+allowed read-only evidence; no automated cleanup or second attempt. An
+OnFailure hook can send on a *future* new failure; no production failure
+is induced as a test. No public notification delivery is proven by this PR.

@@ -1,0 +1,62 @@
+{
+  "schema": "rozkalns.rpi5-main.weather-v7-failure-telegram-install.v1",
+  "repository": "rozkalnsandris/RPi5_main",
+  "issue": 1087,
+  "state": "SOURCE_ONLY_NO_LIVE",
+  "authorization": "STRICT_SEPARATE_EXACT_OWNER_LIVE_REQUIRED",
+  "source_check_default": true,
+  "host_preflight_explicit": true,
+  "apply_requires_root": true,
+  "apply_requires_separate_live_authorization": true,
+  "source_sha_required": "40-hex exact current main; branch main clean and origin exact",
+  "installed_targets": {
+    "/usr/local/libexec/rozkalns-weather-v7-failure-telegram": "0755",
+    "/etc/systemd/system/rozkalns-weather-v7-failure-telegram.service": "0644",
+    "/etc/systemd/system/rozkalns-weather-operator-v7-dispatch-caller.service": "0644"
+  },
+  "fixed_staging_target": "/etc/systemd/system/.rozkalns-weather-operator-v7-dispatch-caller.service.1087-candidate",
+  "existing_unit_predecessor": "installed original caller service must equal current source minus exact one OnFailure line",
+  "existing_timer": "boot-only timer must byte-match current source; never replace timer",
+  "existing_caller_executable": "must byte-match current source; never replace",
+  "historical_failed_state": {
+    "unit": "rozkalns-weather-operator-v7-dispatch-caller.service",
+    "active": "failed",
+    "result": "exit-code",
+    "exec_main_status": 78,
+    "exit_timestamp": "Wed 2026-09-30 21:55:22 CEST",
+    "accepted": true,
+    "reset_failed_authorized": false
+  },
+  "credentials": {
+    "files": [
+      "/etc/credstore/weather-v7-failure-telegram-token",
+      "/etc/credstore/weather-v7-failure-telegram-chat-id"
+    ],
+    "preprovisioned_metadata": "root:root 0600 regular; 1..256 bytes",
+    "values_inspected": false,
+    "values_written": false,
+    "provisioning_requires_separate_owner_authorization": true
+  },
+  "allowed_when_separately_authorized": [
+    "create the exact new notifier executable",
+    "create the exact new notifier unit",
+    "create one exact fixed staging file and atomically replace caller service unit",
+    "systemctl daemon-reload",
+    "bounded read-only post-install identity and historical state verification"
+  ],
+  "forbidden": [
+    "automatic retries or cleanup or rollback",
+    "restart or start caller or notifier",
+    "timer reload or re-enable or reconfigure",
+    "reset-failed",
+    "reboot",
+    "Telegram send or network test",
+    "credential contents or provisioning",
+    "global failed-unit scanner",
+    "environment or secret access",
+    "runtime deployment"
+  ],
+  "source_merge_authorizes_live": false,
+  "source_merge_proves_runtime_readiness": false,
+  "future_host_verification_and_live_owner_gate_required": true
+}
