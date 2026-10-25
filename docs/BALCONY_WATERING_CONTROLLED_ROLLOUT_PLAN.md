@@ -6,7 +6,7 @@ Issue: #986. Source contract: [BALCONY_WATERING_CONTRACT.md](BALCONY_WATERING_CO
 
 Use the **existing ESP32 → MQTT → Home Assistant → Hermes** control chain and one cold-season controller. Do not add a new broker, daemon, scheduler, parallel watering controller, device firmware or WeatherNext dependency to solve the seasonal change.
 
-The selected *candidate* is `ops/bin/balcony-watering-autumn`: 11 active flowers (1, 3–10, 12 and 13), a minimum dry-sensor quorum, frost forecast guard, at most one 45 s candidate cycle per day and switch-state-confirmed ON/OFF. These are **source properties, not observed live-device behavior**. The device-side 180 s hard limit remains independent.
+The selected *candidate* is `ops/bin/balcony-watering-autumn`: 10 active flowers (1, 3–10 and 12), a minimum dry-sensor quorum, frost forecast guard, at most one 45 s candidate cycle per day and switch-state-confirmed ON/OFF. These are **source properties, not observed live-device behavior**. The device-side 180 s hard limit remains independent.
 
 Historical read-only evidence showed three enabled private Hermes jobs: 07:00 and 23:00 invoked `laistisana_2x.sh`; 14:00 invoked `laistisana_2x_karstums.sh`. The historical primary script used the superseded 14-sensor gate. This evidence is **not current authority to modify those jobs**. Their identity, state, schedule and script bindings must be freshly re-proven.
 
@@ -17,7 +17,7 @@ Historical read-only evidence showed three enabled private Hermes jobs: 07:00 an
 1. Obtain fresh canonical `RPi5_main/main`, `AGENTS.md`, the autumn contract, open PRs/reviews and exact-head CI.
 2. Resolve the source policy of [PR #977](https://github.com/rozkalnsandris/RPi5_main/pull/977), which is open at plan creation: whether missing active moisture sensors **block** the run (the current merged source) or are **presumed wet** and excluded from confirmed dry counts (the proposed change), and whether results go to the RPi5 notifications bot or the balcony bot via Home Assistant MQTT. **Choose one reviewed, merged implementation; do not mix the two.** An explicit owner decision to use the current merged source is also acceptable if the open PR remains unmerged.
 3. Freeze one full **merged Git SHA** and the SHA-256 of the exact `ops/bin/balcony-watering-autumn` bytes. Verify all repository-required CI and review gates for that release. Never use an unmerged PR HEAD for LIVE.
-4. Freeze the candidate configuration contract: 11 active sensors, default dry quorum 2, wet guard 9, frost threshold 2.0 °C with forecast required, one daily decision, at most one 45 s candidate cycle, and the 180 s firmware boundary. Treat changes to any of these as a **new owner decision**, not a silent rollout detail.
+4. Freeze the candidate configuration contract: 10 active sensors, default dry quorum 2, wet guard 8, frost threshold 2.0 °C with forecast required, one daily decision, at most one 45 s candidate cycle, and the 180 s firmware boundary. Treat changes to any of these as a **new owner decision**, not a silent rollout detail.
 5. Confirm the selected season and notification destination with the owner. If winter watering is not wanted, **STOP** rather than automatically activating a different schedule.
 
 Discovery baseline on 2026-10-12: `main` `86c2a1917f39717632de73fcc575596ff2865f84`. This is **not** a frozen future rollout SHA.
@@ -33,7 +33,7 @@ Required report fields:
 - actual **referenced and resolved** live file identity for `laistisana_2x.sh` and `laistisana_2x_karstums.sh`: owner/type/mode/size, one-link and symlink check, SHA-256 and sensor-gate/switch-confirmation classification;
 - if the selected autumn controller already exists, its exact target identity, mode/owner/hash and whether another schedule invokes it; refuse an ambiguous or conflicting install target;
 - protected-runtime capability metadata only: availability of `HASS_URL`, `HASS_TOKEN`, weather entity, necessary notification transport and writable state/lock/log directories, **without exposing values or credential paths**;
-- read-only HA/ESP32 status evidence as separately authorized: relevant 11 entity availability, weather/frost forecast usability, MQTT/HA health and software-reported pump state. Software `off` is **not independent physical current/flow evidence**;
+- read-only HA/ESP32 status evidence as separately authorized: relevant 10 entity availability, weather/frost forecast usability, MQTT/HA health and software-reported pump state. Software `off` is **not independent physical current/flow evidence**;
 - time-window safety: no watering run currently executing, no concurrent scheduler/owner manual start and adequate margin before the next existing scheduled trigger; confirm the 11:00 job will mean the intended local clock time.
 
 Any missing, inconsistent or unreadable binding => **BLOCKED before mutation**. Historic SHA, past dry-run or GitHub merge is insufficient.

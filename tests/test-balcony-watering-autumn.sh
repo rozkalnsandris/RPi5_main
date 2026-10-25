@@ -77,8 +77,8 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 mode = sys.argv[1]
-active = [1] + list(range(3, 11)) + [12, 13]
-retired = [2, 11, 14, 15]
+active = [1] + list(range(3, 11)) + [12]
+retired = [2, 11, 13, 14, 15]
 soon = (datetime.now(timezone.utc) + timedelta(hours=6)).replace(microsecond=0).isoformat()
 target = 1 if mode == "active_dry_unavailable" else 5
 dry = [1, 3, 7]
@@ -107,7 +107,7 @@ for i in active:
 
 if mode in ("retired", "retired_dry", "retired_only"):
     for i in retired:
-        state = "sauss" if mode == "retired_dry" and i == 11 else "unavailable"
+        state = "sauss" if mode == "retired_dry" and i in (11, 13) else "unavailable"
         states.append({"entity_id": "sensor.balkona_laistisana_puke_%d" % i, "state": state})
 
 weather = {"entity_id": "weather.forecast_home", "state": "cloudy", "attributes": {"temperature": float(os.environ.get("MOCK_TEMP", "11.5")), "forecast": [{"datetime": soon, "templow": float(os.environ.get("MOCK_FORECAST_ATTR_MIN", "6.0"))}]}}
@@ -123,7 +123,7 @@ import json
 import sys
 
 mode = sys.argv[1]
-active = [1] + list(range(3, 11)) + [12, 13]
+active = [1] + list(range(3, 11)) + [12]
 dry = [1, 3, 7]
 states = [{"entity_id": "sensor.balkona_laistisana_puke_%d" % i,
            "state": "sauss" if i in dry else "mitrs"} for i in active]
@@ -230,17 +230,18 @@ bash -n "$autumn"
 if grep -Ev '^[[:space:]]*#' "$autumn" | grep -q 'last_updated'; then
     fail "runtime code must not depend on last_updated"
 fi
-# retired flowers 2/11/14/15 must never appear in the required sensor set
+# retired flowers 2/11/13/14/15 must never appear in the required sensor set
 ! grep -qE 'ACTIVE_SENSORS=\(.*[^0-9]2[^0-9].*\)' "$autumn" || fail "retired flower 2 must not be active"
 ! grep -qE 'ACTIVE_SENSORS=\(.*1[45].*\)' "$autumn" || fail "retired flowers 14/15 must not be active"
-grep -qF 'ACTIVE_SENSORS=(1 3 4 5 6 7 8 9 10 12 13)' "$autumn" || fail "retired flower 11 cannot be active"
+grep -qF 'ACTIVE_SENSORS=(1 3 4 5 6 7 8 9 10 12)' "$autumn" || fail "retired flowers 11 and 13 cannot be active"
 # the ESP32 hard limit must not be raised
 grep -q 'ESP32_MAX_SECONDS=180' "$autumn" || fail "ESP32 180 s hard limit must be preserved"
+grep -q 'MAX_MOIST="${BALCONY_MAX_MOIST_SENSORS:-8}"' "$autumn" || fail "10-sensor wet guard must remain 8"
 
 export MOCK_ON_CODE=200 MOCK_OFF_CODE=200 MOCK_ON_APPLY=1 MOCK_OFF_APPLY=1
 export MOCK_SWITCH_STATE_MODE=valid MOCK_FORECAST_SERVICE_MODE=ok MOCK_FORECAST_MIN=4.0
 
-# 1: three dry pots of eleven, mild night => one confirmed cycle, one message,
+# 1: three dry pots of ten, mild night => one confirmed cycle, one message,
 # and the day marker is written.
 export MOCK_SENSOR_MODE=valid
 reset_run
@@ -250,26 +251,27 @@ grep -qF 'NOTIFY-MQTT: submitted to balcony bot bridge' "$logfile" || fail "case
 assert_actions 'on,off'
 assert_tg_count 1
 assert_tg_contains 'Laistīts: 45 s'
-assert_tg_contains 'sausi 3/11 sensori (1,3,7)'
+assert_tg_contains 'sausi 3/10 sensori (1,3,7)'
 [[ -f "$tmp/state/last-watered" ]] || fail "case 1 must record the watering date"
 [[ "$(cat "$tmp/state/last-watered")" == "$(TZ=Europe/Berlin date '+%Y-%m-%d')" ]] || fail "case 1 recorded an unexpected date"
 
-# 2: retired sensors 2/11/14/15 unavailable never block and never count as dry.
+# 2: retired sensors 2/11/13/14/15 unavailable never block and never count as dry.
 export MOCK_SENSOR_MODE=retired
 reset_run
 run_autumn
 [[ "$rc" -eq 0 ]] || fail "case 2 expected exit 0, got ${rc}"
 assert_actions 'on,off'
-assert_tg_contains 'sausi 3/11 sensori'
+assert_tg_contains 'sausi 3/10 sensori'
 
-# 2b: stale retained flower 11 'sauss' must not change quorum or fallback.
+# 2b: stale retained flowers 11 and 13 'sauss' must not change quorum or fallback.
 export MOCK_SENSOR_MODE=retired_dry
 reset_run
 run_autumn
 [[ "$rc" -eq 0 ]] || fail "case 2b expected exit 0, got ${rc}"
 assert_actions 'on,off'
-assert_tg_contains 'sausi 3/11 sensori'
+assert_tg_contains 'sausi 3/10 sensori'
 ! grep -qF 'nav pieejami sensori: 11' "$logfile" || fail 'retired flower 11 cannot be a fallback'
+! grep -qF 'nav pieejami sensori: 13' "$logfile" || fail 'retired flower 13 cannot be a fallback'
 
 # 3: one missing/unavailable/unknown active sensor is counted as moist,
 # explicitly marked as assumed, and does not suppress watering with three dry.
@@ -314,7 +316,7 @@ run_autumn
 assert_actions ''
 assert_tg_count 1
 assert_tg_contains 'Nav laistīts'
-assert_tg_contains 'nav pieejami sensori: 1,3,4,5,6,7,8,9,10,12,13 (pieņemti mitri)'
+assert_tg_contains 'nav pieejami sensori: 1,3,4,5,6,7,8,9,10,12 (pieņemti mitri)'
 [[ -f "$tmp/state/last-watered" ]] && fail 'case 3c must not mark watering'
 
 # 4: Home Assistant transport and JSON failures fail closed with a message.
@@ -338,7 +340,7 @@ run_autumn
 assert_actions ''
 assert_tg_count 1
 assert_tg_contains 'Nav laistīts'
-assert_tg_contains 'sausi tikai 1/11 sensori (vajag vismaz 2)'
+assert_tg_contains 'sausi tikai 1/10 sensori (vajag vismaz 2)'
 [[ -f "$tmp/state/last-watered" ]] && fail "case 5 must not record a watering"
 
 # 6: an already wet tray is left alone and reports no watering.
@@ -348,7 +350,7 @@ run_autumn
 assert_actions ''
 assert_tg_count 1
 assert_tg_contains 'Nav laistīts'
-assert_tg_contains 'sausi tikai 0/11 sensori (vajag vismaz 2)'
+assert_tg_contains 'sausi tikai 0/10 sensori (vajag vismaz 2)'
 
 # 7: frost risk blocks watering and reports itself.
 export MOCK_SENSOR_MODE=valid
