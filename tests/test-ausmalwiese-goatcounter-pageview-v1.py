@@ -268,8 +268,8 @@ class RuntimeProofSourceTests(unittest.TestCase):
             ROOT / "scripts/ausmalwiese_goatcounter_isolated_probe_v1.py"
         ).read_text(encoding="utf-8")
         self.assertNotIn("urlretrieve(", source)
-        self.assertNotIn("subprocess.run(["curl"", source)
-        self.assertNotIn("subprocess.run(["wget"", source)
+        self.assertNotIn('subprocess.run(["curl"', source)
+        self.assertNotIn('subprocess.run(["wget"', source)
         self.assertNotIn("/srv/coloring-pages-content", source)
         self.assertNotIn("/var/lib/ausmalwiese-goatcounter", source)
         self.assertIn('dir="/tmp"', source)
