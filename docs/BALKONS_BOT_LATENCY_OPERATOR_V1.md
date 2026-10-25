@@ -27,7 +27,7 @@ require a separate update/reconciliation design; no overwrites.
 
 Revision #1230 keeps that initial-install boundary and strengthens the tracked
 overlay: the two non-secret manual-watering policy values are fixed to
-`BALCONY_SAFETY_STATE_FILE=/home/andris/.local/state/balcony-watering-autumn/manual-safety-v1.json`
+`BALCONY_SAFETY_STATE_FILE=~/.local/state/balcony-watering-autumn/manual-safety-v1.json`
 and `BALCONY_SAFETY_STATE_MAX_AGE_SECONDS=21600`. `EnvironmentFile` and
 `PassEnvironment` stay reset. The non-root deploy verifier requires the exact
 mapping before either CHECK can return READY or VERIFY can return PASS.
