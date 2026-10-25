@@ -119,13 +119,13 @@ class SyntheticGoatCounterFixture(unittest.TestCase):
 
     def test_unexpected_second_user_rejected(self):
         self.mutate(
-            "INSERT INTO users VALUES(6, 1, 'extra@example.invalid')"
+            "INSERT INTO users VALUES(6, 1, 'extra@example.com')"
         )
         self.assert_stops("SYNTHETIC_USER_SCOPE")
 
     def test_unexpected_user_identity_rejected(self):
         self.mutate(
-            "UPDATE users SET email='visitor@example.invalid'"
+            "UPDATE users SET email='visitor@example.com'"
         )
         self.assert_stops("SYNTHETIC_USER_SCOPE")
 
