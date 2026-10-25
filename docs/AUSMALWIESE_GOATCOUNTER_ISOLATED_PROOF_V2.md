@@ -34,7 +34,21 @@ lifecycle could also remove the private fixture while unwinding a failure.
 That made the failure safe but insufficiently diagnostic and did not preserve
 failure evidence.
 
-No retry of that runtime proof is part of #1228.
+No retry of that runtime proof was part of #1228.
+
+A later separately authorized v2 proof then localized the next failure to:
+
+```text
+GOATCOUNTER_ISOLATED=STOP CODE=SYNTHETIC_API_TOKEN_CREATE_FAILED
+```
+
+Pinned v2.7.0 source review showed that the inherited v1 setup passed a plain
+email to `db create apitoken -user=...`. The upstream command first accepts
+an email while resolving `site_id`, but then calls `User.Find()`, whose
+non-numeric form expects a different selector shape. The canonical v2 operator
+therefore reads the one synthetic numeric `user_id` from its private
+isolated SQLite fixture and passes only that numeric ID to the API-token CLI
+step. The ID is never printed or returned.
 
 ## Reused v1 security boundary
 
@@ -45,7 +59,7 @@ v2 imports and reuses the already reviewed v1 implementation for:
 - non-root `rpi5`/Linux/arm64 host guard;
 - isolated environment construction;
 - `version -json` build-profile validation;
-- synthetic site/token database setup logic;
+- synthetic site creation and post-setup privacy configuration;
 - loopback-only server readiness;
 - the exact two synthetic `0427183` count submissions;
 - one-transmission HTTP behavior with proxies and redirects disabled;
@@ -57,8 +71,10 @@ credential source, service mutation, Cloudflare operation or retry path.
 
 ## Stage-specific setup diagnostics
 
-v2 temporarily replaces only the v1 synthetic setup runner while v1's
-`_make_site` function executes. Non-zero exits, execution errors and timeouts
+v2 executes the three synthetic setup stages directly with the same
+stage-specific runner. After synthetic site/user creation it reads exactly one
+matching synthetic `user_id` from the private fixture and uses that numeric
+selector for API-token creation. Non-zero exits, execution errors and timeouts
 map to one stable code according to the attempted setup stage:
 
 | Synthetic stage | Stable code |
@@ -73,7 +89,9 @@ An unexpected setup command fails closed as
 For every setup command, stdin is disabled and stdout/stderr are sent to
 `DEVNULL`. The operator never includes raw GoatCounter output, generated
 synthetic credential values, SQLite rows or fixture paths in the failure code.
-The original v1 runner is restored even when setup raises.
+The selector lookup itself fails closed as `SYNTHETIC_DATABASE_SETUP` unless
+exactly one positive integer synthetic user ID matches the fixed synthetic
+email. No selector value is included in operator output.
 
 ## Failure evidence lifecycle
 
