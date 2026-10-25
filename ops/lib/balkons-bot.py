@@ -189,7 +189,7 @@ def _manual_watering_admission(now_epoch: int | None = None) -> tuple[bool, str]
     if not raw_path or max_age_s is None:
         return False, "RPi5 drošības stāvoklis nav konfigurēts"
 
-    path = Path(raw_path)
+    path = Path(raw_path).expanduser()
     try:
         if path.is_symlink() or not path.is_file():
             return False, "RPi5 drošības stāvoklis nav pieejams"
