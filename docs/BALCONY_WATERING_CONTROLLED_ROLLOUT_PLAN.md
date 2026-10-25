@@ -24,7 +24,9 @@ Discovery baseline on 2026-10-12: `main` `86c2a1917f39717632de73fcc575596ff2865f
 
 ## Gate 1 — sanitized read-only production preflight (separate scoped authority)
 
-Collect only **derived allowlisted evidence** from the private Hermes scheduler and actual script target. Do not print/store raw job JSON, job prompts, commands, paths, logs, environment, HA credentials, MQTT payloads or Telegram IDs in Git, issues or chat.
+Run the reviewed `ops/bin/balcony-watering-hermes-preflight` against the current per-user Hermes cron store under a separately scoped read-only authorization. The preflight reads the bounded store but emits only schedule/binding classes and fingerprints. Do not print/store raw job JSON, job prompts, commands, private paths, logs, environment, HA credentials, MQTT payloads or Telegram IDs in Git, issues or chat.
+
+A PASS requires exactly one enabled/local recognized legacy watering job at 07:00, 14:00 and 23:00 and no extra watering candidate. Any existing 11:00/autumn job is a material reconciliation input and blocks an initial-create operator until its exact sanitized classification is reviewed. The unrelated-job definition fingerprint is part of the later preservation baseline.
 
 Required report fields:
 
@@ -36,11 +38,13 @@ Required report fields:
 - read-only HA/ESP32 status evidence as separately authorized: relevant 10 entity availability, weather/frost forecast usability, MQTT/HA health and software-reported pump state. Software `off` is **not independent physical current/flow evidence**;
 - time-window safety: no watering run currently executing, no concurrent scheduler/owner manual start and adequate margin before the next existing scheduled trigger; confirm the 11:00 job will mean the intended local clock time.
 
-Any missing, inconsistent or unreadable binding => **BLOCKED before mutation**. Historic SHA, past dry-run or GitHub merge is insufficient.
+Any missing, duplicate, inconsistent, unreadable or unrecognized binding => **BLOCKED before mutation**. Historic SHA, past dry-run or GitHub merge is insufficient. A PASS from the schedule sanitizer still does not authorize mutation; it supplies the exact evidence needed to review the later fixed-target operator.
 
-## Gate 2 — exact one-shot LIVE envelope (new explicit owner authorization)
+## Gate 2 — reviewed operator, then exact one-shot LIVE envelope
 
-A later owner authorization must name **host, merged SHA, immutable source hash, exact private target classes, expected baseline fingerprints, scheduled-job identities, permitted writes, recovery boundary, and hard exclusions**. Source merge/this plan grants none of those permissions.
+Gate 1 comes first. Do not design the final scheduler mutation by guessing the private Hermes record shape. Current Hermes cron lifecycle changes must go through reviewed Hermes cron CLI/API operations; direct `jobs.json` patching is not an accepted apply mechanism. If the selected 11:00 design uses a script-only job, the reviewed operator must also bind the exact Hermes-managed script location and prove how the existing protected Home Assistant runtime inputs reach that script without copying credentials into Git or ordinary argv/environment.
+
+Only after those facts are frozen may a later owner authorization name **host, merged SHA, immutable source hash, exact private target classes, expected baseline fingerprints, scheduled-job identities, permitted Hermes lifecycle operations, recovery boundary, and hard exclusions**. Source merge/this plan grants none of those permissions.
 
 The reviewed one-shot intent (not implemented by this document) is:
 
@@ -74,5 +78,5 @@ Three identical failed operation attempts require STOP and failure-layer analysi
 
 - Offline regression is already part of `make validate`: `tests/test-balcony-watering.sh` and `tests/test-balcony-watering-autumn.sh` use mocked network/pump paths. CI establishes source correctness, **not host adoption**.
 - This plan intentionally adds **no executable installer, scheduler editor, private binding, secrets, live config, new service, or actuator command**.
-- **Current result: READY for source review; BLOCKED for LIVE** until Gate 0 owner release choice, fresh Gate 1 read-only evidence and a reviewed fixed-target executor/recovery envelope exist.
+- **Current result: READY for source review; BLOCKED for LIVE** until the release choice is current, the #1230 safety-state binding/source preflight is merged, fresh Gate 1 projection evidence is collected, and a separate reviewed fixed-target Hermes CLI/API executor/recovery envelope is produced from that evidence.
 - Only after a separate **MERGE** decision for this plan may a future bounded **COMPOSITE LIVE** request be prepared. Neither merge nor source checks authorize runtime action.
