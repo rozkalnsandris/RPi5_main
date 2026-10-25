@@ -289,7 +289,7 @@ class BalkonsBotDeployVerifierTests(unittest.TestCase):
         self.assertEqual(environment, verifier.EXPECTED_ENVIRONMENT_LINES)
         self.assertIn(
             "Environment=BALCONY_SAFETY_STATE_FILE="
-            "/home/andris/.local/state/balcony-watering-autumn/manual-safety-v1.json",
+            "~/.local/state/balcony-watering-autumn/manual-safety-v1.json",
             lines,
         )
         self.assertIn("Environment=BALCONY_SAFETY_STATE_MAX_AGE_SECONDS=21600", lines)
