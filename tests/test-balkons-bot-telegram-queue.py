@@ -169,6 +169,25 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(published, [(("balkons/cmd", "laist"), {})])
         self.assertEqual(outbound.qsize(), 0)
 
+    def test_manual_watering_expands_neutral_home_safety_path(self):
+        ns, outbound, published, _ = self.bridge()
+        with tempfile.TemporaryDirectory() as home:
+            state_dir = Path(home) / ".local/state/balcony-watering-autumn"
+            state_dir.mkdir(parents=True)
+            self._write_safety(state_dir)
+            with unittest.mock.patch.dict(
+                os.environ,
+                {
+                    "HOME": home,
+                    "BALCONY_SAFETY_STATE_FILE":
+                        "~/.local/state/balcony-watering-autumn/manual-safety-v1.json",
+                },
+                clear=False,
+            ):
+                ns["handle_command"]("/laist")
+        self.assertEqual(published, [(("balkons/cmd", "laist"), {})])
+        self.assertEqual(outbound.qsize(), 0)
+
     def test_manual_watering_blocks_frost_stale_and_missing_state(self):
         ns, outbound, published, _ = self.bridge()
         with tempfile.TemporaryDirectory() as directory:

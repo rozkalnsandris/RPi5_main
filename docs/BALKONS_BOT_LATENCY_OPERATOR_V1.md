@@ -25,6 +25,13 @@ source file, shell command or external executable path as an argument. Both
 forward destinations must be absent, including symlinks. Existing deployments
 require a separate update/reconciliation design; no overwrites.
 
+Revision #1230 keeps that initial-install boundary and strengthens the tracked
+overlay: the two non-secret manual-watering policy values are fixed to
+`BALCONY_SAFETY_STATE_FILE=~/.local/state/balcony-watering-autumn/manual-safety-v1.json`
+and `BALCONY_SAFETY_STATE_MAX_AGE_SECONDS=21600`. `EnvironmentFile` and
+`PassEnvironment` stay reset. The non-root deploy verifier requires the exact
+mapping before either CHECK can return READY or VERIFY can return PASS.
+
 ## Authorization — a CLI switch is NOT permission
 
 An RPi5 run requires a fresh, independently authorized owner LIVE decision.
@@ -73,10 +80,11 @@ The operator requires **root** for its bounded metadata checks; it runs the
 existing deploy verifier as **andris/non-root** with only fixed arguments.
 That verifier must return READY, preserve five encrypted-credential *metadata*
 checks and the accepted historic source **hash-only** boundary, confirm
-service/lifecycle/K10 metadata, and return no evidence of credential content
-being read or hashed. Raw protected service configuration, ciphertext objects,
-legacy source bytes and process secrets are never copied to Git, backups,
-terminal output or the new recovery marker.
+service/lifecycle/K10 metadata, require the exact #1230 safety-state environment
+mapping, and return no evidence of credential content being read or hashed. Raw
+protected service configuration, ciphertext objects, legacy source bytes and
+process secrets are never copied to Git, backups, terminal output or the new
+recovery marker.
 
 Example *syntax only*, **not an authorization or ready-to-run command**:
 

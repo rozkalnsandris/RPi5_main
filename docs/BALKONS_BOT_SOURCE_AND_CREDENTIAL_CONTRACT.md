@@ -70,10 +70,19 @@ provides five credential files through `$CREDENTIALS_DIRECTORY`:
 The bot reads those files directly. Credential contents are never accepted via
 process argv and are never copied into dedicated secret environment variables.
 Credential values remain reachable only through systemd's directory locator,
-`CREDENTIALS_DIRECTORY`. The bot may also read two **non-secret** policy
-settings: `BALCONY_SAFETY_STATE_FILE` (the local safety JSON path) and
-`BALCONY_SAFETY_STATE_MAX_AGE_SECONDS` (default six hours). Neither carries
-a credential or Home Assistant authority.
+`CREDENTIALS_DIRECTORY`. The reviewed deployment overlay now fixes two
+**non-secret** policy settings rather than inheriting them from ambient runtime
+state:
+
+- `BALCONY_SAFETY_STATE_FILE=~/.local/state/balcony-watering-autumn/manual-safety-v1.json`;
+- `BALCONY_SAFETY_STATE_MAX_AGE_SECONDS=21600`.
+
+The overlay clears `EnvironmentFile` and `PassEnvironment`, and the deployment
+verifier rejects any missing, duplicate or alternate safety-state mapping. Neither
+setting carries a credential or Home Assistant authority. The path is intentionally home-relative so no private user-home value is tracked. The
+bot expands `~` at runtime. A later host preflight must prove that the controller
+writer and `balkons-bot.service` resolve that home-relative path to the same
+non-root account before deployment.
 
 The source unit template maps those credential names to root-managed files under
 `/etc/credstore`. Production ownership, file creation, and value population are
@@ -183,7 +192,12 @@ sanitized, read-only preflight and bind authorization to:
 3. the still-expected live bot source provenance SHA or an explicitly reviewed
    successor state;
 4. the current sanitized service lifecycle/identity contract;
-5. a verified root-only rollback bundle.
+5. a verified root-only rollback bundle;
+6. the exact reviewed non-secret safety-state path/freshness environment mapping.
+
+The #1230 source outcome does not deploy this mapping. Its presence in Git means
+only that the future #925-style initial install has a deterministic policy binding
+to verify.
 
 Only a fresh narrow one-shot owner authorization may start mutation. Authorization
 is consumed at `MUTATION_STARTED=YES` even if rollback follows.
