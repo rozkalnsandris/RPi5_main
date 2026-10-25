@@ -50,6 +50,23 @@ therefore reads the one synthetic numeric `user_id` from its private
 isolated SQLite fixture and passes only that numeric ID to the API-token CLI
 step. The ID is never printed or returned.
 
+A third separately authorized proof progressed through setup and the two
+synthetic count submissions, then stopped at shutdown as:
+
+```text
+GOATCOUNTER_ISOLATED=STOP CODE=SERVER_UNCLEAN_EXIT
+```
+
+Pinned GoatCounter v2.7.0 uses the pinned zhttp `Serve()` helper. zhttp
+registers SIGHUP/SIGTERM/SIGINT with `signal.Notify()`, calls
+`http.Server.Shutdown()`, and then GoatCounter runs
+`cron.TaskPersistAndStat()` before its normal zero exit. Pinned zhttp also has
+an explicit exit 66 for a Serve error; GoatCounter's force-kill path exits 99.
+
+The observed generic failure does not prove which abnormal exit occurred.
+Until one later separately authorized proof returns a new sanitized class, the
+root cause remains unknown.
+
 ## Reused v1 security boundary
 
 v2 imports and reuses the already reviewed v1 implementation for:
@@ -63,7 +80,7 @@ v2 imports and reuses the already reviewed v1 implementation for:
 - loopback-only server readiness;
 - the exact two synthetic `0427183` count submissions;
 - one-transmission HTTP behavior with proxies and redirects disabled;
-- graceful server shutdown;
+- the single graceful SIGINT shutdown attempt and timeout bounds;
 - structural SQLite privacy validation.
 
 v2 does not add a downloader, install path, production database path,
@@ -92,6 +109,28 @@ synthetic credential values, SQLite rows or fixture paths in the failure code.
 The selector lookup itself fails closed as `SYNTHETIC_DATABASE_SETUP` unless
 exactly one positive integer synthetic user ID matches the fixed synthetic
 email. No selector value is included in operator output.
+
+## Shutdown exit classification
+
+A server exit is successful only when the process return code is exactly zero.
+The proof sends one SIGINT for graceful shutdown and does not retry, send a
+second graceful signal, or accept any non-zero exit as success.
+
+Non-zero returns are reduced to fixed, non-sensitive classes:
+
+| Observed class | Stable code |
+| --- | --- |
+| terminated directly by SIGINT | `SERVER_TERMINATED_BY_SIGINT` |
+| pinned zhttp Serve error exit 66 | `SERVER_ZHTTP_SERVE_ERROR` |
+| GoatCounter force-kill exit 99 | `SERVER_FORCE_KILL_EXIT` |
+| another negative signal return | `SERVER_TERMINATED_BY_OTHER_SIGNAL` |
+| another positive non-zero return | `SERVER_OTHER_NONZERO_EXIT` |
+
+The numeric return code, signal number, PID, stdout/stderr and fixture path are
+not printed. Existing timeout handling remains fail-closed:
+`SERVER_SHUTDOWN_TIMEOUT` after the bounded termination path and
+`SERVER_PROCESS_STUCK` if even that process termination does not complete.
+Those paths do not perform a proof retry.
 
 ## Failure evidence lifecycle
 
@@ -134,7 +173,9 @@ execute GoatCounter or inspect RPi5 runtime state. They prove:
 - each setup-stage non-zero exit produces its own stable code;
 - upstream stdout/stderr stay suppressed;
 - execution errors remain stage-specific without leaking details;
-- the v1 runner is restored on setup failure;
+- API-token creation uses the isolated numeric synthetic user ID;
+- every shutdown return class maps to a fixed sanitized code while zero alone passes;
+- only one SIGINT is sent on the normal shutdown path;
 - runtime failure skips cleanup and preserves a private `0700` fixture;
 - complete PASS reaches success cleanup exactly once;
 - operator output contains only the stable failure code;

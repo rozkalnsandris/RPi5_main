@@ -16,6 +16,7 @@ import json
 import os
 import secrets
 import shutil
+import signal
 import sqlite3
 import subprocess
 import tempfile
@@ -73,6 +74,44 @@ def _new_fixture_root() -> Path:
 
 def _cleanup_success_fixture(root: Path) -> None:
     shutil.rmtree(root)
+
+
+def _server_exit_failure_code(exit_code: int) -> str | None:
+    """Map an observed process exit to one stable, non-sensitive class."""
+    if exit_code == 0:
+        return None
+    if exit_code == -signal.SIGINT:
+        return "SERVER_TERMINATED_BY_SIGINT"
+    if exit_code == 66:
+        return "SERVER_ZHTTP_SERVE_ERROR"
+    if exit_code == 99:
+        return "SERVER_FORCE_KILL_EXIT"
+    if exit_code < 0:
+        return "SERVER_TERMINATED_BY_OTHER_SIGNAL"
+    return "SERVER_OTHER_NONZERO_EXIT"
+
+
+def _stop_server_classified(proc: subprocess.Popen[bytes]) -> None:
+    """Require one graceful SIGINT and classify any non-zero server exit."""
+    if proc.poll() is None:
+        proc.send_signal(signal.SIGINT)
+        try:
+            exit_code = proc.wait(timeout=12)
+        except subprocess.TimeoutExpired:
+            # Preserve the existing bounded timeout/stuck semantics. This is
+            # termination after the single shutdown attempt, not a retry.
+            proc.kill()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                raise base.RuntimeStop("SERVER_PROCESS_STUCK")
+            raise base.RuntimeStop("SERVER_SHUTDOWN_TIMEOUT")
+    else:
+        exit_code = proc.returncode
+
+    failure_code = _server_exit_failure_code(exit_code)
+    if failure_code is not None:
+        raise base.RuntimeStop(failure_code)
 
 
 def _synthetic_user_id(db: Path) -> int:
@@ -210,7 +249,7 @@ def _run_fixture(release_archive_arg: str, root: Path) -> None:
         raise base.RuntimeStop("LOOPBACK_PROCESS_ERROR")
     finally:
         if proc is not None:
-            base._stop_server(proc)
+            _stop_server_classified(proc)
 
     try:
         base.inspect_fixture(
