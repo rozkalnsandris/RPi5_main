@@ -11,8 +11,12 @@ Cloudflare authority is implied.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import json
 import os
+import secrets
 import shutil
+import sqlite3
 import subprocess
 import tempfile
 from pathlib import Path
@@ -71,18 +75,103 @@ def _cleanup_success_fixture(root: Path) -> None:
     shutil.rmtree(root)
 
 
+def _synthetic_user_id(db: Path) -> int:
+    """Return the one synthetic user ID without emitting fixture contents."""
+    try:
+        with contextlib.closing(sqlite3.connect(db, timeout=2)) as con:
+            rows = con.execute(
+                "SELECT user_id FROM users WHERE email=?",
+                (base.EMAIL,),
+            ).fetchall()
+    except sqlite3.DatabaseError:
+        raise base.RuntimeStop("SYNTHETIC_DATABASE_SETUP")
+
+    if len(rows) != 1:
+        raise base.RuntimeStop("SYNTHETIC_DATABASE_SETUP")
+    user_id = rows[0][0]
+    if isinstance(user_id, bool) or not isinstance(user_id, int) or user_id <= 0:
+        raise base.RuntimeStop("SYNTHETIC_DATABASE_SETUP")
+    return user_id
+
+
+def _create_count_token(
+    binary: Path,
+    root: Path,
+    env: dict[str, str],
+    db: Path,
+    db_arg: str,
+) -> None:
+    """Create the token using GoatCounter v2.7.0's robust numeric selector."""
+    user_id = _synthetic_user_id(db)
+    _run_stage(
+        binary,
+        root,
+        env,
+        "db",
+        "create",
+        "apitoken",
+        "-user=" + str(user_id),
+        "-name=synthetic-count-only",
+        "-perm=count",
+        "-db=" + db_arg,
+    )
+
+
 def _make_site_with_stage_diagnostics(
     binary: Path,
     root: Path,
     env: dict[str, str],
     db: Path,
 ) -> str:
-    original_runner = base._run
-    base._run = _run_stage
+    db_arg = "sqlite+" + str(db)
+    _run_stage(binary, root, env, "db", "newdb", "-db=" + db_arg)
+
+    site_passphrase = secrets.token_hex(20)
+    _run_stage(
+        binary,
+        root,
+        env,
+        "db",
+        "create",
+        "site",
+        "-vhost=" + base.HOST,
+        "-user.email=" + base.EMAIL,
+        "-user.password=" + site_passphrase,
+        "-db=" + db_arg,
+    )
+    site_passphrase = ""
+
+    _create_count_token(binary, root, env, db, db_arg)
+
     try:
-        return base._make_site(binary, root, env, db)
-    finally:
-        base._run = original_runner
+        with contextlib.closing(sqlite3.connect(db, timeout=2)) as con:
+            con.row_factory = sqlite3.Row
+            sites = con.execute(
+                "SELECT site_id, settings FROM sites"
+            ).fetchall()
+            tokens = con.execute(
+                "SELECT token FROM api_tokens"
+            ).fetchall()
+            if len(sites) != 1 or len(tokens) != 1:
+                raise base.RuntimeStop("SYNTHETIC_SITE_OR_TOKEN_COUNT")
+            settings = json.loads(sites[0]["settings"])
+            if not isinstance(settings, dict):
+                raise base.RuntimeStop("SYNTHETIC_SETTINGS_INVALID")
+            settings["collect"] = 1
+            settings["ignore_ips"] = []
+            con.execute(
+                "UPDATE sites SET settings=? WHERE site_id=?",
+                (json.dumps(settings, separators=(",", ":")), sites[0]["site_id"]),
+            )
+            con.commit()
+            token = tokens[0]["token"]
+            if not isinstance(token, str) or len(token) < 16:
+                raise base.RuntimeStop("SYNTHETIC_TOKEN_INVALID")
+            return token
+    except base.RuntimeStop:
+        raise
+    except (sqlite3.DatabaseError, ValueError, TypeError):
+        raise base.RuntimeStop("SYNTHETIC_DATABASE_SETUP")
 
 
 def _run_fixture(release_archive_arg: str, root: Path) -> None:
