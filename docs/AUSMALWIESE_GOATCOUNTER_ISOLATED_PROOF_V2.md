@@ -63,8 +63,20 @@ registers SIGHUP/SIGTERM/SIGINT with `signal.Notify()`, calls
 `cron.TaskPersistAndStat()` before its normal zero exit. Pinned zhttp also has
 an explicit exit 66 for a Serve error; GoatCounter's force-kill path exits 99.
 
-The observed generic failure does not prove which abnormal exit occurred.
-Until one later separately authorized proof returns a new sanitized class, the
+The observed generic failure did not prove which abnormal exit occurred.
+
+A fourth separately authorized proof, after the first shutdown-classification
+change, progressed through the same synthetic runtime path and stopped as:
+
+```text
+GOATCOUNTER_ISOLATED=STOP CODE=SERVER_OTHER_NONZERO_EXIT
+```
+
+Pinned GoatCounter v2.7.0 uses exit 1 for its generic command-error path.
+Go's runtime uses exit 2 for an unrecovered panic/runtime failure by default.
+The canonical v2 operator therefore distinguishes those two positive exits
+without capturing or printing GoatCounter stdout/stderr. Until one later
+separately authorized proof returns the refined stable class, the exact runtime
 root cause remains unknown.
 
 ## Reused v1 security boundary
@@ -121,6 +133,8 @@ Non-zero returns are reduced to fixed, non-sensitive classes:
 | Observed class | Stable code |
 | --- | --- |
 | terminated directly by SIGINT | `SERVER_TERMINATED_BY_SIGINT` |
+| GoatCounter generic command-error exit 1 | `SERVER_GOATCOUNTER_COMMAND_ERROR` |
+| Go panic/runtime-failure exit 2 | `SERVER_GO_RUNTIME_FAILURE` |
 | pinned zhttp Serve error exit 66 | `SERVER_ZHTTP_SERVE_ERROR` |
 | GoatCounter force-kill exit 99 | `SERVER_FORCE_KILL_EXIT` |
 | another negative signal return | `SERVER_TERMINATED_BY_OTHER_SIGNAL` |
@@ -174,7 +188,7 @@ execute GoatCounter or inspect RPi5 runtime state. They prove:
 - upstream stdout/stderr stay suppressed;
 - execution errors remain stage-specific without leaking details;
 - API-token creation uses the isolated numeric synthetic user ID;
-- every shutdown return class maps to a fixed sanitized code while zero alone passes;
+- every shutdown return class, including explicit positive exits 1 and 2, maps to a fixed sanitized code while zero alone passes;
 - only one SIGINT is sent on the normal shutdown path;
 - runtime failure skips cleanup and preserves a private `0700` fixture;
 - complete PASS reaches success cleanup exactly once;
