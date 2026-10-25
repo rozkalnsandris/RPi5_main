@@ -6,6 +6,7 @@ service, Cloudflare route or protected runtime state is touched.
 import contextlib
 import io
 import os
+import sqlite3
 import sys
 import tempfile
 import unittest
@@ -105,21 +106,55 @@ class IsolatedProofV2Tests(unittest.TestCase):
             "SYNTHETIC_SETUP_STAGE_INVALID",
         )
 
-    def test_base_runner_is_restored_even_when_site_setup_fails(self):
-        original = runtime.base._run
-        with mock.patch.object(
-            runtime.base,
-            "_make_site",
-            side_effect=runtime.base.RuntimeStop("SYNTHETIC_DB_CREATE_FAILED"),
-        ):
-            with self.assertRaises(runtime.base.RuntimeStop):
-                runtime._make_site_with_stage_diagnostics(
-                    Path("/synthetic/bin"),
-                    Path("/tmp/synthetic"),
-                    {},
-                    Path("/tmp/synthetic/db.sqlite3"),
+    def test_api_token_uses_numeric_synthetic_user_selector(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as parent:
+            db = Path(parent) / "synthetic.sqlite3"
+            with sqlite3.connect(db) as con:
+                con.execute("CREATE TABLE users (user_id integer, email text)")
+                con.execute(
+                    "INSERT INTO users VALUES(?, ?)",
+                    (17, runtime.base.EMAIL),
                 )
-        self.assertIs(runtime.base._run, original)
+
+            with mock.patch.object(runtime, "_run_stage") as run_stage:
+                runtime._create_count_token(
+                    Path("/synthetic/bin"),
+                    Path(parent),
+                    {"PATH": "/usr/bin:/bin"},
+                    db,
+                    "sqlite+" + str(db),
+                )
+
+            run_stage.assert_called_once()
+            argv = run_stage.call_args.args[3:]
+            self.assertIn("-user=17", argv)
+            self.assertNotIn("-user=" + runtime.base.EMAIL, argv)
+            self.assertEqual(argv[:3], ("db", "create", "apitoken"))
+            self.assertIn("-name=synthetic-count-only", argv)
+            self.assertIn("-perm=count", argv)
+
+    def test_api_token_selector_fails_closed_without_one_synthetic_user(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as parent:
+            db = Path(parent) / "synthetic.sqlite3"
+            with sqlite3.connect(db) as con:
+                con.execute("CREATE TABLE users (user_id integer, email text)")
+                con.execute(
+                    "INSERT INTO users VALUES(?, ?)",
+                    (17, "other@example.com"),
+                )
+
+            with mock.patch.object(runtime, "_run_stage") as run_stage:
+                with self.assertRaises(runtime.base.RuntimeStop) as raised:
+                    runtime._create_count_token(
+                        Path("/synthetic/bin"),
+                        Path(parent),
+                        {"PATH": "/usr/bin:/bin"},
+                        db,
+                        "sqlite+" + str(db),
+                    )
+
+            self.assertEqual(str(raised.exception), "SYNTHETIC_DATABASE_SETUP")
+            run_stage.assert_not_called()
 
     def test_runtime_failure_preserves_private_fixture_and_skips_cleanup(self):
         with tempfile.TemporaryDirectory(dir="/tmp") as parent:
