@@ -47,11 +47,16 @@ def legacy_jobs():
 
 
 class HermesWateringPreflightTests(unittest.TestCase):
-    def make_store(self, jobs=None):
+    def make_store(self, jobs=None, *, bare_list=False):
         temporary = tempfile.TemporaryDirectory(prefix="balcony-hermes-preflight-")
         self.addCleanup(temporary.cleanup)
         path = Path(temporary.name) / "jobs.json"
-        path.write_text(json.dumps(legacy_jobs() if jobs is None else jobs), encoding="utf-8")
+        values = legacy_jobs() if jobs is None else jobs
+        payload = values if bare_list else {
+            "jobs": values,
+            "updated_at": "2026-10-25T15:00:00+00:00",
+        }
+        path.write_text(json.dumps(payload), encoding="utf-8")
         path.chmod(0o600)
         return path
 
@@ -64,6 +69,7 @@ class HermesWateringPreflightTests(unittest.TestCase):
         self.assertEqual(report["result"], "PASS")
         self.assertEqual(report["blockers"], [])
         self.assertEqual(report["store"]["job_count"], 3)
+        self.assertEqual(report["store"]["format"], "canonical_dict")
         self.assertEqual(report["autumn"], {"status": "absent", "count": 0})
         for slot, _expr, binding in m.LEGACY_SLOTS:
             self.assertEqual(report["legacy"][slot]["status"], "matched")
@@ -76,6 +82,24 @@ class HermesWateringPreflightTests(unittest.TestCase):
         self.assertFalse(report["mutation_started"])
         self.assertFalse(report["writes_performed"])
         self.assertFalse(report["store"]["raw_payload_emitted"])
+
+    def test_legacy_bare_list_is_classified_without_mutation(self):
+        path = self.make_store(bare_list=True)
+        report = m.collect(store_path=path, expected_uid=os.geteuid())
+        self.assertEqual(report["result"], "PASS")
+        self.assertEqual(report["store"]["format"], "legacy_bare_list")
+        self.assertFalse(report["mutation_started"])
+        self.assertFalse(report["writes_performed"])
+
+    def test_unknown_canonical_store_shape_blocks(self):
+        path = self.make_store()
+        path.write_text(
+            json.dumps({"jobs": legacy_jobs(), "updated_at": "x", "extra": True}),
+            encoding="utf-8",
+        )
+        with self.assertRaises(m.PreflightError) as caught:
+            m.collect(store_path=path, expected_uid=os.geteuid())
+        self.assertEqual(caught.exception.code, "store_shape_invalid")
 
     def test_missing_and_duplicate_legacy_jobs_block(self):
         missing = self.collect(legacy_jobs()[1:])
@@ -180,7 +204,7 @@ class HermesWateringPreflightTests(unittest.TestCase):
 
     def test_duplicate_json_key_and_malformed_store_block(self):
         path = self.make_store()
-        path.write_text('[{"id":"x","id":"y"}]', encoding="utf-8")
+        path.write_text('{"jobs":[{"id":"x","id":"y"}]}', encoding="utf-8")
         with self.assertRaises(m.PreflightError) as caught:
             m.collect(store_path=path, expected_uid=os.geteuid())
         self.assertEqual(caught.exception.code, "store_duplicate_json_key")
