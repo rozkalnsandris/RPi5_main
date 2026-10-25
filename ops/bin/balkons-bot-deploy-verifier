@@ -31,6 +31,13 @@ ENCRYPTED_CREDENTIAL_LINES = {
     "LoadCredentialEncrypted=mqtt-username:/etc/credstore.encrypted/balkons-bot-mqtt-username",
     "LoadCredentialEncrypted=mqtt-secret:/etc/credstore.encrypted/balkons-bot-mqtt-secret",
 }
+SAFETY_STATE_PATH = "/home/andris/.local/state/balcony-watering-autumn/manual-safety-v1.json"
+SAFETY_STATE_MAX_AGE_SECONDS = "21600"
+EXPECTED_ENVIRONMENT_LINES = {
+    "Environment=PYTHONDONTWRITEBYTECODE=1",
+    f"Environment=BALCONY_SAFETY_STATE_FILE={SAFETY_STATE_PATH}",
+    f"Environment=BALCONY_SAFETY_STATE_MAX_AGE_SECONDS={SAFETY_STATE_MAX_AGE_SECONDS}",
+}
 
 PYTHON = "/usr/bin/python3"
 GIT = "/usr/bin/git"
@@ -240,6 +247,23 @@ def validate_overlay_contract(path: Path) -> None:
     }
     if actual != ENCRYPTED_CREDENTIAL_LINES:
         raise DeployVerifyError("overlay_encrypted_credential_mapping_mismatch")
+
+    if lines.count("Environment=") != 1:
+        raise DeployVerifyError("overlay_environment_reset_invalid")
+    if lines.count("EnvironmentFile=") != 1 or lines.count("PassEnvironment=") != 1:
+        raise DeployVerifyError("overlay_environment_inheritance_reset_invalid")
+    environment_lines = {
+        line for line in lines
+        if line.startswith("Environment=") and line != "Environment="
+    }
+    if environment_lines != EXPECTED_ENVIRONMENT_LINES:
+        raise DeployVerifyError("overlay_environment_mapping_mismatch")
+    if any(
+        line.startswith(("EnvironmentFile=", "PassEnvironment="))
+        and line not in {"EnvironmentFile=", "PassEnvironment="}
+        for line in lines
+    ):
+        raise DeployVerifyError("overlay_environment_inheritance_present")
 
 
 def parse_main_pid(raw: str) -> int:
