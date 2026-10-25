@@ -106,6 +106,68 @@ class IsolatedProofV2Tests(unittest.TestCase):
             "SYNTHETIC_SETUP_STAGE_INVALID",
         )
 
+    def test_server_exit_classes_are_stable_and_zero_only_passes(self):
+        cases = (
+            (0, None),
+            (-runtime.signal.SIGINT, "SERVER_TERMINATED_BY_SIGINT"),
+            (66, "SERVER_ZHTTP_SERVE_ERROR"),
+            (99, "SERVER_FORCE_KILL_EXIT"),
+            (-runtime.signal.SIGTERM, "SERVER_TERMINATED_BY_OTHER_SIGNAL"),
+            (7, "SERVER_OTHER_NONZERO_EXIT"),
+        )
+        for exit_code, expected in cases:
+            with self.subTest(exit_code=exit_code):
+                self.assertEqual(
+                    runtime._server_exit_failure_code(exit_code),
+                    expected,
+                )
+
+    def test_shutdown_sends_one_sigint_and_never_emits_raw_exit_code(self):
+        proc = mock.Mock()
+        proc.poll.return_value = None
+        proc.wait.return_value = -runtime.signal.SIGINT
+
+        with self.assertRaises(runtime.base.RuntimeStop) as raised:
+            runtime._stop_server_classified(proc)
+
+        self.assertEqual(str(raised.exception), "SERVER_TERMINATED_BY_SIGINT")
+        proc.send_signal.assert_called_once_with(runtime.signal.SIGINT)
+        proc.wait.assert_called_once_with(timeout=12)
+        proc.kill.assert_not_called()
+        self.assertNotIn(str(-runtime.signal.SIGINT), str(raised.exception))
+
+    def test_shutdown_timeout_preserves_existing_bounded_codes(self):
+        proc = mock.Mock()
+        proc.poll.return_value = None
+        proc.wait.side_effect = (
+            runtime.subprocess.TimeoutExpired(cmd="goatcounter", timeout=12),
+            0,
+        )
+
+        with self.assertRaises(runtime.base.RuntimeStop) as raised:
+            runtime._stop_server_classified(proc)
+
+        self.assertEqual(str(raised.exception), "SERVER_SHUTDOWN_TIMEOUT")
+        proc.send_signal.assert_called_once_with(runtime.signal.SIGINT)
+        proc.kill.assert_called_once_with()
+        self.assertEqual(proc.wait.call_count, 2)
+
+    def test_shutdown_stuck_preserves_existing_stable_code(self):
+        proc = mock.Mock()
+        proc.poll.return_value = None
+        proc.wait.side_effect = (
+            runtime.subprocess.TimeoutExpired(cmd="goatcounter", timeout=12),
+            runtime.subprocess.TimeoutExpired(cmd="goatcounter", timeout=5),
+        )
+
+        with self.assertRaises(runtime.base.RuntimeStop) as raised:
+            runtime._stop_server_classified(proc)
+
+        self.assertEqual(str(raised.exception), "SERVER_PROCESS_STUCK")
+        proc.send_signal.assert_called_once_with(runtime.signal.SIGINT)
+        proc.kill.assert_called_once_with()
+        self.assertEqual(proc.wait.call_count, 2)
+
     def test_api_token_uses_numeric_synthetic_user_selector(self):
         with tempfile.TemporaryDirectory(dir="/tmp") as parent:
             db = Path(parent) / "synthetic.sqlite3"
@@ -190,24 +252,35 @@ class IsolatedProofV2Tests(unittest.TestCase):
             self.assertFalse(root.exists())
 
     def test_main_outputs_only_stable_failure_code(self):
-        stdout = io.StringIO()
-        with mock.patch.object(
-            sys,
-            "argv",
-            ["probe-v2", "--release-archive", "/tmp/synthetic-release.gz"],
-        ), mock.patch.object(
-            runtime,
-            "run_isolated",
-            side_effect=runtime.base.RuntimeStop("SYNTHETIC_SITE_CREATE_FAILED"),
-        ), contextlib.redirect_stdout(stdout):
-            rc = runtime.main()
-
-        self.assertEqual(rc, 2)
-        self.assertEqual(
-            stdout.getvalue(),
-            "GOATCOUNTER_ISOLATED=STOP CODE=SYNTHETIC_SITE_CREATE_FAILED\n",
+        cases = (
+            "SYNTHETIC_SITE_CREATE_FAILED",
+            "SERVER_TERMINATED_BY_SIGINT",
+            "SERVER_ZHTTP_SERVE_ERROR",
+            "SERVER_FORCE_KILL_EXIT",
+            "SERVER_TERMINATED_BY_OTHER_SIGNAL",
+            "SERVER_OTHER_NONZERO_EXIT",
         )
-        self.assertNotIn("/tmp/", stdout.getvalue())
+        for code in cases:
+            with self.subTest(code=code):
+                stdout = io.StringIO()
+                with mock.patch.object(
+                    sys,
+                    "argv",
+                    ["probe-v2", "--release-archive", "/tmp/synthetic-release.gz"],
+                ), mock.patch.object(
+                    runtime,
+                    "run_isolated",
+                    side_effect=runtime.base.RuntimeStop(code),
+                ), contextlib.redirect_stdout(stdout):
+                    rc = runtime.main()
+
+                self.assertEqual(rc, 2)
+                self.assertEqual(
+                    stdout.getvalue(),
+                    "GOATCOUNTER_ISOLATED=STOP CODE=" + code + "\n",
+                )
+                self.assertNotIn("/tmp/", stdout.getvalue())
+                self.assertNotIn("returncode", stdout.getvalue().casefold())
 
     def test_v2_source_has_no_retry_downloader_or_implicit_temp_cleanup(self):
         source = (
