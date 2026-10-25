@@ -129,8 +129,10 @@ def _schedule_expr(job: dict[str, Any]) -> str | None:
 
 
 def _marker_roles(job: dict[str, Any]) -> set[str]:
+    # A display name may make a job a watering candidate, but it is not proof
+    # of the executable binding. Only script/prompt content can establish role.
     values: list[str] = []
-    for key in ("script", "prompt", "name"):
+    for key in ("script", "prompt"):
         value = job.get(key)
         if isinstance(value, str):
             values.append(value.casefold())
