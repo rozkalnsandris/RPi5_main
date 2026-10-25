@@ -75,9 +75,21 @@ GOATCOUNTER_ISOLATED=STOP CODE=SERVER_OTHER_NONZERO_EXIT
 Pinned GoatCounter v2.7.0 uses exit 1 for its generic command-error path.
 Go's runtime uses exit 2 for an unrecovered panic/runtime failure by default.
 The canonical v2 operator therefore distinguishes those two positive exits
-without capturing or printing GoatCounter stdout/stderr. Until one later
-separately authorized proof returns the refined stable class, the exact runtime
-root cause remains unknown.
+without capturing or printing GoatCounter stdout/stderr.
+
+A fifth separately authorized proof then stopped as:
+
+```text
+GOATCOUNTER_ISOLATED=STOP CODE=SERVER_GOATCOUNTER_COMMAND_ERROR
+```
+
+That established GoatCounter exit code 1, but the operator still used the same
+return-code mapping whether the child had already exited before shutdown or
+exited after the proof sent SIGINT. The result therefore did not prove that
+shutdown caused the command error. The canonical v2 operator now performs one
+process-state observation before any shutdown signal and reports a separate
+pre-shutdown class when the child is already gone. One later separately
+authorized proof is still required to establish the failure phase.
 
 ## Reused v1 security boundary
 
@@ -124,14 +136,34 @@ email. No selector value is included in operator output.
 
 ## Shutdown exit classification
 
-A server exit is successful only when the process return code is exactly zero.
-The proof sends one SIGINT for graceful shutdown and does not retry, send a
-second graceful signal, or accept any non-zero exit as success.
+Before sending any shutdown signal, the proof performs exactly one
+`proc.poll()` process-state observation.
 
-Non-zero returns are reduced to fixed, non-sensitive classes:
+If the child has already exited, no SIGINT is sent. The proof fails closed with
+one stable pre-shutdown class:
 
-| Observed class | Stable code |
+| Pre-shutdown observed class | Stable code |
 | --- | --- |
+| clean exit 0 before shutdown was requested | `SERVER_PRE_SHUTDOWN_CLEAN_EXIT` |
+| terminated by SIGINT before proof shutdown | `SERVER_PRE_SHUTDOWN_SIGINT_EXIT` |
+| GoatCounter generic command-error exit 1 | `SERVER_PRE_SHUTDOWN_GOATCOUNTER_COMMAND_ERROR` |
+| Go panic/runtime-failure exit 2 | `SERVER_PRE_SHUTDOWN_GO_RUNTIME_FAILURE` |
+| pinned zhttp Serve error exit 66 | `SERVER_PRE_SHUTDOWN_ZHTTP_SERVE_ERROR` |
+| GoatCounter force-kill exit 99 | `SERVER_PRE_SHUTDOWN_FORCE_KILL_EXIT` |
+| another negative signal return | `SERVER_PRE_SHUTDOWN_OTHER_SIGNAL` |
+| another positive non-zero return | `SERVER_PRE_SHUTDOWN_OTHER_NONZERO_EXIT` |
+
+A pre-shutdown exit is an unexpected phase failure even when its return code is
+zero; a complete proof may pass only after the child was observed alive, the
+proof sent its one graceful SIGINT, and the resulting process return code was
+exactly zero.
+
+If the child is still alive, the proof sends exactly one SIGINT and preserves
+the existing post-SIGINT classes:
+
+| Post-SIGINT observed class | Stable code |
+| --- | --- |
+| normal return code 0 | proof continues toward PASS |
 | terminated directly by SIGINT | `SERVER_TERMINATED_BY_SIGINT` |
 | GoatCounter generic command-error exit 1 | `SERVER_GOATCOUNTER_COMMAND_ERROR` |
 | Go panic/runtime-failure exit 2 | `SERVER_GO_RUNTIME_FAILURE` |
@@ -140,11 +172,12 @@ Non-zero returns are reduced to fixed, non-sensitive classes:
 | another negative signal return | `SERVER_TERMINATED_BY_OTHER_SIGNAL` |
 | another positive non-zero return | `SERVER_OTHER_NONZERO_EXIT` |
 
-The numeric return code, signal number, PID, stdout/stderr and fixture path are
-not printed. Existing timeout handling remains fail-closed:
-`SERVER_SHUTDOWN_TIMEOUT` after the bounded termination path and
-`SERVER_PROCESS_STUCK` if even that process termination does not complete.
-Those paths do not perform a proof retry.
+The proof does not retry, send a second graceful signal, or accept a non-zero
+post-SIGINT exit as success. The numeric return code, signal number, PID,
+stdout/stderr and fixture path are not printed. Existing timeout handling
+remains fail-closed: `SERVER_SHUTDOWN_TIMEOUT` after the bounded termination
+path and `SERVER_PROCESS_STUCK` if even that process termination does not
+complete. Those paths do not perform a proof retry.
 
 ## Failure evidence lifecycle
 
@@ -188,8 +221,10 @@ execute GoatCounter or inspect RPi5 runtime state. They prove:
 - upstream stdout/stderr stay suppressed;
 - execution errors remain stage-specific without leaking details;
 - API-token creation uses the isolated numeric synthetic user ID;
-- every shutdown return class, including explicit positive exits 1 and 2, maps to a fixed sanitized code while zero alone passes;
-- only one SIGINT is sent on the normal shutdown path;
+- an already-exited child maps to a fixed pre-shutdown class and never receives SIGINT;
+- pre-shutdown exits 0, 1, 2, 66, 99, other signals and other positive values map to sanitized fixed classes;
+- a live child receives exactly one SIGINT and preserves all existing post-SIGINT mappings;
+- only post-SIGINT return code zero allows the proof to continue toward PASS;
 - runtime failure skips cleanup and preserves a private `0700` fixture;
 - complete PASS reaches success cleanup exactly once;
 - operator output contains only the stable failure code;
