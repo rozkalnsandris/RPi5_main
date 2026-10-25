@@ -31,7 +31,7 @@ ENCRYPTED_CREDENTIAL_LINES = {
     "LoadCredentialEncrypted=mqtt-username:/etc/credstore.encrypted/balkons-bot-mqtt-username",
     "LoadCredentialEncrypted=mqtt-secret:/etc/credstore.encrypted/balkons-bot-mqtt-secret",
 }
-SAFETY_STATE_PATH = "/home/andris/.local/state/balcony-watering-autumn/manual-safety-v1.json"
+SAFETY_STATE_PATH = "~/.local/state/balcony-watering-autumn/manual-safety-v1.json"
 SAFETY_STATE_MAX_AGE_SECONDS = "21600"
 EXPECTED_ENVIRONMENT_LINES = {
     "Environment=PYTHONDONTWRITEBYTECODE=1",
