@@ -157,6 +157,19 @@ class HermesWateringPreflightTests(unittest.TestCase):
         self.assertIn("autumn_job_unrecognized", report["blockers"])
         self.assertNotIn(secret, json.dumps(report, sort_keys=True))
 
+    def test_unrelated_same_time_jobs_are_preserved(self):
+        jobs = legacy_jobs()
+        jobs.extend([
+            job("news07", "daily-news", "0 7 * * *", "opaque-news"),
+            job("news11", "lunch-digest", "0 11 * * *", "opaque-digest"),
+            job("news14", "afternoon-report", "0 14 * * *", "opaque-report"),
+            job("news23", "nightly-backup-report", "0 23 * * *", "opaque-backup"),
+        ])
+        report = self.collect(jobs)
+        self.assertEqual(report["result"], "PASS")
+        self.assertEqual(report["autumn"], {"status": "absent", "count": 0})
+        self.assertEqual(report["store"]["job_count"], 7)
+
     def test_unexpected_watering_candidate_blocks(self):
         jobs = legacy_jobs()
         jobs.append(
