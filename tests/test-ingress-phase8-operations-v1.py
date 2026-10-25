@@ -55,6 +55,8 @@ class IngressPhase8OperationsTests(unittest.TestCase):
             "Reboot-survival and final acceptance gate",
             "Separate SIMPLE-DEPLOY scheduler gate",
             "13 registered services",
+            "exact current registry service set",
+            "Do not hardcode a historical service count",
             "mutation_performed=false",
             "separate",
             "owner LIVE authority",
