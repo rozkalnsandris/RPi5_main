@@ -207,6 +207,29 @@ class BridgeTests(unittest.TestCase):
                 ns["handle_command"]("/laist")
             self.assertIn("nav pieejams", outbound.get_nowait()[0])
 
+            path.write_text("[]", encoding="utf-8")
+            with unittest.mock.patch.dict(
+                os.environ,
+                {"BALCONY_SAFETY_STATE_FILE": str(path)},
+                clear=False,
+            ):
+                ns["handle_command"]("/laist")
+            self.assertIn("nav derīgs", outbound.get_nowait()[0])
+
+            path = self._write_safety(
+                directory,
+                decision="block_sensor_coverage",
+                sensor_degraded_count=3,
+                sensor_coverage_ok=False,
+            )
+            with unittest.mock.patch.dict(
+                os.environ,
+                {"BALCONY_SAFETY_STATE_FILE": str(path)},
+                clear=False,
+            ):
+                ns["handle_command"]("/laist")
+            self.assertIn("nepietiek derīgu mitruma sensoru", outbound.get_nowait()[0])
+
     def test_stop_bypasses_manual_watering_gate(self):
         ns, _, published, _ = self.bridge()
         with unittest.mock.patch.dict(
