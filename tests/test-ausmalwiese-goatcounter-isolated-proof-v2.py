@@ -106,6 +106,31 @@ class IsolatedProofV2Tests(unittest.TestCase):
             "SYNTHETIC_SETUP_STAGE_INVALID",
         )
 
+    def test_pre_shutdown_exit_classes_are_stable_and_never_send_sigint(self):
+        cases = (
+            (0, "SERVER_PRE_SHUTDOWN_CLEAN_EXIT"),
+            (-runtime.signal.SIGINT, "SERVER_PRE_SHUTDOWN_SIGINT_EXIT"),
+            (1, "SERVER_PRE_SHUTDOWN_GOATCOUNTER_COMMAND_ERROR"),
+            (2, "SERVER_PRE_SHUTDOWN_GO_RUNTIME_FAILURE"),
+            (66, "SERVER_PRE_SHUTDOWN_ZHTTP_SERVE_ERROR"),
+            (99, "SERVER_PRE_SHUTDOWN_FORCE_KILL_EXIT"),
+            (-runtime.signal.SIGTERM, "SERVER_PRE_SHUTDOWN_OTHER_SIGNAL"),
+            (7, "SERVER_PRE_SHUTDOWN_OTHER_NONZERO_EXIT"),
+        )
+        for exit_code, expected in cases:
+            with self.subTest(exit_code=exit_code):
+                proc = mock.Mock()
+                proc.poll.return_value = exit_code
+
+                with self.assertRaises(runtime.base.RuntimeStop) as raised:
+                    runtime._stop_server_classified(proc)
+
+                self.assertEqual(str(raised.exception), expected)
+                proc.poll.assert_called_once_with()
+                proc.send_signal.assert_not_called()
+                proc.wait.assert_not_called()
+                proc.kill.assert_not_called()
+
     def test_server_exit_classes_are_stable_and_zero_only_passes(self):
         cases = (
             (0, None),
@@ -133,6 +158,7 @@ class IsolatedProofV2Tests(unittest.TestCase):
             runtime._stop_server_classified(proc)
 
         self.assertEqual(str(raised.exception), "SERVER_TERMINATED_BY_SIGINT")
+        proc.poll.assert_called_once_with()
         proc.send_signal.assert_called_once_with(runtime.signal.SIGINT)
         proc.wait.assert_called_once_with(timeout=12)
         proc.kill.assert_not_called()
@@ -150,6 +176,7 @@ class IsolatedProofV2Tests(unittest.TestCase):
             runtime._stop_server_classified(proc)
 
         self.assertEqual(str(raised.exception), "SERVER_SHUTDOWN_TIMEOUT")
+        proc.poll.assert_called_once_with()
         proc.send_signal.assert_called_once_with(runtime.signal.SIGINT)
         proc.kill.assert_called_once_with()
         self.assertEqual(proc.wait.call_count, 2)
@@ -166,6 +193,7 @@ class IsolatedProofV2Tests(unittest.TestCase):
             runtime._stop_server_classified(proc)
 
         self.assertEqual(str(raised.exception), "SERVER_PROCESS_STUCK")
+        proc.poll.assert_called_once_with()
         proc.send_signal.assert_called_once_with(runtime.signal.SIGINT)
         proc.kill.assert_called_once_with()
         self.assertEqual(proc.wait.call_count, 2)
@@ -256,6 +284,14 @@ class IsolatedProofV2Tests(unittest.TestCase):
     def test_main_outputs_only_stable_failure_code(self):
         cases = (
             "SYNTHETIC_SITE_CREATE_FAILED",
+            "SERVER_PRE_SHUTDOWN_CLEAN_EXIT",
+            "SERVER_PRE_SHUTDOWN_SIGINT_EXIT",
+            "SERVER_PRE_SHUTDOWN_GOATCOUNTER_COMMAND_ERROR",
+            "SERVER_PRE_SHUTDOWN_GO_RUNTIME_FAILURE",
+            "SERVER_PRE_SHUTDOWN_ZHTTP_SERVE_ERROR",
+            "SERVER_PRE_SHUTDOWN_FORCE_KILL_EXIT",
+            "SERVER_PRE_SHUTDOWN_OTHER_SIGNAL",
+            "SERVER_PRE_SHUTDOWN_OTHER_NONZERO_EXIT",
             "SERVER_TERMINATED_BY_SIGINT",
             "SERVER_GOATCOUNTER_COMMAND_ERROR",
             "SERVER_GO_RUNTIME_FAILURE",
