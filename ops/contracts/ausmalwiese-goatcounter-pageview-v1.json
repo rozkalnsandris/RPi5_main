@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "state": "SOURCE_ONLY_NOT_INSTALLED",
+  "repository": "rozkalnsandris/RPi5_main",
+  "issue": 1224,
+  "public": {
+    "route": "/api/pageview",
+    "hosts": [
+      "ausmalwiese.de",
+      "www.ausmalwiese.de"
+    ],
+    "max_body_bytes": 128,
+    "catalog": "/srv/coloring-pages-content/public/catalog.json"
+  },
+  "adapter": {
+    "listen": "127.0.0.1:9193",
+    "backend": "http://127.0.0.1:9194/api/v0/count",
+    "backend_host": "goatcounter.ausmalwiese.invalid",
+    "credential_name": "goatcounter-token"
+  },
+  "goatcounter": {
+    "version": "v2.7.0",
+    "source_commit": "7e91d8a9bdbb0dd48496e498c5680f8f3477a1b4",
+    "arm64_asset": "goatcounter-v2.7.0-linux-arm64.gz",
+    "arm64_bytes": 12770791,
+    "arm64_sha256": "ff5b2670b858bbe48802dfdc74130b6dcde2de9f5c1229b838eb9132769307dd",
+    "listen": "127.0.0.1:9194"
+  },
+  "boundaries": {
+    "allow_live": false,
+    "allow_install": false,
+    "allow_ingress_change": false,
+    "allow_database_mutation": false,
+    "allow_secret_access_from_checkout": false,
+    "allow_retry": false,
+    "allow_rollback": false,
+    "allow_cleanup": false,
+    "request_logging": false,
+    "forward_client_headers": false
+  }
+}
