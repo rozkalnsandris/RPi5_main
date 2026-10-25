@@ -119,7 +119,7 @@ Each run records `watering.log` and sends **Laistīts** with duration/dry count,
 
 The autumn controller now publishes a compact local `manual-safety-v1.json` policy artifact after each non-dry-run decision. The JSON schema is `rozkalns.balcony-watering-safety.v1` and contains only: generation epoch, decision class, frost-block flag, fixed sensor total, degraded-sensor count, sensor-coverage flag and already-watered-today flag. It contains no HA response body, raw moisture reading, credential, private path, chat data or other personal data. Writes use a same-directory temporary file followed by atomic replacement.
 
-The bot reads that file **read-only** through the non-secret `BALCONY_SAFETY_STATE_FILE` path. Normal `/laist` and `/laist_N` are accepted only when the file is structurally valid, no more than `BALCONY_SAFETY_STATE_MAX_AGE_SECONDS` old (default 21600 / six hours), and reports `decision=manual_permit`, no frost block, acceptable sensor coverage and no watering already recorded today. Missing, malformed, symlinked, future-dated or stale state blocks manual watering. The bot receives no Home Assistant credential.
+The bot reads that file **read-only** through the non-secret `BALCONY_SAFETY_STATE_FILE` path. The reviewed production overlay binds it exactly to `/home/andris/.local/state/balcony-watering-autumn/manual-safety-v1.json` and fixes `BALCONY_SAFETY_STATE_MAX_AGE_SECONDS=21600` (six hours); ambient environment files/pass-through are explicitly cleared. The writer and bot are expected to run as the same non-root `andris` account, so the controller's atomic file replacement remains readable without adding a group or privilege bridge. Normal `/laist` and `/laist_N` are accepted only when the file is structurally valid, fresh, and reports `decision=manual_permit`, no frost block, acceptable sensor coverage and no watering already recorded today. Missing, malformed, symlinked, future-dated or stale state blocks manual watering. The bot receives no Home Assistant credential.
 
 The manual permit deliberately does **not** duplicate the automatic dry quorum/wet guard: it is an owner-initiated watering request, but it may not bypass the host safety conditions (freshness, frost, sensor coverage and once-per-day state). There is no force/override command in this source slice. A future override would require its own explicit two-step/expiry design.
 
@@ -156,7 +156,7 @@ Autumn/winter controller inputs:
 - `BALCONY_MIN_DRY_SENSORS` — default `2`;
 - `BALCONY_MAX_MOIST_SENSORS` — default `8`;
 - `BALCONY_MAX_DEGRADED_SENSORS` — default `2`; a larger missing/unavailable/unknown active-sensor count blocks watering;
-- `BALCONY_SAFETY_STATE_FILE` — optional exact path for the atomic manual-safety JSON (defaults under `BALCONY_AUTUMN_STATE_DIR`);
+- `BALCONY_SAFETY_STATE_FILE` — exact production mapping is `/home/andris/.local/state/balcony-watering-autumn/manual-safety-v1.json`; controller source still defaults under `BALCONY_AUTUMN_STATE_DIR` for disconnected/test use;
 - `BALCONY_AUTUMN_STATE_DIR`, `BALCONY_AUTUMN_LOCKFILE`, `BALCONY_AUTUMN_LOGFILE` — runtime path overrides.
 
 A later production mapping may provide these inputs through a protected host-only configuration mechanism. That mapping is intentionally out of scope here.
@@ -203,6 +203,14 @@ The repository-wide `make validate` gate includes this regression together with 
 17. the lock refuses an overlapping run;
 18. the atomic manual-safety state records permit/frost/coverage/already-watered outcomes and dry-run never mutates it.
 
+## Sanitized Hermes Gate-1 projection
+
+`ops/bin/balcony-watering-hermes-preflight` is the source-controlled read-only bridge between historical schedule knowledge and any future Hermes mutation. It reads only the bounded per-user Hermes cron store, requires a regular single-link owner-only `0600` file, rejects duplicate JSON keys and emits only schedule/binding classes plus SHA-256 fingerprints. Raw job JSON, prompts, command/path payloads and credentials are never emitted.
+
+A PASS requires exactly one recognized enabled/local 07:00 primary job, 14:00 heat-gate job and 23:00 primary job, with no extra watering candidate. An existing 11:00/autumn candidate is reported but deliberately blocks the initial-create design, whether its binding is recognized or opaque. The projection also includes a stable fingerprint of unrelated job definitions while ignoring run-only metadata such as last/next run timestamps and status.
+
+This preflight performs no Hermes lifecycle command and no write. A later rollout operator must be designed from fresh Gate-1 evidence and use reviewed Hermes cron CLI/API operations for pause/create/edit/resume as applicable; it must not patch `jobs.json` directly. Script-only scheduling also requires reconciling the exact Hermes-managed script location and protected runtime credential wiring before any apply design is accepted.
+
 ## Production and deployment boundary
 
 This source publication deliberately does **not**:
@@ -217,4 +225,4 @@ This source publication deliberately does **not**:
 - restart/reload a service;
 - rotate credentials.
 
-Any future production apply requires a separate owner authorization, fresh source/live binding, backup/rollback plan, bounded diff, and post-apply verification. A source merge alone never authorizes deployment.
+Any future production apply requires a separate owner authorization, fresh source/live binding, a PASS/sanitized Gate-1 schedule projection, a reviewed fixed-target Hermes CLI/API mutation operator, recovery boundary, bounded diff, and post-apply verification. A source merge alone never authorizes deployment.
