@@ -2,7 +2,7 @@
   "schema": "rozkalns.rpi5-main.stats-zone-binding.v1",
   "repository": "rozkalnsandris/RPi5_main",
   "issue": 1211,
-  "status": "SOURCE_ONLY_NO_LIVE",
+  "status": "SOURCE_ADAPTER_READY_NO_INSTALL_NO_LIVE",
   "worker": "coloring-pages-stats-v1",
   "environment": "production",
   "target_zone": "ausmalwiese.de",
@@ -41,9 +41,9 @@
     "alternate_transport": false
   },
   "future_adapter_requirements": [
-    "separate source review and runtime installation LIVE owner gate",
-    "protected root-owned runtime must verify full source/config installation and credential allowlist",
-    "verified_zone_id must authenticate official Cloudflare zone name/status, no raw IDs logged",
+    "source adapter is reviewed but requires a separate protected root-owned runtime installation LIVE owner gate",
+    "protected root-owned runtime must verify full source/config/adapter installation and credential allowlist",
+    "verified_zone_id must authenticate exactly one official active Cloudflare zone and equal the protected credential allowlist; no raw IDs logged",
     "double-read sanitized snapshot before any mutation",
     "owner-authorized active UUID and snapshot SHA256 and candidate bytes",
     "one-shot provider write budgets consumed before dispatch",
@@ -60,5 +60,24 @@
     "separate exact-head MERGE expressly required by #1211 frozen scope",
     "independent future trusted adapter/host installer review and LIVE authority",
     "independent exact Cloudflare version upload+deploy owner authorization"
-  ]
+  ],
+  "trusted_adapter_source": "scripts/ausmalwiese_stats_zone_binding_adapter_v1.py",
+  "trusted_adapter_test": "tests/test-ausmalwiese-stats-zone-binding-adapter-v1.py",
+  "trusted_adapter": {
+    "transport_source": "scripts/ausmalwiese_stats_worker_runtime_v1.py",
+    "exact_zone_lookup": "GET /client/v4/zones?name=ausmalwiese.de&status=active&match=all&page=1&per_page=2; require exactly one active result and equality with protected credential allowlist",
+    "requires_candidate_code_sha256": "47f7490918d25e8f1dcc683cebe3c4d3d9a75230f33ae5a1d26cbd6bd3ec1173",
+    "requires_normal_write_mode": true,
+    "delegates": [
+      "read_snapshot",
+      "upload_version_once",
+      "deploy_version_once"
+    ],
+    "has_cli": false,
+    "reads_credentials": false,
+    "creates_transport": false,
+    "installed": false
+  },
+  "adapter_has_provider_transport": false,
+  "adapter_has_protected_credential_reader": false
 }

@@ -389,9 +389,19 @@ the owner's distinct exact LIVE authorization **outside** the pure core,
 and spend at most one upload and one deploy budget *before* dispatch.
 No generic API/editor/browser mutation, new credential provisioning, secret
 printing, retry, rollback, cleanup or fallback executor is allowed.
-The existing protected installed runtime **does not** expose that new
-`verified_zone_id` interface and cannot execute this proposal yet; a new
-reviewed, separately owner-gated adapter installation is required.
+The existing protected installed runtime remains unchanged and does not
+install the #1211 adapter. Source-only
+`scripts/ausmalwiese_stats_zone_binding_adapter_v1.py` now supplies the
+narrow missing bridge: it accepts only an injected instance of the already
+reviewed Stats Worker transport in normal upload+deploy mode, requires the
+reviewed candidate code SHA-256 and fresh write budgets, performs one fixed
+official active-zone lookup for `ausmalwiese.de`, requires exactly one result
+whose Zone ID equals the protected credential allowlist, and then delegates
+only `read_snapshot`, `upload_version_once` and `deploy_version_once`.
+It has no CLI, credential reader, HTTP client or installer. Therefore the
+current host still cannot execute this proposal until a separately reviewed,
+owner-authorized protected installation binds this adapter to exact installed
+runtime/source provenance.
 
 The pure protocol checks exact Worker module bytes, candidate hash and
 handlers via the already trusted collector; double-reads active=latest at
