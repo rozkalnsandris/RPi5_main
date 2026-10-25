@@ -5,6 +5,7 @@ Cloudflare, inspect RPi5, or demonstrate GDPR/TDDDG compliance.
 """
 import contextlib
 import io
+import importlib.util
 import itertools
 import json
 import sqlite3
@@ -17,6 +18,14 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import ausmalwiese_goatcounter_offline_privacy_probe_v1 as probe  # noqa: E402
+
+V2_TEST_PATH = ROOT / "tests" / "test-ausmalwiese-goatcounter-isolated-proof-v2.py"
+V2_SPEC = importlib.util.spec_from_file_location("goatcounter_isolated_proof_v2_tests", V2_TEST_PATH)
+if V2_SPEC is None or V2_SPEC.loader is None:
+    raise RuntimeError("unable to load GoatCounter isolated proof v2 tests")
+V2_TESTS = importlib.util.module_from_spec(V2_SPEC)
+V2_SPEC.loader.exec_module(V2_TESTS)
+IsolatedProofV2Tests = V2_TESTS.IsolatedProofV2Tests
 
 
 class SyntheticGoatCounterFixture(unittest.TestCase):

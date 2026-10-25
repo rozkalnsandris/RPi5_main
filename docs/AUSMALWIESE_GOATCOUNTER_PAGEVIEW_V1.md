@@ -88,14 +88,23 @@ The only accepted upstream runtime candidate is:
 - SHA-256:
   `ff5b2670b858bbe48802dfdc74130b6dcde2de9f5c1229b838eb9132769307dd`
 
-`scripts/ausmalwiese_goatcounter_isolated_probe_v1.py` performs **no
-download**. A future separately authorized proof must place that exact archive
-as a direct child of `/tmp` on host `rpi5` and run the probe as non-root.
-The probe creates only a private `/tmp/goatcounter-offline-*` fixture,
-verifies `version -json`, creates a synthetic site/token, forces effective
-`CollectNothing=1`, starts one random loopback listener, submits two
-synthetic `0427183` hits with exactly `no_sessions:true`, shuts down cleanly
-and runs the structural SQLite privacy gate.
+The historical
+`scripts/ausmalwiese_goatcounter_isolated_probe_v1.py` entrypoint is
+superseded and must not be used for another runtime attempt. The canonical
+future operator is
+`scripts/ausmalwiese_goatcounter_isolated_probe_v2.py`; its exact
+failure-preserving contract is documented in
+`docs/AUSMALWIESE_GOATCOUNTER_ISOLATED_PROOF_V2.md`.
+
+The operator performs **no download**. A future separately authorized proof
+must place that exact archive as a direct child of `/tmp` on host `rpi5`
+and run the v2 probe as non-root. The proof creates only a private
+`/tmp/goatcounter-offline-*` fixture, verifies `version -json`, creates a
+synthetic site/token, forces effective `CollectNothing=1`, starts one random
+loopback listener, submits two synthetic `0427183` hits with exactly
+`no_sessions:true`, shuts down cleanly and runs the structural SQLite privacy
+gate. A proof failure preserves the private `0700` fixture; only a complete
+PASS reaches bounded success cleanup.
 
 The structural gate rejects:
 
