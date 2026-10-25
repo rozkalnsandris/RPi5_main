@@ -69,7 +69,7 @@ case "$url" in
         case "${MOCK_SENSOR_MODE:-valid}" in
             empty) exit 0 ;;
             malformed) printf '{bad-json' ;;
-            valid|retired|retired_dry|active_missing|active_unavailable|active_unknown|active_dry_unavailable|all_active_unavailable|active_odd_state|one_dry|all_wet|retired_only)
+            valid|retired|retired_dry|active_missing|active_unavailable|active_unknown|active_dry_unavailable|three_unavailable|all_active_unavailable|active_odd_state|one_dry|all_wet|retired_only)
                 python3 - "${MOCK_SENSOR_MODE:-valid}" <<'PY'
 import json
 import os
@@ -95,6 +95,8 @@ for i in active:
     elif i in dry:
         state = "sauss"
     if mode == "all_active_unavailable":
+        state = "unavailable"
+    elif mode == "three_unavailable" and i in (5, 6, 8):
         state = "unavailable"
     elif mode in ("active_unavailable", "active_unknown", "active_dry_unavailable", "active_odd_state") and i == target:
         state = {
@@ -183,6 +185,7 @@ export BALCONY_AUTUMN_SOAK_SECONDS=0
 export BALCONY_AUTUMN_STATE_DIR="$tmp/state"
 export BALCONY_AUTUMN_LOCKFILE="$tmp/autumn.lock"
 export BALCONY_AUTUMN_LOGFILE="$logfile"
+export BALCONY_MAX_DEGRADED_SENSORS=2
 
 fail() {
     echo "balcony autumn watering regression: FAIL: $*" >&2
@@ -209,11 +212,38 @@ assert_tg_count() {
     [[ "$actual" == "$expected" ]] || fail "expected ${expected} Telegram message(s), got ${actual}: $(paste -sd'|' "$tg" 2>/dev/null)"
 }
 
+assert_safety() {
+    local decision="$1" frost="$2" coverage="$3" degraded="$4" watered="$5"
+    local path="$tmp/state/manual-safety-v1.json"
+    [[ -f "$path" ]] || fail "expected safety state file"
+    python3 - "$path" "$decision" "$frost" "$coverage" "$degraded" "$watered" <<'PY'
+import json
+import sys
+
+path, decision, frost, coverage, degraded, watered = sys.argv[1:]
+with open(path, encoding="utf-8") as handle:
+    data = json.load(handle)
+assert set(data) == {
+    "schema", "generated_at_epoch", "decision", "frost_blocked",
+    "sensor_total", "sensor_degraded_count", "sensor_coverage_ok",
+    "already_watered_today",
+}
+assert data["schema"] == "rozkalns.balcony-watering-safety.v1"
+assert isinstance(data["generated_at_epoch"], int)
+assert data["sensor_total"] == 10
+assert data["decision"] == decision
+assert data["frost_blocked"] is (frost == "1")
+assert data["sensor_coverage_ok"] is (coverage == "1")
+assert data["sensor_degraded_count"] == int(degraded)
+assert data["already_watered_today"] is (watered == "1")
+PY
+}
+
 reset_run() {
     : >"$actions"
     : >"$tg"
     : >"$logfile"
-    rm -f "$tmp/state/last-watered"
+    rm -f "$tmp/state/last-watered" "$tmp/state/manual-safety-v1.json"
     printf 'off\n' >"$switch_state"
 }
 
@@ -237,6 +267,7 @@ grep -qF 'ACTIVE_SENSORS=(1 3 4 5 6 7 8 9 10 12)' "$autumn" || fail "retired flo
 # the ESP32 hard limit must not be raised
 grep -q 'ESP32_MAX_SECONDS=180' "$autumn" || fail "ESP32 180 s hard limit must be preserved"
 grep -q 'MAX_MOIST="${BALCONY_MAX_MOIST_SENSORS:-8}"' "$autumn" || fail "10-sensor wet guard must remain 8"
+grep -q 'MAX_DEGRADED="${BALCONY_MAX_DEGRADED_SENSORS:-2}"' "$autumn" || fail "sensor coverage default must remain 2"
 
 export MOCK_ON_CODE=200 MOCK_OFF_CODE=200 MOCK_ON_APPLY=1 MOCK_OFF_APPLY=1
 export MOCK_SWITCH_STATE_MODE=valid MOCK_FORECAST_SERVICE_MODE=ok MOCK_FORECAST_MIN=4.0
@@ -254,6 +285,7 @@ assert_tg_contains 'Laistīts: 45 s'
 assert_tg_contains 'sausi 3/10 sensori (1,3,7)'
 [[ -f "$tmp/state/last-watered" ]] || fail "case 1 must record the watering date"
 [[ "$(cat "$tmp/state/last-watered")" == "$(TZ=Europe/Berlin date '+%Y-%m-%d')" ]] || fail "case 1 recorded an unexpected date"
+assert_safety block_already_watered 0 1 0 1
 
 # 2: retired sensors 2/11/13/14/15 unavailable never block and never count as dry.
 export MOCK_SENSOR_MODE=retired
@@ -319,6 +351,17 @@ assert_tg_contains 'Nav laistīts'
 assert_tg_contains 'nav pieejami sensori: 1,3,4,5,6,7,8,9,10,12 (pieņemti mitri)'
 [[ -f "$tmp/state/last-watered" ]] && fail 'case 3c must not mark watering'
 
+# 3d: more than two degraded active sensors blocks automatic watering even
+# when three other sensors are confirmed dry.
+export MOCK_SENSOR_MODE=three_unavailable
+reset_run
+run_autumn
+[[ "$rc" -eq 0 ]] || fail 'case 3d expected exit 0'
+assert_actions ''
+assert_tg_count 1
+assert_tg_contains 'nav pieejami 3/10 aktīvie mitruma sensori (maksimums 2)'
+assert_safety block_sensor_coverage 0 0 3 0
+
 # 4: Home Assistant transport and JSON failures fail closed with a message.
 export MOCK_SENSOR_MODE=empty
 reset_run
@@ -342,6 +385,7 @@ assert_tg_count 1
 assert_tg_contains 'Nav laistīts'
 assert_tg_contains 'sausi tikai 1/10 sensori (vajag vismaz 2)'
 [[ -f "$tmp/state/last-watered" ]] && fail "case 5 must not record a watering"
+assert_safety manual_permit 0 1 0 0
 
 # 6: an already wet tray is left alone and reports no watering.
 export MOCK_SENSOR_MODE=all_wet
@@ -362,6 +406,7 @@ assert_actions ''
 assert_tg_count 1
 assert_tg_contains 'sala risks'
 [[ -f "$tmp/state/last-watered" ]] && fail "case 7 must not record a watering"
+assert_safety block_frost 1 1 0 0
 
 # 8: a low current temperature blocks even when the forecast attribute is the
 # only source and the service fallback is available.
@@ -428,6 +473,7 @@ run_autumn
 assert_actions ''
 assert_tg_count 1
 assert_tg_contains 'šodien jau laistīts'
+assert_safety block_already_watered 0 0 10 1
 
 # 14: duration is bounded by the device hard limit and reported accurately.
 reset_run
@@ -450,6 +496,7 @@ run_autumn
 assert_actions ''
 assert_tg_count 0
 [[ -f "$tmp/state/last-watered" ]] && fail "case 15 must not record a watering"
+[[ -f "$tmp/state/manual-safety-v1.json" ]] && fail "case 15 dry-run must not write safety state"
 grep -q 'DRY-RUN: gates passed' "$logfile" || fail "case 15 must log the dry-run decision"
 unset BALCONY_AUTUMN_DRY_RUN
 
