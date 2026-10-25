@@ -57,7 +57,7 @@ def _strict_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def _read_store(path: Path, expected_uid: int) -> tuple[bytes, list[dict[str, Any]]]:
+def _read_store(path: Path, expected_uid: int) -> tuple[bytes, list[dict[str, Any]], str]:
     try:
         info = path.lstat()
     except OSError:
@@ -94,11 +94,28 @@ def _read_store(path: Path, expected_uid: int) -> tuple[bytes, list[dict[str, An
         raise
     except (UnicodeError, json.JSONDecodeError):
         raise PreflightError("store_json_invalid") from None
-    if not isinstance(data, list):
+    store_format: str
+    if isinstance(data, dict):
+        if set(data) - {"jobs", "updated_at"}:
+            raise PreflightError("store_shape_invalid")
+        raw_jobs = data.get("jobs")
+        if not isinstance(raw_jobs, list):
+            raise PreflightError("store_jobs_shape_invalid")
+        updated_at = data.get("updated_at")
+        if updated_at is not None and not isinstance(updated_at, str):
+            raise PreflightError("store_updated_at_invalid")
+        store_format = "canonical_dict"
+    elif isinstance(data, list):
+        # Hermes still reads this legacy form and auto-repairs it on a later
+        # write. Gate-1 is read-only, so classify it without mutating it.
+        raw_jobs = data
+        store_format = "legacy_bare_list"
+    else:
         raise PreflightError("store_shape_invalid")
+
     jobs: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
-    for item in data:
+    for item in raw_jobs:
         if not isinstance(item, dict):
             raise PreflightError("job_shape_invalid")
         job_id = item.get("id")
@@ -113,7 +130,7 @@ def _read_store(path: Path, expected_uid: int) -> tuple[bytes, list[dict[str, An
             raise PreflightError("job_id_duplicate")
         seen_ids.add(job_id)
         jobs.append(item)
-    return raw, jobs
+    return raw, jobs, store_format
 
 
 def _schedule_expr(job: dict[str, Any]) -> str | None:
@@ -225,7 +242,7 @@ def _unrelated_fingerprint(jobs: list[dict[str, Any]], selected_ids: set[int]) -
 
 
 def collect(*, store_path: Path, expected_uid: int) -> dict[str, Any]:
-    raw, jobs = _read_store(store_path, expected_uid)
+    raw, jobs, store_format = _read_store(store_path, expected_uid)
     blockers: list[str] = []
     selected: set[int] = set()
     legacy: dict[str, Any] = {}
@@ -314,6 +331,7 @@ def collect(*, store_path: Path, expected_uid: int) -> dict[str, Any]:
             "job_count": len(jobs),
             "sha256": sha256_bytes(raw),
             "mode": "0600",
+            "format": store_format,
             "raw_payload_emitted": False,
         },
         "legacy": legacy,
