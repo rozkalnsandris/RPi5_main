@@ -82,6 +82,10 @@ def _server_exit_failure_code(exit_code: int) -> str | None:
         return None
     if exit_code == -signal.SIGINT:
         return "SERVER_TERMINATED_BY_SIGINT"
+    if exit_code == 1:
+        return "SERVER_GOATCOUNTER_COMMAND_ERROR"
+    if exit_code == 2:
+        return "SERVER_GO_RUNTIME_FAILURE"
     if exit_code == 66:
         return "SERVER_ZHTTP_SERVE_ERROR"
     if exit_code == 99:
