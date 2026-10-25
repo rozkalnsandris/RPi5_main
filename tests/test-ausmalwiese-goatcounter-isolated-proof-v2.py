@@ -37,10 +37,17 @@ class IsolatedProofV2Tests(unittest.TestCase):
         self.assertEqual(runtime.base.VIEWS, 2)
 
     def test_each_setup_nonzero_maps_to_stage_specific_silent_code(self):
+        fixture_only_value = "fixture-only-value-123"
         cases = (
             (("db", "newdb", "-db=synthetic"), "SYNTHETIC_DB_CREATE_FAILED"),
             (
-                ("db", "create", "site", "-vhost=stats.example.test"),
+                (
+                    "db",
+                    "create",
+                    "site",
+                    "-vhost=stats.example.test",
+                    "-synthetic-value=" + fixture_only_value,
+                ),
                 "SYNTHETIC_SITE_CREATE_FAILED",
             ),
             (
@@ -67,6 +74,9 @@ class IsolatedProofV2Tests(unittest.TestCase):
                 self.assertEqual(str(raised.exception), expected)
                 self.assertEqual(stdout.getvalue(), "")
                 self.assertEqual(stderr.getvalue(), "")
+                self.assertNotIn(fixture_only_value, str(raised.exception))
+                self.assertNotIn(fixture_only_value, stdout.getvalue())
+                self.assertNotIn(fixture_only_value, stderr.getvalue())
                 self.assertIs(run.call_args.kwargs["stdout"], runtime.subprocess.DEVNULL)
                 self.assertIs(run.call_args.kwargs["stderr"], runtime.subprocess.DEVNULL)
                 self.assertEqual(run.call_count, 1)
