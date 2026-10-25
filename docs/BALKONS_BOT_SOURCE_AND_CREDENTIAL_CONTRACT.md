@@ -74,14 +74,15 @@ Credential values remain reachable only through systemd's directory locator,
 **non-secret** policy settings rather than inheriting them from ambient runtime
 state:
 
-- `BALCONY_SAFETY_STATE_FILE=/home/andris/.local/state/balcony-watering-autumn/manual-safety-v1.json`;
+- `BALCONY_SAFETY_STATE_FILE=~/.local/state/balcony-watering-autumn/manual-safety-v1.json`;
 - `BALCONY_SAFETY_STATE_MAX_AGE_SECONDS=21600`.
 
 The overlay clears `EnvironmentFile` and `PassEnvironment`, and the deployment
 verifier rejects any missing, duplicate or alternate safety-state mapping. Neither
-setting carries a credential or Home Assistant authority. The expected production
-writer and `balkons-bot.service` identity are both the non-root `andris`
-account; a later host preflight must revalidate that assumption before deployment.
+setting carries a credential or Home Assistant authority. The path is intentionally home-relative so no private user-home value is tracked. The
+bot expands `~` at runtime. A later host preflight must prove that the controller
+writer and `balkons-bot.service` resolve that home-relative path to the same
+non-root account before deployment.
 
 The source unit template maps those credential names to root-managed files under
 `/etc/credstore`. Production ownership, file creation, and value population are
