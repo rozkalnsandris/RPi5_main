@@ -5,11 +5,15 @@ from __future__ import annotations
 import ast
 import contextlib
 import io
+import json
+import os
 import queue
+import tempfile
 import threading
 import time
 import types
 import unittest
+import unittest.mock
 from pathlib import Path
 
 SOURCE = Path(__file__).resolve().parents[1] / "ops/lib/balkons-bot.py"
@@ -17,7 +21,10 @@ TEXT = SOURCE.read_text(encoding="utf-8")
 TREE = ast.parse(TEXT)
 FUNCTION_NAMES = {
     "_send_telegram_now", "tg_send", "_telegram_sender_loop",
-    "_start_telegram_sender", "on_message", "_publish_command", "handle_command",
+    "_start_telegram_sender", "on_message", "_strict_json_object",
+    "_safety_state_max_age_s", "_manual_watering_admission",
+    "_publish_command", "_publish_command_with_feedback",
+    "_handle_manual_watering", "handle_command",
 }
 SELECTED = [n for n in TREE.body if isinstance(n, ast.FunctionDef) and n.name in FUNCTION_NAMES]
 assert {n.name for n in SELECTED} == FUNCTION_NAMES
@@ -25,7 +32,7 @@ FUNCTIONS = compile(ast.fix_missing_locations(ast.Module(body=SELECTED, type_ign
 
 
 class BridgeTests(unittest.TestCase):
-    def bridge(self, post=None):
+    def bridge(self, post=None, mqtt_rc=0):
         errors = []
         if post is None:
             post = lambda *args, **kwargs: object()
@@ -35,13 +42,16 @@ class BridgeTests(unittest.TestCase):
         class FakeMqtt:
             def publish(self, *args, **kwargs):
                 publish_calls.append((args, kwargs))
-                return types.SimpleNamespace(rc=0)
+                return types.SimpleNamespace(rc=mqtt_rc)
 
         ns = {
             "queue": queue,
             "time": time,
             "threading": threading,
             "sys": __import__("sys"),
+            "json": json,
+            "os": os,
+            "Path": Path,
             "requests": types.SimpleNamespace(post=post),
             "mqtt": types.SimpleNamespace(MQTT_ERR_SUCCESS=0),
             "_mqttc": FakeMqtt(),
@@ -52,6 +62,14 @@ class BridgeTests(unittest.TestCase):
             "_outbound_messages": outbound,
             "TELEGRAM_SLOW_SEND_S": 1.0,
             "T_CMD": "balkons/cmd",
+            "SAFETY_STATE_SCHEMA": "rozkalns.balcony-watering-safety.v1",
+            "SAFETY_STATE_DEFAULT_MAX_AGE_S": 21600,
+            "SAFETY_STATE_MAX_BYTES": 4096,
+            "SAFETY_STATE_KEYS": {
+                "schema", "generated_at_epoch", "decision", "frost_blocked",
+                "sensor_total", "sensor_degraded_count", "sensor_coverage_ok",
+                "already_watered_today",
+            },
         }
         exec(FUNCTIONS, ns)
         return ns, outbound, publish_calls, errors
@@ -122,17 +140,99 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(len(attempts), 1)
         self.assertEqual(errors, [("TG send error", "TimeoutError")])
 
-    def test_command_publish_contract_unchanged(self):
+    def _write_safety(self, directory, **overrides):
+        state = {
+            "schema": "rozkalns.balcony-watering-safety.v1",
+            "generated_at_epoch": int(time.time()),
+            "decision": "manual_permit",
+            "frost_blocked": False,
+            "sensor_total": 10,
+            "sensor_degraded_count": 0,
+            "sensor_coverage_ok": True,
+            "already_watered_today": False,
+        }
+        state.update(overrides)
+        path = Path(directory) / "manual-safety-v1.json"
+        path.write_text(json.dumps(state), encoding="utf-8")
+        return path
+
+    def test_manual_watering_requires_fresh_permitting_state(self):
+        ns, outbound, published, _ = self.bridge()
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._write_safety(directory)
+            with unittest.mock.patch.dict(
+                os.environ,
+                {"BALCONY_SAFETY_STATE_FILE": str(path)},
+                clear=False,
+            ):
+                ns["handle_command"]("/laist")
+        self.assertEqual(published, [(("balkons/cmd", "laist"), {})])
+        self.assertEqual(outbound.qsize(), 0)
+
+    def test_manual_watering_blocks_frost_stale_and_missing_state(self):
+        ns, outbound, published, _ = self.bridge()
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._write_safety(
+                directory,
+                decision="block_frost",
+                frost_blocked=True,
+            )
+            with unittest.mock.patch.dict(
+                os.environ,
+                {"BALCONY_SAFETY_STATE_FILE": str(path)},
+                clear=False,
+            ):
+                ns["handle_command"]("/laist_2")
+            self.assertEqual(published, [])
+            self.assertIn("sala risks", outbound.get_nowait()[0])
+
+            path = self._write_safety(
+                directory,
+                generated_at_epoch=int(time.time()) - 21601,
+            )
+            with unittest.mock.patch.dict(
+                os.environ,
+                {"BALCONY_SAFETY_STATE_FILE": str(path)},
+                clear=False,
+            ):
+                ns["handle_command"]("/laist")
+            self.assertIn("novecojusi", outbound.get_nowait()[0])
+
+            path.unlink()
+            with unittest.mock.patch.dict(
+                os.environ,
+                {"BALCONY_SAFETY_STATE_FILE": str(path)},
+                clear=False,
+            ):
+                ns["handle_command"]("/laist")
+            self.assertIn("nav pieejams", outbound.get_nowait()[0])
+
+    def test_stop_bypasses_manual_watering_gate(self):
+        ns, _, published, _ = self.bridge()
+        with unittest.mock.patch.dict(
+            os.environ,
+            {"BALCONY_SAFETY_STATE_FILE": "/does/not/exist"},
+            clear=False,
+        ):
+            ns["handle_command"]("/stop")
+        self.assertEqual(published, [(("balkons/cmd", "stop"), {})])
+
+    def test_mqtt_publish_failure_feedback_is_one_shot(self):
+        ns, outbound, published, _ = self.bridge(mqtt_rc=4)
+        ns["handle_command"]("/stop")
+        self.assertEqual(len(published), 1)
+        self.assertEqual(outbound.qsize(), 1)
+        self.assertIn("netika nosūtīta", outbound.get_nowait()[0])
+
+    def test_non_watering_command_publish_contract_unchanged(self):
         ns, _, published, _ = self.bridge()
         ns["handle_command"]("/mitrums")
         ns["handle_command"]("/stop")
-        ns["handle_command"]("/laist")
         self.assertEqual(
             published,
             [
                 (("balkons/cmd", "mitrums"), {}),
                 (("balkons/cmd", "stop"), {}),
-                (("balkons/cmd", "laist"), {}),
             ],
         )
 
