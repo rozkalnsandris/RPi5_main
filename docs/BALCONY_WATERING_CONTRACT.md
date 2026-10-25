@@ -18,12 +18,12 @@ The live production files were reconciled read-only before this source was creat
 
 ## Required sensor contract
 
-The primary controller checks exactly **12 active** Home Assistant entities before any pump-ON request:
+The primary controller checks exactly **11 active** Home Assistant entities before any pump-ON request:
 
 - flower **1**;
-- flowers **3-13** (including flower **5**).
+- flowers **3-10, 12 and 13** (including flower **5**).
 
-ESP32 firmware retired flowers **2, 14 and 15**. Those retired entities are no longer required; only the 12 active sensors form the fail-closed gate.
+The source policy retires flowers **2, 11, 14 and 15**. Only the remaining 11 active sensors form the reviewed gate. Flower 11 is not retired on a live device until the reviewed firmware has been separately merged and flashed; source updates are not runtime adoption.
 
 This **supersedes** the historical 14-sensor source gate in #174 (flowers 1-4 and 6-15, which excluded flower 5). The firmware source change was shipped to the ESP32 independently; updating this RPi5 source does not prove that the private production controller has been replaced.
 
@@ -61,7 +61,7 @@ The heat-gate source reads the Home Assistant weather entity and uses a default 
 - at or above the threshold: `exec` the same primary two-cycle controller;
 - Home Assistant or temperature parse failure: fail closed without delegation.
 
-The primary controller always re-runs its own 12-sensor gate after temperature delegation.
+The primary controller always re-runs its own 11-sensor gate after temperature delegation.
 
 ## Current schedule evidence
 
@@ -89,9 +89,9 @@ Creating, disabling or editing Hermes schedules, installing the controller at a 
 ### Gates, in order
 
 1. **State fetch** — one `GET /api/states` snapshot. An empty answer is a skip with an error notification.
-2. **Active sensor set** — exactly 12 entities: flowers 1 and 3–13. Retired flowers 2, 14 and 15 are never required, never counted and never treated as dry. At the owner's request, an active moisture sensor missing from the snapshot, or reporting `unavailable`/`unknown`/empty, is **assumed moist, not measured moist**. These assumptions are separately logged and included in the Telegram outcome. An unexpected categorical value still blocks watering; empty/invalid HA responses block the whole run. This fallback is confined to the autumn/winter controller, not the stricter primary/summer controller above.
-3. **Quorum** — watering is considered only when at least `BALCONY_MIN_DRY_SENSORS` (default `2`) of the 12 active sensors **actually report** `sauss`. A single dry sensor never waters the whole tray; unavailable sensors can never count as dry.
-4. **Wet-enough guard** — when at least `BALCONY_MAX_MOIST_SENSORS` (default `10`) of the 12 are reported or **assumed** `mitrs`, the run skips with a no-watering notification. Sensor absence therefore cannot force a watering cycle.
+2. **Active sensor set** — exactly 11 entities: flowers 1, 3–10, 12 and 13. Retired flowers 2, 11, 14 and 15 are never required, never counted and never treated as dry. At the owner's request, an active moisture sensor missing from the snapshot, or reporting `unavailable`/`unknown`/empty, is **assumed moist, not measured moist**. These assumptions are separately logged and included in the Telegram outcome. An unexpected categorical value still blocks watering; empty/invalid HA responses block the whole run. This fallback is confined to the autumn/winter controller, not the stricter primary/summer controller above.
+3. **Quorum** — watering is considered only when at least `BALCONY_MIN_DRY_SENSORS` (default `2`) of the 11 active sensors **actually report** `sauss`. A single dry sensor never waters the whole tray; unavailable sensors can never count as dry.
+4. **Wet-enough guard** — when at least `BALCONY_MAX_MOIST_SENSORS` (default `9`) of the 11 are reported or **assumed** `mitrs`, the run skips with a no-watering notification. Sensor absence therefore cannot force a watering cycle.
 5. **Frost gate** — the low temperature for the next 24 h is read from the weather entity `forecast` attribute. When that attribute is absent, the read-only `weather.get_forecasts` service is used. The lower of that low and the current temperature is compared with `BALCONY_FROST_THRESHOLD_C` (default `2.0`); at or below the threshold the run is blocked and reported as a frost block. When no usable temperature can be obtained, the run skips with an error. `BALCONY_FROST_REQUIRE_FORECAST=0` downgrades a missing forecast to the current temperature with a logged warning; the default `1` keeps it fail-closed.
 
 `BALCONY_AUTUMN_DRY_RUN=1` executes every gate, logs the decision and suppresses the pump request, all Telegram messages and the day marker. It exists so a preflight can prove what the controller would do before anything is live.
@@ -154,7 +154,7 @@ Autumn/winter controller inputs:
 - `BALCONY_FROST_THRESHOLD_C` — default `2.0`;
 - `BALCONY_FROST_REQUIRE_FORECAST` — default `1` (fail closed when no forecast is available);
 - `BALCONY_MIN_DRY_SENSORS` — default `2`;
-- `BALCONY_MAX_MOIST_SENSORS` — default `10`;
+- `BALCONY_MAX_MOIST_SENSORS` — default `9`;
 - `BALCONY_AUTUMN_STATE_DIR`, `BALCONY_AUTUMN_LOCKFILE`, `BALCONY_AUTUMN_LOGFILE` — runtime path overrides.
 
 A later production mapping may provide these inputs through a protected host-only configuration mechanism. That mapping is intentionally out of scope here.
@@ -163,8 +163,8 @@ A later production mapping may provide these inputs through a protected host-onl
 
 `tests/test-balcony-watering.sh` replaces `curl` and `sleep` with local mocks, uses a reserved `.invalid` URL, and never performs a real network request or pump action. It verifies:
 
-1. all 12 active sensors valid with retired 2/14/15 absent => watering path is reachable;
-2. retired 2/14/15 unavailable => still valid; active flower 5 missing/unavailable/unknown => skip;
+1. all 11 active sensors valid with retired 2/11/14/15 absent => watering path is reachable;
+2. retired 2/11/14/15 unavailable (or retired 11 stale and dry) => still valid; active flower 5 missing/unavailable/unknown => skip;
 3. one required sensor missing => skip;
 4. one required sensor unavailable => skip;
 5. one required sensor unknown => skip;
@@ -175,17 +175,17 @@ A later production mapping may provide these inputs through a protected host-onl
 10. HTTP 200 for ON without a switch transition does not start the timed watering window and does not trigger a duplicate ON retry;
 11. HTTP 200 for OFF without an `off` state keeps the cleanup obligation active;
 12. malformed switch-state feedback fails closed and never triggers a second ON;
-13. below 27 C => no delegation, at 27 C => delegation, with the same 12-sensor gate;
+13. below 27 C => no delegation, at 27 C => delegation, with the same 11-sensor gate;
 14. all `curl` traffic remains inside the local mock.
 
 The repository-wide `make validate` gate includes this regression together with shell syntax, secret scanning, and public-repository safety checks.
 
 `tests/test-balcony-watering-autumn.sh` covers the cold-season controller with the same offline technique — local `curl` and `sleep` mocks, a reserved `.invalid` origin and a locally intercepted Home Assistant MQTT publish endpoint, so no request leaves the machine and no pump action is possible. It verifies:
 
-1. three dry pots of twelve with a mild night => exactly one confirmed `on,off` cycle, one watering message and a recorded day marker;
-2. retired 2/14/15 `unavailable` => still waters and never counts as dry;
+1. three dry pots of eleven with a mild night => exactly one confirmed `on,off` cycle, one watering message and a recorded day marker;
+2. retired 2/11/14/15 `unavailable` (or retired 11 stale and dry) => still waters and never counts as dry;
 3. active sensor missing/`unavailable`/`unknown` with three confirmed dry => one safe watering cycle and assumption reported; unexpected categorical value => skip with an error message;
-4. active dry sensor unavailable or all 12 unavailable => never trigger watering; empty/malformed Home Assistant snapshot => skip with error;
+4. active dry sensor unavailable or all 11 unavailable => never trigger watering; empty/malformed Home Assistant snapshot => skip with error;
 5. one dry sensor => skip, exactly one no-watering Telegram message;
 6. tray already moist => skip, exactly one no-watering Telegram message;
 7. forecast low at or below the frost threshold => blocked with a frost message and no pump request;
