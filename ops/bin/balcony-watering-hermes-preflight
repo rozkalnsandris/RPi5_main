@@ -275,13 +275,15 @@ def collect(*, store_path: Path, expected_uid: int) -> dict[str, Any]:
 
     autumn_matches: list[tuple[int, dict[str, Any]]] = []
     for index, job in enumerate(jobs):
+        roles = _marker_roles(job)
+        exact_autumn_name = (
+            isinstance(job.get("name"), str)
+            and job["name"].casefold() == "balcony-watering-autumn"
+        )
         if (
-            _schedule_expr(job) == AUTUMN_EXPR
-            or "autumn" in _marker_roles(job)
-            or (
-                isinstance(job.get("name"), str)
-                and job["name"].casefold() == "balcony-watering-autumn"
-            )
+            "autumn" in roles
+            or exact_autumn_name
+            or (_schedule_expr(job) == AUTUMN_EXPR and _watering_candidate(job))
         ):
             autumn_matches.append((index, job))
 
@@ -314,11 +316,10 @@ def collect(*, store_path: Path, expected_uid: int) -> dict[str, Any]:
             "autumn_job_already_exists" if recognized else "autumn_job_unrecognized"
         )
 
-    expected_slot_exprs = {expr for _slot, expr, _binding in LEGACY_SLOTS}
     for index, job in enumerate(jobs):
         if index in selected:
             continue
-        if _watering_candidate(job) or _schedule_expr(job) in expected_slot_exprs | {AUTUMN_EXPR}:
+        if _watering_candidate(job):
             selected.add(index)
             blockers.append("unexpected_watering_job_candidate")
 
