@@ -159,7 +159,7 @@ Autumn/winter controller inputs:
 - `BALCONY_SAFETY_STATE_FILE` — exact production mapping is `/home/andris/.local/state/balcony-watering-autumn/manual-safety-v1.json`; controller source still defaults under `BALCONY_AUTUMN_STATE_DIR` for disconnected/test use;
 - `BALCONY_AUTUMN_STATE_DIR`, `BALCONY_AUTUMN_LOCKFILE`, `BALCONY_AUTUMN_LOGFILE` — runtime path overrides.
 
-A later production mapping may provide these inputs through a protected host-only configuration mechanism. That mapping is intentionally out of scope here.
+Except for the exact non-secret bot safety-state path/freshness mapping reviewed above, the controller's Home Assistant credentials and any production-only overrides remain protected host runtime inputs. Their values and binding mechanism are outside this source outcome and must be revalidated separately before LIVE.
 
 ## Offline regression gate
 
