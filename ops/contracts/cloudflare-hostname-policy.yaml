@@ -73,6 +73,30 @@ hostnames:
     audit_route_presence: present
     evidence: tunnel-route-present-parent-wildcard-requires-exact-public-bypass
 
+  - hostname: ausmalwiese.de
+    owner_repo: rozkalnsandris/coloring-pages
+    delivery: shared_rpi5_tunnel
+    trust_class: PUBLIC
+    desired_origin_scope: loopback
+    access_application_scope: none
+    protect_with_access: false
+    app_jwt_validation: false
+    lan_break_glass: false
+    audit_route_presence: present
+    evidence: issue-982-public-onboarding-https-accepted
+
+  - hostname: www.ausmalwiese.de
+    owner_repo: rozkalnsandris/coloring-pages
+    delivery: shared_rpi5_tunnel
+    trust_class: PUBLIC
+    desired_origin_scope: loopback
+    access_application_scope: none
+    protect_with_access: false
+    app_jwt_validation: false
+    lan_break_glass: false
+    audit_route_presence: present
+    evidence: issue-982-public-onboarding-https-accepted
+
   - hostname: weather.rozkalns.net
     owner_repo: rozkalnsandris/rozkalns_weather
     delivery: shared_rpi5_tunnel

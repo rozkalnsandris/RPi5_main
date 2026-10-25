@@ -412,6 +412,20 @@ class CloudflareP0Tests(unittest.TestCase):
                 continue
             self.assertIn(item.audit_route_presence, {"present", "absent"})
 
+    def test_repository_registry_tracks_ausmalwiese_public_alias_routes(self) -> None:
+        registry = cf.load_registry(
+            ROOT / "ops" / "contracts" / "cloudflare-hostname-policy.yaml"
+        )
+        for hostname in ("ausmalwiese.de", "www.ausmalwiese.de"):
+            item = registry[hostname]
+            self.assertEqual(item.delivery, "shared_rpi5_tunnel")
+            self.assertEqual(item.trust_class, "PUBLIC")
+            self.assertEqual(item.desired_origin_scope, "loopback")
+            self.assertEqual(item.access_application_scope, "none")
+            self.assertEqual(item.protect_with_access, "false")
+            self.assertFalse(item.lan_break_glass)
+            self.assertEqual(item.audit_route_presence, "present")
+
     def test_repository_registry_tracks_dashboard_live_route_contract(self) -> None:
         registry = cf.load_registry(
             ROOT / "ops" / "contracts" / "cloudflare-hostname-policy.yaml"
