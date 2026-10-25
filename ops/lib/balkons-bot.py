@@ -28,6 +28,20 @@ TELEGRAM_SLOW_SEND_S = 1.0
 T_CMD = "balkons/cmd"
 T_OUT = "balkons/telegram_out"
 
+SAFETY_STATE_SCHEMA = "rozkalns.balcony-watering-safety.v1"
+SAFETY_STATE_DEFAULT_MAX_AGE_S = 6 * 60 * 60
+SAFETY_STATE_MAX_BYTES = 4096
+SAFETY_STATE_KEYS = {
+    "schema",
+    "generated_at_epoch",
+    "decision",
+    "frost_blocked",
+    "sensor_total",
+    "sensor_degraded_count",
+    "sensor_coverage_ok",
+    "already_watered_today",
+}
+
 _telegram_token = ""
 _allowed_chat_id = ""
 _mqtt_host = ""
@@ -147,36 +161,140 @@ def on_message(client, userdata, msg) -> None:
     tg_send(text)
 
 
-def _publish_command(payload: str) -> None:
+def _strict_json_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate key")
+        result[key] = value
+    return result
+
+
+def _safety_state_max_age_s() -> int | None:
+    raw = os.environ.get("BALCONY_SAFETY_STATE_MAX_AGE_SECONDS", "").strip()
+    if not raw:
+        return SAFETY_STATE_DEFAULT_MAX_AGE_S
+    try:
+        value = int(raw, 10)
+    except ValueError:
+        return None
+    if value < 60 or value > 86400:
+        return None
+    return value
+
+
+def _manual_watering_admission(now_epoch: int | None = None) -> tuple[bool, str]:
+    raw_path = os.environ.get("BALCONY_SAFETY_STATE_FILE", "").strip()
+    max_age_s = _safety_state_max_age_s()
+    if not raw_path or max_age_s is None:
+        return False, "RPi5 drošības stāvoklis nav konfigurēts"
+
+    path = Path(raw_path)
+    try:
+        if path.is_symlink() or not path.is_file():
+            return False, "RPi5 drošības stāvoklis nav pieejams"
+        size = path.stat().st_size
+        if size <= 0 or size > SAFETY_STATE_MAX_BYTES:
+            return False, "RPi5 drošības stāvoklis nav derīgs"
+        data = json.loads(
+            path.read_text(encoding="utf-8"),
+            object_pairs_hook=_strict_json_object,
+        )
+    except (OSError, UnicodeError, ValueError, json.JSONDecodeError):
+        return False, "RPi5 drošības stāvoklis nav derīgs"
+
+    if not isinstance(data, dict) or set(data) != SAFETY_STATE_KEYS:
+        return False, "RPi5 drošības stāvoklis nav derīgs"
+    if data.get("schema") != SAFETY_STATE_SCHEMA:
+        return False, "RPi5 drošības stāvokļa versija nav derīga"
+
+    generated = data.get("generated_at_epoch")
+    sensor_total = data.get("sensor_total")
+    degraded = data.get("sensor_degraded_count")
+    if (
+        isinstance(generated, bool)
+        or not isinstance(generated, int)
+        or isinstance(sensor_total, bool)
+        or not isinstance(sensor_total, int)
+        or isinstance(degraded, bool)
+        or not isinstance(degraded, int)
+        or sensor_total != 10
+        or degraded < 0
+        or degraded > sensor_total
+        or not isinstance(data.get("frost_blocked"), bool)
+        or not isinstance(data.get("sensor_coverage_ok"), bool)
+        or not isinstance(data.get("already_watered_today"), bool)
+        or not isinstance(data.get("decision"), str)
+    ):
+        return False, "RPi5 drošības stāvoklis nav derīgs"
+
+    now = int(time.time()) if now_epoch is None else now_epoch
+    age = now - generated
+    if generated > now + 60 or age < 0 or age > max_age_s:
+        return False, "RPi5 drošības pārbaude ir novecojusi"
+
+    if data["already_watered_today"]:
+        return False, "šodien jau laistīts"
+    if data["frost_blocked"] or data["decision"] == "block_frost":
+        return False, "sala risks"
+    if not data["sensor_coverage_ok"] or data["decision"] == "block_sensor_coverage":
+        return False, "nepietiek derīgu mitruma sensoru"
+    if data["decision"] != "manual_permit":
+        return False, "RPi5 drošības pārbaude pašlaik neļauj laistīt"
+    return True, ""
+
+
+def _publish_command(payload: str) -> bool:
     if _mqttc is None:
         print("MQTT client unavailable", file=sys.stderr)
-        return
-    info = _mqttc.publish(T_CMD, payload)
+        return False
+    try:
+        info = _mqttc.publish(T_CMD, payload)
+    except Exception as exc:
+        _safe_error("MQTT publish error", exc)
+        return False
     if info.rc != mqtt.MQTT_ERR_SUCCESS:
         print(f"MQTT publish failed rc={info.rc}", file=sys.stderr)
+        return False
+    return True
+
+
+def _publish_command_with_feedback(payload: str) -> bool:
+    delivered = _publish_command(payload)
+    if not delivered:
+        tg_send("⚠️ Komanda netika nosūtīta uz laistīšanas kontrolieri.")
+    return delivered
+
+
+def _handle_manual_watering(payload: str) -> None:
+    allowed, reason = _manual_watering_admission()
+    if not allowed:
+        tg_send(f"⛔ Laistīšana bloķēta: {reason}.")
+        return
+    _publish_command_with_feedback(payload)
 
 
 def handle_command(text: str) -> None:
     text = text.strip()
 
     if text == "/laist":
-        _publish_command("laist")
+        _handle_manual_watering("laist")
     elif text.startswith("/laist_"):
-        _publish_command(f"laist_{text[7:]}")
+        _handle_manual_watering(f"laist_{text[7:]}")
     elif text == "/stop":
-        _publish_command("stop")
+        _publish_command_with_feedback("stop")
     elif text == "/mitrums":
-        _publish_command("mitrums")
+        _publish_command_with_feedback("mitrums")
     elif text == "/statuss":
-        _publish_command("statuss")
+        _publish_command_with_feedback("statuss")
     elif text == "/raw":
-        _publish_command("raw")
+        _publish_command_with_feedback("raw")
     elif text == "/start":
         tg_send(
             "🌱 Balkona Laistīšana\n\n"
-            "/laist — 30 sek\n"
-            "/laist_2 — 2 min\n"
-            "/stop — apturēt\n"
+            "/laist — 30 sek (vajag svaigu RPi5 drošības pārbaudi)\n"
+            "/laist_2 — 2 min (vajag svaigu RPi5 drošības pārbaudi)\n"
+            "/stop — apturēt (vienmēr tiešs)\n"
             "/mitrums — sensori\n"
             "/statuss — info\n"
             "/raw — ADC vērtības"

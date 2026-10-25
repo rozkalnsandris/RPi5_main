@@ -36,6 +36,17 @@ while the pump is running, and uses separate MQTT ACK tracking. A queue
 build-up or Telegram API outage can still delay/drop responses; production
 end-to-end measurements should locate the remaining bottleneck.
 
+## Later manual-watering admission (#1226)
+
+The latency worker remains unchanged: MQTT callbacks only enqueue Telegram HTTP
+work. A later source layer now checks a fresh local RPi5 safety-state file before
+normal `/laist*` publishes. That file read is local and bounded; it adds no
+Telegram/HA network request and no new credential. `/stop` remains direct.
+
+If MQTT rejects a command publish, the bot enqueues one user-facing Telegram
+failure message and performs no application retry. This does not claim
+end-to-end command delivery or pump state.
+
 ## Production safety gate
 
 Merge is separately owner-gated, and source merge does not install or restart
