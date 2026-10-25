@@ -31,6 +31,8 @@ ReadWritePaths=/var/lib/ausmalwiese-goatcounter
 MemoryMax=192M
 CPUQuota=50%
 TasksMax=64
+StandardOutput=null
+StandardError=null
 
 [Install]
 WantedBy=multi-user.target
