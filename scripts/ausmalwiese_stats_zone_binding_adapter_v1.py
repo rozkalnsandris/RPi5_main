@@ -14,7 +14,7 @@ OTHER_ZONE = "rozkalns.net"
 CODE_SHA = "47f7490918d25e8f1dcc683cebe3c4d3d9a75230f33ae5a1d26cbd6bd3ec1173"
 PRE_CONFIRM = "OWNER-AUTHORIZED-STATS-ZONE-BINDING-PREFLIGHT"
 APPLY_CONFIRM = "OWNER-AUTHORIZED-STATS-ZONE-BINDING-APPLY"
-ID32 = re.compile(r"[0-9a-f]{32}\\Z")
+ID32 = re.compile(r"[0-9a-f]{32}\Z")
 
 
 class Stop(Exception):
