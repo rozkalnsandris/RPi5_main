@@ -90,9 +90,10 @@ Creating, disabling or editing Hermes schedules, installing the controller at a 
 
 1. **State fetch** — one `GET /api/states` snapshot. An empty answer is a skip with an error notification.
 2. **Active sensor set** — exactly 10 entities: flowers 1, 3–10 and 12. Retired flowers 2, 11, 13, 14 and 15 are never required, never counted and never treated as dry. At the owner's request, an active moisture sensor missing from the snapshot, or reporting `unavailable`/`unknown`/empty, is **assumed moist, not measured moist**. These assumptions are separately logged and included in the Telegram outcome. An unexpected categorical value still blocks watering; empty/invalid HA responses block the whole run. This fallback is confined to the autumn/winter controller, not the stricter primary/summer controller above.
-3. **Quorum** — watering is considered only when at least `BALCONY_MIN_DRY_SENSORS` (default `2`) of the 10 active sensors **actually report** `sauss`. A single dry sensor never waters the whole tray; unavailable sensors can never count as dry.
-4. **Wet-enough guard** — when at least `BALCONY_MAX_MOIST_SENSORS` (default `8`) of the 10 are reported or **assumed** `mitrs`, the run skips with a no-watering notification. Sensor absence therefore cannot force a watering cycle.
-5. **Frost gate** — the low temperature for the next 24 h is read from the weather entity `forecast` attribute. When that attribute is absent, the read-only `weather.get_forecasts` service is used. The lower of that low and the current temperature is compared with `BALCONY_FROST_THRESHOLD_C` (default `2.0`); at or below the threshold the run is blocked and reported as a frost block. When no usable temperature can be obtained, the run skips with an error. `BALCONY_FROST_REQUIRE_FORECAST=0` downgrades a missing forecast to the current temperature with a logged warning; the default `1` keeps it fail-closed.
+3. **Sensor coverage** — at most `BALCONY_MAX_DEGRADED_SENSORS` (default `2`) of the 10 active sensors may be missing/`unavailable`/`unknown`. A third degraded sensor blocks watering and reports `Nav laistīts`. Degraded sensors remain assumed moist and can never count as dry.
+4. **Quorum** — watering is considered only when at least `BALCONY_MIN_DRY_SENSORS` (default `2`) of the 10 active sensors **actually report** `sauss`. A single dry sensor never waters the whole tray; unavailable sensors can never count as dry.
+5. **Wet-enough guard** — when at least `BALCONY_MAX_MOIST_SENSORS` (default `8`) of the 10 are reported or **assumed** `mitrs`, the run skips with a no-watering notification. Sensor absence therefore cannot force a watering cycle.
+6. **Frost gate** — the low temperature for the next 24 h is read from the weather entity `forecast` attribute. When that attribute is absent, the read-only `weather.get_forecasts` service is used. The lower of that low and the current temperature is compared with `BALCONY_FROST_THRESHOLD_C` (default `2.0`); at or below the threshold the run is blocked and reported as a frost block. When no usable temperature can be obtained, the run skips with an error. `BALCONY_FROST_REQUIRE_FORECAST=0` downgrades a missing forecast to the current temperature with a logged warning; the default `1` keeps it fail-closed.
 
 `BALCONY_AUTUMN_DRY_RUN=1` executes every gate, logs the decision and suppresses the pump request, all Telegram messages and the day marker. It exists so a preflight can prove what the controller would do before anything is live.
 
@@ -114,16 +115,15 @@ The autumn/winter controller delivers its notifications via **Home Assistant MQT
 
 Each run records `watering.log` and sends **Laistīts** with duration/dry count, **Nav laistīts** with a specific reason (insufficient measured dry sensors, soil already moist, already watered that day, frost, or sensor/temperature checks), **Kļūda** for unsafe pump outcomes, or a lock-contention warning. An unavailable active moisture sensor is explicitly listed as **assumed moist**, never described as measured. `NOTIFY-MQTT` logs successful handoff; `NOTIFY-WARN` records a failed handoff without retry or changing the watering decision. Dry-run suppresses all MQTT/Telegram notifications. Hermes cron delivery stays `local` to prevent duplicate raw logs in the Hermes Agent chat. A separate exact LIVE approval is needed to install source and later verify one ordinary scheduled delivery without triggering watering.
 
-### Manual commands and frost (evaluation)
+### Telegram manual watering safety state
 
-Manual paths stay outside this gate: the bot's `/laist` and `/laist_N` publish `balkons/cmd` directly, and `balkons/sukna/komanda ON` reaches the device as well. The bot holds an MQTT and Telegram credential, not a Home Assistant credential, so it cannot evaluate the frost gate itself.
+The autumn controller now publishes a compact local `manual-safety-v1.json` policy artifact after each non-dry-run decision. The JSON schema is `rozkalns.balcony-watering-safety.v1` and contains only: generation epoch, decision class, frost-block flag, fixed sensor total, degraded-sensor count, sensor-coverage flag and already-watered-today flag. It contains no HA response body, raw moisture reading, credential, private path, chat data or other personal data. Writes use a same-directory temporary file followed by atomic replacement.
 
-Evaluated options:
+The bot reads that file **read-only** through the non-secret `BALCONY_SAFETY_STATE_FILE` path. Normal `/laist` and `/laist_N` are accepted only when the file is structurally valid, no more than `BALCONY_SAFETY_STATE_MAX_AGE_SECONDS` old (default 21600 / six hours), and reports `decision=manual_permit`, no frost block, acceptable sensor coverage and no watering already recorded today. Missing, malformed, symlinked, future-dated or stale state blocks manual watering. The bot receives no Home Assistant credential.
 
-- **Host-side flag (recommended next step).** The 11:00 controller already computes a frost decision; writing a dated frost flag into its state directory would let the bot refuse `/laist*` while the flag is fresh, without new credentials. This is a separate, bounded change that must also define flag staleness and the owner-override wording.
-- **Device-side block.** A firmware subscription to a frost/block topic would refuse starts even for a direct MQTT publisher, but it adds a coupled topic, a new firmware revision and an OTA to the critical path.
+The manual permit deliberately does **not** duplicate the automatic dry quorum/wet guard: it is an owner-initiated watering request, but it may not bypass the host safety conditions (freshness, frost, sensor coverage and once-per-day state). There is no force/override command in this source slice. A future override would require its own explicit two-step/expiry design.
 
-Until one of these is authorized, manual commands remain a deliberate owner override, and the device's 180 s fail-safe is the only bound on them.
+`/stop` remains outside the admission gate and is published directly to `balkons/cmd`, preserving the ESP32 urgent STOP path. The ESP32 180 s hard limit remains the final device-side bound. Direct publishers to `balkons/sukna/komanda` are not changed by this host-side Telegram gate.
 
 ## Private runtime boundary
 
@@ -155,6 +155,8 @@ Autumn/winter controller inputs:
 - `BALCONY_FROST_REQUIRE_FORECAST` — default `1` (fail closed when no forecast is available);
 - `BALCONY_MIN_DRY_SENSORS` — default `2`;
 - `BALCONY_MAX_MOIST_SENSORS` — default `8`;
+- `BALCONY_MAX_DEGRADED_SENSORS` — default `2`; a larger missing/unavailable/unknown active-sensor count blocks watering;
+- `BALCONY_SAFETY_STATE_FILE` — optional exact path for the atomic manual-safety JSON (defaults under `BALCONY_AUTUMN_STATE_DIR`);
 - `BALCONY_AUTUMN_STATE_DIR`, `BALCONY_AUTUMN_LOCKFILE`, `BALCONY_AUTUMN_LOGFILE` — runtime path overrides.
 
 A later production mapping may provide these inputs through a protected host-only configuration mechanism. That mapping is intentionally out of scope here.
@@ -184,8 +186,8 @@ The repository-wide `make validate` gate includes this regression together with 
 
 1. three dry pots of ten with a mild night => exactly one confirmed `on,off` cycle, one watering message and a recorded day marker;
 2. retired 2/11/13/14/15 `unavailable` (or retired 11/13 stale and dry) => still waters and never counts as dry;
-3. active sensor missing/`unavailable`/`unknown` with three confirmed dry => one safe watering cycle and assumption reported; unexpected categorical value => skip with an error message;
-4. active dry sensor unavailable or all 10 unavailable => never trigger watering; empty/malformed Home Assistant snapshot => skip with error;
+3. one or two active sensors missing/`unavailable`/`unknown` with three confirmed dry => the fallback remains eligible; unexpected categorical value => skip with an error message;
+4. more than two degraded active sensors => explicit sensor-coverage block and no pump request; active dry sensor unavailable or all 10 unavailable => never trigger watering; empty/malformed Home Assistant snapshot => skip with error;
 5. one dry sensor => skip, exactly one no-watering Telegram message;
 6. tray already moist => skip, exactly one no-watering Telegram message;
 7. forecast low at or below the frost threshold => blocked with a frost message and no pump request;
@@ -198,7 +200,8 @@ The repository-wide `make validate` gate includes this regression together with 
 14. duration is honoured and a duration above the 180 s device limit is rejected;
 15. dry-run => every gate runs, no pump request, no message, no day marker;
 16. post-cycle calibration readback is logged, and only sent to Telegram when explicitly enabled;
-17. the lock refuses an overlapping run.
+17. the lock refuses an overlapping run;
+18. the atomic manual-safety state records permit/frost/coverage/already-watered outcomes and dry-run never mutates it.
 
 ## Production and deployment boundary
 
