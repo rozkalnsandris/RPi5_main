@@ -282,7 +282,17 @@ class BalkonsBotDeployVerifierTests(unittest.TestCase):
             if line.startswith("LoadCredentialEncrypted=") and line != "LoadCredentialEncrypted="
         }
         self.assertEqual(encrypted, verifier.ENCRYPTED_CREDENTIAL_LINES)
-        self.assertIn("Environment=PYTHONDONTWRITEBYTECODE=1", lines)
+        environment = {
+            line for line in lines
+            if line.startswith("Environment=") and line != "Environment="
+        }
+        self.assertEqual(environment, verifier.EXPECTED_ENVIRONMENT_LINES)
+        self.assertIn(
+            "Environment=BALCONY_SAFETY_STATE_FILE="
+            "~/.local/state/balcony-watering-autumn/manual-safety-v1.json",
+            lines,
+        )
+        self.assertIn("Environment=BALCONY_SAFETY_STATE_MAX_AGE_SECONDS=21600", lines)
         unset_lines = [line for line in lines if line.startswith("UnsetEnvironment=")]
         self.assertEqual(len(unset_lines), 1)
         for name in (
@@ -304,6 +314,30 @@ class BalkonsBotDeployVerifierTests(unittest.TestCase):
         self.assertNotIn("RestartSec=", text)
         self.assertNotIn("TimeoutStopSec=", text)
         self.assertNotIn("@", text)
+
+    def test_overlay_rejects_alternate_or_ambient_safety_state_binding(self):
+        original = OVERLAY_PATH.read_text(encoding="utf-8")
+        variants = (
+            original.replace(
+                verifier.SAFETY_STATE_PATH,
+                "/tmp/manual-safety-v1.json",
+            ),
+            original.replace(
+                "Environment=BALCONY_SAFETY_STATE_MAX_AGE_SECONDS=21600\n",
+                "",
+            ),
+            original.replace(
+                "EnvironmentFile=\n",
+                "EnvironmentFile=/tmp/ambient.env\n",
+            ),
+            original + "PassEnvironment=BALCONY_SAFETY_STATE_FILE\n",
+        )
+        for index, content in enumerate(variants):
+            with self.subTest(index=index), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "overlay.conf"
+                path.write_text(content, encoding="utf-8")
+                with self.assertRaises(verifier.DeployVerifyError):
+                    verifier.validate_overlay_contract(path)
 
 
 if __name__ == "__main__":
