@@ -29,8 +29,8 @@ The bridge keeps the existing topology:
 - subscribe to `balkons/telegram_out` and forward received text to the authorized
   Telegram chat;
 - publish accepted Telegram commands to `balkons/cmd`;
-- preserve the existing `/laist`, `/laist_N`, `/stop`, `/mitrums`, `/statuss`,
-  `/raw`, and `/start` command behavior;
+- gate normal `/laist` and `/laist_N` on the local RPi5 watering safety-state contract while keeping `/stop` direct and ungated;
+- preserve `/mitrums`, `/statuss`, `/raw`, and `/start` command transport behavior;
 - keep MQTT port `1883` and keepalive `60` to avoid an unrelated transport change;
 - keep Telegram long polling with a 30 second server timeout and bounded retry
   after transient failures.
@@ -39,6 +39,22 @@ The ESP32 remains the authority for pump command safety. Its tracked firmware
 bounds MQTT command payloads, treats `stop` as urgent, validates requested watering
 minutes, and enforces the pump hard limit. The bot must not duplicate or broaden
 that firmware safety policy in this source-provenance remediation.
+
+## Manual watering admission
+
+Issue #1226 adds a host-side admission layer without moving watering policy or HA
+credentials into the Telegram process. The bot validates the exact
+`rozkalns.balcony-watering-safety.v1` object, rejects duplicate JSON keys,
+symlinks, oversized/extra fields, invalid sensor counts, future or stale
+timestamps and every non-`manual_permit` decision. Failure is closed: no
+`balkons/cmd` pump-start publish occurs.
+
+A failed MQTT `publish()` handoff produces exactly one queued Telegram warning
+and is not retried. This matters especially for duplicate-sensitive pump-start
+commands. `/stop` never consults the safety file and continues directly to
+`balkons/cmd`; only MQTT transport failure can prevent that handoff.
+
+No force override is implemented by this source outcome.
 
 ## Runtime credential contract
 
@@ -53,8 +69,11 @@ provides five credential files through `$CREDENTIALS_DIRECTORY`:
 
 The bot reads those files directly. Credential contents are never accepted via
 process argv and are never copied into dedicated secret environment variables.
-The environment variable used by application code is only systemd's directory
-locator, `CREDENTIALS_DIRECTORY`.
+Credential values remain reachable only through systemd's directory locator,
+`CREDENTIALS_DIRECTORY`. The bot may also read two **non-secret** policy
+settings: `BALCONY_SAFETY_STATE_FILE` (the local safety JSON path) and
+`BALCONY_SAFETY_STATE_MAX_AGE_SECONDS` (default six hours). Neither carries
+a credential or Home Assistant authority.
 
 The source unit template maps those credential names to root-managed files under
 `/etc/credstore`. Production ownership, file creation, and value population are
