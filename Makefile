@@ -7,6 +7,8 @@ test:
 	python3 ./tests/test-weather-v7-telegram-credentials-v1.py
 	python3 ./tests/test-ausmalwiese-stats-zone-binding-v1.py
 	python3 ./tests/test-ausmalwiese-stats-zone-binding-adapter-v1.py
+	python3 ./tests/test-ausmalwiese-goatcounter-pageview-v1.py
+	python3 ./tests/test-ausmalwiese-goatcounter-offline-privacy-v1.py
 	bash ./tests/test-run-gitleaks-ci-arch.sh
 	bash ./tests/test-run-gitleaks-ci-history-scope.sh
 	python3 ./tests/test-start-mode-routing.py

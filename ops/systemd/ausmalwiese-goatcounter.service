@@ -1,0 +1,38 @@
+# SOURCE ONLY for RPi5_main #1224. Not installed or enabled by source merge.
+[Unit]
+Description=Ausmalwiese GoatCounter v2.7.0 private pageview store
+After=network.target
+ConditionPathIsExecutable=/usr/local/libexec/ausmalwiese-goatcounter-v1/goatcounter
+ConditionPathExists=/var/lib/ausmalwiese-goatcounter/goatcounter.sqlite3
+
+[Service]
+Type=simple
+User=ausmalwiese-goatcounter
+Group=ausmalwiese-goatcounter
+UMask=0077
+ExecStart=/usr/local/libexec/ausmalwiese-goatcounter-v1/goatcounter serve -db=sqlite+/var/lib/ausmalwiese-goatcounter/goatcounter.sqlite3 -listen=127.0.0.1:9194 -tls=http -store-every=1
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_INET AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=localhost
+ReadWritePaths=/var/lib/ausmalwiese-goatcounter
+MemoryMax=192M
+CPUQuota=50%
+TasksMax=64
+StandardOutput=null
+StandardError=null
+
+[Install]
+WantedBy=multi-user.target
