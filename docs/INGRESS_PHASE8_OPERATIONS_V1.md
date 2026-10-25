@@ -106,8 +106,10 @@ A future **separately authorized** reboot-survival acceptance should establish
 a baseline of connector and registered app state, preserve required recovery
 references, then verify after the actual host reboot: connector active/enabled,
 expected edge connections, PUBLIC anonymous path, ADMIN/PRIVATE Access
-semantics, listener/Docker/firewall classes and a fresh 13-service Phase 7
-report. The reboot and any service lifecycle changes are **LIVE**, and cannot
+semantics, listener/Docker/firewall classes and a fresh Phase 7 report covering
+the exact current registry service set. Do not hardcode a historical service
+count into reboot acceptance. The reboot and any service lifecycle changes are
+**LIVE**, and cannot
 be performed under this source-documentation outcome. A documentation link
 or previous PASS does not satisfy this real reboot gate.
 
