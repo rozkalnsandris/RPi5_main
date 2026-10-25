@@ -182,7 +182,9 @@ class AdapterContractTests(unittest.TestCase):
         self.assertIn("def log_message(self, format, *args):", source)
         self.assertIn("def handle_error(self, request, client_address):", source)
         self.assertNotIn("print(self.path", source)
-        self.assertNotIn("client_address)", source.split("def handle_error", 1)[1])
+        handler_body = source.split("def handle_error", 1)[1].split("class Handler", 1)[0]
+        self.assertNotIn("print(", handler_body)
+        self.assertNotIn("sys.stderr", handler_body)
 
     def test_existing_public_compose_is_not_wired_to_new_services(self):
         compose = (
