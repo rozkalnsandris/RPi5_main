@@ -76,8 +76,27 @@ def _cleanup_success_fixture(root: Path) -> None:
     shutil.rmtree(root)
 
 
+def _pre_shutdown_exit_failure_code(exit_code: int) -> str:
+    """Map an already-exited child to one stable pre-shutdown class."""
+    if exit_code == 0:
+        return "SERVER_PRE_SHUTDOWN_CLEAN_EXIT"
+    if exit_code == -signal.SIGINT:
+        return "SERVER_PRE_SHUTDOWN_SIGINT_EXIT"
+    if exit_code == 1:
+        return "SERVER_PRE_SHUTDOWN_GOATCOUNTER_COMMAND_ERROR"
+    if exit_code == 2:
+        return "SERVER_PRE_SHUTDOWN_GO_RUNTIME_FAILURE"
+    if exit_code == 66:
+        return "SERVER_PRE_SHUTDOWN_ZHTTP_SERVE_ERROR"
+    if exit_code == 99:
+        return "SERVER_PRE_SHUTDOWN_FORCE_KILL_EXIT"
+    if exit_code < 0:
+        return "SERVER_PRE_SHUTDOWN_OTHER_SIGNAL"
+    return "SERVER_PRE_SHUTDOWN_OTHER_NONZERO_EXIT"
+
+
 def _server_exit_failure_code(exit_code: int) -> str | None:
-    """Map an observed process exit to one stable, non-sensitive class."""
+    """Map a post-SIGINT process exit to one stable, non-sensitive class."""
     if exit_code == 0:
         return None
     if exit_code == -signal.SIGINT:
@@ -96,22 +115,25 @@ def _server_exit_failure_code(exit_code: int) -> str | None:
 
 
 def _stop_server_classified(proc: subprocess.Popen[bytes]) -> None:
-    """Require one graceful SIGINT and classify any non-zero server exit."""
-    if proc.poll() is None:
-        proc.send_signal(signal.SIGINT)
+    """Separate pre-shutdown exit evidence from one graceful SIGINT attempt."""
+    pre_shutdown_exit = proc.poll()
+    if pre_shutdown_exit is not None:
+        raise base.RuntimeStop(
+            _pre_shutdown_exit_failure_code(pre_shutdown_exit)
+        )
+
+    proc.send_signal(signal.SIGINT)
+    try:
+        exit_code = proc.wait(timeout=12)
+    except subprocess.TimeoutExpired:
+        # Preserve the existing bounded timeout/stuck semantics. This is
+        # termination after the single shutdown attempt, not a retry.
+        proc.kill()
         try:
-            exit_code = proc.wait(timeout=12)
+            proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
-            # Preserve the existing bounded timeout/stuck semantics. This is
-            # termination after the single shutdown attempt, not a retry.
-            proc.kill()
-            try:
-                proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                raise base.RuntimeStop("SERVER_PROCESS_STUCK")
-            raise base.RuntimeStop("SERVER_SHUTDOWN_TIMEOUT")
-    else:
-        exit_code = proc.returncode
+            raise base.RuntimeStop("SERVER_PROCESS_STUCK")
+        raise base.RuntimeStop("SERVER_SHUTDOWN_TIMEOUT")
 
     failure_code = _server_exit_failure_code(exit_code)
     if failure_code is not None:
