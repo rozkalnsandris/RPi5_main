@@ -25,6 +25,11 @@ assert '"update_id"' in source
 assert '"chat_id"' in source
 assert '"balkons/cmd"' in source
 assert '"balkons/telegram_out"' in source
+assert '"BALCONY_SAFETY_STATE_FILE"' in source
+assert '"BALCONY_SAFETY_STATE_MAX_AGE_SECONDS"' in source
+assert '"rozkalns.balcony-watering-safety.v1"' in source
+assert "HASS_TOKEN" not in source
+assert "HASS_URL" not in source
 assert "Komanda no TG:" not in source
 assert "MQTT->TG:" not in source
 assert "str(exc)" not in source
