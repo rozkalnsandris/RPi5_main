@@ -174,7 +174,8 @@ class IsolatedProofV2Tests(unittest.TestCase):
         self.assertNotIn('subprocess.run(["wget"', source)
         self.assertNotIn("/srv/coloring-pages-content", source)
         self.assertNotIn("/var/lib/ausmalwiese-goatcounter", source)
-        self.assertNotIn("retry", source.casefold().split("No retry", 1)[-1])
+        self.assertNotIn("for attempt in", source)
+        self.assertNotIn("while attempt", source)
         self.assertIn('tempfile.mkdtemp(prefix=base.PREFIX, dir="/tmp")', source)
         self.assertIn("shutil.rmtree(root)", source)
 
