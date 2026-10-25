@@ -1,0 +1,342 @@
+#!/usr/bin/python3 -I
+"""Sanitized read-only Hermes watering schedule preflight for RPi5_main#1230."""
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+from pathlib import Path
+import pwd
+import stat
+from typing import Any
+
+SCHEMA = "rozkalns.balcony-watering.hermes-preflight.v1"
+EXPECTED_USER = "andris"
+MAX_STORE_BYTES = 2_000_000
+EXPECTED_MODE = 0o600
+
+LEGACY_SLOTS = (
+    ("legacy_0700_primary", "0 7 * * *", "primary"),
+    ("legacy_1400_heat", "0 14 * * *", "heat"),
+    ("legacy_2300_primary", "0 23 * * *", "primary"),
+)
+AUTUMN_EXPR = "0 11 * * *"
+
+PRIMARY_MARKERS = ("laistisana_2x.sh", "balcony-watering-2x")
+HEAT_MARKERS = ("laistisana_2x_karstums.sh", "balcony-watering-heat-gate")
+AUTUMN_MARKERS = ("balcony-watering-autumn",)
+
+SENSITIVE_DEFINITION_FIELDS = {"prompt", "script", "monitor_script", "workdir"}
+RUNTIME_FIELDS = {
+    "next_run_at", "last_run_at", "last_status", "last_error",
+    "last_delivery_at", "last_delivery_error", "last_started_at",
+    "last_completed_at", "fire_claim", "execution_skipped",
+}
+
+
+class PreflightError(RuntimeError):
+    def __init__(self, code: str) -> None:
+        self.code = code
+        super().__init__(code)
+
+
+def sha256_bytes(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+
+def sha256_text(value: str) -> str:
+    return sha256_bytes(value.encode("utf-8"))
+
+
+def _strict_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise PreflightError("store_duplicate_json_key")
+        result[key] = value
+    return result
+
+
+def _read_store(path: Path, expected_uid: int) -> tuple[bytes, list[dict[str, Any]]]:
+    try:
+        info = path.lstat()
+    except OSError:
+        raise PreflightError("store_missing") from None
+    if (
+        path.is_symlink()
+        or not stat.S_ISREG(info.st_mode)
+        or info.st_nlink != 1
+        or info.st_uid != expected_uid
+    ):
+        raise PreflightError("store_unsafe")
+    if stat.S_IMODE(info.st_mode) != EXPECTED_MODE:
+        raise PreflightError("store_mode_invalid")
+    if info.st_size <= 0 or info.st_size > MAX_STORE_BYTES:
+        raise PreflightError("store_size_invalid")
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        raise PreflightError("store_unreadable") from None
+    if len(raw) != info.st_size:
+        raise PreflightError("store_changed_during_read")
+    try:
+        data = json.loads(raw.decode("utf-8"), object_pairs_hook=_strict_object)
+    except PreflightError:
+        raise
+    except (UnicodeError, json.JSONDecodeError):
+        raise PreflightError("store_json_invalid") from None
+    if not isinstance(data, list):
+        raise PreflightError("store_shape_invalid")
+    jobs: list[dict[str, Any]] = []
+    for item in data:
+        if not isinstance(item, dict):
+            raise PreflightError("job_shape_invalid")
+        jobs.append(item)
+    return raw, jobs
+
+
+def _schedule_expr(job: dict[str, Any]) -> str | None:
+    schedule = job.get("schedule")
+    if (
+        not isinstance(schedule, dict)
+        or schedule.get("kind") != "cron"
+        or not isinstance(schedule.get("expr"), str)
+    ):
+        return None
+    expr = " ".join(schedule["expr"].split())
+    return expr or None
+
+
+def _marker_roles(job: dict[str, Any]) -> set[str]:
+    values: list[str] = []
+    for key in ("script", "prompt", "name"):
+        value = job.get(key)
+        if isinstance(value, str):
+            values.append(value.casefold())
+    joined = "\n".join(values)
+    roles: set[str] = set()
+    if any(marker in joined for marker in PRIMARY_MARKERS):
+        roles.add("primary")
+    if any(marker in joined for marker in HEAT_MARKERS):
+        roles.add("heat")
+    if any(marker in joined for marker in AUTUMN_MARKERS):
+        roles.add("autumn")
+    return roles
+
+
+def _watering_candidate(job: dict[str, Any]) -> bool:
+    if _marker_roles(job):
+        return True
+    name = job.get("name")
+    if not isinstance(name, str):
+        return False
+    lowered = name.casefold()
+    return any(token in lowered for token in ("balkon", "watering", "laist"))
+
+
+def _definition_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        result: dict[str, Any] = {}
+        for key in sorted(value):
+            if key in RUNTIME_FIELDS:
+                continue
+            if key == "completed" and set(value) <= {"times", "completed"}:
+                continue
+            result[key] = _definition_value(value[key])
+        return result
+    if isinstance(value, list):
+        return [_definition_value(item) for item in value]
+    return value
+
+
+def _definition_projection(job: dict[str, Any]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key in sorted(job):
+        if key in RUNTIME_FIELDS:
+            continue
+        value = job[key]
+        if key in SENSITIVE_DEFINITION_FIELDS and isinstance(value, str):
+            result[key + "_sha256"] = sha256_text(value)
+            continue
+        if key == "repeat" and isinstance(value, dict):
+            result[key] = {"times": value.get("times")}
+            continue
+        result[key] = _definition_value(value)
+    return result
+
+
+def _fingerprint(job: dict[str, Any]) -> str:
+    raw = json.dumps(
+        _definition_projection(job),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    ).encode("utf-8")
+    return sha256_bytes(raw)
+
+
+def _target_summary(job: dict[str, Any], role: str) -> dict[str, Any]:
+    roles = _marker_roles(job)
+    return {
+        "role": role,
+        "enabled": job.get("enabled") is True,
+        "deliver_local": job.get("deliver") == "local",
+        "binding": next(iter(roles)) if len(roles) == 1 else "ambiguous",
+        "identity_sha256": _fingerprint(job),
+    }
+
+
+def _unrelated_fingerprint(jobs: list[dict[str, Any]], selected_ids: set[int]) -> str:
+    projections = [
+        _definition_projection(job)
+        for index, job in enumerate(jobs)
+        if index not in selected_ids
+    ]
+    raw = json.dumps(
+        projections,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    ).encode("utf-8")
+    return sha256_bytes(raw)
+
+
+def collect(*, store_path: Path, expected_uid: int) -> dict[str, Any]:
+    raw, jobs = _read_store(store_path, expected_uid)
+    blockers: list[str] = []
+    selected: set[int] = set()
+    legacy: dict[str, Any] = {}
+
+    for slot, expr, expected_binding in LEGACY_SLOTS:
+        matches: list[tuple[int, dict[str, Any]]] = []
+        for index, job in enumerate(jobs):
+            if _schedule_expr(job) == expr and expected_binding in _marker_roles(job):
+                matches.append((index, job))
+        if not matches:
+            blockers.append(slot + "_missing")
+            legacy[slot] = {"status": "missing"}
+            continue
+        if len(matches) != 1:
+            blockers.append(slot + "_duplicate")
+            legacy[slot] = {"status": "duplicate", "count": len(matches)}
+            selected.update(index for index, _job in matches)
+            continue
+        index, job = matches[0]
+        selected.add(index)
+        summary = _target_summary(job, expected_binding)
+        summary["status"] = "matched"
+        legacy[slot] = summary
+        if not summary["enabled"]:
+            blockers.append(slot + "_disabled")
+        if not summary["deliver_local"]:
+            blockers.append(slot + "_delivery_not_local")
+        if summary["binding"] != expected_binding:
+            blockers.append(slot + "_binding_ambiguous")
+
+    autumn_matches: list[tuple[int, dict[str, Any]]] = []
+    for index, job in enumerate(jobs):
+        if (
+            _schedule_expr(job) == AUTUMN_EXPR
+            or "autumn" in _marker_roles(job)
+            or (
+                isinstance(job.get("name"), str)
+                and job["name"].casefold() == "balcony-watering-autumn"
+            )
+        ):
+            autumn_matches.append((index, job))
+
+    autumn: dict[str, Any]
+    if not autumn_matches:
+        autumn = {"status": "absent", "count": 0}
+    elif len(autumn_matches) > 1:
+        selected.update(index for index, _job in autumn_matches)
+        autumn = {"status": "duplicate", "count": len(autumn_matches)}
+        blockers.append("autumn_job_duplicate")
+    else:
+        index, job = autumn_matches[0]
+        selected.add(index)
+        roles = _marker_roles(job)
+        recognized = (
+            roles == {"autumn"}
+            and _schedule_expr(job) == AUTUMN_EXPR
+            and job.get("deliver") == "local"
+            and isinstance(job.get("enabled"), bool)
+        )
+        autumn = {
+            "status": "recognized_existing" if recognized else "unrecognized_existing",
+            "count": 1,
+            "enabled": job.get("enabled") is True,
+            "deliver_local": job.get("deliver") == "local",
+            "binding": "autumn" if roles == {"autumn"} else "unrecognized",
+            "identity_sha256": _fingerprint(job),
+        }
+        blockers.append(
+            "autumn_job_already_exists" if recognized else "autumn_job_unrecognized"
+        )
+
+    expected_slot_exprs = {expr for _slot, expr, _binding in LEGACY_SLOTS}
+    for index, job in enumerate(jobs):
+        if index in selected:
+            continue
+        if _watering_candidate(job) or _schedule_expr(job) in expected_slot_exprs | {AUTUMN_EXPR}:
+            selected.add(index)
+            blockers.append("unexpected_watering_job_candidate")
+
+    report = {
+        "schema": SCHEMA,
+        "scope": "READ_ONLY",
+        "result": "PASS" if not blockers else "BLOCKED",
+        "blockers": sorted(set(blockers)),
+        "store": {
+            "job_count": len(jobs),
+            "sha256": sha256_bytes(raw),
+            "mode": "0600",
+            "raw_payload_emitted": False,
+        },
+        "legacy": legacy,
+        "autumn": autumn,
+        "watering_projection_sha256": sha256_bytes(
+            json.dumps(
+                [_definition_projection(jobs[i]) for i in sorted(selected)],
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=True,
+            ).encode("utf-8")
+        ),
+        "unrelated_definition_sha256": _unrelated_fingerprint(jobs, selected),
+        "mutation_started": False,
+        "writes_performed": False,
+    }
+    return report
+
+
+def blocked_report(code: str) -> dict[str, Any]:
+    return {
+        "schema": SCHEMA,
+        "scope": "READ_ONLY",
+        "result": "BLOCKED",
+        "blockers": [code],
+        "mutation_started": False,
+        "writes_performed": False,
+        "raw_payload_emitted": False,
+    }
+
+
+def main() -> int:
+    try:
+        account = pwd.getpwnam(EXPECTED_USER)
+        if os.geteuid() != account.pw_uid:
+            raise PreflightError("execution_user_mismatch")
+        home = Path(account.pw_dir)
+        store = home / ".hermes" / "cron" / "jobs.json"
+        report = collect(store_path=store, expected_uid=account.pw_uid)
+    except PreflightError as exc:
+        report = blocked_report(exc.code)
+    except Exception:
+        report = blocked_report("internal_error")
+    print(json.dumps(report, sort_keys=True, separators=(",", ":"), ensure_ascii=True))
+    return 0 if report["result"] == "PASS" else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
