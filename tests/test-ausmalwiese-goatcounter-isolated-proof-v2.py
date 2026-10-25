@@ -110,6 +110,8 @@ class IsolatedProofV2Tests(unittest.TestCase):
         cases = (
             (0, None),
             (-runtime.signal.SIGINT, "SERVER_TERMINATED_BY_SIGINT"),
+            (1, "SERVER_GOATCOUNTER_COMMAND_ERROR"),
+            (2, "SERVER_GO_RUNTIME_FAILURE"),
             (66, "SERVER_ZHTTP_SERVE_ERROR"),
             (99, "SERVER_FORCE_KILL_EXIT"),
             (-runtime.signal.SIGTERM, "SERVER_TERMINATED_BY_OTHER_SIGNAL"),
@@ -255,6 +257,8 @@ class IsolatedProofV2Tests(unittest.TestCase):
         cases = (
             "SYNTHETIC_SITE_CREATE_FAILED",
             "SERVER_TERMINATED_BY_SIGINT",
+            "SERVER_GOATCOUNTER_COMMAND_ERROR",
+            "SERVER_GO_RUNTIME_FAILURE",
             "SERVER_ZHTTP_SERVE_ERROR",
             "SERVER_FORCE_KILL_EXIT",
             "SERVER_TERMINATED_BY_OTHER_SIGNAL",
