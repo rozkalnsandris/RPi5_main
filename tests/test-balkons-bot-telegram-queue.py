@@ -242,8 +242,15 @@ class BridgeTests(unittest.TestCase):
 
     def test_mqtt_publish_failure_feedback_is_one_shot(self):
         ns, outbound, published, _ = self.bridge(mqtt_rc=4)
-        ns["handle_command"]("/stop")
-        self.assertEqual(len(published), 1)
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._write_safety(directory)
+            with unittest.mock.patch.dict(
+                os.environ,
+                {"BALCONY_SAFETY_STATE_FILE": str(path)},
+                clear=False,
+            ):
+                ns["handle_command"]("/laist")
+        self.assertEqual(published, [(("balkons/cmd", "laist"), {})])
         self.assertEqual(outbound.qsize(), 1)
         self.assertIn("netika nosūtīta", outbound.get_nowait()[0])
 
