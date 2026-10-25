@@ -186,7 +186,7 @@ def _make_site(binary: Path, root: Path, env: dict[str, str], db: Path) -> str:
     site_passphrase = secrets.token_hex(20)
     _run(binary, root, env, "db", "create", "site",
          "-vhost=" + HOST, "-user.email=" + EMAIL,
-         "-user.password=" + password, "-db=" + db_arg)
+         "-user.password=" + site_passphrase, "-db=" + db_arg)
     site_passphrase = ""
     _run(binary, root, env, "db", "create", "apitoken",
          "-user=" + EMAIL, "-name=synthetic-count-only",
