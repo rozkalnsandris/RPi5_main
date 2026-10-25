@@ -170,6 +170,14 @@ class HermesWateringPreflightTests(unittest.TestCase):
         third = self.collect(changed)["unrelated_definition_sha256"]
         self.assertNotEqual(first, third)
 
+    def test_duplicate_job_id_blocks(self):
+        jobs = legacy_jobs()
+        jobs[1]["id"] = jobs[0]["id"]
+        path = self.make_store(jobs)
+        with self.assertRaises(m.PreflightError) as caught:
+            m.collect(store_path=path, expected_uid=os.geteuid())
+        self.assertEqual(caught.exception.code, "job_id_duplicate")
+
     def test_duplicate_json_key_and_malformed_store_block(self):
         path = self.make_store()
         path.write_text('[{"id":"x","id":"y"}]', encoding="utf-8")
