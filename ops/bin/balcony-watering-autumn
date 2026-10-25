@@ -26,6 +26,7 @@ SOAK="${BALCONY_AUTUMN_SOAK_SECONDS:-300}"
 FROST_THRESHOLD="${BALCONY_FROST_THRESHOLD_C:-2.0}"
 MIN_DRY="${BALCONY_MIN_DRY_SENSORS:-2}"
 MAX_MOIST="${BALCONY_MAX_MOIST_SENSORS:-8}"
+MAX_DEGRADED="${BALCONY_MAX_DEGRADED_SENSORS:-2}"
 REQUIRE_FORECAST="${BALCONY_FROST_REQUIRE_FORECAST:-1}"
 CALIBRATION="${BALCONY_AUTUMN_CALIBRATION:-0}"
 DRY_RUN="${BALCONY_AUTUMN_DRY_RUN:-0}"
@@ -34,6 +35,7 @@ STATE_DIR="${BALCONY_AUTUMN_STATE_DIR:-${HOME}/.local/state/balcony-watering-aut
 LOCKFILE="${BALCONY_AUTUMN_LOCKFILE:-/tmp/balcony-watering-autumn.lock}"
 LOGFILE="${BALCONY_AUTUMN_LOGFILE:-${STATE_DIR}/watering.log}"
 LAST_WATERED_FILE="${STATE_DIR}/last-watered"
+SAFETY_STATE_FILE="${BALCONY_SAFETY_STATE_FILE:-${STATE_DIR}/manual-safety-v1.json}"
 
 AUTH_HEADER_NAME="Authorization"
 STATE_CONFIRM_ATTEMPTS=5
@@ -64,6 +66,7 @@ require_integer BALCONY_AUTUMN_DURATION_SECONDS "$DURATION" 1 "$ESP32_MAX_SECOND
 require_integer BALCONY_AUTUMN_SOAK_SECONDS "$SOAK" 0 3600
 require_integer BALCONY_MIN_DRY_SENSORS "$MIN_DRY" 1 "$ACTIVE_SENSOR_COUNT"
 require_integer BALCONY_MAX_MOIST_SENSORS "$MAX_MOIST" 1 "$ACTIVE_SENSOR_COUNT"
+require_integer BALCONY_MAX_DEGRADED_SENSORS "$MAX_DEGRADED" 0 9
 [[ "$FROST_THRESHOLD" =~ ^-?[0-9]+(\.[0-9]+)?$ ]] || {
     echo "Invalid BALCONY_FROST_THRESHOLD_C" >&2
     exit 2
@@ -82,6 +85,69 @@ mkdir -p -- "$(dirname -- "$LOGFILE")"
 
 log() {
     printf '%s %s\n' "$(TZ="Europe/Berlin" date '+%Y-%m-%d %H:%M:%S')" "$*" | tee -a "$LOGFILE"
+}
+
+# Manual Telegram watering reads this compact file through the RPi5 bot.
+# It contains policy metadata only: no HA payloads, credentials or raw readings.
+write_safety_state() {
+    local decision="$1" frost_blocked="$2" coverage_ok="$3"
+    local degraded_count="$4" already_watered="$5"
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        log "DRY-RUN safety state (suppressed): decision=${decision}"
+        return 0
+    fi
+
+    local parent tmp
+    parent="$(dirname -- "$SAFETY_STATE_FILE")"
+    if [[ ! -d "$parent" || -L "$SAFETY_STATE_FILE" ]]; then
+        log "SAFETY-STATE FAIL: target is unavailable or unsafe"
+        return 1
+    fi
+
+    tmp="$(mktemp "${SAFETY_STATE_FILE}.tmp.XXXXXX")" || {
+        log "SAFETY-STATE FAIL: temporary file could not be created"
+        return 1
+    }
+
+    if ! python3 - "$tmp" "$decision" "$frost_blocked" "$coverage_ok"         "$degraded_count" "$already_watered" "$ACTIVE_SENSOR_COUNT" <<'PY'
+import json
+import sys
+import time
+
+path, decision, frost, coverage, degraded, watered, total = sys.argv[1:]
+payload = {
+    "already_watered_today": watered == "1",
+    "decision": decision,
+    "frost_blocked": frost == "1",
+    "generated_at_epoch": int(time.time()),
+    "schema": "rozkalns.balcony-watering-safety.v1",
+    "sensor_coverage_ok": coverage == "1",
+    "sensor_degraded_count": int(degraded),
+    "sensor_total": int(total),
+}
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(payload, handle, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+    handle.write("\n")
+PY
+    then
+        rm -f -- "$tmp"
+        log "SAFETY-STATE FAIL: JSON write failed"
+        return 1
+    fi
+
+    chmod 0644 "$tmp" || {
+        rm -f -- "$tmp"
+        log "SAFETY-STATE FAIL: mode update failed"
+        return 1
+    }
+    mv -f -- "$tmp" "$SAFETY_STATE_FILE" || {
+        rm -f -- "$tmp"
+        log "SAFETY-STATE FAIL: atomic replace failed"
+        return 1
+    }
+
+    log "SAFETY-STATE: decision=${decision} degraded=${degraded_count}/${ACTIVE_SENSOR_COUNT}"
 }
 
 # Notifications go through existing HA MQTT -> Balkona bot bridge only.
@@ -126,6 +192,11 @@ if ! flock -n 200; then
     exit 1
 fi
 
+if ! write_safety_state "block_controller_running" 0 0 "$ACTIVE_SENSOR_COUNT" 0; then
+    send_tg "⚠️ Balkona laistīšana: drošības stāvokli nevar atjaunot — laistīšana bloķēta"
+    exit 1
+fi
+
 today() {
     TZ="Europe/Berlin" date '+%Y-%m-%d'
 }
@@ -146,6 +217,10 @@ mark_watered() {
 # At most one pump cycle per calendar day, independent of the schedule that
 # invokes this controller.
 if [[ "$(last_watered_date || true)" == "$(today)" ]]; then
+    if ! write_safety_state "block_already_watered" 0 0 "$ACTIVE_SENSOR_COUNT" 1; then
+        send_tg "⚠️ Balkona laistīšana: drošības stāvokli nevar atjaunot"
+        exit 1
+    fi
     log "SKIP: already watered today ($(today)) — at most one cycle per day"
     send_tg "🌿 Balkona laistīšana: Nav laistīts — šodien jau laistīts"
     exit 0
@@ -449,19 +524,31 @@ request_ha_confirmed() {
     return 1
 }
 
+SAFETY_DEGRADED_COUNT="$ACTIVE_SENSOR_COUNT"
+SAFETY_COVERAGE_OK=0
+SAFETY_FROST_BLOCKED=0
+SAFETY_ALREADY_WATERED=0
+
 fail_run() {
+    write_safety_state "block_unavailable" "$SAFETY_FROST_BLOCKED"         "$SAFETY_COVERAGE_OK" "$SAFETY_DEGRADED_COUNT" "$SAFETY_ALREADY_WATERED" || true
     log "FAIL: $*"
     send_tg "🚨 Balcony autumn watering failed: $*"
     exit 1
 }
 
 skip_quiet() {
+    if ! write_safety_state "manual_permit" 0 1 "$SAFETY_DEGRADED_COUNT" 0; then
+        log "ERROR-SKIP: manual safety state could not be written"
+        send_tg "⚠️ Nav laistīts — drošības stāvokli nevar atjaunot"
+        exit 1
+    fi
     log "SKIP: $*"
     send_tg "🌿 Nav laistīts — $*${SENSOR_NOTE:-}"
     exit 0
 }
 
 skip_error() {
+    write_safety_state "block_unavailable" "$SAFETY_FROST_BLOCKED"         "$SAFETY_COVERAGE_OK" "$SAFETY_DEGRADED_COUNT" "$SAFETY_ALREADY_WATERED" || true
     log "ERROR-SKIP: $*"
     send_tg "⚠️ Nav laistīts — pārbaudes kļūda: $*${SENSOR_NOTE:-}"
     exit 0
@@ -539,6 +626,12 @@ MOIST_COUNT="${A[MOIST_COUNT]:-NA}"
 DRY_LIST="${A[DRY_LIST]:-}"
 ASSUMED_MOIST_COUNT="${A[ASSUMED_MOIST_COUNT]:-0}"
 ASSUMED_MOIST_LIST="${A[ASSUMED_MOIST_LIST]:-}"
+SAFETY_DEGRADED_COUNT="$ASSUMED_MOIST_COUNT"
+if (( ASSUMED_MOIST_COUNT <= MAX_DEGRADED )); then
+    SAFETY_COVERAGE_OK=1
+else
+    SAFETY_COVERAGE_OK=0
+fi
 TEMP_CURRENT="${A[TEMP_CURRENT]:-NA}"
 TEMP_FORECAST_MIN="${A[TEMP_FORECAST_MIN]:-NA}"
 
@@ -550,6 +643,17 @@ if (( ASSUMED_MOIST_COUNT > 0 )); then
     log "SENSOR-FALLBACK: unavailable/missing/unknown sensors ${ASSUMED_MOIST_LIST}; counted as moist (not measured)"
 fi
 log "SENSOR-CHECK OK: ${ACTIVE_SENSOR_COUNT} active sensors; dry=${DRY_COUNT} moist=${MOIST_COUNT} (assumed=${ASSUMED_MOIST_COUNT}) videjs=${A[VIDEJS_COUNT]:-NA}"
+
+if (( ASSUMED_MOIST_COUNT > MAX_DEGRADED )); then
+    if ! write_safety_state "block_sensor_coverage" 0 0 "$ASSUMED_MOIST_COUNT" 0; then
+        log "ERROR-SKIP: sensor coverage unsafe and safety state write failed"
+        send_tg "⚠️ Nav laistīts — sensoru pārklājums nav pietiekams; drošības stāvokli nevar atjaunot"
+        exit 1
+    fi
+    log "SENSOR-COVERAGE BLOCK: degraded=${ASSUMED_MOIST_COUNT}/${ACTIVE_SENSOR_COUNT}, max=${MAX_DEGRADED}"
+    send_tg "⚠️ Nav laistīts — nav pieejami ${ASSUMED_MOIST_COUNT}/${ACTIVE_SENSOR_COUNT} aktīvie mitruma sensori (maksimums ${MAX_DEGRADED})${SENSOR_NOTE:-}"
+    exit 0
+fi
 
 if [[ "$TEMP_FORECAST_MIN" == "NA" ]]; then
     TEMP_FORECAST_MIN="$(service_forecast_min)"
@@ -583,6 +687,12 @@ PY
 )"
 
 if [[ "$FROST_DECISION" == "BLOCK" ]]; then
+    SAFETY_FROST_BLOCKED=1
+    if ! write_safety_state "block_frost" 1 1 "$SAFETY_DEGRADED_COUNT" 0; then
+        log "ERROR-SKIP: frost block safety state write failed"
+        send_tg "⚠️ Nav laistīts — sala risks; drošības stāvokli nevar atjaunot"
+        exit 1
+    fi
     log "FROST-CHECK BLOCK: low ${FROST_MIN}C (current ${TEMP_CURRENT}C) <= ${FROST_THRESHOLD}C"
     send_tg "❄️ Nav laistīts — sala risks: min. ${FROST_MIN}°C, pašlaik ${TEMP_CURRENT}°C, slieksnis ${FROST_THRESHOLD}°C${SENSOR_NOTE:-}"
     exit 0
@@ -620,6 +730,10 @@ fi
 # The pump is confirmed running, so water is delivered from here on. Record the
 # day now: a later failure must never allow a second cycle on the same day.
 mark_watered
+SAFETY_ALREADY_WATERED=1
+if ! write_safety_state "block_already_watered" 0 1 "$SAFETY_DEGRADED_COUNT" 1; then
+    fail_run "watering day recorded but manual safety state could not be updated"
+fi
 
 log "watering for ${DURATION}s"
 sleep "$DURATION"
