@@ -198,6 +198,116 @@ class IsolatedProofV2Tests(unittest.TestCase):
         proc.kill.assert_called_once_with()
         self.assertEqual(proc.wait.call_count, 2)
 
+    def test_count_failure_survives_pre_shutdown_exit_one_finalizer(self):
+        primary_codes = (
+            "BACKEND_NOT_ACCEPTED",
+            "BACKEND_RESPONSE_UNCERTAIN",
+        )
+        for primary_code in primary_codes:
+            with self.subTest(primary_code=primary_code):
+                with tempfile.TemporaryDirectory(dir="/tmp") as parent:
+                    root = Path(parent)
+                    proc = mock.Mock()
+                    secondary_code = (
+                        "SERVER_PRE_SHUTDOWN_GOATCOUNTER_COMMAND_ERROR"
+                    )
+
+                    with mock.patch.object(
+                        runtime.base,
+                        "_verified_release_archive",
+                        return_value=Path("/synthetic/bin"),
+                    ), mock.patch.object(
+                        runtime.base, "_isolated_env", return_value={}
+                    ), mock.patch.object(
+                        runtime.base, "_version"
+                    ), mock.patch.object(
+                        runtime,
+                        "_make_site_with_stage_diagnostics",
+                        return_value="synthetic-token",
+                    ), mock.patch.object(
+                        runtime.base, "_free_loopback_port", return_value=12345
+                    ), mock.patch.object(
+                        runtime.subprocess, "Popen", return_value=proc
+                    ), mock.patch.object(
+                        runtime.base, "_tcp_ready"
+                    ), mock.patch.object(
+                        runtime.base,
+                        "_count_once",
+                        side_effect=runtime.base.RuntimeStop(primary_code),
+                    ) as count_once, mock.patch.object(
+                        runtime,
+                        "_stop_server_classified",
+                        side_effect=runtime.base.RuntimeStop(secondary_code),
+                    ) as stop_server:
+                        with self.assertRaises(runtime.base.RuntimeStop) as raised:
+                            runtime._run_fixture("/tmp/synthetic-release.gz", root)
+
+                self.assertEqual(str(raised.exception), primary_code)
+                self.assertEqual(
+                    raised.exception.secondary_server_stop_code,
+                    secondary_code,
+                )
+                count_once.assert_called_once()
+                stop_server.assert_called_once_with(proc)
+
+    def test_successful_counts_keep_server_stop_failure_primary(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as parent:
+            root = Path(parent)
+            proc = mock.Mock()
+            secondary_code = "SERVER_PRE_SHUTDOWN_GOATCOUNTER_COMMAND_ERROR"
+
+            with mock.patch.object(
+                runtime.base,
+                "_verified_release_archive",
+                return_value=Path("/synthetic/bin"),
+            ), mock.patch.object(
+                runtime.base, "_isolated_env", return_value={}
+            ), mock.patch.object(
+                runtime.base, "_version"
+            ), mock.patch.object(
+                runtime,
+                "_make_site_with_stage_diagnostics",
+                return_value="synthetic-token",
+            ), mock.patch.object(
+                runtime.base, "_free_loopback_port", return_value=12345
+            ), mock.patch.object(
+                runtime.subprocess, "Popen", return_value=proc
+            ), mock.patch.object(
+                runtime.base, "_tcp_ready"
+            ), mock.patch.object(
+                runtime.base, "_count_once"
+            ) as count_once, mock.patch.object(
+                runtime,
+                "_stop_server_classified",
+                side_effect=runtime.base.RuntimeStop(secondary_code),
+            ):
+                with self.assertRaises(runtime.base.RuntimeStop) as raised:
+                    runtime._run_fixture("/tmp/synthetic-release.gz", root)
+
+        self.assertEqual(str(raised.exception), secondary_code)
+        self.assertEqual(count_once.call_count, runtime.base.VIEWS)
+
+    def test_secondary_server_stop_evidence_is_sanitized(self):
+        known = runtime.base.RuntimeStop(
+            "SERVER_PRE_SHUTDOWN_GOATCOUNTER_COMMAND_ERROR"
+        )
+        unknown = runtime.base.RuntimeStop("fixture-only-raw-detail")
+
+        self.assertEqual(
+            runtime._secondary_server_stop_code(known),
+            "SERVER_PRE_SHUTDOWN_GOATCOUNTER_COMMAND_ERROR",
+        )
+        self.assertEqual(
+            runtime._secondary_server_stop_code(unknown),
+            "SERVER_STOP_SECONDARY_ERROR",
+        )
+        self.assertEqual(
+            runtime._secondary_server_stop_code(
+                ValueError("fixture-only-raw-detail")
+            ),
+            "SERVER_STOP_SECONDARY_ERROR",
+        )
+
     def test_api_token_uses_numeric_synthetic_user_selector(self):
         with tempfile.TemporaryDirectory(dir="/tmp") as parent:
             db = Path(parent) / "synthetic.sqlite3"
@@ -336,6 +446,12 @@ class IsolatedProofV2Tests(unittest.TestCase):
         self.assertNotIn("while attempt", source)
         self.assertIn('tempfile.mkdtemp(prefix=base.PREFIX, dir="/tmp")', source)
         self.assertIn("shutil.rmtree(root)", source)
+
+        base_source = (
+            ROOT / "scripts" / "ausmalwiese_goatcounter_isolated_probe_v1.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("if response.status != 202:", base_source)
+        self.assertIn('"no_sessions": True', base_source)
 
 
 if __name__ == "__main__":

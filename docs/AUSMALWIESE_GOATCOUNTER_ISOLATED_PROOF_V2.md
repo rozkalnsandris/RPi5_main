@@ -88,8 +88,32 @@ return-code mapping whether the child had already exited before shutdown or
 exited after the proof sent SIGINT. The result therefore did not prove that
 shutdown caused the command error. The canonical v2 operator now performs one
 process-state observation before any shutdown signal and reports a separate
-pre-shutdown class when the child is already gone. One later separately
-authorized proof is still required to establish the failure phase.
+pre-shutdown class when the child is already gone.
+
+A sixth separately authorized proof then stopped as:
+
+```text
+GOATCOUNTER_ISOLATED=STOP CODE=SERVER_PRE_SHUTDOWN_GOATCOUNTER_COMMAND_ERROR
+```
+
+That established that the child had exit code 1 before the proof requested
+shutdown. It still did not prove that both synthetic count requests completed:
+the count/readiness body ran inside a `try` whose `finally` always executed
+the server-stop classifier. If a count-stage `RuntimeStop` was already
+unwinding and the finalizer raised a server-stop `RuntimeStop`, Python would
+propagate the finalizer exception and mask the original backend failure.
+
+The canonical v2 operator now preserves the first readiness/count
+`RuntimeStop` as primary evidence. It still executes the one bounded
+server-stop path, but any secondary finalizer exception is reduced to a fixed
+sanitized code and attached only as internal secondary evidence. The operator
+stdout remains the primary stable failure code.
+
+Upstream evidence also confirms the HTTP contract used by this proof:
+GoatCounter documents `POST /api/v0/count` for backend pageview ingestion,
+supports `no_sessions:true`, and pinned v2.7.0
+`handlers/api.go` writes HTTP 202 on the successful count path before
+returning `{"status":"ok"}`.
 
 ## Reused v1 security boundary
 
@@ -204,8 +228,16 @@ Only a complete proof PASS reaches the bounded success cleanup
 
 v2 adds no retry or fallback. Each synthetic setup command is invoked once.
 The inherited HTTP count path still performs exactly one transmission per
-synthetic hit and never resends after ambiguity. A runtime failure terminates
-that proof attempt.
+synthetic hit, requires the pinned successful HTTP 202 response, and never
+resends after ambiguity.
+
+If readiness or counting raises a stable `RuntimeStop`, that first failure is
+retained as the causal operator result even though the existing bounded
+server-stop finalizer still runs. A later finalizer/server-stop failure cannot
+replace it. Secondary server-stop evidence is restricted to the fixed known
+shutdown classes; any unexpected secondary exception is reduced to
+`SERVER_STOP_SECONDARY_ERROR`. No secondary code is printed by the operator.
+A runtime failure terminates that proof attempt.
 
 ## Disconnected tests
 
@@ -225,6 +257,10 @@ execute GoatCounter or inspect RPi5 runtime state. They prove:
 - pre-shutdown exits 0, 1, 2, 66, 99, other signals and other positive values map to sanitized fixed classes;
 - a live child receives exactly one SIGINT and preserves all existing post-SIGINT mappings;
 - only post-SIGINT return code zero allows the proof to continue toward PASS;
+- `BACKEND_NOT_ACCEPTED` and `BACKEND_RESPONSE_UNCERTAIN` remain primary when a server-stop finalizer also fails;
+- the observed backend-failure plus pre-shutdown GoatCounter exit-1 shape preserves the backend code and retains only sanitized secondary evidence;
+- successful counts still allow the existing server-stop class to become the primary failure;
+- the inherited count path still requires HTTP 202, uses `no_sessions:true`, and performs no retry;
 - runtime failure skips cleanup and preserves a private `0700` fixture;
 - complete PASS reaches success cleanup exactly once;
 - operator output contains only the stable failure code;

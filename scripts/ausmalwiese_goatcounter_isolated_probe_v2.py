@@ -114,6 +114,36 @@ def _server_exit_failure_code(exit_code: int) -> str | None:
     return "SERVER_OTHER_NONZERO_EXIT"
 
 
+_SERVER_STOP_EVIDENCE_CODES = frozenset({
+    "SERVER_PRE_SHUTDOWN_CLEAN_EXIT",
+    "SERVER_PRE_SHUTDOWN_SIGINT_EXIT",
+    "SERVER_PRE_SHUTDOWN_GOATCOUNTER_COMMAND_ERROR",
+    "SERVER_PRE_SHUTDOWN_GO_RUNTIME_FAILURE",
+    "SERVER_PRE_SHUTDOWN_ZHTTP_SERVE_ERROR",
+    "SERVER_PRE_SHUTDOWN_FORCE_KILL_EXIT",
+    "SERVER_PRE_SHUTDOWN_OTHER_SIGNAL",
+    "SERVER_PRE_SHUTDOWN_OTHER_NONZERO_EXIT",
+    "SERVER_TERMINATED_BY_SIGINT",
+    "SERVER_GOATCOUNTER_COMMAND_ERROR",
+    "SERVER_GO_RUNTIME_FAILURE",
+    "SERVER_ZHTTP_SERVE_ERROR",
+    "SERVER_FORCE_KILL_EXIT",
+    "SERVER_TERMINATED_BY_OTHER_SIGNAL",
+    "SERVER_OTHER_NONZERO_EXIT",
+    "SERVER_SHUTDOWN_TIMEOUT",
+    "SERVER_PROCESS_STUCK",
+})
+
+
+def _secondary_server_stop_code(exc: Exception) -> str:
+    """Reduce a finalizer exception to sanitized secondary evidence."""
+    if isinstance(exc, base.RuntimeStop):
+        code = str(exc)
+        if code in _SERVER_STOP_EVIDENCE_CODES:
+            return code
+    return "SERVER_STOP_SECONDARY_ERROR"
+
+
 def _stop_server_classified(proc: subprocess.Popen[bytes]) -> None:
     """Separate pre-shutdown exit evidence from one graceful SIGINT attempt."""
     pre_shutdown_exit = proc.poll()
@@ -250,6 +280,7 @@ def _run_fixture(release_archive_arg: str, root: Path) -> None:
 
     port = base._free_loopback_port()
     proc = None
+    primary_failure = None
     try:
         proc = subprocess.Popen(
             [
@@ -271,11 +302,23 @@ def _run_fixture(release_archive_arg: str, root: Path) -> None:
         for _ in range(base.VIEWS):
             base._count_once(port, token)
         token = ""
+    except base.RuntimeStop as exc:
+        primary_failure = exc
     except OSError:
-        raise base.RuntimeStop("LOOPBACK_PROCESS_ERROR")
+        primary_failure = base.RuntimeStop("LOOPBACK_PROCESS_ERROR")
     finally:
         if proc is not None:
-            _stop_server_classified(proc)
+            try:
+                _stop_server_classified(proc)
+            except Exception as stop_exc:
+                if primary_failure is None:
+                    raise
+                primary_failure.secondary_server_stop_code = (
+                    _secondary_server_stop_code(stop_exc)
+                )
+
+    if primary_failure is not None:
+        raise primary_failure
 
     try:
         base.inspect_fixture(
