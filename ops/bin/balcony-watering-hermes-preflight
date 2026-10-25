@@ -75,9 +75,18 @@ def _read_store(path: Path, expected_uid: int) -> tuple[bytes, list[dict[str, An
         raise PreflightError("store_size_invalid")
     try:
         raw = path.read_bytes()
+        after = path.lstat()
     except OSError:
         raise PreflightError("store_unreadable") from None
-    if len(raw) != info.st_size:
+    before_identity = (
+        info.st_dev, info.st_ino, info.st_uid, info.st_nlink,
+        stat.S_IMODE(info.st_mode), info.st_size, info.st_mtime_ns,
+    )
+    after_identity = (
+        after.st_dev, after.st_ino, after.st_uid, after.st_nlink,
+        stat.S_IMODE(after.st_mode), after.st_size, after.st_mtime_ns,
+    )
+    if len(raw) != info.st_size or before_identity != after_identity:
         raise PreflightError("store_changed_during_read")
     try:
         data = json.loads(raw.decode("utf-8"), object_pairs_hook=_strict_object)
@@ -88,9 +97,21 @@ def _read_store(path: Path, expected_uid: int) -> tuple[bytes, list[dict[str, An
     if not isinstance(data, list):
         raise PreflightError("store_shape_invalid")
     jobs: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
     for item in data:
         if not isinstance(item, dict):
             raise PreflightError("job_shape_invalid")
+        job_id = item.get("id")
+        if (
+            not isinstance(job_id, str)
+            or not job_id
+            or len(job_id) > 128
+            or any(ord(char) < 0x21 or ord(char) > 0x7E for char in job_id)
+        ):
+            raise PreflightError("job_id_invalid")
+        if job_id in seen_ids:
+            raise PreflightError("job_id_duplicate")
+        seen_ids.add(job_id)
         jobs.append(item)
     return raw, jobs
 
