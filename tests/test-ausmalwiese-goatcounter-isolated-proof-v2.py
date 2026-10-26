@@ -318,48 +318,47 @@ class IsolatedProofV2Tests(unittest.TestCase):
             "SERVER_STOP_SECONDARY_ERROR",
         )
 
-    def test_collect_hits_preserves_existing_bitmask_and_clears_ignore_ips(self):
+    def test_aggregate_only_replaces_default_collection_bits(self):
         settings = {
             "collect": 190,
             "ignore_ips": "192.0.2.1",
             "other": "preserved",
         }
 
-        runtime._enable_collect_hits(settings)
+        runtime._enforce_aggregate_only(settings)
 
-        self.assertEqual(settings["collect"], 190 | 256)
+        self.assertEqual(settings["collect"], 1)
         self.assertEqual(settings["ignore_ips"], "")
         self.assertNotIsInstance(settings["ignore_ips"], list)
         self.assertEqual(settings["other"], "preserved")
 
-    def test_collect_hits_distinguishes_collectnothing_from_collecthits(self):
-        settings = {"collect": 1, "ignore_ips": ""}
+    def test_aggregate_only_disables_collecthits(self):
+        settings = {"collect": 257, "ignore_ips": ""}
 
-        runtime._enable_collect_hits(settings)
+        runtime._enforce_aggregate_only(settings)
 
-        self.assertEqual(settings["collect"], 1 | 256)
-        self.assertNotEqual(settings["collect"], 1)
-        self.assertTrue(settings["collect"] & 256)
+        self.assertEqual(settings["collect"], 1)
+        self.assertFalse(settings["collect"] & 256)
         self.assertEqual(settings["ignore_ips"], "")
 
-    def test_synthetic_settings_serialize_collect_as_number_and_ignore_ips_as_text(self):
+    def test_synthetic_settings_serialize_collectnothing_and_text_ignore_ips(self):
         settings = {
             "collect": 190,
             "ignore_ips": "192.0.2.1",
             "allow_counter": True,
         }
 
-        runtime._enable_collect_hits(settings)
+        runtime._enforce_aggregate_only(settings)
         encoded = runtime.json.dumps(settings, separators=(",", ":"))
         decoded = runtime.json.loads(encoded)
 
         self.assertIsInstance(decoded["collect"], int)
-        self.assertEqual(decoded["collect"], 190 | 256)
+        self.assertEqual(decoded["collect"], 1)
         self.assertIsInstance(decoded["ignore_ips"], str)
         self.assertEqual(decoded["ignore_ips"], "")
         self.assertNotIn('"ignore_ips":[]', encoded)
 
-    def test_collect_hits_rejects_malformed_bitmasks_without_mutation(self):
+    def test_aggregate_only_rejects_malformed_bitmasks_without_mutation(self):
         malformed = (None, True, 1.5, "190", -1, 65536)
         for value in malformed:
             with self.subTest(value=value):
@@ -370,7 +369,7 @@ class IsolatedProofV2Tests(unittest.TestCase):
                 before = dict(settings)
 
                 with self.assertRaises(runtime.base.RuntimeStop) as raised:
-                    runtime._enable_collect_hits(settings)
+                    runtime._enforce_aggregate_only(settings)
 
                 self.assertEqual(
                     str(raised.exception),
@@ -476,7 +475,7 @@ class IsolatedProofV2Tests(unittest.TestCase):
                         "SELECT settings FROM sites WHERE site_id=1"
                     ).fetchone()[0]
                 settings = runtime.json.loads(stored)
-                self.assertEqual(settings["collect"], 1 | 256)
+                self.assertEqual(settings["collect"], 1)
                 self.assertEqual(settings["ignore_ips"], "")
                 self.assertNotIsInstance(settings["ignore_ips"], list)
 
@@ -772,8 +771,8 @@ class IsolatedProofV2Tests(unittest.TestCase):
         self.assertIn("_startup_exit_failure_code", source)
         self.assertNotIn("stderr=subprocess.STDOUT", source)
         self.assertEqual(source.count('"-automigrate"'), 1)
-        self.assertIn("_COLLECT_HITS = 256", source)
-        self.assertIn('settings["collect"] = collect | _COLLECT_HITS', source)
+        self.assertIn("_COLLECT_NOTHING = 1", source)
+        self.assertIn('settings["collect"] = _COLLECT_NOTHING', source)
         self.assertIn('settings["ignore_ips"] = ""', source)
         self.assertNotIn('settings["ignore_ips"] = []', source)
         self.assertIn('"SYNTHETIC_SITE_DESERIALIZATION_FAILED"', source)

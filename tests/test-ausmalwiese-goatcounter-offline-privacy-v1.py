@@ -75,7 +75,7 @@ class SyntheticGoatCounterFixture(unittest.TestCase):
             )
             con.execute(
                 "INSERT INTO sites VALUES(?, ?)",
-                (1, json.dumps({"collect": 1, "ignore_ips": []})),
+                (1, json.dumps({"collect": 1, "ignore_ips": ""})),
             )
             con.execute(
                 "INSERT INTO users VALUES(5, 1, 'goatcounter-probe@example.com')"
@@ -255,21 +255,34 @@ class SyntheticGoatCounterFixture(unittest.TestCase):
         )
         self.assert_stops("LANGUAGE_LOOKUP_SHAPE")
 
-    def test_session_defaults_zero_rejected(self):
+    def test_zero_collect_rejected(self):
         self.mutate("UPDATE sites SET settings='{\"collect\": 0}'")
         self.assert_stops("SITE_COLLECTION_NOT_MINIMAL")
 
-    def test_session_bit_rejected(self):
-        self.mutate("UPDATE sites SET settings='{\"collect\": 129}'")
-        self.assert_stops("SITE_COLLECTION_NOT_MINIMAL")
+    def test_any_non_aggregate_collection_bits_rejected(self):
+        for collect in (2, 4, 16, 128, 190, 257):
+            with self.subTest(collect=collect):
+                self.mutate(
+                    "UPDATE sites SET settings=?",
+                    (json.dumps({"collect": collect, "ignore_ips": ""}),),
+                )
+                self.assert_stops("SITE_COLLECTION_NOT_MINIMAL")
 
     def test_boolean_collect_rejected(self):
         self.mutate("UPDATE sites SET settings='{\"collect\": true}'")
         self.assert_stops("SITE_COLLECTION_NOT_MINIMAL")
 
-    def test_explicit_ip_ignore_list_rejected(self):
+    def test_nonempty_text_ip_ignore_rejected(self):
         self.mutate(
-            "UPDATE sites SET settings='{\"collect\": 1, \"ignore_ips\": [\"203.0.113.1\"]}'"
+            "UPDATE sites SET settings=?",
+            (json.dumps({"collect": 1, "ignore_ips": "203.0.113.1"}),),
+        )
+        self.assert_stops("SITE_COLLECTION_NOT_MINIMAL")
+
+    def test_array_ip_ignore_representation_rejected(self):
+        self.mutate(
+            "UPDATE sites SET settings=?",
+            (json.dumps({"collect": 1, "ignore_ips": []}),),
         )
         self.assert_stops("SITE_COLLECTION_NOT_MINIMAL")
 
