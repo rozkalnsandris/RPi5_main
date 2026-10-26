@@ -308,6 +308,88 @@ class IsolatedProofV2Tests(unittest.TestCase):
             "SERVER_STOP_SECONDARY_ERROR",
         )
 
+    def test_collect_hits_preserves_existing_bitmask_and_clears_ignore_ips(self):
+        settings = {
+            "collect": 190,
+            "ignore_ips": ["192.0.2.1"],
+            "other": "preserved",
+        }
+
+        runtime._enable_collect_hits(settings)
+
+        self.assertEqual(settings["collect"], 190 | 256)
+        self.assertEqual(settings["ignore_ips"], [])
+        self.assertEqual(settings["other"], "preserved")
+
+    def test_collect_hits_distinguishes_collectnothing_from_collecthits(self):
+        settings = {"collect": 1, "ignore_ips": []}
+
+        runtime._enable_collect_hits(settings)
+
+        self.assertEqual(settings["collect"], 1 | 256)
+        self.assertNotEqual(settings["collect"], 1)
+        self.assertTrue(settings["collect"] & 256)
+
+    def test_collect_hits_rejects_malformed_bitmasks_without_mutation(self):
+        malformed = (None, True, 1.5, "190", -1, 65536)
+        for value in malformed:
+            with self.subTest(value=value):
+                settings = {
+                    "collect": value,
+                    "ignore_ips": ["fixture-only-ip"],
+                }
+                before = dict(settings)
+
+                with self.assertRaises(runtime.base.RuntimeStop) as raised:
+                    runtime._enable_collect_hits(settings)
+
+                self.assertEqual(
+                    str(raised.exception),
+                    "SYNTHETIC_SETTINGS_INVALID",
+                )
+                self.assertEqual(settings, before)
+                self.assertNotIn("fixture-only-ip", str(raised.exception))
+
+    def test_server_launch_uses_one_automigrate_and_one_popen(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as parent:
+            root = Path(parent)
+            proc = mock.Mock()
+
+            with mock.patch.object(
+                runtime.base,
+                "_verified_release_archive",
+                return_value=Path("/synthetic/bin"),
+            ), mock.patch.object(
+                runtime.base, "_isolated_env", return_value={}
+            ), mock.patch.object(
+                runtime.base, "_version"
+            ), mock.patch.object(
+                runtime,
+                "_make_site_with_stage_diagnostics",
+                return_value="synthetic-token",
+            ), mock.patch.object(
+                runtime.base, "_free_loopback_port", return_value=12345
+            ), mock.patch.object(
+                runtime.subprocess, "Popen", return_value=proc
+            ) as popen, mock.patch.object(
+                runtime, "_tcp_ready_classified"
+            ), mock.patch.object(
+                runtime.base,
+                "_count_once",
+                side_effect=runtime.base.RuntimeStop("BACKEND_NOT_ACCEPTED"),
+            ), mock.patch.object(
+                runtime, "_stop_server_classified"
+            ):
+                with self.assertRaises(runtime.base.RuntimeStop):
+                    runtime._run_fixture("/tmp/synthetic-release.gz", root)
+
+        popen.assert_called_once()
+        argv = popen.call_args.args[0]
+        self.assertEqual(argv.count("-automigrate"), 1)
+        self.assertEqual(argv[1], "serve")
+        self.assertIn("-tls=http", argv)
+        self.assertIn("-store-every=1", argv)
+
     def test_api_token_uses_numeric_synthetic_user_selector(self):
         with tempfile.TemporaryDirectory(dir="/tmp") as parent:
             db = Path(parent) / "synthetic.sqlite3"
@@ -580,6 +662,9 @@ class IsolatedProofV2Tests(unittest.TestCase):
         self.assertIn("_STARTUP_STDERR_LIMIT = 8192", source)
         self.assertIn("_startup_exit_failure_code", source)
         self.assertNotIn("stderr=subprocess.STDOUT", source)
+        self.assertEqual(source.count('"-automigrate"'), 1)
+        self.assertIn("_COLLECT_HITS = 256", source)
+        self.assertIn('settings["collect"] = collect | _COLLECT_HITS', source)
 
         base_source = (
             ROOT / "scripts" / "ausmalwiese_goatcounter_isolated_probe_v1.py"
