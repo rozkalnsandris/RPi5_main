@@ -113,6 +113,7 @@ _STAGE_FAILURES = {
     ("db", "newdb"): "SYNTHETIC_DB_CREATE_FAILED",
     ("db", "create", "site"): "SYNTHETIC_SITE_CREATE_FAILED",
     ("db", "create", "apitoken"): "SYNTHETIC_API_TOKEN_CREATE_FAILED",
+    ("db", "show", "site"): "SYNTHETIC_SITE_READBACK_FAILED",
 }
 
 
@@ -340,6 +341,26 @@ def _enable_collect_hits(settings: dict[str, object]) -> None:
     settings["ignore_ips"] = []
 
 
+def _verify_site_readback(
+    binary: Path,
+    root: Path,
+    env: dict[str, str],
+    db_arg: str,
+) -> None:
+    """Make GoatCounter deserialize the synthetic Site before server launch."""
+    _run_stage(
+        binary,
+        root,
+        env,
+        "db",
+        "show",
+        "site",
+        "-find=" + base.HOST,
+        "-format=json",
+        "-db=" + db_arg,
+    )
+
+
 def _make_site_with_stage_diagnostics(
     binary: Path,
     root: Path,
@@ -366,6 +387,7 @@ def _make_site_with_stage_diagnostics(
 
     _create_count_token(binary, root, env, db, db_arg)
 
+    token = ""
     try:
         with contextlib.closing(sqlite3.connect(db, timeout=2)) as con:
             con.row_factory = sqlite3.Row
@@ -389,11 +411,13 @@ def _make_site_with_stage_diagnostics(
             token = tokens[0]["token"]
             if not isinstance(token, str) or len(token) < 16:
                 raise base.RuntimeStop("SYNTHETIC_TOKEN_INVALID")
-            return token
     except base.RuntimeStop:
         raise
     except (sqlite3.DatabaseError, ValueError, TypeError):
         raise base.RuntimeStop("SYNTHETIC_DATABASE_SETUP")
+
+    _verify_site_readback(binary, root, env, db_arg)
+    return token
 
 
 def _run_fixture(release_archive_arg: str, root: Path) -> None:

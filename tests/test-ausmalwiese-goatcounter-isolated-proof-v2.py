@@ -55,6 +55,17 @@ class IsolatedProofV2Tests(unittest.TestCase):
                 ("db", "create", "apitoken", "-perm=count"),
                 "SYNTHETIC_API_TOKEN_CREATE_FAILED",
             ),
+            (
+                (
+                    "db",
+                    "show",
+                    "site",
+                    "-find=stats.example.test",
+                    "-format=json",
+                    "-db=synthetic",
+                ),
+                "SYNTHETIC_SITE_READBACK_FAILED",
+            ),
         )
         for argv, expected in cases:
             with self.subTest(expected=expected):
@@ -390,6 +401,82 @@ class IsolatedProofV2Tests(unittest.TestCase):
         self.assertIn("-tls=http", argv)
         self.assertIn("-store-every=1", argv)
 
+    def test_site_readback_uses_exact_silent_goatcounter_show_argv(self):
+        with mock.patch.object(runtime, "_run_stage") as run_stage:
+            runtime._verify_site_readback(
+                Path("/synthetic/bin"),
+                Path("/tmp/synthetic"),
+                {"PATH": "/usr/bin:/bin"},
+                "sqlite+/tmp/synthetic/db.sqlite3",
+            )
+
+        run_stage.assert_called_once_with(
+            Path("/synthetic/bin"),
+            Path("/tmp/synthetic"),
+            {"PATH": "/usr/bin:/bin"},
+            "db",
+            "show",
+            "site",
+            "-find=" + runtime.base.HOST,
+            "-format=json",
+            "-db=sqlite+/tmp/synthetic/db.sqlite3",
+        )
+
+    def test_site_readback_runs_once_after_settings_commit(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as parent:
+            root = Path(parent)
+            db = root / "synthetic.sqlite3"
+            with sqlite3.connect(db) as con:
+                con.execute(
+                    "CREATE TABLE sites (site_id integer, settings text)"
+                )
+                con.execute(
+                    "CREATE TABLE api_tokens (token text)"
+                )
+                con.execute(
+                    "INSERT INTO sites VALUES (?, ?)",
+                    (
+                        1,
+                        '{"collect":1,"ignore_ips":["fixture-only-ip"]}',
+                    ),
+                )
+                con.execute(
+                    "INSERT INTO api_tokens VALUES (?)",
+                    ("synthetic-token-1234567890",),
+                )
+
+            def verify_readback(binary, readback_root, env, db_arg):
+                self.assertEqual(binary, Path("/synthetic/bin"))
+                self.assertEqual(readback_root, root)
+                self.assertEqual(env, {"PATH": "/usr/bin:/bin"})
+                self.assertEqual(db_arg, "sqlite+" + str(db))
+                with sqlite3.connect(db) as con:
+                    stored = con.execute(
+                        "SELECT settings FROM sites WHERE site_id=1"
+                    ).fetchone()[0]
+                settings = runtime.json.loads(stored)
+                self.assertEqual(settings["collect"], 1 | 256)
+                self.assertEqual(settings["ignore_ips"], [])
+
+            with mock.patch.object(
+                runtime, "_run_stage"
+            ), mock.patch.object(
+                runtime, "_create_count_token"
+            ), mock.patch.object(
+                runtime,
+                "_verify_site_readback",
+                side_effect=verify_readback,
+            ) as readback:
+                token = runtime._make_site_with_stage_diagnostics(
+                    Path("/synthetic/bin"),
+                    root,
+                    {"PATH": "/usr/bin:/bin"},
+                    db,
+                )
+
+            self.assertEqual(token, "synthetic-token-1234567890")
+            readback.assert_called_once()
+
     def test_api_token_uses_numeric_synthetic_user_selector(self):
         with tempfile.TemporaryDirectory(dir="/tmp") as parent:
             db = Path(parent) / "synthetic.sqlite3"
@@ -665,6 +752,9 @@ class IsolatedProofV2Tests(unittest.TestCase):
         self.assertEqual(source.count('"-automigrate"'), 1)
         self.assertIn("_COLLECT_HITS = 256", source)
         self.assertIn('settings["collect"] = collect | _COLLECT_HITS', source)
+        self.assertIn('"SYNTHETIC_SITE_READBACK_FAILED"', source)
+        self.assertIn('"-format=json"', source)
+        self.assertIn("_verify_site_readback(binary, root, env, db_arg)", source)
 
         base_source = (
             ROOT / "scripts" / "ausmalwiese_goatcounter_isolated_probe_v1.py"
