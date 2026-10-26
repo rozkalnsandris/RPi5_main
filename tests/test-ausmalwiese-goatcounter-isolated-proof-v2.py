@@ -409,6 +409,26 @@ class IsolatedProofV2Tests(unittest.TestCase):
                 ),
                 "SERVER_STARTUP_BIND_PERMISSION_DENIED",
             ),
+            (
+                1,
+                b"goatcounter: zdb.Connect: sqlite database at /tmp/private.sqlite does not exist\n",
+                "SERVER_STARTUP_DATABASE_ERROR",
+            ),
+            (
+                1,
+                b"goatcounter: Sites.List: no such table: sites\n",
+                "SERVER_STARTUP_SITE_LIST_ERROR",
+            ),
+            (
+                1,
+                b"goatcounter: template: dashboard: parse failure\n",
+                "SERVER_STARTUP_TEMPLATE_ERROR",
+            ),
+            (
+                1,
+                b"goatcounter: zhttp.Serve: listen tcp: invalid argument\n",
+                "SERVER_STARTUP_ZHTTP_SETUP_ERROR",
+            ),
             (0, b"", "SERVER_STARTUP_CLEAN_EXIT"),
             (1, b"other startup error", "SERVER_STARTUP_GOATCOUNTER_COMMAND_ERROR"),
             (2, b"", "SERVER_STARTUP_GO_RUNTIME_FAILURE"),
@@ -428,6 +448,19 @@ class IsolatedProofV2Tests(unittest.TestCase):
                 self.assertNotIn("fixture-only-secret", code)
                 self.assertNotIn("address already in use", code.casefold())
                 self.assertNotIn("permission denied", code.casefold())
+                self.assertNotIn("/tmp/private.sqlite", code)
+                self.assertNotIn("no such table", code.casefold())
+                self.assertNotIn("parse failure", code.casefold())
+
+    def test_startup_bind_classification_has_priority_over_other_markers(self):
+        code = runtime._startup_exit_failure_code(
+            1,
+            (
+                b"goatcounter: zhttp.Serve: listen tcp 127.0.0.1:54321: "
+                b"bind: address already in use; zdb.Connect: fixture-only-detail"
+            ),
+        )
+        self.assertEqual(code, "SERVER_STARTUP_BIND_ADDRESS_IN_USE")
 
     def test_startup_stderr_capture_is_bounded_and_discardable(self):
         payload = b"x" * (runtime._STARTUP_STDERR_LIMIT + 4096)
@@ -479,6 +512,10 @@ class IsolatedProofV2Tests(unittest.TestCase):
             "SYNTHETIC_SITE_CREATE_FAILED",
             "SERVER_STARTUP_BIND_ADDRESS_IN_USE",
             "SERVER_STARTUP_BIND_PERMISSION_DENIED",
+            "SERVER_STARTUP_DATABASE_ERROR",
+            "SERVER_STARTUP_SITE_LIST_ERROR",
+            "SERVER_STARTUP_TEMPLATE_ERROR",
+            "SERVER_STARTUP_ZHTTP_SETUP_ERROR",
             "SERVER_STARTUP_CLEAN_EXIT",
             "SERVER_STARTUP_GOATCOUNTER_COMMAND_ERROR",
             "SERVER_STARTUP_GO_RUNTIME_FAILURE",

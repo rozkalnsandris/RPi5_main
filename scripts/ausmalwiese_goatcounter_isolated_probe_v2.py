@@ -85,6 +85,15 @@ def _startup_exit_failure_code(exit_code: int, stderr_prefix: bytes) -> str:
         return "SERVER_STARTUP_BIND_ADDRESS_IN_USE"
     if listen_error and b"bind: permission denied" in lower:
         return "SERVER_STARTUP_BIND_PERMISSION_DENIED"
+    if exit_code == 1:
+        if b"zdb.connect:" in lower or b" database at " in lower:
+            return "SERVER_STARTUP_DATABASE_ERROR"
+        if b"sites.list:" in lower:
+            return "SERVER_STARTUP_SITE_LIST_ERROR"
+        if b"template:" in lower:
+            return "SERVER_STARTUP_TEMPLATE_ERROR"
+        if b"zhttp.serve:" in lower:
+            return "SERVER_STARTUP_ZHTTP_SETUP_ERROR"
     if exit_code == 0:
         return "SERVER_STARTUP_CLEAN_EXIT"
     if exit_code == 1:
