@@ -323,12 +323,12 @@ def _create_count_token(
     )
 
 
-_COLLECT_HITS = 256
+_COLLECT_NOTHING = 1
 _COLLECT_MASK_MAX = (1 << 16) - 1
 
 
-def _enable_collect_hits(settings: dict[str, object]) -> None:
-    """Enable individual hit storage without discarding existing collect bits."""
+def _enforce_aggregate_only(settings: dict[str, object]) -> None:
+    """Disable visitor dimensions and individual-hit storage for the fixture."""
     collect = settings.get("collect")
     if (
         isinstance(collect, bool)
@@ -337,7 +337,7 @@ def _enable_collect_hits(settings: dict[str, object]) -> None:
         or collect > _COLLECT_MASK_MAX
     ):
         raise base.RuntimeStop("SYNTHETIC_SETTINGS_INVALID")
-    settings["collect"] = collect | _COLLECT_HITS
+    settings["collect"] = _COLLECT_NOTHING
     settings["ignore_ips"] = ""
 
 
@@ -401,7 +401,7 @@ def _make_site_with_stage_diagnostics(
             settings = json.loads(sites[0]["settings"])
             if not isinstance(settings, dict):
                 raise base.RuntimeStop("SYNTHETIC_SETTINGS_INVALID")
-            _enable_collect_hits(settings)
+            _enforce_aggregate_only(settings)
             con.execute(
                 "UPDATE sites SET settings=? WHERE site_id=?",
                 (json.dumps(settings, separators=(",", ":")), sites[0]["site_id"]),
