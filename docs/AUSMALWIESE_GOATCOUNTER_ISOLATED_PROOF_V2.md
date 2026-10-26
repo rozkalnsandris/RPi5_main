@@ -185,16 +185,20 @@ file, and it is never printed.
 
 If the loopback listener becomes ready, retained startup bytes are immediately
 discarded and the reader continues in discard-only mode. If the child exits
-before readiness, the bounded prefix is used only to recognize the two exact
-pinned zhttp listen/bind shapes below; the prefix is then discarded and only a
-fixed code survives:
+before readiness, the bounded prefix is used only to recognize reviewed pinned
+upstream startup shapes; the prefix is then discarded and only a fixed code
+survives:
 
 | Pre-ready observed class | Stable code |
 | --- | --- |
 | zhttp listen/bind reports address already in use | `SERVER_STARTUP_BIND_ADDRESS_IN_USE` |
 | zhttp listen/bind reports permission denied | `SERVER_STARTUP_BIND_PERMISSION_DENIED` |
+| pinned zdb/GoatCounter database connection family | `SERVER_STARTUP_DATABASE_ERROR` |
+| pinned `Sites.List` site-enumeration family | `SERVER_STARTUP_SITE_LIST_ERROR` |
+| embedded template parse/init family | `SERVER_STARTUP_TEMPLATE_ERROR` |
+| another synchronous pinned `zhttp.Serve` setup error | `SERVER_STARTUP_ZHTTP_SETUP_ERROR` |
 | clean exit 0 before readiness | `SERVER_STARTUP_CLEAN_EXIT` |
-| GoatCounter generic command-error exit 1 | `SERVER_STARTUP_GOATCOUNTER_COMMAND_ERROR` |
+| unmatched GoatCounter generic command-error exit 1 | `SERVER_STARTUP_GOATCOUNTER_COMMAND_ERROR` |
 | Go panic/runtime-failure exit 2 | `SERVER_STARTUP_GO_RUNTIME_FAILURE` |
 | pinned zhttp Serve exit 66 | `SERVER_STARTUP_ZHTTP_SERVE_ERROR` |
 | GoatCounter force-kill exit 99 | `SERVER_STARTUP_FORCE_KILL_EXIT` |
@@ -207,10 +211,20 @@ stderr, stdout, PID, numeric listener port, fixture path, API token, password,
 SQLite row contents or arbitrary exception text in operator output.
 
 The bind-specific classes require both the pinned `zhttp.Serve: listen tcp`
-marker and the corresponding fixed bind phrase. An exit code 1 without that
-evidence remains the generic GoatCounter startup command-error class. This
-prevents the latest `SERVER_EARLY_EXIT` observation from being overclaimed as
-a proven port collision.
+marker and the corresponding fixed bind phrase and take priority over all other
+exit-1 markers. Database, `Sites.List`, template and generic zhttp setup
+classes also require reviewed fixed markers; arbitrary stderr is never emitted.
+
+The next separately authorized proof after the first startup-classification
+change stopped as:
+
+```text
+GOATCOUNTER_ISOLATED=STOP CODE=SERVER_STARTUP_GOATCOUNTER_COMMAND_ERROR
+```
+
+That excludes the two reviewed bind classes but still does not prove which
+remaining pre-ready stage failed. Unknown exit-1 stderr therefore continues to
+fail closed as the generic GoatCounter startup command-error class.
 
 ## Shutdown exit classification
 
