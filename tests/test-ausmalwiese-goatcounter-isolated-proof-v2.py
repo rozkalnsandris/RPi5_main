@@ -815,7 +815,7 @@ class IsolatedProofV2Tests(unittest.TestCase):
         self.assertIn('"SYNTHETIC_SITE_DESERIALIZATION_FAILED"', source)
         self.assertNotIn('"-format=json"', source)
         self.assertIn("_verify_site_deserialization(binary, root, env, db_arg)", source)
-        self.assertIn("base.operator_safe_stop_code(exc)", source)
+        self.assertIn("privacy.operator_safe_stop_code(exc)", source)
         self.assertIn("_inspect_fixture_or_raise(root)", source)
 
         base_source = (
