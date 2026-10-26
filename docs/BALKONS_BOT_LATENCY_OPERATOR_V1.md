@@ -68,7 +68,8 @@ for CHECK. Source-only work does not create the LIVE comment.
 
 ## Owner-operated preflight — no production effect
 
-The existing trusted RPi5 checkout must be a clean, main-branch checkout
+The existing trusted RPi5 checkout is fixed to the owner-home basename
+`RPi5_main` (normally `$HOME/RPi5_main`) and must be a clean, main-branch checkout
 with HEAD and local origin/main at the full, separately confirmed current GitHub
 commit. If origin has moved, STOP; do not repair via checkout/reset/force.
 
