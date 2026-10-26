@@ -26,6 +26,7 @@ import time
 from pathlib import Path
 
 import ausmalwiese_goatcounter_isolated_probe_v1 as base
+import ausmalwiese_goatcounter_offline_privacy_probe_v1 as privacy
 
 
 PASS = "PASS_SYNTHETIC_GOATCOUNTER_RUNTIME_ONLY_NOT_LIVE_OR_LEGAL_PROOF"
@@ -483,7 +484,7 @@ def _inspect_fixture_or_raise(root: Path) -> None:
             expected_views=base.VIEWS,
         )
     except base.ProbeStop as exc:
-        raise base.RuntimeStop(base.operator_safe_stop_code(exc)) from None
+        raise base.RuntimeStop(privacy.operator_safe_stop_code(exc)) from None
 
 
 def run_isolated(release_archive_arg: str) -> str:
