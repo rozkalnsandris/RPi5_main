@@ -326,6 +326,29 @@ The corrected source restores exact `collect=1` and keeps
 `CollectHits`, fresh-site default visitor-dimension flags, non-empty or array
 IP-ignore representations, individual hit rows and visitor-dimension rows.
 
+A later separately authorized proof with that aggregate-only correction again
+passed setup, deserialization, server start, both HTTP 202 submissions and
+clean shutdown, then stopped at the same structural gate:
+
+```text
+GOATCOUNTER_ISOLATED=STOP CODE=ISOLATED_SQLITE_PRIVACY_GATE
+```
+
+Pinned v2.7.0 shutdown source explains the remaining deterministic mismatch.
+After `cron.TaskPersistAndStat()`, `serve.go` always calls
+`Memstore.StoreSessions(db)`. `StoreSessions()` always writes one
+`store(key="session")` row, even when no session was collected. With
+`no_sessions:true` and `collect=1`, `Memstore.Reset()` leaves exactly four
+empty maps: `sessions`, `hashes`, `paths` and `seen`.
+
+The structural gate therefore no longer blanket-rejects the entire `store`
+table. It accepts exactly one shutdown housekeeping row only when its key is
+`session` and its JSON value is exactly those four empty objects. Missing or
+extra rows, another key, malformed JSON, missing or extra fields, non-object
+values, or any non-empty session/hash/path/seen content still fail closed.
+This is not permission to persist session data; it recognizes only pinned
+GoatCounter's empty graceful-shutdown bookkeeping.
+
 This diagnostic and fix remain source-only. They do not authorize another
 runtime attempt or inspection of a retained failed fixture.
 
@@ -426,6 +449,8 @@ execute GoatCounter or inspect RPi5 runtime state. They prove:
 - serialized synthetic settings keep `collect` numeric and `ignore_ips` textual, never `[]`;
 - malformed, boolean, negative or out-of-range collect bitmasks fail closed without mutation or fixture-data leakage;
 - synthetic `ignore_ips` is reset to GoatCounter's empty text representation only after collect validation succeeds;
+- the offline privacy gate accepts exactly one `store(key="session")` shutdown housekeeping row only when `sessions`, `hashes`, `paths` and `seen` are all empty JSON objects;
+- missing/extra store rows, another key, malformed or non-empty session housekeeping remain rejected;
 - exactly one pre-serve GoatCounter-native no-op site update path uses the fixed synthetic vhost with output suppressed;
 - the diagnostic passes no `-format`, `-vhost` or `-link` arguments, so the pinned CLI requests no site-row update;
 - the diagnostic runs only after the synthetic settings commit and maps any non-zero result to `SYNTHETIC_SITE_DESERIALIZATION_FAILED`;
