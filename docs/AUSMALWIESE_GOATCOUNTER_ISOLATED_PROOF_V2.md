@@ -239,10 +239,17 @@ synthetic proof therefore adds exactly one `-automigrate` flag to its isolated
 does not authorize or imply migration of any production database.
 
 The pinned v2.7.0 collection setting is a bitmask. Value `1` is
-`CollectNothing`, while individual pageview storage uses
-`CollectHits = 256`. The proof now validates the existing synthetic
-`settings.collect` value as a non-boolean 16-bit integer and writes
-`collect | 256`, preserving every pre-existing collection flag.
+`CollectNothing`, while `CollectHits = 256` means storing individual
+pageviews for exports. Pinned `memstore.processHit()` sets `h.NoStore=true`
+whenever `CollectHits` is absent, but still returns the processed hit for
+aggregate/stat persistence. Referrer, user-agent, screen-size, language,
+location and session dimensions are independently cleared when their flags are
+absent.
+
+The synthetic proof therefore enforces exact aggregate-only
+`settings.collect = 1` after validating the existing value as a non-boolean
+16-bit integer. It does not preserve fresh-site defaults and does not enable
+`CollectHits` or any visitor-dimension bit.
 
 Pinned v2.7.0 declares `SiteSettings.IgnoreIPs` as GoatCounter `Strings`.
 That type implements `MarshalText()` / `UnmarshalText()` using
@@ -297,9 +304,27 @@ deserialized by pinned GoatCounter before server launch.
 Source review then identified the synthetic type-shape mismatch above:
 `ignore_ips` had been rewritten as a JSON array even though the DB settings
 type uses GoatCounter `Strings` text serialization. The proof now writes the
-empty textual value and retains this same pre-serve `Sites.Find()` gate. A
-future PASS through the gate would confirm that the corrected row shape is
-accepted before any HTTP server exists.
+empty textual value and retains this same pre-serve `Sites.Find()` gate.
+
+A later separately authorized proof passed that deserialization gate, server
+startup, both synthetic HTTP 202 count submissions and the clean server-stop
+path, then stopped only at:
+
+```text
+GOATCOUNTER_ISOLATED=STOP CODE=ISOLATED_SQLITE_PRIVACY_GATE
+```
+
+Source review of the structural gate showed that it still required the original
+aggregate-only `collect == 1` contract, while the v2 setup had meanwhile been
+changed to preserve fresh-site defaults and add `CollectHits=256`. That
+configuration conflicts with the privacy contract: `CollectHits` permits
+individual rows in `hits`, and the default collection bits permit visitor
+dimensions that the proof is intended to disable.
+
+The corrected source restores exact `collect=1` and keeps
+`ignore_ips=""`. The offline structural gate remains strict: it rejects
+`CollectHits`, fresh-site default visitor-dimension flags, non-empty or array
+IP-ignore representations, individual hit rows and visitor-dimension rows.
 
 This diagnostic and fix remain source-only. They do not authorize another
 runtime attempt or inspection of a retained failed fixture.
@@ -396,9 +421,9 @@ execute GoatCounter or inspect RPi5 runtime state. They prove:
 
 - exact v2.7.0 arm64 pin reuse;
 - the synthetic server is launched exactly once and its argv contains exactly one `-automigrate`;
-- existing collection bits are preserved while `CollectHits=256` is enabled;
+- synthetic settings are forced to exact aggregate-only `collect=1`;
+- `CollectHits=256`, the fresh-site default bitmask and visitor-dimension bits are not preserved;
 - serialized synthetic settings keep `collect` numeric and `ignore_ips` textual, never `[]`;
-- `CollectNothing=1` remains distinct from `CollectHits=256`;
 - malformed, boolean, negative or out-of-range collect bitmasks fail closed without mutation or fixture-data leakage;
 - synthetic `ignore_ips` is reset to GoatCounter's empty text representation only after collect validation succeeds;
 - exactly one pre-serve GoatCounter-native no-op site update path uses the fixed synthetic vhost with output suppressed;
