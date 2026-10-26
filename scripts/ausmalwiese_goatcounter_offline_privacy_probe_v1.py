@@ -36,8 +36,7 @@ TABLES = frozenset({
 DISALLOWED_ROWS = frozenset({
     "hits", "bots", "campaigns", "browsers", "systems",
     "browser_stats", "system_stats", "location_stats", "size_stats",
-    "language_stats", "campaign_stats", "exports", "store",
-    "iso_3166_1",
+    "language_stats", "campaign_stats", "exports", "iso_3166_1",
 })
 COLS = {
     "sites": {"site_id", "settings"},
@@ -155,6 +154,28 @@ def inspect_fixture(root: str | Path, *, page_id: str, expected_views: int) -> s
             for table in sorted(DISALLOWED_ROWS):
                 if _count(conn, table):
                     _stop("FORBIDDEN_ROWS_" + table.upper())
+
+            # Pinned v2.7.0 graceful shutdown always writes one session
+            # housekeeping row. With no_sessions:true and CollectSession off,
+            # all four maps must remain empty; any retained session material
+            # or unrelated store record fails closed.
+            store_rows = conn.execute(
+                "SELECT key, value FROM store"
+            ).fetchall()
+            if len(store_rows) != 1 or store_rows[0]["key"] != "session":
+                _stop("SESSION_STORE_SHAPE")
+            try:
+                stored_session = json.loads(store_rows[0]["value"])
+            except (ValueError, TypeError):
+                _stop("SESSION_STORE_JSON")
+            if stored_session != {
+                "sessions": {},
+                "hashes": {},
+                "paths": {},
+                "seen": {},
+            }:
+                _stop("SESSION_STORE_NOT_EMPTY")
+
             # v2.7.0 includes seeded reference tables as well as visitor data.
             # A clean installation has one static unknown-location row; the
             # bundled db/languages.sql creates 7,086 language entries plus
