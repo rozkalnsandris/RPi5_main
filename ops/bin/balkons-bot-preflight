@@ -28,6 +28,8 @@ DROPIN_REL = Path("ops/systemd/balkons-bot-runtime-override.conf")
 PREFLIGHT_REL = Path("ops/bin/balkons-bot-preflight")
 CRITICAL_RELS = (SOURCE_REL, TEMPLATE_REL, DROPIN_REL, PREFLIGHT_REL)
 
+ENCRYPTED_CREDENTIAL_DIR = Path("/etc/credstore.encrypted")
+ENCRYPTED_CREDENTIAL_DIR_MODE = 0o711
 ENCRYPTED_CREDENTIAL_MODE = 0o400
 ENCRYPTED_CREDENTIAL_MAX_BYTES = 65536
 ENCRYPTED_CREDENTIAL_SPECS = (
@@ -215,29 +217,59 @@ def map_absolute(path: Path, root_prefix: Path | None) -> Path:
 
 def collect_encrypted_credential_metadata(
     *, root_prefix: Path | None = None, expected_owner_uid: int = 0,
+    expected_owner_gid: int = 0,
 ) -> tuple[dict[str, object], list[str]]:
     """Validate ciphertext metadata only; credential bytes are never opened or hashed."""
     blockers: list[str] = []
     valid_count = 0
-    for credential_id, absolute_path in ENCRYPTED_CREDENTIAL_SPECS:
-        path = map_absolute(absolute_path, root_prefix)
-        try:
-            metadata = path.lstat()
-        except OSError:
-            blockers.append(f"encrypted_credential_{credential_id.replace('-', '_')}_missing")
-            continue
-        regular_one_link = stat.S_ISREG(metadata.st_mode) and metadata.st_nlink == 1
-        owner_matches = metadata.st_uid == expected_owner_uid
-        mode_matches = stat.S_IMODE(metadata.st_mode) == ENCRYPTED_CREDENTIAL_MODE
-        size_bounded = 0 < metadata.st_size <= ENCRYPTED_CREDENTIAL_MAX_BYTES
-        if regular_one_link and owner_matches and mode_matches and size_bounded:
-            valid_count += 1
-            continue
-        blockers.append(f"encrypted_credential_{credential_id.replace('-', '_')}_metadata_invalid")
+    directory_metadata_valid = False
+    credential_dir = map_absolute(ENCRYPTED_CREDENTIAL_DIR, root_prefix)
+    try:
+        directory_metadata = credential_dir.lstat()
+    except FileNotFoundError:
+        blockers.append("encrypted_credential_directory_missing")
+    except PermissionError:
+        blockers.append("encrypted_credential_directory_inaccessible")
+    except OSError:
+        blockers.append("encrypted_credential_directory_metadata_unreadable")
+    else:
+        directory_metadata_valid = (
+            stat.S_ISDIR(directory_metadata.st_mode)
+            and directory_metadata.st_uid == expected_owner_uid
+            and directory_metadata.st_gid == expected_owner_gid
+            and stat.S_IMODE(directory_metadata.st_mode) == ENCRYPTED_CREDENTIAL_DIR_MODE
+        )
+        if not directory_metadata_valid:
+            blockers.append("encrypted_credential_directory_metadata_invalid")
+
+    if directory_metadata_valid:
+        for credential_id, absolute_path in ENCRYPTED_CREDENTIAL_SPECS:
+            path = map_absolute(absolute_path, root_prefix)
+            blocker_prefix = f"encrypted_credential_{credential_id.replace('-', '_')}"
+            try:
+                metadata = path.lstat()
+            except FileNotFoundError:
+                blockers.append(f"{blocker_prefix}_missing")
+                continue
+            except PermissionError:
+                blockers.append(f"{blocker_prefix}_inaccessible")
+                continue
+            except OSError:
+                blockers.append(f"{blocker_prefix}_metadata_unreadable")
+                continue
+            regular_one_link = stat.S_ISREG(metadata.st_mode) and metadata.st_nlink == 1
+            owner_matches = metadata.st_uid == expected_owner_uid
+            mode_matches = stat.S_IMODE(metadata.st_mode) == ENCRYPTED_CREDENTIAL_MODE
+            size_bounded = 0 < metadata.st_size <= ENCRYPTED_CREDENTIAL_MAX_BYTES
+            if regular_one_link and owner_matches and mode_matches and size_bounded:
+                valid_count += 1
+                continue
+            blockers.append(f"{blocker_prefix}_metadata_invalid")
     report: dict[str, object] = {
         "contract": "systemd_load_credential_encrypted_host_bound_v1",
         "ids": list(ENCRYPTED_CREDENTIAL_IDS),
         "expected_count": len(ENCRYPTED_CREDENTIAL_SPECS),
+        "directory_metadata_valid": directory_metadata_valid,
         "metadata_valid_count": valid_count,
         "all_metadata_valid": valid_count == len(ENCRYPTED_CREDENTIAL_SPECS),
         "content_read": False,
@@ -250,6 +282,7 @@ def collect_preflight(
     expected_repo_sha: str, expected_live_source_sha256: str, *,
     repo_root: Path | None = None, runner: Runner = run_command,
     credential_root_prefix: Path | None = None, expected_credential_owner_uid: int = 0,
+    expected_credential_owner_gid: int = 0,
 ) -> dict[str, object]:
     if not SHA1_RE.fullmatch(expected_repo_sha):
         raise PreflightError("expected_repo_sha_invalid")
@@ -292,7 +325,9 @@ def collect_preflight(
     live_source_sha256 = sha256_file(live_source)
     paho = probe_paho(python_executable, runner)
     encrypted_credentials, credential_blockers = collect_encrypted_credential_metadata(
-        root_prefix=credential_root_prefix, expected_owner_uid=expected_credential_owner_uid,
+        root_prefix=credential_root_prefix,
+        expected_owner_uid=expected_credential_owner_uid,
+        expected_owner_gid=expected_credential_owner_gid,
     )
     user = properties["User"]
     fragment_path = properties["FragmentPath"]

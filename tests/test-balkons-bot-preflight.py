@@ -9,6 +9,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "ops/bin/balkons-bot-preflight"
@@ -86,12 +87,16 @@ class BalkonsBotPreflightTests(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("ENCRYPTED_CIPHERTEXT_FIXTURE\n", encoding="utf-8")
             path.chmod(preflight.ENCRYPTED_CREDENTIAL_MODE)
+        credential_dir = preflight.map_absolute(preflight.ENCRYPTED_CREDENTIAL_DIR, fake_root)
+        credential_dir.chmod(preflight.ENCRYPTED_CREDENTIAL_DIR_MODE)
         return temporary, repo, fake_root, live, live_hash
 
     def collect(self, repo: Path, fake_root: Path, live_hash: str, runner: FakeRunner):
         return preflight.collect_preflight(
             REPO_SHA, live_hash, repo_root=repo, runner=runner,
-            credential_root_prefix=fake_root, expected_credential_owner_uid=os.geteuid(),
+            credential_root_prefix=fake_root,
+            expected_credential_owner_uid=os.geteuid(),
+            expected_credential_owner_gid=os.getegid(),
         )
 
     def test_pass_report_is_sanitized_and_read_only(self):
@@ -106,6 +111,7 @@ class BalkonsBotPreflightTests(unittest.TestCase):
         self.assertEqual(report["paho"]["callback_api_class"], "versioned")
         credentials = report["encrypted_credentials"]
         self.assertEqual(credentials["ids"], list(preflight.ENCRYPTED_CREDENTIAL_IDS))
+        self.assertTrue(credentials["directory_metadata_valid"])
         self.assertTrue(credentials["all_metadata_valid"])
         self.assertEqual(credentials["metadata_valid_count"], 5)
         self.assertFalse(credentials["content_read"])
@@ -117,6 +123,31 @@ class BalkonsBotPreflightTests(unittest.TestCase):
         self.assertEqual(len(systemctl_commands), 1)
         self.assertEqual(systemctl_commands[0][1], "show")
         self.assertNotIn("cat", systemctl_commands[0])
+
+    def test_nontraversable_credential_directory_blocks_before_file_metadata(self):
+        temporary, repo, fake_root, live, live_hash = self.make_repo()
+        self.addCleanup(temporary.cleanup)
+        credential_dir = preflight.map_absolute(preflight.ENCRYPTED_CREDENTIAL_DIR, fake_root)
+        credential_dir.chmod(0o700)
+        report = self.collect(repo, fake_root, live_hash, FakeRunner(live_source=live))
+        self.assertEqual(report["preflight"], "BLOCKED")
+        self.assertIn("encrypted_credential_directory_metadata_invalid", report["blockers"])
+        self.assertFalse(report["encrypted_credentials"]["directory_metadata_valid"])
+        self.assertEqual(report["encrypted_credentials"]["metadata_valid_count"], 0)
+
+    def test_permission_error_is_not_misreported_as_missing(self):
+        temporary, _repo, fake_root, _live, _live_hash = self.make_repo()
+        self.addCleanup(temporary.cleanup)
+        with mock.patch.object(Path, "lstat", side_effect=PermissionError):
+            report, blockers = preflight.collect_encrypted_credential_metadata(
+                root_prefix=fake_root,
+                expected_owner_uid=os.geteuid(),
+                expected_owner_gid=os.getegid(),
+            )
+        self.assertEqual(blockers, ["encrypted_credential_directory_inaccessible"])
+        self.assertFalse(report["directory_metadata_valid"])
+        self.assertEqual(report["metadata_valid_count"], 0)
+        self.assertFalse(any(code.endswith("_missing") for code in blockers))
 
     def test_missing_encrypted_credential_blocks_without_content_read(self):
         temporary, repo, fake_root, live, live_hash = self.make_repo()
@@ -141,7 +172,9 @@ class BalkonsBotPreflightTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         report = preflight.collect_preflight(
             REPO_SHA, "b" * 64, repo_root=repo, runner=FakeRunner(live_source=live),
-            credential_root_prefix=fake_root, expected_credential_owner_uid=os.geteuid(),
+            credential_root_prefix=fake_root,
+            expected_credential_owner_uid=os.geteuid(),
+            expected_credential_owner_gid=os.getegid(),
         )
         self.assertEqual(report["preflight"], "BLOCKED")
         self.assertIn("live_source_provenance_mismatch", report["blockers"])

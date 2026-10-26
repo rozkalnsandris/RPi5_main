@@ -37,11 +37,14 @@ not match that expected SHA.
 4. one `systemctl show balkons-bot.service` call restricted to these properties:
    `LoadState`, `ActiveState`, `SubState`, `User`, `ExecStart`, `Restart`,
    `RestartUSec`, `TimeoutStopUSec`, `SendSIGKILL`, and `FragmentPath`;
-5. hash the single absolute Python source path derived from `ExecStart`;
-6. require the service executable to be a system-path `python3`/`python3.x`, then
+5. validate metadata only for the fixed `/etc/credstore.encrypted` directory and
+   five fixed ciphertext paths using `lstat()`; the directory must be
+   `root:root 0711`, and credential contents are never opened or hashed;
+6. hash the single absolute Python source path derived from `ExecStart`;
+7. require the service executable to be a system-path `python3`/`python3.x`, then
    invoke it with isolated mode (`-I`) and a fixed `-c` probe that returns only
    the installed `paho-mqtt` version and whether `CallbackAPIVersion` exists;
-7. hash the tracked source, tracked unit template, and preflight artifact itself.
+8. hash the tracked source, tracked unit template, and preflight artifact itself.
 
 The artifact must not:
 
@@ -93,6 +96,10 @@ The preflight is `PASS` only when all of the following hold:
 - the live source exists and its SHA256 matches the reviewed expected provenance;
 - the service user and fragment path are present;
 - the service executable is a system-path Python 3 interpreter before any probe is executed;
+- the encrypted credential directory is a real root-owned `0711` directory so
+  the non-root metadata preflight can traverse the five fixed paths without
+  directory-list or credential-content access;
+- all five encrypted credential objects satisfy the reviewed metadata contract;
 - `SendSIGKILL=no`;
 - the Paho compatibility probe succeeds and returns a bounded version string plus
   versioned/legacy callback classification.
