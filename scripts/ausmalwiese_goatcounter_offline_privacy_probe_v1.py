@@ -38,6 +38,54 @@ DISALLOWED_ROWS = frozenset({
     "browser_stats", "system_stats", "location_stats", "size_stats",
     "language_stats", "campaign_stats", "exports", "iso_3166_1",
 })
+OPERATOR_SAFE_STOP_CODES = frozenset({
+    "AGGREGATE_DUPLICATE_HOUR",
+    "AGGREGATE_ROW_INVALID",
+    "API_TOKEN_COUNT",
+    "API_TOKEN_JSON",
+    "API_TOKEN_NOT_COUNT_ONLY",
+    "DAILY_COUNTS_MISMATCH",
+    "DAILY_ROW_DUPLICATE",
+    "DAILY_ROW_INVALID",
+    "DAILY_STATS_FORMAT",
+    "EXPECTED_PUBLIC_ID",
+    "EXPECTED_VIEWS",
+    "FIXTURE_TOO_LARGE",
+    "LANGUAGE_LOOKUP_COUNT",
+    "LANGUAGE_LOOKUP_DUPLICATE",
+    "LANGUAGE_LOOKUP_SENTINEL",
+    "LANGUAGE_LOOKUP_SHAPE",
+    "LOCATION_LOOKUP_NOT_STATIC",
+    "NOT_ISOLATED_TEMP_ROOT",
+    "NO_AGGREGATE_COUNTS",
+    "NO_DAILY_STATS",
+    "NO_SYNTHETIC_SQLITE",
+    "PAGEVIEW_TOTAL_MISMATCH",
+    "PATH_ALLOWLIST",
+    "REFERRER_STORED",
+    "REF_AGGREGATE_DUPLICATE_HOUR",
+    "REF_AGGREGATE_MISMATCH",
+    "REF_AGGREGATE_ROW_INVALID",
+    "SCHEMA_COLUMNS",
+    "SCHEMA_IDENTITY",
+    "SESSION_STORE_JSON",
+    "SESSION_STORE_NOT_EMPTY",
+    "SESSION_STORE_SHAPE",
+    "SITE_COLLECTION_NOT_MINIMAL",
+    "SITE_COUNT",
+    "SITE_SETTINGS",
+    "SQLITE_INTEGRITY",
+    "SQLITE_READ_OR_SCHEMA_ERROR",
+    "SYNTHETIC_FIXTURE_MARKER",
+    "SYNTHETIC_USER_SCOPE",
+    "UNCHECKPOINTED_SQLITE",
+    "UNREVIEWED_TABLE",
+    "VERSION_MIGRATION_IDENTITY",
+})
+OPERATOR_SAFE_FORBIDDEN_ROW_CODES = frozenset(
+    "FORBIDDEN_ROWS_" + table.upper() for table in DISALLOWED_ROWS
+)
+PRIVACY_GATE_FALLBACK = "ISOLATED_SQLITE_PRIVACY_GATE"
 COLS = {
     "sites": {"site_id", "settings"},
     "users": {"user_id", "site_id", "email"},
@@ -57,6 +105,17 @@ COLS = {
 }
 class ProbeStop(ValueError):
     """Stable, non-sensitive failure code; no raw database values."""
+
+
+def operator_safe_stop_code(exc: ProbeStop) -> str:
+    """Return only a reviewed fixed operator code; collapse everything else."""
+    code = str(exc)
+    if (
+        code in OPERATOR_SAFE_STOP_CODES
+        or code in OPERATOR_SAFE_FORBIDDEN_ROW_CODES
+    ):
+        return code
+    return PRIVACY_GATE_FALLBACK
 
 
 def _stop(code: str) -> None:
@@ -363,7 +422,11 @@ def main() -> int:
             expected_views=args.expected_views,
         )
     except (ProbeStop, OSError) as exc:
-        code = str(exc) if isinstance(exc, ProbeStop) else "FIXTURE_IO_ERROR"
+        code = (
+            operator_safe_stop_code(exc)
+            if isinstance(exc, ProbeStop)
+            else "FIXTURE_IO_ERROR"
+        )
         print("GOATCOUNTER_OFFLINE=STOP CODE=" + code)
         return 2
     print("GOATCOUNTER_OFFLINE=" + result)
