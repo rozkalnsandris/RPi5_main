@@ -321,24 +321,43 @@ class IsolatedProofV2Tests(unittest.TestCase):
     def test_collect_hits_preserves_existing_bitmask_and_clears_ignore_ips(self):
         settings = {
             "collect": 190,
-            "ignore_ips": ["192.0.2.1"],
+            "ignore_ips": "192.0.2.1",
             "other": "preserved",
         }
 
         runtime._enable_collect_hits(settings)
 
         self.assertEqual(settings["collect"], 190 | 256)
-        self.assertEqual(settings["ignore_ips"], [])
+        self.assertEqual(settings["ignore_ips"], "")
+        self.assertNotIsInstance(settings["ignore_ips"], list)
         self.assertEqual(settings["other"], "preserved")
 
     def test_collect_hits_distinguishes_collectnothing_from_collecthits(self):
-        settings = {"collect": 1, "ignore_ips": []}
+        settings = {"collect": 1, "ignore_ips": ""}
 
         runtime._enable_collect_hits(settings)
 
         self.assertEqual(settings["collect"], 1 | 256)
         self.assertNotEqual(settings["collect"], 1)
         self.assertTrue(settings["collect"] & 256)
+        self.assertEqual(settings["ignore_ips"], "")
+
+    def test_synthetic_settings_serialize_collect_as_number_and_ignore_ips_as_text(self):
+        settings = {
+            "collect": 190,
+            "ignore_ips": "192.0.2.1",
+            "allow_counter": True,
+        }
+
+        runtime._enable_collect_hits(settings)
+        encoded = runtime.json.dumps(settings, separators=(",", ":"))
+        decoded = runtime.json.loads(encoded)
+
+        self.assertIsInstance(decoded["collect"], int)
+        self.assertEqual(decoded["collect"], 190 | 256)
+        self.assertIsInstance(decoded["ignore_ips"], str)
+        self.assertEqual(decoded["ignore_ips"], "")
+        self.assertNotIn('"ignore_ips":[]', encoded)
 
     def test_collect_hits_rejects_malformed_bitmasks_without_mutation(self):
         malformed = (None, True, 1.5, "190", -1, 65536)
@@ -346,7 +365,7 @@ class IsolatedProofV2Tests(unittest.TestCase):
             with self.subTest(value=value):
                 settings = {
                     "collect": value,
-                    "ignore_ips": ["fixture-only-ip"],
+                    "ignore_ips": "fixture-only-ip",
                 }
                 before = dict(settings)
 
@@ -439,7 +458,7 @@ class IsolatedProofV2Tests(unittest.TestCase):
                     "INSERT INTO sites VALUES (?, ?)",
                     (
                         1,
-                        '{"collect":1,"ignore_ips":["fixture-only-ip"]}',
+                        '{"collect":1,"ignore_ips":"fixture-only-ip"}',
                     ),
                 )
                 con.execute(
@@ -458,7 +477,8 @@ class IsolatedProofV2Tests(unittest.TestCase):
                     ).fetchone()[0]
                 settings = runtime.json.loads(stored)
                 self.assertEqual(settings["collect"], 1 | 256)
-                self.assertEqual(settings["ignore_ips"], [])
+                self.assertEqual(settings["ignore_ips"], "")
+                self.assertNotIsInstance(settings["ignore_ips"], list)
 
             with mock.patch.object(
                 runtime, "_run_stage"
@@ -754,6 +774,8 @@ class IsolatedProofV2Tests(unittest.TestCase):
         self.assertEqual(source.count('"-automigrate"'), 1)
         self.assertIn("_COLLECT_HITS = 256", source)
         self.assertIn('settings["collect"] = collect | _COLLECT_HITS', source)
+        self.assertIn('settings["ignore_ips"] = ""', source)
+        self.assertNotIn('settings["ignore_ips"] = []', source)
         self.assertIn('"SYNTHETIC_SITE_DESERIALIZATION_FAILED"', source)
         self.assertNotIn('"-format=json"', source)
         self.assertIn("_verify_site_deserialization(binary, root, env, db_arg)", source)
