@@ -17,15 +17,88 @@ import os
 import secrets
 import shutil
 import signal
+import socket
 import sqlite3
 import subprocess
 import tempfile
+import threading
+import time
 from pathlib import Path
 
 import ausmalwiese_goatcounter_isolated_probe_v1 as base
 
 
 PASS = "PASS_SYNTHETIC_GOATCOUNTER_RUNTIME_ONLY_NOT_LIVE_OR_LEGAL_PROOF"
+
+_STARTUP_STDERR_LIMIT = 8192
+_STARTUP_STDERR_CHUNK = 1024
+
+
+class _BoundedStderrCapture:
+    """Drain child stderr while retaining only a small startup prefix."""
+
+    def __init__(self, stream, limit: int = _STARTUP_STDERR_LIMIT) -> None:
+        self._stream = stream
+        self._limit = limit
+        self._buffer = bytearray()
+        self._lock = threading.Lock()
+        self._retain = True
+        self._thread = threading.Thread(
+            target=self._drain,
+            name="goatcounter-startup-stderr",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def _drain(self) -> None:
+        try:
+            while True:
+                chunk = self._stream.read(_STARTUP_STDERR_CHUNK)
+                if not chunk:
+                    return
+                with self._lock:
+                    if not self._retain or len(self._buffer) >= self._limit:
+                        continue
+                    remaining = self._limit - len(self._buffer)
+                    self._buffer.extend(chunk[:remaining])
+        except (OSError, ValueError):
+            return
+
+    def snapshot(self) -> bytes:
+        with self._lock:
+            return bytes(self._buffer)
+
+    def discard(self) -> None:
+        with self._lock:
+            self._retain = False
+            self._buffer.clear()
+
+    def wait(self, timeout: float = 1.0) -> None:
+        self._thread.join(timeout)
+
+
+def _startup_exit_failure_code(exit_code: int, stderr_prefix: bytes) -> str:
+    """Reduce a pre-ready child exit to fixed, non-sensitive evidence."""
+    lower = stderr_prefix.lower()
+    listen_error = b"zhttp.serve: listen tcp" in lower
+    if listen_error and b"bind: address already in use" in lower:
+        return "SERVER_STARTUP_BIND_ADDRESS_IN_USE"
+    if listen_error and b"bind: permission denied" in lower:
+        return "SERVER_STARTUP_BIND_PERMISSION_DENIED"
+    if exit_code == 0:
+        return "SERVER_STARTUP_CLEAN_EXIT"
+    if exit_code == 1:
+        return "SERVER_STARTUP_GOATCOUNTER_COMMAND_ERROR"
+    if exit_code == 2:
+        return "SERVER_STARTUP_GO_RUNTIME_FAILURE"
+    if exit_code == 66:
+        return "SERVER_STARTUP_ZHTTP_SERVE_ERROR"
+    if exit_code == 99:
+        return "SERVER_STARTUP_FORCE_KILL_EXIT"
+    if exit_code < 0:
+        return "SERVER_STARTUP_SIGNAL_EXIT"
+    return "SERVER_STARTUP_OTHER_NONZERO_EXIT"
+
 
 _STAGE_FAILURES = {
     ("db", "newdb"): "SYNTHETIC_DB_CREATE_FAILED",
@@ -142,6 +215,34 @@ def _secondary_server_stop_code(exc: Exception) -> str:
         if code in _SERVER_STOP_EVIDENCE_CODES:
             return code
     return "SERVER_STOP_SECONDARY_ERROR"
+
+
+def _tcp_ready_classified(
+    port: int,
+    proc: subprocess.Popen[bytes],
+) -> None:
+    """Wait for loopback readiness or classify a pre-ready child exit."""
+    if proc.stderr is None:
+        raise base.RuntimeStop("SERVER_STARTUP_DIAGNOSTIC_UNAVAILABLE")
+
+    capture = _BoundedStderrCapture(proc.stderr)
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        exit_code = proc.poll()
+        if exit_code is not None:
+            capture.wait()
+            code = _startup_exit_failure_code(exit_code, capture.snapshot())
+            capture.discard()
+            raise base.RuntimeStop(code)
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.2):
+                capture.discard()
+                return
+        except OSError:
+            time.sleep(0.1)
+
+    capture.discard()
+    raise base.RuntimeStop("LOOPBACK_NOT_READY")
 
 
 def _stop_server_classified(proc: subprocess.Popen[bytes]) -> None:
@@ -295,10 +396,10 @@ def _run_fixture(release_archive_arg: str, root: Path) -> None:
             env=env,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
             start_new_session=True,
         )
-        base._tcp_ready(port, proc)
+        _tcp_ready_classified(port, proc)
         for _ in range(base.VIEWS):
             base._count_once(port, token)
         token = ""
