@@ -201,7 +201,7 @@ def inspect_fixture(root: str | Path, *, page_id: str, expected_views: int) -> s
             if (not isinstance(settings, dict)
                     or type(settings.get("collect")) is not int
                     or settings.get("collect") != 1
-                    or settings.get("ignore_ips") not in (None, [])):
+                    or settings.get("ignore_ips") not in (None, "")):
                 _stop("SITE_COLLECTION_NOT_MINIMAL")
             site_id = sites[0]["site_id"]
 
