@@ -338,7 +338,7 @@ def _enable_collect_hits(settings: dict[str, object]) -> None:
     ):
         raise base.RuntimeStop("SYNTHETIC_SETTINGS_INVALID")
     settings["collect"] = collect | _COLLECT_HITS
-    settings["ignore_ips"] = []
+    settings["ignore_ips"] = ""
 
 
 def _verify_site_deserialization(
