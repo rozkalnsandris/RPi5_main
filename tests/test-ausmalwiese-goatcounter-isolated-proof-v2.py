@@ -58,13 +58,12 @@ class IsolatedProofV2Tests(unittest.TestCase):
             (
                 (
                     "db",
-                    "show",
+                    "update",
                     "site",
                     "-find=stats.example.test",
-                    "-format=json",
                     "-db=synthetic",
                 ),
-                "SYNTHETIC_SITE_READBACK_FAILED",
+                "SYNTHETIC_SITE_DESERIALIZATION_FAILED",
             ),
         )
         for argv, expected in cases:
@@ -401,9 +400,9 @@ class IsolatedProofV2Tests(unittest.TestCase):
         self.assertIn("-tls=http", argv)
         self.assertIn("-store-every=1", argv)
 
-    def test_site_readback_uses_exact_silent_goatcounter_show_argv(self):
+    def test_site_deserialization_uses_exact_silent_noop_update_argv(self):
         with mock.patch.object(runtime, "_run_stage") as run_stage:
-            runtime._verify_site_readback(
+            runtime._verify_site_deserialization(
                 Path("/synthetic/bin"),
                 Path("/tmp/synthetic"),
                 {"PATH": "/usr/bin:/bin"},
@@ -415,14 +414,17 @@ class IsolatedProofV2Tests(unittest.TestCase):
             Path("/tmp/synthetic"),
             {"PATH": "/usr/bin:/bin"},
             "db",
-            "show",
+            "update",
             "site",
             "-find=" + runtime.base.HOST,
-            "-format=json",
             "-db=sqlite+/tmp/synthetic/db.sqlite3",
         )
+        argv = run_stage.call_args.args[3:]
+        self.assertFalse(any(arg.startswith("-format") for arg in argv))
+        self.assertFalse(any(arg.startswith("-vhost") for arg in argv))
+        self.assertFalse(any(arg.startswith("-link") for arg in argv))
 
-    def test_site_readback_runs_once_after_settings_commit(self):
+    def test_site_deserialization_runs_once_after_settings_commit(self):
         with tempfile.TemporaryDirectory(dir="/tmp") as parent:
             root = Path(parent)
             db = root / "synthetic.sqlite3"
@@ -445,9 +447,9 @@ class IsolatedProofV2Tests(unittest.TestCase):
                     ("synthetic-token-1234567890",),
                 )
 
-            def verify_readback(binary, readback_root, env, db_arg):
+            def verify_deserialization(binary, verify_root, env, db_arg):
                 self.assertEqual(binary, Path("/synthetic/bin"))
-                self.assertEqual(readback_root, root)
+                self.assertEqual(verify_root, root)
                 self.assertEqual(env, {"PATH": "/usr/bin:/bin"})
                 self.assertEqual(db_arg, "sqlite+" + str(db))
                 with sqlite3.connect(db) as con:
@@ -464,9 +466,9 @@ class IsolatedProofV2Tests(unittest.TestCase):
                 runtime, "_create_count_token"
             ), mock.patch.object(
                 runtime,
-                "_verify_site_readback",
-                side_effect=verify_readback,
-            ) as readback:
+                "_verify_site_deserialization",
+                side_effect=verify_deserialization,
+            ) as deserialization:
                 token = runtime._make_site_with_stage_diagnostics(
                     Path("/synthetic/bin"),
                     root,
@@ -475,7 +477,7 @@ class IsolatedProofV2Tests(unittest.TestCase):
                 )
 
             self.assertEqual(token, "synthetic-token-1234567890")
-            readback.assert_called_once()
+            deserialization.assert_called_once()
 
     def test_api_token_uses_numeric_synthetic_user_selector(self):
         with tempfile.TemporaryDirectory(dir="/tmp") as parent:
@@ -752,9 +754,9 @@ class IsolatedProofV2Tests(unittest.TestCase):
         self.assertEqual(source.count('"-automigrate"'), 1)
         self.assertIn("_COLLECT_HITS = 256", source)
         self.assertIn('settings["collect"] = collect | _COLLECT_HITS', source)
-        self.assertIn('"SYNTHETIC_SITE_READBACK_FAILED"', source)
-        self.assertIn('"-format=json"', source)
-        self.assertIn("_verify_site_readback(binary, root, env, db_arg)", source)
+        self.assertIn('"SYNTHETIC_SITE_DESERIALIZATION_FAILED"', source)
+        self.assertNotIn('"-format=json"', source)
+        self.assertIn("_verify_site_deserialization(binary, root, env, db_arg)", source)
 
         base_source = (
             ROOT / "scripts" / "ausmalwiese_goatcounter_isolated_probe_v1.py"

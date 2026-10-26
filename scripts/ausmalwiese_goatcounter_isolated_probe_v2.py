@@ -113,7 +113,7 @@ _STAGE_FAILURES = {
     ("db", "newdb"): "SYNTHETIC_DB_CREATE_FAILED",
     ("db", "create", "site"): "SYNTHETIC_SITE_CREATE_FAILED",
     ("db", "create", "apitoken"): "SYNTHETIC_API_TOKEN_CREATE_FAILED",
-    ("db", "show", "site"): "SYNTHETIC_SITE_READBACK_FAILED",
+    ("db", "update", "site"): "SYNTHETIC_SITE_DESERIALIZATION_FAILED",
 }
 
 
@@ -341,22 +341,21 @@ def _enable_collect_hits(settings: dict[str, object]) -> None:
     settings["ignore_ips"] = []
 
 
-def _verify_site_readback(
+def _verify_site_deserialization(
     binary: Path,
     root: Path,
     env: dict[str, str],
     db_arg: str,
 ) -> None:
-    """Make GoatCounter deserialize the synthetic Site before server launch."""
+    """Run GoatCounter's Sites.Find path without requesting a site-row update."""
     _run_stage(
         binary,
         root,
         env,
         "db",
-        "show",
+        "update",
         "site",
         "-find=" + base.HOST,
-        "-format=json",
         "-db=" + db_arg,
     )
 
@@ -416,7 +415,7 @@ def _make_site_with_stage_diagnostics(
     except (sqlite3.DatabaseError, ValueError, TypeError):
         raise base.RuntimeStop("SYNTHETIC_DATABASE_SETUP")
 
-    _verify_site_readback(binary, root, env, db_arg)
+    _verify_site_deserialization(binary, root, env, db_arg)
     return token
 
 
