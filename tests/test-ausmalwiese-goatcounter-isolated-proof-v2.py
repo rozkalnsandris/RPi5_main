@@ -229,7 +229,7 @@ class IsolatedProofV2Tests(unittest.TestCase):
                     ), mock.patch.object(
                         runtime.subprocess, "Popen", return_value=proc
                     ), mock.patch.object(
-                        runtime.base, "_tcp_ready"
+                        runtime, "_tcp_ready_classified"
                     ), mock.patch.object(
                         runtime.base,
                         "_count_once",
@@ -273,7 +273,7 @@ class IsolatedProofV2Tests(unittest.TestCase):
             ), mock.patch.object(
                 runtime.subprocess, "Popen", return_value=proc
             ), mock.patch.object(
-                runtime.base, "_tcp_ready"
+                runtime, "_tcp_ready_classified"
             ), mock.patch.object(
                 runtime.base, "_count_once"
             ) as count_once, mock.patch.object(
@@ -391,9 +391,102 @@ class IsolatedProofV2Tests(unittest.TestCase):
             self.assertEqual(result, runtime.PASS)
             self.assertFalse(root.exists())
 
+    def test_startup_exit_classes_are_fixed_and_sanitized(self):
+        cases = (
+            (
+                1,
+                (
+                    b"goatcounter: zhttp.Serve: listen tcp "
+                    b"127.0.0.1:54321: bind: address already in use\n"
+                ),
+                "SERVER_STARTUP_BIND_ADDRESS_IN_USE",
+            ),
+            (
+                1,
+                (
+                    b"goatcounter: zhttp.Serve: listen tcp "
+                    b"127.0.0.1:54321: bind: permission denied\n"
+                ),
+                "SERVER_STARTUP_BIND_PERMISSION_DENIED",
+            ),
+            (0, b"", "SERVER_STARTUP_CLEAN_EXIT"),
+            (1, b"other startup error", "SERVER_STARTUP_GOATCOUNTER_COMMAND_ERROR"),
+            (2, b"", "SERVER_STARTUP_GO_RUNTIME_FAILURE"),
+            (66, b"", "SERVER_STARTUP_ZHTTP_SERVE_ERROR"),
+            (99, b"", "SERVER_STARTUP_FORCE_KILL_EXIT"),
+            (-runtime.signal.SIGTERM, b"", "SERVER_STARTUP_SIGNAL_EXIT"),
+            (7, b"", "SERVER_STARTUP_OTHER_NONZERO_EXIT"),
+        )
+        for exit_code, stderr_prefix, expected in cases:
+            with self.subTest(exit_code=exit_code, expected=expected):
+                code = runtime._startup_exit_failure_code(
+                    exit_code,
+                    stderr_prefix + b" token=fixture-only-secret",
+                )
+                self.assertEqual(code, expected)
+                self.assertNotIn("54321", code)
+                self.assertNotIn("fixture-only-secret", code)
+                self.assertNotIn("address already in use", code.casefold())
+                self.assertNotIn("permission denied", code.casefold())
+
+    def test_startup_stderr_capture_is_bounded_and_discardable(self):
+        payload = b"x" * (runtime._STARTUP_STDERR_LIMIT + 4096)
+        capture = runtime._BoundedStderrCapture(io.BytesIO(payload))
+        capture.wait()
+
+        self.assertEqual(
+            len(capture.snapshot()),
+            runtime._STARTUP_STDERR_LIMIT,
+        )
+        capture.discard()
+        self.assertEqual(capture.snapshot(), b"")
+
+    def test_tcp_ready_early_exit_emits_only_sanitized_startup_code(self):
+        proc = mock.Mock()
+        proc.poll.return_value = 1
+        proc.stderr = io.BytesIO(
+            b"goatcounter: zhttp.Serve: listen tcp "
+            b"127.0.0.1:54321: bind: address already in use\n"
+            b"token=fixture-only-secret\n"
+        )
+
+        with self.assertRaises(runtime.base.RuntimeStop) as raised:
+            runtime._tcp_ready_classified(54321, proc)
+
+        self.assertEqual(
+            str(raised.exception),
+            "SERVER_STARTUP_BIND_ADDRESS_IN_USE",
+        )
+        self.assertNotIn("54321", str(raised.exception))
+        self.assertNotIn("fixture-only-secret", str(raised.exception))
+        proc.poll.assert_called_once_with()
+
+    def test_tcp_ready_requires_diagnostic_pipe(self):
+        proc = mock.Mock()
+        proc.stderr = None
+
+        with self.assertRaises(runtime.base.RuntimeStop) as raised:
+            runtime._tcp_ready_classified(54321, proc)
+
+        self.assertEqual(
+            str(raised.exception),
+            "SERVER_STARTUP_DIAGNOSTIC_UNAVAILABLE",
+        )
+        proc.poll.assert_not_called()
+
     def test_main_outputs_only_stable_failure_code(self):
         cases = (
             "SYNTHETIC_SITE_CREATE_FAILED",
+            "SERVER_STARTUP_BIND_ADDRESS_IN_USE",
+            "SERVER_STARTUP_BIND_PERMISSION_DENIED",
+            "SERVER_STARTUP_CLEAN_EXIT",
+            "SERVER_STARTUP_GOATCOUNTER_COMMAND_ERROR",
+            "SERVER_STARTUP_GO_RUNTIME_FAILURE",
+            "SERVER_STARTUP_ZHTTP_SERVE_ERROR",
+            "SERVER_STARTUP_FORCE_KILL_EXIT",
+            "SERVER_STARTUP_SIGNAL_EXIT",
+            "SERVER_STARTUP_OTHER_NONZERO_EXIT",
+            "SERVER_STARTUP_DIAGNOSTIC_UNAVAILABLE",
             "SERVER_PRE_SHUTDOWN_CLEAN_EXIT",
             "SERVER_PRE_SHUTDOWN_SIGINT_EXIT",
             "SERVER_PRE_SHUTDOWN_GOATCOUNTER_COMMAND_ERROR",
@@ -446,6 +539,10 @@ class IsolatedProofV2Tests(unittest.TestCase):
         self.assertNotIn("while attempt", source)
         self.assertIn('tempfile.mkdtemp(prefix=base.PREFIX, dir="/tmp")', source)
         self.assertIn("shutil.rmtree(root)", source)
+        self.assertIn("stderr=subprocess.PIPE", source)
+        self.assertIn("_STARTUP_STDERR_LIMIT = 8192", source)
+        self.assertIn("_startup_exit_failure_code", source)
+        self.assertNotIn("stderr=subprocess.STDOUT", source)
 
         base_source = (
             ROOT / "scripts" / "ausmalwiese_goatcounter_isolated_probe_v1.py"
