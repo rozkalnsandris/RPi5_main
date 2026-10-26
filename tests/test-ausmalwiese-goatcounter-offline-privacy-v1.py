@@ -526,6 +526,54 @@ class SyntheticGoatCounterFixture(unittest.TestCase):
         with self.assertRaisesRegex(probe.ProbeStop, "^EXPECTED_PUBLIC_ID$"):
             probe.inspect_fixture(self.root, page_id=427183, expected_views=2)
 
+    def test_operator_safe_codes_are_allowlisted_and_unknown_is_collapsed(self):
+        for code in sorted(probe.OPERATOR_SAFE_STOP_CODES):
+            with self.subTest(code=code):
+                self.assertEqual(
+                    probe.operator_safe_stop_code(probe.ProbeStop(code)),
+                    code,
+                )
+
+        for table in sorted(probe.DISALLOWED_ROWS):
+            code = "FORBIDDEN_ROWS_" + table.upper()
+            with self.subTest(code=code):
+                self.assertIn(code, probe.OPERATOR_SAFE_FORBIDDEN_ROW_CODES)
+                self.assertEqual(
+                    probe.operator_safe_stop_code(probe.ProbeStop(code)),
+                    code,
+                )
+
+        private = "fixture-only-private-row-value"
+        self.assertEqual(
+            probe.operator_safe_stop_code(probe.ProbeStop(private)),
+            probe.PRIVACY_GATE_FALLBACK,
+        )
+        self.assertNotIn(
+            private,
+            probe.operator_safe_stop_code(probe.ProbeStop(private)),
+        )
+
+    def test_cli_unknown_probe_stop_collapses_without_detail(self):
+        private = "fixture-only-private-row-value"
+        stream = io.StringIO()
+        with mock.patch.object(
+            probe,
+            "inspect_fixture",
+            side_effect=probe.ProbeStop(private),
+        ), mock.patch(
+            "sys.argv",
+            ["probe", "--synthetic-test-root", str(self.root),
+             "--expected-page-id", self.id, "--expected-views", "2"],
+        ), contextlib.redirect_stdout(stream):
+            status = probe.main()
+
+        self.assertEqual(status, 2)
+        self.assertEqual(
+            stream.getvalue().strip(),
+            "GOATCOUNTER_OFFLINE=STOP CODE=ISOLATED_SQLITE_PRIVACY_GATE",
+        )
+        self.assertNotIn(private, stream.getvalue())
+
     def test_cli_stop_output_discloses_no_raw_database_data(self):
         self.mutate(
             "INSERT INTO bots VALUES(1, ?, 20, ?, '2026-10-25 11:05:00')",
