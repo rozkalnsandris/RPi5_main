@@ -109,6 +109,23 @@ server-stop path, but any secondary finalizer exception is reduced to a fixed
 sanitized code and attached only as internal secondary evidence. The operator
 stdout remains the primary stable failure code.
 
+A seventh separately authorized proof synced the corrected source to
+`6be3a7c85fd240f55601fce68519023e03b2c033` and then stopped as:
+
+```text
+GOATCOUNTER_ISOLATED=STOP CODE=SERVER_EARLY_EXIT
+```
+
+That result proves only that the GoatCounter child exited before the loopback
+listener became ready. It does not prove a bind collision, database startup
+failure, panic, or any other exact root cause. Pinned GoatCounter v2.7.0 and
+pinned zhttp source show that zhttp performs `net.Listen("tcp", server.Addr)`
+synchronously before signaling readiness, so a listen/bind failure is one
+possible pre-ready cause. The canonical operator now reduces bounded startup
+stderr and the child exit class to fixed sanitized startup codes so a later
+separately authorized proof can distinguish that case without exposing raw
+output.
+
 Upstream evidence also confirms the HTTP contract used by this proof:
 GoatCounter documents `POST /api/v0/count` for backend pageview ingestion,
 supports `no_sessions:true`, and pinned v2.7.0
@@ -157,6 +174,43 @@ synthetic credential values, SQLite rows or fixture paths in the failure code.
 The selector lookup itself fails closed as `SYNTHETIC_DATABASE_SETUP` unless
 exactly one positive integer synthetic user ID matches the fixed synthetic
 email. No selector value is included in operator output.
+
+## Pre-ready startup classification
+
+The server process keeps stdout disabled. Stderr is connected to an in-memory
+pipe that is drained continuously by a daemon reader so GoatCounter cannot
+block on a full startup pipe. The reader retains at most the first **8192
+bytes**. Excess bytes are discarded, the retained prefix is never written to a
+file, and it is never printed.
+
+If the loopback listener becomes ready, retained startup bytes are immediately
+discarded and the reader continues in discard-only mode. If the child exits
+before readiness, the bounded prefix is used only to recognize the two exact
+pinned zhttp listen/bind shapes below; the prefix is then discarded and only a
+fixed code survives:
+
+| Pre-ready observed class | Stable code |
+| --- | --- |
+| zhttp listen/bind reports address already in use | `SERVER_STARTUP_BIND_ADDRESS_IN_USE` |
+| zhttp listen/bind reports permission denied | `SERVER_STARTUP_BIND_PERMISSION_DENIED` |
+| clean exit 0 before readiness | `SERVER_STARTUP_CLEAN_EXIT` |
+| GoatCounter generic command-error exit 1 | `SERVER_STARTUP_GOATCOUNTER_COMMAND_ERROR` |
+| Go panic/runtime-failure exit 2 | `SERVER_STARTUP_GO_RUNTIME_FAILURE` |
+| pinned zhttp Serve exit 66 | `SERVER_STARTUP_ZHTTP_SERVE_ERROR` |
+| GoatCounter force-kill exit 99 | `SERVER_STARTUP_FORCE_KILL_EXIT` |
+| another negative signal return | `SERVER_STARTUP_SIGNAL_EXIT` |
+| another positive non-zero return | `SERVER_STARTUP_OTHER_NONZERO_EXIT` |
+
+If the diagnostic pipe is unexpectedly unavailable, the proof fails closed as
+`SERVER_STARTUP_DIAGNOSTIC_UNAVAILABLE`. The operator never includes raw
+stderr, stdout, PID, numeric listener port, fixture path, API token, password,
+SQLite row contents or arbitrary exception text in operator output.
+
+The bind-specific classes require both the pinned `zhttp.Serve: listen tcp`
+marker and the corresponding fixed bind phrase. An exit code 1 without that
+evidence remains the generic GoatCounter startup command-error class. This
+prevents the latest `SERVER_EARLY_EXIT` observation from being overclaimed as
+a proven port collision.
 
 ## Shutdown exit classification
 
@@ -249,6 +303,9 @@ The tests use mocks and temporary synthetic directories only. They do not
 execute GoatCounter or inspect RPi5 runtime state. They prove:
 
 - exact v2.7.0 arm64 pin reuse;
+- bounded startup stderr retention never exceeds 8192 bytes and is discardable;
+- bind address-in-use and permission failures reduce to fixed startup codes without leaking the numeric port or raw stderr;
+- generic exit 1, Go runtime 2, zhttp 66, force-kill 99, signal and other non-zero startup exits remain distinguishable;
 - each setup-stage non-zero exit produces its own stable code;
 - upstream stdout/stderr stay suppressed;
 - execution errors remain stage-specific without leaking details;
