@@ -257,23 +257,37 @@ Pinned v2.7.0 schema creation already records every migration through the
 release's current 2.7 migration set in the `version` table. Therefore the
 unchanged fresh-fixture failure does not establish a pending-migration cause.
 
-Before any future server launch, the proof now runs exactly one silent
-GoatCounter-native site readback:
+A later separately authorized proof reached that gate and stopped as:
 
 ```text
-goatcounter db show site -find=<fixed synthetic vhost> -format=json -db=<synthetic DB>
+GOATCOUNTER_ISOLATED=STOP CODE=SYNTHETIC_SITE_READBACK_FAILED
 ```
 
-The command uses pinned v2.7.0 `Sites.Find()`, which performs `select * from
-sites` into the same `Site` type used by `Sites.UnscopedList()`. Its
-stdout and stderr remain `DEVNULL`; no JSON, row content, fixture path or
-upstream error is emitted.
+That proves the failure occurs before the HTTP server launch, but the previous
+`db show site` gate was still too broad: pinned v2.7.0 first runs
+`Sites.Find()` and then performs a separate dump/format step. The fixed code
+therefore could not distinguish Site deserialization from show formatting.
 
-A non-zero readback becomes only
-`SYNTHETIC_SITE_READBACK_FAILED`. That narrows the failure to the synthetic
-site row / GoatCounter deserialization path before any HTTP server exists. A
-successful readback followed by the existing `SERVER_STARTUP_SITE_LIST_ERROR`
-would instead narrow the remaining failure to serve-only startup context.
+Before any future server launch, the proof now runs exactly one silent
+GoatCounter-native no-op site update path:
+
+```text
+goatcounter db update site -find=<fixed synthetic vhost> -db=<synthetic DB>
+```
+
+Pinned v2.7.0 executes `Sites.Find()` before entering the update loop. With
+neither `-vhost` nor `-link` present, that loop calls neither
+`Site.Update()` nor `Site.UpdateParent()`; no site-row update is requested.
+The command still opens and completes its normal database transaction. stdout
+and stderr remain `DEVNULL`; no row content, fixture path or upstream error
+is emitted.
+
+A non-zero result becomes only
+`SYNTHETIC_SITE_DESERIALIZATION_FAILED`. That now localizes the failure to
+the pinned GoatCounter `Sites.Find()` / `Site` deserialization path. A
+successful result followed by the existing `SERVER_STARTUP_SITE_LIST_ERROR`
+would instead prove that the same row can deserialize in the standalone CLI
+context and shift the remaining failure to later serve-only startup context.
 
 This diagnostic is still source-only. It does not authorize another runtime
 attempt or inspection of a retained failed fixture.
@@ -374,8 +388,9 @@ execute GoatCounter or inspect RPi5 runtime state. They prove:
 - `CollectNothing=1` remains distinct from `CollectHits=256`;
 - malformed, boolean, negative or out-of-range collect bitmasks fail closed without mutation or fixture-data leakage;
 - synthetic `ignore_ips` is reset to an empty list only after collect validation succeeds;
-- exactly one pre-serve GoatCounter-native site readback uses the fixed synthetic vhost and JSON format with output suppressed;
-- the readback runs only after the synthetic settings commit and maps any non-zero result to `SYNTHETIC_SITE_READBACK_FAILED`;
+- exactly one pre-serve GoatCounter-native no-op site update path uses the fixed synthetic vhost with output suppressed;
+- the diagnostic passes no `-format`, `-vhost` or `-link` arguments, so the pinned CLI requests no site-row update;
+- the diagnostic runs only after the synthetic settings commit and maps any non-zero result to `SYNTHETIC_SITE_DESERIALIZATION_FAILED`;
 - bounded startup stderr retention never exceeds 8192 bytes and is discardable;
 - bind address-in-use and permission failures reduce to fixed startup codes without leaking the numeric port or raw stderr;
 - generic exit 1, Go runtime 2, zhttp 66, force-kill 99, signal and other non-zero startup exits remain distinguishable;
