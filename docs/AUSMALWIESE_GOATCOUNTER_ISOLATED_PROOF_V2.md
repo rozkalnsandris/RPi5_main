@@ -242,10 +242,17 @@ The pinned v2.7.0 collection setting is a bitmask. Value `1` is
 `CollectNothing`, while individual pageview storage uses
 `CollectHits = 256`. The proof now validates the existing synthetic
 `settings.collect` value as a non-boolean 16-bit integer and writes
-`collect | 256`, preserving every pre-existing collection flag. It continues
-to force synthetic `ignore_ips` to an empty list. A missing, non-integer,
-boolean, negative or out-of-range collect value fails closed as
-`SYNTHETIC_SETTINGS_INVALID` without emitting fixture contents.
+`collect | 256`, preserving every pre-existing collection flag.
+
+Pinned v2.7.0 declares `SiteSettings.IgnoreIPs` as GoatCounter `Strings`.
+That type implements `MarshalText()` / `UnmarshalText()` using
+comma-separated text. The synthetic DB rewrite must therefore preserve that
+textual stored-settings shape: an empty ignore set is written as
+`"ignore_ips":""`, not as the JSON array `"ignore_ips":[]`. The earlier
+array rewrite changed the stored JSON shape before `Sites.Find()`
+deserialization. A missing, non-integer, boolean, negative or out-of-range
+collect value still fails closed as `SYNTHETIC_SETTINGS_INVALID` without
+emitting fixture contents.
 
 A later separately authorized proof with both changes still stopped as:
 
