@@ -78,6 +78,20 @@ class SyntheticGoatCounterFixture(unittest.TestCase):
                 (1, json.dumps({"collect": 1, "ignore_ips": ""})),
             )
             con.execute(
+                "INSERT INTO store VALUES('session', ?)",
+                (
+                    json.dumps(
+                        {
+                            "sessions": {},
+                            "hashes": {},
+                            "paths": {},
+                            "seen": {},
+                        },
+                        separators=(",", ":"),
+                    ),
+                ),
+            )
+            con.execute(
                 "INSERT INTO users VALUES(5, 1, 'goatcounter-probe@example.com')"
             )
             con.execute(
@@ -300,9 +314,86 @@ class SyntheticGoatCounterFixture(unittest.TestCase):
         )
         self.assert_stops("FORBIDDEN_ROWS_BOTS")
 
-    def test_stored_session_map_rejected(self):
-        self.mutate("INSERT INTO store VALUES('session', 'synthetic')")
-        self.assert_stops("FORBIDDEN_ROWS_STORE")
+    def test_empty_shutdown_session_housekeeping_is_permitted(self):
+        self.assertEqual(
+            self.run_probe(),
+            "PASS_STRUCTURAL_SYNTHETIC_ONLY_NOT_RUNTIME_OR_PRIVACY_PROOF",
+        )
+
+    def test_missing_shutdown_session_housekeeping_rejected(self):
+        self.mutate("DELETE FROM store")
+        self.assert_stops("SESSION_STORE_SHAPE")
+
+    def test_extra_store_row_rejected(self):
+        self.mutate("INSERT INTO store VALUES('other', '{}')")
+        self.assert_stops("SESSION_STORE_SHAPE")
+
+    def test_wrong_store_key_rejected(self):
+        self.mutate("UPDATE store SET key='other'")
+        self.assert_stops("SESSION_STORE_SHAPE")
+
+    def test_malformed_session_store_json_rejected(self):
+        self.mutate("UPDATE store SET value='not-json'")
+        self.assert_stops("SESSION_STORE_JSON")
+
+    def test_session_store_requires_exact_empty_map_shape(self):
+        payloads = (
+            {},
+            {"sessions": {}, "hashes": {}, "paths": {}},
+            {
+                "sessions": {},
+                "hashes": {},
+                "paths": {},
+                "seen": {},
+                "extra": {},
+            },
+            {"sessions": [], "hashes": {}, "paths": {}, "seen": {}},
+            {
+                "sessions": {"visitor": "synthetic"},
+                "hashes": {},
+                "paths": {},
+                "seen": {},
+            },
+            {
+                "sessions": {},
+                "hashes": {"visitor": "synthetic"},
+                "paths": {},
+                "seen": {},
+            },
+            {
+                "sessions": {},
+                "hashes": {},
+                "paths": {"visitor": {}},
+                "seen": {},
+            },
+            {
+                "sessions": {},
+                "hashes": {},
+                "paths": {},
+                "seen": {"visitor": 1},
+            },
+        )
+        for payload in payloads:
+            with self.subTest(payload=payload):
+                self.mutate(
+                    "UPDATE store SET value=?",
+                    (json.dumps(payload, separators=(",", ":")),),
+                )
+                self.assert_stops("SESSION_STORE_NOT_EMPTY")
+                self.mutate(
+                    "UPDATE store SET value=?",
+                    (
+                        json.dumps(
+                            {
+                                "sessions": {},
+                                "hashes": {},
+                                "paths": {},
+                                "seen": {},
+                            },
+                            separators=(",", ":"),
+                        ),
+                    ),
+                )
 
     def test_personal_dimensions_rejected(self):
         for table in ("browser_stats", "location_stats", "campaign_stats"):
