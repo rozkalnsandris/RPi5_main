@@ -37,6 +37,43 @@ class IsolatedProofV2Tests(unittest.TestCase):
         self.assertEqual(runtime.base.PAGE_ID, "0427183")
         self.assertEqual(runtime.base.VIEWS, 2)
 
+    def test_privacy_gate_surfaces_only_operator_safe_codes(self):
+        root = Path("/tmp/goatcounter-offline-synthetic")
+        for code in (
+            "SESSION_STORE_SHAPE",
+            "NO_DAILY_STATS",
+            "FORBIDDEN_ROWS_BOTS",
+        ):
+            with self.subTest(code=code), mock.patch.object(
+                runtime.base,
+                "inspect_fixture",
+                side_effect=runtime.base.ProbeStop(code),
+            ) as inspect_fixture:
+                with self.assertRaises(runtime.base.RuntimeStop) as raised:
+                    runtime._inspect_fixture_or_raise(root)
+
+                self.assertEqual(str(raised.exception), code)
+                inspect_fixture.assert_called_once_with(
+                    root,
+                    page_id=runtime.base.PAGE_ID,
+                    expected_views=runtime.base.VIEWS,
+                )
+
+        private = "fixture-only-private-row-value"
+        with mock.patch.object(
+            runtime.base,
+            "inspect_fixture",
+            side_effect=runtime.base.ProbeStop(private),
+        ):
+            with self.assertRaises(runtime.base.RuntimeStop) as raised:
+                runtime._inspect_fixture_or_raise(root)
+
+        self.assertEqual(
+            str(raised.exception),
+            "ISOLATED_SQLITE_PRIVACY_GATE",
+        )
+        self.assertNotIn(private, str(raised.exception))
+
     def test_each_setup_nonzero_maps_to_stage_specific_silent_code(self):
         fixture_only_value = "fixture-only-value-123"
         cases = (
@@ -778,6 +815,8 @@ class IsolatedProofV2Tests(unittest.TestCase):
         self.assertIn('"SYNTHETIC_SITE_DESERIALIZATION_FAILED"', source)
         self.assertNotIn('"-format=json"', source)
         self.assertIn("_verify_site_deserialization(binary, root, env, db_arg)", source)
+        self.assertIn("base.operator_safe_stop_code(exc)", source)
+        self.assertIn("_inspect_fixture_or_raise(root)", source)
 
         base_source = (
             ROOT / "scripts" / "ausmalwiese_goatcounter_isolated_probe_v1.py"
