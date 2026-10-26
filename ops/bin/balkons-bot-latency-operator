@@ -21,7 +21,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-REPO_BASENAME = "RPi5_main"\nREPO = Path(REPO_BASENAME)  # Resolved once from the fixed owner in main().
+REPO_BASENAME = "RPi5_main"
+REPO = Path(REPO_BASENAME)  # Resolved once from the fixed owner in main().
 OPERATOR = Path("/usr/local/sbin/rpi5-balkons-bot-latency-operator")
 SOURCE = "ops/lib/balkons-bot.py"
 OVERLAY = "ops/systemd/balkons-bot-runtime-override.conf"
