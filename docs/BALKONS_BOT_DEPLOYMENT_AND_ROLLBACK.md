@@ -60,8 +60,10 @@ to read existing plaintext credentials.
 
 For each of the five IDs, the owner-run flow is:
 
-1. ensure `/etc/credstore.encrypted` exists as a real root-owned directory and is
-   not group/world writable;
+1. ensure `/etc/credstore.encrypted` exists as a real `root:root` directory
+   with exact mode `0711`; this permits the intentionally non-root metadata
+   preflight to traverse only known fixed credential paths while preventing
+   directory listing and all group/world writes;
 2. supply the plaintext credential to standard input from a trusted local source;
    never place it in argv, shell history, Git, chat, a temporary plaintext file or
    logs;
@@ -85,6 +87,11 @@ no credential values.
 
 Tracked `ops/bin/balkons-bot-preflight` validates ciphertext **metadata only**. It
 does not open or hash any credential object.
+
+The parent `/etc/credstore.encrypted` directory must be a real root-owned
+directory with exact mode `0711`. The execute-only group/world bits allow the
+non-root verifier to `lstat()` the five already-known fixed paths without granting
+directory listing or ciphertext reads.
 
 Every fixed encrypted object must be:
 
