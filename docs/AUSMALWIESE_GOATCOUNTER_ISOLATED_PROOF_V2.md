@@ -283,14 +283,19 @@ and stderr remain `DEVNULL`; no row content, fixture path or upstream error
 is emitted.
 
 A non-zero result becomes only
-`SYNTHETIC_SITE_DESERIALIZATION_FAILED`. That now localizes the failure to
-the pinned GoatCounter `Sites.Find()` / `Site` deserialization path. A
-successful result followed by the existing `SERVER_STARTUP_SITE_LIST_ERROR`
-would instead prove that the same row can deserialize in the standalone CLI
-context and shift the remaining failure to later serve-only startup context.
+`SYNTHETIC_SITE_DESERIALIZATION_FAILED`. A separately authorized proof
+reached this exact code, proving that the rewritten synthetic row could not be
+deserialized by pinned GoatCounter before server launch.
 
-This diagnostic is still source-only. It does not authorize another runtime
-attempt or inspection of a retained failed fixture.
+Source review then identified the synthetic type-shape mismatch above:
+`ignore_ips` had been rewritten as a JSON array even though the DB settings
+type uses GoatCounter `Strings` text serialization. The proof now writes the
+empty textual value and retains this same pre-serve `Sites.Find()` gate. A
+future PASS through the gate would confirm that the corrected row shape is
+accepted before any HTTP server exists.
+
+This diagnostic and fix remain source-only. They do not authorize another
+runtime attempt or inspection of a retained failed fixture.
 
 ## Shutdown exit classification
 
@@ -385,9 +390,10 @@ execute GoatCounter or inspect RPi5 runtime state. They prove:
 - exact v2.7.0 arm64 pin reuse;
 - the synthetic server is launched exactly once and its argv contains exactly one `-automigrate`;
 - existing collection bits are preserved while `CollectHits=256` is enabled;
+- serialized synthetic settings keep `collect` numeric and `ignore_ips` textual, never `[]`;
 - `CollectNothing=1` remains distinct from `CollectHits=256`;
 - malformed, boolean, negative or out-of-range collect bitmasks fail closed without mutation or fixture-data leakage;
-- synthetic `ignore_ips` is reset to an empty list only after collect validation succeeds;
+- synthetic `ignore_ips` is reset to GoatCounter's empty text representation only after collect validation succeeds;
 - exactly one pre-serve GoatCounter-native no-op site update path uses the fixed synthetic vhost with output suppressed;
 - the diagnostic passes no `-format`, `-vhost` or `-link` arguments, so the pinned CLI requests no site-row update;
 - the diagnostic runs only after the synthetic settings commit and maps any non-zero result to `SYNTHETIC_SITE_DESERIALIZATION_FAILED`;
