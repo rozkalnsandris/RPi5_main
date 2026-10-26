@@ -217,6 +217,7 @@ def map_absolute(path: Path, root_prefix: Path | None) -> Path:
 
 def collect_encrypted_credential_metadata(
     *, root_prefix: Path | None = None, expected_owner_uid: int = 0,
+    expected_owner_gid: int = 0,
 ) -> tuple[dict[str, object], list[str]]:
     """Validate ciphertext metadata only; credential bytes are never opened or hashed."""
     blockers: list[str] = []
@@ -235,6 +236,7 @@ def collect_encrypted_credential_metadata(
         directory_metadata_valid = (
             stat.S_ISDIR(directory_metadata.st_mode)
             and directory_metadata.st_uid == expected_owner_uid
+            and directory_metadata.st_gid == expected_owner_gid
             and stat.S_IMODE(directory_metadata.st_mode) == ENCRYPTED_CREDENTIAL_DIR_MODE
         )
         if not directory_metadata_valid:
@@ -280,6 +282,7 @@ def collect_preflight(
     expected_repo_sha: str, expected_live_source_sha256: str, *,
     repo_root: Path | None = None, runner: Runner = run_command,
     credential_root_prefix: Path | None = None, expected_credential_owner_uid: int = 0,
+    expected_credential_owner_gid: int = 0,
 ) -> dict[str, object]:
     if not SHA1_RE.fullmatch(expected_repo_sha):
         raise PreflightError("expected_repo_sha_invalid")
@@ -322,7 +325,9 @@ def collect_preflight(
     live_source_sha256 = sha256_file(live_source)
     paho = probe_paho(python_executable, runner)
     encrypted_credentials, credential_blockers = collect_encrypted_credential_metadata(
-        root_prefix=credential_root_prefix, expected_owner_uid=expected_credential_owner_uid,
+        root_prefix=credential_root_prefix,
+        expected_owner_uid=expected_credential_owner_uid,
+        expected_owner_gid=expected_credential_owner_gid,
     )
     user = properties["User"]
     fragment_path = properties["FragmentPath"]

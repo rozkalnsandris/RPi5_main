@@ -94,7 +94,9 @@ class BalkonsBotPreflightTests(unittest.TestCase):
     def collect(self, repo: Path, fake_root: Path, live_hash: str, runner: FakeRunner):
         return preflight.collect_preflight(
             REPO_SHA, live_hash, repo_root=repo, runner=runner,
-            credential_root_prefix=fake_root, expected_credential_owner_uid=os.geteuid(),
+            credential_root_prefix=fake_root,
+            expected_credential_owner_uid=os.geteuid(),
+            expected_credential_owner_gid=os.getegid(),
         )
 
     def test_pass_report_is_sanitized_and_read_only(self):
@@ -138,7 +140,9 @@ class BalkonsBotPreflightTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         with mock.patch.object(Path, "lstat", side_effect=PermissionError):
             report, blockers = preflight.collect_encrypted_credential_metadata(
-                root_prefix=fake_root, expected_owner_uid=os.geteuid(),
+                root_prefix=fake_root,
+                expected_owner_uid=os.geteuid(),
+                expected_owner_gid=os.getegid(),
             )
         self.assertEqual(blockers, ["encrypted_credential_directory_inaccessible"])
         self.assertFalse(report["directory_metadata_valid"])
@@ -168,7 +172,9 @@ class BalkonsBotPreflightTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         report = preflight.collect_preflight(
             REPO_SHA, "b" * 64, repo_root=repo, runner=FakeRunner(live_source=live),
-            credential_root_prefix=fake_root, expected_credential_owner_uid=os.geteuid(),
+            credential_root_prefix=fake_root,
+            expected_credential_owner_uid=os.geteuid(),
+            expected_credential_owner_gid=os.getegid(),
         )
         self.assertEqual(report["preflight"], "BLOCKED")
         self.assertIn("live_source_provenance_mismatch", report["blockers"])
