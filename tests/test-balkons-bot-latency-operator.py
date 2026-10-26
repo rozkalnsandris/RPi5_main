@@ -358,6 +358,11 @@ class OperatorTests(unittest.TestCase):
             with self.assertRaisesRegex(operator.Blocked, "source_blob_mismatch"):
                 operator.check_source(MAIN)
 
+    def test_operator_binds_canonical_rpi5_main_checkout(self):
+        self.assertEqual(operator.REPO_BASENAME, "RPi5_main")
+        source = SOURCE.read_text(encoding="utf-8")
+        self.assertNotIn("RPi5-maintenance", source)
+
     def test_source_does_not_add_legacy_secret_copy_or_automatic_recovery(self):
         data = SOURCE.read_text()
         self.assertNotIn("shutil.copy", data)
