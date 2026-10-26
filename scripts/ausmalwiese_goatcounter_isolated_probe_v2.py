@@ -322,6 +322,24 @@ def _create_count_token(
     )
 
 
+_COLLECT_HITS = 256
+_COLLECT_MASK_MAX = (1 << 16) - 1
+
+
+def _enable_collect_hits(settings: dict[str, object]) -> None:
+    """Enable individual hit storage without discarding existing collect bits."""
+    collect = settings.get("collect")
+    if (
+        isinstance(collect, bool)
+        or not isinstance(collect, int)
+        or collect < 0
+        or collect > _COLLECT_MASK_MAX
+    ):
+        raise base.RuntimeStop("SYNTHETIC_SETTINGS_INVALID")
+    settings["collect"] = collect | _COLLECT_HITS
+    settings["ignore_ips"] = []
+
+
 def _make_site_with_stage_diagnostics(
     binary: Path,
     root: Path,
@@ -362,8 +380,7 @@ def _make_site_with_stage_diagnostics(
             settings = json.loads(sites[0]["settings"])
             if not isinstance(settings, dict):
                 raise base.RuntimeStop("SYNTHETIC_SETTINGS_INVALID")
-            settings["collect"] = 1
-            settings["ignore_ips"] = []
+            _enable_collect_hits(settings)
             con.execute(
                 "UPDATE sites SET settings=? WHERE site_id=?",
                 (json.dumps(settings, separators=(",", ":")), sites[0]["site_id"]),
@@ -399,6 +416,7 @@ def _run_fixture(release_archive_arg: str, root: Path) -> None:
                 "-db=sqlite+" + str(db),
                 "-listen=127.0.0.1:" + str(port),
                 "-tls=http",
+                "-automigrate",
                 "-store-every=1",
             ],
             cwd=root,
