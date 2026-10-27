@@ -367,7 +367,29 @@ Unknown `ProbeStop` text is still reduced to
 `ISOLATED_SQLITE_PRIVACY_GATE`. SQLite values, fixture paths, tokens, raw
 rows and arbitrary exception details remain unavailable to operator stdout.
 
-This diagnostic remains source-only. It does not authorize another runtime
+A later separately authorized proof with sanitized structural codes reached:
+
+```text
+GOATCOUNTER_ISOLATED=STOP CODE=FORBIDDEN_ROWS_LANGUAGE_STATS
+```
+
+Pinned v2.7.0 source shows that this row does not imply language collection.
+With `collect=1`, `memstore.processHit()` clears language, location and
+screen size but also sets `FirstVisit=true` whenever session collection is
+disabled. The cron aggregate functions still write anonymous buckets:
+`language_stats.language=""`, `location_stats.location=""` and
+`size_stats.width=0`. Browser and system aggregates explicitly skip their
+zero IDs, while campaign aggregates skip missing campaign IDs.
+
+The structural gate therefore no longer blanket-rejects those three anonymous
+aggregate tables. Instead it derives exact per-day totals from the already
+validated `hit_counts` rows and requires every language/location/size
+aggregate to match the same synthetic site, path, day and count with only the
+empty/zero dimension value. Missing rows, extra rows, duplicate days,
+non-empty language/location, non-zero width, wrong scope, invalid day or count
+mismatch all fail closed with reviewed operator-safe codes.
+
+This correction remains source-only. It does not authorize another runtime
 attempt or inspection of a retained failed fixture.
 
 ## Shutdown exit classification
@@ -472,6 +494,9 @@ execute GoatCounter or inspect RPi5 runtime state. They prove:
 - every reviewed fixed structural `ProbeStop` code is allowlisted for operator output;
 - `FORBIDDEN_ROWS_<TABLE>` is surfaced only for tables in the fixed reviewed `DISALLOWED_ROWS` set;
 - arbitrary or unknown structural exception text is collapsed to `ISOLATED_SQLITE_PRIVACY_GATE` without detail leakage;
+- disabled language/location/screen-size collection permits only anonymous aggregate buckets (`language=""`, `location=""`, `width=0`);
+- those anonymous buckets must exactly match the validated per-day `hit_counts` totals for the same synthetic site/path, with no duplicate or extra dimension rows;
+- browser/system/campaign aggregates remain exact zero-row requirements when their dimensions are disabled/absent;
 - exactly one pre-serve GoatCounter-native no-op site update path uses the fixed synthetic vhost with output suppressed;
 - the diagnostic passes no `-format`, `-vhost` or `-link` arguments, so the pinned CLI requests no site-row update;
 - the diagnostic runs only after the synthetic settings commit and maps any non-zero result to `SYNTHETIC_SITE_DESERIALIZATION_FAILED`;
