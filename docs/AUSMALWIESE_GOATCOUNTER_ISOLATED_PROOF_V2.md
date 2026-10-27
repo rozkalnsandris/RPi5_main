@@ -349,8 +349,26 @@ values, or any non-empty session/hash/path/seen content still fail closed.
 This is not permission to persist session data; it recognizes only pinned
 GoatCounter's empty graceful-shutdown bookkeeping.
 
-This diagnostic and fix remain source-only. They do not authorize another
-runtime attempt or inspection of a retained failed fixture.
+A later separately authorized proof with the empty-session-housekeeping
+correction still reached the structural gate and returned only:
+
+```text
+GOATCOUNTER_ISOLATED=STOP CODE=ISOLATED_SQLITE_PRIVACY_GATE
+```
+
+At that point additional source-side guessing is intentionally stopped. The
+offline structural probe already emits fixed, non-sensitive invariant codes;
+the v2 wrapper had been collapsing all of them into the single generic code.
+
+The canonical wrapper now surfaces the exact structural code only when it is in
+an explicit reviewed allowlist. The dynamic `FORBIDDEN_ROWS_<TABLE>` family
+is accepted only for table names from the fixed `DISALLOWED_ROWS` set.
+Unknown `ProbeStop` text is still reduced to
+`ISOLATED_SQLITE_PRIVACY_GATE`. SQLite values, fixture paths, tokens, raw
+rows and arbitrary exception details remain unavailable to operator stdout.
+
+This diagnostic remains source-only. It does not authorize another runtime
+attempt or inspection of a retained failed fixture.
 
 ## Shutdown exit classification
 
@@ -451,6 +469,9 @@ execute GoatCounter or inspect RPi5 runtime state. They prove:
 - synthetic `ignore_ips` is reset to GoatCounter's empty text representation only after collect validation succeeds;
 - the offline privacy gate accepts exactly one `store(key="session")` shutdown housekeeping row only when `sessions`, `hashes`, `paths` and `seen` are all empty JSON objects;
 - missing/extra store rows, another key, malformed or non-empty session housekeeping remain rejected;
+- every reviewed fixed structural `ProbeStop` code is allowlisted for operator output;
+- `FORBIDDEN_ROWS_<TABLE>` is surfaced only for tables in the fixed reviewed `DISALLOWED_ROWS` set;
+- arbitrary or unknown structural exception text is collapsed to `ISOLATED_SQLITE_PRIVACY_GATE` without detail leakage;
 - exactly one pre-serve GoatCounter-native no-op site update path uses the fixed synthetic vhost with output suppressed;
 - the diagnostic passes no `-format`, `-vhost` or `-link` arguments, so the pinned CLI requests no site-row update;
 - the diagnostic runs only after the synthetic settings commit and maps any non-zero result to `SYNTHETIC_SITE_DESERIALIZATION_FAILED`;

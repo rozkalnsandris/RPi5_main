@@ -26,6 +26,7 @@ import time
 from pathlib import Path
 
 import ausmalwiese_goatcounter_isolated_probe_v1 as base
+import ausmalwiese_goatcounter_offline_privacy_probe_v1 as privacy
 
 
 PASS = "PASS_SYNTHETIC_GOATCOUNTER_RUNTIME_ONLY_NOT_LIVE_OR_LEGAL_PROOF"
@@ -471,14 +472,19 @@ def _run_fixture(release_archive_arg: str, root: Path) -> None:
     if primary_failure is not None:
         raise primary_failure
 
+    _inspect_fixture_or_raise(root)
+
+
+def _inspect_fixture_or_raise(root: Path) -> None:
+    """Run the structural gate and surface only reviewed operator-safe codes."""
     try:
         base.inspect_fixture(
             root,
             page_id=base.PAGE_ID,
             expected_views=base.VIEWS,
         )
-    except base.ProbeStop:
-        raise base.RuntimeStop("ISOLATED_SQLITE_PRIVACY_GATE")
+    except base.ProbeStop as exc:
+        raise base.RuntimeStop(privacy.operator_safe_stop_code(exc)) from None
 
 
 def run_isolated(release_archive_arg: str) -> str:
