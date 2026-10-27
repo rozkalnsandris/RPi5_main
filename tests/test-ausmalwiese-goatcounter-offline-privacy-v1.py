@@ -52,6 +52,18 @@ class SyntheticGoatCounterFixture(unittest.TestCase):
             "hit_counts": "site_id integer, path_id integer, hour text, total integer",
             "ref_counts": "site_id integer, path_id integer, ref_id integer, hour text, total integer",
             "hit_stats": "site_id integer, path_id integer, day text, stats text",
+            "language_stats": (
+                "site_id integer, path_id integer, day text, "
+                "language text, count integer"
+            ),
+            "location_stats": (
+                "site_id integer, path_id integer, day text, "
+                "location text, count integer"
+            ),
+            "size_stats": (
+                "site_id integer, path_id integer, day text, "
+                "width integer, count integer"
+            ),
             "bots": "site_id integer, path text, bot integer, user_agent text, created_at text",
             "hits": "site_id integer, path_id integer, session blob, created_at text",
             "store": "key text, value blob",
@@ -115,6 +127,15 @@ class SyntheticGoatCounterFixture(unittest.TestCase):
             con.execute(
                 "INSERT INTO hit_stats VALUES(1, 9, ?, ?)",
                 ("2026-10-25", json.dumps(hours)),
+            )
+            con.execute(
+                "INSERT INTO language_stats VALUES(1, 9, '2026-10-25', '', 2)"
+            )
+            con.execute(
+                "INSERT INTO location_stats VALUES(1, 9, '2026-10-25', '', 2)"
+            )
+            con.execute(
+                "INSERT INTO size_stats VALUES(1, 9, '2026-10-25', 0, 2)"
             )
 
     def mutate(self, sql, args=()):
@@ -396,11 +417,104 @@ class SyntheticGoatCounterFixture(unittest.TestCase):
                 )
 
     def test_personal_dimensions_rejected(self):
-        for table in ("browser_stats", "location_stats", "campaign_stats"):
+        for table in ("browser_stats", "system_stats", "campaign_stats"):
             with self.subTest(table=table):
                 self.mutate("INSERT INTO " + table + " VALUES(1)")
                 self.assert_stops("FORBIDDEN_ROWS_" + table.upper())
                 self.mutate("DELETE FROM " + table)
+
+    def test_unknown_dimension_aggregates_are_permitted(self):
+        self.assertEqual(
+            self.run_probe(),
+            "PASS_STRUCTURAL_SYNTHETIC_ONLY_NOT_RUNTIME_OR_PRIVACY_PROOF",
+        )
+
+    def test_language_aggregate_rejects_dimension_or_scope_drift(self):
+        mutations = (
+            ("UPDATE language_stats SET language='eng'", "LANGUAGE_AGGREGATE_ROW_INVALID"),
+            ("UPDATE language_stats SET site_id=2", "LANGUAGE_AGGREGATE_ROW_INVALID"),
+            ("UPDATE language_stats SET path_id=10", "LANGUAGE_AGGREGATE_ROW_INVALID"),
+            ("UPDATE language_stats SET day='2026-10-25 11:00:00'", "LANGUAGE_AGGREGATE_ROW_INVALID"),
+            ("UPDATE language_stats SET count=0", "LANGUAGE_AGGREGATE_ROW_INVALID"),
+            ("UPDATE language_stats SET count=3", "LANGUAGE_AGGREGATE_MISMATCH"),
+        )
+        for sql, code in mutations:
+            with self.subTest(sql=sql):
+                self.mutate(sql)
+                self.assert_stops(code)
+                self.mutate("DELETE FROM language_stats")
+                self.mutate(
+                    "INSERT INTO language_stats VALUES(1, 9, '2026-10-25', '', 2)"
+                )
+
+    def test_language_aggregate_missing_or_duplicate_day_rejected(self):
+        self.mutate("DELETE FROM language_stats")
+        self.assert_stops("LANGUAGE_AGGREGATE_MISMATCH")
+        self.mutate(
+            "INSERT INTO language_stats VALUES(1, 9, '2026-10-25', '', 2)"
+        )
+        self.mutate(
+            "INSERT INTO language_stats VALUES(1, 9, '2026-10-25', '', 2)"
+        )
+        self.assert_stops("LANGUAGE_AGGREGATE_DUPLICATE_DAY")
+
+    def test_location_aggregate_rejects_dimension_or_scope_drift(self):
+        mutations = (
+            ("UPDATE location_stats SET location='DE'", "LOCATION_AGGREGATE_ROW_INVALID"),
+            ("UPDATE location_stats SET site_id=2", "LOCATION_AGGREGATE_ROW_INVALID"),
+            ("UPDATE location_stats SET path_id=10", "LOCATION_AGGREGATE_ROW_INVALID"),
+            ("UPDATE location_stats SET day='bad-day'", "LOCATION_AGGREGATE_ROW_INVALID"),
+            ("UPDATE location_stats SET count=0", "LOCATION_AGGREGATE_ROW_INVALID"),
+            ("UPDATE location_stats SET count=3", "LOCATION_AGGREGATE_MISMATCH"),
+        )
+        for sql, code in mutations:
+            with self.subTest(sql=sql):
+                self.mutate(sql)
+                self.assert_stops(code)
+                self.mutate("DELETE FROM location_stats")
+                self.mutate(
+                    "INSERT INTO location_stats VALUES(1, 9, '2026-10-25', '', 2)"
+                )
+
+    def test_location_aggregate_missing_or_duplicate_day_rejected(self):
+        self.mutate("DELETE FROM location_stats")
+        self.assert_stops("LOCATION_AGGREGATE_MISMATCH")
+        self.mutate(
+            "INSERT INTO location_stats VALUES(1, 9, '2026-10-25', '', 2)"
+        )
+        self.mutate(
+            "INSERT INTO location_stats VALUES(1, 9, '2026-10-25', '', 2)"
+        )
+        self.assert_stops("LOCATION_AGGREGATE_DUPLICATE_DAY")
+
+    def test_size_aggregate_rejects_dimension_or_scope_drift(self):
+        mutations = (
+            ("UPDATE size_stats SET width=800", "SIZE_AGGREGATE_ROW_INVALID"),
+            ("UPDATE size_stats SET site_id=2", "SIZE_AGGREGATE_ROW_INVALID"),
+            ("UPDATE size_stats SET path_id=10", "SIZE_AGGREGATE_ROW_INVALID"),
+            ("UPDATE size_stats SET day='bad-day'", "SIZE_AGGREGATE_ROW_INVALID"),
+            ("UPDATE size_stats SET count=0", "SIZE_AGGREGATE_ROW_INVALID"),
+            ("UPDATE size_stats SET count=3", "SIZE_AGGREGATE_MISMATCH"),
+        )
+        for sql, code in mutations:
+            with self.subTest(sql=sql):
+                self.mutate(sql)
+                self.assert_stops(code)
+                self.mutate("DELETE FROM size_stats")
+                self.mutate(
+                    "INSERT INTO size_stats VALUES(1, 9, '2026-10-25', 0, 2)"
+                )
+
+    def test_size_aggregate_missing_or_duplicate_day_rejected(self):
+        self.mutate("DELETE FROM size_stats")
+        self.assert_stops("SIZE_AGGREGATE_MISMATCH")
+        self.mutate(
+            "INSERT INTO size_stats VALUES(1, 9, '2026-10-25', 0, 2)"
+        )
+        self.mutate(
+            "INSERT INTO size_stats VALUES(1, 9, '2026-10-25', 0, 2)"
+        )
+        self.assert_stops("SIZE_AGGREGATE_DUPLICATE_DAY")
 
     def test_nonblank_referrer_rejected(self):
         self.mutate(
