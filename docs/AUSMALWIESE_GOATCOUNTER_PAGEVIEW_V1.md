@@ -106,21 +106,34 @@ loopback listener, submits two synthetic `0427183` hits with exactly
 gate. A proof failure preserves the private `0700` fixture; only a complete
 PASS reaches bounded success cleanup.
 
-The structural gate rejects:
+The structural gate is fail-closed and permits only the pinned
+aggregate-only v2.7.0 shape:
 
-- any row in `hits`, `bots` or `store`;
-- browser/system/location/language/campaign/size personal-dimension stats;
-- non-empty referrer values;
-- unsafe `Collect=0` defaults or Session bits;
-- unexpected tables/columns/migrations;
-- wrong page paths/counts;
-- WAL/SHM/journal residue;
-- non-count-only synthetic API-token scope;
-- exports and other reviewed forbidden rows.
+- `hits`, `bots`, browser/system aggregates, campaigns and exports remain
+  zero-row requirements;
+- the one graceful-shutdown `store(key="session")` housekeeping row is
+  accepted only when its `sessions`, `hashes`, `paths` and `seen`
+  objects are all empty;
+- disabled language/location/screen-size dimensions may produce only anonymous
+  aggregate buckets (`language=""`, `location=""`, `width=0`) whose
+  exact site/path/day/count values duplicate the already validated pageview
+  totals;
+- non-empty referrer values, unsafe collection bitmasks, unexpected
+  tables/columns/migrations, wrong paths/counts, WAL/SHM/journal residue,
+  non-count-only synthetic API-token scope and other reviewed forbidden rows
+  remain rejected.
 
-Passing is evidence only for that synthetic pinned runtime. It does **not**
-prove source reproducibility, production ingress/logging, backups, Cloudflare
-processing, German legal compliance or consent status.
+On 2026-10-27, after the reviewed privacy-gate corrections, one separately
+authorized execution on `rpi5` at exact source
+`4f2bd81ddc521dbb6f86df17cdb060c088a64f95` returned:
+
+```text
+GOATCOUNTER_ISOLATED=PASS_SYNTHETIC_GOATCOUNTER_RUNTIME_ONLY_NOT_LIVE_OR_LEGAL_PROOF
+```
+
+That satisfies the pinned synthetic runtime gate only. It does **not** prove
+production ingress/logging, service/path/port/credential compatibility,
+backups, Cloudflare processing, German legal compliance or consent status.
 
 ## One-attempt failure semantics
 
@@ -137,6 +150,7 @@ Disconnected source tests:
 ```text
 python3 tests/test-ausmalwiese-goatcounter-pageview-v1.py
 python3 tests/test-ausmalwiese-goatcounter-offline-privacy-v1.py
+python3 tests/test-ausmalwiese-goatcounter-compatibility-preflight-v1.py
 python3 scripts/ausmalwiese_goatcounter_pageview_adapter_v1.py --check-contract
 ```
 
@@ -144,16 +158,20 @@ They do not execute GoatCounter or access RPi5 runtime state.
 
 ## Post-merge gates
 
-Source merge alone performs no runtime mutation. Before PR #391 can be merged
-for production use, all of the following remain separate gates:
+Source merge alone performs no runtime mutation. The pinned synthetic runtime
+proof is complete; the next source contract is
+`docs/AUSMALWIESE_GOATCOUNTER_COMPATIBILITY_PREFLIGHT_V1.md` (#1266).
 
-1. exact merged RPi5 source + exact pinned archive synthetic proof on `rpi5`;
-2. proof that the required service users/paths/ports/credential boundary can
-   be provisioned without conflicting with current runtime;
-3. German GDPR/TDDDG review of the exact first-party request and transient
+Before PR #391 can be merged for production use, the remaining gates are:
+
+1. one separately owner-authorized read-only compatibility preflight on
+   `rpi5`, bound to the then-current exact merged source SHA;
+2. German GDPR/TDDDG review of the exact first-party request and transient
    Cloudflare/network/proxy processing;
-4. separate owner-authorized install/database/service operation;
-5. separate exact path-only Cloudflare Tunnel ingress mutation and public
+3. separate owner-authorized install/database/service operation;
+4. separate exact path-only Cloudflare Tunnel ingress mutation and public
    verification.
 
-No LIVE retry/rollback/cleanup is implied.
+The compatibility preflight authorization, when later granted, does not imply
+install, credential/database access, service lifecycle, network mutation,
+retry, rollback or cleanup.
