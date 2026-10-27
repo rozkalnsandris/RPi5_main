@@ -35,8 +35,8 @@ TABLES = frozenset({
 })
 DISALLOWED_ROWS = frozenset({
     "hits", "bots", "campaigns", "browsers", "systems",
-    "browser_stats", "system_stats", "location_stats", "size_stats",
-    "language_stats", "campaign_stats", "exports", "iso_3166_1",
+    "browser_stats", "system_stats",
+    "campaign_stats", "exports", "iso_3166_1",
 })
 OPERATOR_SAFE_STOP_CODES = frozenset({
     "AGGREGATE_DUPLICATE_HOUR",
@@ -55,7 +55,16 @@ OPERATOR_SAFE_STOP_CODES = frozenset({
     "LANGUAGE_LOOKUP_DUPLICATE",
     "LANGUAGE_LOOKUP_SENTINEL",
     "LANGUAGE_LOOKUP_SHAPE",
+    "LANGUAGE_AGGREGATE_DUPLICATE_DAY",
+    "LANGUAGE_AGGREGATE_MISMATCH",
+    "LANGUAGE_AGGREGATE_ROW_INVALID",
+    "LOCATION_AGGREGATE_DUPLICATE_DAY",
+    "LOCATION_AGGREGATE_MISMATCH",
+    "LOCATION_AGGREGATE_ROW_INVALID",
     "LOCATION_LOOKUP_NOT_STATIC",
+    "SIZE_AGGREGATE_DUPLICATE_DAY",
+    "SIZE_AGGREGATE_MISMATCH",
+    "SIZE_AGGREGATE_ROW_INVALID",
     "NOT_ISOLATED_TEMP_ROOT",
     "NO_AGGREGATE_COUNTS",
     "NO_DAILY_STATS",
@@ -95,6 +104,9 @@ COLS = {
     "hit_counts": {"site_id", "path_id", "hour", "total"},
     "ref_counts": {"site_id", "path_id", "ref_id", "hour", "total"},
     "hit_stats": {"site_id", "path_id", "day", "stats"},
+    "language_stats": {"site_id", "path_id", "day", "language", "count"},
+    "location_stats": {"site_id", "path_id", "day", "location", "count"},
+    "size_stats": {"site_id", "path_id", "day", "width", "count"},
     "hits": {"site_id", "path_id", "created_at", "session"},
     "bots": {"site_id", "path", "user_agent", "created_at", "bot"},
     "store": {"key", "value"},
@@ -404,6 +416,63 @@ def inspect_fixture(root: str | Path, *, page_id: str, expected_views: int) -> s
                 daily_actual[r["day"]] = stats
             if daily_actual != daily_expected:
                 _stop("DAILY_COUNTS_MISMATCH")
+
+            # With CollectSession, CollectLanguage, CollectLocation and
+            # CollectScreenSize disabled, pinned v2.7.0 still aggregates each
+            # FirstVisit=true hit into anonymous dimension buckets. These
+            # buckets are permitted only when they exactly duplicate the
+            # already-validated per-day pageview totals and carry no dimension.
+            dimension_expected = {
+                day: sum(hours) for day, hours in daily_expected.items()
+            }
+
+            language_actual = {}
+            for r in conn.execute(
+                "SELECT site_id, path_id, day, language, count "
+                "FROM language_stats"
+            ).fetchall():
+                if (r["site_id"] != site_id or r["path_id"] != path_id
+                        or r["language"] != ""
+                        or type(r["count"]) is not int or r["count"] < 1
+                        or not _timestamp(r["day"], day=True)):
+                    _stop("LANGUAGE_AGGREGATE_ROW_INVALID")
+                if r["day"] in language_actual:
+                    _stop("LANGUAGE_AGGREGATE_DUPLICATE_DAY")
+                language_actual[r["day"]] = r["count"]
+            if language_actual != dimension_expected:
+                _stop("LANGUAGE_AGGREGATE_MISMATCH")
+
+            location_actual = {}
+            for r in conn.execute(
+                "SELECT site_id, path_id, day, location, count "
+                "FROM location_stats"
+            ).fetchall():
+                if (r["site_id"] != site_id or r["path_id"] != path_id
+                        or r["location"] != ""
+                        or type(r["count"]) is not int or r["count"] < 1
+                        or not _timestamp(r["day"], day=True)):
+                    _stop("LOCATION_AGGREGATE_ROW_INVALID")
+                if r["day"] in location_actual:
+                    _stop("LOCATION_AGGREGATE_DUPLICATE_DAY")
+                location_actual[r["day"]] = r["count"]
+            if location_actual != dimension_expected:
+                _stop("LOCATION_AGGREGATE_MISMATCH")
+
+            size_actual = {}
+            for r in conn.execute(
+                "SELECT site_id, path_id, day, width, count "
+                "FROM size_stats"
+            ).fetchall():
+                if (r["site_id"] != site_id or r["path_id"] != path_id
+                        or type(r["width"]) is not int or r["width"] != 0
+                        or type(r["count"]) is not int or r["count"] < 1
+                        or not _timestamp(r["day"], day=True)):
+                    _stop("SIZE_AGGREGATE_ROW_INVALID")
+                if r["day"] in size_actual:
+                    _stop("SIZE_AGGREGATE_DUPLICATE_DAY")
+                size_actual[r["day"]] = r["count"]
+            if size_actual != dimension_expected:
+                _stop("SIZE_AGGREGATE_MISMATCH")
     except sqlite3.DatabaseError:
         _stop("SQLITE_READ_OR_SCHEMA_ERROR")
     return "PASS_STRUCTURAL_SYNTHETIC_ONLY_NOT_RUNTIME_OR_PRIVACY_PROOF"
