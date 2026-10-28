@@ -3,11 +3,15 @@
 No RPi5 runtime, public request, production catalog, credential, database or
 GoatCounter process is touched.
 """
+import contextlib
 import gzip
 import hashlib
 import importlib
+import importlib.util
+import io
 import json
 import os
+import shlex
 import sys
 import tempfile
 import unittest
@@ -211,6 +215,72 @@ class AdapterContractTests(unittest.TestCase):
             self.assertNotIn("0.0.0.0", text)
             if port:
                 self.assertIn(port, text)
+
+
+class InstalledAdapterTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.install = self.root / "libexec/ausmalwiese-goatcounter-v1"
+        self.install.mkdir(parents=True)
+        script = self.install / "pageview-adapter.py"
+        script.write_text(Path(adapter.__file__).read_text(), encoding="utf-8")
+        spec = importlib.util.spec_from_file_location("installed_adapter", script)
+        self.module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.module)
+        self.contract = self.install / "pageview-contract.json"
+        self.contract.write_text(json.dumps(adapter.expected_contract()), encoding="utf-8")
+
+    def invoke(self, arguments):
+        output = io.StringIO()
+        with mock.patch.object(self.module, "QuietThreadingHTTPServer") as server:
+            with contextlib.redirect_stdout(output):
+                result = self.module.main(arguments)
+        return result, output.getvalue(), server
+
+    def test_unit_argv_starts_relocated_adapter_with_colocated_contract(self):
+        unit = (ROOT / "ops/systemd/ausmalwiese-goatcounter-pageview.service").read_text()
+        start = next(line.removeprefix("ExecStart=") for line in unit.splitlines()
+                     if line.startswith("ExecStart="))
+        argv = shlex.split(start)
+        prefix = "/usr/local/libexec/ausmalwiese-goatcounter-v1/"
+        self.assertEqual(argv[0], prefix + "pageview-adapter.py")
+        self.assertIn("ConditionPathExists=" + prefix + "pageview-contract.json", unit)
+        arguments = [arg.replace(prefix, str(self.install) + "/") for arg in argv[1:]]
+        result, _, server = self.invoke(arguments)
+        self.assertEqual(result, 0)
+        server.assert_called_once_with(("127.0.0.1", 9193), self.module.Handler)
+        server.return_value.serve_forever.assert_called_once_with(poll_interval=0.5)
+
+    def test_explicit_contract_check_works_without_repository_tree(self):
+        result, output, server = self.invoke(["--check-contract", "--contract", str(self.contract)])
+        self.assertEqual(result, 0)
+        self.assertIn("SOURCE_OK_NOT_LIVE", output)
+        server.assert_not_called()
+
+    def test_missing_contract_stops_before_binding(self):
+        self.contract.unlink()
+        result, output, server = self.invoke(["--serve", "--contract", str(self.contract)])
+        self.assertEqual(result, 2)
+        self.assertIn("CODE=CONTRACT_UNAVAILABLE", output)
+        server.assert_not_called()
+
+    def test_contract_drift_stops_before_binding(self):
+        data = adapter.expected_contract()
+        data["boundaries"]["allow_live"] = True
+        self.contract.write_text(json.dumps(data), encoding="utf-8")
+        result, output, server = self.invoke(["--serve", "--contract", str(self.contract)])
+        self.assertEqual(result, 2)
+        self.assertIn("CODE=CONTRACT_DRIFT", output)
+        server.assert_not_called()
+
+    def test_malformed_contract_stops_before_binding(self):
+        self.contract.write_text("{", encoding="utf-8")
+        result, output, server = self.invoke(["--serve", "--contract", str(self.contract)])
+        self.assertEqual(result, 2)
+        self.assertIn("CODE=CONTRACT_UNAVAILABLE", output)
+        server.assert_not_called()
 
 
 class RuntimeProofSourceTests(unittest.TestCase):

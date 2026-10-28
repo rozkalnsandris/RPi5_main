@@ -100,11 +100,12 @@ EXPECTED_GOATCOUNTER_UNIT_LINES = (
 
 EXPECTED_PAGEVIEW_UNIT_LINES = (
     "ConditionPathIsExecutable=/usr/local/libexec/ausmalwiese-goatcounter-v1/pageview-adapter.py",
+    "ConditionPathExists=/usr/local/libexec/ausmalwiese-goatcounter-v1/pageview-contract.json",
     "ConditionPathExists=/srv/coloring-pages-content/public/catalog.json",
     "User=ausmalwiese-pageview",
     "Group=ausmalwiese-pageview",
     "LoadCredential=goatcounter-token:/etc/ausmalwiese-goatcounter/pageview-token",
-    "ExecStart=/usr/local/libexec/ausmalwiese-goatcounter-v1/pageview-adapter.py --serve",
+    "ExecStart=/usr/local/libexec/ausmalwiese-goatcounter-v1/pageview-adapter.py --serve --contract=/usr/local/libexec/ausmalwiese-goatcounter-v1/pageview-contract.json",
     "ReadOnlyPaths=/srv/coloring-pages-content/public/catalog.json",
     "StandardOutput=null",
     "StandardError=null",

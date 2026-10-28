@@ -49,6 +49,12 @@ contract:
 3. adapter source constants for the catalog, adapter listen address/port,
    backend URL and credential name.
 
+The pageview unit must explicitly pass
+`--contract=/usr/local/libexec/ausmalwiese-goatcounter-v1/pageview-contract.json`
+and require that same path with `ConditionPathExists`. The executable root
+absence check covers this future non-secret installed contract too. The
+preflight does not install it or read a runtime copy.
+
 Any source drift is:
 
 ```text

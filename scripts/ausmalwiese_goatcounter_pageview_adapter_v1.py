@@ -271,9 +271,11 @@ def expected_contract() -> dict[str, Any]:
     }
 
 
-def check_contract() -> None:
+def check_contract(path: Path | None = None) -> None:
+    if path is None:
+        path = CONTRACT_PATH
     try:
-        data = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         stop("CONTRACT_UNAVAILABLE")
     if data != expected_contract():
@@ -350,8 +352,8 @@ class Handler(BaseHTTPRequestHandler):
     do_PATCH = do_GET
 
 
-def serve() -> None:
-    check_contract()
+def serve(contract_path: Path | None = None) -> None:
+    check_contract(contract_path)
     server = QuietThreadingHTTPServer((ADAPTER_HOST, ADAPTER_PORT), Handler)
     server.serve_forever(poll_interval=0.5)
 
@@ -361,13 +363,17 @@ def main(argv: list[str] | None = None) -> int:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--check-contract", action="store_true")
     mode.add_argument("--serve", action="store_true")
+    parser.add_argument(
+        "--contract", type=Path,
+        help="Non-secret source contract file; defaults to the checkout contract",
+    )
     args = parser.parse_args(argv)
     try:
         if args.check_contract:
-            check_contract()
+            check_contract(args.contract)
             print("AUSMALWIESE_GOATCOUNTER_PAGEVIEW=SOURCE_OK_NOT_LIVE")
         else:
-            serve()
+            serve(args.contract)
         return 0
     except AdapterStop as exc:
         print("AUSMALWIESE_GOATCOUNTER_PAGEVIEW=STOP CODE=" + str(exc))
