@@ -7,6 +7,7 @@ test:
 	python3 ./tests/test-weather-v7-telegram-credentials-v1.py
 	python3 ./tests/test-ausmalwiese-stats-zone-binding-v1.py
 	python3 ./tests/test-ausmalwiese-stats-zone-binding-adapter-v1.py
+	python3 ./tests/test-ausmalwiese-goatcounter-tunnel-v1.py
 	python3 ./tests/test-ausmalwiese-goatcounter-pageview-v1.py
 	python3 ./tests/test-ausmalwiese-goatcounter-offline-privacy-v1.py
 	python3 ./tests/test-ausmalwiese-goatcounter-compatibility-preflight-v1.py
