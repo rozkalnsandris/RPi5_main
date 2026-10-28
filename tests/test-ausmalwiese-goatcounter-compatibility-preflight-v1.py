@@ -162,6 +162,20 @@ class CompatibilityPreflightTests(unittest.TestCase):
         self.assert_stop("SOURCE_CONTRACT_DRIFT")
         self.assertEqual(self.host.calls, [])
 
+    def test_installed_contract_unit_wiring_required_before_host_metadata(self):
+        path = self.root / "ops/systemd/ausmalwiese-goatcounter-pageview.service"
+        original = path.read_text(encoding="utf-8")
+        contract = "/usr/local/libexec/ausmalwiese-goatcounter-v1/pageview-contract.json"
+        for broken in (
+            original.replace(" --contract=" + contract, ""),
+            original.replace("ConditionPathExists=" + contract + "\n", ""),
+            original.replace(contract, "/unexpected/contract.json"),
+        ):
+            with self.subTest(unit=broken):
+                path.write_text(broken, encoding="utf-8")
+                self.assert_stop("SOURCE_CONTRACT_DRIFT")
+                self.assertEqual(self.host.calls, [])
+
     def test_identity_failures_are_fixed_codes(self):
         cases = (
             ("ROOT_FORBIDDEN", "euid", 0),

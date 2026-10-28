@@ -78,6 +78,36 @@ The GoatCounter unit expects a separately provisioned exact v2.7.0 binary and
 pre-created private database. Source merge does not create users, directories,
 credentials, databases, services or ports.
 
+### Installed adapter contract (#1268)
+
+The adapter's checkout default resolves `ops/contracts` relative to the source
+tree. Copying only the Python program to its service path does not preserve
+that layout: the old default would look under `/usr/local/libexec/ops/contracts`
+and fail with `CONTRACT_UNAVAILABLE` before binding a listener.
+
+The reviewed service now passes an explicit `--contract` argument and requires
+the non-secret contract file to exist. A later authorized installer must map
+these exact source files beneath
+`/usr/local/libexec/ausmalwiese-goatcounter-v1/`:
+
+| Repository source | Installed filename | Intended ownership/mode |
+| --- | --- | --- |
+| `scripts/ausmalwiese_goatcounter_pageview_adapter_v1.py` | `pageview-adapter.py` | root:root, 0755 |
+| `ops/contracts/ausmalwiese-goatcounter-pageview-v1.json` | `pageview-contract.json` | root:root, 0644 |
+
+Both files must come from the same reviewed revision. This JSON contains only
+the public source contract, never credentials or a runtime authorization.
+Its `SOURCE_ONLY_NOT_INSTALLED` and false authorization flags remain source
+provenance; installation authority must come from the separate owner decision.
+No private credential/database file belongs in this executable directory.
+
+The source CLI still supports `--check-contract` without arguments inside the
+checkout. The installed form uses `--check-contract --contract=<installed path>`.
+Missing, malformed or mismatched contract content fails before server creation;
+there is no fallback to another file. Disconnected tests relocate the real
+adapter, use the tracked unit's arguments and mock only the HTTP listener.
+They prove startup wiring, not an installed systemd service or backend health.
+
 ## Pinned runtime proof
 
 The only accepted upstream runtime candidate is:
@@ -175,3 +205,24 @@ Before PR #391 can be merged for production use, the remaining gates are:
 The compatibility preflight authorization, when later granted, does not imply
 install, credential/database access, service lifecycle, network mutation,
 retry, rollback or cleanup.
+
+## Compatibility observation, 2026-10-28
+
+One owner-authorized read-only execution of the exact compatibility operator
+from `5af7a956a60ca4d0dbee0c3eb95cff03a48ab29c` returned:
+
+```text
+GOATCOUNTER_COMPATIBILITY=PASS_READ_ONLY_COMPATIBILITY_SOURCE_ONLY USERS=ABSENT GROUPS=ABSENT TARGETS=ABSENT UNITS=ABSENT PORTS=FREE CATALOG=COMPATIBLE
+```
+
+The owner selected Codex SSH after the Desktop Commander quota prevented its
+command from executing. The RPi5 checkout was still at
+`4f2bd81ddc521dbb6f86df17cdb060c088a64f95`; the operator was executed in memory
+from GitHub source, after all four on-disk source dependencies matched the
+approved revision's Git blob hashes. No checkout update or host write occurred.
+
+This is dated absence/compatibility evidence, not installation completion.
+The source-path correction in #1268 needs review/merge, and host compatibility
+must be refreshed against the selected install revision before first mutation.
+Private install/database/credential/service operations, legal review and
+path-only public ingress remain separate gates; PR #391 remains held.

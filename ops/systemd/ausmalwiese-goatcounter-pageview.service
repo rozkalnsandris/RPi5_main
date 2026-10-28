@@ -4,6 +4,7 @@ Description=Ausmalwiese first-party GoatCounter pageview adapter
 After=ausmalwiese-goatcounter.service
 Requires=ausmalwiese-goatcounter.service
 ConditionPathIsExecutable=/usr/local/libexec/ausmalwiese-goatcounter-v1/pageview-adapter.py
+ConditionPathExists=/usr/local/libexec/ausmalwiese-goatcounter-v1/pageview-contract.json
 ConditionPathExists=/srv/coloring-pages-content/public/catalog.json
 
 [Service]
@@ -12,7 +13,7 @@ User=ausmalwiese-pageview
 Group=ausmalwiese-pageview
 UMask=0077
 LoadCredential=goatcounter-token:/etc/ausmalwiese-goatcounter/pageview-token
-ExecStart=/usr/local/libexec/ausmalwiese-goatcounter-v1/pageview-adapter.py --serve
+ExecStart=/usr/local/libexec/ausmalwiese-goatcounter-v1/pageview-adapter.py --serve --contract=/usr/local/libexec/ausmalwiese-goatcounter-v1/pageview-contract.json
 Restart=on-failure
 RestartSec=5s
 NoNewPrivileges=yes
