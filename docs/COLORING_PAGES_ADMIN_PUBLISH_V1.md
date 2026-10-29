@@ -2,7 +2,7 @@
 
 Issue: RPi5_main #1149.
 
-## Canonical category and topic selection (#1276; source-only)
+## Canonical category and topic selection (#1276)
 
 ADMIN reads exactly the deployed public `https://ausmalwiese.de/categories.json` and
 `https://ausmalwiese.de/topics.json` registries. Fixed URLs, schema, unique
@@ -16,16 +16,19 @@ is passed through job state to every ZIP page as importer `--topic`,
 and verified in the resulting `catalog.json` entry. Legacy records with no
 explicit `topics` remain supported, and edit/archive/restore do not erase them.
 
-**Source/runtime prerequisites remain unfulfilled as of 2026-10-29:**
-`coloring-pages` serves `/topics.json` but not `/categories.json`;
-the currently pinned immutable importer image does not support `--topic`.
-The public repository must separately review, authorize and deploy the
-new public categories endpoint and an importer topic persistence contract
-before this ADMIN change can be installed. The protected ADMIN publisher
-rejects unavailable/stale taxonomy or incompatible pinned importer **before
-content mutation**, retaining the existing print prepare/validate gate, lock
-and no-retry semantics. No image pin update, cross-repository source write,
-merge, RPi5 runtime install/restart, or publication is authorized here.
+**Dependency and rollout status (verified 2026-10-29): satisfied.**
+The reviewed `coloring-pages` dependency is source
+`e16ccf09e04bff3004a41a87e22e900472cb9e4a` in immutable image
+`ghcr.io/rozkalnsandris/coloring-pages@sha256:c6a51aa4ffcf3911e8d4118fbbedfd153e155fe4fcf5a8485ea539d238b9a049`.
+It exposes both public category/topic registries and supports importer
+`--topic` persistence. The reviewed ADMIN publisher was rolled out from
+`RPi5_main@b57a845b4dae5c6184ab78a96979a01616fc8343`; live
+`GET /api/categories` returned the canonical German category labels and
+topic registry after the bounded taxonomy User-Agent compatibility fix.
+The protected ADMIN publisher still rejects unavailable/stale taxonomy or an
+incompatible pinned importer **before content mutation**, retaining the print
+prepare/validate gate, shared lock and no-retry semantics. This verification
+does not authorize an actual ZIP publication or any unrelated LIVE mutation.
 
 ## Owner workflow
 
