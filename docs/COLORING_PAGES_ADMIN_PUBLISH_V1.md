@@ -82,7 +82,7 @@ The current immutable Coloring Pages image is used for:
 - `coloring-pages-print-master validate`
 - `coloring-pages-import`
 
-The ADMIN pin is bound to reviewed application source `edfcfbd0c0584a8deb485b885f5c687788fb271f` and immutable image `ghcr.io/rozkalnsandris/coloring-pages@sha256:1a6038e6c6c43d5565b0cda745db90f3fbaa370d3296d16af3571adcb0ae259c`. That release retains the balanced lossless WebP encoder setting and adds real UTC `published_at` metadata for newly imported catalogue entries; legacy catalogue entries are not backfilled or guessed.
+The ADMIN pin is bound to reviewed application source `e16ccf09e04bff3004a41a87e22e900472cb9e4a` and immutable image `ghcr.io/rozkalnsandris/coloring-pages@sha256:c6a51aa4ffcf3911e8d4118fbbedfd153e155fe4fcf5a8485ea539d238b9a049`. That release includes the canonical public category/topic registries and importer `--topic` persistence required by #1276, while retaining the existing publication metadata and media behavior.
 
 ### Mandatory print-quality gate
 
