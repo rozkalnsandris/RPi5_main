@@ -350,7 +350,7 @@ def load_catalog() -> tuple[list[dict], str]:
     return data, hashlib.sha256(raw).hexdigest()
 
 
-def validate_catalog_entry(entry: dict) -> dict:
+def validate_catalog_entry(entry: dict, *, require_current_category: bool = True) -> dict:
     if not isinstance(entry, dict):
         stop("catalog entry is invalid")
     required = {"id", "title", "category", "age", "difficulty"}
@@ -358,7 +358,12 @@ def validate_catalog_entry(entry: dict) -> dict:
         stop("catalog entry is missing required metadata")
     validate_catalog_id(entry["id"])
     validate_title(entry["title"])
-    if entry["category"] not in load_taxonomy()["categories"]:
+    category = entry["category"]
+    if not isinstance(category, str) or not CATALOG_ID.fullmatch(category):
+        stop("catalog entry category is invalid")
+    # Historical archive snapshots are readable without network taxonomy.
+    # Archive and restore mutations retain the default current-category gate.
+    if require_current_category and category not in load_taxonomy()["categories"]:
         stop("catalog entry category is invalid")
     topics = entry.get("topics", [])
     if not isinstance(topics, list) or len(topics) > 1 or any(not isinstance(t, str) for t in topics):
@@ -401,7 +406,7 @@ def load_archive_identity(page_id: str) -> dict:
 
 def load_archive_record(page_id: str) -> dict:
     payload = load_archive_identity(page_id)
-    entry = validate_catalog_entry(payload.get("entry"))
+    entry = validate_catalog_entry(payload.get("entry"), require_current_category=False)
     if entry["id"] != page_id:
         stop("archive entry id mismatch")
     return payload

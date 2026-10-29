@@ -105,10 +105,15 @@ class Tests(unittest.TestCase):
         }
         try:
             admin.write_json(archive/"1234567.json",payload)
-            records=admin.list_archive_records()
+            with patch.object(admin, "load_taxonomy", side_effect=AssertionError("archive read must not fetch public taxonomy")):
+                records=admin.list_archive_records()
             self.assertEqual(len(records),1)
             self.assertEqual(records[0]["id"],"1234567")
             self.assertEqual(records[0]["entry"]["title"],"Birne")
+            # Writes must continue to validate categories against live taxonomy.
+            with patch.object(admin, "load_taxonomy", side_effect=admin.Stop("public taxonomy unavailable")):
+                with self.assertRaisesRegex(admin.Stop, "public taxonomy unavailable"):
+                    admin.validate_catalog_entry(entry)
             catalog.write_text(json.dumps([entry])+"\n",encoding="utf-8")
             self.assertEqual(admin.list_archive_records(),[])
             catalog.write_text("[]\n",encoding="utf-8")
