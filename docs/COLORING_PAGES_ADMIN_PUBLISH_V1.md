@@ -2,6 +2,31 @@
 
 Issue: RPi5_main #1149.
 
+## Canonical category and topic selection (#1276; source-only)
+
+ADMIN reads exactly the deployed public `https://ausmalwiese.de/categories.json` and
+`https://ausmalwiese.de/topics.json` registries. Fixed URLs, schema, unique
+IDs, bounded payloads and SHA-256 combined version are enforced before the
+protected `GET /api/categories` offers a category plus optional topic.
+New deployed registry items appear in the ADMIN menu without duplicated
+hard-coded Python or JavaScript category tables. Topic kind is aligned with
+the public filtering contract: seasonal topics under `jahreszeiten`, other
+topics under other categories. Explicit topic selection (not title inference)
+is passed through job state to every ZIP page as importer `--topic`,
+and verified in the resulting `catalog.json` entry. Legacy records with no
+explicit `topics` remain supported, and edit/archive/restore do not erase them.
+
+**Source/runtime prerequisites remain unfulfilled as of 2026-10-29:**
+`coloring-pages` serves `/topics.json` but not `/categories.json`;
+the currently pinned immutable importer image does not support `--topic`.
+The public repository must separately review, authorize and deploy the
+new public categories endpoint and an importer topic persistence contract
+before this ADMIN change can be installed. The protected ADMIN publisher
+rejects unavailable/stale taxonomy or incompatible pinned importer **before
+content mutation**, retaining the existing print prepare/validate gate, lock
+and no-retry semantics. No image pin update, cross-repository source write,
+merge, RPi5 runtime install/restart, or publication is authorized here.
+
 ## Owner workflow
 
 1. ChatGPT creates approved coloring-page PNG drafts and packages them into one ZIP.

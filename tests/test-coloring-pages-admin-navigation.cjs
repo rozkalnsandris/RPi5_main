@@ -6,14 +6,17 @@ const path = require("node:path");
 const html = fs.readFileSync(path.join(__dirname, "../ops/admin/coloring-pages/index.html"), "utf8");
 const script = html.split("<script>")[1].split("</script>")[0];
 class Element {
-  constructor() { this.value="";this.textContent="";this.style={};this.dataset={};this.attrs={};this.children=[];this.hidden=false;this.disabled=false;this.classList={add(){},remove(){}}; }
+  constructor(tag="div") { this.tag=tag;this.value="";this.textContent="";this.style={};this.dataset={};this.attrs={};this.children=[];this.hidden=false;this.disabled=false;this.classList={add(){},remove(){}}; }
+  get options(){return this.children.filter(x=>x.tag==="option")}
+  remove(i){this.children.splice(i,1)}
+  replaceChildren(...items){this.children=items}
+  querySelectorAll(q){if(q==="option")return this.children.flatMap(x=>x.tag==="option"?[x]:x.children);if(q==="input")return this.children.flatMap(x=>x.children.filter(y=>y.tag==="input"));return []}
   set innerHTML(value) { this.markup=value;this.children=[]; }
   get innerHTML() { return this.markup||""; }
   append(...items) { this.children.push(...items); }
   appendChild(item) { this.append(item); }
   setAttribute(name,value) { this.attrs[name]=value; }
   removeAttribute(name) { delete this.attrs[name]; }
-  querySelectorAll() { return []; }
   focus() { this.focused=true; }
   scrollIntoView() {}
   reportValidity() { return true; }
@@ -23,17 +26,20 @@ function harness() {
   for (const match of html.matchAll(/\bid="([^"]+)"/g)) ids[match[1]]=new Element();
   const pages=[...html.matchAll(/\bdata-page="([^"]+)"/g)].map(m=>Object.assign(new Element(),{dataset:{page:m[1]}}));
   const navs=[...html.matchAll(/\bdata-nav="([^"]+)"/g)].map(m=>Object.assign(new Element(),{dataset:{nav:m[1]}}));
+  for(const id of ["category","catalogFilter","editCategory","topic"])ids[id].children=[new Element("option")];
   const layout=new Element(),skip=new Element(),listeners={},calls=[];
   const location={hash:""};
   const entries=Array.from({length:53},(_,i)=>({id:String(i).padStart(7,"0"),title:"Page "+i,category:i%2?"tiere":"lernen",age:"3-6",difficulty:"easy",thumb:"/media/test/thumb.webp"}));
-  const state={entries,etag:'W/"edge-weakened"',catalogSha:"a".repeat(64),status:200,confirm:false,prompts:[],answers:[]};
+  const state={entries,etag:'W/"edge-weakened"',catalogSha:"a".repeat(64),status:200,confirm:false,prompts:[],answers:[],
+    taxonomy:{version:"b".repeat(64),categories:[{id:"tiere",label:"Tiere"},{id:"lernen",label:"Lernen"},{id:"jahreszeiten",label:"Jahreszeiten & Feste"}],
+    topics:[{id:"weihnachten",label:"Weihnachten",kind:"seasonal"},{id:"obst",label:"Obst",kind:"evergreen"}]}};
   const sandbox={
     document:{
       title:"",
       getElementById:id=>ids[id],
       querySelectorAll:selector=>selector==="[data-page]"?pages:navs,
       querySelector:selector=>selector===".edit-layout"?layout:skip,
-      createElement:()=>new Element()
+      createElement:tag=>new Element(tag)
     }, location,
     history:{replaceState(_a,_b,url){location.hash=url}},
     window:{addEventListener(name,callback){listeners[name]=callback},scrollTo(){},confirm(message){state.confirmText=message;return state.confirm},prompt(message){state.prompts.push(message);return state.answers.length?state.answers.shift():null}},
@@ -46,7 +52,9 @@ function harness() {
       if(url==="/api/catalog")return {ok:true,headers:{get:()=>state.etag},json:async()=>({entries:state.entries,count:state.entries.length,catalog_sha256:state.catalogSha})};
       if(url==="/api/archive")return {ok:true,json:async()=>({entries:[],count:0})};
       if(url==="/api/activity")return {ok:true,json:async()=>({events:[],count:0})};
-      if(url==="/api/categories")return {ok:true,json:async()=>({categories:[]})};
+      if(url==="/api/categories")return {ok:true,json:async()=>state.taxonomy};
+      if(url==="/api/uploads")return {ok:true,json:async()=>({upload_id:"c".repeat(32),count:1,files:[{title:"Weihnachtsstern"}]})};
+      if(url==="/api/jobs")return {ok:true,json:async()=>({job_id:"d".repeat(32),status:"queued",steps:[],results:[]})};
       if(url==="/api/session")return {ok:true,json:async()=>({csrf_token:"fixture"})};
       if(url==="/api/jobs/active")return {ok:true,json:async()=>({active:false})};
       throw Error("Unexpected test request: "+url);
@@ -59,6 +67,23 @@ function harness() {
 async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categoriesReady=true;}
 (async()=>{
   const h=harness();await ready(h);
+  assert.equal(h.s.taxonomyVersion,"b".repeat(64));
+  assert.equal(h.ids.topic.disabled,false);
+  assert.equal(h.ids.category.children.some(x=>x.value==="jahreszeiten"&&x.textContent==="Jahreszeiten & Feste"),true);
+  const options=()=>h.ids.topic.children.flatMap(x=>x.tag==="option"?[x]:x.children);
+  assert.equal(options().some(x=>x.value==="weihnachten"),true);
+  h.ids.category.value="jahreszeiten";h.ids.category.onchange();
+  assert.equal(options().find(x=>x.value==="weihnachten").disabled,false);
+  assert.equal(options().find(x=>x.value==="obst").disabled,true);
+  h.ids.topic.value="weihnachten";
+  await h.s.sendZip({name:"weihnachten.zip"});
+  await h.ids.publish.onclick();
+  const pub=h.calls.find(x=>x.url==="/api/jobs");
+  assert.equal(JSON.parse(pub.options.body).topic,"weihnachten");
+  assert.equal(JSON.parse(pub.options.body).taxonomy_sha256,"b".repeat(64));
+  h.state.taxonomy.topics.push({id:"laterne",label:"Laterne",kind:"seasonal"});
+  await h.s.loadCategories();
+  assert.equal(options().some(x=>x.value==="laterne"),true);
   h.ids.navToggle.onclick();assert.equal(h.ids.primaryNav.dataset.open,"true");assert.equal(h.ids.navToggle.attrs["aria-expanded"],"true");
   h.listeners.keydown({key:"Escape"});assert.equal(h.ids.primaryNav.dataset.open,"false");assert.equal(h.ids.navToggle.focused,true);
   h.ids.navToggle.onclick();h.ids.primaryNav.onclick({target:{closest:()=>({})}});

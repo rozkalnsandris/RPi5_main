@@ -105,10 +105,15 @@ class Tests(unittest.TestCase):
         }
         try:
             admin.write_json(archive/"1234567.json",payload)
-            records=admin.list_archive_records()
+            with patch.object(admin, "load_taxonomy", side_effect=AssertionError("archive read must not fetch public taxonomy")):
+                records=admin.list_archive_records()
             self.assertEqual(len(records),1)
             self.assertEqual(records[0]["id"],"1234567")
             self.assertEqual(records[0]["entry"]["title"],"Birne")
+            # Writes must continue to validate categories against live taxonomy.
+            with patch.object(admin, "load_taxonomy", side_effect=admin.Stop("public taxonomy unavailable")):
+                with self.assertRaisesRegex(admin.Stop, "public taxonomy unavailable"):
+                    admin.validate_catalog_entry(entry)
             catalog.write_text(json.dumps([entry])+"\n",encoding="utf-8")
             self.assertEqual(admin.list_archive_records(),[])
             catalog.write_text("[]\n",encoding="utf-8")
@@ -610,5 +615,49 @@ class StaticTests(unittest.TestCase):
         forbidden=" ".join(diagnostics["forbidden"]).lower()
         for word in ("headers","cookies","tokens","credentials","environment","stdout","stderr","traceback"):
             self.assertIn(word,forbidden)
+
+    def test_taxonomy_is_dynamic_and_rejects_invalid_registry(self):
+        data={
+          "categories":{"schema":"rozkalns.coloring-pages.categories.v1","categories":[{"id":"jahreszeiten","label":"Jahreszeiten & Feste"}]},
+          "topics":{"schema":"rozkalns.coloring-pages.topics.v1","topics":[{"id":"weihnachten","label":"Weihnachten","kind":"seasonal"}]},
+        }
+        class Reply:
+            status=200
+            def __init__(self,url,payload):self.url,self.payload=url,payload
+            def __enter__(self):return self
+            def __exit__(self,*args):pass
+            def geturl(self):return self.url
+            def read(self,limit):return self.payload[:limit]
+        class Opener:
+            def open(self,req,timeout):
+                key="categories" if req.full_url.endswith("/categories.json") else "topics"
+                return Reply(req.full_url,json.dumps(data[key]).encode())
+        with patch.object(admin,"build_opener",return_value=Opener()):
+            first=admin.load_taxonomy()
+            self.assertIn("weihnachten",first["topics"])
+            data["topics"]["topics"].append({"id":"laterne","label":"Laterne","kind":"seasonal"})
+            second=admin.load_taxonomy()
+            self.assertIn("laterne",second["topics"])
+            self.assertNotEqual(first["version"],second["version"])
+            for bad in [
+                {"schema":"wrong","topics":[]},
+                {"schema":data["topics"]["schema"],"topics":[data["topics"]["topics"][0]]*2},
+                {"schema":data["topics"]["schema"],"topics":[{"id":"oops","label":"Test","kind":"unknown"}]},
+            ]:
+                with self.subTest(bad=bad):
+                    data["topics"]=bad
+                    with self.assertRaises(admin.Stop):admin.load_taxonomy()
+    def test_topic_and_category_gates_before_publication(self):
+        src=MODULE.read_text()
+        self.assertLess(src.index('require_category_capability(uid, gid, job["category"])'),src.index('ids = allocate_ids'))
+        self.assertLess(src.index('require_topic_capability(uid, gid)'),src.index('ids = allocate_ids'))
+        self.assertIn('*(["--topic", job["topic"]] if job.get("topic") else [])',src)
+        self.assertIn('matches[0].get("topics") != [job["topic"]]',src)
+        self.assertIn('"topics", "age"',src)
+        with patch.object(admin,"docker_prefix",return_value=["docker","run"]),patch.object(admin.subprocess,"run",return_value=SimpleNamespace(returncode=0,stdout='["jahreszeiten"]')):
+            admin.require_category_capability(1,1,"jahreszeiten")
+            with self.assertRaises(admin.Stop):admin.require_category_capability(1,1,"neue-kategorie")
+        with patch.object(admin,"docker_prefix",return_value=["docker","run"]),patch.object(admin.subprocess,"run",return_value=SimpleNamespace(returncode=0,stdout="--category")):
+            with self.assertRaises(admin.Stop):admin.require_topic_capability(1,1)
 
 if __name__=="__main__":unittest.main()
