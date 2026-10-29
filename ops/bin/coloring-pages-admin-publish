@@ -78,14 +78,61 @@ ALLOWED_AGES = {"3-6", "4-8"}
 ALLOWED_DIFFICULTIES = {"easy", "normal", "detailed"}
 ADMIN_ORIGIN = "https://admin.ausmalwiese.de"
 CSRF_TOKEN = secrets.token_hex(32)
-CATEGORIES = {
-    "tiere": "Tiere",
-    "fahrzeuge": "Fahrzeuge",
-    "alphabet": "Alphabet",
-    "lernen": "Lernen",
-    "figuren": "Figuren & Helden",
-    "jahreszeiten": "Jahreszeiten & Feste",
+# Canonical registries are deployed by coloring-pages. No fallback to static ADMIN labels.
+TAXONOMY_URLS = {"categories": ORIGIN + "/categories.json", "topics": ORIGIN + "/topics.json"}
+TAXONOMY_SCHEMAS = {
+    "categories": "rozkalns.coloring-pages.categories.v1",
+    "topics": "rozkalns.coloring-pages.topics.v1",
 }
+TAXONOMY_MAX_BYTES = 65536
+
+
+class NoTaxonomyRedirect(HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, message, headers, url):
+        return None
+
+
+def load_taxonomy() -> dict:
+    """Fetch exactly the active public registries; fail closed on absence/drift."""
+    output, digests = {}, []
+    for name, url in TAXONOMY_URLS.items():
+        try:
+            request = Request(url, headers={"Accept": "application/json", "Cache-Control": "no-store"})
+            with build_opener(NoTaxonomyRedirect).open(request, timeout=5) as response:
+                if response.status != 200 or response.geturl() != url:
+                    stop("public taxonomy origin is invalid")
+                data = response.read(TAXONOMY_MAX_BYTES + 1)
+        except Stop:
+            raise
+        except Exception:
+            stop("public taxonomy unavailable")
+        if not data or len(data) > TAXONOMY_MAX_BYTES:
+            stop("public taxonomy size invalid")
+        try:
+            registry = json.loads(data)
+        except (UnicodeError, ValueError):
+            stop("public taxonomy JSON invalid")
+        if not isinstance(registry, dict) or registry.get("schema") != TAXONOMY_SCHEMAS[name]:
+            stop("public taxonomy schema invalid")
+        rows = registry.get(name)
+        if not isinstance(rows, list) or not 0 < len(rows) <= 128:
+            stop("public taxonomy list invalid")
+        result = {}
+        for row in rows:
+            if not isinstance(row, dict):
+                stop("public taxonomy entry invalid")
+            ident, label = row.get("id"), row.get("label")
+            if (not isinstance(ident, str) or not CATALOG_ID.fullmatch(ident) or len(ident) > 48 or
+                not isinstance(label, str) or not 1 <= len(label.strip()) <= 80 or ident in result):
+                stop("public taxonomy entry invalid")
+            if name == "topics" and row.get("kind") not in {"seasonal", "evergreen"}:
+                stop("public topic kind invalid")
+            result[ident] = {"id": ident, "label": label.strip(),
+                             **({"kind": row["kind"]} if name == "topics" else {})}
+        output[name] = result
+        digests.append(hashlib.sha256(data).hexdigest())
+    output["version"] = hashlib.sha256(":".join(digests).encode("ascii")).hexdigest()
+    return output
 STEPS = [
     "ZIP-Datei empfangen und entpacken",
     "PNG-Dateien prüfen",
@@ -311,8 +358,11 @@ def validate_catalog_entry(entry: dict) -> dict:
         stop("catalog entry is missing required metadata")
     validate_catalog_id(entry["id"])
     validate_title(entry["title"])
-    if entry["category"] not in CATEGORIES:
+    if entry["category"] not in load_taxonomy()["categories"]:
         stop("catalog entry category is invalid")
+    topics = entry.get("topics", [])
+    if not isinstance(topics, list) or len(topics) > 1 or any(not isinstance(t, str) for t in topics):
+        stop("catalog entry topics are invalid")
     validate_age(entry["age"])
     validate_difficulty(entry["difficulty"])
     for key in ("language", "thumb", "preview", "print"):
@@ -322,7 +372,7 @@ def validate_catalog_entry(entry: dict) -> dict:
 
 
 def catalog_view_entry(entry: dict) -> dict:
-    keys = ("id", "title", "category", "age", "difficulty", "language", "thumb", "preview", "print")
+    keys = ("id", "title", "category", "topics", "age", "difficulty", "language", "thumb", "preview", "print")
     return {key: entry.get(key) for key in keys}
 
 
@@ -785,6 +835,19 @@ def run_tool(entrypoint: str, args: list[str], uid: int, gid: int, job_id: str |
     return run.stdout
 
 
+def require_topic_capability(uid: int, gid: int) -> None:
+    """Immutable importer must explicitly support --topic before the first content write."""
+    try:
+        proc = subprocess.run(
+            [*docker_prefix(uid, gid), "--entrypoint", IMPORTER, IMAGE, "--help"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=30, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        stop("immutable importer topic preflight unavailable")
+    if proc.returncode != 0 or "--topic" not in proc.stdout:
+        stop("immutable importer lacks reviewed topic support")
+
+
 def hardlink_to_inbox(source: Path, destination: Path) -> None:
     if os.path.lexists(destination):
         stop("inbox destination already exists")
@@ -964,6 +1027,13 @@ def run_job(job_id: str) -> None:
                 fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
                 stop("another publication job is active")
+            registry = load_taxonomy()
+            if (registry["version"] != job.get("taxonomy_sha256") or
+                job["category"] not in registry["categories"] or
+                (job.get("topic") and job["topic"] not in registry["topics"])):
+                stop("public taxonomy changed since selection")
+            if job.get("topic"):
+                require_topic_capability(uid, gid)
             audit("job_started", job_id=job_id, upload_id=job["upload_id"], page_count=len(pages))
             update_job(job_id, lambda p: p.update(status="running", started_at=int(time.time())))
             set_step(job_id, 0, "done")
@@ -1009,9 +1079,15 @@ def run_job(job_id: str) -> None:
                 output = run_tool(IMPORTER, [
                     str(inbox), "--id", page_id, "--title", title, "--character", "",
                     "--category", job["category"], "--age", "3-6", "--difficulty", "easy", "--language", "de",
+                    *(["--topic", job["topic"]] if job.get("topic") else []),
                 ], uid, gid, job_id=job_id, page_index=page_index)
                 if f"IMPORTED={page_id} PAGES=1" not in output.splitlines():
                     stop("immutable importer result is ambiguous")
+                if job.get("topic"):
+                    published, _ = load_catalog()
+                    matches = [item for item in published if item.get("id") == page_id]
+                    if len(matches) != 1 or matches[0].get("topics") != [job["topic"]]:
+                        stop("importer did not persist explicit topic")
                 results.append({
                     "id": page_id, "title": title, "source_name": item["source_name"],
                     "sha256": meta["sha256"], "size_bytes": meta["size_bytes"], "status": "imported",
@@ -1229,7 +1305,12 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/session":
                 return self.send_json(200, {"csrf_token": CSRF_TOKEN})
             if path == "/api/categories":
-                return self.send_json(200, {"categories": [{"id": k, "label": v} for k, v in CATEGORIES.items()]})
+                registry = load_taxonomy()
+                return self.send_json(200, {
+                    "categories": list(registry["categories"].values()),
+                    "topics": list(registry["topics"].values()),
+                    "version": registry["version"],
+                })
             if path == "/api/catalog":
                 catalog, catalog_sha256 = load_catalog()
                 return self.send_json(
@@ -1360,7 +1441,7 @@ class Handler(BaseHTTPRequestHandler):
         page_id = validate_catalog_id(raw["id"])
         title = validate_title(raw["title"])
         category = raw["category"]
-        if category not in CATEGORIES:
+        if category not in load_taxonomy()["categories"]:
             stop("category is invalid")
         age = validate_age(raw["age"])
         difficulty = validate_difficulty(raw["difficulty"])
@@ -1642,15 +1723,18 @@ class Handler(BaseHTTPRequestHandler):
 
     def handle_job(self):
         raw = self.read_request_json()
-        if not isinstance(raw, dict) or set(raw) != {"upload_id", "category", "titles"}:
+        if not isinstance(raw, dict) or set(raw) != {"upload_id", "category", "topic", "taxonomy_sha256", "titles"}:
             stop("job request keys are invalid")
         upload_id = raw["upload_id"]
         if not isinstance(upload_id, str) or not TOKEN.fullmatch(upload_id):
             stop("upload id is invalid")
         upload = read_json(UPLOADS / upload_id / "upload.json")
-        category = raw["category"]
-        if category not in CATEGORIES:
-            stop("category is invalid")
+        category, topic, version = raw["category"], raw["topic"], raw["taxonomy_sha256"]
+        registry = load_taxonomy()
+        if (not isinstance(category, str) or category not in registry["categories"] or
+            not isinstance(topic, str) or (topic and topic not in registry["topics"]) or
+            not isinstance(version, str) or version != registry["version"]):
+            stop("category/topic or taxonomy version invalid")
         titles_raw = raw["titles"]
         if not isinstance(titles_raw, list) or len(titles_raw) != len(upload["files"]):
             stop("titles must match uploaded PNG count")
@@ -1668,7 +1752,8 @@ class Handler(BaseHTTPRequestHandler):
             payload = {
                 "schema": "rozkalns.rpi5-main.coloring-pages-admin-job.v1",
                 "job_id": job_id, "upload_id": upload_id,
-                "category": category, "category_label": CATEGORIES[category],
+                "category": category, "category_label": registry["categories"][category]["label"],
+                "topic": topic, "taxonomy_sha256": version,
                 "titles": titles, "status": "queued", "created_at": int(time.time()),
                 "updated_at": int(time.time()), "steps": initial_steps(), "results": [],
             }
