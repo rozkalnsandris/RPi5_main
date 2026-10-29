@@ -196,9 +196,13 @@ def validate_token(raw):
 def send_once(page_id, token):
     token = validate_token(token)
     body = payload(page_id)
-    request = (b"POST /api/v0/count HTTP/1.1\r\nHost: goatcounter.ausmalwiese.invalid\r\n"
-               b"Authorization: Bearer " + token + b"\r\nContent-Type: application/json\r\n"
-               b"Connection: close\r\nContent-Length: " + str(len(body)).encode()
+    headers = ((b"Host", b"goatcounter.ausmalwiese.invalid"),
+               (b"Authorization", b"Bearer " + token),
+               (b"Content-Type", b"application/json"),
+               (b"Connection", b"close"),
+               (b"Content-Length", str(len(body)).encode()))
+    request = (b"POST /api/v0/count HTTP/1.1\r\n"
+               + b"\r\n".join(key + b": " + value for key, value in headers)
                + b"\r\n\r\n" + body)
     deadline = time.monotonic() + BACKEND_SECONDS
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as conn:

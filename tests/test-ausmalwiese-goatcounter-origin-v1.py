@@ -218,6 +218,9 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(len(got), 1)
         head, body = got[0]
         self.assertIn(b"Host: goatcounter.ausmalwiese.invalid", head)
+        headers = dict(line.split(b": ", 1) for line in head.split(b"\r\n")[1:])
+        self.assertEqual(headers[b"Authorization"], b"Bearer " + b"synthetic-count-token")
+        self.assertEqual(headers[b"Content-Length"], str(len(body)).encode())
         self.assertNotIn(b"User-Agent", head)
         self.assertNotIn(b"Referer", head)
         self.assertEqual(body, origin.payload("0123456"))
