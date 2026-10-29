@@ -97,7 +97,7 @@ def load_taxonomy() -> dict:
     output, digests = {}, []
     for name, url in TAXONOMY_URLS.items():
         try:
-            request = Request(url, headers={"Accept": "application/json", "Cache-Control": "no-store"})
+            request = Request(url, headers={"Accept": "application/json", "Cache-Control": "no-store", "User-Agent": "Ausmalwiese-Admin/1.0"})
             with build_opener(NoTaxonomyRedirect).open(request, timeout=5) as response:
                 if response.status != 200 or response.geturl() != url:
                     stop("public taxonomy origin is invalid")
