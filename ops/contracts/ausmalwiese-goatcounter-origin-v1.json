@@ -1,0 +1,18 @@
+{
+  "schema": "ausmalwiese.origin-collector.v1",
+  "issue": 1274,
+  "socket": "/run/ausmalwiese-pageview/origin.sock",
+  "socket_mode": "0660",
+  "fd_name": "origin",
+  "route": "/internal/origin-count",
+  "method": "POST",
+  "body_bytes": 21,
+  "prefix": "/origin-detail-request/",
+  "max_active": 4,
+  "max_header": 512,
+  "request_seconds": 0.2,
+  "backend_seconds": 0.15,
+  "retries": 0,
+  "request_logs": false,
+  "public_listener": false
+}

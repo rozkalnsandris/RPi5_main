@@ -1,0 +1,49 @@
+name: GoatCounter private origin collector
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/ausmalwiese_goatcounter_origin*.py'
+      - 'tests/test-ausmalwiese-goatcounter-origin-v1.py'
+      - 'ops/contracts/ausmalwiese-goatcounter-origin-v1.json'
+      - 'ops/systemd/ausmalwiese-goatcounter-origin.*'
+      - '.github/workflows/ausmalwiese-goatcounter-origin-source.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ausmalwiese_goatcounter_origin*.py'
+      - 'tests/test-ausmalwiese-goatcounter-origin-v1.py'
+      - 'ops/contracts/ausmalwiese-goatcounter-origin-v1.json'
+      - 'ops/systemd/ausmalwiese-goatcounter-origin.*'
+      - '.github/workflows/ausmalwiese-goatcounter-origin-source.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  origin-collector-interop:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Checkout collector source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Checkout immutable accepted application transport proof
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: rozkalnsandris/coloring-pages
+          ref: 5a88082bcbdf97ee5280117c3eed3cf33a13db46
+          path: .transport-fixture
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /tools/goatcounter_origin_isolated_probe.py
+            /tools/goatcounter_origin_nginx.py
+            /tools/goatcounter_origin_contract.py
+            /tools/goatcounter_pageview_contract.py
+            /deploy/nginx.conf
+      - name: Synthetic Unix and backend tests
+        run: python3 tests/test-ausmalwiese-goatcounter-origin-v1.py -v
+      - name: Real Nginx to actual bounded collector with synthetic backend
+        run: python3 scripts/ausmalwiese_goatcounter_origin_interop_v1.py --fixture .transport-fixture
