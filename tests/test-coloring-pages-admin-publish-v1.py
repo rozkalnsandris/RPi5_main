@@ -630,6 +630,10 @@ class StaticTests(unittest.TestCase):
             def read(self,limit):return self.payload[:limit]
         class Opener:
             def open(self,req,timeout):
+                headers=dict(req.header_items())
+                assert headers["Accept"]=="application/json"
+                assert headers["Cache-control"]=="no-store"
+                assert headers["User-agent"]=="Ausmalwiese-Admin/1.0"
                 key="categories" if req.full_url.endswith("/categories.json") else "topics"
                 return Reply(req.full_url,json.dumps(data[key]).encode())
         with patch.object(admin,"build_opener",return_value=Opener()):
