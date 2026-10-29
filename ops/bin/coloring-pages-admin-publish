@@ -835,6 +835,27 @@ def run_tool(entrypoint: str, args: list[str], uid: int, gid: int, job_id: str |
     return run.stdout
 
 
+def require_category_capability(uid: int, gid: int, category: str) -> None:
+    """Ensure the selected category exists inside the *pinned* importer image."""
+    probe = ("import json; p='/usr/local/share/coloring-pages/categories.json';"
+             " d=json.load(open(p,encoding='utf-8'));"
+             " print(json.dumps([x['id'] for x in d['categories']]))")
+    try:
+        result = subprocess.run(
+            [*docker_prefix(uid, gid), "--entrypoint", "/usr/bin/python3", IMAGE, "-c", probe],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=30, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        stop("pinned importer category preflight unavailable")
+    try:
+        ids = json.loads(result.stdout) if result.returncode == 0 else None
+    except (UnicodeError, ValueError):
+        ids = None
+    if (not isinstance(ids, list) or len(ids) != len(set(ids)) or
+        any(not isinstance(x, str) for x in ids) or category not in ids):
+        stop("pinned importer category mismatch")
+
+
 def require_topic_capability(uid: int, gid: int) -> None:
     """Immutable importer must explicitly support --topic before the first content write."""
     try:
@@ -1030,8 +1051,11 @@ def run_job(job_id: str) -> None:
             registry = load_taxonomy()
             if (registry["version"] != job.get("taxonomy_sha256") or
                 job["category"] not in registry["categories"] or
-                (job.get("topic") and job["topic"] not in registry["topics"])):
+                (job.get("topic") and job["topic"] not in registry["topics"]) or
+                (job.get("topic") and
+                 (registry["topics"][job["topic"]]["kind"] == "seasonal") != (job["category"] == "jahreszeiten"))):
                 stop("public taxonomy changed since selection")
+            require_category_capability(uid, gid, job["category"])
             if job.get("topic"):
                 require_topic_capability(uid, gid)
             audit("job_started", job_id=job_id, upload_id=job["upload_id"], page_count=len(pages))
@@ -1733,7 +1757,8 @@ class Handler(BaseHTTPRequestHandler):
         registry = load_taxonomy()
         if (not isinstance(category, str) or category not in registry["categories"] or
             not isinstance(topic, str) or (topic and topic not in registry["topics"]) or
-            not isinstance(version, str) or version != registry["version"]):
+            not isinstance(version, str) or version != registry["version"] or
+            (topic and (registry["topics"][topic]["kind"] == "seasonal") != (category == "jahreszeiten"))):
             stop("category/topic or taxonomy version invalid")
         titles_raw = raw["titles"]
         if not isinstance(titles_raw, list) or len(titles_raw) != len(upload["files"]):

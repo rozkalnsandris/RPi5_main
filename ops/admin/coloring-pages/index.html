@@ -590,7 +590,7 @@ results=document.getElementById("results"),resultTitle=document.getElementById("
 catalogGrid=document.getElementById("catalogGrid"),catalogSearch=document.getElementById("catalogSearch"),catalogFilter=document.getElementById("catalogFilter"),catalogRefresh=document.getElementById("catalogRefresh"),catalogCount=document.getElementById("catalogCount"),catalogFeedback=document.getElementById("catalogFeedback"),
 archiveGrid=document.getElementById("archiveGrid"),archiveCount=document.getElementById("archiveCount"),archiveRefresh=document.getElementById("archiveRefresh"),activityList=document.getElementById("activityList"),activityCount=document.getElementById("activityCount"),activityRefresh=document.getElementById("activityRefresh"),
 editDialog=document.getElementById("editDialog"),editDialogTitle=document.getElementById("editDialogTitle"),editForm=document.getElementById("editForm"),editId=document.getElementById("editId"),editTitle=document.getElementById("editTitle"),editCategory=document.getElementById("editCategory"),editAge=document.getElementById("editAge"),editDifficulty=document.getElementById("editDifficulty"),editSave=document.getElementById("editSave");
-var categoryLabels=Object.create(null),topicLabels=Object.create(null),taxonomyVersion="";
+var categoryLabels=Object.create(null),topicLabels=Object.create(null),topicKinds=Object.create(null),taxonomyVersion="";
 var stepLabels={
 "ZIP-Datei empfangen und entpacken":"Receive and unpack ZIP file",
 "PNG-Dateien prüfen":"Check PNG files",
@@ -623,9 +623,9 @@ async function loadCategories(){
   try{
     var d=await adminFetch("/api/categories");
     if(!Array.isArray(d.categories)||!d.categories.length||!Array.isArray(d.topics)||!d.topics.length||!/^[0-9a-f]{64}$/.test(d.version||""))throw Error("Invalid taxonomy");
-    var cs=Object.create(null),ts=Object.create(null);
+    var cs=Object.create(null),ts=Object.create(null),kinds=Object.create(null);
     d.categories.forEach(function(x){if(!x||typeof x.id!=="string"||typeof x.label!=="string"||Object.prototype.hasOwnProperty.call(cs,x.id))throw Error("Invalid category");cs[x.id]=x.label});
-    d.topics.forEach(function(x){if(!x||typeof x.id!=="string"||typeof x.label!=="string"||!["seasonal","evergreen"].includes(x.kind)||Object.prototype.hasOwnProperty.call(ts,x.id))throw Error("Invalid topic");ts[x.id]=x.label});
+    d.topics.forEach(function(x){if(!x||typeof x.id!=="string"||typeof x.label!=="string"||!["seasonal","evergreen"].includes(x.kind)||Object.prototype.hasOwnProperty.call(ts,x.id))throw Error("Invalid topic");ts[x.id]=x.label;kinds[x.id]=x.kind});
     var option=function(id,label){var n=document.createElement("option");n.value=id;n.textContent=label;return n};
     [category,catalogFilter,editCategory].forEach(function(sel){while(sel.options.length>1)sel.remove(1)});
     topic.replaceChildren(option("","No specific topic"));
@@ -634,13 +634,23 @@ async function loadCategories(){
     group.seasonal.label="Feste & Jahreszeiten";group.evergreen.label="Weitere Themen";
     d.topics.forEach(function(t){group[t.kind].appendChild(option(t.id,t.label))});
     topic.append(group.seasonal,group.evergreen);
-    categoryLabels=cs;topicLabels=ts;taxonomyVersion=d.version;topic.disabled=false;
+    categoryLabels=cs;topicLabels=ts;topicKinds=kinds;taxonomyVersion=d.version;topic.disabled=false;filterTopics();
   }catch(e){taxonomyVersion="";topic.disabled=true;publicationErr("Public categories and topics could not be loaded.");throw e}
 }
 drop.onclick=function(){file.click()};drop.onkeydown=function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();file.click()}};drop.ondragover=function(e){e.preventDefault();drop.classList.add("drag")};drop.ondragleave=function(){drop.classList.remove("drag")};drop.ondrop=function(e){e.preventDefault();drop.classList.remove("drag");if(e.dataTransfer.files[0])sendZip(e.dataTransfer.files[0])};file.onchange=function(){if(file.files[0])sendZip(file.files[0])};
 async function sendZip(f){if(job&&!isTerminal(job)){publicationErr("Wait for the current publishing job to finish.");return}clearPublicationErr();publish.disabled=true;success.style.display="none";process.style.display="none";try{upload=await adminFetch("/api/uploads",{method:"POST",headers:{"Content-Type":"application/zip"},body:f});filebar.style.display="block";filebar.textContent="✓ "+f.name+" — found "+upload.count+" PNG";renderPreviews();updateButton()}catch(e){publicationErr(e.message)}}
 function renderPreviews(){previews.innerHTML="";upload.files.forEach(function(item,i){var c=document.createElement("div");c.className="preview";var img=document.createElement("img");img.src="/api/uploads/"+upload.upload_id+"/preview/"+(i+1);img.alt="Preview "+(i+1);var input=document.createElement("input");input.value=item.title;input.maxLength=128;input.setAttribute("aria-label","Image "+(i+1)+" title");input.oninput=updateButton;c.append(img,input);previews.appendChild(c)})}
-category.onchange=topic.onchange=updateButton;function titles(){return Array.from(previews.querySelectorAll("input")).map(function(x){return x.value.trim()})}
+function filterTopics(){
+  if(topic.disabled)return;
+  var seasonal=category.value==="jahreszeiten";
+  Array.from(topic.querySelectorAll("option")).forEach(function(option){
+    if(option.value&&Object.prototype.hasOwnProperty.call(topicKinds,option.value)){
+      option.disabled=(topicKinds[option.value]==="seasonal")!==seasonal;
+    }
+  });
+  if(topic.selectedOptions&&topic.selectedOptions.length&&topic.selectedOptions[0].disabled)topic.value="";
+}
+category.onchange=function(){filterTopics();updateButton()};topic.onchange=updateButton;function titles(){return Array.from(previews.querySelectorAll("input")).map(function(x){return x.value.trim()})}
 function updateButton(){document.getElementById("activeJobLink").hidden=!(job&&!isTerminal(job));publish.disabled=!!(job&&!isTerminal(job))||!(upload&&taxonomyVersion&&category.value&&!topic.disabled&&titles().length===upload.count&&titles().every(Boolean))}
 publish.onclick=async function(){clearPublicationErr();publish.disabled=true;success.style.display="none";try{var created=await adminFetch("/api/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({upload_id:upload.upload_id,category:category.value,topic:topic.value,taxonomy_sha256:taxonomyVersion,titles:titles()})});startTracking(created,created.restored===true)}catch(e){publicationErr(e.message);updateButton()}}
 async function refresh(){if(!job||pollBusy||isTerminal(job))return;pollBusy=true;try{var latest=await adminFetch("/api/jobs/"+job.job_id);job=latest;pollFailures=0;clearPublicationErr();renderJob(job);if(isTerminal(job)){finishJob(job)}else{scheduleRefresh(1500)}}catch(e){pollFailures=Math.min(pollFailures+1,4);publicationErr("The connection to publishing status was interrupted. Retrying…");scheduleRefresh(Math.min(10000,1500*Math.pow(2,pollFailures)))}finally{pollBusy=false}}
