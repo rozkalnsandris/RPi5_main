@@ -1,0 +1,47 @@
+# Source candidate for #1274; no effect on the installed browser adapter.
+[Unit]
+Description=Private Ausmalwiese origin request collector
+Requires=ausmalwiese-goatcounter-origin.socket ausmalwiese-goatcounter.service
+After=ausmalwiese-goatcounter-origin.socket ausmalwiese-goatcounter.service
+ConditionPathIsExecutable=/usr/local/libexec/ausmalwiese-goatcounter-v1/origin-collector.py
+ConditionPathExists=/usr/local/libexec/ausmalwiese-goatcounter-v1/origin-contract.json
+ConditionPathExists=/usr/local/libexec/ausmalwiese-goatcounter-v1/origin-peer.json
+StartLimitIntervalSec=60
+StartLimitBurst=1
+
+[Service]
+Type=notify
+NotifyAccess=main
+User=ausmalwiese-pageview
+Group=ausmalwiese-pageview
+UMask=0077
+LoadCredential=goatcounter-token:/etc/ausmalwiese-goatcounter/pageview-token
+ExecStart=/usr/local/libexec/ausmalwiese-goatcounter-v1/origin-collector.py --serve --contract=/usr/local/libexec/ausmalwiese-goatcounter-v1/origin-contract.json
+TimeoutStartSec=10
+TimeoutStopSec=2
+Restart=no
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_INET AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=localhost
+# Directory visibility preserves atomic catalog replacement; never pin its inode.
+ReadOnlyPaths=/srv/coloring-pages-content/public
+MemoryMax=192M
+CPUQuota=25%
+TasksMax=12
+LimitNOFILE=64
+StandardOutput=null
+StandardError=null
+
+[Install]
+WantedBy=multi-user.target

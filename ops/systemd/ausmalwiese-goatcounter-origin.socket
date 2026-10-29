@@ -1,0 +1,21 @@
+# Source candidate for #1274. Installation/activation requires exact LIVE authority.
+[Unit]
+Description=Private Ausmalwiese origin counter socket
+Before=ausmalwiese-goatcounter-origin.service
+
+[Socket]
+ListenStream=/run/ausmalwiese-pageview/origin.sock
+FileDescriptorName=origin
+SocketUser=ausmalwiese-pageview
+SocketGroup=ausmalwiese-pageview
+SocketMode=0660
+DirectoryMode=0755
+Backlog=8
+Accept=no
+Service=ausmalwiese-goatcounter-origin.service
+RemoveOnStop=yes
+TriggerLimitIntervalSec=60
+TriggerLimitBurst=1
+
+[Install]
+WantedBy=sockets.target
