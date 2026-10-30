@@ -58,24 +58,27 @@ The importer receives repeated `--additional-category` flags for secondaries.
 For each imported ID the catalogue is checked for exactly one matching entry,
 the ordered categories and any explicit topic.
 
-**Release gate:** This change deliberately **does not update** the ADMIN
-immutable importer IMAGE pin (`sha256:c6a51aa4ffcf3911e8d4118fbbedfd153e155fe4fcf5a8485ea539d238b9a049`).
-That older pinned importer is not assumed to support `--additional-category`.
-A multi-category POST is rejected *before creating a job*, unless the fixed
-pinned image passes a read-only canonical registry and CLI capability probe;
-the probe runs again inside the publication lock, before staging/ID allocation.
-Source merge is not an ADMIN LIVE deployment. A separately reviewed image-pin
-update plus exact owner-authorized RPi5 ADMIN installation and runtime preflight
-are required before multi-category publishing can be enabled. There are no new
-rights to deploy, publish a real ZIP, migrate records, change secrets, or retry
-failed publication.
+**Release gate:** PR #1282 intentionally retained the old ADMIN importer
+pin `sha256:c6a51aa4ffcf3911e8d4118fbbedfd153e155fe4fcf5a8485ea539d238b9a049`. Follow-up issue #1283 repins the **source**
+to the reviewed `sha256:080270f8bf7e98bb2da0cfbfd71434238edbf3ce78f6f5ad10e66c87b3e6b777` image (public source
+`5d67bd1957ec95fb3aaa185cc930d6ea116f67b2`), which exposes repeatable `--additional-category`.
+The public RPi5 container digest and /health+/ready were verified by the owner;
+that evidence **does not** prove the protected ADMIN publisher is installed.
+The runtime still requires a read-only canonical registry and CLI capability
+probe **before job creation** and again under the publication lock before
+staging/ID allocation. A source commit/merge does not install or restart ADMIN.
+Before multi-category publication is considered operational, the exact new
+RPi5_main source must be merged, the ADMIN full installer separately authorized
+and run with active-job/lock preflight, and runtime identity, readiness and the
+pinned importer capability verified. No real ZIP upload, content mutation,
+new permissions, retries, rollback or cleanup are authorized by this source change.
 
 ## Owner workflow
 
 1. ChatGPT creates approved coloring-page PNG drafts and packages them into one ZIP.
 2. The owner opens the protected Ausmalwiese ADMIN page. The admin interface is English, uses the same Baloo 2/Nunito typography as the public Statistics/Traffic dashboards, and provides one header navigation containing Overview, Add pages, Catalog, Archive, Activity, Statistics and Traffic. Below 1200px, the same navigation opens with the Menu button; Escape or choosing a link closes it. The active admin section remains highlighted, including Catalog while editing.
 3. Open **Pievienot**, upload the ZIP and inspect the private previews/titles.
-4. The owner explicitly chooses one canonical category.
+4. The owner explicitly chooses one or more canonical categories; the first is primary.
 5. Press **Sākt publicēšanu**.
 6. The browser polls the job status while RPi5 performs print preparation, validation, ID allocation, import, derivatives/catalog update, sitemap refresh when enabled, and public verification.
 7. PASS shows each published activity ID and direct `https://ausmalwiese.de/detail.html?id=<id>` link.
@@ -125,7 +128,7 @@ The current immutable Coloring Pages image is used for:
 - `coloring-pages-print-master validate`
 - `coloring-pages-import`
 
-The ADMIN pin is bound to reviewed application source `e16ccf09e04bff3004a41a87e22e900472cb9e4a` and immutable image `ghcr.io/rozkalnsandris/coloring-pages@sha256:c6a51aa4ffcf3911e8d4118fbbedfd153e155fe4fcf5a8485ea539d238b9a049`. That release includes the canonical public category/topic registries and importer `--topic` persistence required by #1276, while retaining the existing publication metadata and media behavior.
+The ADMIN source pin targets reviewed application source `5d67bd1957ec95fb3aaa185cc930d6ea116f67b2` and immutable image `ghcr.io/rozkalnsandris/coloring-pages@sha256:080270f8bf7e98bb2da0cfbfd71434238edbf3ce78f6f5ad10e66c87b3e6b777`. The pinned image includes the canonical public category/topic registries, importer `--topic` persistence (#1276), and repeated `--additional-category` (#1281). This is a source-state statement, **not** evidence that the protected RPi5 ADMIN service has been updated; separately authorized guarded LIVE installation and verification remain required.
 
 ### Mandatory print-quality gate
 

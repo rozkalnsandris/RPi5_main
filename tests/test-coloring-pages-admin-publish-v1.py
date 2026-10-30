@@ -305,7 +305,7 @@ class Tests(unittest.TestCase):
         source=MODULE.read_text()
         self.assertNotIn("extractall(",source);self.assertNotIn('"0.0.0.0"',source);self.assertNotIn("rclone",source.lower())
         self.assertIn('HOST = "127.0.0.1"',source);self.assertIn("PUBLISH_LOCK",source)
-        self.assertIn("ghcr.io/rozkalnsandris/coloring-pages@sha256:c6a51aa4ffcf3911e8d4118fbbedfd153e155fe4fcf5a8485ea539d238b9a049",source)
+        self.assertIn("ghcr.io/rozkalnsandris/coloring-pages@sha256:080270f8bf7e98bb2da0cfbfd71434238edbf3ce78f6f5ad10e66c87b3e6b777",source)
         self.assertIn("VALIDATE_PRINT=PASS",source);self.assertIn("detail.html?id=",source)
         prepare=source.index('run_tool(PRINT_MASTER, ["prepare"')
         validate=source.index('run_tool(PRINT_MASTER, ["validate"')
@@ -538,8 +538,13 @@ class StaticTests(unittest.TestCase):
         self.assertEqual(master["safe_margin_color"],"#FFFFFF")
         self.assertEqual(master["fit"],"aspect-ratio-preserving-centered")
         self.assertEqual(contract["publication"]["zip_member_semantics"],"each-png-is-one-independent-single-page-activity")
-        self.assertEqual(contract["runtime"]["source_sha"],"e16ccf09e04bff3004a41a87e22e900472cb9e4a")
-        self.assertEqual(contract["runtime"]["image_ref"],"ghcr.io/rozkalnsandris/coloring-pages@sha256:c6a51aa4ffcf3911e8d4118fbbedfd153e155fe4fcf5a8485ea539d238b9a049")
+        self.assertEqual(contract["runtime"]["source_sha"],"5d67bd1957ec95fb3aaa185cc930d6ea116f67b2")
+        self.assertEqual(contract["runtime"]["image_ref"],"ghcr.io/rozkalnsandris/coloring-pages@sha256:080270f8bf7e98bb2da0cfbfd71434238edbf3ce78f6f5ad10e66c87b3e6b777")
+        self.assertEqual(admin.IMAGE,contract["runtime"]["image_ref"])
+        self.assertNotIn("sha256:c6a51aa4ffcf3911e8d4118fbbedfd153e155fe4fcf5a8485ea539d238b9a049",MODULE.read_text())
+        self.assertTrue(contract["publication"]["multi_category"]["image_pin_changed"])
+        self.assertEqual(contract["publication"]["multi_category"]["pinned_source_sha"],"5d67bd1957ec95fb3aaa185cc930d6ea116f67b2")
+        self.assertEqual(contract["publication"]["multi_category"]["status"],"source-pinned-awaiting-owner-authorized-live-install")
         manager=contract["catalog_management"]
         self.assertEqual(manager["issue"],1172)
         self.assertEqual(manager["validator"],"strong-sha256-etag")
@@ -689,7 +694,14 @@ class StaticTests(unittest.TestCase):
         ]):
             with self.assertRaises(admin.Stop):
                 admin.require_multi_category_capability(1,1,["tiere","jahreszeiten"],registry)
+        with patch.object(admin,"docker_prefix",return_value=["docker","run"]),patch.object(admin.subprocess,"run",side_effect=[
+            SimpleNamespace(returncode=0,stdout='["jahreszeiten", "tiere"]'),
+            SimpleNamespace(returncode=0,stdout="--additional-category"),
+        ]):
+            with self.assertRaises(admin.Stop):
+                admin.require_multi_category_capability(1,1,["tiere","jahreszeiten"],registry)
         src=MODULE.read_text()
+        self.assertNotIn("docker pull",src)
         self.assertLess(src.index("require_multi_category_capability(uid, gid, selected, registry)"),src.index("job_dir = JOBS / job_id"))
         self.assertLess(src.index("require_multi_category_capability(uid, gid, job_categories, registry)"),src.index("ids = allocate_ids"))
         self.assertIn('"--additional-category", cat',src)

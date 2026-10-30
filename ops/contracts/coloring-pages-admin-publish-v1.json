@@ -92,7 +92,7 @@
     "zip_member_semantics": "each-png-is-one-independent-single-page-activity",
     "multi_category": {
       "issue": 1281,
-      "status": "source-only-pinned-importer-capability-required",
+      "status": "source-pinned-awaiting-owner-authorized-live-install",
       "selection": "ordered-chips-primary-first",
       "max_categories": 6,
       "legacy_single_category": true,
@@ -102,14 +102,15 @@
       "importer_additional_category_cli": "repeat---additional-category",
       "importer_preflight": "pinned-image-cli-and-exact-registry-before-job-and-within-publication-lock",
       "persistence_postcheck": "same-id-single-record-category-and-ordered-categories",
-      "image_pin_changed": false,
-      "release_gate": "separate-reviewed-pin-and-owner-authorized-live-install"
+      "image_pin_changed": true,
+      "release_gate": "exact-source-merge-then-separate-owner-live-full-install-and-runtime-capability-verification",
+      "pinned_source_sha": "5d67bd1957ec95fb3aaa185cc930d6ea116f67b2"
     }
   },
   "runtime": {
     "user": "andris",
-    "image_ref": "ghcr.io/rozkalnsandris/coloring-pages@sha256:c6a51aa4ffcf3911e8d4118fbbedfd153e155fe4fcf5a8485ea539d238b9a049",
-    "source_sha": "e16ccf09e04bff3004a41a87e22e900472cb9e4a"
+    "image_ref": "ghcr.io/rozkalnsandris/coloring-pages@sha256:080270f8bf7e98bb2da0cfbfd71434238edbf3ce78f6f5ad10e66c87b3e6b777",
+    "source_sha": "5d67bd1957ec95fb3aaa185cc930d6ea116f67b2"
   },
   "live_activation": "separate-owner-authorization",
   "recovery": {
