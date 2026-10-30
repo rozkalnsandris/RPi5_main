@@ -350,6 +350,32 @@ def load_catalog() -> tuple[list[dict], str]:
     return data, hashlib.sha256(raw).hexdigest()
 
 
+def validated_categories(primary: str, selected, registry: dict) -> list[str]:
+    """Validate canonical, unique, ordered memberships; allow legacy single-category."""
+    known = registry["categories"]
+    if type(primary) is not str or primary not in known:
+        stop("category is invalid")
+    if selected is None:
+        return [primary]
+    if (type(selected) is not list or not 1 <= len(selected) <= min(len(known), 6) or
+        any(type(item) is not str or item not in known for item in selected) or
+        len(set(selected)) != len(selected) or selected[0] != primary):
+        stop("categories must be ordered unique canonical IDs beginning with category")
+    return list(selected)
+
+
+def validated_topic(topic, categories: list[str], registry: dict) -> str:
+    if type(topic) is not str or (topic and topic not in registry["topics"]):
+        stop("topic is invalid")
+    if topic:
+        seasonal = registry["topics"][topic]["kind"] == "seasonal"
+        if seasonal and "jahreszeiten" not in categories:
+            stop("seasonal topic requires Jahreszeiten")
+        if not seasonal and not any(cat != "jahreszeiten" for cat in categories):
+            stop("evergreen topic requires a non-seasonal category")
+    return topic
+
+
 def validate_catalog_entry(entry: dict, *, require_current_category: bool = True) -> dict:
     if not isinstance(entry, dict):
         stop("catalog entry is invalid")
@@ -363,8 +389,17 @@ def validate_catalog_entry(entry: dict, *, require_current_category: bool = True
         stop("catalog entry category is invalid")
     # Historical archive snapshots are readable without network taxonomy.
     # Archive and restore mutations retain the default current-category gate.
-    if require_current_category and category not in load_taxonomy()["categories"]:
+    registry = load_taxonomy() if require_current_category else None
+    if require_current_category and category not in registry["categories"]:
         stop("catalog entry category is invalid")
+    if "categories" in entry:
+        selected = entry["categories"]
+        if (type(selected) is not list or not 1 <= len(selected) <= 6 or
+            any(type(item) is not str or not CATALOG_ID.fullmatch(item) for item in selected) or
+            len(set(selected)) != len(selected) or selected[0] != category):
+            stop("catalog entry categories are invalid")
+        if registry is not None:
+            validated_categories(category, selected, registry)
     topics = entry.get("topics", [])
     if not isinstance(topics, list) or len(topics) > 1 or any(not isinstance(t, str) for t in topics):
         stop("catalog entry topics are invalid")
@@ -377,8 +412,8 @@ def validate_catalog_entry(entry: dict, *, require_current_category: bool = True
 
 
 def catalog_view_entry(entry: dict) -> dict:
-    keys = ("id", "title", "category", "topics", "age", "difficulty", "language", "thumb", "preview", "print")
-    return {key: entry.get(key) for key in keys}
+    keys = ("id", "title", "category", "topics", "age", "difficulty", "language", "thumb", "preview", "print", "categories")
+    return {key: entry.get(key) for key in keys if key != "categories" or key in entry}
 
 
 def archive_path(page_id: str) -> Path:
@@ -874,6 +909,33 @@ def require_topic_capability(uid: int, gid: int) -> None:
         stop("immutable importer lacks reviewed topic support")
 
 
+def require_multi_category_capability(uid: int, gid: int, categories: list[str], registry: dict) -> None:
+    """Read-only capability check of the fixed ADMIN importer image before job creation."""
+    if len(categories) == 1:
+        return
+    probe = ("import json; p='/usr/local/share/coloring-pages/categories.json';"
+             " d=json.load(open(p,encoding='utf-8'));"
+             " print(json.dumps([x['id'] for x in d['categories']]))")
+    try:
+        image_ids = subprocess.run(
+            [*docker_prefix(uid, gid), "--entrypoint", "/usr/bin/python3", IMAGE, "-c", probe],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=30, check=False,
+        )
+        help_result = subprocess.run(
+            [*docker_prefix(uid, gid), "--entrypoint", IMPORTER, IMAGE, "--help"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=30, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        stop("pinned importer multi-category preflight unavailable")
+    try:
+        ids = json.loads(image_ids.stdout) if image_ids.returncode == 0 else None
+    except (UnicodeError, ValueError):
+        ids = None
+    if (type(ids) is not list or ids != list(registry["categories"]) or
+        help_result.returncode != 0 or "--additional-category" not in help_result.stdout):
+        stop("pinned importer lacks reviewed multi-category capability or registry")
+
+
 def hardlink_to_inbox(source: Path, destination: Path) -> None:
     if os.path.lexists(destination):
         stop("inbox destination already exists")
@@ -1054,13 +1116,12 @@ def run_job(job_id: str) -> None:
             except BlockingIOError:
                 stop("another publication job is active")
             registry = load_taxonomy()
-            if (registry["version"] != job.get("taxonomy_sha256") or
-                job["category"] not in registry["categories"] or
-                (job.get("topic") and job["topic"] not in registry["topics"]) or
-                (job.get("topic") and
-                 (registry["topics"][job["topic"]]["kind"] == "seasonal") != (job["category"] == "jahreszeiten"))):
+            if registry["version"] != job.get("taxonomy_sha256"):
                 stop("public taxonomy changed since selection")
+            job_categories = validated_categories(job["category"], job.get("categories"), registry)
+            validated_topic(job.get("topic", ""), job_categories, registry)
             require_category_capability(uid, gid, job["category"])
+            require_multi_category_capability(uid, gid, job_categories, registry)
             if job.get("topic"):
                 require_topic_capability(uid, gid)
             audit("job_started", job_id=job_id, upload_id=job["upload_id"], page_count=len(pages))
@@ -1108,15 +1169,23 @@ def run_job(job_id: str) -> None:
                 output = run_tool(IMPORTER, [
                     str(inbox), "--id", page_id, "--title", title, "--character", "",
                     "--category", job["category"], "--age", "3-6", "--difficulty", "easy", "--language", "de",
+                    *[arg for cat in job_categories[1:] for arg in ("--additional-category", cat)],
                     *(["--topic", job["topic"]] if job.get("topic") else []),
                 ], uid, gid, job_id=job_id, page_index=page_index)
                 if f"IMPORTED={page_id} PAGES=1" not in output.splitlines():
                     stop("immutable importer result is ambiguous")
-                if job.get("topic"):
+                if job.get("topic") or len(job_categories) > 1:
                     published, _ = load_catalog()
-                    matches = [item for item in published if item.get("id") == page_id]
-                    if len(matches) != 1 or matches[0].get("topics") != [job["topic"]]:
+                    matches = [entry for entry in published if entry.get("id") == page_id]
+                    if len(matches) != 1:
+                        stop("importer did not persist the page exactly once")
+                    if job.get("topic") and matches[0].get("topics") != [job["topic"]]:
                         stop("importer did not persist explicit topic")
+                    if len(job_categories) > 1 and (
+                        matches[0].get("category") != job_categories[0] or
+                        matches[0].get("categories") != job_categories
+                    ):
+                        stop("importer did not persist selected categories")
                 results.append({
                     "id": page_id, "title": title, "source_name": item["source_name"],
                     "sha256": meta["sha256"], "size_bytes": meta["size_bytes"], "status": "imported",
@@ -1465,16 +1534,27 @@ class Handler(BaseHTTPRequestHandler):
     def handle_catalog_edit(self):
         expected_sha256 = self.expected_catalog_sha256()
         raw = self.read_request_json()
-        if not isinstance(raw, dict) or set(raw) != {"id", "title", "category", "age", "difficulty"}:
+        legacy_keys = {"id", "title", "category", "age", "difficulty"}
+        modern_keys = legacy_keys | {"categories", "topic", "taxonomy_sha256"}
+        if (not isinstance(raw, dict) or set(raw) not in (legacy_keys, modern_keys) or
+            ("categories" in raw and raw["categories"] is None)):
             stop("catalog edit request keys are invalid")
         page_id = validate_catalog_id(raw["id"])
         title = validate_title(raw["title"])
         category = raw["category"]
-        if category not in load_taxonomy()["categories"]:
-            stop("category is invalid")
+        registry = load_taxonomy()
+        selected = validated_categories(category, raw.get("categories"), registry)
+        if set(raw) == modern_keys:
+            if raw["taxonomy_sha256"] != registry["version"]:
+                stop("catalog edit taxonomy version changed")
+            validated_topic(raw["topic"], selected, registry)
         age = validate_age(raw["age"])
         difficulty = validate_difficulty(raw["difficulty"])
         with acquire_catalog_lock():
+            locked_registry = load_taxonomy()
+            if locked_registry["version"] != registry["version"]:
+                stop("catalog edit taxonomy changed before write")
+            validated_categories(category, raw.get("categories"), locked_registry)
             catalog, current_sha256 = load_catalog()
             if current_sha256 != expected_sha256:
                 self.send_error_json(412, "catalog changed; reload before saving")
@@ -1483,12 +1563,19 @@ class Handler(BaseHTTPRequestHandler):
             if len(matches) != 1:
                 stop("catalog target does not exist exactly once")
             entry = matches[0]
+            if set(raw) == legacy_keys and "categories" in entry:
+                stop("multi-category entry requires an explicit category selection")
+            if set(raw) == legacy_keys and entry.get("topics"):
+                validated_topic(entry["topics"][0], selected, locked_registry)
             changes = {
                 "title": title,
                 "category": category,
                 "age": age,
                 "difficulty": difficulty,
             }
+            if set(raw) == modern_keys:
+                changes["categories"] = selected
+                changes["topics"] = [raw["topic"]] if raw["topic"] else []
             changed_fields = [key for key, value in changes.items() if entry.get(key) != value]
             if not changed_fields:
                 return self.send_json(
@@ -1752,7 +1839,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def handle_job(self):
         raw = self.read_request_json()
-        if not isinstance(raw, dict) or set(raw) != {"upload_id", "category", "topic", "taxonomy_sha256", "titles"}:
+        legacy_keys = {"upload_id", "category", "topic", "taxonomy_sha256", "titles"}
+        if (not isinstance(raw, dict) or set(raw) not in (legacy_keys, legacy_keys | {"categories"}) or
+            ("categories" in raw and raw["categories"] is None)):
             stop("job request keys are invalid")
         upload_id = raw["upload_id"]
         if not isinstance(upload_id, str) or not TOKEN.fullmatch(upload_id):
@@ -1760,10 +1849,9 @@ class Handler(BaseHTTPRequestHandler):
         upload = read_json(UPLOADS / upload_id / "upload.json")
         category, topic, version = raw["category"], raw["topic"], raw["taxonomy_sha256"]
         registry = load_taxonomy()
-        if (not isinstance(category, str) or category not in registry["categories"] or
-            not isinstance(topic, str) or (topic and topic not in registry["topics"]) or
-            not isinstance(version, str) or version != registry["version"] or
-            (topic and (registry["topics"][topic]["kind"] == "seasonal") != (category == "jahreszeiten"))):
+        selected = validated_categories(category, raw.get("categories"), registry)
+        validated_topic(topic, selected, registry)
+        if type(version) is not str or version != registry["version"]:
             stop("category/topic or taxonomy version invalid")
         titles_raw = raw["titles"]
         if not isinstance(titles_raw, list) or len(titles_raw) != len(upload["files"]):
@@ -1776,6 +1864,9 @@ class Handler(BaseHTTPRequestHandler):
                 restored["restored"] = True
                 self.send_json(200, restored)
                 return
+            if len(selected) > 1:
+                uid, gid = owner_ids()
+                require_multi_category_capability(uid, gid, selected, registry)
             job_id = secrets.token_hex(16)
             job_dir = JOBS / job_id
             job_dir.mkdir(mode=0o700)
@@ -1783,6 +1874,7 @@ class Handler(BaseHTTPRequestHandler):
                 "schema": "rozkalns.rpi5-main.coloring-pages-admin-job.v1",
                 "job_id": job_id, "upload_id": upload_id,
                 "category": category, "category_label": registry["categories"][category]["label"],
+                **({"categories": selected} if "categories" in raw else {}),
                 "topic": topic, "taxonomy_sha256": version,
                 "titles": titles, "status": "queued", "created_at": int(time.time()),
                 "updated_at": int(time.time()), "steps": initial_steps(), "results": [],

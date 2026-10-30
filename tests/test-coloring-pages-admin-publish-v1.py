@@ -427,7 +427,7 @@ class StaticTests(unittest.TestCase):
 
     def test_assets_and_contract(self):
         html=(ROOT/"ops/admin/coloring-pages/index.html").read_text()
-        self.assertIn("Publishing and catalog",html);self.assertIn("Choose a category",html)
+        self.assertIn("Publishing and catalog",html);self.assertIn("Choose categories",html)
         self.assertIn('<html lang="en">',html);self.assertIn("--blue:#1474d4",html)
         self.assertIn('class="site-header"',html)
         self.assertIn('class="admin-hero"',html)
@@ -544,7 +544,7 @@ class StaticTests(unittest.TestCase):
         self.assertEqual(manager["issue"],1172)
         self.assertEqual(manager["validator"],"strong-sha256-etag")
         self.assertEqual(manager["write_precondition"],"If-Match-required")
-        self.assertEqual(manager["editable_fields"],["title","category","age","difficulty"])
+        self.assertEqual(manager["editable_fields"],["title","category","categories","topics","age","difficulty"])
         self.assertTrue(manager["physical_delete"])
         self.assertEqual(manager["lifecycle_issue"],1174)
         self.assertEqual(manager["delete_issue"],1178)
@@ -651,6 +651,51 @@ class StaticTests(unittest.TestCase):
                 with self.subTest(bad=bad):
                     data["topics"]=bad
                     with self.assertRaises(admin.Stop):admin.load_taxonomy()
+    def test_multi_category_validation_and_legacy_compatibility(self):
+        registry={
+            "categories":{"tiere":{}, "jahreszeiten":{}, "lernen":{}},
+            "topics":{"weihnachten":{"kind":"seasonal"}, "obst":{"kind":"evergreen"}},
+        }
+        self.assertEqual(admin.validated_categories("tiere",None,registry),["tiere"])
+        chosen=admin.validated_categories("tiere",["tiere","jahreszeiten"],registry)
+        self.assertEqual(chosen,["tiere","jahreszeiten"])
+        self.assertEqual(admin.validated_topic("weihnachten",chosen,registry),"weihnachten")
+        self.assertEqual(admin.validated_topic("obst",chosen,registry),"obst")
+        for selected in ([],["jahreszeiten","tiere"],["tiere","tiere"],["tiere","unknown"],"tiere",["tiere",12]):
+            with self.subTest(selected=selected),self.assertRaises(admin.Stop):
+                admin.validated_categories("tiere",selected,registry)
+        with self.assertRaises(admin.Stop):
+            admin.validated_topic("weihnachten",["tiere"],registry)
+        with self.assertRaises(admin.Stop):
+            admin.validated_topic("obst",["jahreszeiten"],registry)
+        entry={"id":"1234567","title":"Fuchs","category":"tiere","categories":["tiere","jahreszeiten"],
+               "age":"3-6","difficulty":"easy","topics":["weihnachten"]}
+        with patch.object(admin,"load_taxonomy",side_effect=AssertionError("archive read must not fetch network")):
+            self.assertEqual(admin.validate_catalog_entry(entry,require_current_category=False)["categories"],entry["categories"])
+        self.assertEqual(admin.catalog_view_entry(entry)["categories"],entry["categories"])
+        legacy=dict(entry);legacy.pop("categories")
+        self.assertNotIn("categories",admin.catalog_view_entry(legacy))
+
+    def test_pinned_importer_multi_category_gate_and_source_order(self):
+        registry={"categories":{"tiere":{}, "jahreszeiten":{}}}
+        with patch.object(admin,"docker_prefix",return_value=["docker","run"]),patch.object(admin.subprocess,"run",side_effect=[
+            SimpleNamespace(returncode=0,stdout='["tiere", "jahreszeiten"]'),
+            SimpleNamespace(returncode=0,stdout="--additional-category"),
+        ]):
+            admin.require_multi_category_capability(1,1,["tiere","jahreszeiten"],registry)
+        with patch.object(admin,"docker_prefix",return_value=["docker","run"]),patch.object(admin.subprocess,"run",side_effect=[
+            SimpleNamespace(returncode=0,stdout='["tiere", "jahreszeiten"]'),
+            SimpleNamespace(returncode=0,stdout="--category"),
+        ]):
+            with self.assertRaises(admin.Stop):
+                admin.require_multi_category_capability(1,1,["tiere","jahreszeiten"],registry)
+        src=MODULE.read_text()
+        self.assertLess(src.index("require_multi_category_capability(uid, gid, selected, registry)"),src.index("job_dir = JOBS / job_id"))
+        self.assertLess(src.index("require_multi_category_capability(uid, gid, job_categories, registry)"),src.index("ids = allocate_ids"))
+        self.assertIn('"--additional-category", cat',src)
+        self.assertIn('("categories" in raw and raw["categories"] is None)',src)
+        self.assertIn('matches[0].get("categories") != job_categories',src)
+
     def test_topic_and_category_gates_before_publication(self):
         src=MODULE.read_text()
         self.assertLess(src.index('require_category_capability(uid, gid, job["category"])'),src.index('ids = allocate_ids'))

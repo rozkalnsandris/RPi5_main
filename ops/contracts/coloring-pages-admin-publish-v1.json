@@ -89,7 +89,22 @@
       }
     },
     "editorial_quality_gate": "owner-review-before-zip-upload",
-    "zip_member_semantics": "each-png-is-one-independent-single-page-activity"
+    "zip_member_semantics": "each-png-is-one-independent-single-page-activity",
+    "multi_category": {
+      "issue": 1281,
+      "status": "source-only-pinned-importer-capability-required",
+      "selection": "ordered-chips-primary-first",
+      "max_categories": 6,
+      "legacy_single_category": true,
+      "category_primary": "first-selected-id",
+      "taxonomy_sha256_required": true,
+      "category_topic_compatibility": "kind-matches-any-selected-category",
+      "importer_additional_category_cli": "repeat---additional-category",
+      "importer_preflight": "pinned-image-cli-and-exact-registry-before-job-and-within-publication-lock",
+      "persistence_postcheck": "same-id-single-record-category-and-ordered-categories",
+      "image_pin_changed": false,
+      "release_gate": "separate-reviewed-pin-and-owner-authorized-live-install"
+    }
   },
   "runtime": {
     "user": "andris",
@@ -194,6 +209,8 @@
     "editable_fields": [
       "title",
       "category",
+      "categories",
+      "topics",
       "age",
       "difficulty"
     ],
