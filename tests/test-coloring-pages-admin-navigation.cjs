@@ -27,7 +27,7 @@ function harness() {
   for (const match of html.matchAll(/\bid="([^"]+)"/g)) ids[match[1]]=new Element();
   const pages=[...html.matchAll(/\bdata-page="([^"]+)"/g)].map(m=>Object.assign(new Element(),{dataset:{page:m[1]}}));
   const navs=[...html.matchAll(/\bdata-nav="([^"]+)"/g)].map(m=>Object.assign(new Element(),{dataset:{nav:m[1]}}));
-  for(const id of ["category","catalogFilter","editCategory","topic"])ids[id].children=[new Element("option")];
+  for(const id of ["category","catalogFilter","editCategory"])ids[id].children=[new Element("option")];
   const layout=new Element(),skip=new Element(),listeners={},calls=[];
   const location={hash:""};
   const entries=Array.from({length:53},(_,i)=>({id:String(i).padStart(7,"0"),title:"Page "+i,category:i%2?"tiere":"lernen",age:"3-6",difficulty:"easy",thumb:"/media/test/thumb.webp"}));
