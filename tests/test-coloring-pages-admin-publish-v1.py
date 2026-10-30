@@ -693,6 +693,7 @@ class StaticTests(unittest.TestCase):
         self.assertLess(src.index("require_multi_category_capability(uid, gid, selected, registry)"),src.index("job_dir = JOBS / job_id"))
         self.assertLess(src.index("require_multi_category_capability(uid, gid, job_categories, registry)"),src.index("ids = allocate_ids"))
         self.assertIn('"--additional-category", cat',src)
+        self.assertIn('("categories" in raw and raw["categories"] is None)',src)
         self.assertIn('matches[0].get("categories") != job_categories',src)
 
     def test_topic_and_category_gates_before_publication(self):

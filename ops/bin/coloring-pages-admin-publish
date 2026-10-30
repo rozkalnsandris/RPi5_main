@@ -1536,7 +1536,8 @@ class Handler(BaseHTTPRequestHandler):
         raw = self.read_request_json()
         legacy_keys = {"id", "title", "category", "age", "difficulty"}
         modern_keys = legacy_keys | {"categories", "topic", "taxonomy_sha256"}
-        if not isinstance(raw, dict) or set(raw) not in (legacy_keys, modern_keys):
+        if (not isinstance(raw, dict) or set(raw) not in (legacy_keys, modern_keys) or
+            ("categories" in raw and raw["categories"] is None)):
             stop("catalog edit request keys are invalid")
         page_id = validate_catalog_id(raw["id"])
         title = validate_title(raw["title"])
@@ -1839,7 +1840,8 @@ class Handler(BaseHTTPRequestHandler):
     def handle_job(self):
         raw = self.read_request_json()
         legacy_keys = {"upload_id", "category", "topic", "taxonomy_sha256", "titles"}
-        if not isinstance(raw, dict) or set(raw) not in (legacy_keys, legacy_keys | {"categories"}):
+        if (not isinstance(raw, dict) or set(raw) not in (legacy_keys, legacy_keys | {"categories"}) or
+            ("categories" in raw and raw["categories"] is None)):
             stop("job request keys are invalid")
         upload_id = raw["upload_id"]
         if not isinstance(upload_id, str) or not TOKEN.fullmatch(upload_id):
