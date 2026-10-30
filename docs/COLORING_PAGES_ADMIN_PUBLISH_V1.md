@@ -30,6 +30,46 @@ incompatible pinned importer **before content mutation**, retaining the print
 prepare/validate gate, shared lock and no-retry semantics. This verification
 does not authorize an actual ZIP publication or any unrelated LIVE mutation.
 
+## Multiple category ADMIN picker — issue #1281 (source-only)
+
+The public prerequisite is `coloring-pages#432` (merged source
+`5d67bd1957ec95fb3aaa185cc930d6ea116f67b2`). The RPi5 public container
+was verified by the owner with matching immutable digest
+`sha256:080270f8bf7e98bb2da0cfbfd71434238edbf3ce78f6f5ad10e66c87b3e6b777`,
+`/health=200`, and `/ready=200`.
+
+At upload Step 3, choose one or more canonical categories. Selected category
+chips retain order: the first is the primary `category`, all selected values
+appear in ordered `categories[]`. Remove buttons are keyboard accessible and
+move focus back to the native selector. Removed categories become available again.
+No selection means Publish is disabled. `Topic (optional)` remains independent:
+seasonal topics require `jahreszeiten`, evergreen topics require at least one
+other category. Removing the only compatible category visibly clears the topic.
+Each ZIP PNG receives the same ordered categories in its own one-page activity.
+
+The Catalog and Archive display all selected category labels and the Catalog
+filter matches any assigned category. Editing permits category chip changes;
+an incompatible previously assigned topic is cleared, while other metadata,
+archive snapshots, restore, IDs, assets and legacy single-category records
+remain intact. The protected API validates exactly one primary, up to six
+distinct canonical IDs, canonical taxonomy SHA-256 and topic compatibility
+before job creation and again under the existing shared publication lock.
+The importer receives repeated `--additional-category` flags for secondaries.
+For each imported ID the catalogue is checked for exactly one matching entry,
+the ordered categories and any explicit topic.
+
+**Release gate:** This change deliberately **does not update** the ADMIN
+immutable importer IMAGE pin (`sha256:c6a51aa4ffcf3911e8d4118fbbedfd153e155fe4fcf5a8485ea539d238b9a049`).
+That older pinned importer is not assumed to support `--additional-category`.
+A multi-category POST is rejected *before creating a job*, unless the fixed
+pinned image passes a read-only canonical registry and CLI capability probe;
+the probe runs again inside the publication lock, before staging/ID allocation.
+Source merge is not an ADMIN LIVE deployment. A separately reviewed image-pin
+update plus exact owner-authorized RPi5 ADMIN installation and runtime preflight
+are required before multi-category publishing can be enabled. There are no new
+rights to deploy, publish a real ZIP, migrate records, change secrets, or retry
+failed publication.
+
 ## Owner workflow
 
 1. ChatGPT creates approved coloring-page PNG drafts and packages them into one ZIP.
