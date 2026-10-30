@@ -27,7 +27,7 @@ function harness() {
   for (const match of html.matchAll(/\bid="([^"]+)"/g)) ids[match[1]]=new Element();
   const pages=[...html.matchAll(/\bdata-page="([^"]+)"/g)].map(m=>Object.assign(new Element(),{dataset:{page:m[1]}}));
   const navs=[...html.matchAll(/\bdata-nav="([^"]+)"/g)].map(m=>Object.assign(new Element(),{dataset:{nav:m[1]}}));
-  for(const id of ["category","catalogFilter","editCategory"])ids[id].children=[new Element("option")];
+  ids.catalogFilter.children=[new Element("option")];
   const layout=new Element(),skip=new Element(),listeners={},calls=[];
   const location={hash:""};
   const entries=Array.from({length:53},(_,i)=>({id:String(i).padStart(7,"0"),title:"Page "+i,category:i%2?"tiere":"lernen",age:"3-6",difficulty:"easy",thumb:"/media/test/thumb.webp"}));
@@ -70,9 +70,12 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
   const h=harness();await ready(h);
   assert.equal(h.s.taxonomyVersion,"b".repeat(64));
   assert.equal(h.s.topicReady,true);
-  assert.equal(h.ids.category.children.some(x=>x.value==="jahreszeiten"&&x.textContent==="Jahreszeiten & Feste"),true);
+  assert.equal(Object.keys(h.s.categoryInputs).length,3);
+  assert.equal(h.s.categoryInputs.jahreszeiten.value,"jahreszeiten");
+  assert.equal(h.ids.categoryChoices.children[0].children.length,4,"fieldset has legend and categories");
   assert.equal(Object.keys(h.s.topicInputs).length,2);
-  h.ids.category.value="jahreszeiten";h.ids.category.onchange();
+  h.s.categoryInputs.jahreszeiten.checked=true;h.s.categoryInputs.jahreszeiten.onchange();
+  assert.equal(h.ids.categorySummary.textContent,"Choose categories… (1 selected)");
   assert.equal(h.s.topicInputs.weihnachten.disabled,false);
   assert.equal(h.s.topicInputs.obst.disabled,true);
   h.s.topicInputs.weihnachten.checked=true;h.s.topicInputs.weihnachten.onchange();
@@ -86,7 +89,8 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
   h.s.topicInputs.weihnachten.checked=true;h.s.topicInputs.weihnachten.onchange();
   assert.deepEqual(Array.from(h.s.selectedCategories),["jahreszeiten"]);
   assert.equal(h.ids.chosenCategories.children.length,1);
-  assert.equal(h.ids.category.options.find(x=>x.value==="jahreszeiten").disabled,true);
+  assert.equal(h.s.categoryInputs.jahreszeiten.checked,true);
+  assert.equal(h.ids.chosenCategories.children[0].children[0].textContent,"Jahreszeiten & Feste (primary)");
   await h.s.sendZip({name:"weihnachten.zip"});
   await h.ids.publish.onclick();
   const pub=h.calls.find(x=>x.url==="/api/jobs");
@@ -98,12 +102,14 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
   h.state.taxonomy.topics.push({id:"laterne",label:"Laterne",kind:"seasonal"});
   await h.s.loadCategories();
   assert.equal(Object.keys(h.s.topicInputs).includes("laterne"),true);
+  assert.equal(h.s.categoryInputs.jahreszeiten.checked,true,"taxonomy reload preserves category checkboxes");
   const multi=harness();await ready(multi);
-  const add=id=>{multi.ids.category.value=id;multi.ids.category.onchange()};
+  const add=id=>{multi.s.categoryInputs[id].checked=true;multi.s.categoryInputs[id].onchange()};
   add("tiere");add("jahreszeiten");add("lernen");add("lernen");
   assert.deepEqual(Array.from(multi.s.selectedCategories),["tiere","jahreszeiten","lernen"],"duplicate category ignored");
   assert.equal(multi.ids.chosenCategories.children.length,3);
-  assert.equal(multi.ids.category.options.find(x=>x.value==="lernen").disabled,true);
+  assert.equal(multi.s.categoryInputs.lernen.checked,true);
+  assert.equal(multi.ids.categorySummary.textContent,"Choose categories… (3 selected)");
   multi.s.topicInputs.weihnachten.checked=true;multi.s.topicInputs.weihnachten.onchange();
   multi.s.topicInputs.obst.checked=true;multi.s.topicInputs.obst.onchange();
   assert.deepEqual(Array.from(multi.s.selectedTopics),["weihnachten","obst"]);
@@ -111,7 +117,8 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
   multi.ids.chosenCategories.children[1].children[1].onclick();
   assert.deepEqual(Array.from(multi.s.selectedTopics),["obst"],"removing seasonal category clears seasonal topic only");
   assert.equal(multi.ids.chosenTopic.children.length,1,"compatible evergreen topic remains");
-  assert.equal(multi.ids.category.focused,true,"focus returns to category select");
+  assert.equal(multi.ids.categoryPicker.querySelector("summary").focused,true,"chip removal focuses category disclosure");
+  assert.equal(multi.s.categoryInputs.jahreszeiten.checked,false,"removed chip unchecks category");
   multi.ids.chosenCategories.children[0].children[1].onclick();
   assert.deepEqual(Array.from(multi.s.selectedCategories),["lernen"],"next chip becomes primary");
   add("jahreszeiten");
@@ -134,9 +141,16 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
   assert.deepEqual(Array.from(multi.s.editValues().categories),["tiere"]);
   multi.ids.editChosenCategories.children[0].children[1].onclick();
   assert.equal(multi.ids.editSave.disabled,true,"zero-category edit is blocked");
-  multi.ids.editCategory.value="tiere";multi.ids.editCategory.onchange();
+  multi.s.editCategoryInputs.tiere.checked=true;multi.s.editCategoryInputs.tiere.onchange();
+  assert.deepEqual(Array.from(multi.s.editValues().categories),["tiere"],"edit checkbox restores category");
   multi.state.confirm=true; // Allow leaving the deliberately modified first edit.
   multi.go("edit/0000001");
+  assert.equal(multi.s.editCategoryInputs.tiere.checked,true);
+  assert.equal(multi.s.editCategoryInputs.jahreszeiten.checked,true);
+  multi.s.editCategoryInputs.lernen.checked=true;multi.s.editCategoryInputs.lernen.onchange();
+  assert.deepEqual(Array.from(multi.s.editValues().categories),["tiere","jahreszeiten","lernen"],"edit category toggle updates payload");
+  multi.s.editCategoryInputs.lernen.checked=false;multi.s.editCategoryInputs.lernen.onchange();
+  assert.deepEqual(Array.from(multi.s.editValues().categories),["tiere","jahreszeiten"],"edit checkbox untoggle restores original");
   assert.deepEqual(Array.from(multi.s.editSelectedTopics),["obst","weihnachten"],"all edited topics loaded");
   assert.deepEqual(Array.from(multi.s.editValues().topics),["obst","weihnachten"],"catalog edit preserves both topics");
   // Edit checkboxes must mutate the same selectedTopics array that editValues() saves.
@@ -157,6 +171,8 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
   const edited=multi.calls.find(x=>x.url==="/api/catalog/edit");
   assert.equal(JSON.parse(edited.options.body).topic,"obst","primary edited topic submitted");
   assert.deepEqual(JSON.parse(edited.options.body).topics,["obst"],"edited checkbox topic transmitted to API");
+  assert.deepEqual(JSON.parse(edited.options.body).categories,["tiere"],"edited categories transmitted to API");
+  assert.equal(JSON.parse(edited.options.body).category,"tiere","first selected category stays primary");
   h.ids.navToggle.onclick();assert.equal(h.ids.primaryNav.dataset.open,"true");assert.equal(h.ids.navToggle.attrs["aria-expanded"],"true");
   h.listeners.keydown({key:"Escape"});assert.equal(h.ids.primaryNav.dataset.open,"false");assert.equal(h.ids.navToggle.focused,true);
   h.ids.navToggle.onclick();h.ids.primaryNav.onclick({target:{closest:()=>({})}});
