@@ -1,5 +1,18 @@
 # Ausmalwiese admin ZIP publisher v1
 
+## Multiple canonical topics (#1287) — source only
+
+Upstream `coloring-pages#434` was owner-merged as source `1b292b238f491269fa11387b32f9d2742fc3aea1`. The canonical GitHub Actions image-build log recorded immutable image `ghcr.io/rozkalnsandris/coloring-pages@sha256:9ada5cdeca92627b195fa2897ce8e6c6921b47d5cb1cacc90ce6b8c59e6d8a9a` (not a LIVE proof).
+
+The protected ADMIN upload and Catalog/Edit flows accept ordered canonical `topics[]`, retain one optional legacy `topic` first ID, and use accessible native `details/summary` containing `fieldset/legend` and ordinary checkboxes. The upload and edit selections have removable chips; incompatible topics are removed when corresponding categories disappear, while compatible selections and their relative order remain. The native checkbox controls handle keyboard navigation and do not rely on custom ARIA listbox keyboard models or the OS-native single-select dropdown.
+
+ADMIN validates all requested topics against the *live exact taxonomy version* and selected category kinds before job creation and again under the publication lock. For multiple topics, it read-only probes the **pinned image** for exact topic registry IDs and `--additional-topic` CLI support before job creation and again under the lock, rejects any mismatch, passes `--topic` for the first ID and `--additional-topic` for subsequent IDs, and verifies every selected topic was persisted in order. The Catalog editor preserves all existing topics unless explicitly changed; old single-/no-topic submissions remain valid and cannot silently truncate an existing multi-topic entry. Archive snapshots may be read without network taxonomy, while public write validations remain strict.
+
+This feature requires **owner merge and separate owner-authorized guarded ADMIN full installation and restart** because the backend/image changes; `ui-only` is not permitted. GitHub image pin or CI does not prove RPi5 LIVE. No ZIP upload, catalog modification, publication or LIVE operation is authorized by source work alone.
+
+Accessibility references: https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/details ; https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/input/checkbox ; https://www.w3.org/WAI/ARIA/apg/patterns/listbox/ .
+
+
 Issue: RPi5_main #1149.
 
 ## Canonical category and topic selection (#1276)
