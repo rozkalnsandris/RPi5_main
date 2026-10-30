@@ -319,7 +319,7 @@ html{overflow-y:scroll}
         <div class="panel-heading">
           <div class="panel-title"><span class="step-number">3</span><div><span class="panel-kicker">Catalog</span><h2>Choose categories</h2></div></div>
         </div>
-        <div id="chosenCategories" class="category-chips" aria-live="polite"></div><label for="category">Add another category…</label><select id="category"><option value="">Choose a category …</option></select><p class="category-help">Choose at least one category; the first is primary.</p><label for="topic">Topic (optional)</label><select id="topic" disabled><option value="">No specific topic</option></select>
+        <div id="chosenCategories" class="category-chips" aria-live="polite"></div><label for="category">Add another category…</label><select id="category"><option value="">Choose a category …</option></select><p class="category-help">Choose at least one category; the first is primary.</p><label for="topic">Topic (optional)</label><select id="topic" disabled><option value="">No specific topic</option></select><div id="chosenTopic" class="category-chips" aria-live="polite"></div>
       </article>
 
       <article class="admin-panel">
@@ -647,6 +647,16 @@ function refreshEditChips(){
  document.getElementById("editTopicSummary").textContent=editSelectedTopic?(topicLabels[editSelectedTopic]||editSelectedTopic):"None";
  editSave.disabled=!editSelectedCategories.length||editStale;
 }
+function renderSelectedTopic(){
+ var holder=document.getElementById("chosenTopic");holder.replaceChildren();
+ if(!topic.value||!topicLabels[topic.value])return;
+ var chip=document.createElement("span");chip.className="category-chip";
+ var label=document.createElement("span");label.textContent=topicLabels[topic.value];
+ var remove=document.createElement("button");remove.type="button";remove.textContent="×";
+ remove.setAttribute("aria-label","Remove "+label.textContent+" topic");
+ remove.onclick=function(){topic.value="";renderSelectedTopic();updateButton();topic.focus()};
+ chip.append(label,remove);holder.appendChild(chip);
+}
 function refreshUploadChips(){renderChips(selectedCategories,category,chosenCategories,refreshUploadChips);filterTopics();updateButton()}
 async function loadCategories(){
   try{
@@ -678,10 +688,11 @@ function filterTopics(){
   if(opt.value&&Object.prototype.hasOwnProperty.call(topicKinds,opt.value))opt.disabled=!compatibleTopic(topicKinds[opt.value],selectedCategories);
  });
  if(topic.value&&(!topicKinds[topic.value]||!compatibleTopic(topicKinds[topic.value],selectedCategories)))topic.value="";
+ renderSelectedTopic();
 }
 category.onchange=function(){var id=category.value;if(id&&categoryLabels[id]&&!selectedCategories.includes(id))selectedCategories.push(id);refreshUploadChips()};
 editCategory.onchange=function(){var id=editCategory.value;if(id&&categoryLabels[id]&&!editSelectedCategories.includes(id))editSelectedCategories.push(id);refreshEditChips()};
-topic.onchange=updateButton;function titles(){return Array.from(previews.querySelectorAll("input")).map(function(x){return x.value.trim()})}
+topic.onchange=function(){renderSelectedTopic();updateButton()};function titles(){return Array.from(previews.querySelectorAll("input")).map(function(x){return x.value.trim()})}
 function updateButton(){document.getElementById("activeJobLink").hidden=!(job&&!isTerminal(job));publish.disabled=!!(job&&!isTerminal(job))||!(upload&&taxonomyVersion&&selectedCategories.length&&!topic.disabled&&titles().length===upload.count&&titles().every(Boolean))}
 publish.onclick=async function(){if(!selectedCategories.length||publish.disabled)return;clearPublicationErr();publish.disabled=true;success.style.display="none";try{var created=await adminFetch("/api/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({upload_id:upload.upload_id,category:selectedCategories[0],categories:selectedCategories.slice(),topic:topic.value,taxonomy_sha256:taxonomyVersion,titles:titles()})});startTracking(created,created.restored===true)}catch(e){publicationErr(e.message);updateButton()}}
 async function refresh(){if(!job||pollBusy||isTerminal(job))return;pollBusy=true;try{var latest=await adminFetch("/api/jobs/"+job.job_id);job=latest;pollFailures=0;clearPublicationErr();renderJob(job);if(isTerminal(job)){finishJob(job)}else{scheduleRefresh(1500)}}catch(e){pollFailures=Math.min(pollFailures+1,4);publicationErr("The connection to publishing status was interrupted. Retrying…");scheduleRefresh(Math.min(10000,1500*Math.pow(2,pollFailures)))}finally{pollBusy=false}}
