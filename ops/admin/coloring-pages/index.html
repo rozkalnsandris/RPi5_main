@@ -127,6 +127,19 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .category-chip button{min-width:44px;min-height:44px;border:0;border-radius:50%;background:transparent;color:inherit;font-size:22px;cursor:pointer}
 .category-chip button:hover,.category-chip button:focus-visible{background:#fff;outline:2px solid var(--blue)}
 .category-help{margin:5px 0 10px;font-size:12px;color:var(--muted);font-weight:700}
+.topic-picker{margin-top:6px;border:1px solid #cfdaea;border-radius:12px;background:#fff}
+.topic-picker>summary{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;padding:9px 12px;font-size:14px;font-weight:700;color:var(--text);cursor:pointer;list-style:none}
+.topic-picker>summary::-webkit-details-marker{display:none}
+.topic-picker>summary:focus-visible{outline:3px solid var(--blue-deep);outline-offset:3px;border-radius:12px}
+.topic-arrow{font-size:19px;line-height:1;transition:transform .15s}
+.topic-picker[open] .topic-arrow{transform:rotate(180deg)}
+.topic-options{max-height:260px;overflow-y:auto;overscroll-behavior:contain;border-top:1px solid #cfdaea;padding:6px 10px}
+.topic-options fieldset{border:0;margin:0 0 8px;padding:0;min-width:0}
+.topic-options legend{font-size:12px;font-weight:800;color:var(--muted);padding:8px 0 3px}
+.topic-option{display:flex;align-items:center;gap:10px;min-height:44px;padding:6px;border-radius:8px;cursor:pointer;font-size:14px}
+.topic-option input{width:18px;height:18px;flex:none;accent-color:var(--blue-deep)}
+.topic-option:focus-within{outline:2px solid var(--blue-deep);outline-offset:-2px}
+.topic-option:has(input:disabled){opacity:.45;cursor:not-allowed}
 @media(max-width:900px){.overview-grid{gap:12px}.overview-card{padding:20px}.catalog-grid,.archive-grid{grid-template-columns:1fr}.edit-layout{grid-template-columns:220px minmax(0,1fr)}.catalog-toolbar .secondary{grid-column:auto}}
 @media(max-width:620px){.overview-intro,.overview-footer{align-items:stretch;flex-direction:column}.overview-intro{padding:24px}.overview-grid,.edit-layout{grid-template-columns:1fr}.overview-card{padding:24px}.overview-intro h2{font-size:29px}.catalog-toolbar{grid-template-columns:1fr}.activity-item{grid-template-columns:1fr}.activity-item small{grid-row:2}.activity-meta{grid-row:3}.catalog-card{grid-template-columns:64px minmax(0,1fr);padding:12px;column-gap:12px}.catalog-card img{height:90px}.pagination{flex-wrap:wrap}.edit-preview img{max-height:230px}.dialog-actions a{width:100%}.overview-footer .catalog-actions{margin:0}}
 /* One navigation for every admin screen and the related dashboards. */
@@ -319,7 +332,7 @@ html{overflow-y:scroll}
         <div class="panel-heading">
           <div class="panel-title"><span class="step-number">3</span><div><span class="panel-kicker">Catalog</span><h2>Choose categories</h2></div></div>
         </div>
-        <div id="chosenCategories" class="category-chips" aria-live="polite"></div><label for="category">Add another category…</label><select id="category"><option value="">Choose a category …</option></select><p class="category-help">Choose at least one category; the first is primary.</p><label for="topic">Topic (optional)</label><select id="topic" disabled><option value="">No specific topic</option></select><div id="chosenTopic" class="category-chips" aria-live="polite"></div>
+        <div id="chosenCategories" class="category-chips" aria-live="polite"></div><label for="category">Add another category…</label><select id="category"><option value="">Choose a category …</option></select><p class="category-help">Choose at least one category; the first is primary.</p><span class="category-help">Topics (optional)</span><details id="topicPicker" class="topic-picker"><summary><span id="topicSummary">Choose topics…</span><span class="topic-arrow" aria-hidden="true">▾</span></summary><div id="topicChoices" class="topic-options"></div></details><div id="chosenTopic" class="category-chips" aria-live="polite"></div>
       </article>
 
       <article class="admin-panel">
@@ -393,7 +406,7 @@ html{overflow-y:scroll}
     <input id="editId" type="hidden">
     <div class="field-grid">
       <div class="field wide"><label for="editTitle">Title</label><input id="editTitle" maxlength="128" required></div>
-      <div class="field wide"><span class="category-help">Categories (first is primary)</span><div id="editChosenCategories" class="category-chips" aria-live="polite"></div><label for="editCategory">Add another category…</label><select id="editCategory"><option value="">Choose a category …</option></select></div><div class="field"><span>Assigned topic</span><output id="editTopicSummary">None</output></div>
+      <div class="field wide"><span class="category-help">Categories (first is primary)</span><div id="editChosenCategories" class="category-chips" aria-live="polite"></div><label for="editCategory">Add another category…</label><select id="editCategory"><option value="">Choose a category …</option></select></div><div class="field wide"><span class="category-help">Topics (optional)</span><details id="editTopicPicker" class="topic-picker"><summary><span id="editTopicSummary">Choose topics…</span><span class="topic-arrow" aria-hidden="true">▾</span></summary><div id="editTopicChoices" class="topic-options"></div></details><div id="editChosenTopics" class="category-chips" aria-live="polite"></div></div>
       <div class="field"><label for="editAge">Age</label><select id="editAge"><option value="3-6">3–6 years</option><option value="4-8">4–8 years</option></select></div>
       <div class="field"><label for="editDifficulty">Difficulty</label><select id="editDifficulty"><option value="easy">Easy</option><option value="normal">Medium</option><option value="detailed">Detailed</option></select></div>
     </div>
@@ -587,10 +600,10 @@ primaryNav.onclick=function(event){if(event.target.closest("a")){setMenuOpen(fal
 window.addEventListener("keydown",function(event){if(event.key==="Escape"&&primaryNav.dataset.open==="true"){setMenuOpen(false);navToggle.focus()}});
 
 var upload=null,job=null,poll=null,uiTick=null,pollFailures=0,pollBusy=false,csrfToken="",catalogData=null,catalogEtag="";
-var catalogPage=1, PAGE_SIZE=24, currentRoute="", editBaseline="", editEtag="", editStale=false, categoriesReady=false, feedbackTimer=null;var selectedCategories=[],editSelectedCategories=[],editSelectedTopic="";
+var catalogPage=1, PAGE_SIZE=24, currentRoute="", editBaseline="", editEtag="", editStale=false, categoriesReady=false, feedbackTimer=null;var selectedCategories=[],editSelectedCategories=[],selectedTopics=[],editSelectedTopics=[];var topicInputs=Object.create(null),editTopicInputs=Object.create(null),topicReady=false;
 var SESSION_JOB_KEY="ausmalwiese.admin.activeJob.v1";
 var file=document.getElementById("file"),drop=document.getElementById("drop"),filebar=document.getElementById("filebar"),
-previews=document.getElementById("previews"),category=document.getElementById("category"),chosenCategories=document.getElementById("chosenCategories"),topic=document.getElementById("topic"),publish=document.getElementById("publish"),
+previews=document.getElementById("previews"),category=document.getElementById("category"),chosenCategories=document.getElementById("chosenCategories"),topicPicker=document.getElementById("topicPicker"),topicChoices=document.getElementById("topicChoices"),chosenTopic=document.getElementById("chosenTopic"),editTopicPicker=document.getElementById("editTopicPicker"),editTopicChoices=document.getElementById("editTopicChoices"),editChosenTopics=document.getElementById("editChosenTopics"),publish=document.getElementById("publish"),
 process=document.getElementById("process"),steps=document.getElementById("steps"),success=document.getElementById("success"),
 results=document.getElementById("results"),resultTitle=document.getElementById("resultTitle"),errorBox=document.getElementById("error"),
 catalogGrid=document.getElementById("catalogGrid"),catalogSearch=document.getElementById("catalogSearch"),catalogFilter=document.getElementById("catalogFilter"),catalogRefresh=document.getElementById("catalogRefresh"),catalogCount=document.getElementById("catalogCount"),catalogFeedback=document.getElementById("catalogFeedback"),
@@ -641,23 +654,47 @@ function renderChips(list,sel,container,onChange){
  Array.from(sel.options).forEach(function(opt){opt.disabled=!!opt.value&&list.includes(opt.value)});
  sel.value="";
 }
+function makeTopicOptions(container,inputs,list,refresh){
+ container.replaceChildren();
+ ["seasonal","evergreen"].forEach(function(kind){
+  var field=document.createElement("fieldset"),legend=document.createElement("legend");
+  legend.textContent=kind==="seasonal"?"Feste & Jahreszeiten":"Weitere Themen";field.appendChild(legend);
+  Object.keys(topicKinds).forEach(function(id){
+   if(topicKinds[id]!==kind)return;
+   var row=document.createElement("label");row.className="topic-option";
+   var input=document.createElement("input");input.type="checkbox";input.value=id;input.name="topics";
+   var label=document.createElement("span");label.textContent=topicLabels[id];
+   input.onchange=function(){var position=list.indexOf(id);if(input.checked&&position<0)list.push(id);if(!input.checked&&position>=0)list.splice(position,1);refresh()};
+   inputs[id]=input;row.append(input,label);field.appendChild(row);
+  });
+  container.appendChild(field);
+ });
+}
+function refreshTopicSelection(list,chosen,inputs,categories,summary,picker,refresh){
+ var valid=list.filter(function(id){return topicKinds[id]&&compatibleTopic(topicKinds[id],categories)});
+ if(valid.length!==list.length)list.splice(0,list.length,...valid);
+ Object.keys(inputs).forEach(function(id){inputs[id].disabled=!compatibleTopic(topicKinds[id],categories);inputs[id].checked=list.includes(id)});
+ chosen.replaceChildren();
+ list.forEach(function(id){
+  var chip=document.createElement("span");chip.className="category-chip";
+  var label=document.createElement("span");label.textContent=topicLabels[id];
+  var remove=document.createElement("button");remove.type="button";remove.textContent="×";
+  remove.setAttribute("aria-label","Remove "+label.textContent+" topic");
+  remove.onclick=function(){list.splice(list.indexOf(id),1);refresh();picker.querySelector("summary").focus()};
+  chip.append(label,remove);chosen.appendChild(chip);
+ });
+ summary.textContent=list.length?"Choose topics… ("+list.length+" selected)":"Choose topics…";
+}
 function refreshEditChips(){
  renderChips(editSelectedCategories,editCategory,editChosenCategories,refreshEditChips);
- if(editSelectedTopic&&!compatibleTopic(topicKinds[editSelectedTopic],editSelectedCategories))editSelectedTopic="";
- document.getElementById("editTopicSummary").textContent=editSelectedTopic?(topicLabels[editSelectedTopic]||editSelectedTopic):"None";
+ refreshTopicSelection(editSelectedTopics,editChosenTopics,editTopicInputs,editSelectedCategories,document.getElementById("editTopicSummary"),editTopicPicker,refreshEditChips);
  editSave.disabled=!editSelectedCategories.length||editStale;
 }
-function renderSelectedTopic(){
- var holder=document.getElementById("chosenTopic");holder.replaceChildren();
- if(!topic.value||!topicLabels[topic.value])return;
- var chip=document.createElement("span");chip.className="category-chip";
- var label=document.createElement("span");label.textContent=topicLabels[topic.value];
- var remove=document.createElement("button");remove.type="button";remove.textContent="×";
- remove.setAttribute("aria-label","Remove "+label.textContent+" topic");
- remove.onclick=function(){topic.value="";renderSelectedTopic();updateButton();topic.focus()};
- chip.append(label,remove);holder.appendChild(chip);
+function refreshUploadTopics(){
+ refreshTopicSelection(selectedTopics,chosenTopic,topicInputs,selectedCategories,document.getElementById("topicSummary"),topicPicker,refreshUploadTopics);
+ updateButton();
 }
-function refreshUploadChips(){renderChips(selectedCategories,category,chosenCategories,refreshUploadChips);filterTopics();updateButton()}
+function refreshUploadChips(){renderChips(selectedCategories,category,chosenCategories,refreshUploadChips);refreshUploadTopics()}
 async function loadCategories(){
   try{
     var d=await adminFetch("/api/categories");
