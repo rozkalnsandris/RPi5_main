@@ -739,7 +739,7 @@ function populateEdit(){
   var missing=document.getElementById("editMissing"),layout=document.querySelector(".edit-layout");
   missing.hidden=!!x;layout.hidden=!x;
   if(!x){missing.textContent="This entry is no longer in the catalog. Return to Catalog and choose another page.";editBaseline="";return}
-  editId.value=x.id;editTitle.value=x.title||"";editSelectedCategories=categoryMembership(x);editSelectedTopics=Array.isArray(x.topics)?x.topics.slice():[];editAge.value=x.age;editDifficulty.value=x.difficulty;refreshEditChips();
+  editId.value=x.id;editTitle.value=x.title||"";editSelectedCategories=categoryMembership(x);editSelectedTopics.splice(0,editSelectedTopics.length,...(Array.isArray(x.topics)?x.topics:[]));editAge.value=x.age;editDifficulty.value=x.difficulty;refreshEditChips();
   
   editDialogTitle.textContent="Page information";document.getElementById("editPreviewCaption").textContent="ID: "+x.id;
   document.getElementById("editPreview").src="https://ausmalwiese.de"+x.thumb;

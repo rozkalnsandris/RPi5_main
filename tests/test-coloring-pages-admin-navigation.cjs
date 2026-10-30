@@ -139,11 +139,24 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
   multi.go("edit/0000001");
   assert.deepEqual(Array.from(multi.s.editSelectedTopics),["obst","weihnachten"],"all edited topics loaded");
   assert.deepEqual(Array.from(multi.s.editValues().topics),["obst","weihnachten"],"catalog edit preserves both topics");
-  multi.ids.editChosenTopics.children[0].children[1].onclick();
+  // Edit checkboxes must mutate the same selectedTopics array that editValues() saves.
+  multi.s.editTopicInputs.obst.checked=false;multi.s.editTopicInputs.obst.onchange();
+  assert.deepEqual(Array.from(multi.s.editValues().topics),["weihnachten"],"unchecking existing topic updates edit payload");
+  assert.equal(multi.ids.editChosenTopics.children.length,1,"unchecking removes the corresponding chip");
+  multi.s.editTopicInputs.obst.checked=true;multi.s.editTopicInputs.obst.onchange();
+  assert.deepEqual(Array.from(multi.s.editValues().topics),["weihnachten","obst"],"checking adds the topic to edit payload");
+  assert.equal(multi.ids.editChosenTopics.children.length,2,"checking restores the chosen topic chip");
+  multi.ids.editChosenTopics.children[1].children[1].onclick();
   assert.deepEqual(Array.from(multi.s.editSelectedTopics),["weihnachten"]);
   assert.equal(multi.ids.editTopicPicker.querySelector("summary").focused,true);
   multi.ids.editChosenCategories.children[1].children[1].onclick();
   assert.deepEqual(Array.from(multi.s.editSelectedTopics),[],"removing seasonal category removes only incompatible remaining topic");
+  multi.s.editTopicInputs.obst.checked=true;multi.s.editTopicInputs.obst.onchange();
+  assert.deepEqual(Array.from(multi.s.editValues().topics),["obst"],"checkbox selection survives category changes");
+  await multi.ids.editForm.onsubmit({preventDefault(){}});
+  const edited=multi.calls.find(x=>x.url==="/api/catalog/edit");
+  assert.equal(JSON.parse(edited.options.body).topic,"obst","primary edited topic submitted");
+  assert.deepEqual(JSON.parse(edited.options.body).topics,["obst"],"edited checkbox topic transmitted to API");
   h.ids.navToggle.onclick();assert.equal(h.ids.primaryNav.dataset.open,"true");assert.equal(h.ids.navToggle.attrs["aria-expanded"],"true");
   h.listeners.keydown({key:"Escape"});assert.equal(h.ids.primaryNav.dataset.open,"false");assert.equal(h.ids.navToggle.focused,true);
   h.ids.navToggle.onclick();h.ids.primaryNav.onclick({target:{closest:()=>({})}});
