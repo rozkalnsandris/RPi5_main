@@ -120,7 +120,7 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
   assert.deepEqual(Array.from(multi.s.editValues().categories),["tiere"]);
   multi.ids.editChosenCategories.children[0].children[1].onclick();
   assert.equal(multi.ids.editSave.disabled,true,"zero-category edit is blocked");
-  multi.ids.navToggle.onclick();assert.equal(multi.ids.primaryNav.dataset.open,"true");assert.equal(h.ids.navToggle.attrs["aria-expanded"],"true");
+  h.ids.navToggle.onclick();assert.equal(h.ids.primaryNav.dataset.open,"true");assert.equal(h.ids.navToggle.attrs["aria-expanded"],"true");
   h.listeners.keydown({key:"Escape"});assert.equal(h.ids.primaryNav.dataset.open,"false");assert.equal(h.ids.navToggle.focused,true);
   h.ids.navToggle.onclick();h.ids.primaryNav.onclick({target:{closest:()=>({})}});
   assert.equal(h.ids.navToggle.attrs["aria-expanded"],"false");
