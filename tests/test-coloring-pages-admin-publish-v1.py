@@ -305,7 +305,7 @@ class Tests(unittest.TestCase):
         source=MODULE.read_text()
         self.assertNotIn("extractall(",source);self.assertNotIn('"0.0.0.0"',source);self.assertNotIn("rclone",source.lower())
         self.assertIn('HOST = "127.0.0.1"',source);self.assertIn("PUBLISH_LOCK",source)
-        self.assertIn("ghcr.io/rozkalnsandris/coloring-pages@sha256:080270f8bf7e98bb2da0cfbfd71434238edbf3ce78f6f5ad10e66c87b3e6b777",source)
+        self.assertIn("ghcr.io/rozkalnsandris/coloring-pages@sha256:9ada5cdeca92627b195fa2897ce8e6c6921b47d5cb1cacc90ce6b8c59e6d8a9a",source)
         self.assertIn("VALIDATE_PRINT=PASS",source);self.assertIn("detail.html?id=",source)
         prepare=source.index('run_tool(PRINT_MASTER, ["prepare"')
         validate=source.index('run_tool(PRINT_MASTER, ["validate"')
@@ -538,9 +538,11 @@ class StaticTests(unittest.TestCase):
         self.assertEqual(master["safe_margin_color"],"#FFFFFF")
         self.assertEqual(master["fit"],"aspect-ratio-preserving-centered")
         self.assertEqual(contract["publication"]["zip_member_semantics"],"each-png-is-one-independent-single-page-activity")
-        self.assertEqual(contract["runtime"]["source_sha"],"5d67bd1957ec95fb3aaa185cc930d6ea116f67b2")
-        self.assertEqual(contract["runtime"]["image_ref"],"ghcr.io/rozkalnsandris/coloring-pages@sha256:080270f8bf7e98bb2da0cfbfd71434238edbf3ce78f6f5ad10e66c87b3e6b777")
+        self.assertEqual(contract["runtime"]["source_sha"],"1b292b238f491269fa11387b32f9d2742fc3aea1")
+        self.assertEqual(contract["runtime"]["image_ref"],"ghcr.io/rozkalnsandris/coloring-pages@sha256:9ada5cdeca92627b195fa2897ce8e6c6921b47d5cb1cacc90ce6b8c59e6d8a9a")
         self.assertEqual(admin.IMAGE,contract["runtime"]["image_ref"])
+        self.assertEqual(contract["publication"]["multi_topic"]["issue"],1287)
+        self.assertEqual(contract["publication"]["multi_topic"]["max_topics"],21)
         self.assertNotIn("sha256:c6a51aa4ffcf3911e8d4118fbbedfd153e155fe4fcf5a8485ea539d238b9a049",MODULE.read_text())
         self.assertTrue(contract["publication"]["multi_category"]["image_pin_changed"])
         self.assertEqual(contract["publication"]["multi_category"]["pinned_source_sha"],"5d67bd1957ec95fb3aaa185cc930d6ea116f67b2")
@@ -681,6 +683,60 @@ class StaticTests(unittest.TestCase):
         legacy=dict(entry);legacy.pop("categories")
         self.assertNotIn("categories",admin.catalog_view_entry(legacy))
 
+    def test_ordered_multi_topic_validation_and_archive_contract(self):
+        registry={
+            "categories":{"tiere":{}, "jahreszeiten":{}},
+            "topics":{"bauernhof":{"kind":"evergreen"},
+                      "blumen":{"kind":"evergreen"},
+                      "weihnachten":{"kind":"seasonal"}},
+        }
+        cats=["tiere","jahreszeiten"]
+        self.assertEqual(admin.validated_topics("",None,cats,registry),[])
+        self.assertEqual(admin.validated_topics("bauernhof",None,cats,registry),["bauernhof"])
+        self.assertEqual(admin.validated_topics("bauernhof",["bauernhof","weihnachten","blumen"],cats,registry),
+                         ["bauernhof","weihnachten","blumen"])
+        self.assertEqual(admin.validated_topics("",[],cats,registry),[])
+        for first,chosen,categories in [
+            ("bauernhof",["weihnachten","bauernhof"],cats),
+            ("bauernhof",["bauernhof","bauernhof"],cats),
+            ("bauernhof",["bauernhof","invalid"],cats),
+            ("bauernhof",["bauernhof","weihnachten"],["tiere"]),
+            ("weihnachten",["weihnachten","bauernhof"],["jahreszeiten"]),
+            ("",["bauernhof"],cats),
+            ("bauernhof","bauernhof",cats),
+            ("bauernhof",[None],cats),
+        ]:
+            with self.subTest(first=first,chosen=chosen,categories=categories),self.assertRaises(admin.Stop):
+                admin.validated_topics(first,chosen,categories,registry)
+        entry={"id":"1234567","title":"Farm","category":"tiere","categories":cats,
+               "age":"3-6","difficulty":"easy","topics":["bauernhof","weihnachten"]}
+        with patch.object(admin,"load_taxonomy",side_effect=AssertionError("archive must not use network")):
+            self.assertEqual(admin.validate_catalog_entry(entry,require_current_category=False)["topics"],entry["topics"])
+        with patch.object(admin,"load_taxonomy",return_value=registry):
+            self.assertEqual(admin.validate_catalog_entry(entry)["topics"],entry["topics"])
+            for invalid in (["bauernhof","bauernhof"], ["unknown"], [None]):
+                bad=dict(entry,topics=invalid)
+                with self.assertRaises(admin.Stop):admin.validate_catalog_entry(bad)
+
+    def test_multi_topic_immutable_capability_gate(self):
+        registry={"topics":{"bauernhof":{},"weihnachten":{}}}
+        with patch.object(admin,"docker_prefix",return_value=["docker","run"]),patch.object(admin.subprocess,"run",side_effect=[
+            SimpleNamespace(returncode=0,stdout='["bauernhof","weihnachten"]'),
+            SimpleNamespace(returncode=0,stdout="--topic --additional-topic"),
+        ]):
+            admin.require_multi_topic_capability(1,1,["bauernhof","weihnachten"],registry)
+        with patch.object(admin,"docker_prefix",return_value=["docker","run"]),patch.object(admin.subprocess,"run",side_effect=[
+            SimpleNamespace(returncode=0,stdout='["bauernhof","weihnachten"]'),
+            SimpleNamespace(returncode=0,stdout="--topic"),
+        ]):
+            with self.assertRaises(admin.Stop):
+                admin.require_multi_topic_capability(1,1,["bauernhof","weihnachten"],registry)
+        source=MODULE.read_text()
+        self.assertLess(source.index("require_multi_topic_capability(uid, gid, topics, registry)"),
+                        source.index("job_dir = JOBS / job_id"))
+        self.assertLess(source.index("require_multi_topic_capability(uid, gid, job_topics, registry)"),
+                        source.index("ids = allocate_ids"))
+
     def test_pinned_importer_multi_category_gate_and_source_order(self):
         registry={"categories":{"tiere":{}, "jahreszeiten":{}}}
         with patch.object(admin,"docker_prefix",return_value=["docker","run"]),patch.object(admin.subprocess,"run",side_effect=[
@@ -712,8 +768,8 @@ class StaticTests(unittest.TestCase):
         src=MODULE.read_text()
         self.assertLess(src.index('require_category_capability(uid, gid, job["category"])'),src.index('ids = allocate_ids'))
         self.assertLess(src.index('require_topic_capability(uid, gid)'),src.index('ids = allocate_ids'))
-        self.assertIn('*(["--topic", job["topic"]] if job.get("topic") else [])',src)
-        self.assertIn('matches[0].get("topics") != [job["topic"]]',src)
+        self.assertIn('("--topic" if i == 0 else "--additional-topic"), t',src)
+        self.assertIn('matches[0].get("topics") != job_topics',src)
         self.assertIn('"topics", "age"',src)
         with patch.object(admin,"docker_prefix",return_value=["docker","run"]),patch.object(admin.subprocess,"run",return_value=SimpleNamespace(returncode=0,stdout='["jahreszeiten"]')):
             admin.require_category_capability(1,1,"jahreszeiten")

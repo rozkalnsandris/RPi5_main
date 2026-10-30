@@ -105,12 +105,27 @@
       "image_pin_changed": true,
       "release_gate": "exact-source-merge-then-separate-owner-live-full-install-and-runtime-capability-verification",
       "pinned_source_sha": "5d67bd1957ec95fb3aaa185cc930d6ea116f67b2"
+    },
+    "multi_topic": {
+      "issue": 1287,
+      "status": "source-only-awaiting-owner-authorized-live-full-install",
+      "selection": "ordered-native-details-checkboxes-with-removable-chips",
+      "legacy_single_topic": true,
+      "max_topics": 21,
+      "topic_primary": "first-selected-id-or-empty",
+      "taxonomy_sha256_required": true,
+      "category_topic_compatibility": "each-kind-matches-at-least-one-selected-category",
+      "importer_additional_topic_cli": "repeat---additional-topic",
+      "importer_preflight": "pinned-immutable-image-cli-and-exact-registry-before-job-and-within-publication-lock",
+      "persistence_postcheck": "same-id-single-record-ordered-topics",
+      "release_gate": "owner-merge-then-separate-owner-live-full-install-and-runtime-verification",
+      "pinned_source_sha": "1b292b238f491269fa11387b32f9d2742fc3aea1"
     }
   },
   "runtime": {
     "user": "andris",
-    "image_ref": "ghcr.io/rozkalnsandris/coloring-pages@sha256:080270f8bf7e98bb2da0cfbfd71434238edbf3ce78f6f5ad10e66c87b3e6b777",
-    "source_sha": "5d67bd1957ec95fb3aaa185cc930d6ea116f67b2"
+    "image_ref": "ghcr.io/rozkalnsandris/coloring-pages@sha256:9ada5cdeca92627b195fa2897ce8e6c6921b47d5cb1cacc90ce6b8c59e6d8a9a",
+    "source_sha": "1b292b238f491269fa11387b32f9d2742fc3aea1"
   },
   "live_activation": "separate-owner-authorization",
   "recovery": {

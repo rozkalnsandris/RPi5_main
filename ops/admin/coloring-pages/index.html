@@ -127,6 +127,19 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .category-chip button{min-width:44px;min-height:44px;border:0;border-radius:50%;background:transparent;color:inherit;font-size:22px;cursor:pointer}
 .category-chip button:hover,.category-chip button:focus-visible{background:#fff;outline:2px solid var(--blue)}
 .category-help{margin:5px 0 10px;font-size:12px;color:var(--muted);font-weight:700}
+.topic-picker{margin-top:6px;border:1px solid #cfdaea;border-radius:12px;background:#fff}
+.topic-picker>summary{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;padding:9px 12px;font-size:14px;font-weight:700;color:var(--text);cursor:pointer;list-style:none}
+.topic-picker>summary::-webkit-details-marker{display:none}
+.topic-picker>summary:focus-visible{outline:3px solid var(--blue-deep);outline-offset:3px;border-radius:12px}
+.topic-arrow{font-size:19px;line-height:1;transition:transform .15s}
+.topic-picker[open] .topic-arrow{transform:rotate(180deg)}
+.topic-options{max-height:260px;overflow-y:auto;overscroll-behavior:contain;border-top:1px solid #cfdaea;padding:6px 10px}
+.topic-options fieldset{border:0;margin:0 0 8px;padding:0;min-width:0}
+.topic-options legend{font-size:12px;font-weight:800;color:var(--muted);padding:8px 0 3px}
+.topic-option{display:flex;align-items:center;gap:10px;min-height:44px;padding:6px;border-radius:8px;cursor:pointer;font-size:14px}
+.topic-option input{width:18px;height:18px;flex:none;accent-color:var(--blue-deep)}
+.topic-option:focus-within{outline:2px solid var(--blue-deep);outline-offset:-2px}
+.topic-option:has(input:disabled){opacity:.45;cursor:not-allowed}
 @media(max-width:900px){.overview-grid{gap:12px}.overview-card{padding:20px}.catalog-grid,.archive-grid{grid-template-columns:1fr}.edit-layout{grid-template-columns:220px minmax(0,1fr)}.catalog-toolbar .secondary{grid-column:auto}}
 @media(max-width:620px){.overview-intro,.overview-footer{align-items:stretch;flex-direction:column}.overview-intro{padding:24px}.overview-grid,.edit-layout{grid-template-columns:1fr}.overview-card{padding:24px}.overview-intro h2{font-size:29px}.catalog-toolbar{grid-template-columns:1fr}.activity-item{grid-template-columns:1fr}.activity-item small{grid-row:2}.activity-meta{grid-row:3}.catalog-card{grid-template-columns:64px minmax(0,1fr);padding:12px;column-gap:12px}.catalog-card img{height:90px}.pagination{flex-wrap:wrap}.edit-preview img{max-height:230px}.dialog-actions a{width:100%}.overview-footer .catalog-actions{margin:0}}
 /* One navigation for every admin screen and the related dashboards. */
@@ -319,7 +332,7 @@ html{overflow-y:scroll}
         <div class="panel-heading">
           <div class="panel-title"><span class="step-number">3</span><div><span class="panel-kicker">Catalog</span><h2>Choose categories</h2></div></div>
         </div>
-        <div id="chosenCategories" class="category-chips" aria-live="polite"></div><label for="category">Add another category…</label><select id="category"><option value="">Choose a category …</option></select><p class="category-help">Choose at least one category; the first is primary.</p><label for="topic">Topic (optional)</label><select id="topic" disabled><option value="">No specific topic</option></select><div id="chosenTopic" class="category-chips" aria-live="polite"></div>
+        <div id="chosenCategories" class="category-chips" aria-live="polite"></div><label for="category">Add another category…</label><select id="category"><option value="">Choose a category …</option></select><p class="category-help">Choose at least one category; the first is primary.</p><span class="category-help">Topics (optional)</span><details id="topicPicker" class="topic-picker"><summary><span id="topicSummary">Choose topics…</span><span class="topic-arrow" aria-hidden="true">▾</span></summary><div id="topicChoices" class="topic-options"></div></details><div id="chosenTopic" class="category-chips" aria-live="polite"></div>
       </article>
 
       <article class="admin-panel">
@@ -393,7 +406,7 @@ html{overflow-y:scroll}
     <input id="editId" type="hidden">
     <div class="field-grid">
       <div class="field wide"><label for="editTitle">Title</label><input id="editTitle" maxlength="128" required></div>
-      <div class="field wide"><span class="category-help">Categories (first is primary)</span><div id="editChosenCategories" class="category-chips" aria-live="polite"></div><label for="editCategory">Add another category…</label><select id="editCategory"><option value="">Choose a category …</option></select></div><div class="field"><span>Assigned topic</span><output id="editTopicSummary">None</output></div>
+      <div class="field wide"><span class="category-help">Categories (first is primary)</span><div id="editChosenCategories" class="category-chips" aria-live="polite"></div><label for="editCategory">Add another category…</label><select id="editCategory"><option value="">Choose a category …</option></select></div><div class="field wide"><span class="category-help">Topics (optional)</span><details id="editTopicPicker" class="topic-picker"><summary><span id="editTopicSummary">Choose topics…</span><span class="topic-arrow" aria-hidden="true">▾</span></summary><div id="editTopicChoices" class="topic-options"></div></details><div id="editChosenTopics" class="category-chips" aria-live="polite"></div></div>
       <div class="field"><label for="editAge">Age</label><select id="editAge"><option value="3-6">3–6 years</option><option value="4-8">4–8 years</option></select></div>
       <div class="field"><label for="editDifficulty">Difficulty</label><select id="editDifficulty"><option value="easy">Easy</option><option value="normal">Medium</option><option value="detailed">Detailed</option></select></div>
     </div>
@@ -587,10 +600,10 @@ primaryNav.onclick=function(event){if(event.target.closest("a")){setMenuOpen(fal
 window.addEventListener("keydown",function(event){if(event.key==="Escape"&&primaryNav.dataset.open==="true"){setMenuOpen(false);navToggle.focus()}});
 
 var upload=null,job=null,poll=null,uiTick=null,pollFailures=0,pollBusy=false,csrfToken="",catalogData=null,catalogEtag="";
-var catalogPage=1, PAGE_SIZE=24, currentRoute="", editBaseline="", editEtag="", editStale=false, categoriesReady=false, feedbackTimer=null;var selectedCategories=[],editSelectedCategories=[],editSelectedTopic="";
+var catalogPage=1, PAGE_SIZE=24, currentRoute="", editBaseline="", editEtag="", editStale=false, categoriesReady=false, feedbackTimer=null;var selectedCategories=[],editSelectedCategories=[],selectedTopics=[],editSelectedTopics=[];var topicInputs=Object.create(null),editTopicInputs=Object.create(null),topicReady=false;
 var SESSION_JOB_KEY="ausmalwiese.admin.activeJob.v1";
 var file=document.getElementById("file"),drop=document.getElementById("drop"),filebar=document.getElementById("filebar"),
-previews=document.getElementById("previews"),category=document.getElementById("category"),chosenCategories=document.getElementById("chosenCategories"),topic=document.getElementById("topic"),publish=document.getElementById("publish"),
+previews=document.getElementById("previews"),category=document.getElementById("category"),chosenCategories=document.getElementById("chosenCategories"),topicPicker=document.getElementById("topicPicker"),topicChoices=document.getElementById("topicChoices"),chosenTopic=document.getElementById("chosenTopic"),editTopicPicker=document.getElementById("editTopicPicker"),editTopicChoices=document.getElementById("editTopicChoices"),editChosenTopics=document.getElementById("editChosenTopics"),publish=document.getElementById("publish"),
 process=document.getElementById("process"),steps=document.getElementById("steps"),success=document.getElementById("success"),
 results=document.getElementById("results"),resultTitle=document.getElementById("resultTitle"),errorBox=document.getElementById("error"),
 catalogGrid=document.getElementById("catalogGrid"),catalogSearch=document.getElementById("catalogSearch"),catalogFilter=document.getElementById("catalogFilter"),catalogRefresh=document.getElementById("catalogRefresh"),catalogCount=document.getElementById("catalogCount"),catalogFeedback=document.getElementById("catalogFeedback"),
@@ -641,23 +654,47 @@ function renderChips(list,sel,container,onChange){
  Array.from(sel.options).forEach(function(opt){opt.disabled=!!opt.value&&list.includes(opt.value)});
  sel.value="";
 }
+function makeTopicOptions(container,inputs,list,refresh){
+ container.replaceChildren();
+ ["seasonal","evergreen"].forEach(function(kind){
+  var field=document.createElement("fieldset"),legend=document.createElement("legend");
+  legend.textContent=kind==="seasonal"?"Feste & Jahreszeiten":"Weitere Themen";field.appendChild(legend);
+  Object.keys(topicKinds).forEach(function(id){
+   if(topicKinds[id]!==kind)return;
+   var row=document.createElement("label");row.className="topic-option";
+   var input=document.createElement("input");input.type="checkbox";input.value=id;input.name="topics";
+   var label=document.createElement("span");label.textContent=topicLabels[id];
+   input.onchange=function(){var position=list.indexOf(id);if(input.checked&&position<0)list.push(id);if(!input.checked&&position>=0)list.splice(position,1);refresh()};
+   inputs[id]=input;row.append(input,label);field.appendChild(row);
+  });
+  container.appendChild(field);
+ });
+}
+function refreshTopicSelection(list,chosen,inputs,categories,summary,picker,refresh){
+ var valid=list.filter(function(id){return topicKinds[id]&&compatibleTopic(topicKinds[id],categories)});
+ if(valid.length!==list.length)list.splice(0,list.length,...valid);
+ Object.keys(inputs).forEach(function(id){inputs[id].disabled=!compatibleTopic(topicKinds[id],categories);inputs[id].checked=list.includes(id)});
+ chosen.replaceChildren();
+ list.forEach(function(id){
+  var chip=document.createElement("span");chip.className="category-chip";
+  var label=document.createElement("span");label.textContent=topicLabels[id];
+  var remove=document.createElement("button");remove.type="button";remove.textContent="×";
+  remove.setAttribute("aria-label","Remove "+label.textContent+" topic");
+  remove.onclick=function(){list.splice(list.indexOf(id),1);refresh();picker.querySelector("summary").focus()};
+  chip.append(label,remove);chosen.appendChild(chip);
+ });
+ summary.textContent=list.length?"Choose topics… ("+list.length+" selected)":"Choose topics…";
+}
 function refreshEditChips(){
  renderChips(editSelectedCategories,editCategory,editChosenCategories,refreshEditChips);
- if(editSelectedTopic&&!compatibleTopic(topicKinds[editSelectedTopic],editSelectedCategories))editSelectedTopic="";
- document.getElementById("editTopicSummary").textContent=editSelectedTopic?(topicLabels[editSelectedTopic]||editSelectedTopic):"None";
+ refreshTopicSelection(editSelectedTopics,editChosenTopics,editTopicInputs,editSelectedCategories,document.getElementById("editTopicSummary"),editTopicPicker,refreshEditChips);
  editSave.disabled=!editSelectedCategories.length||editStale;
 }
-function renderSelectedTopic(){
- var holder=document.getElementById("chosenTopic");holder.replaceChildren();
- if(!topic.value||!topicLabels[topic.value])return;
- var chip=document.createElement("span");chip.className="category-chip";
- var label=document.createElement("span");label.textContent=topicLabels[topic.value];
- var remove=document.createElement("button");remove.type="button";remove.textContent="×";
- remove.setAttribute("aria-label","Remove "+label.textContent+" topic");
- remove.onclick=function(){topic.value="";renderSelectedTopic();updateButton();topic.focus()};
- chip.append(label,remove);holder.appendChild(chip);
+function refreshUploadTopics(){
+ refreshTopicSelection(selectedTopics,chosenTopic,topicInputs,selectedCategories,document.getElementById("topicSummary"),topicPicker,refreshUploadTopics);
+ updateButton();
 }
-function refreshUploadChips(){renderChips(selectedCategories,category,chosenCategories,refreshUploadChips);filterTopics();updateButton()}
+function refreshUploadChips(){renderChips(selectedCategories,category,chosenCategories,refreshUploadChips);refreshUploadTopics()}
 async function loadCategories(){
   try{
     var d=await adminFetch("/api/categories");
@@ -667,34 +704,24 @@ async function loadCategories(){
     d.topics.forEach(function(x){if(!x||typeof x.id!=="string"||typeof x.label!=="string"||!["seasonal","evergreen"].includes(x.kind)||Object.prototype.hasOwnProperty.call(ts,x.id))throw Error("Invalid topic");ts[x.id]=x.label;kinds[x.id]=x.kind});
     var option=function(id,label){var n=document.createElement("option");n.value=id;n.textContent=label;return n};
     [category,catalogFilter,editCategory].forEach(function(sel){while(sel.options.length>1)sel.remove(1)});
-    topic.replaceChildren(option("","No specific topic"));
     d.categories.forEach(function(c){[category,catalogFilter,editCategory].forEach(function(sel){sel.appendChild(option(c.id,c.label))})});
-    var group={seasonal:document.createElement("optgroup"),evergreen:document.createElement("optgroup")};
-    group.seasonal.label="Feste & Jahreszeiten";group.evergreen.label="Weitere Themen";
-    d.topics.forEach(function(t){group[t.kind].appendChild(option(t.id,t.label))});
-    topic.append(group.seasonal,group.evergreen);
-    categoryLabels=cs;topicLabels=ts;topicKinds=kinds;taxonomyVersion=d.version;topic.disabled=false;
- selectedCategories=selectedCategories.filter(function(x){return Object.prototype.hasOwnProperty.call(cs,x)});
- editSelectedCategories=editSelectedCategories.filter(function(x){return Object.prototype.hasOwnProperty.call(cs,x)});
- refreshUploadChips();refreshEditChips();
-  }catch(e){taxonomyVersion="";topic.disabled=true;publicationErr("Public categories and topics could not be loaded.");throw e}
+    categoryLabels=cs;topicLabels=ts;topicKinds=kinds;taxonomyVersion=d.version;topicReady=true;
+    topicInputs=Object.create(null);editTopicInputs=Object.create(null);
+    makeTopicOptions(topicChoices,topicInputs,selectedTopics,refreshUploadTopics);
+    makeTopicOptions(editTopicChoices,editTopicInputs,editSelectedTopics,refreshEditChips);
+    selectedCategories=selectedCategories.filter(function(x){return Object.prototype.hasOwnProperty.call(cs,x)});
+    editSelectedCategories=editSelectedCategories.filter(function(x){return Object.prototype.hasOwnProperty.call(cs,x)});
+    refreshUploadChips();refreshEditChips();
+  }catch(e){taxonomyVersion="";topicReady=false;publicationErr("Public categories and topics could not be loaded.");throw e}
 }
 drop.onclick=function(){file.click()};drop.onkeydown=function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();file.click()}};drop.ondragover=function(e){e.preventDefault();drop.classList.add("drag")};drop.ondragleave=function(){drop.classList.remove("drag")};drop.ondrop=function(e){e.preventDefault();drop.classList.remove("drag");if(e.dataTransfer.files[0])sendZip(e.dataTransfer.files[0])};file.onchange=function(){if(file.files[0])sendZip(file.files[0])};
 async function sendZip(f){if(job&&!isTerminal(job)){publicationErr("Wait for the current publishing job to finish.");return}clearPublicationErr();publish.disabled=true;success.style.display="none";process.style.display="none";try{upload=await adminFetch("/api/uploads",{method:"POST",headers:{"Content-Type":"application/zip"},body:f});filebar.style.display="block";filebar.textContent="✓ "+f.name+" — found "+upload.count+" PNG";renderPreviews();updateButton()}catch(e){publicationErr(e.message)}}
 function renderPreviews(){previews.innerHTML="";upload.files.forEach(function(item,i){var c=document.createElement("div");c.className="preview";var img=document.createElement("img");img.src="/api/uploads/"+upload.upload_id+"/preview/"+(i+1);img.alt="Preview "+(i+1);var input=document.createElement("input");input.value=item.title;input.maxLength=128;input.setAttribute("aria-label","Image "+(i+1)+" title");input.oninput=updateButton;c.append(img,input);previews.appendChild(c)})}
-function filterTopics(){
- if(topic.disabled)return;
- Array.from(topic.querySelectorAll("option")).forEach(function(opt){
-  if(opt.value&&Object.prototype.hasOwnProperty.call(topicKinds,opt.value))opt.disabled=!compatibleTopic(topicKinds[opt.value],selectedCategories);
- });
- if(topic.value&&(!topicKinds[topic.value]||!compatibleTopic(topicKinds[topic.value],selectedCategories)))topic.value="";
- renderSelectedTopic();
-}
 category.onchange=function(){var id=category.value;if(id&&categoryLabels[id]&&!selectedCategories.includes(id))selectedCategories.push(id);refreshUploadChips()};
 editCategory.onchange=function(){var id=editCategory.value;if(id&&categoryLabels[id]&&!editSelectedCategories.includes(id))editSelectedCategories.push(id);refreshEditChips()};
-topic.onchange=function(){renderSelectedTopic();updateButton()};function titles(){return Array.from(previews.querySelectorAll("input")).map(function(x){return x.value.trim()})}
-function updateButton(){document.getElementById("activeJobLink").hidden=!(job&&!isTerminal(job));publish.disabled=!!(job&&!isTerminal(job))||!(upload&&taxonomyVersion&&selectedCategories.length&&!topic.disabled&&titles().length===upload.count&&titles().every(Boolean))}
-publish.onclick=async function(){if(!selectedCategories.length||publish.disabled)return;clearPublicationErr();publish.disabled=true;success.style.display="none";try{var created=await adminFetch("/api/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({upload_id:upload.upload_id,category:selectedCategories[0],categories:selectedCategories.slice(),topic:topic.value,taxonomy_sha256:taxonomyVersion,titles:titles()})});startTracking(created,created.restored===true)}catch(e){publicationErr(e.message);updateButton()}}
+function titles(){return Array.from(previews.querySelectorAll("input")).map(function(x){return x.value.trim()})}
+function updateButton(){document.getElementById("activeJobLink").hidden=!(job&&!isTerminal(job));publish.disabled=!!(job&&!isTerminal(job))||!(upload&&taxonomyVersion&&selectedCategories.length&&topicReady&&titles().length===upload.count&&titles().every(Boolean))}
+publish.onclick=async function(){if(!selectedCategories.length||publish.disabled)return;clearPublicationErr();publish.disabled=true;success.style.display="none";try{var created=await adminFetch("/api/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({upload_id:upload.upload_id,category:selectedCategories[0],categories:selectedCategories.slice(),topic:selectedTopics[0]||"",topics:selectedTopics.slice(),taxonomy_sha256:taxonomyVersion,titles:titles()})});startTracking(created,created.restored===true)}catch(e){publicationErr(e.message);updateButton()}}
 async function refresh(){if(!job||pollBusy||isTerminal(job))return;pollBusy=true;try{var latest=await adminFetch("/api/jobs/"+job.job_id);job=latest;pollFailures=0;clearPublicationErr();renderJob(job);if(isTerminal(job)){finishJob(job)}else{scheduleRefresh(1500)}}catch(e){pollFailures=Math.min(pollFailures+1,4);publicationErr("The connection to publishing status was interrupted. Retrying…");scheduleRefresh(Math.min(10000,1500*Math.pow(2,pollFailures)))}finally{pollBusy=false}}
 function renderJob(j){steps.innerHTML="";j.steps.forEach(function(s,i){var row=document.createElement("div");row.className="row "+s.status;var dur="";if(s.started_at){var end=s.finished_at||Math.floor(Date.now()/1000);dur=(end-s.started_at)+" s"}var label=(stepLabels[s.label]||s.label)+(s.detail?" — "+s.detail:"");row.innerHTML="<span class=dot>"+(s.status==="done"?"✓":(i+1))+"</span><span>"+escapeHtml(label)+"</span><span class=status>"+escapeHtml(statusLabels[s.status]||s.status)+"</span><span class=duration>"+dur+"</span>";steps.appendChild(row)})}
 function renderResults(items,partial){if(!items||!items.length)return;success.style.display="block";resultTitle.textContent=partial?"Partially complete — processed pages":"✓ Published successfully!";results.innerHTML="";items.forEach(function(x){var d=document.createElement("div");d.className="result";var status=x.status==="published"?"Published":"Imported";var link=x.url?"<br><a target=_blank rel=noopener href='"+x.url+"'>Open published page ↗</a>":"";d.innerHTML="<strong>"+escapeHtml(x.title)+"</strong><br><small>ID: "+escapeHtml(x.id)+" · "+status+"</small>"+link;results.appendChild(d)})}
@@ -703,7 +730,7 @@ function showCatalogFeedback(m){clearTimeout(feedbackTimer);catalogFeedback.text
 async function loadCatalog(){catalogCount.textContent="Loading catalog…";try{var r=await fetch("/api/catalog",{headers:{"X-Ausmalwiese-Admin":"1"},cache:"no-store"});var d=await r.json();if(!r.ok)throw new Error(d.error||("HTTP "+r.status));catalogData=d;catalogEtag=catalogValidator(d.catalog_sha256);renderCatalog();document.getElementById("overviewCatalog").textContent=d.count;if(currentRoute.startsWith("edit/")&&!editBaseline)populateEdit()}catch(e){document.getElementById("overviewCatalog").textContent="—";if(currentRoute.startsWith("edit/")){document.getElementById("editMissing").textContent="Could not load the catalog. Return to Catalog and select Refresh."}catalogCount.textContent="Could not load the catalog.";catalogGrid.innerHTML='<p class="catalog-empty">'+escapeHtml(e.message)+'</p>'}}
 function filteredCatalog(){if(!catalogData)return[];var q=catalogSearch.value.trim().toLocaleLowerCase("de-DE"),cat=catalogFilter.value;return catalogData.entries.filter(function(x){return(!cat||categoryMembership(x).includes(cat))&&(!q||String(x.id).toLowerCase().includes(q)||String(x.title||"").toLocaleLowerCase("de-DE").includes(q))})}
 function renderCatalog(){if(!catalogData)return;var matches=filteredCatalog(),pages=Math.max(1,Math.ceil(matches.length/PAGE_SIZE));catalogPage=Math.min(catalogPage,pages);var start=(catalogPage-1)*PAGE_SIZE,items=matches.slice(start,start+PAGE_SIZE);catalogCount.textContent=matches.length?"Showing "+(start+1)+"–"+(start+items.length)+" of "+matches.length+" entries":"No matching pages found.";document.getElementById("catalogPageStatus").textContent=catalogPage+" / "+pages;document.getElementById("catalogPrevious").disabled=catalogPage===1;document.getElementById("catalogNext").disabled=catalogPage===pages;catalogGrid.innerHTML="";if(!items.length){catalogGrid.innerHTML='<p class="catalog-empty">No matching pages found.</p>';return}items.forEach(function(x){var card=document.createElement("article");card.className="catalog-card";var img=document.createElement("img");img.loading="lazy";img.alt="";img.src="https://ausmalwiese.de"+x.thumb;var h=document.createElement("h3");h.textContent=x.title||x.id;var meta=document.createElement("small");meta.textContent="ID: "+x.id;var tags=document.createElement("div");tags.className="catalog-tags";[...categoryMembership(x).map(categoryText),...(Array.isArray(x.topics)?x.topics.map(function(t){return topicLabels[t]||t}):[]),x.age+" years",({easy:"Easy",normal:"Medium",detailed:"Detailed"}[x.difficulty]||x.difficulty)].forEach(function(t){var s=document.createElement("span");s.className="catalog-tag";s.textContent=t;tags.appendChild(s)});var actions=document.createElement("div");actions.className="catalog-actions";var edit=document.createElement("a");edit.className="secondary";edit.textContent="Edit";edit.href="#edit/"+encodeURIComponent(x.id);edit.setAttribute("aria-label","Edit: "+(x.title||x.id));var open=document.createElement("a");open.className="secondary";open.target="_blank";open.rel="noopener";open.href="https://ausmalwiese.de/detail.html?id="+encodeURIComponent(x.id);open.textContent="Open ↗";var archive=document.createElement("button");archive.className="danger";archive.type="button";archive.textContent="Archive";archive.onclick=function(){archiveCatalogEntry(x)};actions.append(edit,open,archive);card.append(img,h,meta,tags,actions);catalogGrid.appendChild(card)})}
-function editValues(){return {id:editId.value,title:editTitle.value.trim(),category:editSelectedCategories[0]||"",categories:editSelectedCategories.slice(),topic:editSelectedTopic,taxonomy_sha256:taxonomyVersion,age:editAge.value,difficulty:editDifficulty.value}}
+function editValues(){return {id:editId.value,title:editTitle.value.trim(),category:editSelectedCategories[0]||"",categories:editSelectedCategories.slice(),topic:editSelectedTopics[0]||"",topics:editSelectedTopics.slice(),taxonomy_sha256:taxonomyVersion,age:editAge.value,difficulty:editDifficulty.value}}
 function editDirty(){return !!editBaseline&&JSON.stringify(editValues())!==editBaseline}
 function populateEdit(){
   if(!catalogData||!categoriesReady)return;
@@ -712,7 +739,7 @@ function populateEdit(){
   var missing=document.getElementById("editMissing"),layout=document.querySelector(".edit-layout");
   missing.hidden=!!x;layout.hidden=!x;
   if(!x){missing.textContent="This entry is no longer in the catalog. Return to Catalog and choose another page.";editBaseline="";return}
-  editId.value=x.id;editTitle.value=x.title||"";editSelectedCategories=categoryMembership(x);editSelectedTopic=Array.isArray(x.topics)&&x.topics.length?x.topics[0]:"";editAge.value=x.age;editDifficulty.value=x.difficulty;refreshEditChips();
+  editId.value=x.id;editTitle.value=x.title||"";editSelectedCategories=categoryMembership(x);editSelectedTopics.splice(0,editSelectedTopics.length,...(Array.isArray(x.topics)?x.topics:[]));editAge.value=x.age;editDifficulty.value=x.difficulty;refreshEditChips();
   
   editDialogTitle.textContent="Page information";document.getElementById("editPreviewCaption").textContent="ID: "+x.id;
   document.getElementById("editPreview").src="https://ausmalwiese.de"+x.thumb;
