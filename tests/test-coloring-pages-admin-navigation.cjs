@@ -10,6 +10,7 @@ class Element {
   get options(){return this.children.filter(x=>x.tag==="option")}
   remove(i){this.children.splice(i,1)}
   replaceChildren(...items){this.children=items}
+  querySelector(q){if(q==="summary"){if(!this.summary)this.summary=new Element("summary");return this.summary}return null}
   querySelectorAll(q){if(q==="option")return this.children.flatMap(x=>x.tag==="option"?[x]:x.children);if(q==="input")return this.children.flatMap(x=>x.children.filter(y=>y.tag==="input"));return []}
   set innerHTML(value) { this.markup=value;this.children=[]; }
   get innerHTML() { return this.markup||""; }
@@ -68,22 +69,21 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
 (async()=>{
   const h=harness();await ready(h);
   assert.equal(h.s.taxonomyVersion,"b".repeat(64));
-  assert.equal(h.ids.topic.disabled,false);
+  assert.equal(h.s.topicReady,true);
   assert.equal(h.ids.category.children.some(x=>x.value==="jahreszeiten"&&x.textContent==="Jahreszeiten & Feste"),true);
-  const options=()=>h.ids.topic.children.flatMap(x=>x.tag==="option"?[x]:x.children);
-  assert.equal(options().some(x=>x.value==="weihnachten"),true);
+  assert.equal(Object.keys(h.s.topicInputs).length,2);
   h.ids.category.value="jahreszeiten";h.ids.category.onchange();
-  assert.equal(options().find(x=>x.value==="weihnachten").disabled,false);
-  assert.equal(options().find(x=>x.value==="obst").disabled,true);
-  h.ids.topic.value="weihnachten";h.ids.topic.onchange();
-  assert.equal(h.ids.chosenTopic.children.length,1,"selected topic has a visible chip");
+  assert.equal(h.s.topicInputs.weihnachten.disabled,false);
+  assert.equal(h.s.topicInputs.obst.disabled,true);
+  h.s.topicInputs.weihnachten.checked=true;h.s.topicInputs.weihnachten.onchange();
+  assert.deepEqual(Array.from(h.s.selectedTopics),["weihnachten"]);
+  assert.equal(h.ids.chosenTopic.children.length,1,"selected topic has a chip");
   assert.equal(h.ids.chosenTopic.children[0].children[0].textContent,"Weihnachten");
   assert.equal(h.ids.chosenTopic.children[0].children[1].attrs["aria-label"],"Remove Weihnachten topic");
   h.ids.chosenTopic.children[0].children[1].onclick();
-  assert.equal(h.ids.topic.value,"","chip removes selected topic");
-  assert.equal(h.ids.chosenTopic.children.length,0,"removing topic clears visible chip");
-  assert.equal(h.ids.topic.focused,true,"removal returns focus to topic selector");
-  h.ids.topic.value="weihnachten";h.ids.topic.onchange();
+  assert.equal(h.s.selectedTopics.length,0);
+  assert.equal(h.ids.topicPicker.querySelector("summary").focused,true,"removal focuses disclosure");
+  h.s.topicInputs.weihnachten.checked=true;h.s.topicInputs.weihnachten.onchange();
   assert.deepEqual(Array.from(h.s.selectedCategories),["jahreszeiten"]);
   assert.equal(h.ids.chosenCategories.children.length,1);
   assert.equal(h.ids.category.options.find(x=>x.value==="jahreszeiten").disabled,true);
@@ -91,24 +91,26 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
   await h.ids.publish.onclick();
   const pub=h.calls.find(x=>x.url==="/api/jobs");
   assert.equal(JSON.parse(pub.options.body).topic,"weihnachten");
+  assert.deepEqual(JSON.parse(pub.options.body).topics,["weihnachten"]);
   assert.deepEqual(JSON.parse(pub.options.body).categories,["jahreszeiten"]);
   assert.equal(JSON.parse(pub.options.body).category,"jahreszeiten");
   assert.equal(JSON.parse(pub.options.body).taxonomy_sha256,"b".repeat(64));
   h.state.taxonomy.topics.push({id:"laterne",label:"Laterne",kind:"seasonal"});
   await h.s.loadCategories();
-  assert.equal(options().some(x=>x.value==="laterne"),true);
+  assert.equal(Object.keys(h.s.topicInputs).includes("laterne"),true);
   const multi=harness();await ready(multi);
   const add=id=>{multi.ids.category.value=id;multi.ids.category.onchange()};
   add("tiere");add("jahreszeiten");add("lernen");add("lernen");
   assert.deepEqual(Array.from(multi.s.selectedCategories),["tiere","jahreszeiten","lernen"],"duplicate category ignored");
   assert.equal(multi.ids.chosenCategories.children.length,3);
   assert.equal(multi.ids.category.options.find(x=>x.value==="lernen").disabled,true);
-  assert.equal(multi.ids.topic.options.length>0,true);
-  multi.ids.topic.value="weihnachten";multi.ids.topic.onchange();
-  assert.equal(multi.ids.chosenTopic.children.length,1);
+  multi.s.topicInputs.weihnachten.checked=true;multi.s.topicInputs.weihnachten.onchange();
+  multi.s.topicInputs.obst.checked=true;multi.s.topicInputs.obst.onchange();
+  assert.deepEqual(Array.from(multi.s.selectedTopics),["weihnachten","obst"]);
+  assert.equal(multi.ids.chosenTopic.children.length,2);
   multi.ids.chosenCategories.children[1].children[1].onclick();
-  assert.equal(multi.ids.topic.value,"","removing only seasonal category clears seasonal topic");
-  assert.equal(multi.ids.chosenTopic.children.length,0,"cleared incompatible topic no longer has a chip");
+  assert.deepEqual(Array.from(multi.s.selectedTopics),["obst"],"removing seasonal category clears seasonal topic only");
+  assert.equal(multi.ids.chosenTopic.children.length,1,"compatible evergreen topic remains");
   assert.equal(multi.ids.category.focused,true,"focus returns to category select");
   multi.ids.chosenCategories.children[0].children[1].onclick();
   assert.deepEqual(Array.from(multi.s.selectedCategories),["lernen"],"next chip becomes primary");
@@ -119,6 +121,8 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
   assert.deepEqual(JSON.parse(multiJob.options.body).categories,["lernen","jahreszeiten"]);
   assert.equal(JSON.parse(multiJob.options.body).category,"lernen");
   multi.state.entries[0].categories=["lernen","tiere"];
+  multi.state.entries[1].categories=["tiere","jahreszeiten"];
+  multi.state.entries[1].topics=["obst","weihnachten"];
   await multi.s.loadCatalog();
   multi.ids.catalogFilter.value="tiere";
   assert.equal(multi.s.filteredCatalog().some(x=>x.id==="0000000"),true,"any-category catalog filter");
@@ -130,6 +134,14 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
   assert.deepEqual(Array.from(multi.s.editValues().categories),["tiere"]);
   multi.ids.editChosenCategories.children[0].children[1].onclick();
   assert.equal(multi.ids.editSave.disabled,true,"zero-category edit is blocked");
+  multi.go("edit/0000001");
+  assert.deepEqual(Array.from(multi.s.editSelectedTopics),["obst","weihnachten"],"all edited topics loaded");
+  assert.deepEqual(Array.from(multi.s.editValues().topics),["obst","weihnachten"],"catalog edit preserves both topics");
+  multi.ids.editChosenTopics.children[0].children[1].onclick();
+  assert.deepEqual(Array.from(multi.s.editSelectedTopics),["weihnachten"]);
+  assert.equal(multi.ids.editTopicPicker.querySelector("summary").focused,true);
+  multi.ids.editChosenCategories.children[1].children[1].onclick();
+  assert.deepEqual(Array.from(multi.s.editSelectedTopics),[],"removing seasonal category removes only incompatible remaining topic");
   h.ids.navToggle.onclick();assert.equal(h.ids.primaryNav.dataset.open,"true");assert.equal(h.ids.navToggle.attrs["aria-expanded"],"true");
   h.listeners.keydown({key:"Escape"});assert.equal(h.ids.primaryNav.dataset.open,"false");assert.equal(h.ids.navToggle.focused,true);
   h.ids.navToggle.onclick();h.ids.primaryNav.onclick({target:{closest:()=>({})}});
