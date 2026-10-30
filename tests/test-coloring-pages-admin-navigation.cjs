@@ -134,6 +134,8 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
   assert.deepEqual(Array.from(multi.s.editValues().categories),["tiere"]);
   multi.ids.editChosenCategories.children[0].children[1].onclick();
   assert.equal(multi.ids.editSave.disabled,true,"zero-category edit is blocked");
+  multi.ids.editCategory.value="tiere";multi.ids.editCategory.onchange();
+  multi.state.confirm=true; // Allow leaving the deliberately modified first edit.
   multi.go("edit/0000001");
   assert.deepEqual(Array.from(multi.s.editSelectedTopics),["obst","weihnachten"],"all edited topics loaded");
   assert.deepEqual(Array.from(multi.s.editValues().topics),["obst","weihnachten"],"catalog edit preserves both topics");
