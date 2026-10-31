@@ -8,6 +8,7 @@ on:
       - "ops/systemd/coloring-pages-admin-publish.service"
       - "scripts/install-coloring-pages-admin-publish-v1.sh"
       - "tests/test-coloring-pages-admin-publish-v1.py"
+      - "tests/test-coloring-pages-admin-categories-1291.py"
       - "docs/COLORING_PAGES_ADMIN_PUBLISH_V1.md"
       - ".github/workflows/ausmalwiese-admin-publish-source.yml"
   push:
@@ -19,6 +20,7 @@ on:
       - "ops/systemd/coloring-pages-admin-publish.service"
       - "scripts/install-coloring-pages-admin-publish-v1.sh"
       - "tests/test-coloring-pages-admin-publish-v1.py"
+      - "tests/test-coloring-pages-admin-categories-1291.py"
       - "docs/COLORING_PAGES_ADMIN_PUBLISH_V1.md"
       - ".github/workflows/ausmalwiese-admin-publish-source.yml"
 permissions:
@@ -34,6 +36,7 @@ jobs:
       - name: Validate source
         run: |
           python3 tests/test-coloring-pages-admin-publish-v1.py
+          python3 tests/test-coloring-pages-admin-categories-1291.py
           python3 -m py_compile ops/bin/coloring-pages-admin-publish
           python3 -m json.tool ops/contracts/coloring-pages-admin-publish-v1.json >/dev/null
           bash -n scripts/install-coloring-pages-admin-publish-v1.sh
