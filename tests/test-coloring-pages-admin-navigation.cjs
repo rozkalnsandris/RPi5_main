@@ -55,6 +55,7 @@ function harness() {
       if(url==="/api/activity")return {ok:true,json:async()=>({events:[],count:0})};
       if(url==="/api/categories")return {ok:true,json:async()=>state.taxonomy};
       if(url==="/api/categories/manage")return {ok:true,json:async()=>state.managed||({enabled:false,reason:"Not activated",categories:[],revision:null,registry_sha256:null,counts:{}})};
+      if(url==="/api/topics/manage")return {ok:true,json:async()=>state.managedTopics||({enabled:false,reason:"Not activated",topics:[],revision:null,registry_sha256:null,counts:{}})};
       if(url==="/api/uploads")return {ok:true,json:async()=>({upload_id:"c".repeat(32),count:1,files:[{title:"Weihnachtsstern"}]})};
       if(url==="/api/jobs")return {ok:true,json:async()=>({job_id:"d".repeat(32),status:"queued",steps:[],results:[]})};
       if(url==="/api/session")return {ok:true,json:async()=>({csrf_token:"fixture"})};
@@ -208,6 +209,26 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
     assert.equal(h.navs.find(x=>x.dataset.nav===page).attrs["aria-current"],"page");
     assert.equal(opened.at(-1),page);
   }
+  assert.equal(h.navs.some(x=>x.dataset.nav==="topics"),false,"Topics no longer appears in top navigation");
+  assert.equal(h.pages.some(x=>x.dataset.page==="topics"),false,"Topics shares Categories view");
+  const categoryMarkup=html.slice(html.indexOf('data-page="categories"'),html.indexOf('data-page="activity"'));
+  assert.match(categoryMarkup,/id="categoriesRows"[\s\S]*id="managedTopicsPanel"[\s\S]*id="topicsRows"/,"Topics follows Categories");
+  assert.match(html,/id="categoriesRefresh"[^>]*>↻ Refresh all</,"one refresh for both");
+  assert.equal(html.includes('id="topicsRefresh"'),false,"no duplicate Topics refresh");
+  h.go("catalog");
+  const categoryReads=h.calls.filter(x=>x.url==="/api/categories/manage").length;
+  const topicReads=h.calls.filter(x=>x.url==="/api/topics/manage").length;
+  h.go("categories");
+  assert.equal(h.calls.filter(x=>x.url==="/api/categories/manage").length,categoryReads+1,"Categories loads on combined route");
+  assert.equal(h.calls.filter(x=>x.url==="/api/topics/manage").length,topicReads+1,"Topics loads on combined route");
+  await h.ids.categoriesRefresh.onclick();
+  assert.equal(h.calls.filter(x=>x.url==="/api/categories/manage").length,categoryReads+2,"refresh Categories");
+  assert.equal(h.calls.filter(x=>x.url==="/api/topics/manage").length,topicReads+2,"refresh Topics");
+  h.go("catalog");h.go("topics");
+  assert.equal(h.s.currentRoute,"categories","old #topics link opens Categories");
+  assert.equal(h.s.location.hash,"#categories","old bookmark canonicalized");
+  assert.equal(h.ids.managedTopicsHeading.focused,true,"old bookmark focuses Topics heading");
+  assert.equal(h.navs.find(x=>x.dataset.nav==="categories").attrs["aria-current"],"page");
   h.go("catalog");assert.equal(h.ids.catalogGrid.children.length,24);
   h.ids.catalogNext.onclick();assert.equal(h.ids.catalogPageStatus.textContent,"2 / 3");assert.equal(h.ids.catalogGrid.children.length,24);
   h.ids.catalogNext.onclick();assert.equal(h.ids.catalogGrid.children.length,5);assert.equal(h.ids.catalogNext.disabled,true);

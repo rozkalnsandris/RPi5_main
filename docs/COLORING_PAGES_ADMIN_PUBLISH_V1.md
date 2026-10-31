@@ -582,3 +582,25 @@ The only canonical registry is `/srv/coloring-pages-content/public/topics.json`.
 Public `coloring-pages` PR #439 was merged as `0930f938f957e29c8d6597acbf2b49e0dba37eda` and the owner verified the LIVE `topics.v2` endpoint (`revision=1`, 21 topics), but this does not prove a protected ADMIN deployment. The reviewed image produced by [GitHub Actions run 41234648027](https://github.com/rozkalnsandris/coloring-pages/actions/runs/41234648027) is `ghcr.io/rozkalnsandris/coloring-pages@sha256:d5546fac6922c3b01645f59d8c7d0658cbbcbe1a4eac3ccdd629621da863777c`. ADMIN and Drive ingest source now pin that same immutable identity.
 
 Before any restart/import, independently verify the image can read the same mounted canonical `topics.json`, and its CLI offers `--topics-sha256` / `--additional-topic`. PUBLIC production does not grant operator or ADMIN installation authority. Bridge and ADMIN publication were owner-held during the cutover; they must remain held until separate exact LIVE authorizations for the operator installation, guarded full ADMIN install/restart and explicit release of the hold. Source PR merge is not any of those authorizations.
+
+## Combined Categories and Topics management — issue #1299 (source-only)
+
+The ADMIN top navigation has a single **Categories** entry. Its `#categories` page shows
+compact category rows and Add category first, followed directly by compact **Topics**
+rows, Add topic and the existing Edit dialog. The page has one shared **Refresh all**
+control, which reads both independent protected registry snapshots. A legacy
+`#topics` bookmark redirects to `#categories` and focuses the Topics heading.
+
+Categories and Topics are different canonical registries, **not** a parent-child
+schema. Seasonal topics can be selected with the `jahreszeiten` category and
+evergreen topics with other category kinds. The existing protected APIs, strong
+ETag/If-Match, CSRF, referenced-item deletion guards, publication lock, and
+Add pages/Catalog topic/category picker synchronization remain unchanged.
+
+UI-only source work: no backend or registry mutation, no merge or LIVE implied.
+A separately owner-authorized, exact-head **ui-only** ADMIN installation is required
+after merge; no service restart is needed for that reviewed mode. Native
+`<details>/<summary>` remains used for compact Add forms and the Topics Edit
+`<dialog>` retains keyboard focus handling. References:
+[MDN details](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/details),
+[WAI-ARIA APG accordion](https://www.w3.org/WAI/ARIA/apg/patterns/accordion/).
