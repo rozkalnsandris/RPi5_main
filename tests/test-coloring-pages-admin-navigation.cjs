@@ -54,6 +54,7 @@ function harness() {
       if(url==="/api/archive")return {ok:true,json:async()=>({entries:[],count:0})};
       if(url==="/api/activity")return {ok:true,json:async()=>({events:[],count:0})};
       if(url==="/api/categories")return {ok:true,json:async()=>state.taxonomy};
+      if(url==="/api/categories/manage")return {ok:true,json:async()=>({enabled:false,reason:"Not activated",categories:[],revision:null,registry_sha256:null,counts:{}})};
       if(url==="/api/uploads")return {ok:true,json:async()=>({upload_id:"c".repeat(32),count:1,files:[{title:"Weihnachtsstern"}]})};
       if(url==="/api/jobs")return {ok:true,json:async()=>({job_id:"d".repeat(32),status:"queued",steps:[],results:[]})};
       if(url==="/api/session")return {ok:true,json:async()=>({csrf_token:"fixture"})};
