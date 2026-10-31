@@ -297,6 +297,7 @@ html{overflow-y:scroll}
 .topics-create .wide{grid-column:1/-1}
 .topics-create textarea{width:100%;max-width:100%;box-sizing:border-box}
 .topics-dialog{width:min(640px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto;border:1px solid var(--line);border-radius:16px;padding:18px}
+.topics-under-categories{margin-top:18px}
 .topics-dialog::backdrop{background:rgba(16,30,45,.6)}
 .topics-dialog-actions{padding:0 14px 12px}
 @media(max-width:700px){.topics-create{grid-template-columns:minmax(0,1fr)}}
@@ -317,7 +318,6 @@ html{overflow-y:scroll}
       <a href="#upload" data-nav="upload">Add pages</a>
       <a href="#catalog" data-nav="catalog">Catalog</a>
       <a href="#categories" data-nav="categories">Categories</a>
-      <a href="#topics" data-nav="topics">Topics</a>
       <a href="#archive" data-nav="archive">Archive</a>
       <a href="#activity" data-nav="activity">Activity</a>
       <a href="#stats" data-nav="stats">Statistics</a>
@@ -431,11 +431,11 @@ html{overflow-y:scroll}
 
     </div>
   </section>
-  <section class="management-section" data-page="categories" hidden aria-label="Categories">
+  <section class="management-section" data-page="categories" hidden aria-label="Categories and Topics">
     <div class="container categories-shell"><article class="admin-panel categories-panel">
       <div class="panel-heading">
-        <div class="panel-title"><div><span class="panel-kicker">Organization</span><h2>Category list</h2></div></div>
-        <button id="categoriesRefresh" class="secondary" type="button">↻ Refresh</button>
+        <div class="panel-title"><div><span class="panel-kicker">Organization</span><h2>Categories</h2></div></div>
+        <button id="categoriesRefresh" class="secondary" type="button">↻ Refresh all</button>
       </div>
       <p class="categories-note">IDs are permanent. Original or in-use categories cannot be deleted.</p>
       <p id="categoriesStatus" class="categories-status" role="status" aria-live="polite">Checking registry…</p>
@@ -449,12 +449,9 @@ html{overflow-y:scroll}
         </form>
       </details>
     </article></div>
-  </section>
-  <section class="management-section" data-page="topics" hidden aria-label="Topics">
-    <div class="container categories-shell"><article class="admin-panel categories-panel">
-      <div class="panel-heading"><div class="panel-title"><div><span class="panel-kicker">Organization</span><h2>Topic list</h2></div></div>
-        <button id="topicsRefresh" class="secondary" type="button">↻ Refresh</button></div>
-      <p class="categories-note">IDs are permanent. Referenced topics cannot be removed or reassigned.</p>
+    <div class="container categories-shell topics-under-categories"><article class="admin-panel categories-panel" id="managedTopicsPanel" aria-labelledby="managedTopicsHeading">
+      <div class="panel-heading"><div class="panel-title"><div><span class="panel-kicker">Under Categories</span><h2 id="managedTopicsHeading" tabindex="-1">Topics</h2></div></div></div>
+      <p class="categories-note">Topics refine categories. Seasonal topics are used with Jahreszeiten &amp; Feste; evergreen topics with other categories. IDs are permanent; referenced topics cannot be removed or reassigned.</p>
       <p id="topicsStatus" class="categories-status" role="status" aria-live="polite">Checking managed Topics…</p>
       <ul id="topicsRows" class="categories-list" aria-label="Topics and usage" hidden></ul>
       <details id="topicsCreate" class="categories-add" hidden><summary>Add topic</summary>
@@ -938,7 +935,7 @@ async function writeManagedCategory(payload){
    await adminFetch("/api/categories/manage",{method:"POST",
      headers:{"Content-Type":"application/json","If-Match":managedCategoryEtag},
      body:JSON.stringify(payload)});
-   await loadCategories();await loadCatalog();await loadManagedCategories();
+   await loadCategories();await loadCatalog();await refreshTaxonomyManagers();
    if(payload.action==="create"){
      document.getElementById("newCategoryId").value="";
      document.getElementById("newCategoryLabel").value="";
@@ -950,7 +947,7 @@ async function writeManagedCategory(payload){
    else categoriesStatus.textContent=e.message;
  }
 }
-document.getElementById("categoriesRefresh").onclick=loadManagedCategories;
+document.getElementById("categoriesRefresh").onclick=refreshTaxonomyManagers;
 categoriesForm.onsubmit=function(ev){
  ev.preventDefault();if(!managedCategoryEnabled)return;
  var id=document.getElementById("newCategoryId").value,label=document.getElementById("newCategoryLabel").value;
@@ -1027,7 +1024,7 @@ async function writeManagedTopic(raw){
     await adminFetch("/api/topics/manage",{method:"POST",
       headers:{"Content-Type":"application/json","If-Match":topicsManagedEtag},body:JSON.stringify(raw)});
     if(raw.action==="update")topicsDialog.close();
-    await loadCategories();await loadCatalog();await loadManagedTopics();
+    await loadCategories();await loadCatalog();await refreshTaxonomyManagers();
     if(raw.action==="create"){topicsForm.reset();topicsSeason("topicNew");topicsCreate.open=false}
     topicsStatus.textContent="Saved. Add pages and Catalog topics refreshed.";
   }catch(e){
@@ -1036,7 +1033,7 @@ async function writeManagedTopic(raw){
     topicsStatus.textContent=stale?"Topics changed. Refresh before editing.":e.message;
   }finally{topicsWriting=false}
 }
-document.getElementById("topicsRefresh").onclick=loadManagedTopics;
+async function refreshTaxonomyManagers(){await Promise.all([loadManagedCategories(),loadManagedTopics()])}
 topicsForm.onsubmit=function(e){e.preventDefault();
   if(topicsManagedEnabled&&!topicsWriting&&topicsForm.reportValidity())
     writeManagedTopic({action:"create",topic:topicsFormValues("topicNew")})};
@@ -1049,8 +1046,7 @@ var pageInfo={
   overview:["Overview","Everything you need to manage Ausmalwiese in one place."],
   upload:["Add pages","Choose a ZIP file, review the images and publish them in the selected categories."],
   catalog:["Catalog","Find a page, edit its details or move it to the archive."],
-  categories:["Categories","Create, rename and safely remove unused categories."],
-  topics:["Topics","Create, edit and safely remove unused topics."],
+  categories:["Categories & Topics","Manage categories and the topics used with them in one place."],
   edit:["Edit page","Update the title, categories, age range and difficulty."],
   archive:["Archive","Restore hidden pages or manage archived entries."],
   stats:["Statistics","Print activity, likes and catalog engagement."],
@@ -1059,6 +1055,8 @@ var pageInfo={
 };
 function routePage(){
   var next=location.hash.slice(1)||"overview",page=next.split("/")[0];
+  var legacyTopics=next==="topics";
+  if(legacyTopics){next="categories";page="categories";history.replaceState(null,"","#categories")}
   if(!Object.prototype.hasOwnProperty.call(pageInfo,page)||(page==="edit"&&!next.startsWith("edit/"))||(page!=="edit"&&next!==page)){
     next="overview";page="overview";history.replaceState(null,"","#overview");
   }
@@ -1076,11 +1074,13 @@ function routePage(){
   document.getElementById("admin-title").textContent=pageInfo[page][0];
   document.getElementById("pageDescription").textContent=pageInfo[page][1];
   document.title=pageInfo[page][0]+" – Ausmalwiese";
-  if(page==="categories"&&changed)loadManagedCategories();
-  if(page==="topics"&&changed)loadManagedTopics();
+  if(page==="categories"&&changed)refreshTaxonomyManagers();
   if(page==="edit"&&changed){editBaseline="";document.querySelector(".edit-layout").hidden=true;document.getElementById("editMissing").hidden=false;document.getElementById("editMissing").textContent="Loading entry…";populateEdit()}
   if(window.AdminAnalytics)window.AdminAnalytics.open(page);
-  if(changed){document.getElementById("admin-title").focus({preventScroll:true});window.scrollTo(0,0)}
+  if(changed){
+    if(legacyTopics){var heading=document.getElementById("managedTopicsHeading");heading.focus({preventScroll:true});heading.scrollIntoView()}
+    else{document.getElementById("admin-title").focus({preventScroll:true});window.scrollTo(0,0)}
+  }
 }
 document.querySelector(".skip-link").onclick=function(event){event.preventDefault();document.getElementById("main").focus();document.getElementById("main").scrollIntoView()};
 window.addEventListener("hashchange",routePage);
