@@ -262,6 +262,7 @@ test:
 	python3 ./tests/test-cv-pull-deploy-controller.py
 	python3 ./tests/test-cv-controller-activation.py
 	python3 ./tests/test-ausmalwiese-admin-simple-deploy-v1.py
+	python3 ./tests/test-coloring-pages-admin-topics-1294.py
 	python3 ./tests/test-cv-classifier-host-alignment.py
 	python3 ./tests/test-cv-pull-deploy-canary.py
 	python3 -m py_compile scripts/*.py ops/lib/dashboard-evidence.py ops/bin/hermes-tech-restore-drill ops/lib/balkons-bot.py ops/bin/balkons-bot-preflight ops/bin/balkons-bot-deploy-verifier ops/bin/balkons-bot-latency-operator ops/bin/balcony-watering-hermes-preflight ops/bin/simple-deploy-executor-upgrade-933 ops/bin/rozkalns-cv-live-stats-rollout-1000 ops/lib/deploy_executor/*.py

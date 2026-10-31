@@ -291,6 +291,16 @@ html{overflow-y:scroll}
   .categories-create .primary{width:100%}
 }
 
+
+/* Topics reuses small Categories rows and the native disclosure pattern. */
+.topics-create{grid-template-columns:repeat(2,minmax(0,1fr))}
+.topics-create .wide{grid-column:1/-1}
+.topics-create textarea{width:100%;max-width:100%;box-sizing:border-box}
+.topics-dialog{width:min(640px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto;border:1px solid var(--line);border-radius:16px;padding:18px}
+.topics-dialog::backdrop{background:rgba(16,30,45,.6)}
+.topics-dialog-actions{padding:0 14px 12px}
+@media(max-width:700px){.topics-create{grid-template-columns:minmax(0,1fr)}}
+
 </style>
 </head>
 <body>
@@ -307,6 +317,7 @@ html{overflow-y:scroll}
       <a href="#upload" data-nav="upload">Add pages</a>
       <a href="#catalog" data-nav="catalog">Catalog</a>
       <a href="#categories" data-nav="categories">Categories</a>
+      <a href="#topics" data-nav="topics">Topics</a>
       <a href="#archive" data-nav="archive">Archive</a>
       <a href="#activity" data-nav="activity">Activity</a>
       <a href="#stats" data-nav="stats">Statistics</a>
@@ -438,6 +449,37 @@ html{overflow-y:scroll}
         </form>
       </details>
     </article></div>
+  </section>
+  <section class="management-section" data-page="topics" hidden aria-label="Topics">
+    <div class="container categories-shell"><article class="admin-panel categories-panel">
+      <div class="panel-heading"><div class="panel-title"><div><span class="panel-kicker">Organization</span><h2>Topic list</h2></div></div>
+        <button id="topicsRefresh" class="secondary" type="button">↻ Refresh</button></div>
+      <p class="categories-note">IDs are permanent. Referenced topics cannot be removed or reassigned.</p>
+      <p id="topicsStatus" class="categories-status" role="status" aria-live="polite">Checking managed Topics…</p>
+      <ul id="topicsRows" class="categories-list" aria-label="Topics and usage" hidden></ul>
+      <details id="topicsCreate" class="categories-add" hidden><summary>Add topic</summary>
+        <form id="topicsForm" class="categories-create topics-create"><div class="field"><label for="topicNewId">Topic ID</label><input id="topicNewId" maxlength="48" pattern="[a-z0-9]+(-[a-z0-9]+)*" required></div>
+<div class="field"><label for="topicNewLabel">German label</label><input id="topicNewLabel" maxlength="80" required></div>
+<div class="field"><label for="topicNewIcon">Icon</label><input id="topicNewIcon" maxlength="24" required></div>
+<div class="field"><label for="topicNewKind">Kind</label><select id="topicNewKind"><option value="evergreen">Evergreen</option><option value="seasonal">Seasonal</option></select></div>
+<div class="field"><label for="topicNewFrom">Season from (MM-DD)</label><input id="topicNewFrom" pattern="[0-9]{2}-[0-9]{2}" placeholder="12-01"></div>
+<div class="field"><label for="topicNewTo">Season to (MM-DD)</label><input id="topicNewTo" pattern="[0-9]{2}-[0-9]{2}" placeholder="02-29"></div>
+<div class="field wide"><label for="topicNewTerms">Legacy terms (one per line)</label><textarea id="topicNewTerms" rows="2" maxlength="2048"></textarea></div>
+          <button class="primary" type="submit">Create topic</button></form></details>
+    </article></div>
+    <dialog id="topicsDialog" class="topics-dialog" aria-labelledby="topicsDialogTitle">
+      <form id="topicsEditForm"><h2 id="topicsDialogTitle">Edit topic</h2>
+        <div class="categories-create topics-create"><div class="field"><label for="topicEditId">Topic ID (permanent)</label><input id="topicEditId" maxlength="48" readonly></div>
+<div class="field"><label for="topicEditLabel">German label</label><input id="topicEditLabel" maxlength="80" required></div>
+<div class="field"><label for="topicEditIcon">Icon</label><input id="topicEditIcon" maxlength="24" required></div>
+<div class="field"><label for="topicEditKind">Kind</label><select id="topicEditKind"><option value="evergreen">Evergreen</option><option value="seasonal">Seasonal</option></select></div>
+<div class="field"><label for="topicEditFrom">Season from (MM-DD)</label><input id="topicEditFrom" pattern="[0-9]{2}-[0-9]{2}" placeholder="12-01"></div>
+<div class="field"><label for="topicEditTo">Season to (MM-DD)</label><input id="topicEditTo" pattern="[0-9]{2}-[0-9]{2}" placeholder="02-29"></div>
+<div class="field wide"><label for="topicEditTerms">Legacy terms (one per line)</label><textarea id="topicEditTerms" rows="2" maxlength="2048"></textarea></div></div>
+        <div class="category-buttons topics-dialog-actions"><button type="button" id="topicsCancel" class="secondary">Cancel</button>
+          <button class="primary" type="submit">Save changes</button></div>
+      </form>
+    </dialog>
   </section>
   <section class="management-section" data-page="activity" hidden aria-label="Activity">
     <div class="container">
@@ -915,11 +957,100 @@ categoriesForm.onsubmit=function(ev){
  writeManagedCategory({action:"create",id:id,label:label});
 };
 
+
+var topicsRows=document.getElementById("topicsRows"),topicsStatus=document.getElementById("topicsStatus"),
+    topicsCreate=document.getElementById("topicsCreate"),topicsForm=document.getElementById("topicsForm"),
+    topicsDialog=document.getElementById("topicsDialog"),topicsEditForm=document.getElementById("topicsEditForm");
+var topicsManagedEtag="",topicsManagedEnabled=false,topicsWriting=false;
+function topicsFormValues(p){
+  var get=function(k){return document.getElementById(p+k).value};
+  var kind=get("Kind"),term=get("Terms").split(/\r?\n/).map(function(v){return v.trim()}).filter(Boolean);
+  var item={id:get("Id").trim(),label:get("Label").trim(),icon:get("Icon").trim(),
+            kind:kind,legacy_terms:term};
+  if(kind==="seasonal"){item.active_from=get("From").trim();item.active_to=get("To").trim()}
+  return item;
+}
+function topicsFill(p,t){
+  var fields={Id:t.id,Label:t.label,Icon:t.icon,Kind:t.kind,From:t.active_from||"",
+              To:t.active_to||"",Terms:(t.legacy_terms||[]).join("\n")};
+  Object.keys(fields).forEach(function(k){document.getElementById(p+k).value=fields[k]});
+}
+function topicsSeason(p){
+  var enable=document.getElementById(p+"Kind").value==="seasonal";
+  ["From","To"].forEach(function(k){var input=document.getElementById(p+k);
+    input.required=enable;input.disabled=!enable;if(!enable)input.value=""});
+}
+["topicNew","topicEdit"].forEach(function(p){
+  document.getElementById(p+"Kind").onchange=function(){topicsSeason(p)};
+  topicsSeason(p);
+});
+async function loadManagedTopics(){
+  topicsStatus.textContent="Checking topics…";topicsManagedEnabled=false;topicsManagedEtag="";
+  topicsRows.hidden=true;topicsCreate.hidden=true;topicsRows.replaceChildren();
+  try{
+    var snapshot=await adminFetch("/api/topics/manage");
+    if(!snapshot.enabled||!/^[0-9a-f]{64}$/.test(snapshot.registry_sha256||"")){
+      topicsStatus.textContent=snapshot.reason||"Managed Topics not activated.";return;
+    }
+    if(!Array.isArray(snapshot.topics)||!snapshot.topics.length)throw Error("Invalid Topics snapshot");
+    topicsManagedEtag=catalogValidator(snapshot.registry_sha256);
+    topicsManagedEnabled=true;topicsRows.hidden=false;topicsCreate.hidden=false;
+    topicsStatus.textContent=snapshot.topics.length+" topics · revision "+snapshot.revision;
+    snapshot.topics.forEach(function(t){
+      var count=(snapshot.counts||{})[t.id]||{catalog:0,archive:0};
+      var row=document.createElement("li");row.className="category-row";
+      var main=document.createElement("div");main.className="category-main";
+      var label=document.createElement("strong");label.className="category-label";label.textContent=t.icon+" "+t.label;
+      var slug=document.createElement("span");slug.className="category-id";slug.textContent=t.id+" · "+t.kind;
+      main.append(label,slug);
+      var usage=document.createElement("span");usage.className="category-usage";
+      usage.textContent=count.catalog+" catalog · "+count.archive+" archive";
+      var actions=document.createElement("div");actions.className="category-buttons";
+      var edit=document.createElement("button");edit.type="button";edit.className="secondary";edit.textContent="Edit";
+      edit.setAttribute("aria-label","Edit "+t.label);
+      edit.onclick=function(){topicsFill("topicEdit",t);topicsSeason("topicEdit");topicsDialog.showModal()};
+      var remove=document.createElement("button");remove.type="button";remove.className="danger";remove.textContent="Delete";
+      remove.disabled=!!(count.catalog||count.archive||snapshot.topics.length===1);
+      remove.setAttribute("aria-label","Delete "+t.label+(remove.disabled?" (in use)":""));
+      remove.onclick=async function(){
+        if(topicsWriting)return;
+        var confirmation=window.prompt("Type the exact topic ID to delete: "+t.id);
+        if(confirmation===t.id)await writeManagedTopic({action:"delete",id:t.id,confirm_id:confirmation})};
+      actions.append(edit,remove);row.append(main,usage,actions);topicsRows.append(row);
+    });
+  }catch(e){topicsStatus.textContent=e.message}
+}
+async function writeManagedTopic(raw){
+  if(!topicsManagedEnabled||!topicsManagedEtag||topicsWriting)return;
+  topicsWriting=true;
+  try{
+    await adminFetch("/api/topics/manage",{method:"POST",
+      headers:{"Content-Type":"application/json","If-Match":topicsManagedEtag},body:JSON.stringify(raw)});
+    if(raw.action==="update")topicsDialog.close();
+    await loadCategories();await loadCatalog();await loadManagedTopics();
+    if(raw.action==="create"){topicsForm.reset();topicsSeason("topicNew");topicsCreate.open=false}
+    topicsStatus.textContent="Saved. Add pages and Catalog topics refreshed.";
+  }catch(e){
+    var stale=e.httpStatus===412;
+    await loadManagedTopics();
+    topicsStatus.textContent=stale?"Topics changed. Refresh before editing.":e.message;
+  }finally{topicsWriting=false}
+}
+document.getElementById("topicsRefresh").onclick=loadManagedTopics;
+topicsForm.onsubmit=function(e){e.preventDefault();
+  if(topicsManagedEnabled&&!topicsWriting&&topicsForm.reportValidity())
+    writeManagedTopic({action:"create",topic:topicsFormValues("topicNew")})};
+document.getElementById("topicsCancel").onclick=function(){topicsDialog.close()};
+topicsEditForm.onsubmit=function(e){e.preventDefault();
+  if(topicsManagedEnabled&&!topicsWriting&&topicsEditForm.reportValidity())
+    writeManagedTopic({action:"update",topic:topicsFormValues("topicEdit")})};
+
 var pageInfo={
   overview:["Overview","Everything you need to manage Ausmalwiese in one place."],
   upload:["Add pages","Choose a ZIP file, review the images and publish them in the selected categories."],
   catalog:["Catalog","Find a page, edit its details or move it to the archive."],
   categories:["Categories","Create, rename and safely remove unused categories."],
+  topics:["Topics","Create, edit and safely remove unused topics."],
   edit:["Edit page","Update the title, categories, age range and difficulty."],
   archive:["Archive","Restore hidden pages or manage archived entries."],
   stats:["Statistics","Print activity, likes and catalog engagement."],
@@ -946,6 +1077,7 @@ function routePage(){
   document.getElementById("pageDescription").textContent=pageInfo[page][1];
   document.title=pageInfo[page][0]+" – Ausmalwiese";
   if(page==="categories"&&changed)loadManagedCategories();
+  if(page==="topics"&&changed)loadManagedTopics();
   if(page==="edit"&&changed){editBaseline="";document.querySelector(".edit-layout").hidden=true;document.getElementById("editMissing").hidden=false;document.getElementById("editMissing").textContent="Loading entry…";populateEdit()}
   if(window.AdminAnalytics)window.AdminAnalytics.open(page);
   if(changed){document.getElementById("admin-title").focus({preventScroll:true});window.scrollTo(0,0)}
