@@ -22,6 +22,7 @@ import subprocess
 import threading
 import time
 import zipfile
+import unicodedata
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlparse
@@ -78,10 +79,220 @@ ALLOWED_AGES = {"3-6", "4-8"}
 ALLOWED_DIFFICULTIES = {"easy", "normal", "detailed"}
 ADMIN_ORIGIN = "https://admin.ausmalwiese.de"
 CSRF_TOKEN = secrets.token_hex(32)
+# One managed v2 taxonomy. Never fall back to image-local categories on v2.
+MANAGED_PATH = PUBLIC / "categories.json"
+MANAGED_SCHEMA = "rozkalns.coloring-pages.categories.v2"
+MANAGED_CORE = ("tiere", "fahrzeuge", "alphabet", "lernen", "figuren", "jahreszeiten")
+MANAGED_RESERVED = frozenset(("essen-natur", "seasonal"))
+MANAGED_MAX_BYTES = 16384
+
+
+def validate_managed(doc):
+    if (type(doc) is not dict or set(doc) != {"schema", "revision", "categories"}
+            or doc["schema"] != MANAGED_SCHEMA):
+        stop("managed category schema invalid")
+    if type(doc["revision"]) is not int or not 1 <= doc["revision"] <= 2147483647:
+        stop("managed category revision invalid")
+    rows = doc["categories"]
+    if type(rows) is not list or not 6 <= len(rows) <= 64:
+        stop("managed category count invalid")
+    ids = []
+    for row in rows:
+        if type(row) is not dict or set(row) != {"id", "label"}:
+            stop("managed category entry invalid")
+        ident, label = row["id"], row["label"]
+        if (type(ident) is not str or len(ident) > 48
+                or CATALOG_ID.fullmatch(ident) is None or ident in MANAGED_RESERVED):
+            stop("managed category id invalid")
+        if (type(label) is not str or not 1 <= len(label) <= 80 or label != label.strip()
+                or unicodedata.normalize("NFC", label) != label
+                or any(unicodedata.category(ch)[0] == "C" for ch in label)):
+            stop("managed category label invalid")
+        ids.append(ident)
+    if tuple(ids[:6]) != MANAGED_CORE or len(ids) != len(set(ids)):
+        stop("managed core or duplicate category invalid")
+    return frozenset(ids)
+
+
+def managed_bytes(doc):
+    validate_managed(doc)
+    data = (json.dumps(doc, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    if len(data) > MANAGED_MAX_BYTES:
+        stop("managed category data too large")
+    return data
+
+
+def read_managed():
+    """Read exact canonical bytes from the shared mounted content file."""
+    if MANAGED_PATH.parent.is_symlink() or MANAGED_PATH.is_symlink():
+        stop("managed registry symlink forbidden")
+    try:
+        fd = os.open(MANAGED_PATH, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        with os.fdopen(fd, "rb") as stream:
+            info = os.fstat(stream.fileno())
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or (info.st_uid, info.st_gid) != owner_ids()
+                    or stat.S_IMODE(info.st_mode) != 0o644
+                    or not 0 < info.st_size <= MANAGED_MAX_BYTES):
+                stop("managed registry file ownership, type or mode invalid")
+            data = stream.read(MANAGED_MAX_BYTES + 1)
+        doc = json.loads(data.decode("utf-8"))
+    except (OSError, UnicodeError, ValueError):
+        stop("managed registry missing or malformed")
+    if data != managed_bytes(doc):
+        stop("managed registry noncanonical serialization")
+    return doc, hashlib.sha256(data).hexdigest()
+
+
+def importer_v2_capability(expected_sha):
+    """No network, no mutation, no unpinned importer. Never infer from v1."""
+    try:
+        uid, gid = owner_ids()
+        help_result = subprocess.run(
+            [*docker_prefix(uid, gid), "--entrypoint", IMPORTER, IMAGE, "--help"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            text=True, timeout=30, check=False)
+        probe = subprocess.run(
+            [*docker_prefix(uid, gid), "--entrypoint", "/usr/bin/python3", IMAGE,
+             "/usr/local/bin/coloring_pages_categories.py",
+             "validate", "--registry", str(MANAGED_PATH)],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            text=True, timeout=30, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return (help_result.returncode == 0 and "--categories-sha256" in help_result.stdout
+            and "--additional-category" in help_result.stdout
+            and probe.returncode == 0 and ("sha256=" + expected_sha) in probe.stdout.split())
+
+
+def managed_verified(doc, digest):
+    try:
+        fetched = load_taxonomy()
+    except Stop:
+        return False
+    return (fetched.get("category_schema") == MANAGED_SCHEMA
+            and fetched.get("category_sha256") == digest
+            and fetched.get("category_revision") == doc["revision"]
+            and importer_v2_capability(digest))
+
+
+def membership_for_count(entry):
+    primary = entry.get("category")
+    selected = entry.get("categories", [primary])
+    if (type(primary) is not str or type(selected) is not list or not selected
+            or any(type(v) is not str for v in selected)
+            or selected[0] != primary or len(set(selected)) != len(selected)):
+        stop("category membership in catalog/archive invalid")
+    return selected
+
+
+def managed_counts(ids):
+    out = {ident: {"catalog": 0, "archive": 0} for ident in ids}
+    live, _ = load_catalog()
+    for entry in live:
+        for ident in membership_for_count(entry):
+            if ident not in out:
+                stop("unrecognized catalog category")
+            out[ident]["catalog"] += 1
+    if ARCHIVE.is_dir():
+        for path in sorted(ARCHIVE.glob("*.json")):
+            if path.is_symlink() or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*\.json", path.name):
+                stop("unsafe archive category record")
+            record = load_archive_record(path.stem)
+            for ident in membership_for_count(record["entry"]):
+                if ident not in out:
+                    stop("unrecognized archived category")
+                out[ident]["archive"] += 1
+    return out
+
+
+def managed_snapshot():
+    """Read-only management response. Interrupted staging blocks new changes."""
+    if list(MANAGED_PATH.parent.glob(".categories.admin.*.tmp")):
+        return {"enabled": False, "reason": "Manual review required for interrupted category edit.",
+                "registry_sha256": None, "revision": None, "categories": [], "counts": {}}
+    try:
+        doc, digest = read_managed()
+        counts = managed_counts(validate_managed(doc))
+        enabled = managed_verified(doc, digest)
+    except Stop:
+        return {"enabled": False, "reason": "Managed categories are not activated.",
+                "registry_sha256": None, "revision": None, "categories": [], "counts": {}}
+    return {"enabled": enabled,
+            "reason": "" if enabled else "Public v2 registry / pinned importer verification failed.",
+            "registry_sha256": digest, "revision": doc["revision"],
+            "categories": doc["categories"], "counts": counts}
+
+
+def change_managed(raw, expected_sha):
+    """Caller holds PUBLISH_LOCK. A post-mutation error is a terminal STOP."""
+    if type(raw) is not dict or raw.get("action") not in ("create", "rename", "delete"):
+        stop("category action invalid")
+    action = raw["action"]
+    keys = {"create": {"action", "id", "label"},
+            "rename": {"action", "id", "label"},
+            "delete": {"action", "id", "confirm_id"}}
+    if set(raw) != keys[action]:
+        stop("category request keys invalid")
+    snapshot = managed_snapshot()
+    if not snapshot["enabled"]:
+        stop("managed categories unavailable")
+    if snapshot["registry_sha256"] != expected_sha:
+        return None  # stale: HTTP 412
+    if active_jobs():
+        stop("pending or active publications block category editing")
+    doc, digest = read_managed()
+    if digest != expected_sha:
+        return None
+    ident = raw["id"]
+    if type(ident) is not str or len(ident) > 48 or CATALOG_ID.fullmatch(ident) is None:
+        stop("category id invalid")
+    ids = validate_managed(doc)
+    if action == "create":
+        if ident in ids or ident in MANAGED_RESERVED or len(doc["categories"]) >= 64:
+            stop("category id exists or is reserved")
+        doc["categories"].append({"id": ident, "label": raw["label"]})
+    elif action == "rename":
+        if ident not in ids:
+            stop("category does not exist")
+        for row in doc["categories"]:
+            if row["id"] == ident:
+                if row["label"] == raw["label"]:
+                    stop("category label unchanged")
+                row["label"] = raw["label"]
+                break
+    else:
+        if ident not in ids or ident in MANAGED_CORE or raw["confirm_id"] != ident:
+            stop("protected category cannot be deleted")
+        usage = snapshot["counts"][ident]
+        if usage["catalog"] or usage["archive"]:
+            stop("referenced category cannot be deleted")
+        doc["categories"] = [row for row in doc["categories"] if row["id"] != ident]
+    doc["revision"] += 1
+    raw_data = managed_bytes(doc)
+    # Beginning of first mutation; no retry, rollback, cleanup or alternate path.
+    temp = MANAGED_PATH.parent / (".categories.admin." + secrets.token_hex(8) + ".tmp")
+    fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+    with os.fdopen(fd, "wb", buffering=0) as stream:
+        os.fchmod(stream.fileno(), 0o644)
+        stream.write(raw_data)
+        os.fsync(stream.fileno())
+    os.replace(temp, MANAGED_PATH)
+    parent_fd = os.open(MANAGED_PATH.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(parent_fd)
+    finally:
+        os.close(parent_fd)
+    confirmed, current_sha = read_managed()
+    if confirmed != doc or not managed_verified(doc, current_sha):
+        stop("category registry mutation verification failed: STOP")
+    return confirmed, current_sha
+
+
 # Canonical registries are deployed by coloring-pages. No fallback to static ADMIN labels.
 TAXONOMY_URLS = {"categories": ORIGIN + "/categories.json", "topics": ORIGIN + "/topics.json"}
 TAXONOMY_SCHEMAS = {
-    "categories": "rozkalns.coloring-pages.categories.v1",
+    "categories": ("rozkalns.coloring-pages.categories.v1", MANAGED_SCHEMA),
     "topics": "rozkalns.coloring-pages.topics.v1",
 }
 TAXONOMY_MAX_BYTES = 65536
@@ -112,7 +323,9 @@ def load_taxonomy() -> dict:
             registry = json.loads(data)
         except (UnicodeError, ValueError):
             stop("public taxonomy JSON invalid")
-        if not isinstance(registry, dict) or registry.get("schema") != TAXONOMY_SCHEMAS[name]:
+        if not isinstance(registry, dict) or registry.get("schema") not in (
+                TAXONOMY_SCHEMAS[name] if isinstance(TAXONOMY_SCHEMAS[name], tuple) else (TAXONOMY_SCHEMAS[name],)
+        ):
             stop("public taxonomy schema invalid")
         rows = registry.get(name)
         if not isinstance(rows, list) or not 0 < len(rows) <= 128:
@@ -129,6 +342,12 @@ def load_taxonomy() -> dict:
                 stop("public topic kind invalid")
             result[ident] = {"id": ident, "label": label.strip(),
                              **({"kind": row["kind"]} if name == "topics" else {})}
+        if name == "categories":
+            if registry["schema"] == MANAGED_SCHEMA and data != managed_bytes(registry):
+                stop("public managed registry serialization mismatch")
+            output["category_schema"] = registry["schema"]
+            output["category_revision"] = registry.get("revision")
+            output["category_sha256"] = hashlib.sha256(data).hexdigest()
         output[name] = result
         digests.append(hashlib.sha256(data).hexdigest())
     output["version"] = hashlib.sha256(":".join(digests).encode("ascii")).hexdigest()
@@ -934,6 +1153,10 @@ def require_multi_category_capability(uid: int, gid: int, categories: list[str],
     """Read-only capability check of the fixed ADMIN importer image before job creation."""
     if len(categories) == 1:
         return
+    if registry.get("category_schema") == MANAGED_SCHEMA:
+        if not managed_pub_ready(registry):
+            stop("managed importer capability missing")
+        return
     probe = ("import json; p='/usr/local/share/coloring-pages/categories.json';"
              " d=json.load(open(p,encoding='utf-8'));"
              " print(json.dumps([x['id'] for x in d['categories']]))")
@@ -955,6 +1178,16 @@ def require_multi_category_capability(uid: int, gid: int, categories: list[str],
     if (type(ids) is not list or ids != list(registry["categories"]) or
         help_result.returncode != 0 or "--additional-category" not in help_result.stdout):
         stop("pinned importer lacks reviewed multi-category capability or registry")
+
+
+def managed_pub_ready(registry):
+    if registry.get("category_schema") != MANAGED_SCHEMA:
+        return True
+    try:
+        doc, digest = read_managed()
+    except Stop:
+        return False
+    return digest == registry.get("category_sha256") and managed_verified(doc, digest)
 
 
 def require_multi_topic_capability(uid: int, gid: int, topics: list[str], registry: dict) -> None:
@@ -1169,7 +1402,11 @@ def run_job(job_id: str) -> None:
             job_categories = validated_categories(job["category"], job.get("categories"), registry)
             job_topics = validated_topics(job.get("topic", ""), job.get("topics"),
                                           job_categories, registry)
-            require_category_capability(uid, gid, job["category"])
+            if registry.get("category_schema") == MANAGED_SCHEMA:
+                if not managed_pub_ready(registry):
+                    stop("managed importer not activated")
+            else:
+                require_category_capability(uid, gid, job["category"])
             require_multi_category_capability(uid, gid, job_categories, registry)
             if job_topics:
                 require_topic_capability(uid, gid)
@@ -1219,6 +1456,8 @@ def run_job(job_id: str) -> None:
                 output = run_tool(IMPORTER, [
                     str(inbox), "--id", page_id, "--title", title, "--character", "",
                     "--category", job["category"], "--age", "3-6", "--difficulty", "easy", "--language", "de",
+                    *([] if registry.get("category_schema") != MANAGED_SCHEMA else
+                      ["--categories-sha256", registry["category_sha256"]]),
                     *[arg for cat in job_categories[1:] for arg in ("--additional-category", cat)],
                     *([arg for i, t in enumerate(job_topics) for arg in
                        (("--topic" if i == 0 else "--additional-topic"), t)]),
@@ -1453,6 +1692,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self.static("fonts/nunito-latin-vf-ba344451eab25b21.woff2", "font/woff2")
             if path == "/api/session":
                 return self.send_json(200, {"csrf_token": CSRF_TOKEN})
+            if path == "/api/categories/manage":
+                if not self.admin_marker():
+                    return
+                snap = managed_snapshot()
+                digest = snap["registry_sha256"]
+                return self.send_json(200, snap, {"ETag": catalog_etag(digest)} if digest else None)
             if path == "/api/categories":
                 registry = load_taxonomy()
                 return self.send_json(200, {
@@ -1555,6 +1800,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             path = urlparse(self.path).path
+            if path == "/api/categories/manage":
+                return self.handle_categories_manage()
             if path == "/api/uploads":
                 return self.handle_upload()
             if path == "/api/jobs":
@@ -1581,6 +1828,19 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_DELETE(self):
         self.send_error_json(405, "method not allowed")
+
+    def handle_categories_manage(self):
+        expected = self.expected_catalog_sha256()
+        request = self.read_request_json()
+        with acquire_catalog_lock():
+            if not managed_snapshot()["enabled"]:
+                return self.send_error_json(503, "managed categories not activated")
+            updated = change_managed(request, expected)
+            if updated is None:
+                return self.send_error_json(412, "categories changed; reload before saving")
+        doc, digest = updated
+        return self.send_json(200, {"status": "updated", "revision": doc["revision"],
+                                    "registry_sha256": digest}, {"ETag": catalog_etag(digest)})
 
     def handle_catalog_edit(self):
         expected_sha256 = self.expected_catalog_sha256()
@@ -1909,6 +2169,8 @@ class Handler(BaseHTTPRequestHandler):
         category, topic, version = raw["category"], raw["topic"], raw["taxonomy_sha256"]
         registry = load_taxonomy()
         selected = validated_categories(category, raw.get("categories"), registry)
+        if registry.get("category_schema") == MANAGED_SCHEMA and not managed_pub_ready(registry):
+            stop("managed taxonomy importer not activated")
         topics = validated_topics(topic, raw.get("topics"), selected, registry)
         if type(version) is not str or version != registry["version"]:
             stop("category/topic or taxonomy version invalid")

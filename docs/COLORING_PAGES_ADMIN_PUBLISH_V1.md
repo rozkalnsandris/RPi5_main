@@ -15,6 +15,29 @@ Accessibility references: https://developer.mozilla.org/en-US/docs/Web/HTML/Refe
 
 Issue: RPi5_main #1149.
 
+## Managed runtime category administration — #1291
+
+The protected ADMIN Categories route supports create, German label edits and guarded
+deletion of unused custom IDs. It uses GET /api/categories/manage and POST
+/api/categories/manage with the existing same-origin marker and CSRF protection,
+a strong If-Match SHA256 precondition (stale returns HTTP 412), exact action-key
+allowlists and fixed canonical filesystem paths. The six structural IDs cannot
+be removed. Current catalog plus complete archive membership (primary and
+secondary) protects referenced categories. Pending publication jobs also block
+writes. The same publication lock serializes category, catalog and importer
+changes, with atomic fsync/write/replace. Failure after the first filesystem
+mutation requires STOP without cleanup, rollback or retry; orphan staging blocks
+future edits until reviewed. Successful changes refresh Add pages and
+Catalog/Edit selectors; IDs do not change on label edits.
+
+Activation is deliberately fail-closed: the source-only feature cannot write
+until coloring-pages#436 is merged and separately deployed, the managed v2
+public file is initialized under owner authorization, and the exact immutable
+pinned importer image proves the same registry SHA256 and
+--categories-sha256 support. No host seed, permissions, Docker image repin,
+LIVE ADMIN full service install/restart, merge or publication is authorized
+by this PR. UI-only deployment is not suitable for the backend change.
+
 ## Canonical category and topic selection (#1276)
 
 ADMIN reads exactly the deployed public `https://ausmalwiese.de/categories.json` and

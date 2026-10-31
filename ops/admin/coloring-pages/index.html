@@ -272,6 +272,7 @@ html{overflow-y:scroll}
       <a href="#overview" data-nav="overview">Overview</a>
       <a href="#upload" data-nav="upload">Add pages</a>
       <a href="#catalog" data-nav="catalog">Catalog</a>
+      <a href="#categories" data-nav="categories">Categories</a>
       <a href="#archive" data-nav="archive">Archive</a>
       <a href="#activity" data-nav="activity">Activity</a>
       <a href="#stats" data-nav="stats">Statistics</a>
@@ -384,6 +385,20 @@ html{overflow-y:scroll}
       </article>
 
     </div>
+  </section>
+  <section class="management-section" data-page="categories" hidden aria-label="Categories">
+   <div class="container"><article class="admin-panel">
+    <div class="panel-heading"><div class="panel-title"><div><span class="panel-kicker">Organization</span><h2>Categories</h2></div></div>
+     <button id="categoriesRefresh" class="secondary" type="button">↻ Refresh</button></div>
+    <p class="category-help">Category IDs are permanent. The six original categories and all referenced categories cannot be deleted.</p>
+    <p id="categoriesStatus" role="status" aria-live="polite">Checking registry…</p>
+    <div id="categoriesRows" class="catalog-grid" aria-live="polite"></div>
+    <form id="categoriesForm" class="field-grid" hidden>
+     <div class="field"><label for="newCategoryId">Category ID</label><input id="newCategoryId" required maxlength="48" pattern="[a-z0-9]+(-[a-z0-9]+)*" autocomplete="off"></div>
+     <div class="field"><label for="newCategoryLabel">German label</label><input id="newCategoryLabel" required maxlength="80" autocomplete="off"></div>
+     <div class="field wide"><button class="primary" type="submit">Create category</button></div>
+    </form>
+   </article></div>
   </section>
   <section class="management-section" data-page="activity" hidden aria-label="Activity">
     <div class="container">
@@ -786,10 +801,74 @@ async function restoreArchiveEntry(x){var typed=window.prompt("Restoring returns
 async function permanentDeleteArchiveEntry(x){var typed=window.prompt("PERMANENT DELETION. Published images, the private original and its matching inbox file (if present) will be deleted. The archive record is kept to reserve the ID. Enter the ID: "+x.id);if(typed===null)return;if(typed.trim()!==x.id){err("The confirmation ID does not match.");return}var phrase=window.prompt('Second confirmation: type DELETE exactly');if(phrase===null)return;if(phrase!=="DELETE"){err("The DELETE confirmation does not match.");return}clearErr();try{var d=await adminFetch("/api/archive/delete",{method:"POST",headers:{"Content-Type":"application/json","If-Match":catalogEtag},body:JSON.stringify({id:x.id,confirm_id:typed.trim(),confirm_phrase:phrase})});showCatalogFeedback("✓ Permanently deleted: "+d.deleted_file_count+" files. The ID reservation was kept.");await refreshContentViews()}catch(e){if(e.httpStatus===412)await loadCatalog();err(e.message)}}
 function activityLabel(e){var names={catalog_edit:"Catalog edit",catalog_archive:"Archived",catalog_restore:"Restored",catalog_delete_started:"Permanent deletion started",catalog_delete:"Permanently deleted",job_terminal:"Publishing job",public_verified:"Publication verified",service_start:"Admin service started"};return names[e.event]||e.event}
 async function loadActivity(){activityCount.textContent="Loading activity…";try{var d=await adminFetch("/api/activity");activityCount.textContent=d.count+" events";activityList.innerHTML="";if(!d.events.length){activityList.innerHTML='<p class="catalog-empty">No activity yet.</p>';return}d.events.forEach(function(e){var row=document.createElement("div");row.className="activity-item";var title=document.createElement("strong");title.textContent=activityLabel(e)+(e.page_id?" · "+e.page_id:"");var time=document.createElement("small");time.textContent=new Date(e.ts).toLocaleString("en-GB");var meta=document.createElement("div");meta.className="activity-meta";var level=document.createElement("span");level.className="activity-level "+e.level;level.textContent=e.level;meta.appendChild(level);["action","changed_fields","job_status","step_status","sitemap_status","error_code","archive_state","deleted_file_count","deleted_byte_count"].forEach(function(k){if(e[k]!==undefined){var s=document.createElement("span");s.className="catalog-tag";s.textContent=k+": "+e[k];meta.appendChild(s)}});row.append(title,time,meta);activityList.appendChild(row)})}catch(e){activityCount.textContent="Could not load activity.";activityList.innerHTML='<p class="catalog-empty">'+escapeHtml(e.message)+'</p>'}}
+var managedCategoryEtag="",managedCategoryEnabled=false;
+var categoriesStatus=document.getElementById("categoriesStatus"),
+ categoriesRows=document.getElementById("categoriesRows"),
+ categoriesForm=document.getElementById("categoriesForm");
+async function loadManagedCategories(){
+ categoriesStatus.textContent="Checking categories…";
+ managedCategoryEtag="";managedCategoryEnabled=false;categoriesForm.hidden=true;categoriesRows.replaceChildren();
+ try{
+   var snapshot=await adminFetch("/api/categories/manage");
+   if(!snapshot.enabled||!/^[0-9a-f]{64}$/.test(snapshot.registry_sha256||"")){
+     categoriesStatus.textContent=snapshot.reason||"Category management is not activated.";
+     return;
+   }
+   managedCategoryEnabled=true;managedCategoryEtag=catalogValidator(snapshot.registry_sha256);
+   categoriesForm.hidden=false;
+   categoriesStatus.textContent="Revision "+snapshot.revision+" · "+snapshot.categories.length+" categories.";
+   snapshot.categories.forEach(function(c){
+     var card=document.createElement("article");card.className="catalog-card";
+     var h=document.createElement("h3");h.textContent=c.label;
+     var count=snapshot.counts[c.id]||{catalog:0,archive:0};
+     var info=document.createElement("small");info.textContent=c.id+" · "+count.catalog+" catalog · "+count.archive+" archive";
+     var actions=document.createElement("div");actions.className="catalog-actions";
+     var rename=document.createElement("button");rename.type="button";rename.className="secondary";rename.textContent="Rename label";
+     rename.onclick=async function(){
+       var label=window.prompt("German category name",c.label);
+       if(label===null||label===c.label)return;
+       await writeManagedCategory({action:"rename",id:c.id,label:label});
+     };
+     actions.append(rename);
+     if(!["tiere","fahrzeuge","alphabet","lernen","figuren","jahreszeiten"].includes(c.id)){
+       var remove=document.createElement("button");remove.type="button";remove.className="danger";remove.textContent="Delete";
+       remove.disabled=!!(count.catalog||count.archive);
+       remove.onclick=async function(){
+         var check=window.prompt("To delete this unused category, type its exact ID: "+c.id);
+         if(check!==c.id)return;
+         await writeManagedCategory({action:"delete",id:c.id,confirm_id:check});
+       };
+       actions.append(remove);
+     }
+     card.append(h,info,actions);categoriesRows.append(card);
+   });
+ }catch(e){categoriesStatus.textContent=e.message;}
+}
+async function writeManagedCategory(payload){
+ if(!managedCategoryEnabled||!managedCategoryEtag)return;
+ try{
+   await adminFetch("/api/categories/manage",{method:"POST",
+     headers:{"Content-Type":"application/json","If-Match":managedCategoryEtag},
+     body:JSON.stringify(payload)});
+   await loadCategories();await loadCatalog();await loadManagedCategories();
+   categoriesStatus.textContent="Saved. Category selectors refreshed.";
+ }catch(e){
+   if(e.httpStatus===412){await loadManagedCategories();categoriesStatus.textContent="Categories changed. Refresh before editing.";}
+   else categoriesStatus.textContent=e.message;
+ }
+}
+document.getElementById("categoriesRefresh").onclick=loadManagedCategories;
+categoriesForm.onsubmit=function(ev){
+ ev.preventDefault();if(!managedCategoryEnabled)return;
+ var id=document.getElementById("newCategoryId").value,label=document.getElementById("newCategoryLabel").value;
+ writeManagedCategory({action:"create",id:id,label:label});
+};
+
 var pageInfo={
   overview:["Overview","Everything you need to manage Ausmalwiese in one place."],
   upload:["Add pages","Choose a ZIP file, review the images and publish them in the selected categories."],
   catalog:["Catalog","Find a page, edit its details or move it to the archive."],
+  categories:["Categories","Create, rename and safely remove unused categories."],
   edit:["Edit page","Update the title, categories, age range and difficulty."],
   archive:["Archive","Restore hidden pages or manage archived entries."],
   stats:["Statistics","Print activity, likes and catalog engagement."],
@@ -815,6 +894,7 @@ function routePage(){
   document.getElementById("admin-title").textContent=pageInfo[page][0];
   document.getElementById("pageDescription").textContent=pageInfo[page][1];
   document.title=pageInfo[page][0]+" – Ausmalwiese";
+  if(page==="categories"&&changed)loadManagedCategories();
   if(page==="edit"&&changed){editBaseline="";document.querySelector(".edit-layout").hidden=true;document.getElementById("editMissing").hidden=false;document.getElementById("editMissing").textContent="Loading entry…";populateEdit()}
   if(window.AdminAnalytics)window.AdminAnalytics.open(page);
   if(changed){document.getElementById("admin-title").focus({preventScroll:true});window.scrollTo(0,0)}
