@@ -20,6 +20,8 @@ class Element {
   removeAttribute(name) { delete this.attrs[name]; }
   focus() { this.focused=true; }
   scrollIntoView() {}
+  showModal() { this.open=true; }
+  close() { this.open=false; }
   reportValidity() { return true; }
 }
 function harness() {
