@@ -125,7 +125,7 @@
   "runtime": {
     "user": "andris",
     "image_ref": "ghcr.io/rozkalnsandris/coloring-pages@sha256:b92ad638dae31206f1b59345fcccb3440828abb837f21ccc6a394cdc9547039a",
-    "source_sha": "1b292b238f491269fa11387b32f9d2742fc3aea1"
+    "source_sha": "cbea269cb5f974d240ab069db762bf85ee112a2a"
   },
   "live_activation": "separate-owner-authorization",
   "recovery": {

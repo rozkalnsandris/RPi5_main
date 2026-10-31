@@ -538,7 +538,7 @@ class StaticTests(unittest.TestCase):
         self.assertEqual(master["safe_margin_color"],"#FFFFFF")
         self.assertEqual(master["fit"],"aspect-ratio-preserving-centered")
         self.assertEqual(contract["publication"]["zip_member_semantics"],"each-png-is-one-independent-single-page-activity")
-        self.assertEqual(contract["runtime"]["source_sha"],"1b292b238f491269fa11387b32f9d2742fc3aea1")
+        self.assertEqual(contract["runtime"]["source_sha"],"cbea269cb5f974d240ab069db762bf85ee112a2a")
         self.assertEqual(contract["runtime"]["image_ref"],"ghcr.io/rozkalnsandris/coloring-pages@sha256:b92ad638dae31206f1b59345fcccb3440828abb837f21ccc6a394cdc9547039a")
         self.assertEqual(admin.IMAGE,contract["runtime"]["image_ref"])
         self.assertEqual(contract["publication"]["multi_topic"]["issue"],1287)
