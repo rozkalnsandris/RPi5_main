@@ -93,6 +93,12 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
         )
         self.assertEqual(completed.returncode, 0, completed.stdout)
 
+    def test_operators_retain_git_executable_mode(self) -> None:
+        # Both are installed as standalone commands; Git must preserve +x.
+        for path in (OPERATOR, ROOT / "ops/bin/coloring-pages-admin-publish"):
+            with self.subTest(path=str(path)):
+                self.assertTrue(path.stat().st_mode & stat.S_IXUSR, str(path))
+
     def test_topics_v2_admin_and_drive_importer_pins_match(self) -> None:
         admin_source = (ROOT / "ops/bin/coloring-pages-admin-publish").read_text(encoding="utf-8")
         self.assertIn(f'IMAGE = "{IMAGE_REF}"', admin_source)
