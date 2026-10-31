@@ -88,7 +88,10 @@ class CategoriesTests(unittest.TestCase):
         html=(ROOT/"ops/admin/coloring-pages/index.html").read_text(encoding="utf-8")
         server=TARGET.read_text(encoding="utf-8")
         for marker in ('href="#categories" data-nav="categories"', 'data-page="categories"',
-                       'id="categoriesStatus" role="status"',
+                       'id="categoriesStatus" class="categories-status" role="status"',
+                       'id="categoriesRows" class="categories-list"',
+                       'id="categoriesCreate" class="categories-add"',
+                       'category-row', 'category-buttons',
                        'await loadCategories();await loadCatalog();await loadManagedCategories();',
                        'method:"POST"','If-Match'):
             self.assertIn(marker,html)

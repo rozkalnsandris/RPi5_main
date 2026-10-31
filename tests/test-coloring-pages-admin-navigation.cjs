@@ -54,7 +54,7 @@ function harness() {
       if(url==="/api/archive")return {ok:true,json:async()=>({entries:[],count:0})};
       if(url==="/api/activity")return {ok:true,json:async()=>({events:[],count:0})};
       if(url==="/api/categories")return {ok:true,json:async()=>state.taxonomy};
-      if(url==="/api/categories/manage")return {ok:true,json:async()=>({enabled:false,reason:"Not activated",categories:[],revision:null,registry_sha256:null,counts:{}})};
+      if(url==="/api/categories/manage")return {ok:true,json:async()=>state.managed||({enabled:false,reason:"Not activated",categories:[],revision:null,registry_sha256:null,counts:{}})};
       if(url==="/api/uploads")return {ok:true,json:async()=>({upload_id:"c".repeat(32),count:1,files:[{title:"Weihnachtsstern"}]})};
       if(url==="/api/jobs")return {ok:true,json:async()=>({job_id:"d".repeat(32),status:"queued",steps:[],results:[]})};
       if(url==="/api/session")return {ok:true,json:async()=>({csrf_token:"fixture"})};
@@ -174,13 +174,36 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
   assert.deepEqual(JSON.parse(edited.options.body).topics,["obst"],"edited checkbox topic transmitted to API");
   assert.deepEqual(JSON.parse(edited.options.body).categories,["tiere"],"edited categories transmitted to API");
   assert.equal(JSON.parse(edited.options.body).category,"tiere","first selected category stays primary");
+  const managed=harness();await ready(managed);
+  managed.state.managed={
+    enabled:true,revision:1,registry_sha256:"f".repeat(64),
+    categories:[{id:"tiere",label:"Tiere"},{id:"berufe",label:"Berufe"},{id:"autos",label:"Autos"}],
+    counts:{tiere:{catalog:91,archive:0},berufe:{catalog:0,archive:0},autos:{catalog:2,archive:1}}
+  };
+  await managed.s.loadManagedCategories();
+  assert.equal(managed.ids.categoriesRows.hidden,false,"active categories list is visible");
+  assert.equal(managed.ids.categoriesCreate.hidden,false,"creation disclosure is available");
+  assert.equal(managed.ids.categoriesRows.children.length,3,"one compact row per category");
+  assert.equal(managed.ids.categoriesRows.children[0].tag,"li","native list semantics");
+  assert.equal(managed.ids.categoriesRows.children[0].children[0].children[0].textContent,"Tiere");
+  assert.equal(managed.ids.categoriesRows.children[0].children[1].textContent,"91 catalog · 0 archive");
+  assert.equal(managed.ids.categoriesRows.children[0].children[2].children.length,1,"built-in categories have no delete");
+  assert.equal(managed.ids.categoriesRows.children[1].children[2].children[1].disabled,false,"unused custom category can be deleted");
+  assert.equal(managed.ids.categoriesRows.children[2].children[2].children[1].disabled,true,"referenced custom category cannot be deleted");
+  assert.equal(managed.ids.categoriesRows.children[2].children[2].children[1].attrs["aria-label"],"Delete Autos (in use)");
+  managed.state.answers=[null];
+  await managed.ids.categoriesRows.children[0].children[2].children[0].onclick();
+  assert.equal(managed.calls.filter(c=>c.url==="/api/categories/manage"&&c.options.method==="POST").length,0,"cancelled rename performs no write");
+  const inactive=harness();await ready(inactive);await inactive.s.loadManagedCategories();
+  assert.equal(inactive.ids.categoriesRows.hidden,true,"unavailable categories hide list");
+  assert.equal(inactive.ids.categoriesCreate.hidden,true,"unavailable categories hide creation");
   h.ids.navToggle.onclick();assert.equal(h.ids.primaryNav.dataset.open,"true");assert.equal(h.ids.navToggle.attrs["aria-expanded"],"true");
   h.listeners.keydown({key:"Escape"});assert.equal(h.ids.primaryNav.dataset.open,"false");assert.equal(h.ids.navToggle.focused,true);
   h.ids.navToggle.onclick();h.ids.primaryNav.onclick({target:{closest:()=>({})}});
   assert.equal(h.ids.navToggle.attrs["aria-expanded"],"false");
   h.ids.navToggle.onclick();h.go("catalog");assert.equal(h.ids.primaryNav.dataset.open,"false");
   const opened=[];h.s.window.AdminAnalytics={open:page=>opened.push(page)};
-  for(const page of ["overview","upload","catalog","archive","activity","stats","traffic"]){
+  for(const page of ["overview","upload","catalog","categories","archive","activity","stats","traffic"]){
     h.go(page);assert.deepEqual(h.pages.filter(x=>!x.hidden).map(x=>x.dataset.page),[page]);
     assert.equal(h.navs.find(x=>x.dataset.nav===page).attrs["aria-current"],"page");
     assert.equal(opened.at(-1),page);

@@ -257,6 +257,40 @@ html{overflow-y:scroll}
 @media(max-width:900px){.stats-kpi-grid,.traffic-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.stats-rankings-grid{grid-template-columns:1fr}.stats-table-heading{align-items:stretch;flex-direction:column}.stats-controls{width:100%}.stats-search{flex:1}.stats-search input{width:100%}}
 @media(max-width:620px){.stats-kpi-grid{grid-template-columns:1fr;gap:12px}.stats-kpi,.stats-panel,.stats-all .container{padding:16px}.stats-panel-heading{align-items:start;flex-direction:column;gap:5px}.stats-top-item{grid-template-columns:24px 56px minmax(0,1fr) auto;gap:8px;min-height:72px}.stats-top-thumb{width:56px;height:56px}.stats-top-metric{font-size:12px}.stats-controls{align-items:stretch;flex-direction:column}.stats-search input,.stats-sort-label select{width:100%}.stats-sort-label select{display:block}.stats-table-wrap{max-width:100%}.analytics-toolbar{align-items:start}.analytics-toolbar .secondary{flex-shrink:0}}
 
+
+/* Compact Categories manager; independent of large image Catalog cards. */
+.categories-shell{max-width:940px}
+.categories-panel{padding:18px 20px}
+.categories-panel .panel-heading{margin-bottom:8px}
+.categories-panel .panel-title h2{font-size:20px}
+.categories-note,.categories-status{margin:0 0 10px;color:var(--muted);font-size:12px;line-height:1.45}
+.categories-status{font-weight:800;color:var(--text)}
+.categories-list{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.category-row{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(148px,.8fr) auto;gap:14px;align-items:center;min-height:54px;padding:7px 12px}
+.category-row+.category-row{border-top:1px solid var(--line)}
+.category-row:nth-child(even){background:#fbfdff}
+.category-main{min-width:0}
+.category-label{display:block;font-size:14px;font-weight:800;line-height:1.3;overflow-wrap:anywhere}
+.category-id{display:block;margin-top:2px;color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+.category-usage{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.category-buttons{display:flex;justify-content:flex-end;gap:6px}
+.category-buttons .secondary,.category-buttons .danger{min-height:40px;padding:7px 11px;font-size:12px}
+.categories-add{margin-top:12px;border:1px solid var(--line);border-radius:12px;background:#fbfdff}
+.categories-add>summary{padding:11px 14px;color:var(--blue-deep);font-size:13px;font-weight:800;cursor:pointer}
+.categories-add[open]>summary{border-bottom:1px solid var(--line)}
+.categories-create{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:10px;align-items:end;padding:12px 14px}
+.categories-create .field{min-width:0}
+.categories-create .field input{min-height:40px}
+.categories-create .primary{min-height:40px;white-space:nowrap}
+@media(max-width:700px){
+  .categories-panel{padding:14px}
+  .category-row{grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;padding:8px 10px}
+  .category-usage{grid-column:1;grid-row:2;white-space:normal}
+  .category-buttons{grid-column:2;grid-row:1/3;align-self:center}
+  .categories-create{grid-template-columns:minmax(0,1fr)}
+  .categories-create .primary{width:100%}
+}
+
 </style>
 </head>
 <body>
@@ -387,18 +421,23 @@ html{overflow-y:scroll}
     </div>
   </section>
   <section class="management-section" data-page="categories" hidden aria-label="Categories">
-   <div class="container"><article class="admin-panel">
-    <div class="panel-heading"><div class="panel-title"><div><span class="panel-kicker">Organization</span><h2>Categories</h2></div></div>
-     <button id="categoriesRefresh" class="secondary" type="button">↻ Refresh</button></div>
-    <p class="category-help">Category IDs are permanent. The six original categories and all referenced categories cannot be deleted.</p>
-    <p id="categoriesStatus" role="status" aria-live="polite">Checking registry…</p>
-    <div id="categoriesRows" class="catalog-grid" aria-live="polite"></div>
-    <form id="categoriesForm" class="field-grid" hidden>
-     <div class="field"><label for="newCategoryId">Category ID</label><input id="newCategoryId" required maxlength="48" pattern="[a-z0-9]+(-[a-z0-9]+)*" autocomplete="off"></div>
-     <div class="field"><label for="newCategoryLabel">German label</label><input id="newCategoryLabel" required maxlength="80" autocomplete="off"></div>
-     <div class="field wide"><button class="primary" type="submit">Create category</button></div>
-    </form>
-   </article></div>
+    <div class="container categories-shell"><article class="admin-panel categories-panel">
+      <div class="panel-heading">
+        <div class="panel-title"><div><span class="panel-kicker">Organization</span><h2>Category list</h2></div></div>
+        <button id="categoriesRefresh" class="secondary" type="button">↻ Refresh</button>
+      </div>
+      <p class="categories-note">IDs are permanent. Original or in-use categories cannot be deleted.</p>
+      <p id="categoriesStatus" class="categories-status" role="status" aria-live="polite">Checking registry…</p>
+      <ul id="categoriesRows" class="categories-list" aria-label="Categories and usage" hidden></ul>
+      <details id="categoriesCreate" class="categories-add" hidden>
+        <summary>Add category</summary>
+        <form id="categoriesForm" class="categories-create">
+          <div class="field"><label for="newCategoryId">Category ID</label><input id="newCategoryId" required maxlength="48" pattern="[a-z0-9]+(-[a-z0-9]+)*" autocomplete="off"></div>
+          <div class="field"><label for="newCategoryLabel">German label</label><input id="newCategoryLabel" required maxlength="80" autocomplete="off"></div>
+          <button class="primary" type="submit">Create category</button>
+        </form>
+      </details>
+    </article></div>
   </section>
   <section class="management-section" data-page="activity" hidden aria-label="Activity">
     <div class="container">
@@ -804,10 +843,11 @@ async function loadActivity(){activityCount.textContent="Loading activity…";tr
 var managedCategoryEtag="",managedCategoryEnabled=false;
 var categoriesStatus=document.getElementById("categoriesStatus"),
  categoriesRows=document.getElementById("categoriesRows"),
+ categoriesCreate=document.getElementById("categoriesCreate"),
  categoriesForm=document.getElementById("categoriesForm");
 async function loadManagedCategories(){
  categoriesStatus.textContent="Checking categories…";
- managedCategoryEtag="";managedCategoryEnabled=false;categoriesForm.hidden=true;categoriesRows.replaceChildren();
+ managedCategoryEtag="";managedCategoryEnabled=false;categoriesCreate.hidden=true;categoriesRows.hidden=true;categoriesRows.replaceChildren();
  try{
    var snapshot=await adminFetch("/api/categories/manage");
    if(!snapshot.enabled||!/^[0-9a-f]{64}$/.test(snapshot.registry_sha256||"")){
@@ -815,24 +855,30 @@ async function loadManagedCategories(){
      return;
    }
    managedCategoryEnabled=true;managedCategoryEtag=catalogValidator(snapshot.registry_sha256);
-   categoriesForm.hidden=false;
-   categoriesStatus.textContent="Revision "+snapshot.revision+" · "+snapshot.categories.length+" categories.";
+   categoriesCreate.hidden=false;categoriesRows.hidden=false;
+   categoriesStatus.textContent=snapshot.categories.length+" categories · revision "+snapshot.revision;
    snapshot.categories.forEach(function(c){
-     var card=document.createElement("article");card.className="catalog-card";
-     var h=document.createElement("h3");h.textContent=c.label;
+     var row=document.createElement("li");row.className="category-row";
+     var main=document.createElement("div");main.className="category-main";
+     var label=document.createElement("strong");label.className="category-label";label.textContent=c.label;
+     var ident=document.createElement("span");ident.className="category-id";ident.textContent=c.id;
+     main.append(label,ident);
      var count=snapshot.counts[c.id]||{catalog:0,archive:0};
-     var info=document.createElement("small");info.textContent=c.id+" · "+count.catalog+" catalog · "+count.archive+" archive";
-     var actions=document.createElement("div");actions.className="catalog-actions";
-     var rename=document.createElement("button");rename.type="button";rename.className="secondary";rename.textContent="Rename label";
+     var usage=document.createElement("span");usage.className="category-usage";
+     usage.textContent=count.catalog+" catalog · "+count.archive+" archive";
+     var actions=document.createElement("div");actions.className="category-buttons";
+     var rename=document.createElement("button");rename.type="button";rename.className="secondary";rename.textContent="Rename";
+     rename.setAttribute("aria-label","Rename "+c.label);
      rename.onclick=async function(){
-       var label=window.prompt("German category name",c.label);
-       if(label===null||label===c.label)return;
-       await writeManagedCategory({action:"rename",id:c.id,label:label});
+       var nextLabel=window.prompt("German category name",c.label);
+       if(nextLabel===null||nextLabel===c.label)return;
+       await writeManagedCategory({action:"rename",id:c.id,label:nextLabel});
      };
      actions.append(rename);
      if(!["tiere","fahrzeuge","alphabet","lernen","figuren","jahreszeiten"].includes(c.id)){
        var remove=document.createElement("button");remove.type="button";remove.className="danger";remove.textContent="Delete";
        remove.disabled=!!(count.catalog||count.archive);
+       remove.setAttribute("aria-label","Delete "+c.label+(remove.disabled?" (in use)":""));
        remove.onclick=async function(){
          var check=window.prompt("To delete this unused category, type its exact ID: "+c.id);
          if(check!==c.id)return;
@@ -840,7 +886,7 @@ async function loadManagedCategories(){
        };
        actions.append(remove);
      }
-     card.append(h,info,actions);categoriesRows.append(card);
+     row.append(main,usage,actions);categoriesRows.append(row);
    });
  }catch(e){categoriesStatus.textContent=e.message;}
 }
@@ -851,6 +897,11 @@ async function writeManagedCategory(payload){
      headers:{"Content-Type":"application/json","If-Match":managedCategoryEtag},
      body:JSON.stringify(payload)});
    await loadCategories();await loadCatalog();await loadManagedCategories();
+   if(payload.action==="create"){
+     document.getElementById("newCategoryId").value="";
+     document.getElementById("newCategoryLabel").value="";
+     categoriesCreate.open=false;
+   }
    categoriesStatus.textContent="Saved. Category selectors refreshed.";
  }catch(e){
    if(e.httpStatus===412){await loadManagedCategories();categoriesStatus.textContent="Categories changed. Refresh before editing.";}
