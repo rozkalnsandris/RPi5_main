@@ -498,3 +498,73 @@ language is `en`. Catalog titles and other owner-entered content retain their
 original language. Existing Latin Extended font support remains available for
 those titles. Restore and Refresh remain distinct actions; the exact `DELETE`
 confirmation and all existing mutation guards remain unchanged.
+
+## Compact category/topic manager pattern (2026-10-31)
+
+**Canonical shipped reference:** `RPi5_main#1293` squash-merged into
+`main@860318022e71f2aee6bbec583785200fe016730d`, protected UI
+`ops/admin/coloring-pages/index.html` and `#categories`. The RPi5 owner
+confirmed `ADMIN_CATEGORIES_COMPACT_UI=PASS` and Opera verified six semantic
+list rows plus the collapsed `Add category` disclosure. This is the preferred
+native management layout for small/medium taxonomies, including Topics.
+
+### Visual, interaction and accessibility rules
+
+- **One constrained, quiet panel**, not the image-card `catalog-grid`. Use
+  `categories-shell` (max-width 940px), compact heading, short instruction and
+  an accessible `role="status"` state line.
+- **Semantic list, one topic/category per row:** `ul/li`, readable label,
+  immutable slug in muted secondary text, compact assigned catalog/archive
+  counts, and short row-scoped buttons with a unique accessible name (for
+  example `Rename Tiere` or `Edit Weihnachten`). No decorative thumbnails.
+- **Progressive disclosure:** a collapsed native `details/summary` for
+  `Add category` or `Add topic` with explicitly labeled inputs. When editing
+  a Topic with multiple fields, use one accessible row-scoped editor/dialog
+  opened on demand, not full forms repeated in every row.
+- **Small screens:** the name stays primary, counts wrap beneath it and action
+  controls remain reachable. Preserve visible keyboard focus, feedback,
+  disabled-in-use actions and no horizontal overflow. Avoid a data table when
+  the narrow screen has too few columns to remain readable.
+- **State safety:** initial loading, unavailable/disabled registry, stale
+  `If-Match` and failed writes display a clear message. Don't show enabled
+  editing controls when the managed backend is unavailable. Keep a visible
+  Refresh control and clear a successful Add form.
+- **Existing code is the source of truth:** reuse current `categories-panel`,
+  `categories-list`, `category-row`, `category-buttons`,
+  `categories-add` and tested JavaScript behavior rather than adding an
+  unrelated framework or another large card grid. Ensure original Categories
+  flow and Add pages/Catalog selectors remain intact.
+
+### Topics-specific data and security boundary
+
+`Topics` currently uses image-local `metadata/topics.json`
+(`rozkalns.coloring-pages.topics.v1`) containing `id`, `label`, `icon`,
+`kind` and for seasonal topics `active_from`/`active_to`, plus
+`legacy_terms`. The importer uses the image-local allowed topic IDs and
+kind. Consequently **a UI-only Topics mutation is unsafe** even if it looks
+like the compact Categories manager.
+
+Delivery sequence:
+
+1. `coloring-pages#438`: a shared versioned managed Topics v2 registry
+   served publicly with exact immutable importer verification. Preserve all
+   original topic IDs, kind/date/icon/keyword semantics and compatibility.
+2. `RPi5_main#1294`: protected `#topics` editor using this compact pattern;
+   show label, slug, kind, icon and usage counts, with collapsible Add and
+   bounded Edit controls. Reuse same-origin CSRF, strong `If-Match`, fixed
+   allowlisted mutations, shared publishing lock and referenced-topic delete
+   refusal; `kind` changes cannot silently invalidate existing pages.
+3. After separate owner-authorized merge and **LIVE evidence** for the shared
+   runtime/importer, enable the ADMIN Topics mutation API through the guarded
+   full installer (backend changes require restart). Verify synchronized
+   Add pages and Catalog/Edit pickers. Never infer LIVE from GitHub alone.
+
+**Gates:** This documentation and a future source PR do not authorize
+creation, modification or deletion of LIVE topics, registry seeding/migration,
+content/media changes, importer redeploy, service restart, Access/permissions
+or any merge. Owner authorizations remain separate and exact.
+
+References: `RPi5_main#1291` (Categories API), `RPi5_main#1293` (compact
+UI), `RPi5_main#1294` (Topics management), `coloring-pages#438`
+(public/importer prerequisite), W3C HTML native list/details and WCAG 2.2
+focus/target guidance.
