@@ -568,3 +568,11 @@ References: `RPi5_main#1291` (Categories API), `RPi5_main#1293` (compact
 UI), `RPi5_main#1294` (Topics management), `coloring-pages#438`
 (public/importer prerequisite), W3C HTML native list/details and WCAG 2.2
 focus/target guidance.
+
+## Managed Topics v2 (#1294) — source-only
+
+The protected ADMIN now has a compact accessible `#topics` list, one native collapsed Add form, a single Edit dialog and disabled-on-unavailable controls. `GET /api/topics/manage` provides full canonical revision/metadata, live/catalog/archive counts and strong SHA-256 ETag. `POST /api/topics/manage` allows exactly create/update/delete; token, exact Origin/Fetch Metadata, fixed path, immutable IDs, strict schema, shared publication lock, strong `If-Match` (stale 412), no active/queued jobs and referenced-topic delete/kind-change refusal. A staged write is fsync'd and atomically replaced with verification; after the first mutation any error is terminal without retry, rollback or cleanup.
+
+The only canonical registry is `/srv/coloring-pages-content/public/topics.json`. Admin checks exact managed v2 bytes against public `/topics.json` and a **pinned networkless immutable importer** with `--topics-sha256` and the same mounted registry, no image-local fallback. Legacy public v1 topics remain read-compatible but cannot activate the editor. Any Topics edit reloads Add pages and Catalog/Edit pickers. Every v2 import passes the expected SHA even without a chosen topic.
+
+**Activation gate:** `coloring-pages#438` / PR #439 must be separately merged and LIVE-proven with exact registry seed, public mount and pinned importer **before** the protected ADMIN backend can be activated through a separately owner-authorized *full* installer/restart. This PR does not authorize merge, LIVE, registry seeding, image repin or host mutations. References: MDN HTTP If-Match/412, OWASP CSRF prevention and native details/summary.
