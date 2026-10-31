@@ -48,7 +48,7 @@ WEB_ROOT = Path("/usr/local/share/coloring-pages-admin")
 SOURCE_WEB_ROOT = Path(__file__).resolve().parents[1] / "admin" / "coloring-pages"
 
 DOCKER = "/usr/bin/docker"
-IMAGE = "ghcr.io/rozkalnsandris/coloring-pages@sha256:b92ad638dae31206f1b59345fcccb3440828abb837f21ccc6a394cdc9547039a"
+IMAGE = "ghcr.io/rozkalnsandris/coloring-pages@sha256:d5546fac6922c3b01645f59d8c7d0658cbbcbe1a4eac3ccdd629621da863777c"
 PRINT_MASTER = "/usr/local/bin/coloring-pages-print-master"
 IMPORTER = "/usr/local/bin/coloring-pages-import"
 ORIGIN = "https://ausmalwiese.de"

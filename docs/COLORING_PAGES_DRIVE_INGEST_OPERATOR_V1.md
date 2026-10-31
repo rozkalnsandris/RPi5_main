@@ -89,7 +89,7 @@ Leftover partial state is preserved and causes STOP. There is no automatic retry
 The same publish operator directly runs the reviewed immutable image:
 
 ```text
-ghcr.io/rozkalnsandris/coloring-pages@sha256:2a80b56c20c37f4a530059c3e438c6627fd962786e6590dd914e59e86a837ba8
+ghcr.io/rozkalnsandris/coloring-pages@sha256:d5546fac6922c3b01645f59d8c7d0658cbbcbe1a4eac3ccdd629621da863777c
 ```
 
 Entrypoint:
@@ -174,3 +174,9 @@ References:
 For a v2 activity the operator requires private originals `source-1.png` through `source-N.png` to match every owner-bound size/SHA-256. It verifies one catalogue item whose top-level `preview`/`print` point to page 1 and whose ordered `pages[]` exactly matches `preview-N.webp` + `print-N.png`. `thumb.webp`, every page derivative and every public URL must pass before the v2 PASS receipt is written.
 
 The operator invokes the importer once with all ordered direct-child inbox paths and an explicit activity ID. It expects the immutable importer result `IMPORTED=<id> PAGES=<N>`. A failure after persistent mutation starts is a STOP; no automatic retry, rollback or cleanup is added.
+
+## Managed Topics v2 image repin — source-only (#1294)
+
+The immutable importer is pinned to `ghcr.io/rozkalnsandris/coloring-pages@sha256:d5546fac6922c3b01645f59d8c7d0658cbbcbe1a4eac3ccdd629621da863777c`, built from `coloring-pages@0930f938f957e29c8d6597acbf2b49e0dba37eda` in GitHub Actions run [41234648027](https://github.com/rozkalnsandris/coloring-pages/actions/runs/41234648027). The run's build/promotion logs prove this exact digest, not merely the mutable production tag. The host operator source, import contract, host contract and offline tests must use the same digest. Retain `--pull=never`, `--network none`, read-only root and exact mounted content-root identity.
+
+This is a source pin only. The bridge operator's installed identity and the ADMIN full backend remain unchanged until separately owner-authorized host installation and read-only importer v2 capability verification. No Drive import, publication, service restart, runtime mutation or retry is authorized by this source change.
