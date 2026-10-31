@@ -19,7 +19,7 @@ CONTRACT = ROOT / "ops/contracts/coloring-pages-drive-ingest-operator-v1.json"
 INSTALLER = ROOT / "scripts/install-coloring-pages-drive-ingest-operator-v1.sh"
 HOST_CONTRACT = ROOT / "ops/contracts/simple-deploy-host-v1.json"
 
-IMAGE_DIGEST = "sha256:2a80b56c20c37f4a530059c3e438c6627fd962786e6590dd914e59e86a837ba8"
+IMAGE_DIGEST = "sha256:d5546fac6922c3b01645f59d8c7d0658cbbcbe1a4eac3ccdd629621da863777c"
 IMAGE_REF = f"ghcr.io/rozkalnsandris/coloring-pages@{IMAGE_DIGEST}"
 
 LOADER = importlib.machinery.SourceFileLoader(
@@ -92,6 +92,12 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(completed.returncode, 0, completed.stdout)
+
+    def test_topics_v2_admin_and_drive_importer_pins_match(self) -> None:
+        admin_source = (ROOT / "ops/bin/coloring-pages-admin-publish").read_text(encoding="utf-8")
+        self.assertIn(f'IMAGE = "{IMAGE_REF}"', admin_source)
+        self.assertEqual(drive_ingest.IMPORTER_IMAGE, IMAGE_REF)
+        self.assertEqual(self.contract["consumer"]["source_revision"], "0930f938f957e29c8d6597acbf2b49e0dba37eda")
 
     def test_contract_is_one_operator_with_direct_immutable_import(self) -> None:
         consumer = self.contract["consumer"]
@@ -424,7 +430,7 @@ class ColoringPagesPublishOperatorTests(unittest.TestCase):
     def test_v2_contract_keeps_one_operator_and_verifies_all_pages_first(self) -> None:
         self.assertEqual(
             self.contract["consumer"]["source_revision"],
-            "337f78988064536250a6094a01563233d81891ff",
+            "0930f938f957e29c8d6597acbf2b49e0dba37eda",
         )
         self.assertIn("--expected-page", self.contract["operator"]["allowed_arguments"])
         self.assertEqual(

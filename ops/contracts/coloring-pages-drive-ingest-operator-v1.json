@@ -4,10 +4,10 @@
   "status": "source-defined-not-installed",
   "consumer": {
     "repository": "rozkalnsandris/coloring-pages",
-    "image_digest": "sha256:2a80b56c20c37f4a530059c3e438c6627fd962786e6590dd914e59e86a837ba8",
-    "image_ref": "ghcr.io/rozkalnsandris/coloring-pages@sha256:2a80b56c20c37f4a530059c3e438c6627fd962786e6590dd914e59e86a837ba8",
+    "image_digest": "sha256:d5546fac6922c3b01645f59d8c7d0658cbbcbe1a4eac3ccdd629621da863777c",
+    "image_ref": "ghcr.io/rozkalnsandris/coloring-pages@sha256:d5546fac6922c3b01645f59d8c7d0658cbbcbe1a4eac3ccdd629621da863777c",
     "importer_entrypoint": "/usr/local/bin/coloring-pages-import",
-    "source_revision": "337f78988064536250a6094a01563233d81891ff"
+    "source_revision": "0930f938f957e29c8d6597acbf2b49e0dba37eda"
   },
   "operator": {
     "source": "ops/bin/coloring-pages-drive-ingest",
@@ -145,7 +145,7 @@
   "import": {
     "method": "direct-immutable-container",
     "runtime": "/usr/bin/docker",
-    "image_ref": "ghcr.io/rozkalnsandris/coloring-pages@sha256:2a80b56c20c37f4a530059c3e438c6627fd962786e6590dd914e59e86a837ba8",
+    "image_ref": "ghcr.io/rozkalnsandris/coloring-pages@sha256:d5546fac6922c3b01645f59d8c7d0658cbbcbe1a4eac3ccdd629621da863777c",
     "entrypoint": "/usr/local/bin/coloring-pages-import",
     "pull_policy": "never",
     "network": "none",
