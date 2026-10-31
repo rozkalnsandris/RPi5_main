@@ -92,7 +92,7 @@ class CategoriesTests(unittest.TestCase):
                        'id="categoriesRows" class="categories-list"',
                        'id="categoriesCreate" class="categories-add"',
                        'category-row', 'category-buttons',
-                       'await loadCategories();await loadCatalog();await loadManagedCategories();',
+                       'await loadCategories();await loadCatalog();await refreshTaxonomyManagers();',
                        'method:"POST"','If-Match'):
             self.assertIn(marker,html)
         for marker in ('if path == "/api/categories/manage":', 'with acquire_catalog_lock():',

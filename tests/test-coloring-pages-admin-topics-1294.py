@@ -85,11 +85,14 @@ class TopicTests(unittest.TestCase):
     def test_ui_http_and_lock_contract(self):
         html=(ROOT/"ops/admin/coloring-pages/index.html").read_text()
         source=TARGET.read_text()
-        for marker in ('href="#topics" data-nav="topics"','data-page="topics"',
+        for marker in ('href="#categories" data-nav="categories"','data-page="categories"',
+                       'id="managedTopicsPanel"','refreshTaxonomyManagers()',
                        'id="topicsRows"','id="topicsCreate"','topicsDialog',
                        'loadManagedTopics()', 'await loadCategories();await loadCatalog();',
                        'If-Match','role="status" aria-live="polite"'):
             self.assertIn(marker,html)
+        self.assertNotIn('data-nav="topics"',html)
+        self.assertNotIn('data-page="topics"',html)
         for marker in ('path == "/api/topics/manage"','def handle_topics_manage(self):',
                        'self.headers.get("Origin")','self.headers.get("Sec-Fetch-Site")',
                        'with acquire_catalog_lock():','self.send_error_json(412, "topics changed',
