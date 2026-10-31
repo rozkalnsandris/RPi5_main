@@ -50,8 +50,8 @@ function harness() {
     fetch:async(url,options={})=>{
       calls.push({url,options});
       if(["/api/catalog/edit","/api/catalog/archive","/api/catalog/restore","/api/archive/delete"].includes(url))return {ok:state.status===200,status:state.status,json:async()=>state.status===200?({status:"ok",deleted_file_count:1}):({error:"stale"})};
-      if(url==="/api/catalog")return {ok:true,headers:{get:()=>state.etag},json:async()=>({entries:state.entries,count:state.entries.length,catalog_sha256:state.catalogSha})};
-      if(url==="/api/archive")return {ok:true,json:async()=>({entries:[],count:0})};
+      if(url==="/api/catalog")return {ok:!state.usageReadFails,status:state.usageReadFails?503:200,headers:{get:()=>state.etag},json:async()=>({entries:state.entries,count:state.entries.length,catalog_sha256:state.catalogSha})};
+      if(url==="/api/archive")return {ok:true,json:async()=>({entries:state.archiveEntries||[],count:(state.archiveEntries||[]).length,catalog_sha256:state.archiveSha||state.catalogSha})};
       if(url==="/api/activity")return {ok:true,json:async()=>({events:[],count:0})};
       if(url==="/api/categories")return {ok:true,json:async()=>state.taxonomy};
       if(url==="/api/categories/manage")return {ok:true,json:async()=>state.managed||({enabled:false,reason:"Not activated",categories:[],revision:null,registry_sha256:null,counts:{}})};
@@ -195,6 +195,70 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
   managed.state.answers=[null];
   await managed.ids.categoriesRows.children[0].children[2].children[0].onclick();
   assert.equal(managed.calls.filter(c=>c.url==="/api/categories/manage"&&c.options.method==="POST").length,0,"cancelled rename performs no write");
+  const grouped=harness();await ready(grouped);
+  grouped.state.entries=[
+    {id:"0000001",category:"tiere",categories:["tiere","autos","autos"],topics:["bauernhof","bauernhof","obst"]},
+    {id:"0000002",category:"tiere",categories:["tiere"],topics:["bauernhof"]},
+    {id:"0000003",category:"berufe",topics:[]}
+  ];
+  grouped.state.archiveEntries=[
+    {state:"archived",entry:{id:"0000004",category:"autos",topics:["bauernhof"]}},
+    {state:"archived",entry:{id:"0000005",category:"berufe",topics:["obst"]}}
+  ];
+  grouped.state.managed={
+    enabled:true,revision:1,registry_sha256:"f".repeat(64),
+    categories:[{id:"tiere",label:"Tiere"},{id:"autos",label:"Autos"},{id:"berufe",label:"Berufe"}],
+    counts:{tiere:{catalog:2,archive:0},autos:{catalog:1,archive:1},berufe:{catalog:1,archive:1}}
+  };
+  grouped.state.managedTopics={
+    enabled:true,revision:1,registry_sha256:"e".repeat(64),
+    topics:[
+      {id:"bauernhof",label:"Bauernhof",icon:"🚜",kind:"evergreen",legacy_terms:[]},
+      {id:"obst",label:"Obst",icon:"🍎",kind:"evergreen",legacy_terms:[]},
+      {id:"weihnachten",label:"Weihnachten",icon:"🎄",kind:"seasonal",legacy_terms:[]}
+    ],
+    counts:{bauernhof:{catalog:2,archive:1},obst:{catalog:1,archive:1},weihnachten:{catalog:0,archive:0}}
+  };
+  await grouped.s.refreshTaxonomyManagers();
+  assert.equal(grouped.ids.categoriesRows.children.length,3);
+  assert.equal(grouped.ids.categoriesRows.children[0].children[3].tag,"details","native disclosure added under Category");
+  const tiereDetails=grouped.ids.categoriesRows.children[0].children[3];
+  assert.equal(tiereDetails.children[0].tag,"summary");
+  assert.equal(tiereDetails.children[0].textContent,"2 used topics — show / hide");
+  const tiereTopics=tiereDetails.children[1].children;
+  assert.equal(tiereTopics.length,2,"duplicate topic IDs counted once per category");
+  assert.equal(tiereTopics[0].children[0].children[0].textContent,"🚜 Bauernhof");
+  assert.equal(tiereTopics[0].children[1].textContent,"2 catalog · 0 archive");
+  assert.equal(tiereTopics[0].children[2].children[1].disabled,true,"in-use topic cannot be deleted from grouped view");
+  assert.equal(tiereTopics[1].children[1].textContent,"1 catalog · 0 archive");
+  const autosTopics=grouped.ids.categoriesRows.children[1].children[3].children[1].children;
+  assert.equal(autosTopics.length,2,"multi-category use shows the same Topic in both categories");
+  assert.equal(autosTopics[0].children[1].textContent,"1 catalog · 1 archive","archived references included per category");
+  const berufeTopics=grouped.ids.categoriesRows.children[2].children[3].children[1].children;
+  assert.equal(berufeTopics.length,1);
+  assert.equal(berufeTopics[0].children[1].textContent,"0 catalog · 1 archive");
+  assert.equal(grouped.ids.topicsRows.children.length,1,"unreferenced topic remains manageable");
+  assert.equal(grouped.ids.topicsRows.children[0].children[0].children[0].textContent,"🎄 Weihnachten");
+  assert.equal(grouped.ids.topicsRows.children[0].children[2].children[1].disabled,false);
+  tiereDetails.open=true;tiereDetails.ontoggle();
+  await grouped.s.refreshTaxonomyManagers();
+  assert.equal(grouped.ids.categoriesRows.children[0].children[3].open,true,"expanded state retained after refresh");
+  const d=grouped.ids.categoriesRows.children[0].children[3].children[1].children[0];
+  d.children[2].children[0].onclick();
+  assert.equal(grouped.ids.topicEditId.value,"bauernhof","edit dialog works from grouped Topic row");
+  grouped.state.usageReadFails=true;
+  await grouped.s.refreshTaxonomyManagers();
+  assert.equal(grouped.ids.categoriesRows.children[0].children.length,3,"failed read never shows invented group");
+  assert.equal(grouped.ids.topicsRows.children.length,3,"all Topics remain accessible on grouping failure");
+  assert.match(grouped.ids.topicGroupsStatus.textContent,/unavailable/);
+  grouped.state.usageReadFails=false;grouped.state.archiveSha="b".repeat(64);
+  await grouped.s.refreshTaxonomyManagers();
+  assert.equal(grouped.ids.categoriesRows.children[0].children.length,3,"inconsistent catalog/archive hashes cannot be grouped");
+  grouped.state.archiveSha=null;
+  grouped.state.entries=[{id:"0000007",category:"tiere",topics:[]}];grouped.state.archiveEntries=[];
+  await grouped.s.refreshTaxonomyManagers();
+  assert.equal(grouped.ids.categoriesRows.children[0].children[3].children[1].textContent,"No topics used by catalog or archived pages in this category.");
+  assert.equal(grouped.ids.topicsRows.children.length,3,"kind alone never fabricates category assignments");
   const inactive=harness();await ready(inactive);await inactive.s.loadManagedCategories();
   assert.equal(inactive.ids.categoriesRows.hidden,true,"unavailable categories hide list");
   assert.equal(inactive.ids.categoriesCreate.hidden,true,"unavailable categories hide creation");
