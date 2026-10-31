@@ -124,8 +124,8 @@
   },
   "runtime": {
     "user": "andris",
-    "image_ref": "ghcr.io/rozkalnsandris/coloring-pages@sha256:b92ad638dae31206f1b59345fcccb3440828abb837f21ccc6a394cdc9547039a",
-    "source_sha": "cbea269cb5f974d240ab069db762bf85ee112a2a"
+    "image_ref": "ghcr.io/rozkalnsandris/coloring-pages@sha256:d5546fac6922c3b01645f59d8c7d0658cbbcbe1a4eac3ccdd629621da863777c",
+    "source_sha": "0930f938f957e29c8d6597acbf2b49e0dba37eda"
   },
   "live_activation": "separate-owner-authorization",
   "recovery": {
