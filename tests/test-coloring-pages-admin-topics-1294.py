@@ -93,7 +93,7 @@ class TopicTests(unittest.TestCase):
         for marker in ('path == "/api/topics/manage"','def handle_topics_manage(self):',
                        'self.headers.get("Origin")','self.headers.get("Sec-Fetch-Site")',
                        'with acquire_catalog_lock():','self.send_error_json(412, "topics changed',
-                       '"--topics-sha256"','managed_topics_ready(registry)',
+                       '"--topics-sha256"','topics_runtime_ready(registry)',
                        'data != topics_canonical_bytes(registry)'):
             self.assertIn(marker,source)
 
