@@ -1191,7 +1191,7 @@ async function writeManagedTopic(raw){
     topicsStatus.textContent=stale?"Topics changed. Refresh before editing.":e.message;
   }finally{topicsWriting=false}
 }
-function refreshTaxonomyManagers(){
+async function refreshTaxonomyManagers(){
   var generation=++managerRefreshGeneration;
   // Serialize manager reads so an older response cannot replace newer snapshots.
   var task=managerRefreshBarrier.then(async function(){
