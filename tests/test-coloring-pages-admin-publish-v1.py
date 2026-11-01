@@ -422,6 +422,20 @@ class StaticTests(unittest.TestCase):
             self.assertIn(f'"${key}_TMP" "/usr/local/share/coloring-pages-admin/fonts/${key}_NAME"',full)
             self.assertGreater(full.rindex(f'/assets/fonts/${key}_NAME'),full.index('systemctl restart'))
 
+    def test_category_topic_installer_preflight_is_fail_closed(self):
+        installer = (ROOT/"scripts/install-coloring-pages-admin-publish-v1.sh").read_text()
+        ui = installer.split('if [[ "$MODE" == "ui-only" ]]; then')[1].split("exit 0")[0]
+        full = installer.split("test -f \"$PUBLISH_LOCK\"")[0]
+        self.assertIn("/api/category-topics/manage", ui)
+        self.assertLess(ui.index("/api/category-topics/manage"), ui.index("install -o root"))
+        self.assertIn("CATEGORY_TOPIC_LINKS_OWNER_SEED_REQUIRED", full)
+        self.assertIn("CATEGORY_TOPIC_LINKS_UNSAFE_IDENTITY", full)
+        self.assertIn("CATEGORY_TOPIC_LINKS_INVALID_SEED", full)
+        self.assertIn("os.O_NOFOLLOW", full)
+        self.assertIn("data[\"schema\"] == \"rozkalns.rpi5-main.category-topic-links.v1\"", full)
+        self.assertLess(installer.index("CATEGORY_TOPIC_LINKS_OWNER_SEED_REQUIRED"),
+                        installer.index('BALOO_TMP="$(mktemp)"'))
+
     def test_navigation_behavior(self):
         subprocess.run(["node", str(ROOT/"tests/test-coloring-pages-admin-navigation.cjs")], check=True, timeout=30)
 
