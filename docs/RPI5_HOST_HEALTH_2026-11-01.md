@@ -158,7 +158,7 @@ Record changes and confirmed failures separately from observations. Distinguish 
 
 ## 9. Source-only Hermes free-only change plan (2026-11-01)
 
-**Scope:** prospective single-key change to the private `rpi5` file `/home/andris/.hermes/config.yaml`, **not performed** in this source-only work. This is a proposed LIVE decision envelope, not an authorization, runnable production patch, successful acceptance test or proof of gateway adoption.
+**Scope:** prospective single-key change to the private `rpi5` Hermes configuration file (`<HERMES_CONFIG>`, exact target bound only in the separate owner LIVE authorization), **not performed** in this source-only work. This is a proposed LIVE decision envelope, not an authorization, runnable production patch, successful acceptance test or proof of gateway adoption.
 
 ### Additional read-only source and host metadata
 
