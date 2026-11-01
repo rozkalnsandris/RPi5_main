@@ -627,3 +627,19 @@ remain untouched; no backend or LIVE change is authorized.
 
 References: [MDN native details](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/details),
 [GOV.UK accordion guidance](https://design-system.service.gov.uk/components/accordion/).
+
+## Compact category and unused-topic disclosures — #1303 (source only)
+
+Category rows with zero catalog/archive-used Topics display plain, noninteractive
+“No topics used in pages.” text; only rows with genuine used Topics expose a
+native `details/summary` accordion. The Topics manager places unmatched Topics
+inside one initially collapsed, keyboard-accessible disclosure, reporting its
+current count. It says “Unused topics” only when global catalog/archive counts
+also show no references; otherwise it says “Other topics”. Add Topic stays
+outside the disclosure, and Edit/Delete retain their existing global guards.
+
+The shared Refresh all keeps disclosure open states. If catalog/archive usage
+is unavailable or invalid, the group counts are not fabricated, an error is
+visible, and the complete topic list is explicitly opened for management.
+No category/topic ownership mapping is inferred from compatibility, and no
+registry, API or LIVE behavior is changed by this source-only update.

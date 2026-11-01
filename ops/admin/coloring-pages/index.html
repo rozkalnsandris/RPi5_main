@@ -303,7 +303,11 @@ html{overflow-y:scroll}
 .category-topics[open]>summary{margin-bottom:8px}
 .category-topics-list{list-style:none;padding:0 0 0 10px;margin:0;display:grid;gap:6px;border-left:2px solid #d9e7fa}
 .category-topics-list .category-row{border:1px solid var(--line);border-radius:10px;background:#fbfdff}
-.category-topics-empty{font-size:12px;color:var(--muted);margin:8px 0 4px}
+.category-topics-empty{grid-column:1/-1;font-size:12px;color:var(--muted);margin:8px 0 4px}
+.topics-other{margin-top:12px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.topics-other>summary{padding:12px;min-height:44px;cursor:pointer;color:var(--blue-deep);font-weight:800}
+.topics-other[open]>summary{border-bottom:1px solid var(--line)}
+.topics-other>.categories-list{margin:0;padding:8px 10px 10px}
 @media(max-width:700px){.category-topics-list{padding-left:6px}}
 .topics-dialog::backdrop{background:rgba(16,30,45,.6)}
 .topics-dialog-actions{padding:0 14px 12px}
@@ -461,7 +465,10 @@ html{overflow-y:scroll}
       <div class="panel-heading"><div class="panel-title"><div><span class="panel-kicker">Under Categories</span><h2 id="managedTopicsHeading" tabindex="-1">Topics</h2></div></div></div>
       <p class="categories-note">Used topics appear inside their Categories above. A topic can appear in several categories when pages use both. Topics without matching page usage remain below; IDs are permanent and referenced topics cannot be removed.</p>
       <p id="topicsStatus" class="categories-status" role="status" aria-live="polite">Checking managed Topics…</p>
-      <ul id="topicsRows" class="categories-list" aria-label="Topics not shown in Categories" hidden></ul>
+      <details id="topicsOtherDetails" class="topics-other" hidden>
+        <summary id="topicsOtherSummary">Other topics</summary>
+        <ul id="topicsRows" class="categories-list" aria-label="Topics not shown in Categories" hidden></ul>
+      </details>
       <p id="topicsUnusedEmpty" class="categories-note" hidden>All topics are shown in the categories above.</p>
       <details id="topicsCreate" class="categories-add" hidden><summary>Add topic</summary>
         <form id="topicsForm" class="categories-create topics-create"><div class="field"><label for="topicNewId">Topic ID</label><input id="topicNewId" maxlength="48" pattern="[a-z0-9]+(-[a-z0-9]+)*" required></div>
@@ -889,7 +896,8 @@ async function permanentDeleteArchiveEntry(x){var typed=window.prompt("PERMANENT
 function activityLabel(e){var names={catalog_edit:"Catalog edit",catalog_archive:"Archived",catalog_restore:"Restored",catalog_delete_started:"Permanent deletion started",catalog_delete:"Permanently deleted",job_terminal:"Publishing job",public_verified:"Publication verified",service_start:"Admin service started"};return names[e.event]||e.event}
 async function loadActivity(){activityCount.textContent="Loading activity…";try{var d=await adminFetch("/api/activity");activityCount.textContent=d.count+" events";activityList.innerHTML="";if(!d.events.length){activityList.innerHTML='<p class="catalog-empty">No activity yet.</p>';return}d.events.forEach(function(e){var row=document.createElement("div");row.className="activity-item";var title=document.createElement("strong");title.textContent=activityLabel(e)+(e.page_id?" · "+e.page_id:"");var time=document.createElement("small");time.textContent=new Date(e.ts).toLocaleString("en-GB");var meta=document.createElement("div");meta.className="activity-meta";var level=document.createElement("span");level.className="activity-level "+e.level;level.textContent=e.level;meta.appendChild(level);["action","changed_fields","job_status","step_status","sitemap_status","error_code","archive_state","deleted_file_count","deleted_byte_count"].forEach(function(k){if(e[k]!==undefined){var s=document.createElement("span");s.className="catalog-tag";s.textContent=k+": "+e[k];meta.appendChild(s)}});row.append(title,time,meta);activityList.appendChild(row)})}catch(e){activityCount.textContent="Could not load activity.";activityList.innerHTML='<p class="catalog-empty">'+escapeHtml(e.message)+'</p>'}}
 var managedCategoryEtag="",managedCategoryEnabled=false,managedCategorySnapshot=null,managedTopicsSnapshot=null,categoryTopicUsage=null,categoryTopicUsageError="",expandedCategories=new Set();
-var topicGroupsStatus=document.getElementById("topicGroupsStatus"),topicsUnusedEmpty=document.getElementById("topicsUnusedEmpty");
+var topicGroupsStatus=document.getElementById("topicGroupsStatus"),topicsUnusedEmpty=document.getElementById("topicsUnusedEmpty"),
+ topicsOtherDetails=document.getElementById("topicsOtherDetails"),topicsOtherSummary=document.getElementById("topicsOtherSummary");
 var categoriesStatus=document.getElementById("categoriesStatus"),
  categoriesRows=document.getElementById("categoriesRows"),
  categoriesCreate=document.getElementById("categoriesCreate"),
@@ -1050,6 +1058,11 @@ function renderGroupedTopicUsage(){
   if(!managedCategorySnapshot||!managedTopicsSnapshot||!categoryTopicUsage){
     topicGroupsStatus.textContent="Category-topic usage unavailable. All topics remain listed below."
       +(categoryTopicUsageError?" "+categoryTopicUsageError:"");
+    if(managedTopicsSnapshot){
+      topicsOtherDetails.hidden=false;topicsOtherDetails.open=true;
+      topicsOtherSummary.textContent="All topics (usage unavailable)";
+      topicsRows.hidden=false;
+    }else{topicsOtherDetails.hidden=true}
     topicsUnusedEmpty.hidden=true;
     return;
   }
@@ -1060,33 +1073,39 @@ function renderGroupedTopicUsage(){
       var n=counts[t.id];return n&&(n.catalog>0||n.archive>0);
     });
     included.forEach(function(t){assigned.add(t.id)});
+    if(!included.length){
+      var empty=document.createElement("p");empty.className="category-topics-empty";
+      empty.textContent="No topics used in pages.";
+      row.appendChild(empty);
+      return;
+    }
     var details=document.createElement("details");details.className="category-topics";
     details.open=expandedCategories.has(c.id);
     details.ontoggle=function(){if(details.open)expandedCategories.add(c.id);else expandedCategories.delete(c.id)};
     var summary=document.createElement("summary");
     summary.textContent=included.length+" used topic"+(included.length===1?"":"s")+" — show / hide";
     details.appendChild(summary);
-    if(included.length){
-      var list=document.createElement("ul");list.className="category-topics-list";
-      list.setAttribute("aria-label","Topics used in "+c.label);
-      included.forEach(function(t){list.appendChild(managedTopicRow(t,snapshot,counts[t.id],c.label))});
-      details.appendChild(list);
-    }else{
-      var empty=document.createElement("p");empty.className="category-topics-empty";
-      empty.textContent="No topics used by catalog or archived pages in this category.";
-      details.appendChild(empty);
-    }
+    var list=document.createElement("ul");list.className="category-topics-list";
+    list.setAttribute("aria-label","Topics used in "+c.label);
+    included.forEach(function(t){list.appendChild(managedTopicRow(t,snapshot,counts[t.id],c.label))});
+    details.appendChild(list);
     row.appendChild(details);
   });
   var remaining=snapshot.topics.filter(function(t){return !assigned.has(t.id)});
+  var globallyUnused=remaining.every(function(t){
+    var n=(snapshot.counts||{})[t.id]||{catalog:0,archive:0};
+    return !n.catalog&&!n.archive;
+  });
   topicsRows.replaceChildren(...remaining.map(function(t){return managedTopicRow(t,snapshot,null,"Other topics")}));
+  topicsOtherDetails.hidden=!remaining.length;
+  topicsOtherSummary.textContent=(globallyUnused?"Unused topics (":"Other topics (")+remaining.length+")";
   topicsRows.hidden=!remaining.length;topicsUnusedEmpty.hidden=!!remaining.length;
   topicsStatus.textContent=snapshot.topics.length+" topics · "+remaining.length+" not shown in categories · revision "+snapshot.revision;
   topicGroupsStatus.textContent="Expand a category to see topics used by its catalog and archived pages. Counts are per category, not assignments.";
 }
 async function loadManagedTopics(){
   topicsStatus.textContent="Checking topics…";topicsManagedEnabled=false;topicsManagedEtag="";managedTopicsSnapshot=null;topicsUnusedEmpty.hidden=true;
-  topicsRows.hidden=true;topicsCreate.hidden=true;topicsRows.replaceChildren();
+  topicsOtherDetails.hidden=true;topicsRows.hidden=true;topicsCreate.hidden=true;topicsRows.replaceChildren();
   try{
     var snapshot=await adminFetch("/api/topics/manage");
     if(!snapshot.enabled||!/^[0-9a-f]{64}$/.test(snapshot.registry_sha256||"")){
@@ -1094,7 +1113,8 @@ async function loadManagedTopics(){
     }
     if(!Array.isArray(snapshot.topics)||!snapshot.topics.length)throw Error("Invalid Topics snapshot");
     topicsManagedEtag=catalogValidator(snapshot.registry_sha256);managedTopicsSnapshot=snapshot;
-    topicsManagedEnabled=true;topicsRows.hidden=false;topicsCreate.hidden=false;
+    topicsManagedEnabled=true;topicsOtherDetails.hidden=false;topicsRows.hidden=false;topicsCreate.hidden=false;
+    topicsOtherSummary.textContent="All topics ("+snapshot.topics.length+")";
     topicsStatus.textContent=snapshot.topics.length+" topics · revision "+snapshot.revision;
     snapshot.topics.forEach(function(t){topicsRows.appendChild(managedTopicRow(t,snapshot,null,"Other topics"))});
   }catch(e){topicsStatus.textContent=e.message}
