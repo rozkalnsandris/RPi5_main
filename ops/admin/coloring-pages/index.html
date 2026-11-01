@@ -1116,7 +1116,7 @@ function renderGroupedTopicUsage(){
      });
      var link=document.createElement("button");link.type="button";link.className="secondary";link.textContent="+ Link topic";
      link.disabled=select.options.length===1||linksWriting;
-     link.onclick=function(){if(select.value)writeCategoryTopicLink("link",c.id,select.value)};
+     link.onclick=function(){if(select.value)return writeCategoryTopicLink("link",c.id,select.value)};
      actions.append(select,link);details.appendChild(actions);
    }
    row.appendChild(details);
