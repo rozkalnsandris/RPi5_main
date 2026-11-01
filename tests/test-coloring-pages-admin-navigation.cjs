@@ -5,6 +5,16 @@ const vm = require("node:vm");
 const path = require("node:path");
 const html = fs.readFileSync(path.join(__dirname, "../ops/admin/coloring-pages/index.html"), "utf8");
 const script = html.split("<script>")[1].split("</script>")[0];
+const categoryPage = html.slice(html.indexOf('data-page="categories"'), html.indexOf('data-page="activity"'));
+assert.equal((categoryPage.match(/class="admin-panel categories-panel"/g)||[]).length,1,"Categories and Topics use exactly one management card");
+assert.equal((categoryPage.match(/class="container categories-shell"/g)||[]).length,1,"no second Topics container");
+assert.equal((categoryPage.match(/<h2\b/g)||[]).length,1,"one top-level management heading");
+assert.match(categoryPage,/<section class="topics-inline" aria-labelledby="managedTopicsHeading">/,"topic tools are nested inside Categories");
+assert.match(categoryPage,/<h3 id="managedTopicsHeading" tabindex="-1">Topic tools<\/h3>/,"legacy #topics bookmark focus target retained");
+assert.ok(categoryPage.indexOf('id="categoriesRows"')<categoryPage.indexOf('id="topicsOtherDetails"'),"unlinked topics follow category rows");
+assert.ok(categoryPage.indexOf('id="topicsOtherDetails"')<categoryPage.indexOf('id="topicsCreate"'),"Add topic remains within the same card");
+assert.match(categoryPage,/id="categoriesRows"[^>]*aria-label="Categories and linked topics"/,"category rows explain linked topics");
+assert.match(html,/@media\(max-width:700px\).*category-topics-list/,"existing narrow-screen disclosure preserved");
 class Element {
   constructor(tag="div") { this.tag=tag;this.value="";this.textContent="";this.style={};this.dataset={};this.attrs={};this.children=[];this.hidden=false;this.disabled=false;this.classList={add(){},remove(){}}; }
   get options(){return this.children.filter(x=>x.tag==="option")}
@@ -273,7 +283,8 @@ async function ready(h){for(let i=0;i<40;i++)await Promise.resolve();h.s.categor
   assert.equal(grouped.ids.topicsOtherSummary.textContent,"Unlinked topics (1)");
   grouped.state.links.links=[];
   await grouped.s.refreshTaxonomyManagers();
-  assert.equal(grouped.ids.categoriesRows.children[0].children[3].children[0].textContent,"0 linked topics — show / hide");
+  assert.equal(grouped.ids.categoriesRows.children[0].children[3].children[0].textContent,"No linked topics — open to link");
+   assert.equal(grouped.ids.categoriesRows.children[0].children[3].children[2].textContent,"No topics linked to this category. Choose one below to link it.","empty category explains explicit linking");
   assert.equal(grouped.ids.topicsRows.children.length,3,"usage never fabricates links");
   const select=grouped.ids.categoriesRows.children[0].children[3].children.at(-1).children[0];
   select.value="bauernhof";
