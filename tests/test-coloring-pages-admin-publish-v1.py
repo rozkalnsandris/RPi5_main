@@ -866,6 +866,24 @@ class CategoryTopicBindingTests(unittest.TestCase):
                 self.assertEqual(other["revision"],3)
                 self.assertEqual(admin.read_links(registry)[1],sha2)
 
+    def test_linked_topic_kind_cannot_change_with_zero_page_usage(self):
+        # A topic can have zero pages but still be explicitly linked; changing
+        # its kind would break the pinned seasonal/evergreen link contract.
+        old = {"id": "bauernhof", "label": "Bauernhof", "icon": "B",
+               "kind": "evergreen", "legacy_terms": []}
+        new = dict(old, kind="seasonal", active_from="12-01", active_to="02-29")
+        doc = {"schema": admin.TOPICS_SCHEMA, "revision": 1, "topics": [old]}
+        digest = "d" * 64
+        snapshot = {"enabled": True, "registry_sha256": digest,
+                    "counts": {"bauernhof": {"catalog": 0, "archive": 0}}}
+        with patch.object(admin, "topics_snapshot", return_value=snapshot), patch.object(
+                admin, "active_jobs", return_value=[]), patch.object(
+                admin, "read_topics_registry", return_value=(doc, digest)), patch.object(
+                admin, "load_taxonomy", return_value=self.registry()), patch.object(
+                admin, "read_links", return_value=(self.seed(), "e" * 64)):
+            with self.assertRaisesRegex(admin.Stop, "linked topic kind cannot change"):
+                admin.change_topics({"action": "update", "topic": new}, digest)
+
     def test_linked_topic_validation_preserves_unchanged_legacy(self):
         registry=self.registry()
         with tempfile.TemporaryDirectory() as temp:
