@@ -129,3 +129,29 @@ Record changes and confirmed failures separately from observations. Distinguish 
 - These upstream references may differ from the **installed Hermes revision**, which was not verified by this metadata-only observation.
 
 **Decision / remaining owner gates:** Leave live service, credentials, config and runtime unchanged. Before claiming cost protection, an **explicit narrowly scoped protected-configuration read-only authorization** is required to validate sanitized `auxiliary.free_only`, the effective OpenRouter model, relevant task-level providers and primary fallback routes **without printing raw config, credentials or endpoint values**; verification against the installed Hermes version is also needed. A separate scoped owner LIVE authorization is required for any actual Hermes gateway restart/reload, model invocation, MCP handshake, or config write. Neither action is authorized by this dated observation.
+
+## 8. Protected read-only Hermes auxiliary fallback audit (2026-11-01 12:21:27 CET)
+
+**Collection:** 2026-11-01T11:21:27+00:00 (12:21:27 CET), host `rpi5`. Owner authorized `HERMES-AUX-FREE-ONLY`: one narrowly scoped **read-only, in-memory, sanitized** inspection of the protected Hermes YAML. No raw configuration, provider endpoints, API keys, credential values or model IDs were printed or recorded. No service mutation or model call occurred.
+
+**Evidence binding:** inspected YAML SHA-256 `cdd9f830b7dcce256c82fb3e381fe9a555cebde29459e9a0a484622f14312da8` matched the expected post-Chroma-fix fingerprint. The fingerprint proves the file inspected, **not** the running gateway's currently loaded configuration.
+
+| Inspected field or class | Sanitized result |
+| --- | --- |
+| `auxiliary.free_only` | **ABSENT** in host YAML; published upstream default is `false` |
+| `auxiliary.openrouter_model` | Not explicitly set / not verifiable as a free `:free` override |
+| Explicit auxiliary OpenRouter tasks | **1**: `vision`, configured model **does not end in `:free`** |
+| Auxiliary tasks with `provider: auto` | **11** |
+| Auxiliary tasks pinned to a different explicit provider | **1** |
+| Auxiliary task blocks absent from inspected allowlist | **4** |
+| Root `fallback_providers` | **2** entries; neither was identified as OpenRouter by the sanitized provider/model classification |
+| Primary provider | Not identified as OpenRouter by sanitized provider/model classification |
+| Model calls, configuration writes, restarts | **0** |
+
+**Interpretation:** the host configuration does **not establish a free-only OpenRouter auxiliary guarantee**. The `vision` model lacking `:free` is a **potential paid-route risk**, not evidence of any charged request. Missing `free_only` and the classified primary/other fallback routes must not be interpreted as proof of actual billing, complete route safety, or successful runtime configuration adoption.
+
+**Upstream source reference (reviewed 2026-11-01, not asserted as the installed revision):**
+- `NousResearch/hermes-agent` at `a4994d4ead8f9c915b485cec5689909b349a49df`, [`hermes_cli/config_defaults.py`](https://github.com/NousResearch/hermes-agent/blob/a4994d4ead8f9c915b485cec5689909b349a49df/hermes_cli/config_defaults.py) (`auxiliary.free_only` default `False`).
+- [`agent/auxiliary_client.py`](https://github.com/NousResearch/hermes-agent/blob/a4994d4ead8f9c915b485cec5689909b349a49df/agent/auxiliary_client.py) restricts its OpenRouter auxiliary selection to `:free` models when free-only is true and warns for non-free selections. This does **not** establish identical behavior for primary-provider routes, other explicit providers or unknown installed versions.
+
+**Next decision:** keep the existing LIVE configuration unchanged. To enforce a `:free`-only auxiliary policy, first verify the installed Hermes revision and choose a compatible `vision` route, then require a **separate exact host/config LIVE authorization** for any write. Restart/reload, live MCP handshake and provider requests require separate authorization; none is implied by this report. Compare a future sanitized follow-up to this **12:21:27 CET** configuration snapshot.
