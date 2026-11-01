@@ -102,3 +102,30 @@ Record changes and confirmed failures separately from observations. Distinguish 
 - Memory: no observed OOM kills; insufficient PSI for firm pressure conclusion.
 - Docker: storage not urgent (66.1 GiB free); retain rollback images and build cache pending a separate risk decision.
 - This record is a **dated baseline for comparison**, not a permission to prune, restart, redeploy or merge.
+
+## 7. Follow-up: Hermes Chroma and OpenRouter auxiliary signals (2026-11-01 11:56:55 CET)
+
+**Collection:** 2026-11-01T11:56:55+01:00 (10:56:55 UTC), `rpi5`; read-only, minimum-sufficient sanitized journal counters and `systemctl show` plus **file metadata only**. No raw Hermes configuration, process environment, credentials, messages, API calls or ChromaDB records were read or committed.
+
+| Observation | Value |
+| --- | --- |
+| Gateway service state | `active/running`, PID `952` |
+| Gateway last activation | `2026-10-25 10:33:53 CET` |
+| Hermes config metadata last modification | `2026-11-01 09:49:27 CET`; size `18,970` bytes |
+| `hermes-gateway.service` journal rows, 2026-11-01 00:00–11:56:55 CET | `32` |
+| Journal rows after Chroma config change, 09:50–11:56:55 CET | `3` |
+| Journal matches for Pydantic `eval_type_backport`/import failure | `0` both windows |
+| Sanitized Chroma/MCP error and successful connection pattern matches | `0` both windows |
+| Auxiliary `PAID lane engaged` warning matches | `0` both windows |
+| Auxiliary free-only skip warning matches | `0` both windows |
+| OpenRouter billing/HTTP 402 warning matches | `0` both windows |
+
+**Interpretation:** zero matching journal lines does **not** prove that the gateway has reloaded the new Chroma arguments, connected successfully to ChromaDB, or that paid OpenRouter fallback is disabled. The gateway activation predates the Chroma config edit. The isolated previously authorized `uvx --offline ... chroma-mcp --help` test remains PASS, but it is **not** a live MCP handshake.
+
+**Published Hermes source/docs checked, 2026-11-01:**
+- [Hermes Agent configuration defaults](https://github.com/NousResearch/hermes-agent/blob/main/hermes_cli/config_defaults.py) documents `auxiliary.free_only` default `false`, and a potentially paid default auxiliary OpenRouter fallback.
+- [Hermes auxiliary router source](https://github.com/NousResearch/hermes-agent/blob/main/agent/auxiliary_client.py) guards automatic auxiliary OpenRouter lanes with `auxiliary.free_only`; `:free` is a model naming rule, not a pricing guarantee.
+- [Hermes provider fallback guide](https://hermes-agent.nousresearch.com/docs/user-guide/features/fallback-providers) describes separate primary, task-specific and auxiliary fallback mechanisms. **Do not infer protection of every provider/fallback path from a single auxiliary flag.**
+- These upstream references may differ from the **installed Hermes revision**, which was not verified by this metadata-only observation.
+
+**Decision / remaining owner gates:** Leave live service, credentials, config and runtime unchanged. Before claiming cost protection, an **explicit narrowly scoped protected-configuration read-only authorization** is required to validate sanitized `auxiliary.free_only`, the effective OpenRouter model, relevant task-level providers and primary fallback routes **without printing raw config, credentials or endpoint values**; verification against the installed Hermes version is also needed. A separate scoped owner LIVE authorization is required for any actual Hermes gateway restart/reload, model invocation, MCP handshake, or config write. Neither action is authorized by this dated observation.
