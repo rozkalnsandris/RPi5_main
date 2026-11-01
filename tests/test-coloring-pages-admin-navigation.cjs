@@ -218,6 +218,10 @@ async function managerReady(h){await h.s.refreshTaxonomyManagers();await h.s.cat
   assert.deepEqual(JSON.parse(edited.options.body).categories,["tiere"],"edited categories transmitted to API");
   assert.equal(JSON.parse(edited.options.body).category,"tiere","first selected category stays primary");
   const managed=harness();await ready(managed);
+  // #1336: the public site's existing category link icons are decorative and ID-bound.
+  for(const [id,emoji] of Object.entries({tiere:"🐱",fahrzeuge:"🚒",alphabet:"🔤",lernen:"✂️",figuren:"🦸",jahreszeiten:"🍂"}))
+    assert.equal(managed.s.categoryIcons[id],emoji,"same icon as public site for "+id);
+  assert.equal(managed.s.categoryIcons.berufe,undefined,"unknown custom IDs have no guessed icon");
   managed.state.managed={
     enabled:true,revision:1,registry_sha256:"f".repeat(64),
     categories:[{id:"tiere",label:"Tiere"},{id:"berufe",label:"Berufe"},{id:"autos",label:"Autos"}],
@@ -229,6 +233,11 @@ async function managerReady(h){await h.s.refreshTaxonomyManagers();await h.s.cat
   assert.equal(managed.ids.categoriesRows.children.length,3,"one compact row per category");
   assert.equal(managed.ids.categoriesRows.children[0].tag,"li","native list semantics");
   assert.equal(managed.ids.categoriesRows.children[0].children[0].children[0].textContent,"Tiere");
+  const tiereIcon=managed.ids.categoriesRows.children[0].children[0].children[0].children[0];
+  assert.equal(tiereIcon.textContent,"🐱","built-in Category displays public icon");
+  assert.equal(tiereIcon.attrs["aria-hidden"],"true","decorative emoji not repeated to screen readers");
+  assert.equal(managed.ids.categoriesRows.children[1].children[0].children[0].children.length,0,
+    "custom Category displays only its own label");
   assert.equal(managed.ids.categoriesRows.children[0].children[1].textContent,"91 catalog · 0 archive");
   assert.equal(managed.ids.categoriesRows.children[0].children[2].children.length,1,"built-in categories have no delete");
   assert.equal(managed.ids.categoriesRows.children[1].children[2].children[1].disabled,false,"unused custom category can be deleted");
@@ -372,6 +381,11 @@ async function managerReady(h){await h.s.refreshTaxonomyManagers();await h.s.cat
   assert.equal(progressive.ids.taxonomyPreview.hidden,false,"read-only preview precedes guarded GETs");
   assert.equal(progressive.ids.verifiedTaxonomy.hidden,true,"edit controls remain hidden");
   assert.equal(progressive.ids.taxonomyPreviewRows.children.length,3);
+  assert.equal(progressive.ids.taxonomyPreviewRows.children[0].children[0].children[0].children[0].textContent,"🐱");
+  assert.equal(progressive.ids.taxonomyPreviewRows.children[1].children[0].children[0].children[0].textContent,"✂️");
+  assert.equal(progressive.ids.taxonomyPreviewRows.children[2].children[0].children[0].children[0].textContent,"🍂",
+    "read-only preview shares exactly the category icon map");
+  assert.equal(progressive.ids.taxonomyPreviewRows.children[0].children[0].children[0].children[0].attrs["aria-hidden"],"true");
   const staged=progressive.ids.taxonomyPreviewRows.children[2].children[1];
   assert.equal(staged.children[1].children.length,1,"only explicitly verified saved links");
   assert.equal(staged.children[1].children[0].children[0].children[0].textContent,"Weihnachten");
