@@ -916,105 +916,206 @@ class CategoryTopicBindingTests(unittest.TestCase):
 
 
 class ManagerProbeLatencyTests(unittest.TestCase):
-    """No live Docker, registry or application data: capability checks are mocked."""
+    """All probes are mocked: no host Docker, runtime registry or data reads."""
 
-    def test_parallel_probe_pair_and_no_positive_cache(self):
-        import threading
-        from concurrent.futures import ThreadPoolExecutor
+    @staticmethod
+    def completed_help(stdout=None, code=0):
+        return SimpleNamespace(
+            returncode=code,
+            stdout=stdout if stdout is not None else (
+                "--categories-sha256 --additional-category "
+                "--topics-sha256 --additional-topic"))
 
-        seen = []
-        mutex = threading.Lock()
-        barrier = threading.Barrier(2, timeout=5)
+    @staticmethod
+    def encoded_response(digest="a" * 64, help_stdout=None, help_code=0,
+                         validator_code=0, schema=1):
+        return json.dumps({
+            "schema": schema, "checks": [
+                {"code": help_code, "stdout": (
+                    help_stdout if help_stdout is not None else
+                    "--categories-sha256 --additional-category --topics-sha256 --additional-topic")},
+                {"code": validator_code, "stdout": "sha256=" + digest}
+            ]
+        }, separators=(",", ":"))
+
+    def test_single_container_executes_both_original_checks_with_hardened_flags(self):
+        import contextlib
+        import io
+        import sys
+
+        docker_calls, inner_calls = [], []
         category_digest, topic_digest = "a" * 64, "b" * 64
-        image_one = admin.IMAGE
-        image_two = "ghcr.io/rozkalnsandris/coloring-pages@sha256:" + "f" * 64
+        first_image = admin.IMAGE
+        second_image = "ghcr.io/rozkalnsandris/coloring-pages@sha256:" + "f" * 64
 
-        def fake_run(args, **kwargs):
-            with mutex:
-                seen.append(tuple(args))
-            # Sequential calls would time out here; both checks must overlap.
-            barrier.wait()
-            self.assertEqual(kwargs["timeout"], 30)
+        def fake_run(cmd, **kwargs):
+            if cmd[0] != admin.DOCKER:
+                inner_calls.append(list(cmd))
+                self.assertEqual(kwargs["timeout"], 30)
+                self.assertFalse(kwargs["check"])
+                self.assertEqual(kwargs["stderr"], subprocess.DEVNULL)
+                if list(cmd) == [admin.IMPORTER, "--help"]:
+                    return self.completed_help()
+                digest = (category_digest if "coloring_pages_categories.py" in cmd[1]
+                          else topic_digest)
+                self.assertEqual(cmd[0], "/usr/bin/python3")
+                self.assertEqual(list(cmd[2:4]), ["validate", "--registry"])
+                return SimpleNamespace(returncode=0, stdout="sha256=" + digest)
+
+            docker_calls.append(list(cmd))
+            self.assertEqual(kwargs["timeout"], 65)
             self.assertFalse(kwargs["check"])
-            if args[-1] == "--help":
-                return SimpleNamespace(returncode=0, stdout=(
-                    "--categories-sha256 --additional-category "
-                    "--topics-sha256 --additional-topic"))
-            digest = category_digest if any(x.endswith("coloring_pages_categories.py") for x in args) else topic_digest
-            return SimpleNamespace(returncode=0, stdout="sha256=" + digest)
+            self.assertEqual(cmd.count("--entrypoint"), 1)
+            self.assertEqual(cmd[cmd.index("--entrypoint") + 1], "/usr/bin/python3")
+            self.assertIn("--pull=never", cmd)
+            self.assertIn("--read-only", cmd)
+            self.assertIn("--cap-drop", cmd)
+            self.assertIn("ALL", cmd)
+            self.assertIn("--network", cmd)
+            self.assertIn("none", cmd)
+            self.assertIn("--security-opt", cmd)
+            self.assertIn("no-new-privileges:true", cmd)
+            self.assertIn("--user", cmd)
+            self.assertIn("--mount", cmd)
+            self.assertIn(admin.IMAGE, cmd)
 
-        with patch.object(admin, "docker_prefix", return_value=["docker", "run"]), patch.object(
-                admin, "owner_ids", return_value=(1, 1)), patch.object(
+            idx = cmd.index("-c")
+            self.assertIn("CAPABILITY_PROBE_SCRIPT", admin.__dict__)
+            stdout = io.StringIO()
+            with patch.object(sys, "argv", ["-c", *cmd[idx + 2:]]), contextlib.redirect_stdout(stdout):
+                exec(cmd[idx + 1], {"__name__": "__main__"})
+            return SimpleNamespace(returncode=0, stdout=stdout.getvalue())
+
+        with patch.object(admin, "owner_ids", return_value=(1, 1)), patch.object(
                 admin.subprocess, "run", side_effect=fake_run):
             self.assertTrue(admin.importer_v2_capability(category_digest))
             self.assertTrue(admin.immutable_topics_capability(topic_digest))
-            with patch.object(admin, "IMAGE", image_two):
-                self.assertTrue(admin.importer_v2_capability(category_digest))
+            # Warm reads never reuse a previous yes/no result.
+            self.assertTrue(admin.importer_v2_capability(category_digest))
+            with patch.object(admin, "IMAGE", second_image):
                 self.assertTrue(admin.immutable_topics_capability(topic_digest))
-        self.assertEqual(len(seen), 8, "warm reads and image changes rerun BOTH checks")
-        self.assertTrue(all(image_one in cmd for cmd in seen[:4]))
-        self.assertTrue(all(image_two in cmd for cmd in seen[4:]))
-        self.assertTrue(all("--network" not in cmd or "none" in cmd for cmd in seen))
 
-    def test_fail_closed_on_stale_digest_missing_flag_and_probe_failure(self):
-        from concurrent.futures import ThreadPoolExecutor
+        self.assertEqual(len(docker_calls), 4, "one Docker start per manager read")
+        self.assertEqual(len(inner_calls), 8, "BOTH original checks per read")
+        self.assertTrue(all(first_image in cmd for cmd in docker_calls[:3]))
+        self.assertIn(second_image, docker_calls[3])
+        self.assertEqual(inner_calls.count([admin.IMPORTER, "--help"]), 4)
 
+    def test_digest_registry_change_and_failure_modes_fail_closed(self):
         digest = "a" * 64
-        def run_ok(args, **_kwargs):
-            if args[-1] == "--help":
-                return SimpleNamespace(returncode=0, stdout=(
-                    "--categories-sha256 --additional-category "
-                    "--topics-sha256 --additional-topic"))
-            return SimpleNamespace(returncode=0, stdout="sha256=" + digest)
-
-        with patch.object(admin, "docker_prefix", return_value=["docker", "run"]), patch.object(
-                admin, "owner_ids", return_value=(1, 1)):
-            with patch.object(admin.subprocess, "run", side_effect=run_ok):
+        good = self.encoded_response(digest)
+        with patch.object(admin, "owner_ids", return_value=(1, 1)):
+            with patch.object(admin.subprocess, "run", return_value=SimpleNamespace(
+                    returncode=0, stdout=good)) as runner:
                 self.assertTrue(admin.importer_v2_capability(digest))
-                self.assertFalse(admin.importer_v2_capability("c" * 64))
-                self.assertFalse(admin.immutable_topics_capability("c" * 64))
+                self.assertFalse(admin.importer_v2_capability("b" * 64))
+                self.assertFalse(admin.immutable_topics_capability("b" * 64))
+                self.assertEqual(runner.call_count, 3, "registry revision forces new probe")
+
+            malformed = [
+                "{not json", "", "[]" * 2, good + "{}",
+                json.dumps({"schema": 2, "checks": json.loads(good)["checks"]}),
+                json.dumps({"schema": 1, "checks": json.loads(good)["checks"][:1]}),
+                json.dumps({"schema": 1, "checks": [{"code": 0, "stdout": "sha256=" + digest}, {}]}),
+                self.encoded_response(digest, help_stdout="--categories-sha256"),
+                self.encoded_response(digest, help_code=1),
+                self.encoded_response(digest, validator_code=1),
+                self.encoded_response("f" * 64),
+            ]
+            for body in malformed:
+                with self.subTest(body=body[:45]), patch.object(
+                        admin.subprocess, "run", return_value=SimpleNamespace(
+                            returncode=0, stdout=body)):
+                    self.assertFalse(admin.importer_v2_capability(digest))
+            for code in (1, 2):
+                with patch.object(admin.subprocess, "run", return_value=SimpleNamespace(
+                        returncode=code, stdout=good)):
+                    self.assertFalse(admin.importer_v2_capability(digest))
             with patch.object(admin.subprocess, "run", return_value=SimpleNamespace(
-                    returncode=0, stdout="sha256=" + digest)):
-                self.assertFalse(admin.importer_v2_capability(digest))
-            with patch.object(admin.subprocess, "run", return_value=SimpleNamespace(
-                    returncode=1, stdout="--categories-sha256 --additional-category sha256=" + digest)):
+                    returncode=0, stdout="x" * 65537)):
                 self.assertFalse(admin.importer_v2_capability(digest))
             with patch.object(admin.subprocess, "run", side_effect=OSError("docker unavailable")):
                 self.assertFalse(admin.importer_v2_capability(digest))
-            with patch.object(admin.subprocess, "run", side_effect=subprocess.TimeoutExpired("docker", 30)):
+            with patch.object(admin.subprocess, "run", side_effect=subprocess.TimeoutExpired("docker", 65)):
                 self.assertFalse(admin.immutable_topics_capability(digest))
+            # A stale failure cannot be returned as a success on the next GET.
+            with patch.object(admin.subprocess, "run", return_value=SimpleNamespace(
+                    returncode=0, stdout=good)):
+                self.assertTrue(admin.importer_v2_capability(digest))
 
-    def test_process_wide_docker_probe_limit_for_parallel_management_gets(self):
+    def test_embedded_inner_probe_failure_never_approves_manager(self):
+        import contextlib
+        import io
+        import sys
+
+        calls = []
+        def fake_run(cmd, **kwargs):
+            if cmd[0] == admin.DOCKER:
+                idx = cmd.index("-c")
+                capture = io.StringIO()
+                with patch.object(sys, "argv", ["-c", *cmd[idx + 2:]]), contextlib.redirect_stdout(capture):
+                    try:
+                        exec(cmd[idx + 1], {"__name__": "__main__"})
+                    except SystemExit as exc:
+                        return SimpleNamespace(returncode=int(exc.code), stdout=capture.getvalue())
+                return SimpleNamespace(returncode=0, stdout=capture.getvalue())
+            calls.append(cmd)
+            if cmd[-1] == "--help":
+                return self.completed_help()
+            raise subprocess.TimeoutExpired("validator", 30)
+
+        with patch.object(admin, "owner_ids", return_value=(1, 1)), patch.object(
+                admin.subprocess, "run", side_effect=fake_run):
+            self.assertFalse(admin.importer_v2_capability("a" * 64))
+        self.assertEqual(len(calls), 2, "second check timeout fails closed")
+
+    def test_process_wide_two_container_limit_and_no_cache(self):
         import threading
         import time
         from concurrent.futures import ThreadPoolExecutor
 
         self.assertEqual(admin.CAPABILITY_PROBES._max_workers, 2)
-        active, highest = 0, 0
+        active, peak, starts = 0, 0, 0
         lock = threading.Lock()
-        def fake_run(args, **_kwargs):
-            nonlocal active, highest
+
+        def fake_docker(cmd, **kwargs):
+            nonlocal active, peak, starts
+            self.assertEqual(cmd[0], admin.DOCKER)
+            self.assertEqual(kwargs["timeout"], 65)
             with lock:
                 active += 1
-                highest = max(highest, active)
-            time.sleep(0.012)
+                starts += 1
+                peak = max(peak, active)
+            time.sleep(0.02)
             with lock:
                 active -= 1
-            if args[-1] == "--help":
-                return SimpleNamespace(returncode=0, stdout=(
-                    "--categories-sha256 --additional-category --topics-sha256 --additional-topic"))
-            return SimpleNamespace(returncode=0, stdout="sha256=" + "a" * 64)
+            return SimpleNamespace(returncode=0, stdout=self.encoded_response())
 
-        with patch.object(admin, "docker_prefix", return_value=["docker", "run"]), patch.object(
-                admin, "owner_ids", return_value=(1, 1)), patch.object(
-                admin.subprocess, "run", side_effect=fake_run):
-            with ThreadPoolExecutor(max_workers=4) as callers:
-                tasks = [callers.submit(
+        with patch.object(admin, "owner_ids", return_value=(1, 1)), patch.object(
+                admin.subprocess, "run", side_effect=fake_docker):
+            with ThreadPoolExecutor(max_workers=6) as readers:
+                results = [readers.submit(
                     admin.importer_v2_capability if i % 2 else admin.immutable_topics_capability,
-                    "a" * 64) for i in range(4)]
-                self.assertTrue(all(task.result(timeout=5) for task in tasks))
-        self.assertLessEqual(highest, 2, "bounded in-flight immutable importer probes")
+                    "a" * 64) for i in range(6)]
+                self.assertTrue(all(task.result(timeout=6) for task in results))
+        self.assertEqual(starts, 6, "one new container per request, no positive cache")
+        self.assertLessEqual(peak, 2, "process-wide capped Docker concurrency")
         self.assertEqual(active, 0)
+
+    def test_taxonomy_digest_mismatch_skips_probe_without_approval(self):
+        with patch.object(admin, "load_taxonomy", return_value={
+                "category_schema": admin.MANAGED_SCHEMA, "category_revision": 1,
+                "category_sha256": "a" * 64,
+                "topic_schema": admin.TOPICS_SCHEMA, "topic_revision": 1,
+                "topic_sha256": "a" * 64}), patch.object(
+                admin, "importer_v2_capability", return_value=True) as category_probe, patch.object(
+                admin, "immutable_topics_capability", return_value=True) as topic_probe:
+            self.assertFalse(admin.managed_verified({"revision": 2}, "a" * 64))
+            self.assertFalse(admin.topics_runtime_verified({"revision": 2}, "a" * 64))
+            self.assertFalse(admin.managed_verified({"revision": 1}, "b" * 64))
+            self.assertFalse(admin.topics_runtime_verified({"revision": 1}, "b" * 64))
+            category_probe.assert_not_called()
+            topic_probe.assert_not_called()
 
 
 if __name__=="__main__":unittest.main()

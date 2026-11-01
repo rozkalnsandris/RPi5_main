@@ -825,3 +825,72 @@ authorized deployment, with fresh bounded per-endpoint timings. A source-only
 merge is not authorization to replace the running backend, restart the ADMIN
 service or change containers. No retry, rollback, cleanup, registry write,
 secrets or production mutation is authorized by #1320.
+
+
+## One-container, two-check manager preflight — #1323 (source-only)
+
+### Baseline and stage attribution
+
+After #1320's approved LIVE source update, bounded loopback RPi5 HTTP GET samples
+(2026-11-01, current installed source `ad8e9cac9d0d83ca9b6a9578510c10e0a00ee819`)
+remained slow: `/api/categories/manage` 2.073 and 1.786 s,
+`/api/topics/manage` 1.567 and 1.212 s, while
+`/api/category-topics/manage` was 0.534 and 0.338 s, and the full
+`/api/catalog` returned in 0.007–0.008 s. Two concurrent Category+Topic
+GET cycles took 2.246 and 1.992 seconds wall time. Each response was
+HTTP 200. These are **request totals**, not browser paint or individual
+Docker-step measurements. No real Docker profiler was run, since the source
+issue does not authorize executing Docker against LIVE.
+
+The source manager path consists of distinct stages: (1) canonical
+registry read and SHA validation, (2) catalog/archive membership counting,
+(3) public taxonomy registry revision/digest check and (4) pinned importer
+`--help` flag and exact mounted registry `validate` probe. The count and
+taxonomy stages are still performed on each GET. Prior #1320 parallelized
+stage (4)'s two Docker container launches, but left **two** immutable
+container start-ups per manager request. This change reduces the count
+to **one** launch; the two original checks still run independently
+*inside* that same pinned container using the existing executable paths.
+
+### Fail-closed one-container contract
+
+Each manager GET schedules **one** `docker run`, process-wide bounded by
+`ThreadPoolExecutor(max_workers=2)`. The invocation preserves the same
+pinned `IMAGE` digest, `--pull=never`, `--network none`, `--read-only`,
+`--tmpfs`, non-root `--user`, `--cap-drop ALL`,
+`--security-opt no-new-privileges:true`, and bound shared-content
+mount. The immutable image's existing `/usr/bin/python3` entrypoint runs
+a fixed, reviewed Python `-c` script (no user input or shell command).
+It separately executes the original importer `--help` and Python
+category/topic registry `validate --registry` commands with individual
+30-second timeouts and captured, structured stdout/return codes.
+
+The host accepts a response **only** if the single container exit code is
+zero, its output is bounded to 65,536 bytes, its JSON schema and the
+two independent check results are exact, BOTH check exit codes are zero,
+the expected importer flags appear, and `sha256=<current_registry_sha256>`
+appears as its own validator token. Every malformed result, stale digest,
+timeout or Docker failure returns disabled management capability. The
+outer container has a 65-second bound (two sequential 30-second inner
+commands plus container overhead). No fallback, retry, positive cache,
+new route, token, registry write or permission change was introduced.
+The next GET always reads current registry/taxonomy and runs one new pinned
+container even when the prior GET succeeded; changes to the validated
+registry or pinned image therefore cannot reuse an old result.
+
+The offline CI regressions execute the same inline check script with
+mocked subprocess responses (never a host Docker invocation), assert the
+two real child command shapes and hardening flags, warm and changed-image
+checks, fresh registry SHA on each request, missing flags, malformed JSON,
+non-zero exits, validator timeout, and a two-container maximum under
+six concurrent reads. The deterministic startup-count model changes from
+**two** separate `docker run` calls to **one** per manager GET; it does
+not assert an unmeasured millisecond improvement or replace a production
+profile. The existing exact registry, ETag, CSRF, locks, interrupted-stage
+and old/legacy manager behavior remain unchanged.
+
+**Source-only, no LIVE permission:** #1323's merged source does not
+authorize backend installation, service restart, runtime Docker command
+or migration. A separately owner-authorized exact LIVE operation and
+bounded before/after request timings are required before claiming a
+measured production speedup.
