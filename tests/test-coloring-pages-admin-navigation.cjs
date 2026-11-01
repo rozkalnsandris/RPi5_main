@@ -44,6 +44,7 @@ function harness() {
   const location={hash:""};
   const entries=Array.from({length:53},(_,i)=>({id:String(i).padStart(7,"0"),title:"Page "+i,category:i%2?"tiere":"lernen",age:"3-6",difficulty:"easy",thumb:"/media/test/thumb.webp"}));
   const state={entries,etag:'W/"edge-weakened"',catalogSha:"a".repeat(64),status:200,confirm:false,prompts:[],answers:[],
+    usageHold:false,pendingUsage:[],
     taxonomy:{version:"b".repeat(64),categories:[{id:"tiere",label:"Tiere"},{id:"lernen",label:"Lernen"},{id:"jahreszeiten",label:"Jahreszeiten & Feste"}],
     topics:[{id:"weihnachten",label:"Weihnachten",kind:"seasonal"},{id:"obst",label:"Obst",kind:"evergreen"}]},
     links:{enabled:true,revision:1,registry_sha256:"d".repeat(64),category_sha256:"f".repeat(64),topic_sha256:"e".repeat(64),
@@ -64,7 +65,11 @@ function harness() {
     fetch:async(url,options={})=>{
       calls.push({url,options});
       if(["/api/catalog/edit","/api/catalog/archive","/api/catalog/restore","/api/archive/delete"].includes(url))return {ok:state.status===200,status:state.status,json:async()=>state.status===200?({status:"ok",deleted_file_count:1}):({error:"stale"})};
-      if(url==="/api/catalog")return {ok:!state.usageReadFails,status:state.usageReadFails?503:200,headers:{get:()=>state.etag},json:async()=>({entries:state.entries,count:state.entries.length,catalog_sha256:state.catalogSha})};
+      if(url==="/api/catalog"){
+        const fails=!!state.usageReadFails;
+        if(state.usageHold&&options.cache!=="no-store")await new Promise(resolve=>state.pendingUsage.push(resolve));
+        return {ok:!fails,status:fails?503:200,headers:{get:()=>state.etag},json:async()=>({entries:state.entries,count:state.entries.length,catalog_sha256:state.catalogSha})};
+      }
       if(url==="/api/archive")return {ok:true,json:async()=>({entries:state.archiveEntries||[],count:(state.archiveEntries||[]).length,catalog_sha256:state.archiveSha||state.catalogSha})};
       if(url==="/api/activity")return {ok:true,json:async()=>({events:[],count:0})};
       if(url==="/api/categories")return {ok:true,json:async()=>state.taxonomy};
@@ -92,6 +97,7 @@ function harness() {
   return {s:sandbox,ids,pages,navs,state,calls,listeners,layout,skip,go(route){location.hash="#"+route;sandbox.routePage()}};
 }
 async function ready(h){for(let i=0;i<40;i++)await Promise.resolve();h.s.categoriesReady=true;}
+async function managerReady(h){await h.s.refreshTaxonomyManagers();await h.s.categoryTopicUsagePending;}
 (async()=>{
   const h=harness();await ready(h);
   assert.equal(h.s.taxonomyVersion,"b".repeat(64));
@@ -246,8 +252,33 @@ async function ready(h){for(let i=0;i<40;i++)await Promise.resolve();h.s.categor
     {category:"autos",topic:"bauernhof"},{category:"autos",topic:"obst"},
     {category:"berufe",topic:"obst"}
   ];
+  // An intentionally blocked usage read must not block functional Category/Topic links.
+  grouped.state.usageHold=true;
   await grouped.s.refreshTaxonomyManagers();
+  assert.equal(grouped.ids.categoriesRows.children.length,3,"manager renders before page usage");
+  assert.equal(grouped.ids.categoriesRows.children[0].children[3].children[1].children.length,2,"links render while usage is pending");
+  assert.equal(grouped.ids.categoriesRows.children[0].children[3].children[1].children[0].children[1].textContent,"Page usage loading…","no invented zero count");
+  assert.match(grouped.ids.topicGroupsStatus.textContent,/Loading page usage/);
+  assert.equal(grouped.state.pendingUsage.length,1,"catalog usage request remains pending");
+  grouped.state.pendingUsage.shift()();
+  await grouped.s.categoryTopicUsagePending;
+  assert.equal(grouped.ids.categoriesRows.children[0].children[3].children[1].children[0].children[1].textContent,"2 catalog · 0 archive","counts update in place");
+  grouped.state.usageHold=false;
+  await managerReady(grouped);
   assert.equal(grouped.ids.categoriesRows.children.length,3);
+  // A slower older error must not overwrite the more recent successful refresh.
+  grouped.state.usageHold=true;grouped.state.usageReadFails=true;
+  await grouped.s.refreshTaxonomyManagers();
+  const staleUsage=grouped.s.categoryTopicUsagePending;
+  grouped.state.usageReadFails=false;
+  await grouped.s.refreshTaxonomyManagers();
+  const freshUsage=grouped.s.categoryTopicUsagePending;
+  assert.equal(grouped.state.pendingUsage.length,2);
+  grouped.state.pendingUsage.pop()();await freshUsage;
+  assert.match(grouped.ids.topicGroupsStatus.textContent,/Assignments are saved independently/);
+  grouped.state.pendingUsage.shift()();await staleUsage;
+  assert.doesNotMatch(grouped.ids.topicGroupsStatus.textContent,/Usage unavailable/,"late older errors are ignored");
+  grouped.state.usageHold=false;
   const tiereDetails=grouped.ids.categoriesRows.children[0].children[3];
   assert.equal(tiereDetails.tag,"details","category uses native disclosure");
   assert.equal(tiereDetails.children[0].textContent,"2 linked topics — show / hide");
@@ -265,24 +296,24 @@ async function ready(h){for(let i=0;i<40;i++)await Promise.resolve();h.s.categor
   assert.equal(grouped.ids.topicsRows.children[0].children[2].children[1].disabled,false);
   assert.ok(html.includes('<details id="topicsOtherDetails"'),"unlinked topics collapsed in native disclosure");
   tiereDetails.open=true;tiereDetails.ontoggle();grouped.ids.topicsOtherDetails.open=true;
-  await grouped.s.refreshTaxonomyManagers();
+  await managerReady(grouped);
   assert.equal(grouped.ids.categoriesRows.children[0].children[3].open,true);
   assert.equal(grouped.ids.topicsOtherDetails.open,true);
   grouped.ids.categoriesRows.children[0].children[3].children[1].children[0].children[2].children[0].onclick();
   assert.equal(grouped.ids.topicEditId.value,"bauernhof","edit works within Category");
   grouped.state.usageReadFails=true;
-  await grouped.s.refreshTaxonomyManagers();
+  await managerReady(grouped);
   assert.equal(grouped.ids.categoriesRows.children[0].children[3].children[1].children.length,2,"read failure does not erase saved links");
   assert.match(grouped.ids.topicGroupsStatus.textContent,/Usage unavailable/);
   grouped.state.usageReadFails=false;grouped.state.archiveSha="b".repeat(64);
-  await grouped.s.refreshTaxonomyManagers();
+  await managerReady(grouped);
   assert.equal(grouped.ids.categoriesRows.children[0].children[3].children[1].children.length,2,"usage mismatch does not fabricate or erase links");
   grouped.state.archiveSha=null;grouped.state.entries=[{id:"0000007",category:"tiere",topics:[]}];grouped.state.archiveEntries=[];
-  await grouped.s.refreshTaxonomyManagers();
+  await managerReady(grouped);
   assert.equal(grouped.ids.categoriesRows.children[0].children[3].children[1].children[0].children[1].textContent,"0 catalog · 0 archive","zero-use linked topic shown");
   assert.equal(grouped.ids.topicsOtherSummary.textContent,"Unlinked topics (1)");
   grouped.state.links.links=[];
-  await grouped.s.refreshTaxonomyManagers();
+  await managerReady(grouped);
   assert.equal(grouped.ids.categoriesRows.children[0].children[3].children[0].textContent,"No linked topics — open to link");
    assert.equal(grouped.ids.categoriesRows.children[0].children[3].children[2].textContent,"No topics linked to this category. Choose one below to link it.","empty category explains explicit linking");
   assert.equal(grouped.ids.topicsRows.children.length,3,"usage never fabricates links");
@@ -295,7 +326,7 @@ async function ready(h){for(let i=0;i<40;i++)await Promise.resolve();h.s.categor
   assert.deepEqual(JSON.parse(linkWrite.options.body),{action:"link",category:"tiere",topic:"bauernhof",category_sha256:"f".repeat(64),topic_sha256:"e".repeat(64)});
   assert.equal(grouped.ids.categoriesRows.children[0].children[3].children[1].children.length,1,"explicit link persists");
   grouped.state.links.enabled=false;grouped.state.links.reason="Owner seed required";
-  await grouped.s.refreshTaxonomyManagers();
+  await managerReady(grouped);
   assert.match(grouped.ids.topicGroupsStatus.textContent,/Owner seed required/);
   assert.equal(grouped.ids.categoriesRows.children[0].children[3].children[1].children.length,0,"disabled assignments never guessed");
   assert.equal(grouped.ids.categoriesRows.children[0].children[3].children.at(-1).tag,"p","no write controls while disabled");
