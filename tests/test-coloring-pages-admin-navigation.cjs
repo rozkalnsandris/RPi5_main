@@ -44,7 +44,7 @@ function harness() {
   const location={hash:""};
   const entries=Array.from({length:53},(_,i)=>({id:String(i).padStart(7,"0"),title:"Page "+i,category:i%2?"tiere":"lernen",age:"3-6",difficulty:"easy",thumb:"/media/test/thumb.webp"}));
   const state={entries,etag:'W/"edge-weakened"',catalogSha:"a".repeat(64),status:200,confirm:false,prompts:[],answers:[],
-    usageHold:false,pendingUsage:[],
+    usageHold:false,pendingUsage:[],managerHold:false,pendingManagers:[],
     taxonomy:{version:"b".repeat(64),categories:[{id:"tiere",label:"Tiere"},{id:"lernen",label:"Lernen"},{id:"jahreszeiten",label:"Jahreszeiten & Feste"}],
     topics:[{id:"weihnachten",label:"Weihnachten",kind:"seasonal"},{id:"obst",label:"Obst",kind:"evergreen"}]},
     links:{enabled:true,revision:1,registry_sha256:"d".repeat(64),category_sha256:"f".repeat(64),topic_sha256:"e".repeat(64),
@@ -73,8 +73,14 @@ function harness() {
       if(url==="/api/archive")return {ok:true,json:async()=>({entries:state.archiveEntries||[],count:(state.archiveEntries||[]).length,catalog_sha256:state.archiveSha||state.catalogSha})};
       if(url==="/api/activity")return {ok:true,json:async()=>({events:[],count:0})};
       if(url==="/api/categories")return {ok:true,json:async()=>state.taxonomy};
-      if(url==="/api/categories/manage")return {ok:true,json:async()=>state.managed||({enabled:false,reason:"Not activated",categories:[],revision:null,registry_sha256:null,counts:{}})};
-      if(url==="/api/topics/manage")return {ok:true,json:async()=>state.managedTopics||({enabled:false,reason:"Not activated",topics:[],revision:null,registry_sha256:null,counts:{}})};
+      if(url==="/api/categories/manage"){
+        if(state.managerHold&&options.method!=="POST")await new Promise(resolve=>state.pendingManagers.push({url,resolve}));
+        return {ok:true,json:async()=>state.managed||({enabled:false,reason:"Not activated",categories:[],revision:null,registry_sha256:null,counts:{}})};
+      }
+      if(url==="/api/topics/manage"){
+        if(state.managerHold&&options.method!=="POST")await new Promise(resolve=>state.pendingManagers.push({url,resolve}));
+        return {ok:true,json:async()=>state.managedTopics||({enabled:false,reason:"Not activated",topics:[],revision:null,registry_sha256:null,counts:{}})};
+      }
       if(url==="/api/category-topics/manage"){
         if(options.method==="POST"){
           if(state.linkWriteStatus===412)return {ok:false,status:412,json:async()=>({error:"Stale assignment"})};
@@ -330,6 +336,48 @@ async function managerReady(h){await h.s.refreshTaxonomyManagers();await h.s.cat
   assert.match(grouped.ids.topicGroupsStatus.textContent,/Owner seed required/);
   assert.equal(grouped.ids.categoriesRows.children[0].children[3].children[1].children.length,0,"disabled assignments never guessed");
   assert.equal(grouped.ids.categoriesRows.children[0].children[3].children.at(-1).tag,"p","no write controls while disabled");
+
+  // #1327: delayed protected manager GETs must never block early public names or enable writes.
+  const progressive=harness();await ready(progressive);
+  progressive.state.managed={enabled:true,revision:1,registry_sha256:"f".repeat(64),
+    categories:progressive.state.taxonomy.categories,
+    counts:{tiere:{catalog:1,archive:0},lernen:{catalog:0,archive:0},jahreszeiten:{catalog:0,archive:0}}};
+  progressive.state.managedTopics={enabled:true,revision:1,registry_sha256:"e".repeat(64),
+    topics:[{id:"weihnachten",label:"Weihnachten",icon:"W",kind:"seasonal"},
+      {id:"obst",label:"Obst",icon:"O",kind:"evergreen"}],
+    counts:{weihnachten:{catalog:0,archive:0},obst:{catalog:0,archive:0}}};
+  progressive.state.managerHold=true;progressive.go("categories");await ready(progressive);
+  assert.equal(progressive.state.pendingManagers.length,2);
+  assert.equal(progressive.ids.taxonomyPreview.hidden,false,"read-only preview precedes guarded GETs");
+  assert.equal(progressive.ids.verifiedTaxonomy.hidden,true,"edit controls remain hidden");
+  assert.equal(progressive.ids.taxonomyPreviewRows.children.length,3);
+  const staged=progressive.ids.taxonomyPreviewRows.children[2].children[1];
+  assert.equal(staged.children[1].children.length,1,"only explicitly verified saved links");
+  assert.equal(staged.children[1].children[0].children[0].children[0].textContent,"Weihnachten");
+  assert.equal(staged.children.length,2,"no mutations in preview");
+  const before=progressive.calls.filter(x=>x.options.method==="POST").length;
+  await progressive.s.writeManagedCategory({action:"create",id:"new",label:"New"});
+  await progressive.s.writeManagedTopic({action:"delete",id:"obst",confirm_id:"obst"});
+  await progressive.s.writeCategoryTopicLink("unlink","jahreszeiten","weihnachten");
+  assert.equal(progressive.calls.filter(x=>x.options.method==="POST").length,before);
+  progressive.ids.newCategoryLabel.value="Draft";
+  staged.open=true;staged.ontoggle();
+  progressive.state.managerHold=false;progressive.state.pendingManagers.splice(0).forEach(x=>x.resolve());
+  await progressive.s.managerRefreshBarrier;
+  assert.equal(progressive.ids.verifiedTaxonomy.hidden,false,"both SHA-matched manager checks permit UI");
+  assert.equal(progressive.ids.taxonomyPreview.hidden,true);
+  assert.equal(progressive.ids.categoriesRows.children[2].children[3].open,true,"open disclosure preserved");
+  assert.equal(progressive.ids.newCategoryLabel.value,"Draft","pending checks preserve unsaved form");
+  progressive.state.managedTopics.registry_sha256="a".repeat(64);
+  await progressive.s.refreshTaxonomyManagers();
+  assert.equal(progressive.ids.verifiedTaxonomy.hidden,true,"digest mismatch fails closed");
+  assert.equal(progressive.ids.taxonomyPreview.hidden,false,"preview remains readable after failure");
+  await progressive.s.writeCategoryTopicLink("unlink","jahreszeiten","weihnachten");
+  assert.equal(progressive.calls.filter(x=>x.options.method==="POST").length,before);
+  progressive.state.managedTopics.enabled=false;
+  await progressive.s.refreshTaxonomyManagers();
+  assert.equal(progressive.ids.verifiedTaxonomy.hidden,true);
+  assert.equal(progressive.ids.taxonomyPreviewRows.children.length,3,"failed capability never erases read-only taxonomy");
 
   const inactive=harness();await ready(inactive);await inactive.s.loadManagedCategories();
   assert.equal(inactive.ids.categoriesRows.hidden,true,"unavailable categories hide list");

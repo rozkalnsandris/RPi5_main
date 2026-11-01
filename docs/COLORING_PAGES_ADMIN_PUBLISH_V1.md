@@ -894,3 +894,58 @@ authorize backend installation, service restart, runtime Docker command
 or migration. A separately owner-authorized exact LIVE operation and
 bounded before/after request timings are required before claiming a
 measured production speedup.
+
+
+## Early read-only Categories & Topics — #1327 (source-only)
+
+The unified Categories & Topics manager previously waited for **both** slow
+guarded `/api/categories/manage` and `/api/topics/manage` requests before
+painting category and topic groupings. These fresh immutable importer checks are
+still mandatory before accepting any edit and must not be cached or skipped.
+
+The existing `/api/categories` response is already loaded for Add pages and
+contains canonical category/topic names and Topic seasonal/evergreen kinds.
+The protected `/api/category-topics/manage` endpoint verifies and returns
+only explicit saved links; links are never inferred from catalog usage.
+The UI now displays this **read-only** taxonomy and saved-linked-topic
+disclosure view as soon as those reads are available, while the two protected
+management GETs remain pending. The preview has no create, rename, delete, edit,
+link or unlink controls, no fabricated page counts, and uses native
+`<details><summary>` disclosures. When links are unavailable, the preview
+still shows canonical public names but **does not guess assignments**.
+
+The full preexisting manager forms and linked-topic controls remain under a
+natively `hidden` wrapper throughout the verification phase. Even if one
+guarded manager GET returns early, all protected write handlers additionally
+reject mutations until **both** responses succeed and their category/topic
+registry SHA-256 values match those returned by the protected links snapshot.
+The exact existing `If-Match`, CSRF/admin marker, locks, seasonal Topic rules
+and backend security checks stay unchanged. A failed or stale capability check
+keeps the section read-only; the user can refresh again. The existing
+generation barrier prevents older manager responses from revealing a stale
+edit view. Open category disclosures and unsaved form field values survive the
+transition from preview to verified controls.
+
+The offline navigation regression delays both guarded management GETs,
+checks that public categories and explicit links appear first with no enabled
+mutations, then releases the responses and verifies digest-gated controls,
+expanded-state and form preservation. It also checks digest mismatch and a
+disabled manager fail closed. Optional catalog/archive usage aggregation stays
+deferred and never blocks the first read-only paint.
+
+Accessibility: use native `hidden` on unverified action containers (rather
+than `aria-disabled` alone, which does not suppress event handlers), use
+native keyboard-operable `<details>/<summary>`, and keep neutral status
+text. See [MDN aria-disabled](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Attributes/aria-disabled)
+and [W3C disclosure pattern](https://www.w3.org/WAI/ARIA/apg/patterns/disclosure/).
+
+**Performance claim boundary:** after #1324's owner-authorized LIVE backend
+install, the server-local warm GET medians were ~0.99s for Categories and
+Topics and ~0.31s for explicit links. These are not first-paint browser
+metrics; this UI change aims to improve *perceived availability* of read-only
+content, without changing the server's protected GET latency.
+
+**Source-only:** this PR does not authorize installation of the ADMIN HTML,
+backend changes, service restart, host Docker commands, registry mutation or
+LIVE testing beyond existing approved read-only surfaces. A separate precise
+owner LIVE authorization is required before any deployment.
