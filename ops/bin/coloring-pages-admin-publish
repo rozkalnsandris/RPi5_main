@@ -599,8 +599,8 @@ def links_snapshot():
         if registry.get("category_schema") != MANAGED_SCHEMA or registry.get("topic_schema") != TOPICS_SCHEMA:
             return disabled
         doc, digest = read_links(registry)
-    except Stop:
-        return disabled
+    except Stop as error:
+        return dict(disabled, reason="Category-topic links invalid/unavailable: "+str(error)+". Manual review required.")
     return {"enabled": True, "reason": "", "revision": doc["revision"],
             "registry_sha256": digest, "links": doc["links"],
             "category_sha256": registry["category_sha256"],
