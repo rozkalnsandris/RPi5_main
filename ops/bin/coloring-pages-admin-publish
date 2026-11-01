@@ -491,8 +491,12 @@ def change_topics(raw, expected_digest):
             if previous == topic:
                 stop("topic unchanged")
             count = snap["counts"][ident]
-            if previous["kind"] != topic["kind"] and (count["catalog"] or count["archive"]):
-                stop("referenced topic kind cannot change")
+            if previous["kind"] != topic["kind"]:
+                if count["catalog"] or count["archive"]:
+                    stop("referenced topic kind cannot change")
+                links, _ = read_links(load_taxonomy())
+                if any(pair["topic"] == ident for pair in links["links"]):
+                    stop("linked topic kind cannot change")
             doc["topics"] = [topic if row["id"] == ident else row for row in doc["topics"]]
     else:
         ident = raw["id"]
