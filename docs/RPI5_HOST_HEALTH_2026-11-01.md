@@ -155,3 +155,30 @@ Record changes and confirmed failures separately from observations. Distinguish 
 - [`agent/auxiliary_client.py`](https://github.com/NousResearch/hermes-agent/blob/a4994d4ead8f9c915b485cec5689909b349a49df/agent/auxiliary_client.py) restricts its OpenRouter auxiliary selection to `:free` models when free-only is true and warns for non-free selections. This does **not** establish identical behavior for primary-provider routes, other explicit providers or unknown installed versions.
 
 **Next decision:** keep the existing LIVE configuration unchanged. To enforce a `:free`-only auxiliary policy, first verify the installed Hermes revision and choose a compatible `vision` route, then require a **separate exact host/config LIVE authorization** for any write. Restart/reload, live MCP handshake and provider requests require separate authorization; none is implied by this report. Compare a future sanitized follow-up to this **12:21:27 CET** configuration snapshot.
+
+## 9. Source-only Hermes free-only change plan (2026-11-01)
+
+**Scope:** prospective single-key change to the private `rpi5` file `/home/andris/.hermes/config.yaml`, **not performed** in this source-only work. This is a proposed LIVE decision envelope, not an authorization, runnable production patch, successful acceptance test or proof of gateway adoption.
+
+### Additional read-only source and host metadata
+
+- Host metadata sampled 2026-11-01 **12:33:39 CET**: a `hermes` executable exists under the operator's home directory; no installed Hermes revision/commit could be established by this limited read-only metadata check. The inspected private YAML was **not re-opened**.
+- [Hermes configuration docs](https://hermes-agent.nousresearch.com/docs/user-guide/configuration) show independent per-task `provider`/`model`/`base_url` settings and specify that vision requires a multimodal model.
+- [Hermes fallback providers docs](https://hermes-agent.nousresearch.com/docs/user-guide/features/fallback-providers) distinguish primary and auxiliary fallback paths, including task-specific chains. The `auxiliary.free_only` rule must not be treated as a global no-billing guarantee.
+- Immutable upstream code evidence: [`config_defaults.py`](https://github.com/NousResearch/hermes-agent/blob/a4994d4ead8f9c915b485cec5689909b349a49df/hermes_cli/config_defaults.py) defaults `auxiliary.free_only` to `False`; [`auxiliary_client.py`](https://github.com/NousResearch/hermes-agent/blob/a4994d4ead8f9c915b485cec5689909b349a49df/agent/auxiliary_client.py) skips an OpenRouter auxiliary selection when free-only is true and the chosen model is not recognized as free. The **installed** revision has not been proven identical.
+
+### Proposed minimal change and expected impact
+
+1. Set **only** `auxiliary.free_only: true` under the existing top-level `auxiliary` YAML mapping. Keep `vision`, other per-task settings, primary provider, two root fallbacks, MCP/Chroma settings, credentials and unrelated bytes unchanged.
+2. The currently configured explicit `auxiliary.vision` OpenRouter model does **not** end in `:free`. In the referenced upstream implementation this route would be rejected; **vision/image analysis may stop working** until a genuinely available, multimodal, acceptable free route is selected and independently authorized. Do **not** silently switch to an unverified free model or another paid provider.
+3. The proposed flag constrains only the OpenRouter auxiliary handling covered by the installed implementation. It does not establish a no-cost guarantee for primary requests, other providers, direct endpoints or unknown task-specific fallbacks.
+
+### Mandatory preflight for a later separately authorized LIVE action
+
+- Identify the installed Hermes version/source revision **without** exposing configuration, secrets, process environment or user sessions; verify that its resolver honors `auxiliary.free_only` for the explicit pinned `vision` route and relevant automatic paths.
+- Before any write, verify hostname `rpi5`, exact regular-file target, owner/mode, absence of symlink, and expected baseline SHA-256 `cdd9f830b7dcce256c82fb3e381fe9a555cebde29459e9a0a484622f14312da8`; fail closed on drift.
+- Construct a staged candidate by a **single surgical insertion** into the existing `auxiliary` mapping, preserving all other bytes and file metadata. Refuse an ambiguous mapping, duplicate keys, parse errors or any other semantic change. Compare parsed before/after in memory and require *exactly one* changed path: `auxiliary.free_only: ABSENT -> true`.
+- Validate the candidate before promoting it; only a separately authorized one-shot, same-directory atomic promote with an exact target/baseline and bounded read-only verification may alter the host. Do not reload/restart the gateway, invoke an LLM, test Chroma MCP, clean up artifacts, retry or roll back unless those exact classes are separately explicitly authorized.
+- After any live file mutation, record the new SHA-256 and sanitized semantic checks as **new observed evidence**; any error or uncertainty after the first write is `STOP` with read-only evidence only.
+
+**Gate:** source plan only. A separate explicit owner LIVE authorization is required before staging or writing the protected host configuration. No host mutation, gateway restart, model call or deployment occurred while preparing this plan.
