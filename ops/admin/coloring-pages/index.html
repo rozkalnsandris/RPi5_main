@@ -271,6 +271,8 @@ html{overflow-y:scroll}
 .category-row:nth-child(even){background:#fbfdff}
 .category-main{min-width:0}
 .category-label{display:block;font-size:14px;font-weight:800;line-height:1.3;overflow-wrap:anywhere}
+.category-label.category-with-icon{display:flex;align-items:center;gap:8px}
+.category-icon{order:-1;flex:none;font-size:19px;line-height:1}
 .category-id{display:block;margin-top:2px;color:var(--muted);font-size:12px;overflow-wrap:anywhere}
 .category-usage{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .category-buttons{display:flex;justify-content:flex-end;gap:6px}
@@ -764,6 +766,18 @@ async function restoreActiveJob(){var id=storedJobId();if(id){try{var saved=awai
 function categoryMembership(entry){return Array.isArray(entry.categories)&&entry.categories.length?entry.categories.slice():[entry.category]}
 function compatibleTopic(kind,list){return kind==="seasonal"?list.includes("jahreszeiten"):list.some(function(x){return x!=="jahreszeiten"})}
 function categoryText(id){return categoryLabels[id]||id}
+// Exact icons used by the public Ausmalwiese category links (coloring-pages/index.html).
+// Unknown custom IDs intentionally have no guessed icon; category labels remain unmodified.
+var categoryIcons=Object.freeze({
+ tiere:"🐱",fahrzeuge:"🚒",alphabet:"🔤",lernen:"✂️",figuren:"🦸",jahreszeiten:"🍂"
+});
+function decorateCategoryLabel(label,id){
+ var emoji=Object.prototype.hasOwnProperty.call(categoryIcons,id)?categoryIcons[id]:"";
+ if(!emoji)return;
+ var icon=document.createElement("span");icon.className="category-icon";
+ icon.setAttribute("aria-hidden","true");icon.textContent=emoji;
+ label.className+=" category-with-icon";label.appendChild(icon);
+}
 function makeCategoryOptions(container,inputs,list,refresh){
  var field=document.createElement("fieldset"),legend=document.createElement("legend");
  container.replaceChildren();legend.textContent="Categories (first selected is primary)";field.appendChild(legend);
@@ -967,6 +981,7 @@ async function loadManagedCategories(){
      var row=document.createElement("li");row.className="category-row";
      var main=document.createElement("div");main.className="category-main";
      var label=document.createElement("strong");label.className="category-label";label.textContent=c.label;
+     decorateCategoryLabel(label,c.id);
      var ident=document.createElement("span");ident.className="category-id";ident.textContent=c.id;
      main.append(label,ident);
      var count=snapshot.counts[c.id]||{catalog:0,archive:0};
@@ -1239,6 +1254,7 @@ function renderTaxonomyPreview(){
     var row=document.createElement("li");row.className="category-row";
     var main=document.createElement("div");main.className="category-main";
     var label=document.createElement("strong");label.className="category-label";label.textContent=categoryLabels[id];
+    decorateCategoryLabel(label,id);
     var key=document.createElement("span");key.className="category-id";key.textContent=id;main.append(label,key);
     var details=document.createElement("details");details.className="category-topics";details.dataset.categoryId=id;
     details.open=expandedCategories.has(id);
