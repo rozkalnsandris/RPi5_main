@@ -780,3 +780,48 @@ late stale errors and unchanged fail-closed edit behavior.
 **Source-only delivery**: no HTML file is installed to the RPi5 by merge. A
 separate exact owner-authorized UI-only installer operation is required for
 LIVE and must pass its existing backend/API and service preflight.
+
+
+## Bounded immutable-importer management probes — #1320 (source-only)
+
+Read-only measurement of the existing loopback ADMIN endpoints on RPi5
+(2026-11-01, GitHub and host source at
+`d4b5022607bb1241c32a4588c88db30bf396a4aa`):
+
+| Endpoint (HTTP 200) | Three observed sequential GET total times |
+|---|---|
+| `/api/categories/manage` | 2.830 s; 2.504 s; 1.703 s |
+| `/api/topics/manage` | 2.270 s; 1.718 s; 1.957 s |
+| `/api/category-topics/manage` | 0.339 s; 0.313 s; 0.346 s |
+
+These are *server-local total request times*, not cold-browser paint metrics,
+and are not proof of a guaranteed production speedup. The source shows that
+each category/topic management response invokes two separate immutable-importer
+Docker checks sequentially: a pinned importer `--help` capability test and a
+pinned `/usr/bin/python3` validator against the registry digest.
+
+The #1320 change **does not cache** a capability decision. It schedules the
+two already-existing immutable-image read-only Docker probes concurrently using
+a process-wide `ThreadPoolExecutor(max_workers=2)`. This caps in-flight
+capability probes to two across concurrent manager requests. Both subprocess
+results remain required for success, with the same pinned `IMAGE`, hardening
+options (`--pull=never --network none --read-only --cap-drop ALL`,
+`no-new-privileges`, nonroot user), 30-second per-probe timeout, exit-status
+and capability/digest stdout checks. Each request still reads and validates
+the current registry and public taxonomy; the exact digest, ETag and mutation
+preconditions remain unchanged. On subprocess failure/timeout or digest
+mismatch the management capability fails closed. A registry change or image
+identity change automatically gets **new checks on the next request**, because
+no positive result survives between requests.
+
+Offline source regressions use mocked immutable-container results to prove
+that both checks overlap, run again for subsequent warm reads and a changed
+image identity, reject stale digests/missing flags/nonzero exit/timeout, and
+keep global concurrent probe pressure at two under overlapping requests.
+No real production registry, Docker daemon or service is mutated in these tests.
+
+Any observed LIVE improvement must be established **after** a separately
+authorized deployment, with fresh bounded per-endpoint timings. A source-only
+merge is not authorization to replace the running backend, restart the ADMIN
+service or change containers. No retry, rollback, cleanup, registry write,
+secrets or production mutation is authorized by #1320.
