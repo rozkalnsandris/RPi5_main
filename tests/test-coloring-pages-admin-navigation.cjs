@@ -310,9 +310,11 @@ async function ready(h){for(let i=0;i<40;i++)await Promise.resolve();h.s.categor
   assert.match(html,/id="categoriesRefresh"[^>]*>↻ Refresh all</,"one refresh for both");
   assert.equal(html.includes('id="topicsRefresh"'),false,"no duplicate Topics refresh");
   h.go("catalog");
+  await ready(h);
   const categoryReads=h.calls.filter(x=>x.url==="/api/categories/manage").length;
   const topicReads=h.calls.filter(x=>x.url==="/api/topics/manage").length;
   h.go("categories");
+  await ready(h);
   assert.equal(h.calls.filter(x=>x.url==="/api/categories/manage").length,categoryReads+1,"Categories loads on combined route");
   assert.equal(h.calls.filter(x=>x.url==="/api/topics/manage").length,topicReads+1,"Topics loads on combined route");
   await h.ids.categoriesRefresh.onclick();
