@@ -268,6 +268,8 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
   assert.equal(grouped.ids.categoriesRows.children[0].children.length,3,"inconsistent catalog/archive hashes cannot be grouped");
   grouped.state.archiveSha=null;
   grouped.state.entries=[{id:"0000007",category:"tiere",topics:[]}];grouped.state.archiveEntries=[];
+  grouped.state.managedTopics.counts.bauernhof={catalog:0,archive:0};
+  grouped.state.managedTopics.counts.obst={catalog:0,archive:0};
   await grouped.s.refreshTaxonomyManagers();
   assert.equal(grouped.ids.categoriesRows.children[0].children[3].tag,"p","zero-usage category is not an interactive disclosure");
   assert.equal(grouped.ids.categoriesRows.children[0].children[3].textContent,"No topics used in pages.");
