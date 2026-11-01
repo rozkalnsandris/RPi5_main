@@ -390,7 +390,7 @@ html{overflow-y:scroll}
         <div class="panel-heading">
           <div class="panel-title"><span class="step-number">3</span><div><span class="panel-kicker">Catalog</span><h2>Choose categories</h2></div></div>
         </div>
-        <span class="category-help">Categories (first selected is primary)</span><details id="categoryPicker" class="topic-picker"><summary><span id="categorySummary">Choose categories…</span><span class="topic-arrow" aria-hidden="true">▾</span></summary><div id="categoryChoices" class="topic-options"></div></details><div id="chosenCategories" class="category-chips" aria-live="polite"></div><p class="category-help">Choose at least one category; the first selected is primary.</p><span class="category-help">Topics (optional)</span><details id="topicPicker" class="topic-picker"><summary><span id="topicSummary">Choose topics…</span><span class="topic-arrow" aria-hidden="true">▾</span></summary><div id="topicChoices" class="topic-options"></div></details><div id="chosenTopic" class="category-chips" aria-live="polite"></div>
+        <span class="category-help">Categories (first selected is primary)</span><details id="categoryPicker" class="topic-picker"><summary><span id="categorySummary">Choose categories…</span><span class="topic-arrow" aria-hidden="true">▾</span></summary><div id="categoryChoices" class="topic-options"></div></details><div id="chosenCategories" class="category-chips" aria-live="polite"></div><p class="category-help">Choose at least one category; the first selected is primary.</p><span class="category-help">Topics (optional)</span><details id="topicPicker" class="topic-picker"><summary><span id="topicSummary">Choose topics…</span><span class="topic-arrow" aria-hidden="true">▾</span></summary><div id="topicChoices" class="topic-options"></div></details><div id="chosenTopic" class="category-chips" aria-live="polite"></div><p id="topicSelectionStatus" class="category-help" role="status" aria-live="polite"></p>
       </article>
 
       <article class="admin-panel">
@@ -516,7 +516,7 @@ html{overflow-y:scroll}
     <input id="editId" type="hidden">
     <div class="field-grid">
       <div class="field wide"><label for="editTitle">Title</label><input id="editTitle" maxlength="128" required></div>
-      <div class="field wide"><span class="category-help">Categories (first selected is primary)</span><details id="editCategoryPicker" class="topic-picker"><summary><span id="editCategorySummary">Choose categories…</span><span class="topic-arrow" aria-hidden="true">▾</span></summary><div id="editCategoryChoices" class="topic-options"></div></details><div id="editChosenCategories" class="category-chips" aria-live="polite"></div></div><div class="field wide"><span class="category-help">Topics (optional)</span><details id="editTopicPicker" class="topic-picker"><summary><span id="editTopicSummary">Choose topics…</span><span class="topic-arrow" aria-hidden="true">▾</span></summary><div id="editTopicChoices" class="topic-options"></div></details><div id="editChosenTopics" class="category-chips" aria-live="polite"></div></div>
+      <div class="field wide"><span class="category-help">Categories (first selected is primary)</span><details id="editCategoryPicker" class="topic-picker"><summary><span id="editCategorySummary">Choose categories…</span><span class="topic-arrow" aria-hidden="true">▾</span></summary><div id="editCategoryChoices" class="topic-options"></div></details><div id="editChosenCategories" class="category-chips" aria-live="polite"></div></div><div class="field wide"><span class="category-help">Topics (optional)</span><details id="editTopicPicker" class="topic-picker"><summary><span id="editTopicSummary">Choose topics…</span><span class="topic-arrow" aria-hidden="true">▾</span></summary><div id="editTopicChoices" class="topic-options"></div></details><div id="editChosenTopics" class="category-chips" aria-live="polite"></div><p id="editTopicSelectionStatus" class="category-help" role="status" aria-live="polite"></p></div>
       <div class="field"><label for="editAge">Age</label><select id="editAge"><option value="3-6">3–6 years</option><option value="4-8">4–8 years</option></select></div>
       <div class="field"><label for="editDifficulty">Difficulty</label><select id="editDifficulty"><option value="easy">Easy</option><option value="normal">Medium</option><option value="detailed">Detailed</option></select></div>
     </div>
@@ -721,6 +721,7 @@ archiveGrid=document.getElementById("archiveGrid"),archiveCount=document.getElem
 editDialog=document.getElementById("editDialog"),editDialogTitle=document.getElementById("editDialogTitle"),editForm=document.getElementById("editForm"),editId=document.getElementById("editId"),editTitle=document.getElementById("editTitle"),editCategoryPicker=document.getElementById("editCategoryPicker"),editCategoryChoices=document.getElementById("editCategoryChoices"),editChosenCategories=document.getElementById("editChosenCategories"),editAge=document.getElementById("editAge"),editDifficulty=document.getElementById("editDifficulty"),editSave=document.getElementById("editSave");
 var categoryLabels=Object.create(null),topicLabels=Object.create(null),topicKinds=Object.create(null),taxonomyVersion="";
 var categoryInputs=Object.create(null),editCategoryInputs=Object.create(null);
+var editOriginalCategories=[],editOriginalTopics=[];
 var stepLabels={
 "ZIP-Datei empfangen und entpacken":"Receive and unpack ZIP file",
 "PNG-Dateien prüfen":"Check PNG files",
@@ -782,44 +783,70 @@ function refreshCategorySelection(list,chosen,inputs,summary,picker,refresh){
  });
  summary.textContent=list.length?"Choose categories… ("+list.length+" selected)":"Choose categories…";
 }
-function makeTopicOptions(container,inputs,list,refresh){
- container.replaceChildren();
- ["seasonal","evergreen"].forEach(function(kind){
-  var field=document.createElement("fieldset"),legend=document.createElement("legend");
-  legend.textContent=kind==="seasonal"?"Feste & Jahreszeiten":"Weitere Themen";field.appendChild(legend);
-  Object.keys(topicKinds).forEach(function(id){
-   if(topicKinds[id]!==kind)return;
-   var row=document.createElement("label");row.className="topic-option";
-   var input=document.createElement("input");input.type="checkbox";input.value=id;input.name="topics";
-   var label=document.createElement("span");label.textContent=topicLabels[id];
-   input.onchange=function(){var position=list.indexOf(id);if(input.checked&&position<0)list.push(id);if(!input.checked&&position>=0)list.splice(position,1);refresh()};
-   inputs[id]=input;row.append(input,label);field.appendChild(row);
-  });
-  container.appendChild(field);
- });
+function topicLinked(id,categories){
+ return !!(topicLinksEnabled&&topicLinks.links.some(function(p){return p.topic===id&&categories.includes(p.category)})
+   &&topicKinds[id]&&compatibleTopic(topicKinds[id],categories));
 }
-function refreshTopicSelection(list,chosen,inputs,categories,summary,picker,refresh){
- var valid=list.filter(function(id){return topicKinds[id]&&compatibleTopic(topicKinds[id],categories)});
- if(valid.length!==list.length)list.splice(0,list.length,...valid);
- Object.keys(inputs).forEach(function(id){inputs[id].disabled=!compatibleTopic(topicKinds[id],categories);inputs[id].checked=list.includes(id)});
+function legacyEditAllowed(id,categories){
+ return editOriginalTopics.includes(id)&&JSON.stringify(categories)===JSON.stringify(editOriginalCategories);
+}
+function invalidTopics(list,categories,editing){
+ return list.some(function(id){return !topicLinked(id,categories)&&!(editing&&legacyEditAllowed(id,categories))});
+}
+function makeTopicOptions(container,inputs,list,categories,refresh,editing){
+ container.replaceChildren();Object.keys(inputs).forEach(function(id){delete inputs[id]});
+ var shown=new Set();
+ function group(title,items,legacy){
+   if(!items.length)return;
+   var field=document.createElement("fieldset"),legend=document.createElement("legend");
+   legend.textContent=title;field.appendChild(legend);
+   items.forEach(function(id){
+     if(shown.has(id))return;shown.add(id);
+     var row=document.createElement("label");row.className="topic-option";
+     var input=document.createElement("input");input.type="checkbox";input.value=id;input.name="topics";input.checked=list.includes(id);
+     input.disabled=legacy&&!legacyEditAllowed(id,categories);
+     var label=document.createElement("span");label.textContent=(topicLabels[id]||id)+(legacy?" (legacy / unlinked)":"");
+     input.onchange=function(){var i=list.indexOf(id);if(input.checked&&i<0)list.push(id);if(!input.checked&&i>=0)list.splice(i,1);refresh()};
+     inputs[id]=input;row.append(input,label);field.appendChild(row);
+   });
+   container.appendChild(field);
+ }
+ categories.forEach(function(c){
+   group(categoryText(c),Object.keys(topicLabels).filter(function(t){return !shown.has(t)&&topicLinked(t,[c])&&compatibleTopic(topicKinds[t],categories)}),false);
+ });
+ if(editing)group("Previously selected (unlinked)",list.filter(function(t){return !shown.has(t)}),true);
+ if(!shown.size){
+   var empty=document.createElement("p");empty.className="category-help";
+   empty.textContent=!topicLinksEnabled?topicLinksReason:categories.length?"No linked topics. Link topics in Categories & Topics.":"Choose a category first.";
+   container.appendChild(empty);
+ }
+}
+function refreshTopicSelection(list,chosen,inputs,categories,summary,picker,refresh,editing){
+ makeTopicOptions(editing?editTopicChoices:topicChoices,inputs,list,categories,refresh,editing);
+ var invalid=invalidTopics(list,categories,editing);
  chosen.replaceChildren();
  list.forEach(function(id){
-  var chip=document.createElement("span");chip.className="category-chip";
-  var label=document.createElement("span");label.textContent=topicLabels[id];
-  var remove=document.createElement("button");remove.type="button";remove.textContent="×";
-  remove.setAttribute("aria-label","Remove "+label.textContent+" topic");
-  remove.onclick=function(){list.splice(list.indexOf(id),1);refresh();picker.querySelector("summary").focus()};
-  chip.append(label,remove);chosen.appendChild(chip);
+   var linked=topicLinked(id,categories),legacy=editing&&legacyEditAllowed(id,categories);
+   var chip=document.createElement("span");chip.className="category-chip";
+   var label=document.createElement("span");label.textContent=(topicLabels[id]||id)+(!linked?(legacy?" (legacy / unlinked)":" (not linked)"):"");
+   var remove=document.createElement("button");remove.type="button";remove.textContent="×";
+   remove.setAttribute("aria-label","Remove "+(topicLabels[id]||id)+" topic");
+   remove.onclick=function(){list.splice(list.indexOf(id),1);refresh();picker.querySelector("summary").focus()};
+   chip.append(label,remove);chosen.appendChild(chip);
  });
  summary.textContent=list.length?"Choose topics… ("+list.length+" selected)":"Choose topics…";
+ document.getElementById(editing?"editTopicSelectionStatus":"topicSelectionStatus").textContent=
+   !topicLinksEnabled?topicLinksReason:invalid?"Selection contains unlinked topics. Remove them or restore the correct category.":
+   editing&&list.some(function(id){return !topicLinked(id,categories)})?"Existing unlinked topics are retained only while categories remain unchanged.":"Topics are optional and limited to linked categories.";
+ return invalid;
 }
 function refreshEditChips(){
  refreshCategorySelection(editSelectedCategories,editChosenCategories,editCategoryInputs,document.getElementById("editCategorySummary"),editCategoryPicker,refreshEditChips);
- refreshTopicSelection(editSelectedTopics,editChosenTopics,editTopicInputs,editSelectedCategories,document.getElementById("editTopicSummary"),editTopicPicker,refreshEditChips);
- editSave.disabled=!editSelectedCategories.length||editStale;
+ var invalid=refreshTopicSelection(editSelectedTopics,editChosenTopics,editTopicInputs,editSelectedCategories,document.getElementById("editTopicSummary"),editTopicPicker,refreshEditChips,true);
+ editSave.disabled=!editSelectedCategories.length||editStale||!topicLinksEnabled||invalid;
 }
 function refreshUploadTopics(){
- refreshTopicSelection(selectedTopics,chosenTopic,topicInputs,selectedCategories,document.getElementById("topicSummary"),topicPicker,refreshUploadTopics);
+ refreshTopicSelection(selectedTopics,chosenTopic,topicInputs,selectedCategories,document.getElementById("topicSummary"),topicPicker,refreshUploadTopics,false);
  updateButton();
 }
 function refreshUploadChips(){refreshCategorySelection(selectedCategories,chosenCategories,categoryInputs,document.getElementById("categorySummary"),categoryPicker,refreshUploadChips);refreshUploadTopics()}
@@ -840,8 +867,8 @@ async function loadCategories(){
     makeCategoryOptions(categoryChoices,categoryInputs,selectedCategories,refreshUploadChips);
     makeCategoryOptions(editCategoryChoices,editCategoryInputs,editSelectedCategories,refreshEditChips);
     topicInputs=Object.create(null);editTopicInputs=Object.create(null);
-    makeTopicOptions(topicChoices,topicInputs,selectedTopics,refreshUploadTopics);
-    makeTopicOptions(editTopicChoices,editTopicInputs,editSelectedTopics,refreshEditChips);
+    await loadCategoryTopicLinks();
+    
     refreshUploadChips();refreshEditChips();
   }catch(e){taxonomyVersion="";topicReady=false;publicationErr("Public categories and topics could not be loaded.");throw e}
 }
@@ -849,7 +876,7 @@ drop.onclick=function(){file.click()};drop.onkeydown=function(e){if(e.key==="Ent
 async function sendZip(f){if(job&&!isTerminal(job)){publicationErr("Wait for the current publishing job to finish.");return}clearPublicationErr();publish.disabled=true;success.style.display="none";process.style.display="none";try{upload=await adminFetch("/api/uploads",{method:"POST",headers:{"Content-Type":"application/zip"},body:f});filebar.style.display="block";filebar.textContent="✓ "+f.name+" — found "+upload.count+" PNG";renderPreviews();updateButton()}catch(e){publicationErr(e.message)}}
 function renderPreviews(){previews.innerHTML="";upload.files.forEach(function(item,i){var c=document.createElement("div");c.className="preview";var img=document.createElement("img");img.src="/api/uploads/"+upload.upload_id+"/preview/"+(i+1);img.alt="Preview "+(i+1);var input=document.createElement("input");input.value=item.title;input.maxLength=128;input.setAttribute("aria-label","Image "+(i+1)+" title");input.oninput=updateButton;c.append(img,input);previews.appendChild(c)})}
 function titles(){return Array.from(previews.querySelectorAll("input")).map(function(x){return x.value.trim()})}
-function updateButton(){document.getElementById("activeJobLink").hidden=!(job&&!isTerminal(job));publish.disabled=!!(job&&!isTerminal(job))||!(upload&&taxonomyVersion&&selectedCategories.length&&topicReady&&titles().length===upload.count&&titles().every(Boolean))}
+function updateButton(){document.getElementById("activeJobLink").hidden=!(job&&!isTerminal(job));publish.disabled=!!(job&&!isTerminal(job))||!(upload&&taxonomyVersion&&selectedCategories.length&&topicReady&&topicLinksEnabled&&!invalidTopics(selectedTopics,selectedCategories,false)&&titles().length===upload.count&&titles().every(Boolean))}
 publish.onclick=async function(){if(!selectedCategories.length||publish.disabled)return;clearPublicationErr();publish.disabled=true;success.style.display="none";try{var created=await adminFetch("/api/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({upload_id:upload.upload_id,category:selectedCategories[0],categories:selectedCategories.slice(),topic:selectedTopics[0]||"",topics:selectedTopics.slice(),taxonomy_sha256:taxonomyVersion,titles:titles()})});startTracking(created,created.restored===true)}catch(e){publicationErr(e.message);updateButton()}}
 async function refresh(){if(!job||pollBusy||isTerminal(job))return;pollBusy=true;try{var latest=await adminFetch("/api/jobs/"+job.job_id);job=latest;pollFailures=0;clearPublicationErr();renderJob(job);if(isTerminal(job)){finishJob(job)}else{scheduleRefresh(1500)}}catch(e){pollFailures=Math.min(pollFailures+1,4);publicationErr("The connection to publishing status was interrupted. Retrying…");scheduleRefresh(Math.min(10000,1500*Math.pow(2,pollFailures)))}finally{pollBusy=false}}
 function renderJob(j){steps.innerHTML="";j.steps.forEach(function(s,i){var row=document.createElement("div");row.className="row "+s.status;var dur="";if(s.started_at){var end=s.finished_at||Math.floor(Date.now()/1000);dur=(end-s.started_at)+" s"}var label=(stepLabels[s.label]||s.label)+(s.detail?" — "+s.detail:"");row.innerHTML="<span class=dot>"+(s.status==="done"?"✓":(i+1))+"</span><span>"+escapeHtml(label)+"</span><span class=status>"+escapeHtml(statusLabels[s.status]||s.status)+"</span><span class=duration>"+dur+"</span>";steps.appendChild(row)})}
@@ -868,16 +895,16 @@ function populateEdit(){
   var missing=document.getElementById("editMissing"),layout=document.querySelector(".edit-layout");
   missing.hidden=!!x;layout.hidden=!x;
   if(!x){missing.textContent="This entry is no longer in the catalog. Return to Catalog and choose another page.";editBaseline="";return}
-  editId.value=x.id;editTitle.value=x.title||"";editSelectedCategories.splice(0,editSelectedCategories.length,...categoryMembership(x));editSelectedTopics.splice(0,editSelectedTopics.length,...(Array.isArray(x.topics)?x.topics:[]));editAge.value=x.age;editDifficulty.value=x.difficulty;refreshEditChips();
+  editId.value=x.id;editTitle.value=x.title||"";editSelectedCategories.splice(0,editSelectedCategories.length,...categoryMembership(x));editSelectedTopics.splice(0,editSelectedTopics.length,...(Array.isArray(x.topics)?x.topics:[]));editAge.value=x.age;editDifficulty.value=x.difficulty;editOriginalCategories=categoryMembership(x);editOriginalTopics=editSelectedTopics.slice();refreshEditChips();
   
   editDialogTitle.textContent="Page information";document.getElementById("editPreviewCaption").textContent="ID: "+x.id;
   document.getElementById("editPreview").src="https://ausmalwiese.de"+x.thumb;
   document.getElementById("editPreview").alt=x.title||"Page preview";
   document.getElementById("editPublicLink").href="https://ausmalwiese.de/detail.html?id="+encodeURIComponent(x.id);
-  editEtag=catalogEtag;editStale=false;editSave.disabled=false;editBaseline=JSON.stringify(editValues());
+  editEtag=catalogEtag;editStale=false;refreshEditChips();editBaseline=JSON.stringify(editValues());
 }
 editForm.onsubmit=async function(event){
-  event.preventDefault();if(editSave.disabled||editStale||!editSelectedCategories.length||!editForm.reportValidity())return;
+  event.preventDefault();if(editSave.disabled||editStale||!topicLinksEnabled||invalidTopics(editSelectedTopics,editSelectedCategories,true)||!editSelectedCategories.length||!editForm.reportValidity())return;
   var payload=editValues();if(!payload.title){editTitle.focus();return}
   editSave.disabled=true;clearErr();
   try{
@@ -1151,6 +1178,7 @@ async function writeManagedTopic(raw){
 async function refreshTaxonomyManagers(){
   topicGroupsStatus.textContent="Loading saved assignments and usage…";
   await Promise.all([loadCategoryTopicLinks(),loadManagedCategories(),loadManagedTopics(),loadCategoryTopicUsage()]);
+  refreshUploadChips();refreshEditChips();
   renderGroupedTopicUsage();
 }
 topicsForm.onsubmit=function(e){e.preventDefault();
