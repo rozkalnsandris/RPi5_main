@@ -940,7 +940,7 @@ class ManagerProbeLatencyTests(unittest.TestCase):
                 return SimpleNamespace(returncode=0, stdout=(
                     "--categories-sha256 --additional-category "
                     "--topics-sha256 --additional-topic"))
-            digest = category_digest if "coloring_pages_categories.py" in args else topic_digest
+            digest = category_digest if any(x.endswith("coloring_pages_categories.py") for x in args) else topic_digest
             return SimpleNamespace(returncode=0, stdout="sha256=" + digest)
 
         with patch.object(admin, "docker_prefix", return_value=["docker", "run"]), patch.object(

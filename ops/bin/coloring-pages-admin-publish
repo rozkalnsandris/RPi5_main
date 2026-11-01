@@ -157,9 +157,9 @@ def run_capability_probes(help_args, validation_args):
     """
     options = {"stdout": subprocess.PIPE, "stderr": subprocess.DEVNULL,
                "text": True, "timeout": 30, "check": False}
-    first = CAPABILITY_PROBES.submit(subprocess.run, help_args, **options)
-    second = CAPABILITY_PROBES.submit(subprocess.run, validation_args, **options)
     try:
+        first = CAPABILITY_PROBES.submit(subprocess.run, help_args, **options)
+        second = CAPABILITY_PROBES.submit(subprocess.run, validation_args, **options)
         help_result = first.result()
         validation_result = second.result()
     except (OSError, subprocess.TimeoutExpired, RuntimeError):
