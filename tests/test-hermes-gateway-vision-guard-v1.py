@@ -118,7 +118,8 @@ class HttpBoundaryTests(unittest.TestCase):
                     require_fixed_http_request(req)
 
     def test_single_httpx_entry_and_reentry_rejected(self):
-        sent = Mock(return_value=SimpleNamespace(status_code=200))
+        sent = Mock()
+        sent.handle_request.return_value = SimpleNamespace(status_code=200)
         transport = OfflineSingleDispatchHttpTransport(sent)
         # The adapter must call a real duck-typed handle_request method,
         # never a higher level completions.create wrapper.

@@ -13,5 +13,11 @@ regexes = [
   '''^9649c6c38b4bce83ee535557dc7e8e335f8c08ad$''',
   '''^64736e040291e4b4d9b13ffceaac56fa5c7907ec$''',
   '''^4cb441873df8245387f06ee55d637a9f7b11cdc8$''',
-  '''^130fc36a22bb4ace500b022c3defcccbf0893012$''',
+  '''^130fc36a22bb4ace500b022c3defcccbf0893012
+]
+'',
+  # Public upstream Hermes agent/auxiliary_client.py Git blob SHA-1; not a credential.
+  '''^34401444a875280deec8fb4f8e49cb38e3a6cf65
+]
+'',
 ]
