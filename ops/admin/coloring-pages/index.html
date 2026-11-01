@@ -297,7 +297,8 @@ html{overflow-y:scroll}
 .topics-create .wide{grid-column:1/-1}
 .topics-create textarea{width:100%;max-width:100%;box-sizing:border-box}
 .topics-dialog{width:min(640px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto;border:1px solid var(--line);border-radius:16px;padding:18px}
-.topics-under-categories{margin-top:18px}
+.topics-inline{margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+.topics-inline h3{margin:0 0 8px;font-size:14px;font-weight:900}
 .category-topics{grid-column:1/-1;min-width:0;border-top:1px solid var(--line);margin-top:6px;padding-top:6px}
 .category-topics>summary{color:var(--blue-deep);font-weight:900;font-size:12px;cursor:pointer;padding:6px 2px;min-height:32px}
 .category-topics[open]>summary{margin-bottom:8px}
@@ -445,13 +446,13 @@ html{overflow-y:scroll}
   <section class="management-section" data-page="categories" hidden aria-label="Categories and Topics">
     <div class="container categories-shell"><article class="admin-panel categories-panel">
       <div class="panel-heading">
-        <div class="panel-title"><div><span class="panel-kicker">Organization</span><h2>Categories</h2></div></div>
+        <div class="panel-title"><div><span class="panel-kicker">Organization</span><h2>Categories &amp; Topics</h2></div></div>
         <button id="categoriesRefresh" class="secondary" type="button">↻ Refresh all</button>
       </div>
       <p class="categories-note">IDs are permanent. Original or in-use categories cannot be deleted.</p>
       <p id="categoriesStatus" class="categories-status" role="status" aria-live="polite">Checking registry…</p>
       <p id="topicGroupsStatus" class="categories-note" role="status" aria-live="polite">Expand a category to view its explicitly linked topics, even without published pages.</p>
-      <ul id="categoriesRows" class="categories-list" aria-label="Categories and usage" hidden></ul>
+      <ul id="categoriesRows" class="categories-list" aria-label="Categories and linked topics" hidden></ul>
       <details id="categoriesCreate" class="categories-add" hidden>
         <summary>Add category</summary>
         <form id="categoriesForm" class="categories-create">
@@ -460,10 +461,9 @@ html{overflow-y:scroll}
           <button class="primary" type="submit">Create category</button>
         </form>
       </details>
-    </article></div>
-    <div class="container categories-shell topics-under-categories"><article class="admin-panel categories-panel" id="managedTopicsPanel" aria-labelledby="managedTopicsHeading">
-      <div class="panel-heading"><div class="panel-title"><div><span class="panel-kicker">Under Categories</span><h2 id="managedTopicsHeading" tabindex="-1">Topics</h2></div></div></div>
-      <p class="categories-note">Manage explicit topic links inside each category. Unlink never deletes a topic. Globally unlinked topics appear below; usage counts are separate.</p>
+      <section class="topics-inline" aria-labelledby="managedTopicsHeading">
+        <h3 id="managedTopicsHeading" tabindex="-1">Topic tools</h3>
+      <p class="categories-note">Link existing topics within a category above. Manage topics not linked to any category here; unlinking never deletes them.</p>
       <p id="topicsStatus" class="categories-status" role="status" aria-live="polite">Checking managed Topics…</p>
       <details id="topicsOtherDetails" class="topics-other" hidden>
         <summary id="topicsOtherSummary">Other topics</summary>
@@ -479,6 +479,7 @@ html{overflow-y:scroll}
 <div class="field"><label for="topicNewTo">Season to (MM-DD)</label><input id="topicNewTo" pattern="[0-9]{2}-[0-9]{2}" placeholder="02-29"></div>
 <div class="field wide"><label for="topicNewTerms">Legacy terms (one per line)</label><textarea id="topicNewTerms" rows="2" maxlength="2048"></textarea></div>
           <button class="primary" type="submit">Create topic</button></form></details>
+      </section>
     </article></div>
     <dialog id="topicsDialog" class="topics-dialog" aria-labelledby="topicsDialogTitle">
       <form id="topicsEditForm"><h2 id="topicsDialogTitle">Edit topic</h2>
@@ -1099,18 +1100,18 @@ function renderGroupedTopicUsage(){
    var details=document.createElement("details");details.className="category-topics";
    details.open=expandedCategories.has(c.id);
    details.ontoggle=function(){if(details.open)expandedCategories.add(c.id);else expandedCategories.delete(c.id)};
-   var summary=document.createElement("summary");summary.textContent=pairs.length+" linked topic"+(pairs.length===1?"":"s")+" — show / hide";details.appendChild(summary);
+   var summary=document.createElement("summary");summary.textContent=pairs.length?pairs.length+" linked topic"+(pairs.length===1?"":"s")+" — show / hide":"No linked topics — open to link";details.appendChild(summary);
    var list=document.createElement("ul");list.className="category-topics-list";list.setAttribute("aria-label","Topics linked to "+c.label);
    pairs.forEach(function(p){
      var t=snapshot.topics.find(function(x){return x.id===p.topic});
      if(t){assigned.add(t.id);list.appendChild(managedTopicRow(t,snapshot,counts[t.id]||{catalog:0,archive:0},c.id))}
    });
    details.appendChild(list);
-   if(!pairs.length){var empty=document.createElement("p");empty.className="category-topics-empty";empty.textContent=topicLinksEnabled?"No linked topics yet.":"Assignments unavailable.";details.appendChild(empty)}
+   if(!pairs.length){var empty=document.createElement("p");empty.className="category-topics-empty";empty.textContent=topicLinksEnabled?"No topics linked to this category. Choose one below to link it.":"Assignments unavailable.";details.appendChild(empty)}
    if(topicLinksEnabled){
      var actions=document.createElement("div");actions.className="category-buttons";
      var select=document.createElement("select");select.setAttribute("aria-label","Topic to link to "+c.label);
-     var first=document.createElement("option");first.value="";first.textContent="Choose topic…";select.appendChild(first);
+     var first=document.createElement("option");first.value="";first.textContent="Choose an existing topic…";select.appendChild(first);
      snapshot.topics.filter(function(t){return compatibleTopic(t.kind,[c.id])&&!pairs.some(function(p){return p.topic===t.id})}).forEach(function(t){
        var opt=document.createElement("option");opt.value=t.id;opt.textContent=t.label;select.appendChild(opt);
      });
