@@ -750,3 +750,33 @@ Category–Topic API preflight, and must not be treated as authorized by source
 merge. The source regression suite asserts a single card, hierarchy and empty
 Category wording, while preserving protected link, Add pages and Catalog/Edit
 behavior.
+
+## Progressive Categories & Topics loading — #1318 (source-only)
+
+The category-first manager renders once the protected Category registry, Topic
+registry and explicit Category↔Topic assignment snapshots have been read. These
+three read-only requests are started concurrently; rendering and link actions
+do not await the optional catalog/archive page-usage aggregation.
+
+While the optional `/api/catalog` + `/api/archive` verified pair is pending,
+per-linked-Topic usage cells explicitly say `Page usage loading…` and the
+status announces loading. The managed Category counts continue to come from
+their own validated manager snapshot. On success, linked-Topic counts are
+updated *in place*, preserving open disclosures, keyboard focus, Topic selectors,
+and any unsaved UI state. Invalid, stale or unavailable analytics show
+`Usage unavailable`; zeros are not fabricated. A generation guard prevents
+older in-flight usage results from overwriting newer refreshes, and manager
+refreshes are serialized to avoid stale protected snapshot replacement.
+
+This optimization changes no registry, API, category/topic association, page
+metadata, publishing lock or backend enforcement. Topic linking remains an
+explicit authenticated single operation: expand a Category, select a compatible
+existing Topic, and press `+ Link topic`. Seasonal Topics may link only under
+`jahreszeiten`; evergreen Topics only under other Categories. Historic topic
+usage does not auto-create links. The offline regression defers catalog usage
+and checks that links are already usable, then verifies in-place count updates,
+late stale errors and unchanged fail-closed edit behavior.
+
+**Source-only delivery**: no HTML file is installed to the RPi5 by merge. A
+separate exact owner-authorized UI-only installer operation is required for
+LIVE and must pass its existing backend/API and service preflight.
