@@ -605,7 +605,7 @@ after merge; no service restart is needed for that reviewed mode. Native
 [MDN details](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/details),
 [WAI-ARIA APG accordion](https://www.w3.org/WAI/ARIA/apg/patterns/accordion/).
 
-## Category-specific Topics by page usage — #1301 (source-only)
+## Historical category-specific Topic usage — #1301 (superseded by #1305 for management)
 
 The combined protected ADMIN Category list progressively discloses **actual used
 Topics** directly beneath each category. Open the native `details/summary` row
@@ -628,7 +628,7 @@ remain untouched; no backend or LIVE change is authorized.
 References: [MDN native details](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/details),
 [GOV.UK accordion guidance](https://design-system.service.gov.uk/components/accordion/).
 
-## Compact category and unused-topic disclosures — #1303 (source only)
+## Historical compact topic disclosures — #1303 (superseded by #1305 for management)
 
 Category rows with zero catalog/archive-used Topics display plain, noninteractive
 “No topics used in pages.” text; only rows with genuine used Topics expose a
@@ -644,7 +644,7 @@ visible, and the complete topic list is explicitly opened for management.
 No category/topic ownership mapping is inferred from compatibility, and no
 registry, API or LIVE behavior is changed by this source-only update.
 
-## Persistent Category ↔ Topic associations — issue #1305 (IN PROGRESS, source-only)
+## Persistent Category ↔ Topic associations — issue #1305 (source-only, LIVE gated)
 
 The protected ADMIN relationship registry is intentionally **separate** from
 public canonical \`categories.v2\` and \`topics.v2\`, and is stored privately at
@@ -678,6 +678,36 @@ avoid a link changing while jobs are queued. Catalog edits can retain unchanged
 legacy Topics on the same category memberships without silently discarding
 them; changed memberships/topic selections must conform. A missing or invalid
 registry disables new writes while existing read-only views continue working.
+
+**Unified UI:** the Categories disclosure lists explicitly assigned Topics, including
+those with zero page usage; catalog/archive counts are separate read-only metrics.
+Each category has an explicit `+ Link topic` picker and per-link `Unlink`, which
+never deletes the global Topic. The compact collapsed `Unlinked topics` list
+contains only globally unassigned Topics, where Edit/Delete actions remain
+subject to reference/lock checks. `Add topic` remains in this same screen.
+Assignments are not inferred from imported content, taxonomy `kind`, or
+existing archive records. Linked Topics may appear under more than one category.
+
+**Add pages and Catalog/Edit:** choose ordered Categories first (the first
+is primary); each selected category contributes only its explicitly linked
+compatible Topics, with cross-category deduplication and optional ordered
+Topic multi-select. When a Category is removed, previously chosen Topics
+remain visible; invalid selections block publishing/saving instead of being
+silently dropped. Existing Catalog/Edit entries whose valid Topics are no
+longer linked retain them with a legacy/unlinked label only while the original
+category memberships are unchanged. Changing categories requires deliberate
+Topic correction. New writes cannot bypass backend link verification.
+
+**Source installer preflight:** `ui-only` must verify the installed
+`GET /api/category-topics/manage` API exists (enabled or disabled) before
+replacing HTML; it cannot be used to install this frontend against the old
+backend. `full` requires the *already owner-seeded* canonical private
+`category-topic-links.json` with safe single-link owner/mode, size and
+deterministic schema/ordering checks **before** the first installer mutation.
+It neither creates nor repairs any associations. Runtime validates the
+taxonomies, link compatibility and exact digests; the owner must separately
+approve exact seed and full installer/service restart. Missing/unsafe seed
+is a preflight STOP, not a reason to auto-create it.
 
 **Rollout gate:** this source change modifies the ADMIN backend and therefore
 requires an owner-authorized full ADMIN installer/service restart (not UI-only),
