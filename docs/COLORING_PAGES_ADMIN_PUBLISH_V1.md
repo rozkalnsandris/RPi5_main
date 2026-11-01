@@ -604,3 +604,26 @@ after merge; no service restart is needed for that reviewed mode. Native
 `<dialog>` retains keyboard focus handling. References:
 [MDN details](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/details),
 [WAI-ARIA APG accordion](https://www.w3.org/WAI/ARIA/apg/patterns/accordion/).
+
+## Category-specific Topics by page usage — #1301 (source-only)
+
+The combined protected ADMIN Category list progressively discloses **actual used
+Topics** directly beneath each category. Open the native `details/summary` row
+to view per-category catalog/archive page counts and the existing guarded Topic
+Edit/Delete actions. Topics can appear under several categories because
+catalog pages may have multiple `categories[]` and `topics[]`. This is a
+**read-only view derived from actual page metadata**, not a new category→topic
+assignment schema. Topic kind/compatibility alone does not infer membership.
+
+The shared Refresh all reads managed Categories, managed Topics, protected
+`/api/catalog` and `/api/archive`. Hash-mismatched or unavailable catalog
+or archive snapshots prevent grouped display, and all Topics remain accessible
+in the Other Topics list instead of showing misleading mappings. Topic IDs
+without any mapped catalog/archive use also remain manageable in that list.
+Counts deduplicate repeated IDs within each page and preserve archived
+references. Expanded category state persists after refresh. Existing Add Topic,
+strong If-Match, CSRF, deletion locks, page publishing and selector wiring
+remain untouched; no backend or LIVE change is authorized.
+
+References: [MDN native details](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/details),
+[GOV.UK accordion guidance](https://design-system.service.gov.uk/components/accordion/).
