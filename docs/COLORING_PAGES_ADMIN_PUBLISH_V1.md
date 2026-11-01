@@ -723,3 +723,30 @@ only by current GitHub CI and later independent LIVE verification.
 Design references: https://wordpress.org/documentation/article/taxonomies/ ,
 https://design-system.service.gov.uk/components/checkboxes/ ,
 https://www.w3.org/WAI/ARIA/apg/patterns/disclosure/ .
+
+## Single-card Categories & Topics UX — #1314 (source-only)
+
+The unified Categories & Topics page contains **one** category-first management
+card. Expand any Category to view, edit, explicitly link or unlink its Topics;
+an empty Category announces "No linked topics — open to link" rather than
+suggesting the global Topic registry is empty. The existing `+ Link topic`
+picker is only an explicit operation inside the expanded Category.
+
+Below the Category rows and Add category disclosure, a subordinate **Topic
+tools** section in that same card contains the independently reported Topic
+registry revision, the compact native `Unlinked topics (N)` disclosure and
+`Add topic`. A Topic listed there is globally unassigned, **not** necessarily
+unused in existing pages. The `#topics` bookmark still redirects to
+`#categories` and focuses the retained `managedTopicsHeading` target.
+Native `details/summary`, keyboard focus and narrow-screen layout remain
+available. Existing Add pages/Catalog/Edit multi-category Topic filtering and
+legacy/unlinked validation are unchanged.
+
+This is a layout, copy and accessibility refinement; it does not change the
+private association registry, guarded API, taxonomies, page metadata, backend,
+or content. No automatic Category–Topic links are inferred from usage. UI-only
+deployment is **separately owner-gated**, requires the installed protected
+Category–Topic API preflight, and must not be treated as authorized by source
+merge. The source regression suite asserts a single card, hierarchy and empty
+Category wording, while preserving protected link, Add pages and Catalog/Edit
+behavior.
