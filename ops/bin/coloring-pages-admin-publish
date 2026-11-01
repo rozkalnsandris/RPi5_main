@@ -267,6 +267,9 @@ def change_managed(raw, expected_sha):
         usage = snapshot["counts"][ident]
         if usage["catalog"] or usage["archive"]:
             stop("referenced category cannot be deleted")
+        links, _ = read_links(load_taxonomy())
+        if any(p["category"] == ident for p in links["links"]):
+            stop("linked category cannot be deleted")
         doc["categories"] = [row for row in doc["categories"] if row["id"] != ident]
     doc["revision"] += 1
     raw_data = managed_bytes(doc)
@@ -291,6 +294,10 @@ def change_managed(raw, expected_sha):
 
 
 TOPICS_PATH = PUBLIC / "topics.json"
+# Explicitly seeded, private, owner-gated taxonomy associations (never usage-derived).
+LINKS_PATH = STATE / "category-topic-links.json"
+LINKS_SCHEMA = "rozkalns.rpi5-main.category-topic-links.v1"
+LINKS_MAX_BYTES = 65536
 TOPICS_SCHEMA = "rozkalns.coloring-pages.topics.v2"
 TOPICS_MAX_BYTES = 65536
 
@@ -494,6 +501,9 @@ def change_topics(raw, expected_digest):
         count = snap["counts"][ident]
         if count["catalog"] or count["archive"] or len(doc["topics"]) == 1:
             stop("referenced or last topic cannot be deleted")
+        links, _ = read_links(load_taxonomy())
+        if any(p["topic"] == ident for p in links["links"]):
+            stop("linked topic cannot be deleted")
         doc["topics"] = [row for row in doc["topics"] if row["id"] != ident]
     doc["revision"] += 1
     data = topics_canonical_bytes(doc)
@@ -524,6 +534,140 @@ def topics_runtime_ready(registry):
     except Stop:
         return False
     return sha == registry.get("topic_sha256") and topics_runtime_verified(doc, sha)
+
+
+def links_bytes(doc, registry):
+    if (type(doc) is not dict or set(doc) != {"schema", "revision", "links"}
+            or doc["schema"] != LINKS_SCHEMA or type(doc["revision"]) is not int
+            or not 1 <= doc["revision"] <= 2147483647):
+        stop("category-topic links schema invalid")
+    items = doc["links"]
+    if type(items) is not list or len(items) > 512:
+        stop("category-topic links count invalid")
+    prior = None
+    for row in items:
+        if type(row) is not dict or set(row) != {"category", "topic"}:
+            stop("category-topic link keys invalid")
+        c, t = row["category"], row["topic"]
+        if type(c) is not str or type(t) is not str or c not in registry["categories"] or t not in registry["topics"]:
+            stop("category-topic link unknown ID")
+        if (registry["topics"][t]["kind"] == "seasonal") != (c == "jahreszeiten"):
+            stop("category-topic link incompatible with importer")
+        current = (c, t)
+        if prior is not None and current <= prior:
+            stop("category-topic links must be ordered unique pairs")
+        prior = current
+    data = (json.dumps(doc, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    if len(data) > LINKS_MAX_BYTES:
+        stop("category-topic links too large")
+    return data
+
+
+def read_links(registry):
+    if LINKS_PATH.parent.is_symlink() or LINKS_PATH.is_symlink():
+        stop("unsafe category-topic links symlink")
+    try:
+        fd = os.open(LINKS_PATH, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        with os.fdopen(fd, "rb") as f:
+            info = os.fstat(f.fileno())
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or (info.st_uid, info.st_gid) != owner_ids()
+                    or stat.S_IMODE(info.st_mode) != 0o600
+                    or not 0 < info.st_size <= LINKS_MAX_BYTES):
+                stop("unsafe category-topic links permissions")
+            data = f.read(LINKS_MAX_BYTES + 1)
+        doc = json.loads(data.decode("utf-8"))
+    except (OSError, UnicodeError, ValueError):
+        stop("category-topic links missing/invalid; owner seed required")
+    if data != links_bytes(doc, registry):
+        stop("noncanonical category-topic links")
+    return doc, hashlib.sha256(data).hexdigest()
+
+
+def links_snapshot():
+    disabled = {"enabled": False, "reason": "Category-topic links need owner-authorized seed.",
+                "revision": None, "registry_sha256": None, "links": [],
+                "category_sha256": None, "topic_sha256": None}
+    if list(LINKS_PATH.parent.glob(".category-topic-links.admin.*.tmp")):
+        return dict(disabled, reason="Interrupted category-topic write requires manual review.")
+    try:
+        registry = load_taxonomy()
+        if registry.get("category_schema") != MANAGED_SCHEMA or registry.get("topic_schema") != TOPICS_SCHEMA:
+            return disabled
+        doc, digest = read_links(registry)
+    except Stop:
+        return disabled
+    return {"enabled": True, "reason": "", "revision": doc["revision"],
+            "registry_sha256": digest, "links": doc["links"],
+            "category_sha256": registry["category_sha256"],
+            "topic_sha256": registry["topic_sha256"]}
+
+
+def validate_linked_topics(topics, categories, registry, *, previous=None):
+    if registry.get("category_schema") != MANAGED_SCHEMA or registry.get("topic_schema") != TOPICS_SCHEMA:
+        stop("category-topic mapping requires managed v2")
+    if list(LINKS_PATH.parent.glob(".category-topic-links.admin.*.tmp")):
+        stop("interrupted category-topic links write")
+    doc, digest = read_links(registry)
+    allowed = {(r["category"], r["topic"]) for r in doc["links"]}
+    prior_cats = membership_for_count(previous) if previous is not None else []
+    prior_topics = topic_refs(previous) if previous is not None else []
+    for topic in topics:
+        if any((cat, topic) in allowed for cat in categories):
+            continue
+        if previous is not None and categories == prior_cats and topic in prior_topics:
+            continue  # Existing valid legacy topic may remain untouched on a metadata edit.
+        stop("topic not linked to selected categories")
+    return digest
+
+
+def change_links(raw, expected):
+    if (type(raw) is not dict or set(raw) != {"action", "category", "topic", "category_sha256", "topic_sha256"}
+            or raw["action"] not in ("link", "unlink")):
+        stop("invalid link action")
+    snapshot = links_snapshot()
+    if not snapshot["enabled"]:
+        stop("category-topic links disabled")
+    if (expected != snapshot["registry_sha256"]
+            or raw["category_sha256"] != snapshot["category_sha256"]
+            or raw["topic_sha256"] != snapshot["topic_sha256"]):
+        return None
+    if active_jobs():
+        stop("publication jobs forbid category-topic changes")
+    registry = load_taxonomy()
+    if (snapshot["category_sha256"] != registry["category_sha256"]
+            or snapshot["topic_sha256"] != registry["topic_sha256"]):
+        return None
+    doc, digest = read_links(registry)
+    if digest != expected:
+        return None
+    pair = {"category": raw["category"], "topic": raw["topic"]}
+    links_bytes({"schema": LINKS_SCHEMA, "revision": 1, "links": [pair]}, registry)
+    present = pair in doc["links"]
+    if (raw["action"] == "link") == present:
+        stop("duplicate or absent category-topic link")
+    doc["links"] = sorted((doc["links"] + [pair] if not present else
+                           [p for p in doc["links"] if p != pair]),
+                          key=lambda p: (p["category"], p["topic"]))
+    doc["revision"] += 1
+    data = links_bytes(doc, registry)
+    # First mutation; error beyond this point is STOP without retry/rollback/cleanup.
+    temp = LINKS_PATH.parent / (".category-topic-links.admin." + secrets.token_hex(8) + ".tmp")
+    fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "wb", buffering=0) as f:
+        os.fchmod(f.fileno(), 0o600)
+        f.write(data)
+        os.fsync(f.fileno())
+    os.replace(temp, LINKS_PATH)
+    parent = os.open(LINKS_PATH.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(parent)
+    finally:
+        os.close(parent)
+    confirmed, sha = read_links(registry)
+    if confirmed != doc or sha != hashlib.sha256(data).hexdigest():
+        stop("category-topic write verification failed: STOP")
+    return confirmed, sha
 
 
 # Canonical registries are deployed by coloring-pages. No fallback to static ADMIN labels.
@@ -1649,6 +1793,9 @@ def run_job(job_id: str) -> None:
             job_categories = validated_categories(job["category"], job.get("categories"), registry)
             job_topics = validated_topics(job.get("topic", ""), job.get("topics"),
                                           job_categories, registry)
+            link_sha = validate_linked_topics(job_topics, job_categories, registry)
+            if job.get("category_topic_links_sha256") != link_sha:
+                stop("category-topic links changed before import")
             if registry.get("category_schema") == MANAGED_SCHEMA:
                 if not managed_pub_ready(registry):
                     stop("managed importer not activated")
@@ -1943,6 +2090,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self.static("fonts/nunito-latin-vf-ba344451eab25b21.woff2", "font/woff2")
             if path == "/api/session":
                 return self.send_json(200, {"csrf_token": CSRF_TOKEN})
+            if path == "/api/category-topics/manage":
+                if not self.admin_marker():
+                    return
+                snap = links_snapshot()
+                digest = snap["registry_sha256"]
+                return self.send_json(200, snap, {"ETag": catalog_etag(digest)} if digest else None)
             if path == "/api/categories/manage":
                 if not self.admin_marker():
                     return
@@ -2057,6 +2210,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             path = urlparse(self.path).path
+            if path == "/api/category-topics/manage":
+                return self.handle_category_topic_links_manage()
             if path == "/api/categories/manage":
                 return self.handle_categories_manage()
             if path == "/api/topics/manage":
@@ -2087,6 +2242,20 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_DELETE(self):
         self.send_error_json(405, "method not allowed")
+
+    def handle_category_topic_links_manage(self):
+        if (self.headers.get("Origin") not in {ADMIN_ORIGIN, f"http://{HOST}:{PORT}"}
+                or self.headers.get("Sec-Fetch-Site") not in {"same-origin", "none"}):
+            return self.send_error_json(403, "Category-topic origin forbidden")
+        expected = self.expected_catalog_sha256()
+        raw = self.read_request_json()
+        with acquire_catalog_lock():
+            updated = change_links(raw, expected)
+            if updated is None:
+                return self.send_error_json(412, "Category-topic links changed; refresh before saving")
+        doc, digest = updated
+        return self.send_json(200, {"status": "updated", "revision": doc["revision"],
+                                    "registry_sha256": digest}, {"ETag": catalog_etag(digest)})
 
     def handle_categories_manage(self):
         expected = self.expected_catalog_sha256()
@@ -2159,6 +2328,9 @@ class Handler(BaseHTTPRequestHandler):
                 stop("multi-topic entry requires an explicit topic selection")
             if set(raw) == legacy_keys and entry.get("topics"):
                 validated_topics(entry["topics"][0], entry["topics"], selected, locked_registry)
+            chosen_topics = (validated_topics(raw["topic"], raw.get("topics"), selected, locked_registry)
+                             if set(raw) != legacy_keys else topic_refs(entry))
+            validate_linked_topics(chosen_topics, selected, locked_registry, previous=entry)
             changes = {
                 "title": title,
                 "category": category,
@@ -2450,6 +2622,7 @@ class Handler(BaseHTTPRequestHandler):
         if registry.get("topic_schema") == TOPICS_SCHEMA and not topics_runtime_ready(registry):
             stop("managed Topics importer not activated")
         topics = validated_topics(topic, raw.get("topics"), selected, registry)
+        link_sha = validate_linked_topics(topics, selected, registry)
         if type(version) is not str or version != registry["version"]:
             stop("category/topic or taxonomy version invalid")
         titles_raw = raw["titles"]
@@ -2463,6 +2636,8 @@ class Handler(BaseHTTPRequestHandler):
                 restored["restored"] = True
                 self.send_json(200, restored)
                 return
+            if validate_linked_topics(topics, selected, registry) != link_sha:
+                stop("category-topic links changed before queue")
             if len(selected) > 1 or len(topics) > 1:
                 uid, gid = owner_ids()
                 require_multi_category_capability(uid, gid, selected, registry)
@@ -2477,6 +2652,7 @@ class Handler(BaseHTTPRequestHandler):
                 **({"categories": selected} if "categories" in raw else {}),
                 "topic": topic, **({"topics": topics} if "topics" in raw else {}),
                 "taxonomy_sha256": version,
+                "category_topic_links_sha256": link_sha,
                 "titles": titles, "status": "queued", "created_at": int(time.time()),
                 "updated_at": int(time.time()), "steps": initial_steps(), "results": [],
             }

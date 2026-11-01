@@ -643,3 +643,49 @@ is unavailable or invalid, the group counts are not fabricated, an error is
 visible, and the complete topic list is explicitly opened for management.
 No category/topic ownership mapping is inferred from compatibility, and no
 registry, API or LIVE behavior is changed by this source-only update.
+
+## Persistent Category ↔ Topic associations — issue #1305 (IN PROGRESS, source-only)
+
+The protected ADMIN relationship registry is intentionally **separate** from
+public canonical \`categories.v2\` and \`topics.v2\`, and is stored privately at
+\`/srv/coloring-pages-content/state/admin-publish/category-topic-links.json\`
+(\`0600\`, owner \`andris\`). It uses exactly:
+\`{"schema":"rozkalns.rpi5-main.category-topic-links.v1","revision":1,"links":[]}\`
+with canonical UTF-8 JSON (\`ensure_ascii=False\`, 2-space indent, trailing newline).
+Links are sorted lexicographically by \`(category, topic)\`, unique and validated
+against both current published registries; seasonal topics belong only to
+\`jahreszeiten\`, evergreen topics only to nonseasonal Categories. A topic may
+be linked to multiple Categories. Empty links are valid; missing links are not.
+
+**Owner-gated seed:** no code path creates this file on GET or POST. A future
+exact owner LIVE authorization must approve a one-time seed and installed
+backend rollout; never seed from catalog/archive usage. Do not seed, apply
+migration, overwrite or modify file permissions as a consequence of source
+merge. Verify the canonical SHA-256, owner, mode, no hardlinks or symlinks,
+directory and service state before any mutation; first mutation consumes
+authorization. Error/drift/partial staging is STOP, no retry/rollback/cleanup.
+
+The guarded same-origin \`/api/category-topics/manage\` exposes enabled/read-only
+\`revision\`, \`links\`, SHA-256 validator and current category/topic hashes.
+Mutating one \`link\` or \`unlink\` requires same-origin, marker, CSRF,
+strong \`If-Match\`, exact two taxonomy digests, shared publishing lock,
+no active/queued jobs, a seeded valid file and an atomic single-file write.
+This registry **does not modify page metadata**. Global category/topic deletion
+is blocked while referenced by the registry; unlinking never deletes a Topic.
+
+Publication creation and the import worker pin exact relationship SHA to
+avoid a link changing while jobs are queued. Catalog edits can retain unchanged
+legacy Topics on the same category memberships without silently discarding
+them; changed memberships/topic selections must conform. A missing or invalid
+registry disables new writes while existing read-only views continue working.
+
+**Rollout gate:** this source change modifies the ADMIN backend and therefore
+requires an owner-authorized full ADMIN installer/service restart (not UI-only),
+plus separately authorized private registry creation. It **does not authorize**
+either LIVE action, manual seed, service restart, public content rewrite, or
+changes to \`rozkalnsandris/coloring-pages\`. Current statuses are evidenced
+only by current GitHub CI and later independent LIVE verification.
+
+Design references: https://wordpress.org/documentation/article/taxonomies/ ,
+https://design-system.service.gov.uk/components/checkboxes/ ,
+https://www.w3.org/WAI/ARIA/apg/patterns/disclosure/ .
