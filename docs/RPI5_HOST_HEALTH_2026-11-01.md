@@ -236,4 +236,4 @@ The snippet shows **only two selected paths**, not a replacement for the private
 2. Separately authorize a bounded **LIVE host configuration mutation** with the exact host/file/baseline, exactly the two selected semantic changes, file metadata preservation and fail-closed no-retry safeguards. Selection and GitHub source merge never authorize a write. No current authorization includes reload/restart; treat service lifecycle as a distinct owner gate.
 3. After any separately authorized LIVE mutation, observe only sanitized evidence for the new file hash and expected two-field semantic delta. Do not claim Gateway adoption, service functionality or global no-billing until independently verified with separately authorized, privacy-appropriate runtime checks.
 
-**Current status: OPTION B SELECTED / SOURCE READY FOR REVIEW / LIVE NOT STARTED.**
+**Current status: OPTION B SELECTED / SOURCE PLAN ONLY / LIVE NOT STARTED.**
