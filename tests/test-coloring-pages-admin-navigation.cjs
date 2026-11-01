@@ -8,7 +8,7 @@ const script = html.split("<script>")[1].split("</script>")[0];
 const categoryPage = html.slice(html.indexOf('data-page="categories"'), html.indexOf('data-page="activity"'));
 assert.equal((categoryPage.match(/class="admin-panel categories-panel"/g)||[]).length,1,"Categories and Topics use exactly one management card");
 assert.equal((categoryPage.match(/class="container categories-shell"/g)||[]).length,1,"no second Topics container");
-assert.equal((categoryPage.match(/<h2\b/g)||[]).length,1,"one top-level management heading");
+assert.equal((categoryPage.slice(0,categoryPage.indexOf('<dialog id="topicsDialog"')).match(/<h2\b/g)||[]).length,1,"one top-level management heading; edit dialog has its own title");
 assert.match(categoryPage,/<section class="topics-inline" aria-labelledby="managedTopicsHeading">/,"topic tools are nested inside Categories");
 assert.match(categoryPage,/<h3 id="managedTopicsHeading" tabindex="-1">Topic tools<\/h3>/,"legacy #topics bookmark focus target retained");
 assert.ok(categoryPage.indexOf('id="categoriesRows"')<categoryPage.indexOf('id="topicsOtherDetails"'),"unlinked topics follow category rows");
