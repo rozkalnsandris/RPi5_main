@@ -229,7 +229,7 @@ def main() -> int:
             apply(args)
         return 0
     except (Stop, OSError, ValueError, KeyError, TypeError, json.JSONDecodeError,
-            subprocess.SubprocessError, fcntl.error) as error:
+            subprocess.SubprocessError) as error:
         print("STOP: " + str(error) + " (NO RETRY / ROLLBACK / CLEANUP)", file=sys.stderr)
         return 2
 
