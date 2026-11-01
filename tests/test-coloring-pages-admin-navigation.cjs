@@ -35,7 +35,9 @@ function harness() {
   const entries=Array.from({length:53},(_,i)=>({id:String(i).padStart(7,"0"),title:"Page "+i,category:i%2?"tiere":"lernen",age:"3-6",difficulty:"easy",thumb:"/media/test/thumb.webp"}));
   const state={entries,etag:'W/"edge-weakened"',catalogSha:"a".repeat(64),status:200,confirm:false,prompts:[],answers:[],
     taxonomy:{version:"b".repeat(64),categories:[{id:"tiere",label:"Tiere"},{id:"lernen",label:"Lernen"},{id:"jahreszeiten",label:"Jahreszeiten & Feste"}],
-    topics:[{id:"weihnachten",label:"Weihnachten",kind:"seasonal"},{id:"obst",label:"Obst",kind:"evergreen"}]}};
+    topics:[{id:"weihnachten",label:"Weihnachten",kind:"seasonal"},{id:"obst",label:"Obst",kind:"evergreen"}]},
+    links:{enabled:true,revision:1,registry_sha256:"d".repeat(64),category_sha256:"f".repeat(64),topic_sha256:"e".repeat(64),
+      links:[{category:"jahreszeiten",topic:"weihnachten"},{category:"tiere",topic:"obst"},{category:"lernen",topic:"obst"}]}};
   const sandbox={
     document:{
       title:"",
@@ -58,6 +60,16 @@ function harness() {
       if(url==="/api/categories")return {ok:true,json:async()=>state.taxonomy};
       if(url==="/api/categories/manage")return {ok:true,json:async()=>state.managed||({enabled:false,reason:"Not activated",categories:[],revision:null,registry_sha256:null,counts:{}})};
       if(url==="/api/topics/manage")return {ok:true,json:async()=>state.managedTopics||({enabled:false,reason:"Not activated",topics:[],revision:null,registry_sha256:null,counts:{}})};
+      if(url==="/api/category-topics/manage"){
+        if(options.method==="POST"){
+          if(state.linkWriteStatus===412)return {ok:false,status:412,json:async()=>({error:"Stale assignment"})};
+          const data=JSON.parse(options.body);
+          if(data.action==="link")state.links.links.push({category:data.category,topic:data.topic});
+          if(data.action==="unlink")state.links.links=state.links.links.filter(x=>x.category!==data.category||x.topic!==data.topic);
+          state.links.registry_sha256="c".repeat(64);state.links.revision++;
+        }
+        return {ok:true,status:200,json:async()=>state.links};
+      }
       if(url==="/api/uploads")return {ok:true,json:async()=>({upload_id:"c".repeat(32),count:1,files:[{title:"Weihnachtsstern"}]})};
       if(url==="/api/jobs")return {ok:true,json:async()=>({job_id:"d".repeat(32),status:"queued",steps:[],results:[]})};
       if(url==="/api/session")return {ok:true,json:async()=>({csrf_token:"fixture"})};
@@ -69,7 +81,7 @@ function harness() {
   vm.runInContext(script,sandbox);
   return {s:sandbox,ids,pages,navs,state,calls,listeners,layout,skip,go(route){location.hash="#"+route;sandbox.routePage()}};
 }
-async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categoriesReady=true;}
+async function ready(h){for(let i=0;i<40;i++)await Promise.resolve();h.s.categoriesReady=true;}
 (async()=>{
   const h=harness();await ready(h);
   assert.equal(h.s.taxonomyVersion,"b".repeat(64));
@@ -77,11 +89,11 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
   assert.equal(Object.keys(h.s.categoryInputs).length,3);
   assert.equal(h.s.categoryInputs.jahreszeiten.value,"jahreszeiten");
   assert.equal(h.ids.categoryChoices.children[0].children.length,4,"fieldset has legend and categories");
-  assert.equal(Object.keys(h.s.topicInputs).length,2);
+  assert.equal(Object.keys(h.s.topicInputs).length,0,"topics are hidden until a category is chosen");
   h.s.categoryInputs.jahreszeiten.checked=true;h.s.categoryInputs.jahreszeiten.onchange();
   assert.equal(h.ids.categorySummary.textContent,"Choose categories… (1 selected)");
   assert.equal(h.s.topicInputs.weihnachten.disabled,false);
-  assert.equal(h.s.topicInputs.obst.disabled,true);
+  assert.equal(h.s.topicInputs.obst,undefined,"unlinked topics are not offered");
   h.s.topicInputs.weihnachten.checked=true;h.s.topicInputs.weihnachten.onchange();
   assert.deepEqual(Array.from(h.s.selectedTopics),["weihnachten"]);
   assert.equal(h.ids.chosenTopic.children.length,1,"selected topic has a chip");
@@ -104,6 +116,7 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
   assert.equal(JSON.parse(pub.options.body).category,"jahreszeiten");
   assert.equal(JSON.parse(pub.options.body).taxonomy_sha256,"b".repeat(64));
   h.state.taxonomy.topics.push({id:"laterne",label:"Laterne",kind:"seasonal"});
+  h.state.links.links.push({category:"jahreszeiten",topic:"laterne"});
   await h.s.loadCategories();
   assert.equal(Object.keys(h.s.topicInputs).includes("laterne"),true);
   assert.equal(h.s.categoryInputs.jahreszeiten.checked,true,"taxonomy reload preserves category checkboxes");
@@ -119,8 +132,9 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
   assert.deepEqual(Array.from(multi.s.selectedTopics),["weihnachten","obst"]);
   assert.equal(multi.ids.chosenTopic.children.length,2);
   multi.ids.chosenCategories.children[1].children[1].onclick();
-  assert.deepEqual(Array.from(multi.s.selectedTopics),["obst"],"removing seasonal category clears seasonal topic only");
-  assert.equal(multi.ids.chosenTopic.children.length,1,"compatible evergreen topic remains");
+  assert.deepEqual(Array.from(multi.s.selectedTopics),["weihnachten","obst"],"category change never silently discards a topic");
+  assert.equal(multi.ids.chosenTopic.children.length,2,"invalid selection remains visible");
+  assert.match(multi.ids.topicSelectionStatus.textContent,/unlinked/);
   assert.equal(multi.ids.categoryPicker.querySelector("summary").focused,true,"chip removal focuses category disclosure");
   assert.equal(multi.s.categoryInputs.jahreszeiten.checked,false,"removed chip unchecks category");
   multi.ids.chosenCategories.children[0].children[1].onclick();
@@ -168,7 +182,9 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
   assert.deepEqual(Array.from(multi.s.editSelectedTopics),["weihnachten"]);
   assert.equal(multi.ids.editTopicPicker.querySelector("summary").focused,true);
   multi.ids.editChosenCategories.children[1].children[1].onclick();
-  assert.deepEqual(Array.from(multi.s.editSelectedTopics),[],"removing seasonal category removes only incompatible remaining topic");
+  assert.deepEqual(Array.from(multi.s.editSelectedTopics),["weihnachten"],"edit preserves invalid topic until deliberate correction");
+  assert.equal(multi.ids.editSave.disabled,true,"invalid edit selection blocks save");
+  multi.ids.editChosenTopics.children[0].children[1].onclick();
   multi.s.editTopicInputs.obst.checked=true;multi.s.editTopicInputs.obst.onchange();
   assert.deepEqual(Array.from(multi.s.editValues().topics),["obst"],"checkbox selection survives category changes");
   await multi.ids.editForm.onsubmit({preventDefault(){}});
@@ -207,84 +223,72 @@ async function ready(h){for(let i=0;i<15;i++)await Promise.resolve();h.s.categor
     {state:"archived",entry:{id:"0000004",category:"autos",topics:["bauernhof"]}},
     {state:"archived",entry:{id:"0000005",category:"berufe",topics:["obst"]}}
   ];
-  grouped.state.managed={
-    enabled:true,revision:1,registry_sha256:"f".repeat(64),
+  grouped.state.managed={enabled:true,revision:1,registry_sha256:"f".repeat(64),
     categories:[{id:"tiere",label:"Tiere"},{id:"autos",label:"Autos"},{id:"berufe",label:"Berufe"}],
-    counts:{tiere:{catalog:2,archive:0},autos:{catalog:1,archive:1},berufe:{catalog:1,archive:1}}
-  };
-  grouped.state.managedTopics={
-    enabled:true,revision:1,registry_sha256:"e".repeat(64),
-    topics:[
-      {id:"bauernhof",label:"Bauernhof",icon:"🚜",kind:"evergreen",legacy_terms:[]},
+    counts:{tiere:{catalog:2,archive:0},autos:{catalog:1,archive:1},berufe:{catalog:1,archive:1}}};
+  grouped.state.managedTopics={enabled:true,revision:1,registry_sha256:"e".repeat(64),
+    topics:[{id:"bauernhof",label:"Bauernhof",icon:"🚜",kind:"evergreen",legacy_terms:[]},
       {id:"obst",label:"Obst",icon:"🍎",kind:"evergreen",legacy_terms:[]},
-      {id:"weihnachten",label:"Weihnachten",icon:"🎄",kind:"seasonal",legacy_terms:[]}
-    ],
-    counts:{bauernhof:{catalog:2,archive:1},obst:{catalog:1,archive:1},weihnachten:{catalog:0,archive:0}}
-  };
+      {id:"weihnachten",label:"Weihnachten",icon:"🎄",kind:"seasonal",legacy_terms:[]}],
+    counts:{bauernhof:{catalog:2,archive:1},obst:{catalog:1,archive:1},weihnachten:{catalog:0,archive:0}}};
+  grouped.state.links.links=[
+    {category:"tiere",topic:"bauernhof"},{category:"tiere",topic:"obst"},
+    {category:"autos",topic:"bauernhof"},{category:"autos",topic:"obst"},
+    {category:"berufe",topic:"obst"}
+  ];
   await grouped.s.refreshTaxonomyManagers();
   assert.equal(grouped.ids.categoriesRows.children.length,3);
-  assert.equal(grouped.ids.categoriesRows.children[0].children[3].tag,"details","native disclosure added under Category");
   const tiereDetails=grouped.ids.categoriesRows.children[0].children[3];
-  assert.equal(tiereDetails.children[0].tag,"summary");
-  assert.equal(tiereDetails.children[0].textContent,"2 used topics — show / hide");
-  const tiereTopics=tiereDetails.children[1].children;
-  assert.equal(tiereTopics.length,2,"duplicate topic IDs counted once per category");
-  assert.equal(tiereTopics[0].children[0].children[0].textContent,"🚜 Bauernhof");
-  assert.equal(tiereTopics[0].children[1].textContent,"2 catalog · 0 archive");
-  assert.equal(tiereTopics[0].children[2].children[1].disabled,true,"in-use topic cannot be deleted from grouped view");
-  assert.equal(tiereTopics[1].children[1].textContent,"1 catalog · 0 archive");
-  const autosTopics=grouped.ids.categoriesRows.children[1].children[3].children[1].children;
-  assert.equal(autosTopics.length,2,"multi-category use shows the same Topic in both categories");
-  assert.equal(autosTopics[0].children[1].textContent,"1 catalog · 1 archive","archived references included per category");
-  const berufeTopics=grouped.ids.categoriesRows.children[2].children[3].children[1].children;
-  assert.equal(berufeTopics.length,1);
-  assert.equal(berufeTopics[0].children[1].textContent,"0 catalog · 1 archive");
-  assert.ok(html.includes('<details id="topicsOtherDetails"'),"native accessible unused-topics disclosure");
-  assert.ok(html.includes('<summary id="topicsOtherSummary"'),"native accessible summary");
-  assert.equal(grouped.ids.topicsOtherSummary.textContent,"Unused topics (1)");
-  assert.equal(grouped.ids.topicsOtherDetails.hidden,false,"remaining topics section is available");
-  assert.equal(grouped.ids.topicsOtherDetails.open,undefined,"unused topics start collapsed");
-  assert.equal(grouped.ids.topicsRows.children.length,1,"unreferenced topic remains manageable");
+  assert.equal(tiereDetails.tag,"details","category uses native disclosure");
+  assert.equal(tiereDetails.children[0].textContent,"2 linked topics — show / hide");
+  assert.equal(tiereDetails.children[1].children.length,2,"linked topics deduplicated");
+  assert.equal(tiereDetails.children[1].children[0].children[0].children[0].textContent,"🚜 Bauernhof");
+  assert.equal(tiereDetails.children[1].children[0].children[1].textContent,"2 catalog · 0 archive");
+  assert.equal(tiereDetails.children[1].children[0].children[2].children[1].textContent,"Unlink","unlink differs from global delete");
+  assert.equal(tiereDetails.children[1].children[0].children[2].children[1].disabled,false);
+  assert.equal(grouped.ids.categoriesRows.children[1].children[3].children[1].children.length,2,"many-to-many links");
+  assert.equal(grouped.ids.categoriesRows.children[2].children[3].children[1].children.length,1);
+  assert.equal(grouped.ids.categoriesRows.children[2].children[3].children[1].children[0].children[1].textContent,"0 catalog · 1 archive");
+  assert.equal(grouped.ids.topicsOtherSummary.textContent,"Unlinked topics (1)");
+  assert.equal(grouped.ids.topicsRows.children.length,1);
   assert.equal(grouped.ids.topicsRows.children[0].children[0].children[0].textContent,"🎄 Weihnachten");
   assert.equal(grouped.ids.topicsRows.children[0].children[2].children[1].disabled,false);
-  tiereDetails.open=true;tiereDetails.ontoggle();
-  grouped.ids.topicsOtherDetails.open=true;
+  assert.ok(html.includes('<details id="topicsOtherDetails"'),"unlinked topics collapsed in native disclosure");
+  tiereDetails.open=true;tiereDetails.ontoggle();grouped.ids.topicsOtherDetails.open=true;
   await grouped.s.refreshTaxonomyManagers();
-  assert.equal(grouped.ids.categoriesRows.children[0].children[3].open,true,"expanded state retained after refresh");
-  assert.equal(grouped.ids.topicsOtherDetails.open,true,"unused topics remain expanded after refresh");
-  const d=grouped.ids.categoriesRows.children[0].children[3].children[1].children[0];
-  d.children[2].children[0].onclick();
-  assert.equal(grouped.ids.topicEditId.value,"bauernhof","edit dialog works from grouped Topic row");
+  assert.equal(grouped.ids.categoriesRows.children[0].children[3].open,true);
+  assert.equal(grouped.ids.topicsOtherDetails.open,true);
+  grouped.ids.categoriesRows.children[0].children[3].children[1].children[0].children[2].children[0].onclick();
+  assert.equal(grouped.ids.topicEditId.value,"bauernhof","edit works within Category");
   grouped.state.usageReadFails=true;
   await grouped.s.refreshTaxonomyManagers();
-  assert.equal(grouped.ids.categoriesRows.children[0].children.length,3,"failed read never shows invented group");
-  assert.equal(grouped.ids.topicsRows.children.length,3,"all Topics remain accessible on grouping failure");
-  assert.equal(grouped.ids.topicsOtherDetails.hidden,false);
-  assert.equal(grouped.ids.topicsOtherDetails.open,true,"usage error reveals every editable topic");
-  assert.equal(grouped.ids.topicsOtherSummary.textContent,"All topics (usage unavailable)");
-  assert.match(grouped.ids.topicGroupsStatus.textContent,/unavailable/);
+  assert.equal(grouped.ids.categoriesRows.children[0].children[3].children[1].children.length,2,"read failure does not erase saved links");
+  assert.match(grouped.ids.topicGroupsStatus.textContent,/Usage unavailable/);
   grouped.state.usageReadFails=false;grouped.state.archiveSha="b".repeat(64);
   await grouped.s.refreshTaxonomyManagers();
-  assert.equal(grouped.ids.categoriesRows.children[0].children.length,3,"inconsistent catalog/archive hashes cannot be grouped");
-  grouped.state.archiveSha=null;
-  grouped.state.entries=[{id:"0000007",category:"tiere",topics:[]}];grouped.state.archiveEntries=[];
-  grouped.state.managedTopics.counts.bauernhof={catalog:0,archive:0};
-  grouped.state.managedTopics.counts.obst={catalog:0,archive:0};
+  assert.equal(grouped.ids.categoriesRows.children[0].children[3].children[1].children.length,2,"usage mismatch does not fabricate or erase links");
+  grouped.state.archiveSha=null;grouped.state.entries=[{id:"0000007",category:"tiere",topics:[]}];grouped.state.archiveEntries=[];
   await grouped.s.refreshTaxonomyManagers();
-  assert.equal(grouped.ids.categoriesRows.children[0].children[3].tag,"p","zero-usage category is not an interactive disclosure");
-  assert.equal(grouped.ids.categoriesRows.children[0].children[3].textContent,"No topics used in pages.");
-  assert.equal(grouped.ids.topicsOtherSummary.textContent,"Unused topics (3)");
-  assert.equal(grouped.ids.topicsRows.children.length,3,"kind alone never fabricates category assignments");
-  assert.ok(html.includes('@media(max-width:700px)'),"responsive category styles retained");
-  assert.ok(html.includes('.topics-other>summary{padding:12px;min-height:44px'),"touch-friendly disclosure");
-  grouped.state.managedTopics.counts.weihnachten={catalog:1,archive:0};
+  assert.equal(grouped.ids.categoriesRows.children[0].children[3].children[1].children[0].children[1].textContent,"0 catalog · 0 archive","zero-use linked topic shown");
+  assert.equal(grouped.ids.topicsOtherSummary.textContent,"Unlinked topics (1)");
+  grouped.state.links.links=[];
   await grouped.s.refreshTaxonomyManagers();
-  assert.equal(grouped.ids.topicsOtherSummary.textContent,"Other topics (3)","globally used but unmapped is not unused");
-  grouped.state.managedTopics.counts.weihnachten={catalog:0,archive:0};
-  grouped.state.entries=[{id:"0000008",category:"tiere",topics:["bauernhof","obst","weihnachten"]}];
+  assert.equal(grouped.ids.categoriesRows.children[0].children[3].children[0].textContent,"0 linked topics — show / hide");
+  assert.equal(grouped.ids.topicsRows.children.length,3,"usage never fabricates links");
+  const select=grouped.ids.categoriesRows.children[0].children[3].children.at(-1).children[0];
+  select.value="bauernhof";
+  await grouped.ids.categoriesRows.children[0].children[3].children.at(-1).children[1].onclick();
+  const linkWrite=grouped.calls.find(x=>x.url==="/api/category-topics/manage"&&x.options.method==="POST");
+  assert.equal(linkWrite.options.headers["If-Match"],'"'+("d".repeat(64))+'"',"strong If-Match guards link");
+  assert.equal(linkWrite.options.headers["X-Ausmalwiese-CSRF"],"fixture");
+  assert.deepEqual(JSON.parse(linkWrite.options.body),{action:"link",category:"tiere",topic:"bauernhof",category_sha256:"f".repeat(64),topic_sha256:"e".repeat(64)});
+  assert.equal(grouped.ids.categoriesRows.children[0].children[3].children[1].children.length,1,"explicit link persists");
+  grouped.state.links.enabled=false;grouped.state.links.reason="Owner seed required";
   await grouped.s.refreshTaxonomyManagers();
-  assert.equal(grouped.ids.topicsOtherDetails.hidden,true,"hide empty other-topics disclosure");
-  assert.equal(grouped.ids.topicsUnusedEmpty.hidden,false,"show all-assigned state");
+  assert.match(grouped.ids.topicGroupsStatus.textContent,/Owner seed required/);
+  assert.equal(grouped.ids.categoriesRows.children[0].children[3].children[1].children.length,0,"disabled assignments never guessed");
+  assert.equal(grouped.ids.categoriesRows.children[0].children[3].children.at(-1).tag,"p","no write controls while disabled");
+
   const inactive=harness();await ready(inactive);await inactive.s.loadManagedCategories();
   assert.equal(inactive.ids.categoriesRows.hidden,true,"unavailable categories hide list");
   assert.equal(inactive.ids.categoriesCreate.hidden,true,"unavailable categories hide creation");
