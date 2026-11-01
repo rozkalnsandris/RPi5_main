@@ -201,9 +201,39 @@ Record changes and confirmed failures separately from observations. Distinguish 
 
 **Privacy / provider gate:** external vision requests send image content and prompts to the upstream model provider. OpenRouter's [privacy policy](https://openrouter.ai/privacy) says providers have varying retention/training practices; a free price is **not** a privacy guarantee. The `google/gemma-4-31b-it:free` listing currently shows Google AI Studio as a free endpoint; obtain an explicit decision on permitted image categories/provider data handling **before** making even a test request. In particular, do not automatically route personal or confidential images to a free service merely to preserve the feature. Another investigated multimodal free SKU, `nvidia/nemotron-3.5-super-vl:free`, expressly warns against personal/confidential uploads and says free endpoint sessions may be logged for product improvement; it is **not** the default candidate.
 
-**Exact owner decision remains outstanding:**
+**Planning alternatives (owner source-only selection recorded in §11):**
 - **Option A: free-only, vision route skipped.** One-key update `auxiliary.free_only: true`, leaving the current paid-ineligible explicit vision model unchanged. Non-OpenRouter/primary routes are unaffected by this specific guard.
 - **Option B: free-only with candidate vision preservation.** Two-key update `auxiliary.free_only: true` and `auxiliary.vision.model: google/gemma-4-31b-it:free`; leave all unrelated config untouched. Requires explicit provider/privacy decision, renewed zero-price/image-input availability verification, and separate bounded LIVE authority.
 - Do **not** configure `openrouter/free` as if it were a `:free` SKU; it does not meet the installed strict `_is_free_model` predicate. Do **not** assert global zero-billing: the primary route, different explicit providers, other fallbacks and runtime state remain outside the guarantee.
 
-**No LIVE activation:** model/provider calls, raw protected config output, credentials, service restart/reload, staging, writing and cleanup were excluded. The two alternatives are a source-only decision record until exact separate owner approval.
+**No LIVE activation:** model/provider calls, raw protected config output, credentials, service restart/reload, staging, writing and cleanup were excluded. The later owner choice of Option B is recorded in §11; it is a source-only planning decision, not LIVE/provider-data authorization.
+
+## 11. Owner-selected Option B — preserve vision on free OpenRouter model (2026-11-01)
+
+**Owner selection (source-only, NO-LIVE):** `SELECT RPi5_main HERMES-FREE-ONLY OPTION=B PRESERVE-VISION MODEL=google/gemma-4-31b-it:free NO-LIVE`. This freezes the **intended future two-key change** for review, not an instruction to apply it. Option A (leave vision ineligible and skip its OpenRouter route) is **not** selected.
+
+### Exact intended semantic delta (not applied)
+
+```yaml
+auxiliary:
+  free_only: true
+  vision:
+    model: google/gemma-4-31b-it:free
+```
+
+The snippet shows **only two selected paths**, not a replacement for the private YAML: `auxiliary.free_only: ABSENT -> true` and `auxiliary.vision.model: current protected value -> google/gemma-4-31b-it:free`. Keep the existing `auxiliary.vision.provider: openrouter` and every unrelated key/byte, including `auxiliary.openrouter_model`, other tasks, primary/fallback providers, MCP/Chroma, credentials and permissions **unchanged**. Before any later authorized write, verify that the whole-file SHA-256 still matches `cdd9f830b7dcce256c82fb3e381fe9a555cebde29459e9a0a484622f14312da8`; otherwise STOP and request a new decision. Do not disclose the existing protected model ID.
+
+### Verified external constraints, not live acceptance
+
+- The official [OpenRouter model page](https://openrouter.ai/google/gemma-4-31b-it%3Afree) lists `google/gemma-4-31b-it:free` with **image input**, text output and current **$0 token pricing**. The installed Hermes Agent 0.21.3 `_is_free_model` rule recognizes the `:free` suffix, and the explicit OpenRouter vision resolver uses it. This is static compatibility, **not proof that an image request will work**.
+- OpenRouter's [free-model documentation](https://openrouter.ai/collections/free-models) specifies **20 requests/minute and 50 requests/day** without the purchased-credit threshold, potentially **1,000/day** after qualifying credit purchases. Rate limits and provider availability may change; verify immediately before any separately authorized LIVE decision.
+- The [OpenRouter pricing page](https://openrouter.ai/pricing) does **not** offer guaranteed EU in-region routing on Free. Its [privacy policy](https://openrouter.ai/privacy) notes that upstream provider data retention and training practices vary. Selecting Option B is **not** approval to send real, personal, confidential or family images to a third-party endpoint, or evidence of any accepted specific endpoint/retention policy.
+- OpenRouter's `openrouter/free` dynamic routing ID is **not** an allowed substitution: despite being free in the vendor service, it fails the installed Hermes exact free-SKU suffix/prefix predicate. Do not switch providers, fallbacks, endpoints or add an unreviewed paid route.
+
+### Remaining gates — NOT authorized by Option B
+
+1. Verify provider endpoint suitability and image-data handling, with a new explicit owner decision covering permitted image categories and external transmission. For now, **no model/API requests**, including test images.
+2. Separately authorize a bounded **LIVE host configuration mutation** with the exact host/file/baseline, exactly the two selected semantic changes, file metadata preservation and fail-closed no-retry safeguards. Selection and GitHub source merge never authorize a write. No current authorization includes reload/restart; treat service lifecycle as a distinct owner gate.
+3. After any separately authorized LIVE mutation, observe only sanitized evidence for the new file hash and expected two-field semantic delta. Do not claim Gateway adoption, service functionality or global no-billing until independently verified with separately authorized, privacy-appropriate runtime checks.
+
+**Current status: OPTION B SELECTED / SOURCE PLAN ONLY / LIVE NOT STARTED.**
