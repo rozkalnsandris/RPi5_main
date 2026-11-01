@@ -232,8 +232,17 @@ The snippet shows **only two selected paths**, not a replacement for the private
 
 ### Remaining gates — NOT authorized by Option B
 
-1. Verify provider endpoint suitability and image-data handling, with a new explicit owner decision covering permitted image categories and external transmission. For now, **no model/API requests**, including test images.
+1. **The owner has now accepted a narrowly defined privacy scope:** only public or synthetic images are eligible for future, separately authorized provider use; non-EU processing is accepted for that limited category (see the recorded decision below). Before any actual external request, reverify endpoint suitability, model availability and applicable data handling. **No model/API requests are currently authorized**, including test images. Expanded image categories or changed conditions require a new decision.
 2. Separately authorize a bounded **LIVE host configuration mutation** with the exact host/file/baseline, exactly the two selected semantic changes, file metadata preservation and fail-closed no-retry safeguards. Selection and GitHub source merge never authorize a write. No current authorization includes reload/restart; treat service lifecycle as a distinct owner gate.
 3. After any separately authorized LIVE mutation, observe only sanitized evidence for the new file hash and expected two-field semantic delta. Do not claim Gateway adoption, service functionality or global no-billing until independently verified with separately authorized, privacy-appropriate runtime checks.
 
-**Current status: OPTION B SELECTED / SOURCE PLAN ONLY / LIVE NOT STARTED.**
+### Provider/privacy owner decision — accepted for planning, NOT execution (2026-11-01)
+
+The owner issued `AUTHORIZE RPi5_main HERMES-OPTION-B PROVIDER-PRIVACY MODEL=google/gemma-4-31b-it:free ALLOW=PUBLIC-SYNTHETIC-IMAGES-ONLY ACCEPT=NON-EU-PROCESSING NO-LIVE NO-API-CALLS`.
+
+- **Allowed category for a later, separately authorized request:** public or genuinely synthetic, non-confidential image content only. Personal, family, private, confidential, credential-bearing or other sensitive imagery is **outside this approval**.
+- **Accepted risk:** routing this limited category outside the EU. This is a privacy **scope decision**, not a certification of data minimization, retention, training opt-out, GDPR compliance or the currently selected upstream endpoint.
+- **Not authorized:** any OpenRouter, model or provider API request (including test images), protected configuration write, service reload/restart, secrets/environment access, model/provider substitution, or production activation. Do not treat this source record as reusable LIVE authorization.
+- **Still required before LIVE:** current zero-price and image-input verification for `google/gemma-4-31b-it:free`; exact host baseline SHA-256 and semantic-diff preflight; a separately issued bounded owner LIVE command for the two selected YAML fields. Runtime usage/testing and Gateway service lifecycle remain independently gated.
+
+**Current status: OPTION B + LIMITED PROVIDER-PRIVACY SCOPE SELECTED / SOURCE PLAN ONLY / NO-LIVE / NO-API-CALLS.**
