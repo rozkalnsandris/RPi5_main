@@ -971,7 +971,7 @@ async function loadManagedCategories(){
      actions.append(rename);
      if(!["tiere","fahrzeuge","alphabet","lernen","figuren","jahreszeiten"].includes(c.id)){
        var remove=document.createElement("button");remove.type="button";remove.className="danger";remove.textContent="Delete";
-       remove.disabled=!!(count.catalog||count.archive||(topicLinksEnabled&&topicLinks.links.some(function(p){return p.category===c.id})));
+       remove.disabled=!topicLinksEnabled||!!(count.catalog||count.archive||topicLinks.links.some(function(p){return p.category===c.id}));
        remove.setAttribute("aria-label","Delete "+c.label+(remove.disabled?" (in use)":""));
        remove.onclick=async function(){
          var check=window.prompt("To delete this unused category, type its exact ID: "+c.id);
@@ -1054,7 +1054,7 @@ function managedTopicRow(t,snapshot,localCount,categoryId){
    remove.onclick=function(){if(window.confirm("Unlink "+t.label+" from "+categoryText(categoryId)+"? This will not delete the topic."))writeCategoryTopicLink("unlink",categoryId,t.id)};
  }else{
    remove.textContent="Delete topic";
-   remove.disabled=!!(global.catalog||global.archive||snapshot.topics.length===1||(topicLinksEnabled&&topicLinks.links.some(function(p){return p.topic===t.id})));
+   remove.disabled=!topicLinksEnabled||!!(global.catalog||global.archive||snapshot.topics.length===1||topicLinks.links.some(function(p){return p.topic===t.id}));
    remove.setAttribute("aria-label","Delete "+t.label+(remove.disabled?" (referenced)":""));
    remove.onclick=function(){if(topicsWriting)return;var id=window.prompt("Type the exact topic ID to delete: "+t.id);if(id===t.id)writeManagedTopic({action:"delete",id:t.id,confirm_id:id})};
  }
@@ -1177,7 +1177,8 @@ async function writeManagedTopic(raw){
 }
 async function refreshTaxonomyManagers(){
   topicGroupsStatus.textContent="Loading saved assignments and usage…";
-  await Promise.all([loadCategoryTopicLinks(),loadManagedCategories(),loadManagedTopics(),loadCategoryTopicUsage()]);
+  await loadCategoryTopicLinks();
+ await Promise.all([loadManagedCategories(),loadManagedTopics(),loadCategoryTopicUsage()]);
   refreshUploadChips();refreshEditChips();
   renderGroupedTopicUsage();
 }
