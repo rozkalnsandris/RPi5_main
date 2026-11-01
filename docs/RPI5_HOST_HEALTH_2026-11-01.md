@@ -287,3 +287,34 @@ This section supersedes the **historical source-only status** above. All observa
 3. A separate explicit one-shot owner authorization for a **synthetic image only** provider smoke test with zero-price routing, sanitized outcome and no retries. Actual success and Gateway integration remain unverified.
 
 **Status: PRIVACY/RISK DECISION ACCEPTED FOR NVIDIA FREE VISION; SOURCE RECORD ONLY; NO NEW CONFIG WRITE / RESTART / API DISPATCH; LIVE VISION ACCEPTANCE PENDING.**
+
+
+## 14. Hermes Option B — NVIDIA LIVE execution and positive synthetic vision smoke (2026-11-01)
+
+**This section is the latest bounded observation and supersedes the historical pending/failed statuses in §§12–13.** Owner decisions for NVIDIA data handling, host configuration mutation, service restart, account privacy change and each external image API call were **separate, one-time, exact-scope authorizations**. None supplies standing permission for future LIVE or API activity.
+
+### Host configuration — separately authorized one-field atomic update
+
+- On `rpi5`, the exact protected-file preflight verified `/home/andris/.hermes/config.yaml` SHA-256 `caf4280dc2f3e1cb973d0c6d9cf94b5523f204d9bcf2d9469a997ec84d491d25`, file mode `0600`, owner/group, absence of xattrs and expected YAML semantics. The one-shot same-directory atomic replacement changed **only** `auxiliary.vision.model: google/gemma-4-31b-it:free -> nvidia/nemotron-3.5-super-vl:free`; the existing `auxiliary.vision.provider: openrouter`, `auxiliary.free_only: true`, every unrelated semantic field and file metadata were preserved.
+- **Observed new config SHA-256:** `e59f75df87e777cf01fe92a28947cf3a73428eda5b25c67e6c266139282df8d9`. Execution ended `RESULT=PASS`, exit code 0. This hash was independently verified by subsequent bounded checks. It is a historical observed file state, not a claim about the current host without a new read.
+
+### Gateway lifecycle — separate owner authorization
+
+- A separate owner-authorized one-shot `systemctl --system restart hermes-gateway.service` was executed after exact config-hash and service/PID checks. The sanitized post-check returned `active/running`, changed PID `1930779 -> 2083122`, and matched the new config SHA-256. **One** restart, no retries, no rollback and no config writes in this lifecycle operation.
+- Gateway process readiness at that point is **not** proof of a complete Gateway vision-tool request. Do not infer ongoing runtime/process state from this historical post-check.
+
+### Failed free NVIDIA smoke / OpenRouter account policy diagnosis
+
+- A separately authorized **one-shot synthetic 96×96 image** OpenRouter SDK request resolved the exact NVIDIA free model, with a zero-price provider cap and SDK retries disabled; response was **HTTP 404 / NotFoundError**, sanitized diagnostic category `POLICY_RESTRICTION`. The full exception was not retained or printed. One request, no retry/config write/restart.
+- Read-only inspection in the signed-in [OpenRouter Privacy settings](https://openrouter.ai/settings/privacy) and [model provider view](https://openrouter.ai/nvidia/nemotron-3.5-super-vl%3Afree) showed **All other models: Zero Data Retention enabled**, while NVIDIA free's endpoint was labeled **Privacy: Trains / Not routable**. These observations strongly establish an account policy versus provider-retention incompatibility; the precise raw 404 error text was not retained.
+- The owner **separately authorized** disabling account-wide `All other models` Zero Data Retention while preserving other settings. In the connected browser the user performed that change; the subsequent read-only *fresh page reload* showed `All other models` ZDR **OFF** and `Allow free endpoints that train on request data` **ON**. The `Allow free endpoints that publish prompts` setting was observed **OFF**. No assistant-operated account mutation was performed. This is a **global account privacy relaxation**, not a limitation on image content at the OpenRouter account boundary; it can affect other requests/apps using the account.
+
+### Positive synthetic vision smoke — distinct one-shot owner authorization
+
+- After the privacy change, the separately authorized **single** direct Hermes auxiliary/OpenRouter SDK smoke verified the exact expected NVIDIA free model, config SHA-256 `e59f75df87e777cf01fe92a28947cf3a73428eda5b25c67e6c266139282df8d9`, official OpenRouter route and `hermes-gateway.service` `active/running`.
+- In-memory image: **96×96**, blue background, red central circle; no real/user/private imagery sent. Provider request had default routing, an explicit `max_price` cap of zero for prompt, completion, image and request, **SDK retries = 0**, no fallback model. Sanitized result: **HTTP 200**, `IMAGE_RECOGNITION=PASS_RED`, expected returned model, **401 total tokens**, **one API dispatch**, **zero** config writes/restarts/retries; process completed with **exit code 0**.
+- The successful response **proves this single synthetic image reached and was recognized via the Hermes auxiliary/OpenRouter client** at the observed time. It does **not** prove full Gateway/Telegram vision-tool end-to-end acceptance, an absence of billing/account usage, future free routing/quotas, automated restriction to public-only images, or ongoing current service health. No private or family images are authorized under the accepted scope.
+
+**Most recent evidence-based status: NVIDIA FREE VISION CLIENT SMOKE = PASS (ONE SYNTHETIC IMAGE); CONFIG PROMOTED / GATEWAY RESTART VERIFIED AT POST-CHECK; ACCOUNT-WIDE ZDR FOR OTHER MODELS OFF; FULL GATEWAY VISION ACCEPTANCE NOT TESTED.**
+
+**Next gate:** If full end-to-end Gateway vision is needed, first define a strictly **synthetic-only** route and separate owner LIVE/API authorization with a single bounded dispatch, sanitized output, no retries, no protected/private images, and explicit review of any app-level image-upload pathway. No merge or source documentation update alone authorizes a new host or external provider operation.
