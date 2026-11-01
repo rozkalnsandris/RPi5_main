@@ -295,7 +295,7 @@ This section supersedes the **historical source-only status** above. All observa
 
 ### Host configuration — separately authorized one-field atomic update
 
-- On `rpi5`, the exact protected-file preflight verified `/home/andris/.hermes/config.yaml` SHA-256 `caf4280dc2f3e1cb973d0c6d9cf94b5523f204d9bcf2d9469a997ec84d491d25`, file mode `0600`, owner/group, absence of xattrs and expected YAML semantics. The one-shot same-directory atomic replacement changed **only** `auxiliary.vision.model: google/gemma-4-31b-it:free -> nvidia/nemotron-3.5-super-vl:free`; the existing `auxiliary.vision.provider: openrouter`, `auxiliary.free_only: true`, every unrelated semantic field and file metadata were preserved.
+- On `rpi5`, the exact protected-file preflight verified `the protected Hermes configuration file` SHA-256 `caf4280dc2f3e1cb973d0c6d9cf94b5523f204d9bcf2d9469a997ec84d491d25`, file mode `0600`, owner/group, absence of xattrs and expected YAML semantics. The one-shot same-directory atomic replacement changed **only** `auxiliary.vision.model: google/gemma-4-31b-it:free -> nvidia/nemotron-3.5-super-vl:free`; the existing `auxiliary.vision.provider: openrouter`, `auxiliary.free_only: true`, every unrelated semantic field and file metadata were preserved.
 - **Observed new config SHA-256:** `e59f75df87e777cf01fe92a28947cf3a73428eda5b25c67e6c266139282df8d9`. Execution ended `RESULT=PASS`, exit code 0. This hash was independently verified by subsequent bounded checks. It is a historical observed file state, not a claim about the current host without a new read.
 
 ### Gateway lifecycle — separate owner authorization
