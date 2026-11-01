@@ -6,8 +6,10 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 
 import argparse
+from datetime import datetime, timedelta, timezone
 import fcntl
 import hashlib
+import http.client
 import json
 import logging
 from logging.handlers import TimedRotatingFileHandler
@@ -27,7 +29,7 @@ import zipfile
 import unicodedata
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import unquote, urlparse
+from urllib.parse import unquote, urlencode, urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 OWNER = "andris"
@@ -2064,6 +2066,220 @@ def analytics_snapshot(path: str) -> dict:
         raise AnalyticsUnavailable("analytics temporarily unavailable") from None
 
 
+ORIGIN_REPORT_PATHS = {f"/api/analytics/origin?days={n}": n for n in (1, 7, 30, 365)}
+ORIGIN_REPORT_CREDENTIAL = Path(
+    "/run/credentials/coloring-pages-admin-publish.service/goatcounter-stats"
+)
+ORIGIN_PATH = re.compile(r"/origin-detail-request/([0-9]{7})\Z")
+MAX_SAFE_COUNT = 9007199254740991
+
+
+class OriginReportUnavailable(Exception):
+    def __init__(self, status="unavailable"):
+        self.status = status
+
+
+def origin_count(value):
+    if type(value) is not int or not 0 <= value <= MAX_SAFE_COUNT:
+        raise ValueError("invalid aggregate")
+    return value
+
+
+def origin_credential():
+    """Only the separate systemd credential; never the collector's count token."""
+    try:
+        fd = os.open(ORIGIN_REPORT_CREDENTIAL, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
+    except FileNotFoundError:
+        raise OriginReportUnavailable("not_configured") from None
+    with os.fdopen(fd, "rb") as stream:
+        info = os.fstat(stream.fileno())
+        if (not stat.S_ISREG(info.st_mode) or info.st_mode & 0o077
+                or info.st_size > 256):
+            raise ValueError("invalid credential file")
+        raw = stream.read(257).strip()
+    if not re.fullmatch(rb"[A-Za-z0-9_+./=-]{20,200}", raw):
+        raise ValueError("invalid credential format")
+    return raw.decode("ascii")
+
+
+class OriginReportReader:
+    """Bounded aggregate reader for GoatCounter 2.7.0; one in-flight snapshot.
+
+    No cookies, forwarded client headers, DNS, proxies, redirects, exports or
+    production DB access. GETs may update GoatCounter token last-used metadata.
+    """
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.cache = {}
+        self.next_request = 0.0
+        self.retry_after = 0.0
+
+    def get(self, target, token, budget):
+        if not (target == "/api/v0/me" or target.startswith("/api/v0/paths?")
+                or target.startswith("/api/v0/stats/hits?")):
+            raise ValueError("unsupported API")
+        wait = self.next_request - time.monotonic()
+        if wait > 0:
+            time.sleep(wait)
+        remaining = budget["deadline"] - time.monotonic()
+        if remaining <= 0 or budget["requests"] >= 51:
+            raise ValueError("report budget exceeded")
+        budget["requests"] += 1
+        # Less than four requests/second, including /me and path pagination.
+        self.next_request = time.monotonic() + 0.35
+        connection = http.client.HTTPConnection("127.0.0.1", 9194, timeout=min(4, remaining))
+        try:
+            connection.request("GET", target, headers={
+                "Host": "goatcounter.ausmalwiese.invalid",
+                "Authorization": "Bearer " + token,
+                "Accept": "application/json",
+                "Connection": "close",
+            })
+            response = connection.getresponse()
+            if (response.status != 200 or response.getheader("Content-Type", "").split(";", 1)[0]
+                    != "application/json" or response.getheader("Content-Encoding") not in (None, "identity")):
+                raise ValueError("upstream rejected")
+            raw = bytearray()
+            while True:
+                if time.monotonic() >= budget["deadline"]:
+                    raise ValueError("report deadline exceeded")
+                chunk = response.read1(65536)
+                if not chunk:
+                    break
+                raw.extend(chunk)
+                budget["bytes"] += len(chunk)
+                if len(raw) > 4 * 1024 * 1024 or budget["bytes"] > 32 * 1024 * 1024:
+                    raise ValueError("report too large")
+            payload = json.loads(raw)
+            if type(payload) is not dict:
+                raise ValueError("invalid API object")
+            return payload
+        finally:
+            connection.close()
+
+    def collect(self, days, now, token):
+        today = now.date()
+        start = today - timedelta(days=days - 1)
+        daily = {(start + timedelta(days=n)).isoformat(): 0 for n in range(days)}
+        budget = {"deadline": time.monotonic() + 45, "requests": 0, "bytes": 0}
+        me = self.get("/api/v0/me", token, budget)
+        user, permissions = me["user"], me["token"]
+        site = user["site"]
+        if (type(site) is not int or site <= 0 or permissions["permissions"] != 64
+                or permissions["sites"] != [site]
+                or type(permissions["sites"][0]) is not int
+                or user["settings"]["timezone"] not in ("UTC", "Etc/UTC")):
+            raise ValueError("stats-only single-site UTC credential required")
+        selected, after = {}, 0
+        for _ in range(10):
+            page = self.get("/api/v0/paths?" + urlencode({"limit": 200, "after": after}), token, budget)
+            paths, more = page["paths"], page["more"]
+            if type(paths) is not list or len(paths) > 200 or type(more) is not bool:
+                raise ValueError("invalid paths page")
+            for item in paths:
+                ident = item["id"]
+                if type(ident) is not int or not after < ident <= 2147483647:
+                    raise ValueError("invalid paths cursor")
+                after = ident
+                match = ORIGIN_PATH.fullmatch(item["path"])
+                if match and item["event"] is False:
+                    selected[ident] = match[1]
+            if len(selected) > 1000 or (more and not paths):
+                raise ValueError("path pagination incomplete")
+            if not more:
+                break
+        else:
+            raise ValueError("path limit exceeded")
+
+        rows = []
+        ids = list(selected)
+        # Never send an empty include_paths: GoatCounter treats it as all paths.
+        for offset in range(0, len(ids), 25):
+            batch = ids[offset:offset + 25]
+            payload = self.get("/api/v0/stats/hits?" + urlencode({
+                "start": start.isoformat() + "T00:00:00Z",
+                "end": today.isoformat() + "T23:00:00Z",
+                "include_paths": ",".join(map(str, batch)), "limit": 100, "daily": "true",
+            }), token, budget)
+            hits = payload["hits"]
+            if payload["more"] is not False or type(hits) is not list or len(hits) > len(batch):
+                raise ValueError("incomplete statistics")
+            seen, batch_total = set(), 0
+            for hit in hits:
+                ident = hit["path_id"]
+                if (type(ident) is not int or ident not in batch or ident in seen
+                        or hit["path"] != "/origin-detail-request/" + selected[ident]
+                        or hit["event"] is not False):
+                    raise ValueError("unexpected statistics path")
+                seen.add(ident)
+                count = origin_count(hit["count"])
+                stats = hit["stats"]
+                if type(stats) is not list or len(stats) != days:
+                    raise ValueError("incomplete days")
+                seen_days, subtotal = set(), 0
+                for day in stats:
+                    date = day["day"]
+                    if date not in daily or date in seen_days:
+                        raise ValueError("invalid day")
+                    seen_days.add(date)
+                    value = origin_count(day["daily"])
+                    hourly = day["hourly"]
+                    if (type(hourly) is not list or len(hourly) != 24
+                            or sum(origin_count(n) for n in hourly) != value):
+                        raise ValueError("invalid daily aggregate")
+                    subtotal += value
+                    daily[date] = origin_count(daily[date] + value)
+                if subtotal != count:
+                    raise ValueError("inconsistent page total")
+                batch_total += count
+                if count:
+                    rows.append({"page_id": selected[ident], "requests": count})
+            if origin_count(payload["total"]) != batch_total:
+                raise ValueError("inconsistent batch total")
+        total = origin_count(sum(daily.values()))
+        if len({row["page_id"] for row in rows}) != len(rows):
+            raise ValueError("duplicate page identity")
+        return {"version": 1, "status": "ok", "metric": "origin_detail_requests",
+                "range_days": days, "timezone": "UTC", "start_day": start.isoformat(),
+                "end_day": today.isoformat(), "today_partial": True,
+                "generated_at": now.isoformat().replace("+00:00", "Z"),
+                "cache_seconds": 60, "total": total,
+                "daily": [{"day": day, "requests": count} for day, count in daily.items()],
+                "pages": sorted(rows, key=lambda row: (-row["requests"], row["page_id"]))}
+
+    def snapshot(self, days):
+        if type(days) is not int or days not in (1, 7, 30, 365):
+            raise OriginReportUnavailable()
+        if not self.lock.acquire(blocking=False):
+            raise OriginReportUnavailable("busy")
+        try:
+            token = origin_credential()
+            now = datetime.now(timezone.utc)
+            key = (days, now.date(), hashlib.sha256(token.encode()).digest())
+            cached = self.cache.get(key)
+            if cached and time.monotonic() < cached[0]:
+                return cached[1]
+            if time.monotonic() < self.retry_after:
+                raise OriginReportUnavailable("busy")
+            # Discard expired entries; no stale data returned after an error.
+            self.cache = {k: v for k, v in self.cache.items() if time.monotonic() < v[0] and k[2] == key[2]}
+            result = self.collect(days, now, token)
+            self.cache[key] = (time.monotonic() + 60, result)
+            return result
+        except OriginReportUnavailable:
+            raise
+        except Exception:
+            self.cache.clear()
+            self.retry_after = time.monotonic() + 5
+            raise OriginReportUnavailable() from None
+        finally:
+            self.lock.release()
+
+
+ORIGIN_REPORT_READER = OriginReportReader()
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "AusmalwieseAdmin/1"
 
@@ -2119,7 +2335,17 @@ class Handler(BaseHTTPRequestHandler):
             if path in ("/", "/index.html"):
                 return self.static("index.html", "text/html; charset=utf-8")
             if self.path == "/api/analytics/capabilities":
-                return self.send_json(200, {"version": 1, "read_only": True})
+                return self.send_json(200, {"version": 1, "read_only": True, "origin_report_version": 1})
+            if self.path in ORIGIN_REPORT_PATHS:
+                if not self.admin_marker():
+                    return
+                if (self.headers.get("Sec-Fetch-Site") not in (None, "same-origin", "none")
+                        or self.headers.get("Origin") not in (None, ADMIN_ORIGIN, f"http://{HOST}:{PORT}")):
+                    return self.send_error_json(403, "cross-site admin request rejected")
+                try:
+                    return self.send_json(200, ORIGIN_REPORT_READER.snapshot(ORIGIN_REPORT_PATHS[self.path]))
+                except OriginReportUnavailable as exc:
+                    return self.send_json(503, {"version": 1, "status": exc.status})
             if path.startswith("/api/analytics/"):
                 if self.path not in ANALYTICS_PATHS:
                     return self.send_error_json(404, "not found")
