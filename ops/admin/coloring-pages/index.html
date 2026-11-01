@@ -334,6 +334,7 @@ html{overflow-y:scroll}
       <a href="#activity" data-nav="activity">Activity</a>
       <a href="#stats" data-nav="stats">Statistics</a>
       <a href="#traffic" data-nav="traffic">Traffic</a>
+      <a href="#origin" data-nav="origin">Origin requests</a>
       <a class="outline-link admin-home-link" href="https://ausmalwiese.de/"><span aria-hidden="true">↗</span> Open website</a>
     </nav>
   </div>
@@ -709,6 +710,35 @@ html{overflow-y:scroll}
     </section>
 
 </div></section>
+<section class="analytics-page" data-page="origin" aria-labelledby="admin-title" hidden>
+  <div class="container analytics-toolbar">
+    <label class="stats-sort-label">Period (UTC)
+      <select data-origin-days><option value="1">Today</option><option value="7" selected>Last 7 days</option><option value="30">Last 30 days</option><option value="365">Last 365 days</option></select>
+    </label>
+    <button class="secondary" data-origin-refresh type="button">↻ Refresh</button>
+  </div>
+  <div class="container"><p class="stats-status" data-origin-status role="status">Data has not been loaded yet.</p></div>
+  <div data-origin-content hidden>
+    <section class="stats-summary" aria-label="Origin request summary">
+      <div class="container stats-kpi-grid">
+        <article class="stats-kpi"><div><span class="stats-kpi-label">Recorded detail requests</span><strong data-origin-total>–</strong></div></article>
+        <article class="stats-kpi"><div><span class="stats-kpi-label">Page IDs with requests</span><strong data-origin-pages>–</strong></div></article>
+      </div>
+      <div class="container"><p class="stats-note">These are detail requests recorded at the website origin, not unique people or successfully displayed pages. Cache hits do not reach the origin. Repeat requests, bots, 304 responses and requests that later fail may count; delivery failures may lose counts. Cloudflare Traffic and Like/Print/QR statistics are separate.</p><p class="stats-note">Up to 365 days are retained. Every period includes today, which is incomplete. Missing earlier data is not reconstructed.</p></div>
+    </section>
+    <div class="container">
+      <article class="stats-panel">
+        <div class="stats-panel-heading"><h2>Pages by origin requests</h2><span class="stats-panel-caption">Includes historical page IDs</span></div>
+        <p data-origin-empty hidden>No origin requests were recorded in this period. This does not verify that counting is enabled.</p>
+        <div class="stats-table-wrap"><table class="stats-table"><thead><tr><th scope="col">Page ID</th><th scope="col">Recorded requests</th></tr></thead><tbody data-origin-ranking></tbody></table></div>
+        <button class="secondary" data-origin-more type="button" hidden>Show more pages</button>
+      </article>
+      <article class="stats-panel">
+        <details><summary>Daily totals (UTC)</summary><div class="stats-table-wrap" style="max-height:360px;overflow:auto"><table class="stats-table"><thead><tr><th scope="col">UTC day</th><th scope="col">Recorded requests</th></tr></thead><tbody data-origin-daily></tbody></table></div></details>
+      </article>
+    </div>
+  </div>
+</section>
 </main>
 <noscript><p class="container notice">The admin panel requires JavaScript.</p></noscript>
 
@@ -1365,6 +1395,7 @@ var pageInfo={
   archive:["Archive","Restore hidden pages or manage archived entries."],
   stats:["Statistics","Print activity, likes and catalog engagement."],
   traffic:["Traffic","Website visits, page views and crawler activity."],
+  origin:["Origin requests","Recorded detail requests by day and page ID."],
   activity:["Activity","Publishing and catalog changes from the last 7 days."]
 };
 function routePage(){
@@ -1391,6 +1422,7 @@ function routePage(){
   if(page==="categories"&&changed)refreshTaxonomyManagers();
   if(page==="edit"&&changed){editBaseline="";document.querySelector(".edit-layout").hidden=true;document.getElementById("editMissing").hidden=false;document.getElementById("editMissing").textContent="Loading entry…";populateEdit()}
   if(window.AdminAnalytics)window.AdminAnalytics.open(page);
+  if(window.AdminOrigin)window.AdminOrigin.open(page);
   if(changed){
     if(legacyTopics){var heading=document.getElementById("managedTopicsHeading");heading.focus({preventScroll:true});heading.scrollIntoView()}
     else{document.getElementById("admin-title").focus({preventScroll:true});window.scrollTo(0,0)}
@@ -1561,6 +1593,62 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
   }
   window.AdminAnalytics = {open(page) {if (states[page] && !states[page].loaded) return load(page);}};
   window.AdminAnalytics.open(currentRoute);
+})();
+</script>
+<script>
+// Separate aggregate report. No public tracking calls or browser API credentials.
+(function(){
+  "use strict";
+  const node=name=>document.querySelector("[data-origin-"+name+"]");
+  const number=new Intl.NumberFormat("en-GB"), allowed=[1,7,30,365];
+  let sequence=0, controller=null, loaded=false, rows=[], shown=25;
+  const count=value=>Number.isSafeInteger(value)&&value>=0;
+  function clear(){
+    node("content").hidden=true;node("total").textContent="–";node("pages").textContent="–";
+    node("ranking").replaceChildren();node("daily").replaceChildren();rows=[];shown=25;
+  }
+  function row(label,value){
+    const tr=document.createElement("tr"),name=document.createElement("td"),requests=document.createElement("td");
+    name.textContent=label;requests.textContent=number.format(value);tr.append(name,requests);return tr;
+  }
+  function ranking(){
+    node("ranking").replaceChildren(...rows.slice(0,shown).map(item=>row(item.page_id,item.requests)));
+    node("more").hidden=shown>=rows.length;
+  }
+  function validate(data,days){
+    if(data.version!==1||data.status!=="ok"||data.metric!=="origin_detail_requests"||data.range_days!==days||data.timezone!=="UTC"||data.today_partial!==true||!count(data.total)||!Array.isArray(data.pages)||data.pages.length>1000||!Array.isArray(data.daily)||data.daily.length!==days||typeof data.generated_at!=="string"||!/^\d{4}-\d{2}-\d{2}T[0-9:.]+Z$/.test(data.generated_at))throw Error("invalid report");
+    if(!data.pages.every(item=>typeof item.page_id==="string"&&/^[0-9]{7}$/.test(item.page_id)&&count(item.requests))||new Set(data.pages.map(item=>item.page_id)).size!==data.pages.length)throw Error("invalid pages");
+    if(!data.daily.every(item=>/^\d{4}-\d{2}-\d{2}$/.test(item.day)&&count(item.requests))||new Set(data.daily.map(item=>item.day)).size!==days)throw Error("invalid days");
+    if(data.pages.reduce((sum,item)=>sum+item.requests,0)!==data.total||data.daily.reduce((sum,item)=>sum+item.requests,0)!==data.total)throw Error("invalid totals");
+    if(data.start_day!==data.daily[0].day||data.end_day!==data.daily[days-1].day)throw Error("invalid range");
+  }
+  async function refresh(){
+    const days=Number(node("days").value);if(!allowed.includes(days))return;
+    const generation=++sequence;if(controller)controller.abort();controller=new AbortController();
+    const current=controller,timer=setTimeout(()=>current.abort(),55000);
+    clear();loaded=false;node("refresh").disabled=true;node("days").disabled=true;
+    node("status").textContent="Loading recorded origin requests…";
+    try{
+      const response=await fetch("/api/analytics/origin?days="+days,{method:"GET",credentials:"same-origin",cache:"no-store",redirect:"error",headers:{"X-Ausmalwiese-Admin":"1"},signal:current.signal});
+      const data=await response.json();if(generation!==sequence)return;
+      if(!response.ok){
+        if(data.status==="not_configured"){node("status").textContent="Origin reporting is not connected yet.";return;}
+        if(data.status==="busy"){node("status").textContent="A report is being prepared or temporarily paused. Refresh again shortly.";return;}
+        throw Error("unavailable");
+      }
+      validate(data,days);rows=data.pages;ranking();
+      node("daily").replaceChildren(...data.daily.map(item=>row(item.day+(item.day===data.end_day?" · incomplete":""),item.requests)));
+      node("total").textContent=number.format(data.total);node("pages").textContent=number.format(rows.length);
+      node("empty").hidden=data.total!==0;
+      node("status").textContent=data.start_day+" to "+data.end_day+" UTC · Snapshot "+data.generated_at.replace("T"," ").replace("Z"," UTC")+" · may be cached for 60 seconds; recent counts may still be processing.";
+      node("content").hidden=false;loaded=true;
+    }catch(_){if(generation===sequence){clear();node("status").textContent="Could not load origin requests. Refresh to try again; unavailable data is not zero.";}}
+    finally{clearTimeout(timer);if(generation===sequence){node("refresh").disabled=false;node("days").disabled=false;}}
+  }
+  node("refresh").addEventListener("click",refresh);node("days").addEventListener("change",refresh);
+  node("more").addEventListener("click",()=>{shown+=25;ranking();});
+  window.AdminOrigin={open:page=>page==="origin"&&!loaded&&!node("refresh").disabled?refresh():Promise.resolve()};
+  if(typeof currentRoute!=="undefined")window.AdminOrigin.open(currentRoute);
 })();
 </script>
 </body>

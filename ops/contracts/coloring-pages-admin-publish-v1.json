@@ -2,6 +2,20 @@
   "schema": "rozkalns.rpi5-main.coloring-pages-admin-publish.v1",
   "status": "source-only",
   "issue": 1149,
+  "origin_report": {
+    "issue": 1326,
+    "version": 1,
+    "metric": "origin_detail_requests",
+    "range_days": [1, 7, 30, 365],
+    "timezone": "UTC",
+    "credential_default": "not-configured",
+    "credential_opt_in": "ops/systemd/coloring-pages-admin-origin-report.conf",
+    "credential_permission": "stats-only-single-site",
+    "upstream": "loopback-127.0.0.1:9194",
+    "public_route": false,
+    "public_counting_activation": false,
+    "operator_doc": "docs/AUSMALWIESE_GOATCOUNTER_REPORT_V1.md"
+  },
   "listener": {
     "host": "127.0.0.1",
     "port": 8765

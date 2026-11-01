@@ -51,7 +51,7 @@ fi
 if [[ "$MODE" == "ui-only" ]]; then
   [[ "$SERVICE_ACTIVE" -eq 1 ]] || { echo "ADMIN_SERVICE_MUST_BE_ACTIVE_FOR_UI_ONLY" >&2; exit 2; }
   # Integrated dashboards require the read-only adapter. Reject an older backend before writing HTML.
-  curl --fail --silent --show-error --max-time 3 http://127.0.0.1:8765/api/analytics/capabilities | python3 -c 'import json,sys; p=json.load(sys.stdin); assert p.get("version") == 1 and p.get("read_only") is True'
+  curl --fail --silent --show-error --max-time 3 http://127.0.0.1:8765/api/analytics/capabilities | python3 -c 'import json,sys; p=json.load(sys.stdin); assert p.get("version") == 1 and p.get("read_only") is True and p.get("origin_report_version") == 1'
   # A UI-only update cannot introduce Category ↔ Topic controls against an
   # older backend. This GET must not create or repair a registry.
   curl --fail --silent --show-error --max-time 3 -H 'X-Ausmalwiese-Admin: 1' \
