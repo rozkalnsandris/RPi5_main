@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+
 import argparse
 import fcntl
 import hashlib
@@ -48,6 +50,9 @@ WEB_ROOT = Path("/usr/local/share/coloring-pages-admin")
 SOURCE_WEB_ROOT = Path(__file__).resolve().parents[1] / "admin" / "coloring-pages"
 
 DOCKER = "/usr/bin/docker"
+# A single bounded worker pair across all concurrent management reads.
+# Never cache positive capabilities: every request reruns both immutable-image probes.
+CAPABILITY_PROBES = ThreadPoolExecutor(max_workers=2, thread_name_prefix="admin-capability")
 IMAGE = "ghcr.io/rozkalnsandris/coloring-pages@sha256:d5546fac6922c3b01645f59d8c7d0658cbbcbe1a4eac3ccdd629621da863777c"
 PRINT_MASTER = "/usr/local/bin/coloring-pages-print-master"
 IMPORTER = "/usr/local/bin/coloring-pages-import"
@@ -144,26 +149,40 @@ def read_managed():
     return doc, hashlib.sha256(data).hexdigest()
 
 
-def importer_v2_capability(expected_sha):
-    """No network, no mutation, no unpinned importer. Never infer from v1."""
+def run_capability_probes(help_args, validation_args):
+    """Run BOTH immutable-image checks, bounded process-wide to two Docker probes.
+
+    Only their scheduling changes. No result cache, digest shortcut, changed
+    container privilege, or weaker return-code/stdout checks are permitted.
+    """
+    options = {"stdout": subprocess.PIPE, "stderr": subprocess.DEVNULL,
+               "text": True, "timeout": 30, "check": False}
+    first = CAPABILITY_PROBES.submit(subprocess.run, help_args, **options)
+    second = CAPABILITY_PROBES.submit(subprocess.run, validation_args, **options)
     try:
-        uid, gid = owner_ids()
-        help_result = subprocess.run(
-            [*docker_prefix(uid, gid), "--entrypoint", IMPORTER, IMAGE, "--help"],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-            text=True, timeout=30, check=False)
-        probe = subprocess.run(
-            [*docker_prefix(uid, gid), "--entrypoint", "/usr/bin/python3", IMAGE,
-             "/usr/local/bin/coloring_pages_categories.py",
-             "validate", "--registry", str(MANAGED_PATH)],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-            text=True, timeout=30, check=False)
-    except (OSError, subprocess.TimeoutExpired):
+        help_result = first.result()
+        validation_result = second.result()
+    except (OSError, subprocess.TimeoutExpired, RuntimeError):
+        # Both checks must succeed. A failed probe can never enable a manager.
+        return None
+    return help_result, validation_result
+
+
+def importer_v2_capability(expected_sha):
+    """Immutable pinned importer: both CLI and same-registry digest must pass."""
+    uid, gid = owner_ids()
+    checked = run_capability_probes(
+        [*docker_prefix(uid, gid), "--entrypoint", IMPORTER, IMAGE, "--help"],
+        [*docker_prefix(uid, gid), "--entrypoint", "/usr/bin/python3", IMAGE,
+         "/usr/local/bin/coloring_pages_categories.py",
+         "validate", "--registry", str(MANAGED_PATH)],
+    )
+    if checked is None:
         return False
+    help_result, probe = checked
     return (help_result.returncode == 0 and "--categories-sha256" in help_result.stdout
             and "--additional-category" in help_result.stdout
             and probe.returncode == 0 and ("sha256=" + expected_sha) in probe.stdout.split())
-
 
 def managed_verified(doc, digest):
     try:
@@ -384,21 +403,20 @@ def read_topics_registry():
 
 
 def immutable_topics_capability(digest):
-    """Immutable image must validate same mounted registry; never accept image v1 seed."""
-    try:
-        uid, gid = owner_ids()
-        help_result = subprocess.run([*docker_prefix(uid, gid), "--entrypoint", IMPORTER, IMAGE, "--help"],
-                                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=30, check=False)
-        probe = subprocess.run([*docker_prefix(uid, gid), "--entrypoint", "/usr/bin/python3", IMAGE,
-                                "/usr/local/bin/coloring_pages_topics.py", "validate",
-                                "--registry", str(TOPICS_PATH)],
-                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=30, check=False)
-    except (OSError, subprocess.TimeoutExpired):
+    """Immutable pinned importer: both CLI and same-registry digest must pass."""
+    uid, gid = owner_ids()
+    checked = run_capability_probes(
+        [*docker_prefix(uid, gid), "--entrypoint", IMPORTER, IMAGE, "--help"],
+        [*docker_prefix(uid, gid), "--entrypoint", "/usr/bin/python3", IMAGE,
+         "/usr/local/bin/coloring_pages_topics.py", "validate",
+         "--registry", str(TOPICS_PATH)],
+    )
+    if checked is None:
         return False
+    help_result, probe = checked
     return (help_result.returncode == 0 and "--topics-sha256" in help_result.stdout
-            and "--additional-topic" in help_result.stdout and probe.returncode == 0
-            and ("sha256=" + digest) in probe.stdout.split())
-
+            and "--additional-topic" in help_result.stdout
+            and probe.returncode == 0 and ("sha256=" + digest) in probe.stdout.split())
 
 def topics_runtime_verified(doc, digest):
     try:
