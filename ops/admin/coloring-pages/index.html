@@ -390,7 +390,7 @@ html{overflow-y:scroll}
         <div class="panel-heading">
           <div class="panel-title"><span class="step-number">3</span><div><span class="panel-kicker">Catalog</span><h2>Choose categories</h2></div></div>
         </div>
-        <span class="category-help">Categories (first selected is primary)</span><details id="categoryPicker" class="topic-picker"><summary><span id="categorySummary">Choose categories…</span><span class="topic-arrow" aria-hidden="true">▾</span></summary><div id="categoryChoices" class="topic-options"></div></details><div id="chosenCategories" class="category-chips" aria-live="polite"></div><p class="category-help">Choose at least one category; the first selected is primary.</p><span class="category-help">Topics (optional)</span><details id="topicPicker" class="topic-picker"><summary><span id="topicSummary">Choose topics…</span><span class="topic-arrow" aria-hidden="true">▾</span></summary><div id="topicChoices" class="topic-options"></div></details><div id="chosenTopic" class="category-chips" aria-live="polite"></div>
+        <span class="category-help">Categories (first selected is primary)</span><details id="categoryPicker" class="topic-picker"><summary><span id="categorySummary">Choose categories…</span><span class="topic-arrow" aria-hidden="true">▾</span></summary><div id="categoryChoices" class="topic-options"></div></details><div id="chosenCategories" class="category-chips" aria-live="polite"></div><p class="category-help">Choose at least one category; the first selected is primary.</p><span class="category-help">Topics (optional)</span><details id="topicPicker" class="topic-picker"><summary><span id="topicSummary">Choose topics…</span><span class="topic-arrow" aria-hidden="true">▾</span></summary><div id="topicChoices" class="topic-options"></div></details><div id="chosenTopic" class="category-chips" aria-live="polite"></div><p id="topicSelectionStatus" class="category-help" role="status" aria-live="polite"></p>
       </article>
 
       <article class="admin-panel">
@@ -450,7 +450,7 @@ html{overflow-y:scroll}
       </div>
       <p class="categories-note">IDs are permanent. Original or in-use categories cannot be deleted.</p>
       <p id="categoriesStatus" class="categories-status" role="status" aria-live="polite">Checking registry…</p>
-      <p id="topicGroupsStatus" class="categories-note" role="status" aria-live="polite">Expand a category to view its used topics.</p>
+      <p id="topicGroupsStatus" class="categories-note" role="status" aria-live="polite">Expand a category to view its explicitly linked topics, even without published pages.</p>
       <ul id="categoriesRows" class="categories-list" aria-label="Categories and usage" hidden></ul>
       <details id="categoriesCreate" class="categories-add" hidden>
         <summary>Add category</summary>
@@ -463,11 +463,11 @@ html{overflow-y:scroll}
     </article></div>
     <div class="container categories-shell topics-under-categories"><article class="admin-panel categories-panel" id="managedTopicsPanel" aria-labelledby="managedTopicsHeading">
       <div class="panel-heading"><div class="panel-title"><div><span class="panel-kicker">Under Categories</span><h2 id="managedTopicsHeading" tabindex="-1">Topics</h2></div></div></div>
-      <p class="categories-note">Used topics appear inside their Categories above. A topic can appear in several categories when pages use both. Topics without matching page usage remain below; IDs are permanent and referenced topics cannot be removed.</p>
+      <p class="categories-note">Manage explicit topic links inside each category. Unlink never deletes a topic. Globally unlinked topics appear below; usage counts are separate.</p>
       <p id="topicsStatus" class="categories-status" role="status" aria-live="polite">Checking managed Topics…</p>
       <details id="topicsOtherDetails" class="topics-other" hidden>
         <summary id="topicsOtherSummary">Other topics</summary>
-        <ul id="topicsRows" class="categories-list" aria-label="Topics not shown in Categories" hidden></ul>
+        <ul id="topicsRows" class="categories-list" aria-label="Topics not linked to a category" hidden></ul>
       </details>
       <p id="topicsUnusedEmpty" class="categories-note" hidden>All topics are shown in the categories above.</p>
       <details id="topicsCreate" class="categories-add" hidden><summary>Add topic</summary>
@@ -516,7 +516,7 @@ html{overflow-y:scroll}
     <input id="editId" type="hidden">
     <div class="field-grid">
       <div class="field wide"><label for="editTitle">Title</label><input id="editTitle" maxlength="128" required></div>
-      <div class="field wide"><span class="category-help">Categories (first selected is primary)</span><details id="editCategoryPicker" class="topic-picker"><summary><span id="editCategorySummary">Choose categories…</span><span class="topic-arrow" aria-hidden="true">▾</span></summary><div id="editCategoryChoices" class="topic-options"></div></details><div id="editChosenCategories" class="category-chips" aria-live="polite"></div></div><div class="field wide"><span class="category-help">Topics (optional)</span><details id="editTopicPicker" class="topic-picker"><summary><span id="editTopicSummary">Choose topics…</span><span class="topic-arrow" aria-hidden="true">▾</span></summary><div id="editTopicChoices" class="topic-options"></div></details><div id="editChosenTopics" class="category-chips" aria-live="polite"></div></div>
+      <div class="field wide"><span class="category-help">Categories (first selected is primary)</span><details id="editCategoryPicker" class="topic-picker"><summary><span id="editCategorySummary">Choose categories…</span><span class="topic-arrow" aria-hidden="true">▾</span></summary><div id="editCategoryChoices" class="topic-options"></div></details><div id="editChosenCategories" class="category-chips" aria-live="polite"></div></div><div class="field wide"><span class="category-help">Topics (optional)</span><details id="editTopicPicker" class="topic-picker"><summary><span id="editTopicSummary">Choose topics…</span><span class="topic-arrow" aria-hidden="true">▾</span></summary><div id="editTopicChoices" class="topic-options"></div></details><div id="editChosenTopics" class="category-chips" aria-live="polite"></div><p id="editTopicSelectionStatus" class="category-help" role="status" aria-live="polite"></p></div>
       <div class="field"><label for="editAge">Age</label><select id="editAge"><option value="3-6">3–6 years</option><option value="4-8">4–8 years</option></select></div>
       <div class="field"><label for="editDifficulty">Difficulty</label><select id="editDifficulty"><option value="easy">Easy</option><option value="normal">Medium</option><option value="detailed">Detailed</option></select></div>
     </div>
@@ -721,6 +721,7 @@ archiveGrid=document.getElementById("archiveGrid"),archiveCount=document.getElem
 editDialog=document.getElementById("editDialog"),editDialogTitle=document.getElementById("editDialogTitle"),editForm=document.getElementById("editForm"),editId=document.getElementById("editId"),editTitle=document.getElementById("editTitle"),editCategoryPicker=document.getElementById("editCategoryPicker"),editCategoryChoices=document.getElementById("editCategoryChoices"),editChosenCategories=document.getElementById("editChosenCategories"),editAge=document.getElementById("editAge"),editDifficulty=document.getElementById("editDifficulty"),editSave=document.getElementById("editSave");
 var categoryLabels=Object.create(null),topicLabels=Object.create(null),topicKinds=Object.create(null),taxonomyVersion="";
 var categoryInputs=Object.create(null),editCategoryInputs=Object.create(null);
+var editOriginalCategories=[],editOriginalTopics=[];
 var stepLabels={
 "ZIP-Datei empfangen und entpacken":"Receive and unpack ZIP file",
 "PNG-Dateien prüfen":"Check PNG files",
@@ -782,44 +783,70 @@ function refreshCategorySelection(list,chosen,inputs,summary,picker,refresh){
  });
  summary.textContent=list.length?"Choose categories… ("+list.length+" selected)":"Choose categories…";
 }
-function makeTopicOptions(container,inputs,list,refresh){
- container.replaceChildren();
- ["seasonal","evergreen"].forEach(function(kind){
-  var field=document.createElement("fieldset"),legend=document.createElement("legend");
-  legend.textContent=kind==="seasonal"?"Feste & Jahreszeiten":"Weitere Themen";field.appendChild(legend);
-  Object.keys(topicKinds).forEach(function(id){
-   if(topicKinds[id]!==kind)return;
-   var row=document.createElement("label");row.className="topic-option";
-   var input=document.createElement("input");input.type="checkbox";input.value=id;input.name="topics";
-   var label=document.createElement("span");label.textContent=topicLabels[id];
-   input.onchange=function(){var position=list.indexOf(id);if(input.checked&&position<0)list.push(id);if(!input.checked&&position>=0)list.splice(position,1);refresh()};
-   inputs[id]=input;row.append(input,label);field.appendChild(row);
-  });
-  container.appendChild(field);
- });
+function topicLinked(id,categories){
+ return !!(topicLinksEnabled&&topicLinks.links.some(function(p){return p.topic===id&&categories.includes(p.category)})
+   &&topicKinds[id]&&compatibleTopic(topicKinds[id],categories));
 }
-function refreshTopicSelection(list,chosen,inputs,categories,summary,picker,refresh){
- var valid=list.filter(function(id){return topicKinds[id]&&compatibleTopic(topicKinds[id],categories)});
- if(valid.length!==list.length)list.splice(0,list.length,...valid);
- Object.keys(inputs).forEach(function(id){inputs[id].disabled=!compatibleTopic(topicKinds[id],categories);inputs[id].checked=list.includes(id)});
+function legacyEditAllowed(id,categories){
+ return editOriginalTopics.includes(id)&&JSON.stringify(categories)===JSON.stringify(editOriginalCategories);
+}
+function invalidTopics(list,categories,editing){
+ return list.some(function(id){return !topicLinked(id,categories)&&!(editing&&legacyEditAllowed(id,categories))});
+}
+function makeTopicOptions(container,inputs,list,categories,refresh,editing){
+ container.replaceChildren();Object.keys(inputs).forEach(function(id){delete inputs[id]});
+ var shown=new Set();
+ function group(title,items,legacy){
+   if(!items.length)return;
+   var field=document.createElement("fieldset"),legend=document.createElement("legend");
+   legend.textContent=title;field.appendChild(legend);
+   items.forEach(function(id){
+     if(shown.has(id))return;shown.add(id);
+     var row=document.createElement("label");row.className="topic-option";
+     var input=document.createElement("input");input.type="checkbox";input.value=id;input.name="topics";input.checked=list.includes(id);
+     input.disabled=legacy&&!legacyEditAllowed(id,categories);
+     var label=document.createElement("span");label.textContent=(topicLabels[id]||id)+(legacy?" (legacy / unlinked)":"");
+     input.onchange=function(){var i=list.indexOf(id);if(input.checked&&i<0)list.push(id);if(!input.checked&&i>=0)list.splice(i,1);refresh()};
+     inputs[id]=input;row.append(input,label);field.appendChild(row);
+   });
+   container.appendChild(field);
+ }
+ categories.forEach(function(c){
+   group(categoryText(c),Object.keys(topicLabels).filter(function(t){return !shown.has(t)&&topicLinked(t,[c])&&compatibleTopic(topicKinds[t],categories)}),false);
+ });
+ if(editing)group("Previously selected (unlinked)",list.filter(function(t){return !shown.has(t)}),true);
+ if(!shown.size){
+   var empty=document.createElement("p");empty.className="category-help";
+   empty.textContent=!topicLinksEnabled?topicLinksReason:categories.length?"No linked topics. Link topics in Categories & Topics.":"Choose a category first.";
+   container.appendChild(empty);
+ }
+}
+function refreshTopicSelection(list,chosen,inputs,categories,summary,picker,refresh,editing){
+ makeTopicOptions(editing?editTopicChoices:topicChoices,inputs,list,categories,refresh,editing);
+ var invalid=invalidTopics(list,categories,editing);
  chosen.replaceChildren();
  list.forEach(function(id){
-  var chip=document.createElement("span");chip.className="category-chip";
-  var label=document.createElement("span");label.textContent=topicLabels[id];
-  var remove=document.createElement("button");remove.type="button";remove.textContent="×";
-  remove.setAttribute("aria-label","Remove "+label.textContent+" topic");
-  remove.onclick=function(){list.splice(list.indexOf(id),1);refresh();picker.querySelector("summary").focus()};
-  chip.append(label,remove);chosen.appendChild(chip);
+   var linked=topicLinked(id,categories),legacy=editing&&legacyEditAllowed(id,categories);
+   var chip=document.createElement("span");chip.className="category-chip";
+   var label=document.createElement("span");label.textContent=(topicLabels[id]||id)+(!linked?(legacy?" (legacy / unlinked)":" (not linked)"):"");
+   var remove=document.createElement("button");remove.type="button";remove.textContent="×";
+   remove.setAttribute("aria-label","Remove "+(topicLabels[id]||id)+" topic");
+   remove.onclick=function(){list.splice(list.indexOf(id),1);refresh();picker.querySelector("summary").focus()};
+   chip.append(label,remove);chosen.appendChild(chip);
  });
  summary.textContent=list.length?"Choose topics… ("+list.length+" selected)":"Choose topics…";
+ document.getElementById(editing?"editTopicSelectionStatus":"topicSelectionStatus").textContent=
+   !topicLinksEnabled?topicLinksReason:invalid?"Selection contains unlinked topics. Remove them or restore the correct category.":
+   editing&&list.some(function(id){return !topicLinked(id,categories)})?"Existing unlinked topics are retained only while categories remain unchanged.":"Topics are optional and limited to linked categories.";
+ return invalid;
 }
 function refreshEditChips(){
  refreshCategorySelection(editSelectedCategories,editChosenCategories,editCategoryInputs,document.getElementById("editCategorySummary"),editCategoryPicker,refreshEditChips);
- refreshTopicSelection(editSelectedTopics,editChosenTopics,editTopicInputs,editSelectedCategories,document.getElementById("editTopicSummary"),editTopicPicker,refreshEditChips);
- editSave.disabled=!editSelectedCategories.length||editStale;
+ var invalid=refreshTopicSelection(editSelectedTopics,editChosenTopics,editTopicInputs,editSelectedCategories,document.getElementById("editTopicSummary"),editTopicPicker,refreshEditChips,true);
+ editSave.disabled=!editSelectedCategories.length||editStale||!topicLinksEnabled||invalid;
 }
 function refreshUploadTopics(){
- refreshTopicSelection(selectedTopics,chosenTopic,topicInputs,selectedCategories,document.getElementById("topicSummary"),topicPicker,refreshUploadTopics);
+ refreshTopicSelection(selectedTopics,chosenTopic,topicInputs,selectedCategories,document.getElementById("topicSummary"),topicPicker,refreshUploadTopics,false);
  updateButton();
 }
 function refreshUploadChips(){refreshCategorySelection(selectedCategories,chosenCategories,categoryInputs,document.getElementById("categorySummary"),categoryPicker,refreshUploadChips);refreshUploadTopics()}
@@ -840,8 +867,8 @@ async function loadCategories(){
     makeCategoryOptions(categoryChoices,categoryInputs,selectedCategories,refreshUploadChips);
     makeCategoryOptions(editCategoryChoices,editCategoryInputs,editSelectedCategories,refreshEditChips);
     topicInputs=Object.create(null);editTopicInputs=Object.create(null);
-    makeTopicOptions(topicChoices,topicInputs,selectedTopics,refreshUploadTopics);
-    makeTopicOptions(editTopicChoices,editTopicInputs,editSelectedTopics,refreshEditChips);
+    await loadCategoryTopicLinks();
+    
     refreshUploadChips();refreshEditChips();
   }catch(e){taxonomyVersion="";topicReady=false;publicationErr("Public categories and topics could not be loaded.");throw e}
 }
@@ -849,7 +876,7 @@ drop.onclick=function(){file.click()};drop.onkeydown=function(e){if(e.key==="Ent
 async function sendZip(f){if(job&&!isTerminal(job)){publicationErr("Wait for the current publishing job to finish.");return}clearPublicationErr();publish.disabled=true;success.style.display="none";process.style.display="none";try{upload=await adminFetch("/api/uploads",{method:"POST",headers:{"Content-Type":"application/zip"},body:f});filebar.style.display="block";filebar.textContent="✓ "+f.name+" — found "+upload.count+" PNG";renderPreviews();updateButton()}catch(e){publicationErr(e.message)}}
 function renderPreviews(){previews.innerHTML="";upload.files.forEach(function(item,i){var c=document.createElement("div");c.className="preview";var img=document.createElement("img");img.src="/api/uploads/"+upload.upload_id+"/preview/"+(i+1);img.alt="Preview "+(i+1);var input=document.createElement("input");input.value=item.title;input.maxLength=128;input.setAttribute("aria-label","Image "+(i+1)+" title");input.oninput=updateButton;c.append(img,input);previews.appendChild(c)})}
 function titles(){return Array.from(previews.querySelectorAll("input")).map(function(x){return x.value.trim()})}
-function updateButton(){document.getElementById("activeJobLink").hidden=!(job&&!isTerminal(job));publish.disabled=!!(job&&!isTerminal(job))||!(upload&&taxonomyVersion&&selectedCategories.length&&topicReady&&titles().length===upload.count&&titles().every(Boolean))}
+function updateButton(){document.getElementById("activeJobLink").hidden=!(job&&!isTerminal(job));publish.disabled=!!(job&&!isTerminal(job))||!(upload&&taxonomyVersion&&selectedCategories.length&&topicReady&&topicLinksEnabled&&!invalidTopics(selectedTopics,selectedCategories,false)&&titles().length===upload.count&&titles().every(Boolean))}
 publish.onclick=async function(){if(!selectedCategories.length||publish.disabled)return;clearPublicationErr();publish.disabled=true;success.style.display="none";try{var created=await adminFetch("/api/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({upload_id:upload.upload_id,category:selectedCategories[0],categories:selectedCategories.slice(),topic:selectedTopics[0]||"",topics:selectedTopics.slice(),taxonomy_sha256:taxonomyVersion,titles:titles()})});startTracking(created,created.restored===true)}catch(e){publicationErr(e.message);updateButton()}}
 async function refresh(){if(!job||pollBusy||isTerminal(job))return;pollBusy=true;try{var latest=await adminFetch("/api/jobs/"+job.job_id);job=latest;pollFailures=0;clearPublicationErr();renderJob(job);if(isTerminal(job)){finishJob(job)}else{scheduleRefresh(1500)}}catch(e){pollFailures=Math.min(pollFailures+1,4);publicationErr("The connection to publishing status was interrupted. Retrying…");scheduleRefresh(Math.min(10000,1500*Math.pow(2,pollFailures)))}finally{pollBusy=false}}
 function renderJob(j){steps.innerHTML="";j.steps.forEach(function(s,i){var row=document.createElement("div");row.className="row "+s.status;var dur="";if(s.started_at){var end=s.finished_at||Math.floor(Date.now()/1000);dur=(end-s.started_at)+" s"}var label=(stepLabels[s.label]||s.label)+(s.detail?" — "+s.detail:"");row.innerHTML="<span class=dot>"+(s.status==="done"?"✓":(i+1))+"</span><span>"+escapeHtml(label)+"</span><span class=status>"+escapeHtml(statusLabels[s.status]||s.status)+"</span><span class=duration>"+dur+"</span>";steps.appendChild(row)})}
@@ -868,16 +895,16 @@ function populateEdit(){
   var missing=document.getElementById("editMissing"),layout=document.querySelector(".edit-layout");
   missing.hidden=!!x;layout.hidden=!x;
   if(!x){missing.textContent="This entry is no longer in the catalog. Return to Catalog and choose another page.";editBaseline="";return}
-  editId.value=x.id;editTitle.value=x.title||"";editSelectedCategories.splice(0,editSelectedCategories.length,...categoryMembership(x));editSelectedTopics.splice(0,editSelectedTopics.length,...(Array.isArray(x.topics)?x.topics:[]));editAge.value=x.age;editDifficulty.value=x.difficulty;refreshEditChips();
+  editId.value=x.id;editTitle.value=x.title||"";editSelectedCategories.splice(0,editSelectedCategories.length,...categoryMembership(x));editSelectedTopics.splice(0,editSelectedTopics.length,...(Array.isArray(x.topics)?x.topics:[]));editAge.value=x.age;editDifficulty.value=x.difficulty;editOriginalCategories=categoryMembership(x);editOriginalTopics=editSelectedTopics.slice();refreshEditChips();
   
   editDialogTitle.textContent="Page information";document.getElementById("editPreviewCaption").textContent="ID: "+x.id;
   document.getElementById("editPreview").src="https://ausmalwiese.de"+x.thumb;
   document.getElementById("editPreview").alt=x.title||"Page preview";
   document.getElementById("editPublicLink").href="https://ausmalwiese.de/detail.html?id="+encodeURIComponent(x.id);
-  editEtag=catalogEtag;editStale=false;editSave.disabled=false;editBaseline=JSON.stringify(editValues());
+  editEtag=catalogEtag;editStale=false;refreshEditChips();editBaseline=JSON.stringify(editValues());
 }
 editForm.onsubmit=async function(event){
-  event.preventDefault();if(editSave.disabled||editStale||!editSelectedCategories.length||!editForm.reportValidity())return;
+  event.preventDefault();if(editSave.disabled||editStale||!topicLinksEnabled||invalidTopics(editSelectedTopics,editSelectedCategories,true)||!editSelectedCategories.length||!editForm.reportValidity())return;
   var payload=editValues();if(!payload.title){editTitle.focus();return}
   editSave.disabled=true;clearErr();
   try{
@@ -896,6 +923,16 @@ async function permanentDeleteArchiveEntry(x){var typed=window.prompt("PERMANENT
 function activityLabel(e){var names={catalog_edit:"Catalog edit",catalog_archive:"Archived",catalog_restore:"Restored",catalog_delete_started:"Permanent deletion started",catalog_delete:"Permanently deleted",job_terminal:"Publishing job",public_verified:"Publication verified",service_start:"Admin service started"};return names[e.event]||e.event}
 async function loadActivity(){activityCount.textContent="Loading activity…";try{var d=await adminFetch("/api/activity");activityCount.textContent=d.count+" events";activityList.innerHTML="";if(!d.events.length){activityList.innerHTML='<p class="catalog-empty">No activity yet.</p>';return}d.events.forEach(function(e){var row=document.createElement("div");row.className="activity-item";var title=document.createElement("strong");title.textContent=activityLabel(e)+(e.page_id?" · "+e.page_id:"");var time=document.createElement("small");time.textContent=new Date(e.ts).toLocaleString("en-GB");var meta=document.createElement("div");meta.className="activity-meta";var level=document.createElement("span");level.className="activity-level "+e.level;level.textContent=e.level;meta.appendChild(level);["action","changed_fields","job_status","step_status","sitemap_status","error_code","archive_state","deleted_file_count","deleted_byte_count"].forEach(function(k){if(e[k]!==undefined){var s=document.createElement("span");s.className="catalog-tag";s.textContent=k+": "+e[k];meta.appendChild(s)}});row.append(title,time,meta);activityList.appendChild(row)})}catch(e){activityCount.textContent="Could not load activity.";activityList.innerHTML='<p class="catalog-empty">'+escapeHtml(e.message)+'</p>'}}
 var managedCategoryEtag="",managedCategoryEnabled=false,managedCategorySnapshot=null,managedTopicsSnapshot=null,categoryTopicUsage=null,categoryTopicUsageError="",expandedCategories=new Set();
+var topicLinks=null,topicLinksEnabled=false,topicLinksReason="Not loaded",linksWriting=false;
+async function loadCategoryTopicLinks(){
+  try{
+    var x=await adminFetch("/api/category-topics/manage");
+    if(!x.enabled||!/^[0-9a-f]{64}$/.test(x.registry_sha256||"")||!Array.isArray(x.links)){
+      topicLinks=null;topicLinksEnabled=false;topicLinksReason=x.reason||"Assignments require an authorized seed.";return;
+    }
+    topicLinks=x;topicLinksEnabled=true;topicLinksReason="";
+  }catch(e){topicLinks=null;topicLinksEnabled=false;topicLinksReason="Assignments unavailable: "+e.message}
+}
 var topicGroupsStatus=document.getElementById("topicGroupsStatus"),topicsUnusedEmpty=document.getElementById("topicsUnusedEmpty"),
  topicsOtherDetails=document.getElementById("topicsOtherDetails"),topicsOtherSummary=document.getElementById("topicsOtherSummary");
 var categoriesStatus=document.getElementById("categoriesStatus"),
@@ -934,7 +971,7 @@ async function loadManagedCategories(){
      actions.append(rename);
      if(!["tiere","fahrzeuge","alphabet","lernen","figuren","jahreszeiten"].includes(c.id)){
        var remove=document.createElement("button");remove.type="button";remove.className="danger";remove.textContent="Delete";
-       remove.disabled=!!(count.catalog||count.archive);
+       remove.disabled=!topicLinksEnabled||!!(count.catalog||count.archive||topicLinks.links.some(function(p){return p.category===c.id}));
        remove.setAttribute("aria-label","Delete "+c.label+(remove.disabled?" (in use)":""));
        remove.onclick=async function(){
          var check=window.prompt("To delete this unused category, type its exact ID: "+c.id);
@@ -999,30 +1036,29 @@ function topicsSeason(p){
   document.getElementById(p+"Kind").onchange=function(){topicsSeason(p)};
   topicsSeason(p);
 });
-function managedTopicRow(t,snapshot,localCount,context){
-  var globalCount=(snapshot.counts||{})[t.id]||{catalog:0,archive:0};
-  var count=localCount||globalCount;
-  var row=document.createElement("li");row.className="category-row";
-  var main=document.createElement("div");main.className="category-main";
-  var label=document.createElement("strong");label.className="category-label";label.textContent=t.icon+" "+t.label;
-  var slug=document.createElement("span");slug.className="category-id";slug.textContent=t.id+" · "+t.kind;
-  main.append(label,slug);
-  var usage=document.createElement("span");usage.className="category-usage";
-  usage.textContent=count.catalog+" catalog · "+count.archive+" archive";
-  var actions=document.createElement("div");actions.className="category-buttons";
-  var edit=document.createElement("button");edit.type="button";edit.className="secondary";edit.textContent="Edit";
-  edit.setAttribute("aria-label","Edit "+t.label+(context?" in "+context:""));
-  edit.onclick=function(){topicsFill("topicEdit",t);topicsSeason("topicEdit");topicsDialog.showModal()};
-  var remove=document.createElement("button");remove.type="button";remove.className="danger";remove.textContent="Delete";
-  remove.disabled=!!(globalCount.catalog||globalCount.archive||snapshot.topics.length===1);
-  remove.setAttribute("aria-label","Delete "+t.label+(context?" in "+context:"")+(remove.disabled?" (in use)":""));
-  remove.onclick=async function(){
-    if(topicsWriting)return;
-    var confirmation=window.prompt("Type the exact topic ID to delete: "+t.id);
-    if(confirmation===t.id)await writeManagedTopic({action:"delete",id:t.id,confirm_id:confirmation});
-  };
-  actions.append(edit,remove);row.append(main,usage,actions);
-  return row;
+function managedTopicRow(t,snapshot,localCount,categoryId){
+ var global=(snapshot.counts||{})[t.id]||{catalog:0,archive:0},count=localCount||global;
+ var row=document.createElement("li");row.className="category-row";
+ var main=document.createElement("div");main.className="category-main";
+ var label=document.createElement("strong");label.className="category-label";label.textContent=t.icon+" "+t.label;
+ var slug=document.createElement("span");slug.className="category-id";slug.textContent=t.id+" · "+t.kind;main.append(label,slug);
+ var usage=document.createElement("span");usage.className="category-usage";usage.textContent=count.catalog+" catalog · "+count.archive+" archive";
+ var actions=document.createElement("div");actions.className="category-buttons";
+ var edit=document.createElement("button");edit.type="button";edit.className="secondary";edit.textContent="Edit topic";
+ edit.setAttribute("aria-label","Edit "+t.label);
+ edit.onclick=function(){topicsFill("topicEdit",t);topicsSeason("topicEdit");topicsDialog.showModal()};actions.append(edit);
+ var remove=document.createElement("button");remove.type="button";remove.className="danger";
+ if(categoryId){
+   remove.textContent="Unlink";remove.disabled=!topicLinksEnabled||linksWriting;
+   remove.setAttribute("aria-label","Unlink "+t.label+" from "+categoryText(categoryId));
+   remove.onclick=function(){if(window.confirm("Unlink "+t.label+" from "+categoryText(categoryId)+"? This will not delete the topic."))writeCategoryTopicLink("unlink",categoryId,t.id)};
+ }else{
+   remove.textContent="Delete topic";
+   remove.disabled=!topicLinksEnabled||!!(global.catalog||global.archive||snapshot.topics.length===1||topicLinks.links.some(function(p){return p.topic===t.id}));
+   remove.setAttribute("aria-label","Delete "+t.label+(remove.disabled?" (referenced)":""));
+   remove.onclick=function(){if(topicsWriting)return;var id=window.prompt("Type the exact topic ID to delete: "+t.id);if(id===t.id)writeManagedTopic({action:"delete",id:t.id,confirm_id:id})};
+ }
+ actions.append(remove);row.append(main,usage,actions);return row;
 }
 function topicUsageFromEntries(catalog,archive){
   if(!catalog||!archive||!Array.isArray(catalog.entries)||catalog.count!==catalog.entries.length
@@ -1055,53 +1091,57 @@ async function loadCategoryTopicUsage(){
   }catch(e){categoryTopicUsageError=e.message||"Usage unavailable";}
 }
 function renderGroupedTopicUsage(){
-  if(!managedCategorySnapshot||!managedTopicsSnapshot||!categoryTopicUsage){
-    topicGroupsStatus.textContent="Category-topic usage unavailable. All topics remain listed below."
-      +(categoryTopicUsageError?" "+categoryTopicUsageError:"");
-    if(managedTopicsSnapshot){
-      topicsOtherDetails.hidden=false;topicsOtherDetails.open=true;
-      topicsOtherSummary.textContent="All topics (usage unavailable)";
-      topicsRows.hidden=false;
-    }else{topicsOtherDetails.hidden=true}
-    topicsUnusedEmpty.hidden=true;
-    return;
-  }
-  var assigned=new Set(),snapshot=managedTopicsSnapshot;
-  managedCategorySnapshot.categories.forEach(function(c,i){
-    var row=categoriesRows.children[i],counts=categoryTopicUsage[c.id]||Object.create(null);
-    var included=snapshot.topics.filter(function(t){
-      var n=counts[t.id];return n&&(n.catalog>0||n.archive>0);
-    });
-    included.forEach(function(t){assigned.add(t.id)});
-    if(!included.length){
-      var empty=document.createElement("p");empty.className="category-topics-empty";
-      empty.textContent="No topics used in pages.";
-      row.appendChild(empty);
-      return;
-    }
-    var details=document.createElement("details");details.className="category-topics";
-    details.open=expandedCategories.has(c.id);
-    details.ontoggle=function(){if(details.open)expandedCategories.add(c.id);else expandedCategories.delete(c.id)};
-    var summary=document.createElement("summary");
-    summary.textContent=included.length+" used topic"+(included.length===1?"":"s")+" — show / hide";
-    details.appendChild(summary);
-    var list=document.createElement("ul");list.className="category-topics-list";
-    list.setAttribute("aria-label","Topics used in "+c.label);
-    included.forEach(function(t){list.appendChild(managedTopicRow(t,snapshot,counts[t.id],c.label))});
-    details.appendChild(list);
-    row.appendChild(details);
-  });
-  var remaining=snapshot.topics.filter(function(t){return !assigned.has(t.id)});
-  var globallyUnused=remaining.every(function(t){
-    var n=(snapshot.counts||{})[t.id]||{catalog:0,archive:0};
-    return !n.catalog&&!n.archive;
-  });
-  topicsRows.replaceChildren(...remaining.map(function(t){return managedTopicRow(t,snapshot,null,"Other topics")}));
-  topicsOtherDetails.hidden=!remaining.length;
-  topicsOtherSummary.textContent=(globallyUnused?"Unused topics (":"Other topics (")+remaining.length+")";
-  topicsRows.hidden=!remaining.length;topicsUnusedEmpty.hidden=!!remaining.length;
-  topicsStatus.textContent=snapshot.topics.length+" topics · "+remaining.length+" not shown in categories · revision "+snapshot.revision;
-  topicGroupsStatus.textContent="Expand a category to see topics used by its catalog and archived pages. Counts are per category, not assignments.";
+ if(!managedCategorySnapshot||!managedTopicsSnapshot)return;
+ var snapshot=managedTopicsSnapshot,assigned=new Set();
+ managedCategorySnapshot.categories.forEach(function(c,i){
+   var row=categoriesRows.children[i],pairs=topicLinksEnabled?topicLinks.links.filter(function(p){return p.category===c.id}):[];
+   var counts=(categoryTopicUsage||{})[c.id]||Object.create(null);
+   var details=document.createElement("details");details.className="category-topics";
+   details.open=expandedCategories.has(c.id);
+   details.ontoggle=function(){if(details.open)expandedCategories.add(c.id);else expandedCategories.delete(c.id)};
+   var summary=document.createElement("summary");summary.textContent=pairs.length+" linked topic"+(pairs.length===1?"":"s")+" — show / hide";details.appendChild(summary);
+   var list=document.createElement("ul");list.className="category-topics-list";list.setAttribute("aria-label","Topics linked to "+c.label);
+   pairs.forEach(function(p){
+     var t=snapshot.topics.find(function(x){return x.id===p.topic});
+     if(t){assigned.add(t.id);list.appendChild(managedTopicRow(t,snapshot,counts[t.id]||{catalog:0,archive:0},c.id))}
+   });
+   details.appendChild(list);
+   if(!pairs.length){var empty=document.createElement("p");empty.className="category-topics-empty";empty.textContent=topicLinksEnabled?"No linked topics yet.":"Assignments unavailable.";details.appendChild(empty)}
+   if(topicLinksEnabled){
+     var actions=document.createElement("div");actions.className="category-buttons";
+     var select=document.createElement("select");select.setAttribute("aria-label","Topic to link to "+c.label);
+     var first=document.createElement("option");first.value="";first.textContent="Choose topic…";select.appendChild(first);
+     snapshot.topics.filter(function(t){return compatibleTopic(t.kind,[c.id])&&!pairs.some(function(p){return p.topic===t.id})}).forEach(function(t){
+       var opt=document.createElement("option");opt.value=t.id;opt.textContent=t.label;select.appendChild(opt);
+     });
+     var link=document.createElement("button");link.type="button";link.className="secondary";link.textContent="+ Link topic";
+     link.disabled=select.options.length===1||linksWriting;
+     link.onclick=function(){if(select.value)return writeCategoryTopicLink("link",c.id,select.value)};
+     actions.append(select,link);details.appendChild(actions);
+   }
+   row.appendChild(details);
+ });
+ var remaining=snapshot.topics.filter(function(t){return !assigned.has(t.id)});
+ topicsRows.replaceChildren(...remaining.map(function(t){return managedTopicRow(t,snapshot,null,null)}));
+ topicsOtherDetails.hidden=!remaining.length;
+ topicsOtherSummary.textContent="Unlinked topics ("+remaining.length+")";
+ topicsRows.hidden=!remaining.length;topicsUnusedEmpty.hidden=!!remaining.length;
+ topicsStatus.textContent=snapshot.topics.length+" topics · "+remaining.length+" globally unlinked · revision "+snapshot.revision;
+ topicGroupsStatus.textContent=!topicLinksEnabled?topicLinksReason:"Assignments are saved independently of page usage."+(categoryTopicUsageError?" Usage unavailable: "+categoryTopicUsageError:"");
+}
+async function writeCategoryTopicLink(action,category,topic){
+ if(linksWriting||!topicLinksEnabled)return;
+ var snap=topicLinks;linksWriting=true;topicGroupsStatus.textContent="Saving "+action+"…";
+ try{
+   await adminFetch("/api/category-topics/manage",{method:"POST",
+     headers:{"Content-Type":"application/json","If-Match":catalogValidator(snap.registry_sha256)},
+     body:JSON.stringify({action:action,category:category,topic:topic,category_sha256:snap.category_sha256,topic_sha256:snap.topic_sha256})});
+   await refreshTaxonomyManagers();
+   topicGroupsStatus.textContent="Assignment saved.";
+ }catch(e){
+   await refreshTaxonomyManagers();
+   topicGroupsStatus.textContent=e.httpStatus===412?"Assignments changed. Review current links before another operation.":e.message;
+ }finally{linksWriting=false}
 }
 async function loadManagedTopics(){
   topicsStatus.textContent="Checking topics…";topicsManagedEnabled=false;topicsManagedEtag="";managedTopicsSnapshot=null;topicsUnusedEmpty.hidden=true;
@@ -1136,8 +1176,10 @@ async function writeManagedTopic(raw){
   }finally{topicsWriting=false}
 }
 async function refreshTaxonomyManagers(){
-  topicGroupsStatus.textContent="Checking category-topic usage…";
-  await Promise.all([loadManagedCategories(),loadManagedTopics(),loadCategoryTopicUsage()]);
+  topicGroupsStatus.textContent="Loading saved assignments and usage…";
+  await loadCategoryTopicLinks();
+ await Promise.all([loadManagedCategories(),loadManagedTopics(),loadCategoryTopicUsage()]);
+  refreshUploadChips();refreshEditChips();
   renderGroupedTopicUsage();
 }
 topicsForm.onsubmit=function(e){e.preventDefault();
@@ -1152,7 +1194,7 @@ var pageInfo={
   overview:["Overview","Everything you need to manage Ausmalwiese in one place."],
   upload:["Add pages","Choose a ZIP file, review the images and publish them in the selected categories."],
   catalog:["Catalog","Find a page, edit its details or move it to the archive."],
-  categories:["Categories & Topics","Manage categories and the topics used with them in one place."],
+  categories:["Categories & Topics","Manage categories and explicitly linked topics."],
   edit:["Edit page","Update the title, categories, age range and difficulty."],
   archive:["Archive","Restore hidden pages or manage archived entries."],
   stats:["Statistics","Print activity, likes and catalog engagement."],

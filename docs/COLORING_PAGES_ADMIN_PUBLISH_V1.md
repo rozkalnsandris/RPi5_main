@@ -78,16 +78,20 @@ At upload Step 3, choose one or more canonical categories. Selected category
 chips retain order: the first is the primary `category`, all selected values
 appear in ordered `categories[]`. Remove buttons are keyboard accessible and
 move focus back to the native selector. Removed categories become available again.
-No selection means Publish is disabled. `Topic (optional)` remains independent:
-seasonal topics require `jahreszeiten`, evergreen topics require at least one
-other category. Removing the only compatible category visibly clears the topic.
-Each ZIP PNG receives the same ordered categories in its own one-page activity.
+No selection means Publish is disabled. Topics are optional but must be
+explicitly linked to a chosen category: seasonal topics link only under
+`jahreszeiten`, evergreen topics under nonseasonal Categories. Removing a
+category leaves an incompatible selected Topic visible with a warning and
+blocks publishing until the selection is deliberately corrected. A missing or
+invalid private link registry also blocks new writes. Each ZIP PNG receives the
+same ordered categories in its own one-page activity.
 
 The Catalog and Archive display all selected category labels and the Catalog
 filter matches any assigned category. Editing permits category chip changes;
-an incompatible previously assigned topic is cleared, while other metadata,
-archive snapshots, restore, IDs, assets and legacy single-category records
-remain intact. The protected API validates exactly one primary, up to six
+existing valid but currently unlinked topics are retained for unchanged
+memberships. Changed memberships with unlinked Topics block saving rather
+than silently clearing selections. Other metadata, archive snapshots, restore,
+IDs, assets and legacy single-category records remain intact. The protected API validates exactly one primary, up to six
 distinct canonical IDs, canonical taxonomy SHA-256 and topic compatibility
 before job creation and again under the existing shared publication lock.
 The importer receives repeated `--additional-category` flags for secondaries.
@@ -605,7 +609,7 @@ after merge; no service restart is needed for that reviewed mode. Native
 [MDN details](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/details),
 [WAI-ARIA APG accordion](https://www.w3.org/WAI/ARIA/apg/patterns/accordion/).
 
-## Category-specific Topics by page usage — #1301 (source-only)
+## Historical category-specific Topic usage — #1301 (superseded by #1305 for management)
 
 The combined protected ADMIN Category list progressively discloses **actual used
 Topics** directly beneath each category. Open the native `details/summary` row
@@ -628,7 +632,7 @@ remain untouched; no backend or LIVE change is authorized.
 References: [MDN native details](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/details),
 [GOV.UK accordion guidance](https://design-system.service.gov.uk/components/accordion/).
 
-## Compact category and unused-topic disclosures — #1303 (source only)
+## Historical compact topic disclosures — #1303 (superseded by #1305 for management)
 
 Category rows with zero catalog/archive-used Topics display plain, noninteractive
 “No topics used in pages.” text; only rows with genuine used Topics expose a
@@ -643,3 +647,79 @@ is unavailable or invalid, the group counts are not fabricated, an error is
 visible, and the complete topic list is explicitly opened for management.
 No category/topic ownership mapping is inferred from compatibility, and no
 registry, API or LIVE behavior is changed by this source-only update.
+
+## Persistent Category ↔ Topic associations — issue #1305 (source-only, LIVE gated)
+
+The protected ADMIN relationship registry is intentionally **separate** from
+public canonical \`categories.v2\` and \`topics.v2\`, and is stored privately at
+\`/srv/coloring-pages-content/state/admin-publish/category-topic-links.json\`
+(\`0600\`, owner \`andris\`). It uses exactly:
+\`{"schema":"rozkalns.rpi5-main.category-topic-links.v1","revision":1,"links":[]}\`
+with canonical UTF-8 JSON (\`ensure_ascii=False\`, 2-space indent, trailing newline).
+Links are sorted lexicographically by \`(category, topic)\`, unique and validated
+against both current published registries; seasonal topics belong only to
+\`jahreszeiten\`, evergreen topics only to nonseasonal Categories. A topic may
+be linked to multiple Categories. Empty links are valid; missing links are not.
+
+**Owner-gated seed:** no code path creates this file on GET or POST. A future
+exact owner LIVE authorization must approve a one-time seed and installed
+backend rollout; never seed from catalog/archive usage. Do not seed, apply
+migration, overwrite or modify file permissions as a consequence of source
+merge. Verify the canonical SHA-256, owner, mode, no hardlinks or symlinks,
+directory and service state before any mutation; first mutation consumes
+authorization. Error/drift/partial staging is STOP, no retry/rollback/cleanup.
+
+The guarded same-origin \`/api/category-topics/manage\` exposes enabled/read-only
+\`revision\`, \`links\`, SHA-256 validator and current category/topic hashes.
+Mutating one \`link\` or \`unlink\` requires same-origin, marker, CSRF,
+strong \`If-Match\`, exact two taxonomy digests, shared publishing lock,
+no active/queued jobs, a seeded valid file and an atomic single-file write.
+This registry **does not modify page metadata**. Global category/topic deletion
+is blocked while referenced by the registry; unlinking never deletes a Topic.
+
+Publication creation and the import worker pin exact relationship SHA to
+avoid a link changing while jobs are queued. Catalog edits can retain unchanged
+legacy Topics on the same category memberships without silently discarding
+them; changed memberships/topic selections must conform. A missing or invalid
+registry disables new writes while existing read-only views continue working.
+
+**Unified UI:** the Categories disclosure lists explicitly assigned Topics, including
+those with zero page usage; catalog/archive counts are separate read-only metrics.
+Each category has an explicit `+ Link topic` picker and per-link `Unlink`, which
+never deletes the global Topic. The compact collapsed `Unlinked topics` list
+contains only globally unassigned Topics, where Edit/Delete actions remain
+subject to reference/lock checks. `Add topic` remains in this same screen.
+Assignments are not inferred from imported content, taxonomy `kind`, or
+existing archive records. Linked Topics may appear under more than one category.
+
+**Add pages and Catalog/Edit:** choose ordered Categories first (the first
+is primary); each selected category contributes only its explicitly linked
+compatible Topics, with cross-category deduplication and optional ordered
+Topic multi-select. When a Category is removed, previously chosen Topics
+remain visible; invalid selections block publishing/saving instead of being
+silently dropped. Existing Catalog/Edit entries whose valid Topics are no
+longer linked retain them with a legacy/unlinked label only while the original
+category memberships are unchanged. Changing categories requires deliberate
+Topic correction. New writes cannot bypass backend link verification.
+
+**Source installer preflight:** `ui-only` must verify the installed
+`GET /api/category-topics/manage` API exists (enabled or disabled) before
+replacing HTML; it cannot be used to install this frontend against the old
+backend. `full` requires the *already owner-seeded* canonical private
+`category-topic-links.json` with safe single-link owner/mode, size and
+deterministic schema/ordering checks **before** the first installer mutation.
+It neither creates nor repairs any associations. Runtime validates the
+taxonomies, link compatibility and exact digests; the owner must separately
+approve exact seed and full installer/service restart. Missing/unsafe seed
+is a preflight STOP, not a reason to auto-create it.
+
+**Rollout gate:** this source change modifies the ADMIN backend and therefore
+requires an owner-authorized full ADMIN installer/service restart (not UI-only),
+plus separately authorized private registry creation. It **does not authorize**
+either LIVE action, manual seed, service restart, public content rewrite, or
+changes to \`rozkalnsandris/coloring-pages\`. Current statuses are evidenced
+only by current GitHub CI and later independent LIVE verification.
+
+Design references: https://wordpress.org/documentation/article/taxonomies/ ,
+https://design-system.service.gov.uk/components/checkboxes/ ,
+https://www.w3.org/WAI/ARIA/apg/patterns/disclosure/ .

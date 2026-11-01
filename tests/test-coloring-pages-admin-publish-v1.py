@@ -422,6 +422,20 @@ class StaticTests(unittest.TestCase):
             self.assertIn(f'"${key}_TMP" "/usr/local/share/coloring-pages-admin/fonts/${key}_NAME"',full)
             self.assertGreater(full.rindex(f'/assets/fonts/${key}_NAME'),full.index('systemctl restart'))
 
+    def test_category_topic_installer_preflight_is_fail_closed(self):
+        installer = (ROOT/"scripts/install-coloring-pages-admin-publish-v1.sh").read_text()
+        ui = installer.split('if [[ "$MODE" == "ui-only" ]]; then')[1].split("exit 0")[0]
+        full = installer.split("test -f \"$PUBLISH_LOCK\"")[0]
+        self.assertIn("/api/category-topics/manage", ui)
+        self.assertLess(ui.index("/api/category-topics/manage"), ui.index("install -o root"))
+        self.assertIn("CATEGORY_TOPIC_LINKS_OWNER_SEED_REQUIRED", full)
+        self.assertIn("CATEGORY_TOPIC_LINKS_UNSAFE_IDENTITY", full)
+        self.assertIn("CATEGORY_TOPIC_LINKS_INVALID_SEED", full)
+        self.assertIn("os.O_NOFOLLOW", full)
+        self.assertIn("data[\"schema\"] == \"rozkalns.rpi5-main.category-topic-links.v1\"", full)
+        self.assertLess(installer.index("CATEGORY_TOPIC_LINKS_OWNER_SEED_REQUIRED"),
+                        installer.index('BALOO_TMP="$(mktemp)"'))
+
     def test_navigation_behavior(self):
         subprocess.run(["node", str(ROOT/"tests/test-coloring-pages-admin-navigation.cjs")], check=True, timeout=30)
 
@@ -782,5 +796,122 @@ class StaticTests(unittest.TestCase):
             with self.assertRaises(admin.Stop):admin.require_category_capability(1,1,"neue-kategorie")
         with patch.object(admin,"docker_prefix",return_value=["docker","run"]),patch.object(admin.subprocess,"run",return_value=SimpleNamespace(returncode=0,stdout="--category")):
             with self.assertRaises(admin.Stop):admin.require_topic_capability(1,1)
+
+
+class CategoryTopicBindingTests(unittest.TestCase):
+    """Private canonical links are not inferred, seeded, or migrated implicitly."""
+
+    def registry(self):
+        return {"categories":{"tiere":{"id":"tiere"},"lernen":{"id":"lernen"},
+                              "jahreszeiten":{"id":"jahreszeiten"}},
+                "topics":{"bauernhof":{"id":"bauernhof","kind":"evergreen"},
+                          "weihnachten":{"id":"weihnachten","kind":"seasonal"}},
+                "category_schema":admin.MANAGED_SCHEMA,"topic_schema":admin.TOPICS_SCHEMA,
+                "category_sha256":"a"*64,"topic_sha256":"b"*64}
+
+    def seed(self):
+        return {"schema":admin.LINKS_SCHEMA,"revision":1,
+                "links":[{"category":"tiere","topic":"bauernhof"}]}
+
+    def test_canonical_links_and_no_auto_seed(self):
+        registry=self.registry()
+        with tempfile.TemporaryDirectory() as temp:
+            path=Path(temp)/"category-topic-links.json"
+            with patch.object(admin,"LINKS_PATH",path),patch.object(
+                    admin,"owner_ids",return_value=(os.geteuid(),os.getegid())),patch.object(
+                    admin,"load_taxonomy",return_value=registry):
+                self.assertFalse(admin.links_snapshot()["enabled"])
+                self.assertFalse(path.exists(),"GET must not create a seed")
+                data=admin.links_bytes(self.seed(),registry)
+                path.write_bytes(data)
+                path.chmod(0o600)
+                self.assertEqual(admin.read_links(registry)[0],self.seed())
+                self.assertEqual(admin.read_links(registry)[1],
+                                 __import__("hashlib").sha256(data).hexdigest())
+                self.assertTrue(admin.links_snapshot()["enabled"])
+                path.chmod(0o644)
+                with self.assertRaises(admin.Stop):admin.read_links(registry)
+                path.chmod(0o600)
+                path.unlink()
+                path.symlink_to(Path(temp)/"missing")
+                with self.assertRaises(admin.Stop):admin.read_links(registry)
+
+    def test_strict_ids_kinds_uniqueness_and_references(self):
+        registry=self.registry()
+        valid=self.seed()
+        admin.links_bytes(valid,registry)
+        bad=[
+            dict(valid,revision=True),
+            dict(valid,links=[{"category":"tiere","topic":"weihnachten"}]),
+            dict(valid,links=[{"category":"jahreszeiten","topic":"bauernhof"}]),
+            dict(valid,links=[{"category":"unknown","topic":"bauernhof"}]),
+            dict(valid,links=valid["links"]*2),
+            dict(valid,links=[{"category":"tiere","topic":"bauernhof","unknown":1}]),
+        ]
+        for entry in bad:
+            with self.subTest(entry=entry),self.assertRaises(admin.Stop):
+                admin.links_bytes(entry,registry)
+
+    def test_manual_link_unlink_and_stale_gate(self):
+        registry=self.registry()
+        with tempfile.TemporaryDirectory() as temp:
+            path=Path(temp)/"category-topic-links.json"
+            data=admin.links_bytes(self.seed(),registry)
+            path.write_bytes(data)
+            path.chmod(0o600)
+            with patch.object(admin,"LINKS_PATH",path),patch.object(
+                    admin,"owner_ids",return_value=(os.geteuid(),os.getegid())),patch.object(
+                    admin,"load_taxonomy",return_value=registry),patch.object(
+                    admin,"active_jobs",return_value=[]):
+                snap=admin.links_snapshot()
+                raw={"action":"link","category":"lernen","topic":"bauernhof",
+                     "category_sha256":"a"*64,"topic_sha256":"b"*64}
+                self.assertIsNone(admin.change_links(raw,"0"*64))
+                self.assertEqual(path.read_bytes(),data)
+                doc,sha=admin.change_links(raw,snap["registry_sha256"])
+                self.assertEqual(len(doc["links"]),2)
+                self.assertEqual(doc["revision"],2)
+                self.assertEqual(admin.read_links(registry)[1],sha)
+                with self.assertRaises(admin.Stop):admin.change_links(raw,sha)
+                with patch.object(admin,"active_jobs",return_value=[{"status":"queued"}]),self.assertRaises(admin.Stop):
+                    admin.change_links(dict(raw,action="unlink"),sha)
+                other,sha2=admin.change_links(dict(raw,action="unlink"),sha)
+                self.assertEqual(len(other["links"]),1)
+                self.assertEqual(other["revision"],3)
+                self.assertEqual(admin.read_links(registry)[1],sha2)
+
+    def test_linked_topic_kind_cannot_change_with_zero_page_usage(self):
+        # A topic can have zero pages but still be explicitly linked; changing
+        # its kind would break the pinned seasonal/evergreen link contract.
+        old = {"id": "bauernhof", "label": "Bauernhof", "icon": "B",
+               "kind": "evergreen", "legacy_terms": []}
+        new = dict(old, kind="seasonal", active_from="12-01", active_to="02-29")
+        doc = {"schema": admin.TOPICS_SCHEMA, "revision": 1, "topics": [old]}
+        digest = "d" * 64
+        snapshot = {"enabled": True, "registry_sha256": digest,
+                    "counts": {"bauernhof": {"catalog": 0, "archive": 0}}}
+        with patch.object(admin, "topics_snapshot", return_value=snapshot), patch.object(
+                admin, "active_jobs", return_value=[]), patch.object(
+                admin, "read_topics_registry", return_value=(doc, digest)), patch.object(
+                admin, "load_taxonomy", return_value=self.registry()), patch.object(
+                admin, "read_links", return_value=(self.seed(), "e" * 64)):
+            with self.assertRaisesRegex(admin.Stop, "linked topic kind cannot change"):
+                admin.change_topics({"action": "update", "topic": new}, digest)
+
+    def test_linked_topic_validation_preserves_unchanged_legacy(self):
+        registry=self.registry()
+        with tempfile.TemporaryDirectory() as temp:
+            path=Path(temp)/"links.json"
+            path.write_bytes(admin.links_bytes(self.seed(),registry))
+            path.chmod(0o600)
+            with patch.object(admin,"LINKS_PATH",path),patch.object(
+                    admin,"owner_ids",return_value=(os.geteuid(),os.getegid())):
+                admin.validate_linked_topics(["bauernhof"],["tiere"],registry)
+                with self.assertRaises(admin.Stop):
+                    admin.validate_linked_topics(["bauernhof"],["lernen"],registry)
+                legacy={"category":"lernen","categories":["lernen"],"topics":["bauernhof"]}
+                admin.validate_linked_topics(["bauernhof"],["lernen"],registry,previous=legacy)
+                with self.assertRaises(admin.Stop):
+                    admin.validate_linked_topics(["bauernhof"],["jahreszeiten"],registry,previous=legacy)
 
 if __name__=="__main__":unittest.main()

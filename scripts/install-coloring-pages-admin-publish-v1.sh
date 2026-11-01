@@ -7,6 +7,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 REPO="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
 SERVICE="coloring-pages-admin-publish.service"
 PUBLISH_LOCK="/srv/coloring-pages-content/state/drive-ingest/.lock"
+LINKS_REGISTRY="/srv/coloring-pages-content/state/admin-publish/category-topic-links.json"
 BALOO_NAME="baloo2-latin-vf-26fb4610d4bc976d.woff2"
 NUNITO_NAME="nunito-latin-vf-ba344451eab25b21.woff2"
 BALOO_SHA256="26fb4610d4bc976d2584ca15e66c11465dbc1f267a10dca668fcb3080dfe59c1"
@@ -51,6 +52,11 @@ if [[ "$MODE" == "ui-only" ]]; then
   [[ "$SERVICE_ACTIVE" -eq 1 ]] || { echo "ADMIN_SERVICE_MUST_BE_ACTIVE_FOR_UI_ONLY" >&2; exit 2; }
   # Integrated dashboards require the read-only adapter. Reject an older backend before writing HTML.
   curl --fail --silent --show-error --max-time 3 http://127.0.0.1:8765/api/analytics/capabilities | python3 -c 'import json,sys; p=json.load(sys.stdin); assert p.get("version") == 1 and p.get("read_only") is True'
+  # A UI-only update cannot introduce Category ↔ Topic controls against an
+  # older backend. This GET must not create or repair a registry.
+  curl --fail --silent --show-error --max-time 3 -H 'X-Ausmalwiese-Admin: 1' \
+    http://127.0.0.1:8765/api/category-topics/manage |
+    python3 -c 'import json,sys; p=json.load(sys.stdin); assert isinstance(p.get("enabled"),bool) and isinstance(p.get("links"),list) and "category_sha256" in p and "topic_sha256" in p'
   [[ -f "/usr/local/share/coloring-pages-admin/fonts/$BALOO_NAME" ]] || { echo "BALOO_FONT_MISSING" >&2; exit 2; }
   [[ -f "/usr/local/share/coloring-pages-admin/fonts/$NUNITO_NAME" ]] || { echo "NUNITO_FONT_MISSING" >&2; exit 2; }
   [[ "$(sha256sum "/usr/local/share/coloring-pages-admin/fonts/$BALOO_NAME" | awk '{print $1}')" == "$BALOO_SHA256" ]] || { echo "BALOO_FONT_HASH_MISMATCH" >&2; exit 2; }
@@ -70,6 +76,50 @@ if [[ "$MODE" == "ui-only" ]]; then
   echo "AUSMALWIESE_ADMIN_UI_UPDATE=PASS"
   exit 0
 fi
+
+# Before any full installer mutation, require an explicitly owner-seeded private
+# association registry. The installer never creates or repairs this file.
+if [[ -L "$LINKS_REGISTRY" || ! -f "$LINKS_REGISTRY" ]]; then
+  echo "CATEGORY_TOPIC_LINKS_OWNER_SEED_REQUIRED" >&2; exit 2
+fi
+[[ "$(stat -c '%U:%G:%a:%h' "$LINKS_REGISTRY")" == "andris:andris:600:1" ]] || {
+  echo "CATEGORY_TOPIC_LINKS_UNSAFE_IDENTITY" >&2; exit 2;
+}
+python3 - "$LINKS_REGISTRY" <<'PY'
+import json
+import os
+import pathlib
+import stat
+import sys
+
+path = pathlib.Path(sys.argv[1])
+fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+with os.fdopen(fd, "rb") as stream:
+    identity = os.fstat(stream.fileno())
+    if not stat.S_ISREG(identity.st_mode) or identity.st_nlink != 1 or identity.st_size > 65536:
+        raise SystemExit("CATEGORY_TOPIC_LINKS_UNSAFE_FILE")
+    raw = stream.read(65537)
+if not raw or len(raw) > 65536:
+    raise SystemExit("CATEGORY_TOPIC_LINKS_UNSAFE_SIZE")
+try:
+    data = json.loads(raw)
+    links = data["links"]
+    assert (type(data) is dict and set(data) == {"schema", "revision", "links"}
+            and data["schema"] == "rozkalns.rpi5-main.category-topic-links.v1"
+            and type(data["revision"]) is int and 1 <= data["revision"] <= 2147483647
+            and type(links) is list and len(links) <= 512)
+    keys = []
+    for pair in links:
+        assert type(pair) is dict and set(pair) == {"category", "topic"}
+        c, t = pair["category"], pair["topic"]
+        assert (type(c) is str and type(t) is str
+                and all(x.isascii() and (x.islower() or x.isdigit() or x == "-") for x in c + t))
+        keys.append((c, t))
+    assert keys == sorted(set(keys))
+    assert raw == (json.dumps(data, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+except (ValueError, KeyError, TypeError, AssertionError):
+    raise SystemExit("CATEGORY_TOPIC_LINKS_INVALID_SEED")
+PY
 
 test -f "$PUBLISH_LOCK"
 [[ "$(stat -c '%U:%G:%a' "$PUBLISH_LOCK")" == "andris:andris:600" ]] || { echo "SHARED_LOCK_INVALID" >&2; exit 2; }
