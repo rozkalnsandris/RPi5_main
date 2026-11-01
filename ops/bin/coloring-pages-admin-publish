@@ -50,9 +50,29 @@ WEB_ROOT = Path("/usr/local/share/coloring-pages-admin")
 SOURCE_WEB_ROOT = Path(__file__).resolve().parents[1] / "admin" / "coloring-pages"
 
 DOCKER = "/usr/bin/docker"
-# A single bounded worker pair across all concurrent management reads.
-# Never cache positive capabilities: every request reruns both immutable-image probes.
+# Limit concurrent read-only pinned Docker containers to two across manager GETs.
+# No cached capability results: every GET validates both checks inside one container.
 CAPABILITY_PROBES = ThreadPoolExecutor(max_workers=2, thread_name_prefix="admin-capability")
+CAPABILITY_PROBE_SCRIPT = """\
+import json
+import subprocess
+import sys
+
+# Run the same importer CLI help and registry validator inside ONE pinned image.
+# Each retains its own 30-second timeout, exit code and full stdout.
+checks = ((sys.argv[1], "--help"),
+          ("/usr/bin/python3", sys.argv[2], "validate", "--registry", sys.argv[3]))
+results = []
+for args in checks:
+    try:
+        completed = subprocess.run(args, stdout=subprocess.PIPE,
+                                   stderr=subprocess.DEVNULL, text=True,
+                                   timeout=30, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        sys.exit(2)
+    results.append({"code": completed.returncode, "stdout": completed.stdout})
+print(json.dumps({"schema": 1, "checks": results}, separators=(",", ":")))
+"""
 IMAGE = "ghcr.io/rozkalnsandris/coloring-pages@sha256:d5546fac6922c3b01645f59d8c7d0658cbbcbe1a4eac3ccdd629621da863777c"
 PRINT_MASTER = "/usr/local/bin/coloring-pages-print-master"
 IMPORTER = "/usr/local/bin/coloring-pages-import"
@@ -149,40 +169,51 @@ def read_managed():
     return doc, hashlib.sha256(data).hexdigest()
 
 
-def run_capability_probes(help_args, validation_args):
-    """Run BOTH immutable-image checks, bounded process-wide to two Docker probes.
+def run_capability_probes(validator: str, registry_path: Path):
+    """Run BOTH checks per request in one pinned read-only Docker invocation.
 
-    Only their scheduling changes. No result cache, digest shortcut, changed
-    container privilege, or weaker return-code/stdout checks are permitted.
+    One immutable image, no positive cache or provenance shortcut. The CLI help
+    and exact-registry validator run as separate subprocesses *inside* that
+    container with their original 30-second individual timeout.
     """
-    options = {"stdout": subprocess.PIPE, "stderr": subprocess.DEVNULL,
-               "text": True, "timeout": 30, "check": False}
+    uid, gid = owner_ids()
+    command = [*docker_prefix(uid, gid),
+               "--entrypoint", "/usr/bin/python3", IMAGE, "-c",
+               CAPABILITY_PROBE_SCRIPT, IMPORTER, validator, str(registry_path)]
     try:
-        first = CAPABILITY_PROBES.submit(subprocess.run, help_args, **options)
-        second = CAPABILITY_PROBES.submit(subprocess.run, validation_args, **options)
-        help_result = first.result()
-        validation_result = second.result()
-    except (OSError, subprocess.TimeoutExpired, RuntimeError):
-        # Both checks must succeed. A failed probe can never enable a manager.
+        # The 65-second outer bound covers at most two 30-second inner checks
+        # plus a bounded container start. No retry, cleanup or fallback.
+        pending = CAPABILITY_PROBES.submit(
+            subprocess.run, command, stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, text=True, timeout=65, check=False)
+        completed = pending.result()
+        if (completed.returncode != 0 or type(completed.stdout) is not str
+                or not 0 < len(completed.stdout) <= 65536):
+            return None
+        payload = json.loads(completed.stdout)
+    except (OSError, subprocess.TimeoutExpired, RuntimeError, ValueError, UnicodeError):
         return None
-    return help_result, validation_result
+    if (type(payload) is not dict or set(payload) != {"schema", "checks"}
+            or type(payload["schema"]) is not int or payload["schema"] != 1
+            or type(payload["checks"]) is not list or len(payload["checks"]) != 2):
+        return None
+    for item in payload["checks"]:
+        if (type(item) is not dict or set(item) != {"code", "stdout"}
+                or type(item["code"]) is not int or type(item["stdout"]) is not str
+                or len(item["stdout"]) > 65536):
+            return None
+    return payload["checks"]
 
 
 def importer_v2_capability(expected_sha):
-    """Immutable pinned importer: both CLI and same-registry digest must pass."""
-    uid, gid = owner_ids()
-    checked = run_capability_probes(
-        [*docker_prefix(uid, gid), "--entrypoint", IMPORTER, IMAGE, "--help"],
-        [*docker_prefix(uid, gid), "--entrypoint", "/usr/bin/python3", IMAGE,
-         "/usr/local/bin/coloring_pages_categories.py",
-         "validate", "--registry", str(MANAGED_PATH)],
-    )
+    """Both importer help flags and exact categories digest must succeed."""
+    checked = run_capability_probes("/usr/local/bin/coloring_pages_categories.py", MANAGED_PATH)
     if checked is None:
         return False
     help_result, probe = checked
-    return (help_result.returncode == 0 and "--categories-sha256" in help_result.stdout
-            and "--additional-category" in help_result.stdout
-            and probe.returncode == 0 and ("sha256=" + expected_sha) in probe.stdout.split())
+    return (help_result["code"] == 0 and "--categories-sha256" in help_result["stdout"]
+            and "--additional-category" in help_result["stdout"]
+            and probe["code"] == 0 and ("sha256=" + expected_sha) in probe["stdout"].split())
 
 def managed_verified(doc, digest):
     try:
@@ -403,20 +434,14 @@ def read_topics_registry():
 
 
 def immutable_topics_capability(digest):
-    """Immutable pinned importer: both CLI and same-registry digest must pass."""
-    uid, gid = owner_ids()
-    checked = run_capability_probes(
-        [*docker_prefix(uid, gid), "--entrypoint", IMPORTER, IMAGE, "--help"],
-        [*docker_prefix(uid, gid), "--entrypoint", "/usr/bin/python3", IMAGE,
-         "/usr/local/bin/coloring_pages_topics.py", "validate",
-         "--registry", str(TOPICS_PATH)],
-    )
+    """Both importer help flags and exact Topics digest must succeed."""
+    checked = run_capability_probes("/usr/local/bin/coloring_pages_topics.py", TOPICS_PATH)
     if checked is None:
         return False
     help_result, probe = checked
-    return (help_result.returncode == 0 and "--topics-sha256" in help_result.stdout
-            and "--additional-topic" in help_result.stdout
-            and probe.returncode == 0 and ("sha256=" + digest) in probe.stdout.split())
+    return (help_result["code"] == 0 and "--topics-sha256" in help_result["stdout"]
+            and "--additional-topic" in help_result["stdout"]
+            and probe["code"] == 0 and ("sha256=" + digest) in probe["stdout"].split())
 
 def topics_runtime_verified(doc, digest):
     try:
