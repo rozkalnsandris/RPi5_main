@@ -3,6 +3,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
 const path = require("node:path");
+// #1332 source-only operator tests run in the existing ADMIN navigation CI path.
+require("node:child_process").execFileSync("python3", [path.join(__dirname, "test-ausmalwiese-category-topic-links-bulk-v1.py")], {timeout:30000, stdio:"pipe"});
 const html = fs.readFileSync(path.join(__dirname, "../ops/admin/coloring-pages/index.html"), "utf8");
 const script = html.split("<script>")[1].split("</script>")[0];
 const categoryPage = html.slice(html.indexOf('data-page="categories"'), html.indexOf('data-page="activity"'));
@@ -10,7 +12,7 @@ assert.equal((categoryPage.match(/class="admin-panel categories-panel"/g)||[]).l
 assert.equal((categoryPage.match(/class="container categories-shell"/g)||[]).length,1,"no second Topics container");
 assert.equal((categoryPage.slice(0,categoryPage.indexOf('<dialog id="topicsDialog"')).match(/<h2\b/g)||[]).length,1,"one top-level management heading; edit dialog has its own title");
 assert.match(categoryPage,/<section class="topics-inline" id="managedTopicsPanel" aria-labelledby="managedTopicsHeading">/,"topic tools are nested inside Categories");
-assert.match(categoryPage,/<h3 id="managedTopicsHeading" tabindex="-1">Topic tools<\/h3>/,"legacy #topics bookmark focus target retained");
+assert.match(categoryPage,/<h3 id="managedTopicsHeading" tabindex="-1">Unlinked topic inventory<\/h3>/,"legacy #topics bookmark focus target retained");
 assert.ok(categoryPage.indexOf('id="categoriesRows"')<categoryPage.indexOf('id="topicsOtherDetails"'),"unlinked topics follow category rows");
 assert.ok(categoryPage.indexOf('id="topicsOtherDetails"')<categoryPage.indexOf('id="topicsCreate"'),"Add topic remains within the same card");
 assert.match(categoryPage,/id="categoriesRows"[^>]*aria-label="Categories and linked topics"/,"category rows explain linked topics");
@@ -296,7 +298,7 @@ async function managerReady(h){await h.s.refreshTaxonomyManagers();await h.s.cat
   assert.equal(grouped.ids.categoriesRows.children[1].children[3].children[1].children.length,2,"many-to-many links");
   assert.equal(grouped.ids.categoriesRows.children[2].children[3].children[1].children.length,1);
   assert.equal(grouped.ids.categoriesRows.children[2].children[3].children[1].children[0].children[1].textContent,"0 catalog · 1 archive");
-  assert.equal(grouped.ids.topicsOtherSummary.textContent,"Unlinked topics (1)");
+  assert.equal(grouped.ids.topicsOtherSummary.textContent,"Unlinked topics (1) — global inventory");
   assert.equal(grouped.ids.topicsRows.children.length,1);
   assert.equal(grouped.ids.topicsRows.children[0].children[0].children[0].textContent,"🎄 Weihnachten");
   assert.equal(grouped.ids.topicsRows.children[0].children[2].children[1].disabled,false);
@@ -317,12 +319,31 @@ async function managerReady(h){await h.s.refreshTaxonomyManagers();await h.s.cat
   grouped.state.archiveSha=null;grouped.state.entries=[{id:"0000007",category:"tiere",topics:[]}];grouped.state.archiveEntries=[];
   await managerReady(grouped);
   assert.equal(grouped.ids.categoriesRows.children[0].children[3].children[1].children[0].children[1].textContent,"0 catalog · 0 archive","zero-use linked topic shown");
-  assert.equal(grouped.ids.topicsOtherSummary.textContent,"Unlinked topics (1)");
+  assert.equal(grouped.ids.topicsOtherSummary.textContent,"Unlinked topics (1) — global inventory");
   grouped.state.links.links=[];
   await managerReady(grouped);
   assert.equal(grouped.ids.categoriesRows.children[0].children[3].children[0].textContent,"No linked topics — open to link");
    assert.equal(grouped.ids.categoriesRows.children[0].children[3].children[2].textContent,"No topics linked to this category. Choose one below to link it.","empty category explains explicit linking");
   assert.equal(grouped.ids.topicsRows.children.length,3,"usage never fabricates links");
+  // #1332: Category-first Create is navigation, never an implicit second POST.
+  const categoryActions=grouped.ids.categoriesRows.children[0].children[3].children.at(-1);
+  assert.equal(categoryActions.children.length,3,"link picker and explicit Create topic for each Category");
+  assert.equal(categoryActions.children[1].textContent,"+ Link existing topic");
+  const createTopic=categoryActions.children[2];
+  assert.equal(createTopic.textContent,"+ Create topic");
+  const beforeWrites=grouped.calls.filter(x=>x.options.method==="POST").length;
+  createTopic.onclick();
+  assert.equal(grouped.ids.topicsCreate.open,true);
+  assert.equal(grouped.ids.topicNewKind.value,"evergreen");
+  assert.equal(grouped.ids.topicsCreate.querySelector("summary").focused,true);
+  assert.match(grouped.ids.topicCreateHelp.textContent,/remains unlinked/);
+  assert.equal(grouped.calls.filter(x=>x.options.method==="POST").length,beforeWrites,
+    "opening Create never mutates either registry");
+  grouped.ids.topicNewId.value="unsaved-draft";
+  grouped.ids.categoriesRows.children[2].children[3].children.at(-1).children[2].onclick();
+  assert.equal(grouped.ids.topicNewId.value,"unsaved-draft","draft preserved across Category entry points");
+  assert.equal(grouped.ids.topicNewKind.value,"evergreen","draft kind not rewritten");
+
   const select=grouped.ids.categoriesRows.children[0].children[3].children.at(-1).children[0];
   select.value="bauernhof";
   await grouped.ids.categoriesRows.children[0].children[3].children.at(-1).children[1].onclick();
@@ -379,6 +400,19 @@ async function managerReady(h){await h.s.refreshTaxonomyManagers();await h.s.cat
   assert.equal(progressive.ids.verifiedTaxonomy.hidden,true);
   assert.equal(progressive.ids.taxonomyPreviewRows.children.length,3,"failed capability never erases read-only taxonomy");
 
+  const seasonalCreate=harness();await ready(seasonalCreate);
+  seasonalCreate.state.managed={enabled:true,revision:1,registry_sha256:"f".repeat(64),
+    categories:seasonalCreate.state.taxonomy.categories,
+    counts:{tiere:{catalog:0,archive:0},lernen:{catalog:0,archive:0},jahreszeiten:{catalog:0,archive:0}}};
+  seasonalCreate.state.managedTopics={enabled:true,revision:1,registry_sha256:"e".repeat(64),
+    topics:[{id:"weihnachten",label:"Weihnachten",icon:"W",kind:"seasonal"}],
+    counts:{weihnachten:{catalog:0,archive:0}}};
+  await seasonalCreate.s.refreshTaxonomyManagers();
+  const seasonAction=seasonalCreate.ids.categoriesRows.children[2].children[3].children.at(-1).children[2];
+  seasonAction.onclick();
+  assert.equal(seasonalCreate.ids.topicNewKind.value,"seasonal","season Category preselects seasonal kind");
+  assert.equal(seasonalCreate.calls.filter(x=>x.options.method==="POST").length,0,
+    "Create UI entry point does not link silently");
   const inactive=harness();await ready(inactive);await inactive.s.loadManagedCategories();
   assert.equal(inactive.ids.categoriesRows.hidden,true,"unavailable categories hide list");
   assert.equal(inactive.ids.categoriesCreate.hidden,true,"unavailable categories hide creation");

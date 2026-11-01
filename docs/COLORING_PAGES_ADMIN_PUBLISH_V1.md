@@ -949,3 +949,82 @@ content, without changing the server's protected GET latency.
 backend changes, service restart, host Docker commands, registry mutation or
 LIVE testing beyond existing approved read-only surfaces. A separate precise
 owner LIVE authorization is required before any deployment.
+
+
+## #1332 — Category-first Topic creation and reviewed 21-link mapping plan (source-only)
+
+The ADMIN Categories & Topics screen now has **one Category-first action flow**:
+expand a Category and choose **+ Link existing topic** or **+ Create topic**.
+Create opens the existing Topic form in the same management card, preselecting
+`seasonal` only for `jahreszeiten` and `evergreen` for nonseasonal
+Categories when that form has no existing draft. It preserves unsaved input,
+opens the native disclosure, and moves keyboard focus to its summary. The new
+Topic is **not linked by creation**; it appears in the collapsed **Unlinked
+topic inventory** until the owner separately selects and confirms its link.
+No automatic second API POST, no guessed category inference, and no two-file
+transaction. Existing exact If-Match, CSRF, protected registry checks, shared
+publishing lock, and Add pages/Catalog/Edit legacy safeguards are preserved.
+The global inventory remains present for finding and editing unlinked Topics.
+
+### Frozen exact 21-link candidate (not applied)
+
+A pre-existing empty registry remains valid. The reviewed source operator
+`scripts/ausmalwiese-category-topic-links-bulk-v1.py` encodes the following
+*proposal*, which has **not** been approved for LIVE use:
+
+| Category | Proposed existing Topic IDs |
+| --- | --- |
+| `jahreszeiten` | `winter`, `fasching`, `fruehling`, `ostern`, `muttertag`, `sommer`, `halloween`, `herbst`, `sankt-martin`, `advent`, `nikolaus`, `weihnachten` |
+| `tiere` | `dinosaurier`, `bauernhof`, `meerestiere` |
+| `lernen` | `obst`, `gemuese`, `weltraum`, `blumen`, `sport` |
+| `figuren` | `einhoerner` |
+| `fahrzeuge`, `alphabet` | no links in this candidate |
+
+The operator's **default is no execution**: only `--plan` prints an inert,
+sorted, canonical 21-pair plan and its prospective output SHA-256; it
+does not access RPi5 runtime, the registry or any network. The private
+`category-topic-links.json` schema remains exactly
+`rozkalns.rpi5-main.category-topic-links.v1`: on *separately authorized*
+apply, revision 1 with `links: []` would become revision 2 with exactly 21
+sorted unique pairs. No public category/topic IDs, archive entries or
+catalog page metadata are modified.
+
+**Separate LIVE owner authorization required**, naming exact host `rpi5`,
+source main SHA, reviewed operator Git blob, file target
+`/srv/coloring-pages-content/state/admin-publish/category-topic-links.json`,
+existing registry SHA-256
+`fa0f5200058f6e67e138385fcadb244283539bfb7295e74d1187d2f792b4501c`,
+category SHA-256
+`fe76364e6245b772d21fb080d982dcbb90de420dd2f2a1056c7a1248d7cab635`,
+topic SHA-256
+`a13d970821e96e86ae8a574417610ae2239178c363bbf83c014c7d8b61d1201a`,
+the exact **plan output SHA** printed by a fresh `--plan`, and precisely
+`ONE_ATOMIC_21_LINK_REGISTRY_REPLACE` without restart or registry
+permission changes. This PR does **not** approve that mutation; a successful
+source merge does **not** deploy the ADMIN HTML or apply any link.
+
+Before the first stage-file creation, the operator checks the exact clean
+Git HEAD/branch/origin and its own Git blob; unprivileged `andris`
+identity, fixed target path, regular single-link `0600` ownership, no
+symlinks, exact empty revision-1 bytes and SHA, absent abandoned staging
+files; held nonblocking shared publishing lock; no queued/running jobs;
+and canonical current Category/Topic IDs, kinds and SHA digests from
+protected same-origin APIs. It refuses mismatches instead of inferring,
+repairing or overwriting. After successful preflight, the **single**
+operation stages 21 links, fsyncs, performs exactly **one** atomic
+`os.replace` and fsyncs the directory; read-back verifies bytes,
+ownership and mode. The first stage-file creation consumes the one-time
+authority. Any error or drift means **STOP** without retry, rollback,
+cleanup, service restart or alternate mutation. Do not execute `--apply`
+without the new owner LIVE authorization and a fresh exact-state preflight.
+
+Offline regressions exercise deterministic all-21 serialization and SHA,
+seasonal compatibility, rejection of missing/duplicate/malformed IDs,
+mode/hardlink/symlink guards, interrupted staging, simulated single
+replacement and retained failure evidence, plus the existing category
+management UI tests (including explicit create without silent linking).
+
+Accessibility basis: [W3C disclosure pattern](https://www.w3.org/WAI/ARIA/apg/patterns/disclosure/)
+and [GOV.UK checkboxes](https://design-system.service.gov.uk/components/checkboxes/);
+native details/summary and grouped Category controls are used rather
+than a new custom ARIA tree or implicit selected associations.

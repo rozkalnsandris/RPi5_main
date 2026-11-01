@@ -471,15 +471,15 @@ html{overflow-y:scroll}
         </form>
       </details>
       <section class="topics-inline" id="managedTopicsPanel" aria-labelledby="managedTopicsHeading">
-        <h3 id="managedTopicsHeading" tabindex="-1">Topic tools</h3>
-      <p class="categories-note">Link existing topics within a category above. Manage topics not linked to any category here; unlinking never deletes them.</p>
+        <h3 id="managedTopicsHeading" tabindex="-1">Unlinked topic inventory</h3>
+      <p class="categories-note">Expand a category above to link or create a topic. Unlinked topics are listed below for global editing; creating a topic does not link it automatically.</p>
       <p id="topicsStatus" class="categories-status" role="status" aria-live="polite">Checking managed Topics…</p>
       <details id="topicsOtherDetails" class="topics-other" hidden>
         <summary id="topicsOtherSummary">Other topics</summary>
         <ul id="topicsRows" class="categories-list" aria-label="Topics not linked to a category" hidden></ul>
       </details>
       <p id="topicsUnusedEmpty" class="categories-note" hidden>All topics are shown in the categories above.</p>
-      <details id="topicsCreate" class="categories-add" hidden><summary>Add topic</summary>
+      <details id="topicsCreate" class="categories-add" hidden><summary>Create a new topic</summary><p id="topicCreateHelp" class="categories-note">Create a Topic first; then link it explicitly under a category. No automatic assignment.</p>
         <form id="topicsForm" class="categories-create topics-create"><div class="field"><label for="topicNewId">Topic ID</label><input id="topicNewId" maxlength="48" pattern="[a-z0-9]+(-[a-z0-9]+)*" required></div>
 <div class="field"><label for="topicNewLabel">German label</label><input id="topicNewLabel" maxlength="80" required></div>
 <div class="field"><label for="topicNewIcon">Icon</label><input id="topicNewIcon" maxlength="24" required></div>
@@ -1141,17 +1141,32 @@ function renderGroupedTopicUsage(){
      snapshot.topics.filter(function(t){return compatibleTopic(t.kind,[c.id])&&!pairs.some(function(p){return p.topic===t.id})}).forEach(function(t){
        var opt=document.createElement("option");opt.value=t.id;opt.textContent=t.label;select.appendChild(opt);
      });
-     var link=document.createElement("button");link.type="button";link.className="secondary";link.textContent="+ Link topic";
+     var link=document.createElement("button");link.type="button";link.className="secondary";link.textContent="+ Link existing topic";
      link.disabled=select.options.length===1||linksWriting;
      link.onclick=function(){if(select.value)return writeCategoryTopicLink("link",c.id,select.value)};
-     actions.append(select,link);details.appendChild(actions);
+     var create=document.createElement("button");create.type="button";create.className="secondary";
+      create.textContent="+ Create topic";create.disabled=!topicsManagedEnabled||managerPreviewPending||topicsWriting;
+      create.setAttribute("aria-label","Create topic for "+c.label+" (link separately)");
+      create.onclick=function(){
+        if(!topicsManagedEnabled||managerPreviewPending)return;
+        // Creating a Topic is one registry mutation; linking requires another explicit action.
+        topicsCreate.open=true;
+        var kind=document.getElementById("topicNewKind"),name=document.getElementById("topicNewLabel");
+        var draft=document.getElementById("topicNewId").value||name.value||
+          document.getElementById("topicNewIcon").value;
+        if(!draft){kind.value=c.id==="jahreszeiten"?"seasonal":"evergreen";topicsSeason("topicNew")}
+        document.getElementById("topicCreateHelp").textContent=
+          "Create a topic for "+c.label+". It remains unlinked until you explicitly choose Link existing topic above.";
+        topicsCreate.querySelector("summary").focus();
+      };
+      actions.append(select,link,create);details.appendChild(actions);
    }
    row.appendChild(details);
  });
  var remaining=snapshot.topics.filter(function(t){return !assigned.has(t.id)});
  topicsRows.replaceChildren(...remaining.map(function(t){return managedTopicRow(t,snapshot,null,null)}));
  topicsOtherDetails.hidden=!remaining.length;
- topicsOtherSummary.textContent="Unlinked topics ("+remaining.length+")";
+ topicsOtherSummary.textContent="Unlinked topics ("+remaining.length+") — global inventory";
  topicsRows.hidden=!remaining.length;topicsUnusedEmpty.hidden=!!remaining.length;
  topicsStatus.textContent=snapshot.topics.length+" topics · "+remaining.length+" globally unlinked · revision "+snapshot.revision;
  updateCategoryTopicUsageCounts();
@@ -1195,7 +1210,7 @@ async function writeManagedTopic(raw){
     if(raw.action==="update")topicsDialog.close();
     await loadCategories();await loadCatalog();await refreshTaxonomyManagers();
     if(raw.action==="create"){topicsForm.reset();topicsSeason("topicNew");topicsCreate.open=false}
-    topicsStatus.textContent="Saved. Add pages and Catalog topics refreshed.";
+    topicsStatus.textContent=raw.action==="create"?"Topic created but not linked. Expand its Category and choose Link existing topic.":"Saved. Add pages and Catalog topics refreshed.";
   }catch(e){
     var stale=e.httpStatus===412;
     await loadManagedTopics();
