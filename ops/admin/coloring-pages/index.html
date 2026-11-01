@@ -450,7 +450,7 @@ html{overflow-y:scroll}
       </div>
       <p class="categories-note">IDs are permanent. Original or in-use categories cannot be deleted.</p>
       <p id="categoriesStatus" class="categories-status" role="status" aria-live="polite">Checking registry…</p>
-      <p id="topicGroupsStatus" class="categories-note" role="status" aria-live="polite">Expand a category to view its used topics.</p>
+      <p id="topicGroupsStatus" class="categories-note" role="status" aria-live="polite">Expand a category to view its explicitly linked topics, even without published pages.</p>
       <ul id="categoriesRows" class="categories-list" aria-label="Categories and usage" hidden></ul>
       <details id="categoriesCreate" class="categories-add" hidden>
         <summary>Add category</summary>
@@ -463,11 +463,11 @@ html{overflow-y:scroll}
     </article></div>
     <div class="container categories-shell topics-under-categories"><article class="admin-panel categories-panel" id="managedTopicsPanel" aria-labelledby="managedTopicsHeading">
       <div class="panel-heading"><div class="panel-title"><div><span class="panel-kicker">Under Categories</span><h2 id="managedTopicsHeading" tabindex="-1">Topics</h2></div></div></div>
-      <p class="categories-note">Used topics appear inside their Categories above. A topic can appear in several categories when pages use both. Topics without matching page usage remain below; IDs are permanent and referenced topics cannot be removed.</p>
+      <p class="categories-note">Manage explicit topic links inside each category. Unlink never deletes a topic. Globally unlinked topics appear below; usage counts are separate.</p>
       <p id="topicsStatus" class="categories-status" role="status" aria-live="polite">Checking managed Topics…</p>
       <details id="topicsOtherDetails" class="topics-other" hidden>
         <summary id="topicsOtherSummary">Other topics</summary>
-        <ul id="topicsRows" class="categories-list" aria-label="Topics not shown in Categories" hidden></ul>
+        <ul id="topicsRows" class="categories-list" aria-label="Topics not linked to a category" hidden></ul>
       </details>
       <p id="topicsUnusedEmpty" class="categories-note" hidden>All topics are shown in the categories above.</p>
       <details id="topicsCreate" class="categories-add" hidden><summary>Add topic</summary>
@@ -896,6 +896,16 @@ async function permanentDeleteArchiveEntry(x){var typed=window.prompt("PERMANENT
 function activityLabel(e){var names={catalog_edit:"Catalog edit",catalog_archive:"Archived",catalog_restore:"Restored",catalog_delete_started:"Permanent deletion started",catalog_delete:"Permanently deleted",job_terminal:"Publishing job",public_verified:"Publication verified",service_start:"Admin service started"};return names[e.event]||e.event}
 async function loadActivity(){activityCount.textContent="Loading activity…";try{var d=await adminFetch("/api/activity");activityCount.textContent=d.count+" events";activityList.innerHTML="";if(!d.events.length){activityList.innerHTML='<p class="catalog-empty">No activity yet.</p>';return}d.events.forEach(function(e){var row=document.createElement("div");row.className="activity-item";var title=document.createElement("strong");title.textContent=activityLabel(e)+(e.page_id?" · "+e.page_id:"");var time=document.createElement("small");time.textContent=new Date(e.ts).toLocaleString("en-GB");var meta=document.createElement("div");meta.className="activity-meta";var level=document.createElement("span");level.className="activity-level "+e.level;level.textContent=e.level;meta.appendChild(level);["action","changed_fields","job_status","step_status","sitemap_status","error_code","archive_state","deleted_file_count","deleted_byte_count"].forEach(function(k){if(e[k]!==undefined){var s=document.createElement("span");s.className="catalog-tag";s.textContent=k+": "+e[k];meta.appendChild(s)}});row.append(title,time,meta);activityList.appendChild(row)})}catch(e){activityCount.textContent="Could not load activity.";activityList.innerHTML='<p class="catalog-empty">'+escapeHtml(e.message)+'</p>'}}
 var managedCategoryEtag="",managedCategoryEnabled=false,managedCategorySnapshot=null,managedTopicsSnapshot=null,categoryTopicUsage=null,categoryTopicUsageError="",expandedCategories=new Set();
+var topicLinks=null,topicLinksEnabled=false,topicLinksReason="Not loaded",linksWriting=false;
+async function loadCategoryTopicLinks(){
+  try{
+    var x=await adminFetch("/api/category-topics/manage");
+    if(!x.enabled||!/^[0-9a-f]{64}$/.test(x.registry_sha256||"")||!Array.isArray(x.links)){
+      topicLinks=null;topicLinksEnabled=false;topicLinksReason=x.reason||"Assignments require an authorized seed.";return;
+    }
+    topicLinks=x;topicLinksEnabled=true;topicLinksReason="";
+  }catch(e){topicLinks=null;topicLinksEnabled=false;topicLinksReason="Assignments unavailable: "+e.message}
+}
 var topicGroupsStatus=document.getElementById("topicGroupsStatus"),topicsUnusedEmpty=document.getElementById("topicsUnusedEmpty"),
  topicsOtherDetails=document.getElementById("topicsOtherDetails"),topicsOtherSummary=document.getElementById("topicsOtherSummary");
 var categoriesStatus=document.getElementById("categoriesStatus"),
@@ -934,7 +944,7 @@ async function loadManagedCategories(){
      actions.append(rename);
      if(!["tiere","fahrzeuge","alphabet","lernen","figuren","jahreszeiten"].includes(c.id)){
        var remove=document.createElement("button");remove.type="button";remove.className="danger";remove.textContent="Delete";
-       remove.disabled=!!(count.catalog||count.archive);
+       remove.disabled=!!(count.catalog||count.archive||(topicLinksEnabled&&topicLinks.links.some(function(p){return p.category===c.id})));
        remove.setAttribute("aria-label","Delete "+c.label+(remove.disabled?" (in use)":""));
        remove.onclick=async function(){
          var check=window.prompt("To delete this unused category, type its exact ID: "+c.id);
@@ -999,30 +1009,29 @@ function topicsSeason(p){
   document.getElementById(p+"Kind").onchange=function(){topicsSeason(p)};
   topicsSeason(p);
 });
-function managedTopicRow(t,snapshot,localCount,context){
-  var globalCount=(snapshot.counts||{})[t.id]||{catalog:0,archive:0};
-  var count=localCount||globalCount;
-  var row=document.createElement("li");row.className="category-row";
-  var main=document.createElement("div");main.className="category-main";
-  var label=document.createElement("strong");label.className="category-label";label.textContent=t.icon+" "+t.label;
-  var slug=document.createElement("span");slug.className="category-id";slug.textContent=t.id+" · "+t.kind;
-  main.append(label,slug);
-  var usage=document.createElement("span");usage.className="category-usage";
-  usage.textContent=count.catalog+" catalog · "+count.archive+" archive";
-  var actions=document.createElement("div");actions.className="category-buttons";
-  var edit=document.createElement("button");edit.type="button";edit.className="secondary";edit.textContent="Edit";
-  edit.setAttribute("aria-label","Edit "+t.label+(context?" in "+context:""));
-  edit.onclick=function(){topicsFill("topicEdit",t);topicsSeason("topicEdit");topicsDialog.showModal()};
-  var remove=document.createElement("button");remove.type="button";remove.className="danger";remove.textContent="Delete";
-  remove.disabled=!!(globalCount.catalog||globalCount.archive||snapshot.topics.length===1);
-  remove.setAttribute("aria-label","Delete "+t.label+(context?" in "+context:"")+(remove.disabled?" (in use)":""));
-  remove.onclick=async function(){
-    if(topicsWriting)return;
-    var confirmation=window.prompt("Type the exact topic ID to delete: "+t.id);
-    if(confirmation===t.id)await writeManagedTopic({action:"delete",id:t.id,confirm_id:confirmation});
-  };
-  actions.append(edit,remove);row.append(main,usage,actions);
-  return row;
+function managedTopicRow(t,snapshot,localCount,categoryId){
+ var global=(snapshot.counts||{})[t.id]||{catalog:0,archive:0},count=localCount||global;
+ var row=document.createElement("li");row.className="category-row";
+ var main=document.createElement("div");main.className="category-main";
+ var label=document.createElement("strong");label.className="category-label";label.textContent=t.icon+" "+t.label;
+ var slug=document.createElement("span");slug.className="category-id";slug.textContent=t.id+" · "+t.kind;main.append(label,slug);
+ var usage=document.createElement("span");usage.className="category-usage";usage.textContent=count.catalog+" catalog · "+count.archive+" archive";
+ var actions=document.createElement("div");actions.className="category-buttons";
+ var edit=document.createElement("button");edit.type="button";edit.className="secondary";edit.textContent="Edit topic";
+ edit.setAttribute("aria-label","Edit "+t.label);
+ edit.onclick=function(){topicsFill("topicEdit",t);topicsSeason("topicEdit");topicsDialog.showModal()};actions.append(edit);
+ var remove=document.createElement("button");remove.type="button";remove.className="danger";
+ if(categoryId){
+   remove.textContent="Unlink";remove.disabled=!topicLinksEnabled||linksWriting;
+   remove.setAttribute("aria-label","Unlink "+t.label+" from "+categoryText(categoryId));
+   remove.onclick=function(){if(window.confirm("Unlink "+t.label+" from "+categoryText(categoryId)+"? This will not delete the topic."))writeCategoryTopicLink("unlink",categoryId,t.id)};
+ }else{
+   remove.textContent="Delete topic";
+   remove.disabled=!!(global.catalog||global.archive||snapshot.topics.length===1||(topicLinksEnabled&&topicLinks.links.some(function(p){return p.topic===t.id})));
+   remove.setAttribute("aria-label","Delete "+t.label+(remove.disabled?" (referenced)":""));
+   remove.onclick=function(){if(topicsWriting)return;var id=window.prompt("Type the exact topic ID to delete: "+t.id);if(id===t.id)writeManagedTopic({action:"delete",id:t.id,confirm_id:id})};
+ }
+ actions.append(remove);row.append(main,usage,actions);return row;
 }
 function topicUsageFromEntries(catalog,archive){
   if(!catalog||!archive||!Array.isArray(catalog.entries)||catalog.count!==catalog.entries.length
@@ -1055,53 +1064,57 @@ async function loadCategoryTopicUsage(){
   }catch(e){categoryTopicUsageError=e.message||"Usage unavailable";}
 }
 function renderGroupedTopicUsage(){
-  if(!managedCategorySnapshot||!managedTopicsSnapshot||!categoryTopicUsage){
-    topicGroupsStatus.textContent="Category-topic usage unavailable. All topics remain listed below."
-      +(categoryTopicUsageError?" "+categoryTopicUsageError:"");
-    if(managedTopicsSnapshot){
-      topicsOtherDetails.hidden=false;topicsOtherDetails.open=true;
-      topicsOtherSummary.textContent="All topics (usage unavailable)";
-      topicsRows.hidden=false;
-    }else{topicsOtherDetails.hidden=true}
-    topicsUnusedEmpty.hidden=true;
-    return;
-  }
-  var assigned=new Set(),snapshot=managedTopicsSnapshot;
-  managedCategorySnapshot.categories.forEach(function(c,i){
-    var row=categoriesRows.children[i],counts=categoryTopicUsage[c.id]||Object.create(null);
-    var included=snapshot.topics.filter(function(t){
-      var n=counts[t.id];return n&&(n.catalog>0||n.archive>0);
-    });
-    included.forEach(function(t){assigned.add(t.id)});
-    if(!included.length){
-      var empty=document.createElement("p");empty.className="category-topics-empty";
-      empty.textContent="No topics used in pages.";
-      row.appendChild(empty);
-      return;
-    }
-    var details=document.createElement("details");details.className="category-topics";
-    details.open=expandedCategories.has(c.id);
-    details.ontoggle=function(){if(details.open)expandedCategories.add(c.id);else expandedCategories.delete(c.id)};
-    var summary=document.createElement("summary");
-    summary.textContent=included.length+" used topic"+(included.length===1?"":"s")+" — show / hide";
-    details.appendChild(summary);
-    var list=document.createElement("ul");list.className="category-topics-list";
-    list.setAttribute("aria-label","Topics used in "+c.label);
-    included.forEach(function(t){list.appendChild(managedTopicRow(t,snapshot,counts[t.id],c.label))});
-    details.appendChild(list);
-    row.appendChild(details);
-  });
-  var remaining=snapshot.topics.filter(function(t){return !assigned.has(t.id)});
-  var globallyUnused=remaining.every(function(t){
-    var n=(snapshot.counts||{})[t.id]||{catalog:0,archive:0};
-    return !n.catalog&&!n.archive;
-  });
-  topicsRows.replaceChildren(...remaining.map(function(t){return managedTopicRow(t,snapshot,null,"Other topics")}));
-  topicsOtherDetails.hidden=!remaining.length;
-  topicsOtherSummary.textContent=(globallyUnused?"Unused topics (":"Other topics (")+remaining.length+")";
-  topicsRows.hidden=!remaining.length;topicsUnusedEmpty.hidden=!!remaining.length;
-  topicsStatus.textContent=snapshot.topics.length+" topics · "+remaining.length+" not shown in categories · revision "+snapshot.revision;
-  topicGroupsStatus.textContent="Expand a category to see topics used by its catalog and archived pages. Counts are per category, not assignments.";
+ if(!managedCategorySnapshot||!managedTopicsSnapshot)return;
+ var snapshot=managedTopicsSnapshot,assigned=new Set();
+ managedCategorySnapshot.categories.forEach(function(c,i){
+   var row=categoriesRows.children[i],pairs=topicLinksEnabled?topicLinks.links.filter(function(p){return p.category===c.id}):[];
+   var counts=(categoryTopicUsage||{})[c.id]||Object.create(null);
+   var details=document.createElement("details");details.className="category-topics";
+   details.open=expandedCategories.has(c.id);
+   details.ontoggle=function(){if(details.open)expandedCategories.add(c.id);else expandedCategories.delete(c.id)};
+   var summary=document.createElement("summary");summary.textContent=pairs.length+" linked topic"+(pairs.length===1?"":"s")+" — show / hide";details.appendChild(summary);
+   var list=document.createElement("ul");list.className="category-topics-list";list.setAttribute("aria-label","Topics linked to "+c.label);
+   pairs.forEach(function(p){
+     var t=snapshot.topics.find(function(x){return x.id===p.topic});
+     if(t){assigned.add(t.id);list.appendChild(managedTopicRow(t,snapshot,counts[t.id]||{catalog:0,archive:0},c.id))}
+   });
+   details.appendChild(list);
+   if(!pairs.length){var empty=document.createElement("p");empty.className="category-topics-empty";empty.textContent=topicLinksEnabled?"No linked topics yet.":"Assignments unavailable.";details.appendChild(empty)}
+   if(topicLinksEnabled){
+     var actions=document.createElement("div");actions.className="category-buttons";
+     var select=document.createElement("select");select.setAttribute("aria-label","Topic to link to "+c.label);
+     var first=document.createElement("option");first.value="";first.textContent="Choose topic…";select.appendChild(first);
+     snapshot.topics.filter(function(t){return compatibleTopic(t.kind,[c.id])&&!pairs.some(function(p){return p.topic===t.id})}).forEach(function(t){
+       var opt=document.createElement("option");opt.value=t.id;opt.textContent=t.label;select.appendChild(opt);
+     });
+     var link=document.createElement("button");link.type="button";link.className="secondary";link.textContent="+ Link topic";
+     link.disabled=select.options.length===1||linksWriting;
+     link.onclick=function(){if(select.value)writeCategoryTopicLink("link",c.id,select.value)};
+     actions.append(select,link);details.appendChild(actions);
+   }
+   row.appendChild(details);
+ });
+ var remaining=snapshot.topics.filter(function(t){return !assigned.has(t.id)});
+ topicsRows.replaceChildren(...remaining.map(function(t){return managedTopicRow(t,snapshot,null,null)}));
+ topicsOtherDetails.hidden=!remaining.length;
+ topicsOtherSummary.textContent="Unlinked topics ("+remaining.length+")";
+ topicsRows.hidden=!remaining.length;topicsUnusedEmpty.hidden=!!remaining.length;
+ topicsStatus.textContent=snapshot.topics.length+" topics · "+remaining.length+" globally unlinked · revision "+snapshot.revision;
+ topicGroupsStatus.textContent=!topicLinksEnabled?topicLinksReason:"Assignments are saved independently of page usage."+(categoryTopicUsageError?" Usage unavailable: "+categoryTopicUsageError:"");
+}
+async function writeCategoryTopicLink(action,category,topic){
+ if(linksWriting||!topicLinksEnabled)return;
+ var snap=topicLinks;linksWriting=true;topicGroupsStatus.textContent="Saving "+action+"…";
+ try{
+   await adminFetch("/api/category-topics/manage",{method:"POST",
+     headers:{"Content-Type":"application/json","If-Match":catalogValidator(snap.registry_sha256)},
+     body:JSON.stringify({action:action,category:category,topic:topic,category_sha256:snap.category_sha256,topic_sha256:snap.topic_sha256})});
+   await refreshTaxonomyManagers();
+   topicGroupsStatus.textContent="Assignment saved.";
+ }catch(e){
+   await refreshTaxonomyManagers();
+   topicGroupsStatus.textContent=e.httpStatus===412?"Assignments changed. Review current links before another operation.":e.message;
+ }finally{linksWriting=false}
 }
 async function loadManagedTopics(){
   topicsStatus.textContent="Checking topics…";topicsManagedEnabled=false;topicsManagedEtag="";managedTopicsSnapshot=null;topicsUnusedEmpty.hidden=true;
@@ -1136,8 +1149,8 @@ async function writeManagedTopic(raw){
   }finally{topicsWriting=false}
 }
 async function refreshTaxonomyManagers(){
-  topicGroupsStatus.textContent="Checking category-topic usage…";
-  await Promise.all([loadManagedCategories(),loadManagedTopics(),loadCategoryTopicUsage()]);
+  topicGroupsStatus.textContent="Loading saved assignments and usage…";
+  await Promise.all([loadCategoryTopicLinks(),loadManagedCategories(),loadManagedTopics(),loadCategoryTopicUsage()]);
   renderGroupedTopicUsage();
 }
 topicsForm.onsubmit=function(e){e.preventDefault();
@@ -1152,7 +1165,7 @@ var pageInfo={
   overview:["Overview","Everything you need to manage Ausmalwiese in one place."],
   upload:["Add pages","Choose a ZIP file, review the images and publish them in the selected categories."],
   catalog:["Catalog","Find a page, edit its details or move it to the archive."],
-  categories:["Categories & Topics","Manage categories and the topics used with them in one place."],
+  categories:["Categories & Topics","Manage categories and explicitly linked topics."],
   edit:["Edit page","Update the title, categories, age range and difficulty."],
   archive:["Archive","Restore hidden pages or manage archived entries."],
   stats:["Statistics","Print activity, likes and catalog engagement."],
