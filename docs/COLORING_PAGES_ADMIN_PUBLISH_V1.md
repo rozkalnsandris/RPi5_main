@@ -78,16 +78,20 @@ At upload Step 3, choose one or more canonical categories. Selected category
 chips retain order: the first is the primary `category`, all selected values
 appear in ordered `categories[]`. Remove buttons are keyboard accessible and
 move focus back to the native selector. Removed categories become available again.
-No selection means Publish is disabled. `Topic (optional)` remains independent:
-seasonal topics require `jahreszeiten`, evergreen topics require at least one
-other category. Removing the only compatible category visibly clears the topic.
-Each ZIP PNG receives the same ordered categories in its own one-page activity.
+No selection means Publish is disabled. Topics are optional but must be
+explicitly linked to a chosen category: seasonal topics link only under
+`jahreszeiten`, evergreen topics under nonseasonal Categories. Removing a
+category leaves an incompatible selected Topic visible with a warning and
+blocks publishing until the selection is deliberately corrected. A missing or
+invalid private link registry also blocks new writes. Each ZIP PNG receives the
+same ordered categories in its own one-page activity.
 
 The Catalog and Archive display all selected category labels and the Catalog
 filter matches any assigned category. Editing permits category chip changes;
-an incompatible previously assigned topic is cleared, while other metadata,
-archive snapshots, restore, IDs, assets and legacy single-category records
-remain intact. The protected API validates exactly one primary, up to six
+existing valid but currently unlinked topics are retained for unchanged
+memberships. Changed memberships with unlinked Topics block saving rather
+than silently clearing selections. Other metadata, archive snapshots, restore,
+IDs, assets and legacy single-category records remain intact. The protected API validates exactly one primary, up to six
 distinct canonical IDs, canonical taxonomy SHA-256 and topic compatibility
 before job creation and again under the existing shared publication lock.
 The importer receives repeated `--additional-category` flags for secondaries.
