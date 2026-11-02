@@ -26,9 +26,9 @@ const sha=x=>x.repeat(64),c=[{id:"tiere",label:"Tiere"},{id:"lernen",label:"Lern
  links:{enabled:true,registry_sha256:sha("e"),category_sha256:sha("c"),topic_sha256:sha("d"),links:l}};
 const state={"/api/catalog":snapshot.catalog,"/api/categories":snapshot.taxonomy,"/api/categories/manage":snapshot.categories,
  "/api/topics/manage":snapshot.topics,"/api/category-topics/manage":snapshot.links};
-const calls=[],exports=[],revoked=[],copy=x=>JSON.parse(JSON.stringify(x));
+const calls=[],downloadBytes=[],revoked=[],copy=x=>JSON.parse(JSON.stringify(x));
 const ctx={window:{confirm:()=>true},document:{getElementById:k=>ids[k],createElement:k=>new Node(k)},
- Set,Map,Promise,URL:{createObjectURL(b){exports.push(b.bytes[0]);return "blob:test"},revokeObjectURL(u){revoked.push(u)}},
+ Set,Map,Promise,URL:{createObjectURL(b){downloadBytes.push(b.bytes[0]);return "blob:test"},revokeObjectURL(u){revoked.push(u)}},
  Blob:class{constructor(bytes){this.bytes=bytes}},
  fetch:async(u,o)=>{calls.push({u,o});assert.equal(o.method,"GET");assert.equal(o.cache,"no-store");return {ok:true,json:async()=>copy(state[u])}},
  console};
@@ -56,10 +56,10 @@ bad(s=>s.topics.topics[0].legacy_terms="bad");
  const first=ids.classificationRows.children[0].children[1].children.at(-1);
  first.children[1].click();
  assert.ok(ids.classificationMetrics.children.some(x=>x.textContent==="approved: 1"));
- await api.exportPlan();assert.equal(exports.length,1);assert.equal(revoked.length,1);
- assert.equal(JSON.parse(exports[0]).approved_changes.length,1);
+ await api.exportPlan();assert.equal(downloadBytes.length,1);assert.equal(revoked.length,1);
+ assert.equal(JSON.parse(downloadBytes[0]).approved_changes.length,1);
  state["/api/catalog"]={...snapshot.catalog,catalog_sha256:sha("9")};
- await api.exportPlan();assert.equal(exports.length,1);assert.equal(ids.classificationWorkspace.hidden,true);
+ await api.exportPlan();assert.equal(downloadBytes.length,1);assert.equal(ids.classificationWorkspace.hidden,true);
  assert.match(ids.classificationStatus.textContent,/Export blocked/);
  assert.ok(calls.every(x=>x.o.method==="GET"));
  console.log("Catalog classification read-only, review, stale, and export: PASS");
