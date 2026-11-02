@@ -333,6 +333,14 @@ html{overflow-y:scroll}
 .classification-row button{min-height:35px}
 @media(max-width:600px){.classification-row{grid-template-columns:45px minmax(0,1fr)}.classification-row img{width:45px}.classification-tools label{width:100%}.classification-tools input,.classification-tools select{width:100%;max-width:100%}}
 
+
+/* Catalog Topic discovery (#1313), native controls only */
+.catalog-toolbar{grid-template-columns:minmax(190px,1fr) repeat(2,minmax(150px,200px)) auto auto}
+.catalog-toolbar select{min-width:0}
+.catalog-topic-hint{font-size:12px;line-height:1.5;color:var(--muted);margin:-4px 0 12px}
+@media(max-width:1100px){.catalog-toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}.catalog-toolbar input{grid-column:1/-1}.catalog-toolbar .secondary{grid-column:auto}}
+@media(max-width:620px){.catalog-toolbar{grid-template-columns:minmax(0,1fr)}.catalog-toolbar input{grid-column:auto}}
+
 </style>
 </head>
 <body>
@@ -440,10 +448,14 @@ html{overflow-y:scroll}
           <input id="catalogSearch" type="search" placeholder="Search by title or ID…" autocomplete="off">
           <label class="sr-only" for="catalogFilter">Filter by category</label>
           <select id="catalogFilter"><option value="">All categories</option></select>
+          <label class="sr-only" for="catalogTopicFilter">Filter by Topic</label>
+          <select id="catalogTopicFilter" disabled aria-describedby="catalogTopicHint"><option value="">All Topics</option></select>
+          <button id="catalogReset" class="secondary" type="button">Reset filters</button>
           <button id="catalogRefresh" class="secondary" type="button">↻ Refresh</button>
         </div>
 
-        <div class="catalog-meta"><span id="catalogCount">Loading catalog…</span><span>Archiving hides a page from the website. You can restore it from Archive.</span></div>
+        <p class="catalog-topic-hint" id="catalogTopicHint" aria-live="polite">Topic filter requires a Catalog snapshot.</p>
+        <div class="catalog-meta"><span id="catalogCount" role="status" aria-live="polite">Loading catalog…</span><span>Archiving hides a page from the website. You can restore it from Archive.</span></div>
         <div id="catalogGrid" class="catalog-grid"></div>
         <nav class="pagination" aria-label="Catalog pages"><button id="catalogPrevious" class="secondary" type="button">← Previous</button><span id="catalogPageStatus" role="status"></span><button id="catalogNext" class="secondary" type="button">Next →</button></nav>
 
@@ -809,7 +821,7 @@ var file=document.getElementById("file"),drop=document.getElementById("drop"),fi
 previews=document.getElementById("previews"),categoryPicker=document.getElementById("categoryPicker"),categoryChoices=document.getElementById("categoryChoices"),chosenCategories=document.getElementById("chosenCategories"),topicPicker=document.getElementById("topicPicker"),topicChoices=document.getElementById("topicChoices"),chosenTopic=document.getElementById("chosenTopic"),editTopicPicker=document.getElementById("editTopicPicker"),editTopicChoices=document.getElementById("editTopicChoices"),editChosenTopics=document.getElementById("editChosenTopics"),publish=document.getElementById("publish"),
 process=document.getElementById("process"),steps=document.getElementById("steps"),success=document.getElementById("success"),
 results=document.getElementById("results"),resultTitle=document.getElementById("resultTitle"),errorBox=document.getElementById("error"),
-catalogGrid=document.getElementById("catalogGrid"),catalogSearch=document.getElementById("catalogSearch"),catalogFilter=document.getElementById("catalogFilter"),catalogRefresh=document.getElementById("catalogRefresh"),catalogCount=document.getElementById("catalogCount"),catalogFeedback=document.getElementById("catalogFeedback"),
+catalogGrid=document.getElementById("catalogGrid"),catalogSearch=document.getElementById("catalogSearch"),catalogFilter=document.getElementById("catalogFilter"),catalogTopicFilter=document.getElementById("catalogTopicFilter"),catalogTopicHint=document.getElementById("catalogTopicHint"),catalogRefresh=document.getElementById("catalogRefresh"),catalogCount=document.getElementById("catalogCount"),catalogFeedback=document.getElementById("catalogFeedback"),
 archiveGrid=document.getElementById("archiveGrid"),archiveCount=document.getElementById("archiveCount"),archiveRefresh=document.getElementById("archiveRefresh"),activityList=document.getElementById("activityList"),activityCount=document.getElementById("activityCount"),activityRefresh=document.getElementById("activityRefresh"),
 editDialog=document.getElementById("editDialog"),editDialogTitle=document.getElementById("editDialogTitle"),editForm=document.getElementById("editForm"),editId=document.getElementById("editId"),editTitle=document.getElementById("editTitle"),editCategoryPicker=document.getElementById("editCategoryPicker"),editCategoryChoices=document.getElementById("editCategoryChoices"),editChosenCategories=document.getElementById("editChosenCategories"),editAge=document.getElementById("editAge"),editDifficulty=document.getElementById("editDifficulty"),editSave=document.getElementById("editSave");
 var categoryLabels=Object.create(null),topicLabels=Object.create(null),topicKinds=Object.create(null),taxonomyVersion="";
@@ -973,7 +985,7 @@ async function loadCategories(){
     makeCategoryOptions(editCategoryChoices,editCategoryInputs,editSelectedCategories,refreshEditChips);
     topicInputs=Object.create(null);editTopicInputs=Object.create(null);
     await loadCategoryTopicLinks();
-    
+    updateCatalogTopicFilter();
     refreshUploadChips();refreshEditChips();
     if(managerPreviewPending)renderTaxonomyPreview();
   }catch(e){taxonomyVersion="";topicReady=false;publicationErr("Public categories and topics could not be loaded.");throw e}
@@ -989,8 +1001,46 @@ function renderJob(j){steps.innerHTML="";j.steps.forEach(function(s,i){var row=d
 function renderResults(items,partial){if(!items||!items.length)return;success.style.display="block";resultTitle.textContent=partial?"Partially complete — processed pages":"✓ Published successfully!";results.innerHTML="";items.forEach(function(x){var d=document.createElement("div");d.className="result";var status=x.status==="published"?"Published":"Imported";var link=x.url?"<br><a target=_blank rel=noopener href='"+x.url+"'>Open published page ↗</a>":"";d.innerHTML="<strong>"+escapeHtml(x.title)+"</strong><br><small>ID: "+escapeHtml(x.id)+" · "+status+"</small>"+link;results.appendChild(d)})}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 function showCatalogFeedback(m){clearTimeout(feedbackTimer);catalogFeedback.textContent=m;catalogFeedback.style.display="block";feedbackTimer=setTimeout(function(){catalogFeedback.style.display="none"},6000)}
-async function loadCatalog(){if(window.AdminClassification)window.AdminClassification.invalidate("Catalog refreshed. Analyze again.");catalogCount.textContent="Loading catalog…";try{var r=await fetch("/api/catalog",{headers:{"X-Ausmalwiese-Admin":"1"},cache:"no-store"});var d=await r.json();if(!r.ok)throw new Error(d.error||("HTTP "+r.status));catalogData=d;catalogEtag=catalogValidator(d.catalog_sha256);renderCatalog();document.getElementById("overviewCatalog").textContent=d.count;if(currentRoute.startsWith("edit/")&&!editBaseline)populateEdit()}catch(e){document.getElementById("overviewCatalog").textContent="—";if(currentRoute.startsWith("edit/")){document.getElementById("editMissing").textContent="Could not load the catalog. Return to Catalog and select Refresh."}catalogCount.textContent="Could not load the catalog.";catalogGrid.innerHTML='<p class="catalog-empty">'+escapeHtml(e.message)+'</p>'}}
-function filteredCatalog(){if(!catalogData)return[];var q=catalogSearch.value.trim().toLocaleLowerCase("de-DE"),cat=catalogFilter.value;return catalogData.entries.filter(function(x){return(!cat||categoryMembership(x).includes(cat))&&(!q||String(x.id).toLowerCase().includes(q)||String(x.title||"").toLocaleLowerCase("de-DE").includes(q))})}
+async function loadCatalog(){if(window.AdminClassification)window.AdminClassification.invalidate("Catalog refreshed. Analyze again.");catalogCount.textContent="Loading catalog…";try{var r=await fetch("/api/catalog",{headers:{"X-Ausmalwiese-Admin":"1"},cache:"no-store"});var d=await r.json();if(!r.ok)throw new Error(d.error||("HTTP "+r.status));catalogData=d;catalogEtag=catalogValidator(d.catalog_sha256);updateCatalogTopicFilter();renderCatalog();document.getElementById("overviewCatalog").textContent=d.count;if(currentRoute.startsWith("edit/")&&!editBaseline)populateEdit()}catch(e){catalogData=null;catalogEtag="";updateCatalogTopicFilter();document.getElementById("overviewCatalog").textContent="—";if(currentRoute.startsWith("edit/")){document.getElementById("editMissing").textContent="Could not load the catalog. Return to Catalog and select Refresh."}catalogCount.textContent="Could not load the catalog.";catalogGrid.innerHTML='<p class="catalog-empty">'+escapeHtml(e.message)+'</p>'}}
+// #1313: read-only Catalog Topic options. Page memberships never create registry links.
+function catalogEntryTopics(entry){
+ if(Array.isArray(entry.topics))return [...new Set(entry.topics.filter(function(id){return typeof id==="string"&&id.length>0}))];
+ return typeof entry.topic==="string"&&entry.topic?[entry.topic]:[];
+}
+function updateCatalogTopicFilter(){
+ var previous=catalogTopicFilter.value,cat=catalogFilter.value,all=document.createElement("option");
+ all.value="";all.textContent="All Topics";catalogTopicFilter.replaceChildren(all);
+ if(!catalogData||!Array.isArray(catalogData.entries)||!topicReady){
+  catalogTopicFilter.value="";catalogTopicFilter.disabled=true;
+  catalogTopicHint.textContent="Topic filtering requires a valid Catalog and taxonomy snapshot.";return;
+ }
+ var links=topicLinksEnabled&&topicLinks&&Array.isArray(topicLinks.links)?topicLinks.links:null;
+ var used=new Map(),linked=new Set();
+ catalogData.entries.forEach(function(entry){
+  if(!entry||!entry.id)return;
+  if(cat&&!categoryMembership(entry).includes(cat))return;
+  catalogEntryTopics(entry).forEach(function(id){used.set(id,(used.get(id)||0)+1)});
+ });
+ if(cat&&links)links.forEach(function(pair){
+  if(pair&&pair.category===cat&&typeof pair.topic==="string"&&Object.prototype.hasOwnProperty.call(topicLabels,pair.topic))linked.add(pair.topic);
+ });
+ var names=new Set([...used.keys(),...linked]);
+ [...names].sort(function(a,b){return (topicLabels[a]||a).localeCompare(topicLabels[b]||b,"de")}).forEach(function(id){
+  var option=document.createElement("option");option.value=id;
+  var suffix=" · "+(used.get(id)||0)+" pages";
+  if(cat&&links&&!linked.has(id))suffix+=" · legacy/unlinked";
+  if(cat&&!links)suffix+=" · link status unavailable";
+  option.textContent=(topicLabels[id]||id)+suffix;catalogTopicFilter.appendChild(option);
+ });
+ catalogTopicFilter.value=names.has(previous)?previous:"";
+ catalogTopicFilter.disabled=!names.size;
+ catalogTopicHint.textContent=!names.size?"No Topics available for this Catalog scope.":
+  cat?"Explicitly linked Topics and Topics already used on matching pages. Legacy/unlinked is not a saved association.":
+  "Only Topics actually used on published pages; no associations inferred.";
+}
+function resetCatalogFilters(){catalogSearch.value="";catalogFilter.value="";catalogTopicFilter.value="";catalogPage=1;updateCatalogTopicFilter();renderCatalog()}
+
+function filteredCatalog(){if(!catalogData)return[];var q=catalogSearch.value.trim().toLocaleLowerCase("de-DE"),cat=catalogFilter.value,topic=catalogTopicFilter.value;return catalogData.entries.filter(function(x){return(!cat||categoryMembership(x).includes(cat))&&(!topic||catalogEntryTopics(x).includes(topic))&&(!q||String(x.id).toLowerCase().includes(q)||String(x.title||"").toLocaleLowerCase("de-DE").includes(q))})}
 function renderCatalog(){if(!catalogData)return;var matches=filteredCatalog(),pages=Math.max(1,Math.ceil(matches.length/PAGE_SIZE));catalogPage=Math.min(catalogPage,pages);var start=(catalogPage-1)*PAGE_SIZE,items=matches.slice(start,start+PAGE_SIZE);catalogCount.textContent=matches.length?"Showing "+(start+1)+"–"+(start+items.length)+" of "+matches.length+" entries":"No matching pages found.";document.getElementById("catalogPageStatus").textContent=catalogPage+" / "+pages;document.getElementById("catalogPrevious").disabled=catalogPage===1;document.getElementById("catalogNext").disabled=catalogPage===pages;catalogGrid.innerHTML="";if(!items.length){catalogGrid.innerHTML='<p class="catalog-empty">No matching pages found.</p>';return}items.forEach(function(x){var card=document.createElement("article");card.className="catalog-card";var img=document.createElement("img");img.loading="lazy";img.alt="";img.src="https://ausmalwiese.de"+x.thumb;var h=document.createElement("h3");h.textContent=x.title||x.id;var meta=document.createElement("small");meta.textContent="ID: "+x.id;var tags=document.createElement("div");tags.className="catalog-tags";[...categoryMembership(x).map(categoryText),...(Array.isArray(x.topics)?x.topics.map(function(t){return topicLabels[t]||t}):[]),x.age+" years",({easy:"Easy",normal:"Medium",detailed:"Detailed"}[x.difficulty]||x.difficulty)].forEach(function(t){var s=document.createElement("span");s.className="catalog-tag";s.textContent=t;tags.appendChild(s)});var actions=document.createElement("div");actions.className="catalog-actions";var edit=document.createElement("a");edit.className="secondary";edit.textContent="Edit";edit.href="#edit/"+encodeURIComponent(x.id);edit.setAttribute("aria-label","Edit: "+(x.title||x.id));var open=document.createElement("a");open.className="secondary";open.target="_blank";open.rel="noopener";open.href="https://ausmalwiese.de/detail.html?id="+encodeURIComponent(x.id);open.textContent="Open ↗";var archive=document.createElement("button");archive.className="danger";archive.type="button";archive.textContent="Archive";archive.onclick=function(){archiveCatalogEntry(x)};actions.append(edit,open,archive);card.append(img,h,meta,tags,actions);catalogGrid.appendChild(card)})}
 function editValues(){return {id:editId.value,title:editTitle.value.trim(),category:editSelectedCategories[0]||"",categories:editSelectedCategories.slice(),topic:editSelectedTopics[0]||"",topics:editSelectedTopics.slice(),taxonomy_sha256:taxonomyVersion,age:editAge.value,difficulty:editDifficulty.value}}
 function editDirty(){return !!editBaseline&&JSON.stringify(editValues())!==editBaseline}
@@ -1497,7 +1547,9 @@ function routePage(){
 document.querySelector(".skip-link").onclick=function(event){event.preventDefault();document.getElementById("main").focus();document.getElementById("main").scrollIntoView()};
 window.addEventListener("hashchange",routePage);
 window.addEventListener("beforeunload",function(event){if(editDirty()||(upload&&!job)||(job&&!isTerminal(job))){event.preventDefault();event.returnValue=""}});
-catalogSearch.oninput=catalogFilter.onchange=function(){catalogPage=1;renderCatalog()};
+catalogSearch.oninput=catalogTopicFilter.onchange=function(){catalogPage=1;renderCatalog()};
+catalogFilter.onchange=function(){catalogTopicFilter.value="";catalogPage=1;updateCatalogTopicFilter();renderCatalog()};
+document.getElementById("catalogReset").onclick=resetCatalogFilters;
 document.getElementById("catalogPrevious").onclick=function(){catalogPage--;renderCatalog();document.getElementById("admin-title").scrollIntoView()};
 document.getElementById("catalogNext").onclick=function(){catalogPage++;renderCatalog();document.getElementById("admin-title").scrollIntoView()};
 catalogRefresh.onclick=refreshContentViews;archiveRefresh.onclick=loadArchive;activityRefresh.onclick=loadActivity;

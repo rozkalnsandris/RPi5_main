@@ -1,6 +1,14 @@
 # Ausmalwiese admin ZIP publisher v1
 
 
+## Catalog Category → Topic discovery (#1313) — source-only
+
+The protected Catalog has a native labeled Topic select alongside Category/title/ID search, a Reset control, responsive keyboard controls and live result/Topic hint text. Category changes reset the Topic value; search, category and topic filters intersect without touching pagination, Edit or Archive. The Topic filter stays disabled when the Catalog or canonical taxonomy is missing. Failed Catalog loads clear stale filter choices.
+
+When Category is selected, Topic options combine explicit saved association links with actual Topic metadata on matching published pages. Historical used Topics without an explicit link are labelled legacy/unlinked, never inferred as registry links. When link status is unknown, the label explicitly says link status unavailable. With all Categories selected, only Topics actually used on Catalog pages are offered. Zero saved links do not erase legacy page metadata. Filtering is GET-only; there are no source changes to catalog, registries, API or application files outside this UI, test and document scope.
+
+Design references: W3C WAI form labelling, GOV.UK Select, and MDN native HTML select. Merge and UI-only LIVE deploy remain separate owner gates.
+
 ## Bulk Catalog classification review (#1341) — source-only
 
 The existing protected Catalog section has **Analyze Catalog** / **Review classifications**. No proposals are generated until requested. The module sends only same-origin GETs with the existing ADMIN marker to the complete Catalog, public taxonomy, managed Categories, managed Topics and explicit private links registries. SHA-256 and count/ID checks fail closed on stale or incomplete snapshots; analysis repeats a catalog/taxonomy/link digest read. A catalog refresh invalidates in-memory review. No external AI provider, browser persistence, publication, catalog edit or runtime mutation is used.
