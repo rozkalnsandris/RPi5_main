@@ -21,6 +21,7 @@ import sqlite3
 import subprocess
 import tempfile
 import time
+import traceback
 
 ROOT = Path(__file__).resolve().parents[1]
 ARCHIVE = Path("/input/goatcounter-v2.7.0-linux-amd64.gz")
@@ -42,6 +43,20 @@ def run():
     spec = importlib.util.spec_from_loader(loader.name, loader)
     admin = importlib.util.module_from_spec(spec)
     loader.exec_module(admin)
+
+    class DiagnosticReader(admin.OriginReportReader):
+        def collect(self, *args):
+            try:
+                return super().collect(*args)
+            except Exception as exc:
+                # Line numbers and exception classes only: no API body, token or
+                # exception message, even for this disposable synthetic fixture.
+                frames = traceback.extract_tb(exc.__traceback__)
+                lines = [frame.lineno for frame in frames
+                         if frame.filename == str(ROOT / "ops/bin/coloring-pages-admin-publish")]
+                print("REPORT_VALIDATION_FAILURE type=" + type(exc).__name__ + " lines=" + str(lines), flush=True)
+                raise
+
     with tempfile.TemporaryDirectory(prefix="goatcounter-report-") as directory:
         root = Path(directory)
         binary = root / "goatcounter"
@@ -55,18 +70,21 @@ def run():
         db = root / "synthetic.sqlite3"
         dbarg = "-db=sqlite+" + str(db)
 
-        def cli(*args):
+        def cli(stage, *args):
             result = subprocess.run([str(binary), *args], cwd=root, env=env, stdin=subprocess.DEVNULL,
                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=25)
-            require(result.returncode == 0, "CLI_SETUP")
+            require(result.returncode == 0, "CLI_" + stage)
 
-        cli("db", "newdb", dbarg)
-        cli("db", "create", "site", "-vhost=" + HOST, "-user.email=synthetic@example.test",
+        cli("NEWDB", "db", "newdb", dbarg)
+        cli("SITE", "db", "create", "site", "-vhost=" + HOST, "-user.email=synthetic@example.com",
             "-user.password=" + secrets.token_hex(16), dbarg)
         with contextlib.closing(sqlite3.connect(db)) as con:
             user = con.execute("SELECT user_id FROM users").fetchone()[0]
         for perm in ("count", "stats"):
-            cli("db", "create", "apitoken", "-user=" + str(user), "-name=fixture-" + perm, "-perm=" + perm, dbarg)
+            # v2.7's CLI omits Stats from getPerm; set that bit below in the
+            # fresh fixture only, before starting the isolated server.
+            cli("TOKEN_" + perm.upper(), "db", "create", "apitoken", "-user=" + str(user),
+                "-name=fixture-" + perm, "-perm=count", dbarg)
         with contextlib.closing(sqlite3.connect(db)) as con:
             site, settings = con.execute("SELECT site_id, settings FROM sites").fetchone()
             settings = json.loads(settings)
@@ -74,6 +92,7 @@ def run():
             con.execute("UPDATE sites SET settings=?", (json.dumps(settings),))
             # Only this new synthetic DB is edited; no production provisioning.
             con.execute("UPDATE api_tokens SET sites=?", (json.dumps([site]),))
+            con.execute("UPDATE api_tokens SET permissions=? WHERE name=?", (64, "fixture-stats"))
             tokens = dict(con.execute("SELECT name, token FROM api_tokens"))
             con.commit()
         credential = root / "stats-token"
@@ -112,7 +131,7 @@ def run():
 
         process = start()
         try:
-            empty = admin.OriginReportReader().snapshot(7)
+            empty = DiagnosticReader().snapshot(7)
             require(empty["total"] == 0 and empty["pages"] == [], "EMPTY_NAMESPACE")
             # 28 origin paths force two reader batches; unrelated events never enter the result.
             paths = ["/origin-detail-request/0123456"] * 3 + ["/origin-detail-request/7654321"] * 2
@@ -142,7 +161,7 @@ def run():
         process = start()
         try:
             for days, total in ((1, 29), (7, 31), (30, 31), (365, 31)):
-                result = admin.OriginReportReader().snapshot(days)
+                result = DiagnosticReader().snapshot(days)
                 require(result["total"] == total and len(result["daily"]) == days, "RANGE_TOTAL_" + str(days))
                 require(sum(row["requests"] for row in result["pages"]) == total, "RANKING_TOTAL")
                 require(sum(row["requests"] for row in result["daily"]) == total, "DAILY_TOTAL")
