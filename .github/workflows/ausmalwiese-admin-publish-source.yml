@@ -9,6 +9,11 @@ on:
       - "scripts/install-coloring-pages-admin-publish-v1.sh"
       - "tests/test-coloring-pages-admin-publish-v1.py"
       - "tests/test-coloring-pages-admin-categories-1291.py"
+      - "tests/test-ausmalwiese-goatcounter-report-v1.py"
+      - "tests/test-coloring-pages-admin-origin.cjs"
+      - "tests/goatcounter-report-isolated-v27.py"
+      - "ops/systemd/coloring-pages-admin-origin-report.conf"
+      - "docs/AUSMALWIESE_GOATCOUNTER_REPORT_V1.md"
       - "docs/COLORING_PAGES_ADMIN_PUBLISH_V1.md"
       - ".github/workflows/ausmalwiese-admin-publish-source.yml"
   push:
@@ -21,6 +26,11 @@ on:
       - "scripts/install-coloring-pages-admin-publish-v1.sh"
       - "tests/test-coloring-pages-admin-publish-v1.py"
       - "tests/test-coloring-pages-admin-categories-1291.py"
+      - "tests/test-ausmalwiese-goatcounter-report-v1.py"
+      - "tests/test-coloring-pages-admin-origin.cjs"
+      - "tests/goatcounter-report-isolated-v27.py"
+      - "ops/systemd/coloring-pages-admin-origin-report.conf"
+      - "docs/AUSMALWIESE_GOATCOUNTER_REPORT_V1.md"
       - "docs/COLORING_PAGES_ADMIN_PUBLISH_V1.md"
       - ".github/workflows/ausmalwiese-admin-publish-source.yml"
 permissions:
@@ -37,6 +47,37 @@ jobs:
         run: |
           python3 tests/test-coloring-pages-admin-publish-v1.py
           python3 tests/test-coloring-pages-admin-categories-1291.py
+          python3 tests/test-ausmalwiese-goatcounter-report-v1.py
+          node tests/test-coloring-pages-admin-origin.cjs
           python3 -m py_compile ops/bin/coloring-pages-admin-publish
           python3 -m json.tool ops/contracts/coloring-pages-admin-publish-v1.json >/dev/null
           bash -n scripts/install-coloring-pages-admin-publish-v1.sh
+
+  goatcounter-report-v27:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Verify pinned GoatCounter 2.7.0 release
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/goatcounter-v2.7.0-linux-amd64.gz"
+          curl --fail --silent --show-error --location --retry 0 --max-time 120 --proto '=https' \
+            https://github.com/arp242/goatcounter/releases/download/v2.7.0/goatcounter-v2.7.0-linux-amd64.gz \
+            --output "$archive"
+          test "$(wc -c < "$archive")" -eq 13935060
+          printf '%s  %s\n' '98d221cb9c8ef2bf76d8daa9cca647839f8d8b0bb5bc7400ff9337c5da834511' "$archive" | sha256sum --check --status
+          chmod 0444 "$archive"
+      - name: Exercise real aggregate API in isolated synthetic container
+        run: |
+          set -euo pipefail
+          docker run --rm --pull=always --platform linux/amd64 \
+            --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
+            --pids-limit 64 --memory 512m --cpus 1 --user 65532:65532 \
+            --tmpfs /tmp:rw,exec,nosuid,nodev,size=192m,mode=1777 \
+            --mount "type=bind,src=$GITHUB_WORKSPACE,dst=/source,readonly" \
+            --mount "type=bind,src=$RUNNER_TEMP/goatcounter-v2.7.0-linux-amd64.gz,dst=/input/goatcounter-v2.7.0-linux-amd64.gz,readonly" \
+            --env PYTHONDONTWRITEBYTECODE=1 --env GOATCOUNTER_REPORT_ISOLATED_CI=1 \
+            python:3.12.16-slim-bookworm python3 /source/tests/goatcounter-report-isolated-v27.py
