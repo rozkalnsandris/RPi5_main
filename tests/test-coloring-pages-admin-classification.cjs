@@ -37,7 +37,7 @@ const api=ctx.window.AdminClassification,analysis=api.audit(copy(snapshot)),rows
 assert.equal(rows.length,7);assert.equal(rows[0].status,"proposed");assert.deepEqual(Array.from(rows[0].after.topics),["hund"]);
 assert.equal(rows[1].status,"proposed");assert.deepEqual(Array.from(rows[1].after.categories),["tiere","jahreszeiten"]);
 assert.equal(rows[2].status,"review");assert.equal(rows[3].status,"unchanged");assert.equal(rows[4].status,"unchanged");
-assert.equal(rows[5].status,"review");assert.equal(rows[6].status,"unchanged");
+assert.equal(rows[5].status,"review");assert.equal(rows[6].status,"proposed");assert.deepEqual(Array.from(rows[6].after.topics),["hund","baum"]);
 assert.deepEqual(Array.from(rows[6].after.categories),["lernen","tiere"]);
 rows[0].decision="approved";rows[1].decision="rejected";
 assert.equal(api.manifest(analysis).approved_changes.length,1);
