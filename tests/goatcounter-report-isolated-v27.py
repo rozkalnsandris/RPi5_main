@@ -101,8 +101,12 @@ def run():
         admin.ORIGIN_REPORT_CREDENTIAL = credential
 
         def start():
+            # UID 65532 intentionally has no passwd entry in the CI image.
+            # v2.7 otherwise calls user.Current() for its default From address
+            # and panics before opening the listener.
             process = subprocess.Popen([str(binary), "serve", dbarg, "-listen=127.0.0.1:9194",
-                                        "-tls=http", "-automigrate", "-store-every=1"], cwd=root, env=env,
+                                        "-tls=http", "-automigrate", "-store-every=1",
+                                        "-email-from=synthetic@example.com"], cwd=root, env=env,
                                        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             try:
                 deadline = time.monotonic() + 15
