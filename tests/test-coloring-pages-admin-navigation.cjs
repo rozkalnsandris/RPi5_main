@@ -204,6 +204,10 @@ async function managerReady(h){await h.s.refreshTaxonomyManagers();await h.s.cat
   assert.equal(multi.ids.catalogTopicFilter.options.length,1);
   multi.state.usageReadFails=false;await multi.s.loadCatalog();
   assert.equal(multi.ids.catalogTopicFilter.disabled,false);
+  // Restore the verified fixture links before pre-existing Edit tests.
+  multi.state.links.enabled=true;
+  multi.state.links.links=[{category:"jahreszeiten",topic:"weihnachten"},{category:"tiere",topic:"obst"},{category:"lernen",topic:"obst"}];
+  await multi.s.loadCategories();
 
   multi.go("edit/0000000");
   assert.deepEqual(Array.from(multi.s.editSelectedCategories),["lernen","tiere"]);
