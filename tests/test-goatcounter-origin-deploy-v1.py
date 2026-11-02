@@ -83,7 +83,7 @@ class Runner:
                 return sd.CommandResult(0, json.dumps({"digest": self.pointer}), "")
             if ref == sd.ORIGIN_IMAGE + "@" + self.request["profile"]["derivative_digest"]:
                 return sd.CommandResult(0, json.dumps(self.request["derivative_config"]), "")
-            if ref == "ghcr.io/" + sd.ORIGIN_REPOSITORY + "@" + self.request["profile"]["base_digest"]:
+            if ref in {"ghcr.io/" + sd.ORIGIN_REPOSITORY + "@" + self.request["profile"][key] for key in ("base_digest", "base_platform_digest")}:
                 return sd.CommandResult(0, json.dumps(self.request["base_config"]), "")
         if argv[:2] == ["docker", "compose"]:
             if "ps" in argv:
@@ -163,6 +163,8 @@ class OriginTests(unittest.TestCase):
         self.assertEqual((result.result, result.desired_digest), ("SUCCESS", DERIVED))
         override = json.loads(self.deployer.state.override_path(sd.ORIGIN_TARGET).read_text())
         self.assertEqual(override, {"services": {"coloring-pages": {"image": sd.ORIGIN_IMAGE + "@" + DERIVED}}})
+        self.assertTrue(any(c[4] == "ghcr.io/" + sd.ORIGIN_REPOSITORY + "@" + BASE_PLATFORM
+                            for c in self.runner.calls if c[:4] == ("docker", "buildx", "imagetools", "inspect")))
         receipt = self.deployer.state.last_success(self.deployer.registry.get(sd.ORIGIN_TARGET))
         self.assertEqual(receipt["pointer_digest_before"], BASE)
         self.assertFalse(receipt["pointer_changed_during_attempt"])

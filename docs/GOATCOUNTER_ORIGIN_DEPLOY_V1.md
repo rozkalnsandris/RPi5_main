@@ -186,6 +186,11 @@ commands performed by #1346 or an automatic release workflow.
    operators must monitor HOLD and prepare the matching pair promptly. Never use
    the ordinary image as an automatic fallback or clear receipts to bypass opt-in.
 
+The historical Hermes state-adoption operation keeps its original helper hash
+pin unchanged. Its compatibility regression now proves that the evolved generic
+helper is rejected by that historical source guard; it does not repin or revive
+the old operation.
+
 The current installer is not widened into an arbitrary profile installer. The
 new profile functions live inside the existing trusted helper module, so helper
 installation has no hidden extra Python-module dependency. This PR adds no

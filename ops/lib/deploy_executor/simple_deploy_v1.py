@@ -995,7 +995,8 @@ class SimpleDeployer:
                     "blocked": False, "desired_digest": pointer_before,
                 })
                 return ReconcileResult("HOLD_ORIGIN_PAIR_REQUIRED", target.target_alias, pointer_before, False, None)
-            image_metadata = self._inspect_image(target, pointer_before)
+            base_metadata_digest = profile["base_platform_digest"] if profile is not None else pointer_before
+            image_metadata = self._inspect_image(target, base_metadata_digest)
             desired_digest = pointer_before
             if profile is not None:
                 desired_digest = profile["derivative_digest"]

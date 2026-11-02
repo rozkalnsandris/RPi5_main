@@ -59,7 +59,13 @@ class AdoptionTests(unittest.TestCase):
     def test_contract_hashes_and_exact_registry_delta(self):
         self.assertEqual(json.loads((ROOT / m.CONTRACT).read_bytes()), m.contract())
         for p, expected in m.HASHES.items():
-            self.assertEqual(m.digest((ROOT / p).read_bytes()), expected)
+            if p == m.EXECUTOR_SOURCE:
+                # #1346 evolves the generic helper; this historical operation
+                # must retain its original pin, not gain current-helper authority.
+                self.assertEqual(expected, 'ed906786fd85169c6c555a3ac466b157edaf24a65fe12f60ee2ec6940ade20d0')
+                self.assertNotEqual(m.digest((ROOT / p).read_bytes()), expected)
+            else:
+                self.assertEqual(m.digest((ROOT / p).read_bytes()), expected)
         self.assertEqual(
             (ROOT / m.NEW_REGISTRY).read_bytes(), self.candidate[m.NEW_REGISTRY]
         )
@@ -68,6 +74,31 @@ class AdoptionTests(unittest.TestCase):
         changed['targets'][0]['architecture'] = 'wrong'
         with self.assertRaises(m.Stop):
             m.registry_delta(self.candidate[m.BASE_REGISTRY], json.dumps(changed).encode())
+
+    def test_historical_source_guard_rejects_current_generic_helper(self):
+        sha = 'a' * 40
+
+        def git_bytes(*args):
+            if args == ('rev-parse', '--verify', 'HEAD'):
+                return sha.encode()
+            if args == ('remote', 'get-url', 'origin'):
+                return m.ORIGIN.encode()
+            if args == ('ls-files', '--others', '--exclude-standard'):
+                return b''
+            if args[0] == 'show':
+                return (ROOT / args[1].split(':', 1)[1]).read_bytes()
+            raise AssertionError(args)
+
+        with patch.object(m, 'directory', return_value=contextlib.nullcontext()), \
+                patch.object(m, 'git', return_value=SimpleNamespace(returncode=0)), \
+                patch.object(m, 'git_bytes', side_effect=git_bytes) as reads, \
+                patch.object(m, 'registry_delta') as registry_delta:
+            with self.assertRaises(m.Stop):
+                m.source_check(sha)
+        # Clean source and all earlier pins passed; the unchanged helper pin
+        # specifically rejected the new bytes before proceeding to registry work.
+        self.assertEqual(reads.call_args.args, ('show', f'{sha}:{m.EXECUTOR_SOURCE}'))
+        registry_delta.assert_not_called()
 
     def test_success_copies_tree_and_preserves_neighbors(self):
         neighbor = self.base / 'state/other-target'
