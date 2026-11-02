@@ -31,6 +31,7 @@ test:
 	python3 ./tests/test-control-phase5-signer-handoff.py
 	python3 ./tests/test-control-phase5-observation-delivery.py
 	python3 ./tests/test-simple-deploy-v1.py
+	python3 ./tests/test-goatcounter-origin-deploy-v1.py
 	python3 ./tests/test-simple-deploy-pointer-failure-926.py
 	python3 ./tests/test-simple-deploy-executor-upgrade-933.py
 	python3 ./tests/test-cv-live-stats-rollout-1000.py

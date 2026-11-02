@@ -213,6 +213,7 @@ class TargetSpec:
     persistent_volumes: tuple[str, ...]
     registry_pull_profile: str
     forbidden_operations: tuple[str, ...]
+    origin_counting: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -234,11 +235,107 @@ class DeployerIdentity:
     source_sha: str
 
 
+# Explicitly opt-in; no production registry entry is enabled by this source.
+ORIGIN_TARGET = "coloring-pages-public-rpi5"
+ORIGIN_REPOSITORY = "rozkalnsandris/coloring-pages"
+ORIGIN_IMAGE = "ghcr.io/rozkalnsandris/coloring-pages-origin"
+ORIGIN_RECIPE_SHA = "8d0de541e03f2db1196fb89569d549fb2294abfb"
+ORIGIN_BASE_COMPOSE_SHA256 = "142c30bdd1080de90360f287e5b6fae27611c535caef0a41a09a998528bcbbc2"
+ORIGIN_SOCKET = "/run/ausmalwiese-pageview"
+ORIGIN_PROFILE_KEYS = frozenset({
+    "schema", "application_source_sha", "base_digest", "base_platform_digest", "recipe_source_sha",
+    "derivative_digest", "architecture", "socket_group", "provenance_sha256",
+    "peer_evidence_sha256",
+})
+
+
+def origin_profile_sha256(profile: Mapping[str, Any]) -> str:
+    return hashlib.sha256(json.dumps(profile, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def validate_origin_profile(value: Any) -> dict[str, Any]:
+    def invalid() -> None:
+        _fail("ORIGIN_PROFILE_INVALID", "reviewed origin profile identity is invalid")
+    if type(value) is not dict or frozenset(value) != ORIGIN_PROFILE_KEYS:
+        invalid()
+    if (value["schema"] != "rozkalns.coloring-pages.origin-profile.v1"
+            or value["architecture"] != ARCHITECTURE
+            or value["recipe_source_sha"] != ORIGIN_RECIPE_SHA):
+        invalid()
+    if type(value["application_source_sha"]) is not str or not SHA1_RE.fullmatch(value["application_source_sha"]):
+        invalid()
+    for key in ("base_digest", "base_platform_digest", "derivative_digest"):
+        if type(value[key]) is not str or not DIGEST_RE.fullmatch(value[key]):
+            invalid()
+    if value["base_digest"] == value["derivative_digest"]:
+        invalid()
+    for key in ("provenance_sha256", "peer_evidence_sha256"):
+        if type(value[key]) is not str or not re.fullmatch(r"[0-9a-f]{64}", value[key]):
+            invalid()
+    group = value["socket_group"]
+    if (type(group) is not str or not re.fullmatch(r"[1-9][0-9]{0,9}", group)
+            or int(group) > 4294967294):
+        invalid()
+    return dict(value)
+
+
+def render_origin_compose(profile: Mapping[str, Any]) -> bytes:
+    profile = validate_origin_profile(profile)
+    # Full trusted adapter, not an unobserved overlay. Only four service fields
+    # differ from the hash-bound default: image, platform, group_add, volumes.
+    service = {
+        "image": f"{ORIGIN_IMAGE}@{profile['derivative_digest']}",
+        "platform": ARCHITECTURE,
+        "group_add": [profile["socket_group"]],
+        "ports": ["127.0.0.1:9191:8080"],
+        "volumes": [
+            {"type": "bind", "source": "/srv/coloring-pages-content/public",
+             "target": "/var/lib/coloring-pages/public", "read_only": True,
+             "bind": {"create_host_path": False}},
+            {"type": "bind", "source": ORIGIN_SOCKET, "target": ORIGIN_SOCKET,
+             "read_only": True, "bind": {"create_host_path": False}},
+        ],
+        "read_only": True, "tmpfs": ["/tmp"],
+        "security_opt": ["no-new-privileges:true"], "cap_drop": ["ALL"],
+        "healthcheck": {
+            "test": ["CMD", "wget", "--quiet", "--output-document=-", "http://127.0.0.1:8080/ready"],
+            "interval": "30s", "timeout": "5s", "retries": 3, "start_period": "10s",
+        },
+        "restart": "unless-stopped",
+    }
+    return (json.dumps({"services": {"coloring-pages": service}}, sort_keys=True, indent=2) + "\n").encode()
+
+
+def validate_origin_metadata(value: Any, profile: Mapping[str, Any], shared_sha: str, *, derivative: bool) -> None:
+    if type(value) is not dict or value.get("os") != "linux" or value.get("architecture") != "arm64":
+        _fail("ORIGIN_METADATA_INVALID", "origin image architecture mismatch")
+    config = value.get("config")
+    labels = config.get("Labels") if type(config) is dict else None
+    expected = {
+        "org.opencontainers.image.revision": profile["application_source_sha"],
+        "io.rozkalns.simple-deploy.target": ORIGIN_TARGET,
+        "io.rozkalns.simple-deploy.shared-revision": shared_sha,
+    }
+    if type(config) is not dict:
+        _fail("ORIGIN_METADATA_INVALID", "origin image configuration missing")
+    if derivative:
+        expected.update({
+            "io.rozkalns.origin.base-digest": profile["base_digest"],
+            "io.rozkalns.origin.recipe-revision": profile["recipe_source_sha"],
+        })
+        if (config.get("User") != "101" or config.get("Entrypoint") != ["nginx"]
+                or config.get("Cmd") != ["-c", "/etc/nginx/nginx-origin.conf", "-g", "daemon off;"]):
+            _fail("ORIGIN_METADATA_INVALID", "origin image command/user mismatch")
+    if type(labels) is not dict or any(labels.get(k) != v for k, v in expected.items()):
+        _fail("ORIGIN_METADATA_INVALID", "origin image provenance labels mismatch")
+
+
 def _parse_target(value: Any, index: int) -> TargetSpec:
     where = f"targets[{index}]"
     if type(value) is not dict:
         _fail("REGISTRY_SCHEMA", f"{where} must be an object")
-    _exact_keys(value, TARGET_KEYS, where)
+    keys = TARGET_KEYS | {"origin_counting"} if "origin_counting" in value else TARGET_KEYS
+    _exact_keys(value, keys, where)
 
     alias = _required_string(value["target_alias"], f"{where}.target_alias", max_len=64, pattern=IDENTIFIER_RE)
     repository = _required_string(
@@ -314,6 +411,19 @@ def _parse_target(value: Any, index: int) -> TargetSpec:
     if type(forbidden) is not list or tuple(forbidden) != FORBIDDEN_OPERATIONS:
         _fail("REGISTRY_POLICY", f"{where}.forbidden_operations must equal the fixed SIMPLE-DEPLOY exclusion list")
 
+    origin = None
+    if "origin_counting" in value:
+        origin = validate_origin_profile(value["origin_counting"])
+        if (alias != ORIGIN_TARGET or repository != ORIGIN_REPOSITORY
+                or project != "coloring-pages-public" or service != "coloring-pages"
+                or compose_file != "coloring-pages-origin.json.yml"
+                or file_sha256 != hashlib.sha256(render_origin_compose(origin)).hexdigest()
+                or liveness_url != "http://127.0.0.1:9191/health"
+                or readiness_url != "http://127.0.0.1:9191/ready"
+                or wait_timeout != 180 or volumes != ["coloring_pages_content"]
+                or pull_profile != "public-anonymous-pull"):
+            _fail("ORIGIN_PROFILE_INVALID", "origin target binding mismatch")
+
     return TargetSpec(
         target_alias=alias,
         consumer_repository=repository,
@@ -327,6 +437,7 @@ def _parse_target(value: Any, index: int) -> TargetSpec:
         persistent_volumes=tuple(parsed_volumes),
         registry_pull_profile=pull_profile,
         forbidden_operations=FORBIDDEN_OPERATIONS,
+        origin_counting=origin,
     )
 
 
@@ -764,6 +875,10 @@ class SimpleDeployer:
             _fail("COMPOSE_CONTRACT_INVALID", "reviewed Compose file must not be group/world writable")
         if _sha256_file(path) != target.compose.file_sha256:
             _fail("COMPOSE_CONTRACT_INVALID", "reviewed Compose file hash drifted")
+        if target.origin_counting is not None:
+            expected = render_origin_compose(validate_origin_profile(target.origin_counting))
+            if path.read_bytes() != expected:
+                _fail("COMPOSE_CONTRACT_INVALID", "origin Compose differs from the bounded renderer")
         return path
 
     def _resolve_pointer(self, target: TargetSpec) -> str:
@@ -784,7 +899,7 @@ class SimpleDeployer:
         )
         return _parse_manifest_digest(stdout)
 
-    def _inspect_image(self, target: TargetSpec, digest: str) -> ImageMetadata:
+    def _inspect_image(self, target: TargetSpec, digest: str, *, origin: bool = False) -> ImageMetadata:
         stdout = _run_required(
             self.runner,
             [
@@ -792,7 +907,7 @@ class SimpleDeployer:
                 "buildx",
                 "imagetools",
                 "inspect",
-                f"{target.image}@{digest}",
+                f"{ORIGIN_IMAGE if origin else target.image}@{digest}",
                 "--format",
                 "{{json .Image}}",
             ],
@@ -800,7 +915,10 @@ class SimpleDeployer:
             code="IMAGE_METADATA_FAILED",
             mutation_started=False,
         )
-        return _parse_image_metadata(stdout, target, digest)
+        metadata = _parse_image_metadata(stdout, target, digest)
+        if target.origin_counting is not None:
+            validate_origin_metadata(json.loads(stdout), target.origin_counting, target.shared_workflow_sha, derivative=origin)
+        return metadata
 
     @staticmethod
     def _compose_prefix(target: TargetSpec, compose_file: Path, override_file: Path) -> list[str]:
@@ -868,11 +986,27 @@ class SimpleDeployer:
                 )
 
             compose_file = self._verify_compose_file(target)
-            desired_digest = self._resolve_pointer(target)
-            image_metadata = self._inspect_image(target, desired_digest)
+            pointer_before = self._resolve_pointer(target)
+            profile = target.origin_counting
+            if profile is not None and pointer_before != profile["base_digest"]:
+                self.state.write_status(target.target_alias, {
+                    **self._status_base(target), "result": "HOLD_ORIGIN_PAIR_REQUIRED",
+                    "error_code": "REVIEWED_DERIVATIVE_REQUIRED", "mutation_started": False,
+                    "blocked": False, "desired_digest": pointer_before,
+                })
+                return ReconcileResult("HOLD_ORIGIN_PAIR_REQUIRED", target.target_alias, pointer_before, False, None)
+            image_metadata = self._inspect_image(target, pointer_before)
+            desired_digest = pointer_before
+            if profile is not None:
+                desired_digest = profile["derivative_digest"]
+                image_metadata = self._inspect_image(target, desired_digest, origin=True)
             source_sha = image_metadata.source_sha
             prior = self.state.last_success(target)
-            if prior is not None and prior["deployed_digest"] == desired_digest:
+            if profile is None and prior is not None and prior.get("origin_profile_sha256"):
+                _fail("ORIGIN_PROFILE_REMOVAL_FORBIDDEN", "an opted-in receipt requires an explicit reviewed recovery")
+            profile_sha = origin_profile_sha256(profile) if profile is not None else None
+            if (prior is not None and prior["deployed_digest"] == desired_digest
+                    and (profile is None or prior.get("origin_profile_sha256") == profile_sha)):
                 self.state.write_status(
                     target.target_alias,
                     {
@@ -886,7 +1020,7 @@ class SimpleDeployer:
                 )
                 return ReconcileResult("NO_OP_CURRENT", target.target_alias, desired_digest, False, False)
 
-            image_ref = f"{target.image}@{desired_digest}"
+            image_ref = f"{ORIGIN_IMAGE if profile is not None else target.image}@{desired_digest}"
             override_file = self.state.write_override(target, image_ref)
             prefix = self._compose_prefix(target, compose_file, override_file)
 
@@ -962,7 +1096,7 @@ class SimpleDeployer:
                     _fail("READINESS_FAILED", "readiness endpoint did not return 200", mutation_started=True)
 
             pointer_after = self._resolve_pointer(target)
-            pointer_changed = pointer_after != desired_digest
+            pointer_changed = pointer_after != pointer_before
 
             success = {
                 **self._status_base(target),
@@ -986,11 +1120,14 @@ class SimpleDeployer:
                 },
                 "persistent_volumes": list(target.persistent_volumes),
                 "production_pointer": f"{target.image}:{PRODUCTION_TAG}",
-                "pointer_digest_before": desired_digest,
+                "pointer_digest_before": pointer_before,
                 "pointer_digest_after": pointer_after,
                 "pointer_changed_during_attempt": pointer_changed,
                 "mutation_started": True,
             }
+            if profile is not None:
+                success["origin_profile_sha256"] = profile_sha
+                success["origin_base_digest"] = profile["base_digest"]
             self.state.write_success(target, success)
             self.state.write_status(
                 target.target_alias,
@@ -1070,6 +1207,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             try:
                 result = deployer.reconcile(alias)
                 print(_safe_result_line(result))
+                if result.result == "HOLD_ORIGIN_PAIR_REQUIRED":
+                    failed = True
             except SimpleDeployError as exc:
                 failed = True
                 failure_suffix = (
