@@ -79,6 +79,32 @@ class ReportTests(unittest.TestCase):
                 self.assertNotIn("PRIVATE", json.dumps(result))
                 self.assertEqual(len(fixture.calls), 5)
 
+    def test_365_day_stats_use_bounded_path_batches(self):
+        fixture = Fixture(365)
+        fixture.paths = [
+            {"id": i, "path": "/origin-detail-request/" + str(2000000 + i), "event": False}
+            for i in range(1, 13)
+        ]
+        queried = []
+        def get(target, token, budget):
+            if target == "/api/v0/me":
+                return copy.deepcopy(fixture.me)
+            if target.startswith("/api/v0/paths?"):
+                return {"paths": copy.deepcopy(fixture.paths), "more": False}
+            self.assertTrue(target.startswith("/api/v0/stats/hits?"))
+            selected = parse_qs(urlsplit(target).query)["include_paths"][0].split(",")
+            self.assertGreater(len(selected), 0)
+            self.assertLessEqual(len(selected), 5)
+            queried.extend(selected)
+            return {"hits": [], "more": False, "total": 0}
+        reader = admin.OriginReportReader()
+        reader.get = get
+        report = reader.collect(365, NOW, TOKEN)
+        self.assertEqual(report["total"], 0)
+        self.assertEqual(report["pages"], [])
+        self.assertEqual(len(report["daily"]), 365)
+        self.assertEqual(queried, [str(i) for i in range(1, 13)])
+
     def test_empty_namespace_never_requests_unfiltered_stats(self):
         fixture = Fixture()
         fixture.paths = fixture.paths[:1]

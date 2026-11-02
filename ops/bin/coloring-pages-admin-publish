@@ -2197,8 +2197,11 @@ class OriginReportReader:
         rows = []
         ids = list(selected)
         # Never send an empty include_paths: GoatCounter treats it as all paths.
-        for offset in range(0, len(ids), 25):
-            batch = ids[offset:offset + 25]
+        # A 365-day HitList contains full hourly arrays for every selected path.
+        # Keep the upstream response below the unchanged 4 MiB safety bound.
+        batch_size = 5 if days == 365 else 25
+        for offset in range(0, len(ids), batch_size):
+            batch = ids[offset:offset + batch_size]
             payload = self.get("/api/v0/stats/hits?" + urlencode({
                 "start": start.isoformat() + "T00:00:00Z",
                 "end": today.isoformat() + "T23:00:00Z",

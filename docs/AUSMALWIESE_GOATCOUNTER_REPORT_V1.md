@@ -35,7 +35,7 @@ The reader uses only `127.0.0.1:9194`, Host
    account metadata, which is discarded and never sent to ADMIN or logs.
 2. `/api/v0/paths?limit=200&after=<cursor>`: discover up to 2,000 path records.
    Select only non-event `/origin-detail-request/<seven-digit-id>` names.
-3. `/api/v0/stats/hits`: batches of 25 selected numeric path IDs, limit 100,
+3. `/api/v0/stats/hits`: batches of up to 25 selected numeric path IDs (5 for 365-day reports to preserve the strict 4 MiB response bound), limit 100,
    `daily=true`, UTC start 00:00 and end 23:00 (inclusive hourly API boundary).
    Empty selection performs **no** stats request: an empty filter means all paths
    in GoatCounter. Never include the old browser-count namespace.
