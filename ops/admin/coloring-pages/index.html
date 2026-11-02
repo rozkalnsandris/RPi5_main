@@ -316,6 +316,23 @@ html{overflow-y:scroll}
 .topics-dialog-actions{padding:0 14px 12px}
 @media(max-width:700px){.topics-create{grid-template-columns:minmax(0,1fr)}}
 
+
+/* Read-only Catalog classification review (#1341) */
+.classification-review{border-top:1px solid var(--line);margin-top:20px;padding-top:18px}
+.classification-review h3{margin:0 0 8px;font-size:19px}
+.classification-review p{font-size:13px;line-height:1.5}
+.classification-tools,.classification-metrics{display:flex;align-items:center;flex-wrap:wrap;gap:9px;margin:12px 0}
+.classification-metrics span{padding:5px 9px;border:1px solid var(--line);border-radius:8px;font-size:12px;background:#f8fafc}
+.classification-tools label{display:flex;align-items:center;gap:5px;font-size:13px}
+.classification-rows{display:grid;gap:10px}
+.classification-row{border:1px solid var(--line);border-radius:12px;padding:12px;display:grid;grid-template-columns:65px minmax(0,1fr);gap:12px}
+.classification-row img{width:65px;max-height:95px;object-fit:contain}
+.classification-row h4{margin:0;overflow-wrap:anywhere}
+.classification-row p{margin:4px 0;overflow-wrap:anywhere}
+.classification-row .classification-tools{margin:6px 0 0}
+.classification-row button{min-height:35px}
+@media(max-width:600px){.classification-row{grid-template-columns:45px minmax(0,1fr)}.classification-row img{width:45px}.classification-tools label{width:100%}.classification-tools input,.classification-tools select{width:100%;max-width:100%}}
+
 </style>
 </head>
 <body>
@@ -429,6 +446,39 @@ html{overflow-y:scroll}
         <div class="catalog-meta"><span id="catalogCount">Loading catalog…</span><span>Archiving hides a page from the website. You can restore it from Archive.</span></div>
         <div id="catalogGrid" class="catalog-grid"></div>
         <nav class="pagination" aria-label="Catalog pages"><button id="catalogPrevious" class="secondary" type="button">← Previous</button><span id="catalogPageStatus" role="status"></span><button id="catalogNext" class="secondary" type="button">Next →</button></nav>
+
+        <section class="classification-review" id="classificationReview" aria-labelledby="classificationTitle">
+          <h3 id="classificationTitle">Review classifications</h3>
+          <p>Inspect every published page. Proposals are read-only and never saved to LIVE.</p>
+          <div class="classification-tools">
+            <button type="button" class="secondary" id="classificationAnalyze">Analyze Catalog</button>
+            <button type="button" class="secondary" id="classificationDiscard" disabled>Discard review</button>
+          </div>
+          <p role="status" aria-live="polite" id="classificationStatus">Select Analyze Catalog to start a read-only audit.</p>
+          <div id="classificationWorkspace" hidden>
+            <div id="classificationMetrics" class="classification-metrics" aria-label="Audit totals"></div>
+            <div class="classification-tools">
+              <label>Search title or ID <input type="search" id="classificationSearch" autocomplete="off"></label>
+              <label>Review status <select id="classificationFilter">
+                <option value="all">All</option><option value="proposed">Proposals</option>
+                <option value="review">Needs review</option><option value="approved">Approved</option>
+                <option value="rejected">Rejected</option><option value="deferred">Deferred</option>
+                <option value="unchanged">Unchanged</option>
+              </select></label>
+            </div>
+            <div class="classification-rows" id="classificationRows" aria-label="Classification entries"></div>
+            <nav class="classification-tools" aria-label="Classification pagination">
+              <button type="button" class="secondary" id="classificationPrev">Previous</button>
+              <span role="status" id="classificationPager"></span>
+              <button type="button" class="secondary" id="classificationNext">Next</button>
+            </nav>
+            <div class="classification-tools">
+              <button type="button" class="secondary" id="classificationApproveSelected" disabled>Approve checked proposals</button>
+              <button type="button" class="secondary" id="classificationExport">Export reviewed dry-run JSON</button>
+            </div>
+            <p>Only explicitly approved proposals are included in approved_changes. The export cannot apply LIVE changes.</p>
+          </div>
+        </section>
       </article>
     </div>
   </section>
@@ -939,7 +989,7 @@ function renderJob(j){steps.innerHTML="";j.steps.forEach(function(s,i){var row=d
 function renderResults(items,partial){if(!items||!items.length)return;success.style.display="block";resultTitle.textContent=partial?"Partially complete — processed pages":"✓ Published successfully!";results.innerHTML="";items.forEach(function(x){var d=document.createElement("div");d.className="result";var status=x.status==="published"?"Published":"Imported";var link=x.url?"<br><a target=_blank rel=noopener href='"+x.url+"'>Open published page ↗</a>":"";d.innerHTML="<strong>"+escapeHtml(x.title)+"</strong><br><small>ID: "+escapeHtml(x.id)+" · "+status+"</small>"+link;results.appendChild(d)})}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 function showCatalogFeedback(m){clearTimeout(feedbackTimer);catalogFeedback.textContent=m;catalogFeedback.style.display="block";feedbackTimer=setTimeout(function(){catalogFeedback.style.display="none"},6000)}
-async function loadCatalog(){catalogCount.textContent="Loading catalog…";try{var r=await fetch("/api/catalog",{headers:{"X-Ausmalwiese-Admin":"1"},cache:"no-store"});var d=await r.json();if(!r.ok)throw new Error(d.error||("HTTP "+r.status));catalogData=d;catalogEtag=catalogValidator(d.catalog_sha256);renderCatalog();document.getElementById("overviewCatalog").textContent=d.count;if(currentRoute.startsWith("edit/")&&!editBaseline)populateEdit()}catch(e){document.getElementById("overviewCatalog").textContent="—";if(currentRoute.startsWith("edit/")){document.getElementById("editMissing").textContent="Could not load the catalog. Return to Catalog and select Refresh."}catalogCount.textContent="Could not load the catalog.";catalogGrid.innerHTML='<p class="catalog-empty">'+escapeHtml(e.message)+'</p>'}}
+async function loadCatalog(){if(window.AdminClassification)window.AdminClassification.invalidate("Catalog refreshed. Analyze again.");catalogCount.textContent="Loading catalog…";try{var r=await fetch("/api/catalog",{headers:{"X-Ausmalwiese-Admin":"1"},cache:"no-store"});var d=await r.json();if(!r.ok)throw new Error(d.error||("HTTP "+r.status));catalogData=d;catalogEtag=catalogValidator(d.catalog_sha256);renderCatalog();document.getElementById("overviewCatalog").textContent=d.count;if(currentRoute.startsWith("edit/")&&!editBaseline)populateEdit()}catch(e){document.getElementById("overviewCatalog").textContent="—";if(currentRoute.startsWith("edit/")){document.getElementById("editMissing").textContent="Could not load the catalog. Return to Catalog and select Refresh."}catalogCount.textContent="Could not load the catalog.";catalogGrid.innerHTML='<p class="catalog-empty">'+escapeHtml(e.message)+'</p>'}}
 function filteredCatalog(){if(!catalogData)return[];var q=catalogSearch.value.trim().toLocaleLowerCase("de-DE"),cat=catalogFilter.value;return catalogData.entries.filter(function(x){return(!cat||categoryMembership(x).includes(cat))&&(!q||String(x.id).toLowerCase().includes(q)||String(x.title||"").toLocaleLowerCase("de-DE").includes(q))})}
 function renderCatalog(){if(!catalogData)return;var matches=filteredCatalog(),pages=Math.max(1,Math.ceil(matches.length/PAGE_SIZE));catalogPage=Math.min(catalogPage,pages);var start=(catalogPage-1)*PAGE_SIZE,items=matches.slice(start,start+PAGE_SIZE);catalogCount.textContent=matches.length?"Showing "+(start+1)+"–"+(start+items.length)+" of "+matches.length+" entries":"No matching pages found.";document.getElementById("catalogPageStatus").textContent=catalogPage+" / "+pages;document.getElementById("catalogPrevious").disabled=catalogPage===1;document.getElementById("catalogNext").disabled=catalogPage===pages;catalogGrid.innerHTML="";if(!items.length){catalogGrid.innerHTML='<p class="catalog-empty">No matching pages found.</p>';return}items.forEach(function(x){var card=document.createElement("article");card.className="catalog-card";var img=document.createElement("img");img.loading="lazy";img.alt="";img.src="https://ausmalwiese.de"+x.thumb;var h=document.createElement("h3");h.textContent=x.title||x.id;var meta=document.createElement("small");meta.textContent="ID: "+x.id;var tags=document.createElement("div");tags.className="catalog-tags";[...categoryMembership(x).map(categoryText),...(Array.isArray(x.topics)?x.topics.map(function(t){return topicLabels[t]||t}):[]),x.age+" years",({easy:"Easy",normal:"Medium",detailed:"Detailed"}[x.difficulty]||x.difficulty)].forEach(function(t){var s=document.createElement("span");s.className="catalog-tag";s.textContent=t;tags.appendChild(s)});var actions=document.createElement("div");actions.className="catalog-actions";var edit=document.createElement("a");edit.className="secondary";edit.textContent="Edit";edit.href="#edit/"+encodeURIComponent(x.id);edit.setAttribute("aria-label","Edit: "+(x.title||x.id));var open=document.createElement("a");open.className="secondary";open.target="_blank";open.rel="noopener";open.href="https://ausmalwiese.de/detail.html?id="+encodeURIComponent(x.id);open.textContent="Open ↗";var archive=document.createElement("button");archive.className="danger";archive.type="button";archive.textContent="Archive";archive.onclick=function(){archiveCatalogEntry(x)};actions.append(edit,open,archive);card.append(img,h,meta,tags,actions);catalogGrid.appendChild(card)})}
 function editValues(){return {id:editId.value,title:editTitle.value.trim(),category:editSelectedCategories[0]||"",categories:editSelectedCategories.slice(),topic:editSelectedTopics[0]||"",topics:editSelectedTopics.slice(),taxonomy_sha256:taxonomyVersion,age:editAge.value,difficulty:editDifficulty.value}}
@@ -1665,6 +1715,181 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
   node("more").addEventListener("click",()=>{shown+=25;ranking();});
   window.AdminOrigin={open:page=>page==="origin"&&!loaded&&!node("refresh").disabled?refresh():Promise.resolve()};
   if(typeof currentRoute!=="undefined")window.AdminOrigin.open(currentRoute);
+})();
+</script>
+<!-- #1341 standalone classification audit -->
+<script>
+(function(){
+"use strict";
+var el=function(id){return document.getElementById(id)};
+var nodes={analyze:el("classificationAnalyze"),discard:el("classificationDiscard"),status:el("classificationStatus"),
+ work:el("classificationWorkspace"),metrics:el("classificationMetrics"),rows:el("classificationRows"),
+ search:el("classificationSearch"),filter:el("classificationFilter"),prev:el("classificationPrev"),
+ next:el("classificationNext"),pager:el("classificationPager"),bulk:el("classificationApproveSelected"),
+ export:el("classificationExport")};
+var run=0,report=null,page=1,checked=new Set();
+function sha(v){return typeof v==="string"&&/^[a-f0-9]{64}$/.test(v)}
+function slug(v){return typeof v==="string"&&/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(v)&&v.length<=48}
+function norm(v){return String(v||"").normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/ß/g,"ss").toLocaleLowerCase("de-DE").replace(/[^a-z0-9]+/g," ").trim().replace(/\s+/g," ")}
+function unique(a){return Array.isArray(a)&&new Set(a).size===a.length&&a.every(function(v){return typeof v==="string"})}
+function validate(s){
+ if(!s||!s.catalog||!s.taxonomy||!s.categories||!s.topics||!s.links)throw Error("Incomplete snapshot");
+ var c=s.catalog,t=s.taxonomy,k=s.categories,m=s.topics,l=s.links;
+ if(!sha(c.catalog_sha256)||!Array.isArray(c.entries)||c.count!==c.entries.length||c.count>10000
+  ||!sha(t.version)||!Array.isArray(t.categories)||!Array.isArray(t.topics)||!k.enabled||!m.enabled||!l.enabled
+  ||!sha(k.registry_sha256)||!sha(m.registry_sha256)||!sha(l.registry_sha256)
+  ||k.registry_sha256!==l.category_sha256||m.registry_sha256!==l.topic_sha256
+  ||!Array.isArray(k.categories)||!Array.isArray(m.topics)||!Array.isArray(l.links)
+  ||k.categories.length!==t.categories.length||m.topics.length!==t.topics.length)throw Error("Missing or inconsistent registry");
+ var cats=new Map(),topics=new Map(),links=new Set(),seen=new Set();
+ k.categories.forEach(function(x){if(!x||!slug(x.id)||typeof x.label!=="string"||cats.has(x.id))throw Error("Invalid Category");cats.set(x.id,x)});
+ m.topics.forEach(function(x){if(!x||!slug(x.id)||typeof x.label!=="string"||!["seasonal","evergreen"].includes(x.kind)
+   ||!Array.isArray(x.legacy_terms)||x.legacy_terms.some(function(v){return typeof v!=="string"})
+   ||topics.has(x.id))throw Error("Invalid Topic");topics.set(x.id,x)});
+ t.categories.forEach(function(x){var c=x&&cats.get(x.id);if(!c||c.label!==x.label)throw Error("Public Category mismatch")});
+ t.topics.forEach(function(x){var m=x&&topics.get(x.id);if(!m||m.label!==x.label||m.kind!==x.kind)throw Error("Public Topic mismatch")});
+ l.links.forEach(function(x){if(!x||!cats.has(x.category)||!topics.has(x.topic))throw Error("Unknown Topic link");
+  var pair=x.category+"/"+x.topic;
+  if(links.has(pair)||((topics.get(x.topic).kind==="seasonal")!==(x.category==="jahreszeiten")))throw Error("Duplicate or incompatible link");
+  links.add(pair);
+ });
+ c.entries.forEach(function(x){if(!x||!/^[0-9]{7}$/.test(x.id)||seen.has(x.id)||typeof x.title!=="string"||!x.title.trim())throw Error("Invalid catalog identity");
+  seen.add(x.id);
+  var cc=Array.isArray(x.categories)?x.categories:[x.category],tt=Array.isArray(x.topics)?x.topics:[];
+  if(!unique(cc)||!cc.length||cc.length>6||cc[0]!==x.category||cc.some(function(v){return !cats.has(v)})
+    ||!unique(tt)||tt.some(function(v){return !topics.has(v)}))throw Error("Invalid catalog memberships");
+ });
+ return {cats:cats,topics:topics,links:links};
+}
+function classify(x,index){
+ var categories=Array.isArray(x.categories)?x.categories.slice():[x.category],
+     topics=Array.isArray(x.topics)?x.topics.slice():[];
+ var row={id:x.id,title:x.title,thumb:x.thumb||"",before:{categories:categories.slice(),topics:topics.slice()},
+  after:{categories:categories.slice(),topics:topics.slice()},status:"unchanged",decision:"deferred",confidence:"none",reason:"No unambiguous Topic phrase."};
+ if(topics.some(function(t){return !categories.some(function(c){return index.links.has(c+"/"+t)})})){
+  row.status="review";row.reason="Existing unlinked Topic requires manual review.";return row;
+ }
+ var title=" "+norm(x.title)+" ",matches=[];
+ index.topics.forEach(function(t){
+  if(topics.includes(t.id))return;
+  var term=[t.label,t.id].concat(t.legacy_terms).map(norm).filter(function(v){return v.length>=4}).find(function(v){return title.includes(" "+v+" ")});
+  if(term)matches.push({topic:t,term:term});
+ });
+ if(!matches.length)return row;
+ if(matches.length>1){row.status="review";row.reason="Multiple matched Topics: "+matches.map(function(v){return v.topic.id}).join(", ");return row}
+ var topic=matches[0].topic,linked=Array.from(index.links).filter(function(s){return s.endsWith("/"+topic.id)}).map(function(s){return s.slice(0,s.lastIndexOf("/"))});
+ var selected=linked.filter(function(c){return categories.includes(c)});
+ if(!selected.length){
+  if(linked.length!==1||categories.length>=6){row.status="review";row.reason="No single compatible linked Category for "+topic.id;return row}
+  row.after.categories.push(linked[0]);
+ }
+ if(topic.kind==="seasonal"&&!row.after.categories.includes("jahreszeiten")
+   ||topic.kind==="evergreen"&&!row.after.categories.some(function(c){return c!=="jahreszeiten"})){
+  row.status="review";row.reason="Topic kind is incompatible with categories.";return row;
+ }
+ row.after.topics.push(topic.id);row.status="proposed";row.confidence="high";
+ row.reason="Exact title phrase "+JSON.stringify(matches[0].term)+" matches "+topic.id+
+  (selected.length?" in an existing Category.":"; proposes its sole linked Category.");
+ return row;
+}
+function audit(s){var index=validate(s);return {total:s.catalog.count,
+ rows:s.catalog.entries.map(function(x){return classify(x,index)}),
+ hashes:{catalog_sha256:s.catalog.catalog_sha256,taxonomy_sha256:s.taxonomy.version,
+ category_sha256:s.categories.registry_sha256,topic_sha256:s.topics.registry_sha256,links_sha256:s.links.registry_sha256}}}
+function totals(a){var c={published:a.total,missingTopic:0,proposed:0,needsReview:0,approved:0,rejected:0,deferred:0};
+ a.rows.forEach(function(x){if(!x.before.topics.length)c.missingTopic++;
+ if(x.status==="review")c.needsReview++;
+ if(x.status==="proposed"){c.proposed++;c[x.decision]++}});
+ return c;
+}
+function manifest(a){return {schema:"ausmalwiese.catalog-classification-review.v1",mode:"DRY_RUN_ONLY",hashes:Object.assign({},a.hashes),totals:totals(a),
+ approved_changes:a.rows.filter(function(x){return x.status==="proposed"&&x.decision==="approved"}).map(function(x){
+  return {id:x.id,before:x.before,after:x.after,reason:x.reason,confidence:x.confidence}}),
+ review_decisions:a.rows.filter(function(x){return x.status==="proposed"}).map(function(x){return {id:x.id,decision:x.decision}})}}
+function invalidate(message){run++;report=null;checked.clear();page=1;nodes.work.hidden=true;nodes.discard.disabled=true;nodes.analyze.disabled=false;
+ if(message)nodes.status.textContent=message;}
+async function get(path){var r=await fetch(path,{method:"GET",headers:{"X-Ausmalwiese-Admin":"1"},cache:"no-store"});
+ if(!r.ok)throw Error("Read-only snapshot unavailable: "+path);return r.json();}
+async function snapshot(){
+ var names=["/api/catalog","/api/categories","/api/categories/manage","/api/topics/manage","/api/category-topics/manage"];
+ var all=await Promise.all(names.map(get)),s={catalog:all[0],taxonomy:all[1],categories:all[2],topics:all[3],links:all[4]};
+ validate(s);
+ var again=await Promise.all([get("/api/catalog"),get("/api/categories"),get("/api/category-topics/manage")]);
+ if(again[0].catalog_sha256!==s.catalog.catalog_sha256||again[1].version!==s.taxonomy.version
+ ||again[2].registry_sha256!==s.links.registry_sha256||again[2].category_sha256!==s.categories.registry_sha256
+ ||again[2].topic_sha256!==s.topics.registry_sha256)throw Error("Catalog or taxonomy changed during analysis");
+ return s;
+}
+function node(tag,content){var n=document.createElement(tag);n.textContent=content;return n}
+function render(){
+ if(!report)return;
+ nodes.metrics.replaceChildren();var count=totals(report);
+ Object.keys(count).forEach(function(k){nodes.metrics.appendChild(node("span",k+": "+count[k]))});
+ var q=norm(nodes.search.value),filter=nodes.filter.value;
+ var rows=report.rows.filter(function(x){
+  return (!q||norm(x.title+" "+x.id).includes(q))&&
+   (filter==="all"||filter===x.status||(x.status==="proposed"&&filter===x.decision));
+ });
+ var pages=Math.max(1,Math.ceil(rows.length/20));page=Math.min(page,pages);
+ nodes.rows.replaceChildren();nodes.pager.textContent="Page "+page+" / "+pages+" · "+rows.length+" results";
+ nodes.prev.disabled=page===1;nodes.next.disabled=page===pages;
+ rows.slice((page-1)*20,page*20).forEach(function(r){
+  var article=document.createElement("article");article.className="classification-row";
+  var img=document.createElement("img");img.alt="";img.loading="lazy";
+  if(/^\/[a-zA-Z0-9/_-]+[.][a-zA-Z0-9]+$/.test(r.thumb))img.src="https://ausmalwiese.de"+r.thumb;
+  var body=document.createElement("div"),list=function(v){return v.length?v.join(", "):"—"};
+  body.append(node("h4",r.title),node("small","ID: "+r.id),
+   node("p","Current · Categories: "+list(r.before.categories)+" · Topics: "+list(r.before.topics)),
+   node("p","Suggested · Categories: "+list(r.after.categories)+" · Topics: "+list(r.after.topics)),
+   node("p",r.reason),
+   node("strong",r.status==="proposed"?"Decision: "+r.decision:r.status==="review"?"Needs manual review":"Unchanged"));
+  if(r.status==="proposed"){
+   var actions=document.createElement("div");actions.className="classification-tools";
+   var input=document.createElement("input");input.type="checkbox";input.checked=checked.has(r.id);
+   input.setAttribute("aria-label","Select high-confidence proposal "+r.id);
+   input.onchange=function(){if(input.checked)checked.add(r.id);else checked.delete(r.id);nodes.bulk.disabled=!checked.size};actions.appendChild(input);
+   ["approved","rejected","deferred"].forEach(function(value){
+    var button=document.createElement("button");button.type="button";button.className="secondary";
+    button.textContent=value==="approved"?"Approve":value==="rejected"?"Reject":"Defer";
+    button.disabled=r.decision===value;button.setAttribute("aria-label",button.textContent+" classification "+r.id);
+    button.onclick=function(){r.decision=value;checked.delete(r.id);render()};actions.appendChild(button);
+   });body.appendChild(actions);
+  }
+  article.append(img,body);nodes.rows.appendChild(article);
+ });
+ nodes.bulk.disabled=!checked.size;
+}
+async function analyze(){var ticket=++run;report=null;checked.clear();nodes.work.hidden=true;nodes.analyze.disabled=true;
+ nodes.status.textContent="Reading full Catalog and canonical registries…";
+ try{var s=await snapshot();if(ticket!==run)return;report=audit(s);page=1;nodes.search.value="";nodes.filter.value="all";
+ nodes.work.hidden=false;nodes.discard.disabled=false;nodes.status.textContent="Read-only analysis ready. Review suggested changes.";render();
+ }catch(e){if(ticket===run)invalidate("Analysis blocked: "+e.message)}
+ finally{if(ticket===run)nodes.analyze.disabled=false}
+}
+async function exportPlan(){if(!report)return;var original=report,ticket=run;nodes.export.disabled=true;
+ try{var s=await snapshot();if(ticket!==run||report!==original)return;
+ var latest=audit(s).hashes;if(Object.keys(original.hashes).some(function(k){return original.hashes[k]!==latest[k]}))
+ throw Error("Catalog or registry changed since review");
+ var bytes=JSON.stringify(manifest(original),null,2)+"\n";
+ var url=URL.createObjectURL(new Blob([bytes],{type:"application/json"}));
+ try{var link=document.createElement("a");link.download="ausmalwiese-classification-dry-run.json";link.href=url;link.click();}
+ finally{URL.revokeObjectURL(url)}
+ nodes.status.textContent="Reviewed dry-run exported. No LIVE catalog changes.";
+ }catch(e){invalidate("Export blocked: "+e.message)}
+ finally{nodes.export.disabled=!report}
+}
+nodes.analyze.onclick=analyze;
+nodes.discard.onclick=function(){invalidate("Review discarded without changes")};
+nodes.search.oninput=nodes.filter.onchange=function(){page=1;render()};
+nodes.prev.onclick=function(){if(report&&page>1){page--;render()}};
+nodes.next.onclick=function(){if(report){page++;render()}};
+nodes.bulk.onclick=function(){if(!report||!checked.size)return;
+ var selected=report.rows.filter(function(x){return x.status==="proposed"&&x.confidence==="high"&&checked.has(x.id)});
+ if(!selected.length||!window.confirm("Approve "+selected.length+" checked suggestions in this dry-run only?"))return;
+ selected.forEach(function(x){x.decision="approved"});checked.clear();render();
+};
+nodes.export.onclick=exportPlan;
+window.AdminClassification={audit:audit,validate:validate,totals:totals,manifest:manifest,analyze:analyze,exportPlan:exportPlan,invalidate:invalidate};
 })();
 </script>
 </body>

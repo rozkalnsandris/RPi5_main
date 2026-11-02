@@ -1,5 +1,16 @@
 # Ausmalwiese admin ZIP publisher v1
 
+
+## Bulk Catalog classification review (#1341) — source-only
+
+The existing protected Catalog section has **Analyze Catalog** / **Review classifications**. No proposals are generated until requested. The module sends only same-origin GETs with the existing ADMIN marker to the complete Catalog, public taxonomy, managed Categories, managed Topics and explicit private links registries. SHA-256 and count/ID checks fail closed on stale or incomplete snapshots; analysis repeats a catalog/taxonomy/link digest read. A catalog refresh invalidates in-memory review. No external AI provider, browser persistence, publication, catalog edit or runtime mutation is used.
+
+Normalized German title words/phrases, canonical Topic labels and legacy terms produce conservative proposals. An exact unique matching Topic must have an unambiguous linked Category; otherwise the row is **Needs review**. Existing valid ordered multi-category and multi-Topic assignments are retained. At most one sole linked secondary Category is proposed; no deletion. Previews, title, ID, current and suggested assignments, reasons, Approve/Reject/Defer, search, status filter and pagination are provided. Optional checked-row approval requires explicit confirmation.
+
+**Export reviewed dry-run JSON** repeats protected hash verification and includes canonical hashes, counts, approved ID/before/after/reason and proposal decisions, but no titles, media, credentials or visitor information. It is **DRY_RUN_ONLY**, without an apply endpoint. A future bulk apply requires a separate reviewed operator, exact owner authorization, frozen hash/lock/job preconditions and one atomic write; not part of #1341.
+
+Offline regression: node tests/test-coloring-pages-admin-classification.cjs. ADMIN source workflow includes this test. Merge and UI-only deployment are separate owner gates.
+
 ## Multiple canonical topics (#1287) — source only
 
 Upstream `coloring-pages#434` was owner-merged as source `1b292b238f491269fa11387b32f9d2742fc3aea1`. The canonical GitHub Actions image-build log recorded immutable image `ghcr.io/rozkalnsandris/coloring-pages@sha256:9ada5cdeca92627b195fa2897ce8e6c6921b47d5cb1cacc90ce6b8c59e6d8a9a` (not a LIVE proof).
