@@ -3,6 +3,10 @@ name: Coloring Pages SIMPLE-DEPLOY target source
 on:
   pull_request:
     paths:
+      - "ops/lib/deploy_executor/simple_deploy_v1.py"
+      - "scripts/prepare-goatcounter-origin-deploy-v1.py"
+      - "tests/test-goatcounter-origin-deploy-v1.py"
+      - "docs/GOATCOUNTER_ORIGIN_DEPLOY_V1.md"
       - "ops/deploy/simple-deploy-targets-v1.json"
       - "ops/deploy/simple-deploy-compose/coloring-pages-public.yml"
       - "ops/contracts/simple-deploy-host-v1.json"
@@ -26,3 +30,5 @@ jobs:
         run: python3 ./tests/test-simple-deploy-coloring-pages-target-v1.py
       - name: Validate SIMPLE-DEPLOY registry regressions
         run: python3 ./tests/test-simple-deploy-v1.py
+      - name: Validate opt-in origin profile and reconciliation
+        run: python3 ./tests/test-goatcounter-origin-deploy-v1.py
