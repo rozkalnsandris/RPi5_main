@@ -29,7 +29,9 @@ The reader uses only `127.0.0.1:9194`, Host
 `goatcounter.ausmalwiese.invalid`, and these GoatCounter 2.7.0 GETs:
 
 1. `/api/v0/me`: require permissions exactly 64 (Stats), a single explicit site
-   equal to the user site, and user timezone UTC or Etc/UTC. This response includes
+   equal to the user site, and user timezone `.UTC`, `UTC` or `Etc/UTC`.
+   The pinned v2.7 `tz.Zone` serializer emits `.UTC` (empty country code followed
+   by a dot and the zone); this is UTC, not a different timezone. This response includes
    account metadata, which is discarded and never sent to ADMIN or logs.
 2. `/api/v0/paths?limit=200&after=<cursor>`: discover up to 2,000 path records.
    Select only non-event `/origin-detail-request/<seven-digit-id>` names.

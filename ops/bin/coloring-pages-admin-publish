@@ -2169,7 +2169,9 @@ class OriginReportReader:
         if (type(site) is not int or site <= 0 or permissions["permissions"] != 64
                 or permissions["sites"] != [site]
                 or type(permissions["sites"][0]) is not int
-                or user["settings"]["timezone"] not in ("UTC", "Etc/UTC")):
+                # v2.7's tz.Zone serializes CountryCode + "." + Zone; UTC
+                # has an empty country code and is therefore exactly ".UTC".
+                or user["settings"]["timezone"] not in (".UTC", "UTC", "Etc/UTC")):
             raise ValueError("stats-only single-site UTC credential required")
         selected, after = {}, 0
         for _ in range(10):

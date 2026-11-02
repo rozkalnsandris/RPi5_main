@@ -26,7 +26,7 @@ class Fixture:
     def __init__(self, days=7):
         self.days = days
         self.calls = []
-        self.me = {"user": {"site": 1, "email": "PRIVATE_EMAIL", "settings": {"timezone": "UTC"}},
+        self.me = {"user": {"site": 1, "email": "PRIVATE_EMAIL", "settings": {"timezone": ".UTC"}},
                    "token": {"permissions": 64, "sites": [1]}}
         self.paths = [{"id": 1, "path": "/old-browser-counter/0123456", "event": False},
                       {"id": 2, "path": "/origin-detail-request/0123456", "event": False},
@@ -99,10 +99,18 @@ class ReportTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.collect(fixture)
             self.assertEqual(fixture.calls, ["/api/v0/me"])
-        fixture = Fixture()
-        fixture.me["user"]["settings"]["timezone"] = "Europe/Berlin"
-        with self.assertRaises(ValueError):
-            self.collect(fixture)
+        for zone in ("Europe/Berlin", "DE.Europe/Berlin", "UTC+01:00", "", None):
+            fixture = Fixture()
+            fixture.me["user"]["settings"]["timezone"] = zone
+            with self.assertRaises(ValueError):
+                self.collect(fixture)
+            self.assertEqual(fixture.calls, ["/api/v0/me"])
+
+    def test_serialized_utc_and_plain_utc_names(self):
+        for zone in (".UTC", "UTC", "Etc/UTC"):
+            fixture = Fixture()
+            fixture.me["user"]["settings"]["timezone"] = zone
+            self.assertEqual(self.collect(fixture)["total"], 5)
 
     def test_reject_incomplete_inconsistent_or_unrelated_aggregates(self):
         mutations = [lambda p: p.update(more=True), lambda p: p.update(total=6),
