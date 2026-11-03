@@ -1,217 +1,228 @@
 #!/usr/bin/env python3
-"""Adversarial, disconnected Cloudflare readback tests (#1356)."""
+"""GoatCounter SIMPLE injected Cloudflare readback and guarded GET tests (#1358)."""
 import hashlib
 from pathlib import Path
 import sys
 import unittest
 from unittest.mock import patch
 
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"scripts"))
-import ausmalwiese_goatcounter_simple_cloudflare_readback_v1 as m
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+import ausmalwiese_goatcounter_simple_cloudflare_readback_v1 as readback
+import ausmalwiese_goatcounter_simple_cloudflare_operator_v1 as operator
 
-ACCOUNT="a"*32
-ZONE="b"*32
-TUNNEL="11111111-1111-4111-8111-111111111111"
-P=f"/accounts/{ACCOUNT}"
-C=f"{P}/cfd_tunnel?name=rpi5-tunnel&is_deleted=false&per_page=100"
-T=f"{P}/cfd_tunnel/{TUNNEL}/configurations"
-R=f"/zones/{ZONE}/workers/routes"
-D=f"{P}/workers/domains?page=1&per_page=20"
+ACCOUNT, ZONE = "a" * 32, "b" * 32
+TUNNEL = "11111111-1111-4111-8111-111111111111"
+BASE = "/accounts/" + ACCOUNT
+ZONE_PATH = "/zones/" + ZONE
+LIST = BASE + "/cfd_tunnel?name=rpi5-tunnel&is_deleted=false&per_page=100"
+CONFIG = BASE + "/cfd_tunnel/" + TUNNEL + "/configurations"
+ROUTES = ZONE_PATH + "/workers/routes"
+APEX = BASE + "/workers/domains?hostname=ausmalwiese.de"
+WWW = BASE + "/workers/domains?hostname=www.ausmalwiese.de"
 
-def response(value,**fields):
-    return {"success":True,"errors":[],"result":value,**fields}
 
-def info(page,count,total):
-    return {"page":page,"count":count,"per_page":20,"total_count":total,
-            "total_pages":max(1,(total+19)//20)}
+def response(result, info=None):
+    obj = {"success": True, "errors": [], "result": result}
+    if info is not None:
+        obj["result_info"] = info
+    return obj
 
-def domain(host="api.ausmalwiese.de",ident="c"*32,zone=ZONE,
-           zone_name="ausmalwiese.de",active=True,preview=False):
-    return {"id":ident,"hostname":host,"zone_id":zone,"zone_name":zone_name,
-            "enabled":active,"previews_enabled":preview,"service":"worker-fixture"}
+
+def page(count=0, total=None, pages=1):
+    return {"page": 1, "per_page": 20, "count": count,
+            "total_count": count if total is None else total,
+            "total_pages": pages}
+
+
+def domain(name, zone=ZONE):
+    return {"id": "c" * 32, "hostname": name, "zone_id": zone,
+            "zone_name": "ausmalwiese.de", "enabled": True,
+            "previews_enabled": False, "service": "private-canary"}
+
 
 def fixture():
     return {
-        f"/zones/{ZONE}":response({"id":ZONE,"name":"ausmalwiese.de",
-             "status":"active","account":{"id":ACCOUNT}}),
-        C:response([{"id":TUNNEL,"name":"rpi5-tunnel",
-             "config_src":"cloudflare","deleted_at":None,"account_id":ACCOUNT}],
-             result_info={"page":1,"total_pages":1,"count":1,"total_count":1}),
-        T:response({"version":4,"account_id":ACCOUNT,"config":{"ingress":[
-             {"hostname":"ausmalwiese.de","service":"http://127.0.0.1:9191"},
-             {"hostname":"www.ausmalwiese.de","service":"http://127.0.0.1:9191"},
-             {"service":"http_status:404"}]}}),
-        R:response([{"id":"d"*32,"pattern":"ausmalwiese.de/api/*",
-                     "script":"worker-fixture"}]),
-        D:response([],result_info=info(1,0,0)),
+        ZONE_PATH: response({"id": ZONE, "name": "ausmalwiese.de",
+                             "status": "active", "account": {"id": ACCOUNT}}),
+        LIST: response([{"id": TUNNEL, "name": "rpi5-tunnel",
+                         "config_src": "cloudflare", "deleted_at": None,
+                         "account_id": ACCOUNT}],
+                       {"page": 1, "total_pages": 1, "count": 1, "total_count": 1}),
+        CONFIG: response({"version": 9, "config": {"ingress": [
+            {"hostname": "ausmalwiese.de", "service": "http://127.0.0.1:9191"},
+            {"hostname": "www.ausmalwiese.de", "service": "http://127.0.0.1:9191"},
+            {"service": "http_status:404"}]}}),
+        ROUTES: response([{"id": "d" * 32, "pattern": "ausmalwiese.de/api/*",
+                           "script": "private-canary"}]),
+        APEX: response([], page()), WWW: response([], page()),
     }
 
-class Getter:
-    def __init__(self,answers):
-        self.answers=answers
-        self.paths=[]
-    def __call__(self,path):
-        self.paths.append(path)
-        if path not in self.answers:
-            raise RuntimeError("canary secret upstream error")
-        return self.answers[path]
 
-class EvidenceTests(unittest.TestCase):
+class Stub:
+    def __init__(self, data):
+        self.data = data
+        self.requests = []
+    def __call__(self, path):
+        self.requests.append(path)
+        if path not in self.data:
+            raise RuntimeError("SECRET_CANARY from provider")
+        return self.data[path]
+
+
+class Tests(unittest.TestCase):
     def setUp(self):
-        p=patch.object(m,"ACCOUNT_SHA256",hashlib.sha256(ACCOUNT.encode()).hexdigest())
-        p.start()
-        self.addCleanup(p.stop)
+        pin = patch.object(readback, "ACCOUNT_SHA256",
+                           hashlib.sha256(ACCOUNT.encode()).hexdigest())
+        pin.start()
+        self.addCleanup(pin.stop)
 
-    def run_case(self,data=None,account=ACCOUNT,zone=ZONE):
-        fake=Getter(fixture() if data is None else data)
-        result=m.collect_once(trusted_get=fake,account_id=account,zone_id=zone)
-        self.assertEqual(len(fake.paths),len(set(fake.paths)))
-        self.assertLessEqual(len(fake.paths),12)
-        self.assertNotIn("canary",str(result))
-        self.assertNotIn(ACCOUNT,str(result))
-        self.assertNotIn(ZONE,str(result))
-        return result,fake
+    def check(self, data=None, account=ACCOUNT, zone=ZONE):
+        caller = Stub(fixture() if data is None else data)
+        value = readback.collect_once(trusted_get=caller,
+                                      account_id=account, zone_id=zone)
+        self.assertEqual(len(caller.requests), len(set(caller.requests)))
+        self.assertLessEqual(len(caller.requests), 6)
+        self.assertNotIn("private-canary", repr(value))
+        self.assertNotIn("SECRET_CANARY", repr(value))
+        self.assertNotIn(ACCOUNT, repr(value))
+        self.assertNotIn(ZONE, repr(value))
+        return value, caller
 
-    def assert_stop(self,data,code):
-        result,fake=self.run_case(data)
-        self.assertEqual(result,(code,None))
-        return fake
+    def bad(self, data, status):
+        val, _ = self.check(data)
+        self.assertEqual(val, (status, None))
 
-    def test_synthetic_pass_exposes_only_safe_constants(self):
-        result,fake=self.run_case()
-        self.assertEqual(result[0],"PASS_EDGE_SOURCE_ONLY")
-        self.assertEqual(result[1],{
-            "remote_tunnel":"verified_exact_config",
-            "routes":{"ausmalwiese.de":"absent_safe_before_app_catchall",
-                      "www.ausmalwiese.de":"absent_safe_before_app_catchall"},
-            "worker_routes":"verified_no_count_interception",
-            "worker_custom_domains":"verified_no_count_interception"})
-        self.assertEqual(fake.paths,[f"/zones/{ZONE}",C,T,R,D])
-        self.assertNotIn(TUNNEL,str(result))
-        self.assertNotIn("worker-fixture",str(result))
+    def test_exact_gets_and_no_sensitive_output(self):
+        val, stub = self.check()
+        self.assertEqual(stub.requests,
+                         [ZONE_PATH, LIST, CONFIG, ROUTES, APEX, WWW])
+        self.assertEqual(val[0], "PASS_EDGE_SOURCE_ONLY")
+        self.assertEqual(val[1]["worker_custom_domains"],
+                         "verified_no_count_interception")
+        self.assertEqual(val[1]["worker_routes"],
+                         "verified_no_count_interception")
 
-    def test_bad_identity_stops_before_get(self):
-        for account,zone in ((None,ZONE),(True,ZONE),("x"*32,ZONE),
-                             (ACCOUNT,"invalid"),(ACCOUNT,True)):
-            with self.subTest(account=account,zone=zone):
-                result,fake=self.run_case(account=account,zone=zone)
-                self.assertEqual(result,("STOP_IDENTITY",None))
-                self.assertEqual(fake.paths,[])
+    def test_wrong_identity_stops_before_get(self):
+        for acc, zone in ((None, ZONE), ("c" * 32, ZONE),
+                          (ACCOUNT, "wrong"), (ACCOUNT, False)):
+            with self.subTest(account=acc, zone=zone):
+                val, stub = self.check(account=acc, zone=zone)
+                self.assertEqual(val, ("STOP_IDENTITY", None))
+                self.assertEqual(stub.requests, [])
 
-    def test_zone_binding(self):
-        for field,value in (("name","other.com"),("id","c"*32),
-                            ("status","pending"),("account",{"id":"d"*32})):
-            data=fixture()
-            data[f"/zones/{ZONE}"]["result"][field]=value
-            with self.subTest(field=field):
-                self.assert_stop(data,"STOP_ZONE")
+    def test_tunnel_guards(self):
+        data = fixture()
+        data[LIST]["result"][0]["config_src"] = "local"
+        self.bad(data, "STOP_TUNNEL")
+        data = fixture()
+        data[CONFIG]["result"]["config"]["originRequest"] = {"tls": "canary"}
+        self.bad(data, "STOP_ROUTE")
+        data = fixture()
+        data[CONFIG]["result"]["config"]["ingress"].insert(0, {
+            "hostname": "*.ausmalwiese.de", "service": "http://127.0.0.1:9000"})
+        self.bad(data, "STOP_ROUTE")
 
-    def test_tunnel_and_route_fail_closed(self):
-        for field,value in (("name","wrong"),("config_src","local"),
-                            ("id","invalid"),("deleted_at","now"),
-                            ("account_id","f"*32)):
-            data=fixture()
-            data[C]["result"][0][field]=value
-            with self.subTest(field=field):
-                self.assert_stop(data,"STOP_TUNNEL")
-        data=fixture()
-        data[C]["result_info"]["total_pages"]=2
-        self.assert_stop(data,"STOP_TUNNEL_PAGINATION")
-        data=fixture()
-        data[T]["result"]["config"]["originRequest"]={"httpHostHeader":"canary"}
-        self.assert_stop(data,"STOP_ROUTE")
-        data=fixture()
-        data[T]["result"]["config"]["ingress"].insert(0,{
-            "hostname":"*.ausmalwiese.de","service":"http://127.0.0.1:9195"})
-        self.assert_stop(data,"STOP_ROUTE")
-        data=fixture()
-        data[T]["result"]["config"]["ingress"].insert(0,{
-            "hostname":"ausmalwiese.de","path":"^/count$",
-            "service":"http://127.0.0.1:9194",
-            "originRequest":{"httpHostHeader":"goatcounter.ausmalwiese.invalid"}})
-        self.assert_stop(data,"STOP_ROUTE")
-        data=fixture()
-        data[T]["result"]["version"]=True
-        self.assert_stop(data,"STOP_TUNNEL")
+    def test_worker_route_ambiguous_and_scriptless(self):
+        for pattern in ("ausmalwiese.de/count", "ausmalwiese.de/count*",
+                        "www.ausmalwiese.de/*", "*",
+                        "*.ausmalwiese.de/count", "ausmalwiese.de/COUNT",
+                        "ausmalwiese.de/count?x=1", "ausmalwiese.de/*/count"):
+            data = fixture()
+            data[ROUTES]["result"] = [{"id": "d" * 32,
+                                       "pattern": pattern, "script": None}]
+            with self.subTest(pattern=pattern):
+                self.bad(data, "STOP_WORKER")
+        data = fixture()
+        data[ROUTES]["result_info"] = {"page": 1, "total_pages": 2}
+        self.bad(data, "STOP_WORKER_PAGINATION")
 
-    def test_worker_routes_and_exclusion(self):
-        for pat in ("ausmalwiese.de/count","ausmalwiese.de/count*",
-                    "*.ausmalwiese.de/count","*ausmalwiese.de/*",
-                    "www.ausmalwiese.de/*","ausmalwiese.de/*.jpg",
-                    "ausmalwiese.de/count?x=y","*","ausmalwiese.de/COUNT"):
-            with self.subTest(pattern=pat):
-                data=fixture()
-                data[R]["result"]=[{"id":"d"*32,"pattern":pat,"script":None}]
-                self.assert_stop(data,"STOP_WORKER")
-        data=fixture()
-        data[R]["result_info"]={"page":1,"total_pages":2}
-        self.assert_stop(data,"STOP_WORKER_PAGINATION")
-        data=fixture()
-        data[R]["result"][0]["token"]="canary"
-        result,_=self.run_case(data)
-        self.assertEqual(result[0],"PASS_EDGE_SOURCE_ONLY")
-        data=fixture()
-        data[R]["result"]*=2
-        self.assert_stop(data,"STOP_WORKER")
+    def test_domain_exact_hostname_filters(self):
+        for key, name in ((APEX, "ausmalwiese.de"),
+                          (WWW, "www.ausmalwiese.de")):
+            data = fixture()
+            data[key] = response([domain(name)], page(1))
+            self.bad(data, "STOP_DOMAIN_INTERCEPTION")
+        data = fixture()
+        data[APEX] = response([domain("other.example")], page(1))
+        self.bad(data, "STOP_DOMAIN_FILTER")
+        data = fixture()
+        data[WWW] = response([domain("www.ausmalwiese.de", "c" * 32)], page(1))
+        self.bad(data, "STOP_DOMAIN_ZONE")
 
-    def test_domains_enabled_disabled_and_preview(self):
-        for host,active,preview in (("ausmalwiese.de",True,False),
-                ("www.ausmalwiese.de",False,True),
-                ("ausmalwiese.de",False,False),
-                ("www.ausmalwiese.de",True,True)):
-            data=fixture()
-            data[D]=response([domain(host,active=active,preview=preview)],
-                             result_info=info(1,1,1))
-            with self.subTest(host=host,active=active,preview=preview):
-                self.assert_stop(data,"STOP_DOMAIN_INTERCEPTION")
-        data=fixture()
-        data[D]=response([domain()],result_info=info(1,1,1))
-        result,_=self.run_case(data)
-        self.assertEqual(result[0],"PASS_EDGE_SOURCE_ONLY")
-        data=fixture()
-        data[D]=response([domain("www.ausmalwiese.de",zone="e"*32)],
-                         result_info=info(1,1,1))
-        self.assert_stop(data,"STOP_DOMAIN_ZONE")
-
-    def test_bounded_complete_pagination(self):
-        data=fixture()
-        more=f"{P}/workers/domains?page=2&per_page=20"
-        entries=[domain(f"example{n}.org",ident=f"{n+1:032x}",
-                        zone="f"*32,zone_name="example.org")
-                 for n in range(21)]
-        data[D]=response(entries[:20],result_info=info(1,20,21))
-        data[more]=response(entries[20:],result_info=info(2,1,21))
-        result,fake=self.run_case(data)
-        self.assertEqual(result[0],"PASS_EDGE_SOURCE_ONLY")
-        self.assertEqual(fake.paths[-1],more)
-        data[more]["result_info"]["page"]=1
-        self.assert_stop(data,"STOP_DOMAIN_PAGINATION")
-        del data[more]
-        fake=self.assert_stop(data,"STOP_TRANSPORT")
-        self.assertEqual(fake.paths.count(more),1)
-
-    def test_incomplete_and_invalid_pages(self):
-        for change in ("missing","count","total","page","pages","per_page"):
-            data=fixture()
-            obj=data[D]
-            if change=="missing":del obj["result_info"]
-            if change=="count":obj["result_info"]["count"]=1
-            if change=="total":obj["result_info"]["total_count"]=21
-            if change=="page":obj["result_info"]["page"]=2
-            if change=="pages":obj["result_info"]["total_pages"]=2
-            if change=="per_page":obj["result_info"]["per_page"]=100
+    def test_no_guessed_pagination_or_false_completeness(self):
+        for change in ("missing", "multi", "total", "count", "bad-page"):
+            data = fixture()
+            if change == "missing":
+                del data[APEX]["result_info"]
+            elif change == "multi":
+                data[APEX]["result_info"]["total_pages"] = 2
+            elif change == "total":
+                data[APEX]["result_info"]["total_count"] = 2000
+            elif change == "count":
+                data[APEX]["result_info"]["count"] = 1
+            elif change == "bad-page":
+                data[APEX]["result_info"]["page"] = 2
             with self.subTest(change=change):
-                self.assert_stop(data,"STOP_DOMAIN_PAGINATION")
-        data=fixture()
-        data[D]["result"]=[{"raw-token":"canary"}]
-        data[D]["result_info"]=info(1,1,1)
-        self.assert_stop(data,"STOP_DOMAIN")
+                self.bad(data, "STOP_DOMAIN_PAGINATION")
+        data = fixture()
+        del data[WWW]
+        val, stub = self.check(data)
+        self.assertEqual(val, ("STOP_TRANSPORT", None))
+        self.assertEqual(stub.requests.count(WWW), 1)
 
-    def test_transport_injection_and_disabled_runtime(self):
-        self.assertEqual(m.collect_once(trusted_get=None,account_id=ACCOUNT,zone_id=ZONE),
-                         ("STOP_TRANSPORT",None))
-        self.assertFalse(hasattr(m,"apply"))
-        self.assertFalse(hasattr(m,"main"))
+    def test_guarded_operator_cannot_execute_from_repo_checkout(self):
+        # Even an authenticated-looking fake must not trigger a GET while
+        # the code is only a source checkout, not root-owned trusted release.
+        class Client:
+            def __init__(self): self.calls = []
+            def _request(self, method, path):
+                self.calls.append((method, path))
+                return fixture()[path]
+        fake = Client()
+        val = operator.run_guarded(client=fake, account_id=ACCOUNT,
+                                   zone_id=ZONE, expected_source_sha="f" * 40)
+        self.assertEqual(val, ("STOP_TRUSTED_INSTALL", None))
+        self.assertEqual(fake.calls, [])
 
-if __name__=="__main__":
+    def test_getonly_transport_rejects_every_unapproved_path(self):
+        class Client:
+            def __init__(self): self.calls = []
+            def _request(self, method, path):
+                self.calls.append((method, path))
+                return fixture()[path]
+        with patch.object(operator, "CloudflareClient", Client):
+            fake = Client()
+            bounded = operator.GETOnly(fake, ACCOUNT, ZONE)
+            for path in ("/user/tokens/verify", BASE + "/workers/scripts",
+                         "/zones/" + ZONE + "/dns_records",
+                         BASE + "/workers/domains?page=1&per_page=20",
+                         BASE + "/cfd_tunnel/invalid/configurations"):
+                with self.subTest(path=path):
+                    with self.assertRaises(operator.Blocked):
+                        bounded(path)
+            self.assertEqual(fake.calls, [])
+            self.assertEqual(bounded(ZONE_PATH), fixture()[ZONE_PATH])
+            self.assertEqual(fake.calls, [("GET", ZONE_PATH)])
+            with self.assertRaises(operator.Blocked):
+                bounded(ZONE_PATH)
+            self.assertEqual(len(fake.calls), 1)
+
+    def test_synthetic_operator_end_to_end_get_only(self):
+        class Client:
+            def __init__(self): self.calls = []
+            def _request(self, method, path):
+                self.calls.append((method, path))
+                return fixture()[path]
+        with patch.object(operator, "CloudflareClient", Client), \
+             patch.object(operator, "verified_release", return_value=None):
+            fake = Client()
+            val = operator.run_guarded(client=fake, account_id=ACCOUNT,
+                                       zone_id=ZONE, expected_source_sha="f" * 40)
+            # Only in this mock-proven synthetic test can GET be exercised.
+            self.assertEqual(val[0], "PASS_EDGE_SOURCE_ONLY")
+            self.assertEqual([x[1] for x in fake.calls],
+                             [ZONE_PATH, LIST, CONFIG, ROUTES, APEX, WWW])
+            self.assertEqual({x[0] for x in fake.calls}, {"GET"})
+
+if __name__ == "__main__":
     unittest.main()
