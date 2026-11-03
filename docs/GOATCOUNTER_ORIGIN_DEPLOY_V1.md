@@ -73,6 +73,40 @@ ASCII escaping and no trailing newline. Image digests include `sha256:`; evidenc
 hashes are 64 lowercase hex characters. Request-file SHA binds its **exact bytes**.
 These hashes bind reviewed evidence; they do not authenticate arbitrary statements.
 
+### Provenance compatibility with the observed native ARM64 BuildKit release
+
+The unmodified candidate archive from the [2026-11-03 ARM64 proof run
+41591540610](https://github.com/rozkalnsandris/coloring-pages/actions/runs/41591540610)
+uses in-toto `Statement/v1` with SLSA **predicate v0.2** even with
+`--provenance=mode=max,version=v0.2`. That is a statement wrapper version,
+not permission to accept any SLSA predicate. The historic
+`Statement/v0.1` contract remains byte-for-byte behaviorally supported.
+
+For **v1 only**, the preparer accepts the exact two observed materials:
+the immutable recipe Git URL/commit digest and one base-image package URL
+`pkg:docker/ghcr.io/rozkalnsandris/coloring-pages?digest=<base-index-sha256>&platform=linux%2Farm64`
+whose material digest equals the **base OCI index** SHA-256. It does not
+mistake that index for the ARM64 image manifest: separately, the request's
+exact raw base index SHA must match `base_digest` and its unique ARM64/v8
+descriptor must match `base_platform_digest`. The legacy v0.1 branch
+continues to require the base material's ARM64 manifest digest.
+
+Both variants still require one exact derivative ARM64 subject,
+`predicateType=https://slsa.dev/provenance/v0.2`,
+`buildType=https://mobyproject.org/buildkit@v1`, the pinned Git recipe
+URI/SHA/entrypoint, the exact immutable `APPLICATION_IMAGE` build argument,
+canonical statement SHA-256, and strict configuration/peer identity checks.
+Unknown wrappers, altered base/recipe materials, ambiguous/duplicate
+materials and mismatched index/ARM64 identities fail closed. No attestation
+rewriting, public activation, or LIVE authority is implied.
+
+Evidence is recorded in [RPi5_main #1348](https://github.com/rozkalnsandris/RPi5_main/issues/1348);
+the source fix requires an exact coordinated application-repository validator
+pin and a fresh ARM64 proof. Published images and host runtime remain separate
+owner-gated steps. Official format references:
+[Docker SLSA definitions](https://docs.docker.com/build/metadata/attestations/slsa-definitions/)
+and [in-toto Statement v1](https://github.com/in-toto/attestation/blob/main/spec/v1/statement.md).
+
 `scripts/prepare-goatcounter-origin-deploy-v1.py` is non-root, offline and emits one
 JSON bundle to stdout. It invokes no subprocess, network, Docker, host probe or
 installer. Its only inputs are the explicit bounded regular request file and

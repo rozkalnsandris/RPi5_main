@@ -63,6 +63,25 @@ def fixture():
         "base_config": base, "derivative_config": derived, "provenance": provenance, "peer_evidence": peer}
 
 
+def v1_fixture():
+    """Minimal synthetic analogue of the actual ARM64 BuildKit v1 wrapper.
+
+    The OCI base material is the index digest; its unique ARM64 descriptor is
+    checked separately by prepare() against the canonical base manifest.
+    """
+    request = fixture()
+    statement = request["provenance"]
+    statement["_type"] = "https://in-toto.io/Statement/v1"
+    statement["predicate"]["materials"] = [
+        {"uri": "pkg:docker/ghcr.io/rozkalnsandris/coloring-pages?digest=" + BASE +
+                "&platform=linux%2Farm64", "digest": {"sha256": BASE[7:]}},
+        {"uri": "https://github.com/rozkalnsandris/coloring-pages.git#" + sd.ORIGIN_RECIPE_SHA,
+         "digest": {"sha1": sd.ORIGIN_RECIPE_SHA}},
+    ]
+    request["profile"]["provenance_sha256"] = op.digest(statement)
+    return request
+
+
 def prepare(value=None, **kwargs):
     return op.prepare(value or fixture(), REGISTRY, COMPOSE, source_sha=HOST_SOURCE, now=NOW, **kwargs)
 
@@ -300,6 +319,60 @@ class OriginTests(unittest.TestCase):
         for value in (None, [], {}):
             with self.assertRaises(sd.SimpleDeployError):
                 sd.validate_origin_profile(value)
+
+    def test_real_buildkit_v1_wrapper_strict_index_material_and_legacy(self):
+        modern = v1_fixture()
+        modern_bundle = prepare(modern)
+        self.assertEqual(modern_bundle["activation"], "NOT_PERFORMED")
+        self.assertFalse(modern_bundle["runtime_authority"])
+        self.assertEqual(prepare()["activation"], "NOT_PERFORMED")  # Legacy v0.1 still accepted.
+        # Material ordering is not an identity or trust signal.
+        modern["provenance"]["predicate"]["materials"].reverse()
+        modern["profile"]["provenance_sha256"] = op.digest(modern["provenance"])
+        self.assertEqual(prepare(modern)["activation"], "NOT_PERFORMED")
+
+    def test_real_buildkit_v1_rehashed_provenance_drift_is_refused(self):
+        changes = [
+            lambda r: r["provenance"].update(_type="https://in-toto.io/Statement/v2"),
+            lambda r: r["provenance"].update(_type="https://in-toto.io/Statement/v0.1"),
+            lambda r: r["provenance"].update(predicateType="https://slsa.dev/provenance/v1"),
+            lambda r: r["provenance"]["predicate"]["materials"][0].update(
+                uri="pkg:docker/ghcr.io/rozkalnsandris/coloring-pages?digest=" + NEW_BASE +
+                    "&platform=linux%2Farm64"),
+            lambda r: r["provenance"]["predicate"]["materials"][0].update(
+                uri="pkg:docker/ghcr.io/rozkalnsandris/coloring-pages?digest=" + BASE +
+                    "&platform=linux%2Famd64"),
+            lambda r: r["provenance"]["predicate"]["materials"][0].update(
+                digest={"sha256": BASE_PLATFORM[7:]}),
+            lambda r: r["provenance"]["predicate"]["materials"][0].update(
+                uri="pkg:docker/ghcr.io/rozkalnsandris/coloring-pages@" + BASE +
+                    "?platform=linux%2Farm64"),
+            lambda r: r["provenance"]["predicate"]["materials"][1].update(
+                uri="https://github.com/rozkalnsandris/coloring-pages.git#main"),
+            lambda r: r["provenance"]["predicate"]["materials"][1].update(
+                digest={"sha1": "f" * 40}),
+            lambda r: r["provenance"]["predicate"]["materials"].append(
+                copy.deepcopy(r["provenance"]["predicate"]["materials"][0])),
+            lambda r: r["provenance"]["subject"][0].update(digest={"sha256": "f" * 64}),
+            lambda r: r["provenance"]["predicate"]["invocation"]["configSource"].update(
+                entryPoint="Dockerfile"),
+            lambda r: r["provenance"]["predicate"]["invocation"]["parameters"]["args"].update(
+                **{"build-arg:APPLICATION_IMAGE": "ghcr.io/other@sha256:" + "a" * 64}),
+        ]
+        for index, change in enumerate(changes):
+            with self.subTest(case=index):
+                request = v1_fixture()
+                change(request)
+                # Rehash the altered statement: hashes alone must not authorize it.
+                request["profile"]["provenance_sha256"] = op.digest(request["provenance"])
+                with self.assertRaises((op.Refusal, sd.SimpleDeployError)):
+                    prepare(request)
+
+    def test_real_buildkit_v1_index_is_bound_to_unique_arm64_manifest(self):
+        request = v1_fixture()
+        request["profile"]["base_platform_digest"] = NEW_BASE
+        with self.assertRaises((op.Refusal, sd.SimpleDeployError)):
+            prepare(request)
 
     def test_preparation_rejects_stale_mismatched_provenance_and_peer(self):
         mutations = [
