@@ -50,7 +50,11 @@ boundary. **A source PASS never authorizes LIVE collection or Tunnel mutation.**
    matching either public hostname `/count`, including bare `*`,
    a broad host route, or a route exclusion, is rejected. Unknown pattern
    grammar/upper-case routes also STOP; results here are conservative and
-   **not a general Cloudflare route engine**. Future trusted adapter must
+   **not a general Cloudflare route engine**. Only an optional `http(s)://`,
+   one leading hostname wildcard and one trailing path wildcard are accepted.
+   Infix wildcards, query parameters, uppercase paths/hosts and unknown
+   syntax STOP. `/count*` also catches query-bearing requests and MUST STOP.
+   A root-only hostname route is disjoint from `/count` per Cloudflare docs. Future trusted adapter must
    confirm complete Worker subrequest/route precedence separately.
 4. `worker_domains`: injected normalized canonical hostnames only,
    independently complete; exact `ausmalwiese.de` or

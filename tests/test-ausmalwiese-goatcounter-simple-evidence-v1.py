@@ -60,7 +60,7 @@ class EvidenceTests(unittest.TestCase):
     def produce(self, v):
         return e.produce(**v)
 
-    def fail(self, key, subkey, value, code):
+    def assert_block(self, key, subkey, value, code):
         inp = sample()
         inp[key][subkey] = value
         self.assertEqual(self.produce(inp), (code, None))
@@ -81,29 +81,29 @@ class EvidenceTests(unittest.TestCase):
             x = sample()
             del x[name]
             self.assertEqual(self.produce(x), ("STOP_UNVERIFIED", None))
-        self.fail("service", "source", "not_authorized", "STOP_UNVERIFIED")
-        self.fail("tunnel", "source", "not_authorized", "STOP_UNVERIFIED")
-        self.fail("worker_routes", "source", "not_authorized", "STOP_UNVERIFIED")
-        self.fail("worker_domains", "source", "not_authorized", "STOP_UNVERIFIED")
-        self.fail("ip", "source", "header_present_not_proof", "STOP_UNVERIFIED")
-        self.fail("privacy", "source", "not_approved", "STOP_UNVERIFIED")
+        self.assert_block("service", "source", "not_authorized", "STOP_UNVERIFIED")
+        self.assert_block("tunnel", "source", "not_authorized", "STOP_UNVERIFIED")
+        self.assert_block("worker_routes", "source", "not_authorized", "STOP_UNVERIFIED")
+        self.assert_block("worker_domains", "source", "not_authorized", "STOP_UNVERIFIED")
+        self.assert_block("ip", "source", "header_present_not_proof", "STOP_UNVERIFIED")
+        self.assert_block("privacy", "source", "not_approved", "STOP_UNVERIFIED")
 
     def test_service_and_collect(self):
         for field, value in (("version", "v2.6.0"), ("state", "inactive"),
                              ("listener", "0.0.0.0:9194"), ("vhost", "ausmalwiese.de")):
             with self.subTest(field=field):
-                self.fail("service", field, value, "STOP_SERVICE")
-        self.fail("service", "collect_provenance", "unknown", "STOP_UNVERIFIED")
+                self.assert_block("service", field, value, "STOP_SERVICE")
+        self.assert_block("service", "collect_provenance", "unknown", "STOP_UNVERIFIED")
         for flag in (1, 2, 128, 131, 134, 146, 256, 386, "130", True, None):
             with self.subTest(flag=flag):
-                self.fail("service", "collect", flag, "STOP_COLLECT")
+                self.assert_block("service", "collect", flag, "STOP_COLLECT")
 
     def test_tunnel_shape_conflicts_and_partial_routes(self):
         for key, value in (("tunnel_name", "wrong"), ("config_src", "local"),
                            ("version", True), ("version", -1),
                            ("owned_hosts_verified", False)):
             with self.subTest(key=key):
-                self.fail("tunnel", key, value, "STOP_TUNNEL")
+                self.assert_block("tunnel", key, value, "STOP_TUNNEL")
         x = sample()
         x["tunnel"]["config"]["originRequest"] = {"httpHostHeader": "invalid"}
         self.assertEqual(self.produce(x), ("STOP_ROUTE", None))
@@ -125,7 +125,7 @@ class EvidenceTests(unittest.TestCase):
                 x=sample()
                 x["worker_routes"]["routes"]=[{"pattern":pattern,"script":"worker"}]
                 self.assertEqual(self.produce(x), ("STOP_WORKER", None))
-        self.fail("worker_routes", "complete", False, "STOP_WORKER")
+        self.assert_block("worker_routes", "complete", False, "STOP_WORKER")
         x=sample()
         x["worker_routes"]["routes"].append({"pattern":"notknown", "script":"x", "private_token":"sensitive"})
         self.assertEqual(self.produce(x), ("STOP_WORKER", None))
@@ -134,12 +134,46 @@ class EvidenceTests(unittest.TestCase):
         x["worker_routes"]["routes"]=[{"id":"private", "pattern":"x.test/*","script":"worker"}]
         self.assertEqual(self.produce(x), ("STOP_WORKER", None))
 
+    def test_worker_route_grammar_and_query_interception(self):
+        # No-script exclusion routes are also rejected if /count can match.
+        for pattern in (
+                "ausmalwiese.de/count*", "ausmalwiese.de/cou*",
+                "*ausmalwiese.de/count", "*.ausmalwiese.de/count",
+                "https://ausmalwiese.de/count",
+                "http://www.ausmalwiese.de/count"):
+            with self.subTest(intercept=pattern):
+                inp = sample()
+                inp["worker_routes"]["routes"] = [{"pattern": pattern, "script": None}]
+                self.assertEqual(self.produce(inp), ("STOP_WORKER", None))
+
+        for pattern in (
+                "ausmalwiese.de/foo*bar", "ausmalwiese.de/*.jpg",
+                "ausmalwiese.de/count?x=y", "Ausmalwiese.de/count",
+                "ausmalwiese.de/*/count", "www.*.ausmalwiese.de/count",
+                "*", "ausmalwiese.de/COUNT"):
+            with self.subTest(unknown=pattern):
+                inp = sample()
+                inp["worker_routes"]["routes"] = [{"pattern": pattern, "script": "worker"}]
+                self.assertEqual(self.produce(inp), ("STOP_WORKER", None))
+
+        for pattern in (
+                "ausmalwiese.de/api/*", "https://example.org/*",
+                "www.ausmalwiese.de/assets/*",
+                "*.ausmalwiese.de/api/*", "ausmalwiese.de/",
+                "example.org/count", "ausmalwiese.de"):
+            with self.subTest(disjoint=pattern):
+                inp = sample()
+                inp["worker_routes"]["routes"] = [{"pattern": pattern, "script": "worker"}]
+                verdict, summary = self.produce(inp)
+                self.assertEqual(verdict, "PASS_SOURCE_ONLY")
+                self.assertIsNotNone(summary)
+
     def test_custom_domain_interception(self):
         for d in ("ausmalwiese.de", "www.ausmalwiese.de", "*.ausmalwiese.de", "", "AUSMALWIESE.DE"):
             x=sample()
             x["worker_domains"]["domains"]=[d]
             self.assertEqual(self.produce(x), ("STOP_WORKER", None))
-        self.fail("worker_domains", "complete", False, "STOP_WORKER")
+        self.assert_block("worker_domains", "complete", False, "STOP_WORKER")
 
     def test_ip_trust(self):
         for key, value in (
@@ -151,12 +185,12 @@ class EvidenceTests(unittest.TestCase):
                 ("spoof_rejected", False), ("spoof_rejected", "true"),
                 ("proto", "unknown")):
             with self.subTest(key=key):
-                self.fail("ip", key, value, "STOP_IP_TRUST")
+                self.assert_block("ip", key, value, "STOP_IP_TRUST")
 
     def test_privacy_and_unknown(self):
-        self.fail("privacy", "approved_collect", 131, "STOP_PRIVACY")
-        self.fail("privacy", "notice", "draft", "STOP_PRIVACY")
-        self.fail("privacy", "frontend", "enabled", "STOP_PRIVACY")
+        self.assert_block("privacy", "approved_collect", 131, "STOP_PRIVACY")
+        self.assert_block("privacy", "notice", "draft", "STOP_PRIVACY")
+        self.assert_block("privacy", "frontend", "enabled", "STOP_PRIVACY")
         x=sample()
         x["service"]["SECRET_TOKEN"] = "canary-private-string"
         self.assertEqual(self.produce(x), ("STOP_SERVICE", None))

@@ -22,15 +22,43 @@ def _stop(code):
     return code, None
 
 def _worker_route_matches(pattern):
-    """Conservative tiny supported route subset. None means unknown -> STOP."""
-    if (type(pattern) is not str or not 1 <= len(pattern) <= 255
-            or pattern != pattern.lower()
-            or re.fullmatch(r"(?:https?://)?[a-z0-9.*-]+(?:/[a-z0-9_.*~-]*)?", pattern) is None):
+    """Return True for /count interception, False for proven disjoint, None if unknown.
+
+    Only accept a conservative subset of Cloudflare Worker Routes: an
+    optional scheme, a hostname with at most one * at its beginning,
+    and an optional case-sensitive path with at most one trailing *.
+    Reject ambiguous grammar rather than trying to emulate Cloudflare.
+    """
+    if type(pattern) is not str or not 1 <= len(pattern) <= 255:
         return None
+    match = re.fullmatch(r"(?:(https?)://)?([^/?#]+)(/[^?#]*)?", pattern)
+    if match is None:
+        return None
+    hostname, path = match.group(2), match.group(3)
+    if (hostname != hostname.lower()
+            or hostname.count("*") > 1 or "*" in hostname[1:]):
+        return None
+    bare_host = (hostname[2:] if hostname.startswith("*.")
+                 else hostname[1:] if hostname.startswith("*") else hostname)
+    labels = bare_host.split(".")
+    if (len(labels) < 2
+            or any(re.fullmatch(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?", x) is None
+                   for x in labels)):
+        return None
+    if path is not None:
+        if (path != path.lower()
+                or re.fullmatch(r"/[a-z0-9/_.~*-]*", path) is None
+                or path.count("*") > 1
+                or ("*" in path and not path.endswith("*"))):
+            return None
+    # With no path, a Cloudflare route matches only the root URL, not /count.
+    # A path ending in * can also match /count?query. Reject even no-script
+    # exclusion routes because precedence cannot prove origin bypass here.
     for host in HOSTS:
-        for request in (host + "/count", "http://" + host + "/count",
-                        "https://" + host + "/count"):
-            if fnmatchcase(request, pattern):
+        if fnmatchcase(host, hostname):
+            if path == "/count" or (
+                    path is not None and path.endswith("*")
+                    and "/count".startswith(path[:-1])):
                 return True
     return False
 
