@@ -45,7 +45,11 @@ def unique_object(pairs):
 
 def validate_provenance(statement, profile):
     require(type(statement) is dict)
-    require(statement.get("_type") == "https://in-toto.io/Statement/v0.1")
+    statement_type = statement.get("_type")
+    require(statement_type in {
+        "https://in-toto.io/Statement/v0.1",
+        "https://in-toto.io/Statement/v1",
+    })
     require(statement.get("predicateType") == "https://slsa.dev/provenance/v0.2")
     subjects = statement.get("subject")
     require(type(subjects) is list and len(subjects) == 1)
@@ -66,9 +70,24 @@ def validate_provenance(statement, profile):
     require(parameters["args"].get("build-arg:APPLICATION_IMAGE") == f"ghcr.io/{sd.ORIGIN_REPOSITORY}@{profile['base_digest']}")
     materials = predicate.get("materials")
     require(type(materials) is list)
-    base = [m for m in materials if type(m) is dict and type(m.get("uri")) is str and unquote(m["uri"]) ==
-            "pkg:docker/ghcr.io/rozkalnsandris/coloring-pages@" + profile["base_digest"] + "?platform=linux/arm64"]
-    require(len(base) == 1 and base[0].get("digest") == {"sha256": profile["base_platform_digest"][7:]})
+    if statement_type == "https://in-toto.io/Statement/v0.1":
+        # Preserve the accepted legacy platform-manifest material contract.
+        base = [m for m in materials if type(m) is dict and type(m.get("uri")) is str and unquote(m["uri"]) ==
+                "pkg:docker/ghcr.io/rozkalnsandris/coloring-pages@" + profile["base_digest"] + "?platform=linux/arm64"]
+        require(len(base) == 1 and base[0].get("digest") == {"sha256": profile["base_platform_digest"][7:]})
+    else:
+        # Observed BuildKit Statement/v1 + SLSA v0.2: the material binds the
+        # OCI base index. prepare() independently verifies its unique ARM64
+        # descriptor against the profile's base_platform_digest.
+        require(len(materials) == 2 and all(type(m) is dict and set(m) == {"uri", "digest"} for m in materials))
+        expected_base = ("pkg:docker/ghcr.io/rozkalnsandris/coloring-pages?digest=" +
+                         profile["base_digest"] + "&platform=linux%2Farm64")
+        expected_recipe = ("https://github.com/rozkalnsandris/coloring-pages.git#" +
+                           profile["recipe_source_sha"])
+        base = [m for m in materials if m["uri"] == expected_base]
+        recipe = [m for m in materials if m["uri"] == expected_recipe]
+        require(len(base) == 1 and base[0]["digest"] == {"sha256": profile["base_digest"][7:]})
+        require(len(recipe) == 1 and recipe[0]["digest"] == {"sha1": profile["recipe_source_sha"]})
     require(digest(statement) == profile["provenance_sha256"])
 
 
