@@ -11,6 +11,7 @@ test:
 	python3 ./tests/test-ausmalwiese-goatcounter-simple-route-v1.py
 	python3 ./tests/test-ausmalwiese-goatcounter-simple-readiness-v1.py
 	python3 ./tests/test-ausmalwiese-goatcounter-simple-evidence-v1.py
+	python3 ./tests/test-ausmalwiese-goatcounter-simple-cloudflare-readback-v1.py
 	python3 ./tests/test-ausmalwiese-goatcounter-retention-v1.py
 	python3 ./tests/test-ausmalwiese-goatcounter-origin-v1.py
 	python3 ./tests/test-ausmalwiese-goatcounter-pageview-v1.py
