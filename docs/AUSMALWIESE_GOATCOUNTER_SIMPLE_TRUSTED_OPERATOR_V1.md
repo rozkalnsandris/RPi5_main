@@ -24,11 +24,11 @@ database setting or public /count request. Existing rpi5-tunnel is reused.
 - Installer derives the checkout root from its own checked-out scripts/ path.
   It verifies exact HEAD, main branch, canonical origin and clean checkout.
   Every source byte must equal git show SHA:path from that exact tree.
-- The installer packs exactly 9 source modules, including existing verified
+- The installer packs exactly 10 source modules, including existing verified
   CloudflareClient, tunnel, route, readiness, evidence, Cloudflare readback and
-  SQLite Collect readback. It writes an existing-Cloudflare-compatible
+  SQLite Collect readback and the GitHub owner-capability verifier. It writes an existing-Cloudflare-compatible
   release.json digest map (7 modules) and a separate trusted-release.json
-  (all 9 modules), each with the same full SHA. No generic client.
+  (all 10 modules), each with the same full SHA. No generic client.
 - Each new SHA-named release root is root:root 0700. Files are root:root
   0400 except the runner 0500. No symlinks, overwrite, fallback or cleanup.
   Manifest files are installed LAST. The first `mkdir` in the **new exact
@@ -102,14 +102,12 @@ Official Git documentation: https://git-scm.com/docs/git-config/2.54.0
 
 The trusted runner checks the exact installed path, root identity, both
 root-owned manifests and every pinned module byte before importing any
-dependency. It has *no network/DB CLI and no token loader*. Protected functions
-remain dormant unless a **separately authorized trusted caller** provides
-exact source SHA, scope and independent owner authority. The installer DOES
-NOT create owner-readonly-grant.json. A root-owned grant of the exact closed
-schema is only one fail-closed input; its presence is not independently
-sufficient evidence of who approved it or proof of one-shot consumption.
-The external owner/controller must prove authority and consume its one-shot
-permission before invoking a protected function; no in-source retry exists.
+dependency. It has *no network/DB CLI and no token loader*. Protected functions remain dormant unless their independent runtime gates
+pass. For Cloudflare GET, the installer packages the GitHub owner-capability
+verifier but does not create its persistent consumption-state directory.
+For Collect, the installer still DOES NOT create owner-readonly-grant.json;
+that grant remains only one fail-closed input and is not independently
+sufficient owner proof. No protected path has an in-source retry.
 
 ### Collect / active WAL
 
@@ -150,24 +148,23 @@ permission before invoking a protected function; no in-source retry exists.
 
 ## One-shot diagnostic handoff — #1368 (SOURCE ONLY)
 
-Use the **existing** `rpi5-tunnel`, the nine already reviewed source modules,
+Use the **existing** `rpi5-tunnel`, the ten hash-pinned release modules,
 and the **existing** `CloudflareClient`. No new tunnel, service, token reader,
 provider client or public `/count` traffic is necessary. The only public-safe
 result is a fixed `PASS_EDGE_SOURCE_ONLY` or `STOP_CLOUDFLARE`.
 
-The trusted runner exposes a `--source-check` CLI only. A *separately
-authorized, independently trusted caller* must use
-`cloudflare_once(expected_source_sha, owner_gate, client_factory, account_id,
-zone_id)` **in process**. Its `owner_gate(scope, SHA)` must independently
-authenticate and consume an exact owner approval **before** returning the
-literal `True`; a callback or the root-owned `owner-readonly-grant.json`
-ALONE is **not** an authorization receipt. A caller also must have permission
-to read the existing credential capability through an independently approved
-boundary; the injected `client_factory(verified_CloudflareClient_class)`
-must return exactly that already reviewed class. The runner itself never
-loads tokens or outputs account IDs, tokens, provider responses or private
-paths. All six possible calls are guarded one-shot **GET**, with no retry.
-Any missing/invalid grant, owner gate, client or API proof returns a fixed STOP.
+The trusted runner exposes a `--source-check` CLI only. Its Cloudflare path
+uses `cloudflare_once(expected_source_sha, approval_comment_id,
+client_factory, account_id, zone_id)` **in process**. Before the client factory
+is touched, the hash-pinned owner-capability module authenticates one fresh,
+unedited GitHub issue comment from the exact repository owner and durably
+consumes its comment ID. A local callback or `owner-readonly-grant.json`
+cannot authorize `CLOUDFLARE_GET`. The caller still must receive the existing
+reviewed `CloudflareClient` from a separately approved credential boundary;
+the runner never loads tokens or outputs account IDs, tokens, provider
+responses or private paths. All six possible calls remain one-shot **GET**,
+with no retry. Missing/expired owner approval, replay, missing client
+capability or API ambiguity returns a fixed STOP.
 Because Worker Domain response pagination metadata can be ambiguous, a
 conservative `STOP_CLOUDFLARE` is not evidence of an actual conflict.
 
@@ -251,3 +248,71 @@ Official docs (rechecked 2026-11-06):
 - https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html
 - https://developers.cloudflare.com/api/resources/workers/subresources/domains/methods/list/
 - https://developers.cloudflare.com/api/resources/zero_trust/subresources/tunnels/subresources/cloudflared/subresources/configurations/methods/get/
+
+
+## #1372 GitHub owner-identity capability (SOURCE ONLY)
+
+The previous local `owner-readonly-grant.json` + callback pattern is not an
+independent owner proof for Cloudflare GET and is no longer accepted by the
+Cloudflare protected path. The source now defines one external approval
+capability in
+`scripts/ausmalwiese_goatcounter_simple_owner_capability_v1.py`.
+
+The capability relies on GitHub's authenticated repository-owner identity for
+this **public** repository. A future exact owner decision is materialized as
+one unedited issue comment on `RPi5_main#1372`. The runtime performs exactly
+one unauthenticated HTTPS GET to the fixed GitHub REST issue-comment endpoint;
+public issue comments do not require a GitHub token. It accepts only the fixed
+owner login **and numeric user ID**, `author_association=OWNER`, exact issue
+URL, comment ID and an unedited `created_at == updated_at` record.
+
+The comment body must be canonical compact JSON with exactly:
+`schema=1`, repository, issue 1372, exact merged source SHA,
+`scope=CLOUDFLARE_GET`, `host=rpi5`, `tunnel=rpi5-tunnel`,
+`zone=ausmalwiese.de`, the already source-pinned account SHA-256,
+literal `one_shot=true`, and `expires_at`. No account ID, zone ID, token,
+private path or provider response is published. Approval validity is at most
+15 minutes from GitHub's immutable comment creation timestamp; edited,
+expired, non-canonical or wrong-owner comments STOP before consumption.
+
+The installed capability is usable only from the exact SHA-named root-owned
+release under `/usr/local/libexec`, as root, through `python3 -I -B`.
+The trusted runner verifies all release bytes before importing it. Direct
+source-checkout invocation cannot reach GitHub or consume approval.
+
+Replay resistance is persistent and fail-closed. Before any Cloudflare client
+factory is called, the capability atomically creates exactly one
+`root:root 0600` file named from the GitHub comment ID under the fixed,
+pre-existing `root:root 0700` directory
+`/var/lib/rpi5-goatcounter-simple-owner-consumed` using
+`O_CREAT|O_EXCL|O_NOFOLLOW`, then fsyncs file and directory. Existing state
+means STOP. A crash/error after exclusive creation burns the approval; there
+is no unlink, retry, cleanup or rollback path. The state directory is **not**
+created by this source change and needs separate exact LIVE provisioning.
+
+The Cloudflare diagnostic itself remains bounded by the existing exact
+`CloudflareClient` type, GETOnly wrapper and maximum-six unique GET budget.
+Owner approval is consumed before the client factory or Cloudflare dispatch.
+The old arbitrary callback cannot authorize `CLOUDFLARE_GET`; it remains
+only on the separately gated `COLLECT` path.
+
+This source change deliberately does **not** solve or widen the Cloudflare
+credential boundary. The existing Tunnel capability may be reused by reviewed
+read-only consumers where its permissions suffice, but its current source
+contract does not prove the Zone/Workers READ permissions required by all six
+GoatCounter diagnostics. Therefore no token reader is added and no existing
+writer credential is silently treated as sufficient. A future protected run
+still requires a separately proven, owner-approved credential/client factory
+that can perform only the required reads.
+
+Future gates remain separate:
+1. merge the exact reviewed PR head;
+2. exact RPi5 install of a new SHA-named immutable release;
+3. exact creation/verification of the persistent one-shot state directory;
+4. materialize one fresh canonical owner comment (<=15 min lifetime);
+5. separately prove/authorize the Cloudflare read capability and one bounded
+   GET run. No source merge, comment, or state directory authorizes credentials
+   or Cloudflare by itself.
+
+GitHub REST reference:
+https://docs.github.com/en/rest/issues/comments?apiVersion=2022-11-28

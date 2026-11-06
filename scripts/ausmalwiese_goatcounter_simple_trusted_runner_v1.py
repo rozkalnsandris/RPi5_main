@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Root-owned, one-shot, fail-closed GoatCounter SIMPLE diagnostic (source only).
+"""Root-owned, one-shot, fail-closed GoatCounter SIMPLE diagnostic.
 
 No secrets, credential loader, network CLI, installation or host operation is
-performed by importing this module. Protected modes require a separately
-owner-authorized, independently provisioned root-owned grant and caller.
+performed by importing this module. Cloudflare GET requires a hash-pinned
+GitHub owner capability with persistent replay protection; Collect keeps its
+separate fail-closed grant/owner/read-only-mount boundary.
 """
 import hashlib
 import importlib
@@ -18,7 +19,7 @@ RELEASE_PREFIX = 'rpi5-goatcounter-simple-cloudflare-readonly-'
 ROOT = Path(__file__).absolute().parent
 ENTRY = ROOT / 'trusted_runner.py'
 TRUSTED = ROOT / 'trusted-release.json'
-GRANT = ROOT / 'owner-readonly-grant.json'  # NOT installed; separate owner gate.
+GRANT = ROOT / 'owner-readonly-grant.json'  # NOT installed; COLLECT only.
 DB = Path('/var/lib/ausmalwiese-goatcounter/goatcounter.sqlite3')
 SHA = re.compile(r'[0-9a-f]{40}\Z')
 SHA256 = re.compile(r'[0-9a-f]{64}\Z')
@@ -32,6 +33,7 @@ FILES = (
     'ausmalwiese_goatcounter_simple_evidence_v1.py',
     'ausmalwiese_goatcounter_simple_cloudflare_readback_v1.py',
     'ausmalwiese_goatcounter_simple_collect_readback_v1.py',
+    'owner_capability.py',
     'trusted_runner.py',
 )
 OLD_FILES = FILES[:7]
@@ -113,13 +115,9 @@ def grant_ok(grant, *, scope, source_sha):
 
 
 def approved(scope, expected_source_sha, *, owner_gate=None):
-    """Owner gate is an independent trusted caller, NEVER a self-signed grant.
-
-    The caller must authenticate and consume the exact owner authority outside
-    this module. Merely passing a callback is NOT proof of owner permission.
-    """
+    """COLLECT-only legacy gate; Cloudflare uses GitHub owner capability."""
     global _PROTECTED_CALL_CONSUMED
-    require(scope in ('COLLECT', 'CLOUDFLARE_GET'))
+    require(scope == 'COLLECT')
     require(_PROTECTED_CALL_CONSUMED is False and callable(owner_gate))
     # Root-owned grant is only an additional fail-closed input; it is not
     # independent proof of an owner decision or durable one-shot consumption.
@@ -199,25 +197,40 @@ def collect_once(*, expected_source_sha, owner_gate=None, readonly_proof=None):
             sys.path.remove(str(ROOT))
 
 
-def cloudflare_once(*, expected_source_sha, client_factory=None,
-                    account_id=None, zone_id=None, owner_gate=None):
-    """One GET-only diagnostic through the EXISTING trusted CloudflareClient.
+def github_owner_authorized(*, expected_source_sha, approval_comment_id,
+                            account_id, zone_id):
+    """Use only the hash-pinned GitHub owner capability from this release."""
+    capability = release_import('owner_capability')
+    return capability.authorize_once(
+        expected_source_sha=expected_source_sha,
+        comment_id=approval_comment_id,
+        account_id=account_id,
+        zone_id=zone_id,
+    ) is True
 
-    The external owner-authorized caller supplies verified identities and a
-    factory for the reviewed CloudflareClient class. There is no credential
-    loader, CLI, provider-ID output or new transport in this module.
+
+def cloudflare_once(*, expected_source_sha, approval_comment_id=None,
+                    client_factory=None, account_id=None, zone_id=None):
+    """One independently owner-approved GET-only Cloudflare diagnostic.
+
+    GitHub owner approval is authenticated and durably consumed BEFORE the
+    client factory or any Cloudflare dependency can dispatch. The client
+    itself still comes from a separately approved credential capability.
     """
     inserted = False
     try:
         verify_release(expected_source_sha)
-        approved('CLOUDFLARE_GET', expected_source_sha, owner_gate=owner_gate)
-        require(callable(client_factory))
+        require(type(approval_comment_id) is int and approval_comment_id > 0)
         verified_import_path()
         inserted = True
+        require(github_owner_authorized(
+            expected_source_sha=expected_source_sha,
+            approval_comment_id=approval_comment_id,
+            account_id=account_id,
+            zone_id=zone_id,
+        ))
+        require(callable(client_factory))
 
-        # The underlying Cloudflare operator checks that ALL its dependencies
-        # are the hash-pinned installed modules, not only transitively loaded
-        # ones. Import each explicitly, then verify the exact loaded path.
         for name in (
                 'cloudflare_rdc_operator',
                 'ausmalwiese_goatcounter_tunnel_v1',
@@ -238,7 +251,6 @@ def cloudflare_once(*, expected_source_sha, client_factory=None,
         status, _ = module.run_guarded(client=client, account_id=account_id,
                                        zone_id=zone_id,
                                        expected_source_sha=expected_source_sha)
-        # Fixed public-safe result only; no provider response escapes.
         return ('PASS_EDGE_SOURCE_ONLY' if status == 'PASS_EDGE_SOURCE_ONLY'
                 else 'STOP_CLOUDFLARE')
     except Exception:
