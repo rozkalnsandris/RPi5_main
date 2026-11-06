@@ -32,6 +32,8 @@ SOURCE = {
         'scripts/ausmalwiese_goatcounter_simple_cloudflare_readback_v1.py',
     'ausmalwiese_goatcounter_simple_collect_readback_v1.py':
         'scripts/ausmalwiese_goatcounter_simple_collect_readback_v1.py',
+    'owner_capability.py':
+        'scripts/ausmalwiese_goatcounter_simple_owner_capability_v1.py',
     'trusted_runner.py': 'scripts/ausmalwiese_goatcounter_simple_trusted_runner_v1.py',
 }
 LEGACY_FILES = tuple(SOURCE)[:7]

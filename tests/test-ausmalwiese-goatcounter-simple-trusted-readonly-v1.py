@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Offline-only source tests. No real DB, Cloudflare, root, install or creds."""
 import contextlib
+import datetime as dt
 import hashlib
 import importlib.util
 import io
@@ -23,6 +24,7 @@ def load(name, filename):
 
 i = load('goatcounter_installer', 'install-ausmalwiese-goatcounter-simple-trusted-readonly-v1.py')
 o = load('goatcounter_runner', 'ausmalwiese_goatcounter_simple_trusted_runner_v1.py')
+a = load('goatcounter_owner_capability', 'ausmalwiese_goatcounter_simple_owner_capability_v1.py')
 SHA = 'f' * 40
 CANARY = 'DO_NOT_LEAK_PRIVATE_CREDENTIAL_OR_IP'
 
@@ -71,7 +73,7 @@ class Tests(unittest.TestCase):
     def test_package_never_uses_installer_or_network(self):
         with patch.object(i.os, 'mkdir', side_effect=AssertionError('WRITE')), \
              patch.object(i, 'git', side_effect=AssertionError('GIT')):
-            self.assertEqual(len(i.build_package(SHA,self.blobs)), 11)
+            self.assertEqual(len(i.build_package(SHA,self.blobs)), 12)
 
     def test_install_requires_root_and_exact_host_before_mutation(self):
         for euid, host in [(1000,'rpi5'),(0,'not-rpi5')]:
@@ -374,33 +376,27 @@ class Tests(unittest.TestCase):
                 o.approved('COLLECT', SHA,owner_gate=lambda scope, sha: True)
             reader.assert_called_once()
 
-    def test_independent_owner_gate_required_before_grant_or_client(self):
-        with patch.object(o, '_PROTECTED_CALL_CONSUMED', False), \
-             patch.object(o, 'load_json') as grant, \
-             patch.object(o, 'verified_import_path') as imports:
-            with self.assertRaises(o.Stop):
-                o.approved('CLOUDFLARE_GET', SHA)
-            grant.assert_not_called()
+    def test_github_owner_capability_required_before_client(self):
+        factory = unittest.mock.Mock()
+        with patch.object(o, 'verify_release', return_value=True), \
+             patch.object(o, 'verified_import_path'), \
+             patch.object(o, 'github_owner_authorized', side_effect=o.Stop()), \
+             patch.object(o, 'release_import') as imports:
             self.assertEqual(o.cloudflare_once(
-                expected_source_sha=SHA, client_factory=lambda typ: CANARY,
-                owner_gate=None), 'STOP_CLOUDFLARE')
+                expected_source_sha=SHA, approval_comment_id=123,
+                account_id='a'*32, zone_id='b'*32,
+                client_factory=factory), 'STOP_CLOUDFLARE')
+            factory.assert_not_called()
             imports.assert_not_called()
 
-    def test_denied_owner_gate_consumes_once_with_no_protected_call(self):
-        grant={'schema':1,'repository':o.REPOSITORY,'source_sha':SHA,
-               'scope':'CLOUDFLARE_GET','owner_approved':True,'one_shot':True}
-        calls=[]
-        def rejected(scope, sha):
-            calls.append((scope,sha))
-            return False
-        with patch.object(o, '_PROTECTED_CALL_CONSUMED', False), \
-             patch.object(o, 'load_json', return_value=grant) as read:
+
+    def test_legacy_callback_cannot_authorize_cloudflare(self):
+        with patch.object(o, 'load_json') as grant:
             with self.assertRaises(o.Stop):
-                o.approved('CLOUDFLARE_GET',SHA,owner_gate=rejected)
-            with self.assertRaises(o.Stop):
-                o.approved('CLOUDFLARE_GET',SHA,owner_gate=rejected)
-            self.assertEqual(calls,[('CLOUDFLARE_GET',SHA)])
-            read.assert_called_once()
+                o.approved('CLOUDFLARE_GET', SHA,
+                           owner_gate=lambda scope, sha: True)
+            grant.assert_not_called()
+
 
     def test_collect_without_independent_readonly_mount_proof_no_db_open(self):
         with patch.object(o, 'verify_release', return_value=True), \
@@ -445,10 +441,18 @@ class Tests(unittest.TestCase):
     def test_one_shot_cloudflare_synthetic_injected_factory(self):
         class FakeClient:
             pass
+        events = []
         fake_run = SimpleNamespace(run_guarded=lambda **kwargs: (
             'PASS_EDGE_SOURCE_ONLY', {'raw': CANARY}))
+        def owner_auth(**kwargs):
+            events.append('owner')
+            return True
+        def factory(trusted):
+            events.append('client')
+            return trusted()
         with patch.object(o,'verify_release',return_value=True), \
-             patch.object(o,'approved',return_value=None) as approve, \
+             patch.object(o,'github_owner_authorized',
+                          side_effect=owner_auth) as authorize, \
              patch.object(o,'verified_import_path') as imports, \
              patch.object(o,'release_import') as release_import, \
              patch.object(o.importlib.util,'spec_from_file_location') as spec, \
@@ -459,23 +463,25 @@ class Tests(unittest.TestCase):
                  'cloudflare_rdc_operator': SimpleNamespace(
                      CloudflareClient=FakeClient)}):
             result=o.cloudflare_once(
-                expected_source_sha=SHA, owner_gate=lambda s,h: True,
+                expected_source_sha=SHA, approval_comment_id=123,
                 account_id='a'*32, zone_id='b'*32,
-                client_factory=lambda trusted: trusted())
+                client_factory=factory)
             self.assertEqual(result,'PASS_EDGE_SOURCE_ONLY')
             self.assertNotIn(CANARY,result)
+            self.assertEqual(events, ['owner', 'client'])
             self.assertEqual(release_import.call_count,6)
-            approve.assert_called_once_with(
-                'CLOUDFLARE_GET',SHA,
-                owner_gate=unittest.mock.ANY)
+            authorize.assert_called_once_with(
+                expected_source_sha=SHA, approval_comment_id=123,
+                account_id='a'*32, zone_id='b'*32)
             imports.assert_called_once()
             spec.return_value.loader.exec_module.assert_called_once_with(fake_run)
+
 
     def test_cloudflare_client_factory_must_return_exact_trusted_type(self):
         class FakeClient:
             pass
         with patch.object(o,'verify_release',return_value=True), \
-             patch.object(o,'approved',return_value=None), \
+             patch.object(o,'github_owner_authorized',return_value=True), \
              patch.object(o,'verified_import_path'), \
              patch.object(o,'release_import'), \
              patch.object(o.importlib.util,'spec_from_file_location') as spec, \
@@ -484,16 +490,183 @@ class Tests(unittest.TestCase):
                  'cloudflare_rdc_operator': SimpleNamespace(
                      CloudflareClient=FakeClient)}):
             result=o.cloudflare_once(
-                expected_source_sha=SHA, owner_gate=lambda s,h:True,
+                expected_source_sha=SHA, approval_comment_id=123,
+                account_id='a'*32, zone_id='b'*32,
                 client_factory=lambda trusted: object())
             self.assertEqual(result,'STOP_CLOUDFLARE')
             spec.assert_not_called()
+
 
     def test_no_secret_in_public_status(self):
         with patch.object(o,'verify_release',side_effect=OSError(CANARY)):
             a=o.offline_status(SHA)
         self.assertEqual(a,'STOP_RELEASE')
         self.assertNotIn(CANARY,a)
+
+
+    def test_owner_comment_exact_identity_and_expiry(self):
+        created = '2026-11-06T22:00:00Z'
+        expires = '2026-11-06T22:10:00Z'
+        account = 'a' * 32
+        account_hash = hashlib.sha256(account.encode()).hexdigest()
+        document = {
+            'schema': 1, 'repository': a.REPOSITORY, 'issue': a.ISSUE,
+            'source_sha': SHA, 'scope': a.SCOPE, 'host': a.HOST,
+            'tunnel': a.TUNNEL, 'zone': a.ZONE,
+            'account_sha256': account_hash, 'one_shot': True,
+            'expires_at': expires,
+        }
+        payload = {
+            'id': 123, 'url': a.API_PREFIX + '123',
+            'issue_url': a.ISSUE_API,
+            'html_url': a.ISSUE_HTML + '#issuecomment-123',
+            'author_association': 'OWNER',
+            'user': {'login': a.OWNER_LOGIN, 'id': a.OWNER_ID,
+                     'type': 'User'},
+            'created_at': created, 'updated_at': created,
+            'body': a.canonical(document),
+        }
+        with patch.object(a, 'ACCOUNT_SHA256', account_hash), \
+             patch.object(a, '_now', return_value=dt.datetime(
+                 2026, 11, 6, 22, 5, tzinfo=dt.timezone.utc)):
+            digest = a.validate_comment(
+                payload, comment_id=123, expected_source_sha=SHA,
+                account_id=account)
+        self.assertEqual(digest, hashlib.sha256(
+            payload['body'].encode()).hexdigest())
+
+        variants = [
+            {**payload, 'author_association': 'MEMBER'},
+            {**payload, 'updated_at': '2026-11-06T22:00:01Z'},
+            {**payload, 'user': {**payload['user'], 'id': a.OWNER_ID + 1}},
+            {**payload, 'issue_url': a.ISSUE_API + '/wrong'},
+        ]
+        with patch.object(a, 'ACCOUNT_SHA256', account_hash), \
+             patch.object(a, '_now', return_value=dt.datetime(
+                 2026, 11, 6, 22, 5, tzinfo=dt.timezone.utc)):
+            for bad in variants:
+                with self.subTest(field=repr(bad)[:40]):
+                    with self.assertRaises(a.Stop):
+                        a.validate_comment(
+                            bad, comment_id=123, expected_source_sha=SHA,
+                            account_id=account)
+            with self.assertRaises(a.Stop):
+                a.validate_comment(
+                    payload, comment_id=123, expected_source_sha='e'*40,
+                    account_id=account)
+
+    def test_owner_comment_expired_or_noncanonical_stops(self):
+        account = 'a' * 32
+        account_hash = hashlib.sha256(account.encode()).hexdigest()
+        base = {
+            'schema': 1, 'repository': a.REPOSITORY, 'issue': a.ISSUE,
+            'source_sha': SHA, 'scope': a.SCOPE, 'host': a.HOST,
+            'tunnel': a.TUNNEL, 'zone': a.ZONE,
+            'account_sha256': account_hash, 'one_shot': True,
+            'expires_at': '2026-11-06T22:10:00Z',
+        }
+        payload = {
+            'id': 123, 'url': a.API_PREFIX + '123',
+            'issue_url': a.ISSUE_API,
+            'html_url': a.ISSUE_HTML + '#issuecomment-123',
+            'author_association': 'OWNER',
+            'user': {'login': a.OWNER_LOGIN, 'id': a.OWNER_ID,
+                     'type': 'User'},
+            'created_at': '2026-11-06T22:00:00Z',
+            'updated_at': '2026-11-06T22:00:00Z',
+            'body': a.canonical(base),
+        }
+        with patch.object(a, 'ACCOUNT_SHA256', account_hash), \
+             patch.object(a, '_now', return_value=dt.datetime(
+                 2026, 11, 6, 22, 11, tzinfo=dt.timezone.utc)):
+            with self.assertRaises(a.Stop):
+                a.validate_comment(
+                    payload, comment_id=123, expected_source_sha=SHA,
+                    account_id=account)
+        payload['body'] = json.dumps(base, indent=2, sort_keys=True)
+        with patch.object(a, 'ACCOUNT_SHA256', account_hash), \
+             patch.object(a, '_now', return_value=dt.datetime(
+                 2026, 11, 6, 22, 5, tzinfo=dt.timezone.utc)):
+            with self.assertRaises(a.Stop):
+                a.validate_comment(
+                    payload, comment_id=123, expected_source_sha=SHA,
+                    account_id=account)
+
+    def test_owner_authorize_consumes_after_authenticated_fetch(self):
+        account = 'a' * 32
+        account_hash = hashlib.sha256(account.encode()).hexdigest()
+        created = '2026-11-06T22:00:00Z'
+        document = {
+            'schema': 1, 'repository': a.REPOSITORY, 'issue': a.ISSUE,
+            'source_sha': SHA, 'scope': a.SCOPE, 'host': a.HOST,
+            'tunnel': a.TUNNEL, 'zone': a.ZONE,
+            'account_sha256': account_hash, 'one_shot': True,
+            'expires_at': '2026-11-06T22:10:00Z',
+        }
+        payload = {
+            'id': 123, 'url': a.API_PREFIX + '123',
+            'issue_url': a.ISSUE_API,
+            'html_url': a.ISSUE_HTML + '#issuecomment-123',
+            'author_association': 'OWNER',
+            'user': {'login': a.OWNER_LOGIN, 'id': a.OWNER_ID,
+                     'type': 'User'},
+            'created_at': created, 'updated_at': created,
+            'body': a.canonical(document),
+        }
+        with patch.object(a, 'ACCOUNT_SHA256', account_hash), \
+             patch.object(a, 'verify_context'), \
+             patch.object(a, 'fetch_comment', return_value=payload) as fetch, \
+             patch.object(a, '_now', return_value=dt.datetime(
+                 2026, 11, 6, 22, 5, tzinfo=dt.timezone.utc)), \
+             patch.object(a, 'consume_once', return_value=True) as consume:
+            self.assertTrue(a.authorize_once(
+                expected_source_sha=SHA, comment_id=123,
+                account_id=account, zone_id='b'*32))
+            fetch.assert_called_once_with(123)
+            consume.assert_called_once()
+
+    def test_owner_wrong_account_stops_before_network_or_consumption(self):
+        with patch.object(a, 'verify_context'), \
+             patch.object(a, 'fetch_comment') as fetch, \
+             patch.object(a, 'consume_once') as consume:
+            with self.assertRaises(a.Stop):
+                a.authorize_once(
+                    expected_source_sha=SHA, comment_id=123,
+                    account_id='a'*32, zone_id='b'*32)
+            fetch.assert_not_called()
+            consume.assert_not_called()
+
+    def test_owner_replay_exclusive_file_is_fail_closed(self):
+        meta = SimpleNamespace(
+            st_mode=stat.S_IFREG | 0o600, st_uid=0, st_gid=0, st_nlink=1)
+        opens = [11, FileExistsError()]
+        def open_once(*args, **kwargs):
+            value = opens.pop(0)
+            if isinstance(value, BaseException):
+                raise value
+            return value
+        with patch.object(a, 'open_state_root', return_value=10), \
+             patch.object(a.os, 'open', side_effect=open_once), \
+             patch.object(a.os, 'fstat', return_value=meta), \
+             patch.object(a.os, 'write', side_effect=lambda fd, raw: len(raw)), \
+             patch.object(a.os, 'fsync'), \
+             patch.object(a.os, 'close'), \
+             patch.object(a.os, 'umask', return_value=0o022):
+            self.assertTrue(a.consume_once(
+                comment_id=123, body_sha256='c'*64,
+                expected_source_sha=SHA))
+            with self.assertRaises(a.Stop):
+                a.consume_once(
+                    comment_id=123, body_sha256='c'*64,
+                    expected_source_sha=SHA)
+
+    def test_owner_capability_has_no_cloudflare_token_reader(self):
+        source = (ROOT / 'ausmalwiese_goatcounter_simple_owner_capability_v1.py').read_text()
+        self.assertNotIn('/etc/rpi5-secrets', source)
+        self.assertNotIn('api.cloudflare.com', source)
+        self.assertNotIn('Authorization', source)
+        self.assertIn('ProxyHandler({})', source)
+
 
 
 if __name__ == '__main__':
