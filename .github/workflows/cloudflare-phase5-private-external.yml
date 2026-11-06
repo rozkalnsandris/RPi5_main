@@ -42,10 +42,10 @@ jobs:
       contents: read
       actions: read
     steps:
-      - name: Checkout exact authorized main source
+      - name: Checkout exact event main source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.authorize.outputs.expected_sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
       - name: Run bounded PRIVATE Access and anonymous-edge audit
