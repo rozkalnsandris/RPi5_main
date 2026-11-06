@@ -144,10 +144,10 @@ class ReportTests(unittest.TestCase):
         for zone in (".UTC", "UTC", "Etc/UTC"):
             fixture = Fixture()
             fixture.me["user"]["settings"]["timezone"] = zone
-            self.assertEqual(self.collect(fixture)["total"], 5)
+            self.assertEqual(self.collect(fixture)["total"], 6)
 
     def test_reject_incomplete_inconsistent_or_unrelated_aggregates(self):
-        mutations = [lambda p: p.update(more=True), lambda p: p.update(total=6),
+        mutations = [lambda p: p.update(more=True), lambda p: p.update(total=7),
                      lambda p: p["hits"][0].update(path="/unrelated"),
                      lambda p: p["hits"][0].update(event=True),
                      lambda p: p["hits"][0].update(count=-1),
