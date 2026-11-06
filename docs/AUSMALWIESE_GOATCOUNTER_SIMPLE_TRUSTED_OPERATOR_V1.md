@@ -31,6 +31,36 @@ database setting or public /count request. Existing rpi5-tunnel is reused.
   runner exposes only the source-check CLI. Source/CI must not invoke
   the actual installer or read protected files.
 
+## Root Git trust preflight — #1366 source correction
+
+The first separately authorized install attempt (2026-11-06) synchronized
+the RPi5 checkout to the reviewed main SHA and passed the unprivileged source
+plan, but the **one** root installer invocation returned
+`STOP_INSTALL_UNCERTAIN` before the install target was created.
+The consumed LIVE authorization is **not** reusable; no retry, rollback,
+cleanup or alternate host path was attempted. Git's documented `safe.directory`
+ownership gate is a likely, but not retrospectively proven, cause: the
+installer previously removed `SUDO_UID` from its subprocess environment.
+
+The corrected installer checks the real UID, mode and directory type of the
+checkout, `.git` and the installer source before any Git subprocess. Under
+sudo-root, it requires an exact decimal, non-root `SUDO_UID` that matches the
+ownership of **all three**, rejects symlinked or group/other-writable
+metadata, then forwards only that validated `SUDO_UID` to Git.
+Unprivileged source-plan checks require the same unprivileged owner.
+All inherited Git/environment config is dropped; core.fsmonitor is disabled,
+hooks are disabled, Git locks are optional-disabled, stderr is discarded.
+No `safe.directory=*`, global Git config or filesystem permissions change.
+Git identity or ownership failures yield the sole sanitized code
+`STOP_GIT_TRUST`; other failures remain `STOP_INSTALL_UNCERTAIN`.
+
+This is **only a source fix** with disconnected adversarial tests. A later
+RPi5 installation needs a **new exact owner authorization**, with current main,
+host and target freshness checked again; nothing here grants a second attempt.
+
+Official Git documentation: https://git-scm.com/docs/git-config/2.54.0
+(see `safe.directory` and the root/`SUDO_UID` exception).
+
 ## Runtime requirements (NOT performed here)
 
 The trusted runner checks the exact installed path, root identity, both
