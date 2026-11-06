@@ -794,9 +794,9 @@ html{overflow-y:scroll}
     </section>
     <div class="container">
       <article class="stats-panel">
-        <div class="stats-panel-heading"><h2>Coloring pages by GoatCounter visits</h2><span class="stats-panel-caption">Includes historical page IDs</span></div>
+        <div class="stats-panel-heading"><h2>Coloring pages by GoatCounter visits</h2><span class="stats-panel-caption">Catalog and archive titles; unknown historical IDs stay visible</span></div>
         <p data-origin-empty hidden>No consent-based GoatCounter visits were recorded in this period.</p>
-        <div class="stats-table-wrap"><table class="stats-table"><thead><tr><th scope="col">Page ID</th><th scope="col">Visits</th></tr></thead><tbody data-origin-ranking></tbody></table></div>
+        <div class="stats-table-wrap"><table class="stats-table"><thead><tr><th scope="col">Coloring page</th><th scope="col">Visits</th></tr></thead><tbody data-origin-ranking></tbody></table></div>
         <button class="secondary" data-origin-more type="button" hidden>Show more pages</button>
       </article>
       <article class="stats-panel">
@@ -1721,26 +1721,43 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
   "use strict";
   const node=name=>document.querySelector("[data-origin-"+name+"]");
   const number=new Intl.NumberFormat("en-GB"), allowed=[1,7,30,365];
-  let sequence=0, controller=null, loaded=false, rows=[], shown=25;
+  let sequence=0, controller=null, loaded=false, rows=[], shown=25, titles=new Map();
   const count=value=>Number.isSafeInteger(value)&&value>=0;
   function clear(){
     node("content").hidden=true;node("total").textContent="–";node("home").textContent="–";node("coloring").textContent="–";node("pages").textContent="–";
-    node("ranking").replaceChildren();node("daily").replaceChildren();rows=[];shown=25;
+    node("ranking").replaceChildren();node("daily").replaceChildren();rows=[];shown=25;titles=new Map();
   }
   function row(label,value){
     const tr=document.createElement("tr"),name=document.createElement("td"),requests=document.createElement("td");
     name.textContent=label;requests.textContent=number.format(value);tr.append(name,requests);return tr;
   }
+  function pageRow(item){
+    const tr=document.createElement("tr"),page=document.createElement("td"),title=document.createElement("div"),meta=document.createElement("small"),visits=document.createElement("td");
+    title.textContent=titles.get(item.page_id)||"Unknown historical page";meta.textContent="ID: "+item.page_id;visits.textContent=number.format(item.visits);
+    page.append(title,meta);tr.append(page,visits);return tr;
+  }
   function ranking(){
-    node("ranking").replaceChildren(...rows.slice(0,shown).map(item=>row(item.page_id,item.visits)));
+    node("ranking").replaceChildren(...rows.slice(0,shown).map(pageRow));
     node("more").hidden=shown>=rows.length;
   }
   function validate(data,days){
-    if(data.version!==2||data.status!=="ok"||data.metric!=="consent_pageviews"||data.range_days!==days||data.timezone!=="UTC"||data.today_partial!==true||!count(data.total)||!count(data.homepage_visits)||!count(data.ausmalbild_visits)||!Array.isArray(data.pages)||data.pages.length>1000||!Array.isArray(data.daily)||data.daily.length!==days||typeof data.generated_at!=="string"||!/^\d{4}-\d{2}-\d{2}T[0-9:.]+Z$/.test(data.generated_at))throw Error("invalid report");
+    if(data.version!==2||data.status!=="ok"||data.metric!=="consent_pageviews"||data.range_days!==days||data.timezone!=="UTC"||data.today_partial!==true||!count(data.total)||!count(data.homepage_visits)||!count(data.ausmalbild_visits)||!Array.isArray(data.pages)||data.pages.length>1000||!Array.isArray(data.daily)||data.daily.length!==days||typeof data.generated_at!=="string"||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z$/.test(data.generated_at))throw Error("invalid report");
     if(!data.pages.every(item=>typeof item.page_id==="string"&&/^[0-9]{7}$/.test(item.page_id)&&count(item.visits))||new Set(data.pages.map(item=>item.page_id)).size!==data.pages.length)throw Error("invalid pages");
-    if(!data.daily.every(item=>/^\d{4}-\d{2}-\d{2}$/.test(item.day)&&count(item.visits))||new Set(data.daily.map(item=>item.day)).size!==days)throw Error("invalid days");
+    if(!data.daily.every(item=>/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(item.day)&&count(item.visits))||new Set(data.daily.map(item=>item.day)).size!==days)throw Error("invalid days");
     if(data.homepage_visits+data.ausmalbild_visits!==data.total||data.pages.reduce((sum,item)=>sum+item.visits,0)!==data.ausmalbild_visits||data.daily.reduce((sum,item)=>sum+item.visits,0)!==data.total)throw Error("invalid totals");
     if(data.start_day!==data.daily[0].day||data.end_day!==data.daily[days-1].day)throw Error("invalid range");
+  }
+  async function safeJson(path,signal){
+    try{
+      const response=await fetch(path,{method:"GET",credentials:"same-origin",cache:"no-store",redirect:"error",headers:{"X-Ausmalwiese-Admin":"1"},signal});
+      if(!response.ok)return null;return await response.json();
+    }catch(error){if(signal.aborted)throw error;return null;}
+  }
+  async function loadTitles(signal){
+    const found=new Map(),catalog=await safeJson("/api/catalog",signal),archive=await safeJson("/api/archive",signal);
+    if(catalog&&Array.isArray(catalog.entries))catalog.entries.forEach(item=>{if(item&&/^[0-9]{7}$/.test(String(item.id))&&typeof item.title==="string"&&item.title.trim())found.set(String(item.id),item.title);});
+    if(archive&&Array.isArray(archive.entries))archive.entries.forEach(item=>{const entry=item&&item.entry;if(entry&&/^[0-9]{7}$/.test(String(entry.id))&&typeof entry.title==="string"&&entry.title.trim()&&!found.has(String(entry.id)))found.set(String(entry.id),entry.title);});
+    return found;
   }
   async function refresh(){
     const days=Number(node("days").value);if(!allowed.includes(days))return;
@@ -1756,7 +1773,7 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
         if(data.status==="busy"){node("status").textContent="A report is being prepared or temporarily paused. Refresh again shortly.";return;}
         throw Error("unavailable");
       }
-      validate(data,days);rows=data.pages;ranking();
+      validate(data,days);titles=await loadTitles(current.signal);if(generation!==sequence)return;rows=data.pages;ranking();
       node("daily").replaceChildren(...data.daily.map(item=>row(item.day+(item.day===data.end_day?" · incomplete":""),item.visits)));
       node("total").textContent=number.format(data.total);node("home").textContent=number.format(data.homepage_visits);node("coloring").textContent=number.format(data.ausmalbild_visits);node("pages").textContent=number.format(rows.length);
       node("empty").hidden=data.total!==0;
