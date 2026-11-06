@@ -12,7 +12,7 @@ database setting or public /count request. Existing rpi5-tunnel is reused.
 - Installer source: scripts/install-ausmalwiese-goatcounter-simple-trusted-readonly-v1.py
 - Runner source: scripts/ausmalwiese_goatcounter_simple_trusted_runner_v1.py
 - Fixed install target: /usr/local/libexec/rpi5-goatcounter-simple-cloudflare-readonly
-- Installer reads the exact clean main checkout at /home/andris/RPi5_main.
+- Installer derives the checkout root from its own checked-out scripts/ path.
   It verifies exact HEAD, main branch, canonical origin and clean checkout.
   Every source byte must equal git show SHA:path from that exact tree.
 - The installer packs exactly 9 source modules, including existing verified
