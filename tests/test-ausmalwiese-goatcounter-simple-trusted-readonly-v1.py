@@ -5,6 +5,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import stat
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -98,6 +99,146 @@ class Tests(unittest.TestCase):
              patch.object(i.os, 'mkdir') as mkdir:
             with self.assertRaises(i.Stop):
                 i.install_once(self.package)
+            mkdir.assert_not_called()
+
+    def git_identity(self, *, sudo='1000', euid=0, repo_uid=1000,
+                     git_uid=1000, source_uid=1000,
+                     repo_mode=stat.S_IFDIR | 0o755,
+                     git_mode=stat.S_IFDIR | 0o755,
+                     source_mode=stat.S_IFREG | 0o644,
+                     expect_success=True):
+        repo = Path('/synthetic/verified-checkout')
+        entry = Path(i.__file__).absolute()
+        original = Path.lstat
+
+        def metadata(p):
+            if p == entry:
+                return SimpleNamespace(st_uid=source_uid, st_mode=source_mode,
+                                       st_nlink=1)
+            if p == repo:
+                return SimpleNamespace(st_uid=repo_uid, st_mode=repo_mode)
+            if p == repo / '.git':
+                return SimpleNamespace(st_uid=git_uid, st_mode=git_mode)
+            return original(p)
+
+        env = {} if sudo is None else {'SUDO_UID': sudo}
+        env.update({'GIT_CONFIG_COUNT': '9', 'GIT_TRACE': 'private-canary'})
+        with patch.object(i, 'REPO', repo), \
+             patch.object(i.os, 'geteuid', return_value=euid), \
+             patch.object(Path, 'lstat', new=metadata), \
+             patch.dict(i.os.environ, env, clear=True), \
+             patch.object(i.subprocess, 'run') as run, \
+             patch.object(i.os, 'mkdir') as mkdir:
+            if expect_success:
+                self.assertEqual(i.verified_git_owner(), repo_uid)
+            else:
+                with self.assertRaises(i.GitTrustStop):
+                    i.verified_git_owner()
+            run.assert_not_called()
+            mkdir.assert_not_called()
+
+    def test_root_sudo_checkout_identity_exact_pass(self):
+        self.git_identity()
+
+    def test_non_root_checkout_owner_pass_and_sudo_ignored(self):
+        self.git_identity(euid=1000, sudo='9999')
+
+    def test_missing_bad_or_spoofed_sudo_uid_fails_before_git(self):
+        for value in (None, '', '0', '0001', '1000 ', '+1000', '-1000',
+                      '1000\n', 'not-a-number', '1001', '4294967295',
+                      '99999999999'):
+            with self.subTest(sudo=value):
+                self.git_identity(sudo=value, expect_success=False)
+
+    def test_misowned_checkout_gitdir_and_entry_fail_before_git(self):
+        for details in ({'repo_uid': 0}, {'git_uid': 0},
+                        {'source_uid': 0}, {'repo_uid': 1001},
+                        {'git_uid': 1001}):
+            with self.subTest(details=details):
+                self.git_identity(**details, expect_success=False)
+
+    def test_symlink_gitdir_checkout_and_source_are_denied(self):
+        for details in ({'repo_mode': stat.S_IFLNK | 0o777},
+                        {'git_mode': stat.S_IFLNK | 0o777},
+                        {'source_mode': stat.S_IFLNK | 0o777}):
+            with self.subTest(details=details):
+                self.git_identity(**details, expect_success=False)
+
+    def test_group_writable_metadata_is_denied(self):
+        for details in ({'repo_mode': stat.S_IFDIR | 0o775},
+                        {'git_mode': stat.S_IFDIR | 0o775},
+                        {'source_mode': stat.S_IFREG | 0o666}):
+            with self.subTest(details=details):
+                self.git_identity(**details, expect_success=False)
+
+    def test_root_git_env_is_sudo_owner_only_and_no_config_inheritance(self):
+        with patch.object(i, 'verified_git_owner', return_value=1000), \
+             patch.object(i.os, 'geteuid', return_value=0), \
+             patch.dict(i.os.environ, {
+                 'SUDO_UID': '1000', 'HOME': '/private-canary',
+                 'GIT_CONFIG_GLOBAL': '/private-canary',
+                 'GIT_CONFIG_COUNT': '1', 'GIT_TRACE': 'private-canary',
+                 'GIT_EXEC_PATH': '/private-canary',
+             }, clear=True), \
+             patch.object(i.subprocess, 'run', return_value=SimpleNamespace(
+                 returncode=0, stdout=b'synthetic sha\n')) as run, \
+             patch.object(i.os, 'mkdir') as mkdir:
+            self.assertEqual(i.git('rev-parse', 'HEAD'), b'synthetic sha\n')
+            args, kw = run.call_args
+            self.assertEqual(args[0][0], '/usr/bin/git')
+            self.assertIn('core.fsmonitor=false', args[0])
+            self.assertIn('core.hooksPath=/dev/null', args[0])
+            self.assertEqual(args[0][-2:], ['rev-parse', 'HEAD'])
+            self.assertEqual(kw['env'], {
+                'PATH': '/usr/bin:/bin', 'LC_ALL': 'C',
+                'GIT_CONFIG_NOSYSTEM': '1',
+                'GIT_CONFIG_GLOBAL': '/dev/null',
+                'GIT_OPTIONAL_LOCKS': '0',
+                'GIT_TERMINAL_PROMPT': '0',
+                'SUDO_UID': '1000',
+            })
+            self.assertIs(kw['stderr'], i.subprocess.DEVNULL)
+            mkdir.assert_not_called()
+
+    def test_unprivileged_git_env_never_forwards_sudo_or_git_values(self):
+        with patch.object(i, 'verified_git_owner', return_value=1000), \
+             patch.object(i.os, 'geteuid', return_value=1000), \
+             patch.dict(i.os.environ, {'SUDO_UID': '7777',
+                                       'GIT_TRACE': 'private-canary'}, clear=True), \
+             patch.object(i.subprocess, 'run', return_value=SimpleNamespace(
+                 returncode=0, stdout=b'')) as run:
+            i.git('status', '--porcelain=v1')
+            self.assertNotIn('SUDO_UID', run.call_args.kwargs['env'])
+            self.assertNotIn('GIT_TRACE', run.call_args.kwargs['env'])
+
+    def test_rejected_git_trust_never_runs_git_or_installs(self):
+        with patch.object(i, 'verified_git_owner',
+                          side_effect=i.GitTrustStop()), \
+             patch.object(i.subprocess, 'run') as run, \
+             patch.object(i.os, 'mkdir') as mkdir:
+            with self.assertRaises(i.GitTrustStop):
+                i.git('rev-parse', 'HEAD')
+            run.assert_not_called()
+            mkdir.assert_not_called()
+
+    def test_git_safe_directory_failure_is_fixed_status(self):
+        with patch.object(i, 'verified_git_owner', return_value=1000), \
+             patch.object(i.os, 'geteuid', return_value=0), \
+             patch.object(i.subprocess, 'run', return_value=SimpleNamespace(
+                 returncode=128, stdout=b'')), \
+             patch.object(i.os, 'mkdir') as mkdir:
+            with self.assertRaises(i.GitTrustStop):
+                i.git('rev-parse', 'HEAD')
+            mkdir.assert_not_called()
+        with patch.object(i.os, 'geteuid', return_value=0), \
+             patch.object(i.socket, 'gethostname', return_value='rpi5'), \
+             patch.object(i, 'load_checkout',
+                          side_effect=i.GitTrustStop()), \
+             patch.object(i.os, 'mkdir') as mkdir, \
+             contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(i.main(['--expected-main', SHA, '--apply',
+                                     '--confirm-install', i.CONFIRM]), 2)
+            self.assertEqual(output.getvalue().strip(), 'STOP_GIT_TRUST')
             mkdir.assert_not_called()
 
     def test_source_verify_trusted_mode_never_proves_live(self):
