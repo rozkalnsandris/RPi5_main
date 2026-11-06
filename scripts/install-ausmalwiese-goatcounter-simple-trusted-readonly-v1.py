@@ -41,23 +41,76 @@ class Stop(Exception):
     pass
 
 
+class GitTrustStop(Stop):
+    """Fixed-status failure; do not echo Git stderr or path/identity data."""
+
+
 def require(ok):
     if not ok:
         raise Stop()
 
 
+def trust_require(ok):
+    if not ok:
+        raise GitTrustStop()
+
+
+def verified_git_owner():
+    """Allow only the actual checkout owner; never disable safe.directory.
+
+    Git explicitly trusts SUDO_UID when running as root, but the subprocess
+    receives only a *validated* UID after matching exact checkout metadata.
+    Neither the rest of the sudo environment nor Git config is inherited.
+    """
+    entry = Path(__file__).absolute()
+    trust_require(entry == entry.resolve())
+    source = entry.lstat()
+    checkout = REPO.lstat()
+    gitdir = (REPO / '.git').lstat()
+    trust_require(stat.S_ISREG(source.st_mode) and source.st_nlink == 1
+                  and stat.S_ISDIR(checkout.st_mode)
+                  and stat.S_ISDIR(gitdir.st_mode))
+    trust_require(not (source.st_mode & 0o022)
+                  and not (checkout.st_mode & 0o022)
+                  and not (gitdir.st_mode & 0o022))
+
+    euid = os.geteuid()
+    if euid == 0:
+        raw_uid = os.environ.get('SUDO_UID')
+        trust_require(type(raw_uid) is str
+                      and re.fullmatch(r'[1-9][0-9]{0,9}', raw_uid) is not None)
+        uid = int(raw_uid)
+        trust_require(uid < 4294967295)
+    else:
+        uid = euid
+        trust_require(uid > 0)
+
+    trust_require(source.st_uid == uid and checkout.st_uid == uid
+                  and gitdir.st_uid == uid)
+    return uid
+
+
 def git(*args):
-    p = subprocess.run(['/usr/bin/git', '-C', str(REPO), *args],
-                       stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                       stderr=subprocess.DEVNULL, timeout=15,
-                       env={'PATH': '/usr/bin:/bin', 'LC_ALL': 'C'})
-    require(p.returncode == 0 and len(p.stdout) < 2000000)
+    owner = verified_git_owner()  # Before *any* Git subprocess.
+    env = {
+        'PATH': '/usr/bin:/bin', 'LC_ALL': 'C',
+        'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': '/dev/null',
+        'GIT_OPTIONAL_LOCKS': '0', 'GIT_TERMINAL_PROMPT': '0',
+    }
+    if os.geteuid() == 0:
+        env['SUDO_UID'] = str(owner)
+    p = subprocess.run(
+        ['/usr/bin/git', '-c', 'core.fsmonitor=false',
+         '-c', 'core.hooksPath=/dev/null', '-C', str(REPO), *args],
+        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL, timeout=15, env=env)
+    trust_require(p.returncode == 0 and len(p.stdout) < 2000000)
     return p.stdout
 
 
 def verify_checkout(sha):
     require(type(sha) is str and SHA.fullmatch(sha))
-    require(REPO.is_dir() and not REPO.is_symlink())
+    verified_git_owner()
     require(git('rev-parse', 'HEAD').decode().strip() == sha)
     require(git('branch', '--show-current').decode().strip() == 'main')
     require(git('remote', 'get-url', 'origin').decode().strip() ==
@@ -160,6 +213,9 @@ def main(argv=None):
             return 0
         print(install_once(package))
         return 0
+    except GitTrustStop:
+        print('STOP_GIT_TRUST')
+        return 2
     except Exception:
         print('STOP_INSTALL_UNCERTAIN')
         return 2
