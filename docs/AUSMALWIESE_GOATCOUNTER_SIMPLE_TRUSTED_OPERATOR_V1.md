@@ -16,7 +16,11 @@ database setting or public /count request. Existing rpi5-tunnel is reused.
 - Source repo: rozkalnsandris/RPi5_main, exact future approved main SHA.
 - Installer source: scripts/install-ausmalwiese-goatcounter-simple-trusted-readonly-v1.py
 - Runner source: scripts/ausmalwiese_goatcounter_simple_trusted_runner_v1.py
-- Fixed install target: /usr/local/libexec/rpi5-goatcounter-simple-cloudflare-readonly
+- Historical fixed release (preserved, never overwritten):
+  `/usr/local/libexec/rpi5-goatcounter-simple-cloudflare-readonly`.
+- **New** immutable release target, selected only from the exact reviewed
+  source SHA: `/usr/local/libexec/rpi5-goatcounter-simple-cloudflare-readonly-<sha>`.
+  No `current` symlink, pointer swap, service restart or implicit consumer switch.
 - Installer derives the checkout root from its own checked-out scripts/ path.
   It verifies exact HEAD, main branch, canonical origin and clean checkout.
   Every source byte must equal git show SHA:path from that exact tree.
@@ -25,16 +29,44 @@ database setting or public /count request. Existing rpi5-tunnel is reused.
   SQLite Collect readback. It writes an existing-Cloudflare-compatible
   release.json digest map (7 modules) and a separate trusted-release.json
   (all 9 modules), each with the same full SHA. No generic client.
-- Release root is root:root 0700. Files are root:root 0400 except the runner
-  0500. No symlinks, overwrite, upgrade, fallback installer, or cleanup.
-  Manifest files are installed LAST. First mkdir consumes a future distinct
-  owner-authorized installation mutation. Any later error is STOP with partial
-  material left untouched; never retry/rollback/cleanup automatically.
-- If an earlier installed release already occupies the fixed target, STOP.
-  This issue does not authorize replacement or an alternate path.
+- Each new SHA-named release root is root:root 0700. Files are root:root
+  0400 except the runner 0500. No symlinks, overwrite, fallback or cleanup.
+  Manifest files are installed LAST. The first `mkdir` in the **new exact
+  versioned path** consumes a future separate LIVE approval. Any error
+  leaves the new directory as-is; **no retry, rollback, cleanup or alternative**.
+- The existing legacy root and previous SHA-named roots are untouched. A
+  pre-existing target for the same SHA causes STOP before the first write.
+  A versioned install does not automatically switch callers or read a secret.
+  Both trusted runner and Cloudflare operator pin their actual module path to
+  `/usr/local/libexec/rpi5-goatcounter-simple-cloudflare-readonly-<expected-sha>`
+  before reading root-owned manifests or performing any protected operation.
 - Calling the installer with no --apply only evaluates a source plan; the
   runner exposes only the source-check CLI. Source/CI must not invoke
   the actual installer or read protected files.
+
+## #1370 no-overwrite upgrade boundary (SOURCE ONLY)
+
+The earlier root-owned fixed release is verified but immutable. The smallest
+safe transition is a **new side-by-side SHA-named directory under the same
+`/usr/local/libexec` parent**. This does not need a new installer framework,
+secondary tunnel or service. Source / tests / docs make that path available;
+the first actual directory creation remains a distinct LIVE action.
+
+`versioned_root(sha)` validates one lowercase 40-character Git SHA and
+constructs exactly one install destination. The installer checks the clean
+exact-source checkout, canonical origin, root-safe parents, absent target,
+and both manifest `source_sha` values **before mkdir**. It uses only
+`mkdir`, exclusive no-symlink file creation, fsync and fixed modes. It never
+`rename`, `unlink`, `rmdir`, `chmod` or overwrite an older release.
+The runner and operator refuse to verify any release whose actual directory
+name does not match the exact expected commit SHA. `python3 -I -B`
+prevents local `operator.py` from hijacking standard-library imports.
+
+**No active runtime switch** is performed by this source outcome.
+After a later approved install, a separately approved trusted caller must
+explicitly select the new exact runner path; no pointer is changed. If the
+new target already exists (complete or partial), STOP; no second attempt,
+repair, rollback or cleanup without new risk authorization.
 
 ## Root Git trust preflight — #1366 source correction
 
@@ -156,28 +188,38 @@ No such proof or inability to prevent physical `-shm` writes results in
 `STOP_COLLECT` **before opening SQLite**. No `immutable=1`, copies,
 checkpoints, sidecar cleanup or new database service.
 
-**Future single owner decision (NOT granted):** after final exact-head merge
-and fresh RPi5 preflight, independently authorize a **bounded replacement
-plan for the existing immutable root-owned release** (never overwrite it
-by default), an exact source SHA and digest verification, a separately issued
-one-shot root-owned grant with authenticated owner provenance, and—only if
-explicitly approved—the existing-credential GET-only check. If safe,
-reviewed replacement and least-privilege credentials are not available,
-**STOP**; do not create another tunnel or silently use a checkout script.
-`Collect` remains independently gated and disabled unless the OS proof
-exists. A source merge is not a LIVE/credential/installation permission.
+**Future single installation decision (NOT granted):** after exact-head
+merge and fresh RPi5 preflight, separately authorize precisely:
+1. The one exact Git source sync to reviewed SHA (only if required).
+2. A single root-owned versioned release creation at
+   `/usr/local/libexec/rpi5-goatcounter-simple-cloudflare-readonly-<sha>`
+   with exact reviewed source inputs and digest manifests, **no overwrite**,
+   using the reviewed installer and one `--apply` invocation. The legacy
+   release is left intact; target pre-existence is STOP.
+3. One read-only `/usr/bin/python3 -I -B` source-integrity check of
+   `<new-release>/trusted_runner.py --source-check --expected-source-sha <sha>`,
+   which proves only the installed bytes, not LIVE Cloudflare readiness.
+
+**Protected diagnostics are a separate owner gate:** a root-owned exact-scope
+one-shot grant, independently authenticated/consumed caller, existing
+Cloudflare least-privilege capability and bounded GET-only read must each be
+explicitly approved and available. The source runner still has no protected
+CLI and cannot read token files by itself. If any trusted caller/permission
+is missing, **STOP**, rather than using an unreviewed root shell workaround.
+`Collect` remains disabled without the independently proven OS RO WAL/-shm
+boundary. No new tunnel, service or analytics activation follows from merge.
 
 Disconnected tests in the existing Makefile cover isolated import guards,
 owner grant + external gate consumption, no DB open without RO proof,
 and synthetic one-shot injected GET. These tests DO NOT prove real
 Cloudflare, client-IP forwarding, or German privacy approval.
 
-## Future exact owner gates (not granted by AUTO-RUN FULL #1364)
+## Future exact owner gates (not granted by AUTO-RUN FULL #1364 or #1370)
 
 1. Review PR exact HEAD/CI/reviews and issue an explicit MERGE command.
-2. Independently authorize exact RPi5 source sync + installation:
-   host=rpi5, exact approved main SHA, existing target must be absent,
-   exact installer/checkout/target, one mkdir+bounded file writes.
+2. Independently authorize exact RPi5 source sync + **new versioned
+   release install**: host=rpi5, exact approved main SHA, new SHA-named
+   target must be absent, legacy target untouched, one mkdir+bounded files.
    No generic sudo/root permission beyond that one reviewed operation.
 3. Independently authorize protected DB/settings READ and mount/identity
    safety, with only allowlisted sanitized results; or STOP before SQLite.
