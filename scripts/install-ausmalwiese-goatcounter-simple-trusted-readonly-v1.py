@@ -15,7 +15,7 @@ import socket
 import stat
 import subprocess
 
-REPO = Path('/home/andris/RPi5_main')
+REPO = Path(__file__).resolve().parents[1]
 ROOT = Path('/usr/local/libexec/rpi5-goatcounter-simple-cloudflare-readonly')
 REPOSITORY = 'rozkalnsandris/RPi5_main'
 SCOPE = 'GOATCOUNTER_SIMPLE_TRUSTED_READONLY_V1'
