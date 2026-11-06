@@ -33,6 +33,7 @@ FILES = (
     'trusted_runner.py',
 )
 OLD_FILES = FILES[:7]
+_PROTECTED_CALL_CONSUMED = False
 
 
 class Stop(Exception):
@@ -108,11 +109,14 @@ def grant_ok(grant, *, scope, source_sha):
 
 
 def approved(scope, expected_source_sha):
+    global _PROTECTED_CALL_CONSUMED
     require(scope in ('COLLECT', 'CLOUDFLARE_GET'))
+    require(_PROTECTED_CALL_CONSUMED is False)
     # Installer never places the grant. It can only be created under a distinct
     # exact owner gate, whose independent provenance the caller must verify.
     require(grant_ok(load_json(GRANT, 0o400), scope=scope,
                      source_sha=expected_source_sha))
+    _PROTECTED_CALL_CONSUMED = True  # BEFORE first protected read/GET
 
 
 
