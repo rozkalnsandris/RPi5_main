@@ -255,8 +255,9 @@ class Tests(unittest.TestCase):
         with patch.object(o, 'verify_release', side_effect=o.Stop()), \
              patch.object(o, 'approved') as approve:
             self.assertEqual(o.cloudflare_once(expected_source_sha=SHA,
-                             client=CANARY, account_id=CANARY,
-                             zone_id=CANARY), 'STOP_CLOUDFLARE')
+                             client_factory=lambda typ: CANARY,
+                             account_id=CANARY, zone_id=CANARY),
+                             'STOP_CLOUDFLARE')
             approve.assert_not_called()
 
     def test_no_protected_dispatch_without_owner_grant(self):
@@ -288,13 +289,15 @@ class Tests(unittest.TestCase):
              patch.object(Path, 'stat', new=stub_stat), \
              patch.object(o.os, 'statvfs') as vfs:
             vfs.return_value.f_flag=0
-            self.assertEqual(o.collect_once(expected_source_sha=SHA),'STOP_COLLECT')
+            self.assertEqual(o.collect_once(expected_source_sha=SHA,
+                              readonly_proof=lambda paths: True),
+                              'STOP_COLLECT')
             self.assertGreater(vfs.call_count,0)
 
     def test_authorization_missing_grant_fails_closed(self):
         with patch.object(o,'load_json',side_effect=OSError(CANARY)):
             with self.assertRaises(OSError):
-                o.approved('COLLECT',SHA)
+                o.approved('COLLECT',SHA,owner_gate=lambda scope, sha: True)
         for scope in ('ALL','WRITE','COLLECT+GET'):
             with patch.object(o,'load_json') as loader:
                 with self.assertRaises(o.Stop):
@@ -320,10 +323,125 @@ class Tests(unittest.TestCase):
                  'owner_approved': True, 'one_shot': True}
         with patch.object(o, '_PROTECTED_CALL_CONSUMED', False), \
              patch.object(o, 'load_json', return_value=grant) as reader:
-            o.approved('COLLECT', SHA)
+            o.approved('COLLECT', SHA,owner_gate=lambda scope, sha: True)
             with self.assertRaises(o.Stop):
-                o.approved('COLLECT', SHA)
+                o.approved('COLLECT', SHA,owner_gate=lambda scope, sha: True)
             reader.assert_called_once()
+
+    def test_independent_owner_gate_required_before_grant_or_client(self):
+        with patch.object(o, '_PROTECTED_CALL_CONSUMED', False), \
+             patch.object(o, 'load_json') as grant, \
+             patch.object(o, 'verified_import_path') as imports:
+            with self.assertRaises(o.Stop):
+                o.approved('CLOUDFLARE_GET', SHA)
+            grant.assert_not_called()
+            self.assertEqual(o.cloudflare_once(
+                expected_source_sha=SHA, client_factory=lambda typ: CANARY,
+                owner_gate=None), 'STOP_CLOUDFLARE')
+            imports.assert_not_called()
+
+    def test_denied_owner_gate_consumes_once_with_no_protected_call(self):
+        grant={'schema':1,'repository':o.REPOSITORY,'source_sha':SHA,
+               'scope':'CLOUDFLARE_GET','owner_approved':True,'one_shot':True}
+        calls=[]
+        def rejected(scope, sha):
+            calls.append((scope,sha))
+            return False
+        with patch.object(o, '_PROTECTED_CALL_CONSUMED', False), \
+             patch.object(o, 'load_json', return_value=grant) as read:
+            with self.assertRaises(o.Stop):
+                o.approved('CLOUDFLARE_GET',SHA,owner_gate=rejected)
+            with self.assertRaises(o.Stop):
+                o.approved('CLOUDFLARE_GET',SHA,owner_gate=rejected)
+            self.assertEqual(calls,[('CLOUDFLARE_GET',SHA)])
+            read.assert_called_once()
+
+    def test_collect_without_independent_readonly_mount_proof_no_db_open(self):
+        with patch.object(o, 'verify_release', return_value=True), \
+             patch.object(o, 'approved', return_value=None), \
+             patch.object(o.os, 'statvfs') as vfs, \
+             patch.object(o, 'release_import') as imports:
+            self.assertEqual(o.collect_once(
+                expected_source_sha=SHA, owner_gate=lambda s,h:True),
+                'STOP_COLLECT')
+            vfs.assert_not_called()
+            imports.assert_not_called()
+
+    def test_no_protected_import_without_isolated_nobytecode_mode(self):
+        for isolated, nobytecode in ((0,1),(1,0),(0,0)):
+            with self.subTest(isolated=isolated,bytecode=nobytecode), \
+                 patch.object(o.sys,'flags',SimpleNamespace(
+                     isolated=isolated,dont_write_bytecode=nobytecode)), \
+                 patch.object(o.sys,'path',list(o.sys.path)):
+                prior=list(o.sys.path)
+                with self.assertRaises(o.Stop):
+                    o.verified_import_path()
+                self.assertEqual(prior,o.sys.path)
+
+    def test_stdlib_operator_cannot_be_shadowed_by_release(self):
+        fake=SimpleNamespace(__file__=str(o.ROOT/'operator.py'))
+        with patch.object(o.sys,'flags',SimpleNamespace(
+                 isolated=1,dont_write_bytecode=1)), \
+             patch.object(o.sys,'path',list(o.sys.path)), \
+             patch.dict(o.sys.modules, {'operator': fake}):
+            with self.assertRaises(o.Stop):
+                o.verified_import_path()
+            self.assertNotIn(str(o.ROOT),o.sys.path)
+
+    def test_safe_isolated_mode_can_import_after_stdlib_operator_pin(self):
+        with patch.object(o.sys,'flags',SimpleNamespace(
+                 isolated=1,dont_write_bytecode=1)), \
+             patch.object(o.sys,'path',list(o.sys.path)):
+            self.assertNotIn(str(o.ROOT),o.sys.path)
+            o.verified_import_path()
+            self.assertEqual(o.sys.path[0],str(o.ROOT))
+
+    def test_one_shot_cloudflare_synthetic_injected_factory(self):
+        class FakeClient:
+            pass
+        fake_run = SimpleNamespace(run_guarded=lambda **kwargs: (
+            'PASS_EDGE_SOURCE_ONLY', {'raw': CANARY}))
+        with patch.object(o,'verify_release',return_value=True), \
+             patch.object(o,'approved',return_value=None) as approve, \
+             patch.object(o,'verified_import_path') as imports, \
+             patch.object(o,'release_import') as release_import, \
+             patch.object(o.importlib.util,'spec_from_file_location') as spec, \
+             patch.object(o.importlib.util,'module_from_spec',
+                          return_value=fake_run), \
+             patch.object(o.sys,'path',list(o.sys.path)), \
+             patch.dict(o.sys.modules, {
+                 'cloudflare_rdc_operator': SimpleNamespace(
+                     CloudflareClient=FakeClient)}):
+            result=o.cloudflare_once(
+                expected_source_sha=SHA, owner_gate=lambda s,h: True,
+                account_id='a'*32, zone_id='b'*32,
+                client_factory=lambda trusted: trusted())
+            self.assertEqual(result,'PASS_EDGE_SOURCE_ONLY')
+            self.assertNotIn(CANARY,result)
+            self.assertEqual(release_import.call_count,6)
+            approve.assert_called_once_with(
+                'CLOUDFLARE_GET',SHA,
+                owner_gate=unittest.mock.ANY)
+            imports.assert_called_once()
+            spec.return_value.loader.exec_module.assert_called_once_with(fake_run)
+
+    def test_cloudflare_client_factory_must_return_exact_trusted_type(self):
+        class FakeClient:
+            pass
+        with patch.object(o,'verify_release',return_value=True), \
+             patch.object(o,'approved',return_value=None), \
+             patch.object(o,'verified_import_path'), \
+             patch.object(o,'release_import'), \
+             patch.object(o.importlib.util,'spec_from_file_location') as spec, \
+             patch.object(o.sys,'path',list(o.sys.path)), \
+             patch.dict(o.sys.modules, {
+                 'cloudflare_rdc_operator': SimpleNamespace(
+                     CloudflareClient=FakeClient)}):
+            result=o.cloudflare_once(
+                expected_source_sha=SHA, owner_gate=lambda s,h:True,
+                client_factory=lambda trusted: object())
+            self.assertEqual(result,'STOP_CLOUDFLARE')
+            spec.assert_not_called()
 
     def test_no_secret_in_public_status(self):
         with patch.object(o,'verify_release',side_effect=OSError(CANARY)):
