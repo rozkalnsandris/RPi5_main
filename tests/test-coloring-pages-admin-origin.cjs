@@ -41,6 +41,6 @@ function harness(route="overview"){
  assert.equal(h.nodes.total.textContent,"3");assert.equal(h.nodes.days.disabled,false);assert.equal(h.nodes.refresh.disabled,false);
  assert.ok(h.calls.every(({url,options})=>/^\/api\/analytics\/origin\?days=(1|7|30|365)$/.test(url)&&options.method==="GET"&&options.redirect==="error"&&options.headers["X-Ausmalwiese-Admin"]==="1"));
  assert.ok(!script.includes("innerHTML"));assert.ok(!script.includes("localStorage"));
- const deep=harness("origin");for(let i=0;i<15;i++)await Promise.resolve();assert.equal(deep.nodes.total.textContent,"5");
+ const deep=harness("origin");for(let i=0;i<15;i++)await Promise.resolve();assert.equal(deep.nodes.total.textContent,"6");
  console.log("GoatCounter visit UI: isolated route, consent metrics, UTC ranges, honest empty/error states, safe DOM and stale-result rejection PASS");
 })().catch(error=>{console.error(error);process.exitCode=1;});

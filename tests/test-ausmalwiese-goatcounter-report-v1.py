@@ -69,11 +69,12 @@ class ReportTests(unittest.TestCase):
         reader.get = fixture.get
         return reader.collect(fixture.days, NOW, TOKEN)
 
-    def test_all_ranges_only_origin_namespace_and_safe_output(self):
+    def test_all_ranges_only_consent_namespace_and_safe_output(self):
         for days in (1, 7, 30, 365):
             with self.subTest(days=days):
                 fixture = Fixture(days)
                 result = self.collect(fixture)
+                self.assertEqual((result["version"], result["metric"]), (2, "consent_pageviews"))
                 self.assertEqual(result["total"], 6)
                 self.assertEqual(result["homepage_visits"], 1)
                 self.assertEqual(result["ausmalbild_visits"], 5)
