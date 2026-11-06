@@ -17,6 +17,7 @@ import subprocess
 
 REPO = Path(__file__).resolve().parents[1]
 ROOT = Path('/usr/local/libexec/rpi5-goatcounter-simple-cloudflare-readonly')
+# LEGACY ROOT IS NEVER WRITTEN AGAIN. New releases are installed beside it.
 REPOSITORY = 'rozkalnsandris/RPi5_main'
 SCOPE = 'GOATCOUNTER_SIMPLE_TRUSTED_READONLY_V1'
 SHA = re.compile(r'[0-9a-f]{40}\Z')
@@ -158,20 +159,32 @@ def _root_safe(p):
             and st.st_gid == 0 and not (st.st_mode & 0o022))
 
 
-def install_once(files):
-    """ONE mutation sequence; first mkdir consumes separate LIVE approval.
+def versioned_root(sha):
+    """Single immutable destination, chosen from the reviewed exact SHA."""
+    require(type(sha) is str and SHA.fullmatch(sha) is not None)
+    return ROOT.with_name(ROOT.name + '-' + sha)
 
-    If any later error occurs, leave partial files untouched and STOP.
-    Caller must independently prove owner authorization before invoking.
+
+def install_once(sha, files):
+    """Install a NEW immutable SHA release; preserve the old fixed release.
+
+    First mkdir is the only authorized start of a future LIVE mutation. A
+    failure after mkdir leaves the new target untouched (no retry/rollback).
+    Never create symlinks, modify the legacy root or silently switch callers.
     """
+    root = versioned_root(sha)
     require(type(files) is dict and set(files) == set(SOURCE) | {
             'release.json', 'trusted-release.json'})
-    for parent in reversed(ROOT.parents):
+    # Pin both embedded manifests to the same intended SHA BEFORE mkdir.
+    for manifest in ('release.json', 'trusted-release.json'):
+        record = json.loads(files[manifest].decode('utf-8'))
+        require(type(record) is dict and record.get('source_sha') == sha)
+    for parent in reversed(root.parents):
         _root_safe(parent)
-    require(not os.path.lexists(ROOT))
+    require(not os.path.lexists(root))
     os.umask(0o077)
-    os.mkdir(ROOT, 0o700)  # FIRST LIVE MUTATION if separately authorized.
-    rootfd = os.open(ROOT, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    os.mkdir(root, 0o700)  # FIRST LIVE MUTATION if separately authorized.
+    rootfd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
         for name in [*SOURCE, 'release.json', 'trusted-release.json']:
             require('/' not in name and name not in ('.', '..'))
@@ -211,7 +224,7 @@ def main(argv=None):
         if not args.apply:
             print('PASS_SOURCE_PLAN_ONLY')
             return 0
-        print(install_once(package))
+        print(install_once(args.expected_main, package))
         return 0
     except GitTrustStop:
         print('STOP_GIT_TRUST')
