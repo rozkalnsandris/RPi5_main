@@ -1,8 +1,13 @@
 # GoatCounter SIMPLE — one-shot trusted read-only operator source (#1364)
 
-**SOURCE ONLY — not installed, not authorized to run on RPi5.**
-This outcome adds an installer **source** and an importable bounded runner to the
-existing GoatCounter SIMPLE offline/Cloudflare readback modules. It does not
+**Source-development contract; protected runtime operations are not authorized.**
+The existing fixed release `7767caf9b5a5921aac43702af75ba2abe0e77d7d`
+was independently installed on RPi5 and passed one root-owned
+`python3 -I -B` source check (2026-11-06). This confirms **source integrity
+only**, not Cloudflare/Collect settings or LIVE analytics. Subsequent #1368
+source edits are NOT installed, and cannot be silently applied to that immutable
+release. This outcome adds an installer **source** and an importable bounded
+runner to the existing GoatCounter SIMPLE offline/Cloudflare readback modules. It does not
 create a new Tunnel, daemon, service, API client, key, credential, runtime grant,
 database setting or public /count request. Existing rpi5-tunnel is reused.
 
@@ -110,6 +115,62 @@ permission before invoking a protected function; no in-source retry exists.
   filtered host inventory. The existing sanitizer intentionally STOPs on any
   ambiguous pagination metadata; this can yield a legitimate false STOP,
   never treat source-only PASS as LIVE clearance or silently weaken it.
+
+## One-shot diagnostic handoff — #1368 (SOURCE ONLY)
+
+Use the **existing** `rpi5-tunnel`, the nine already reviewed source modules,
+and the **existing** `CloudflareClient`. No new tunnel, service, token reader,
+provider client or public `/count` traffic is necessary. The only public-safe
+result is a fixed `PASS_EDGE_SOURCE_ONLY` or `STOP_CLOUDFLARE`.
+
+The trusted runner exposes a `--source-check` CLI only. A *separately
+authorized, independently trusted caller* must use
+`cloudflare_once(expected_source_sha, owner_gate, client_factory, account_id,
+zone_id)` **in process**. Its `owner_gate(scope, SHA)` must independently
+authenticate and consume an exact owner approval **before** returning the
+literal `True`; a callback or the root-owned `owner-readonly-grant.json`
+ALONE is **not** an authorization receipt. A caller also must have permission
+to read the existing credential capability through an independently approved
+boundary; the injected `client_factory(verified_CloudflareClient_class)`
+must return exactly that already reviewed class. The runner itself never
+loads tokens or outputs account IDs, tokens, provider responses or private
+paths. All six possible calls are guarded one-shot **GET**, with no retry.
+Any missing/invalid grant, owner gate, client or API proof returns a fixed STOP.
+Because Worker Domain response pagination metadata can be ambiguous, a
+conservative `STOP_CLOUDFLARE` is not evidence of an actual conflict.
+
+Import safety: protected module loading requires Python **`-I -B`**,
+a preloaded, verified **standard-library** `operator` module, and
+no foreign preloaded release dependencies. The fixed release path is added
+only temporarily and removed in a `finally` block. This avoids local
+`operator.py` shadowing Python's standard library without renaming or
+overwriting installed release files. See
+https://docs.python.org/3.11/using/cmdline.html.
+
+`Collect` is **OFF by default**: `collect_once` requires a distinct
+authorized `COLLECT` grant, a trusted `owner_gate`, AND an independent
+`readonly_proof` that an enforced mount namespace prevents even root
+remount/writes to the SQLite database, existing active WAL and `-shm`.
+The runner also independently checks `ST_RDONLY` for all three.
+No such proof or inability to prevent physical `-shm` writes results in
+`STOP_COLLECT` **before opening SQLite**. No `immutable=1`, copies,
+checkpoints, sidecar cleanup or new database service.
+
+**Future single owner decision (NOT granted):** after final exact-head merge
+and fresh RPi5 preflight, independently authorize a **bounded replacement
+plan for the existing immutable root-owned release** (never overwrite it
+by default), an exact source SHA and digest verification, a separately issued
+one-shot root-owned grant with authenticated owner provenance, and—only if
+explicitly approved—the existing-credential GET-only check. If safe,
+reviewed replacement and least-privilege credentials are not available,
+**STOP**; do not create another tunnel or silently use a checkout script.
+`Collect` remains independently gated and disabled unless the OS proof
+exists. A source merge is not a LIVE/credential/installation permission.
+
+Disconnected tests in the existing Makefile cover isolated import guards,
+owner grant + external gate consumption, no DB open without RO proof,
+and synthetic one-shot injected GET. These tests DO NOT prove real
+Cloudflare, client-IP forwarding, or German privacy approval.
 
 ## Future exact owner gates (not granted by AUTO-RUN FULL #1364)
 
