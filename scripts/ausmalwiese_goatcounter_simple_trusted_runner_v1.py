@@ -6,12 +6,14 @@ performed by importing this module. Protected modes require a separately
 owner-authorized, independently provisioned root-owned grant and caller.
 """
 import hashlib
+import importlib
 import json
 import os
 from pathlib import Path
 import re
 import stat
 import sys
+import sysconfig
 
 ROOT = Path('/usr/local/libexec/rpi5-goatcounter-simple-cloudflare-readonly')
 ENTRY = ROOT / 'trusted_runner.py'
@@ -108,30 +110,52 @@ def grant_ok(grant, *, scope, source_sha):
             and grant['owner_approved'] is True and grant['one_shot'] is True)
 
 
-def approved(scope, expected_source_sha):
+def approved(scope, expected_source_sha, *, owner_gate=None):
+    """Owner gate is an independent trusted caller, NEVER a self-signed grant.
+
+    The caller must authenticate and consume the exact owner authority outside
+    this module. Merely passing a callback is NOT proof of owner permission.
+    """
     global _PROTECTED_CALL_CONSUMED
     require(scope in ('COLLECT', 'CLOUDFLARE_GET'))
-    require(_PROTECTED_CALL_CONSUMED is False)
-    # Installer never places the grant. It can only be created under a distinct
-    # exact owner gate, whose independent provenance the caller must verify.
+    require(_PROTECTED_CALL_CONSUMED is False and callable(owner_gate))
+    # Root-owned grant is only an additional fail-closed input; it is not
+    # independent proof of an owner decision or durable one-shot consumption.
     require(grant_ok(load_json(GRANT, 0o400), scope=scope,
                      source_sha=expected_source_sha))
-    _PROTECTED_CALL_CONSUMED = True  # BEFORE first protected read/GET
+    _PROTECTED_CALL_CONSUMED = True  # Consume BEFORE external gate/any I/O.
+    require(owner_gate(scope, expected_source_sha) is True)
 
 
 
 def verified_import_path():
-    # A caller must not pre-load checkout/foreign modules before verification.
-    # Check cache BEFORE any imported module can execute in a protected mode.
+    """Isolated, no-bytecode imports; never shadow stdlib operator.py."""
+    require(sys.flags.isolated == 1 and sys.flags.dont_write_bytecode == 1)
+    require(str(ROOT) not in sys.path)
+    # Python's own operator module must be cached BEFORE this trusted release
+    # is temporarily made importable. A release file named operator.py must
+    # never take the place of Python's standard-library operator.
+    stdop = sys.modules.get('operator')
+    require(stdop is not None and getattr(stdop, '__file__', None) is not None)
+    require(Path(stdop.__file__).resolve()
+            == Path(sysconfig.get_path('stdlib')).resolve() / 'operator.py')
+    # No foreign preloaded dependency is allowed.
     for name in FILES[1:-1]:
         loaded = sys.modules.get(name[:-3])
         if loaded is not None:
             require(getattr(loaded, '__file__', None) is not None
                     and Path(loaded.__file__).absolute() == ROOT / name)
     sys.dont_write_bytecode = True
-    if str(ROOT) in sys.path:
-        sys.path.remove(str(ROOT))
     sys.path.insert(0, str(ROOT))
+
+
+def release_import(name):
+    """Only modules from the hash-verified fixed release may be imported."""
+    require(name + '.py' in FILES[1:-1])
+    module = importlib.import_module(name)
+    require(getattr(module, '__file__', None) is not None
+            and Path(module.__file__).absolute() == ROOT / (name + '.py'))
+    return module
 
 
 def offline_status(expected_source_sha):
@@ -142,54 +166,84 @@ def offline_status(expected_source_sha):
         return 'STOP_RELEASE'
 
 
-def collect_once(*, expected_source_sha):
-    """No database open unless root-owned owner-grant AND kernel RO mount."""
+def collect_once(*, expected_source_sha, owner_gate=None, readonly_proof=None):
+    """Optional: no live WAL read without two independent runtime gates.
+
+    The trusted caller must independently prove a non-bypassable RO mount
+    namespace (including -shm) before returning True from readonly_proof.
+    Neither a self-signed boolean nor statvfs alone is authority.
+    """
+    inserted = False
     try:
         verify_release(expected_source_sha)
-        approved('COLLECT', expected_source_sha)
-        # Require an independently installed, approved read-only bind mount
-        # that covers the *actual* DB and sidecar paths. No mount is created.
+        approved('COLLECT', expected_source_sha, owner_gate=owner_gate)
+        require(callable(readonly_proof))
+        require(readonly_proof((str(DB), str(DB) + '-wal',
+                                str(DB) + '-shm')) is True)
         require(hasattr(os, 'ST_RDONLY'))
         require(DB.parent.stat().st_dev == DB.stat().st_dev)
         for target in (DB, Path(str(DB) + '-wal'), Path(str(DB) + '-shm')):
             require((os.statvfs(target).f_flag & os.ST_RDONLY) != 0)
-        # No checkout imports; modules are verified first and from fixed root.
         verified_import_path()
-        import ausmalwiese_goatcounter_simple_collect_readback_v1 as collect
-        require(Path(collect.__file__).absolute() == ROOT / (
-            'ausmalwiese_goatcounter_simple_collect_readback_v1.py'))
+        inserted = True
+        collect = release_import('ausmalwiese_goatcounter_simple_collect_readback_v1')
         value = collect.read_once(DB)
         return value if value in ('COLLECT_DISABLED_1',
                                   'COLLECT_CANDIDATE_130') else 'STOP_COLLECT'
     except Exception:
         return 'STOP_COLLECT'
+    finally:
+        if inserted and str(ROOT) in sys.path:
+            sys.path.remove(str(ROOT))
 
 
-def cloudflare_once(*, expected_source_sha, client, account_id, zone_id):
-    """Only a separately authorized trusted caller can supply credentials.
+def cloudflare_once(*, expected_source_sha, client_factory=None,
+                    account_id=None, zone_id=None, owner_gate=None):
+    """One GET-only diagnostic through the EXISTING trusted CloudflareClient.
 
-    Existing operator itself enforces exact host release, account binding,
-    read-only GET allowlist, one GET per endpoint, no retries or redirects.
-    No token/file opener is created here.
+    The external owner-authorized caller supplies verified identities and a
+    factory for the reviewed CloudflareClient class. There is no credential
+    loader, CLI, provider-ID output or new transport in this module.
     """
+    inserted = False
     try:
         verify_release(expected_source_sha)
-        approved('CLOUDFLARE_GET', expected_source_sha)
+        approved('CLOUDFLARE_GET', expected_source_sha, owner_gate=owner_gate)
+        require(callable(client_factory))
         verified_import_path()
-        import importlib.util
+        inserted = True
+
+        # The underlying Cloudflare operator checks that ALL its dependencies
+        # are the hash-pinned installed modules, not only transitively loaded
+        # ones. Import each explicitly, then verify the exact loaded path.
+        for name in (
+                'cloudflare_rdc_operator',
+                'ausmalwiese_goatcounter_tunnel_v1',
+                'ausmalwiese_goatcounter_simple_route_v1',
+                'ausmalwiese_goatcounter_simple_readiness_v1',
+                'ausmalwiese_goatcounter_simple_evidence_v1',
+                'ausmalwiese_goatcounter_simple_cloudflare_readback_v1'):
+            release_import(name)
+        client_type = sys.modules['cloudflare_rdc_operator'].CloudflareClient
+        client = client_factory(client_type)
+        require(type(client) is client_type)
+
         spec = importlib.util.spec_from_file_location(
             'goatcounter_cloudflare_operator', ROOT / 'operator.py')
         require(spec is not None and spec.loader is not None)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        status, summary = module.run_guarded(client=client, account_id=account_id,
-                                            zone_id=zone_id,
-                                            expected_source_sha=expected_source_sha)
-        # Expose no raw Cloudflare data, even though underlying sanitizer only
-        # returns an allowlisted summary.
-        return 'PASS_EDGE_SOURCE_ONLY' if status == 'PASS_EDGE_SOURCE_ONLY' else 'STOP_CLOUDFLARE'
+        status, _ = module.run_guarded(client=client, account_id=account_id,
+                                       zone_id=zone_id,
+                                       expected_source_sha=expected_source_sha)
+        # Fixed public-safe result only; no provider response escapes.
+        return ('PASS_EDGE_SOURCE_ONLY' if status == 'PASS_EDGE_SOURCE_ONLY'
+                else 'STOP_CLOUDFLARE')
     except Exception:
         return 'STOP_CLOUDFLARE'
+    finally:
+        if inserted and str(ROOT) in sys.path:
+            sys.path.remove(str(ROOT))
 
 
 if __name__ == '__main__':
