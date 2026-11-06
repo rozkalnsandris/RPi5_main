@@ -171,8 +171,8 @@ class Tests(unittest.TestCase):
         self.assertEqual(stub.requests.count(WWW), 1)
 
     def test_guarded_operator_cannot_execute_from_repo_checkout(self):
-        # Even an authenticated-looking fake must not trigger a GET while
-        # the code is only a source checkout, not root-owned trusted release.
+        # A source checkout does not match an exact SHA-versioned release path;
+        # fail closed before any GET, regardless of caller-supplied identity.
         class Client:
             def __init__(self): self.calls = []
             def _request(self, method, path):
@@ -181,7 +181,7 @@ class Tests(unittest.TestCase):
         fake = Client()
         val = operator.run_guarded(client=fake, account_id=ACCOUNT,
                                    zone_id=ZONE, expected_source_sha="f" * 40)
-        self.assertEqual(val, ("STOP_TRUSTED_INSTALL", None))
+        self.assertEqual(val, ("STOP_RELEASE", None))
         self.assertEqual(fake.calls, [])
 
     def test_getonly_transport_rejects_every_unapproved_path(self):
