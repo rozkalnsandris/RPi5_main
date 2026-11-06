@@ -40,7 +40,7 @@ printf '%s\n' '#!/usr/bin/env bash' \
   'case "${name}" in' \
   '  docker)' \
   '    mode=${STUB_DOCKER_MODE:-ok}' \
-  '    if [[ "${mode}" == timeout ]]; then sleep 3; exit 124; fi' \
+  '    if [[ "${mode}" == timeout && "${1:-}" == version ]]; then sleep 3; exit 124; fi' \
   '    if [[ "${mode}" == permission && "${1:-}" != --version ]]; then printf "permission denied while trying to connect to the Docker daemon\n" >&2; exit 1; fi' \
   '    if [[ "${mode}" == daemon && "${1:-}" != --version ]]; then printf "Cannot connect to the Docker daemon\n" >&2; exit 1; fi' \
   '    case "${1:-}" in' \

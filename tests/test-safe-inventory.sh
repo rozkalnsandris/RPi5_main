@@ -43,7 +43,7 @@ printf '%s\n' '#!/usr/bin/env bash' \
   '  df) printf "Filesystem Type Size Used Avail Use%% Mounted on\\n/dev/root ext4 8G 1G 7G 13%% /\\n" ;;' \
   '  findmnt) printf "/ /dev/root ext4 rw\\n" ;;' \
   '  dpkg-query) printf "base-files\\t1.0\\n" ;;' \
-  '  systemctl) if [[ "${STUB_SYSTEMCTL_MODE:-ok}" == timeout ]]; then sleep 3; fi; printf "demo.service enabled\\n" ;;' \
+  '  systemctl) if [[ "${STUB_SYSTEMCTL_MODE:-ok}" == timeout && "${1:-}" == list-unit-files && " $* " == *" --state=enabled "* ]]; then sleep 3; fi; printf "demo.service enabled\\n" ;;' \
   '  docker) case "${1:-}" in version) printf "27.0\\n" ;; ps) printf "demo\\tdemo:latest\\tUp (healthy)\\n" ;; compose) printf "demo-project\\n" ;; network) printf "bridge\\tbridge\\n" ;; esac ;;' \
   '  ss) printf "tcp LISTEN 0 128 127.0.0.1:8080 0.0.0.0:*\\n" ;;' \
   '  journalctl) printf "2026-01-01T00:00:00Z kernel: warning summary\\n" ;;' \
