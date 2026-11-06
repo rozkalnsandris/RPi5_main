@@ -2070,7 +2070,7 @@ ORIGIN_REPORT_PATHS = {f"/api/analytics/origin?days={n}": n for n in (1, 7, 30, 
 ORIGIN_REPORT_CREDENTIAL = Path(
     "/run/credentials/coloring-pages-admin-publish.service/goatcounter-stats"
 )
-ORIGIN_PATH = re.compile(r"/origin-detail-request/([0-9]{7})\Z")
+CONSENT_PAGE_PATH = re.compile(r"/ausmalbild/([0-9]{7})\Z")
 MAX_SAFE_COUNT = 9007199254740991
 
 
@@ -2184,10 +2184,15 @@ class OriginReportReader:
                 if type(ident) is not int or not after < ident <= 2147483647:
                     raise ValueError("invalid paths cursor")
                 after = ident
-                match = ORIGIN_PATH.fullmatch(item["path"])
-                if match and item["event"] is False:
-                    selected[ident] = match[1]
-            if len(selected) > 1000 or (more and not paths):
+                path = item["path"]
+                if item["event"] is False:
+                    if path == "/":
+                        selected[ident] = None
+                    else:
+                        match = CONSENT_PAGE_PATH.fullmatch(path)
+                        if match:
+                            selected[ident] = match[1]
+            if len(selected) > 1001 or (more and not paths):
                 raise ValueError("path pagination incomplete")
             if not more:
                 break
@@ -2195,6 +2200,8 @@ class OriginReportReader:
             raise ValueError("path limit exceeded")
 
         rows = []
+        homepage_total = 0
+        ausmalbild_total = 0
         ids = list(selected)
         # Never send an empty include_paths: GoatCounter treats it as all paths.
         # A 365-day HitList contains full hourly arrays for every selected path.
@@ -2213,8 +2220,12 @@ class OriginReportReader:
             seen, batch_total = set(), 0
             for hit in hits:
                 ident = hit["path_id"]
+                page_id = selected.get(ident) if type(ident) is int else None
+                expected_path = "/" if type(ident) is int and ident in selected and page_id is None else (
+                    "/ausmalbild/" + page_id if type(page_id) is str else None
+                )
                 if (type(ident) is not int or ident not in batch or ident in seen
-                        or hit["path"] != "/origin-detail-request/" + selected[ident]
+                        or expected_path is None or hit["path"] != expected_path
                         or hit["event"] is not False):
                     raise ValueError("unexpected statistics path")
                 seen.add(ident)
@@ -2238,20 +2249,27 @@ class OriginReportReader:
                 if subtotal != count:
                     raise ValueError("inconsistent page total")
                 batch_total += count
-                if count:
-                    rows.append({"page_id": selected[ident], "requests": count})
+                if page_id is None:
+                    homepage_total = origin_count(homepage_total + count)
+                else:
+                    ausmalbild_total = origin_count(ausmalbild_total + count)
+                    if count:
+                        rows.append({"page_id": page_id, "visits": count})
             if origin_count(payload["total"]) != batch_total:
                 raise ValueError("inconsistent batch total")
         total = origin_count(sum(daily.values()))
         if len({row["page_id"] for row in rows}) != len(rows):
             raise ValueError("duplicate page identity")
-        return {"version": 1, "status": "ok", "metric": "origin_detail_requests",
+        if origin_count(homepage_total + ausmalbild_total) != total:
+            raise ValueError("inconsistent visit totals")
+        return {"version": 2, "status": "ok", "metric": "consent_pageviews",
                 "range_days": days, "timezone": "UTC", "start_day": start.isoformat(),
                 "end_day": today.isoformat(), "today_partial": True,
                 "generated_at": now.isoformat().replace("+00:00", "Z"),
                 "cache_seconds": 60, "total": total,
-                "daily": [{"day": day, "requests": count} for day, count in daily.items()],
-                "pages": sorted(rows, key=lambda row: (-row["requests"], row["page_id"]))}
+                "homepage_visits": homepage_total, "ausmalbild_visits": ausmalbild_total,
+                "daily": [{"day": day, "visits": count} for day, count in daily.items()],
+                "pages": sorted(rows, key=lambda row: (-row["visits"], row["page_id"]))}
 
     def snapshot(self, days):
         if type(days) is not int or days not in (1, 7, 30, 365):
@@ -2340,7 +2358,7 @@ class Handler(BaseHTTPRequestHandler):
             if path in ("/", "/index.html"):
                 return self.static("index.html", "text/html; charset=utf-8")
             if self.path == "/api/analytics/capabilities":
-                return self.send_json(200, {"version": 1, "read_only": True, "origin_report_version": 1})
+                return self.send_json(200, {"version": 1, "read_only": True, "origin_report_version": 2})
             if self.path in ORIGIN_REPORT_PATHS:
                 if not self.admin_marker():
                     return

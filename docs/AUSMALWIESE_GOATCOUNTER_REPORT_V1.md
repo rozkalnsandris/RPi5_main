@@ -1,152 +1,117 @@
-# Private GoatCounter reporting in ADMIN
+# Private GoatCounter consent-visit reporting in ADMIN
 
-Outcome issue: #1326. Source-only; this document is not LIVE authority.
+Outcome issue: #1376. Source-only; this document is not LIVE authority.
 
 ## Visible outcome
 
-The protected ADMIN has a separate **Origin requests** view at `#origin` with
-UTC today/7/30/365-day totals, daily rows and a ranking of seven-digit page IDs.
-Historical IDs remain visible even if a page is no longer in the catalogue.
-Cloudflare Traffic and the existing Like/Print/QR/campaign data are unchanged.
+The protected ADMIN keeps the existing `#origin` route, but the view now reports the
+consent-gated GoatCounter pageviews actually emitted by the public Ausmalwiese app.
+The navigation/title is **GoatCounter visits**.
 
-These are recorded detail requests, not people or successfully displayed pages.
-Cache hits do not reach the origin; repeats, bots, 304s and requests failing
-after the mirror may count. Collector/backend delivery failures may lose counts.
-Every range includes the incomplete current UTC day. Retention is 365 days;
-there is no all-time claim and no reconstruction of periods before activation.
-An empty report does not establish that public counting is enabled.
+UTC today/7/30/365-day reports include:
+
+- total consent pageviews;
+- homepage (`/`) visits;
+- coloring-page (`/ausmalbild/<seven-digit-id>`) visits;
+- count of coloring-page IDs with visits;
+- daily totals;
+- per-coloring-page ranking.
+
+These are pageviews, not unique people. Visitors who do not choose optional analytics
+are intentionally absent. Cloudflare Traffic and Like/Print/QR statistics remain
+separate.
 
 ## Reader and trust boundary
 
-`ops/bin/coloring-pages-admin-publish` serves exactly
-`GET /api/analytics/origin?days=1|7|30|365`. Extra/repeated/unknown parameters
-return 404. The ADMIN marker and same-origin/Fetch Metadata checks reject browser
-cross-site use. The marker is **not authentication**: the existing protected
-ADMIN ingress/Cloudflare Access policy and loopback listener remain the actual
-access boundary. No public route or new ingress is introduced here.
+`ops/bin/coloring-pages-admin-publish` continues to serve exactly
+`GET /api/analytics/origin?days=1|7|30|365`. The endpoint name is retained for
+stable ADMIN routing; the response contract is version 2 with metric
+`consent_pageviews`.
 
 The reader uses only `127.0.0.1:9194`, Host
-`goatcounter.ausmalwiese.invalid`, and these GoatCounter 2.7.0 GETs:
+`goatcounter.ausmalwiese.invalid`, and the existing stats-only GoatCounter 2.7.0
+credential. It performs only bounded authenticated GETs:
 
-1. `/api/v0/me`: require permissions exactly 64 (Stats), a single explicit site
-   equal to the user site, and user timezone `.UTC`, `UTC` or `Etc/UTC`.
-   The pinned v2.7 `tz.Zone` serializer emits `.UTC` (empty country code followed
-   by a dot and the zone); this is UTC, not a different timezone. This response includes
-   account metadata, which is discarded and never sent to ADMIN or logs.
-2. `/api/v0/paths?limit=200&after=<cursor>`: discover up to 2,000 path records.
-   Select only non-event `/origin-detail-request/<seven-digit-id>` names.
-3. `/api/v0/stats/hits`: batches of up to 25 selected numeric path IDs (5 for 365-day reports to preserve the strict 4 MiB response bound), limit 100,
-   `daily=true`, UTC start 00:00 and end 23:00 (inclusive hourly API boundary).
-   Empty selection performs **no** stats request: an empty filter means all paths
-   in GoatCounter. Never include the old browser-count namespace.
+1. `/api/v0/me`: require Stats permission exactly 64, one explicit site, UTC timezone.
+2. `/api/v0/paths?limit=200&after=<cursor>`: select only non-event `/` and
+   `/ausmalbild/<seven-digit-id>` records. Old `/origin-detail-request/...`,
+   browser-counter namespaces, query variants and every other path are ignored.
+3. `/api/v0/stats/hits`: request only selected numeric path IDs, with UTC daily
+   aggregates and the existing response/request/time bounds.
 
-Daily and hourly sums, page totals, batch totals, IDs, dates, pagination and safe
-integer bounds are validated before any result is returned. Only counts, dates,
-the metric identity and page IDs leave the reader. Titles, account details,
-credentials, referrals, visitor data and individual hits do not. No SQL, exports,
-arbitrary URLs, redirects, inherited proxies or client headers are used.
+An empty selection performs no stats request because an empty GoatCounter path filter
+would mean all paths.
 
-Resource limits: one in-flight report, <=51 GETs, 0.35 seconds between request
-starts (below the upstream four-per-second read limit), <=1,000 selected IDs,
-4 MiB per response, 32 MiB total, 45-second aggregate deadline with <=4 seconds
-for a socket operation. A large report exceeding a bound fails in full; it is
-never represented as a truncated successful total. Successful in-memory results
-are cached for 60 seconds, keyed by UTC date, range and credential fingerprint.
-Recent events may still await GoatCounter processing. Failures clear cached
-results and impose a five-second cooldown. No on-disk report cache is created.
-Batches are read sequentially, not in a database snapshot transaction; new counts
-or paths arriving during a report appear on a later refresh.
+Only sanitized aggregate counts, UTC dates and seven-digit coloring-page IDs leave the
+reader. No raw hit, IP address, referrer, User-Agent, title, account metadata, token,
+arbitrary path or upstream error body is returned or logged.
 
-The UI loads lazily and uses safe text nodes. It clears displayed data while
-refreshing and on failure, rejects stale responses, and distinguishes not
-connected, temporarily busy, unavailable and a genuine successful zero. Ranking
-rows are shown 25 at a time; all daily rows are in an expandable scrollable table.
+The version-2 response has:
 
-**Authenticated GETs can update GoatCounter token last-used metadata.** This is
-an aggregate reader with no count/settings methods, not a promise of a byte-for-
-byte read-only database. Future production verification must authorize that
-existing-credential use and protected account metadata, even without events.
+```json
+{
+  "version": 2,
+  "status": "ok",
+  "metric": "consent_pageviews",
+  "total": 0,
+  "homepage_visits": 0,
+  "ausmalbild_visits": 0,
+  "daily": [{"day": "YYYY-MM-DD", "visits": 0}],
+  "pages": [{"page_id": "1234567", "visits": 0}]
+}
+```
 
-## Installation and separate credential opt-in
+The adapter validates that homepage + coloring-page visits equals total, the per-page
+ranking sums to coloring-page visits, and daily totals sum to total.
 
-The existing full ADMIN installer deploys the updated executable and HTML. No
-new Python dependency is required. UI-only mode now requires capability
-`origin_report_version: 1` before writing HTML, so an old backend must first be
-updated under the normal separate ADMIN installation authorization.
+## Resource and failure behavior
 
-The ordinary installer does **not** install the reporting drop-in, provision a
-token or read the private GoatCounter DB. With no systemd credential, the report
-returns 503 `not_configured` and makes no upstream request. Existing default unit
-and public collector configuration are unchanged.
+The existing bounded reader semantics remain: one in-flight report, <=51 GETs,
+0.35 seconds between request starts, <=1,000 coloring-page IDs plus the homepage,
+4 MiB per response, 32 MiB aggregate response budget and 45-second deadline.
+The 365-day report uses batches of at most five paths; shorter windows use at most 25.
 
-Opt-in source: `ops/systemd/coloring-pages-admin-origin-report.conf`. Its exact
-future destination is
-`/etc/systemd/system/coloring-pages-admin-publish.service.d/origin-report.conf`.
-It loads `/etc/ausmalwiese-goatcounter/stats-token` as `goatcounter-stats`, which
-the application reads only at
-`/run/credentials/coloring-pages-admin-publish.service/goatcounter-stats`.
-The credential must be a regular, private file with no group/world access;
-the persistent source should be root-owned 0600. It is never an environment
-variable, command-line bearer token, HTML field or GitHub secret/artifact.
-Installing this opt-in before provisioning the credential makes systemd fail
-startup; do not install it prematurely.
+Successful reports are cached in memory for 60 seconds. Failures clear cached results
+and return a sanitized unavailable/busy/not-configured state. There is no report file,
+SQL access, export, redirect, arbitrary URL or direct production database read.
 
-The existing `/etc/ausmalwiese-goatcounter/pageview-token` stays count-only and
-must not be reused or have its permissions widened. The report token must have
-only Stats (64), one explicit site, and a UTC reader user. A stats token can read
-all site statistics at the upstream API; prefix restriction is enforced by this
-adapter, not by a fictitious prefix-level token permission.
+Authenticated GETs can update GoatCounter token last-used metadata. The credential
+remains the dedicated Stats-only systemd credential and must never be replaced by the
+count token.
 
-## Future bounded rollout preparation
+## UI/backend compatibility
 
-After source merge, prepare one exact-main Composite LIVE plan before requesting
-owner authorization. This PR does not supply a ready runtime baseline or consume
-an older authorization. The plan must bind:
+`/api/analytics/capabilities` now advertises `origin_report_version: 2`.
+The UI-only installer requires version 2 before writing the new HTML, preventing a new
+GoatCounter-visits UI from silently running against the old origin-detail-request
+backend contract.
 
-- Fresh protected ADMIN/GoatCounter unit and account metadata, app version and
-  credential presence/permissions, without printing token or raw config.
-- Separate stats-only token provisioning for the correct site/UTC user; use a
-  dedicated UTC reader user if needed rather than silently changing the owner's
-  timezone. Freeze exact account/database mutation limits and capture the new
-  token directly into the protected file with no token in terminal output.
-- Full ADMIN source installation if needed, then the one opt-in drop-in and one
-  explicitly authorized ADMIN service restart. Provision the credential before
-  enabling the drop-in. Do not invoke the installer under source-only authority.
-- Bounded authenticated GET verification: `/me` permission/timezone booleans,
-  the actual ADMIN report shape/totals, no credential in responses, and existing
-  unauthenticated ADMIN ingress denial. Do not generate public pageviews as a
-  test. Record only sanitized counts/statuses/hashes; raw account/API responses
-  and the new token are protected.
-- Stop on any failure; no implicit retry, rollback, credential deletion,
-  permission widening or alternate deployment path.
+The `#origin` hash and `/api/analytics/origin` endpoint remain stable to avoid
+breaking bookmarks or ingress rules.
 
-Reporting deployment alone never enables public counting. Public app origin
-variant deployment still needs trusted SIMPLE-DEPLOY/reconciler integration,
-fresh authorized runtime evidence, legal/notice completion and explicit
-activation authority. Coloring-pages #440 merged at
-`8d0de541e03f2db1196fb89569d549fb2294abfb`; its source proof is not deployment
-evidence. Private collector evidence remains the dated verification receipt on
-RPi5_main #1275. No fresh LIVE observation is claimed here.
+## Installation and LIVE boundary
 
-## Validation and provenance
+The ordinary ADMIN source/install boundary is unchanged. This source change does not
+provision credentials, change GoatCounter settings, mutate the database, restart a
+service, alter Cloudflare/Tunnel routes or generate synthetic public visits.
 
-- `python3 tests/test-ausmalwiese-goatcounter-report-v1.py`: aggregate filtering,
-  pagination, UTC windows, totals, failure/cache/credential/HTTP boundaries.
-- `node tests/test-coloring-pages-admin-origin.cjs`: actual inline renderer,
-  period changes, safe DOM, empty/error states, stale-response rejection.
-- Existing ADMIN publication, navigation, categories and analytics regressions.
-- `tests/goatcounter-report-isolated-v27.py`: automatic PR CI with official
-  v2.7.0 amd64 archive size 13,935,060 and SHA-256
-  `98d221cb9c8ef2bf76d8daa9cca647839f8d8b0bb5bc7400ff9337c5da834511`.
-  Only a non-root, network-none, read-only-root container and new temporary
-  synthetic SQLite fixture are used. Exercise empty paths, >25 origin paths,
-  old namespace exclusion, real UTC/day totals and count-token rejection. Fixture
-  setup SQL never exists in the production reader and is not an operational
-  provisioning recipe. No production credential or public counting endpoint.
+A future LIVE rollout must separately authorize the exact merged `RPi5_main` SHA and
+the existing ADMIN deployment/service lifecycle required to install the updated backend
+and HTML. Verification should use only sanitized aggregate response fields and must not
+print the credential or raw GoatCounter API responses.
 
-API contract reviewed against [official API documentation](https://www.goatcounter.com/help/api)
-and pinned [handlers/api.go](https://github.com/arp242/goatcounter/blob/7e91d8a9bdbb0dd48496e498c5680f8f3477a1b4/handlers/api.go),
-[hit_list.go](https://github.com/arp242/goatcounter/blob/7e91d8a9bdbb0dd48496e498c5680f8f3477a1b4/hit_list.go),
-[api_token.go](https://github.com/arp242/goatcounter/blob/7e91d8a9bdbb0dd48496e498c5680f8f3477a1b4/api_token.go)
-and [site.go](https://github.com/arp242/goatcounter/blob/7e91d8a9bdbb0dd48496e498c5680f8f3477a1b4/site.go).
-The upstream v0 API may change; an upgrade requires renewed compatibility proof.
+## Validation
+
+Focused tests:
+
+- `python3 tests/test-ausmalwiese-goatcounter-report-v1.py` — path allowlist,
+  aggregate split/totals, UTC windows, pagination, credential and HTTP boundaries.
+- `node tests/test-coloring-pages-admin-origin.cjs` — version-2 UI validation,
+  KPI/ranking/daily rendering, safe DOM, error states and stale-response rejection.
+- `tests/goatcounter-report-isolated-v27.py` — pinned GoatCounter v2.7.0 isolated
+  synthetic proof with homepage + coloring-page hits and exclusion of old namespaces.
+- `tests/test-coloring-pages-admin-publish-v1.py` — UI-only installer requires
+  `origin_report_version: 2`.
+
+The upstream API remains pinned to GoatCounter v2.7.0; an upstream upgrade requires
+renewed compatibility proof.
