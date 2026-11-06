@@ -173,6 +173,17 @@ class Tests(unittest.TestCase):
                 o.verify_release(SHA)
             read.assert_not_called()
 
+    def test_one_shot_consumed_before_protected_call(self):
+        grant = {'schema': 1, 'repository': o.REPOSITORY,
+                 'source_sha': SHA, 'scope': 'COLLECT',
+                 'owner_approved': True, 'one_shot': True}
+        with patch.object(o, '_PROTECTED_CALL_CONSUMED', False), \
+             patch.object(o, 'load_json', return_value=grant) as reader:
+            o.approved('COLLECT', SHA)
+            with self.assertRaises(o.Stop):
+                o.approved('COLLECT', SHA)
+            reader.assert_called_once()
+
     def test_no_secret_in_public_status(self):
         with patch.object(o,'verify_release',side_effect=OSError(CANARY)):
             a=o.offline_status(SHA)
