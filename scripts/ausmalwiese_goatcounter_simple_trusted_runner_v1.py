@@ -13,7 +13,6 @@ from pathlib import Path
 import re
 import stat
 import sys
-import sysconfig
 
 ROOT = Path('/usr/local/libexec/rpi5-goatcounter-simple-cloudflare-readonly')
 ENTRY = ROOT / 'trusted_runner.py'
@@ -138,7 +137,7 @@ def verified_import_path():
     stdop = sys.modules.get('operator')
     require(stdop is not None and getattr(stdop, '__file__', None) is not None)
     require(Path(stdop.__file__).resolve()
-            == Path(sysconfig.get_path('stdlib')).resolve() / 'operator.py')
+            == Path(os.__file__).resolve().with_name('operator.py'))
     # No foreign preloaded dependency is allowed.
     for name in FILES[1:-1]:
         loaded = sys.modules.get(name[:-3])
