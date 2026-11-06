@@ -16,7 +16,8 @@ import sys
 from cloudflare_rdc_operator import CloudflareClient
 import ausmalwiese_goatcounter_simple_cloudflare_readback_v1 as readback
 
-ROOT = Path("/usr/local/libexec/rpi5-goatcounter-simple-cloudflare-readonly")
+RELEASE_PREFIX = "rpi5-goatcounter-simple-cloudflare-readonly-"
+ROOT = Path(__file__).absolute().parent
 ENTRY = ROOT / "operator.py"
 RELEASE = ROOT / "release.json"
 REPOSITORY = "rozkalnsandris/RPi5_main"
@@ -74,6 +75,9 @@ def safe_regular(path, mode, size_max):
 def verified_release(expected_main):
     """Real OS and content identity only; never a caller-provided proof."""
     require(type(expected_main) is str and SHA40.fullmatch(expected_main),
+            "STOP_RELEASE")
+    require(ROOT.parent == Path("/usr/local/libexec")
+            and ROOT.name == RELEASE_PREFIX + expected_main,
             "STOP_RELEASE")
     require(os.geteuid() == 0 and Path(__file__).absolute() == ENTRY,
             "STOP_TRUSTED_INSTALL")
