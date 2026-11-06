@@ -423,6 +423,11 @@ class Phase4AdminRouteOriginTests(unittest.TestCase):
             "CLOUDFLARE_P1D04_WRITE_API_TOKEN",
         ):
             self.assertNotIn(forbidden, workflow)
+        self.assertEqual(workflow.count("ref: ${{ github.sha }}"), 2)
+        self.assertNotIn(
+            "ref: ${{ needs.authorize.outputs.expected_sha }}",
+            workflow,
+        )
 
     def test_source_uses_official_get_paths_and_no_raw_output_fields(self) -> None:
         source = MODULE_PATH.read_text(encoding="utf-8")
