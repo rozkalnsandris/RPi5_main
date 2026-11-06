@@ -391,6 +391,7 @@ class StaticTests(unittest.TestCase):
             opener.assert_not_called()
         installer=(ROOT/"scripts/install-coloring-pages-admin-publish-v1.sh").read_text()
         self.assertLess(installer.index("/api/analytics/capabilities"),installer.index('install -o root -g root -m 0644'))
+        self.assertIn('p.get("origin_report_version") == 2',installer)
 
     def test_latvian_font_faces_and_routes(self):
         html=(ROOT/"ops/admin/coloring-pages/index.html").read_text()

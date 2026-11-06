@@ -29,11 +29,14 @@ class Fixture:
         self.me = {"user": {"site": 1, "email": "PRIVATE_EMAIL", "settings": {"timezone": ".UTC"}},
                    "token": {"permissions": 64, "sites": [1]}}
         self.paths = [{"id": 1, "path": "/old-browser-counter/0123456", "event": False},
-                      {"id": 2, "path": "/origin-detail-request/0123456", "event": False},
-                      {"id": 3, "path": "/origin-detail-request/7654321", "event": False},
-                      {"id": 4, "path": "/origin-detail-request/9999999", "event": True},
-                      {"id": 5, "path": "/origin-detail-request/0123456?private=x", "event": False}]
-        self.payload = {"more": False, "total": 5, "hits": [self.hit(2, 3), self.hit(3, 2)]}
+                      {"id": 2, "path": "/", "event": False},
+                      {"id": 3, "path": "/ausmalbild/0123456", "event": False},
+                      {"id": 4, "path": "/ausmalbild/7654321", "event": False},
+                      {"id": 5, "path": "/ausmalbild/9999999", "event": True},
+                      {"id": 6, "path": "/ausmalbild/0123456?private=x", "event": False},
+                      {"id": 7, "path": "/origin-detail-request/0123456", "event": False}]
+        self.payload = {"more": False, "total": 6,
+                        "hits": [self.hit(2, 1), self.hit(3, 3), self.hit(4, 2)]}
 
     def hit(self, ident, count):
         date = NOW.date() - timedelta(days=self.days - 1)
@@ -54,7 +57,7 @@ class Fixture:
             # Deliberately paginate sooner than the requested limit.
             return {"paths": remaining[:2], "more": len(remaining) > 2}
         q = parse_qs(urlsplit(target).query)
-        assert q["include_paths"] == ["2,3"]
+        assert q["include_paths"] == ["2,3,4"]
         assert q["start"] == [(NOW.date() - timedelta(days=self.days - 1)).isoformat() + "T00:00:00Z"]
         assert q["end"] == ["2026-11-02T23:00:00Z"]
         return copy.deepcopy(self.payload)
@@ -66,23 +69,26 @@ class ReportTests(unittest.TestCase):
         reader.get = fixture.get
         return reader.collect(fixture.days, NOW, TOKEN)
 
-    def test_all_ranges_only_origin_namespace_and_safe_output(self):
+    def test_all_ranges_only_consent_namespace_and_safe_output(self):
         for days in (1, 7, 30, 365):
             with self.subTest(days=days):
                 fixture = Fixture(days)
                 result = self.collect(fixture)
-                self.assertEqual(result["total"], 5)
-                self.assertEqual(result["pages"], [{"page_id": "0123456", "requests": 3},
-                                                   {"page_id": "7654321", "requests": 2}])
+                self.assertEqual((result["version"], result["metric"]), (2, "consent_pageviews"))
+                self.assertEqual(result["total"], 6)
+                self.assertEqual(result["homepage_visits"], 1)
+                self.assertEqual(result["ausmalbild_visits"], 5)
+                self.assertEqual(result["pages"], [{"page_id": "0123456", "visits": 3},
+                                                   {"page_id": "7654321", "visits": 2}])
                 self.assertEqual(len(result["daily"]), days)
-                self.assertEqual(sum(row["requests"] for row in result["daily"]), 5)
+                self.assertEqual(sum(row["visits"] for row in result["daily"]), 6)
                 self.assertNotIn("PRIVATE", json.dumps(result))
-                self.assertEqual(len(fixture.calls), 5)
+                self.assertEqual(len(fixture.calls), 6)
 
     def test_365_day_stats_use_bounded_path_batches(self):
         fixture = Fixture(365)
-        fixture.paths = [
-            {"id": i, "path": "/origin-detail-request/" + str(2000000 + i), "event": False}
+        fixture.paths = [{"id": 1, "path": "/", "event": False}] + [
+            {"id": i + 1, "path": "/ausmalbild/" + str(2000000 + i), "event": False}
             for i in range(1, 13)
         ]
         queried = []
@@ -103,13 +109,15 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(report["total"], 0)
         self.assertEqual(report["pages"], [])
         self.assertEqual(len(report["daily"]), 365)
-        self.assertEqual(queried, [str(i) for i in range(1, 13)])
+        self.assertEqual(queried, [str(i) for i in range(1, 14)])
 
-    def test_empty_namespace_never_requests_unfiltered_stats(self):
+    def test_unrelated_namespaces_never_request_unfiltered_stats(self):
         fixture = Fixture()
-        fixture.paths = fixture.paths[:1]
+        fixture.paths = [fixture.paths[0], fixture.paths[-1]]
         result = self.collect(fixture)
         self.assertEqual(result["total"], 0)
+        self.assertEqual(result["homepage_visits"], 0)
+        self.assertEqual(result["ausmalbild_visits"], 0)
         self.assertEqual(result["pages"], [])
         self.assertFalse(any("/stats/" in target for target in fixture.calls))
 
@@ -136,10 +144,10 @@ class ReportTests(unittest.TestCase):
         for zone in (".UTC", "UTC", "Etc/UTC"):
             fixture = Fixture()
             fixture.me["user"]["settings"]["timezone"] = zone
-            self.assertEqual(self.collect(fixture)["total"], 5)
+            self.assertEqual(self.collect(fixture)["total"], 6)
 
     def test_reject_incomplete_inconsistent_or_unrelated_aggregates(self):
-        mutations = [lambda p: p.update(more=True), lambda p: p.update(total=6),
+        mutations = [lambda p: p.update(more=True), lambda p: p.update(total=7),
                      lambda p: p["hits"][0].update(path="/unrelated"),
                      lambda p: p["hits"][0].update(event=True),
                      lambda p: p["hits"][0].update(count=-1),
