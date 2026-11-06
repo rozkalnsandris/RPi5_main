@@ -98,8 +98,54 @@ class Tests(unittest.TestCase):
              patch.object(i.os.path, 'lexists', return_value=True), \
              patch.object(i.os, 'mkdir') as mkdir:
             with self.assertRaises(i.Stop):
-                i.install_once(self.package)
+                i.install_once(SHA, self.package)
             mkdir.assert_not_called()
+
+    def test_versioned_target_matches_exact_sha_and_preserves_legacy(self):
+        target = i.versioned_root(SHA)
+        self.assertEqual(target, i.ROOT.with_name(i.ROOT.name + '-' + SHA))
+        self.assertNotEqual(target, i.ROOT)
+        self.assertEqual(target.parent, i.ROOT.parent)
+        for bad in ('', 'F' * 40, '../', 'f' * 39, None):
+            with self.subTest(bad=bad):
+                with self.assertRaises(i.Stop):
+                    i.versioned_root(bad)
+
+    def test_versioned_installer_never_writes_legacy_directory(self):
+        target = i.versioned_root(SHA)
+        with patch.object(i, '_root_safe'), \
+             patch.object(i.os.path, 'lexists', return_value=False) as exists, \
+             patch.object(i.os, 'mkdir', side_effect=i.Stop()) as mkdir, \
+             patch.object(i.os, 'open') as opening:
+            with self.assertRaises(i.Stop):
+                i.install_once(SHA, self.package)
+            exists.assert_called_once_with(target)
+            mkdir.assert_called_once_with(target, 0o700)
+            opening.assert_not_called()
+
+    def test_manifest_source_sha_mismatch_stops_before_any_install(self):
+        other = 'e' * 40
+        with patch.object(i, '_root_safe') as parent, \
+             patch.object(i.os.path, 'lexists') as exists, \
+             patch.object(i.os, 'mkdir') as mkdir:
+            with self.assertRaises(i.Stop):
+                i.install_once(other, self.package)
+            parent.assert_not_called()
+            exists.assert_not_called()
+            mkdir.assert_not_called()
+
+    def test_versioned_runner_rejects_other_release_before_protected_io(self):
+        wrong = i.versioned_root('e' * 40)
+        with patch.object(o, 'ROOT', wrong), \
+             patch.object(o, 'load_json') as loader:
+            with self.assertRaises(o.Stop):
+                o.verify_release(SHA)
+            loader.assert_not_called()
+        with patch.object(o, 'ROOT', i.ROOT), \
+             patch.object(o, 'load_json') as loader:
+            with self.assertRaises(o.Stop):
+                o.verify_release(SHA)
+            loader.assert_not_called()
 
     def git_identity(self, *, sudo='1000', euid=0, repo_uid=1000,
                      git_uid=1000, source_uid=1000,
