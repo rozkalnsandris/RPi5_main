@@ -24,7 +24,7 @@ permissions:
 jobs:
   phase4-canary-retirement-closure-contract:
     name: phase4 canary-retirement closure contract
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
 
     steps:
