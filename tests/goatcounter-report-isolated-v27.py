@@ -136,11 +136,12 @@ def run():
         process = start()
         try:
             empty = DiagnosticReader().snapshot(7)
-            require(empty["total"] == 0 and empty["pages"] == [], "EMPTY_NAMESPACE")
-            # 28 origin paths force two reader batches; unrelated events never enter the result.
-            paths = ["/origin-detail-request/0123456"] * 3 + ["/origin-detail-request/7654321"] * 2
-            paths += ["/origin-detail-request/" + str(2000000 + n) for n in range(26)]
-            paths += ["/old-browser-counter/0123456"] * 9
+            require(empty["total"] == 0 and empty["homepage_visits"] == 0
+                    and empty["ausmalbild_visits"] == 0 and empty["pages"] == [], "EMPTY_NAMESPACE")
+            # Homepage plus 28 coloring paths force two reader batches; old namespaces stay excluded.
+            paths = ["/"] + ["/ausmalbild/0123456"] * 3 + ["/ausmalbild/7654321"] * 2
+            paths += ["/ausmalbild/" + str(2000000 + n) for n in range(26)]
+            paths += ["/origin-detail-request/0123456"] * 9 + ["/old-browser-counter/0123456"] * 9
             connection = http.client.HTTPConnection("127.0.0.1", 9194, timeout=5)
             try:
                 body = json.dumps({"no_sessions": True, "hits": [{"path": p} for p in paths]})
@@ -153,7 +154,7 @@ def run():
             stop(process)
         # Shift one fixture aggregate into the previous UTC day to prove window boundaries.
         with contextlib.closing(sqlite3.connect(db)) as con:
-            path_id = con.execute("SELECT path_id FROM paths WHERE path=?", ("/origin-detail-request/7654321",)).fetchone()[0]
+            path_id = con.execute("SELECT path_id FROM paths WHERE path=?", ("/ausmalbild/7654321",)).fetchone()[0]
             previous = (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat()
             hour = con.execute("SELECT hour FROM hit_counts WHERE path_id=?", (path_id,)).fetchone()[0]
             day = con.execute("SELECT day FROM hit_stats WHERE path_id=?", (path_id,)).fetchone()[0]
@@ -164,12 +165,14 @@ def run():
             con.commit()
         process = start()
         try:
-            for days, total in ((1, 29), (7, 31), (30, 31), (365, 31)):
+            for days, total, coloring in ((1, 30, 29), (7, 32, 31), (30, 32, 31), (365, 32, 31)):
                 result = DiagnosticReader().snapshot(days)
                 require(result["total"] == total and len(result["daily"]) == days, "RANGE_TOTAL_" + str(days))
-                require(sum(row["requests"] for row in result["pages"]) == total, "RANKING_TOTAL")
-                require(sum(row["requests"] for row in result["daily"]) == total, "DAILY_TOTAL")
-                require(all(set(row) == {"page_id", "requests"} for row in result["pages"]), "REDACTION")
+                require(result["homepage_visits"] == 1 and result["ausmalbild_visits"] == coloring,
+                        "VISIT_SPLIT_" + str(days))
+                require(sum(row["visits"] for row in result["pages"]) == coloring, "RANKING_TOTAL")
+                require(sum(row["visits"] for row in result["daily"]) == total, "DAILY_TOTAL")
+                require(all(set(row) == {"page_id", "visits"} for row in result["pages"]), "REDACTION")
             credential.chmod(0o600)
             credential.write_text(tokens["fixture-count"])
             credential.chmod(0o400)
@@ -181,7 +184,7 @@ def run():
                 raise RuntimeError("COUNT_TOKEN_NOT_REJECTED")
         finally:
             stop(process)
-    print("GOATCOUNTER_REPORT_V27=PASS synthetic-only empty, multi-batch, UTC ranges, daily/ranking totals, separate stats token")
+    print("GOATCOUNTER_REPORT_V27=PASS synthetic-only consent paths, multi-batch, UTC ranges, visit split, daily/ranking totals, separate stats token")
 
 
 if __name__ == "__main__":

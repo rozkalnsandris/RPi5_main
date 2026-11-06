@@ -361,7 +361,7 @@ html{overflow-y:scroll}
       <a href="#activity" data-nav="activity">Activity</a>
       <a href="#stats" data-nav="stats">Statistics</a>
       <a href="#traffic" data-nav="traffic">Traffic</a>
-      <a href="#origin" data-nav="origin">Origin requests</a>
+      <a href="#origin" data-nav="origin">GoatCounter visits</a>
       <a class="outline-link admin-home-link" href="https://ausmalwiese.de/"><span aria-hidden="true">↗</span> Open website</a>
     </nav>
   </div>
@@ -783,22 +783,24 @@ html{overflow-y:scroll}
   </div>
   <div class="container"><p class="stats-status" data-origin-status role="status">Data has not been loaded yet.</p></div>
   <div data-origin-content hidden>
-    <section class="stats-summary" aria-label="Origin request summary">
+    <section class="stats-summary" aria-label="GoatCounter visit summary">
       <div class="container stats-kpi-grid">
-        <article class="stats-kpi"><div><span class="stats-kpi-label">Recorded detail requests</span><strong data-origin-total>–</strong></div></article>
-        <article class="stats-kpi"><div><span class="stats-kpi-label">Page IDs with requests</span><strong data-origin-pages>–</strong></div></article>
+        <article class="stats-kpi"><div><span class="stats-kpi-label">Consent pageviews</span><strong data-origin-total>–</strong></div></article>
+        <article class="stats-kpi"><div><span class="stats-kpi-label">Homepage visits</span><strong data-origin-home>–</strong></div></article>
+        <article class="stats-kpi"><div><span class="stats-kpi-label">Coloring-page visits</span><strong data-origin-coloring>–</strong></div></article>
+        <article class="stats-kpi"><div><span class="stats-kpi-label">Coloring pages with visits</span><strong data-origin-pages>–</strong></div></article>
       </div>
-      <div class="container"><p class="stats-note">These are detail requests recorded at the website origin, not unique people or successfully displayed pages. Cache hits do not reach the origin. Repeat requests, bots, 304 responses and requests that later fail may count; delivery failures may lose counts. Cloudflare Traffic and Like/Print/QR statistics are separate.</p><p class="stats-note">Up to 365 days are retained. Every period includes today, which is incomplete. Missing earlier data is not reconstructed.</p></div>
+      <div class="container"><p class="stats-note">These are GoatCounter pageviews recorded only after a visitor has allowed optional analytics. They are not unique people. This view includes the homepage and <code>/ausmalbild/&lt;ID&gt;</code> pages only; visitors without analytics consent are not counted.</p><p class="stats-note">Up to 365 days are retained. Every period includes today, which is incomplete. Cloudflare Traffic and Like/Print/QR statistics are separate.</p></div>
     </section>
     <div class="container">
       <article class="stats-panel">
-        <div class="stats-panel-heading"><h2>Pages by origin requests</h2><span class="stats-panel-caption">Includes historical page IDs</span></div>
-        <p data-origin-empty hidden>No origin requests were recorded in this period. This does not verify that counting is enabled.</p>
-        <div class="stats-table-wrap"><table class="stats-table"><thead><tr><th scope="col">Page ID</th><th scope="col">Recorded requests</th></tr></thead><tbody data-origin-ranking></tbody></table></div>
+        <div class="stats-panel-heading"><h2>Coloring pages by GoatCounter visits</h2><span class="stats-panel-caption">Includes historical page IDs</span></div>
+        <p data-origin-empty hidden>No consent-based GoatCounter visits were recorded in this period.</p>
+        <div class="stats-table-wrap"><table class="stats-table"><thead><tr><th scope="col">Page ID</th><th scope="col">Visits</th></tr></thead><tbody data-origin-ranking></tbody></table></div>
         <button class="secondary" data-origin-more type="button" hidden>Show more pages</button>
       </article>
       <article class="stats-panel">
-        <details><summary>Daily totals (UTC)</summary><div class="stats-table-wrap" style="max-height:360px;overflow:auto"><table class="stats-table"><thead><tr><th scope="col">UTC day</th><th scope="col">Recorded requests</th></tr></thead><tbody data-origin-daily></tbody></table></div></details>
+        <details><summary>Daily totals (UTC)</summary><div class="stats-table-wrap" style="max-height:360px;overflow:auto"><table class="stats-table"><thead><tr><th scope="col">UTC day</th><th scope="col">Visits</th></tr></thead><tbody data-origin-daily></tbody></table></div></details>
       </article>
     </div>
   </div>
@@ -1511,7 +1513,7 @@ var pageInfo={
   archive:["Archive","Restore hidden pages or manage archived entries."],
   stats:["Statistics","Print activity, likes and catalog engagement."],
   traffic:["Traffic","Website visits, page views and crawler activity."],
-  origin:["Origin requests","Recorded detail requests by day and page ID."],
+  origin:["GoatCounter visits","Consent-based pageviews by day and coloring page."],
   activity:["Activity","Publishing and catalog changes from the last 7 days."]
 };
 function routePage(){
@@ -1722,7 +1724,7 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
   let sequence=0, controller=null, loaded=false, rows=[], shown=25;
   const count=value=>Number.isSafeInteger(value)&&value>=0;
   function clear(){
-    node("content").hidden=true;node("total").textContent="–";node("pages").textContent="–";
+    node("content").hidden=true;node("total").textContent="–";node("home").textContent="–";node("coloring").textContent="–";node("pages").textContent="–";
     node("ranking").replaceChildren();node("daily").replaceChildren();rows=[];shown=25;
   }
   function row(label,value){
@@ -1730,14 +1732,14 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
     name.textContent=label;requests.textContent=number.format(value);tr.append(name,requests);return tr;
   }
   function ranking(){
-    node("ranking").replaceChildren(...rows.slice(0,shown).map(item=>row(item.page_id,item.requests)));
+    node("ranking").replaceChildren(...rows.slice(0,shown).map(item=>row(item.page_id,item.visits)));
     node("more").hidden=shown>=rows.length;
   }
   function validate(data,days){
-    if(data.version!==1||data.status!=="ok"||data.metric!=="origin_detail_requests"||data.range_days!==days||data.timezone!=="UTC"||data.today_partial!==true||!count(data.total)||!Array.isArray(data.pages)||data.pages.length>1000||!Array.isArray(data.daily)||data.daily.length!==days||typeof data.generated_at!=="string"||!/^\d{4}-\d{2}-\d{2}T[0-9:.]+Z$/.test(data.generated_at))throw Error("invalid report");
-    if(!data.pages.every(item=>typeof item.page_id==="string"&&/^[0-9]{7}$/.test(item.page_id)&&count(item.requests))||new Set(data.pages.map(item=>item.page_id)).size!==data.pages.length)throw Error("invalid pages");
-    if(!data.daily.every(item=>/^\d{4}-\d{2}-\d{2}$/.test(item.day)&&count(item.requests))||new Set(data.daily.map(item=>item.day)).size!==days)throw Error("invalid days");
-    if(data.pages.reduce((sum,item)=>sum+item.requests,0)!==data.total||data.daily.reduce((sum,item)=>sum+item.requests,0)!==data.total)throw Error("invalid totals");
+    if(data.version!==2||data.status!=="ok"||data.metric!=="consent_pageviews"||data.range_days!==days||data.timezone!=="UTC"||data.today_partial!==true||!count(data.total)||!count(data.homepage_visits)||!count(data.ausmalbild_visits)||!Array.isArray(data.pages)||data.pages.length>1000||!Array.isArray(data.daily)||data.daily.length!==days||typeof data.generated_at!=="string"||!/^\d{4}-\d{2}-\d{2}T[0-9:.]+Z$/.test(data.generated_at))throw Error("invalid report");
+    if(!data.pages.every(item=>typeof item.page_id==="string"&&/^[0-9]{7}$/.test(item.page_id)&&count(item.visits))||new Set(data.pages.map(item=>item.page_id)).size!==data.pages.length)throw Error("invalid pages");
+    if(!data.daily.every(item=>/^\d{4}-\d{2}-\d{2}$/.test(item.day)&&count(item.visits))||new Set(data.daily.map(item=>item.day)).size!==days)throw Error("invalid days");
+    if(data.homepage_visits+data.ausmalbild_visits!==data.total||data.pages.reduce((sum,item)=>sum+item.visits,0)!==data.ausmalbild_visits||data.daily.reduce((sum,item)=>sum+item.visits,0)!==data.total)throw Error("invalid totals");
     if(data.start_day!==data.daily[0].day||data.end_day!==data.daily[days-1].day)throw Error("invalid range");
   }
   async function refresh(){
@@ -1745,22 +1747,22 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
     const generation=++sequence;if(controller)controller.abort();controller=new AbortController();
     const current=controller,timer=setTimeout(()=>current.abort(),55000);
     clear();loaded=false;node("refresh").disabled=true;node("days").disabled=true;
-    node("status").textContent="Loading recorded origin requests…";
+    node("status").textContent="Loading GoatCounter visits…";
     try{
       const response=await fetch("/api/analytics/origin?days="+days,{method:"GET",credentials:"same-origin",cache:"no-store",redirect:"error",headers:{"X-Ausmalwiese-Admin":"1"},signal:current.signal});
       const data=await response.json();if(generation!==sequence)return;
       if(!response.ok){
-        if(data.status==="not_configured"){node("status").textContent="Origin reporting is not connected yet.";return;}
+        if(data.status==="not_configured"){node("status").textContent="GoatCounter reporting is not connected yet.";return;}
         if(data.status==="busy"){node("status").textContent="A report is being prepared or temporarily paused. Refresh again shortly.";return;}
         throw Error("unavailable");
       }
       validate(data,days);rows=data.pages;ranking();
-      node("daily").replaceChildren(...data.daily.map(item=>row(item.day+(item.day===data.end_day?" · incomplete":""),item.requests)));
-      node("total").textContent=number.format(data.total);node("pages").textContent=number.format(rows.length);
+      node("daily").replaceChildren(...data.daily.map(item=>row(item.day+(item.day===data.end_day?" · incomplete":""),item.visits)));
+      node("total").textContent=number.format(data.total);node("home").textContent=number.format(data.homepage_visits);node("coloring").textContent=number.format(data.ausmalbild_visits);node("pages").textContent=number.format(rows.length);
       node("empty").hidden=data.total!==0;
       node("status").textContent=data.start_day+" to "+data.end_day+" UTC · Snapshot "+data.generated_at.replace("T"," ").replace("Z"," UTC")+" · may be cached for 60 seconds; recent counts may still be processing.";
       node("content").hidden=false;loaded=true;
-    }catch(_){if(generation===sequence){clear();node("status").textContent="Could not load origin requests. Refresh to try again; unavailable data is not zero.";}}
+    }catch(_){if(generation===sequence){clear();node("status").textContent="Could not load GoatCounter visits. Refresh to try again; unavailable data is not zero.";}}
     finally{clearTimeout(timer);if(generation===sequence){node("refresh").disabled=false;node("days").disabled=false;}}
   }
   node("refresh").addEventListener("click",refresh);node("days").addEventListener("change",refresh);
