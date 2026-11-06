@@ -1515,11 +1515,8 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
   const metric = (name, value) => text(`[data-${name}]`, format(value));
   const category = value => labels[value] || value || "–";
   const publicLink = id => "https://ausmalwiese.de/detail.html?id=" + encodeURIComponent(id);
-  const states = {};
-  for (const page of ["stats"]) {
-    const query = name => document.querySelector(`[data-${page}-${name}]`);
-    states[page] = {rows:[], limit:20, loaded:false, busy:false, search:query("search"), sort:query("sort"), table:query("table"), more:query("load-more"), empty:query("table-empty"), refresh:query("refresh"), status:query("status"), content:document.querySelector(`[data-analytics-content="${page}"]`)};
-  }
+  const statsQuery = name => document.querySelector(`[data-stats-${name}]`);
+  const statsState = {rows:[], limit:20, loaded:false, busy:false, search:statsQuery("search"), sort:statsQuery("sort"), table:statsQuery("table"), more:statsQuery("load-more"), empty:statsQuery("table-empty"), refresh:statsQuery("refresh"), status:statsQuery("status"), content:document.querySelector('[data-analytics-content="stats"]')};
   async function request(path) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 15000);
@@ -1570,8 +1567,8 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
     }));
     document.querySelector(emptySelector).hidden = sorted.length !== 0;
   }
-  function renderTable(page) {
-    const state = states[page];
+  function renderTable() {
+    const state = statsState;
     const search = state.search.value.trim().toLocaleLowerCase("en");
     const keys = {prints:"print_count",recent:"recent_prints",likes:"like_count",views:"view_count",recentViews:"recent_views"};
     const key = keys[state.sort.value];
@@ -1582,7 +1579,7 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
       const wrap = element("div","stats-page-cell");
       wrap.append(thumbnail(row,""),link(row)); td.append(wrap);
       tr.append(td,element("td","",category(row.category)));
-      for (const key of page === "stats" ? ["print_count","recent_prints","like_count"] : ["view_count","recent_views"]) tr.append(element("td","stats-number",format(row[key])));
+      for (const key of ["print_count","recent_prints","like_count"]) tr.append(element("td","stats-number",format(row[key])));
       return tr;
     }));
     state.empty.hidden = rows.length !== 0;
@@ -1599,8 +1596,8 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
     ranking("[data-stats-popular]","[data-stats-popular-empty]",rows,"print_count","🖨");
     ranking("[data-stats-trending]","[data-stats-trending-empty]",rows,"recent_prints","🔥");
   }
-  async function load(page) {
-    const state = states[page];
+  async function loadStats() {
+    const state = statsState;
     if (state.busy) return;
     state.busy = true; state.refresh.disabled = true;
     state.status.textContent = "Loading data…";
@@ -1613,7 +1610,7 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
       ]);
       state.rows = rowsFor(catalog,overview);
       renderStats(state.rows,overview,month);
-      state.limit = 20; renderTable(page);
+      state.limit = 20; renderTable();
       const ids = new Set(state.rows.map(row => row.id));
       const unknown = overview.pages.filter(item => !ids.has(String(item.page_id))).length;
       state.status.textContent = "Updated at " + clock() + (unknown ? " · " + unknown + " stats IDs are not in the current catalog" : "");
@@ -1623,12 +1620,10 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
       state.status.textContent = "Could not load data. Select Refresh to try again.";
     } finally { state.busy = false; state.refresh.disabled = false; }
   }
-  for (const [page,state] of Object.entries(states)) {
-    for (const [control,event] of [[state.search,"input"],[state.sort,"change"]]) if (control) control.addEventListener(event,() => {state.limit=20;renderTable(page);});
-    if (state.more) state.more.addEventListener("click",() => {state.limit+=20;renderTable(page);});
-    state.refresh.addEventListener("click",() => load(page));
-  }
-  window.AdminAnalytics = {open(page) {if (states[page] && !states[page].loaded) return load(page);}};
+  for (const [control,event] of [[statsState.search,"input"],[statsState.sort,"change"]]) control.addEventListener(event,() => {statsState.limit=20;renderTable();});
+  statsState.more.addEventListener("click",() => {statsState.limit+=20;renderTable();});
+  statsState.refresh.addEventListener("click",loadStats);
+  window.AdminAnalytics = {open(page) {if (page==="stats" && !statsState.loaded) return loadStats();}};
   window.AdminAnalytics.open(currentRoute);
 })();
 </script>
