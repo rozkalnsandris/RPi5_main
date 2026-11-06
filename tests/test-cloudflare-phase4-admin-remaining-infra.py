@@ -254,6 +254,11 @@ class Phase4RemainingInfraTests(unittest.TestCase):
         self.assertNotIn("CLOUDFLARE_TUNNEL_API_TOKEN", workflow)
         self.assertNotIn("CLOUDFLARE_WRITE_API_TOKEN", workflow)
         self.assertNotIn("workflow_dispatch", workflow)
+        self.assertEqual(workflow.count("ref: ${{ github.sha }}"), 2)
+        self.assertNotIn(
+            "ref: ${{ needs.authorize.outputs.expected_sha }}",
+            workflow,
+        )
 
     def test_output_contract_forbids_sensitive_runtime_fields(self) -> None:
         output = self.verifier["sanitized_output"]
