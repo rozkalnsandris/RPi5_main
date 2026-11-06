@@ -115,6 +115,21 @@ def approved(scope, expected_source_sha):
                      source_sha=expected_source_sha))
 
 
+
+def verified_import_path():
+    # A caller must not pre-load checkout/foreign modules before verification.
+    # Check cache BEFORE any imported module can execute in a protected mode.
+    for name in FILES[1:-1]:
+        loaded = sys.modules.get(name[:-3])
+        if loaded is not None:
+            require(getattr(loaded, '__file__', None) is not None
+                    and Path(loaded.__file__).absolute() == ROOT / name)
+    sys.dont_write_bytecode = True
+    if str(ROOT) in sys.path:
+        sys.path.remove(str(ROOT))
+    sys.path.insert(0, str(ROOT))
+
+
 def offline_status(expected_source_sha):
     try:
         verify_release(expected_source_sha)
@@ -135,10 +150,7 @@ def collect_once(*, expected_source_sha):
         for target in (DB, Path(str(DB) + '-wal'), Path(str(DB) + '-shm')):
             require((os.statvfs(target).f_flag & os.ST_RDONLY) != 0)
         # No checkout imports; modules are verified first and from fixed root.
-        sys.dont_write_bytecode = True
-        if str(ROOT) in sys.path:
-            sys.path.remove(str(ROOT))
-        sys.path.insert(0, str(ROOT))
+        verified_import_path()
         import ausmalwiese_goatcounter_simple_collect_readback_v1 as collect
         require(Path(collect.__file__).absolute() == ROOT / (
             'ausmalwiese_goatcounter_simple_collect_readback_v1.py'))
@@ -159,10 +171,7 @@ def cloudflare_once(*, expected_source_sha, client, account_id, zone_id):
     try:
         verify_release(expected_source_sha)
         approved('CLOUDFLARE_GET', expected_source_sha)
-        sys.dont_write_bytecode = True
-        if str(ROOT) in sys.path:
-            sys.path.remove(str(ROOT))
-        sys.path.insert(0, str(ROOT))
+        verified_import_path()
         import importlib.util
         spec = importlib.util.spec_from_file_location(
             'goatcounter_cloudflare_operator', ROOT / 'operator.py')
