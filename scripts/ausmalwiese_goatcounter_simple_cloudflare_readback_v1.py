@@ -14,8 +14,6 @@ ID = re.compile(r"[0-9a-f]{32}\Z")
 UUID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\Z")
 ZONE = "ausmalwiese.de"
 TUNNEL = "rpi5-tunnel"
-PER_PAGE = 20
-MAX_PAGES = 5
 
 class Stop(Exception):
     def __init__(self, code):
@@ -111,61 +109,49 @@ def inspect_routes(getter, zone, seen):
         require(_worker_route_matches(row["pattern"]) is False, "STOP_WORKER")
 
 def inspect_domains(getter, account, zone, seen):
-    ids=set()
-    total=None
-    pages=None
-    for page in range(1,MAX_PAGES+1):
-        url=("/accounts/"+account+"/workers/domains?page="+str(page)
-             +"&per_page="+str(PER_PAGE))
-        raw=get(getter,url,seen)
-        rows=unpack(raw,"DOMAIN")
-        info=raw.get("result_info")
-        require(type(rows) is list and len(rows)<=PER_PAGE
+    """Exact documented hostname-filter reads, no guessed page parameter.
+
+    The provider documents hostname filtering, but not page/per_page request
+    parameters. Check BOTH hosts independently; absence is credible only if
+    result_info proves a complete first page of the filtered response.
+    Total_count may refer to the unfiltered account, not filtered count.
+    """
+    for hostname in HOSTS:
+        url = "/accounts/" + account + "/workers/domains?hostname=" + hostname
+        raw = get(getter, url, seen)
+        rows = unpack(raw, "DOMAIN")
+        info = raw.get("result_info")
+        require(type(rows) is list and len(rows) <= 100
                 and type(info) is dict
                 and all(type(info.get(k)) is int for k in
-                        ("page","count","per_page","total_count","total_pages"))
-                and info["page"] == page and info["count"] == len(rows)
-                and info["per_page"] == PER_PAGE
-                and 0<=info["total_count"]<=PER_PAGE*MAX_PAGES
-                and 1<=info["total_pages"]<=MAX_PAGES,
+                        ("page", "count", "per_page", "total_count", "total_pages"))
+                and info["page"] == 1 and info["total_pages"] == 1
+                and info["count"] == len(rows)
+                and 1 <= info["per_page"] <= 100
+                and len(rows) <= info["per_page"]
+                and info["total_count"] == len(rows),
                 "STOP_DOMAIN_PAGINATION")
-        if total is None:
-            total,pages=info["total_count"],info["total_pages"]
-            require(pages==max(1,(total+PER_PAGE-1)//PER_PAGE),
-                    "STOP_DOMAIN_PAGINATION")
-        require(info["total_count"]==total and info["total_pages"]==pages
-                and len(rows)==(PER_PAGE if page<pages
-                                else total-PER_PAGE*(pages-1)),
-                "STOP_DOMAIN_PAGINATION")
+        ids = set()
         for row in rows:
             require(type(row) is dict and type(row.get("id")) is str
-                    and ID.fullmatch(row["id"]) is not None and row["id"] not in ids
+                    and ID.fullmatch(row["id"]) is not None
+                    and row["id"] not in ids
                     and type(row.get("hostname")) is str
                     and type(row.get("zone_id")) is str
                     and ID.fullmatch(row["zone_id"]) is not None
                     and type(row.get("zone_name")) is str
                     and type(row.get("enabled")) is bool
                     and type(row.get("previews_enabled")) is bool
-                    and type(row.get("service")) is str and bool(row["service"]),
-                    "STOP_DOMAIN")
+                    and type(row.get("service")) is str
+                    and bool(row["service"]), "STOP_DOMAIN")
             ids.add(row["id"])
-            hostname=row["hostname"]
-            require(hostname==hostname.lower().rstrip(".")
-                    and re.fullmatch(r"[a-z0-9.-]{1,253}",hostname) is not None,
-                    "STOP_DOMAIN")
-            if row["zone_id"]==zone:
-                require(row["zone_name"]==ZONE,"STOP_DOMAIN")
-                for host in HOSTS:
-                    # Enabled, disabled and preview-only states are rejected
-                    # at target/parent hosts: incomplete precedence proof.
-                    require(host!=hostname and not host.endswith("."+hostname),
-                            "STOP_DOMAIN_INTERCEPTION")
-            elif hostname in HOSTS or hostname.endswith("."+ZONE):
-                raise Stop("STOP_DOMAIN_ZONE")
-        if page==pages:
-            require(len(ids)==total,"STOP_DOMAIN_PAGINATION")
-            return
-    raise Stop("STOP_DOMAIN_PAGINATION")
+            require(row["hostname"] == hostname, "STOP_DOMAIN_FILTER")
+            require(row["zone_id"] == zone and row["zone_name"] == ZONE,
+                    "STOP_DOMAIN_ZONE")
+            # The apex domain may preview-intercept www, even if disabled
+            # for direct routing; an EXACT target hostname must be empty.
+            # Reject every matching entry (including disabled/preview-only).
+            raise Stop("STOP_DOMAIN_INTERCEPTION")
 
 def collect_once(*, trusted_get, account_id, zone_id):
     """Only allowlisted status codes and reconstructed safe constants escape."""
