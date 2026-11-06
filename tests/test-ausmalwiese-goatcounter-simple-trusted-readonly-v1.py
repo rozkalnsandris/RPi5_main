@@ -160,6 +160,19 @@ class Tests(unittest.TestCase):
                     o.approved(scope,SHA)
                 loader.assert_not_called()
 
+    def test_reject_foreign_preloaded_dependency(self):
+        foreign = SimpleNamespace(__file__='/tmp/checkout-cloudflare.py')
+        with patch.dict(o.sys.modules, {'cloudflare_rdc_operator': foreign}):
+            with self.assertRaises(o.Stop):
+                o.verified_import_path()
+
+    def test_runtime_owner_identity_gate_precedes_release_access(self):
+        with patch.object(o.os, 'geteuid', return_value=1000), \
+             patch.object(o, 'load_json') as read:
+            with self.assertRaises(o.Stop):
+                o.verify_release(SHA)
+            read.assert_not_called()
+
     def test_no_secret_in_public_status(self):
         with patch.object(o,'verify_release',side_effect=OSError(CANARY)):
             a=o.offline_status(SHA)
