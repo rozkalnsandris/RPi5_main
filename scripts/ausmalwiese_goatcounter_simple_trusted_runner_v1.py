@@ -14,7 +14,8 @@ import re
 import stat
 import sys
 
-ROOT = Path('/usr/local/libexec/rpi5-goatcounter-simple-cloudflare-readonly')
+RELEASE_PREFIX = 'rpi5-goatcounter-simple-cloudflare-readonly-'
+ROOT = Path(__file__).absolute().parent
 ENTRY = ROOT / 'trusted_runner.py'
 TRUSTED = ROOT / 'trusted-release.json'
 GRANT = ROOT / 'owner-readonly-grant.json'  # NOT installed; separate owner gate.
@@ -72,6 +73,8 @@ def load_json(path, mode):
 def verify_release(expected_source_sha):
     """Verify entire fixed package before loading executable dependencies."""
     require(type(expected_source_sha) is str and SHA.fullmatch(expected_source_sha))
+    require(ROOT.parent == Path('/usr/local/libexec')
+            and ROOT.name == RELEASE_PREFIX + expected_source_sha)
     require(os.geteuid() == 0 and Path(__file__).absolute() == ENTRY)
     release = load_json(TRUSTED, 0o400)
     require(type(release) is dict and set(release) ==
