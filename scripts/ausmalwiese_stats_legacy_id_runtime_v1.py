@@ -13,6 +13,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import pwd
 import re
 import ssl
 import stat
@@ -24,7 +25,10 @@ import urllib.request
 
 ISSUE = 1417
 REPOSITORY = "rozkalnsandris/RPi5_main"
-SOURCE_ROOT_RUNTIME = Path("/home/andris/RPi5_main")
+RUNTIME_OPERATOR_UID = 1000
+RUNTIME_OPERATOR_GID = 1000
+RUNTIME_HOME = Path(pwd.getpwuid(RUNTIME_OPERATOR_UID).pw_dir)
+SOURCE_ROOT_RUNTIME = RUNTIME_HOME / "RPi5_main"
 SOURCE_REL = "scripts/ausmalwiese_stats_legacy_id_runtime_v1.py"
 PLANNER_REL = "scripts/ausmalwiese_stats_legacy_id_migration_v1.py"
 PLANNER_BLOB = "fb0c39fd552ec55e3fbb4310fe70dfee42e4e1c4"
@@ -43,10 +47,8 @@ API_BASE = "https://api.cloudflare.com/client/v4"
 CONFIRM = "OWNER-AUTHORIZED-STATS-LEGACY-ID-D1-MIGRATION"
 MAX_RESPONSE_BYTES = 1048576
 TIMEOUT_SECONDS = 12
-RUNTIME_OPERATOR_UID = 1000
-RUNTIME_OPERATOR_GID = 1000
 RUNTIME_ENV = {
-    "HOME": "/home/andris",
+    "HOME": str(RUNTIME_HOME),
     "USER": "andris",
     "LOGNAME": "andris",
     "PATH": "/usr/local/bin:/usr/bin:/bin",
@@ -299,8 +301,6 @@ def validate_installed_source(
     need(origin in {
         "https://github.com/rozkalnsandris/RPi5_main",
         "https://github.com/rozkalnsandris/RPi5_main.git",
-        "git@github.com:rozkalnsandris/RPi5_main",
-        "git@github.com:rozkalnsandris/RPi5_main.git",
     }, "SOURCE_ORIGIN_DRIFT")
     source_bytes = _exact_working_file(root, SOURCE_REL, None, runner=runner)
     try:
