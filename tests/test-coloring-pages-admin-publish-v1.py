@@ -176,6 +176,48 @@ class Tests(unittest.TestCase):
         finally:
             admin.ORIGINALS,admin.MEDIA,admin.INBOX=old_originals,old_media,old_inbox
 
+    def test_path_components_are_normalized_before_filesystem_use(self):
+        self.assertEqual(admin.validate_catalog_id("1234567"), "1234567")
+        self.assertEqual(admin.validate_storage_token("a"*32), "a"*32)
+        self.assertEqual(admin.validate_staged_page_name("page-001.png"), "page-001.png")
+        for bad in ("../1234567", "1234567/../x", "/tmp/x", ".", ".."):
+            with self.assertRaises(admin.Stop):
+                admin.validate_catalog_id(bad)
+        for bad in ("../" + "a"*32, "a"*31 + "/", "/tmp/token"):
+            with self.assertRaises(admin.Stop):
+                admin.validate_storage_token(bad)
+        for bad in ("../page-001.png", "page-1.png", "page-001.png/extra", "/tmp/page-001.png"):
+            with self.assertRaises(admin.Stop):
+                admin.validate_staged_page_name(bad)
+
+    def test_storage_child_selection_returns_only_existing_safe_entry(self):
+        root=Path(self.tmp.name)/"storage-select";root.mkdir()
+        token="a"*32
+        (root/token).mkdir()
+        selected=admin.select_existing_child(root,token,directory=True)
+        self.assertIsNotNone(selected)
+        self.assertEqual(selected[0],token)
+        self.assertIsNone(admin.select_existing_child(root,"b"*32,directory=True))
+        outside=Path(self.tmp.name)/"outside-storage";outside.mkdir()
+        (root/"link").symlink_to(outside,target_is_directory=True)
+        with self.assertRaises(admin.Stop):
+            admin.select_existing_child(root,"link",directory=True)
+
+    def test_delete_inbox_rejects_tampered_inventory_name(self):
+        old_inbox=admin.INBOX
+        root=Path(self.tmp.name)/"inbox-tamper";root.mkdir()
+        page_id="1234567"
+        (root/(page_id+".png")).write_bytes(b"inbox")
+        admin.INBOX=root
+        try:
+            inventory=admin.inspect_delete_inbox(page_id)
+            inventory["name"]="../outside.png"
+            with self.assertRaises(admin.Stop):
+                admin.delete_validated_inbox(page_id,inventory)
+            self.assertTrue((root/(page_id+".png")).is_file())
+        finally:
+            admin.INBOX=old_inbox
+
     def test_permanent_delete_rejects_same_size_inode_replacement(self):
         old_media=admin.MEDIA
         root=Path(self.tmp.name)/"media";root.mkdir()
