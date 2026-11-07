@@ -424,6 +424,14 @@
       ],
       [
         "python3",
+        "./tests/test-ausmalwiese-stats-legacy-id-runtime-v1.py"
+      ],
+      [
+        "python3",
+        "./tests/test-ausmalwiese-stats-legacy-id-runtime-installer-v1.py"
+      ],
+      [
+        "python3",
         "./tests/test-ausmalwiese-stats-gate-a-d1-runtime-v1.py"
       ],
       [
