@@ -75,7 +75,7 @@ class InstallerTests(unittest.TestCase):
         raw=PAYLOAD
         blob=hashlib.sha1(b"blob "+str(len(raw)).encode()+b"\0"+raw).hexdigest()
         self.assertEqual(blob,mod.SOURCE_BLOB)
-        self.assertEqual(mod.SOURCE_BLOB,"375435c1b021ca12393fbb0278b8c60edfb7a4cb")
+        self.assertEqual(mod.SOURCE_BLOB,"a4e4885cbca81d6b68cf42064dee1bc0a99b206d")
         self.assertEqual(mod.TARGET,"/usr/local/sbin/rpi5-ausmalwiese-stats-legacy-id-d1-migrate")
         self.assertEqual(mod.UPGRADE_SOURCES,{})
 

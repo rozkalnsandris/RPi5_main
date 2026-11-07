@@ -23,7 +23,7 @@ TEST="/usr/bin/test"
 SHA256SUM="/usr/bin/sha256sum"
 
 SOURCE_REL="scripts/ausmalwiese_stats_legacy_id_runtime_v1.py"
-SOURCE_BLOB="375435c1b021ca12393fbb0278b8c60edfb7a4cb"
+SOURCE_BLOB="a4e4885cbca81d6b68cf42064dee1bc0a99b206d"
 TARGET="/usr/local/sbin/rpi5-ausmalwiese-stats-legacy-id-d1-migrate"
 CONFIRM="INSTALL-AUSMALWIESE-STATS-LEGACY-ID-RUNTIME"
 UPGRADE_CONFIRM="UPGRADE-AUSMALWIESE-STATS-LEGACY-ID-RUNTIME"
@@ -75,8 +75,6 @@ def exact_checkout(expected_main,*,runner=subprocess.run)->None:
     if origin not in {
         "https://github.com/rozkalnsandris/RPi5_main",
         "https://github.com/rozkalnsandris/RPi5_main.git",
-        "git@github.com:rozkalnsandris/RPi5_main",
-        "git@github.com:rozkalnsandris/RPi5_main.git",
     }:
         raise Stop("untrusted_origin")
 
