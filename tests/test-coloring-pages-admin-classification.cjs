@@ -27,7 +27,7 @@ const sha=x=>x.repeat(64),c=[{id:"tiere",label:"Tiere"},{id:"lernen",label:"Lern
           entry("0000004","Hundert Bilder"),entry("0000005","Hund","tiere",["hund"]),
           entry("0000006","Hund","tiere",["baum"]),
           {...entry("0000007","Ein Baum","lernen",["hund"]),categories:["lernen","tiere"]},
-          entry("0000008","Auto"),entry("0000009","Auto")],
+          entry("0000008","Auto"),entry("legacy-auto","Auto")],
  snapshot={catalog:{catalog_sha256:sha("a"),count:entries.length,entries},
  taxonomy:{version:sha("b"),categories:c,topics:t.map(({id,label,kind})=>({id,label,kind}))},
  categories:{enabled:true,registry_sha256:sha("c"),categories:c},
@@ -54,7 +54,7 @@ assert.equal(rows[3].status,"review","no-topic/no-match is not silently treated 
 assert.equal(rows[4].status,"unchanged","existing linked topic stays intact");
 assert.equal(rows[5].status,"review","grandfathered unlinked topic requires manual review");
 assert.equal(rows[6].status,"proposed");assert.deepEqual(Array.from(rows[6].after.topics),["hund","baum"]);
-assert.equal(rows[7].status,"review");assert.equal(rows[8].status,"review");
+assert.equal(rows[7].status,"review");assert.equal(rows[8].status,"review");assert.equal(rows[8].id,"legacy-auto","historical non-7-digit IDs remain reviewable");
 assert.ok(analysis.gaps.some(x=>x.term==="auto"&&x.count===2));
 assert.equal(api.totals(analysis).unmatched,3); // "Hundert Bilder" and two Auto titles
 assert.equal(api.manifest(analysis).review_decisions.length,9,"100% of IDs accounted for");
