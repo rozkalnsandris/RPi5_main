@@ -58,9 +58,21 @@ jobs:
       - name: Checkout exact authorized main source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.authorize.outputs.expected_sha }}
+          ref: main
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Verify authorized SHA matches trusted checkout
+        env:
+          EXPECTED_SHA: ${{ needs.authorize.outputs.expected_sha }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ ! "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "authorized SHA has invalid format" >&2
+            exit 2
+          fi
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
 
       - name: Run exact GET-only P1D-04 pre-LIVE prep
         env:
