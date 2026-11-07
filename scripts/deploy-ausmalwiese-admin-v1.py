@@ -40,7 +40,7 @@ INSTALLER = ROOT / "scripts/install-coloring-pages-admin-publish-v1.sh"
 INSTALL_CONFIRM = "OWNER-AUTHORIZED-AUSMALWIESE-ADMIN-ZIP-PUBLISHER-INSTALL"
 SERVICE = "coloring-pages-admin-publish.service"
 BASE_URL = "http://127.0.0.1:8765"
-ENV = {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"}
+ENV = {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "GIT_OPTIONAL_LOCKS": "0"}
 
 
 class DeployError(RuntimeError):
