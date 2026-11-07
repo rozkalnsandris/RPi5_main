@@ -163,7 +163,6 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .stats-status { min-height: 22px; font-size: 13px; }
 .stats-summary { padding: 0 0 28px; background: transparent; }
 .stats-kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
-.traffic-kpi-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .stats-kpi {
   display: flex; align-items: center; gap: 14px; min-width: 0; padding: 20px;
   border: 1px solid var(--line); border-radius: 20px; background: #fff; box-shadow: var(--shadow);
@@ -254,7 +253,7 @@ html{overflow-y:scroll}
 .stats-table td{overflow-wrap:anywhere}
 .gallery-actions{display:flex;justify-content:center;margin-top:18px}
 @media(max-width:1100px){.traffic-kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-@media(max-width:900px){.stats-kpi-grid,.traffic-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.stats-rankings-grid{grid-template-columns:1fr}.stats-table-heading{align-items:stretch;flex-direction:column}.stats-controls{width:100%}.stats-search{flex:1}.stats-search input{width:100%}}
+@media(max-width:900px){.stats-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.stats-rankings-grid{grid-template-columns:1fr}.stats-table-heading{align-items:stretch;flex-direction:column}.stats-controls{width:100%}.stats-search{flex:1}.stats-search input{width:100%}}
 @media(max-width:620px){.stats-kpi-grid{grid-template-columns:1fr;gap:12px}.stats-kpi,.stats-panel,.stats-all .container{padding:16px}.stats-panel-heading{align-items:start;flex-direction:column;gap:5px}.stats-top-item{grid-template-columns:24px 56px minmax(0,1fr) auto;gap:8px;min-height:72px}.stats-top-thumb{width:56px;height:56px}.stats-top-metric{font-size:12px}.stats-controls{align-items:stretch;flex-direction:column}.stats-search input,.stats-sort-label select{width:100%}.stats-sort-label select{display:block}.stats-table-wrap{max-width:100%}.analytics-toolbar{align-items:start}.analytics-toolbar .secondary{flex-shrink:0}}
 
 
@@ -361,7 +360,6 @@ html{overflow-y:scroll}
       <a href="#activity" data-nav="activity">Activity</a>
       <a href="#stats" data-nav="stats">Statistics</a>
       <a href="#traffic" data-nav="traffic">Traffic</a>
-      <a href="#origin" data-nav="origin">GoatCounter visits</a>
       <a class="outline-link admin-home-link" href="https://ausmalwiese.de/"><span aria-hidden="true">↗</span> Open website</a>
     </nav>
   </div>
@@ -473,7 +471,7 @@ html{overflow-y:scroll}
               <label>Search title or ID <input type="search" id="classificationSearch" autocomplete="off"></label>
               <label>Review status <select id="classificationFilter">
                 <option value="all">All</option><option value="proposed">Proposals</option>
-                <option value="review">Needs review</option><option value="approved">Approved</option>
+                <option value="review">Needs review</option><option value="pending">Not reviewed</option><option value="approved">Approved</option>
                 <option value="rejected">Rejected</option><option value="deferred">Deferred</option>
                 <option value="unchanged">Unchanged</option>
               </select></label>
@@ -488,7 +486,7 @@ html{overflow-y:scroll}
               <button type="button" class="secondary" id="classificationApproveSelected" disabled>Approve checked proposals</button>
               <button type="button" class="secondary" id="classificationExport">Export reviewed dry-run JSON</button>
             </div>
-            <p>Only explicitly approved proposals are included in approved_changes. The export cannot apply LIVE changes.</p>
+            <p>Review every activity ID, including unchanged entries. Select multiple linked Categories and Topics after checking the image. Recurring title words are research leads, not automatic new Topics. The export is read-only and cannot apply LIVE changes.</p>
           </div>
         </section>
       </article>
@@ -722,59 +720,6 @@ html{overflow-y:scroll}
   
 </div></section>
 <section class="analytics-page" data-page="traffic" aria-labelledby="admin-title" hidden>
-<div class="container analytics-toolbar"><p class="stats-status" data-traffic-page-status role="status">Data has not been loaded yet.</p><button class="secondary" data-traffic-refresh type="button">↻ Refresh</button></div>
-<div data-analytics-content="traffic" hidden>
-<section class="stats-summary" aria-label="Cloudflare traffic summary">
-      <div class="container stats-kpi-grid traffic-kpi-grid">
-        <article class="stats-kpi">
-          <span class="stats-kpi-icon" aria-hidden="true">👤</span>
-          <div><span class="stats-kpi-label" data-stats-unique-visitors-label>Unique visitors · unavailable</span><strong data-stats-unique-visitors>–</strong></div>
-        </article>
-        <article class="stats-kpi">
-          <span class="stats-kpi-icon" aria-hidden="true">↪</span>
-          <div><span class="stats-kpi-label">Website visits in the last 7 days <span aria-hidden="true">·</span> not unique people</span><strong data-stats-visits>–</strong></div>
-        </article>
-        <article class="stats-kpi">
-          <span class="stats-kpi-icon" aria-hidden="true">↔</span>
-          <div><span class="stats-kpi-label">HTTP requests in the last 7 days <span aria-hidden="true">·</span> Cloudflare edge</span><strong data-traffic-requests>–</strong></div>
-        </article>
-        <article class="stats-kpi">
-          <span class="stats-kpi-icon" aria-hidden="true">🤖</span>
-          <div><span class="stats-kpi-label">Crawler requests in the last 7 days</span><strong data-stats-crawler-requests>–</strong></div>
-        </article>
-      </div>
-      <div class="container">
-        <p class="stats-note" data-traffic-visits-note>Unique visitors are unavailable because a hostname-scoped unique count has not been verified. Website visits are not unique people. HTTP requests and crawler requests are separate Cloudflare metrics and may be sampled.</p>
-      </div>
-    </section>
-
-    <section class="stats-rankings" aria-label="Cloudflare crawler analytics">
-      <div class="container">
-        <article class="stats-panel">
-          <div class="stats-panel-heading">
-            <div><span class="stats-panel-kicker">7 days</span><h2>🤖 Crawlers</h2></div>
-            <span class="stats-panel-caption" data-traffic-status>User-Agent heuristic</span>
-          </div>
-          <div class="stats-table-wrap">
-            <table class="stats-table">
-              <thead>
-                <tr>
-                  <th scope="col">Crawler</th>
-                  <th scope="col" class="stats-number">Requests</th>
-                  <th scope="col">Top requested paths</th>
-                </tr>
-              </thead>
-              <tbody data-stats-crawlers></tbody>
-            </table>
-          </div>
-          <p class="stats-empty" data-stats-crawlers-empty hidden>No crawler requests in this period.</p>
-          <p class="stats-note">Crawler names are inferred from User-Agent strings. Paths do not include URL query strings. Do not subtract crawler requests from visits.</p>
-        </article>
-      </div>
-    </section>
-
-</div></section>
-<section class="analytics-page" data-page="origin" aria-labelledby="admin-title" hidden>
   <div class="container analytics-toolbar">
     <label class="stats-sort-label">Period (UTC)
       <select data-origin-days><option value="1">Today</option><option value="7" selected>Last 7 days</option><option value="30">Last 30 days</option><option value="365">Last 365 days</option></select>
@@ -783,18 +728,18 @@ html{overflow-y:scroll}
   </div>
   <div class="container"><p class="stats-status" data-origin-status role="status">Data has not been loaded yet.</p></div>
   <div data-origin-content hidden>
-    <section class="stats-summary" aria-label="GoatCounter visit summary">
+    <section class="stats-summary" aria-label="GoatCounter traffic summary">
       <div class="container stats-kpi-grid">
         <article class="stats-kpi"><div><span class="stats-kpi-label">Consent pageviews</span><strong data-origin-total>–</strong></div></article>
         <article class="stats-kpi"><div><span class="stats-kpi-label">Homepage visits</span><strong data-origin-home>–</strong></div></article>
         <article class="stats-kpi"><div><span class="stats-kpi-label">Coloring-page visits</span><strong data-origin-coloring>–</strong></div></article>
         <article class="stats-kpi"><div><span class="stats-kpi-label">Coloring pages with visits</span><strong data-origin-pages>–</strong></div></article>
       </div>
-      <div class="container"><p class="stats-note">These are GoatCounter pageviews recorded only after a visitor has allowed optional analytics. They are not unique people. This view includes the homepage and <code>/ausmalbild/&lt;ID&gt;</code> pages only; visitors without analytics consent are not counted.</p><p class="stats-note">Up to 365 days are retained. Every period includes today, which is incomplete. Cloudflare Traffic and Like/Print/QR statistics are separate.</p></div>
+      <div class="container"><p class="stats-note">GoatCounter records these pageviews only after a visitor allows optional analytics. Visitors without analytics consent are not counted, recognizable bots/crawlers are filtered, and these values are not raw HTTP request counts or unique people.</p><p class="stats-note">This view includes the homepage and <code>/ausmalbild/&lt;ID&gt;</code> pages only. Up to 365 days are retained; every period includes today, which is incomplete. Like, Print and QR statistics remain separate.</p></div>
     </section>
     <div class="container">
       <article class="stats-panel">
-        <div class="stats-panel-heading"><h2>Coloring pages by GoatCounter visits</h2><span class="stats-panel-caption">Catalog and archive titles; unknown historical IDs stay visible</span></div>
+        <div class="stats-panel-heading"><div><span class="stats-panel-kicker">GoatCounter</span><h2>Most visited coloring pages</h2></div><span class="stats-panel-caption">Catalog and archive titles · ID kept as secondary context</span></div>
         <p data-origin-empty hidden>No consent-based GoatCounter visits were recorded in this period.</p>
         <div class="stats-table-wrap"><table class="stats-table"><thead><tr><th scope="col">Coloring page</th><th scope="col">Visits</th></tr></thead><tbody data-origin-ranking></tbody></table></div>
         <button class="secondary" data-origin-more type="button" hidden>Show more pages</button>
@@ -1512,14 +1457,14 @@ var pageInfo={
   edit:["Edit page","Update the title, categories, age range and difficulty."],
   archive:["Archive","Restore hidden pages or manage archived entries."],
   stats:["Statistics","Print activity, likes and catalog engagement."],
-  traffic:["Traffic","Website visits, page views and crawler activity."],
-  origin:["GoatCounter visits","Consent-based pageviews by day and coloring page."],
+  traffic:["Traffic","Consent-based GoatCounter pageviews by period and coloring page."],
   activity:["Activity","Publishing and catalog changes from the last 7 days."]
 };
 function routePage(){
   var next=location.hash.slice(1)||"overview",page=next.split("/")[0];
-  var legacyTopics=next==="topics";
+  var legacyTopics=next==="topics",legacyOrigin=next==="origin";
   if(legacyTopics){next="categories";page="categories";history.replaceState(null,"","#categories")}
+  else if(legacyOrigin){next="traffic";page="traffic";history.replaceState(null,"","#traffic")}
   if(!Object.prototype.hasOwnProperty.call(pageInfo,page)||(page==="edit"&&!next.startsWith("edit/"))||(page!=="edit"&&next!==page)){
     next="overview";page="overview";history.replaceState(null,"","#overview");
   }
@@ -1570,11 +1515,8 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
   const metric = (name, value) => text(`[data-${name}]`, format(value));
   const category = value => labels[value] || value || "–";
   const publicLink = id => "https://ausmalwiese.de/detail.html?id=" + encodeURIComponent(id);
-  const states = {};
-  for (const page of ["stats", "traffic"]) {
-    const query = name => document.querySelector(`[data-${page}-${name}]`);
-    states[page] = {rows:[], limit:20, loaded:false, busy:false, search:page === "stats" ? query("search") : null, sort:page === "stats" ? query("sort") : null, table:page === "stats" ? query("table") : null, more:page === "stats" ? query("load-more") : null, empty:page === "stats" ? query("table-empty") : null, refresh:query("refresh"), status:query(page === "stats" ? "status" : "page-status"), content:document.querySelector(`[data-analytics-content="${page}"]`)};
-  }
+  const statsQuery = name => document.querySelector(`[data-stats-${name}]`);
+  const statsState = {rows:[], limit:20, loaded:false, busy:false, search:statsQuery("search"), sort:statsQuery("sort"), table:statsQuery("table"), more:statsQuery("load-more"), empty:statsQuery("table-empty"), refresh:statsQuery("refresh"), status:statsQuery("status"), content:document.querySelector('[data-analytics-content="stats"]')};
   async function request(path) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 15000);
@@ -1625,8 +1567,8 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
     }));
     document.querySelector(emptySelector).hidden = sorted.length !== 0;
   }
-  function renderTable(page) {
-    const state = states[page];
+  function renderTable() {
+    const state = statsState;
     const search = state.search.value.trim().toLocaleLowerCase("en");
     const keys = {prints:"print_count",recent:"recent_prints",likes:"like_count",views:"view_count",recentViews:"recent_views"};
     const key = keys[state.sort.value];
@@ -1637,7 +1579,7 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
       const wrap = element("div","stats-page-cell");
       wrap.append(thumbnail(row,""),link(row)); td.append(wrap);
       tr.append(td,element("td","",category(row.category)));
-      for (const key of page === "stats" ? ["print_count","recent_prints","like_count"] : ["view_count","recent_views"]) tr.append(element("td","stats-number",format(row[key])));
+      for (const key of ["print_count","recent_prints","like_count"]) tr.append(element("td","stats-number",format(row[key])));
       return tr;
     }));
     state.empty.hidden = rows.length !== 0;
@@ -1654,64 +1596,34 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
     ranking("[data-stats-popular]","[data-stats-popular-empty]",rows,"print_count","🖨");
     ranking("[data-stats-trending]","[data-stats-trending-empty]",rows,"recent_prints","🔥");
   }
-  function renderTraffic(traffic) {
-    const valid = traffic && traffic.range_days === 7
-      && traffic.analytics_host === "ausmalwiese.de"
-      && traffic.cloudflare_traffic_version === 1;
-    metric("stats-unique-visitors",null);
-    text("[data-stats-unique-visitors-label]","Unique visitors · unavailable");
-    metric("stats-visits",valid ? traffic.visits : null);
-    metric("traffic-requests",valid ? traffic.http_requests : null);
-    metric("stats-crawler-requests",valid ? traffic.crawler_requests : null);
-    text("[data-traffic-status]",!valid ? "Crawler data unavailable" : (traffic.sampled ? "Cloudflare · sampled · " : "Cloudflare · ") + "User-Agent heuristic");
-    text("[data-traffic-visits-note]","Unique visitors are unavailable because a hostname-scoped unique count has not been verified. Website visits are not unique people. HTTP requests and crawler requests are separate Cloudflare metrics." + (valid && traffic.sampled ? " Cloudflare analytics is sampled." : valid ? " Cloudflare analytics may be sampled." : " Traffic data is currently unavailable."));
-    const crawlers = valid && Array.isArray(traffic.crawlers) ? traffic.crawlers : [];
-    document.querySelector("[data-stats-crawlers]").replaceChildren(...crawlers.map(crawler => {
-      const tr = element("tr");
-      const paths = (Array.isArray(crawler.paths) ? crawler.paths : []).map(item => String(item.path || "/") + " (" + format(item.requests) + ")").join(" · ");
-      tr.append(element("td","",crawler.name || "Other crawler"),element("td","stats-number",format(crawler.requests)),element("td","",paths));
-      return tr;
-    }));
-    const empty = document.querySelector("[data-stats-crawlers-empty]");
-    empty.hidden = crawlers.length !== 0;
-    empty.textContent = !valid ? "Could not load crawler data." : "No crawler requests in this period.";
-  }
-  async function load(page) {
-    const state = states[page];
+  async function loadStats() {
+    const state = statsState;
     if (state.busy) return;
     state.busy = true; state.refresh.disabled = true;
     state.status.textContent = "Loading data…";
     state.content.hidden = true;
     try {
       const clock = () => new Intl.DateTimeFormat("en-GB",{hour:"2-digit",minute:"2-digit"}).format(new Date());
-      if (page === "stats") {
-        const [catalog,overview,month] = await Promise.all([
-          request("/api/catalog"),request("/api/analytics/overview"),
-          request("/api/analytics/campaigns?days=30").catch(() => null),
-        ]);
-        state.rows = rowsFor(catalog,overview);
-        renderStats(state.rows,overview,month);
-        state.limit = 20; renderTable(page);
-        const ids = new Set(state.rows.map(row => row.id));
-        const unknown = overview.pages.filter(item => !ids.has(String(item.page_id))).length;
-        state.status.textContent = "Updated at " + clock() + (unknown ? " · " + unknown + " stats IDs are not in the current catalog" : "");
-      } else {
-        const traffic = await request("/api/analytics/traffic?days=7");
-        renderTraffic(traffic);
-        state.status.textContent = "Updated at " + clock() + (traffic.sampled ? " · sampled analytics" : "");
-      }
+      const [catalog,overview,month] = await Promise.all([
+        request("/api/catalog"),request("/api/analytics/overview"),
+        request("/api/analytics/campaigns?days=30").catch(() => null),
+      ]);
+      state.rows = rowsFor(catalog,overview);
+      renderStats(state.rows,overview,month);
+      state.limit = 20; renderTable();
+      const ids = new Set(state.rows.map(row => row.id));
+      const unknown = overview.pages.filter(item => !ids.has(String(item.page_id))).length;
+      state.status.textContent = "Updated at " + clock() + (unknown ? " · " + unknown + " stats IDs are not in the current catalog" : "");
       state.loaded = true; state.content.hidden = false;
     } catch (_) {
       state.loaded = false;
       state.status.textContent = "Could not load data. Select Refresh to try again.";
     } finally { state.busy = false; state.refresh.disabled = false; }
   }
-  for (const [page,state] of Object.entries(states)) {
-    for (const [control,event] of [[state.search,"input"],[state.sort,"change"]]) if (control) control.addEventListener(event,() => {state.limit=20;renderTable(page);});
-    if (state.more) state.more.addEventListener("click",() => {state.limit+=20;renderTable(page);});
-    state.refresh.addEventListener("click",() => load(page));
-  }
-  window.AdminAnalytics = {open(page) {if (states[page] && !states[page].loaded) return load(page);}};
+  for (const [control,event] of [[statsState.search,"input"],[statsState.sort,"change"]]) control.addEventListener(event,() => {statsState.limit=20;renderTable();});
+  statsState.more.addEventListener("click",() => {statsState.limit+=20;renderTable();});
+  statsState.refresh.addEventListener("click",loadStats);
+  window.AdminAnalytics = {open(page) {if (page==="stats" && !statsState.loaded) return loadStats();}};
   window.AdminAnalytics.open(currentRoute);
 })();
 </script>
@@ -1784,11 +1696,11 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
   }
   node("refresh").addEventListener("click",refresh);node("days").addEventListener("change",refresh);
   node("more").addEventListener("click",()=>{shown+=25;ranking();});
-  window.AdminOrigin={open:page=>page==="origin"&&!loaded&&!node("refresh").disabled?refresh():Promise.resolve()};
+  window.AdminOrigin={open:page=>page==="traffic"&&!loaded&&!node("refresh").disabled?refresh():Promise.resolve()};
   if(typeof currentRoute!=="undefined")window.AdminOrigin.open(currentRoute);
 })();
 </script>
-<!-- #1341 standalone classification audit -->
+<!-- #1341 standalone classification audit; extended coverage review #1395 -->
 <script>
 (function(){
 "use strict";
@@ -1798,11 +1710,13 @@ var nodes={analyze:el("classificationAnalyze"),discard:el("classificationDiscard
  search:el("classificationSearch"),filter:el("classificationFilter"),prev:el("classificationPrev"),
  next:el("classificationNext"),pager:el("classificationPager"),bulk:el("classificationApproveSelected"),
  export:el("classificationExport")};
-var run=0,report=null,page=1,checked=new Set();
+var run=0,report=null,page=1,checked=new Set(),expanded=new Set();
 function sha(v){return typeof v==="string"&&/^[a-f0-9]{64}$/.test(v)}
 function slug(v){return typeof v==="string"&&/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(v)&&v.length<=48}
 function norm(v){return String(v||"").normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/ß/g,"ss").toLocaleLowerCase("de-DE").replace(/[^a-z0-9]+/g," ").trim().replace(/\s+/g," ")}
 function unique(a){return Array.isArray(a)&&new Set(a).size===a.length&&a.every(function(v){return typeof v==="string"})}
+function same(a,b){return JSON.stringify(a)===JSON.stringify(b)}
+function memberships(x){return {categories:Array.isArray(x.categories)?x.categories.slice():[x.category],topics:Array.isArray(x.topics)?x.topics.slice():[]}}
 function validate(s){
  if(!s||!s.catalog||!s.taxonomy||!s.categories||!s.topics||!s.links)throw Error("Incomplete snapshot");
  var c=s.catalog,t=s.taxonomy,k=s.categories,m=s.topics,l=s.links;
@@ -1826,80 +1740,158 @@ function validate(s){
  });
  c.entries.forEach(function(x){if(!x||!/^[0-9]{7}$/.test(x.id)||seen.has(x.id)||typeof x.title!=="string"||!x.title.trim())throw Error("Invalid catalog identity");
   seen.add(x.id);
-  var cc=Array.isArray(x.categories)?x.categories:[x.category],tt=Array.isArray(x.topics)?x.topics:[];
-  if(!unique(cc)||!cc.length||cc.length>6||cc[0]!==x.category||cc.some(function(v){return !cats.has(v)})
-    ||!unique(tt)||tt.some(function(v){return !topics.has(v)}))throw Error("Invalid catalog memberships");
+  var v=memberships(x);
+  if(!unique(v.categories)||!v.categories.length||v.categories.length>6||v.categories[0]!==x.category||v.categories.some(function(id){return !cats.has(id)})
+    ||!unique(v.topics)||v.topics.some(function(id){return !topics.has(id)}))throw Error("Invalid catalog memberships");
  });
  return {cats:cats,topics:topics,links:links};
 }
+function selectionError(v,index,requireTopic){
+ if(!unique(v.categories)||v.categories.length<1||v.categories.length>6||v.categories.some(function(id){return !index.cats.has(id)}))return "Select 1–6 valid Categories.";
+ if(!unique(v.topics)||v.topics.some(function(id){return !index.topics.has(id)}))return "Unknown or duplicate Topic.";
+ if(requireTopic&&!v.topics.length)return "No relevant Topic selected: defer until visually reviewed or add a reviewed Topic.";
+ if(v.topics.some(function(t){return !v.categories.some(function(c){return index.links.has(c+"/"+t)})}))return "Topic is not linked to a selected Category.";
+ return "";
+}
 function classify(x,index){
- var categories=Array.isArray(x.categories)?x.categories.slice():[x.category],
-     topics=Array.isArray(x.topics)?x.topics.slice():[];
- var row={id:x.id,title:x.title,thumb:x.thumb||"",before:{categories:categories.slice(),topics:topics.slice()},
-  after:{categories:categories.slice(),topics:topics.slice()},status:"unchanged",decision:"deferred",confidence:"none",reason:"No unambiguous Topic phrase."};
- if(topics.some(function(t){return !categories.some(function(c){return index.links.has(c+"/"+t)})})){
-  row.status="review";row.reason="Existing unlinked Topic requires manual review.";return row;
- }
+ var before=memberships(x);
+ var row={id:x.id,title:x.title,thumb:x.thumb||"",before:before,
+  after:{categories:before.categories.slice(),topics:before.topics.slice()},
+  status:"unchanged",decision:"pending",confidence:"none",manual:false,matched:false,
+  reason:"Current classification requires review."};
+ var existingError=selectionError(before,index,false);
+ if(existingError){row.status="review";row.reason="Existing membership needs review: "+existingError;return row}
  var title=" "+norm(x.title)+" ",matches=[];
  index.topics.forEach(function(t){
-  if(topics.includes(t.id))return;
-  var term=[t.label,t.id].concat(t.legacy_terms).map(norm).filter(function(v){return v.length>=4}).find(function(v){return title.includes(" "+v+" ")});
+  if(before.topics.includes(t.id))return;
+  var term=[t.label,t.id].concat(t.legacy_terms).map(norm).filter(function(v){return v.length>=4})
+   .find(function(v){return title.includes(" "+v+" ")});
   if(term)matches.push({topic:t,term:term});
  });
- if(!matches.length)return row;
- if(matches.length>1){row.status="review";row.reason="Multiple matched Topics: "+matches.map(function(v){return v.topic.id}).join(", ");return row}
+ row.matched=matches.length>0;
+ if(!matches.length){
+  if(!before.topics.length){row.status="review";row.reason="No matching existing Topic: inspect thumbnail; propose a verified Topic or defer."}
+  return row;
+ }
+ if(matches.length>1){row.status="review";row.reason="Multiple possible Topics: "+matches.map(function(v){return v.topic.id}).join(", ")+"; inspect thumbnail.";return row}
  var topic=matches[0].topic,linked=Array.from(index.links).filter(function(s){return s.endsWith("/"+topic.id)}).map(function(s){return s.slice(0,s.lastIndexOf("/"))});
- var selected=linked.filter(function(c){return categories.includes(c)});
+ var selected=linked.filter(function(c){return before.categories.includes(c)});
  if(!selected.length){
-  if(linked.length!==1||categories.length>=6){row.status="review";row.reason="No single compatible linked Category for "+topic.id;return row}
+  if(linked.length!==1||before.categories.length>=6){row.status="review";row.reason="Ambiguous or absent linked Category for "+topic.id;return row}
   row.after.categories.push(linked[0]);
  }
- if(topic.kind==="seasonal"&&!row.after.categories.includes("jahreszeiten")
-   ||topic.kind==="evergreen"&&!row.after.categories.some(function(c){return c!=="jahreszeiten"})){
-  row.status="review";row.reason="Topic kind is incompatible with categories.";return row;
- }
- row.after.topics.push(topic.id);row.status="proposed";row.confidence="high";
- row.reason="Exact title phrase "+JSON.stringify(matches[0].term)+" matches "+topic.id+
-  (selected.length?" in an existing Category.":"; proposes its sole linked Category.");
+ row.after.topics.push(topic.id);
+ if(selectionError(row.after,index,true)){row.status="review";row.after=memberships(x);row.reason="Topic / Category linkage requires review.";return row}
+ row.status="proposed";row.confidence="high";
+ row.reason="Title-only exact phrase "+JSON.stringify(matches[0].term)+" suggests "+topic.id+
+  (selected.length?" in an existing Category.":" with its sole linked Category.")+" Verify image before approval.";
  return row;
 }
-function audit(s){var index=validate(s);return {total:s.catalog.count,
- rows:s.catalog.entries.map(function(x){return classify(x,index)}),
+function gaps(rows){
+ var terms=new Map(),ignore=new Set(["und","mit","die","der","das","ein","eine","einer","auf","als","dem","den","zum","zur","fuer","aus","von","beim","bild","bilder","ausmalbild","malvorlage","malen","kinder","kind","gross","klein"]);
+ rows.forEach(function(r){if(r.before.topics.length||r.matched)return;
+  var words=new Set(norm(r.title).split(" ").filter(function(w){return w.length>=4&&!ignore.has(w)&&!/^[0-9]+$/.test(w)}));
+  words.forEach(function(w){if(!terms.has(w))terms.set(w,[]);terms.get(w).push(r.id)});
+ });
+ return Array.from(terms).filter(function(p){return p[1].length>=2}).sort(function(a,b){return b[1].length-a[1].length||a[0].localeCompare(b[0])})
+  .slice(0,20).map(function(p){return {term:p[0],count:p[1].length,sample_ids:p[1].slice(0,3)}});
+}
+function audit(s){var index=validate(s),rows=s.catalog.entries.map(function(x){return classify(x,index)});
+ return {total:s.catalog.count,index:index,rows:rows,gaps:gaps(rows),
  hashes:{catalog_sha256:s.catalog.catalog_sha256,taxonomy_sha256:s.taxonomy.version,
- category_sha256:s.categories.registry_sha256,topic_sha256:s.topics.registry_sha256,links_sha256:s.links.registry_sha256}}}
-function totals(a){var c={published:a.total,missingTopic:0,proposed:0,needsReview:0,approved:0,rejected:0,deferred:0};
- a.rows.forEach(function(x){if(!x.before.topics.length)c.missingTopic++;
- if(x.status==="review")c.needsReview++;
- if(x.status==="proposed"){c.proposed++;c[x.decision]++}});
+ category_sha256:s.categories.registry_sha256,topic_sha256:s.topics.registry_sha256,links_sha256:s.links.registry_sha256}};
+}
+function totals(a){var c={published:a.total,missingTopic:0,proposed:0,needsReview:0,approved:0,rejected:0,deferred:0,pending:0,reviewed:0,unmatched:0};
+ a.rows.forEach(function(r){
+  if(!r.before.topics.length)c.missingTopic++;
+  if(!r.matched&&!r.before.topics.length)c.unmatched++;
+  if(r.status==="review")c.needsReview++;
+  if(r.status==="proposed")c.proposed++;
+  if(r.decision in {approved:1,rejected:1,deferred:1,pending:1})c[r.decision]++;
+  if(r.decision!=="pending")c.reviewed++;
+ });
  return c;
 }
-function manifest(a){return {schema:"ausmalwiese.catalog-classification-review.v1",mode:"DRY_RUN_ONLY",hashes:Object.assign({},a.hashes),totals:totals(a),
- approved_changes:a.rows.filter(function(x){return x.status==="proposed"&&x.decision==="approved"}).map(function(x){
-  return {id:x.id,before:x.before,after:x.after,reason:x.reason,confidence:x.confidence}}),
- review_decisions:a.rows.filter(function(x){return x.status==="proposed"}).map(function(x){return {id:x.id,decision:x.decision}})}}
-function invalidate(message){run++;report=null;checked.clear();page=1;nodes.work.hidden=true;nodes.discard.disabled=true;nodes.analyze.disabled=false;
- if(message)nodes.status.textContent=message;}
+function manifest(a){
+ var changed=[],decisions=[];
+ a.rows.slice().sort(function(x,y){return x.id.localeCompare(y.id)}).forEach(function(r){
+  var error=r.decision==="approved"?selectionError(r.after,a.index,true):"";
+  if(error)throw Error("Invalid approved classification for "+r.id+": "+error);
+  var v={id:r.id,decision:r.decision,before:r.before,after:r.after,reason:r.reason,confidence:r.confidence};
+  decisions.push(v);
+  if(r.decision==="approved"&&!same(r.before,r.after))changed.push(v);
+ });
+ var counts=totals(a);
+ return {schema:"ausmalwiese.catalog-classification-review.v2",mode:"DRY_RUN_ONLY",complete_review:counts.pending===0,
+  hashes:Object.assign({},a.hashes),totals:counts,unmatched_title_terms:a.gaps.slice(),
+  approved_changes:changed,review_decisions:decisions};
+}
+function choose(r,field,id,value){
+ if(!report||!report.index)return;
+ var values=r.after[field].slice(),pos=values.indexOf(id);
+ if(value&&pos<0)values.push(id);
+ if(!value&&pos>=0)values.splice(pos,1);
+ r.after[field]=values;r.decision="pending";r.manual=true;r.confidence="manual";
+ r.status=selectionError(r.after,report.index,true)?"review":same(r.before,r.after)?"unchanged":"proposed";
+ r.reason="Manual classification: verify image, topic semantics and Category links before approval.";
+ checked.delete(r.id);render();
+}
+function decision(r,value){
+ if(value==="approved"){var error=selectionError(r.after,report.index,true);if(error){nodes.status.textContent="Cannot approve "+r.id+": "+error;return false}}
+ r.decision=value;checked.delete(r.id);render();return true;
+}
+function invalidate(message){run++;report=null;checked.clear();expanded.clear();page=1;nodes.work.hidden=true;nodes.discard.disabled=true;nodes.analyze.disabled=false;
+ if(message)nodes.status.textContent=message}
 async function get(path){var r=await fetch(path,{method:"GET",headers:{"X-Ausmalwiese-Admin":"1"},cache:"no-store"});
- if(!r.ok)throw Error("Read-only snapshot unavailable: "+path);return r.json();}
+ if(!r.ok)throw Error("Read-only snapshot unavailable: "+path);return r.json()}
 async function snapshot(){
  var names=["/api/catalog","/api/categories","/api/categories/manage","/api/topics/manage","/api/category-topics/manage"];
  var all=await Promise.all(names.map(get)),s={catalog:all[0],taxonomy:all[1],categories:all[2],topics:all[3],links:all[4]};
  validate(s);
- var again=await Promise.all([get("/api/catalog"),get("/api/categories"),get("/api/category-topics/manage")]);
+ var again=await Promise.all(names.map(get));
  if(again[0].catalog_sha256!==s.catalog.catalog_sha256||again[1].version!==s.taxonomy.version
- ||again[2].registry_sha256!==s.links.registry_sha256||again[2].category_sha256!==s.categories.registry_sha256
- ||again[2].topic_sha256!==s.topics.registry_sha256)throw Error("Catalog or taxonomy changed during analysis");
+  ||again[2].registry_sha256!==s.categories.registry_sha256||again[3].registry_sha256!==s.topics.registry_sha256
+  ||again[4].registry_sha256!==s.links.registry_sha256||again[4].category_sha256!==s.links.category_sha256
+  ||again[4].topic_sha256!==s.links.topic_sha256)throw Error("Catalog or taxonomy changed during analysis");
+ validate({catalog:again[0],taxonomy:again[1],categories:again[2],topics:again[3],links:again[4]});
  return s;
 }
 function node(tag,content){var n=document.createElement(tag);n.textContent=content;return n}
+function checkGroup(r,field,options,labelText){
+ var box=document.createElement("fieldset"),legend=node("legend",labelText);box.appendChild(legend);
+ options.forEach(function(opt){
+  var label=document.createElement("label"),input=document.createElement("input");
+  input.type="checkbox";input.checked=r.after[field].includes(opt.id);
+  input.setAttribute("aria-label",labelText+": "+opt.label);input.onchange=function(){choose(r,field,opt.id,input.checked)};
+  label.append(input,node("span",opt.label));box.appendChild(label);
+ });
+ return box;
+}
+function editor(r){
+ var d=document.createElement("details");d.open=expanded.has(r.id);
+ d.ontoggle=function(){if(d.open)expanded.add(r.id);else expanded.delete(r.id)};
+ d.appendChild(node("summary","Review Categories / Topics (multiple allowed)"));
+ var cats=Array.from(report.index.cats.values()),topicIDs=new Set(r.after.topics);
+ var topics=Array.from(report.index.topics.values()).filter(function(t){
+  return topicIDs.has(t.id)||r.after.categories.some(function(c){return report.index.links.has(c+"/"+t.id)});
+ });
+ d.appendChild(checkGroup(r,"categories",cats,"Categories (first selected is primary)"));
+ d.appendChild(checkGroup(r,"topics",topics,"Topics linked to selected Categories"));
+ var error=selectionError(r.after,report.index,true);
+ if(error)d.appendChild(node("p","Not eligible for approval: "+error));
+ return d;
+}
 function render(){
  if(!report)return;
  nodes.metrics.replaceChildren();var count=totals(report);
  Object.keys(count).forEach(function(k){nodes.metrics.appendChild(node("span",k+": "+count[k]))});
+ var note=document.createElement("p");note.textContent="Unmatched title words are research leads only, NOT verified Topic labels: "+
+  (report.gaps.length?report.gaps.slice(0,8).map(function(g){return g.term+" ("+g.count+")"}).join(", "):"no recurring terms");
+ nodes.metrics.appendChild(note);
  var q=norm(nodes.search.value),filter=nodes.filter.value;
  var rows=report.rows.filter(function(x){
   return (!q||norm(x.title+" "+x.id).includes(q))&&
-   (filter==="all"||filter===x.status||(x.status==="proposed"&&filter===x.decision));
+   (filter==="all"||filter===x.status||filter===x.decision);
  });
  var pages=Math.max(1,Math.ceil(rows.length/20));page=Math.min(page,pages);
  nodes.rows.replaceChildren();nodes.pager.textContent="Page "+page+" / "+pages+" · "+rows.length+" results";
@@ -1913,39 +1905,43 @@ function render(){
    node("p","Current · Categories: "+list(r.before.categories)+" · Topics: "+list(r.before.topics)),
    node("p","Suggested · Categories: "+list(r.after.categories)+" · Topics: "+list(r.after.topics)),
    node("p",r.reason),
-   node("strong",r.status==="proposed"?"Decision: "+r.decision:r.status==="review"?"Needs manual review":"Unchanged"));
-  if(r.status==="proposed"){
-   var actions=document.createElement("div");actions.className="classification-tools";
+   node("strong","Decision: "+r.decision+(r.status==="review"?" · Needs review":"")));
+  body.appendChild(editor(r));
+  var actions=document.createElement("div");actions.className="classification-tools";
+  if(r.status==="proposed"&&r.confidence==="high"){
    var input=document.createElement("input");input.type="checkbox";input.checked=checked.has(r.id);
-   input.setAttribute("aria-label","Select high-confidence proposal "+r.id);
-   input.onchange=function(){if(input.checked)checked.add(r.id);else checked.delete(r.id);nodes.bulk.disabled=!checked.size};actions.appendChild(input);
-   ["approved","rejected","deferred"].forEach(function(value){
-    var button=document.createElement("button");button.type="button";button.className="secondary";
-    button.textContent=value==="approved"?"Approve":value==="rejected"?"Reject":"Defer";
-    button.disabled=r.decision===value;button.setAttribute("aria-label",button.textContent+" classification "+r.id);
-    button.onclick=function(){r.decision=value;checked.delete(r.id);render()};actions.appendChild(button);
-   });body.appendChild(actions);
+   input.setAttribute("aria-label","Select image-reviewed proposal "+r.id);
+   input.onchange=function(){if(input.checked)checked.add(r.id);else checked.delete(r.id);nodes.bulk.disabled=!checked.size};
+   actions.appendChild(input);
   }
-  article.append(img,body);nodes.rows.appendChild(article);
+  ["approved","rejected","deferred"].forEach(function(value){
+   var button=document.createElement("button");button.type="button";button.className="secondary";
+   button.textContent=value==="approved"?"Approve":value==="rejected"?"Reject":"Defer";
+   button.disabled=r.decision===value||(value==="approved"&&!!selectionError(r.after,report.index,true));
+   button.setAttribute("aria-label",button.textContent+" classification "+r.id);
+   button.onclick=function(){decision(r,value)};actions.appendChild(button);
+  });
+  body.appendChild(actions);article.append(img,body);nodes.rows.appendChild(article);
  });
  nodes.bulk.disabled=!checked.size;
 }
-async function analyze(){var ticket=++run;report=null;checked.clear();nodes.work.hidden=true;nodes.analyze.disabled=true;
+async function analyze(){var ticket=++run;report=null;checked.clear();expanded.clear();nodes.work.hidden=true;nodes.analyze.disabled=true;
  nodes.status.textContent="Reading full Catalog and canonical registries…";
  try{var s=await snapshot();if(ticket!==run)return;report=audit(s);page=1;nodes.search.value="";nodes.filter.value="all";
- nodes.work.hidden=false;nodes.discard.disabled=false;nodes.status.textContent="Read-only analysis ready. Review suggested changes.";render();
+ nodes.work.hidden=false;nodes.discard.disabled=false;nodes.status.textContent="Read-only coverage audit ready. Review all IDs; defer uncertain images.";render();
  }catch(e){if(ticket===run)invalidate("Analysis blocked: "+e.message)}
  finally{if(ticket===run)nodes.analyze.disabled=false}
 }
 async function exportPlan(){if(!report)return;var original=report,ticket=run;nodes.export.disabled=true;
  try{var s=await snapshot();if(ticket!==run||report!==original)return;
- var latest=audit(s).hashes;if(Object.keys(original.hashes).some(function(k){return original.hashes[k]!==latest[k]}))
- throw Error("Catalog or registry changed since review");
- var bytes=JSON.stringify(manifest(original),null,2)+"\n";
- var url=URL.createObjectURL(new Blob([bytes],{type:"application/json"}));
- try{var link=document.createElement("a");link.download="ausmalwiese-classification-dry-run.json";link.href=url;link.click();}
- finally{URL.revokeObjectURL(url)}
- nodes.status.textContent="Reviewed dry-run exported. No LIVE catalog changes.";
+  var latest=audit(s).hashes;if(Object.keys(original.hashes).some(function(k){return original.hashes[k]!==latest[k]}))
+   throw Error("Catalog or registry changed since review");
+  var plan=manifest(original),bytes=JSON.stringify(plan,null,2)+"\n";
+  if(bytes.length>6000000)throw Error("Review exceeds bounded export size");
+  var url=URL.createObjectURL(new Blob([bytes],{type:"application/json"}));
+  try{var link=document.createElement("a");link.download="ausmalwiese-classification-review-dry-run.json";link.href=url;link.click()}
+  finally{URL.revokeObjectURL(url)}
+  nodes.status.textContent=plan.complete_review?"Complete reviewed dry-run exported. No LIVE changes.":"Partial dry-run exported (pending decisions). NOT READY for apply.";
  }catch(e){invalidate("Export blocked: "+e.message)}
  finally{nodes.export.disabled=!report}
 }
@@ -1955,12 +1951,13 @@ nodes.search.oninput=nodes.filter.onchange=function(){page=1;render()};
 nodes.prev.onclick=function(){if(report&&page>1){page--;render()}};
 nodes.next.onclick=function(){if(report){page++;render()}};
 nodes.bulk.onclick=function(){if(!report||!checked.size)return;
- var selected=report.rows.filter(function(x){return x.status==="proposed"&&x.confidence==="high"&&checked.has(x.id)});
- if(!selected.length||!window.confirm("Approve "+selected.length+" checked suggestions in this dry-run only?"))return;
+ var selected=report.rows.filter(function(x){return x.status==="proposed"&&x.confidence==="high"&&checked.has(x.id)&&!selectionError(x.after,report.index,true)});
+ if(!selected.length||!window.confirm("Confirm image review of "+selected.length+" exact-phrase suggestions in this DRY-RUN only?"))return;
  selected.forEach(function(x){x.decision="approved"});checked.clear();render();
 };
 nodes.export.onclick=exportPlan;
-window.AdminClassification={audit:audit,validate:validate,totals:totals,manifest:manifest,analyze:analyze,exportPlan:exportPlan,invalidate:invalidate};
+window.AdminClassification={audit:audit,validate:validate,totals:totals,manifest:manifest,choose:choose,decision:decision,
+ selectionError:selectionError,gaps:gaps,analyze:analyze,exportPlan:exportPlan,invalidate:invalidate};
 })();
 </script>
 </body>
