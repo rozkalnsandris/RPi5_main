@@ -190,6 +190,19 @@ class Tests(unittest.TestCase):
             with self.assertRaises(admin.Stop):
                 admin.validate_staged_page_name(bad)
 
+    def test_storage_child_selection_returns_only_existing_safe_entry(self):
+        root=Path(self.tmp.name)/"storage-select";root.mkdir()
+        token="a"*32
+        (root/token).mkdir()
+        selected=admin.select_existing_child(root,token,directory=True)
+        self.assertIsNotNone(selected)
+        self.assertEqual(selected[0],token)
+        self.assertIsNone(admin.select_existing_child(root,"b"*32,directory=True))
+        outside=Path(self.tmp.name)/"outside-storage";outside.mkdir()
+        (root/"link").symlink_to(outside,target_is_directory=True)
+        with self.assertRaises(admin.Stop):
+            admin.select_existing_child(root,"link",directory=True)
+
     def test_delete_inbox_rejects_tampered_inventory_name(self):
         old_inbox=admin.INBOX
         root=Path(self.tmp.name)/"inbox-tamper";root.mkdir()
