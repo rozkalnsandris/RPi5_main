@@ -122,6 +122,30 @@ class Tests(unittest.TestCase):
         finally:
             admin.CATALOG,admin.ARCHIVE=old_catalog,old_archive
 
+    def test_archive_identity_rejects_symlink_and_non_private_mode(self):
+        old_archive=admin.ARCHIVE
+        root=Path(self.tmp.name)/"archive-safety";root.mkdir()
+        admin.ARCHIVE=root
+        page_id="1234567"
+        payload={
+            "schema":"rozkalns.rpi5-main.coloring-pages-admin-archive.v1",
+            "id":page_id,"state":"prepared","archived_at":123,
+        }
+        target=root/(page_id+".json")
+        try:
+            admin.write_json(target,payload)
+            target.chmod(0o644)
+            with self.assertRaises(admin.Stop):
+                admin.load_archive_identity(page_id)
+            target.unlink()
+            outside=Path(self.tmp.name)/"outside-archive.json"
+            outside.write_text(json.dumps(payload),encoding="utf-8")
+            target.symlink_to(outside)
+            with self.assertRaises(admin.Stop):
+                admin.load_archive_identity(page_id)
+        finally:
+            admin.ARCHIVE=old_archive
+
     def test_deleted_tombstone_reserves_id_and_is_hidden_from_archive_list(self):
         old_catalog,old_archive=admin.CATALOG,admin.ARCHIVE
         root=Path(self.tmp.name)
