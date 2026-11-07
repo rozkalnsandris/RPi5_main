@@ -420,6 +420,10 @@
       ],
       [
         "python3",
+        "./tests/test-ausmalwiese-stats-legacy-id-migration-v1.py"
+      ],
+      [
+        "python3",
         "./tests/test-ausmalwiese-stats-gate-a-d1-runtime-v1.py"
       ],
       [
