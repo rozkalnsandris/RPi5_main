@@ -70,7 +70,8 @@ for required in (
     "./tests/test-ausmalwiese-catalog-classification-apply-v1.py",
     "./tests/test-ausmalwiese-catalog-classification-review-to-apply-v1.py",
     "./tests/test-ausmalwiese-taxonomy-expansion-apply-v1.py",
-    "./tests/test-ausmalwiese-goatcounter-household-waf-install-v1.py",\n    "./tests/test-ausmalwiese-goatcounter-household-waf-replace-v1.py",
+    "./tests/test-ausmalwiese-goatcounter-household-waf-install-v1.py",
+    "./tests/test-ausmalwiese-goatcounter-household-waf-replace-v1.py",
 ):
     assert all_text.count(required) == 1, required
 
