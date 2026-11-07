@@ -13,7 +13,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / 'scripts/materialize-simple-deploy-hermes-prerequisites-v1.py'
 CONTRACT = ROOT / 'ops/contracts/simple-deploy-hermes-prerequisite-materialization-v1.json'
-WORKFLOW = ROOT / '.github/workflows/simple-deploy-hermes-prerequisite-materialization-source.yml'
+VALIDATION_MANIFEST = ROOT / 'ci/validate-groups.json'
 ADOPTION = ROOT / 'scripts/adopt-simple-deploy-hermes-v1.py'
 
 spec = importlib.util.spec_from_file_location('simple_deploy_hermes_prerequisites_v1', MODULE_PATH)
@@ -240,10 +240,11 @@ class HermesPrerequisiteMaterializationTests(unittest.TestCase):
         self.assertFalse(contract['authority']['systemd'])
 
     def test_ci_never_invokes_apply_and_existing_adoption_stays_separate(self) -> None:
-        workflow = WORKFLOW.read_text(encoding='utf-8')
-        self.assertNotIn('--apply', workflow)
-        self.assertIn('test-simple-deploy-hermes-adoption-v1.py', workflow)
-        self.assertIn('test-simple-deploy-hermes-adoption-phase-b-identity.py', workflow)
+        payload = json.loads(VALIDATION_MANIFEST.read_text(encoding='utf-8'))
+        commands = {tuple(argv) for entries in payload['groups'].values() for argv in entries}
+        self.assertFalse(any('--apply' in argv for argv in commands))
+        self.assertIn(('python3', './tests/test-simple-deploy-hermes-adoption-v1.py'), commands)
+        self.assertIn(('python3', './tests/test-simple-deploy-hermes-adoption-phase-b-identity.py'), commands)
         adoption = ADOPTION.read_text(encoding='utf-8')
         self.assertNotIn('materialize-simple-deploy-hermes-prerequisites-v1', adoption)
 
