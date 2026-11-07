@@ -477,6 +477,8 @@ async function managerReady(h){await h.s.refreshTaxonomyManagers();await h.s.cat
   }
   assert.equal(h.navs.some(x=>x.dataset.nav==="topics"),false,"Topics no longer appears in top navigation");
   assert.equal(h.pages.some(x=>x.dataset.page==="topics"),false,"Topics shares Categories view");
+  assert.equal(h.navs.some(x=>x.dataset.nav==="origin"),false,"GoatCounter no longer has a separate navigation item");
+  assert.equal(h.pages.some(x=>x.dataset.page==="origin"),false,"GoatCounter shares Traffic view");
   const categoryMarkup=html.slice(html.indexOf('data-page="categories"'),html.indexOf('data-page="activity"'));
   assert.match(categoryMarkup,/id="categoriesRows"[\s\S]*id="managedTopicsPanel"[\s\S]*id="topicsRows"/,"Topics follows Categories");
   assert.match(html,/id="categoriesRefresh"[^>]*>↻ Refresh all</,"one refresh for both");
@@ -497,6 +499,11 @@ async function managerReady(h){await h.s.refreshTaxonomyManagers();await h.s.cat
   assert.equal(h.s.location.hash,"#categories","old bookmark canonicalized");
   assert.equal(h.ids.managedTopicsHeading.focused,true,"old bookmark focuses Topics heading");
   assert.equal(h.navs.find(x=>x.dataset.nav==="categories").attrs["aria-current"],"page");
+  h.go("catalog");h.go("origin");
+  assert.equal(h.s.currentRoute,"traffic","old #origin link opens Traffic");
+  assert.equal(h.s.location.hash,"#traffic","old GoatCounter bookmark canonicalized");
+  assert.equal(h.navs.find(x=>x.dataset.nav==="traffic").attrs["aria-current"],"page");
+  assert.equal(opened.at(-1),"traffic");
   h.go("catalog");assert.equal(h.ids.catalogGrid.children.length,24);
   h.ids.catalogNext.onclick();assert.equal(h.ids.catalogPageStatus.textContent,"2 / 3");assert.equal(h.ids.catalogGrid.children.length,24);
   h.ids.catalogNext.onclick();assert.equal(h.ids.catalogGrid.children.length,5);assert.equal(h.ids.catalogNext.disabled,true);
