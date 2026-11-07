@@ -224,6 +224,10 @@
       ],
       [
         "python3",
+        "./tests/test-ausmalwiese-goatcounter-household-waf-v1.py"
+      ],
+      [
+        "python3",
         "./tests/test-ausmalwiese-goatcounter-simple-evidence-v1.py"
       ],
       [
