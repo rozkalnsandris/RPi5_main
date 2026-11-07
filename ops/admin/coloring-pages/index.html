@@ -341,31 +341,62 @@ html{overflow-y:scroll}
 @media(max-width:620px){.catalog-toolbar{grid-template-columns:minmax(0,1fr)}.catalog-toolbar input{grid-column:auto}}
 
 
-/* GoatCounter Traffic dashboard — only documented aggregate API dimensions. */
-.traffic-dashboard{display:grid;grid-template-columns:1fr;gap:18px;padding-bottom:44px}
+/* Traffic: responsive report layout; axes stay readable outside the SVG. */
+.traffic-view{--traffic-accent:#4148db}
+.traffic-view .analytics-toolbar{margin-bottom:12px;align-items:end}
+.traffic-view .stats-status{margin-bottom:18px;font-size:13px;line-height:1.6}
+.traffic-view .stats-kpi-grid{gap:14px}
+.traffic-view .stats-kpi{padding:22px;box-shadow:none;align-items:start;border-top:3px solid #dfe3fa}
+.traffic-view .stats-kpi:first-child{background:#f0f1ff;border-color:#d9dcfb;border-top-color:var(--traffic-accent)}
+.traffic-view .stats-kpi strong{font-size:36px;margin:8px 0 4px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.traffic-kpi-help{display:block;color:var(--muted);font-size:12px;line-height:1.4}
+.traffic-dashboard{display:grid;grid-template-columns:1fr;gap:24px;padding-bottom:44px}
 .traffic-panel-wide{min-width:0}.traffic-section{display:grid;gap:12px}
+.traffic-view .stats-panel{box-shadow:0 3px 14px rgb(23 58 102 / 3%)}
+.traffic-view .stats-panel-heading{align-items:start;margin-bottom:20px}
+.traffic-view .stats-panel-caption{max-width:360px;line-height:1.5}
 .traffic-panel-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
 .traffic-panel-grid-four{grid-template-columns:repeat(4,minmax(0,1fr))}
-.traffic-mini{padding:18px}.traffic-mini h3{margin:0 0 14px;font-family:var(--font-display);font-size:19px}
-.traffic-trend{display:block;width:100%;height:250px;border:1px solid var(--line);border-radius:16px;background:#fbfdff}
-.traffic-trend-grid{stroke:#dfe8f3;stroke-width:1}.traffic-trend-line{fill:none;stroke:var(--blue);stroke-width:3;vector-effect:non-scaling-stroke}
-.traffic-trend-dot{fill:var(--blue);stroke:#fff;stroke-width:2;vector-effect:non-scaling-stroke}
-.traffic-trend-label{fill:#24425f;stroke:#fbfdff;stroke-width:3;paint-order:stroke;stroke-linejoin:round;font-family:var(--font-body);font-size:12px;font-weight:900;font-variant-numeric:tabular-nums;pointer-events:none}
-.traffic-fallback{margin-top:12px}.traffic-fallback summary{cursor:pointer;color:var(--blue-deep);font-weight:900}
-.traffic-bars{display:grid;gap:11px;list-style:none;margin:0;padding:0}
-.traffic-bar-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 12px;align-items:center}
-.traffic-bar-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:800}
-.traffic-bar-value{font-size:13px;font-weight:900;font-variant-numeric:tabular-nums}
-.traffic-bar-track{grid-column:1/-1;height:7px;border-radius:999px;background:#edf3fa;overflow:hidden}
-.traffic-bar-fill{display:block;height:100%;min-width:2px;border-radius:999px;background:var(--blue)}
-.traffic-page{display:flex;align-items:center;gap:10px}.traffic-page img{width:44px;height:58px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff}
-.traffic-page-copy{min-width:0}.traffic-page-copy div{font-weight:800}.traffic-page-copy small{display:block;color:var(--muted)}
+.traffic-mini{padding:20px}.traffic-mini h3{margin:0 0 16px;font-family:var(--font-display);font-size:20px}
+.traffic-chart{display:grid;grid-template-columns:48px minmax(0,1fr);gap:10px;padding:16px 16px 12px 0;border:1px solid var(--line);border-radius:16px;background:#fafbff}
+.traffic-y-axis{display:flex;flex-direction:column;justify-content:space-between;align-items:end;padding-block:10px;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.traffic-y-axis span{line-height:0}
+.traffic-trend{display:block;width:100%;height:220px;overflow:visible}
+.traffic-trend-grid{stroke:#e1e5f0;stroke-width:1;stroke-dasharray:4 4;vector-effect:non-scaling-stroke}
+.traffic-trend-area{fill:#4148db;fill-opacity:.07}
+.traffic-trend-line{fill:none;stroke:var(--traffic-accent);stroke-width:3;vector-effect:non-scaling-stroke}
+.traffic-trend-dot{stroke:var(--traffic-accent);stroke-width:7;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.traffic-trend-dot:last-child{stroke:#bd7400;stroke-width:9}
+.traffic-x-axis{grid-column:2;display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:12px;font-weight:800}
+.traffic-chart-note{margin:10px 0 0;color:var(--muted);font-size:12px}
+.traffic-fallback{margin-top:14px}.traffic-fallback summary{cursor:pointer;color:var(--blue-deep);font-weight:800;min-height:44px;align-content:center}
+.traffic-bars{display:grid;gap:15px;list-style:none;margin:0;padding:0}
+.traffic-bar-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;align-items:center}
+.traffic-bar-label{min-width:0;overflow-wrap:anywhere;font-size:14px;font-weight:800}
+.traffic-bar-value{font-size:14px;font-weight:900;font-variant-numeric:tabular-nums}
+.traffic-bar-track{grid-column:1/-1;height:6px;border-radius:999px;background:#edf0fa;overflow:hidden}
+.traffic-bar-fill{display:block;height:100%;border-radius:999px;background:var(--traffic-accent)}
+.traffic-page{display:flex;align-items:center;gap:12px}.traffic-page img{flex:none;width:44px;height:58px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff}
+.traffic-page-copy{min-width:0}.traffic-page-copy a,.traffic-page-copy div{font-weight:800;text-decoration:none}.traffic-page-copy a:hover{text-decoration:underline;color:var(--blue-deep)}.traffic-page-copy small{display:block;color:var(--muted);font-size:12px;margin-top:3px}
 .traffic-share{color:var(--muted);font-variant-numeric:tabular-nums}
-.traffic-quality{padding:16px 18px;border:1px solid #d7e6f6;border-radius:16px;background:#f4f9ff;color:#355675}
-.traffic-quality strong{color:var(--text)}.traffic-quality p{margin:4px 0 0;font-size:13px;font-weight:700}
+.traffic-view .stats-table{table-layout:fixed}
+.traffic-view .stats-table th:not(:first-child),.traffic-view .stats-table td:not(:first-child){width:92px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.traffic-view .stats-empty{padding:16px;border-radius:12px;background:#f6f7fc;margin:0;font-size:13px;line-height:1.6}
+[data-origin-more]{margin-top:16px}
+.traffic-quality{padding:18px 20px;border:1px solid var(--line);border-radius:16px;background:#f0f3fa;color:var(--muted)}
+.traffic-quality strong{color:var(--text)}.traffic-quality p{margin:6px 0 0;font-size:13px;line-height:1.6}
 @media(max-width:1100px){.traffic-panel-grid-four{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:720px){.traffic-panel-grid,.traffic-panel-grid-four{grid-template-columns:1fr}.traffic-trend{height:210px}.traffic-page img{width:38px;height:50px}}
-
+@media(max-width:620px){
+ .traffic-view .stats-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+ .traffic-view .stats-kpi{padding:16px 14px}.traffic-view .stats-kpi strong{font-size:30px}
+ .traffic-view .stats-kpi-label{font-size:12px;min-height:35px}
+ .traffic-panel-grid,.traffic-panel-grid-four{grid-template-columns:1fr}.traffic-dashboard{gap:20px}
+ .traffic-chart{grid-template-columns:38px minmax(0,1fr);gap:8px;padding-right:12px}.traffic-trend{height:180px}
+ .traffic-x-axis,.traffic-y-axis{font-size:11px}.traffic-page img{width:32px;height:44px}.traffic-page{gap:8px}
+ .traffic-view .stats-table th,.traffic-view .stats-table td{padding:12px 8px;font-size:12px}
+ .traffic-view .stats-table th:not(:first-child),.traffic-view .stats-table td:not(:first-child){width:60px}
+ .traffic-kpi-help{font-size:11px}.traffic-quality{padding:16px}
+}
 </style>
 </head>
 <body>
@@ -745,7 +776,7 @@ html{overflow-y:scroll}
     </section>
   
 </div></section>
-<section class="analytics-page" data-page="traffic" aria-labelledby="admin-title" hidden>
+<section class="analytics-page traffic-view" data-page="traffic" aria-labelledby="admin-title" hidden>
   <div class="container analytics-toolbar">
     <label class="stats-sort-label">Period (UTC)
       <select data-origin-days><option value="1">Today</option><option value="7" selected>Last 7 days</option><option value="30">Last 30 days</option><option value="365">Last 365 days</option></select>
@@ -756,43 +787,49 @@ html{overflow-y:scroll}
   <div data-origin-content hidden>
     <section class="stats-summary" aria-label="GoatCounter traffic summary">
       <div class="container stats-kpi-grid">
-        <article class="stats-kpi"><div><span class="stats-kpi-label">GoatCounter visits</span><strong data-origin-total>–</strong></div></article>
-        <article class="stats-kpi"><div><span class="stats-kpi-label">Homepage visits</span><strong data-origin-home>–</strong></div></article>
-        <article class="stats-kpi"><div><span class="stats-kpi-label">Coloring-page visits</span><strong data-origin-coloring>–</strong></div></article>
-        <article class="stats-kpi"><div><span class="stats-kpi-label">Coloring pages with visits</span><strong data-origin-pages>–</strong></div></article>
+        <article class="stats-kpi"><div><span class="stats-kpi-label">Total visits</span><strong data-origin-total>–</strong><small class="traffic-kpi-help">Recorded by GoatCounter</small></div></article>
+        <article class="stats-kpi"><div><span class="stats-kpi-label">Homepage visits</span><strong data-origin-home>–</strong><small class="traffic-kpi-help">Visits to the homepage</small></div></article>
+        <article class="stats-kpi"><div><span class="stats-kpi-label">Coloring-page visits</span><strong data-origin-coloring>–</strong><small class="traffic-kpi-help">Visits to coloring pages</small></div></article>
+        <article class="stats-kpi"><div><span class="stats-kpi-label">Coloring pages with visits</span><strong data-origin-pages>–</strong><small class="traffic-kpi-help">Different coloring pages</small></div></article>
       </div>
     </section>
     <div class="container traffic-dashboard">
       <article class="stats-panel traffic-panel-wide">
         <div class="stats-panel-heading"><div><span class="stats-panel-kicker">Trend</span><h2>Visits over time</h2></div><span class="stats-panel-caption">UTC · today is incomplete</span></div>
-        <svg class="traffic-trend" data-origin-trend viewBox="0 0 720 220" preserveAspectRatio="none" role="img" aria-label="GoatCounter visit trend"></svg>
+        <div class="traffic-chart">
+          <div class="traffic-y-axis" data-origin-y-axis aria-hidden="true"></div>
+          <svg class="traffic-trend" data-origin-trend viewBox="0 0 720 220" preserveAspectRatio="none" role="img" aria-label="GoatCounter visit trend"></svg>
+          <div class="traffic-x-axis" data-origin-x-axis aria-hidden="true"></div>
+        </div>
+        <p class="traffic-chart-note">Daily visits · UTC dates · the amber point is today, still in progress.</p>
         <details class="traffic-fallback"><summary>Daily totals table</summary><div class="stats-table-wrap"><table class="stats-table"><thead><tr><th scope="col">UTC day</th><th scope="col">Visits</th></tr></thead><tbody data-origin-daily></tbody></table></div></details>
       </article>
       <article class="stats-panel traffic-panel-wide">
-        <div class="stats-panel-heading"><div><span class="stats-panel-kicker">Content</span><h2>Most visited coloring pages</h2></div><span class="stats-panel-caption">Catalog/archive title · share of coloring-page visits</span></div>
-        <p data-origin-empty hidden>No GoatCounter visits were recorded in this period.</p>
-        <div class="stats-table-wrap"><table class="stats-table"><thead><tr><th scope="col">Coloring page</th><th scope="col">Visits</th><th scope="col">Share</th></tr></thead><tbody data-origin-ranking></tbody></table></div>
+        <div class="stats-panel-heading"><div><span class="stats-panel-kicker">Content</span><h2>Most visited coloring pages</h2></div><span class="stats-panel-caption">Ranked by visits · share of coloring-page visits</span></div>
+        <p class="stats-empty" data-origin-empty hidden>No coloring-page visits were recorded in this period.</p>
+        <p class="stats-note" data-origin-meta-status role="status" hidden></p>
+        <div class="stats-table-wrap" data-origin-ranking-wrap><table class="stats-table"><thead><tr><th scope="col">Coloring page</th><th scope="col">Visits</th><th scope="col">Share</th></tr></thead><tbody data-origin-ranking></tbody></table></div>
         <button class="secondary" data-origin-more type="button" hidden>Show more pages</button>
       </article>
       <section class="traffic-section traffic-panel-wide" aria-labelledby="traffic-acquisition-heading">
-        <div class="stats-panel-heading"><div><span class="stats-panel-kicker">Acquisition</span><h2 id="traffic-acquisition-heading">How visits arrived</h2></div><span class="stats-panel-caption">Documented GoatCounter toprefs + campaigns</span></div>
+        <div class="stats-panel-heading"><div><span class="stats-panel-kicker">Acquisition</span><h2 id="traffic-acquisition-heading">How visits arrived</h2></div><span class="stats-panel-caption">Top recorded sources and campaign tags</span></div>
         <div class="traffic-panel-grid">
-          <article class="stats-panel traffic-mini"><h3>Top referrers</h3><ol class="traffic-bars" data-origin-referrers></ol><p class="stats-empty" data-origin-referrers-empty hidden>No referrer data.</p></article>
-          <article class="stats-panel traffic-mini"><h3>Campaigns</h3><ol class="traffic-bars" data-origin-campaigns></ol><p class="stats-empty" data-origin-campaigns-empty hidden>No campaign data.</p></article>
+          <article class="stats-panel traffic-mini"><h3>Top referrers</h3><ol class="traffic-bars" data-origin-referrers></ol><p class="stats-empty" data-origin-referrers-empty hidden>No referring sites recorded. This does not mean there were no visits.</p></article>
+          <article class="stats-panel traffic-mini"><h3>Campaigns</h3><ol class="traffic-bars" data-origin-campaigns></ol><p class="stats-empty" data-origin-campaigns-empty hidden>No campaign tags recorded for this period.</p></article>
         </div>
       </section>
       <section class="traffic-section traffic-panel-wide" aria-labelledby="traffic-audience-heading">
-        <div class="stats-panel-heading"><div><span class="stats-panel-kicker">Audience</span><h2 id="traffic-audience-heading">Aggregate technical context</h2></div><span class="stats-panel-caption">Documented GoatCounter aggregate dimensions</span></div>
+        <div class="stats-panel-heading"><div><span class="stats-panel-kicker">Audience</span><h2 id="traffic-audience-heading">Visitor details</h2></div><span class="stats-panel-caption">Details may be missing when they were not supplied with a visit.</span></div>
         <div class="traffic-panel-grid traffic-panel-grid-four">
-          <article class="stats-panel traffic-mini"><h3>Locations</h3><ol class="traffic-bars" data-origin-locations></ol><p class="stats-empty" data-origin-locations-empty hidden>No location data.</p></article>
-          <article class="stats-panel traffic-mini"><h3>Browsers</h3><ol class="traffic-bars" data-origin-browsers></ol><p class="stats-empty" data-origin-browsers-empty hidden>No browser data.</p></article>
-          <article class="stats-panel traffic-mini"><h3>Operating systems</h3><ol class="traffic-bars" data-origin-systems></ol><p class="stats-empty" data-origin-systems-empty hidden>No system data.</p></article>
-          <article class="stats-panel traffic-mini"><h3>Screen widths</h3><ol class="traffic-bars" data-origin-sizes></ol><p class="stats-empty" data-origin-sizes-empty hidden>No screen-size data.</p></article>
+          <article class="stats-panel traffic-mini"><h3>Locations</h3><ol class="traffic-bars" data-origin-locations></ol><p class="stats-empty" data-origin-locations-empty hidden>No location details were supplied for this period.</p></article>
+          <article class="stats-panel traffic-mini"><h3>Browsers</h3><ol class="traffic-bars" data-origin-browsers></ol><p class="stats-empty" data-origin-browsers-empty hidden>No browser details were supplied for this period.</p></article>
+          <article class="stats-panel traffic-mini"><h3>Operating systems</h3><ol class="traffic-bars" data-origin-systems></ol><p class="stats-empty" data-origin-systems-empty hidden>No system details were supplied for this period.</p></article>
+          <article class="stats-panel traffic-mini"><h3>Screen widths</h3><ol class="traffic-bars" data-origin-sizes></ol><p class="stats-empty" data-origin-sizes-empty hidden>No screen-size details were supplied for this period.</p></article>
         </div>
       </section>
       <div class="traffic-quality traffic-panel-wide" role="note" aria-label="Traffic data quality">
         <strong>Data quality</strong>
-        <p>Only visitors who allow optional analytics are represented. GoatCounter visit/session logic is not a count of unique natural people. Recognizable bots and crawlers are filtered. These values are not raw HTTP request counts. Reports may be cached for 60 seconds and recent counts can take a short time to appear.</p>
+        <p>Only visitors who allow optional analytics are represented. Missing visitor details cannot be reconstructed from visit totals. Bars compare the recorded top entries, not percentages of all visitors. GoatCounter visit/session logic is not a count of unique natural people. Recognizable bots and crawlers are filtered. These values are not raw HTTP request counts. Reports may be cached for 60 seconds and recent counts can take a short time to appear.</p>
       </div>
     </div>
   </div>
@@ -1504,7 +1541,7 @@ var pageInfo={
   edit:["Edit page","Update the title, categories, age range and difficulty."],
   archive:["Archive","Restore hidden pages or manage archived entries."],
   stats:["Statistics","Print activity, likes and catalog engagement."],
-  traffic:["Traffic","GoatCounter visits, sources and aggregate technical context from the documented Stats API."],
+  traffic:["Traffic","See how often your pages are visited and where recorded visits come from."],
   activity:["Activity","Publishing and catalog changes from the last 7 days."]
 };
 function routePage(){
@@ -1681,14 +1718,14 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
   const node=name=>document.querySelector("[data-origin-"+name+"]");
   const number=new Intl.NumberFormat("en-GB"),allowed=[1,7,30,365],dimensions=["referrers","campaigns","locations","browsers","systems","sizes"];
   const svgNS="http://www.w3.org/2000/svg";
-  let sequence=0,controller=null,loaded=false,rows=[],shown=25,pagesMeta=new Map();
+  let sequence=0,controller=null,loaded=false,rows=[],shown=25,pagesMeta=new Map(),metadataComplete=false;
   const count=value=>Number.isSafeInteger(value)&&value>=0;
   const label=value=>typeof value==="string"&&value.length>0&&value.length<=160&&!/[\u0000-\u001f\u007f]/.test(value);
   function clear(){
     node("content").hidden=true;node("total").textContent="–";node("home").textContent="–";node("coloring").textContent="–";node("pages").textContent="–";
-    node("ranking").replaceChildren();node("daily").replaceChildren();node("trend").replaceChildren();
+    node("ranking").replaceChildren();node("daily").replaceChildren();node("trend").replaceChildren();node("x-axis").replaceChildren();node("y-axis").replaceChildren();node("meta-status").hidden=true;
     dimensions.forEach(name=>{node(name).replaceChildren();node(name+"-empty").hidden=true});
-    rows=[];shown=25;pagesMeta=new Map();
+    rows=[];shown=25;pagesMeta=new Map();metadataComplete=false;
   }
   function row(labelText,value){
     const tr=document.createElement("tr"),name=document.createElement("td"),visits=document.createElement("td");
@@ -1696,10 +1733,12 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
   }
   function pageRow(item,total){
     const tr=document.createElement("tr"),page=document.createElement("td"),visits=document.createElement("td"),share=document.createElement("td");
-    const wrap=document.createElement("div"),copy=document.createElement("div"),title=document.createElement("div"),meta=document.createElement("small");
-    wrap.className="traffic-page";copy.className="traffic-page-copy";const info=pagesMeta.get(item.page_id)||{};
-    if(info.thumb){const image=document.createElement("img");image.src=info.thumb;image.alt="";image.loading="lazy";wrap.append(image)}
-    title.textContent=info.title||"Unknown historical page";meta.textContent="ID: "+item.page_id;copy.append(title,meta);wrap.append(copy);page.append(wrap);
+    const info=pagesMeta.get(item.page_id)||{};
+    const wrap=document.createElement("div"),copy=document.createElement("div"),title=document.createElement(info.published?"a":"div"),meta=document.createElement("small");
+    wrap.className="traffic-page";copy.className="traffic-page-copy";
+    if(info.thumb){const image=document.createElement("img");image.src=info.thumb;image.alt="";image.loading="lazy";image.addEventListener("error",()=>{image.hidden=true});wrap.append(image)}
+    if(info.published){title.href="https://ausmalwiese.de/detail.html?id="+item.page_id;title.target="_blank";title.rel="noopener noreferrer";}
+    title.textContent=info.title||(metadataComplete?"Unknown historical page":"Page title unavailable");meta.textContent="ID: "+item.page_id+(info.archived?" · Archived":"");copy.append(title,meta);wrap.append(copy);page.append(wrap);
     visits.textContent=number.format(item.visits);share.className="traffic-share";share.textContent=total?Math.round(item.visits*1000/total)/10+"%":"0%";
     tr.append(page,visits,share);return tr;
   }
@@ -1720,29 +1759,35 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
     if(data.start_day!==data.daily[0].day||data.end_day!==data.daily[days-1].day)throw Error("invalid range");
   }
   function renderTrend(data){
-    const svg=node("trend"),values=data.daily.map(item=>item.visits),max=Math.max(1,...values),left=28,right=700,top=20,bottom=195;
-    const grid=document.createElementNS(svgNS,"line");grid.setAttribute("x1",left);grid.setAttribute("x2",right);grid.setAttribute("y1",bottom);grid.setAttribute("y2",bottom);grid.setAttribute("class","traffic-trend-grid");svg.append(grid);
-    const points=values.map((value,index)=>{const x=values.length===1?(left+right)/2:left+(right-left)*index/(values.length-1);const y=bottom-(bottom-top)*value/max;return{x,y,value}});
-    const line=document.createElementNS(svgNS,"polyline");line.setAttribute("class","traffic-trend-line");line.setAttribute("points",points.map(p=>p.x.toFixed(1)+","+p.y.toFixed(1)).join(" "));svg.append(line);
-    const labelStep=values.length<=14?1:Math.ceil(values.length/12);
+    const svg=node("trend"),values=data.daily.map(item=>item.visits),peak=Math.max(1,...values);
+    const step=10**Math.floor(Math.log10(peak)),max=Math.max(2,Math.ceil(peak/(2*step))*2*step),left=4,right=716,top=10,bottom=210;
+    function shape(tag,attrs,text){const el=document.createElementNS(svgNS,tag);Object.entries(attrs).forEach(([key,value])=>el.setAttribute(key,value));if(text!==undefined)el.textContent=text;return el;}
+    const ticks=[max,max/2,0];
+    node("y-axis").replaceChildren(...ticks.map(value=>{const el=document.createElement("span");el.textContent=number.format(value);return el;}));
+    ticks.forEach(value=>{const y=bottom-(bottom-top)*value/max;svg.append(shape("line",{x1:left,x2:right,y1:y,y2:y,class:"traffic-trend-grid"}));});
+    const points=values.map((value,index)=>({x:values.length===1?(left+right)/2:left+(right-left)*index/(values.length-1),y:bottom-(bottom-top)*value/max,value}));
+    const coords=points.map(p=>p.x.toFixed(1)+","+p.y.toFixed(1)).join(" ");
+    svg.append(shape("polygon",{class:"traffic-trend-area",points:points[0].x+","+bottom+" "+coords+" "+points[points.length-1].x+","+bottom}));
+    svg.append(shape("polyline",{class:"traffic-trend-line",points:coords}));
     points.forEach((point,index)=>{
-      const sampled=index%labelStep===0||index===values.length-1,showDot=values.length<=31||sampled;
-      if(showDot){const dot=document.createElementNS(svgNS,"circle");dot.setAttribute("class","traffic-trend-dot");dot.setAttribute("cx",point.x.toFixed(1));dot.setAttribute("cy",point.y.toFixed(1));dot.setAttribute("r","3.5");svg.append(dot)}
-      if(sampled&&point.value>0){
-        const label=document.createElementNS(svgNS,"text"),nearTop=point.y<top+18;
-        label.setAttribute("class","traffic-trend-label");label.setAttribute("x",point.x.toFixed(1));label.setAttribute("y",(nearTop?point.y+19:point.y-9).toFixed(1));
-        label.setAttribute("text-anchor",index===0?"start":index===values.length-1?"end":"middle");label.textContent=number.format(point.value);svg.append(label);
+      if(values.length<=31||index%Math.ceil(values.length/12)===0||index===values.length-1){
+        const dot=shape("line",{class:"traffic-trend-dot",x1:point.x.toFixed(1),x2:point.x.toFixed(1),y1:point.y.toFixed(1),y2:point.y.toFixed(1)});
+        dot.append(shape("title",{},data.daily[index].day+": "+number.format(point.value)+" visits"+(index===values.length-1?" · incomplete":"")));svg.append(dot);
       }
     });
-    svg.setAttribute("aria-label",data.range_days+" day GoatCounter visit trend; "+number.format(data.total)+" visits; latest day "+number.format(values[values.length-1])+" visits and is incomplete.");
+    node("x-axis").style.justifyContent=values.length===1?"center":"space-between";
+    const indexes=values.length===1?[0]:[0,Math.floor((values.length-1)/2),values.length-1];
+    const dateFormat=new Intl.DateTimeFormat("en-GB",{day:"numeric",month:"short",...(data.range_days===365?{year:"2-digit"}:{}),timeZone:"UTC"});
+    node("x-axis").replaceChildren(...[...new Set(indexes)].map(index=>{const el=document.createElement("span");el.textContent=dateFormat.format(new Date(data.daily[index].day+"T00:00:00Z"));return el;}));
+    svg.setAttribute("aria-label",data.range_days+" day GoatCounter visit trend; "+number.format(data.total)+" visits; "+data.start_day+" to "+data.end_day+" UTC; latest day "+number.format(values[values.length-1])+" visits and is incomplete. Daily totals are available in the table below.");
   }
   function renderDimension(name,items){
     const target=node(name),max=Math.max(1,...items.map(item=>item.visits));
     target.replaceChildren(...items.map(item=>{
       const li=document.createElement("li"),labelNode=document.createElement("span"),value=document.createElement("span"),track=document.createElement("span"),fill=document.createElement("span");
       li.className="traffic-bar-row";labelNode.className="traffic-bar-label";value.className="traffic-bar-value";track.className="traffic-bar-track";fill.className="traffic-bar-fill";
-      let text=item.label;if(name==="sizes"&&/^[0-9]+$/.test(text)&&text!=="0")text+=" px";if(name==="sizes"&&text==="0")text="Unknown";
-      labelNode.textContent=text;labelNode.title=text;value.textContent=number.format(item.visits);fill.style.width=Math.max(2,item.visits*100/max)+"%";
+      let text=item.label;if(name==="sizes"&&/^[0-9]+$/.test(text)&&text!=="0")text+=" px";if((name==="sizes"&&text==="0")||(["locations","browsers","systems","sizes"].includes(name)&&/^(unknown|\(unknown\)|\(no data\))$/i.test(text)))text="Not recorded";
+      labelNode.textContent=text;labelNode.title=text;value.textContent=number.format(item.visits);fill.style.width=(item.visits*100/max)+"%";
       track.append(fill);li.append(labelNode,value,track);return li;
     }));
     node(name+"-empty").hidden=items.length!==0;
@@ -1754,15 +1799,16 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
     }catch(error){if(signal.aborted)throw error;return null;}
   }
   async function loadMeta(signal){
-    const found=new Map(),catalog=await safeJson("/api/catalog",signal),archive=await safeJson("/api/archive",signal);
-    if(catalog&&Array.isArray(catalog.entries))catalog.entries.forEach(item=>{
+    const found=new Map(),[catalog,archive]=await Promise.all([safeJson("/api/catalog",signal),safeJson("/api/archive",signal)]);
+    const catalogOk=Boolean(catalog&&Array.isArray(catalog.entries)),archiveOk=Boolean(archive&&Array.isArray(archive.entries));
+    if(catalogOk)catalog.entries.forEach(item=>{
       if(item&&/^[0-9]{7}$/.test(String(item.id))&&typeof item.title==="string"&&item.title.trim()){
-        const id=String(item.id),thumb=typeof item.thumb==="string"&&/^\/media\/[0-9]{7}\/thumb[.]webp$/.test(item.thumb)?"https://ausmalwiese.de"+item.thumb:"";
-        found.set(id,{title:item.title,thumb});
+        const id=String(item.id);
+        found.set(id,{title:item.title,thumb:"https://ausmalwiese.de/media/"+id+"/thumb.webp",published:true});
       }
     });
-    if(archive&&Array.isArray(archive.entries))archive.entries.forEach(item=>{const entry=item&&item.entry;if(entry&&/^[0-9]{7}$/.test(String(entry.id))&&typeof entry.title==="string"&&entry.title.trim()&&!found.has(String(entry.id)))found.set(String(entry.id),{title:entry.title,thumb:""});});
-    return found;
+    if(archiveOk)archive.entries.forEach(item=>{const entry=item&&item.entry;if(entry&&/^[0-9]{7}$/.test(String(entry.id))&&typeof entry.title==="string"&&entry.title.trim()&&!found.has(String(entry.id)))found.set(String(entry.id),{title:entry.title,thumb:"",archived:true});});
+    return {found,complete:catalogOk&&archiveOk};
   }
   async function refresh(){
     const days=Number(node("days").value);if(!allowed.includes(days))return;
@@ -1777,13 +1823,22 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
         if(data.status==="busy"){node("status").textContent="A report is being prepared or temporarily paused. Refresh again shortly.";return;}
         throw Error("unavailable");
       }
-      validate(data,days);pagesMeta=await loadMeta(current.signal);if(generation!==sequence)return;rows=data.pages;ranking(data.ausmalbild_visits);renderTrend(data);
+      validate(data,days);rows=[...data.pages].sort((a,b)=>b.visits-a.visits||a.page_id.localeCompare(b.page_id));ranking(data.ausmalbild_visits);renderTrend(data);
       node("daily").replaceChildren(...data.daily.map(item=>row(item.day+(item.day===data.end_day?" · incomplete":""),item.visits)));
       dimensions.forEach(name=>renderDimension(name,data[name]));
       node("total").textContent=number.format(data.total);node("home").textContent=number.format(data.homepage_visits);node("coloring").textContent=number.format(data.ausmalbild_visits);node("pages").textContent=number.format(rows.length);
-      node("empty").hidden=data.total!==0;
-      node("status").textContent=data.start_day+" to "+data.end_day+" UTC · Snapshot "+data.generated_at.replace("T"," ").replace("Z"," UTC")+" · cached up to "+data.cache_seconds+" seconds.";
-      node("content").hidden=false;loaded=true;
+      node("empty").hidden=rows.length!==0;node("ranking-wrap").hidden=rows.length===0;
+      node("empty").textContent=data.total===0?"No visits were recorded in this period.":"No coloring-page visits in this period. Recorded visits were to the homepage.";
+      node("status").textContent=data.start_day+" to "+data.end_day+" UTC · Snapshot "+data.generated_at.slice(0,10)+" at "+data.generated_at.slice(11,16)+" UTC · cached for up to 60 seconds.";
+      node("content").hidden=false;loaded=true;node("refresh").disabled=false;node("days").disabled=false;
+      if(rows.length){
+        node("meta-status").hidden=false;node("meta-status").textContent="Loading page titles…";
+        try{
+          const meta=await loadMeta(current.signal);if(generation!==sequence)return;
+          pagesMeta=meta.found;metadataComplete=meta.complete;ranking(data.ausmalbild_visits);
+          node("meta-status").hidden=meta.complete;node("meta-status").textContent="Some page titles could not be loaded. Visit counts are available; refresh to try again.";
+        }catch(_){if(generation===sequence)node("meta-status").textContent="Page titles could not be loaded. Visit counts are available; refresh to try again.";}
+      }
     }catch(_){if(generation===sequence){clear();node("status").textContent="Could not load GoatCounter traffic. Refresh to try again; unavailable data is not zero.";}}
     finally{clearTimeout(timer);if(generation===sequence){node("refresh").disabled=false;node("days").disabled=false;}}
   }
@@ -2055,3 +2110,4 @@ window.AdminClassification={audit:audit,validate:validate,totals:totals,manifest
 </script>
 </body>
 </html>
+

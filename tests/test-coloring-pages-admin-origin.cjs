@@ -23,6 +23,7 @@ function harness(route="overview"){
  const context={currentRoute:route,window:{},Intl,AbortController,setTimeout,clearTimeout,Map,document:{querySelector(selector){const key=selector.slice(13,-1);assert.ok(nodes[key],selector);return nodes[key];},createElement(){return new Element();},createElementNS(){return new Element();}},fetch:async(url,options)=>{
    calls.push({url,options});
    if(/^\/api\/analytics\/origin\?days=/.test(url)){if(response.promise)return response.promise;return{ok:response.ok,json:async()=>response.data};}
+   if(url==="/api/catalog"&&catalog.promise)return catalog.promise;
    if(url==="/api/catalog")return{ok:catalog.ok,json:async()=>catalog.data};
    if(url==="/api/archive")return{ok:archive.ok,json:async()=>archive.data};
    throw new Error("unexpected URL "+url);
@@ -38,13 +39,13 @@ function pageCells(h){
  const h=harness();assert.equal(h.calls.length,0,"lazy report");await h.open("stats");assert.equal(h.calls.length,0);
  await h.open("traffic");assert.equal(h.nodes.total.textContent,"6");assert.equal(h.nodes.home.textContent,"1");assert.equal(h.nodes.coloring.textContent,"5");assert.equal(h.nodes.pages.textContent,"1");
  assert.deepEqual(pageCells(h),{title:"Kleiner Traktor",id:"ID: 0123456",visits:"5",share:"100%"});
- assert.ok(h.nodes.trend.children.length>=2);const shortLabels=h.nodes.trend.children.filter(child=>child.attributes.class==="traffic-trend-label");assert.equal(shortLabels.length,1);assert.deepEqual(shortLabels.map(label=>label.textContent),["6"]);assert.equal(h.nodes.referrers.children.length,1);assert.equal(h.nodes.campaigns.children.length,1);
+ assert.ok(h.nodes.trend.children.length>=2);assert.deepEqual(h.nodes["y-axis"].children.map(n=>n.textContent),["6","3","0"]);assert.deepEqual(h.nodes["x-axis"].children.map(n=>n.textContent),["27 Oct","30 Oct","2 Nov"]);assert.match(h.nodes.trend.attributes["aria-label"],/2026-10-27 to 2026-11-02 UTC/);assert.equal(h.nodes.referrers.children.length,1);assert.equal(h.nodes.campaigns.children.length,1);
  assert.equal(h.nodes.locations.children.length,1);assert.equal(h.nodes.browsers.children.length,1);assert.equal(h.nodes.systems.children.length,1);assert.equal(h.nodes.sizes.children.length,1);
  assert.equal(h.nodes.daily.children.length,7);assert.match(h.nodes.daily.children[6].children[0].textContent,/incomplete/);
  assert.match(h.nodes.status.textContent,/UTC.*Snapshot/);assert.equal(h.nodes.content.hidden,false);
 
  h.set({ok:true,data:report(7,4,1,"7654321")});await h.refresh();
- assert.deepEqual(pageCells(h),{title:"Alter Schneemann",id:"ID: 7654321",visits:"4",share:"100%"},"archive title");
+ assert.deepEqual(pageCells(h),{title:"Alter Schneemann",id:"ID: 7654321 · Archived",visits:"4",share:"100%"},"archive title");
 
  h.set({ok:true,data:report(7,2,1,"1111111")});await h.refresh();
  assert.deepEqual(pageCells(h),{title:"Unknown historical page",id:"ID: 1111111",visits:"2",share:"100%"},"unknown historical ID fallback");
@@ -55,7 +56,7 @@ function pageCells(h){
  h.set({ok:false,data:{status:"busy"}});await h.refresh();assert.match(h.nodes.status.textContent,/shortly/);
  h.set({ok:false,data:{status:"unavailable"}});await h.refresh();assert.match(h.nodes.status.textContent,/not zero/);
  h.set({ok:true,data:report(1,0,0)});await h.change(1);assert.equal(h.nodes.total.textContent,"0");assert.equal(h.nodes.empty.hidden,false);assert.equal(h.nodes.content.hidden,false);assert.equal(h.nodes.trend.children.filter(child=>child.attributes.class==="traffic-trend-label").length,0);
- h.set({ok:true,data:report(365,5)});await h.change(365);assert.equal(h.nodes.daily.children.length,365);const longLabels=h.nodes.trend.children.filter(child=>child.attributes.class==="traffic-trend-label");assert.equal(longLabels.length,1);assert.equal(longLabels[0].textContent,"6");
+ h.set({ok:true,data:report(365,5)});await h.change(365);assert.equal(h.nodes.daily.children.length,365);assert.equal(h.nodes["x-axis"].children.length,3);assert.match(h.nodes["x-axis"].children[0].textContent,/25/);assert.equal(h.nodes["y-axis"].children[0].textContent,"6");
  const malformed=report(365,5);malformed.pages[0].page_id="<img onerror=evil>";
  h.set({ok:true,data:malformed});await h.refresh();assert.equal(h.nodes.content.hidden,true);assert.equal(h.nodes.ranking.children.length,0);
  const inconsistent=report(365,5);inconsistent.total=7;h.set({ok:true,data:inconsistent});await h.refresh();assert.equal(h.nodes.content.hidden,true);
@@ -64,12 +65,48 @@ function pageCells(h){
  assert.equal(h.nodes.total.textContent,"3");assert.equal(h.nodes.days.disabled,false);assert.equal(h.nodes.refresh.disabled,false);
  assert.ok(h.calls.every(({url,options})=>(/^\/api\/analytics\/origin\?days=(1|7|30|365)$/.test(url)||url==="/api/catalog"||url==="/api/archive")&&options.method==="GET"&&options.redirect==="error"&&options.headers["X-Ausmalwiese-Admin"]==="1"));
  assert.ok(!script.includes("innerHTML"));assert.ok(!script.includes("localStorage"));
+
+ // Catalog entries omit thumb in normal API responses. Derive only from a valid published ID.
+ const meta=harness();await meta.open("traffic");
+ let wrap=meta.nodes.ranking.children[0].children[0].children[0];
+ assert.equal(wrap.children[0].src,"https://ausmalwiese.de/media/0123456/thumb.webp");
+ assert.equal(wrap.children[1].children[0].href,"https://ausmalwiese.de/detail.html?id=0123456");
+ wrap.children[0].listeners.error();assert.equal(wrap.children[0].hidden,true,"broken thumbnail is hidden");
+ meta.setCatalog({ok:true,data:{entries:[{id:"0123456",title:"<img onerror=evil>",thumb:"https://evil.invalid/x"}]}});await meta.refresh();
+ assert.equal(pageCells(meta).title,"<img onerror=evil>","title stays text");
+ assert.equal(meta.nodes.ranking.children[0].children[0].children[0].children[0].src,"https://ausmalwiese.de/media/0123456/thumb.webp");
+ meta.setCatalog({ok:false,data:null});meta.setArchive({ok:false,data:null});await meta.refresh();
+ assert.equal(meta.nodes.total.textContent,"6");assert.equal(meta.nodes.content.hidden,false);
+ assert.equal(pageCells(meta).title,"Page title unavailable");assert.equal(meta.nodes["meta-status"].hidden,false);
+ assert.match(meta.nodes["meta-status"].textContent,/Visit counts are available/);
+ // A slow optional title request must not delay the validated metrics and chart.
+ let finishMeta;meta.setCatalog({promise:new Promise(r=>finishMeta=r)});
+ const pending=meta.refresh();for(let i=0;i<12;i++)await Promise.resolve();
+ assert.equal(meta.nodes.content.hidden,false);assert.equal(meta.nodes.total.textContent,"6");
+ assert.match(meta.nodes["meta-status"].textContent,/Loading page titles/);assert.equal(meta.nodes.days.disabled,false);assert.equal(meta.nodes.refresh.disabled,false);
+ meta.set({ok:true,data:report(1,0,3)});await meta.change(1);
+ assert.equal(meta.nodes.empty.hidden,false);assert.match(meta.nodes.empty.textContent,/homepage/);assert.equal(meta.nodes["ranking-wrap"].hidden,true);
+ finishMeta({ok:true,json:async()=>({entries:[]})});await pending;
+ assert.equal(meta.nodes.total.textContent,"3","late metadata cannot replace the new report");
+ // Unknown data is named honestly and never converted into a fabricated browser or location.
+ const missing=report();missing.locations=[{label:"(unknown)",visits:6}];missing.sizes=[{label:"0",visits:6}];missing.browsers=[];
+ const dim=harness();dim.set({ok:true,data:missing});await dim.open("traffic");
+ assert.equal(dim.nodes.locations.children[0].children[0].textContent,"Not recorded");
+ assert.equal(dim.nodes.sizes.children[0].children[0].textContent,"Not recorded");assert.equal(dim.nodes["browsers-empty"].hidden,false);
+ // Unsorted valid input must still render the most-visited page first.
+ const ranked=report(7,6,0);ranked.pages=[{page_id:"0000001",visits:1},{page_id:"0000002",visits:5}];
+ dim.set({ok:true,data:ranked});await dim.refresh();assert.equal(pageCells(dim).id,"ID: 0000002");
+ // Pagination preserves the denominator across the complete report.
+ const many=report(7,30,0);many.pages=Array.from({length:30},(_,i)=>({page_id:String(i+1).padStart(7,"0"),visits:1}));
+ dim.set({ok:true,data:many});await dim.refresh();assert.equal(dim.nodes.ranking.children.length,25);assert.equal(dim.nodes.more.hidden,false);
+ dim.nodes.more.listeners.click();assert.equal(dim.nodes.ranking.children.length,30);assert.equal(dim.nodes.more.hidden,true);assert.equal(pageCells(dim).share,"3.3%");
  const deep=harness("traffic");for(let i=0;i<25;i++)await Promise.resolve();assert.equal(deep.nodes.total.textContent,"6");assert.equal(pageCells(deep).title,"Kleiner Traktor");
  assert.ok(!html.includes('data-page="origin"'),"no separate GoatCounter route");
  assert.ok(!html.includes('data-nav="origin"'),"no separate GoatCounter navigation");
  assert.ok(!html.includes("/api/analytics/traffic?days=7"),"Traffic has no Cloudflare analytics call");
  assert.match(html,/Recognizable bots and crawlers are filtered/);
- assert.match(html,/Documented GoatCounter aggregate dimensions/);
+ assert.match(html,/Details may be missing when they were not supplied/);
  assert.ok(!html.includes("HTTP requests in the last 7 days"));
  console.log("GoatCounter Traffic UI: documented API dimensions, trend, titles, safe aggregates and stale-result rejection PASS");
 })().catch(error=>{console.error(error);process.exitCode=1;});
+
