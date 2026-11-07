@@ -224,6 +224,14 @@
       ],
       [
         "python3",
+        "./tests/test-ausmalwiese-goatcounter-household-waf-v1.py"
+      ],
+      [
+        "python3",
+        "./tests/test-ausmalwiese-goatcounter-household-waf-install-v1.py"
+      ],
+      [
+        "python3",
         "./tests/test-ausmalwiese-goatcounter-simple-evidence-v1.py"
       ],
       [
@@ -420,6 +428,18 @@
       ],
       [
         "python3",
+        "./tests/test-ausmalwiese-stats-legacy-id-migration-v1.py"
+      ],
+      [
+        "python3",
+        "./tests/test-ausmalwiese-stats-legacy-id-runtime-v1.py"
+      ],
+      [
+        "python3",
+        "./tests/test-ausmalwiese-stats-legacy-id-runtime-installer-v1.py"
+      ],
+      [
+        "python3",
         "./tests/test-ausmalwiese-stats-gate-a-d1-runtime-v1.py"
       ],
       [
@@ -465,6 +485,14 @@
       [
         "python3",
         "./tests/test-coloring-pages-admin-topics-1294.py"
+      ],
+      [
+        "python3",
+        "./tests/test-ausmalwiese-catalog-classification-apply-v1.py"
+      ],
+      [
+        "python3",
+        "./tests/test-ausmalwiese-catalog-classification-review-to-apply-v1.py"
       ]
     ],
     "hermes-cv": [

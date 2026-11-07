@@ -8,6 +8,18 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import ausmalwiese_goatcounter_simple_readiness_v1 as m
 
+
+def trusted_ip():
+    return {
+        "tunnel_peer": "verified_loopback_only",
+        "host_header": "verified_pinned_vhost",
+        "forwarded_headers": "trusted_proxy_overwrites_untrusted_values",
+        "remote_addr": "verified_real_client_after_v2_7_0_processing",
+        "spoof_test": "synthetic_spoof_rejected",
+        "forwarded_proto": "verified_https",
+    }
+
+
 def sample():
     return {
         "schema_version": 1,
@@ -23,20 +35,28 @@ def sample():
             "worker_routes": "verified_no_count_interception",
             "worker_custom_domains": "verified_no_count_interception",
         },
-        "ip": {
-            "tunnel_peer": "verified_loopback_only",
-            "host_header": "verified_pinned_vhost",
-            "forwarded_headers": "trusted_proxy_overwrites_untrusted_values",
-            "remote_addr": "verified_real_client_after_v2_7_0_processing",
-            "spoof_test": "synthetic_spoof_rejected",
-            "forwarded_proto": "verified_https",
-        },
+        "ip": trusted_ip(),
         "privacy": {
             "approved_collect": 130,
             "notice": "reviewed_actual_processing_flow",
             "frontend": "off",
         },
     }
+
+
+def household():
+    return {
+        "schema_version": 1,
+        "ip": trusted_ip(),
+        "egress": {"ipv4": "shared_stable_exact", "ipv6": "absent"},
+        "mutation": {
+            "target": "goatcounter_site_settings",
+            "field": "ignore_ips",
+            "preserve_other_settings": True,
+            "direct_db_edit": False,
+        },
+    }
+
 
 class ReadinessTests(unittest.TestCase):
     def test_clean_synthetic_only(self):
@@ -131,6 +151,95 @@ class ReadinessTests(unittest.TestCase):
         e["service"]["state"] = "UNTRUSTED_VISITOR_DATA"
         self.assertEqual(m.evaluate(e), "STOP_SERVICE_METADATA")
         self.assertNotIn("UNTRUSTED_VISITOR_DATA", m.evaluate(e))
+
+
+class HouseholdExclusionTests(unittest.TestCase):
+    def test_stable_shared_ipv4_is_native_candidate(self):
+        self.assertEqual(m.evaluate_household_exclusion(household()),
+                         "PASS_HOUSEHOLD_EXCLUSION_SOURCE_ONLY")
+
+    def test_stable_exact_ipv6_set_is_native_candidate(self):
+        e = household()
+        e["egress"] = {"ipv4": "absent", "ipv6": "stable_exact_set"}
+        self.assertEqual(m.evaluate_household_exclusion(e),
+                         "PASS_HOUSEHOLD_EXCLUSION_SOURCE_ONLY")
+
+    def test_dynamic_addresses_fail_closed(self):
+        for field, value, code in (
+            ("ipv4", "dynamic_or_unknown", "STOP_DYNAMIC_IPV4"),
+            ("ipv6", "rotating_or_unknown", "STOP_DYNAMIC_IPV6"),
+        ):
+            e = household()
+            e["egress"][field] = value
+            with self.subTest(field=field):
+                self.assertEqual(m.evaluate_household_exclusion(e), code)
+
+    def test_requires_reused_client_ip_trust_contract(self):
+        for field, value in (
+            ("tunnel_peer", "unverified"),
+            ("forwarded_headers", "client_header_forwarded_unchanged"),
+            ("spoof_test", "spoof_accepted"),
+        ):
+            e = household()
+            e["ip"][field] = value
+            with self.subTest(field=field):
+                self.assertEqual(m.evaluate_household_exclusion(e), "STOP_IP_TRUST")
+
+    def test_mutation_contract_is_ignore_ips_only(self):
+        for field, value in (
+            ("target", "database"),
+            ("field", "collect"),
+            ("preserve_other_settings", False),
+            ("direct_db_edit", True),
+        ):
+            e = household()
+            e["mutation"][field] = value
+            with self.subTest(field=field):
+                self.assertEqual(m.evaluate_household_exclusion(e),
+                                 "STOP_MUTATION_CONTRACT")
+
+    def test_exact_ip_validation_rejects_prefixes_and_noncanonical_forms(self):
+        self.assertTrue(m.exact_ignore_ips_valid([
+            "8.8.8.8", "2606:4700:4700::1111"]))
+        for values in (
+            ["8.8.8.0/24"],
+            ["2606:4700:4700::/48"],
+            ["2606:4700:4700:0:0:0:0:1111"],
+            ["fe80::1%eth0"],
+            ["127.0.0.1"],
+            ["8.8.8.8", "8.8.8.8"],
+            [],
+            "8.8.8.8",
+        ):
+            with self.subTest(values=values):
+                self.assertFalse(m.exact_ignore_ips_valid(values))
+
+    def test_exact_matching_is_coverage_not_prefix_matching(self):
+        self.assertTrue(m.exact_ignore_ips_cover(
+            ["8.8.8.8"],
+            ["8.8.8.8", "2606:4700:4700::1111"],
+        ))
+        self.assertFalse(m.exact_ignore_ips_cover(
+            ["8.8.4.4"],
+            ["8.8.8.8", "2606:4700:4700::1111"],
+        ))
+
+    def test_household_result_never_contains_address_or_secret(self):
+        e = household()
+        e["secret"] = "CANARY_SECRET"
+        self.assertEqual(m.evaluate_household_exclusion(e), "STOP_HOUSEHOLD_SCHEMA")
+        out = m.evaluate_household_exclusion(household())
+        self.assertNotIn("8.8.8.8", out)
+        self.assertNotIn("CANARY_SECRET", out)
+
+    def test_no_egress_or_unknown_shape_stops(self):
+        e = household()
+        e["egress"] = {"ipv4": "absent", "ipv6": "absent"}
+        self.assertEqual(m.evaluate_household_exclusion(e), "STOP_NO_EGRESS")
+        e = household()
+        e["egress"]["ipv6"] = "whole_prefix"
+        self.assertEqual(m.evaluate_household_exclusion(e), "STOP_EGRESS")
+
 
 if __name__ == "__main__":
     unittest.main()

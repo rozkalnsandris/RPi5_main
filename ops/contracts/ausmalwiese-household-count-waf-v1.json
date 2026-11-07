@@ -1,0 +1,98 @@
+{
+  "credentials": {
+    "dedicated_zone_secret_required": true,
+    "fixed_root_only_path": "/etc/rpi5-secrets/cloudflare/ausmalwiese-zone-waf-writer.json",
+    "reuse_tunnel_credentials": false,
+    "zone_name_must_match": "ausmalwiese.de",
+    "zone_read_required": true,
+    "zone_waf_edit_required": true,
+    "reuse_access_worker_d1_credentials": false,
+    "zone_waf_write_required": true,
+    "provisioning_transport": "hidden-local-controlling-tty-only",
+    "provisioning_source_implemented": true,
+    "provisioning_executed": false
+  },
+  "gates": {
+    "cloudflare_mutation_separate_authorization": true,
+    "credential_provision_separate_authorization": true,
+    "merge_separate_authorization": true,
+    "no_live_in_this_pr": true,
+    "operator_install_separate_source_and_authorization": true,
+    "protected_household_discovery_separate_authorization": true,
+    "operator_install_separate_authorization": true,
+    "no_install_in_this_pr": true,
+    "no_provisioning_in_this_pr": true
+  },
+  "hosts": [
+    "ausmalwiese.de",
+    "www.ausmalwiese.de"
+  ],
+  "installed_operator": {
+    "path": "/usr/local/sbin/rpi5-ausmalwiese-household-waf",
+    "release": "/usr/local/libexec/rpi5-ausmalwiese-household-waf/release.json",
+    "exact_release_required_for_protected_modes": true,
+    "installer_in_this_outcome": true,
+    "installer_source": "scripts/install-ausmalwiese-goatcounter-household-waf-v1.py",
+    "installer_source_implemented": true,
+    "install_executed": false,
+    "first_install_only": true
+  },
+  "path": "/count",
+  "phase": "http_request_firewall_custom",
+  "privacy": {
+    "cloudflare_rule_stores_address_material_if_live_approved": true,
+    "github_raw_household_address_storage": false,
+    "sanitized_receipts_only": true
+  },
+  "provider": {
+    "absent_entrypoint_mutation": "POST /zones/{zone_id}/rulesets",
+    "existing_entrypoint_mutation": "POST /zones/{zone_id}/rulesets/{ruleset_id}/rules",
+    "forbidden": [
+      "PUT",
+      "PATCH",
+      "DELETE",
+      "retry",
+      "rollback",
+      "existing-rule-replacement"
+    ],
+    "free_plan_conservative_rule_capacity": 5,
+    "maximum_writes": 1,
+    "post_write": "GET entrypoint and verify target plus semantic preservation of prior rules",
+    "preflight": [
+      "GET /zones/{zone_id}",
+      "GET /zones/{zone_id}/rulesets/phases/http_request_firewall_custom/entrypoint"
+    ],
+    "zone_level": true
+  },
+  "references": [
+    "https://developers.cloudflare.com/waf/custom-rules/",
+    "https://developers.cloudflare.com/waf/custom-rules/create-api/",
+    "https://developers.cloudflare.com/ruleset-engine/rules-language/values/",
+    "https://developers.cloudflare.com/ruleset-engine/rules-language/fields/reference/ip.src/"
+  ],
+  "rule_action": "block",
+  "rule_ref": "ausmalwiese-household-goatcounter-exclusion-v1",
+  "schema": "rozkalns.rpi5-main.ausmalwiese-household-count-waf.v1",
+  "source_input": {
+    "accepted": [
+      "canonical-public-ipv4",
+      "canonical-public-ipv6",
+      "canonical-public-ipv4-cidr-prefixlen-24-to-32",
+      "canonical-public-ipv6-cidr-prefixlen-48-to-128"
+    ],
+    "forbidden": [
+      "chat",
+      "cli-arguments",
+      "environment",
+      "stdin",
+      "github",
+      "logs",
+      "private-or-special-addresses",
+      "overbroad-prefixes"
+    ],
+    "maximum_entries": 8,
+    "transport": "hidden-local-controlling-tty-only"
+  },
+  "status": "source-ready-not-deployed",
+  "zone": "ausmalwiese.de"
+}

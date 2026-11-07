@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "status": "SOURCE_ONLY_INSTALLABLE_RUNTIME_PROVIDER_REQUIRED_NO_LIVE",
+  "issue": 1417,
+  "repository": "rozkalnsandris/RPi5_main",
+  "runtime_entry": "/usr/local/sbin/rpi5-ausmalwiese-stats-legacy-id-d1-migrate",
+  "source_dependencies": {
+    "planner_path": "scripts/ausmalwiese_stats_legacy_id_migration_v1.py",
+    "planner_blob": "fb0c39fd552ec55e3fbb4310fe70dfee42e4e1c4",
+    "migration_contract_path": "ops/contracts/ausmalwiese-stats-legacy-id-migration-v1.json",
+    "migration_contract_blob": "c571dc6efc702ecf5f933aa58f3f7a59e5db02e9",
+    "aliases_path": "ops/vendor/coloring-pages/legacy-id-aliases-457.json",
+    "aliases_blob": "2e20a2a7a7e716274934a0eb662091150ef55e7f"
+  },
+  "d1": {
+    "binding": "DB",
+    "database_name": "coloring-pages-stats-v1",
+    "database_id": "f8ac8f1d-a230-4bc4-af13-557c1b91b273",
+    "api_host": "api.cloudflare.com",
+    "api_path_template": "/accounts/{account_id}/d1/database/f8ac8f1d-a230-4bc4-af13-557c1b91b273/query",
+    "mutation_batch_entries": 6,
+    "read_batch_entries": 24
+  },
+  "credential_provider": {
+    "status": "REQUIRED_NOT_ESTABLISHED",
+    "path": "/usr/local/libexec/rpi5-ausmalwiese-stats-d1-credentials-v1",
+    "provider_sha256": null,
+    "required_capabilities": [
+      "D1 Read",
+      "D1 Write"
+    ]
+  },
+  "transport": {
+    "verified_https": true,
+    "redirects": false,
+    "ambient_proxy": false,
+    "automatic_retries": 0,
+    "timeout_seconds": 12,
+    "max_response_bytes": 1048576
+  },
+  "confirmation": "OWNER-AUTHORIZED-STATS-LEGACY-ID-D1-MIGRATION",
+  "actions": {
+    "install": false,
+    "credential_read": false,
+    "cloudflare_request": false,
+    "d1_read": false,
+    "d1_write": false,
+    "rpi5_content_write": false,
+    "service_lifecycle": false,
+    "merge": false,
+    "live": false,
+    "retry": false,
+    "rollback": false,
+    "cleanup": false
+  }
+}
