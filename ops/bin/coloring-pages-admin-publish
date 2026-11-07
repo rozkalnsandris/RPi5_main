@@ -948,7 +948,7 @@ def write_json_child(root: Path, expected_name: str, payload: dict, *, trusted_r
     target_prefix = proc_root.rstrip(os.sep) + os.sep
     if not target_path.startswith(target_prefix) or os.path.dirname(target_path) != proc_root:
         os.close(root_fd)
-        stop("state file path escapes directory")
+        raise Stop("state file path escapes directory")
     temp_path = os.path.join(proc_root, ".admin-json-" + secrets.token_hex(8) + ".tmp")
     data = (json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode()
     try:
