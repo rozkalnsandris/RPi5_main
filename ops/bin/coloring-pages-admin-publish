@@ -991,7 +991,7 @@ def validate_staged_page_name(value) -> str:
     return normalized
 
 
-def select_existing_child(root: Path, expected_name: str, *, directory: bool):
+def select_existing_child_fd(root_fd: int, expected_name: str, *, directory: bool):
     if (
         not isinstance(expected_name, str)
         or not expected_name
@@ -999,6 +999,22 @@ def select_existing_child(root: Path, expected_name: str, *, directory: bool):
         or os.path.basename(expected_name) != expected_name
     ):
         stop("storage child name is invalid")
+    matches = [name for name in os.listdir(root_fd) if name == expected_name]
+    if not matches:
+        return None
+    if len(matches) != 1:
+        stop("storage child match is ambiguous")
+    selected = matches[0]
+    st = os.stat(selected, dir_fd=root_fd, follow_symlinks=False)
+    if directory:
+        if not stat.S_ISDIR(st.st_mode):
+            stop("storage child is not a directory")
+    elif not stat.S_ISREG(st.st_mode):
+        stop("storage child is not a regular file")
+    return selected, st
+
+
+def select_existing_child(root: Path, expected_name: str, *, directory: bool):
     flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
     try:
         root_fd = os.open(root, flags)
@@ -1007,19 +1023,7 @@ def select_existing_child(root: Path, expected_name: str, *, directory: bool):
     except OSError:
         stop("storage root is unavailable")
     try:
-        matches = [name for name in os.listdir(root_fd) if name == expected_name]
-        if not matches:
-            return None
-        if len(matches) != 1:
-            stop("storage child match is ambiguous")
-        selected = matches[0]
-        st = os.stat(selected, dir_fd=root_fd, follow_symlinks=False)
-        if directory:
-            if not stat.S_ISDIR(st.st_mode):
-                stop("storage child is not a directory")
-        elif not stat.S_ISREG(st.st_mode):
-            stop("storage child is not a regular file")
-        return selected, st
+        return select_existing_child_fd(root_fd, expected_name, directory=directory)
     finally:
         os.close(root_fd)
 
@@ -1273,8 +1277,12 @@ def inspect_delete_directory(root: Path, page_id: str) -> dict:
     except OSError:
         stop("delete root is unavailable")
     try:
+        selected = select_existing_child_fd(root_fd, page_id, directory=True)
+        if selected is None:
+            stop("delete target directory is unavailable")
+        target_name, _selected_st = selected
         try:
-            target_fd = os.open(page_id, flags, dir_fd=root_fd)
+            target_fd = os.open(target_name, flags, dir_fd=root_fd)
         except OSError:
             stop("delete target directory is unavailable")
         try:
@@ -1287,7 +1295,7 @@ def inspect_delete_directory(root: Path, page_id: str) -> dict:
             total = 0
             files = []
             for name in names:
-                if not name or "/" in name or "\\" in name or name in {".", ".."}:
+                if not name or "/" in name or "\" in name or name in {".", ".."}:
                     stop("delete target filename is unsafe")
                 item_st = os.stat(name, dir_fd=target_fd, follow_symlinks=False)
                 if (
@@ -1343,7 +1351,11 @@ def delete_validated_directory(root: Path, page_id: str, inventory: dict) -> Non
     flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
     root_fd = os.open(root, flags)
     try:
-        target_fd = os.open(page_id, flags, dir_fd=root_fd)
+        selected = select_existing_child_fd(root_fd, page_id, directory=True)
+        if selected is None:
+            stop("delete target changed after preflight")
+        target_name, _selected_st = selected
+        target_fd = os.open(target_name, flags, dir_fd=root_fd)
         try:
             target_st = os.fstat(target_fd)
             if (target_st.st_dev, target_st.st_ino) != (inventory["dev"], inventory["ino"]):
@@ -1366,10 +1378,10 @@ def delete_validated_directory(root: Path, page_id: str, inventory: dict) -> Non
                     stop("delete target file changed after preflight")
             for item in inventory["files"]:
                 os.unlink(item["name"], dir_fd=target_fd)
-            current = os.stat(page_id, dir_fd=root_fd, follow_symlinks=False)
+            current = os.stat(target_name, dir_fd=root_fd, follow_symlinks=False)
             if (current.st_dev, current.st_ino) != (inventory["dev"], inventory["ino"]):
                 stop("delete target directory changed before removal")
-            os.rmdir(page_id, dir_fd=root_fd)
+            os.rmdir(target_name, dir_fd=root_fd)
         finally:
             os.close(target_fd)
     finally:
