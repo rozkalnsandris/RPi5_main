@@ -481,6 +481,10 @@
       [
         "python3",
         "./tests/test-coloring-pages-admin-topics-1294.py"
+      ],
+      [
+        "python3",
+        "./tests/test-ausmalwiese-catalog-classification-apply-v1.py"
       ]
     ],
     "hermes-cv": [
