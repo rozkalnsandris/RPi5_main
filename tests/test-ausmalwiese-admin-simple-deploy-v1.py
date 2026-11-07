@@ -94,7 +94,7 @@ class Tests(unittest.TestCase):
             self.assertEqual(len(r.calls),1)
 
     def test_wrapper_environment_remains_bounded(self):
-        self.assertEqual(mod.ENV,{"PATH":"/usr/bin:/bin","LANG":"C.UTF-8","LC_ALL":"C.UTF-8"})
+        self.assertEqual(mod.ENV,{"PATH":"/usr/bin:/bin","LANG":"C.UTF-8","LC_ALL":"C.UTF-8","GIT_OPTIONAL_LOCKS":"0"})
         self.assertNotIn("SUDO_UID",mod.ENV)
 
     def test_installer_git_validation_uses_exact_repo_safe_directory(self):
