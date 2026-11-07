@@ -922,19 +922,43 @@ def audit(event: str, level: str = "INFO", **fields) -> None:
         stop("admin diagnostic logging failed")
 
 
-def write_json(path: Path, payload: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    temp = path.with_name("." + path.name + "." + secrets.token_hex(8) + ".tmp")
-    data = (json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode()
-    fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+def write_json_child(root: Path, expected_name: str, payload: dict) -> None:
+    if (
+        not isinstance(expected_name, str)
+        or not expected_name
+        or expected_name in {".", ".."}
+        or os.path.basename(expected_name) != expected_name
+    ):
+        stop("state file name is invalid")
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
     try:
-        with os.fdopen(fd, "wb", buffering=0) as handle:
-            handle.write(data)
-            os.fsync(handle.fileno())
-        os.replace(temp, path)
+        root_fd = os.open(root, flags)
+    except OSError:
+        stop("state directory is unavailable")
+    temp_name = "." + expected_name + "." + secrets.token_hex(8) + ".tmp"
+    data = (json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode()
+    try:
+        fd = os.open(
+            temp_name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+            dir_fd=root_fd,
+        )
+        try:
+            with os.fdopen(fd, "wb", buffering=0, closefd=False) as handle:
+                handle.write(data)
+                os.fsync(handle.fileno())
+        finally:
+            os.close(fd)
+        os.replace(temp_name, expected_name, src_dir_fd=root_fd, dst_dir_fd=root_fd)
+        os.fsync(root_fd)
     finally:
-        if os.path.lexists(temp):
-            os.unlink(temp)
+        try:
+            os.unlink(temp_name, dir_fd=root_fd)
+        except FileNotFoundError:
+            pass
+        finally:
+            os.close(root_fd)
 
 
 def read_json_child(root: Path, expected_name: str, limit: int = MAX_JSON, *, required_mode: int | None = None):
@@ -1893,11 +1917,11 @@ def initial_steps() -> list[dict]:
 
 
 def update_job(job_id: str, mutate) -> dict:
-    path = JOBS / job_id / "job.json"
-    payload = read_json(path)
+    job_dir = existing_storage_dir(JOBS, job_id)
+    payload = read_json(job_dir / "job.json")
     mutate(payload)
     payload["updated_at"] = int(time.time())
-    write_json(path, payload)
+    write_json_child(job_dir, "job.json", payload)
     return payload
 
 
@@ -1964,7 +1988,7 @@ def reconcile_interrupted_jobs() -> int:
                 step["status"] = "failed"
                 step["finished_at"] = now
                 break
-        write_json(path, payload)
+        write_json_child(path.parent, "job.json", payload)
         audit(
             "stale_job_reconciled",
             level="WARNING",
@@ -2932,11 +2956,11 @@ class Handler(BaseHTTPRequestHandler):
                 "catalog_before_sha256": current_sha256,
                 "entry": entry,
             }
-            write_json(record_path, prepared)
+            write_json_child(ARCHIVE, f"{page_id}.json", prepared)
             del catalog[indexes[0]]
             new_sha256 = write_catalog(catalog, current_sha256)
             prepared.update(state="archived", catalog_after_sha256=new_sha256)
-            write_json(record_path, prepared)
+            write_json_child(ARCHIVE, f"{page_id}.json", prepared)
             audit(
                 "catalog_archive",
                 level="WARNING",
@@ -2988,7 +3012,7 @@ class Handler(BaseHTTPRequestHandler):
                 restore_catalog_before_sha256=current_sha256,
                 restore_catalog_after_sha256=new_sha256,
             )
-            write_json(archive_path(page_id), record)
+            write_json_child(ARCHIVE, f"{page_id}.json", record)
             audit(
                 "catalog_restore",
                 page_id=page_id,
@@ -3067,7 +3091,7 @@ class Handler(BaseHTTPRequestHandler):
                     "total_bytes": deleted_byte_count,
                 },
             )
-            write_json(archive_path(page_id), record)
+            write_json_child(ARCHIVE, f"{page_id}.json", record)
             audit(
                 "catalog_delete_started",
                 level="WARNING",
@@ -3088,7 +3112,7 @@ class Handler(BaseHTTPRequestHandler):
                 deleted_file_count=deleted_file_count,
                 deleted_byte_count=deleted_byte_count,
             )
-            write_json(archive_path(page_id), record)
+            write_json_child(ARCHIVE, f"{page_id}.json", record)
             audit(
                 "catalog_delete",
                 level="WARNING",
@@ -3134,7 +3158,7 @@ class Handler(BaseHTTPRequestHandler):
                 os.fsync(out.fileno())
             staged = stage_zip(archive, upload_dir)
             payload = {"schema": "rozkalns.rpi5-main.coloring-pages-admin-upload.v1", "created_at": int(time.time()), **staged}
-            write_json(upload_dir / "upload.json", payload)
+            write_json_child(upload_dir, "upload.json", payload)
         except Exception:
             shutil.rmtree(upload_dir, ignore_errors=True)
             raise
@@ -3194,7 +3218,7 @@ class Handler(BaseHTTPRequestHandler):
                 "updated_at": int(time.time()), "steps": initial_steps(), "results": [],
             }
             audit("job_queued", job_id=job_id, upload_id=upload_id, page_count=len(upload["files"]))
-            write_json(job_dir / "job.json", payload)
+            write_json_child(job_dir, "job.json", payload)
             threading.Thread(target=run_job, args=(job_id,), name="publish-" + job_id[:8], daemon=True).start()
         self.send_json(202, payload)
 
