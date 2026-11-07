@@ -166,3 +166,96 @@ This command must be entered only in an owner-controlled local/SSH terminal with
 6. separate exact one-write WAF creation authorization.
 
 Source merge alone completes none of these LIVE gates.
+
+
+## Existing-rule IPv6 extension source (#1427)
+
+The current LIVE household rule was verified to block the household IPv4 path while
+an IPv6 request to the same exact `/count` path still reached the backend. Issue
+#1427 adds source support for a later, separately authorized IPv6 extension without
+broadening host or path scope.
+
+The reviewed update flow is intentionally distinct from create mode:
+
+1. verify the exact installed release and dedicated zone credential;
+2. `GET /zones/{zone_id}` and require exact `ausmalwiese.de`;
+3. `GET /zones/{zone_id}/rulesets/phases/http_request_firewall_custom/entrypoint`;
+4. require exactly one rule with
+   `ref=ausmalwiese-household-goatcounter-exclusion-v1`;
+5. require that rule to match this operator's exact description, hosts, exact
+   `/count` path, `block` action and enabled state;
+6. recover and validate the incumbent source set from the exact canonical
+   expression;
+7. require at least one incumbent IPv4 source and preserve every incumbent source;
+8. permit only additive canonical public IPv6 exact addresses or CIDRs, with the
+   existing `/48` minimum-prefix guard; no new IPv4 is accepted in update mode;
+9. preflight performs zero writes and emits only source-shape counts;
+10. a separately authorized apply permits exactly one
+    `PATCH /zones/{zone_id}/rulesets/{ruleset_id}/rules/{rule_id}`;
+11. one post-write GET must prove the exact target update and unchanged unrelated
+    rule identities, order and semantics.
+
+There is no POST/PUT/DELETE in update mode. Any error or ambiguity after PATCH
+dispatch is terminal; no retry, rollback or cleanup is authorized by the operator.
+
+The source commands are:
+
+```bash
+sudo -n /usr/local/sbin/rpi5-ausmalwiese-household-waf --update-preflight --expected-main <exact-installed-release-sha>
+```
+
+and, only after a separate exact LIVE authorization:
+
+```bash
+sudo -n /usr/local/sbin/rpi5-ausmalwiese-household-waf --update-apply --expected-main <exact-installed-release-sha> --confirm UPDATE-AUSMALWIESE-HOUSEHOLD-COUNT-WAF
+```
+
+Raw household address material remains hidden local-TTY input only. A future
+protected preflight must prove the intended IPv6 exact address/CIDR set before any
+claim of household-wide IPv6 coverage.
+
+### First replacement of the installed household WAF release
+
+Because the #1422 installer is deliberately first-install-only, #1427 adds
+`scripts/replace-ausmalwiese-goatcounter-household-waf-v1.py` for exactly the
+first reviewed replacement of the installed household WAF operator.
+
+It is pinned to the current incumbent release:
+- source SHA `6abc94ded6b1737beb322ee09ef19c57f1e95794`;
+- operator SHA-256
+  `7ebc7b3e6e79a60334242f2258e11abcef266a063899e7a69ec0f794a9bd59e8`;
+- release metadata SHA-256
+  `3ed4805405a5767faf79fea0aef2bb0c0f33a05646532e32a3d50dd9b6f66889`.
+
+Default mode is read-only. A future replacement must run unprivileged from clean
+exact `main`, stage only the fixed operator and release metadata files, verify
+both, re-verify both incumbents immediately before replacement, then perform only
+the two fixed atomic renames. The dedicated credential file is neither read nor
+modified. Any failure after the first staged write is dispatched is terminal with
+unknown/partial mutation state; there is no retry, rollback or cleanup.
+
+Read-only source preflight form:
+
+```bash
+python3 scripts/replace-ausmalwiese-goatcounter-household-waf-v1.py --expected-main <exact-current-main>
+```
+
+Future apply form, requiring a separate exact LIVE authorization:
+
+```bash
+python3 scripts/replace-ausmalwiese-goatcounter-household-waf-v1.py --expected-main <exact-current-main> --apply --confirm REPLACE-AUSMALWIESE-HOUSEHOLD-WAF-RELEASE
+```
+
+### Gates after #1427 source readiness
+
+Source merge alone authorizes none of the following:
+
+1. protected household IPv6 discovery/evidence;
+2. installed household-WAF release replacement;
+3. Cloudflare update preflight against protected source material;
+4. Cloudflare PATCH;
+5. any secret/credential mutation;
+6. any DNS, Tunnel, Worker, GoatCounter, database or service mutation.
+
+Those remain separate owner gates. End-to-end completion requires a final
+sanitized IPv4+IPv6 `/count` block check plus a non-`/count` control check.

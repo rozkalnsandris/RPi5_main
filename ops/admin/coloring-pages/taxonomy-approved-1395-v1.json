@@ -1,0 +1,261 @@
+{
+  "schema": "ausmalwiese.taxonomy-approved-bundle.v1",
+  "issue": 1395,
+  "proposal_comment_id": 6712760996,
+  "approval_comment_id": 6712767989,
+  "categories": [
+    {
+      "id": "natur",
+      "label": "Natur & Essen"
+    }
+  ],
+  "topics": [
+    {
+      "id": "haustiere",
+      "label": "Haustiere",
+      "icon": "🐾",
+      "kind": "evergreen",
+      "legacy_terms": [
+        "haustier",
+        "haustiere",
+        "hund",
+        "hunde",
+        "katze",
+        "katzen",
+        "kaninchen",
+        "hamster"
+      ]
+    },
+    {
+      "id": "wildtiere",
+      "label": "Wildtiere",
+      "icon": "🦁",
+      "kind": "evergreen",
+      "legacy_terms": [
+        "wildtier",
+        "wildtiere",
+        "löwe",
+        "loewe",
+        "tiger",
+        "elefant",
+        "giraffe",
+        "zebra",
+        "bär",
+        "baer",
+        "fuchs",
+        "wolf"
+      ]
+    },
+    {
+      "id": "drachen",
+      "label": "Drachen",
+      "icon": "🐉",
+      "kind": "evergreen",
+      "legacy_terms": [
+        "drache",
+        "drachen"
+      ]
+    },
+    {
+      "id": "autos",
+      "label": "Autos",
+      "icon": "🚗",
+      "kind": "evergreen",
+      "legacy_terms": [
+        "auto",
+        "autos",
+        "pkw",
+        "cabrio",
+        "sportwagen",
+        "rennwagen",
+        "monstertruck"
+      ]
+    },
+    {
+      "id": "baufahrzeuge",
+      "label": "Baufahrzeuge",
+      "icon": "🚧",
+      "kind": "evergreen",
+      "legacy_terms": [
+        "baufahrzeug",
+        "baufahrzeuge",
+        "bagger",
+        "kran",
+        "radlader",
+        "betonmischer",
+        "kipper",
+        "muldenkipper",
+        "baumaschine"
+      ]
+    },
+    {
+      "id": "einsatzfahrzeuge",
+      "label": "Einsatzfahrzeuge",
+      "icon": "🚒",
+      "kind": "evergreen",
+      "legacy_terms": [
+        "einsatzfahrzeug",
+        "einsatzfahrzeuge",
+        "feuerwehr",
+        "feuerwehrauto",
+        "polizei",
+        "polizeiauto",
+        "rettungswagen",
+        "krankenwagen",
+        "ambulanz"
+      ]
+    },
+    {
+      "id": "deutschland",
+      "label": "Deutschland",
+      "icon": "🇩🇪",
+      "kind": "evergreen",
+      "legacy_terms": [
+        "deutschland",
+        "bundesrepublik",
+        "brandenburger tor"
+      ]
+    },
+    {
+      "id": "wetter",
+      "label": "Wetter",
+      "icon": "🌦️",
+      "kind": "evergreen",
+      "legacy_terms": [
+        "wetter",
+        "regen",
+        "regenschirm",
+        "wolke",
+        "wolken",
+        "gewitter",
+        "blitz",
+        "regenbogen"
+      ]
+    },
+    {
+      "id": "farben",
+      "label": "Farben",
+      "icon": "🎨",
+      "kind": "evergreen",
+      "legacy_terms": [
+        "farbe",
+        "farben",
+        "farbkreis"
+      ]
+    },
+    {
+      "id": "berufe",
+      "label": "Berufe",
+      "icon": "👷",
+      "kind": "evergreen",
+      "legacy_terms": [
+        "beruf",
+        "berufe",
+        "feuerwehrmann",
+        "polizist",
+        "polizistin",
+        "arzt",
+        "ärztin",
+        "lehrer",
+        "lehrerin",
+        "bäcker",
+        "baecker"
+      ]
+    },
+    {
+      "id": "lebensraeume",
+      "label": "Lebensräume",
+      "icon": "🌍",
+      "kind": "evergreen",
+      "legacy_terms": [
+        "lebensraum",
+        "lebensräume",
+        "lebensraeume",
+        "wald",
+        "wiese",
+        "dschungel",
+        "savanne",
+        "wüste",
+        "wueste"
+      ]
+    },
+    {
+      "id": "schulanfang",
+      "label": "Schulanfang",
+      "icon": "🎒",
+      "kind": "seasonal",
+      "active_from": "07-15",
+      "active_to": "09-30",
+      "legacy_terms": [
+        "schulanfang",
+        "einschulung",
+        "schultüte",
+        "schultuete",
+        "erstklässler",
+        "erstklaessler"
+      ]
+    }
+  ],
+  "links": [
+    {
+      "category": "tiere",
+      "topic": "haustiere"
+    },
+    {
+      "category": "tiere",
+      "topic": "wildtiere"
+    },
+    {
+      "category": "figuren",
+      "topic": "drachen"
+    },
+    {
+      "category": "fahrzeuge",
+      "topic": "autos"
+    },
+    {
+      "category": "fahrzeuge",
+      "topic": "baufahrzeuge"
+    },
+    {
+      "category": "fahrzeuge",
+      "topic": "einsatzfahrzeuge"
+    },
+    {
+      "category": "lernen",
+      "topic": "deutschland"
+    },
+    {
+      "category": "natur",
+      "topic": "wetter"
+    },
+    {
+      "category": "lernen",
+      "topic": "farben"
+    },
+    {
+      "category": "lernen",
+      "topic": "berufe"
+    },
+    {
+      "category": "natur",
+      "topic": "lebensraeume"
+    },
+    {
+      "category": "jahreszeiten",
+      "topic": "schulanfang"
+    },
+    {
+      "category": "natur",
+      "topic": "obst"
+    },
+    {
+      "category": "natur",
+      "topic": "gemuese"
+    },
+    {
+      "category": "natur",
+      "topic": "blumen"
+    }
+  ]
+}
