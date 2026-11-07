@@ -166,6 +166,7 @@ def existing_projection(rules: list) -> list[tuple]:
         result.append((
             entry["id"],
             entry.get("ref"),
+            entry.get("description", ""),
             entry["action"],
             entry["expression"],
             entry.get("enabled", True),
@@ -314,6 +315,7 @@ def verify_update(after: dict, before: list[tuple], target_index: int,
     expected_target = (
         before[target_index][0],
         RULE_REF,
+        RULE_DESCRIPTION,
         "block",
         expected["expression"],
         True,
