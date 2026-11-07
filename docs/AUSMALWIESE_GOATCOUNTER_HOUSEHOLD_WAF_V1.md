@@ -101,3 +101,68 @@ Source merge does not authorize Cloudflare or RPi5 mutation. Remaining gates are
 4. one explicit Cloudflare WAF create authorization bound to the reviewed installed release and exact zone/rule operation.
 
 No rule is LIVE until those gates are separately satisfied.
+
+
+## First-install and dedicated credential source (#1422)
+
+The operator source is now paired with a reviewed **first-install-only** source installer:
+`scripts/install-ausmalwiese-goatcounter-household-waf-v1.py`.
+
+The installer does not run automatically. Its default mode is a read-only preflight requiring an unprivileged caller, clean exact `main`, canonical GitHub origin, tracked fixed source, safe root-controlled parent metadata, and absent fixed targets (including dangling symlinks). It captures the operator bytes and exact release metadata before any future mutation.
+
+A future separately authorized install may perform only three fixed `sudo -n` GNU coreutils mutations:
+
+1. create `/usr/local/libexec/rpi5-ausmalwiese-household-waf` as root:root 0700;
+2. install captured operator bytes to `/usr/local/sbin/rpi5-ausmalwiese-household-waf` as root:root 0500;
+3. install captured `release.json` as root:root 0400.
+
+No privileged Python, shell `-c`, caller-selected path/command, overwrite, update, replace, sudoers edit, retry, rollback or cleanup is part of the installer. After the first root write is dispatched, any error/ambiguity is terminal and the installation may be partial.
+
+Read-only source preflight form after a future exact checkout sync:
+
+```bash
+python3 scripts/install-ausmalwiese-goatcounter-household-waf-v1.py --expected-main <exact-current-main>
+```
+
+The future install form exists in source but requires its own exact LIVE authorization:
+
+```bash
+python3 scripts/install-ausmalwiese-goatcounter-household-waf-v1.py --expected-main <exact-current-main> --apply --confirm INSTALL-AUSMALWIESE-HOUSEHOLD-WAF
+```
+
+Merging this source does **not** authorize either command to mutate the host.
+
+### Dedicated Cloudflare credential provisioning
+
+The installed root-owned operator now includes a separately gated `--provision-secret` mode. It requires exact installed-release verification and an already existing private root-owned `/etc/rpi5-secrets/cloudflare` directory. The fixed secret target is:
+
+`/etc/rpi5-secrets/cloudflare/ausmalwiese-zone-waf-writer.json`
+
+The only allowed credential schema is `zone_id`, `zone_name=ausmalwiese.de`, `api_token`. Zone ID and token are accepted only through hidden `getpass` prompts on the local controlling TTY. They are not accepted through chat, GitHub, CLI arguments, environment variables or stdin.
+
+Before any secret-file mutation, provisioning performs GET-only provider checks:
+- exact `ausmalwiese.de` zone identity;
+- the `http_request_firewall_custom` entrypoint, accepting either a valid zone entrypoint or `404`.
+
+Provisioning performs no WAF `POST`, no household IP/CIDR discovery and no rule creation. A successful GET proves only the required read path, **not** Zone WAF Write permission. The owner must separately create/verify a dedicated token scoped only to the `ausmalwiese.de` zone with Zone Read + Zone WAF Write; Tunnel, Access, Worker, D1 or other credentials must not be reused.
+
+The secret file's exclusive `O_EXCL|O_NOFOLLOW` root-only 0600 create is the first and only provisioning mutation. Any error after creation begins is STOP with no automatic retry/rollback/cleanup.
+
+Future provisioning form, only after separately authorized install and credential-provision gates:
+
+```bash
+sudo -n /usr/local/sbin/rpi5-ausmalwiese-household-waf --provision-secret --expected-main <exact-installed-release-sha> --confirm PROVISION-AUSMALWIESE-ZONE-WAF-SECRET
+```
+
+This command must be entered only in an owner-controlled local/SSH terminal with a controlling TTY; credential values themselves must never be pasted into chat.
+
+### Remaining gates after #1422 source merge
+
+1. exact RPi5 checkout sync/read-only installer preflight;
+2. separate first-install LIVE authorization for the fixed three-file installation;
+3. separate owner-local-TTY dedicated credential provisioning authorization;
+4. protected household IP/CIDR discovery/preflight with sanitized output only;
+5. GET-only Cloudflare rule inventory/quota preflight;
+6. separate exact one-write WAF creation authorization.
+
+Source merge alone completes none of these LIVE gates.
