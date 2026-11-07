@@ -25,7 +25,7 @@ def topic(ident, label, icon="x", terms=None, kind="evergreen"):
     return out
 
 
-def fixtures(tmp: Path, additions=None, links=None):
+def fixtures(tmp: Path, additions=None, links=None, category_additions=None):
     public = tmp / "public"
     state = tmp / "state" / "admin-publish"
     jobs = state / "jobs"
@@ -74,6 +74,8 @@ def fixtures(tmp: Path, additions=None, links=None):
         additions = [topic("haustiere", "Haustiere", "🐾", ["haustier", "hund", "katze"])]
     if links is None:
         links = [{"category": "tiere", "topic": "haustiere"}]
+    if category_additions is None:
+        category_additions = []
     hashes = {
         "category_sha256": op.sha256(paths["categories"].read_bytes()),
         "topic_sha256": op.sha256(paths["topics"].read_bytes()),
@@ -85,6 +87,7 @@ def fixtures(tmp: Path, additions=None, links=None):
         "mode": "APPROVED_APPLY",
         "hashes": hashes,
         "revisions": revisions,
+        "categories": category_additions,
         "topics": additions,
         "links": links,
     }
@@ -151,7 +154,7 @@ class Tests(unittest.TestCase):
 
     def test_zero_change_is_noop(self):
         with tempfile.TemporaryDirectory() as td:
-            paths, manifest, _, _ = fixtures(Path(td), [], [])
+            paths, manifest, _, _ = fixtures(Path(td), [], [], [])
             before_topics = paths["topics"].read_bytes(); before_links = paths["links"].read_bytes()
             with self.bind(paths):
                 result = op.execute_apply(manifest["manifest_sha256"])
@@ -238,23 +241,108 @@ class Tests(unittest.TestCase):
                 op.execute_apply(manifest["manifest_sha256"])
             self.assertEqual(paths["topics"].read_bytes(), before)
 
-    def test_second_stage_failure_leaves_first_stage_for_manual_review(self):
+    def test_third_stage_failure_leaves_evidence_for_manual_review(self):
         with tempfile.TemporaryDirectory() as td:
             paths, manifest, _, _ = fixtures(Path(td))
             real_stage = op.stage
             calls = 0
-            def fail_second(path, prefix, data, mode):
+            def fail_third(path, prefix, data, mode):
                 nonlocal calls
                 calls += 1
-                if calls == 2:
-                    raise op.Stop("synthetic second stage failure")
+                if calls == 3:
+                    raise op.Stop("synthetic third stage failure")
                 return real_stage(path, prefix, data, mode)
-            with self.bind(paths), mock.patch.object(op, "stage", side_effect=fail_second):
-                with self.assertRaisesRegex(op.Stop, "synthetic second stage failure"):
+            with self.bind(paths), mock.patch.object(op, "stage", side_effect=fail_third):
+                with self.assertRaisesRegex(op.Stop, "synthetic third stage failure"):
                     op.execute_apply(manifest["manifest_sha256"])
+            self.assertTrue(list(paths["categories"].parent.glob(".categories.taxonomy-expansion.*.tmp")))
             self.assertTrue(list(paths["topics"].parent.glob(".topics.taxonomy-expansion.*.tmp")))
+            self.assertEqual(json.loads(paths["categories"].read_text())["revision"], 4)
             self.assertEqual(json.loads(paths["topics"].read_text())["revision"], 7)
             self.assertEqual(json.loads(paths["links"].read_text())["revision"], 9)
+
+    def test_category_bundle_can_link_new_and_existing_topics(self):
+        with tempfile.TemporaryDirectory() as td:
+            additions = [topic("wetter", "Wetter", "🌦️", ["wetter"])]
+            category_additions = [{"id": "natur", "label": "Natur & Essen"}]
+            links = [
+                {"category": "natur", "topic": "wetter"},
+                {"category": "natur", "topic": "bauernhof"},
+            ]
+            paths, manifest, old_topics, old_links = fixtures(
+                Path(td), additions, links, category_additions
+            )
+            old_categories = json.loads(paths["categories"].read_text())
+            with self.bind(paths):
+                plan = op.public_plan(manifest["manifest_sha256"])
+                result = op.execute_apply(manifest["manifest_sha256"])
+            self.assertEqual(plan["category_ids"], ["natur"])
+            self.assertEqual(plan["topic_ids"], ["wetter"])
+            self.assertEqual(plan["links"], [["natur", "wetter"], ["natur", "bauernhof"]])
+            self.assertEqual(result["status"], "PASS")
+            new_categories = json.loads(paths["categories"].read_text())
+            new_topics = json.loads(paths["topics"].read_text())
+            new_links = json.loads(paths["links"].read_text())
+            self.assertEqual(new_categories["categories"][:-1], old_categories["categories"])
+            self.assertEqual(new_categories["categories"][-1], {"id": "natur", "label": "Natur & Essen"})
+            self.assertEqual(new_categories["revision"], 5)
+            self.assertEqual(new_topics["topics"][:len(old_topics["topics"])], old_topics["topics"])
+            for row in old_links["links"]:
+                self.assertIn(row, new_links["links"])
+            self.assertIn({"category": "natur", "topic": "bauernhof"}, new_links["links"])
+
+    def test_existing_or_duplicate_category_is_rejected(self):
+        with tempfile.TemporaryDirectory() as td:
+            paths, _, _, _ = fixtures(
+                Path(td), [], [], [{"id": "tiere", "label": "Duplicate"}]
+            )
+            doc = json.loads(paths["manifest"].read_text())
+            with self.bind(paths), self.assertRaisesRegex(op.Stop, "category already exists"):
+                op.public_plan(doc["manifest_sha256"])
+        with tempfile.TemporaryDirectory() as td:
+            cats = [{"id": "natur", "label": "Natur & Essen"}, {"id": "natur", "label": "Natur"}]
+            paths, _, _, _ = fixtures(Path(td), [], [], cats)
+            doc = json.loads(paths["manifest"].read_text())
+            with self.bind(paths), self.assertRaisesRegex(op.Stop, "category already exists|duplicates"):
+                op.public_plan(doc["manifest_sha256"])
+
+    def test_existing_topic_link_is_allowed_only_when_new_category_participates(self):
+        with tempfile.TemporaryDirectory() as td:
+            paths, manifest, _, _ = fixtures(
+                Path(td), [], [{"category": "natur", "topic": "bauernhof"}],
+                [{"id": "natur", "label": "Natur & Essen"}]
+            )
+            with self.bind(paths):
+                plan = op.public_plan(manifest["manifest_sha256"])
+            self.assertEqual(plan["links"], [["natur", "bauernhof"]])
+        with tempfile.TemporaryDirectory() as td:
+            paths, _, _, _ = fixtures(
+                Path(td), [], [{"category": "fahrzeuge", "topic": "bauernhof"}], []
+            )
+            doc = json.loads(paths["manifest"].read_text())
+            with self.bind(paths), self.assertRaisesRegex(op.Stop, "must involve"):
+                op.public_plan(doc["manifest_sha256"])
+
+    def test_unsafe_category_mode_blocks_before_mutation(self):
+        with tempfile.TemporaryDirectory() as td:
+            paths, manifest, _, _ = fixtures(
+                Path(td), [], [{"category": "natur", "topic": "bauernhof"}],
+                [{"id": "natur", "label": "Natur & Essen"}]
+            )
+            paths["categories"].chmod(0o600)
+            before = paths["categories"].read_bytes()
+            with self.bind(paths), self.assertRaisesRegex(op.Stop, "categories mode unsafe"):
+                op.execute_apply(manifest["manifest_sha256"])
+            self.assertEqual(paths["categories"].read_bytes(), before)
+
+    def test_interrupted_category_stage_blocks_before_mutation(self):
+        with tempfile.TemporaryDirectory() as td:
+            paths, manifest, _, _ = fixtures(Path(td))
+            (paths["categories"].parent / ".categories.taxonomy-expansion.orphan.tmp").write_bytes(b"x")
+            before = paths["categories"].read_bytes()
+            with self.bind(paths), self.assertRaisesRegex(op.Stop, "interrupted taxonomy staging"):
+                op.execute_apply(manifest["manifest_sha256"])
+            self.assertEqual(paths["categories"].read_bytes(), before)
 
     def test_source_check_is_inert(self):
         with mock.patch("builtins.print") as printed:
