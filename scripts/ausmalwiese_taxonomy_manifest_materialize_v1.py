@@ -295,6 +295,7 @@ def assert_idle() -> None:
 
 
 def acquire_lock():
+    handle = None
     try:
         st = LOCK.lstat()
         if LOCK.is_symlink() or not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
@@ -307,10 +308,16 @@ def acquire_lock():
         fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         return handle
     except BlockingIOError:
+        if handle is not None:
+            handle.close()
         stop("shared publication lock busy")
     except Stop:
+        if handle is not None and not handle.closed:
+            handle.close()
         raise
     except OSError:
+        if handle is not None and not handle.closed:
+            handle.close()
         stop("shared publication lock unavailable")
 
 

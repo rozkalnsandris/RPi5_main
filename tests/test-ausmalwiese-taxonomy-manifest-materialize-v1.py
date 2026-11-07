@@ -188,7 +188,7 @@ class Tests(unittest.TestCase):
             root=Path(td); paths = fixture(root)
             other=root/"other"; other.write_bytes(b"x")
             paths["manifest"].symlink_to(other)
-            with self.bind(paths), self.assertRaisesRegex(mat.Stop, "symlink unsafe"):
+            with self.bind(paths), self.assertRaisesRegex(mat.Stop, "unsafe manifest target"):
                 mat.materialize()
 
     def test_active_job_and_busy_lock_stop_before_write(self):
