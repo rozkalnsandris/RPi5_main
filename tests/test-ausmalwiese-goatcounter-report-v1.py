@@ -37,6 +37,17 @@ class Fixture:
                       {"id": 7, "path": "/origin-detail-request/0123456", "event": False}]
         self.payload = {"more": False, "total": 6,
                         "hits": [self.hit(2, 1), self.hit(3, 3), self.hit(4, 2)]}
+        self.dimensions = {
+            "toprefs": {"more": False, "stats": [
+                {"id": "1", "name": "https://example.org/private/path?x=1", "count": 3, "ref_scheme": "h"},
+                {"id": "2", "name": "", "count": 1, "ref_scheme": "o"},
+                {"id": "3", "name": "profile", "count": 2, "ref_scheme": "c"}]},
+            "campaigns": {"more": False, "stats": [{"id": "1", "name": "profile", "count": 2}]},
+            "locations": {"more": False, "stats": [{"id": "DE", "name": "Germany", "count": 5}]},
+            "browsers": {"more": False, "stats": [{"id": "1", "name": "Firefox", "count": 4}]},
+            "systems": {"more": False, "stats": [{"id": "1", "name": "Android", "count": 3}]},
+            "sizes": {"more": False, "stats": [{"id": "390", "name": "390", "count": 3}]},
+        }
 
     def hit(self, ident, count):
         date = NOW.date() - timedelta(days=self.days - 1)
@@ -60,7 +71,10 @@ class Fixture:
         assert q["include_paths"] == ["2,3,4"]
         assert q["start"] == [(NOW.date() - timedelta(days=self.days - 1)).isoformat() + "T00:00:00Z"]
         assert q["end"] == ["2026-11-02T23:00:00Z"]
-        return copy.deepcopy(self.payload)
+        if target.startswith("/api/v0/stats/hits?"):
+            return copy.deepcopy(self.payload)
+        page = target.split("/api/v0/stats/", 1)[1].split("?", 1)[0]
+        return copy.deepcopy(self.dimensions[page])
 
 
 class ReportTests(unittest.TestCase):
@@ -74,7 +88,7 @@ class ReportTests(unittest.TestCase):
             with self.subTest(days=days):
                 fixture = Fixture(days)
                 result = self.collect(fixture)
-                self.assertEqual((result["version"], result["metric"]), (2, "consent_pageviews"))
+                self.assertEqual((result["version"], result["metric"]), (3, "goatcounter_visits"))
                 self.assertEqual(result["total"], 6)
                 self.assertEqual(result["homepage_visits"], 1)
                 self.assertEqual(result["ausmalbild_visits"], 5)
@@ -82,8 +96,18 @@ class ReportTests(unittest.TestCase):
                                                    {"page_id": "7654321", "visits": 2}])
                 self.assertEqual(len(result["daily"]), days)
                 self.assertEqual(sum(row["visits"] for row in result["daily"]), 6)
+                self.assertEqual(result["referrers"], [
+                    {"label": "https://example.org", "visits": 3},
+                    {"label": "Direct / no referrer", "visits": 1},
+                ])
+                self.assertEqual(result["campaigns"], [{"label": "profile", "visits": 2}])
+                self.assertEqual(result["locations"], [{"label": "Germany", "visits": 5}])
+                self.assertEqual(result["browsers"], [{"label": "Firefox", "visits": 4}])
+                self.assertEqual(result["systems"], [{"label": "Android", "visits": 3}])
+                self.assertEqual(result["sizes"], [{"label": "390", "visits": 3}])
                 self.assertNotIn("PRIVATE", json.dumps(result))
-                self.assertEqual(len(fixture.calls), 6)
+                self.assertNotIn("/private/path", json.dumps(result))
+                self.assertEqual(len(fixture.calls), 12)
 
     def test_365_day_stats_use_bounded_path_batches(self):
         fixture = Fixture(365)
@@ -100,11 +124,16 @@ class ReportTests(unittest.TestCase):
             self.assertTrue(target.startswith("/api/v0/stats/hits?"))
             selected = parse_qs(urlsplit(target).query)["include_paths"][0].split(",")
             self.assertGreater(len(selected), 0)
-            self.assertLessEqual(len(selected), 5)
+            self.assertLessEqual(len(selected), 20)
             queried.extend(selected)
             return {"hits": [], "more": False, "total": 0}
+        original_get = get
+        def get_with_dimensions(target, token, budget):
+            if target.startswith("/api/v0/stats/") and not target.startswith("/api/v0/stats/hits?"):
+                return {"stats": [], "more": False}
+            return original_get(target, token, budget)
         reader = admin.OriginReportReader()
-        reader.get = get
+        reader.get = get_with_dimensions
         report = reader.collect(365, NOW, TOKEN)
         self.assertEqual(report["total"], 0)
         self.assertEqual(report["pages"], [])

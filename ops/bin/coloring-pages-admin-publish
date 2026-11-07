@@ -2072,6 +2072,9 @@ ORIGIN_REPORT_CREDENTIAL = Path(
 )
 CONSENT_PAGE_PATH = re.compile(r"/ausmalbild/([0-9]{7})\Z")
 MAX_SAFE_COUNT = 9007199254740991
+ORIGIN_REPORT_DIMENSIONS = ("toprefs", "campaigns", "locations", "browsers", "systems", "sizes")
+ORIGIN_REPORT_DIMENSION_BATCH = 100
+ORIGIN_REPORT_DIMENSION_LIMIT = 100
 
 
 class OriginReportUnavailable(Exception):
@@ -2116,14 +2119,15 @@ class OriginReportReader:
         self.retry_after = 0.0
 
     def get(self, target, token, budget):
+        dimension_prefixes = tuple("/api/v0/stats/" + name + "?" for name in ORIGIN_REPORT_DIMENSIONS)
         if not (target == "/api/v0/me" or target.startswith("/api/v0/paths?")
-                or target.startswith("/api/v0/stats/hits?")):
+                or target.startswith("/api/v0/stats/hits?") or target.startswith(dimension_prefixes)):
             raise ValueError("unsupported API")
         wait = self.next_request - time.monotonic()
         if wait > 0:
             time.sleep(wait)
         remaining = budget["deadline"] - time.monotonic()
-        if remaining <= 0 or budget["requests"] >= 51:
+        if remaining <= 0 or budget["requests"] >= 64:
             raise ValueError("report budget exceeded")
         budget["requests"] += 1
         # Less than four requests/second, including /me and path pagination.
@@ -2157,6 +2161,73 @@ class OriginReportReader:
             return payload
         finally:
             connection.close()
+
+
+    @staticmethod
+    def dimension_label(page, item):
+        """Reduce one documented GoatCounter HitStat to a browser-safe label."""
+        name = item.get("name")
+        if type(name) is not str or len(name) > 2048:
+            return None
+        if any(unicodedata.category(ch)[0] == "C" for ch in name):
+            return None
+        name = name.strip()
+        if page == "toprefs":
+            scheme = item.get("ref_scheme")
+            if scheme == "c":
+                return None
+            if not name or name == "(no data)":
+                return "Direct / no referrer"
+            if scheme == "h":
+                parsed = urlparse(name)
+                if (parsed.scheme not in ("http", "https") or parsed.hostname is None
+                        or parsed.username is not None or parsed.password is not None):
+                    return None
+                try:
+                    port = parsed.port
+                except ValueError:
+                    return None
+                label = parsed.scheme + "://" + parsed.hostname.lower()
+                if port is not None and not ((parsed.scheme == "http" and port == 80)
+                                             or (parsed.scheme == "https" and port == 443)):
+                    label += ":" + str(port)
+                return label if len(label) <= 160 else None
+            if scheme not in ("g", "o", None, ""):
+                return None
+        if page == "campaigns" and ("?" in name or "&" in name or "=" in name):
+            return None
+        if not name:
+            return "Unknown"
+        return name if len(name) <= 120 else None
+
+    def dimension(self, page, ids, start, today, token, budget):
+        """Read one documented GoatCounter aggregate dimension; never raw hits."""
+        if page not in ORIGIN_REPORT_DIMENSIONS or not ids:
+            return []
+        combined = {}
+        for offset in range(0, len(ids), ORIGIN_REPORT_DIMENSION_BATCH):
+            batch = ids[offset:offset + ORIGIN_REPORT_DIMENSION_BATCH]
+            payload = self.get("/api/v0/stats/" + page + "?" + urlencode({
+                "start": start.isoformat() + "T00:00:00Z",
+                "end": today.isoformat() + "T23:00:00Z",
+                "include_paths": ",".join(map(str, batch)),
+                "limit": ORIGIN_REPORT_DIMENSION_LIMIT,
+            }), token, budget)
+            stats, more = payload.get("stats"), payload.get("more")
+            if (type(stats) is not list or len(stats) > ORIGIN_REPORT_DIMENSION_LIMIT
+                    or type(more) is not bool):
+                raise ValueError("invalid dimension statistics")
+            for item in stats:
+                if type(item) is not dict:
+                    raise ValueError("invalid dimension row")
+                value = origin_count(item.get("count"))
+                label = self.dimension_label(page, item)
+                if label is None or value == 0:
+                    continue
+                combined[label] = origin_count(combined.get(label, 0) + value)
+        rows = [{"label": label, "visits": visits} for label, visits in combined.items()]
+        rows.sort(key=lambda row: (-row["visits"], row["label"].casefold()))
+        return rows[:10]
 
     def collect(self, days, now, token):
         today = now.date()
@@ -2206,7 +2277,7 @@ class OriginReportReader:
         # Never send an empty include_paths: GoatCounter treats it as all paths.
         # A 365-day HitList contains full hourly arrays for every selected path.
         # Keep the upstream response below the unchanged 4 MiB safety bound.
-        batch_size = 5 if days == 365 else 25
+        batch_size = 20 if days == 365 else 50
         for offset in range(0, len(ids), batch_size):
             batch = ids[offset:offset + batch_size]
             payload = self.get("/api/v0/stats/hits?" + urlencode({
@@ -2262,14 +2333,24 @@ class OriginReportReader:
             raise ValueError("duplicate page identity")
         if origin_count(homepage_total + ausmalbild_total) != total:
             raise ValueError("inconsistent visit totals")
-        return {"version": 2, "status": "ok", "metric": "consent_pageviews",
+        dimensions = {
+            "referrers": self.dimension("toprefs", ids, start, today, token, budget),
+            "campaigns": self.dimension("campaigns", ids, start, today, token, budget),
+            "locations": self.dimension("locations", ids, start, today, token, budget),
+            "browsers": self.dimension("browsers", ids, start, today, token, budget),
+            "systems": self.dimension("systems", ids, start, today, token, budget),
+            "sizes": self.dimension("sizes", ids, start, today, token, budget),
+        } if ids else {name: [] for name in
+                       ("referrers", "campaigns", "locations", "browsers", "systems", "sizes")}
+        return {"version": 3, "status": "ok", "metric": "goatcounter_visits",
                 "range_days": days, "timezone": "UTC", "start_day": start.isoformat(),
                 "end_day": today.isoformat(), "today_partial": True,
                 "generated_at": now.isoformat().replace("+00:00", "Z"),
                 "cache_seconds": 60, "total": total,
                 "homepage_visits": homepage_total, "ausmalbild_visits": ausmalbild_total,
                 "daily": [{"day": day, "visits": count} for day, count in daily.items()],
-                "pages": sorted(rows, key=lambda row: (-row["visits"], row["page_id"]))}
+                "pages": sorted(rows, key=lambda row: (-row["visits"], row["page_id"])),
+                **dimensions}
 
     def snapshot(self, days):
         if type(days) is not int or days not in (1, 7, 30, 365):
@@ -2358,7 +2439,7 @@ class Handler(BaseHTTPRequestHandler):
             if path in ("/", "/index.html"):
                 return self.static("index.html", "text/html; charset=utf-8")
             if self.path == "/api/analytics/capabilities":
-                return self.send_json(200, {"version": 1, "read_only": True, "origin_report_version": 2})
+                return self.send_json(200, {"version": 1, "read_only": True, "origin_report_version": 3})
             if self.path in ORIGIN_REPORT_PATHS:
                 if not self.admin_marker():
                     return
