@@ -48,7 +48,11 @@ class HouseholdWafTests(unittest.TestCase):
         self.assertTrue(data["privacy"]["cloudflare_rule_stores_address_material_if_live_approved"])
         self.assertFalse(data["privacy"]["github_raw_household_address_storage"])
         self.assertFalse(data["credentials"]["reuse_tunnel_credentials"])
-        self.assertFalse(data["installed_operator"]["installer_in_this_outcome"])
+        self.assertTrue(data["installed_operator"]["installer_in_this_outcome"])
+        self.assertTrue(data["installed_operator"]["installer_source_implemented"])
+        self.assertFalse(data["installed_operator"]["install_executed"])
+        self.assertTrue(data["credentials"]["provisioning_source_implemented"])
+        self.assertFalse(data["credentials"]["provisioning_executed"])
 
     def test_constants_are_exact_scope(self):
         self.assertEqual(m.ZONE_NAME, "ausmalwiese.de")

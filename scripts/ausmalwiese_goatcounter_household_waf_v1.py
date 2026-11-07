@@ -306,6 +306,90 @@ def api_call(token: str, method: str, path: str, payload: dict | None = None) ->
     return code, doc["result"]
 
 
+def provision_secret(expected_main: str) -> None:
+    """Future separately owner-gated dedicated credential provisioning.
+
+    Inputs come only from a hidden local controlling TTY. The exclusive secret
+    creation is the first and only mutation; any later ambiguity requires STOP.
+    """
+    verified_installed_release(expected_main)
+    try:
+        parent = SECRET.parent.lstat()
+        if (not stat.S_ISDIR(parent.st_mode) or parent.st_uid != 0
+                or parent.st_gid != 0 or stat.S_IMODE(parent.st_mode) & 0o077):
+            raise GateError("secret_directory_not_private")
+        try:
+            SECRET.lstat()
+        except FileNotFoundError:
+            pass
+        else:
+            raise GateError("dedicated_secret_already_exists")
+        tty = os.open("/dev/tty", os.O_RDWR | os.O_NOCTTY | os.O_NOFOLLOW)
+        try:
+            if not os.isatty(tty):
+                raise GateError("controlling_tty_required")
+        finally:
+            os.close(tty)
+    except OSError:
+        raise GateError("controlling_tty_or_private_directory_unavailable") from None
+
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", getpass.GetPassWarning)
+            zone = getpass.getpass("Dedicated ausmalwiese.de Zone ID (hidden): ")
+            token = getpass.getpass("Dedicated Zone Read + Zone WAF Write token (hidden): ")
+    except (EOFError, KeyboardInterrupt, getpass.GetPassWarning, OSError):
+        raise GateError("secure_local_tty_input_failed") from None
+
+    if not hex_id(zone) or not isinstance(token, str) or not 16 <= len(token) <= 512:
+        raise GateError("credential_shape_invalid")
+
+    _, zone_data = api_call(token, "GET", f"/zones/{zone}")
+    if zone_data.get("id") != zone or zone_data.get("name") != ZONE_NAME:
+        raise GateError("provider_zone_identity_mismatch")
+
+    endpoint = f"/zones/{zone}/rulesets/phases/{PHASE}/entrypoint"
+    code, snapshot = api_call(token, "GET", endpoint)
+    if code == 200:
+        if (not isinstance(snapshot, dict) or snapshot.get("phase") != PHASE
+                or snapshot.get("kind") != "zone"):
+            raise GateError("unexpected_entrypoint")
+        existing_projection(snapshot.get("rules"))
+    elif code != 404:
+        raise GateError("unexpected_entrypoint_status")
+
+    payload = (json.dumps({
+        "zone_id": zone,
+        "zone_name": ZONE_NAME,
+        "api_token": token,
+    }, separators=(",", ":")) + "\n").encode()
+
+    try:
+        fd = os.open(
+            SECRET,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+            0o600,
+        )
+    except OSError:
+        raise GateError("dedicated_secret_create_blocked") from None
+    try:
+        try:
+            os.fchmod(fd, 0o600)
+            view = memoryview(payload)
+            while view:
+                written = os.write(fd, view)
+                if written < 1:
+                    raise OSError("short write")
+                view = view[written:]
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        if owned_file(SECRET, 0o600) != payload:
+            raise GateError("secret_post_write_mismatch")
+    except (OSError, GateError):
+        raise GateError("secret_post_mutation_unknown_state") from None
+
+
 def execute(expected_main: str, apply: bool) -> dict:
     zone, token = installed_credentials(expected_main)
     values = read_household_sources()
@@ -357,19 +441,30 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Ausmalwiese household GoatCounter edge exclusion")
     parser.add_argument("--plan", action="store_true")
     parser.add_argument("--preflight", action="store_true")
+    parser.add_argument("--provision-secret", action="store_true")
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--expected-main", default="")
     parser.add_argument("--confirm", default="")
     args = parser.parse_args(argv)
-    if sum((args.plan, args.preflight, args.apply)) > 1:
+    if sum((args.plan, args.preflight, args.provision_secret, args.apply)) > 1:
         raise GateError("conflicting_modes")
-    if not args.preflight and not args.apply:
+    if not args.preflight and not args.provision_secret and not args.apply:
         if args.confirm or args.expected_main:
             raise GateError("offline_preview_has_no_authorization")
         print(json.dumps(offline_plan(), sort_keys=True))
         return 0
     if args.preflight and args.confirm:
         raise GateError("preflight_must_be_read_only")
+    if args.provision_secret:
+        if args.confirm != "PROVISION-AUSMALWIESE-ZONE-WAF-SECRET":
+            raise GateError("provision_confirmation_required")
+        provision_secret(args.expected_main)
+        print(json.dumps({
+            "status": "provisioned",
+            "zone": ZONE_NAME,
+            "files_created": 1,
+        }, sort_keys=True))
+        return 0
     if args.apply and args.confirm != "CREATE-AUSMALWIESE-HOUSEHOLD-COUNT-WAF":
         raise GateError("exact_apply_confirmation_required")
     result = execute(args.expected_main, args.apply)
