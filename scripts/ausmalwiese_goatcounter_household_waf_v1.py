@@ -239,7 +239,7 @@ def plan(snapshot: dict | None, zone_id: str,
     if len(before) >= MAX_FREE_RULES:
         raise GateError("custom_rule_capacity_exhausted")
     expression = rule["expression"]
-    if any(item[1] == RULE_REF or item[3] == expression for item in before):
+    if any(item[1] == RULE_REF or item[4] == expression for item in before):
         raise GateError("rule_already_present_or_conflict")
     return (
         "append_one_rule",
