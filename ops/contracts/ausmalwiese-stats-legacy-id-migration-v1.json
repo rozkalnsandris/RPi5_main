@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "status": "SOURCE_ONLY_LEGACY_ID_STATS_MIGRATION_NO_LIVE",
+  "issue": 1412,
+  "repository": "rozkalnsandris/RPi5_main",
+  "upstream": {
+    "repository": "rozkalnsandris/coloring-pages",
+    "commit": "9c013bfbab8f3cc5eaaa905f57119c53abc8ab48",
+    "alias_path": "metadata/legacy-id-aliases.json",
+    "alias_git_blob": "2e20a2a7a7e716274934a0eb662091150ef55e7f",
+    "source_catalog_sha256": "efa6a736839657f849606f665b09bd51dff1165a1c9c2038e9d5b7e720cc7ba9",
+    "source_catalog_count": 477,
+    "source_legacy_count": 30,
+    "source_plan_manifest_sha256": "80538dd2bda9755212c599d1b75a106673e1eb5c774cebc47f4192e0478fad9c",
+    "aliases_sha256": "24cf6ec46ba2ad2b1791c8aff8975937bb9b0e629076d0d34b828ee30d6308b5"
+  },
+  "d1": {
+    "binding": "DB",
+    "database_name": "coloring-pages-stats-v1",
+    "database_id": "f8ac8f1d-a230-4bc4-af13-557c1b91b273",
+    "worker_blob": "8790a8ddc3b83771088c4cceb16a3b57ce5d1c8b",
+    "config_blob": "3733263a391274f2b6b0f2023c8656565bde8e1a",
+    "schema_blob": "ead4cc5f497de6eeac0cf6b07c2ca13db986423a"
+  },
+  "page_id_tables": [
+    "page_stats",
+    "daily_prints",
+    "likes",
+    "daily_views",
+    "daily_campaign_events",
+    "archived_like_totals"
+  ],
+  "untouched_tables": [
+    "daily_print_qr_scans",
+    "like_cookie_sessions"
+  ],
+  "transaction": {
+    "primitive": "D1_DATABASE_BATCH",
+    "statement_count": 6,
+    "one_remote_dispatch_required": true,
+    "target_collision_policy": "STOP"
+  },
+  "sequence": [
+    "FRESH_SANITIZED_PREFLIGHT",
+    "SEPARATE_OWNER_AUTHORIZED_D1_BATCH",
+    "SANITIZED_POST_VERIFY",
+    "SEPARATE_RPI5_CATALOG_MEDIA_CUTOVER"
+  ],
+  "actions": {
+    "cloudflare_request": false,
+    "credential_access": false,
+    "d1_read": false,
+    "d1_write": false,
+    "worker_upload": false,
+    "worker_deploy": false,
+    "rpi5_content_write": false,
+    "service_lifecycle": false,
+    "merge": false,
+    "live": false,
+    "retry": false,
+    "rollback": false,
+    "cleanup": false
+  }
+}

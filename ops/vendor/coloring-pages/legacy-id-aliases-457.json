@@ -1,0 +1,131 @@
+{
+  "schema": "rozkalns.coloring-pages.legacy-id-aliases.v1",
+  "issue": 457,
+  "source_catalog_sha256": "efa6a736839657f849606f665b09bd51dff1165a1c9c2038e9d5b7e720cc7ba9",
+  "source_catalog_count": 477,
+  "source_legacy_count": 30,
+  "source_plan_manifest_sha256": "80538dd2bda9755212c599d1b75a106673e1eb5c774cebc47f4192e0478fad9c",
+  "aliases_sha256": "24cf6ec46ba2ad2b1791c8aff8975937bb9b0e629076d0d34b828ee30d6308b5",
+  "aliases": [
+    {
+      "old_id": "cp-000008",
+      "new_id": "8173656"
+    },
+    {
+      "old_id": "cp-000007",
+      "new_id": "2010939"
+    },
+    {
+      "old_id": "cp-000006",
+      "new_id": "2786289"
+    },
+    {
+      "old_id": "cp-000005",
+      "new_id": "8017560"
+    },
+    {
+      "old_id": "cp-000004",
+      "new_id": "4250167"
+    },
+    {
+      "old_id": "cp-000003",
+      "new_id": "9021721"
+    },
+    {
+      "old_id": "cp-000002",
+      "new_id": "8488568"
+    },
+    {
+      "old_id": "cp-000001",
+      "new_id": "8429988"
+    },
+    {
+      "old_id": "halloween-hexenhut-labyrinth-001",
+      "new_id": "9244385"
+    },
+    {
+      "old_id": "obst-pflanzen-zuordnen-001",
+      "new_id": "6935197"
+    },
+    {
+      "old_id": "wetter-zuordnen-001",
+      "new_id": "5336125"
+    },
+    {
+      "old_id": "verkehrsmittel-wege-zuordnen-001",
+      "new_id": "4621302"
+    },
+    {
+      "old_id": "tiere-futter-zuordnen-001",
+      "new_id": "6467733"
+    },
+    {
+      "old_id": "tiere-lebensraeume-zuordnen-001",
+      "new_id": "9025020"
+    },
+    {
+      "old_id": "weihnachtskugel-muster-001",
+      "new_id": "4285443"
+    },
+    {
+      "old_id": "kuerbis-gesicht-001",
+      "new_id": "0921115"
+    },
+    {
+      "old_id": "block-figur-001",
+      "new_id": "4819718"
+    },
+    {
+      "old_id": "farben-zuordnen-001",
+      "new_id": "6160923"
+    },
+    {
+      "old_id": "halloween-geist-001",
+      "new_id": "8404669"
+    },
+    {
+      "old_id": "halloween-kuerbis-geist-002",
+      "new_id": "4071268"
+    },
+    {
+      "old_id": "halloween-hexe-001",
+      "new_id": "4776902"
+    },
+    {
+      "old_id": "herbst-kaetzchen-001",
+      "new_id": "8747187"
+    },
+    {
+      "old_id": "halloween-fledermaus-001",
+      "new_id": "3701954"
+    },
+    {
+      "old_id": "halloween-001",
+      "new_id": "4481901"
+    },
+    {
+      "old_id": "halloween-kuerbis-001",
+      "new_id": "6566100"
+    },
+    {
+      "old_id": "figuren-001",
+      "new_id": "8718505"
+    },
+    {
+      "old_id": "dino-001",
+      "new_id": "4003608"
+    },
+    {
+      "old_id": "lapsa-003",
+      "new_id": "9599986"
+    },
+    {
+      "old_id": "lapsa-001",
+      "new_id": "3434267"
+    },
+    {
+      "old_id": "bauarbeiter-hund-001",
+      "new_id": "5733674"
+    }
+  ]
+}
