@@ -13,7 +13,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "scripts/materialize-simple-deploy-hermes-prerequisites-v2.py"
 CONTRACT = ROOT / "ops/contracts/simple-deploy-hermes-prerequisite-materialization-v2.json"
-WORKFLOW = ROOT / ".github/workflows/simple-deploy-hermes-prerequisite-phase-b-parent-source.yml"
+VALIDATION_MANIFEST = ROOT / "ci/validate-groups.json"
 GENERIC_INSTALLER = ROOT / "scripts/install-simple-deploy-v1.py"
 
 spec = importlib.util.spec_from_file_location("simple_deploy_hermes_prerequisites_v2", MODULE_PATH)
@@ -237,10 +237,11 @@ class HermesPhaseBParentCorrectionTests(unittest.TestCase):
         parser = materialize._build_parser()
         options = {option for action in parser._actions for option in action.option_strings}
         self.assertEqual(options, {"-h", "--help", "--expected-source-sha", "--apply"})
-        workflow = WORKFLOW.read_text(encoding="utf-8")
-        self.assertNotIn("--apply", workflow)
-        self.assertIn("test-simple-deploy-hermes-prerequisite-materialization-v1.py", workflow)
-        self.assertIn("test-simple-deploy-hermes-prerequisite-phase-b-parent-v2.py", workflow)
+        payload = json.loads(VALIDATION_MANIFEST.read_text(encoding="utf-8"))
+        commands = {tuple(argv) for entries in payload["groups"].values() for argv in entries}
+        self.assertFalse(any("--apply" in argv for argv in commands))
+        self.assertIn(("python3", "./tests/test-simple-deploy-hermes-prerequisite-materialization-v1.py"), commands)
+        self.assertIn(("python3", "./tests/test-simple-deploy-hermes-prerequisite-phase-b-parent-v2.py"), commands)
 
     def test_public_source_has_no_numeric_runtime_identity_or_home_literal(self) -> None:
         source = MODULE_PATH.read_text(encoding="utf-8")

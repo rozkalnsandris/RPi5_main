@@ -14,7 +14,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "scripts/materialize-simple-deploy-hermes-prerequisites-v3.py"
 CONTRACT = ROOT / "ops/contracts/simple-deploy-hermes-prerequisite-materialization-v3.json"
-WORKFLOW = ROOT / ".github/workflows/simple-deploy-hermes-prerequisite-recovery-v3-source.yml"
+VALIDATION_MANIFEST = ROOT / "ci/validate-groups.json"
 
 spec = importlib.util.spec_from_file_location("simple_deploy_hermes_prerequisites_v3", MODULE_PATH)
 assert spec and spec.loader
@@ -245,12 +245,12 @@ class HermesPrerequisiteRecoveryV3Tests(unittest.TestCase):
         self.assertEqual(options, {"-h", "--help", "--expected-source-sha", "--apply"})
 
     def test_ci_is_source_only_and_runs_v1_v2_v3_regressions(self) -> None:
-        workflow = WORKFLOW.read_text(encoding="utf-8")
-        self.assertNotIn("--apply", workflow)
-        self.assertIn("test-simple-deploy-hermes-prerequisite-materialization-v1.py", workflow)
-        self.assertIn("test-simple-deploy-hermes-prerequisite-phase-b-parent-v2.py", workflow)
-        self.assertIn("test-simple-deploy-hermes-prerequisite-recovery-v3.py", workflow)
-        self.assertIn("materialize-simple-deploy-hermes-prerequisites-v3.py", workflow)
+        payload = json.loads(VALIDATION_MANIFEST.read_text(encoding="utf-8"))
+        commands = {tuple(argv) for entries in payload["groups"].values() for argv in entries}
+        self.assertFalse(any("--apply" in argv for argv in commands))
+        self.assertIn(("python3", "./tests/test-simple-deploy-hermes-prerequisite-materialization-v1.py"), commands)
+        self.assertIn(("python3", "./tests/test-simple-deploy-hermes-prerequisite-phase-b-parent-v2.py"), commands)
+        self.assertIn(("python3", "./tests/test-simple-deploy-hermes-prerequisite-recovery-v3.py"), commands)
 
 
 if __name__ == "__main__":

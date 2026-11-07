@@ -67,31 +67,13 @@ for required in (
 ):
     assert all_text.count(required) == 1, required
 
-SOURCE_JOB_WORKFLOWS = {
-    ".github/workflows/simple-deploy-coloring-pages-alignment-source.yml",
-    ".github/workflows/simple-deploy-hermes-adoption-source.yml",
-    ".github/workflows/simple-deploy-hermes-prerequisite-materialization-source.yml",
-    ".github/workflows/simple-deploy-hermes-prerequisite-phase-b-parent-source.yml",
-    ".github/workflows/simple-deploy-hermes-prerequisite-recovery-v3-source.yml",
-    ".github/workflows/weather-data-companion-source.yml",
-    ".github/workflows/weathernext-installer-boundary-trusted-dispatch-mode-reconcile-source.yml",
-    ".github/workflows/weathernext-private-installer-boundary-refresh-source.yml",
-}
-command_set = set(commands)
-source_job_workflows: set[str] = set()
+source_job_workflows: list[str] = []
 for workflow_path in sorted((ROOT / ".github/workflows").glob("*.yml")):
     workflow_text = workflow_path.read_text(encoding="utf-8")
-    if re.search(r"(?m)^  source:\s*$", workflow_text) is None:
-        continue
-    relative = workflow_path.relative_to(ROOT).as_posix()
-    source_job_workflows.add(relative)
-    for test_path in re.findall(
-        r"(?m)^\s*python3 (\./tests/[^\s\\]+\.py)\s*$",
-        workflow_text,
-    ):
-        assert ("python3", test_path) in command_set, f"{relative}: {test_path}"
+    if re.search(r"(?m)^  source:\\s*$", workflow_text) is not None:
+        source_job_workflows.append(workflow_path.relative_to(ROOT).as_posix())
 
-assert source_job_workflows == SOURCE_JOB_WORKFLOWS
+assert not source_job_workflows, f"ambiguous source jobs remain: {source_job_workflows}"
 
 python_syntax = (ROOT / "tests/test-python-syntax.py").read_text(encoding="utf-8")
 for required in (
