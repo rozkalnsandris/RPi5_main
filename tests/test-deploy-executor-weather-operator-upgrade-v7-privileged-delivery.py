@@ -116,7 +116,11 @@ class WeatherV7PrivilegedDeliveryTests(unittest.TestCase):
         cls.checkout = json.loads(CHECKOUT_CONTRACT.read_text(encoding="utf-8"))
         cls.registry = json.loads(REGISTRY.read_text(encoding="utf-8"))
         cls.doc = DOC.read_text(encoding="utf-8")
-        cls.validation_commands = [\n            tuple(argv)\n            for entries in json.loads(VALIDATE_MANIFEST.read_text(encoding="utf-8"))["groups"].values()\n            for argv in entries\n        ]
+        cls.validation_commands = [
+            tuple(argv)
+            for entries in json.loads(VALIDATE_MANIFEST.read_text(encoding="utf-8"))["groups"].values()
+            for argv in entries
+        ]
 
     def prepare(
         self,
