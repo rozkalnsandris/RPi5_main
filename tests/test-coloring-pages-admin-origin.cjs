@@ -33,8 +33,8 @@ function pageCells(h){
  return {title:page.children[0].textContent,id:page.children[1].textContent,visits:tr.children[1].textContent};
 }
 (async()=>{
- const h=harness();assert.equal(h.calls.length,0,"lazy report");await h.open("traffic");assert.equal(h.calls.length,0);
- await h.open("origin");assert.equal(h.nodes.total.textContent,"6");assert.equal(h.nodes.home.textContent,"1");assert.equal(h.nodes.coloring.textContent,"5");assert.equal(h.nodes.pages.textContent,"1");
+ const h=harness();assert.equal(h.calls.length,0,"lazy report");await h.open("stats");assert.equal(h.calls.length,0);
+ await h.open("traffic");assert.equal(h.nodes.total.textContent,"6");assert.equal(h.nodes.home.textContent,"1");assert.equal(h.nodes.coloring.textContent,"5");assert.equal(h.nodes.pages.textContent,"1");
  assert.deepEqual(pageCells(h),{title:"Kleiner Traktor",id:"ID: 0123456",visits:"5"});
  assert.equal(h.nodes.daily.children.length,7);assert.match(h.nodes.daily.children[6].children[0].textContent,/incomplete/);
  assert.match(h.nodes.status.textContent,/UTC.*Snapshot/);assert.equal(h.nodes.content.hidden,false);
@@ -60,6 +60,10 @@ function pageCells(h){
  assert.equal(h.nodes.total.textContent,"3");assert.equal(h.nodes.days.disabled,false);assert.equal(h.nodes.refresh.disabled,false);
  assert.ok(h.calls.every(({url,options})=>(/^\/api\/analytics\/origin\?days=(1|7|30|365)$/.test(url)||url==="/api/catalog"||url==="/api/archive")&&options.method==="GET"&&options.redirect==="error"&&options.headers["X-Ausmalwiese-Admin"]==="1"));
  assert.ok(!script.includes("innerHTML"));assert.ok(!script.includes("localStorage"));
- const deep=harness("origin");for(let i=0;i<25;i++)await Promise.resolve();assert.equal(deep.nodes.total.textContent,"6");assert.equal(pageCells(deep).title,"Kleiner Traktor");
- console.log("GoatCounter visit UI: Catalog/Archive titles, historical fallback, consent metrics, UTC ranges, safe DOM and stale-result rejection PASS");
+ const deep=harness("traffic");for(let i=0;i<25;i++)await Promise.resolve();assert.equal(deep.nodes.total.textContent,"6");assert.equal(pageCells(deep).title,"Kleiner Traktor");
+ assert.ok(!html.includes('data-page="origin"'),"no separate GoatCounter route");
+ assert.ok(!html.includes('data-nav="origin"'),"no separate GoatCounter navigation");
+ assert.ok(!html.includes("/api/analytics/traffic?days=7"),"Traffic has no Cloudflare analytics call");
+ assert.match(html,/recognizable bots\/crawlers are filtered/);
+ console.log("GoatCounter Traffic UI: one route, Catalog/Archive titles, consent metrics, UTC ranges, safe DOM and stale-result rejection PASS");
 })().catch(error=>{console.error(error);process.exitCode=1;});
