@@ -197,6 +197,14 @@ class Tests(unittest.TestCase):
         selected=admin.select_existing_child(root,token,directory=True)
         self.assertIsNotNone(selected)
         self.assertEqual(selected[0],token)
+        flags=os.O_RDONLY | getattr(os,"O_DIRECTORY",0) | getattr(os,"O_NOFOLLOW",0)
+        root_fd=os.open(root,flags)
+        try:
+            selected_fd=admin.select_existing_child_fd(root_fd,token,directory=True)
+            self.assertIsNotNone(selected_fd)
+            self.assertEqual(selected_fd[0],token)
+        finally:
+            os.close(root_fd)
         self.assertIsNone(admin.select_existing_child(root,"b"*32,directory=True))
         outside=Path(self.tmp.name)/"outside-storage";outside.mkdir()
         (root/"link").symlink_to(outside,target_is_directory=True)
