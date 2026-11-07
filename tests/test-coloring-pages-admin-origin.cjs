@@ -55,7 +55,7 @@ function pageCells(h){
  h.set({ok:false,data:{status:"busy"}});await h.refresh();assert.match(h.nodes.status.textContent,/shortly/);
  h.set({ok:false,data:{status:"unavailable"}});await h.refresh();assert.match(h.nodes.status.textContent,/not zero/);
  h.set({ok:true,data:report(1,0,0)});await h.change(1);assert.equal(h.nodes.total.textContent,"0");assert.equal(h.nodes.empty.hidden,false);assert.equal(h.nodes.content.hidden,false);assert.equal(h.nodes.trend.children.filter(child=>child.attributes.class==="traffic-trend-label").length,0);
- h.set({ok:true,data:report(365,5)});await h.change(365);assert.equal(h.nodes.daily.children.length,365);const longLabels=h.nodes.trend.children.filter(child=>child.attributes.class==="traffic-trend-label");assert.ok(longLabels.length>1&&longLabels.length<=13);assert.equal(longLabels[longLabels.length-1].textContent,"6");
+ h.set({ok:true,data:report(365,5)});await h.change(365);assert.equal(h.nodes.daily.children.length,365);const longLabels=h.nodes.trend.children.filter(child=>child.attributes.class==="traffic-trend-label");assert.equal(longLabels.length,1);assert.equal(longLabels[0].textContent,"6");
  const malformed=report(365,5);malformed.pages[0].page_id="<img onerror=evil>";
  h.set({ok:true,data:malformed});await h.refresh();assert.equal(h.nodes.content.hidden,true);assert.equal(h.nodes.ranking.children.length,0);
  const inconsistent=report(365,5);inconsistent.total=7;h.set({ok:true,data:inconsistent});await h.refresh();assert.equal(h.nodes.content.hidden,true);
