@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,7 +34,7 @@ for group in EXPECTED_GROUPS:
         assert "-c" not in argv
         commands.append(tuple(argv))
 
-assert len(commands) == 286
+assert len(commands) == 297
 assert len(set(commands)) == len(commands)
 
 for argv in commands:
@@ -65,5 +66,41 @@ for required in (
     "./tests/test-adguard-dhcpv4-migration.py",
 ):
     assert all_text.count(required) == 1, required
+
+SOURCE_JOB_WORKFLOWS = {
+    ".github/workflows/simple-deploy-coloring-pages-alignment-source.yml",
+    ".github/workflows/simple-deploy-hermes-adoption-source.yml",
+    ".github/workflows/simple-deploy-hermes-prerequisite-materialization-source.yml",
+    ".github/workflows/simple-deploy-hermes-prerequisite-phase-b-parent-source.yml",
+    ".github/workflows/simple-deploy-hermes-prerequisite-recovery-v3-source.yml",
+    ".github/workflows/weather-data-companion-source.yml",
+    ".github/workflows/weathernext-installer-boundary-trusted-dispatch-mode-reconcile-source.yml",
+    ".github/workflows/weathernext-private-installer-boundary-refresh-source.yml",
+}
+command_set = set(commands)
+source_job_workflows: set[str] = set()
+for workflow_path in sorted((ROOT / ".github/workflows").glob("*.yml")):
+    workflow_text = workflow_path.read_text(encoding="utf-8")
+    if re.search(r"(?m)^  source:\s*$", workflow_text) is None:
+        continue
+    relative = workflow_path.relative_to(ROOT).as_posix()
+    source_job_workflows.add(relative)
+    for test_path in re.findall(
+        r"(?m)^\s*python3 (\./tests/[^\s\\]+\.py)\s*$",
+        workflow_text,
+    ):
+        assert ("python3", test_path) in command_set, f"{relative}: {test_path}"
+
+assert source_job_workflows == SOURCE_JOB_WORKFLOWS
+
+python_syntax = (ROOT / "tests/test-python-syntax.py").read_text(encoding="utf-8")
+for required in (
+    'ROOT / "ops/bin/rpi5-weathernext-private-installer-boundary-bootstrap"',
+    'ROOT / "ops/bin/rpi5-weathernext-private-installer-boundary-refresh-runtime"',
+):
+    assert required in python_syntax, required
+
+assert "      - workflow-security\n" in workflow
+assert "WORKFLOW_SECURITY_RESULT: ${{ needs['workflow-security'].result }}" in workflow
 
 print(f"Validation manifest: PASS ({len(commands)} commands / {len(EXPECTED_GROUPS)} groups)")
