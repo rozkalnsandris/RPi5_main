@@ -16,6 +16,7 @@ The existing protected Catalog section has **Analyze Catalog** / **Review classi
 Normalized German title words/phrases, canonical Topic labels and legacy terms produce conservative proposals. An exact unique matching Topic must have an unambiguous linked Category; otherwise the row is **Needs review**. Existing valid ordered multi-category and multi-Topic assignments are retained. At most one sole linked secondary Category is proposed; no deletion. Previews, title, ID, current and suggested assignments, reasons, Approve/Reject/Defer, search, status filter and pagination are provided. Optional checked-row approval requires explicit confirmation.
 
 **Export reviewed dry-run JSON** repeats protected hash verification and includes canonical hashes, counts, approved ID/before/after/reason and proposal decisions, but no titles, media, credentials or visitor information. It is **DRY_RUN_ONLY**, without an apply endpoint. A future bulk apply requires a separate reviewed operator, exact owner authorization, frozen hash/lock/job preconditions and one atomic write; not part of #1341.
+Historical catalog IDs are validated with the backend canonical ID syntax (`[a-z0-9]+(?:-[a-z0-9]+)*`), so legacy non-7-digit IDs remain reviewable; the newer seven-digit publication policy is not retroactively applied to existing catalog entries.
 
 Offline regression: node tests/test-coloring-pages-admin-classification.cjs. ADMIN source workflow includes this test. Merge and UI-only deployment are separate owner gates.
 

@@ -1886,7 +1886,7 @@ function validate(s){
   if(links.has(pair)||((topics.get(x.topic).kind==="seasonal")!==(x.category==="jahreszeiten")))throw Error("Duplicate or incompatible link");
   links.add(pair);
  });
- c.entries.forEach(function(x){if(!x||!/^[0-9]{7}$/.test(x.id)||seen.has(x.id)||typeof x.title!=="string"||!x.title.trim())throw Error("Invalid catalog identity");
+ c.entries.forEach(function(x){if(!x||!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(x.id)||seen.has(x.id)||typeof x.title!=="string"||!x.title.trim())throw Error("Invalid catalog identity");
   seen.add(x.id);
   var v=memberships(x);
   if(!unique(v.categories)||!v.categories.length||v.categories.length>6||v.categories[0]!==x.category||v.categories.some(function(id){return !cats.has(id)})
