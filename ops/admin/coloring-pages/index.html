@@ -340,6 +340,31 @@ html{overflow-y:scroll}
 @media(max-width:1100px){.catalog-toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}.catalog-toolbar input{grid-column:1/-1}.catalog-toolbar .secondary{grid-column:auto}}
 @media(max-width:620px){.catalog-toolbar{grid-template-columns:minmax(0,1fr)}.catalog-toolbar input{grid-column:auto}}
 
+
+/* GoatCounter Traffic dashboard — only documented aggregate API dimensions. */
+.traffic-dashboard{display:grid;grid-template-columns:1fr;gap:18px;padding-bottom:44px}
+.traffic-panel-wide{min-width:0}.traffic-section{display:grid;gap:12px}
+.traffic-panel-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.traffic-panel-grid-four{grid-template-columns:repeat(4,minmax(0,1fr))}
+.traffic-mini{padding:18px}.traffic-mini h3{margin:0 0 14px;font-family:var(--font-display);font-size:19px}
+.traffic-trend{display:block;width:100%;height:250px;border:1px solid var(--line);border-radius:16px;background:#fbfdff}
+.traffic-trend-grid{stroke:#dfe8f3;stroke-width:1}.traffic-trend-line{fill:none;stroke:var(--blue);stroke-width:3;vector-effect:non-scaling-stroke}
+.traffic-trend-dot{fill:var(--blue);stroke:#fff;stroke-width:2;vector-effect:non-scaling-stroke}
+.traffic-fallback{margin-top:12px}.traffic-fallback summary{cursor:pointer;color:var(--blue-deep);font-weight:900}
+.traffic-bars{display:grid;gap:11px;list-style:none;margin:0;padding:0}
+.traffic-bar-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 12px;align-items:center}
+.traffic-bar-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:800}
+.traffic-bar-value{font-size:13px;font-weight:900;font-variant-numeric:tabular-nums}
+.traffic-bar-track{grid-column:1/-1;height:7px;border-radius:999px;background:#edf3fa;overflow:hidden}
+.traffic-bar-fill{display:block;height:100%;min-width:2px;border-radius:999px;background:var(--blue)}
+.traffic-page{display:flex;align-items:center;gap:10px}.traffic-page img{width:44px;height:58px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff}
+.traffic-page-copy{min-width:0}.traffic-page-copy div{font-weight:800}.traffic-page-copy small{display:block;color:var(--muted)}
+.traffic-share{color:var(--muted);font-variant-numeric:tabular-nums}
+.traffic-quality{padding:16px 18px;border:1px solid #d7e6f6;border-radius:16px;background:#f4f9ff;color:#355675}
+.traffic-quality strong{color:var(--text)}.traffic-quality p{margin:4px 0 0;font-size:13px;font-weight:700}
+@media(max-width:1100px){.traffic-panel-grid-four{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:720px){.traffic-panel-grid,.traffic-panel-grid-four{grid-template-columns:1fr}.traffic-trend{height:210px}.traffic-page img{width:38px;height:50px}}
+
 </style>
 </head>
 <body>
@@ -730,23 +755,44 @@ html{overflow-y:scroll}
   <div data-origin-content hidden>
     <section class="stats-summary" aria-label="GoatCounter traffic summary">
       <div class="container stats-kpi-grid">
-        <article class="stats-kpi"><div><span class="stats-kpi-label">Consent pageviews</span><strong data-origin-total>–</strong></div></article>
+        <article class="stats-kpi"><div><span class="stats-kpi-label">GoatCounter visits</span><strong data-origin-total>–</strong></div></article>
         <article class="stats-kpi"><div><span class="stats-kpi-label">Homepage visits</span><strong data-origin-home>–</strong></div></article>
         <article class="stats-kpi"><div><span class="stats-kpi-label">Coloring-page visits</span><strong data-origin-coloring>–</strong></div></article>
         <article class="stats-kpi"><div><span class="stats-kpi-label">Coloring pages with visits</span><strong data-origin-pages>–</strong></div></article>
       </div>
-      <div class="container"><p class="stats-note">GoatCounter records these pageviews only after a visitor allows optional analytics. Visitors without analytics consent are not counted, recognizable bots/crawlers are filtered, and these values are not raw HTTP request counts or unique people.</p><p class="stats-note">This view includes the homepage and <code>/ausmalbild/&lt;ID&gt;</code> pages only. Up to 365 days are retained; every period includes today, which is incomplete. Like, Print and QR statistics remain separate.</p></div>
     </section>
-    <div class="container">
-      <article class="stats-panel">
-        <div class="stats-panel-heading"><div><span class="stats-panel-kicker">GoatCounter</span><h2>Most visited coloring pages</h2></div><span class="stats-panel-caption">Catalog and archive titles · ID kept as secondary context</span></div>
-        <p data-origin-empty hidden>No consent-based GoatCounter visits were recorded in this period.</p>
-        <div class="stats-table-wrap"><table class="stats-table"><thead><tr><th scope="col">Coloring page</th><th scope="col">Visits</th></tr></thead><tbody data-origin-ranking></tbody></table></div>
+    <div class="container traffic-dashboard">
+      <article class="stats-panel traffic-panel-wide">
+        <div class="stats-panel-heading"><div><span class="stats-panel-kicker">Trend</span><h2>Visits over time</h2></div><span class="stats-panel-caption">UTC · today is incomplete</span></div>
+        <svg class="traffic-trend" data-origin-trend viewBox="0 0 720 220" preserveAspectRatio="none" role="img" aria-label="GoatCounter visit trend"></svg>
+        <details class="traffic-fallback"><summary>Daily totals table</summary><div class="stats-table-wrap"><table class="stats-table"><thead><tr><th scope="col">UTC day</th><th scope="col">Visits</th></tr></thead><tbody data-origin-daily></tbody></table></div></details>
+      </article>
+      <article class="stats-panel traffic-panel-wide">
+        <div class="stats-panel-heading"><div><span class="stats-panel-kicker">Content</span><h2>Most visited coloring pages</h2></div><span class="stats-panel-caption">Catalog/archive title · share of coloring-page visits</span></div>
+        <p data-origin-empty hidden>No GoatCounter visits were recorded in this period.</p>
+        <div class="stats-table-wrap"><table class="stats-table"><thead><tr><th scope="col">Coloring page</th><th scope="col">Visits</th><th scope="col">Share</th></tr></thead><tbody data-origin-ranking></tbody></table></div>
         <button class="secondary" data-origin-more type="button" hidden>Show more pages</button>
       </article>
-      <article class="stats-panel">
-        <details><summary>Daily totals (UTC)</summary><div class="stats-table-wrap" style="max-height:360px;overflow:auto"><table class="stats-table"><thead><tr><th scope="col">UTC day</th><th scope="col">Visits</th></tr></thead><tbody data-origin-daily></tbody></table></div></details>
-      </article>
+      <section class="traffic-section traffic-panel-wide" aria-labelledby="traffic-acquisition-heading">
+        <div class="stats-panel-heading"><div><span class="stats-panel-kicker">Acquisition</span><h2 id="traffic-acquisition-heading">How visits arrived</h2></div><span class="stats-panel-caption">Documented GoatCounter toprefs + campaigns</span></div>
+        <div class="traffic-panel-grid">
+          <article class="stats-panel traffic-mini"><h3>Top referrers</h3><ol class="traffic-bars" data-origin-referrers></ol><p class="stats-empty" data-origin-referrers-empty hidden>No referrer data.</p></article>
+          <article class="stats-panel traffic-mini"><h3>Campaigns</h3><ol class="traffic-bars" data-origin-campaigns></ol><p class="stats-empty" data-origin-campaigns-empty hidden>No campaign data.</p></article>
+        </div>
+      </section>
+      <section class="traffic-section traffic-panel-wide" aria-labelledby="traffic-audience-heading">
+        <div class="stats-panel-heading"><div><span class="stats-panel-kicker">Audience</span><h2 id="traffic-audience-heading">Aggregate technical context</h2></div><span class="stats-panel-caption">Documented GoatCounter aggregate dimensions</span></div>
+        <div class="traffic-panel-grid traffic-panel-grid-four">
+          <article class="stats-panel traffic-mini"><h3>Locations</h3><ol class="traffic-bars" data-origin-locations></ol><p class="stats-empty" data-origin-locations-empty hidden>No location data.</p></article>
+          <article class="stats-panel traffic-mini"><h3>Browsers</h3><ol class="traffic-bars" data-origin-browsers></ol><p class="stats-empty" data-origin-browsers-empty hidden>No browser data.</p></article>
+          <article class="stats-panel traffic-mini"><h3>Operating systems</h3><ol class="traffic-bars" data-origin-systems></ol><p class="stats-empty" data-origin-systems-empty hidden>No system data.</p></article>
+          <article class="stats-panel traffic-mini"><h3>Screen widths</h3><ol class="traffic-bars" data-origin-sizes></ol><p class="stats-empty" data-origin-sizes-empty hidden>No screen-size data.</p></article>
+        </div>
+      </section>
+      <aside class="traffic-quality traffic-panel-wide" aria-label="Traffic data quality">
+        <strong>Data quality</strong>
+        <p>Only visitors who allow optional analytics are represented. GoatCounter visit/session logic is not a count of unique natural people. Recognizable bots and crawlers are filtered. These values are not raw HTTP request counts. Reports may be cached for 60 seconds and recent counts can take a short time to appear.</p>
+      </aside>
     </div>
   </div>
 </section>
@@ -1457,7 +1503,7 @@ var pageInfo={
   edit:["Edit page","Update the title, categories, age range and difficulty."],
   archive:["Archive","Restore hidden pages or manage archived entries."],
   stats:["Statistics","Print activity, likes and catalog engagement."],
-  traffic:["Traffic","Consent-based GoatCounter pageviews by period and coloring page."],
+  traffic:["Traffic","GoatCounter visits, sources and aggregate technical context from the documented Stats API."],
   activity:["Activity","Publishing and catalog changes from the last 7 days."]
 };
 function routePage(){
@@ -1628,36 +1674,68 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
 })();
 </script>
 <script>
-// Separate aggregate report. No public tracking calls or browser API credentials.
+// GoatCounter-only aggregate dashboard. No public tracking calls or browser API credentials.
 (function(){
   "use strict";
   const node=name=>document.querySelector("[data-origin-"+name+"]");
-  const number=new Intl.NumberFormat("en-GB"), allowed=[1,7,30,365];
-  let sequence=0, controller=null, loaded=false, rows=[], shown=25, titles=new Map();
+  const number=new Intl.NumberFormat("en-GB"),allowed=[1,7,30,365],dimensions=["referrers","campaigns","locations","browsers","systems","sizes"];
+  const svgNS="http://www.w3.org/2000/svg";
+  let sequence=0,controller=null,loaded=false,rows=[],shown=25,pagesMeta=new Map();
   const count=value=>Number.isSafeInteger(value)&&value>=0;
+  const label=value=>typeof value==="string"&&value.length>0&&value.length<=160&&!/[\u0000-\u001f\u007f]/.test(value);
   function clear(){
     node("content").hidden=true;node("total").textContent="–";node("home").textContent="–";node("coloring").textContent="–";node("pages").textContent="–";
-    node("ranking").replaceChildren();node("daily").replaceChildren();rows=[];shown=25;titles=new Map();
+    node("ranking").replaceChildren();node("daily").replaceChildren();node("trend").replaceChildren();
+    dimensions.forEach(name=>{node(name).replaceChildren();node(name+"-empty").hidden=true});
+    rows=[];shown=25;pagesMeta=new Map();
   }
-  function row(label,value){
-    const tr=document.createElement("tr"),name=document.createElement("td"),requests=document.createElement("td");
-    name.textContent=label;requests.textContent=number.format(value);tr.append(name,requests);return tr;
+  function row(labelText,value){
+    const tr=document.createElement("tr"),name=document.createElement("td"),visits=document.createElement("td");
+    name.textContent=labelText;visits.textContent=number.format(value);tr.append(name,visits);return tr;
   }
-  function pageRow(item){
-    const tr=document.createElement("tr"),page=document.createElement("td"),title=document.createElement("div"),meta=document.createElement("small"),visits=document.createElement("td");
-    title.textContent=titles.get(item.page_id)||"Unknown historical page";meta.textContent="ID: "+item.page_id;visits.textContent=number.format(item.visits);
-    page.append(title,meta);tr.append(page,visits);return tr;
+  function pageRow(item,total){
+    const tr=document.createElement("tr"),page=document.createElement("td"),visits=document.createElement("td"),share=document.createElement("td");
+    const wrap=document.createElement("div"),copy=document.createElement("div"),title=document.createElement("div"),meta=document.createElement("small");
+    wrap.className="traffic-page";copy.className="traffic-page-copy";const info=pagesMeta.get(item.page_id)||{};
+    if(info.thumb){const image=document.createElement("img");image.src=info.thumb;image.alt="";image.loading="lazy";wrap.append(image)}
+    title.textContent=info.title||"Unknown historical page";meta.textContent="ID: "+item.page_id;copy.append(title,meta);wrap.append(copy);page.append(wrap);
+    visits.textContent=number.format(item.visits);share.className="traffic-share";share.textContent=total?Math.round(item.visits*1000/total)/10+"%":"0%";
+    tr.append(page,visits,share);return tr;
   }
-  function ranking(){
-    node("ranking").replaceChildren(...rows.slice(0,shown).map(pageRow));
+  function ranking(total){
+    node("ranking").replaceChildren(...rows.slice(0,shown).map(item=>pageRow(item,total)));
     node("more").hidden=shown>=rows.length;
   }
+  function validateDimension(items){
+    return Array.isArray(items)&&items.length<=10&&items.every(item=>item&&label(item.label)&&count(item.visits))
+      &&new Set(items.map(item=>item.label)).size===items.length;
+  }
   function validate(data,days){
-    if(data.version!==2||data.status!=="ok"||data.metric!=="consent_pageviews"||data.range_days!==days||data.timezone!=="UTC"||data.today_partial!==true||!count(data.total)||!count(data.homepage_visits)||!count(data.ausmalbild_visits)||!Array.isArray(data.pages)||data.pages.length>1000||!Array.isArray(data.daily)||data.daily.length!==days||typeof data.generated_at!=="string"||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z$/.test(data.generated_at))throw Error("invalid report");
+    if(data.version!==3||data.status!=="ok"||data.metric!=="goatcounter_visits"||data.range_days!==days||data.timezone!=="UTC"||data.today_partial!==true||data.cache_seconds!==60||!count(data.total)||!count(data.homepage_visits)||!count(data.ausmalbild_visits)||!Array.isArray(data.pages)||data.pages.length>1000||!Array.isArray(data.daily)||data.daily.length!==days||typeof data.generated_at!=="string"||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z$/.test(data.generated_at))throw Error("invalid report");
     if(!data.pages.every(item=>typeof item.page_id==="string"&&/^[0-9]{7}$/.test(item.page_id)&&count(item.visits))||new Set(data.pages.map(item=>item.page_id)).size!==data.pages.length)throw Error("invalid pages");
     if(!data.daily.every(item=>/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(item.day)&&count(item.visits))||new Set(data.daily.map(item=>item.day)).size!==days)throw Error("invalid days");
+    if(!dimensions.every(name=>validateDimension(data[name])))throw Error("invalid dimensions");
     if(data.homepage_visits+data.ausmalbild_visits!==data.total||data.pages.reduce((sum,item)=>sum+item.visits,0)!==data.ausmalbild_visits||data.daily.reduce((sum,item)=>sum+item.visits,0)!==data.total)throw Error("invalid totals");
     if(data.start_day!==data.daily[0].day||data.end_day!==data.daily[days-1].day)throw Error("invalid range");
+  }
+  function renderTrend(data){
+    const svg=node("trend"),values=data.daily.map(item=>item.visits),max=Math.max(1,...values),left=28,right=700,top=20,bottom=195;
+    const grid=document.createElementNS(svgNS,"line");grid.setAttribute("x1",left);grid.setAttribute("x2",right);grid.setAttribute("y1",bottom);grid.setAttribute("y2",bottom);grid.setAttribute("class","traffic-trend-grid");svg.append(grid);
+    const points=values.map((value,index)=>{const x=values.length===1?(left+right)/2:left+(right-left)*index/(values.length-1);const y=bottom-(bottom-top)*value/max;return{x,y,value}});
+    const line=document.createElementNS(svgNS,"polyline");line.setAttribute("class","traffic-trend-line");line.setAttribute("points",points.map(p=>p.x.toFixed(1)+","+p.y.toFixed(1)).join(" "));svg.append(line);
+    points.forEach((point,index)=>{if(values.length>31&&index!==values.length-1)return;const dot=document.createElementNS(svgNS,"circle");dot.setAttribute("class","traffic-trend-dot");dot.setAttribute("cx",point.x.toFixed(1));dot.setAttribute("cy",point.y.toFixed(1));dot.setAttribute("r","3.5");svg.append(dot)});
+    svg.setAttribute("aria-label",data.range_days+" day GoatCounter visit trend; "+number.format(data.total)+" visits; latest day "+number.format(values[values.length-1])+" visits and is incomplete.");
+  }
+  function renderDimension(name,items){
+    const target=node(name),max=Math.max(1,...items.map(item=>item.visits));
+    target.replaceChildren(...items.map(item=>{
+      const li=document.createElement("li"),labelNode=document.createElement("span"),value=document.createElement("span"),track=document.createElement("span"),fill=document.createElement("span");
+      li.className="traffic-bar-row";labelNode.className="traffic-bar-label";value.className="traffic-bar-value";track.className="traffic-bar-track";fill.className="traffic-bar-fill";
+      let text=item.label;if(name==="sizes"&&/^[0-9]+$/.test(text)&&text!=="0")text+=" px";if(name==="sizes"&&text==="0")text="Unknown";
+      labelNode.textContent=text;labelNode.title=text;value.textContent=number.format(item.visits);fill.style.width=Math.max(2,item.visits*100/max)+"%";
+      track.append(fill);li.append(labelNode,value,track);return li;
+    }));
+    node(name+"-empty").hidden=items.length!==0;
   }
   async function safeJson(path,signal){
     try{
@@ -1665,18 +1743,22 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
       if(!response.ok)return null;return await response.json();
     }catch(error){if(signal.aborted)throw error;return null;}
   }
-  async function loadTitles(signal){
+  async function loadMeta(signal){
     const found=new Map(),catalog=await safeJson("/api/catalog",signal),archive=await safeJson("/api/archive",signal);
-    if(catalog&&Array.isArray(catalog.entries))catalog.entries.forEach(item=>{if(item&&/^[0-9]{7}$/.test(String(item.id))&&typeof item.title==="string"&&item.title.trim())found.set(String(item.id),item.title);});
-    if(archive&&Array.isArray(archive.entries))archive.entries.forEach(item=>{const entry=item&&item.entry;if(entry&&/^[0-9]{7}$/.test(String(entry.id))&&typeof entry.title==="string"&&entry.title.trim()&&!found.has(String(entry.id)))found.set(String(entry.id),entry.title);});
+    if(catalog&&Array.isArray(catalog.entries))catalog.entries.forEach(item=>{
+      if(item&&/^[0-9]{7}$/.test(String(item.id))&&typeof item.title==="string"&&item.title.trim()){
+        const id=String(item.id),thumb=typeof item.thumb==="string"&&/^\/media\/[0-9]{7}\/thumb[.]webp$/.test(item.thumb)?"https://ausmalwiese.de"+item.thumb:"";
+        found.set(id,{title:item.title,thumb});
+      }
+    });
+    if(archive&&Array.isArray(archive.entries))archive.entries.forEach(item=>{const entry=item&&item.entry;if(entry&&/^[0-9]{7}$/.test(String(entry.id))&&typeof entry.title==="string"&&entry.title.trim()&&!found.has(String(entry.id)))found.set(String(entry.id),{title:entry.title,thumb:""});});
     return found;
   }
   async function refresh(){
     const days=Number(node("days").value);if(!allowed.includes(days))return;
     const generation=++sequence;if(controller)controller.abort();controller=new AbortController();
     const current=controller,timer=setTimeout(()=>current.abort(),55000);
-    clear();loaded=false;node("refresh").disabled=true;node("days").disabled=true;
-    node("status").textContent="Loading GoatCounter visits…";
+    clear();loaded=false;node("refresh").disabled=true;node("days").disabled=true;node("status").textContent="Loading GoatCounter traffic…";
     try{
       const response=await fetch("/api/analytics/origin?days="+days,{method:"GET",credentials:"same-origin",cache:"no-store",redirect:"error",headers:{"X-Ausmalwiese-Admin":"1"},signal:current.signal});
       const data=await response.json();if(generation!==sequence)return;
@@ -1685,17 +1767,18 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
         if(data.status==="busy"){node("status").textContent="A report is being prepared or temporarily paused. Refresh again shortly.";return;}
         throw Error("unavailable");
       }
-      validate(data,days);titles=await loadTitles(current.signal);if(generation!==sequence)return;rows=data.pages;ranking();
+      validate(data,days);pagesMeta=await loadMeta(current.signal);if(generation!==sequence)return;rows=data.pages;ranking(data.ausmalbild_visits);renderTrend(data);
       node("daily").replaceChildren(...data.daily.map(item=>row(item.day+(item.day===data.end_day?" · incomplete":""),item.visits)));
+      dimensions.forEach(name=>renderDimension(name,data[name]));
       node("total").textContent=number.format(data.total);node("home").textContent=number.format(data.homepage_visits);node("coloring").textContent=number.format(data.ausmalbild_visits);node("pages").textContent=number.format(rows.length);
       node("empty").hidden=data.total!==0;
-      node("status").textContent=data.start_day+" to "+data.end_day+" UTC · Snapshot "+data.generated_at.replace("T"," ").replace("Z"," UTC")+" · may be cached for 60 seconds; recent counts may still be processing.";
+      node("status").textContent=data.start_day+" to "+data.end_day+" UTC · Snapshot "+data.generated_at.replace("T"," ").replace("Z"," UTC")+" · cached up to "+data.cache_seconds+" seconds.";
       node("content").hidden=false;loaded=true;
-    }catch(_){if(generation===sequence){clear();node("status").textContent="Could not load GoatCounter visits. Refresh to try again; unavailable data is not zero.";}}
+    }catch(_){if(generation===sequence){clear();node("status").textContent="Could not load GoatCounter traffic. Refresh to try again; unavailable data is not zero.";}}
     finally{clearTimeout(timer);if(generation===sequence){node("refresh").disabled=false;node("days").disabled=false;}}
   }
   node("refresh").addEventListener("click",refresh);node("days").addEventListener("change",refresh);
-  node("more").addEventListener("click",()=>{shown+=25;ranking();});
+  node("more").addEventListener("click",()=>{shown+=25;ranking(rows.reduce((sum,item)=>sum+item.visits,0));});
   window.AdminOrigin={open:page=>page==="traffic"&&!loaded&&!node("refresh").disabled?refresh():Promise.resolve()};
   if(typeof currentRoute!=="undefined")window.AdminOrigin.open(currentRoute);
 })();
