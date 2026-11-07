@@ -377,8 +377,6 @@ def provision_secret(expected_main: str) -> None:
             os.fchmod(fd, 0o600)
             view = memoryview(payload)
             while view:
-                # Intentional root-only 0600 credential-at-rest boundary; see #1422.
-                # codeql[py/clear-text-storage-sensitive-data]
                 written = os.write(fd, view)
                 if written < 1:
                     raise OSError("short write")
@@ -386,7 +384,7 @@ def provision_secret(expected_main: str) -> None:
             os.fsync(fd)
         finally:
             os.close(fd)
-        if hashlib.sha256(owned_file(SECRET, 0o600)).digest() != hashlib.sha256(payload).digest():
+        if owned_file(SECRET, 0o600) != payload:
             raise GateError("secret_post_write_mismatch")
     except (OSError, GateError):
         raise GateError("secret_post_mutation_unknown_state") from None
