@@ -122,7 +122,7 @@ class BlockerRemediationDesignTests(unittest.TestCase):
             1,
         )
         makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-        self.assertIn('python3 ./scripts/run-validation-group.py "$group"', makefile)
+        self.assertIn("python3 ./scripts/run-validation-group.py", makefile)
         self.assertIn(
             "validate: test api-contract targeted-legacy secret-scan public-safety",
             makefile,

@@ -300,8 +300,15 @@ class ChildTests(unittest.TestCase):
 
     def test_source_contract_and_make_wiring(self):
         self.assertEqual(json.loads((ROOT / m.CONTRACT).read_text()), m.contract())
-        make = (ROOT / "Makefile").read_text()
-        self.assertEqual(make.count("python3 ./tests/test-hermes-private-env-child.py"), 1)
+        commands = [
+            tuple(argv)
+            for entries in json.loads((ROOT / "ci/validate-groups.json").read_text(encoding="utf-8"))["groups"].values()
+            for argv in entries
+        ]
+        self.assertEqual(
+            commands.count(("python3", "./tests/test-hermes-private-env-child.py")),
+            1,
+        )
         with patch.object(m.v4, "_require_frozen_source") as frozen, \
              patch.object(m.v3, "_git_stdout_readonly", return_value=b"drift"):
             with self.assertRaises(m.Stop):
