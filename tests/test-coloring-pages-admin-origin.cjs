@@ -38,7 +38,7 @@ function pageCells(h){
  const h=harness();assert.equal(h.calls.length,0,"lazy report");await h.open("stats");assert.equal(h.calls.length,0);
  await h.open("traffic");assert.equal(h.nodes.total.textContent,"6");assert.equal(h.nodes.home.textContent,"1");assert.equal(h.nodes.coloring.textContent,"5");assert.equal(h.nodes.pages.textContent,"1");
  assert.deepEqual(pageCells(h),{title:"Kleiner Traktor",id:"ID: 0123456",visits:"5",share:"100%"});
- assert.ok(h.nodes.trend.children.length>=2);assert.equal(h.nodes.referrers.children.length,1);assert.equal(h.nodes.campaigns.children.length,1);
+ assert.ok(h.nodes.trend.children.length>=2);const shortLabels=h.nodes.trend.children.filter(child=>child.attributes.class==="traffic-trend-label");assert.equal(shortLabels.length,7);assert.deepEqual(shortLabels.map(label=>label.textContent),["0","0","0","0","0","0","6"]);assert.equal(h.nodes.referrers.children.length,1);assert.equal(h.nodes.campaigns.children.length,1);
  assert.equal(h.nodes.locations.children.length,1);assert.equal(h.nodes.browsers.children.length,1);assert.equal(h.nodes.systems.children.length,1);assert.equal(h.nodes.sizes.children.length,1);
  assert.equal(h.nodes.daily.children.length,7);assert.match(h.nodes.daily.children[6].children[0].textContent,/incomplete/);
  assert.match(h.nodes.status.textContent,/UTC.*Snapshot/);assert.equal(h.nodes.content.hidden,false);
@@ -55,7 +55,7 @@ function pageCells(h){
  h.set({ok:false,data:{status:"busy"}});await h.refresh();assert.match(h.nodes.status.textContent,/shortly/);
  h.set({ok:false,data:{status:"unavailable"}});await h.refresh();assert.match(h.nodes.status.textContent,/not zero/);
  h.set({ok:true,data:report(1,0,0)});await h.change(1);assert.equal(h.nodes.total.textContent,"0");assert.equal(h.nodes.empty.hidden,false);assert.equal(h.nodes.content.hidden,false);
- h.set({ok:true,data:report(365,5)});await h.change(365);assert.equal(h.nodes.daily.children.length,365);
+ h.set({ok:true,data:report(365,5)});await h.change(365);assert.equal(h.nodes.daily.children.length,365);const longLabels=h.nodes.trend.children.filter(child=>child.attributes.class==="traffic-trend-label");assert.ok(longLabels.length>1&&longLabels.length<=13);assert.equal(longLabels[longLabels.length-1].textContent,"6");
  const malformed=report(365,5);malformed.pages[0].page_id="<img onerror=evil>";
  h.set({ok:true,data:malformed});await h.refresh();assert.equal(h.nodes.content.hidden,true);assert.equal(h.nodes.ranking.children.length,0);
  const inconsistent=report(365,5);inconsistent.total=7;h.set({ok:true,data:inconsistent});await h.refresh();assert.equal(h.nodes.content.hidden,true);
