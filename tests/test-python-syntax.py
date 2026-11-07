@@ -13,6 +13,8 @@ fixed = [
     ROOT / "ops/bin/balkons-bot-latency-operator",
     ROOT / "ops/bin/balcony-watering-hermes-preflight",
     ROOT / "ops/bin/simple-deploy-executor-upgrade-933",
+    ROOT / "ops/bin/rpi5-weathernext-private-installer-boundary-bootstrap",
+    ROOT / "ops/bin/rpi5-weathernext-private-installer-boundary-refresh-runtime",
     ROOT / "ops/bin/rozkalns-cv-live-stats-rollout-1000",
 ]
 paths = sorted(

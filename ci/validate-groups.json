@@ -62,6 +62,10 @@
       ],
       [
         "python3",
+        "./tests/test-reconcile-simple-deploy-weather-data-v1.py"
+      ],
+      [
+        "python3",
         "./tests/test-deploy-executor-weather-public-runtime.py"
       ],
       [
@@ -135,6 +139,34 @@
       [
         "python3",
         "./tests/test-rpi5-main-weather-public-runtime-trusted-checkout-bootstrap.py"
+      ],
+      [
+        "python3",
+        "./tests/test-weather-private-installer-boundary-trusted-dispatch-mode-reconcile.py"
+      ],
+      [
+        "python3",
+        "./tests/test-weather-private-installer-boundary-refresh.py"
+      ],
+      [
+        "python3",
+        "./tests/test-weather-private-installer-boundary-bootstrap.py"
+      ],
+      [
+        "python3",
+        "./tests/test-weather-private-installer-boundary-manager-runtime-mode.py"
+      ],
+      [
+        "python3",
+        "./tests/test-weather-private-installer-boundary-refresh-runtime.py"
+      ],
+      [
+        "python3",
+        "./tests/test-weather-private-installer-boundary-refresh-bootstrap-runtime.py"
+      ],
+      [
+        "python3",
+        "./tests/test-weather-private-installer-boundary-refresh-module-registration.py"
       ],
       [
         "python3",
@@ -277,6 +309,10 @@
       [
         "python3",
         "./tests/test-simple-deploy-coloring-pages-alignment-v1.py"
+      ],
+      [
+        "python3",
+        "./tests/test-simple-deploy-coloring-pages-target-v1.py"
       ],
       [
         "python3",
@@ -447,6 +483,14 @@
       [
         "python3",
         "./tests/test-simple-deploy-hermes-prerequisite-recovery-v3.py"
+      ],
+      [
+        "python3",
+        "./tests/test-simple-deploy-hermes-adoption-v1.py"
+      ],
+      [
+        "python3",
+        "./tests/test-simple-deploy-hermes-adoption-phase-b-identity.py"
       ],
       [
         "python3",
