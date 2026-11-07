@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 REPAIR = ROOT / "scripts/repair-weather-v9-predecessor-bootstrap-capability.py"
 CONTRACT = ROOT / "ops/deploy/weather-v9-predecessor-bootstrap-capability-repair.json"
 DOC = ROOT / "docs/operations/weather-v9-predecessor-bootstrap-capability-repair.md"
-WORKFLOW = ROOT / ".github/workflows/validate.yml"
+TARGETED_LEGACY = ROOT / "scripts/targeted_legacy_regressions.py"
 
 
 def load_repair():
@@ -34,7 +34,7 @@ class WeatherV9BootstrapCapabilityRepairTests(unittest.TestCase):
         cls.script = REPAIR.read_text(encoding="utf-8")
         cls.contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
         cls.doc = DOC.read_text(encoding="utf-8")
-        cls.workflow = WORKFLOW.read_text(encoding="utf-8")
+        cls.targeted_legacy = TARGETED_LEGACY.read_text(encoding="utf-8")
 
     def baseline(self):
         old_broker = b"old-broker\n"
@@ -221,8 +221,8 @@ class WeatherV9BootstrapCapabilityRepairTests(unittest.TestCase):
         self.assertIn("exactly two atomic replacement operations", self.doc)
         self.assertIn("one new root-broker `preflight` request", self.doc)
         self.assertIn(
-            "python3 ./tests/test-weather-v9-predecessor-bootstrap-capability-repair.py",
-            self.workflow,
+            "tests/test-weather-v9-predecessor-bootstrap-capability-repair.py",
+            self.targeted_legacy,
         )
 
 

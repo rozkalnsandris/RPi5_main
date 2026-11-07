@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 OPERATOR = ROOT / "scripts" / "activate-cv-classifier-baseline.sh"
-MAKEFILE = ROOT / "Makefile"
+VALIDATE_MANIFEST = ROOT / "ci/validate-groups.json"
 
 
 class CVClassifierHostAlignmentTests(unittest.TestCase):
@@ -15,10 +16,14 @@ class CVClassifierHostAlignmentTests(unittest.TestCase):
         cls.text = OPERATOR.read_text(encoding="utf-8")
 
     def test_operator_is_registered_and_parses_as_bash(self) -> None:
-        makefile = MAKEFILE.read_text(encoding="utf-8")
+        commands = [
+            tuple(argv)
+            for entries in json.loads(VALIDATE_MANIFEST.read_text(encoding="utf-8"))["groups"].values()
+            for argv in entries
+        ]
         self.assertIn(
-            "python3 ./tests/test-cv-classifier-host-alignment.py",
-            makefile,
+            ("python3", "./tests/test-cv-classifier-host-alignment.py"),
+            commands,
         )
         subprocess.run(["bash", "-n", str(OPERATOR)], check=True)
 

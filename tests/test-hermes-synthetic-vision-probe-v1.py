@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import importlib.util
 import io
+import json
 import socket
 import struct
 import unittest
@@ -167,8 +168,15 @@ class HermesSyntheticVisionProbeTests(unittest.TestCase):
         self.assertEqual(attempts, ["sent"])
 
     def test_makefile_runs_probe_tests(self) -> None:
-        makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-        self.assertIn("python3 ./tests/test-hermes-synthetic-vision-probe-v1.py", makefile)
+        commands = [
+            tuple(argv)
+            for entries in json.loads((ROOT / "ci/validate-groups.json").read_text(encoding="utf-8"))["groups"].values()
+            for argv in entries
+        ]
+        self.assertIn(
+            ("python3", "./tests/test-hermes-synthetic-vision-probe-v1.py"),
+            commands,
+        )
 
 
 if __name__ == "__main__":

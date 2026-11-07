@@ -17,7 +17,7 @@ MODULE = ROOT / "ops/lib/deploy_executor/weather_public_runtime_operator_upgrade
 ENTRYPOINT_SOURCE = ROOT / "ops/bin/rozkalns-weather-public-runtime-operator-upgrade-v3"
 UPGRADE_CONTRACT = ROOT / "ops/deploy/weather-public-runtime-operator-upgrade-v3.json"
 CHECKOUT_CONTRACT = ROOT / "ops/deploy/rpi5-main-weather-public-runtime-operator-upgrade-v3-trusted-checkout-bootstrap.json"
-VALIDATE_MANIFEST = ROOT / "ci/validate-groups.json"
+MAKEFILE = ROOT / "Makefile"
 sys.path.insert(0, str(ROOT / "ops/lib"))
 
 from deploy_executor import weather_public_runtime_operator_upgrade_v3 as upgrade
@@ -365,14 +365,10 @@ class WeatherOperatorEntrypointUpgradeV3Tests(unittest.TestCase):
             "worktree prune",
         ):
             self.assertNotIn(forbidden, source)
-        commands = [
-            tuple(argv)
-            for entries in json.loads(VALIDATE_MANIFEST.read_text(encoding="utf-8"))["groups"].values()
-            for argv in entries
-        ]
+        makefile = MAKEFILE.read_text(encoding="utf-8")
         self.assertIn(
-            ("python3", "./tests/test-deploy-executor-weather-public-operator-upgrade-v3.py"),
-            commands,
+            "python3 ./tests/test-deploy-executor-weather-public-operator-upgrade-v3.py",
+            makefile,
         )
 
     def test_public_source_contains_no_concrete_home_path(self) -> None:
