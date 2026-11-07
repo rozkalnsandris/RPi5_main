@@ -18,7 +18,7 @@ DELIVERY_CONTRACT = ROOT / "ops/deploy/weather-public-runtime-operator-upgrade-v
 CHECKOUT_CONTRACT = ROOT / "ops/deploy/rpi5-main-weather-public-runtime-operator-upgrade-v7-trusted-checkout-bootstrap.json"
 REGISTRY = ROOT / "ops/deploy/executor-operations.json"
 DOC = ROOT / "docs/WEATHER_OPERATOR_V7_PRIVILEGED_DELIVERY.md"
-MAKEFILE = ROOT / "Makefile"
+VALIDATE_MANIFEST = ROOT / "ci/validate-groups.json"
 MODULE = ROOT / "ops/lib/deploy_executor/weather_operator_upgrade_v7_privileged_delivery.py"
 REQUEST_ID = "123e4567-e89b-42d3-a456-426614174000"
 SOURCE_SHA = "a" * 40
@@ -116,7 +116,11 @@ class WeatherV7PrivilegedDeliveryTests(unittest.TestCase):
         cls.checkout = json.loads(CHECKOUT_CONTRACT.read_text(encoding="utf-8"))
         cls.registry = json.loads(REGISTRY.read_text(encoding="utf-8"))
         cls.doc = DOC.read_text(encoding="utf-8")
-        cls.makefile = MAKEFILE.read_text(encoding="utf-8")
+        cls.validation_commands = [
+            tuple(argv)
+            for entries in json.loads(VALIDATE_MANIFEST.read_text(encoding="utf-8"))["groups"].values()
+            for argv in entries
+        ]
 
     def prepare(
         self,
@@ -340,8 +344,8 @@ class WeatherV7PrivilegedDeliveryTests(unittest.TestCase):
         self.assertIn("P8 remains mutation-disabled", self.doc)
         self.assertIn("Source merge does not authorize LIVE", self.doc)
         self.assertIn(
-            "python3 ./tests/test-deploy-executor-weather-operator-upgrade-v7-privileged-delivery.py",
-            self.makefile,
+            ("python3", "./tests/test-deploy-executor-weather-operator-upgrade-v7-privileged-delivery.py"),
+            self.validation_commands,
         )
 
 

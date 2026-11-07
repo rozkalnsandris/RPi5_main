@@ -21,7 +21,7 @@ SOCKET = ROOT / "ops/systemd/rozkalns-weather-operator-v7-privileged-broker.sock
 SERVICE = ROOT / "ops/systemd/rozkalns-weather-operator-v7-privileged-broker@.service"
 DELIVERY = ROOT / "ops/deploy/weather-public-runtime-operator-upgrade-v7-privileged-delivery.json"
 DOC = ROOT / "docs/WEATHER_OPERATOR_V7_PRIVILEGED_DELIVERY.md"
-WORKFLOW = ROOT / ".github/workflows/validate.yml"
+TARGETED_LEGACY = ROOT / "scripts/targeted_legacy_regressions.py"
 REQUEST_ID = "123e4567-e89b-42d3-a456-426614174000"
 
 
@@ -75,7 +75,7 @@ class WeatherV7HostCapabilityTests(unittest.TestCase):
         cls.service = SERVICE.read_text(encoding="utf-8")
         cls.delivery = json.loads(DELIVERY.read_text(encoding="utf-8"))
         cls.doc = DOC.read_text(encoding="utf-8")
-        cls.workflow = WORKFLOW.read_text(encoding="utf-8")
+        cls.targeted_legacy = TARGETED_LEGACY.read_text(encoding="utf-8")
 
     def test_source_status_is_install_ready_but_live_inactive(self) -> None:
         ready = cap.source_readiness()
@@ -252,8 +252,8 @@ class WeatherV7HostCapabilityTests(unittest.TestCase):
         self.assertIn("RPi5_main#571", self.doc)
         self.assertIn("SOURCE_READY_FOR_HOST_CAPABILITY_INSTALL", self.doc)
         self.assertIn(
-            "python3 ./tests/test-weather-operator-v7-host-capability-installer.py",
-            self.workflow,
+            "tests/test-weather-operator-v7-host-capability-installer.py",
+            self.targeted_legacy,
         )
 
 

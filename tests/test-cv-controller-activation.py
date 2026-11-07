@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 import re
 import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 OPERATOR = ROOT / "ops" / "bin" / "rozkalns-cv-controller-activate"
-MAKEFILE = ROOT / "Makefile"
+VALIDATE_MANIFEST = ROOT / "ci/validate-groups.json"
 
 
 class CvControllerActivationContractTests(unittest.TestCase):
@@ -16,10 +17,14 @@ class CvControllerActivationContractTests(unittest.TestCase):
         cls.text = OPERATOR.read_text(encoding="utf-8")
 
     def test_operator_is_registered_in_validation(self) -> None:
-        makefile = MAKEFILE.read_text(encoding="utf-8")
+        commands = [
+            tuple(argv)
+            for entries in json.loads(VALIDATE_MANIFEST.read_text(encoding="utf-8"))["groups"].values()
+            for argv in entries
+        ]
         self.assertIn(
-            "python3 ./tests/test-cv-controller-activation.py",
-            makefile,
+            ("python3", "./tests/test-cv-controller-activation.py"),
+            commands,
         )
 
     def test_operator_is_executable_in_git_index(self) -> None:

@@ -9,7 +9,7 @@ CONTRACT_PATH = ROOT / "ops/deploy/rpi5-main-weather-v7-host-capability-installe
 V2_CONTRACT_PATH = ROOT / "ops/deploy/rpi5-main-weather-v7-host-capability-installer-source-v2-trusted-checkout-bootstrap.json"
 OPERATOR_BOOTSTRAP_PATH = ROOT / "ops/deploy/rpi5-main-weather-public-runtime-operator-upgrade-v7-trusted-checkout-bootstrap.json"
 DOC_PATH = ROOT / "docs/WEATHER_OPERATOR_V7_PRIVILEGED_DELIVERY.md"
-WORKFLOW_PATH = ROOT / ".github/workflows/validate.yml"
+TARGETED_LEGACY_PATH = ROOT / "scripts/targeted_legacy_regressions.py"
 
 
 def require(condition: bool, message: str) -> None:
@@ -22,7 +22,7 @@ def main() -> None:
     v2 = json.loads(V2_CONTRACT_PATH.read_text(encoding="utf-8"))
     operator = json.loads(OPERATOR_BOOTSTRAP_PATH.read_text(encoding="utf-8"))
     doc = DOC_PATH.read_text(encoding="utf-8")
-    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+    targeted_legacy = TARGETED_LEGACY_PATH.read_text(encoding="utf-8")
 
     require(contract["schema"] == "rozkalns.rpi5-main.weather-v7-host-capability-installer-source-trusted-checkout-bootstrap.v1", "schema drifted")
     require(contract["issue"] == 574, "issue binding drifted")
@@ -106,7 +106,7 @@ def main() -> None:
 
     require("Issue #574 trusted installer source delivery" in doc, "#574 continuity documentation missing")
     require("Issue #586 sudo Git trust correction" in doc, "#586 continuity documentation missing")
-    require("python3 ./tests/test-weather-v7-host-capability-installer-source-delivery.py" in workflow, "#574/#586 source-delivery security test is not wired into Validate")
+    require("tests/test-weather-v7-host-capability-installer-source-delivery.py" in targeted_legacy, "#574/#586 source-delivery security test is not wired into targeted legacy validation")
 
     print("weather-v7 host-capability installer source delivery contract: PASS")
 

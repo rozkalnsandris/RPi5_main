@@ -21,7 +21,7 @@ INSTALLER = ROOT / "scripts/install-weather-operator-v7-host-capability.py"
 REPAIR = ROOT / "scripts/repair-weather-operator-v7-host-capability-home-access.py"
 CONTRACT = ROOT / "ops/deploy/weather-public-runtime-operator-upgrade-v7-host-capability-repair-v2.json"
 DOC = ROOT / "docs/WEATHER_OPERATOR_V7_REPAIR_595.md"
-WORKFLOW = ROOT / ".github/workflows/validate.yml"
+TARGETED_LEGACY = ROOT / "scripts/targeted_legacy_regressions.py"
 REQUEST_ID = "123e4567-e89b-42d3-a456-426614174595"
 
 
@@ -85,7 +85,7 @@ class WeatherV7HomeAccessRepairTests(unittest.TestCase):
         cls.repair = REPAIR.read_text(encoding="utf-8")
         cls.contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
         cls.doc = DOC.read_text(encoding="utf-8")
-        cls.workflow = WORKFLOW.read_text(encoding="utf-8")
+        cls.targeted_legacy = TARGETED_LEGACY.read_text(encoding="utf-8")
 
     def test_direct_owner_authorization_is_accepted_and_app_mediated_is_rejected(self) -> None:
         parsed = cap.parse_authorization_issue(
@@ -224,8 +224,8 @@ class WeatherV7HomeAccessRepairTests(unittest.TestCase):
         self.assertIn("CAP_DAC_OVERRIDE", self.doc)
         self.assertIn("@@WEATHER_V7_MANAGER_PARENT@@", self.doc)
         self.assertIn(
-            "python3 ./tests/test-weather-v7-host-capability-home-access-repair.py",
-            self.workflow,
+            "tests/test-weather-v7-host-capability-home-access-repair.py",
+            self.targeted_legacy,
         )
 
 

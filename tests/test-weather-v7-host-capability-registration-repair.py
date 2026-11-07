@@ -16,7 +16,7 @@ BROKER = ROOT / "ops/bin/rozkalns-weather-operator-v7-privileged-broker"
 REPAIR = ROOT / "scripts/repair-weather-operator-v7-host-capability-registration.py"
 CONTRACT = ROOT / "ops/deploy/weather-public-runtime-operator-upgrade-v7-host-capability-repair.json"
 DOC = ROOT / "docs/WEATHER_OPERATOR_V7_REPAIR_593.md"
-WORKFLOW = ROOT / ".github/workflows/validate.yml"
+TARGETED_LEGACY = ROOT / "scripts/targeted_legacy_regressions.py"
 ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
 
 
@@ -28,7 +28,7 @@ class WeatherV7RegistrationRepairTests(unittest.TestCase):
         cls.repair = REPAIR.read_text(encoding="utf-8")
         cls.contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
         cls.doc = DOC.read_text(encoding="utf-8")
-        cls.workflow = WORKFLOW.read_text(encoding="utf-8")
+        cls.targeted_legacy = TARGETED_LEGACY.read_text(encoding="utf-8")
 
     def test_first_install_registers_canonical_manager_not_linked_source_root(self) -> None:
         self.assertIn('run_git("rev-parse", "--path-format=absolute", "--git-common-dir")', self.installer)
@@ -168,8 +168,8 @@ class WeatherV7RegistrationRepairTests(unittest.TestCase):
         self.assertIn("ops-workflows#65", self.doc)
         self.assertIn("brand-new", self.doc)
         self.assertIn(
-            "python3 ./tests/test-weather-v7-host-capability-registration-repair.py",
-            self.workflow,
+            "tests/test-weather-v7-host-capability-registration-repair.py",
+            self.targeted_legacy,
         )
 
 

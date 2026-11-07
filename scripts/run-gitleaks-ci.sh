@@ -14,6 +14,26 @@ resolve_gitleaks_release_arch() {
   esac
 }
 
+gitleaks_release_archive_sha256() {
+  case "${1:-}" in
+    x64)
+      printf '%s\n' "ba6dbb656933921c775ee5a2d1c13a91046e7952e9d919f9bac4cec61d628e7d"
+      ;;
+    arm64)
+      printf '%s\n' "bf5f7f466ebfade1296c8bd32cf7d3f592c2aa78836aa9980ffbe2cadca7a861"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+verify_sha256_file() {
+  local file="${1:?file required}"
+  local expected="${2:?expected SHA-256 required}"
+  printf '%s  %s\n' "${expected}" "${file}" | sha256sum -c - >/dev/null
+}
+
 gitleaks_history_revision() {
   printf '%s\n' "HEAD"
 }
@@ -63,19 +83,14 @@ trap 'rm -rf "$tmp"' EXIT
 curl_common=(--fail --location --silent --show-error --retry 3 --proto '=https' --tlsv1.2)
 
 curl "${curl_common[@]}" "$release_base/$archive" -o "$tmp/$archive"
-curl "${curl_common[@]}" "$release_base/gitleaks_${GITLEAKS_VERSION}_checksums.txt" -o "$tmp/checksums.txt"
-
-grep -E "[[:space:]]${archive}$" "$tmp/checksums.txt" >"$tmp/checksum-one.txt" || {
-  echo "Gitleaks CI: FAIL: pinned release checksum entry missing" >&2
+if ! expected_archive_sha256="$(gitleaks_release_archive_sha256 "$gitleaks_arch")"; then
+  echo "Gitleaks CI: FAIL: no pinned checksum for architecture: $gitleaks_arch" >&2
   exit 1
-}
-(
-  cd "$tmp"
-  sha256sum -c checksum-one.txt >/dev/null
-) || {
+fi
+if ! verify_sha256_file "$tmp/$archive" "$expected_archive_sha256"; then
   echo "Gitleaks CI: FAIL: pinned release checksum mismatch" >&2
   exit 1
-}
+fi
 
 tar -xzf "$tmp/$archive" -C "$tmp" gitleaks
 chmod 0700 "$tmp/gitleaks"
