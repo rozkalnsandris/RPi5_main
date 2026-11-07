@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export GIT_OPTIONAL_LOCKS=0
 EXPECTED_MAIN="${1:-}"
 CONFIRM="${2:-}"
 MODE="${3:-full}"
