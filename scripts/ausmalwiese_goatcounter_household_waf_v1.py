@@ -517,9 +517,7 @@ def provision_secret(expected_main: str) -> None:
         with warnings.catch_warnings():
             warnings.simplefilter("error", getpass.GetPassWarning)
             zone = getpass.getpass("Dedicated ausmalwiese.de Zone ID (hidden): ")
-            token = getpass.getpass(
-                "Dedicated Zone Read + Zone WAF Write token (hidden): "
-            )
+            token = getpass.getpass("Dedicated Zone Read + Zone WAF Write token (hidden): ")
     except (EOFError, KeyboardInterrupt, getpass.GetPassWarning, OSError):
         raise GateError("secure_local_tty_input_failed") from None
 
