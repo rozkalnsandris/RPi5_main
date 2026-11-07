@@ -17,7 +17,7 @@ jobs:
   authorize:
     name: Authorize exact owner P1D-04 pre-LIVE prep command
     if: github.event.issue.pull_request == null && github.event.issue.number == 179 && startsWith(github.event.comment.body, '/rpi5-p1d04 prep ')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -48,7 +48,7 @@ jobs:
     name: Build private GET-only Organization preimage evidence
     needs: authorize
     if: needs.authorize.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read

@@ -39,7 +39,7 @@ permissions:
 
 jobs:
   source-contract:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Check out repository
@@ -60,7 +60,7 @@ jobs:
             ops/lib/deploy_executor/weather_private_privileged_dispatch.py
 
   deterministic-wheelhouse:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
       SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}

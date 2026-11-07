@@ -16,7 +16,7 @@ concurrency:
 jobs:
   regressions:
     name: regression / ${{ matrix.group }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     strategy:
       fail-fast: false
@@ -44,7 +44,7 @@ jobs:
 
   api-contract:
     name: GitHub API access contract
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
       - name: Check out repository
@@ -57,7 +57,7 @@ jobs:
 
   targeted-legacy:
     name: targeted legacy regressions
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Check out repository
@@ -73,7 +73,7 @@ jobs:
 
   secret-scan:
     name: tracked source secret guard
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
       - name: Check out repository
@@ -86,7 +86,7 @@ jobs:
 
   public-safety:
     name: public diff safety
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
       - name: Check out repository
@@ -101,7 +101,7 @@ jobs:
         run: bash ./scripts/check-public-safety.sh
 
   gitleaks:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Check out full repository history
@@ -135,7 +135,7 @@ jobs:
       - gitleaks
       - public-automation-baseline
       - workflow-security
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
       - name: Check out repository

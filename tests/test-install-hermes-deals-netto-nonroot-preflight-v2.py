@@ -247,7 +247,7 @@ class NettoPreflightV2InstallerTests(unittest.TestCase):
             "python3 ./tests/test-install-hermes-deals-netto-nonroot-preflight-v2.py",
             source,
         )
-        self.assertIn("runs-on: ubuntu-latest", source)
+        self.assertIn("runs-on: ubuntu-24.04", source)
         self.assertNotIn("self-hosted", source)
 
 

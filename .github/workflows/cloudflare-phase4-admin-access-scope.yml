@@ -17,7 +17,7 @@ jobs:
   authorize:
     name: Authorize exact owner Phase 4 command
     if: github.event.issue.pull_request == null && github.event.issue.number == 819 && startsWith(github.event.comment.body, '/rpi5-p4-access-scope ')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -48,7 +48,7 @@ jobs:
     name: Run Phase 4 ADMIN Access scope GET-only audit
     needs: authorize
     if: needs.authorize.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read

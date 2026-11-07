@@ -16,7 +16,7 @@ jobs:
   authorize:
     name: Authorize exact owner command
     if: github.event.issue.pull_request == null && startsWith(github.event.comment.body, '/rpi5-61 ')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -46,7 +46,7 @@ jobs:
     name: Run guarded Cloudflare route operation
     needs: authorize
     if: needs.authorize.result == 'success' && contains(fromJSON('["check","cutover","verify-loopback"]'), needs.authorize.outputs.operation)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -132,7 +132,7 @@ jobs:
     needs:
       - authorize
       - route
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read

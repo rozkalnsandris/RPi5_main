@@ -34,7 +34,7 @@ permissions:
 jobs:
   phase4-activation-evidence-contract:
     name: phase4 activation-evidence contract
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     steps:
