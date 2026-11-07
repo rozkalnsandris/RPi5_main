@@ -20,6 +20,37 @@ assert_arch amd64 x64
 assert_arch aarch64 arm64
 assert_arch arm64 arm64
 
+[[ "$(gitleaks_release_archive_sha256 x64)" == "ba6dbb656933921c775ee5a2d1c13a91046e7952e9d919f9bac4cec61d628e7d" ]] || {
+  echo "Gitleaks architecture test: FAIL: x64 checksum pin mismatch" >&2
+  exit 1
+}
+[[ "$(gitleaks_release_archive_sha256 arm64)" == "bf5f7f466ebfade1296c8bd32cf7d3f592c2aa78836aa9980ffbe2cadca7a861" ]] || {
+  echo "Gitleaks architecture test: FAIL: arm64 checksum pin mismatch" >&2
+  exit 1
+}
+if gitleaks_release_archive_sha256 riscv64 >/dev/null 2>&1; then
+  echo "Gitleaks architecture test: FAIL: unsupported checksum architecture accepted" >&2
+  exit 1
+fi
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+printf '%s' 'checksum-canary' >"$tmp/archive"
+expected="$(sha256sum "$tmp/archive" | awk '{print $1}')"
+verify_sha256_file "$tmp/archive" "$expected" || {
+  echo "Gitleaks architecture test: FAIL: valid checksum rejected" >&2
+  exit 1
+}
+if verify_sha256_file "$tmp/archive" "0000000000000000000000000000000000000000000000000000000000000000" >/dev/null 2>&1; then
+  echo "Gitleaks architecture test: FAIL: wrong checksum accepted" >&2
+  exit 1
+fi
+printf '%s' '-modified' >>"$tmp/archive"
+if verify_sha256_file "$tmp/archive" "$expected" >/dev/null 2>&1; then
+  echo "Gitleaks architecture test: FAIL: modified archive accepted" >&2
+  exit 1
+fi
+
 for machine in '' armv7l riscv64 ppc64le; do
   if resolve_gitleaks_release_arch "$machine" >/dev/null 2>&1; then
     echo "Gitleaks architecture test: FAIL: unsupported architecture accepted: ${machine:-<empty>}" >&2

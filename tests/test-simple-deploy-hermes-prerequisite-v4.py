@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/materialize-simple-deploy-hermes-prerequisites-v4.py"
 CONTRACT = ROOT / "ops/contracts/simple-deploy-hermes-prerequisite-materialization-v4.json"
 DOC = ROOT / "docs/SIMPLE_DEPLOY_HERMES_PREREQUISITE_MATERIALIZATION_V4.md"
-MAKEFILE = ROOT / "Makefile"
+VALIDATE_MANIFEST = ROOT / "ci/validate-groups.json"
 spec = importlib.util.spec_from_file_location("hermes_v4_under_test", SCRIPT)
 assert spec and spec.loader
 v4 = importlib.util.module_from_spec(spec)
@@ -170,15 +170,23 @@ class HermesV4SourceTests(unittest.TestCase):
         self.assertIn("--no-optional-locks", (ROOT / "scripts/materialize-simple-deploy-hermes-prerequisites-v3.py").read_text(encoding="utf-8"))
 
     def test_legacy_regressions_and_ci_are_integrated(self):
-        make = MAKEFILE.read_text(encoding="utf-8")
+        commands = [
+            tuple(argv)
+            for entries in json.loads(VALIDATE_MANIFEST.read_text(encoding="utf-8"))["groups"].values()
+            for argv in entries
+        ]
         for filename in (
             "test-simple-deploy-hermes-prerequisite-materialization-v1.py",
             "test-simple-deploy-hermes-prerequisite-phase-b-parent-v2.py",
             "test-simple-deploy-hermes-prerequisite-recovery-v3.py",
             "test-simple-deploy-hermes-prerequisite-v4.py",
         ):
-            self.assertEqual(make.count("python3 ./tests/" + filename), 1)
-        self.assertIn("validate: test secret-scan public-safety", make)
+            self.assertEqual(commands.count(("python3", "./tests/" + filename)), 1)
+        makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+        self.assertIn(
+            "validate: test api-contract targeted-legacy secret-scan public-safety",
+            makefile,
+        )
         docs = DOC.read_text(encoding="utf-8")
         self.assertIn("BLOCKED_NO_START", docs)
         self.assertIn("Production deploy/change REQUIRED: NO", docs)

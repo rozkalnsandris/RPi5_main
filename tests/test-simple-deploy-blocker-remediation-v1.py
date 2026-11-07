@@ -15,7 +15,7 @@ V3 = ROOT / "ops/contracts/simple-deploy-hermes-prerequisite-materialization-v3.
 TECH = ROOT / "ops/deploy/hermes-tech-simple-deploy-cutover-v1.json"
 REGISTRY = ROOT / "ops/deploy/simple-deploy-targets-v1.json"
 EXE = ROOT / "ops/lib/deploy_executor/simple_deploy_v1.py"
-MAKEFILE = ROOT / "Makefile"
+VALIDATE_MANIFEST = ROOT / "ci/validate-groups.json"
 
 
 def load(path: Path) -> dict:
@@ -112,10 +112,21 @@ class BlockerRemediationDesignTests(unittest.TestCase):
             self.assertIn(marker, self.doc)
         for forbidden in ("192.168.", "HOME_LAT", "HOME_LON", "token=", "POSTGRES_PASSWORD"):
             self.assertNotIn(forbidden, self.doc)
-        recipe = "\tpython3 ./tests/test-simple-deploy-blocker-remediation-v1.py"
-        self.assertEqual(MAKEFILE.read_text(encoding="utf-8").count(recipe), 1)
-        self.assertIn("validate: test secret-scan public-safety",
-                      MAKEFILE.read_text(encoding="utf-8"))
+        commands = [
+            tuple(argv)
+            for entries in load(VALIDATE_MANIFEST)["groups"].values()
+            for argv in entries
+        ]
+        self.assertEqual(
+            commands.count(("python3", "./tests/test-simple-deploy-blocker-remediation-v1.py")),
+            1,
+        )
+        makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+        self.assertIn("python3 ./scripts/run-validation-group.py", makefile)
+        self.assertIn(
+            "validate: test api-contract targeted-legacy secret-scan public-safety",
+            makefile,
+        )
         self.assertIn("docs/SIMPLE_DEPLOY_BLOCKER_REMEDIATION_V1.md",
                       (ROOT / "docs/SIMPLE_DEPLOY_TIMER_RESTORATION_V1.md").read_text(encoding="utf-8"))
 

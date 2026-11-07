@@ -192,8 +192,15 @@ class HttpBoundaryTests(unittest.TestCase):
                     )
 
     def test_makefile_wiring(self):
-        content = (ROOT / "Makefile").read_text(encoding="utf-8")
-        self.assertIn("python3 ./tests/test-hermes-gateway-vision-guard-v1.py", content)
+        commands = [
+            tuple(argv)
+            for entries in json.loads((ROOT / "ci/validate-groups.json").read_text(encoding="utf-8"))["groups"].values()
+            for argv in entries
+        ]
+        self.assertIn(
+            ("python3", "./tests/test-hermes-gateway-vision-guard-v1.py"),
+            commands,
+        )
 
 
 if __name__ == "__main__":
