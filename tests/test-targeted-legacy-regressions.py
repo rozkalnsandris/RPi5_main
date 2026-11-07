@@ -22,6 +22,7 @@ assert module.select_groups([".github/workflows/validate.yml"]) == (True, True)
 assert module.select_groups(["ops/lib/deploy_executor/example.py"]) == (True, True)
 assert module.select_groups(["tests/hermes-deals-runner-smoke-example.py"]) == (True, False)
 assert module.select_groups(["scripts/rpi5_deploy.py"]) == (False, True)
-assert module.select_groups(["tests/test-WeAtHeRnExT-example.py"]) == (False, True)
+assert module.select_groups(["WeatherNext/example.py"]) == (False, True)
+assert module.select_groups(["tests/test-WeAtHeRnExT-example.py"]) == (False, False)
 
 print("Targeted legacy regression selector: PASS")

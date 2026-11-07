@@ -19,7 +19,7 @@ UPGRADE_CONTRACT = ROOT / "ops/deploy/weather-public-runtime-operator-upgrade.js
 CHECKOUT_CONTRACT = ROOT / "ops/deploy/rpi5-main-weather-public-runtime-operator-upgrade-trusted-checkout-bootstrap.json"
 INSTALL_CONTRACT = ROOT / "ops/deploy/weather-public-runtime-operator-install.json"
 DOC = ROOT / "docs/WEATHER_PUBLIC_RUNTIME_EXECUTOR_SOURCE.md"
-MAKEFILE = ROOT / "Makefile"
+VALIDATE_MANIFEST = ROOT / "ci/validate-groups.json"
 sys.path.insert(0, str(ROOT / "ops/lib"))
 
 from deploy_executor import weather_public_runtime_operator_upgrade as upgrade
@@ -388,17 +388,21 @@ class WeatherOperatorUpgradeSourceTests(unittest.TestCase):
 
     def test_docs_and_validate_target_are_wired(self) -> None:
         doc = DOC.read_text(encoding="utf-8")
-        makefile = MAKEFILE.read_text(encoding="utf-8")
+        commands = [
+            tuple(argv)
+            for entries in json.loads(VALIDATE_MANIFEST.read_text(encoding="utf-8"))["groups"].values()
+            for argv in entries
+        ]
         self.assertIn("Issue #487", doc)
         self.assertIn("RPi5_main-weather-public-runtime-operator-upgrade-trusted", doc)
         self.assertIn("weather-public-runtime-operator-upgrade.json", doc)
         self.assertIn(
-            "python3 ./tests/test-deploy-executor-weather-public-operator-install.py",
-            makefile,
+            ("python3", "./tests/test-deploy-executor-weather-public-operator-install.py"),
+            commands,
         )
         self.assertIn(
-            "python3 ./tests/test-deploy-executor-weather-public-operator-upgrade.py",
-            makefile,
+            ("python3", "./tests/test-deploy-executor-weather-public-operator-upgrade.py"),
+            commands,
         )
 
     def test_public_source_contains_no_concrete_home_path(self) -> None:
