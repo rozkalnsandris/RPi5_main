@@ -11,7 +11,7 @@ CONTRACT = ROOT / "ops/deploy/rpi5-main-weather-public-runtime-trusted-checkout-
 INSTALL = ROOT / "ops/deploy/weather-public-runtime-helper-install.json"
 EXECUTION = ROOT / "ops/deploy/weather-public-runtime-execution.json"
 DOC = ROOT / "docs/WEATHER_PUBLIC_RUNTIME_EXECUTOR_SOURCE.md"
-MAKEFILE = ROOT / "Makefile"
+VALIDATE_MANIFEST = ROOT / "ci/validate-groups.json"
 
 EXPECTED_SCHEMA = "rozkalns.rpi5-main.weather-public-runtime-trusted-checkout-bootstrap.v1"
 EXPECTED_BASE = "95b6b95b132614cbc330d6d764d0557079a67534"
@@ -79,7 +79,11 @@ class WeatherTrustedCheckoutBootstrapContractTests(unittest.TestCase):
         cls.install = json.loads(INSTALL.read_text())
         cls.execution = json.loads(EXECUTION.read_text())
         cls.doc = DOC.read_text()
-        cls.makefile = MAKEFILE.read_text()
+        cls.validation_commands = [
+            tuple(argv)
+            for entries in json.loads(VALIDATE_MANIFEST.read_text())["groups"].values()
+            for argv in entries
+        ]
 
     def test_identity_is_fixed_and_source_only(self) -> None:
         c = self.contract
@@ -187,8 +191,8 @@ class WeatherTrustedCheckoutBootstrapContractTests(unittest.TestCase):
         self.assertIn("evidence-only", self.doc)
         self.assertIn("git worktree add --detach", self.doc)
         self.assertIn(
-            "python3 ./tests/test-rpi5-main-weather-public-runtime-trusted-checkout-bootstrap.py",
-            self.makefile,
+            ("python3", "./tests/test-rpi5-main-weather-public-runtime-trusted-checkout-bootstrap.py"),
+            self.validation_commands,
         )
 
 
