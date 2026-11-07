@@ -30,9 +30,9 @@ const sha=x=>x.repeat(64),c=[{id:"tiere",label:"Tiere"},{id:"lernen",label:"Lern
           entry("0000008","Auto"),entry("legacy-auto","Auto")],
  snapshot={catalog:{catalog_sha256:sha("a"),count:entries.length,entries},
  taxonomy:{version:sha("b"),categories:c,topics:t.map(({id,label,kind})=>({id,label,kind}))},
- categories:{enabled:true,registry_sha256:sha("c"),categories:c},
- topics:{enabled:true,registry_sha256:sha("d"),topics:t},
- links:{enabled:true,registry_sha256:sha("e"),category_sha256:sha("c"),topic_sha256:sha("d"),links:l}};
+ categories:{enabled:true,revision:4,registry_sha256:sha("c"),categories:c},
+ topics:{enabled:true,revision:7,registry_sha256:sha("d"),topics:t},
+ links:{enabled:true,revision:9,registry_sha256:sha("e"),category_sha256:sha("c"),topic_sha256:sha("d"),links:l}};
 const state={"/api/catalog":snapshot.catalog,"/api/categories":snapshot.taxonomy,"/api/categories/manage":snapshot.categories,
  "/api/topics/manage":snapshot.topics,"/api/category-topics/manage":snapshot.links};
 const calls=[],downloadBytes=[],revoked=[],copy=x=>JSON.parse(JSON.stringify(x));
@@ -62,6 +62,7 @@ assert.equal(api.manifest(analysis).complete_review,false);
 assert.equal(api.manifest(analysis).approved_changes.length,0);
 assert.equal(api.manifest(analysis).mode,"DRY_RUN_ONLY");
 assert.equal(api.manifest(analysis).schema,"ausmalwiese.catalog-classification-review.v2");
+assert.deepEqual(JSON.parse(JSON.stringify(api.manifest(analysis).revisions)),{category_revision:4,topic_revision:7,links_revision:9});
 function bad(f){const s=copy(snapshot);f(s);assert.throws(()=>api.audit(s))}
 bad(s=>s.catalog.count++);
 bad(s=>s.catalog.entries.push(s.catalog.entries[0]));
@@ -111,6 +112,7 @@ assert.match(api.selectionError(rows[5].after,analysis.index,true),/not linked/)
  assert.equal(exported.mode,"DRY_RUN_ONLY");assert.equal(exported.complete_review,false);
  assert.equal(exported.approved_changes.length,1,"UI review state remains independent of synthetic API sample rows");
  assert.equal(exported.review_decisions.length,9);
+ assert.deepEqual(exported.revisions,{category_revision:4,topic_revision:7,links_revision:9});
  assert.ok(calls.every(x=>x.o.method==="GET"));
  state["/api/catalog"]={...snapshot.catalog,catalog_sha256:sha("9")};
  await api.exportPlan();

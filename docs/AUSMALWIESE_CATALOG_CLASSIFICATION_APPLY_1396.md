@@ -19,6 +19,8 @@ The caller cannot select alternate paths.
 
 The fixed schema is `ausmalwiese.catalog-classification-apply.v1`, derived from review schema `ausmalwiese.catalog-classification-review.v2`.
 
+The reviewed UI export now carries exact Category/Topic/link revisions as well as hashes. The source-only bridge `scripts/ausmalwiese_catalog_classification_review_to_apply_v1.py --review <export.json>` validates a complete `DRY_RUN_ONLY` export and prints the deterministic apply manifest to stdout. It does not stage the manifest or access LIVE state.
+
 A valid manifest must contain:
 
 - exact SHA-256 of catalog, Categories, Topics and Category↔Topic links;
@@ -28,6 +30,8 @@ A valid manifest must contain:
 - exact before/after ordered Categories and Topics;
 - a bounded reason and confidence value;
 - deterministic `manifest_sha256` over the complete manifest except that digest field.
+
+The bridge rejects incomplete reviews, pending decisions, missing/invalid revisions, duplicate IDs, malformed assignments, and any mismatch between `approved_changes` and the approved changed decision subset.
 
 Current catalog entries may have no Topic. An approved changed entry must have at least one valid Topic linked to one of its selected Categories. Rejected/deferred rows are preserved unchanged by the operator.
 
