@@ -101,6 +101,7 @@ MAX_DELETE_BYTES = 1024 * 1024 * 1024
 DELETE_CONFIRM = "DELETE"
 PNG_SIG = b"\x89PNG\r\n\x1a\n"
 TOKEN = re.compile(r"^[0-9a-f]{32}$")
+STAGED_PAGE_NAME = re.compile(r"^page-[0-9]{3}\\.png$")
 CATALOG_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 ALLOWED_AGES = {"3-6", "4-8"}
 ALLOWED_DIFFICULTIES = {"easy", "normal", "detailed"}
@@ -966,7 +967,28 @@ def validate_title(value) -> str:
 def validate_catalog_id(value) -> str:
     if not isinstance(value, str) or not CATALOG_ID.fullmatch(value):
         stop("catalog id is invalid")
-    return value
+    normalized = os.path.basename(value)
+    if normalized != value or normalized in {".", ".."}:
+        stop("catalog id path component is invalid")
+    return normalized
+
+
+def validate_storage_token(value) -> str:
+    if not isinstance(value, str) or not TOKEN.fullmatch(value):
+        stop("storage token is invalid")
+    normalized = os.path.basename(value)
+    if normalized != value:
+        stop("storage token path component is invalid")
+    return normalized
+
+
+def validate_staged_page_name(value) -> str:
+    if not isinstance(value, str) or not STAGED_PAGE_NAME.fullmatch(value):
+        stop("staged page name is invalid")
+    normalized = os.path.basename(value)
+    if normalized != value:
+        stop("staged page path component is invalid")
+    return normalized
 
 
 def validate_age(value) -> str:
@@ -1093,7 +1115,7 @@ def catalog_view_entry(entry: dict) -> dict:
 
 
 def archive_path(page_id: str) -> Path:
-    validate_catalog_id(page_id)
+    page_id = validate_catalog_id(page_id)
     return ARCHIVE / f"{page_id}.json"
 
 
@@ -1169,7 +1191,7 @@ def reserved_ids() -> set[str]:
 
 
 def inspect_delete_directory(root: Path, page_id: str) -> dict:
-    validate_catalog_id(page_id)
+    page_id = validate_catalog_id(page_id)
     flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
     try:
         root_fd = os.open(root, flags)
@@ -1225,7 +1247,7 @@ def inspect_delete_directory(root: Path, page_id: str) -> dict:
 
 
 def inspect_delete_inbox(page_id: str) -> dict:
-    validate_catalog_id(page_id)
+    page_id = validate_catalog_id(page_id)
     name = page_id + ".png"
     path = INBOX / name
     if not os.path.lexists(path):
@@ -1244,6 +1266,7 @@ def inspect_delete_inbox(page_id: str) -> dict:
 
 
 def delete_validated_directory(root: Path, page_id: str, inventory: dict) -> None:
+    page_id = validate_catalog_id(page_id)
     flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
     root_fd = os.open(root, flags)
     try:
@@ -1283,10 +1306,14 @@ def delete_validated_directory(root: Path, page_id: str, inventory: dict) -> Non
 def delete_validated_inbox(page_id: str, inventory: dict) -> None:
     if not inventory["exists"]:
         return
+    page_id = validate_catalog_id(page_id)
+    name = page_id + ".png"
+    if inventory.get("name") != name:
+        stop("delete inbox inventory name is invalid")
     flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
     root_fd = os.open(INBOX, flags)
     try:
-        st = os.stat(inventory["name"], dir_fd=root_fd, follow_symlinks=False)
+        st = os.stat(name, dir_fd=root_fd, follow_symlinks=False)
         if (
             not stat.S_ISREG(st.st_mode)
             or (st.st_dev, st.st_ino) != (inventory["dev"], inventory["ino"])
@@ -1295,7 +1322,7 @@ def delete_validated_inbox(page_id: str, inventory: dict) -> None:
             or st.st_gid != os.getegid()
         ):
             stop("delete inbox file changed after preflight")
-        os.unlink(inventory["name"], dir_fd=root_fd)
+        os.unlink(name, dir_fd=root_fd)
     finally:
         os.close(root_fd)
 
@@ -1866,8 +1893,9 @@ def run_job(job_id: str) -> None:
             set_step(job_id, 2, "running")
             prepared = []
             for page_index, item in enumerate(pages, 1):
-                source = upload_dir / "pages" / item["staged_name"]
-                target = prepared_dir / item["staged_name"]
+                staged_name = validate_staged_page_name(item.get("staged_name"))
+                source = upload_dir / "pages" / staged_name
+                target = prepared_dir / staged_name
                 run_tool(PRINT_MASTER, ["prepare", str(source), str(target)], uid, gid, job_id=job_id, page_index=page_index)
                 prepared.append(target)
             set_step(job_id, 2, "done")
@@ -2519,15 +2547,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, {"active": current is not None, "job": current})
             match = re.fullmatch(r"/api/uploads/([0-9a-f]{32})", path)
             if match:
-                return self.send_json(200, {"upload_id": match.group(1), **read_json(UPLOADS / match.group(1) / "upload.json")})
+                upload_id = validate_storage_token(match.group(1))
+                return self.send_json(200, {"upload_id": upload_id, **read_json(UPLOADS / upload_id / "upload.json")})
             match = re.fullmatch(r"/api/uploads/([0-9a-f]{32})/preview/(\d+)", path)
             if match:
-                payload = read_json(UPLOADS / match.group(1) / "upload.json")
+                upload_id = validate_storage_token(match.group(1))
+                payload = read_json(UPLOADS / upload_id / "upload.json")
                 index = int(match.group(2))
                 if index < 1 or index > len(payload["files"]):
                     return self.send_error_json(404, "preview not found")
                 item = payload["files"][index - 1]
-                data = (UPLOADS / match.group(1) / "pages" / item["staged_name"]).read_bytes()
+                staged_name = validate_staged_page_name(item.get("staged_name"))
+                data = (UPLOADS / upload_id / "pages" / staged_name).read_bytes()
                 self.send_response(200)
                 self.send_header("Content-Type", "image/png")
                 self.send_header("Cache-Control", "no-store")
@@ -2538,7 +2569,8 @@ class Handler(BaseHTTPRequestHandler):
                 return
             match = re.fullmatch(r"/api/jobs/([0-9a-f]{32})", path)
             if match:
-                return self.send_json(200, read_json(JOBS / match.group(1) / "job.json"))
+                job_id = validate_storage_token(match.group(1))
+                return self.send_json(200, read_json(JOBS / job_id / "job.json"))
             self.send_error_json(404, "not found")
         except Stop as exc:
             self.send_error_json(400, str(exc))
@@ -2987,9 +3019,7 @@ class Handler(BaseHTTPRequestHandler):
         if (not isinstance(raw, dict) or set(raw) not in valid_keys or
             ("categories" in raw and raw["categories"] is None)):
             stop("job request keys are invalid")
-        upload_id = raw["upload_id"]
-        if not isinstance(upload_id, str) or not TOKEN.fullmatch(upload_id):
-            stop("upload id is invalid")
+        upload_id = validate_storage_token(raw["upload_id"])
         upload = read_json(UPLOADS / upload_id / "upload.json")
         category, topic, version = raw["category"], raw["topic"], raw["taxonomy_sha256"]
         registry = load_taxonomy()
