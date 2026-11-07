@@ -1728,7 +1728,7 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
     points.forEach((point,index)=>{
       const sampled=index%labelStep===0||index===values.length-1,showDot=values.length<=31||sampled;
       if(showDot){const dot=document.createElementNS(svgNS,"circle");dot.setAttribute("class","traffic-trend-dot");dot.setAttribute("cx",point.x.toFixed(1));dot.setAttribute("cy",point.y.toFixed(1));dot.setAttribute("r","3.5");svg.append(dot)}
-      if(sampled){
+      if(sampled&&point.value>0){
         const label=document.createElementNS(svgNS,"text"),nearTop=point.y<top+18;
         label.setAttribute("class","traffic-trend-label");label.setAttribute("x",point.x.toFixed(1));label.setAttribute("y",(nearTop?point.y+19:point.y-9).toFixed(1));
         label.setAttribute("text-anchor",index===0?"start":index===values.length-1?"end":"middle");label.textContent=number.format(point.value);svg.append(label);
