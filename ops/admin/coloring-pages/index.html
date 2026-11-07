@@ -350,6 +350,7 @@ html{overflow-y:scroll}
 .traffic-trend{display:block;width:100%;height:250px;border:1px solid var(--line);border-radius:16px;background:#fbfdff}
 .traffic-trend-grid{stroke:#dfe8f3;stroke-width:1}.traffic-trend-line{fill:none;stroke:var(--blue);stroke-width:3;vector-effect:non-scaling-stroke}
 .traffic-trend-dot{fill:var(--blue);stroke:#fff;stroke-width:2;vector-effect:non-scaling-stroke}
+.traffic-trend-label{fill:#24425f;stroke:#fbfdff;stroke-width:3;paint-order:stroke;stroke-linejoin:round;font-family:var(--font-body);font-size:12px;font-weight:900;font-variant-numeric:tabular-nums;pointer-events:none}
 .traffic-fallback{margin-top:12px}.traffic-fallback summary{cursor:pointer;color:var(--blue-deep);font-weight:900}
 .traffic-bars{display:grid;gap:11px;list-style:none;margin:0;padding:0}
 .traffic-bar-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 12px;align-items:center}
@@ -1723,7 +1724,16 @@ Promise.all([loadCategories(),ensureSession()]).then(function(){categoriesReady=
     const grid=document.createElementNS(svgNS,"line");grid.setAttribute("x1",left);grid.setAttribute("x2",right);grid.setAttribute("y1",bottom);grid.setAttribute("y2",bottom);grid.setAttribute("class","traffic-trend-grid");svg.append(grid);
     const points=values.map((value,index)=>{const x=values.length===1?(left+right)/2:left+(right-left)*index/(values.length-1);const y=bottom-(bottom-top)*value/max;return{x,y,value}});
     const line=document.createElementNS(svgNS,"polyline");line.setAttribute("class","traffic-trend-line");line.setAttribute("points",points.map(p=>p.x.toFixed(1)+","+p.y.toFixed(1)).join(" "));svg.append(line);
-    points.forEach((point,index)=>{if(values.length>31&&index!==values.length-1)return;const dot=document.createElementNS(svgNS,"circle");dot.setAttribute("class","traffic-trend-dot");dot.setAttribute("cx",point.x.toFixed(1));dot.setAttribute("cy",point.y.toFixed(1));dot.setAttribute("r","3.5");svg.append(dot)});
+    const labelStep=values.length<=14?1:Math.ceil(values.length/12);
+    points.forEach((point,index)=>{
+      const sampled=index%labelStep===0||index===values.length-1,showDot=values.length<=31||sampled;
+      if(showDot){const dot=document.createElementNS(svgNS,"circle");dot.setAttribute("class","traffic-trend-dot");dot.setAttribute("cx",point.x.toFixed(1));dot.setAttribute("cy",point.y.toFixed(1));dot.setAttribute("r","3.5");svg.append(dot)}
+      if(sampled){
+        const label=document.createElementNS(svgNS,"text"),nearTop=point.y<top+18;
+        label.setAttribute("class","traffic-trend-label");label.setAttribute("x",point.x.toFixed(1));label.setAttribute("y",(nearTop?point.y+19:point.y-9).toFixed(1));
+        label.setAttribute("text-anchor",index===0?"start":index===values.length-1?"end":"middle");label.textContent=number.format(point.value);svg.append(label);
+      }
+    });
     svg.setAttribute("aria-label",data.range_days+" day GoatCounter visit trend; "+number.format(data.total)+" visits; latest day "+number.format(values[values.length-1])+" visits and is incomplete.");
   }
   function renderDimension(name,items){
