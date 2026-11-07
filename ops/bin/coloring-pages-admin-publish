@@ -1295,7 +1295,7 @@ def inspect_delete_directory(root: Path, page_id: str) -> dict:
             total = 0
             files = []
             for name in names:
-                if not name or "/" in name or "\" in name or name in {".", ".."}:
+                if not name or "/" in name or chr(92) in name or name in {".", ".."}:
                     stop("delete target filename is unsafe")
                 item_st = os.stat(name, dir_fd=target_fd, follow_symlinks=False)
                 if (
