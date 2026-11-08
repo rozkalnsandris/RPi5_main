@@ -694,7 +694,7 @@
       "queue_match": {
         "target_alias": "hermes-tech-public-rpi5",
         "execution_location_class": "trusted-home-host",
-        "repository_entrypoint": "ops/deploy/hermes-tech-simple-deploy-cutover-v1.json",
+        "repository_entrypoint": "ops/bin/hermes-tech-simple-deploy-cutover-v1",
         "deploy_class": "STRICT_LIVE_AUTH_REQUIRED"
       },
       "target_alias": "hermes-tech-public-rpi5",
@@ -707,8 +707,12 @@
       },
       "mutation_budget": [
         {
+          "category": "filesystem.hermes-tech-cutover-operator-installation",
+          "max_operations": 2
+        },
+        {
           "category": "systemd.hermes-tech-legacy-runtime-retirement",
-          "max_operations": 1
+          "max_operations": 3
         },
         {
           "category": "filesystem.hermes-tech-simple-deploy-materialization",
@@ -716,6 +720,10 @@
         },
         {
           "category": "docker.hermes-tech-simple-deploy-application-apply",
+          "max_operations": 1
+        },
+        {
+          "category": "systemd.hermes-tech-target-timer-activation",
           "max_operations": 1
         }
       ],
@@ -732,12 +740,19 @@
       ],
       "dependencies": [
         "cutover-contract:ops/deploy/hermes-tech-simple-deploy-cutover-v1.json",
+        "cutover-installer:ops/bin/install-hermes-tech-simple-deploy-cutover-v1",
+        "cutover-operator:ops/bin/hermes-tech-simple-deploy-cutover-v1",
+        "exact-release-helper:ops/bin/hermes-tech-exact-reconcile-v1",
         "simple-deploy-target-registry:ops/deploy/simple-deploy-targets-v1.json",
         "simple-deploy-compose:ops/deploy/simple-deploy-compose/hermes-tech-public.yml",
         "simple-deploy-compose-sha256:fd1ca0d00c79bfb5e5cd1be589ae13b378c5c223be0b61d3f14f31da687fe6b9",
+        "compatible-generic-deployer-identity:62fd973653754fb489bda5c7d803015def71a6f4",
+        "compatible-generic-deployer-sha256:ed906786fd85169c6c555a3ac466b157edaf24a65fe12f60ee2ec6940ade20d0",
         "legacy-web-unit:hermes-tech-web.service",
         "legacy-pull-timer-unit:hermes-tech-pull-deploy.timer",
         "legacy-pull-service-unit:hermes-tech-pull-deploy.service",
+        "target-timer:target-scoped SIMPLE-DEPLOY timer template + hermes-tech-public-rpi5 instance",
+        "global-all-target-timer:rozkalns-simple-deployer.timer:must-remain-disabled",
         "loopback-bind:127.0.0.1:8089",
         "liveness:/health",
         "readiness:/ready",
@@ -746,29 +761,35 @@
       "preflight": [
         "READY and separate owner LIVE-AUTH bind this exact STRICT target before any host mutation",
         "authorized RPi5_main SHA is current/reachable and exact-SHA required CI is successful",
-        "cutover contract, SIMPLE-DEPLOY target registry and Hermes Tech Compose source match reviewed identities",
-        "legacy hermes-tech-web.service is loaded and active and owns 127.0.0.1:8089 before mutation",
+        "fixed installer/operator/helper, cutover contract, SIMPLE-DEPLOY target registry and Hermes Tech Compose source match reviewed identities",
+        "installed generic SIMPLE-DEPLOY identity/module match the reviewed compatible baseline",
+        "authorized Hermes Tech immutable image digest and source label are exact before the first mutation",
+        "legacy hermes-tech-web.service is loaded and active and exact hermes-blog owns 127.0.0.1:8089 before mutation",
         "legacy hermes-tech-pull-deploy.timer is loaded and active before mutation",
         "legacy hermes-tech-pull-deploy.service is loaded and neither activating, deactivating nor failed",
         "Hermes Tech SIMPLE-DEPLOY destination Compose and receipt are absent before first cutover",
-        "exact immutable Hermes Tech image digest is frozen before apply",
-        "operation and global executor registry remain execution-disabled until separately authorized host/live activation"
+        "Hermes Tech target-scoped SIMPLE-DEPLOY timer is disabled/inactive and its service inactive",
+        "global --all SIMPLE-DEPLOY timer is disabled/inactive and remains outside this operation"
       ],
       "postconditions": [
+        "fixed cutover operator closure is root-owned at reviewed paths and identities",
         "legacy Hermes Tech pull timer/service and web runtime are retired according to the reviewed one-time contract",
         "Hermes Tech SIMPLE-DEPLOY Compose is materialized from the exact reviewed source identity",
-        "127.0.0.1:8089 ownership transfers from hermes-tech-web.service through an observed unbound state to hermes-tech-public/hermes-tech",
+        "127.0.0.1:8089 ownership transfers from exact legacy hermes-blog through an observed unbound state to hermes-tech-public/hermes-tech",
+        "first reconcile uses the fixed exact-release adapter and receipt binds the authorized source SHA and immutable image digest",
         "GET /health and GET /ready on 127.0.0.1:8089 return HTTP 200",
-        "SIMPLE-DEPLOY receipt exists for hermes-tech-public-rpi5 and binds the exact deployed image digest",
+        "target-scoped target-scoped SIMPLE-DEPLOY timer template + hermes-tech-public-rpi5 instance is enabled/active",
+        "global rozkalns-simple-deployer.timer remains disabled/inactive",
         "no database, secret, network, unrelated host or repository-settings mutation occurs",
         "post-mutation failure has no automatic retry, cleanup, rollback or alternate mutation path"
       ],
       "required_github_evidence": [
-        "exact RPi5_main source SHA and successful exact-SHA CI",
-        "reviewed Hermes Tech cutover contract identity",
+        "exact RPi5_main source SHA and successful exact-SHA required CI",
+        "reviewed fixed installer/operator/helper and Hermes Tech cutover contract identities",
         "reviewed SIMPLE-DEPLOY target registry and Compose source identities",
+        "exact Hermes Tech consumer source SHA and immutable image digest from successful publication evidence",
         "READY queue envelope for hermes-tech-public-rpi5",
-        "separate owner LIVE-AUTH for the exact one-time Hermes Tech cutover"
+        "separate owner LIVE-AUTH for the exact one-time Hermes Tech operator install and cutover"
       ]
     },
     {

@@ -1,0 +1,269 @@
+#!/usr/bin/python3 -I
+"""Install the fixed Hermes Tech cutover operator closure.
+
+Source-only until a separate exact LIVE authorization permits this fixed two-file
+installation. No caller-selected path, command or environment is accepted.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import pwd
+import re
+import stat
+import subprocess
+from pathlib import Path
+
+OWNER = "andris"
+ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
+REPO_REL = "RPi5_main"
+INSTALLER_REL = "ops/bin/install-hermes-tech-simple-deploy-cutover-v1"
+OPERATOR_REL = "ops/bin/hermes-tech-simple-deploy-cutover-v1"
+HELPER_REL = "ops/bin/hermes-tech-exact-reconcile-v1"
+
+OPERATOR_DEST = Path("/usr/local/sbin/hermes-tech-simple-deploy-cutover-v1")
+HELPER_DEST = Path("/usr/local/libexec/rozkalns-simple-deployer/hermes-tech-exact-reconcile-v1")
+SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+ENV = {
+    "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    "LANG": "C.UTF-8",
+    "LC_ALL": "C.UTF-8",
+}
+MUTATION_STARTED = False
+
+
+class InstallError(RuntimeError):
+    pass
+
+
+def fail(reason: str) -> None:
+    raise InstallError(reason)
+
+
+def run(argv: tuple[str, ...], *, timeout: int = 30) -> subprocess.CompletedProcess[str]:
+    try:
+        result = subprocess.run(
+            argv,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+            timeout=timeout,
+            env=ENV,
+        )
+    except (OSError, subprocess.SubprocessError, UnicodeError):
+        fail(f"command_transport_failed:{Path(argv[0]).name}")
+    if result.returncode != 0:
+        fail(f"command_failed:{Path(argv[0]).name}")
+    if len(result.stdout) > 262144 or len(result.stderr) > 131072:
+        fail("command_output_oversize")
+    return result
+
+
+def owner_home() -> Path:
+    try:
+        home = Path(pwd.getpwnam(OWNER).pw_dir)
+    except KeyError:
+        fail("owner_account_missing")
+    if not home.is_absolute():
+        fail("owner_home_invalid")
+    return home
+
+
+def owner_git(repo: Path, *args: str) -> str:
+    home = owner_home()
+    return run(
+        (
+            "/usr/sbin/runuser", "-u", OWNER, "--",
+            "/usr/bin/env", f"HOME={home}", "PATH=/usr/local/bin:/usr/bin:/bin",
+            "/usr/bin/git", "-C", str(repo), *args,
+        ),
+    ).stdout
+
+
+def git_blob(repo: Path, expected_main: str, relative: str) -> bytes:
+    home = owner_home()
+    return run(
+        (
+            "/usr/sbin/runuser", "-u", OWNER, "--",
+            "/usr/bin/env", f"HOME={home}", "PATH=/usr/local/bin:/usr/bin:/bin",
+            "/usr/bin/git", "-C", str(repo), "show", f"{expected_main}:{relative}",
+        ),
+    ).stdout.encode("utf-8")
+
+
+def sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def safe_directory(path: Path) -> None:
+    try:
+        info = path.lstat()
+    except OSError:
+        fail(f"install_directory_missing:{path.name}")
+    if (
+        not stat.S_ISDIR(info.st_mode)
+        or path.is_symlink()
+        or info.st_uid != 0
+        or info.st_gid != 0
+        or info.st_mode & 0o022
+    ):
+        fail(f"install_directory_unsafe:{path.name}")
+
+
+def source_closure(expected_main: str) -> tuple[bytes, bytes]:
+    if os.geteuid() != 0:
+        fail("root_required")
+    home = owner_home()
+    repo = home / REPO_REL
+    if not (repo / ".git").is_dir():
+        fail("rpi5_main_checkout_missing")
+    if owner_git(repo, "rev-parse", "HEAD").strip() != expected_main:
+        fail("rpi5_main_head_mismatch")
+    if owner_git(repo, "branch", "--show-current").strip() != "main":
+        fail("rpi5_main_not_on_main")
+    if owner_git(repo, "remote", "get-url", "origin").strip() != ORIGIN:
+        fail("rpi5_main_origin_mismatch")
+    if owner_git(repo, "status", "--porcelain=v1", "--untracked-files=all"):
+        fail("rpi5_main_checkout_dirty")
+
+    expected_installer = repo / INSTALLER_REL
+    if Path(__file__).absolute() != expected_installer:
+        fail("installer_path_mismatch")
+    try:
+        installer_info = expected_installer.lstat()
+        running_installer = expected_installer.read_bytes()
+    except OSError:
+        fail("installer_source_unreadable")
+    if (
+        not stat.S_ISREG(installer_info.st_mode)
+        or expected_installer.is_symlink()
+        or stat.S_IMODE(installer_info.st_mode) & 0o022
+        or running_installer != git_blob(repo, expected_main, INSTALLER_REL)
+    ):
+        fail("installer_source_identity_mismatch")
+
+    helper = git_blob(repo, expected_main, HELPER_REL)
+    operator = git_blob(repo, expected_main, OPERATOR_REL)
+    if not helper.startswith(b"#!/usr/bin/python3 -I\n"):
+        fail("helper_source_invalid")
+    if not operator.startswith(b"#!/usr/bin/python3 -I\n"):
+        fail("operator_source_invalid")
+
+    safe_directory(HELPER_DEST.parent)
+    safe_directory(OPERATOR_DEST.parent)
+    for destination in (HELPER_DEST, OPERATOR_DEST):
+        if destination.exists() or destination.is_symlink():
+            fail(f"install_destination_not_absent:{destination.name}")
+    return helper, operator
+
+
+def install_once(path: Path, data: bytes, mode: int) -> None:
+    global MUTATION_STARTED
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(path, flags, 0o600)
+    except OSError:
+        fail(f"install_create_failed:{path.name}")
+    MUTATION_STARTED = True
+    try:
+        offset = 0
+        while offset < len(data):
+            written = os.write(fd, data[offset:])
+            if written <= 0:
+                fail(f"install_write_failed:{path.name}")
+            offset += written
+        os.fchown(fd, 0, 0)
+        os.fchmod(fd, mode)
+        os.fsync(fd)
+    except OSError:
+        fail(f"install_write_failed:{path.name}")
+    finally:
+        os.close(fd)
+
+    try:
+        info = path.lstat()
+        installed = path.read_bytes()
+    except OSError:
+        fail(f"install_verify_failed:{path.name}")
+    if (
+        not stat.S_ISREG(info.st_mode)
+        or path.is_symlink()
+        or info.st_uid != 0
+        or info.st_gid != 0
+        or stat.S_IMODE(info.st_mode) != mode
+        or sha256(installed) != sha256(data)
+    ):
+        fail(f"install_verify_failed:{path.name}")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Install fixed Hermes Tech SIMPLE-DEPLOY cutover closure",
+    )
+    parser.add_argument("mode", choices=("check", "apply"), nargs="?", default="check")
+    parser.add_argument("--expected-main", required=True)
+    parser.add_argument("--confirm")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if SHA_RE.fullmatch(args.expected_main) is None:
+        parser.error("--expected-main must be a lowercase 40-character SHA")
+    if (
+        args.mode == "apply"
+        and args.confirm != "INSTALL-HERMES-TECH-CUTOVER-CLOSURE"
+    ):
+        parser.error(
+            "apply requires --confirm INSTALL-HERMES-TECH-CUTOVER-CLOSURE",
+        )
+    if args.mode == "check" and args.confirm is not None:
+        parser.error("--confirm is valid only with apply")
+
+    try:
+        helper, operator = source_closure(args.expected_main)
+        if args.mode == "apply":
+            # Publish support first. A partial support-only install is inert;
+            # the root-only operator entrypoint is published last.
+            install_once(HELPER_DEST, helper, 0o555)
+            install_once(OPERATOR_DEST, operator, 0o500)
+            result = "PASS"
+        else:
+            result = "READY"
+        print(json.dumps({
+            "schema": "rpi5.hermes-tech-cutover-install.v1",
+            "mode": args.mode,
+            "result": result,
+            "mutation_started": MUTATION_STARTED,
+            "artifact_count": 2,
+            "helper_sha256": sha256(helper),
+            "operator_sha256": sha256(operator),
+        }, sort_keys=True))
+        return 0
+    except InstallError as exc:
+        print(json.dumps({
+            "schema": "rpi5.hermes-tech-cutover-install.v1",
+            "mode": args.mode,
+            "result": "BLOCKED",
+            "reason": str(exc),
+            "mutation_started": MUTATION_STARTED,
+        }, sort_keys=True))
+        return 2
+    except Exception:
+        print(json.dumps({
+            "schema": "rpi5.hermes-tech-cutover-install.v1",
+            "mode": args.mode,
+            "result": "BLOCKED",
+            "reason": "unexpected_error",
+            "mutation_started": MUTATION_STARTED,
+        }, sort_keys=True))
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
