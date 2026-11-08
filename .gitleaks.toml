@@ -15,5 +15,9 @@ regexes = [
   '''^4cb441873df8245387f06ee55d637a9f7b11cdc8$''',
   '''^130fc36a22bb4ace500b022c3defcccbf0893012$''',
   # Public upstream Hermes agent/auxiliary_client.py Git blob SHA-1; not a credential.
-  '''^34401444a875280deec8fb4f8e49cb38e3a6cf65$''',
+  '''^34401444a875280deec8fb4f8e49cb38e3a6cf65
+'',
+  # 2026-11-02 observed RPi5 public Hermes agent/auxiliary_client.py Git blob; no secret material.
+  '''^e2e9eba8501203f4cde8e02e31d2944cda24ff38
+'',
 ]
