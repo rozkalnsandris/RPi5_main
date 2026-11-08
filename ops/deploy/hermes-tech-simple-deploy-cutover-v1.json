@@ -177,8 +177,6 @@
     "modifies_generic_simple_deploy_source": false
   },
   "standing_reconciliation": {
-    "target_timer": "rozkalns-simple-deployer@hermes-tech-public-rpi5.timer",
-    "target_service": "rozkalns-simple-deployer@hermes-tech-public-rpi5.service",
     "required_initial_timer_enabled_state": "disabled",
     "required_initial_timer_active_state": "inactive",
     "required_initial_service_active_state": "inactive",
@@ -189,6 +187,9 @@
     "global_timer_required_enabled_state": "disabled",
     "global_timer_required_active_state": "inactive",
     "global_service_required_active_state": "inactive",
-    "global_all_target_reconciliation_forbidden": true
+    "global_all_target_reconciliation_forbidden": true,
+    "target_timer_template": "rozkalns-simple-deployer@.timer",
+    "target_service_template": "rozkalns-simple-deployer@.service",
+    "target_instance": "hermes-tech-public-rpi5"
   }
 }
