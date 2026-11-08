@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.machinery
 import importlib.util
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -13,6 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 HELPER_PATH = ROOT / "ops/bin/hermes-tech-exact-reconcile-v1"
 INSTALLER_PATH = ROOT / "ops/bin/install-hermes-tech-simple-deploy-cutover-v1"
 RESUME_PATH = ROOT / "ops/bin/hermes-tech-simple-deploy-resume-v1"
+CONTRACT_PATH = ROOT / "ops/deploy/hermes-tech-simple-deploy-resume-v1.json"
+EXECUTOR_REGISTRY_PATH = ROOT / "ops/deploy/executor-operations.json"
 
 
 def _load(name: str, path: Path):
@@ -239,3 +242,80 @@ def test_resume_source_has_no_legacy_restart_cleanup_or_compose_materialization(
         assert forbidden not in source.lower() if forbidden.islower() else forbidden not in source
     assert '("/usr/bin/systemctl", "enable", "--now", cutover.TARGET_TIMER)' in source
     assert 'STATUS_SHA256 = "42187d0258d92b4dfb644d8d2261a4dc604d77b81d542eb93d3637c5e681cf5d"' in source
+
+
+def test_resume_contract_pins_partial_state_and_helper_recovery():
+    contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+
+    assert contract["schema"] == "rozkalns.rpi5-main.hermes-tech-simple-deploy-resume.v1"
+    assert contract["issue"] == 1451
+    assert contract["operation_id"] == "rpi5-main.hermes-tech-simple-deploy-resume.v1"
+    assert contract["execution_enabled"] is False
+    assert contract["authorization_class"] == "STRICT"
+    assert contract["one_time"] is True
+
+    root = contract["root_cause"]
+    assert root["failure_type"] == "TypeError"
+    assert root["failure_reason"] == "pinned-generic-inspect-api-does-not-accept-origin-keyword"
+    assert root["failure_before_generic_status_write"] is True
+    assert root["pinned_generic_module_sha256"] == (
+        "ed906786fd85169c6c555a3ac466b157edaf24a65fe12f60ee2ec6940ade20d0"
+    )
+
+    recovery = contract["helper_recovery"]
+    assert recovery["baseline_main"] == "1af1b450a0082894f405343505b6fb07606a26c1"
+    assert recovery["required_initial_sha256"] == (
+        "8a6cb72706c61dffd1c126c825169f92363edcbf328fb0bce42bdf60a014d050"
+    )
+    assert recovery["target_path"] == (
+        "/usr/local/libexec/rozkalns-simple-deployer/hermes-tech-exact-reconcile-v1"
+    )
+    assert recovery["atomic_replace_once"] is True
+    assert recovery["automatic_retry"] is False
+    assert recovery["automatic_cleanup"] is False
+    assert recovery["automatic_rollback"] is False
+
+    baseline = contract["partial_baseline"]
+    assert baseline["compose_sha256"] == (
+        "fd1ca0d00c79bfb5e5cd1be589ae13b378c5c223be0b61d3f14f31da687fe6b9"
+    )
+    assert baseline["stale_status_sha256"] == (
+        "42187d0258d92b4dfb644d8d2261a4dc604d77b81d542eb93d3637c5e681cf5d"
+    )
+    assert baseline["loopback_required_unbound"] is True
+    assert baseline["receipt_required_absent"] is True
+    assert baseline["legacy_container_required_absent"] is True
+    assert baseline["simple_deploy_container_required_absent"] is True
+
+
+def test_resume_registry_operation_is_strict_and_forward_only():
+    registry = json.loads(EXECUTOR_REGISTRY_PATH.read_text(encoding="utf-8"))
+    operation = next(
+        item
+        for item in registry["operations"]
+        if item["operation_id"] == "rpi5-main.hermes-tech-simple-deploy-resume.v1"
+    )
+
+    assert registry["execution_enabled"] is False
+    assert operation["authorization_class"] == "STRICT"
+    assert operation["ordinary_live_all_eligible"] is False
+    assert operation["rollback_policy"] == "NONE"
+    assert operation["queue_match"] == {
+        "target_alias": "hermes-tech-public-rpi5",
+        "execution_location_class": "trusted-home-host",
+        "repository_entrypoint": "ops/bin/hermes-tech-simple-deploy-resume-v1",
+        "deploy_class": "STRICT_LIVE_AUTH_REQUIRED",
+    }
+    assert {
+        item["category"]: item["max_operations"]
+        for item in operation["mutation_budget"]
+    } == {
+        "filesystem.hermes-tech-exact-helper-recovery": 1,
+        "filesystem.hermes-tech-resume-operator-installation": 1,
+        "docker.hermes-tech-simple-deploy-application-apply": 1,
+        "systemd.hermes-tech-target-timer-activation": 1,
+    }
+    exclusions = "\n".join(operation["exclusions"]).lower()
+    assert "legacy hermes tech runtime restart or rollback" in exclusions
+    assert "global simple-deploy all-target timer activation" in exclusions
+    assert "automatic retry cleanup rollback" in exclusions
