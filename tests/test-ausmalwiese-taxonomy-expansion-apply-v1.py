@@ -306,7 +306,7 @@ class Tests(unittest.TestCase):
             with self.bind(paths), self.assertRaisesRegex(op.Stop, "category already exists|duplicates"):
                 op.public_plan(doc["manifest_sha256"])
 
-    def test_existing_topic_link_is_allowed_only_when_new_category_participates(self):
+    def test_existing_topic_link_is_allowed_with_or_without_new_category(self):
         with tempfile.TemporaryDirectory() as td:
             paths, manifest, _, _ = fixtures(
                 Path(td), [], [{"category": "natur", "topic": "bauernhof"}],
@@ -316,12 +316,12 @@ class Tests(unittest.TestCase):
                 plan = op.public_plan(manifest["manifest_sha256"])
             self.assertEqual(plan["links"], [["natur", "bauernhof"]])
         with tempfile.TemporaryDirectory() as td:
-            paths, _, _, _ = fixtures(
+            paths, manifest, _, _ = fixtures(
                 Path(td), [], [{"category": "fahrzeuge", "topic": "bauernhof"}], []
             )
-            doc = json.loads(paths["manifest"].read_text())
-            with self.bind(paths), self.assertRaisesRegex(op.Stop, "must involve"):
-                op.public_plan(doc["manifest_sha256"])
+            with self.bind(paths):
+                plan = op.public_plan(manifest["manifest_sha256"])
+            self.assertEqual(plan["links"], [["fahrzeuge", "bauernhof"]])
 
     def test_unsafe_category_mode_blocks_before_mutation(self):
         with tempfile.TemporaryDirectory() as td:
