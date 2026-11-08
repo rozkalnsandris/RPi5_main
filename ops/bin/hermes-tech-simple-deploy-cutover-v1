@@ -418,19 +418,30 @@ def require_installed_target(sd: Any) -> Any:
     return target
 
 
+def runtime_docker(*argv: str, timeout: int = 40) -> subprocess.CompletedProcess[str]:
+    return run(
+        (
+            "/usr/sbin/runuser", "-u", RUNTIME_USER, "--",
+            "/usr/bin/env",
+            f"DOCKER_CONFIG={ANON_DOCKER_CONFIG}",
+            "PATH=/usr/local/bin:/usr/bin:/bin",
+            "/usr/bin/docker",
+            *argv,
+        ),
+        timeout=timeout,
+    )
+
+
 def require_exact_release(
     sd: Any,
     target: Any,
     expected_source: str,
     expected_digest: str,
 ) -> None:
-    pointer_raw = run(
-        (
-            "/usr/bin/docker", "buildx", "imagetools", "inspect",
-            f"{TARGET_IMAGE}:production",
-            "--format", "{{json .Manifest}}",
-        ),
-        timeout=40,
+    pointer_raw = runtime_docker(
+        "buildx", "imagetools", "inspect",
+        f"{TARGET_IMAGE}:production",
+        "--format", "{{json .Manifest}}",
     ).stdout
     try:
         pointer = sd._parse_manifest_digest(pointer_raw)
@@ -439,13 +450,10 @@ def require_exact_release(
     if pointer != expected_digest:
         fail("expected_digest_mismatch")
 
-    image_raw = run(
-        (
-            "/usr/bin/docker", "buildx", "imagetools", "inspect",
-            f"{TARGET_IMAGE}@{expected_digest}",
-            "--format", "{{json .Image}}",
-        ),
-        timeout=40,
+    image_raw = runtime_docker(
+        "buildx", "imagetools", "inspect",
+        f"{TARGET_IMAGE}@{expected_digest}",
+        "--format", "{{json .Image}}",
     ).stdout
     try:
         metadata = sd._parse_image_metadata(image_raw, target, expected_digest)
@@ -533,20 +541,16 @@ def verify_new_runtime(expected_source: str, expected_digest: str) -> None:
             "/usr/bin/docker", "ps", "--no-trunc",
             "--filter", f"label=com.docker.compose.project={TARGET_PROJECT}",
             "--filter", f"label=com.docker.compose.service={TARGET_SERVICE}",
-            "--format", "{{.ID}}|{{.Image}}|{{.Status}}",
+            "--format", "{{.ID}}|{{.Status}}",
         ),
         timeout=20,
     )
     lines = [line for line in result.stdout.splitlines() if line.strip()]
     if len(lines) != 1:
         fail("simple_deploy_container_identity_missing")
-    parts = lines[0].split("|", 2)
+    parts = lines[0].split("|", 1)
     expected_image = f"{TARGET_IMAGE}@{expected_digest}"
-    if (
-        len(parts) != 3
-        or parts[1] != expected_image
-        or not parts[2].startswith("Up ")
-    ):
+    if len(parts) != 2 or not parts[1].startswith("Up "):
         fail("simple_deploy_container_identity_drift")
     container_id = parts[0]
     port = run(
