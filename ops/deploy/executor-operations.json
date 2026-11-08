@@ -711,6 +711,10 @@
           "max_operations": 2
         },
         {
+          "category": "filesystem.hermes-tech-cutover-operator-recovery",
+          "max_operations": 1
+        },
+        {
           "category": "systemd.hermes-tech-legacy-runtime-retirement",
           "max_operations": 3
         },
@@ -756,7 +760,8 @@
         "loopback-bind:127.0.0.1:8089",
         "liveness:/health",
         "readiness:/ready",
-        "global-execution:disabled"
+        "global-execution:disabled",
+        "cutover-operator-recovery:issue-1449:installer-upgrade-apply"
       ],
       "preflight": [
         "READY and separate owner LIVE-AUTH bind this exact STRICT target before any host mutation",
@@ -769,7 +774,8 @@
         "legacy hermes-tech-pull-deploy.service is loaded and neither activating, deactivating nor failed",
         "Hermes Tech SIMPLE-DEPLOY destination Compose and receipt are absent before first cutover",
         "Hermes Tech target-scoped SIMPLE-DEPLOY timer is disabled/inactive and its service inactive",
-        "global --all SIMPLE-DEPLOY timer is disabled/inactive and remains outside this operation"
+        "global --all SIMPLE-DEPLOY timer is disabled/inactive and remains outside this operation",
+        "if a prior partial LIVE installed the baseline closure, recovery requires exact baseline operator bytes, exact current helper bytes and absent fixed recovery stage before one operator-only replacement"
       ],
       "postconditions": [
         "fixed cutover operator closure is root-owned at reviewed paths and identities",
@@ -781,7 +787,8 @@
         "target-scoped target-scoped SIMPLE-DEPLOY timer template + hermes-tech-public-rpi5 instance is enabled/active",
         "global rozkalns-simple-deployer.timer remains disabled/inactive",
         "no database, secret, network, unrelated host or repository-settings mutation occurs",
-        "post-mutation failure has no automatic retry, cleanup, rollback or alternate mutation path"
+        "post-mutation failure has no automatic retry, cleanup, rollback or alternate mutation path",
+        "when issue-1449 recovery is required, only the fixed Hermes Tech cutover operator file is atomically replaced; helper and runtime remain unchanged until the cutover phase"
       ],
       "required_github_evidence": [
         "exact RPi5_main source SHA and successful exact-SHA required CI",
