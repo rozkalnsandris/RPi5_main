@@ -191,5 +191,30 @@
     "target_timer_template": "rozkalns-simple-deployer@.timer",
     "target_service_template": "rozkalns-simple-deployer@.service",
     "target_instance": "hermes-tech-public-rpi5"
+  },
+  "operator_upgrade_recovery": {
+    "issue": 1449,
+    "required_only_after_partial_live_install": true,
+    "installer_source": "ops/bin/install-hermes-tech-simple-deploy-cutover-v1",
+    "installer_mode": "upgrade-apply",
+    "baseline_main": "fba44df0cc004b4b62f991c9ed8114f460764bc0",
+    "target_path": "/usr/local/sbin/hermes-tech-simple-deploy-cutover-v1",
+    "helper_path": "/usr/local/libexec/rozkalns-simple-deployer/hermes-tech-exact-reconcile-v1",
+    "helper_replacement_forbidden": true,
+    "required_target_initial_identity": "exact-baseline-main-operator-bytes",
+    "required_helper_identity": "exact-current-main-helper-bytes",
+    "stage_path": "/usr/local/sbin/.hermes-tech-simple-deploy-cutover-v1.issue1449.stage",
+    "stage_creation": "O_EXCL|O_NOFOLLOW",
+    "target_owner": "root",
+    "target_group": "root",
+    "target_mode": "0500",
+    "atomic_replace_once": true,
+    "directory_fsync_required": true,
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "systemd_docker_runtime_mutation": false,
+    "separate_live_authorization_required": true,
+    "source_merge_replaces_installed_operator": false
   }
 }
