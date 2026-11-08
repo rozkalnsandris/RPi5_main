@@ -72,14 +72,18 @@ def run_git(repo: Path, *args: str) -> str:
 
     home = owner_home()
     env = {
-        "PATH": "/usr/local/bin:/usr/bin:/bin",
-        "HOME": str(home),
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "LANG": "C.UTF-8",
         "LC_ALL": "C.UTF-8",
     }
+    argv = [
+        "/usr/sbin/runuser", "-u", OWNER, "--",
+        "/usr/bin/env", f"HOME={home}", "PATH=/usr/local/bin:/usr/bin:/bin",
+        "/usr/bin/git", "-C", str(repo), *args,
+    ]
     try:
         done = subprocess.run(
-            ["/usr/bin/git", "-C", str(repo), *args],
+            argv,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -100,14 +104,18 @@ def git_blob(repo: Path, revision: str, relative: str) -> bytes:
 
     home = owner_home()
     env = {
-        "PATH": "/usr/local/bin:/usr/bin:/bin",
-        "HOME": str(home),
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "LANG": "C.UTF-8",
         "LC_ALL": "C.UTF-8",
     }
+    argv = [
+        "/usr/sbin/runuser", "-u", OWNER, "--",
+        "/usr/bin/env", f"HOME={home}", "PATH=/usr/local/bin:/usr/bin:/bin",
+        "/usr/bin/git", "-C", str(repo), "show", f"{revision}:{relative}",
+    ]
     try:
         done = subprocess.run(
-            ["/usr/bin/git", "-C", str(repo), "show", f"{revision}:{relative}"],
+            argv,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
