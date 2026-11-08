@@ -104,6 +104,7 @@ def test_installer_is_two_fixed_files_support_first_and_no_cleanup():
     assert "install_once(HELPER_DEST, helper, 0o555)" in source
     assert "install_once(OPERATOR_DEST, operator, 0o500)" in source
     assert source.index("install_once(HELPER_DEST") < source.index("install_once(OPERATOR_DEST")
+    assert 'if Path(__file__).absolute() != expected_installer:' in source
     assert "os.O_EXCL" in source
     assert "os.replace" not in source
     assert "unlink(" not in source
