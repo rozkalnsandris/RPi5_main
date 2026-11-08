@@ -1,0 +1,154 @@
+{
+  "schema": "rozkalns.rpi5-main.hermes-tech-simple-deploy-resume.v1",
+  "schema_version": 1,
+  "issue": 1451,
+  "operation_id": "rpi5-main.hermes-tech-simple-deploy-resume.v1",
+  "execution_enabled": false,
+  "authorization_class": "STRICT",
+  "one_time": true,
+  "target_alias": "hermes-tech-public-rpi5",
+  "source_only_state": {
+    "live_authorized": false,
+    "runtime_mutation_permitted_by_this_file": false,
+    "merge_authorized": false,
+    "helper_recovery_authorized": false,
+    "resume_install_authorized": false,
+    "resume_execution_authorized": false
+  },
+  "root_cause": {
+    "helper_path": "/usr/local/libexec/rozkalns-simple-deployer/hermes-tech-exact-reconcile-v1",
+    "pinned_generic_module_sha256": "ed906786fd85169c6c555a3ac466b157edaf24a65fe12f60ee2ec6940ade20d0",
+    "failure_type": "TypeError",
+    "failure_reason": "pinned-generic-inspect-api-does-not-accept-origin-keyword",
+    "failure_before_generic_status_write": true
+  },
+  "helper_recovery": {
+    "installer_source": "ops/bin/install-hermes-tech-simple-deploy-cutover-v1",
+    "installer_mode": "helper-upgrade-apply",
+    "baseline_main": "1af1b450a0082894f405343505b6fb07606a26c1",
+    "target_path": "/usr/local/libexec/rozkalns-simple-deployer/hermes-tech-exact-reconcile-v1",
+    "required_initial_sha256": "8a6cb72706c61dffd1c126c825169f92363edcbf328fb0bce42bdf60a014d050",
+    "operator_must_equal_current_main": true,
+    "target_owner": "root",
+    "target_group": "root",
+    "target_mode": "0555",
+    "stage_path": "/usr/local/libexec/rozkalns-simple-deployer/.hermes-tech-exact-reconcile-v1.issue1451.stage",
+    "stage_creation": "O_EXCL|O_NOFOLLOW",
+    "atomic_replace_once": true,
+    "directory_fsync_required": true,
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false
+  },
+  "resume_installation": {
+    "installer_source": "ops/bin/install-hermes-tech-simple-deploy-cutover-v1",
+    "installer_mode": "resume-install-apply",
+    "source_path": "ops/bin/hermes-tech-simple-deploy-resume-v1",
+    "target_path": "/usr/local/sbin/hermes-tech-simple-deploy-resume-v1",
+    "required_initial_state": "absent",
+    "target_owner": "root",
+    "target_group": "root",
+    "target_mode": "0500",
+    "source_merge_installs_resume": false
+  },
+  "partial_baseline": {
+    "checkout_main": "exact-authorized-current-main",
+    "installed_cutover_operator": "exact-current-main-source",
+    "installed_exact_helper": "exact-current-main-source-after-helper-recovery",
+    "legacy_web_unit": {
+      "name": "hermes-tech-web.service",
+      "enabled": "disabled",
+      "active": "inactive",
+      "sub": "dead"
+    },
+    "legacy_pull_timer": {
+      "name": "hermes-tech-pull-deploy.timer",
+      "enabled": "disabled",
+      "active": "inactive",
+      "sub": "dead"
+    },
+    "legacy_pull_service": {
+      "name": "hermes-tech-pull-deploy.service",
+      "enabled": "static",
+      "active": "inactive",
+      "sub": "dead"
+    },
+    "target_timer": {
+      "template": "rozkalns-simple-deployer@.timer",
+      "instance": "hermes-tech-public-rpi5",
+      "enabled": "disabled",
+      "active": "inactive",
+      "sub": "dead"
+    },
+    "target_service": {
+      "template": "rozkalns-simple-deployer@.service",
+      "instance": "hermes-tech-public-rpi5",
+      "enabled": "static",
+      "active": "inactive",
+      "sub": "dead"
+    },
+    "global_timer": {
+      "name": "rozkalns-simple-deployer.timer",
+      "enabled": "disabled",
+      "active": "inactive",
+      "sub": "dead"
+    },
+    "global_service": {
+      "name": "rozkalns-simple-deployer.service",
+      "enabled": "static",
+      "active": "inactive",
+      "sub": "dead"
+    },
+    "compose_path": "/etc/rozkalns-simple-deployer/compose/hermes-tech-public.yml",
+    "compose_sha256": "fd1ca0d00c79bfb5e5cd1be589ae13b378c5c223be0b61d3f14f31da687fe6b9",
+    "compose_stage_required_absent": true,
+    "receipt_required_absent": true,
+    "legacy_container_required_absent": true,
+    "simple_deploy_container_required_absent": true,
+    "loopback_bind": "127.0.0.1:8089",
+    "loopback_required_unbound": true,
+    "stale_status_path": "/var/lib/rozkalns-simple-deployer/status/hermes-tech-public-rpi5.json",
+    "stale_status_sha256": "42187d0258d92b4dfb644d8d2261a4dc604d77b81d542eb93d3637c5e681cf5d"
+  },
+  "resume_execution": {
+    "entrypoint_source": "ops/bin/hermes-tech-simple-deploy-resume-v1",
+    "installed_entrypoint": "/usr/local/sbin/hermes-tech-simple-deploy-resume-v1",
+    "exact_image_digest_required": true,
+    "exact_consumer_source_required": true,
+    "steps": [
+      "revalidate-exact-owner-live-authority-and-current-main",
+      "revalidate-fixed-resume-cutover-helper-and-generic-identities",
+      "revalidate-exact-partial-baseline-and-stale-status-hash",
+      "revalidate-authorized-hermes-source-and-immutable-digest",
+      "invoke-fixed-exact-release-helper-once",
+      "verify-simple-deploy-container-and-127.0.0.1:8089-bind",
+      "verify-health-200",
+      "verify-ready-200",
+      "verify-exact-success-receipt",
+      "enable-and-start-hermes-tech-target-scoped-simple-deploy-timer",
+      "verify-global-all-target-timer-remains-disabled-inactive",
+      "verify-runtime-again"
+    ]
+  },
+  "failure_semantics": {
+    "fail_closed": true,
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "alternate_mutation_path": false,
+    "preserve_evidence": true,
+    "stop_after_first_post_mutation_error_or_ambiguity": true
+  },
+  "forbidden_operations": [
+    "legacy-runtime-restart-or-rollback",
+    "compose-rematerialization-or-removal",
+    "generic-shell-or-arbitrary-command-execution",
+    "caller-selected-command-path-argv-or-environment",
+    "unrelated-service-timer-docker-or-filesystem-mutation",
+    "database-schema-or-data-mutation",
+    "secrets-credentials-permissions-or-protected-config-access",
+    "network-firewall-dns-or-cloudflare-mutation",
+    "global-simple-deployer-all-target-timer-enable-or-start",
+    "automatic-retry-cleanup-rollback-or-alternate-mutation-path"
+  ]
+}

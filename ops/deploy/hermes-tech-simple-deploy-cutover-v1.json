@@ -89,19 +89,25 @@
   "ordered_steps": [
     "revalidate-exact-owner-live-authority-and-ready-envelope",
     "revalidate-exact-source-contract-and-compose-sha256",
+    "revalidate-fixed-cutover-operator-closure-installed-from-authorized-main",
+    "revalidate-compatible-generic-simple-deployer-identity",
+    "revalidate-authorized-hermes-tech-source-and-immutable-digest",
     "revalidate-legacy-unit-identities-and-initial-states",
-    "revalidate-127.0.0.1:8089-is-owned-by-hermes-tech-web.service",
-    "revalidate-compose-destination-is-absent",
+    "revalidate-hermes-blog-exact-image-and-127.0.0.1:8089-bind",
+    "revalidate-compose-destination-and-success-receipt-are-absent",
+    "revalidate-target-timer-disabled-inactive-and-global-timer-disabled-inactive",
     "stop-and-disable-hermes-tech-pull-deploy.timer",
-    "stop-hermes-tech-pull-deploy.service-if-active-and-disable-if-enabled",
+    "stop-hermes-tech-pull-deploy.service",
     "stop-and-disable-hermes-tech-web.service",
-    "verify-127.0.0.1:8089-is-unbound",
+    "verify-hermes-blog-is-absent-and-127.0.0.1:8089-is-unbound",
     "materialize-exact-hermes-tech-public-compose",
-    "apply-hermes-tech-public-rpi5-through-reviewed-generic-simple-deploy-with-exact-image-digest",
+    "apply-hermes-tech-public-rpi5-through-fixed-exact-release-helper",
     "verify-127.0.0.1:8089-is-owned-by-hermes-tech-public-compose",
     "verify-health-200",
     "verify-ready-200",
-    "verify-simple-deploy-receipt"
+    "verify-simple-deploy-receipt-exact-source-and-digest",
+    "enable-and-start-hermes-tech-target-scoped-simple-deploy-timer",
+    "verify-target-timer-enabled-active-and-global-all-target-timer-disabled-inactive"
   ],
   "failure_semantics": {
     "fail_closed": true,
@@ -121,11 +127,94 @@
     "network-firewall-dns-or-cloudflare-mutation",
     "package-user-group-or-runner-mutation",
     "repository-settings-rulesets-or-secrets-mutation",
-    "automatic-retry-cleanup-rollback-or-alternate-mutation-path"
+    "automatic-retry-cleanup-rollback-or-alternate-mutation-path",
+    "global-simple-deployer-all-target-timer-enable-or-start"
   ],
   "source_only_state": {
     "live_authorized": false,
     "runtime_mutation_permitted_by_this_file": false,
-    "merge_authorized": false
+    "merge_authorized": false,
+    "operator_installation_authorized": false,
+    "target_timer_activation_authorized": false
+  },
+  "issue": 1447,
+  "operator_installation": {
+    "installer_source": "ops/bin/install-hermes-tech-simple-deploy-cutover-v1",
+    "entrypoint_source": "ops/bin/hermes-tech-simple-deploy-cutover-v1",
+    "support_source": "ops/bin/hermes-tech-exact-reconcile-v1",
+    "installed_entrypoint": "/usr/local/sbin/hermes-tech-simple-deploy-cutover-v1",
+    "installed_support": "/usr/local/libexec/rozkalns-simple-deployer/hermes-tech-exact-reconcile-v1",
+    "required_initial_state": "both-absent",
+    "publication_order": [
+      "support",
+      "entrypoint"
+    ],
+    "entrypoint_owner": "root",
+    "entrypoint_group": "root",
+    "entrypoint_mode": "0500",
+    "support_owner": "root",
+    "support_group": "root",
+    "support_mode": "0555",
+    "partial_support_without_entrypoint_is_inert": true,
+    "separate_live_installation_authorization_required": true,
+    "source_merge_installs_operator": false
+  },
+  "exact_release_adapter": {
+    "generic_deployer_module": "/usr/local/libexec/rozkalns-simple-deployer/simple_deploy_v1.py",
+    "compatible_deployer_identity_source_sha": "62fd973653754fb489bda5c7d803015def71a6f4",
+    "compatible_deployer_module_sha256": "ed906786fd85169c6c555a3ac466b157edaf24a65fe12f60ee2ec6940ade20d0",
+    "runtime_user": "rozkalns-simple-deployer",
+    "fixed_support_entrypoint": "/usr/local/libexec/rozkalns-simple-deployer/hermes-tech-exact-reconcile-v1",
+    "caller_release_inputs": [
+      "expected-source-sha",
+      "expected-image-digest"
+    ],
+    "caller_path_command_environment_inputs_forbidden": true,
+    "production_pointer_must_equal_expected_digest_before_mutation": true,
+    "image_label_source_must_equal_expected_source_before_mutation": true,
+    "production_pointer_must_remain_expected_digest_after_mutation": true,
+    "reuses_generic_simple_deploy_state_machine": true,
+    "modifies_generic_simple_deploy_source": false
+  },
+  "standing_reconciliation": {
+    "required_initial_timer_enabled_state": "disabled",
+    "required_initial_timer_active_state": "inactive",
+    "required_initial_service_active_state": "inactive",
+    "final_timer_enabled_state": "enabled",
+    "final_timer_active_state": "active",
+    "global_timer": "rozkalns-simple-deployer.timer",
+    "global_service": "rozkalns-simple-deployer.service",
+    "global_timer_required_enabled_state": "disabled",
+    "global_timer_required_active_state": "inactive",
+    "global_service_required_active_state": "inactive",
+    "global_all_target_reconciliation_forbidden": true,
+    "target_timer_template": "rozkalns-simple-deployer@.timer",
+    "target_service_template": "rozkalns-simple-deployer@.service",
+    "target_instance": "hermes-tech-public-rpi5"
+  },
+  "operator_upgrade_recovery": {
+    "issue": 1449,
+    "required_only_after_partial_live_install": true,
+    "installer_source": "ops/bin/install-hermes-tech-simple-deploy-cutover-v1",
+    "installer_mode": "upgrade-apply",
+    "baseline_main": "fba44df0cc004b4b62f991c9ed8114f460764bc0",
+    "target_path": "/usr/local/sbin/hermes-tech-simple-deploy-cutover-v1",
+    "helper_path": "/usr/local/libexec/rozkalns-simple-deployer/hermes-tech-exact-reconcile-v1",
+    "helper_replacement_forbidden": true,
+    "required_target_initial_identity": "exact-baseline-main-operator-bytes",
+    "required_helper_identity": "exact-current-main-helper-bytes",
+    "stage_path": "/usr/local/sbin/.hermes-tech-simple-deploy-cutover-v1.issue1449.stage",
+    "stage_creation": "O_EXCL|O_NOFOLLOW",
+    "target_owner": "root",
+    "target_group": "root",
+    "target_mode": "0500",
+    "atomic_replace_once": true,
+    "directory_fsync_required": true,
+    "automatic_retry": false,
+    "automatic_cleanup": false,
+    "automatic_rollback": false,
+    "systemd_docker_runtime_mutation": false,
+    "separate_live_authorization_required": true,
+    "source_merge_replaces_installed_operator": false
   }
 }

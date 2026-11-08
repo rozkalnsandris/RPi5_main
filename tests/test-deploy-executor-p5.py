@@ -49,6 +49,7 @@ class P5InterfaceSecurityTests(unittest.TestCase):
                 "hermes-deals.runner-smoke-audit.v1",
                 "hermes-deals.source-sync.v1",
                 "rpi5-main.hermes-tech-simple-deploy-cutover.v1",
+                "rpi5-main.hermes-tech-simple-deploy-resume.v1",
                 "rpi5-main.rozkalns-cv-post-cutover-reconcile.v1",
                 "rpi5-main.weather-operator-upgrade-v7.v1",
                 "rozkalns-weather.public-runtime-release.v1",
@@ -86,6 +87,18 @@ class P5InterfaceSecurityTests(unittest.TestCase):
         self.assertFalse(runner_smoke.ordinary_live_all_eligible)
         self.assertEqual(runner_smoke.rollback_policy, "NONE")
         self.assertEqual(runner_smoke.queue_match.deploy_class, "STRICT_LIVE_AUTH_REQUIRED")
+        hermes_resume = operations["rpi5-main.hermes-tech-simple-deploy-resume.v1"]
+        self.assertEqual(hermes_resume.authorization_class, "STRICT")
+        self.assertFalse(hermes_resume.ordinary_live_all_eligible)
+        self.assertEqual(hermes_resume.rollback_policy, "NONE")
+        self.assertEqual(
+            hermes_resume.queue_match.repository_entrypoint,
+            "ops/bin/hermes-tech-simple-deploy-resume-v1",
+        )
+        self.assertEqual(
+            hermes_resume.baseline.resolver_id,
+            "rpi5-main.hermes-tech-simple-deploy-resume-baseline.v1",
+        )
         weather = operations["rozkalns-weather.public-runtime-release.v1"]
         self.assertEqual(weather.authorization_class, "STRICT")
         self.assertFalse(weather.ordinary_live_all_eligible)

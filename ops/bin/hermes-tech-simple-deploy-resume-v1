@@ -1,0 +1,412 @@
+#!/usr/bin/python3 -I
+"""Resume the fixed Hermes Tech SIMPLE-DEPLOY cutover from one exact partial state.
+
+This is not a retry-capable generic recovery tool. It accepts only the reviewed
+post-failure baseline captured by issue #1451 and may continue only forward.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import importlib.machinery
+import importlib.util
+import json
+import os
+import pwd
+import re
+import stat
+import sys
+from pathlib import Path
+from typing import Any
+
+OWNER = "andris"
+ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
+REPO_REL = "RPi5_main"
+RESUME_REL = "ops/bin/hermes-tech-simple-deploy-resume-v1"
+CUTOVER_REL = "ops/bin/hermes-tech-simple-deploy-cutover-v1"
+HELPER_REL = "ops/bin/hermes-tech-exact-reconcile-v1"
+
+INSTALLED_RESUME = Path("/usr/local/sbin/hermes-tech-simple-deploy-resume-v1")
+INSTALLED_CUTOVER = Path("/usr/local/sbin/hermes-tech-simple-deploy-cutover-v1")
+INSTALLED_HELPER = Path("/usr/local/libexec/rozkalns-simple-deployer/hermes-tech-exact-reconcile-v1")
+STATUS = Path("/var/lib/rozkalns-simple-deployer/status/hermes-tech-public-rpi5.json")
+STATUS_SHA256 = "42187d0258d92b4dfb644d8d2261a4dc604d77b81d542eb93d3637c5e681cf5d"
+TARGET_ALIAS = "hermes-tech-public-rpi5"
+SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+MUTATION_STARTED = False
+
+
+class ResumeError(RuntimeError):
+    pass
+
+
+def fail(reason: str) -> None:
+    raise ResumeError(reason)
+
+
+def sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(131072), b""):
+                digest.update(chunk)
+    except OSError:
+        fail(f"file_hash_failed:{path.name}")
+    return digest.hexdigest()
+
+
+def owner_home() -> Path:
+    try:
+        return Path(pwd.getpwnam(OWNER).pw_dir)
+    except KeyError:
+        fail("owner_account_missing")
+
+
+def run_git(repo: Path, *args: str) -> str:
+    import subprocess
+
+    home = owner_home()
+    env = {
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+    }
+    argv = [
+        "/usr/sbin/runuser", "-u", OWNER, "--",
+        "/usr/bin/env", f"HOME={home}", "PATH=/usr/local/bin:/usr/bin:/bin",
+        "/usr/bin/git", "-C", str(repo), *args,
+    ]
+    try:
+        done = subprocess.run(
+            argv,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+            timeout=30,
+            env=env,
+        )
+    except (OSError, subprocess.SubprocessError, UnicodeError):
+        fail("git_transport_failed")
+    if done.returncode != 0 or len(done.stdout) > 262144:
+        fail("git_command_failed")
+    return done.stdout
+
+
+def git_blob(repo: Path, revision: str, relative: str) -> bytes:
+    import subprocess
+
+    home = owner_home()
+    env = {
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+    }
+    argv = [
+        "/usr/sbin/runuser", "-u", OWNER, "--",
+        "/usr/bin/env", f"HOME={home}", "PATH=/usr/local/bin:/usr/bin:/bin",
+        "/usr/bin/git", "-C", str(repo), "show", f"{revision}:{relative}",
+    ]
+    try:
+        done = subprocess.run(
+            argv,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=30,
+            env=env,
+        )
+    except (OSError, subprocess.SubprocessError):
+        fail("git_blob_read_failed")
+    if done.returncode != 0 or len(done.stdout) > 524288:
+        fail("git_blob_read_failed")
+    return done.stdout
+
+
+def require_regular(path: Path, *, mode: int) -> bytes:
+    try:
+        info = path.lstat()
+        data = path.read_bytes()
+    except OSError:
+        fail(f"required_file_missing:{path.name}")
+    if (
+        not stat.S_ISREG(info.st_mode)
+        or path.is_symlink()
+        or info.st_nlink != 1
+        or info.st_uid != 0
+        or info.st_gid != 0
+        or stat.S_IMODE(info.st_mode) != mode
+    ):
+        fail(f"required_file_metadata_drift:{path.name}")
+    return data
+
+
+def require_checkout(expected_main: str) -> Path:
+    if os.geteuid() != 0:
+        fail("root_required")
+    repo = owner_home() / REPO_REL
+    if not (repo / ".git").is_dir():
+        fail("rpi5_main_checkout_missing")
+    if run_git(repo, "rev-parse", "HEAD").strip() != expected_main:
+        fail("rpi5_main_head_mismatch")
+    if run_git(repo, "branch", "--show-current").strip() != "main":
+        fail("rpi5_main_not_on_main")
+    if run_git(repo, "remote", "get-url", "origin").strip() != ORIGIN:
+        fail("rpi5_main_origin_mismatch")
+    if run_git(repo, "status", "--porcelain=v1", "--untracked-files=all"):
+        fail("rpi5_main_checkout_dirty")
+    return repo
+
+
+def load_cutover(expected_main: str) -> Any:
+    repo = require_checkout(expected_main)
+    expected_resume = git_blob(repo, expected_main, RESUME_REL)
+    expected_cutover = git_blob(repo, expected_main, CUTOVER_REL)
+    expected_helper = git_blob(repo, expected_main, HELPER_REL)
+
+    if require_regular(INSTALLED_RESUME, mode=0o500) != expected_resume:
+        fail("installed_resume_source_mismatch")
+    if require_regular(INSTALLED_CUTOVER, mode=0o500) != expected_cutover:
+        fail("installed_cutover_source_mismatch")
+    if require_regular(INSTALLED_HELPER, mode=0o555) != expected_helper:
+        fail("installed_helper_source_mismatch")
+
+    loader = importlib.machinery.SourceFileLoader(
+        "hermes_resume_cutover_runtime",
+        str(INSTALLED_CUTOVER),
+    )
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    if spec is None or spec.loader is None:
+        fail("cutover_import_failed")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    try:
+        loader.exec_module(module)
+    except Exception:
+        fail("cutover_import_failed")
+    return module
+
+
+def require_status_baseline(cutover: Any) -> None:
+    runtime = cutover.account(cutover.RUNTIME_USER)
+    try:
+        info = STATUS.lstat()
+    except OSError:
+        fail("resume_status_missing")
+    if (
+        not stat.S_ISREG(info.st_mode)
+        or STATUS.is_symlink()
+        or info.st_uid != runtime.pw_uid
+        or info.st_gid != runtime.pw_gid
+        or stat.S_IMODE(info.st_mode) != 0o600
+        or sha256_file(STATUS) != STATUS_SHA256
+    ):
+        fail("resume_status_drift")
+
+
+def require_partial_baseline(
+    cutover: Any,
+    expected_source: str,
+    expected_digest: str,
+) -> None:
+    for unit, expected in (
+        (
+            cutover.LEGACY_WEB_UNIT,
+            dict(
+                LoadState="loaded", UnitFileState="disabled",
+                ActiveState="inactive", SubState="dead", MainPID="0",
+            ),
+        ),
+        (
+            cutover.LEGACY_PULL_TIMER,
+            dict(
+                LoadState="loaded", UnitFileState="disabled",
+                ActiveState="inactive", SubState="dead",
+            ),
+        ),
+        (
+            cutover.LEGACY_PULL_SERVICE,
+            dict(
+                LoadState="loaded", UnitFileState="static",
+                ActiveState="inactive", SubState="dead", MainPID="0",
+            ),
+        ),
+        (
+            cutover.TARGET_TIMER,
+            dict(
+                LoadState="loaded", UnitFileState="disabled",
+                ActiveState="inactive", SubState="dead",
+            ),
+        ),
+        (
+            cutover.TARGET_TIMER_SERVICE,
+            dict(
+                LoadState="loaded", UnitFileState="static",
+                ActiveState="inactive", SubState="dead", MainPID="0",
+            ),
+        ),
+        (
+            cutover.GLOBAL_TIMER,
+            dict(
+                LoadState="loaded", UnitFileState="disabled",
+                ActiveState="inactive", SubState="dead",
+            ),
+        ),
+        (
+            cutover.GLOBAL_SERVICE,
+            dict(
+                LoadState="loaded", UnitFileState="static",
+                ActiveState="inactive", SubState="dead", MainPID="0",
+            ),
+        ),
+    ):
+        values = cutover.require_unit(unit, **expected)
+        cutover.require_no_job(unit, values)
+
+    cutover.require_regular(cutover.COMPOSE_DEST, uid=0, gid=0, mode=0o644)
+    if cutover.sha256_file(cutover.COMPOSE_DEST) != cutover.EXPECTED_COMPOSE_SHA256:
+        fail("resume_compose_hash_mismatch")
+    if cutover.COMPOSE_STAGE.exists() or cutover.COMPOSE_STAGE.is_symlink():
+        fail("resume_compose_stage_present")
+    if cutover.RECEIPT.exists() or cutover.RECEIPT.is_symlink():
+        fail("resume_success_receipt_present")
+    require_status_baseline(cutover)
+
+    legacy = cutover.run(
+        (
+            "/usr/bin/docker", "ps", "-a",
+            "--filter", f"name=^/{cutover.LEGACY_CONTAINER}$",
+            "--format", "{{.ID}}",
+        ),
+        timeout=20,
+    ).stdout.strip()
+    if legacy:
+        fail("resume_legacy_container_present")
+
+    current = cutover.run(
+        (
+            "/usr/bin/docker", "ps", "-a",
+            "--filter", f"label=com.docker.compose.project={cutover.TARGET_PROJECT}",
+            "--filter", f"label=com.docker.compose.service={cutover.TARGET_SERVICE}",
+            "--format", "{{.ID}}",
+        ),
+        timeout=20,
+    ).stdout.strip()
+    if current:
+        fail("resume_simple_deploy_container_present")
+    cutover.require_port_unbound()
+
+    sd = cutover.load_deployer_module()
+    target = cutover.require_installed_target(sd)
+    cutover.require_exact_release(sd, target, expected_source, expected_digest)
+
+
+def preflight(expected_main: str, expected_source: str, expected_digest: str) -> Any:
+    cutover = load_cutover(expected_main)
+    require_partial_baseline(cutover, expected_source, expected_digest)
+    return cutover
+
+
+def apply_resume(expected_main: str, expected_source: str, expected_digest: str) -> None:
+    global MUTATION_STARTED
+    cutover = preflight(expected_main, expected_source, expected_digest)
+
+    MUTATION_STARTED = True
+    cutover.invoke_exact_reconcile(expected_source, expected_digest)
+    cutover.verify_new_runtime(expected_source, expected_digest)
+
+    cutover.run(
+        ("/usr/bin/systemctl", "enable", "--now", cutover.TARGET_TIMER),
+        timeout=30,
+    )
+    timer = cutover.require_unit(
+        cutover.TARGET_TIMER,
+        LoadState="loaded",
+        UnitFileState="enabled",
+        ActiveState="active",
+    )
+    if timer["SubState"] not in {"running", "waiting"}:
+        fail("resume_target_timer_substate_invalid")
+    cutover.require_no_job(cutover.TARGET_TIMER, timer)
+
+    global_timer = cutover.require_unit(
+        cutover.GLOBAL_TIMER,
+        LoadState="loaded",
+        UnitFileState="disabled",
+        ActiveState="inactive",
+        SubState="dead",
+    )
+    cutover.require_no_job(cutover.GLOBAL_TIMER, global_timer)
+    cutover.verify_new_runtime(expected_source, expected_digest)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Resume one exact Hermes Tech partial SIMPLE-DEPLOY cutover",
+    )
+    parser.add_argument("mode", choices=("check", "apply"), nargs="?", default="check")
+    parser.add_argument("--expected-main", required=True)
+    parser.add_argument("--expected-source", required=True)
+    parser.add_argument("--expected-digest", required=True)
+    parser.add_argument("--confirm")
+    args = parser.parse_args(argv)
+
+    if SHA_RE.fullmatch(args.expected_main) is None:
+        parser.error("--expected-main must be a lowercase 40-character SHA")
+    if SHA_RE.fullmatch(args.expected_source) is None:
+        parser.error("--expected-source must be a lowercase 40-character SHA")
+    if DIGEST_RE.fullmatch(args.expected_digest) is None:
+        parser.error("--expected-digest must be sha256:<64 lowercase hex>")
+    if args.mode == "apply" and args.confirm != "RESUME-HERMES-TECH-SIMPLE-DEPLOY":
+        parser.error("apply requires --confirm RESUME-HERMES-TECH-SIMPLE-DEPLOY")
+    if args.mode == "check" and args.confirm is not None:
+        parser.error("--confirm is valid only with apply")
+
+    try:
+        if args.mode == "check":
+            preflight(args.expected_main, args.expected_source, args.expected_digest)
+            result = "READY"
+        else:
+            apply_resume(args.expected_main, args.expected_source, args.expected_digest)
+            result = "PASS"
+        print(json.dumps({
+            "schema": "rpi5.hermes-tech-simple-deploy-resume.v1",
+            "mode": args.mode,
+            "result": result,
+            "mutation_started": MUTATION_STARTED,
+            "target": TARGET_ALIAS,
+            "source_sha": args.expected_source,
+            "digest": args.expected_digest,
+        }, sort_keys=True))
+        return 0
+    except ResumeError as exc:
+        print(json.dumps({
+            "schema": "rpi5.hermes-tech-simple-deploy-resume.v1",
+            "mode": args.mode,
+            "result": "BLOCKED",
+            "reason": str(exc),
+            "mutation_started": MUTATION_STARTED,
+            "target": TARGET_ALIAS,
+        }, sort_keys=True))
+        return 2
+    except Exception:
+        print(json.dumps({
+            "schema": "rpi5.hermes-tech-simple-deploy-resume.v1",
+            "mode": args.mode,
+            "result": "BLOCKED",
+            "reason": "unexpected_error",
+            "mutation_started": MUTATION_STARTED,
+            "target": TARGET_ALIAS,
+        }, sort_keys=True))
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

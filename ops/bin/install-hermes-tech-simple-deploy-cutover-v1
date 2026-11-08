@@ -1,0 +1,595 @@
+#!/usr/bin/python3 -I
+"""Install or exactly upgrade the fixed Hermes Tech cutover operator closure.
+
+Source-only until a separate exact LIVE authorization permits a fixed mutation.
+No caller-selected path, command or environment is accepted.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import pwd
+import re
+import stat
+import subprocess
+from pathlib import Path
+
+OWNER = "andris"
+ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
+REPO_REL = "RPi5_main"
+INSTALLER_REL = "ops/bin/install-hermes-tech-simple-deploy-cutover-v1"
+OPERATOR_REL = "ops/bin/hermes-tech-simple-deploy-cutover-v1"
+HELPER_REL = "ops/bin/hermes-tech-exact-reconcile-v1"
+RESUME_REL = "ops/bin/hermes-tech-simple-deploy-resume-v1"
+UPGRADE_BASELINE_MAIN = "fba44df0cc004b4b62f991c9ed8114f460764bc0"
+HELPER_UPGRADE_BASELINE_MAIN = "1af1b450a0082894f405343505b6fb07606a26c1"
+
+OPERATOR_DEST = Path("/usr/local/sbin/hermes-tech-simple-deploy-cutover-v1")
+HELPER_DEST = Path("/usr/local/libexec/rozkalns-simple-deployer/hermes-tech-exact-reconcile-v1")
+RESUME_DEST = Path("/usr/local/sbin/hermes-tech-simple-deploy-resume-v1")
+OPERATOR_UPGRADE_STAGE = OPERATOR_DEST.parent / ".hermes-tech-simple-deploy-cutover-v1.issue1449.stage"
+HELPER_UPGRADE_STAGE = HELPER_DEST.parent / ".hermes-tech-exact-reconcile-v1.issue1451.stage"
+SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+ENV = {
+    "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    "LANG": "C.UTF-8",
+    "LC_ALL": "C.UTF-8",
+}
+MUTATION_STARTED = False
+
+
+class InstallError(RuntimeError):
+    pass
+
+
+def fail(reason: str) -> None:
+    raise InstallError(reason)
+
+
+def run(argv: tuple[str, ...], *, timeout: int = 30) -> subprocess.CompletedProcess[str]:
+    try:
+        result = subprocess.run(
+            argv,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+            timeout=timeout,
+            env=ENV,
+        )
+    except (OSError, subprocess.SubprocessError, UnicodeError):
+        fail(f"command_transport_failed:{Path(argv[0]).name}")
+    if result.returncode != 0:
+        fail(f"command_failed:{Path(argv[0]).name}")
+    if len(result.stdout) > 262144 or len(result.stderr) > 131072:
+        fail("command_output_oversize")
+    return result
+
+
+def owner_home() -> Path:
+    try:
+        home = Path(pwd.getpwnam(OWNER).pw_dir)
+    except KeyError:
+        fail("owner_account_missing")
+    if not home.is_absolute():
+        fail("owner_home_invalid")
+    return home
+
+
+def owner_git(repo: Path, *args: str) -> str:
+    home = owner_home()
+    return run(
+        (
+            "/usr/sbin/runuser", "-u", OWNER, "--",
+            "/usr/bin/env", f"HOME={home}", "PATH=/usr/local/bin:/usr/bin:/bin",
+            "/usr/bin/git", "-C", str(repo), *args,
+        ),
+    ).stdout
+
+
+def git_blob(repo: Path, revision: str, relative: str) -> bytes:
+    home = owner_home()
+    return run(
+        (
+            "/usr/sbin/runuser", "-u", OWNER, "--",
+            "/usr/bin/env", f"HOME={home}", "PATH=/usr/local/bin:/usr/bin:/bin",
+            "/usr/bin/git", "-C", str(repo), "show", f"{revision}:{relative}",
+        ),
+    ).stdout.encode("utf-8")
+
+
+def sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def safe_directory(path: Path) -> None:
+    try:
+        info = path.lstat()
+    except OSError:
+        fail(f"install_directory_missing:{path.name}")
+    if (
+        not stat.S_ISDIR(info.st_mode)
+        or path.is_symlink()
+        or info.st_uid != 0
+        or info.st_gid != 0
+        or info.st_mode & 0o022
+    ):
+        fail(f"install_directory_unsafe:{path.name}")
+
+
+def read_installed(path: Path, *, mode: int) -> tuple[tuple[int, int, int, int], bytes]:
+    try:
+        info = path.lstat()
+        data = path.read_bytes()
+    except OSError:
+        fail(f"installed_file_unreadable:{path.name}")
+    if (
+        not stat.S_ISREG(info.st_mode)
+        or path.is_symlink()
+        or info.st_nlink != 1
+        or info.st_uid != 0
+        or info.st_gid != 0
+        or stat.S_IMODE(info.st_mode) != mode
+    ):
+        fail(f"installed_file_metadata_drift:{path.name}")
+    return (info.st_dev, info.st_ino, info.st_mtime_ns, info.st_size), data
+
+
+def source_context(expected_main: str) -> tuple[Path, bytes, bytes]:
+    if os.geteuid() != 0:
+        fail("root_required")
+    home = owner_home()
+    repo = home / REPO_REL
+    if not (repo / ".git").is_dir():
+        fail("rpi5_main_checkout_missing")
+    if owner_git(repo, "rev-parse", "HEAD").strip() != expected_main:
+        fail("rpi5_main_head_mismatch")
+    if owner_git(repo, "branch", "--show-current").strip() != "main":
+        fail("rpi5_main_not_on_main")
+    if owner_git(repo, "remote", "get-url", "origin").strip() != ORIGIN:
+        fail("rpi5_main_origin_mismatch")
+    if owner_git(repo, "status", "--porcelain=v1", "--untracked-files=all"):
+        fail("rpi5_main_checkout_dirty")
+
+    expected_installer = repo / INSTALLER_REL
+    if Path(__file__).absolute() != expected_installer:
+        fail("installer_path_mismatch")
+    try:
+        installer_info = expected_installer.lstat()
+        running_installer = expected_installer.read_bytes()
+    except OSError:
+        fail("installer_source_unreadable")
+    if (
+        not stat.S_ISREG(installer_info.st_mode)
+        or expected_installer.is_symlink()
+        or stat.S_IMODE(installer_info.st_mode) & 0o022
+        or running_installer != git_blob(repo, expected_main, INSTALLER_REL)
+    ):
+        fail("installer_source_identity_mismatch")
+
+    helper = git_blob(repo, expected_main, HELPER_REL)
+    operator = git_blob(repo, expected_main, OPERATOR_REL)
+    if not helper.startswith(b"#!/usr/bin/python3 -I\n"):
+        fail("helper_source_invalid")
+    if not operator.startswith(b"#!/usr/bin/python3 -I\n"):
+        fail("operator_source_invalid")
+
+    safe_directory(HELPER_DEST.parent)
+    safe_directory(OPERATOR_DEST.parent)
+    return repo, helper, operator
+
+
+def source_closure(expected_main: str) -> tuple[bytes, bytes]:
+    _repo, helper, operator = source_context(expected_main)
+    for destination in (HELPER_DEST, OPERATOR_DEST):
+        if destination.exists() or destination.is_symlink():
+            fail(f"install_destination_not_absent:{destination.name}")
+    return helper, operator
+
+
+def install_once(path: Path, data: bytes, mode: int) -> None:
+    global MUTATION_STARTED
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(path, flags, 0o600)
+    except OSError:
+        fail(f"install_create_failed:{path.name}")
+    MUTATION_STARTED = True
+    try:
+        offset = 0
+        while offset < len(data):
+            written = os.write(fd, data[offset:])
+            if written <= 0:
+                fail(f"install_write_failed:{path.name}")
+            offset += written
+        os.fchown(fd, 0, 0)
+        os.fchmod(fd, mode)
+        os.fsync(fd)
+    except OSError:
+        fail(f"install_write_failed:{path.name}")
+    finally:
+        os.close(fd)
+
+    try:
+        info = path.lstat()
+        installed = path.read_bytes()
+    except OSError:
+        fail(f"install_verify_failed:{path.name}")
+    if (
+        not stat.S_ISREG(info.st_mode)
+        or path.is_symlink()
+        or info.st_nlink != 1
+        or info.st_uid != 0
+        or info.st_gid != 0
+        or stat.S_IMODE(info.st_mode) != mode
+        or sha256(installed) != sha256(data)
+    ):
+        fail(f"install_verify_failed:{path.name}")
+
+
+def operator_upgrade_preflight(
+    expected_main: str,
+) -> tuple[bytes, tuple[int, int, int, int], bytes]:
+    repo, helper, desired_operator = source_context(expected_main)
+    if expected_main == UPGRADE_BASELINE_MAIN:
+        fail("operator_upgrade_source_not_newer_than_baseline")
+
+    helper_identity, installed_helper = read_installed(HELPER_DEST, mode=0o555)
+    if installed_helper != helper:
+        fail("installed_helper_source_mismatch")
+
+    baseline_operator = git_blob(repo, UPGRADE_BASELINE_MAIN, OPERATOR_REL)
+    if not baseline_operator.startswith(b"#!/usr/bin/python3 -I\n"):
+        fail("operator_upgrade_baseline_invalid")
+    operator_identity, installed_operator = read_installed(OPERATOR_DEST, mode=0o500)
+    if installed_operator != baseline_operator:
+        fail("installed_operator_baseline_mismatch")
+    if desired_operator == baseline_operator:
+        fail("operator_upgrade_no_source_delta")
+    if OPERATOR_UPGRADE_STAGE.exists() or OPERATOR_UPGRADE_STAGE.is_symlink():
+        fail("operator_upgrade_stage_present")
+
+    # The helper is not a mutation target. Keep its identity in the snapshot so
+    # any concurrent replacement is detected immediately before commit.
+    return desired_operator, operator_identity, helper_identity
+
+
+def upgrade_operator_once(expected_main: str) -> str:
+    global MUTATION_STARTED
+    desired, operator_identity, helper_identity = operator_upgrade_preflight(expected_main)
+
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(OPERATOR_UPGRADE_STAGE, flags, 0o600)
+    except OSError:
+        fail("operator_upgrade_stage_create_failed")
+    MUTATION_STARTED = True
+    try:
+        offset = 0
+        while offset < len(desired):
+            written = os.write(fd, desired[offset:])
+            if written <= 0:
+                fail("operator_upgrade_stage_write_failed")
+            offset += written
+        os.fchown(fd, 0, 0)
+        os.fchmod(fd, 0o500)
+        os.fsync(fd)
+    except OSError:
+        fail("operator_upgrade_stage_write_failed")
+    finally:
+        os.close(fd)
+
+    stage_identity, staged = read_installed(OPERATOR_UPGRADE_STAGE, mode=0o500)
+    if sha256(staged) != sha256(desired):
+        fail("operator_upgrade_stage_identity_mismatch")
+
+    # Revalidate all immutable inputs and the exact installed target immediately
+    # before the one atomic replacement. The fixed stage must be the same inode.
+    desired_again, operator_identity_again, helper_identity_again = operator_upgrade_preflight_without_stage(
+        expected_main,
+    )
+    if (
+        desired_again != desired
+        or operator_identity_again != operator_identity
+        or helper_identity_again != helper_identity
+    ):
+        fail("operator_upgrade_precommit_drift")
+    stage_identity_again, staged_again = read_installed(OPERATOR_UPGRADE_STAGE, mode=0o500)
+    if stage_identity_again != stage_identity or staged_again != desired:
+        fail("operator_upgrade_stage_drift")
+
+    try:
+        os.replace(OPERATOR_UPGRADE_STAGE, OPERATOR_DEST)
+        dirfd = os.open(
+            OPERATOR_DEST.parent,
+            os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0),
+        )
+        try:
+            os.fsync(dirfd)
+        finally:
+            os.close(dirfd)
+    except OSError:
+        fail("operator_upgrade_replace_failed")
+
+    _final_identity, final_operator = read_installed(OPERATOR_DEST, mode=0o500)
+    if final_operator != desired:
+        fail("operator_upgrade_postreplace_identity_mismatch")
+    _repo, helper, desired_current = source_context(expected_main)
+    _helper_id, installed_helper = read_installed(HELPER_DEST, mode=0o555)
+    if installed_helper != helper or desired_current != final_operator:
+        fail("operator_upgrade_postreplace_drift")
+    return "PASS"
+
+
+def operator_upgrade_preflight_without_stage(
+    expected_main: str,
+) -> tuple[bytes, tuple[int, int, int, int], tuple[int, int, int, int]]:
+    repo, helper, desired_operator = source_context(expected_main)
+    if expected_main == UPGRADE_BASELINE_MAIN:
+        fail("operator_upgrade_source_not_newer_than_baseline")
+    helper_identity, installed_helper = read_installed(HELPER_DEST, mode=0o555)
+    if installed_helper != helper:
+        fail("installed_helper_source_mismatch")
+    baseline_operator = git_blob(repo, UPGRADE_BASELINE_MAIN, OPERATOR_REL)
+    operator_identity, installed_operator = read_installed(OPERATOR_DEST, mode=0o500)
+    if installed_operator != baseline_operator:
+        fail("installed_operator_baseline_mismatch")
+    if desired_operator == baseline_operator:
+        fail("operator_upgrade_no_source_delta")
+    return desired_operator, operator_identity, helper_identity
+
+
+def helper_upgrade_preflight_without_stage(
+    expected_main: str,
+) -> tuple[bytes, tuple[int, int, int, int], tuple[int, int, int, int]]:
+    repo, desired_helper, operator = source_context(expected_main)
+    if expected_main == HELPER_UPGRADE_BASELINE_MAIN:
+        fail("helper_upgrade_source_not_newer_than_baseline")
+    operator_identity, installed_operator = read_installed(OPERATOR_DEST, mode=0o500)
+    if installed_operator != operator:
+        fail("installed_operator_source_mismatch")
+    baseline_helper = git_blob(repo, HELPER_UPGRADE_BASELINE_MAIN, HELPER_REL)
+    helper_identity, installed_helper = read_installed(HELPER_DEST, mode=0o555)
+    if installed_helper != baseline_helper:
+        fail("installed_helper_baseline_mismatch")
+    if desired_helper == baseline_helper:
+        fail("helper_upgrade_no_source_delta")
+    return desired_helper, helper_identity, operator_identity
+
+
+def helper_upgrade_preflight(
+    expected_main: str,
+) -> tuple[bytes, tuple[int, int, int, int], tuple[int, int, int, int]]:
+    desired, helper_identity, operator_identity = helper_upgrade_preflight_without_stage(
+        expected_main,
+    )
+    if HELPER_UPGRADE_STAGE.exists() or HELPER_UPGRADE_STAGE.is_symlink():
+        fail("helper_upgrade_stage_present")
+    return desired, helper_identity, operator_identity
+
+
+def upgrade_helper_once(expected_main: str) -> str:
+    global MUTATION_STARTED
+    desired, helper_identity, operator_identity = helper_upgrade_preflight(expected_main)
+
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(HELPER_UPGRADE_STAGE, flags, 0o600)
+    except OSError:
+        fail("helper_upgrade_stage_create_failed")
+    MUTATION_STARTED = True
+    try:
+        offset = 0
+        while offset < len(desired):
+            written = os.write(fd, desired[offset:])
+            if written <= 0:
+                fail("helper_upgrade_stage_write_failed")
+            offset += written
+        os.fchown(fd, 0, 0)
+        os.fchmod(fd, 0o555)
+        os.fsync(fd)
+    except OSError:
+        fail("helper_upgrade_stage_write_failed")
+    finally:
+        os.close(fd)
+
+    stage_identity, staged = read_installed(HELPER_UPGRADE_STAGE, mode=0o555)
+    if sha256(staged) != sha256(desired):
+        fail("helper_upgrade_stage_identity_mismatch")
+
+    desired_again, helper_identity_again, operator_identity_again = (
+        helper_upgrade_preflight_without_stage(expected_main)
+    )
+    if (
+        desired_again != desired
+        or helper_identity_again != helper_identity
+        or operator_identity_again != operator_identity
+    ):
+        fail("helper_upgrade_precommit_drift")
+    stage_identity_again, staged_again = read_installed(HELPER_UPGRADE_STAGE, mode=0o555)
+    if stage_identity_again != stage_identity or staged_again != desired:
+        fail("helper_upgrade_stage_drift")
+
+    try:
+        os.replace(HELPER_UPGRADE_STAGE, HELPER_DEST)
+        dirfd = os.open(
+            HELPER_DEST.parent,
+            os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0),
+        )
+        try:
+            os.fsync(dirfd)
+        finally:
+            os.close(dirfd)
+    except OSError:
+        fail("helper_upgrade_replace_failed")
+
+    _final_identity, final_helper = read_installed(HELPER_DEST, mode=0o555)
+    if final_helper != desired:
+        fail("helper_upgrade_postreplace_identity_mismatch")
+    _repo, desired_current, operator = source_context(expected_main)
+    _operator_id, installed_operator = read_installed(OPERATOR_DEST, mode=0o500)
+    if installed_operator != operator or desired_current != final_helper:
+        fail("helper_upgrade_postreplace_drift")
+    return "PASS"
+
+
+def resume_install_preflight(expected_main: str) -> bytes:
+    repo, helper, operator = source_context(expected_main)
+    _helper_identity, installed_helper = read_installed(HELPER_DEST, mode=0o555)
+    if installed_helper != helper:
+        fail("installed_helper_source_mismatch")
+    _operator_identity, installed_operator = read_installed(OPERATOR_DEST, mode=0o500)
+    if installed_operator != operator:
+        fail("installed_operator_source_mismatch")
+    resume = git_blob(repo, expected_main, RESUME_REL)
+    if not resume.startswith(b"#!/usr/bin/python3 -I\n"):
+        fail("resume_source_invalid")
+    safe_directory(RESUME_DEST.parent)
+    if RESUME_DEST.exists() or RESUME_DEST.is_symlink():
+        fail("resume_install_destination_not_absent")
+    return resume
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Install or exactly upgrade Hermes Tech cutover closure",
+    )
+    parser.add_argument(
+        "mode",
+        choices=(
+            "check", "apply", "upgrade-check", "upgrade-apply",
+            "helper-upgrade-check", "helper-upgrade-apply",
+            "resume-install-check", "resume-install-apply",
+        ),
+        nargs="?",
+        default="check",
+    )
+    parser.add_argument("--expected-main", required=True)
+    parser.add_argument("--confirm")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if SHA_RE.fullmatch(args.expected_main) is None:
+        parser.error("--expected-main must be a lowercase 40-character SHA")
+    expected_confirm = {
+        "apply": "INSTALL-HERMES-TECH-CUTOVER-CLOSURE",
+        "upgrade-apply": "UPGRADE-HERMES-TECH-CUTOVER-OPERATOR",
+        "helper-upgrade-apply": "UPGRADE-HERMES-TECH-EXACT-HELPER",
+        "resume-install-apply": "INSTALL-HERMES-TECH-RESUME-OPERATOR",
+    }.get(args.mode)
+    if expected_confirm is not None and args.confirm != expected_confirm:
+        parser.error(f"{args.mode} requires --confirm {expected_confirm}")
+    if expected_confirm is None and args.confirm is not None:
+        parser.error("--confirm is valid only with mutation modes")
+
+    try:
+        if args.mode in {"check", "apply"}:
+            helper, operator = source_closure(args.expected_main)
+            if args.mode == "apply":
+                # Publish support first. A partial support-only install is inert;
+                # the root-only operator entrypoint is published last.
+                install_once(HELPER_DEST, helper, 0o555)
+                install_once(OPERATOR_DEST, operator, 0o500)
+                result = "PASS"
+            else:
+                result = "READY"
+            payload = {
+                "schema": "rpi5.hermes-tech-cutover-install.v1",
+                "mode": args.mode,
+                "result": result,
+                "mutation_started": MUTATION_STARTED,
+                "artifact_count": 2,
+                "helper_sha256": sha256(helper),
+                "operator_sha256": sha256(operator),
+            }
+        elif args.mode in {"upgrade-check", "upgrade-apply"}:
+            desired, _operator_identity, _helper_identity = operator_upgrade_preflight(
+                args.expected_main,
+            )
+            if args.mode == "upgrade-apply":
+                result = upgrade_operator_once(args.expected_main)
+            else:
+                result = "READY"
+            payload = {
+                "schema": "rpi5.hermes-tech-cutover-operator-upgrade.v1",
+                "mode": args.mode,
+                "result": result,
+                "mutation_started": MUTATION_STARTED,
+                "target": OPERATOR_DEST.name,
+                "baseline_main": UPGRADE_BASELINE_MAIN,
+                "operator_sha256": sha256(desired),
+            }
+        elif args.mode in {"helper-upgrade-check", "helper-upgrade-apply"}:
+            desired, _helper_identity, _operator_identity = helper_upgrade_preflight(
+                args.expected_main,
+            )
+            if args.mode == "helper-upgrade-apply":
+                result = upgrade_helper_once(args.expected_main)
+            else:
+                result = "READY"
+            payload = {
+                "schema": "rpi5.hermes-tech-exact-helper-upgrade.v1",
+                "mode": args.mode,
+                "result": result,
+                "mutation_started": MUTATION_STARTED,
+                "target": HELPER_DEST.name,
+                "baseline_main": HELPER_UPGRADE_BASELINE_MAIN,
+                "helper_sha256": sha256(desired),
+            }
+        else:
+            resume = resume_install_preflight(args.expected_main)
+            if args.mode == "resume-install-apply":
+                install_once(RESUME_DEST, resume, 0o500)
+                result = "PASS"
+            else:
+                result = "READY"
+            payload = {
+                "schema": "rpi5.hermes-tech-resume-install.v1",
+                "mode": args.mode,
+                "result": result,
+                "mutation_started": MUTATION_STARTED,
+                "target": RESUME_DEST.name,
+                "resume_sha256": sha256(resume),
+            }
+        print(json.dumps(payload, sort_keys=True))
+        return 0
+    except InstallError as exc:
+        print(json.dumps({
+            "schema": (
+                "rpi5.hermes-tech-resume-install.v1"
+                if args.mode.startswith("resume-install-")
+                else "rpi5.hermes-tech-exact-helper-upgrade.v1"
+                if args.mode.startswith("helper-upgrade-")
+                else "rpi5.hermes-tech-cutover-operator-upgrade.v1"
+                if args.mode.startswith("upgrade-")
+                else "rpi5.hermes-tech-cutover-install.v1"
+            ),
+            "mode": args.mode,
+            "result": "BLOCKED",
+            "reason": str(exc),
+            "mutation_started": MUTATION_STARTED,
+        }, sort_keys=True))
+        return 2
+    except Exception:
+        print(json.dumps({
+            "schema": (
+                "rpi5.hermes-tech-cutover-operator-upgrade.v1"
+                if args.mode.startswith("upgrade-")
+                else "rpi5.hermes-tech-cutover-install.v1"
+            ),
+            "mode": args.mode,
+            "result": "BLOCKED",
+            "reason": "unexpected_error",
+            "mutation_started": MUTATION_STARTED,
+        }, sort_keys=True))
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -44,7 +44,7 @@ class P4RegistryAndNormalizationTests(unittest.TestCase):
     def test_production_registry_contains_reviewed_disabled_operations(self):
         registry = load_registry(PRODUCTION_REGISTRY)
         self.assertFalse(registry.execution_enabled)
-        self.assertEqual(len(registry.operations), 11)
+        self.assertEqual(len(registry.operations), 12)
         operations = {item.operation_id: item for item in registry.operations}
         p9 = operations["rozkalns-control-center.merge-postcanary-reconcile.v1"]
         self.assertEqual(p9.adapter_id, "rozkalns-control-center.merge-postcanary-reconcile.v1")
@@ -121,6 +121,23 @@ class P4RegistryAndNormalizationTests(unittest.TestCase):
             "rpi5-main.rozkalns-cv-post-cutover-reconcile-baseline.v1",
         )
         self.assertEqual(cv_reconcile.rollback_policy, "NONE")
+        hermes_resume = operations["rpi5-main.hermes-tech-simple-deploy-resume.v1"]
+        self.assertEqual(
+            hermes_resume.adapter_id,
+            "rpi5-main.hermes-tech-simple-deploy-resume.v1",
+        )
+        self.assertEqual(hermes_resume.authorization_class, "STRICT")
+        self.assertFalse(hermes_resume.ordinary_live_all_eligible)
+        self.assertEqual(hermes_resume.queue_match.target_alias, "hermes-tech-public-rpi5")
+        self.assertEqual(
+            hermes_resume.queue_match.repository_entrypoint,
+            "ops/bin/hermes-tech-simple-deploy-resume-v1",
+        )
+        self.assertEqual(
+            hermes_resume.baseline.resolver_id,
+            "rpi5-main.hermes-tech-simple-deploy-resume-baseline.v1",
+        )
+        self.assertEqual(hermes_resume.rollback_policy, "NONE")
 
     def test_inert_fixture_registry_loads(self):
         registry = load_registry(FIXTURES / "operations_inert.json")

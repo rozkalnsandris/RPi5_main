@@ -1,0 +1,206 @@
+#!/usr/bin/python3 -I
+"""Exact-release adapter for the fixed Hermes Tech one-time cutover.
+
+This helper is installed root-owned but executes only as rozkalns-simple-deployer.
+It reuses the generic SIMPLE-DEPLOY state machine and narrows one reviewed target
+to an owner-authorized source SHA and immutable digest.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import importlib.util
+import json
+import os
+import pwd
+import re
+import stat
+import sys
+from pathlib import Path
+from typing import Any
+
+INSTALLED_HELPER = Path("/usr/local/libexec/rozkalns-simple-deployer/hermes-tech-exact-reconcile-v1")
+DEPLOYER_MODULE = Path("/usr/local/libexec/rozkalns-simple-deployer/simple_deploy_v1.py")
+TARGET_ALIAS = "hermes-tech-public-rpi5"
+TARGET_IMAGE = "ghcr.io/rozkalnsandris/hermes-tech"
+TARGET_PROJECT = "hermes-tech-public"
+TARGET_SERVICE = "hermes-tech"
+EXPECTED_COMPOSE_SHA256 = "fd1ca0d00c79bfb5e5cd1be589ae13b378c5c223be0b61d3f14f31da687fe6b9"
+COMPATIBLE_DEPLOYER_IDENTITY = "62fd973653754fb489bda5c7d803015def71a6f4"
+COMPATIBLE_DEPLOYER_SHA256 = "ed906786fd85169c6c555a3ac466b157edaf24a65fe12f60ee2ec6940ade20d0"
+RUN_AS = "rozkalns-simple-deployer"
+SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+
+
+class ExactReleaseError(RuntimeError):
+    pass
+
+
+def fail(reason: str) -> None:
+    raise ExactReleaseError(reason)
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(131072), b""):
+                digest.update(chunk)
+    except OSError:
+        fail("deployer_source_unreadable")
+    return digest.hexdigest()
+
+
+def require_installed_identity() -> None:
+    try:
+        expected_uid = pwd.getpwnam(RUN_AS).pw_uid
+    except KeyError:
+        fail("runtime_user_missing")
+    if os.geteuid() != expected_uid:
+        fail("runtime_user_mismatch")
+    if Path(__file__).absolute() != INSTALLED_HELPER:
+        fail("helper_not_installed")
+    try:
+        info = INSTALLED_HELPER.lstat()
+    except OSError:
+        fail("helper_missing")
+    if (
+        not stat.S_ISREG(info.st_mode)
+        or INSTALLED_HELPER.is_symlink()
+        or info.st_uid != 0
+        or info.st_gid != 0
+        or stat.S_IMODE(info.st_mode) != 0o555
+    ):
+        fail("helper_metadata_drift")
+    try:
+        deployer = DEPLOYER_MODULE.lstat()
+    except OSError:
+        fail("deployer_source_missing")
+    if (
+        not stat.S_ISREG(deployer.st_mode)
+        or DEPLOYER_MODULE.is_symlink()
+        or deployer.st_uid != 0
+        or deployer.st_gid != 0
+        or stat.S_IMODE(deployer.st_mode) != 0o444
+        or sha256_file(DEPLOYER_MODULE) != COMPATIBLE_DEPLOYER_SHA256
+    ):
+        fail("deployer_source_identity_mismatch")
+
+
+def load_deployer() -> Any:
+    spec = importlib.util.spec_from_file_location("hermes_exact_simple_deploy_v1", DEPLOYER_MODULE)
+    if spec is None or spec.loader is None:
+        fail("deployer_import_failed")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception:
+        fail("deployer_import_failed")
+    return module
+
+
+def exact_deployer(sd: Any, expected_source: str, expected_digest: str) -> Any:
+    base = sd._production_deployer()
+    if base.identity.source_sha != COMPATIBLE_DEPLOYER_IDENTITY:
+        fail("deployer_identity_mismatch")
+    target = base.registry.get(TARGET_ALIAS)
+    if (
+        target.consumer_repository != "rozkalnsandris/hermes-tech"
+        or target.image != TARGET_IMAGE
+        or target.compose.project != TARGET_PROJECT
+        or target.compose.service != TARGET_SERVICE
+        or target.compose.file != "hermes-tech-public.yml"
+        or target.compose.file_sha256 != EXPECTED_COMPOSE_SHA256
+        or target.persistent_volumes != ()
+        or target.registry_pull_profile != "public-anonymous-pull"
+    ):
+        fail("target_contract_mismatch")
+
+    class ExactReleaseDeployer(sd.SimpleDeployer):
+        def _resolve_pointer(self, target_spec: Any) -> str:
+            digest = super()._resolve_pointer(target_spec)
+            if digest != expected_digest:
+                raise sd.SimpleDeployError(
+                    "EXPECTED_DIGEST_MISMATCH",
+                    "production pointer does not match authorized immutable digest",
+                )
+            return digest
+
+        def _inspect_image(self, target_spec: Any, digest: str, *, origin: bool = False) -> Any:
+            if origin:
+                raise sd.SimpleDeployError(
+                    "ORIGIN_MODE_FORBIDDEN",
+                    "Hermes Tech exact-release adapter does not support origin mode",
+                )
+            metadata = super()._inspect_image(target_spec, digest)
+            if metadata.source_sha != expected_source:
+                raise sd.SimpleDeployError(
+                    "EXPECTED_SOURCE_MISMATCH",
+                    "image source revision does not match authorized source",
+                )
+            return metadata
+
+    return ExactReleaseDeployer(
+        registry=base.registry,
+        identity=base.identity,
+        state=base.state,
+        runner=base.runner,
+        http=base.http,
+        compose_root=base.compose_root,
+        require_root_owned_compose=base.require_root_owned_compose,
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Hermes Tech exact-release SIMPLE-DEPLOY adapter")
+    parser.add_argument("--expected-source", required=True)
+    parser.add_argument("--expected-digest", required=True)
+    args = parser.parse_args(argv)
+    if SHA_RE.fullmatch(args.expected_source) is None:
+        parser.error("--expected-source must be a lowercase 40-character SHA")
+    if DIGEST_RE.fullmatch(args.expected_digest) is None:
+        parser.error("--expected-digest must be sha256:<64 lowercase hex>")
+
+    try:
+        require_installed_identity()
+        sd = load_deployer()
+        deployer = exact_deployer(sd, args.expected_source, args.expected_digest)
+        result = deployer.reconcile(TARGET_ALIAS)
+        if (
+            result.result != "SUCCESS"
+            or result.desired_digest != args.expected_digest
+            or result.mutation_started is not True
+            or result.pointer_changed_during_attempt is not False
+        ):
+            fail("reconcile_result_invalid")
+        print(json.dumps({
+            "schema": "rpi5.hermes-tech-exact-reconcile.v1",
+            "result": "PASS",
+            "target": TARGET_ALIAS,
+            "source_sha": args.expected_source,
+            "digest": args.expected_digest,
+            "mutation_started": True,
+        }, sort_keys=True))
+        return 0
+    except ExactReleaseError as exc:
+        print(json.dumps({
+            "schema": "rpi5.hermes-tech-exact-reconcile.v1",
+            "result": "BLOCKED",
+            "target": TARGET_ALIAS,
+            "reason": str(exc),
+        }, sort_keys=True))
+        return 2
+    except Exception:
+        print(json.dumps({
+            "schema": "rpi5.hermes-tech-exact-reconcile.v1",
+            "result": "BLOCKED",
+            "target": TARGET_ALIAS,
+            "reason": "generic_reconcile_failed",
+        }, sort_keys=True))
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

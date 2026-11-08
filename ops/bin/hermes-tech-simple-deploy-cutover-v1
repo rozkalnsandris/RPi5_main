@@ -1,0 +1,792 @@
+#!/usr/bin/python3 -I
+"""Fixed one-time Hermes Tech SIMPLE-DEPLOY cutover operator.
+
+This operator is source-only until separately installed and owner-authorized.
+It accepts release identities only; every command, unit, path and target is fixed.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import importlib.util
+import json
+import os
+import pwd
+import re
+import stat
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+OWNER = "andris"
+RUNTIME_USER = "rozkalns-simple-deployer"
+ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
+REPO_REL = "RPi5_main"
+SOURCE_REL = "ops/bin/hermes-tech-simple-deploy-cutover-v1"
+HELPER_SOURCE_REL = "ops/bin/hermes-tech-exact-reconcile-v1"
+COMPOSE_SOURCE_REL = "ops/deploy/simple-deploy-compose/hermes-tech-public.yml"
+
+INSTALLED_OPERATOR = Path("/usr/local/sbin/hermes-tech-simple-deploy-cutover-v1")
+INSTALLED_HELPER = Path("/usr/local/libexec/rozkalns-simple-deployer/hermes-tech-exact-reconcile-v1")
+DEPLOYER_MODULE = Path("/usr/local/libexec/rozkalns-simple-deployer/simple_deploy_v1.py")
+DEPLOYER_REGISTRY = Path("/etc/rozkalns-simple-deployer/targets.json")
+DEPLOYER_IDENTITY = Path("/etc/rozkalns-simple-deployer/identity.json")
+COMPOSE_ROOT = Path("/etc/rozkalns-simple-deployer/compose")
+COMPOSE_DEST = COMPOSE_ROOT / "hermes-tech-public.yml"
+COMPOSE_STAGE = COMPOSE_ROOT / ".hermes-tech-public.yml.cutover-stage"
+STATE_ROOT = Path("/var/lib/rozkalns-simple-deployer")
+ANON_DOCKER_CONFIG = STATE_ROOT / "docker-anonymous"
+RECEIPT = STATE_ROOT / "receipts/hermes-tech-public-rpi5.json"
+
+TARGET_ALIAS = "hermes-tech-public-rpi5"
+TARGET_IMAGE = "ghcr.io/rozkalnsandris/hermes-tech"
+TARGET_PROJECT = "hermes-tech-public"
+TARGET_SERVICE = "hermes-tech"
+TARGET_PORT = "127.0.0.1:8089"
+TARGET_CONTAINER_PORT = "8080/tcp"
+LIVENESS_URL = "http://127.0.0.1:8089/health"
+READINESS_URL = "http://127.0.0.1:8089/ready"
+
+EXPECTED_COMPOSE_SHA256 = "fd1ca0d00c79bfb5e5cd1be589ae13b378c5c223be0b61d3f14f31da687fe6b9"
+COMPATIBLE_DEPLOYER_IDENTITY = "62fd973653754fb489bda5c7d803015def71a6f4"
+COMPATIBLE_DEPLOYER_SHA256 = "ed906786fd85169c6c555a3ac466b157edaf24a65fe12f60ee2ec6940ade20d0"
+
+LEGACY_WEB_UNIT = "hermes-tech-web.service"
+LEGACY_PULL_TIMER = "hermes-tech-pull-deploy.timer"
+LEGACY_PULL_SERVICE = "hermes-tech-pull-deploy.service"
+LEGACY_CONTAINER = "hermes-blog"
+LEGACY_IMAGE = "sha256:54f2a904c251d5a34adf545a72d32515a15e08418dae0266e23be2e18c66fefa"
+
+TARGET_TIMER_INSTANCE = "hermes-tech-public-rpi5"
+TARGET_TIMER = f"rozkalns-simple-deployer{chr(64)}{TARGET_TIMER_INSTANCE}.timer"
+TARGET_TIMER_SERVICE = f"rozkalns-simple-deployer{chr(64)}{TARGET_TIMER_INSTANCE}.service"
+GLOBAL_TIMER = "rozkalns-simple-deployer.timer"
+GLOBAL_SERVICE = "rozkalns-simple-deployer.service"
+
+SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+ENV = {
+    "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    "LANG": "C.UTF-8",
+    "LC_ALL": "C.UTF-8",
+    "DOCKER_CONFIG": str(ANON_DOCKER_CONFIG),
+}
+MUTATION_STARTED = False
+
+
+class CutoverError(RuntimeError):
+    pass
+
+
+def fail(reason: str) -> None:
+    raise CutoverError(reason)
+
+
+def run(
+    argv: tuple[str, ...],
+    *,
+    timeout: int = 30,
+    ok: tuple[int, ...] = (0,),
+) -> subprocess.CompletedProcess[str]:
+    try:
+        result = subprocess.run(
+            argv,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+            timeout=timeout,
+            env=ENV,
+        )
+    except (OSError, subprocess.SubprocessError, UnicodeError):
+        fail(f"command_transport_failed:{Path(argv[0]).name}")
+    if result.returncode not in ok:
+        fail(f"command_failed:{Path(argv[0]).name}")
+    if len(result.stdout) > 131072 or len(result.stderr) > 131072:
+        fail("command_output_oversize")
+    return result
+
+
+def sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(131072), b""):
+                digest.update(chunk)
+    except OSError:
+        fail(f"file_hash_failed:{path.name}")
+    return digest.hexdigest()
+
+
+def account(name: str) -> pwd.struct_passwd:
+    try:
+        return pwd.getpwnam(name)
+    except KeyError:
+        fail(f"account_missing:{name}")
+
+
+def owner_home() -> Path:
+    home = Path(account(OWNER).pw_dir)
+    if not home.is_absolute():
+        fail("owner_home_invalid")
+    return home
+
+
+def owner_git(repo: Path, *args: str) -> str:
+    home = owner_home()
+    return run(
+        (
+            "/usr/sbin/runuser", "-u", OWNER, "--",
+            "/usr/bin/env", f"HOME={home}", "PATH=/usr/local/bin:/usr/bin:/bin",
+            "/usr/bin/git", "-C", str(repo), *args,
+        ),
+        timeout=30,
+    ).stdout
+
+
+def git_blob(repo: Path, expected_main: str, relative: str) -> bytes:
+    result = run(
+        (
+            "/usr/sbin/runuser", "-u", OWNER, "--",
+            "/usr/bin/env", f"HOME={owner_home()}", "PATH=/usr/local/bin:/usr/bin:/bin",
+            "/usr/bin/git", "-C", str(repo), "show", f"{expected_main}:{relative}",
+        ),
+        timeout=30,
+    )
+    return result.stdout.encode("utf-8")
+
+
+def require_regular(
+    path: Path,
+    *,
+    uid: int | None = None,
+    gid: int | None = None,
+    mode: int | None = None,
+) -> os.stat_result:
+    try:
+        info = path.lstat()
+    except OSError:
+        fail(f"required_file_missing:{path.name}")
+    if not stat.S_ISREG(info.st_mode) or path.is_symlink():
+        fail(f"required_file_unsafe:{path.name}")
+    if uid is not None and info.st_uid != uid:
+        fail(f"required_file_owner_drift:{path.name}")
+    if gid is not None and info.st_gid != gid:
+        fail(f"required_file_group_drift:{path.name}")
+    if mode is not None and stat.S_IMODE(info.st_mode) != mode:
+        fail(f"required_file_mode_drift:{path.name}")
+    return info
+
+
+def require_checkout(expected_main: str) -> tuple[Path, bytes]:
+    home = owner_home()
+    repo = home / REPO_REL
+    if not (repo / ".git").is_dir():
+        fail("rpi5_main_checkout_missing")
+    if owner_git(repo, "rev-parse", "HEAD").strip() != expected_main:
+        fail("rpi5_main_head_mismatch")
+    if owner_git(repo, "branch", "--show-current").strip() != "main":
+        fail("rpi5_main_not_on_main")
+    if owner_git(repo, "remote", "get-url", "origin").strip() != ORIGIN:
+        fail("rpi5_main_origin_mismatch")
+    if owner_git(repo, "status", "--porcelain=v1", "--untracked-files=all"):
+        fail("rpi5_main_checkout_dirty")
+
+    operator_source = git_blob(repo, expected_main, SOURCE_REL)
+    helper_source = git_blob(repo, expected_main, HELPER_SOURCE_REL)
+    require_regular(INSTALLED_OPERATOR, uid=0, gid=0, mode=0o500)
+    require_regular(INSTALLED_HELPER, uid=0, gid=0, mode=0o555)
+    try:
+        installed_operator = INSTALLED_OPERATOR.read_bytes()
+        installed_helper = INSTALLED_HELPER.read_bytes()
+    except OSError:
+        fail("installed_cutover_source_read_failed")
+    if installed_operator != operator_source:
+        fail("installed_operator_source_mismatch")
+    if installed_helper != helper_source:
+        fail("installed_helper_source_mismatch")
+
+    compose = git_blob(repo, expected_main, COMPOSE_SOURCE_REL)
+    if sha256_bytes(compose) != EXPECTED_COMPOSE_SHA256:
+        fail("reviewed_compose_source_hash_mismatch")
+    return repo, compose
+
+
+def unit_properties(unit: str) -> dict[str, str]:
+    required_keys = (
+        "LoadState", "UnitFileState", "ActiveState", "SubState",
+        "Job", "NeedDaemonReload",
+    )
+    optional_keys = ("MainPID",)
+    keys = required_keys + optional_keys
+    if not unit.endswith((".service", ".timer")):
+        fail(f"systemd_unit_class_invalid:{unit}")
+    result = run(
+        (
+            "/usr/bin/systemctl", "show", unit, "--no-pager",
+            *(f"--property={key}" for key in keys),
+        ),
+        timeout=15,
+    )
+    values: dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        if line.count("=") != 1:
+            fail(f"systemd_status_invalid:{unit}")
+        key, value = line.split("=", 1)
+        if key not in keys or key in values or len(value) > 128:
+            fail(f"systemd_status_invalid:{unit}")
+        values[key] = value
+    if not set(required_keys).issubset(values):
+        fail(f"systemd_status_invalid:{unit}")
+    if unit.endswith(".service") and "MainPID" not in values:
+        fail(f"systemd_status_invalid:{unit}")
+    values.setdefault("MainPID", "0")
+    if values["Job"] == "":
+        values["Job"] = "0"
+    return values
+
+
+def require_unit(unit: str, **expected: str) -> dict[str, str]:
+    values = unit_properties(unit)
+    for key, value in expected.items():
+        if values.get(key) != value:
+            fail(f"systemd_state_drift:{unit}:{key}")
+    return values
+
+
+def require_no_job(unit: str, values: dict[str, str]) -> None:
+    if values["Job"] != "0" or values["NeedDaemonReload"] != "no":
+        fail(f"systemd_job_or_reload_pending:{unit}")
+
+
+def require_pre_systemd() -> None:
+    web = require_unit(
+        LEGACY_WEB_UNIT,
+        LoadState="loaded",
+        UnitFileState="enabled",
+        ActiveState="active",
+        SubState="running",
+    )
+    require_no_job(LEGACY_WEB_UNIT, web)
+
+    pull_timer = require_unit(
+        LEGACY_PULL_TIMER,
+        LoadState="loaded",
+        UnitFileState="enabled",
+        ActiveState="active",
+    )
+    if pull_timer["SubState"] not in {"running", "waiting"}:
+        fail("legacy_pull_timer_substate_drift")
+    require_no_job(LEGACY_PULL_TIMER, pull_timer)
+
+    pull_service = unit_properties(LEGACY_PULL_SERVICE)
+    if pull_service["LoadState"] != "loaded" or pull_service["UnitFileState"] not in {"static", "disabled"}:
+        fail("legacy_pull_service_identity_drift")
+    if pull_service["ActiveState"] not in {"active", "inactive"}:
+        fail("legacy_pull_service_transitional")
+    if pull_service["SubState"] not in {"running", "dead", "exited"}:
+        fail("legacy_pull_service_substate_drift")
+    require_no_job(LEGACY_PULL_SERVICE, pull_service)
+
+    target_timer = require_unit(
+        TARGET_TIMER,
+        LoadState="loaded",
+        UnitFileState="disabled",
+        ActiveState="inactive",
+        SubState="dead",
+    )
+    require_no_job(TARGET_TIMER, target_timer)
+    target_service = require_unit(
+        TARGET_TIMER_SERVICE,
+        LoadState="loaded",
+        UnitFileState="static",
+        ActiveState="inactive",
+        SubState="dead",
+        MainPID="0",
+    )
+    require_no_job(TARGET_TIMER_SERVICE, target_service)
+
+    global_timer = require_unit(
+        GLOBAL_TIMER,
+        LoadState="loaded",
+        UnitFileState="disabled",
+        ActiveState="inactive",
+        SubState="dead",
+    )
+    require_no_job(GLOBAL_TIMER, global_timer)
+    global_service = require_unit(
+        GLOBAL_SERVICE,
+        LoadState="loaded",
+        UnitFileState="static",
+        ActiveState="inactive",
+        SubState="dead",
+        MainPID="0",
+    )
+    require_no_job(GLOBAL_SERVICE, global_service)
+
+
+def require_legacy_container() -> None:
+    result = run(
+        (
+            "/usr/bin/docker", "ps", "--no-trunc",
+            "--filter", f"name=^/{LEGACY_CONTAINER}$",
+            "--format", "{{.ID}}|{{.Image}}|{{.Status}}",
+        ),
+        timeout=20,
+    )
+    lines = [line for line in result.stdout.splitlines() if line.strip()]
+    if len(lines) != 1:
+        fail("legacy_container_identity_missing")
+    parts = lines[0].split("|", 2)
+    if len(parts) != 3 or parts[1] != LEGACY_IMAGE or not parts[2].startswith("Up "):
+        fail("legacy_container_identity_drift")
+    port = run(
+        ("/usr/bin/docker", "port", LEGACY_CONTAINER, "80/tcp"),
+        timeout=20,
+    ).stdout.strip()
+    if port != TARGET_PORT:
+        fail("legacy_container_port_drift")
+
+
+def require_port_unbound() -> None:
+    result = run(
+        ("/usr/bin/ss", "-H", "-ltn", "sport", "=", ":8089"),
+        timeout=10,
+    )
+    if result.stdout.strip():
+        fail("loopback_8089_still_bound")
+
+
+def require_pre_filesystem() -> None:
+    if COMPOSE_DEST.exists() or COMPOSE_DEST.is_symlink():
+        fail("compose_destination_not_absent")
+    if COMPOSE_STAGE.exists() or COMPOSE_STAGE.is_symlink():
+        fail("compose_stage_not_absent")
+    if RECEIPT.exists() or RECEIPT.is_symlink():
+        fail("success_receipt_not_absent")
+    if (ANON_DOCKER_CONFIG / "config.json").exists():
+        fail("anonymous_docker_profile_has_credentials")
+    try:
+        info = COMPOSE_ROOT.lstat()
+    except OSError:
+        fail("compose_root_missing")
+    if (
+        not stat.S_ISDIR(info.st_mode)
+        or info.st_uid != 0
+        or info.st_gid != 0
+        or info.st_mode & 0o022
+    ):
+        fail("compose_root_unsafe")
+
+
+def load_deployer_module() -> Any:
+    require_regular(DEPLOYER_MODULE, uid=0, gid=0, mode=0o444)
+    if sha256_file(DEPLOYER_MODULE) != COMPATIBLE_DEPLOYER_SHA256:
+        fail("installed_deployer_source_mismatch")
+    spec = importlib.util.spec_from_file_location(
+        "hermes_cutover_simple_deploy_v1",
+        DEPLOYER_MODULE,
+    )
+    if spec is None or spec.loader is None:
+        fail("installed_deployer_import_failed")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception:
+        fail("installed_deployer_import_failed")
+    return module
+
+
+def require_installed_target(sd: Any) -> Any:
+    registry = sd.load_registry(DEPLOYER_REGISTRY)
+    identity = sd.load_identity(DEPLOYER_IDENTITY)
+    if identity.source_sha != COMPATIBLE_DEPLOYER_IDENTITY:
+        fail("installed_deployer_identity_mismatch")
+    target = registry.get(TARGET_ALIAS)
+    if (
+        target.consumer_repository != "rozkalnsandris/hermes-tech"
+        or target.image != TARGET_IMAGE
+        or target.compose.project != TARGET_PROJECT
+        or target.compose.service != TARGET_SERVICE
+        or target.compose.file != COMPOSE_DEST.name
+        or target.compose.file_sha256 != EXPECTED_COMPOSE_SHA256
+        or target.health.liveness_url != LIVENESS_URL
+        or target.health.readiness_url != READINESS_URL
+        or target.persistent_volumes != ()
+        or target.registry_pull_profile != "public-anonymous-pull"
+    ):
+        fail("installed_target_contract_mismatch")
+    return target
+
+
+def runtime_docker(*argv: str, timeout: int = 40) -> subprocess.CompletedProcess[str]:
+    return run(
+        (
+            "/usr/sbin/runuser", "-u", RUNTIME_USER, "--",
+            "/usr/bin/env",
+            f"DOCKER_CONFIG={ANON_DOCKER_CONFIG}",
+            "PATH=/usr/local/bin:/usr/bin:/bin",
+            "/usr/bin/docker",
+            *argv,
+        ),
+        timeout=timeout,
+    )
+
+
+def require_exact_release(
+    sd: Any,
+    target: Any,
+    expected_source: str,
+    expected_digest: str,
+) -> None:
+    pointer_raw = runtime_docker(
+        "buildx", "imagetools", "inspect",
+        f"{TARGET_IMAGE}:production",
+        "--format", "{{json .Manifest}}",
+    ).stdout
+    try:
+        pointer = sd._parse_manifest_digest(pointer_raw)
+    except Exception:
+        fail("production_pointer_invalid")
+    if pointer != expected_digest:
+        fail("expected_digest_mismatch")
+
+    image_raw = runtime_docker(
+        "buildx", "imagetools", "inspect",
+        f"{TARGET_IMAGE}@{expected_digest}",
+        "--format", "{{json .Image}}",
+    ).stdout
+    try:
+        metadata = sd._parse_image_metadata(image_raw, target, expected_digest)
+    except Exception:
+        fail("expected_image_metadata_invalid")
+    if metadata.source_sha != expected_source:
+        fail("expected_source_mismatch")
+
+
+def materialize_compose(compose: bytes) -> None:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(COMPOSE_STAGE, flags, 0o600)
+    except OSError:
+        fail("compose_stage_create_failed")
+    try:
+        offset = 0
+        while offset < len(compose):
+            written = os.write(fd, compose[offset:])
+            if written <= 0:
+                fail("compose_stage_write_failed")
+            offset += written
+        os.fchown(fd, 0, 0)
+        os.fchmod(fd, 0o644)
+        os.fsync(fd)
+    except OSError:
+        fail("compose_stage_write_failed")
+    finally:
+        os.close(fd)
+
+    if sha256_file(COMPOSE_STAGE) != EXPECTED_COMPOSE_SHA256:
+        fail("compose_stage_hash_mismatch")
+    try:
+        os.link(COMPOSE_STAGE, COMPOSE_DEST, follow_symlinks=False)
+        dirfd = os.open(
+            COMPOSE_ROOT,
+            os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0),
+        )
+        try:
+            os.fsync(dirfd)
+        finally:
+            os.close(dirfd)
+    except OSError:
+        fail("compose_publish_failed")
+
+    require_regular(COMPOSE_DEST, uid=0, gid=0, mode=0o644)
+    if sha256_file(COMPOSE_DEST) != EXPECTED_COMPOSE_SHA256:
+        fail("compose_destination_hash_mismatch")
+    try:
+        os.unlink(COMPOSE_STAGE)
+    except OSError:
+        fail("compose_stage_finalize_failed")
+
+
+def invoke_exact_reconcile(expected_source: str, expected_digest: str) -> None:
+    result = run(
+        (
+            "/usr/sbin/runuser", "-u", RUNTIME_USER, "--",
+            str(INSTALLED_HELPER),
+            "--expected-source", expected_source,
+            "--expected-digest", expected_digest,
+        ),
+        timeout=420,
+        ok=(0, 2),
+    )
+    try:
+        payload = json.loads(result.stdout)
+    except (UnicodeError, json.JSONDecodeError):
+        fail("exact_reconcile_result_invalid")
+    if (
+        result.returncode != 0
+        or payload.get("schema") != "rpi5.hermes-tech-exact-reconcile.v1"
+        or payload.get("result") != "PASS"
+        or payload.get("target") != TARGET_ALIAS
+        or payload.get("source_sha") != expected_source
+        or payload.get("digest") != expected_digest
+        or payload.get("mutation_started") is not True
+    ):
+        fail("exact_reconcile_failed")
+
+
+def verify_new_runtime(expected_source: str, expected_digest: str) -> None:
+    result = run(
+        (
+            "/usr/bin/docker", "ps", "--no-trunc",
+            "--filter", f"label=com.docker.compose.project={TARGET_PROJECT}",
+            "--filter", f"label=com.docker.compose.service={TARGET_SERVICE}",
+            "--format", "{{.ID}}|{{.Status}}",
+        ),
+        timeout=20,
+    )
+    lines = [line for line in result.stdout.splitlines() if line.strip()]
+    if len(lines) != 1:
+        fail("simple_deploy_container_identity_missing")
+    parts = lines[0].split("|", 1)
+    expected_image = f"{TARGET_IMAGE}@{expected_digest}"
+    if len(parts) != 2 or not parts[1].startswith("Up "):
+        fail("simple_deploy_container_identity_drift")
+    container_id = parts[0]
+    port = run(
+        ("/usr/bin/docker", "port", container_id, TARGET_CONTAINER_PORT),
+        timeout=20,
+    ).stdout.strip()
+    if port != TARGET_PORT:
+        fail("simple_deploy_container_port_drift")
+
+    for url, label in (
+        (LIVENESS_URL, "liveness"),
+        (READINESS_URL, "readiness"),
+    ):
+        status_code = run(
+            (
+                "/usr/bin/curl", "-sS", "-o", "/dev/null",
+                "-w", "%{http_code}", "--max-time", "8", url,
+            ),
+            timeout=12,
+        ).stdout.strip()
+        if status_code != "200":
+            fail(f"{label}_verification_failed")
+
+    runtime = account(RUNTIME_USER)
+    require_regular(RECEIPT, uid=runtime.pw_uid, gid=runtime.pw_gid, mode=0o600)
+    try:
+        receipt = json.loads(RECEIPT.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        fail("success_receipt_invalid")
+    if (
+        receipt.get("target_alias") != TARGET_ALIAS
+        or receipt.get("result") != "SUCCESS"
+        or receipt.get("deployed_digest") != expected_digest
+        or receipt.get("image_ref") != expected_image
+        or receipt.get("consumer_source_sha") != expected_source
+        or receipt.get("pointer_digest_before") != expected_digest
+        or receipt.get("pointer_digest_after") != expected_digest
+        or receipt.get("pointer_changed_during_attempt") is not False
+        or receipt.get("mutation_started") is not True
+    ):
+        fail("success_receipt_identity_mismatch")
+
+
+def preflight(
+    expected_main: str,
+    expected_source: str,
+    expected_digest: str,
+) -> tuple[bytes, Any]:
+    if os.geteuid() != 0:
+        fail("root_required")
+    _repo, compose = require_checkout(expected_main)
+    require_pre_systemd()
+    require_legacy_container()
+    require_pre_filesystem()
+    sd = load_deployer_module()
+    target = require_installed_target(sd)
+    require_exact_release(sd, target, expected_source, expected_digest)
+    return compose, sd
+
+
+def apply_cutover(
+    expected_main: str,
+    expected_source: str,
+    expected_digest: str,
+) -> None:
+    global MUTATION_STARTED
+    compose, _sd = preflight(expected_main, expected_source, expected_digest)
+
+    MUTATION_STARTED = True
+    run(
+        ("/usr/bin/systemctl", "disable", "--now", LEGACY_PULL_TIMER),
+        timeout=30,
+    )
+    timer = require_unit(
+        LEGACY_PULL_TIMER,
+        LoadState="loaded",
+        UnitFileState="disabled",
+        ActiveState="inactive",
+        SubState="dead",
+    )
+    require_no_job(LEGACY_PULL_TIMER, timer)
+
+    run(("/usr/bin/systemctl", "stop", LEGACY_PULL_SERVICE), timeout=45)
+    pull_service = require_unit(
+        LEGACY_PULL_SERVICE,
+        LoadState="loaded",
+        UnitFileState="static",
+        ActiveState="inactive",
+        SubState="dead",
+        MainPID="0",
+    )
+    require_no_job(LEGACY_PULL_SERVICE, pull_service)
+
+    run(
+        ("/usr/bin/systemctl", "disable", "--now", LEGACY_WEB_UNIT),
+        timeout=45,
+    )
+    web = require_unit(
+        LEGACY_WEB_UNIT,
+        LoadState="loaded",
+        UnitFileState="disabled",
+        ActiveState="inactive",
+        SubState="dead",
+        MainPID="0",
+    )
+    require_no_job(LEGACY_WEB_UNIT, web)
+
+    legacy = run(
+        (
+            "/usr/bin/docker", "ps", "-a",
+            "--filter", f"name=^/{LEGACY_CONTAINER}$",
+            "--format", "{{.ID}}",
+        ),
+        timeout=20,
+    ).stdout.strip()
+    if legacy:
+        fail("legacy_container_remains_after_web_retirement")
+    require_port_unbound()
+
+    materialize_compose(compose)
+    invoke_exact_reconcile(expected_source, expected_digest)
+    verify_new_runtime(expected_source, expected_digest)
+
+    run(("/usr/bin/systemctl", "enable", "--now", TARGET_TIMER), timeout=30)
+    target_timer = require_unit(
+        TARGET_TIMER,
+        LoadState="loaded",
+        UnitFileState="enabled",
+        ActiveState="active",
+    )
+    if target_timer["SubState"] not in {"running", "waiting"}:
+        fail("target_timer_substate_invalid")
+    require_no_job(TARGET_TIMER, target_timer)
+
+    global_timer = require_unit(
+        GLOBAL_TIMER,
+        LoadState="loaded",
+        UnitFileState="disabled",
+        ActiveState="inactive",
+        SubState="dead",
+    )
+    require_no_job(GLOBAL_TIMER, global_timer)
+    verify_new_runtime(expected_source, expected_digest)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Fixed Hermes Tech one-time SIMPLE-DEPLOY cutover operator",
+    )
+    parser.add_argument("mode", choices=("check", "apply"), nargs="?", default="check")
+    parser.add_argument("--expected-main", required=True)
+    parser.add_argument("--expected-source", required=True)
+    parser.add_argument("--expected-digest", required=True)
+    parser.add_argument("--confirm")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if SHA_RE.fullmatch(args.expected_main) is None:
+        parser.error("--expected-main must be a lowercase 40-character SHA")
+    if SHA_RE.fullmatch(args.expected_source) is None:
+        parser.error("--expected-source must be a lowercase 40-character SHA")
+    if DIGEST_RE.fullmatch(args.expected_digest) is None:
+        parser.error("--expected-digest must be sha256:<64 lowercase hex>")
+    if (
+        args.mode == "apply"
+        and args.confirm != "CUTOVER-HERMES-TECH-SIMPLE-DEPLOY"
+    ):
+        parser.error(
+            "apply requires --confirm CUTOVER-HERMES-TECH-SIMPLE-DEPLOY",
+        )
+    if args.mode == "check" and args.confirm is not None:
+        parser.error("--confirm is valid only with apply")
+
+    try:
+        if args.mode == "check":
+            preflight(
+                args.expected_main,
+                args.expected_source,
+                args.expected_digest,
+            )
+            payload = {
+                "schema": "rpi5.hermes-tech-simple-deploy-cutover.v1",
+                "mode": "check",
+                "result": "READY",
+                "mutation_started": False,
+                "target": TARGET_ALIAS,
+            }
+        else:
+            apply_cutover(
+                args.expected_main,
+                args.expected_source,
+                args.expected_digest,
+            )
+            payload = {
+                "schema": "rpi5.hermes-tech-simple-deploy-cutover.v1",
+                "mode": "apply",
+                "result": "PASS",
+                "mutation_started": MUTATION_STARTED,
+                "target": TARGET_ALIAS,
+                "source_sha": args.expected_source,
+                "digest": args.expected_digest,
+            }
+        print(json.dumps(payload, sort_keys=True))
+        return 0
+    except CutoverError as exc:
+        print(json.dumps({
+            "schema": "rpi5.hermes-tech-simple-deploy-cutover.v1",
+            "mode": args.mode,
+            "result": "BLOCKED",
+            "reason": str(exc),
+            "mutation_started": MUTATION_STARTED,
+            "target": TARGET_ALIAS,
+        }, sort_keys=True))
+        return 2
+    except Exception:
+        print(json.dumps({
+            "schema": "rpi5.hermes-tech-simple-deploy-cutover.v1",
+            "mode": args.mode,
+            "result": "BLOCKED",
+            "reason": "unexpected_error",
+            "mutation_started": MUTATION_STARTED,
+            "target": TARGET_ALIAS,
+        }, sort_keys=True))
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
