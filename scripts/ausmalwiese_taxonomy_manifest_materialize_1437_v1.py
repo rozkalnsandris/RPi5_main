@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import importlib.util
 import json
 import os
@@ -31,6 +32,18 @@ JOBS = STATE / "jobs"
 ORIGIN = "https://github.com/rozkalnsandris/RPi5_main.git"
 ISSUE = 1437
 EXPECTED_MANIFEST_SHA256 = "12d33afcb1b025ee5df0530891aa31d824d0a155cc8a3c8f2fe672041b7fabb2"
+REPLACEABLE_PREDECESSOR_RAW_SHA256 = "66282e777d0546b3d160135c225c6305e701a52894caaf88417bdc6c9335afac"
+REPLACEABLE_PREDECESSOR_MANIFEST_SHA256 = "6cb9bd42f89ba925239deccf9ce4cec164f386bdca78afe39d0d9942381e5bb6"
+REPLACEABLE_PREDECESSOR_HASHES = {
+    "category_sha256": "fe76364e6245b772d21fb080d982dcbb90de420dd2f2a1056c7a1248d7cab635",
+    "topic_sha256": "a13d970821e96e86ae8a574417610ae2239178c363bbf83c014c7d8b61d1201a",
+    "links_sha256": "7b6320b9ac46d33d28319648769f20bf0f59a11a64aaeadadf4007e8d6f3abc6",
+}
+REPLACEABLE_PREDECESSOR_REVISIONS = {
+    "category_revision": 1,
+    "topic_revision": 1,
+    "links_revision": 2,
+}
 CONFIRM = "OWNER-AUTHORIZED-AUSMALWIESE-TAXONOMY-1437-MANIFEST-MATERIALIZE"
 MAX_MANIFEST = 512 * 1024
 SHA40_RE = __import__("re").compile(r"^[0-9a-f]{40}$")
@@ -217,9 +230,22 @@ def inspect_existing(expected: bytes) -> str:
         stop("manifest target mode unsafe")
     if (st.st_uid, st.st_gid) != (os.geteuid(), os.getegid()):
         stop("manifest target ownership unsafe")
-    if raw != expected:
+    if raw == expected:
+        return "IDENTICAL"
+
+    if hashlib.sha256(raw).hexdigest() != REPLACEABLE_PREDECESSOR_RAW_SHA256:
         stop("existing manifest differs")
-    return "IDENTICAL"
+    predecessor = parse_json(raw, "manifest target")
+    if (
+        not isinstance(predecessor, dict)
+        or predecessor.get("schema") != CONSUMER.SCHEMA
+        or predecessor.get("mode") != "APPROVED_APPLY"
+        or predecessor.get("manifest_sha256") != REPLACEABLE_PREDECESSOR_MANIFEST_SHA256
+        or predecessor.get("hashes") != REPLACEABLE_PREDECESSOR_HASHES
+        or predecessor.get("revisions") != REPLACEABLE_PREDECESSOR_REVISIONS
+    ):
+        stop("existing manifest predecessor identity invalid")
+    return "REPLACEABLE_PREDECESSOR"
 
 def fsync_dir(path: Path) -> None:
     fd = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))

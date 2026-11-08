@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -31,6 +32,32 @@ def current_taxonomy():
     topics = {"schema":topics["schema"],"revision":2,"topics":topics["topics"]+bundle["topics"]}
     links = {"schema":links["schema"],"revision":3,"links":sorted(links["links"]+bundle["links"],key=lambda r:(r["category"],r["topic"]))}
     return cats, topics, links
+
+def predecessor_bytes():
+    cats = old.baseline_categories()
+    topics = old.baseline_topics()
+    links = old.baseline_links()
+    bundle = json.loads((ROOT / "ops/admin/coloring-pages/taxonomy-approved-1395-v1.json").read_text())
+    manifest = {
+        "schema": mat.CONSUMER.SCHEMA,
+        "mode": "APPROVED_APPLY",
+        "hashes": {
+            "category_sha256": hashlib.sha256(raw(cats)).hexdigest(),
+            "topic_sha256": hashlib.sha256(raw(topics)).hexdigest(),
+            "links_sha256": hashlib.sha256(raw(links)).hexdigest(),
+        },
+        "revisions": {
+            "category_revision": cats["revision"],
+            "topic_revision": topics["revision"],
+            "links_revision": links["revision"],
+        },
+        "categories": bundle["categories"],
+        "topics": bundle["topics"],
+        "links": bundle["links"],
+    }
+    manifest["manifest_sha256"] = mat.CONSUMER.canonical_digest(manifest)
+    return raw(manifest)
+
 
 def fixture(root: Path):
     public=root/"public"; state=root/"state"/"admin-publish"; jobs=state/"jobs"
@@ -75,6 +102,47 @@ class Tests(unittest.TestCase):
             self.assertEqual(result["links_after_sha256"], "9e4b03fa1567fe56112d27a0bb59fe1d9c2f73cfc2b4dae41a89df61cd7c3109")
             self.assertEqual((result["category_after_revision"],result["topic_after_revision"],result["links_after_revision"]),(3,3,4))
             self.assertFalse(paths["manifest"].exists())
+
+    def test_exact_replaceable_predecessor_identity(self):
+        predecessor = predecessor_bytes()
+        doc = json.loads(predecessor)
+        self.assertEqual(
+            hashlib.sha256(predecessor).hexdigest(),
+            mat.REPLACEABLE_PREDECESSOR_RAW_SHA256,
+        )
+        self.assertEqual(
+            doc["manifest_sha256"],
+            mat.REPLACEABLE_PREDECESSOR_MANIFEST_SHA256,
+        )
+        self.assertEqual(doc["hashes"], mat.REPLACEABLE_PREDECESSOR_HASHES)
+        self.assertEqual(doc["revisions"], mat.REPLACEABLE_PREDECESSOR_REVISIONS)
+
+    def test_exact_predecessor_is_replaced_with_1437_manifest(self):
+        with tempfile.TemporaryDirectory() as td:
+            paths=fixture(Path(td))
+            paths["manifest"].write_bytes(predecessor_bytes())
+            paths["manifest"].chmod(0o600)
+            with self.bind(paths):
+                state = mat.inspect_existing(mat.canonical_bytes(
+                    json.loads(mat.SOURCE_MANIFEST.read_text())
+                ))
+                result = mat.materialize()
+            self.assertEqual(state, "REPLACEABLE_PREDECESSOR")
+            self.assertEqual(result["status"], "PASS")
+            self.assertTrue(result["mutation_started"])
+            final = json.loads(paths["manifest"].read_text())
+            self.assertEqual(final["manifest_sha256"], mat.EXPECTED_MANIFEST_SHA256)
+            self.assertEqual(paths["manifest"].stat().st_mode & 0o777, 0o600)
+
+    def test_predecessor_semantic_drift_is_rejected(self):
+        with tempfile.TemporaryDirectory() as td:
+            paths=fixture(Path(td))
+            doc=json.loads(predecessor_bytes())
+            doc["revisions"]["links_revision"]=99
+            paths["manifest"].write_bytes(raw(doc))
+            paths["manifest"].chmod(0o600)
+            with self.bind(paths), self.assertRaisesRegex(mat.Stop,"existing manifest differs"):
+                mat.materialize()
 
     def test_materialize_and_identical_noop(self):
         with tempfile.TemporaryDirectory() as td:
