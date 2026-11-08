@@ -880,6 +880,100 @@
         "READY envelope for rozkalns-cv-post-cutover-reconcile",
         "separate owner LIVE authorization for the exact one-time reconciliation"
       ]
+    },
+    {
+      "operation_id": "rpi5-main.hermes-tech-simple-deploy-resume.v1",
+      "source_repository": "rozkalnsandris/RPi5_main",
+      "queue_match": {
+        "target_alias": "hermes-tech-public-rpi5",
+        "execution_location_class": "trusted-home-host",
+        "repository_entrypoint": "ops/bin/hermes-tech-simple-deploy-resume-v1",
+        "deploy_class": "STRICT_LIVE_AUTH_REQUIRED"
+      },
+      "target_alias": "hermes-tech-public-rpi5",
+      "adapter_id": "rpi5-main.hermes-tech-simple-deploy-resume.v1",
+      "authorization_class": "STRICT",
+      "ordinary_live_all_eligible": false,
+      "baseline": {
+        "kind": "resolver",
+        "resolver_id": "rpi5-main.hermes-tech-simple-deploy-resume-baseline.v1"
+      },
+      "mutation_budget": [
+        {
+          "category": "filesystem.hermes-tech-exact-helper-recovery",
+          "max_operations": 1
+        },
+        {
+          "category": "filesystem.hermes-tech-resume-operator-installation",
+          "max_operations": 1
+        },
+        {
+          "category": "docker.hermes-tech-simple-deploy-application-apply",
+          "max_operations": 1
+        },
+        {
+          "category": "systemd.hermes-tech-target-timer-activation",
+          "max_operations": 1
+        }
+      ],
+      "rollback_policy": "NONE",
+      "exclusions": [
+        "legacy Hermes Tech runtime restart or rollback",
+        "Compose rematerialization removal or cleanup",
+        "generic sudo/root shell or arbitrary command execution",
+        "caller-selected command path argv environment authority",
+        "unrelated service timer Docker filesystem or host mutation",
+        "database schema or data mutation",
+        "credentials secrets permissions or protected configuration access",
+        "network firewall DNS or Cloudflare mutation",
+        "global SIMPLE-DEPLOY all-target timer activation",
+        "automatic retry cleanup rollback or alternate mutation path"
+      ],
+      "dependencies": [
+        "issue:RPi5_main#1451",
+        "resume-contract:ops/deploy/hermes-tech-simple-deploy-resume-v1.json",
+        "resume-installer:ops/bin/install-hermes-tech-simple-deploy-cutover-v1",
+        "resume-operator:ops/bin/hermes-tech-simple-deploy-resume-v1",
+        "cutover-operator:ops/bin/hermes-tech-simple-deploy-cutover-v1",
+        "exact-release-helper:ops/bin/hermes-tech-exact-reconcile-v1",
+        "simple-deploy-compose-sha256:fd1ca0d00c79bfb5e5cd1be589ae13b378c5c223be0b61d3f14f31da687fe6b9",
+        "stale-status-sha256:42187d0258d92b4dfb644d8d2261a4dc604d77b81d542eb93d3637c5e681cf5d",
+        "compatible-generic-deployer-identity:62fd973653754fb489bda5c7d803015def71a6f4",
+        "compatible-generic-deployer-sha256:ed906786fd85169c6c555a3ac466b157edaf24a65fe12f60ee2ec6940ade20d0",
+        "loopback-bind:127.0.0.1:8089",
+        "global-execution:disabled"
+      ],
+      "preflight": [
+        "READY and separate owner LIVE authority bind exact current RPi5_main SHA and hermes-tech-public-rpi5",
+        "exact current-main required CI is successful and canonical checkout is clean exact main",
+        "installed cutover operator equals exact current-main source and installed helper equals exact reviewed issue-1451 recovery baseline before helper replacement",
+        "helper replacement and resume operator installation use only reviewed fixed paths and exact current-main bytes",
+        "legacy Hermes Tech web pull timer and pull service are already retired disabled or static and inactive",
+        "reviewed Hermes Tech Compose already exists with exact hash and no cutover stage exists",
+        "legacy and SIMPLE-DEPLOY Hermes containers are absent 127.0.0.1:8089 is unbound and success receipt is absent",
+        "stale status file equals the exact reviewed issue-1451 SHA-256",
+        "target-scoped Hermes SIMPLE-DEPLOY timer is disabled inactive and global all-target timer is disabled inactive",
+        "authorized Hermes Tech immutable image digest and source label remain exact"
+      ],
+      "postconditions": [
+        "installed exact helper and resume operator equal exact authorized current-main source identities",
+        "one fixed exact-release reconciliation succeeds and receipt binds exact source SHA and immutable image digest",
+        "hermes-tech-public/hermes-tech owns 127.0.0.1:8089",
+        "GET /health and GET /ready on 127.0.0.1:8089 return HTTP 200",
+        "target-scoped Hermes SIMPLE-DEPLOY timer is enabled active",
+        "global rozkalns-simple-deployer.timer remains disabled inactive",
+        "legacy Hermes Tech units remain retired and are never restarted",
+        "reviewed Compose remains exact and is not rematerialized or removed",
+        "no database secret network unrelated host or repository-settings mutation occurs",
+        "post-mutation failure has no automatic retry cleanup rollback or alternate mutation path"
+      ],
+      "required_github_evidence": [
+        "exact RPi5_main source SHA and successful exact-SHA required CI",
+        "reviewed issue-1451 helper fix installer resume operator and resume contract identities",
+        "exact Hermes Tech consumer source SHA and immutable image digest from successful publication evidence",
+        "public-safe host baseline matching the reviewed partial-cutover contract",
+        "separate owner LIVE authorization for exact helper recovery resume install and one resume execution"
+      ]
     }
   ]
 }

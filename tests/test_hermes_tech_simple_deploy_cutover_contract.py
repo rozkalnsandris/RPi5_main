@@ -1,5 +1,7 @@
 import json
 from pathlib import Path
+import subprocess
+import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -218,3 +220,25 @@ def test_cutover_order_prevents_parallel_8089_ownership_and_global_timer_activat
     assert contract["port_ownership_transition"]["parallel_bind_forbidden"] is True
     assert contract["generic_simple_deploy_apply"]["exact_image_digest_required"] is True
     assert "generic-shell-or-arbitrary-command-execution" in contract["forbidden_operations"]
+
+
+
+def main() -> int:
+    tests = [
+        value
+        for name, value in sorted(globals().items())
+        if name.startswith("test_") and callable(value)
+    ]
+    for test in tests:
+        test()
+    subprocess.run(
+        [sys.executable, str(ROOT / "tests/test_hermes_tech_partial_cutover_resume.py")],
+        cwd=ROOT,
+        check=True,
+    )
+    print(f"PASS: {len(tests)} Hermes Tech cutover contract tests + recovery suite")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

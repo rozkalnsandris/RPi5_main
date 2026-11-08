@@ -129,7 +129,12 @@ def exact_deployer(sd: Any, expected_source: str, expected_digest: str) -> Any:
             return digest
 
         def _inspect_image(self, target_spec: Any, digest: str, *, origin: bool = False) -> Any:
-            metadata = super()._inspect_image(target_spec, digest, origin=origin)
+            if origin:
+                raise sd.SimpleDeployError(
+                    "ORIGIN_MODE_FORBIDDEN",
+                    "Hermes Tech exact-release adapter does not support origin mode",
+                )
+            metadata = super()._inspect_image(target_spec, digest)
             if metadata.source_sha != expected_source:
                 raise sd.SimpleDeployError(
                     "EXPECTED_SOURCE_MISMATCH",
