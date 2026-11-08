@@ -120,6 +120,52 @@ def test_installer_is_two_fixed_files_support_first_and_no_cleanup():
         assert forbidden not in source
 
 
+def test_timer_status_may_omit_mainpid_and_normalizes_to_zero():
+    observed = """LoadState=loaded
+ActiveState=active
+SubState=running
+UnitFileState=enabled
+Job=
+NeedDaemonReload=no
+"""
+    with patch.object(
+        operator,
+        "run",
+        return_value=SimpleNamespace(returncode=0, stdout=observed, stderr=""),
+    ):
+        values = operator.unit_properties(operator.LEGACY_PULL_TIMER)
+
+    assert values == {
+        "LoadState": "loaded",
+        "ActiveState": "active",
+        "SubState": "running",
+        "UnitFileState": "enabled",
+        "Job": "0",
+        "NeedDaemonReload": "no",
+        "MainPID": "0",
+    }
+
+
+def test_service_status_still_requires_mainpid():
+    observed = """LoadState=loaded
+ActiveState=inactive
+SubState=dead
+UnitFileState=static
+Job=
+NeedDaemonReload=no
+"""
+    with patch.object(
+        operator,
+        "run",
+        return_value=SimpleNamespace(returncode=0, stdout=observed, stderr=""),
+    ):
+        with pytest.raises(
+            operator.CutoverError,
+            match=r"^systemd_status_invalid:hermes-tech-pull-deploy\.service$",
+        ):
+            operator.unit_properties(operator.LEGACY_PULL_SERVICE)
+
+
 def test_apply_cutover_uses_reviewed_order_and_never_starts_global_timer():
     operator.MUTATION_STARTED = False
     calls: list[tuple[str, ...]] = []
