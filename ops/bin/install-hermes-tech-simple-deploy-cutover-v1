@@ -130,11 +130,20 @@ def source_closure(expected_main: str) -> tuple[bytes, bytes]:
     if owner_git(repo, "status", "--porcelain=v1", "--untracked-files=all"):
         fail("rpi5_main_checkout_dirty")
 
+    expected_installer = repo / INSTALLER_REL
+    if Path(__file__).absolute() != expected_installer:
+        fail("installer_path_mismatch")
     try:
-        running_installer = Path(__file__).read_bytes()
+        installer_info = expected_installer.lstat()
+        running_installer = expected_installer.read_bytes()
     except OSError:
         fail("installer_source_unreadable")
-    if running_installer != git_blob(repo, expected_main, INSTALLER_REL):
+    if (
+        not stat.S_ISREG(installer_info.st_mode)
+        or expected_installer.is_symlink()
+        or stat.S_IMODE(installer_info.st_mode) & 0o022
+        or running_installer != git_blob(repo, expected_main, INSTALLER_REL)
+    ):
         fail("installer_source_identity_mismatch")
 
     helper = git_blob(repo, expected_main, HELPER_REL)
