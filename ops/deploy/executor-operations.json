@@ -751,7 +751,7 @@
         "legacy-web-unit:hermes-tech-web.service",
         "legacy-pull-timer-unit:hermes-tech-pull-deploy.timer",
         "legacy-pull-service-unit:hermes-tech-pull-deploy.service",
-        "target-timer:rozkalns-simple-deployer@hermes-tech-public-rpi5.timer",
+        "target-timer:target-scoped SIMPLE-DEPLOY timer template + hermes-tech-public-rpi5 instance",
         "global-all-target-timer:rozkalns-simple-deployer.timer:must-remain-disabled",
         "loopback-bind:127.0.0.1:8089",
         "liveness:/health",
@@ -778,7 +778,7 @@
         "127.0.0.1:8089 ownership transfers from exact legacy hermes-blog through an observed unbound state to hermes-tech-public/hermes-tech",
         "first reconcile uses the fixed exact-release adapter and receipt binds the authorized source SHA and immutable image digest",
         "GET /health and GET /ready on 127.0.0.1:8089 return HTTP 200",
-        "target-scoped rozkalns-simple-deployer@hermes-tech-public-rpi5.timer is enabled/active",
+        "target-scoped target-scoped SIMPLE-DEPLOY timer template + hermes-tech-public-rpi5 instance is enabled/active",
         "global rozkalns-simple-deployer.timer remains disabled/inactive",
         "no database, secret, network, unrelated host or repository-settings mutation occurs",
         "post-mutation failure has no automatic retry, cleanup, rollback or alternate mutation path"
