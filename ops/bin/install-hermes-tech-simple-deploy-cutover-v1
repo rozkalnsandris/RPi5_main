@@ -23,10 +23,12 @@ INSTALLER_REL = "ops/bin/install-hermes-tech-simple-deploy-cutover-v1"
 OPERATOR_REL = "ops/bin/hermes-tech-simple-deploy-cutover-v1"
 HELPER_REL = "ops/bin/hermes-tech-exact-reconcile-v1"
 UPGRADE_BASELINE_MAIN = "fba44df0cc004b4b62f991c9ed8114f460764bc0"
+HELPER_UPGRADE_BASELINE_MAIN = "1af1b450a0082894f405343505b6fb07606a26c1"
 
 OPERATOR_DEST = Path("/usr/local/sbin/hermes-tech-simple-deploy-cutover-v1")
 HELPER_DEST = Path("/usr/local/libexec/rozkalns-simple-deployer/hermes-tech-exact-reconcile-v1")
 OPERATOR_UPGRADE_STAGE = OPERATOR_DEST.parent / ".hermes-tech-simple-deploy-cutover-v1.issue1449.stage"
+HELPER_UPGRADE_STAGE = HELPER_DEST.parent / ".hermes-tech-exact-reconcile-v1.issue1451.stage"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 ENV = {
     "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
@@ -338,13 +340,110 @@ def operator_upgrade_preflight_without_stage(
     return desired_operator, operator_identity, helper_identity
 
 
+def helper_upgrade_preflight_without_stage(
+    expected_main: str,
+) -> tuple[bytes, tuple[int, int, int, int], tuple[int, int, int, int]]:
+    repo, desired_helper, operator = source_context(expected_main)
+    if expected_main == HELPER_UPGRADE_BASELINE_MAIN:
+        fail("helper_upgrade_source_not_newer_than_baseline")
+    operator_identity, installed_operator = read_installed(OPERATOR_DEST, mode=0o500)
+    if installed_operator != operator:
+        fail("installed_operator_source_mismatch")
+    baseline_helper = git_blob(repo, HELPER_UPGRADE_BASELINE_MAIN, HELPER_REL)
+    helper_identity, installed_helper = read_installed(HELPER_DEST, mode=0o555)
+    if installed_helper != baseline_helper:
+        fail("installed_helper_baseline_mismatch")
+    if desired_helper == baseline_helper:
+        fail("helper_upgrade_no_source_delta")
+    return desired_helper, helper_identity, operator_identity
+
+
+def helper_upgrade_preflight(
+    expected_main: str,
+) -> tuple[bytes, tuple[int, int, int, int], tuple[int, int, int, int]]:
+    desired, helper_identity, operator_identity = helper_upgrade_preflight_without_stage(
+        expected_main,
+    )
+    if HELPER_UPGRADE_STAGE.exists() or HELPER_UPGRADE_STAGE.is_symlink():
+        fail("helper_upgrade_stage_present")
+    return desired, helper_identity, operator_identity
+
+
+def upgrade_helper_once(expected_main: str) -> str:
+    global MUTATION_STARTED
+    desired, helper_identity, operator_identity = helper_upgrade_preflight(expected_main)
+
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(HELPER_UPGRADE_STAGE, flags, 0o600)
+    except OSError:
+        fail("helper_upgrade_stage_create_failed")
+    MUTATION_STARTED = True
+    try:
+        offset = 0
+        while offset < len(desired):
+            written = os.write(fd, desired[offset:])
+            if written <= 0:
+                fail("helper_upgrade_stage_write_failed")
+            offset += written
+        os.fchown(fd, 0, 0)
+        os.fchmod(fd, 0o555)
+        os.fsync(fd)
+    except OSError:
+        fail("helper_upgrade_stage_write_failed")
+    finally:
+        os.close(fd)
+
+    stage_identity, staged = read_installed(HELPER_UPGRADE_STAGE, mode=0o555)
+    if sha256(staged) != sha256(desired):
+        fail("helper_upgrade_stage_identity_mismatch")
+
+    desired_again, helper_identity_again, operator_identity_again = (
+        helper_upgrade_preflight_without_stage(expected_main)
+    )
+    if (
+        desired_again != desired
+        or helper_identity_again != helper_identity
+        or operator_identity_again != operator_identity
+    ):
+        fail("helper_upgrade_precommit_drift")
+    stage_identity_again, staged_again = read_installed(HELPER_UPGRADE_STAGE, mode=0o555)
+    if stage_identity_again != stage_identity or staged_again != desired:
+        fail("helper_upgrade_stage_drift")
+
+    try:
+        os.replace(HELPER_UPGRADE_STAGE, HELPER_DEST)
+        dirfd = os.open(
+            HELPER_DEST.parent,
+            os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0),
+        )
+        try:
+            os.fsync(dirfd)
+        finally:
+            os.close(dirfd)
+    except OSError:
+        fail("helper_upgrade_replace_failed")
+
+    _final_identity, final_helper = read_installed(HELPER_DEST, mode=0o555)
+    if final_helper != desired:
+        fail("helper_upgrade_postreplace_identity_mismatch")
+    _repo, desired_current, operator = source_context(expected_main)
+    _operator_id, installed_operator = read_installed(OPERATOR_DEST, mode=0o500)
+    if installed_operator != operator or desired_current != final_helper:
+        fail("helper_upgrade_postreplace_drift")
+    return "PASS"
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Install or exactly upgrade Hermes Tech cutover closure",
     )
     parser.add_argument(
         "mode",
-        choices=("check", "apply", "upgrade-check", "upgrade-apply"),
+        choices=(
+            "check", "apply", "upgrade-check", "upgrade-apply",
+            "helper-upgrade-check", "helper-upgrade-apply",
+        ),
         nargs="?",
         default="check",
     )
@@ -361,6 +460,7 @@ def main(argv: list[str] | None = None) -> int:
     expected_confirm = {
         "apply": "INSTALL-HERMES-TECH-CUTOVER-CLOSURE",
         "upgrade-apply": "UPGRADE-HERMES-TECH-CUTOVER-OPERATOR",
+        "helper-upgrade-apply": "UPGRADE-HERMES-TECH-EXACT-HELPER",
     }.get(args.mode)
     if expected_confirm is not None and args.confirm != expected_confirm:
         parser.error(f"{args.mode} requires --confirm {expected_confirm}")
@@ -387,7 +487,7 @@ def main(argv: list[str] | None = None) -> int:
                 "helper_sha256": sha256(helper),
                 "operator_sha256": sha256(operator),
             }
-        else:
+        elif args.mode in {"upgrade-check", "upgrade-apply"}:
             desired, _operator_identity, _helper_identity = operator_upgrade_preflight(
                 args.expected_main,
             )
@@ -404,12 +504,31 @@ def main(argv: list[str] | None = None) -> int:
                 "baseline_main": UPGRADE_BASELINE_MAIN,
                 "operator_sha256": sha256(desired),
             }
+        else:
+            desired, _helper_identity, _operator_identity = helper_upgrade_preflight(
+                args.expected_main,
+            )
+            if args.mode == "helper-upgrade-apply":
+                result = upgrade_helper_once(args.expected_main)
+            else:
+                result = "READY"
+            payload = {
+                "schema": "rpi5.hermes-tech-exact-helper-upgrade.v1",
+                "mode": args.mode,
+                "result": result,
+                "mutation_started": MUTATION_STARTED,
+                "target": HELPER_DEST.name,
+                "baseline_main": HELPER_UPGRADE_BASELINE_MAIN,
+                "helper_sha256": sha256(desired),
+            }
         print(json.dumps(payload, sort_keys=True))
         return 0
     except InstallError as exc:
         print(json.dumps({
             "schema": (
-                "rpi5.hermes-tech-cutover-operator-upgrade.v1"
+                "rpi5.hermes-tech-exact-helper-upgrade.v1"
+                if args.mode.startswith("helper-upgrade-")
+                else "rpi5.hermes-tech-cutover-operator-upgrade.v1"
                 if args.mode.startswith("upgrade-")
                 else "rpi5.hermes-tech-cutover-install.v1"
             ),
