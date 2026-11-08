@@ -22,11 +22,13 @@ REPO_REL = "RPi5_main"
 INSTALLER_REL = "ops/bin/install-hermes-tech-simple-deploy-cutover-v1"
 OPERATOR_REL = "ops/bin/hermes-tech-simple-deploy-cutover-v1"
 HELPER_REL = "ops/bin/hermes-tech-exact-reconcile-v1"
+RESUME_REL = "ops/bin/hermes-tech-simple-deploy-resume-v1"
 UPGRADE_BASELINE_MAIN = "fba44df0cc004b4b62f991c9ed8114f460764bc0"
 HELPER_UPGRADE_BASELINE_MAIN = "1af1b450a0082894f405343505b6fb07606a26c1"
 
 OPERATOR_DEST = Path("/usr/local/sbin/hermes-tech-simple-deploy-cutover-v1")
 HELPER_DEST = Path("/usr/local/libexec/rozkalns-simple-deployer/hermes-tech-exact-reconcile-v1")
+RESUME_DEST = Path("/usr/local/sbin/hermes-tech-simple-deploy-resume-v1")
 OPERATOR_UPGRADE_STAGE = OPERATOR_DEST.parent / ".hermes-tech-simple-deploy-cutover-v1.issue1449.stage"
 HELPER_UPGRADE_STAGE = HELPER_DEST.parent / ".hermes-tech-exact-reconcile-v1.issue1451.stage"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -434,6 +436,23 @@ def upgrade_helper_once(expected_main: str) -> str:
     return "PASS"
 
 
+def resume_install_preflight(expected_main: str) -> bytes:
+    repo, helper, operator = source_context(expected_main)
+    _helper_identity, installed_helper = read_installed(HELPER_DEST, mode=0o555)
+    if installed_helper != helper:
+        fail("installed_helper_source_mismatch")
+    _operator_identity, installed_operator = read_installed(OPERATOR_DEST, mode=0o500)
+    if installed_operator != operator:
+        fail("installed_operator_source_mismatch")
+    resume = git_blob(repo, expected_main, RESUME_REL)
+    if not resume.startswith(b"#!/usr/bin/python3 -I\n"):
+        fail("resume_source_invalid")
+    safe_directory(RESUME_DEST.parent)
+    if RESUME_DEST.exists() or RESUME_DEST.is_symlink():
+        fail("resume_install_destination_not_absent")
+    return resume
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Install or exactly upgrade Hermes Tech cutover closure",
@@ -443,6 +462,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=(
             "check", "apply", "upgrade-check", "upgrade-apply",
             "helper-upgrade-check", "helper-upgrade-apply",
+            "resume-install-check", "resume-install-apply",
         ),
         nargs="?",
         default="check",
@@ -461,6 +481,7 @@ def main(argv: list[str] | None = None) -> int:
         "apply": "INSTALL-HERMES-TECH-CUTOVER-CLOSURE",
         "upgrade-apply": "UPGRADE-HERMES-TECH-CUTOVER-OPERATOR",
         "helper-upgrade-apply": "UPGRADE-HERMES-TECH-EXACT-HELPER",
+        "resume-install-apply": "INSTALL-HERMES-TECH-RESUME-OPERATOR",
     }.get(args.mode)
     if expected_confirm is not None and args.confirm != expected_confirm:
         parser.error(f"{args.mode} requires --confirm {expected_confirm}")
@@ -504,7 +525,7 @@ def main(argv: list[str] | None = None) -> int:
                 "baseline_main": UPGRADE_BASELINE_MAIN,
                 "operator_sha256": sha256(desired),
             }
-        else:
+        elif args.mode in {"helper-upgrade-check", "helper-upgrade-apply"}:
             desired, _helper_identity, _operator_identity = helper_upgrade_preflight(
                 args.expected_main,
             )
@@ -521,12 +542,29 @@ def main(argv: list[str] | None = None) -> int:
                 "baseline_main": HELPER_UPGRADE_BASELINE_MAIN,
                 "helper_sha256": sha256(desired),
             }
+        else:
+            resume = resume_install_preflight(args.expected_main)
+            if args.mode == "resume-install-apply":
+                install_once(RESUME_DEST, resume, 0o500)
+                result = "PASS"
+            else:
+                result = "READY"
+            payload = {
+                "schema": "rpi5.hermes-tech-resume-install.v1",
+                "mode": args.mode,
+                "result": result,
+                "mutation_started": MUTATION_STARTED,
+                "target": RESUME_DEST.name,
+                "resume_sha256": sha256(resume),
+            }
         print(json.dumps(payload, sort_keys=True))
         return 0
     except InstallError as exc:
         print(json.dumps({
             "schema": (
-                "rpi5.hermes-tech-exact-helper-upgrade.v1"
+                "rpi5.hermes-tech-resume-install.v1"
+                if args.mode.startswith("resume-install-")
+                else "rpi5.hermes-tech-exact-helper-upgrade.v1"
                 if args.mode.startswith("helper-upgrade-")
                 else "rpi5.hermes-tech-cutover-operator-upgrade.v1"
                 if args.mode.startswith("upgrade-")
