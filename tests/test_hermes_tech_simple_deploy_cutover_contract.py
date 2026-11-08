@@ -112,8 +112,9 @@ def test_cutover_contract_pins_legacy_runtime_materialization_and_port_transitio
 def test_cutover_contract_activates_only_target_scoped_timer():
     contract = _load(CONTRACT_PATH)
     standing = contract["standing_reconciliation"]
-    assert standing["target_timer"] == "rozkalns-simple-deployer@hermes-tech-public-rpi5.timer"
-    assert standing["target_service"] == "rozkalns-simple-deployer@hermes-tech-public-rpi5.service"
+    assert standing["target_timer_template"] == "rozkalns-simple-deployer@.timer"
+    assert standing["target_service_template"] == "rozkalns-simple-deployer@.service"
+    assert standing["target_instance"] == "hermes-tech-public-rpi5"
     assert standing["required_initial_timer_enabled_state"] == "disabled"
     assert standing["required_initial_timer_active_state"] == "inactive"
     assert standing["final_timer_enabled_state"] == "enabled"
