@@ -219,10 +219,14 @@ def require_checkout(expected_main: str) -> tuple[Path, bytes]:
 
 
 def unit_properties(unit: str) -> dict[str, str]:
-    keys = (
+    required_keys = (
         "LoadState", "UnitFileState", "ActiveState", "SubState",
-        "MainPID", "Job", "NeedDaemonReload",
+        "Job", "NeedDaemonReload",
     )
+    optional_keys = ("MainPID",)
+    keys = required_keys + optional_keys
+    if not unit.endswith((".service", ".timer")):
+        fail(f"systemd_unit_class_invalid:{unit}")
     result = run(
         (
             "/usr/bin/systemctl", "show", unit, "--no-pager",
@@ -238,8 +242,11 @@ def unit_properties(unit: str) -> dict[str, str]:
         if key not in keys or key in values or len(value) > 128:
             fail(f"systemd_status_invalid:{unit}")
         values[key] = value
-    if set(values) != set(keys):
+    if not set(required_keys).issubset(values):
         fail(f"systemd_status_invalid:{unit}")
+    if unit.endswith(".service") and "MainPID" not in values:
+        fail(f"systemd_status_invalid:{unit}")
+    values.setdefault("MainPID", "0")
     if values["Job"] == "":
         values["Job"] = "0"
     return values
