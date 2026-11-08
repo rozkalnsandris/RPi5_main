@@ -3,7 +3,8 @@
 readonly GOATCOUNTER_URL="https://github.com/arp242/goatcounter/releases/download/v2.7.0/goatcounter-v2.7.0-linux-amd64.gz"
 readonly GOATCOUNTER_EXPECTED_BYTES="13935060"
 readonly GOATCOUNTER_EXPECTED_SHA256="98d221cb9c8ef2bf76d8daa9cca647839f8d8b0bb5bc7400ff9337c5da834511"
-readonly GOATCOUNTER_FETCH_MAX_ATTEMPTS="3"
+readonly GOATCOUNTER_FETCH_MAX_ATTEMPTS="4"
+readonly GOATCOUNTER_FETCH_RETRY_BASE_SECONDS="10"
 readonly GOATCOUNTER_FETCH_CONNECT_TIMEOUT_SECONDS="15"
 readonly GOATCOUNTER_FETCH_ATTEMPT_MAX_SECONDS="45"
 
@@ -116,7 +117,7 @@ fetch_verified_release() {
       echo "GoatCounter fetch: transient curl error $curl_rc; retrying ($attempt/$GOATCOUNTER_FETCH_MAX_ATTEMPTS)" >&2
     fi
 
-    delay=$((attempt * 2))
+    delay=$((GOATCOUNTER_FETCH_RETRY_BASE_SECONDS * attempt))
     sleep "$delay"
   done
 
