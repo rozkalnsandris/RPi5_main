@@ -13,7 +13,8 @@ fail() {
 [[ "$GOATCOUNTER_URL" == "https://github.com/arp242/goatcounter/releases/download/v2.7.0/goatcounter-v2.7.0-linux-amd64.gz" ]] || fail "pinned URL drift"
 [[ "$GOATCOUNTER_EXPECTED_BYTES" == "13935060" ]] || fail "pinned byte count drift"
 [[ "$GOATCOUNTER_EXPECTED_SHA256" == "98d221cb9c8ef2bf76d8daa9cca647839f8d8b0bb5bc7400ff9337c5da834511" ]] || fail "pinned SHA-256 drift"
-[[ "$GOATCOUNTER_FETCH_MAX_ATTEMPTS" == "3" ]] || fail "attempt ceiling drift"
+[[ "$GOATCOUNTER_FETCH_MAX_ATTEMPTS" == "4" ]] || fail "attempt ceiling drift"
+[[ "$GOATCOUNTER_FETCH_RETRY_BASE_SECONDS" == "10" ]] || fail "retry backoff drift"
 [[ "$GOATCOUNTER_FETCH_CONNECT_TIMEOUT_SECONDS" == "15" ]] || fail "connect timeout drift"
 [[ "$GOATCOUNTER_FETCH_ATTEMPT_MAX_SECONDS" == "45" ]] || fail "attempt timeout drift"
 
@@ -120,11 +121,11 @@ fi
 [[ ! -e "$out" ]] || fail "404 left a final output"
 
 out="$TMP/out-exhausted"
-reset_mock "0,504,error" "0,504,error" "0,504,error"
+reset_mock "0,504,error" "0,504,error" "0,504,error" "0,504,error"
 if fetch_verified_release "https://example.invalid/pinned" "$out" "$FIXTURE_BYTES" "$FIXTURE_SHA256" >/dev/null 2>&1; then
   fail "exhausted 504 unexpectedly succeeded"
 fi
-[[ "$(cat "$MOCK_COUNT_FILE")" == "3" ]] || fail "transient retry ceiling changed"
+[[ "$(cat "$MOCK_COUNT_FILE")" == "4" ]] || fail "transient retry ceiling changed"
 [[ ! -e "$out" ]] || fail "exhausted retry left a final output"
 
 out="$TMP/out-timeout"
