@@ -4,10 +4,9 @@ import importlib.machinery
 import importlib.util
 import json
 from pathlib import Path
+import tempfile
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
-
-import pytest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -99,14 +98,32 @@ def test_exact_helper_matches_pinned_generic_inspect_signature_without_origin_ke
     assert metadata.source_sha == "b" * 40
 
 
+def _assert_raises(error_type, callback, expected_text=None):
+    try:
+        callback()
+    except error_type as exc:
+        if expected_text is not None:
+            assert str(exc) == expected_text
+        return
+    raise AssertionError(f"expected {error_type.__name__}")
+
+
 def test_exact_helper_forbids_origin_mode_and_preserves_source_gate():
     sd, target = _fake_sd()
     deployer = helper.exact_deployer(sd, "d" * 40, "sha256:" + "a" * 64)
 
-    with pytest.raises(FakeSimpleDeployError):
-        deployer._inspect_image(target, "sha256:" + "a" * 64)
-    with pytest.raises(FakeSimpleDeployError):
-        deployer._inspect_image(target, "sha256:" + "a" * 64, origin=True)
+    _assert_raises(
+        FakeSimpleDeployError,
+        lambda: deployer._inspect_image(target, "sha256:" + "a" * 64),
+    )
+    _assert_raises(
+        FakeSimpleDeployError,
+        lambda: deployer._inspect_image(
+            target,
+            "sha256:" + "a" * 64,
+            origin=True,
+        ),
+    )
 
 
 def test_helper_upgrade_check_is_read_only():
@@ -164,11 +181,11 @@ def test_helper_upgrade_replace_error_preserves_stage_and_baseline(tmp_path):
         patch.object(installer.os, "fchown", return_value=None),
         patch.object(installer.os, "replace", side_effect=OSError("synthetic")),
     ):
-        with pytest.raises(
+        _assert_raises(
             installer.InstallError,
-            match=r"^helper_upgrade_replace_failed$",
-        ):
-            installer.upgrade_helper_once("a" * 40)
+            lambda: installer.upgrade_helper_once("a" * 40),
+            "helper_upgrade_replace_failed",
+        )
 
     assert installer.MUTATION_STARTED is True
     assert helper_dest.read_bytes() == b"old-helper"
@@ -319,3 +336,27 @@ def test_resume_registry_operation_is_strict_and_forward_only():
     assert "legacy hermes tech runtime restart or rollback" in exclusions
     assert "global simple-deploy all-target timer activation" in exclusions
     assert "automatic retry cleanup rollback" in exclusions
+
+
+
+def main() -> int:
+    direct = [
+        test_exact_helper_matches_pinned_generic_inspect_signature_without_origin_keyword,
+        test_exact_helper_forbids_origin_mode_and_preserves_source_gate,
+        test_helper_upgrade_check_is_read_only,
+        test_resume_install_check_is_read_only,
+        test_resume_apply_is_forward_only_and_activates_target_timer_last,
+        test_resume_source_has_no_legacy_restart_cleanup_or_compose_materialization,
+        test_resume_contract_pins_partial_state_and_helper_recovery,
+        test_resume_registry_operation_is_strict_and_forward_only,
+    ]
+    for test in direct:
+        test()
+    with tempfile.TemporaryDirectory() as tmp:
+        test_helper_upgrade_replace_error_preserves_stage_and_baseline(Path(tmp))
+    print(f"PASS: {len(direct) + 1} Hermes Tech partial-cutover recovery tests")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
