@@ -4,70 +4,41 @@ set -Eeuo pipefail
 cd "$(git rev-parse --show-toplevel)"
 source ./scripts/run-gitleaks-ci.sh
 
-assert_arch() {
-  local machine="$1"
-  local expected="$2"
-  local actual
-  actual="$(resolve_gitleaks_release_arch "$machine")"
-  [[ "$actual" == "$expected" ]] || {
-    echo "Gitleaks architecture test: FAIL: $machine resolved to $actual, expected $expected" >&2
-    exit 1
-  }
-}
+expected_version="8.18.4"
+expected_image="ghcr.io/gitleaks/gitleaks@sha256:75bdb2b2f4db213cde0b8295f13a88d6b333091bbfbf3012a4e083d00d31caba"
 
-assert_arch x86_64 x64
-assert_arch amd64 x64
-assert_arch aarch64 arm64
-assert_arch arm64 arm64
-
-[[ "$(gitleaks_release_archive_sha256 x64)" == "ba6dbb656933921c775ee5a2d1c13a91046e7952e9d919f9bac4cec61d628e7d" ]] || {
-  echo "Gitleaks architecture test: FAIL: x64 checksum pin mismatch" >&2
+[[ "$(gitleaks_container_version)" == "$expected_version" ]] || {
+  echo "Gitleaks container pin test: FAIL: version pin mismatch" >&2
   exit 1
 }
-[[ "$(gitleaks_release_archive_sha256 arm64)" == "bf5f7f466ebfade1296c8bd32cf7d3f592c2aa78836aa9980ffbe2cadca7a861" ]] || {
-  echo "Gitleaks architecture test: FAIL: arm64 checksum pin mismatch" >&2
+[[ "$(gitleaks_container_image)" == "$expected_image" ]] || {
+  echo "Gitleaks container pin test: FAIL: image digest pin mismatch" >&2
   exit 1
 }
-if gitleaks_release_archive_sha256 riscv64 >/dev/null 2>&1; then
-  echo "Gitleaks architecture test: FAIL: unsupported checksum architecture accepted" >&2
-  exit 1
-fi
 
-tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
-printf '%s' 'checksum-canary' >"$tmp/archive"
-expected="$(sha256sum "$tmp/archive" | awk '{print $1}')"
-verify_sha256_file "$tmp/archive" "$expected" || {
-  echo "Gitleaks architecture test: FAIL: valid checksum rejected" >&2
+grep -Fq 'docker pull "$GITLEAKS_IMAGE"' ./scripts/run-gitleaks-ci.sh || {
+  echo "Gitleaks container pin test: FAIL: pinned image pull missing" >&2
   exit 1
 }
-if verify_sha256_file "$tmp/archive" "0000000000000000000000000000000000000000000000000000000000000000" >/dev/null 2>&1; then
-  echo "Gitleaks architecture test: FAIL: wrong checksum accepted" >&2
+grep -Fq -- '--network=none' ./scripts/run-gitleaks-ci.sh || {
+  echo "Gitleaks container pin test: FAIL: scanner container network isolation missing" >&2
   exit 1
-fi
-printf '%s' '-modified' >>"$tmp/archive"
-if verify_sha256_file "$tmp/archive" "$expected" >/dev/null 2>&1; then
-  echo "Gitleaks architecture test: FAIL: modified archive accepted" >&2
+}
+grep -Fq 'target=/repo,readonly' ./scripts/run-gitleaks-ci.sh || {
+  echo "Gitleaks container pin test: FAIL: repository mount is not read-only" >&2
   exit 1
-fi
+}
+grep -Fq 'GIT_CONFIG_KEY_0=safe.directory' ./scripts/run-gitleaks-ci.sh || {
+  echo "Gitleaks container pin test: FAIL: safe.directory binding missing" >&2
+  exit 1
+}
 
-for machine in '' armv7l riscv64 ppc64le; do
-  if resolve_gitleaks_release_arch "$machine" >/dev/null 2>&1; then
-    echo "Gitleaks architecture test: FAIL: unsupported architecture accepted: ${machine:-<empty>}" >&2
+for forbidden in   'github.com/gitleaks/gitleaks/releases/download'   'curl_common='   'tar -xzf'   'gitleaks_release_archive_sha256'   'resolve_gitleaks_release_arch'
+do
+  if grep -Fq "$forbidden" ./scripts/run-gitleaks-ci.sh; then
+    echo "Gitleaks container pin test: FAIL: legacy release-asset path remains: $forbidden" >&2
     exit 1
   fi
 done
 
-current="$(resolve_gitleaks_release_arch "$(uname -m)")"
-[[ "$current" == "x64" || "$current" == "arm64" ]] || {
-  echo "Gitleaks architecture test: FAIL: current machine did not resolve to a supported release asset" >&2
-  exit 1
-}
-
-grep -Fq 'archive="gitleaks_${GITLEAKS_VERSION}_linux_${gitleaks_arch}.tar.gz"' ./scripts/run-gitleaks-ci.sh
-if grep -Fq 'linux_x64.tar.gz' ./scripts/run-gitleaks-ci.sh; then
-  echo "Gitleaks architecture test: FAIL: fixed x64 archive remains" >&2
-  exit 1
-fi
-
-echo "Gitleaks architecture mapping test: PASS ($(uname -m) -> $current)"
+echo "Gitleaks container pin test: PASS ($expected_version / immutable GHCR digest)"
