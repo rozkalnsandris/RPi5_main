@@ -87,7 +87,7 @@ operator order is:
 12. require the new Compose service, `/health=200`, `/ready=200`, and a
     receipt binding the exact authorized source/digest;
 13. enable/start only
-    `rozkalns-simple-deployer@hermes-tech-public-rpi5.timer`;
+    `rozkalns-simple-deployer@.timer` with instance `hermes-tech-public-rpi5`;
 14. require the global `rozkalns-simple-deployer.timer` to remain
     disabled/inactive and verify the new runtime again.
 
