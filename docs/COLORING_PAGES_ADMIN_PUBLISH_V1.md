@@ -1048,3 +1048,15 @@ Accessibility basis: [W3C disclosure pattern](https://www.w3.org/WAI/ARIA/apg/pa
 and [GOV.UK checkboxes](https://design-system.service.gov.uk/components/checkboxes/);
 native details/summary and grouped Category controls are used rather
 than a new custom ARIA tree or implicit selected associations.
+
+## Remaining Topic coverage — #1437 (source-only)
+
+After the completed #1395/#1396 review and catalog apply, the exact LIVE baseline is 477 unique published IDs with 86 rows still intentionally deferred without a Topic (35 alphabet, 40 figures, 8 learning, 2 vehicles, 1 seasonal misclassification). Issue #1437 freezes a second reviewed pass that assigns meaningful subject Topics to those 86 rows and preserves all other reviewed memberships.
+
+The reviewed source inputs are `ops/admin/coloring-pages/taxonomy-apply-1437-v1.json` and `ops/admin/coloring-pages/classification-apply-1437-v1.json`. They bind the pre-change catalog SHA `fa8b8efa50e65a37bfce27379c96f03c04c7a8c2f0fa48944fa9adccf80812e7`, taxonomy revisions 2/2/3, the exact current registry hashes, and all 477 catalog IDs. The classification manifest changes exactly 86 rows and requires a non-empty meaningful Topic for every approved row. It does not introduce task/format Topics such as Zuordnen, Ausschneiden/Kleben or Malen nach Zahlen.
+
+The taxonomy pass adds `orte` plus 12 evergreen subject Topics and 16 explicit links. The existing taxonomy operator remains the only registry mutation path; #1437 only relaxes its former "link must involve a newly-created taxonomy object" restriction so an exact reviewed link between two already-existing IDs (specifically `fahrzeuge↔bauernhof`) can be added under the same hash/revision/lock/job/manifest gates. Duplicate, unknown and seasonal-incompatible links remain rejected.
+
+The planned post-taxonomy hashes are Category `01b7f951152c9bcd6ce27a8a29390f2c09025d587d8b7a08476fc1acf96d5468`, Topic `67c28647b3e2417e505326e89abb167469f55556c162350c32dc8fc17cbada1f`, links `9e4b03fa1567fe56112d27a0bb59fe1d9c2f73cfc2b4dae41a89df61cd7c3109`, revisions 3/3/4. The reviewed classification manifest logical SHA is `6009c1d8e6798cf3387af2d6f20fcf1dd4f347ea629bc89cb7d1f16d118e08d7`; it preserves 477/477 unique IDs and targets 86→0 no-Topic coverage. The generic church ID `4683994` is corrected from `jahreszeiten` to `orte/gebaeude`.
+
+Source merge does not stage runtime manifests and does not authorize taxonomy or catalog mutation. Future LIVE execution must separately revalidate exact source, catalog/taxonomy hashes/revisions, lock/jobs/staging state and then use the existing one-shot taxonomy and catalog operators under fresh owner authorizations. Taxonomy apply must complete and verify before the catalog classification manifest becomes eligible.
