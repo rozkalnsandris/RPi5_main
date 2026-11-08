@@ -110,6 +110,41 @@ configuration or secret access, permissions outside the two fixed installed
 files, Cloudflare/network mutation, package changes, or unrelated service,
 timer or Docker lifecycle.
 
+## Partial-install operator recovery (#1449)
+
+The first owner-authorized LIVE attempt installed the reviewed closure but stopped
+before any legacy/runtime cutover mutation because the operator parser treated
+timer `MainPID` as mandatory. The source fix keeps `MainPID` mandatory for
+services and permits timers to omit it, matching observed `systemctl show`
+behavior.
+
+Because the helper is already correct and only the installed operator becomes
+stale after this source fix merges, the existing installer now exposes a fixed
+`upgrade-check` / `upgrade-apply` recovery mode. It is not a generic
+installer or path replacement API.
+
+Recovery is bounded to:
+
+- baseline operator bytes from
+  `fba44df0cc004b4b62f991c9ed8114f460764bc0`;
+- current-main helper bytes, which must already be installed unchanged;
+- exactly
+  `/usr/local/sbin/hermes-tech-simple-deploy-cutover-v1`;
+- one fixed same-directory stage
+  `.hermes-tech-simple-deploy-cutover-v1.issue1449.stage`;
+- root:root mode `0500`;
+- one `O_EXCL|O_NOFOLLOW` stage creation and one atomic `os.replace`;
+- directory `fsync` and exact post-replacement byte verification.
+
+The helper is never replaced. No systemd, Docker, Compose, receipt, database,
+secret, network or unrelated filesystem mutation is part of this recovery.
+After stage creation, any error preserves evidence and STOPs; there is no
+automatic retry, cleanup or rollback.
+
+Merging #1449 does not replace the installed operator. A later Composite LIVE
+must explicitly include the one-file operator recovery mutation before any
+cutover retry.
+
 ## Future owner gates
 
 This source outcome still requires:
