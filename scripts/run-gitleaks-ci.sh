@@ -1,37 +1,11 @@
 #!/usr/bin/env bash
 
-resolve_gitleaks_release_arch() {
-  case "${1:-}" in
-    x86_64|amd64)
-      printf '%s\n' "x64"
-      ;;
-    aarch64|arm64)
-      printf '%s\n' "arm64"
-      ;;
-    *)
-      return 1
-      ;;
-  esac
+gitleaks_container_version() {
+  printf '%s\n' "8.18.4"
 }
 
-gitleaks_release_archive_sha256() {
-  case "${1:-}" in
-    x64)
-      printf '%s\n' "ba6dbb656933921c775ee5a2d1c13a91046e7952e9d919f9bac4cec61d628e7d"
-      ;;
-    arm64)
-      printf '%s\n' "bf5f7f466ebfade1296c8bd32cf7d3f592c2aa78836aa9980ffbe2cadca7a861"
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-}
-
-verify_sha256_file() {
-  local file="${1:?file required}"
-  local expected="${2:?expected SHA-256 required}"
-  printf '%s  %s\n' "${expected}" "${file}" | sha256sum -c - >/dev/null
+gitleaks_container_image() {
+  printf '%s\n' "ghcr.io/gitleaks/gitleaks@sha256:75bdb2b2f4db213cde0b8295f13a88d6b333091bbfbf3012a4e083d00d31caba"
 }
 
 gitleaks_history_revision() {
@@ -65,37 +39,35 @@ GITLEAKS_CONFIG=".gitleaks.toml"
   exit 1
 }
 
-# v8.18.4 is used as a known-good control: the upstream v8.30.1 regression
+# v8.18.4 remains the known-good control: the upstream v8.30.1 regression
 # report demonstrates this release detects the same canonical GitHub PAT shape
-# that v8.30.1 missed. Our runtime canaries remain the final trust gate.
-GITLEAKS_VERSION="8.18.4"
-machine_arch="$(uname -m)"
-if ! gitleaks_arch="$(resolve_gitleaks_release_arch "$machine_arch")"; then
-  echo "Gitleaks CI: FAIL: unsupported machine architecture: $machine_arch" >&2
+# that v8.30.1 missed. Pull the official multi-arch GHCR image by immutable
+# digest rather than downloading a release asset during every CI run.
+GITLEAKS_VERSION="$(gitleaks_container_version)"
+GITLEAKS_IMAGE="$(gitleaks_container_image)"
+
+command -v docker >/dev/null 2>&1 || {
+  echo "Gitleaks CI: FAIL: docker is required on this GitHub-hosted Ubuntu job" >&2
   exit 1
-fi
-archive="gitleaks_${GITLEAKS_VERSION}_linux_${gitleaks_arch}.tar.gz"
-release_base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+}
+
+docker pull "$GITLEAKS_IMAGE" >/dev/null
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
-curl_common=(--fail --location --silent --show-error --retry 3 --proto '=https' --tlsv1.2)
+run_gitleaks() {
+  docker run --rm --network=none \
+    --env GIT_CONFIG_COUNT=1 \
+    --env GIT_CONFIG_KEY_0=safe.directory \
+    --env GIT_CONFIG_VALUE_0=/repo \
+    --mount "type=bind,source=$PWD,target=/repo,readonly" \
+    --mount "type=bind,source=$tmp,target=/work,readonly" \
+    --workdir /repo \
+    "$GITLEAKS_IMAGE" "$@"
+}
 
-curl "${curl_common[@]}" "$release_base/$archive" -o "$tmp/$archive"
-if ! expected_archive_sha256="$(gitleaks_release_archive_sha256 "$gitleaks_arch")"; then
-  echo "Gitleaks CI: FAIL: no pinned checksum for architecture: $gitleaks_arch" >&2
-  exit 1
-fi
-if ! verify_sha256_file "$tmp/$archive" "$expected_archive_sha256"; then
-  echo "Gitleaks CI: FAIL: pinned release checksum mismatch" >&2
-  exit 1
-fi
-
-tar -xzf "$tmp/$archive" -C "$tmp" gitleaks
-chmod 0700 "$tmp/gitleaks"
-
-version="$($tmp/gitleaks version)"
+version="$(docker run --rm --network=none "$GITLEAKS_IMAGE" version)"
 [[ "$version" == "$GITLEAKS_VERSION" || "$version" == "v$GITLEAKS_VERSION" ]] || {
   echo "Gitleaks CI: FAIL: unexpected scanner version" >&2
   exit 1
@@ -109,10 +81,10 @@ canary="ghp_""7Nq4Xv2Za9Lm5Rt8Pk3Hy6Wc1Bd0Fs9Gj4Ku"
 printf 'token = "%s"\n' "$canary" >"$canary_dir/canary.txt"
 
 set +e
-"$tmp/gitleaks" detect \
+run_gitleaks detect \
   --no-git \
-  --source "$canary_dir" \
-  --config "$GITLEAKS_CONFIG" \
+  --source /work/canary \
+  --config /repo/$GITLEAKS_CONFIG \
   --redact \
   --no-banner \
   --no-color \
@@ -140,10 +112,10 @@ runtime_image="hermes-deals-api:main-""a1b2c3d4e5f6"
 printf 'image = "%s"\n' "$runtime_image" >"$runtime_image_dir/image.txt"
 
 set +e
-"$tmp/gitleaks" detect \
+run_gitleaks detect \
   --no-git \
-  --source "$runtime_image_dir" \
-  --config "$GITLEAKS_CONFIG" \
+  --source /work/runtime-image \
+  --config /repo/$GITLEAKS_CONFIG \
   --redact \
   --no-banner \
   --no-color \
@@ -159,14 +131,12 @@ set -e
 echo "Gitleaks CI: runtime image false-positive canary PASS"
 
 # Independently prove the complete history stream can be generated before
-# asking this older known-good scanner to execute its own equivalent git-log
-# scan. This prevents a broken repository/history invocation from being treated
-# as a clean result.
+# asking this known-good scanner to execute its own equivalent git-log scan.
 git log -p "$history_revision" --no-ext-diff --no-textconv -- . >/dev/null
 
-"$tmp/gitleaks" detect \
-  --source . \
-  --config "$GITLEAKS_CONFIG" \
+run_gitleaks detect \
+  --source /repo \
+  --config /repo/$GITLEAKS_CONFIG \
   --log-opts="$history_revision --no-ext-diff --no-textconv" \
   --redact \
   --no-banner \
