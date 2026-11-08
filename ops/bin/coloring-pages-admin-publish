@@ -1281,6 +1281,11 @@ def archive_path(page_id: str) -> Path:
     return ARCHIVE / f"{page_id}.json"
 
 
+def archive_record_exists(page_id: str) -> bool:
+    page_id = validate_catalog_id(page_id)
+    return select_existing_child(ARCHIVE, f"{page_id}.json", directory=False) is not None
+
+
 def load_archive_identity(page_id: str) -> dict:
     page_id = validate_catalog_id(page_id)
     payload = read_json_child(ARCHIVE, f"{page_id}.json", required_mode=0o600)
@@ -2948,7 +2953,6 @@ class Handler(BaseHTTPRequestHandler):
         page_id = validate_catalog_id(raw["id"])
         if raw["confirm_id"] != page_id:
             stop("catalog archive confirmation does not match id")
-        record_path = archive_path(page_id)
         with acquire_catalog_lock():
             catalog, current_sha256 = load_catalog()
             if current_sha256 != expected_sha256:
@@ -2957,7 +2961,7 @@ class Handler(BaseHTTPRequestHandler):
             indexes = [index for index, entry in enumerate(catalog) if entry["id"] == page_id]
             if len(indexes) != 1:
                 stop("catalog target does not exist exactly once")
-            if os.path.lexists(record_path):
+            if archive_record_exists(page_id):
                 stop("archive record already exists for id")
             entry = validate_catalog_entry(catalog[indexes[0]])
             archived_at = int(time.time())
