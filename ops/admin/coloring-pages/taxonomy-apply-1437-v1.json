@@ -1,0 +1,242 @@
+{
+  "schema": "ausmalwiese.taxonomy-expansion-apply.v2",
+  "mode": "APPROVED_APPLY",
+  "hashes": {
+    "category_sha256": "94d64efc25727ad4d3591be1586485709eca2b350ce5e7b1546d9aea11c0ae16",
+    "topic_sha256": "804869a4dc44c9761280dc3653524014dcabf74131cfa59805048a275fcf96c4",
+    "links_sha256": "8c90863b9dbcd35a76b474712d76ebc50935805dbda785800a713a5496fe7289"
+  },
+  "revisions": {
+    "category_revision": 2,
+    "topic_revision": 2,
+    "links_revision": 3
+  },
+  "categories": [
+    {
+      "id": "orte",
+      "label": "Orte & Gebäude"
+    }
+  ],
+  "topics": [
+    {
+      "id": "buchstaben",
+      "label": "Buchstaben",
+      "icon": "🔤",
+      "kind": "evergreen",
+      "legacy_terms": [
+        "buchstabe",
+        "buchstaben",
+        "alphabet"
+      ]
+    },
+    {
+      "id": "menschen",
+      "label": "Menschen",
+      "icon": "🧑",
+      "kind": "evergreen",
+      "legacy_terms": [
+        "mensch",
+        "menschen",
+        "junge",
+        "mädchen",
+        "maedchen",
+        "person",
+        "personen"
+      ]
+    },
+    {
+      "id": "tanzen",
+      "label": "Tanzen",
+      "icon": "💃",
+      "kind": "evergreen",
+      "legacy_terms": [
+        "tanzen",
+        "tanz",
+        "tänzer",
+        "taenzer",
+        "tänzerin",
+        "taenzerin",
+        "ballerina"
+      ]
+    },
+    {
+      "id": "lesen",
+      "label": "Lesen",
+      "icon": "📚",
+      "kind": "evergreen",
+      "legacy_terms": [
+        "lesen",
+        "liest",
+        "buch",
+        "bücher",
+        "buecher"
+      ]
+    },
+    {
+      "id": "babys",
+      "label": "Babys",
+      "icon": "👶",
+      "kind": "evergreen",
+      "legacy_terms": [
+        "baby",
+        "babys",
+        "säugling",
+        "saeugling"
+      ]
+    },
+    {
+      "id": "maerchen",
+      "label": "Märchen & Fantasie",
+      "icon": "🏰",
+      "kind": "evergreen",
+      "legacy_terms": [
+        "märchen",
+        "maerchen",
+        "fantasie",
+        "gartenzwerg",
+        "hofnarr",
+        "rattenfänger",
+        "rattenfaenger",
+        "schloss",
+        "monster"
+      ]
+    },
+    {
+      "id": "blockwelt",
+      "label": "Blockwelt",
+      "icon": "🧱",
+      "kind": "evergreen",
+      "legacy_terms": [
+        "blockwelt",
+        "blockig",
+        "block-figur",
+        "spitzhacke"
+      ]
+    },
+    {
+      "id": "wald",
+      "label": "Wald",
+      "icon": "🌲",
+      "kind": "evergreen",
+      "legacy_terms": [
+        "wald",
+        "pilz",
+        "eichel"
+      ]
+    },
+    {
+      "id": "alltag",
+      "label": "Alltag",
+      "icon": "🏠",
+      "kind": "evergreen",
+      "legacy_terms": [
+        "alltag",
+        "alltagsgegenstände",
+        "alltagsgegenstaende"
+      ]
+    },
+    {
+      "id": "verkehr",
+      "label": "Verkehr",
+      "icon": "🚦",
+      "kind": "evergreen",
+      "legacy_terms": [
+        "verkehr",
+        "verkehrsmittel",
+        "wege"
+      ]
+    },
+    {
+      "id": "tierwissen",
+      "label": "Tierwissen",
+      "icon": "🐾",
+      "kind": "evergreen",
+      "legacy_terms": [
+        "tierwissen",
+        "tiere und futter",
+        "tier und futter",
+        "tiere und passende dinge"
+      ]
+    },
+    {
+      "id": "gebaeude",
+      "label": "Gebäude",
+      "icon": "🏛️",
+      "kind": "evergreen",
+      "legacy_terms": [
+        "gebäude",
+        "gebaeude",
+        "kirche",
+        "schloss",
+        "haus"
+      ]
+    }
+  ],
+  "links": [
+    {
+      "category": "alphabet",
+      "topic": "buchstaben"
+    },
+    {
+      "category": "fahrzeuge",
+      "topic": "bauernhof"
+    },
+    {
+      "category": "figuren",
+      "topic": "babys"
+    },
+    {
+      "category": "figuren",
+      "topic": "blockwelt"
+    },
+    {
+      "category": "figuren",
+      "topic": "lesen"
+    },
+    {
+      "category": "figuren",
+      "topic": "maerchen"
+    },
+    {
+      "category": "figuren",
+      "topic": "menschen"
+    },
+    {
+      "category": "figuren",
+      "topic": "tanzen"
+    },
+    {
+      "category": "lernen",
+      "topic": "alltag"
+    },
+    {
+      "category": "lernen",
+      "topic": "blockwelt"
+    },
+    {
+      "category": "lernen",
+      "topic": "maerchen"
+    },
+    {
+      "category": "lernen",
+      "topic": "tierwissen"
+    },
+    {
+      "category": "lernen",
+      "topic": "verkehr"
+    },
+    {
+      "category": "lernen",
+      "topic": "wald"
+    },
+    {
+      "category": "natur",
+      "topic": "wald"
+    },
+    {
+      "category": "orte",
+      "topic": "gebaeude"
+    }
+  ],
+  "manifest_sha256": "12d33afcb1b025ee5df0530891aa31d824d0a155cc8a3c8f2fe672041b7fabb2"
+}

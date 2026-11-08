@@ -357,8 +357,6 @@ def validate_manifest(
             stop("manifest link references unknown taxonomy")
         if pair in link_pairs or pair in pair_seen:
             stop("manifest link already exists or duplicates")
-        if category not in new_category_ids and topic not in new_topic_ids:
-            stop("manifest link must involve a new category or topic")
         if (combined_topics[topic]["kind"] == "seasonal") != (category == "jahreszeiten"):
             stop("manifest link incompatible with topic kind")
         pair_seen.add(pair)

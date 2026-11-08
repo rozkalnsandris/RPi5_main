@@ -505,6 +505,10 @@
       [
         "python3",
         "./tests/test-ausmalwiese-taxonomy-manifest-materialize-v1.py"
+      ],
+      [
+        "python3",
+        "./tests/test-ausmalwiese-topic-coverage-1437.py"
       ]
     ],
     "hermes-cv": [
