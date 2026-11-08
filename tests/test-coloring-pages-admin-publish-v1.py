@@ -104,7 +104,7 @@ class Tests(unittest.TestCase):
             "id":"1234567","state":"prepared","archived_at":123,"entry":entry,
         }
         try:
-            admin.write_json(archive/"1234567.json",payload)
+            admin.write_json_child(archive, "1234567.json", payload, trusted_root=archive)
             with patch.object(admin, "load_taxonomy", side_effect=AssertionError("archive read must not fetch public taxonomy")):
                 records=admin.list_archive_records()
             self.assertEqual(len(records),1)
@@ -117,7 +117,7 @@ class Tests(unittest.TestCase):
             catalog.write_text(json.dumps([entry])+"\n",encoding="utf-8")
             self.assertEqual(admin.list_archive_records(),[])
             catalog.write_text("[]\n",encoding="utf-8")
-            payload["state"]="restored";admin.write_json(archive/"1234567.json",payload)
+            payload["state"]="restored";admin.write_json_child(archive, "1234567.json", payload, trusted_root=archive)
             self.assertEqual(admin.list_archive_records(),[])
         finally:
             admin.CATALOG,admin.ARCHIVE=old_catalog,old_archive
@@ -133,7 +133,7 @@ class Tests(unittest.TestCase):
         }
         target=root/(page_id+".json")
         try:
-            admin.write_json(target,payload)
+            admin.write_json_child(root, page_id+".json", payload, trusted_root=root)
             target.chmod(0o644)
             with self.assertRaises(admin.Stop):
                 admin.load_archive_identity(page_id)
@@ -145,6 +145,24 @@ class Tests(unittest.TestCase):
                 admin.load_archive_identity(page_id)
         finally:
             admin.ARCHIVE=old_archive
+
+    def test_write_json_child_confines_target_to_open_directory(self):
+        root=Path(self.tmp.name)/"json-write-safety";root.mkdir()
+        outside=Path(self.tmp.name)/"outside-write.json"
+        outside.write_text('{"untouched":true}\n',encoding="utf-8")
+        target=root/"state.json"
+        target.symlink_to(outside)
+        with self.assertRaises(admin.Stop):
+            admin.write_json_child(root, "../escape.json", {"blocked":True}, trusted_root=root)
+        admin.write_json_child(root, "state.json", {"ok":True}, trusted_root=root)
+        self.assertEqual(json.loads(outside.read_text(encoding="utf-8")),{"untouched":True})
+        self.assertFalse(target.is_symlink())
+        self.assertEqual(stat.S_IMODE(target.stat().st_mode),0o600)
+        self.assertEqual(admin.read_json_child(root, "state.json"),{"ok":True})
+        symlink_root=Path(self.tmp.name)/"json-write-root-link"
+        symlink_root.symlink_to(root,target_is_directory=True)
+        with self.assertRaises(admin.Stop):
+            admin.write_json_child(symlink_root, "state.json", {"blocked":True}, trusted_root=root)
 
     def test_deleted_tombstone_reserves_id_and_is_hidden_from_archive_list(self):
         old_catalog,old_archive=admin.CATALOG,admin.ARCHIVE
@@ -162,7 +180,7 @@ class Tests(unittest.TestCase):
             "id":"1234567","state":"deleted","archived_at":123,"deleted_at":124,"entry":entry,
         }
         try:
-            admin.write_json(archive/"1234567.json",payload)
+            admin.write_json_child(archive, "1234567.json", payload, trusted_root=archive)
             self.assertEqual(admin.list_archive_records(),[])
             self.assertEqual(admin.archive_reserved_ids(),{"1234567"})
             self.assertIn("1234567",admin.reserved_ids())
@@ -318,7 +336,7 @@ class Tests(unittest.TestCase):
             "steps":[{"label":"Import","status":"running","started_at":1}],
             "results":[{"id":"1234567","title":"P","status":"imported"}],
         }
-        jobdir=jobs/("a"*32);jobdir.mkdir();admin.write_json(jobdir/"job.json",payload)
+        jobdir=jobs/("a"*32);jobdir.mkdir();admin.write_json_child(jobdir, "job.json", payload, trusted_root=jobs)
         try:
             self.assertEqual(admin.reconcile_interrupted_jobs(),1)
             saved=admin.read_json(jobdir/"job.json")
@@ -337,7 +355,7 @@ class Tests(unittest.TestCase):
         jobs=Path(self.tmp.name)/"active";jobs.mkdir()
         admin.JOBS=jobs
         payload={"job_id":"c"*32,"status":"queued"}
-        jobdir=jobs/("c"*32);jobdir.mkdir();admin.write_json(jobdir/"job.json",payload)
+        jobdir=jobs/("c"*32);jobdir.mkdir();admin.write_json_child(jobdir, "job.json", payload, trusted_root=jobs)
         try:self.assertEqual(admin.active_job()["job_id"],"c"*32)
         finally:admin.JOBS=old_jobs
 
