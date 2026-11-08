@@ -80,6 +80,37 @@ def test_cutover_contract_pins_operator_closure_and_exact_release_adapter():
     assert adapter["modifies_generic_simple_deploy_source"] is False
 
 
+def test_cutover_contract_pins_operator_recovery_after_partial_install():
+    contract = _load(CONTRACT_PATH)
+    recovery = contract["operator_upgrade_recovery"]
+
+    assert recovery == {
+        "issue": 1449,
+        "required_only_after_partial_live_install": True,
+        "installer_source": "ops/bin/install-hermes-tech-simple-deploy-cutover-v1",
+        "installer_mode": "upgrade-apply",
+        "baseline_main": "fba44df0cc004b4b62f991c9ed8114f460764bc0",
+        "target_path": "/usr/local/sbin/hermes-tech-simple-deploy-cutover-v1",
+        "helper_path": "/usr/local/libexec/rozkalns-simple-deployer/hermes-tech-exact-reconcile-v1",
+        "helper_replacement_forbidden": True,
+        "required_target_initial_identity": "exact-baseline-main-operator-bytes",
+        "required_helper_identity": "exact-current-main-helper-bytes",
+        "stage_path": "/usr/local/sbin/.hermes-tech-simple-deploy-cutover-v1.issue1449.stage",
+        "stage_creation": "O_EXCL|O_NOFOLLOW",
+        "target_owner": "root",
+        "target_group": "root",
+        "target_mode": "0500",
+        "atomic_replace_once": True,
+        "directory_fsync_required": True,
+        "automatic_retry": False,
+        "automatic_cleanup": False,
+        "automatic_rollback": False,
+        "systemd_docker_runtime_mutation": False,
+        "separate_live_authorization_required": True,
+        "source_merge_replaces_installed_operator": False,
+    }
+
+
 def test_cutover_contract_pins_legacy_runtime_materialization_and_port_transition():
     contract = _load(CONTRACT_PATH)
 
@@ -161,6 +192,7 @@ def test_executor_registry_keeps_cutover_strict_and_binds_fixed_operator():
     categories = {item["category"]: item["max_operations"] for item in operation["mutation_budget"]}
     assert categories == {
         "filesystem.hermes-tech-cutover-operator-installation": 2,
+        "filesystem.hermes-tech-cutover-operator-recovery": 1,
         "systemd.hermes-tech-legacy-runtime-retirement": 3,
         "filesystem.hermes-tech-simple-deploy-materialization": 1,
         "docker.hermes-tech-simple-deploy-application-apply": 1,
