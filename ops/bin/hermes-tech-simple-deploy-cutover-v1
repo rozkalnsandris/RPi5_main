@@ -58,8 +58,9 @@ LEGACY_PULL_SERVICE = "hermes-tech-pull-deploy.service"
 LEGACY_CONTAINER = "hermes-blog"
 LEGACY_IMAGE = "sha256:54f2a904c251d5a34adf545a72d32515a15e08418dae0266e23be2e18c66fefa"
 
-TARGET_TIMER = "rozkalns-simple-deployer@hermes-tech-public-rpi5.timer"
-TARGET_TIMER_SERVICE = "rozkalns-simple-deployer@hermes-tech-public-rpi5.service"
+TARGET_TIMER_INSTANCE = "hermes-tech-public-rpi5"
+TARGET_TIMER = f"rozkalns-simple-deployer{chr(64)}{TARGET_TIMER_INSTANCE}.timer"
+TARGET_TIMER_SERVICE = f"rozkalns-simple-deployer{chr(64)}{TARGET_TIMER_INSTANCE}.service"
 GLOBAL_TIMER = "rozkalns-simple-deployer.timer"
 GLOBAL_SERVICE = "rozkalns-simple-deployer.service"
 
