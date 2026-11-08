@@ -34,7 +34,7 @@ for group in EXPECTED_GROUPS:
         assert "-c" not in argv
         commands.append(tuple(argv))
 
-assert len(commands) == 308
+assert len(commands) == 309
 assert len(set(commands)) == len(commands)
 
 for argv in commands:
@@ -70,7 +70,7 @@ for required in (
     "./tests/test-ausmalwiese-catalog-classification-apply-v1.py",
     "./tests/test-ausmalwiese-catalog-classification-review-to-apply-v1.py",
     "./tests/test-ausmalwiese-taxonomy-expansion-apply-v1.py",
-    "./tests/test-ausmalwiese-taxonomy-manifest-materialize-v1.py",
+    "./tests/test-ausmalwiese-taxonomy-manifest-materialize-v1.py",\n    "./tests/test-ausmalwiese-taxonomy-manifest-materialize-1437-v1.py",
     "./tests/test-ausmalwiese-goatcounter-household-waf-install-v1.py",
     "./tests/test-ausmalwiese-goatcounter-household-waf-replace-v1.py",
 ):
