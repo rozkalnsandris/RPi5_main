@@ -106,7 +106,8 @@ def test_installer_is_two_fixed_files_support_first_and_no_cleanup():
     assert source.index("install_once(HELPER_DEST") < source.index("install_once(OPERATOR_DEST")
     assert 'if Path(__file__).absolute() != expected_installer:' in source
     assert "os.O_EXCL" in source
-    assert "os.replace" not in source
+    assert "OPERATOR_UPGRADE_STAGE" in source
+    assert "os.replace(OPERATOR_UPGRADE_STAGE, OPERATOR_DEST)" in source
     assert "unlink(" not in source
     assert "remove(" not in source
     assert "rmtree(" not in source
@@ -269,6 +270,125 @@ def test_installer_apply_publishes_support_before_root_entrypoint():
         (installer.HELPER_DEST, b"helper", 0o555),
         (installer.OPERATOR_DEST, b"operator", 0o500),
     ]
+
+
+def test_operator_upgrade_check_is_read_only():
+    installer.MUTATION_STARTED = False
+    desired = b"reviewed-new-operator"
+    out = io.StringIO()
+    with (
+        patch.object(
+            installer,
+            "operator_upgrade_preflight",
+            return_value=(desired, (1, 2, 3, 4), (5, 6, 7, 8)),
+        ),
+        patch.object(installer, "upgrade_operator_once") as upgrade,
+        redirect_stdout(out),
+    ):
+        rc = installer.main([
+            "upgrade-check",
+            "--expected-main",
+            "a" * 40,
+        ])
+
+    assert rc == 0
+    upgrade.assert_not_called()
+    payload = __import__("json").loads(out.getvalue())
+    assert payload["result"] == "READY"
+    assert payload["mutation_started"] is False
+    assert payload["baseline_main"] == installer.UPGRADE_BASELINE_MAIN
+
+
+def test_operator_upgrade_atomically_replaces_only_operator(tmp_path):
+    installer.MUTATION_STARTED = False
+    operator_dest = tmp_path / "hermes-tech-simple-deploy-cutover-v1"
+    helper_dest = tmp_path / "hermes-tech-exact-reconcile-v1"
+    stage = tmp_path / ".hermes-tech-simple-deploy-cutover-v1.issue1449.stage"
+    operator_dest.write_bytes(b"old-operator")
+    helper_dest.write_bytes(b"helper")
+    desired = b"new-operator"
+    old_identity = (1, 10, 100, len(b"old-operator"))
+    helper_identity = (1, 20, 200, len(b"helper"))
+
+    def fake_read(path, *, mode):
+        data = path.read_bytes()
+        inode = 30 if path == stage else 40 if path == operator_dest else 20
+        return (1, inode, 300, len(data)), data
+
+    with (
+        patch.object(installer, "OPERATOR_DEST", operator_dest),
+        patch.object(installer, "HELPER_DEST", helper_dest),
+        patch.object(installer, "OPERATOR_UPGRADE_STAGE", stage),
+        patch.object(
+            installer,
+            "operator_upgrade_preflight",
+            return_value=(desired, old_identity, helper_identity),
+        ),
+        patch.object(
+            installer,
+            "operator_upgrade_preflight_without_stage",
+            return_value=(desired, old_identity, helper_identity),
+        ),
+        patch.object(
+            installer,
+            "source_context",
+            return_value=(tmp_path, b"helper", desired),
+        ),
+        patch.object(installer, "read_installed", side_effect=fake_read),
+        patch.object(installer.os, "fchown", return_value=None),
+    ):
+        assert installer.upgrade_operator_once("a" * 40) == "PASS"
+
+    assert installer.MUTATION_STARTED is True
+    assert operator_dest.read_bytes() == desired
+    assert helper_dest.read_bytes() == b"helper"
+    assert not stage.exists()
+
+
+def test_operator_upgrade_replace_error_preserves_stage_and_baseline(tmp_path):
+    installer.MUTATION_STARTED = False
+    operator_dest = tmp_path / "hermes-tech-simple-deploy-cutover-v1"
+    helper_dest = tmp_path / "hermes-tech-exact-reconcile-v1"
+    stage = tmp_path / ".hermes-tech-simple-deploy-cutover-v1.issue1449.stage"
+    operator_dest.write_bytes(b"old-operator")
+    helper_dest.write_bytes(b"helper")
+    desired = b"new-operator"
+    old_identity = (1, 10, 100, len(b"old-operator"))
+    helper_identity = (1, 20, 200, len(b"helper"))
+
+    def fake_read(path, *, mode):
+        data = path.read_bytes()
+        inode = 30 if path == stage else 40 if path == operator_dest else 20
+        return (1, inode, 300, len(data)), data
+
+    with (
+        patch.object(installer, "OPERATOR_DEST", operator_dest),
+        patch.object(installer, "HELPER_DEST", helper_dest),
+        patch.object(installer, "OPERATOR_UPGRADE_STAGE", stage),
+        patch.object(
+            installer,
+            "operator_upgrade_preflight",
+            return_value=(desired, old_identity, helper_identity),
+        ),
+        patch.object(
+            installer,
+            "operator_upgrade_preflight_without_stage",
+            return_value=(desired, old_identity, helper_identity),
+        ),
+        patch.object(installer, "read_installed", side_effect=fake_read),
+        patch.object(installer.os, "fchown", return_value=None),
+        patch.object(installer.os, "replace", side_effect=OSError("synthetic")),
+    ):
+        with pytest.raises(
+            installer.InstallError,
+            match=r"^operator_upgrade_replace_failed$",
+        ):
+            installer.upgrade_operator_once("a" * 40)
+
+    assert installer.MUTATION_STARTED is True
+    assert operator_dest.read_bytes() == b"old-operator"
+    assert helper_dest.read_bytes() == b"helper"
+    assert stage.read_bytes() == desired
 
 
 def test_generic_simple_deploy_source_is_not_extended_with_cutover_cli():
