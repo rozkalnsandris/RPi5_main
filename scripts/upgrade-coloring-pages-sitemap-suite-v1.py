@@ -330,7 +330,8 @@ def source_snapshot(expected_sha: str, uid: int, gid: int):
     sources = {}
     for path, digest in NEW.items():
         tracked = owner_git("ls-tree", "HEAD", "--", path).decode("ascii").strip()
-        if tracked != "100644 blob " + digest + "\t" + path:
+        mode = "100755" if path == INGEST else "100644"
+        if tracked != mode + " blob " + digest + "\t" + path:
             raise UpgradeError("new source Git blob or mode mismatch")
         content = owner_git("show", "HEAD:" + path)
         if not content or blob(content) != digest:
