@@ -130,33 +130,47 @@ def marker_state(paths: Paths, root_uid: int, root_gid: int) -> str:
 
 
 def require_writer_quiescence() -> bool:
-    """Read-only fixed systemd guard; owner must ALSO exclude direct writers.
+    """Read-only systemd guard including the armed bridge activation path.
 
-    The shared flock blocks only cooperating ingesters. These unit checks do
-    not prevent an unrelated direct Docker importer or later manual invocation.
-    A separate, currently valid owner LIVE gate must cover that risk.
+    A path unit can start an otherwise inactive service upon a filesystem
+    event. These checks plus the shared advisory flock do NOT exclude direct
+    Docker/manual writers or actors reactivating units between probes.
+    Separate current owner LIVE authority and independent writer isolation
+    remain mandatory for the entire three-file replacement window.
     """
-    for unit in (
-        "coloring-pages-admin-publish.service",
-        "coloring-pages-publish-request-bridge.service",
-    ):
+    bridge = "coloring-pages-publish-request-bridge.service"
+    bridge_path = "coloring-pages-publish-request-bridge.path"
+    units = (
+        ("coloring-pages-admin-publish.service",
+         ("LoadState", "ActiveState", "Job"), None),
+        (bridge, ("LoadState", "ActiveState", "Job", "TriggeredBy"),
+         ("TriggeredBy", bridge_path)),
+        (bridge_path, ("LoadState", "ActiveState", "Job", "Triggers"),
+         ("Triggers", bridge)),
+    )
+    for unit, properties, expected_edge in units:
         result = subprocess.run(
             ["/usr/bin/systemctl", "show", unit,
-             "--property=LoadState,ActiveState,Job", "--no-pager"],
+             "--property=" + ",".join(properties), "--no-pager"],
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, text=True, timeout=8, check=False,
         )
         if result.returncode or len(result.stdout) > 4096:
             raise UpgradeError("quiescence systemd observation failed")
         lines = result.stdout.strip().splitlines()
-        if len(lines) != 3 or any(line.count("=") != 1 for line in lines):
+        if (len(lines) != len(properties)
+            or any(line.count("=") != 1 for line in lines)):
             raise UpgradeError("quiescence unit state ambiguous")
         state = dict(line.split("=", 1) for line in lines)
-        if (set(state) != {"LoadState", "ActiveState", "Job"}
-            or state["LoadState"] != "loaded"
+        if set(state) != set(properties):
+            raise UpgradeError("quiescence unit state ambiguous")
+        if (state["LoadState"] != "loaded"
             or state["ActiveState"] != "inactive"
             or state["Job"] not in ("", "0")):
             raise UpgradeError("catalogue writer entrance is not quiescent")
+        if (expected_edge is not None
+            and state[expected_edge[0]].split() != [expected_edge[1]]):
+            raise UpgradeError("unexpected bridge path activation edge")
     return True
 
 
