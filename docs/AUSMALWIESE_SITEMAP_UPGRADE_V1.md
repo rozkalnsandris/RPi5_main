@@ -260,3 +260,55 @@ are documented by the official manuals:
 - https://man7.org/linux/man-pages/man2/flock.2.html
 - https://docs.python.org/3/library/os.html#os.replace
 - https://man7.org/linux/man-pages/man1/systemctl.1.html
+
+---
+
+## Bridge path activation guard — follow-up issue #1462 (source only)
+
+The read-only RPi5 audit on `RPi5_main/main@059493133a6452cf7e0993ed9fac0c9c0f07ee4b`
+found `coloring-pages-publish-request-bridge.service` **inactive** while
+`coloring-pages-publish-request-bridge.path` remained **active / waiting /
+enabled** with `Triggers=coloring-pages-publish-request-bridge.service`.
+The ADMIN service was also **active**. Both conditions are **STOP** for the
+three-file suite upgrade. No service, path, timer or file was changed in that
+audit.
+
+The reviewed `scripts/upgrade-coloring-pages-sitemap-suite-v1.py` now
+inspects **three** exact systemd units on every writer-quiescence probe:
+
+- `coloring-pages-admin-publish.service`: loaded, **inactive**, no job.
+- `coloring-pages-publish-request-bridge.service`: loaded, **inactive**, no
+  job; `TriggeredBy` must be exactly
+  `coloring-pages-publish-request-bridge.path`.
+- `coloring-pages-publish-request-bridge.path`: loaded, **inactive**, no
+  job; `Triggers` must be exactly
+  `coloring-pages-publish-request-bridge.service`.
+
+All observations use fixed-path **read-only** `systemctl show` with
+machine-parsable properties. Missing/duplicate/unexpected properties,
+unexpected activation edges, active/waiting/activating/failed states,
+pending jobs or command errors fail closed **before any staged file**.
+The same guard is checked after stages and before each replacement; a
+rearmed path after staging STOPs with partial files preserved and **no
+retry, cleanup or rollback**. The post-publish marker and all old/new
+binary blob pins remain unchanged.
+
+A `.path` unit **can start its associated service even when the service
+itself is inactive**, so merely stopping or checking the bridge service
+does not isolate this ingress. A future owner-authorized maintenance plan
+must explicitly control the ADMIN service **and** the bridge `.path`
+activation (and any in-flight bridge service). This source guard **does
+not stop, disable, mask, or restart** anything. Stopping those units and
+later resuming them are distinct LIVE decisions; mere `enabled` unit-file
+state is not itself the runtime trigger.
+
+These fixed systemd checks and the shared advisory `flock` **do not
+prove** that other direct Docker/manual/importer writers are absent, or
+prevent a separate actor from starting units between checks. The owner
+must independently establish and maintain exclusion throughout the
+non-transactional three-file replacement window; check for external
+writer/activation drift and STOP on uncertainty.
+
+Official references:
+- https://www.freedesktop.org/software/systemd/man/258/systemd.path.html
+- https://www.freedesktop.org/software/systemd/man/262/systemctl.html
