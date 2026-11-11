@@ -17,11 +17,12 @@ from urllib.parse import quote
 from xml.sax.saxutils import escape
 
 ORIGIN = "https://ausmalwiese.de"
-CATEGORY_ROUTES = ("tiere", "fahrzeuge", "alphabet", "lernen", "figuren", "jahreszeiten")
+CATEGORY_ROUTES = ("tiere", "fahrzeuge", "alphabet", "lernen", "figuren", "jahreszeiten", "essen-natur")
 STATIC_URLS = (
     f"{ORIGIN}/",
     f"{ORIGIN}/kita",
     *(f"{ORIGIN}/{route}" for route in CATEGORY_ROUTES),
+    f"{ORIGIN}/kalender.html",
 )
 MAX_URLS = 50_000
 MAX_BYTES = 50_000_000
