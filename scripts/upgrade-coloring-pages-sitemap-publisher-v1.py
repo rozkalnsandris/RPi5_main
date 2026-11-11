@@ -23,12 +23,12 @@ SCRIPT_REL = "scripts/upgrade-coloring-pages-sitemap-publisher-v1.py"
 OPERATOR = "ops/bin/coloring-pages-sitemap-publish"
 GENERATOR = "ops/vendor/coloring-pages-sitemap"
 OLD = {
-    OPERATOR: "7b0330f30e27d6fe9c5f3e4fbf81fc6473ade660",
-    GENERATOR: "49c8ba34cf0a4c4ab100463df9adacc4c6e90c2c",
-}
-NEW = {
     OPERATOR: "4ade38f1225f4c1bc102fda8d5538f9262695d43",
     GENERATOR: "5d1d37c32573aa8ac0d91f45b73938638fd183e9",
+}
+NEW = {
+    OPERATOR: "3263845045f6d38f31ff359158be90ab59006240",
+    GENERATOR: "f4ffaa4293f9c46f475f96d4409f05ff347a7590",
 }
 MARKER_BYTES = b"coloring-pages-sitemap-post-publish-v1\n"
 MAX_BYTES = 100_000
