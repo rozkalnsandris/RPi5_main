@@ -154,31 +154,139 @@ class ExactSitemapSuiteTests(unittest.TestCase):
             self.run_op(apply=True, probe=None)
         self.assertTrue(all(not p.exists() for p in self.stages()))
 
-    def test_fixed_systemd_guard_requires_two_inactive_loaded_units(self):
-        healthy = "LoadState=loaded\nActiveState=inactive\nJob=\n"
-        failing = "LoadState=loaded\nActiveState=active\nJob=\n"
+    @staticmethod
+    def systemd_snapshots(*, admin="inactive", bridge="inactive", path="inactive",
+                          bridge_edge="coloring-pages-publish-request-bridge.path",
+                          path_edge="coloring-pages-publish-request-bridge.service",
+                          admin_job="", bridge_job="", path_job=""):
+        def done(text, status=0):
+            return subprocess.CompletedProcess([], status, text, "")
+        return [
+            done(f"LoadState=loaded\nActiveState={admin}\nJob={admin_job}\n"),
+            done("LoadState=loaded\n" +
+                 f"ActiveState={bridge}\nJob={bridge_job}\n" +
+                 f"TriggeredBy={bridge_edge}\n"),
+            done("LoadState=loaded\n" +
+                 f"ActiveState={path}\nJob={path_job}\n" +
+                 f"Triggers={path_edge}\n"),
+        ]
+
+    def test_fixed_systemd_guard_requires_two_services_and_path_inactive(self):
         with mock.patch.object(
-            mod.subprocess, "run",
-            side_effect=[subprocess.CompletedProcess([], 0, healthy, ""),
-                         subprocess.CompletedProcess([], 0, healthy, "")],
-        ) as run:
+            mod.subprocess, "run", side_effect=self.systemd_snapshots(),
+        ) as calls:
             self.assertTrue(mod.require_writer_quiescence())
-            self.assertEqual(run.call_count, 2)
-            for c in run.call_args_list:
-                self.assertEqual(c.args[0][0], "/usr/bin/systemctl")
-                self.assertEqual(c.args[0][1], "show")
-        with mock.patch.object(
-            mod.subprocess, "run",
-            return_value=subprocess.CompletedProcess([], 0, failing, ""),
+            self.assertEqual(calls.call_count, 3)
+            self.assertEqual(
+                [c.args[0][2] for c in calls.call_args_list],
+                [
+                    "coloring-pages-admin-publish.service",
+                    "coloring-pages-publish-request-bridge.service",
+                    "coloring-pages-publish-request-bridge.path",
+                ],
+            )
+            for c in calls.call_args_list:
+                self.assertEqual(c.args[0][:2], ["/usr/bin/systemctl", "show"])
+                self.assertEqual(c.kwargs["timeout"], 8)
+                self.assertFalse(c.kwargs["check"])
+                self.assertEqual(c.kwargs["stdin"], subprocess.DEVNULL)
+
+    def test_active_path_blocks_check_and_apply_before_staging(self):
+        for apply in (False, True):
+            with self.subTest(apply=apply):
+                with mock.patch.object(
+                    mod.subprocess, "run",
+                    side_effect=self.systemd_snapshots(path="active"),
+                ):
+                    with self.assertRaisesRegex(mod.UpgradeError, "not quiescent"):
+                        self.run_op(apply=apply, probe=mod.require_writer_quiescence)
+                self.assertTrue(all(not p.exists() for p in self.stages()))
+                self.assertEqual(
+                    self.paths.ingest.read_bytes(), self.old[mod.INGEST],
+                )
+
+    def test_active_service_and_path_pending_jobs_fail_closed(self):
+        for options in (
+            {"admin": "active"},
+            {"bridge": "active"},
+            {"path": "activating"},
+            {"path": "failed"},
+            {"path_job": "19"},
+            {"bridge_job": "27"},
+            {"admin_job": "56"},
         ):
+            with self.subTest(options=options):
+                with mock.patch.object(
+                    mod.subprocess, "run",
+                    side_effect=self.systemd_snapshots(**options),
+                ):
+                    with self.assertRaisesRegex(mod.UpgradeError, "not quiescent"):
+                        mod.require_writer_quiescence()
+                self.assertTrue(all(not p.exists() for p in self.stages()))
+
+    def test_wrong_or_missing_bridge_trigger_edges_fail_closed(self):
+        for options in (
+            {"path_edge": "other.service"},
+            {"bridge_edge": "other.path"},
+            {"path_edge": ""},
+            {"bridge_edge": ""},
+            {"path_edge": "coloring-pages-publish-request-bridge.service other.service"},
+            {"bridge_edge": "coloring-pages-publish-request-bridge.path other.path"},
+        ):
+            with self.subTest(options=options):
+                with mock.patch.object(
+                    mod.subprocess, "run",
+                    side_effect=self.systemd_snapshots(**options),
+                ):
+                    with self.assertRaisesRegex(mod.UpgradeError, "activation edge"):
+                        mod.require_writer_quiescence()
+
+    def test_ambiguous_malformed_or_nonzero_path_state_is_rejected(self):
+        good = self.systemd_snapshots()
+        for final in (
+            subprocess.CompletedProcess([], 1, "", ""),
+            subprocess.CompletedProcess([], 0, "LoadState=loaded\nJob=\nTriggers=x\n", ""),
+            subprocess.CompletedProcess(
+                [], 0, "LoadState=loaded\nActiveState=inactive\n"
+                "Triggers=bridge.service\nTriggers=bridge.service\n", "",
+            ),
+            subprocess.CompletedProcess([], 0, "A" * 4097, ""),
+        ):
+            with self.subTest(final=final.returncode):
+                with mock.patch.object(
+                    mod.subprocess, "run", side_effect=[*good[:2], final],
+                ):
+                    with self.assertRaises(mod.UpgradeError):
+                        mod.require_writer_quiescence()
+
+    def test_path_reactivation_after_staging_preserves_all_partials(self):
+        path_observations = 0
+
+        def systemd_response(argv, **_kwargs):
+            nonlocal path_observations
+            which = argv[2]
+            order = (
+                "coloring-pages-admin-publish.service",
+                "coloring-pages-publish-request-bridge.service",
+                "coloring-pages-publish-request-bridge.path",
+            )
+            if which == order[2]:
+                path_observations += 1
+            snapshots = self.systemd_snapshots(
+                path="active" if path_observations >= 3 else "inactive",
+            )
+            return snapshots[order.index(which)]
+
+        with mock.patch.object(mod.subprocess, "run", side_effect=systemd_response):
             with self.assertRaisesRegex(mod.UpgradeError, "not quiescent"):
-                mod.require_writer_quiescence()
-        with mock.patch.object(
-            mod.subprocess, "run",
-            return_value=subprocess.CompletedProcess([], 1, "", ""),
-        ):
-            with self.assertRaisesRegex(mod.UpgradeError, "observation failed"):
-                mod.require_writer_quiescence()
+                self.run_op(apply=True, probe=mod.require_writer_quiescence)
+        self.assertEqual(path_observations, 3)
+        self.assertTrue(all(stage.exists() for stage in self.stages()))
+        self.assertEqual(self.paths.generator.read_bytes(), self.old[mod.GENERATOR])
+        self.assertEqual(self.paths.operator.read_bytes(), self.old[mod.OPERATOR])
+        self.assertEqual(self.paths.ingest.read_bytes(), self.old[mod.INGEST])
+        with self.assertRaises(mod.UpgradeError):
+            self.run_op(apply=True)
 
     def test_quiescence_loss_after_all_three_staged_preserves_evidence(self):
         checks = 0
