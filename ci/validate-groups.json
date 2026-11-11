@@ -316,6 +316,10 @@
       ],
       [
         "python3",
+        "./tests/test-coloring-pages-sitemap-suite-upgrade-v1.py"
+      ],
+      [
+        "python3",
         "./tests/test-ausmalwiese-coordinated-upgrade-v1.py"
       ],
       [
