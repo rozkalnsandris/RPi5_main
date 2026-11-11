@@ -121,3 +121,62 @@ Official references:
 - https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap
 - https://docs.python.org/3/library/os.html#os.replace
 - https://man7.org/linux/man-pages/man2/flock.2.html
+
+---
+
+## SEO follow-up: post-publish Drive ingest trust source #1458 (2026-11-11)
+
+The **source-only** `ops/bin/coloring-pages-drive-ingest` post-ingest trust pins
+now match the reviewed ten-static-URL publisher/generator pair:
+
+- fixed installed publisher `/usr/local/bin/coloring-pages-sitemap-publish`:
+  Git blob `3263845045f6d38f31ff359158be90ab59006240`;
+- fixed installed generator
+  `/usr/local/share/coloring-pages/coloring-pages-sitemap`:
+  Git blob `f4ffaa4293f9c46f475f96d4409f05ff347a7590`;
+- resulting **source** Drive ingester Git blob:
+  `c4e2f67e0154f705e2d46db9dcc87e6a69b108fd`.
+  The previously installed/source ingester was
+  `b10dc43bceb8ac3b77d8af47661b11a4ca50ea90`.
+
+Only the two `SITEMAP_OPERATOR_BLOB` and `SITEMAP_GENERATOR_BLOB`
+constants change in the Drive ingester. A valid root-owned `0444` marker
+with exact bytes `coloring-pages-sitemap-post-publish-v1\n` is **still**
+required, and the reviewed Git blobs must match **both** installed files.
+There is no fallback trusting old or mixed binary pairs. The same
+after-new-ingest-receipt, after-lock-release, no-timer `--check` then
+single SHA-guarded `--apply` semantics and fail-closed `STALE` status
+remain unchanged.
+
+**Critical LIVE ordering:** the last authorized read-only host inspection
+found the marker already enabled, while installed ingester and publisher/
+generator were still the predecessor pair. Neither this source merge nor the
+existence of that marker grants permission to install or start using new
+binaries. A two-file publisher/generator upgrade, an **independent**
+Drive-ingester source-to-installed update, and a one-shot sitemap publish
+each cross separately authorized LIVE boundaries. A mixed old/new pair
+will cause the post-ingest hook to stop with `STALE phase=TRUST` after
+a successful content receipt; do not retry the ingest, rollback, toggle
+the marker or automatically repair files.
+
+Before any future LIVE action, revalidate exact host/main, installed Git blobs,
+the enabled marker, writable catalog/sitemap actors, active timer/service
+state, shared advisory lock and staged-file absence. The publisher upgrade
+is a **non-transactional two-file** swap; independent writer quiescence must
+cover its entire mutation window. A separate, independently reviewed
+installed Drive-ingester upgrade method/authorization must be identified
+and approved: do **not** use the historical first-install-only installer or
+an unreviewed direct overwrite. No new source change authorizes a host
+mutation or standing future `PUBLISH` operation.
+
+Preserve the immutable historical
+`ops/contracts/ausmalwiese-sitemap-cutover-v1.json` record; its older
+`candidate_release.drive_ingest_git_blob` still describes that earlier
+cutover, not the new current source. Focused CI tests bind the current
+ingester source to the reviewed publisher/generator bytes and reject
+predecessor/mixed installed pairs before subprocess execution.
+
+Google sitemap documentation:
+https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap .
+The shared lock is advisory; Python flock documentation:
+https://docs.python.org/3/library/fcntl.html .
