@@ -63,3 +63,61 @@ After merge, any host replacement requires a fresh exact LIVE authorization
 bound to the merged RPi5_main SHA, installed predecessor blobs, marker/lock
 state and no-retry semantics. Sitemap publication is a later separate LIVE
 gate with fresh catalogue and prior-sitemap SHA-256 values.
+
+---
+
+## Current source-only SEO successor: issue #1456 (2026-11-11)
+
+The section above documents the **historical #1094 upgrade** and its then-reviewed
+release. The reviewed `coloring-pages` source now differs:
+`coloring-pages/main@a44f07ebe0dcf9c33efcde8f05c2fa528479c26d`,
+merged PR #482, exact upstream generator blob
+`f4ffaa4293f9c46f475f96d4409f05ff347a7590`.
+The source handoff `deploy/sitemap-publication-handoff-v1.json` specifies
+**10 ordered static canonical URLs** (root, Kita, Tiere, Fahrzeuge, Alphabet,
+Lernen, Figuren, Jahreszeiten, Essen & Natur, `/kalender.html`),
+then the deterministic catalogue-backed detail IDs. Both newly requested
+URLs are existing public pages with their own canonical links; no runtime
+catalogue, IDs, media or routing change is required.
+
+For the newly pinned fixed-path upgrade script, the **predecessor** is exactly:
+
+- publisher `4ade38f1225f4c1bc102fda8d5538f9262695d43`;
+- generator `5d1d37c32573aa8ac0d91f45b73938638fd183e9`.
+
+The **source successor** is exactly:
+
+- publisher `3263845045f6d38f31ff359158be90ab59006240`;
+- generator `f4ffaa4293f9c46f475f96d4409f05ff347a7590`.
+
+The new publisher checks the same strict, ordered, single-source URL set and
+the exact generator blob. The existing exact-upgrade procedure retains its
+staged two-file replacement, nonblocking Drive-ingest advisory lock, root
+owner/mode checks, frozen exact-main checkout, marker-state checks, fsync,
+old/new SHA guards and fail-closed handling. `os.replace()` is atomic for
+**each file**, not for the pair: independent writer quiescence must be verified
+before any separately owner-authorized LIVE upgrade.
+
+**Important separate trust boundary:** `ops/bin/coloring-pages-drive-ingest`
+and the historical first-install-only installer remain pinned to their
+older release. They are **not** changed or enabled in this source scope.
+If the post-ingest marker is enabled, the old ingest trust pin will reject
+the newer publisher/generator and report a stale sitemap after content
+publication; a separate reviewed source and owner LIVE decision is required
+to upgrade that trust. Do not assume marker absence from GitHub. A
+read-only verification of the installed operator/generator, marker, shared
+lock, and all catalogue writers is required before a future host action.
+
+This issue does **not** install/restart services, update production
+`sitemap.xml`, rewrite the catalogue, submit Search Console, modify
+Cloudflare, or authorize automatic post-ingest sitemap updates. The two
+remaining LIVE decisions are separate: (1) exact fixed-path two-file upgrade,
+(2) one-shot sitemap publication bound to a fresh catalogue SHA-256 and prior
+sitemap SHA-256. A static source merge does not perform either mutation.
+The previously observed 477 detail URLs would yield 487 entries if unchanged;
+do not treat this conditional count as a current protected-runtime baseline.
+
+Official references:
+- https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap
+- https://docs.python.org/3/library/os.html#os.replace
+- https://man7.org/linux/man-pages/man2/flock.2.html
