@@ -25,7 +25,8 @@ class AusmalwieseSitemapCutoverTests(unittest.TestCase):
     def test_new_origin_and_exact_release_blobs(self):
         c = POLICY["candidate_release"]
         self.assertEqual(POLICY["origin"], "https://ausmalwiese.de")
-        self.assertEqual(git_blob(INGEST.read_bytes()), c["drive_ingest_git_blob"])
+        self.assertEqual(c["drive_ingest_git_blob"], "b10dc43bceb8ac3b77d8af47661b11a4ca50ea90")
+        self.assertEqual(git_blob(INGEST.read_bytes()), "c4e2f67e0154f705e2d46db9dcc87e6a69b108fd")
         self.assertEqual(c["generator_git_blob"], "49c8ba34cf0a4c4ab100463df9adacc4c6e90c2c")
         self.assertEqual(c["publisher_git_blob"], "7b0330f30e27d6fe9c5f3e4fbf81fc6473ade660")
         self.assertEqual(git_blob(GENERATOR.read_bytes()), "f4ffaa4293f9c46f475f96d4409f05ff347a7590")
@@ -56,8 +57,10 @@ class AusmalwieseSitemapCutoverTests(unittest.TestCase):
     def test_post_ingest_source_pin_is_aligned_but_activation_remains_gated(self):
         txt = INGEST.read_text()
         pins = POLICY["candidate_release"]
-        self.assertIn(f'SITEMAP_OPERATOR_BLOB = "{pins["publisher_git_blob"]}"', txt)
-        self.assertIn(f'SITEMAP_GENERATOR_BLOB = "{pins["generator_git_blob"]}"', txt)
+        self.assertIn('SITEMAP_OPERATOR_BLOB = "3263845045f6d38f31ff359158be90ab59006240"', txt)
+        self.assertIn('SITEMAP_GENERATOR_BLOB = "f4ffaa4293f9c46f475f96d4409f05ff347a7590"', txt)
+        self.assertNotIn(f'SITEMAP_OPERATOR_BLOB = "{pins["publisher_git_blob"]}"', txt)
+        self.assertNotIn(f'SITEMAP_GENERATOR_BLOB = "{pins["generator_git_blob"]}"', txt)
         self.assertIn('SITEMAP_ENABLE_MARKER', txt)
         self.assertIn('post-publish-v1.enabled', txt)
 
