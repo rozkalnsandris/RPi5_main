@@ -69,6 +69,46 @@ class PostPublishTests(unittest.TestCase):
         import hashlib
         return hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
 
+    def test_reviewed_source_pins_are_the_exact_ten_url_release(self):
+        source = OPERATOR.read_text(encoding="utf-8")
+        expected_publisher = "3263845045f6d38f31ff359158be90ab59006240"
+        expected_generator = "f4ffaa4293f9c46f475f96d4409f05ff347a7590"
+        self.assertEqual(
+            self.blob((ROOT / "ops/bin/coloring-pages-sitemap-publish").read_bytes()),
+            expected_publisher,
+        )
+        self.assertEqual(
+            self.blob((ROOT / "ops/vendor/coloring-pages-sitemap").read_bytes()),
+            expected_generator,
+        )
+        self.assertIn(f'SITEMAP_OPERATOR_BLOB = "{expected_publisher}"', source)
+        self.assertIn(f'SITEMAP_GENERATOR_BLOB = "{expected_generator}"', source)
+        self.assertNotIn(
+            'SITEMAP_OPERATOR_BLOB = "7b0330f30e27d6fe9c5f3e4fbf81fc6473ade660"',
+            source,
+        )
+        self.assertNotIn(
+            'SITEMAP_GENERATOR_BLOB = "49c8ba34cf0a4c4ab100463df9adacc4c6e90c2c"',
+            source,
+        )
+
+    def test_predecessor_or_mixed_installed_pair_fails_before_execution(self):
+        for path, expected_mode in ((self.entry, 0o755), (self.vendor, 0o444)):
+            with self.subTest(changed_file=path.name):
+                original = path.read_bytes()
+                path.chmod(0o644)
+                path.write_bytes(b"outdated untrusted sitemap component\n")
+                path.chmod(expected_mode)
+                with mock.patch.object(mod.subprocess, "run") as run:
+                    self.assertEqual(
+                        mod.refresh_sitemap_after_new_ingest(),
+                        ("STALE", "TRUST"),
+                    )
+                    run.assert_not_called()
+                path.chmod(0o644)
+                path.write_bytes(original)
+                path.chmod(expected_mode)
+
     def test_default_disabled_is_inert(self):
         self.gate.unlink()
         with mock.patch.object(mod.subprocess, "run") as run:
