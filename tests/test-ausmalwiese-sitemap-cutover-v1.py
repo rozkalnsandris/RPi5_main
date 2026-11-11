@@ -28,8 +28,8 @@ class AusmalwieseSitemapCutoverTests(unittest.TestCase):
         self.assertEqual(git_blob(INGEST.read_bytes()), c["drive_ingest_git_blob"])
         self.assertEqual(c["generator_git_blob"], "49c8ba34cf0a4c4ab100463df9adacc4c6e90c2c")
         self.assertEqual(c["publisher_git_blob"], "7b0330f30e27d6fe9c5f3e4fbf81fc6473ade660")
-        self.assertEqual(git_blob(GENERATOR.read_bytes()), "5d1d37c32573aa8ac0d91f45b73938638fd183e9")
-        self.assertEqual(git_blob(OPERATOR.read_bytes()), "4ade38f1225f4c1bc102fda8d5538f9262695d43")
+        self.assertEqual(git_blob(GENERATOR.read_bytes()), "f4ffaa4293f9c46f475f96d4409f05ff347a7590")
+        self.assertEqual(git_blob(OPERATOR.read_bytes()), "3263845045f6d38f31ff359158be90ab59006240")
         self.assertNotEqual(c["publisher_git_blob"], POLICY["old_release"]["publisher_git_blob"])
 
     def test_generator_and_publisher_are_new_origin_only(self):
@@ -39,8 +39,9 @@ class AusmalwieseSitemapCutoverTests(unittest.TestCase):
         self.assertIn('ORIGIN = "https://ausmalwiese.de"', operator)
         self.assertNotIn('https://coloring.rozkalns.net', generator)
         self.assertNotIn('https://coloring.rozkalns.net', operator)
-        self.assertIn('GENERATOR_GIT_BLOB = "5d1d37c32573aa8ac0d91f45b73938638fd183e9"', operator)
-        self.assertIn('CATEGORY_ROUTES = ("tiere", "fahrzeuge", "alphabet", "lernen", "figuren", "jahreszeiten")', operator)
+        self.assertIn('GENERATOR_GIT_BLOB = "f4ffaa4293f9c46f475f96d4409f05ff347a7590"', operator)
+        self.assertIn('CATEGORY_ROUTES = ("tiere", "fahrzeuge", "alphabet", "lernen", "figuren", "jahreszeiten", "essen-natur")', operator)
+        self.assertIn('ORIGIN + "/kalender.html"', operator)
         self.assertIn('LOCAL_SITEMAP = "http://127.0.0.1:9191/sitemap.xml"', operator)
 
     def test_first_install_only_guard_remains_and_is_pinned(self):
