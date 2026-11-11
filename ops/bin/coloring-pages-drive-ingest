@@ -871,8 +871,8 @@ SITEMAP_ENABLE_MARKER = Path("/usr/local/share/coloring-pages/post-publish-v1.en
 SITEMAP_GATE_BYTES = b"coloring-pages-sitemap-post-publish-v1\n"
 SITEMAP_PUBLISHER = Path("/usr/local/bin/coloring-pages-sitemap-publish")
 SITEMAP_GENERATOR = Path("/usr/local/share/coloring-pages/coloring-pages-sitemap")
-SITEMAP_OPERATOR_BLOB = "7b0330f30e27d6fe9c5f3e4fbf81fc6473ade660"
-SITEMAP_GENERATOR_BLOB = "49c8ba34cf0a4c4ab100463df9adacc4c6e90c2c"
+SITEMAP_OPERATOR_BLOB = "3263845045f6d38f31ff359158be90ab59006240"
+SITEMAP_GENERATOR_BLOB = "f4ffaa4293f9c46f475f96d4409f05ff347a7590"
 SITEMAP_ROOT_DIRS = (
     Path("/usr/local"),
     Path("/usr/local/bin"),
