@@ -956,8 +956,9 @@ class CategoryTopicBindingTests(unittest.TestCase):
 
     def test_manual_link_unlink_and_stale_gate(self):
         categories={"schema":admin.MANAGED_SCHEMA,"revision":1,"categories":[
-            {"id":"tiere","label":"Tiere"},{"id":"lernen","label":"Lernen"},
-            {"id":"jahreszeiten","label":"Jahreszeiten & Feste"}]}
+            {"id":"tiere","label":"Tiere"},{"id":"fahrzeuge","label":"Fahrzeuge"},
+            {"id":"alphabet","label":"Alphabet"},{"id":"lernen","label":"Lernen"},
+            {"id":"figuren","label":"Figuren"},{"id":"jahreszeiten","label":"Jahreszeiten & Feste"}]}
         topics={"schema":admin.TOPICS_SCHEMA,"revision":1,"topics":[
             {"id":"bauernhof","label":"Bauernhof","icon":"B","kind":"evergreen","legacy_terms":[]},
             {"id":"weihnachten","label":"Weihnachten","icon":"W","kind":"seasonal","legacy_terms":[],
@@ -1008,8 +1009,9 @@ class CategoryTopicBindingTests(unittest.TestCase):
         snapshot = {"enabled": True, "registry_sha256": digest,
                     "counts": {"bauernhof": {"catalog": 0, "archive": 0}}}
         categories={"schema":admin.MANAGED_SCHEMA,"revision":1,"categories":[
-            {"id":"tiere","label":"Tiere"},{"id":"lernen","label":"Lernen"},
-            {"id":"jahreszeiten","label":"Jahreszeiten & Feste"}]}
+            {"id":"tiere","label":"Tiere"},{"id":"fahrzeuge","label":"Fahrzeuge"},
+            {"id":"alphabet","label":"Alphabet"},{"id":"lernen","label":"Lernen"},
+            {"id":"figuren","label":"Figuren"},{"id":"jahreszeiten","label":"Jahreszeiten & Feste"}]}
         with patch.object(admin, "topics_snapshot", return_value=snapshot), patch.object(
                 admin, "active_jobs", return_value=[]), patch.object(
                 admin, "read_topics_registry", return_value=(doc, digest)), patch.object(
