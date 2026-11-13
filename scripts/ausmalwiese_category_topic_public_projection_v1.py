@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Materialize the canonical Category↔Topic registry as a public read-only projection (#1464).
 
-Plan mode is read-only. Apply mode can only create the fixed public projection when it
-is absent; an existing differing projection is a manual-review STOP. It never edits
+Plan mode is read-only. Apply mode creates or refreshes only the fixed public projection
+from freshly validated canonical registries under the shared lock. It never edits
 Categories, Topics, private links, catalog metadata, media, or service configuration.
 """
 from __future__ import annotations
@@ -294,10 +294,14 @@ def apply() -> dict[str, Any]:
         status = inspect_projection(raw)
         if status == "IDENTICAL":
             return public_summary(doc, raw, status="UNCHANGED", mutation_started=False)
-        if status != "ABSENT":
-            stop("existing public projection differs; manual review required")
+        if status not in {"ABSENT", "DIFFERENT"}:
+            stop("public projection state invalid")
         write_once(raw)
-        return public_summary(doc, raw, status="PASS", mutation_started=True)
+        return public_summary(
+            doc, raw,
+            status="CREATED" if status == "ABSENT" else "REFRESHED",
+            mutation_started=True,
+        )
 
 
 def parser() -> argparse.ArgumentParser:
