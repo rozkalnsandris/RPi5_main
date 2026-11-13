@@ -27,7 +27,10 @@ loader.exec_module(admin)
 def categories_doc(extra=None):
     rows = [
         {"id": "tiere", "label": "Tiere"},
+        {"id": "fahrzeuge", "label": "Fahrzeuge"},
+        {"id": "alphabet", "label": "Alphabet"},
         {"id": "lernen", "label": "Lernen"},
+        {"id": "figuren", "label": "Figuren"},
         {"id": "jahreszeiten", "label": "Jahreszeiten & Feste"},
     ]
     if extra:
