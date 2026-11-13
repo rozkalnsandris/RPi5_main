@@ -126,6 +126,49 @@ class ProjectionContractTests(unittest.TestCase):
         self.assertNotEqual(base_doc["category_sha256"], drift_doc["category_sha256"])
         self.assertNotEqual(base_raw, drift_raw)
 
+    def test_materializer_refreshes_only_projection_from_current_canonical_state(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            categories = root / "categories.json"
+            topics = root / "topics.json"
+            links = root / "category-topic-links.json"
+            public_projection = root / "category-topics.json"
+            lock = root / ".lock"
+            jobs = root / "jobs"
+            jobs.mkdir()
+            lock.write_bytes(b""); lock.chmod(0o600)
+
+            cats = categories_doc()
+            topic_state = topics_doc()
+            link_state = links_doc()
+            categories.write_bytes(raw(cats)); categories.chmod(0o644)
+            topics.write_bytes(raw(topic_state)); topics.chmod(0o644)
+            links.write_bytes(raw(link_state)); links.chmod(0o600)
+
+            stale = dict(projection.build_projection(raw(cats), raw(topic_state), raw(link_state))[0])
+            stale["revision"] = 1
+            stale["source_links_sha256"] = "0" * 64
+            public_projection.write_bytes(projection.projection_bytes(stale)); public_projection.chmod(0o644)
+
+            with patch.object(projection, "CATEGORIES", categories), patch.object(
+                projection, "TOPICS", topics
+            ), patch.object(projection, "LINKS", links), patch.object(
+                projection, "PROJECTION", public_projection
+            ), patch.object(projection, "LOCK", lock), patch.object(
+                projection, "JOBS", jobs
+            ):
+                before = projection.plan()
+                self.assertEqual(before["status"], "DIFFERENT")
+                result = projection.apply()
+                after = projection.plan()
+
+            self.assertEqual(result["status"], "REFRESHED")
+            self.assertTrue(result["mutation_started"])
+            self.assertEqual(after["status"], "IDENTICAL")
+            current_doc, expected = projection.build_projection(raw(cats), raw(topic_state), raw(link_state))
+            self.assertEqual(public_projection.read_bytes(), expected)
+            self.assertEqual(current_doc["source_links_sha256"], link_state and hashlib.sha256(raw(link_state)).hexdigest())
+
     def test_admin_builder_matches_materializer_contract(self):
         cats = categories_doc()
         topics = topics_doc()
