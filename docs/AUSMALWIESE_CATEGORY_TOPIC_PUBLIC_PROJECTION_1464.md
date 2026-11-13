@@ -99,9 +99,11 @@ scripts/ausmalwiese_category_topic_public_projection_v1.py
 ```
 
 Its paths are fixed. `--plan` is read-only and reports only bounded hashes,
-revisions, link count and target. `--apply` requires an exact confirmation and
-may create the projection only when the target is absent. If an existing target
-differs, it stops for manual review rather than overwriting it.
+revisions, link count and target. `--apply` requires an exact confirmation and, under the shared publication lock,
+may create an absent projection or refresh an existing canonical-but-stale
+projection from the freshly validated current Category, Topic and private-link
+registries. It never changes those source registries. Read-only `--plan` never
+creates or repairs the projection.
 
 The future LIVE order is intentionally separate from this source issue:
 
