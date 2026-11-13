@@ -64,3 +64,16 @@ Verification: `node tests/test-coloring-pages-admin-origin.cjs`, the existing
 analytics/navigation suites, and `python3 tests/test-ausmalwiese-goatcounter-report-v1.py`.
 Synthetic browser checks cover desktop 1440×900 and phone 412×892. This remains a
 source-only change requiring separate merge and ADMIN rollout authorization.
+
+## Fixed Kita usage baseline (#1466)
+
+The protected ADMIN service also exposes `GET /api/analytics/kita?days=1|7|30|365` as a separate report. It does not change the existing Traffic v3 response or UI. The reader reuses the same Stats-only, one-site, UTC credential and loopback GoatCounter v2.7.0 JSON API transport.
+
+Only the exact compile-time public paths `/kita` and `/kita/herbst` may be selected from `GET /api/v0/paths`. Their IDs are used only in bounded non-empty `GET /api/v0/stats/hits` requests and are never returned. The browser-visible response contains fixed path strings plus integer `visits` values using the same `goatcounter_visits` semantics and bounded UTC range metadata.
+
+The endpoint accepts no caller-supplied path, URL, prefix or wildcard filter. Extra query parameters such as `paths=` do not match the allowlisted endpoint and return 404. Raw GoatCounter responses, path IDs, titles, account/site metadata, IP addresses, User-Agent strings and unrelated paths are never returned.
+
+A known allowlisted path absent from GoatCounter's path index is valid zero. Duplicate path identities, malformed days/hourly aggregates, inconsistent totals, missing credentials, busy state or upstream errors remain unavailable instead of being converted to zero.
+
+This baseline is intended only to decide whether the reviewed Kita-Pakete V1 pilot has enough real consent-based usage evidence to justify Phase 5 expansion. It is not a conversion metric and does not prove unique people, classroom use or successful printing.
+

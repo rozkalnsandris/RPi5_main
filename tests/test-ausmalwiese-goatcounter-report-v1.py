@@ -77,11 +77,168 @@ class Fixture:
         return copy.deepcopy(self.dimensions[page])
 
 
+class KitaFixture:
+    def __init__(self, days=7):
+        self.days = days
+        self.calls = []
+        self.me = {"user": {"site": 1, "email": "PRIVATE_EMAIL",
+                            "settings": {"timezone": ".UTC"}},
+                   "token": {"permissions": 64, "sites": [1]}}
+        self.paths = [
+            {"id": 1, "path": "/other", "event": False},
+            {"id": 2, "path": "/kita", "event": False},
+            {"id": 3, "path": "/kita/herbst", "event": False},
+            {"id": 4, "path": "/kita?private=x", "event": False},
+            {"id": 5, "path": "/kita/private", "event": False},
+            {"id": 6, "path": "/kita", "event": True},
+        ]
+        self.payload = {"more": False, "total": 6,
+                        "hits": [self.hit(2, 4), self.hit(3, 2)]}
+
+    def hit(self, ident, count):
+        date = NOW.date() - timedelta(days=self.days - 1)
+        stats = [{"day": (date + timedelta(days=i)).isoformat(),
+                  "hourly": [0] * 24, "daily": 0}
+                 for i in range(self.days)]
+        stats[-1].update(hourly=[count] + [0] * 23, daily=count)
+        return {"path_id": ident,
+                "path": next(p["path"] for p in self.paths if p["id"] == ident),
+                "title": "PRIVATE_TITLE", "event": False,
+                "count": count, "stats": stats}
+
+    def get(self, target, token, budget):
+        self.calls.append(target)
+        if target == "/api/v0/me":
+            return copy.deepcopy(self.me)
+        if target.startswith("/api/v0/paths?"):
+            q = parse_qs(urlsplit(target).query)
+            after = int(q["after"][0])
+            remaining = [p for p in self.paths if p["id"] > after]
+            return {"paths": copy.deepcopy(remaining[:2]),
+                    "more": len(remaining) > 2}
+        q = parse_qs(urlsplit(target).query)
+        expected_ids = [str(p["id"]) for p in self.paths
+                        if p["event"] is False
+                        and p["path"] in admin.KITA_PUBLIC_PATHS]
+        assert q["include_paths"] == [",".join(expected_ids)]
+        assert q["start"] == [
+            (NOW.date() - timedelta(days=self.days - 1)).isoformat()
+            + "T00:00:00Z"
+        ]
+        assert q["end"] == ["2026-11-02T23:00:00Z"]
+        assert target.startswith("/api/v0/stats/hits?")
+        return copy.deepcopy(self.payload)
+
+
 class ReportTests(unittest.TestCase):
     def collect(self, fixture):
         reader = admin.OriginReportReader()
         reader.get = fixture.get
         return reader.collect(fixture.days, NOW, TOKEN)
+
+    def collect_kita(self, fixture):
+        reader = admin.KitaReportReader()
+        reader.get = fixture.get
+        return reader.collect(fixture.days, NOW, TOKEN)
+
+    def test_kita_report_all_ranges_are_fixed_sanitized_aggregates(self):
+        expected = [
+            {"path": "/kita", "visits": 4},
+            {"path": "/kita/herbst", "visits": 2},
+        ]
+        for days in (1, 7, 30, 365):
+            with self.subTest(days=days):
+                fixture = KitaFixture(days)
+                result = self.collect_kita(fixture)
+                self.assertEqual((result["version"], result["metric"]),
+                                 (1, "goatcounter_visits"))
+                self.assertEqual(result["range_days"], days)
+                self.assertEqual(result["paths"], expected)
+                self.assertEqual(set(result), {
+                    "version", "status", "metric", "range_days", "timezone",
+                    "start_day", "end_day", "today_partial", "generated_at",
+                    "cache_seconds", "paths",
+                })
+                serialized = json.dumps(result)
+                self.assertNotIn("PRIVATE", serialized)
+                self.assertNotIn("?private=", serialized)
+                self.assertNotIn("/kita/private", serialized)
+
+    def test_kita_report_absent_allowlisted_path_is_valid_zero(self):
+        fixture = KitaFixture()
+        fixture.paths = [p for p in fixture.paths
+                         if p["path"] != "/kita/herbst"]
+        fixture.payload = {"more": False, "total": 4,
+                           "hits": [fixture.hit(2, 4)]}
+        self.assertEqual(self.collect_kita(fixture)["paths"], [
+            {"path": "/kita", "visits": 4},
+            {"path": "/kita/herbst", "visits": 0},
+        ])
+
+    def test_kita_report_no_allowlisted_paths_avoids_unfiltered_stats(self):
+        fixture = KitaFixture()
+        fixture.paths = [
+            {"id": 1, "path": "/other", "event": False},
+            {"id": 2, "path": "/kita?private=x", "event": False},
+        ]
+        result = self.collect_kita(fixture)
+        self.assertEqual(result["paths"], [
+            {"path": "/kita", "visits": 0},
+            {"path": "/kita/herbst", "visits": 0},
+        ])
+        self.assertFalse(any("/stats/" in call for call in fixture.calls))
+
+    def test_kita_report_rejects_duplicate_or_inconsistent_stats(self):
+        duplicate = KitaFixture()
+        duplicate.paths.append({"id": 7, "path": "/kita", "event": False})
+        duplicate.paths.sort(key=lambda row: row["id"])
+        with self.assertRaises(ValueError):
+            self.collect_kita(duplicate)
+
+        wrong = KitaFixture()
+        wrong.payload["hits"][0]["path"] = "/kita/private"
+        with self.assertRaises(ValueError):
+            self.collect_kita(wrong)
+
+        inconsistent = KitaFixture()
+        inconsistent.payload["total"] = 7
+        with self.assertRaises(ValueError):
+            self.collect_kita(inconsistent)
+
+    def test_kita_endpoint_is_exact_admin_only_and_has_no_path_filter(self):
+        for target, headers, expected in (
+            ("/api/analytics/kita?days=7", {}, 403),
+            ("/api/analytics/kita?days=7",
+             {"X-Ausmalwiese-Admin": "1", "Sec-Fetch-Site": "cross-site"}, 403),
+            ("/api/analytics/kita?days=7",
+             {"X-Ausmalwiese-Admin": "1", "Origin": "https://other.invalid"}, 403),
+            ("/api/analytics/kita?days=7&paths=%2Fkita",
+             {"X-Ausmalwiese-Admin": "1"}, 404),
+            ("/api/analytics/kita?days=8",
+             {"X-Ausmalwiese-Admin": "1"}, 404),
+            ("/api/analytics/kita?days=7",
+             {"X-Ausmalwiese-Admin": "1"}, 200),
+        ):
+            with self.subTest(target=target):
+                handler = object.__new__(admin.Handler)
+                handler.path, handler.headers = target, headers
+                handler.send_json = Mock()
+                handler.send_error_json = lambda status, _message: handler.send_json(status, {})
+                with patch.object(admin.KITA_REPORT_READER, "snapshot",
+                                  return_value={"paths": []}) as snapshot:
+                    handler.do_GET()
+                    self.assertEqual(handler.send_json.call_args.args[0], expected)
+                    self.assertEqual(snapshot.call_count, int(expected == 200))
+
+        handler = object.__new__(admin.Handler)
+        handler.path = "/api/analytics/kita?days=7"
+        handler.headers = {"X-Ausmalwiese-Admin": "1"}
+        handler.send_json = Mock()
+        with patch.object(admin.KITA_REPORT_READER, "snapshot",
+                          side_effect=admin.OriginReportUnavailable()):
+            handler.do_GET()
+            self.assertEqual(handler.send_json.call_args.args,
+                             (503, {"version": 1, "status": "unavailable"}))
 
     def test_all_ranges_only_consent_namespace_and_safe_output(self):
         for days in (1, 7, 30, 365):
