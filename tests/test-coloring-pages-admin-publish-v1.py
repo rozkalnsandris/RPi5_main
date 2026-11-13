@@ -532,6 +532,12 @@ class StaticTests(unittest.TestCase):
     def test_navigation_behavior(self):
         subprocess.run(["node", str(ROOT/"tests/test-coloring-pages-admin-navigation.cjs")], check=True, timeout=30)
 
+    def test_category_topic_public_projection_1464(self):
+        subprocess.run(
+            ["python3", str(ROOT/"tests/test-ausmalwiese-category-topic-public-projection-1464.py")],
+            check=True, timeout=30,
+        )
+
     def test_assets_and_contract(self):
         html=(ROOT/"ops/admin/coloring-pages/index.html").read_text()
         self.assertIn("Publishing and catalog",html);self.assertIn("Choose categories",html)
@@ -949,19 +955,35 @@ class CategoryTopicBindingTests(unittest.TestCase):
                 admin.links_bytes(entry,registry)
 
     def test_manual_link_unlink_and_stale_gate(self):
-        registry=self.registry()
+        categories={"schema":admin.MANAGED_SCHEMA,"revision":1,"categories":[
+            {"id":"tiere","label":"Tiere"},{"id":"fahrzeuge","label":"Fahrzeuge"},
+            {"id":"alphabet","label":"Alphabet"},{"id":"lernen","label":"Lernen"},
+            {"id":"figuren","label":"Figuren"},{"id":"jahreszeiten","label":"Jahreszeiten & Feste"}]}
+        topics={"schema":admin.TOPICS_SCHEMA,"revision":1,"topics":[
+            {"id":"bauernhof","label":"Bauernhof","icon":"B","kind":"evergreen","legacy_terms":[]},
+            {"id":"weihnachten","label":"Weihnachten","icon":"W","kind":"seasonal","legacy_terms":[],
+             "active_from":"11-01","active_to":"01-10"}]}
+        registry=admin.local_taxonomy_registry(categories,topics)
         with tempfile.TemporaryDirectory() as temp:
-            path=Path(temp)/"category-topic-links.json"
+            root=Path(temp)
+            category_path=root/"categories.json"; topic_path=root/"topics.json"
+            path=root/"category-topic-links.json"; projection_path=root/"category-topics.json"
+            category_path.write_bytes(admin.managed_bytes(categories));category_path.chmod(0o644)
+            topic_path.write_bytes(admin.topics_canonical_bytes(topics));topic_path.chmod(0o644)
             data=admin.links_bytes(self.seed(),registry)
-            path.write_bytes(data)
-            path.chmod(0o600)
-            with patch.object(admin,"LINKS_PATH",path),patch.object(
+            path.write_bytes(data);path.chmod(0o600)
+            _,projection_data=admin.public_links_projection_bytes(categories,topics,self.seed())
+            projection_path.write_bytes(projection_data);projection_path.chmod(0o644)
+            with patch.object(admin,"MANAGED_PATH",category_path),patch.object(
+                    admin,"TOPICS_PATH",topic_path),patch.object(admin,"LINKS_PATH",path),patch.object(
+                    admin,"PUBLIC_LINKS_PATH",projection_path),patch.object(
                     admin,"owner_ids",return_value=(os.geteuid(),os.getegid())),patch.object(
                     admin,"load_taxonomy",return_value=registry),patch.object(
                     admin,"active_jobs",return_value=[]):
                 snap=admin.links_snapshot()
                 raw={"action":"link","category":"lernen","topic":"bauernhof",
-                     "category_sha256":"a"*64,"topic_sha256":"b"*64}
+                     "category_sha256":registry["category_sha256"],
+                     "topic_sha256":registry["topic_sha256"]}
                 self.assertIsNone(admin.change_links(raw,"0"*64))
                 self.assertEqual(path.read_bytes(),data)
                 doc,sha=admin.change_links(raw,snap["registry_sha256"])
@@ -986,11 +1008,16 @@ class CategoryTopicBindingTests(unittest.TestCase):
         digest = "d" * 64
         snapshot = {"enabled": True, "registry_sha256": digest,
                     "counts": {"bauernhof": {"catalog": 0, "archive": 0}}}
+        categories={"schema":admin.MANAGED_SCHEMA,"revision":1,"categories":[
+            {"id":"tiere","label":"Tiere"},{"id":"fahrzeuge","label":"Fahrzeuge"},
+            {"id":"alphabet","label":"Alphabet"},{"id":"lernen","label":"Lernen"},
+            {"id":"figuren","label":"Figuren"},{"id":"jahreszeiten","label":"Jahreszeiten & Feste"}]}
         with patch.object(admin, "topics_snapshot", return_value=snapshot), patch.object(
                 admin, "active_jobs", return_value=[]), patch.object(
                 admin, "read_topics_registry", return_value=(doc, digest)), patch.object(
-                admin, "load_taxonomy", return_value=self.registry()), patch.object(
-                admin, "read_links", return_value=(self.seed(), "e" * 64)):
+                admin, "read_managed", return_value=(categories, "a" * 64)), patch.object(
+                admin, "read_links", return_value=(self.seed(), "e" * 64)), patch.object(
+                admin, "require_current_public_links_projection", return_value=None):
             with self.assertRaisesRegex(admin.Stop, "linked topic kind cannot change"):
                 admin.change_topics({"action": "update", "topic": new}, digest)
 

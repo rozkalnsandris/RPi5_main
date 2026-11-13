@@ -301,6 +301,10 @@ def change_managed(raw, expected_sha):
     if type(ident) is not str or len(ident) > 48 or CATALOG_ID.fullmatch(ident) is None:
         stop("category id invalid")
     ids = validate_managed(doc)
+    topics_doc, _ = read_topics_registry()
+    local_registry = local_taxonomy_registry(doc, topics_doc)
+    links_doc, _ = read_links(local_registry)
+    require_current_public_links_projection(doc, topics_doc, links_doc)
     if action == "create":
         if ident in ids or ident in MANAGED_RESERVED or len(doc["categories"]) >= 64:
             stop("category id exists or is reserved")
@@ -320,12 +324,12 @@ def change_managed(raw, expected_sha):
         usage = snapshot["counts"][ident]
         if usage["catalog"] or usage["archive"]:
             stop("referenced category cannot be deleted")
-        links, _ = read_links(load_taxonomy())
-        if any(p["category"] == ident for p in links["links"]):
+        if any(p["category"] == ident for p in links_doc["links"]):
             stop("linked category cannot be deleted")
         doc["categories"] = [row for row in doc["categories"] if row["id"] != ident]
     doc["revision"] += 1
     raw_data = managed_bytes(doc)
+    projection_doc, projection_data = public_links_projection_bytes(doc, topics_doc, links_doc)
     # Beginning of first mutation; no retry, rollback, cleanup or alternate path.
     temp = MANAGED_PATH.parent / (".categories.admin." + secrets.token_hex(8) + ".tmp")
     fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
@@ -333,8 +337,15 @@ def change_managed(raw, expected_sha):
         os.fchmod(stream.fileno(), 0o644)
         stream.write(raw_data)
         os.fsync(stream.fileno())
+    projection_temp = stage_public_links_projection(projection_data)
     os.replace(temp, MANAGED_PATH)
     parent_fd = os.open(MANAGED_PATH.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(parent_fd)
+    finally:
+        os.close(parent_fd)
+    os.replace(projection_temp, PUBLIC_LINKS_PATH)
+    parent_fd = os.open(PUBLIC_LINKS_PATH.parent, os.O_RDONLY | os.O_DIRECTORY)
     try:
         os.fsync(parent_fd)
     finally:
@@ -342,6 +353,7 @@ def change_managed(raw, expected_sha):
     confirmed, current_sha = read_managed()
     if confirmed != doc or not managed_verified(doc, current_sha):
         stop("category registry mutation verification failed: STOP")
+    verify_public_links_projection(projection_doc, projection_data)
     return confirmed, current_sha
 
 
@@ -351,6 +363,9 @@ TOPICS_PATH = PUBLIC / "topics.json"
 LINKS_PATH = STATE / "category-topic-links.json"
 LINKS_SCHEMA = "rozkalns.rpi5-main.category-topic-links.v1"
 LINKS_MAX_BYTES = 65536
+PUBLIC_LINKS_PATH = PUBLIC / "category-topics.json"
+PUBLIC_LINKS_SCHEMA = "rozkalns.coloring-pages.category-topics.v1"
+PUBLIC_LINKS_MAX_BYTES = 65536
 TOPICS_SCHEMA = "rozkalns.coloring-pages.topics.v2"
 TOPICS_MAX_BYTES = 65536
 
@@ -520,6 +535,10 @@ def change_topics(raw, expected_digest):
     if current_sha != expected_digest:
         return None
     existing = validate_topics_registry(doc)
+    categories_doc, _ = read_managed()
+    local_registry = local_taxonomy_registry(categories_doc, doc)
+    links_doc, _ = read_links(local_registry)
+    require_current_public_links_projection(categories_doc, doc, links_doc)
     if action in {"create", "update"}:
         topic = raw["topic"]
         if type(topic) is not dict:
@@ -540,8 +559,7 @@ def change_topics(raw, expected_digest):
             if previous["kind"] != topic["kind"]:
                 if count["catalog"] or count["archive"]:
                     stop("referenced topic kind cannot change")
-                links, _ = read_links(load_taxonomy())
-                if any(pair["topic"] == ident for pair in links["links"]):
+                if any(pair["topic"] == ident for pair in links_doc["links"]):
                     stop("linked topic kind cannot change")
             doc["topics"] = [topic if row["id"] == ident else row for row in doc["topics"]]
     else:
@@ -551,12 +569,12 @@ def change_topics(raw, expected_digest):
         count = snap["counts"][ident]
         if count["catalog"] or count["archive"] or len(doc["topics"]) == 1:
             stop("referenced or last topic cannot be deleted")
-        links, _ = read_links(load_taxonomy())
-        if any(p["topic"] == ident for p in links["links"]):
+        if any(p["topic"] == ident for p in links_doc["links"]):
             stop("linked topic cannot be deleted")
         doc["topics"] = [row for row in doc["topics"] if row["id"] != ident]
     doc["revision"] += 1
     data = topics_canonical_bytes(doc)
+    projection_doc, projection_data = public_links_projection_bytes(categories_doc, doc, links_doc)
     # First mutation: no retry, rollback or cleanup if any operation below fails.
     temporary = TOPICS_PATH.parent / (".topics.admin." + secrets.token_hex(8) + ".tmp")
     fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
@@ -564,8 +582,15 @@ def change_topics(raw, expected_digest):
         os.fchmod(stream.fileno(), 0o644)
         stream.write(data)
         os.fsync(stream.fileno())
+    projection_temp = stage_public_links_projection(projection_data)
     os.replace(temporary, TOPICS_PATH)
     parent_fd = os.open(TOPICS_PATH.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(parent_fd)
+    finally:
+        os.close(parent_fd)
+    os.replace(projection_temp, PUBLIC_LINKS_PATH)
+    parent_fd = os.open(PUBLIC_LINKS_PATH.parent, os.O_RDONLY | os.O_DIRECTORY)
     try:
         os.fsync(parent_fd)
     finally:
@@ -573,6 +598,7 @@ def change_topics(raw, expected_digest):
     verified, sha = read_topics_registry()
     if verified != doc or not topics_runtime_verified(doc, sha):
         stop("post-write Topics verification failed: STOP")
+    verify_public_links_projection(projection_doc, projection_data)
     return verified, sha
 
 
@@ -634,6 +660,113 @@ def read_links(registry):
     return doc, hashlib.sha256(data).hexdigest()
 
 
+def local_taxonomy_registry(categories_doc, topics_doc):
+    category_data = managed_bytes(categories_doc)
+    topic_data = topics_canonical_bytes(topics_doc)
+    return {
+        "category_schema": categories_doc["schema"],
+        "category_revision": categories_doc["revision"],
+        "category_sha256": hashlib.sha256(category_data).hexdigest(),
+        "categories": {row["id"]: {"id": row["id"], "label": row["label"]} for row in categories_doc["categories"]},
+        "topic_schema": topics_doc["schema"],
+        "topic_revision": topics_doc["revision"],
+        "topic_sha256": hashlib.sha256(topic_data).hexdigest(),
+        "topics": {row["id"]: {"id": row["id"], "label": row["label"], "kind": row["kind"]} for row in topics_doc["topics"]},
+    }
+
+
+def public_links_projection_bytes(categories_doc, topics_doc, links_doc):
+    registry = local_taxonomy_registry(categories_doc, topics_doc)
+    links_data = links_bytes(links_doc, registry)
+    doc = {
+        "schema": PUBLIC_LINKS_SCHEMA,
+        "revision": links_doc["revision"],
+        "category_revision": categories_doc["revision"],
+        "topic_revision": topics_doc["revision"],
+        "category_sha256": registry["category_sha256"],
+        "topic_sha256": registry["topic_sha256"],
+        "source_links_sha256": hashlib.sha256(links_data).hexdigest(),
+        "links": links_doc["links"],
+    }
+    data = (json.dumps(doc, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    if len(data) > PUBLIC_LINKS_MAX_BYTES:
+        stop("public category-topic projection too large")
+    return doc, data
+
+
+def validate_public_links_projection(doc):
+    required = {"schema", "revision", "category_revision", "topic_revision",
+                "category_sha256", "topic_sha256", "source_links_sha256", "links"}
+    if type(doc) is not dict or set(doc) != required or doc["schema"] != PUBLIC_LINKS_SCHEMA:
+        stop("public category-topic projection schema invalid")
+    for key in ("revision", "category_revision", "topic_revision"):
+        if type(doc[key]) is not int or not 1 <= doc[key] <= 2147483647:
+            stop("public category-topic projection revision invalid")
+    for key in ("category_sha256", "topic_sha256", "source_links_sha256"):
+        if type(doc[key]) is not str or re.fullmatch(r"[0-9a-f]{64}", doc[key]) is None:
+            stop("public category-topic projection digest invalid")
+    if type(doc["links"]) is not list or len(doc["links"]) > 512:
+        stop("public category-topic projection links invalid")
+    prior = None
+    for row in doc["links"]:
+        if type(row) is not dict or set(row) != {"category", "topic"}:
+            stop("public category-topic projection link invalid")
+        pair = (row["category"], row["topic"])
+        if any(type(value) is not str or CATALOG_ID.fullmatch(value) is None for value in pair):
+            stop("public category-topic projection ID invalid")
+        if prior is not None and pair <= prior:
+            stop("public category-topic projection links must be ordered unique")
+        prior = pair
+    return doc
+
+
+def read_public_links_projection():
+    if PUBLIC_LINKS_PATH.parent.is_symlink() or PUBLIC_LINKS_PATH.is_symlink():
+        stop("unsafe public category-topic projection symlink")
+    try:
+        fd = os.open(PUBLIC_LINKS_PATH, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        with os.fdopen(fd, "rb") as stream:
+            info = os.fstat(stream.fileno())
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or (info.st_uid, info.st_gid) != owner_ids()
+                    or stat.S_IMODE(info.st_mode) != 0o644
+                    or not 0 < info.st_size <= PUBLIC_LINKS_MAX_BYTES):
+                stop("unsafe public category-topic projection permissions")
+            data = stream.read(PUBLIC_LINKS_MAX_BYTES + 1)
+        doc = json.loads(data.decode("utf-8"))
+    except Stop:
+        raise
+    except (OSError, UnicodeError, ValueError):
+        stop("public category-topic projection missing or invalid")
+    validate_public_links_projection(doc)
+    if data != (json.dumps(doc, ensure_ascii=False, indent=2) + "\n").encode("utf-8"):
+        stop("public category-topic projection noncanonical serialization")
+    return doc, data
+
+
+def require_current_public_links_projection(categories_doc, topics_doc, links_doc):
+    expected_doc, expected_data = public_links_projection_bytes(categories_doc, topics_doc, links_doc)
+    current_doc, current_data = read_public_links_projection()
+    if current_doc != expected_doc or current_data != expected_data:
+        stop("public category-topic projection drift; materialize before taxonomy mutation")
+
+
+def stage_public_links_projection(data):
+    temp = PUBLIC_LINKS_PATH.parent / (".category-topics.admin." + secrets.token_hex(8) + ".tmp")
+    fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+    with os.fdopen(fd, "wb", buffering=0) as stream:
+        os.fchmod(stream.fileno(), 0o644)
+        stream.write(data)
+        os.fsync(stream.fileno())
+    return temp
+
+
+def verify_public_links_projection(expected_doc, expected_data):
+    current_doc, current_data = read_public_links_projection()
+    if current_doc != expected_doc or current_data != expected_data:
+        stop("public category-topic projection verification failed: STOP")
+
+
 def links_snapshot():
     disabled = {"enabled": False, "reason": "Category-topic links need owner-authorized seed.",
                 "revision": None, "registry_sha256": None, "links": [],
@@ -688,11 +821,17 @@ def change_links(raw, expected):
     if (snapshot["category_sha256"] != registry["category_sha256"]
             or snapshot["topic_sha256"] != registry["topic_sha256"]):
         return None
-    doc, digest = read_links(registry)
+    categories_doc, category_sha = read_managed()
+    topics_doc, topic_sha = read_topics_registry()
+    if category_sha != snapshot["category_sha256"] or topic_sha != snapshot["topic_sha256"]:
+        return None
+    local_registry = local_taxonomy_registry(categories_doc, topics_doc)
+    doc, digest = read_links(local_registry)
     if digest != expected:
         return None
+    require_current_public_links_projection(categories_doc, topics_doc, doc)
     pair = {"category": raw["category"], "topic": raw["topic"]}
-    links_bytes({"schema": LINKS_SCHEMA, "revision": 1, "links": [pair]}, registry)
+    links_bytes({"schema": LINKS_SCHEMA, "revision": 1, "links": [pair]}, local_registry)
     present = pair in doc["links"]
     if (raw["action"] == "link") == present:
         stop("duplicate or absent category-topic link")
@@ -700,7 +839,8 @@ def change_links(raw, expected):
                            [p for p in doc["links"] if p != pair]),
                           key=lambda p: (p["category"], p["topic"]))
     doc["revision"] += 1
-    data = links_bytes(doc, registry)
+    data = links_bytes(doc, local_registry)
+    projection_doc, projection_data = public_links_projection_bytes(categories_doc, topics_doc, doc)
     # First mutation; error beyond this point is STOP without retry/rollback/cleanup.
     temp = LINKS_PATH.parent / (".category-topic-links.admin." + secrets.token_hex(8) + ".tmp")
     fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
@@ -708,15 +848,23 @@ def change_links(raw, expected):
         os.fchmod(f.fileno(), 0o600)
         f.write(data)
         os.fsync(f.fileno())
+    projection_temp = stage_public_links_projection(projection_data)
     os.replace(temp, LINKS_PATH)
     parent = os.open(LINKS_PATH.parent, os.O_RDONLY | os.O_DIRECTORY)
     try:
         os.fsync(parent)
     finally:
         os.close(parent)
-    confirmed, sha = read_links(registry)
+    os.replace(projection_temp, PUBLIC_LINKS_PATH)
+    parent = os.open(PUBLIC_LINKS_PATH.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(parent)
+    finally:
+        os.close(parent)
+    confirmed, sha = read_links(local_registry)
     if confirmed != doc or sha != hashlib.sha256(data).hexdigest():
         stop("category-topic write verification failed: STOP")
+    verify_public_links_projection(projection_doc, projection_data)
     return confirmed, sha
 
 
