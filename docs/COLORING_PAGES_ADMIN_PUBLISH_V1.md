@@ -1060,3 +1060,9 @@ The taxonomy pass adds `orte` plus 12 evergreen subject Topics and 16 explicit l
 The planned post-taxonomy hashes are Category `01b7f951152c9bcd6ce27a8a29390f2c09025d587d8b7a08476fc1acf96d5468`, Topic `67c28647b3e2417e505326e89abb167469f55556c162350c32dc8fc17cbada1f`, links `9e4b03fa1567fe56112d27a0bb59fe1d9c2f73cfc2b4dae41a89df61cd7c3109`, revisions 3/3/4. The reviewed classification manifest logical SHA is `6009c1d8e6798cf3387af2d6f20fcf1dd4f347ea629bc89cb7d1f16d118e08d7`; it preserves 477/477 unique IDs and targets 86→0 no-Topic coverage. The generic church ID `4683994` is corrected from `jahreszeiten` to `orte/gebaeude`.
 
 Source merge does not stage runtime manifests and does not authorize taxonomy or catalog mutation. Future LIVE execution must separately revalidate exact source, catalog/taxonomy hashes/revisions, lock/jobs/staging state and then use the existing one-shot taxonomy and catalog operators under fresh owner authorizations. Taxonomy apply must complete and verify before the catalog classification manifest becomes eligible.
+
+## Public Category↔Topic projection (#1464)
+
+The private canonical Category↔Topic registry remains under the protected ADMIN state tree. A deterministic, public-safe projection is defined at `/category-topics.json` with exact Category/Topic/link SHA and revision bindings. Protected Category, Topic and link mutations require the current projection to match before mutation and update it inside the same fail-closed transaction.
+
+Read-only requests never seed or repair the public file. Initial materialization uses the fixed-target source operator `scripts/ausmalwiese_category_topic_public_projection_v1.py` and remains separately LIVE/owner-gated. Full schema, consumer validation and rollout order: `docs/AUSMALWIESE_CATEGORY_TOPIC_PUBLIC_PROJECTION_1464.md`.
