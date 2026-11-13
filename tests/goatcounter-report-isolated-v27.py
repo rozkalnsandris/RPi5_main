@@ -138,10 +138,16 @@ def run():
             empty = DiagnosticReader().snapshot(7)
             require(empty["total"] == 0 and empty["homepage_visits"] == 0
                     and empty["ausmalbild_visits"] == 0 and empty["pages"] == [], "EMPTY_NAMESPACE")
+            kita_empty = admin.KitaReportReader().snapshot(7)
+            require(kita_empty["paths"] == [
+                {"path": "/kita", "visits": 0},
+                {"path": "/kita/herbst", "visits": 0},
+            ], "EMPTY_KITA_NAMESPACE")
             # Homepage plus 28 coloring paths force two reader batches; old namespaces stay excluded.
             paths = ["/"] + ["/ausmalbild/0123456"] * 3 + ["/ausmalbild/7654321"] * 2
             paths += ["/ausmalbild/" + str(2000000 + n) for n in range(26)]
             paths += ["/origin-detail-request/0123456"] * 9 + ["/old-browser-counter/0123456"] * 9
+            paths += ["/kita"] * 4 + ["/kita/herbst"] * 2
             connection = http.client.HTTPConnection("127.0.0.1", 9194, timeout=5)
             try:
                 body = json.dumps({"no_sessions": True, "hits": [{"path": p} for p in paths]})
@@ -173,6 +179,11 @@ def run():
                 require(sum(row["visits"] for row in result["pages"]) == coloring, "RANKING_TOTAL")
                 require(sum(row["visits"] for row in result["daily"]) == total, "DAILY_TOTAL")
                 require(all(set(row) == {"page_id", "visits"} for row in result["pages"]), "REDACTION")
+                kita = admin.KitaReportReader().snapshot(days)
+                require(kita["paths"] == [
+                    {"path": "/kita", "visits": 4},
+                    {"path": "/kita/herbst", "visits": 2},
+                ], "KITA_VISITS_" + str(days))
             credential.chmod(0o600)
             credential.write_text(tokens["fixture-count"])
             credential.chmod(0o400)

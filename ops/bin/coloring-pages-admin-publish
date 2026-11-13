@@ -2409,6 +2409,8 @@ def analytics_snapshot(path: str) -> dict:
 
 
 ORIGIN_REPORT_PATHS = {f"/api/analytics/origin?days={n}": n for n in (1, 7, 30, 365)}
+KITA_REPORT_PATHS = {f"/api/analytics/kita?days={n}": n for n in (1, 7, 30, 365)}
+KITA_PUBLIC_PATHS = ("/kita", "/kita/herbst")
 ORIGIN_REPORT_CREDENTIAL = Path(
     "/run/credentials/coloring-pages-admin-publish.service/goatcounter-stats"
 )
@@ -2726,6 +2728,116 @@ class OriginReportReader:
 ORIGIN_REPORT_READER = OriginReportReader()
 
 
+class KitaReportReader(OriginReportReader):
+    """Fixed-path sanitized visit aggregates for the Kita V1 usage baseline."""
+
+    def collect(self, days, now, token):
+        today = now.date()
+        start = today - timedelta(days=days - 1)
+        valid_days = {
+            (start + timedelta(days=n)).isoformat() for n in range(days)
+        }
+        budget = {"deadline": time.monotonic() + 45, "requests": 0, "bytes": 0}
+        me = self.get("/api/v0/me", token, budget)
+        user, permissions = me["user"], me["token"]
+        site = user["site"]
+        if (type(site) is not int or site <= 0 or permissions["permissions"] != 64
+                or permissions["sites"] != [site]
+                or type(permissions["sites"][0]) is not int
+                or user["settings"]["timezone"] not in (".UTC", "UTC", "Etc/UTC")):
+            raise ValueError("stats-only single-site UTC credential required")
+
+        selected, after = {}, 0
+        for _ in range(10):
+            page = self.get("/api/v0/paths?" + urlencode(
+                {"limit": 200, "after": after}), token, budget)
+            paths, more = page["paths"], page["more"]
+            if type(paths) is not list or len(paths) > 200 or type(more) is not bool:
+                raise ValueError("invalid paths page")
+            for item in paths:
+                ident = item["id"]
+                if type(ident) is not int or not after < ident <= 2147483647:
+                    raise ValueError("invalid paths cursor")
+                after = ident
+                path = item["path"]
+                if item["event"] is False and path in KITA_PUBLIC_PATHS:
+                    if path in selected:
+                        raise ValueError("duplicate Kita path")
+                    selected[path] = ident
+            if more and not paths:
+                raise ValueError("path pagination incomplete")
+            if not more:
+                break
+        else:
+            raise ValueError("path limit exceeded")
+
+        totals = {path: 0 for path in KITA_PUBLIC_PATHS}
+        ids = [selected[path] for path in KITA_PUBLIC_PATHS if path in selected]
+        if ids:
+            payload = self.get("/api/v0/stats/hits?" + urlencode({
+                "start": start.isoformat() + "T00:00:00Z",
+                "end": today.isoformat() + "T23:00:00Z",
+                "include_paths": ",".join(map(str, ids)),
+                "limit": 100,
+                "daily": "true",
+            }), token, budget)
+            hits = payload["hits"]
+            if (payload["more"] is not False or type(hits) is not list
+                    or len(hits) > len(ids)):
+                raise ValueError("incomplete Kita statistics")
+            expected = {ident: path for path, ident in selected.items()}
+            seen, batch_total = set(), 0
+            for hit in hits:
+                ident = hit["path_id"]
+                path = expected.get(ident) if type(ident) is int else None
+                if (ident not in ids or ident in seen or path is None
+                        or hit["path"] != path or hit["event"] is not False):
+                    raise ValueError("unexpected Kita statistics path")
+                seen.add(ident)
+                count = origin_count(hit["count"])
+                stats = hit["stats"]
+                if type(stats) is not list or len(stats) != days:
+                    raise ValueError("incomplete Kita days")
+                seen_days, subtotal = set(), 0
+                for day in stats:
+                    date = day["day"]
+                    if date not in valid_days or date in seen_days:
+                        raise ValueError("invalid Kita day")
+                    seen_days.add(date)
+                    value = origin_count(day["daily"])
+                    hourly = day["hourly"]
+                    if (type(hourly) is not list or len(hourly) != 24
+                            or sum(origin_count(n) for n in hourly) != value):
+                        raise ValueError("invalid Kita daily aggregate")
+                    subtotal += value
+                if subtotal != count:
+                    raise ValueError("inconsistent Kita path total")
+                totals[path] = count
+                batch_total += count
+            if origin_count(payload["total"]) != batch_total:
+                raise ValueError("inconsistent Kita batch total")
+
+        return {
+            "version": 1,
+            "status": "ok",
+            "metric": "goatcounter_visits",
+            "range_days": days,
+            "timezone": "UTC",
+            "start_day": start.isoformat(),
+            "end_day": today.isoformat(),
+            "today_partial": True,
+            "generated_at": now.isoformat().replace("+00:00", "Z"),
+            "cache_seconds": 60,
+            "paths": [
+                {"path": path, "visits": totals[path]}
+                for path in KITA_PUBLIC_PATHS
+            ],
+        }
+
+
+KITA_REPORT_READER = KitaReportReader()
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "AusmalwieseAdmin/1"
 
@@ -2782,6 +2894,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self.static("index.html", "text/html; charset=utf-8")
             if self.path == "/api/analytics/capabilities":
                 return self.send_json(200, {"version": 1, "read_only": True, "origin_report_version": 3})
+            if self.path in KITA_REPORT_PATHS:
+                if not self.admin_marker():
+                    return
+                if (self.headers.get("Sec-Fetch-Site") not in (None, "same-origin", "none")
+                        or self.headers.get("Origin") not in (None, ADMIN_ORIGIN, f"http://{HOST}:{PORT}")):
+                    return self.send_error_json(403, "cross-site admin request rejected")
+                try:
+                    return self.send_json(200, KITA_REPORT_READER.snapshot(KITA_REPORT_PATHS[self.path]))
+                except OriginReportUnavailable as exc:
+                    return self.send_json(503, {"version": 1, "status": exc.status})
             if self.path in ORIGIN_REPORT_PATHS:
                 if not self.admin_marker():
                     return
