@@ -151,6 +151,86 @@ class ProjectionContractTests(unittest.TestCase):
             self.assertEqual(result["status"], "ABSENT")
             self.assertFalse(public_projection.exists())
 
+    def _runtime_files(self, root, cats, topics, links):
+        categories = root / "categories.json"
+        topics_path = root / "topics.json"
+        links_path = root / "category-topic-links.json"
+        public_projection = root / "category-topics.json"
+        registry = admin.local_taxonomy_registry(cats, topics)
+        categories.write_bytes(admin.managed_bytes(cats)); categories.chmod(0o644)
+        topics_path.write_bytes(admin.topics_canonical_bytes(topics)); topics_path.chmod(0o644)
+        links_data = admin.links_bytes(links, registry)
+        links_path.write_bytes(links_data); links_path.chmod(0o600)
+        _, projection_raw = admin.public_links_projection_bytes(cats, topics, links)
+        public_projection.write_bytes(projection_raw); public_projection.chmod(0o644)
+        return categories, topics_path, links_path, public_projection, registry, links_data
+
+    def test_category_rename_refreshes_projection_binding(self):
+        cats, topics, links = categories_doc(), topics_doc(), links_doc()
+        with tempfile.TemporaryDirectory() as temp:
+            paths = self._runtime_files(Path(temp), cats, topics, links)
+            categories, topics_path, links_path, public_projection, registry, _ = paths
+            category_sha = registry["category_sha256"]
+            snapshot = {
+                "enabled": True, "registry_sha256": category_sha,
+                "counts": {row["id"]: {"catalog": 0, "archive": 0} for row in cats["categories"]},
+            }
+            patches = [
+                patch.object(admin, "MANAGED_PATH", categories),
+                patch.object(admin, "TOPICS_PATH", topics_path),
+                patch.object(admin, "LINKS_PATH", links_path),
+                patch.object(admin, "PUBLIC_LINKS_PATH", public_projection),
+                patch.object(admin, "owner_ids", return_value=(os.geteuid(), os.getegid())),
+                patch.object(admin, "managed_snapshot", return_value=snapshot),
+                patch.object(admin, "active_jobs", return_value=[]),
+                patch.object(admin, "managed_verified", return_value=True),
+            ]
+            for item in patches: item.start()
+            try:
+                _, new_sha = admin.change_managed(
+                    {"action": "rename", "id": "tiere", "label": "Tiere & Natur"}, category_sha
+                )
+                projection_doc, _ = admin.read_public_links_projection()
+                self.assertEqual(projection_doc["category_revision"], 3)
+                self.assertEqual(projection_doc["category_sha256"], new_sha)
+                self.assertNotEqual(projection_doc["category_sha256"], category_sha)
+            finally:
+                for item in reversed(patches): item.stop()
+
+    def test_topic_create_refreshes_projection_binding(self):
+        cats, topics, links = categories_doc(), topics_doc(), links_doc()
+        with tempfile.TemporaryDirectory() as temp:
+            paths = self._runtime_files(Path(temp), cats, topics, links)
+            categories, topics_path, links_path, public_projection, registry, _ = paths
+            topic_sha = registry["topic_sha256"]
+            snapshot = {
+                "enabled": True, "registry_sha256": topic_sha,
+                "counts": {row["id"]: {"catalog": 0, "archive": 0} for row in topics["topics"]},
+            }
+            patches = [
+                patch.object(admin, "MANAGED_PATH", categories),
+                patch.object(admin, "TOPICS_PATH", topics_path),
+                patch.object(admin, "LINKS_PATH", links_path),
+                patch.object(admin, "PUBLIC_LINKS_PATH", public_projection),
+                patch.object(admin, "owner_ids", return_value=(os.geteuid(), os.getegid())),
+                patch.object(admin, "topics_snapshot", return_value=snapshot),
+                patch.object(admin, "active_jobs", return_value=[]),
+                patch.object(admin, "topics_runtime_verified", return_value=True),
+            ]
+            for item in patches: item.start()
+            try:
+                new_topic = {
+                    "id": "wald", "label": "Wald", "icon": "W",
+                    "kind": "evergreen", "legacy_terms": [],
+                }
+                _, new_sha = admin.change_topics({"action": "create", "topic": new_topic}, topic_sha)
+                projection_doc, _ = admin.read_public_links_projection()
+                self.assertEqual(projection_doc["topic_revision"], 4)
+                self.assertEqual(projection_doc["topic_sha256"], new_sha)
+                self.assertNotEqual(projection_doc["topic_sha256"], topic_sha)
+            finally:
+                for item in reversed(patches): item.stop()
+
     def test_admin_link_mutation_requires_seed_and_updates_projection(self):
         cats = categories_doc()
         topics = topics_doc()
