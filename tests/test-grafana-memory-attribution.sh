@@ -352,4 +352,6 @@ assert "cgroup_oom_event_deltas=null" in evidence
 assert "collector is **not implemented or authorized to run**" in evidence
 PY
 
+python3 -B "${repo}/tests/test-grafana-continuity.py"
+
 printf '%s\n' 'Grafana memory attribution tests: PASS'
