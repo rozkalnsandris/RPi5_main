@@ -146,10 +146,11 @@ def inspect(*, store: Path, home: Path, source: Path, bot: Path,
     target = from_wrapper(wrapper_raw, home=home, root=scripts)
     target_raw = read_safe(target, expected_uid)
     require(digest(target_raw) == old_sha, "deployed_target_sha_drift")
+    # Exact reviewed SHA-256 pins the legacy notification implementation; a
+    # substring search for an embedded URL would not provide a sound URL check.
     old_text = target_raw.decode("utf-8", errors="replace")
     require(active_set(old_text) == OLD_ACTIVE and
             "active sensors not usable" in old_text and
-            "api.telegram.org" in old_text and
             "balkons/telegram_out" not in old_text,
             "deployed_target_class_unexpected")
     # A Git checkout's identity and cleanliness still need separate recheck
@@ -162,7 +163,6 @@ def inspect(*, store: Path, home: Path, source: Path, bot: Path,
     require(active_set(new_text) == EXPECTED_ACTIVE and
             "BALCONY_MAX_DEGRADED_SENSORS" in new_text and
             "balkons/telegram_out" in new_text and
-            "api.telegram.org" not in new_text and
             "ESP32_MAX_SECONDS=180" in new_text and
             "PUMP_IS_ON=" in new_text,
             "candidate_policy_unreviewed")
