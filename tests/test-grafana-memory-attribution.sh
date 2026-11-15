@@ -167,6 +167,9 @@ assert report["container"]["percent_basis_points"] == 8768
 markdown = pathlib.Path(sys.argv[2]).read_text(encoding="utf-8")
 assert "Dominant component: `anonymous`." in markdown
 assert "headroom 61.60 MiB" in markdown
+assert "Grafana queries, plugins, Go allocations or caches" in markdown
+assert "Grafana Home" not in markdown
+assert "DNS cache" not in markdown
 PY
 
 if grep -R -F "system.slice/docker-${cid}.scope" "${one}" >/dev/null; then
