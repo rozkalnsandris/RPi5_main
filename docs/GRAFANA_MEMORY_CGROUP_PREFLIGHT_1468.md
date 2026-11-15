@@ -75,4 +75,4 @@ A later auxiliary read-only report snippet failed with `KeyError: 'memory_stat'`
 
 ## Next source-only identity-continuity contract
 
-The initial V01 reports remain descriptive-only. A proposed future single-invocation, pinned-cgroup-FD protocol and its explicit independent-verifier limitations are specified in [GRAFANA_CONTINUOUS_CGROUP_IDENTITY_CONTRACT_1468.md](GRAFANA_CONTINUOUS_CGROUP_IDENTITY_CONTRACT_1468.md). **This is a design, not a deployed sampler, OOM-delta result or LIVE authorization.**
+The initial V01 reports remain descriptive-only. The single-invocation, pinned-cgroup-FD protocol and independent-verifier limitations are specified in [GRAFANA_CONTINUOUS_CGROUP_IDENTITY_CONTRACT_1468.md](GRAFANA_CONTINUOUS_CGROUP_IDENTITY_CONTRACT_1468.md). A source-only sampler and adversarial tests are implemented, but **there is no RPi5 execution, new OOM-delta result, deployed sampler or LIVE authorization**.

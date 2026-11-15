@@ -339,7 +339,7 @@ import sys
 contract = Path(sys.argv[1]).read_text(encoding="utf-8")
 evidence = Path(sys.argv[2]).read_text(encoding="utf-8")
 required = (
-    "DESIGN ONLY", "NOT IMPLEMENTED", "NOT LIVE AUTHORIZATION",
+    "SOURCE IMPLEMENTED", "NOT RUN ON RPi5", "NOT LIVE AUTHORIZATION",
     "single-process, continuous-identity", "same pinned directory handle",
     "memory.events.local", "end-start", "null deltas",
     "PID reuse", "source commit SHA", "independent offline verifier",
@@ -349,9 +349,10 @@ required = (
 assert all(marker in contract for marker in required), "continuous-identity contract missing invariant"
 assert "GRAFANA_CONTINUOUS_CGROUP_IDENTITY_CONTRACT_1468.md" in evidence
 assert "cgroup_oom_event_deltas=null" in evidence
-assert "collector is **not implemented or authorized to run**" in evidence
+assert "has not been run on RPi5" in evidence
 PY
 
 python3 -B "${repo}/tests/test-grafana-continuity.py"
+python3 -B "${repo}/tests/test-grafana-continuity-collector.py"
 
 printf '%s\n' 'Grafana memory attribution tests: PASS'
