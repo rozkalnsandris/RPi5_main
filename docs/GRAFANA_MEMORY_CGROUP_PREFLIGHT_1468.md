@@ -58,3 +58,11 @@ This phase includes a bounded, non-root **Grafana-only snapshot** collector, str
 ## Grafana process/cgroup identity correction
 
 The collector now reads only allowlisted `docker ps --no-trunc --filter name=^/grafana$` ID/name metadata (not `docker inspect`). It requires exactly one running container and one process whose cgroup leaf matches that same full Docker ID (`/docker/<id>` or `/system.slice/docker-<id>.scope`). The runtime identifier is never published. A second identity check immediately before writing the final evidence target rejects drift. Unrelated or unsupported cgroups are rejected rather than misattributed. This source-only change is not a LIVE authorization.
+
+## Independent snapshots: offline descriptive series
+
+`scripts/analyze-grafana-memory-series.py`, `scripts/verify-grafana-memory-series.py` and `scripts/grafana_memory_series_core.py` create/verify a sanitized, immutable descriptive comparison from **2–8 separately verified Grafana V01 snapshots** in one ignored evidence directory. Source bundle identity, chronology, provenance, checksums and memory-category values are independently checked; source names are allowlisted. The existing `tests/test-grafana-memory-attribution.sh` suite covers positive and adversarial comparisons.
+
+**Critical limitation:** Grafana V01 snapshots deliberately omit raw container/cgroup IDs, and independent snapshots **cannot prove the same cgroup instance across time**. The resulting series is always `descriptive_only`, reports `same_cgroup_identity=unproven`, and sets `cgroup_oom_event_deltas=null`. Cumulative `memory.events` values and `memory.peak` are historical. This tool does **not** prove newly occurred OOM kills, Grafana-caused host swap, health regressions or measured RAM savings. A separate trusted continuous-identity capture contract is still needed for attributable deltas.
+
+No LIVE collection, host checkout update, permission change, Docker change, deployment, monitoring restart or optimization is authorized by this source-only implementation.
