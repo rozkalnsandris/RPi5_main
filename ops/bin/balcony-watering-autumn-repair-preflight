@@ -1,0 +1,233 @@
+#!/usr/bin/python3 -I
+"""Read-only, sanitized preflight for the *existing* Hermes 11:00 autumn job.
+
+Source-only for RPi5_main #1474. This never installs, runs or edits a
+watering controller and never contacts Home Assistant, MQTT or Telegram.
+The protected Hermes store may be read only under separate exact owner READ
+authorization. A PASS is NOT LIVE or deployment authority.
+"""
+from __future__ import annotations
+
+import hashlib
+import importlib.machinery
+import importlib.util
+import json
+import os
+from pathlib import Path
+import pwd
+import re
+import stat
+from typing import Any
+
+SCHEMA = "rozkalns.balcony-autumn-1100-repair-preflight.v1"
+OLD_SHA256 = "86972a10bd457abb6350e2f924d7c3bcc54139af322f335707f51e1e440ac60b"
+WRAPPER_SHA256 = "3e5698a54d33fafaef59a0bc5c847136672c6658de3a22001058bffe51a4133f"
+CANDIDATE_SHA256 = "0117ab6230c5b388d71fed2aebfa072f48a1a891a9608de12bfd6bc5b139e693"
+EXPECTED_ACTIVE = (1, 3, 4, 5, 6, 7, 8, 9, 10, 12)
+OLD_ACTIVE = (1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)
+MAX_BYTES = 100_000
+
+
+class Blocked(Exception):
+    """Fixed public-safe category; never contain a private value."""
+
+
+def require(condition: bool, reason: str) -> None:
+    if not condition:
+        raise Blocked(reason)
+
+
+def digest(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def gate_module():
+    path = Path(__file__).resolve().with_name("balcony-watering-hermes-preflight")
+    loader = importlib.machinery.SourceFileLoader("balcony_gate1_1474", str(path))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    require(spec is not None, "gate1_module_unavailable")
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+def read_safe(path: Path, owner: int, *, limit: int = MAX_BYTES) -> bytes:
+    """No symlink, hardlink, unsafe mode or TOCTOU metadata drift."""
+    try:
+        info = path.lstat()
+        require(path.resolve(strict=True) == path, "path_symlink_or_escape")
+        require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1,
+                "file_type_unsafe")
+        require(info.st_uid == owner, "file_owner_mismatch")
+        require(stat.S_IMODE(info.st_mode) & 0o022 == 0, "file_writable_by_others")
+        require(0 < info.st_size <= limit, "file_size_unsafe")
+        data = path.read_bytes()
+        after = path.lstat()
+        identity = lambda s: (s.st_dev, s.st_ino, s.st_uid, s.st_nlink,
+                              s.st_mode, s.st_size, s.st_mtime_ns)
+        require(len(data) == info.st_size and identity(info) == identity(after),
+                "file_changed_during_read")
+        return data
+    except (OSError, RuntimeError, UnicodeError):
+        raise Blocked("file_unreadable") from None
+
+
+def active_set(contents: str) -> tuple[int, ...] | None:
+    matches = re.findall(r"(?m)^ACTIVE_SENSORS=\\(([0-9 \\t]+)\\)$", contents)
+    if len(matches) != 1:
+        return None
+    return tuple(int(value) for value in matches[0].split())
+
+
+def from_wrapper(wrapper: bytes, *, home: Path, root: Path) -> Path:
+    """Classify the exact literal reference; NEVER execute wrapper text."""
+    text = wrapper.decode("utf-8", errors="strict")
+    # Only these two HOME spellings are reviewed; never expand arbitrary shell.
+    expanded = text.replace("${HOME}", str(home)).replace("$HOME", str(home))
+    pattern = (r"(?<![A-Za-z0-9_.])" + re.escape(str(home))
+               + r"/[A-Za-z0-9_./-]*balcony-watering-autumn[A-Za-z0-9_.-]*")
+    matches = list(dict.fromkeys(re.findall(pattern, expanded)))
+    require(len(matches) == 1, "wrapper_referent_ambiguous")
+    target = Path(matches[0])
+    require(target.parent == root and
+            re.fullmatch(r"balcony-watering-autumn(?:[A-Za-z0-9_.-]*)",
+                         target.name) is not None,
+            "wrapper_referent_unexpected")
+    return target
+
+
+def inspect(*, store: Path, home: Path, source: Path, bot: Path,
+            expected_uid: int, old_sha: str = OLD_SHA256,
+            wrapper_sha: str = WRAPPER_SHA256,
+            candidate_sha: str = CANDIDATE_SHA256) -> dict[str, Any]:
+    gate = gate_module()
+    try:
+        _raw, jobs, fmt = gate._read_store(store, expected_uid)
+    except gate.PreflightError:
+        raise Blocked("hermes_store_invalid") from None
+    require(fmt == "canonical_dict", "hermes_store_format_unreviewed")
+    selected: set[int] = set()
+    for _slot, cron, role in gate.LEGACY_SLOTS:
+        matches = [(i, j) for i, j in enumerate(jobs)
+                   if gate._schedule_expr(j) == cron and role in gate._marker_roles(j)]
+        require(len(matches) == 1, "legacy_slot_missing_or_duplicate")
+        i, job = matches[0]
+        selected.add(i)
+        require(job.get("enabled") is False and
+                gate._marker_roles(job) == {role},
+                "legacy_schedule_not_disabled_or_ambiguous")
+    autumn = [(i, j) for i, j in enumerate(jobs)
+              if "autumn" in gate._marker_roles(j) or
+              (gate._schedule_expr(j) == gate.AUTUMN_EXPR
+               and gate._watering_candidate(j))]
+    require(len(autumn) == 1, "autumn_job_missing_or_duplicate")
+    index, job = autumn[0]
+    selected.add(index)
+    require(gate._marker_roles(job) == {"autumn"} and
+            gate._schedule_expr(job) == gate.AUTUMN_EXPR and
+            job.get("enabled") is True and job.get("deliver") == "local",
+            "autumn_job_binding_or_delivery_invalid")
+    require(all(not gate._watering_candidate(job)
+                for i, job in enumerate(jobs) if i not in selected),
+            "unexpected_watering_candidate")
+    binding = job.get("script")
+    require(isinstance(binding, str) and len(binding) <= 1024 and
+            bool(binding) and not any(ord(c) < 32 for c in binding),
+            "autumn_script_binding_invalid")
+    scripts = home / ".hermes" / "scripts"
+    wrapper = Path(binding).expanduser()
+    if not wrapper.is_absolute():
+        wrapper = scripts / wrapper
+    require(wrapper.parent == scripts and
+            wrapper.name.startswith("balcony-watering-autumn"),
+            "wrapper_path_unexpected")
+    wrapper_raw = read_safe(wrapper, expected_uid, limit=4096)
+    require(digest(wrapper_raw) == wrapper_sha, "wrapper_sha_drift")
+    target = from_wrapper(wrapper_raw, home=home, root=scripts)
+    target_raw = read_safe(target, expected_uid)
+    require(digest(target_raw) == old_sha, "deployed_target_sha_drift")
+    old_text = target_raw.decode("utf-8", errors="replace")
+    require(active_set(old_text) == OLD_ACTIVE and
+            "active sensors not usable" in old_text and
+            "api.telegram.org" in old_text and
+            "balkons/telegram_out" not in old_text,
+            "deployed_target_class_unexpected")
+    # A Git checkout's identity and cleanliness still need separate recheck
+    # immediately before any LIVE use. This check only classifies its bytes.
+    require(source == home / "RPi5_main" / "ops/bin/balcony-watering-autumn",
+            "candidate_location_unexpected")
+    replacement = read_safe(source, expected_uid)
+    require(digest(replacement) == candidate_sha, "candidate_sha_drift")
+    new_text = replacement.decode("utf-8", errors="replace")
+    require(active_set(new_text) == EXPECTED_ACTIVE and
+            "BALCONY_MAX_DEGRADED_SENSORS" in new_text and
+            "balkons/telegram_out" in new_text and
+            "api.telegram.org" not in new_text and
+            "ESP32_MAX_SECONDS=180" in new_text and
+            "PUMP_IS_ON=" in new_text,
+            "candidate_policy_unreviewed")
+    bot_text = read_safe(bot, expected_uid).decode("utf-8", errors="replace")
+    require(bot == home / "RPi5_main" / "ops/lib/balkons-bot.py" and
+            'T_OUT = "balkons/telegram_out"' in bot_text and
+            "client.subscribe(T_OUT)" in bot_text,
+            "bot_source_route_unreviewed")
+    return {
+        "schema": SCHEMA,
+        "result": "SOURCE_REPAIR_PREFLIGHT_PASS",
+        "existing_autumn_job": "enabled_local_unique",
+        "legacy_jobs": "three_disabled",
+        "job_definition_sha256": gate._fingerprint(job),
+        "wrapper_sha256": digest(wrapper_raw),
+        "deployed_controller_sha256": digest(target_raw),
+        "candidate_controller_sha256": digest(replacement),
+        "source_route": "ha_mqtt_balkons_telegram_out",
+        "retired_11_13": "excluded_from_candidate",
+        "live_bot_delivery": "unverified",
+        "runtime_credentials": "unverified",
+        "source_checkout_provenance": "unverified",
+        "live_apply_authorized": False,
+        "mutation_started": False,
+        "writes_performed": False,
+        "raw_payload_emitted": False,
+    }
+
+
+def main() -> int:
+    try:
+        user = pwd.getpwnam("andris")
+        require(os.uname().nodename.split(".")[0] == "rpi5" and
+                os.geteuid() == user.pw_uid, "wrong_host_or_user")
+        home = Path(user.pw_dir)
+        result = inspect(
+            store=home / ".hermes/cron/jobs.json",
+            home=home,
+            source=home / "RPi5_main/ops/bin/balcony-watering-autumn",
+            bot=home / "RPi5_main/ops/lib/balkons-bot.py",
+            expected_uid=user.pw_uid,
+        )
+    except Blocked as exc:
+        result = {
+            "schema": SCHEMA,
+            "result": "BLOCKED",
+            "reason": str(exc),
+            "live_apply_authorized": False,
+            "mutation_started": False,
+            "writes_performed": False,
+            "raw_payload_emitted": False,
+        }
+    except Exception:
+        result = {
+            "schema": SCHEMA,
+            "result": "BLOCKED",
+            "reason": "internal_error",
+            "live_apply_authorized": False,
+            "mutation_started": False,
+            "writes_performed": False,
+            "raw_payload_emitted": False,
+        }
+    print(json.dumps(result, sort_keys=True, separators=(",", ":")))
+    return 0 if result["result"] == "SOURCE_REPAIR_PREFLIGHT_PASS" else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
