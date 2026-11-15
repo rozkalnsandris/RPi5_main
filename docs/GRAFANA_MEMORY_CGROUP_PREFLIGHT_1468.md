@@ -48,3 +48,9 @@ Grafana supports Prometheus-compatible internal performance/HTTP metrics. First 
 - **Never claim saved RAM from lowering a limit**: a limit is a ceiling, not a decrease in memory actually held. Reevaluate #1469 only after measured benefit and no degradation of DNS, Home Assistant, Grafana, Prometheus or Hermes.
 
 **Current outcome:** Grafana is a high-priority **diagnostic candidate, not an identified fault**. The repeated host swap activity remains unattributed; observed available RAM and absent host OOM argue against emergency OS migration or blanket memory caps.
+
+## Source-level Grafana V01 implementation (#1468)
+
+This phase includes a bounded, non-root **Grafana-only snapshot** collector, strict verifier, and synthetic regression fixtures. Exact Grafana process identity and Docker CLI row are required. The cgroup-v2 snapshot contains `memory.current`, `memory.peak`, `memory.max`, `memory.swap.current`, `memory.stat`, hierarchical `memory.events`, and optional `memory.events.local`; missing local events are represented by **null**, not zero. Source files: `scripts/collect-grafana-memory-attribution.py`, `scripts/grafana_memory_core.py`, `scripts/verify-grafana-memory-attribution.py`, `tests/test-grafana-memory-attribution.sh`.
+
+**Important limitation:** this initial source tool captures **one snapshot**; `memory.events` values are cumulative history, *not* delta proof. The specified in-sample identity checks, multi-window event-delta verifier, and health correlation still require an independently reviewed source-only follow-up before attributing RAM pressure to Grafana. It has **not been run on RPi5**; a source merge is **not** LIVE permission. No changes to actual cgroup/container limits, Grafana runtime, PSS privileges, credentials, Docker or services are authorized.

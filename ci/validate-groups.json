@@ -1176,6 +1176,10 @@
       ],
       [
         "bash",
+        "./tests/test-grafana-memory-attribution.sh"
+      ],
+      [
+        "bash",
         "./tests/test-hermes-tech-web-runtime.sh"
       ],
       [
