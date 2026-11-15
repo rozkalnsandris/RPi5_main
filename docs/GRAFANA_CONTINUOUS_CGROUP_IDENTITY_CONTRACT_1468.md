@@ -1,0 +1,37 @@
+# Grafana continuous cgroup identity: source-only design contract (#1468)
+
+**Status: DESIGN ONLY — NOT IMPLEMENTED, NOT RUN ON RPi5, NOT LIVE AUTHORIZATION.** Source continuation for [initial V01 evidence](GRAFANA_MEMORY_V01_INITIAL_EVIDENCE_1468.md). The verified 2026-11-15 37-second V01 pair lacks cross-snapshot identity proof and therefore cannot support new event deltas. Keep `cgroup_oom_event_deltas=null` for that historical pair. Do not reinterpret those bundles or mutate them.
+
+## Objective and scope
+
+Specify the smallest bounded, unprivileged Grafana-specific **single-process, continuous-identity** numeric collection contract, distinct from the existing independent-snapshot descriptive analyzer. This proposed collector/verifier does not yet exist. Implementation must be a separate source-only change with synthetic adversarial fixtures, reviewed before any separately owner-authorized RPi5 use.
+
+- One exact running `grafana` Docker container and exactly one `grafana` process, bound by the **full 64-hex container ID** to the process cgroup-v2 leaf. Reuse the V01 strict `docker ps --no-trunc --filter name=^/grafana$` parser and allowlist. Never use `docker inspect`, Docker API, `sudo`, root, process environment, arguments, logs, credentials or raw configuration.
+- Before the first reading, capture the opaque Docker ID and process identity **only in process memory**. Pin the cgroup directory with a read-only directory FD; compare `fstat` device/inode and path-to-FD identity throughout the run. Pin process start time from the numeric start-time field of `/proc/<pid>/stat` (parsed robustly across the parenthesized comm field) to guard against PID reuse. Verify the exact Docker ID, `/proc/<pid>/comm`, process cgroup binding, and start time before and after every sample and immediately before publication.
+- Read cgroup numeric files from the **same pinned directory handle**, using relative, non-symlink-following opens. Never re-resolve a replaced cgroup path and continue as though it were the original. Reject disappearing/replaced directories, new PID/start time, container ID drift, leaf mismatch, unsupported cgroup layout, unreadable required files or counter regressions. **Fail closed; do not mark a broken run as continuous.**
+- The FD + identity checks establish continuity only **inside that collector invocation**. Do not extend continuity across separate runs, container restarts, exported V01 snapshot bundles or independently collected idle/busy windows. There is no secure continuity claim derived from timestamps, a reused name, an unchanged memory limit or equal cumulative counters alone.
+
+## Bounded capture design
+
+- Proposed parameters: exactly 2–8 samples at 15–300 seconds spacing, with total wall time no more than 2,400 seconds; UTC timestamps at every read and monotonic elapsed times. No perpetual scheduler, background monitoring or implicit cron activation.
+- Required cgroup v2 numeric fields per sample: `memory.current`, `memory.max`, `memory.swap.current` (explicit null if unavailable), `memory.events.local` keys `max`, `oom`, `oom_kill`, and hierarchical `memory.events` with the same keys. Optional `memory.peak` and allowlisted `memory.stat` values remain separate historical/accounting observations. All input reads have hard size/time limits; no uncontrolled output or command stderr is persisted.
+- Valid within-run `max`, `oom` and `oom_kill` deltas require a stable pinned FD, unchanged process/container identity, complete numeric start/end counters and nondecreasing values. Calculate `end-start` only **within the proven single invocation**; if any prerequisite is unknown or false, emit null deltas (if no artifact has yet been written), or stop according to the frozen error policy after writes.
+- `memory.events max` means boundary attempts, **not** OOM or an OOM kill. `memory.peak` is a high-water observation and must never be reset or interpreted as an interval maximum without a separate verified mechanism. Swap occupancy change is not a paging **rate** and cannot establish host swap origin. `docker stats` displayed memory excludes certain cache, so never equate it to `memory.current`.
+- Do not infer process-exclusive RSS, sustained host pressure, Grafana query/plugin causation, or any health regression without separately validated host/health metrics. Existing V08/V09 tools must provide authorized host-wide paging counters and representative idle/busy windows; no new protected runtime endpoints are implied.
+
+## Sanitized evidence and independent verification
+
+- Proposed isolated ignored output under `evidence/` or `exports/`, with strict path, symlink, hard-link and collision controls. Preserve source commit SHA, collector version, UTC timestamps, numeric samples, interval event deltas and a fixed status enum such as `within_run_identity_verified`. No PIDs, raw or hashed container IDs, cgroup paths, inode numbers, host addresses or other persistent identifying fingerprints may appear in JSON, Markdown, manifests or Git.
+- A future independent offline verifier must check schema/allowlists, immutable file inventory, SHA-256 checksums, exact sample count, timestamp order and bounds, monotonic counters, arithmetic deltas, null/unknown handling and report/Markdown projection. The verifier **cannot independently re-observe the historical kernel FD or Docker identity**; its identity conclusion is limited to validated collector provenance and the collector's in-process checks. Explicitly document that trust boundary rather than claiming independent cryptographic host-identity proof.
+- Capture and publication must be atomic; no partial report may be marked VERIFIED. A missing required read or identity drift before write is a non-publishing failure. After an authorized evidence write begins, any error or uncertainty is **STOP**, preserving evidence without retry, rollback or cleanup unless separately authorized.
+- Only **sanitized conclusions** may be added to GitHub. The collector/verifier implementation and exact host-local invocation require their own reviewed source-only PR and subsequently new pinned, target-specific LIVE authorization. GitHub source merge is not deploy authority.
+
+## Mandatory synthetic/offline acceptance matrix
+
+Test one container/process, supported Docker cgroup layouts, continuous FD identity, exact end-minus-start arithmetic, event counter `max` increment without OOM, zero OOM, optional unavailable swap/peak, null PSI, counter regression, missing local events, process start-time change/PID reuse, container ID change, replaced cgroup inode/FD/path, process disappearing, multiple matching processes, symlinks, hard links, input/output bounds, publication race, report tampering, checksum tampering and output sanitization. Do not test against production as a substitute for fixtures.
+
+## Decision gate for #1468
+
+This document **does not** claim a working continuous collector, new Grafana OOM deltas or RPi5 memory optimization. First implement and review this protocol with adversarial tests. Then request separate bounded LIVE authority for naturally separated idle and busy windows, and compare synchronized host page-counter rates plus approved service-health evidence before choosing a change under #1469. **#1468 stays OPEN.**
+
+Official semantics: [Linux kernel cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html), [Docker CLI stats](https://docs.docker.com/reference/cli/docker/container/stats/).
