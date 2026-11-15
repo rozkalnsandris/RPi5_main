@@ -1,0 +1,35 @@
+# SOURCE ONLY (#1490): not installed into Home Assistant.
+# Deliberately disabled. No MQTT publishes, Telegram polling, credentials,
+# pump/relay control, or service lifecycle calls are present in this file.
+#
+# Do NOT enable until a distinct owner-approved HA cutover preflight confirms:
+# - the MQTT integration and expected exact notification topic;
+# - the installed Telegram bot integration, one allowlisted recipient chat;
+# - replacement of the placeholder notify entity_id with that recipient;
+# - a single active notification consumer (avoid duplicate deliveries).
+# Keep the existing RPi5 Telegram command poller until a separate verified
+# command-safety cutover preserves /stop and fail-closed /laist* gates.
+- id: balkons_telegram_native_notification_staged
+  alias: "Balkons: MQTT notification to native Telegram (staged)"
+  description: "Disabled HA 2026.11 reference; not a deployment instruction."
+  initial_state: false
+  triggers:
+    - trigger: mqtt
+      topic: "balkons/telegram_out"
+      qos: 0
+  conditions:
+    - condition: template
+      value_template: >-
+        {{ trigger.topic == 'balkons/telegram_out'
+           and trigger.payload is string
+           and 0 < (trigger.payload | length) <= 1024 }}
+  actions:
+    - action: telegram_bot.send_message
+      data:
+        # Must be replaced with the verified notify entity for the
+        # explicitly allowlisted chat. Never use an inferred default chat.
+        entity_id: notify.replace_with_approved_telegram_chat
+        message: "{{ trigger.payload }}"
+        parse_mode: plain_text
+  mode: queued
+  max: 5
