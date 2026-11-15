@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Collect a bounded, non-root V11 Grafana Home memory-attribution bundle."""
+"""Collect a bounded, non-root Grafana memory-attribution snapshot."""
 from __future__ import annotations
 
 import argparse

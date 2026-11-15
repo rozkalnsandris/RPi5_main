@@ -436,6 +436,6 @@ def render_markdown(report: dict[str, Any]) -> str:
     lines.extend(f"- {item}" for item in report["limitations"])
     lines.extend([
         "",
-        "This report attributes Linux memory classes only. It cannot distinguish Grafana Home's DNS cache, query-log buffer, statistics, filter structures, runtime clients, or another Go heap owner without application-level metrics or a separately approved heap profile.",
+        "This report describes Linux memory accounting only. It cannot determine which Grafana queries, plugins, Go allocations or caches account for these bytes, or establish new OOM events or service degradation without separately authorized metrics or profiling.",
     ])
     return "\n".join(lines) + "\n"
