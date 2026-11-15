@@ -180,6 +180,19 @@ class UpdateTests(unittest.TestCase):
                 op.read_public(target, owner=os.getuid(), mode=0o644)
             self.assertEqual(source.read_bytes(), b"public fixture")
 
+    def test_public_root_group_mismatch_is_rejected(self):
+        # The file contents are public, but the privileged target must be
+        # exactly root:root; root-owned with an unexpected group is not READY.
+        source = self.root / "untrusted-group"
+        source.write_bytes(b"synthetic public source")
+        fake = SimpleNamespace(
+            st_mode=stat.S_IFREG | 0o644, st_nlink=1, st_uid=0,
+            st_gid=42, st_size=len(b"synthetic public source")
+        )
+        with patch.object(Path, "lstat", return_value=fake):
+            with self.assertRaisesRegex(op.Blocked, "public_file_metadata_invalid"):
+                op.read_public(source, owner=0, mode=0o644)
+
     def test_owner_comment_exact_new_issue_and_current_sha(self):
         now = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
         approval = {

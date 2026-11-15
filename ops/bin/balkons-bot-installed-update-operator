@@ -94,7 +94,9 @@ def read_public(path: Path, *, owner: int, mode: int,
     try:
         before = path.lstat()
         if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
-                or before.st_uid != owner or stat.S_IMODE(before.st_mode) != mode
+                or before.st_uid != owner
+                or (owner == 0 and before.st_gid != 0)
+                or stat.S_IMODE(before.st_mode) != mode
                 or not 0 < before.st_size <= max_bytes):
             deny("public_file_metadata_invalid")
         with path.open("rb") as stream:
