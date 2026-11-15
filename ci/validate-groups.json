@@ -1095,6 +1095,10 @@
         "./tests/test-balkons-bot-latency-operator.py"
       ],
       [
+        "python3",
+        "./tests/test-balkons-bot-installed-update-operator.py"
+      ],
+      [
         "bash",
         "./tests/test-balkons-bot-systemd.sh"
       ],
