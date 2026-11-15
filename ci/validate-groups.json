@@ -1088,6 +1088,10 @@
       ],
       [
         "python3",
+        "./tests/test-balkons-bot-mqtt-notification-smoke-plan.py"
+      ],
+      [
+        "python3",
         "./tests/test-balkons-bot-latency-rollout.py"
       ],
       [
