@@ -64,7 +64,7 @@ class RouteAttributionTests(unittest.TestCase):
     def test_legacy_source_private_filename_not_assumed_public(self):
         # Private legacy Python file must NEVER be opened, no matter its
         # basename. Prior ad-hoc scripts falsely insisted on "balkon".
-        private = "/home/andris/opaque-worker.py"
+        private = "/opt/private-fixture/opaque-worker.py"
         props = show(private)
         before = sorted(self.root.iterdir())
         report = self.collect(
