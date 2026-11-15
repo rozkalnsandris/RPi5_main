@@ -276,6 +276,10 @@ if python3 "${verifier}" "${hardlinked}" >/dev/null 2>&1; then
   exit 1
 fi
 
+# Restore the canonical source bundle link-count after the deliberate hard-link rejection.
+rm -f "${hardlinked}/report.md"
+python3 -B "${verifier}" "${one}" >/dev/null
+
 series_analyzer="$repo/scripts/analyze-grafana-memory-series.py"
 series_verifier="$repo/scripts/verify-grafana-memory-series.py"
 later="$root/bundle-later"

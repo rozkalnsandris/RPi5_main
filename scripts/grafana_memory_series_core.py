@@ -137,7 +137,7 @@ def render_markdown(r: dict) -> str:
     s = r["summary"]
     lines = [
         "# Grafana memory snapshots (descriptive only)", "",
-        f"Samples: {r['sample_count']}; collector SHA: \`{r['source_commit']}\`.",
+        f"Samples: {r['sample_count']}; collector SHA: `{r['source_commit']}`.",
         "**Cgroup identity unknown; event deltas = null. No new Grafana OOM inferred.**",
         "",
         "| UTC | Docker MiB | cgroup current MiB | historical peak MiB | local events |",
