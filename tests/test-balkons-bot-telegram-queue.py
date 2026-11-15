@@ -22,6 +22,8 @@ TREE = ast.parse(TEXT)
 FUNCTION_NAMES = {
     "_send_telegram_now", "tg_send", "_telegram_sender_loop",
     "_start_telegram_sender", "on_message", "_strict_json_object",
+    "_connected", "_subscription_acknowledged", "on_subscribe_v1",
+    "on_subscribe_v2",
     "_safety_state_max_age_s", "_manual_watering_admission",
     "_publish_command", "_publish_command_with_feedback",
     "_handle_manual_watering", "handle_command",
@@ -38,8 +40,13 @@ class BridgeTests(unittest.TestCase):
             post = lambda *args, **kwargs: object()
         outbound = queue.Queue(maxsize=16)
         publish_calls = []
+        subscribe_calls = []
 
         class FakeMqtt:
+            def subscribe(self, topic):
+                subscribe_calls.append(topic)
+                return (0, 19)
+
             def publish(self, *args, **kwargs):
                 publish_calls.append((args, kwargs))
                 return types.SimpleNamespace(rc=mqtt_rc)
@@ -54,6 +61,9 @@ class BridgeTests(unittest.TestCase):
             "Path": Path,
             "requests": types.SimpleNamespace(post=post),
             "mqtt": types.SimpleNamespace(MQTT_ERR_SUCCESS=0),
+            "_mqtt_subscribe_pending_mid": None,
+            "T_OUT": "balkons/telegram_out",
+            "_subscribe_calls": subscribe_calls,
             "_mqttc": FakeMqtt(),
             "_telegram_url": lambda method: "https://example.invalid/" + method,
             "_telegram_response": lambda response: {"ok": True},
@@ -80,7 +90,9 @@ class BridgeTests(unittest.TestCase):
         ns, outbound, _, _ = self.bridge(forbidden_post)
         ns["on_message"](None, None, types.SimpleNamespace(payload=b"sensor reading"))
         self.assertEqual(outbound.qsize(), 1)
-        self.assertEqual(outbound.get_nowait()[0], "sensor reading")
+        item = outbound.get_nowait()
+        self.assertEqual(item[0], "sensor reading")
+        self.assertEqual(item[2], "mqtt")
 
     def test_slow_http_does_not_block_next_mqtt_callback(self):
         entered = threading.Event()
@@ -139,6 +151,107 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(outbound.unfinished_tasks, 0)
         self.assertEqual(len(attempts), 1)
         self.assertEqual(errors, [("TG send error", "TimeoutError")])
+
+    def test_subscribe_request_not_counted_as_broker_ack(self):
+        ns, _, _, _ = self.bridge()
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            ns["_connected"](ns["_mqttc"], 0)
+        self.assertEqual(ns["_subscribe_calls"], ["balkons/telegram_out"])
+        self.assertEqual(ns["_mqtt_subscribe_pending_mid"], 19)
+        self.assertIn("MQTT connected", stderr.getvalue())
+        self.assertNotIn("MQTT SUBACK accepted", stderr.getvalue())
+        with contextlib.redirect_stderr(stderr):
+            ns["on_subscribe_v1"](None, None, 19, [0])
+        self.assertIn("MQTT SUBACK accepted", stderr.getvalue())
+        self.assertIsNone(ns["_mqtt_subscribe_pending_mid"])
+
+    def test_v2_suback_requires_matching_mid_and_success_reason(self):
+        ns, _, _, _ = self.bridge()
+        output = io.StringIO()
+        with contextlib.redirect_stderr(output):
+            ns["_connected"](ns["_mqttc"], 0)
+            ns["on_subscribe_v2"](
+                None, None, 18, [types.SimpleNamespace(value=0)], None
+            )
+            self.assertEqual(ns["_mqtt_subscribe_pending_mid"], 19)
+            ns["on_subscribe_v2"](
+                None, None, 19, [types.SimpleNamespace(value=0)], None
+            )
+        lines = output.getvalue().splitlines()
+        self.assertIn("MQTT SUBACK unmatched", lines)
+        self.assertIn("MQTT SUBACK accepted", lines)
+        self.assertIsNone(ns["_mqtt_subscribe_pending_mid"])
+
+    def test_suback_rejection_unknown_and_reconnect_clear_pending(self):
+        ns, _, _, _ = self.bridge()
+        output = io.StringIO()
+        with contextlib.redirect_stderr(output):
+            ns["_connected"](ns["_mqttc"], 0)
+            ns["on_subscribe_v1"](None, None, 19, [128])
+            ns["_connected"](ns["_mqttc"], 0)
+            ns["on_subscribe_v2"](None, None, 19, [], None)
+            ns["_connected"](ns["_mqttc"], 0)
+            ns["on_subscribe_v2"](
+                None, None, 19, [types.SimpleNamespace(value=0x80)], None
+            )
+            ns["_connected"](ns["_mqttc"], 0)
+            ns["_connected"](ns["_mqttc"], 5)
+            ns["on_subscribe_v1"](None, None, 19, [0])
+        lines = output.getvalue().splitlines()
+        self.assertEqual(lines.count("MQTT SUBACK rejected"), 2)
+        self.assertIn("MQTT SUBACK unknown", lines)
+        self.assertIn("MQTT connection rejected", lines)
+        self.assertIn("MQTT SUBACK unmatched", lines)
+        self.assertNotIn("MQTT SUBACK accepted", lines)
+        self.assertIsNone(ns["_mqtt_subscribe_pending_mid"])
+
+    def test_telegram_api_outcomes_distinguish_local_and_mqtt_provenance(self):
+        ns, outbound, _, _ = self.bridge()
+        output = io.StringIO()
+        with contextlib.redirect_stderr(output):
+            ns["_start_telegram_sender"]()
+            ns["on_message"](
+                None, None, types.SimpleNamespace(payload=b"private MQTT message")
+            )
+            ns["tg_send"]("private local message")
+            deadline = time.monotonic() + 2
+            while outbound.unfinished_tasks and time.monotonic() < deadline:
+                time.sleep(0.01)
+        self.assertEqual(outbound.unfinished_tasks, 0)
+        lines = output.getvalue().splitlines()
+        self.assertIn("TG API outcome source=mqtt ok=1", lines)
+        self.assertIn("TG API outcome source=local ok=1", lines)
+        self.assertNotIn("private", output.getvalue())
+        self.assertNotIn("balkons/telegram_out", output.getvalue())
+        self.assertNotIn("test-only", output.getvalue())
+
+    def test_failed_mqtt_send_reports_fixed_category_without_retry(self):
+        calls = []
+        def fails(*args, **kwargs):
+            calls.append(1)
+            raise TimeoutError("token-bearing URL never to be logged")
+        ns, outbound, _, errors = self.bridge(fails)
+        output = io.StringIO()
+        with contextlib.redirect_stderr(output):
+            ns["_start_telegram_sender"]()
+            ns["on_message"](
+                None, None, types.SimpleNamespace(payload=b"private response")
+            )
+            deadline = time.monotonic() + 2
+            while outbound.unfinished_tasks and time.monotonic() < deadline:
+                time.sleep(0.01)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(errors, [("TG send error", "TimeoutError")])
+        self.assertIn("TG API outcome source=mqtt ok=0", output.getvalue())
+        self.assertNotIn("private", output.getvalue())
+
+    def test_observability_is_event_only_without_extra_network_calls(self):
+        self.assertIn("client.on_subscribe = on_subscribe_v1", TEXT)
+        self.assertIn("client.on_subscribe = on_subscribe_v2", TEXT)
+        self.assertEqual(TEXT.count("client.subscribe(T_OUT)"), 1)
+        self.assertEqual(TEXT.count("requests.post("), 1)
+        self.assertNotIn("client.publish(T_OUT", TEXT)
 
     def _write_safety(self, directory, **overrides):
         state = {
