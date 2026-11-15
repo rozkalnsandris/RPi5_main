@@ -332,4 +332,24 @@ assert "a source merge alone is **not** LIVE permission" in preflight
 assert "No new attributable OOM events were measured" not in record
 PY
 
+# Static continuity safety contract regression: source-only, no runtime access.
+python3 -B - "${repo}/docs/GRAFANA_CONTINUOUS_CGROUP_IDENTITY_CONTRACT_1468.md" "${repo}/docs/GRAFANA_MEMORY_V01_INITIAL_EVIDENCE_1468.md" <<'PY'
+from pathlib import Path
+import sys
+contract = Path(sys.argv[1]).read_text(encoding="utf-8")
+evidence = Path(sys.argv[2]).read_text(encoding="utf-8")
+required = (
+    "DESIGN ONLY", "NOT IMPLEMENTED", "NOT LIVE AUTHORIZATION",
+    "single-process, continuous-identity", "same pinned directory handle",
+    "memory.events.local", "end-start", "null deltas",
+    "PID reuse", "source commit SHA", "independent offline verifier",
+    "cannot independently re-observe", "No PIDs, raw or hashed container IDs",
+    "After an authorized evidence write begins", "#1468 stays OPEN",
+)
+assert all(marker in contract for marker in required), "continuous-identity contract missing invariant"
+assert "GRAFANA_CONTINUOUS_CGROUP_IDENTITY_CONTRACT_1468.md" in evidence
+assert "cgroup_oom_event_deltas=null" in evidence
+assert "collector is **not implemented or authorized to run**" in evidence
+PY
+
 printf '%s\n' 'Grafana memory attribution tests: PASS'
