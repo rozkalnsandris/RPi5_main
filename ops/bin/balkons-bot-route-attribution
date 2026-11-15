@@ -1,0 +1,217 @@
+#!/usr/bin/python3 -I
+"""Sanitized READ-ONLY attribution of the configured balcony-bot entrypoint.
+
+RPi5_main #1478.  Source only: this command does not authorize inspecting a
+production service. It may run on rpi5 only after a separate exact READ-only
+owner authorization. It reads allowlisted systemd *properties*, never a raw
+unit file, credential, secret-bearing legacy Python source, or process argv.
+It does not send MQTT/Telegram or mutate a file, service or device.
+"""
+from __future__ import annotations
+
+import hashlib
+import importlib.machinery
+import importlib.util
+import json
+import os
+from pathlib import Path
+import pwd
+import re
+import stat
+import subprocess
+import sys
+
+SCHEMA = "rozkalns.balkons-bot-route-attribution.v1"
+SERVICE = "balkons-bot.service"
+PUBLIC_TARGET = Path("/usr/local/lib/rpi5-balkons-bot.py")
+PUBLIC_SOURCE_SHA256 = "53de789f18b2ef09558f5298ff3ea8f74e94020f3ce0622893e7123c225a36fd"
+# Historical owner-approved H3 path *fingerprint*; not proof of current binding.
+LEGACY_PATH_SHA256 = "c23da644fe6a26cdc7b4606cbdd49091dee8de55251cc168f1e822796bb39125"
+CREDENTIAL_IDS = ("telegram-token", "telegram-chat-id", "mqtt-host",
+                  "mqtt-username", "mqtt-secret")
+PROPERTIES = ("LoadState", "ActiveState", "SubState", "MainPID",
+              "ExecStart", "LoadCredentialEncrypted", "LoadCredential")
+SAFE_ENV = {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C"}
+MAX_PROPERTY_BYTES = 16_384
+MAX_SOURCE_BYTES = 128_000
+PREFLIGHT_NAME = "balkons-bot-preflight"
+
+
+class Blocked(Exception):
+    """A fixed public-safe reason code, never private input."""
+
+
+def require(ok: bool, code: str) -> None:
+    if not ok:
+        raise Blocked(code)
+
+
+def digest(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def source_parser():
+    """Reuse the reviewed canonical ExecStart parser, not a filename regex."""
+    location = Path(__file__).resolve().with_name(PREFLIGHT_NAME)
+    require(location.is_file() and not location.is_symlink(),
+            "public_parser_unavailable")
+    loader = importlib.machinery.SourceFileLoader("balkons_bot_route_parser_1478",
+                                                   str(location))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    require(spec is not None, "public_parser_unavailable")
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module.parse_exec_start
+
+
+def parse_properties(raw: str) -> dict[str, str]:
+    require(len(raw) <= MAX_PROPERTY_BYTES, "service_metadata_oversize")
+    properties: dict[str, str] = {}
+    for row in raw.splitlines():
+        require("=" in row, "service_metadata_malformed")
+        key, value = row.split("=", 1)
+        require(key in PROPERTIES and key not in properties,
+                "service_metadata_unexpected_or_duplicate")
+        properties[key] = value
+    require(set(properties) == set(PROPERTIES), "service_metadata_missing")
+    return properties
+
+
+def credential_class(properties: dict[str, str]) -> str:
+    """Metadata IDs only; never expose encrypted-file paths or values."""
+    if properties["LoadCredential"].strip():
+        return "OTHER_OR_PLAINTEXT_MAPPING_PRESENT"
+    encrypted = properties["LoadCredentialEncrypted"]
+    found = [
+        bool(re.search(r"(?<![A-Za-z0-9_-])" + re.escape(name) + r":", encrypted))
+        for name in CREDENTIAL_IDS
+    ]
+    if not encrypted.strip():
+        return "NONE_DECLARED"
+    if all(found):
+        return "FIVE_ENCRYPTED_IDS_DECLARED"
+    return "PARTIAL_OR_UNEXPECTED_DECLARATION"
+
+
+def public_target_status(target: Path, *, uid: int, sha: str) -> str:
+    """Read only the fixed, secret-free *public* target when safely present."""
+    try:
+        before = target.lstat()
+    except FileNotFoundError:
+        return "ABSENT"
+    except OSError:
+        raise Blocked("public_target_metadata_unavailable") from None
+    require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1
+            and before.st_uid == uid and stat.S_IMODE(before.st_mode) == 0o644
+            and 0 < before.st_size <= MAX_SOURCE_BYTES,
+            "public_target_metadata_unsafe")
+    try:
+        with target.open("rb") as stream:
+            data = stream.read(MAX_SOURCE_BYTES + 1)
+        after = target.lstat()
+    except OSError:
+        raise Blocked("public_target_read_unavailable") from None
+    identity = lambda info: (info.st_dev, info.st_ino, info.st_mode,
+                             info.st_uid, info.st_nlink, info.st_size,
+                             info.st_mtime_ns)
+    require(len(data) == before.st_size and identity(before) == identity(after),
+            "public_target_changed_during_read")
+    return "REVIEWED_HASH_MATCH" if digest(data) == sha else "UNEXPECTED_HASH"
+
+
+def collect(*, properties: dict[str, str], parser, target: Path = PUBLIC_TARGET,
+            owner: int = 0, sha: str = PUBLIC_SOURCE_SHA256,
+            legacy_path_sha: str = LEGACY_PATH_SHA256) -> dict[str, object]:
+    require(properties["LoadState"] == "loaded"
+            and properties["ActiveState"] == "active"
+            and properties["SubState"] == "running",
+            "service_not_active")
+    pid = properties["MainPID"]
+    require(pid.isdecimal() and 1 < int(pid) < 2**31,
+            "service_mainpid_invalid")
+    try:
+        _python, script = parser(properties["ExecStart"])
+    except Exception:
+        raise Blocked("execstart_invalid") from None
+    # The systemd property is metadata, not observed process argv. A private
+    # source path is NEVER opened, read, hashed as content, or emitted.
+    require(script.is_absolute(), "execstart_not_absolute")
+    path_sha = digest(str(script).encode("utf-8"))
+    public_state = public_target_status(target, uid=owner, sha=sha)
+    if script == PUBLIC_TARGET:
+        if public_state != "REVIEWED_HASH_MATCH":
+            raise Blocked("configured_public_source_not_reviewed")
+        route = "REVIEWED_PUBLIC_SOURCE_CONFIGURED"
+    elif path_sha == legacy_path_sha:
+        route = "HISTORICAL_LEGACY_PATH_FINGERPRINT_MATCH"
+    else:
+        route = "OTHER_PRIVATE_SOURCE_UNATTRIBUTED"
+    return {
+        "schema": SCHEMA,
+        "result": "CLASSIFIED",
+        "service_metadata": "active_running",
+        "configured_entrypoint_class": route,
+        "configured_path_sha256": path_sha,
+        "canonical_public_target": public_state,
+        "credential_declaration": credential_class(properties),
+        "configured_source_has_reviewed_mqtt_topic": (
+            route == "REVIEWED_PUBLIC_SOURCE_CONFIGURED"),
+        "process_entrypoint_verified": False,
+        "broker_subscription_verified": False,
+        "telegram_delivery_verified": False,
+        "private_legacy_source_read": False,
+        "credential_content_read": False,
+        "raw_argv_or_paths_emitted": False,
+        "mutation_started": False,
+        "writes_performed": False,
+    }
+
+
+def safe_show() -> str:
+    args = ["/usr/bin/systemctl", "show", SERVICE, "--no-pager"]
+    args.extend("--property=" + prop for prop in PROPERTIES)
+    try:
+        completed = subprocess.run(
+            args, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            text=True, encoding="utf-8", errors="strict",
+            timeout=8, env=SAFE_ENV, check=False,
+        )
+    except (OSError, subprocess.SubprocessError, UnicodeError):
+        raise Blocked("systemctl_metadata_unavailable") from None
+    require(completed.returncode == 0
+            and len(completed.stdout) <= MAX_PROPERTY_BYTES,
+            "systemctl_metadata_unavailable")
+    return completed.stdout
+
+
+def main() -> int:
+    try:
+        user = pwd.getpwnam("andris")
+        require(os.uname().nodename.split(".")[0] == "rpi5"
+                and os.geteuid() == user.pw_uid,
+                "host_or_uid_unexpected")
+        props = parse_properties(safe_show())
+        result = collect(properties=props, parser=source_parser())
+    except Blocked as exc:
+        result = {
+            "schema": SCHEMA, "result": "BLOCKED", "reason": str(exc),
+            "private_legacy_source_read": False,
+            "credential_content_read": False,
+            "raw_argv_or_paths_emitted": False,
+            "mutation_started": False, "writes_performed": False,
+        }
+    except Exception:
+        result = {
+            "schema": SCHEMA, "result": "BLOCKED", "reason": "internal_error",
+            "private_legacy_source_read": False,
+            "credential_content_read": False,
+            "raw_argv_or_paths_emitted": False,
+            "mutation_started": False, "writes_performed": False,
+        }
+    print(json.dumps(result, sort_keys=True, separators=(",", ":")))
+    return 0 if result["result"] == "CLASSIFIED" else 2
+
+
+if __name__ == "__main__":
+    sys.dont_write_bytecode = True
+    raise SystemExit(main())
