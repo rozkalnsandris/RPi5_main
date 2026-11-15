@@ -1071,6 +1071,10 @@
         "./tests/test-balcony-watering-autumn.sh"
       ],
       [
+        "python3",
+        "./tests/test-balcony-watering-autumn-notify-only.py"
+      ],
+      [
         "bash",
         "./tests/test-balkons-log-mqtt-credential.sh"
       ],
