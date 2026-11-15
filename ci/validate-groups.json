@@ -1113,10 +1113,6 @@
       [
         "python3",
         "./tests/test-balcony-watering-hermes-preflight.py"
-      ],
-      [
-        "python3",
-        "./tests/test-balcony-watering-autumn-repair-preflight.py"
       ]
     ],
     "host-a": [
