@@ -1,6 +1,6 @@
 # Grafana memory/cgroup diagnostic preflight — RPi5 #1468
 
-Status: **SOURCE-ONLY DESIGN; NOT EXECUTED ON RPi5**. Canonical issues: [#1468](https://github.com/rozkalnsandris/RPi5_main/issues/1468) (measure first), [#1469](https://github.com/rozkalnsandris/RPi5_main/issues/1469) (optimization decision). This document prepares a narrow, owner-gated, sanitized, non-root diagnostic; it does **not** authorize cgroup inspection, new evidence writes, memory limit changes or any service mutation.
+Status: **SOURCE CONTRACT + VERIFIED INITIAL RPi5 V01 OBSERVATIONS (2026-11-15); ISSUE #1468 OPEN**. See [sanitized initial evidence](GRAFANA_MEMORY_V01_INITIAL_EVIDENCE_1468.md). Canonical issues: [#1468](https://github.com/rozkalnsandris/RPi5_main/issues/1468) (measure first), [#1469](https://github.com/rozkalnsandris/RPi5_main/issues/1469) (optimization decision). This document prepares a narrow, owner-gated, sanitized, non-root diagnostic; it does **not** authorize cgroup inspection, new evidence writes, memory limit changes or any service mutation.
 
 ## Why Grafana first
 
@@ -25,7 +25,7 @@ Status: **SOURCE-ONLY DESIGN; NOT EXECUTED ON RPi5**. Canonical issues: [#1468](
 
 Canonical references: [Linux kernel cgroup v2](https://www.kernel.org/doc/html/v6.12/admin-guide/cgroup-v2.html), [Docker stats CLI](https://docs.docker.com/reference/cli/docker/container/stats/), [Docker runtime metrics](https://docs.docker.com/engine/containers/runmetrics/), [Grafana internal monitoring](https://grafana.com/docs/grafana/latest/setup-grafana/set-up-grafana-monitoring/).
 
-## Proposed strict source-only collector contract (not yet implemented)
+## Initial source-only design contract (historical; V01 implemented)
 
 1. **Identity and preflight:** pin GitHub `main`, exact installed host checkout and tool hashes; prove current clean checkout, unprivileged user, cgroup **v2** capability and a distinct new ignored `evidence/` output target. Resolve the **single exact running** `grafana` container/process identity using allowlisted names/metadata. Check cgroup namespace/layout and identity stability at every sample; **fail closed on zero/multiple matches, path traversal, changing identity, unreadable required fields or controller mismatch**. Do not print PID, cgroup path, container ID or namespace details.
 2. **Constrained retrieval:** process identity via `/proc/<pid>/comm` + validated `/proc/<pid>/cgroup` mapping (never read arguments, environments, raw configurations, mounts, socket targets or Docker protected runtime data); only the explicitly allowlisted cgroup/proc numeric fields above. **No generic privileged shell/execution interface.** Require an exact owner authorization for *any* cgroup/process inspection not already allowed by current repo/host policy.
@@ -53,7 +53,7 @@ Grafana supports Prometheus-compatible internal performance/HTTP metrics. First 
 
 This phase includes a bounded, non-root **Grafana-only snapshot** collector, strict verifier, and synthetic regression fixtures. Exact Grafana process identity and Docker CLI row are required. The cgroup-v2 snapshot contains `memory.current`, `memory.peak`, `memory.max`, `memory.swap.current`, `memory.stat`, hierarchical `memory.events`, and optional `memory.events.local`; missing local events are represented by **null**, not zero. Source files: `scripts/collect-grafana-memory-attribution.py`, `scripts/grafana_memory_core.py`, `scripts/verify-grafana-memory-attribution.py`, `tests/test-grafana-memory-attribution.sh`.
 
-**Important limitation:** this initial source tool captures **one snapshot**; `memory.events` values are cumulative history, *not* delta proof. The specified in-sample identity checks, multi-window event-delta verifier, and health correlation still require an independently reviewed source-only follow-up before attributing RAM pressure to Grafana. It has **not been run on RPi5**; a source merge is **not** LIVE permission. No changes to actual cgroup/container limits, Grafana runtime, PSS privileges, credentials, Docker or services are authorized.
+**Important limitation:** this initial source tool captures **one snapshot**; `memory.events` values are cumulative history, *not* delta proof. The specified in-sample identity checks, multi-window event-delta verifier, and health correlation still require an independently reviewed source-only follow-up before attributing RAM pressure to Grafana. The collector was run under a separate one-time owner LIVE authorization on RPi5 on 2026-11-15; a source merge alone is **not** LIVE permission. See [verified evidence](GRAFANA_MEMORY_V01_INITIAL_EVIDENCE_1468.md). No changes to actual cgroup/container limits, Grafana runtime, PSS privileges, credentials, Docker or services are authorized.
 
 ## Grafana process/cgroup identity correction
 
@@ -65,4 +65,10 @@ The collector now reads only allowlisted `docker ps --no-trunc --filter name=^/g
 
 **Critical limitation:** Grafana V01 snapshots deliberately omit raw container/cgroup IDs, and independent snapshots **cannot prove the same cgroup instance across time**. The resulting series is always `descriptive_only`, reports `same_cgroup_identity=unproven`, and sets `cgroup_oom_event_deltas=null`. Cumulative `memory.events` values and `memory.peak` are historical. This tool does **not** prove newly occurred OOM kills, Grafana-caused host swap, health regressions or measured RAM savings. A separate trusted continuous-identity capture contract is still needed for attributable deltas.
 
-No LIVE collection, host checkout update, permission change, Docker change, deployment, monitoring restart or optimization is authorized by this source-only implementation.
+This source-only implementation itself grants **no** LIVE collection, checkout update, permissions, Docker change, deployment, monitoring restart or optimization. The separately authorized 2026-11-15 initial collection is documented in [the sanitized evidence](GRAFANA_MEMORY_V01_INITIAL_EVIDENCE_1468.md); that one-time authorization cannot be reused.
+
+## Initial RPi5 evidence continuity (2026-11-15)
+
+The two source-verified Grafana V01 snapshots were captured at `2026-11-15T12:29:36Z` and `2026-11-15T12:30:13Z` (37 seconds apart), using collector source `65eba8930ebfda18ec7e4fe7656e0f92f31f92e7`. Both snapshots and the independently verified descriptive series are retained under ignored host `evidence/`; raw identifiers and evidence were **not** added to Git. The historical cumulative `memory.events max` counters were 30664 and 30670; both `oom` and `oom_kill` were zero. Since independent snapshots do **not** establish same-cgroup continuity, `cgroup_oom_event_deltas=null` and no attributable new event or host swap-pressure claim is made.
+
+A later auxiliary read-only report snippet failed with `KeyError: 'memory_stat'`. The stored report uses `cgroup.memory_stat_bytes`. A separately authorized read-only review of **existing evidence only** subsequently succeeded; neither the collector nor the independent verifier had failed. Complete sanitized numbers, limitations and the next owner gate: [GRAFANA_MEMORY_V01_INITIAL_EVIDENCE_1468.md](GRAFANA_MEMORY_V01_INITIAL_EVIDENCE_1468.md). **Do not close #1468** on these two nearby samples or change RAM limits without independently validated, representative workload evidence.

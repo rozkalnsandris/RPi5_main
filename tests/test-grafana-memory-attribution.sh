@@ -310,4 +310,26 @@ if python3 -B "$series_verifier" "$root/series-tampered" >/dev/null 2>&1; then
   echo "grafana series: report tamper bypass" >&2; exit 1
 fi
 
+# Source-only historical evidence regression: documentation must keep provenance and limits.
+python3 -B - "${repo}/docs/GRAFANA_MEMORY_V01_INITIAL_EVIDENCE_1468.md" "${repo}/docs/GRAFANA_MEMORY_CGROUP_PREFLIGHT_1468.md" <<'PY'
+from pathlib import Path
+import sys
+record = Path(sys.argv[1]).read_text(encoding="utf-8")
+preflight = Path(sys.argv[2]).read_text(encoding="utf-8")
+required = (
+    "65eba8930ebfda18ec7e4fe7656e0f92f31f92e7",
+    "2026-11-15T12:29:36Z", "2026-11-15T12:30:13Z",
+    "30664", "30670", "131.53 MiB", "135.33 MiB",
+    "cgroup.memory_stat_bytes", "same_cgroup_identity=unproven",
+    "cgroup_oom_event_deltas=null", "#1468 stays OPEN",
+    "37 seconds apart", "No new collection",
+)
+assert all(text in record for text in required), "Grafana initial evidence contract missing"
+assert "GRAFANA_MEMORY_V01_INITIAL_EVIDENCE_1468.md" in preflight
+assert "SOURCE-ONLY DESIGN; NOT EXECUTED ON RPi5" not in preflight
+assert "It has **not been run on RPi5**" not in preflight
+assert "a source merge alone is **not** LIVE permission" in preflight
+assert "No new attributable OOM events were measured" not in record
+PY
+
 printf '%s\n' 'Grafana memory attribution tests: PASS'
