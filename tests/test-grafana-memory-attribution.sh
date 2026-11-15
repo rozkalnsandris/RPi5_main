@@ -122,7 +122,7 @@ collect(){
   GRAFANA_ATTR_TEST_UID=1000 \
   GRAFANA_ATTR_TEST_CONTAINER_ID="${cid}" \
   GRAFANA_ATTR_TEST_COMMIT=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
-  GRAFANA_ATTR_FIXED_UTC=2026-08-05T13:00:00Z \
+  GRAFANA_ATTR_FIXED_UTC="${GRAFANA_ATTR_TEST_UTC:-2026-08-05T13:00:00Z}" \
   GRAFANA_ATTR_PROC_ROOT="${proc}" \
   GRAFANA_ATTR_CGROUP_ROOT="${cgroup}" \
   python3 "${collector}" --output "${output}" >/dev/null
@@ -274,6 +274,33 @@ ln "${one}/report.md" "${hardlinked}/report.md"
 if python3 "${verifier}" "${hardlinked}" >/dev/null 2>&1; then
   printf '%s\n' 'test-grafana-memory-attribution: FAIL: hard link accepted' >&2
   exit 1
+fi
+
+series_analyzer="$repo/scripts/analyze-grafana-memory-series.py"
+series_verifier="$repo/scripts/verify-grafana-memory-series.py"
+later="$root/bundle-later"
+GRAFANA_ATTR_TEST_UTC=2026-08-05T13:05:00Z collect "$later"
+python3 -B "$series_analyzer" --output "$root/series-good" "$one" "$later" >/dev/null
+python3 -B "$series_verifier" "$root/series-good" >/dev/null
+python3 - "$root/series-good/report.json" <<'PY'
+import json,sys
+r=json.load(open(sys.argv[1],encoding="utf-8"))
+assert r["sample_count"] == 2
+assert r["comparison"] == "descriptive_only"
+assert r["same_cgroup_identity"] == "unproven"
+assert r["cgroup_oom_event_deltas"] is None
+assert r["summary"]["missing_local_events"] == 1
+PY
+if python3 -B "$series_analyzer" --output "$root/out-of-order" "$later" "$one" >/dev/null 2>&1; then
+  echo "grafana series: chronological bypass" >&2; exit 1
+fi
+if python3 -B "$series_analyzer" --output "$root/duplicate" "$one" "$one" >/dev/null 2>&1; then
+  echo "grafana series: duplicate bypass" >&2; exit 1
+fi
+cp -a "$root/series-good" "$root/series-tampered"
+printf '\n' >> "$root/series-tampered/report.json"
+if python3 -B "$series_verifier" "$root/series-tampered" >/dev/null 2>&1; then
+  echo "grafana series: report tamper bypass" >&2; exit 1
 fi
 
 printf '%s\n' 'Grafana memory attribution tests: PASS'
