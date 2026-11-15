@@ -114,3 +114,58 @@ probe is implied or authorized.
 Offline regression: `tests/test-balkons-bot-route-attribution.py` runs through
 `tests/test-balkons-bot-preflight.py` in the existing balcony CI group; none
 of those tests contacts a live host, broker, Telegram or ESP32.
+
+## MQTT SUBACK and Telegram API outcome observability (#1481)
+
+**Scope: source only.** The 2026-11-15 owner-authorized #925 initial
+installation placed the reviewed bot and encrypted-credential systemd overlay
+on RPi5. A subsequent strictly read-only check showed the service running, but
+a bounded journal tail since service start exposed no reliable connection or
+delivery markers. Absence of log messages is **not** evidence of a failed MQTT
+connection or Telegram delivery: stdout may have been buffered, and normal
+fast Telegram sends were previously silent.
+
+The source now emits only fixed, eagerly flushed **stderr** categories:
+
+- `MQTT connected`: broker CONNACK accepted; still **not** a subscription ACK.
+- `MQTT subscribe request rejected` / `MQTT subscribe request invalid`:
+  the local request could not be established.
+- `MQTT SUBACK accepted`: a broker acknowledgment matched the pending
+  subscription packet ID, carried exactly one acceptable QoS success reason,
+  and was observed for the single reviewed `balkons/telegram_out`
+  subscription. A reconnect invalidates the previous pending ID.
+- `MQTT SUBACK rejected`, `MQTT SUBACK unknown` or `MQTT SUBACK unmatched`:
+  a rejected, malformed, delayed or unrelated acknowledgment. None proves
+  the required subscription is active.
+- `TG API outcome source=mqtt ok=1`: a message received on the reviewed MQTT
+  callback path was accepted by the Telegram Bot HTTP API on **one** send
+  attempt. `source=local` identifies independently generated messages
+  (including startup). `ok=0` means the request failed. Slow-send
+  `queue_ms`/`http_ms` diagnostics remain separate.
+
+This reporting never includes MQTT payloads/topics, bot token, URLs, chat
+identifiers, Telegram text, arbitrary exception strings, or per-message
+identifiers. It does not add MQTT publishes, Telegram probes, duplicate HTTP
+attempts, new retries, service changes or ESP32/pump commands.
+
+**Proof limits:** Broker SUBACK establishes subscription acceptance only on
+that particular connection. Telegram `ok=1` is HTTP API acceptance, **not**
+human delivery, a chat-read receipt, or independent proof of recipient
+correctness. A local startup `ok=1` is **not** evidence that the MQTT
+notification route works. For the 11:00 repair, require a current matching
+SUBACK and a real MQTT-origin API acceptance event, plus independently
+authorized verification of destination wiring and HA publishing capability;
+this source change alone cannot provide those observations.
+
+**Production update is separate:** #925's reviewed initial-install operator
+rejects existing public source and overlay targets, so it must **never** be
+reused to overwrite the live bot. After this source PR is merged by separate
+owner decision, prepare a new fixed-source-hash, already-installed update and
+rollback/recovery design. Its own exact COMPOSITE STRICT LIVE authorization
+must cover every host file replacement and service lifecycle action. No
+production operation, broker probe or Telegram send is authorized by this PR.
+
+Offline tests extend the existing `tests/test-balkons-bot-telegram-queue.py`
+balcony CI suite with Paho v1/v2 callback signatures, matching/mismatched
+SUBACK, malformed/rejected reasons, reconnect invalidation, and source-tagged
+HTTP outcome logging without message data.
