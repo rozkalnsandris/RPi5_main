@@ -73,7 +73,7 @@ def read_safe(path: Path, owner: int, *, limit: int = MAX_BYTES) -> bytes:
 
 
 def active_set(contents: str) -> tuple[int, ...] | None:
-    matches = re.findall(r"(?m)^ACTIVE_SENSORS=\\(([0-9 \\t]+)\\)$", contents)
+    matches = re.findall(r"(?m)^ACTIVE_SENSORS=\(([0-9 \t]+)\)$", contents)
     if len(matches) != 1:
         return None
     return tuple(int(value) for value in matches[0].split())
