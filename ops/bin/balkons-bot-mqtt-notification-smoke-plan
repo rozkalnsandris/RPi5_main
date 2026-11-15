@@ -1,0 +1,173 @@
+#!/usr/bin/env python3
+"""Offline-only specification for a benign MQTT -> Telegram route smoke test.
+
+This module deliberately has no HTTP/MQTT client and cannot send a message.
+A live HA MQTT publish needs a separate, exact owner authorization.
+"""
+from __future__ import annotations
+
+import argparse
+import ast
+import json
+import stat
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+BOT = Path("ops/lib/balkons-bot.py")
+CONTROLLER = Path("ops/bin/balcony-watering-autumn")
+TOPIC = "balkons/telegram_out"
+COMMAND_TOPIC = "balkons/cmd"
+HA_ROUTE = "/api/services/mqtt/publish"
+PAYLOAD = "Balkona MQTT-Telegram sakaru tests. Tikai pazinojums."
+SCHEMA = "rpi5.balkons_bot_notification_smoke_plan.v1"
+CONTROLLER_REQUEST = (
+    '{"topic": "balkons/telegram_out", "payload": sys.stdin.read(), '
+    '"qos": 0, "retain": False}'
+)
+
+
+class ContractError(Exception):
+    """A fixed, public-safe source-contract error code."""
+
+
+def read_reviewed_source(root: Path, relative: Path) -> str:
+    path = root / relative
+    try:
+        st = path.lstat()
+        if (not stat.S_ISREG(st.st_mode) or st.st_nlink != 1
+                or st.st_size < 1 or st.st_size > 131072):
+            raise ContractError("source_file_unsafe")
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        raise ContractError("source_file_unavailable") from None
+
+
+def _function(tree: ast.Module, name: str) -> ast.FunctionDef:
+    result = [
+        n for n in tree.body
+        if isinstance(n, ast.FunctionDef) and n.name == name
+    ]
+    if len(result) != 1:
+        raise ContractError("bot_callback_missing")
+    return result[0]
+
+
+def _constant(tree: ast.Module, name: str) -> object:
+    result = [
+        n.value.value for n in tree.body
+        if isinstance(n, ast.Assign)
+        and len(n.targets) == 1
+        and isinstance(n.targets[0], ast.Name)
+        and n.targets[0].id == name
+        and isinstance(n.value, ast.Constant)
+    ]
+    if len(result) != 1:
+        raise ContractError("bot_topic_assignment_invalid")
+    return result[0]
+
+
+def validate_source_contract(root: Path = ROOT) -> None:
+    """Inspect public tracked source only; never read runtime configuration."""
+    bot = read_reviewed_source(root, BOT)
+    controller = read_reviewed_source(root, CONTROLLER)
+    try:
+        tree = ast.parse(bot)
+    except SyntaxError:
+        raise ContractError("bot_python_invalid") from None
+
+    if _constant(tree, "T_OUT") != TOPIC or _constant(tree, "T_CMD") != COMMAND_TOPIC:
+        raise ContractError("bot_mqtt_topics_changed")
+    connected = _function(tree, "_connected")
+    subscribe = [
+        n for n in ast.walk(connected)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+        and n.func.attr == "subscribe"
+        and len(n.args) == 1 and isinstance(n.args[0], ast.Name)
+        and n.args[0].id == "T_OUT"
+    ]
+    if len(subscribe) != 1:
+        raise ContractError("bot_notification_subscription_changed")
+    received = _function(tree, "on_message")
+    forwarding = [
+        n for n in ast.walk(received)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+        and n.func.id == "tg_send"
+        and len(n.args) == 1
+        and any(
+            kw.arg == "source" and isinstance(kw.value, ast.Constant)
+            and kw.value.value == "mqtt" for kw in n.keywords
+        )
+    ]
+    if len(forwarding) != 1:
+        raise ContractError("bot_notification_provenance_changed")
+    if (CONTROLLER_REQUEST not in controller or
+            controller.count(CONTROLLER_REQUEST) != 1 or
+            controller.count(HA_ROUTE) != 1):
+        raise ContractError("controller_ha_notification_contract_changed")
+
+    body = notification_body()
+    if (body["topic"] != TOPIC or body["topic"] == COMMAND_TOPIC
+            or body["qos"] != 0 or body["retain"] is not False
+            or any(ch in body["topic"] for ch in ("#", "+", "*"))
+            or any(word in body["payload"].lower() for word in
+                   ("laist", "stop", "/mitrums", "pump", "relay", "valve"))):
+        raise ContractError("notification_payload_unsafe")
+
+
+def notification_body() -> dict[str, object]:
+    """One immutable notification; no CLI or environment-supplied topic/payload."""
+    return {"topic": TOPIC, "payload": PAYLOAD, "qos": 0, "retain": False}
+
+
+def source_only_plan(root: Path = ROOT) -> dict[str, object]:
+    validate_source_contract(root)
+    return {
+        "schema": SCHEMA,
+        "result": "SOURCE_ONLY_PLAN",
+        "can_publish": False,
+        "network_calls": 0,
+        "mutation_started": False,
+        "request_specification": {
+            "method": "POST",
+            "endpoint_path": HA_ROUTE,
+            "body": notification_body(),
+            "maximum_live_attempts_after_separate_owner_authorization": 1,
+        },
+        "proof_limits": {
+            "ha_http_200_is_telegram_delivery": False,
+            "mqtt_suback_is_telegram_delivery": False,
+            "telegram_api_acceptance_is_chat_receipt": False,
+            "recipient_must_check_exact_text": True,
+        },
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Offline-only one-message MQTT-to-Telegram test specification"
+    )
+    parser.add_argument("--check", action="store_true",
+                        help="Validate reviewed source route; no network requests")
+    args = parser.parse_args()
+    try:
+        if args.check:
+            validate_source_contract()
+            report = {
+                "schema": SCHEMA, "result": "PASS", "mode": "source_contract",
+                "can_publish": False, "network_calls": 0,
+                "mutation_started": False,
+            }
+        else:
+            report = source_only_plan()
+    except ContractError as exc:
+        report = {
+            "schema": SCHEMA, "result": "BLOCKED", "reason": str(exc),
+            "can_publish": False, "network_calls": 0,
+            "mutation_started": False,
+        }
+    print(json.dumps(report, sort_keys=True, ensure_ascii=True, separators=(",", ":")))
+    return 0 if report["result"] != "BLOCKED" else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
