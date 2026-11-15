@@ -268,5 +268,24 @@ class HermesWateringPreflightTests(unittest.TestCase):
             self.assertNotIn(token, text)
 
 
+    def test_existing_11h_repair_preflight_offline_suite(self):
+        # Keep one balcony validation entry while exercising the separate
+        # existing-job repair suite. The child test uses only temporary files;
+        # it never invokes the real host preflight, Hermes, HA or MQTT.
+        import subprocess
+        import sys
+
+        outcome = subprocess.run(
+            [sys.executable, str(ROOT / "tests/test-balcony-watering-autumn-repair-preflight.py")],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        self.assertEqual(outcome.returncode, 0, outcome.stderr[-3000:])
+
+
+
 if __name__ == "__main__":
     unittest.main()
