@@ -13,6 +13,7 @@ import sys
 
 from memory_pressure_core import (
     COLLECTOR_VERSION,
+    LEGACY_COLLECTOR_VERSION,
     SCHEMA,
     SECTION_FILES,
     SECTION_NAMES,
@@ -167,7 +168,7 @@ def main() -> None:
         metadata = json.loads((bundle / "metadata.json").read_text(encoding="utf-8"))
         if set(metadata) != {"schema", "collector_version", "git_commit", "collected_at_utc", "sample_seconds"}:
             fail("invalid metadata fields")
-        if metadata["schema"] != SCHEMA or metadata["collector_version"] != COLLECTOR_VERSION:
+        if metadata["schema"] != SCHEMA or metadata["collector_version"] not in {COLLECTOR_VERSION, LEGACY_COLLECTOR_VERSION}:
             fail("invalid metadata version")
         if metadata["git_commit"] != "unavailable" and not COMMIT_RE.fullmatch(metadata["git_commit"]):
             fail("invalid git commit")

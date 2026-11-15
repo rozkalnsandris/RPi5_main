@@ -8,7 +8,8 @@ import re
 from typing import Any
 
 SCHEMA = "rpi5.memory-pressure-diagnostic.v1"
-COLLECTOR_VERSION = "v08.0.0"
+COLLECTOR_VERSION = "v08.1.0"
+LEGACY_COLLECTOR_VERSION = "v08.0.0"
 MEMINFO_KEYS = (
     "MemTotal", "MemFree", "MemAvailable", "Buffers", "Cached",
     "SReclaimable", "Shmem", "SwapTotal", "SwapFree", "Dirty",
@@ -150,13 +151,31 @@ def parse_zram_rows(path: pathlib.Path) -> list[dict[str, int | str]]:
     return rows
 
 
+def psi_available_in_bundle(bundle: pathlib.Path) -> bool:
+    """Use the recorded PSI read statuses, not placeholder zero counters."""
+    state: dict[str, bool] = {}
+    for line in (bundle / "section-status.tsv").read_text(encoding="utf-8").splitlines()[1:]:
+        fields = line.split("\t")
+        if fields[0] in {"psi_start", "psi_end"}:
+            if len(fields) != 5 or fields[0] in state:
+                raise BundleError("invalid PSI section status")
+            state[fields[0]] = fields[2] == "true" and fields[3] == "0"
+    if set(state) != {"psi_start", "psi_end"}:
+        raise BundleError("missing PSI section status")
+    return all(state.values())
+
+
 def build_report(bundle: pathlib.Path, metadata: dict[str, Any]) -> dict[str, Any]:
     sections = bundle / "sections"
     meminfo = read_tsv_map(sections / "meminfo.tsv", ("key", "value_kib"), MEMINFO_KEYS)
     vm_start = read_tsv_map(sections / "vmstat_start.tsv", ("key", "value"), VMSTAT_KEYS)
     vm_end = read_tsv_map(sections / "vmstat_end.tsv", ("key", "value"), VMSTAT_KEYS)
-    psi_start = parse_psi(sections / "psi_start.txt")
-    psi_end = parse_psi(sections / "psi_end.txt")
+    legacy = metadata["collector_version"] == LEGACY_COLLECTOR_VERSION
+    psi_available = True if legacy else psi_available_in_bundle(bundle)
+    psi_start = parse_psi(sections / "psi_start.txt") if psi_available else {}
+    psi_end = parse_psi(sections / "psi_end.txt") if psi_available else {}
+    if psi_available and (set(psi_start) != {"some", "full"} or set(psi_end) != {"some", "full"}):
+        raise BundleError("incomplete PSI rows")
     processes = parse_process_rows(sections / "process_rss.tsv")
     containers = parse_container_rows(sections / "container_memory.tsv")
     swap_rows = parse_swap_rows(sections / "swap.tsv")
@@ -174,23 +193,26 @@ def build_report(bundle: pathlib.Path, metadata: dict[str, Any]) -> dict[str, An
         raise BundleError("invalid memory totals")
 
     delta_vm = {key: _delta(vm_end.get(key, 0), vm_start.get(key, 0), key) for key in VMSTAT_KEYS}
-    psi_delta: dict[str, int] = {}
+    psi_delta: dict[str, int | None] = {}
     for kind in ("some", "full"):
-        before = int(psi_start.get(kind, {}).get("total_usec", 0))
-        after = int(psi_end.get(kind, {}).get("total_usec", 0))
-        psi_delta[kind] = _delta(after, before, f"psi_{kind}")
+        if not psi_available:
+            psi_delta[kind] = None
+        else:
+            before = int(psi_start[kind]["total_usec"])
+            after = int(psi_end[kind]["total_usec"])
+            psi_delta[kind] = _delta(after, before, f"psi_{kind}")
 
     swap_used = meminfo["SwapTotal"] - meminfo["SwapFree"]
     available_percent = round((mem_available * 100.0) / mem_total, 2)
     active_swap = delta_vm.get("pswpin", 0) > 0 or delta_vm.get("pswpout", 0) > 0
-    if delta_vm.get("oom_kill", 0) > 0 or psi_delta["full"] > 0 or active_swap:
+    if delta_vm.get("oom_kill", 0) > 0 or (psi_delta["full"] is not None and psi_delta["full"] > 0) or active_swap:
         observation_level = "attention"
     elif swap_used > 0 or available_percent < 20.0:
         observation_level = "informational"
     else:
         observation_level = "none"
 
-    return {
+    result = {
         "schema": SCHEMA,
         "metadata": metadata,
         "observation": {
@@ -218,12 +240,19 @@ def build_report(bundle: pathlib.Path, metadata: dict[str, Any]) -> dict[str, An
         "containers": containers,
         "limitations": limitations,
     }
+    if not legacy:
+        result["observation"]["psi_available"] = psi_available
+    return result
 
 
 def render_markdown(report: dict[str, Any]) -> str:
     obs = report["observation"]
     delta = obs["sample_delta"]
     meta = report["metadata"]
+    psi_text = (
+        f"{delta['psi_some_total_usec']}/{delta['psi_full_total_usec']} microseconds"
+        if obs.get("psi_available", True) else "unavailable (not measured)"
+    )
     lines = [
         "# Memory pressure diagnostic",
         "",
@@ -238,7 +267,7 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"- Swap used: {obs['swap_used_kib']} KiB of {obs['swap_total_kib']} KiB.",
         f"- Swap-in delta: {delta['pswpin_pages']} pages; swap-out delta: {delta['pswpout_pages']} pages.",
         f"- Major-fault delta: {delta['pgmajfault']}; OOM-kill delta: {delta['oom_kill']}.",
-        f"- PSI some/full total delta: {delta['psi_some_total_usec']}/{delta['psi_full_total_usec']} microseconds.",
+        f"- PSI some/full total delta: {psi_text}.",
         "",
         "## Safe inventories",
         "",

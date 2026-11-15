@@ -10,16 +10,20 @@ import re
 from typing import Any
 
 SCHEMA = "rpi5.memory-pressure-series.v1"
-ANALYZER_VERSION = "v09.0.0"
+ANALYZER_VERSION = "v09.1.0"
+LEGACY_ANALYZER_VERSION = "v09.0.0"
 UTC_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:@+-]{0,127}$")
 SIZE_RE = re.compile(r"^(0|[0-9]+(?:\.[0-9]+)?)(B|KB|MB|GB|TB|PB|KiB|MiB|GiB|TiB|PiB)?$")
 
-LIMITATIONS = (
+LEGACY_LIMITATIONS = (
     "The series summarizes short V08 windows and can miss activity between samples.",
     "Container usage values inherit Docker's displayed precision and are not PSS or peak memory.",
     "A trend association is not proof of causality or a memory leak.",
+)
+LIMITATIONS = LEGACY_LIMITATIONS + (
+    "Unavailable PSI is unknown, not measured zero; classification uses only available evidence.",
 )
 
 
@@ -85,7 +89,21 @@ def build_source(bundle: pathlib.Path, report: dict[str, Any]) -> dict[str, Any]
     }
 
 
-def build_sample(report: dict[str, Any]) -> dict[str, Any]:
+def source_psi_available(bundle: pathlib.Path, report: dict[str, Any]) -> bool:
+    """Read section statuses for historical V08 bundles with false-zero PSI."""
+    if "psi_available" in report["observation"]:
+        return report["observation"]["psi_available"]
+    state: dict[str, bool] = {}
+    for line in (bundle / "section-status.tsv").read_text(encoding="utf-8").splitlines()[1:]:
+        parts = line.split("\t")
+        if len(parts) == 5 and parts[0] in {"psi_start", "psi_end"}:
+            state[parts[0]] = parts[2] == "true" and parts[3] == "0"
+    if set(state) != {"psi_start", "psi_end"}:
+        raise SeriesError("missing PSI section status")
+    return all(state.values())
+
+
+def build_sample(report: dict[str, Any], psi_available: bool) -> dict[str, Any]:
     metadata = report["metadata"]
     observation = report["observation"]
     delta = observation["sample_delta"]
@@ -99,8 +117,9 @@ def build_sample(report: dict[str, Any]) -> dict[str, Any]:
         "pswpout_pages": delta["pswpout_pages"],
         "pgmajfault": delta["pgmajfault"],
         "oom_kill": delta["oom_kill"],
-        "psi_some_total_usec": delta["psi_some_total_usec"],
-        "psi_full_total_usec": delta["psi_full_total_usec"],
+        "psi_available": psi_available,
+        "psi_some_total_usec": delta["psi_some_total_usec"] if psi_available else None,
+        "psi_full_total_usec": delta["psi_full_total_usec"] if psi_available else None,
     }
 
 
@@ -127,15 +146,16 @@ def build_container_trends(reports: list[dict[str, Any]]) -> list[dict[str, Any]
     return trends
 
 
-def classify(samples: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
+def classify(samples: list[dict[str, Any]], *, legacy: bool = False) -> tuple[str, str, dict[str, Any]]:
+    psi_available_samples = sum(1 for row in samples if row.get("psi_available", True))
     psi_samples = sum(
         1 for row in samples
-        if row["psi_some_total_usec"] > 0 or row["psi_full_total_usec"] > 0
+        if (row["psi_some_total_usec"] or 0) > 0 or (row["psi_full_total_usec"] or 0) > 0
     )
     swapout_samples = sum(1 for row in samples if row["pswpout_pages"] > 0)
     low_memory_samples = sum(1 for row in samples if row["mem_available_basis_points"] < 1500)
     oom_total = sum(row["oom_kill"] for row in samples)
-    psi_full_total = sum(row["psi_full_total_usec"] for row in samples)
+    psi_full_total = sum(row["psi_full_total_usec"] or 0 for row in samples)
     sustained = (
         oom_total > 0
         or psi_full_total > 0
@@ -147,8 +167,8 @@ def classify(samples: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
         row["pswpin_pages"] > 0
         or row["pswpout_pages"] > 0
         or row["pgmajfault"] > 0
-        or row["psi_some_total_usec"] > 0
-        or row["psi_full_total_usec"] > 0
+        or (row["psi_some_total_usec"] or 0) > 0
+        or (row["psi_full_total_usec"] or 0) > 0
         or row["oom_kill"] > 0
         for row in samples
     )
@@ -157,6 +177,9 @@ def classify(samples: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
         level = "attention"
     elif activity:
         classification = "intermittent_activity"
+        level = "informational"
+    elif not legacy and psi_available_samples < len(samples):
+        classification = "indeterminate"
         level = "informational"
     else:
         classification = "stable_idle"
@@ -169,6 +192,9 @@ def classify(samples: list[dict[str, Any]]) -> tuple[str, str, dict[str, Any]]:
         "swapout_activity_samples": swapout_samples,
         "low_memory_samples": low_memory_samples,
     }
+    if not legacy:
+        evidence["psi_available_samples"] = psi_available_samples
+        evidence["psi_full_total_usec"] = psi_full_total if psi_available_samples == len(samples) else None
     return classification, level, evidence
 
 
@@ -176,13 +202,18 @@ def build_report(bundles: list[pathlib.Path], reports: list[dict[str, Any]]) -> 
     if not 2 <= len(reports) <= 64 or len(bundles) != len(reports):
         raise SeriesError("series requires 2 to 64 bundles")
     sources = [build_source(bundle, report) for bundle, report in zip(bundles, reports, strict=True)]
-    samples = [build_sample(report) for report in reports]
+    samples = [
+        build_sample(report, source_psi_available(bundle, report))
+        for bundle, report in zip(bundles, reports, strict=True)
+    ]
     timestamps = [row["collection_utc"] for row in samples]
     if any(not UTC_RE.fullmatch(value) for value in timestamps):
         raise SeriesError("invalid collection timestamp")
     if timestamps != sorted(timestamps) or len(set(timestamps)) != len(timestamps):
         raise SeriesError("collection timestamps must increase strictly")
     classification, level, evidence = classify(samples)
+    psi_available_samples = sum(row["psi_available"] for row in samples)
+    psi_complete = psi_available_samples == len(samples)
     aggregate = {
         "mem_available_min_basis_points": min(row["mem_available_basis_points"] for row in samples),
         "mem_available_max_basis_points": max(row["mem_available_basis_points"] for row in samples),
@@ -193,8 +224,9 @@ def build_report(bundles: list[pathlib.Path], reports: list[dict[str, Any]]) -> 
         "pswpout_pages_total": sum(row["pswpout_pages"] for row in samples),
         "pgmajfault_total": sum(row["pgmajfault"] for row in samples),
         "oom_kill_total": sum(row["oom_kill"] for row in samples),
-        "psi_some_total_usec": sum(row["psi_some_total_usec"] for row in samples),
-        "psi_full_total_usec": sum(row["psi_full_total_usec"] for row in samples),
+        "psi_available_samples": psi_available_samples,
+        "psi_some_total_usec": sum(row["psi_some_total_usec"] for row in samples) if psi_complete else None,
+        "psi_full_total_usec": sum(row["psi_full_total_usec"] for row in samples) if psi_complete else None,
         "source_attention_samples": sum(1 for row in samples if row["source_level"] == "attention"),
     }
     return {
@@ -220,8 +252,13 @@ def build_report(bundles: list[pathlib.Path], reports: list[dict[str, Any]]) -> 
     }
 
 
+def format_psi(some: int | None, full: int | None) -> str:
+    return "unavailable" if some is None or full is None else f"{some}/{full}"
+
+
 def render_markdown(report: dict[str, Any]) -> str:
     aggregate = report["aggregate"]
+    legacy = report["analyzer_version"] == LEGACY_ANALYZER_VERSION
     lines = [
         "# Memory pressure series",
         "",
@@ -237,7 +274,7 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"- Swap used: {format_mib(aggregate['swap_used_first_kib'])} → {format_mib(aggregate['swap_used_latest_kib'])} MiB; change {format_mib(aggregate['swap_used_change_kib'])} MiB.",
         f"- Swap-in/out pages: {aggregate['pswpin_pages_total']}/{aggregate['pswpout_pages_total']}.",
         f"- Major faults: {aggregate['pgmajfault_total']}; OOM kills: {aggregate['oom_kill_total']}.",
-        f"- PSI some/full: {aggregate['psi_some_total_usec']}/{aggregate['psi_full_total_usec']} microseconds.",
+        f"- PSI some/full: {format_psi(aggregate['psi_some_total_usec'], aggregate['psi_full_total_usec'])} microseconds.",
         f"- Source V08 attention samples: {aggregate['source_attention_samples']}.",
         "",
         "## Samples",
@@ -245,11 +282,14 @@ def render_markdown(report: dict[str, Any]) -> str:
         "| UTC | Available | Swap MiB | In/Out | Major | PSI some/full | Source level |",
         "|---|---:|---:|---:|---:|---:|---|",
     ]
+    if not legacy:
+        coverage = f"- PSI available: {aggregate['psi_available_samples']}/{report['sample_count']} samples."
+        lines.insert(lines.index(f"- Source V08 attention samples: {aggregate['source_attention_samples']}."), coverage)
     for row in report["samples"]:
         lines.append(
             f"| `{row['collection_utc']}` | {row['mem_available_basis_points'] / 100:.2f}% | "
             f"{format_mib(row['swap_used_kib'])} | {row['pswpin_pages']}/{row['pswpout_pages']} | "
-            f"{row['pgmajfault']} | {row['psi_some_total_usec']}/{row['psi_full_total_usec']} | "
+            f"{row['pgmajfault']} | {format_psi(row['psi_some_total_usec'], row['psi_full_total_usec'])} | "
             f"`{row['source_level']}` |"
         )
     lines += ["", "## Container trends", ""]
@@ -280,5 +320,7 @@ def render_markdown(report: dict[str, Any]) -> str:
         "## Limitations",
         "",
     ]
+    if not legacy:
+        lines.insert(lines.index("## Limitations") - 1, f"- PSI data available: {report['evidence']['psi_available_samples']}/{report['sample_count']} samples.")
     lines.extend(f"- {item}" for item in report["limitations"])
     return "\n".join(lines) + "\n"

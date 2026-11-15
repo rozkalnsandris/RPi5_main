@@ -278,7 +278,7 @@ def main() -> None:
     write_section("meminfo.tsv", "host-memory", available, rc, parse_meminfo(raw) if rc == 0 else "key\tvalue_kib\n")
 
     psi_available, psi_start_rc, psi_start_raw = read_proc("pressure/memory", "start")
-    write_section("psi_start.txt", "memory-pressure", psi_available, psi_start_rc, psi_start_raw if psi_start_rc == 0 else "some avg10=0.00 avg60=0.00 avg300=0.00 total=0\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0\n")
+    write_section("psi_start.txt", "memory-pressure", psi_available, psi_start_rc, psi_start_raw if psi_start_rc == 0 else "")
     vm_available, vm_start_rc, vm_start_raw = read_proc("vmstat", "start")
     write_section("vmstat_start.tsv", "memory-counters", vm_available, vm_start_rc, parse_vmstat(vm_start_raw) if vm_start_rc == 0 else "key\tvalue\n")
 
@@ -286,7 +286,9 @@ def main() -> None:
         time.sleep(SAMPLE_SECONDS)
 
     psi_end_available, psi_end_rc, psi_end_raw = read_proc("pressure/memory", "end")
-    write_section("psi_end.txt", "memory-pressure", psi_end_available, psi_end_rc, psi_end_raw if psi_end_rc == 0 else "some avg10=0.00 avg60=0.00 avg300=0.00 total=0\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0\n")
+    write_section("psi_end.txt", "memory-pressure", psi_end_available, psi_end_rc, psi_end_raw if psi_end_rc == 0 else "")
+    if psi_start_rc != 0 or psi_end_rc != 0:
+        limitations.add("Memory PSI unavailable; its values are unknown, not zero.")
     vm_end_available, vm_end_rc, vm_end_raw = read_proc("vmstat", "end")
     write_section("vmstat_end.tsv", "memory-counters", vm_end_available, vm_end_rc, parse_vmstat(vm_end_raw) if vm_end_rc == 0 else "key\tvalue\n")
 

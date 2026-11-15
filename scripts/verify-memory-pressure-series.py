@@ -13,6 +13,8 @@ import sys
 
 from memory_pressure_series import (
     ANALYZER_VERSION,
+    LEGACY_ANALYZER_VERSION,
+    LEGACY_LIMITATIONS,
     LIMITATIONS,
     SAFE_NAME_RE,
     SCHEMA,
@@ -99,8 +101,9 @@ def validate_report(report: dict) -> None:
         "collection_end_utc", "classification", "series_level", "sources",
         "samples", "aggregate", "containers", "evidence", "checks", "limitations",
     }, "report")
-    if report["schema"] != SCHEMA or report["analyzer_version"] != ANALYZER_VERSION:
+    if report["schema"] != SCHEMA or report["analyzer_version"] not in {ANALYZER_VERSION, LEGACY_ANALYZER_VERSION}:
         fail("unsupported report version")
+    legacy = report["analyzer_version"] == LEGACY_ANALYZER_VERSION
     sample_count = require_int(report["sample_count"], "sample count", minimum=2, maximum=64)
     if not isinstance(report["samples"], list) or len(report["samples"]) != sample_count:
         fail("sample count mismatch")
@@ -133,6 +136,8 @@ def validate_report(report: dict) -> None:
         "pswpout_pages", "pgmajfault", "oom_kill", "psi_some_total_usec",
         "psi_full_total_usec",
     }
+    if not legacy:
+        sample_keys.add("psi_available")
     for sample in report["samples"]:
         exact_keys(sample, sample_keys, "sample")
         timestamp = sample["collection_utc"]
@@ -142,11 +147,16 @@ def validate_report(report: dict) -> None:
             fail("invalid source level")
         require_int(sample["mem_available_kib"], "available memory", minimum=0)
         require_int(sample["mem_available_basis_points"], "available percentage", minimum=0, maximum=10000)
-        for key in (
-            "swap_used_kib", "pswpin_pages", "pswpout_pages", "pgmajfault",
-            "oom_kill", "psi_some_total_usec", "psi_full_total_usec",
-        ):
+        for key in ("swap_used_kib", "pswpin_pages", "pswpout_pages", "pgmajfault", "oom_kill"):
             require_int(sample[key], key, minimum=0)
+        if not legacy and type(sample["psi_available"]) is not bool:
+            fail("invalid PSI availability")
+        for key in ("psi_some_total_usec", "psi_full_total_usec"):
+            if not legacy and not sample["psi_available"]:
+                if sample[key] is not None:
+                    fail("unavailable PSI must be null")
+            else:
+                require_int(sample[key], key, minimum=0)
         sample_times.append(timestamp)
         samples.append(sample)
     if sample_times != sorted(sample_times) or len(set(sample_times)) != sample_count:
@@ -156,7 +166,7 @@ def validate_report(report: dict) -> None:
     if report["collection_start_utc"] != sample_times[0] or report["collection_end_utc"] != sample_times[-1]:
         fail("series window mismatch")
 
-    expected_classification, expected_level, expected_evidence = classify(samples)
+    expected_classification, expected_level, expected_evidence = classify(samples, legacy=legacy)
     if report["classification"] != expected_classification or report["series_level"] != expected_level:
         fail("classification mismatch")
     if report["evidence"] != expected_evidence:
@@ -168,7 +178,7 @@ def validate_report(report: dict) -> None:
         "pswpin_pages_total", "pswpout_pages_total", "pgmajfault_total",
         "oom_kill_total", "psi_some_total_usec", "psi_full_total_usec",
         "source_attention_samples",
-    }, "aggregate")
+    } | ({"psi_available_samples"} if not legacy else set()), "aggregate")
     expected_aggregate = {
         "mem_available_min_basis_points": min(row["mem_available_basis_points"] for row in samples),
         "mem_available_max_basis_points": max(row["mem_available_basis_points"] for row in samples),
@@ -179,10 +189,18 @@ def validate_report(report: dict) -> None:
         "pswpout_pages_total": sum(row["pswpout_pages"] for row in samples),
         "pgmajfault_total": sum(row["pgmajfault"] for row in samples),
         "oom_kill_total": sum(row["oom_kill"] for row in samples),
-        "psi_some_total_usec": sum(row["psi_some_total_usec"] for row in samples),
-        "psi_full_total_usec": sum(row["psi_full_total_usec"] for row in samples),
+        "psi_some_total_usec": (
+            sum(row["psi_some_total_usec"] for row in samples)
+            if legacy or all(row["psi_available"] for row in samples) else None
+        ),
+        "psi_full_total_usec": (
+            sum(row["psi_full_total_usec"] for row in samples)
+            if legacy or all(row["psi_available"] for row in samples) else None
+        ),
         "source_attention_samples": sum(1 for row in samples if row["source_level"] == "attention"),
     }
+    if not legacy:
+        expected_aggregate["psi_available_samples"] = sum(row["psi_available"] for row in samples)
     if aggregate != expected_aggregate:
         fail("aggregate mismatch")
 
@@ -220,7 +238,7 @@ def validate_report(report: dict) -> None:
         "source_bundles_unchanged": True,
     }:
         fail("verification checks mismatch")
-    if report["limitations"] != list(LIMITATIONS):
+    if report["limitations"] != list(LEGACY_LIMITATIONS if legacy else LIMITATIONS):
         fail("limitations mismatch")
 
 

@@ -126,6 +126,22 @@ r=json.load(open(sys.argv[1])); assert r['observation']['container_rows']==0
 assert any('Per-container current memory was unavailable' in x for x in r['limitations'])
 PY
 
+
+mv "${proc}/pressure/memory.start" "${proc}/pressure/memory.start.off"
+mv "${proc}/pressure/memory.end" "${proc}/pressure/memory.end.off"
+unknown="$(collect no-psi)"
+python3 "${verifier}" "${unknown}" >/dev/null
+python3 - "${unknown}/report.json" "${unknown}/report.md" <<'PY'
+import json, pathlib, sys
+r = json.loads(pathlib.Path(sys.argv[1]).read_text())
+assert r["observation"]["psi_available"] is False
+assert r["observation"]["sample_delta"]["psi_some_total_usec"] is None
+assert r["observation"]["sample_delta"]["psi_full_total_usec"] is None
+assert "unavailable (not measured)" in pathlib.Path(sys.argv[2]).read_text()
+PY
+mv "${proc}/pressure/memory.start.off" "${proc}/pressure/memory.start"
+mv "${proc}/pressure/memory.end.off" "${proc}/pressure/memory.end"
+
 if PATH="${stub}:/usr/bin:/bin" MEMORY_DIAG_TEST_MODE=1 MEMORY_DIAG_TEST_UID=0 MEMORY_DIAG_PROC_ROOT="${proc}" python3 "${collector}" --output "${root}/root" >/dev/null 2>&1; then
   fail 'collector accepted root identity'
 fi

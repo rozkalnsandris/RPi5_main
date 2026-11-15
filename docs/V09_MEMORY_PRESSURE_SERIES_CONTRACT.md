@@ -29,3 +29,7 @@ A single V08 `attention` window does not automatically make the series `sustaine
 `analyze-memory-pressure-series.py` writes canonical `report.json`, deterministic `report.md` and `SHA256SUMS` atomically to a new directory below ignored `evidence/` or `exports/` paths. `verify-memory-pressure-series.py` checks structure, ownership, file types, checksums, canonical JSON, arithmetic, chronology, classification and exact Markdown rendering.
 
 The report summarizes source windows and associations only. It does not prove causality, diagnose a leak, deploy, remediate, clear swap, tune zram, restart services or change Docker.
+
+## PSI availability (v09.1.0; #1468)
+
+V09 checks PSI source status even for verified legacy V08 bundles. It emits `psi_available=false` and null deltas when absent; aggregate PSI is null when any source lacks data. Confirmed repeated swap-out still establishes `sustained_pressure`; no recorded activity plus incomplete PSI results in `indeterminate`, not `stable_idle`. The verifier supports historical v09.0.0 output for provenance; reanalyze old sources for corrected PSI interpretation.
