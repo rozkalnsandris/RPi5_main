@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import tempfile
@@ -195,6 +196,32 @@ def read_keyed_ints(path: pathlib.Path, allowed: tuple[str, ...]) -> dict[str, i
     return result
 
 
+def exact_grafana_container_id() -> str:
+    """Resolve the exact Docker container without exporting its opaque ID."""
+    completed = subprocess.run(
+        ["docker", "ps", "--no-trunc", "--filter", "name=^/grafana$",
+         "--format", "{{.ID}}\t{{.Names}}"],
+        check=False, capture_output=True, text=True, timeout=10,
+    )
+    if completed.returncode != 0:
+        fail("Grafana Docker identity unavailable")
+    rows = completed.stdout.splitlines()
+    if len(rows) != 1:
+        fail("expected one running Grafana container")
+    parts = rows[0].split("\t")
+    if len(parts) != 2 or parts[1] != "grafana" or not re.fullmatch(r"[0-9a-f]{64}", parts[0]):
+        fail("Grafana Docker identity invalid")
+    return parts[0]
+
+
+def require_bound_cgroup(relative: pathlib.PurePosixPath, container_id: str) -> None:
+    """Reject unrelated, root-level or unrecognized cgroup layouts."""
+    if not relative.is_absolute() or relative == pathlib.PurePosixPath("/"):
+        fail("Grafana cgroup is not a container leaf")
+    if relative.name not in (container_id, f"docker-{container_id}.scope"):
+        fail("Grafana process cgroup does not belong to Docker container")
+
+
 def docker_stats() -> tuple[bool, str, str, str, int]:
     if os.environ.get("GRAFANA_ATTR_DISABLE_DOCKER") == "1":
         return False, "0", "0", "0%", 0
@@ -240,6 +267,7 @@ def write_map(
 
 def build_bundle(target: pathlib.Path) -> pathlib.Path:
     processes = find_processes()
+    container_id = exact_grafana_container_id()
     limitations: set[str] = set()
 
     status_totals = {key: 0 for key in STATUS_MEMORY_KEYS}
@@ -277,6 +305,7 @@ def build_bundle(target: pathlib.Path) -> pathlib.Path:
         fail("expected one exact Grafana cgroup-v2 path")
     if len(cgroup_paths) == 1:
         relative = next(iter(cgroup_paths))
+        require_bound_cgroup(relative, container_id)
         relative_parts = [part for part in relative.parts if part not in {"/", ""}]
         cgroup_dir = CGROUP_ROOT.joinpath(*relative_parts)
         scalar_files = {
@@ -394,6 +423,11 @@ def build_bundle(target: pathlib.Path) -> pathlib.Path:
             ),
             encoding="utf-8",
         )
+        # Validate identity again before publishing the immutable evidence bundle.
+        if (exact_grafana_container_id() != container_id or
+                read_text(processes[0] / "comm").strip() != "grafana" or
+                cgroup_relative_path(processes[0]) != relative):
+            fail("Grafana process/container identity drift")
         os.chmod(temp, 0o700)
         for path in temp.rglob("*"):
             if path.is_file():

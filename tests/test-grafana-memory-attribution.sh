@@ -10,7 +10,8 @@ trap 'rm -rf -- "${root}" "${repo}/evidence/test-grafana-memory-link"' EXIT
 proc="${root}/proc"
 cgroup="${root}/cgroup"
 stub="${root}/stub"
-mkdir -p "${proc}/123/fd" "${cgroup}/test.slice/grafana.scope" "${stub}"
+cid="$(printf '0123456789abcdef%.0s' {1..4})"
+mkdir -p "${proc}/123/fd" "${cgroup}/system.slice/docker-${cid}.scope" "${stub}"
 for item in 1 2 3 4 5; do : > "${proc}/123/fd/${item}"; done
 
 cat > "${proc}/123/comm" <<'EOF'
@@ -51,16 +52,16 @@ SwapPss:            8000 kB
 Locked:                0 kB
 EOF
 
-cat > "${proc}/123/cgroup" <<'EOF'
-0::/test.slice/grafana.scope
+cat > "${proc}/123/cgroup" <<EOF
+0::/system.slice/docker-${cid}.scope
 EOF
 
-printf '%s\n' $((460000 * 1024)) > "${cgroup}/test.slice/grafana.scope/memory.current"
-printf '%s\n' $((470000 * 1024)) > "${cgroup}/test.slice/grafana.scope/memory.peak"
-printf '%s\n' $((12000 * 1024)) > "${cgroup}/test.slice/grafana.scope/memory.swap.current"
-printf '%s\n' $((500 * 1024 * 1024)) > "${cgroup}/test.slice/grafana.scope/memory.max"
+printf '%s\n' $((460000 * 1024)) > "${cgroup}/system.slice/docker-${cid}.scope/memory.current"
+printf '%s\n' $((470000 * 1024)) > "${cgroup}/system.slice/docker-${cid}.scope/memory.peak"
+printf '%s\n' $((12000 * 1024)) > "${cgroup}/system.slice/docker-${cid}.scope/memory.swap.current"
+printf '%s\n' $((500 * 1024 * 1024)) > "${cgroup}/system.slice/docker-${cid}.scope/memory.max"
 
-cat > "${cgroup}/test.slice/grafana.scope/memory.stat" <<EOF
+cat > "${cgroup}/system.slice/docker-${cid}.scope/memory.stat" <<EOF
 anon $((420000 * 1024))
 file $((20000 * 1024))
 kernel $((20000 * 1024))
@@ -87,7 +88,7 @@ pgsteal 110
 thp_fault_alloc 0
 EOF
 
-cat > "${cgroup}/test.slice/grafana.scope/memory.events" <<'EOF'
+cat > "${cgroup}/system.slice/docker-${cid}.scope/memory.events" <<'EOF'
 low 0
 high 0
 max 0
@@ -95,7 +96,7 @@ oom 0
 oom_kill 0
 oom_group_kill 0
 EOF
-cat > "${cgroup}/test.slice/grafana.scope/memory.events.local" <<'EOF'
+cat > "${cgroup}/system.slice/docker-${cid}.scope/memory.events.local" <<'EOF'
 low 0
 high 0
 max 0
@@ -106,7 +107,11 @@ EOF
 
 cat > "${stub}/docker" <<'EOF'
 #!/usr/bin/env bash
-printf 'grafana\t438.4MiB / 500MiB\t87.68%%\t15\n'
+case "${1-}" in
+  ps) printf '%s\tgrafana\n' "${GRAFANA_ATTR_TEST_CONTAINER_ID:?}" ;;
+  stats) printf 'grafana\t438.4MiB / 500MiB\t87.68%%\t15\n' ;;
+  *) exit 1 ;;
+esac
 EOF
 chmod +x "${stub}/docker"
 
@@ -115,6 +120,7 @@ collect(){
   PATH="${stub}:/usr/bin:/bin" \
   GRAFANA_ATTR_TEST_MODE=1 \
   GRAFANA_ATTR_TEST_UID=1000 \
+  GRAFANA_ATTR_TEST_CONTAINER_ID="${cid}" \
   GRAFANA_ATTR_TEST_COMMIT=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
   GRAFANA_ATTR_FIXED_UTC=2026-08-05T13:00:00Z \
   GRAFANA_ATTR_PROC_ROOT="${proc}" \
@@ -163,12 +169,23 @@ assert "Dominant component: `anonymous`." in markdown
 assert "headroom 61.60 MiB" in markdown
 PY
 
-if grep -R -F 'test.slice/grafana.scope' "${one}" >/dev/null; then
+if grep -R -F "system.slice/docker-${cid}.scope" "${one}" >/dev/null; then
   printf '%s\n' 'test-grafana-memory-attribution: FAIL: cgroup path leaked' >&2
   exit 1
 fi
 
-rm -f "${cgroup}/test.slice/grafana.scope/memory.events.local"
+wrong="${root}/wrong-identity"
+if GRAFANA_ATTR_TEST_CONTAINER_ID="$(printf 'f%.0s' {1..64})" \
+   PATH="${stub}:/usr/bin:/bin" GRAFANA_ATTR_TEST_MODE=1 GRAFANA_ATTR_TEST_UID=1000 \
+   GRAFANA_ATTR_PROC_ROOT="${proc}" GRAFANA_ATTR_CGROUP_ROOT="${cgroup}" \
+   python3 "${collector}" --output "${wrong}" >/dev/null 2>&1
+then
+  printf '%s\n' 'test-grafana-memory-attribution: FAIL: mismatched container accepted' >&2
+  exit 1
+fi
+test ! -e "${wrong}"
+
+rm -f "${cgroup}/system.slice/docker-${cid}.scope/memory.events.local"
 unknown="${root}/bundle-no-local-events"
 collect "${unknown}"
 python3 "${verifier}" "${unknown}" >/dev/null
