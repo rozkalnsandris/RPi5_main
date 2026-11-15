@@ -48,7 +48,8 @@ _mqtt_host = ""
 _mqtt_username = ""
 _mqtt_secret = ""
 _mqttc: mqtt.Client | None = None
-_outbound_messages: queue.Queue[tuple[str, float]] = queue.Queue(
+_mqtt_subscribe_pending_mid: int | None = None
+_outbound_messages: queue.Queue[tuple[str, float, str]] = queue.Queue(
     maxsize=TELEGRAM_SEND_QUEUE_SIZE
 )
 
@@ -96,10 +97,13 @@ def _send_telegram_now(text: str) -> bool:
         return False
 
 
-def tg_send(text: str) -> None:
+def tg_send(text: str, *, source: str = "local") -> None:
     """Stage one bounded best-effort message without blocking on HTTP."""
+    # Only fixed internal source classes may enter the journal.
+    if source not in ("local", "mqtt"):
+        source = "local"
     try:
-        _outbound_messages.put_nowait((text, time.monotonic()))
+        _outbound_messages.put_nowait((text, time.monotonic(), source))
     except queue.Full:
         # Never journal Telegram text or MQTT payload contents.
         print("TG outbound queue full; newest message dropped", file=sys.stderr)
@@ -107,13 +111,20 @@ def tg_send(text: str) -> None:
 
 def _telegram_sender_loop() -> None:
     while True:
-        text, queued_at = _outbound_messages.get()
+        text, queued_at, source = _outbound_messages.get()
         try:
             send_started = time.monotonic()
             delivered = _send_telegram_now(text)
             send_ended = time.monotonic()
             queue_delay = max(0.0, send_started - queued_at)
             http_delay = max(0.0, send_ended - send_started)
+            # HTTP API acceptance, not receipt by a person or chat client.
+            # Fixed categories only: never log the text, chat, token or URL.
+            print(
+                f"TG API outcome source={source} ok={int(delivered)}",
+                file=sys.stderr,
+                flush=True,
+            )
             if queue_delay >= TELEGRAM_SLOW_SEND_S or http_delay >= TELEGRAM_SLOW_SEND_S:
                 print(
                     f"TG delivery timing queue_ms={int(queue_delay * 1000)} "
@@ -131,14 +142,49 @@ def _start_telegram_sender() -> None:
     ).start()
 
 def _connected(client, reason_code) -> None:
+    global _mqtt_subscribe_pending_mid
+    # Reconnect invalidates any previous, unacknowledged subscription.
+    _mqtt_subscribe_pending_mid = None
     if reason_code != 0:
-        print("MQTT connection rejected", file=sys.stderr)
+        print("MQTT connection rejected", file=sys.stderr, flush=True)
         return
 
-    print("MQTT connected")
-    result, _mid = client.subscribe(T_OUT)
+    print("MQTT connected", file=sys.stderr, flush=True)
+    result, mid = client.subscribe(T_OUT)
     if result != mqtt.MQTT_ERR_SUCCESS:
-        print(f"MQTT subscribe failed rc={result}", file=sys.stderr)
+        print("MQTT subscribe request rejected", file=sys.stderr, flush=True)
+    elif type(mid) is int and mid > 0:
+        # subscribe() return success is only a request, NOT broker SUBACK.
+        _mqtt_subscribe_pending_mid = mid
+    else:
+        print("MQTT subscribe request invalid", file=sys.stderr, flush=True)
+
+
+def _subscription_acknowledged(mid, reason_codes) -> None:
+    global _mqtt_subscribe_pending_mid
+    if type(mid) is not int or mid != _mqtt_subscribe_pending_mid:
+        print("MQTT SUBACK unmatched", file=sys.stderr, flush=True)
+        return
+    _mqtt_subscribe_pending_mid = None
+    if not isinstance(reason_codes, (list, tuple)) or len(reason_codes) != 1:
+        print("MQTT SUBACK unknown", file=sys.stderr, flush=True)
+        return
+    reason = reason_codes[0]
+    code = reason if type(reason) is int else getattr(reason, "value", None)
+    if type(code) is int and code in (0, 1, 2):
+        print("MQTT SUBACK accepted", file=sys.stderr, flush=True)
+    else:
+        print("MQTT SUBACK rejected", file=sys.stderr, flush=True)
+
+
+def on_subscribe_v1(client, userdata, mid, granted_qos) -> None:
+    del client, userdata
+    _subscription_acknowledged(mid, granted_qos)
+
+
+def on_subscribe_v2(client, userdata, mid, reason_code_list, properties) -> None:
+    del client, userdata, properties
+    _subscription_acknowledged(mid, reason_code_list)
 
 
 def on_connect_v2(client, userdata, connect_flags, reason_code, properties) -> None:
@@ -158,7 +204,7 @@ def on_message(client, userdata, msg) -> None:
     text = msg.payload.decode("utf-8", errors="replace")
     # The payload is intentionally delivered to the authorized Telegram chat,
     # but is not duplicated into the service journal.
-    tg_send(text)
+    tg_send(text, source="mqtt")
 
 
 def _strict_json_object(pairs):
@@ -380,9 +426,11 @@ def _start_mqtt() -> None:
     if callback_api is None:
         client = mqtt.Client()
         client.on_connect = on_connect_v1
+        setattr(client, "on_subscribe", on_subscribe_v1)
     else:
         client = mqtt.Client(callback_api.VERSION2)
         client.on_connect = on_connect_v2
+        setattr(client, "on_subscribe", on_subscribe_v2)
 
     client.username_pw_set(_mqtt_username, _mqtt_secret)
     client.on_message = on_message
