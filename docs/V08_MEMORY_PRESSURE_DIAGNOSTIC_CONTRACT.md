@@ -30,3 +30,7 @@ The report level is a deterministic review hint, not a diagnosis:
 - `none`: neither condition was observed.
 
 A short sample can miss intermittent pressure. Root-cause conclusions require repeated verified bundles under comparable idle and busy periods.
+
+## PSI availability (v08.1.0; #1468)
+
+PSI is considered measured only if **both** start/end reads succeed. New bundles record `psi_available=false` and null deltas when absent, with explicit unavailable Markdown. The verifier still accepts historical v08.0.0 bundles unchanged; old placeholder zeros are **not measured** PSI, so consumers must consult section-status metadata.

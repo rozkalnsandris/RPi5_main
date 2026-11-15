@@ -171,4 +171,22 @@ assert report["evidence"]["sustained_pressure"] is True
 assert report["evidence"]["swapout_activity_samples"]==2
 PY
 
+
+# Missing PSI must not appear as a measured zero.
+write_proc 1800000 1750000 0 0 0 0
+rm "${proc}/pressure/memory.start" "${proc}/pressure/memory.end"
+unknown_one="$(collect unknown-one 2026-08-05T14:00:00Z 440MiB 88.00%)"
+unknown_two="$(collect unknown-two 2026-08-05T14:05:00Z 440MiB 88.00%)"
+python3 "${analyzer}" --output "${root}/no-psi" "${unknown_one}" "${unknown_two}" >/dev/null
+python3 "${verifier}" "${root}/no-psi" >/dev/null
+python3 - "${root}/no-psi/report.json" "${root}/no-psi/report.md" <<'PY'
+import json, pathlib, sys
+r = json.loads(pathlib.Path(sys.argv[1]).read_text())
+assert r["classification"] == "indeterminate"
+assert r["aggregate"]["psi_available_samples"] == 0
+assert r["aggregate"]["psi_some_total_usec"] is None
+assert all(s["psi_available"] is False and s["psi_full_total_usec"] is None for s in r["samples"])
+assert "PSI some/full: unavailable" in pathlib.Path(sys.argv[2]).read_text()
+PY
+
 printf '%s\n' 'Memory pressure series tests: PASS'
