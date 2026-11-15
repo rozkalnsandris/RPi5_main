@@ -252,5 +252,19 @@ class BalkonsBotPreflightTests(unittest.TestCase):
         self.assertNotIn("sha256_file(path)", credential_slice)
 
 
+    def test_route_attribution_offline_suite(self):
+        # Existing balcony CI manifest entry drives the independent offline
+        # metadata-only route tests. No device or network is contacted.
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "tests/test-balkons-bot-route-attribution.py")],
+            cwd=ROOT, capture_output=True, text=True,
+            timeout=60, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr[-3000:])
+
+
 if __name__ == "__main__":
     unittest.main()

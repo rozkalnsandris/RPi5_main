@@ -54,3 +54,63 @@ Merge is separately owner-gated, and source merge does not install or restart
 sanitized read-only preflight, exact source/artifact identity and recovery
 review. Never run MQTT probes/commands, restart host services, read credentials
 or flash/actuate ESP32 under this source-only change.
+
+## Existing 11:00 watering Telegram route attribution (#1478, source only)
+
+The November 15, 2026 source/host reconciliation must **not infer** the active
+bot's MQTT subscription from `balkons-bot.service=active`, nor infer a failed
+bot from an unfamiliar Python filename. The historical live-only, potentially
+secret-bearing Python implementation from #192 predates the reviewed
+`ops/lib/balkons-bot.py` source. The reviewed initial-install operator from
+#925/#932 targets exactly `/usr/local/lib/rpi5-balkons-bot.py` and the
+encrypted-credential overlay, but an owner authorization record is **not proof
+that installation/restart completed**. Historical #925 owner approvals are not
+reusable LIVE authority.
+
+After an independently scoped, **strict READONLY** host authorization, the
+source-only `ops/bin/balkons-bot-route-attribution` can classify only
+allowlisted `systemctl show` metadata for `balkons-bot.service`: configured
+system Python script path **regardless of its basename**, service status and
+main PID presence, known legacy *path fingerprint* (not legacy file content),
+fixed reviewed public install-target hash and declared encrypted credential
+*identifiers*. It reuses the existing reviewed
+`ops/bin/balkons-bot-preflight` `ExecStart` parser. It does not read the
+private live bot's Python bytes, credentials, proc argv, raw service unit,
+environment, logs or MQTT payload; it prints no private path/argv, only a
+bounded sanitized classification, path SHA-256 and static status flags.
+
+Possible classifications:
+
+- `REVIEWED_PUBLIC_SOURCE_CONFIGURED`: `ExecStart` references the exact
+  public fixed file and its SHA-256 matches reviewed source. Metadata alone
+  still **does not verify the running PID's executable, actual MQTT broker
+  connection/subscription or delivery to the Telegram chat**.
+- `HISTORICAL_LEGACY_PATH_FINGERPRINT_MATCH`: configured path fingerprint
+  equals a previously approved #925 private baseline; this proves no legacy
+  file bytes or current behavior. Never open that source to inspect topics.
+- `OTHER_PRIVATE_SOURCE_UNATTRIBUTED`: some other Python entrypoint; do not
+  guess identity from the basename.
+- `BLOCKED`: conflicting source metadata, missing/unsafe public fixed
+  target when configured, invalid PID/service/ExecStart. No arbitrary fallback.
+
+The five encrypted credential IDs in the public overlay are declarations
+only. Metadata cannot establish that credentials decrypt successfully or
+that the bot reaches the correct chat; even a running service and successful
+MQTT publish are not proof of Telegram receipt.
+
+**Gate for the already merged #1474 11:00 repair:** the current Hermes wrapper
+still executes a 12-sensor/obsolete direct-Telegram controller, while its
+reviewed replacement sends `Nav laistīts` through HA MQTT
+`balkons/telegram_out`. Do **not** replace that controller until the target
+bot route and missing protected runtime wiring have independently passed a
+separate exactly authorized, sanitized read-only preflight. If the reviewed
+bot is not installed, use the existing #925 fixed initial-install operator
+*only after a new exact composite LIVE owner decision and its original
+no-overwrite/recovery gates*, not an improvised source copy. Bot LIVE
+installation, any credential change, and the 11:00 controller file replacement
+are distinct trust-boundary operations. No cron change or manual watering
+probe is implied or authorized.
+
+Offline regression: `tests/test-balkons-bot-route-attribution.py` runs through
+`tests/test-balkons-bot-preflight.py` in the existing balcony CI group; none
+of those tests contacts a live host, broker, Telegram or ESP32.
