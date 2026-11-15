@@ -343,7 +343,7 @@ required = (
     "single-process, continuous-identity", "same pinned directory handle",
     "memory.events.local", "end-start", "null deltas",
     "PID reuse", "source commit SHA", "independent offline verifier",
-    "cannot independently re-observe", "no PIDs, raw or hashed container IDs",
+    "cannot independently re-observe", "No PIDs, raw or hashed container IDs",
     "After an authorized evidence write begins", "#1468 stays OPEN",
 )
 assert all(marker in contract for marker in required), "continuous-identity contract missing invariant"
