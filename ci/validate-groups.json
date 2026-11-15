@@ -1092,6 +1092,10 @@
       ],
       [
         "python3",
+        "./tests/test-balkons-ha-native-telegram.py"
+      ],
+      [
+        "python3",
         "./tests/test-balkons-bot-latency-rollout.py"
       ],
       [
