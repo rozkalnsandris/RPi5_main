@@ -123,6 +123,75 @@ def classify_run_count_only_drift(job: dict[str, Any], expected_sha: str,
     return "unclassified"
 
 
+
+# Exact-SHA reversible probes only. No inference of a previous job definition.
+# These fields are documented as scheduler-owned by Hermes Cron Internals.
+HERMES_TRANSIENT_ADDITIONS = ("last_dispatch", "pending_slot")
+
+
+def _bounded_hermes_metadata(value: Any) -> bool:
+    """Guard the cost of synthetic reconstruction; never serialize to output."""
+    if not isinstance(value, dict) or len(value) > 16:
+        return False
+    try:
+        encoded = json.dumps(value, sort_keys=True, ensure_ascii=True)
+    except (TypeError, ValueError, RecursionError):
+        return False
+    return len(encoded) <= 4096
+
+
+def classify_hermes_scheduler_drift(job: dict[str, Any],
+                                   expected_sha: str, fingerprint) -> str:
+    """Attempt a bounded reconstruction of the PINNED hash, NEVER a PASS.
+
+    A hash match confirms only that a *hypothetical* previous document
+    would match. It cannot establish actual history without a saved preimage.
+    No allowlisted category permits an apply operation or a SHA re-pin.
+    """
+    previous = classify_run_count_only_drift(job, expected_sha, fingerprint)
+    if previous != "unclassified":
+        return previous
+
+    candidates: list[str] = []
+    for field in HERMES_TRANSIENT_ADDITIONS:
+        if field not in job or not _bounded_hermes_metadata(job[field]):
+            continue
+        without_metadata = dict(job)
+        without_metadata.pop(field)
+        if fingerprint(without_metadata) == expected_sha:
+            candidates.append(field + "_added_only")
+        count = classify_run_count_only_drift(
+            without_metadata, expected_sha, fingerprint
+        )
+        if count in ("run_count_increment_only", "run_count_added_only"):
+            candidates.append("run_count_plus_" + field + "_added_only")
+
+    # 'state' is an actuator/scheduler decision field: never call it
+    # harmless, and never reconstruct paused/completed/disabled states.
+    state = job.get("state")
+    if type(state) is str and state in ("scheduled", "running"):
+        without_state = dict(job)
+        without_state.pop("state")
+        if fingerprint(without_state) == expected_sha:
+            candidates.append("state_added_only")
+        old_state = "running" if state == "scheduled" else "scheduled"
+        with_previous_state = dict(job)
+        with_previous_state["state"] = old_state
+        if fingerprint(with_previous_state) == expected_sha:
+            candidates.append("state_transient_only")
+
+    if all(field in job and _bounded_hermes_metadata(job[field])
+           for field in HERMES_TRANSIENT_ADDITIONS):
+        without_both = dict(job)
+        for field in HERMES_TRANSIENT_ADDITIONS:
+            without_both.pop(field)
+        if fingerprint(without_both) == expected_sha:
+            candidates.append("last_dispatch_and_pending_slot_added_only")
+
+    # An ambiguous result is not trustworthy even for a diagnostic.
+    return candidates[0] if len(candidates) == 1 else "unclassified"
+
+
 def inspect(*, store: Path, home: Path, source: Path, bot: Path,
             expected_uid: int, old_sha: str = OLD_SHA256,
             wrapper_sha: str = WRAPPER_SHA256,
@@ -162,7 +231,7 @@ def inspect(*, store: Path, home: Path, source: Path, bot: Path,
     if gate._fingerprint(job) != job_sha:
         if diagnostic_categories is not None:
             diagnostic_categories.append(
-                classify_run_count_only_drift(job, job_sha, gate._fingerprint)
+                classify_hermes_scheduler_drift(job, job_sha, gate._fingerprint)
             )
         raise Blocked("autumn_job_identity_drift")
     binding = job.get("script")
@@ -241,7 +310,7 @@ def main() -> int:
         description="Sanitized existing 11:00 Hermes job preflight"
     )
     parser.add_argument("--diagnose", action="store_true",
-                        help="Categorize only a one-field run_count drift; never PASS")
+                        help="Categorize bounded Hermes metadata drift; never PASS")
     args = parser.parse_args()
     diagnostic_categories: list[str] = []
     try:
