@@ -84,11 +84,12 @@ class RepairTests(unittest.TestCase):
         self.store.write_text(json.dumps({"jobs": self.jobs, "updated_at": "synthetic"}))
         self.store.chmod(0o600)
 
-    def inspect(self):
+    def inspect(self, *, diagnostics=None):
         return m.inspect(
             store=self.store, home=self.home,
             source=self.source, bot=self.bot,
-            expected_uid=os.geteuid(), **self.hashes,
+            expected_uid=os.geteuid(), diagnostic_categories=diagnostics,
+            **self.hashes,
         )
 
     def block(self, needle):
@@ -114,6 +115,65 @@ class RepairTests(unittest.TestCase):
         self.assertNotIn("laistisana_2x", rendered)
         for path, state in before.items():
             self.assertEqual((path.read_bytes(), path.stat().st_mtime_ns), state)
+
+    def test_counter_increment_only_diagnosed_but_remains_blocked(self):
+        self.jobs[3]["run_count"] = 12
+        self.hashes["job_sha"] = m.gate_module()._fingerprint(self.jobs[3])
+        self.jobs[3]["run_count"] = 13
+        self.save_store()
+        diagnostics = []
+        with self.assertRaises(m.Blocked) as error:
+            self.inspect(diagnostics=diagnostics)
+        self.assertEqual(str(error.exception), "autumn_job_identity_drift")
+        self.assertEqual(diagnostics, ["run_count_increment_only"])
+        # Without explicit diagnostic mode the same strict gate still blocks.
+        self.block("autumn_job_identity_drift")
+
+    def test_counter_just_added_diagnosed_but_remains_blocked(self):
+        self.jobs[3]["run_count"] = 1
+        self.save_store()
+        diagnostics = []
+        with self.assertRaises(m.Blocked) as error:
+            self.inspect(diagnostics=diagnostics)
+        self.assertEqual(str(error.exception), "autumn_job_identity_drift")
+        self.assertEqual(diagnostics, ["run_count_added_only"])
+
+    def test_definition_change_with_counter_is_unclassified(self):
+        self.jobs[3]["run_count"] = 7
+        self.hashes["job_sha"] = m.gate_module()._fingerprint(self.jobs[3])
+        self.jobs[3]["run_count"] = 8
+        self.jobs[3]["prompt"] = "PRIVATE_SYNTHETIC_NOT_TO_EMIT"
+        self.save_store()
+        diagnostics = []
+        with self.assertRaises(m.Blocked) as error:
+            self.inspect(diagnostics=diagnostics)
+        self.assertEqual(str(error.exception), "autumn_job_identity_drift")
+        self.assertEqual(diagnostics, ["unclassified"])
+        self.assertNotIn("PRIVATE_SYNTHETIC_NOT_TO_EMIT",
+                         repr(diagnostics))
+
+    def test_noninteger_or_unbounded_counter_never_classified_as_only(self):
+        for value in (True, "8", -1, 1_000_001):
+            with self.subTest(value=value):
+                self.jobs[3]["run_count"] = value
+                self.save_store()
+                diagnostics = []
+                with self.assertRaises(m.Blocked) as error:
+                    self.inspect(diagnostics=diagnostics)
+                self.assertEqual(str(error.exception),
+                                 "autumn_job_identity_drift")
+                self.assertEqual(diagnostics, ["unclassified"])
+
+    def test_counter_guess_does_not_erase_invariant_mismatch(self):
+        self.jobs[3]["run_count"] = 1
+        self.jobs[3]["deliver"] = "telegram"
+        self.save_store()
+        diagnostics = []
+        with self.assertRaises(m.Blocked) as error:
+            self.inspect(diagnostics=diagnostics)
+        self.assertEqual(str(error.exception),
+                         "autumn_job_binding_or_delivery_invalid")
+        self.assertEqual(diagnostics, [])
 
     def test_frozen_job_definition_digest_must_match(self):
         self.hashes["job_sha"] = "0" * 64

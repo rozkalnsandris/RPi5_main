@@ -8,6 +8,7 @@ authorization. A PASS is NOT LIVE or deployment authority.
 """
 from __future__ import annotations
 
+import argparse
 import hashlib
 import importlib.machinery
 import importlib.util
@@ -97,11 +98,37 @@ def from_wrapper(wrapper: bytes, *, home: Path, root: Path) -> Path:
     return target
 
 
+def classify_run_count_only_drift(job: dict[str, Any], expected_sha: str,
+                                  fingerprint) -> str:
+    """Diagnostic only: a SHA match proves no *other* definition field drift.
+
+    No result from this helper authorizes replacement or re-pins JOB_SHA256.
+    Only the documented runtime counter is substituted, never schedule,
+    script, prompt, credentials, recipient, enabled or delivery.
+    """
+    count = job.get("run_count")
+    if type(count) is not int or not 0 <= count <= 1_000_000:
+        return "unclassified"
+    without_count = dict(job)
+    without_count.pop("run_count")
+    if fingerprint(without_count) == expected_sha:
+        return "run_count_added_only"
+    # Prefer the immediately preceding run; bound work and never infer
+    # a previous definition from an unmatched digest.
+    for previous in range(count - 1, max(-1, count - 513), -1):
+        with_previous_count = dict(job)
+        with_previous_count["run_count"] = previous
+        if fingerprint(with_previous_count) == expected_sha:
+            return "run_count_increment_only"
+    return "unclassified"
+
+
 def inspect(*, store: Path, home: Path, source: Path, bot: Path,
             expected_uid: int, old_sha: str = OLD_SHA256,
             wrapper_sha: str = WRAPPER_SHA256,
             candidate_sha: str = CANDIDATE_SHA256,
-            job_sha: str = JOB_SHA256) -> dict[str, Any]:
+            job_sha: str = JOB_SHA256,
+            diagnostic_categories: list[str] | None = None) -> dict[str, Any]:
     gate = gate_module()
     try:
         _raw, jobs, fmt = gate._read_store(store, expected_uid)
@@ -132,7 +159,12 @@ def inspect(*, store: Path, home: Path, source: Path, bot: Path,
     require(all(not gate._watering_candidate(job)
                 for i, job in enumerate(jobs) if i not in selected),
             "unexpected_watering_candidate")
-    require(gate._fingerprint(job) == job_sha, "autumn_job_identity_drift")
+    if gate._fingerprint(job) != job_sha:
+        if diagnostic_categories is not None:
+            diagnostic_categories.append(
+                classify_run_count_only_drift(job, job_sha, gate._fingerprint)
+            )
+        raise Blocked("autumn_job_identity_drift")
     binding = job.get("script")
     require(isinstance(binding, str) and len(binding) <= 1024 and
             bool(binding) and not any(ord(c) < 32 for c in binding),
@@ -205,6 +237,13 @@ def inspect(*, store: Path, home: Path, source: Path, bot: Path,
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Sanitized existing 11:00 Hermes job preflight"
+    )
+    parser.add_argument("--diagnose", action="store_true",
+                        help="Categorize only a one-field run_count drift; never PASS")
+    args = parser.parse_args()
+    diagnostic_categories: list[str] = []
     try:
         user = pwd.getpwnam("andris")
         require(os.uname().nodename.split(".")[0] == "rpi5" and
@@ -216,6 +255,7 @@ def main() -> int:
             source=home / "RPi5_main/ops/bin/balcony-watering-autumn-notify-only",
             bot=home / "RPi5_main/ops/lib/balkons-bot.py",
             expected_uid=user.pw_uid,
+            diagnostic_categories=diagnostic_categories if args.diagnose else None,
         )
     except Blocked as exc:
         result = {
@@ -227,6 +267,10 @@ def main() -> int:
             "writes_performed": False,
             "raw_payload_emitted": False,
         }
+        if args.diagnose and str(exc) == "autumn_job_identity_drift":
+            result["identity_drift_class"] = (
+                diagnostic_categories[0] if diagnostic_categories else "unclassified"
+            )
     except Exception:
         result = {
             "schema": SCHEMA,

@@ -141,6 +141,30 @@ class SingleFileTransactionTests(unittest.TestCase):
         self.assertFalse(state["mutation_started"])
         self.assertEqual(self.target.read_bytes(), original)
 
+    def test_imported_preflight_blocked_reason_is_sanitized(self):
+        # Synthetic isolated module: never opens a real Hermes store.
+        home = self.root / "synthetic-home"
+        preflight = (home / "RPi5_main" / m.PRE_REL)
+        preflight.parent.mkdir(parents=True)
+        for message, expected in (
+            ("autumn_job_identity_drift", "preflight_job_identity_drift"),
+            ("PRIVATE_SYNTHETIC_NOT_TO_EMIT", "preflight_not_ready"),
+        ):
+            with self.subTest(message=message):
+                preflight.write_text(
+                    "class Blocked(Exception): pass\n"
+                    "def inspect(**kwargs):\n"
+                    "    raise Blocked(" + repr(message) + ")\n",
+                    encoding="utf-8",
+                )
+                with self.assertRaises(m.Blocked) as error:
+                    m.preflight_gate(home, owner=self.uid)
+                self.assertEqual(str(error.exception), expected)
+                self.assertNotIn("PRIVATE_SYNTHETIC_NOT_TO_EMIT",
+                                 str(error.exception))
+        self.assertFalse((self.root / m.BACKUP_NAME).exists())
+        self.assertFalse((self.root / m.STAGE_NAME).exists())
+
     def test_static_safety_scope(self):
         source = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("os.O_CREAT | os.O_EXCL", source)
