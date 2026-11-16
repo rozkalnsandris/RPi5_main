@@ -1,0 +1,211 @@
+#!/usr/bin/env python3
+"""Offline-only final HA/Telegram route proof CONTRACT for legacy 11:00 (#1502).
+
+Source/CI check only. This tool never reads protected runtime data, contacts
+Home Assistant/Telegram/MQTT, sends a notification or changes any runtime file.
+Its PASS is strictly not a live-authentication/destination/delivery PASS.
+"""
+from __future__ import annotations
+
+import argparse
+import ast
+import hashlib
+import json
+import os
+from pathlib import Path
+import stat
+
+ROOT = Path(__file__).resolve().parents[2]
+SCHEMA = "rpi5.balcony_autumn_final_route_proof_plan.v1"
+CANDIDATE = "ops/bin/balcony-watering-autumn-notify-only"
+BOT = "ops/lib/balkons-bot.py"
+SMOKE = "ops/bin/balkons-bot-mqtt-notification-smoke-plan"
+CANDIDATE_SHA256 = "7c993c5e0fdffdcb405b57aebad2be65a133be17caf13f16492fde6f12bc45b1"
+TOPIC = "balkons/telegram_out"
+COMMAND_TOPIC = "balkons/cmd"
+HA_PUBLISH_PATH = "/api/services/mqtt/publish"
+PAYLOAD = "Balkona MQTT-Telegram sakaru tests. Tikai pazinojums."
+SMOKE_REQUEST = (
+    '{"topic": "balkons/telegram_out", "payload": sys.stdin.read(), '
+    '"qos": 0, "retain": False}'
+)
+MAX_BYTES = 131072
+
+
+class Blocked(Exception):
+    """A fixed category only, not protected source text or an exception."""
+
+
+def require(condition: bool, code: str) -> None:
+    if not condition:
+        raise Blocked(code)
+
+
+def read_public(root: Path, relative: str) -> bytes:
+    """Read only a fixed allowlisted public source file; refuse symlink races."""
+    require(relative in (CANDIDATE, BOT, SMOKE), "public_source_not_allowlisted")
+    path = root / relative
+    try:
+        before = path.lstat()
+        require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1
+                and 0 < before.st_size <= MAX_BYTES
+                and not before.st_mode & 0o022, "public_source_unsafe")
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            opened = os.fstat(fd)
+            identity = lambda s: (s.st_dev, s.st_ino, s.st_mode,
+                                  s.st_uid, s.st_gid, s.st_nlink,
+                                  s.st_size, s.st_mtime_ns)
+            require(identity(opened) == identity(before),
+                    "public_source_raced")
+            data = os.read(fd, MAX_BYTES + 1)
+            require(len(data) == before.st_size
+                    and identity(path.lstat()) == identity(before),
+                    "public_source_changed")
+        finally:
+            os.close(fd)
+        return data
+    except OSError:
+        raise Blocked("public_source_unavailable") from None
+
+
+def python_module(data: bytes, code: str) -> ast.Module:
+    try:
+        parsed = ast.parse(data.decode("utf-8", "strict"))
+    except (UnicodeError, SyntaxError):
+        raise Blocked(code) from None
+    require(isinstance(parsed, ast.Module), code)
+    return parsed
+
+
+def constant(tree: ast.Module, name: str, code: str) -> object:
+    matches = [node.value for node in tree.body
+               if isinstance(node, ast.Assign)
+               and len(node.targets) == 1
+               and isinstance(node.targets[0], ast.Name)
+               and node.targets[0].id == name]
+    require(len(matches) == 1 and isinstance(matches[0], ast.Constant), code)
+    return matches[0].value
+
+
+def function(tree: ast.Module, name: str, code: str) -> ast.FunctionDef:
+    matches = [node for node in tree.body
+               if isinstance(node, ast.FunctionDef) and node.name == name]
+    require(len(matches) == 1, code)
+    return matches[0]
+
+
+def validate(root: Path = ROOT) -> None:
+    """Check reviewed public bytes/AST only; never claim a LIVE proof."""
+    candidate = read_public(root, CANDIDATE)
+    require(hashlib.sha256(candidate).hexdigest() == CANDIDATE_SHA256,
+            "candidate_sha_drift")
+    require(candidate.count(TOPIC.encode()) == 1
+            and candidate.count(HA_PUBLISH_PATH.encode()) == 1
+            and SMOKE_REQUEST.encode() in candidate
+            and b"api.telegram.org" not in candidate,
+            "candidate_notification_route_drift")
+    bot = python_module(read_public(root, BOT), "bot_source_invalid")
+    require(constant(bot, "T_OUT", "bot_topic_invalid") == TOPIC
+            and constant(bot, "T_CMD", "bot_topic_invalid") == COMMAND_TOPIC,
+            "bot_topic_drift")
+    subscribed = [
+        call for call in ast.walk(function(bot, "_connected",
+                                           "bot_connect_callback_missing"))
+        if isinstance(call, ast.Call)
+        and isinstance(call.func, ast.Attribute)
+        and call.func.attr == "subscribe"
+        and len(call.args) == 1
+        and isinstance(call.args[0], ast.Name)
+        and call.args[0].id == "T_OUT"
+    ]
+    require(len(subscribed) == 1, "bot_subscription_drift")
+    forwarded = [
+        call for call in ast.walk(function(bot, "on_message",
+                                           "bot_forwarder_missing"))
+        if isinstance(call, ast.Call)
+        and isinstance(call.func, ast.Name)
+        and call.func.id == "tg_send"
+        and len(call.args) == 1
+        and any(keyword.arg == "source"
+                and isinstance(keyword.value, ast.Constant)
+                and keyword.value.value == "mqtt"
+                for keyword in call.keywords)
+    ]
+    require(len(forwarded) == 1, "bot_forwarding_drift")
+    smoke = python_module(read_public(root, SMOKE), "smoke_plan_invalid")
+    require(constant(smoke, "TOPIC", "smoke_topic_invalid") == TOPIC
+            and constant(smoke, "COMMAND_TOPIC", "smoke_topic_invalid")
+            == COMMAND_TOPIC, "smoke_topic_drift")
+    require(constant(smoke, "HA_ROUTE", "smoke_route_invalid")
+            == HA_PUBLISH_PATH, "smoke_route_drift")
+    require(constant(smoke, "PAYLOAD", "smoke_payload_invalid")
+            == PAYLOAD, "smoke_payload_drift")
+    require(constant(smoke, "CONTROLLER_REQUEST",
+                     "smoke_request_invalid") == SMOKE_REQUEST,
+            "smoke_request_drift")
+
+
+def plan(root: Path = ROOT) -> dict[str, object]:
+    validate(root)
+    return {
+        "schema": SCHEMA,
+        "result": "SOURCE_ROUTE_CONTRACT_PASS",
+        "scope": "OFFLINE_SOURCE_ONLY",
+        "live_route_ready": False,
+        "runtime_mutation_authorized": False,
+        "network_calls": 0,
+        "writes_performed": False,
+        "mqtt_publish_performed": False,
+        "telegram_send_performed": False,
+        "actuator_commands_performed": False,
+        "requires_separate_readonly_evidence": {
+            "existing_hermes_ha_authenticated_get": "UNVERIFIED",
+            "telegram_bot_identity_getMe": "UNVERIFIED",
+            "configured_recipient_getChat": "UNVERIFIED",
+            "independent_owner_chat_binding": "UNVERIFIED",
+            "other_active_telegram_consumers": "UNVERIFIED",
+        },
+        "future_read_methods": {
+            "home_assistant": "GET /api/",
+            "telegram_bot_identity": "getMe",
+            "telegram_configured_chat": "getChat",
+        },
+        "human_message_receipt": "UNVERIFIED_NOT_PROVABLE_FROM_API",
+        "existing_smoke_plan_reused": True,
+        "no_live_credential_delegate_assumed": True,
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Offline-only proof contract; NEVER verifies live delivery"
+    )
+    parser.add_argument("--check", action="store_true")
+    parser.parse_args()
+    try:
+        result = plan()
+    except Blocked as exc:
+        result = {
+            "schema": SCHEMA,
+            "result": "BLOCKED",
+            "reason": str(exc),
+            "live_route_ready": False,
+            "network_calls": 0,
+            "writes_performed": False,
+        }
+    except Exception:
+        result = {
+            "schema": SCHEMA,
+            "result": "BLOCKED",
+            "reason": "internal_error",
+            "live_route_ready": False,
+            "network_calls": 0,
+            "writes_performed": False,
+        }
+    print(json.dumps(result, sort_keys=True, separators=(",", ":")))
+    return 0 if result["result"] == "SOURCE_ROUTE_CONTRACT_PASS" else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
