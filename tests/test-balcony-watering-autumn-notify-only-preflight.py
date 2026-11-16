@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "ops/bin/balcony-watering-autumn-notify-only-preflight"
@@ -354,6 +355,140 @@ class RepairTests(unittest.TestCase):
         self.wrapper.write_text('#!/bin/bash\nexec "$HOME/.hermes/scripts/other"\n')
         self.hashes["wrapper_sha"] = m.digest(self.wrapper.read_bytes())
         self.block("wrapper_referent_ambiguous")
+
+
+
+# Pure source-only comparator; production Gate-1 and install gates stay intact.
+COMPARE_SCRIPT = ROOT / "ops/lib/balcony_autumn_definition_compare.py"
+compare_loader = importlib.machinery.SourceFileLoader(
+    "balcony_compare_1509", str(COMPARE_SCRIPT)
+)
+compare_spec = importlib.util.spec_from_loader(compare_loader.name, compare_loader)
+assert compare_spec is not None
+comparison = importlib.util.module_from_spec(compare_spec)
+compare_loader.exec_module(comparison)
+
+
+class VerifiedDefinitionComparisonTests(unittest.TestCase):
+    def setUp(self):
+        self.before = {
+            "id": "private-synthetic-identifier",
+            "name": "private-synthetic-name",
+            "enabled": True,
+            "deliver": "local",
+            "script": "PRIVATE_SYNTHETIC_SCRIPT_BODY",
+            "prompt": "PRIVATE_SYNTHETIC_PROMPT",
+            "schedule": {"kind": "cron", "expr": "0 11 * * *"},
+        }
+        self.after = json.loads(json.dumps(self.before))
+        original = m.gate_module()._fingerprint(self.before)
+        self.patch = mock.patch.object(comparison, "FROZEN_REFERENCE_SHA256",
+                                       original)
+        self.patch.start()
+        self.addCleanup(self.patch.stop)
+
+    def assert_blocked_sanitized(self, report):
+        self.assertEqual(report["result"], "BLOCKED")
+        self.assertFalse(report["live_apply_authorized"])
+        self.assertFalse(report["mutation_started"])
+        self.assertFalse(report["writes_performed"])
+        self.assertFalse(report["raw_payload_emitted"])
+        text = json.dumps(report, sort_keys=True)
+        for prohibited in ("PRIVATE_SYNTHETIC", "private-synthetic",
+                           "0 11 * * *", "script_sha256", "PRIVATE"):
+            self.assertNotIn(prohibited, text)
+        self.assertLess(len(text), 2048)
+
+    def test_reference_unavailable_is_not_inferred_from_sha(self):
+        report = comparison.compare_verified_definitions(None, self.after)
+        self.assert_blocked_sanitized(report)
+        self.assertEqual(report["reason"], "verified_reference_unavailable")
+        self.assertEqual(report["changed_definition_categories"], [])
+
+    def test_observed_missing_still_blocks(self):
+        report = comparison.compare_verified_definitions(self.before, None)
+        self.assert_blocked_sanitized(report)
+        self.assertEqual(report["reason"], "observed_definition_unavailable")
+
+    def test_unauthenticated_reference_rejected_before_any_diff(self):
+        self.before["prompt"] = "PRIVATE_CHANGED"
+        report = comparison.compare_verified_definitions(self.before, self.after)
+        self.assert_blocked_sanitized(report)
+        self.assertEqual(report["reason"], "reference_fingerprint_mismatch")
+        self.assertFalse(report["reference_fingerprint_verified"])
+        self.assertEqual(report["changed_definition_categories"], [])
+
+    def test_verified_equal_definition_still_blocked(self):
+        report = comparison.compare_verified_definitions(self.before, self.after)
+        self.assert_blocked_sanitized(report)
+        self.assertTrue(report["reference_fingerprint_verified"])
+        self.assertEqual(report["reason"], "definition_fingerprint_unchanged")
+        self.assertEqual(report["changed_definition_categories"], [])
+
+    def test_sensitive_binding_changes_report_categories_only(self):
+        self.after["script"] = "PRIVATE_SYNTHETIC_NEW_SCRIPT_BODY"
+        self.after["prompt"] = "PRIVATE_SYNTHETIC_NEW_PROMPT"
+        self.after["deliver"] = "PRIVATE_SYNTHETIC_CHAT_ID"
+        self.after["schedule"]["expr"] = "0 12 * * *"
+        report = comparison.compare_verified_definitions(self.before, self.after)
+        self.assert_blocked_sanitized(report)
+        self.assertEqual(report["reason"], "definition_difference_categorized")
+        self.assertEqual(report["changed_definition_categories"],
+                         ["delivery_binding", "prompt_definition",
+                          "schedule_contract", "script_binding"])
+
+    def test_hermes_scheduler_field_categories_never_authorize(self):
+        self.after["run_count"] = 2
+        self.after["state"] = "running"
+        self.after["last_dispatch"] = {"opaque": "PRIVATE_SYNTHETIC"}
+        self.after["pending_slot"] = {"opaque": "PRIVATE_SYNTHETIC"}
+        report = comparison.compare_verified_definitions(self.before, self.after)
+        self.assert_blocked_sanitized(report)
+        self.assertEqual(report["changed_definition_categories"],
+                         ["hermes_last_dispatch", "hermes_pending_slot",
+                          "hermes_run_count", "hermes_scheduler_state"])
+
+    def test_unknown_definition_key_never_echoed(self):
+        self.after["PRIVATE_SYNTHETIC_ARBITRARY_KEY"] = "PRIVATE_SYNTHETIC"
+        report = comparison.compare_verified_definitions(self.before, self.after)
+        self.assert_blocked_sanitized(report)
+        self.assertEqual(report["changed_definition_categories"],
+                         ["other_definition_fields"])
+
+    def test_transient_fields_excluded_by_gate_cannot_force_pass(self):
+        self.after["last_status"] = "PRIVATE_SYNTHETIC"
+        self.after["next_run_at"] = "PRIVATE_SYNTHETIC"
+        report = comparison.compare_verified_definitions(self.before, self.after)
+        self.assert_blocked_sanitized(report)
+        self.assertEqual(report["reason"], "definition_fingerprint_unchanged")
+        self.assertEqual(report["changed_definition_categories"], [])
+
+    def test_invalid_or_excessive_inputs_are_blocked_with_no_leak(self):
+        bad = ([], True, {"blob": float("nan")},
+               {"blob": "PRIVATE_SYNTHETIC" * 10_000},
+               {str(i): i for i in range(100)})
+        for value in bad:
+            with self.subTest(value_type=type(value).__name__):
+                report = comparison.compare_verified_definitions(self.before,
+                                                                  value)
+                self.assert_blocked_sanitized(report)
+                self.assertEqual(report["reason"], "unreviewed_definition_shape")
+
+    def test_reference_checksum_never_dynamically_repinned(self):
+        with mock.patch.object(comparison, "FROZEN_REFERENCE_SHA256",
+                               "0" * 64):
+            report = comparison.compare_verified_definitions(self.before,
+                                                              self.after)
+        self.assert_blocked_sanitized(report)
+        self.assertEqual(report["reason"], "reference_fingerprint_mismatch")
+
+    def test_module_is_pure_offline_and_has_no_cli(self):
+        source = COMPARE_SCRIPT.read_text(encoding="utf-8")
+        for forbidden in ("jobs.json", "subprocess", "requests.", "urllib.",
+                          "socket.", "os.system", "mqtt", "telegram",
+                          "open(", "read_bytes(", "write_text(",
+                          "if __name__"):
+            self.assertNotIn(forbidden, source)
 
 
 if __name__ == "__main__":
