@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import importlib.machinery
 import importlib.util
 import json
 import os
+import sys
+from contextlib import redirect_stdout
 from pathlib import Path
+from types import SimpleNamespace
 import tempfile
 import unittest
 from unittest import mock
@@ -482,6 +486,43 @@ class RepairTests(unittest.TestCase):
         self.jobs[3]["no_agent"] = False
         self.save_store()
         self.block("autumn_job_identity_drift")  # default has no diagnostics
+
+    def test_cli_diagnose_emits_fixed_category_only_on_block(self):
+        # A mocked CLI: no host/Hermes reads or controller access.
+        def fail_inspect(**kwargs):
+            if kwargs["diagnostic_categories"] is not None:
+                kwargs["diagnostic_categories"].append("unclassified")
+            if kwargs["strict_blockers"] is not None:
+                kwargs["strict_blockers"].append("no_agent_not_enabled")
+            raise m.Blocked("autumn_job_identity_drift")
+
+        with (mock.patch.object(m.pwd, "getpwnam", return_value=SimpleNamespace(
+                  pw_uid=os.geteuid(), pw_dir=str(self.home))),
+              mock.patch.object(m.os, "uname", return_value=SimpleNamespace(
+                  nodename="rpi5")),
+              mock.patch.object(m, "inspect", side_effect=fail_inspect) as mocked):
+            for args, diagnosed in ((["preflight"], False),
+                                    (["preflight", "--diagnose"], True)):
+                with self.subTest(diagnosed=diagnosed):
+                    capture = io.StringIO()
+                    with mock.patch.object(sys, "argv", args), redirect_stdout(capture):
+                        exit_code = m.main()
+                    self.assertEqual(exit_code, 2)
+                    report = json.loads(capture.getvalue())
+                    self.assertEqual(report["result"], "BLOCKED")
+                    self.assertEqual(report["reason"], "autumn_job_identity_drift")
+                    self.assertFalse(report["live_apply_authorized"])
+                    self.assertFalse(report["writes_performed"])
+                    self.assertFalse(report["mutation_started"])
+                    self.assertFalse(report["raw_payload_emitted"])
+                    self.assertEqual("strict_script_only_blocker" in report, diagnosed)
+                    if diagnosed:
+                        self.assertEqual(report["identity_drift_class"], "unclassified")
+                        self.assertEqual(report["strict_script_only_blocker"],
+                                         "no_agent_not_enabled")
+                    self.assertNotIn(str(self.home), capture.getvalue())
+                    self.assertNotIn("PRIVATE_SYNTHETIC", capture.getvalue())
+            self.assertEqual(mocked.call_count, 2)
 
     def test_strict_blocker_prioritizes_unknown_fields_and_no_agent(self):
         self.enable_strict_script_only()
