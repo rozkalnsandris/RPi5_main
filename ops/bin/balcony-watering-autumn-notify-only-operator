@@ -157,8 +157,15 @@ def preflight_gate(home: Path, *, owner: int) -> dict:
                   if str(exc) == "autumn_job_identity_drift"
                   else "preflight_not_ready")
         raise Blocked(reason) from None
+    reviewed_identity = (
+        (report.get("identity_mode") == "pinned_legacy"
+         and report.get("job_definition_sha256") == JOB_SHA
+         and report.get("script_only_contract_verified") is False)
+        or (report.get("identity_mode") == "strict_script_only"
+            and report.get("script_only_contract_verified") is True)
+    )
     require(report.get("result") == "SOURCE_NOTIFY_ONLY_PREFLIGHT_PASS"
-            and report.get("job_definition_sha256") == JOB_SHA
+            and reviewed_identity
             and report.get("wrapper_sha256") == WRAPPER_SHA
             and report.get("deployed_controller_sha256") == OLD_SHA
             and report.get("candidate_controller_sha256") == NEW_SHA

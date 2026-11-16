@@ -98,6 +98,81 @@ def from_wrapper(wrapper: bytes, *, home: Path, root: Path) -> Path:
     return target
 
 
+# Frozen, source-reviewed safety invariants for Hermes script-only mode.
+# Only this strict alternative may tolerate scheduler-managed fingerprint drift.
+# In no-agent mode, an empty prompt cannot activate an LLM agent path.
+SCRIPT_ONLY_FIELDS = frozenset({
+    "id", "name", "enabled", "deliver", "script", "prompt", "schedule",
+    "no_agent", "timezone", "grace_minutes", "state", "repeat",
+    "run_count", "next_run_at", "last_run_at", "last_status", "last_error",
+    "last_delivery_at", "last_delivery_error", "last_started_at",
+    "last_completed_at", "created_at", "last_dispatch",
+    "pending_slot", "fire_claim", "execution_skipped",
+    "model", "provider", "skills",
+})
+SCRIPT_ONLY_TIMESTAMPS = (
+    "next_run_at", "last_run_at", "last_delivery_at",
+    "last_started_at", "last_completed_at", "created_at",
+)
+SCRIPT_ONLY_OUTCOMES = ("last_status", "last_error", "last_delivery_error")
+
+
+def strict_script_only_identity(job: dict[str, Any]) -> bool:
+    """Accept only deterministic scheduled script-only binding; not a re-pin.
+
+    Script path and actual wrapper/controller bytes are verified separately
+    later in inspect(). Unknown config, queued runs or agent mode fail closed.
+    """
+    if type(job) is not dict or len(job) > 40:
+        return False
+    if set(job) - SCRIPT_ONLY_FIELDS:
+        return False
+    if job.get("no_agent") is not True or job.get("prompt") != "":
+        return False
+    if (job.get("state") != "scheduled"
+            or job.get("timezone") != "Europe/Berlin"
+            or type(job.get("grace_minutes")) is not int
+            or job["grace_minutes"] != 0):
+        return False
+    schedule = job.get("schedule")
+    if type(schedule) is not dict or not set(schedule) <= {"kind", "expr", "display"}:
+        return False
+    if (schedule.get("kind") != "cron"
+            or schedule.get("expr") != "0 11 * * *"
+            or ("display" in schedule and schedule["display"] != "0 11 * * *")):
+        return False
+    if job.get("pending_slot") is not None or job.get("fire_claim") is not None:
+        return False
+    if job.get("model") is not None or job.get("provider") is not None:
+        return False
+    if job.get("skills") not in (None, []):
+        return False
+    count = job.get("run_count")
+    if count is not None and (type(count) is not int or not 0 <= count <= 1_000_000):
+        return False
+    repeat = job.get("repeat")
+    if repeat is not None:
+        if type(repeat) is not dict or set(repeat) != {"times", "completed"}:
+            return False
+        if repeat["times"] is not None:
+            return False
+        if type(repeat["completed"]) is not int or not 0 <= repeat["completed"] <= 1_000_000:
+            return False
+    if "execution_skipped" in job and type(job["execution_skipped"]) is not bool:
+        return False
+    for key in SCRIPT_ONLY_TIMESTAMPS:
+        value = job.get(key)
+        if value is not None and (type(value) is not str or len(value) > 128):
+            return False
+    for key in SCRIPT_ONLY_OUTCOMES:
+        value = job.get(key)
+        if value is not None and (type(value) is not str or len(value) > 1024):
+            return False
+    if "last_dispatch" in job and not _bounded_hermes_metadata(job["last_dispatch"]):
+        return False
+    return True
+
+
 def classify_run_count_only_drift(job: dict[str, Any], expected_sha: str,
                                   fingerprint) -> str:
     """Diagnostic only: a SHA match proves no *other* definition field drift.
@@ -228,7 +303,11 @@ def inspect(*, store: Path, home: Path, source: Path, bot: Path,
     require(all(not gate._watering_candidate(job)
                 for i, job in enumerate(jobs) if i not in selected),
             "unexpected_watering_candidate")
-    if gate._fingerprint(job) != job_sha:
+    legacy_pin_matches = gate._fingerprint(job) == job_sha
+    script_only_matches = (
+        not legacy_pin_matches and strict_script_only_identity(job)
+    )
+    if not legacy_pin_matches and not script_only_matches:
         if diagnostic_categories is not None:
             diagnostic_categories.append(
                 classify_hermes_scheduler_drift(job, job_sha, gate._fingerprint)
@@ -290,6 +369,9 @@ def inspect(*, store: Path, home: Path, source: Path, bot: Path,
         "existing_autumn_job": "enabled_local_unique",
         "legacy_jobs": "three_disabled",
         "job_definition_sha256": gate._fingerprint(job),
+        "identity_mode": ("pinned_legacy" if legacy_pin_matches
+                          else "strict_script_only"),
+        "script_only_contract_verified": bool(script_only_matches),
         "wrapper_sha256": digest(wrapper_raw),
         "deployed_controller_sha256": digest(target_raw),
         "candidate_controller_sha256": digest(replacement),

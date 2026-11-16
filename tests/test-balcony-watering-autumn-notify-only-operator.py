@@ -165,6 +165,48 @@ class SingleFileTransactionTests(unittest.TestCase):
         self.assertFalse((self.root / m.BACKUP_NAME).exists())
         self.assertFalse((self.root / m.STAGE_NAME).exists())
 
+    def test_operator_script_only_branch_requires_complete_guard_report(self):
+        # Only a synthetic module; no real cron/job, host or pump access.
+        home = self.root / "synthetic-home"
+        preflight = home / "RPi5_main" / m.PRE_REL
+        preflight.parent.mkdir(parents=True, exist_ok=True)
+        report = {
+            "result": "SOURCE_NOTIFY_ONLY_PREFLIGHT_PASS",
+            "identity_mode": "strict_script_only",
+            "script_only_contract_verified": True,
+            "job_definition_sha256": "f" * 64,
+            "wrapper_sha256": m.WRAPPER_SHA,
+            "deployed_controller_sha256": m.OLD_SHA,
+            "candidate_controller_sha256": m.NEW_SHA,
+            "existing_autumn_job": "enabled_local_unique",
+            "legacy_jobs": "three_disabled",
+            "mutation_started": False,
+            "writes_performed": False,
+        }
+        for key, value in (
+            ("valid", True),
+            ("script_only_contract_verified", False),
+            ("identity_mode", "unsafe"),
+            ("wrapper_sha256", "0" * 64),
+            ("existing_autumn_job", "duplicate"),
+            ("mutation_started", True),
+        ):
+            data = dict(report)
+            if key != "valid":
+                data[key] = value
+            preflight.write_text(
+                "class Blocked(Exception): pass\n"
+                "def inspect(**kwargs):\n"
+                "    return " + repr(data) + "\n",
+                encoding="utf-8",
+            )
+            if key == "valid":
+                self.assertEqual(m.preflight_gate(home, owner=self.uid), data)
+            else:
+                with self.assertRaises(m.Blocked) as raised:
+                    m.preflight_gate(home, owner=self.uid)
+                self.assertEqual(str(raised.exception), "preflight_not_ready")
+
     def test_static_safety_scope(self):
         source = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("os.O_CREAT | os.O_EXCL", source)

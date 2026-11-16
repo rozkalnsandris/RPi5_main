@@ -358,6 +358,128 @@ class RepairTests(unittest.TestCase):
 
 
 
+    def enable_strict_script_only(self):
+        # Synthetic fixture: does not touch the real RPi5/Hermes store.
+        self.jobs[3].update({
+            "no_agent": True, "timezone": "Europe/Berlin",
+            "grace_minutes": 0, "state": "scheduled",
+        })
+        self.save_store()
+
+    def test_script_only_ignores_bounded_scheduler_runtime_changes(self):
+        self.enable_strict_script_only()
+        self.jobs[3]["run_count"] = 12
+        self.jobs[3]["repeat"] = {"times": None, "completed": 12}
+        self.jobs[3]["last_dispatch"] = {"kind": "on_time", "at": "synthetic"}
+        self.jobs[3]["last_run_at"] = "synthetic"
+        self.jobs[3]["last_status"] = "ok"
+        self.save_store()
+        before = {p: (p.read_bytes(), p.stat().st_mtime_ns)
+                  for p in (self.store, self.wrapper, self.target, self.source, self.bot)}
+        result = self.inspect()
+        self.assertEqual(result["result"], "SOURCE_NOTIFY_ONLY_PREFLIGHT_PASS")
+        self.assertEqual(result["identity_mode"], "strict_script_only")
+        self.assertTrue(result["script_only_contract_verified"])
+        self.assertNotEqual(result["job_definition_sha256"], self.hashes["job_sha"])
+        self.assertFalse(result["live_apply_authorized"])
+        self.assertFalse(result["writes_performed"])
+        self.assertFalse(result["mutation_started"])
+        self.assertFalse(result["raw_payload_emitted"])
+        for file, state in before.items():
+            self.assertEqual((file.read_bytes(), file.stat().st_mtime_ns), state)
+
+    def test_pinned_legacy_identity_reports_backward_compatible_mode(self):
+        result = self.inspect()
+        self.assertEqual(result["identity_mode"], "pinned_legacy")
+        self.assertFalse(result["script_only_contract_verified"])
+        self.assertEqual(result["job_definition_sha256"], self.hashes["job_sha"])
+
+    def test_script_only_wrong_no_agent_prompt_clock_or_state_stays_blocked(self):
+        self.enable_strict_script_only()
+        for field, changes in (
+            ("no_agent", (False, None, "true")),
+            ("prompt", ("PRIVATE_SYNTHETIC_LLM_PROMPT", None)),
+            ("timezone", (None, "UTC", "Europe/Paris")),
+            ("grace_minutes", (None, 1, True)),
+            ("state", ("running", "paused", "completed")),
+            ("repeat", ({"times": 1, "completed": 0},
+                        {"times": None, "completed": True})),
+            ("skills", (["PRIVATE_SYNTHETIC_SKILL"],)),
+            ("model", ("PRIVATE_SYNTHETIC_MODEL",)),
+            ("provider", ("PRIVATE_SYNTHETIC_PROVIDER",)),
+            ("monitor_script", ("PRIVATE_SYNTHETIC_COMMAND",)),
+            ("pending_slot", ({"at": "now"},)),
+            ("fire_claim", ({"at": "now"},)),
+            ("unknown_field", ("PRIVATE_SYNTHETIC_UNREVIEWED",)),
+        ):
+            original = self.jobs[3].get(field, object())
+            for change in changes:
+                with self.subTest(field=field, change_type=type(change).__name__):
+                    self.jobs[3][field] = change
+                    self.save_store()
+                    self.block("autumn_job_identity_drift")
+                    self.assertNotIn("PRIVATE_SYNTHETIC", str(self.jobs[3].get("id")))
+            if field in ("no_agent", "prompt", "timezone", "grace_minutes", "state"):
+                self.jobs[3][field] = {
+                    "no_agent": True, "prompt": "", "timezone": "Europe/Berlin",
+                    "grace_minutes": 0, "state": "scheduled",
+                }[field]
+            else:
+                self.jobs[3].pop(field, None)
+            self.save_store()
+
+    def test_script_only_schedule_and_wrapper_drift_still_fail_closed(self):
+        self.enable_strict_script_only()
+        self.jobs[3]["schedule"]["display"] = "0 10 * * *"
+        self.save_store()
+        self.block("autumn_job_identity_drift")
+        self.jobs[3]["schedule"] = {
+            "kind": "cron", "expr": "0 11 * * *", "display": "0 11 * * *"
+        }
+        self.save_store()
+        self.assertEqual(self.inspect()["identity_mode"], "strict_script_only")
+        self.wrapper.write_text("#!/bin/bash\nexit 0\n")
+        self.block("wrapper_sha_drift")
+
+    def test_script_only_rejects_controller_sensor_and_route_drift(self):
+        self.enable_strict_script_only()
+        self.target.write_bytes(OLD + b"changed")
+        self.block("deployed_target_sha_drift")
+        self.target.write_bytes(OLD)
+        self.source.write_bytes(CANDIDATE + b"tampered")
+        self.block("candidate_sha_drift")
+        self.source.write_bytes(CANDIDATE)
+        self.bot.write_bytes(b"PRIVATE_SYNTHETIC_WRONG_ROUTE")
+        self.block("bot_source_route_unreviewed")
+
+    def test_script_only_rejects_hidden_watering_job_and_legacy_reactivation(self):
+        self.enable_strict_script_only()
+        self.jobs.append(job("extra", "0 12 * * *", "balcony-watering-autumn"))
+        self.save_store()
+        self.block("autumn_job_missing_or_duplicate")
+        self.jobs.pop()
+        self.jobs[0]["enabled"] = True
+        self.save_store()
+        self.block("legacy_schedule_not_disabled_or_ambiguous")
+
+    def test_script_only_bounded_metadata_and_private_value_never_leak(self):
+        self.enable_strict_script_only()
+        for key, value in (
+            ("run_count", True),
+            ("run_count", 1_000_001),
+            ("last_dispatch", "PRIVATE_SYNTHETIC"),
+            ("last_dispatch", {"private": "PRIVATE_SYNTHETIC" * 1000}),
+            ("execution_skipped", "PRIVATE_SYNTHETIC"),
+        ):
+            self.jobs[3][key] = value
+            self.save_store()
+            with self.assertRaises(m.Blocked) as raised:
+                self.inspect()
+            self.assertEqual(str(raised.exception), "autumn_job_identity_drift")
+            self.assertNotIn("PRIVATE_SYNTHETIC", str(raised.exception))
+            self.jobs[3].pop(key, None)
+
+
 # Pure source-only comparator; production Gate-1 and install gates stay intact.
 COMPARE_SCRIPT = ROOT / "ops/lib/balcony_autumn_definition_compare.py"
 compare_loader = importlib.machinery.SourceFileLoader(
