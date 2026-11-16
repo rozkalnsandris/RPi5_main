@@ -333,13 +333,14 @@ assert "No new attributable OOM events were measured" not in record
 PY
 
 # Static continuity safety contract regression: source-only, no runtime access.
-python3 -B - "${repo}/docs/GRAFANA_CONTINUOUS_CGROUP_IDENTITY_CONTRACT_1468.md" "${repo}/docs/GRAFANA_MEMORY_V01_INITIAL_EVIDENCE_1468.md" <<'PY'
+python3 -B - "${repo}/docs/GRAFANA_CONTINUOUS_CGROUP_IDENTITY_CONTRACT_1468.md" "${repo}/docs/GRAFANA_MEMORY_V01_INITIAL_EVIDENCE_1468.md" "${repo}/docs/GRAFANA_CONTINUITY_V02_VERIFIED_20261115_1468.md" <<'PY'
 from pathlib import Path
 import sys
 contract = Path(sys.argv[1]).read_text(encoding="utf-8")
 evidence = Path(sys.argv[2]).read_text(encoding="utf-8")
+v02 = Path(sys.argv[3]).read_text(encoding="utf-8")
 required = (
-    "SOURCE IMPLEMENTED", "NOT RUN ON RPi5", "NOT LIVE AUTHORIZATION",
+    "SOURCE IMPLEMENTED", "RPi5 V02 VERIFIED", "NOT LIVE AUTHORIZATION",
     "single-process, continuous-identity", "same pinned directory handle",
     "memory.events.local", "end-start", "null deltas",
     "PID reuse", "source commit SHA", "independent offline verifier",
@@ -349,7 +350,15 @@ required = (
 assert all(marker in contract for marker in required), "continuous-identity contract missing invariant"
 assert "GRAFANA_CONTINUOUS_CGROUP_IDENTITY_CONTRACT_1468.md" in evidence
 assert "cgroup_oom_event_deltas=null" in evidence
-assert "has not been run on RPi5" in evidence
+assert "had not been run on RPi5" in evidence
+assert "GRAFANA_CONTINUITY_V02_VERIFIED_20261115_1468.md" in contract
+assert "GRAFANA_CONTINUITY_V02_VERIFIED_20261115_1468.md" in evidence
+assert all(marker in v02 for marker in (
+    "140f51fa55d0a66ad6da6d551bc6dc36b5a54718",
+    "22d00a74b9bab15fcc18a48825bd498996fee4aa627d612a92691cf7cb40d37a",
+    "3a614893f63a56bd57d4a5b6d4416c1ebd91ab27939db0c4963a013f3cccc27c",
+    "within-invocation", "109", "oom_kill", "NOT", "#1468",
+)), "Grafana V02 sanitized evidence markers missing"
 PY
 
 python3 -B "${repo}/tests/test-grafana-continuity.py"
