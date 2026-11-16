@@ -1,0 +1,31 @@
+# Grafana + RPi5 memory: composite offline evidence and LIVE decision (#1468)
+
+**Status: SOURCE-ONLY IMPLEMENTED; NOT RUN ON RPi5; NO_LIVE_AUTHORITY.** This is a bounded *offline* adapter to existing V08 and Grafana V02 verified bundles, not a deployed host collector, scheduler or permission to query internal metrics. **#1468 remains OPEN.**
+
+## Existing evidence (2026-11-15–16)
+
+- Grafana V02 verified 180-second window B: `memory.max=300 MiB`, within-run cgroup `memory.events.local max=109`, `oom=0`, `oom_kill=0`; historical `memory.peak` and swap occupancy cannot be interpreted as interval paging rates. See [V02 evidence](GRAFANA_CONTINUITY_V02_VERIFIED_20261115_1468.md).
+- Separately authorized Grafana GET to container-local `/api/health`: success, `database=ok`, Grafana `13.3.1`. This later request was **not synchronized** with V02; no Grafana latency, HTTP error-rate or dashboard performance evidence was collected. See [health result](GRAFANA_HEALTH_CORRELATION_1468.md).
+- Further **separately owner-authorized, one-shot, sanitized** Prometheus container-local GETs: **0** metric names under the `grafana_*` selector; **0** matching `up` target series for `job=~"(?i).*grafana.*"` with `count(...)`. The earlier aggregate `sum(up{job=~"(?i).*grafana.*"}) or vector(0)` also returned 0, but alone could not distinguish absent targets from `up=0`. The later count closes that *specific* ambiguity for the matching job label only. Alternate job names, scrape configuration and remote metrics remain **unverified**. No labels, URLs, private metrics, credentials or raw numeric samples were printed.
+- The RPi5 checkout observed during these GETs was behind contemporaneous GitHub `main`; it was not updated. A future source-dependent host collection requires exact installed-source SHA and clean-tree checks.
+
+## Reuse instead of a third sampler
+
+1. `scripts/collect-memory-pressure-diagnostic.py` (V08) already collects bounded host `MemAvailable`, swap-in/out pages, major faults, PSI (nullable), swap/zram metadata and allowed container/process summaries; its normal sampling interval is 5 seconds, with existing non-test bounds of 1–30 seconds. V08 also reads sanitized kernel event records: any future LIVE envelope must **explicitly include this existing read** or require a separately reviewed source-supported skip mode.
+2. `scripts/collect-grafana-continuity.py` (Grafana V02) already collects 2–8 cgroup snapshots at 15–300 second spacing, with per-invocation pinned FD/process/Docker identity. Its verifier checks the report and integrity, but cannot independently replay historical kernel identity.
+3. NEW `scripts/analyze-grafana-host-correlation.py` takes **one verified Grafana V02 bundle plus exactly 2–8 independently verified V08 bundles** under ignored `evidence/` or `exports/`. It invokes existing V02/V08 verifiers; accepts only regular, locally owned, bounded `report.json` files under symlink-free allowed paths; detects source changes around verification; rejects incorrect schema, counters, timestamps or duplicate input roots.
+4. The analyzer performs **no host inspection, Docker call, collector invocation or evidence write**. It emits only deterministic sanitized JSON to stdout: public source revision, nominal V08 UTC windows, memory availability, retained swap, host paging/fault deltas, optional PSI, Grafana cgroup memory limit/current usage and within-run `max/oom/oom_kill` counts. No PID, Docker ID, cgroup path, URLs, labels, logs or private raw metrics are exported.
+
+## Timing and inference are deliberately conservative
+
+V08 `collected_at_utc` is a **coarse collector start time**, *not* an exact timestamp for `vmstat` or PSI reads. It has a nominal duration only. Consequently, the offline output is classified as `nominal_overlap_not_alignment` or `no_nominal_overlap`; touching endpoints are not overlap. **Both** explicitly set `verified_same_window=false` and `proven_causation=false`. Even nominal overlap does not prove that a Grafana `max` event occurred at the same instant as host paging, that Grafana caused swap activity, or that Grafana user requests degraded. Legacy V08.0.0 PSI placeholders remain `null`, never inferred to be measured zero. V02 `memory.peak` is historical and `memory.swap.current` is occupancy, not paging rate. Synthetic tests cannot substitute for live observations.
+
+For *true* per-counter time alignment, a separately reviewed source-level enhancement must record actual UTC timestamps for the host and Grafana counter intervals. Do not claim that this offline comparison solves missing timestamp precision or missing Grafana HTTP performance metrics.
+
+## Next composite owner gate (not authorized by this merge)
+
+After source readiness, the owner may approve **one explicit bounded Composite LIVE** authorization for `rpi5` instead of repeated ad hoc health GETs. Freeze exact GitHub and installed SHA, collector hash/provenance, V08 kernel-event inspection disposition, allowlisted files/outputs, exact 2–8 V08 short windows and one Grafana V02 window, unique ignored bundle targets, fixed duration/sample limits and a subsequent offline-only comparison. Capture only naturally occurring idle/busy workloads; do not generate production test load. Execute the existing verifiers before reporting findings.
+
+Any error or uncertainty **after the first evidence write** means STOP without retry, rollback, cleanup, re-collection, alternate host mutation or manufactured evidence; all unverified/partial evidence must remain non-VERIFIED. This document grants **NO_LIVE_AUTHORITY**. Do not change Docker limits, cgroup settings, services, Prometheus scrape jobs, Grafana endpoints, RPi5 packages or production data. Grafana performance impact and memory resource budget remain unproven; hold 300 MiB until independently corroborated evidence justifies an owner decision under #1469.
+
+Official semantics: [Linux cgroup v2 memory.events](https://docs.kernel.org/admin-guide/cgroup-v2.html) and [Prometheus HTTP API](https://prometheus.io/docs/prometheus/latest/querying/api/). Existing source contracts: [V08](V08_MEMORY_PRESSURE_DIAGNOSTIC_CONTRACT.md), [V09](V09_MEMORY_PRESSURE_SERIES_CONTRACT.md), [Grafana continuous identity](GRAFANA_CONTINUOUS_CGROUP_IDENTITY_CONTRACT_1468.md).

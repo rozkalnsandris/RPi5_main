@@ -389,4 +389,22 @@ PY
 python3 -B "${repo}/tests/test-grafana-continuity.py"
 python3 -B "${repo}/tests/test-grafana-continuity-collector.py"
 
+# Composite correlation is offline-only; CI uses synthetic V08/V02 reports.
+python3 -B "${repo}/tests/test-grafana-host-correlation.py"
+python3 -B - "${repo}/docs/GRAFANA_HOST_MEMORY_COMPOSITE_1468.md" <<'PY'
+from pathlib import Path
+import sys
+document = Path(sys.argv[1]).read_text(encoding="utf-8")
+markers = (
+    "SOURCE-ONLY IMPLEMENTED", "NOT RUN ON RPi5", "NO_LIVE_AUTHORITY",
+    "scripts/analyze-grafana-host-correlation.py",
+    "scripts/collect-memory-pressure-diagnostic.py",
+    "scripts/collect-grafana-continuity.py",
+    "nominal_overlap_not_alignment", "verified_same_window=false",
+    "proven_causation=false", "oom_kill=0", "109", "13.3.1",
+    "STOP without retry", "#1468",
+)
+assert all(marker.lower() in document.lower() for marker in markers)
+PY
+
 printf '%s\n' 'Grafana memory attribution tests: PASS'
