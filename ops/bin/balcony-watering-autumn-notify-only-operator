@@ -1,0 +1,308 @@
+#!/usr/bin/python3 -I
+"""Source-only one-file Hermes 11:00 notification-route replacement (#1498).
+
+The --apply switch is NOT owner authorization. Execute only under a separate
+explicit COMPOSITE STRICT LIVE owner decision after sanitized runtime gates.
+Never invoke the watering controller, publish MQTT or read protected .env.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import fcntl
+import hashlib
+import importlib.machinery
+import importlib.util
+import json
+import os
+from pathlib import Path
+import pwd
+import stat
+import subprocess
+import sys
+from zoneinfo import ZoneInfo
+
+OWNER = "andris"
+HOST = "rpi5"
+SOURCE_REL = "ops/bin/balcony-watering-autumn-notify-only"
+OP_REL = "ops/bin/balcony-watering-autumn-notify-only-operator"
+PRE_REL = "ops/bin/balcony-watering-autumn-notify-only-preflight"
+GATE_REL = "ops/bin/balcony-watering-hermes-preflight"
+BOT_REL = "ops/lib/balkons-bot.py"
+OLD_SHA = "86972a10bd457abb6350e2f924d7c3bcc54139af322f335707f51e1e440ac60b"
+NEW_SHA = "7c993c5e0fdffdcb405b57aebad2be65a133be17caf13f16492fde6f12bc45b1"
+WRAPPER_SHA = "3e5698a54d33fafaef59a0bc5c847136672c6658de3a22001058bffe51a4133f"
+JOB_SHA = "bc085927b0a145b947742551c1550e4a875b55fc2c9925148e11c3d5e3123562"
+TARGET_NAME = "balcony-watering-autumn.sh"
+BACKUP_NAME = ".balcony-watering-autumn-notify-1498.recovery"
+STAGE_NAME = ".balcony-watering-autumn-notify-1498.stage"
+LOCK = Path("/tmp/balcony-watering-autumn.lock")
+MAX_BYTES = 100_000
+SAFE_ENV = {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C",
+            "GIT_OPTIONAL_LOCKS": "0"}
+
+
+class Blocked(Exception):
+    """Public-safe category, never a private value."""
+
+
+def require(condition: bool, code: str) -> None:
+    if not condition:
+        raise Blocked(code)
+
+
+def sha(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def identity(st: os.stat_result) -> tuple[int, ...]:
+    return (st.st_dev, st.st_ino, st.st_mode, st.st_uid, st.st_gid,
+            st.st_nlink, st.st_size, st.st_mtime_ns)
+
+
+def read_exact(path: Path, *, owner: int, mode: int | None = None,
+               limit: int = MAX_BYTES) -> bytes:
+    """Regular one-link file, no symlink follow, bounded read and race check."""
+    try:
+        before = path.lstat()
+        require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1
+                and before.st_uid == owner
+                and (mode is None or stat.S_IMODE(before.st_mode) == mode)
+                and not before.st_mode & 0o022
+                and 0 < before.st_size <= limit, "file_metadata_invalid")
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            opened = os.fstat(fd)
+            require(identity(opened) == identity(before), "file_raced")
+            with os.fdopen(fd, "rb", closefd=False) as stream:
+                data = stream.read(limit + 1)
+            require(len(data) == before.st_size
+                    and identity(path.lstat()) == identity(before),
+                    "file_changed")
+        finally:
+            os.close(fd)
+        return data
+    except OSError:
+        raise Blocked("file_unavailable") from None
+
+
+def safe_dir(path: Path, *, owner: int) -> None:
+    try:
+        s = path.lstat()
+        require(stat.S_ISDIR(s.st_mode) and s.st_uid == owner
+                and not s.st_mode & 0o022, "directory_unsafe")
+    except OSError:
+        raise Blocked("directory_unavailable") from None
+
+
+def git(repo: Path, *args: str) -> str:
+    try:
+        p = subprocess.run(("/usr/bin/git", "-C", str(repo), *args),
+                           capture_output=True, text=True, errors="strict",
+                           env=SAFE_ENV, timeout=12, check=False)
+    except (OSError, UnicodeError, subprocess.SubprocessError):
+        raise Blocked("git_unavailable") from None
+    require(p.returncode == 0 and len(p.stdout) <= 32768, "git_check_failed")
+    return p.stdout.strip()
+
+
+def source_gate(home: Path, *, owner: int, expected_main: str) -> bytes:
+    require(len(expected_main) == 40
+            and all(c in "0123456789abcdef" for c in expected_main),
+            "release_sha_invalid")
+    repo = home / "RPi5_main"
+    safe_dir(repo, owner=owner)
+    require(git(repo, "rev-parse", "HEAD") == expected_main
+            and git(repo, "rev-parse", "refs/remotes/origin/main") == expected_main
+            and git(repo, "branch", "--show-current") == "main",
+            "checkout_drift")
+    paths = (SOURCE_REL, OP_REL, PRE_REL, GATE_REL, BOT_REL)
+    require(not git(repo, "status", "--porcelain=v1",
+                    "--untracked-files=no", "--", *paths),
+            "tracked_source_dirty")
+    require(set(git(repo, "ls-files", "--", *paths).splitlines()) == set(paths),
+            "required_source_untracked")
+    result: dict[str, bytes] = {}
+    for rel in paths:
+        path = repo / rel
+        raw = read_exact(path, owner=owner)
+        blob = hashlib.sha1(b"blob " + str(len(raw)).encode("ascii")
+                            + b"\x00" + raw).hexdigest()
+        require(git(repo, "rev-parse", expected_main + ":" + rel) == blob,
+                "tracked_blob_mismatch")
+        result[rel] = raw
+    require(sha(result[SOURCE_REL]) == NEW_SHA, "candidate_sha_mismatch")
+    return result[SOURCE_REL]
+
+
+def preflight_gate(home: Path, *, owner: int) -> dict:
+    path = home / "RPi5_main" / PRE_REL
+    loader = importlib.machinery.SourceFileLoader("notify_only_1498", str(path))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    require(spec is not None, "preflight_unavailable")
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    report = module.inspect(
+        store=home / ".hermes/cron/jobs.json",
+        home=home,
+        source=home / "RPi5_main" / SOURCE_REL,
+        bot=home / "RPi5_main" / BOT_REL,
+        expected_uid=owner,
+    )
+    require(report.get("result") == "SOURCE_NOTIFY_ONLY_PREFLIGHT_PASS"
+            and report.get("job_definition_sha256") == JOB_SHA
+            and report.get("wrapper_sha256") == WRAPPER_SHA
+            and report.get("deployed_controller_sha256") == OLD_SHA
+            and report.get("candidate_controller_sha256") == NEW_SHA
+            and report.get("existing_autumn_job") == "enabled_local_unique"
+            and report.get("legacy_jobs") == "three_disabled"
+            and report.get("mutation_started") is False
+            and report.get("writes_performed") is False,
+            "preflight_not_ready")
+    return report
+
+
+def no_existing(path: Path, code: str) -> None:
+    try:
+        path.lstat()
+    except FileNotFoundError:
+        return
+    except OSError:
+        raise Blocked("destination_uninspectable") from None
+    raise Blocked(code)
+
+
+def write_exclusive(path: Path, data: bytes, *, mode: int,
+                    state: dict[str, bool]) -> None:
+    # Authorization is consumed when we enter the first O_CREAT.
+    state["mutation_started"] = True
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL
+                 | os.O_NOFOLLOW | os.O_CLOEXEC, mode)
+    try:
+        os.fchmod(fd, mode)
+        with os.fdopen(fd, "wb", closefd=False) as stream:
+            stream.write(data)
+            stream.flush()
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def one_file_replace(target: Path, candidate: bytes, *, owner: int,
+                     group: int, state: dict[str, bool]) -> None:
+    """Single-use transaction; never delete/rollback on ANY failure."""
+    require(sha(candidate) == NEW_SHA, "candidate_sha_mismatch")
+    safe_dir(target.parent, owner=owner)
+    meta = target.lstat()
+    require(meta.st_gid == group, "target_group_unreviewed")
+    old = read_exact(target, owner=owner, mode=0o700)
+    require(sha(old) == OLD_SHA, "deployed_target_sha_drift")
+    backup, stage = target.with_name(BACKUP_NAME), target.with_name(STAGE_NAME)
+    no_existing(backup, "recovery_already_exists")
+    no_existing(stage, "stage_already_exists")
+    require(not target.parent.stat().st_mode & stat.S_ISGID,
+            "target_directory_setgid")
+    write_exclusive(backup, old, mode=0o600, state=state)
+    require(read_exact(backup, owner=owner, mode=0o600) == old,
+            "recovery_readback_failed")
+    write_exclusive(stage, candidate, mode=0o700, state=state)
+    staged = read_exact(stage, owner=owner, mode=0o700)
+    require(sha(staged) == NEW_SHA and stage.lstat().st_gid == group,
+            "stage_verify_failed")
+    require(identity(target.lstat()) == identity(meta),
+            "target_changed_before_replace")
+    os.replace(stage, target)
+    require(sha(read_exact(target, owner=owner, mode=0o700)) == NEW_SHA,
+            "installed_readback_failed")
+    dirfd = os.open(target.parent, os.O_RDONLY | os.O_DIRECTORY
+                    | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        os.fsync(dirfd)
+    finally:
+        os.close(dirfd)
+
+
+def acquire_existing_lock(*, owner: int) -> int:
+    st = LOCK.lstat()
+    require(stat.S_ISREG(st.st_mode) and st.st_nlink == 1
+            and st.st_uid == owner, "controller_lock_unreviewed")
+    fd = os.open(LOCK, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    require(identity(os.fstat(fd)) == identity(st), "controller_lock_raced")
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        os.close(fd)
+        raise Blocked("controller_lock_busy") from None
+    return fd
+
+
+def precheck_window() -> None:
+    now = dt.datetime.now(ZoneInfo("Europe/Berlin"))
+    minute = now.hour * 60 + now.minute
+    require(not 600 <= minute <= 720, "11h_schedule_window_blocked")
+
+
+def main() -> int:
+    state = {"mutation_started": False}
+    try:
+        ap = argparse.ArgumentParser()
+        ap.add_argument("--expected-main", required=True)
+        mx = ap.add_mutually_exclusive_group(required=True)
+        mx.add_argument("--check", action="store_true")
+        mx.add_argument("--apply", action="store_true")
+        args = ap.parse_args()
+        user = pwd.getpwnam(OWNER)
+        require(os.uname().nodename.split(".")[0] == HOST
+                and os.geteuid() == user.pw_uid, "host_or_user_mismatch")
+        home = Path(user.pw_dir)
+        safe_dir(home, owner=user.pw_uid)
+        safe_dir(home / ".hermes", owner=user.pw_uid)
+        scripts = home / ".hermes/scripts"
+        safe_dir(scripts, owner=user.pw_uid)
+        candidate = source_gate(home, owner=user.pw_uid,
+                                expected_main=args.expected_main)
+        preflight_gate(home, owner=user.pw_uid)
+        target = scripts / TARGET_NAME
+        require(sha(read_exact(target, owner=user.pw_uid, mode=0o700)) == OLD_SHA,
+                "deployed_target_sha_drift")
+        no_existing(scripts / BACKUP_NAME, "recovery_already_exists")
+        no_existing(scripts / STAGE_NAME, "stage_already_exists")
+        if args.apply:
+            precheck_window()
+            fd = acquire_existing_lock(owner=user.pw_uid)
+            try:
+                # Recheck immediately under existing controller lock.
+                preflight_gate(home, owner=user.pw_uid)
+                one_file_replace(target, candidate, owner=user.pw_uid,
+                                 group=user.pw_gid, state=state)
+            finally:
+                os.close(fd)
+            outcome = "REPLACED"
+        else:
+            outcome = "SOURCE_AND_SCHEDULE_READY_RUNTIME_UNVERIFIED"
+        result = {
+            "result": outcome, "expected_main": args.expected_main,
+            "candidate_sha256": NEW_SHA,
+            "mutation_started": state["mutation_started"],
+            "writes_performed": state["mutation_started"],
+            "telegram_delivery": "unverified",
+            "raw_payload_emitted": False,
+        }
+    except Blocked as exc:
+        result = {"result": "STOP" if state["mutation_started"] else "BLOCKED",
+                  "reason": str(exc),
+                  "mutation_started": state["mutation_started"],
+                  "writes_performed": state["mutation_started"],
+                  "raw_payload_emitted": False}
+    except Exception:
+        result = {"result": "STOP" if state["mutation_started"] else "BLOCKED",
+                  "reason": "internal_error",
+                  "mutation_started": state["mutation_started"],
+                  "writes_performed": state["mutation_started"],
+                  "raw_payload_emitted": False}
+    print(json.dumps(result, sort_keys=True, separators=(",", ":")))
+    return 0 if result["result"] in ("REPLACED", "SOURCE_AND_SCHEDULE_READY_RUNTIME_UNVERIFIED") else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
