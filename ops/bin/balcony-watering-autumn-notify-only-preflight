@@ -173,6 +173,69 @@ def strict_script_only_identity(job: dict[str, Any]) -> bool:
     return True
 
 
+def strict_script_only_blocker(job: dict[str, Any]) -> str:
+    """First failed strict-mode invariant; public fixed labels only.
+
+    Diagnostic-only: NEVER decides acceptance, replaces the pinned SHA,
+    authorizes operator apply, or echoes a job value/field name from input.
+    strict_script_only_identity() remains the unchanged safety authority.
+    """
+    if type(job) is not dict or len(job) > 40:
+        return "definition_shape_unreviewed"
+    if set(job) - SCRIPT_ONLY_FIELDS:
+        return "definition_keys_unreviewed"
+    if job.get("no_agent") is not True:
+        return "no_agent_not_enabled"
+    if job.get("prompt") != "":
+        return "prompt_not_empty"
+    if job.get("state") != "scheduled":
+        return "scheduler_state_unreviewed"
+    if job.get("timezone") != "Europe/Berlin":
+        return "timezone_unreviewed"
+    if (type(job.get("grace_minutes")) is not int
+            or job["grace_minutes"] != 0):
+        return "grace_unreviewed"
+    schedule = job.get("schedule")
+    if (type(schedule) is not dict
+            or not set(schedule) <= {"kind", "expr", "display"}
+            or schedule.get("kind") != "cron"
+            or schedule.get("expr") != "0 11 * * *"
+            or ("display" in schedule
+                and schedule["display"] != "0 11 * * *")):
+        return "schedule_unreviewed"
+    if job.get("pending_slot") is not None or job.get("fire_claim") is not None:
+        return "pending_dispatch_unreviewed"
+    if (job.get("model") is not None or job.get("provider") is not None
+            or job.get("skills") not in (None, [])):
+        return "agent_bindings_unreviewed"
+    count = job.get("run_count")
+    if count is not None and (type(count) is not int or not 0 <= count <= 1_000_000):
+        return "counter_unreviewed"
+    repeat = job.get("repeat")
+    if repeat is not None:
+        if (type(repeat) is not dict
+                or set(repeat) != {"times", "completed"}
+                or repeat["times"] is not None
+                or type(repeat["completed"]) is not int
+                or not 0 <= repeat["completed"] <= 1_000_000):
+            return "repeat_unreviewed"
+    if ("execution_skipped" in job
+            and type(job["execution_skipped"]) is not bool):
+        return "scheduler_metadata_unreviewed"
+    for key in SCRIPT_ONLY_TIMESTAMPS:
+        value = job.get(key)
+        if value is not None and (type(value) is not str or len(value) > 128):
+            return "scheduler_metadata_unreviewed"
+    for key in SCRIPT_ONLY_OUTCOMES:
+        value = job.get(key)
+        if value is not None and (type(value) is not str or len(value) > 1024):
+            return "scheduler_metadata_unreviewed"
+    if "last_dispatch" in job and not _bounded_hermes_metadata(job["last_dispatch"]):
+        return "scheduler_metadata_unreviewed"
+    # Cannot infer an unreviewed mismatch is harmless.
+    return "unclassified"
+
+
 def classify_run_count_only_drift(job: dict[str, Any], expected_sha: str,
                                   fingerprint) -> str:
     """Diagnostic only: a SHA match proves no *other* definition field drift.
@@ -272,7 +335,8 @@ def inspect(*, store: Path, home: Path, source: Path, bot: Path,
             wrapper_sha: str = WRAPPER_SHA256,
             candidate_sha: str = CANDIDATE_SHA256,
             job_sha: str = JOB_SHA256,
-            diagnostic_categories: list[str] | None = None) -> dict[str, Any]:
+            diagnostic_categories: list[str] | None = None,
+            strict_blockers: list[str] | None = None) -> dict[str, Any]:
     gate = gate_module()
     try:
         _raw, jobs, fmt = gate._read_store(store, expected_uid)
@@ -312,6 +376,8 @@ def inspect(*, store: Path, home: Path, source: Path, bot: Path,
             diagnostic_categories.append(
                 classify_hermes_scheduler_drift(job, job_sha, gate._fingerprint)
             )
+        if strict_blockers is not None:
+            strict_blockers.append(strict_script_only_blocker(job))
         raise Blocked("autumn_job_identity_drift")
     binding = job.get("script")
     require(isinstance(binding, str) and len(binding) <= 1024 and
@@ -395,6 +461,7 @@ def main() -> int:
                         help="Categorize bounded Hermes metadata drift; never PASS")
     args = parser.parse_args()
     diagnostic_categories: list[str] = []
+    strict_blockers: list[str] = []
     try:
         user = pwd.getpwnam("andris")
         require(os.uname().nodename.split(".")[0] == "rpi5" and
@@ -407,6 +474,7 @@ def main() -> int:
             bot=home / "RPi5_main/ops/lib/balkons-bot.py",
             expected_uid=user.pw_uid,
             diagnostic_categories=diagnostic_categories if args.diagnose else None,
+            strict_blockers=strict_blockers if args.diagnose else None,
         )
     except Blocked as exc:
         result = {
@@ -421,6 +489,9 @@ def main() -> int:
         if args.diagnose and str(exc) == "autumn_job_identity_drift":
             result["identity_drift_class"] = (
                 diagnostic_categories[0] if diagnostic_categories else "unclassified"
+            )
+            result["strict_script_only_blocker"] = (
+                strict_blockers[0] if strict_blockers else "unclassified"
             )
     except Exception:
         result = {
