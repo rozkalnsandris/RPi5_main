@@ -1104,6 +1104,10 @@
       ],
       [
         "python3",
+        "./tests/test-balcony-autumn-final-route-proof-plan.py"
+      ],
+      [
+        "python3",
         "./tests/test-balkons-ha-native-telegram.py"
       ],
       [
