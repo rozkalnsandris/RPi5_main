@@ -243,6 +243,8 @@ def parse_kernel_events(raw: str) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", required=True)
+    parser.add_argument("--skip-kernel-events", action="store_true",
+                        help="do not read the kernel journal; report data unavailable")
     args = parser.parse_args()
 
     if effective_uid() == 0:
@@ -310,10 +312,15 @@ def main() -> None:
     if d_rc != 0:
         limitations.add("Per-container current memory was unavailable; no Docker access change was attempted.")
 
-    j_available, j_rc, j_raw = run_command(["journalctl", "-k", "-b", "--no-pager", "-o", "short-iso", "-n", "500"])
+    if args.skip_kernel_events:
+        # Avoid calling journalctl when kernel-log access is not authorized.
+        j_available, j_rc, j_raw = False, 127, ""
+        limitations.add("Kernel memory-event journal intentionally not inspected; events are unknown.")
+    else:
+        j_available, j_rc, j_raw = run_command(["journalctl", "-k", "-b", "--no-pager", "-o", "short-iso", "-n", "500"])
+        if j_rc != 0:
+            limitations.add("Recent kernel memory-event lines were unavailable in this collection context.")
     write_section("kernel_memory_events.txt", "kernel-memory", j_available, j_rc, parse_kernel_events(j_raw) if j_rc == 0 else "")
-    if j_rc != 0:
-        limitations.add("Recent kernel memory-event lines were unavailable in this collection context.")
 
     write_section("limitations.txt", "limitations", True, 0, "\n".join(sorted(limitations)) + "\n")
 

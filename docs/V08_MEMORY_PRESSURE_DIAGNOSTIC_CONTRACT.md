@@ -34,3 +34,16 @@ A short sample can miss intermittent pressure. Root-cause conclusions require re
 ## PSI availability (v08.1.0; #1468)
 
 PSI is considered measured only if **both** start/end reads succeed. New bundles record `psi_available=false` and null deltas when absent, with explicit unavailable Markdown. The verifier still accepts historical v08.0.0 bundles unchanged; old placeholder zeros are **not measured** PSI, so consumers must consult section-status metadata.
+
+## Explicit kernel-journal opt-out (#1468)
+
+The V08 CLI now accepts `--skip-kernel-events`. When selected it **never
+invokes `journalctl`**, writes an empty `kernel_memory_events.txt`,
+marks the section unavailable (`command_available=false`, exit status 127),
+and reports that kernel events are **unknown**, not absent. The existing
+V08 verifier accepts and validates this bounded omitted-data case.
+
+Without the flag, legacy V08 behavior is unchanged. A future composite
+RPi5 diagnostic should include this flag unless separate protected
+kernel-journal inspection is explicitly owner-authorized. No source merge
+authorizes a new RPi5 host collection or LIVE activity.

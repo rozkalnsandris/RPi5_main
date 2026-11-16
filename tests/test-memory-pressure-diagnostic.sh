@@ -78,6 +78,9 @@ printf '/dev/zram0 3221225472 2411724800 612345678 700000000 4\n'
 EOF
 cat > "${stub}/journalctl" <<'EOF'
 #!/usr/bin/env bash
+if [[ -n "${MEMORY_DIAG_TEST_JOURNAL_MARKER:-}" ]]; then
+  : > "${MEMORY_DIAG_TEST_JOURNAL_MARKER}"
+fi
 printf '2026-08-05 kernel: normal line\n'
 printf '2026-08-05 kernel: memory cgroup event for abcdef1234567890 at 192.168.1.2\n'
 EOF
@@ -86,6 +89,8 @@ chmod +x "${stub}"/*
 collect(){
   local out="$1" missing="${2:-}"
   local log="${root}/${out}.log"
+  local flags=()
+  if [[ "${3:-}" == "skip" ]]; then flags+=(--skip-kernel-events); fi
   PATH="${stub}:/usr/bin:/bin" \
   MEMORY_DIAG_TEST_MODE=1 \
   MEMORY_DIAG_TEST_UID=1000 \
@@ -94,7 +99,8 @@ collect(){
   MEMORY_DIAG_SAMPLE_SECONDS=0 \
   MEMORY_DIAG_PROC_ROOT="${proc}" \
   MEMORY_DIAG_TEST_MISSING_COMMANDS="${missing}" \
-  python3 "${collector}" --output "${root}/${out}" >"${log}"
+  MEMORY_DIAG_TEST_JOURNAL_MARKER="${root}/${out}.journal-saw" \
+  python3 "${collector}" --output "${root}/${out}" "${flags[@]}" >"${log}"
   awk -F ': ' '/^Memory diagnostic result:/ {print $2}' "${log}"
 }
 
@@ -113,6 +119,21 @@ assert [x['name'] for x in r['containers']]==['adguard','homeassistant']
 PY
 grep -q '\[REDACTED_HEX_ID\]' "${one}/sections/kernel_memory_events.txt" || fail 'kernel ID not redacted'
 grep -q '\[REDACTED_IP\]' "${one}/sections/kernel_memory_events.txt" || fail 'kernel IP not redacted'
+
+[[ -e "${root}/out1.journal-saw" ]] || fail "kernel journal baseline was not invoked"
+
+# The explicit opt-out must never invoke journalctl and cannot imply zero events.
+no_journal="$(collect no-journal "" skip)"
+python3 "${verifier}" "${no_journal}" >/dev/null
+[[ ! -e "${root}/no-journal.journal-saw" ]] || fail "journalctl invoked despite opt-out"
+python3 - "${no_journal}/report.json" "${no_journal}/section-status.tsv" <<'PY'
+import json, pathlib, sys
+r = json.loads(pathlib.Path(sys.argv[1]).read_text())
+assert r["observation"]["kernel_event_lines"] == 0
+assert any("intentionally not inspected" in x for x in r["limitations"])
+rows = pathlib.Path(sys.argv[2]).read_text().splitlines()
+assert "kernel_memory_events\tkernel-memory\tfalse\t127\t0" in rows
+PY
 
 second="$(collect out2)"
 cmp "${one}/report.json" "${second}/report.json" || fail 'report JSON not deterministic'
