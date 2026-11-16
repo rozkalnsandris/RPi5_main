@@ -178,6 +178,9 @@ class RepairTests(unittest.TestCase):
     def test_reject_invalid_store_without_raw_leak(self):
         self.jobs[3]["prompt"] = "SECRET_SYNTHETIC"
         self.save_store()
+        # This test changes the frozen definition intentionally; repin only
+        # the synthetic test fingerprint to test privacy, not deployment.
+        self.hashes["job_sha"] = m.gate_module()._fingerprint(self.jobs[3])
         self.assertNotIn("SECRET_SYNTHETIC", json.dumps(self.inspect()))
         self.store.write_text("{not json")
         self.block("hermes_store_invalid")
