@@ -137,7 +137,8 @@ class FinalRoutePlanTests(unittest.TestCase):
                           "os.replace(", "os.O_CREAT", "switch.turn_on",
                           "open('.env'", 'open(".env"'):
             self.assertNotIn(forbidden, source)
-        self.assertIn('"/api/"', json.dumps(m.plan(self.root)))
+        self.assertEqual(m.plan(self.root)["future_read_methods"]["home_assistant"],
+                         "GET /api/")
         self.assertIn('"getMe"', json.dumps(m.plan(self.root)))
         self.assertIn('"getChat"', json.dumps(m.plan(self.root)))
 
