@@ -363,6 +363,29 @@ assert all(marker in v02 for marker in (
 )), "Grafana V02 sanitized evidence markers missing"
 PY
 
+# Grafana health GET evidence and future correlation gate are source-only.
+python3 -B - "${repo}/docs/GRAFANA_HEALTH_CORRELATION_1468.md" "${repo}/docs/GRAFANA_CONTINUITY_V02_VERIFIED_20261115_1468.md" "${repo}/docs/GRAFANA_MEMORY_CGROUP_PREFLIGHT_1468.md" <<'PY'
+from pathlib import Path
+import sys
+health, v02, preflight = [Path(p).read_text(encoding="utf-8") for p in sys.argv[1:]]
+required = (
+    "GRAFANA-HEALTH-SURFACE-PREFLIGHT",
+    "GRAFANA-CONTAINER-HEALTH-GET",
+    "140f51fa55d0a66ad6da6d551bc6dc36b5a54718",
+    "a9aa708504c52775eaed8706bd118dd2a314f7ed",
+    "13.3.1", "database=ok",
+    "NO_PERFORMANCE_PROOF", "NO_SAME_WINDOW_CORRELATION",
+    "PROMETHEUS_SERIES_UNVERIFIED", "NO_LIVE_AUTHORITY",
+    "zero new Grafana OOM", "109", "#1468",
+)
+assert all(marker in health for marker in required), "Grafana health provenance/safety contract missing"
+assert "GRAFANA_HEALTH_CORRELATION_1468.md" in v02
+assert "GRAFANA_HEALTH_CORRELATION_1468.md" in preflight
+assert "not synchronized" in health.lower()
+assert "not synchronized" in preflight.lower()
+assert "new Grafana HTTP performance evidence" not in health
+PY
+
 python3 -B "${repo}/tests/test-grafana-continuity.py"
 python3 -B "${repo}/tests/test-grafana-continuity-collector.py"
 
