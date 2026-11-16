@@ -88,6 +88,18 @@ schedule/state changes, running/paused transitions, duplicate jobs,
 scheduler bookkeeping and non-leak), diff/CI/review and an explicit owner
 merge decision. This runbook does **not** implement or approve that change.
 
+## Exact source-only continuation before the evidence gate
+
+After this planning PR is explicitly merged, the first implementation task is
+a focused **source-only** issue/PR for the independent expected-contract
+fixture, pure in-memory classifier and adversarial offline tests described
+above. That classifier must remain `BLOCKED` even on a nominal match; it
+cannot edit the old fingerprint or authorize `--apply`. The expected
+contract must be reviewed and frozen independently of live observations.
+Only then is a current-job read-only evidence request technically
+meaningful; neither this plan nor a bare `START` supplies protected-read
+authority.
+
 ## Next bounded evidence gate — only after the validator exists
 
 A *separate* owner `STRICT READONLY` approval must identify:
